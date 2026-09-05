@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type DtpRegime = "gold" | "fin";
 type DtpFase = "antes" | "durante" | "depois";
@@ -110,6 +110,11 @@ export function DtpView({ regime, onBack, onPresencas }: Props) {
   const isGold = regime === "gold";
   const [fase, setFase] = useState<DtpFase | "todas">("todas");
   const [items, setItems] = useState<DtpDoc[]>(() => (isGold ? docsGold() : docsFin()));
+
+  useEffect(() => {
+    setFase("todas");
+    setItems(isGold ? docsGold() : docsFin());
+  }, [isGold]);
 
   const meta = isGold
     ? {

@@ -2003,7 +2003,7 @@ export default function App() {
       case "gold-cursos": return <CursosGoldView />;
       case "gold-turmas": return <TurmasGoldView onCockpit={openCockpit} />;
       case "gold-cockpit-turma": return <CockpitTurmaView turmaId={cockpitId} onBack={() => navigate("gold-turmas")} onDtp={() => navigate("gold-dtp")} />;
-      case "gold-dtp": return <DtpView regime="gold" onBack={() => navigate("gold-turmas")} />;
+      case "gold-dtp": return <DtpView key="gold-dtp" regime="gold" onBack={() => navigate("gold-turmas")} />;
       case "gold-preinscricoes": return <PreInscricoesGoldView />;
       case "gold-formandos-turmas": return <FormandosTurmasView />;
       case "gold-formandos-gold": return <PlaceholderView title="Formandos Gold" />;
@@ -2018,7 +2018,7 @@ export default function App() {
       case "fin-cursos": return <FinCursosView />;
       case "fin-turmas": return <FinTurmasView onPresencas={() => navigate("fin-presencas")} onDtp={() => navigate("fin-dtp")} />;
       case "fin-presencas": return <PresencasView />;
-      case "fin-dtp": return <DtpView regime="fin" onBack={() => navigate("fin-turmas")} onPresencas={() => navigate("fin-presencas")} />;
+      case "fin-dtp": return <DtpView key="fin-dtp" regime="fin" onBack={() => navigate("fin-turmas")} onPresencas={() => navigate("fin-presencas")} />;
       case "formadores": return <FormadoresView />;
       case "blog-posts": return <BlogView />;
       case "blog-tematicas": return <PlaceholderView title="Temáticas do Blog" />;

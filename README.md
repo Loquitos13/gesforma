@@ -9,7 +9,11 @@ O **dossiê técnico-pedagógico (DTP) vive dentro da turma** (separador no cock
 - **Gold / CCP** — núcleo DGERT + PIP, simulações, 5 anos de experiência, recibos
 - **Financiada / UFCD** — núcleo DGERT + elegibilidade, IBAN, horas, relatório de execução
 
-O menu **Dossiês das turmas** lista as turmas com a completude do DTP e abre o dossiê dessa turma.
+O menu **Dossiê TP** lista as turmas com a completude do dossiê e abre o DTP dessa turma.
+
+**Inquéritos** (Gold e Financiada) permitem montar questionários de satisfação com texto, escolha múltipla, escala 1–5 e sim/não.
+
+No cockpit da turma: plano de sessão completo (introdução / desenvolvimento / conclusão), folha de presenças por sessão, perfil do formador com documentos, e upload de certificados.
 
 ## Correr localmente
 
@@ -19,5 +23,3 @@ npm run dev
 ```
 
 Abre [http://127.0.0.1:43147](http://127.0.0.1:43147).
-
-Atalhos na demo: cockpit da turma (Gold e Financiada) → **Dossiê da turma**; lista **Dossiês das turmas** no menu; notificações de DTP incompleto abrem a turma certa.

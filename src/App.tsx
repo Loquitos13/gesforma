@@ -4,6 +4,11 @@ import {
   FormandosGoldView, DatasGoldView, LocaisView, AreasTematicasView,
   ModulosView, ConteudosView, FinInscricoesView, BlogTematicasView, ConfiguracoesView,
 } from "./CatalogViews";
+import {
+  FileUploadModal, PresencasSessaoModal, FormadorProfileSlideOver, PlanoSessaoModal,
+  InqueritosView, defaultPlanos, emptyPlano,
+  type PlanoSessaoData, type SessaoMeta,
+} from "./TurmaExtras";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -62,8 +67,8 @@ const I = {
 type View =
   | "painel" | "gold-preinscricoes" | "gold-formandos-turmas" | "gold-formandos-gold"
   | "gold-campanhas" | "gold-cursos" | "gold-datas" | "gold-locais" | "gold-areas-tematicas"
-  | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-cockpit-turma" | "gold-dtp"
-  | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-turmas" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma"
+  | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-cockpit-turma" | "gold-dtp" | "gold-inqueritos"
+  | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-turmas" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
   | "formadores" | "blog-posts" | "blog-tematicas"
   | "emails" | "pagamentos" | "configuracoes";
 
@@ -548,12 +553,12 @@ function FichaFormando({ formando, tipo = "gold", onClose }: { formando: Formand
 
 // ─── Cockpit da Turma ─────────────────────────────────────────────────────────
 
-const sessoesSample = [
-  { n: 1, data: "Sáb, 07 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Realizada", plano: true },
-  { n: 2, data: "Sáb, 14 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Realizada", plano: true },
-  { n: 3, data: "Sáb, 21 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false },
-  { n: 4, data: "Sáb, 28 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false },
-  { n: 5, data: "Sáb, 05 Out 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false },
+const sessoesSample: SessaoMeta[] = [
+  { n: 1, data: "Sáb, 07 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Realizada", plano: true, modulo: "Módulo 1 — Fundamentos da Formação Profissional", duracao: "4h" },
+  { n: 2, data: "Sáb, 14 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Realizada", plano: true, modulo: "Módulo 2 — Planeamento e Organização da Formação", duracao: "4h" },
+  { n: 3, data: "Sáb, 21 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false, modulo: "Módulo 2 — Planeamento e Organização da Formação", duracao: "4h" },
+  { n: 4, data: "Sáb, 28 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false, modulo: "Módulo 3 — Comunicação e Dinamização de Grupos", duracao: "4h" },
+  { n: 5, data: "Sáb, 05 Out 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false, modulo: "Módulo 3 — Comunicação e Dinamização de Grupos", duracao: "4h" },
 ];
 
 const certificadosSample = [
@@ -595,6 +600,35 @@ const docsTurmaGrupos: { id: string; label: string; color: string; icon: React.R
   ]},
 ];
 
+const docsFinGrupos: typeof docsTurmaGrupos = [
+  { id: "turma", label: "Documentos da turma", color: "bg-blue-50 border-blue-200 text-blue-800", icon: I.school, items: [
+    { label: "Programa de formação UFCD", detalhe: "UFCD 3564 · Primeiros Socorros · 25h.", estado: "ok" },
+    { label: "Regulamento de formação", detalhe: "Regulamento ENA + regras do financiador.", estado: "ok" },
+    { label: "Cronograma da turma", detalhe: "5 sessões síncronas · Sala Virtual.", estado: "ok" },
+    { label: "Enquadramento do financiador", detalhe: "Candidatura e regras da tipologia.", estado: "ok" },
+    { label: "Relatório de execução", detalhe: "Fecha o DTP da turma financiada.", estado: "falta", bloqueante: true },
+  ]},
+  { id: "sessoes", label: "Documentos das sessões", color: "bg-slate-50 border-slate-200 text-slate-700", icon: I.calendar, items: [
+    { label: "Planos de sessão", detalhe: "0/5 planos carregados.", estado: "falta", bloqueante: true },
+    { label: "Sumários assinados", detalhe: "Ainda sem sessões fechadas.", estado: "falta" },
+    { label: "Folhas de presença", detalhe: "Assinatura digital por sessão.", estado: "falta" },
+    { label: "Mapa de assiduidade em horas", detalhe: "Obrigatório no regime financiado.", estado: "falta", bloqueante: true },
+  ]},
+  { id: "formandos", label: "Documentos dos formandos", color: "bg-emerald-50 border-emerald-200 text-emerald-800", icon: I.users, items: [
+    { label: "Contratos de formação", detalhe: "14/17 assinados.", estado: "parcial" },
+    { label: "Cartão de cidadão", detalhe: "15/17 no dossier.", estado: "parcial" },
+    { label: "Certificado de habilitações", detalhe: "12/17 validados.", estado: "parcial" },
+    { label: "Curriculum vitae", detalhe: "14/17.", estado: "parcial" },
+    { label: "IBAN", detalhe: "3/17. Sem IBAN não há apoios.", estado: "falta", bloqueante: true },
+    { label: "Comprovativo de emprego", detalhe: "10/17.", estado: "parcial" },
+  ]},
+  { id: "formadores", label: "Documentos dos formadores", color: "bg-violet-50 border-violet-200 text-violet-800", icon: I.person, items: [
+    { label: "CCP / CCPE do formador", detalhe: "Vânia Fernandes · CCP válido.", estado: "ok" },
+    { label: "CV do formador", detalhe: "Atualizado em 2026-03-02.", estado: "ok" },
+    { label: "Contrato do formador", detalhe: "2026/UFCD-3564.", estado: "ok" },
+  ]},
+];
+
 function TurmaTabBar({ tab, onChange, accent = "gold", dtpPct }: { tab: CockpitTab; onChange: (t: CockpitTab) => void; accent?: "gold" | "fin"; dtpPct: number }) {
   const active = accent === "gold" ? "border-amber-500 text-amber-600" : "border-blue-600 text-blue-600";
   const chip = accent === "gold" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700";
@@ -618,15 +652,16 @@ function TurmaTabBar({ tab, onChange, accent = "gold", dtpPct }: { tab: CockpitT
   );
 }
 
-function DocumentosTurmaTab({ onOpenDtp }: { onOpenDtp: () => void }) {
+function DocumentosTurmaTab({ onOpenDtp, regime = "gold" }: { onOpenDtp: () => void; regime?: "gold" | "fin" }) {
   const estadoCfg: Record<DocEstado, { dot: string; chip: string; label: string }> = {
     ok: { dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700 border-emerald-200", label: "No dossiê" },
     parcial: { dot: "bg-amber-400", chip: "bg-amber-50 text-amber-700 border-amber-200", label: "Parcial" },
     falta: { dot: "bg-red-400", chip: "bg-red-50 text-red-600 border-red-200", label: "Em falta" },
   };
+  const grupos = regime === "fin" ? docsFinGrupos : docsTurmaGrupos;
   return (
     <div className="space-y-4">
-      {docsTurmaGrupos.map(g => {
+      {grupos.map(g => {
         const ok = g.items.filter(d => d.estado === "ok").length;
         return (
           <Card key={g.id}>
@@ -664,7 +699,7 @@ function DocumentosTurmaTab({ onOpenDtp }: { onOpenDtp: () => void }) {
   );
 }
 
-function CertificadosTurmaTab() {
+function CertificadosTurmaTab({ onUpload }: { onUpload?: (id: number) => void }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
@@ -710,7 +745,7 @@ function CertificadosTurmaTab() {
                     <Td className="text-center">
                       {c.certificado
                         ? <div className="flex items-center justify-center gap-1"><span className="text-xs text-emerald-600 font-semibold">Emitido</span><ActBtn icon={I.eye} label="Ver" color="gray" /></div>
-                        : <button disabled={!elegivel} className="text-xs font-semibold px-2.5 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed">Upload</button>}
+                        : <button onClick={() => onUpload?.(c.id)} disabled={!elegivel} className="text-xs font-semibold px-2.5 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed">Upload</button>}
                     </Td>
                   </tr>
                 );
@@ -730,7 +765,11 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const vagasLivres = turma.vagas - turma.totalAlunos;
   const [fichaOpen, setFichaOpen] = useState<FormandoRecord | null>(null);
   const [tab, setTab] = useState<CockpitTab>(initialTab);
-  const [planoSessao, setPlanoSessao] = useState<typeof sessoesSample[number] | null>(null);
+  const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
+  const [planos, setPlanos] = useState<Record<number, PlanoSessaoData>>(defaultPlanos);
+  const [presencasSession, setPresencasSession] = useState<SessaoMeta | null>(null);
+  const [uploadCert, setUploadCert] = useState<number | null>(null);
+  const [formadorOpen, setFormadorOpen] = useState(false);
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
 
   return (
@@ -787,7 +826,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         {tab === "sessoes" && (
           <Card>
             <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-700">Sessões — {turma.nome}</p>
+              <p className="text-sm font-semibold text-slate-700">Sessões - {turma.nome}</p>
               <NewBtn label="+ Nova Sessão" />
             </div>
             <div className="overflow-x-auto">
@@ -801,7 +840,9 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                         <p className="text-xs font-medium text-slate-800 whitespace-nowrap">{s.data}</p>
                         <p className="text-xs text-slate-400">{s.hora}</p>
                       </Td>
-                      <Td className="text-xs font-medium text-slate-700">{s.formador}</Td>
+                      <Td className="text-xs font-medium text-slate-700">
+                        <button onClick={() => setFormadorOpen(true)} className="hover:text-violet-700 font-medium">{s.formador}</button>
+                      </Td>
                       <Td>
                         <button onClick={() => setPlanoSessao(s)}
                           className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${s.plano ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100" : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"}`}>
@@ -809,7 +850,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                         </button>
                       </Td>
                       <Td>{estadoBadge(s.estado)}</Td>
-                      <Td><div className="flex gap-1"><ActBtn icon={I.attend} label="Presenças" color={s.estado === "Realizada" ? "teal" : "gray"} /><ActBtn icon={I.edit} label="Editar" /></div></Td>
+                      <Td><div className="flex gap-1"><ActBtn icon={I.attend} label="Presenças" color={s.estado === "Realizada" ? "teal" : "gray"} onClick={() => s.estado === "Realizada" && setPresencasSession(s)} /><ActBtn icon={I.edit} label="Editar" /></div></Td>
                     </tr>
                   ))}
                 </tbody>
@@ -817,8 +858,8 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             </div>
           </Card>
         )}
-        {tab === "documentos" && <DocumentosTurmaTab onOpenDtp={() => setTab("dtp")} />}
-        {tab === "certificados" && <CertificadosTurmaTab />}
+        {tab === "documentos" && <DocumentosTurmaTab onOpenDtp={() => setTab("dtp")} regime="gold" />}
+        {tab === "certificados" && <CertificadosTurmaTab onUpload={id => setUploadCert(id)} />}
 
         {tab === "overview" && <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -841,11 +882,11 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             </div>
             <div className="space-y-2">
               {[
-                "Módulo 1 — Fundamentos da Formação Profissional (8h)",
-                "Módulo 2 — Planeamento e Organização da Formação (16h)",
-                "Módulo 3 — Comunicação e Dinamização de Grupos (16h)",
-                "Módulo 4 — Avaliação das Aprendizagens (8h)",
-                "Módulo 5 — Elaboração do Portefólio (8h)",
+                "Módulo 1 - Fundamentos da Formação Profissional (8h)",
+                "Módulo 2 - Planeamento e Organização da Formação (16h)",
+                "Módulo 3 - Comunicação e Dinamização de Grupos (16h)",
+                "Módulo 4 - Avaliação das Aprendizagens (8h)",
+                "Módulo 5 - Elaboração do Portefólio (8h)",
               ].map((line, i) => (
                 <div key={i} className="flex items-start gap-2 text-sm text-slate-700">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 flex-shrink-0" />
@@ -907,7 +948,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
               </div>
             </div>
             <div className="flex gap-2 mt-3">
-              <button className="flex-1 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-semibold rounded-lg border border-violet-200">Ver perfil</button>
+              <button onClick={() => setFormadorOpen(true)} className="flex-1 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-semibold rounded-lg border border-violet-200">Ver perfil</button>
               <button className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg">Alterar</button>
             </div>
           </Card>
@@ -929,26 +970,16 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
       <SlideOver open={!!fichaOpen} onClose={() => setFichaOpen(null)} title="Ficha do Formando" sub={fichaOpen ? `#${fichaOpen.id}` : ""}>
         {fichaOpen && <FichaFormando formando={fichaOpen} onClose={() => setFichaOpen(null)} />}
       </SlideOver>
-      <SlideOver open={!!planoSessao} onClose={() => setPlanoSessao(null)} title={planoSessao ? `Plano de Sessão — Sessão ${planoSessao.n}` : ""} sub={planoSessao ? `${planoSessao.data} · ${planoSessao.hora}` : ""}>
-        {planoSessao && (
-          <div className="p-5 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              {[{ l: "Formador", v: planoSessao.formador }, { l: "Duração", v: "4h" }, { l: "Data", v: planoSessao.data }, { l: "Estado", v: planoSessao.estado }].map(f => (
-                <div key={f.l} className="bg-amber-50 border border-amber-100 rounded-xl p-3">
-                  <p className="text-xs text-amber-600 font-semibold uppercase tracking-wider mb-1">{f.l}</p>
-                  <p className="text-xs font-bold text-slate-800">{f.v}</p>
-                </div>
-              ))}
-            </div>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              {planoSessao.plano
-                ? "Plano preenchido: introdução, desenvolvimento e conclusão com conteúdos, métodos e avaliação."
-                : "Ainda sem plano. Preenche os momentos da sessão antes da data."}
-            </p>
-            <button onClick={() => setPlanoSessao(null)} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Fechar</button>
-          </div>
-        )}
-      </SlideOver>
+      <PlanoSessaoModal
+        open={!!planoSessao}
+        onClose={() => setPlanoSessao(null)}
+        sessao={planoSessao ?? undefined}
+        plano={planoSessao ? (planos[planoSessao.n] ?? emptyPlano()) : emptyPlano()}
+        onSave={data => { if (planoSessao) setPlanos(prev => ({ ...prev, [planoSessao.n]: data })); }}
+      />
+      <PresencasSessaoModal open={!!presencasSession} onClose={() => setPresencasSession(null)} sessao={presencasSession ?? undefined} />
+      <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" />
+      <FormadorProfileSlideOver open={formadorOpen} onClose={() => setFormadorOpen(false)} nome="Isac Silva" />
     </>
   );
 }
@@ -970,8 +1001,8 @@ function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (
   return (
     <div className="space-y-4">
       <PageHeader
-        title={isGold ? "Dossiês das turmas Gold" : "Dossiês das turmas Financiadas"}
-        sub="Na ENA o DTP vive dentro da turma. O código interno (VNG-SM-07/09, UFCD 3564) identifica a turma - não é uma “ação” à parte."
+        title={isGold ? "Dossiê TP — Gold" : "Dossiê TP — Financiada"}
+        sub="Na ENA o DTP vive dentro da turma. O código interno (VNG-SM-07/09, UFCD 3564) identifica a turma — não é uma “ação” à parte."
       />
       <Card>
         <div className="overflow-x-auto">
@@ -1012,8 +1043,11 @@ function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (
 function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview" }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab }) {
   const turma = finTurmasData.find(t => t.id === turmaId) ?? finTurmasData.find(t => t.ufcdCod === "3564") ?? finTurmasData[0];
   const [tab, setTab] = useState<CockpitTab>(initialTab);
+  const [formadorOpen, setFormadorOpen] = useState(false);
+  const [uploadCert, setUploadCert] = useState<number | null>(null);
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
   const prontos = Math.floor(turma.alunos * 0.8);
+  const membros = finFormandosData.filter(f => f.curso === turma.curso || f.turma.includes(turma.ufcdCod));
 
   return (
     <div className="space-y-5">
@@ -1056,23 +1090,54 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview" }: { tur
         <DtpPanel regime="fin" turma={{ codigo: turma.ufcdCod === "3564" ? "UFCD 3564 · T1" : turma.nome, id: turma.id, titulo: turma.curso, sub: `UFCD ${turma.ufcdCod} · ${turma.horas}h` }} />
       )}
       {tab === "sessoes" && <PresencasView turmaId={turma.id} embedded />}
-      {tab === "documentos" && <DocumentosTurmaTab onOpenDtp={() => setTab("dtp")} />}
-      {tab === "certificados" && <CertificadosTurmaTab />}
+      {tab === "documentos" && <DocumentosTurmaTab onOpenDtp={() => setTab("dtp")} regime="fin" />}
+      {tab === "certificados" && <CertificadosTurmaTab onUpload={id => setUploadCert(id)} />}
       {tab === "overview" && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { l: "Código interno", v: turma.nome, c: "text-slate-800" },
-            { l: "UFCD", v: turma.ufcdCod, c: "text-blue-600" },
-            { l: "Formandos", v: `${turma.alunos}/${turma.alunosTotal}`, c: "text-slate-800" },
-            { l: "Dossiers prontos", v: `${prontos}/${turma.alunos}`, c: prontos === turma.alunos ? "text-emerald-600" : "text-amber-600" },
-          ].map(s => (
-            <Card key={s.l} className="p-4">
-              <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">{s.l}</p>
-              <p className={`text-lg font-bold ${s.c} truncate`}>{s.v}</p>
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { l: "Código interno", v: turma.nome, c: "text-slate-800" },
+              { l: "UFCD", v: turma.ufcdCod, c: "text-blue-600" },
+              { l: "Formandos", v: `${turma.alunos}/${turma.alunosTotal}`, c: "text-slate-800" },
+              { l: "Dossiers prontos", v: `${prontos}/${turma.alunos}`, c: prontos === turma.alunos ? "text-emerald-600" : "text-amber-600" },
+            ].map(s => (
+              <Card key={s.l} className="p-4">
+                <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">{s.l}</p>
+                <p className={`text-lg font-bold ${s.c} truncate`}>{s.v}</p>
+              </Card>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Card className="p-4">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Formador</p>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center text-violet-700 font-bold">{turma.formador[0]}</div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">{turma.formador}</p>
+                  <p className="text-xs text-slate-500">UFCD {turma.ufcdCod} · {turma.horas}h</p>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button onClick={() => setFormadorOpen(true)} className="flex-1 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-semibold rounded-lg border border-violet-200">Ver perfil</button>
+                <button className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg">Alterar</button>
+              </div>
             </Card>
-          ))}
-        </div>
+            <Card className="p-4">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Formandos desta turma</p>
+              <div className="space-y-2">
+                {(membros.length ? membros : finFormandosData).slice(0, 4).map(f => (
+                  <div key={f.id} className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-slate-700">{f.nome} {f.apelido}</span>
+                    {estadoBadge(f.estado)}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        </>
       )}
+      <FormadorProfileSlideOver open={formadorOpen} onClose={() => setFormadorOpen(false)} nome={turma.formador} />
+      <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" accent="fin" />
     </div>
   );
 }
@@ -1786,6 +1851,7 @@ function CursosGoldView() {
 
 function FormadoresView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
+  const [perfil, setPerfil] = useState<typeof formadoresData[number] | null>(null);
   const f = formadoresData.filter(x => `${x.nome} ${x.email}`.toLowerCase().includes(s.toLowerCase()));
   return (
     <div className="space-y-4">
@@ -1799,10 +1865,10 @@ function FormadoresView() {
               {f.map(r => (
                 <tr key={r.id} className="hover:bg-slate-50">
                   <Td><IdCell id={r.id} /></Td>
-                  <Td className="text-sm font-medium text-blue-600">{r.nome}</Td>
+                  <Td><button onClick={() => setPerfil(r)} className="text-sm font-medium text-blue-600 hover:text-blue-800">{r.nome}</button></Td>
                   <Td className="font-mono text-xs text-slate-500">{r.telf}</Td>
                   <Td className="text-xs text-blue-600">{r.email}</Td>
-                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" /><ActBtn icon={I.doc} label="Docs" color="orange" /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
+                  <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Perfil" onClick={() => setPerfil(r)} /><ActBtn icon={I.doc} label="Docs" color="orange" onClick={() => setPerfil(r)} /><ActBtn icon={I.edit} label="Editar" /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
                 </tr>
               ))}
             </tbody>
@@ -1810,6 +1876,7 @@ function FormadoresView() {
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
+      <FormadorProfileSlideOver open={!!perfil} onClose={() => setPerfil(null)} nome={perfil?.nome ?? ""} telf={perfil?.telf} />
     </div>
   );
 }
@@ -2058,6 +2125,8 @@ const allSearchable: Array<{ tipo: string; nome: string; sub: string } & NavTarg
   ...finCursosData.map(c => ({ tipo: "UFCD", nome: `${c.ufcdCod} · ${c.ufcd}`, sub: c.nomeComercial, view: "fin-cursos" as View })),
   { tipo: "DTP", nome: "Dossiê da turma VNG-SM-07/09", sub: "CCP · Gold", view: "gold-cockpit-turma" as View, turmaId: 943, tab: "dtp" as CockpitTab },
   { tipo: "DTP", nome: "Dossiê da turma UFCD 3564 · T1", sub: "Primeiros Socorros · Financiada", view: "fin-cockpit-turma" as View, turmaId: 218, tab: "dtp" as CockpitTab },
+  { tipo: "Inquérito", nome: "Satisfação CCP", sub: "Gold · 5 perguntas", view: "gold-inqueritos" as View },
+  { tipo: "Inquérito", nome: "Satisfação UFCD 3564", sub: "Financiada · 4 perguntas", view: "fin-inqueritos" as View },
 ];
 
 function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: () => void; onNavigate: (t: NavTarget) => void }) {
@@ -2117,7 +2186,7 @@ function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: (
           <div className="px-4 py-4 grid grid-cols-2 gap-2">
             {[
               { l: "Pré-Inscrições", v: "gold-preinscricoes" as View }, { l: "Turmas Gold", v: "gold-turmas" as View },
-              { l: "Dossiês Gold", v: "gold-dtp" as View }, { l: "Dossiês Financiada", v: "fin-dtp" as View },
+              { l: "Dossiê TP Gold", v: "gold-dtp" as View }, { l: "Inquéritos Gold", v: "gold-inqueritos" as View },
             ].map(s => (
               <button key={s.l} onClick={() => { onNavigate({ view: s.v }); onClose(); }}
                 className="text-left px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-semibold text-slate-700 transition-colors">{s.l}</button>
@@ -2187,20 +2256,22 @@ const sidebarConfig: NavGroup[] = [
     { label: "Formandos", icon: I.users, children: [{ label: "Formandos Turmas", view: "gold-formandos-turmas" }, { label: "Formandos Gold", view: "gold-formandos-gold" }] },
     { label: "Campanhas", view: "gold-campanhas", icon: I.megaphone },
     { label: "Edição de Cursos", icon: I.book, children: [
-      { label: "Cursos Gold", view: "gold-cursos" }, { label: "Datas", view: "gold-datas" },
+      { label: "Cursos Gold", view: "gold-cursos" }, { label: "Módulos", view: "gold-modulos" },
+      { label: "Conteúdos", view: "gold-conteudos" }, { label: "Datas", view: "gold-datas" },
       { label: "Locais", view: "gold-locais" }, { label: "Áreas Temáticas", view: "gold-areas-tematicas" },
-      { label: "Módulos", view: "gold-modulos" }, { label: "Conteúdos", view: "gold-conteudos" },
     ]},
     { label: "Turmas", view: "gold-turmas", icon: I.school },
-    { label: "Dossiês das turmas", view: "gold-dtp", icon: I.doc },
+    { label: "Dossiê TP", view: "gold-dtp", icon: I.folder },
+    { label: "Inquéritos", view: "gold-inqueritos", icon: I.doc },
   ]},
   { group: "Financiada", items: [
     { label: "Inscrições", view: "fin-inscricoes", icon: I.clipboard },
     { label: "Formandos", view: "fin-formandos", icon: I.users },
     { label: "Turmas", view: "fin-turmas", icon: I.school },
     { label: "Presenças", view: "fin-presencas", icon: I.attend },
-    { label: "Dossiês das turmas", view: "fin-dtp", icon: I.doc },
     { label: "Cursos", view: "fin-cursos", icon: I.book },
+    { label: "Dossiê TP", view: "fin-dtp", icon: I.folder },
+    { label: "Inquéritos", view: "fin-inqueritos", icon: I.doc },
   ]},
   { group: "Gestão", items: [
     { label: "Formadores", view: "formadores", icon: I.person },
@@ -2330,10 +2401,12 @@ const viewTitles: Partial<Record<View, string>> = {
   "gold-campanhas": "Campanhas", "gold-cursos": "Cursos Gold", "gold-datas": "Datas Gold",
   "gold-locais": "Locais", "gold-areas-tematicas": "Áreas Temáticas",
   "gold-modulos": "Módulos", "gold-conteudos": "Conteúdos",
-  "gold-turmas": "Turmas Gold", "gold-cockpit-turma": "Cockpit da Turma", "gold-dtp": "Dossiês das turmas Gold",
+  "gold-turmas": "Turmas Gold", "gold-cockpit-turma": "Cockpit da Turma", "gold-dtp": "Dossiê TP — Gold",
+  "gold-inqueritos": "Inquéritos — Gold",
   "fin-inscricoes": "Inscrições Financiadas", "fin-formandos": "Formandos Financiados",
   "fin-cursos": "Cursos Financiados", "fin-turmas": "Turmas Financiadas", "fin-presencas": "Folha de Presenças",
-  "fin-dtp": "Dossiês das turmas Financiadas", "fin-cockpit-turma": "Cockpit da Turma Financiada",
+  "fin-dtp": "Dossiê TP — Financiada", "fin-cockpit-turma": "Cockpit da Turma Financiada",
+  "fin-inqueritos": "Inquéritos — Financiada",
   formadores: "Formadores", "blog-posts": "Blog - Posts", "blog-tematicas": "Blog - Temáticas",
   emails: "Emails Automáticos", pagamentos: "Pagamentos", configuracoes: "Configurações",
 };
@@ -2407,6 +2480,7 @@ export default function App() {
       case "gold-areas-tematicas": return <AreasTematicasView />;
       case "gold-modulos": return <ModulosView />;
       case "gold-conteudos": return <ConteudosView />;
+      case "gold-inqueritos": return <InqueritosView acento="gold" />;
       case "fin-inscricoes": return <FinInscricoesView />;
       case "fin-formandos": return <FinFormandosView />;
       case "fin-cursos": return <FinCursosView />;
@@ -2414,6 +2488,7 @@ export default function App() {
       case "fin-presencas": return <PresencasView />;
       case "fin-dtp": return <DtpTurmasPicker regime="fin" onOpen={(id) => openFinCockpit(id, "dtp")} />;
       case "fin-cockpit-turma": return <FinCockpitTurmaView turmaId={finCockpitId} initialTab={cockpitTab} onBack={() => navigate("fin-turmas")} />;
+      case "fin-inqueritos": return <InqueritosView acento="fin" />;
       case "formadores": return <FormadoresView />;
       case "blog-posts": return <BlogView />;
       case "blog-tematicas": return <BlogTematicasView />;

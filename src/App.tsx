@@ -1882,7 +1882,13 @@ function PreInscricoesGoldView() {
                 <button onClick={() => setViewMode("table")} className={`px-3 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5 ${viewMode === "table" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>{I.list} Lista</button>
                 <button onClick={() => setViewMode("kanban")} className={`px-3 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5 ${viewMode === "kanban" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>{I.kanban} Kanban</button>
               </div>
-              <NewBtn label="+ Nova" onClick={() => { setCurso("Formação de Formadores - CCP"); setTurma("VNG-SM-07/09"); setLocal("V.N.Gaia"); setNovo(true); }} />
+              <NewBtn label="+ Nova" onClick={() => {
+                const cursoNovo = "Formação de Formadores - CCP";
+                setCurso(cursoNovo);
+                setTurma(turmaGoldOpts(gold, { curso: cursoNovo })[0]?.value ?? "");
+                setLocal("V.N.Gaia");
+                setNovo(true);
+              }} />
             </div>
           }
         />

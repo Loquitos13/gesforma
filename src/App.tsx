@@ -343,24 +343,48 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
   );
 }
 function MiniBarChart({ data, color }: { data: { mes: string; v: number }[]; color: string }) {
+  const [hover, setHover] = useState<number | null>(null);
   const max = Math.max(...data.map(d => d.v), 1);
   const h = 160;
   const gap = 8;
   const barW = (600 - gap * (data.length - 1)) / data.length;
   return (
-    <svg viewBox="0 0 600 160" className="w-full h-40 block" role="img" aria-label="Receita mensal">
-      {data.map((d, i) => {
-        const bh = Math.max(6, (d.v / max) * (h - 2));
-        const x = i * (barW + gap);
-        return (
-          <g key={d.mes}>
-            <rect x={x} y={h - bh} width={barW} height={bh} rx="4" fill={color} opacity={i === data.length - 1 ? 1 : 0.5}>
-              <title>€ {d.v.toLocaleString("pt-PT")}</title>
-            </rect>
-          </g>
-        );
-      })}
-    </svg>
+    <div className="relative" onMouseLeave={() => setHover(null)}>
+      <svg viewBox="0 0 600 160" className="w-full h-40 block" role="img" aria-label="Receita mensal">
+        {data.map((d, i) => {
+          const bh = Math.max(6, (d.v / max) * (h - 8));
+          const x = i * (barW + gap);
+          const active = hover === i;
+          const dim = hover !== null && !active;
+          return (
+            <g key={d.mes} onMouseEnter={() => setHover(i)} className="cursor-pointer">
+              <rect x={x} y={0} width={barW} height={h} fill="transparent" />
+              <rect
+                x={x}
+                y={active ? h - bh - 4 : h - bh}
+                width={barW}
+                height={active ? bh + 4 : bh}
+                rx="4"
+                fill={color}
+                opacity={active ? 1 : dim ? 0.22 : i === data.length - 1 ? 1 : 0.5}
+                style={{ transition: "opacity 160ms ease, y 160ms ease, height 160ms ease" }}
+              />
+            </g>
+          );
+        })}
+      </svg>
+      {hover !== null && (
+        <div
+          className="pointer-events-none absolute z-10 -translate-x-1/2"
+          style={{ left: `${((hover + 0.5) / data.length) * 100}%`, top: 4 }}
+        >
+          <div className="bg-slate-800 text-white rounded-lg px-2.5 py-1 shadow-lg whitespace-nowrap">
+            <p className="text-xs font-semibold">{data[hover].mes}</p>
+            <p className="text-xs text-emerald-300 font-bold">€ {data[hover].v.toLocaleString("pt-PT")}</p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

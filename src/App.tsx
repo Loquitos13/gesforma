@@ -343,16 +343,24 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
   );
 }
 function MiniBarChart({ data, color }: { data: { mes: string; v: number }[]; color: string }) {
-  const max = Math.max(...data.map(d => d.v));
+  const max = Math.max(...data.map(d => d.v), 1);
+  const h = 160;
+  const gap = 8;
+  const barW = (600 - gap * (data.length - 1)) / data.length;
   return (
-    <div className="flex items-end gap-0.5 h-12">
-      {data.map((d, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-0.5 group relative">
-          <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">€{(d.v / 1000).toFixed(1)}k</div>
-          <div className="w-full rounded-t" style={{ height: `${(d.v / max) * 100}%`, backgroundColor: color, opacity: i === data.length - 1 ? 1 : 0.55 }} />
-        </div>
-      ))}
-    </div>
+    <svg viewBox="0 0 600 160" className="w-full h-40 block" role="img" aria-label="Receita mensal">
+      {data.map((d, i) => {
+        const bh = Math.max(6, (d.v / max) * (h - 2));
+        const x = i * (barW + gap);
+        return (
+          <g key={d.mes}>
+            <rect x={x} y={h - bh} width={barW} height={bh} rx="4" fill={color} opacity={i === data.length - 1 ? 1 : 0.5}>
+              <title>€ {d.v.toLocaleString("pt-PT")}</title>
+            </rect>
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 

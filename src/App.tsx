@@ -8,14 +8,14 @@ import {
   FileUploadModal, PresencasSessaoModal, FormadorProfileSlideOver, PlanoSessaoModal, SumarioSessaoModal,
   InqueritosView, defaultPlanos, emptyPlano, defaultSumarios, defaultSumariosFin, emptySumario, sumarioPreenchido,
   seedListaFromDetalhe, seedPipItems, seedSimItems,
-  getParametrosAvaliacao, setParametrosAvaliacao,
+  getParametrosAvaliacao,
   type PlanoSessaoData, type SessaoMeta, type SumarioSessaoData, type ResolveDocTarget, type PipItem, type SimItem,
-  type CriterioAvaliacao,
 } from "./TurmaExtras";
 import { ResolverDocumentoModal } from "./DocResolver";
+import { CursoFichaView } from "./CursoFichaView";
 import {
   FilterChips, SearchSelect,
-  blogTematicasOpts, categoriasGoldOpts, cursosFinOpts, cursosGoldOpts,
+  blogTematicasOpts, cursosFinOpts, cursosGoldOpts,
   formadoresOpts, horariosOpts, locaisOpts, modulosOpts, turmasGoldOpts,
 } from "./FormKit";
 
@@ -76,13 +76,13 @@ const I = {
 type View =
   | "painel" | "gold-preinscricoes" | "gold-formandos-turmas" | "gold-formandos-gold"
   | "gold-campanhas" | "gold-cursos" | "gold-datas" | "gold-locais" | "gold-areas-tematicas"
-  | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-cockpit-turma" | "gold-dtp" | "gold-inqueritos"
+  | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-cockpit-turma" | "gold-curso-ficha" | "gold-dtp" | "gold-inqueritos"
   | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-turmas" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
   | "formadores" | "blog-posts" | "blog-tematicas"
   | "emails" | "pagamentos" | "configuracoes";
 
 type CockpitTab = "overview" | "sessoes" | "documentos" | "dtp" | "certificados";
-type NavTarget = { view: View; turmaId?: number; tab?: CockpitTab };
+type NavTarget = { view: View; turmaId?: number; tab?: CockpitTab; cursoId?: number | "new" };
 
 // ─── Sample Data ─────────────────────────────────────────────────────────────
 
@@ -2159,52 +2159,18 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
 
 // ─── Remaining views (simplified) ────────────────────────────────────────────
 
-function slugCriterio(label: string, existing: CriterioAvaliacao[]) {
-  const base = label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "criterio";
-  let id = base; let n = 2;
-  while (existing.some(c => c.id === id)) { id = `${base}-${n}`; n += 1; }
-  return id;
-}
-
-function CursosGoldView() {
+function CursosGoldView({ onOpen }: { onOpen: (id: number | "new") => void }) {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
-  const [open, setOpen] = useState<typeof cursosGoldData[number] | "new" | null>(null);
-  const [criterios, setCriterios] = useState<CriterioAvaliacao[]>([]);
-  const [novoCriterio, setNovoCriterio] = useState("");
-  const [categoria, setCategoria] = useState("");
-  const [nomeCurso, setNomeCurso] = useState("");
-  const editing = open && open !== "new" ? open : null;
   const f = cursosGoldData.filter(c => {
     const q = `${c.nome} ${c.categoria}`.toLowerCase().includes(s.toLowerCase());
     return q && (filtro === "Todos" || c.estado === filtro || c.categoria === filtro);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
-  const temAvaliacao = /ccp/i.test(nomeCurso) || /ccp/i.test(categoria);
-
-  function abrir(c: typeof cursosGoldData[number] | "new") {
-    if (c === "new") {
-      setOpen("new");
-      setNomeCurso("");
-      setCategoria("");
-      setCriterios([]);
-    } else {
-      setOpen(c);
-      setNomeCurso(c.nome);
-      setCategoria(c.categoria);
-      setCriterios(getParametrosAvaliacao(c.nome).criterios);
-    }
-    setNovoCriterio("");
-  }
-
-  function guardarCurso() {
-    if (temAvaliacao) setParametrosAvaliacao(nomeCurso || "Formação de Formadores - CCP", criterios.filter(c => c.label.trim()));
-    setOpen(null);
-  }
 
   return (
     <div>
-      <PageHeader title="Cursos Gold" action={<NewBtn label="+ Novo Curso" onClick={() => abrir("new")} />} />
+      <PageHeader title="Cursos Gold" sub="Clique num curso para editar a página pública e a ficha operacional." action={<NewBtn label="+ Novo Curso" onClick={() => onOpen("new")} />} />
       <div className="mb-4"><FilterChips options={["Todos", "Ativo", "Inactivo", "CCP e Gestão da Formação", "Saúde e bem estar"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} /></div>
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
@@ -2215,14 +2181,14 @@ function CursosGoldView() {
               {rows.map(c => (
                 <tr key={c.id} className="hover:bg-slate-50">
                   <Td><IdCell id={c.id} /></Td>
-                  <Td className="max-w-[200px]"><button onClick={() => abrir(c)} className="text-xs font-medium text-blue-600 leading-snug text-left hover:underline">{c.nome}</button></Td>
+                  <Td className="max-w-[200px]"><button onClick={() => onOpen(c.id)} className="text-xs font-medium text-blue-600 leading-snug text-left hover:underline">{c.nome}</button></Td>
                   <Td className="text-xs text-slate-600 whitespace-nowrap">{c.categoria}</Td>
                   <Td><Badge label={c.tipo} variant={c.tipo === "Gold" ? "amber" : "gray"} /></Td>
                   <Td className="text-xs font-semibold text-amber-600">€ {c.preco}</Td>
                   <Td><span className={`text-xs px-1.5 py-0.5 rounded font-medium ${c.regime === "e-learning" ? "bg-blue-50 text-blue-700" : "bg-violet-50 text-violet-700"}`}>{c.regime}</span></Td>
                   <Td className="text-center text-xs text-slate-600">{c.horas || "-"}</Td>
                   <Td>{estadoBadge(c.estado)}</Td>
-                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => abrir(c)} /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
+                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar página" onClick={() => onOpen(c.id)} /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
                 </tr>
               ))}
             </tbody>
@@ -2230,58 +2196,6 @@ function CursosGoldView() {
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
-      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing?.nome ?? "Novo curso Gold"} sub="Ficha do curso e parâmetros da folha de avaliação.">
-        <div className="p-5 space-y-4">
-          <Field label="Nome"><input className={iCls} value={nomeCurso} onChange={e => setNomeCurso(e.target.value)} /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Categoria"><SearchSelect value={categoria} onChange={setCategoria} options={categoriasGoldOpts} /></Field>
-            <Field label="Preço (€)"><input className={iCls} type="number" defaultValue={editing?.preco ?? 0} /></Field>
-          </div>
-          {temAvaliacao && (
-            <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 space-y-3">
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Parâmetros de avaliação</p>
-                <p className="text-xs text-slate-500 mt-0.5">A folha das simulações inicial e final usa estes critérios, à escala 1–5.</p>
-              </div>
-              <div className="space-y-2">
-                {criterios.length === 0 && <p className="text-xs text-slate-500">Ainda não há critérios. Adiciona o primeiro abaixo.</p>}
-                {criterios.map((c, i) => (
-                  <div key={c.id} className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-slate-400 w-5">{i + 1}</span>
-                    <input className={iCls} value={c.label}
-                      onChange={e => setCriterios(prev => prev.map(x => x.id === c.id ? { ...x, label: e.target.value } : x))} />
-                    <button type="button" onClick={() => setCriterios(prev => prev.filter(x => x.id !== c.id))}
-                      className="p-2 text-slate-400 hover:text-red-500" aria-label="Remover critério">{I.trash}</button>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <input className={iCls} value={novoCriterio} placeholder="Novo critério (ex. Gestão do tempo)"
-                  onChange={e => setNovoCriterio(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === "Enter" && novoCriterio.trim()) {
-                      setCriterios(prev => [...prev, { id: slugCriterio(novoCriterio, prev), label: novoCriterio.trim() }]);
-                      setNovoCriterio("");
-                    }
-                  }} />
-                <button type="button"
-                  onClick={() => {
-                    if (!novoCriterio.trim()) return;
-                    setCriterios(prev => [...prev, { id: slugCriterio(novoCriterio, prev), label: novoCriterio.trim() }]);
-                    setNovoCriterio("");
-                  }}
-                  className="px-3 py-2 text-xs font-semibold rounded-lg border border-violet-200 bg-white text-violet-700 hover:bg-violet-50 whitespace-nowrap">
-                  + Critério
-                </button>
-              </div>
-            </div>
-          )}
-          <div className="flex gap-2 pt-2">
-            <button onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button onClick={guardarCurso} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
-          </div>
-        </div>
-      </SlideOver>
     </div>
   );
 }
@@ -2628,7 +2542,7 @@ const allSearchable: Array<{ tipo: string; nome: string; sub: string } & NavTarg
   ...finFormandosData.map(f => ({ tipo: "Formando Financiado", nome: `${f.nome} ${f.apelido}`, sub: f.email, view: "fin-formandos" as View })),
   ...turmasGoldData.map(t => ({ tipo: "Turma Gold", nome: t.nome, sub: `${t.local} · ${t.curso}`, view: "gold-cockpit-turma" as View, turmaId: t.id, tab: "overview" as CockpitTab })),
   ...finTurmasData.map(t => ({ tipo: "Turma Financiada", nome: t.nome, sub: `UFCD ${t.ufcdCod}`, view: "fin-cockpit-turma" as View, turmaId: t.id, tab: "overview" as CockpitTab })),
-  ...cursosGoldData.map(c => ({ tipo: "Curso Gold", nome: c.nome, sub: c.categoria, view: "gold-cursos" as View })),
+  ...cursosGoldData.map(c => ({ tipo: "Curso Gold", nome: c.nome, sub: c.categoria, view: "gold-curso-ficha" as View, cursoId: c.id })),
   ...finCursosData.map(c => ({ tipo: "UFCD", nome: `${c.ufcdCod} · ${c.ufcd}`, sub: c.nomeComercial, view: "fin-cursos" as View })),
   { tipo: "DTP", nome: "Dossiê da turma VNG-SM-07/09", sub: "CCP · Gold", view: "gold-cockpit-turma" as View, turmaId: 943, tab: "dtp" as CockpitTab },
   { tipo: "DTP", nome: "Dossiê da turma UFCD 3564 · T1", sub: "Primeiros Socorros · Financiada", view: "fin-cockpit-turma" as View, turmaId: 218, tab: "dtp" as CockpitTab },
@@ -2905,7 +2819,7 @@ function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v:
 const viewTitles: Partial<Record<View, string>> = {
   painel: "Painel", "gold-preinscricoes": "Pré-Inscrições Gold",
   "gold-formandos-turmas": "Formandos Turmas", "gold-formandos-gold": "Formandos Gold",
-  "gold-campanhas": "Campanhas", "gold-cursos": "Cursos Gold", "gold-datas": "Datas Gold",
+  "gold-campanhas": "Campanhas", "gold-cursos": "Cursos Gold", "gold-curso-ficha": "Ficha do curso", "gold-datas": "Datas Gold",
   "gold-locais": "Locais", "gold-areas-tematicas": "Áreas Temáticas",
   "gold-modulos": "Módulos", "gold-conteudos": "Conteúdos",
   "gold-turmas": "Turmas Gold", "gold-cockpit-turma": "Cockpit da Turma", "gold-dtp": "Dossiê TP - Gold",
@@ -2923,6 +2837,7 @@ export default function App() {
   const [cockpitId, setCockpitId] = useState<number | undefined>();
   const [finCockpitId, setFinCockpitId] = useState<number | undefined>();
   const [cockpitTab, setCockpitTab] = useState<CockpitTab>("overview");
+  const [cursoFichaId, setCursoFichaId] = useState<number | "new" | undefined>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -2941,6 +2856,9 @@ export default function App() {
     }
     if (t.view === "fin-cockpit-turma") {
       setFinCockpitId(t.turmaId); setCockpitTab(t.tab ?? "overview");
+    }
+    if (t.view === "gold-curso-ficha") {
+      setCursoFichaId(t.cursoId ?? "new");
     }
     go(t.view);
   }, [go]);
@@ -2974,7 +2892,13 @@ export default function App() {
   function renderView() {
     switch (view) {
       case "painel": return <PainelView onNavigate={navigate} />;
-      case "gold-cursos": return <CursosGoldView />;
+      case "gold-cursos": return <CursosGoldView onOpen={id => { setCursoFichaId(id); go("gold-curso-ficha"); }} />;
+      case "gold-curso-ficha": return (
+        <CursoFichaView
+          curso={cursoFichaId && cursoFichaId !== "new" ? cursosGoldData.find(c => c.id === cursoFichaId) : undefined}
+          onBack={() => navigate("gold-cursos")}
+        />
+      );
       case "gold-turmas": return <TurmasGoldView onCockpit={openCockpit} />;
       case "gold-cockpit-turma": return <CockpitTurmaView turmaId={cockpitId} initialTab={cockpitTab} onBack={() => navigate("gold-turmas")} onNavigate={navigate} />;
       case "gold-dtp": return <DtpTurmasPicker regime="gold" onOpen={(id) => openCockpit(id, "dtp")} />;

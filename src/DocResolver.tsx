@@ -36,16 +36,22 @@ export function ResolverDocumentoModal({
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const rowInputRef = useRef<HTMLInputElement>(null);
-  const [rowUpload, setRowUpload] = useState<{ id: string; field: "pip" | "video" } | null>(null);
+  const rowUploadRef = useRef<{ id: string; field: "pip" | "video" } | null>(null);
+  const hydrateKey = useRef("");
 
   useEffect(() => {
-    if (open && target) {
-      setItems(target.items ? target.items.map(i => ({ ...i })) : []);
-      setPipItems(target.pipItems ? target.pipItems.map(i => ({ ...i })) : []);
-      setSimItems(target.simItems ? target.simItems.map(i => ({ ...i, notas: { ...i.notas } })) : []);
-      setOpenAluno(null);
-      setFile(null);
+    if (!open || !target) {
+      hydrateKey.current = "";
+      return;
     }
+    const key = `${target.kind}:${target.label}`;
+    if (hydrateKey.current === key) return;
+    hydrateKey.current = key;
+    setItems(target.items ? target.items.map(i => ({ ...i })) : []);
+    setPipItems(target.pipItems ? target.pipItems.map(i => ({ ...i })) : []);
+    setSimItems(target.simItems ? target.simItems.map(i => ({ ...i, notas: { ...i.notas } })) : []);
+    setOpenAluno(null);
+    setFile(null);
   }, [open, target]);
 
   if (!open || !target) return null;
@@ -62,22 +68,41 @@ export function ResolverDocumentoModal({
   const total = doc.kind === "pip" ? pipItems.length : doc.kind === "simulacao" ? simItems.length : items.length;
   const wide = doc.kind === "simulacao" || doc.kind === "pip";
 
+  function persistPip(next: PipItem[]) {
+    onSave({ ...pipEstado(next), payload: next });
+  }
+  function persistSim(next: SimItem[]) {
+    onSave({ ...simEstado(next, criterios), payload: next });
+  }
+
   function pickFile(id: string, field: "pip" | "video") {
-    setRowUpload({ id, field });
-    setTimeout(() => rowInputRef.current?.click(), 0);
+    rowUploadRef.current = { id, field };
+    if (rowInputRef.current) {
+      rowInputRef.current.accept = field === "video" ? "video/*,.mp4,.mov,.webm" : ".pdf,.doc,.docx";
+      rowInputRef.current.click();
+    }
   }
   function onRowFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     e.target.value = "";
-    if (!f || !rowUpload) return;
-    if (rowUpload.field === "pip") setPipItems(prev => prev.map(x => x.id === rowUpload.id ? { ...x, fileName: f.name } : x));
-    if (rowUpload.field === "video") setSimItems(prev => prev.map(x => x.id === rowUpload.id ? { ...x, videoName: f.name } : x));
-    setRowUpload(null);
+    const dest = rowUploadRef.current;
+    rowUploadRef.current = null;
+    if (!f || !dest) return;
+    if (dest.field === "pip") {
+      const next = pipItems.map(x => x.id === dest.id ? { ...x, fileName: f.name } : x);
+      setPipItems(next);
+      persistPip(next);
+    }
+    if (dest.field === "video") {
+      const next = simItems.map(x => x.id === dest.id ? { ...x, videoName: f.name } : x);
+      setSimItems(next);
+      persistSim(next);
+    }
   }
 
   function guardar() {
-    if (doc.kind === "pip") onSave({ ...pipEstado(pipItems), payload: pipItems });
-    else if (doc.kind === "simulacao") onSave({ ...simEstado(simItems, criterios), payload: simItems });
+    if (doc.kind === "pip") persistPip(pipItems);
+    else if (doc.kind === "simulacao") persistSim(simItems);
     else if (doc.kind === "lista") {
       onSave({
         estado: listaEstado,
@@ -98,9 +123,7 @@ export function ResolverDocumentoModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className={`bg-white rounded-2xl shadow-2xl w-full flex flex-col max-h-[90vh] ${wide ? "max-w-2xl" : "max-w-lg"}`}>
-        <input ref={rowInputRef} type="file" className="hidden"
-          accept={rowUpload?.field === "video" ? "video/*,.mp4,.mov,.webm" : ".pdf,.doc,.docx"}
-          onChange={onRowFile} />
+        <input ref={rowInputRef} type="file" className="hidden" onChange={onRowFile} />
         <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
           <div>
             <p className="text-sm font-semibold text-slate-800">{doc.label}</p>
@@ -134,7 +157,11 @@ export function ResolverDocumentoModal({
                   {item.fileName ? "Substituir" : "Carregar PIP"}
                 </button>
                 {item.fileName && (
-                  <button onClick={() => setPipItems(prev => prev.map(x => x.id === item.id ? { ...x, fileName: undefined } : x))}
+                  <button onClick={() => {
+                    const next = pipItems.map(x => x.id === item.id ? { ...x, fileName: undefined } : x);
+                    setPipItems(next);
+                    persistPip(next);
+                  }}
                     className="text-slate-300 hover:text-red-500" title="Remover">{I.trash}</button>
                 )}
                 {badgeEstado(item.fileName ? "ok" : "falta")}
@@ -188,7 +215,11 @@ export function ResolverDocumentoModal({
                             <p className="flex-1 text-xs text-slate-700 min-w-0">{c.label}</p>
                             <div className="flex gap-1">
                               {[1, 2, 3, 4, 5].map(n => (
-                                <button key={n} onClick={() => setSimItems(prev => prev.map(x => x.id === item.id ? { ...x, notas: { ...x.notas, [c.id]: n } } : x))}
+                                <button key={n} onClick={() => {
+                                  const next = simItems.map(x => x.id === item.id ? { ...x, notas: { ...x.notas, [c.id]: n } } : x);
+                                  setSimItems(next);
+                                  persistSim(next);
+                                }}
                                   className={`w-7 h-7 rounded-full text-xs font-bold border ${item.notas[c.id] === n ? "bg-amber-500 text-white border-amber-500" : "bg-white text-slate-500 border-slate-200 hover:border-amber-300"}`}>
                                   {n}
                                 </button>

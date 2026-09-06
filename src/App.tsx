@@ -596,7 +596,8 @@ const certificadosSample = [
 ];
 
 type DocEstado = "ok" | "parcial" | "falta";
-const docsTurmaGrupos: { id: string; label: string; color: string; icon: React.ReactNode; items: { label: string; detalhe: string; estado: DocEstado; bloqueante?: boolean }[] }[] = [
+type DocItem = { label: string; detalhe: string; estado: DocEstado; bloqueante?: boolean; payload?: unknown };
+const docsTurmaGrupos: { id: string; label: string; color: string; icon: React.ReactNode; items: DocItem[] }[] = [
   { id: "turma", label: "Documentos da turma", color: "bg-amber-50 border-amber-200 text-amber-800", icon: I.school, items: [
     { label: "Programa de formação", detalhe: "Objetivos, conteúdos, metodologias e avaliação.", estado: "ok" },
     { label: "Regulamento de formação", detalhe: "Regulamento ENA aceite pelos formandos.", estado: "ok" },
@@ -679,6 +680,22 @@ function cloneGrupos(src: typeof docsTurmaGrupos) {
   return src.map(g => ({ ...g, items: g.items.map(i => ({ ...i })) }));
 }
 
+function applyDocSave(
+  grupos: typeof docsTurmaGrupos,
+  ref: { grupoId: string; label: string },
+  next: { estado: DocEstado; detalhe: string; payload?: unknown },
+) {
+  return grupos.map(g => g.id !== ref.grupoId ? g : {
+    ...g,
+    items: g.items.map(d => d.label !== ref.label ? d : {
+      ...d,
+      estado: next.estado,
+      detalhe: next.detalhe,
+      payload: next.payload !== undefined ? next.payload : d.payload,
+    }),
+  });
+}
+
 function DocumentosTurmaTab({ regime = "gold", curso }: { regime?: "gold" | "fin"; curso?: string }) {
   const estadoCfg: Record<DocEstado, { dot: string; chip: string; label: string }> = {
     ok: { dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700 border-emerald-200", label: "No dossiê" },
@@ -688,8 +705,9 @@ function DocumentosTurmaTab({ regime = "gold", curso }: { regime?: "gold" | "fin
   const seed = regime === "fin" ? docsFinGrupos : docsTurmaGrupos;
   const [grupos, setGrupos] = useState(() => cloneGrupos(seed));
   const [resolver, setResolver] = useState<{ grupoId: string; label: string } | null>(null);
-  const [payloads, setPayloads] = useState<Record<string, unknown>>({});
-  useEffect(() => { setGrupos(cloneGrupos(seed)); setResolver(null); setPayloads({}); }, [regime]);
+  const resolverRef = useRef(resolver);
+  resolverRef.current = resolver;
+  useEffect(() => { setGrupos(cloneGrupos(seed)); setResolver(null); }, [regime]);
 
   const nomesFormandos = regime === "fin"
     ? finFormandosData.map(f => `${f.nome} ${f.apelido}`)
@@ -707,25 +725,20 @@ function DocumentosTurmaTab({ regime = "gold", curso }: { regime?: "gold" | "fin
     setResolver({ grupoId, label: doc.label });
   }
 
-  function payloadKey(grupoId: string, label: string) {
-    return `${grupoId}:${label}`;
-  }
-
-  function targetFromDoc(grupoId: string, doc: { label: string; detalhe: string; estado: DocEstado }): ResolveDocTarget {
-    const saved = payloads[payloadKey(grupoId, doc.label)];
+  function targetFromDoc(grupoId: string, doc: DocItem): ResolveDocTarget {
     const isPip = doc.label === "PIP";
     const isSim = /simula/i.test(doc.label);
     if (isPip) {
       return {
         label: doc.label, detalhe: doc.detalhe, estado: doc.estado, kind: "pip",
-        pipItems: seedPipItems(nomesFormandos, saved as PipItem[] | undefined),
+        pipItems: seedPipItems(nomesFormandos, doc.payload as PipItem[] | undefined),
       };
     }
     if (isSim) {
       const params = getParametrosAvaliacao(cursoNome);
       return {
         label: doc.label, detalhe: doc.detalhe, estado: doc.estado, kind: "simulacao",
-        simItems: seedSimItems(nomesFormandos, params.criterios, saved as SimItem[] | undefined),
+        simItems: seedSimItems(nomesFormandos, params.criterios, doc.payload as SimItem[] | undefined),
         criterios: params.criterios,
         curso: params.curso,
       };
@@ -784,14 +797,9 @@ function DocumentosTurmaTab({ regime = "gold", curso }: { regime?: "gold" | "fin
         accent={regime}
         target={aberto ? targetFromDoc(aberto.grupoId, aberto.doc) : null}
         onSave={next => {
-          if (!resolver) return;
-          if (next.payload !== undefined) {
-            setPayloads(prev => ({ ...prev, [payloadKey(resolver.grupoId, resolver.label)]: next.payload }));
-          }
-          setGrupos(prev => prev.map(g => g.id !== resolver.grupoId ? g : {
-            ...g,
-            items: g.items.map(d => d.label !== resolver.label ? d : { ...d, estado: next.estado, detalhe: next.detalhe }),
-          }));
+          const ref = resolverRef.current;
+          if (!ref) return;
+          setGrupos(prev => applyDocSave(prev, ref, next));
         }}
       />
     </div>

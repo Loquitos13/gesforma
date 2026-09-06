@@ -77,7 +77,7 @@ type View =
   | "painel" | "gold-preinscricoes" | "gold-formandos-turmas" | "gold-formandos-gold"
   | "gold-campanhas" | "gold-cursos" | "gold-datas" | "gold-locais" | "gold-areas-tematicas"
   | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-cockpit-turma" | "gold-curso-ficha" | "gold-dtp" | "gold-inqueritos"
-  | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-turmas" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
+  | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
   | "formadores" | "blog-posts" | "blog-tematicas"
   | "emails" | "pagamentos" | "configuracoes";
 
@@ -1900,7 +1900,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
-      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `Editar ${editing.nome}` : "Nova turma Gold"} sub="Código interno da turma — o objeto de gestão é a turma, não a ação.">
+      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `Editar ${editing.nome}` : "Nova turma Gold"} sub="Código interno da turma - o objeto de gestão é a turma, não a ação.">
         <div className="p-5 space-y-3">
           <Field label="Código interno"><input className={iCls} defaultValue={editing?.nome ?? ""} placeholder="VNG-SM-07/09" /></Field>
           <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
@@ -2140,7 +2140,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
-      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? editing.nome : "Nova turma financiada"} sub="UFCD e turma — o objeto de gestão é a turma.">
+      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? editing.nome : "Nova turma financiada"} sub="UFCD e turma - o objeto de gestão é a turma.">
         <div className="p-5 space-y-3">
           <Field label="Curso / UFCD"><SearchSelect value={curso} onChange={setCurso} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
           <Field label="Código da turma"><input className={iCls} defaultValue={editing?.nome ?? ""} placeholder="UFCD 3564 · T1" /></Field>
@@ -2337,15 +2337,14 @@ function CampanhasView() {
   );
 }
 
-function FinCursosView() {
+function FinCursosView({ onOpen }: { onOpen: (id: number | "new") => void }) {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
-  const [open, setOpen] = useState(false);
-  const [ufcd, setUfcd] = useState("");
   const f = finCursosData.filter(c => `${c.ufcd} ${c.nomeComercial}`.toLowerCase().includes(s.toLowerCase()) && (filtro === "Todos" || c.estado === filtro));
+  const rows = f.slice((p - 1) * pp, p * pp);
   return (
     <div className="space-y-4">
-      <PageHeader title="Cursos Financiados" action={<NewBtn label="+ Novo Curso" onClick={() => setOpen(true)} />} />
+      <PageHeader title="Cursos Financiados" sub="Clique numa UFCD para editar a página pública e a ficha operacional." action={<NewBtn label="+ Novo Curso" onClick={() => onOpen("new")} />} />
       <FilterChips options={["Todos", "Ativo", "Inactivo"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} accent="fin" />
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
@@ -2353,15 +2352,15 @@ function FinCursosView() {
           <table className="w-full text-sm">
             <thead><tr><Th>Cód. UFCD</Th><Th>UFCD</Th><Th>Nome Comercial</Th><Th>Regime</Th><Th className="text-center">Horas</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {f.map(c => (
+              {rows.map(c => (
                 <tr key={c.id} className="hover:bg-slate-50">
                   <Td><span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-600 text-white">{c.ufcdCod}</span></Td>
-                  <Td className="text-xs text-blue-600 font-medium max-w-[180px]">{c.ufcd}</Td>
+                  <Td className="max-w-[180px]"><button onClick={() => onOpen(c.id)} className="text-xs text-blue-600 font-medium text-left hover:underline">{c.ufcd}</button></Td>
                   <Td className="text-xs text-slate-600 max-w-[200px]">{c.nomeComercial}</Td>
                   <Td><span className={`text-xs px-1.5 py-0.5 rounded font-medium ${c.regime === "e-learning" ? "bg-blue-50 text-blue-700" : "bg-violet-50 text-violet-700"}`}>{c.regime}</span></Td>
                   <Td className="text-center text-xs text-slate-600">{c.horas || "-"}</Td>
                   <Td>{estadoBadge(c.estado)}</Td>
-                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
+                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar página" onClick={() => onOpen(c.id)} /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
                 </tr>
               ))}
             </tbody>
@@ -2369,20 +2368,6 @@ function FinCursosView() {
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
-      <SlideOver open={open} onClose={() => setOpen(false)} title="Novo curso financiado" sub="UFCD do Catálogo Nacional de Qualificações">
-        <div className="p-5 space-y-3">
-          <Field label="UFCD"><SearchSelect value={ufcd} onChange={setUfcd} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
-          <Field label="Nome comercial"><input className={iCls} /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Horas"><input type="number" className={iCls} defaultValue={25} /></Field>
-            <Field label="Estado"><select className={iCls}><option>Ativo</option><option>Inactivo</option></select></Field>
-          </div>
-          <div className="flex gap-2 pt-2">
-            <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button onClick={() => setOpen(false)} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">Guardar</button>
-          </div>
-        </div>
-      </SlideOver>
     </div>
   );
 }
@@ -2543,7 +2528,7 @@ const allSearchable: Array<{ tipo: string; nome: string; sub: string } & NavTarg
   ...turmasGoldData.map(t => ({ tipo: "Turma Gold", nome: t.nome, sub: `${t.local} · ${t.curso}`, view: "gold-cockpit-turma" as View, turmaId: t.id, tab: "overview" as CockpitTab })),
   ...finTurmasData.map(t => ({ tipo: "Turma Financiada", nome: t.nome, sub: `UFCD ${t.ufcdCod}`, view: "fin-cockpit-turma" as View, turmaId: t.id, tab: "overview" as CockpitTab })),
   ...cursosGoldData.map(c => ({ tipo: "Curso Gold", nome: c.nome, sub: c.categoria, view: "gold-curso-ficha" as View, cursoId: c.id })),
-  ...finCursosData.map(c => ({ tipo: "UFCD", nome: `${c.ufcdCod} · ${c.ufcd}`, sub: c.nomeComercial, view: "fin-cursos" as View })),
+  ...finCursosData.map(c => ({ tipo: "UFCD", nome: `${c.ufcdCod} · ${c.ufcd}`, sub: c.nomeComercial, view: "fin-curso-ficha" as View, cursoId: c.id })),
   { tipo: "DTP", nome: "Dossiê da turma VNG-SM-07/09", sub: "CCP · Gold", view: "gold-cockpit-turma" as View, turmaId: 943, tab: "dtp" as CockpitTab },
   { tipo: "DTP", nome: "Dossiê da turma UFCD 3564 · T1", sub: "Primeiros Socorros · Financiada", view: "fin-cockpit-turma" as View, turmaId: 218, tab: "dtp" as CockpitTab },
   { tipo: "Inquérito", nome: "Satisfação CCP", sub: "Gold · 5 perguntas", view: "gold-inqueritos" as View },
@@ -2825,7 +2810,7 @@ const viewTitles: Partial<Record<View, string>> = {
   "gold-turmas": "Turmas Gold", "gold-cockpit-turma": "Cockpit da Turma", "gold-dtp": "Dossiê TP - Gold",
   "gold-inqueritos": "Inquéritos - Gold",
   "fin-inscricoes": "Inscrições Financiadas", "fin-formandos": "Formandos Financiados",
-  "fin-cursos": "Cursos Financiados", "fin-turmas": "Turmas Financiadas", "fin-presencas": "Folha de Presenças",
+  "fin-cursos": "Cursos Financiados", "fin-curso-ficha": "Ficha UFCD", "fin-turmas": "Turmas Financiadas", "fin-presencas": "Folha de Presenças",
   "fin-dtp": "Dossiê TP - Financiada", "fin-cockpit-turma": "Cockpit da Turma Financiada",
   "fin-inqueritos": "Inquéritos - Financiada",
   formadores: "Formadores", "blog-posts": "Blog - Posts", "blog-tematicas": "Blog - Temáticas",
@@ -2857,7 +2842,7 @@ export default function App() {
     if (t.view === "fin-cockpit-turma") {
       setFinCockpitId(t.turmaId); setCockpitTab(t.tab ?? "overview");
     }
-    if (t.view === "gold-curso-ficha") {
+    if (t.view === "gold-curso-ficha" || t.view === "fin-curso-ficha") {
       setCursoFichaId(t.cursoId ?? "new");
     }
     go(t.view);
@@ -2914,7 +2899,17 @@ export default function App() {
       case "gold-inqueritos": return <InqueritosView acento="gold" />;
       case "fin-inscricoes": return <FinInscricoesView />;
       case "fin-formandos": return <FinFormandosView />;
-      case "fin-cursos": return <FinCursosView />;
+      case "fin-cursos": return <FinCursosView onOpen={id => { setCursoFichaId(id); go("fin-curso-ficha"); }} />;
+      case "fin-curso-ficha": {
+        const raw = cursoFichaId && cursoFichaId !== "new" ? finCursosData.find(c => c.id === cursoFichaId) : undefined;
+        return (
+          <CursoFichaView
+            accent="fin"
+            curso={raw ? { id: raw.id, nome: raw.nomeComercial, ufcdCod: raw.ufcdCod, ufcd: raw.ufcd, regime: raw.regime, horas: raw.horas, estado: raw.estado } : undefined}
+            onBack={() => navigate("fin-cursos")}
+          />
+        );
+      }
       case "fin-turmas": return <FinTurmasView onCockpit={openFinCockpit} />;
       case "fin-presencas": return <PresencasView />;
       case "fin-dtp": return <DtpTurmasPicker regime="fin" onOpen={(id) => openFinCockpit(id, "dtp")} />;

@@ -13,6 +13,11 @@ import {
   type CriterioAvaliacao,
 } from "./TurmaExtras";
 import { ResolverDocumentoModal } from "./DocResolver";
+import {
+  FilterChips, SearchSelect,
+  blogTematicasOpts, categoriasGoldOpts, cursosFinOpts, cursosGoldOpts,
+  formadoresOpts, horariosOpts, locaisOpts, modulosOpts, turmasGoldOpts,
+} from "./FormKit";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -911,6 +916,9 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const [presencasSession, setPresencasSession] = useState<SessaoMeta | null>(null);
   const [uploadCert, setUploadCert] = useState<number | null>(null);
   const [formadorOpen, setFormadorOpen] = useState(false);
+  const [novaSessao, setNovaSessao] = useState(false);
+  const [formadorSessao, setFormadorSessao] = useState("Isac Silva");
+  const [moduloSessao, setModuloSessao] = useState("");
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
 
   return (
@@ -968,7 +976,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           <Card>
             <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
               <p className="text-sm font-semibold text-slate-700">Sessões - {turma.nome}</p>
-              <NewBtn label="+ Nova Sessão" />
+              <NewBtn label="+ Nova Sessão" onClick={() => { setFormadorSessao(turma.curso.includes("CCP") ? "Isac Silva" : "Vânia Fernandes"); setModuloSessao(""); setNovaSessao(true); }} />
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1137,6 +1145,20 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
       <PresencasSessaoModal open={!!presencasSession} onClose={() => setPresencasSession(null)} sessao={presencasSession ?? undefined} />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" />
       <FormadorProfileSlideOver open={formadorOpen} onClose={() => setFormadorOpen(false)} nome="Isac Silva" />
+      <SlideOver open={novaSessao} onClose={() => setNovaSessao(false)} title="Nova sessão" sub={turma.nome}>
+        <div className="p-5 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Data"><input type="date" className={iCls} /></Field>
+            <Field label="Hora"><input className={iCls} placeholder="09h–13h" /></Field>
+          </div>
+          <Field label="Formador"><SearchSelect value={formadorSessao} onChange={setFormadorSessao} options={formadoresOpts} placeholder="Pesquisar formador…" /></Field>
+          <Field label="Módulo"><SearchSelect value={moduloSessao} onChange={setModuloSessao} options={modulosOpts} placeholder="Pesquisar módulo…" /></Field>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setNovaSessao(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={() => setNovaSessao(false)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Criar sessão</button>
+          </div>
+        </div>
+      </SlideOver>
     </>
   );
 }
@@ -1715,12 +1737,20 @@ function PainelView({ onNavigate }: { onNavigate: (v: View | NavTarget) => void 
 function PreInscricoesGoldView() {
   const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
+  const [filtro, setFiltro] = useState("Todos");
   const [fichaItem, setFichaItem] = useState<typeof preinscricoesData[number] | null>(null);
   const [fichaOpen, setFichaOpen] = useState(false);
+  const [novo, setNovo] = useState(false);
+  const [curso, setCurso] = useState("");
+  const [turma, setTurma] = useState("");
+  const [local, setLocal] = useState("");
 
   function openFicha(item: typeof preinscricoesData[number]) { setFichaItem(item); setFichaOpen(true); }
 
-  const f = preinscricoesData.filter(x => `${x.nome} ${x.apelido} ${x.email} ${x.curso}`.toLowerCase().includes(s.toLowerCase()));
+  const f = preinscricoesData.filter(x => {
+    const q = `${x.nome} ${x.apelido} ${x.email} ${x.curso}`.toLowerCase().includes(s.toLowerCase());
+    return q && (filtro === "Todos" || x.estado === filtro);
+  });
   const rows = f.slice((p - 1) * pp, p * pp);
 
   return (
@@ -1733,10 +1763,13 @@ function PreInscricoesGoldView() {
                 <button onClick={() => setViewMode("table")} className={`px-3 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5 ${viewMode === "table" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>{I.list} Lista</button>
                 <button onClick={() => setViewMode("kanban")} className={`px-3 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5 ${viewMode === "kanban" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>{I.kanban} Kanban</button>
               </div>
-              <NewBtn label="+ Nova" />
+              <NewBtn label="+ Nova" onClick={() => { setCurso("Formação de Formadores - CCP"); setTurma("VNG-SM-07/09"); setLocal("V.N.Gaia"); setNovo(true); }} />
             </div>
           }
         />
+        {viewMode === "table" && (
+          <FilterChips options={["Todos", "Não contactado", "1º Contacto", "2º Contacto", "Pago", "Formando"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} />
+        )}
 
         {viewMode === "kanban" ? (
           <KanbanBoard onCardClick={openFicha} />
@@ -1778,6 +1811,23 @@ function PreInscricoesGoldView() {
         )}
       </div>
       <FichaComercial item={fichaItem} open={fichaOpen} onClose={() => setFichaOpen(false)} />
+      <SlideOver open={novo} onClose={() => setNovo(false)} title="Nova pré-inscrição" sub="Lead comercial Gold">
+        <div className="p-5 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Nome"><input className={iCls} /></Field>
+            <Field label="Apelido"><input className={iCls} /></Field>
+          </div>
+          <Field label="Email"><input className={iCls} type="email" /></Field>
+          <Field label="Telemóvel"><input className={iCls} /></Field>
+          <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <Field label="Turma"><SearchSelect value={turma} onChange={setTurma} options={turmasGoldOpts} placeholder="Pesquisar turma…" /></Field>
+          <Field label="Local"><SearchSelect value={local} onChange={setLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setNovo(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={() => setNovo(false)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+          </div>
+        </div>
+      </SlideOver>
     </>
   );
 }
@@ -1786,11 +1836,30 @@ function PreInscricoesGoldView() {
 
 function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
-  const f = turmasGoldData.filter(t => `${t.nome} ${t.local} ${t.curso}`.toLowerCase().includes(s.toLowerCase()));
+  const [filtro, setFiltro] = useState("Todos");
+  const [open, setOpen] = useState<typeof turmasGoldData[number] | "new" | null>(null);
+  const [curso, setCurso] = useState("Formação de Formadores - CCP");
+  const [local, setLocal] = useState("");
+  const [horario, setHorario] = useState("");
+  const [formador, setFormador] = useState("Isac Silva");
+  const editing = open && open !== "new" ? open : null;
+  const f = turmasGoldData.filter(t => {
+    const q = `${t.nome} ${t.local} ${t.curso}`.toLowerCase().includes(s.toLowerCase());
+    return q && (filtro === "Todos" || t.estado === filtro || t.local === filtro);
+  });
   const rows = f.slice((p - 1) * pp, p * pp);
+  useEffect(() => {
+    if (open) {
+      setCurso(editing?.curso ?? "Formação de Formadores - CCP");
+      setLocal(editing?.local ?? "");
+      setHorario(editing?.horario ?? "");
+      setFormador("Isac Silva");
+    }
+  }, [open, editing]);
   return (
     <div className="space-y-4">
-      <PageHeader title="Turmas Gold" sub="13 ativas · 167 total" action={<NewBtn label="+ Nova Turma" />} />
+      <PageHeader title="Turmas Gold" sub="13 ativas · 167 total" action={<NewBtn label="+ Nova Turma" onClick={() => setOpen("new")} />} />
+      <FilterChips options={["Todos", "Ativo", "Inactivo", "V.N.Gaia", "Braga", "Lisboa"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} />
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
         <div className="overflow-x-auto">
@@ -1819,7 +1888,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
                     <Td>
                       <div className="flex gap-1">
                         <ActBtn icon={I.eye} label="Cockpit" onClick={() => onCockpit(t.id)} color="teal" />
-                        <ActBtn icon={I.edit} label="Editar" />
+                        <ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(t)} />
                         <ActBtn icon={I.trash} label="Eliminar" color="red" />
                       </div>
                     </Td>
@@ -1831,6 +1900,28 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
+      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `Editar ${editing.nome}` : "Nova turma Gold"} sub="Código interno da turma — o objeto de gestão é a turma, não a ação.">
+        <div className="p-5 space-y-3">
+          <Field label="Código interno"><input className={iCls} defaultValue={editing?.nome ?? ""} placeholder="VNG-SM-07/09" /></Field>
+          <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Local"><SearchSelect value={local} onChange={setLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
+            <Field label="Horário"><SearchSelect value={horario} onChange={setHorario} options={horariosOpts} /></Field>
+          </div>
+          <Field label="Formador"><SearchSelect value={formador} onChange={setFormador} options={formadoresOpts} placeholder="Pesquisar formador…" /></Field>
+          <Field label="Data de início"><input type="date" className={iCls} defaultValue={editing?.dataInicio ?? ""} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Vagas"><input type="number" className={iCls} defaultValue={editing?.vagas ?? 16} /></Field>
+            <Field label="Estado">
+              <select className={iCls} defaultValue={editing?.estado ?? "Ativo"}><option>Ativo</option><option>Inactivo</option></select>
+            </Field>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={() => setOpen(null)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+          </div>
+        </div>
+      </SlideOver>
     </div>
   );
 }
@@ -1839,13 +1930,22 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
 
 function FormandosTurmasView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
+  const [filtro, setFiltro] = useState("Todos");
   const [fichaOpen, setFichaOpen] = useState<FormandoRecord | null>(null);
-  const f = formandosTurmasData.filter(x => `${x.nome} ${x.apelido} ${x.turma}`.toLowerCase().includes(s.toLowerCase()));
+  const [edit, setEdit] = useState<FormandoRecord | null>(null);
+  const [turma, setTurma] = useState("");
+  const [cursoEdit, setCursoEdit] = useState("");
+  const f = formandosTurmasData.filter(x => {
+    const q = `${x.nome} ${x.apelido} ${x.turma}`.toLowerCase().includes(s.toLowerCase());
+    return q && (filtro === "Todos" || (filtro === "Pago" ? x.pago : filtro === "Por pagar" ? !x.pago : x.turma === filtro));
+  });
   const rows = f.slice((p - 1) * pp, p * pp);
+  useEffect(() => { if (edit) { setTurma(edit.turma); setCursoEdit(edit.curso); } }, [edit]);
   return (
     <>
       <div className="space-y-4">
         <PageHeader title="Formandos Turmas" sub="6 075 formandos em turma" />
+        <FilterChips options={["Todos", "Pago", "Por pagar", "VNG-SM-07/09", "PEN-SM-02/09"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} />
         <Card>
           <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
           <div className="overflow-x-auto">
@@ -1872,7 +1972,7 @@ function FormandosTurmasView() {
                     <Td>
                       <div className="flex gap-1">
                         <ActBtn icon={I.eye} label="Ficha" onClick={() => setFichaOpen(r)} />
-                        <ActBtn icon={I.edit} label="Editar" />
+                        <ActBtn icon={I.edit} label="Editar" onClick={() => setEdit(r)} />
                         <ActBtn icon={I.trash} label="Eliminar" color="red" />
                       </div>
                     </Td>
@@ -1887,6 +1987,16 @@ function FormandosTurmasView() {
       <SlideOver open={!!fichaOpen} onClose={() => setFichaOpen(null)} title="Ficha do Formando" sub={fichaOpen ? `#${fichaOpen.id}` : ""}>
         {fichaOpen && <FichaFormando formando={fichaOpen} onClose={() => setFichaOpen(null)} />}
       </SlideOver>
+      <SlideOver open={!!edit} onClose={() => setEdit(null)} title={edit ? `${edit.nome} ${edit.apelido}` : ""} sub="Mover de turma ou actualizar dados">
+        <div className="p-5 space-y-3">
+          <Field label="Turma"><SearchSelect value={turma} onChange={setTurma} options={turmasGoldOpts} placeholder="Pesquisar turma…" /></Field>
+          <Field label="Curso"><SearchSelect value={cursoEdit} onChange={setCursoEdit} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setEdit(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={() => setEdit(null)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+          </div>
+        </div>
+      </SlideOver>
     </>
   );
 }
@@ -1895,13 +2005,18 @@ function FormandosTurmasView() {
 
 function FinFormandosView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
+  const [filtro, setFiltro] = useState("Todos");
   const [dossierOpen, setDossierOpen] = useState<FinFormando | null>(null);
-  const f = finFormandosData.filter(x => `${x.nome} ${x.apelido} ${x.email}`.toLowerCase().includes(s.toLowerCase()));
+  const f = finFormandosData.filter(x => {
+    const q = `${x.nome} ${x.apelido} ${x.email}`.toLowerCase().includes(s.toLowerCase());
+    return q && (filtro === "Todos" || x.estado === filtro || x.turma === filtro);
+  });
   const rows = f.slice((p - 1) * pp, p * pp);
   return (
     <>
       <div className="space-y-4">
         <PageHeader title="Formandos Financiados" sub="1 390 formandos" />
+        <FilterChips options={["Todos", "Elegível", "SM-T01", "UFCD 3564 · T1"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} accent="fin" />
         <Card>
           <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
           <div className="overflow-x-auto">
@@ -1957,11 +2072,28 @@ function FinFormandosView() {
 
 function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab) => void }) {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
-  const f = finTurmasData.filter(t => `${t.nome} ${t.curso}`.toLowerCase().includes(s.toLowerCase()));
+  const [filtro, setFiltro] = useState("Todos");
+  const [open, setOpen] = useState<typeof finTurmasData[number] | "new" | null>(null);
+  const [curso, setCurso] = useState("");
+  const [formador, setFormador] = useState("");
+  const [localFin, setLocalFin] = useState("");
+  const editing = open && open !== "new" ? open : null;
+  const f = finTurmasData.filter(t => {
+    const q = `${t.nome} ${t.curso}`.toLowerCase().includes(s.toLowerCase());
+    return q && (filtro === "Todos" || t.estado === filtro);
+  });
   const rows = f.slice((p - 1) * pp, p * pp);
+  useEffect(() => {
+    if (open) {
+      setCurso(editing?.curso ?? "");
+      setFormador(editing?.formador ?? "");
+      setLocalFin(editing?.local ?? "Sala Virtual");
+    }
+  }, [open, editing]);
   return (
     <div className="space-y-4">
-      <PageHeader title="Turmas Financiadas" sub={`${finTurmasData.length} turmas`} action={<NewBtn label="+ Nova Turma" />} />
+      <PageHeader title="Turmas Financiadas" sub={`${finTurmasData.length} turmas`} action={<NewBtn label="+ Nova Turma" onClick={() => setOpen("new")} />} />
+      <FilterChips options={["Todos", "A montar", "A decorrer"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} accent="fin" />
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
         <div className="overflow-x-auto">
@@ -1996,7 +2128,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
                         <ActBtn icon={I.eye} label="Cockpit" color="teal" onClick={() => onCockpit(t.id, "overview")} />
                         <ActBtn icon={I.attend} label="Presenças" color="teal" onClick={() => onCockpit(t.id, "sessoes")} />
                         <ActBtn icon={I.doc} label="Dossiê da turma" color="orange" onClick={() => onCockpit(t.id, "dtp")} />
-                        <ActBtn icon={I.edit} label="Editar" />
+                        <ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(t)} />
                         <ActBtn icon={I.euro} label="Faturação" color="green" />
                       </div>
                     </Td>
@@ -2008,6 +2140,19 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
+      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? editing.nome : "Nova turma financiada"} sub="UFCD e turma — o objeto de gestão é a turma.">
+        <div className="p-5 space-y-3">
+          <Field label="Curso / UFCD"><SearchSelect value={curso} onChange={setCurso} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
+          <Field label="Código da turma"><input className={iCls} defaultValue={editing?.nome ?? ""} placeholder="UFCD 3564 · T1" /></Field>
+          <Field label="Formador"><SearchSelect value={formador} onChange={setFormador} options={formadoresOpts} placeholder="Pesquisar formador…" /></Field>
+          <Field label="Local"><SearchSelect value={localFin} onChange={setLocalFin} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
+          <Field label="Data de início"><input type="date" className={iCls} defaultValue={editing?.dataInicio ?? ""} /></Field>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={() => setOpen(null)} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">Guardar</button>
+          </div>
+        </div>
+      </SlideOver>
     </div>
   );
 }
@@ -2023,27 +2168,44 @@ function slugCriterio(label: string, existing: CriterioAvaliacao[]) {
 
 function CursosGoldView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
-  const [open, setOpen] = useState<typeof cursosGoldData[number] | null>(null);
+  const [filtro, setFiltro] = useState("Todos");
+  const [open, setOpen] = useState<typeof cursosGoldData[number] | "new" | null>(null);
   const [criterios, setCriterios] = useState<CriterioAvaliacao[]>([]);
   const [novoCriterio, setNovoCriterio] = useState("");
-  const f = cursosGoldData.filter(c => `${c.nome} ${c.categoria}`.toLowerCase().includes(s.toLowerCase()));
+  const [categoria, setCategoria] = useState("");
+  const [nomeCurso, setNomeCurso] = useState("");
+  const editing = open && open !== "new" ? open : null;
+  const f = cursosGoldData.filter(c => {
+    const q = `${c.nome} ${c.categoria}`.toLowerCase().includes(s.toLowerCase());
+    return q && (filtro === "Todos" || c.estado === filtro || c.categoria === filtro);
+  });
   const rows = f.slice((p - 1) * pp, p * pp);
-  const temAvaliacao = !!open && (/ccp/i.test(open.nome) || /ccp/i.test(open.categoria));
+  const temAvaliacao = /ccp/i.test(nomeCurso) || /ccp/i.test(categoria);
 
-  function abrir(c: typeof cursosGoldData[number]) {
-    setOpen(c);
-    setCriterios(getParametrosAvaliacao(c.nome).criterios);
+  function abrir(c: typeof cursosGoldData[number] | "new") {
+    if (c === "new") {
+      setOpen("new");
+      setNomeCurso("");
+      setCategoria("");
+      setCriterios([]);
+    } else {
+      setOpen(c);
+      setNomeCurso(c.nome);
+      setCategoria(c.categoria);
+      setCriterios(getParametrosAvaliacao(c.nome).criterios);
+    }
     setNovoCriterio("");
   }
 
   function guardarCurso() {
-    if (open && temAvaliacao) setParametrosAvaliacao(open.nome, criterios.filter(c => c.label.trim()));
+    if (temAvaliacao) setParametrosAvaliacao(nomeCurso || "Formação de Formadores - CCP", criterios.filter(c => c.label.trim()));
     setOpen(null);
   }
 
   return (
     <div>
-      <PageHeader title="Cursos Gold" action={<NewBtn label="+ Novo Curso" />} />
+      <PageHeader title="Cursos Gold" action={<NewBtn label="+ Novo Curso" onClick={() => abrir("new")} />} />
+      <div className="mb-4"><FilterChips options={["Todos", "Ativo", "Inactivo", "CCP e Gestão da Formação", "Saúde e bem estar"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} /></div>
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
         <div className="overflow-x-auto">
@@ -2068,12 +2230,12 @@ function CursosGoldView() {
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
-      <SlideOver open={!!open} onClose={() => setOpen(null)} title={open?.nome ?? "Curso"} sub="Ficha do curso e parâmetros da folha de avaliação.">
+      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing?.nome ?? "Novo curso Gold"} sub="Ficha do curso e parâmetros da folha de avaliação.">
         <div className="p-5 space-y-4">
-          <Field label="Nome"><input className={iCls} defaultValue={open?.nome ?? ""} /></Field>
+          <Field label="Nome"><input className={iCls} value={nomeCurso} onChange={e => setNomeCurso(e.target.value)} /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Categoria"><input className={iCls} defaultValue={open?.categoria ?? ""} /></Field>
-            <Field label="Preço (€)"><input className={iCls} type="number" defaultValue={open?.preco ?? 0} /></Field>
+            <Field label="Categoria"><SearchSelect value={categoria} onChange={setCategoria} options={categoriasGoldOpts} /></Field>
+            <Field label="Preço (€)"><input className={iCls} type="number" defaultValue={editing?.preco ?? 0} /></Field>
           </div>
           {temAvaliacao && (
             <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 space-y-3">
@@ -2127,10 +2289,11 @@ function CursosGoldView() {
 function FormadoresView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [perfil, setPerfil] = useState<typeof formadoresData[number] | null>(null);
+  const [novo, setNovo] = useState(false);
   const f = formadoresData.filter(x => `${x.nome} ${x.email}`.toLowerCase().includes(s.toLowerCase()));
   return (
     <div className="space-y-4">
-      <PageHeader title="Formadores" action={<NewBtn label="+ Novo Formador" />} />
+      <PageHeader title="Formadores" action={<NewBtn label="+ Novo Formador" onClick={() => setNovo(true)} />} />
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
         <div className="overflow-x-auto">
@@ -2152,16 +2315,31 @@ function FormadoresView() {
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
       <FormadorProfileSlideOver open={!!perfil} onClose={() => setPerfil(null)} nome={perfil?.nome ?? ""} telf={perfil?.telf} />
+      <SlideOver open={novo} onClose={() => setNovo(false)} title="Novo formador" sub="Ficha e documentos pedagógicos">
+        <div className="p-5 space-y-3">
+          <Field label="Nome"><input className={iCls} /></Field>
+          <Field label="Email"><input className={iCls} type="email" /></Field>
+          <Field label="Telemóvel"><input className={iCls} /></Field>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setNovo(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={() => setNovo(false)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+          </div>
+        </div>
+      </SlideOver>
     </div>
   );
 }
 
 function BlogView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
-  const f = blogPostsData.filter(x => x.titulo.toLowerCase().includes(s.toLowerCase()));
+  const [filtro, setFiltro] = useState("Todos");
+  const [open, setOpen] = useState(false);
+  const [tematica, setTematica] = useState("");
+  const f = blogPostsData.filter(x => x.titulo.toLowerCase().includes(s.toLowerCase()) && (filtro === "Todos" || x.status === filtro));
   return (
     <div className="space-y-4">
-      <PageHeader title="Blog - Posts" action={<NewBtn label="+ Novo Post" />} />
+      <PageHeader title="Blog - Posts" action={<NewBtn label="+ Novo Post" onClick={() => { setTematica(""); setOpen(true); }} />} />
+      <FilterChips options={["Todos", "Ativo", "Inactivo"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} />
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
         <div className="overflow-x-auto">
@@ -2183,14 +2361,27 @@ function BlogView() {
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
+      <SlideOver open={open} onClose={() => setOpen(false)} title="Novo post" sub="Artigo no site da ENA">
+        <div className="p-5 space-y-3">
+          <Field label="Título"><input className={iCls} /></Field>
+          <Field label="Temática"><SearchSelect value={tematica} onChange={setTematica} options={blogTematicasOpts} placeholder="Pesquisar temática…" /></Field>
+          <Field label="Slug"><input className={iCls} placeholder="ccp-formacao-formadores" /></Field>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={() => setOpen(false)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+          </div>
+        </div>
+      </SlideOver>
     </div>
   );
 }
 
 function CampanhasView() {
+  const [open, setOpen] = useState(false);
+  const [cursoCamp, setCursoCamp] = useState("");
   return (
     <div className="space-y-4">
-      <PageHeader title="Campanhas" action={<NewBtn label="+ Nova Campanha" />} />
+      <PageHeader title="Campanhas" action={<NewBtn label="+ Nova Campanha" onClick={() => setOpen(true)} />} />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {campanhasData.map(c => (
           <Card key={c.id} className="p-4 hover:shadow-md transition-shadow">
@@ -2217,16 +2408,31 @@ function CampanhasView() {
           </Card>
         ))}
       </div>
+      <SlideOver open={open} onClose={() => setOpen(false)} title="Nova campanha" sub="Campanha comercial Gold">
+        <div className="p-5 space-y-3">
+          <Field label="Nome"><input className={iCls} placeholder="Outubro 2026" /></Field>
+          <Field label="Curso em destaque"><SearchSelect value={cursoCamp} onChange={setCursoCamp} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <Field label="Data de início"><input type="date" className={iCls} /></Field>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={() => setOpen(false)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+          </div>
+        </div>
+      </SlideOver>
     </div>
   );
 }
 
 function FinCursosView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
-  const f = finCursosData.filter(c => `${c.ufcd} ${c.nomeComercial}`.toLowerCase().includes(s.toLowerCase()));
+  const [filtro, setFiltro] = useState("Todos");
+  const [open, setOpen] = useState(false);
+  const [ufcd, setUfcd] = useState("");
+  const f = finCursosData.filter(c => `${c.ufcd} ${c.nomeComercial}`.toLowerCase().includes(s.toLowerCase()) && (filtro === "Todos" || c.estado === filtro));
   return (
     <div className="space-y-4">
-      <PageHeader title="Cursos Financiados" action={<NewBtn label="+ Novo Curso" />} />
+      <PageHeader title="Cursos Financiados" action={<NewBtn label="+ Novo Curso" onClick={() => setOpen(true)} />} />
+      <FilterChips options={["Todos", "Ativo", "Inactivo"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} accent="fin" />
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
         <div className="overflow-x-auto">
@@ -2249,6 +2455,20 @@ function FinCursosView() {
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
+      <SlideOver open={open} onClose={() => setOpen(false)} title="Novo curso financiado" sub="UFCD do Catálogo Nacional de Qualificações">
+        <div className="p-5 space-y-3">
+          <Field label="UFCD"><SearchSelect value={ufcd} onChange={setUfcd} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
+          <Field label="Nome comercial"><input className={iCls} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Horas"><input type="number" className={iCls} defaultValue={25} /></Field>
+            <Field label="Estado"><select className={iCls}><option>Ativo</option><option>Inactivo</option></select></Field>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={() => setOpen(false)} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">Guardar</button>
+          </div>
+        </div>
+      </SlideOver>
     </div>
   );
 }
@@ -2256,9 +2476,11 @@ function FinCursosView() {
 function EmailsView() {
   const [tab, setTab] = useState<"regras" | "templates" | "historico">("regras");
   const [regras, setRegras] = useState(emailRegras);
+  const [novaRegra, setNovaRegra] = useState(false);
+  const [cursoEmail, setCursoEmail] = useState("");
   return (
     <div className="space-y-5">
-      <PageHeader title="Emails Automáticos" action={<NewBtn label="+ Nova Regra" />} />
+      <PageHeader title="Emails Automáticos" action={<NewBtn label="+ Nova Regra" onClick={() => setNovaRegra(true)} />} />
       <div className="flex gap-1 border-b border-slate-200 bg-white rounded-t-xl px-4 pt-3">
         {(["regras", "templates", "historico"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
@@ -2323,6 +2545,17 @@ function EmailsView() {
           <div className="p-4 text-center text-xs text-slate-400">Histórico detalhado disponível na versão completa</div>
         </Card>
       )}
+      <SlideOver open={novaRegra} onClose={() => setNovaRegra(false)} title="Nova regra de email" sub="Disparo automático por evento">
+        <div className="p-5 space-y-3">
+          <Field label="Nome"><input className={iCls} placeholder="Lembrete de pagamento" /></Field>
+          <Field label="Gatilho"><input className={iCls} placeholder="Pré-inscrição sem pagamento há 3 dias" /></Field>
+          <Field label="Curso (opcional)"><SearchSelect value={cursoEmail} onChange={setCursoEmail} options={cursosGoldOpts} placeholder="Pesquisar curso…" allowEmpty /></Field>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setNovaRegra(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={() => setNovaRegra(false)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+          </div>
+        </div>
+      </SlideOver>
     </div>
   );
 }

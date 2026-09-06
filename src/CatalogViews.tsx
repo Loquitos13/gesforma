@@ -1,4 +1,8 @@
 import { useEffect, useState } from "react";
+import {
+  FilterChips, SearchSelect,
+  cursosFinOpts, cursosGoldOpts, horariosOpts, locaisOpts, modulosOpts, turmasFinOpts,
+} from "./FormKit";
 
 const I = {
   plus: (
@@ -170,9 +174,9 @@ function FormActions({ onClose }: { onClose: () => void }) {
 const formandosGoldData = [
   { id: 4301, nome: "Rui", apelido: "Moreira", email: "rui.moreira@gmail.com", telf: "912334887", curso: "Excel do Básico ao Avançado", local: "E-learning", inscrito: "2026-08-12", pago: true, valor: 45, metodo: "MB Way", estado: "Ativo" },
   { id: 4302, nome: "Carla", apelido: "Nogueira", email: "carla.nogueira@sapo.pt", telf: "934112009", curso: "A Arte de Comunicar: E-learning", local: "Sala Virtual", inscrito: "2026-08-28", pago: true, valor: 35, metodo: "Cartão", estado: "Ativo" },
-  { id: 4303, nome: "Pedro", apelido: "Almeida", email: "palmeida@outlook.pt", telf: "918776221", curso: "Curso de Cura Prânica", local: "E-learning", inscrito: "2026-09-01", pago: false, valor: 200, metodo: "—", estado: "Pendente" },
+  { id: 4303, nome: "Pedro", apelido: "Almeida", email: "palmeida@outlook.pt", telf: "918776221", curso: "Curso de Cura Prânica", local: "E-learning", inscrito: "2026-09-01", pago: false, valor: 200, metodo: "-", estado: "Pendente" },
   { id: 4304, nome: "Sofia", apelido: "Ramos", email: "sofia.ramos@ena.pt", telf: "926441078", curso: "Auxiliar de Medicina Dentária", local: "E-learning", inscrito: "2026-07-19", pago: true, valor: 300, metodo: "Transferência", estado: "Ativo" },
-  { id: 4305, nome: "Nuno", apelido: "Teixeira", email: "nuno.teixeira88@gmail.com", telf: "961203445", curso: "Auxiliar de Medicina Veterinária", local: "E-learning", inscrito: "2026-09-02", pago: false, valor: 400, metodo: "—", estado: "Pendente" },
+  { id: 4305, nome: "Nuno", apelido: "Teixeira", email: "nuno.teixeira88@gmail.com", telf: "961203445", curso: "Auxiliar de Medicina Veterinária", local: "E-learning", inscrito: "2026-09-02", pago: false, valor: 400, metodo: "-", estado: "Pendente" },
 ];
 
 const datasGoldData = [
@@ -205,19 +209,19 @@ const areasTematicasData = [
 ];
 
 const modulosData = [
-  { id: 1, codigo: "M1", nome: "Aprendizagem e pedagogia", horas: 20, curso: "CCP — Formação de Formadores", tipo: "Teórico-prático", estado: "Ativo" },
-  { id: 2, codigo: "M2", nome: "Comunicação e dinâmica de grupos", horas: 20, curso: "CCP — Formação de Formadores", tipo: "Teórico-prático", estado: "Ativo" },
-  { id: 3, codigo: "M3", nome: "Avaliação da formação", horas: 15, curso: "CCP — Formação de Formadores", tipo: "Teórico", estado: "Ativo" },
-  { id: 4, codigo: "M4", nome: "Simulação pedagógica", horas: 25, curso: "CCP — Formação de Formadores", tipo: "Prático", estado: "Ativo" },
-  { id: 5, codigo: "M5", nome: "Plataformas digitais e e-learning", horas: 10, curso: "CCP — Formação de Formadores", tipo: "B-learning", estado: "Ativo" },
+  { id: 1, codigo: "M1", nome: "Aprendizagem e pedagogia", horas: 20, curso: "CCP - Formação de Formadores", tipo: "Teórico-prático", estado: "Ativo" },
+  { id: 2, codigo: "M2", nome: "Comunicação e dinâmica de grupos", horas: 20, curso: "CCP - Formação de Formadores", tipo: "Teórico-prático", estado: "Ativo" },
+  { id: 3, codigo: "M3", nome: "Avaliação da formação", horas: 15, curso: "CCP - Formação de Formadores", tipo: "Teórico", estado: "Ativo" },
+  { id: 4, codigo: "M4", nome: "Simulação pedagógica", horas: 25, curso: "CCP - Formação de Formadores", tipo: "Prático", estado: "Ativo" },
+  { id: 5, codigo: "M5", nome: "Plataformas digitais e e-learning", horas: 10, curso: "CCP - Formação de Formadores", tipo: "B-learning", estado: "Ativo" },
   { id: 6, codigo: "EX1", nome: "Tabelas dinâmicas e dashboards", horas: 4, curso: "Excel do Básico ao Avançado", tipo: "Prático", estado: "Ativo" },
 ];
 
 const conteudosData = [
-  { id: 11, titulo: "Manual CCP — Módulo 1 (Aprendizagem)", tipo: "PDF", curso: "CCP", modulo: "M1", tamanho: "2,4 MB", estado: "Ativo" },
+  { id: 11, titulo: "Manual CCP - Módulo 1 (Aprendizagem)", tipo: "PDF", curso: "CCP", modulo: "M1", tamanho: "2,4 MB", estado: "Ativo" },
   { id: 12, titulo: "Vídeo: comunicação em sala", tipo: "Vídeo", curso: "CCP", modulo: "M2", tamanho: "18 min", estado: "Ativo" },
   { id: 13, titulo: "Grelha de observação da simulação", tipo: "PDF", curso: "CCP", modulo: "M4", tamanho: "180 KB", estado: "Ativo" },
-  { id: 14, titulo: "Plataforma Moodle CCP", tipo: "Link", curso: "CCP", modulo: "M5", tamanho: "—", estado: "Ativo" },
+  { id: 14, titulo: "Plataforma Moodle CCP", tipo: "Link", curso: "CCP", modulo: "M5", tamanho: "-", estado: "Ativo" },
   { id: 15, titulo: "Ficha de avaliação final", tipo: "PDF", curso: "CCP", modulo: "M3", tamanho: "92 KB", estado: "Ativo" },
   { id: 16, titulo: "Exercícios Excel avançado", tipo: "PDF", curso: "Excel", modulo: "EX1", tamanho: "1,1 MB", estado: "Inactivo" },
 ];
@@ -232,8 +236,8 @@ const finInscricoesData: Array<{
   { id: 503, inscrito: "2026-08-27", nome: "Vanesa Magali", apelido: "Correa Bender", email: "valescabender@gmail.com", telf: "963130925", ufcd: "10785", curso: "Publicidade nas Redes Sociais", turma: "SM-T01", estado: "Colocado na turma", docs: { cc: true, ch: true, cu: true, ci: true, ce: true } },
   { id: 504, inscrito: "2026-08-26", nome: "Laércio Daniel", apelido: "Ferreira da Costa", email: "71aercio7@gmail.com", telf: "933168749", ufcd: "10785", curso: "Publicidade nas Redes Sociais", turma: "SM-T01", estado: "Elegível", docs: { cc: true, ch: false, cu: false, ci: false, ce: false } },
   { id: 505, inscrito: "2026-08-20", nome: "Tânia", apelido: "Veloso", email: "taniapatriciaveloso@gmail.com", telf: "914011998", ufcd: "10785", curso: "Publicidade nas Redes Sociais", turma: "SM-T01", estado: "Recebida", docs: { cc: true, ch: false, cu: false, ci: false, ce: false } },
-  { id: 506, inscrito: "2026-08-18", nome: "Helena", apelido: "Costa", email: "helena.costa@gmail.com", telf: "917220331", ufcd: "3564", curso: "Primeiros Socorros", turma: "—", estado: "Indeferido", docs: { cc: true, ch: false, cu: false, ci: false, ce: false } },
-  { id: 507, inscrito: "2026-09-03", nome: "Bruno", apelido: "Machado", email: "bruno.machado@ua.pt", telf: "925667109", ufcd: "10394", curso: "Métodos e Técnicas Pedagógicas", turma: "—", estado: "Em análise", docs: { cc: true, ch: true, cu: false, ci: true, ce: false } },
+  { id: 506, inscrito: "2026-08-18", nome: "Helena", apelido: "Costa", email: "helena.costa@gmail.com", telf: "917220331", ufcd: "3564", curso: "Primeiros Socorros", turma: "-", estado: "Indeferido", docs: { cc: true, ch: false, cu: false, ci: false, ce: false } },
+  { id: 507, inscrito: "2026-09-03", nome: "Bruno", apelido: "Machado", email: "bruno.machado@ua.pt", telf: "925667109", ufcd: "10394", curso: "Métodos e Técnicas Pedagógicas", turma: "-", estado: "Em análise", docs: { cc: true, ch: true, cu: false, ci: true, ce: false } },
 ];
 
 const blogTematicasData = [
@@ -259,14 +263,21 @@ function DocPips({ docs }: { docs: DocDots }) {
 
 export function FormandosGoldView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1);
+  const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof formandosGoldData[number] | null>(null);
-  const f = formandosGoldData.filter(x => `${x.nome} ${x.apelido} ${x.curso} ${x.email}`.toLowerCase().includes(s.toLowerCase()));
+  const [curso, setCurso] = useState("");
+  const f = formandosGoldData.filter(x => {
+    const q = `${x.nome} ${x.apelido} ${x.curso} ${x.email}`.toLowerCase().includes(s.toLowerCase());
+    return q && (filtro === "Todos" || x.estado === filtro);
+  });
   const rows = f.slice((p - 1) * 10, p * 10);
   const editing = open && open !== "new" ? open : null;
+  useEffect(() => { if (open) setCurso(editing?.curso ?? ""); }, [open, editing]);
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Formandos Gold" sub="Formandos individuais — sem turma atribuída. Cursos e-learning e vendas avulso." action={<NewBtn label="+ Novo formando" onClick={() => setOpen("new")} />} />
+        <PageHeader title="Formandos Gold" sub="Formandos individuais - sem turma atribuída. Cursos e-learning e vendas avulso." action={<NewBtn label="+ Novo formando" onClick={() => setOpen("new")} />} />
+        <FilterChips options={["Todos", "Ativo", "Pendente"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} />
         <Card>
           <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} />
           <div className="overflow-x-auto">
@@ -303,7 +314,7 @@ export function FormandosGoldView() {
           </div>
           <Field label="Email"><input className={iCls} defaultValue={editing?.email ?? ""} /></Field>
           <Field label="Telemóvel"><input className={iCls} defaultValue={editing?.telf ?? ""} /></Field>
-          <Field label="Curso"><input className={iCls} defaultValue={editing?.curso ?? ""} /></Field>
+          <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
           <Field label="Valor (€)"><input className={iCls} type="number" defaultValue={editing?.valor ?? 0} /></Field>
           <FormActions onClose={() => setOpen(null)} />
         </div>
@@ -314,14 +325,29 @@ export function FormandosGoldView() {
 
 export function DatasGoldView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1);
+  const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof datasGoldData[number] | null>(null);
-  const f = datasGoldData.filter(x => `${x.curso} ${x.local} ${x.horario}`.toLowerCase().includes(s.toLowerCase()));
+  const [curso, setCurso] = useState("");
+  const [local, setLocal] = useState("");
+  const [horario, setHorario] = useState("");
+  const f = datasGoldData.filter(x => {
+    const q = `${x.curso} ${x.local} ${x.horario}`.toLowerCase().includes(s.toLowerCase());
+    return q && (filtro === "Todos" || x.status === filtro || x.local === filtro);
+  });
   const rows = f.slice((p - 1) * 10, p * 10);
   const editing = open && open !== "new" ? open : null;
+  useEffect(() => {
+    if (open) {
+      setCurso(editing?.curso ?? "Formação de Formadores - CCP");
+      setLocal(editing?.local ?? "");
+      setHorario(editing?.horario ?? "");
+    }
+  }, [open, editing]);
   return (
     <>
       <div className="space-y-4">
         <PageHeader title="Datas / Edições Gold" sub="Calendário comercial: início, fim, horário, preço e local. Cada edição alimenta as turmas." action={<NewBtn label="+ Nova data" onClick={() => setOpen("new")} />} />
+        <FilterChips options={["Todos", "Ativo", "Inactivo", "V.N.Gaia", "Braga", "Lisboa"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} />
         <Card>
           <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} />
           <div className="overflow-x-auto">
@@ -353,13 +379,13 @@ export function DatasGoldView() {
       </div>
       <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `Edição #${editing.id}` : "Nova data / edição"} sub="Define o calendário comercial da turma">
         <div className="p-5 space-y-3">
-          <Field label="Curso"><input className={iCls} defaultValue={editing?.curso ?? "Formação de Formadores - CCP"} /></Field>
+          <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Início"><input type="date" className={iCls} defaultValue={editing?.inicio ?? ""} /></Field>
             <Field label="Fim"><input type="date" className={iCls} defaultValue={editing?.fim ?? ""} /></Field>
           </div>
-          <Field label="Horário"><input className={iCls} defaultValue={editing?.horario ?? ""} /></Field>
-          <Field label="Local"><input className={iCls} defaultValue={editing?.local ?? ""} /></Field>
+          <Field label="Horário"><SearchSelect value={horario} onChange={setHorario} options={horariosOpts} /></Field>
+          <Field label="Local"><SearchSelect value={local} onChange={setLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
           <Field label="Preço (€)"><input type="number" className={iCls} defaultValue={editing?.preco ?? 125} /></Field>
           <Field label="Link de inscrição"><input className={iCls} defaultValue={editing?.link ?? ""} /></Field>
           <FormActions onClose={() => setOpen(null)} />
@@ -371,13 +397,18 @@ export function DatasGoldView() {
 
 export function LocaisView() {
   const [s, setS] = useState("");
+  const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof locaisData[number] | null>(null);
-  const f = locaisData.filter(x => `${x.nome} ${x.morada}`.toLowerCase().includes(s.toLowerCase()));
+  const f = locaisData.filter(x => {
+    const q = `${x.nome} ${x.morada}`.toLowerCase().includes(s.toLowerCase());
+    return q && (filtro === "Todos" || x.status === filtro);
+  });
   const editing = open && open !== "new" ? open : null;
   return (
     <>
       <div className="space-y-4">
         <PageHeader title="Locais" sub="Polos da ENA onde as turmas Gold decorrem." action={<NewBtn label="+ Novo local" onClick={() => setOpen("new")} />} />
+        <FilterChips options={["Todos", "Ativo", "Inactivo"]} value={filtro} onChange={setFiltro} />
         <Card>
           <TableToolbar search={s} onSearch={setS} />
           <div className="overflow-x-auto">
@@ -390,7 +421,7 @@ export function LocaisView() {
                     <Td><span className="text-slate-400 font-mono text-xs">{r.id}</span></Td>
                     <Td className="text-sm font-semibold text-slate-800">{r.nome}</Td>
                     <Td className="text-xs text-slate-500 max-w-[240px]">{r.morada}</Td>
-                    <Td className="text-center text-xs text-slate-600">{r.salas || "—"}</Td>
+                    <Td className="text-center text-xs text-slate-600">{r.salas || "-"}</Td>
                     <Td className="text-center text-xs font-semibold text-slate-700">{r.turmas}</Td>
                     <Td>{estadoBadge(r.status)}</Td>
                     <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
@@ -415,13 +446,15 @@ export function LocaisView() {
 
 export function AreasTematicasView() {
   const [s, setS] = useState("");
+  const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof areasTematicasData[number] | null>(null);
-  const f = areasTematicasData.filter(x => x.nome.toLowerCase().includes(s.toLowerCase()));
+  const f = areasTematicasData.filter(x => x.nome.toLowerCase().includes(s.toLowerCase()) && (filtro === "Todos" || x.estado === filtro));
   const editing = open && open !== "new" ? open : null;
   return (
     <>
       <div className="space-y-4">
         <PageHeader title="Áreas Temáticas" sub="Agrupam os cursos Gold no site e no backoffice." action={<NewBtn label="+ Nova área" onClick={() => setOpen("new")} />} />
+        <FilterChips options={["Todos", "Ativo", "Inactivo"]} value={filtro} onChange={setFiltro} />
         <Card>
           <TableToolbar search={s} onSearch={setS} />
           <div className="overflow-x-auto">
@@ -455,13 +488,21 @@ export function AreasTematicasView() {
 
 export function ModulosView() {
   const [s, setS] = useState("");
+  const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof modulosData[number] | null>(null);
-  const f = modulosData.filter(x => `${x.nome} ${x.codigo} ${x.curso}`.toLowerCase().includes(s.toLowerCase()));
+  const [curso, setCurso] = useState("");
+  const f = modulosData.filter(x => {
+    const q = `${x.nome} ${x.codigo} ${x.curso}`.toLowerCase().includes(s.toLowerCase());
+    const byCurso = filtro === "Todos" || (filtro === "CCP" ? /ccp/i.test(x.curso) : filtro === "Excel" ? /excel/i.test(x.curso) : x.estado === filtro);
+    return q && byCurso;
+  });
   const editing = open && open !== "new" ? open : null;
+  useEffect(() => { if (open) setCurso(editing?.curso ?? ""); }, [open, editing]);
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Módulos" sub="Blocos pedagógicos dos cursos Gold — no CCP: aprendizagem, comunicação, avaliação e simulação." action={<NewBtn label="+ Novo módulo" onClick={() => setOpen("new")} />} />
+        <PageHeader title="Módulos" sub="Blocos pedagógicos dos cursos Gold - no CCP: aprendizagem, comunicação, avaliação e simulação." action={<NewBtn label="+ Novo módulo" onClick={() => setOpen("new")} />} />
+        <FilterChips options={["Todos", "CCP", "Excel", "Ativo"]} value={filtro} onChange={setFiltro} />
         <Card>
           <TableToolbar search={s} onSearch={setS} />
           <div className="overflow-x-auto">
@@ -493,7 +534,7 @@ export function ModulosView() {
             <Field label="Horas"><input type="number" className={iCls} defaultValue={editing?.horas ?? 10} /></Field>
           </div>
           <Field label="Nome"><input className={iCls} defaultValue={editing?.nome ?? ""} /></Field>
-          <Field label="Curso"><input className={iCls} defaultValue={editing?.curso ?? ""} /></Field>
+          <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
           <Field label="Tipo"><input className={iCls} defaultValue={editing?.tipo ?? ""} /></Field>
           <FormActions onClose={() => setOpen(null)} />
         </div>
@@ -504,13 +545,26 @@ export function ModulosView() {
 
 export function ConteudosView() {
   const [s, setS] = useState("");
+  const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof conteudosData[number] | null>(null);
-  const f = conteudosData.filter(x => `${x.titulo} ${x.curso} ${x.modulo}`.toLowerCase().includes(s.toLowerCase()));
+  const [curso, setCurso] = useState("");
+  const [modulo, setModulo] = useState("");
+  const f = conteudosData.filter(x => {
+    const q = `${x.titulo} ${x.curso} ${x.modulo}`.toLowerCase().includes(s.toLowerCase());
+    return q && (filtro === "Todos" || x.tipo === filtro || x.estado === filtro);
+  });
   const editing = open && open !== "new" ? open : null;
+  useEffect(() => {
+    if (open) {
+      setCurso(editing?.curso === "Excel" ? "Excel do Básico ao Avançado" : editing?.curso === "CCP" ? "Formação de Formadores - CCP" : editing?.curso ?? "");
+      setModulo(editing ? (modulosOpts.find(m => m.value.startsWith(editing.modulo))?.value ?? "") : "");
+    }
+  }, [open, editing]);
   return (
     <>
       <div className="space-y-4">
         <PageHeader title="Conteúdos" sub="Materiais da turma e do curso: PDF, vídeo ou ligação externa." action={<NewBtn label="+ Novo conteúdo" onClick={() => setOpen("new")} />} />
+        <FilterChips options={["Todos", "PDF", "Vídeo", "Link", "Ativo", "Inactivo"]} value={filtro} onChange={setFiltro} />
         <Card>
           <TableToolbar search={s} onSearch={setS} />
           <div className="overflow-x-auto">
@@ -543,8 +597,8 @@ export function ConteudosView() {
               <option>PDF</option><option>Vídeo</option><option>Link</option>
             </select>
           </Field>
-          <Field label="Curso"><input className={iCls} defaultValue={editing?.curso ?? ""} /></Field>
-          <Field label="Módulo"><input className={iCls} defaultValue={editing?.modulo ?? ""} /></Field>
+          <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <Field label="Módulo"><SearchSelect value={modulo} onChange={setModulo} options={modulosOpts} placeholder="Pesquisar módulo…" /></Field>
           <FormActions onClose={() => setOpen(null)} />
         </div>
       </SlideOver>
@@ -555,8 +609,17 @@ export function ConteudosView() {
 export function FinInscricoesView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1);
   const [filtro, setFiltro] = useState("Todas");
-  const [open, setOpen] = useState<typeof finInscricoesData[number] | null>(null);
+  const [open, setOpen] = useState<"new" | typeof finInscricoesData[number] | null>(null);
+  const [curso, setCurso] = useState("");
+  const [turma, setTurma] = useState("");
   const estados = ["Todas", "Recebida", "Em análise", "Elegível", "Colocado na turma", "Indeferido"];
+  const editing = open && open !== "new" ? open : null;
+  useEffect(() => {
+    if (open) {
+      setCurso(editing?.curso ?? "");
+      setTurma(editing && editing.turma !== "-" ? editing.turma : "");
+    }
+  }, [open, editing]);
   const f = finInscricoesData.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.ufcd} ${x.curso} ${x.turma}`.toLowerCase().includes(s.toLowerCase());
     return q && (filtro === "Todas" || x.estado === filtro);
@@ -565,7 +628,7 @@ export function FinInscricoesView() {
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Inscrições Financiadas" sub="Pipeline de elegibilidade por turma e UFCD — não é o funil comercial Gold." action={<NewBtn label="+ Nova inscrição" onClick={() => setOpen(finInscricoesData[0])} />} />
+        <PageHeader title="Inscrições Financiadas" sub="Pipeline de elegibilidade por turma e UFCD - não é o funil comercial Gold." action={<NewBtn label="+ Nova inscrição" onClick={() => setOpen("new")} />} />
         <div className="flex flex-wrap gap-2">
           {estados.map(e => (
             <button key={e} onClick={() => { setFiltro(e); setP(1); }}
@@ -609,25 +672,33 @@ export function FinInscricoesView() {
         </Card>
         <p className="text-xs text-slate-400">Pontinhos do dossier: CC cartão de cidadão · CH certificado de habilitações · CU curriculum · CI IBAN · CE comprovativo de emprego. Sem dossier completo a turma não arranca.</p>
       </div>
-      <SlideOver open={!!open} onClose={() => setOpen(null)} title={open ? `${open.nome} ${open.apelido}` : ""} sub={open ? `UFCD ${open.ufcd} · ${open.turma}` : ""}>
-        {open && (
-          <div className="p-5 space-y-4">
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="bg-slate-50 rounded-xl p-3"><p className="text-slate-400">UFCD</p><p className="font-semibold text-slate-800 mt-0.5">{open.ufcd} · {open.curso}</p></div>
-              <div className="bg-slate-50 rounded-xl p-3"><p className="text-slate-400">Turma</p><p className="font-semibold text-slate-800 mt-0.5">{open.turma}</p></div>
+      <SlideOver open={!!open} onClose={() => setOpen(null)}
+        title={editing ? `${editing.nome} ${editing.apelido}` : "Nova inscrição financiada"}
+        sub={editing ? `UFCD ${editing.ufcd} · ${editing.turma}` : "Candidatura a UFCD — não é o funil Gold"}>
+        <div className="p-5 space-y-4">
+          {!editing && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Nome"><input className={iCls} /></Field>
+              <Field label="Apelido"><input className={iCls} /></Field>
+              <Field label="Email"><input className={iCls} /></Field>
+              <Field label="Telemóvel"><input className={iCls} /></Field>
             </div>
-            <Field label="Estado">
-              <select className={iCls} defaultValue={open.estado}>
-                {estados.filter(e => e !== "Todas").map(e => <option key={e}>{e}</option>)}
-              </select>
-            </Field>
+          )}
+          <Field label="Curso / UFCD"><SearchSelect value={curso} onChange={setCurso} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
+          <Field label="Turma"><SearchSelect value={turma} onChange={setTurma} options={turmasFinOpts} placeholder="Pesquisar turma…" allowEmpty /></Field>
+          <Field label="Estado">
+            <select className={iCls} defaultValue={editing?.estado ?? "Recebida"}>
+              {estados.filter(e => e !== "Todas").map(e => <option key={e}>{e}</option>)}
+            </select>
+          </Field>
+          {editing && (
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Dossier de elegibilidade</p>
-              <DocPips docs={open.docs} />
+              <DocPips docs={editing.docs} />
             </div>
-            <FormActions onClose={() => setOpen(null)} />
-          </div>
-        )}
+          )}
+          <FormActions onClose={() => setOpen(null)} />
+        </div>
       </SlideOver>
     </>
   );
@@ -635,13 +706,15 @@ export function FinInscricoesView() {
 
 export function BlogTematicasView() {
   const [s, setS] = useState("");
+  const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof blogTematicasData[number] | null>(null);
-  const f = blogTematicasData.filter(x => `${x.nome} ${x.slug}`.toLowerCase().includes(s.toLowerCase()));
+  const f = blogTematicasData.filter(x => `${x.nome} ${x.slug}`.toLowerCase().includes(s.toLowerCase()) && (filtro === "Todos" || x.estado === filtro));
   const editing = open && open !== "new" ? open : null;
   return (
     <>
       <div className="space-y-4">
         <PageHeader title="Temáticas do Blog" sub="Categorias dos artigos no site da ENA." action={<NewBtn label="+ Nova temática" onClick={() => setOpen("new")} />} />
+        <FilterChips options={["Todos", "Ativo", "Inactivo"]} value={filtro} onChange={setFiltro} />
         <Card>
           <TableToolbar search={s} onSearch={setS} />
           <div className="overflow-x-auto">
@@ -676,12 +749,12 @@ export function BlogTematicasView() {
 }
 
 const configCards = [
-  { id: "entidade", titulo: "Entidade formadora", texto: "ENA — Escola de Negócios e Administração. NIF, certificação DGERT e dados de contacto.", campos: ["Designação: ENA", "NIF: 510 000 000", "Certificação DGERT: válida"] },
+  { id: "entidade", titulo: "Entidade formadora", texto: "ENA - Escola de Negócios e Administração. NIF, certificação DGERT e dados de contacto.", campos: ["Designação: ENA", "NIF: 510 000 000", "Certificação DGERT: válida"] },
   { id: "formacao", titulo: "Formação", texto: "Prazos de arquivo, emissão de certificados e língua dos documentos.", campos: ["Arquivo DTP: 10 anos (IEFP)", "Certificados: NetForce / SIGO", "Unidade de gestão: turma"] },
   { id: "gold", titulo: "Gold / Autofinanciada", texto: "Preços, métodos de pagamento e regras do CCP.", campos: ["MB Way, Multibanco, cartão, transferência, PayPal", "Curso-bandeira: CCP", "DTP com extras IEFP (PIP, simulações)"] },
   { id: "fin", titulo: "Financiada", texto: "Elegibilidade, UFCD e documentos do financiador.", campos: ["Dossier: CC, CH, CV, IBAN, emprego", "Assiduidade em horas da UFCD", "Turma bloqueada sem dossier"] },
   { id: "emails", titulo: "Emails automáticos", texto: "Remetente, assinatura e regras ativas.", campos: ["Remetente: formacao@ena.pt", "Assinatura: Equipa ENA", "Regras ativas: 4"] },
-  { id: "users", titulo: "Utilizadores", texto: "Acessos ao GesForma.", campos: ["Tania — Administradora", "Aguilar — Comercial Gold", "Secretariado — Financiada"] },
+  { id: "users", titulo: "Utilizadores", texto: "Acessos ao GesForma.", campos: ["Tania - Administradora", "Aguilar - Comercial Gold", "Secretariado - Financiada"] },
 ];
 
 export function ConfiguracoesView() {
@@ -689,7 +762,7 @@ export function ConfiguracoesView() {
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Configurações" sub="Parâmetros da entidade — a ENA gere por turmas, não por ação de formação." />
+        <PageHeader title="Configurações" sub="Parâmetros da entidade - a ENA gere por turmas, não por ação de formação." />
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {configCards.map(c => (
             <button key={c.id} onClick={() => setOpen(c)} className="text-left bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:border-amber-300 hover:shadow-md transition-all">
@@ -700,7 +773,7 @@ export function ConfiguracoesView() {
           ))}
         </div>
       </div>
-      <SlideOver open={!!open} onClose={() => setOpen(null)} title={open?.titulo ?? ""} sub="Pré-visualização — valores de demonstração">
+      <SlideOver open={!!open} onClose={() => setOpen(null)} title={open?.titulo ?? ""} sub="Pré-visualização - valores de demonstração">
         {open && (
           <div className="p-5 space-y-3">
             <p className="text-sm text-slate-600">{open.texto}</p>

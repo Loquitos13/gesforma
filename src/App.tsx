@@ -1,5 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { DtpView } from "./DtpView";
+import { DtpPanel } from "./DtpView";
+import {
+  FormandosGoldView, DatasGoldView, LocaisView, AreasTematicasView,
+  ModulosView, ConteudosView, FinInscricoesView, BlogTematicasView, ConfiguracoesView,
+} from "./CatalogViews";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -58,9 +62,12 @@ type View =
   | "painel" | "gold-preinscricoes" | "gold-formandos-turmas" | "gold-formandos-gold"
   | "gold-campanhas" | "gold-cursos" | "gold-datas" | "gold-locais" | "gold-areas-tematicas"
   | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-cockpit-turma" | "gold-dtp"
-  | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-turmas" | "fin-presencas" | "fin-dtp"
+  | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-turmas" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma"
   | "formadores" | "blog-posts" | "blog-tematicas"
   | "emails" | "pagamentos" | "configuracoes";
+
+type CockpitTab = "geral" | "dtp" | "presencas";
+type NavTarget = { view: View; turmaId?: number; tab?: CockpitTab };
 
 // ─── Sample Data ─────────────────────────────────────────────────────────────
 
@@ -90,8 +97,8 @@ const turmasGoldData = [
 const preinscricoesData = [
   { id: 17550, inscrito: "2026-09-04 11:24", nome: "Inês", apelido: "Caetano", email: "caetanoines9@gmail.com", telf: "932810856", inicioCurso: "2026-09-07", concelho: "Trofa", local: "V.N.Gaia", curso: "Formação de Formadores - CCP", preco: 125, estado: "Não contactado", campanha: "Setembro 2026", origem: "Website" },
   { id: 17539, inscrito: "2026-09-04 11:07", nome: "Aline Cristina", apelido: "Pereira", email: "alinecristina@ua.pt", telf: "934283406", inicioCurso: "2026-09-03", concelho: "Guimarães", local: "Braga", curso: "Formação de Formadores - CCP", preco: 120, estado: "1º Contacto", campanha: "Setembro 2026", origem: "Facebook" },
-  { id: 17536, inscrito: "2026-09-04 09:52", nome: "Priscila", apelido: "Damasceno", email: "prisciladamasceno82@gmail.com", telf: "931810126", inicioCurso: "—", concelho: "Leiria", local: "Sala Virtual", curso: "Auxiliar de Medicina Dentária", preco: 300, estado: "1º Contacto", campanha: "Setembro 2026", origem: "Google" },
-  { id: 17534, inscrito: "2026-09-03 22:20", nome: "Glynnis", apelido: "Ferreira", email: "glynnisferreira@gmail.com", telf: "939080789", inicioCurso: "—", concelho: "V.N.Gaia", local: "E-learning", curso: "E-Formador novas tecnologias", preco: 80, estado: "1º Contacto", campanha: "CCP 2020", origem: "Website" },
+  { id: 17536, inscrito: "2026-09-04 09:52", nome: "Priscila", apelido: "Damasceno", email: "prisciladamasceno82@gmail.com", telf: "931810126", inicioCurso: "-", concelho: "Leiria", local: "Sala Virtual", curso: "Auxiliar de Medicina Dentária", preco: 300, estado: "1º Contacto", campanha: "Setembro 2026", origem: "Google" },
+  { id: 17534, inscrito: "2026-09-03 22:20", nome: "Glynnis", apelido: "Ferreira", email: "glynnisferreira@gmail.com", telf: "939080789", inicioCurso: "-", concelho: "V.N.Gaia", local: "E-learning", curso: "E-Formador novas tecnologias", preco: 80, estado: "1º Contacto", campanha: "CCP 2020", origem: "Website" },
   { id: 17533, inscrito: "2026-09-03 21:24", nome: "Carolina", apelido: "Esteves", email: "carolinaesteves@gmail.com", telf: "960303492", inicioCurso: "2026-09-07", concelho: "Braga", local: "V.N.Gaia", curso: "Formação de Formadores - CCP", preco: 125, estado: "1º Contacto", campanha: "Setembro 2026", origem: "Instagram" },
   { id: 17532, inscrito: "2026-09-03 17:28", nome: "Susana", apelido: "Santos", email: "info@drasusanasantos.co", telf: "919890846", inicioCurso: "2026-09-07", concelho: "Lisboa", local: "Lisboa - Pós Laboral", curso: "Formação de Formadores - CCP", preco: 145, estado: "Não contactado", campanha: "Setembro 2026", origem: "Referência" },
   { id: 17531, inscrito: "2026-09-03 16:32", nome: "Cheila", apelido: "Parisot", email: "cheilaparisot@gmail.com", telf: "917754385", inicioCurso: "2026-07-06", concelho: "Sintra", local: "Lisboa - Laboral Manhã", curso: "Formação de Formadores - CCP", preco: 145, estado: "2º Contacto", campanha: "Setembro 2026", origem: "Facebook" },
@@ -103,10 +110,10 @@ const preinscricoesData = [
 const formandosTurmasData = [
   { id: 17550, nome: "Tiago", apelido: "Bento", telf: "919700594", email: "tiagojsbento@gmail.com", inscrito: "2026-09-03 16:21", local: "V.N.Gaia", curso: "Formação de Formadores - CCP", turma: "VNG-SM-07/09", turmaId: 943, estado: "Formando", pago: true, valor: 125, metodo: "MB Way" },
   { id: 17539, nome: "Luciana", apelido: "D'Avila", telf: "910641014", email: "davila.lucianam@gmail.com", inscrito: "2026-09-02 16:29", local: "V.N.Gaia", curso: "Formação de Formadores - CCP", turma: "VNG-SM-07/09", turmaId: 943, estado: "Formando", pago: true, valor: 125, metodo: "Cartão" },
-  { id: 17536, nome: "Ciara", apelido: "Gonçalves", telf: "912247513", email: "g.clarasofia03@gmail.com", inscrito: "2026-09-02 11:45", local: "Penafiel", curso: "Formação de Formadores - CCP", turma: "PEN-SM-02/09", turmaId: 938, estado: "Formando", pago: false, valor: 125, metodo: "—" },
+  { id: 17536, nome: "Ciara", apelido: "Gonçalves", telf: "912247513", email: "g.clarasofia03@gmail.com", inscrito: "2026-09-02 11:45", local: "Penafiel", curso: "Formação de Formadores - CCP", turma: "PEN-SM-02/09", turmaId: 938, estado: "Formando", pago: false, valor: 125, metodo: "-" },
   { id: 17534, nome: "Liliana", apelido: "Real", telf: "9111", email: "liascr777@gmail.com", inscrito: "2026-09-02 09:32", local: "Penafiel", curso: "Formação de Formadores - CCP", turma: "PEN-SM-02/09", turmaId: 938, estado: "Formando", pago: true, valor: 125, metodo: "Multibanco" },
   { id: 17526, nome: "Angélica", apelido: "Ribeiro", telf: "935043095", email: "alribeiro53@gmail.com", inscrito: "2026-09-01 15:06", local: "V.N.Gaia", curso: "Formação de Formadores - CCP", turma: "VNG-SM-07/09", turmaId: 943, estado: "Formando", pago: true, valor: 125, metodo: "MB Way" },
-  { id: 17522, nome: "Maria", apelido: "Mota", telf: "925997151", email: "mccmota.28@gmail.com", inscrito: "2026-09-01 09:36", local: "Braga", curso: "Formação de Formadores - CCP", turma: "BRG-PL-15/09", turmaId: 945, estado: "Formando", pago: false, valor: 120, metodo: "—" },
+  { id: 17522, nome: "Maria", apelido: "Mota", telf: "925997151", email: "mccmota.28@gmail.com", inscrito: "2026-09-01 09:36", local: "Braga", curso: "Formação de Formadores - CCP", turma: "BRG-PL-15/09", turmaId: 945, estado: "Formando", pago: false, valor: 120, metodo: "-" },
   { id: 17517, nome: "Elisabete", apelido: "Soares", telf: "914298952", email: "elisabete.soares@netcabo.pt", inscrito: "2026-08-31 21:45", local: "V.N.Gaia", curso: "Formação de Formadores - CCP", turma: "VNG-SM-07/09", turmaId: 943, estado: "Formando", pago: true, valor: 125, metodo: "Cartão" },
   { id: 17516, nome: "Andreia", apelido: "Arantes", telf: "962016923", email: "andreia_filipa@hotmail.com", inscrito: "2026-08-31 20:22", local: "Braga", curso: "Formação de Formadores - CCP", turma: "BRG-SM-21/09", turmaId: 944, estado: "Formando", pago: true, valor: 120, metodo: "MB Way" },
   { id: 17514, nome: "Hugo", apelido: "Baldaia", telf: "932832245", email: "hugo.baldaia2@gmail.com", inscrito: "2026-08-31 14:32", local: "V.N.Gaia", curso: "Formação de Formadores - CCP", turma: "VNG-PL-04/09", turmaId: 939, estado: "Formando", pago: true, valor: 125, metodo: "MB Way" },
@@ -114,11 +121,11 @@ const formandosTurmasData = [
 ];
 
 const finFormandosData = [
-  { id: 27, nome: "Diogo Alexandre", apelido: "Soares Oliveira", turma: "Social Media - Ação 1", telf: "914388980", email: "diogo_nik@hotmail.com", curso: "Publicidade nas Redes Sociais", estado: "Elegível", cc: { ok: true, data: "2021-01-10" }, ch: { ok: false, data: "" }, cu: { ok: false, data: "" }, ci: { ok: true, data: "2021-01-12" }, ce: { ok: false, data: "" } },
-  { id: 42, nome: "Laércio Daniel", apelido: "Ferreira da Costa", turma: "Social Media - Ação 1", telf: "933168749", email: "71aercio7@gmail.com", curso: "Publicidade nas Redes Sociais", estado: "Elegível", cc: { ok: true, data: "2021-01-12" }, ch: { ok: false, data: "" }, cu: { ok: false, data: "" }, ci: { ok: false, data: "" }, ce: { ok: false, data: "" } },
-  { id: 71, nome: "Vanesa Magali", apelido: "Correa Bender", turma: "Social Media - Ação 1", telf: "963130925", email: "valescabender@gmail.com", curso: "Publicidade nas Redes Sociais", estado: "Elegível", cc: { ok: true, data: "2021-01-20" }, ch: { ok: true, data: "2021-01-21" }, cu: { ok: true, data: "2021-01-22" }, ci: { ok: true, data: "2021-01-20" }, ce: { ok: true, data: "2021-01-23" } },
-  { id: 81, nome: "Tânia", apelido: "Veloso", turma: "Social Media - Ação 1", telf: "914011998", email: "taniapatriciaveloso@gmail.com", curso: "Publicidade nas Redes Sociais", estado: "Elegível", cc: { ok: true, data: "2021-01-24" }, ch: { ok: false, data: "" }, cu: { ok: false, data: "" }, ci: { ok: false, data: "" }, ce: { ok: false, data: "" } },
-  { id: 97, nome: "Mariana", apelido: "Sousa Pereira", turma: "Social Media - Ação 2", telf: "932874093", email: "mariana98pereira@gmail.com", curso: "Publicidade nas Redes Sociais", estado: "Elegível", cc: { ok: false, data: "" }, ch: { ok: false, data: "" }, cu: { ok: false, data: "" }, ci: { ok: false, data: "" }, ce: { ok: false, data: "" } },
+  { id: 27, nome: "Diogo Alexandre", apelido: "Soares Oliveira", turma: "SM-T01", telf: "914388980", email: "diogo_nik@hotmail.com", curso: "Publicidade nas Redes Sociais", estado: "Elegível", cc: { ok: true, data: "2021-01-10" }, ch: { ok: false, data: "" }, cu: { ok: false, data: "" }, ci: { ok: true, data: "2021-01-12" }, ce: { ok: false, data: "" } },
+  { id: 42, nome: "Laércio Daniel", apelido: "Ferreira da Costa", turma: "SM-T01", telf: "933168749", email: "71aercio7@gmail.com", curso: "Publicidade nas Redes Sociais", estado: "Elegível", cc: { ok: true, data: "2021-01-12" }, ch: { ok: false, data: "" }, cu: { ok: false, data: "" }, ci: { ok: false, data: "" }, ce: { ok: false, data: "" } },
+  { id: 71, nome: "Vanesa Magali", apelido: "Correa Bender", turma: "SM-T01", telf: "963130925", email: "valescabender@gmail.com", curso: "Publicidade nas Redes Sociais", estado: "Elegível", cc: { ok: true, data: "2021-01-20" }, ch: { ok: true, data: "2021-01-21" }, cu: { ok: true, data: "2021-01-22" }, ci: { ok: true, data: "2021-01-20" }, ce: { ok: true, data: "2021-01-23" } },
+  { id: 81, nome: "Tânia", apelido: "Veloso", turma: "SM-T01", telf: "914011998", email: "taniapatriciaveloso@gmail.com", curso: "Publicidade nas Redes Sociais", estado: "Elegível", cc: { ok: true, data: "2021-01-24" }, ch: { ok: false, data: "" }, cu: { ok: false, data: "" }, ci: { ok: false, data: "" }, ce: { ok: false, data: "" } },
+  { id: 97, nome: "Mariana", apelido: "Sousa Pereira", turma: "UFCD 3564 · T1", telf: "932874093", email: "mariana98pereira@gmail.com", curso: "Primeiros Socorros", estado: "Elegível", cc: { ok: false, data: "" }, ch: { ok: false, data: "" }, cu: { ok: false, data: "" }, ci: { ok: false, data: "" }, ce: { ok: false, data: "" } },
 ];
 
 const finCursosData = [
@@ -201,30 +208,13 @@ const topCursos = [
   { nome: "Publicidade nas Redes Sociais", inscritos: 389, receita: 48625, taxa: 54 },
 ];
 
-const locaisData = [
-  { id: 15, nome: "V.N.Gaia", status: "Ativo" }, { id: 16, nome: "Aveiro", status: "Ativo" },
-  { id: 17, nome: "Penafiel", status: "Ativo" }, { id: 19, nome: "Lisboa - Pós laboral e Sábados", status: "Ativo" },
-  { id: 25, nome: "Sala Virtual / E-Learning", status: "Ativo" },
-];
-
-const datasGoldData = [
-  { id: 27, inicio: "2025-08-22", fim: "2025-10-08", horario: "Pós Laboral", preco: 125, local: "Aveiro", curso: "Formação de Formadores - CCP", status: "Inactivo", hasLink: true },
-  { id: 31, inicio: "2025-06-13", fim: "2025-07-30", horario: "Pós Laboral", preco: 120, local: "Braga", curso: "Formação de Formadores - CCP", status: "Inactivo", hasLink: true },
-];
-
-const areasTematicasData = [
-  { id: 17, nome: "Boas práticas para a vida", estado: "Ativo" },
-  { id: 18, nome: "Boas práticas profissionais", estado: "Ativo" },
-  { id: 19, nome: "Boas praticas pedagógicas", estado: "Ativo" },
-];
-
-const notificacoesData = [
-  { id: 1, tipo: "warn", titulo: "VNG-SM-07/09 sem vagas", texto: "A turma de V.N.Gaia (07/09) atingiu capacidade máxima — 10/10 formandos.", tempo: "2 min", lida: false, view: "gold-cockpit-turma" as View },
-  { id: 2, tipo: "error", titulo: "67 pagamentos pendentes", texto: "€8 400 por confirmar. 12 com mais de 7 dias sem resposta.", tempo: "15 min", lida: false, view: "pagamentos" as View },
-  { id: 3, tipo: "warn", titulo: "DTP Financiada a 54% — UFCD 3564", texto: "A turma não arranca: faltam habilitações, CV e comprovativo de emprego.", tempo: "1h", lida: false, view: "fin-dtp" as View },
-  { id: 6, tipo: "warn", titulo: "DTP Gold incompleto — VNG-SM-07/09", texto: "PIP, simulações e sumários em falta. Não emitir CCP.", tempo: "45 min", lida: false, view: "gold-dtp" as View },
-  { id: 4, tipo: "info", titulo: "Nova pré-inscrição Gold", texto: "Inês Caetano inscreveu-se em CCP - V.N.Gaia 07/09.", tempo: "2h", lida: true, view: "gold-preinscricoes" as View },
-  { id: 5, tipo: "info", titulo: "Turma BRG-PL-15/09 com poucas inscrições", texto: "Apenas 2 de 16 vagas preenchidas. A 15/09 está próxima.", tempo: "3h", lida: true, view: "gold-turmas" as View },
+const notificacoesData: Array<{ id: number; tipo: string; titulo: string; texto: string; tempo: string; lida: boolean } & NavTarget> = [
+  { id: 1, tipo: "warn", titulo: "VNG-SM-07/09 sem vagas", texto: "A turma de V.N.Gaia (07/09) atingiu capacidade máxima — 10/10 formandos.", tempo: "2 min", lida: false, view: "gold-cockpit-turma", turmaId: 943, tab: "geral" },
+  { id: 2, tipo: "error", titulo: "67 pagamentos pendentes", texto: "€8 400 por confirmar. 12 com mais de 7 dias sem resposta.", tempo: "15 min", lida: false, view: "pagamentos" },
+  { id: 3, tipo: "warn", titulo: "DTP da turma UFCD 3564 · T1 a 54%", texto: "A turma não arranca: faltam habilitações, CV e comprovativo de emprego.", tempo: "1h", lida: false, view: "fin-cockpit-turma", turmaId: 218, tab: "dtp" },
+  { id: 6, tipo: "warn", titulo: "DTP incompleto — turma VNG-SM-07/09", texto: "PIP, simulações e sumários em falta. Não emitir CCP.", tempo: "45 min", lida: false, view: "gold-cockpit-turma", turmaId: 943, tab: "dtp" },
+  { id: 4, tipo: "info", titulo: "Nova pré-inscrição Gold", texto: "Inês Caetano inscreveu-se em CCP — turma VNG-SM-07/09.", tempo: "2h", lida: true, view: "gold-preinscricoes" },
+  { id: 5, tipo: "info", titulo: "Turma BRG-PL-15/09 com poucas inscrições", texto: "Apenas 2 de 16 vagas preenchidas. A 15/09 está próxima.", tempo: "3h", lida: true, view: "gold-turmas" },
 ];
 
 // ─── UI Primitives ────────────────────────────────────────────────────────────
@@ -557,12 +547,14 @@ function FichaFormando({ formando, tipo = "gold", onClose }: { formando: Formand
 
 // ─── Cockpit da Turma ─────────────────────────────────────────────────────────
 
-function CockpitTurmaView({ turmaId, onBack, onDtp }: { turmaId?: number; onBack: () => void; onDtp: () => void }) {
+function CockpitTurmaView({ turmaId, onBack, initialTab = "geral" }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab }) {
   const turma = turmasGoldData.find(t => t.id === turmaId) ?? turmasGoldData[0];
   const membros = formandosTurmasData.filter(f => f.turmaId === turma.id);
   const pagos = membros.filter(f => f.pago).length;
   const vagasLivres = turma.vagas - turma.totalAlunos;
   const [fichaOpen, setFichaOpen] = useState<FormandoRecord | null>(null);
+  const [tab, setTab] = useState<CockpitTab>(initialTab);
+  useEffect(() => { setTab(initialTab === "presencas" ? "geral" : initialTab); }, [initialTab, turmaId]);
 
   return (
     <>
@@ -589,7 +581,7 @@ function CockpitTurmaView({ turmaId, onBack, onDtp }: { turmaId?: number; onBack
               </div>
             </div>
             <div className="flex gap-3 flex-shrink-0">
-              <button onClick={onDtp} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors">Abrir DTP</button>
+              <button onClick={() => setTab("dtp")} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors">Dossiê da turma</button>
               <button className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>
             </div>
           </div>
@@ -610,6 +602,20 @@ function CockpitTurmaView({ turmaId, onBack, onDtp }: { turmaId?: number; onBack
           </div>
         </div>
 
+        <div className="flex gap-1 bg-white rounded-xl border border-slate-200 p-1">
+          {([{ id: "geral" as CockpitTab, l: "Turma" }, { id: "dtp" as CockpitTab, l: "Dossiê TP" }]).map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`flex-1 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${tab === t.id ? "bg-amber-500 text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+              {t.l}
+            </button>
+          ))}
+        </div>
+
+        {tab === "dtp" && (
+          <DtpPanel regime="gold" turma={{ codigo: turma.nome, id: turma.id, titulo: turma.curso, sub: `${turma.local} · ${turma.horario}` }} />
+        )}
+
+        {tab === "geral" && <>
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
@@ -690,12 +696,142 @@ function CockpitTurmaView({ turmaId, onBack, onDtp }: { turmaId?: number; onBack
             </div>
           </Card>
         </div>
+        </>}
       </div>
 
       <SlideOver open={!!fichaOpen} onClose={() => setFichaOpen(null)} title="Ficha do Formando" sub={fichaOpen ? `#${fichaOpen.id}` : ""}>
         {fichaOpen && <FichaFormando formando={fichaOpen} onClose={() => setFichaOpen(null)} />}
       </SlideOver>
     </>
+  );
+}
+
+function dtpPctGold(id: number) {
+  const map: Record<number, number> = { 947: 72, 946: 61, 945: 40, 944: 55, 943: 48, 940: 68, 939: 52, 938: 58, 937: 91, 936: 88 };
+  return map[id] ?? 50;
+}
+function dtpPctFin(id: number) {
+  const map: Record<number, number> = { 222: 38, 220: 62, 219: 71, 218: 54, 217: 66 };
+  return map[id] ?? 50;
+}
+
+function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (id: number) => void }) {
+  const isGold = regime === "gold";
+  const rows = isGold
+    ? turmasGoldData.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, extra: `${t.local} · ${t.horario}`, estado: t.estado, pct: dtpPctGold(t.id) }))
+    : finTurmasData.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, extra: `UFCD ${t.ufcdCod} · ${t.formador}`, estado: t.estado, pct: dtpPctFin(t.id) }));
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        title={isGold ? "Dossiês das turmas Gold" : "Dossiês das turmas Financiadas"}
+        sub="Na ENA o DTP vive dentro da turma. O código interno (VNG-SM-07/09, UFCD 3564) identifica a turma — não é uma “ação” à parte."
+      />
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr><Th>Código interno</Th><Th>Curso</Th><Th>Detalhe</Th><Th>Estado</Th><Th>DTP</Th><Th>Ações</Th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map(t => (
+                <tr key={t.id} className="hover:bg-slate-50">
+                  <Td>
+                    <button onClick={() => onOpen(t.id)} className="text-xs font-bold font-mono text-blue-600 hover:text-blue-800">{t.codigo}</button>
+                  </Td>
+                  <Td className="text-xs text-slate-600 max-w-[200px]">{t.curso}</Td>
+                  <Td className="text-xs text-slate-500">{t.extra}</Td>
+                  <Td>{estadoBadge(t.estado)}</Td>
+                  <Td>
+                    <div className="flex items-center gap-2 min-w-[110px]">
+                      <div className="flex-1 bg-slate-100 rounded-full h-1.5">
+                        <div className="h-1.5 rounded-full" style={{ width: `${t.pct}%`, backgroundColor: t.pct >= 80 ? "#10B981" : t.pct >= 50 ? (isGold ? "#F59E0B" : "#2563EB") : "#EF4444" }} />
+                      </div>
+                      <span className={`text-xs font-bold ${t.pct >= 80 ? "text-emerald-600" : t.pct >= 50 ? "text-amber-600" : "text-red-500"}`}>{t.pct}%</span>
+                    </div>
+                  </Td>
+                  <Td>
+                    <button onClick={() => onOpen(t.id)} className={`px-3 py-1.5 text-xs font-semibold rounded-lg text-white ${isGold ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}>
+                      Abrir dossiê
+                    </button>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function FinCockpitTurmaView({ turmaId, onBack, initialTab = "geral" }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab }) {
+  const turma = finTurmasData.find(t => t.id === turmaId) ?? finTurmasData.find(t => t.ufcdCod === "3564") ?? finTurmasData[0];
+  const [tab, setTab] = useState<CockpitTab>(initialTab);
+  useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
+  const prontos = Math.floor(turma.alunos * 0.8);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-2 text-xs text-slate-500">
+        <button onClick={onBack} className="hover:text-blue-600 transition-colors">Turmas Financiadas</button>
+        <span>›</span><span className="font-semibold text-slate-700">{turma.nome}</span>
+      </div>
+      <div className="bg-gradient-to-br from-[#0F172A] to-[#1E3A5F] rounded-2xl p-5 text-white">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-lg">UFCD {turma.ufcdCod}</span>
+              <span className="bg-white/10 text-white text-xs font-bold px-2.5 py-1 rounded-lg font-mono">{turma.nome}</span>
+              {estadoBadge(turma.estado)}
+            </div>
+            <p className="text-lg font-bold mt-1">{turma.curso}</p>
+            <div className="flex flex-wrap gap-4 mt-2 text-slate-300 text-xs">
+              <span className="flex items-center gap-1">{I.location} {turma.local}</span>
+              <span className="flex items-center gap-1">{I.calendar} {turma.dataInicio}</span>
+              <span className="flex items-center gap-1">{I.school} {turma.formador} · {turma.horas}h</span>
+            </div>
+          </div>
+          <div className="flex gap-3 flex-shrink-0">
+            <button onClick={() => setTab("dtp")} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors">Dossiê da turma</button>
+            <button onClick={() => setTab("presencas")} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-lg transition-colors">Presenças</button>
+          </div>
+        </div>
+        <div className="mt-4">
+          <div className="flex justify-between text-xs mb-1.5">
+            <span className="text-slate-300">{turma.alunos} formandos · {prontos} dossiers prontos</span>
+            <span className="text-blue-300">{turma.alunosTotal} vagas</span>
+          </div>
+          <div className="w-full bg-white/10 rounded-full h-2">
+            <div className="h-2 rounded-full bg-blue-400" style={{ width: `${(turma.alunos / turma.alunosTotal) * 100}%` }} />
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-1 bg-white rounded-xl border border-slate-200 p-1">
+        {([{ id: "geral" as CockpitTab, l: "Turma" }, { id: "presencas" as CockpitTab, l: "Presenças" }, { id: "dtp" as CockpitTab, l: "Dossiê TP" }]).map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`flex-1 px-3 py-2 text-sm font-semibold rounded-lg transition-colors ${tab === t.id ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+            {t.l}
+          </button>
+        ))}
+      </div>
+      {tab === "dtp" && (
+        <DtpPanel regime="fin" turma={{ codigo: turma.ufcdCod === "3564" ? "UFCD 3564 · T1" : turma.nome, id: turma.id, titulo: turma.curso, sub: `UFCD ${turma.ufcdCod} · ${turma.horas}h` }} />
+      )}
+      {tab === "presencas" && <PresencasView turmaId={turma.id} embedded />}
+      {tab === "geral" && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { l: "Código interno", v: turma.nome, c: "text-slate-800" },
+            { l: "UFCD", v: turma.ufcdCod, c: "text-blue-600" },
+            { l: "Formandos", v: `${turma.alunos}/${turma.alunosTotal}`, c: "text-slate-800" },
+            { l: "Dossiers prontos", v: `${prontos}/${turma.alunos}`, c: prontos === turma.alunos ? "text-emerald-600" : "text-amber-600" },
+          ].map(s => (
+            <Card key={s.l} className="p-4">
+              <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">{s.l}</p>
+              <p className={`text-lg font-bold ${s.c} truncate`}>{s.v}</p>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -808,7 +944,7 @@ function FichaComercial({ item, open, onClose }: { item: typeof preinscricoesDat
           <a href={`tel:${item.telf}`} className="flex-1 py-2 bg-slate-800 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5 hover:bg-slate-700 transition-colors">{I.phone} Ligar</a>
           <a href={`https://wa.me/351${item.telf}`} className="flex-1 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5 hover:bg-emerald-700 transition-colors">{I.whatsapp} WhatsApp</a>
         </div>
-        <button className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2">{I.convert} Converter em Formando — Escolher turma</button>
+        <button className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2">{I.convert} Converter em Formando - Escolher turma</button>
       </div>
     </Modal>
   );
@@ -867,7 +1003,7 @@ function DossierPanel({ formando }: { formando: FinFormando }) {
 
 // ─── Folha de Presenças ───────────────────────────────────────────────────────
 
-function PresencasView() {
+function PresencasView({ turmaId, embedded }: { turmaId?: number; embedded?: boolean }) {
   type Presenca = { [key: number]: boolean };
   const sessoes = ["Sess. 1 · 27 Ago", "Sess. 2 · 03 Set", "Sess. 3 · 10 Set", "Sess. 4 · 17 Set", "Sess. 5 · 24 Set"];
   const [presencas, setPresencas] = useState<Record<number, Presenca>>(() => {
@@ -883,12 +1019,13 @@ function PresencasView() {
     setPresencas(prev => ({ ...prev, [fId]: { ...prev[fId], [si]: !prev[fId][si] } }));
   }
 
-  const turma = finTurmasData[2];
+  const turma = finTurmasData.find(t => t.id === turmaId) ?? finTurmasData.find(t => t.ufcdCod === "3564") ?? finTurmasData[2];
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Folha de Presenças" sub={`${turma.nome} · UFCD ${turma.ufcdCod} · ${turma.horas}h`}
-        action={<button className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors">{I.download} Exportar</button>} />
+      {!embedded && <PageHeader title="Folha de Presenças" sub={`${turma.nome} · UFCD ${turma.ufcdCod} · ${turma.horas}h`}
+        action={<button className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors">{I.download} Exportar</button>} />}
+      {embedded && <p className="text-xs text-slate-500">Presenças da turma <span className="font-semibold text-slate-700">{turma.nome}</span> · UFCD {turma.ufcdCod} · {turma.horas}h</p>}
 
       {/* Turma summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -965,7 +1102,7 @@ function PresencasView() {
 
 // ─── Painel ───────────────────────────────────────────────────────────────────
 
-function PainelView({ onNavigate }: { onNavigate: (v: View) => void }) {
+function PainelView({ onNavigate }: { onNavigate: (v: View | NavTarget) => void }) {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
@@ -1311,7 +1448,7 @@ function FinFormandosView() {
 
 // ─── Turmas Financiadas ───────────────────────────────────────────────────────
 
-function FinTurmasView({ onPresencas, onDtp }: { onPresencas: () => void; onDtp: () => void }) {
+function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab) => void }) {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const f = finTurmasData.filter(t => `${t.nome} ${t.curso}`.toLowerCase().includes(s.toLowerCase()));
   const rows = f.slice((p - 1) * pp, p * pp);
@@ -1332,8 +1469,10 @@ function FinTurmasView({ onPresencas, onDtp }: { onPresencas: () => void; onDtp:
                     <Td className="font-mono text-xs text-slate-500 whitespace-nowrap">{t.dataInicio}</Td>
                     <Td><span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-600 text-white">{t.ufcdCod}</span></Td>
                     <Td>
-                      <p className="text-xs font-semibold text-blue-600 max-w-[160px]">{t.nome}</p>
-                      <p className="text-xs text-slate-400 truncate max-w-[160px]">{t.curso}</p>
+                      <button onClick={() => onCockpit(t.id, "geral")} className="text-left">
+                        <p className="text-xs font-semibold text-blue-600 max-w-[160px] hover:text-blue-800">{t.nome}</p>
+                        <p className="text-xs text-slate-400 truncate max-w-[160px]">{t.curso}</p>
+                      </button>
                     </Td>
                     <Td className="text-xs text-slate-600 whitespace-nowrap">{t.formador}</Td>
                     <Td>
@@ -1347,8 +1486,9 @@ function FinTurmasView({ onPresencas, onDtp }: { onPresencas: () => void; onDtp:
                     <Td>{estadoBadge(t.estado)}</Td>
                     <Td>
                       <div className="flex gap-1">
-                        <ActBtn icon={I.attend} label="Presenças" color="teal" onClick={onPresencas} />
-                        <ActBtn icon={I.doc} label="Dossiê TP" color="orange" onClick={onDtp} />
+                        <ActBtn icon={I.eye} label="Cockpit" color="teal" onClick={() => onCockpit(t.id, "geral")} />
+                        <ActBtn icon={I.attend} label="Presenças" color="teal" onClick={() => onCockpit(t.id, "presencas")} />
+                        <ActBtn icon={I.doc} label="Dossiê da turma" color="orange" onClick={() => onCockpit(t.id, "dtp")} />
                         <ActBtn icon={I.edit} label="Editar" />
                         <ActBtn icon={I.euro} label="Faturação" color="green" />
                       </div>
@@ -1388,7 +1528,7 @@ function CursosGoldView() {
                   <Td><Badge label={c.tipo} variant={c.tipo === "Gold" ? "amber" : "gray"} /></Td>
                   <Td className="text-xs font-semibold text-amber-600">€ {c.preco}</Td>
                   <Td><span className={`text-xs px-1.5 py-0.5 rounded font-medium ${c.regime === "e-learning" ? "bg-blue-50 text-blue-700" : "bg-violet-50 text-violet-700"}`}>{c.regime}</span></Td>
-                  <Td className="text-center text-xs text-slate-600">{c.horas || "—"}</Td>
+                  <Td className="text-center text-xs text-slate-600">{c.horas || "-"}</Td>
                   <Td>{estadoBadge(c.estado)}</Td>
                   <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
                 </tr>
@@ -1437,7 +1577,7 @@ function BlogView() {
   const f = blogPostsData.filter(x => x.titulo.toLowerCase().includes(s.toLowerCase()));
   return (
     <div className="space-y-4">
-      <PageHeader title="Blog — Posts" action={<NewBtn label="+ Novo Post" />} />
+      <PageHeader title="Blog - Posts" action={<NewBtn label="+ Novo Post" />} />
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
         <div className="overflow-x-auto">
@@ -1515,7 +1655,7 @@ function FinCursosView() {
                   <Td className="text-xs text-blue-600 font-medium max-w-[180px]">{c.ufcd}</Td>
                   <Td className="text-xs text-slate-600 max-w-[200px]">{c.nomeComercial}</Td>
                   <Td><span className={`text-xs px-1.5 py-0.5 rounded font-medium ${c.regime === "e-learning" ? "bg-blue-50 text-blue-700" : "bg-violet-50 text-violet-700"}`}>{c.regime}</span></Td>
-                  <Td className="text-center text-xs text-slate-600">{c.horas || "—"}</Td>
+                  <Td className="text-center text-xs text-slate-600">{c.horas || "-"}</Td>
                   <Td>{estadoBadge(c.estado)}</Td>
                   <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
                 </tr>
@@ -1665,31 +1805,20 @@ function PagamentosView() {
   );
 }
 
-function PlaceholderView({ title, sub }: { title: string; sub?: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <div className="w-14 h-14 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600 mb-4">{I.file}</div>
-      <h1 className="text-xl font-bold text-slate-800">{title}</h1>
-      {sub && <p className="text-slate-400 mt-2 text-sm">{sub}</p>}
-      <p className="text-xs text-slate-400 mt-4 bg-slate-100 px-3 py-1.5 rounded-lg">Disponível na aplicação completa</p>
-    </div>
-  );
-}
-
 // ─── Pesquisa Global (Ctrl+K) ─────────────────────────────────────────────────
 
-const allSearchable = [
+const allSearchable: Array<{ tipo: string; nome: string; sub: string } & NavTarget> = [
   ...formandosTurmasData.map(f => ({ tipo: "Formando Gold", nome: `${f.nome} ${f.apelido}`, sub: f.email, view: "gold-formandos-turmas" as View })),
   ...finFormandosData.map(f => ({ tipo: "Formando Financiado", nome: `${f.nome} ${f.apelido}`, sub: f.email, view: "fin-formandos" as View })),
-  ...turmasGoldData.map(t => ({ tipo: "Turma Gold", nome: t.nome, sub: `${t.local} · ${t.curso}`, view: "gold-turmas" as View })),
-  ...finTurmasData.map(t => ({ tipo: "Turma Financiada", nome: t.nome, sub: `UFCD ${t.ufcdCod}`, view: "fin-turmas" as View })),
+  ...turmasGoldData.map(t => ({ tipo: "Turma Gold", nome: t.nome, sub: `${t.local} · ${t.curso}`, view: "gold-cockpit-turma" as View, turmaId: t.id, tab: "geral" as CockpitTab })),
+  ...finTurmasData.map(t => ({ tipo: "Turma Financiada", nome: t.nome, sub: `UFCD ${t.ufcdCod}`, view: "fin-cockpit-turma" as View, turmaId: t.id, tab: "geral" as CockpitTab })),
   ...cursosGoldData.map(c => ({ tipo: "Curso Gold", nome: c.nome, sub: c.categoria, view: "gold-cursos" as View })),
   ...finCursosData.map(c => ({ tipo: "UFCD", nome: `${c.ufcdCod} · ${c.ufcd}`, sub: c.nomeComercial, view: "fin-cursos" as View })),
-  { tipo: "DTP", nome: "Dossiê técnico-pedagógico Gold", sub: "VNG-SM-07/09 · CCP", view: "gold-dtp" as View },
-  { tipo: "DTP", nome: "Dossiê técnico-pedagógico Financiada", sub: "UFCD 3564 · Primeiros Socorros", view: "fin-dtp" as View },
+  { tipo: "DTP", nome: "Dossiê da turma VNG-SM-07/09", sub: "CCP · Gold", view: "gold-cockpit-turma" as View, turmaId: 943, tab: "dtp" as CockpitTab },
+  { tipo: "DTP", nome: "Dossiê da turma UFCD 3564 · T1", sub: "Primeiros Socorros · Financiada", view: "fin-cockpit-turma" as View, turmaId: 218, tab: "dtp" as CockpitTab },
 ];
 
-function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: () => void; onNavigate: (v: View) => void }) {
+function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: () => void; onNavigate: (t: NavTarget) => void }) {
   const [q, setQ] = useState("");
   const results = q.length > 1 ? allSearchable.filter(r => `${r.nome} ${r.sub} ${r.tipo}`.toLowerCase().includes(q.toLowerCase())).slice(0, 8) : [];
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1730,7 +1859,7 @@ function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: (
             {results.length === 0 ? (
               <p className="text-center text-sm text-slate-400 py-8">Sem resultados para "{q}"</p>
             ) : results.map((r, i) => (
-              <button key={i} onClick={() => { onNavigate(r.view); onClose(); }}
+              <button key={i} onClick={() => { onNavigate({ view: r.view, turmaId: r.turmaId, tab: r.tab }); onClose(); }}
                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-50 last:border-0">
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${tipoColor[r.tipo] ?? "bg-slate-100 text-slate-600"}`}>{r.tipo}</span>
                 <div className="flex-1 min-w-0">
@@ -1746,9 +1875,9 @@ function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: (
           <div className="px-4 py-4 grid grid-cols-2 gap-2">
             {[
               { l: "Pré-Inscrições", v: "gold-preinscricoes" as View }, { l: "Turmas Gold", v: "gold-turmas" as View },
-              { l: "DTP Gold (CCP)", v: "gold-dtp" as View }, { l: "DTP Financiada", v: "fin-dtp" as View },
+              { l: "Dossiês Gold", v: "gold-dtp" as View }, { l: "Dossiês Financiada", v: "fin-dtp" as View },
             ].map(s => (
-              <button key={s.l} onClick={() => { onNavigate(s.v); onClose(); }}
+              <button key={s.l} onClick={() => { onNavigate({ view: s.v }); onClose(); }}
                 className="text-left px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-semibold text-slate-700 transition-colors">{s.l}</button>
             ))}
           </div>
@@ -1763,7 +1892,7 @@ function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: (
 
 // ─── Notificações ─────────────────────────────────────────────────────────────
 
-function NotificacoesPanel({ onNavigate, onClose }: { onNavigate: (v: View) => void; onClose: () => void }) {
+function NotificacoesPanel({ onNavigate, onClose }: { onNavigate: (t: NavTarget) => void; onClose: () => void }) {
   const [items, setItems] = useState(notificacoesData);
   const naoLidas = items.filter(n => !n.lida).length;
 
@@ -1781,7 +1910,7 @@ function NotificacoesPanel({ onNavigate, onClose }: { onNavigate: (v: View) => v
       </div>
       <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
         {items.map(n => (
-          <button key={n.id} onClick={() => { markRead(n.id); onNavigate(n.view); onClose(); }}
+          <button key={n.id} onClick={() => { markRead(n.id); onNavigate({ view: n.view, turmaId: n.turmaId, tab: n.tab }); onClose(); }}
             className={`w-full flex gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors ${n.lida ? "opacity-60" : ""}`}>
             <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${n.tipo === "warn" ? "bg-amber-100 text-amber-600" : n.tipo === "error" ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"}`}>
               {n.tipo === "error" ? I.warn : n.tipo === "warn" ? I.warn : I.info}
@@ -1818,16 +1947,17 @@ const sidebarConfig: NavGroup[] = [
     { label: "Edição de Cursos", icon: I.book, children: [
       { label: "Cursos Gold", view: "gold-cursos" }, { label: "Datas", view: "gold-datas" },
       { label: "Locais", view: "gold-locais" }, { label: "Áreas Temáticas", view: "gold-areas-tematicas" },
+      { label: "Módulos", view: "gold-modulos" }, { label: "Conteúdos", view: "gold-conteudos" },
     ]},
     { label: "Turmas", view: "gold-turmas", icon: I.school },
-    { label: "Dossiê TP", view: "gold-dtp", icon: I.doc },
+    { label: "Dossiês das turmas", view: "gold-dtp", icon: I.doc },
   ]},
   { group: "Financiada", items: [
     { label: "Inscrições", view: "fin-inscricoes", icon: I.clipboard },
     { label: "Formandos", view: "fin-formandos", icon: I.users },
     { label: "Turmas", view: "fin-turmas", icon: I.school },
     { label: "Presenças", view: "fin-presencas", icon: I.attend },
-    { label: "Dossiê TP", view: "fin-dtp", icon: I.doc },
+    { label: "Dossiês das turmas", view: "fin-dtp", icon: I.doc },
     { label: "Cursos", view: "fin-cursos", icon: I.book },
   ]},
   { group: "Gestão", items: [
@@ -1841,7 +1971,7 @@ const sidebarConfig: NavGroup[] = [
   ]},
 ];
 
-function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v: View) => void; onClose?: () => void }) {
+function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v: View | NavTarget) => void; onClose?: () => void }) {
   const [openGroups, setOpenGroups] = useState<string[]>(() => {
     const open: string[] = ["Principal"];
     sidebarConfig.forEach(g => {
@@ -1859,8 +1989,15 @@ function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v:
 
   function toggleGroup(name: string) { setOpenGroups(prev => prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name]); }
   function toggleLeaf(label: string) { setOpenLeaves(prev => prev.includes(label) ? prev.filter(x => x !== label) : [...prev, label]); }
-  function isActive(v?: View) { return v === view; }
-  function groupHasActive(g: NavGroup) { return g.items.some(item => item.view === view || item.children?.some(c => c.view === view)); }
+  function isActive(v?: View) {
+    if (v === view) return true;
+    if (v === "gold-turmas" && view === "gold-cockpit-turma") return true;
+    if (v === "fin-turmas" && view === "fin-cockpit-turma") return true;
+    return false;
+  }
+  function groupHasActive(g: NavGroup) {
+    return g.items.some(item => isActive(item.view) || item.children?.some(c => isActive(c.view)));
+  }
   function leafHasActive(item: NavLeaf) { return item.view === view || item.children?.some(c => c.view === view); }
 
   return (
@@ -1950,29 +2087,44 @@ const viewTitles: Partial<Record<View, string>> = {
   "gold-formandos-turmas": "Formandos Turmas", "gold-formandos-gold": "Formandos Gold",
   "gold-campanhas": "Campanhas", "gold-cursos": "Cursos Gold", "gold-datas": "Datas Gold",
   "gold-locais": "Locais", "gold-areas-tematicas": "Áreas Temáticas",
-  "gold-turmas": "Turmas Gold", "gold-cockpit-turma": "Cockpit da Turma", "gold-dtp": "DTP Gold — CCP",
+  "gold-modulos": "Módulos", "gold-conteudos": "Conteúdos",
+  "gold-turmas": "Turmas Gold", "gold-cockpit-turma": "Cockpit da Turma", "gold-dtp": "Dossiês das turmas Gold",
   "fin-inscricoes": "Inscrições Financiadas", "fin-formandos": "Formandos Financiados",
   "fin-cursos": "Cursos Financiados", "fin-turmas": "Turmas Financiadas", "fin-presencas": "Folha de Presenças",
-  "fin-dtp": "DTP Financiada — UFCD 3564",
-  formadores: "Formadores", "blog-posts": "Blog — Posts", "blog-tematicas": "Blog — Temáticas",
+  "fin-dtp": "Dossiês das turmas Financiadas", "fin-cockpit-turma": "Cockpit da Turma Financiada",
+  formadores: "Formadores", "blog-posts": "Blog - Posts", "blog-tematicas": "Blog - Temáticas",
   emails: "Emails Automáticos", pagamentos: "Pagamentos", configuracoes: "Configurações",
 };
 
 export default function App() {
   const [view, setView] = useState<View>("painel");
   const [cockpitId, setCockpitId] = useState<number | undefined>();
+  const [finCockpitId, setFinCockpitId] = useState<number | undefined>();
+  const [cockpitTab, setCockpitTab] = useState<CockpitTab>("geral");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  const navigate = useCallback((v: View) => {
+  const go = useCallback((v: View) => {
     setView(v); setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
-  function openCockpit(id: number) { setCockpitId(id); setView("gold-cockpit-turma"); }
+  const navigate = useCallback((target: View | NavTarget) => {
+    const t: NavTarget = typeof target === "string" ? { view: target } : target;
+    if (t.view === "gold-cockpit-turma") {
+      setCockpitId(t.turmaId); setCockpitTab(t.tab ?? "geral");
+    }
+    if (t.view === "fin-cockpit-turma") {
+      setFinCockpitId(t.turmaId); setCockpitTab(t.tab ?? "geral");
+    }
+    go(t.view);
+  }, [go]);
+
+  function openCockpit(id: number, tab: CockpitTab = "geral") { setCockpitId(id); setCockpitTab(tab); setView("gold-cockpit-turma"); }
+  function openFinCockpit(id: number, tab: CockpitTab = "geral") { setFinCockpitId(id); setCockpitTab(tab); setView("fin-cockpit-turma"); }
 
   // Ctrl+K
   useEffect(() => {
@@ -2002,29 +2154,30 @@ export default function App() {
       case "painel": return <PainelView onNavigate={navigate} />;
       case "gold-cursos": return <CursosGoldView />;
       case "gold-turmas": return <TurmasGoldView onCockpit={openCockpit} />;
-      case "gold-cockpit-turma": return <CockpitTurmaView turmaId={cockpitId} onBack={() => navigate("gold-turmas")} onDtp={() => navigate("gold-dtp")} />;
-      case "gold-dtp": return <DtpView key="gold-dtp" regime="gold" onBack={() => navigate("gold-turmas")} />;
+      case "gold-cockpit-turma": return <CockpitTurmaView turmaId={cockpitId} initialTab={cockpitTab} onBack={() => navigate("gold-turmas")} />;
+      case "gold-dtp": return <DtpTurmasPicker regime="gold" onOpen={(id) => openCockpit(id, "dtp")} />;
       case "gold-preinscricoes": return <PreInscricoesGoldView />;
       case "gold-formandos-turmas": return <FormandosTurmasView />;
-      case "gold-formandos-gold": return <PlaceholderView title="Formandos Gold" />;
+      case "gold-formandos-gold": return <FormandosGoldView />;
       case "gold-campanhas": return <CampanhasView />;
-      case "gold-datas": return <PlaceholderView title="Datas Gold" />;
-      case "gold-locais": return <PlaceholderView title="Locais" />;
-      case "gold-areas-tematicas": return <PlaceholderView title="Áreas Temáticas" />;
-      case "gold-modulos": return <PlaceholderView title="Módulos" />;
-      case "gold-conteudos": return <PlaceholderView title="Conteúdos" />;
-      case "fin-inscricoes": return <PlaceholderView title="Inscrições Financiadas" />;
+      case "gold-datas": return <DatasGoldView />;
+      case "gold-locais": return <LocaisView />;
+      case "gold-areas-tematicas": return <AreasTematicasView />;
+      case "gold-modulos": return <ModulosView />;
+      case "gold-conteudos": return <ConteudosView />;
+      case "fin-inscricoes": return <FinInscricoesView />;
       case "fin-formandos": return <FinFormandosView />;
       case "fin-cursos": return <FinCursosView />;
-      case "fin-turmas": return <FinTurmasView onPresencas={() => navigate("fin-presencas")} onDtp={() => navigate("fin-dtp")} />;
+      case "fin-turmas": return <FinTurmasView onCockpit={openFinCockpit} />;
       case "fin-presencas": return <PresencasView />;
-      case "fin-dtp": return <DtpView key="fin-dtp" regime="fin" onBack={() => navigate("fin-turmas")} onPresencas={() => navigate("fin-presencas")} />;
+      case "fin-dtp": return <DtpTurmasPicker regime="fin" onOpen={(id) => openFinCockpit(id, "dtp")} />;
+      case "fin-cockpit-turma": return <FinCockpitTurmaView turmaId={finCockpitId} initialTab={cockpitTab} onBack={() => navigate("fin-turmas")} />;
       case "formadores": return <FormadoresView />;
       case "blog-posts": return <BlogView />;
-      case "blog-tematicas": return <PlaceholderView title="Temáticas do Blog" />;
+      case "blog-tematicas": return <BlogTematicasView />;
       case "emails": return <EmailsView />;
       case "pagamentos": return <PagamentosView />;
-      case "configuracoes": return <PlaceholderView title="Configurações" />;
+      case "configuracoes": return <ConfiguracoesView />;
       default: return <PainelView onNavigate={navigate} />;
     }
   }
@@ -2089,7 +2242,7 @@ export default function App() {
           <main className="flex-1 p-4 sm:p-5 overflow-auto">{renderView()}</main>
 
           <footer className="bg-white border-t border-slate-100 px-5 py-2.5 text-center flex-shrink-0">
-            <p className="text-xs text-slate-400">GesForma © 2026 · <span className="font-semibold text-slate-500">ENA</span> — Escola de Negócios e Administração</p>
+            <p className="text-xs text-slate-400">GesForma © 2026 · <span className="font-semibold text-slate-500">ENA</span> - Escola de Negócios e Administração</p>
           </footer>
         </div>
       </div>

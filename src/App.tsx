@@ -82,7 +82,7 @@ type View =
   | "emails" | "pagamentos" | "configuracoes";
 
 type CockpitTab = "overview" | "sessoes" | "documentos" | "dtp" | "certificados";
-type NavTarget = { view: View; turmaId?: number; tab?: CockpitTab; cursoId?: number | "new" };
+type NavTarget = { view: View; turmaId?: number; tab?: CockpitTab; cursoId?: number | "new"; cursoNome?: string };
 
 // ─── Sample Data ─────────────────────────────────────────────────────────────
 
@@ -2823,6 +2823,7 @@ export default function App() {
   const [finCockpitId, setFinCockpitId] = useState<number | undefined>();
   const [cockpitTab, setCockpitTab] = useState<CockpitTab>("overview");
   const [cursoFichaId, setCursoFichaId] = useState<number | "new" | undefined>();
+  const [moduloCurso, setModuloCurso] = useState<string | undefined>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -2844,6 +2845,9 @@ export default function App() {
     }
     if (t.view === "gold-curso-ficha" || t.view === "fin-curso-ficha") {
       setCursoFichaId(t.cursoId ?? "new");
+    }
+    if (t.view === "gold-modulos") {
+      setModuloCurso(t.cursoNome);
     }
     go(t.view);
   }, [go]);
@@ -2882,6 +2886,7 @@ export default function App() {
         <CursoFichaView
           curso={cursoFichaId && cursoFichaId !== "new" ? cursosGoldData.find(c => c.id === cursoFichaId) : undefined}
           onBack={() => navigate("gold-cursos")}
+          onOpenModulos={nome => navigate({ view: "gold-modulos", cursoNome: nome })}
         />
       );
       case "gold-turmas": return <TurmasGoldView onCockpit={openCockpit} />;
@@ -2894,7 +2899,7 @@ export default function App() {
       case "gold-datas": return <DatasGoldView />;
       case "gold-locais": return <LocaisView />;
       case "gold-areas-tematicas": return <AreasTematicasView />;
-      case "gold-modulos": return <ModulosView />;
+      case "gold-modulos": return <ModulosView cursoInicial={moduloCurso} />;
       case "gold-conteudos": return <ConteudosView />;
       case "gold-inqueritos": return <InqueritosView acento="gold" />;
       case "fin-inscricoes": return <FinInscricoesView />;

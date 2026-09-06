@@ -170,19 +170,19 @@ const conteudoFin: Record<string, { sintese: string; objetivos: string; programa
     categoria: "Saúde e segurança",
     tags: "primeiros socorros, saude, ufcd",
     sintese:
-      "UFCD 3564 do Catálogo Nacional de Qualificações. Forma para reconhecer emergências, aplicar suporte básico de vida e estabilizar a vítima até chegar ajuda especializada.\n\n25 horas em e-learning, com casos práticos e avaliação final. Curso financiado — sem custo para o formando elegível.",
+      "UFCD 3564 do Catálogo Nacional de Qualificações. Forma para reconhecer emergências, aplicar suporte básico de vida e estabilizar a vítima até chegar ajuda especializada.\n\n25 horas em e-learning, com casos práticos e avaliação final. Curso financiado - sem custo para o formando elegível.",
     objetivos:
       "Identificar sinais de emergência médica e acionar o 112.\nAplicar a cadeia de sobrevivência e o SBV no adulto.\nControlar hemorragias e imobilizar lesões músculo-esqueléticas.\nAgir em situações de queimadura, intoxicação e desmaio.\nRegistar a ocorrência e comunicar com os meios de socorro.",
     programa:
       "1. Enquadramento e cadeia de sobrevivência\n2. Avaliação da vítima e posição de segurança\n3. Suporte básico de vida e DEA\n4. Hemorragias, feridas e queimaduras\n5. Traumatismos e imobilização\n6. Avaliação e encerramento",
     funcionamento:
-      "25 horas assíncronas na plataforma Moodle.\nAcesso durante o período da turma, com tutoragem por formador.\nAssiduidade e teste final obrigatórios para certificado.\nFinanciado — sujeito a critérios de elegibilidade (IEFP / PO).",
+      "25 horas assíncronas na plataforma Moodle.\nAcesso durante o período da turma, com tutoragem por formador.\nAssiduidade e teste final obrigatórios para certificado.\nFinanciado - sujeito a critérios de elegibilidade (IEFP / PO).",
   },
   "10785": {
     categoria: "Marketing digital",
     tags: "redes sociais, trafego, ufcd",
     sintese:
-      "UFCD 10785 — Publicidade nas Redes Sociais. Percurso prático para planear, lançar e ler campanhas de tráfego pago em Meta e Google.\n\n25 horas em e-learning. O nome comercial no site (Master em Tráfego) deve explicar o benefício; o código UFCD fica visível para quem precisa do CNQ.",
+      "UFCD 10785 - Publicidade nas Redes Sociais. Percurso prático para planear, lançar e ler campanhas de tráfego pago em Meta e Google.\n\n25 horas em e-learning. O nome comercial no site (Master em Tráfego) deve explicar o benefício; o código UFCD fica visível para quem precisa do CNQ.",
     objetivos:
       "Definir público, objetivo e orçamento de uma campanha.\nMontar conjuntos de anúncios e criativos para feed e stories.\nLer métricas de alcance, CPC e conversão.\nAjustar campanhas com base em dados da primeira semana.\nCumprir as regras de publicidade das plataformas.",
     programa:
@@ -194,7 +194,7 @@ const conteudoFin: Record<string, { sintese: string; objetivos: string; programa
     categoria: "TIC e cibersegurança",
     tags: "ciberseguranca, tic, ufcd",
     sintese:
-      "UFCD 9188 — Fundamentos de cibersegurança. Introduz ameaças comuns, higiene digital e o papel de cada colaborador na proteção da organização.\n\n25 horas em b-learning: sessões síncronas para exercícios e trabalho autónomo na plataforma.",
+      "UFCD 9188 - Fundamentos de cibersegurança. Introduz ameaças comuns, higiene digital e o papel de cada colaborador na proteção da organização.\n\n25 horas em b-learning: sessões síncronas para exercícios e trabalho autónomo na plataforma.",
     objetivos:
       "Reconhecer phishing, malware e engenharia social.\nAplicar palavras-passe fortes e autenticação de dois fatores.\nProteger dados pessoais e profissionais no dia a dia.\nSaber a quem reportar um incidente.\nAdotar boas práticas em dispositivos móveis e cloud.",
     programa:
@@ -206,7 +206,7 @@ const conteudoFin: Record<string, { sintese: string; objetivos: string; programa
     categoria: "Formação de formadores",
     tags: "pedagogia, formadores, ufcd",
     sintese:
-      "UFCD 10394 — Métodos e Técnicas Pedagógicas Ativos. Destina-se a formadores que querem sair do expositivo e pôr o grupo a trabalhar.\n\n25 horas em b-learning, com micro-práticas em sessão e um plano de sessão entregue no fim.",
+      "UFCD 10394 - Métodos e Técnicas Pedagógicas Ativos. Destina-se a formadores que querem sair do expositivo e pôr o grupo a trabalhar.\n\n25 horas em b-learning, com micro-práticas em sessão e um plano de sessão entregue no fim.",
     objetivos:
       "Escolher métodos ativos adequados ao objetivo e ao grupo.\nDesenhar atividades de 10 a 40 minutos com materiais simples.\nConduzir brainstorming, estudo de caso e role-play.\nDar feedback sem desmotivar o formando.\nIntegrar técnicas ativas num plano de sessão completo.",
     programa:
@@ -435,10 +435,12 @@ function SitePreview({ data, accent }: { data: CursoSite; accent: CursoAccent })
 export function CursoFichaView({
   curso,
   onBack,
+  onOpenModulos,
   accent = "gold",
 }: {
   curso?: CursoFichaSeed;
   onBack: () => void;
+  onOpenModulos?: (cursoNome: string) => void;
   accent?: CursoAccent;
 }) {
   const t = theme(accent);
@@ -483,9 +485,9 @@ export function CursoFichaView({
   }
 
   const metaLine = accent === "fin"
-    ? [data.ufcdCod ? `UFCD ${data.ufcdCod}` : "UFCD", data.horas ? `${data.horas}h` : "—", data.regime || "regime", data.slug ? `/cursos/${data.slug}` : ""]
+    ? [data.ufcdCod ? `UFCD ${data.ufcdCod}` : "UFCD", data.horas ? `${data.horas}h` : "-", data.regime || "regime", data.slug ? `/cursos/${data.slug}` : ""]
         .filter(Boolean).join(" · ")
-    : [data.tipo || "Tipo", data.horas ? `${data.horas}h` : "—", data.regime || "regime", data.slug ? `/cursos/${data.slug}` : ""]
+    : [data.tipo || "Tipo", data.horas ? `${data.horas}h` : "-", data.regime || "regime", data.slug ? `/cursos/${data.slug}` : ""]
         .filter(Boolean).join(" · ");
 
   return (
@@ -515,6 +517,13 @@ export function CursoFichaView({
                 <div className={`h-full rounded-full ${pct === 100 ? "bg-emerald-500" : t.bar}`} style={{ width: `${pct}%` }} />
               </div>
             </div>
+            {onOpenModulos && (
+              <button type="button"
+                onClick={() => onOpenModulos(data.titulo || curso?.nome || "")}
+                className="px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 whitespace-nowrap">
+                Módulos
+              </button>
+            )}
             <button type="button" onClick={() => setPreviewOpen(v => !v)}
               className="lg:hidden px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
               {previewOpen ? "Editar" : "Ver site"}
@@ -620,7 +629,7 @@ export function CursoFichaView({
           {tab === "conteudo" && (
             <div className="space-y-4">
               <div className={`rounded-xl border px-4 py-3 text-sm ${t.note}`}>
-                Cada bloco corresponde a uma secção da página pública. Escreva para o formando — não para a operação interna.
+                Cada bloco corresponde a uma secção da página pública. Escreva para o formando - não para a operação interna.
               </div>
               <EditorBlock accent={accent} label="Síntese do curso" siteHint="Primeiro parágrafo abaixo do banner. Responda: para quem é e o que se leva daqui." value={data.sintese} onChange={v => patch({ sintese: v })} rows={7} />
               <EditorBlock accent={accent} label="Objetivos" siteHint="Lista do que o formando será capaz de fazer. Uma ideia por linha." value={data.objetivos} onChange={v => patch({ objetivos: v })} rows={7} />
@@ -711,7 +720,7 @@ export function CursoFichaView({
                 </ul>
                 {pct < 100 && (
                   <p className="text-xs text-slate-500 mt-4">
-                    Faltam {lista.length - done} campos para a página ficar completa. Pode guardar na mesma — o site mostra o que já existe.
+                    Faltam {lista.length - done} campos para a página ficar completa. Pode guardar na mesma - o site mostra o que já existe.
                   </p>
                 )}
               </div>

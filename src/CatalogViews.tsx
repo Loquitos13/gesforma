@@ -209,12 +209,15 @@ const areasTematicasData = [
 ];
 
 const modulosData = [
-  { id: 1, codigo: "M1", nome: "Aprendizagem e pedagogia", horas: 20, curso: "CCP - Formação de Formadores", tipo: "Teórico-prático", estado: "Ativo" },
-  { id: 2, codigo: "M2", nome: "Comunicação e dinâmica de grupos", horas: 20, curso: "CCP - Formação de Formadores", tipo: "Teórico-prático", estado: "Ativo" },
-  { id: 3, codigo: "M3", nome: "Avaliação da formação", horas: 15, curso: "CCP - Formação de Formadores", tipo: "Teórico", estado: "Ativo" },
-  { id: 4, codigo: "M4", nome: "Simulação pedagógica", horas: 25, curso: "CCP - Formação de Formadores", tipo: "Prático", estado: "Ativo" },
-  { id: 5, codigo: "M5", nome: "Plataformas digitais e e-learning", horas: 10, curso: "CCP - Formação de Formadores", tipo: "B-learning", estado: "Ativo" },
+  { id: 1, codigo: "M1", nome: "Aprendizagem e pedagogia", horas: 20, curso: "Formação de Formadores - CCP", tipo: "Teórico-prático", estado: "Ativo" },
+  { id: 2, codigo: "M2", nome: "Comunicação e dinâmica de grupos", horas: 20, curso: "Formação de Formadores - CCP", tipo: "Teórico-prático", estado: "Ativo" },
+  { id: 3, codigo: "M3", nome: "Avaliação da formação", horas: 15, curso: "Formação de Formadores - CCP", tipo: "Teórico", estado: "Ativo" },
+  { id: 4, codigo: "M4", nome: "Simulação pedagógica", horas: 25, curso: "Formação de Formadores - CCP", tipo: "Prático", estado: "Ativo" },
+  { id: 5, codigo: "M5", nome: "Plataformas digitais e e-learning", horas: 10, curso: "Formação de Formadores - CCP", tipo: "B-learning", estado: "Ativo" },
   { id: 6, codigo: "EX1", nome: "Tabelas dinâmicas e dashboards", horas: 4, curso: "Excel do Básico ao Avançado", tipo: "Prático", estado: "Ativo" },
+  { id: 7, codigo: "AV1", nome: "Voz e respiração", horas: 6, curso: "A Arte de Comunicar e Falar em Público: B-learning", tipo: "Prático", estado: "Ativo" },
+  { id: 8, codigo: "AV2", nome: "Estrutura do discurso", horas: 5, curso: "A Arte de Comunicar e Falar em Público: B-learning", tipo: "Teórico-prático", estado: "Ativo" },
+  { id: 9, codigo: "AV3", nome: "Ensaio e feedback", horas: 5, curso: "A Arte de Comunicar e Falar em Público: B-learning", tipo: "Prático", estado: "Ativo" },
 ];
 
 const conteudosData = [
@@ -486,30 +489,107 @@ export function AreasTematicasView() {
   );
 }
 
-export function ModulosView() {
+type ModuloRow = typeof modulosData[number];
+
+export function ModulosView({ cursoInicial }: { cursoInicial?: string }) {
   const [s, setS] = useState("");
-  const [filtro, setFiltro] = useState("Todos");
-  const [open, setOpen] = useState<"new" | typeof modulosData[number] | null>(null);
+  const [estado, setEstado] = useState("Todos");
+  const [cursoFiltro, setCursoFiltro] = useState(cursoInicial ?? "");
+  const [lista, setLista] = useState<ModuloRow[]>(modulosData);
+  const [open, setOpen] = useState<"new" | ModuloRow | null>(null);
   const [curso, setCurso] = useState("");
-  const f = modulosData.filter(x => {
-    const q = `${x.nome} ${x.codigo} ${x.curso}`.toLowerCase().includes(s.toLowerCase());
-    const byCurso = filtro === "Todos" || (filtro === "CCP" ? /ccp/i.test(x.curso) : filtro === "Excel" ? /excel/i.test(x.curso) : x.estado === filtro);
-    return q && byCurso;
-  });
+  const [codigo, setCodigo] = useState("");
+  const [nome, setNome] = useState("");
+  const [horas, setHoras] = useState("10");
+  const [tipo, setTipo] = useState("Teórico-prático");
   const editing = open && open !== "new" ? open : null;
-  useEffect(() => { if (open) setCurso(editing?.curso ?? ""); }, [open, editing]);
+
+  useEffect(() => { setCursoFiltro(cursoInicial ?? ""); }, [cursoInicial]);
+
+  useEffect(() => {
+    if (!open) return;
+    setCurso(editing?.curso || cursoFiltro || "");
+    setCodigo(editing?.codigo ?? "");
+    setNome(editing?.nome ?? "");
+    setHoras(String(editing?.horas ?? 10));
+    setTipo(editing?.tipo ?? "Teórico-prático");
+  }, [open, editing, cursoFiltro]);
+
+  const f = lista.filter(x => {
+    const q = `${x.nome} ${x.codigo} ${x.curso}`.toLowerCase().includes(s.toLowerCase());
+    const byCurso = !cursoFiltro || x.curso === cursoFiltro;
+    const byEstado = estado === "Todos" || x.estado === estado;
+    return q && byCurso && byEstado;
+  });
+  const horasCurso = f.reduce((acc, x) => acc + x.horas, 0);
+
+  function abrirNovo() {
+    setOpen("new");
+  }
+
+  function guardarModulo() {
+    if (!nome.trim() || !curso) return;
+    if (open === "new") {
+      const id = Math.max(0, ...lista.map(x => x.id)) + 1;
+      setLista(prev => [...prev, {
+        id, codigo: codigo.trim() || `M${id}`, nome: nome.trim(), horas: Number(horas) || 0,
+        curso, tipo: tipo.trim() || "Teórico-prático", estado: "Ativo",
+      }]);
+      if (!cursoFiltro) setCursoFiltro(curso);
+    } else if (editing) {
+      setLista(prev => prev.map(x => x.id === editing.id
+        ? { ...x, codigo: codigo.trim() || x.codigo, nome: nome.trim(), horas: Number(horas) || 0, curso, tipo: tipo.trim() || x.tipo }
+        : x));
+    }
+    setOpen(null);
+  }
+
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Módulos" sub="Blocos pedagógicos dos cursos Gold - no CCP: aprendizagem, comunicação, avaliação e simulação." action={<NewBtn label="+ Novo módulo" onClick={() => setOpen("new")} />} />
-        <FilterChips options={["Todos", "CCP", "Excel", "Ativo"]} value={filtro} onChange={setFiltro} />
+        <PageHeader
+          title="Módulos"
+          sub={cursoFiltro ? `${f.length} módulo${f.length === 1 ? "" : "s"} · ${horasCurso}h neste curso` : "Escolha um curso para ver e criar os seus módulos."}
+          action={<NewBtn label="+ Novo módulo" onClick={abrirNovo} />}
+        />
+        <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+            <Field label="Curso">
+              <SearchSelect
+                value={cursoFiltro}
+                onChange={setCursoFiltro}
+                options={cursosGoldOpts}
+                placeholder="Pesquisar curso…"
+                allowEmpty
+              />
+            </Field>
+            <button type="button" onClick={abrirNovo}
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg whitespace-nowrap">
+              {I.plus} Novo módulo{cursoFiltro ? " neste curso" : ""}
+            </button>
+          </div>
+          <FilterChips options={["Todos", "Ativo", "Inactivo"]} value={estado} onChange={setEstado} />
+        </div>
         <Card>
           <TableToolbar search={s} onSearch={setS} />
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr><Th>Id</Th><Th>Código</Th><Th>Módulo</Th><Th>Curso</Th><Th>Tipo</Th><Th className="text-center">Horas</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
               <tbody className="divide-y divide-slate-100">
-                {f.length === 0 && <EmptyState text="Nenhum módulo encontrado." />}
+                {f.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-10 text-center">
+                      <p className="text-sm text-slate-500">
+                        {!cursoFiltro
+                          ? "Selecione um curso acima para listar os módulos."
+                          : "Este curso ainda não tem módulos."}
+                      </p>
+                      <button type="button" onClick={abrirNovo} className="mt-3 text-sm font-semibold text-amber-600 hover:text-amber-700">
+                        + Criar o primeiro módulo
+                      </button>
+                    </td>
+                  </tr>
+                )}
                 {f.map(r => (
                   <tr key={r.id} className="hover:bg-slate-50">
                     <Td><span className="text-slate-400 font-mono text-xs">{r.id}</span></Td>
@@ -519,7 +599,7 @@ export function ModulosView() {
                     <Td className="text-xs text-slate-600">{r.tipo}</Td>
                     <Td className="text-center text-xs font-semibold">{r.horas}h</Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(prev => prev.filter(x => x.id !== r.id))} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -527,16 +607,20 @@ export function ModulosView() {
           </div>
         </Card>
       </div>
-      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `${editing.codigo} · ${editing.nome}` : "Novo módulo"}>
+      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `${editing.codigo} · ${editing.nome}` : "Novo módulo"} sub={curso || cursoFiltro || "Associar a um curso Gold"}>
         <div className="p-5 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Código"><input className={iCls} defaultValue={editing?.codigo ?? ""} /></Field>
-            <Field label="Horas"><input type="number" className={iCls} defaultValue={editing?.horas ?? 10} /></Field>
-          </div>
-          <Field label="Nome"><input className={iCls} defaultValue={editing?.nome ?? ""} /></Field>
           <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
-          <Field label="Tipo"><input className={iCls} defaultValue={editing?.tipo ?? ""} /></Field>
-          <FormActions onClose={() => setOpen(null)} />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Código"><input className={iCls} value={codigo} onChange={e => setCodigo(e.target.value)} placeholder="M6" /></Field>
+            <Field label="Horas"><input type="number" className={iCls} value={horas} onChange={e => setHoras(e.target.value)} /></Field>
+          </div>
+          <Field label="Nome"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome do módulo" /></Field>
+          <Field label="Tipo"><input className={iCls} value={tipo} onChange={e => setTipo(e.target.value)} /></Field>
+          <div className="flex gap-2 pt-2">
+            <button type="button" onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button type="button" onClick={guardarModulo} disabled={!nome.trim() || !curso}
+              className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Guardar</button>
+          </div>
         </div>
       </SlideOver>
     </>
@@ -674,7 +758,7 @@ export function FinInscricoesView() {
       </div>
       <SlideOver open={!!open} onClose={() => setOpen(null)}
         title={editing ? `${editing.nome} ${editing.apelido}` : "Nova inscrição financiada"}
-        sub={editing ? `UFCD ${editing.ufcd} · ${editing.turma}` : "Candidatura a UFCD — não é o funil Gold"}>
+        sub={editing ? `UFCD ${editing.ufcd} · ${editing.turma}` : "Candidatura a UFCD - não é o funil Gold"}>
         <div className="p-5 space-y-4">
           {!editing && (
             <div className="grid grid-cols-2 gap-3">

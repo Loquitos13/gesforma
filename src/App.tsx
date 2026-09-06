@@ -6,9 +6,12 @@ import {
 } from "./CatalogViews";
 import {
   FileUploadModal, PresencasSessaoModal, FormadorProfileSlideOver, PlanoSessaoModal,
-  InqueritosView, defaultPlanos, emptyPlano, ResolverDocumentoModal, seedListaFromDetalhe,
-  type PlanoSessaoData, type SessaoMeta, type ResolveDocTarget,
+  InqueritosView, defaultPlanos, emptyPlano, seedListaFromDetalhe, seedPipItems, seedSimItems,
+  getParametrosAvaliacao, setParametrosAvaliacao,
+  type PlanoSessaoData, type SessaoMeta, type ResolveDocTarget, type PipItem, type SimItem,
+  type CriterioAvaliacao,
 } from "./TurmaExtras";
+import { ResolverDocumentoModal } from "./DocResolver";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -78,6 +81,7 @@ type NavTarget = { view: View; turmaId?: number; tab?: CockpitTab };
 // ─── Sample Data ─────────────────────────────────────────────────────────────
 
 const cursosGoldData = [
+  { id: 100, nome: "Formação de Formadores - CCP", categoria: "CCP e Gestão da Formação", tipo: "Gold", preco: 125, regime: "b-learning", horas: 90, estado: "Ativo" },
   { id: 108, nome: "A Arte de Comunicar e Falar em Público: B-learning", categoria: "Desenvolvimento Pessoal", tipo: "Gold", preco: 80, regime: "b-learning", horas: 16, estado: "Inactivo" },
   { id: 107, nome: "A Arte de Comunicar e Falar em Público: E-learning", categoria: "Desenvolvimento Pessoal", tipo: "Pré-inscrição", preco: 35, regime: "e-learning", horas: 8, estado: "Inactivo" },
   { id: 131, nome: "CCP - Formação de Formadores para Empresas", categoria: "CCP e Gestão da Formação", tipo: "Pré-inscrição", preco: 120, regime: "b-learning", horas: 90, estado: "Inactivo" },
@@ -656,7 +660,7 @@ function cloneGrupos(src: typeof docsTurmaGrupos) {
   return src.map(g => ({ ...g, items: g.items.map(i => ({ ...i })) }));
 }
 
-function DocumentosTurmaTab({ regime = "gold" }: { regime?: "gold" | "fin" }) {
+function DocumentosTurmaTab({ regime = "gold", curso }: { regime?: "gold" | "fin"; curso?: string }) {
   const estadoCfg: Record<DocEstado, { dot: string; chip: string; label: string }> = {
     ok: { dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700 border-emerald-200", label: "No dossiê" },
     parcial: { dot: "bg-amber-400", chip: "bg-amber-50 text-amber-700 border-amber-200", label: "Parcial" },
@@ -665,7 +669,8 @@ function DocumentosTurmaTab({ regime = "gold" }: { regime?: "gold" | "fin" }) {
   const seed = regime === "fin" ? docsFinGrupos : docsTurmaGrupos;
   const [grupos, setGrupos] = useState(() => cloneGrupos(seed));
   const [resolver, setResolver] = useState<{ grupoId: string; label: string } | null>(null);
-  useEffect(() => { setGrupos(cloneGrupos(seed)); setResolver(null); }, [regime]);
+  const [payloads, setPayloads] = useState<Record<string, unknown>>({});
+  useEffect(() => { setGrupos(cloneGrupos(seed)); setResolver(null); setPayloads({}); }, [regime]);
 
   const nomesFormandos = regime === "fin"
     ? finFormandosData.map(f => `${f.nome} ${f.apelido}`)
@@ -673,6 +678,7 @@ function DocumentosTurmaTab({ regime = "gold" }: { regime?: "gold" | "fin" }) {
   const nomesSessoes = regime === "fin"
     ? ["Sessão 1 · 27 Ago", "Sessão 2 · 03 Set", "Sessão 3 · 10 Set", "Sessão 4 · 17 Set", "Sessão 5 · 24 Set"]
     : Array.from({ length: 16 }, (_, i) => `Sessão ${i + 1}`);
+  const cursoNome = curso ?? (regime === "gold" ? "Formação de Formadores - CCP" : undefined);
 
   const aberto = resolver
     ? grupos.flatMap(g => g.items.filter(d => g.id === resolver.grupoId && d.label === resolver.label).map(d => ({ grupoId: g.id, grupo: g.id, doc: d })))[0]
@@ -682,7 +688,29 @@ function DocumentosTurmaTab({ regime = "gold" }: { regime?: "gold" | "fin" }) {
     setResolver({ grupoId, label: doc.label });
   }
 
+  function payloadKey(grupoId: string, label: string) {
+    return `${grupoId}:${label}`;
+  }
+
   function targetFromDoc(grupoId: string, doc: { label: string; detalhe: string; estado: DocEstado }): ResolveDocTarget {
+    const saved = payloads[payloadKey(grupoId, doc.label)];
+    const isPip = doc.label === "PIP";
+    const isSim = /simula/i.test(doc.label);
+    if (isPip) {
+      return {
+        label: doc.label, detalhe: doc.detalhe, estado: doc.estado, kind: "pip",
+        pipItems: seedPipItems(nomesFormandos, saved as PipItem[] | undefined),
+      };
+    }
+    if (isSim) {
+      const params = getParametrosAvaliacao(cursoNome);
+      return {
+        label: doc.label, detalhe: doc.detalhe, estado: doc.estado, kind: "simulacao",
+        simItems: seedSimItems(nomesFormandos, params.criterios, saved as SimItem[] | undefined),
+        criterios: params.criterios,
+        curso: params.curso,
+      };
+    }
     const lista = /\d+\s*\/\s*\d+/.test(doc.detalhe) || grupoId === "formandos" || grupoId === "sessoes";
     const nomes = grupoId === "sessoes" ? nomesSessoes : nomesFormandos;
     return {
@@ -738,6 +766,9 @@ function DocumentosTurmaTab({ regime = "gold" }: { regime?: "gold" | "fin" }) {
         target={aberto ? targetFromDoc(aberto.grupoId, aberto.doc) : null}
         onSave={next => {
           if (!resolver) return;
+          if (next.payload !== undefined) {
+            setPayloads(prev => ({ ...prev, [payloadKey(resolver.grupoId, resolver.label)]: next.payload }));
+          }
           setGrupos(prev => prev.map(g => g.id !== resolver.grupoId ? g : {
             ...g,
             items: g.items.map(d => d.label !== resolver.label ? d : { ...d, estado: next.estado, detalhe: next.detalhe }),
@@ -907,7 +938,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             </div>
           </Card>
         )}
-        {tab === "documentos" && <DocumentosTurmaTab regime="gold" />}
+        {tab === "documentos" && <DocumentosTurmaTab regime="gold" curso={turma.curso} />}
         {tab === "certificados" && <CertificadosTurmaTab onUpload={id => setUploadCert(id)} />}
 
         {tab === "overview" && <>
@@ -1139,7 +1170,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview" }: { tur
         <DtpPanel regime="fin" turma={{ codigo: turma.ufcdCod === "3564" ? "UFCD 3564 · T1" : turma.nome, id: turma.id, titulo: turma.curso, sub: `UFCD ${turma.ufcdCod} · ${turma.horas}h` }} />
       )}
       {tab === "sessoes" && <PresencasView turmaId={turma.id} embedded />}
-      {tab === "documentos" && <DocumentosTurmaTab regime="fin" />}
+      {tab === "documentos" && <DocumentosTurmaTab regime="fin" curso={turma.curso} />}
       {tab === "certificados" && <CertificadosTurmaTab onUpload={id => setUploadCert(id)} />}
       {tab === "overview" && (
         <>
@@ -1863,10 +1894,33 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
 
 // ─── Remaining views (simplified) ────────────────────────────────────────────
 
+function slugCriterio(label: string, existing: CriterioAvaliacao[]) {
+  const base = label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "criterio";
+  let id = base; let n = 2;
+  while (existing.some(c => c.id === id)) { id = `${base}-${n}`; n += 1; }
+  return id;
+}
+
 function CursosGoldView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
+  const [open, setOpen] = useState<typeof cursosGoldData[number] | null>(null);
+  const [criterios, setCriterios] = useState<CriterioAvaliacao[]>([]);
+  const [novoCriterio, setNovoCriterio] = useState("");
   const f = cursosGoldData.filter(c => `${c.nome} ${c.categoria}`.toLowerCase().includes(s.toLowerCase()));
   const rows = f.slice((p - 1) * pp, p * pp);
+  const temAvaliacao = !!open && (/ccp/i.test(open.nome) || /ccp/i.test(open.categoria));
+
+  function abrir(c: typeof cursosGoldData[number]) {
+    setOpen(c);
+    setCriterios(getParametrosAvaliacao(c.nome).criterios);
+    setNovoCriterio("");
+  }
+
+  function guardarCurso() {
+    if (open && temAvaliacao) setParametrosAvaliacao(open.nome, criterios.filter(c => c.label.trim()));
+    setOpen(null);
+  }
+
   return (
     <div>
       <PageHeader title="Cursos Gold" action={<NewBtn label="+ Novo Curso" />} />
@@ -1879,14 +1933,14 @@ function CursosGoldView() {
               {rows.map(c => (
                 <tr key={c.id} className="hover:bg-slate-50">
                   <Td><IdCell id={c.id} /></Td>
-                  <Td className="max-w-[200px]"><span className="text-xs font-medium text-blue-600 leading-snug">{c.nome}</span></Td>
+                  <Td className="max-w-[200px]"><button onClick={() => abrir(c)} className="text-xs font-medium text-blue-600 leading-snug text-left hover:underline">{c.nome}</button></Td>
                   <Td className="text-xs text-slate-600 whitespace-nowrap">{c.categoria}</Td>
                   <Td><Badge label={c.tipo} variant={c.tipo === "Gold" ? "amber" : "gray"} /></Td>
                   <Td className="text-xs font-semibold text-amber-600">€ {c.preco}</Td>
                   <Td><span className={`text-xs px-1.5 py-0.5 rounded font-medium ${c.regime === "e-learning" ? "bg-blue-50 text-blue-700" : "bg-violet-50 text-violet-700"}`}>{c.regime}</span></Td>
                   <Td className="text-center text-xs text-slate-600">{c.horas || "-"}</Td>
                   <Td>{estadoBadge(c.estado)}</Td>
-                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
+                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => abrir(c)} /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
                 </tr>
               ))}
             </tbody>
@@ -1894,6 +1948,58 @@ function CursosGoldView() {
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
+      <SlideOver open={!!open} onClose={() => setOpen(null)} title={open?.nome ?? "Curso"} sub="Ficha do curso e parâmetros da folha de avaliação.">
+        <div className="p-5 space-y-4">
+          <Field label="Nome"><input className={iCls} defaultValue={open?.nome ?? ""} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Categoria"><input className={iCls} defaultValue={open?.categoria ?? ""} /></Field>
+            <Field label="Preço (€)"><input className={iCls} type="number" defaultValue={open?.preco ?? 0} /></Field>
+          </div>
+          {temAvaliacao && (
+            <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 space-y-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Parâmetros de avaliação</p>
+                <p className="text-xs text-slate-500 mt-0.5">A folha das simulações inicial e final usa estes critérios, à escala 1–5.</p>
+              </div>
+              <div className="space-y-2">
+                {criterios.length === 0 && <p className="text-xs text-slate-500">Ainda não há critérios. Adiciona o primeiro abaixo.</p>}
+                {criterios.map((c, i) => (
+                  <div key={c.id} className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-slate-400 w-5">{i + 1}</span>
+                    <input className={iCls} value={c.label}
+                      onChange={e => setCriterios(prev => prev.map(x => x.id === c.id ? { ...x, label: e.target.value } : x))} />
+                    <button type="button" onClick={() => setCriterios(prev => prev.filter(x => x.id !== c.id))}
+                      className="p-2 text-slate-400 hover:text-red-500" aria-label="Remover critério">{I.trash}</button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input className={iCls} value={novoCriterio} placeholder="Novo critério (ex. Gestão do tempo)"
+                  onChange={e => setNovoCriterio(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && novoCriterio.trim()) {
+                      setCriterios(prev => [...prev, { id: slugCriterio(novoCriterio, prev), label: novoCriterio.trim() }]);
+                      setNovoCriterio("");
+                    }
+                  }} />
+                <button type="button"
+                  onClick={() => {
+                    if (!novoCriterio.trim()) return;
+                    setCriterios(prev => [...prev, { id: slugCriterio(novoCriterio, prev), label: novoCriterio.trim() }]);
+                    setNovoCriterio("");
+                  }}
+                  className="px-3 py-2 text-xs font-semibold rounded-lg border border-violet-200 bg-white text-violet-700 hover:bg-violet-50 whitespace-nowrap">
+                  + Critério
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={guardarCurso} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+          </div>
+        </div>
+      </SlideOver>
     </div>
   );
 }

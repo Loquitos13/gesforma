@@ -102,14 +102,91 @@ export function FileUploadModal({ open, onClose, title, accent = "gold", onConfi
 
 export type ResolveDocEstado = "ok" | "parcial" | "falta";
 export type ResolveListaItem = { id: string; nome: string; ok: boolean };
+export type CriterioAvaliacao = { id: string; label: string };
+
+export type PipItem = { id: string; nome: string; fileName?: string };
+export type SimItem = { id: string; nome: string; videoName?: string; notas: Record<string, number | undefined> };
+
+export type ResolveDocKind = "ficheiro" | "lista" | "pip" | "simulacao";
 
 export type ResolveDocTarget = {
   label: string;
   detalhe: string;
   estado: ResolveDocEstado;
-  kind: "ficheiro" | "lista";
+  kind: ResolveDocKind;
   items?: ResolveListaItem[];
+  pipItems?: PipItem[];
+  simItems?: SimItem[];
+  curso?: string;
+  criterios?: CriterioAvaliacao[];
 };
+
+export const criteriosCcp: CriterioAvaliacao[] = [
+  { id: "planif", label: "Planificação da sessão" },
+  { id: "comun", label: "Comunicação e linguagem" },
+  { id: "metodos", label: "Métodos e técnicas pedagógicas" },
+  { id: "grupo", label: "Gestão do grupo e do tempo" },
+  { id: "recursos", label: "Utilização de recursos didáticos" },
+  { id: "aval", label: "Avaliação das aprendizagens" },
+];
+
+const parametrosPorCurso: Record<string, CriterioAvaliacao[]> = {
+  "Formação de Formadores - CCP": criteriosCcp.map(c => ({ ...c })),
+  "CCP - Formação de Formadores para Empresas": criteriosCcp.map(c => ({ ...c })),
+};
+
+export function getParametrosAvaliacao(curso?: string) {
+  const nome = curso ?? "Formação de Formadores - CCP";
+  const saved = parametrosPorCurso[nome];
+  if (saved) return { curso: nome, criterios: saved.map(c => ({ ...c })) };
+  if (/ccp/i.test(nome)) return { curso: nome, criterios: criteriosCcp.map(c => ({ ...c })) };
+  return { curso: nome, criterios: [] };
+}
+export function setParametrosAvaliacao(curso: string, criterios: CriterioAvaliacao[]) {
+  parametrosPorCurso[curso] = criterios.map(c => ({ ...c }));
+}
+
+export function seedPipItems(nomes: string[], saved?: PipItem[]): PipItem[] {
+  if (saved?.length) return saved.map(i => ({ ...i }));
+  return nomes.map((nome, i) => ({ id: String(i + 1), nome }));
+}
+
+export function seedSimItems(nomes: string[], criterios: CriterioAvaliacao[], saved?: SimItem[]): SimItem[] {
+  if (saved?.length) {
+    return saved.map(i => ({
+      ...i,
+      notas: Object.fromEntries(criterios.map(c => [c.id, i.notas[c.id]])),
+    }));
+  }
+  return nomes.map((nome, i) => ({
+    id: String(i + 1),
+    nome,
+    notas: Object.fromEntries(criterios.map(c => [c.id, undefined])),
+  }));
+}
+
+export function pipEstado(items: PipItem[]): { estado: ResolveDocEstado; detalhe: string; done: number } {
+  const done = items.filter(i => i.fileName).length;
+  const estado: ResolveDocEstado = done === 0 ? "falta" : done === items.length ? "ok" : "parcial";
+  return { estado, detalhe: `${done}/${items.length} projetos arquivados.`, done };
+}
+
+export function grelhaCompleta(item: SimItem, criterios: CriterioAvaliacao[]) {
+  return criterios.length > 0 && criterios.every(c => typeof item.notas[c.id] === "number");
+}
+export function simAlunoEstado(item: SimItem, criterios: CriterioAvaliacao[]): ResolveDocEstado {
+  const vid = !!item.videoName;
+  const gre = grelhaCompleta(item, criterios);
+  if (vid && gre) return "ok";
+  if (vid || gre || Object.values(item.notas).some(v => typeof v === "number")) return "parcial";
+  return "falta";
+}
+export function simEstado(items: SimItem[], criterios: CriterioAvaliacao[]): { estado: ResolveDocEstado; detalhe: string; done: number } {
+  const done = items.filter(i => simAlunoEstado(i, criterios) === "ok").length;
+  const algum = items.some(i => simAlunoEstado(i, criterios) !== "falta");
+  const estado: ResolveDocEstado = done === items.length && items.length > 0 ? "ok" : done === 0 && !algum ? "falta" : "parcial";
+  return { estado, detalhe: `${done}/${items.length} formandos com vídeo e grelha.`, done };
+}
 
 export function seedListaFromDetalhe(detalhe: string, nomes: string[]): ResolveListaItem[] {
   const m = detalhe.match(/(\d+)\s*\/\s*(\d+)/);
@@ -118,129 +195,6 @@ export function seedListaFromDetalhe(detalhe: string, nomes: string[]): ResolveL
   const list = nomes.slice(0, total);
   while (list.length < total) list.push(list.length < 16 ? `Sessão ${list.length + 1}` : `Item ${list.length + 1}`);
   return list.map((nome, i) => ({ id: String(i + 1), nome, ok: i < okCount }));
-}
-
-export function ResolverDocumentoModal({
-  open, onClose, target, accent = "gold", onSave,
-}: {
-  open: boolean;
-  onClose: () => void;
-  target: ResolveDocTarget | null;
-  accent?: "gold" | "fin";
-  onSave: (next: { estado: ResolveDocEstado; detalhe: string }) => void;
-}) {
-  const gold = accent === "gold";
-  const [items, setItems] = useState<ResolveListaItem[]>([]);
-  const [file, setFile] = useState<File | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (open && target) {
-      setItems(target.items ? target.items.map(i => ({ ...i })) : []);
-      setFile(null);
-    }
-  }, [open, target]);
-
-  if (!open || !target) return null;
-
-  const done = items.filter(i => i.ok).length;
-  const listaEstado: ResolveDocEstado = items.length === 0 ? "ok" : done === items.length ? "ok" : done === 0 ? "falta" : "parcial";
-
-  function guardarLista() {
-    const detalhe = items.length
-      ? `${done} / ${items.length} ${target!.label.toLowerCase().includes("sess") ? "sessões" : "formandos"}.`
-      : target!.detalhe;
-    onSave({ estado: listaEstado, detalhe });
-    onClose();
-  }
-
-  function guardarFicheiro() {
-    onSave({ estado: "ok", detalhe: file ? `Carregado: ${file.name}` : "No dossiê." });
-    onClose();
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
-        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
-          <div>
-            <p className="text-sm font-semibold text-slate-800">{target.label}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{target.kind === "lista" ? "Marca o que já está no dossiê ou carrega o que falta." : "Carrega o ficheiro para resolver neste ecrã."}</p>
-          </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
-        </div>
-
-        {target.kind === "lista" ? (
-          <>
-            <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
-              <span className="text-xs text-slate-500">{done}/{items.length} no dossiê</span>
-              <div className="flex items-center gap-2">
-                <div className="w-28 bg-slate-200 rounded-full h-1.5">
-                  <div className="h-1.5 rounded-full" style={{ width: `${items.length ? (done / items.length) * 100 : 0}%`, backgroundColor: gold ? "#F59E0B" : "#2563EB" }} />
-                </div>
-                <span className="text-xs font-bold text-slate-600">{items.length ? Math.round((done / items.length) * 100) : 0}%</span>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
-              {items.map(item => (
-                <label key={item.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 cursor-pointer">
-                  <button type="button" onClick={() => setItems(prev => prev.map(x => x.id === item.id ? { ...x, ok: !x.ok } : x))}
-                    className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${item.ok ? "bg-emerald-500 border-emerald-500" : "border-slate-300"}`}>
-                    {item.ok && <svg viewBox="0 0 12 12" fill="none" className="w-3 h-3"><path d="M2 6l3 3 5-5" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                  </button>
-                  <span className="flex-1 text-sm text-slate-700">{item.nome}</span>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${item.ok ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
-                    {item.ok ? "No dossiê" : "Em falta"}
-                  </span>
-                </label>
-              ))}
-            </div>
-            <div className="flex gap-2 px-5 py-4 border-t border-slate-100 flex-shrink-0">
-              <button onClick={onClose} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-              <button onClick={guardarLista} className={`flex-1 py-2 text-white text-sm font-semibold rounded-lg ${gold ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}>Guardar</button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="p-5">
-              {!file ? (
-                <div
-                  onDragOver={e => { e.preventDefault(); setDragging(true); }}
-                  onDragLeave={() => setDragging(false)}
-                  onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) setFile(f); }}
-                  onClick={() => inputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${dragging ? (gold ? "border-amber-400 bg-amber-50" : "border-blue-400 bg-blue-50") : "border-slate-200 hover:border-amber-300 hover:bg-slate-50"}`}
-                >
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 ${gold ? "bg-amber-100 text-amber-600" : "bg-blue-100 text-blue-600"}`}>{I.download}</div>
-                  <p className="text-sm font-semibold text-slate-700">Arraste o ficheiro para aqui</p>
-                  <p className="text-xs text-slate-400 mt-1">ou clique para escolher do computador</p>
-                  <p className="text-xs text-slate-400 mt-1">PDF, DOC, JPG, PNG — máx. 10 MB</p>
-                  <input ref={inputRef} type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setFile(f); }} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" />
-                </div>
-              ) : (
-                <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
-                  <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600 flex-shrink-0">{I.file}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-800 truncate">{file.name}</p>
-                    <p className="text-xs text-slate-500">{(file.size / 1024).toFixed(0)} KB</p>
-                  </div>
-                  <button onClick={() => setFile(null)} className="p-1 text-slate-400 hover:text-red-500">{I.x}</button>
-                </div>
-              )}
-            </div>
-            <div className="flex gap-2 px-5 pb-5">
-              <button onClick={onClose} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-              <button disabled={!file} onClick={guardarFicheiro}
-                className={`flex-1 py-2 disabled:opacity-40 text-white text-sm font-semibold rounded-lg ${gold ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}>
-                Guardar no dossiê
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
 }
 
 export function PresencasSessaoModal({ open, onClose, sessao }: {

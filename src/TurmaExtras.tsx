@@ -411,6 +411,55 @@ export function emptyPlano(): PlanoSessaoData {
   return { objetivosGerais: "", objetivosEspecificos: "", momentos: { introducao: { ...emptyMomento }, desenvolvimento: { ...emptyMomento }, conclusao: { ...emptyMomento } } };
 }
 
+export type SumarioSessaoData = {
+  conteudos: string;
+  atividades: string;
+  observacoes: string;
+  assinado: boolean;
+  assinadoEm?: string;
+};
+
+export function emptySumario(): SumarioSessaoData {
+  return { conteudos: "", atividades: "", observacoes: "", assinado: false };
+}
+
+export function sumarioPreenchido(s?: SumarioSessaoData) {
+  return !!s && s.conteudos.trim().length > 0;
+}
+
+export const defaultSumarios: Record<number, SumarioSessaoData> = {
+  1: {
+    conteudos: "Enquadramento legal da formação profissional em Portugal; Sistema Nacional de Qualificações; papel e perfil do formador.",
+    atividades: "Apresentação dos participantes; análise de documentos legais; quiz de consolidação.",
+    observacoes: "Grupo participativo. Sem ocorrências.",
+    assinado: true,
+    assinadoEm: "07 Set 2026",
+  },
+  2: {
+    conteudos: "Métodos e técnicas pedagógicas; elaboração do plano de sessão; gestão do tempo em contexto formativo.",
+    atividades: "Elaboração de plano de sessão em grupo; role-play; apresentação oral e feedback.",
+    observacoes: "Dois formandos chegaram 15 minutos atrasados.",
+    assinado: true,
+    assinadoEm: "14 Set 2026",
+  },
+};
+
+export const defaultSumariosFin: Record<number, SumarioSessaoData> = {
+  1: {
+    conteudos: "Enquadramento da UFCD 3564; cadeia de sobrevivência; avaliação primária da vítima.",
+    atividades: "Demonstração de SVB; prática em pares com manequim.",
+    observacoes: "Sessão síncrona. Um formando entrou 10 minutos depois.",
+    assinado: true,
+    assinadoEm: "27 Ago 2026",
+  },
+  2: {
+    conteudos: "Hemorragias, queimaduras e posicionamento da vítima.",
+    atividades: "Simulação de primeiros socorros; correção de técnicas.",
+    observacoes: "",
+    assinado: false,
+  },
+};
+
 export function PlanoSessaoModal({ open, onClose, sessao, plano, onSave }: {
   open: boolean; onClose: () => void;
   sessao?: SessaoMeta;
@@ -528,6 +577,118 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano, onSave }: {
               </div>
             )}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function SumarioSessaoModal({ open, onClose, sessao, sumario, accent = "gold", onSave }: {
+  open: boolean; onClose: () => void;
+  sessao?: SessaoMeta;
+  sumario: SumarioSessaoData;
+  accent?: "gold" | "fin";
+  onSave: (data: SumarioSessaoData) => void;
+}) {
+  const gold = accent === "gold";
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<SumarioSessaoData>(sumario);
+  useEffect(() => {
+    setDraft(sumario);
+    setEditing(!sumarioPreenchido(sumario));
+  }, [open, sumario]);
+
+  if (!open || !sessao) return null;
+  const filled = sumarioPreenchido(sumario);
+
+  function guardar(assinar?: boolean) {
+    const next: SumarioSessaoData = {
+      ...draft,
+      assinado: assinar ? true : draft.assinado,
+      assinadoEm: assinar ? sessao!.data.replace(/^[^,]+,\s*/, "") : draft.assinadoEm,
+    };
+    onSave(next);
+    setEditing(false);
+  }
+
+  const fields: { key: keyof Pick<SumarioSessaoData, "conteudos" | "atividades" | "observacoes">; label: string; hint: string }[] = [
+    { key: "conteudos", label: "Conteúdos leccionados", hint: "O que foi efectivamente tratado nesta sessão." },
+    { key: "atividades", label: "Atividades realizadas", hint: "Exercícios, demonstrações, trabalhos de grupo." },
+    { key: "observacoes", label: "Observações e ocorrências", hint: "Atrasos, desistências, material em falta — ou deixe em branco." },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl flex flex-col max-h-[90vh]">
+        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Sumário - Sessão {sessao.n}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{sessao.data} · {sessao.hora} · {sessao.formador}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className={`rounded-xl p-3 border ${gold ? "bg-amber-50 border-amber-100" : "bg-blue-50 border-blue-100"}`}>
+              <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${gold ? "text-amber-600" : "text-blue-600"}`}>Módulo</p>
+              <p className="text-xs font-bold text-slate-800 leading-snug">{sessao.modulo}</p>
+            </div>
+            <div className={`rounded-xl p-3 border ${gold ? "bg-amber-50 border-amber-100" : "bg-blue-50 border-blue-100"}`}>
+              <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${gold ? "text-amber-600" : "text-blue-600"}`}>Duração</p>
+              <p className="text-xs font-bold text-slate-800">{sessao.duracao}</p>
+            </div>
+          </div>
+          {fields.map(f => (
+            <div key={f.key} className="space-y-1.5">
+              <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">{f.label}</p>
+              {editing
+                ? <textarea value={draft[f.key]} onChange={e => setDraft(prev => ({ ...prev, [f.key]: e.target.value }))} rows={f.key === "observacoes" ? 2 : 3}
+                    placeholder={f.hint}
+                    className="w-full text-sm text-slate-700 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none leading-relaxed" />
+                : <div className="bg-slate-50 rounded-xl p-3 text-sm text-slate-700 leading-relaxed min-h-[56px]">
+                    {sumario[f.key] || <span className="text-slate-400 italic">Não preenchido</span>}
+                  </div>}
+            </div>
+          ))}
+          <div className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${sumario.assinado ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-200"}`}>
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-xs ${sumario.assinado ? "bg-emerald-500" : "bg-slate-300"}`}>
+              {sumario.assinado ? "✓" : ""}
+            </span>
+            <div>
+              <p className="text-xs font-semibold text-slate-700">
+                {sumario.assinado ? `Assinado por ${sessao.formador}` : "Por assinar pelo formador"}
+              </p>
+              {sumario.assinadoEm && <p className="text-xs text-slate-400">{sumario.assinadoEm}</p>}
+            </div>
+          </div>
+          <p className="text-xs text-slate-400">Sem sumário assinado a sessão não existiu para auditoria do DTP.</p>
+        </div>
+        <div className="flex gap-2 px-5 py-4 border-t border-slate-100 flex-shrink-0">
+          {editing ? (
+            <>
+              <button onClick={onClose} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+              <button disabled={!draft.conteudos.trim()} onClick={() => guardar(false)}
+                className="flex-1 py-2 border border-slate-200 text-sm text-slate-700 rounded-lg hover:bg-slate-50 disabled:opacity-40">Guardar rascunho</button>
+              <button disabled={!draft.conteudos.trim()} onClick={() => guardar(true)}
+                className={`flex-1 py-2 text-white text-sm font-semibold rounded-lg disabled:opacity-40 ${gold ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}>
+                Guardar e assinar
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={onClose} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Fechar</button>
+              <button onClick={() => { setDraft(sumario); setEditing(true); }}
+                className="flex-1 py-2 border border-slate-200 text-sm text-slate-700 rounded-lg hover:bg-slate-50">
+                {filled ? "Editar" : "Preencher"}
+              </button>
+              {filled && !sumario.assinado && (
+                <button onClick={() => guardar(true)}
+                  className={`flex-1 py-2 text-white text-sm font-semibold rounded-lg ${gold ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}>
+                  Assinar
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

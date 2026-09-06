@@ -5,10 +5,11 @@ import {
   ModulosView, ConteudosView, FinInscricoesView, BlogTematicasView, ConfiguracoesView,
 } from "./CatalogViews";
 import {
-  FileUploadModal, PresencasSessaoModal, FormadorProfileSlideOver, PlanoSessaoModal,
-  InqueritosView, defaultPlanos, emptyPlano, seedListaFromDetalhe, seedPipItems, seedSimItems,
+  FileUploadModal, PresencasSessaoModal, FormadorProfileSlideOver, PlanoSessaoModal, SumarioSessaoModal,
+  InqueritosView, defaultPlanos, emptyPlano, defaultSumarios, defaultSumariosFin, emptySumario, sumarioPreenchido,
+  seedListaFromDetalhe, seedPipItems, seedSimItems,
   getParametrosAvaliacao, setParametrosAvaliacao,
-  type PlanoSessaoData, type SessaoMeta, type ResolveDocTarget, type PipItem, type SimItem,
+  type PlanoSessaoData, type SessaoMeta, type SumarioSessaoData, type ResolveDocTarget, type PipItem, type SimItem,
   type CriterioAvaliacao,
 } from "./TurmaExtras";
 import { ResolverDocumentoModal } from "./DocResolver";
@@ -565,6 +566,24 @@ const sessoesSample: SessaoMeta[] = [
   { n: 5, data: "Sáb, 05 Out 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false, modulo: "Módulo 3 - Comunicação e Dinamização de Grupos", duracao: "4h" },
 ];
 
+const finSessoesSample: SessaoMeta[] = [
+  { n: 1, data: "Qua, 27 Ago 2026", hora: "19h–22h", formador: "Vânia Fernandes", estado: "Realizada", plano: true, modulo: "UFCD 3564 · Avaliação primária e SVB", duracao: "5h" },
+  { n: 2, data: "Qua, 03 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", estado: "Realizada", plano: true, modulo: "UFCD 3564 · Trauma e hemorragias", duracao: "5h" },
+  { n: 3, data: "Qua, 10 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", estado: "Agendada", plano: false, modulo: "UFCD 3564 · Queimaduras e intoxicações", duracao: "5h" },
+  { n: 4, data: "Qua, 17 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", estado: "Agendada", plano: false, modulo: "UFCD 3564 · Emergências médicas", duracao: "5h" },
+  { n: 5, data: "Qua, 24 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", estado: "Agendada", plano: false, modulo: "UFCD 3564 · Simulação e avaliação", duracao: "5h" },
+];
+
+function sumarioLabel(s?: SumarioSessaoData) {
+  if (s?.assinado && sumarioPreenchido(s)) return "Ver sumário";
+  if (sumarioPreenchido(s)) return "Assinar sumário";
+  return "+ Preencher sumário";
+}
+function sumarioBtnCls(s: SumarioSessaoData | undefined, gold: boolean) {
+  if (s?.assinado && sumarioPreenchido(s)) return "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100";
+  return gold ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100";
+}
+
 const certificadosSample = [
   { id: 1, nome: "Tiago Bento", presencas: 100, elearning: 90, nota: 17, certificado: true },
   { id: 2, nome: "Luciana D'Avila", presencas: 80, elearning: 100, nota: 15, certificado: false },
@@ -847,6 +866,8 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const [tab, setTab] = useState<CockpitTab>(initialTab);
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
   const [planos, setPlanos] = useState<Record<number, PlanoSessaoData>>(defaultPlanos);
+  const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
+  const [sumarios, setSumarios] = useState<Record<number, SumarioSessaoData>>(defaultSumarios);
   const [presencasSession, setPresencasSession] = useState<SessaoMeta | null>(null);
   const [uploadCert, setUploadCert] = useState<number | null>(null);
   const [formadorOpen, setFormadorOpen] = useState(false);
@@ -911,9 +932,11 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead><tr><Th>Nº</Th><Th>Data / Hora</Th><Th>Formador</Th><Th>Plano de Sessão</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
+                <thead><tr><Th>Nº</Th><Th>Data / Hora</Th><Th>Formador</Th><Th>Plano de Sessão</Th><Th>Sumário</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
-                  {sessoesSample.map(s => (
+                  {sessoesSample.map(s => {
+                    const sum = sumarios[s.n];
+                    return (
                     <tr key={s.n} className="hover:bg-slate-50">
                       <Td><span className="w-7 h-7 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center">{s.n}</span></Td>
                       <Td>
@@ -929,10 +952,17 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                           {s.plano ? "Ver plano" : "+ Preencher plano"}
                         </button>
                       </Td>
+                      <Td>
+                        <button onClick={() => setSumarioSessao(s)}
+                          className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${sumarioBtnCls(sum, true)}`}>
+                          {sumarioLabel(sum)}
+                        </button>
+                      </Td>
                       <Td>{estadoBadge(s.estado)}</Td>
                       <Td><div className="flex gap-1"><ActBtn icon={I.attend} label="Presenças" color={s.estado === "Realizada" ? "teal" : "gray"} onClick={() => s.estado === "Realizada" && setPresencasSession(s)} /><ActBtn icon={I.edit} label="Editar" /></div></Td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1056,6 +1086,13 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         sessao={planoSessao ?? undefined}
         plano={planoSessao ? (planos[planoSessao.n] ?? emptyPlano()) : emptyPlano()}
         onSave={data => { if (planoSessao) setPlanos(prev => ({ ...prev, [planoSessao.n]: data })); }}
+      />
+      <SumarioSessaoModal
+        open={!!sumarioSessao}
+        onClose={() => setSumarioSessao(null)}
+        sessao={sumarioSessao ?? undefined}
+        sumario={sumarioSessao ? (sumarios[sumarioSessao.n] ?? emptySumario()) : emptySumario()}
+        onSave={data => { if (sumarioSessao) setSumarios(prev => ({ ...prev, [sumarioSessao.n]: data })); }}
       />
       <PresencasSessaoModal open={!!presencasSession} onClose={() => setPresencasSession(null)} sessao={presencasSession ?? undefined} />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" />
@@ -1401,6 +1438,8 @@ function PresencasView({ turmaId, embedded }: { turmaId?: number; embedded?: boo
     });
     return init;
   });
+  const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
+  const [sumarios, setSumarios] = useState<Record<number, SumarioSessaoData>>(defaultSumariosFin);
 
   function toggle(fId: number, si: number) {
     setPresencas(prev => ({ ...prev, [fId]: { ...prev[fId], [si]: !prev[fId][si] } }));
@@ -1412,7 +1451,41 @@ function PresencasView({ turmaId, embedded }: { turmaId?: number; embedded?: boo
     <div className="space-y-4">
       {!embedded && <PageHeader title="Folha de Presenças" sub={`${turma.nome} · UFCD ${turma.ufcdCod} · ${turma.horas}h`}
         action={<button className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors">{I.download} Exportar</button>} />}
-      {embedded && <p className="text-xs text-slate-500">Presenças da turma <span className="font-semibold text-slate-700">{turma.nome}</span> · UFCD {turma.ufcdCod} · {turma.horas}h</p>}
+      {embedded && <p className="text-xs text-slate-500">Sessões da turma <span className="font-semibold text-slate-700">{turma.nome}</span> · UFCD {turma.ufcdCod} · {turma.horas}h</p>}
+
+      <Card>
+        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+          <p className="text-sm font-semibold text-slate-700">Sessões - {turma.nome}</p>
+          <span className="text-xs text-slate-500">{Object.values(sumarios).filter(s => s.assinado).length}/{finSessoesSample.length} sumários assinados</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr><Th>Nº</Th><Th>Data / Hora</Th><Th>Formador</Th><Th>Sumário</Th><Th>Estado</Th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {finSessoesSample.map(s => {
+                const sum = sumarios[s.n];
+                return (
+                  <tr key={s.n} className="hover:bg-slate-50">
+                    <Td><span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">{s.n}</span></Td>
+                    <Td>
+                      <p className="text-xs font-medium text-slate-800 whitespace-nowrap">{s.data}</p>
+                      <p className="text-xs text-slate-400">{s.hora}</p>
+                    </Td>
+                    <Td className="text-xs font-medium text-slate-700">{s.formador}</Td>
+                    <Td>
+                      <button onClick={() => setSumarioSessao(s)}
+                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${sumarioBtnCls(sum, false)}`}>
+                        {sumarioLabel(sum)}
+                      </button>
+                    </Td>
+                    <Td>{estadoBadge(s.estado)}</Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
       {/* Turma summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1483,6 +1556,14 @@ function PresencasView({ turmaId, embedded }: { turmaId?: number; embedded?: boo
           <button className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors">Guardar presenças</button>
         </div>
       </Card>
+      <SumarioSessaoModal
+        open={!!sumarioSessao}
+        onClose={() => setSumarioSessao(null)}
+        accent="fin"
+        sessao={sumarioSessao ?? undefined}
+        sumario={sumarioSessao ? (sumarios[sumarioSessao.n] ?? emptySumario()) : emptySumario()}
+        onSave={data => { if (sumarioSessao) setSumarios(prev => ({ ...prev, [sumarioSessao.n]: data })); }}
+      />
     </div>
   );
 }

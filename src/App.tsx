@@ -345,45 +345,45 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 function MiniBarChart({ data, color }: { data: { mes: string; v: number }[]; color: string }) {
   const [hover, setHover] = useState<number | null>(null);
   const max = Math.max(...data.map(d => d.v), 1);
-  const h = 160;
-  const gap = 8;
-  const barW = (600 - gap * (data.length - 1)) / data.length;
   return (
     <div className="relative" onMouseLeave={() => setHover(null)}>
-      <svg viewBox="0 0 600 160" className="w-full h-40 block" role="img" aria-label="Receita mensal">
+      <div className="flex items-end gap-1.5 h-40" role="img" aria-label="Receita mensal">
         {data.map((d, i) => {
-          const bh = Math.max(6, (d.v / max) * (h - 8));
-          const x = i * (barW + gap);
+          const pct = Math.max(8, (d.v / max) * 100);
           const active = hover === i;
           const dim = hover !== null && !active;
           return (
-            <g key={d.mes} onMouseEnter={() => setHover(i)} className="cursor-pointer">
-              <rect x={x} y={0} width={barW} height={h} fill="transparent" />
-              <rect
-                x={x}
-                y={active ? h - bh - 4 : h - bh}
-                width={barW}
-                height={active ? bh + 4 : bh}
-                rx="4"
-                fill={color}
-                opacity={active ? 1 : dim ? 0.22 : i === data.length - 1 ? 1 : 0.5}
-                style={{ transition: "opacity 160ms ease, y 160ms ease, height 160ms ease" }}
+            <div key={d.mes} className="relative flex-1 h-full flex items-end cursor-pointer"
+              onMouseEnter={() => setHover(i)}>
+              {active && (
+                <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-0 z-10">
+                  <div className="bg-slate-800 text-white rounded-lg px-2.5 py-1 shadow-lg whitespace-nowrap">
+                    <p className="text-xs font-semibold">{d.mes}</p>
+                    <p className="text-xs text-emerald-300 font-bold">€ {d.v.toLocaleString("pt-PT")}</p>
+                  </div>
+                </div>
+              )}
+              <div
+                className="w-full rounded-t-md"
+                style={{
+                  height: `${pct}%`,
+                  backgroundColor: color,
+                  opacity: active ? 1 : dim ? 0.22 : i === data.length - 1 ? 1 : 0.5,
+                  transform: active ? "translateY(-4px)" : undefined,
+                  transition: "opacity 160ms ease, transform 160ms ease",
+                }}
               />
-            </g>
+            </div>
           );
         })}
-      </svg>
-      {hover !== null && (
-        <div
-          className="pointer-events-none absolute z-10 -translate-x-1/2"
-          style={{ left: `${((hover + 0.5) / data.length) * 100}%`, top: 4 }}
-        >
-          <div className="bg-slate-800 text-white rounded-lg px-2.5 py-1 shadow-lg whitespace-nowrap">
-            <p className="text-xs font-semibold">{data[hover].mes}</p>
-            <p className="text-xs text-emerald-300 font-bold">€ {data[hover].v.toLocaleString("pt-PT")}</p>
-          </div>
-        </div>
-      )}
+      </div>
+      <div className="flex gap-1.5 mt-2">
+        {data.map((d, i) => (
+          <span key={d.mes} className={`flex-1 text-center text-xs ${hover === i ? "text-slate-700 font-semibold" : "text-slate-400"}`}>
+            {d.mes}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1654,7 +1654,6 @@ function PainelView({ onNavigate }: { onNavigate: (v: View | NavTarget) => void 
             <span className="text-sm font-bold text-emerald-600">€ 339 190</span>
           </div>
           <MiniBarChart data={receitaMensal} color="#F59E0B" />
-          <div className="flex justify-between mt-2">{receitaMensal.map(d => <span key={d.mes} className="text-xs text-slate-400 flex-1 text-center">{d.mes}</span>)}</div>
         </Card>
         <Card className="p-4">
           <p className="text-sm font-semibold text-slate-700 mb-3">Funil de Conversão</p>
@@ -2354,7 +2353,6 @@ function PagamentosView() {
         <Card className="p-4">
           <p className="text-sm font-semibold text-slate-700 mb-2">Receita Mensal</p>
           <MiniBarChart data={receitaMensal} color="#F59E0B" />
-          <div className="flex justify-between mt-2">{receitaMensal.map(d => <span key={d.mes} className="text-xs text-slate-400 flex-1 text-center">{d.mes}</span>)}</div>
         </Card>
       </div>
       <Card>

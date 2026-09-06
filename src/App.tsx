@@ -16,8 +16,11 @@ import { CursoFichaView } from "./CursoFichaView";
 import {
   FilterChips, SearchSelect,
   blogTematicasOpts, cursosFinOpts, cursosGoldOpts,
-  formadoresOpts, horariosOpts, locaisOpts, modulosOpts, turmasGoldOpts,
+  formadoresOpts, horariosOpts, locaisOpts, modulosOpts,
 } from "./FormKit";
+import { CronogramaEditor, TurmaActivaToggle, TurmaInactivaBanner, TurmaInscricaoHint } from "./TurmaCronograma";
+import { useTurmas } from "./TurmasContext";
+import { cronogramaToSessoes, formatSessaoLabel, isTurmaActiva, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -81,7 +84,7 @@ type View =
   | "formadores" | "blog-posts" | "blog-tematicas"
   | "emails" | "pagamentos" | "configuracoes";
 
-type CockpitTab = "overview" | "sessoes" | "documentos" | "dtp" | "certificados";
+type CockpitTab = "overview" | "cronograma" | "sessoes" | "documentos" | "dtp" | "certificados";
 type NavTarget = { view: View; turmaId?: number; tab?: CockpitTab; cursoId?: number | "new"; cursoNome?: string };
 
 // ─── Sample Data ─────────────────────────────────────────────────────────────
@@ -98,16 +101,16 @@ const cursosGoldData = [
 ];
 
 const turmasGoldData = [
-  { id: 947, dataInicio: "2026-09-03", nome: "2176/2026", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Laboral Manhã", totalAlunos: 16, vagas: 16, estado: "Ativo" },
-  { id: 946, dataInicio: "2026-07-06", nome: "IRN LSB 01/09", curso: "Formação de Formadores - CCP", local: "Lisboa", horario: "Laboral Manhã", totalAlunos: 12, vagas: 16, estado: "Ativo" },
-  { id: 945, dataInicio: "2026-09-15", nome: "BRG-PL-15/09", curso: "Formação de Formadores - CCP", local: "Braga", horario: "Pós Laboral", totalAlunos: 2, vagas: 16, estado: "Ativo" },
-  { id: 944, dataInicio: "2026-09-21", nome: "BRG-SM-21/09", curso: "Formação de Formadores - CCP", local: "Braga", horario: "Sábado manhã", totalAlunos: 6, vagas: 16, estado: "Ativo" },
-  { id: 943, dataInicio: "2026-09-07", nome: "VNG-SM-07/09", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Sábado manhã", totalAlunos: 10, vagas: 16, estado: "Ativo" },
-  { id: 940, dataInicio: "2026-09-03", nome: "2175/2026", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Laboral Manhã", totalAlunos: 14, vagas: 16, estado: "Ativo" },
-  { id: 939, dataInicio: "2026-09-04", nome: "VNG-PL-04/09", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Pós Laboral", totalAlunos: 9, vagas: 16, estado: "Ativo" },
-  { id: 938, dataInicio: "2026-09-02", nome: "PEN-SM-02/09", curso: "Formação de Formadores - CCP", local: "Penafiel", horario: "Sábado manhã", totalAlunos: 13, vagas: 16, estado: "Ativo" },
-  { id: 937, dataInicio: "2026-08-28", nome: "VNG-SM-28/08", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Sábado manhã", totalAlunos: 12, vagas: 16, estado: "Inactivo" },
-  { id: 936, dataInicio: "2026-09-03", nome: "VNG-LM-03/09", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Laboral Manhã", totalAlunos: 12, vagas: 16, estado: "Inactivo" },
+  { id: 947, dataInicio: "2026-09-03", nome: "2176/2026", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Laboral Manhã", totalAlunos: 16, vagas: 16, estado: "Ativa" },
+  { id: 946, dataInicio: "2026-07-06", nome: "IRN LSB 01/09", curso: "Formação de Formadores - CCP", local: "Lisboa", horario: "Laboral Manhã", totalAlunos: 12, vagas: 16, estado: "Ativa" },
+  { id: 945, dataInicio: "2026-09-15", nome: "BRG-PL-15/09", curso: "Formação de Formadores - CCP", local: "Braga", horario: "Pós Laboral", totalAlunos: 2, vagas: 16, estado: "Ativa" },
+  { id: 944, dataInicio: "2026-09-21", nome: "BRG-SM-21/09", curso: "Formação de Formadores - CCP", local: "Braga", horario: "Sábado manhã", totalAlunos: 6, vagas: 16, estado: "Ativa" },
+  { id: 943, dataInicio: "2026-09-07", nome: "VNG-SM-07/09", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Sábado manhã", totalAlunos: 10, vagas: 16, estado: "Ativa" },
+  { id: 940, dataInicio: "2026-09-03", nome: "2175/2026", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Laboral Manhã", totalAlunos: 14, vagas: 16, estado: "Ativa" },
+  { id: 939, dataInicio: "2026-09-04", nome: "VNG-PL-04/09", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Pós Laboral", totalAlunos: 9, vagas: 16, estado: "Ativa" },
+  { id: 938, dataInicio: "2026-09-02", nome: "PEN-SM-02/09", curso: "Formação de Formadores - CCP", local: "Penafiel", horario: "Sábado manhã", totalAlunos: 13, vagas: 16, estado: "Ativa" },
+  { id: 937, dataInicio: "2026-08-28", nome: "VNG-SM-28/08", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Sábado manhã", totalAlunos: 12, vagas: 16, estado: "Inativa" },
+  { id: 936, dataInicio: "2026-09-03", nome: "VNG-LM-03/09", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Laboral Manhã", totalAlunos: 12, vagas: 16, estado: "Inativa" },
 ];
 
 const preinscricoesData = [
@@ -248,12 +251,16 @@ function Badge({ label, variant }: { label: string; variant: BadgeVariant }) {
 }
 function estadoBadge(estado: string) {
   const m: Record<string, BadgeVariant> = {
-    "Ativo": "green", "Inactivo": "gray", "1º Contacto": "blue", "2º Contacto": "indigo",
+    "Ativo": "green", "Inactivo": "gray", "Ativa": "green", "Inativa": "gray", "1º Contacto": "blue", "2º Contacto": "indigo",
     "Não contactado": "amber", "Pago": "teal", "Formando": "green", "Matriculado": "green",
     "Elegível": "teal", "A montar": "red", "A decorrer": "green", "Encerrada": "gray",
     "Reembolsado": "violet", "Pendente": "orange", "Realizada": "green", "Agendada": "blue",
   };
   return <Badge label={estado} variant={m[estado] ?? "gray"} />;
+}
+
+function formatSessaoLine(s: SessaoCronograma) {
+  return `${formatSessaoLabel(s.data)} · ${(s.horaInicio || "").replace(":", "h")}–${(s.horaFim || "").replace(":", "h")}`;
 }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -452,7 +459,8 @@ function FichaFormando({ formando, tipo = "gold", onClose }: { formando: Formand
     { id: 1, texto: "Ligou a questionar sobre o horário de sábado. Confirmou presença.", data: "2026-09-02 10:15", autor: "Tania" },
   ]);
 
-  const turma = turmasGoldData.find(t => t.id === formando.turmaId);
+  const { gold } = useTurmas();
+  const turma = gold.find(t => t.id === formando.turmaId);
 
   return (
     <div className="flex flex-col h-full">
@@ -465,7 +473,7 @@ function FichaFormando({ formando, tipo = "gold", onClose }: { formando: Formand
           <div className="flex-1 min-w-0">
             <p className="font-bold text-slate-800">{formando.nome} {formando.apelido}</p>
             <p className="text-xs text-slate-500 truncate">{formando.email}</p>
-            <div className="flex items-center gap-2 mt-1">{estadoBadge(formando.estado)}<span className="text-xs text-slate-400">{formando.turma}</span></div>
+            <div className="flex items-center gap-2 mt-1">{estadoBadge(formando.estado)}<span className="text-xs text-slate-400">{formando.turma}{turma && !isTurmaActiva(turma) ? " · turma inativa" : ""}</span></div>
           </div>
           <div className={`text-right flex-shrink-0 ${formando.pago ? "text-emerald-600" : "text-amber-600"}`}>
             <p className="text-lg font-bold">€{formando.valor}</p>
@@ -695,6 +703,7 @@ function TurmaTabBar({ tab, onChange, accent = "gold", dtpPct }: { tab: CockpitT
   const chip = accent === "gold" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700";
   const tabs: { id: CockpitTab; label: string; icon: React.ReactNode }[] = [
     { id: "overview", label: "Visão Geral", icon: I.school },
+    { id: "cronograma", label: "Cronograma", icon: I.calendar },
     { id: "sessoes", label: "Sessões", icon: I.calendar },
     { id: "documentos", label: "Documentos", icon: I.file },
     { id: "dtp", label: "Dossiê TP", icon: I.folder },
@@ -903,10 +912,13 @@ function CertificadosTurmaTab({ onUpload }: { onUpload?: (id: number) => void })
 }
 
 function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab; onNavigate?: (v: View) => void }) {
-  const turma = turmasGoldData.find(t => t.id === turmaId) ?? turmasGoldData[0];
+  const { gold, toggleGold, setGoldCronograma } = useTurmas();
+  const turma = gold.find(t => t.id === turmaId) ?? gold[0];
+  const activa = isTurmaActiva(turma);
   const membros = formandosTurmasData.filter(f => f.turmaId === turma.id);
   const pagos = membros.filter(f => f.pago).length;
   const vagasLivres = turma.vagas - turma.totalAlunos;
+  const sessoesTurma = turma.cronograma.length ? cronogramaToSessoes(turma.cronograma) : sessoesSample;
   const [fichaOpen, setFichaOpen] = useState<FormandoRecord | null>(null);
   const [tab, setTab] = useState<CockpitTab>(initialTab);
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
@@ -919,6 +931,9 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const [novaSessao, setNovaSessao] = useState(false);
   const [formadorSessao, setFormadorSessao] = useState("Isac Silva");
   const [moduloSessao, setModuloSessao] = useState("");
+  const [dataSessao, setDataSessao] = useState("");
+  const [horaSessao, setHoraSessao] = useState("09:00");
+  const [addFormando, setAddFormando] = useState(false);
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
 
   return (
@@ -937,6 +952,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
               <div className="flex items-center gap-2 mb-1">
                 <span className="bg-amber-500 text-white text-xs font-bold px-2.5 py-1 rounded-lg">{turma.nome}</span>
                 {estadoBadge(turma.estado)}
+                <TurmaActivaToggle compact light activa={activa} onChange={v => toggleGold(turma.id, v)} />
               </div>
               <p className="text-lg font-bold mt-1">{turma.curso}</p>
               <div className="flex flex-wrap gap-4 mt-2 text-slate-300 text-xs">
@@ -969,6 +985,24 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
 
         <TurmaTabBar tab={tab} onChange={setTab} accent="gold" dtpPct={dtpPctGold(turma.id)} />
 
+        {!activa && (
+          <TurmaInactivaBanner nome={turma.nome} onActivate={() => toggleGold(turma.id, true)} />
+        )}
+
+        {tab === "cronograma" && (
+          <Card className="p-5">
+            <CronogramaEditor
+              sessoes={turma.cronograma}
+              onChange={next => setGoldCronograma(turma.id, next)}
+              inicio={turma.dataInicio}
+              horario={turma.horario}
+              horas={turma.horas}
+              formador={turma.formador}
+              curso={turma.curso}
+            />
+          </Card>
+        )}
+
         {tab === "dtp" && (
           <DtpPanel regime="gold" turma={{ codigo: turma.nome, id: turma.id, titulo: turma.curso, sub: `${turma.local} · ${turma.horario}` }} />
         )}
@@ -982,7 +1016,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
               <table className="w-full text-sm">
                 <thead><tr><Th>Nº</Th><Th>Data / Hora</Th><Th>Formador</Th><Th>Plano de Sessão</Th><Th>Sumário</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
-                  {sessoesSample.map(s => {
+                  {sessoesTurma.map(s => {
                     const sum = sumarios[s.n];
                     return (
                     <tr key={s.n} className="hover:bg-slate-50">
@@ -1058,7 +1092,9 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         <Card>
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <p className="text-sm font-semibold text-slate-700">Lista de Formandos</p>
-            <NewBtn label="Adicionar" />
+            {activa
+              ? <NewBtn label="Adicionar" onClick={() => setAddFormando(true)} />
+              : <button disabled title="Turma inativa — não aceita novas inscrições" className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-200 text-slate-400 text-sm font-semibold rounded-lg cursor-not-allowed">Adicionar</button>}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1113,12 +1149,15 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           <Card className="p-4">
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Próximas Sessões</p>
             <div className="space-y-2">
-              {["Sáb, 07 Set 2026 · 09h–13h", "Sáb, 14 Set 2026 · 09h–13h", "Sáb, 21 Set 2026 · 09h–13h"].map((s, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
+              {(turma.cronograma.length ? turma.cronograma : []).filter(s => s.data >= "2026-09-06").slice(0, 3).map((s, i) => (
+                <div key={s.id ?? i} className="flex items-center gap-2 text-xs">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
-                  <span className="text-slate-600">{s}</span>
+                  <span className="text-slate-600">{formatSessaoLine(s)}</span>
                 </div>
               ))}
+              {turma.cronograma.filter(s => s.data >= "2026-09-06").length === 0 && (
+                <p className="text-xs text-slate-400">Sem sessões futuras. Edite o cronograma da turma.</p>
+              )}
             </div>
           </Card>
         </div>
@@ -1148,15 +1187,44 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
       <SlideOver open={novaSessao} onClose={() => setNovaSessao(false)} title="Nova sessão" sub={turma.nome}>
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Data"><input type="date" className={iCls} /></Field>
-            <Field label="Hora"><input className={iCls} placeholder="09h–13h" /></Field>
+            <Field label="Data"><input type="date" className={iCls} value={dataSessao} onChange={e => setDataSessao(e.target.value)} /></Field>
+            <Field label="Hora início"><input type="time" className={iCls} value={horaSessao} onChange={e => setHoraSessao(e.target.value)} /></Field>
           </div>
           <Field label="Formador"><SearchSelect value={formadorSessao} onChange={setFormadorSessao} options={formadoresOpts} placeholder="Pesquisar formador…" /></Field>
           <Field label="Módulo"><SearchSelect value={moduloSessao} onChange={setModuloSessao} options={modulosOpts} placeholder="Pesquisar módulo…" /></Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setNovaSessao(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button onClick={() => setNovaSessao(false)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Criar sessão</button>
+            <button onClick={() => {
+              if (!dataSessao) return;
+              const [h, m] = (horaSessao || "09:00").split(":").map(Number);
+              const endH = String((h || 9) + 4).padStart(2, "0");
+              setGoldCronograma(turma.id, [...turma.cronograma, {
+                id: `s-manual-${Date.now()}`,
+                data: dataSessao,
+                horaInicio: horaSessao || "09:00",
+                horaFim: `${endH}:${String(m || 0).padStart(2, "0")}`,
+                modulo: moduloSessao,
+                formador: formadorSessao,
+              }]);
+              setNovaSessao(false);
+            }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Criar sessão</button>
           </div>
+        </div>
+      </SlideOver>
+      <SlideOver open={addFormando} onClose={() => setAddFormando(false)} title="Inscrever formando" sub={turma.nome}>
+        <div className="p-5 space-y-3">
+          {activa ? (
+            <>
+              <p className="text-xs text-slate-500">A turma está ativa e tem {Math.max(0, turma.vagas - turma.totalAlunos)} vagas. Só turmas ativas aceitam novas inscrições.</p>
+              <Field label="Formando"><input className={iCls} placeholder="Nome do formando" /></Field>
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setAddFormando(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+                <button onClick={() => setAddFormando(false)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Inscrever</button>
+              </div>
+            </>
+          ) : (
+            <TurmaInactivaBanner nome={turma.nome} onActivate={() => toggleGold(turma.id, true)} />
+          )}
         </div>
       </SlideOver>
     </>
@@ -1173,10 +1241,11 @@ function dtpPctFin(id: number) {
 }
 
 function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (id: number) => void }) {
+  const { gold, fin } = useTurmas();
   const isGold = regime === "gold";
   const rows = isGold
-    ? turmasGoldData.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, extra: `${t.local} · ${t.horario}`, estado: t.estado, pct: dtpPctGold(t.id) }))
-    : finTurmasData.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, extra: `UFCD ${t.ufcdCod} · ${t.formador}`, estado: t.estado, pct: dtpPctFin(t.id) }));
+    ? gold.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, extra: `${t.local} · ${t.horario}`, estado: t.estado, pct: dtpPctGold(t.id) }))
+    : fin.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, extra: `UFCD ${t.ufcdCod} · ${t.formador}`, estado: isTurmaActiva(t) ? t.estado : "Inativa", pct: dtpPctFin(t.id) }));
   return (
     <div className="space-y-4">
       <PageHeader
@@ -1220,7 +1289,9 @@ function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (
 }
 
 function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview" }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab }) {
-  const turma = finTurmasData.find(t => t.id === turmaId) ?? finTurmasData.find(t => t.ufcdCod === "3564") ?? finTurmasData[0];
+  const { fin, toggleFin, setFinCronograma } = useTurmas();
+  const turma = fin.find(t => t.id === turmaId) ?? fin.find(t => t.ufcdCod === "3564") ?? fin[0];
+  const activa = isTurmaActiva(turma);
   const [tab, setTab] = useState<CockpitTab>(initialTab);
   const [formadorOpen, setFormadorOpen] = useState(false);
   const [uploadCert, setUploadCert] = useState<number | null>(null);
@@ -1241,6 +1312,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview" }: { tur
               <span className="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-lg">UFCD {turma.ufcdCod}</span>
               <span className="bg-white/10 text-white text-xs font-bold px-2.5 py-1 rounded-lg font-mono">{turma.nome}</span>
               {estadoBadge(turma.estado)}
+              <TurmaActivaToggle compact light accent="fin" activa={activa} onChange={v => toggleFin(turma.id, v)} />
             </div>
             <p className="text-lg font-bold mt-1">{turma.curso}</p>
             <div className="flex flex-wrap gap-4 mt-2 text-slate-300 text-xs">
@@ -1265,6 +1337,21 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview" }: { tur
         </div>
       </div>
       <TurmaTabBar tab={tab} onChange={setTab} accent="fin" dtpPct={dtpPctFin(turma.id)} />
+      {!activa && <TurmaInactivaBanner nome={turma.nome} onActivate={() => toggleFin(turma.id, true)} />}
+      {tab === "cronograma" && (
+        <Card className="p-5">
+          <CronogramaEditor
+            accent="fin"
+            sessoes={turma.cronograma}
+            onChange={next => setFinCronograma(turma.id, next)}
+            inicio={turma.dataInicio}
+            horario={turma.horario}
+            horas={turma.horas}
+            formador={turma.formador}
+            curso={turma.curso}
+          />
+        </Card>
+      )}
       {tab === "dtp" && (
         <DtpPanel regime="fin" turma={{ codigo: turma.ufcdCod === "3564" ? "UFCD 3564 · T1" : turma.nome, id: turma.id, titulo: turma.curso, sub: `UFCD ${turma.ufcdCod} · ${turma.horas}h` }} />
       )}
@@ -1401,9 +1488,19 @@ function KanbanBoard({ onCardClick }: { onCardClick: (item: typeof preinscricoes
 // ─── Modal Ficha Comercial (pré-inscrição) ────────────────────────────────────
 
 function FichaComercial({ item, open, onClose }: { item: typeof preinscricoesData[number] | null; open: boolean; onClose: () => void }) {
+  const { gold } = useTurmas();
   const [notas, setNotas] = useState("Ligou a perguntar sobre horários. Interessada em Sábado manhã.");
   const [proximoContacto, setProximoContacto] = useState("2026-09-06");
+  const [escolherTurma, setEscolherTurma] = useState(false);
+  const [turmaConv, setTurmaConv] = useState("");
+  const [convMsg, setConvMsg] = useState("");
+  useEffect(() => {
+    setEscolherTurma(false);
+    setTurmaConv("");
+    setConvMsg("");
+  }, [item?.id, open]);
   if (!item) return null;
+  const turmaOpts = turmaGoldOpts(gold, { curso: item.curso });
   return (
     <Modal open={open} onClose={onClose} title={`${item.nome} ${item.apelido}`}>
       <div className="p-5 space-y-4">
@@ -1430,7 +1527,27 @@ function FichaComercial({ item, open, onClose }: { item: typeof preinscricoesDat
           <a href={`tel:${item.telf}`} className="flex-1 py-2 bg-slate-800 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5 hover:bg-slate-700 transition-colors">{I.phone} Ligar</a>
           <a href={`https://wa.me/351${item.telf}`} className="flex-1 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5 hover:bg-emerald-700 transition-colors">{I.whatsapp} WhatsApp</a>
         </div>
-        <button className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2">{I.convert} Converter em Formando - Escolher turma</button>
+        {!escolherTurma ? (
+          <button onClick={() => { setEscolherTurma(true); setConvMsg(""); }} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2">{I.convert} Converter em Formando - Escolher turma</button>
+        ) : (
+          <div className="space-y-2">
+            <Field label="Turma ativa">
+              <SearchSelect value={turmaConv} onChange={setTurmaConv} options={turmaOpts} placeholder="Só turmas ativas…" empty="Não há turmas ativas para este curso." />
+            </Field>
+            <TurmaInscricaoHint optsLen={turmaOpts.length} curso={item.curso} />
+            {convMsg && <p className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">{convMsg}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => setEscolherTurma(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+              <button
+                disabled={!turmaConv}
+                onClick={() => setConvMsg(`${item.nome} ${item.apelido} inscrita na turma ${turmaConv}.`)}
+                className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg"
+              >
+                Confirmar inscrição
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -1741,9 +1858,11 @@ function PreInscricoesGoldView() {
   const [fichaItem, setFichaItem] = useState<typeof preinscricoesData[number] | null>(null);
   const [fichaOpen, setFichaOpen] = useState(false);
   const [novo, setNovo] = useState(false);
+  const { gold } = useTurmas();
   const [curso, setCurso] = useState("");
   const [turma, setTurma] = useState("");
   const [local, setLocal] = useState("");
+  const turmaOpts = turmaGoldOpts(gold, { curso: curso || undefined });
 
   function openFicha(item: typeof preinscricoesData[number]) { setFichaItem(item); setFichaOpen(true); }
 
@@ -1819,8 +1938,11 @@ function PreInscricoesGoldView() {
           </div>
           <Field label="Email"><input className={iCls} type="email" /></Field>
           <Field label="Telemóvel"><input className={iCls} /></Field>
-          <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
-          <Field label="Turma"><SearchSelect value={turma} onChange={setTurma} options={turmasGoldOpts} placeholder="Pesquisar turma…" /></Field>
+          <Field label="Curso"><SearchSelect value={curso} onChange={v => { setCurso(v); setTurma(""); }} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <Field label="Turma">
+            <SearchSelect value={turma} onChange={setTurma} options={turmaOpts} placeholder="Só turmas ativas…" empty="Não há turmas ativas para este curso." />
+          </Field>
+          <TurmaInscricaoHint optsLen={turmaOpts.length} curso={curso || undefined} />
           <Field label="Local"><SearchSelect value={local} onChange={setLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setNovo(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
@@ -1835,31 +1957,56 @@ function PreInscricoesGoldView() {
 // ─── Turmas Gold ──────────────────────────────────────────────────────────────
 
 function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
+  const { gold, patchGold, addGold, toggleGold } = useTurmas();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
-  const [open, setOpen] = useState<typeof turmasGoldData[number] | "new" | null>(null);
+  const [open, setOpen] = useState<TurmaGold | "new" | null>(null);
+  const [nome, setNome] = useState("");
   const [curso, setCurso] = useState("Formação de Formadores - CCP");
   const [local, setLocal] = useState("");
   const [horario, setHorario] = useState("");
   const [formador, setFormador] = useState("Isac Silva");
+  const [dataInicio, setDataInicio] = useState("");
+  const [vagas, setVagas] = useState(16);
+  const [activa, setActiva] = useState(true);
+  const [cronograma, setCronograma] = useState<SessaoCronograma[]>([]);
   const editing = open && open !== "new" ? open : null;
-  const f = turmasGoldData.filter(t => {
+  const ativas = gold.filter(t => isTurmaActiva(t)).length;
+  const f = gold.filter(t => {
     const q = `${t.nome} ${t.local} ${t.curso}`.toLowerCase().includes(s.toLowerCase());
     return q && (filtro === "Todos" || t.estado === filtro || t.local === filtro);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
+  const horasCurso = cursosGoldData.find(c => c.nome === curso)?.horas ?? 90;
   useEffect(() => {
     if (open) {
+      setNome(editing?.nome ?? "");
       setCurso(editing?.curso ?? "Formação de Formadores - CCP");
       setLocal(editing?.local ?? "");
       setHorario(editing?.horario ?? "");
-      setFormador("Isac Silva");
+      setFormador(editing?.formador ?? "Isac Silva");
+      setDataInicio(editing?.dataInicio ?? "");
+      setVagas(editing?.vagas ?? 16);
+      setActiva(editing ? isTurmaActiva(editing) : true);
+      setCronograma(editing?.cronograma ?? []);
     }
   }, [open, editing]);
+  function guardar() {
+    const payload = {
+      nome: nome.trim() || "Nova turma",
+      curso, local, horario, formador, dataInicio, vagas,
+      estado: (activa ? "Ativa" : "Inativa") as TurmaGold["estado"],
+      horas: horasCurso,
+      cronograma,
+    };
+    if (editing) patchGold(editing.id, payload);
+    else addGold({ id: Date.now() % 100000, totalAlunos: 0, ...payload });
+    setOpen(null);
+  }
   return (
     <div className="space-y-4">
-      <PageHeader title="Turmas Gold" sub="13 ativas · 167 total" action={<NewBtn label="+ Nova Turma" onClick={() => setOpen("new")} />} />
-      <FilterChips options={["Todos", "Ativo", "Inactivo", "V.N.Gaia", "Braga", "Lisboa"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} />
+      <PageHeader title="Turmas Gold" sub={`${ativas} ativas · ${gold.length} no total · só as ativas aceitam inscrições`} action={<NewBtn label="+ Nova Turma" onClick={() => setOpen("new")} />} />
+      <FilterChips options={["Todos", "Ativa", "Inativa", "V.N.Gaia", "Braga", "Lisboa"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} />
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
         <div className="overflow-x-auto">
@@ -1874,6 +2021,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
                     <Td className="font-mono text-xs text-slate-500 whitespace-nowrap">{t.dataInicio}</Td>
                     <Td>
                       <button onClick={() => onCockpit(t.id)} className="text-xs font-semibold text-blue-600 hover:text-blue-800 whitespace-nowrap text-left">{t.nome}</button>
+                      <p className="text-xs text-slate-400">{t.cronograma.length} sessões no cronograma</p>
                     </Td>
                     <Td className="text-xs text-slate-600 whitespace-nowrap">{t.local}</Td>
                     <Td className="text-xs text-slate-600 whitespace-nowrap">{t.horario}</Td>
@@ -1884,7 +2032,9 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
                         {livre > 0 && livre <= 3 && <Badge label="Quase cheia" variant="amber" />}
                       </div>
                     </Td>
-                    <Td>{estadoBadge(t.estado)}</Td>
+                    <Td>
+                      <TurmaActivaToggle compact activa={isTurmaActiva(t)} onChange={v => toggleGold(t.id, v)} />
+                    </Td>
                     <Td>
                       <div className="flex gap-1">
                         <ActBtn icon={I.eye} label="Cockpit" onClick={() => onCockpit(t.id)} color="teal" />
@@ -1902,23 +2052,30 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
       </Card>
       <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `Editar ${editing.nome}` : "Nova turma Gold"} sub="Código interno da turma - o objeto de gestão é a turma, não a ação.">
         <div className="p-5 space-y-3">
-          <Field label="Código interno"><input className={iCls} defaultValue={editing?.nome ?? ""} placeholder="VNG-SM-07/09" /></Field>
+          <TurmaActivaToggle activa={activa} onChange={setActiva} />
+          <Field label="Código interno"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="VNG-SM-07/09" /></Field>
           <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Local"><SearchSelect value={local} onChange={setLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
             <Field label="Horário"><SearchSelect value={horario} onChange={setHorario} options={horariosOpts} /></Field>
           </div>
           <Field label="Formador"><SearchSelect value={formador} onChange={setFormador} options={formadoresOpts} placeholder="Pesquisar formador…" /></Field>
-          <Field label="Data de início"><input type="date" className={iCls} defaultValue={editing?.dataInicio ?? ""} /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Vagas"><input type="number" className={iCls} defaultValue={editing?.vagas ?? 16} /></Field>
-            <Field label="Estado">
-              <select className={iCls} defaultValue={editing?.estado ?? "Ativo"}><option>Ativo</option><option>Inactivo</option></select>
-            </Field>
+            <Field label="Data de início"><input type="date" className={iCls} value={dataInicio} onChange={e => setDataInicio(e.target.value)} /></Field>
+            <Field label="Vagas"><input type="number" className={iCls} value={vagas} onChange={e => setVagas(Number(e.target.value) || 0)} /></Field>
           </div>
+          <CronogramaEditor
+            sessoes={cronograma}
+            onChange={setCronograma}
+            inicio={dataInicio}
+            horario={horario}
+            horas={horasCurso}
+            formador={formador}
+            curso={curso}
+          />
           <div className="flex gap-2 pt-2">
             <button onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button onClick={() => setOpen(null)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+            <button onClick={guardar} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
           </div>
         </div>
       </SlideOver>
@@ -1929,12 +2086,14 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
 // ─── Formandos Turmas ─────────────────────────────────────────────────────────
 
 function FormandosTurmasView() {
+  const { gold } = useTurmas();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
   const [fichaOpen, setFichaOpen] = useState<FormandoRecord | null>(null);
   const [edit, setEdit] = useState<FormandoRecord | null>(null);
   const [turma, setTurma] = useState("");
   const [cursoEdit, setCursoEdit] = useState("");
+  const turmaOpts = turmaGoldOpts(gold, { curso: cursoEdit || undefined, includeNome: edit?.turma });
   const f = formandosTurmasData.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.turma}`.toLowerCase().includes(s.toLowerCase());
     return q && (filtro === "Todos" || (filtro === "Pago" ? x.pago : filtro === "Por pagar" ? !x.pago : x.turma === filtro));
@@ -1989,8 +2148,11 @@ function FormandosTurmasView() {
       </SlideOver>
       <SlideOver open={!!edit} onClose={() => setEdit(null)} title={edit ? `${edit.nome} ${edit.apelido}` : ""} sub="Mover de turma ou actualizar dados">
         <div className="p-5 space-y-3">
-          <Field label="Turma"><SearchSelect value={turma} onChange={setTurma} options={turmasGoldOpts} placeholder="Pesquisar turma…" /></Field>
-          <Field label="Curso"><SearchSelect value={cursoEdit} onChange={setCursoEdit} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <Field label="Turma">
+            <SearchSelect value={turma} onChange={setTurma} options={turmaOpts} placeholder="Só turmas ativas…" empty="Não há turmas ativas para este curso." />
+          </Field>
+          <TurmaInscricaoHint optsLen={turmaOpts.length} curso={cursoEdit || undefined} />
+          <Field label="Curso"><SearchSelect value={cursoEdit} onChange={v => { setCursoEdit(v); if (turma && !turmaGoldOpts(gold, { curso: v, includeNome: edit?.turma }).some(o => o.value === turma)) setTurma(""); }} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setEdit(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button onClick={() => setEdit(null)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
@@ -2071,34 +2233,63 @@ function FinFormandosView() {
 // ─── Turmas Financiadas ───────────────────────────────────────────────────────
 
 function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab) => void }) {
+  const { fin, patchFin, addFin, toggleFin } = useTurmas();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
-  const [open, setOpen] = useState<typeof finTurmasData[number] | "new" | null>(null);
+  const [open, setOpen] = useState<TurmaFin | "new" | null>(null);
+  const [nome, setNome] = useState("");
   const [curso, setCurso] = useState("");
   const [formador, setFormador] = useState("");
   const [localFin, setLocalFin] = useState("");
+  const [dataInicio, setDataInicio] = useState("");
+  const [activa, setActiva] = useState(true);
+  const [cronograma, setCronograma] = useState<SessaoCronograma[]>([]);
   const editing = open && open !== "new" ? open : null;
-  const f = finTurmasData.filter(t => {
+  const ativas = fin.filter(t => isTurmaActiva(t)).length;
+  const f = fin.filter(t => {
     const q = `${t.nome} ${t.curso}`.toLowerCase().includes(s.toLowerCase());
-    return q && (filtro === "Todos" || t.estado === filtro);
+    const activaLbl = isTurmaActiva(t) ? "Ativa" : "Inativa";
+    return q && (filtro === "Todos" || t.estado === filtro || activaLbl === filtro);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
   useEffect(() => {
     if (open) {
+      setNome(editing?.nome ?? "");
       setCurso(editing?.curso ?? "");
       setFormador(editing?.formador ?? "");
       setLocalFin(editing?.local ?? "Sala Virtual");
+      setDataInicio(editing?.dataInicio ?? "");
+      setActiva(editing ? isTurmaActiva(editing) : true);
+      setCronograma(editing?.cronograma ?? []);
     }
   }, [open, editing]);
+  function guardar() {
+    const horas = editing?.horas ?? 25;
+    const payload = {
+      nome: nome.trim() || "Nova turma",
+      curso, formador, local: localFin, dataInicio, activa, cronograma, horas,
+    };
+    if (editing) patchFin(editing.id, payload);
+    else addFin({
+      id: Date.now() % 100000,
+      ufcdCod: "0000",
+      horario: "Online",
+      alunos: 0,
+      alunosTotal: 20,
+      estado: "A montar",
+      ...payload,
+    });
+    setOpen(null);
+  }
   return (
     <div className="space-y-4">
-      <PageHeader title="Turmas Financiadas" sub={`${finTurmasData.length} turmas`} action={<NewBtn label="+ Nova Turma" onClick={() => setOpen("new")} />} />
-      <FilterChips options={["Todos", "A montar", "A decorrer"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} accent="fin" />
+      <PageHeader title="Turmas Financiadas" sub={`${ativas} ativas · ${fin.length} no total · só as ativas aceitam novas inscrições`} action={<NewBtn label="+ Nova Turma" onClick={() => setOpen("new")} />} />
+      <FilterChips options={["Todos", "Ativa", "Inativa", "A montar", "A decorrer"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} accent="fin" />
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr><Th>Id</Th><Th>Início</Th><Th>UFCD</Th><Th>Turma / Curso</Th><Th>Formador</Th><Th>Elegíveis</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
+            <thead><tr><Th>Id</Th><Th>Início</Th><Th>UFCD</Th><Th>Turma / Curso</Th><Th>Formador</Th><Th>Elegíveis</Th><Th>Estado</Th><Th>Inscrições</Th><Th>Ações</Th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map(t => {
                 const prontos = Math.floor(t.alunos * 0.8);
@@ -2110,7 +2301,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
                     <Td>
                       <button onClick={() => onCockpit(t.id, "overview")} className="text-left">
                         <p className="text-xs font-semibold text-blue-600 max-w-[160px] hover:text-blue-800">{t.nome}</p>
-                        <p className="text-xs text-slate-400 truncate max-w-[160px]">{t.curso}</p>
+                        <p className="text-xs text-slate-400 truncate max-w-[160px]">{t.curso} · {t.cronograma.length} sessões</p>
                       </button>
                     </Td>
                     <Td className="text-xs text-slate-600 whitespace-nowrap">{t.formador}</Td>
@@ -2123,6 +2314,9 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
                       </div>
                     </Td>
                     <Td>{estadoBadge(t.estado)}</Td>
+                    <Td>
+                      <TurmaActivaToggle compact accent="fin" activa={isTurmaActiva(t)} onChange={v => toggleFin(t.id, v)} />
+                    </Td>
                     <Td>
                       <div className="flex gap-1">
                         <ActBtn icon={I.eye} label="Cockpit" color="teal" onClick={() => onCockpit(t.id, "overview")} />
@@ -2142,14 +2336,25 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
       </Card>
       <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? editing.nome : "Nova turma financiada"} sub="UFCD e turma - o objeto de gestão é a turma.">
         <div className="p-5 space-y-3">
+          <TurmaActivaToggle accent="fin" activa={activa} onChange={setActiva} />
           <Field label="Curso / UFCD"><SearchSelect value={curso} onChange={setCurso} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
-          <Field label="Código da turma"><input className={iCls} defaultValue={editing?.nome ?? ""} placeholder="UFCD 3564 · T1" /></Field>
+          <Field label="Código da turma"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="UFCD 3564 · T1" /></Field>
           <Field label="Formador"><SearchSelect value={formador} onChange={setFormador} options={formadoresOpts} placeholder="Pesquisar formador…" /></Field>
           <Field label="Local"><SearchSelect value={localFin} onChange={setLocalFin} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
-          <Field label="Data de início"><input type="date" className={iCls} defaultValue={editing?.dataInicio ?? ""} /></Field>
+          <Field label="Data de início"><input type="date" className={iCls} value={dataInicio} onChange={e => setDataInicio(e.target.value)} /></Field>
+          <CronogramaEditor
+            accent="fin"
+            sessoes={cronograma}
+            onChange={setCronograma}
+            inicio={dataInicio}
+            horario={editing?.horario ?? "Pós Laboral"}
+            horas={editing?.horas ?? 25}
+            formador={formador}
+            curso={curso}
+          />
           <div className="flex gap-2 pt-2">
             <button onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button onClick={() => setOpen(null)} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">Guardar</button>
+            <button onClick={guardar} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">Guardar</button>
           </div>
         </div>
       </SlideOver>

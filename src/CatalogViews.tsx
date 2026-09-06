@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import {
   FilterChips, SearchSelect,
-  cursosFinOpts, cursosGoldOpts, horariosOpts, locaisOpts, modulosOpts, turmasFinOpts,
+  cursosFinOpts, cursosGoldOpts, horariosOpts, locaisOpts, modulosOpts,
 } from "./FormKit";
+import { TurmaInscricaoHint } from "./TurmaCronograma";
+import { useTurmas } from "./TurmasContext";
+import { turmaFinOpts } from "./turmaModel";
 
 const I = {
   plus: (
@@ -691,6 +694,7 @@ export function ConteudosView() {
 }
 
 export function FinInscricoesView() {
+  const { fin } = useTurmas();
   const [s, setS] = useState(""); const [p, setP] = useState(1);
   const [filtro, setFiltro] = useState("Todas");
   const [open, setOpen] = useState<"new" | typeof finInscricoesData[number] | null>(null);
@@ -698,6 +702,7 @@ export function FinInscricoesView() {
   const [turma, setTurma] = useState("");
   const estados = ["Todas", "Recebida", "Em análise", "Elegível", "Colocado na turma", "Indeferido"];
   const editing = open && open !== "new" ? open : null;
+  const turmaOpts = turmaFinOpts(fin, { curso: curso || undefined, includeNome: editing && editing.turma !== "-" ? editing.turma : undefined });
   useEffect(() => {
     if (open) {
       setCurso(editing?.curso ?? "");
@@ -768,8 +773,9 @@ export function FinInscricoesView() {
               <Field label="Telemóvel"><input className={iCls} /></Field>
             </div>
           )}
-          <Field label="Curso / UFCD"><SearchSelect value={curso} onChange={setCurso} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
-          <Field label="Turma"><SearchSelect value={turma} onChange={setTurma} options={turmasFinOpts} placeholder="Pesquisar turma…" allowEmpty /></Field>
+          <Field label="Curso / UFCD"><SearchSelect value={curso} onChange={v => { setCurso(v); setTurma(""); }} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
+          <Field label="Turma"><SearchSelect value={turma} onChange={setTurma} options={turmaOpts} placeholder="Só turmas ativas…" empty="Não há turmas ativas para esta UFCD." allowEmpty /></Field>
+          <TurmaInscricaoHint optsLen={turmaOpts.length} curso={curso || undefined} />
           <Field label="Estado">
             <select className={iCls} defaultValue={editing?.estado ?? "Recebida"}>
               {estados.filter(e => e !== "Todas").map(e => <option key={e}>{e}</option>)}

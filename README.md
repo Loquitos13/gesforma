@@ -26,6 +26,8 @@ A vista **Módulos** começa pelo filtro de curso: lista só os blocos desse cur
 
 Os botões **Novo curso**, **Nova turma**, **Novo módulo**, **Nova sessão** e equivalentes abrem um formulário. Quando é preciso escolher curso, turma, local, formador ou módulo, o campo é um **dropdown com pesquisa**. As tabelas têm filtros por estado, local ou tipo.
 
+Cada **turma** tem um **cronograma** (gerar a partir da data de início e do horário, ou editar sessão a sessão) e um toggle **Ativa / Inativa**. Só turmas ativas aparecem nas pré-inscrições Gold, na conversão de lead em formando, na mudança de turma de um formando e nas inscrições financiadas. Uma turma inativa mantém os formandos já inscritos, mas fecha novas entradas.
+
 ## Correr localmente
 
 ```bash

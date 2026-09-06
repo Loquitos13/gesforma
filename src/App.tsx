@@ -6,8 +6,8 @@ import {
 } from "./CatalogViews";
 import {
   FileUploadModal, PresencasSessaoModal, FormadorProfileSlideOver, PlanoSessaoModal,
-  InqueritosView, defaultPlanos, emptyPlano,
-  type PlanoSessaoData, type SessaoMeta,
+  InqueritosView, defaultPlanos, emptyPlano, ResolverDocumentoModal, seedListaFromDetalhe,
+  type PlanoSessaoData, type SessaoMeta, type ResolveDocTarget,
 } from "./TurmaExtras";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -554,11 +554,11 @@ function FichaFormando({ formando, tipo = "gold", onClose }: { formando: Formand
 // ─── Cockpit da Turma ─────────────────────────────────────────────────────────
 
 const sessoesSample: SessaoMeta[] = [
-  { n: 1, data: "Sáb, 07 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Realizada", plano: true, modulo: "Módulo 1 — Fundamentos da Formação Profissional", duracao: "4h" },
-  { n: 2, data: "Sáb, 14 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Realizada", plano: true, modulo: "Módulo 2 — Planeamento e Organização da Formação", duracao: "4h" },
-  { n: 3, data: "Sáb, 21 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false, modulo: "Módulo 2 — Planeamento e Organização da Formação", duracao: "4h" },
-  { n: 4, data: "Sáb, 28 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false, modulo: "Módulo 3 — Comunicação e Dinamização de Grupos", duracao: "4h" },
-  { n: 5, data: "Sáb, 05 Out 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false, modulo: "Módulo 3 — Comunicação e Dinamização de Grupos", duracao: "4h" },
+  { n: 1, data: "Sáb, 07 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Realizada", plano: true, modulo: "Módulo 1 - Fundamentos da Formação Profissional", duracao: "4h" },
+  { n: 2, data: "Sáb, 14 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Realizada", plano: true, modulo: "Módulo 2 - Planeamento e Organização da Formação", duracao: "4h" },
+  { n: 3, data: "Sáb, 21 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false, modulo: "Módulo 2 - Planeamento e Organização da Formação", duracao: "4h" },
+  { n: 4, data: "Sáb, 28 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false, modulo: "Módulo 3 - Comunicação e Dinamização de Grupos", duracao: "4h" },
+  { n: 5, data: "Sáb, 05 Out 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false, modulo: "Módulo 3 - Comunicação e Dinamização de Grupos", duracao: "4h" },
 ];
 
 const certificadosSample = [
@@ -652,13 +652,48 @@ function TurmaTabBar({ tab, onChange, accent = "gold", dtpPct }: { tab: CockpitT
   );
 }
 
-function DocumentosTurmaTab({ onOpenDtp, regime = "gold" }: { onOpenDtp: () => void; regime?: "gold" | "fin" }) {
+function cloneGrupos(src: typeof docsTurmaGrupos) {
+  return src.map(g => ({ ...g, items: g.items.map(i => ({ ...i })) }));
+}
+
+function DocumentosTurmaTab({ regime = "gold" }: { regime?: "gold" | "fin" }) {
   const estadoCfg: Record<DocEstado, { dot: string; chip: string; label: string }> = {
     ok: { dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700 border-emerald-200", label: "No dossiê" },
     parcial: { dot: "bg-amber-400", chip: "bg-amber-50 text-amber-700 border-amber-200", label: "Parcial" },
     falta: { dot: "bg-red-400", chip: "bg-red-50 text-red-600 border-red-200", label: "Em falta" },
   };
-  const grupos = regime === "fin" ? docsFinGrupos : docsTurmaGrupos;
+  const seed = regime === "fin" ? docsFinGrupos : docsTurmaGrupos;
+  const [grupos, setGrupos] = useState(() => cloneGrupos(seed));
+  const [resolver, setResolver] = useState<{ grupoId: string; label: string } | null>(null);
+  useEffect(() => { setGrupos(cloneGrupos(seed)); setResolver(null); }, [regime]);
+
+  const nomesFormandos = regime === "fin"
+    ? finFormandosData.map(f => `${f.nome} ${f.apelido}`)
+    : formandosTurmasData.map(f => `${f.nome} ${f.apelido}`);
+  const nomesSessoes = regime === "fin"
+    ? ["Sessão 1 · 27 Ago", "Sessão 2 · 03 Set", "Sessão 3 · 10 Set", "Sessão 4 · 17 Set", "Sessão 5 · 24 Set"]
+    : Array.from({ length: 16 }, (_, i) => `Sessão ${i + 1}`);
+
+  const aberto = resolver
+    ? grupos.flatMap(g => g.items.filter(d => g.id === resolver.grupoId && d.label === resolver.label).map(d => ({ grupoId: g.id, grupo: g.id, doc: d })))[0]
+    : undefined;
+
+  function abrir(grupoId: string, doc: { label: string; detalhe: string; estado: DocEstado }) {
+    setResolver({ grupoId, label: doc.label });
+  }
+
+  function targetFromDoc(grupoId: string, doc: { label: string; detalhe: string; estado: DocEstado }): ResolveDocTarget {
+    const lista = /\d+\s*\/\s*\d+/.test(doc.detalhe) || grupoId === "formandos" || grupoId === "sessoes";
+    const nomes = grupoId === "sessoes" ? nomesSessoes : nomesFormandos;
+    return {
+      label: doc.label,
+      detalhe: doc.detalhe,
+      estado: doc.estado,
+      kind: lista ? "lista" : "ficheiro",
+      items: lista ? seedListaFromDetalhe(doc.detalhe, nomes) : undefined,
+    };
+  }
+
   return (
     <div className="space-y-4">
       {grupos.map(g => {
@@ -683,9 +718,10 @@ function DocumentosTurmaTab({ onOpenDtp, regime = "gold" }: { onOpenDtp: () => v
                       <p className="text-xs text-slate-400 mt-0.5">{doc.detalhe}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {doc.estado !== "ok" && (
-                        <button onClick={onOpenDtp} className="text-xs font-semibold text-blue-600 hover:text-blue-800 underline underline-offset-2 whitespace-nowrap">Ver no DTP →</button>
-                      )}
+                      <button onClick={() => abrir(g.id, doc)}
+                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${doc.estado === "ok" ? "bg-white text-slate-600 border-slate-200 hover:bg-slate-50" : regime === "gold" ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"}`}>
+                        {doc.estado === "ok" ? "Substituir" : "Resolver"}
+                      </button>
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${cfg.chip} whitespace-nowrap`}>{cfg.label}</span>
                     </div>
                   </div>
@@ -695,6 +731,19 @@ function DocumentosTurmaTab({ onOpenDtp, regime = "gold" }: { onOpenDtp: () => v
           </Card>
         );
       })}
+      <ResolverDocumentoModal
+        open={!!aberto}
+        onClose={() => setResolver(null)}
+        accent={regime}
+        target={aberto ? targetFromDoc(aberto.grupoId, aberto.doc) : null}
+        onSave={next => {
+          if (!resolver) return;
+          setGrupos(prev => prev.map(g => g.id !== resolver.grupoId ? g : {
+            ...g,
+            items: g.items.map(d => d.label !== resolver.label ? d : { ...d, estado: next.estado, detalhe: next.detalhe }),
+          }));
+        }}
+      />
     </div>
   );
 }
@@ -858,7 +907,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             </div>
           </Card>
         )}
-        {tab === "documentos" && <DocumentosTurmaTab onOpenDtp={() => setTab("dtp")} regime="gold" />}
+        {tab === "documentos" && <DocumentosTurmaTab regime="gold" />}
         {tab === "certificados" && <CertificadosTurmaTab onUpload={id => setUploadCert(id)} />}
 
         {tab === "overview" && <>
@@ -1001,8 +1050,8 @@ function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (
   return (
     <div className="space-y-4">
       <PageHeader
-        title={isGold ? "Dossiê TP — Gold" : "Dossiê TP — Financiada"}
-        sub="Na ENA o DTP vive dentro da turma. O código interno (VNG-SM-07/09, UFCD 3564) identifica a turma — não é uma “ação” à parte."
+        title={isGold ? "Dossiê TP - Gold" : "Dossiê TP - Financiada"}
+        sub="Na ENA o DTP vive dentro da turma. O código interno (VNG-SM-07/09, UFCD 3564) identifica a turma - não é uma “ação” à parte."
       />
       <Card>
         <div className="overflow-x-auto">
@@ -1090,7 +1139,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview" }: { tur
         <DtpPanel regime="fin" turma={{ codigo: turma.ufcdCod === "3564" ? "UFCD 3564 · T1" : turma.nome, id: turma.id, titulo: turma.curso, sub: `UFCD ${turma.ufcdCod} · ${turma.horas}h` }} />
       )}
       {tab === "sessoes" && <PresencasView turmaId={turma.id} embedded />}
-      {tab === "documentos" && <DocumentosTurmaTab onOpenDtp={() => setTab("dtp")} regime="fin" />}
+      {tab === "documentos" && <DocumentosTurmaTab regime="fin" />}
       {tab === "certificados" && <CertificadosTurmaTab onUpload={id => setUploadCert(id)} />}
       {tab === "overview" && (
         <>
@@ -2401,12 +2450,12 @@ const viewTitles: Partial<Record<View, string>> = {
   "gold-campanhas": "Campanhas", "gold-cursos": "Cursos Gold", "gold-datas": "Datas Gold",
   "gold-locais": "Locais", "gold-areas-tematicas": "Áreas Temáticas",
   "gold-modulos": "Módulos", "gold-conteudos": "Conteúdos",
-  "gold-turmas": "Turmas Gold", "gold-cockpit-turma": "Cockpit da Turma", "gold-dtp": "Dossiê TP — Gold",
-  "gold-inqueritos": "Inquéritos — Gold",
+  "gold-turmas": "Turmas Gold", "gold-cockpit-turma": "Cockpit da Turma", "gold-dtp": "Dossiê TP - Gold",
+  "gold-inqueritos": "Inquéritos - Gold",
   "fin-inscricoes": "Inscrições Financiadas", "fin-formandos": "Formandos Financiados",
   "fin-cursos": "Cursos Financiados", "fin-turmas": "Turmas Financiadas", "fin-presencas": "Folha de Presenças",
-  "fin-dtp": "Dossiê TP — Financiada", "fin-cockpit-turma": "Cockpit da Turma Financiada",
-  "fin-inqueritos": "Inquéritos — Financiada",
+  "fin-dtp": "Dossiê TP - Financiada", "fin-cockpit-turma": "Cockpit da Turma Financiada",
+  "fin-inqueritos": "Inquéritos - Financiada",
   formadores: "Formadores", "blog-posts": "Blog - Posts", "blog-tematicas": "Blog - Temáticas",
   emails: "Emails Automáticos", pagamentos: "Pagamentos", configuracoes: "Configurações",
 };

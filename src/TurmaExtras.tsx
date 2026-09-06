@@ -46,13 +46,14 @@ function SlideOver({ open, onClose, title, sub, children }: { open: boolean; onC
   );
 }
 
-export function FileUploadModal({ open, onClose, title, accent = "gold" }: { open: boolean; onClose: () => void; title?: string; accent?: "gold" | "fin" }) {
+export function FileUploadModal({ open, onClose, title, accent = "gold", onConfirm }: { open: boolean; onClose: () => void; title?: string; accent?: "gold" | "fin"; onConfirm?: () => void }) {
   const [dragging, setDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const gold = accent === "gold";
 
   function handleClose() { setFile(null); onClose(); }
+  function handleConfirm() { setFile(null); onConfirm?.(); onClose(); }
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -73,7 +74,7 @@ export function FileUploadModal({ open, onClose, title, accent = "gold" }: { ope
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 ${gold ? "bg-amber-100 text-amber-600" : "bg-blue-100 text-blue-600"}`}>{I.download}</div>
               <p className="text-sm font-semibold text-slate-700">Arraste o ficheiro para aqui</p>
               <p className="text-xs text-slate-400 mt-1">ou clique para escolher do computador</p>
-              <p className="text-xs text-slate-400 mt-1">PDF, DOC, JPG, PNG — máx. 10 MB</p>
+              <p className="text-xs text-slate-400 mt-1">PDF, DOC, JPG, PNG - máx. 10 MB</p>
               <input ref={inputRef} type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setFile(f); }} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" />
             </div>
           ) : (
@@ -89,11 +90,154 @@ export function FileUploadModal({ open, onClose, title, accent = "gold" }: { ope
         </div>
         <div className="flex gap-2 px-5 pb-5">
           <button onClick={handleClose} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-          <button disabled={!file} onClick={handleClose}
+          <button disabled={!file} onClick={handleConfirm}
             className={`flex-1 py-2 disabled:opacity-40 text-white text-sm font-semibold rounded-lg ${gold ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}>
             Confirmar upload
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+export type ResolveDocEstado = "ok" | "parcial" | "falta";
+export type ResolveListaItem = { id: string; nome: string; ok: boolean };
+
+export type ResolveDocTarget = {
+  label: string;
+  detalhe: string;
+  estado: ResolveDocEstado;
+  kind: "ficheiro" | "lista";
+  items?: ResolveListaItem[];
+};
+
+export function seedListaFromDetalhe(detalhe: string, nomes: string[]): ResolveListaItem[] {
+  const m = detalhe.match(/(\d+)\s*\/\s*(\d+)/);
+  const okCount = m ? Number(m[1]) : 0;
+  const total = m ? Number(m[2]) : nomes.length;
+  const list = nomes.slice(0, total);
+  while (list.length < total) list.push(list.length < 16 ? `Sessão ${list.length + 1}` : `Item ${list.length + 1}`);
+  return list.map((nome, i) => ({ id: String(i + 1), nome, ok: i < okCount }));
+}
+
+export function ResolverDocumentoModal({
+  open, onClose, target, accent = "gold", onSave,
+}: {
+  open: boolean;
+  onClose: () => void;
+  target: ResolveDocTarget | null;
+  accent?: "gold" | "fin";
+  onSave: (next: { estado: ResolveDocEstado; detalhe: string }) => void;
+}) {
+  const gold = accent === "gold";
+  const [items, setItems] = useState<ResolveListaItem[]>([]);
+  const [file, setFile] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open && target) {
+      setItems(target.items ? target.items.map(i => ({ ...i })) : []);
+      setFile(null);
+    }
+  }, [open, target]);
+
+  if (!open || !target) return null;
+
+  const done = items.filter(i => i.ok).length;
+  const listaEstado: ResolveDocEstado = items.length === 0 ? "ok" : done === items.length ? "ok" : done === 0 ? "falta" : "parcial";
+
+  function guardarLista() {
+    const detalhe = items.length
+      ? `${done} / ${items.length} ${target!.label.toLowerCase().includes("sess") ? "sessões" : "formandos"}.`
+      : target!.detalhe;
+    onSave({ estado: listaEstado, detalhe });
+    onClose();
+  }
+
+  function guardarFicheiro() {
+    onSave({ estado: "ok", detalhe: file ? `Carregado: ${file.name}` : "No dossiê." });
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
+          <div>
+            <p className="text-sm font-semibold text-slate-800">{target.label}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{target.kind === "lista" ? "Marca o que já está no dossiê ou carrega o que falta." : "Carrega o ficheiro para resolver neste ecrã."}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
+        </div>
+
+        {target.kind === "lista" ? (
+          <>
+            <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+              <span className="text-xs text-slate-500">{done}/{items.length} no dossiê</span>
+              <div className="flex items-center gap-2">
+                <div className="w-28 bg-slate-200 rounded-full h-1.5">
+                  <div className="h-1.5 rounded-full" style={{ width: `${items.length ? (done / items.length) * 100 : 0}%`, backgroundColor: gold ? "#F59E0B" : "#2563EB" }} />
+                </div>
+                <span className="text-xs font-bold text-slate-600">{items.length ? Math.round((done / items.length) * 100) : 0}%</span>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
+              {items.map(item => (
+                <label key={item.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 cursor-pointer">
+                  <button type="button" onClick={() => setItems(prev => prev.map(x => x.id === item.id ? { ...x, ok: !x.ok } : x))}
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${item.ok ? "bg-emerald-500 border-emerald-500" : "border-slate-300"}`}>
+                    {item.ok && <svg viewBox="0 0 12 12" fill="none" className="w-3 h-3"><path d="M2 6l3 3 5-5" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                  </button>
+                  <span className="flex-1 text-sm text-slate-700">{item.nome}</span>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${item.ok ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
+                    {item.ok ? "No dossiê" : "Em falta"}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2 px-5 py-4 border-t border-slate-100 flex-shrink-0">
+              <button onClick={onClose} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+              <button onClick={guardarLista} className={`flex-1 py-2 text-white text-sm font-semibold rounded-lg ${gold ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}>Guardar</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="p-5">
+              {!file ? (
+                <div
+                  onDragOver={e => { e.preventDefault(); setDragging(true); }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) setFile(f); }}
+                  onClick={() => inputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${dragging ? (gold ? "border-amber-400 bg-amber-50" : "border-blue-400 bg-blue-50") : "border-slate-200 hover:border-amber-300 hover:bg-slate-50"}`}
+                >
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 ${gold ? "bg-amber-100 text-amber-600" : "bg-blue-100 text-blue-600"}`}>{I.download}</div>
+                  <p className="text-sm font-semibold text-slate-700">Arraste o ficheiro para aqui</p>
+                  <p className="text-xs text-slate-400 mt-1">ou clique para escolher do computador</p>
+                  <p className="text-xs text-slate-400 mt-1">PDF, DOC, JPG, PNG — máx. 10 MB</p>
+                  <input ref={inputRef} type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setFile(f); }} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" />
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+                  <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600 flex-shrink-0">{I.file}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{file.name}</p>
+                    <p className="text-xs text-slate-500">{(file.size / 1024).toFixed(0)} KB</p>
+                  </div>
+                  <button onClick={() => setFile(null)} className="p-1 text-slate-400 hover:text-red-500">{I.x}</button>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 px-5 pb-5">
+              <button onClick={onClose} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+              <button disabled={!file} onClick={guardarFicheiro}
+                className={`flex-1 py-2 disabled:opacity-40 text-white text-sm font-semibold rounded-lg ${gold ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}>
+                Guardar no dossiê
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -124,7 +268,7 @@ export function PresencasSessaoModal({ open, onClose, sessao }: {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
           <div>
-            <p className="text-sm font-semibold text-slate-800">Folha de Presenças — Sessão {sessao?.n}</p>
+            <p className="text-sm font-semibold text-slate-800">Folha de Presenças - Sessão {sessao?.n}</p>
             <p className="text-xs text-slate-400">{sessao?.data} · {sessao?.hora}</p>
           </div>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
@@ -185,7 +329,7 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf = "914 547 
 
   return (
     <>
-      <SlideOver open={open} onClose={onClose} title={`Perfil — ${nome}`} sub="Formador / Formadora">
+      <SlideOver open={open} onClose={onClose} title={`Perfil - ${nome}`} sub="Formador / Formadora">
         <div className="p-4 space-y-5">
           <div className="flex items-center gap-4 p-4 bg-violet-50 border border-violet-200 rounded-xl">
             <div className="w-14 h-14 rounded-2xl bg-violet-600 flex items-center justify-center text-white text-xl font-bold flex-shrink-0">{nome[0]}</div>
@@ -331,7 +475,7 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano, onSave }: {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[92vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
           <div>
-            <p className="text-sm font-bold text-slate-800">Plano de Sessão — Sessão {sessao.n}</p>
+            <p className="text-sm font-bold text-slate-800">Plano de Sessão - Sessão {sessao.n}</p>
             <p className="text-xs text-slate-400 mt-0.5">{sessao.data} · {sessao.hora} · {sessao.formador}</p>
           </div>
           <div className="flex items-center gap-2">
@@ -420,7 +564,7 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano, onSave }: {
                         <td className="px-3 py-3 font-bold text-slate-700 align-top whitespace-nowrap">{momentoLabels[momento]}</td>
                         {campoLabels.map(campo => (
                           <td key={campo} className="px-3 py-3 text-slate-600 align-top leading-relaxed">
-                            {hasContent ? (plano.momentos[momento][campo] || <span className="text-slate-300">—</span>) : <span className="text-slate-300">—</span>}
+                            {hasContent ? (plano.momentos[momento][campo] || <span className="text-slate-300">-</span>) : <span className="text-slate-300">-</span>}
                           </td>
                         ))}
                       </tr>
@@ -454,7 +598,7 @@ const tipoIcons: Record<PerguntaTipo, React.ReactNode> = {
 };
 
 const inqueritosGold: Inquerito[] = [{
-  id: 1, titulo: "Inquérito de Satisfação — Formação de Formadores CCP",
+  id: 1, titulo: "Inquérito de Satisfação - Formação de Formadores CCP",
   perguntas: [
     { id: 1, tipo: "escala", texto: "Como avalia a qualidade geral da formação?" },
     { id: 2, tipo: "escala", texto: "O formador demonstrou domínio dos conteúdos?" },
@@ -465,7 +609,7 @@ const inqueritosGold: Inquerito[] = [{
 }];
 
 const inqueritosFin: Inquerito[] = [{
-  id: 1, titulo: "Inquérito de Satisfação — UFCD 3564 Primeiros Socorros",
+  id: 1, titulo: "Inquérito de Satisfação - UFCD 3564 Primeiros Socorros",
   perguntas: [
     { id: 1, tipo: "escala", texto: "Os conteúdos da UFCD foram claros e úteis?" },
     { id: 2, tipo: "escala", texto: "A carga horária (25h) foi adequada?" },

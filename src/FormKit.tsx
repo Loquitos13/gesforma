@@ -97,22 +97,35 @@ export const locaisOpts: SelectOption[] = [
   { value: "E-learning", sub: "Assíncrono" },
 ];
 
+export function formadoresToOpts(list: { nome: string; telf?: string; especialidade?: string; ccp?: string }[]): SelectOption[] {
+  return list
+    .filter(f => f.nome.trim())
+    .map(f => ({
+      value: f.nome,
+      sub: [f.telf, f.especialidade || (f.ccp ? `CCP ${f.ccp}` : "")].filter(Boolean).join(" · ") || undefined,
+    }));
+}
+
+export function formadoresOptsWithFrom(base: SelectOption[], current?: string | string[]): SelectOption[] {
+  const extras = (Array.isArray(current) ? current : current ? [current] : [])
+    .map(v => v.trim())
+    .filter(Boolean)
+    .filter(v => !base.some(o => o.value === v));
+  if (!extras.length) return base;
+  return [...extras.map(value => ({ value, sub: "Atribuído nesta turma" })), ...base];
+}
+
 export const formadoresOpts: SelectOption[] = [
-  { value: "Isac Silva", sub: "914 547 554 · CCP" },
-  { value: "Ivan Esteves", sub: "912 370 557" },
-  { value: "António Cardeal", sub: "915 258 691 · Comunicar" },
-  { value: "Cátia Pinheiro", sub: "Estética Facial" },
-  { value: "Vânia Fernandes", sub: "967 432 879 · Primeiros Socorros" },
+  { value: "Isac Silva", sub: "914 547 554 · CCP e pedagogia" },
+  { value: "Ivan Esteves", sub: "912 370 557 · Comunicação" },
+  { value: "António Cardeal", sub: "915 258 691 · Comunicar em contexto profissional" },
+  { value: "Cátia Pinheiro", sub: "912 919 291 · Estética facial" },
+  { value: "Vânia Fernandes", sub: "967 432 879 · Primeiros socorros" },
   { value: "Rosana Suarez", sub: "938 039 001 · Massagem" },
 ];
 
 export function formadoresOptsWith(current?: string | string[]): SelectOption[] {
-  const extras = (Array.isArray(current) ? current : current ? [current] : [])
-    .map(v => v.trim())
-    .filter(Boolean)
-    .filter(v => !formadoresOpts.some(o => o.value === v));
-  if (!extras.length) return formadoresOpts;
-  return [...extras.map(value => ({ value, sub: "Atribuído nesta turma" })), ...formadoresOpts];
+  return formadoresOptsWithFrom(formadoresOpts, current);
 }
 
 export const horariosOpts: SelectOption[] = [

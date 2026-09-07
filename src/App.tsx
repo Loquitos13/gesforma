@@ -16,9 +16,12 @@ import { CursoFichaView } from "./CursoFichaView";
 import {
   SearchSelect, MultiSearchSelect, ViewFilters, matchesFilter, uniqueOpts,
   blogTematicasOpts, cursosFinOpts, cursosGoldOpts,
-  formadoresOpts, formadoresOptsWith, horariosOpts, locaisOpts, modulosOptsForCurso,
+  horariosOpts, locaisOpts, modulosOptsForCurso,
 } from "./FormKit";
 import { CronogramaEditor, FormadoresAtribuidosCard, TurmaActivaToggle, TurmaInactivaBanner, TurmaInscricaoHint } from "./TurmaCronograma";
+import { FormadoresView } from "./FormadoresView";
+import { FORMADORES_SEED } from "./formadorModel";
+import { useFormadorOptions } from "./FormadoresContext";
 import { useTurmas } from "./TurmasContext";
 import { cronogramaToSessoes, formatSessaoLabel, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
 
@@ -79,8 +82,8 @@ const I = {
 type View =
   | "painel" | "gold-preinscricoes" | "gold-formandos-turmas" | "gold-formandos-gold"
   | "gold-campanhas" | "gold-cursos" | "gold-datas" | "gold-locais" | "gold-areas-tematicas"
-  | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-cockpit-turma" | "gold-curso-ficha" | "gold-dtp" | "gold-inqueritos"
-  | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
+  | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-formadores" | "gold-cockpit-turma" | "gold-curso-ficha" | "gold-dtp" | "gold-inqueritos"
+  | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-formadores" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
   | "formadores" | "blog-posts" | "blog-tematicas"
   | "emails" | "pagamentos" | "configuracoes";
 
@@ -160,15 +163,6 @@ const finTurmasData = [
   { id: 219, dataInicio: "2026-08-31", nome: "UCUC00033 - Comunicar", curso: "Comunicar e interagir em contexto profissional", ufcdCod: "3564", local: "Sala Virtual / E-Learning", horario: "Online", alunos: 17, alunosTotal: 20, estado: "A decorrer", horas: 25, formador: "António" },
   { id: 218, dataInicio: "2026-08-27", nome: "UFCD 3564 - Primeiros So.", curso: "Primeiros Socorros", ufcdCod: "3564", local: "Sala Virtual / E-Learning", horario: "Online", alunos: 4, alunosTotal: 20, estado: "A montar", horas: 25, formador: "Vânia Fernandes" },
   { id: 217, dataInicio: "2026-08-27", nome: "UFCD 9119 - Massagem", curso: "Técnicas de massagem", ufcdCod: "9119", local: "Sala Virtual / E-Learning", horario: "Online", alunos: 17, alunosTotal: 20, estado: "A decorrer", horas: 25, formador: "Rosana" },
-];
-
-const formadoresData = [
-  { id: 7, nome: "Isac Silva", telf: "914547554", email: "isacsilva1992@gmail.com" },
-  { id: 8, nome: "Ivan Esteves", telf: "912370557", email: "exsorio2@gmail.com" },
-  { id: 11, nome: "António Cardeal", telf: "915258691", email: "antoniocardeal71@gmail.com" },
-  { id: 12, nome: "Cátia Pinheiro", telf: "91291929", email: "catiapinheiro@ena.pt" },
-  { id: 19, nome: "Vânia Fernandes", telf: "967432879", email: "fernandes.c.vania@gmail.com" },
-  { id: 20, nome: "Rosana Suarez", telf: "938039001", email: "roxana.suarez.costa@gmail.com" },
 ];
 
 const blogPostsData = [
@@ -622,7 +616,7 @@ const finSessoesSample: SessaoMeta[] = [
 
 function ModulosCell({ sessao }: { sessao: { modulo?: string; modulos?: string[] } }) {
   const list = sessaoModulos(sessao);
-  if (!list.length) return <span className="text-xs text-slate-400">—</span>;
+  if (!list.length) return <span className="text-xs text-slate-400">-</span>;
   return (
     <div className="flex flex-col gap-0.5 min-w-[10rem] max-w-[16rem]">
       {list.map(m => (
@@ -639,7 +633,7 @@ function FormadoresCell({
   onOpen?: (nome: string) => void;
 }) {
   const list = sessaoFormadores(sessao);
-  if (!list.length) return <span className="text-xs text-slate-400">—</span>;
+  if (!list.length) return <span className="text-xs text-slate-400">-</span>;
   return (
     <div className="flex flex-col gap-0.5 min-w-[8rem] max-w-[14rem]">
       {list.map(nome => onOpen ? (
@@ -964,6 +958,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const [formadorOpen, setFormadorOpen] = useState<string | null>(null);
   const [novaSessao, setNovaSessao] = useState(false);
   const [formadoresSessao, setFormadoresSessao] = useState<string[]>(["Isac Silva"]);
+  const formadorOptsSessao = useFormadorOptions(formadoresSessao);
   const [moduloSessao, setModuloSessao] = useState<string[]>([]);
   const [dataSessao, setDataSessao] = useState("");
   const [horaSessao, setHoraSessao] = useState("09:00");
@@ -1126,7 +1121,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             <p className="text-sm font-semibold text-slate-700">Lista de Formandos</p>
             {activa
               ? <NewBtn label="Adicionar" onClick={() => setAddFormando(true)} />
-              : <button disabled title="Turma inativa — não aceita novas inscrições" className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-200 text-slate-400 text-sm font-semibold rounded-lg cursor-not-allowed">Adicionar</button>}
+              : <button disabled title="Turma inativa - não aceita novas inscrições" className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-200 text-slate-400 text-sm font-semibold rounded-lg cursor-not-allowed">Adicionar</button>}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -1216,7 +1211,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             <MultiSearchSelect
               values={formadoresSessao}
               onChange={setFormadoresSessao}
-              options={formadoresOptsWith(formadoresSessao)}
+              options={formadorOptsSessao}
               placeholder="Pesquisar formador…"
               noneLabel="Selecionar formadores…"
               unitSingular="formador"
@@ -2035,6 +2030,7 @@ function PreInscricoesGoldView() {
 
 function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   const { gold, patchGold, addGold, toggleGold } = useTurmas();
+  const formadorOpts = useFormadorOptions();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
@@ -2145,7 +2141,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
             <Field label="Local"><SearchSelect value={local} onChange={setLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
             <Field label="Horário"><SearchSelect value={horario} onChange={setHorario} options={horariosOpts} /></Field>
           </div>
-          <Field label="Formador"><SearchSelect value={formador} onChange={setFormador} options={formadoresOpts} placeholder="Pesquisar formador…" /></Field>
+          <Field label="Formador"><SearchSelect value={formador} onChange={setFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Data de início"><input type="date" className={iCls} value={dataInicio} onChange={e => setDataInicio(e.target.value)} /></Field>
             <Field label="Vagas"><input type="number" className={iCls} value={vagas} onChange={e => setVagas(Number(e.target.value) || 0)} /></Field>
@@ -2336,6 +2332,7 @@ function FinFormandosView() {
 
 function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab) => void }) {
   const { fin, patchFin, addFin, toggleFin } = useTurmas();
+  const formadorOpts = useFormadorOptions();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
@@ -2447,7 +2444,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
           <TurmaActivaToggle accent="fin" activa={activa} onChange={setActiva} />
           <Field label="Curso / UFCD"><SearchSelect value={curso} onChange={setCurso} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
           <Field label="Código da turma"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="UFCD 3564 · T1" /></Field>
-          <Field label="Formador"><SearchSelect value={formador} onChange={setFormador} options={formadoresOpts} placeholder="Pesquisar formador…" /></Field>
+          <Field label="Formador"><SearchSelect value={formador} onChange={setFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
           <Field label="Local"><SearchSelect value={localFin} onChange={setLocalFin} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
           <Field label="Data de início"><input type="date" className={iCls} value={dataInicio} onChange={e => setDataInicio(e.target.value)} /></Field>
           <CronogramaEditor
@@ -2520,49 +2517,6 @@ function CursosGoldView({ onOpen }: { onOpen: (id: number | "new") => void }) {
   );
 }
 
-function FormadoresView() {
-  const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
-  const [perfil, setPerfil] = useState<typeof formadoresData[number] | null>(null);
-  const [novo, setNovo] = useState(false);
-  const f = formadoresData.filter(x => `${x.nome} ${x.email}`.toLowerCase().includes(s.toLowerCase()));
-  return (
-    <div className="space-y-4">
-      <PageHeader title="Formadores" action={<NewBtn label="+ Novo Formador" onClick={() => setNovo(true)} />} />
-      <Card>
-        <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr><Th>Id</Th><Th>Nome</Th><Th>Telf</Th><Th>Email</Th><Th>Ações</Th></tr></thead>
-            <tbody className="divide-y divide-slate-100">
-              {f.map(r => (
-                <tr key={r.id} className="hover:bg-slate-50">
-                  <Td><IdCell id={r.id} /></Td>
-                  <Td><button onClick={() => setPerfil(r)} className="text-sm font-medium text-blue-600 hover:text-blue-800">{r.nome}</button></Td>
-                  <Td className="font-mono text-xs text-slate-500">{r.telf}</Td>
-                  <Td className="text-xs text-blue-600">{r.email}</Td>
-                  <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Perfil" onClick={() => setPerfil(r)} /><ActBtn icon={I.doc} label="Docs" color="orange" onClick={() => setPerfil(r)} /><ActBtn icon={I.edit} label="Editar" /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
-      </Card>
-      <FormadorProfileSlideOver open={!!perfil} onClose={() => setPerfil(null)} nome={perfil?.nome ?? ""} telf={perfil?.telf} />
-      <SlideOver open={novo} onClose={() => setNovo(false)} title="Novo formador" sub="Ficha e documentos pedagógicos">
-        <div className="p-5 space-y-3">
-          <Field label="Nome"><input className={iCls} /></Field>
-          <Field label="Email"><input className={iCls} type="email" /></Field>
-          <Field label="Telemóvel"><input className={iCls} /></Field>
-          <div className="flex gap-2 pt-2">
-            <button onClick={() => setNovo(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button onClick={() => setNovo(false)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
-          </div>
-        </div>
-      </SlideOver>
-    </div>
-  );
-}
 
 function BlogView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
@@ -2873,6 +2827,12 @@ const allSearchable: Array<{ tipo: string; nome: string; sub: string } & NavTarg
   { tipo: "DTP", nome: "Dossiê da turma UFCD 3564 · T1", sub: "Primeiros Socorros · Financiada", view: "fin-cockpit-turma" as View, turmaId: 218, tab: "dtp" as CockpitTab },
   { tipo: "Inquérito", nome: "Satisfação CCP", sub: "Gold · 5 perguntas", view: "gold-inqueritos" as View },
   { tipo: "Inquérito", nome: "Satisfação UFCD 3564", sub: "Financiada · 4 perguntas", view: "fin-inqueritos" as View },
+  ...FORMADORES_SEED.map(f => ({
+    tipo: f.regimes.includes("gold") ? "Formador Gold" : "Formador Financiado",
+    nome: f.nome,
+    sub: f.especialidade || f.email,
+    view: (f.regimes.includes("gold") ? "gold-formadores" : "fin-formadores") as View,
+  })),
 ];
 
 function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: () => void; onNavigate: (t: NavTarget) => void }) {
@@ -2899,6 +2859,7 @@ function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: (
     "Formando Gold": "bg-amber-100 text-amber-700", "Formando Financiado": "bg-blue-100 text-blue-700",
     "Turma Gold": "bg-violet-100 text-violet-700", "Turma Financiada": "bg-teal-100 text-teal-700",
     "Curso Gold": "bg-orange-100 text-orange-700", "UFCD": "bg-emerald-100 text-emerald-700",
+    "Formador Gold": "bg-violet-100 text-violet-700", "Formador Financiado": "bg-blue-100 text-blue-700",
   };
 
   return (
@@ -3007,6 +2968,7 @@ const sidebarConfig: NavGroup[] = [
       { label: "Locais", view: "gold-locais" }, { label: "Áreas Temáticas", view: "gold-areas-tematicas" },
     ]},
     { label: "Turmas", view: "gold-turmas", icon: I.school },
+    { label: "Formadores", view: "gold-formadores", icon: I.person },
     { label: "Dossiê TP", view: "gold-dtp", icon: I.folder },
     { label: "Inquéritos", view: "gold-inqueritos", icon: I.doc },
   ]},
@@ -3014,13 +2976,13 @@ const sidebarConfig: NavGroup[] = [
     { label: "Inscrições", view: "fin-inscricoes", icon: I.clipboard },
     { label: "Formandos", view: "fin-formandos", icon: I.users },
     { label: "Turmas", view: "fin-turmas", icon: I.school },
+    { label: "Formadores", view: "fin-formadores", icon: I.person },
     { label: "Presenças", view: "fin-presencas", icon: I.attend },
     { label: "Cursos", view: "fin-cursos", icon: I.book },
     { label: "Dossiê TP", view: "fin-dtp", icon: I.folder },
     { label: "Inquéritos", view: "fin-inqueritos", icon: I.doc },
   ]},
   { group: "Gestão", items: [
-    { label: "Formadores", view: "formadores", icon: I.person },
     { label: "Blog", icon: I.blog, children: [{ label: "Posts", view: "blog-posts" }, { label: "Temáticas", view: "blog-tematicas" }] },
   ]},
   { group: "Sistema", items: [
@@ -3147,13 +3109,13 @@ const viewTitles: Partial<Record<View, string>> = {
   "gold-campanhas": "Campanhas", "gold-cursos": "Cursos Gold", "gold-curso-ficha": "Ficha do curso", "gold-datas": "Datas Gold",
   "gold-locais": "Locais", "gold-areas-tematicas": "Áreas Temáticas",
   "gold-modulos": "Módulos", "gold-conteudos": "Conteúdos",
-  "gold-turmas": "Turmas Gold", "gold-cockpit-turma": "Cockpit da Turma", "gold-dtp": "Dossiê TP - Gold",
+  "gold-turmas": "Turmas Gold", "gold-formadores": "Formadores Gold", "gold-cockpit-turma": "Cockpit da Turma", "gold-dtp": "Dossiê TP - Gold",
   "gold-inqueritos": "Inquéritos - Gold",
   "fin-inscricoes": "Inscrições Financiadas", "fin-formandos": "Formandos Financiados",
-  "fin-cursos": "Cursos Financiados", "fin-curso-ficha": "Ficha UFCD", "fin-turmas": "Turmas Financiadas", "fin-presencas": "Folha de Presenças",
+  "fin-cursos": "Cursos Financiados", "fin-curso-ficha": "Ficha UFCD", "fin-turmas": "Turmas Financiadas", "fin-formadores": "Formadores Financiada", "fin-presencas": "Folha de Presenças",
   "fin-dtp": "Dossiê TP - Financiada", "fin-cockpit-turma": "Cockpit da Turma Financiada",
   "fin-inqueritos": "Inquéritos - Financiada",
-  formadores: "Formadores", "blog-posts": "Blog - Posts", "blog-tematicas": "Blog - Temáticas",
+  formadores: "Formadores Gold", "blog-posts": "Blog - Posts", "blog-tematicas": "Blog - Temáticas",
   emails: "Emails Automáticos", pagamentos: "Pagamentos", configuracoes: "Configurações",
 };
 
@@ -3242,6 +3204,8 @@ export default function App() {
       case "gold-modulos": return <ModulosView cursoInicial={moduloCurso} />;
       case "gold-conteudos": return <ConteudosView />;
       case "gold-inqueritos": return <InqueritosView acento="gold" />;
+      case "gold-formadores":
+      case "formadores": return <FormadoresView regime="gold" />;
       case "fin-inscricoes": return <FinInscricoesView />;
       case "fin-formandos": return <FinFormandosView />;
       case "fin-cursos": return <FinCursosView onOpen={id => { setCursoFichaId(id); go("fin-curso-ficha"); }} />;
@@ -3260,7 +3224,7 @@ export default function App() {
       case "fin-dtp": return <DtpTurmasPicker regime="fin" onOpen={(id) => openFinCockpit(id, "dtp")} />;
       case "fin-cockpit-turma": return <FinCockpitTurmaView turmaId={finCockpitId} initialTab={cockpitTab} onBack={() => navigate("fin-turmas")} />;
       case "fin-inqueritos": return <InqueritosView acento="fin" />;
-      case "formadores": return <FormadoresView />;
+      case "fin-formadores": return <FormadoresView regime="fin" />;
       case "blog-posts": return <BlogView />;
       case "blog-tematicas": return <BlogTematicasView />;
       case "emails": return <EmailsView />;

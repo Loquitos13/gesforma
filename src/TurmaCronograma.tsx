@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { MultiSearchSelect, formadoresOptsWith, modulosOptsForCurso } from "./FormKit";
+import { MultiSearchSelect, modulosOptsForCurso } from "./FormKit";
+import { useFormadorOptions } from "./FormadoresContext";
 import {
   CRONOGRAMA_HOJE,
   emptySessao,
@@ -155,6 +156,7 @@ function SessaoRow({
 }) {
   const chip = ESTADO_UI[estado];
   const horas = sessaoDuracaoHoras(sessao);
+  const formadorOpts = useFormadorOptions(sessaoFormadores(sessao));
   const ring = estado === "proxima" || estado === "hoje"
     ? gold ? "ring-1 ring-amber-200 bg-amber-50/40" : "ring-1 ring-blue-200 bg-blue-50/40"
     : estado === "realizada" ? "opacity-80" : "";
@@ -219,7 +221,7 @@ function SessaoRow({
             <MultiSearchSelect
               values={sessaoFormadores(sessao)}
               onChange={formadores => onPatch({ formadores })}
-              options={formadoresOptsWith(sessaoFormadores(sessao))}
+              options={formadorOpts}
               placeholder="Pesquisar formador…"
               noneLabel="Selecionar formadores…"
               unitSingular="formador"
@@ -313,13 +315,13 @@ export function CronogramaEditor({
           <KpiCard
             accent={accent}
             label="Próxima sessão"
-            value={next ? formatDiaMes(next.data) : "—"}
+            value={next ? formatDiaMes(next.data) : "-"}
             hint={next ? `${formatHoraRange(next.horaInicio, next.horaFim)} · ${modulosLabel(sessaoModulos(next))}` : "Sem sessões futuras"}
           />
           <KpiCard
             accent={accent}
             label="Período"
-            value={periodo ? `${formatDiaMes(periodo.inicio)} – ${formatDiaMes(periodo.fim)}` : "—"}
+            value={periodo ? `${formatDiaMes(periodo.inicio)} – ${formatDiaMes(periodo.fim)}` : "-"}
             hint={periodo ? `${formatMesAno(periodo.inicio)}${periodo.inicio.slice(0, 7) !== periodo.fim.slice(0, 7) ? ` → ${formatMesAno(periodo.fim)}` : ""}` : "Defina datas nas sessões"}
           />
         </>
@@ -446,6 +448,7 @@ export function FormadoresAtribuidosCard({
   onOpen?: (nome: string) => void;
 }) {
   const lista = formadoresNasSessoes(sessoes, fallback);
+  const catalogo = useFormadorOptions(lista.map(f => f.nome));
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-slate-100">
@@ -463,7 +466,7 @@ export function FormadoresAtribuidosCard({
       ) : (
         <ul className="divide-y divide-slate-100">
           {lista.map(f => {
-            const opt = formadoresOptsWith(f.nome).find(o => o.value === f.nome);
+            const opt = catalogo.find(o => o.value === f.nome);
             const inicial = f.nome.trim().charAt(0).toUpperCase() || "?";
             return (
               <li key={f.nome} className="px-4 py-3 flex items-center gap-3">

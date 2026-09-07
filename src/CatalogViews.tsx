@@ -686,7 +686,7 @@ export function ConteudosView() {
   const [tipo, setTipo] = useState("PDF");
   const [origem, setOrigem] = useState("");
   const editing = open && open !== "new" ? open : null;
-  const modulosDoCurso = modulosData.filter(m => !curso || m.curso === curso);
+  const modulosDoCurso = curso ? modulosData.filter(m => m.curso === curso) : [];
   const moduloOpts = modulosDoCurso.map(m => ({ value: m.codigo, sub: `${m.nome} · ${m.horas}h` }));
   const filtroModuloOpts = modulosData
     .filter(m => !filtroCurso || m.curso === filtroCurso)

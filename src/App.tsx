@@ -275,7 +275,8 @@ function PageHeader({ title, sub, action }: { title: string; sub?: string; actio
   );
 }
 function NewBtn({ label, onClick }: { label: string; onClick?: () => void }) {
-  return <button onClick={onClick} className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm whitespace-nowrap">{I.plus}{label}</button>;
+  const text = label.replace(/^\+\s*/, "");
+  return <button onClick={onClick} className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm whitespace-nowrap">{I.plus}{text}</button>;
 }
 function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <th className={`text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap bg-slate-50 border-b border-slate-200 ${className}`}>{children}</th>;

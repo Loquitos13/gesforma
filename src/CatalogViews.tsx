@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   SearchSelect, ViewFilters, matchesFilter, uniqueOpts,
-  cursosFinOpts, cursosGoldOpts, horariosOpts, locaisOpts, modulosOpts,
+  cursosFinOpts, cursosGoldOpts, horariosOpts, locaisOpts,
 } from "./FormKit";
 import { TurmaInscricaoHint } from "./TurmaCronograma";
 import { useTurmas } from "./TurmasContext";
@@ -87,9 +87,10 @@ function PageHeader({ title, sub, action }: { title: string; sub?: string; actio
   );
 }
 function NewBtn({ label, onClick }: { label: string; onClick?: () => void }) {
+  const text = label.replace(/^\+\s*/, "");
   return (
     <button onClick={onClick} className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm whitespace-nowrap">
-      {I.plus}{label}
+      {I.plus}{text}
     </button>
   );
 }
@@ -224,13 +225,32 @@ const modulosData = [
 ];
 
 const conteudosData = [
-  { id: 11, titulo: "Manual CCP - Módulo 1 (Aprendizagem)", tipo: "PDF", curso: "CCP", modulo: "M1", tamanho: "2,4 MB", estado: "Ativo" },
-  { id: 12, titulo: "Vídeo: comunicação em sala", tipo: "Vídeo", curso: "CCP", modulo: "M2", tamanho: "18 min", estado: "Ativo" },
-  { id: 13, titulo: "Grelha de observação da simulação", tipo: "PDF", curso: "CCP", modulo: "M4", tamanho: "180 KB", estado: "Ativo" },
-  { id: 14, titulo: "Plataforma Moodle CCP", tipo: "Link", curso: "CCP", modulo: "M5", tamanho: "-", estado: "Ativo" },
-  { id: 15, titulo: "Ficha de avaliação final", tipo: "PDF", curso: "CCP", modulo: "M3", tamanho: "92 KB", estado: "Ativo" },
-  { id: 16, titulo: "Exercícios Excel avançado", tipo: "PDF", curso: "Excel", modulo: "EX1", tamanho: "1,1 MB", estado: "Inactivo" },
+  { id: 11, titulo: "Manual CCP - Módulo 1 (Aprendizagem)", tipo: "PDF", curso: "Formação de Formadores - CCP", modulo: "M1", tamanho: "2,4 MB", estado: "Ativo" },
+  { id: 12, titulo: "Vídeo: comunicação em sala", tipo: "Vídeo", curso: "Formação de Formadores - CCP", modulo: "M2", tamanho: "18 min", estado: "Ativo" },
+  { id: 13, titulo: "Grelha de observação da simulação", tipo: "PDF", curso: "Formação de Formadores - CCP", modulo: "M4", tamanho: "180 KB", estado: "Ativo" },
+  { id: 14, titulo: "Plataforma Moodle CCP", tipo: "Link", curso: "Formação de Formadores - CCP", modulo: "M5", tamanho: "-", estado: "Ativo" },
+  { id: 15, titulo: "Ficha de avaliação final", tipo: "PDF", curso: "Formação de Formadores - CCP", modulo: "M3", tamanho: "92 KB", estado: "Ativo" },
+  { id: 16, titulo: "Exercícios Excel avançado", tipo: "PDF", curso: "Excel do Básico ao Avançado", modulo: "EX1", tamanho: "1,1 MB", estado: "Inactivo" },
 ];
+
+const tiposModuloOpts = [
+  { value: "Teórico-prático" },
+  { value: "Teórico" },
+  { value: "Prático" },
+  { value: "B-learning" },
+];
+
+function nextCodigoModulo(lista: Array<{ codigo: string; curso: string }>, curso: string) {
+  const mesmos = lista.filter(m => m.curso === curso);
+  const prefix = curso.includes("Excel") ? "EX" : curso.includes("Comunicar") ? "AV" : "M";
+  const nums = mesmos.map(m => Number((m.codigo.match(/\d+/) || ["0"])[0])).filter(n => !Number.isNaN(n));
+  return `${prefix}${(nums.length ? Math.max(...nums) : 0) + 1}`;
+}
+
+function labelModulo(codigo: string, curso?: string) {
+  const m = modulosData.find(x => x.codigo === codigo && (!curso || x.curso === curso));
+  return m ? `${m.codigo} · ${m.nome}` : codigo;
+}
 
 type DocDots = { cc: boolean; ch: boolean; cu: boolean; ci: boolean; ce: boolean };
 const finInscricoesData: Array<{
@@ -530,11 +550,11 @@ export function ModulosView({ cursoInicial }: { cursoInicial?: string }) {
   useEffect(() => {
     if (!open) return;
     setCurso(editing?.curso || cursoFiltro || "");
-    setCodigo(editing?.codigo ?? "");
+    setCodigo(editing?.codigo ?? (cursoFiltro ? nextCodigoModulo(lista, cursoFiltro) : ""));
     setNome(editing?.nome ?? "");
     setHoras(String(editing?.horas ?? 10));
     setTipo(editing?.tipo ?? "Teórico-prático");
-  }, [open, editing, cursoFiltro]);
+  }, [open, editing, cursoFiltro, lista]);
 
   const f = lista.filter(x => {
     const q = `${x.nome} ${x.codigo} ${x.curso}`.toLowerCase().includes(s.toLowerCase());
@@ -577,12 +597,6 @@ export function ModulosView({ cursoInicial }: { cursoInicial?: string }) {
           fields={[{ label: "Curso", value: cursoFiltro, onChange: setCursoFiltro, options: cursosGoldOpts, placeholder: "Pesquisar curso…" }]}
           chips={{ options: ["Todos", "Ativo", "Inactivo"], value: estado, onChange: setEstado }}
           onClear={() => { setCursoFiltro(""); setEstado("Todos"); }}
-          action={
-            <button type="button" onClick={abrirNovo}
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg whitespace-nowrap">
-              {I.plus} Novo módulo{cursoFiltro ? " neste curso" : ""}
-            </button>
-          }
         />
         <Card>
           <TableToolbar search={s} onSearch={setS} />
@@ -599,7 +613,7 @@ export function ModulosView({ cursoInicial }: { cursoInicial?: string }) {
                           : "Este curso ainda não tem módulos."}
                       </p>
                       <button type="button" onClick={abrirNovo} className="mt-3 text-sm font-semibold text-amber-600 hover:text-amber-700">
-                        + Criar o primeiro módulo
+                        Criar o primeiro módulo
                       </button>
                     </td>
                   </tr>
@@ -621,19 +635,37 @@ export function ModulosView({ cursoInicial }: { cursoInicial?: string }) {
           </div>
         </Card>
       </div>
-      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `${editing.codigo} · ${editing.nome}` : "Novo módulo"} sub={curso || cursoFiltro || "Associar a um curso Gold"}>
-        <div className="p-5 space-y-3">
-          <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Código"><input className={iCls} value={codigo} onChange={e => setCodigo(e.target.value)} placeholder="M6" /></Field>
-            <Field label="Horas"><input type="number" className={iCls} value={horas} onChange={e => setHoras(e.target.value)} /></Field>
+      <SlideOver
+        open={!!open}
+        onClose={() => setOpen(null)}
+        title={editing ? `${editing.codigo} · ${editing.nome}` : "Novo módulo"}
+        sub={curso ? `Pertence a ${curso}` : "Um módulo existe sempre dentro de um curso"}
+      >
+        <div className="p-5 space-y-4">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+            <p className="text-xs font-semibold text-amber-800">Módulo ⊂ curso</p>
+            <p className="text-xs text-amber-700 mt-0.5">Não há módulos soltos. Escolha o curso e o módulo fica associado a ele — nas turmas, nos conteúdos e no DTP.</p>
           </div>
-          <Field label="Nome"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome do módulo" /></Field>
-          <Field label="Tipo"><input className={iCls} value={tipo} onChange={e => setTipo(e.target.value)} /></Field>
-          <div className="flex gap-2 pt-2">
+          <Field label="Curso *">
+            <SearchSelect value={curso} onChange={v => { setCurso(v); if (!editing) setCodigo(nextCodigoModulo(lista, v)); }} options={cursosGoldOpts} placeholder="Obrigatório — pesquisar curso…" />
+          </Field>
+          {curso && (
+            <p className="text-xs text-slate-500 -mt-2">
+              {lista.filter(m => m.curso === curso).length} módulos neste curso · {lista.filter(m => m.curso === curso).reduce((a, m) => a + m.horas, 0)}h já definidas
+            </p>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Código"><input className={iCls} value={codigo} onChange={e => setCodigo(e.target.value)} placeholder={curso ? nextCodigoModulo(lista, curso) : "M1"} /></Field>
+            <Field label="Horas"><input type="number" min={1} className={iCls} value={horas} onChange={e => setHoras(e.target.value)} /></Field>
+          </div>
+          <Field label="Nome do módulo *"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex.: Avaliação da formação" /></Field>
+          <Field label="Tipo"><SearchSelect value={tipo} onChange={setTipo} options={tiposModuloOpts} /></Field>
+          <div className="flex gap-2 pt-1">
             <button type="button" onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button type="button" onClick={guardarModulo} disabled={!nome.trim() || !curso}
-              className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Guardar</button>
+              className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">
+              {editing ? "Guardar" : "Criar módulo"}
+            </button>
           </div>
         </div>
       </SlideOver>
@@ -645,28 +677,70 @@ export function ConteudosView() {
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
+  const [filtroModulo, setFiltroModulo] = useState("");
+  const [lista, setLista] = useState(conteudosData);
   const [open, setOpen] = useState<"new" | typeof conteudosData[number] | null>(null);
   const [curso, setCurso] = useState("");
   const [modulo, setModulo] = useState("");
-  const f = conteudosData.filter(x => {
-    const q = `${x.titulo} ${x.curso} ${x.modulo}`.toLowerCase().includes(s.toLowerCase());
-    return q && matchesFilter(x.curso, filtroCurso) && (filtro === "Todos" || x.tipo === filtro || x.estado === filtro);
-  });
+  const [titulo, setTitulo] = useState("");
+  const [tipo, setTipo] = useState("PDF");
+  const [origem, setOrigem] = useState("");
   const editing = open && open !== "new" ? open : null;
+  const modulosDoCurso = modulosData.filter(m => !curso || m.curso === curso);
+  const moduloOpts = modulosDoCurso.map(m => ({ value: m.codigo, sub: `${m.nome} · ${m.horas}h` }));
+  const filtroModuloOpts = modulosData
+    .filter(m => !filtroCurso || m.curso === filtroCurso)
+    .map(m => ({ value: m.codigo, sub: `${m.nome}` }));
+
+  const f = lista.filter(x => {
+    const q = `${x.titulo} ${x.curso} ${x.modulo}`.toLowerCase().includes(s.toLowerCase());
+    return q && matchesFilter(x.curso, filtroCurso) && matchesFilter(x.modulo, filtroModulo) && (filtro === "Todos" || x.tipo === filtro || x.estado === filtro);
+  });
+
   useEffect(() => {
-    if (open) {
-      setCurso(editing?.curso === "Excel" ? "Excel do Básico ao Avançado" : editing?.curso === "CCP" ? "Formação de Formadores - CCP" : editing?.curso ?? "");
-      setModulo(editing ? (modulosOpts.find(m => m.value.startsWith(editing.modulo))?.value ?? "") : "");
+    if (!open) return;
+    const c = editing?.curso || filtroCurso || "";
+    setCurso(c);
+    setModulo(editing?.modulo ?? "");
+    setTitulo(editing?.titulo ?? "");
+    setTipo(editing?.tipo ?? "PDF");
+    setOrigem("");
+  }, [open, editing, filtroCurso]);
+
+  function escolherCurso(v: string) {
+    setCurso(v);
+    const aindaServe = modulosData.some(m => m.curso === v && m.codigo === modulo);
+    if (!aindaServe) setModulo("");
+  }
+
+  function guardarConteudo() {
+    if (!titulo.trim() || !curso || !modulo) return;
+    if (open === "new") {
+      const id = Math.max(0, ...lista.map(x => x.id)) + 1;
+      setLista(prev => [...prev, {
+        id, titulo: titulo.trim(), tipo, curso, modulo,
+        tamanho: tipo === "Link" ? "-" : tipo === "Vídeo" ? "—" : "0 KB",
+        estado: "Ativo",
+      }]);
+      if (!filtroCurso) setFiltroCurso(curso);
+      if (!filtroModulo) setFiltroModulo(modulo);
+    } else if (editing) {
+      setLista(prev => prev.map(x => x.id === editing.id ? { ...x, titulo: titulo.trim(), tipo, curso, modulo } : x));
     }
-  }, [open, editing]);
+    setOpen(null);
+  }
+
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Conteúdos" sub="Materiais da turma e do curso: PDF, vídeo ou ligação externa." action={<NewBtn label="+ Novo conteúdo" onClick={() => setOpen("new")} />} />
+        <PageHeader title="Conteúdos" sub="Materiais do módulo: PDF, vídeo ou ligação. Sem módulo o ficheiro não entra no DTP." action={<NewBtn label="Novo conteúdo" onClick={() => setOpen("new")} />} />
         <ViewFilters
-          fields={[{ label: "Curso", value: filtroCurso, onChange: setFiltroCurso, options: uniqueOpts(conteudosData.map(x => x.curso)) }]}
+          fields={[
+            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setFiltroModulo(""); }, options: uniqueOpts(lista.map(x => x.curso)) },
+            { label: "Módulo", value: filtroModulo, onChange: setFiltroModulo, options: filtroModuloOpts, placeholder: filtroCurso ? "Módulos deste curso…" : "Todos os módulos…" },
+          ]}
           chips={{ options: ["Todos", "PDF", "Vídeo", "Link", "Ativo", "Inactivo"], value: filtro, onChange: setFiltro }}
-          onClear={() => { setFiltroCurso(""); setFiltro("Todos"); }}
+          onClear={() => { setFiltroCurso(""); setFiltroModulo(""); setFiltro("Todos"); }}
         />
         <Card>
           <TableToolbar search={s} onSearch={setS} />
@@ -674,17 +748,17 @@ export function ConteudosView() {
             <table className="w-full text-sm">
               <thead><tr><Th>Id</Th><Th>Título</Th><Th>Tipo</Th><Th>Curso</Th><Th>Módulo</Th><Th>Tamanho</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
               <tbody className="divide-y divide-slate-100">
-                {f.length === 0 && <EmptyState text="Nenhum conteúdo encontrado." />}
+                {f.length === 0 && <EmptyState text="Nenhum conteúdo neste curso ou módulo." />}
                 {f.map(r => (
                   <tr key={r.id} className="hover:bg-slate-50">
                     <Td><span className="text-slate-400 font-mono text-xs">{r.id}</span></Td>
                     <Td className="text-sm font-medium text-slate-800 max-w-[220px]">{r.titulo}</Td>
                     <Td>{estadoBadge(r.tipo)}</Td>
-                    <Td className="text-xs text-slate-600">{r.curso}</Td>
-                    <Td><span className="text-xs font-mono font-bold text-slate-600">{r.modulo}</span></Td>
+                    <Td className="text-xs text-slate-600 max-w-[160px]">{r.curso}</Td>
+                    <Td className="text-xs text-slate-600 whitespace-nowrap">{labelModulo(r.modulo, r.curso)}</Td>
                     <Td className="text-xs text-slate-500">{r.tamanho}</Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Abrir" /><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Abrir" /><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(prev => prev.filter(x => x.id !== r.id))} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -692,17 +766,50 @@ export function ConteudosView() {
           </div>
         </Card>
       </div>
-      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? editing.titulo : "Novo conteúdo"}>
-        <div className="p-5 space-y-3">
-          <Field label="Título"><input className={iCls} defaultValue={editing?.titulo ?? ""} /></Field>
+      <SlideOver
+        open={!!open}
+        onClose={() => setOpen(null)}
+        title={editing ? editing.titulo : "Novo conteúdo"}
+        sub={modulo && curso ? `${labelModulo(modulo, curso)} · ${curso}` : "O material fica no módulo, e o módulo no curso"}
+      >
+        <div className="p-5 space-y-4">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+            <p className="text-xs font-semibold text-amber-800">Conteúdo ⊂ módulo ⊂ curso</p>
+            <p className="text-xs text-amber-700 mt-0.5">Escolha o curso, depois o módulo. O PDF, o vídeo ou o link ficam nesse bloco — é assim que o formador e o DTP os encontram.</p>
+          </div>
+          <Field label="Curso *">
+            <SearchSelect value={curso} onChange={escolherCurso} options={cursosGoldOpts} placeholder="Primeiro o curso…" />
+          </Field>
+          <Field label="Módulo *">
+            <SearchSelect
+              value={modulo}
+              onChange={setModulo}
+              options={moduloOpts}
+              placeholder={curso ? "Módulos deste curso…" : "Escolha o curso primeiro"}
+              empty={curso ? "Este curso ainda não tem módulos." : "Escolha o curso para ver os módulos."}
+            />
+          </Field>
+          {curso && moduloOpts.length === 0 && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              Não há módulos em «{curso}». Crie primeiro o módulo na vista Módulos — o conteúdo não pode ficar órfão.
+            </p>
+          )}
+          <Field label="Título *"><input className={iCls} value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex.: Manual do módulo 1" /></Field>
           <Field label="Tipo">
-            <select className={iCls} defaultValue={editing?.tipo ?? "PDF"}>
+            <select className={iCls} value={tipo} onChange={e => setTipo(e.target.value)}>
               <option>PDF</option><option>Vídeo</option><option>Link</option>
             </select>
           </Field>
-          <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
-          <Field label="Módulo"><SearchSelect value={modulo} onChange={setModulo} options={modulosOpts} placeholder="Pesquisar módulo…" /></Field>
-          <FormActions onClose={() => setOpen(null)} />
+          <Field label={tipo === "Link" ? "URL" : "Ficheiro ou referência"}>
+            <input className={iCls} value={origem} onChange={e => setOrigem(e.target.value)} placeholder={tipo === "Link" ? "https://…" : "manual-m1.pdf (protótipo — não envia o ficheiro)"} />
+          </Field>
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button type="button" onClick={guardarConteudo} disabled={!titulo.trim() || !curso || !modulo}
+              className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">
+              {editing ? "Guardar" : "Criar conteúdo"}
+            </button>
+          </div>
         </div>
       </SlideOver>
     </>

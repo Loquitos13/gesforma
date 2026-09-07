@@ -1,4 +1,54 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
+
+function useFixedMenu(open: boolean, triggerRef: RefObject<HTMLElement | null>, bump = 0) {
+  const [box, setBox] = useState({ top: 0, left: 0, width: 0 });
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const el = triggerRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const width = Math.max(r.width, 240);
+      const left = Math.min(Math.max(8, r.left), window.innerWidth - width - 8);
+      const below = r.bottom + 6;
+      const maxH = 280;
+      const top = below + maxH > window.innerHeight - 8 ? Math.max(8, r.top - maxH - 6) : below;
+      setBox({ top, left, width });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, bump, triggerRef]);
+  return box;
+}
+
+function MenuPortal({
+  open, triggerRef, panelRef, children, bump = 0,
+}: {
+  open: boolean;
+  triggerRef: RefObject<HTMLElement | null>;
+  panelRef: RefObject<HTMLDivElement | null>;
+  children: ReactNode;
+  bump?: number;
+}) {
+  const box = useFixedMenu(open, triggerRef, bump);
+  if (!open || typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      ref={panelRef}
+      style={{ position: "fixed", top: box.top, left: box.left, width: box.width, zIndex: 80 }}
+      className="bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden"
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
 
 export type SelectOption = { value: string; sub?: string };
 
@@ -128,16 +178,21 @@ export function SearchSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const h = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (triggerRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
+    };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
   const filtered = options.filter(o => `${o.value} ${o.sub ?? ""}`.toLowerCase().includes(q.toLowerCase()));
   const selected = options.find(o => o.value === value);
   return (
-    <div ref={ref} className="relative">
+    <div ref={triggerRef} className="relative">
       <button type="button" onClick={() => { setOpen(v => !v); setQ(""); }}
         className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-amber-400">
         <span className={`truncate ${selected || value ? "text-slate-800" : "text-slate-400"}`}>
@@ -145,28 +200,26 @@ export function SearchSelect({
         </span>
         <span className="text-slate-400 flex-shrink-0">▾</span>
       </button>
-      {open && (
-        <div className="absolute z-[60] mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-          <div className="p-2 border-b border-slate-100">
-            <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={placeholder}
-              className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400" />
-          </div>
-          <div className="max-h-52 overflow-y-auto">
-            {allowEmpty && (
-              <button type="button" onClick={() => { onChange(""); setOpen(false); }}
-                className="w-full text-left px-3 py-2 text-xs text-slate-400 hover:bg-slate-50">Limpar seleção</button>
-            )}
-            {filtered.length === 0 && <p className="px-3 py-4 text-xs text-slate-400 text-center">{empty}</p>}
-            {filtered.map(o => (
-              <button key={o.value} type="button" onClick={() => { onChange(o.value); setOpen(false); }}
-                className={`w-full text-left px-3 py-2 hover:bg-amber-50 ${o.value === value ? "bg-amber-50" : ""}`}>
-                <p className="text-sm text-slate-800">{o.value}</p>
-                {o.sub && <p className="text-xs text-slate-400">{o.sub}</p>}
-              </button>
-            ))}
-          </div>
+      <MenuPortal open={open} triggerRef={triggerRef} panelRef={panelRef}>
+        <div className="p-2 border-b border-slate-100">
+          <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={placeholder}
+            className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400" />
         </div>
-      )}
+        <div className="max-h-52 overflow-y-auto bg-white">
+          {allowEmpty && (
+            <button type="button" onClick={() => { onChange(""); setOpen(false); }}
+              className="w-full text-left px-3 py-2 text-xs text-slate-400 hover:bg-slate-50">Limpar seleção</button>
+          )}
+          {filtered.length === 0 && <p className="px-3 py-4 text-xs text-slate-400 text-center">{empty}</p>}
+          {filtered.map(o => (
+            <button key={o.value} type="button" onClick={() => { onChange(o.value); setOpen(false); }}
+              className={`w-full text-left px-3 py-2 hover:bg-amber-50 ${o.value === value ? "bg-amber-50" : ""}`}>
+              <p className="text-sm text-slate-800">{o.value}</p>
+              {o.sub && <p className="text-xs text-slate-400">{o.sub}</p>}
+            </button>
+          ))}
+        </div>
+      </MenuPortal>
     </div>
   );
 }
@@ -182,9 +235,14 @@ export function MultiSearchSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const h = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (triggerRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
+    };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
@@ -198,7 +256,7 @@ export function MultiSearchSelect({
   }
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={triggerRef} className="relative">
       <button type="button" onClick={() => { setOpen(v => !v); setQ(""); }}
         className="w-full min-h-[38px] px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-amber-400">
         <span className="flex flex-wrap gap-1 min-w-0 flex-1">
@@ -219,39 +277,37 @@ export function MultiSearchSelect({
         </span>
         <span className="text-slate-400 flex-shrink-0">▾</span>
       </button>
-      {open && (
-        <div className="absolute z-[60] mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-          <div className="p-2 border-b border-slate-100">
-            <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={placeholder}
-              className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400" />
-          </div>
-          <div className="max-h-52 overflow-y-auto">
-            {filtered.length === 0 && <p className="px-3 py-4 text-xs text-slate-400 text-center">{empty}</p>}
-            {filtered.map(o => {
-              const on = selected.includes(o.value);
-              return (
-                <button key={o.value} type="button" onClick={() => toggle(o.value)}
-                  className={`w-full text-left px-3 py-2 flex items-start gap-2 hover:bg-amber-50 ${on ? "bg-amber-50" : ""}`}>
-                  <span className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${on ? "bg-amber-500 border-amber-500 text-white" : "border-slate-300 bg-white"}`}>
-                    {on && (
-                      <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                    )}
-                  </span>
-                  <span className="min-w-0">
-                    <p className="text-sm text-slate-800">{o.value}</p>
-                    {o.sub && <p className="text-xs text-slate-400">{o.sub}</p>}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          {selected.length > 0 && (
-            <div className="px-3 py-2 border-t border-slate-100 text-[11px] text-slate-500">
-              {selected.length === 1 ? "1 módulo selecionado" : `${selected.length} módulos selecionados`} · clique de novo para retirar
-            </div>
-          )}
+      <MenuPortal open={open} triggerRef={triggerRef} panelRef={panelRef} bump={selected.length}>
+        <div className="p-2 border-b border-slate-100 bg-white">
+          <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={placeholder}
+            className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400" />
         </div>
-      )}
+        <div className="max-h-52 overflow-y-auto bg-white">
+          {filtered.length === 0 && <p className="px-3 py-4 text-xs text-slate-400 text-center">{empty}</p>}
+          {filtered.map(o => {
+            const on = selected.includes(o.value);
+            return (
+              <button key={o.value} type="button" onClick={() => toggle(o.value)}
+                className={`w-full text-left px-3 py-2 flex items-start gap-2 hover:bg-amber-50 ${on ? "bg-amber-50" : ""}`}>
+                <span className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${on ? "bg-amber-500 border-amber-500 text-white" : "border-slate-300 bg-white"}`}>
+                  {on && (
+                    <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                  )}
+                </span>
+                <span className="min-w-0">
+                  <p className="text-sm text-slate-800">{o.value}</p>
+                  {o.sub && <p className="text-xs text-slate-400">{o.sub}</p>}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {selected.length > 0 && (
+          <div className="px-3 py-2 border-t border-slate-100 text-[11px] text-slate-500 bg-white">
+            {selected.length === 1 ? "1 módulo selecionado" : `${selected.length} módulos selecionados`} · clique de novo para retirar
+          </div>
+        )}
+      </MenuPortal>
     </div>
   );
 }

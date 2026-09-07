@@ -157,7 +157,7 @@ function SessaoRow({
     : estado === "realizada" ? "opacity-80" : "";
 
   return (
-    <div className={`rounded-xl border border-slate-200 bg-white ${ring}`}>
+    <div className={`rounded-xl border border-slate-200 bg-white ${ring} ${expanded ? "relative z-20" : "relative z-0"}`}>
       <div className="flex items-stretch gap-0">
         <button
           type="button"

@@ -1669,6 +1669,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const [moduloSessao, setModuloSessao] = useState<string[]>([]);
   const [dataSessao, setDataSessao] = useState("");
   const [horaSessao, setHoraSessao] = useState("19:00");
+  const [docsOpen, setDocsOpen] = useState<FinFormando | null>(null);
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
   const prontos = Math.floor(turma.alunos * 0.8);
   const membros = finFormandosData.filter(f => f.curso === turma.curso || f.turma.includes(turma.ufcdCod));
@@ -1786,9 +1787,13 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead><tr><Th>Nome</Th><Th>Contacto</Th><Th>Turma</Th><Th>Estado</Th></tr></thead>
+                <thead><tr><Th>Nome</Th><Th>Contacto</Th><Th>Turma</Th><Th>Estado</Th><Th>Documentos</Th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
-                  {listaFormandos.map(f => (
+                  {listaFormandos.map(f => {
+                    const keys: DocKey[] = ["cc", "ch", "cu", "ci", "ce"];
+                    const okCount = keys.filter(k => f[k].ok).length;
+                    const complete = okCount === 5;
+                    return (
                     <tr key={f.id} className="hover:bg-slate-50">
                       <Td>
                         <p className="text-xs font-semibold text-slate-800">{f.nome} {f.apelido}</p>
@@ -1797,8 +1802,15 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
                       <Td className="font-mono text-xs text-slate-500">{f.telf}</Td>
                       <Td className="text-xs text-slate-600 whitespace-nowrap">{f.turma}</Td>
                       <Td>{estadoBadge(f.estado)}</Td>
+                      <Td>
+                        <button type="button" onClick={() => setDocsOpen(f)} title="CC · CH · CU · CI · CE"
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${complete ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
+                          {complete ? "✓ Completos" : `${okCount}/5 · ${5 - okCount} em falta`}
+                        </button>
+                      </Td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1847,6 +1859,9 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
         sessao={presencasSession ?? undefined}
         formandos={listaFormandos.map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }))}
       />
+      <SlideOver open={!!docsOpen} onClose={() => setDocsOpen(null)} title="Documentos do formando" sub={docsOpen ? `${docsOpen.nome} ${docsOpen.apelido}` : ""}>
+        {docsOpen && <DocumentosFinPanel formando={docsOpen} />}
+      </SlideOver>
       <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? turma.formador} />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" accent="fin" />
       <SlideOver open={novaSessao} onClose={() => setNovaSessao(false)} title="Nova sessão" sub={turma.nome}>

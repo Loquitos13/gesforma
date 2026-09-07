@@ -644,10 +644,10 @@ export function ModulosView({ cursoInicial }: { cursoInicial?: string }) {
         <div className="p-5 space-y-4">
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
             <p className="text-xs font-semibold text-amber-800">Módulo ⊂ curso</p>
-            <p className="text-xs text-amber-700 mt-0.5">Não há módulos soltos. Escolha o curso e o módulo fica associado a ele — nas turmas, nos conteúdos e no DTP.</p>
+            <p className="text-xs text-amber-700 mt-0.5">Não há módulos soltos. Escolha o curso e o módulo fica associado a ele - nas turmas, nos conteúdos e no DTP.</p>
           </div>
           <Field label="Curso *">
-            <SearchSelect value={curso} onChange={v => { setCurso(v); if (!editing) setCodigo(nextCodigoModulo(lista, v)); }} options={cursosGoldOpts} placeholder="Obrigatório — pesquisar curso…" />
+            <SearchSelect value={curso} onChange={v => { setCurso(v); if (!editing) setCodigo(nextCodigoModulo(lista, v)); }} options={cursosGoldOpts} placeholder="Obrigatório - pesquisar curso…" />
           </Field>
           {curso && (
             <p className="text-xs text-slate-500 -mt-2">
@@ -719,7 +719,7 @@ export function ConteudosView() {
       const id = Math.max(0, ...lista.map(x => x.id)) + 1;
       setLista(prev => [...prev, {
         id, titulo: titulo.trim(), tipo, curso, modulo,
-        tamanho: tipo === "Link" ? "-" : tipo === "Vídeo" ? "—" : "0 KB",
+        tamanho: tipo === "Link" ? "-" : tipo === "Vídeo" ? "-" : "0 KB",
         estado: "Ativo",
       }]);
       if (!filtroCurso) setFiltroCurso(curso);
@@ -775,7 +775,7 @@ export function ConteudosView() {
         <div className="p-5 space-y-4">
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
             <p className="text-xs font-semibold text-amber-800">Conteúdo ⊂ módulo ⊂ curso</p>
-            <p className="text-xs text-amber-700 mt-0.5">Escolha o curso, depois o módulo. O PDF, o vídeo ou o link ficam nesse bloco — é assim que o formador e o DTP os encontram.</p>
+            <p className="text-xs text-amber-700 mt-0.5">Escolha o curso, depois o módulo. O PDF, o vídeo ou o link ficam nesse bloco - é assim que o formador e o DTP os encontram.</p>
           </div>
           <Field label="Curso *">
             <SearchSelect value={curso} onChange={escolherCurso} options={cursosGoldOpts} placeholder="Primeiro o curso…" />
@@ -791,7 +791,7 @@ export function ConteudosView() {
           </Field>
           {curso && moduloOpts.length === 0 && (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              Não há módulos em «{curso}». Crie primeiro o módulo na vista Módulos — o conteúdo não pode ficar órfão.
+              Não há módulos em «{curso}». Crie primeiro o módulo na vista Módulos - o conteúdo não pode ficar órfão.
             </p>
           )}
           <Field label="Título *"><input className={iCls} value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex.: Manual do módulo 1" /></Field>
@@ -801,7 +801,7 @@ export function ConteudosView() {
             </select>
           </Field>
           <Field label={tipo === "Link" ? "URL" : "Ficheiro ou referência"}>
-            <input className={iCls} value={origem} onChange={e => setOrigem(e.target.value)} placeholder={tipo === "Link" ? "https://…" : "manual-m1.pdf (protótipo — não envia o ficheiro)"} />
+            <input className={iCls} value={origem} onChange={e => setOrigem(e.target.value)} placeholder={tipo === "Link" ? "https://…" : "manual-m1.pdf (protótipo - não envia o ficheiro)"} />
           </Field>
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
@@ -960,23 +960,106 @@ export function BlogTematicasView() {
 }
 
 const configCards = [
-  { id: "entidade", titulo: "Entidade formadora", texto: "ENA - Escola de Negócios e Administração. NIF, certificação DGERT e dados de contacto.", campos: ["Designação: ENA", "NIF: 510 000 000", "Certificação DGERT: válida"] },
-  { id: "formacao", titulo: "Formação", texto: "Prazos de arquivo, emissão de certificados e língua dos documentos.", campos: ["Arquivo DTP: 10 anos (IEFP)", "Certificados: NetForce / SIGO", "Unidade de gestão: turma"] },
-  { id: "gold", titulo: "Gold / Autofinanciada", texto: "Preços, métodos de pagamento e regras do CCP.", campos: ["MB Way, Multibanco, cartão, transferência, PayPal", "Curso-bandeira: CCP", "DTP com extras IEFP (PIP, simulações)"] },
-  { id: "fin", titulo: "Financiada", texto: "Elegibilidade, UFCD e documentos do financiador.", campos: ["Dossier: CC, CH, CV, IBAN, emprego", "Assiduidade em horas da UFCD", "Turma bloqueada sem dossier"] },
-  { id: "emails", titulo: "Emails automáticos", texto: "Remetente, assinatura e regras ativas.", campos: ["Remetente: formacao@ena.pt", "Assinatura: Equipa ENA", "Regras ativas: 4"] },
-  { id: "users", titulo: "Utilizadores", texto: "Acessos ao GesForma.", campos: ["Tania - Administradora", "Aguilar - Comercial Gold", "Secretariado - Financiada"] },
+  {
+    id: "entidade",
+    titulo: "Entidade formadora",
+    texto: "ENA - Escola de Negócios e Administração. NIF, certificação DGERT e dados de contacto.",
+    fields: [
+      { label: "Designação", value: "ENA - Escola de Negócios e Administração" },
+      { label: "NIF", value: "510 000 000" },
+      { label: "Certificação DGERT", value: "Válida" },
+      { label: "Email", value: "formacao@ena.pt" },
+      { label: "Telefone", value: "22 374 40 50" },
+    ],
+  },
+  {
+    id: "formacao",
+    titulo: "Formação",
+    texto: "Prazos de arquivo, emissão de certificados e língua dos documentos.",
+    fields: [
+      { label: "Arquivo DTP", value: "10 anos (IEFP)" },
+      { label: "Certificados", value: "NetForce / SIGO" },
+      { label: "Unidade de gestão", value: "Turma" },
+      { label: "Língua dos documentos", value: "Português" },
+    ],
+  },
+  {
+    id: "gold",
+    titulo: "Gold / Autofinanciada",
+    texto: "Preços, métodos de pagamento e regras do CCP.",
+    fields: [
+      { label: "Métodos de pagamento", value: "MB Way, Multibanco, cartão, transferência, PayPal" },
+      { label: "Curso-bandeira", value: "Formação de Formadores - CCP" },
+      { label: "Preço CCP", value: "125 €" },
+      { label: "DTP", value: "Núcleo DGERT + PIP e simulações" },
+    ],
+  },
+  {
+    id: "fin",
+    titulo: "Financiada",
+    texto: "Elegibilidade, UFCD e documentos do financiador.",
+    fields: [
+      { label: "Dossier", value: "CC, CH, CV, IBAN, comprovativo de emprego" },
+      { label: "Assiduidade", value: "Em horas da UFCD" },
+      { label: "Turma sem dossier", value: "Bloqueada para novas inscrições" },
+      { label: "Financiador", value: "IEFP / PO" },
+    ],
+  },
+  {
+    id: "emails",
+    titulo: "Emails automáticos",
+    texto: "Remetente, assinatura e regras ativas.",
+    fields: [
+      { label: "Remetente", value: "formacao@ena.pt" },
+      { label: "Nome visível", value: "ENA Formação" },
+      { label: "Assinatura", value: "Equipa ENA" },
+      { label: "Regras ativas", value: "4" },
+    ],
+  },
+  {
+    id: "users",
+    titulo: "Utilizadores",
+    texto: "Acessos ao GesForma.",
+    fields: [
+      { label: "Tania", value: "Administradora" },
+      { label: "Aguilar", value: "Comercial Gold" },
+      { label: "Secretariado", value: "Financiada" },
+    ],
+  },
 ];
 
+function seedConfigDrafts() {
+  const out: Record<string, Record<string, string>> = {};
+  for (const c of configCards) {
+    out[c.id] = Object.fromEntries(c.fields.map(f => [f.label, f.value]));
+  }
+  return out;
+}
+
 export function ConfiguracoesView() {
-  const [open, setOpen] = useState<typeof configCards[number] | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState(seedConfigDrafts);
+  const idx = configCards.findIndex(c => c.id === openId);
+  const current = idx >= 0 ? configCards[idx] : null;
+  useEffect(() => {
+    if (!openId) return;
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") setOpenId(null); };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [openId]);
+
+  function setField(id: string, label: string, value: string) {
+    setDrafts(prev => ({ ...prev, [id]: { ...prev[id], [label]: value } }));
+  }
+
   return (
     <>
       <div className="space-y-4">
         <PageHeader title="Configurações" sub="Parâmetros da entidade - a ENA gere por turmas, não por ação de formação." />
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {configCards.map(c => (
-            <button key={c.id} onClick={() => setOpen(c)} className="text-left bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:border-amber-300 hover:shadow-md transition-all">
+            <button key={c.id} type="button" onClick={() => setOpenId(c.id)}
+              className={`text-left bg-white rounded-xl border shadow-sm p-5 hover:border-amber-300 hover:shadow-md transition-all ${openId === c.id ? "border-amber-400 ring-1 ring-amber-200" : "border-slate-200"}`}>
               <p className="text-sm font-bold text-slate-800">{c.titulo}</p>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">{c.texto}</p>
               <p className="text-xs font-semibold text-amber-600 mt-3">Abrir →</p>
@@ -984,19 +1067,70 @@ export function ConfiguracoesView() {
           ))}
         </div>
       </div>
-      <SlideOver open={!!open} onClose={() => setOpen(null)} title={open?.titulo ?? ""} sub="Pré-visualização - valores de demonstração">
-        {open && (
-          <div className="p-5 space-y-3">
-            <p className="text-sm text-slate-600">{open.texto}</p>
-            <ul className="space-y-2">
-              {open.campos.map(f => (
-                <li key={f} className="text-sm bg-slate-50 rounded-lg px-3 py-2 text-slate-700">{f}</li>
-              ))}
-            </ul>
-            <FormActions onClose={() => setOpen(null)} />
+
+      {current && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setOpenId(null)} />
+          <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden" style={{ animation: "scaleIn 0.15s ease" }}>
+            <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
+              <div>
+                <h2 className="text-base font-bold text-slate-800">Configurações</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Mude de secção à esquerda - não precisa de fechar o modal.</p>
+              </div>
+              <button type="button" onClick={() => setOpenId(null)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
+            </div>
+            <div className="flex flex-col sm:flex-row min-h-0 flex-1">
+              <nav className="sm:w-56 flex-shrink-0 border-b sm:border-b-0 sm:border-r border-slate-100 bg-slate-50 p-2 overflow-x-auto sm:overflow-y-auto">
+                <div className="flex sm:flex-col gap-1 min-w-max sm:min-w-0">
+                  {configCards.map(c => {
+                    const on = c.id === current.id;
+                    return (
+                      <button key={c.id} type="button" onClick={() => setOpenId(c.id)}
+                        className={`text-left px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap sm:whitespace-normal ${on ? "bg-amber-500 text-white" : "text-slate-600 hover:bg-white hover:text-slate-800"}`}>
+                        {c.titulo}
+                      </button>
+                    );
+                  })}
+                </div>
+              </nav>
+              <div className="flex-1 overflow-y-auto p-5 space-y-4 min-w-0">
+                <div>
+                  <p className="text-sm font-bold text-slate-800">{current.titulo}</p>
+                  <p className="text-xs text-slate-500 mt-1">{current.texto}</p>
+                </div>
+                <div className="space-y-3">
+                  {current.fields.map(f => (
+                    <Field key={f.label} label={f.label}>
+                      <input
+                        className={iCls}
+                        value={drafts[current.id]?.[f.label] ?? f.value}
+                        onChange={e => setField(current.id, f.label, e.target.value)}
+                      />
+                    </Field>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-t border-slate-100 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <button type="button" disabled={idx <= 0} onClick={() => setOpenId(configCards[idx - 1].id)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+                  ← Anterior
+                </button>
+                <span className="text-xs text-slate-400">{idx + 1} / {configCards.length}</span>
+                <button type="button" disabled={idx >= configCards.length - 1} onClick={() => setOpenId(configCards[idx + 1].id)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+                  Seguinte →
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setOpenId(null)} className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Fechar</button>
+                <button type="button" onClick={() => setOpenId(null)} className="px-4 py-2 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white">Guardar</button>
+              </div>
+            </div>
           </div>
-        )}
-      </SlideOver>
+        </div>
+      )}
     </>
   );
 }

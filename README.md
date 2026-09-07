@@ -13,7 +13,7 @@ O menu **Dossiê TP** lista as turmas com a completude do dossiê e abre o DTP d
 
 **Inquéritos** (Gold e Financiada) permitem montar questionários de satisfação com texto, escolha múltipla, escala 1–5 e sim/não.
 
-No cockpit da turma (Gold e Financiada, os mesmos separadores): plano de sessão, **sumário por sessão** e **presenças dentro da sessão** — não há menu isolado de presenças. O perfil do formador e os certificados também vivem na turma.
+No cockpit da turma (Gold e Financiada, os mesmos separadores): plano de sessão, **sumário por sessão** e **presenças dentro da sessão** - não há menu isolado de presenças. O perfil do formador e os certificados também vivem na turma.
 
 No separador **Documentos** (Gold / CCP):
 
@@ -25,6 +25,10 @@ Cada **curso Gold** e cada **UFCD financiada** tem uma ficha própria (não um p
 A vista **Módulos** começa pelo filtro de curso: lista só os blocos desse curso e o botão **+ Novo módulo** está sempre disponível (no cabeçalho, no filtro e no estado vazio). A partir da ficha de um curso Gold, **Módulos** abre já filtrado.
 
 Gold e Financiada têm cada uma o menu **Formadores**: ficha (contacto, CCP, NIF, especialidade), estado Ativo/Inactivo e os regimes em que lecciona. Quem marca os dois regimes aparece nas duas listas. Criar ou editar um formador actualiza os dropdowns do cronograma e das turmas.
+
+Em **Configurações**, clicar num cartão abre um modal com essa secção já seleccionada. A lista à esquerda (e Anterior / Seguinte) muda de parâmetro sem fechar o modal.
+
+Em **Emails automáticos**, a nova regra pede gatilho, template, curso e atraso, com **preview do email** ao lado. O olho nas regras e nos templates abre o mesmo preview.
 
 Os botões **Novo curso**, **Nova turma**, **Novo módulo**, **Nova sessão** e equivalentes abrem um formulário. Quando é preciso escolher curso, turma, local, formador ou módulo, o campo é um **dropdown com pesquisa**. As listas da navegação usam a mesma barra de filtros: **curso** e **local** quando a tabela tem essas colunas (pré-inscrições, formandos, turmas, datas, conteúdos, DTP Gold, pagamentos); nas UFCD financiadas o filtro é por curso e não por polo (quase tudo em sala virtual); em catálogos (cursos, locais, áreas, blog) ficam só estado ou área temática.
 

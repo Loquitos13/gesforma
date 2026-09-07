@@ -186,10 +186,128 @@ const emailRegras = [
 ];
 
 const emailTemplates = [
-  { id: 1, nome: "Boas-vindas", assunto: "Bem-vindo(a) à ENA! Confirme o seu interesse", editado: "2026-08-15", tipo: "welcome" },
+  { id: 1, nome: "Boas-vindas", assunto: "Bem-vindo(a) à ENA, {{nome}}", editado: "2026-08-15", tipo: "welcome" },
   { id: 2, nome: "Confirmação de Pagamento", assunto: "Pagamento confirmado – {{curso}}", editado: "2026-07-22", tipo: "payment" },
-  { id: 5, nome: "Certificado de Conclusão", assunto: "O seu certificado está disponível! 🎓", editado: "2026-08-01", tipo: "certificate" },
+  { id: 3, nome: "Lembrete 24h", assunto: "Amanhã começa {{curso}}", editado: "2026-08-20", tipo: "reminder_24h" },
+  { id: 5, nome: "Certificado de Conclusão", assunto: "O seu certificado está disponível", editado: "2026-08-01", tipo: "certificate" },
+  { id: 6, nome: "Reengajamento", assunto: "Ainda está a tempo de começar {{curso}}", editado: "2026-07-10", tipo: "reengagement" },
 ];
+
+const emailGatilhosOpts = [
+  { value: "Nova pré-inscrição recebida", sub: "Lead acaba de se inscrever no site" },
+  { value: "Pré-inscrição sem pagamento há 3 dias", sub: "Lembrete de cobrança" },
+  { value: "Pagamento confirmado", sub: "Lead passa a formando" },
+  { value: "24 horas antes do início", sub: "Turma a começar" },
+  { value: "Formando marcado como concluído", sub: "Emite certificado" },
+  { value: "30 dias sem compra", sub: "Reengajamento" },
+  { value: "Sumário da sessão assinado", sub: "Aviso interno" },
+];
+
+const emailAtrasosOpts = [
+  { value: "Imediatamente" },
+  { value: "1 hora depois" },
+  { value: "24 horas depois" },
+  { value: "3 dias depois" },
+];
+
+const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: string }> = {
+  welcome: {
+    assunto: "Bem-vindo(a) à ENA, {{nome}}",
+    linhas: [
+      "Confirmámos o seu interesse em {{curso}}.",
+      "A turma {{turma}} é a unidade de gestão: datas, sessões e documentos ficam todos aí.",
+      "Se ainda não escolheu horário, responda a este email ou complete a inscrição no site.",
+    ],
+    cta: "Ver a minha inscrição",
+  },
+  payment: {
+    assunto: "Pagamento confirmado – {{curso}}",
+    linhas: [
+      "{{nome}}, o pagamento de {{curso}} chegou.",
+      "Já está inscrita na turma {{turma}}. O cronograma e o acesso à plataforma seguem nas próximas horas.",
+    ],
+    cta: "Abrir a turma",
+  },
+  reminder_24h: {
+    assunto: "Amanhã começa {{curso}}",
+    linhas: [
+      "{{nome}}, a primeira sessão de {{curso}} é amanhã, turma {{turma}}.",
+      "Traga o CC e, se for CCP, o portefólio em construção. O link da sala está no botão abaixo.",
+    ],
+    cta: "Abrir o cronograma",
+  },
+  certificate: {
+    assunto: "O seu certificado está disponível",
+    linhas: [
+      "Parabéns, {{nome}}. Concluiu {{curso}} na turma {{turma}}.",
+      "O certificado está no cockpit da turma, em Certificados. Guarde o PDF - a ENA arquiva o DTP durante 10 anos.",
+    ],
+    cta: "Descarregar certificado",
+  },
+  reengagement: {
+    assunto: "Ainda está a tempo de começar {{curso}}",
+    linhas: [
+      "{{nome}}, a pré-inscrição em {{curso}} ficou a meio.",
+      "Há vagas na turma {{turma}}. Se quiser retomar, o pagamento reabre a inscrição sem perder os dados.",
+    ],
+    cta: "Retomar inscrição",
+  },
+};
+
+function fillEmailVars(text: string, vars: Record<string, string>) {
+  return text.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? "");
+}
+
+function EmailPreviewPane({
+  tipo, curso, destinatario = "Inês Caetano",
+}: {
+  tipo: string;
+  curso: string;
+  destinatario?: string;
+}) {
+  const body = EMAIL_BODIES[tipo];
+  const vars = {
+    nome: destinatario,
+    curso: curso || "Formação de Formadores - CCP",
+    turma: "VNG-SM-07/09",
+  };
+  if (!tipo || !body) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center">
+        <p className="text-sm font-semibold text-slate-700">Pré-visualização do email</p>
+        <p className="text-xs text-slate-500 mt-1">Escolha um template à esquerda para ver o que o formando recebe.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-slate-200 bg-[#F1F5F9] overflow-hidden">
+      <div className="px-3 py-2 bg-slate-800 text-[11px] text-slate-300 flex items-center justify-between">
+        <span>Caixa de entrada · ENA</span>
+        <span>Pré-visualização</span>
+      </div>
+      <div className="p-3">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 space-y-1">
+            <p className="text-[11px] text-slate-400">De <span className="text-slate-700 font-medium">ENA Formação &lt;formacao@ena.pt&gt;</span></p>
+            <p className="text-[11px] text-slate-400">Para <span className="text-slate-700 font-medium">{destinatario.toLowerCase().replace(/\s+/g, ".")}@gmail.com</span></p>
+            <p className="text-sm font-bold text-slate-800 pt-1">{fillEmailVars(body.assunto, vars)}</p>
+          </div>
+          <div className="px-4 py-4 space-y-3">
+            <div className="bg-amber-500 text-white text-xs font-extrabold tracking-widest px-2.5 py-1.5 rounded-md inline-block">ENA</div>
+            <p className="text-sm text-slate-800">Olá {destinatario.split(" ")[0]},</p>
+            {body.linhas.map(l => (
+              <p key={l} className="text-sm text-slate-600 leading-relaxed">{fillEmailVars(l, vars)}</p>
+            ))}
+            <button type="button" className="inline-flex px-3.5 py-2 bg-amber-500 text-white text-xs font-semibold rounded-lg">
+              {body.cta}
+            </button>
+            <p className="text-[11px] text-slate-400 pt-2 border-t border-slate-100">Equipa ENA · formacao@ena.pt · Este email foi disparado pela regra automática.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const transacoesData = [
   { id: "TRX-17550", nome: "Tiago Bento", valor: 125, metodo: "MB Way", curso: "Formação de Formadores - CCP", data: "2026-09-03 16:21", estado: "Pago" },
@@ -2698,10 +2816,57 @@ function EmailsView() {
   const [tab, setTab] = useState<"regras" | "templates" | "historico">("regras");
   const [regras, setRegras] = useState(emailRegras);
   const [novaRegra, setNovaRegra] = useState(false);
+  const [previewTipo, setPreviewTipo] = useState<string | null>(null);
+  const [nomeRegra, setNomeRegra] = useState("");
+  const [gatilho, setGatilho] = useState("");
+  const [templateNome, setTemplateNome] = useState("");
   const [cursoEmail, setCursoEmail] = useState("");
+  const [atraso, setAtraso] = useState("Imediatamente");
+  const [ativoRegra, setAtivoRegra] = useState(true);
+  const [erroRegra, setErroRegra] = useState("");
+
+  const templateOpts = emailTemplates.map(t => ({ value: t.nome, sub: t.assunto }));
+  const templateTipo = emailTemplates.find(t => t.nome === templateNome)?.tipo ?? "";
+
+  function abrirNova() {
+    setNomeRegra("");
+    setGatilho("");
+    setTemplateNome("");
+    setCursoEmail("");
+    setAtraso("Imediatamente");
+    setAtivoRegra(true);
+    setErroRegra("");
+    setNovaRegra(true);
+  }
+
+  function guardarRegra() {
+    if (!nomeRegra.trim()) {
+      setErroRegra("Dê um nome à regra.");
+      return;
+    }
+    if (!gatilho) {
+      setErroRegra("Escolha o gatilho que dispara o email.");
+      return;
+    }
+    if (!templateTipo) {
+      setErroRegra("Escolha o template que o formando recebe.");
+      return;
+    }
+    setRegras(prev => [{
+      id: Date.now() % 100000,
+      nome: nomeRegra.trim(),
+      gatilho,
+      template: templateTipo,
+      ativo: ativoRegra,
+      envios: 0,
+      taxaAbertura: 0,
+    }, ...prev]);
+    setNovaRegra(false);
+  }
+
   return (
     <div className="space-y-5">
-      <PageHeader title="Emails Automáticos" action={<NewBtn label="+ Nova Regra" onClick={() => setNovaRegra(true)} />} />
+      <PageHeader title="Emails Automáticos" sub="Uma regra = um gatilho + um template. O preview mostra o email com dados de exemplo." action={<NewBtn label="+ Nova Regra" onClick={abrirNova} />} />
       <div className="flex gap-1 border-b border-slate-200 bg-white rounded-t-xl px-4 pt-3">
         {(["regras", "templates", "historico"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
@@ -2728,8 +2893,9 @@ function EmailsView() {
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <Toggle checked={r.ativo} onChange={val => setRegras(prev => prev.map(x => x.id === r.id ? { ...x, ativo: val } : x))} />
+                  <ActBtn icon={I.eye} label="Preview" color="gray" onClick={() => setPreviewTipo(r.template)} />
                   <ActBtn icon={I.edit} label="Editar" />
-                  <ActBtn icon={I.trash} label="Eliminar" color="red" />
+                  <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setRegras(prev => prev.filter(x => x.id !== r.id))} />
                 </div>
               </div>
             ))}
@@ -2741,7 +2907,7 @@ function EmailsView() {
           <div className="divide-y divide-slate-100">
             {emailTemplates.map(t => (
               <div key={t.id} className="px-4 py-4 flex items-center gap-3 hover:bg-slate-50">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white ${t.tipo === "welcome" ? "bg-blue-500" : t.tipo === "payment" ? "bg-emerald-500" : "bg-amber-500"}`}>{I.mail}</div>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white ${t.tipo === "welcome" ? "bg-blue-500" : t.tipo === "payment" ? "bg-emerald-500" : t.tipo === "certificate" ? "bg-violet-500" : "bg-amber-500"}`}>{I.mail}</div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-slate-800">{t.nome}</p>
                   <p className="text-xs text-slate-500 truncate">{t.assunto}</p>
@@ -2749,7 +2915,7 @@ function EmailsView() {
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
                   <ActBtn icon={I.edit} label="Editar" />
-                  <ActBtn icon={I.eye} label="Preview" color="gray" />
+                  <ActBtn icon={I.eye} label="Preview" color="gray" onClick={() => setPreviewTipo(t.tipo)} />
                 </div>
               </div>
             ))}
@@ -2763,20 +2929,74 @@ function EmailsView() {
               <div key={s.l} className="bg-white p-4"><p className="text-xs text-slate-400">{s.l}</p><p className={`text-xl font-bold mt-1 ${s.c}`}>{s.v}</p></div>
             ))}
           </div>
-          <div className="p-4 text-center text-xs text-slate-400">Histórico detalhado disponível na versão completa</div>
+          <div className="p-4 text-center text-xs text-slate-400">Os disparos das regras novas aparecem aqui depois do primeiro envio.</div>
         </Card>
       )}
-      <SlideOver open={novaRegra} onClose={() => setNovaRegra(false)} title="Nova regra de email" sub="Disparo automático por evento">
-        <div className="p-5 space-y-3">
-          <Field label="Nome"><input className={iCls} placeholder="Lembrete de pagamento" /></Field>
-          <Field label="Gatilho"><input className={iCls} placeholder="Pré-inscrição sem pagamento há 3 dias" /></Field>
-          <Field label="Curso (opcional)"><SearchSelect value={cursoEmail} onChange={setCursoEmail} options={cursosGoldOpts} placeholder="Pesquisar curso…" allowEmpty /></Field>
-          <div className="flex gap-2 pt-2">
-            <button onClick={() => setNovaRegra(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button onClick={() => setNovaRegra(false)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+
+      {novaRegra && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setNovaRegra(false)} />
+          <div className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden" style={{ animation: "scaleIn 0.15s ease" }}>
+            <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
+              <div>
+                <h2 className="text-base font-bold text-slate-800">Nova regra de email</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Defina o gatilho à esquerda. O preview à direita actualiza com o template e o curso.</p>
+              </div>
+              <button type="button" onClick={() => setNovaRegra(false)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <div className="space-y-3">
+                <Field label="Nome da regra">
+                  <input className={iCls} value={nomeRegra} onChange={e => setNomeRegra(e.target.value)} placeholder="Ex.: Lembrete de pagamento CCP" />
+                </Field>
+                <Field label="Gatilho">
+                  <SearchSelect value={gatilho} onChange={setGatilho} options={emailGatilhosOpts} placeholder="Quando disparar…" />
+                </Field>
+                <Field label="Template">
+                  <SearchSelect value={templateNome} onChange={setTemplateNome} options={templateOpts} placeholder="Que email enviar…" />
+                </Field>
+                <Field label="Curso (opcional)">
+                  <SearchSelect value={cursoEmail} onChange={setCursoEmail} options={cursosGoldOpts} placeholder="Todas as turmas deste curso…" allowEmpty />
+                </Field>
+                <Field label="Atraso">
+                  <SearchSelect value={atraso} onChange={setAtraso} options={emailAtrasosOpts} />
+                </Field>
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700">Regra activa</p>
+                    <p className="text-[11px] text-slate-400">Desligada fica guardada mas não dispara.</p>
+                  </div>
+                  <Toggle checked={ativoRegra} onChange={setAtivoRegra} />
+                </div>
+                {erroRegra && <p className="text-xs font-medium text-red-600">{erroRegra}</p>}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Preview do email</p>
+                <EmailPreviewPane tipo={templateTipo} curso={cursoEmail} />
+              </div>
+            </div>
+            <div className="flex gap-2 px-5 py-4 border-t border-slate-100 flex-shrink-0">
+              <button type="button" onClick={() => setNovaRegra(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+              <button type="button" onClick={guardarRegra} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Criar regra</button>
+            </div>
           </div>
         </div>
-      </SlideOver>
+      )}
+
+      {previewTipo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setPreviewTipo(null)} />
+          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ animation: "scaleIn 0.15s ease" }}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+              <p className="text-sm font-bold text-slate-800">Preview do email</p>
+              <button type="button" onClick={() => setPreviewTipo(null)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
+            </div>
+            <div className="p-4">
+              <EmailPreviewPane tipo={previewTipo} curso="Formação de Formadores - CCP" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

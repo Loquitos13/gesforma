@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export type SelectOption = { value: string; sub?: string };
 
@@ -162,6 +162,84 @@ export function FilterChips({ options, value, onChange, accent = "gold" }: {
           {o}
         </button>
       ))}
+    </div>
+  );
+}
+
+export function uniqueOpts(values: Array<string | undefined>): SelectOption[] {
+  return [...new Set(values.filter((v): v is string => Boolean(v && v.trim() && v !== "-")))]
+    .sort((a, b) => a.localeCompare(b, "pt"))
+    .map(value => ({ value }));
+}
+
+export function matchesFilter(row: string | undefined, filtro: string) {
+  if (!filtro) return true;
+  const r = (row ?? "").toLowerCase();
+  const f = filtro.toLowerCase();
+  return r === f || r.includes(f) || f.includes(r);
+}
+
+export type ViewFilterField = {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: SelectOption[];
+  placeholder?: string;
+};
+
+export function ViewFilters({
+  accent = "gold",
+  fields = [],
+  chips,
+  onClear,
+  action,
+}: {
+  accent?: "gold" | "fin";
+  fields?: ViewFilterField[];
+  chips?: { options: string[]; value: string; onChange: (v: string) => void };
+  onClear?: () => void;
+  action?: ReactNode;
+}) {
+  const chipsOn = Boolean(chips && chips.value && chips.value !== "Todos" && chips.value !== "Todas");
+  const active = fields.some(f => f.value) || chipsOn;
+  const cols = fields.length + (action ? 1 : 0);
+  const grid = cols <= 1
+    ? "grid-cols-1 sm:grid-cols-[1fr_auto]"
+    : cols === 2
+      ? "grid-cols-1 sm:grid-cols-2"
+      : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+      {(fields.length > 0 || action) && (
+        <div className={`grid ${grid} gap-3 items-end`}>
+          {fields.map(f => (
+            <div key={f.label}>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{f.label}</label>
+              <SearchSelect
+                value={f.value}
+                onChange={f.onChange}
+                options={f.options}
+                placeholder={f.placeholder ?? `Pesquisar ${f.label.toLowerCase()}…`}
+                allowEmpty
+              />
+            </div>
+          ))}
+          {action}
+        </div>
+      )}
+      {(chips || active) && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {chips
+            ? <FilterChips options={chips.options} value={chips.value} onChange={chips.onChange} accent={accent} />
+            : <span />}
+          {active && onClear && (
+            <button type="button" onClick={onClear} className="text-xs font-semibold text-slate-500 hover:text-slate-800 whitespace-nowrap">
+              Limpar filtros
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

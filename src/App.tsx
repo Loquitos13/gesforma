@@ -14,7 +14,7 @@ import {
 import { ResolverDocumentoModal } from "./DocResolver";
 import { CursoFichaView } from "./CursoFichaView";
 import {
-  FilterChips, SearchSelect,
+  SearchSelect, ViewFilters, matchesFilter, uniqueOpts,
   blogTematicasOpts, cursosFinOpts, cursosGoldOpts,
   formadoresOpts, horariosOpts, locaisOpts, modulosOpts,
 } from "./FormKit";
@@ -1243,14 +1243,25 @@ function dtpPctFin(id: number) {
 function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (id: number) => void }) {
   const { gold, fin } = useTurmas();
   const isGold = regime === "gold";
-  const rows = isGold
-    ? gold.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, extra: `${t.local} · ${t.horario}`, estado: t.estado, pct: dtpPctGold(t.id) }))
-    : fin.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, extra: `UFCD ${t.ufcdCod} · ${t.formador}`, estado: isTurmaActiva(t) ? t.estado : "Inativa", pct: dtpPctFin(t.id) }));
+  const [filtroCurso, setFiltroCurso] = useState("");
+  const [filtroLocal, setFiltroLocal] = useState("");
+  const all = isGold
+    ? gold.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, local: t.local, extra: `${t.local} · ${t.horario}`, estado: t.estado, pct: dtpPctGold(t.id) }))
+    : fin.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, local: t.local, extra: `UFCD ${t.ufcdCod} · ${t.formador}`, estado: isTurmaActiva(t) ? t.estado : "Inativa", pct: dtpPctFin(t.id) }));
+  const rows = all.filter(t => matchesFilter(t.curso, filtroCurso) && (!isGold || matchesFilter(t.local, filtroLocal)));
   return (
     <div className="space-y-4">
       <PageHeader
         title={isGold ? "Dossiê TP - Gold" : "Dossiê TP - Financiada"}
         sub="Na ENA o DTP vive dentro da turma. O código interno (VNG-SM-07/09, UFCD 3564) identifica a turma - não é uma “ação” à parte."
+      />
+      <ViewFilters
+        accent={isGold ? "gold" : "fin"}
+        fields={[
+          { label: "Curso", value: filtroCurso, onChange: setFiltroCurso, options: uniqueOpts(all.map(t => t.curso)) },
+          ...(isGold ? [{ label: "Local", value: filtroLocal, onChange: setFiltroLocal, options: uniqueOpts(all.map(t => t.local)) }] : []),
+        ]}
+        onClear={() => { setFiltroCurso(""); setFiltroLocal(""); }}
       />
       <Card>
         <div className="overflow-x-auto">
@@ -1438,7 +1449,7 @@ function KanbanCard({ item, onClick }: { item: typeof preinscricoesData[number];
   );
 }
 
-function KanbanBoard({ onCardClick }: { onCardClick: (item: typeof preinscricoesData[number]) => void }) {
+function KanbanBoard({ onCardClick, visible }: { onCardClick: (item: typeof preinscricoesData[number]) => void; visible?: (item: typeof preinscricoesData[number]) => boolean }) {
   const [items, setItems] = useState(preinscricoesData);
   const [dragId, setDragId] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
@@ -1453,7 +1464,7 @@ function KanbanBoard({ onCardClick }: { onCardClick: (item: typeof preinscricoes
   return (
     <div className="flex gap-3 overflow-x-auto pb-4 min-h-[500px]">
       {kanbanCols.map(col => {
-        const colItems = items.filter(i => i.estado === col.id);
+        const colItems = items.filter(i => i.estado === col.id && (visible ? visible(i) : true));
         return (
           <div key={col.id}
             className={`flex-shrink-0 w-64 rounded-xl border-t-4 ${col.color} ${dragOver === col.id ? "ring-2 ring-amber-400" : ""} transition-all`}
@@ -1607,6 +1618,7 @@ function DossierPanel({ formando }: { formando: FinFormando }) {
 // ─── Folha de Presenças ───────────────────────────────────────────────────────
 
 function PresencasView({ turmaId, embedded }: { turmaId?: number; embedded?: boolean }) {
+  const { fin } = useTurmas();
   type Presenca = { [key: number]: boolean };
   const sessoes = ["Sess. 1 · 27 Ago", "Sess. 2 · 03 Set", "Sess. 3 · 10 Set", "Sess. 4 · 17 Set", "Sess. 5 · 24 Set"];
   const [presencas, setPresencas] = useState<Record<number, Presenca>>(() => {
@@ -1619,17 +1631,33 @@ function PresencasView({ turmaId, embedded }: { turmaId?: number; embedded?: boo
   });
   const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
   const [sumarios, setSumarios] = useState<Record<number, SumarioSessaoData>>(defaultSumariosFin);
+  const [filtroCurso, setFiltroCurso] = useState("");
+  const [filtroTurma, setFiltroTurma] = useState("");
 
   function toggle(fId: number, si: number) {
     setPresencas(prev => ({ ...prev, [fId]: { ...prev[fId], [si]: !prev[fId][si] } }));
   }
 
-  const turma = finTurmasData.find(t => t.id === turmaId) ?? finTurmasData.find(t => t.ufcdCod === "3564") ?? finTurmasData[2];
+  const turma = fin.find(t => t.id === turmaId)
+    ?? fin.find(t => filtroTurma && t.nome === filtroTurma)
+    ?? fin.find(t => filtroCurso && t.curso === filtroCurso)
+    ?? fin.find(t => t.ufcdCod === "3564")
+    ?? fin[0];
 
   return (
     <div className="space-y-4">
       {!embedded && <PageHeader title="Folha de Presenças" sub={`${turma.nome} · UFCD ${turma.ufcdCod} · ${turma.horas}h`}
         action={<button className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors">{I.download} Exportar</button>} />}
+      {!embedded && (
+        <ViewFilters
+          accent="fin"
+          fields={[
+            { label: "Curso / UFCD", value: filtroCurso, onChange: v => { setFiltroCurso(v); setFiltroTurma(""); }, options: uniqueOpts(fin.map(t => t.curso)) },
+            { label: "Turma", value: filtroTurma, onChange: setFiltroTurma, options: uniqueOpts(fin.filter(t => !filtroCurso || t.curso === filtroCurso).map(t => t.nome)) },
+          ]}
+          onClear={() => { setFiltroCurso(""); setFiltroTurma(""); }}
+        />
+      )}
       {embedded && <p className="text-xs text-slate-500">Sessões da turma <span className="font-semibold text-slate-700">{turma.nome}</span> · UFCD {turma.ufcdCod} · {turma.horas}h</p>}
 
       <Card>
@@ -1862,13 +1890,18 @@ function PreInscricoesGoldView() {
   const [curso, setCurso] = useState("");
   const [turma, setTurma] = useState("");
   const [local, setLocal] = useState("");
+  const [filtroCurso, setFiltroCurso] = useState("");
+  const [filtroLocal, setFiltroLocal] = useState("");
   const turmaOpts = turmaGoldOpts(gold, { curso: curso || undefined });
 
   function openFicha(item: typeof preinscricoesData[number]) { setFichaItem(item); setFichaOpen(true); }
 
+  const matchRow = (x: typeof preinscricoesData[number]) =>
+    matchesFilter(x.curso, filtroCurso) && matchesFilter(x.local, filtroLocal);
+
   const f = preinscricoesData.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.email} ${x.curso}`.toLowerCase().includes(s.toLowerCase());
-    return q && (filtro === "Todos" || x.estado === filtro);
+    return q && matchRow(x) && (filtro === "Todos" || x.estado === filtro);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
 
@@ -1892,12 +1925,17 @@ function PreInscricoesGoldView() {
             </div>
           }
         />
-        {viewMode === "table" && (
-          <FilterChips options={["Todos", "Não contactado", "1º Contacto", "2º Contacto", "Pago", "Formando"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} />
-        )}
+        <ViewFilters
+          fields={[
+            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(preinscricoesData.map(x => x.curso)) },
+            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(preinscricoesData.map(x => x.local)) },
+          ]}
+          chips={viewMode === "table" ? { options: ["Todos", "Não contactado", "1º Contacto", "2º Contacto", "Pago", "Formando"], value: filtro, onChange: v => { setFiltro(v); setP(1); } } : undefined}
+          onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
+        />
 
         {viewMode === "kanban" ? (
-          <KanbanBoard onCardClick={openFicha} />
+          <KanbanBoard onCardClick={openFicha} visible={matchRow} />
         ) : (
           <Card>
             <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
@@ -1966,6 +2004,8 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   const { gold, patchGold, addGold, toggleGold } = useTurmas();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
+  const [filtroCurso, setFiltroCurso] = useState("");
+  const [filtroLocal, setFiltroLocal] = useState("");
   const [open, setOpen] = useState<TurmaGold | "new" | null>(null);
   const [nome, setNome] = useState("");
   const [curso, setCurso] = useState("Formação de Formadores - CCP");
@@ -1980,7 +2020,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   const ativas = gold.filter(t => isTurmaActiva(t)).length;
   const f = gold.filter(t => {
     const q = `${t.nome} ${t.local} ${t.curso}`.toLowerCase().includes(s.toLowerCase());
-    return q && (filtro === "Todos" || t.estado === filtro || t.local === filtro);
+    return q && matchesFilter(t.curso, filtroCurso) && matchesFilter(t.local, filtroLocal) && (filtro === "Todos" || t.estado === filtro);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
   const horasCurso = cursosGoldData.find(c => c.nome === curso)?.horas ?? 90;
@@ -2012,7 +2052,14 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   return (
     <div className="space-y-4">
       <PageHeader title="Turmas Gold" sub={`${ativas} ativas · ${gold.length} no total · só as ativas aceitam inscrições`} action={<NewBtn label="+ Nova Turma" onClick={() => setOpen("new")} />} />
-      <FilterChips options={["Todos", "Ativa", "Inativa", "V.N.Gaia", "Braga", "Lisboa"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} />
+      <ViewFilters
+        fields={[
+          { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(gold.map(t => t.curso)) },
+          { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(gold.map(t => t.local)) },
+        ]}
+        chips={{ options: ["Todos", "Ativa", "Inativa"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+        onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
+      />
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
         <div className="overflow-x-auto">
@@ -2095,6 +2142,8 @@ function FormandosTurmasView() {
   const { gold } = useTurmas();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
+  const [filtroCurso, setFiltroCurso] = useState("");
+  const [filtroLocal, setFiltroLocal] = useState("");
   const [fichaOpen, setFichaOpen] = useState<FormandoRecord | null>(null);
   const [edit, setEdit] = useState<FormandoRecord | null>(null);
   const [turma, setTurma] = useState("");
@@ -2102,7 +2151,8 @@ function FormandosTurmasView() {
   const turmaOpts = turmaGoldOpts(gold, { curso: cursoEdit || undefined, includeNome: edit?.turma });
   const f = formandosTurmasData.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.turma}`.toLowerCase().includes(s.toLowerCase());
-    return q && (filtro === "Todos" || (filtro === "Pago" ? x.pago : filtro === "Por pagar" ? !x.pago : x.turma === filtro));
+    const byPago = filtro === "Todos" || (filtro === "Pago" ? x.pago : filtro === "Por pagar" ? !x.pago : true);
+    return q && byPago && matchesFilter(x.curso, filtroCurso) && matchesFilter(x.local, filtroLocal);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
   useEffect(() => { if (edit) { setTurma(edit.turma); setCursoEdit(edit.curso); } }, [edit]);
@@ -2110,7 +2160,14 @@ function FormandosTurmasView() {
     <>
       <div className="space-y-4">
         <PageHeader title="Formandos Turmas" sub="6 075 formandos em turma" />
-        <FilterChips options={["Todos", "Pago", "Por pagar", "VNG-SM-07/09", "PEN-SM-02/09"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} />
+        <ViewFilters
+          fields={[
+            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(formandosTurmasData.map(x => x.curso)) },
+            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(formandosTurmasData.map(x => x.local)) },
+          ]}
+          chips={{ options: ["Todos", "Pago", "Por pagar"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+          onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
+        />
         <Card>
           <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
           <div className="overflow-x-auto">
@@ -2174,17 +2231,23 @@ function FormandosTurmasView() {
 function FinFormandosView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
+  const [filtroCurso, setFiltroCurso] = useState("");
   const [dossierOpen, setDossierOpen] = useState<FinFormando | null>(null);
   const f = finFormandosData.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.email}`.toLowerCase().includes(s.toLowerCase());
-    return q && (filtro === "Todos" || x.estado === filtro || x.turma === filtro);
+    return q && matchesFilter(x.curso, filtroCurso) && (filtro === "Todos" || x.estado === filtro);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
   return (
     <>
       <div className="space-y-4">
         <PageHeader title="Formandos Financiados" sub="1 390 formandos" />
-        <FilterChips options={["Todos", "Elegível", "SM-T01", "UFCD 3564 · T1"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} accent="fin" />
+        <ViewFilters
+          accent="fin"
+          fields={[{ label: "Curso / UFCD", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(finFormandosData.map(x => x.curso)) }]}
+          chips={{ options: ["Todos", "Elegível"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+          onClear={() => { setFiltroCurso(""); setFiltro("Todos"); setP(1); }}
+        />
         <Card>
           <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
           <div className="overflow-x-auto">
@@ -2242,6 +2305,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
   const { fin, patchFin, addFin, toggleFin } = useTurmas();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
+  const [filtroCurso, setFiltroCurso] = useState("");
   const [open, setOpen] = useState<TurmaFin | "new" | null>(null);
   const [nome, setNome] = useState("");
   const [curso, setCurso] = useState("");
@@ -2255,7 +2319,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
   const f = fin.filter(t => {
     const q = `${t.nome} ${t.curso}`.toLowerCase().includes(s.toLowerCase());
     const activaLbl = isTurmaActiva(t) ? "Ativa" : "Inativa";
-    return q && (filtro === "Todos" || t.estado === filtro || activaLbl === filtro);
+    return q && matchesFilter(t.curso, filtroCurso) && (filtro === "Todos" || t.estado === filtro || activaLbl === filtro);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
   useEffect(() => {
@@ -2290,7 +2354,12 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
   return (
     <div className="space-y-4">
       <PageHeader title="Turmas Financiadas" sub={`${ativas} ativas · ${fin.length} no total · só as ativas aceitam novas inscrições`} action={<NewBtn label="+ Nova Turma" onClick={() => setOpen("new")} />} />
-      <FilterChips options={["Todos", "Ativa", "Inativa", "A montar", "A decorrer"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} accent="fin" />
+      <ViewFilters
+        accent="fin"
+        fields={[{ label: "Curso / UFCD", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(fin.map(t => t.curso)) }]}
+        chips={{ options: ["Todos", "Ativa", "Inativa", "A montar", "A decorrer"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+        onClear={() => { setFiltroCurso(""); setFiltro("Todos"); setP(1); }}
+      />
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
         <div className="overflow-x-auto">
@@ -2373,16 +2442,23 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
 function CursosGoldView({ onOpen }: { onOpen: (id: number | "new") => void }) {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
+  const [filtroCat, setFiltroCat] = useState("");
   const f = cursosGoldData.filter(c => {
     const q = `${c.nome} ${c.categoria}`.toLowerCase().includes(s.toLowerCase());
-    return q && (filtro === "Todos" || c.estado === filtro || c.categoria === filtro);
+    return q && matchesFilter(c.categoria, filtroCat) && (filtro === "Todos" || c.estado === filtro);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
 
   return (
     <div>
       <PageHeader title="Cursos Gold" sub="Clique num curso para editar a página pública e a ficha operacional." action={<NewBtn label="+ Novo Curso" onClick={() => onOpen("new")} />} />
-      <div className="mb-4"><FilterChips options={["Todos", "Ativo", "Inactivo", "CCP e Gestão da Formação", "Saúde e bem estar"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} /></div>
+      <div className="mb-4">
+        <ViewFilters
+          fields={[{ label: "Área temática", value: filtroCat, onChange: v => { setFiltroCat(v); setP(1); }, options: uniqueOpts(cursosGoldData.map(c => c.categoria)) }]}
+          chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+          onClear={() => { setFiltroCat(""); setFiltro("Todos"); setP(1); }}
+        />
+      </div>
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
         <div className="overflow-x-auto">
@@ -2464,7 +2540,10 @@ function BlogView() {
   return (
     <div className="space-y-4">
       <PageHeader title="Blog - Posts" action={<NewBtn label="+ Novo Post" onClick={() => { setTematica(""); setOpen(true); }} />} />
-      <FilterChips options={["Todos", "Ativo", "Inactivo"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} />
+      <ViewFilters
+        chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+        onClear={() => setFiltro("Todos")}
+      />
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
         <div className="overflow-x-auto">
@@ -2551,12 +2630,18 @@ function CampanhasView() {
 function FinCursosView({ onOpen }: { onOpen: (id: number | "new") => void }) {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
-  const f = finCursosData.filter(c => `${c.ufcd} ${c.nomeComercial}`.toLowerCase().includes(s.toLowerCase()) && (filtro === "Todos" || c.estado === filtro));
+  const [filtroRegime, setFiltroRegime] = useState("");
+  const f = finCursosData.filter(c => `${c.ufcd} ${c.nomeComercial}`.toLowerCase().includes(s.toLowerCase()) && matchesFilter(c.regime, filtroRegime) && (filtro === "Todos" || c.estado === filtro));
   const rows = f.slice((p - 1) * pp, p * pp);
   return (
     <div className="space-y-4">
       <PageHeader title="Cursos Financiados" sub="Clique numa UFCD para editar a página pública e a ficha operacional." action={<NewBtn label="+ Novo Curso" onClick={() => onOpen("new")} />} />
-      <FilterChips options={["Todos", "Ativo", "Inactivo"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} accent="fin" />
+      <ViewFilters
+        accent="fin"
+        fields={[{ label: "Regime", value: filtroRegime, onChange: v => { setFiltroRegime(v); setP(1); }, options: uniqueOpts(finCursosData.map(c => c.regime)) }]}
+        chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+        onClear={() => { setFiltroRegime(""); setFiltro("Todos"); setP(1); }}
+      />
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
         <div className="overflow-x-auto">
@@ -2672,10 +2757,21 @@ function EmailsView() {
 
 function PagamentosView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
-  const f = transacoesData.filter(t => `${t.nome} ${t.curso} ${t.metodo}`.toLowerCase().includes(s.toLowerCase()));
+  const [filtroCurso, setFiltroCurso] = useState("");
+  const [filtro, setFiltro] = useState("Todos");
+  const f = transacoesData.filter(t =>
+    `${t.nome} ${t.curso} ${t.metodo}`.toLowerCase().includes(s.toLowerCase())
+    && matchesFilter(t.curso, filtroCurso)
+    && (filtro === "Todos" || t.estado === filtro)
+  );
   return (
     <div className="space-y-5">
       <PageHeader title="Pagamentos" />
+      <ViewFilters
+        fields={[{ label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(transacoesData.map(t => t.curso)) }]}
+        chips={{ options: ["Todos", "Pago", "Pendente"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+        onClear={() => { setFiltroCurso(""); setFiltro("Todos"); setP(1); }}
+      />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[{ l: "Receita Total", v: "€ 304 680", c: "text-slate-800" }, { l: "Este Mês", v: "€ 35 200", c: "text-emerald-600" }, { l: "Pendente", v: "€ 8 400", c: "text-amber-600" }, { l: "Reembolsados", v: "€ 1 240", c: "text-red-500" }].map(s => (
           <Card key={s.l} className="p-4"><p className="text-xs text-slate-400 uppercase tracking-wide mb-1">{s.l}</p><p className={`text-xl font-bold ${s.c}`}>{s.v}</p></Card>

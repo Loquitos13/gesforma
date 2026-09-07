@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  FilterChips, SearchSelect,
+  SearchSelect, ViewFilters, matchesFilter, uniqueOpts,
   cursosFinOpts, cursosGoldOpts, horariosOpts, locaisOpts, modulosOpts,
 } from "./FormKit";
 import { TurmaInscricaoHint } from "./TurmaCronograma";
@@ -270,11 +270,13 @@ function DocPips({ docs }: { docs: DocDots }) {
 export function FormandosGoldView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1);
   const [filtro, setFiltro] = useState("Todos");
+  const [filtroCurso, setFiltroCurso] = useState("");
+  const [filtroLocal, setFiltroLocal] = useState("");
   const [open, setOpen] = useState<"new" | typeof formandosGoldData[number] | null>(null);
   const [curso, setCurso] = useState("");
   const f = formandosGoldData.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.curso} ${x.email}`.toLowerCase().includes(s.toLowerCase());
-    return q && (filtro === "Todos" || x.estado === filtro);
+    return q && matchesFilter(x.curso, filtroCurso) && matchesFilter(x.local, filtroLocal) && (filtro === "Todos" || x.estado === filtro);
   });
   const rows = f.slice((p - 1) * 10, p * 10);
   const editing = open && open !== "new" ? open : null;
@@ -283,7 +285,14 @@ export function FormandosGoldView() {
     <>
       <div className="space-y-4">
         <PageHeader title="Formandos Gold" sub="Formandos individuais - sem turma atribuída. Cursos e-learning e vendas avulso." action={<NewBtn label="+ Novo formando" onClick={() => setOpen("new")} />} />
-        <FilterChips options={["Todos", "Ativo", "Pendente"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} />
+        <ViewFilters
+          fields={[
+            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(formandosGoldData.map(x => x.curso)) },
+            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(formandosGoldData.map(x => x.local)) },
+          ]}
+          chips={{ options: ["Todos", "Ativo", "Pendente"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+          onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
+        />
         <Card>
           <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} />
           <div className="overflow-x-auto">
@@ -332,13 +341,15 @@ export function FormandosGoldView() {
 export function DatasGoldView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1);
   const [filtro, setFiltro] = useState("Todos");
+  const [filtroCurso, setFiltroCurso] = useState("");
+  const [filtroLocal, setFiltroLocal] = useState("");
   const [open, setOpen] = useState<"new" | typeof datasGoldData[number] | null>(null);
   const [curso, setCurso] = useState("");
   const [local, setLocal] = useState("");
   const [horario, setHorario] = useState("");
   const f = datasGoldData.filter(x => {
     const q = `${x.curso} ${x.local} ${x.horario}`.toLowerCase().includes(s.toLowerCase());
-    return q && (filtro === "Todos" || x.status === filtro || x.local === filtro);
+    return q && matchesFilter(x.curso, filtroCurso) && matchesFilter(x.local, filtroLocal) && (filtro === "Todos" || x.status === filtro);
   });
   const rows = f.slice((p - 1) * 10, p * 10);
   const editing = open && open !== "new" ? open : null;
@@ -353,7 +364,14 @@ export function DatasGoldView() {
     <>
       <div className="space-y-4">
         <PageHeader title="Datas / Edições Gold" sub="Calendário comercial: início, fim, horário, preço e local. Cada edição alimenta as turmas." action={<NewBtn label="+ Nova data" onClick={() => setOpen("new")} />} />
-        <FilterChips options={["Todos", "Ativo", "Inactivo", "V.N.Gaia", "Braga", "Lisboa"]} value={filtro} onChange={v => { setFiltro(v); setP(1); }} />
+        <ViewFilters
+          fields={[
+            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(datasGoldData.map(x => x.curso)) },
+            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(datasGoldData.map(x => x.local)) },
+          ]}
+          chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+          onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
+        />
         <Card>
           <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} />
           <div className="overflow-x-auto">
@@ -414,7 +432,7 @@ export function LocaisView() {
     <>
       <div className="space-y-4">
         <PageHeader title="Locais" sub="Polos da ENA onde as turmas Gold decorrem." action={<NewBtn label="+ Novo local" onClick={() => setOpen("new")} />} />
-        <FilterChips options={["Todos", "Ativo", "Inactivo"]} value={filtro} onChange={setFiltro} />
+        <ViewFilters chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: setFiltro }} onClear={() => setFiltro("Todos")} />
         <Card>
           <TableToolbar search={s} onSearch={setS} />
           <div className="overflow-x-auto">
@@ -460,7 +478,7 @@ export function AreasTematicasView() {
     <>
       <div className="space-y-4">
         <PageHeader title="Áreas Temáticas" sub="Agrupam os cursos Gold no site e no backoffice." action={<NewBtn label="+ Nova área" onClick={() => setOpen("new")} />} />
-        <FilterChips options={["Todos", "Ativo", "Inactivo"]} value={filtro} onChange={setFiltro} />
+        <ViewFilters chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: setFiltro }} onClear={() => setFiltro("Todos")} />
         <Card>
           <TableToolbar search={s} onSearch={setS} />
           <div className="overflow-x-auto">
@@ -555,24 +573,17 @@ export function ModulosView({ cursoInicial }: { cursoInicial?: string }) {
           sub={cursoFiltro ? `${f.length} módulo${f.length === 1 ? "" : "s"} · ${horasCurso}h neste curso` : "Escolha um curso para ver e criar os seus módulos."}
           action={<NewBtn label="+ Novo módulo" onClick={abrirNovo} />}
         />
-        <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
-            <Field label="Curso">
-              <SearchSelect
-                value={cursoFiltro}
-                onChange={setCursoFiltro}
-                options={cursosGoldOpts}
-                placeholder="Pesquisar curso…"
-                allowEmpty
-              />
-            </Field>
+        <ViewFilters
+          fields={[{ label: "Curso", value: cursoFiltro, onChange: setCursoFiltro, options: cursosGoldOpts, placeholder: "Pesquisar curso…" }]}
+          chips={{ options: ["Todos", "Ativo", "Inactivo"], value: estado, onChange: setEstado }}
+          onClear={() => { setCursoFiltro(""); setEstado("Todos"); }}
+          action={
             <button type="button" onClick={abrirNovo}
               className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg whitespace-nowrap">
               {I.plus} Novo módulo{cursoFiltro ? " neste curso" : ""}
             </button>
-          </div>
-          <FilterChips options={["Todos", "Ativo", "Inactivo"]} value={estado} onChange={setEstado} />
-        </div>
+          }
+        />
         <Card>
           <TableToolbar search={s} onSearch={setS} />
           <div className="overflow-x-auto">
@@ -633,12 +644,13 @@ export function ModulosView({ cursoInicial }: { cursoInicial?: string }) {
 export function ConteudosView() {
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
+  const [filtroCurso, setFiltroCurso] = useState("");
   const [open, setOpen] = useState<"new" | typeof conteudosData[number] | null>(null);
   const [curso, setCurso] = useState("");
   const [modulo, setModulo] = useState("");
   const f = conteudosData.filter(x => {
     const q = `${x.titulo} ${x.curso} ${x.modulo}`.toLowerCase().includes(s.toLowerCase());
-    return q && (filtro === "Todos" || x.tipo === filtro || x.estado === filtro);
+    return q && matchesFilter(x.curso, filtroCurso) && (filtro === "Todos" || x.tipo === filtro || x.estado === filtro);
   });
   const editing = open && open !== "new" ? open : null;
   useEffect(() => {
@@ -651,7 +663,11 @@ export function ConteudosView() {
     <>
       <div className="space-y-4">
         <PageHeader title="Conteúdos" sub="Materiais da turma e do curso: PDF, vídeo ou ligação externa." action={<NewBtn label="+ Novo conteúdo" onClick={() => setOpen("new")} />} />
-        <FilterChips options={["Todos", "PDF", "Vídeo", "Link", "Ativo", "Inactivo"]} value={filtro} onChange={setFiltro} />
+        <ViewFilters
+          fields={[{ label: "Curso", value: filtroCurso, onChange: setFiltroCurso, options: uniqueOpts(conteudosData.map(x => x.curso)) }]}
+          chips={{ options: ["Todos", "PDF", "Vídeo", "Link", "Ativo", "Inactivo"], value: filtro, onChange: setFiltro }}
+          onClear={() => { setFiltroCurso(""); setFiltro("Todos"); }}
+        />
         <Card>
           <TableToolbar search={s} onSearch={setS} />
           <div className="overflow-x-auto">
@@ -700,6 +716,7 @@ export function FinInscricoesView() {
   const [open, setOpen] = useState<"new" | typeof finInscricoesData[number] | null>(null);
   const [curso, setCurso] = useState("");
   const [turma, setTurma] = useState("");
+  const [filtroCurso, setFiltroCurso] = useState("");
   const estados = ["Todas", "Recebida", "Em análise", "Elegível", "Colocado na turma", "Indeferido"];
   const editing = open && open !== "new" ? open : null;
   const turmaOpts = turmaFinOpts(fin, { curso: curso || undefined, includeNome: editing && editing.turma !== "-" ? editing.turma : undefined });
@@ -711,22 +728,19 @@ export function FinInscricoesView() {
   }, [open, editing]);
   const f = finInscricoesData.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.ufcd} ${x.curso} ${x.turma}`.toLowerCase().includes(s.toLowerCase());
-    return q && (filtro === "Todas" || x.estado === filtro);
+    return q && matchesFilter(x.curso, filtroCurso) && (filtro === "Todas" || x.estado === filtro);
   });
   const rows = f.slice((p - 1) * 10, p * 10);
   return (
     <>
       <div className="space-y-4">
         <PageHeader title="Inscrições Financiadas" sub="Pipeline de elegibilidade por turma e UFCD - não é o funil comercial Gold." action={<NewBtn label="+ Nova inscrição" onClick={() => setOpen("new")} />} />
-        <div className="flex flex-wrap gap-2">
-          {estados.map(e => (
-            <button key={e} onClick={() => { setFiltro(e); setP(1); }}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${filtro === e ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
-              {e}
-              {e !== "Todas" && <span className="ml-1 opacity-70">{finInscricoesData.filter(x => x.estado === e).length}</span>}
-            </button>
-          ))}
-        </div>
+        <ViewFilters
+          accent="fin"
+          fields={[{ label: "Curso / UFCD", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(finInscricoesData.map(x => x.curso)) }]}
+          chips={{ options: estados, value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+          onClear={() => { setFiltroCurso(""); setFiltro("Todas"); setP(1); }}
+        />
         <Card>
           <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} />
           <div className="overflow-x-auto">
@@ -804,7 +818,7 @@ export function BlogTematicasView() {
     <>
       <div className="space-y-4">
         <PageHeader title="Temáticas do Blog" sub="Categorias dos artigos no site da ENA." action={<NewBtn label="+ Nova temática" onClick={() => setOpen("new")} />} />
-        <FilterChips options={["Todos", "Ativo", "Inactivo"]} value={filtro} onChange={setFiltro} />
+        <ViewFilters chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: setFiltro }} onClear={() => setFiltro("Todos")} />
         <Card>
           <TableToolbar search={s} onSearch={setS} />
           <div className="overflow-x-auto">

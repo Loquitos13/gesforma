@@ -24,7 +24,7 @@ Cada **curso Gold** e cada **UFCD financiada** tem uma ficha própria (não um p
 
 A vista **Módulos** começa pelo filtro de curso: lista só os blocos desse curso e o botão **+ Novo módulo** está sempre disponível (no cabeçalho, no filtro e no estado vazio). A partir da ficha de um curso Gold, **Módulos** abre já filtrado.
 
-Os botões **Novo curso**, **Nova turma**, **Novo módulo**, **Nova sessão** e equivalentes abrem um formulário. Quando é preciso escolher curso, turma, local, formador ou módulo, o campo é um **dropdown com pesquisa**. As tabelas têm filtros por estado, local ou tipo.
+Os botões **Novo curso**, **Nova turma**, **Novo módulo**, **Nova sessão** e equivalentes abrem um formulário. Quando é preciso escolher curso, turma, local, formador ou módulo, o campo é um **dropdown com pesquisa**. As listas da navegação usam a mesma barra de filtros: **curso** e **local** quando a tabela tem essas colunas (pré-inscrições, formandos, turmas, datas, conteúdos, DTP Gold, pagamentos); nas UFCD financiadas o filtro é por curso e não por polo (quase tudo em sala virtual); em catálogos (cursos, locais, áreas, blog) ficam só estado ou área temática.
 
 Cada **turma** tem um **cronograma** (gerar a partir da data de início e do horário, ou editar sessão a sessão) e um toggle **Ativa / Inativa**. Só turmas ativas aparecem nas pré-inscrições Gold, na conversão de lead em formando, na mudança de turma de um formando e nas inscrições financiadas. Uma turma inativa mantém os formandos já inscritos, mas fecha novas entradas.
 

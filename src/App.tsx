@@ -1052,7 +1052,7 @@ const docsFinGrupos: typeof docsTurmaGrupos = [
   ]},
   { id: "formandos", label: "Documentos dos formandos", color: "bg-emerald-50 border-emerald-200 text-emerald-800", icon: I.users, items: [
     { label: "Contratos de formação", detalhe: "14/17 assinados.", estado: "parcial" },
-    { label: "Cartão de cidadão", detalhe: "15/17 no dossier.", estado: "parcial" },
+    { label: "Cartão de cidadão", detalhe: "15/17 nos documentos.", estado: "parcial" },
     { label: "Certificado de habilitações", detalhe: "12/17 validados.", estado: "parcial" },
     { label: "Curriculum vitae", detalhe: "14/17.", estado: "parcial" },
     { label: "IBAN", detalhe: "3/17. Sem IBAN não há apoios.", estado: "falta", bloqueante: true },
@@ -1703,7 +1703,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
         </div>
         <div className="mt-4">
           <div className="flex justify-between text-xs mb-1.5">
-            <span className="text-slate-300">{turma.alunos} formandos · {prontos} dossiers prontos</span>
+            <span className="text-slate-300">{turma.alunos} formandos · {prontos} com documentos prontos</span>
             <span className="text-blue-300">{turma.alunosTotal} vagas</span>
           </div>
           <div className="w-full bg-white/10 rounded-full h-2">
@@ -1751,7 +1751,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
               { l: "Código interno", v: turma.nome, c: "text-slate-800" },
               { l: "UFCD", v: turma.ufcdCod, c: "text-blue-600" },
               { l: "Formandos", v: `${turma.alunos}/${turma.alunosTotal}`, c: "text-slate-800" },
-              { l: "Dossiers prontos", v: `${prontos}/${turma.alunos}`, c: prontos === turma.alunos ? "text-emerald-600" : "text-amber-600" },
+              { l: "Documentos prontos", v: `${prontos}/${turma.alunos}`, c: prontos === turma.alunos ? "text-emerald-600" : "text-amber-600" },
             ].map(s => (
               <Card key={s.l} className="p-4">
                 <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">{s.l}</p>
@@ -2045,7 +2045,7 @@ function FichaComercial({ item, open, onClose }: { item: typeof preinscricoesDat
   );
 }
 
-// ─── Dossier Financiada ───────────────────────────────────────────────────────
+// ─── Documentos Financiada (CC, CH, CU, CI, CE) ───────────────────────────────
 
 type FinFormando = typeof finFormandosData[number];
 type DocKey = "cc" | "ch" | "cu" | "ci" | "ce";
@@ -2053,7 +2053,7 @@ const docLabels: Record<DocKey, string> = {
   cc: "Cartão de Cidadão", ch: "Certif. Habilitações", cu: "Curriculum Vitae", ci: "IBAN / Certif. Emprego", ce: "Comp. Emprego",
 };
 
-function DossierPanel({ formando }: { formando: FinFormando }) {
+function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
   const [docs, setDocs] = useState({ ...formando });
   const keys: DocKey[] = ["cc", "ch", "cu", "ci", "ce"];
   const completo = keys.every(k => docs[k].ok);
@@ -2067,7 +2067,7 @@ function DossierPanel({ formando }: { formando: FinFormando }) {
         </div>
         <div>
           <p className={`text-sm font-bold ${completo ? "text-emerald-700" : "text-amber-700"}`}>
-            {completo ? "Dossier completo" : `${keys.filter(k => !docs[k].ok).length} documentos em falta`}
+            {completo ? "Documentos completos" : `${keys.filter(k => !docs[k].ok).length} documentos em falta`}
           </p>
           <p className="text-xs text-slate-500 mt-0.5">{docs.nome} {docs.apelido} · {docs.curso}</p>
         </div>
@@ -2549,13 +2549,13 @@ function FormandosTurmasView() {
   );
 }
 
-// ─── Formandos Financiada com Dossier ────────────────────────────────────────
+// ─── Formandos Financiada com Documentos ─────────────────────────────────────
 
 function FinFormandosView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
-  const [dossierOpen, setDossierOpen] = useState<FinFormando | null>(null);
+  const [docsOpen, setDocsOpen] = useState<FinFormando | null>(null);
   const f = finFormandosData.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.email}`.toLowerCase().includes(s.toLowerCase());
     return q && matchesFilter(x.curso, filtroCurso) && (filtro === "Todos" || x.estado === filtro);
@@ -2578,8 +2578,7 @@ function FinFormandosView() {
               <thead>
                 <tr>
                   <Th>Nome</Th><Th>Turma</Th><Th>Curso</Th><Th>Estado</Th>
-                  <Th className="text-center">Documentos</Th>
-                  <Th>Dossier</Th>
+                  <Th>Documentos</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -2596,14 +2595,9 @@ function FinFormandosView() {
                       <Td className="text-xs text-slate-600 whitespace-nowrap">{r.turma}</Td>
                       <Td className="text-xs text-slate-600 max-w-[130px]">{r.curso}</Td>
                       <Td>{estadoBadge(r.estado)}</Td>
-                      <Td className="text-center">
-                        <span className={`inline-flex items-center justify-center w-8 h-6 rounded-full text-xs font-bold ${complete ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
-                          {okCount}/5
-                        </span>
-                      </Td>
                       <Td>
-                        <button onClick={() => setDossierOpen(r)} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${complete ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
-                          {complete ? "✓ Completo" : `${5 - okCount} em falta`}
+                        <button onClick={() => setDocsOpen(r)} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${complete ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
+                          {complete ? "✓ Completos" : `${okCount}/5 · ${5 - okCount} em falta`}
                         </button>
                       </Td>
                     </tr>
@@ -2615,8 +2609,8 @@ function FinFormandosView() {
           <TableFooter page={p} perPage={pp} total={1390} onChange={setP} />
         </Card>
       </div>
-      <SlideOver open={!!dossierOpen} onClose={() => setDossierOpen(null)} title="Dossier do Formando" sub={dossierOpen ? `${dossierOpen.nome} ${dossierOpen.apelido}` : ""}>
-        {dossierOpen && <DossierPanel formando={dossierOpen} />}
+      <SlideOver open={!!docsOpen} onClose={() => setDocsOpen(null)} title="Documentos do formando" sub={docsOpen ? `${docsOpen.nome} ${docsOpen.apelido}` : ""}>
+        {docsOpen && <DocumentosFinPanel formando={docsOpen} />}
       </SlideOver>
     </>
   );

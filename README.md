@@ -7,7 +7,7 @@ A ENA trata por **turma**, não por “ação de formação”. Existe um códig
 O **dossiê técnico-pedagógico (DTP) vive dentro da turma** (separador no cockpit):
 
 - **Gold / CCP** - núcleo DGERT + PIP, simulações, 5 anos de experiência, recibos
-- **Financiada / UFCD** - núcleo DGERT + elegibilidade, IBAN, horas, relatório de execução
+- **Financiada / UFCD** - núcleo DGERT + **documentos** de elegibilidade (CC, CH, CU, IBAN, emprego), horas, relatório de execução
 
 O menu **Dossiê TP** lista as turmas com a completude do dossiê e abre o DTP dessa turma.
 

@@ -74,12 +74,12 @@ function docsFin(codigo: string): DtpDoc[] {
     { id: "instalacoes", fase: "antes", label: "Locais, recursos e infraestruturas", fonte: "Despacho 5756/2020 h)", detalhe: "Sala virtual Moodle · plataforma síncrona.", estado: "ok" },
     { id: "divulgacao", fase: "antes", label: "Divulgação da turma", fonte: "DGERT · Portaria 851/2010 aa)", detalhe: "Newsletter + site ena.pt/financiada.", estado: "ok" },
     { id: "fichas", fase: "antes", label: "Fichas de inscrição e requisitos de acesso", fonte: "DGERT · f) · programa", detalhe: "Elegibilidade ainda incompleta.", estado: "parcial" },
-    { id: "cc", fase: "antes", label: "Cartão de cidadão (dossier formando)", fonte: "Financiada · elegibilidade", detalhe: "3/4. Mariana Sousa Pereira em falta.", estado: "parcial" },
+    { id: "cc", fase: "antes", label: "Cartão de cidadão (documentos do formando)", fonte: "Financiada · elegibilidade", detalhe: "3/4. Mariana Sousa Pereira em falta.", estado: "parcial" },
     { id: "ch", fase: "antes", label: "Certificado de habilitações", fonte: "Financiada · elegibilidade", detalhe: "1/4 validado.", estado: "falta" },
     { id: "cv-formando", fase: "antes", label: "Curriculum vitae do formando", fonte: "Financiada · elegibilidade", detalhe: "1/4 validado.", estado: "falta" },
     { id: "iban", fase: "antes", label: "IBAN / comprovativo de NIB", fonte: "Financiada · processamento", detalhe: "2/4. Sem IBAN não há pagamento de apoios.", estado: "parcial" },
     { id: "emprego", fase: "antes", label: "Comprovativo de situação perante o emprego", fonte: "Financiada · IEFP / tipologia", detalhe: "1/4.", estado: "falta" },
-    { id: "contratos-f", fase: "antes", label: "Contratos de formação (formandos)", fonte: "DGERT · Portaria 851/2010 i)", detalhe: "2/4 assinados. Turma bloqueada até dossier completo.", estado: "parcial" },
+    { id: "contratos-f", fase: "antes", label: "Contratos de formação (formandos)", fonte: "DGERT · Portaria 851/2010 i)", detalhe: "2/4 assinados. Turma bloqueada até documentos completos.", estado: "parcial" },
     { id: "contrato-formador", fase: "antes", label: "Contrato do formador", fonte: "DGERT · Portaria 851/2010 i)", detalhe: "Vânia Fernandes.", estado: "ok" },
     { id: "cv-formador", fase: "antes", label: "CV do formador", fonte: "DGERT / IEFP", detalhe: "Arquivado.", estado: "ok" },
     { id: "ccp-formador", fase: "antes", label: "CCP / CCPE do formador", fonte: "DGERT · requisitos do formador", detalhe: "CCP válido.", estado: "ok" },
@@ -138,7 +138,7 @@ export function DtpPanel({ regime, turma }: Props) {
   const bar = isGold ? (pct >= 80 ? "#10B981" : pct >= 50 ? "#F59E0B" : "#EF4444") : (pct >= 80 ? "#10B981" : pct >= 50 ? "#2563EB" : "#EF4444");
   const bloqueio = isGold
     ? "Não emitir CCP enquanto PIP, simulações e sumários desta turma estiverem em falta."
-    : "Esta turma não arranca: dossiers de elegibilidade incompletos (CH, CV, emprego).";
+    : "Esta turma não arranca: documentos de elegibilidade incompletos (CH, CV, emprego).";
 
   return (
     <div className="space-y-4">

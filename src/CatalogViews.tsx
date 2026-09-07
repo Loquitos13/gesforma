@@ -852,7 +852,7 @@ export function FinInscricoesView() {
           <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} />
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr><Th>Id</Th><Th>Data</Th><Th>Candidato</Th><Th>UFCD</Th><Th>Turma</Th><Th>Dossier</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
+              <thead><tr><Th>Id</Th><Th>Data</Th><Th>Candidato</Th><Th>UFCD</Th><Th>Turma</Th><Th>Documentos</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {rows.length === 0 && <EmptyState text="Nenhuma inscrição neste filtro." />}
                 {rows.map(r => (
@@ -880,7 +880,7 @@ export function FinInscricoesView() {
           </div>
           <TableFooter page={p} total={f.length} perPage={10} onChange={setP} />
         </Card>
-        <p className="text-xs text-slate-400">Pontinhos do dossier: CC cartão de cidadão · CH certificado de habilitações · CU curriculum · CI IBAN · CE comprovativo de emprego. Sem dossier completo a turma não arranca.</p>
+        <p className="text-xs text-slate-400">Pontinhos dos documentos: CC cartão de cidadão · CH certificado de habilitações · CU curriculum · CI IBAN · CE comprovativo de emprego. Sem documentos completos a turma não arranca.</p>
       </div>
       <SlideOver open={!!open} onClose={() => setOpen(null)}
         title={editing ? `${editing.nome} ${editing.apelido}` : "Nova inscrição financiada"}
@@ -904,7 +904,7 @@ export function FinInscricoesView() {
           </Field>
           {editing && (
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Dossier de elegibilidade</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Documentos</p>
               <DocPips docs={editing.docs} />
             </div>
           )}
@@ -999,9 +999,9 @@ const configCards = [
     titulo: "Financiada",
     texto: "Elegibilidade, UFCD e documentos do financiador.",
     fields: [
-      { label: "Dossier", value: "CC, CH, CV, IBAN, comprovativo de emprego" },
+      { label: "Documentos", value: "CC, CH, CV, IBAN, comprovativo de emprego" },
       { label: "Assiduidade", value: "Em horas da UFCD" },
-      { label: "Turma sem dossier", value: "Bloqueada para novas inscrições" },
+      { label: "Turma sem documentos", value: "Bloqueada para novas inscrições" },
       { label: "Financiador", value: "IEFP / PO" },
     ],
   },

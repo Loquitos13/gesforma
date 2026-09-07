@@ -18,7 +18,7 @@ import {
   blogTematicasOpts, cursosFinOpts, cursosGoldOpts,
   formadoresOpts, horariosOpts, locaisOpts, modulosOptsForCurso,
 } from "./FormKit";
-import { CronogramaEditor, TurmaActivaToggle, TurmaInactivaBanner, TurmaInscricaoHint } from "./TurmaCronograma";
+import { CronogramaEditor, FormadoresAtribuidosCard, TurmaActivaToggle, TurmaInactivaBanner, TurmaInscricaoHint } from "./TurmaCronograma";
 import { useTurmas } from "./TurmasContext";
 import { cronogramaToSessoes, formatSessaoLabel, isTurmaActiva, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
 
@@ -940,7 +940,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const [sumarios, setSumarios] = useState<Record<number, SumarioSessaoData>>(defaultSumarios);
   const [presencasSession, setPresencasSession] = useState<SessaoMeta | null>(null);
   const [uploadCert, setUploadCert] = useState<number | null>(null);
-  const [formadorOpen, setFormadorOpen] = useState(false);
+  const [formadorOpen, setFormadorOpen] = useState<string | null>(null);
   const [novaSessao, setNovaSessao] = useState(false);
   const [formadorSessao, setFormadorSessao] = useState("Isac Silva");
   const [moduloSessao, setModuloSessao] = useState<string[]>([]);
@@ -1039,7 +1039,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                       </Td>
                       <Td><ModulosCell sessao={s} /></Td>
                       <Td className="text-xs font-medium text-slate-700">
-                        <button onClick={() => setFormadorOpen(true)} className="hover:text-violet-700 font-medium">{s.formador}</button>
+                        <button onClick={() => setFormadorOpen(s.formador)} className="hover:text-violet-700 font-medium">{s.formador}</button>
                       </Td>
                       <Td>
                         <button onClick={() => setPlanoSessao(s)}
@@ -1143,22 +1143,12 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           </div>
         </Card>
 
-        {/* Formador + datas */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Card className="p-4">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Formador</p>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center text-violet-700 font-bold">I</div>
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Isac Silva</p>
-                <p className="text-xs text-slate-500">914 547 554</p>
-              </div>
-            </div>
-            <div className="flex gap-2 mt-3">
-              <button onClick={() => setFormadorOpen(true)} className="flex-1 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-semibold rounded-lg border border-violet-200">Ver perfil</button>
-              <button className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg">Alterar</button>
-            </div>
-          </Card>
+          <FormadoresAtribuidosCard
+            sessoes={turma.cronograma}
+            fallback={turma.formador}
+            onOpen={setFormadorOpen}
+          />
           <Card className="p-4">
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Próximas Sessões</p>
             <div className="space-y-2">
@@ -1196,7 +1186,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
       />
       <PresencasSessaoModal open={!!presencasSession} onClose={() => setPresencasSession(null)} sessao={presencasSession ?? undefined} />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" />
-      <FormadorProfileSlideOver open={formadorOpen} onClose={() => setFormadorOpen(false)} nome="Isac Silva" />
+      <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? ""} />
       <SlideOver open={novaSessao} onClose={() => setNovaSessao(false)} title="Nova sessão" sub={turma.nome}>
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -1324,7 +1314,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview" }: { tur
   const turma = fin.find(t => t.id === turmaId) ?? fin.find(t => t.ufcdCod === "3564") ?? fin[0];
   const activa = isTurmaActiva(turma);
   const [tab, setTab] = useState<CockpitTab>(initialTab);
-  const [formadorOpen, setFormadorOpen] = useState(false);
+  const [formadorOpen, setFormadorOpen] = useState<string | null>(null);
   const [uploadCert, setUploadCert] = useState<number | null>(null);
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
   const prontos = Math.floor(turma.alunos * 0.8);
@@ -1404,20 +1394,11 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview" }: { tur
             ))}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Card className="p-4">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Formador</p>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center text-violet-700 font-bold">{turma.formador[0]}</div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">{turma.formador}</p>
-                  <p className="text-xs text-slate-500">UFCD {turma.ufcdCod} · {turma.horas}h</p>
-                </div>
-              </div>
-              <div className="flex gap-2 mt-3">
-                <button onClick={() => setFormadorOpen(true)} className="flex-1 py-2 bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-semibold rounded-lg border border-violet-200">Ver perfil</button>
-                <button className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg">Alterar</button>
-              </div>
-            </Card>
+            <FormadoresAtribuidosCard
+              sessoes={turma.cronograma}
+              fallback={turma.formador}
+              onOpen={setFormadorOpen}
+            />
             <Card className="p-4">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Formandos desta turma</p>
               <div className="space-y-2">
@@ -1432,7 +1413,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview" }: { tur
           </div>
         </>
       )}
-      <FormadorProfileSlideOver open={formadorOpen} onClose={() => setFormadorOpen(false)} nome={turma.formador} />
+      <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? turma.formador} />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" accent="fin" />
     </div>
   );

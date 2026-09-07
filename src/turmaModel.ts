@@ -20,6 +20,19 @@ export function sessaoModulos(s: { modulos?: string[]; modulo?: string }) {
   return s.modulo ? [s.modulo] : [];
 }
 
+export function formadoresNasSessoes(sessoes: { formador?: string }[], fallback?: string) {
+  const counts = new Map<string, number>();
+  for (const s of sessoes) {
+    const nome = (s.formador || "").trim();
+    if (!nome || nome === "A definir") continue;
+    counts.set(nome, (counts.get(nome) ?? 0) + 1);
+  }
+  if (counts.size === 0 && fallback?.trim()) counts.set(fallback.trim(), 0);
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pt"))
+    .map(([nome, sessoesN]) => ({ nome, sessoes: sessoesN }));
+}
+
 export type TurmaGold = {
   id: number;
   dataInicio: string;

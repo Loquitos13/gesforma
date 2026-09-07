@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import { MultiSearchSelect, modulosOptsForCurso } from "./FormKit";
+import { MultiSearchSelect, SearchSelect, formadoresOptsWith, modulosOptsForCurso } from "./FormKit";
 import {
   CRONOGRAMA_HOJE,
   emptySessao,
   formatDiaMes,
   formatHoraRange,
   formatMesAno,
+  formadoresNasSessoes,
   generateCronograma,
   groupCronogramaByMonth,
   horasCronograma,
@@ -211,9 +212,15 @@ function SessaoRow({
             <span className="block text-[11px] font-semibold text-slate-500 mb-1">Fim</span>
             <input type="time" value={sessao.horaFim} onChange={e => onPatch({ horaFim: e.target.value })} className={iCls} />
           </label>
-          <label className="block">
+          <label className="block col-span-2 sm:col-span-2">
             <span className="block text-[11px] font-semibold text-slate-500 mb-1">Formador</span>
-            <input value={sessao.formador} onChange={e => onPatch({ formador: e.target.value })} placeholder="Nome do formador" className={iCls} />
+            <SearchSelect
+              value={sessao.formador}
+              onChange={v => onPatch({ formador: v })}
+              options={formadoresOptsWith(sessao.formador)}
+              placeholder="Pesquisar formador…"
+              allowEmpty
+            />
           </label>
           <label className="block col-span-2 sm:col-span-4">
             <span className="block text-[11px] font-semibold text-slate-500 mb-1">Módulos desta sessão</span>
@@ -418,6 +425,57 @@ export function CronogramaEditor({
             </section>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+export function FormadoresAtribuidosCard({
+  sessoes, fallback, onOpen,
+}: {
+  sessoes: SessaoCronograma[];
+  fallback?: string;
+  onOpen?: (nome: string) => void;
+}) {
+  const lista = formadoresNasSessoes(sessoes, fallback);
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100">
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Formadores</p>
+        <p className="text-xs text-slate-500 mt-0.5">
+          {lista.length === 0
+            ? "Ninguém atribuído nas sessões"
+            : lista.length === 1
+              ? "1 formador nas sessões desta turma"
+              : `${lista.length} formadores nas sessões desta turma`}
+        </p>
+      </div>
+      {lista.length === 0 ? (
+        <p className="px-4 py-6 text-xs text-slate-400">Atribua formadores no cronograma. A lista aparece aqui automaticamente.</p>
+      ) : (
+        <ul className="divide-y divide-slate-100">
+          {lista.map(f => {
+            const opt = formadoresOptsWith(f.nome).find(o => o.value === f.nome);
+            const inicial = f.nome.trim().charAt(0).toUpperCase() || "?";
+            return (
+              <li key={f.nome} className="px-4 py-3 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center text-violet-700 font-bold flex-shrink-0">{inicial}</div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-slate-800 truncate">{f.nome}</p>
+                  <p className="text-xs text-slate-500 truncate">
+                    {f.sessoes === 0 ? "Formador da turma" : f.sessoes === 1 ? "1 sessão" : `${f.sessoes} sessões`}
+                    {opt?.sub ? ` · ${opt.sub}` : ""}
+                  </p>
+                </div>
+                {onOpen && (
+                  <button type="button" onClick={() => onOpen(f.nome)} className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 whitespace-nowrap">
+                    Ver perfil
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

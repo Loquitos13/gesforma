@@ -99,11 +99,17 @@ export const locaisOpts: SelectOption[] = [
 
 export const formadoresOpts: SelectOption[] = [
   { value: "Isac Silva", sub: "914 547 554 · CCP" },
-  { value: "Vânia Fernandes", sub: "UFCD 3564 · Primeiros Socorros" },
-  { value: "António", sub: "Comunicar em contexto profissional" },
-  { value: "Cátia", sub: "Estética Facial" },
-  { value: "Rosana", sub: "Técnicas de massagem" },
+  { value: "Ivan Esteves", sub: "912 370 557" },
+  { value: "António Cardeal", sub: "915 258 691 · Comunicar" },
+  { value: "Cátia Pinheiro", sub: "Estética Facial" },
+  { value: "Vânia Fernandes", sub: "967 432 879 · Primeiros Socorros" },
+  { value: "Rosana Suarez", sub: "938 039 001 · Massagem" },
 ];
+
+export function formadoresOptsWith(current?: string): SelectOption[] {
+  if (!current?.trim() || formadoresOpts.some(o => o.value === current)) return formadoresOpts;
+  return [{ value: current, sub: "Atribuído nesta turma" }, ...formadoresOpts];
+}
 
 export const horariosOpts: SelectOption[] = [
   { value: "Sábado manhã" },

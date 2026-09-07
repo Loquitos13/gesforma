@@ -6,9 +6,19 @@ export type SessaoCronograma = {
   data: string;
   horaInicio: string;
   horaFim: string;
-  modulo: string;
+  modulos: string[];
   formador: string;
 };
+
+export function modulosLabel(modulos: string[] | undefined, empty = "Módulo por definir") {
+  const list = (modulos ?? []).map(m => m.trim()).filter(Boolean);
+  return list.length ? list.join(" · ") : empty;
+}
+
+export function sessaoModulos(s: { modulos?: string[]; modulo?: string }) {
+  if (s.modulos?.length) return s.modulos.filter(Boolean);
+  return s.modulo ? [s.modulo] : [];
+}
 
 export type TurmaGold = {
   id: number;
@@ -46,11 +56,19 @@ const WEEKDAYS_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const MONTHS_PT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 const CCP_MODULOS = [
-  "Módulo 1 - Fundamentos da Formação Profissional",
-  "Módulo 2 - Planeamento e Organização da Formação",
-  "Módulo 3 - Comunicação e Dinamização de Grupos",
-  "Módulo 4 - Avaliação das Aprendizagens",
-  "Módulo 5 - Elaboração do Portefólio",
+  "M1 · Aprendizagem e pedagogia",
+  "M2 · Comunicação e dinâmica de grupos",
+  "M3 · Avaliação da formação",
+  "M4 · Simulação pedagógica",
+  "M5 · Plataformas digitais e e-learning",
+];
+
+const UFCD_3564_MODULOS = [
+  "UFCD 3564 · Avaliação primária e SVB",
+  "UFCD 3564 · Trauma e hemorragias",
+  "UFCD 3564 · Queimaduras e intoxicações",
+  "UFCD 3564 · Emergências médicas",
+  "UFCD 3564 · Simulação e avaliação",
 ];
 
 export function isTurmaActiva(t: { estado?: string; activa?: boolean }) {
@@ -170,12 +188,11 @@ function durationLabel(start: string, end: string) {
   return `${h}h`;
 }
 
-function moduloForIndex(i: number, n: number, curso?: string) {
-  if (curso?.includes("Primeiros Socorros") || curso?.includes("3564")) {
-    const blocos = ["Avaliação primária e SVB", "Trauma e hemorragias", "Queimaduras e intoxicações", "Emergências médicas", "Simulação e avaliação"];
-    return `UFCD 3564 · ${blocos[Math.min(blocos.length - 1, Math.floor((i * blocos.length) / n))]}`;
-  }
-  return CCP_MODULOS[Math.min(CCP_MODULOS.length - 1, Math.floor((i * CCP_MODULOS.length) / n))];
+function modulosForIndex(i: number, n: number, curso?: string) {
+  const pool = (curso?.includes("Primeiros Socorros") || curso?.includes("3564"))
+    ? UFCD_3564_MODULOS
+    : CCP_MODULOS;
+  return [pool[Math.min(pool.length - 1, Math.floor((i * pool.length) / n))]];
 }
 
 export function generateCronograma(opts: {
@@ -200,7 +217,7 @@ export function generateCronograma(opts: {
       data: toIso(cursor),
       horaInicio: slot.start,
       horaFim: slot.end,
-      modulo: moduloForIndex(i, n, opts.curso),
+      modulos: modulosForIndex(i, n, opts.curso),
       formador: opts.formador || "A definir",
     });
     cursor.setDate(cursor.getDate() + 1);
@@ -218,7 +235,7 @@ export function emptySessao(formador = "A definir"): SessaoCronograma {
     data: "",
     horaInicio: "09:00",
     horaFim: "13:00",
-    modulo: "",
+    modulos: [],
     formador,
   };
 }
@@ -239,7 +256,8 @@ export function cronogramaToSessoes(c: SessaoCronograma[], today = "2026-09-06")
     formador: s.formador,
     estado: s.data && s.data < today ? "Realizada" : "Agendada",
     plano: Boolean(s.data && s.data < today),
-    modulo: s.modulo,
+    modulo: modulosLabel(s.modulos, ""),
+    modulos: s.modulos,
     duracao: durationLabel(s.horaInicio || "09:00", s.horaFim || "13:00"),
   }));
 }

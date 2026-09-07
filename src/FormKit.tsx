@@ -68,14 +68,38 @@ export const categoriasGoldOpts: SelectOption[] = [
   { value: "Desenvolvimento Pessoal" },
 ];
 
-export const modulosOpts: SelectOption[] = [
-  { value: "M1 · Aprendizagem e pedagogia", sub: "CCP · 20h" },
-  { value: "M2 · Comunicação e dinâmica de grupos", sub: "CCP · 20h" },
-  { value: "M3 · Avaliação da formação", sub: "CCP · 15h" },
-  { value: "M4 · Simulação pedagógica", sub: "CCP · 25h" },
-  { value: "M5 · Plataformas digitais e e-learning", sub: "CCP · 10h" },
-  { value: "EX1 · Tabelas dinâmicas e dashboards", sub: "Excel · 4h" },
+export type ModuloCatalog = SelectOption & { curso?: string };
+
+export const catalogoModulos: ModuloCatalog[] = [
+  { value: "M1 · Aprendizagem e pedagogia", sub: "CCP · 20h", curso: "Formação de Formadores - CCP" },
+  { value: "M2 · Comunicação e dinâmica de grupos", sub: "CCP · 20h", curso: "Formação de Formadores - CCP" },
+  { value: "M3 · Avaliação da formação", sub: "CCP · 15h", curso: "Formação de Formadores - CCP" },
+  { value: "M4 · Simulação pedagógica", sub: "CCP · 25h", curso: "Formação de Formadores - CCP" },
+  { value: "M5 · Plataformas digitais e e-learning", sub: "CCP · 10h", curso: "Formação de Formadores - CCP" },
+  { value: "EX1 · Tabelas dinâmicas e dashboards", sub: "Excel · 4h", curso: "Excel do Básico ao Avançado" },
+  { value: "AV1 · Voz e respiração", sub: "6h", curso: "A Arte de Comunicar e Falar em Público: B-learning" },
+  { value: "AV2 · Estrutura do discurso", sub: "5h", curso: "A Arte de Comunicar e Falar em Público: B-learning" },
+  { value: "AV3 · Ensaio e feedback", sub: "5h", curso: "A Arte de Comunicar e Falar em Público: B-learning" },
+  { value: "UFCD 3564 · Avaliação primária e SVB", sub: "Primeiros Socorros · 5h", curso: "Primeiros Socorros" },
+  { value: "UFCD 3564 · Trauma e hemorragias", sub: "Primeiros Socorros · 5h", curso: "Primeiros Socorros" },
+  { value: "UFCD 3564 · Queimaduras e intoxicações", sub: "Primeiros Socorros · 5h", curso: "Primeiros Socorros" },
+  { value: "UFCD 3564 · Emergências médicas", sub: "Primeiros Socorros · 5h", curso: "Primeiros Socorros" },
+  { value: "UFCD 3564 · Simulação e avaliação", sub: "Primeiros Socorros · 5h", curso: "Primeiros Socorros" },
+  { value: "UFCD 10785 · Criar campanhas", sub: "Publicidade nas Redes Sociais", curso: "Publicidade nas Redes Sociais" },
+  { value: "UFCD 10785 · Segmentação e métricas", sub: "Publicidade nas Redes Sociais", curso: "Publicidade nas Redes Sociais" },
+  { value: "UFCD 9109 · Cuidados básicos", sub: "Estética Facial", curso: "Masterclass em Estética Facial" },
 ];
+
+export const modulosOpts: SelectOption[] = catalogoModulos.map(({ value, sub }) => ({ value, sub }));
+
+export function modulosOptsForCurso(curso?: string): SelectOption[] {
+  if (!curso) return modulosOpts;
+  const exact = catalogoModulos.filter(m => m.curso === curso);
+  if (exact.length) return exact.map(({ value, sub }) => ({ value, sub }));
+  if (/ccp/i.test(curso)) return catalogoModulos.filter(m => m.curso?.includes("CCP")).map(({ value, sub }) => ({ value, sub }));
+  if (/3564|primeiros socorros/i.test(curso)) return catalogoModulos.filter(m => m.curso === "Primeiros Socorros").map(({ value, sub }) => ({ value, sub }));
+  return modulosOpts;
+}
 
 export const areasOpts: SelectOption[] = [
   { value: "CCP e Gestão da Formação" },
@@ -141,6 +165,91 @@ export function SearchSelect({
               </button>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function MultiSearchSelect({
+  values, onChange, options, placeholder = "Pesquisar…", empty = "Nenhum resultado.",
+}: {
+  values: string[];
+  onChange: (next: string[]) => void;
+  options: SelectOption[];
+  placeholder?: string;
+  empty?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+  const selected = values.filter(Boolean);
+  const extras: SelectOption[] = selected.filter(v => !options.some(o => o.value === v)).map(value => ({ value }));
+  const all: SelectOption[] = [...options, ...extras];
+  const filtered = all.filter(o => `${o.value} ${o.sub ?? ""}`.toLowerCase().includes(q.toLowerCase()));
+
+  function toggle(v: string) {
+    onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]);
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => { setOpen(v => !v); setQ(""); }}
+        className="w-full min-h-[38px] px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-amber-400">
+        <span className="flex flex-wrap gap-1 min-w-0 flex-1">
+          {selected.length === 0 && <span className="text-slate-400 py-0.5">Selecionar módulos…</span>}
+          {selected.map(v => (
+            <span key={v} className="inline-flex items-center gap-1 max-w-full px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-medium">
+              <span className="truncate">{v}</span>
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label={`Remover ${v}`}
+                onClick={e => { e.stopPropagation(); toggle(v); }}
+                onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); toggle(v); } }}
+                className="text-slate-400 hover:text-slate-700"
+              >×</span>
+            </span>
+          ))}
+        </span>
+        <span className="text-slate-400 flex-shrink-0">▾</span>
+      </button>
+      {open && (
+        <div className="absolute z-[60] mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+          <div className="p-2 border-b border-slate-100">
+            <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={placeholder}
+              className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </div>
+          <div className="max-h-52 overflow-y-auto">
+            {filtered.length === 0 && <p className="px-3 py-4 text-xs text-slate-400 text-center">{empty}</p>}
+            {filtered.map(o => {
+              const on = selected.includes(o.value);
+              return (
+                <button key={o.value} type="button" onClick={() => toggle(o.value)}
+                  className={`w-full text-left px-3 py-2 flex items-start gap-2 hover:bg-amber-50 ${on ? "bg-amber-50" : ""}`}>
+                  <span className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${on ? "bg-amber-500 border-amber-500 text-white" : "border-slate-300 bg-white"}`}>
+                    {on && (
+                      <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                    )}
+                  </span>
+                  <span className="min-w-0">
+                    <p className="text-sm text-slate-800">{o.value}</p>
+                    {o.sub && <p className="text-xs text-slate-400">{o.sub}</p>}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {selected.length > 0 && (
+            <div className="px-3 py-2 border-t border-slate-100 text-[11px] text-slate-500">
+              {selected.length === 1 ? "1 módulo selecionado" : `${selected.length} módulos selecionados`} · clique de novo para retirar
+            </div>
+          )}
         </div>
       )}
     </div>

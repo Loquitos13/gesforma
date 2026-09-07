@@ -346,7 +346,7 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf = "914 547 
 export type MomentoKey = "introducao" | "desenvolvimento" | "conclusao";
 export type MomentoField = { conteudo: string; atividades: string; metodos: string; avaliacao: string; recursos: string; materiais: string };
 export type PlanoSessaoData = { objetivosGerais: string; objetivosEspecificos: string; momentos: Record<MomentoKey, MomentoField> };
-export type SessaoMeta = { n: number; data: string; hora: string; formador: string; estado: string; plano: boolean; modulo: string; duracao: string };
+export type SessaoMeta = { n: number; data: string; hora: string; formador: string; estado: string; plano: boolean; modulo: string; modulos?: string[]; duracao: string };
 
 export const emptyMomento: MomentoField = { conteudo: "", atividades: "", metodos: "", avaliacao: "", recursos: "", materiais: "" };
 
@@ -498,7 +498,7 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano, onSave }: {
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { l: "Módulo", v: sessao.modulo },
+              { l: sessao.modulos && sessao.modulos.length > 1 ? "Módulos" : "Módulo", v: sessao.modulos?.length ? sessao.modulos.join(" · ") : sessao.modulo },
               { l: "Duração", v: sessao.duracao },
               { l: "Formador/a", v: sessao.formador },
               { l: "Data", v: sessao.data },
@@ -630,8 +630,8 @@ export function SumarioSessaoModal({ open, onClose, sessao, sumario, accent = "g
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className={`rounded-xl p-3 border ${gold ? "bg-amber-50 border-amber-100" : "bg-blue-50 border-blue-100"}`}>
-              <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${gold ? "text-amber-600" : "text-blue-600"}`}>Módulo</p>
-              <p className="text-xs font-bold text-slate-800 leading-snug">{sessao.modulo}</p>
+              <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${gold ? "text-amber-600" : "text-blue-600"}`}>{sessao.modulos && sessao.modulos.length > 1 ? "Módulos" : "Módulo"}</p>
+              <p className="text-xs font-bold text-slate-800 leading-snug">{sessao.modulos?.length ? sessao.modulos.join(" · ") : sessao.modulo}</p>
             </div>
             <div className={`rounded-xl p-3 border ${gold ? "bg-amber-50 border-amber-100" : "bg-blue-50 border-blue-100"}`}>
               <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${gold ? "text-amber-600" : "text-blue-600"}`}>Duração</p>

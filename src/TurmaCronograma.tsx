@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { MultiSearchSelect, modulosOptsForCurso } from "./FormKit";
 import {
   CRONOGRAMA_HOJE,
   emptySessao,
@@ -8,10 +9,12 @@ import {
   generateCronograma,
   groupCronogramaByMonth,
   horasCronograma,
+  modulosLabel,
   periodoCronograma,
   proximaSessao,
   sessaoDuracaoHoras,
   sessaoEstado,
+  sessaoModulos,
   weekdayShort,
   type SessaoCronograma,
   type SessaoEstado,
@@ -135,7 +138,7 @@ function KpiCard({
 }
 
 function SessaoRow({
-  n, sessao, estado, gold, expanded, onToggle, onPatch, onRemove,
+  n, sessao, estado, gold, expanded, onToggle, onPatch, onRemove, moduloOpts,
 }: {
   n: number;
   sessao: SessaoCronograma;
@@ -145,6 +148,7 @@ function SessaoRow({
   onToggle: () => void;
   onPatch: (p: Partial<SessaoCronograma>) => void;
   onRemove: () => void;
+  moduloOpts: { value: string; sub?: string }[];
 }) {
   const chip = ESTADO_UI[estado];
   const horas = sessaoDuracaoHoras(sessao);
@@ -176,7 +180,7 @@ function SessaoRow({
             </p>
           </div>
           <div className="min-w-0 col-span-2 sm:col-span-1 sm:pl-2">
-            <p className="text-sm font-medium text-slate-800 truncate">{sessao.modulo || "Módulo por definir"}</p>
+            <p className="text-sm font-medium text-slate-800 truncate">{modulosLabel(sessaoModulos(sessao))}</p>
             <p className="text-xs text-slate-500 truncate">{sessao.formador || "Formador por definir"}</p>
           </div>
           <span className={`hidden sm:inline-flex text-[11px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${chip.cls}`}>
@@ -212,8 +216,15 @@ function SessaoRow({
             <input value={sessao.formador} onChange={e => onPatch({ formador: e.target.value })} placeholder="Nome do formador" className={iCls} />
           </label>
           <label className="block col-span-2 sm:col-span-4">
-            <span className="block text-[11px] font-semibold text-slate-500 mb-1">Módulo / conteúdo</span>
-            <input value={sessao.modulo} onChange={e => onPatch({ modulo: e.target.value })} placeholder="Ex.: Módulo 2 — Planeamento e organização" className={iCls} />
+            <span className="block text-[11px] font-semibold text-slate-500 mb-1">Módulos desta sessão</span>
+            <MultiSearchSelect
+              values={sessaoModulos(sessao)}
+              onChange={modulos => onPatch({ modulos })}
+              options={moduloOpts}
+              placeholder="Pesquisar módulo do curso…"
+              empty="Não há módulos para este curso."
+            />
+            <p className="text-[11px] text-slate-400 mt-1">Pode associar mais do que um módulo à mesma sessão.</p>
           </label>
         </div>
       )}
@@ -237,6 +248,7 @@ export function CronogramaEditor({
 }) {
   const gold = accent === "gold";
   const page = layout === "page";
+  const moduloOpts = useMemo(() => modulosOptsForCurso(curso), [curso]);
   const totalH = Math.round(horasCronograma(sessoes) * 10) / 10;
   const next = proximaSessao(sessoes);
   const periodo = periodoCronograma(sessoes);
@@ -287,7 +299,7 @@ export function CronogramaEditor({
             accent={accent}
             label="Próxima sessão"
             value={next ? formatDiaMes(next.data) : "—"}
-            hint={next ? `${formatHoraRange(next.horaInicio, next.horaFim)} · ${next.modulo || "Módulo por definir"}` : "Sem sessões futuras"}
+            hint={next ? `${formatHoraRange(next.horaInicio, next.horaFim)} · ${modulosLabel(sessaoModulos(next))}` : "Sem sessões futuras"}
           />
           <KpiCard
             accent={accent}
@@ -394,6 +406,7 @@ export function CronogramaEditor({
                     gold={gold}
                     expanded={openId === sessao.id}
                     onToggle={() => setOpenId(id => id === sessao.id ? null : sessao.id)}
+                    moduloOpts={moduloOpts}
                     onPatch={p => patch(sessao.id, p)}
                     onRemove={() => {
                       onChange(sessoes.filter(x => x.id !== sessao.id));

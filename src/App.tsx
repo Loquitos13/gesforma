@@ -14,13 +14,13 @@ import {
 import { ResolverDocumentoModal } from "./DocResolver";
 import { CursoFichaView } from "./CursoFichaView";
 import {
-  SearchSelect, ViewFilters, matchesFilter, uniqueOpts,
+  SearchSelect, MultiSearchSelect, ViewFilters, matchesFilter, uniqueOpts,
   blogTematicasOpts, cursosFinOpts, cursosGoldOpts,
-  formadoresOpts, horariosOpts, locaisOpts, modulosOpts,
+  formadoresOpts, horariosOpts, locaisOpts, modulosOptsForCurso,
 } from "./FormKit";
 import { CronogramaEditor, TurmaActivaToggle, TurmaInactivaBanner, TurmaInscricaoHint } from "./TurmaCronograma";
 import { useTurmas } from "./TurmasContext";
-import { cronogramaToSessoes, formatSessaoLabel, isTurmaActiva, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
+import { cronogramaToSessoes, formatSessaoLabel, isTurmaActiva, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -605,20 +605,32 @@ function FichaFormando({ formando, tipo = "gold", onClose }: { formando: Formand
 // ─── Cockpit da Turma ─────────────────────────────────────────────────────────
 
 const sessoesSample: SessaoMeta[] = [
-  { n: 1, data: "Sáb, 07 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Realizada", plano: true, modulo: "Módulo 1 - Fundamentos da Formação Profissional", duracao: "4h" },
-  { n: 2, data: "Sáb, 14 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Realizada", plano: true, modulo: "Módulo 2 - Planeamento e Organização da Formação", duracao: "4h" },
-  { n: 3, data: "Sáb, 21 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false, modulo: "Módulo 2 - Planeamento e Organização da Formação", duracao: "4h" },
-  { n: 4, data: "Sáb, 28 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false, modulo: "Módulo 3 - Comunicação e Dinamização de Grupos", duracao: "4h" },
-  { n: 5, data: "Sáb, 05 Out 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false, modulo: "Módulo 3 - Comunicação e Dinamização de Grupos", duracao: "4h" },
+  { n: 1, data: "Sáb, 07 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Realizada", plano: true, modulo: "M1 · Aprendizagem e pedagogia", modulos: ["M1 · Aprendizagem e pedagogia"], duracao: "4h" },
+  { n: 2, data: "Sáb, 14 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Realizada", plano: true, modulo: "M2 · Comunicação e dinâmica de grupos", modulos: ["M2 · Comunicação e dinâmica de grupos"], duracao: "4h" },
+  { n: 3, data: "Sáb, 21 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false, modulo: "M2 · Comunicação e dinâmica de grupos", modulos: ["M2 · Comunicação e dinâmica de grupos"], duracao: "4h" },
+  { n: 4, data: "Sáb, 28 Set 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false, modulo: "M3 · Avaliação da formação", modulos: ["M3 · Avaliação da formação"], duracao: "4h" },
+  { n: 5, data: "Sáb, 05 Out 2026", hora: "09h–13h", formador: "Isac Silva", estado: "Agendada", plano: false, modulo: "M3 · Avaliação da formação", modulos: ["M3 · Avaliação da formação"], duracao: "4h" },
 ];
 
 const finSessoesSample: SessaoMeta[] = [
-  { n: 1, data: "Qua, 27 Ago 2026", hora: "19h–22h", formador: "Vânia Fernandes", estado: "Realizada", plano: true, modulo: "UFCD 3564 · Avaliação primária e SVB", duracao: "5h" },
-  { n: 2, data: "Qua, 03 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", estado: "Realizada", plano: true, modulo: "UFCD 3564 · Trauma e hemorragias", duracao: "5h" },
-  { n: 3, data: "Qua, 10 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", estado: "Agendada", plano: false, modulo: "UFCD 3564 · Queimaduras e intoxicações", duracao: "5h" },
-  { n: 4, data: "Qua, 17 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", estado: "Agendada", plano: false, modulo: "UFCD 3564 · Emergências médicas", duracao: "5h" },
-  { n: 5, data: "Qua, 24 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", estado: "Agendada", plano: false, modulo: "UFCD 3564 · Simulação e avaliação", duracao: "5h" },
+  { n: 1, data: "Qua, 27 Ago 2026", hora: "19h–22h", formador: "Vânia Fernandes", estado: "Realizada", plano: true, modulo: "UFCD 3564 · Avaliação primária e SVB", modulos: ["UFCD 3564 · Avaliação primária e SVB"], duracao: "5h" },
+  { n: 2, data: "Qua, 03 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", estado: "Realizada", plano: true, modulo: "UFCD 3564 · Trauma e hemorragias", modulos: ["UFCD 3564 · Trauma e hemorragias"], duracao: "5h" },
+  { n: 3, data: "Qua, 10 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", estado: "Agendada", plano: false, modulo: "UFCD 3564 · Queimaduras e intoxicações", modulos: ["UFCD 3564 · Queimaduras e intoxicações"], duracao: "5h" },
+  { n: 4, data: "Qua, 17 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", estado: "Agendada", plano: false, modulo: "UFCD 3564 · Emergências médicas", modulos: ["UFCD 3564 · Emergências médicas"], duracao: "5h" },
+  { n: 5, data: "Qua, 24 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", estado: "Agendada", plano: false, modulo: "UFCD 3564 · Simulação e avaliação", modulos: ["UFCD 3564 · Simulação e avaliação"], duracao: "5h" },
 ];
+
+function ModulosCell({ sessao }: { sessao: { modulo?: string; modulos?: string[] } }) {
+  const list = sessaoModulos(sessao);
+  if (!list.length) return <span className="text-xs text-slate-400">—</span>;
+  return (
+    <div className="flex flex-col gap-0.5 min-w-[10rem] max-w-[16rem]">
+      {list.map(m => (
+        <span key={m} className="text-xs text-slate-700 leading-snug">{m}</span>
+      ))}
+    </div>
+  );
+}
 
 function sumarioLabel(s?: SumarioSessaoData) {
   if (s?.assinado && sumarioPreenchido(s)) return "Ver sumário";
@@ -931,7 +943,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const [formadorOpen, setFormadorOpen] = useState(false);
   const [novaSessao, setNovaSessao] = useState(false);
   const [formadorSessao, setFormadorSessao] = useState("Isac Silva");
-  const [moduloSessao, setModuloSessao] = useState("");
+  const [moduloSessao, setModuloSessao] = useState<string[]>([]);
   const [dataSessao, setDataSessao] = useState("");
   const [horaSessao, setHoraSessao] = useState("09:00");
   const [addFormando, setAddFormando] = useState(false);
@@ -1010,11 +1022,11 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           <Card>
             <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
               <p className="text-sm font-semibold text-slate-700">Sessões - {turma.nome}</p>
-              <NewBtn label="+ Nova Sessão" onClick={() => { setFormadorSessao(turma.curso.includes("CCP") ? "Isac Silva" : "Vânia Fernandes"); setModuloSessao(""); setNovaSessao(true); }} />
+              <NewBtn label="+ Nova Sessão" onClick={() => { setFormadorSessao(turma.curso.includes("CCP") ? "Isac Silva" : "Vânia Fernandes"); setModuloSessao([]); setNovaSessao(true); }} />
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead><tr><Th>Nº</Th><Th>Data / Hora</Th><Th>Formador</Th><Th>Plano de Sessão</Th><Th>Sumário</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
+                <thead><tr><Th>Nº</Th><Th>Data / Hora</Th><Th>Módulo</Th><Th>Formador</Th><Th>Plano de Sessão</Th><Th>Sumário</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
                   {sessoesTurma.map(s => {
                     const sum = sumarios[s.n];
@@ -1025,6 +1037,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                         <p className="text-xs font-medium text-slate-800 whitespace-nowrap">{s.data}</p>
                         <p className="text-xs text-slate-400">{s.hora}</p>
                       </Td>
+                      <Td><ModulosCell sessao={s} /></Td>
                       <Td className="text-xs font-medium text-slate-700">
                         <button onClick={() => setFormadorOpen(true)} className="hover:text-violet-700 font-medium">{s.formador}</button>
                       </Td>
@@ -1191,7 +1204,14 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             <Field label="Hora início"><input type="time" className={iCls} value={horaSessao} onChange={e => setHoraSessao(e.target.value)} /></Field>
           </div>
           <Field label="Formador"><SearchSelect value={formadorSessao} onChange={setFormadorSessao} options={formadoresOpts} placeholder="Pesquisar formador…" /></Field>
-          <Field label="Módulo"><SearchSelect value={moduloSessao} onChange={setModuloSessao} options={modulosOpts} placeholder="Pesquisar módulo…" /></Field>
+          <Field label="Módulos">
+            <MultiSearchSelect
+              values={moduloSessao}
+              onChange={setModuloSessao}
+              options={modulosOptsForCurso(turma.curso)}
+              placeholder="Pesquisar módulo do curso…"
+            />
+          </Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setNovaSessao(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button onClick={() => {
@@ -1203,7 +1223,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                 data: dataSessao,
                 horaInicio: horaSessao || "09:00",
                 horaFim: `${endH}:${String(m || 0).padStart(2, "0")}`,
-                modulo: moduloSessao,
+                modulos: moduloSessao,
                 formador: formadorSessao,
               }]);
               setNovaSessao(false);
@@ -1662,13 +1682,13 @@ function PresencasView({ turmaId, embedded }: { turmaId?: number; embedded?: boo
       <Card>
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
           <p className="text-sm font-semibold text-slate-700">Sessões - {turma.nome}</p>
-          <span className="text-xs text-slate-500">{Object.values(sumarios).filter(s => s.assinado).length}/{finSessoesSample.length} sumários assinados</span>
+          <span className="text-xs text-slate-500">{Object.values(sumarios).filter(s => s.assinado).length}/{(turma.cronograma.length ? turma.cronograma : finSessoesSample).length} sumários assinados</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr><Th>Nº</Th><Th>Data / Hora</Th><Th>Formador</Th><Th>Sumário</Th><Th>Estado</Th></tr></thead>
+            <thead><tr><Th>Nº</Th><Th>Data / Hora</Th><Th>Módulo</Th><Th>Formador</Th><Th>Sumário</Th><Th>Estado</Th></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {finSessoesSample.map(s => {
+              {(turma.cronograma.length ? cronogramaToSessoes(turma.cronograma) : finSessoesSample).map(s => {
                 const sum = sumarios[s.n];
                 return (
                   <tr key={s.n} className="hover:bg-slate-50">
@@ -1677,6 +1697,7 @@ function PresencasView({ turmaId, embedded }: { turmaId?: number; embedded?: boo
                       <p className="text-xs font-medium text-slate-800 whitespace-nowrap">{s.data}</p>
                       <p className="text-xs text-slate-400">{s.hora}</p>
                     </Td>
+                    <Td><ModulosCell sessao={s} /></Td>
                     <Td className="text-xs font-medium text-slate-700">{s.formador}</Td>
                     <Td>
                       <button onClick={() => setSumarioSessao(s)}

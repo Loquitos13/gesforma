@@ -26,6 +26,8 @@ A vista **Módulos** começa pelo filtro de curso: lista só os blocos desse cur
 
 Gold e Financiada têm cada uma o menu **Formadores**: ficha (contacto, CCP, NIF, especialidade), estado Ativo/Inactivo e os regimes em que lecciona. Quem marca os dois regimes aparece nas duas listas. Criar ou editar um formador actualiza os dropdowns do cronograma e das turmas.
 
+No **Painel**, o bloco **Como conheceram a ENA** mostra a origem dos formandos (website, referência, redes, IEFP) a partir da pergunta da ficha de inscrição.
+
 Em **Configurações**, clicar num cartão abre um modal com essa secção já seleccionada. A lista à esquerda (e Anterior / Seguinte) muda de parâmetro sem fechar o modal.
 
 Em **Emails automáticos**, a nova regra pede gatilho, template, curso e atraso, com **preview do email** ao lado. O olho nas regras e nos templates abre o mesmo preview.

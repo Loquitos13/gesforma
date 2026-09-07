@@ -380,6 +380,16 @@ const topCursos = [
   { nome: "Publicidade nas Redes Sociais", inscritos: 389, receita: 48625, taxa: 54 },
 ];
 
+const conhecimentoEna = [
+  { id: "web", fonte: "Website / pesquisa Google", curto: "Website", detalhe: "ena.pt e resultados orgânicos", n: 2472, pct: 38, color: "#F59E0B" },
+  { id: "ref", fonte: "Referência", curto: "Referência", detalhe: "Formando, formador ou empresa", n: 1106, pct: 17, color: "#10B981" },
+  { id: "ig", fonte: "Instagram", curto: "Instagram", detalhe: "Reels e campanhas pagas", n: 976, pct: 15, color: "#E1306C" },
+  { id: "fb", fonte: "Facebook", curto: "Facebook", detalhe: "Grupos e anúncios", n: 781, pct: 12, color: "#3B82F6" },
+  { id: "li", fonte: "LinkedIn", curto: "LinkedIn", detalhe: "CCP e formação para empresas", n: 455, pct: 7, color: "#0A66C2" },
+  { id: "iefp", fonte: "IEFP / Centro de emprego", curto: "IEFP", detalhe: "Turmas financiadas", n: 390, pct: 6, color: "#8B5CF6" },
+  { id: "outro", fonte: "Outdoor, feira ou outro", curto: "Outro", detalhe: "Eventos e material impresso", n: 325, pct: 5, color: "#94A3B8" },
+];
+
 const notificacoesData: Array<{ id: number; tipo: string; titulo: string; texto: string; tempo: string; lida: boolean } & NavTarget> = [
   { id: 1, tipo: "warn", titulo: "VNG-SM-07/09 sem vagas", texto: "A turma de V.N.Gaia (07/09) atingiu capacidade máxima - 10/10 formandos.", tempo: "2 min", lida: false, view: "gold-cockpit-turma", turmaId: 943, tab: "overview" },
   { id: 2, tipo: "error", titulo: "67 pagamentos pendentes", texto: "€8 400 por confirmar. 12 com mais de 7 dias sem resposta.", tempo: "15 min", lida: false, view: "pagamentos" },
@@ -552,6 +562,91 @@ function MiniBarChart({ data, color }: { data: { mes: string; v: number }[]; col
         ))}
       </div>
     </div>
+  );
+}
+
+function ConhecimentoEnaCard({ onVerMais }: { onVerMais: () => void }) {
+  const [hover, setHover] = useState<string | null>(null);
+  const total = conhecimentoEna.reduce((s, d) => s + d.n, 0);
+  const active = conhecimentoEna.find(d => d.id === hover) ?? null;
+  const r = 56;
+  const c = 2 * Math.PI * r;
+  let acc = 0;
+  const segments = conhecimentoEna.map(d => {
+    const len = (d.pct / 100) * c;
+    const offset = c * 0.25 - acc;
+    acc += len;
+    return { ...d, len, offset };
+  });
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <p className="text-sm font-semibold text-slate-700">Como conheceram a ENA</p>
+          <p className="text-xs text-slate-400 mt-0.5">Pergunta da ficha de inscrição · {total.toLocaleString("pt-PT")} formandos</p>
+        </div>
+        <button type="button" onClick={onVerMais} className="text-xs font-semibold text-slate-400 hover:text-amber-600 whitespace-nowrap">
+          Pré-inscrições →
+        </button>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 items-center">
+        <div className="flex justify-center" onMouseLeave={() => setHover(null)}>
+          <svg viewBox="0 0 160 160" className="w-44 h-44" role="img" aria-label="Origem dos formandos">
+            {segments.map(s => (
+              <circle
+                key={s.id}
+                cx="80" cy="80" r={r} fill="none"
+                stroke={s.color}
+                strokeWidth={hover && hover !== s.id ? 16 : 22}
+                strokeDasharray={`${s.len} ${c - s.len}`}
+                strokeDashoffset={s.offset}
+                strokeLinecap="butt"
+                className="cursor-pointer"
+                style={{ transition: "stroke-width 160ms ease", opacity: hover && hover !== s.id ? 0.28 : 1 }}
+                onMouseEnter={() => setHover(s.id)}
+              />
+            ))}
+            <circle cx="80" cy="80" r="40" fill="white" />
+            <text x="80" y={active ? 72 : 76} textAnchor="middle" className="fill-slate-800" style={{ fontSize: active ? 16 : 18, fontWeight: 700 }}>
+              {active ? `${active.pct}%` : total.toLocaleString("pt-PT")}
+            </text>
+            <text x="80" y={active ? 90 : 94} textAnchor="middle" className="fill-slate-400" style={{ fontSize: 9 }}>
+              {active ? active.curto : "formandos"}
+            </text>
+          </svg>
+        </div>
+        <div className="space-y-2">
+          {conhecimentoEna.map(d => {
+            const on = hover === d.id;
+            return (
+              <button
+                key={d.id}
+                type="button"
+                onMouseEnter={() => setHover(d.id)}
+                onMouseLeave={() => setHover(null)}
+                className={`w-full text-left rounded-lg px-2 py-1.5 transition-colors ${on ? "bg-slate-50" : ""}`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
+                    <span className={`text-xs truncate ${on ? "font-semibold text-slate-800" : "font-medium text-slate-700"}`}>{d.fonte}</span>
+                  </span>
+                  <span className="text-xs font-bold text-slate-700 flex-shrink-0">{d.pct}%</span>
+                </div>
+                <div className="flex items-center gap-2 pl-4">
+                  <div className="flex-1 bg-slate-100 rounded-full h-1.5">
+                    <div className="h-1.5 rounded-full" style={{ width: `${d.pct}%`, backgroundColor: d.color }} />
+                  </div>
+                  <span className="text-[11px] text-slate-400 w-10 text-right">{d.n.toLocaleString("pt-PT")}</span>
+                </div>
+                {on && <p className="text-[11px] text-slate-400 pl-4 mt-0.5">{d.detalhe}</p>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -2065,6 +2160,7 @@ function PainelView({ onNavigate }: { onNavigate: (v: View | NavTarget) => void 
           </div>
         </Card>
       </div>
+      <ConhecimentoEnaCard onVerMais={() => onNavigate("gold-preinscricoes")} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="p-4">
           <p className="text-sm font-semibold text-slate-700 mb-4">Métodos de Pagamento</p>

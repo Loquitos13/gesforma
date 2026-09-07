@@ -58,11 +58,92 @@ export function isTurmaActiva(t: { estado?: string; activa?: boolean }) {
   return t.estado === "Ativa" || t.estado === "Ativo";
 }
 
+export const CRONOGRAMA_HOJE = "2026-09-07";
+
+const MONTHS_FULL_PT = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+
+export type SessaoEstado = "realizada" | "hoje" | "proxima" | "agendada" | "por-agendar";
+
 export function formatSessaoLabel(iso: string) {
   const [y, m, d] = iso.split("-").map(Number);
   if (!y || !m || !d) return iso;
   const dt = new Date(y, m - 1, d);
   return `${WEEKDAYS_PT[dt.getDay()]}, ${String(d).padStart(2, "0")} ${MONTHS_PT[m - 1]} ${y}`;
+}
+
+export function weekdayShort(iso: string) {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return "—";
+  return WEEKDAYS_PT[new Date(y, m - 1, d).getDay()];
+}
+
+export function formatDiaMes(iso: string) {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return "Sem data";
+  return `${String(d).padStart(2, "0")} ${MONTHS_PT[m - 1]}`;
+}
+
+export function formatMesAno(iso: string) {
+  const [y, m] = iso.split("-").map(Number);
+  if (!y || !m) return "Por agendar";
+  return `${MONTHS_FULL_PT[m - 1]} ${y}`;
+}
+
+export function formatHoraRange(inicio: string, fim: string) {
+  const a = (inicio || "").replace(":", "h");
+  const b = (fim || "").replace(":", "h");
+  if (!a && !b) return "Horário por definir";
+  return `${a}–${b}`;
+}
+
+export function sessaoDuracaoHoras(s: Pick<SessaoCronograma, "horaInicio" | "horaFim">) {
+  const [sh, sm] = (s.horaInicio || "00:00").split(":").map(Number);
+  const [eh, em] = (s.horaFim || "00:00").split(":").map(Number);
+  return Math.max(0, ((eh * 60 + em) - (sh * 60 + sm)) / 60);
+}
+
+export function proximaSessao(sessoes: SessaoCronograma[], today = CRONOGRAMA_HOJE) {
+  return [...sessoes]
+    .filter(s => s.data && s.data >= today)
+    .sort((a, b) => a.data.localeCompare(b.data) || a.horaInicio.localeCompare(b.horaInicio))[0];
+}
+
+export function sessaoEstado(s: SessaoCronograma, today = CRONOGRAMA_HOJE, nextId?: string): SessaoEstado {
+  if (!s.data) return "por-agendar";
+  if (s.data < today) return "realizada";
+  if (s.data === today) return "hoje";
+  if (nextId && s.id === nextId) return "proxima";
+  return "agendada";
+}
+
+export type CronogramaMesGrupo = {
+  key: string;
+  label: string;
+  items: { sessao: SessaoCronograma; n: number }[];
+};
+
+export function groupCronogramaByMonth(sessoes: SessaoCronograma[]): CronogramaMesGrupo[] {
+  const groups: CronogramaMesGrupo[] = [];
+  sessoes.forEach((sessao, i) => {
+    const key = sessao.data ? sessao.data.slice(0, 7) : "sem-data";
+    const label = key === "sem-data" ? "Por agendar" : formatMesAno(sessao.data);
+    let g = groups.find(x => x.key === key);
+    if (!g) {
+      g = { key, label, items: [] };
+      groups.push(g);
+    }
+    g.items.push({ sessao, n: i + 1 });
+  });
+  return groups;
+}
+
+export function periodoCronograma(sessoes: SessaoCronograma[]) {
+  const datas = sessoes.map(s => s.data).filter(Boolean).sort();
+  if (!datas.length) return null;
+  return { inicio: datas[0], fim: datas[datas.length - 1] };
 }
 
 function parseIso(iso: string) {

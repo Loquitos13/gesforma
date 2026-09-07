@@ -991,17 +991,16 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         )}
 
         {tab === "cronograma" && (
-          <Card className="p-5">
-            <CronogramaEditor
-              sessoes={turma.cronograma}
-              onChange={next => setGoldCronograma(turma.id, next)}
-              inicio={turma.dataInicio}
-              horario={turma.horario}
-              horas={turma.horas}
-              formador={turma.formador}
-              curso={turma.curso}
-            />
-          </Card>
+          <CronogramaEditor
+            layout="page"
+            sessoes={turma.cronograma}
+            onChange={next => setGoldCronograma(turma.id, next)}
+            inicio={turma.dataInicio}
+            horario={turma.horario}
+            horas={turma.horas}
+            formador={turma.formador}
+            curso={turma.curso}
+          />
         )}
 
         {tab === "dtp" && (
@@ -1351,18 +1350,17 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview" }: { tur
       <TurmaTabBar tab={tab} onChange={setTab} accent="fin" dtpPct={dtpPctFin(turma.id)} />
       {!activa && <TurmaInactivaBanner nome={turma.nome} onActivate={() => toggleFin(turma.id, true)} />}
       {tab === "cronograma" && (
-        <Card className="p-5">
-          <CronogramaEditor
-            accent="fin"
-            sessoes={turma.cronograma}
-            onChange={next => setFinCronograma(turma.id, next)}
-            inicio={turma.dataInicio}
-            horario={turma.horario}
-            horas={turma.horas}
-            formador={turma.formador}
-            curso={turma.curso}
-          />
-        </Card>
+        <CronogramaEditor
+          layout="page"
+          accent="fin"
+          sessoes={turma.cronograma}
+          onChange={next => setFinCronograma(turma.id, next)}
+          inicio={turma.dataInicio}
+          horario={turma.horario}
+          horas={turma.horas}
+          formador={turma.formador}
+          curso={turma.curso}
+        />
       )}
       {tab === "dtp" && (
         <DtpPanel regime="fin" turma={{ codigo: turma.ufcdCod === "3564" ? "UFCD 3564 · T1" : turma.nome, id: turma.id, titulo: turma.curso, sub: `UFCD ${turma.ufcdCod} · ${turma.horas}h` }} />

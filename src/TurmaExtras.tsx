@@ -197,23 +197,37 @@ export function seedListaFromDetalhe(detalhe: string, nomes: string[]): ResolveL
   return list.map((nome, i) => ({ id: String(i + 1), nome, ok: i < okCount }));
 }
 
-export function PresencasSessaoModal({ open, onClose, sessao }: {
+const PRESENCAS_GOLD_SEED = [
+  { id: 1, nome: "Tiago Bento", presente: true },
+  { id: 2, nome: "Luciana D'Avila", presente: true },
+  { id: 3, nome: "Ciara Gonçalves", presente: false },
+  { id: 4, nome: "Liliana Real", presente: true },
+  { id: 5, nome: "Angélica Ribeiro", presente: true },
+  { id: 6, nome: "Maria Mota", presente: true },
+  { id: 7, nome: "Elisabete Soares", presente: false },
+  { id: 8, nome: "Andreia Arantes", presente: true },
+  { id: 9, nome: "Hugo Baldaia", presente: true },
+  { id: 10, nome: "Marta Maia", presente: true },
+];
+
+export function PresencasSessaoModal({ open, onClose, sessao, formandos }: {
   open: boolean; onClose: () => void;
   sessao?: { n: number; data: string; hora: string };
+  formandos?: { id: number; nome: string; presente?: boolean }[];
 }) {
-  const initial = [
-    { id: 1, nome: "Tiago Bento", presente: true },
-    { id: 2, nome: "Luciana D'Avila", presente: true },
-    { id: 3, nome: "Ciara Gonçalves", presente: false },
-    { id: 4, nome: "Liliana Real", presente: true },
-    { id: 5, nome: "Angélica Ribeiro", presente: true },
-    { id: 6, nome: "Maria Mota", presente: true },
-    { id: 7, nome: "Elisabete Soares", presente: false },
-    { id: 8, nome: "Andreia Arantes", presente: true },
-    { id: 9, nome: "Hugo Baldaia", presente: true },
-    { id: 10, nome: "Marta Maia", presente: true },
-  ];
-  const [presencas, setPresencas] = useState(initial);
+  function seed() {
+    const src = formandos?.length ? formandos : PRESENCAS_GOLD_SEED;
+    return src.map((f, i) => ({
+      id: f.id,
+      nome: f.nome,
+      presente: f.presente ?? i !== 2,
+    }));
+  }
+  const [presencas, setPresencas] = useState(seed);
+  useEffect(() => {
+    if (open) setPresencas(seed());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, sessao?.n]);
   const presentes = presencas.filter(p => p.presente).length;
   const pct = Math.round((presentes / presencas.length) * 100);
   if (!open) return null;
@@ -509,7 +523,7 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano, onSave }: {
             {[
               { l: sessao.modulos && sessao.modulos.length > 1 ? "Módulos" : "Módulo", v: sessao.modulos?.length ? sessao.modulos.join(" · ") : sessao.modulo },
               { l: "Duração", v: sessao.duracao },
-              { l: formadoresDaSessao(sessao).length > 1 ? "Formadores" : "Formador/a", v: formadoresDaSessaoLabel(sessao) || "—" },
+              { l: formadoresDaSessao(sessao).length > 1 ? "Formadores" : "Formador/a", v: formadoresDaSessaoLabel(sessao) || "-" },
               { l: "Data", v: sessao.data },
             ].map(f => (
               <div key={f.l} className="bg-amber-50 border border-amber-100 rounded-xl p-3">
@@ -623,7 +637,7 @@ export function SumarioSessaoModal({ open, onClose, sessao, sumario, accent = "g
   const fields: { key: keyof Pick<SumarioSessaoData, "conteudos" | "atividades" | "observacoes">; label: string; hint: string }[] = [
     { key: "conteudos", label: "Conteúdos leccionados", hint: "O que foi efectivamente tratado nesta sessão." },
     { key: "atividades", label: "Atividades realizadas", hint: "Exercícios, demonstrações, trabalhos de grupo." },
-    { key: "observacoes", label: "Observações e ocorrências", hint: "Atrasos, desistências, material em falta — ou deixe em branco." },
+    { key: "observacoes", label: "Observações e ocorrências", hint: "Atrasos, desistências, material em falta - ou deixe em branco." },
   ];
 
   return (

@@ -268,9 +268,10 @@ function PageHeader({ title, sub, action }: { title: string; sub?: string; actio
     </div>
   );
 }
-function NewBtn({ label, onClick }: { label: string; onClick?: () => void }) {
+function NewBtn({ label, onClick, accent = "gold" }: { label: string; onClick?: () => void; accent?: "gold" | "fin" }) {
   const text = label.replace(/^\+\s*/, "");
-  return <button onClick={onClick} className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm whitespace-nowrap">{I.plus}{text}</button>;
+  const cls = accent === "gold" ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700";
+  return <button onClick={onClick} className={`inline-flex items-center gap-1.5 px-4 py-2 ${cls} text-white text-sm font-semibold rounded-lg transition-colors shadow-sm whitespace-nowrap`}>{I.plus}{text}</button>;
 }
 function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <th className={`text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap bg-slate-50 border-b border-slate-200 ${className}`}>{children}</th>;
@@ -657,6 +658,90 @@ function sumarioBtnCls(s: SumarioSessaoData | undefined, gold: boolean) {
   return gold ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100";
 }
 
+function SessoesTurmaTab({
+  accent, turmaNome, sessoes, sumarios, onNovaSessao, onPlano, onSumario, onPresencas, onOpenFormador,
+}: {
+  accent: "gold" | "fin";
+  turmaNome: string;
+  sessoes: SessaoMeta[];
+  sumarios: Record<number, SumarioSessaoData>;
+  onNovaSessao: () => void;
+  onPlano: (s: SessaoMeta) => void;
+  onSumario: (s: SessaoMeta) => void;
+  onPresencas: (s: SessaoMeta) => void;
+  onOpenFormador?: (nome: string) => void;
+}) {
+  const gold = accent === "gold";
+  const numCls = gold ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700";
+  const planoTodo = gold ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100";
+  return (
+    <Card>
+      <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-700">Sessões - {turmaNome}</p>
+        <NewBtn accent={accent} label="+ Nova Sessão" onClick={onNovaSessao} />
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <Th>Nº</Th><Th>Data / Hora</Th><Th>Módulo</Th><Th>Formadores</Th>
+              <Th>Plano de Sessão</Th><Th>Sumário</Th><Th>Presenças</Th><Th>Estado</Th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {sessoes.map(s => {
+              const sum = sumarios[s.n];
+              const realizada = s.estado === "Realizada";
+              return (
+                <tr key={s.n} className="hover:bg-slate-50">
+                  <Td><span className={`w-7 h-7 rounded-full ${numCls} text-xs font-bold flex items-center justify-center`}>{s.n}</span></Td>
+                  <Td>
+                    <p className="text-xs font-medium text-slate-800 whitespace-nowrap">{s.data}</p>
+                    <p className="text-xs text-slate-400">{s.hora}</p>
+                  </Td>
+                  <Td><ModulosCell sessao={s} /></Td>
+                  <Td><FormadoresCell sessao={s} onOpen={onOpenFormador} /></Td>
+                  <Td>
+                    <button type="button" onClick={() => onPlano(s)}
+                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${s.plano ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100" : planoTodo}`}>
+                      {s.plano ? "Ver plano" : "+ Preencher plano"}
+                    </button>
+                  </Td>
+                  <Td>
+                    <button type="button" onClick={() => onSumario(s)}
+                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${sumarioBtnCls(sum, gold)}`}>
+                      {sumarioLabel(sum)}
+                    </button>
+                  </Td>
+                  <Td>
+                    <button
+                      type="button"
+                      disabled={!realizada}
+                      title={realizada ? "Marcar presenças desta sessão" : "As presenças só se marcam depois da sessão"}
+                      onClick={() => realizada && onPresencas(s)}
+                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${
+                        realizada
+                          ? "text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100"
+                          : "text-slate-400 bg-slate-50 border-slate-200 cursor-not-allowed"
+                      }`}
+                    >
+                      {realizada ? "Marcar presenças" : "Após a sessão"}
+                    </button>
+                  </Td>
+                  <Td>{estadoBadge(s.estado)}</Td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {sessoes.length === 0 && (
+        <p className="px-4 py-8 text-center text-xs text-slate-400">Ainda não há sessões. Gere o cronograma ou adicione a primeira sessão.</p>
+      )}
+    </Card>
+  );
+}
+
 const certificadosSample = [
   { id: 1, nome: "Tiago Bento", presencas: 100, elearning: 90, nota: 17, certificado: true },
   { id: 2, nome: "Luciana D'Avila", presencas: 80, elearning: 100, nota: 15, certificado: false },
@@ -1035,47 +1120,17 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           <DtpPanel regime="gold" turma={{ codigo: turma.nome, id: turma.id, titulo: turma.curso, sub: `${turma.local} · ${turma.horario}` }} />
         )}
         {tab === "sessoes" && (
-          <Card>
-            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-700">Sessões - {turma.nome}</p>
-              <NewBtn label="+ Nova Sessão" onClick={() => { setFormadoresSessao(turma.formador ? [turma.formador] : []); setModuloSessao([]); setNovaSessao(true); }} />
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead><tr><Th>Nº</Th><Th>Data / Hora</Th><Th>Módulo</Th><Th>Formadores</Th><Th>Plano de Sessão</Th><Th>Sumário</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
-                <tbody className="divide-y divide-slate-100">
-                  {sessoesTurma.map(s => {
-                    const sum = sumarios[s.n];
-                    return (
-                    <tr key={s.n} className="hover:bg-slate-50">
-                      <Td><span className="w-7 h-7 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center">{s.n}</span></Td>
-                      <Td>
-                        <p className="text-xs font-medium text-slate-800 whitespace-nowrap">{s.data}</p>
-                        <p className="text-xs text-slate-400">{s.hora}</p>
-                      </Td>
-                      <Td><ModulosCell sessao={s} /></Td>
-                      <Td><FormadoresCell sessao={s} onOpen={setFormadorOpen} /></Td>
-                      <Td>
-                        <button onClick={() => setPlanoSessao(s)}
-                          className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${s.plano ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100" : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"}`}>
-                          {s.plano ? "Ver plano" : "+ Preencher plano"}
-                        </button>
-                      </Td>
-                      <Td>
-                        <button onClick={() => setSumarioSessao(s)}
-                          className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${sumarioBtnCls(sum, true)}`}>
-                          {sumarioLabel(sum)}
-                        </button>
-                      </Td>
-                      <Td>{estadoBadge(s.estado)}</Td>
-                      <Td><div className="flex gap-1"><ActBtn icon={I.attend} label="Presenças" color={s.estado === "Realizada" ? "teal" : "gray"} onClick={() => s.estado === "Realizada" && setPresencasSession(s)} /><ActBtn icon={I.edit} label="Editar" /></div></Td>
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          <SessoesTurmaTab
+            accent="gold"
+            turmaNome={turma.nome}
+            sessoes={sessoesTurma}
+            sumarios={sumarios}
+            onNovaSessao={() => { setFormadoresSessao(turma.formador ? [turma.formador] : []); setModuloSessao([]); setNovaSessao(true); }}
+            onPlano={setPlanoSessao}
+            onSumario={setSumarioSessao}
+            onPresencas={setPresencasSession}
+            onOpenFormador={setFormadorOpen}
+          />
         )}
         {tab === "documentos" && <DocumentosTurmaTab regime="gold" curso={turma.curso} />}
         {tab === "certificados" && <CertificadosTurmaTab onUpload={id => setUploadCert(id)} />}
@@ -1198,7 +1253,12 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         sumario={sumarioSessao ? (sumarios[sumarioSessao.n] ?? emptySumario()) : emptySumario()}
         onSave={data => { if (sumarioSessao) setSumarios(prev => ({ ...prev, [sumarioSessao.n]: data })); }}
       />
-      <PresencasSessaoModal open={!!presencasSession} onClose={() => setPresencasSession(null)} sessao={presencasSession ?? undefined} />
+      <PresencasSessaoModal
+        open={!!presencasSession}
+        onClose={() => setPresencasSession(null)}
+        sessao={presencasSession ?? undefined}
+        formandos={(membros.length ? membros : formandosTurmasData.slice(0, 8)).map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }))}
+      />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" />
       <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? ""} />
       <SlideOver open={novaSessao} onClose={() => setNovaSessao(false)} title="Nova sessão" sub={turma.nome}>
@@ -1336,16 +1396,29 @@ function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (
   );
 }
 
-function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview" }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab }) {
+function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab; onNavigate?: (v: View | NavTarget) => void }) {
   const { fin, toggleFin, setFinCronograma } = useTurmas();
   const turma = fin.find(t => t.id === turmaId) ?? fin.find(t => t.ufcdCod === "3564") ?? fin[0];
   const activa = isTurmaActiva(turma);
+  const sessoesTurma = turma.cronograma.length ? cronogramaToSessoes(turma.cronograma) : finSessoesSample;
   const [tab, setTab] = useState<CockpitTab>(initialTab);
   const [formadorOpen, setFormadorOpen] = useState<string | null>(null);
   const [uploadCert, setUploadCert] = useState<number | null>(null);
+  const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
+  const [planos, setPlanos] = useState<Record<number, PlanoSessaoData>>(defaultPlanos);
+  const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
+  const [sumarios, setSumarios] = useState<Record<number, SumarioSessaoData>>(defaultSumariosFin);
+  const [presencasSession, setPresencasSession] = useState<SessaoMeta | null>(null);
+  const [novaSessao, setNovaSessao] = useState(false);
+  const [formadoresSessao, setFormadoresSessao] = useState<string[]>([]);
+  const formadorOptsSessao = useFormadorOptions(formadoresSessao);
+  const [moduloSessao, setModuloSessao] = useState<string[]>([]);
+  const [dataSessao, setDataSessao] = useState("");
+  const [horaSessao, setHoraSessao] = useState("19:00");
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
   const prontos = Math.floor(turma.alunos * 0.8);
   const membros = finFormandosData.filter(f => f.curso === turma.curso || f.turma.includes(turma.ufcdCod));
+  const listaFormandos = membros.length ? membros : finFormandosData;
 
   return (
     <div className="space-y-5">
@@ -1402,7 +1475,19 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview" }: { tur
       {tab === "dtp" && (
         <DtpPanel regime="fin" turma={{ codigo: turma.ufcdCod === "3564" ? "UFCD 3564 · T1" : turma.nome, id: turma.id, titulo: turma.curso, sub: `UFCD ${turma.ufcdCod} · ${turma.horas}h` }} />
       )}
-      {tab === "sessoes" && <PresencasView turmaId={turma.id} embedded />}
+      {tab === "sessoes" && (
+        <SessoesTurmaTab
+          accent="fin"
+          turmaNome={turma.nome}
+          sessoes={sessoesTurma}
+          sumarios={sumarios}
+          onNovaSessao={() => { setFormadoresSessao(turma.formador ? [turma.formador] : []); setModuloSessao([]); setNovaSessao(true); }}
+          onPlano={setPlanoSessao}
+          onSumario={setSumarioSessao}
+          onPresencas={setPresencasSession}
+          onOpenFormador={setFormadorOpen}
+        />
+      )}
       {tab === "documentos" && <DocumentosTurmaTab regime="fin" curso={turma.curso} />}
       {tab === "certificados" && <CertificadosTurmaTab onUpload={id => setUploadCert(id)} />}
       {tab === "overview" && (
@@ -1420,6 +1505,50 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview" }: { tur
               </Card>
             ))}
           </div>
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Programa da UFCD</p>
+              <button onClick={() => onNavigate?.("fin-cursos")} className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800">{I.edit} Editar programa →</button>
+            </div>
+            <div className="space-y-2">
+              {[
+                `UFCD ${turma.ufcdCod} · ${turma.curso} (${turma.horas}h)`,
+                "Sessões síncronas em sala virtual + trabalho na plataforma",
+                "Assiduidade e avaliação contínua para certificado",
+              ].map((line, i) => (
+                <div key={i} className="flex items-start gap-2 text-sm text-slate-700">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
+                  <span>{line}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+          <Card>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <p className="text-sm font-semibold text-slate-700">Lista de Formandos</p>
+              {activa
+                ? <NewBtn accent="fin" label="Adicionar" />
+                : <button disabled title="Turma inativa - não aceita novas inscrições" className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-200 text-slate-400 text-sm font-semibold rounded-lg cursor-not-allowed">Adicionar</button>}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr><Th>Nome</Th><Th>Contacto</Th><Th>Turma</Th><Th>Estado</Th></tr></thead>
+                <tbody className="divide-y divide-slate-100">
+                  {listaFormandos.map(f => (
+                    <tr key={f.id} className="hover:bg-slate-50">
+                      <Td>
+                        <p className="text-xs font-semibold text-slate-800">{f.nome} {f.apelido}</p>
+                        <p className="text-xs text-slate-400 truncate max-w-[160px]">{f.email}</p>
+                      </Td>
+                      <Td className="font-mono text-xs text-slate-500">{f.telf}</Td>
+                      <Td className="text-xs text-slate-600 whitespace-nowrap">{f.turma}</Td>
+                      <Td>{estadoBadge(f.estado)}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormadoresAtribuidosCard
               sessoes={turma.cronograma}
@@ -1427,21 +1556,92 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview" }: { tur
               onOpen={setFormadorOpen}
             />
             <Card className="p-4">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Formandos desta turma</p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Próximas Sessões</p>
               <div className="space-y-2">
-                {(membros.length ? membros : finFormandosData).slice(0, 4).map(f => (
-                  <div key={f.id} className="flex items-center justify-between text-xs">
-                    <span className="font-medium text-slate-700">{f.nome} {f.apelido}</span>
-                    {estadoBadge(f.estado)}
+                {turma.cronograma.filter(s => s.data >= "2026-09-06").slice(0, 3).map((s, i) => (
+                  <div key={s.id ?? i} className="flex items-center gap-2 text-xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
+                    <span className="text-slate-600">{formatSessaoLine(s)}</span>
                   </div>
                 ))}
+                {turma.cronograma.filter(s => s.data >= "2026-09-06").length === 0 && (
+                  <p className="text-xs text-slate-400">Sem sessões futuras. Edite o cronograma da turma.</p>
+                )}
               </div>
             </Card>
           </div>
         </>
       )}
+      <PlanoSessaoModal
+        open={!!planoSessao}
+        onClose={() => setPlanoSessao(null)}
+        sessao={planoSessao ?? undefined}
+        plano={planoSessao ? (planos[planoSessao.n] ?? emptyPlano()) : emptyPlano()}
+        onSave={data => { if (planoSessao) setPlanos(prev => ({ ...prev, [planoSessao.n]: data })); }}
+      />
+      <SumarioSessaoModal
+        open={!!sumarioSessao}
+        onClose={() => setSumarioSessao(null)}
+        accent="fin"
+        sessao={sumarioSessao ?? undefined}
+        sumario={sumarioSessao ? (sumarios[sumarioSessao.n] ?? emptySumario()) : emptySumario()}
+        onSave={data => { if (sumarioSessao) setSumarios(prev => ({ ...prev, [sumarioSessao.n]: data })); }}
+      />
+      <PresencasSessaoModal
+        open={!!presencasSession}
+        onClose={() => setPresencasSession(null)}
+        sessao={presencasSession ?? undefined}
+        formandos={listaFormandos.map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }))}
+      />
       <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? turma.formador} />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" accent="fin" />
+      <SlideOver open={novaSessao} onClose={() => setNovaSessao(false)} title="Nova sessão" sub={turma.nome}>
+        <div className="p-5 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Data"><input type="date" className={iCls} value={dataSessao} onChange={e => setDataSessao(e.target.value)} /></Field>
+            <Field label="Hora início"><input type="time" className={iCls} value={horaSessao} onChange={e => setHoraSessao(e.target.value)} /></Field>
+          </div>
+          <Field label="Formadores">
+            <MultiSearchSelect
+              values={formadoresSessao}
+              onChange={setFormadoresSessao}
+              options={formadorOptsSessao}
+              placeholder="Pesquisar formador…"
+              noneLabel="Selecionar formadores…"
+              unitSingular="formador"
+              unitPlural="formadores"
+            />
+          </Field>
+          <Field label="Módulos">
+            <MultiSearchSelect
+              values={moduloSessao}
+              onChange={setModuloSessao}
+              options={modulosOptsForCurso(turma.curso)}
+              placeholder="Pesquisar módulo do curso…"
+              noneLabel="Selecionar módulos…"
+              unitSingular="módulo"
+              unitPlural="módulos"
+            />
+          </Field>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setNovaSessao(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={() => {
+              if (!dataSessao) return;
+              const [h, m] = (horaSessao || "19:00").split(":").map(Number);
+              const endH = String((h || 19) + 3).padStart(2, "0");
+              setFinCronograma(turma.id, [...turma.cronograma, {
+                id: `s-manual-${Date.now()}`,
+                data: dataSessao,
+                horaInicio: horaSessao || "19:00",
+                horaFim: `${endH}:${String(m || 0).padStart(2, "0")}`,
+                modulos: moduloSessao,
+                formadores: formadoresSessao,
+              }]);
+              setNovaSessao(false);
+            }} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">Criar sessão</button>
+          </div>
+        </div>
+      </SlideOver>
     </div>
   );
 }
@@ -1638,167 +1838,6 @@ function DossierPanel({ formando }: { formando: FinFormando }) {
       </div>
 
       <button className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors">Enviar lembrete de documentos</button>
-    </div>
-  );
-}
-
-// ─── Folha de Presenças ───────────────────────────────────────────────────────
-
-function PresencasView({ turmaId, embedded }: { turmaId?: number; embedded?: boolean }) {
-  const { fin } = useTurmas();
-  type Presenca = { [key: number]: boolean };
-  const sessoes = ["Sess. 1 · 27 Ago", "Sess. 2 · 03 Set", "Sess. 3 · 10 Set", "Sess. 4 · 17 Set", "Sess. 5 · 24 Set"];
-  const [presencas, setPresencas] = useState<Record<number, Presenca>>(() => {
-    const init: Record<number, Presenca> = {};
-    finFormandosData.forEach(f => {
-      init[f.id] = {};
-      sessoes.forEach((_, si) => { init[f.id][si] = Math.random() > 0.25; });
-    });
-    return init;
-  });
-  const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
-  const [sumarios, setSumarios] = useState<Record<number, SumarioSessaoData>>(defaultSumariosFin);
-  const [filtroCurso, setFiltroCurso] = useState("");
-  const [filtroTurma, setFiltroTurma] = useState("");
-
-  function toggle(fId: number, si: number) {
-    setPresencas(prev => ({ ...prev, [fId]: { ...prev[fId], [si]: !prev[fId][si] } }));
-  }
-
-  const turma = fin.find(t => t.id === turmaId)
-    ?? fin.find(t => filtroTurma && t.nome === filtroTurma)
-    ?? fin.find(t => filtroCurso && t.curso === filtroCurso)
-    ?? fin.find(t => t.ufcdCod === "3564")
-    ?? fin[0];
-
-  return (
-    <div className="space-y-4">
-      {!embedded && <PageHeader title="Folha de Presenças" sub={`${turma.nome} · UFCD ${turma.ufcdCod} · ${turma.horas}h`}
-        action={<button className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors">{I.download} Exportar</button>} />}
-      {!embedded && (
-        <ViewFilters
-          accent="fin"
-          fields={[
-            { label: "Curso / UFCD", value: filtroCurso, onChange: v => { setFiltroCurso(v); setFiltroTurma(""); }, options: uniqueOpts(fin.map(t => t.curso)) },
-            { label: "Turma", value: filtroTurma, onChange: setFiltroTurma, options: uniqueOpts(fin.filter(t => !filtroCurso || t.curso === filtroCurso).map(t => t.nome)) },
-          ]}
-          onClear={() => { setFiltroCurso(""); setFiltroTurma(""); }}
-        />
-      )}
-      {embedded && <p className="text-xs text-slate-500">Sessões da turma <span className="font-semibold text-slate-700">{turma.nome}</span> · UFCD {turma.ufcdCod} · {turma.horas}h</p>}
-
-      <Card>
-        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-          <p className="text-sm font-semibold text-slate-700">Sessões - {turma.nome}</p>
-          <span className="text-xs text-slate-500">{Object.values(sumarios).filter(s => s.assinado).length}/{(turma.cronograma.length ? turma.cronograma : finSessoesSample).length} sumários assinados</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr><Th>Nº</Th><Th>Data / Hora</Th><Th>Módulo</Th><Th>Formadores</Th><Th>Sumário</Th><Th>Estado</Th></tr></thead>
-            <tbody className="divide-y divide-slate-100">
-              {(turma.cronograma.length ? cronogramaToSessoes(turma.cronograma) : finSessoesSample).map(s => {
-                const sum = sumarios[s.n];
-                return (
-                  <tr key={s.n} className="hover:bg-slate-50">
-                    <Td><span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">{s.n}</span></Td>
-                    <Td>
-                      <p className="text-xs font-medium text-slate-800 whitespace-nowrap">{s.data}</p>
-                      <p className="text-xs text-slate-400">{s.hora}</p>
-                    </Td>
-                    <Td><ModulosCell sessao={s} /></Td>
-                    <Td><FormadoresCell sessao={s} /></Td>
-                    <Td>
-                      <button onClick={() => setSumarioSessao(s)}
-                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${sumarioBtnCls(sum, false)}`}>
-                        {sumarioLabel(sum)}
-                      </button>
-                    </Td>
-                    <Td>{estadoBadge(s.estado)}</Td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* Turma summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { l: "UFCD", v: turma.ufcdCod, c: "text-blue-600" },
-          { l: "Formador", v: turma.formador, c: "text-slate-800" },
-          { l: "Sessões", v: `${sessoes.length}`, c: "text-slate-800" },
-          { l: "Horas totais", v: `${turma.horas}h`, c: "text-violet-600" },
-        ].map(s => (
-          <Card key={s.l} className="p-3">
-            <p className="text-xs text-slate-400 uppercase tracking-wider">{s.l}</p>
-            <p className={`text-base font-bold ${s.c} mt-0.5`}>{s.v}</p>
-          </Card>
-        ))}
-      </div>
-
-      <Card>
-        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-          <p className="text-sm font-semibold text-slate-700">Registo de presenças</p>
-          <div className="flex gap-2 text-xs">
-            <span className="flex items-center gap-1"><span className="w-3 h-3 bg-emerald-500 rounded" /> Presente</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-400 rounded" /> Falta</span>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr>
-                <Th>Formando</Th>
-                {sessoes.map(s => <Th key={s} className="text-center whitespace-nowrap">{s}</Th>)}
-                <Th className="text-center">Assiduidade</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {finFormandosData.map(f => {
-                const p = presencas[f.id] ?? {};
-                const presentes = sessoes.filter((_, i) => p[i]).length;
-                const pct = Math.round((presentes / sessoes.length) * 100);
-                return (
-                  <tr key={f.id} className="hover:bg-slate-50 transition-colors">
-                    <Td>
-                      <p className="text-xs font-semibold text-slate-800">{f.nome} {f.apelido}</p>
-                      <p className="text-xs text-slate-400 truncate max-w-[120px]">{f.email}</p>
-                    </Td>
-                    {sessoes.map((_, si) => (
-                      <Td key={si} className="text-center">
-                        <button onClick={() => toggle(f.id, si)}
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center mx-auto text-white transition-colors ${p[si] ? "bg-emerald-500 hover:bg-emerald-600" : "bg-red-400 hover:bg-red-500"}`}>
-                          {p[si] ? I.check : I.xSm}
-                        </button>
-                      </Td>
-                    ))}
-                    <Td className="text-center">
-                      <div className="flex flex-col items-center">
-                        <span className={`text-sm font-bold ${pct >= 75 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-500"}`}>{pct}%</span>
-                        <div className="w-12 bg-slate-100 rounded-full h-1.5 mt-1">
-                          <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, backgroundColor: pct >= 75 ? "#10B981" : pct >= 50 ? "#F59E0B" : "#EF4444" }} />
-                        </div>
-                      </div>
-                    </Td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div className="px-4 py-3 border-t border-slate-100 flex justify-end">
-          <button className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors">Guardar presenças</button>
-        </div>
-      </Card>
-      <SumarioSessaoModal
-        open={!!sumarioSessao}
-        onClose={() => setSumarioSessao(null)}
-        accent="fin"
-        sessao={sumarioSessao ?? undefined}
-        sumario={sumarioSessao ? (sumarios[sumarioSessao.n] ?? emptySumario()) : emptySumario()}
-        onSave={data => { if (sumarioSessao) setSumarios(prev => ({ ...prev, [sumarioSessao.n]: data })); }}
-      />
     </div>
   );
 }
@@ -2977,7 +3016,6 @@ const sidebarConfig: NavGroup[] = [
     { label: "Formandos", view: "fin-formandos", icon: I.users },
     { label: "Turmas", view: "fin-turmas", icon: I.school },
     { label: "Formadores", view: "fin-formadores", icon: I.person },
-    { label: "Presenças", view: "fin-presencas", icon: I.attend },
     { label: "Cursos", view: "fin-cursos", icon: I.book },
     { label: "Dossiê TP", view: "fin-dtp", icon: I.folder },
     { label: "Inquéritos", view: "fin-inqueritos", icon: I.doc },
@@ -3112,7 +3150,7 @@ const viewTitles: Partial<Record<View, string>> = {
   "gold-turmas": "Turmas Gold", "gold-formadores": "Formadores Gold", "gold-cockpit-turma": "Cockpit da Turma", "gold-dtp": "Dossiê TP - Gold",
   "gold-inqueritos": "Inquéritos - Gold",
   "fin-inscricoes": "Inscrições Financiadas", "fin-formandos": "Formandos Financiados",
-  "fin-cursos": "Cursos Financiados", "fin-curso-ficha": "Ficha UFCD", "fin-turmas": "Turmas Financiadas", "fin-formadores": "Formadores Financiada", "fin-presencas": "Folha de Presenças",
+  "fin-cursos": "Cursos Financiados", "fin-curso-ficha": "Ficha UFCD", "fin-turmas": "Turmas Financiadas", "fin-formadores": "Formadores Financiada", "fin-presencas": "Sessões da turma",
   "fin-dtp": "Dossiê TP - Financiada", "fin-cockpit-turma": "Cockpit da Turma Financiada",
   "fin-inqueritos": "Inquéritos - Financiada",
   formadores: "Formadores Gold", "blog-posts": "Blog - Posts", "blog-tematicas": "Blog - Temáticas",
@@ -3220,9 +3258,12 @@ export default function App() {
         );
       }
       case "fin-turmas": return <FinTurmasView onCockpit={openFinCockpit} />;
-      case "fin-presencas": return <PresencasView />;
+      case "fin-presencas": {
+        const tid = finCockpitId ?? 218;
+        return <FinCockpitTurmaView turmaId={tid} initialTab="sessoes" onBack={() => navigate("fin-turmas")} onNavigate={navigate} />;
+      }
       case "fin-dtp": return <DtpTurmasPicker regime="fin" onOpen={(id) => openFinCockpit(id, "dtp")} />;
-      case "fin-cockpit-turma": return <FinCockpitTurmaView turmaId={finCockpitId} initialTab={cockpitTab} onBack={() => navigate("fin-turmas")} />;
+      case "fin-cockpit-turma": return <FinCockpitTurmaView turmaId={finCockpitId} initialTab={cockpitTab} onBack={() => navigate("fin-turmas")} onNavigate={navigate} />;
       case "fin-inqueritos": return <InqueritosView acento="fin" />;
       case "fin-formadores": return <FormadoresView regime="fin" />;
       case "blog-posts": return <BlogView />;

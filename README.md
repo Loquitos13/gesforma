@@ -13,7 +13,7 @@ O menu **Dossiê TP** lista as turmas com a completude do dossiê e abre o DTP d
 
 **Inquéritos** (Gold e Financiada) permitem montar questionários de satisfação com texto, escolha múltipla, escala 1–5 e sim/não.
 
-No cockpit da turma: plano de sessão completo (introdução / desenvolvimento / conclusão), **sumário por sessão** (conteúdos, atividades, assinatura do formador), folha de presenças, perfil do formador com documentos, e upload de certificados.
+No cockpit da turma (Gold e Financiada, os mesmos separadores): plano de sessão, **sumário por sessão** e **presenças dentro da sessão** — não há menu isolado de presenças. O perfil do formador e os certificados também vivem na turma.
 
 No separador **Documentos** (Gold / CCP):
 

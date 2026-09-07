@@ -106,9 +106,13 @@ export const formadoresOpts: SelectOption[] = [
   { value: "Rosana Suarez", sub: "938 039 001 · Massagem" },
 ];
 
-export function formadoresOptsWith(current?: string): SelectOption[] {
-  if (!current?.trim() || formadoresOpts.some(o => o.value === current)) return formadoresOpts;
-  return [{ value: current, sub: "Atribuído nesta turma" }, ...formadoresOpts];
+export function formadoresOptsWith(current?: string | string[]): SelectOption[] {
+  const extras = (Array.isArray(current) ? current : current ? [current] : [])
+    .map(v => v.trim())
+    .filter(Boolean)
+    .filter(v => !formadoresOpts.some(o => o.value === v));
+  if (!extras.length) return formadoresOpts;
+  return [...extras.map(value => ({ value, sub: "Atribuído nesta turma" })), ...formadoresOpts];
 }
 
 export const horariosOpts: SelectOption[] = [
@@ -232,12 +236,16 @@ export function SearchSelect({
 
 export function MultiSearchSelect({
   values, onChange, options, placeholder = "Pesquisar…", empty = "Nenhum resultado.",
+  noneLabel = "Selecionar…", unitSingular = "item", unitPlural = "itens",
 }: {
   values: string[];
   onChange: (next: string[]) => void;
   options: SelectOption[];
   placeholder?: string;
   empty?: string;
+  noneLabel?: string;
+  unitSingular?: string;
+  unitPlural?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -266,7 +274,7 @@ export function MultiSearchSelect({
       <button type="button" onClick={() => { setOpen(v => !v); setQ(""); }}
         className="w-full min-h-[38px] px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-amber-400">
         <span className="flex flex-wrap gap-1 min-w-0 flex-1">
-          {selected.length === 0 && <span className="text-slate-400 py-0.5">Selecionar módulos…</span>}
+          {selected.length === 0 && <span className="text-slate-400 py-0.5">{noneLabel}</span>}
           {selected.map(v => (
             <span key={v} className="inline-flex items-center gap-1 max-w-full px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-medium">
               <span className="truncate">{v}</span>
@@ -310,7 +318,7 @@ export function MultiSearchSelect({
         </div>
         {selected.length > 0 && (
           <div className="px-3 py-2 border-t border-slate-100 text-[11px] text-slate-500 bg-white">
-            {selected.length === 1 ? "1 módulo selecionado" : `${selected.length} módulos selecionados`} · clique de novo para retirar
+            {selected.length === 1 ? `1 ${unitSingular} selecionado` : `${selected.length} ${unitPlural} selecionados`} · clique de novo para retirar
           </div>
         )}
       </MenuPortal>

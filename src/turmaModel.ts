@@ -7,7 +7,7 @@ export type SessaoCronograma = {
   horaInicio: string;
   horaFim: string;
   modulos: string[];
-  formador: string;
+  formadores: string[];
 };
 
 export function modulosLabel(modulos: string[] | undefined, empty = "Módulo por definir") {
@@ -20,12 +20,26 @@ export function sessaoModulos(s: { modulos?: string[]; modulo?: string }) {
   return s.modulo ? [s.modulo] : [];
 }
 
-export function formadoresNasSessoes(sessoes: { formador?: string }[], fallback?: string) {
+export function sessaoFormadores(s: { formadores?: string[]; formador?: string }) {
+  if (s.formadores?.length) return s.formadores.map(f => f.trim()).filter(Boolean);
+  return s.formador?.trim() ? [s.formador.trim()] : [];
+}
+
+export function formadoresLabel(formadores: string[] | undefined, empty = "Formador por definir") {
+  const list = (formadores ?? []).map(f => f.trim()).filter(Boolean);
+  return list.length ? list.join(" · ") : empty;
+}
+
+export function formadoresNasSessoes(
+  sessoes: { formadores?: string[]; formador?: string }[],
+  fallback?: string,
+) {
   const counts = new Map<string, number>();
   for (const s of sessoes) {
-    const nome = (s.formador || "").trim();
-    if (!nome || nome === "A definir") continue;
-    counts.set(nome, (counts.get(nome) ?? 0) + 1);
+    for (const nome of sessaoFormadores(s)) {
+      if (!nome || nome === "A definir") continue;
+      counts.set(nome, (counts.get(nome) ?? 0) + 1);
+    }
   }
   if (counts.size === 0 && fallback?.trim()) counts.set(fallback.trim(), 0);
   return [...counts.entries()]
@@ -231,7 +245,7 @@ export function generateCronograma(opts: {
       horaInicio: slot.start,
       horaFim: slot.end,
       modulos: modulosForIndex(i, n, opts.curso),
-      formador: opts.formador || "A definir",
+      formadores: opts.formador && opts.formador !== "A definir" ? [opts.formador] : [],
     });
     cursor.setDate(cursor.getDate() + 1);
     for (let j = 0; j < 14; j++) {
@@ -249,7 +263,7 @@ export function emptySessao(formador = "A definir"): SessaoCronograma {
     horaInicio: "09:00",
     horaFim: "13:00",
     modulos: [],
-    formador,
+    formadores: formador && formador !== "A definir" ? [formador] : [],
   };
 }
 
@@ -262,17 +276,21 @@ export function horasCronograma(sessoes: SessaoCronograma[]) {
 }
 
 export function cronogramaToSessoes(c: SessaoCronograma[], today = "2026-09-06"): SessaoMeta[] {
-  return c.map((s, i) => ({
-    n: i + 1,
-    data: formatSessaoLabel(s.data),
-    hora: `${(s.horaInicio || "").replace(":", "h")}–${(s.horaFim || "").replace(":", "h")}`,
-    formador: s.formador,
-    estado: s.data && s.data < today ? "Realizada" : "Agendada",
-    plano: Boolean(s.data && s.data < today),
-    modulo: modulosLabel(s.modulos, ""),
-    modulos: s.modulos,
-    duracao: durationLabel(s.horaInicio || "09:00", s.horaFim || "13:00"),
-  }));
+  return c.map((s, i) => {
+    const formadores = sessaoFormadores(s);
+    return {
+      n: i + 1,
+      data: formatSessaoLabel(s.data),
+      hora: `${(s.horaInicio || "").replace(":", "h")}–${(s.horaFim || "").replace(":", "h")}`,
+      formador: formadoresLabel(formadores, ""),
+      formadores,
+      estado: s.data && s.data < today ? "Realizada" : "Agendada",
+      plano: Boolean(s.data && s.data < today),
+      modulo: modulosLabel(s.modulos, ""),
+      modulos: s.modulos,
+      duracao: durationLabel(s.horaInicio || "09:00", s.horaFim || "13:00"),
+    };
+  });
 }
 
 export function turmaGoldOpts(
@@ -327,19 +345,25 @@ export const GOLD_TURMAS_SEED: Omit<TurmaGold, "cronograma" | "formador" | "hora
 const GOLD_INATIVAS = new Set([937, 936]);
 
 export function seedGoldTurmas(): TurmaGold[] {
-  return GOLD_TURMAS_SEED.map(t => ({
-    ...t,
-    estado: GOLD_INATIVAS.has(t.id) ? "Inativa" : "Ativa",
-    formador: "Isac Silva",
-    horas: 90,
-    cronograma: generateCronograma({
+  return GOLD_TURMAS_SEED.map(t => {
+    const cronograma = generateCronograma({
       inicio: t.dataInicio,
       horario: t.horario,
       horas: 90,
       formador: "Isac Silva",
       curso: t.curso,
-    }),
-  }));
+    });
+    if (t.id === 943 && cronograma[2]) {
+      cronograma[2] = { ...cronograma[2], formadores: ["Isac Silva", "Ivan Esteves"] };
+    }
+    return {
+      ...t,
+      estado: GOLD_INATIVAS.has(t.id) ? "Inativa" : "Ativa",
+      formador: "Isac Silva",
+      horas: 90,
+      cronograma,
+    };
+  });
 }
 
 export const FIN_TURMAS_SEED: Omit<TurmaFin, "cronograma" | "activa">[] = [
@@ -351,15 +375,21 @@ export const FIN_TURMAS_SEED: Omit<TurmaFin, "cronograma" | "activa">[] = [
 ];
 
 export function seedFinTurmas(): TurmaFin[] {
-  return FIN_TURMAS_SEED.map(t => ({
-    ...t,
-    activa: t.id !== 222,
-    cronograma: generateCronograma({
+  return FIN_TURMAS_SEED.map(t => {
+    const cronograma = generateCronograma({
       inicio: t.dataInicio,
       horario: t.horario === "Online" ? "Pós Laboral" : t.horario,
       horas: t.horas,
       formador: t.formador,
       curso: t.curso,
-    }),
-  }));
+    });
+    if (t.id === 218 && cronograma[2]) {
+      cronograma[2] = { ...cronograma[2], formadores: ["Vânia Fernandes", "Cátia Pinheiro"] };
+    }
+    return {
+      ...t,
+      activa: t.id !== 222,
+      cronograma,
+    };
+  });
 }

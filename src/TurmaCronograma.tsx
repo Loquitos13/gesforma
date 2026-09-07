@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import { MultiSearchSelect, SearchSelect, formadoresOptsWith, modulosOptsForCurso } from "./FormKit";
+import { MultiSearchSelect, formadoresOptsWith, modulosOptsForCurso } from "./FormKit";
 import {
   CRONOGRAMA_HOJE,
   emptySessao,
   formatDiaMes,
   formatHoraRange,
   formatMesAno,
+  formadoresLabel,
   formadoresNasSessoes,
   generateCronograma,
   groupCronogramaByMonth,
@@ -15,6 +16,7 @@ import {
   proximaSessao,
   sessaoDuracaoHoras,
   sessaoEstado,
+  sessaoFormadores,
   sessaoModulos,
   weekdayShort,
   type SessaoCronograma,
@@ -182,7 +184,7 @@ function SessaoRow({
           </div>
           <div className="min-w-0 col-span-2 sm:col-span-1 sm:pl-2">
             <p className="text-sm font-medium text-slate-800 truncate">{modulosLabel(sessaoModulos(sessao))}</p>
-            <p className="text-xs text-slate-500 truncate">{sessao.formador || "Formador por definir"}</p>
+            <p className="text-xs text-slate-500 truncate">{formadoresLabel(sessaoFormadores(sessao))}</p>
           </div>
           <span className={`hidden sm:inline-flex text-[11px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${chip.cls}`}>
             {chip.label}
@@ -212,15 +214,18 @@ function SessaoRow({
             <span className="block text-[11px] font-semibold text-slate-500 mb-1">Fim</span>
             <input type="time" value={sessao.horaFim} onChange={e => onPatch({ horaFim: e.target.value })} className={iCls} />
           </label>
-          <label className="block col-span-2 sm:col-span-2">
-            <span className="block text-[11px] font-semibold text-slate-500 mb-1">Formador</span>
-            <SearchSelect
-              value={sessao.formador}
-              onChange={v => onPatch({ formador: v })}
-              options={formadoresOptsWith(sessao.formador)}
+          <label className="block col-span-2 sm:col-span-4">
+            <span className="block text-[11px] font-semibold text-slate-500 mb-1">Formadores desta sessão</span>
+            <MultiSearchSelect
+              values={sessaoFormadores(sessao)}
+              onChange={formadores => onPatch({ formadores })}
+              options={formadoresOptsWith(sessaoFormadores(sessao))}
               placeholder="Pesquisar formador…"
-              allowEmpty
+              noneLabel="Selecionar formadores…"
+              unitSingular="formador"
+              unitPlural="formadores"
             />
+            <p className="text-[11px] text-slate-400 mt-1">Pode atribuir mais do que um formador à mesma sessão.</p>
           </label>
           <label className="block col-span-2 sm:col-span-4">
             <span className="block text-[11px] font-semibold text-slate-500 mb-1">Módulos desta sessão</span>
@@ -230,6 +235,9 @@ function SessaoRow({
               options={moduloOpts}
               placeholder="Pesquisar módulo do curso…"
               empty="Não há módulos para este curso."
+              noneLabel="Selecionar módulos…"
+              unitSingular="módulo"
+              unitPlural="módulos"
             />
             <p className="text-[11px] text-slate-400 mt-1">Pode associar mais do que um módulo à mesma sessão.</p>
           </label>
@@ -341,7 +349,7 @@ export function CronogramaEditor({
             {sessoes.length === 0
               ? "Gere o plano a partir da data de início e do horário da turma, ou adicione sessões à mão."
               : page
-                ? "Clique numa sessão para ajustar data, horário, módulo ou formador. Regenerar substitui o plano atual."
+                ? "Clique numa sessão para ajustar data, horário, módulos ou formadores. Regenerar substitui o plano atual."
                 : `${sessoes.length} sessões · ${totalH}h calendarizadas${horas ? ` de ${horas}h` : ""}`}
           </p>
           <div className="flex flex-wrap gap-1.5 mt-2">

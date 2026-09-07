@@ -346,7 +346,16 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf = "914 547 
 export type MomentoKey = "introducao" | "desenvolvimento" | "conclusao";
 export type MomentoField = { conteudo: string; atividades: string; metodos: string; avaliacao: string; recursos: string; materiais: string };
 export type PlanoSessaoData = { objetivosGerais: string; objetivosEspecificos: string; momentos: Record<MomentoKey, MomentoField> };
-export type SessaoMeta = { n: number; data: string; hora: string; formador: string; estado: string; plano: boolean; modulo: string; modulos?: string[]; duracao: string };
+export type SessaoMeta = { n: number; data: string; hora: string; formador: string; formadores?: string[]; estado: string; plano: boolean; modulo: string; modulos?: string[]; duracao: string };
+
+function formadoresDaSessao(s: SessaoMeta) {
+  if (s.formadores?.length) return s.formadores.map(f => f.trim()).filter(Boolean);
+  return s.formador?.trim() ? [s.formador.trim()] : [];
+}
+
+function formadoresDaSessaoLabel(s: SessaoMeta) {
+  return formadoresDaSessao(s).join(" · ");
+}
 
 export const emptyMomento: MomentoField = { conteudo: "", atividades: "", metodos: "", avaliacao: "", recursos: "", materiais: "" };
 
@@ -479,7 +488,7 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano, onSave }: {
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
           <div>
             <p className="text-sm font-bold text-slate-800">Plano de Sessão - Sessão {sessao.n}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{sessao.data} · {sessao.hora} · {sessao.formador}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{sessao.data} · {sessao.hora} · {formadoresDaSessaoLabel(sessao) || "Formador por definir"}</p>
           </div>
           <div className="flex items-center gap-2">
             {!editing
@@ -500,7 +509,7 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano, onSave }: {
             {[
               { l: sessao.modulos && sessao.modulos.length > 1 ? "Módulos" : "Módulo", v: sessao.modulos?.length ? sessao.modulos.join(" · ") : sessao.modulo },
               { l: "Duração", v: sessao.duracao },
-              { l: "Formador/a", v: sessao.formador },
+              { l: formadoresDaSessao(sessao).length > 1 ? "Formadores" : "Formador/a", v: formadoresDaSessaoLabel(sessao) || "—" },
               { l: "Data", v: sessao.data },
             ].map(f => (
               <div key={f.l} className="bg-amber-50 border border-amber-100 rounded-xl p-3">
@@ -623,7 +632,7 @@ export function SumarioSessaoModal({ open, onClose, sessao, sumario, accent = "g
         <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
           <div>
             <p className="text-sm font-semibold text-slate-800">Sumário - Sessão {sessao.n}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{sessao.data} · {sessao.hora} · {sessao.formador}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{sessao.data} · {sessao.hora} · {formadoresDaSessaoLabel(sessao) || "Formador por definir"}</p>
           </div>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
         </div>
@@ -656,7 +665,7 @@ export function SumarioSessaoModal({ open, onClose, sessao, sumario, accent = "g
             </span>
             <div>
               <p className="text-xs font-semibold text-slate-700">
-                {sumario.assinado ? `Assinado por ${sessao.formador}` : "Por assinar pelo formador"}
+                {sumario.assinado ? `Assinado por ${formadoresDaSessaoLabel(sessao) || "formador"}` : "Por assinar pelo formador"}
               </p>
               {sumario.assinadoEm && <p className="text-xs text-slate-400">{sumario.assinadoEm}</p>}
             </div>

@@ -1043,7 +1043,18 @@ export function ConfiguracoesView() {
   const current = idx >= 0 ? configCards[idx] : null;
   useEffect(() => {
     if (!openId) return;
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") setOpenId(null); };
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenId(null);
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        setOpenId(cur => {
+          const i = configCards.findIndex(c => c.id === cur);
+          if (e.key === "ArrowLeft" && i > 0) return configCards[i - 1].id;
+          if (e.key === "ArrowRight" && i >= 0 && i < configCards.length - 1) return configCards[i + 1].id;
+          return cur;
+        });
+      }
+    };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
   }, [openId]);
@@ -1117,7 +1128,7 @@ export function ConfiguracoesView() {
                   className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40">
                   ← Anterior
                 </button>
-                <span className="text-xs text-slate-400">{idx + 1} / {configCards.length}</span>
+                <span className="text-xs text-slate-400">{idx + 1} / {configCards.length} · ← →</span>
                 <button type="button" disabled={idx >= configCards.length - 1} onClick={() => setOpenId(configCards[idx + 1].id)}
                   className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40">
                   Seguinte →

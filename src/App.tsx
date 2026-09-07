@@ -179,7 +179,7 @@ const campanhasData = [
 
 const emailRegras = [
   { id: 1, nome: "Boas-vindas ao registo", gatilho: "Nova pré-inscrição recebida", template: "welcome", ativo: true, envios: 16537, taxaAbertura: 94.2 },
-  { id: 2, nome: "Confirmação de pagamento", gatilho: "Pagamento confirmado", template: "payment_confirm", ativo: true, envios: 6379, taxaAbertura: 98.1 },
+  { id: 2, nome: "Confirmação de pagamento", gatilho: "Pagamento confirmado", template: "payment", ativo: true, envios: 6379, taxaAbertura: 98.1 },
   { id: 3, nome: "Lembrete 24h antes do curso", gatilho: "24 horas antes do início", template: "reminder_24h", ativo: true, envios: 4892, taxaAbertura: 91.7 },
   { id: 5, nome: "Certificado de conclusão", gatilho: "Formando marcado como concluído", template: "certificate", ativo: true, envios: 3821, taxaAbertura: 99.2 },
   { id: 6, nome: "Reengajamento 30 dias", gatilho: "30 dias sem compra", template: "reengagement", ativo: false, envios: 8941, taxaAbertura: 76.3 },
@@ -258,53 +258,94 @@ function fillEmailVars(text: string, vars: Record<string, string>) {
   return text.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? "");
 }
 
+const EMAIL_TIPO_ALIAS: Record<string, string> = { payment_confirm: "payment" };
+
+const GATILHO_TEMPLATE: Record<string, string> = {
+  "Nova pré-inscrição recebida": "Boas-vindas",
+  "Pré-inscrição sem pagamento há 3 dias": "Reengajamento",
+  "Pagamento confirmado": "Confirmação de Pagamento",
+  "24 horas antes do início": "Lembrete 24h",
+  "Formando marcado como concluído": "Certificado de Conclusão",
+  "30 dias sem compra": "Reengajamento",
+};
+
+function destFromGatilho(gatilho: string) {
+  if (gatilho.includes("Sumário") || gatilho.toLowerCase().includes("interno")) {
+    return { nome: "Isac Silva", papel: "Formador", email: "isac.silva@ena.pt" };
+  }
+  if (gatilho.includes("pré-inscrição") || gatilho.includes("compra")) {
+    return { nome: "Inês Caetano", papel: "Lead", email: "ines.caetano@gmail.com" };
+  }
+  return { nome: "Inês Caetano", papel: "Formanda", email: "ines.caetano@gmail.com" };
+}
+
 function EmailPreviewPane({
-  tipo, curso, destinatario = "Inês Caetano",
+  tipo, curso, gatilho = "", atraso = "",
 }: {
   tipo: string;
   curso: string;
-  destinatario?: string;
+  gatilho?: string;
+  atraso?: string;
 }) {
-  const body = EMAIL_BODIES[tipo];
-  const vars = {
-    nome: destinatario,
-    curso: curso || "Formação de Formadores - CCP",
-    turma: "VNG-SM-07/09",
-  };
-  if (!tipo || !body) {
-    return (
-      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center">
-        <p className="text-sm font-semibold text-slate-700">Pré-visualização do email</p>
-        <p className="text-xs text-slate-500 mt-1">Escolha um template à esquerda para ver o que o formando recebe.</p>
-      </div>
-    );
-  }
+  const resolved = EMAIL_TIPO_ALIAS[tipo] ?? tipo;
+  const body = EMAIL_BODIES[resolved];
+  const dest = destFromGatilho(gatilho);
+  const cursoLabel = curso || "Formação de Formadores - CCP";
+  const vars = { nome: dest.nome, curso: cursoLabel, turma: "VNG-SM-07/09" };
+  const assunto = body ? fillEmailVars(body.assunto, vars) : "Assunto do email";
+
   return (
     <div className="rounded-xl border border-slate-200 bg-[#F1F5F9] overflow-hidden">
       <div className="px-3 py-2 bg-slate-800 text-[11px] text-slate-300 flex items-center justify-between">
-        <span>Caixa de entrada · ENA</span>
+        <span>Caixa de entrada · Gmail</span>
         <span>Pré-visualização</span>
       </div>
-      <div className="p-3">
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 space-y-1">
-            <p className="text-[11px] text-slate-400">De <span className="text-slate-700 font-medium">ENA Formação &lt;formacao@ena.pt&gt;</span></p>
-            <p className="text-[11px] text-slate-400">Para <span className="text-slate-700 font-medium">{destinatario.toLowerCase().replace(/\s+/g, ".")}@gmail.com</span></p>
-            <p className="text-sm font-bold text-slate-800 pt-1">{fillEmailVars(body.assunto, vars)}</p>
+      {(gatilho || atraso) && (
+        <div className="px-3 py-2 bg-amber-50 border-b border-amber-100 text-[11px] text-amber-900">
+          <span className="font-semibold">Regra: </span>
+          {gatilho || "sem gatilho"}
+          {atraso ? ` · ${atraso}` : ""}
+          {curso ? ` · ${curso}` : ""}
+        </div>
+      )}
+      {!tipo || !body ? (
+        <div className="px-4 py-10 text-center">
+          <p className="text-sm font-semibold text-slate-700">Ainda sem email para mostrar</p>
+          <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">Escolha o gatilho e o template à esquerda. O assunto e o corpo actualizam aqui com dados de exemplo.</p>
+        </div>
+      ) : (
+        <div className="p-3 space-y-2">
+          <div className="bg-white rounded-lg border border-slate-200 px-3 py-2.5 flex items-start gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-amber-500 text-white text-[10px] font-extrabold flex items-center justify-center flex-shrink-0">ENA</div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-xs font-bold text-slate-800 truncate">ENA Formação</p>
+                <p className="text-[10px] text-slate-400 flex-shrink-0">hoje, 09:14</p>
+              </div>
+              <p className="text-xs font-semibold text-slate-700 truncate">{assunto}</p>
+              <p className="text-[11px] text-slate-400 truncate">Olá {dest.nome.split(" ")[0]}, {fillEmailVars(body.linhas[0], vars)}</p>
+            </div>
           </div>
-          <div className="px-4 py-4 space-y-3">
-            <div className="bg-amber-500 text-white text-xs font-extrabold tracking-widest px-2.5 py-1.5 rounded-md inline-block">ENA</div>
-            <p className="text-sm text-slate-800">Olá {destinatario.split(" ")[0]},</p>
-            {body.linhas.map(l => (
-              <p key={l} className="text-sm text-slate-600 leading-relaxed">{fillEmailVars(l, vars)}</p>
-            ))}
-            <button type="button" className="inline-flex px-3.5 py-2 bg-amber-500 text-white text-xs font-semibold rounded-lg">
-              {body.cta}
-            </button>
-            <p className="text-[11px] text-slate-400 pt-2 border-t border-slate-100">Equipa ENA · formacao@ena.pt · Este email foi disparado pela regra automática.</p>
+          <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 space-y-1">
+              <p className="text-sm font-bold text-slate-800 leading-snug">{assunto}</p>
+              <p className="text-[11px] text-slate-400">De <span className="text-slate-700 font-medium">ENA Formação &lt;formacao@ena.pt&gt;</span></p>
+              <p className="text-[11px] text-slate-400">Para <span className="text-slate-700 font-medium">{dest.email}</span> <span className="text-slate-400">· {dest.papel}</span></p>
+            </div>
+            <div className="px-4 py-4 space-y-3">
+              <div className="bg-amber-500 text-white text-xs font-extrabold tracking-widest px-2.5 py-1.5 rounded-md inline-block">ENA</div>
+              <p className="text-sm text-slate-800">Olá {dest.nome.split(" ")[0]},</p>
+              {body.linhas.map(l => (
+                <p key={l} className="text-sm text-slate-600 leading-relaxed">{fillEmailVars(l, vars)}</p>
+              ))}
+              <button type="button" className="inline-flex px-3.5 py-2 bg-amber-500 text-white text-xs font-semibold rounded-lg">
+                {body.cta}
+              </button>
+              <p className="text-[11px] text-slate-400 pt-2 border-t border-slate-100">Equipa ENA · formacao@ena.pt · Email automático da regra.</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -2817,7 +2858,9 @@ function EmailsView() {
   const [regras, setRegras] = useState(emailRegras);
   const [novaRegra, setNovaRegra] = useState(false);
   const [previewTipo, setPreviewTipo] = useState<string | null>(null);
+  const [previewGatilho, setPreviewGatilho] = useState("");
   const [nomeRegra, setNomeRegra] = useState("");
+  const [nomeTouched, setNomeTouched] = useState(false);
   const [gatilho, setGatilho] = useState("");
   const [templateNome, setTemplateNome] = useState("");
   const [cursoEmail, setCursoEmail] = useState("");
@@ -2828,8 +2871,29 @@ function EmailsView() {
   const templateOpts = emailTemplates.map(t => ({ value: t.nome, sub: t.assunto }));
   const templateTipo = emailTemplates.find(t => t.nome === templateNome)?.tipo ?? "";
 
+  function syncNome(nextGatilho: string, nextTemplate: string) {
+    if (nomeTouched) return;
+    if (nextTemplate && nextGatilho) setNomeRegra(`${nextTemplate} · ${nextGatilho}`);
+    else if (nextTemplate) setNomeRegra(nextTemplate);
+    else setNomeRegra("");
+  }
+
+  function onGatilho(v: string) {
+    setGatilho(v);
+    const sug = GATILHO_TEMPLATE[v];
+    const nextTpl = templateNome || sug || "";
+    if (!templateNome && sug) setTemplateNome(sug);
+    syncNome(v, nextTpl);
+  }
+
+  function onTemplate(v: string) {
+    setTemplateNome(v);
+    syncNome(gatilho, v);
+  }
+
   function abrirNova() {
     setNomeRegra("");
+    setNomeTouched(false);
     setGatilho("");
     setTemplateNome("");
     setCursoEmail("");
@@ -2893,7 +2957,7 @@ function EmailsView() {
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <Toggle checked={r.ativo} onChange={val => setRegras(prev => prev.map(x => x.id === r.id ? { ...x, ativo: val } : x))} />
-                  <ActBtn icon={I.eye} label="Preview" color="gray" onClick={() => setPreviewTipo(r.template)} />
+                  <ActBtn icon={I.eye} label="Preview" color="gray" onClick={() => { setPreviewTipo(r.template); setPreviewGatilho(r.gatilho); }} />
                   <ActBtn icon={I.edit} label="Editar" />
                   <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setRegras(prev => prev.filter(x => x.id !== r.id))} />
                 </div>
@@ -2915,7 +2979,7 @@ function EmailsView() {
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
                   <ActBtn icon={I.edit} label="Editar" />
-                  <ActBtn icon={I.eye} label="Preview" color="gray" onClick={() => setPreviewTipo(t.tipo)} />
+                  <ActBtn icon={I.eye} label="Preview" color="gray" onClick={() => { setPreviewTipo(t.tipo); setPreviewGatilho(""); }} />
                 </div>
               </div>
             ))}
@@ -2940,26 +3004,38 @@ function EmailsView() {
             <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
               <div>
                 <h2 className="text-base font-bold text-slate-800">Nova regra de email</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Defina o gatilho à esquerda. O preview à direita actualiza com o template e o curso.</p>
+                <p className="text-xs text-slate-500 mt-0.5">Quando acontece o gatilho, a ENA envia o template. O email à direita usa dados de exemplo.</p>
               </div>
               <button type="button" onClick={() => setNovaRegra(false)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
             </div>
             <div className="flex-1 overflow-y-auto p-5 grid grid-cols-1 lg:grid-cols-2 gap-5">
               <div className="space-y-3">
-                <Field label="Nome da regra">
-                  <input className={iCls} value={nomeRegra} onChange={e => setNomeRegra(e.target.value)} placeholder="Ex.: Lembrete de pagamento CCP" />
+                <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5 text-xs text-slate-600">
+                  {gatilho || templateNome ? (
+                    <>Quando <span className="font-semibold text-slate-800">{gatilho || "…"}</span>, enviar <span className="font-semibold text-slate-800">{templateNome || "…"}</span> {atraso.toLowerCase()}{cursoEmail ? ` em ${cursoEmail}` : ""}.</>
+                  ) : (
+                    <>Comece pelo gatilho — o template e o nome da regra preenchem-se sozinhos.</>
+                  )}
+                </div>
+                <Field label="1. Gatilho">
+                  <SearchSelect value={gatilho} onChange={onGatilho} options={emailGatilhosOpts} placeholder="Quando disparar…" />
                 </Field>
-                <Field label="Gatilho">
-                  <SearchSelect value={gatilho} onChange={setGatilho} options={emailGatilhosOpts} placeholder="Quando disparar…" />
+                <Field label="2. Template">
+                  <SearchSelect value={templateNome} onChange={onTemplate} options={templateOpts} placeholder="Que email enviar…" />
                 </Field>
-                <Field label="Template">
-                  <SearchSelect value={templateNome} onChange={setTemplateNome} options={templateOpts} placeholder="Que email enviar…" />
+                <Field label="3. Atraso">
+                  <SearchSelect value={atraso} onChange={setAtraso} options={emailAtrasosOpts} />
                 </Field>
                 <Field label="Curso (opcional)">
-                  <SearchSelect value={cursoEmail} onChange={setCursoEmail} options={cursosGoldOpts} placeholder="Todas as turmas deste curso…" allowEmpty />
+                  <SearchSelect value={cursoEmail} onChange={setCursoEmail} options={cursosGoldOpts} placeholder="Todas as turmas, ou só este curso…" allowEmpty />
                 </Field>
-                <Field label="Atraso">
-                  <SearchSelect value={atraso} onChange={setAtraso} options={emailAtrasosOpts} />
+                <Field label="Nome da regra">
+                  <input
+                    className={iCls}
+                    value={nomeRegra}
+                    onChange={e => { setNomeTouched(true); setNomeRegra(e.target.value); }}
+                    placeholder="Preenche-se com o gatilho e o template"
+                  />
                 </Field>
                 <div className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5">
                   <div>
@@ -2971,8 +3047,8 @@ function EmailsView() {
                 {erroRegra && <p className="text-xs font-medium text-red-600">{erroRegra}</p>}
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Preview do email</p>
-                <EmailPreviewPane tipo={templateTipo} curso={cursoEmail} />
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Preview do novo email</p>
+                <EmailPreviewPane tipo={templateTipo} curso={cursoEmail} gatilho={gatilho} atraso={atraso} />
               </div>
             </div>
             <div className="flex gap-2 px-5 py-4 border-t border-slate-100 flex-shrink-0">
@@ -2992,7 +3068,7 @@ function EmailsView() {
               <button type="button" onClick={() => setPreviewTipo(null)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
             </div>
             <div className="p-4">
-              <EmailPreviewPane tipo={previewTipo} curso="Formação de Formadores - CCP" />
+              <EmailPreviewPane tipo={previewTipo} curso="Formação de Formadores - CCP" gatilho={previewGatilho} />
             </div>
           </div>
         </div>

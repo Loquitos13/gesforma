@@ -3119,7 +3119,7 @@ function EmailsView() {
                   {gatilho || templateNome ? (
                     <>Quando <span className="font-semibold text-slate-800">{gatilho || "…"}</span>, enviar <span className="font-semibold text-slate-800">{templateNome || "…"}</span> {atraso.toLowerCase()}{cursoEmail ? ` em ${cursoEmail}` : ""}.</>
                   ) : (
-                    <>Comece pelo gatilho — o template e o nome da regra preenchem-se sozinhos.</>
+                    <>Comece pelo gatilho - o template e o nome da regra preenchem-se sozinhos.</>
                   )}
                 </div>
                 <Field label="1. Gatilho">

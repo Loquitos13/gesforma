@@ -121,7 +121,7 @@ export function formatSessaoLabel(iso: string) {
 
 export function weekdayShort(iso: string) {
   const [y, m, d] = iso.split("-").map(Number);
-  if (!y || !m || !d) return "—";
+  if (!y || !m || !d) return "-";
   return WEEKDAYS_PT[new Date(y, m - 1, d).getDay()];
 }
 
@@ -307,7 +307,7 @@ export function turmaGoldOpts(
       value: t.nome,
       sub: isTurmaActiva(t)
         ? `${t.local} · ${t.horario} · ${Math.max(0, t.vagas - t.totalAlunos)} vagas`
-        : `${t.local} · Inativa — não aceita novas inscrições`,
+        : `${t.local} · Inativa - não aceita novas inscrições`,
     }));
 }
 
@@ -325,7 +325,7 @@ export function turmaFinOpts(
       value: t.nome,
       sub: isTurmaActiva(t)
         ? `UFCD ${t.ufcdCod} · ${t.alunos}/${t.alunosTotal} inscritos`
-        : `UFCD ${t.ufcdCod} · Inativa — não aceita novas inscrições`,
+        : `UFCD ${t.ufcdCod} · Inativa - não aceita novas inscrições`,
     }));
 }
 

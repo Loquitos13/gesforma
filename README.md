@@ -28,7 +28,9 @@ Gold e Financiada têm cada uma o menu **Formadores**: ficha (contacto, CCP, NIF
 
 No **Painel**, o bloco **Como conheceram a ENA** mostra a origem dos formandos (website, referência, redes, IEFP) a partir da pergunta da ficha de inscrição.
 
-Em **Configurações**, clicar num cartão abre um modal com essa secção já seleccionada. A lista à esquerda (e Anterior / Seguinte) muda de parâmetro sem fechar o modal.
+Em **Configurações**, cada cartão abre um **modal centrado** só com essa secção (Cancelar / Guardar). Não há gaveta lateral nem lista de separadores à esquerda.
+
+Os formulários de criar e editar (pré-inscrição, turma, formando, sessão, etc.) abrem em **modal ao centro**, não numa gaveta que desliza da direita.
 
 Em **Emails automáticos**, a nova regra pede gatilho, template, curso e atraso, com **preview do email** ao lado. O olho nas regras e nos templates abre o mesmo preview.
 

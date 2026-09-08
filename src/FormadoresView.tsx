@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ViewFilters, matchesFilter, uniqueOpts } from "./FormKit";
+import { AppModal, ViewFilters, matchesFilter, uniqueOpts } from "./FormKit";
 import { useFormadores } from "./FormadoresContext";
 import { emptyFormador, formadoresDoRegime, type Formador, type FormadorRegime } from "./formadorModel";
 import { FormadorProfileSlideOver } from "./TurmaExtras";
@@ -115,28 +115,8 @@ function TableFooter({ page, perPage, total, onChange }: { page: number; perPage
   );
 }
 
-function SlideOver({ open, onClose, title, sub, children }: { open: boolean; onClose: () => void; title: string; sub?: string; children: React.ReactNode }) {
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    if (open) document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [open, onClose]);
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="w-full max-w-xl bg-white shadow-2xl flex flex-col h-full overflow-hidden" style={{ animation: "slideInRight 0.22s ease" }}>
-        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
-          <div>
-            <h2 className="text-base font-bold text-slate-800">{title}</h2>
-            {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
-          </div>
-          <button type="button" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg">{I.x}</button>
-        </div>
-        <div className="flex-1 overflow-y-auto">{children}</div>
-      </div>
-    </div>
-  );
+function SlideOver({ open, onClose, title, sub, children, size = "md" }: { open: boolean; onClose: () => void; title: string; sub?: string; children: React.ReactNode; size?: "sm" | "md" | "lg" | "xl" }) {
+  return <AppModal open={open} onClose={onClose} title={title} sub={sub} size={size}>{children}</AppModal>;
 }
 
 function toggleRegime(list: FormadorRegime[], regime: FormadorRegime) {

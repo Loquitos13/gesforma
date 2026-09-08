@@ -14,7 +14,7 @@ import {
 import { ResolverDocumentoModal } from "./DocResolver";
 import { CursoFichaView } from "./CursoFichaView";
 import {
-  SearchSelect, MultiSearchSelect, ViewFilters, matchesFilter, uniqueOpts,
+  AppModal, SearchSelect, MultiSearchSelect, ViewFilters, matchesFilter, uniqueOpts,
   blogTematicasOpts, cursosFinOpts, cursosGoldOpts,
   horariosOpts, locaisOpts, modulosOptsForCurso,
 } from "./FormKit";
@@ -667,52 +667,19 @@ function ConhecimentoEnaCard({ onVerMais }: { onVerMais: () => void }) {
   );
 }
 
-// ─── SlideOver Drawer ─────────────────────────────────────────────────────────
+// ─── Modal (substitui as antigas gavetas laterais) ────────────────────────────
 
-function SlideOver({ open, onClose, title, sub, children, width = "max-w-xl" }: {
+function SlideOver({ open, onClose, title, sub, children, size = "md" }: {
   open: boolean; onClose: () => void; title: string; sub?: string;
-  children: React.ReactNode; width?: string;
+  children: React.ReactNode; size?: "sm" | "md" | "lg" | "xl";
 }) {
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    if (open) document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [open, onClose]);
-
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className={`w-full ${width} bg-white shadow-2xl flex flex-col h-full overflow-hidden`} style={{ animation: "slideInRight 0.22s ease" }}>
-        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
-          <div>
-            <h2 className="text-base font-bold text-slate-800">{title}</h2>
-            {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
-          </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors ml-4">{I.x}</button>
-        </div>
-        <div className="flex-1 overflow-y-auto">{children}</div>
-      </div>
-    </div>
-  );
+  return <AppModal open={open} onClose={onClose} title={title} sub={sub} size={size}>{children}</AppModal>;
 }
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
 function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" style={{ animation: "scaleIn 0.18s ease" }}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h2 className="text-base font-bold text-slate-800">{title}</h2>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">{I.xSm}</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
+  return <AppModal open={open} onClose={onClose} title={title} size="md">{children}</AppModal>;
 }
 
 // ─── Ficha do Formando ────────────────────────────────────────────────────────
@@ -1548,7 +1515,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         </>}
       </div>
 
-      <SlideOver open={!!fichaOpen} onClose={() => setFichaOpen(null)} title="Ficha do Formando" sub={fichaOpen ? `#${fichaOpen.id}` : ""}>
+      <SlideOver open={!!fichaOpen} onClose={() => setFichaOpen(null)} title="Ficha do Formando" sub={fichaOpen ? `#${fichaOpen.id}` : ""} size="lg">
         {fichaOpen && <FichaFormando formando={fichaOpen} onClose={() => setFichaOpen(null)} />}
       </SlideOver>
       <PlanoSessaoModal
@@ -1636,8 +1603,8 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                   const { nome, apelido } = splitNome(novoNome);
                   addFormandoTurma({
                     id: nextListId(formandosTurmas),
-                    nome, apelido: apelido || "—",
-                    telf: novoTelf.trim() || "—",
+                    nome, apelido: apelido || "-",
+                    telf: novoTelf.trim() || "-",
                     email: novoEmail.trim() || `${nome.toLowerCase()}@mail.pt`,
                     inscrito: nowStamp(),
                     local: turma.local, curso: turma.curso, turma: turma.nome, turmaId: turma.id,
@@ -1653,7 +1620,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           )}
         </div>
       </SlideOver>
-      <SlideOver open={editTurma} onClose={() => setEditTurma(false)} title={`Editar ${turma.nome}`} sub="Dados da turma Gold">
+      <SlideOver open={editTurma} onClose={() => setEditTurma(false)} title={`Editar ${turma.nome}`} sub="Dados da turma Gold" size="lg">
         <div className="p-5 space-y-3">
           <Field label="Código interno"><input className={iCls} value={editNome} onChange={e => setEditNome(e.target.value)} /></Field>
           <div className="grid grid-cols-2 gap-3">
@@ -1996,8 +1963,8 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
                   const { nome, apelido } = splitNome(novoNome);
                   addFormandoFin({
                     id: nextListId(formandosFin),
-                    nome, apelido: apelido || "—",
-                    turma: turma.nome, telf: novoTelf.trim() || "—",
+                    nome, apelido: apelido || "-",
+                    turma: turma.nome, telf: novoTelf.trim() || "-",
                     email: novoEmail.trim() || `${nome.toLowerCase()}@mail.pt`,
                     curso: turma.curso, estado: "Elegível",
                     ...emptyFinDocs(),
@@ -2012,7 +1979,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           )}
         </div>
       </SlideOver>
-      <SlideOver open={editTurma} onClose={() => setEditTurma(false)} title={`Editar ${turma.nome}`} sub="Dados da turma financiada">
+      <SlideOver open={editTurma} onClose={() => setEditTurma(false)} title={`Editar ${turma.nome}`} sub="Dados da turma financiada" size="lg">
         <div className="p-5 space-y-3">
           <Field label="Código da turma"><input className={iCls} value={editNome} onChange={e => setEditNome(e.target.value)} /></Field>
           <Field label="Curso / UFCD"><SearchSelect value={editCurso} onChange={setEditCurso} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
@@ -2540,7 +2507,7 @@ function PreInscricoesGoldView() {
                 inscrito: editLead?.inscrito ?? nowStamp(),
                 nome: nome.trim(), apelido: apelido.trim(),
                 email: email.trim() || `${nome.trim().toLowerCase().replace(/\s+/g, ".")}@mail.pt`,
-                telf: telf.trim() || "—",
+                telf: telf.trim() || "-",
                 inicioCurso: t?.dataInicio ?? editLead?.inicioCurso ?? "-",
                 concelho: editLead?.concelho ?? "",
                 local: local || t?.local || "V.N.Gaia",
@@ -2667,7 +2634,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
-      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `Editar ${editing.nome}` : "Nova turma Gold"} sub="Código interno da turma - o objeto de gestão é a turma, não a ação.">
+      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `Editar ${editing.nome}` : "Nova turma Gold"} sub="Código interno da turma - o objeto de gestão é a turma, não a ação." size="xl">
         <div className="p-5 space-y-3">
           <TurmaActivaToggle activa={activa} onChange={setActiva} />
           <Field label="Código interno"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="VNG-SM-07/09" /></Field>
@@ -2783,7 +2750,7 @@ function FormandosTurmasView() {
           <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
         </Card>
       </div>
-      <SlideOver open={!!fichaOpen} onClose={() => setFichaOpen(null)} title="Ficha do Formando" sub={fichaOpen ? `#${fichaOpen.id}` : ""}>
+      <SlideOver open={!!fichaOpen} onClose={() => setFichaOpen(null)} title="Ficha do Formando" sub={fichaOpen ? `#${fichaOpen.id}` : ""} size="lg">
         {fichaOpen && <FichaFormando formando={fichaOpen} onClose={() => setFichaOpen(null)} />}
       </SlideOver>
       <SlideOver open={!!edit} onClose={() => setEdit(null)} title={editing ? `${editing.nome} ${editing.apelido}` : "Novo formando"} sub={editing ? "Mover de turma ou actualizar dados" : "Inscrever numa turma ativa"}>
@@ -2816,8 +2783,8 @@ function FormandosTurmasView() {
                 const { nome, apelido } = splitNome(nomeNovo);
                 addFormandoTurma({
                   id: nextListId(formandosTurmas),
-                  nome, apelido: apelido || "—",
-                  telf: telfNovo.trim() || "—",
+                  nome, apelido: apelido || "-",
+                  telf: telfNovo.trim() || "-",
                   email: emailNovo.trim() || `${nome.toLowerCase()}@mail.pt`,
                   inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
                   estado: "Formando", pago: false, valor: 125, metodo: "-",
@@ -2918,8 +2885,8 @@ function FinFormandosView() {
               const { nome, apelido } = splitNome(nomeNovo);
               addFormandoFin({
                 id: nextListId(formandosFin),
-                nome, apelido: apelido || "—",
-                turma: turmaNovo || "—", telf: telfNovo.trim() || "—",
+                nome, apelido: apelido || "-",
+                turma: turmaNovo || "-", telf: telfNovo.trim() || "-",
                 email: emailNovo.trim() || `${nome.toLowerCase()}@mail.pt`,
                 curso: cursoNovo, estado: "Elegível",
                 ...emptyFinDocs(),
@@ -3046,7 +3013,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
-      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? editing.nome : "Nova turma financiada"} sub="UFCD e turma - o objeto de gestão é a turma.">
+      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? editing.nome : "Nova turma financiada"} sub="UFCD e turma - o objeto de gestão é a turma." size="xl">
         <div className="p-5 space-y-3">
           <TurmaActivaToggle accent="fin" activa={activa} onChange={setActiva} />
           <Field label="Curso / UFCD"><SearchSelect value={curso} onChange={setCurso} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>

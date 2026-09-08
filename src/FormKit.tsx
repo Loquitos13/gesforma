@@ -1,6 +1,73 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 
+const modalSizes = {
+  sm: "max-w-md",
+  md: "max-w-lg",
+  lg: "max-w-2xl",
+  xl: "max-w-3xl",
+} as const;
+
+export function AppModal({
+  open,
+  onClose,
+  title,
+  sub,
+  children,
+  footer,
+  size = "md",
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  sub?: string;
+  children: ReactNode;
+  footer?: ReactNode;
+  size?: keyof typeof modalSizes;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+
+  if (!open || typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="app-modal-title">
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-[2px]" onClick={onClose} />
+      <div
+        className={`relative w-full ${modalSizes[size]} max-h-[92vh] bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200/80 flex flex-col overflow-hidden`}
+        style={{ animation: "scaleIn 0.16s ease" }}
+      >
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100 flex-shrink-0">
+          <div className="min-w-0">
+            <h2 id="app-modal-title" className="text-base font-bold text-slate-800 leading-snug">{title}</h2>
+            {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
+          </div>
+          <button type="button" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg flex-shrink-0" aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        {footer && (
+          <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-100 flex-shrink-0 bg-white">
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function useFixedMenu(open: boolean, triggerRef: RefObject<HTMLElement | null>, bump = 0) {
   const [box, setBox] = useState({ top: 0, left: 0, width: 0 });
   useLayoutEffect(() => {

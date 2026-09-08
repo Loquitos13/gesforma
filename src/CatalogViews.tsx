@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  SearchSelect, ViewFilters, matchesFilter, uniqueOpts,
+  AppModal, SearchSelect, ViewFilters, matchesFilter, uniqueOpts,
   cursosFinOpts, cursosGoldOpts, horariosOpts, locaisOpts,
 } from "./FormKit";
 import { TurmaInscricaoHint } from "./TurmaCronograma";
@@ -140,28 +140,8 @@ function TableFooter({ page, total, perPage, onChange }: { page: number; total: 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="flex flex-col gap-1.5"><label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</label>{children}</div>;
 }
-function SlideOver({ open, onClose, title, sub, children }: { open: boolean; onClose: () => void; title: string; sub?: string; children: React.ReactNode }) {
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    if (open) document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [open, onClose]);
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="w-full max-w-xl bg-white shadow-2xl flex flex-col h-full overflow-hidden" style={{ animation: "slideInRight 0.22s ease" }}>
-        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
-          <div>
-            <h2 className="text-base font-bold text-slate-800">{title}</h2>
-            {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
-          </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
-        </div>
-        <div className="flex-1 overflow-y-auto">{children}</div>
-      </div>
-    </div>
-  );
+function SlideOver({ open, onClose, title, sub, children, size = "md" }: { open: boolean; onClose: () => void; title: string; sub?: string; children: React.ReactNode; size?: "sm" | "md" | "lg" | "xl" }) {
+  return <AppModal open={open} onClose={onClose} title={title} sub={sub} size={size}>{children}</AppModal>;
 }
 function EmptyState({ text }: { text: string }) {
   return <tr><td colSpan={12} className="px-4 py-12 text-center text-sm text-slate-400">{text}</td></tr>;
@@ -172,9 +152,9 @@ function nextId<T extends { id: number }>(xs: T[]) {
 
 function FormActions({ onClose, onSave, disabled, label = "Guardar" }: { onClose: () => void; onSave?: () => void; disabled?: boolean; label?: string }) {
   return (
-    <div className="flex gap-2 pt-2">
-      <button type="button" onClick={onSave} disabled={disabled} className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{label}</button>
+    <div className="flex justify-end gap-2 pt-4 mt-1 border-t border-slate-100">
       <button type="button" onClick={onClose} className="px-4 py-2.5 bg-white border border-slate-200 text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-50">Cancelar</button>
+      <button type="button" onClick={onSave} disabled={disabled} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{label}</button>
     </div>
   );
 }
@@ -995,7 +975,7 @@ export function FinInscricoesView() {
           <FormActions onClose={() => setOpen(null)} onSave={() => {
             if (!nome.trim() || !curso) return;
             const opt = cursosFinOpts.find(o => o.value === curso);
-            const ufcd = opt?.sub?.match(/\d+/)?.[0] ?? editing?.ufcd ?? "—";
+            const ufcd = opt?.sub?.match(/\d+/)?.[0] ?? editing?.ufcd ?? "-";
             const row = {
               id: editing?.id ?? nextId(lista),
               inscrito: editing?.inscrito ?? new Date().toISOString().slice(0, 10),
@@ -1158,25 +1138,7 @@ export function ConfiguracoesView() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState(seedConfigDrafts);
   const [saved, setSaved] = useState(false);
-  const idx = configCards.findIndex(c => c.id === openId);
-  const current = idx >= 0 ? configCards[idx] : null;
-  useEffect(() => {
-    if (!openId) return;
-    const h = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpenId(null);
-      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-        e.preventDefault();
-        setOpenId(cur => {
-          const i = configCards.findIndex(c => c.id === cur);
-          if (e.key === "ArrowLeft" && i > 0) return configCards[i - 1].id;
-          if (e.key === "ArrowRight" && i >= 0 && i < configCards.length - 1) return configCards[i + 1].id;
-          return cur;
-        });
-      }
-    };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [openId]);
+  const current = configCards.find(c => c.id === openId) ?? null;
 
   function setField(id: string, label: string, value: string) {
     setDrafts(prev => ({ ...prev, [id]: { ...prev[id], [label]: value } }));
@@ -1198,69 +1160,33 @@ export function ConfiguracoesView() {
         </div>
       </div>
 
-      {current && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setOpenId(null)} />
-          <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden" style={{ animation: "scaleIn 0.15s ease" }}>
-            <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
-              <div>
-                <h2 className="text-base font-bold text-slate-800">Configurações</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Mude de secção à esquerda - não precisa de fechar o modal.</p>
-              </div>
-              <button type="button" onClick={() => setOpenId(null)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
-            </div>
-            <div className="flex flex-col sm:flex-row min-h-0 flex-1">
-              <nav className="sm:w-56 flex-shrink-0 border-b sm:border-b-0 sm:border-r border-slate-100 bg-slate-50 p-2 overflow-x-auto sm:overflow-y-auto">
-                <div className="flex sm:flex-col gap-1 min-w-max sm:min-w-0">
-                  {configCards.map(c => {
-                    const on = c.id === current.id;
-                    return (
-                      <button key={c.id} type="button" onClick={() => setOpenId(c.id)}
-                        className={`text-left px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap sm:whitespace-normal ${on ? "bg-amber-500 text-white" : "text-slate-600 hover:bg-white hover:text-slate-800"}`}>
-                        {c.titulo}
-                      </button>
-                    );
-                  })}
-                </div>
-              </nav>
-              <div className="flex-1 overflow-y-auto p-5 space-y-4 min-w-0">
-                <div>
-                  <p className="text-sm font-bold text-slate-800">{current.titulo}</p>
-                  <p className="text-xs text-slate-500 mt-1">{current.texto}</p>
-                </div>
-                <div className="space-y-3">
-                  {current.fields.map(f => (
-                    <Field key={f.label} label={f.label}>
-                      <input
-                        className={iCls}
-                        value={drafts[current.id]?.[f.label] ?? f.value}
-                        onChange={e => setField(current.id, f.label, e.target.value)}
-                      />
-                    </Field>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-t border-slate-100 flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <button type="button" disabled={idx <= 0} onClick={() => setOpenId(configCards[idx - 1].id)}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40">
-                  ← Anterior
-                </button>
-                <span className="text-xs text-slate-400">{idx + 1} / {configCards.length} · ← →</span>
-                <button type="button" disabled={idx >= configCards.length - 1} onClick={() => setOpenId(configCards[idx + 1].id)}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40">
-                  Seguinte →
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setOpenId(null)} className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Fechar</button>
-                <button type="button" onClick={() => { setSaved(true); setOpenId(null); }} className="px-4 py-2 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white">Guardar</button>
-              </div>
-            </div>
+      <AppModal
+        open={!!current}
+        onClose={() => setOpenId(null)}
+        title={current?.titulo ?? "Configurações"}
+        sub={current?.texto}
+        size="md"
+        footer={
+          <>
+            <button type="button" onClick={() => setOpenId(null)} className="px-4 py-2.5 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Cancelar</button>
+            <button type="button" onClick={() => { setSaved(true); setOpenId(null); }} className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white">Guardar</button>
+          </>
+        }
+      >
+        {current && (
+          <div className="p-5 space-y-3">
+            {current.fields.map(f => (
+              <Field key={f.label} label={f.label}>
+                <input
+                  className={iCls}
+                  value={drafts[current.id]?.[f.label] ?? f.value}
+                  onChange={e => setField(current.id, f.label, e.target.value)}
+                />
+              </Field>
+            ))}
           </div>
-        </div>
-      )}
+        )}
+      </AppModal>
     </>
   );
 }

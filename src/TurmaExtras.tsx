@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { AppModal } from "./FormKit";
 
 const I = {
   x: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>,
@@ -22,28 +23,8 @@ function ActBtn({ icon, label, color = "blue", onClick }: { icon: React.ReactNod
   );
 }
 
-function SlideOver({ open, onClose, title, sub, children }: { open: boolean; onClose: () => void; title: string; sub?: string; children: React.ReactNode }) {
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    if (open) document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [open, onClose]);
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="w-full max-w-lg bg-white shadow-2xl flex flex-col h-full overflow-hidden" style={{ animation: "slideInRight 0.22s ease" }}>
-        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
-          <div>
-            <h2 className="text-base font-bold text-slate-800">{title}</h2>
-            {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
-          </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
-        </div>
-        <div className="flex-1 overflow-y-auto">{children}</div>
-      </div>
-    </div>
-  );
+function SlideOver({ open, onClose, title, sub, children, size = "md" }: { open: boolean; onClose: () => void; title: string; sub?: string; children: React.ReactNode; size?: "sm" | "md" | "lg" | "xl" }) {
+  return <AppModal open={open} onClose={onClose} title={title} sub={sub} size={size}>{children}</AppModal>;
 }
 
 export function FileUploadModal({ open, onClose, title, accent = "gold", onConfirm }: { open: boolean; onClose: () => void; title?: string; accent?: "gold" | "fin"; onConfirm?: () => void }) {

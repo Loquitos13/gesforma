@@ -436,11 +436,13 @@ export function CursoFichaView({
   curso,
   onBack,
   onOpenModulos,
+  onCommit,
   accent = "gold",
 }: {
   curso?: CursoFichaSeed;
   onBack: () => void;
   onOpenModulos?: (cursoNome: string) => void;
+  onCommit?: (saved: CursoFichaSeed) => void;
   accent?: CursoAccent;
 }) {
   const t = theme(accent);
@@ -480,6 +482,20 @@ export function CursoFichaView({
 
   function guardar() {
     if (temAvaliacao) setParametrosAvaliacao(data.titulo || curso?.nome || "Curso", criterios.filter(c => c.label.trim()));
+    if (onCommit && data.titulo.trim()) {
+      onCommit({
+        id: curso?.id ?? Date.now() % 100000,
+        nome: data.titulo.trim(),
+        categoria: data.categoria,
+        tipo: data.tipo,
+        preco: Number(data.preco) || 0,
+        regime: data.regime,
+        horas: Number(data.horas) || 0,
+        estado: data.estado || "Ativo",
+        ufcdCod: data.ufcdCod,
+        ufcd: data.ufcd,
+      });
+    }
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2400);
   }

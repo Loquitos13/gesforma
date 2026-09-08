@@ -166,11 +166,15 @@ function SlideOver({ open, onClose, title, sub, children }: { open: boolean; onC
 function EmptyState({ text }: { text: string }) {
   return <tr><td colSpan={12} className="px-4 py-12 text-center text-sm text-slate-400">{text}</td></tr>;
 }
-function FormActions({ onClose }: { onClose: () => void }) {
+function nextId<T extends { id: number }>(xs: T[]) {
+  return Math.max(0, ...xs.map(x => x.id), 1000) + 1;
+}
+
+function FormActions({ onClose, onSave, disabled, label = "Guardar" }: { onClose: () => void; onSave?: () => void; disabled?: boolean; label?: string }) {
   return (
     <div className="flex gap-2 pt-2">
-      <button className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
-      <button onClick={onClose} className="px-4 py-2.5 bg-white border border-slate-200 text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-50">Cancelar</button>
+      <button type="button" onClick={onSave} disabled={disabled} className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{label}</button>
+      <button type="button" onClick={onClose} className="px-4 py-2.5 bg-white border border-slate-200 text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-50">Cancelar</button>
     </div>
   );
 }
@@ -288,27 +292,53 @@ function DocPips({ docs }: { docs: DocDots }) {
 }
 
 export function FormandosGoldView() {
+  const [lista, setLista] = useState(formandosGoldData);
   const [s, setS] = useState(""); const [p, setP] = useState(1);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtroLocal, setFiltroLocal] = useState("");
   const [open, setOpen] = useState<"new" | typeof formandosGoldData[number] | null>(null);
   const [curso, setCurso] = useState("");
-  const f = formandosGoldData.filter(x => {
+  const [nome, setNome] = useState("");
+  const [apelido, setApelido] = useState("");
+  const [email, setEmail] = useState("");
+  const [telf, setTelf] = useState("");
+  const [valor, setValor] = useState("0");
+  const f = lista.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.curso} ${x.email}`.toLowerCase().includes(s.toLowerCase());
     return q && matchesFilter(x.curso, filtroCurso) && matchesFilter(x.local, filtroLocal) && (filtro === "Todos" || x.estado === filtro);
   });
   const rows = f.slice((p - 1) * 10, p * 10);
   const editing = open && open !== "new" ? open : null;
-  useEffect(() => { if (open) setCurso(editing?.curso ?? ""); }, [open, editing]);
+  useEffect(() => {
+    if (!open) return;
+    setCurso(editing?.curso ?? "");
+    setNome(editing?.nome ?? "");
+    setApelido(editing?.apelido ?? "");
+    setEmail(editing?.email ?? "");
+    setTelf(editing?.telf ?? "");
+    setValor(String(editing?.valor ?? 0));
+  }, [open, editing]);
+  function guardar() {
+    if (!nome.trim() || !curso) return;
+    const row = {
+      id: editing?.id ?? nextId(lista),
+      nome: nome.trim(), apelido: apelido.trim(), email: email.trim(), telf: telf.trim(),
+      curso, local: "E-learning", inscrito: editing?.inscrito ?? new Date().toISOString().slice(0, 10),
+      pago: Number(valor) > 0, valor: Number(valor) || 0, metodo: editing?.metodo ?? "MB Way", estado: "Ativo",
+    };
+    if (editing) setLista(xs => xs.map(x => x.id === editing.id ? row : x));
+    else setLista(xs => [row, ...xs]);
+    setOpen(null);
+  }
   return (
     <>
       <div className="space-y-4">
         <PageHeader title="Formandos Gold" sub="Formandos individuais - sem turma atribuída. Cursos e-learning e vendas avulso." action={<NewBtn label="+ Novo formando" onClick={() => setOpen("new")} />} />
         <ViewFilters
           fields={[
-            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(formandosGoldData.map(x => x.curso)) },
-            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(formandosGoldData.map(x => x.local)) },
+            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(lista.map(x => x.curso)) },
+            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(lista.map(x => x.local)) },
           ]}
           chips={{ options: ["Todos", "Ativo", "Pendente"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
           onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
@@ -332,7 +362,7 @@ export function FormandosGoldView() {
                     <Td className="font-mono text-xs text-slate-500">{r.inscrito}</Td>
                     <Td className="text-xs font-bold text-amber-600">€ {r.valor}</Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Ficha" onClick={() => setOpen(r)} /><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Ficha" onClick={() => setOpen(r)} /><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -344,14 +374,14 @@ export function FormandosGoldView() {
       <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `${editing.nome} ${editing.apelido}` : "Novo formando Gold"} sub={editing ? `#${editing.id} · sem turma` : "Venda individual, fora de turma"}>
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Nome"><input className={iCls} defaultValue={editing?.nome ?? ""} /></Field>
-            <Field label="Apelido"><input className={iCls} defaultValue={editing?.apelido ?? ""} /></Field>
+            <Field label="Nome"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} /></Field>
+            <Field label="Apelido"><input className={iCls} value={apelido} onChange={e => setApelido(e.target.value)} /></Field>
           </div>
-          <Field label="Email"><input className={iCls} defaultValue={editing?.email ?? ""} /></Field>
-          <Field label="Telemóvel"><input className={iCls} defaultValue={editing?.telf ?? ""} /></Field>
+          <Field label="Email"><input className={iCls} value={email} onChange={e => setEmail(e.target.value)} /></Field>
+          <Field label="Telemóvel"><input className={iCls} value={telf} onChange={e => setTelf(e.target.value)} /></Field>
           <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
-          <Field label="Valor (€)"><input className={iCls} type="number" defaultValue={editing?.valor ?? 0} /></Field>
-          <FormActions onClose={() => setOpen(null)} />
+          <Field label="Valor (€)"><input className={iCls} type="number" value={valor} onChange={e => setValor(e.target.value)} /></Field>
+          <FormActions onClose={() => setOpen(null)} onSave={guardar} disabled={!nome.trim() || !curso} label={editing ? "Guardar" : "Criar formando"} />
         </div>
       </SlideOver>
     </>
@@ -359,6 +389,7 @@ export function FormandosGoldView() {
 }
 
 export function DatasGoldView() {
+  const [lista, setLista] = useState(datasGoldData);
   const [s, setS] = useState(""); const [p, setP] = useState(1);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
@@ -367,27 +398,45 @@ export function DatasGoldView() {
   const [curso, setCurso] = useState("");
   const [local, setLocal] = useState("");
   const [horario, setHorario] = useState("");
-  const f = datasGoldData.filter(x => {
+  const [inicio, setInicio] = useState("");
+  const [fim, setFim] = useState("");
+  const [preco, setPreco] = useState("125");
+  const [link, setLink] = useState("");
+  const f = lista.filter(x => {
     const q = `${x.curso} ${x.local} ${x.horario}`.toLowerCase().includes(s.toLowerCase());
     return q && matchesFilter(x.curso, filtroCurso) && matchesFilter(x.local, filtroLocal) && (filtro === "Todos" || x.status === filtro);
   });
   const rows = f.slice((p - 1) * 10, p * 10);
   const editing = open && open !== "new" ? open : null;
   useEffect(() => {
-    if (open) {
-      setCurso(editing?.curso ?? "Formação de Formadores - CCP");
-      setLocal(editing?.local ?? "");
-      setHorario(editing?.horario ?? "");
-    }
+    if (!open) return;
+    setCurso(editing?.curso ?? "Formação de Formadores - CCP");
+    setLocal(editing?.local ?? "");
+    setHorario(editing?.horario ?? "");
+    setInicio(editing?.inicio ?? "");
+    setFim(editing?.fim ?? "");
+    setPreco(String(editing?.preco ?? 125));
+    setLink(editing?.link ?? "");
   }, [open, editing]);
+  function guardar() {
+    if (!curso || !inicio) return;
+    const row = {
+      id: editing?.id ?? nextId(lista),
+      inicio, fim, horario, preco: Number(preco) || 0, local, curso, status: "Ativo",
+      link: link.trim() || `ena.pt/${curso.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 24)}`,
+    };
+    if (editing) setLista(xs => xs.map(x => x.id === editing.id ? row : x));
+    else setLista(xs => [row, ...xs]);
+    setOpen(null);
+  }
   return (
     <>
       <div className="space-y-4">
         <PageHeader title="Datas / Edições Gold" sub="Calendário comercial: início, fim, horário, preço e local. Cada edição alimenta as turmas." action={<NewBtn label="+ Nova data" onClick={() => setOpen("new")} />} />
         <ViewFilters
           fields={[
-            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(datasGoldData.map(x => x.curso)) },
-            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(datasGoldData.map(x => x.local)) },
+            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(lista.map(x => x.curso)) },
+            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(lista.map(x => x.local)) },
           ]}
           chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
           onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
@@ -412,7 +461,7 @@ export function DatasGoldView() {
                       <a href={`https://${r.link}`} className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline" onClick={e => e.preventDefault()}>{I.link} Link</a>
                     </Td>
                     <Td>{estadoBadge(r.status)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -425,14 +474,14 @@ export function DatasGoldView() {
         <div className="p-5 space-y-3">
           <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Início"><input type="date" className={iCls} defaultValue={editing?.inicio ?? ""} /></Field>
-            <Field label="Fim"><input type="date" className={iCls} defaultValue={editing?.fim ?? ""} /></Field>
+            <Field label="Início"><input type="date" className={iCls} value={inicio} onChange={e => setInicio(e.target.value)} /></Field>
+            <Field label="Fim"><input type="date" className={iCls} value={fim} onChange={e => setFim(e.target.value)} /></Field>
           </div>
           <Field label="Horário"><SearchSelect value={horario} onChange={setHorario} options={horariosOpts} /></Field>
           <Field label="Local"><SearchSelect value={local} onChange={setLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
-          <Field label="Preço (€)"><input type="number" className={iCls} defaultValue={editing?.preco ?? 125} /></Field>
-          <Field label="Link de inscrição"><input className={iCls} defaultValue={editing?.link ?? ""} /></Field>
-          <FormActions onClose={() => setOpen(null)} />
+          <Field label="Preço (€)"><input type="number" className={iCls} value={preco} onChange={e => setPreco(e.target.value)} /></Field>
+          <Field label="Link de inscrição"><input className={iCls} value={link} onChange={e => setLink(e.target.value)} /></Field>
+          <FormActions onClose={() => setOpen(null)} onSave={guardar} disabled={!curso || !inicio} label={editing ? "Guardar" : "Criar edição"} />
         </div>
       </SlideOver>
     </>
@@ -440,14 +489,31 @@ export function DatasGoldView() {
 }
 
 export function LocaisView() {
+  const [lista, setLista] = useState(locaisData);
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof locaisData[number] | null>(null);
-  const f = locaisData.filter(x => {
+  const [nome, setNome] = useState("");
+  const [morada, setMorada] = useState("");
+  const [salas, setSalas] = useState("1");
+  const f = lista.filter(x => {
     const q = `${x.nome} ${x.morada}`.toLowerCase().includes(s.toLowerCase());
     return q && (filtro === "Todos" || x.status === filtro);
   });
   const editing = open && open !== "new" ? open : null;
+  useEffect(() => {
+    if (!open) return;
+    setNome(editing?.nome ?? "");
+    setMorada(editing?.morada ?? "");
+    setSalas(String(editing?.salas ?? 1));
+  }, [open, editing]);
+  function guardar() {
+    if (!nome.trim()) return;
+    const row = { id: editing?.id ?? nextId(lista), nome: nome.trim(), morada: morada.trim(), salas: Number(salas) || 0, turmas: editing?.turmas ?? 0, status: "Ativo" };
+    if (editing) setLista(xs => xs.map(x => x.id === editing.id ? row : x));
+    else setLista(xs => [row, ...xs]);
+    setOpen(null);
+  }
   return (
     <>
       <div className="space-y-4">
@@ -468,7 +534,7 @@ export function LocaisView() {
                     <Td className="text-center text-xs text-slate-600">{r.salas || "-"}</Td>
                     <Td className="text-center text-xs font-semibold text-slate-700">{r.turmas}</Td>
                     <Td>{estadoBadge(r.status)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -478,10 +544,10 @@ export function LocaisView() {
       </div>
       <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? editing.nome : "Novo local"}>
         <div className="p-5 space-y-3">
-          <Field label="Nome"><input className={iCls} defaultValue={editing?.nome ?? ""} /></Field>
-          <Field label="Morada"><input className={iCls} defaultValue={editing?.morada ?? ""} /></Field>
-          <Field label="Salas"><input type="number" className={iCls} defaultValue={editing?.salas ?? 1} /></Field>
-          <FormActions onClose={() => setOpen(null)} />
+          <Field label="Nome"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} /></Field>
+          <Field label="Morada"><input className={iCls} value={morada} onChange={e => setMorada(e.target.value)} /></Field>
+          <Field label="Salas"><input type="number" className={iCls} value={salas} onChange={e => setSalas(e.target.value)} /></Field>
+          <FormActions onClose={() => setOpen(null)} onSave={guardar} disabled={!nome.trim()} label={editing ? "Guardar" : "Criar local"} />
         </div>
       </SlideOver>
     </>
@@ -489,11 +555,21 @@ export function LocaisView() {
 }
 
 export function AreasTematicasView() {
+  const [lista, setLista] = useState(areasTematicasData);
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof areasTematicasData[number] | null>(null);
-  const f = areasTematicasData.filter(x => x.nome.toLowerCase().includes(s.toLowerCase()) && (filtro === "Todos" || x.estado === filtro));
+  const [nome, setNome] = useState("");
+  const f = lista.filter(x => x.nome.toLowerCase().includes(s.toLowerCase()) && (filtro === "Todos" || x.estado === filtro));
   const editing = open && open !== "new" ? open : null;
+  useEffect(() => { if (open) setNome(editing?.nome ?? ""); }, [open, editing]);
+  function guardar() {
+    if (!nome.trim()) return;
+    const row = { id: editing?.id ?? nextId(lista), nome: nome.trim(), cursos: editing?.cursos ?? 0, estado: "Ativo" };
+    if (editing) setLista(xs => xs.map(x => x.id === editing.id ? row : x));
+    else setLista(xs => [row, ...xs]);
+    setOpen(null);
+  }
   return (
     <>
       <div className="space-y-4">
@@ -512,7 +588,7 @@ export function AreasTematicasView() {
                     <Td className="text-sm font-medium text-slate-800">{r.nome}</Td>
                     <Td className="text-center text-xs font-semibold text-slate-700">{r.cursos}</Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -522,8 +598,8 @@ export function AreasTematicasView() {
       </div>
       <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? editing.nome : "Nova área temática"}>
         <div className="p-5 space-y-3">
-          <Field label="Nome"><input className={iCls} defaultValue={editing?.nome ?? ""} /></Field>
-          <FormActions onClose={() => setOpen(null)} />
+          <Field label="Nome"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} /></Field>
+          <FormActions onClose={() => setOpen(null)} onSave={guardar} disabled={!nome.trim()} label={editing ? "Guardar" : "Criar área"} />
         </div>
       </SlideOver>
     </>
@@ -818,22 +894,32 @@ export function ConteudosView() {
 
 export function FinInscricoesView() {
   const { fin } = useTurmas();
+  const [lista, setLista] = useState(finInscricoesData);
   const [s, setS] = useState(""); const [p, setP] = useState(1);
   const [filtro, setFiltro] = useState("Todas");
   const [open, setOpen] = useState<"new" | typeof finInscricoesData[number] | null>(null);
   const [curso, setCurso] = useState("");
   const [turma, setTurma] = useState("");
   const [filtroCurso, setFiltroCurso] = useState("");
+  const [nome, setNome] = useState("");
+  const [apelido, setApelido] = useState("");
+  const [email, setEmail] = useState("");
+  const [telf, setTelf] = useState("");
+  const [estadoInsc, setEstadoInsc] = useState("Recebida");
   const estados = ["Todas", "Recebida", "Em análise", "Elegível", "Colocado na turma", "Indeferido"];
   const editing = open && open !== "new" ? open : null;
   const turmaOpts = turmaFinOpts(fin, { curso: curso || undefined, includeNome: editing && editing.turma !== "-" ? editing.turma : undefined });
   useEffect(() => {
-    if (open) {
-      setCurso(editing?.curso ?? "");
-      setTurma(editing && editing.turma !== "-" ? editing.turma : "");
-    }
+    if (!open) return;
+    setCurso(editing?.curso ?? "");
+    setTurma(editing && editing.turma !== "-" ? editing.turma : "");
+    setNome(editing?.nome ?? "");
+    setApelido(editing?.apelido ?? "");
+    setEmail(editing?.email ?? "");
+    setTelf(editing?.telf ?? "");
+    setEstadoInsc(editing?.estado ?? "Recebida");
   }, [open, editing]);
-  const f = finInscricoesData.filter(x => {
+  const f = lista.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.ufcd} ${x.curso} ${x.turma}`.toLowerCase().includes(s.toLowerCase());
     return q && matchesFilter(x.curso, filtroCurso) && (filtro === "Todas" || x.estado === filtro);
   });
@@ -844,7 +930,7 @@ export function FinInscricoesView() {
         <PageHeader title="Inscrições Financiadas" sub="Pipeline de elegibilidade por turma e UFCD - não é o funil comercial Gold." action={<NewBtn label="+ Nova inscrição" onClick={() => setOpen("new")} />} />
         <ViewFilters
           accent="fin"
-          fields={[{ label: "Curso / UFCD", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(finInscricoesData.map(x => x.curso)) }]}
+          fields={[{ label: "Curso / UFCD", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(lista.map(x => x.curso)) }]}
           chips={{ options: estados, value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
           onClear={() => { setFiltroCurso(""); setFiltro("Todas"); setP(1); }}
         />
@@ -872,7 +958,7 @@ export function FinInscricoesView() {
                     <Td className="text-xs font-semibold text-slate-700 whitespace-nowrap">{r.turma}</Td>
                     <Td><DocPips docs={r.docs} /></Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Abrir" onClick={() => setOpen(r)} /><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Abrir" onClick={() => setOpen(r)} /><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -886,19 +972,17 @@ export function FinInscricoesView() {
         title={editing ? `${editing.nome} ${editing.apelido}` : "Nova inscrição financiada"}
         sub={editing ? `UFCD ${editing.ufcd} · ${editing.turma}` : "Candidatura a UFCD - não é o funil Gold"}>
         <div className="p-5 space-y-4">
-          {!editing && (
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Nome"><input className={iCls} /></Field>
-              <Field label="Apelido"><input className={iCls} /></Field>
-              <Field label="Email"><input className={iCls} /></Field>
-              <Field label="Telemóvel"><input className={iCls} /></Field>
-            </div>
-          )}
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Nome"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} /></Field>
+            <Field label="Apelido"><input className={iCls} value={apelido} onChange={e => setApelido(e.target.value)} /></Field>
+            <Field label="Email"><input className={iCls} value={email} onChange={e => setEmail(e.target.value)} /></Field>
+            <Field label="Telemóvel"><input className={iCls} value={telf} onChange={e => setTelf(e.target.value)} /></Field>
+          </div>
           <Field label="Curso / UFCD"><SearchSelect value={curso} onChange={v => { setCurso(v); setTurma(""); }} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
           <Field label="Turma"><SearchSelect value={turma} onChange={setTurma} options={turmaOpts} placeholder="Só turmas ativas…" empty="Não há turmas ativas para esta UFCD." allowEmpty /></Field>
           <TurmaInscricaoHint optsLen={turmaOpts.length} curso={curso || undefined} />
           <Field label="Estado">
-            <select className={iCls} defaultValue={editing?.estado ?? "Recebida"}>
+            <select className={iCls} value={estadoInsc} onChange={e => setEstadoInsc(e.target.value)}>
               {estados.filter(e => e !== "Todas").map(e => <option key={e}>{e}</option>)}
             </select>
           </Field>
@@ -908,7 +992,21 @@ export function FinInscricoesView() {
               <DocPips docs={editing.docs} />
             </div>
           )}
-          <FormActions onClose={() => setOpen(null)} />
+          <FormActions onClose={() => setOpen(null)} onSave={() => {
+            if (!nome.trim() || !curso) return;
+            const opt = cursosFinOpts.find(o => o.value === curso);
+            const ufcd = opt?.sub?.match(/\d+/)?.[0] ?? editing?.ufcd ?? "—";
+            const row = {
+              id: editing?.id ?? nextId(lista),
+              inscrito: editing?.inscrito ?? new Date().toISOString().slice(0, 10),
+              nome: nome.trim(), apelido: apelido.trim(), email: email.trim(), telf: telf.trim(),
+              ufcd, curso, turma: turma || "-", estado: estadoInsc,
+              docs: editing?.docs ?? { cc: false, ch: false, cu: false, ci: false, ce: false },
+            };
+            if (editing) setLista(xs => xs.map(x => x.id === editing.id ? row : x));
+            else setLista(xs => [row, ...xs]);
+            setOpen(null);
+          }} disabled={!nome.trim() || !curso} label={editing ? "Guardar" : "Criar inscrição"} />
         </div>
       </SlideOver>
     </>
@@ -916,11 +1014,19 @@ export function FinInscricoesView() {
 }
 
 export function BlogTematicasView() {
+  const [lista, setLista] = useState(blogTematicasData);
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof blogTematicasData[number] | null>(null);
-  const f = blogTematicasData.filter(x => `${x.nome} ${x.slug}`.toLowerCase().includes(s.toLowerCase()) && (filtro === "Todos" || x.estado === filtro));
+  const [nome, setNome] = useState("");
+  const [slug, setSlug] = useState("");
+  const f = lista.filter(x => `${x.nome} ${x.slug}`.toLowerCase().includes(s.toLowerCase()) && (filtro === "Todos" || x.estado === filtro));
   const editing = open && open !== "new" ? open : null;
+  useEffect(() => {
+    if (!open) return;
+    setNome(editing?.nome ?? "");
+    setSlug(editing?.slug ?? "");
+  }, [open, editing]);
   return (
     <>
       <div className="space-y-4">
@@ -940,7 +1046,7 @@ export function BlogTematicasView() {
                     <Td className="text-xs font-mono text-slate-500">/{r.slug}</Td>
                     <Td className="text-center text-xs font-semibold">{r.posts}</Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -950,9 +1056,21 @@ export function BlogTematicasView() {
       </div>
       <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? editing.nome : "Nova temática"}>
         <div className="p-5 space-y-3">
-          <Field label="Nome"><input className={iCls} defaultValue={editing?.nome ?? ""} /></Field>
-          <Field label="Slug"><input className={iCls} defaultValue={editing?.slug ?? ""} /></Field>
-          <FormActions onClose={() => setOpen(null)} />
+          <Field label="Nome"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} /></Field>
+          <Field label="Slug"><input className={iCls} value={slug} onChange={e => setSlug(e.target.value)} placeholder="formacao-formadores" /></Field>
+          <FormActions onClose={() => setOpen(null)} onSave={() => {
+            if (!nome.trim()) return;
+            const row = {
+              id: editing?.id ?? nextId(lista),
+              nome: nome.trim(),
+              slug: (slug.trim() || nome.trim()).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+              posts: editing?.posts ?? 0,
+              estado: "Ativo",
+            };
+            if (editing) setLista(xs => xs.map(x => x.id === editing.id ? row : x));
+            else setLista(xs => [row, ...xs]);
+            setOpen(null);
+          }} disabled={!nome.trim()} label={editing ? "Guardar" : "Criar temática"} />
         </div>
       </SlideOver>
     </>
@@ -1039,6 +1157,7 @@ function seedConfigDrafts() {
 export function ConfiguracoesView() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState(seedConfigDrafts);
+  const [saved, setSaved] = useState(false);
   const idx = configCards.findIndex(c => c.id === openId);
   const current = idx >= 0 ? configCards[idx] : null;
   useEffect(() => {
@@ -1066,7 +1185,7 @@ export function ConfiguracoesView() {
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Configurações" sub="Parâmetros da entidade - a ENA gere por turmas, não por ação de formação." />
+        <PageHeader title="Configurações" sub={saved ? "Alterações guardadas neste protótipo." : "Parâmetros da entidade - a ENA gere por turmas, não por ação de formação."} />
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {configCards.map(c => (
             <button key={c.id} type="button" onClick={() => setOpenId(c.id)}
@@ -1136,7 +1255,7 @@ export function ConfiguracoesView() {
               </div>
               <div className="flex gap-2">
                 <button type="button" onClick={() => setOpenId(null)} className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Fechar</button>
-                <button type="button" onClick={() => setOpenId(null)} className="px-4 py-2 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white">Guardar</button>
+                <button type="button" onClick={() => { setSaved(true); setOpenId(null); }} className="px-4 py-2 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white">Guardar</button>
               </div>
             </div>
           </div>

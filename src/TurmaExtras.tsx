@@ -210,10 +210,11 @@ const PRESENCAS_GOLD_SEED = [
   { id: 10, nome: "Marta Maia", presente: true },
 ];
 
-export function PresencasSessaoModal({ open, onClose, sessao, formandos }: {
+export function PresencasSessaoModal({ open, onClose, sessao, formandos, onSave }: {
   open: boolean; onClose: () => void;
   sessao?: { n: number; data: string; hora: string };
   formandos?: { id: number; nome: string; presente?: boolean }[];
+  onSave?: (rows: { id: number; nome: string; presente: boolean }[]) => void;
 }) {
   function seed() {
     const src = formandos?.length ? formandos : PRESENCAS_GOLD_SEED;
@@ -268,7 +269,7 @@ export function PresencasSessaoModal({ open, onClose, sessao, formandos }: {
         </div>
         <div className="flex gap-2 px-5 py-4 border-t border-slate-100 flex-shrink-0">
           <button onClick={onClose} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-          <button onClick={onClose} className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">Guardar presenças</button>
+          <button onClick={() => { onSave?.(presencas); onClose(); }} className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">Guardar presenças</button>
         </div>
       </div>
     </div>

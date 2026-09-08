@@ -6,10 +6,12 @@ type TurmasCtx = {
   fin: TurmaFin[];
   patchGold: (id: number, patch: Partial<TurmaGold>) => void;
   addGold: (turma: TurmaGold) => void;
+  removeGold: (id: number) => void;
   setGoldCronograma: (id: number, cronograma: SessaoCronograma[]) => void;
   toggleGold: (id: number, activa: boolean) => void;
   patchFin: (id: number, patch: Partial<TurmaFin>) => void;
   addFin: (turma: TurmaFin) => void;
+  removeFin: (id: number) => void;
   setFinCronograma: (id: number, cronograma: SessaoCronograma[]) => void;
   toggleFin: (id: number, activa: boolean) => void;
 };
@@ -26,6 +28,9 @@ export function TurmasProvider({ children }: { children: ReactNode }) {
   const addGold = useCallback((turma: TurmaGold) => {
     setGold(xs => [turma, ...xs]);
   }, []);
+  const removeGold = useCallback((id: number) => {
+    setGold(xs => xs.filter(t => t.id !== id));
+  }, []);
   const setGoldCronograma = useCallback((id: number, cronograma: SessaoCronograma[]) => {
     setGold(xs => xs.map(t => t.id === id ? { ...t, cronograma } : t));
   }, []);
@@ -39,6 +44,9 @@ export function TurmasProvider({ children }: { children: ReactNode }) {
   const addFin = useCallback((turma: TurmaFin) => {
     setFin(xs => [turma, ...xs]);
   }, []);
+  const removeFin = useCallback((id: number) => {
+    setFin(xs => xs.filter(t => t.id !== id));
+  }, []);
   const setFinCronograma = useCallback((id: number, cronograma: SessaoCronograma[]) => {
     setFin(xs => xs.map(t => t.id === id ? { ...t, cronograma } : t));
   }, []);
@@ -47,8 +55,8 @@ export function TurmasProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(() => ({
-    gold, fin, patchGold, addGold, setGoldCronograma, toggleGold, patchFin, addFin, setFinCronograma, toggleFin,
-  }), [gold, fin, patchGold, addGold, setGoldCronograma, toggleGold, patchFin, addFin, setFinCronograma, toggleFin]);
+    gold, fin, patchGold, addGold, removeGold, setGoldCronograma, toggleGold, patchFin, addFin, removeFin, setFinCronograma, toggleFin,
+  }), [gold, fin, patchGold, addGold, removeGold, setGoldCronograma, toggleGold, patchFin, addFin, removeFin, setFinCronograma, toggleFin]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

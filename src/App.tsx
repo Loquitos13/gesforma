@@ -24,6 +24,7 @@ import { FORMADORES_SEED } from "./formadorModel";
 import { useFormadorOptions } from "./FormadoresContext";
 import { useTurmas } from "./TurmasContext";
 import { cronogramaToSessoes, formatSessaoLabel, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
+import { ListsProvider, nextListId, useLists, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -89,6 +90,22 @@ type View =
 
 type CockpitTab = "overview" | "cronograma" | "sessoes" | "documentos" | "dtp" | "certificados";
 type NavTarget = { view: View; turmaId?: number; tab?: CockpitTab; cursoId?: number | "new"; cursoNome?: string };
+
+function nowStamp() {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function splitNome(full: string) {
+  const parts = full.trim().split(/\s+/).filter(Boolean);
+  return { nome: parts[0] ?? "", apelido: parts.slice(1).join(" ") };
+}
+function emptyFinDocs() {
+  return {
+    cc: { ok: false, data: "" }, ch: { ok: false, data: "" }, cu: { ok: false, data: "" },
+    ci: { ok: false, data: "" }, ce: { ok: false, data: "" },
+  };
+}
 
 // ─── Sample Data ─────────────────────────────────────────────────────────────
 
@@ -700,7 +717,7 @@ function Modal({ open, onClose, title, children }: { open: boolean; onClose: () 
 
 // ─── Ficha do Formando ────────────────────────────────────────────────────────
 
-type FormandoRecord = typeof formandosTurmasData[number];
+type FormandoRecord = FormandoTurma;
 
 function FichaFormando({ formando, tipo = "gold", onClose }: { formando: FormandoRecord; tipo?: "gold" | "fin"; onClose: () => void }) {
   const [tab, setTab] = useState<"info" | "pagamentos" | "historico" | "notas">("info");
@@ -1122,9 +1139,10 @@ function DocumentosTurmaTab({ regime = "gold", curso }: { regime?: "gold" | "fin
   resolverRef.current = resolver;
   useEffect(() => { setGrupos(cloneGrupos(seed)); setResolver(null); }, [regime]);
 
+  const { formandosFin, formandosTurmas } = useLists();
   const nomesFormandos = regime === "fin"
-    ? finFormandosData.map(f => `${f.nome} ${f.apelido}`)
-    : formandosTurmasData.map(f => `${f.nome} ${f.apelido}`);
+    ? formandosFin.map(f => `${f.nome} ${f.apelido}`)
+    : formandosTurmas.map(f => `${f.nome} ${f.apelido}`);
   const nomesSessoes = regime === "fin"
     ? ["Sessão 1 · 27 Ago", "Sessão 2 · 03 Set", "Sessão 3 · 10 Set", "Sessão 4 · 17 Set", "Sessão 5 · 24 Set"]
     : Array.from({ length: 16 }, (_, i) => `Sessão ${i + 1}`);
@@ -1219,14 +1237,29 @@ function DocumentosTurmaTab({ regime = "gold", curso }: { regime?: "gold" | "fin
   );
 }
 
-function CertificadosTurmaTab({ onUpload }: { onUpload?: (id: number) => void }) {
+function CertificadosTurmaTab({ formandos, issued, onUpload }: {
+  formandos: { id: number; nome: string }[];
+  issued?: Record<number, boolean>;
+  onUpload?: (id: number) => void;
+}) {
+  const rows = (formandos.length ? formandos : certificadosSample.map(c => ({ id: c.id, nome: c.nome }))).map((f, i) => {
+    const sample = certificadosSample[i % certificadosSample.length];
+    return {
+      id: f.id,
+      nome: f.nome,
+      presencas: sample.presencas,
+      elearning: sample.elearning,
+      nota: sample.nota,
+      certificado: issued?.[f.id] ?? sample.certificado,
+    };
+  });
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
         {[
-          { l: "Elegíveis", v: certificadosSample.filter(c => c.presencas >= 75 && c.nota >= 10).length, color: "text-emerald-600", bg: "bg-emerald-50" },
-          { l: "Não elegíveis", v: certificadosSample.filter(c => c.presencas < 75 || c.nota < 10).length, color: "text-red-600", bg: "bg-red-50" },
-          { l: "Certificados emitidos", v: certificadosSample.filter(c => c.certificado).length, color: "text-blue-600", bg: "bg-blue-50" },
+          { l: "Elegíveis", v: rows.filter(c => c.presencas >= 75 && c.nota >= 10).length, color: "text-emerald-600", bg: "bg-emerald-50" },
+          { l: "Não elegíveis", v: rows.filter(c => c.presencas < 75 || c.nota < 10).length, color: "text-red-600", bg: "bg-red-50" },
+          { l: "Certificados emitidos", v: rows.filter(c => c.certificado).length, color: "text-blue-600", bg: "bg-blue-50" },
         ].map(s => (
           <Card key={s.l} className={`p-4 ${s.bg}`}>
             <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">{s.l}</p>
@@ -1243,7 +1276,7 @@ function CertificadosTurmaTab({ onUpload }: { onUpload?: (id: number) => void })
           <table className="w-full text-sm">
             <thead><tr><Th>Formando</Th><Th className="text-center">Presenças</Th><Th className="text-center">E-Learning</Th><Th className="text-center">Nota Final</Th><Th className="text-center">Elegibilidade</Th><Th className="text-center">Certificado</Th></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {certificadosSample.map(c => {
+              {rows.map(c => {
                 const elegivel = c.presencas >= 75 && c.nota >= 10;
                 return (
                   <tr key={c.id} className="hover:bg-slate-50">
@@ -1279,10 +1312,11 @@ function CertificadosTurmaTab({ onUpload }: { onUpload?: (id: number) => void })
 }
 
 function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab; onNavigate?: (v: View) => void }) {
-  const { gold, toggleGold, setGoldCronograma } = useTurmas();
+  const { gold, toggleGold, setGoldCronograma, patchGold } = useTurmas();
+  const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma } = useLists();
   const turma = gold.find(t => t.id === turmaId) ?? gold[0];
   const activa = isTurmaActiva(turma);
-  const membros = formandosTurmasData.filter(f => f.turmaId === turma.id);
+  const membros = formandosTurmas.filter(f => f.turmaId === turma.id);
   const pagos = membros.filter(f => f.pago).length;
   const vagasLivres = turma.vagas - turma.totalAlunos;
   const sessoesTurma = turma.cronograma.length ? cronogramaToSessoes(turma.cronograma) : sessoesSample;
@@ -1293,7 +1327,9 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
   const [sumarios, setSumarios] = useState<Record<number, SumarioSessaoData>>(defaultSumarios);
   const [presencasSession, setPresencasSession] = useState<SessaoMeta | null>(null);
+  const [presencasBySessao, setPresencasBySessao] = useState<Record<number, { id: number; nome: string; presente: boolean }[]>>({});
   const [uploadCert, setUploadCert] = useState<number | null>(null);
+  const [certsIssued, setCertsIssued] = useState<Record<number, boolean>>({});
   const [formadorOpen, setFormadorOpen] = useState<string | null>(null);
   const [novaSessao, setNovaSessao] = useState(false);
   const [formadoresSessao, setFormadoresSessao] = useState<string[]>(["Isac Silva"]);
@@ -1302,7 +1338,19 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const [dataSessao, setDataSessao] = useState("");
   const [horaSessao, setHoraSessao] = useState("09:00");
   const [addFormando, setAddFormando] = useState(false);
+  const [novoNome, setNovoNome] = useState("");
+  const [novoEmail, setNovoEmail] = useState("");
+  const [novoTelf, setNovoTelf] = useState("");
+  const [editTurma, setEditTurma] = useState(false);
+  const [editNome, setEditNome] = useState("");
+  const [editLocal, setEditLocal] = useState("");
+  const [editHorario, setEditHorario] = useState("");
+  const [editFormador, setEditFormador] = useState("");
+  const [editInicio, setEditInicio] = useState("");
+  const [editVagas, setEditVagas] = useState(16);
+  const formadorOpts = useFormadorOptions();
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
+  const nomesCockpit = membros.map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }));
 
   return (
     <>
@@ -1330,7 +1378,11 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
               </div>
             </div>
             <div className="flex gap-3 flex-shrink-0">
-              <button className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>
+              <button onClick={() => {
+                setEditNome(turma.nome); setEditLocal(turma.local); setEditHorario(turma.horario);
+                setEditFormador(turma.formador); setEditInicio(turma.dataInicio); setEditVagas(turma.vagas);
+                setEditTurma(true);
+              }} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>
               <button className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-lg transition-colors">{I.download}</button>
             </div>
           </div>
@@ -1387,7 +1439,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           />
         )}
         {tab === "documentos" && <DocumentosTurmaTab regime="gold" curso={turma.curso} />}
-        {tab === "certificados" && <CertificadosTurmaTab onUpload={id => setUploadCert(id)} />}
+        {tab === "certificados" && <CertificadosTurmaTab formandos={nomesCockpit} issued={certsIssued} onUpload={id => setUploadCert(id)} />}
 
         {tab === "overview" && <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1436,7 +1488,10 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             <table className="w-full text-sm">
               <thead><tr><Th>Nome</Th><Th>Contacto</Th><Th>Inscrito a</Th><Th className="text-center">Pago</Th><Th>Método</Th><Th>Ações</Th></tr></thead>
               <tbody className="divide-y divide-slate-100">
-                {(membros.length > 0 ? membros : formandosTurmasData.slice(0, 4)).map(f => (
+                {membros.length === 0 && (
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-xs text-slate-400">Ainda sem formandos nesta turma.</td></tr>
+                )}
+                {membros.map(f => (
                   <tr key={f.id} className="hover:bg-slate-50 transition-colors">
                     <Td>
                       <button onClick={() => setFichaOpen(f)} className="text-left">
@@ -1455,8 +1510,11 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                     <Td>
                       <div className="flex gap-1">
                         <ActBtn icon={I.eye} label="Ficha" onClick={() => setFichaOpen(f)} />
-                        <ActBtn icon={f.pago ? I.receipt : I.euro} label={f.pago ? "Recibo" : "Marcar pago"} color={f.pago ? "gray" : "orange"} />
-                        <ActBtn icon={I.trash} label="Remover" color="red" />
+                        <ActBtn icon={f.pago ? I.receipt : I.euro} label={f.pago ? "Recibo" : "Marcar pago"} color={f.pago ? "gray" : "orange"} onClick={() => { if (!f.pago) patchFormandoTurma(f.id, { pago: true, metodo: "MB Way" }); }} />
+                        <ActBtn icon={I.trash} label="Remover" color="red" onClick={() => {
+                          removeFormandoTurma(f.id);
+                          patchGold(turma.id, { totalAlunos: Math.max(0, turma.totalAlunos - 1) });
+                        }} />
                       </div>
                     </Td>
                   </tr>
@@ -1511,9 +1569,11 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         open={!!presencasSession}
         onClose={() => setPresencasSession(null)}
         sessao={presencasSession ?? undefined}
-        formandos={(membros.length ? membros : formandosTurmasData.slice(0, 8)).map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }))}
+        formandos={nomesCockpit}
+        onSave={rows => { if (presencasSession) setPresencasBySessao(p => ({ ...p, [presencasSession.n]: rows })); }}
       />
-      <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" />
+      <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado"
+        onConfirm={() => { if (uploadCert != null) setCertsIssued(p => ({ ...p, [uploadCert]: true })); }} />
       <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? ""} />
       <SlideOver open={novaSessao} onClose={() => setNovaSessao(false)} title="Nova sessão" sub={turma.nome}>
         <div className="p-5 space-y-3">
@@ -1567,15 +1627,51 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           {activa ? (
             <>
               <p className="text-xs text-slate-500">A turma está ativa e tem {Math.max(0, turma.vagas - turma.totalAlunos)} vagas. Só turmas ativas aceitam novas inscrições.</p>
-              <Field label="Formando"><input className={iCls} placeholder="Nome do formando" /></Field>
+              <Field label="Nome"><input className={iCls} value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="Nome completo" /></Field>
+              <Field label="Email"><input className={iCls} type="email" value={novoEmail} onChange={e => setNovoEmail(e.target.value)} /></Field>
+              <Field label="Telemóvel"><input className={iCls} value={novoTelf} onChange={e => setNovoTelf(e.target.value)} /></Field>
               <div className="flex gap-2 pt-2">
                 <button onClick={() => setAddFormando(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-                <button onClick={() => setAddFormando(false)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Inscrever</button>
+                <button disabled={!novoNome.trim() || vagasLivres <= 0} onClick={() => {
+                  const { nome, apelido } = splitNome(novoNome);
+                  addFormandoTurma({
+                    id: nextListId(formandosTurmas),
+                    nome, apelido: apelido || "—",
+                    telf: novoTelf.trim() || "—",
+                    email: novoEmail.trim() || `${nome.toLowerCase()}@mail.pt`,
+                    inscrito: nowStamp(),
+                    local: turma.local, curso: turma.curso, turma: turma.nome, turmaId: turma.id,
+                    estado: "Formando", pago: false, valor: 125, metodo: "-",
+                  });
+                  patchGold(turma.id, { totalAlunos: turma.totalAlunos + 1 });
+                  setAddFormando(false); setNovoNome(""); setNovoEmail(""); setNovoTelf("");
+                }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Inscrever</button>
               </div>
             </>
           ) : (
             <TurmaInactivaBanner nome={turma.nome} onActivate={() => toggleGold(turma.id, true)} />
           )}
+        </div>
+      </SlideOver>
+      <SlideOver open={editTurma} onClose={() => setEditTurma(false)} title={`Editar ${turma.nome}`} sub="Dados da turma Gold">
+        <div className="p-5 space-y-3">
+          <Field label="Código interno"><input className={iCls} value={editNome} onChange={e => setEditNome(e.target.value)} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Local"><SearchSelect value={editLocal} onChange={setEditLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
+            <Field label="Horário"><SearchSelect value={editHorario} onChange={setEditHorario} options={horariosOpts} /></Field>
+          </div>
+          <Field label="Formador"><SearchSelect value={editFormador} onChange={setEditFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Data de início"><input type="date" className={iCls} value={editInicio} onChange={e => setEditInicio(e.target.value)} /></Field>
+            <Field label="Vagas"><input type="number" className={iCls} value={editVagas} onChange={e => setEditVagas(Number(e.target.value) || 0)} /></Field>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setEditTurma(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={() => {
+              patchGold(turma.id, { nome: editNome.trim() || turma.nome, local: editLocal, horario: editHorario, formador: editFormador, dataInicio: editInicio, vagas: editVagas });
+              setEditTurma(false);
+            }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+          </div>
         </div>
       </SlideOver>
     </>
@@ -1651,13 +1747,15 @@ function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (
 }
 
 function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab; onNavigate?: (v: View | NavTarget) => void }) {
-  const { fin, toggleFin, setFinCronograma } = useTurmas();
+  const { fin, toggleFin, setFinCronograma, patchFin } = useTurmas();
+  const { formandosFin, addFormandoFin } = useLists();
   const turma = fin.find(t => t.id === turmaId) ?? fin.find(t => t.ufcdCod === "3564") ?? fin[0];
   const activa = isTurmaActiva(turma);
   const sessoesTurma = turma.cronograma.length ? cronogramaToSessoes(turma.cronograma) : finSessoesSample;
   const [tab, setTab] = useState<CockpitTab>(initialTab);
   const [formadorOpen, setFormadorOpen] = useState<string | null>(null);
   const [uploadCert, setUploadCert] = useState<number | null>(null);
+  const [certsIssued, setCertsIssued] = useState<Record<number, boolean>>({});
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
   const [planos, setPlanos] = useState<Record<number, PlanoSessaoData>>(defaultPlanos);
   const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
@@ -1670,10 +1768,22 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const [dataSessao, setDataSessao] = useState("");
   const [horaSessao, setHoraSessao] = useState("19:00");
   const [docsOpen, setDocsOpen] = useState<FinFormando | null>(null);
+  const [addFormando, setAddFormando] = useState(false);
+  const [novoNome, setNovoNome] = useState("");
+  const [novoEmail, setNovoEmail] = useState("");
+  const [novoTelf, setNovoTelf] = useState("");
+  const [editTurma, setEditTurma] = useState(false);
+  const [editNome, setEditNome] = useState("");
+  const [editCurso, setEditCurso] = useState("");
+  const [editFormador, setEditFormador] = useState("");
+  const [editLocal, setEditLocal] = useState("");
+  const [editInicio, setEditInicio] = useState("");
+  const formadorOpts = useFormadorOptions();
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
-  const prontos = Math.floor(turma.alunos * 0.8);
-  const membros = finFormandosData.filter(f => f.curso === turma.curso || f.turma.includes(turma.ufcdCod));
-  const listaFormandos = membros.length ? membros : finFormandosData;
+  const membros = formandosFin.filter(f => f.turma === turma.nome || f.curso === turma.curso);
+  const listaFormandos = membros;
+  const prontos = listaFormandos.filter(f => ["cc", "ch", "cu", "ci", "ce"].every(k => f[k as DocKey].ok)).length;
+  const nomesCockpit = listaFormandos.map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }));
 
   return (
     <div className="space-y-5">
@@ -1698,7 +1808,10 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
             </div>
           </div>
           <div className="flex gap-3 flex-shrink-0">
-            <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>
+            <button onClick={() => {
+              setEditNome(turma.nome); setEditCurso(turma.curso); setEditFormador(turma.formador);
+              setEditLocal(turma.local); setEditInicio(turma.dataInicio); setEditTurma(true);
+            }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>
             <button className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-lg transition-colors">{I.download}</button>
           </div>
         </div>
@@ -1744,7 +1857,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
         />
       )}
       {tab === "documentos" && <DocumentosTurmaTab regime="fin" curso={turma.curso} />}
-      {tab === "certificados" && <CertificadosTurmaTab onUpload={id => setUploadCert(id)} />}
+      {tab === "certificados" && <CertificadosTurmaTab formandos={nomesCockpit} issued={certsIssued} onUpload={id => setUploadCert(id)} />}
       {tab === "overview" && (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1782,13 +1895,16 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <p className="text-sm font-semibold text-slate-700">Lista de Formandos</p>
               {activa
-                ? <NewBtn accent="fin" label="Adicionar" />
+                ? <NewBtn accent="fin" label="Adicionar" onClick={() => { setNovoNome(""); setNovoEmail(""); setNovoTelf(""); setAddFormando(true); }} />
                 : <button disabled title="Turma inativa - não aceita novas inscrições" className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-200 text-slate-400 text-sm font-semibold rounded-lg cursor-not-allowed">Adicionar</button>}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr><Th>Nome</Th><Th>Contacto</Th><Th>Turma</Th><Th>Estado</Th><Th>Documentos</Th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
+                  {listaFormandos.length === 0 && (
+                    <tr><td colSpan={5} className="px-4 py-8 text-center text-xs text-slate-400">Ainda sem formandos nesta turma.</td></tr>
+                  )}
                   {listaFormandos.map(f => {
                     const keys: DocKey[] = ["cc", "ch", "cu", "ci", "ce"];
                     const okCount = keys.filter(k => f[k].ok).length;
@@ -1857,13 +1973,61 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
         open={!!presencasSession}
         onClose={() => setPresencasSession(null)}
         sessao={presencasSession ?? undefined}
-        formandos={listaFormandos.map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }))}
+        formandos={nomesCockpit}
+        onSave={() => setPresencasSession(null)}
       />
       <SlideOver open={!!docsOpen} onClose={() => setDocsOpen(null)} title="Documentos do formando" sub={docsOpen ? `${docsOpen.nome} ${docsOpen.apelido}` : ""}>
         {docsOpen && <DocumentosFinPanel formando={docsOpen} />}
       </SlideOver>
       <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? turma.formador} />
-      <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" accent="fin" />
+      <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" accent="fin"
+        onConfirm={() => { if (uploadCert != null) setCertsIssued(p => ({ ...p, [uploadCert]: true })); }} />
+      <SlideOver open={addFormando} onClose={() => setAddFormando(false)} title="Inscrever formando" sub={turma.nome}>
+        <div className="p-5 space-y-3">
+          {activa ? (
+            <>
+              <p className="text-xs text-slate-500">A turma tem {Math.max(0, turma.alunosTotal - turma.alunos)} vagas.</p>
+              <Field label="Nome"><input className={iCls} value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="Nome completo" /></Field>
+              <Field label="Email"><input className={iCls} type="email" value={novoEmail} onChange={e => setNovoEmail(e.target.value)} /></Field>
+              <Field label="Telemóvel"><input className={iCls} value={novoTelf} onChange={e => setNovoTelf(e.target.value)} /></Field>
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setAddFormando(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+                <button disabled={!novoNome.trim()} onClick={() => {
+                  const { nome, apelido } = splitNome(novoNome);
+                  addFormandoFin({
+                    id: nextListId(formandosFin),
+                    nome, apelido: apelido || "—",
+                    turma: turma.nome, telf: novoTelf.trim() || "—",
+                    email: novoEmail.trim() || `${nome.toLowerCase()}@mail.pt`,
+                    curso: turma.curso, estado: "Elegível",
+                    ...emptyFinDocs(),
+                  });
+                  patchFin(turma.id, { alunos: turma.alunos + 1 });
+                  setAddFormando(false);
+                }} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Inscrever</button>
+              </div>
+            </>
+          ) : (
+            <TurmaInactivaBanner nome={turma.nome} onActivate={() => toggleFin(turma.id, true)} />
+          )}
+        </div>
+      </SlideOver>
+      <SlideOver open={editTurma} onClose={() => setEditTurma(false)} title={`Editar ${turma.nome}`} sub="Dados da turma financiada">
+        <div className="p-5 space-y-3">
+          <Field label="Código da turma"><input className={iCls} value={editNome} onChange={e => setEditNome(e.target.value)} /></Field>
+          <Field label="Curso / UFCD"><SearchSelect value={editCurso} onChange={setEditCurso} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
+          <Field label="Formador"><SearchSelect value={editFormador} onChange={setEditFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
+          <Field label="Local"><SearchSelect value={editLocal} onChange={setEditLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
+          <Field label="Data de início"><input type="date" className={iCls} value={editInicio} onChange={e => setEditInicio(e.target.value)} /></Field>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setEditTurma(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={() => {
+              patchFin(turma.id, { nome: editNome.trim() || turma.nome, curso: editCurso, formador: editFormador, local: editLocal, dataInicio: editInicio });
+              setEditTurma(false);
+            }} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">Guardar</button>
+          </div>
+        </div>
+      </SlideOver>
       <SlideOver open={novaSessao} onClose={() => setNovaSessao(false)} title="Nova sessão" sub={turma.nome}>
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -1925,7 +2089,7 @@ const kanbanCols = [
   { id: "Formando", label: "Formando ✓", color: "border-emerald-400 bg-emerald-50", dot: "bg-emerald-400" },
 ];
 
-function KanbanCard({ item, onClick }: { item: typeof preinscricoesData[number]; onClick: () => void }) {
+function KanbanCard({ item, onClick }: { item: Preinscricao; onClick: () => void }) {
   return (
     <button onClick={onClick} className="w-full text-left bg-white rounded-xl border border-slate-200 shadow-sm p-3 hover:shadow-md hover:border-amber-300 transition-all">
       <div className="flex items-start justify-between gap-1">
@@ -1945,15 +2109,19 @@ function KanbanCard({ item, onClick }: { item: typeof preinscricoesData[number];
   );
 }
 
-function KanbanBoard({ onCardClick, visible }: { onCardClick: (item: typeof preinscricoesData[number]) => void; visible?: (item: typeof preinscricoesData[number]) => boolean }) {
-  const [items, setItems] = useState(preinscricoesData);
+function KanbanBoard({ onCardClick, visible, items, onMove }: {
+  onCardClick: (item: Preinscricao) => void;
+  visible?: (item: Preinscricao) => boolean;
+  items: Preinscricao[];
+  onMove: (id: number, estado: string) => void;
+}) {
   const [dragId, setDragId] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
 
   function onDragStart(id: number) { setDragId(id); }
   function onDrop(col: string) {
     if (dragId === null) return;
-    setItems(prev => prev.map(i => i.id === dragId ? { ...i, estado: col } : i));
+    onMove(dragId, col);
     setDragId(null); setDragOver(null);
   }
 
@@ -1994,7 +2162,7 @@ function KanbanBoard({ onCardClick, visible }: { onCardClick: (item: typeof prei
 
 // ─── Modal Ficha Comercial (pré-inscrição) ────────────────────────────────────
 
-function FichaComercial({ item, open, onClose }: { item: typeof preinscricoesData[number] | null; open: boolean; onClose: () => void }) {
+function FichaComercial({ item, open, onClose, onConvert }: { item: Preinscricao | null; open: boolean; onClose: () => void; onConvert?: (turma: string) => void }) {
   const { gold } = useTurmas();
   const [notas, setNotas] = useState("Ligou a perguntar sobre horários. Interessada em Sábado manhã.");
   const [proximoContacto, setProximoContacto] = useState("2026-09-06");
@@ -2047,7 +2215,10 @@ function FichaComercial({ item, open, onClose }: { item: typeof preinscricoesDat
               <button onClick={() => setEscolherTurma(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
               <button
                 disabled={!turmaConv}
-                onClick={() => setConvMsg(`${item.nome} ${item.apelido} inscrita na turma ${turmaConv}.`)}
+                onClick={() => {
+                  onConvert?.(turmaConv);
+                  setConvMsg(`${item.nome} ${item.apelido} inscrita na turma ${turmaConv}.`);
+                }}
                 className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg"
               >
                 Confirmar inscrição
@@ -2062,16 +2233,24 @@ function FichaComercial({ item, open, onClose }: { item: typeof preinscricoesDat
 
 // ─── Documentos Financiada (CC, CH, CU, CI, CE) ───────────────────────────────
 
-type FinFormando = typeof finFormandosData[number];
+type FinFormando = FormandoFin;
 type DocKey = "cc" | "ch" | "cu" | "ci" | "ce";
 const docLabels: Record<DocKey, string> = {
   cc: "Cartão de Cidadão", ch: "Certif. Habilitações", cu: "Curriculum Vitae", ci: "IBAN / Certif. Emprego", ce: "Comp. Emprego",
 };
 
 function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
-  const [docs, setDocs] = useState({ ...formando });
+  const { formandosFin, patchFormandoFin } = useLists();
+  const live = formandosFin.find(f => f.id === formando.id) ?? formando;
+  const [docs, setDocs] = useState(live);
+  useEffect(() => { setDocs(live); }, [live]);
   const keys: DocKey[] = ["cc", "ch", "cu", "ci", "ce"];
   const completo = keys.every(k => docs[k].ok);
+  function toggleDoc(k: DocKey) {
+    const next = { ...docs, [k]: { ok: !docs[k].ok, data: !docs[k].ok ? new Date().toISOString().slice(0, 10) : "" } };
+    setDocs(next);
+    patchFormandoFin(docs.id, { [k]: next[k] });
+  }
 
   return (
     <div className="p-5 space-y-5">
@@ -2092,7 +2271,7 @@ function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
       <div className="space-y-2">
         {keys.map(k => (
           <div key={k} className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${docs[k].ok ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
-            <button onClick={() => setDocs(p => ({ ...p, [k]: { ok: !p[k].ok, data: !p[k].ok ? new Date().toISOString().slice(0, 10) : "" } }))}
+            <button onClick={() => toggleDoc(k)}
               className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-colors ${docs[k].ok ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-red-300"}`}>
               {docs[k].ok && I.check}
             </button>
@@ -2220,10 +2399,16 @@ function PreInscricoesGoldView() {
   const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
-  const [fichaItem, setFichaItem] = useState<typeof preinscricoesData[number] | null>(null);
+  const [fichaItem, setFichaItem] = useState<Preinscricao | null>(null);
   const [fichaOpen, setFichaOpen] = useState(false);
   const [novo, setNovo] = useState(false);
-  const { gold } = useTurmas();
+  const [editLead, setEditLead] = useState<Preinscricao | null>(null);
+  const { gold, patchGold } = useTurmas();
+  const { preinscricoes, addPreinscricao, patchPreinscricao, removePreinscricao, addFormandoTurma, formandosTurmas, cursosGold } = useLists();
+  const [nome, setNome] = useState("");
+  const [apelido, setApelido] = useState("");
+  const [email, setEmail] = useState("");
+  const [telf, setTelf] = useState("");
   const [curso, setCurso] = useState("");
   const [turma, setTurma] = useState("");
   const [local, setLocal] = useState("");
@@ -2231,12 +2416,21 @@ function PreInscricoesGoldView() {
   const [filtroLocal, setFiltroLocal] = useState("");
   const turmaOpts = turmaGoldOpts(gold, { curso: curso || undefined });
 
-  function openFicha(item: typeof preinscricoesData[number]) { setFichaItem(item); setFichaOpen(true); }
+  function openFicha(item: Preinscricao) { setFichaItem(item); setFichaOpen(true); }
+  function resetLeadForm(lead?: Preinscricao) {
+    setNome(lead?.nome ?? "");
+    setApelido(lead?.apelido ?? "");
+    setEmail(lead?.email ?? "");
+    setTelf(lead?.telf ?? "");
+    setCurso(lead?.curso ?? "Formação de Formadores - CCP");
+    setLocal(lead?.local ?? "V.N.Gaia");
+    setTurma(turmaGoldOpts(gold, { curso: lead?.curso ?? "Formação de Formadores - CCP" })[0]?.value ?? "");
+  }
 
-  const matchRow = (x: typeof preinscricoesData[number]) =>
+  const matchRow = (x: Preinscricao) =>
     matchesFilter(x.curso, filtroCurso) && matchesFilter(x.local, filtroLocal);
 
-  const f = preinscricoesData.filter(x => {
+  const f = preinscricoes.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.email} ${x.curso}`.toLowerCase().includes(s.toLowerCase());
     return q && matchRow(x) && (filtro === "Todos" || x.estado === filtro);
   });
@@ -2245,7 +2439,7 @@ function PreInscricoesGoldView() {
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Pré-Inscrições Gold" sub="16 537 pré-inscrições"
+        <PageHeader title="Pré-Inscrições Gold" sub={`${preinscricoes.length} pré-inscrições`}
           action={
             <div className="flex items-center gap-2">
               <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden">
@@ -2253,10 +2447,8 @@ function PreInscricoesGoldView() {
                 <button onClick={() => setViewMode("kanban")} className={`px-3 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5 ${viewMode === "kanban" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>{I.kanban} Kanban</button>
               </div>
               <NewBtn label="+ Nova" onClick={() => {
-                const cursoNovo = "Formação de Formadores - CCP";
-                setCurso(cursoNovo);
-                setTurma(turmaGoldOpts(gold, { curso: cursoNovo })[0]?.value ?? "");
-                setLocal("V.N.Gaia");
+                setEditLead(null);
+                resetLeadForm();
                 setNovo(true);
               }} />
             </div>
@@ -2264,15 +2456,15 @@ function PreInscricoesGoldView() {
         />
         <ViewFilters
           fields={[
-            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(preinscricoesData.map(x => x.curso)) },
-            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(preinscricoesData.map(x => x.local)) },
+            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(preinscricoes.map(x => x.curso)) },
+            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(preinscricoes.map(x => x.local)) },
           ]}
           chips={viewMode === "table" ? { options: ["Todos", "Não contactado", "1º Contacto", "2º Contacto", "Pago", "Formando"], value: filtro, onChange: v => { setFiltro(v); setP(1); } } : undefined}
           onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
         />
 
         {viewMode === "kanban" ? (
-          <KanbanBoard onCardClick={openFicha} visible={matchRow} />
+          <KanbanBoard items={preinscricoes} onMove={(id, estado) => patchPreinscricao(id, { estado })} onCardClick={openFicha} visible={matchRow} />
         ) : (
           <Card>
             <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
@@ -2297,8 +2489,8 @@ function PreInscricoesGoldView() {
                       <Td>
                         <div className="flex gap-1">
                           <ActBtn icon={I.eye} label="Ficha comercial" onClick={() => openFicha(r)} />
-                          <ActBtn icon={I.edit} label="Editar" />
-                          <ActBtn icon={I.trash} label="Eliminar" color="red" />
+                          <ActBtn icon={I.edit} label="Editar" onClick={() => { setEditLead(r); resetLeadForm(r); setNovo(true); }} />
+                          <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => removePreinscricao(r.id)} />
                         </div>
                       </Td>
                     </tr>
@@ -2306,19 +2498,32 @@ function PreInscricoesGoldView() {
                 </tbody>
               </table>
             </div>
-            <TableFooter page={p} perPage={pp} total={16537} onChange={setP} />
+            <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
           </Card>
         )}
       </div>
-      <FichaComercial item={fichaItem} open={fichaOpen} onClose={() => setFichaOpen(false)} />
-      <SlideOver open={novo} onClose={() => setNovo(false)} title="Nova pré-inscrição" sub="Lead comercial Gold">
+      <FichaComercial item={fichaItem} open={fichaOpen} onClose={() => setFichaOpen(false)} onConvert={turmaNome => {
+        if (!fichaItem) return;
+        const t = gold.find(x => x.nome === turmaNome);
+        if (!t || t.vagas - t.totalAlunos <= 0) return;
+        addFormandoTurma({
+          id: nextListId(formandosTurmas),
+          nome: fichaItem.nome, apelido: fichaItem.apelido, telf: fichaItem.telf, email: fichaItem.email,
+          inscrito: nowStamp(), local: t.local, curso: t.curso, turma: t.nome, turmaId: t.id,
+          estado: "Formando", pago: false, valor: fichaItem.preco, metodo: "-",
+        });
+        patchGold(t.id, { totalAlunos: t.totalAlunos + 1 });
+        patchPreinscricao(fichaItem.id, { estado: "Formando" });
+        setFichaItem({ ...fichaItem, estado: "Formando" });
+      }} />
+      <SlideOver open={novo} onClose={() => { setNovo(false); setEditLead(null); }} title={editLead ? `Editar ${editLead.nome}` : "Nova pré-inscrição"} sub="Lead comercial Gold">
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Nome"><input className={iCls} /></Field>
-            <Field label="Apelido"><input className={iCls} /></Field>
+            <Field label="Nome"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} /></Field>
+            <Field label="Apelido"><input className={iCls} value={apelido} onChange={e => setApelido(e.target.value)} /></Field>
           </div>
-          <Field label="Email"><input className={iCls} type="email" /></Field>
-          <Field label="Telemóvel"><input className={iCls} /></Field>
+          <Field label="Email"><input className={iCls} type="email" value={email} onChange={e => setEmail(e.target.value)} /></Field>
+          <Field label="Telemóvel"><input className={iCls} value={telf} onChange={e => setTelf(e.target.value)} /></Field>
           <Field label="Curso"><SearchSelect value={curso} onChange={v => { setCurso(v); setTurma(""); }} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
           <Field label="Turma">
             <SearchSelect value={turma} onChange={setTurma} options={turmaOpts} placeholder="Só turmas ativas…" empty="Não há turmas ativas para este curso." />
@@ -2326,8 +2531,29 @@ function PreInscricoesGoldView() {
           <TurmaInscricaoHint optsLen={turmaOpts.length} curso={curso || undefined} />
           <Field label="Local"><SearchSelect value={local} onChange={setLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
           <div className="flex gap-2 pt-2">
-            <button onClick={() => setNovo(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button onClick={() => setNovo(false)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+            <button onClick={() => { setNovo(false); setEditLead(null); }} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button disabled={!nome.trim()} onClick={() => {
+              const cursoRow = cursosGold.find(c => c.nome === curso);
+              const t = gold.find(x => x.nome === turma);
+              const row: Preinscricao = {
+                id: editLead?.id ?? nextListId(preinscricoes),
+                inscrito: editLead?.inscrito ?? nowStamp(),
+                nome: nome.trim(), apelido: apelido.trim(),
+                email: email.trim() || `${nome.trim().toLowerCase().replace(/\s+/g, ".")}@mail.pt`,
+                telf: telf.trim() || "—",
+                inicioCurso: t?.dataInicio ?? editLead?.inicioCurso ?? "-",
+                concelho: editLead?.concelho ?? "",
+                local: local || t?.local || "V.N.Gaia",
+                curso: curso || "Formação de Formadores - CCP",
+                preco: cursoRow?.preco ?? editLead?.preco ?? 125,
+                estado: editLead?.estado ?? "Não contactado",
+                campanha: editLead?.campanha ?? "Setembro 2026",
+                origem: editLead?.origem ?? "Manual",
+              };
+              if (editLead) patchPreinscricao(editLead.id, row);
+              else addPreinscricao(row);
+              setNovo(false); setEditLead(null);
+            }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editLead ? "Guardar" : "Criar lead"}</button>
           </div>
         </div>
       </SlideOver>
@@ -2338,7 +2564,7 @@ function PreInscricoesGoldView() {
 // ─── Turmas Gold ──────────────────────────────────────────────────────────────
 
 function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
-  const { gold, patchGold, addGold, toggleGold } = useTurmas();
+  const { gold, patchGold, addGold, removeGold, toggleGold } = useTurmas();
   const formadorOpts = useFormadorOptions();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
@@ -2430,7 +2656,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
                       <div className="flex gap-1">
                         <ActBtn icon={I.eye} label="Cockpit" onClick={() => onCockpit(t.id)} color="teal" />
                         <ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(t)} />
-                        <ActBtn icon={I.trash} label="Eliminar" color="red" />
+                        <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => removeGold(t.id)} />
                       </div>
                     </Td>
                   </tr>
@@ -2477,31 +2703,40 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
 // ─── Formandos Turmas ─────────────────────────────────────────────────────────
 
 function FormandosTurmasView() {
-  const { gold } = useTurmas();
+  const { gold, patchGold } = useTurmas();
+  const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma } = useLists();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtroLocal, setFiltroLocal] = useState("");
   const [fichaOpen, setFichaOpen] = useState<FormandoRecord | null>(null);
-  const [edit, setEdit] = useState<FormandoRecord | null>(null);
+  const [edit, setEdit] = useState<FormandoRecord | "new" | null>(null);
   const [turma, setTurma] = useState("");
   const [cursoEdit, setCursoEdit] = useState("");
-  const turmaOpts = turmaGoldOpts(gold, { curso: cursoEdit || undefined, includeNome: edit?.turma });
-  const f = formandosTurmasData.filter(x => {
+  const [nomeNovo, setNomeNovo] = useState("");
+  const [emailNovo, setEmailNovo] = useState("");
+  const [telfNovo, setTelfNovo] = useState("");
+  const editing = edit && edit !== "new" ? edit : null;
+  const turmaOpts = turmaGoldOpts(gold, { curso: cursoEdit || undefined, includeNome: editing?.turma });
+  const f = formandosTurmas.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.turma}`.toLowerCase().includes(s.toLowerCase());
     const byPago = filtro === "Todos" || (filtro === "Pago" ? x.pago : filtro === "Por pagar" ? !x.pago : true);
     return q && byPago && matchesFilter(x.curso, filtroCurso) && matchesFilter(x.local, filtroLocal);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
-  useEffect(() => { if (edit) { setTurma(edit.turma); setCursoEdit(edit.curso); } }, [edit]);
+  useEffect(() => {
+    if (edit === "new") {
+      setTurma(""); setCursoEdit("Formação de Formadores - CCP"); setNomeNovo(""); setEmailNovo(""); setTelfNovo("");
+    } else if (edit) { setTurma(edit.turma); setCursoEdit(edit.curso); }
+  }, [edit]);
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Formandos Turmas" sub="6 075 formandos em turma" />
+        <PageHeader title="Formandos Turmas" sub={`${formandosTurmas.length} formandos em turma`} action={<NewBtn label="+ Novo formando" onClick={() => setEdit("new")} />} />
         <ViewFilters
           fields={[
-            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(formandosTurmasData.map(x => x.curso)) },
-            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(formandosTurmasData.map(x => x.local)) },
+            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(formandosTurmas.map(x => x.curso)) },
+            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(formandosTurmas.map(x => x.local)) },
           ]}
           chips={{ options: ["Todos", "Pago", "Por pagar"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
           onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
@@ -2533,7 +2768,11 @@ function FormandosTurmasView() {
                       <div className="flex gap-1">
                         <ActBtn icon={I.eye} label="Ficha" onClick={() => setFichaOpen(r)} />
                         <ActBtn icon={I.edit} label="Editar" onClick={() => setEdit(r)} />
-                        <ActBtn icon={I.trash} label="Eliminar" color="red" />
+                        <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => {
+                          const t = gold.find(x => x.id === r.turmaId);
+                          removeFormandoTurma(r.id);
+                          if (t) patchGold(t.id, { totalAlunos: Math.max(0, t.totalAlunos - 1) });
+                        }} />
                       </div>
                     </Td>
                   </tr>
@@ -2541,22 +2780,52 @@ function FormandosTurmasView() {
               </tbody>
             </table>
           </div>
-          <TableFooter page={p} perPage={pp} total={6075} onChange={setP} />
+          <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
         </Card>
       </div>
       <SlideOver open={!!fichaOpen} onClose={() => setFichaOpen(null)} title="Ficha do Formando" sub={fichaOpen ? `#${fichaOpen.id}` : ""}>
         {fichaOpen && <FichaFormando formando={fichaOpen} onClose={() => setFichaOpen(null)} />}
       </SlideOver>
-      <SlideOver open={!!edit} onClose={() => setEdit(null)} title={edit ? `${edit.nome} ${edit.apelido}` : ""} sub="Mover de turma ou actualizar dados">
+      <SlideOver open={!!edit} onClose={() => setEdit(null)} title={editing ? `${editing.nome} ${editing.apelido}` : "Novo formando"} sub={editing ? "Mover de turma ou actualizar dados" : "Inscrever numa turma ativa"}>
         <div className="p-5 space-y-3">
+          {!editing && (
+            <>
+              <Field label="Nome"><input className={iCls} value={nomeNovo} onChange={e => setNomeNovo(e.target.value)} placeholder="Nome completo" /></Field>
+              <Field label="Email"><input className={iCls} type="email" value={emailNovo} onChange={e => setEmailNovo(e.target.value)} /></Field>
+              <Field label="Telemóvel"><input className={iCls} value={telfNovo} onChange={e => setTelfNovo(e.target.value)} /></Field>
+            </>
+          )}
           <Field label="Turma">
             <SearchSelect value={turma} onChange={setTurma} options={turmaOpts} placeholder="Só turmas ativas…" empty="Não há turmas ativas para este curso." />
           </Field>
           <TurmaInscricaoHint optsLen={turmaOpts.length} curso={cursoEdit || undefined} />
-          <Field label="Curso"><SearchSelect value={cursoEdit} onChange={v => { setCursoEdit(v); if (turma && !turmaGoldOpts(gold, { curso: v, includeNome: edit?.turma }).some(o => o.value === turma)) setTurma(""); }} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <Field label="Curso"><SearchSelect value={cursoEdit} onChange={v => { setCursoEdit(v); if (turma && !turmaGoldOpts(gold, { curso: v, includeNome: editing?.turma }).some(o => o.value === turma)) setTurma(""); }} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setEdit(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button onClick={() => setEdit(null)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+            <button disabled={!turma || (!editing && !nomeNovo.trim())} onClick={() => {
+              const dest = gold.find(x => x.nome === turma);
+              if (!dest) return;
+              if (editing) {
+                const prev = gold.find(x => x.id === editing.turmaId);
+                patchFormandoTurma(editing.id, { turma: dest.nome, turmaId: dest.id, curso: dest.curso || cursoEdit, local: dest.local });
+                if (prev && prev.id !== dest.id) {
+                  patchGold(prev.id, { totalAlunos: Math.max(0, prev.totalAlunos - 1) });
+                  patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
+                }
+              } else {
+                const { nome, apelido } = splitNome(nomeNovo);
+                addFormandoTurma({
+                  id: nextListId(formandosTurmas),
+                  nome, apelido: apelido || "—",
+                  telf: telfNovo.trim() || "—",
+                  email: emailNovo.trim() || `${nome.toLowerCase()}@mail.pt`,
+                  inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
+                  estado: "Formando", pago: false, valor: 125, metodo: "-",
+                });
+                patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
+              }
+              setEdit(null);
+            }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editing ? "Guardar" : "Inscrever"}</button>
           </div>
         </div>
       </SlideOver>
@@ -2567,22 +2836,31 @@ function FormandosTurmasView() {
 // ─── Formandos Financiada com Documentos ─────────────────────────────────────
 
 function FinFormandosView() {
+  const { fin, patchFin } = useTurmas();
+  const { formandosFin, addFormandoFin } = useLists();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
   const [docsOpen, setDocsOpen] = useState<FinFormando | null>(null);
-  const f = finFormandosData.filter(x => {
+  const [novo, setNovo] = useState(false);
+  const [nomeNovo, setNomeNovo] = useState("");
+  const [emailNovo, setEmailNovo] = useState("");
+  const [telfNovo, setTelfNovo] = useState("");
+  const [cursoNovo, setCursoNovo] = useState("");
+  const [turmaNovo, setTurmaNovo] = useState("");
+  const f = formandosFin.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.email}`.toLowerCase().includes(s.toLowerCase());
     return q && matchesFilter(x.curso, filtroCurso) && (filtro === "Todos" || x.estado === filtro);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
+  const turmaOpts = fin.filter(t => !cursoNovo || t.curso === cursoNovo).map(t => ({ value: t.nome, sub: t.curso }));
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Formandos Financiados" sub="1 390 formandos" />
+        <PageHeader title="Formandos Financiados" sub={`${formandosFin.length} formandos`} action={<NewBtn accent="fin" label="+ Novo formando" onClick={() => { setNomeNovo(""); setEmailNovo(""); setTelfNovo(""); setCursoNovo(""); setTurmaNovo(""); setNovo(true); }} />} />
         <ViewFilters
           accent="fin"
-          fields={[{ label: "Curso / UFCD", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(finFormandosData.map(x => x.curso)) }]}
+          fields={[{ label: "Curso / UFCD", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(formandosFin.map(x => x.curso)) }]}
           chips={{ options: ["Todos", "Elegível"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
           onClear={() => { setFiltroCurso(""); setFiltro("Todos"); setP(1); }}
         />
@@ -2621,11 +2899,37 @@ function FinFormandosView() {
               </tbody>
             </table>
           </div>
-          <TableFooter page={p} perPage={pp} total={1390} onChange={setP} />
+          <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
         </Card>
       </div>
       <SlideOver open={!!docsOpen} onClose={() => setDocsOpen(null)} title="Documentos do formando" sub={docsOpen ? `${docsOpen.nome} ${docsOpen.apelido}` : ""}>
         {docsOpen && <DocumentosFinPanel formando={docsOpen} />}
+      </SlideOver>
+      <SlideOver open={novo} onClose={() => setNovo(false)} title="Novo formando financiado" sub="Candidato elegível numa turma">
+        <div className="p-5 space-y-3">
+          <Field label="Nome"><input className={iCls} value={nomeNovo} onChange={e => setNomeNovo(e.target.value)} placeholder="Nome completo" /></Field>
+          <Field label="Email"><input className={iCls} type="email" value={emailNovo} onChange={e => setEmailNovo(e.target.value)} /></Field>
+          <Field label="Telemóvel"><input className={iCls} value={telfNovo} onChange={e => setTelfNovo(e.target.value)} /></Field>
+          <Field label="Curso / UFCD"><SearchSelect value={cursoNovo} onChange={v => { setCursoNovo(v); setTurmaNovo(""); }} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
+          <Field label="Turma"><SearchSelect value={turmaNovo} onChange={setTurmaNovo} options={turmaOpts} placeholder="Turma destino…" empty="Não há turmas para esta UFCD." /></Field>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setNovo(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button disabled={!nomeNovo.trim() || !cursoNovo} onClick={() => {
+              const { nome, apelido } = splitNome(nomeNovo);
+              addFormandoFin({
+                id: nextListId(formandosFin),
+                nome, apelido: apelido || "—",
+                turma: turmaNovo || "—", telf: telfNovo.trim() || "—",
+                email: emailNovo.trim() || `${nome.toLowerCase()}@mail.pt`,
+                curso: cursoNovo, estado: "Elegível",
+                ...emptyFinDocs(),
+              });
+              const dest = fin.find(t => t.nome === turmaNovo);
+              if (dest) patchFin(dest.id, { alunos: dest.alunos + 1 });
+              setNovo(false);
+            }} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Criar formando</button>
+          </div>
+        </div>
       </SlideOver>
     </>
   );
@@ -2634,7 +2938,7 @@ function FinFormandosView() {
 // ─── Turmas Financiadas ───────────────────────────────────────────────────────
 
 function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab) => void }) {
-  const { fin, patchFin, addFin, toggleFin } = useTurmas();
+  const { fin, patchFin, addFin, removeFin, toggleFin } = useTurmas();
   const formadorOpts = useFormadorOptions();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
@@ -2731,7 +3035,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
                         <ActBtn icon={I.attend} label="Presenças" color="teal" onClick={() => onCockpit(t.id, "sessoes")} />
                         <ActBtn icon={I.doc} label="Dossiê da turma" color="orange" onClick={() => onCockpit(t.id, "dtp")} />
                         <ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(t)} />
-                        <ActBtn icon={I.euro} label="Faturação" color="green" />
+                        <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => removeFin(t.id)} />
                       </div>
                     </Td>
                   </tr>
@@ -2772,11 +3076,46 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
 
 // ─── Remaining views (simplified) ────────────────────────────────────────────
 
+function GoldCursoFichaScreen({ cursoId, onBack, onOpenModulos }: { cursoId?: number | "new"; onBack: () => void; onOpenModulos: (nome: string) => void }) {
+  const { cursosGold, addCursoGold, patchCursoGold } = useLists();
+  const curso = cursoId && cursoId !== "new" ? cursosGold.find(c => c.id === cursoId) : undefined;
+  return (
+    <CursoFichaView
+      curso={curso}
+      onBack={onBack}
+      onOpenModulos={onOpenModulos}
+      onCommit={saved => {
+        if (curso) patchCursoGold(curso.id, { nome: saved.nome, categoria: saved.categoria ?? curso.categoria, tipo: saved.tipo ?? curso.tipo, preco: saved.preco ?? curso.preco, regime: saved.regime, horas: saved.horas, estado: saved.estado });
+        else addCursoGold({ id: saved.id, nome: saved.nome, categoria: saved.categoria || "CCP e Gestão da Formação", tipo: saved.tipo || "Gold", preco: saved.preco ?? 0, regime: saved.regime, horas: saved.horas, estado: saved.estado || "Ativo" });
+      }}
+    />
+  );
+}
+
+function FinCursoFichaScreen({ cursoId, onBack }: { cursoId?: number | "new"; onBack: () => void }) {
+  const { cursosFin, addCursoFin, patchCursoFin } = useLists();
+  const raw = cursoId && cursoId !== "new" ? cursosFin.find(c => c.id === cursoId) : undefined;
+  return (
+    <CursoFichaView
+      accent="fin"
+      curso={raw ? { id: raw.id, nome: raw.nomeComercial, ufcdCod: raw.ufcdCod, ufcd: raw.ufcd, regime: raw.regime, horas: raw.horas, estado: raw.estado } : undefined}
+      onBack={onBack}
+      onCommit={saved => {
+        const ufcdCod = saved.ufcdCod || raw?.ufcdCod || "0000";
+        const row = { id: saved.id, ufcdCod, ufcd: saved.ufcd || saved.nome, nomeComercial: saved.nome, regime: saved.regime, horas: saved.horas, estado: saved.estado || "Ativo" };
+        if (raw) patchCursoFin(raw.id, row);
+        else addCursoFin(row);
+      }}
+    />
+  );
+}
+
 function CursosGoldView({ onOpen }: { onOpen: (id: number | "new") => void }) {
+  const { cursosGold, removeCursoGold } = useLists();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCat, setFiltroCat] = useState("");
-  const f = cursosGoldData.filter(c => {
+  const f = cursosGold.filter(c => {
     const q = `${c.nome} ${c.categoria}`.toLowerCase().includes(s.toLowerCase());
     return q && matchesFilter(c.categoria, filtroCat) && (filtro === "Todos" || c.estado === filtro);
   });
@@ -2787,7 +3126,7 @@ function CursosGoldView({ onOpen }: { onOpen: (id: number | "new") => void }) {
       <PageHeader title="Cursos Gold" sub="Clique num curso para editar a página pública e a ficha operacional." action={<NewBtn label="+ Novo Curso" onClick={() => onOpen("new")} />} />
       <div className="mb-4">
         <ViewFilters
-          fields={[{ label: "Área temática", value: filtroCat, onChange: v => { setFiltroCat(v); setP(1); }, options: uniqueOpts(cursosGoldData.map(c => c.categoria)) }]}
+          fields={[{ label: "Área temática", value: filtroCat, onChange: v => { setFiltroCat(v); setP(1); }, options: uniqueOpts(cursosGold.map(c => c.categoria)) }]}
           chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
           onClear={() => { setFiltroCat(""); setFiltro("Todos"); setP(1); }}
         />
@@ -2808,7 +3147,7 @@ function CursosGoldView({ onOpen }: { onOpen: (id: number | "new") => void }) {
                   <Td><span className={`text-xs px-1.5 py-0.5 rounded font-medium ${c.regime === "e-learning" ? "bg-blue-50 text-blue-700" : "bg-violet-50 text-violet-700"}`}>{c.regime}</span></Td>
                   <Td className="text-center text-xs text-slate-600">{c.horas || "-"}</Td>
                   <Td>{estadoBadge(c.estado)}</Td>
-                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar página" onClick={() => onOpen(c.id)} /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
+                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar página" onClick={() => onOpen(c.id)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => removeCursoGold(c.id)} /></div></Td>
                 </tr>
               ))}
             </tbody>
@@ -2822,14 +3161,18 @@ function CursosGoldView({ onOpen }: { onOpen: (id: number | "new") => void }) {
 
 
 function BlogView() {
+  const { blogPosts, addBlogPost, patchBlogPost, removeBlogPost } = useLists();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
   const [tematica, setTematica] = useState("");
-  const f = blogPostsData.filter(x => x.titulo.toLowerCase().includes(s.toLowerCase()) && (filtro === "Todos" || x.status === filtro));
+  const [titulo, setTitulo] = useState("");
+  const [slug, setSlug] = useState("");
+  const f = blogPosts.filter(x => x.titulo.toLowerCase().includes(s.toLowerCase()) && (filtro === "Todos" || x.status === filtro));
   return (
     <div className="space-y-4">
-      <PageHeader title="Blog - Posts" action={<NewBtn label="+ Novo Post" onClick={() => { setTematica(""); setOpen(true); }} />} />
+      <PageHeader title="Blog - Posts" action={<NewBtn label="+ Novo Post" onClick={() => { setEditId(null); setTitulo(""); setSlug(""); setTematica(""); setOpen(true); }} />} />
       <ViewFilters
         chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
         onClear={() => setFiltro("Todos")}
@@ -2847,7 +3190,7 @@ function BlogView() {
                   <Td className="font-mono text-xs text-slate-500">{r.slug}</Td>
                   <Td className="font-mono text-xs text-slate-500">{r.data}</Td>
                   <Td>{estadoBadge(r.status)}</Td>
-                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
+                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => { setEditId(r.id); setTitulo(r.titulo); setSlug(r.slug); setTematica(""); setOpen(true); }} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => removeBlogPost(r.id)} /></div></Td>
                 </tr>
               ))}
             </tbody>
@@ -2855,14 +3198,20 @@ function BlogView() {
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
-      <SlideOver open={open} onClose={() => setOpen(false)} title="Novo post" sub="Artigo no site da ENA">
+      <SlideOver open={open} onClose={() => setOpen(false)} title={editId != null ? "Editar post" : "Novo post"} sub="Artigo no site da ENA">
         <div className="p-5 space-y-3">
-          <Field label="Título"><input className={iCls} /></Field>
+          <Field label="Título"><input className={iCls} value={titulo} onChange={e => setTitulo(e.target.value)} /></Field>
           <Field label="Temática"><SearchSelect value={tematica} onChange={setTematica} options={blogTematicasOpts} placeholder="Pesquisar temática…" /></Field>
-          <Field label="Slug"><input className={iCls} placeholder="ccp-formacao-formadores" /></Field>
+          <Field label="Slug"><input className={iCls} value={slug} onChange={e => setSlug(e.target.value)} placeholder="ccp-formacao-formadores" /></Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button onClick={() => setOpen(false)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+            <button onClick={() => {
+              if (!titulo.trim()) return;
+              const s = (slug.trim() || titulo).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+              if (editId != null) patchBlogPost(editId, { titulo: titulo.trim(), slug: s });
+              else addBlogPost({ id: nextListId(blogPosts), titulo: titulo.trim(), slug: s, data: new Date().toISOString().slice(0, 10), status: "Ativo" });
+              setOpen(false); setTitulo(""); setSlug(""); setTematica(""); setEditId(null);
+            }} disabled={!titulo.trim()} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editId != null ? "Guardar" : "Criar post"}</button>
           </div>
         </div>
       </SlideOver>
@@ -2871,20 +3220,23 @@ function BlogView() {
 }
 
 function CampanhasView() {
+  const { campanhas, addCampanha, removeCampanha } = useLists();
   const [open, setOpen] = useState(false);
   const [cursoCamp, setCursoCamp] = useState("");
+  const [nomeCamp, setNomeCamp] = useState("");
+  const [dataCamp, setDataCamp] = useState("");
   return (
     <div className="space-y-4">
-      <PageHeader title="Campanhas" action={<NewBtn label="+ Nova Campanha" onClick={() => setOpen(true)} />} />
+      <PageHeader title="Campanhas" action={<NewBtn label="+ Nova Campanha" onClick={() => { setNomeCamp(""); setDataCamp(""); setCursoCamp(""); setOpen(true); }} />} />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {campanhasData.map(c => (
+        {campanhas.map(c => (
           <Card key={c.id} className="p-4 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between mb-3">
               <div>
                 <p className="font-semibold text-slate-800">{c.nome || <span className="italic text-slate-400">sem nome</span>}</p>
                 <p className="text-xs text-slate-400 mt-0.5">{c.data} · {c.encarregado}</p>
               </div>
-              <ActBtn icon={I.edit} label="Editar" />
+              <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => removeCampanha(c.id)} />
             </div>
             <div className="grid grid-cols-2 gap-2 mt-3">
               {[
@@ -2904,12 +3256,16 @@ function CampanhasView() {
       </div>
       <SlideOver open={open} onClose={() => setOpen(false)} title="Nova campanha" sub="Campanha comercial Gold">
         <div className="p-5 space-y-3">
-          <Field label="Nome"><input className={iCls} placeholder="Outubro 2026" /></Field>
+          <Field label="Nome"><input className={iCls} value={nomeCamp} onChange={e => setNomeCamp(e.target.value)} placeholder="Outubro 2026" /></Field>
           <Field label="Curso em destaque"><SearchSelect value={cursoCamp} onChange={setCursoCamp} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
-          <Field label="Data de início"><input type="date" className={iCls} /></Field>
+          <Field label="Data de início"><input type="date" className={iCls} value={dataCamp} onChange={e => setDataCamp(e.target.value)} /></Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button onClick={() => setOpen(false)} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+            <button onClick={() => {
+              if (!nomeCamp.trim()) return;
+              addCampanha({ id: nextListId(campanhas), nome: nomeCamp.trim(), data: dataCamp || new Date().toISOString().slice(0, 10), encarregado: "Aguilar", preinscricoes: 0, pagos: 0, receita: 0, custo: 1 });
+              setOpen(false);
+            }} disabled={!nomeCamp.trim()} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Criar campanha</button>
           </div>
         </div>
       </SlideOver>
@@ -2918,17 +3274,18 @@ function CampanhasView() {
 }
 
 function FinCursosView({ onOpen }: { onOpen: (id: number | "new") => void }) {
+  const { cursosFin, removeCursoFin } = useLists();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroRegime, setFiltroRegime] = useState("");
-  const f = finCursosData.filter(c => `${c.ufcd} ${c.nomeComercial}`.toLowerCase().includes(s.toLowerCase()) && matchesFilter(c.regime, filtroRegime) && (filtro === "Todos" || c.estado === filtro));
+  const f = cursosFin.filter(c => `${c.ufcd} ${c.nomeComercial}`.toLowerCase().includes(s.toLowerCase()) && matchesFilter(c.regime, filtroRegime) && (filtro === "Todos" || c.estado === filtro));
   const rows = f.slice((p - 1) * pp, p * pp);
   return (
     <div className="space-y-4">
       <PageHeader title="Cursos Financiados" sub="Clique numa UFCD para editar a página pública e a ficha operacional." action={<NewBtn label="+ Novo Curso" onClick={() => onOpen("new")} />} />
       <ViewFilters
         accent="fin"
-        fields={[{ label: "Regime", value: filtroRegime, onChange: v => { setFiltroRegime(v); setP(1); }, options: uniqueOpts(finCursosData.map(c => c.regime)) }]}
+        fields={[{ label: "Regime", value: filtroRegime, onChange: v => { setFiltroRegime(v); setP(1); }, options: uniqueOpts(cursosFin.map(c => c.regime)) }]}
         chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
         onClear={() => { setFiltroRegime(""); setFiltro("Todos"); setP(1); }}
       />
@@ -2946,7 +3303,7 @@ function FinCursosView({ onOpen }: { onOpen: (id: number | "new") => void }) {
                   <Td><span className={`text-xs px-1.5 py-0.5 rounded font-medium ${c.regime === "e-learning" ? "bg-blue-50 text-blue-700" : "bg-violet-50 text-violet-700"}`}>{c.regime}</span></Td>
                   <Td className="text-center text-xs text-slate-600">{c.horas || "-"}</Td>
                   <Td>{estadoBadge(c.estado)}</Td>
-                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar página" onClick={() => onOpen(c.id)} /><ActBtn icon={I.trash} label="Eliminar" color="red" /></div></Td>
+                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar página" onClick={() => onOpen(c.id)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => removeCursoFin(c.id)} /></div></Td>
                 </tr>
               ))}
             </tbody>
@@ -2961,6 +3318,9 @@ function FinCursosView({ onOpen }: { onOpen: (id: number | "new") => void }) {
 function EmailsView() {
   const [tab, setTab] = useState<"regras" | "templates" | "historico">("regras");
   const [regras, setRegras] = useState(emailRegras);
+  const [templates, setTemplates] = useState(emailTemplates);
+  const [editRegraId, setEditRegraId] = useState<number | null>(null);
+  const [editTpl, setEditTpl] = useState<typeof emailTemplates[number] | null>(null);
   const [novaRegra, setNovaRegra] = useState(false);
   const [previewTipo, setPreviewTipo] = useState<string | null>(null);
   const [previewGatilho, setPreviewGatilho] = useState("");
@@ -2973,8 +3333,8 @@ function EmailsView() {
   const [ativoRegra, setAtivoRegra] = useState(true);
   const [erroRegra, setErroRegra] = useState("");
 
-  const templateOpts = emailTemplates.map(t => ({ value: t.nome, sub: t.assunto }));
-  const templateTipo = emailTemplates.find(t => t.nome === templateNome)?.tipo ?? "";
+  const templateOpts = templates.map(t => ({ value: t.nome, sub: t.assunto }));
+  const templateTipo = templates.find(t => t.nome === templateNome)?.tipo ?? "";
 
   function syncNome(nextGatilho: string, nextTemplate: string) {
     if (nomeTouched) return;
@@ -2997,6 +3357,7 @@ function EmailsView() {
   }
 
   function abrirNova() {
+    setEditRegraId(null);
     setNomeRegra("");
     setNomeTouched(false);
     setGatilho("");
@@ -3004,6 +3365,20 @@ function EmailsView() {
     setCursoEmail("");
     setAtraso("Imediatamente");
     setAtivoRegra(true);
+    setErroRegra("");
+    setNovaRegra(true);
+  }
+
+  function abrirEditarRegra(r: typeof emailRegras[number]) {
+    setEditRegraId(r.id);
+    setNomeRegra(r.nome);
+    setNomeTouched(true);
+    setGatilho(r.gatilho);
+    const tpl = templates.find(t => t.tipo === r.template);
+    setTemplateNome(tpl?.nome ?? "");
+    setCursoEmail("");
+    setAtraso("Imediatamente");
+    setAtivoRegra(r.ativo);
     setErroRegra("");
     setNovaRegra(true);
   }
@@ -3021,16 +3396,21 @@ function EmailsView() {
       setErroRegra("Escolha o template que o formando recebe.");
       return;
     }
-    setRegras(prev => [{
-      id: Date.now() % 100000,
-      nome: nomeRegra.trim(),
-      gatilho,
-      template: templateTipo,
-      ativo: ativoRegra,
-      envios: 0,
-      taxaAbertura: 0,
-    }, ...prev]);
+    if (editRegraId != null) {
+      setRegras(prev => prev.map(x => x.id === editRegraId ? { ...x, nome: nomeRegra.trim(), gatilho, template: templateTipo, ativo: ativoRegra } : x));
+    } else {
+      setRegras(prev => [{
+        id: Date.now() % 100000,
+        nome: nomeRegra.trim(),
+        gatilho,
+        template: templateTipo,
+        ativo: ativoRegra,
+        envios: 0,
+        taxaAbertura: 0,
+      }, ...prev]);
+    }
     setNovaRegra(false);
+    setEditRegraId(null);
   }
 
   return (
@@ -3063,7 +3443,7 @@ function EmailsView() {
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <Toggle checked={r.ativo} onChange={val => setRegras(prev => prev.map(x => x.id === r.id ? { ...x, ativo: val } : x))} />
                   <ActBtn icon={I.eye} label="Preview" color="gray" onClick={() => { setPreviewTipo(r.template); setPreviewGatilho(r.gatilho); }} />
-                  <ActBtn icon={I.edit} label="Editar" />
+                  <ActBtn icon={I.edit} label="Editar" onClick={() => abrirEditarRegra(r)} />
                   <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setRegras(prev => prev.filter(x => x.id !== r.id))} />
                 </div>
               </div>
@@ -3074,7 +3454,7 @@ function EmailsView() {
       {tab === "templates" && (
         <Card>
           <div className="divide-y divide-slate-100">
-            {emailTemplates.map(t => (
+            {templates.map(t => (
               <div key={t.id} className="px-4 py-4 flex items-center gap-3 hover:bg-slate-50">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white ${t.tipo === "welcome" ? "bg-blue-500" : t.tipo === "payment" ? "bg-emerald-500" : t.tipo === "certificate" ? "bg-violet-500" : "bg-amber-500"}`}>{I.mail}</div>
                 <div className="flex-1 min-w-0">
@@ -3083,7 +3463,7 @@ function EmailsView() {
                   <p className="text-xs text-slate-400">Editado {t.editado}</p>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
-                  <ActBtn icon={I.edit} label="Editar" />
+                  <ActBtn icon={I.edit} label="Editar" onClick={() => setEditTpl(t)} />
                   <ActBtn icon={I.eye} label="Preview" color="gray" onClick={() => { setPreviewTipo(t.tipo); setPreviewGatilho(""); }} />
                 </div>
               </div>
@@ -3108,7 +3488,7 @@ function EmailsView() {
           <div className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden" style={{ animation: "scaleIn 0.15s ease" }}>
             <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
               <div>
-                <h2 className="text-base font-bold text-slate-800">Nova regra de email</h2>
+                <h2 className="text-base font-bold text-slate-800">{editRegraId != null ? "Editar regra de email" : "Nova regra de email"}</h2>
                 <p className="text-xs text-slate-500 mt-0.5">Quando acontece o gatilho, a ENA envia o template. O email à direita usa dados de exemplo.</p>
               </div>
               <button type="button" onClick={() => setNovaRegra(false)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
@@ -3158,7 +3538,7 @@ function EmailsView() {
             </div>
             <div className="flex gap-2 px-5 py-4 border-t border-slate-100 flex-shrink-0">
               <button type="button" onClick={() => setNovaRegra(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-              <button type="button" onClick={guardarRegra} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Criar regra</button>
+              <button type="button" onClick={guardarRegra} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">{editRegraId != null ? "Guardar regra" : "Criar regra"}</button>
             </div>
           </div>
         </div>
@@ -3178,24 +3558,45 @@ function EmailsView() {
           </div>
         </div>
       )}
+      <SlideOver open={!!editTpl} onClose={() => setEditTpl(null)} title={editTpl ? `Editar ${editTpl.nome}` : ""} sub="Assunto e nome do template">
+        {editTpl && (
+          <div className="p-5 space-y-3">
+            <Field label="Nome"><input className={iCls} value={editTpl.nome} onChange={e => setEditTpl({ ...editTpl, nome: e.target.value })} /></Field>
+            <Field label="Assunto"><input className={iCls} value={editTpl.assunto} onChange={e => setEditTpl({ ...editTpl, assunto: e.target.value })} /></Field>
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => setEditTpl(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+              <button onClick={() => {
+                setTemplates(prev => prev.map(t => t.id === editTpl.id ? { ...editTpl, editado: "hoje" } : t));
+                setEditTpl(null);
+              }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+            </div>
+          </div>
+        )}
+      </SlideOver>
     </div>
   );
 }
 
 function PagamentosView() {
+  const [lista, setLista] = useState(transacoesData);
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtro, setFiltro] = useState("Todos");
-  const f = transacoesData.filter(t =>
+  const [novo, setNovo] = useState(false);
+  const [nome, setNome] = useState("");
+  const [curso, setCurso] = useState("");
+  const [valor, setValor] = useState("125");
+  const [metodo, setMetodo] = useState("MB Way");
+  const f = lista.filter(t =>
     `${t.nome} ${t.curso} ${t.metodo}`.toLowerCase().includes(s.toLowerCase())
     && matchesFilter(t.curso, filtroCurso)
     && (filtro === "Todos" || t.estado === filtro)
   );
   return (
     <div className="space-y-5">
-      <PageHeader title="Pagamentos" />
+      <PageHeader title="Pagamentos" action={<NewBtn label="+ Nova transação" onClick={() => { setNome(""); setCurso(""); setValor("125"); setMetodo("MB Way"); setNovo(true); }} />} />
       <ViewFilters
-        fields={[{ label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(transacoesData.map(t => t.curso)) }]}
+        fields={[{ label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(lista.map(t => t.curso)) }]}
         chips={{ options: ["Todos", "Pago", "Pendente"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
         onClear={() => { setFiltroCurso(""); setFiltro("Todos"); setP(1); }}
       />
@@ -3250,6 +3651,31 @@ function PagamentosView() {
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
+      <SlideOver open={novo} onClose={() => setNovo(false)} title="Nova transação" sub="Pagamento Gold">
+        <div className="p-5 space-y-3">
+          <Field label="Nome do formando"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} /></Field>
+          <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Valor (€)"><input className={iCls} type="number" value={valor} onChange={e => setValor(e.target.value)} /></Field>
+            <Field label="Método">
+              <select className={iCls} value={metodo} onChange={e => setMetodo(e.target.value)}>
+                {["MB Way", "Cartão", "Transferência", "Multibanco", "PayPal"].map(m => <option key={m}>{m}</option>)}
+              </select>
+            </Field>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setNovo(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button disabled={!nome.trim() || !curso} onClick={() => {
+              setLista(xs => [{
+                id: `TRX-${Date.now() % 100000}`,
+                nome: nome.trim(), valor: Number(valor) || 0, metodo, curso,
+                data: nowStamp(), estado: "Pago",
+              }, ...xs]);
+              setNovo(false);
+            }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Registar</button>
+          </div>
+        </div>
+      </SlideOver>
     </div>
   );
 }
@@ -3559,6 +3985,22 @@ const viewTitles: Partial<Record<View, string>> = {
 };
 
 export default function App() {
+  return (
+    <ListsProvider seeds={{
+      preinscricoes: preinscricoesData,
+      formandosTurmas: formandosTurmasData,
+      formandosFin: finFormandosData,
+      cursosGold: cursosGoldData,
+      cursosFin: finCursosData,
+      blogPosts: blogPostsData,
+      campanhas: campanhasData,
+    }}>
+      <AppShell />
+    </ListsProvider>
+  );
+}
+
+function AppShell() {
   const [view, setView] = useState<View>("painel");
   const [cockpitId, setCockpitId] = useState<number | undefined>();
   const [finCockpitId, setFinCockpitId] = useState<number | undefined>();
@@ -3623,13 +4065,7 @@ export default function App() {
     switch (view) {
       case "painel": return <PainelView onNavigate={navigate} />;
       case "gold-cursos": return <CursosGoldView onOpen={id => { setCursoFichaId(id); go("gold-curso-ficha"); }} />;
-      case "gold-curso-ficha": return (
-        <CursoFichaView
-          curso={cursoFichaId && cursoFichaId !== "new" ? cursosGoldData.find(c => c.id === cursoFichaId) : undefined}
-          onBack={() => navigate("gold-cursos")}
-          onOpenModulos={nome => navigate({ view: "gold-modulos", cursoNome: nome })}
-        />
-      );
+      case "gold-curso-ficha": return <GoldCursoFichaScreen cursoId={cursoFichaId} onBack={() => navigate("gold-cursos")} onOpenModulos={nome => navigate({ view: "gold-modulos", cursoNome: nome })} />;
       case "gold-turmas": return <TurmasGoldView onCockpit={openCockpit} />;
       case "gold-cockpit-turma": return <CockpitTurmaView turmaId={cockpitId} initialTab={cockpitTab} onBack={() => navigate("gold-turmas")} onNavigate={navigate} />;
       case "gold-dtp": return <DtpTurmasPicker regime="gold" onOpen={(id) => openCockpit(id, "dtp")} />;
@@ -3648,16 +4084,7 @@ export default function App() {
       case "fin-inscricoes": return <FinInscricoesView />;
       case "fin-formandos": return <FinFormandosView />;
       case "fin-cursos": return <FinCursosView onOpen={id => { setCursoFichaId(id); go("fin-curso-ficha"); }} />;
-      case "fin-curso-ficha": {
-        const raw = cursoFichaId && cursoFichaId !== "new" ? finCursosData.find(c => c.id === cursoFichaId) : undefined;
-        return (
-          <CursoFichaView
-            accent="fin"
-            curso={raw ? { id: raw.id, nome: raw.nomeComercial, ufcdCod: raw.ufcdCod, ufcd: raw.ufcd, regime: raw.regime, horas: raw.horas, estado: raw.estado } : undefined}
-            onBack={() => navigate("fin-cursos")}
-          />
-        );
-      }
+      case "fin-curso-ficha": return <FinCursoFichaScreen cursoId={cursoFichaId} onBack={() => navigate("fin-cursos")} />;
       case "fin-turmas": return <FinTurmasView onCockpit={openFinCockpit} />;
       case "fin-presencas": {
         const tid = finCockpitId ?? 218;

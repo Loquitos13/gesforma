@@ -76,6 +76,7 @@ const I = {
   receipt: <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M5 2a2 2 0 00-2 2v14l3.5-2 3.5 2 3.5-2 3.5 2V4a2 2 0 00-2-2H5zm2.5 3a1 1 0 100 2 1 1 0 000-2zm2.25 1a1 1 0 011-1h2.5a1 1 0 110 2h-2.5a1 1 0 01-1-1zm-2.25 3a1 1 0 100 2 1 1 0 000-2zm2.25 1a1 1 0 011-1h2.5a1 1 0 110 2h-2.5a1 1 0 01-1-1zm-2.25 3a1 1 0 100 2 1 1 0 000-2zm2.25 1a1 1 0 011-1h2.5a1 1 0 110 2h-2.5a1 1 0 01-1-1z" clipRule="evenodd"/></svg>,
   attend: <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/></svg>,
   folder: <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>,
+  transfer: <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path d="M8 5a1 1 0 011 1v8a1 1 0 11-2 0V8.414L5.707 9.707a1 1 0 11-1.414-1.414l3-3A1 1 0 018 5zm4 10a1 1 0 01-1-1V6a1 1 0 112 0v5.586l1.293-1.293a1 1 0 111.414 1.414l-3 3A1 1 0 0112 15z"/></svg>,
 };
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -682,12 +683,183 @@ function Modal({ open, onClose, title, children }: { open: boolean; onClose: () 
   return <AppModal open={open} onClose={onClose} title={title} size="md">{children}</AppModal>;
 }
 
+type DestinoTurma = {
+  id: number; nome: string; curso: string; horario: string; local: string;
+  ocupadas: number; vagas: number; activa: boolean;
+};
+
+function ConfirmEliminarFormandoModal({
+  open, onClose, nome, turma, onConfirm,
+}: {
+  open: boolean; onClose: () => void; nome: string; turma: string; onConfirm: () => void;
+}) {
+  return (
+    <AppModal
+      open={open}
+      onClose={onClose}
+      title="Eliminar formando"
+      sub={nome}
+      size="sm"
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Cancelar</button>
+          <button type="button" onClick={() => { onConfirm(); onClose(); }} className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white">Eliminar</button>
+        </>
+      }
+    >
+      <div className="p-5 space-y-2">
+        <p className="text-sm text-slate-700">
+          Remover <span className="font-semibold">{nome}</span> da turma <span className="font-semibold">{turma}</span>?
+        </p>
+        <p className="text-xs text-slate-500">Sai da lista desta turma. Deixa de contar para vagas, presenças e certificados.</p>
+      </div>
+    </AppModal>
+  );
+}
+
+function TransferirTurmaModal({
+  open, onClose, nome, turmaAtual, destinos, onTransfer, accent = "gold",
+}: {
+  open: boolean;
+  onClose: () => void;
+  nome: string;
+  turmaAtual: string;
+  destinos: DestinoTurma[];
+  onTransfer: (dest: DestinoTurma) => void;
+  accent?: "gold" | "fin";
+}) {
+  const [curso, setCurso] = useState("");
+  const [horario, setHorario] = useState("");
+  const [turmaNome, setTurmaNome] = useState("");
+  useEffect(() => {
+    if (open) { setCurso(""); setHorario(""); setTurmaNome(""); }
+  }, [open]);
+
+  const cursoOpts = uniqueOpts(destinos.map(d => d.curso));
+  const horarioOpts = uniqueOpts(destinos.filter(d => !curso || d.curso === curso).map(d => d.horario));
+  const turmas = destinos.filter(d =>
+    (!curso || d.curso === curso) && (!horario || d.horario === horario)
+  );
+  const turmaOpts = turmas.map(d => ({
+    value: d.nome,
+    sub: `${d.local} · ${d.horario} · ${d.ocupadas}/${d.vagas}${!d.activa ? " · inativa" : d.ocupadas >= d.vagas ? " · lotada" : " vagas"}`,
+  }));
+  const dest = turmas.find(d => d.nome === turmaNome);
+  const bloqueada = dest ? (!dest.activa || dest.ocupadas >= dest.vagas) : true;
+  const btn = accent === "fin" ? "bg-blue-600 hover:bg-blue-700" : "bg-amber-500 hover:bg-amber-600";
+
+  return (
+    <AppModal
+      open={open}
+      onClose={onClose}
+      title="Transferir de turma"
+      sub={nome}
+      size="md"
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Cancelar</button>
+          <button
+            type="button"
+            disabled={bloqueada}
+            onClick={() => { if (!dest || bloqueada) return; onTransfer(dest); onClose(); }}
+            className={`px-5 py-2.5 text-sm font-semibold rounded-lg text-white disabled:opacity-40 ${btn}`}
+          >
+            Transferir
+          </button>
+        </>
+      }
+    >
+      <div className="p-5 space-y-3">
+        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-xs text-slate-600">
+          Está em <span className="font-semibold text-slate-800">{turmaAtual}</span>. Escolha o curso, o horário e a turma de destino.
+        </div>
+        <Field label="Curso">
+          <SearchSelect
+            value={curso}
+            onChange={v => { setCurso(v); setHorario(""); setTurmaNome(""); }}
+            options={cursoOpts}
+            placeholder="Pesquisar curso…"
+            empty="Não há outros cursos com turmas."
+          />
+        </Field>
+        <Field label="Horário">
+          <SearchSelect
+            value={horario}
+            onChange={v => { setHorario(v); setTurmaNome(""); }}
+            options={horarioOpts}
+            placeholder={curso ? "Pesquisar horário…" : "Escolha primeiro o curso…"}
+            empty="Sem horários para este curso."
+          />
+        </Field>
+        <Field label="Turma">
+          <SearchSelect
+            value={turmaNome}
+            onChange={setTurmaNome}
+            options={turmaOpts}
+            placeholder={horario || curso ? "Pesquisar turma…" : "Escolha curso e horário…"}
+            empty="Não há turmas para este filtro."
+          />
+        </Field>
+        {dest && !dest.activa && <p className="text-xs font-medium text-amber-700">Esta turma está inativa e não aceita transferências.</p>}
+        {dest && dest.activa && dest.ocupadas >= dest.vagas && <p className="text-xs font-medium text-red-600">A turma {dest.nome} está lotada ({dest.ocupadas}/{dest.vagas}).</p>}
+        {dest && dest.activa && dest.ocupadas < dest.vagas && (
+          <p className="text-xs text-slate-500">{dest.nome} · {dest.local} · {dest.vagas - dest.ocupadas} vagas livres.</p>
+        )}
+        {destinos.length === 0 && <p className="text-xs text-slate-500">Não há outras turmas para onde transferir.</p>}
+      </div>
+    </AppModal>
+  );
+}
+
+function DocumentosGoldPanel({ formando }: { formando: FormandoTurma }) {
+  const [docs, setDocs] = useState(() => [
+    { id: "cc", label: "Cartão de Cidadão", ok: true, data: formando.inscrito.slice(0, 10) },
+    { id: "contrato", label: "Contrato de formação", ok: formando.pago, data: formando.pago ? formando.inscrito.slice(0, 10) : "" },
+    { id: "pip", label: "PIP - Projeto de Intervenção Pedagógica", ok: formando.id % 3 !== 0, data: formando.id % 3 !== 0 ? "2026-08-20" : "" },
+    { id: "exp", label: "Comprovativo de 5 anos de experiência", ok: formando.id % 2 === 0, data: formando.id % 2 === 0 ? "2026-08-12" : "" },
+    { id: "regulamento", label: "Regulamento de formação aceite", ok: true, data: formando.inscrito.slice(0, 10) },
+  ]);
+  const emFalta = docs.filter(d => !d.ok).length;
+  return (
+    <div className="space-y-3">
+      <div className={`rounded-xl p-4 flex items-center gap-3 ${emFalta === 0 ? "bg-emerald-50 border border-emerald-200" : "bg-amber-50 border border-amber-200"}`}>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${emFalta === 0 ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"}`}>
+          {emFalta === 0 ? I.check : I.warn}
+        </div>
+        <div>
+          <p className={`text-sm font-bold ${emFalta === 0 ? "text-emerald-700" : "text-amber-700"}`}>
+            {emFalta === 0 ? "Documentos completos" : `${emFalta} documentos em falta`}
+          </p>
+          <p className="text-xs text-slate-500 mt-0.5">{formando.nome} {formando.apelido} · {formando.turma}</p>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {docs.map(d => (
+          <div key={d.id} className={`flex items-center gap-3 p-3 rounded-xl border ${d.ok ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
+            <button type="button" onClick={() => setDocs(xs => xs.map(x => x.id === d.id ? { ...x, ok: !x.ok, data: !x.ok ? new Date().toISOString().slice(0, 10) : "" } : x))}
+              className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 ${d.ok ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-red-300"}`}>
+              {d.ok && I.check}
+            </button>
+            <div className="flex-1 min-w-0">
+              <p className={`text-xs font-semibold ${d.ok ? "text-emerald-700" : "text-red-600"}`}>{d.label}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{d.ok && d.data ? `Validado em ${d.data}` : "Em falta"}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Ficha do Formando ────────────────────────────────────────────────────────
 
 type FormandoRecord = FormandoTurma;
 
-function FichaFormando({ formando, tipo = "gold", onClose }: { formando: FormandoRecord; tipo?: "gold" | "fin"; onClose: () => void }) {
-  const [tab, setTab] = useState<"info" | "pagamentos" | "historico" | "notas">("info");
+function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "documentos" }: {
+  formando: FormandoRecord; tipo?: "gold" | "fin"; onClose: () => void;
+  initialTab?: "info" | "documentos" | "pagamentos" | "historico" | "notas";
+}) {
+  const [tab, setTab] = useState<"info" | "documentos" | "pagamentos" | "historico" | "notas">(initialTab);
   const [nota, setNota] = useState("");
   const [notas, setNotas] = useState([
     { id: 1, texto: "Ligou a questionar sobre o horário de sábado. Confirmou presença.", data: "2026-09-02 10:15", autor: "Tania" },
@@ -723,11 +895,11 @@ function FichaFormando({ formando, tipo = "gold", onClose }: { formando: Formand
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-100 px-5 bg-white flex-shrink-0">
-        {(["info", "pagamentos", "historico", "notas"] as const).map(t => (
+      <div className="flex border-b border-slate-100 px-5 bg-white flex-shrink-0 overflow-x-auto">
+        {(["info", "documentos", "pagamentos", "historico", "notas"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-3 py-2.5 text-xs font-semibold capitalize transition-colors border-b-2 -mb-px ${tab === t ? "border-amber-500 text-amber-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
-            {t === "info" ? "Informação" : t === "pagamentos" ? "Pagamento" : t === "historico" ? "Histórico" : "Notas"}
+            className={`px-3 py-2.5 text-xs font-semibold capitalize transition-colors border-b-2 -mb-px whitespace-nowrap ${tab === t ? "border-amber-500 text-amber-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+            {t === "info" ? "Informação" : t === "documentos" ? "Documentos" : t === "pagamentos" ? "Pagamento" : t === "historico" ? "Histórico" : "Notas"}
           </button>
         ))}
       </div>
@@ -763,6 +935,8 @@ function FichaFormando({ formando, tipo = "gold", onClose }: { formando: Formand
             )}
           </>
         )}
+
+        {tab === "documentos" && <DocumentosGoldPanel formando={formando} />}
 
         {tab === "pagamentos" && (
           <div className="space-y-3">
@@ -826,9 +1000,7 @@ function FichaFormando({ formando, tipo = "gold", onClose }: { formando: Formand
         )}
       </div>
 
-      {/* Footer actions */}
-      <div className="flex-shrink-0 px-5 py-3 border-t border-slate-100 bg-slate-50 flex gap-2">
-        <button className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5">{I.convert} Converter em Formando</button>
+      <div className="flex-shrink-0 px-5 py-3 border-t border-slate-100 bg-slate-50 flex justify-end">
         <button onClick={onClose} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-50 transition-colors">Fechar</button>
       </div>
     </div>
@@ -1288,6 +1460,8 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const vagasLivres = turma.vagas - turma.totalAlunos;
   const sessoesTurma = turma.cronograma.length ? cronogramaToSessoes(turma.cronograma) : sessoesSample;
   const [fichaOpen, setFichaOpen] = useState<FormandoRecord | null>(null);
+  const [apagarFormando, setApagarFormando] = useState<FormandoRecord | null>(null);
+  const [transferirFormando, setTransferirFormando] = useState<FormandoRecord | null>(null);
   const [tab, setTab] = useState<CockpitTab>(initialTab);
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
   const [planos, setPlanos] = useState<Record<number, PlanoSessaoData>>(defaultPlanos);
@@ -1475,13 +1649,10 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                     </Td>
                     <Td className="text-xs text-slate-600">{f.metodo}</Td>
                     <Td>
-                      <div className="flex gap-1">
-                        <ActBtn icon={I.eye} label="Ficha" onClick={() => setFichaOpen(f)} />
-                        <ActBtn icon={f.pago ? I.receipt : I.euro} label={f.pago ? "Recibo" : "Marcar pago"} color={f.pago ? "gray" : "orange"} onClick={() => { if (!f.pago) patchFormandoTurma(f.id, { pago: true, metodo: "MB Way" }); }} />
-                        <ActBtn icon={I.trash} label="Remover" color="red" onClick={() => {
-                          removeFormandoTurma(f.id);
-                          patchGold(turma.id, { totalAlunos: Math.max(0, turma.totalAlunos - 1) });
-                        }} />
+                      <div className="flex flex-wrap gap-1">
+                        <ActBtn icon={I.eye} label="Ver" onClick={() => setFichaOpen(f)} />
+                        <ActBtn icon={I.transfer} label="Transferir de turma" color="purple" onClick={() => setTransferirFormando(f)} />
+                        <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagarFormando(f)} />
                       </div>
                     </Td>
                   </tr>
@@ -1516,8 +1687,39 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
       </div>
 
       <SlideOver open={!!fichaOpen} onClose={() => setFichaOpen(null)} title="Ficha do Formando" sub={fichaOpen ? `#${fichaOpen.id}` : ""} size="lg">
-        {fichaOpen && <FichaFormando formando={fichaOpen} onClose={() => setFichaOpen(null)} />}
+        {fichaOpen && <FichaFormando formando={fichaOpen} onClose={() => setFichaOpen(null)} initialTab="documentos" />}
       </SlideOver>
+      <ConfirmEliminarFormandoModal
+        open={!!apagarFormando}
+        onClose={() => setApagarFormando(null)}
+        nome={apagarFormando ? `${apagarFormando.nome} ${apagarFormando.apelido}` : ""}
+        turma={turma.nome}
+        onConfirm={() => {
+          if (!apagarFormando) return;
+          removeFormandoTurma(apagarFormando.id);
+          patchGold(turma.id, { totalAlunos: Math.max(0, turma.totalAlunos - 1) });
+          if (fichaOpen?.id === apagarFormando.id) setFichaOpen(null);
+        }}
+      />
+      <TransferirTurmaModal
+        open={!!transferirFormando}
+        onClose={() => setTransferirFormando(null)}
+        nome={transferirFormando ? `${transferirFormando.nome} ${transferirFormando.apelido}` : ""}
+        turmaAtual={turma.nome}
+        destinos={gold.filter(t => t.id !== turma.id).map(t => ({
+          id: t.id, nome: t.nome, curso: t.curso, horario: t.horario, local: t.local,
+          ocupadas: t.totalAlunos, vagas: t.vagas, activa: isTurmaActiva(t),
+        }))}
+        onTransfer={dest => {
+          if (!transferirFormando) return;
+          patchFormandoTurma(transferirFormando.id, {
+            turma: dest.nome, turmaId: dest.id, curso: dest.curso, local: dest.local,
+          });
+          patchGold(turma.id, { totalAlunos: Math.max(0, turma.totalAlunos - 1) });
+          patchGold(dest.id, { totalAlunos: dest.ocupadas + 1 });
+          if (fichaOpen?.id === transferirFormando.id) setFichaOpen(null);
+        }}
+      />
       <PlanoSessaoModal
         open={!!planoSessao}
         onClose={() => setPlanoSessao(null)}
@@ -1715,7 +1917,7 @@ function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (
 
 function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab; onNavigate?: (v: View | NavTarget) => void }) {
   const { fin, toggleFin, setFinCronograma, patchFin } = useTurmas();
-  const { formandosFin, addFormandoFin } = useLists();
+  const { formandosFin, addFormandoFin, patchFormandoFin, removeFormandoFin } = useLists();
   const turma = fin.find(t => t.id === turmaId) ?? fin.find(t => t.ufcdCod === "3564") ?? fin[0];
   const activa = isTurmaActiva(turma);
   const sessoesTurma = turma.cronograma.length ? cronogramaToSessoes(turma.cronograma) : finSessoesSample;
@@ -1735,6 +1937,8 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const [dataSessao, setDataSessao] = useState("");
   const [horaSessao, setHoraSessao] = useState("19:00");
   const [docsOpen, setDocsOpen] = useState<FinFormando | null>(null);
+  const [apagarFormando, setApagarFormando] = useState<FinFormando | null>(null);
+  const [transferirFormando, setTransferirFormando] = useState<FinFormando | null>(null);
   const [addFormando, setAddFormando] = useState(false);
   const [novoNome, setNovoNome] = useState("");
   const [novoEmail, setNovoEmail] = useState("");
@@ -1747,7 +1951,11 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const [editInicio, setEditInicio] = useState("");
   const formadorOpts = useFormadorOptions();
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
-  const membros = formandosFin.filter(f => f.turma === turma.nome || f.curso === turma.curso);
+  const membros = formandosFin.filter(f => {
+    if (f.turma === turma.nome) return true;
+    const noutra = fin.some(t => t.id !== turma.id && t.nome === f.turma);
+    return !noutra && f.curso === turma.curso;
+  });
   const listaFormandos = membros;
   const prontos = listaFormandos.filter(f => ["cc", "ch", "cu", "ci", "ce"].every(k => f[k as DocKey].ok)).length;
   const nomesCockpit = listaFormandos.map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }));
@@ -1867,10 +2075,10 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead><tr><Th>Nome</Th><Th>Contacto</Th><Th>Turma</Th><Th>Estado</Th><Th>Documentos</Th></tr></thead>
+                <thead><tr><Th>Nome</Th><Th>Contacto</Th><Th>Turma</Th><Th>Estado</Th><Th>Documentos</Th><Th>Ações</Th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
                   {listaFormandos.length === 0 && (
-                    <tr><td colSpan={5} className="px-4 py-8 text-center text-xs text-slate-400">Ainda sem formandos nesta turma.</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-8 text-center text-xs text-slate-400">Ainda sem formandos nesta turma.</td></tr>
                   )}
                   {listaFormandos.map(f => {
                     const keys: DocKey[] = ["cc", "ch", "cu", "ci", "ce"];
@@ -1879,8 +2087,10 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
                     return (
                     <tr key={f.id} className="hover:bg-slate-50">
                       <Td>
-                        <p className="text-xs font-semibold text-slate-800">{f.nome} {f.apelido}</p>
-                        <p className="text-xs text-slate-400 truncate max-w-[160px]">{f.email}</p>
+                        <button type="button" onClick={() => setDocsOpen(f)} className="text-left">
+                          <p className="text-xs font-semibold text-blue-600 hover:text-blue-800">{f.nome} {f.apelido}</p>
+                          <p className="text-xs text-slate-400 truncate max-w-[160px]">{f.email}</p>
+                        </button>
                       </Td>
                       <Td className="font-mono text-xs text-slate-500">{f.telf}</Td>
                       <Td className="text-xs text-slate-600 whitespace-nowrap">{f.turma}</Td>
@@ -1890,6 +2100,13 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
                           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${complete ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
                           {complete ? "✓ Completos" : `${okCount}/5 · ${5 - okCount} em falta`}
                         </button>
+                      </Td>
+                      <Td>
+                        <div className="flex flex-wrap gap-1">
+                          <ActBtn icon={I.eye} label="Ver" onClick={() => setDocsOpen(f)} />
+                          <ActBtn icon={I.transfer} label="Transferir de turma" color="purple" onClick={() => setTransferirFormando(f)} />
+                          <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagarFormando(f)} />
+                        </div>
                       </Td>
                     </tr>
                     );
@@ -1943,9 +2160,39 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
         formandos={nomesCockpit}
         onSave={() => setPresencasSession(null)}
       />
-      <SlideOver open={!!docsOpen} onClose={() => setDocsOpen(null)} title="Documentos do formando" sub={docsOpen ? `${docsOpen.nome} ${docsOpen.apelido}` : ""}>
-        {docsOpen && <DocumentosFinPanel formando={docsOpen} />}
+      <SlideOver open={!!docsOpen} onClose={() => setDocsOpen(null)} title="Ficha do Formando" sub={docsOpen ? `#${docsOpen.id}` : ""} size="lg">
+        {docsOpen && <FichaFormandoFin formando={docsOpen} onClose={() => setDocsOpen(null)} />}
       </SlideOver>
+      <ConfirmEliminarFormandoModal
+        open={!!apagarFormando}
+        onClose={() => setApagarFormando(null)}
+        nome={apagarFormando ? `${apagarFormando.nome} ${apagarFormando.apelido}` : ""}
+        turma={turma.nome}
+        onConfirm={() => {
+          if (!apagarFormando) return;
+          removeFormandoFin(apagarFormando.id);
+          patchFin(turma.id, { alunos: Math.max(0, turma.alunos - 1) });
+          if (docsOpen?.id === apagarFormando.id) setDocsOpen(null);
+        }}
+      />
+      <TransferirTurmaModal
+        open={!!transferirFormando}
+        onClose={() => setTransferirFormando(null)}
+        nome={transferirFormando ? `${transferirFormando.nome} ${transferirFormando.apelido}` : ""}
+        turmaAtual={turma.nome}
+        accent="fin"
+        destinos={fin.filter(t => t.id !== turma.id).map(t => ({
+          id: t.id, nome: t.nome, curso: t.curso, horario: t.horario, local: t.local,
+          ocupadas: t.alunos, vagas: t.alunosTotal, activa: isTurmaActiva(t),
+        }))}
+        onTransfer={dest => {
+          if (!transferirFormando) return;
+          patchFormandoFin(transferirFormando.id, { turma: dest.nome, curso: dest.curso });
+          patchFin(turma.id, { alunos: Math.max(0, turma.alunos - 1) });
+          patchFin(dest.id, { alunos: dest.ocupadas + 1 });
+          if (docsOpen?.id === transferirFormando.id) setDocsOpen(null);
+        }}
+      />
       <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? turma.formador} />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" accent="fin"
         onConfirm={() => { if (uploadCert != null) setCertsIssued(p => ({ ...p, [uploadCert]: true })); }} />
@@ -2253,6 +2500,62 @@ function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
       </div>
 
       <button className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors">Enviar lembrete de documentos</button>
+    </div>
+  );
+}
+
+function FichaFormandoFin({ formando, onClose }: { formando: FormandoFin; onClose: () => void }) {
+  const [tab, setTab] = useState<"info" | "documentos">("documentos");
+  const { formandosFin } = useLists();
+  const live = formandosFin.find(f => f.id === formando.id) ?? formando;
+  return (
+    <div className="flex flex-col h-full">
+      <div className="px-5 py-4 border-b bg-blue-50 border-blue-100">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white text-lg font-bold flex-shrink-0 bg-blue-600">
+            {live.nome[0]}{live.apelido[0]}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-slate-800">{live.nome} {live.apelido}</p>
+            <p className="text-xs text-slate-500 truncate">{live.email}</p>
+            <div className="flex items-center gap-2 mt-1">{estadoBadge(live.estado)}<span className="text-xs text-slate-400">{live.turma}</span></div>
+          </div>
+        </div>
+        <div className="flex gap-2 mt-3 flex-wrap">
+          <a href={`tel:${live.telf}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50">{I.phone} {live.telf}</a>
+          <a href={`mailto:${live.email}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 rounded-lg text-xs font-semibold text-white hover:bg-blue-700">{I.mail} Email</a>
+        </div>
+      </div>
+      <div className="flex border-b border-slate-100 px-5 bg-white flex-shrink-0">
+        {(["info", "documentos"] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            className={`px-3 py-2.5 text-xs font-semibold border-b-2 -mb-px ${tab === t ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+            {t === "info" ? "Informação" : "Documentos"}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {tab === "info" && (
+          <div className="p-5 grid grid-cols-2 gap-3">
+            {[
+              { l: "Curso", v: live.curso },
+              { l: "Turma", v: live.turma },
+              { l: "Telemóvel", v: live.telf },
+              { l: "Email", v: live.email },
+              { l: "Estado", v: live.estado },
+            ].map(f => (
+              <div key={f.l} className="bg-slate-50 rounded-xl p-3">
+                <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{f.l}</p>
+                <p className="text-sm font-semibold text-slate-700 mt-0.5 break-all">{f.v}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        {tab === "documentos" && <DocumentosFinPanel formando={live} />}
+      </div>
+      <div className="flex-shrink-0 px-5 py-3 border-t border-slate-100 bg-slate-50 flex justify-end">
+        <button onClick={onClose} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-50">Fechar</button>
+      </div>
     </div>
   );
 }

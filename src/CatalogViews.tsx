@@ -6,6 +6,23 @@ import {
 import { TurmaInscricaoHint } from "./TurmaCronograma";
 import { useTurmas } from "./TurmasContext";
 import { turmaFinOpts } from "./turmaModel";
+import { FichaFormando } from "./FormandoFicha";
+import { ConteudoAbrirModal, type ConteudoPreview } from "./ActionSurfaces";
+import type { FormandoTurma } from "./ListsContext";
+
+type Accent = "gold" | "fin";
+function accentBtn(a: Accent) {
+  return a === "gold" ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700";
+}
+function accentBox(a: Accent) {
+  return a === "gold" ? "border-amber-200 bg-amber-50" : "border-blue-200 bg-blue-50";
+}
+function accentTitle(a: Accent) {
+  return a === "gold" ? "text-amber-800" : "text-blue-800";
+}
+function accentText(a: Accent) {
+  return a === "gold" ? "text-amber-700" : "text-blue-700";
+}
 
 const I = {
   plus: (
@@ -86,10 +103,10 @@ function PageHeader({ title, sub, action }: { title: string; sub?: string; actio
     </div>
   );
 }
-function NewBtn({ label, onClick }: { label: string; onClick?: () => void }) {
+function NewBtn({ label, onClick, accent = "gold" }: { label: string; onClick?: () => void; accent?: Accent }) {
   const text = label.replace(/^\+\s*/, "");
   return (
-    <button onClick={onClick} className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm whitespace-nowrap">
+    <button onClick={onClick} className={`inline-flex items-center gap-1.5 px-4 py-2 ${accentBtn(accent)} text-white text-sm font-semibold rounded-lg transition-colors shadow-sm whitespace-nowrap`}>
       {I.plus}{text}
     </button>
   );
@@ -150,11 +167,11 @@ function nextId<T extends { id: number }>(xs: T[]) {
   return Math.max(0, ...xs.map(x => x.id), 1000) + 1;
 }
 
-function FormActions({ onClose, onSave, disabled, label = "Guardar" }: { onClose: () => void; onSave?: () => void; disabled?: boolean; label?: string }) {
+function FormActions({ onClose, onSave, disabled, label = "Guardar", accent = "gold" }: { onClose: () => void; onSave?: () => void; disabled?: boolean; label?: string; accent?: Accent }) {
   return (
     <div className="flex justify-end gap-2 pt-4 mt-1 border-t border-slate-100">
       <button type="button" onClick={onClose} className="px-4 py-2.5 bg-white border border-slate-200 text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-50">Cancelar</button>
-      <button type="button" onClick={onSave} disabled={disabled} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{label}</button>
+      <button type="button" onClick={onSave} disabled={disabled} className={`px-5 py-2.5 ${accentBtn(accent)} disabled:opacity-40 text-white text-sm font-semibold rounded-lg`}>{label}</button>
     </div>
   );
 }
@@ -217,6 +234,51 @@ const conteudosData = [
   { id: 16, titulo: "Exercícios Excel avançado", tipo: "PDF", curso: "Excel do Básico ao Avançado", modulo: "EX1", tamanho: "1,1 MB", estado: "Inactivo" },
 ];
 
+const modulosFinData = [
+  { id: 101, codigo: "U1", nome: "Avaliação primária da vítima", horas: 8, curso: "Primeiros Socorros", tipo: "Teórico-prático", estado: "Ativo" },
+  { id: 102, codigo: "U2", nome: "Suporte básico de vida", horas: 10, curso: "Primeiros Socorros", tipo: "Prático", estado: "Ativo" },
+  { id: 103, codigo: "U3", nome: "Emergências mais frequentes", horas: 7, curso: "Primeiros Socorros", tipo: "Teórico-prático", estado: "Ativo" },
+  { id: 104, codigo: "R1", nome: "Plataformas e formatos", horas: 8, curso: "Publicidade nas Redes Sociais", tipo: "Teórico", estado: "Ativo" },
+  { id: 105, codigo: "R2", nome: "Campanhas pagas", horas: 10, curso: "Publicidade nas Redes Sociais", tipo: "Prático", estado: "Ativo" },
+  { id: 106, codigo: "R3", nome: "Métricas e relatórios", horas: 7, curso: "Publicidade nas Redes Sociais", tipo: "Teórico-prático", estado: "Ativo" },
+  { id: 107, codigo: "C1", nome: "Ameaça e risco", horas: 8, curso: "Fundamentos de cibersegurança", tipo: "Teórico", estado: "Ativo" },
+  { id: 108, codigo: "C2", nome: "Boas práticas do utilizador", horas: 9, curso: "Fundamentos de cibersegurança", tipo: "Prático", estado: "Ativo" },
+  { id: 109, codigo: "C3", nome: "Resposta a incidentes", horas: 8, curso: "Fundamentos de cibersegurança", tipo: "Teórico-prático", estado: "Ativo" },
+  { id: 110, codigo: "P1", nome: "Métodos ativos", horas: 12, curso: "Métodos e Técnicas Pedagógicas Ativos", tipo: "Teórico-prático", estado: "Ativo" },
+  { id: 111, codigo: "P2", nome: "Dinâmicas de grupo", horas: 13, curso: "Métodos e Técnicas Pedagógicas Ativos", tipo: "Prático", estado: "Ativo" },
+];
+
+const conteudosFinData = [
+  { id: 201, titulo: "Manual UFCD 3564 - Primeiros Socorros", tipo: "PDF", curso: "Primeiros Socorros", modulo: "U1", tamanho: "1,8 MB", estado: "Ativo" },
+  { id: 202, titulo: "Vídeo: SBV no adulto", tipo: "Vídeo", curso: "Primeiros Socorros", modulo: "U2", tamanho: "14 min", estado: "Ativo" },
+  { id: 203, titulo: "Grelha de observação prática", tipo: "PDF", curso: "Primeiros Socorros", modulo: "U2", tamanho: "210 KB", estado: "Ativo" },
+  { id: 204, titulo: "Moodle UFCD 10785", tipo: "Link", curso: "Publicidade nas Redes Sociais", modulo: "R1", tamanho: "-", estado: "Ativo" },
+  { id: 205, titulo: "Guia de campanhas Meta", tipo: "PDF", curso: "Publicidade nas Redes Sociais", modulo: "R2", tamanho: "890 KB", estado: "Ativo" },
+  { id: 206, titulo: "Checklist de higiene digital", tipo: "PDF", curso: "Fundamentos de cibersegurança", modulo: "C2", tamanho: "140 KB", estado: "Ativo" },
+];
+
+const datasFinData = [
+  { id: 301, inicio: "2026-08-27", fim: "2026-09-24", horario: "Pós Laboral", preco: 0, local: "Sala Virtual", curso: "Primeiros Socorros", status: "Ativo", link: "ena.pt/ufcd/3564-t1" },
+  { id: 302, inicio: "2026-09-08", fim: "2026-10-06", horario: "Sábado manhã", preco: 0, local: "Sala Virtual", curso: "Publicidade nas Redes Sociais", status: "Ativo", link: "ena.pt/ufcd/10785-sm" },
+  { id: 303, inicio: "2026-09-15", fim: "2026-10-13", horario: "Pós Laboral", preco: 0, local: "Sala Virtual", curso: "Fundamentos de cibersegurança", status: "Ativo", link: "ena.pt/ufcd/9188-pl" },
+  { id: 304, inicio: "2026-10-01", fim: "2026-10-29", horario: "Laboral Manhã", preco: 0, local: "V.N.Gaia", curso: "Métodos e Técnicas Pedagógicas Ativos", status: "Ativo", link: "ena.pt/ufcd/10394-vng" },
+  { id: 305, inicio: "2026-07-02", fim: "2026-07-30", horario: "Pós Laboral", preco: 0, local: "Sala Virtual", curso: "Primeiros Socorros", status: "Inactivo", link: "ena.pt/ufcd/3564-jul" },
+];
+
+const locaisFinData = [
+  { id: 41, nome: "Sala Virtual", morada: "Moodle + Zoom ENA · turmas financiadas", salas: 0, turmas: 6, status: "Ativo" },
+  { id: 42, nome: "V.N.Gaia", morada: "Rua da Formação 12, 4400-000 V.N. Gaia", salas: 2, turmas: 1, status: "Ativo" },
+  { id: 43, nome: "Centro de emprego Gaia", morada: "Polo IEFP · encaminhamento de candidatos", salas: 1, turmas: 0, status: "Ativo" },
+  { id: 44, nome: "Braga", morada: "Av. da Liberdade 210, 4710 Braga", salas: 1, turmas: 0, status: "Ativo" },
+];
+
+const areasFinData = [
+  { id: 61, nome: "Saúde e segurança", cursos: 2, estado: "Ativo" },
+  { id: 62, nome: "Marketing digital", cursos: 1, estado: "Ativo" },
+  { id: 63, nome: "Cibersegurança", cursos: 1, estado: "Ativo" },
+  { id: 64, nome: "Pedagogia e formação", cursos: 1, estado: "Ativo" },
+];
+
 const tiposModuloOpts = [
   { value: "Teórico-prático" },
   { value: "Teórico" },
@@ -224,15 +286,17 @@ const tiposModuloOpts = [
   { value: "B-learning" },
 ];
 
-function nextCodigoModulo(lista: Array<{ codigo: string; curso: string }>, curso: string) {
+function nextCodigoModulo(lista: Array<{ codigo: string; curso: string }>, curso: string, accent: Accent = "gold") {
   const mesmos = lista.filter(m => m.curso === curso);
-  const prefix = curso.includes("Excel") ? "EX" : curso.includes("Comunicar") ? "AV" : "M";
+  const prefix = accent === "fin"
+    ? (curso.includes("Publicidade") ? "R" : curso.includes("ciber") ? "C" : curso.includes("Métodos") ? "P" : "U")
+    : (curso.includes("Excel") ? "EX" : curso.includes("Comunicar") ? "AV" : "M");
   const nums = mesmos.map(m => Number((m.codigo.match(/\d+/) || ["0"])[0])).filter(n => !Number.isNaN(n));
   return `${prefix}${(nums.length ? Math.max(...nums) : 0) + 1}`;
 }
 
-function labelModulo(codigo: string, curso?: string) {
-  const m = modulosData.find(x => x.codigo === codigo && (!curso || x.curso === curso));
+function labelModulo(codigo: string, curso?: string, catalog: typeof modulosData = modulosData) {
+  const m = catalog.find(x => x.codigo === codigo && (!curso || x.curso === curso));
   return m ? `${m.codigo} · ${m.nome}` : codigo;
 }
 
@@ -271,6 +335,10 @@ function DocPips({ docs }: { docs: DocDots }) {
   );
 }
 
+function asFichaAvulso(r: typeof formandosGoldData[number]): FormandoTurma {
+  return { ...r, turma: "Sem turma", turmaId: 0 };
+}
+
 export function FormandosGoldView() {
   const [lista, setLista] = useState(formandosGoldData);
   const [s, setS] = useState(""); const [p, setP] = useState(1);
@@ -278,6 +346,7 @@ export function FormandosGoldView() {
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtroLocal, setFiltroLocal] = useState("");
   const [open, setOpen] = useState<"new" | typeof formandosGoldData[number] | null>(null);
+  const [ficha, setFicha] = useState<typeof formandosGoldData[number] | null>(null);
   const [curso, setCurso] = useState("");
   const [nome, setNome] = useState("");
   const [apelido, setApelido] = useState("");
@@ -334,15 +403,17 @@ export function FormandosGoldView() {
                   <tr key={r.id} className="hover:bg-slate-50">
                     <Td><span className="text-slate-400 font-mono text-xs">{r.id}</span></Td>
                     <Td>
-                      <p className="text-xs font-medium text-blue-600">{r.nome} {r.apelido}</p>
-                      <p className="text-xs text-slate-400 truncate max-w-[160px]">{r.email}</p>
+                      <button type="button" onClick={() => setFicha(r)} className="text-left">
+                        <p className="text-xs font-medium text-blue-600 hover:text-blue-800">{r.nome} {r.apelido}</p>
+                        <p className="text-xs text-slate-400 truncate max-w-[160px]">{r.email}</p>
+                      </button>
                     </Td>
                     <Td className="text-xs text-slate-600 max-w-[180px]">{r.curso}</Td>
                     <Td className="text-xs text-slate-600 whitespace-nowrap">{r.local}</Td>
                     <Td className="font-mono text-xs text-slate-500">{r.inscrito}</Td>
                     <Td className="text-xs font-bold text-amber-600">€ {r.valor}</Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Ficha" onClick={() => setOpen(r)} /><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Ficha" onClick={() => setFicha(r)} /><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -351,6 +422,9 @@ export function FormandosGoldView() {
           <TableFooter page={p} total={f.length} perPage={10} onChange={setP} />
         </Card>
       </div>
+      <SlideOver open={!!ficha} onClose={() => setFicha(null)} title="Ficha do Formando" sub={ficha ? `#${ficha.id} · venda avulso` : ""} size="lg">
+        {ficha && <FichaFormando formando={asFichaAvulso(ficha)} onClose={() => setFicha(null)} avulso />}
+      </SlideOver>
       <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `${editing.nome} ${editing.apelido}` : "Novo formando Gold"} sub={editing ? `#${editing.id} · sem turma` : "Venda individual, fora de turma"}>
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -369,7 +443,16 @@ export function FormandosGoldView() {
 }
 
 export function DatasGoldView() {
-  const [lista, setLista] = useState(datasGoldData);
+  return <DatasCatalogView accent="gold" />;
+}
+export function DatasFinView() {
+  return <DatasCatalogView accent="fin" />;
+}
+
+function DatasCatalogView({ accent }: { accent: Accent }) {
+  const seed = accent === "gold" ? datasGoldData : datasFinData;
+  const cursosOpts = accent === "gold" ? cursosGoldOpts : cursosFinOpts;
+  const [lista, setLista] = useState(seed);
   const [s, setS] = useState(""); const [p, setP] = useState(1);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
@@ -390,7 +473,7 @@ export function DatasGoldView() {
   const editing = open && open !== "new" ? open : null;
   useEffect(() => {
     if (!open) return;
-    setCurso(editing?.curso ?? "Formação de Formadores - CCP");
+    setCurso(editing?.curso ?? (accent === "gold" ? "Formação de Formadores - CCP" : "Primeiros Socorros"));
     setLocal(editing?.local ?? "");
     setHorario(editing?.horario ?? "");
     setInicio(editing?.inicio ?? "");
@@ -412,10 +495,15 @@ export function DatasGoldView() {
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Datas / Edições Gold" sub="Calendário comercial: início, fim, horário, preço e local. Cada edição alimenta as turmas." action={<NewBtn label="+ Nova data" onClick={() => setOpen("new")} />} />
+        <PageHeader
+          title={accent === "gold" ? "Datas / Edições Gold" : "Datas / Edições Financiadas"}
+          sub={accent === "gold" ? "Calendário comercial: início, fim, horário, preço e local. Cada edição alimenta as turmas." : "Calendário das UFCD: início, fim, horário e local. Sem preço — a edição é financiada."}
+          action={<NewBtn accent={accent} label="+ Nova data" onClick={() => setOpen("new")} />}
+        />
         <ViewFilters
+          accent={accent}
           fields={[
-            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(lista.map(x => x.curso)) },
+            { label: accent === "gold" ? "Curso" : "Curso / UFCD", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(lista.map(x => x.curso)) },
             { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(lista.map(x => x.local)) },
           ]}
           chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
@@ -425,7 +513,7 @@ export function DatasGoldView() {
           <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} />
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr><Th>Id</Th><Th>Início</Th><Th>Fim</Th><Th>Horário</Th><Th>Local</Th><Th>Curso</Th><Th>Preço</Th><Th>Inscrição</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
+              <thead><tr><Th>Id</Th><Th>Início</Th><Th>Fim</Th><Th>Horário</Th><Th>Local</Th><Th>Curso</Th><Th>{accent === "gold" ? "Preço" : "Regime"}</Th><Th>Inscrição</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {rows.length === 0 && <EmptyState text="Nenhuma edição corresponde à pesquisa." />}
                 {rows.map(r => (
@@ -436,7 +524,7 @@ export function DatasGoldView() {
                     <Td className="text-xs text-slate-600 whitespace-nowrap">{r.horario}</Td>
                     <Td className="text-xs text-slate-600 whitespace-nowrap">{r.local}</Td>
                     <Td className="text-xs text-slate-600 max-w-[160px]">{r.curso}</Td>
-                    <Td className="text-xs font-bold text-amber-600">€ {r.preco}</Td>
+                    <Td className={`text-xs font-bold ${accent === "gold" ? "text-amber-600" : "text-blue-600"}`}>{accent === "gold" ? `€ ${r.preco}` : "Financiado"}</Td>
                     <Td>
                       <a href={`https://${r.link}`} className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline" onClick={e => e.preventDefault()}>{I.link} Link</a>
                     </Td>
@@ -450,18 +538,18 @@ export function DatasGoldView() {
           <TableFooter page={p} total={f.length} perPage={10} onChange={setP} />
         </Card>
       </div>
-      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `Edição #${editing.id}` : "Nova data / edição"} sub="Define o calendário comercial da turma">
+      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `Edição #${editing.id}` : "Nova data / edição"} sub={accent === "gold" ? "Define o calendário comercial da turma" : "Define o calendário da UFCD"}>
         <div className="p-5 space-y-3">
-          <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <Field label={accent === "gold" ? "Curso" : "Curso / UFCD"}><SearchSelect value={curso} onChange={setCurso} options={cursosOpts} placeholder={accent === "gold" ? "Pesquisar curso…" : "Pesquisar UFCD…"} /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Início"><input type="date" className={iCls} value={inicio} onChange={e => setInicio(e.target.value)} /></Field>
             <Field label="Fim"><input type="date" className={iCls} value={fim} onChange={e => setFim(e.target.value)} /></Field>
           </div>
           <Field label="Horário"><SearchSelect value={horario} onChange={setHorario} options={horariosOpts} /></Field>
           <Field label="Local"><SearchSelect value={local} onChange={setLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
-          <Field label="Preço (€)"><input type="number" className={iCls} value={preco} onChange={e => setPreco(e.target.value)} /></Field>
+          {accent === "gold" && <Field label="Preço (€)"><input type="number" className={iCls} value={preco} onChange={e => setPreco(e.target.value)} /></Field>}
           <Field label="Link de inscrição"><input className={iCls} value={link} onChange={e => setLink(e.target.value)} /></Field>
-          <FormActions onClose={() => setOpen(null)} onSave={guardar} disabled={!curso || !inicio} label={editing ? "Guardar" : "Criar edição"} />
+          <FormActions accent={accent} onClose={() => setOpen(null)} onSave={guardar} disabled={!curso || !inicio} label={editing ? "Guardar" : "Criar edição"} />
         </div>
       </SlideOver>
     </>
@@ -469,7 +557,14 @@ export function DatasGoldView() {
 }
 
 export function LocaisView() {
-  const [lista, setLista] = useState(locaisData);
+  return <LocaisCatalogView accent="gold" />;
+}
+export function LocaisFinView() {
+  return <LocaisCatalogView accent="fin" />;
+}
+
+function LocaisCatalogView({ accent }: { accent: Accent }) {
+  const [lista, setLista] = useState(accent === "gold" ? locaisData : locaisFinData);
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof locaisData[number] | null>(null);
@@ -497,8 +592,8 @@ export function LocaisView() {
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Locais" sub="Polos da ENA onde as turmas Gold decorrem." action={<NewBtn label="+ Novo local" onClick={() => setOpen("new")} />} />
-        <ViewFilters chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: setFiltro }} onClear={() => setFiltro("Todos")} />
+        <PageHeader title="Locais" sub={accent === "gold" ? "Polos da ENA onde as turmas Gold decorrem." : "Salas e polos das turmas financiadas — quase tudo em sala virtual."} action={<NewBtn accent={accent} label="+ Novo local" onClick={() => setOpen("new")} />} />
+        <ViewFilters accent={accent} chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: setFiltro }} onClear={() => setFiltro("Todos")} />
         <Card>
           <TableToolbar search={s} onSearch={setS} />
           <div className="overflow-x-auto">
@@ -527,7 +622,7 @@ export function LocaisView() {
           <Field label="Nome"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} /></Field>
           <Field label="Morada"><input className={iCls} value={morada} onChange={e => setMorada(e.target.value)} /></Field>
           <Field label="Salas"><input type="number" className={iCls} value={salas} onChange={e => setSalas(e.target.value)} /></Field>
-          <FormActions onClose={() => setOpen(null)} onSave={guardar} disabled={!nome.trim()} label={editing ? "Guardar" : "Criar local"} />
+          <FormActions accent={accent} onClose={() => setOpen(null)} onSave={guardar} disabled={!nome.trim()} label={editing ? "Guardar" : "Criar local"} />
         </div>
       </SlideOver>
     </>
@@ -535,7 +630,14 @@ export function LocaisView() {
 }
 
 export function AreasTematicasView() {
-  const [lista, setLista] = useState(areasTematicasData);
+  return <AreasCatalogView accent="gold" />;
+}
+export function AreasTematicasFinView() {
+  return <AreasCatalogView accent="fin" />;
+}
+
+function AreasCatalogView({ accent }: { accent: Accent }) {
+  const [lista, setLista] = useState(accent === "gold" ? areasTematicasData : areasFinData);
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof areasTematicasData[number] | null>(null);
@@ -553,8 +655,8 @@ export function AreasTematicasView() {
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Áreas Temáticas" sub="Agrupam os cursos Gold no site e no backoffice." action={<NewBtn label="+ Nova área" onClick={() => setOpen("new")} />} />
-        <ViewFilters chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: setFiltro }} onClear={() => setFiltro("Todos")} />
+        <PageHeader title="Áreas Temáticas" sub={accent === "gold" ? "Agrupam os cursos Gold no site e no backoffice." : "Agrupam as UFCD no backoffice e nos relatórios ao financiador."} action={<NewBtn accent={accent} label="+ Nova área" onClick={() => setOpen("new")} />} />
+        <ViewFilters accent={accent} chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: setFiltro }} onClear={() => setFiltro("Todos")} />
         <Card>
           <TableToolbar search={s} onSearch={setS} />
           <div className="overflow-x-auto">
@@ -579,7 +681,7 @@ export function AreasTematicasView() {
       <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? editing.nome : "Nova área temática"}>
         <div className="p-5 space-y-3">
           <Field label="Nome"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} /></Field>
-          <FormActions onClose={() => setOpen(null)} onSave={guardar} disabled={!nome.trim()} label={editing ? "Guardar" : "Criar área"} />
+          <FormActions accent={accent} onClose={() => setOpen(null)} onSave={guardar} disabled={!nome.trim()} label={editing ? "Guardar" : "Criar área"} />
         </div>
       </SlideOver>
     </>
@@ -588,11 +690,16 @@ export function AreasTematicasView() {
 
 type ModuloRow = typeof modulosData[number];
 
-export function ModulosView({ cursoInicial }: { cursoInicial?: string }) {
+export function ModulosFinView({ cursoInicial }: { cursoInicial?: string }) {
+  return <ModulosView cursoInicial={cursoInicial} accent="fin" />;
+}
+
+export function ModulosView({ cursoInicial, accent = "gold" }: { cursoInicial?: string; accent?: Accent }) {
+  const cursosOpts = accent === "gold" ? cursosGoldOpts : cursosFinOpts;
   const [s, setS] = useState("");
   const [estado, setEstado] = useState("Todos");
   const [cursoFiltro, setCursoFiltro] = useState(cursoInicial ?? "");
-  const [lista, setLista] = useState<ModuloRow[]>(modulosData);
+  const [lista, setLista] = useState<ModuloRow[]>(accent === "gold" ? modulosData : modulosFinData);
   const [open, setOpen] = useState<"new" | ModuloRow | null>(null);
   const [curso, setCurso] = useState("");
   const [codigo, setCodigo] = useState("");
@@ -606,7 +713,7 @@ export function ModulosView({ cursoInicial }: { cursoInicial?: string }) {
   useEffect(() => {
     if (!open) return;
     setCurso(editing?.curso || cursoFiltro || "");
-    setCodigo(editing?.codigo ?? (cursoFiltro ? nextCodigoModulo(lista, cursoFiltro) : ""));
+    setCodigo(editing?.codigo ?? (cursoFiltro ? nextCodigoModulo(lista, cursoFiltro, accent) : ""));
     setNome(editing?.nome ?? "");
     setHoras(String(editing?.horas ?? 10));
     setTipo(editing?.tipo ?? "Teórico-prático");
@@ -645,12 +752,13 @@ export function ModulosView({ cursoInicial }: { cursoInicial?: string }) {
     <>
       <div className="space-y-4">
         <PageHeader
-          title="Módulos"
-          sub={cursoFiltro ? `${f.length} módulo${f.length === 1 ? "" : "s"} · ${horasCurso}h neste curso` : "Escolha um curso para ver e criar os seus módulos."}
-          action={<NewBtn label="+ Novo módulo" onClick={abrirNovo} />}
+          title={accent === "gold" ? "Módulos" : "Módulos · Financiada"}
+          sub={cursoFiltro ? `${f.length} módulo${f.length === 1 ? "" : "s"} · ${horasCurso}h neste curso` : (accent === "gold" ? "Escolha um curso para ver e criar os seus módulos." : "Escolha a UFCD para ver e criar os seus módulos.")}
+          action={<NewBtn accent={accent} label="+ Novo módulo" onClick={abrirNovo} />}
         />
         <ViewFilters
-          fields={[{ label: "Curso", value: cursoFiltro, onChange: setCursoFiltro, options: cursosGoldOpts, placeholder: "Pesquisar curso…" }]}
+          accent={accent}
+          fields={[{ label: accent === "gold" ? "Curso" : "Curso / UFCD", value: cursoFiltro, onChange: setCursoFiltro, options: cursosOpts, placeholder: accent === "gold" ? "Pesquisar curso…" : "Pesquisar UFCD…" }]}
           chips={{ options: ["Todos", "Ativo", "Inactivo"], value: estado, onChange: setEstado }}
           onClear={() => { setCursoFiltro(""); setEstado("Todos"); }}
         />
@@ -668,7 +776,7 @@ export function ModulosView({ cursoInicial }: { cursoInicial?: string }) {
                           ? "Selecione um curso acima para listar os módulos."
                           : "Este curso ainda não tem módulos."}
                       </p>
-                      <button type="button" onClick={abrirNovo} className="mt-3 text-sm font-semibold text-amber-600 hover:text-amber-700">
+                      <button type="button" onClick={abrirNovo} className={`mt-3 text-sm font-semibold ${accent === "gold" ? "text-amber-600 hover:text-amber-700" : "text-blue-600 hover:text-blue-700"}`}>
                         Criar o primeiro módulo
                       </button>
                     </td>
@@ -677,7 +785,7 @@ export function ModulosView({ cursoInicial }: { cursoInicial?: string }) {
                 {f.map(r => (
                   <tr key={r.id} className="hover:bg-slate-50">
                     <Td><span className="text-slate-400 font-mono text-xs">{r.id}</span></Td>
-                    <Td><span className="text-xs font-bold font-mono text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">{r.codigo}</span></Td>
+                    <Td><span className={`text-xs font-bold font-mono px-1.5 py-0.5 rounded ${accent === "gold" ? "text-amber-700 bg-amber-50" : "text-blue-700 bg-blue-50"}`}>{r.codigo}</span></Td>
                     <Td className="text-sm font-medium text-slate-800">{r.nome}</Td>
                     <Td className="text-xs text-slate-500 max-w-[180px]">{r.curso}</Td>
                     <Td className="text-xs text-slate-600">{r.tipo}</Td>
@@ -698,12 +806,12 @@ export function ModulosView({ cursoInicial }: { cursoInicial?: string }) {
         sub={curso ? `Pertence a ${curso}` : "Um módulo existe sempre dentro de um curso"}
       >
         <div className="p-5 space-y-4">
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
-            <p className="text-xs font-semibold text-amber-800">Módulo ⊂ curso</p>
-            <p className="text-xs text-amber-700 mt-0.5">Não há módulos soltos. Escolha o curso e o módulo fica associado a ele - nas turmas, nos conteúdos e no DTP.</p>
+          <div className={`rounded-xl border px-3 py-2.5 ${accentBox(accent)}`}>
+            <p className={`text-xs font-semibold ${accentTitle(accent)}`}>Módulo ⊂ {accent === "gold" ? "curso" : "UFCD"}</p>
+            <p className={`text-xs mt-0.5 ${accentText(accent)}`}>Não há módulos soltos. Escolha {accent === "gold" ? "o curso" : "a UFCD"} e o módulo fica associado a ele - nas turmas, nos conteúdos e no DTP.</p>
           </div>
-          <Field label="Curso *">
-            <SearchSelect value={curso} onChange={v => { setCurso(v); if (!editing) setCodigo(nextCodigoModulo(lista, v)); }} options={cursosGoldOpts} placeholder="Obrigatório - pesquisar curso…" />
+          <Field label={accent === "gold" ? "Curso *" : "Curso / UFCD *"}>
+            <SearchSelect value={curso} onChange={v => { setCurso(v); if (!editing) setCodigo(nextCodigoModulo(lista, v, accent)); }} options={cursosOpts} placeholder={accent === "gold" ? "Obrigatório - pesquisar curso…" : "Obrigatório - pesquisar UFCD…"} />
           </Field>
           {curso && (
             <p className="text-xs text-slate-500 -mt-2">
@@ -711,7 +819,7 @@ export function ModulosView({ cursoInicial }: { cursoInicial?: string }) {
             </p>
           )}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Código"><input className={iCls} value={codigo} onChange={e => setCodigo(e.target.value)} placeholder={curso ? nextCodigoModulo(lista, curso) : "M1"} /></Field>
+            <Field label="Código"><input className={iCls} value={codigo} onChange={e => setCodigo(e.target.value)} placeholder={curso ? nextCodigoModulo(lista, curso, accent) : (accent === "gold" ? "M1" : "U1")} /></Field>
             <Field label="Horas"><input type="number" min={1} className={iCls} value={horas} onChange={e => setHoras(e.target.value)} /></Field>
           </div>
           <Field label="Nome do módulo *"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex.: Avaliação da formação" /></Field>
@@ -719,7 +827,7 @@ export function ModulosView({ cursoInicial }: { cursoInicial?: string }) {
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button type="button" onClick={guardarModulo} disabled={!nome.trim() || !curso}
-              className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">
+              className={`flex-1 py-2 ${accentBtn(accent)} disabled:opacity-40 text-white text-sm font-semibold rounded-lg`}>
               {editing ? "Guardar" : "Criar módulo"}
             </button>
           </div>
@@ -729,22 +837,29 @@ export function ModulosView({ cursoInicial }: { cursoInicial?: string }) {
   );
 }
 
-export function ConteudosView() {
+export function ConteudosFinView() {
+  return <ConteudosView accent="fin" />;
+}
+
+export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
+  const cursosOpts = accent === "gold" ? cursosGoldOpts : cursosFinOpts;
+  const catalogoModulos = accent === "gold" ? modulosData : modulosFinData;
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtroModulo, setFiltroModulo] = useState("");
-  const [lista, setLista] = useState(conteudosData);
+  const [lista, setLista] = useState(accent === "gold" ? conteudosData : conteudosFinData);
   const [open, setOpen] = useState<"new" | typeof conteudosData[number] | null>(null);
+  const [abrir, setAbrir] = useState<ConteudoPreview | null>(null);
   const [curso, setCurso] = useState("");
   const [modulo, setModulo] = useState("");
   const [titulo, setTitulo] = useState("");
   const [tipo, setTipo] = useState("PDF");
   const [origem, setOrigem] = useState("");
   const editing = open && open !== "new" ? open : null;
-  const modulosDoCurso = curso ? modulosData.filter(m => m.curso === curso) : [];
+  const modulosDoCurso = curso ? catalogoModulos.filter(m => m.curso === curso) : [];
   const moduloOpts = modulosDoCurso.map(m => ({ value: m.codigo, sub: `${m.nome} · ${m.horas}h` }));
-  const filtroModuloOpts = modulosData
+  const filtroModuloOpts = catalogoModulos
     .filter(m => !filtroCurso || m.curso === filtroCurso)
     .map(m => ({ value: m.codigo, sub: `${m.nome}` }));
 
@@ -765,7 +880,7 @@ export function ConteudosView() {
 
   function escolherCurso(v: string) {
     setCurso(v);
-    const aindaServe = modulosData.some(m => m.curso === v && m.codigo === modulo);
+    const aindaServe = catalogoModulos.some(m => m.curso === v && m.codigo === modulo);
     if (!aindaServe) setModulo("");
   }
 
@@ -789,10 +904,11 @@ export function ConteudosView() {
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Conteúdos" sub="Materiais do módulo: PDF, vídeo ou ligação. Sem módulo o ficheiro não entra no DTP." action={<NewBtn label="Novo conteúdo" onClick={() => setOpen("new")} />} />
+        <PageHeader title={accent === "gold" ? "Conteúdos" : "Conteúdos · Financiada"} sub="Materiais do módulo: PDF, vídeo ou ligação. Sem módulo o ficheiro não entra no DTP." action={<NewBtn accent={accent} label="Novo conteúdo" onClick={() => setOpen("new")} />} />
         <ViewFilters
+          accent={accent}
           fields={[
-            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setFiltroModulo(""); }, options: uniqueOpts(lista.map(x => x.curso)) },
+            { label: accent === "gold" ? "Curso" : "Curso / UFCD", value: filtroCurso, onChange: v => { setFiltroCurso(v); setFiltroModulo(""); }, options: uniqueOpts(lista.map(x => x.curso)) },
             { label: "Módulo", value: filtroModulo, onChange: setFiltroModulo, options: filtroModuloOpts, placeholder: filtroCurso ? "Módulos deste curso…" : "Todos os módulos…" },
           ]}
           chips={{ options: ["Todos", "PDF", "Vídeo", "Link", "Ativo", "Inactivo"], value: filtro, onChange: setFiltro }}
@@ -811,10 +927,10 @@ export function ConteudosView() {
                     <Td className="text-sm font-medium text-slate-800 max-w-[220px]">{r.titulo}</Td>
                     <Td>{estadoBadge(r.tipo)}</Td>
                     <Td className="text-xs text-slate-600 max-w-[160px]">{r.curso}</Td>
-                    <Td className="text-xs text-slate-600 whitespace-nowrap">{labelModulo(r.modulo, r.curso)}</Td>
+                    <Td className="text-xs text-slate-600 whitespace-nowrap">{labelModulo(r.modulo, r.curso, catalogoModulos)}</Td>
                     <Td className="text-xs text-slate-500">{r.tamanho}</Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Abrir" /><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(prev => prev.filter(x => x.id !== r.id))} /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Abrir" onClick={() => setAbrir(r)} /><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(prev => prev.filter(x => x.id !== r.id))} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -826,15 +942,15 @@ export function ConteudosView() {
         open={!!open}
         onClose={() => setOpen(null)}
         title={editing ? editing.titulo : "Novo conteúdo"}
-        sub={modulo && curso ? `${labelModulo(modulo, curso)} · ${curso}` : "O material fica no módulo, e o módulo no curso"}
+        sub={modulo && curso ? `${labelModulo(modulo, curso, catalogoModulos)} · ${curso}` : "O material fica no módulo, e o módulo no curso"}
       >
         <div className="p-5 space-y-4">
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
-            <p className="text-xs font-semibold text-amber-800">Conteúdo ⊂ módulo ⊂ curso</p>
-            <p className="text-xs text-amber-700 mt-0.5">Escolha o curso, depois o módulo. O PDF, o vídeo ou o link ficam nesse bloco - é assim que o formador e o DTP os encontram.</p>
+          <div className={`rounded-xl border px-3 py-2.5 ${accentBox(accent)}`}>
+            <p className={`text-xs font-semibold ${accentTitle(accent)}`}>Conteúdo ⊂ módulo ⊂ {accent === "gold" ? "curso" : "UFCD"}</p>
+            <p className={`text-xs mt-0.5 ${accentText(accent)}`}>Escolha {accent === "gold" ? "o curso" : "a UFCD"}, depois o módulo. O PDF, o vídeo ou o link ficam nesse bloco - é assim que o formador e o DTP os encontram.</p>
           </div>
-          <Field label="Curso *">
-            <SearchSelect value={curso} onChange={escolherCurso} options={cursosGoldOpts} placeholder="Primeiro o curso…" />
+          <Field label={accent === "gold" ? "Curso *" : "Curso / UFCD *"}>
+            <SearchSelect value={curso} onChange={escolherCurso} options={cursosOpts} placeholder={accent === "gold" ? "Primeiro o curso…" : "Primeiro a UFCD…"} />
           </Field>
           <Field label="Módulo *">
             <SearchSelect
@@ -846,7 +962,7 @@ export function ConteudosView() {
             />
           </Field>
           {curso && moduloOpts.length === 0 && (
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <p className={`text-xs rounded-lg px-3 py-2 border ${accentBox(accent)} ${accentText(accent)}`}>
               Não há módulos em «{curso}». Crie primeiro o módulo na vista Módulos - o conteúdo não pode ficar órfão.
             </p>
           )}
@@ -862,12 +978,13 @@ export function ConteudosView() {
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button type="button" onClick={guardarConteudo} disabled={!titulo.trim() || !curso || !modulo}
-              className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">
+              className={`flex-1 py-2 ${accentBtn(accent)} disabled:opacity-40 text-white text-sm font-semibold rounded-lg`}>
               {editing ? "Guardar" : "Criar conteúdo"}
             </button>
           </div>
         </div>
       </SlideOver>
+      <ConteudoAbrirModal open={!!abrir} onClose={() => setAbrir(null)} item={abrir} accent={accent} />
     </>
   );
 }

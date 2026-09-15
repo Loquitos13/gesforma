@@ -215,19 +215,21 @@ const campanhasData = [
 const emailRegras = [
   { id: 1, nome: "Boas-vindas ao registo", gatilho: "Nova pré-inscrição recebida", template: "welcome", ativo: true, envios: 16537, taxaAbertura: 94.2 },
   { id: 2, nome: "Confirmação de pagamento", gatilho: "Pagamento confirmado", template: "payment", ativo: true, envios: 6379, taxaAbertura: 98.1 },
-  { id: 3, nome: "Lembrete 24h antes do curso", gatilho: "24 horas antes do início", template: "reminder_24h", ativo: true, envios: 4892, taxaAbertura: 91.7 },
+  { id: 3, nome: "Contacto após a venda", gatilho: "Contacto após a venda", template: "sale_followup", ativo: true, envios: 0, taxaAbertura: 0 },
+  { id: 4, nome: "Lembrete 24h antes do curso", gatilho: "24 horas antes do início", template: "reminder_24h", ativo: true, envios: 4892, taxaAbertura: 91.7 },
   { id: 5, nome: "Certificado de conclusão", gatilho: "Formando marcado como concluído", template: "certificate", ativo: true, envios: 3821, taxaAbertura: 99.2 },
   { id: 6, nome: "Reengajamento 30 dias", gatilho: "30 dias sem compra", template: "reengagement", ativo: false, envios: 8941, taxaAbertura: 76.3 },
 ];
 
-const emailTemplates = [
-  { id: 1, nome: "Boas-vindas", assunto: "Bem-vindo(a) à ENA, {{nome}}", editado: "2026-08-15", tipo: "welcome" },
-  { id: 2, nome: "Confirmação de Pagamento", assunto: "Pagamento confirmado – {{curso}}", editado: "2026-07-22", tipo: "payment" },
-  { id: 7, nome: "Contacto após a venda", assunto: "Obrigado, {{nome}} — próximos passos em {{curso}}", editado: "2026-09-15", tipo: "sale_followup" },
-  { id: 3, nome: "Lembrete 24h", assunto: "Amanhã começa {{curso}}", editado: "2026-08-20", tipo: "reminder_24h" },
-  { id: 5, nome: "Certificado de Conclusão", assunto: "O seu certificado está disponível", editado: "2026-08-01", tipo: "certificate" },
-  { id: 6, nome: "Reengajamento", assunto: "Ainda está a tempo de começar {{curso}}", editado: "2026-07-10", tipo: "reengagement" },
-];
+type EmailTpl = {
+  id: number;
+  nome: string;
+  assunto: string;
+  editado: string;
+  tipo: string;
+  linhas: string[];
+  cta: string;
+};
 
 const emailGatilhosOpts = [
   { value: "Nova pré-inscrição recebida", sub: "Lead acaba de se inscrever no site" },
@@ -266,7 +268,7 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
     cta: "Abrir a turma",
   },
   sale_followup: {
-    assunto: "Obrigado, {{nome}} — próximos passos em {{curso}}",
+    assunto: "Obrigado, {{nome}} - próximos passos em {{curso}}",
     linhas: [
       "O pagamento ficou registado. Daqui a pouco a secretaria confirma-lhe a turma {{turma}} e o horário.",
       "Se precisar de fatura, recibo ou de alterar o nome no certificado, responda a este email.",
@@ -304,7 +306,48 @@ function fillEmailVars(text: string, vars: Record<string, string>) {
   return text.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? "");
 }
 
+function asTplLines(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.map(String);
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return raw ? [raw] : [];
+    }
+  }
+  return [];
+}
+
 const EMAIL_TIPO_ALIAS: Record<string, string> = { payment_confirm: "payment" };
+
+const emailTemplates: EmailTpl[] = (
+  [
+    { id: 1, nome: "Boas-vindas", editado: "2026-08-15", tipo: "welcome" },
+    { id: 2, nome: "Confirmação de Pagamento", editado: "2026-07-22", tipo: "payment" },
+    { id: 3, nome: "Contacto após a venda", editado: "2026-09-15", tipo: "sale_followup" },
+    { id: 4, nome: "Lembrete 24h", editado: "2026-08-20", tipo: "reminder_24h" },
+    { id: 5, nome: "Certificado de Conclusão", editado: "2026-08-01", tipo: "certificate" },
+    { id: 6, nome: "Reengajamento", editado: "2026-07-10", tipo: "reengagement" },
+  ] as const
+).map(meta => ({
+  ...meta,
+  assunto: EMAIL_BODIES[meta.tipo].assunto,
+  linhas: [...EMAIL_BODIES[meta.tipo].linhas],
+  cta: EMAIL_BODIES[meta.tipo].cta,
+}));
+
+function resolveEmailTipo(tipo: string) {
+  return EMAIL_TIPO_ALIAS[tipo] ?? tipo;
+}
+
+function bodyFromTemplates(tipo: string, list: EmailTpl[]): { assunto: string; linhas: string[]; cta: string; nome?: string } | undefined {
+  const resolved = resolveEmailTipo(tipo);
+  const tpl = list.find(t => t.tipo === resolved);
+  if (tpl) return { assunto: tpl.assunto, linhas: tpl.linhas, cta: tpl.cta, nome: tpl.nome };
+  const fallback = EMAIL_BODIES[resolved];
+  return fallback ? { ...fallback } : undefined;
+}
 
 const GATILHO_TEMPLATE: Record<string, string> = {
   "Nova pré-inscrição recebida": "Boas-vindas",
@@ -327,15 +370,16 @@ function destFromGatilho(gatilho: string) {
 }
 
 function EmailPreviewPane({
-  tipo, curso, gatilho = "", atraso = "",
+  tipo, curso, gatilho = "", atraso = "", templates, draft,
 }: {
   tipo: string;
   curso: string;
   gatilho?: string;
   atraso?: string;
+  templates: EmailTpl[];
+  draft?: { nome?: string; assunto: string; linhas: string[]; cta: string };
 }) {
-  const resolved = EMAIL_TIPO_ALIAS[tipo] ?? tipo;
-  const body = EMAIL_BODIES[resolved];
+  const body = draft ?? bodyFromTemplates(tipo, templates);
   const dest = destFromGatilho(gatilho);
   const cursoLabel = curso || "Formação de Formadores - CCP";
   const vars = { nome: dest.nome, curso: cursoLabel, turma: "VNG-SM-07/09" };
@@ -347,12 +391,17 @@ function EmailPreviewPane({
         <span>Caixa de entrada · Gmail</span>
         <span>Pré-visualização</span>
       </div>
-      {(gatilho || atraso) && (
+      {(gatilho || atraso || body?.nome) && (
         <div className="px-3 py-2 bg-amber-50 border-b border-amber-100 text-[11px] text-amber-900">
-          <span className="font-semibold">Regra: </span>
-          {gatilho || "sem gatilho"}
-          {atraso ? ` · ${atraso}` : ""}
-          {curso ? ` · ${curso}` : ""}
+          {body?.nome && <span className="font-semibold">{body.nome}</span>}
+          {body?.nome && (gatilho || atraso || curso) ? " · " : null}
+          {gatilho || atraso || curso ? (
+            <>
+              {gatilho || "sem gatilho"}
+              {atraso ? ` · ${atraso}` : ""}
+              {curso ? ` · ${curso}` : ""}
+            </>
+          ) : null}
         </div>
       )}
       {!tipo || !body ? (
@@ -3693,10 +3742,19 @@ function EmailsView() {
     try {
       const [r, t, j] = await Promise.all([apiEmailRules(), apiEmailTemplates(), apiEmailJobs()]);
       setRegras(r.rules);
-      setTemplates(t.templates.map(x => ({
-        id: x.id, nome: x.nome, assunto: x.assunto,
-        editado: x.updated_at.slice(0, 10), tipo: x.tipo,
-      })));
+      setTemplates(t.templates.map(x => {
+        const fallback = EMAIL_BODIES[resolveEmailTipo(x.tipo)];
+        const linhas = asTplLines(x.body_lines);
+        return {
+          id: x.id,
+          nome: x.nome,
+          assunto: x.assunto,
+          editado: x.updated_at.slice(0, 10),
+          tipo: x.tipo,
+          linhas: linhas.length ? linhas : (fallback?.linhas ?? []),
+          cta: x.cta || fallback?.cta || "",
+        };
+      }));
       setJobs(j.jobs);
       setJobStats(j.stats);
       setApiOn(true);
@@ -3812,7 +3870,9 @@ function EmailsView() {
       {tab === "regras" && (
         <Card>
           <div className="divide-y divide-slate-100">
-            {regras.map(r => (
+            {regras.map(r => {
+              const tpl = templates.find(t => t.tipo === resolveEmailTipo(r.template));
+              return (
               <div key={r.id} className="px-4 py-4 flex flex-col sm:flex-row sm:items-center gap-3 hover:bg-slate-50">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -3820,6 +3880,10 @@ function EmailsView() {
                     <Badge label={r.ativo ? "Ativo" : "Inativo"} variant={r.ativo ? "green" : "gray"} />
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">⚡ {r.gatilho}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    ✉ {tpl?.nome ?? r.template}
+                    {tpl?.assunto ? <span className="text-slate-400"> · {tpl.assunto}</span> : null}
+                  </p>
                   <div className="flex gap-4 mt-1.5">
                     <span className="text-xs text-slate-400">{r.envios.toLocaleString("pt-PT")} enviados</span>
                     <span className="text-xs text-slate-400">{r.taxaAbertura}% abertura</span>
@@ -3835,7 +3899,7 @@ function EmailsView() {
                   <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagarRegra(r.id)} />
                 </div>
               </div>
-            ))}
+            );})}
           </div>
         </Card>
       )}
@@ -3848,6 +3912,7 @@ function EmailsView() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-slate-800">{t.nome}</p>
                   <p className="text-xs text-slate-500 truncate">{t.assunto}</p>
+                  <p className="text-xs text-slate-400 truncate">{t.linhas[0] ?? "Sem corpo"}</p>
                   <p className="text-xs text-slate-400">Editado {t.editado}</p>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
@@ -3937,7 +4002,7 @@ function EmailsView() {
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Preview do novo email</p>
-                <EmailPreviewPane tipo={templateTipo} curso={cursoEmail} gatilho={gatilho} atraso={atraso} />
+                <EmailPreviewPane tipo={templateTipo} curso={cursoEmail} gatilho={gatilho} atraso={atraso} templates={templates} />
               </div>
             </div>
             <div className="flex gap-2 px-5 py-4 border-t border-slate-100 flex-shrink-0">
@@ -3957,24 +4022,43 @@ function EmailsView() {
               <button type="button" onClick={() => setPreviewTipo(null)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
             </div>
             <div className="p-4">
-              <EmailPreviewPane tipo={previewTipo} curso="Formação de Formadores - CCP" gatilho={previewGatilho} />
+              <EmailPreviewPane tipo={previewTipo} curso="Formação de Formadores - CCP" gatilho={previewGatilho} templates={templates} />
             </div>
           </div>
         </div>
       )}
-      <SlideOver open={!!editTpl} onClose={() => setEditTpl(null)} title={editTpl ? `Editar ${editTpl.nome}` : ""} sub="Assunto e nome do template">
+      <SlideOver open={!!editTpl} onClose={() => setEditTpl(null)} title={editTpl ? `Editar ${editTpl.nome}` : ""} sub="O mesmo texto que o preview das regras e o email enviado." size="xl">
         {editTpl && (
-          <div className="p-5 space-y-3">
-            <Field label="Nome"><input className={iCls} value={editTpl.nome} onChange={e => setEditTpl({ ...editTpl, nome: e.target.value })} /></Field>
-            <Field label="Assunto"><input className={iCls} value={editTpl.assunto} onChange={e => setEditTpl({ ...editTpl, assunto: e.target.value })} /></Field>
-            <div className="flex gap-2 pt-2">
-              <button onClick={() => setEditTpl(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-              <button onClick={() => {
-                setTemplates(prev => prev.map(t => t.id === editTpl.id ? { ...editTpl, editado: "hoje" } : t));
-                if (apiOn) void apiPatchTemplate(editTpl.id, { nome: editTpl.nome, assunto: editTpl.assunto });
-                setEditTpl(null);
-              }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+          <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="space-y-3">
+              <Field label="Nome"><input className={iCls} value={editTpl.nome} onChange={e => setEditTpl({ ...editTpl, nome: e.target.value })} /></Field>
+              <Field label="Assunto"><input className={iCls} value={editTpl.assunto} onChange={e => setEditTpl({ ...editTpl, assunto: e.target.value })} /></Field>
+              <Field label="Corpo">
+                <textarea
+                  className={`${iCls} min-h-[160px]`}
+                  value={editTpl.linhas.join("\n")}
+                  onChange={e => setEditTpl({ ...editTpl, linhas: e.target.value.split("\n") })}
+                />
+              </Field>
+              <Field label="Botão (CTA)"><input className={iCls} value={editTpl.cta} onChange={e => setEditTpl({ ...editTpl, cta: e.target.value })} /></Field>
+              <div className="flex gap-2 pt-2">
+                <button type="button" onClick={() => setEditTpl(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+                <button type="button" onClick={() => {
+                  const linhas = editTpl.linhas.map(l => l.trim()).filter(Boolean);
+                  if (!linhas.length || !editTpl.assunto.trim() || !editTpl.nome.trim() || !editTpl.cta.trim()) return;
+                  const next = { ...editTpl, linhas, editado: "hoje" };
+                  setTemplates(prev => prev.map(t => t.id === editTpl.id ? next : t));
+                  if (apiOn) void apiPatchTemplate(editTpl.id, { nome: next.nome, assunto: next.assunto, body_lines: next.linhas, cta: next.cta });
+                  setEditTpl(null);
+                }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+              </div>
             </div>
+            <EmailPreviewPane
+              tipo={editTpl.tipo}
+              curso="Formação de Formadores - CCP"
+              templates={templates}
+              draft={{ nome: editTpl.nome, assunto: editTpl.assunto, linhas: editTpl.linhas.filter(l => l.trim()), cta: editTpl.cta }}
+            />
           </div>
         )}
       </SlideOver>

@@ -62,6 +62,8 @@ const eventSchema = z.object({
 const templatePatchSchema = z.object({
   nome: z.string().trim().min(2).max(120).optional(),
   assunto: z.string().trim().min(2).max(200).optional(),
+  body_lines: z.array(z.string().trim().min(1).max(500)).min(1).max(12).optional(),
+  cta: z.string().trim().min(1).max(80).optional(),
 });
 
 function clientOk(req: FastifyRequest) {
@@ -215,12 +217,23 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
       `UPDATE email_templates SET
          nome = COALESCE($2, nome),
          assunto = COALESCE($3, assunto),
+         body_lines = COALESCE($4::jsonb, body_lines),
+         cta = COALESCE($5, cta),
          updated_at = now()
        WHERE id = $1`,
-      [id, patch.nome ?? null, patch.assunto ?? null],
+      [
+        id,
+        patch.nome ?? null,
+        patch.assunto ?? null,
+        patch.body_lines ? JSON.stringify(patch.body_lines) : null,
+        patch.cta ?? null,
+      ],
     );
     await audit(db, req.actor!.id, "email.template_update", "email_template", String(id), req.ip);
-    const row = await db.query("SELECT id, tipo, nome, assunto, updated_at FROM email_templates WHERE id = $1", [id]);
+    const row = await db.query(
+      "SELECT id, tipo, nome, assunto, body_lines, cta, updated_at FROM email_templates WHERE id = $1",
+      [id],
+    );
     return { template: row.rows[0] };
   });
 

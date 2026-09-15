@@ -27,6 +27,8 @@ export type EmailTemplate = {
   tipo: string;
   nome: string;
   assunto: string;
+  body_lines?: string[] | string;
+  cta?: string;
   updated_at: string;
 };
 
@@ -71,7 +73,7 @@ export const apiDeleteRule = (id: number) =>
   api<{ ok: boolean }>(`/v1/email/rules/${id}`, { method: "DELETE" });
 
 export const apiEmailTemplates = () => api<{ templates: EmailTemplate[] }>("/v1/email/templates");
-export const apiPatchTemplate = (id: number, body: { nome?: string; assunto?: string }) =>
+export const apiPatchTemplate = (id: number, body: { nome?: string; assunto?: string; body_lines?: string[]; cta?: string }) =>
   api<{ template: EmailTemplate }>(`/v1/email/templates/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 
 export const apiEmailJobs = () => api<{ stats: EmailJobStats; jobs: EmailJob[] }>("/v1/email/jobs");

@@ -94,3 +94,13 @@ Na VPS, depois de preencher `.env` com segredos gerados (`openssl rand -base64 4
 ```bash
 docker compose up -d db api
 ```
+
+### Vercel
+
+A API vai no **mesmo projecto** que a app (`/api`), para o cookie de sessão ser do mesmo domínio. A Vercel é serverless: não há `setInterval`. A fila de email corre no fim de cada evento, ao abrir o histórico, e num cron diário (`/api/v1/cron/email`).
+
+1. Claim ou ligue o Git à Vercel.
+2. Variáveis: `DATABASE_URL` (Neon ou Vercel Postgres), `SESSION_SECRET`, `ADMIN_PASSWORD`, `APP_ORIGIN=https://o-seu-dominio.vercel.app`, `MAIL_MODE`, `SMTP_URL`.
+3. Sem `DATABASE_URL` a função usa PGlite em `/tmp` — some entre invocações. Para produção, Neon é o par habitual da Vercel.
+
+`vercel.json` já encaminha `/api/*` para a função.

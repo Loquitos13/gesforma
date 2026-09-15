@@ -17,12 +17,13 @@ export interface Db {
 
 export async function createDb(): Promise<Db> {
   if (config.databaseUrl) {
+    const neon = /neon\.tech|sslmode=require/.test(config.databaseUrl);
     const sql = postgres(config.databaseUrl, {
-      max: 12,
+      max: process.env.VERCEL ? 1 : 12,
       idle_timeout: 20,
       connect_timeout: 15,
-      prepare: true,
-      ssl: process.env.DATABASE_SSL === "require" ? "require" : false,
+      prepare: !process.env.VERCEL,
+      ssl: process.env.DATABASE_SSL === "require" || neon ? "require" : false,
       connection: { application_name: "gesforma-api" },
     });
     return {

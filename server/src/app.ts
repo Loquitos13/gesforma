@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { ingestEvent, processDueJobs } from "./automations.js";
-import { config, newToken } from "./config.js";
+import { allowedOrigins, config, newToken, onVercel } from "./config.js";
 import type { Db } from "./db/pool.js";
 import {
   delayLabelFromSeconds,
@@ -66,7 +66,7 @@ const templatePatchSchema = z.object({
 
 function clientOk(req: FastifyRequest) {
   const origin = req.headers.origin;
-  if (origin) return origin === config.appOrigin;
+  if (origin) return allowedOrigins().has(origin);
   return req.headers["x-gesforma-client"] === "web";
 }
 
@@ -77,7 +77,7 @@ async function audit(db: Db, actorId: string | undefined, action: string, entity
   );
 }
 
-export async function buildApp(db: Db) {
+export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   const app = Fastify({
     logger: true,
     trustProxy: config.trustProxy,
@@ -93,7 +93,10 @@ export async function buildApp(db: Db) {
     referrerPolicy: { policy: "no-referrer" },
   });
   await app.register(cors, {
-    origin: config.appOrigin,
+    origin: (origin, cb) => {
+      if (!origin || allowedOrigins().has(origin)) cb(null, true);
+      else cb(new Error("origem recusada"), false);
+    },
     credentials: true,
     methods: ["GET", "POST", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "X-Gesforma-Client"],
@@ -141,7 +144,7 @@ export async function buildApp(db: Db) {
       path: "/",
       httpOnly: true,
       sameSite: "strict",
-      secure: config.isProd,
+      secure: config.isProd || onVercel,
       maxAge: days * 86400,
     });
   }
@@ -313,8 +316,16 @@ export async function buildApp(db: Db) {
     return { ok: true };
   });
 
+  app.get("/v1/cron/email", async (req, reply) => {
+    const cron = req.headers["x-vercel-cron"] === "1";
+    const bearer = config.cronSecret && req.headers.authorization === `Bearer ${config.cronSecret}`;
+    if (!cron && !bearer) return reply.code(401).send({ error: "cron recusado" });
+    return processDueJobs(db);
+  });
+
   app.get("/v1/email/jobs", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    await processDueJobs(db).catch(() => undefined);
     const stats = await db.query<{ sent: number; queued: number; failed: number }>(
       `SELECT
          count(*) FILTER (WHERE status = 'sent')::int AS sent,
@@ -340,6 +351,7 @@ export async function buildApp(db: Db) {
     if (!isEmail(parsed.data.payload.email)) return reply.code(400).send({ error: "email inválido" });
     try {
       const result = await ingestEvent(db, parsed.data.type, parsed.data.payload, parsed.data.idempotencyKey);
+      await processDueJobs(db).catch(() => undefined);
       await audit(db, req.actor!.id, "automation.event", parsed.data.type, result.eventId ?? undefined, req.ip, {
         queued: result.queued,
         duplicate: result.duplicate,
@@ -350,14 +362,16 @@ export async function buildApp(db: Db) {
     }
   });
 
-  const tick = async () => {
-    try { await processDueJobs(db); }
-    catch (err) { app.log.error(err); }
-  };
-  const timer = setInterval(tick, 2500);
-  timer.unref();
-  app.addHook("onClose", async () => clearInterval(timer));
-  setTimeout(tick, 400).unref();
+  if (opts.worker !== false && !onVercel) {
+    const tick = async () => {
+      try { await processDueJobs(db); }
+      catch (err) { app.log.error(err); }
+    };
+    const timer = setInterval(tick, 2500);
+    timer.unref();
+    app.addHook("onClose", async () => clearInterval(timer));
+    setTimeout(tick, 400).unref();
+  }
 
   return app;
 }

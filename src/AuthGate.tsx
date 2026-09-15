@@ -14,22 +14,91 @@ export function useAuth() {
   return ctx;
 }
 
+function EnaMark({ size = 72 }: { size?: number }) {
+  return (
+    <div
+      className="rounded-full bg-amber-500 text-white font-extrabold tracking-[0.18em] flex items-center justify-center shadow-[0_8px_24px_rgba(245,158,11,0.35)]"
+      style={{ width: size, height: size, fontSize: size * 0.22 }}
+      aria-hidden
+    >
+      ENA
+    </div>
+  );
+}
+
+function SessionSplash({ pct }: { pct: number }) {
+  const shown = Math.min(100, Math.max(0, Math.round(pct)));
+  const r = 42;
+  const c = 2 * Math.PI * r;
+  const offset = c * (1 - shown / 100);
+  return (
+    <div className="min-h-full flex flex-col items-center justify-center bg-slate-100 px-6">
+      <div className="relative" style={{ width: 120, height: 120 }}>
+        <svg className="absolute inset-0 -rotate-90" viewBox="0 0 120 120" aria-hidden>
+          <circle cx="60" cy="60" r={r} fill="none" stroke="#e2e8f0" strokeWidth="6" />
+          <circle
+            cx="60"
+            cy="60"
+            r={r}
+            fill="none"
+            stroke="#f59e0b"
+            strokeWidth="6"
+            strokeLinecap="round"
+            strokeDasharray={c}
+            strokeDashoffset={offset}
+            className="transition-[stroke-dashoffset] duration-150 ease-out"
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <EnaMark size={72} />
+        </div>
+      </div>
+      <p className="mt-5 text-sm font-semibold text-slate-700 tabular-nums" aria-live="polite">
+        A verificar sessão · {shown}%
+      </p>
+      <p className="mt-1 text-xs text-slate-400">ENA · Escola de Negócios e Administração</p>
+    </div>
+  );
+}
+
 export function AuthGate({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [ready, setReady] = useState(false);
+  const [pct, setPct] = useState(8);
   const [email, setEmail] = useState("tania@ena.pt");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [offline, setOffline] = useState(false);
 
   useEffect(() => {
+    let alive = true;
+    const tick = window.setInterval(() => {
+      setPct(p => {
+        if (p >= 90) return p;
+        return p + (p < 40 ? 6 : p < 70 ? 3 : 1);
+      });
+    }, 90);
     apiMe()
-      .then(r => setUser(r.user))
-      .catch(err => {
-        setOffline(err instanceof TypeError);
+      .then(r => {
+        if (alive) setUser(r.user);
       })
-      .finally(() => setReady(true));
+      .catch(err => {
+        if (alive) setOffline(err instanceof TypeError);
+      })
+      .finally(() => {
+        window.clearInterval(tick);
+        if (!alive) return;
+        setPct(100);
+        window.setTimeout(() => {
+          if (alive) setReady(true);
+        }, 320);
+      });
+    return () => {
+      alive = false;
+      window.clearInterval(tick);
+    };
   }, []);
 
   async function login(e: React.FormEvent) {
@@ -52,14 +121,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
     await apiLogout().catch(() => undefined);
     setUser(null);
     setPassword("");
+    setShowPassword(false);
   }
 
   if (!ready) {
-    return (
-      <div className="min-h-full flex items-center justify-center bg-slate-100">
-        <p className="text-sm text-slate-500">A verificar a sessão…</p>
-      </div>
-    );
+    return <SessionSplash pct={pct} />;
   }
 
   if (!user) {
@@ -83,7 +149,35 @@ export function AuthGate({ children }: { children: ReactNode }) {
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Palavra-passe</span>
-            <input className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
+            <div className="relative">
+              <input
+                className="w-full px-3 py-2 pr-11 text-sm border border-slate-200 rounded-lg"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                aria-label={showPassword ? "Ocultar palavra-passe" : "Mostrar palavra-passe"}
+                aria-pressed={showPassword}
+                title={showPassword ? "Ocultar palavra-passe" : "Mostrar palavra-passe"}
+              >
+                {showPassword ? (
+                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-5 0-9.27-3.11-11-8 1.02-2.89 2.87-5.17 5.17-6.61M9.9 4.24A10.94 10.94 0 0 1 12 4c5 0 9.27 3.11 11 8a11.6 11.6 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </label>
           <button type="submit" disabled={busy} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">
             {busy ? "A entrar…" : "Entrar"}

@@ -74,6 +74,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true;
+    const started = Date.now();
     const tick = window.setInterval(() => {
       setPct(p => {
         if (p >= 90) return p;
@@ -90,10 +91,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
       .finally(() => {
         window.clearInterval(tick);
         if (!alive) return;
-        setPct(100);
+        const remain = Math.max(0, 1100 - (Date.now() - started));
         window.setTimeout(() => {
-          if (alive) setReady(true);
-        }, 320);
+          if (!alive) return;
+          setPct(100);
+          window.setTimeout(() => {
+            if (alive) setReady(true);
+          }, 280);
+        }, remain);
       });
     return () => {
       alive = false;

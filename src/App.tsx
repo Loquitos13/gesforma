@@ -11,6 +11,11 @@ import {
   type TransacaoPreview, type CertificadoPreview, type ExportTurmaInfo, type NotifRow,
 } from "./ActionSurfaces";
 import {
+  ConfirmDangerModal, EmptyHint, MobileCard, NextActions, PageTrail, RegimeBadge, RowActions, NotifKind, sortNotifs,
+  cockpitTabLabel, regimeOfView,
+  type NextAction,
+} from "./SecretaryUX";
+import {
   FileUploadModal, PresencasSessaoModal, FormadorProfileSlideOver, PlanoSessaoModal, SumarioSessaoModal,
   InqueritosView, defaultPlanos, emptyPlano, defaultSumarios, defaultSumariosFin, emptySumario, sumarioPreenchido,
   seedListaFromDetalhe, seedPipItems, seedSimItems,
@@ -468,7 +473,7 @@ function NewBtn({ label, onClick, accent = "gold" }: { label: string; onClick?: 
   return <button onClick={onClick} className={`inline-flex items-center gap-1.5 px-4 py-2 ${cls} text-white text-sm font-semibold rounded-lg transition-colors shadow-sm whitespace-nowrap`}>{I.plus}{text}</button>;
 }
 function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <th className={`text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap bg-slate-50 border-b border-slate-200 ${className}`}>{children}</th>;
+  return <th className={`text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap bg-slate-50 border-b border-slate-200 sticky top-0 z-10 ${className}`}>{children}</th>;
 }
 function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <td className={`px-3 py-2.5 ${className}`}>{children}</td>;
@@ -1314,12 +1319,6 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   return (
     <>
       <div className="space-y-5">
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <button onClick={onBack} className="hover:text-amber-600 transition-colors">Turmas Gold</button>
-          <span>›</span><span className="font-semibold text-slate-700">{turma.nome}</span>
-        </div>
-
         {/* Hero card */}
         <div className="bg-gradient-to-br from-[#0F172A] to-[#1E293B] rounded-2xl p-5 text-white">
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
@@ -1361,6 +1360,18 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             </div>
           </div>
         </div>
+
+        {(() => {
+          const porPagar = membros.filter(f => !f.pago).length;
+          const dtp = dtpPctGold(turma.id);
+          const semSumario = sessoesTurma.filter(s => !sumarioPreenchido(sumarios[s.n])).length;
+          const next: NextAction[] = [];
+          if (dtp < 70) next.push({ tone: "error", title: `DTP a ${dtp}%`, detail: "O dossiê bloqueia o fecho da turma.", onClick: () => setTab("dtp") });
+          if (porPagar) next.push({ tone: "warn", title: `${porPagar} por pagar`, detail: "Gerar MB ou confirmar na ficha do formando.", onClick: () => setTab("overview") });
+          if (semSumario) next.push({ tone: "warn", title: `${semSumario} sessões sem sumário`, detail: "O formador ainda não fechou a sessão.", onClick: () => setTab("sessoes") });
+          if (vagasLivres === 0) next.push({ tone: "info", title: "Turma lotada", detail: "Novas pré-inscrições não entram aqui.", onClick: () => setTab("overview") });
+          return <NextActions accent="gold" actions={next.slice(0, 3)} />;
+        })()}
 
         <TurmaTabBar tab={tab} onChange={setTab} accent="gold" dtpPct={dtpPctGold(turma.id)} />
 
@@ -1443,13 +1454,30 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
               ? <NewBtn label="Adicionar" onClick={() => setAddFormando(true)} />
               : <button disabled title="Turma inativa - não aceita novas inscrições" className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-200 text-slate-400 text-sm font-semibold rounded-lg cursor-not-allowed">Adicionar</button>}
           </div>
-          <div className="overflow-x-auto">
+          {membros.length === 0 && (
+            <EmptyHint text="Ainda sem formandos nesta turma." action={activa ? "Adicionar o primeiro formando" : undefined} onAction={activa ? () => setAddFormando(true) : undefined} />
+          )}
+          <div className="md:hidden p-3 space-y-2">
+            {membros.map(f => (
+              <MobileCard
+                key={f.id}
+                title={`${f.nome} ${f.apelido}`}
+                sub={f.email}
+                badge={f.pago ? <span className="text-[11px] font-bold text-emerald-700">Pago</span> : <span className="text-[11px] font-bold text-amber-700">Por pagar</span>}
+                meta={[f.telf, f.inscrito.slice(0, 10)]}
+                onOpen={() => setFichaOpen(f)}
+                actions={[
+                  { label: "Ficha", icon: I.eye, onClick: () => setFichaOpen(f) },
+                  { label: "Transferir", icon: I.transfer, tone: "purple", onClick: () => setTransferirFormando(f) },
+                  { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagarFormando(f) },
+                ]}
+              />
+            ))}
+          </div>
+          <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
             <table className="w-full text-sm">
               <thead><tr><Th>Nome</Th><Th>Contacto</Th><Th>Inscrito a</Th><Th className="text-center">Pago</Th><Th>Método</Th><Th>Ações</Th></tr></thead>
               <tbody className="divide-y divide-slate-100">
-                {membros.length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-xs text-slate-400">Ainda sem formandos nesta turma.</td></tr>
-                )}
                 {membros.map(f => (
                   <tr key={f.id} className="hover:bg-slate-50 transition-colors">
                     <Td>
@@ -1467,11 +1495,11 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                     </Td>
                     <Td className="text-xs text-slate-600">{f.metodo}</Td>
                     <Td>
-                      <div className="flex flex-wrap gap-1">
-                        <ActBtn icon={I.eye} label="Ver" onClick={() => setFichaOpen(f)} />
-                        <ActBtn icon={I.transfer} label="Transferir de turma" color="purple" onClick={() => setTransferirFormando(f)} />
-                        <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagarFormando(f)} />
-                      </div>
+                      <RowActions actions={[
+                        { label: "Ficha", icon: I.eye, onClick: () => setFichaOpen(f) },
+                        { label: "Transferir", icon: I.transfer, tone: "purple", onClick: () => setTransferirFormando(f) },
+                        { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagarFormando(f) },
+                      ]} />
                     </Td>
                   </tr>
                 ))}
@@ -1784,10 +1812,6 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-2 text-xs text-slate-500">
-        <button onClick={onBack} className="hover:text-blue-600 transition-colors">Turmas Financiadas</button>
-        <span>›</span><span className="font-semibold text-slate-700">{turma.nome}</span>
-      </div>
       <div className="bg-gradient-to-br from-[#0F172A] to-[#1E3A5F] rounded-2xl p-5 text-white">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
@@ -1822,6 +1846,16 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           </div>
         </div>
       </div>
+      {(() => {
+        const docsFalta = listaFormandos.filter(f => !["cc", "ch", "cu", "ci", "ce"].every(k => f[k as DocKey].ok)).length;
+        const dtp = dtpPctFin(turma.id);
+        const semPlano = sessoesTurma.filter(s => !planos[s.n]).length;
+        const next: NextAction[] = [];
+        if (dtp < 70) next.push({ tone: "error", title: `DTP a ${dtp}%`, detail: "Sem dossiê a turma financiada não arranca.", onClick: () => setTab("dtp") });
+        if (docsFalta) next.push({ tone: "error", title: `${docsFalta} com documentos em falta`, detail: "CC, habilitações, CV, IBAN ou emprego.", onClick: () => setTab("overview") });
+        if (semPlano) next.push({ tone: "warn", title: `${semPlano} sessões sem plano`, detail: "O formador ainda não carregou o plano de sessão.", onClick: () => setTab("sessoes") });
+        return <NextActions accent="fin" actions={next.slice(0, 3)} />;
+      })()}
       <TurmaTabBar tab={tab} onChange={setTab} accent="fin" dtpPct={dtpPctFin(turma.id)} />
       {!activa && <TurmaInactivaBanner nome={turma.nome} onActivate={() => toggleFin(turma.id, true)} />}
       {tab === "cronograma" && (
@@ -1895,13 +1929,34 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
                 ? <NewBtn accent="fin" label="Adicionar" onClick={() => { setNovoNome(""); setNovoEmail(""); setNovoTelf(""); setAddFormando(true); }} />
                 : <button disabled title="Turma inativa - não aceita novas inscrições" className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-200 text-slate-400 text-sm font-semibold rounded-lg cursor-not-allowed">Adicionar</button>}
             </div>
-            <div className="overflow-x-auto">
+            {listaFormandos.length === 0 && (
+              <EmptyHint accent="fin" text="Ainda sem formandos nesta turma." action={activa ? "Adicionar o primeiro formando" : undefined} onAction={activa ? () => setAddFormando(true) : undefined} />
+            )}
+            <div className="md:hidden p-3 space-y-2">
+              {listaFormandos.map(f => {
+                const keys: DocKey[] = ["cc", "ch", "cu", "ci", "ce"];
+                const okCount = keys.filter(k => f[k].ok).length;
+                return (
+                  <MobileCard
+                    key={f.id}
+                    title={`${f.nome} ${f.apelido}`}
+                    sub={f.email}
+                    badge={<span className={`text-[11px] font-bold ${okCount === 5 ? "text-emerald-700" : "text-red-600"}`}>{okCount}/5 docs</span>}
+                    meta={[f.telf, f.turma]}
+                    onOpen={() => setDocsOpen(f)}
+                    actions={[
+                      { label: "Ficha", icon: I.eye, onClick: () => setDocsOpen(f) },
+                      { label: "Transferir", icon: I.transfer, tone: "purple", onClick: () => setTransferirFormando(f) },
+                      { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagarFormando(f) },
+                    ]}
+                  />
+                );
+              })}
+            </div>
+            <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
               <table className="w-full text-sm">
                 <thead><tr><Th>Nome</Th><Th>Contacto</Th><Th>Turma</Th><Th>Estado</Th><Th>Documentos</Th><Th>Ações</Th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
-                  {listaFormandos.length === 0 && (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-xs text-slate-400">Ainda sem formandos nesta turma.</td></tr>
-                  )}
                   {listaFormandos.map(f => {
                     const keys: DocKey[] = ["cc", "ch", "cu", "ci", "ce"];
                     const okCount = keys.filter(k => f[k].ok).length;
@@ -1924,11 +1979,11 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
                         </button>
                       </Td>
                       <Td>
-                        <div className="flex flex-wrap gap-1">
-                          <ActBtn icon={I.eye} label="Ver" onClick={() => setDocsOpen(f)} />
-                          <ActBtn icon={I.transfer} label="Transferir de turma" color="purple" onClick={() => setTransferirFormando(f)} />
-                          <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagarFormando(f)} />
-                        </div>
+                        <RowActions actions={[
+                          { label: "Ficha", icon: I.eye, onClick: () => setDocsOpen(f) },
+                          { label: "Transferir", icon: I.transfer, tone: "purple", onClick: () => setTransferirFormando(f) },
+                          { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagarFormando(f) },
+                        ]} />
                       </Td>
                     </tr>
                     );
@@ -2497,6 +2552,7 @@ function PreInscricoesGoldView() {
   const [fichaOpen, setFichaOpen] = useState(false);
   const [novo, setNovo] = useState(false);
   const [editLead, setEditLead] = useState<Preinscricao | null>(null);
+  const [apagar, setApagar] = useState<Preinscricao | null>(null);
   const { gold, patchGold } = useTurmas();
   const { preinscricoes, addPreinscricao, patchPreinscricao, removePreinscricao, addFormandoTurma, formandosTurmas, cursosGold } = useLists();
   const [nome, setNome] = useState("");
@@ -2562,7 +2618,31 @@ function PreInscricoesGoldView() {
         ) : (
           <Card>
             <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
-            <div className="overflow-x-auto">
+            {rows.length === 0 && (
+              <EmptyHint
+                text={preinscricoes.length === 0 ? "Ainda sem pré-inscrições. Registe o pedido do site ou do telefone." : "Nenhuma pré-inscrição neste filtro."}
+                action={preinscricoes.length === 0 ? "Nova pré-inscrição" : "Limpar filtros"}
+                onAction={preinscricoes.length === 0 ? () => { setEditLead(null); resetLeadForm(); setNovo(true); } : () => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setS(""); setP(1); }}
+              />
+            )}
+            <div className="md:hidden p-3 space-y-2">
+              {rows.map(r => (
+                <MobileCard
+                  key={r.id}
+                  title={`${r.nome} ${r.apelido}`}
+                  sub={r.curso}
+                  badge={estadoBadge(r.estado)}
+                  meta={[r.local, `€ ${r.preco}`, r.inscrito]}
+                  onOpen={() => openFicha(r)}
+                  actions={[
+                    { label: "Ficha", icon: I.eye, onClick: () => openFicha(r) },
+                    { label: "Editar", icon: I.edit, onClick: () => { setEditLead(r); resetLeadForm(r); setNovo(true); } },
+                    { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
+                  ]}
+                />
+              ))}
+            </div>
+            <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
               <table className="w-full text-sm">
                 <thead><tr><Th>Id</Th><Th>Inscrito a</Th><Th>Nome</Th><Th>Curso</Th><Th>Local</Th><Th>Valor</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
@@ -2581,11 +2661,11 @@ function PreInscricoesGoldView() {
                       <Td className="text-xs font-bold text-amber-600">€ {r.preco}</Td>
                       <Td>{estadoBadge(r.estado)}</Td>
                       <Td>
-                        <div className="flex gap-1">
-                          <ActBtn icon={I.eye} label="Ficha comercial" onClick={() => openFicha(r)} />
-                          <ActBtn icon={I.edit} label="Editar" onClick={() => { setEditLead(r); resetLeadForm(r); setNovo(true); }} />
-                          <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => removePreinscricao(r.id)} />
-                        </div>
+                        <RowActions actions={[
+                          { label: "Ficha", icon: I.eye, onClick: () => openFicha(r) },
+                          { label: "Editar", icon: I.edit, onClick: () => { setEditLead(r); resetLeadForm(r); setNovo(true); } },
+                          { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
+                        ]} />
                       </Td>
                     </tr>
                   ))}
@@ -2610,6 +2690,14 @@ function PreInscricoesGoldView() {
         patchPreinscricao(fichaItem.id, { estado: "Formando" });
         setFichaItem({ ...fichaItem, estado: "Formando" });
       }} />
+      <ConfirmDangerModal
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        title="Eliminar pré-inscrição"
+        body={apagar ? `Remover ${apagar.nome} ${apagar.apelido} da fila comercial?` : ""}
+        risk="O pedido sai da lista de contacto. Esta acção não se desfaz neste protótipo."
+        onConfirm={() => { if (apagar) removePreinscricao(apagar.id); }}
+      />
       <SlideOver open={novo} onClose={() => { setNovo(false); setEditLead(null); }} title={editLead ? `Editar ${editLead.nome}` : "Nova pré-inscrição"} sub="Lead comercial Gold">
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -2665,6 +2753,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtroLocal, setFiltroLocal] = useState("");
   const [open, setOpen] = useState<TurmaGold | "new" | null>(null);
+  const [apagar, setApagar] = useState<TurmaGold | null>(null);
   const [nome, setNome] = useState("");
   const [curso, setCurso] = useState("Formação de Formadores - CCP");
   const [local, setLocal] = useState("");
@@ -2720,7 +2809,34 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
       />
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
-        <div className="overflow-x-auto">
+        {rows.length === 0 && (
+          <EmptyHint
+            text={gold.length === 0 ? "Ainda sem turmas Gold. A turma é o objecto de gestão." : "Nenhuma turma neste filtro."}
+            action={gold.length === 0 ? "Nova turma" : "Limpar filtros"}
+            onAction={gold.length === 0 ? () => setOpen("new") : () => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setS(""); setP(1); }}
+          />
+        )}
+        <div className="md:hidden p-3 space-y-2">
+          {rows.map(t => {
+            const livre = t.vagas - t.totalAlunos;
+            return (
+              <MobileCard
+                key={t.id}
+                title={t.nome}
+                sub={t.curso}
+                badge={livre === 0 ? <Badge label="Lotada" variant="red" /> : livre <= 3 ? <Badge label="Quase cheia" variant="amber" /> : estadoBadge(t.estado)}
+                meta={[t.local, `${t.totalAlunos}/${t.vagas} vagas`, t.dataInicio]}
+                onOpen={() => onCockpit(t.id)}
+                actions={[
+                  { label: "Cockpit", icon: I.eye, tone: "teal", onClick: () => onCockpit(t.id) },
+                  { label: "Editar", icon: I.edit, onClick: () => setOpen(t) },
+                  { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(t) },
+                ]}
+              />
+            );
+          })}
+        </div>
+        <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
           <table className="w-full text-sm">
             <thead><tr><Th>Id</Th><Th>Data Início</Th><Th>Nome</Th><Th>Local</Th><Th>Horário</Th><Th>Vagas</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
             <tbody className="divide-y divide-slate-100">
@@ -2747,11 +2863,11 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
                       <TurmaActivaToggle compact activa={isTurmaActiva(t)} onChange={v => toggleGold(t.id, v)} />
                     </Td>
                     <Td>
-                      <div className="flex gap-1">
-                        <ActBtn icon={I.eye} label="Cockpit" onClick={() => onCockpit(t.id)} color="teal" />
-                        <ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(t)} />
-                        <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => removeGold(t.id)} />
-                      </div>
+                      <RowActions actions={[
+                        { label: "Cockpit", icon: I.eye, tone: "teal", onClick: () => onCockpit(t.id) },
+                        { label: "Editar", icon: I.edit, onClick: () => setOpen(t) },
+                        { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(t) },
+                      ]} />
                     </Td>
                   </tr>
                 );
@@ -2761,6 +2877,14 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
+      <ConfirmDangerModal
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        title="Eliminar turma Gold"
+        body={apagar ? `Apagar a turma ${apagar.nome}?` : ""}
+        risk="Formandos, cronograma e dossiê desta turma deixam de aparecer neste protótipo."
+        onConfirm={() => { if (apagar) removeGold(apagar.id); }}
+      />
       <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `Editar ${editing.nome}` : "Nova turma Gold"} sub="Código interno da turma - o objeto de gestão é a turma, não a ação." size="xl">
         <div className="p-5 space-y-3">
           <TurmaActivaToggle activa={activa} onChange={setActiva} />
@@ -2804,6 +2928,7 @@ function FormandosTurmasView() {
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtroLocal, setFiltroLocal] = useState("");
   const [fichaOpen, setFichaOpen] = useState<FormandoRecord | null>(null);
+  const [apagar, setApagar] = useState<FormandoRecord | null>(null);
   const [edit, setEdit] = useState<FormandoRecord | "new" | null>(null);
   const [turma, setTurma] = useState("");
   const [cursoEdit, setCursoEdit] = useState("");
@@ -2837,7 +2962,25 @@ function FormandosTurmasView() {
         />
         <Card>
           <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
-          <div className="overflow-x-auto">
+          {rows.length === 0 && <EmptyHint text="Nenhum formando neste filtro." action="Limpar filtros" onAction={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setS(""); setP(1); }} />}
+          <div className="md:hidden p-3 space-y-2">
+            {rows.map(r => (
+              <MobileCard
+                key={r.id}
+                title={`${r.nome} ${r.apelido}`}
+                sub={r.email}
+                badge={r.pago ? <span className="text-[11px] font-bold text-emerald-700">Pago</span> : <span className="text-[11px] font-bold text-amber-700">Por pagar</span>}
+                meta={[r.turma, r.local]}
+                onOpen={() => setFichaOpen(r)}
+                actions={[
+                  { label: "Ficha", icon: I.eye, onClick: () => setFichaOpen(r) },
+                  { label: "Editar", icon: I.edit, onClick: () => setEdit(r) },
+                  { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
+                ]}
+              />
+            ))}
+          </div>
+          <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
             <table className="w-full text-sm">
               <thead><tr><Th>Id</Th><Th>Nome</Th><Th>Turma</Th><Th>Curso</Th><Th>Local</Th><Th className="text-center">Pago</Th><Th>Ações</Th></tr></thead>
               <tbody className="divide-y divide-slate-100">
@@ -2859,15 +3002,11 @@ function FormandosTurmasView() {
                       </span>
                     </Td>
                     <Td>
-                      <div className="flex gap-1">
-                        <ActBtn icon={I.eye} label="Ficha" onClick={() => setFichaOpen(r)} />
-                        <ActBtn icon={I.edit} label="Editar" onClick={() => setEdit(r)} />
-                        <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => {
-                          const t = gold.find(x => x.id === r.turmaId);
-                          removeFormandoTurma(r.id);
-                          if (t) patchGold(t.id, { totalAlunos: Math.max(0, t.totalAlunos - 1) });
-                        }} />
-                      </div>
+                      <RowActions actions={[
+                        { label: "Ficha", icon: I.eye, onClick: () => setFichaOpen(r) },
+                        { label: "Editar", icon: I.edit, onClick: () => setEdit(r) },
+                        { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
+                      ]} />
                     </Td>
                   </tr>
                 ))}
@@ -2923,6 +3062,19 @@ function FormandosTurmasView() {
           </div>
         </div>
       </SlideOver>
+      <ConfirmDangerModal
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        title="Eliminar formando"
+        body={apagar ? `Remover ${apagar.nome} ${apagar.apelido} da turma ${apagar.turma}?` : ""}
+        risk="Sai da lista da turma. Deixa de contar para vagas, presenças e certificados."
+        onConfirm={() => {
+          if (!apagar) return;
+          const t = gold.find(x => x.id === apagar.turmaId);
+          removeFormandoTurma(apagar.id);
+          if (t) patchGold(t.id, { totalAlunos: Math.max(0, t.totalAlunos - 1) });
+        }}
+      />
     </>
   );
 }
@@ -2931,11 +3083,12 @@ function FormandosTurmasView() {
 
 function FinFormandosView() {
   const { fin, patchFin } = useTurmas();
-  const { formandosFin, addFormandoFin } = useLists();
+  const { formandosFin, addFormandoFin, removeFormandoFin } = useLists();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
   const [docsOpen, setDocsOpen] = useState<FinFormando | null>(null);
+  const [apagar, setApagar] = useState<FinFormando | null>(null);
   const [novo, setNovo] = useState(false);
   const [nomeNovo, setNomeNovo] = useState("");
   const [emailNovo, setEmailNovo] = useState("");
@@ -2960,12 +3113,40 @@ function FinFormandosView() {
         />
         <Card>
           <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
-          <div className="overflow-x-auto">
+          {rows.length === 0 && (
+            <EmptyHint
+              accent="fin"
+              text={formandosFin.length === 0 ? "Ainda sem formandos financiados." : "Nenhum formando neste filtro."}
+              action={formandosFin.length === 0 ? "Novo formando" : "Limpar filtros"}
+              onAction={formandosFin.length === 0 ? () => { setNomeNovo(""); setEmailNovo(""); setTelfNovo(""); setCursoNovo(""); setTurmaNovo(""); setNovo(true); } : () => { setFiltroCurso(""); setFiltro("Todos"); setS(""); setP(1); }}
+            />
+          )}
+          <div className="md:hidden p-3 space-y-2">
+            {rows.map(r => {
+              const keys: DocKey[] = ["cc", "ch", "cu", "ci", "ce"];
+              const okCount = keys.filter(k => r[k].ok).length;
+              return (
+                <MobileCard
+                  key={r.id}
+                  title={`${r.nome} ${r.apelido}`}
+                  sub={r.curso}
+                  badge={estadoBadge(r.estado)}
+                  meta={[r.turma, `${okCount}/5 docs`]}
+                  onOpen={() => setDocsOpen(r)}
+                  actions={[
+                    { label: "Documentos", icon: I.doc, tone: "teal", onClick: () => setDocsOpen(r) },
+                    { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
+                  ]}
+                />
+              );
+            })}
+          </div>
+          <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
             <table className="w-full text-sm">
               <thead>
                 <tr>
                   <Th>Nome</Th><Th>Turma</Th><Th>Curso</Th><Th>Estado</Th>
-                  <Th>Documentos</Th>
+                  <Th>Documentos</Th><Th>Ações</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -2987,6 +3168,12 @@ function FinFormandosView() {
                           {complete ? "✓ Completos" : `${okCount}/5 · ${5 - okCount} em falta`}
                         </button>
                       </Td>
+                      <Td>
+                        <RowActions actions={[
+                          { label: "Documentos", icon: I.doc, tone: "teal", onClick: () => setDocsOpen(r) },
+                          { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
+                        ]} />
+                      </Td>
                     </tr>
                   );
                 })}
@@ -2996,6 +3183,19 @@ function FinFormandosView() {
           <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
         </Card>
       </div>
+      <ConfirmDangerModal
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        title="Eliminar formando financiado"
+        body={apagar ? `Remover ${apagar.nome} ${apagar.apelido} da turma ${apagar.turma}?` : ""}
+        risk="Sai da lista e deixa de contar para documentos e elegibilidade."
+        onConfirm={() => {
+          if (!apagar) return;
+          const dest = fin.find(t => t.nome === apagar.turma);
+          removeFormandoFin(apagar.id);
+          if (dest) patchFin(dest.id, { alunos: Math.max(0, dest.alunos - 1) });
+        }}
+      />
       <SlideOver open={!!docsOpen} onClose={() => setDocsOpen(null)} title="Documentos do formando" sub={docsOpen ? `${docsOpen.nome} ${docsOpen.apelido}` : ""}>
         {docsOpen && <DocumentosFinPanel formando={docsOpen} />}
       </SlideOver>
@@ -3038,6 +3238,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
   const [open, setOpen] = useState<TurmaFin | "new" | null>(null);
+  const [apagar, setApagar] = useState<TurmaFin | null>(null);
   const [nome, setNome] = useState("");
   const [curso, setCurso] = useState("");
   const [formador, setFormador] = useState("");
@@ -3093,7 +3294,37 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
       />
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
-        <div className="overflow-x-auto">
+        {rows.length === 0 && (
+          <EmptyHint
+            accent="fin"
+            text={fin.length === 0 ? "Ainda sem turmas financiadas. A turma é o objecto de gestão." : "Nenhuma turma neste filtro."}
+            action={fin.length === 0 ? "Nova turma" : "Limpar filtros"}
+            onAction={fin.length === 0 ? () => setOpen("new") : () => { setFiltroCurso(""); setFiltro("Todos"); setS(""); setP(1); }}
+          />
+        )}
+        <div className="md:hidden p-3 space-y-2">
+          {rows.map(t => {
+            const prontos = Math.floor(t.alunos * 0.8);
+            return (
+              <MobileCard
+                key={t.id}
+                title={t.nome}
+                sub={t.curso}
+                badge={estadoBadge(t.estado)}
+                meta={[`UFCD ${t.ufcdCod}`, `${prontos}/${t.alunos} prontos`, t.dataInicio]}
+                onOpen={() => onCockpit(t.id, "overview")}
+                actions={[
+                  { label: "Cockpit", icon: I.eye, tone: "teal", onClick: () => onCockpit(t.id, "overview") },
+                  { label: "Presenças", icon: I.attend, tone: "teal", onClick: () => onCockpit(t.id, "sessoes") },
+                  { label: "Dossiê", icon: I.doc, tone: "orange", onClick: () => onCockpit(t.id, "dtp") },
+                  { label: "Editar", icon: I.edit, onClick: () => setOpen(t) },
+                  { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(t) },
+                ]}
+              />
+            );
+          })}
+        </div>
+        <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
           <table className="w-full text-sm">
             <thead><tr><Th>Id</Th><Th>Início</Th><Th>UFCD</Th><Th>Turma / Curso</Th><Th>Formador</Th><Th>Elegíveis</Th><Th>Estado</Th><Th>Inscrições</Th><Th>Ações</Th></tr></thead>
             <tbody className="divide-y divide-slate-100">
@@ -3124,13 +3355,13 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
                       <TurmaActivaToggle compact accent="fin" activa={isTurmaActiva(t)} onChange={v => toggleFin(t.id, v)} />
                     </Td>
                     <Td>
-                      <div className="flex gap-1">
-                        <ActBtn icon={I.eye} label="Cockpit" color="teal" onClick={() => onCockpit(t.id, "overview")} />
-                        <ActBtn icon={I.attend} label="Presenças" color="teal" onClick={() => onCockpit(t.id, "sessoes")} />
-                        <ActBtn icon={I.doc} label="Dossiê da turma" color="orange" onClick={() => onCockpit(t.id, "dtp")} />
-                        <ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(t)} />
-                        <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => removeFin(t.id)} />
-                      </div>
+                      <RowActions primary={3} actions={[
+                        { label: "Cockpit", icon: I.eye, tone: "teal", onClick: () => onCockpit(t.id, "overview") },
+                        { label: "Presenças", icon: I.attend, tone: "teal", onClick: () => onCockpit(t.id, "sessoes") },
+                        { label: "Dossiê", icon: I.doc, tone: "orange", onClick: () => onCockpit(t.id, "dtp") },
+                        { label: "Editar", icon: I.edit, onClick: () => setOpen(t) },
+                        { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(t) },
+                      ]} />
                     </Td>
                   </tr>
                 );
@@ -3140,6 +3371,14 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
+      <ConfirmDangerModal
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        title="Eliminar turma financiada"
+        body={apagar ? `Apagar a turma ${apagar.nome}?` : ""}
+        risk="Formandos, cronograma e dossiê desta turma deixam de aparecer neste protótipo."
+        onConfirm={() => { if (apagar) removeFin(apagar.id); }}
+      />
       <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? editing.nome : "Nova turma financiada"} sub="UFCD e turma - o objeto de gestão é a turma." size="xl">
         <div className="p-5 space-y-3">
           <TurmaActivaToggle accent="fin" activa={activa} onChange={setActiva} />
@@ -3727,7 +3966,24 @@ function PagamentosView() {
             <input value={s} onChange={e => { setS(e.target.value); setP(1); }} className="pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg w-52 focus:outline-none focus:ring-2 focus:ring-amber-400" placeholder="Pesquisar…" />
           </div>
         </div>
-        <div className="overflow-x-auto">
+        {f.length === 0 && <EmptyHint text="Nenhuma transação neste filtro." action="Limpar filtros" onAction={() => { setFiltroCurso(""); setFiltro("Todos"); setS(""); }} />}
+        <div className="md:hidden p-3 space-y-2">
+          {f.slice((p - 1) * pp, p * pp).map(t => (
+            <MobileCard
+              key={t.id}
+              title={t.nome}
+              sub={t.curso}
+              badge={estadoBadge(t.estado)}
+              meta={[`€ ${t.valor}`, t.metodo, t.data]}
+              onOpen={() => setDetalhe(t)}
+              actions={[
+                { label: "Detalhes", icon: I.eye, tone: "gray", onClick: () => setDetalhe(t) },
+                { label: "Recibo", icon: I.receipt, onClick: () => setRecibo(t) },
+              ]}
+            />
+          ))}
+        </div>
+        <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
           <table className="w-full text-sm">
             <thead><tr><Th>ID</Th><Th>Nome</Th><Th>Curso</Th><Th>Valor</Th><Th>Método</Th><Th>Data</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
             <tbody className="divide-y divide-slate-100">
@@ -3740,7 +3996,12 @@ function PagamentosView() {
                   <Td className="text-xs text-slate-600">{t.metodo}</Td>
                   <Td className="font-mono text-xs text-slate-500 whitespace-nowrap">{t.data}</Td>
                   <Td>{estadoBadge(t.estado)}</Td>
-                  <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Detalhes" color="gray" onClick={() => setDetalhe(t)} /><ActBtn icon={I.receipt} label="Recibo" onClick={() => setRecibo(t)} /></div></Td>
+                  <Td>
+                    <RowActions actions={[
+                      { label: "Detalhes", icon: I.eye, tone: "gray", onClick: () => setDetalhe(t) },
+                      { label: "Recibo", icon: I.receipt, onClick: () => setRecibo(t) },
+                    ]} />
+                  </Td>
                 </tr>
               ))}
             </tbody>
@@ -3800,23 +4061,43 @@ const allSearchable: Array<{ tipo: string; nome: string; sub: string } & NavTarg
   })),
 ];
 
+const atalhosDoDia: Array<{ tipo: string; nome: string; sub: string } & NavTarget> = [
+  { tipo: "Atalho", nome: "Pré-inscrições por contactar", sub: "Gold · fila comercial do dia", view: "gold-preinscricoes" },
+  { tipo: "Atalho", nome: "Pagamentos pendentes", sub: "Gold · por confirmar", view: "pagamentos" },
+  { tipo: "Atalho", nome: "DTP Gold incompleto", sub: "VNG-SM-07/09 · dossiê da turma", view: "gold-cockpit-turma", turmaId: 943, tab: "dtp" },
+  { tipo: "Atalho", nome: "DTP Financiada incompleto", sub: "UFCD 3564 · T1 · dossiê da turma", view: "fin-cockpit-turma", turmaId: 218, tab: "dtp" },
+  { tipo: "Atalho", nome: "Inscrições a analisar", sub: "Financiada · elegibilidade", view: "fin-inscricoes" },
+];
+
 function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: () => void; onNavigate: (t: NavTarget) => void }) {
   const [q, setQ] = useState("");
+  const [hi, setHi] = useState(0);
   const results = q.length > 1 ? allSearchable.filter(r => `${r.nome} ${r.sub} ${r.tipo}`.toLowerCase().includes(q.toLowerCase())).slice(0, 8) : [];
+  const shown = q.length > 1 ? results : atalhosDoDia;
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (open) { setQ(""); setTimeout(() => inputRef.current?.focus(), 50); }
+    if (open) { setQ(""); setHi(0); setTimeout(() => inputRef.current?.focus(), 50); }
   }, [open]);
 
+  useEffect(() => { setHi(0); }, [q]);
+
+  function openRow(r: (typeof shown)[number]) {
+    onNavigate({ view: r.view, turmaId: r.turmaId, tab: r.tab, cursoId: r.cursoId });
+    onClose();
+  }
+
   useEffect(() => {
+    if (!open) return;
     const h = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); open ? onClose() : undefined; }
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") { e.preventDefault(); onClose(); return; }
+      if (e.key === "ArrowDown") { e.preventDefault(); setHi(i => Math.min(Math.max(shown.length - 1, 0), i + 1)); }
+      if (e.key === "ArrowUp") { e.preventDefault(); setHi(i => Math.max(0, i - 1)); }
+      if (e.key === "Enter" && shown[hi]) { e.preventDefault(); openRow(shown[hi]); }
     };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
-  }, [open, onClose]);
+  }, [open, shown, hi, onClose, onNavigate]);
 
   if (!open) return null;
 
@@ -3825,6 +4106,7 @@ function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: (
     "Turma Gold": "bg-violet-100 text-violet-700", "Turma Financiada": "bg-teal-100 text-teal-700",
     "Curso Gold": "bg-orange-100 text-orange-700", "UFCD": "bg-emerald-100 text-emerald-700",
     "Formador Gold": "bg-violet-100 text-violet-700", "Formador Financiado": "bg-blue-100 text-blue-700",
+    DTP: "bg-red-100 text-red-700", Inquérito: "bg-slate-100 text-slate-600", Atalho: "bg-amber-100 text-amber-800",
   };
 
   return (
@@ -3837,34 +4119,24 @@ function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: (
             className="flex-1 text-sm text-slate-800 placeholder-slate-400 focus:outline-none" />
           <kbd className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-mono">ESC</kbd>
         </div>
-        {q.length > 1 && (
-          <div className="max-h-80 overflow-y-auto">
-            {results.length === 0 ? (
-              <p className="text-center text-sm text-slate-400 py-8">Sem resultados para "{q}"</p>
-            ) : results.map((r, i) => (
-              <button key={i} onClick={() => { onNavigate({ view: r.view, turmaId: r.turmaId, tab: r.tab }); onClose(); }}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-50 last:border-0">
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${tipoColor[r.tipo] ?? "bg-slate-100 text-slate-600"}`}>{r.tipo}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-800 truncate">{r.nome}</p>
-                  <p className="text-xs text-slate-400 truncate">{r.sub}</p>
-                </div>
-                <span className="text-slate-300 flex-shrink-0">{I.chevRight}</span>
-              </button>
-            ))}
-          </div>
-        )}
         {q.length <= 1 && (
-          <div className="px-4 py-4 grid grid-cols-2 gap-2">
-            {[
-              { l: "Pré-Inscrições", v: "gold-preinscricoes" as View }, { l: "Turmas Gold", v: "gold-turmas" as View },
-              { l: "Dossiê TP Gold", v: "gold-dtp" as View }, { l: "Inquéritos Gold", v: "gold-inqueritos" as View },
-            ].map(s => (
-              <button key={s.l} onClick={() => { onNavigate({ view: s.v }); onClose(); }}
-                className="text-left px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-semibold text-slate-700 transition-colors">{s.l}</button>
-            ))}
-          </div>
+          <p className="px-4 pt-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Atalhos do dia</p>
         )}
+        <div className="max-h-80 overflow-y-auto">
+          {q.length > 1 && shown.length === 0 ? (
+            <p className="text-center text-sm text-slate-400 py-8">Sem resultados para "{q}"</p>
+          ) : shown.map((r, i) => (
+            <button key={`${r.tipo}-${r.nome}-${i}`} onClick={() => openRow(r)}
+              className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left border-b border-slate-50 last:border-0 ${i === hi ? "bg-slate-100" : "hover:bg-slate-50"}`}>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${tipoColor[r.tipo] ?? "bg-slate-100 text-slate-600"}`}>{r.tipo}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-800 truncate">{r.nome}</p>
+                <p className="text-xs text-slate-400 truncate">{r.sub}</p>
+              </div>
+              <span className="text-slate-300 flex-shrink-0">{I.chevRight}</span>
+            </button>
+          ))}
+        </div>
         <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex gap-4 text-xs text-slate-400">
           <span>↑↓ navegar</span><span>↵ abrir</span><span>ESC fechar</span>
         </div>
@@ -3892,7 +4164,7 @@ function NotificacoesPanel({ onNavigate, onClose }: { onNavigate: (t: NavTarget)
         {naoLidas > 0 && <button onClick={markAllRead} className="text-xs text-amber-600 hover:text-amber-700 font-semibold">Marcar todas como lidas</button>}
       </div>
       <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
-        {items.map(n => (
+        {sortNotifs(items).map(n => (
           <button key={n.id} onClick={() => { markRead(n.id); onNavigate({ view: n.view, turmaId: n.turmaId, tab: n.tab }); onClose(); }}
             className={`w-full flex gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors ${n.lida ? "opacity-60" : ""}`}>
             <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${n.tipo === "warn" ? "bg-amber-100 text-amber-600" : n.tipo === "error" ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"}`}>
@@ -3901,7 +4173,10 @@ function NotificacoesPanel({ onNavigate, onClose }: { onNavigate: (t: NavTarget)
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-1">
                 <p className="text-xs font-semibold text-slate-800 leading-snug">{n.titulo}</p>
-                {!n.lida && <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 mt-0.5" />}
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <NotifKind tipo={n.tipo} />
+                  {!n.lida && <span className="w-2 h-2 rounded-full bg-red-500" />}
+                </div>
               </div>
               <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.texto}</p>
               <p className="text-xs text-slate-400 mt-1">há {n.tempo}</p>
@@ -3978,10 +4253,29 @@ function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v:
 
   function toggleGroup(name: string) { setOpenGroups(prev => prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name]); }
   function toggleLeaf(label: string) { setOpenLeaves(prev => prev.includes(label) ? prev.filter(x => x !== label) : [...prev, label]); }
+  useEffect(() => {
+    sidebarConfig.forEach(g => {
+      const hit = g.items.some(item =>
+        item.view === view
+        || item.children?.some(c => c.view === view)
+        || (item.view === "gold-turmas" && view === "gold-cockpit-turma")
+        || (item.view === "fin-turmas" && (view === "fin-cockpit-turma" || view === "fin-presencas"))
+      );
+      if (hit) {
+        setOpenGroups(prev => prev.includes(g.group) ? prev : [...prev, g.group]);
+        g.items.forEach(item => {
+          if (item.children?.some(c => c.view === view)) {
+            setOpenLeaves(prev => prev.includes(item.label) ? prev : [...prev, item.label]);
+          }
+        });
+      }
+    });
+  }, [view]);
+
   function isActive(v?: View) {
     if (v === view) return true;
     if (v === "gold-turmas" && view === "gold-cockpit-turma") return true;
-    if (v === "fin-turmas" && view === "fin-cockpit-turma") return true;
+    if (v === "fin-turmas" && (view === "fin-cockpit-turma" || view === "fin-presencas")) return true;
     return false;
   }
   function groupHasActive(g: NavGroup) {
@@ -4166,6 +4460,37 @@ function AppShell() {
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
+  const { gold, fin } = useTurmas();
+  const goldTurma = gold.find(t => t.id === cockpitId) ?? gold[0];
+  const finTurma = fin.find(t => t.id === finCockpitId) ?? fin[0];
+  const regime = regimeOfView(view);
+  const headerCrumbs = (() => {
+    if (view === "gold-cockpit-turma" && goldTurma) {
+      return [
+        { label: "Gold", onClick: () => navigate("painel") },
+        { label: "Turmas", onClick: () => navigate("gold-turmas") },
+        { label: goldTurma.nome, onClick: () => { setCockpitTab("overview"); go("gold-cockpit-turma"); } },
+        { label: cockpitTabLabel[cockpitTab] ?? "Visão geral" },
+      ];
+    }
+    if ((view === "fin-cockpit-turma" || view === "fin-presencas") && finTurma) {
+      return [
+        { label: "Financiada", onClick: () => navigate("painel") },
+        { label: "Turmas", onClick: () => navigate("fin-turmas") },
+        { label: finTurma.nome, onClick: () => { setCockpitTab("overview"); go("fin-cockpit-turma"); } },
+        { label: view === "fin-presencas" ? "Sessões" : (cockpitTabLabel[cockpitTab] ?? "Visão geral") },
+      ];
+    }
+    if (view.startsWith("gold-")) return [{ label: "Gold", onClick: () => navigate("painel") }, { label: viewTitles[view] ?? "Gold" }];
+    if (view.startsWith("fin-")) return [{ label: "Financiada", onClick: () => navigate("painel") }, { label: viewTitles[view] ?? "Financiada" }];
+    return [{ label: viewTitles[view] ?? "GesForma" }];
+  })();
+  const headerDetail = view === "gold-cockpit-turma" && goldTurma
+    ? `${goldTurma.curso} · ${goldTurma.local}`
+    : (view === "fin-cockpit-turma" || view === "fin-presencas") && finTurma
+      ? `UFCD ${finTurma.ufcdCod} · ${finTurma.curso}`
+      : undefined;
+  const bloqueios = notificacoesData.filter(n => !n.lida && n.tipo === "error").length;
   const naoLidas = notificacoesData.filter(n => !n.lida).length;
 
   function renderView() {
@@ -4244,10 +4569,14 @@ function AppShell() {
         {/* Main */}
         <div className="flex-1 flex flex-col min-w-0 min-h-full">
           {/* Top bar */}
-          <header className="sticky top-0 z-30 bg-white border-b border-slate-200 flex items-center gap-3 px-4 h-14 flex-shrink-0 shadow-sm">
-            <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 -ml-1 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors">{I.menu}</button>
+          <header className="sticky top-0 z-30 bg-white border-b border-slate-200 flex items-center gap-3 px-4 min-h-14 py-2 flex-shrink-0 shadow-sm">
+            <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 -ml-1 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors" aria-label="Abrir menu">{I.menu}</button>
             <div className="flex-1 min-w-0">
-              <h1 className="text-sm font-semibold text-slate-800 truncate">{viewTitles[view] ?? ""}</h1>
+              <div className="flex items-center gap-2 min-w-0">
+                <RegimeBadge regime={regime} />
+                <PageTrail crumbs={headerCrumbs} />
+              </div>
+              {headerDetail && <p className="text-[11px] text-slate-400 truncate mt-0.5">{headerDetail}</p>}
             </div>
             <div className="flex items-center gap-2">
               {/* Global search button */}
@@ -4261,7 +4590,9 @@ function AppShell() {
               <div ref={notifRef} className="relative">
                 <button onClick={() => setNotifOpen(p => !p)} className="relative p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">
                   {I.bell}
-                  {naoLidas > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />}
+                  {naoLidas > 0 && (
+                    <span className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${bloqueios > 0 ? "bg-red-500" : "bg-amber-400"}`} />
+                  )}
                 </button>
                 {notifOpen && <NotificacoesPanel onNavigate={v => { navigate(v); setNotifOpen(false); }} onClose={() => setNotifOpen(false)} />}
               </div>

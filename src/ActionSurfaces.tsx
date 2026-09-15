@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { AppModal } from "./FormKit";
+import { EmptyHint, NotifKind, sortNotifs } from "./SecretaryUX";
 
 const I = {
   download: (
@@ -434,14 +435,17 @@ export function NotificacoesView({
   onOpen: (n: NotifRow) => void;
 }) {
   const [lista, setLista] = useState(items);
-  const [filtro, setFiltro] = useState<"Todas" | "Não lidas" | "Gold" | "Financiada">("Todas");
+  const [filtro, setFiltro] = useState<"Todas" | "Não lidas" | "Bloqueio" | "Aviso" | "Info" | "Gold" | "Financiada">("Todas");
   const naoLidas = lista.filter(n => !n.lida).length;
-  const f = lista.filter(n => {
+  const f = sortNotifs(lista.filter(n => {
     if (filtro === "Não lidas") return !n.lida;
+    if (filtro === "Bloqueio") return n.tipo === "error";
+    if (filtro === "Aviso") return n.tipo === "warn";
+    if (filtro === "Info") return n.tipo === "info";
     if (filtro === "Gold") return n.view.startsWith("gold") || n.view === "pagamentos";
     if (filtro === "Financiada") return n.view.startsWith("fin");
     return true;
-  });
+  }));
 
   return (
     <div className="space-y-4">
@@ -459,7 +463,7 @@ export function NotificacoesView({
         )}
       </div>
       <div className="flex flex-wrap gap-2">
-        {(["Todas", "Não lidas", "Gold", "Financiada"] as const).map(o => (
+        {(["Todas", "Não lidas", "Bloqueio", "Aviso", "Info", "Gold", "Financiada"] as const).map(o => (
           <button key={o} type="button" onClick={() => setFiltro(o)}
             className={`px-3 py-1.5 text-xs font-semibold rounded-full border ${filtro === o ? "bg-amber-500 text-white border-amber-500" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
             {o}
@@ -467,7 +471,7 @@ export function NotificacoesView({
         ))}
       </div>
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden divide-y divide-slate-100">
-        {f.length === 0 && <p className="px-4 py-12 text-center text-sm text-slate-400">Nenhuma notificação neste filtro.</p>}
+        {f.length === 0 && <EmptyHint text="Nenhuma notificação neste filtro." action="Ver todas" onAction={() => setFiltro("Todas")} />}
         {f.map(n => (
           <button
             key={n.id}
@@ -481,7 +485,10 @@ export function NotificacoesView({
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-sm font-semibold text-slate-800">{n.titulo}</p>
-                {!n.lida && <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 mt-1.5" />}
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <NotifKind tipo={n.tipo} />
+                  {!n.lida && <span className="w-2 h-2 rounded-full bg-red-500" />}
+                </div>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">{n.texto}</p>
               <p className="text-xs text-slate-400 mt-1">há {n.tempo}</p>

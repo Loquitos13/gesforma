@@ -8,6 +8,7 @@ import { useTurmas } from "./TurmasContext";
 import { turmaFinOpts } from "./turmaModel";
 import { FichaFormando } from "./FormandoFicha";
 import { ConteudoAbrirModal, type ConteudoPreview } from "./ActionSurfaces";
+import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./SecretaryUX";
 import type { FormandoTurma } from "./ListsContext";
 
 type Accent = "gold" | "fin";
@@ -112,7 +113,7 @@ function NewBtn({ label, onClick, accent = "gold" }: { label: string; onClick?: 
   );
 }
 function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <th className={`text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap bg-slate-50 border-b border-slate-200 ${className}`}>{children}</th>;
+  return <th className={`text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap bg-slate-50 border-b border-slate-200 sticky top-0 z-10 ${className}`}>{children}</th>;
 }
 function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <td className={`px-3 py-2.5 ${className}`}>{children}</td>;
@@ -347,6 +348,7 @@ export function FormandosGoldView() {
   const [filtroLocal, setFiltroLocal] = useState("");
   const [open, setOpen] = useState<"new" | typeof formandosGoldData[number] | null>(null);
   const [ficha, setFicha] = useState<typeof formandosGoldData[number] | null>(null);
+  const [apagar, setApagar] = useState<typeof formandosGoldData[number] | null>(null);
   const [curso, setCurso] = useState("");
   const [nome, setNome] = useState("");
   const [apelido, setApelido] = useState("");
@@ -394,11 +396,34 @@ export function FormandosGoldView() {
         />
         <Card>
           <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} />
-          <div className="overflow-x-auto">
+          {rows.length === 0 && (
+            <EmptyHint
+              text={lista.length === 0 ? "Ainda sem formandos avulso. Use para e-learning e vendas sem turma." : "Nenhum formando Gold individual corresponde à pesquisa."}
+              action={lista.length === 0 ? "Novo formando" : "Limpar filtros"}
+              onAction={lista.length === 0 ? () => setOpen("new") : () => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setS(""); setP(1); }}
+            />
+          )}
+          <div className="md:hidden p-3 space-y-2">
+            {rows.map(r => (
+              <MobileCard
+                key={r.id}
+                title={`${r.nome} ${r.apelido}`}
+                sub={r.curso}
+                badge={estadoBadge(r.estado)}
+                meta={[r.local, `€ ${r.valor}`, r.inscrito]}
+                onOpen={() => setFicha(r)}
+                actions={[
+                  { label: "Ficha", icon: I.eye, onClick: () => setFicha(r) },
+                  { label: "Editar", icon: I.edit, onClick: () => setOpen(r) },
+                  { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
+                ]}
+              />
+            ))}
+          </div>
+          <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
             <table className="w-full text-sm">
               <thead><tr><Th>Id</Th><Th>Nome</Th><Th>Curso</Th><Th>Local</Th><Th>Inscrito</Th><Th>Valor</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
               <tbody className="divide-y divide-slate-100">
-                {rows.length === 0 && <EmptyState text="Nenhum formando Gold individual corresponde à pesquisa." />}
                 {rows.map(r => (
                   <tr key={r.id} className="hover:bg-slate-50">
                     <Td><span className="text-slate-400 font-mono text-xs">{r.id}</span></Td>
@@ -413,7 +438,13 @@ export function FormandosGoldView() {
                     <Td className="font-mono text-xs text-slate-500">{r.inscrito}</Td>
                     <Td className="text-xs font-bold text-amber-600">€ {r.valor}</Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Ficha" onClick={() => setFicha(r)} /><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
+                    <Td>
+                      <RowActions actions={[
+                        { label: "Ficha", icon: I.eye, onClick: () => setFicha(r) },
+                        { label: "Editar", icon: I.edit, onClick: () => setOpen(r) },
+                        { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
+                      ]} />
+                    </Td>
                   </tr>
                 ))}
               </tbody>
@@ -422,6 +453,14 @@ export function FormandosGoldView() {
           <TableFooter page={p} total={f.length} perPage={10} onChange={setP} />
         </Card>
       </div>
+      <ConfirmDangerModal
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        title="Eliminar formando Gold"
+        body={apagar ? `Remover ${apagar.nome} ${apagar.apelido} da lista avulso?` : ""}
+        risk="A venda individual sai da lista. Esta acção não se desfaz neste protótipo."
+        onConfirm={() => { if (apagar) setLista(xs => xs.filter(x => x.id !== apagar.id)); }}
+      />
       <SlideOver open={!!ficha} onClose={() => setFicha(null)} title="Ficha do Formando" sub={ficha ? `#${ficha.id} · venda avulso` : ""} size="lg">
         {ficha && <FichaFormando formando={asFichaAvulso(ficha)} onClose={() => setFicha(null)} avulso />}
       </SlideOver>
@@ -995,6 +1034,7 @@ export function FinInscricoesView() {
   const [s, setS] = useState(""); const [p, setP] = useState(1);
   const [filtro, setFiltro] = useState("Todas");
   const [open, setOpen] = useState<"new" | typeof finInscricoesData[number] | null>(null);
+  const [apagar, setApagar] = useState<typeof finInscricoesData[number] | null>(null);
   const [curso, setCurso] = useState("");
   const [turma, setTurma] = useState("");
   const [filtroCurso, setFiltroCurso] = useState("");
@@ -1033,11 +1073,35 @@ export function FinInscricoesView() {
         />
         <Card>
           <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} />
-          <div className="overflow-x-auto">
+          {rows.length === 0 && (
+            <EmptyHint
+              accent="fin"
+              text={lista.length === 0 ? "Ainda sem candidaturas. O pipeline de elegibilidade começa aqui." : "Nenhuma inscrição neste filtro."}
+              action={lista.length === 0 ? "Nova inscrição" : "Limpar filtros"}
+              onAction={lista.length === 0 ? () => setOpen("new") : () => { setFiltroCurso(""); setFiltro("Todas"); setS(""); setP(1); }}
+            />
+          )}
+          <div className="md:hidden p-3 space-y-2">
+            {rows.map(r => (
+              <MobileCard
+                key={r.id}
+                title={`${r.nome} ${r.apelido}`}
+                sub={r.curso}
+                badge={estadoBadge(r.estado)}
+                meta={[`UFCD ${r.ufcd}`, r.turma, r.inscrito]}
+                onOpen={() => setOpen(r)}
+                actions={[
+                  { label: "Abrir", icon: I.eye, onClick: () => setOpen(r) },
+                  { label: "Editar", icon: I.edit, onClick: () => setOpen(r) },
+                  { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
+                ]}
+              />
+            ))}
+          </div>
+          <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
             <table className="w-full text-sm">
               <thead><tr><Th>Id</Th><Th>Data</Th><Th>Candidato</Th><Th>UFCD</Th><Th>Turma</Th><Th>Documentos</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
               <tbody className="divide-y divide-slate-100">
-                {rows.length === 0 && <EmptyState text="Nenhuma inscrição neste filtro." />}
                 {rows.map(r => (
                   <tr key={r.id} className="hover:bg-slate-50">
                     <Td><span className="text-slate-400 font-mono text-xs">{r.id}</span></Td>
@@ -1055,7 +1119,13 @@ export function FinInscricoesView() {
                     <Td className="text-xs font-semibold text-slate-700 whitespace-nowrap">{r.turma}</Td>
                     <Td><DocPips docs={r.docs} /></Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Abrir" onClick={() => setOpen(r)} /><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
+                    <Td>
+                      <RowActions actions={[
+                        { label: "Abrir", icon: I.eye, onClick: () => setOpen(r) },
+                        { label: "Editar", icon: I.edit, onClick: () => setOpen(r) },
+                        { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
+                      ]} />
+                    </Td>
                   </tr>
                 ))}
               </tbody>
@@ -1065,6 +1135,14 @@ export function FinInscricoesView() {
         </Card>
         <p className="text-xs text-slate-400">Pontinhos dos documentos: CC cartão de cidadão · CH certificado de habilitações · CU curriculum · CI IBAN · CE comprovativo de emprego. Sem documentos completos a turma não arranca.</p>
       </div>
+      <ConfirmDangerModal
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        title="Eliminar inscrição financiada"
+        body={apagar ? `Remover a candidatura de ${apagar.nome} ${apagar.apelido}?` : ""}
+        risk="Sai do pipeline de elegibilidade. Esta acção não se desfaz neste protótipo."
+        onConfirm={() => { if (apagar) setLista(xs => xs.filter(x => x.id !== apagar.id)); }}
+      />
       <SlideOver open={!!open} onClose={() => setOpen(null)}
         title={editing ? `${editing.nome} ${editing.apelido}` : "Nova inscrição financiada"}
         sub={editing ? `UFCD ${editing.ufcd} · ${editing.turma}` : "Candidatura a UFCD - não é o funil Gold"}>

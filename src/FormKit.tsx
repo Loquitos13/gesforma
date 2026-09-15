@@ -37,11 +37,22 @@ export function AppModal({
     };
   }, [open, onClose]);
 
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const t = window.setTimeout(() => {
+      const el = panelRef.current?.querySelector<HTMLElement>("button, [href], input, select, textarea");
+      el?.focus();
+    }, 20);
+    return () => window.clearTimeout(t);
+  }, [open]);
+
   if (!open || typeof document === "undefined") return null;
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="app-modal-title">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-[2px]" onClick={onClose} />
       <div
+        ref={panelRef}
         className={`relative w-full ${modalSizes[size]} max-h-[92vh] bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200/80 flex flex-col overflow-hidden`}
         style={{ animation: "scaleIn 0.16s ease" }}
       >

@@ -32,6 +32,8 @@ No **Painel**, o bloco **Como conheceram a ENA** mostra a origem dos formandos (
 
 Em **Configurações**, cada cartão abre um **modal centrado** só com essa secção (Cancelar / Guardar). Não há gaveta lateral nem lista de separadores à esquerda.
 
+A **secretaria** trabalha com rasto no topo (regime + percurso clicável), bloco **A fazer agora** no cockpit, listas em **cartões no telemóvel** e **acções com rótulo** no desktop (menu ⋯ no ecrã estreito). Eliminar pede sempre a mesma confirmação. A pesquisa **⌘K** abre atalhos do dia (pré-inscrições por contactar, pagamentos pendentes, DTP incompleto, inscrições a analisar). As notificações classificam-se em **Bloqueio**, **Aviso** e **Info**.
+
 Os formulários de criar e editar (pré-inscrição, turma, formando, sessão, etc.) abrem em **modal ao centro**, não numa gaveta que desliza da direita.
 
 Em **Emails automáticos**, a nova regra pede gatilho, template, curso e atraso, com **preview do email** ao lado. O olho nas regras e nos templates abre o mesmo preview.

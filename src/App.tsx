@@ -37,6 +37,8 @@ import { useTurmas } from "./TurmasContext";
 import { cronogramaToSessoes, formatSessaoLabel, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
 import { ListsProvider, nextListId, useLists, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
 import { useAuth } from "./AuthGate";
+import { EmailXmlEditor } from "./EmailTemplateEditor";
+import { escapeXml, formatXmlInner, linesToXml, parseEmailXml, xmlParagraphsRaw, xmlToLines } from "./emailXml";
 import {
   apiCreateRule, apiDeleteRule, apiEmailJobs, apiEmailRules, apiEmailTemplates, apiPatchRule, apiPatchTemplate,
   emitAutomation, type EmailJob, type EmailJobStats,
@@ -229,6 +231,7 @@ type EmailTpl = {
   tipo: string;
   linhas: string[];
   cta: string;
+  xml: string;
 };
 
 const emailGatilhosOpts = [
@@ -330,23 +333,27 @@ const emailTemplates: EmailTpl[] = (
     { id: 5, nome: "Certificado de Conclusão", editado: "2026-08-01", tipo: "certificate" },
     { id: 6, nome: "Reengajamento", editado: "2026-07-10", tipo: "reengagement" },
   ] as const
-).map(meta => ({
-  ...meta,
-  assunto: EMAIL_BODIES[meta.tipo].assunto,
-  linhas: [...EMAIL_BODIES[meta.tipo].linhas],
-  cta: EMAIL_BODIES[meta.tipo].cta,
-}));
+).map(meta => {
+  const body = EMAIL_BODIES[meta.tipo];
+  return {
+    ...meta,
+    assunto: body.assunto,
+    linhas: [...body.linhas],
+    cta: body.cta,
+    xml: linesToXml(body.linhas, body.cta),
+  };
+});
 
 function resolveEmailTipo(tipo: string) {
   return EMAIL_TIPO_ALIAS[tipo] ?? tipo;
 }
 
-function bodyFromTemplates(tipo: string, list: EmailTpl[]): { assunto: string; linhas: string[]; cta: string; nome?: string } | undefined {
+function bodyFromTemplates(tipo: string, list: EmailTpl[]): { assunto: string; linhas: string[]; cta: string; nome?: string; xml?: string } | undefined {
   const resolved = resolveEmailTipo(tipo);
   const tpl = list.find(t => t.tipo === resolved);
-  if (tpl) return { assunto: tpl.assunto, linhas: tpl.linhas, cta: tpl.cta, nome: tpl.nome };
+  if (tpl) return { assunto: tpl.assunto, linhas: tpl.linhas, cta: tpl.cta, nome: tpl.nome, xml: tpl.xml };
   const fallback = EMAIL_BODIES[resolved];
-  return fallback ? { ...fallback } : undefined;
+  return fallback ? { ...fallback, xml: linesToXml(fallback.linhas, fallback.cta) } : undefined;
 }
 
 const GATILHO_TEMPLATE: Record<string, string> = {
@@ -377,13 +384,18 @@ function EmailPreviewPane({
   gatilho?: string;
   atraso?: string;
   templates: EmailTpl[];
-  draft?: { nome?: string; assunto: string; linhas: string[]; cta: string };
+  draft?: { nome?: string; assunto: string; linhas: string[]; cta: string; xml?: string };
 }) {
   const body = draft ?? bodyFromTemplates(tipo, templates);
   const dest = destFromGatilho(gatilho);
   const cursoLabel = curso || "Formação de Formadores - CCP";
   const vars = { nome: dest.nome, curso: cursoLabel, turma: "VNG-SM-07/09" };
   const assunto = body ? fillEmailVars(body.assunto, vars) : "Assunto do email";
+  const xml = body?.xml;
+  const rawParas = xml ? xmlParagraphsRaw(xml) : [];
+  const linhas = rawParas.length ? rawParas : (body?.linhas ?? []);
+  const cta = (xml ? parseEmailXml(xml).cta : body?.cta) || body?.cta || "";
+  const previewLinha = rawParas[0] ? fillEmailVars(parseEmailXml(`<p>${rawParas[0]}</p>`).paragraphs[0] ?? "", vars) : (body ? fillEmailVars(body.linhas[0] ?? "", vars) : "");
 
   return (
     <div className="rounded-xl border border-slate-200 bg-[#F1F5F9] overflow-hidden">
@@ -419,7 +431,7 @@ function EmailPreviewPane({
                 <p className="text-[10px] text-slate-400 flex-shrink-0">hoje, 09:14</p>
               </div>
               <p className="text-xs font-semibold text-slate-700 truncate">{assunto}</p>
-              <p className="text-[11px] text-slate-400 truncate">Olá {dest.nome.split(" ")[0]}, {fillEmailVars(body.linhas[0], vars)}</p>
+              <p className="text-[11px] text-slate-400 truncate">Olá {dest.nome.split(" ")[0]}, {previewLinha}</p>
             </div>
           </div>
           <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
@@ -429,13 +441,19 @@ function EmailPreviewPane({
               <p className="text-[11px] text-slate-400">Para <span className="text-slate-700 font-medium">{dest.email}</span> <span className="text-slate-400">· {dest.papel}</span></p>
             </div>
             <div className="px-4 py-4 space-y-3">
-              <div className="bg-amber-500 text-white text-xs font-extrabold tracking-widest px-2.5 py-1.5 rounded-md inline-block">ENA</div>
+              <img src="/imagens/ena-logo-nobg.png" alt="ENA" className="h-7 w-auto" onError={e => { (e.currentTarget as HTMLImageElement).src = "/imagens/ena_logo.svg"; }} />
               <p className="text-sm text-slate-800">Olá {dest.nome.split(" ")[0]},</p>
-              {body.linhas.map(l => (
-                <p key={l} className="text-sm text-slate-600 leading-relaxed">{fillEmailVars(l, vars)}</p>
+              {linhas.map((l, i) => (
+                <p key={`${i}-${l.slice(0, 24)}`} className="text-sm text-slate-600 leading-relaxed">
+                  {rawParas.length
+                    ? formatXmlInner(l, vars).map((part, j) =>
+                        part.t === "strong" ? <strong key={j}>{part.v}</strong> : part.t === "em" ? <em key={j}>{part.v}</em> : <span key={j}>{part.v}</span>,
+                      )
+                    : fillEmailVars(l, vars)}
+                </p>
               ))}
               <button type="button" className="inline-flex px-3.5 py-2 bg-amber-500 text-white text-xs font-semibold rounded-lg">
-                {body.cta}
+                {fillEmailVars(cta, vars)}
               </button>
               <p className="text-[11px] text-slate-400 pt-2 border-t border-slate-100">Equipa ENA · formacao@ena.pt · Email automático da regra.</p>
             </div>
@@ -3745,14 +3763,17 @@ function EmailsView() {
       setTemplates(t.templates.map(x => {
         const fallback = EMAIL_BODIES[resolveEmailTipo(x.tipo)];
         const linhas = asTplLines(x.body_lines);
+        const resolvedLinhas = linhas.length ? linhas : (fallback?.linhas ?? []);
+        const cta = x.cta || fallback?.cta || "";
         return {
           id: x.id,
           nome: x.nome,
           assunto: x.assunto,
           editado: x.updated_at.slice(0, 10),
           tipo: x.tipo,
-          linhas: linhas.length ? linhas : (fallback?.linhas ?? []),
-          cta: x.cta || fallback?.cta || "",
+          linhas: resolvedLinhas,
+          cta,
+          xml: x.body_xml?.trim() || linesToXml(resolvedLinhas, cta),
         };
       }));
       setJobs(j.jobs);
@@ -4027,41 +4048,65 @@ function EmailsView() {
           </div>
         </div>
       )}
-      <SlideOver open={!!editTpl} onClose={() => setEditTpl(null)} title={editTpl ? `Editar ${editTpl.nome}` : ""} sub="O mesmo texto que o preview das regras e o email enviado." size="xl">
-        {editTpl && (
-          <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <div className="space-y-3">
-              <Field label="Nome"><input className={iCls} value={editTpl.nome} onChange={e => setEditTpl({ ...editTpl, nome: e.target.value })} /></Field>
-              <Field label="Assunto"><input className={iCls} value={editTpl.assunto} onChange={e => setEditTpl({ ...editTpl, assunto: e.target.value })} /></Field>
-              <Field label="Corpo">
-                <textarea
-                  className={`${iCls} min-h-[160px]`}
-                  value={editTpl.linhas.join("\n")}
-                  onChange={e => setEditTpl({ ...editTpl, linhas: e.target.value.split("\n") })}
+      {editTpl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setEditTpl(null)} />
+          <div className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden" style={{ animation: "scaleIn 0.15s ease" }}>
+            <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
+              <div>
+                <h2 className="text-base font-bold text-slate-800">Editar {editTpl.nome}</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Editor do corpo do email. O preview à direita usa dados de exemplo.</p>
+              </div>
+              <button type="button" onClick={() => setEditTpl(null)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <div className="space-y-3 min-w-0">
+                <Field label="Nome"><input className={iCls} value={editTpl.nome} onChange={e => setEditTpl({ ...editTpl, nome: e.target.value })} /></Field>
+                <Field label="Assunto"><input className={iCls} value={editTpl.assunto} onChange={e => setEditTpl({ ...editTpl, assunto: e.target.value })} /></Field>
+                <Field label="Corpo do email">
+                  <EmailXmlEditor
+                    xml={editTpl.xml}
+                    onChange={xml => {
+                      const parsed = xmlToLines(xml);
+                      setEditTpl({ ...editTpl, xml, linhas: parsed.linhas, cta: parsed.cta || editTpl.cta });
+                    }}
+                  />
+                </Field>
+                <Field label="Botão (CTA)"><input className={iCls} value={editTpl.cta} onChange={e => {
+                  const cta = e.target.value;
+                  const xml = /<cta\b/i.test(editTpl.xml)
+                    ? editTpl.xml.replace(/<cta\b[^>]*>[\s\S]*?<\/cta>/i, `<cta>${escapeXml(cta)}</cta>`)
+                    : linesToXml(parseEmailXml(editTpl.xml).paragraphs, cta);
+                  setEditTpl({ ...editTpl, cta, xml });
+                }} /></Field>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Preview</p>
+                <EmailPreviewPane
+                  tipo={editTpl.tipo}
+                  curso="Formação de Formadores - CCP"
+                  templates={templates}
+                  draft={{ nome: editTpl.nome, assunto: editTpl.assunto, linhas: editTpl.linhas, cta: editTpl.cta, xml: editTpl.xml }}
                 />
-              </Field>
-              <Field label="Botão (CTA)"><input className={iCls} value={editTpl.cta} onChange={e => setEditTpl({ ...editTpl, cta: e.target.value })} /></Field>
-              <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setEditTpl(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-                <button type="button" onClick={() => {
-                  const linhas = editTpl.linhas.map(l => l.trim()).filter(Boolean);
-                  if (!linhas.length || !editTpl.assunto.trim() || !editTpl.nome.trim() || !editTpl.cta.trim()) return;
-                  const next = { ...editTpl, linhas, editado: "hoje" };
-                  setTemplates(prev => prev.map(t => t.id === editTpl.id ? next : t));
-                  if (apiOn) void apiPatchTemplate(editTpl.id, { nome: next.nome, assunto: next.assunto, body_lines: next.linhas, cta: next.cta });
-                  setEditTpl(null);
-                }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
               </div>
             </div>
-            <EmailPreviewPane
-              tipo={editTpl.tipo}
-              curso="Formação de Formadores - CCP"
-              templates={templates}
-              draft={{ nome: editTpl.nome, assunto: editTpl.assunto, linhas: editTpl.linhas.filter(l => l.trim()), cta: editTpl.cta }}
-            />
+            <div className="flex gap-2 px-5 py-4 border-t border-slate-100 flex-shrink-0">
+              <button type="button" onClick={() => setEditTpl(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+              <button type="button" onClick={() => {
+                const parsed = xmlToLines(editTpl.xml);
+                const linhas = parsed.linhas.length ? parsed.linhas : editTpl.linhas.map(l => l.trim()).filter(Boolean);
+                const cta = (parsed.cta || editTpl.cta).trim();
+                if (!linhas.length || !editTpl.assunto.trim() || !editTpl.nome.trim() || !cta) return;
+                const xml = editTpl.xml.trim() || linesToXml(linhas, cta);
+                const next = { ...editTpl, linhas, cta, xml, editado: "hoje" };
+                setTemplates(prev => prev.map(t => t.id === editTpl.id ? next : t));
+                if (apiOn) void apiPatchTemplate(editTpl.id, { nome: next.nome, assunto: next.assunto, body_lines: next.linhas, body_xml: next.xml, cta: next.cta });
+                setEditTpl(null);
+              }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+            </div>
           </div>
-        )}
-      </SlideOver>
+        </div>
+      )}
       <ConfirmDangerModal
         open={apagarRegra != null}
         onClose={() => setApagarRegra(null)}

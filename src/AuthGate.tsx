@@ -15,7 +15,14 @@ export function useAuth() {
 }
 
 function EnaLogo({ className }: { className?: string }) {
-  return <img src="/imagens/ena_logo.svg" alt="ENA" className={className} />;
+  return (
+    <img
+      src="/imagens/ena-logo-nobg.png"
+      alt="ENA"
+      className={className}
+      onError={e => { (e.currentTarget as HTMLImageElement).src = "/imagens/ena_logo.svg"; }}
+    />
+  );
 }
 
 function SessionSplash({ pct }: { pct: number }) {

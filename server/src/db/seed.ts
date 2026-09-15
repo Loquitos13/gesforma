@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { config } from "../config.js";
+import { linesToXml } from "../emailXml.js";
 import { hashPassword, normalizeEmail } from "../security.js";
 import type { Db } from "./pool.js";
 
@@ -28,7 +29,7 @@ const TEMPLATES = [
   {
     tipo: "sale_followup",
     nome: "Contacto após a venda",
-    assunto: "Obrigado, {{nome}} — próximos passos em {{curso}}",
+    assunto: "Obrigado, {{nome}} - próximos passos em {{curso}}",
     linhas: [
       "O pagamento ficou registado. Daqui a pouco a secretaria confirma-lhe a turma {{turma}} e o horário.",
       "Se precisar de fatura, recibo ou de alterar o nome no certificado, responda a este email.",
@@ -97,14 +98,20 @@ export async function seed(db: Db) {
          body_lines = CASE WHEN email_templates.body_lines = '[]'::jsonb THEN EXCLUDED.body_lines ELSE email_templates.body_lines END`,
       [t.tipo, t.nome, t.assunto, JSON.stringify(t.linhas), t.cta],
     );
-    const row = await db.query<{ body_lines: unknown }>("SELECT body_lines FROM email_templates WHERE tipo = $1", [t.tipo]);
+    const row = await db.query<{ body_lines: unknown; body_xml: string }>(
+      "SELECT body_lines, body_xml FROM email_templates WHERE tipo = $1",
+      [t.tipo],
+    );
     const lines = row.rows[0]?.body_lines;
     const empty = !lines || (Array.isArray(lines) && lines.length === 0);
+    const xml = linesToXml(t.linhas, t.cta);
     if (empty) {
       await db.query(
-        "UPDATE email_templates SET assunto = $2, body_lines = $3::jsonb, cta = $4, updated_at = now() WHERE tipo = $1",
-        [t.tipo, t.assunto, JSON.stringify(t.linhas), t.cta],
+        "UPDATE email_templates SET assunto = $2, body_lines = $3::jsonb, cta = $4, body_xml = $5, updated_at = now() WHERE tipo = $1",
+        [t.tipo, t.assunto, JSON.stringify(t.linhas), t.cta, xml],
       );
+    } else if (!row.rows[0]?.body_xml?.trim()) {
+      await db.query("UPDATE email_templates SET body_xml = $2, updated_at = now() WHERE tipo = $1", [t.tipo, xml]);
     }
   }
 

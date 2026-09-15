@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "./db/pool.js";
+import { parseEmailXml } from "./emailXml.js";
 import { sendMail } from "./mailer.js";
 import { EVENT_ALIASES, fillVars, isEmail, normalizeEmail, sanitizeHeader, sanitizeText } from "./security.js";
 
@@ -10,6 +11,7 @@ type Rule = {
   curso: string | null;
   assunto: string;
   body_lines: unknown;
+  body_xml: string;
   cta: string;
 };
 
@@ -47,12 +49,12 @@ export async function ingestEvent(
   const email = normalizeEmail(String(payload.email ?? ""));
   const nome = sanitizeHeader(String(payload.nome ?? "Formando"));
   const curso = sanitizeHeader(String(payload.curso ?? ""));
-  const turma = sanitizeHeader(String(payload.turma ?? "—"));
+  const turma = sanitizeHeader(String(payload.turma ?? "-"));
   if (!isEmail(email)) throw new Error("Email do destinatário inválido.");
 
   const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
   const rules = await db.query<Rule>(
-    `SELECT r.id, r.template_tipo, r.delay_seconds, r.curso, t.assunto, t.body_lines, t.cta
+    `SELECT r.id, r.template_tipo, r.delay_seconds, r.curso, t.assunto, t.body_lines, t.body_xml, t.cta
      FROM email_rules r
      JOIN email_templates t ON t.tipo = r.template_tipo
      WHERE r.ativo = true AND r.trigger_key IN (${placeholders})`,
@@ -64,8 +66,10 @@ export async function ingestEvent(
   for (const rule of rules.rows) {
     if (rule.curso && curso && rule.curso !== curso) continue;
     const subject = fillVars(rule.assunto, vars);
-    const linhas = asLines(rule.body_lines).map(l => fillVars(l, vars));
-    const body = [`Olá ${nome.split(" ")[0] || nome},`, "", ...linhas, "", rule.cta, "", "Equipa ENA · formacao@ena.pt"].join("\n");
+    const fromXml = parseEmailXml(rule.body_xml ?? "");
+    const linhas = (fromXml.linhas.length ? fromXml.linhas : asLines(rule.body_lines)).map(l => fillVars(l, vars));
+    const cta = fillVars(fromXml.cta || rule.cta, vars);
+    const body = [`Olá ${nome.split(" ")[0] || nome},`, "", ...linhas, "", cta, "", "Equipa ENA · formacao@ena.pt"].join("\n");
     const jobId = randomUUID();
     const when = new Date(Date.now() + rule.delay_seconds * 1000).toISOString();
     await db.query(

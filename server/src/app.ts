@@ -64,7 +64,9 @@ const templatePatchSchema = z.object({
   assunto: z.string().trim().min(2).max(200).optional(),
   body_lines: z.array(z.string().trim().min(1).max(800)).min(1).max(20).optional(),
   body_xml: z.string().trim().min(8).max(8000).optional(),
-  cta: z.string().trim().min(1).max(80).optional(),
+  cta: z.string().trim().min(1).max(120).optional(),
+  cta_href: z.string().trim().min(1).max(500).optional(),
+  cta_ambito: z.enum(["preinscricao", "plataforma"]).optional(),
 });
 
 function clientOk(req: FastifyRequest) {
@@ -203,7 +205,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   app.get("/v1/email/templates", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const rows = await db.query(
-      "SELECT id, tipo, nome, assunto, body_lines, body_xml, cta, updated_at FROM email_templates ORDER BY id",
+      "SELECT id, tipo, nome, assunto, body_lines, body_xml, cta, cta_href, cta_ambito, updated_at FROM email_templates ORDER BY id",
     );
     return { templates: rows.rows };
   });
@@ -221,6 +223,8 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
          body_lines = COALESCE($4::jsonb, body_lines),
          cta = COALESCE($5, cta),
          body_xml = COALESCE($6, body_xml),
+         cta_href = COALESCE($7, cta_href),
+         cta_ambito = COALESCE($8, cta_ambito),
          updated_at = now()
        WHERE id = $1`,
       [
@@ -230,11 +234,13 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
         patch.body_lines ? JSON.stringify(patch.body_lines) : null,
         patch.cta ?? null,
         patch.body_xml ?? null,
+        patch.cta_href ?? null,
+        patch.cta_ambito ?? null,
       ],
     );
     await audit(db, req.actor!.id, "email.template_update", "email_template", String(id), req.ip);
     const row = await db.query(
-      "SELECT id, tipo, nome, assunto, body_lines, body_xml, cta, updated_at FROM email_templates WHERE id = $1",
+      "SELECT id, tipo, nome, assunto, body_lines, body_xml, cta, cta_href, cta_ambito, updated_at FROM email_templates WHERE id = $1",
       [id],
     );
     return { template: row.rows[0] };

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "./db/pool.js";
+import { buildCtaVars, ctaDestino, fillCtaHref } from "./emailCta.js";
 import { parseEmailXml } from "./emailXml.js";
 import { sendMail } from "./mailer.js";
 import { EVENT_ALIASES, fillVars, isEmail, normalizeEmail, sanitizeHeader, sanitizeText } from "./security.js";
@@ -13,6 +14,8 @@ type Rule = {
   body_lines: unknown;
   body_xml: string;
   cta: string;
+  cta_href: string;
+  cta_ambito: string;
 };
 
 function asLines(raw: unknown): string[] {
@@ -54,14 +57,14 @@ export async function ingestEvent(
 
   const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
   const rules = await db.query<Rule>(
-    `SELECT r.id, r.template_tipo, r.delay_seconds, r.curso, t.assunto, t.body_lines, t.body_xml, t.cta
+    `SELECT r.id, r.template_tipo, r.delay_seconds, r.curso, t.assunto, t.body_lines, t.body_xml, t.cta, t.cta_href, t.cta_ambito
      FROM email_rules r
      JOIN email_templates t ON t.tipo = r.template_tipo
      WHERE r.ativo = true AND r.trigger_key IN (${placeholders})`,
     keys,
   );
 
-  const vars = { nome, curso, turma };
+  const vars = buildCtaVars({ nome, email, curso, turma });
   let queued = 0;
   for (const rule of rules.rows) {
     if (rule.curso && curso && rule.curso !== curso) continue;
@@ -69,7 +72,9 @@ export async function ingestEvent(
     const fromXml = parseEmailXml(rule.body_xml ?? "");
     const linhas = (fromXml.linhas.length ? fromXml.linhas : asLines(rule.body_lines)).map(l => fillVars(l, vars));
     const cta = fillVars(fromXml.cta || rule.cta, vars);
-    const body = [`Olá ${nome.split(" ")[0] || nome},`, "", ...linhas, "", cta, "", "Equipa ENA · formacao@ena.pt"].join("\n");
+    const hrefTpl = fromXml.href || rule.cta_href || ctaDestino(rule.template_tipo).href;
+    const href = fillCtaHref(hrefTpl, vars);
+    const body = [`Olá ${nome.split(" ")[0] || nome},`, "", ...linhas, "", cta, href, "", "Equipa ENA · formacao@ena.pt"].join("\n");
     const jobId = randomUUID();
     const when = new Date(Date.now() + rule.delay_seconds * 1000).toISOString();
     await db.query(

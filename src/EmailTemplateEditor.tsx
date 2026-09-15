@@ -3,6 +3,7 @@ import { linesToXml, parseEmailXml } from "./emailXml";
 
 const VARS = [
   { k: "{{nome}}", l: "Nome" },
+  { k: "{{email}}", l: "Email" },
   { k: "{{curso}}", l: "Curso" },
   { k: "{{turma}}", l: "Turma" },
 ];
@@ -21,7 +22,7 @@ export function EmailXmlEditor({
   const texto = doc.paragraphs.join("\n\n");
 
   function applyTexto(next: string) {
-    onChange(linesToXml(next.split(/\n\n+/), doc.cta));
+    onChange(linesToXml(next.split(/\n\n+/), doc.cta, doc.href, doc.ambito));
   }
 
   function insertAt(el: HTMLTextAreaElement | null, snippet: string, wrap?: { before: string; after: string }) {
@@ -75,7 +76,7 @@ export function EmailXmlEditor({
           className="w-full min-h-[240px] px-3 py-2.5 text-sm leading-relaxed border border-slate-200 rounded-lg bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
           value={texto}
           onChange={e => applyTexto(e.target.value)}
-          placeholder="Escreva o corpo do email. Parágrafos separados por uma linha em branco. Use {{nome}}, {{curso}} e {{turma}}."
+          placeholder="Escreva o corpo do email. Parágrafos separados por uma linha em branco. Use {{nome}}, {{email}}, {{curso}} e {{turma}}."
         />
       ) : (
         <textarea
@@ -88,8 +89,8 @@ export function EmailXmlEditor({
       )}
       <p className="text-[11px] text-slate-400">
         {mode === "xml"
-          ? "Tags: <email>, <p>, <strong>, <em>, <cta>. Variáveis: {{nome}}, {{curso}}, {{turma}}."
-          : "Uma linha em branco começa um parágrafo novo. O XML à direita do separador guarda o template."}
+          ? "Tags: <email>, <p>, <strong>, <em>, <cta href ambito>. Variáveis: {{nome}}, {{email}}, {{curso}}, {{turma}}."
+          : "Uma linha em branco começa um parágrafo novo. O botão CTA tem destino próprio (pré-inscrição ou plataforma)."}
       </p>
     </div>
   );

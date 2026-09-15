@@ -38,7 +38,16 @@ import { cronogramaToSessoes, formatSessaoLabel, isTurmaActiva, sessaoFormadores
 import { ListsProvider, nextListId, useLists, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
 import { useAuth } from "./AuthGate";
 import { EmailXmlEditor } from "./EmailTemplateEditor";
-import { escapeXml, formatXmlInner, linesToXml, parseEmailXml, xmlParagraphsRaw, xmlToLines } from "./emailXml";
+import {
+  type CtaAmbito,
+  buildCtaVars,
+  ctaAmbitoLabel,
+  ctaDestino,
+  fillCtaHref,
+  hrefForAmbito,
+  isCtaAmbito,
+} from "./emailCta";
+import { formatXmlInner, linesToXml, parseEmailXml, replaceCta, xmlParagraphsRaw, xmlToLines } from "./emailXml";
 import {
   apiCreateRule, apiDeleteRule, apiEmailJobs, apiEmailRules, apiEmailTemplates, apiPatchRule, apiPatchTemplate,
   emitAutomation, type EmailJob, type EmailJobStats,
@@ -231,6 +240,8 @@ type EmailTpl = {
   tipo: string;
   linhas: string[];
   cta: string;
+  ctaHref: string;
+  ctaAmbito: CtaAmbito;
   xml: string;
 };
 
@@ -252,7 +263,7 @@ const emailAtrasosOpts = [
   { value: "3 dias depois" },
 ];
 
-const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: string }> = {
+const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: string; ctaHref: string; ctaAmbito: CtaAmbito }> = {
   welcome: {
     assunto: "Bem-vindo(a) à ENA, {{nome}}",
     linhas: [
@@ -261,6 +272,8 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
       "Se ainda não escolheu horário, responda a este email ou complete a inscrição no site.",
     ],
     cta: "Ver a minha inscrição",
+    ctaHref: ctaDestino("welcome").href,
+    ctaAmbito: ctaDestino("welcome").ambito,
   },
   payment: {
     assunto: "Pagamento confirmado – {{curso}}",
@@ -269,6 +282,8 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
       "Já está inscrita na turma {{turma}}. O cronograma e o acesso à plataforma seguem nas próximas horas.",
     ],
     cta: "Abrir a turma",
+    ctaHref: ctaDestino("payment").href,
+    ctaAmbito: ctaDestino("payment").ambito,
   },
   sale_followup: {
     assunto: "Obrigado, {{nome}} - próximos passos em {{curso}}",
@@ -278,6 +293,8 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
       "Guarde este comprovativo. A ENA trata a formação pela turma, não por «ação».",
     ],
     cta: "Falar com a secretaria",
+    ctaHref: ctaDestino("sale_followup").href,
+    ctaAmbito: ctaDestino("sale_followup").ambito,
   },
   reminder_24h: {
     assunto: "Amanhã começa {{curso}}",
@@ -286,6 +303,8 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
       "Traga o CC e, se for CCP, o portefólio em construção. O link da sala está no botão abaixo.",
     ],
     cta: "Abrir o cronograma",
+    ctaHref: ctaDestino("reminder_24h").href,
+    ctaAmbito: ctaDestino("reminder_24h").ambito,
   },
   certificate: {
     assunto: "O seu certificado está disponível",
@@ -294,6 +313,8 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
       "O certificado está no cockpit da turma, em Certificados. Guarde o PDF - a ENA arquiva o DTP durante 10 anos.",
     ],
     cta: "Descarregar certificado",
+    ctaHref: ctaDestino("certificate").href,
+    ctaAmbito: ctaDestino("certificate").ambito,
   },
   reengagement: {
     assunto: "Ainda está a tempo de começar {{curso}}",
@@ -302,6 +323,8 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
       "Há vagas na turma {{turma}}. Se quiser retomar, o pagamento reabre a inscrição sem perder os dados.",
     ],
     cta: "Retomar inscrição",
+    ctaHref: ctaDestino("reengagement").href,
+    ctaAmbito: ctaDestino("reengagement").ambito,
   },
 };
 
@@ -340,7 +363,9 @@ const emailTemplates: EmailTpl[] = (
     assunto: body.assunto,
     linhas: [...body.linhas],
     cta: body.cta,
-    xml: linesToXml(body.linhas, body.cta),
+    ctaHref: body.ctaHref,
+    ctaAmbito: body.ctaAmbito,
+    xml: linesToXml(body.linhas, body.cta, body.ctaHref, body.ctaAmbito),
   };
 });
 
@@ -348,12 +373,12 @@ function resolveEmailTipo(tipo: string) {
   return EMAIL_TIPO_ALIAS[tipo] ?? tipo;
 }
 
-function bodyFromTemplates(tipo: string, list: EmailTpl[]): { assunto: string; linhas: string[]; cta: string; nome?: string; xml?: string } | undefined {
+function bodyFromTemplates(tipo: string, list: EmailTpl[]): { assunto: string; linhas: string[]; cta: string; ctaHref: string; ctaAmbito: CtaAmbito; nome?: string; xml?: string } | undefined {
   const resolved = resolveEmailTipo(tipo);
   const tpl = list.find(t => t.tipo === resolved);
-  if (tpl) return { assunto: tpl.assunto, linhas: tpl.linhas, cta: tpl.cta, nome: tpl.nome, xml: tpl.xml };
+  if (tpl) return { assunto: tpl.assunto, linhas: tpl.linhas, cta: tpl.cta, ctaHref: tpl.ctaHref, ctaAmbito: tpl.ctaAmbito, nome: tpl.nome, xml: tpl.xml };
   const fallback = EMAIL_BODIES[resolved];
-  return fallback ? { ...fallback, xml: linesToXml(fallback.linhas, fallback.cta) } : undefined;
+  return fallback ? { ...fallback, xml: linesToXml(fallback.linhas, fallback.cta, fallback.ctaHref, fallback.ctaAmbito) } : undefined;
 }
 
 const GATILHO_TEMPLATE: Record<string, string> = {
@@ -384,17 +409,22 @@ function EmailPreviewPane({
   gatilho?: string;
   atraso?: string;
   templates: EmailTpl[];
-  draft?: { nome?: string; assunto: string; linhas: string[]; cta: string; xml?: string };
+  draft?: { nome?: string; assunto: string; linhas: string[]; cta: string; ctaHref?: string; ctaAmbito?: CtaAmbito; xml?: string };
 }) {
   const body = draft ?? bodyFromTemplates(tipo, templates);
   const dest = destFromGatilho(gatilho);
   const cursoLabel = curso || "Formação de Formadores - CCP";
-  const vars = { nome: dest.nome, curso: cursoLabel, turma: "VNG-SM-07/09" };
+  const vars = buildCtaVars({ nome: dest.nome, email: dest.email, curso: cursoLabel, turma: "VNG-SM-07/09" });
   const assunto = body ? fillEmailVars(body.assunto, vars) : "Assunto do email";
   const xml = body?.xml;
+  const parsedXml = xml ? parseEmailXml(xml) : undefined;
   const rawParas = xml ? xmlParagraphsRaw(xml) : [];
   const linhas = rawParas.length ? rawParas : (body?.linhas ?? []);
-  const cta = (xml ? parseEmailXml(xml).cta : body?.cta) || body?.cta || "";
+  const cta = parsedXml?.cta || body?.cta || "";
+  const fallbackDest = ctaDestino(resolveEmailTipo(tipo));
+  const ctaAmbito = parsedXml?.ambito || body?.ctaAmbito || fallbackDest.ambito;
+  const ctaHrefTpl = parsedXml?.href || body?.ctaHref || fallbackDest.href;
+  const ctaHref = fillCtaHref(ctaHrefTpl, vars);
   const previewLinha = rawParas[0] ? fillEmailVars(parseEmailXml(`<p>${rawParas[0]}</p>`).paragraphs[0] ?? "", vars) : (body ? fillEmailVars(body.linhas[0] ?? "", vars) : "");
 
   return (
@@ -452,9 +482,18 @@ function EmailPreviewPane({
                     : fillEmailVars(l, vars)}
                 </p>
               ))}
-              <button type="button" className="inline-flex px-3.5 py-2 bg-amber-500 text-white text-xs font-semibold rounded-lg">
+              <a
+                href={ctaHref}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex px-3.5 py-2 bg-amber-500 text-white text-xs font-semibold rounded-lg"
+              >
                 {fillEmailVars(cta, vars)}
-              </button>
+              </a>
+              <p className="text-[11px] text-slate-500">
+                {ctaAmbitoLabel(ctaAmbito)} · {fallbackDest.funcao}
+              </p>
+              <p className="text-[10px] font-mono text-slate-400 break-all">{ctaHref}</p>
               <p className="text-[11px] text-slate-400 pt-2 border-t border-slate-100">Equipa ENA · formacao@ena.pt · Email automático da regra.</p>
             </div>
           </div>
@@ -3764,7 +3803,11 @@ function EmailsView() {
         const fallback = EMAIL_BODIES[resolveEmailTipo(x.tipo)];
         const linhas = asTplLines(x.body_lines);
         const resolvedLinhas = linhas.length ? linhas : (fallback?.linhas ?? []);
-        const cta = x.cta || fallback?.cta || "";
+        const parsed = parseEmailXml(x.body_xml ?? "");
+        const dest = ctaDestino(resolveEmailTipo(x.tipo));
+        const cta = x.cta || parsed.cta || fallback?.cta || "";
+        const ctaHref = x.cta_href || parsed.href || fallback?.ctaHref || dest.href;
+        const ctaAmbito = isCtaAmbito(x.cta_ambito) ? x.cta_ambito : (parsed.ambito || fallback?.ctaAmbito || dest.ambito);
         return {
           id: x.id,
           nome: x.nome,
@@ -3773,7 +3816,9 @@ function EmailsView() {
           tipo: x.tipo,
           linhas: resolvedLinhas,
           cta,
-          xml: x.body_xml?.trim() || linesToXml(resolvedLinhas, cta),
+          ctaHref,
+          ctaAmbito,
+          xml: x.body_xml?.trim() || linesToXml(resolvedLinhas, cta, ctaHref, ctaAmbito),
         };
       }));
       setJobs(j.jobs);
@@ -3934,6 +3979,9 @@ function EmailsView() {
                   <p className="text-sm font-semibold text-slate-800">{t.nome}</p>
                   <p className="text-xs text-slate-500 truncate">{t.assunto}</p>
                   <p className="text-xs text-slate-400 truncate">{t.linhas[0] ?? "Sem corpo"}</p>
+                  <p className="text-xs text-slate-500 truncate">
+                    Botão: {t.cta} · {ctaAmbitoLabel(t.ctaAmbito)} · {ctaDestino(t.tipo).funcao}
+                  </p>
                   <p className="text-xs text-slate-400">Editado {t.editado}</p>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
@@ -4068,17 +4116,72 @@ function EmailsView() {
                     xml={editTpl.xml}
                     onChange={xml => {
                       const parsed = xmlToLines(xml);
-                      setEditTpl({ ...editTpl, xml, linhas: parsed.linhas, cta: parsed.cta || editTpl.cta });
+                      setEditTpl({
+                        ...editTpl,
+                        xml,
+                        linhas: parsed.linhas,
+                        cta: parsed.cta || editTpl.cta,
+                        ctaHref: parsed.href || editTpl.ctaHref,
+                        ctaAmbito: parsed.ambito || editTpl.ctaAmbito,
+                      });
                     }}
                   />
                 </Field>
-                <Field label="Botão (CTA)"><input className={iCls} value={editTpl.cta} onChange={e => {
-                  const cta = e.target.value;
-                  const xml = /<cta\b/i.test(editTpl.xml)
-                    ? editTpl.xml.replace(/<cta\b[^>]*>[\s\S]*?<\/cta>/i, `<cta>${escapeXml(cta)}</cta>`)
-                    : linesToXml(parseEmailXml(editTpl.xml).paragraphs, cta);
-                  setEditTpl({ ...editTpl, cta, xml });
-                }} /></Field>
+                <Field label="Texto do botão">
+                  <input
+                    className={iCls}
+                    value={editTpl.cta}
+                    onChange={e => {
+                      const cta = e.target.value;
+                      setEditTpl({ ...editTpl, cta, xml: replaceCta(editTpl.xml, cta, editTpl.ctaHref, editTpl.ctaAmbito) });
+                    }}
+                    placeholder="Pode usar {{nome}}, {{curso}} e {{turma}}"
+                  />
+                </Field>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Destino do botão</p>
+                  <p className="text-[11px] text-slate-500 mb-2">
+                    Este template envia o formando para {ctaAmbitoLabel(ctaDestino(editTpl.tipo).ambito).toLowerCase()}: {ctaDestino(editTpl.tipo).funcao}.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {([
+                      { id: "preinscricao" as const, title: "Pré-inscrição", sub: "Lead ainda sem acesso à plataforma" },
+                      { id: "plataforma" as const, title: "Plataforma do formando", sub: "Turma, cronograma, certificado ou secretaria" },
+                    ]).map(opt => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          const href = hrefForAmbito(editTpl.tipo, opt.id);
+                          setEditTpl({
+                            ...editTpl,
+                            ctaAmbito: opt.id,
+                            ctaHref: href,
+                            xml: replaceCta(editTpl.xml, editTpl.cta, href, opt.id),
+                          });
+                        }}
+                        className={`text-left rounded-xl border px-3 py-2.5 ${editTpl.ctaAmbito === opt.id ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white hover:border-slate-300"}`}
+                      >
+                        <p className="text-xs font-semibold text-slate-800">{opt.title}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">{opt.sub}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Field label="URL do botão">
+                  <input
+                    className={iCls}
+                    value={editTpl.ctaHref}
+                    onChange={e => {
+                      const ctaHref = e.target.value;
+                      setEditTpl({ ...editTpl, ctaHref, xml: replaceCta(editTpl.xml, editTpl.cta, ctaHref, editTpl.ctaAmbito) });
+                    }}
+                    placeholder="{{plataforma_url}}/turma/{{turma}}"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Personaliza com {"{{email}}"}, {"{{curso}}"}, {"{{turma}}"}, {"{{preinscricao_url}}"} ou {"{{plataforma_url}}"}.
+                  </p>
+                </Field>
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Preview</p>
@@ -4086,7 +4189,7 @@ function EmailsView() {
                   tipo={editTpl.tipo}
                   curso="Formação de Formadores - CCP"
                   templates={templates}
-                  draft={{ nome: editTpl.nome, assunto: editTpl.assunto, linhas: editTpl.linhas, cta: editTpl.cta, xml: editTpl.xml }}
+                  draft={{ nome: editTpl.nome, assunto: editTpl.assunto, linhas: editTpl.linhas, cta: editTpl.cta, ctaHref: editTpl.ctaHref, ctaAmbito: editTpl.ctaAmbito, xml: editTpl.xml }}
                 />
               </div>
             </div>
@@ -4096,11 +4199,13 @@ function EmailsView() {
                 const parsed = xmlToLines(editTpl.xml);
                 const linhas = parsed.linhas.length ? parsed.linhas : editTpl.linhas.map(l => l.trim()).filter(Boolean);
                 const cta = (parsed.cta || editTpl.cta).trim();
-                if (!linhas.length || !editTpl.assunto.trim() || !editTpl.nome.trim() || !cta) return;
-                const xml = editTpl.xml.trim() || linesToXml(linhas, cta);
-                const next = { ...editTpl, linhas, cta, xml, editado: "hoje" };
+                const ctaHref = (parsed.href || editTpl.ctaHref).trim();
+                const ctaAmbito = parsed.ambito || editTpl.ctaAmbito;
+                if (!linhas.length || !editTpl.assunto.trim() || !editTpl.nome.trim() || !cta || !ctaHref) return;
+                const xml = editTpl.xml.trim() || linesToXml(linhas, cta, ctaHref, ctaAmbito);
+                const next = { ...editTpl, linhas, cta, ctaHref, ctaAmbito, xml, editado: "hoje" };
                 setTemplates(prev => prev.map(t => t.id === editTpl.id ? next : t));
-                if (apiOn) void apiPatchTemplate(editTpl.id, { nome: next.nome, assunto: next.assunto, body_lines: next.linhas, body_xml: next.xml, cta: next.cta });
+                if (apiOn) void apiPatchTemplate(editTpl.id, { nome: next.nome, assunto: next.assunto, body_lines: next.linhas, body_xml: next.xml, cta: next.cta, cta_href: next.ctaHref, cta_ambito: next.ctaAmbito });
                 setEditTpl(null);
               }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
             </div>

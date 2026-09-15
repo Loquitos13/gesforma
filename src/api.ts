@@ -30,6 +30,8 @@ export type EmailTemplate = {
   body_lines?: string[] | string;
   body_xml?: string;
   cta?: string;
+  cta_href?: string;
+  cta_ambito?: "preinscricao" | "plataforma";
   updated_at: string;
 };
 
@@ -74,7 +76,7 @@ export const apiDeleteRule = (id: number) =>
   api<{ ok: boolean }>(`/v1/email/rules/${id}`, { method: "DELETE" });
 
 export const apiEmailTemplates = () => api<{ templates: EmailTemplate[] }>("/v1/email/templates");
-export const apiPatchTemplate = (id: number, body: { nome?: string; assunto?: string; body_lines?: string[]; body_xml?: string; cta?: string }) =>
+export const apiPatchTemplate = (id: number, body: { nome?: string; assunto?: string; body_lines?: string[]; body_xml?: string; cta?: string; cta_href?: string; cta_ambito?: "preinscricao" | "plataforma" }) =>
   api<{ template: EmailTemplate }>(`/v1/email/templates/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 
 export const apiEmailJobs = () => api<{ stats: EmailJobStats; jobs: EmailJob[] }>("/v1/email/jobs");

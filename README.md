@@ -24,7 +24,7 @@ Cada **curso Gold** e cada **UFCD financiada** tem uma ficha própria (não um p
 
 A vista **Módulos** começa pelo filtro de curso: lista só os blocos desse curso e o botão **+ Novo módulo** está sempre disponível (no cabeçalho, no filtro e no estado vazio). A partir da ficha de um curso Gold ou de uma UFCD, **Módulos** abre já filtrado.
 
-O catálogo **Módulos, Conteúdos, Datas, Locais e Áreas** existe nos dois lados (Gold e Financiada), com o mesmo layout e acento âmbar / azul. Em **Formandos Gold** (avulso) o olho abre a ficha com documentos — o lápis continua a editar. **Detalhes / Recibo** em Pagamentos, **Abrir** em Conteúdos, **Ver certificado**, **Gerar MB / Enviar recibo**, **download** no cockpit e **Ver todas as notificações** abrem ecrãs ou modais deste protótipo (sem backend).
+O catálogo **Módulos, Conteúdos, Datas, Locais e Áreas** existe nos dois lados (Gold e Financiada), com o mesmo layout e acento âmbar / azul. Em **Formandos Gold** (avulso) o olho abre a ficha com documentos - o lápis continua a editar. **Detalhes / Recibo** em Pagamentos, **Abrir** em Conteúdos, **Ver certificado**, **Gerar MB / Enviar recibo**, **download** no cockpit e **Ver todas as notificações** abrem ecrãs ou modais deste protótipo (sem backend).
 
 Gold e Financiada têm cada uma o menu **Formadores**: ficha (contacto, CCP, NIF, especialidade), estado Ativo/Inactivo e os regimes em que lecciona. Quem marca os dois regimes aparece nas duas listas. Criar ou editar um formador actualiza os dropdowns do cronograma e das turmas.
 
@@ -42,11 +42,55 @@ Os botões **Novo curso**, **Nova turma**, **Novo módulo**, **Nova sessão** e 
 
 Cada **turma** tem um **cronograma** e um toggle **Ativa / Inativa**. No cockpit, o separador Cronograma mostra o plano de sessões: resumo (sessões, horas, próxima, período), linha do tempo agrupada por mês e edição sessão a sessão. Cada sessão escolhe **um ou mais módulos** do curso e **um ou mais formadores** em dropdowns com pesquisa. A Visão Geral lista todos os formadores atribuídos às sessões (com o número de sessões de cada um). A tabela de Sessões mostra essa coluna. Regenerar pede confirmação porque substitui o plano atual. Só turmas ativas aparecem nas pré-inscrições Gold, na conversão de lead em formando, na mudança de turma de um formando e nas inscrições financiadas. Uma turma inativa mantém os formandos já inscritos, mas fecha novas entradas.
 
-## Correr localmente
+## Backend e automações de email
+
+A secretaria entra com sessão (cookie httpOnly, SameSite=strict). A API Fastify fala **Postgres** na VPS; em desenvolvimento, se `DATABASE_URL` estiver vazio, usa **PGlite** (o mesmo SQL, ficheiro em `server/data/`).
+
+Arquitectura na VPS: **um Compose, três papéis, rede só interna**.
+
+1. `db` — Postgres 16. Não é publicado na internet.
+2. `api` — só em `127.0.0.1:43148`. O Caddy/nginx faz TLS e encaminha `/api` para aqui.
+3. `web` — esta app Vite, no mesmo domínio, para os cookies funcionarem.
+
+Não separam a base para outro servidor até haver necessidade: um contentor Postgres no mesmo host é mais rápido, o backup é um `pg_dump` e a API não atravessa a rede pública.
+
+**Emails automáticos** — uma regra = gatilho + template + atraso. A secretaria regista uma pré-inscrição ou um pagamento; a API enfileira o envio (incluindo **contacto após a venda**, 1 hora depois do pagamento). O worker corre na própria API, sem Redis. Sem SMTP (`MAIL_MODE=log`) o email fica no histórico; com `SMTP_URL` sai pelo correio.
+
+### Segurança
+
+- Palavras-passe com scrypt; o token de sessão só existe em hash na base.
+- CORS e `Origin` fechados a `APP_ORIGIN`. Pedidos de escrita exigem o cabeçalho `X-Gesforma-Client`.
+- Helmet, limite de corpo 32 KB, rate limit (8 tentativas de login / minuto).
+- SQL só com parâmetros. Assunto e destinatário sem quebras de linha (injecção de cabeçalhos).
+- Em produção a API recusa-se a arrancar sem `DATABASE_URL`, `SESSION_SECRET` (≥32) e `ADMIN_PASSWORD` diferente do valor de desenvolvimento.
+
+### Backup completo
+
+`pg_dump -Fc` (formato custom) copia **todos** os dados. Restaura com `pg_restore`. Na VPS:
 
 ```bash
-npm install
-npm run dev
+docker compose --profile backup run --rm backup
+# ou, no host:
+npm run backup
 ```
 
-Abre [http://127.0.0.1:43147](http://127.0.0.1:43147).
+Os ficheiros ficam em `backups/`. Para ponto-no-tempo (WAL) no futuro: pgBackRest — não é preciso no primeiro servidor.
+
+### Correr localmente
+
+```bash
+cp .env.example .env
+# em desenvolvimento: ADMIN_PASSWORD=altere-me-no-primeiro-arranque
+npm install
+npm install --prefix server
+npm run api    # outra consola — http://127.0.0.1:43148/health
+npm run dev    # http://127.0.0.1:43147
+```
+
+Entrar com `tania@ena.pt` e a palavra-passe do `.env`.
+
+Na VPS, depois de preencher `.env` com segredos gerados (`openssl rand -base64 48`):
+
+```bash
+docker compose up -d db api
+```

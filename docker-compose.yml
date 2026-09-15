@@ -1,0 +1,84 @@
+# GesForma na VPS: Postgres + API na mesma máquina, rede só interna.
+# A base não é publicada. A API só escuta em 127.0.0.1 — o Caddy/nginx faz TLS.
+#
+#   cp .env.example .env   # gere passwords e SESSION_SECRET
+#   docker compose up -d db api
+#   docker compose --profile backup run --rm backup
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gesforma
+      POSTGRES_USER: gesforma
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gesforma -d gesforma"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    command:
+      - postgres
+      - -c
+      - listen_addresses=*
+      - -c
+      - log_min_duration_statement=500
+    networks:
+      - internal
+
+  api:
+    build: ./server
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://gesforma:${POSTGRES_PASSWORD}@db:5432/gesforma
+      SESSION_SECRET: ${SESSION_SECRET}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_NAME: ${ADMIN_NAME:-Tania}
+      APP_ORIGIN: ${APP_ORIGIN}
+      MAIL_MODE: ${MAIL_MODE:-log}
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-ENA Formação <formacao@ena.pt>}
+      API_PORT: "43148"
+      TRUST_PROXY: "true"
+    ports:
+      - "127.0.0.1:43148:43148"
+    networks:
+      - internal
+
+  backup:
+    image: postgres:16-alpine
+    profiles: ["backup"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    networks:
+      - internal
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        stamp=$$(date -u +%Y%m%d-%H%M%S)
+        pg_dump -Fc --no-owner -h db -U gesforma gesforma > /backups/gesforma-$$stamp.dump
+        echo "backup /backups/gesforma-$$stamp.dump"
+        ls -1 /backups/gesforma-*.dump 2>/dev/null | sort | head -n -14 | xargs -r rm --
+
+volumes:
+  pgdata:
+
+networks:
+  internal:
+    driver: bridge

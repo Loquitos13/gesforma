@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 43147",
+    "api": "npm run dev --prefix server",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0 --port 43147"
+    "preview": "vite preview --host 0.0.0.0 --port 43147",
+    "backup": "bash scripts/backup.sh"
   },
   "dependencies": {
     "react": "^19.0.0",

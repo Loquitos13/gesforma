@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { emitAutomation } from "./api";
 
 export function nextListId<T extends { id: number }>(xs: T[]) {
   return Math.max(0, ...xs.map(x => x.id), 1000) + 1;
@@ -89,7 +90,14 @@ export function ListsProvider({
   const [blogPosts, setBlog] = useState(seeds.blogPosts);
   const [campanhas, setCamp] = useState(seeds.campanhas);
 
-  const addPreinscricao = useCallback((row: Preinscricao) => setPre(xs => [row, ...xs]), []);
+  const addPreinscricao = useCallback((row: Preinscricao) => {
+    setPre(xs => [row, ...xs]);
+    void emitAutomation("preinscricao.created", {
+      email: row.email,
+      nome: `${row.nome} ${row.apelido}`.trim(),
+      curso: row.curso,
+    }, `preinscricao:${row.id}:${row.email}`);
+  }, []);
   const patchPreinscricao = useCallback((id: number, patch: Partial<Preinscricao>) => setPre(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x)), []);
   const removePreinscricao = useCallback((id: number) => setPre(xs => xs.filter(x => x.id !== id)), []);
   const addFormandoTurma = useCallback((row: FormandoTurma) => setFT(xs => [row, ...xs]), []);

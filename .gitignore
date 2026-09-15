@@ -3,3 +3,8 @@ dist
 .DS_Store
 *.local
 .vercel
+.env
+server/data
+backups/*.dump
+backups/*.tgz
+backups/*.sql

@@ -36,6 +36,11 @@ import { useFormadorOptions } from "./FormadoresContext";
 import { useTurmas } from "./TurmasContext";
 import { cronogramaToSessoes, formatSessaoLabel, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
 import { ListsProvider, nextListId, useLists, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
+import { useAuth } from "./AuthGate";
+import {
+  apiCreateRule, apiDeleteRule, apiEmailJobs, apiEmailRules, apiEmailTemplates, apiPatchRule, apiPatchTemplate,
+  emitAutomation, type EmailJob, type EmailJobStats,
+} from "./api";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -218,6 +223,7 @@ const emailRegras = [
 const emailTemplates = [
   { id: 1, nome: "Boas-vindas", assunto: "Bem-vindo(a) à ENA, {{nome}}", editado: "2026-08-15", tipo: "welcome" },
   { id: 2, nome: "Confirmação de Pagamento", assunto: "Pagamento confirmado – {{curso}}", editado: "2026-07-22", tipo: "payment" },
+  { id: 7, nome: "Contacto após a venda", assunto: "Obrigado, {{nome}} — próximos passos em {{curso}}", editado: "2026-09-15", tipo: "sale_followup" },
   { id: 3, nome: "Lembrete 24h", assunto: "Amanhã começa {{curso}}", editado: "2026-08-20", tipo: "reminder_24h" },
   { id: 5, nome: "Certificado de Conclusão", assunto: "O seu certificado está disponível", editado: "2026-08-01", tipo: "certificate" },
   { id: 6, nome: "Reengajamento", assunto: "Ainda está a tempo de começar {{curso}}", editado: "2026-07-10", tipo: "reengagement" },
@@ -227,6 +233,7 @@ const emailGatilhosOpts = [
   { value: "Nova pré-inscrição recebida", sub: "Lead acaba de se inscrever no site" },
   { value: "Pré-inscrição sem pagamento há 3 dias", sub: "Lembrete de cobrança" },
   { value: "Pagamento confirmado", sub: "Lead passa a formando" },
+  { value: "Contacto após a venda", sub: "Secretaria confirma turma e próximos passos" },
   { value: "24 horas antes do início", sub: "Turma a começar" },
   { value: "Formando marcado como concluído", sub: "Emite certificado" },
   { value: "30 dias sem compra", sub: "Reengajamento" },
@@ -257,6 +264,15 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
       "Já está inscrita na turma {{turma}}. O cronograma e o acesso à plataforma seguem nas próximas horas.",
     ],
     cta: "Abrir a turma",
+  },
+  sale_followup: {
+    assunto: "Obrigado, {{nome}} — próximos passos em {{curso}}",
+    linhas: [
+      "O pagamento ficou registado. Daqui a pouco a secretaria confirma-lhe a turma {{turma}} e o horário.",
+      "Se precisar de fatura, recibo ou de alterar o nome no certificado, responda a este email.",
+      "Guarde este comprovativo. A ENA trata a formação pela turma, não por «ação».",
+    ],
+    cta: "Falar com a secretaria",
   },
   reminder_24h: {
     assunto: "Amanhã começa {{curso}}",
@@ -294,6 +310,7 @@ const GATILHO_TEMPLATE: Record<string, string> = {
   "Nova pré-inscrição recebida": "Boas-vindas",
   "Pré-inscrição sem pagamento há 3 dias": "Reengajamento",
   "Pagamento confirmado": "Confirmação de Pagamento",
+  "Contacto após a venda": "Contacto após a venda",
   "24 horas antes do início": "Lembrete 24h",
   "Formando marcado como concluído": "Certificado de Conclusão",
   "30 dias sem compra": "Reengajamento",
@@ -3653,7 +3670,11 @@ function EmailsView() {
   const [tab, setTab] = useState<"regras" | "templates" | "historico">("regras");
   const [regras, setRegras] = useState(emailRegras);
   const [templates, setTemplates] = useState(emailTemplates);
+  const [jobs, setJobs] = useState<EmailJob[]>([]);
+  const [jobStats, setJobStats] = useState<EmailJobStats>({ sent: 0, queued: 0, failed: 0 });
+  const [apiOn, setApiOn] = useState(false);
   const [editRegraId, setEditRegraId] = useState<number | null>(null);
+  const [apagarRegra, setApagarRegra] = useState<number | null>(null);
   const [editTpl, setEditTpl] = useState<typeof emailTemplates[number] | null>(null);
   const [novaRegra, setNovaRegra] = useState(false);
   const [previewTipo, setPreviewTipo] = useState<string | null>(null);
@@ -3666,6 +3687,24 @@ function EmailsView() {
   const [atraso, setAtraso] = useState("Imediatamente");
   const [ativoRegra, setAtivoRegra] = useState(true);
   const [erroRegra, setErroRegra] = useState("");
+  const [busyRegra, setBusyRegra] = useState(false);
+
+  async function recarregar() {
+    try {
+      const [r, t, j] = await Promise.all([apiEmailRules(), apiEmailTemplates(), apiEmailJobs()]);
+      setRegras(r.rules);
+      setTemplates(t.templates.map(x => ({
+        id: x.id, nome: x.nome, assunto: x.assunto,
+        editado: x.updated_at.slice(0, 10), tipo: x.tipo,
+      })));
+      setJobs(j.jobs);
+      setJobStats(j.stats);
+      setApiOn(true);
+    } catch {
+      setApiOn(false);
+    }
+  }
+  useEffect(() => { void recarregar(); }, []);
 
   const templateOpts = templates.map(t => ({ value: t.nome, sub: t.assunto }));
   const templateTipo = templates.find(t => t.nome === templateNome)?.tipo ?? "";
@@ -3703,21 +3742,21 @@ function EmailsView() {
     setNovaRegra(true);
   }
 
-  function abrirEditarRegra(r: typeof emailRegras[number]) {
+  function abrirEditarRegra(r: typeof emailRegras[number] & { atraso?: string; curso?: string | null }) {
     setEditRegraId(r.id);
     setNomeRegra(r.nome);
     setNomeTouched(true);
     setGatilho(r.gatilho);
     const tpl = templates.find(t => t.tipo === r.template);
     setTemplateNome(tpl?.nome ?? "");
-    setCursoEmail("");
-    setAtraso("Imediatamente");
+    setCursoEmail(r.curso ?? "");
+    setAtraso(r.atraso ?? "Imediatamente");
     setAtivoRegra(r.ativo);
     setErroRegra("");
     setNovaRegra(true);
   }
 
-  function guardarRegra() {
+  async function guardarRegra() {
     if (!nomeRegra.trim()) {
       setErroRegra("Dê um nome à regra.");
       return;
@@ -3730,26 +3769,38 @@ function EmailsView() {
       setErroRegra("Escolha o template que o formando recebe.");
       return;
     }
-    if (editRegraId != null) {
-      setRegras(prev => prev.map(x => x.id === editRegraId ? { ...x, nome: nomeRegra.trim(), gatilho, template: templateTipo, ativo: ativoRegra } : x));
-    } else {
-      setRegras(prev => [{
-        id: Date.now() % 100000,
-        nome: nomeRegra.trim(),
-        gatilho,
-        template: templateTipo,
-        ativo: ativoRegra,
-        envios: 0,
-        taxaAbertura: 0,
-      }, ...prev]);
+    const body = { nome: nomeRegra.trim(), gatilho, templateTipo, atraso, curso: cursoEmail || null, ativo: ativoRegra };
+    setBusyRegra(true);
+    try {
+      if (apiOn) {
+        if (editRegraId != null) await apiPatchRule(editRegraId, body);
+        else await apiCreateRule(body);
+        await recarregar();
+      } else if (editRegraId != null) {
+        setRegras(prev => prev.map(x => x.id === editRegraId ? { ...x, nome: nomeRegra.trim(), gatilho, template: templateTipo, ativo: ativoRegra } : x));
+      } else {
+        setRegras(prev => [{
+          id: Date.now() % 100000,
+          nome: nomeRegra.trim(),
+          gatilho,
+          template: templateTipo,
+          ativo: ativoRegra,
+          envios: 0,
+          taxaAbertura: 0,
+        }, ...prev]);
+      }
+      setNovaRegra(false);
+      setEditRegraId(null);
+    } catch (err) {
+      setErroRegra(err instanceof Error ? err.message : "Não foi possível guardar.");
+    } finally {
+      setBusyRegra(false);
     }
-    setNovaRegra(false);
-    setEditRegraId(null);
   }
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Emails Automáticos" sub="Uma regra = um gatilho + um template. O preview mostra o email com dados de exemplo." action={<NewBtn label="+ Nova Regra" onClick={abrirNova} />} />
+      <PageHeader title="Emails Automáticos" sub={apiOn ? "As regras vivem na API. Quando a secretaria regista uma pré-inscrição ou um pagamento, a fila dispara sozinha." : "Uma regra = um gatilho + um template. Sem API as alterações ficam só neste ecrã."} action={<NewBtn label="+ Nova Regra" onClick={abrirNova} />} />
       <div className="flex gap-1 border-b border-slate-200 bg-white rounded-t-xl px-4 pt-3">
         {(["regras", "templates", "historico"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
@@ -3775,10 +3826,13 @@ function EmailsView() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
-                  <Toggle checked={r.ativo} onChange={val => setRegras(prev => prev.map(x => x.id === r.id ? { ...x, ativo: val } : x))} />
+                  <Toggle checked={r.ativo} onChange={val => {
+                    setRegras(prev => prev.map(x => x.id === r.id ? { ...x, ativo: val } : x));
+                    if (apiOn) void apiPatchRule(r.id, { ativo: val }).catch(() => recarregar());
+                  }} />
                   <ActBtn icon={I.eye} label="Preview" color="gray" onClick={() => { setPreviewTipo(r.template); setPreviewGatilho(r.gatilho); }} />
                   <ActBtn icon={I.edit} label="Editar" onClick={() => abrirEditarRegra(r)} />
-                  <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setRegras(prev => prev.filter(x => x.id !== r.id))} />
+                  <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagarRegra(r.id)} />
                 </div>
               </div>
             ))}
@@ -3807,12 +3861,28 @@ function EmailsView() {
       )}
       {tab === "historico" && (
         <Card>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-slate-100">
-            {[{ l: "Enviados (30d)", v: "48 920", c: "text-slate-800" }, { l: "Taxa abertura", v: "84.3%", c: "text-emerald-600" }, { l: "Taxa cliques", v: "12.7%", c: "text-blue-600" }, { l: "Erros", v: "0.8%", c: "text-red-500" }].map(s => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-slate-100">
+            {[{ l: "Enviados", v: String(jobStats.sent), c: "text-slate-800" }, { l: "Na fila", v: String(jobStats.queued), c: "text-amber-600" }, { l: "Erros", v: String(jobStats.failed), c: "text-red-500" }].map(s => (
               <div key={s.l} className="bg-white p-4"><p className="text-xs text-slate-400">{s.l}</p><p className={`text-xl font-bold mt-1 ${s.c}`}>{s.v}</p></div>
             ))}
           </div>
-          <div className="p-4 text-center text-xs text-slate-400">Os disparos das regras novas aparecem aqui depois do primeiro envio.</div>
+          {jobs.length === 0 ? (
+            <div className="p-4 text-center text-xs text-slate-400">Os disparos reais aparecem aqui. Crie uma pré-inscrição ou registe um pagamento.</div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {jobs.map(j => (
+                <div key={j.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{j.subject}</p>
+                    <p className="text-xs text-slate-500 truncate">{j.to_name} · {j.to_email} · {j.regra}</p>
+                  </div>
+                  <span className={`text-xs font-bold ${j.status === "sent" ? "text-emerald-700" : j.status === "failed" ? "text-red-600" : "text-amber-700"}`}>
+                    {j.status === "sent" ? "Enviado" : j.status === "failed" ? "Erro" : "Na fila"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
       )}
 
@@ -3872,7 +3942,7 @@ function EmailsView() {
             </div>
             <div className="flex gap-2 px-5 py-4 border-t border-slate-100 flex-shrink-0">
               <button type="button" onClick={() => setNovaRegra(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-              <button type="button" onClick={guardarRegra} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">{editRegraId != null ? "Guardar regra" : "Criar regra"}</button>
+              <button type="button" disabled={busyRegra} onClick={() => void guardarRegra()} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editRegraId != null ? "Guardar regra" : "Criar regra"}</button>
             </div>
           </div>
         </div>
@@ -3901,12 +3971,26 @@ function EmailsView() {
               <button onClick={() => setEditTpl(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
               <button onClick={() => {
                 setTemplates(prev => prev.map(t => t.id === editTpl.id ? { ...editTpl, editado: "hoje" } : t));
+                if (apiOn) void apiPatchTemplate(editTpl.id, { nome: editTpl.nome, assunto: editTpl.assunto });
                 setEditTpl(null);
               }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
             </div>
           </div>
         )}
       </SlideOver>
+      <ConfirmDangerModal
+        open={apagarRegra != null}
+        onClose={() => setApagarRegra(null)}
+        title="Eliminar regra de email"
+        body="A regra deixa de disparar. Os envios já feitos ficam no histórico."
+        risk="Não se desfaz. Os formandos deixam de receber este email automático."
+        onConfirm={() => {
+          const id = apagarRegra;
+          if (id == null) return;
+          setRegras(prev => prev.filter(x => x.id !== id));
+          if (apiOn) void apiDeleteRule(id).catch(() => recarregar());
+        }}
+      />
     </div>
   );
 }
@@ -3918,6 +4002,7 @@ function PagamentosView() {
   const [filtro, setFiltro] = useState("Todos");
   const [novo, setNovo] = useState(false);
   const [nome, setNome] = useState("");
+  const [emailPag, setEmailPag] = useState("");
   const [curso, setCurso] = useState("");
   const [valor, setValor] = useState("125");
   const [metodo, setMetodo] = useState("MB Way");
@@ -3930,7 +4015,7 @@ function PagamentosView() {
   );
   return (
     <div className="space-y-5">
-      <PageHeader title="Pagamentos" action={<NewBtn label="+ Nova transação" onClick={() => { setNome(""); setCurso(""); setValor("125"); setMetodo("MB Way"); setNovo(true); }} />} />
+      <PageHeader title="Pagamentos" action={<NewBtn label="+ Nova transação" onClick={() => { setNome(""); setEmailPag(""); setCurso(""); setValor("125"); setMetodo("MB Way"); setNovo(true); }} />} />
       <ViewFilters
         fields={[{ label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(lista.map(t => t.curso)) }]}
         chips={{ options: ["Todos", "Pago", "Pendente"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
@@ -4012,6 +4097,7 @@ function PagamentosView() {
       <SlideOver open={novo} onClose={() => setNovo(false)} title="Nova transação" sub="Pagamento Gold">
         <div className="p-5 space-y-3">
           <Field label="Nome do formando"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} /></Field>
+          <Field label="Email"><input className={iCls} type="email" value={emailPag} onChange={e => setEmailPag(e.target.value)} placeholder="para o recibo e o contacto após a venda" /></Field>
           <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Valor (€)"><input className={iCls} type="number" value={valor} onChange={e => setValor(e.target.value)} /></Field>
@@ -4024,11 +4110,13 @@ function PagamentosView() {
           <div className="flex gap-2 pt-2">
             <button onClick={() => setNovo(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button disabled={!nome.trim() || !curso} onClick={() => {
+              const id = `TRX-${Date.now() % 100000}`;
               setLista(xs => [{
-                id: `TRX-${Date.now() % 100000}`,
-                nome: nome.trim(), valor: Number(valor) || 0, metodo, curso,
+                id, nome: nome.trim(), valor: Number(valor) || 0, metodo, curso,
                 data: nowStamp(), estado: "Pago",
               }, ...xs]);
+              const mail = emailPag.trim() || `${nome.trim().toLowerCase().replace(/\s+/g, ".")}@mail.pt`;
+              void emitAutomation("payment.confirmed", { email: mail, nome: nome.trim(), curso }, `payment:${id}:${mail}`);
               setNovo(false);
             }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Registar</button>
           </div>
@@ -4236,6 +4324,7 @@ const sidebarConfig: NavGroup[] = [
 ];
 
 function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v: View | NavTarget) => void; onClose?: () => void }) {
+  const { user, logout } = useAuth();
   const [openGroups, setOpenGroups] = useState<string[]>(() => {
     const open: string[] = ["Principal"];
     sidebarConfig.forEach(g => {
@@ -4354,9 +4443,9 @@ function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v:
       </nav>
       <div className="flex-shrink-0 border-t border-white/10 p-3">
         <div className="flex items-center gap-3 px-2 py-2">
-          <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-white text-sm font-bold">T</div>
-          <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-white">Tania</p><p className="text-xs text-slate-500">Administradora</p></div>
-          <button title="Sair" className="p-1.5 text-slate-500 hover:text-white rounded-lg hover:bg-white/10 transition-colors">{I.power}</button>
+          <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-white text-sm font-bold">{user.name.slice(0, 1)}</div>
+          <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-white truncate">{user.name}</p><p className="text-xs text-slate-500 truncate">{user.role}</p></div>
+          <button type="button" title="Sair" onClick={() => void logout()} className="p-1.5 text-slate-500 hover:text-white rounded-lg hover:bg-white/10 transition-colors">{I.power}</button>
         </div>
       </div>
     </div>

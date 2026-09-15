@@ -32,7 +32,7 @@ function SessionSplash({ pct }: { pct: number }) {
   const c = 2 * Math.PI * r;
   const offset = c * (1 - shown / 100);
   return (
-    <div className="min-h-full flex flex-col items-center justify-center bg-slate-100 px-6">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 px-6">
       <div className="relative" style={{ width: 120, height: 120 }}>
         <svg className="absolute inset-0 -rotate-90" viewBox="0 0 120 120" aria-hidden>
           <circle cx="60" cy="60" r={r} fill="none" stroke="#e2e8f0" strokeWidth="6" />
@@ -74,13 +74,24 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true;
+    let apiDone = false;
     const started = Date.now();
+    const minMs = 1800;
     const tick = window.setInterval(() => {
-      setPct(p => {
-        if (p >= 90) return p;
-        return p + (p < 40 ? 6 : p < 70 ? 3 : 1);
-      });
-    }, 90);
+      setPct(p => (p >= 90 ? 90 : p + (p < 40 ? 4 : p < 70 ? 2 : 1)));
+    }, 80);
+    function finish() {
+      if (!alive || !apiDone) return;
+      const wait = Math.max(0, minMs - (Date.now() - started));
+      window.setTimeout(() => {
+        if (!alive) return;
+        window.clearInterval(tick);
+        setPct(100);
+        window.setTimeout(() => {
+          if (alive) setReady(true);
+        }, 400);
+      }, wait);
+    }
     apiMe()
       .then(r => {
         if (alive) setUser(r.user);
@@ -89,16 +100,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
         if (alive) setOffline(err instanceof TypeError);
       })
       .finally(() => {
-        window.clearInterval(tick);
-        if (!alive) return;
-        const remain = Math.max(0, 1100 - (Date.now() - started));
-        window.setTimeout(() => {
-          if (!alive) return;
-          setPct(100);
-          window.setTimeout(() => {
-            if (alive) setReady(true);
-          }, 280);
-        }, remain);
+        apiDone = true;
+        finish();
       });
     return () => {
       alive = false;
@@ -135,7 +138,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (!user) {
     return (
-      <div className="min-h-full flex items-center justify-center bg-slate-100 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
         <form onSubmit={login} className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-4">
           <div>
             <p className="bg-amber-500 text-white font-extrabold text-sm px-3 py-1.5 rounded-lg tracking-widest inline-block">GESFORMA</p>

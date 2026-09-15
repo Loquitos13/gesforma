@@ -14,49 +14,28 @@ export function useAuth() {
   return ctx;
 }
 
-function EnaMark({ size = 72 }: { size?: number }) {
-  return (
-    <div
-      className="rounded-full bg-amber-500 text-white font-extrabold tracking-[0.18em] flex items-center justify-center shadow-[0_8px_24px_rgba(245,158,11,0.35)]"
-      style={{ width: size, height: size, fontSize: size * 0.22 }}
-      aria-hidden
-    >
-      ENA
-    </div>
-  );
+function EnaLogo({ className }: { className?: string }) {
+  return <img src="/imagens/ena_logo.svg" alt="ENA" className={className} />;
 }
 
 function SessionSplash({ pct }: { pct: number }) {
   const shown = Math.min(100, Math.max(0, Math.round(pct)));
-  const r = 42;
-  const c = 2 * Math.PI * r;
-  const offset = c * (1 - shown / 100);
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 px-6">
-      <div className="relative" style={{ width: 120, height: 120 }}>
-        <svg className="absolute inset-0 -rotate-90" viewBox="0 0 120 120" aria-hidden>
-          <circle cx="60" cy="60" r={r} fill="none" stroke="#e2e8f0" strokeWidth="6" />
-          <circle
-            cx="60"
-            cy="60"
-            r={r}
-            fill="none"
-            stroke="#f59e0b"
-            strokeWidth="6"
-            strokeLinecap="round"
-            strokeDasharray={c}
-            strokeDashoffset={offset}
-            className="transition-[stroke-dashoffset] duration-150 ease-out"
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-6">
+      <EnaLogo className="w-[min(88vw,28rem)] h-auto" />
+      <div className="mt-12 w-[min(88vw,28rem)]">
+        <div className="h-2.5 rounded-full bg-slate-200 overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={shown} aria-label="A verificar sessão">
+          <div
+            className="h-full rounded-full bg-[#ffa900] transition-all duration-150 ease-out"
+            style={{ width: `${shown}%` }}
           />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <EnaMark size={72} />
         </div>
+        <p className="mt-5 text-center text-3xl sm:text-4xl font-bold text-slate-800 tabular-nums" aria-live="polite">
+          {shown}%
+        </p>
+        <p className="mt-2 text-center text-base font-semibold text-slate-600">A verificar sessão</p>
+        <p className="mt-1 text-center text-sm text-slate-400">ENA · Escola de Negócios e Administração</p>
       </div>
-      <p className="mt-5 text-sm font-semibold text-slate-700 tabular-nums" aria-live="polite">
-        A verificar sessão · {shown}%
-      </p>
-      <p className="mt-1 text-xs text-slate-400">ENA · Escola de Negócios e Administração</p>
     </div>
   );
 }
@@ -138,11 +117,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <form onSubmit={login} className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-4">
           <div>
-            <p className="bg-amber-500 text-white font-extrabold text-sm px-3 py-1.5 rounded-lg tracking-widest inline-block">GESFORMA</p>
-            <h1 className="text-xl font-bold text-slate-800 mt-3">Entrar na secretaria</h1>
+            <EnaLogo className="h-9 w-auto" />
+            <h1 className="text-xl font-bold text-slate-800 mt-4">Entrar na secretaria</h1>
             <p className="text-sm text-slate-500 mt-1">Sessão com cookie httpOnly. A API recusa origens que não sejam a app.</p>
           </div>
           {offline && (

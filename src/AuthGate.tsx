@@ -62,7 +62,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [ready, setReady] = useState(false);
   const [pct, setPct] = useState(8);
-  const [email, setEmail] = useState("tania@ena.pt");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -194,7 +194,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           </div>
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Email</span>
-            <input className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" value={email} onChange={e => setEmail(e.target.value)} autoComplete="username" />
+            <input className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" value={email} onChange={e => setEmail(e.target.value)} autoComplete="username" placeholder="Email da secretaria" />
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Palavra-passe</span>

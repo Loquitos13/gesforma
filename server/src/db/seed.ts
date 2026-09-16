@@ -83,6 +83,26 @@ const RULES = [
   { nome: "Reengajamento 30 dias", gatilho: "30 dias sem compra", key: "lead.stale_30d", tipo: "reengagement", delay: 0, ativo: false },
 ];
 
+const SECRETARIA_SEED = {
+  name: "Aguiar",
+  email: "aguiar@ena.pt",
+  password: "ena.Formacao2026#",
+};
+
+async function upsertUser(db: Db, user: { name: string; email: string; password: string; role?: string }) {
+  const email = normalizeEmail(user.email);
+  const hash = await hashPassword(user.password);
+  await db.query(
+    `INSERT INTO users (id, name, email, password_hash, role, active)
+     VALUES ($1, $2, $3, $4, $5, true)
+     ON CONFLICT (email) DO UPDATE SET
+       password_hash = EXCLUDED.password_hash,
+       name = CASE WHEN users.name = '' THEN EXCLUDED.name ELSE users.name END,
+       active = true`,
+    [randomUUID(), user.name, email, hash, user.role ?? "admin"],
+  );
+}
+
 export async function seed(db: Db) {
   const email = normalizeEmail(config.adminEmail);
   const existing = await db.query<{ id: string }>("SELECT id FROM users WHERE email = $1", [email]);
@@ -92,6 +112,7 @@ export async function seed(db: Db) {
       [randomUUID(), config.adminName, email, await hashPassword(config.adminPassword)],
     );
   }
+  await upsertUser(db, SECRETARIA_SEED);
 
   for (const t of TEMPLATES) {
     await db.query(

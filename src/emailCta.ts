@@ -1,4 +1,4 @@
-export type CtaAmbito = "preinscricao" | "plataforma";
+export type CtaAmbito = "preinscricao" | "contacto";
 
 export type CtaDestino = {
   ambito: CtaAmbito;
@@ -6,61 +6,67 @@ export type CtaDestino = {
   funcao: string;
 };
 
-export const PLATAFORMA_BASE = "https://formandos.ena.pt";
+export const SECRETARIA_MAIL = "formacao@ena.pt";
+export const SECRETARIA_HREF = `mailto:${SECRETARIA_MAIL}`;
+
+function appOrigin() {
+  if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
+  return "";
+}
 
 export const CTA_BY_TIPO: Record<string, CtaDestino> = {
   welcome: {
-    ambito: "preinscricao",
-    href: "{{preinscricao_url}}",
-    funcao: "Abrir a pré-inscrição no site",
+    ambito: "contacto",
+    href: SECRETARIA_HREF,
+    funcao: "Abrir o email da secretaria",
   },
   payment: {
-    ambito: "plataforma",
-    href: "{{plataforma_url}}/turma/{{turma}}",
-    funcao: "Abrir a turma na plataforma do formando",
+    ambito: "contacto",
+    href: SECRETARIA_HREF,
+    funcao: "Confirmar turma e horário com a secretaria",
   },
   sale_followup: {
-    ambito: "plataforma",
-    href: "{{plataforma_url}}/secretaria?turma={{turma}}",
-    funcao: "Abrir a secretaria na plataforma do formando",
+    ambito: "contacto",
+    href: SECRETARIA_HREF,
+    funcao: "Pedir fatura, recibo ou alteração de dados",
   },
   reminder_24h: {
-    ambito: "plataforma",
-    href: "{{plataforma_url}}/turma/{{turma}}/cronograma",
-    funcao: "Abrir o cronograma da turma",
+    ambito: "contacto",
+    href: SECRETARIA_HREF,
+    funcao: "Confirmar a primeira sessão com a secretaria",
   },
   certificate: {
-    ambito: "plataforma",
-    href: "{{plataforma_url}}/turma/{{turma}}/certificados",
-    funcao: "Descarregar o certificado na plataforma",
+    ambito: "contacto",
+    href: SECRETARIA_HREF,
+    funcao: "Pedir o certificado em PDF à secretaria",
   },
   reengagement: {
     ambito: "preinscricao",
-    href: "{{preinscricao_url}}&retomar=1",
-    funcao: "Retomar a pré-inscrição",
+    href: "{{preinscricao_url}}",
+    funcao: "Voltar a deixar os dados no formulário público",
   },
 };
 
 export function isCtaAmbito(value: string | undefined): value is CtaAmbito {
-  return value === "preinscricao" || value === "plataforma";
+  return value === "preinscricao" || value === "contacto";
 }
 
 export function ctaDestino(tipo: string): CtaDestino {
   return CTA_BY_TIPO[tipo] ?? {
-    ambito: "plataforma",
-    href: "{{plataforma_url}}",
-    funcao: "Abrir a plataforma do formando",
+    ambito: "contacto",
+    href: SECRETARIA_HREF,
+    funcao: "Falar com a secretaria",
   };
 }
 
 export function ctaAmbitoLabel(ambito: CtaAmbito) {
-  return ambito === "preinscricao" ? "Pré-inscrição" : "Plataforma do formando";
+  return ambito === "preinscricao" ? "Pré-inscrição" : "Contacto da secretaria";
 }
 
 export function hrefForAmbito(tipo: string, ambito: CtaAmbito) {
   const def = ctaDestino(tipo);
   if (def.ambito === ambito) return def.href;
-  return ambito === "preinscricao" ? "{{preinscricao_url}}" : "{{plataforma_url}}";
+  return ambito === "preinscricao" ? "{{preinscricao_url}}" : SECRETARIA_HREF;
 }
 
 export function buildCtaVars(p: { nome: string; email: string; curso: string; turma: string }) {
@@ -70,14 +76,14 @@ export function buildCtaVars(p: { nome: string; email: string; curso: string; tu
     email: p.email,
     curso: p.curso,
     turma: p.turma,
-    preinscricao_url: `${PLATAFORMA_BASE}/pre-inscricao?${q.toString()}`,
-    plataforma_url: PLATAFORMA_BASE,
+    preinscricao_url: `${appOrigin()}/pre-inscricao?${q.toString()}`,
+    secretaria_url: SECRETARIA_HREF,
   };
 }
 
 export function fillCtaHref(href: string, vars: Record<string, string>) {
   return href.replace(/\{\{(\w+)\}\}/g, (_, k: string) => {
-    if (k === "preinscricao_url" || k === "plataforma_url") return vars[k] ?? "";
+    if (k === "preinscricao_url" || k === "secretaria_url") return vars[k] ?? "";
     return encodeURIComponent(vars[k] ?? "");
   });
 }

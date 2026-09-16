@@ -50,7 +50,7 @@ import {
 import { formatXmlInner, linesToXml, parseEmailXml, replaceCta, xmlParagraphsRaw, xmlToLines } from "./emailXml";
 import {
   apiCreateRule, apiDeleteRule, apiEmailJobs, apiEmailRules, apiEmailTemplates, apiPatchRule, apiPatchTemplate,
-  emitAutomation, type EmailJob, type EmailJobStats,
+  type EmailJob, type EmailJobStats,
 } from "./api";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -268,10 +268,10 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
     assunto: "Bem-vindo(a) à ENA, {{nome}}",
     linhas: [
       "Confirmámos o seu interesse em {{curso}}.",
-      "A turma {{turma}} é a unidade de gestão: datas, sessões e documentos ficam todos aí.",
-      "Se ainda não escolheu horário, responda a este email ou complete a inscrição no site.",
+      "A secretaria da ENA contacta-o em breve para confirmar horário, turma e pagamento.",
+      "Não precisa de fazer mais nada neste momento. Se tiver urgência, responda a este email.",
     ],
-    cta: "Ver a minha inscrição",
+    cta: "Responder à secretaria",
     ctaHref: ctaDestino("welcome").href,
     ctaAmbito: ctaDestino("welcome").ambito,
   },
@@ -279,9 +279,9 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
     assunto: "Pagamento confirmado – {{curso}}",
     linhas: [
       "{{nome}}, o pagamento de {{curso}} chegou.",
-      "Já está inscrita na turma {{turma}}. O cronograma e o acesso à plataforma seguem nas próximas horas.",
+      "A secretaria confirma-lhe a turma {{turma}} e o horário por telefone ou por este email.",
     ],
-    cta: "Abrir a turma",
+    cta: "Falar com a secretaria",
     ctaHref: ctaDestino("payment").href,
     ctaAmbito: ctaDestino("payment").ambito,
   },
@@ -300,9 +300,9 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
     assunto: "Amanhã começa {{curso}}",
     linhas: [
       "{{nome}}, a primeira sessão de {{curso}} é amanhã, turma {{turma}}.",
-      "Traga o CC e, se for CCP, o portefólio em construção. O link da sala está no botão abaixo.",
+      "Traga o CC e, se for CCP, o portefólio em construção. Qualquer dúvida, responda a este email.",
     ],
-    cta: "Abrir o cronograma",
+    cta: "Confirmar com a secretaria",
     ctaHref: ctaDestino("reminder_24h").href,
     ctaAmbito: ctaDestino("reminder_24h").ambito,
   },
@@ -310,9 +310,9 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
     assunto: "O seu certificado está disponível",
     linhas: [
       "Parabéns, {{nome}}. Concluiu {{curso}} na turma {{turma}}.",
-      "O certificado está no cockpit da turma, em Certificados. Guarde o PDF - a ENA arquiva o DTP durante 10 anos.",
+      "A secretaria envia o certificado em PDF. A ENA arquiva o DTP durante 10 anos.",
     ],
-    cta: "Descarregar certificado",
+    cta: "Pedir o certificado",
     ctaHref: ctaDestino("certificate").href,
     ctaAmbito: ctaDestino("certificate").ambito,
   },
@@ -320,9 +320,9 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
     assunto: "Ainda está a tempo de começar {{curso}}",
     linhas: [
       "{{nome}}, a pré-inscrição em {{curso}} ficou a meio.",
-      "Há vagas na turma {{turma}}. Se quiser retomar, o pagamento reabre a inscrição sem perder os dados.",
+      "Se ainda quiser começar, volte a deixar os dados. A secretaria contacta-o de novo.",
     ],
-    cta: "Retomar inscrição",
+    cta: "Voltar a pré-inscrever-me",
     ctaHref: ctaDestino("reengagement").href,
     ctaAmbito: ctaDestino("reengagement").ambito,
   },
@@ -2378,9 +2378,9 @@ function KanbanBoard({ onCardClick, visible, items, onMove }: {
 
 // ─── Modal Ficha Comercial (pré-inscrição) ────────────────────────────────────
 
-function FichaComercial({ item, open, onClose, onConvert }: { item: Preinscricao | null; open: boolean; onClose: () => void; onConvert?: (turma: string) => void }) {
+function FichaComercial({ item, open, onClose, onConvert, onContactar }: { item: Preinscricao | null; open: boolean; onClose: () => void; onConvert?: (turma: string) => void; onContactar?: (nota: string) => void }) {
   const { gold } = useTurmas();
-  const [notas, setNotas] = useState("Ligou a perguntar sobre horários. Interessada em Sábado manhã.");
+  const [notas, setNotas] = useState("");
   const [proximoContacto, setProximoContacto] = useState("2026-09-06");
   const [escolherTurma, setEscolherTurma] = useState(false);
   const [turmaConv, setTurmaConv] = useState("");
@@ -2389,7 +2389,8 @@ function FichaComercial({ item, open, onClose, onConvert }: { item: Preinscricao
     setEscolherTurma(false);
     setTurmaConv("");
     setConvMsg("");
-  }, [item?.id, open]);
+    setNotas(item?.notas ?? "");
+  }, [item?.id, item?.notas, open]);
   if (!item) return null;
   const turmaOpts = turmaGoldOpts(gold, { curso: item.curso });
   return (
@@ -2416,8 +2417,17 @@ function FichaComercial({ item, open, onClose, onConvert }: { item: Preinscricao
         </Field>
         <div className="flex gap-2">
           <a href={`tel:${item.telf}`} className="flex-1 py-2 bg-slate-800 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5 hover:bg-slate-700 transition-colors">{I.phone} Ligar</a>
-          <a href={`https://wa.me/351${item.telf}`} className="flex-1 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5 hover:bg-emerald-700 transition-colors">{I.whatsapp} WhatsApp</a>
+          <a href={`https://wa.me/351${item.telf.replace(/\D/g, "")}`} className="flex-1 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5 hover:bg-emerald-700 transition-colors">{I.whatsapp} WhatsApp</a>
         </div>
+        {item.estado === "Não contactado" && (
+          <button
+            type="button"
+            onClick={() => onContactar?.(notas.trim())}
+            className="w-full py-2 border border-slate-200 text-sm font-semibold text-slate-700 rounded-lg hover:bg-slate-50"
+          >
+            Registar 1.º contacto
+          </button>
+        )}
         {!escolherTurma ? (
           <button onClick={() => { setEscolherTurma(true); setConvMsg(""); }} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2">{I.convert} Converter em Formando - Escolher turma</button>
         ) : (
@@ -2677,7 +2687,7 @@ function PreInscricoesGoldView() {
   const [editLead, setEditLead] = useState<Preinscricao | null>(null);
   const [apagar, setApagar] = useState<Preinscricao | null>(null);
   const { gold, patchGold } = useTurmas();
-  const { preinscricoes, addPreinscricao, patchPreinscricao, removePreinscricao, addFormandoTurma, formandosTurmas, cursosGold } = useLists();
+  const { preinscricoes, addPreinscricao, patchPreinscricao, removePreinscricao, contactarPreinscricao, addFormandoTurma, formandosTurmas, cursosGold } = useLists();
   const [nome, setNome] = useState("");
   const [apelido, setApelido] = useState("");
   const [email, setEmail] = useState("");
@@ -2758,6 +2768,7 @@ function PreInscricoesGoldView() {
                   meta={[r.local, `€ ${r.preco}`, r.inscrito]}
                   onOpen={() => openFicha(r)}
                   actions={[
+                    ...(r.estado === "Não contactado" ? [{ label: "Contactar", icon: I.phone, onClick: () => { contactarPreinscricao(r.id); openFicha({ ...r, estado: "1º Contacto" }); } }] : []),
                     { label: "Ficha", icon: I.eye, onClick: () => openFicha(r) },
                     { label: "Editar", icon: I.edit, onClick: () => { setEditLead(r); resetLeadForm(r); setNovo(true); } },
                     { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
@@ -2785,6 +2796,7 @@ function PreInscricoesGoldView() {
                       <Td>{estadoBadge(r.estado)}</Td>
                       <Td>
                         <RowActions actions={[
+                          ...(r.estado === "Não contactado" ? [{ label: "Contactar", icon: I.phone, onClick: () => { contactarPreinscricao(r.id); setFichaItem({ ...r, estado: "1º Contacto" }); setFichaOpen(true); } }] : []),
                           { label: "Ficha", icon: I.eye, onClick: () => openFicha(r) },
                           { label: "Editar", icon: I.edit, onClick: () => { setEditLead(r); resetLeadForm(r); setNovo(true); } },
                           { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
@@ -2799,7 +2811,11 @@ function PreInscricoesGoldView() {
           </Card>
         )}
       </div>
-      <FichaComercial item={fichaItem} open={fichaOpen} onClose={() => setFichaOpen(false)} onConvert={turmaNome => {
+      <FichaComercial item={fichaItem} open={fichaOpen} onClose={() => setFichaOpen(false)} onContactar={nota => {
+        if (!fichaItem) return;
+        contactarPreinscricao(fichaItem.id, nota);
+        setFichaItem({ ...fichaItem, estado: fichaItem.estado === "Não contactado" ? "1º Contacto" : fichaItem.estado, notas: nota });
+      }} onConvert={turmaNome => {
         if (!fichaItem) return;
         const t = gold.find(x => x.nome === turmaNome);
         if (!t || t.vagas - t.totalAlunos <= 0) return;
@@ -4141,12 +4157,12 @@ function EmailsView() {
                 <div>
                   <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Destino do botão</p>
                   <p className="text-[11px] text-slate-500 mb-2">
-                    Este template envia o formando para {ctaAmbitoLabel(ctaDestino(editTpl.tipo).ambito).toLowerCase()}: {ctaDestino(editTpl.tipo).funcao}.
+                    Este template aponta para {ctaAmbitoLabel(ctaDestino(editTpl.tipo).ambito).toLowerCase()}: {ctaDestino(editTpl.tipo).funcao}.
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {([
-                      { id: "preinscricao" as const, title: "Pré-inscrição", sub: "Lead ainda sem acesso à plataforma" },
-                      { id: "plataforma" as const, title: "Plataforma do formando", sub: "Turma, cronograma, certificado ou secretaria" },
+                      { id: "preinscricao" as const, title: "Pré-inscrição", sub: "Formulário público. A secretaria contacta a seguir." },
+                      { id: "contacto" as const, title: "Contacto da secretaria", sub: "Email formacao@ena.pt — sem área de formando." },
                     ]).map(opt => (
                       <button
                         key={opt.id}
@@ -4176,10 +4192,10 @@ function EmailsView() {
                       const ctaHref = e.target.value;
                       setEditTpl({ ...editTpl, ctaHref, xml: replaceCta(editTpl.xml, editTpl.cta, ctaHref, editTpl.ctaAmbito) });
                     }}
-                    placeholder="{{plataforma_url}}/turma/{{turma}}"
+                    placeholder="mailto:formacao@ena.pt"
                   />
                   <p className="text-[11px] text-slate-400 mt-1">
-                    Personaliza com {"{{email}}"}, {"{{curso}}"}, {"{{turma}}"}, {"{{preinscricao_url}}"} ou {"{{plataforma_url}}"}.
+                    Personaliza com {"{{email}}"}, {"{{curso}}"}, {"{{turma}}"} ou {"{{preinscricao_url}}"}.
                   </p>
                 </Field>
               </div>
@@ -4230,7 +4246,8 @@ function EmailsView() {
 }
 
 function PagamentosView() {
-  const [lista, setLista] = useState(transacoesData);
+  const { pagamentos, addPagamento } = useLists();
+  const lista = pagamentos.length ? pagamentos : transacoesData;
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtro, setFiltro] = useState("Todos");
@@ -4344,13 +4361,16 @@ function PagamentosView() {
           <div className="flex gap-2 pt-2">
             <button onClick={() => setNovo(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button disabled={!nome.trim() || !curso} onClick={() => {
-              const id = `TRX-${Date.now() % 100000}`;
-              setLista(xs => [{
-                id, nome: nome.trim(), valor: Number(valor) || 0, metodo, curso,
-                data: nowStamp(), estado: "Pago",
-              }, ...xs]);
               const mail = emailPag.trim() || `${nome.trim().toLowerCase().replace(/\s+/g, ".")}@mail.pt`;
-              void emitAutomation("payment.confirmed", { email: mail, nome: nome.trim(), curso }, `payment:${id}:${mail}`);
+              addPagamento({
+                id: `TRX-${Date.now() % 100000}`,
+                nome: nome.trim(),
+                valor: Number(valor) || 0,
+                metodo,
+                curso,
+                data: nowStamp(),
+                estado: "Pago",
+              }, mail);
               setNovo(false);
             }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Registar</button>
           </div>
@@ -4718,6 +4738,7 @@ export default function App() {
       cursosFin: finCursosData,
       blogPosts: blogPostsData,
       campanhas: campanhasData,
+      pagamentos: transacoesData,
     }}>
       <AppShell />
     </ListsProvider>

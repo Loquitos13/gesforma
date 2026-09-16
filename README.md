@@ -1,6 +1,6 @@
-# GesForma - protótipo ENA
+# GesForma - backoffice ENA
 
-Backoffice de gestão de formação (Gold / autofinanciada e Financiada).
+Backoffice de gestão de formação (Gold / autofinanciada e Financiada), com API Fastify, base migrável e formulário público de pré-inscrição.
 
 A ENA trata por **turma**, não por “ação de formação”. Existe um código interno (`VNG-SM-07/09`, `UFCD 3564`), mas o objeto de gestão é a turma.
 
@@ -24,7 +24,7 @@ Cada **curso Gold** e cada **UFCD financiada** tem uma ficha própria (não um p
 
 A vista **Módulos** começa pelo filtro de curso: lista só os blocos desse curso e o botão **+ Novo módulo** está sempre disponível (no cabeçalho, no filtro e no estado vazio). A partir da ficha de um curso Gold ou de uma UFCD, **Módulos** abre já filtrado.
 
-O catálogo **Módulos, Conteúdos, Datas, Locais e Áreas** existe nos dois lados (Gold e Financiada), com o mesmo layout e acento âmbar / azul. Em **Formandos Gold** (avulso) o olho abre a ficha com documentos - o lápis continua a editar. **Detalhes / Recibo** em Pagamentos, **Abrir** em Conteúdos, **Ver certificado**, **Gerar MB / Enviar recibo**, **download** no cockpit e **Ver todas as notificações** abrem ecrãs ou modais deste protótipo (sem backend).
+O catálogo **Módulos, Conteúdos, Datas, Locais e Áreas** existe nos dois lados (Gold e Financiada), com o mesmo layout e acento âmbar / azul. Em **Formandos Gold** (avulso) o olho abre a ficha com documentos - o lápis continua a editar. **Detalhes / Recibo** em Pagamentos, **Abrir** em Conteúdos, **Ver certificado**, **Gerar MB / Enviar recibo**, **download** no cockpit e **Ver todas as notificações** abrem ecrãs ou modais. Pré-inscrições, turmas, formadores, cursos, campanhas, blog e pagamentos persistem na base.
 
 Gold e Financiada têm cada uma o menu **Formadores**: ficha (contacto, CCP, NIF, especialidade), estado Ativo/Inactivo e os regimes em que lecciona. Quem marca os dois regimes aparece nas duas listas. Criar ou editar um formador actualiza os dropdowns do cronograma e das turmas.
 
@@ -38,7 +38,7 @@ Os formulários de criar e editar (pré-inscrição, turma, formando, sessão, e
 
 Em **Emails automáticos**, a nova regra pede gatilho, template, curso e atraso, com **preview do email** ao lado. O olho nas regras e nos templates abre o mesmo preview.
 
-Os botões **Novo curso**, **Nova turma**, **Novo módulo**, **Nova sessão** e equivalentes abrem um formulário. Quando é preciso escolher curso, turma, local, formador ou módulo, o campo é um **dropdown com pesquisa**. As listas da navegação usam a mesma barra de filtros: **curso** e **local** quando a tabela tem essas colunas (pré-inscrições, formandos, turmas, datas, conteúdos, DTP Gold, pagamentos); nas UFCD financiadas o filtro é por curso e não por polo (quase tudo em sala virtual); em catálogos (cursos, locais, áreas, blog) ficam só estado ou área temática.
+Não existe `formandos.ena.pt` nem área de formando. O pedido público é a **pré-inscrição** (`/pre-inscricao`). A secretaria contacta a pessoa a seguir (telefone, WhatsApp ou email). Os emails automáticos levam a esse formulário ou a `mailto:formacao@ena.pt`.
 
 Cada **turma** tem um **cronograma** e um toggle **Ativa / Inativa**. No cockpit, o separador Cronograma mostra o plano de sessões: resumo (sessões, horas, próxima, período), linha do tempo agrupada por mês e edição sessão a sessão. Cada sessão escolhe **um ou mais módulos** do curso e **um ou mais formadores** em dropdowns com pesquisa. A Visão Geral lista todos os formadores atribuídos às sessões (com o número de sessões de cada um). A tabela de Sessões mostra essa coluna. Regenerar pede confirmação porque substitui o plano atual. Só turmas ativas aparecem nas pré-inscrições Gold, na conversão de lead em formando, na mudança de turma de um formando e nas inscrições financiadas. Uma turma inativa mantém os formandos já inscritos, mas fecha novas entradas.
 
@@ -46,15 +46,19 @@ Cada **turma** tem um **cronograma** e um toggle **Ativa / Inativa**. No cockpit
 
 A secretaria entra com sessão (cookie httpOnly, SameSite=strict). A API Fastify fala **Postgres** na VPS; em desenvolvimento, se `DATABASE_URL` estiver vazio, usa **PGlite** (o mesmo SQL, ficheiro em `server/data/`).
 
+As migrações estão em `server/src/db/migrations/` (`001` … `005`) e correm no arranque. O seed cria o admin, os templates de email e, se as tabelas operacionais estiverem vazias, cursos, turmas, formadores, pré-inscrições, formandos, campanhas, blog e pagamentos. O backoffice lê e grava este snapshot em `GET /v1/ops` e nos CRUD `/v1/preinscricoes`, `/v1/turmas-*`, `/v1/formadores`, etc.
+
+O formulário público `POST /v1/public/preinscricoes` (8 pedidos / minuto) cria um lead em **Não contactado**. Na lista Gold, **Contactar** passa a **1.º Contacto** e regista a nota.
+
 Arquitectura na VPS: **um Compose, três papéis, rede só interna**.
 
-1. `db` — Postgres 16. Não é publicado na internet.
-2. `api` — só em `127.0.0.1:43148`. O Caddy/nginx faz TLS e encaminha `/api` para aqui.
-3. `web` — esta app Vite, no mesmo domínio, para os cookies funcionarem.
+1. `db` - Postgres 16. Não é publicado na internet.
+2. `api` - só em `127.0.0.1:43148`. O Caddy/nginx faz TLS e encaminha `/api` para aqui.
+3. `web` - esta app Vite, no mesmo domínio, para os cookies funcionarem.
 
 Não separam a base para outro servidor até haver necessidade: um contentor Postgres no mesmo host é mais rápido, o backup é um `pg_dump` e a API não atravessa a rede pública.
 
-**Emails automáticos** — uma regra = gatilho + template + atraso. A secretaria regista uma pré-inscrição ou um pagamento; a API enfileira o envio (incluindo **contacto após a venda**, 1 hora depois do pagamento). O worker corre na própria API, sem Redis. Sem SMTP (`MAIL_MODE=log`) o email fica no histórico; com `SMTP_URL` sai pelo correio.
+**Emails automáticos** - uma regra = gatilho + template + atraso. A secretaria regista uma pré-inscrição ou um pagamento; a API enfileira o envio (incluindo **contacto após a venda**, 1 hora depois do pagamento). O worker corre na própria API, sem Redis. Sem SMTP (`MAIL_MODE=log`) o email fica no histórico; com `SMTP_URL` sai pelo correio.
 
 ### Segurança
 
@@ -74,7 +78,7 @@ docker compose --profile backup run --rm backup
 npm run backup
 ```
 
-Os ficheiros ficam em `backups/`. Para ponto-no-tempo (WAL) no futuro: pgBackRest — não é preciso no primeiro servidor.
+Os ficheiros ficam em `backups/`. Para ponto-no-tempo (WAL) no futuro: pgBackRest - não é preciso no primeiro servidor.
 
 ### Correr localmente
 
@@ -83,11 +87,13 @@ cp .env.example .env
 # em desenvolvimento: ADMIN_PASSWORD=altere-me-no-primeiro-arranque
 npm install
 npm install --prefix server
-npm run api    # outra consola — http://127.0.0.1:43148/health
+npm run api    # outra consola - http://127.0.0.1:43148/health
 npm run dev    # http://127.0.0.1:43147
 ```
 
 Entrar com `tania@ena.pt` e a palavra-passe do `.env`.
+
+Formulário público (sem login): [http://127.0.0.1:43147/pre-inscricao](http://127.0.0.1:43147/pre-inscricao). Aceita `?curso=` e `?email=`.
 
 Na VPS, depois de preencher `.env` com segredos gerados (`openssl rand -base64 48`):
 
@@ -101,6 +107,6 @@ A API vai no **mesmo projecto** que a app (`/api`), para o cookie de sessão ser
 
 1. Claim ou ligue o Git à Vercel.
 2. Variáveis: `DATABASE_URL` (Neon ou Vercel Postgres), `SESSION_SECRET`, `ADMIN_PASSWORD`, `APP_ORIGIN=https://o-seu-dominio.vercel.app`, `MAIL_MODE`, `SMTP_URL`.
-3. Sem `DATABASE_URL` a função usa PGlite em `/tmp` — some entre invocações. Para produção, Neon é o par habitual da Vercel.
+3. Sem `DATABASE_URL` a função usa PGlite em `/tmp` - some entre invocações. Para produção, Neon é o par habitual da Vercel.
 
 `vercel.json` já encaminha `/api/*` para a função.

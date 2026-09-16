@@ -3,6 +3,7 @@ import { config } from "../config.js";
 import { ctaDestino } from "../emailCta.js";
 import { linesToXml } from "../emailXml.js";
 import { hashPassword, normalizeEmail } from "../security.js";
+import { seedOperational } from "./opsSeed.js";
 import type { Db } from "./pool.js";
 
 const TEMPLATES = [
@@ -12,10 +13,10 @@ const TEMPLATES = [
     assunto: "Bem-vindo(a) à ENA, {{nome}}",
     linhas: [
       "Confirmámos o seu interesse em {{curso}}.",
-      "A turma {{turma}} é a unidade de gestão: datas, sessões e documentos ficam todos aí.",
-      "Se ainda não escolheu horário, responda a este email ou complete a inscrição no site.",
+      "A secretaria da ENA contacta-o em breve para confirmar horário, turma e pagamento.",
+      "Não precisa de fazer mais nada neste momento. Se tiver urgência, responda a este email.",
     ],
-    cta: "Ver a minha inscrição",
+    cta: "Responder à secretaria",
   },
   {
     tipo: "payment",
@@ -23,9 +24,9 @@ const TEMPLATES = [
     assunto: "Pagamento confirmado – {{curso}}",
     linhas: [
       "{{nome}}, o pagamento de {{curso}} chegou.",
-      "Já está inscrita na turma {{turma}}. O cronograma e o acesso à plataforma seguem nas próximas horas.",
+      "A secretaria confirma-lhe a turma {{turma}} e o horário por telefone ou por este email.",
     ],
-    cta: "Abrir a turma",
+    cta: "Falar com a secretaria",
   },
   {
     tipo: "sale_followup",
@@ -44,9 +45,9 @@ const TEMPLATES = [
     assunto: "Amanhã começa {{curso}}",
     linhas: [
       "{{nome}}, a primeira sessão de {{curso}} é amanhã, turma {{turma}}.",
-      "Traga o CC e, se for CCP, o portefólio em construção. O link da sala está no botão abaixo.",
+      "Traga o CC e, se for CCP, o portefólio em construção. Qualquer dúvida, responda a este email.",
     ],
-    cta: "Abrir o cronograma",
+    cta: "Confirmar com a secretaria",
   },
   {
     tipo: "certificate",
@@ -54,9 +55,9 @@ const TEMPLATES = [
     assunto: "O seu certificado está disponível",
     linhas: [
       "Parabéns, {{nome}}. Concluiu {{curso}} na turma {{turma}}.",
-      "O certificado está no cockpit da turma, em Certificados. Guarde o PDF - a ENA arquiva o DTP durante 10 anos.",
+      "A secretaria envia o certificado em PDF. A ENA arquiva o DTP durante 10 anos.",
     ],
-    cta: "Descarregar certificado",
+    cta: "Pedir o certificado",
   },
   {
     tipo: "reengagement",
@@ -64,9 +65,9 @@ const TEMPLATES = [
     assunto: "Ainda está a tempo de começar {{curso}}",
     linhas: [
       "{{nome}}, a pré-inscrição em {{curso}} ficou a meio.",
-      "Há vagas na turma {{turma}}. Se quiser retomar, o pagamento reabre a inscrição sem perder os dados.",
+      "Se ainda quiser começar, volte a deixar os dados. A secretaria contacta-o de novo.",
     ],
-    cta: "Retomar inscrição",
+    cta: "Voltar a pré-inscrever-me",
   },
 ].map(t => {
   const dest = ctaDestino(t.tipo);
@@ -128,6 +129,13 @@ export async function seed(db: Db) {
         [t.tipo, nextXml, t.href, t.ambito],
       );
     }
+    const href = row.rows[0]?.cta_href ?? "";
+    if (href.includes("formandos.ena.pt") || href.includes("plataforma_url") || href.includes("plataforma")) {
+      await db.query(
+        "UPDATE email_templates SET cta = $2, cta_href = $3, cta_ambito = $4, body_xml = $5, updated_at = now() WHERE tipo = $1",
+        [t.tipo, t.cta, t.href, t.ambito, xml],
+      );
+    }
   }
 
   const count = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM email_rules");
@@ -140,4 +148,6 @@ export async function seed(db: Db) {
       );
     }
   }
+
+  await seedOperational(db);
 }

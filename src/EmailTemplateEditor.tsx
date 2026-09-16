@@ -90,7 +90,7 @@ export function EmailXmlEditor({
       <p className="text-[11px] text-slate-400">
         {mode === "xml"
           ? "Tags: <email>, <p>, <strong>, <em>, <cta href ambito>. Variáveis: {{nome}}, {{email}}, {{curso}}, {{turma}}."
-          : "Uma linha em branco começa um parágrafo novo. O botão CTA tem destino próprio (pré-inscrição ou plataforma)."}
+          : "Uma linha em branco começa um parágrafo novo. O botão CTA leva à pré-inscrição ou ao email da secretaria."}
       </p>
     </div>
   );

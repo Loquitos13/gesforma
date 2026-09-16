@@ -31,8 +31,44 @@ export type EmailTemplate = {
   body_xml?: string;
   cta?: string;
   cta_href?: string;
-  cta_ambito?: "preinscricao" | "plataforma";
+  cta_ambito?: "preinscricao" | "contacto";
   updated_at: string;
+};
+
+export type OpsSnapshot = {
+  preinscricoes: Array<{
+    id: number; inscrito: string; nome: string; apelido: string; email: string; telf: string;
+    inicioCurso: string; concelho: string; local: string; curso: string; preco: number;
+    estado: string; campanha: string; origem: string; contactadoEm: string | null; notas: string;
+  }>;
+  formandosTurmas: Array<{
+    id: number; nome: string; apelido: string; telf: string; email: string; inscrito: string;
+    local: string; curso: string; turma: string; turmaId: number; estado: string;
+    pago: boolean; valor: number; metodo: string;
+  }>;
+  formandosFin: Array<{
+    id: number; nome: string; apelido: string; turma: string; telf: string; email: string;
+    curso: string; estado: string;
+    cc: { ok: boolean; data: string }; ch: { ok: boolean; data: string };
+    cu: { ok: boolean; data: string }; ci: { ok: boolean; data: string }; ce: { ok: boolean; data: string };
+  }>;
+  cursosGold: Array<{ id: number; nome: string; categoria: string; tipo: string; preco: number; regime: string; horas: number; estado: string }>;
+  cursosFin: Array<{ id: number; ufcdCod: string; ufcd: string; nomeComercial: string; regime: string; horas: number; estado: string }>;
+  turmasGold: Array<{
+    id: number; dataInicio: string; nome: string; curso: string; local: string; horario: string;
+    totalAlunos: number; vagas: number; estado: string; formador: string; horas: number; cronograma: unknown[];
+  }>;
+  turmasFin: Array<{
+    id: number; dataInicio: string; nome: string; curso: string; ufcdCod: string; local: string; horario: string;
+    alunos: number; alunosTotal: number; estado: string; horas: number; formador: string; activa: boolean; cronograma: unknown[];
+  }>;
+  formadores: Array<{
+    id: number; nome: string; telf: string; email: string; especialidade: string; ccp: string; nif: string;
+    regimes: string[]; estado: string;
+  }>;
+  campanhas: Array<{ id: number; nome: string; data: string; encarregado: string; preinscricoes: number; pagos: number; receita: number; custo: number }>;
+  blogPosts: Array<{ id: number; titulo: string; slug: string; data: string; status: string }>;
+  pagamentos: Array<{ id: string; nome: string; valor: number; metodo: string; curso: string; data: string; estado: string }>;
 };
 
 export type EmailJob = {
@@ -76,8 +112,81 @@ export const apiDeleteRule = (id: number) =>
   api<{ ok: boolean }>(`/v1/email/rules/${id}`, { method: "DELETE" });
 
 export const apiEmailTemplates = () => api<{ templates: EmailTemplate[] }>("/v1/email/templates");
-export const apiPatchTemplate = (id: number, body: { nome?: string; assunto?: string; body_lines?: string[]; body_xml?: string; cta?: string; cta_href?: string; cta_ambito?: "preinscricao" | "plataforma" }) =>
+export const apiPatchTemplate = (id: number, body: { nome?: string; assunto?: string; body_lines?: string[]; body_xml?: string; cta?: string; cta_href?: string; cta_ambito?: "preinscricao" | "contacto" }) =>
   api<{ template: EmailTemplate }>(`/v1/email/templates/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export const apiOps = () => api<OpsSnapshot>("/v1/ops");
+export const apiPublicCursos = () => api<{ cursos: { nome: string; preco: number }[] }>("/v1/public/cursos");
+export const apiPublicPreinscricao = (body: Record<string, unknown>) =>
+  api<{ preinscricao: { id: number }; aviso: string }>("/v1/public/preinscricoes", { method: "POST", body: JSON.stringify(body) });
+
+export const apiCreatePreinscricao = (body: Record<string, unknown>) =>
+  api<{ preinscricao: OpsSnapshot["preinscricoes"][number] }>("/v1/preinscricoes", { method: "POST", body: JSON.stringify(body) });
+export const apiPatchPreinscricao = (id: number, body: Record<string, unknown>) =>
+  api<{ preinscricao: OpsSnapshot["preinscricoes"][number] | null }>(`/v1/preinscricoes/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+export const apiContactarPreinscricao = (id: number, nota = "") =>
+  api<{ preinscricao: OpsSnapshot["preinscricoes"][number] | null }>(`/v1/preinscricoes/${id}/contactar`, { method: "POST", body: JSON.stringify({ nota }) });
+export const apiDeletePreinscricao = (id: number) => api<{ ok: boolean }>(`/v1/preinscricoes/${id}`, { method: "DELETE" });
+
+export const apiCreateFormandoGold = (body: Record<string, unknown>) =>
+  api<{ formando: OpsSnapshot["formandosTurmas"][number] }>("/v1/formandos-gold", { method: "POST", body: JSON.stringify(body) });
+export const apiPatchFormandoGold = (id: number, body: Record<string, unknown>) =>
+  api<{ formando: OpsSnapshot["formandosTurmas"][number] | null }>(`/v1/formandos-gold/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+export const apiDeleteFormandoGold = (id: number) => api<{ ok: boolean }>(`/v1/formandos-gold/${id}`, { method: "DELETE" });
+
+export const apiCreateFormandoFin = (body: Record<string, unknown>) =>
+  api<{ formando: OpsSnapshot["formandosFin"][number] }>("/v1/formandos-fin", { method: "POST", body: JSON.stringify(body) });
+export const apiPatchFormandoFin = (id: number, body: Record<string, unknown>) =>
+  api<{ formando: OpsSnapshot["formandosFin"][number] | null }>(`/v1/formandos-fin/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+export const apiDeleteFormandoFin = (id: number) => api<{ ok: boolean }>(`/v1/formandos-fin/${id}`, { method: "DELETE" });
+
+export const apiCreateCursoGold = (body: Record<string, unknown>) =>
+  api<{ curso: OpsSnapshot["cursosGold"][number] }>("/v1/cursos-gold", { method: "POST", body: JSON.stringify(body) });
+export const apiPatchCursoGold = (id: number, body: Record<string, unknown>) =>
+  api<{ curso: OpsSnapshot["cursosGold"][number] | null }>(`/v1/cursos-gold/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+export const apiDeleteCursoGold = (id: number) => api<{ ok: boolean }>(`/v1/cursos-gold/${id}`, { method: "DELETE" });
+
+export const apiCreateCursoFin = (body: Record<string, unknown>) =>
+  api<{ curso: OpsSnapshot["cursosFin"][number] }>("/v1/cursos-fin", { method: "POST", body: JSON.stringify(body) });
+export const apiPatchCursoFin = (id: number, body: Record<string, unknown>) =>
+  api<{ curso: OpsSnapshot["cursosFin"][number] | null }>(`/v1/cursos-fin/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+export const apiDeleteCursoFin = (id: number) => api<{ ok: boolean }>(`/v1/cursos-fin/${id}`, { method: "DELETE" });
+
+export const apiCreateTurmaGold = (body: Record<string, unknown>) =>
+  api<{ turma: OpsSnapshot["turmasGold"][number] }>("/v1/turmas-gold", { method: "POST", body: JSON.stringify(body) });
+export const apiPatchTurmaGold = (id: number, body: Record<string, unknown>) =>
+  api<{ turma: OpsSnapshot["turmasGold"][number] | null }>(`/v1/turmas-gold/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+export const apiDeleteTurmaGold = (id: number) => api<{ ok: boolean }>(`/v1/turmas-gold/${id}`, { method: "DELETE" });
+
+export const apiCreateTurmaFin = (body: Record<string, unknown>) =>
+  api<{ turma: OpsSnapshot["turmasFin"][number] }>("/v1/turmas-fin", { method: "POST", body: JSON.stringify(body) });
+export const apiPatchTurmaFin = (id: number, body: Record<string, unknown>) =>
+  api<{ turma: OpsSnapshot["turmasFin"][number] | null }>(`/v1/turmas-fin/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+export const apiDeleteTurmaFin = (id: number) => api<{ ok: boolean }>(`/v1/turmas-fin/${id}`, { method: "DELETE" });
+
+export const apiCreateFormador = (body: Record<string, unknown>) =>
+  api<{ formador: OpsSnapshot["formadores"][number] }>("/v1/formadores", { method: "POST", body: JSON.stringify(body) });
+export const apiPatchFormador = (id: number, body: Record<string, unknown>) =>
+  api<{ formador: OpsSnapshot["formadores"][number] | null }>(`/v1/formadores/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+export const apiDeleteFormador = (id: number) => api<{ ok: boolean }>(`/v1/formadores/${id}`, { method: "DELETE" });
+
+export const apiCreateCampanha = (body: Record<string, unknown>) =>
+  api<{ campanha: OpsSnapshot["campanhas"][number] }>("/v1/campanhas", { method: "POST", body: JSON.stringify(body) });
+export const apiPatchCampanha = (id: number, body: Record<string, unknown>) =>
+  api<{ campanha: OpsSnapshot["campanhas"][number] | null }>(`/v1/campanhas/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+export const apiDeleteCampanha = (id: number) => api<{ ok: boolean }>(`/v1/campanhas/${id}`, { method: "DELETE" });
+
+export const apiCreateBlog = (body: Record<string, unknown>) =>
+  api<{ post: OpsSnapshot["blogPosts"][number] }>("/v1/blog", { method: "POST", body: JSON.stringify(body) });
+export const apiPatchBlog = (id: number, body: Record<string, unknown>) =>
+  api<{ post: OpsSnapshot["blogPosts"][number] | null }>(`/v1/blog/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+export const apiDeleteBlog = (id: number) => api<{ ok: boolean }>(`/v1/blog/${id}`, { method: "DELETE" });
+
+export const apiCreatePagamento = (body: Record<string, unknown>) =>
+  api<{ pagamento: OpsSnapshot["pagamentos"][number] }>("/v1/pagamentos", { method: "POST", body: JSON.stringify(body) });
+export const apiPatchPagamento = (id: string, body: Record<string, unknown>) =>
+  api<{ pagamento: OpsSnapshot["pagamentos"][number] | null }>(`/v1/pagamentos/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+export const apiDeletePagamento = (id: string) => api<{ ok: boolean }>(`/v1/pagamentos/${id}`, { method: "DELETE" });
 
 export const apiEmailJobs = () => api<{ stats: EmailJobStats; jobs: EmailJob[] }>("/v1/email/jobs");
 

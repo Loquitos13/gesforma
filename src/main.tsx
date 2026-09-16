@@ -3,17 +3,24 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { AuthGate } from "./AuthGate";
 import { FormadoresProvider } from "./FormadoresContext";
+import { PublicPreinscricao } from "./PublicPreinscricao";
 import { TurmasProvider } from "./TurmasContext";
 import "./index.css";
 
+const publicForm = window.location.pathname.replace(/\/+$/, "") === "/pre-inscricao";
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <AuthGate>
-      <TurmasProvider>
-        <FormadoresProvider>
-          <App />
-        </FormadoresProvider>
-      </TurmasProvider>
-    </AuthGate>
+    {publicForm ? (
+      <PublicPreinscricao />
+    ) : (
+      <AuthGate>
+        <TurmasProvider>
+          <FormadoresProvider>
+            <App />
+          </FormadoresProvider>
+        </TurmasProvider>
+      </AuthGate>
+    )}
   </StrictMode>,
 );

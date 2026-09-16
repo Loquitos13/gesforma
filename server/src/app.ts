@@ -8,6 +8,7 @@ import { z } from "zod";
 import { ingestEvent, processDueJobs } from "./automations.js";
 import { allowedOrigins, config, newToken, onVercel } from "./config.js";
 import type { Db } from "./db/pool.js";
+import { registerOpsRoutes } from "./opsRoutes.js";
 import {
   delayLabelFromSeconds,
   delaySecondsFromLabel,
@@ -66,7 +67,7 @@ const templatePatchSchema = z.object({
   body_xml: z.string().trim().min(8).max(8000).optional(),
   cta: z.string().trim().min(1).max(120).optional(),
   cta_href: z.string().trim().min(1).max(500).optional(),
-  cta_ambito: z.enum(["preinscricao", "plataforma"]).optional(),
+  cta_ambito: z.enum(["preinscricao", "contacto"]).optional(),
 });
 
 function clientOk(req: FastifyRequest) {
@@ -115,7 +116,8 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   });
 
   app.addHook("onRequest", async (req, reply) => {
-    if (req.method !== "GET" && req.method !== "HEAD" && req.url !== "/health") {
+    const path = req.url.split("?")[0] ?? req.url;
+    if (req.method !== "GET" && req.method !== "HEAD" && path !== "/health" && !path.startsWith("/v1/public/")) {
       if (!clientOk(req)) {
         return reply.code(403).send({ error: "origem recusada" });
       }
@@ -383,6 +385,8 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : "evento recusado" });
     }
   });
+
+  registerOpsRoutes(app, db, { requireAuth, audit });
 
   if (opts.worker !== false && !onVercel) {
     const tick = async () => {

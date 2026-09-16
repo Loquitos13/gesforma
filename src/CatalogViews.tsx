@@ -907,6 +907,7 @@ export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
   const [driveMeta, setDriveMeta] = useState<{ id?: string; url?: string; tamanho?: string }>({});
   const [aEnviar, setAEnviar] = useState(false);
   const [erroFicheiro, setErroFicheiro] = useState<string | null>(null);
+  const { status: driveStatus } = useDrive();
   const editing = open && open !== "new" ? open : null;
   const modulosDoCurso = curso ? catalogoModulos.filter(m => m.curso === curso) : [];
   const moduloOpts = modulosDoCurso.map(m => ({ value: m.codigo, sub: `${m.nome} · ${m.horas}h` }));
@@ -1069,6 +1070,11 @@ export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
               <div className="space-y-1.5">
                 <input type="file" className={iCls} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.mp4,.webm"
                   onChange={e => setFicheiro(e.target.files?.[0] ?? null)} />
+                <p className="text-xs text-slate-500">
+                  {driveStatus.connected
+                    ? <>Vai para o Drive da entidade{driveStatus.folderName ? <> · <span className="font-semibold">{driveStatus.folderName}</span></> : null}.</>
+                    : <>Ainda sem Drive ligado. O ficheiro fica no servidor até ligar a conta Google em Configurações.</>}
+                </p>
                 {(ficheiro || driveMeta.id) && (
                   <p className="text-xs text-slate-500">{ficheiro ? ficheiro.name : "Já existe um ficheiro no arquivo."}</p>
                 )}

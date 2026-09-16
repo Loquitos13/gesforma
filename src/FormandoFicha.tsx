@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { EnviarReciboModal, ReferenciaMbModal } from "./ActionSurfaces";
+import { FileUploadModal } from "./TurmaExtras";
 import { useTurmas } from "./TurmasContext";
 import { isTurmaActiva } from "./turmaModel";
 import type { FormandoTurma } from "./ListsContext";
@@ -36,12 +37,13 @@ function estadoBadge(estado: string) {
 
 function DocumentosGoldPanel({ formando, avulso }: { formando: FormandoTurma; avulso?: boolean }) {
   const [docs, setDocs] = useState(() => [
-    { id: "cc", label: "Cartão de Cidadão", ok: true, data: formando.inscrito.slice(0, 10) },
-    { id: "contrato", label: "Contrato de formação", ok: formando.pago, data: formando.pago ? formando.inscrito.slice(0, 10) : "" },
-    { id: "pip", label: "PIP - Projeto de Intervenção Pedagógica", ok: avulso ? formando.pago : formando.id % 3 !== 0, data: avulso ? (formando.pago ? "2026-08-20" : "") : (formando.id % 3 !== 0 ? "2026-08-20" : "") },
-    { id: "exp", label: "Comprovativo de 5 anos de experiência", ok: avulso ? true : formando.id % 2 === 0, data: avulso ? formando.inscrito.slice(0, 10) : (formando.id % 2 === 0 ? "2026-08-12" : "") },
-    { id: "regulamento", label: "Regulamento de formação aceite", ok: true, data: formando.inscrito.slice(0, 10) },
+    { id: "cc", label: "Cartão de Cidadão", ok: true, data: formando.inscrito.slice(0, 10), fileName: "" },
+    { id: "contrato", label: "Contrato de formação", ok: formando.pago, data: formando.pago ? formando.inscrito.slice(0, 10) : "", fileName: "" },
+    { id: "pip", label: "PIP - Projeto de Intervenção Pedagógica", ok: avulso ? formando.pago : formando.id % 3 !== 0, data: avulso ? (formando.pago ? "2026-08-20" : "") : (formando.id % 3 !== 0 ? "2026-08-20" : ""), fileName: "" },
+    { id: "exp", label: "Comprovativo de 5 anos de experiência", ok: avulso ? true : formando.id % 2 === 0, data: avulso ? formando.inscrito.slice(0, 10) : (formando.id % 2 === 0 ? "2026-08-12" : ""), fileName: "" },
+    { id: "regulamento", label: "Regulamento de formação aceite", ok: true, data: formando.inscrito.slice(0, 10), fileName: "" },
   ]);
+  const [uploadFor, setUploadFor] = useState<string | null>(null);
   const emFalta = docs.filter(d => !d.ok).length;
   return (
     <div className="space-y-3">
@@ -65,11 +67,30 @@ function DocumentosGoldPanel({ formando, avulso }: { formando: FormandoTurma; av
             </button>
             <div className="flex-1 min-w-0">
               <p className={`text-xs font-semibold ${d.ok ? "text-emerald-700" : "text-red-600"}`}>{d.label}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{d.ok && d.data ? `Validado em ${d.data}` : "Em falta"}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{d.fileName ? d.fileName : d.ok && d.data ? `Validado em ${d.data}` : "Em falta"}</p>
             </div>
+            <button type="button" onClick={() => setUploadFor(d.id)} className="text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">
+              {d.ok ? "Substituir" : "Carregar"}
+            </button>
           </div>
         ))}
       </div>
+      <FileUploadModal
+        open={!!uploadFor}
+        onClose={() => setUploadFor(null)}
+        title={`Carregar: ${docs.find(d => d.id === uploadFor)?.label ?? ""}`}
+        context={{
+          kind: uploadFor === "pip" ? "pip" : "documento",
+          regime: "gold",
+          turma: avulso ? "avulso" : formando.turma,
+          formando: String(formando.id),
+          label: docs.find(d => d.id === uploadFor)?.label,
+        }}
+        onConfirm={file => {
+          if (!uploadFor) return;
+          setDocs(xs => xs.map(x => x.id === uploadFor ? { ...x, ok: true, data: new Date().toISOString().slice(0, 10), fileName: file.name } : x));
+        }}
+      />
     </div>
   );
 }

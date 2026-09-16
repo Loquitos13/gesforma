@@ -99,7 +99,42 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
-export const apiHealth = () => api<{ ok: boolean; driver: string; mail: string }>("/health");
+export type DriveStatus = {
+  configured: boolean;
+  connected: boolean;
+  email: string | null;
+  folderName: string;
+  folderId: string | null;
+  mode: "google" | "local";
+  hint: string;
+};
+
+export type DriveFile = {
+  id: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  webViewLink: string | null;
+  openUrl: string;
+  folderPath: string;
+  kind: string;
+  regime: string | null;
+  turma: string | null;
+  formando: string | null;
+  label: string | null;
+  storedIn: "google" | "local";
+  createdAt: string;
+};
+
+export type DriveUploadContext = {
+  kind: string;
+  regime?: "gold" | "fin";
+  turma?: string;
+  formando?: string;
+  label?: string;
+};
+
+export const apiHealth = () => api<{ ok: boolean; driver: string; mail: string; drive?: boolean }>("/health");
 export const apiMe = () => api<{ user: SessionUser }>("/v1/me");
 export const apiLogin = (email: string, password: string) =>
   api<{ user: SessionUser }>("/v1/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
@@ -200,6 +235,41 @@ export const apiPutSettings = (id: string, values: Record<string, string>) =>
   api<{ ok: boolean }>(`/v1/settings/${id}`, { method: "PUT", body: JSON.stringify({ values }) });
 
 export const apiEmailJobs = () => api<{ stats: EmailJobStats; jobs: EmailJob[] }>("/v1/email/jobs");
+
+export const apiDriveStatus = () => api<DriveStatus>("/v1/drive/status");
+export const apiDriveDisconnect = () => api<{ ok: boolean }>("/v1/drive/disconnect", { method: "POST" });
+export const apiDriveFiles = (q: DriveUploadContext = { kind: "" }) => {
+  const p = new URLSearchParams();
+  if (q.kind) p.set("kind", q.kind);
+  if (q.regime) p.set("regime", q.regime);
+  if (q.turma) p.set("turma", q.turma);
+  if (q.formando) p.set("formando", q.formando);
+  const qs = p.toString();
+  return api<{ files: DriveFile[] }>(`/v1/drive/files${qs ? `?${qs}` : ""}`);
+};
+export const apiDeleteDriveFile = (id: string) =>
+  api<{ ok: boolean }>(`/v1/drive/files/${id}`, { method: "DELETE" });
+
+export async function apiUploadDrive(file: File, ctx: DriveUploadContext = { kind: "documento" }): Promise<DriveFile> {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("kind", ctx.kind);
+  if (ctx.regime) fd.append("regime", ctx.regime);
+  if (ctx.turma) fd.append("turma", ctx.turma);
+  if (ctx.formando) fd.append("formando", ctx.formando);
+  if (ctx.label) fd.append("label", ctx.label);
+  const headers = new Headers();
+  headers.set("Accept", "application/json");
+  headers.set("X-Gesforma-Client", "web");
+  const res = await fetch(`${BASE}/v1/drive/files`, { method: "POST", credentials: "include", headers, body: fd });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, typeof data.error === "string" ? data.error : "upload recusado");
+  return (data as { file: DriveFile }).file;
+}
+
+export function driveOAuthStartUrl() {
+  return `${BASE}/v1/drive/oauth/start`;
+}
 
 export function emitAutomation(
   type: "preinscricao.created" | "payment.confirmed" | "formando.completed" | "sessao.summary_signed",

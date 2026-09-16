@@ -9,7 +9,9 @@ import { turmaFinOpts } from "./turmaModel";
 import { FichaFormando } from "./FormandoFicha";
 import { ConteudoAbrirModal, type ConteudoPreview } from "./ActionSurfaces";
 import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./SecretaryUX";
+import { apiUploadDrive, driveOAuthStartUrl } from "./api";
 import { useCatalogList, useCatalogs } from "./CatalogsContext";
+import { useDrive } from "./DriveContext";
 import type { FormandoTurma } from "./ListsContext";
 
 type Accent = "gold" | "fin";
@@ -227,7 +229,12 @@ const modulosData = [
   { id: 9, codigo: "AV3", nome: "Ensaio e feedback", horas: 5, curso: "A Arte de Comunicar e Falar em Público: B-learning", tipo: "Prático", estado: "Ativo" },
 ];
 
-const conteudosData = [
+type ConteudoRow = {
+  id: number; titulo: string; tipo: string; curso: string; modulo: string;
+  tamanho: string; estado: string; origem?: string; driveFileId?: string; driveUrl?: string;
+};
+
+const conteudosData: ConteudoRow[] = [
   { id: 11, titulo: "Manual CCP - Módulo 1 (Aprendizagem)", tipo: "PDF", curso: "Formação de Formadores - CCP", modulo: "M1", tamanho: "2,4 MB", estado: "Ativo" },
   { id: 12, titulo: "Vídeo: comunicação em sala", tipo: "Vídeo", curso: "Formação de Formadores - CCP", modulo: "M2", tamanho: "18 min", estado: "Ativo" },
   { id: 13, titulo: "Grelha de observação da simulação", tipo: "PDF", curso: "Formação de Formadores - CCP", modulo: "M4", tamanho: "180 KB", estado: "Ativo" },
@@ -250,7 +257,7 @@ const modulosFinData = [
   { id: 111, codigo: "P2", nome: "Dinâmicas de grupo", horas: 13, curso: "Métodos e Técnicas Pedagógicas Ativos", tipo: "Prático", estado: "Ativo" },
 ];
 
-const conteudosFinData = [
+const conteudosFinData: ConteudoRow[] = [
   { id: 201, titulo: "Manual UFCD 3564 - Primeiros Socorros", tipo: "PDF", curso: "Primeiros Socorros", modulo: "U1", tamanho: "1,8 MB", estado: "Ativo" },
   { id: 202, titulo: "Vídeo: SBV no adulto", tipo: "Vídeo", curso: "Primeiros Socorros", modulo: "U2", tamanho: "14 min", estado: "Ativo" },
   { id: 203, titulo: "Grelha de observação prática", tipo: "PDF", curso: "Primeiros Socorros", modulo: "U2", tamanho: "210 KB", estado: "Ativo" },
@@ -888,7 +895,7 @@ export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtroModulo, setFiltroModulo] = useState("");
-  const [lista, setLista] = useCatalogList("conteudos", accent, accent === "gold" ? conteudosData : conteudosFinData);
+  const [lista, setLista] = useCatalogList<ConteudoRow>("conteudos", accent, accent === "gold" ? conteudosData : conteudosFinData);
   const [open, setOpen] = useState<"new" | typeof conteudosData[number] | null>(null);
   const [abrir, setAbrir] = useState<ConteudoPreview | null>(null);
   const [curso, setCurso] = useState("");
@@ -896,6 +903,10 @@ export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
   const [titulo, setTitulo] = useState("");
   const [tipo, setTipo] = useState("PDF");
   const [origem, setOrigem] = useState("");
+  const [ficheiro, setFicheiro] = useState<File | null>(null);
+  const [driveMeta, setDriveMeta] = useState<{ id?: string; url?: string; tamanho?: string }>({});
+  const [aEnviar, setAEnviar] = useState(false);
+  const [erroFicheiro, setErroFicheiro] = useState<string | null>(null);
   const editing = open && open !== "new" ? open : null;
   const modulosDoCurso = curso ? catalogoModulos.filter(m => m.curso === curso) : [];
   const moduloOpts = modulosDoCurso.map(m => ({ value: m.codigo, sub: `${m.nome} · ${m.horas}h` }));
@@ -915,7 +926,14 @@ export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
     setModulo(editing?.modulo ?? "");
     setTitulo(editing?.titulo ?? "");
     setTipo(editing?.tipo ?? "PDF");
-    setOrigem("");
+    setOrigem(typeof editing?.origem === "string" ? editing.origem : "");
+    setFicheiro(null);
+    setDriveMeta({
+      id: typeof editing?.driveFileId === "string" ? editing.driveFileId : undefined,
+      url: typeof editing?.driveUrl === "string" ? editing.driveUrl : undefined,
+      tamanho: editing?.tamanho,
+    });
+    setErroFicheiro(null);
   }, [open, editing, filtroCurso]);
 
   function escolherCurso(v: string) {
@@ -924,19 +942,51 @@ export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
     if (!aindaServe) setModulo("");
   }
 
-  function guardarConteudo() {
+  async function guardarConteudo() {
     if (!titulo.trim() || !curso || !modulo) return;
+    let meta = driveMeta;
+    if (tipo !== "Link" && ficheiro) {
+      setAEnviar(true);
+      setErroFicheiro(null);
+      try {
+        const uploaded = await apiUploadDrive(ficheiro, {
+          kind: "conteudo",
+          regime: accent,
+          turma: curso,
+          label: titulo.trim(),
+        });
+        meta = {
+          id: uploaded.id,
+          url: uploaded.openUrl,
+          tamanho: uploaded.sizeBytes > 1024 * 1024
+            ? `${(uploaded.sizeBytes / (1024 * 1024)).toFixed(1)} MB`
+            : `${Math.max(1, Math.round(uploaded.sizeBytes / 1024))} KB`,
+        };
+      } catch (err) {
+        setErroFicheiro(err instanceof Error ? err.message : "Falha no envio do ficheiro.");
+        setAEnviar(false);
+        return;
+      }
+      setAEnviar(false);
+    }
+    const row = {
+      titulo: titulo.trim(),
+      tipo,
+      curso,
+      modulo,
+      tamanho: tipo === "Link" ? "-" : (meta.tamanho ?? (tipo === "Vídeo" ? "-" : "0 KB")),
+      estado: "Ativo" as const,
+      origem: tipo === "Link" ? origem.trim() : undefined,
+      driveFileId: meta.id,
+      driveUrl: tipo === "Link" ? origem.trim() : meta.url,
+    };
     if (open === "new") {
       const id = Math.max(0, ...lista.map(x => x.id)) + 1;
-      setLista(prev => [...prev, {
-        id, titulo: titulo.trim(), tipo, curso, modulo,
-        tamanho: tipo === "Link" ? "-" : tipo === "Vídeo" ? "-" : "0 KB",
-        estado: "Ativo",
-      }]);
+      setLista(prev => [...prev, { id, ...row }]);
       if (!filtroCurso) setFiltroCurso(curso);
       if (!filtroModulo) setFiltroModulo(modulo);
     } else if (editing) {
-      setLista(prev => prev.map(x => x.id === editing.id ? { ...x, titulo: titulo.trim(), tipo, curso, modulo } : x));
+      setLista(prev => prev.map(x => x.id === editing.id ? { ...x, ...row } : x));
     }
     setOpen(null);
   }
@@ -1012,14 +1062,25 @@ export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
               <option>PDF</option><option>Vídeo</option><option>Link</option>
             </select>
           </Field>
-          <Field label={tipo === "Link" ? "URL" : "Ficheiro ou referência"}>
-            <input className={iCls} value={origem} onChange={e => setOrigem(e.target.value)} placeholder={tipo === "Link" ? "https://…" : "manual-m1.pdf (protótipo - não envia o ficheiro)"} />
+          <Field label={tipo === "Link" ? "URL" : "Ficheiro (Drive da entidade)"}>
+            {tipo === "Link" ? (
+              <input className={iCls} value={origem} onChange={e => setOrigem(e.target.value)} placeholder="https://…" />
+            ) : (
+              <div className="space-y-1.5">
+                <input type="file" className={iCls} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.mp4,.webm"
+                  onChange={e => setFicheiro(e.target.files?.[0] ?? null)} />
+                {(ficheiro || driveMeta.id) && (
+                  <p className="text-xs text-slate-500">{ficheiro ? ficheiro.name : "Já existe um ficheiro no arquivo."}</p>
+                )}
+                {erroFicheiro && <p className="text-xs font-semibold text-red-600">{erroFicheiro}</p>}
+              </div>
+            )}
           </Field>
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button type="button" onClick={guardarConteudo} disabled={!titulo.trim() || !curso || !modulo}
+            <button type="button" onClick={() => void guardarConteudo()} disabled={!titulo.trim() || !curso || !modulo || aEnviar}
               className={`flex-1 py-2 ${accentBtn(accent)} disabled:opacity-40 text-white text-sm font-semibold rounded-lg`}>
-              {editing ? "Guardar" : "Criar conteúdo"}
+              {aEnviar ? "A enviar…" : editing ? "Guardar" : "Criar conteúdo"}
             </button>
           </div>
         </div>
@@ -1330,6 +1391,70 @@ function seedConfigDrafts() {
   return out;
 }
 
+function DriveSettingsCard() {
+  const { status, ready, disconnect, refresh } = useDrive();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const drive = q.get("drive");
+    if (!drive) return;
+    q.delete("drive");
+    const next = `${window.location.pathname}${q.toString() ? `?${q}` : ""}`;
+    window.history.replaceState({}, "", next);
+    void refresh();
+    if (drive === "ligado") setMsg("Conta Google da entidade ligada. Os próximos uploads vão para o Drive.");
+    else if (drive === "oauth-falhou" || drive === "estado-expirado" || drive === "pedido-invalido") {
+      setMsg("Não foi possível concluir o OAuth. Confirme o URI de redireccionamento e tente outra vez.");
+    }
+  }, [refresh]);
+
+  async function ligar() {
+    window.location.href = driveOAuthStartUrl();
+  }
+
+  async function desligar() {
+    setBusy(true);
+    try {
+      await disconnect();
+      setMsg("Conta Google desligada. Novos ficheiros ficam no servidor até voltar a ligar.");
+    } catch {
+      setMsg("Não foi possível desligar a conta.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 md:col-span-2 xl:col-span-3">
+      <div className="flex flex-col md:flex-row md:items-start gap-4">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-slate-800">Google Drive da entidade</p>
+          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+            PIP, certificados, conteúdos e documentos do formador ficam na pasta <span className="font-semibold text-slate-700">{status.folderName}</span> da conta Google da ENA — não num disco do GesForma.
+          </p>
+          <p className="text-xs text-slate-500 mt-2">{ready ? status.hint : "A ler o estado…"}</p>
+          {status.email && (
+            <p className="text-xs font-semibold text-emerald-700 mt-1">Ligado como {status.email}</p>
+          )}
+          {msg && <p className="text-xs font-semibold text-amber-700 mt-2">{msg}</p>}
+          {!status.configured && (
+            <p className="text-xs text-slate-400 mt-2">
+              No Google Cloud Console: active a Drive API, crie um cliente OAuth «Aplicação Web» e ponha o URI <code className="bg-slate-100 px-1 rounded">{`${window.location.origin}/api/v1/drive/oauth/callback`}</code>. Depois preencha <code className="bg-slate-100 px-1 rounded">GOOGLE_CLIENT_ID</code> e <code className="bg-slate-100 px-1 rounded">GOOGLE_CLIENT_SECRET</code>.
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2 flex-shrink-0">
+          {status.connected
+            ? <button type="button" disabled={busy} onClick={() => void desligar()} className="px-4 py-2.5 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40">Desligar</button>
+            : <button type="button" disabled={!status.configured} onClick={() => void ligar()} className="px-4 py-2.5 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white">Ligar conta Google</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ConfiguracoesView() {
   const { settings, saveSettings } = useCatalogs();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -1355,6 +1480,7 @@ export function ConfiguracoesView() {
       <div className="space-y-4">
         <PageHeader title="Configurações" sub={saved ? "Alterações guardadas na base." : "Parâmetros da entidade - a ENA gere por turmas, não por ação de formação."} />
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <DriveSettingsCard />
           {configCards.map(c => (
             <button key={c.id} type="button" onClick={() => setOpenId(c.id)}
               className={`text-left bg-white rounded-xl border shadow-sm p-5 hover:border-amber-300 hover:shadow-md transition-all ${openId === c.id ? "border-amber-400 ring-1 ring-amber-200" : "border-slate-200"}`}>

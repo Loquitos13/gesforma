@@ -40,6 +40,17 @@ export const config = {
     ?? (process.env.VERCEL ? "/tmp/gesforma-pglite" : new URL("../data/pglite", import.meta.url).pathname),
   trustProxy: bool("TRUST_PROXY", Boolean(process.env.VERCEL)),
   cronSecret: process.env.CRON_SECRET ?? "",
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+  googleRedirectUri: process.env.GOOGLE_REDIRECT_URI
+    ?? `${(process.env.APP_ORIGIN
+      ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://127.0.0.1:43147")).replace(/\/$/, "")}/api/v1/drive/oauth/callback`,
+  googleDriveFolder: process.env.GOOGLE_DRIVE_FOLDER ?? "GesForma",
+  googleDriveFolderId: process.env.GOOGLE_DRIVE_FOLDER_ID ?? "",
+  googleDriveScope: (process.env.GOOGLE_DRIVE_SCOPE ?? "drive.file") as "drive.file" | "drive",
+  driveDir: process.env.DRIVE_DIR
+    ?? (process.env.VERCEL ? "/tmp/gesforma-drive" : new URL("../data/drive-files", import.meta.url).pathname),
+  driveMaxBytes: Number(process.env.DRIVE_MAX_BYTES ?? 10 * 1024 * 1024),
 };
 
 export function allowedOrigins() {

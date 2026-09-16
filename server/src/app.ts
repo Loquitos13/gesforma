@@ -1,6 +1,7 @@
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
+import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
@@ -9,6 +10,7 @@ import { ingestEvent, processDueJobs } from "./automations.js";
 import { allowedOrigins, config, newToken, onVercel } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { registerCatalogRoutes } from "./catalogRoutes.js";
+import { registerDriveRoutes } from "./driveRoutes.js";
 import { registerOpsRoutes } from "./opsRoutes.js";
 import {
   delayLabelFromSeconds,
@@ -89,7 +91,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     logger: true,
     trustProxy: config.trustProxy,
     bodyLimit: 32 * 1024,
-    requestTimeout: 15_000,
+    requestTimeout: 60_000,
     disableRequestLogging: false,
   });
   app.decorate("db", db);
@@ -108,6 +110,9 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     methods: ["GET", "POST", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "X-Gesforma-Client"],
     maxAge: 600,
+  });
+  await app.register(multipart, {
+    limits: { fileSize: config.driveMaxBytes, files: 1, fields: 12 },
   });
   await app.register(cookie, { secret: config.sessionSecret });
   await app.register(rateLimit, {
@@ -161,6 +166,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     ok: true,
     driver: db.driver,
     mail: config.mailMode,
+    drive: Boolean(config.googleClientId && config.googleClientSecret),
   }));
 
   app.post("/v1/auth/login", {
@@ -389,6 +395,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
 
   registerOpsRoutes(app, db, { requireAuth, audit });
   registerCatalogRoutes(app, db, { requireAuth });
+  registerDriveRoutes(app, db, { requireAuth, audit });
 
   if (opts.worker !== false && !onVercel) {
     const tick = async () => {

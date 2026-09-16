@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { ApiError, apiUploadDrive, type DriveFile, type DriveUploadContext } from "./api";
 import { useCatalogList } from "./CatalogsContext";
+import { useDrive } from "./DriveContext";
 import { AppModal } from "./FormKit";
 
 const I = {
@@ -28,14 +30,50 @@ function SlideOver({ open, onClose, title, sub, children, size = "md" }: { open:
   return <AppModal open={open} onClose={onClose} title={title} sub={sub} size={size}>{children}</AppModal>;
 }
 
-export function FileUploadModal({ open, onClose, title, accent = "gold", onConfirm }: { open: boolean; onClose: () => void; title?: string; accent?: "gold" | "fin"; onConfirm?: () => void }) {
+export function FileUploadModal({
+  open, onClose, title, accent = "gold", onConfirm, context,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title?: string;
+  accent?: "gold" | "fin";
+  onConfirm?: (file: DriveFile) => void;
+  context?: DriveUploadContext;
+}) {
   const [dragging, setDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const gold = accent === "gold";
+  const { status } = useDrive();
+  const dest = [status.folderName, context?.regime === "fin" ? "Financiada" : context?.regime === "gold" ? "Gold" : null, context?.turma, context?.label ?? context?.kind]
+    .filter(Boolean)
+    .join(" / ");
 
-  function handleClose() { setFile(null); onClose(); }
-  function handleConfirm() { setFile(null); onConfirm?.(); onClose(); }
+  function handleClose() {
+    if (busy) return;
+    setFile(null);
+    setError(null);
+    onClose();
+  }
+
+  async function handleConfirm() {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const uploaded = await apiUploadDrive(file, context ?? { kind: "documento", regime: accent });
+      onConfirm?.(uploaded);
+      setFile(null);
+      onClose();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Não foi possível enviar o ficheiro.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -45,6 +83,11 @@ export function FileUploadModal({ open, onClose, title, accent = "gold", onConfi
           <button onClick={handleClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
         </div>
         <div className="p-5 space-y-4">
+          <div className={`rounded-xl border px-3 py-2.5 text-xs ${status.connected ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-slate-50 border-slate-200 text-slate-600"}`}>
+            {status.connected
+              ? <>Vai para o Drive da entidade · <span className="font-semibold">{dest || status.folderName}</span></>
+              : <>Ainda sem Drive ligado. O ficheiro fica no servidor até ligar a conta Google em Configurações.</>}
+          </div>
           {!file ? (
             <div
               onDragOver={e => { e.preventDefault(); setDragging(true); }}
@@ -56,8 +99,8 @@ export function FileUploadModal({ open, onClose, title, accent = "gold", onConfi
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 ${gold ? "bg-amber-100 text-amber-600" : "bg-blue-100 text-blue-600"}`}>{I.download}</div>
               <p className="text-sm font-semibold text-slate-700">Arraste o ficheiro para aqui</p>
               <p className="text-xs text-slate-400 mt-1">ou clique para escolher do computador</p>
-              <p className="text-xs text-slate-400 mt-1">PDF, DOC, JPG, PNG - máx. 10 MB</p>
-              <input ref={inputRef} type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setFile(f); }} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" />
+              <p className="text-xs text-slate-400 mt-1">PDF, DOC, JPG, PNG, MP4 — máx. 10 MB</p>
+              <input ref={inputRef} type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setFile(f); }} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.mp4,.webm" />
             </div>
           ) : (
             <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
@@ -66,15 +109,16 @@ export function FileUploadModal({ open, onClose, title, accent = "gold", onConfi
                 <p className="text-sm font-semibold text-slate-800 truncate">{file.name}</p>
                 <p className="text-xs text-slate-500">{(file.size / 1024).toFixed(0)} KB</p>
               </div>
-              <button onClick={() => setFile(null)} className="p-1 text-slate-400 hover:text-red-500">{I.x}</button>
+              <button onClick={() => setFile(null)} className="p-1 text-slate-400 hover:text-red-500" disabled={busy}>{I.x}</button>
             </div>
           )}
+          {error && <p className="text-xs font-semibold text-red-600">{error}</p>}
         </div>
         <div className="flex gap-2 px-5 pb-5">
-          <button onClick={handleClose} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-          <button disabled={!file} onClick={handleConfirm}
+          <button onClick={handleClose} disabled={busy} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50 disabled:opacity-40">Cancelar</button>
+          <button disabled={!file || busy} onClick={() => void handleConfirm()}
             className={`flex-1 py-2 disabled:opacity-40 text-white text-sm font-semibold rounded-lg ${gold ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}>
-            Confirmar upload
+            {busy ? "A enviar…" : status.connected ? "Enviar para o Drive" : "Guardar ficheiro"}
           </button>
         </div>
       </div>
@@ -269,12 +313,12 @@ const defaultFormadorDocs: DocField[] = [
   { id: "seguro", label: "Apólice de Seguro de Acidentes de Trabalho", required: false, uploaded: false },
 ];
 
-export function FormadorProfileSlideOver({ open, onClose, nome, telf = "914 547 554" }: { open: boolean; onClose: () => void; nome: string; telf?: string }) {
+export function FormadorProfileSlideOver({ open, onClose, nome, telf = "914 547 554", accent = "gold" }: { open: boolean; onClose: () => void; nome: string; telf?: string; accent?: "gold" | "fin" }) {
   const [docs, setDocs] = useState<DocField[]>(defaultFormadorDocs);
   const [uploadFor, setUploadFor] = useState<string | null>(null);
 
-  function markUploaded(id: string) {
-    setDocs(prev => prev.map(d => d.id === id ? { ...d, uploaded: true, fileName: `${id}_${nome.toLowerCase().replace(/\s/g, "_")}.pdf` } : d));
+  function markUploaded(id: string, fileName: string) {
+    setDocs(prev => prev.map(d => d.id === id ? { ...d, uploaded: true, fileName } : d));
     setUploadFor(null);
   }
 
@@ -333,8 +377,11 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf = "914 547 
       </SlideOver>
       <FileUploadModal
         open={!!uploadFor}
-        onClose={() => { if (uploadFor) markUploaded(uploadFor); }}
+        onClose={() => setUploadFor(null)}
         title={`Carregar: ${docs.find(d => d.id === uploadFor)?.label ?? ""}`}
+        accent={accent}
+        context={{ kind: "formador-doc", regime: accent, formando: nome, label: docs.find(d => d.id === uploadFor)?.label }}
+        onConfirm={file => { if (uploadFor) markUploaded(uploadFor, file.name); }}
       />
     </>
   );

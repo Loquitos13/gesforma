@@ -74,6 +74,9 @@ export type ConteudoPreview = {
   modulo: string;
   tamanho: string;
   estado: string;
+  origem?: string;
+  driveFileId?: string;
+  driveUrl?: string;
 };
 
 export type CertificadoPreview = {
@@ -310,8 +313,12 @@ export function ConteudoAbrirModal({
         </div>
         {item.tipo === "PDF" && (
           <div className="rounded-xl border border-slate-200 bg-slate-50 min-h-[220px] p-6 flex flex-col items-center justify-center text-center">
-            <p className="text-sm font-bold text-slate-800">Pré-visualização do PDF</p>
-            <p className="text-xs text-slate-500 mt-1 max-w-sm">Página 1 de {item.titulo}. Neste protótipo o ficheiro não está alojado — o botão descarrega um comprovativo local.</p>
+            <p className="text-sm font-bold text-slate-800">{item.driveUrl ? "Ficheiro no arquivo" : "Pré-visualização do PDF"}</p>
+            <p className="text-xs text-slate-500 mt-1 max-w-sm">
+              {item.driveUrl
+                ? "O original está no Google Drive da entidade ou no arquivo do servidor."
+                : "Este conteúdo de catálogo ainda não tem ficheiro carregado."}
+            </p>
           </div>
         )}
         {item.tipo === "Vídeo" && (
@@ -324,13 +331,21 @@ export function ConteudoAbrirModal({
         {item.tipo === "Link" && (
           <div className="rounded-xl border border-slate-200 p-4">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">URL</p>
-            <p className="text-sm font-mono text-blue-700 mt-1 break-all">https://moodle.ena.pt/{item.curso.toLowerCase().replace(/[^a-z0-9]+/g, "-")}/{item.modulo.toLowerCase()}</p>
+            <p className="text-sm font-mono text-blue-700 mt-1 break-all">{item.origem || item.driveUrl || `https://moodle.ena.pt/${item.curso.toLowerCase().replace(/[^a-z0-9]+/g, "-")}/${item.modulo.toLowerCase()}`}</p>
           </div>
         )}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-200 text-sm font-semibold text-slate-600 rounded-lg hover:bg-slate-50">Fechar</button>
-          <button type="button" onClick={onClose} className={`px-4 py-2 ${t.btn} text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5`}>
-            {item.tipo === "Link" ? "Abrir ligação" : <>{I.download} Descarregar</>}
+          <button
+            type="button"
+            onClick={() => {
+              const href = item.tipo === "Link" ? (item.origem || item.driveUrl) : item.driveUrl;
+              if (href) window.open(href, "_blank", "noopener");
+              else onClose();
+            }}
+            className={`px-4 py-2 ${t.btn} text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5`}
+          >
+            {item.tipo === "Link" ? "Abrir ligação" : <>{I.download} {item.driveUrl ? "Abrir ficheiro" : "Fechar"}</>}
           </button>
         </div>
       </div>

@@ -35,6 +35,7 @@ import { FORMADORES_SEED } from "./formadorModel";
 import { useFormadorOptions } from "./FormadoresContext";
 import { useTurmas } from "./TurmasContext";
 import { cronogramaToSessoes, formatSessaoLabel, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
+import { apiDriveFiles } from "./api";
 import { ListsProvider, nextListId, useLists, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
 import { useAuth } from "./AuthGate";
 import { EmailXmlEditor } from "./EmailTemplateEditor";
@@ -1420,6 +1421,18 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const [formadorOpen, setFormadorOpen] = useState<string | null>(null);
   const [novaSessao, setNovaSessao] = useState(false);
   const [formadoresSessao, setFormadoresSessao] = useState<string[]>(["Isac Silva"]);
+  useEffect(() => {
+    apiDriveFiles({ kind: "certificado", regime: "gold", turma: turma.nome }).then(r => {
+      setCertsIssued(prev => {
+        const next = { ...prev };
+        for (const f of r.files) {
+          const id = Number(f.formando);
+          if (Number.isFinite(id)) next[id] = true;
+        }
+        return next;
+      });
+    }).catch(() => undefined);
+  }, [turma.nome]);
   const formadorOptsSessao = useFormadorOptions(formadoresSessao);
   const [moduloSessao, setModuloSessao] = useState<string[]>([]);
   const [dataSessao, setDataSessao] = useState("");
@@ -1711,6 +1724,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         onSave={rows => { if (presencasSession) setPresencasBySessao(p => ({ ...p, [presencasSession.n]: rows })); }}
       />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado"
+        context={{ kind: "certificado", regime: "gold", turma: turma.nome, formando: uploadCert != null ? String(uploadCert) : undefined, label: "Certificado" }}
         onConfirm={() => { if (uploadCert != null) setCertsIssued(p => ({ ...p, [uploadCert]: true })); }} />
       <CertificadoVerModal open={!!verCert} onClose={() => setVerCert(null)} cert={verCert} accent="gold" />
       <ExportTurmaModal open={!!exportTurma} onClose={() => setExportTurma(null)} turma={exportTurma} />
@@ -1898,6 +1912,18 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const [certsIssued, setCertsIssued] = useState<Record<number, boolean>>({});
   const [verCert, setVerCert] = useState<CertificadoPreview | null>(null);
   const [exportTurma, setExportTurma] = useState<ExportTurmaInfo | null>(null);
+  useEffect(() => {
+    apiDriveFiles({ kind: "certificado", regime: "fin", turma: turma.nome }).then(r => {
+      setCertsIssued(prev => {
+        const next = { ...prev };
+        for (const f of r.files) {
+          const id = Number(f.formando);
+          if (Number.isFinite(id)) next[id] = true;
+        }
+        return next;
+      });
+    }).catch(() => undefined);
+  }, [turma.nome]);
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
   const [planos, setPlanos] = useState<Record<number, PlanoSessaoData>>(defaultPlanos);
   const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
@@ -2195,6 +2221,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
       />
       <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? turma.formador} />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" accent="fin"
+        context={{ kind: "certificado", regime: "fin", turma: turma.nome, formando: uploadCert != null ? String(uploadCert) : undefined, label: "Certificado" }}
         onConfirm={() => { if (uploadCert != null) setCertsIssued(p => ({ ...p, [uploadCert]: true })); }} />
       <CertificadoVerModal open={!!verCert} onClose={() => setVerCert(null)} cert={verCert} accent="fin" />
       <ExportTurmaModal open={!!exportTurma} onClose={() => setExportTurma(null)} turma={exportTurma} />
@@ -4746,7 +4773,10 @@ export default function App() {
 }
 
 function AppShell() {
-  const [view, setView] = useState<View>("painel");
+  const [view, setView] = useState<View>(() => {
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("drive")) return "configuracoes";
+    return "painel";
+  });
   const [cockpitId, setCockpitId] = useState<number | undefined>();
   const [finCockpitId, setFinCockpitId] = useState<number | undefined>();
   const [cockpitTab, setCockpitTab] = useState<CockpitTab>("overview");

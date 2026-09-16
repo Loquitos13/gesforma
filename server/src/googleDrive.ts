@@ -62,23 +62,93 @@ type AccountRow = {
   folder_name: string | null;
 };
 
-export function googleConfigured() {
+export type DriveCreds = {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  folderId: string;
+  folderName: string;
+  scope: "drive.file" | "drive";
+  fromEnv: boolean;
+};
+
+type ConfigRow = {
+  client_id: string | null;
+  client_secret: string | null;
+  folder_id: string | null;
+  folder_name: string | null;
+  scope: string | null;
+};
+
+export async function driveCreds(db: Db): Promise<DriveCreds> {
+  const row = await db.query<ConfigRow>(
+    "SELECT client_id, client_secret, folder_id, folder_name, scope FROM drive_config WHERE id = 'google'",
+  );
+  const stored = row.rows[0];
+  let storedSecret = "";
+  if (stored?.client_secret) {
+    try { storedSecret = openSecret(stored.client_secret); } catch { storedSecret = ""; }
+  }
+  return {
+    clientId: config.googleClientId || stored?.client_id || "",
+    clientSecret: config.googleClientSecret || storedSecret,
+    redirectUri: config.googleRedirectUri,
+    folderId: config.googleDriveFolderId || stored?.folder_id || "",
+    folderName: stored?.folder_name || config.googleDriveFolder,
+    scope: config.googleDriveScope === "drive" || stored?.scope === "drive" ? "drive" : "drive.file",
+    fromEnv: Boolean(config.googleClientId && config.googleClientSecret),
+  };
+}
+
+export function googleConfigured(creds?: DriveCreds) {
+  if (creds) return Boolean(creds.clientId && creds.clientSecret);
   return Boolean(config.googleClientId && config.googleClientSecret);
 }
 
-export function googleScopes() {
-  const drive = config.googleDriveScope === "drive"
+export async function saveDriveConfig(db: Db, patch: {
+  clientId?: string;
+  clientSecret?: string;
+  folderId?: string;
+  folderName?: string;
+  scope?: "drive.file" | "drive";
+}) {
+  const prev = await driveCreds(db);
+  const clientId = (patch.clientId ?? prev.clientId).trim();
+  const clientSecret = (patch.clientSecret ?? prev.clientSecret).trim();
+  const folderId = (patch.folderId ?? prev.folderId).trim();
+  const folderName = (patch.folderName ?? prev.folderName).trim() || config.googleDriveFolder;
+  const scope = patch.scope ?? prev.scope;
+  if (!clientId || clientId.length < 12) throw new Error("Client ID inválido");
+  if (!clientSecret || clientSecret.length < 12) throw new Error("Client secret em falta");
+  await db.query(
+    `INSERT INTO drive_config (id, client_id, client_secret, folder_id, folder_name, scope)
+     VALUES ('google', $1, $2, $3, $4, $5)
+     ON CONFLICT (id) DO UPDATE SET
+       client_id = EXCLUDED.client_id,
+       client_secret = EXCLUDED.client_secret,
+       folder_id = EXCLUDED.folder_id,
+       folder_name = EXCLUDED.folder_name,
+       scope = EXCLUDED.scope,
+       updated_at = now()`,
+    [clientId, sealSecret(clientSecret), folderId || null, folderName, scope],
+  );
+  return driveCreds(db);
+}
+
+export function googleScopes(creds?: DriveCreds) {
+  const scope = creds?.scope ?? config.googleDriveScope;
+  const drive = scope === "drive"
     ? "https://www.googleapis.com/auth/drive"
     : "https://www.googleapis.com/auth/drive.file";
   return ["openid", "email", drive];
 }
 
-export function googleAuthUrl(state: string) {
+export function googleAuthUrl(state: string, creds: DriveCreds) {
   const q = new URLSearchParams({
-    client_id: config.googleClientId,
-    redirect_uri: config.googleRedirectUri,
+    client_id: creds.clientId,
+    redirect_uri: creds.redirectUri,
     response_type: "code",
-    scope: googleScopes().join(" "),
+    scope: googleScopes(creds).join(" "),
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: "true",
@@ -113,8 +183,8 @@ function kindFolder(kind: string) {
   return map[kind] ?? sanitizeFileName(kind || "Documentos");
 }
 
-export function folderSegments(ctx: DriveContext) {
-  const segs = [config.googleDriveFolder];
+export function folderSegments(ctx: DriveContext, rootName = config.googleDriveFolder) {
+  const segs = [rootName];
   if (ctx.regime === "fin") segs.push("Financiada");
   else if (ctx.regime === "gold") segs.push("Gold");
   if (ctx.turma) segs.push(sanitizeFileName(ctx.turma));
@@ -140,12 +210,12 @@ async function googleJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
-export async function exchangeCode(code: string) {
+export async function exchangeCode(code: string, creds: DriveCreds) {
   const body = new URLSearchParams({
     code,
-    client_id: config.googleClientId,
-    client_secret: config.googleClientSecret,
-    redirect_uri: config.googleRedirectUri,
+    client_id: creds.clientId,
+    client_secret: creds.clientSecret,
+    redirect_uri: creds.redirectUri,
     grant_type: "authorization_code",
   });
   return googleJson<{
@@ -161,11 +231,11 @@ export async function exchangeCode(code: string) {
   });
 }
 
-async function refreshAccess(refreshToken: string) {
+async function refreshAccess(refreshToken: string, creds: DriveCreds) {
   const body = new URLSearchParams({
     refresh_token: refreshToken,
-    client_id: config.googleClientId,
-    client_secret: config.googleClientSecret,
+    client_id: creds.clientId,
+    client_secret: creds.clientSecret,
     grant_type: "refresh_token",
   });
   return googleJson<{ access_token: string; expires_in: number; scope?: string }>(TOKEN_URL, {
@@ -212,8 +282,8 @@ export async function saveGoogleAccount(db: Db, tokens: {
       sealSecret(refresh),
       expiry,
       tokens.scope ?? googleScopes().join(" "),
-      prev.rows[0]?.folder_id ?? (config.googleDriveFolderId || null),
-      prev.rows[0]?.folder_name ?? config.googleDriveFolder,
+      prev.rows[0]?.folder_id ?? null,
+      prev.rows[0]?.folder_name ?? null,
     ],
   );
   return { email };
@@ -228,19 +298,25 @@ async function loadAccount(db: Db) {
 
 export async function getDriveStatus(db: Db) {
   const account = await loadAccount(db);
+  const creds = await driveCreds(db);
+  const configured = googleConfigured(creds);
   const connected = Boolean(account?.refresh_token);
   return {
-    configured: googleConfigured(),
+    configured,
     connected,
     email: account?.email ?? null,
-    folderName: account?.folder_name ?? config.googleDriveFolder,
-    folderId: account?.folder_id ?? null,
+    folderName: account?.folder_name ?? creds.folderName,
+    folderId: account?.folder_id ?? (creds.folderId || null),
     mode: connected ? "google" as const : "local" as const,
-    hint: !googleConfigured()
-      ? "Defina GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET para ligar o Drive da entidade. Até lá os ficheiros ficam no servidor."
+    redirectUri: creds.redirectUri,
+    clientId: creds.clientId,
+    hasSecret: Boolean(creds.clientSecret),
+    fromEnv: creds.fromEnv,
+    hint: !configured
+      ? "Cole o cliente OAuth da Google (ID e secret) e ligue a conta da entidade. Até lá os ficheiros ficam no servidor."
       : connected
         ? `Ficheiros da secretaria no Drive de ${account?.email}.`
-        : "A conta Google da entidade ainda não está ligada. Os uploads ficam no servidor até ligar.",
+        : "Cliente OAuth gravado. Falta ligar a conta Google da ENA.",
   };
 }
 
@@ -252,7 +328,9 @@ async function accessToken(db: Db) {
   if (exp - 60_000 > Date.now() && account.access_token) {
     try { return openSecret(account.access_token); } catch { /* refresh */ }
   }
-  const next = await refreshAccess(refresh);
+  const creds = await driveCreds(db);
+  if (!googleConfigured(creds)) return null;
+  const next = await refreshAccess(refresh, creds);
   const expiry = new Date(Date.now() + next.expires_in * 1000).toISOString();
   await db.query(
     "UPDATE oauth_accounts SET access_token = $1, expiry = $2, updated_at = now() WHERE provider = 'google'",
@@ -304,10 +382,11 @@ async function createFolder(token: string, name: string, parentId?: string) {
   });
 }
 
-async function ensureFolderPath(db: Db, token: string, segments: string[]) {
+async function ensureFolderPath(db: Db, token: string, segments: string[], folderId?: string) {
   const account = await loadAccount(db);
-  let parent = config.googleDriveFolderId || account?.folder_id || "root";
-  if (!config.googleDriveFolderId && (!account?.folder_id || account.folder_id === "root")) {
+  const pinned = folderId || account?.folder_id || "";
+  let parent = pinned || "root";
+  if (!pinned) {
     const existing = parent === "root"
       ? await findChildFolder(token, "root", segments[0] ?? config.googleDriveFolder)
       : { id: parent, name: account?.folder_name ?? config.googleDriveFolder };
@@ -318,9 +397,7 @@ async function ensureFolderPath(db: Db, token: string, segments: string[]) {
       [parent, segments[0] ?? config.googleDriveFolder],
     );
   }
-  const rest = config.googleDriveFolderId || account?.folder_id
-    ? segments.slice(1)
-    : segments.slice(1);
+  const rest = segments.slice(1);
   for (const name of rest) {
     const found = await findChildFolder(token, parent, name);
     const folder = found ?? await createFolder(token, name, parent);
@@ -383,11 +460,12 @@ export async function storeDriveFile(
   const name = sanitizeFileName(file.name);
   assertUpload(name, file.mime, file.bytes.length);
   const id = newToken(16);
-  const pathLabel = folderSegments(ctx).join(" / ");
-  const token = googleConfigured() ? await accessToken(db).catch(() => null) : null;
+  const creds = await driveCreds(db);
+  const pathLabel = folderSegments(ctx, creds.folderName).join(" / ");
+  const token = googleConfigured(creds) ? await accessToken(db).catch(() => null) : null;
 
   if (token) {
-    const parent = await ensureFolderPath(db, token, folderSegments(ctx));
+    const parent = await ensureFolderPath(db, token, folderSegments(ctx, creds.folderName), creds.folderId);
     const uploaded = await uploadToGoogle(token, parent, name, file.mime, file.bytes);
     await db.query(
       `INSERT INTO drive_files

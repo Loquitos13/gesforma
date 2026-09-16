@@ -107,6 +107,10 @@ export type DriveStatus = {
   folderId: string | null;
   mode: "google" | "local";
   hint: string;
+  redirectUri?: string;
+  clientId?: string;
+  hasSecret?: boolean;
+  fromEnv?: boolean;
 };
 
 export type DriveFile = {
@@ -237,6 +241,8 @@ export const apiPutSettings = (id: string, values: Record<string, string>) =>
 export const apiEmailJobs = () => api<{ stats: EmailJobStats; jobs: EmailJob[] }>("/v1/email/jobs");
 
 export const apiDriveStatus = () => api<DriveStatus>("/v1/drive/status");
+export const apiPutDriveConfig = (body: { clientId: string; clientSecret?: string; folderId?: string; folderName?: string }) =>
+  api<DriveStatus>("/v1/drive/config", { method: "PUT", body: JSON.stringify(body) });
 export const apiDriveDisconnect = () => api<{ ok: boolean }>("/v1/drive/disconnect", { method: "POST" });
 export const apiDriveFiles = (q: DriveUploadContext = { kind: "" }) => {
   const p = new URLSearchParams();

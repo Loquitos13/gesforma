@@ -4,6 +4,7 @@ import type { Db } from "./db/pool.js";
 import {
   deleteDriveFile,
   disconnectGoogle,
+  driveCreds,
   exchangeCode,
   getDriveFile,
   getDriveStatus,
@@ -12,6 +13,7 @@ import {
   listDriveFiles,
   purgeExpiredStates,
   readDriveContent,
+  saveDriveConfig,
   saveGoogleAccount,
   storeDriveFile,
 } from "./googleDrive.js";
@@ -45,10 +47,29 @@ export function registerDriveRoutes(
     return getDriveStatus(db);
   });
 
+  app.put("/v1/drive/config", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const body = (req.body ?? {}) as {
+      clientId?: string;
+      clientSecret?: string;
+      folderId?: string;
+      folderName?: string;
+      scope?: "drive.file" | "drive";
+    };
+    try {
+      await saveDriveConfig(db, body);
+      await audit(db, req.actor!.id, "drive.config", "drive_config", "google", req.ip);
+      return getDriveStatus(db);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : "configuração recusada" });
+    }
+  });
+
   app.get("/v1/drive/oauth/start", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    if (!googleConfigured()) {
-      return reply.code(400).send({ error: "GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET em falta" });
+    const creds = await driveCreds(db);
+    if (!googleConfigured(creds)) {
+      return reply.redirect(`${publicOrigin(req)}/?drive=sem-cliente`);
     }
     await purgeExpiredStates(db);
     const state = newToken(24);
@@ -57,7 +78,7 @@ export function registerDriveRoutes(
       "INSERT INTO oauth_states (state, user_id, redirect_to, expires_at) VALUES ($1, $2, $3, $4)",
       [state, req.actor!.id, `${publicOrigin(req)}/?drive=ligado`, exp],
     );
-    return reply.redirect(googleAuthUrl(state));
+    return reply.redirect(googleAuthUrl(state, creds));
   });
 
   app.get("/v1/drive/oauth/callback", async (req, reply) => {
@@ -73,7 +94,9 @@ export function registerDriveRoutes(
     await db.query("DELETE FROM oauth_states WHERE state = $1", [q.state]);
     if (!st) return fail("estado-expirado");
     try {
-      const tokens = await exchangeCode(q.code);
+      const creds = await driveCreds(db);
+      if (!googleConfigured(creds)) return fail("sem-cliente");
+      const tokens = await exchangeCode(q.code, creds);
       const saved = await saveGoogleAccount(db, tokens);
       await audit(db, st.user_id, "drive.connect", "oauth_account", "google", req.ip, { email: saved.email });
       return reply.redirect(st.redirect_to || `${config.appOrigin}/?drive=ligado`);

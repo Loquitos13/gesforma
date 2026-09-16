@@ -107,7 +107,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
       else cb(new Error("origem recusada"), false);
     },
     credentials: true,
-    methods: ["GET", "POST", "PATCH", "DELETE"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "X-Gesforma-Client"],
     maxAge: 600,
   });

@@ -9,7 +9,7 @@ import { turmaFinOpts } from "./turmaModel";
 import { FichaFormando } from "./FormandoFicha";
 import { ConteudoAbrirModal, type ConteudoPreview } from "./ActionSurfaces";
 import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./SecretaryUX";
-import { apiUploadDrive, driveOAuthStartUrl } from "./api";
+import { apiPutDriveConfig, apiUploadDrive, driveOAuthStartUrl } from "./api";
 import { useCatalogList, useCatalogs } from "./CatalogsContext";
 import { useDrive } from "./DriveContext";
 import type { FormandoTurma } from "./ListsContext";
@@ -1395,6 +1395,15 @@ function DriveSettingsCard() {
   const { status, ready, disconnect, refresh } = useDrive();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [folderId, setFolderId] = useState("");
+  const redirectUri = status.redirectUri || `${window.location.origin}/api/v1/drive/oauth/callback`;
+
+  useEffect(() => {
+    if (status.clientId) setClientId(status.clientId);
+    if (status.folderId) setFolderId(status.folderId);
+  }, [status.clientId, status.folderId]);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -1405,13 +1414,30 @@ function DriveSettingsCard() {
     window.history.replaceState({}, "", next);
     void refresh();
     if (drive === "ligado") setMsg("Conta Google da entidade ligada. Os próximos uploads vão para o Drive.");
+    else if (drive === "sem-cliente") setMsg("Grave primeiro o Client ID e o secret do cliente OAuth.");
     else if (drive === "oauth-falhou" || drive === "estado-expirado" || drive === "pedido-invalido") {
-      setMsg("Não foi possível concluir o OAuth. Confirme o URI de redireccionamento e tente outra vez.");
+      setMsg("Não foi possível concluir o OAuth. Confirme o URI de redireccionamento no Google Cloud e tente outra vez.");
     }
   }, [refresh]);
 
-  async function ligar() {
-    window.location.href = driveOAuthStartUrl();
+  async function guardarCliente() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await apiPutDriveConfig({
+        clientId: clientId.trim(),
+        clientSecret: clientSecret.trim() || undefined,
+        folderId: folderId.trim() || undefined,
+        folderName: status.folderName,
+      });
+      setClientSecret("");
+      await refresh();
+      setMsg("Cliente OAuth gravado. Pode ligar a conta Google da ENA.");
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Não foi possível gravar o cliente OAuth.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function desligar() {
@@ -1427,29 +1453,52 @@ function DriveSettingsCard() {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 md:col-span-2 xl:col-span-3">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 md:col-span-2 xl:col-span-3 space-y-4">
       <div className="flex flex-col md:flex-row md:items-start gap-4">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-slate-800">Google Drive da entidade</p>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-            PIP, certificados, conteúdos e documentos do formador ficam na pasta <span className="font-semibold text-slate-700">{status.folderName}</span> da conta Google da ENA — não num disco do GesForma.
+            OAuth 2.0 da Google + Drive API. PIP, certificados, conteúdos e documentos do formador ficam na pasta <span className="font-semibold text-slate-700">{status.folderName}</span> da conta da ENA.
           </p>
           <p className="text-xs text-slate-500 mt-2">{ready ? status.hint : "A ler o estado…"}</p>
           {status.email && (
             <p className="text-xs font-semibold text-emerald-700 mt-1">Ligado como {status.email}</p>
           )}
           {msg && <p className="text-xs font-semibold text-amber-700 mt-2">{msg}</p>}
-          {!status.configured && (
-            <p className="text-xs text-slate-400 mt-2">
-              No Google Cloud Console: active a Drive API, crie um cliente OAuth «Aplicação Web» e ponha o URI <code className="bg-slate-100 px-1 rounded">{`${window.location.origin}/api/v1/drive/oauth/callback`}</code>. Depois preencha <code className="bg-slate-100 px-1 rounded">GOOGLE_CLIENT_ID</code> e <code className="bg-slate-100 px-1 rounded">GOOGLE_CLIENT_SECRET</code>.
-            </p>
-          )}
         </div>
         <div className="flex gap-2 flex-shrink-0">
           {status.connected
             ? <button type="button" disabled={busy} onClick={() => void desligar()} className="px-4 py-2.5 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40">Desligar</button>
-            : <button type="button" disabled={!status.configured} onClick={() => void ligar()} className="px-4 py-2.5 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white">Ligar conta Google</button>}
+            : <button type="button" disabled={!status.configured || busy} onClick={() => { window.location.href = driveOAuthStartUrl(); }} className="px-4 py-2.5 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white">Ligar conta Google</button>}
         </div>
+      </div>
+
+      <ol className="text-xs text-slate-600 space-y-1 list-decimal pl-4">
+        <li>Google Cloud Console → projecto da ENA → active a <span className="font-semibold">Google Drive API</span>.</li>
+        <li>Ecrã de consentimento OAuth (interno, se for Google Workspace).</li>
+        <li>Clientes OAuth → «Aplicação Web». URI de redireccionamento exactamente o da caixa abaixo.</li>
+        <li>Cole o Client ID e o secret, grave, e ligue com a conta da secretaria (não uma conta pessoal).</li>
+      </ol>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Field label="URI de redireccionamento (copie para o Google Cloud)">
+          <input className={iCls} readOnly value={redirectUri} onFocus={e => e.currentTarget.select()} />
+        </Field>
+        <Field label="Pasta no Drive (ID opcional de uma pasta já existente)">
+          <input className={iCls} value={folderId} onChange={e => setFolderId(e.target.value)} placeholder="vazio = cria a pasta GesForma" disabled={status.fromEnv} />
+        </Field>
+        <Field label="Client ID">
+          <input className={iCls} value={clientId} onChange={e => setClientId(e.target.value)} placeholder="xxxx.apps.googleusercontent.com" autoComplete="off" disabled={status.fromEnv} />
+        </Field>
+        <Field label="Client secret">
+          <input className={iCls} type="password" value={clientSecret} onChange={e => setClientSecret(e.target.value)} placeholder={status.hasSecret ? "•••• já gravado — deixe vazio para manter" : "Cole o secret do cliente Web"} autoComplete="new-password" disabled={status.fromEnv} />
+        </Field>
+      </div>
+      <div className="flex justify-end">
+        <button type="button" disabled={busy || status.fromEnv || !clientId.trim()} onClick={() => void guardarCliente()}
+          className="px-4 py-2.5 text-sm font-semibold rounded-lg bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white">
+          {busy ? "A gravar…" : status.fromEnv ? "Cliente definido no servidor" : "Gravar cliente OAuth"}
+        </button>
       </div>
     </div>
   );

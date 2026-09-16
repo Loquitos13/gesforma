@@ -157,6 +157,19 @@ export function googleAuthUrl(state: string, creds: DriveCreds) {
   return `${AUTH_URL}?${q.toString()}`;
 }
 
+export function googleLoginAuthUrl(state: string, creds: DriveCreds) {
+  const q = new URLSearchParams({
+    client_id: creds.clientId,
+    redirect_uri: config.googleLoginRedirectUri,
+    response_type: "code",
+    scope: "openid email profile",
+    prompt: "select_account",
+    include_granted_scopes: "true",
+    state,
+  });
+  return `${AUTH_URL}?${q.toString()}`;
+}
+
 export function sanitizeFileName(name: string) {
   const base = name.replace(/[/\\]/g, "").replace(/[^\w.\- ()áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]+/g, "_").trim();
   return (base || "ficheiro").slice(0, 180);
@@ -210,12 +223,12 @@ async function googleJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
-export async function exchangeCode(code: string, creds: DriveCreds) {
+export async function exchangeCode(code: string, creds: DriveCreds, redirectUri = creds.redirectUri) {
   const body = new URLSearchParams({
     code,
     client_id: creds.clientId,
     client_secret: creds.clientSecret,
-    redirect_uri: creds.redirectUri,
+    redirect_uri: redirectUri,
     grant_type: "authorization_code",
   });
   return googleJson<{
@@ -245,11 +258,15 @@ async function refreshAccess(refreshToken: string, creds: DriveCreds) {
   });
 }
 
-async function userEmail(accessToken: string) {
+export async function googleUserEmail(accessToken: string) {
   const info = await googleJson<{ email?: string }>(USERINFO_URL, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   return info.email ?? null;
+}
+
+async function userEmail(accessToken: string) {
+  return googleUserEmail(accessToken);
 }
 
 export async function saveGoogleAccount(db: Db, tokens: {
@@ -309,6 +326,7 @@ export async function getDriveStatus(db: Db) {
     folderId: account?.folder_id ?? (creds.folderId || null),
     mode: connected ? "google" as const : "local" as const,
     redirectUri: creds.redirectUri,
+    loginRedirectUri: config.googleLoginRedirectUri,
     clientId: creds.clientId,
     hasSecret: Boolean(creds.clientSecret),
     fromEnv: creds.fromEnv,

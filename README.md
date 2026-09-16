@@ -96,9 +96,9 @@ npm run api    # outra consola - http://127.0.0.1:43148/health
 npm run dev    # http://127.0.0.1:43147
 ```
 
-Entrar com `tania@ena.pt` e a palavra-passe do `.env`.
+Entrar com `tania@ena.pt` e a palavra-passe do `.env`, ou com **Continuar com Google** se o email da conta Google já existir como utilizador da secretaria.
 
-Para o Drive da entidade: no Google Cloud Console active a **Google Drive API**, crie um cliente OAuth «Aplicação Web» com o URI `http://127.0.0.1:43147/api/v1/drive/oauth/callback`. Em **Configurações** cole o Client ID e o secret, grave, e clique em *Ligar conta Google* com a conta da secretaria (não uma conta pessoal). Em produção também pode pôr `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` no ambiente. Sem cliente OAuth os uploads continuam a funcionar, mas ficam no disco local.
+Para o Drive da entidade e o login Google: no Google Cloud Console active a **Google Drive API**, crie um cliente OAuth «Aplicação Web» com os URI `http://127.0.0.1:43147/api/v1/drive/oauth/callback` e `http://127.0.0.1:43147/api/v1/auth/google/callback`. Em **Configurações** cole o Client ID e o secret, grave, e clique em *Ligar conta Google* com a conta da secretaria (não uma conta pessoal). Em produção também pode pôr `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` no ambiente e os URI de `https://gesforma-alpha.vercel.app`. Sem cliente OAuth os uploads continuam a funcionar, mas ficam no disco local; o botão Google no login fica indisponível.
 
 Formulário público (sem login): [http://127.0.0.1:43147/pre-inscricao](http://127.0.0.1:43147/pre-inscricao). Aceita `?curso=` e `?email=`.
 

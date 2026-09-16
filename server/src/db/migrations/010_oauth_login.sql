@@ -1,0 +1,2 @@
+ALTER TABLE oauth_states ALTER COLUMN user_id DROP NOT NULL;
+ALTER TABLE oauth_states ADD COLUMN IF NOT EXISTS purpose text NOT NULL DEFAULT 'drive';

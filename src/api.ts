@@ -108,6 +108,7 @@ export type DriveStatus = {
   mode: "google" | "local";
   hint: string;
   redirectUri?: string;
+  loginRedirectUri?: string;
   clientId?: string;
   hasSecret?: boolean;
   fromEnv?: boolean;
@@ -143,6 +144,11 @@ export const apiMe = () => api<{ user: SessionUser }>("/v1/me");
 export const apiLogin = (email: string, password: string) =>
   api<{ user: SessionUser }>("/v1/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
 export const apiLogout = () => api<{ ok: boolean }>("/v1/auth/logout", { method: "POST" });
+export const apiGoogleLoginStatus = () =>
+  api<{ configured: boolean; redirectUri: string }>("/v1/auth/google");
+export function googleLoginStartUrl() {
+  return `${BASE}/v1/auth/google/start`;
+}
 
 export const apiEmailRules = () => api<{ rules: EmailRule[] }>("/v1/email/rules");
 export const apiCreateRule = (body: Record<string, unknown>) =>

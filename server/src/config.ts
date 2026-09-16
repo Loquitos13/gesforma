@@ -19,13 +19,22 @@ export const onVercel = Boolean(process.env.VERCEL);
 const defaultDevSecret = "dev-only-not-for-production-gesforma-session-key-32";
 const defaultDevPassword = "altere-me-no-primeiro-arranque";
 
+function inferredOrigin() {
+  if (process.env.APP_ORIGIN) return process.env.APP_ORIGIN.replace(/\/$/, "");
+  const prod = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  if (prod) return `https://${prod.replace(/^https?:\/\//, "")}`;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, "")}`;
+  return "http://127.0.0.1:43147";
+}
+
+const appOrigin = inferredOrigin();
+
 export const config = {
   nodeEnv,
   isProd,
   port: Number(process.env.API_PORT ?? 43148),
   host: process.env.API_HOST ?? "0.0.0.0",
-  appOrigin: process.env.APP_ORIGIN
-    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://127.0.0.1:43147"),
+  appOrigin,
   sessionSecret: process.env.SESSION_SECRET ?? ((isProd && !process.env.VERCEL) ? "" : defaultDevSecret),
   sessionDays: Number(process.env.SESSION_DAYS ?? 7),
   cookieName: "gf_session",
@@ -43,8 +52,9 @@ export const config = {
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
   googleRedirectUri: process.env.GOOGLE_REDIRECT_URI
-    ?? `${(process.env.APP_ORIGIN
-      ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://127.0.0.1:43147")).replace(/\/$/, "")}/api/v1/drive/oauth/callback`,
+    ?? `${appOrigin}/api/v1/drive/oauth/callback`,
+  googleLoginRedirectUri: process.env.GOOGLE_LOGIN_REDIRECT_URI
+    ?? `${appOrigin}/api/v1/auth/google/callback`,
   googleDriveFolder: process.env.GOOGLE_DRIVE_FOLDER ?? "GesForma",
   googleDriveFolderId: process.env.GOOGLE_DRIVE_FOLDER_ID ?? "",
   googleDriveScope: (process.env.GOOGLE_DRIVE_SCOPE ?? "drive.file") as "drive.file" | "drive",

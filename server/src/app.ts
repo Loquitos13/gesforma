@@ -11,6 +11,14 @@ import { allowedOrigins, config, newToken, onVercel } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { registerCatalogRoutes } from "./catalogRoutes.js";
 import { registerDriveRoutes } from "./driveRoutes.js";
+import {
+  driveCreds,
+  exchangeCode,
+  googleConfigured,
+  googleLoginAuthUrl,
+  googleUserEmail,
+  purgeExpiredStates,
+} from "./googleDrive.js";
 import { registerOpsRoutes } from "./opsRoutes.js";
 import {
   delayLabelFromSeconds,
@@ -156,10 +164,27 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     reply.setCookie(config.cookieName, token, {
       path: "/",
       httpOnly: true,
-      sameSite: "strict",
+      sameSite: "lax",
       secure: config.isProd || onVercel,
       maxAge: days * 86400,
     });
+  }
+
+  async function createSession(
+    reply: FastifyReply,
+    user: { id: string; email: string; name: string; role: string },
+    req: FastifyRequest,
+    action = "auth.login",
+  ) {
+    const token = newToken();
+    const exp = new Date(Date.now() + config.sessionDays * 86400_000).toISOString();
+    await db.query(
+      "INSERT INTO sessions (id, user_id, token_hash, expires_at, ip, user_agent) VALUES ($1, $2, $3, $4, $5, $6)",
+      [randomUUID(), user.id, sha256(token), exp, req.ip, String(req.headers["user-agent"] ?? "").slice(0, 180)],
+    );
+    setSessionCookie(reply, token, config.sessionDays);
+    await audit(db, user.id, action, "user", user.id, req.ip);
+    return { user };
   }
 
   app.get("/health", async () => ({
@@ -187,15 +212,72 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
       await audit(db, row?.id, "auth.login_failed", "user", row?.id, req.ip);
       return reply.code(401).send({ error: "credenciais inválidas" });
     }
-    const token = newToken();
-    const exp = new Date(Date.now() + config.sessionDays * 86400_000).toISOString();
+    return createSession(reply, { id: row.id, email, name: row.name, role: row.role }, req);
+  });
+
+  app.get("/v1/auth/google", async () => {
+    const creds = await driveCreds(db);
+    return {
+      configured: googleConfigured(creds),
+      redirectUri: config.googleLoginRedirectUri,
+    };
+  });
+
+  app.get("/v1/auth/google/start", {
+    config: { rateLimit: { max: 12, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    const origin = config.appOrigin.replace(/\/$/, "");
+    const creds = await driveCreds(db);
+    if (!googleConfigured(creds)) {
+      return reply.redirect(`${origin}/?login=sem-cliente`);
+    }
+    await purgeExpiredStates(db);
+    const state = newToken(24);
+    const exp = new Date(Date.now() + 10 * 60_000).toISOString();
     await db.query(
-      "INSERT INTO sessions (id, user_id, token_hash, expires_at, ip, user_agent) VALUES ($1, $2, $3, $4, $5, $6)",
-      [randomUUID(), row.id, sha256(token), exp, req.ip, String(req.headers["user-agent"] ?? "").slice(0, 180)],
+      "INSERT INTO oauth_states (state, user_id, redirect_to, expires_at, purpose) VALUES ($1, NULL, $2, $3, 'login')",
+      [state, `${origin}/`, exp],
     );
-    setSessionCookie(reply, token, config.sessionDays);
-    await audit(db, row.id, "auth.login", "user", row.id, req.ip);
-    return { user: { id: row.id, email, name: row.name, role: row.role } };
+    return reply.redirect(googleLoginAuthUrl(state, creds));
+  });
+
+  app.get("/v1/auth/google/callback", async (req, reply) => {
+    const origin = config.appOrigin.replace(/\/$/, "");
+    const fail = (reason: string) => reply.redirect(`${origin}/?login=${encodeURIComponent(reason)}`);
+    const q = req.query as { code?: string; state?: string; error?: string };
+    if (q.error) return fail("oauth-falhou");
+    if (!q.code || !q.state) return fail("pedido-invalido");
+    const row = await db.query<{ purpose: string | null }>(
+      "SELECT purpose FROM oauth_states WHERE state = $1 AND expires_at > now()",
+      [q.state],
+    );
+    const st = row.rows[0];
+    await db.query("DELETE FROM oauth_states WHERE state = $1", [q.state]);
+    if (!st || st.purpose !== "login") return fail("pedido-invalido");
+    try {
+      const creds = await driveCreds(db);
+      if (!googleConfigured(creds)) return fail("sem-cliente");
+      const tokens = await exchangeCode(q.code, creds, config.googleLoginRedirectUri);
+      const email = normalizeEmail((await googleUserEmail(tokens.access_token)) ?? "");
+      if (!isEmail(email)) return fail("oauth-falhou");
+      const user = await db.query<{ id: string; name: string; role: string; active: boolean }>(
+        "SELECT id, name, role, active FROM users WHERE email = $1",
+        [email],
+      );
+      const found = user.rows[0];
+      if (!found) {
+        await audit(db, undefined, "auth.google_denied", "user", email, req.ip);
+        return fail("sem-conta");
+      }
+      if (!found.active) {
+        await audit(db, found.id, "auth.google_denied", "user", found.id, req.ip);
+        return fail("inactivo");
+      }
+      await createSession(reply, { id: found.id, email, name: found.name, role: found.role }, req, "auth.google");
+      return reply.redirect(`${origin}/`);
+    } catch {
+      return fail("oauth-falhou");
+    }
   });
 
   app.post("/v1/auth/logout", async (req, reply) => {

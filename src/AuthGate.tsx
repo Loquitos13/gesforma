@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { apiLogin, apiLogout, apiMe, type SessionUser } from "./api";
+import { apiGoogleLoginStatus, apiLogin, apiLogout, apiMe, googleLoginStartUrl, type SessionUser } from "./api";
 
 type AuthCtx = {
   user: SessionUser;
@@ -12,6 +12,17 @@ export function useAuth() {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error("useAuth precisa de AuthGate");
   return ctx;
+}
+
+function GoogleMark() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden>
+      <path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h6.46a5.52 5.52 0 0 1-2.4 3.62v3.01h3.88c2.27-2.09 3.55-5.17 3.55-8.66Z" />
+      <path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.93-2.91l-3.88-3.01c-1.08.72-2.45 1.15-4.05 1.15-3.11 0-5.75-2.1-6.69-4.92H1.3v3.09A12 12 0 0 0 12 24Z" />
+      <path fill="#FBBC05" d="M5.31 14.31A7.21 7.21 0 0 1 4.93 12c0-.8.14-1.58.38-2.31V6.6H1.3A12 12 0 0 0 0 12c0 1.94.46 3.78 1.3 5.4l4.01-3.09Z" />
+      <path fill="#EA4335" d="M12 4.75c1.76 0 3.34.61 4.59 1.8l3.44-3.44C17.95 1.14 15.24 0 12 0 7.31 0 3.26 2.69 1.3 6.6l4.01 3.09C6.25 6.87 8.89 4.75 12 4.75Z" />
+    </svg>
+  );
 }
 
 function EnaLogo({ className }: { className?: string }) {
@@ -57,6 +68,29 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [offline, setOffline] = useState(false);
+  const [googleReady, setGoogleReady] = useState(false);
+  const [googleOn, setGoogleOn] = useState(false);
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("login");
+    if (!q) return;
+    const msgs: Record<string, string> = {
+      "sem-cliente": "O cliente Google ainda não está configurado. Entre com email e peça à administração para gravar o OAuth.",
+      "sem-conta": "Esta conta Google não tem acesso à secretaria. O email tem de existir como utilizador.",
+      inactivo: "Esta conta está desactivada.",
+      "oauth-falhou": "Não foi possível entrar com o Google. Tente de novo.",
+      "pedido-invalido": "O pedido Google expirou. Tente de novo.",
+    };
+    setError(msgs[q] ?? "Não foi possível entrar com o Google.");
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
+
+  useEffect(() => {
+    apiGoogleLoginStatus()
+      .then(r => setGoogleOn(r.configured))
+      .catch(() => setGoogleOn(false))
+      .finally(() => setGoogleReady(true));
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -137,6 +171,27 @@ export function AuthGate({ children }: { children: ReactNode }) {
             </p>
           )}
           {error && !offline && <p className="text-xs font-medium text-red-600">{error}</p>}
+          <a
+            href={googleOn ? googleLoginStartUrl() : undefined}
+            aria-disabled={!googleOn}
+            onClick={e => {
+              if (!googleOn) {
+                e.preventDefault();
+                setError("O cliente Google ainda não está configurado. Entre com email ou grave o OAuth nas Configurações.");
+              }
+            }}
+            className={`flex items-center justify-center gap-3 w-full h-12 rounded-full text-white text-[15px] font-medium tracking-tight transition-opacity ${
+              googleOn || !googleReady ? "bg-[#0b1220] hover:bg-[#111827]" : "bg-[#0b1220]/40 cursor-not-allowed"
+            }`}
+          >
+            <GoogleMark />
+            Continuar com Google
+          </a>
+          <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <span className="flex-1 h-px bg-slate-200" />
+            ou
+            <span className="flex-1 h-px bg-slate-200" />
+          </div>
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Email</span>
             <input className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" value={email} onChange={e => setEmail(e.target.value)} autoComplete="username" />

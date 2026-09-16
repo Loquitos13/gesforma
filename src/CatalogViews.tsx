@@ -1482,13 +1482,16 @@ function DriveSettingsCard() {
       <ol className="text-xs text-slate-600 space-y-1 list-decimal pl-4">
         <li>Google Cloud Console → projecto da ENA → active a <span className="font-semibold">Google Drive API</span>.</li>
         <li>Ecrã de consentimento OAuth (interno, se for Google Workspace).</li>
-        <li>Clientes OAuth → «Aplicação Web». URI de redireccionamento exactamente o da caixa abaixo.</li>
+        <li>Clientes OAuth → «Aplicação Web». Adicione os dois URI de redireccionamento das caixas abaixo (Drive e login).</li>
         <li>Cole o Client ID e o secret, grave, e ligue com a conta da secretaria (não uma conta pessoal).</li>
       </ol>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <Field label="URI de redireccionamento (copie para o Google Cloud)">
+        <Field label="URI de redireccionamento do Drive">
           <input className={iCls} readOnly value={redirectUri} onFocus={e => e.currentTarget.select()} />
+        </Field>
+        <Field label="URI de redireccionamento do login Google">
+          <input className={iCls} readOnly value={status.loginRedirectUri ?? `${window.location.origin}/api/v1/auth/google/callback`} onFocus={e => e.currentTarget.select()} />
         </Field>
         <Field label="Pasta no Drive (ID opcional de uma pasta já existente)">
           <input className={iCls} value={folderId} onChange={e => setFolderId(e.target.value)} placeholder="vazio = cria a pasta GesForma" disabled={status.fromEnv} />

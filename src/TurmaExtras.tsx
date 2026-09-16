@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useCatalogList } from "./CatalogsContext";
 import { AppModal } from "./FormKit";
 
 const I = {
@@ -740,7 +741,7 @@ const inqueritosFin: Inquerito[] = [{
 
 export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
   const isGold = acento === "gold";
-  const [inqueritos, setInqueritos] = useState<Inquerito[]>(isGold ? inqueritosGold : inqueritosFin);
+  const [inqueritos, setInqueritos] = useCatalogList<Inquerito>("inqueritos", isGold ? "gold" : "fin", isGold ? inqueritosGold : inqueritosFin);
   const [selected, setSelected] = useState<number | null>(1);
   const [creating, setCreating] = useState(false);
   const [novoTitulo, setNovoTitulo] = useState("");

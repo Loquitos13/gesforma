@@ -88,7 +88,38 @@ export async function ingestEvent(
   return { eventId: id, queued, duplicate: false };
 }
 
+async function enqueueTurmaReminders(db: Db) {
+  const day = new Date(Date.now() + 24 * 3600_000).toISOString().slice(0, 10);
+  const gold = await db.query<{ id: number; nome: string; curso: string }>(
+    "SELECT id, nome, curso FROM turmas_gold WHERE data_inicio = $1 AND estado = 'Ativa'",
+    [day],
+  );
+  const fin = await db.query<{ id: number; nome: string; curso: string }>(
+    "SELECT id, nome, curso FROM turmas_fin WHERE data_inicio = $1 AND activa = true",
+    [day],
+  );
+  for (const turma of [...gold.rows, ...fin.rows]) {
+    const alunos = await db.query<{ nome: string; apelido: string; email: string; curso: string }>(
+      `SELECT nome, apelido, email, curso FROM formandos_gold WHERE turma_id = $1 AND email <> ''
+       UNION ALL
+       SELECT nome, apelido, email, curso FROM formandos_fin WHERE turma = $2 AND email <> ''`,
+      [turma.id, turma.nome],
+    );
+    for (const a of alunos.rows) {
+      const email = normalizeEmail(a.email);
+      if (!isEmail(email)) continue;
+      await ingestEvent(
+        db,
+        "turma.starts_in_24h",
+        { email, nome: `${a.nome} ${a.apelido}`.trim(), curso: a.curso || turma.curso, turma: turma.nome },
+        `turma24h:${turma.id}:${email}:${day}`,
+      ).catch(() => undefined);
+    }
+  }
+}
+
 export async function processDueJobs(db: Db, limit = 20) {
+  await enqueueTurmaReminders(db).catch(() => undefined);
   const due = await db.query<{
     id: string;
     to_email: string;

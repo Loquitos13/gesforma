@@ -46,7 +46,9 @@ Cada **turma** tem um **cronograma** e um toggle **Ativa / Inativa**. No cockpit
 
 A secretaria entra com sessão (cookie httpOnly, SameSite=strict). A API Fastify fala **Postgres** na VPS; em desenvolvimento, se `DATABASE_URL` estiver vazio, usa **PGlite** (o mesmo SQL, ficheiro em `server/data/`).
 
-As migrações estão em `server/src/db/migrations/` (`001` … `005`) e correm no arranque. O seed cria o admin, os templates de email e, se as tabelas operacionais estiverem vazias, cursos, turmas, formadores, pré-inscrições, formandos, campanhas, blog e pagamentos. O backoffice lê e grava este snapshot em `GET /v1/ops` e nos CRUD `/v1/preinscricoes`, `/v1/turmas-*`, `/v1/formadores`, etc.
+As migrações estão em `server/src/db/migrations/` (`001` … `006`) e correm no arranque. O seed cria o admin, os templates de email e, se as tabelas estiverem vazias, o operacional (cursos, turmas, formadores, leads, pagamentos) e os **catálogos** (módulos, locais, datas, conteúdos, áreas, formandos avulso, inscrições financiadas, temáticas do blog, inquéritos). O backoffice lê `GET /v1/ops` e grava nos CRUD e em `/v1/catalog/:kind`. As **Configurações** ficam em `app_settings`.
+
+O worker de email também dispara o lembrete **24h antes do início** da turma (formandos da turma) e o certificado quando o estado do formando passa a concluído.
 
 O formulário público `POST /v1/public/preinscricoes` (8 pedidos / minuto) cria um lead em **Não contactado**. Na lista Gold, **Contactar** passa a **1.º Contacto** e regista a nota.
 

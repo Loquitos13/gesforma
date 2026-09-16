@@ -211,7 +211,16 @@ export function registerOpsRoutes(
       [id, d.nome ?? null, d.apelido ?? null, d.telf ?? null, d.email ?? null, d.local ?? null, d.curso ?? null, d.turma ?? null, d.turmaId ?? null, d.estado ?? null, d.pago ?? null, d.valor ?? null, d.metodo ?? null],
     );
     const row = await one(db, "SELECT * FROM formandos_gold WHERE id = $1", [id]);
-    return { formando: row ? mapFormandoGold(row) : null };
+    const mapped = row ? mapFormandoGold(row) : null;
+    if (mapped && d.estado && /conclu/i.test(d.estado) && mapped.email) {
+      await ingestEvent(db, "formando.completed", {
+        email: mapped.email,
+        nome: `${mapped.nome} ${mapped.apelido}`.trim(),
+        curso: mapped.curso,
+        turma: mapped.turma,
+      }, `formando.completed:${id}`).catch(() => undefined);
+    }
+    return { formando: mapped };
   });
 
   app.delete("/v1/formandos-gold/:id", async (req, reply) => {

@@ -69,6 +69,8 @@ export type OpsSnapshot = {
   campanhas: Array<{ id: number; nome: string; data: string; encarregado: string; preinscricoes: number; pagos: number; receita: number; custo: number }>;
   blogPosts: Array<{ id: number; titulo: string; slug: string; data: string; status: string }>;
   pagamentos: Array<{ id: string; nome: string; valor: number; metodo: string; curso: string; data: string; estado: string }>;
+  catalogs?: Record<string, Array<Record<string, unknown> & { id: number }>>;
+  settings?: Record<string, Record<string, string>>;
 };
 
 export type EmailJob = {
@@ -187,6 +189,15 @@ export const apiCreatePagamento = (body: Record<string, unknown>) =>
 export const apiPatchPagamento = (id: string, body: Record<string, unknown>) =>
   api<{ pagamento: OpsSnapshot["pagamentos"][number] | null }>(`/v1/pagamentos/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 export const apiDeletePagamento = (id: string) => api<{ ok: boolean }>(`/v1/pagamentos/${id}`, { method: "DELETE" });
+
+export const apiCreateCatalog = (kind: string, regime: "gold" | "fin", payload: Record<string, unknown>) =>
+  api<{ item: { id: number } & Record<string, unknown> }>(`/v1/catalog/${kind}`, { method: "POST", body: JSON.stringify({ regime, payload }) });
+export const apiPatchCatalog = (kind: string, id: number, payload: Record<string, unknown>, regime?: "gold" | "fin") =>
+  api<{ item: ({ id: number } & Record<string, unknown>) | null }>(`/v1/catalog/${kind}/${id}`, { method: "PATCH", body: JSON.stringify({ payload, regime }) });
+export const apiDeleteCatalog = (kind: string, id: number) =>
+  api<{ ok: boolean }>(`/v1/catalog/${kind}/${id}`, { method: "DELETE" });
+export const apiPutSettings = (id: string, values: Record<string, string>) =>
+  api<{ ok: boolean }>(`/v1/settings/${id}`, { method: "PUT", body: JSON.stringify({ values }) });
 
 export const apiEmailJobs = () => api<{ stats: EmailJobStats; jobs: EmailJob[] }>("/v1/email/jobs");
 

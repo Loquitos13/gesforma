@@ -8,6 +8,7 @@ import { z } from "zod";
 import { ingestEvent, processDueJobs } from "./automations.js";
 import { allowedOrigins, config, newToken, onVercel } from "./config.js";
 import type { Db } from "./db/pool.js";
+import { registerCatalogRoutes } from "./catalogRoutes.js";
 import { registerOpsRoutes } from "./opsRoutes.js";
 import {
   delayLabelFromSeconds,
@@ -387,6 +388,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   });
 
   registerOpsRoutes(app, db, { requireAuth, audit });
+  registerCatalogRoutes(app, db, { requireAuth });
 
   if (opts.worker !== false && !onVercel) {
     const tick = async () => {

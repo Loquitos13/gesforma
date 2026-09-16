@@ -9,6 +9,7 @@ import { turmaFinOpts } from "./turmaModel";
 import { FichaFormando } from "./FormandoFicha";
 import { ConteudoAbrirModal, type ConteudoPreview } from "./ActionSurfaces";
 import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./SecretaryUX";
+import { useCatalogList, useCatalogs } from "./CatalogsContext";
 import type { FormandoTurma } from "./ListsContext";
 
 type Accent = "gold" | "fin";
@@ -341,7 +342,7 @@ function asFichaAvulso(r: typeof formandosGoldData[number]): FormandoTurma {
 }
 
 export function FormandosGoldView() {
-  const [lista, setLista] = useState(formandosGoldData);
+  const [lista, setLista] = useCatalogList("formandos_avulso", "gold", formandosGoldData);
   const [s, setS] = useState(""); const [p, setP] = useState(1);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
@@ -458,7 +459,7 @@ export function FormandosGoldView() {
         onClose={() => setApagar(null)}
         title="Eliminar formando Gold"
         body={apagar ? `Remover ${apagar.nome} ${apagar.apelido} da lista avulso?` : ""}
-        risk="A venda individual sai da lista. Esta acção não se desfaz neste protótipo."
+        risk="A venda individual sai da lista. Esta acção não se desfaz."
         onConfirm={() => { if (apagar) setLista(xs => xs.filter(x => x.id !== apagar.id)); }}
       />
       <SlideOver open={!!ficha} onClose={() => setFicha(null)} title="Ficha do Formando" sub={ficha ? `#${ficha.id} · venda avulso` : ""} size="lg">
@@ -491,7 +492,7 @@ export function DatasFinView() {
 function DatasCatalogView({ accent }: { accent: Accent }) {
   const seed = accent === "gold" ? datasGoldData : datasFinData;
   const cursosOpts = accent === "gold" ? cursosGoldOpts : cursosFinOpts;
-  const [lista, setLista] = useState(seed);
+  const [lista, setLista] = useCatalogList("datas", accent, seed);
   const [s, setS] = useState(""); const [p, setP] = useState(1);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
@@ -536,7 +537,7 @@ function DatasCatalogView({ accent }: { accent: Accent }) {
       <div className="space-y-4">
         <PageHeader
           title={accent === "gold" ? "Datas / Edições Gold" : "Datas / Edições Financiadas"}
-          sub={accent === "gold" ? "Calendário comercial: início, fim, horário, preço e local. Cada edição alimenta as turmas." : "Calendário das UFCD: início, fim, horário e local. Sem preço — a edição é financiada."}
+          sub={accent === "gold" ? "Calendário comercial: início, fim, horário, preço e local. Cada edição alimenta as turmas." : "Calendário das UFCD: início, fim, horário e local. Sem preço - a edição é financiada."}
           action={<NewBtn accent={accent} label="+ Nova data" onClick={() => setOpen("new")} />}
         />
         <ViewFilters
@@ -603,7 +604,7 @@ export function LocaisFinView() {
 }
 
 function LocaisCatalogView({ accent }: { accent: Accent }) {
-  const [lista, setLista] = useState(accent === "gold" ? locaisData : locaisFinData);
+  const [lista, setLista] = useCatalogList("locais", accent, accent === "gold" ? locaisData : locaisFinData);
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof locaisData[number] | null>(null);
@@ -631,7 +632,7 @@ function LocaisCatalogView({ accent }: { accent: Accent }) {
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Locais" sub={accent === "gold" ? "Polos da ENA onde as turmas Gold decorrem." : "Salas e polos das turmas financiadas — quase tudo em sala virtual."} action={<NewBtn accent={accent} label="+ Novo local" onClick={() => setOpen("new")} />} />
+        <PageHeader title="Locais" sub={accent === "gold" ? "Polos da ENA onde as turmas Gold decorrem." : "Salas e polos das turmas financiadas - quase tudo em sala virtual."} action={<NewBtn accent={accent} label="+ Novo local" onClick={() => setOpen("new")} />} />
         <ViewFilters accent={accent} chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: setFiltro }} onClear={() => setFiltro("Todos")} />
         <Card>
           <TableToolbar search={s} onSearch={setS} />
@@ -676,7 +677,7 @@ export function AreasTematicasFinView() {
 }
 
 function AreasCatalogView({ accent }: { accent: Accent }) {
-  const [lista, setLista] = useState(accent === "gold" ? areasTematicasData : areasFinData);
+  const [lista, setLista] = useCatalogList("areas", accent, accent === "gold" ? areasTematicasData : areasFinData);
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof areasTematicasData[number] | null>(null);
@@ -738,7 +739,7 @@ export function ModulosView({ cursoInicial, accent = "gold" }: { cursoInicial?: 
   const [s, setS] = useState("");
   const [estado, setEstado] = useState("Todos");
   const [cursoFiltro, setCursoFiltro] = useState(cursoInicial ?? "");
-  const [lista, setLista] = useState<ModuloRow[]>(accent === "gold" ? modulosData : modulosFinData);
+  const [lista, setLista] = useCatalogList<ModuloRow>("modulos", accent, accent === "gold" ? modulosData : modulosFinData);
   const [open, setOpen] = useState<"new" | ModuloRow | null>(null);
   const [curso, setCurso] = useState("");
   const [codigo, setCodigo] = useState("");
@@ -882,12 +883,12 @@ export function ConteudosFinView() {
 
 export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
   const cursosOpts = accent === "gold" ? cursosGoldOpts : cursosFinOpts;
-  const catalogoModulos = accent === "gold" ? modulosData : modulosFinData;
+  const [catalogoModulos] = useCatalogList<ModuloRow>("modulos", accent, accent === "gold" ? modulosData : modulosFinData);
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtroModulo, setFiltroModulo] = useState("");
-  const [lista, setLista] = useState(accent === "gold" ? conteudosData : conteudosFinData);
+  const [lista, setLista] = useCatalogList("conteudos", accent, accent === "gold" ? conteudosData : conteudosFinData);
   const [open, setOpen] = useState<"new" | typeof conteudosData[number] | null>(null);
   const [abrir, setAbrir] = useState<ConteudoPreview | null>(null);
   const [curso, setCurso] = useState("");
@@ -1030,7 +1031,7 @@ export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
 
 export function FinInscricoesView() {
   const { fin } = useTurmas();
-  const [lista, setLista] = useState(finInscricoesData);
+  const [lista, setLista] = useCatalogList("inscricoes_fin", "fin", finInscricoesData);
   const [s, setS] = useState(""); const [p, setP] = useState(1);
   const [filtro, setFiltro] = useState("Todas");
   const [open, setOpen] = useState<"new" | typeof finInscricoesData[number] | null>(null);
@@ -1140,7 +1141,7 @@ export function FinInscricoesView() {
         onClose={() => setApagar(null)}
         title="Eliminar inscrição financiada"
         body={apagar ? `Remover a candidatura de ${apagar.nome} ${apagar.apelido}?` : ""}
-        risk="Sai do pipeline de elegibilidade. Esta acção não se desfaz neste protótipo."
+        risk="Sai do pipeline de elegibilidade. Esta acção não se desfaz."
         onConfirm={() => { if (apagar) setLista(xs => xs.filter(x => x.id !== apagar.id)); }}
       />
       <SlideOver open={!!open} onClose={() => setOpen(null)}
@@ -1189,7 +1190,7 @@ export function FinInscricoesView() {
 }
 
 export function BlogTematicasView() {
-  const [lista, setLista] = useState(blogTematicasData);
+  const [lista, setLista] = useCatalogList("blog_tematicas", "gold", blogTematicasData);
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof blogTematicasData[number] | null>(null);
@@ -1330,10 +1331,20 @@ function seedConfigDrafts() {
 }
 
 export function ConfiguracoesView() {
+  const { settings, saveSettings } = useCatalogs();
   const [openId, setOpenId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState(seedConfigDrafts);
   const [saved, setSaved] = useState(false);
   const current = configCards.find(c => c.id === openId) ?? null;
+  useEffect(() => {
+    setDrafts(prev => {
+      const next = { ...prev };
+      for (const [id, values] of Object.entries(settings)) {
+        if (values) next[id] = { ...next[id], ...values };
+      }
+      return next;
+    });
+  }, [settings]);
 
   function setField(id: string, label: string, value: string) {
     setDrafts(prev => ({ ...prev, [id]: { ...prev[id], [label]: value } }));
@@ -1342,7 +1353,7 @@ export function ConfiguracoesView() {
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Configurações" sub={saved ? "Alterações guardadas neste protótipo." : "Parâmetros da entidade - a ENA gere por turmas, não por ação de formação."} />
+        <PageHeader title="Configurações" sub={saved ? "Alterações guardadas na base." : "Parâmetros da entidade - a ENA gere por turmas, não por ação de formação."} />
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {configCards.map(c => (
             <button key={c.id} type="button" onClick={() => setOpenId(c.id)}
@@ -1364,7 +1375,11 @@ export function ConfiguracoesView() {
         footer={
           <>
             <button type="button" onClick={() => setOpenId(null)} className="px-4 py-2.5 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Cancelar</button>
-            <button type="button" onClick={() => { setSaved(true); setOpenId(null); }} className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white">Guardar</button>
+            <button type="button" onClick={() => {
+              if (current) saveSettings(current.id, drafts[current.id] ?? {});
+              setSaved(true);
+              setOpenId(null);
+            }} className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white">Guardar</button>
           </>
         }
       >

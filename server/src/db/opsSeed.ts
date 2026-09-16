@@ -1,3 +1,4 @@
+import { seedCatalogs } from "./catalogSeed.js";
 import type { Db } from "./pool.js";
 
 const CURSOS_GOLD = [
@@ -195,6 +196,8 @@ export async function seedOperational(db: Db) {
       );
     }
   }
+
+  await seedCatalogs(db);
 
   await db.query(`
     SELECT setval('ops_id_seq', GREATEST(

@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { AuthGate } from "./AuthGate";
+import { CatalogsProvider } from "./CatalogsContext";
 import { FormadoresProvider } from "./FormadoresContext";
 import { PublicPreinscricao } from "./PublicPreinscricao";
 import { TurmasProvider } from "./TurmasContext";
@@ -17,7 +18,9 @@ createRoot(document.getElementById("root")!).render(
       <AuthGate>
         <TurmasProvider>
           <FormadoresProvider>
-            <App />
+            <CatalogsProvider>
+              <App />
+            </CatalogsProvider>
           </FormadoresProvider>
         </TurmasProvider>
       </AuthGate>

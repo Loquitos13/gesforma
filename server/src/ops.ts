@@ -210,6 +210,7 @@ export async function getOpsSnapshot(db: Db) {
   const [
     preinscricoes, formandosTurmas, formandosFin, cursosGold, cursosFin,
     turmasGold, turmasFin, formadores, campanhas, blogPosts, pagamentos,
+    catalogRows, settingRows,
   ] = await Promise.all([
     listMapped(db, "SELECT * FROM preinscricoes ORDER BY inscrito DESC", mapPreinscricao),
     listMapped(db, "SELECT * FROM formandos_gold ORDER BY inscrito DESC", mapFormandoGold),
@@ -222,9 +223,18 @@ export async function getOpsSnapshot(db: Db) {
     listMapped(db, "SELECT * FROM campanhas ORDER BY data DESC", mapCampanha),
     listMapped(db, "SELECT * FROM blog_posts ORDER BY data DESC", mapBlog),
     listMapped(db, "SELECT * FROM pagamentos ORDER BY data DESC", mapPagamento),
+    db.query<{ id: number; kind: string; regime: string; payload: unknown }>("SELECT id, kind, regime, payload FROM catalog_items ORDER BY id"),
+    db.query<{ id: string; values: unknown }>("SELECT id, values FROM app_settings"),
   ]);
+  const catalogs: Record<string, Array<Record<string, unknown>>> = {};
+  for (const r of catalogRows.rows) {
+    const key = `${r.kind}:${r.regime}`;
+    (catalogs[key] ??= []).push({ id: num(r.id), ...asObj(r.payload) });
+  }
+  const settings = Object.fromEntries(settingRows.rows.map(r => [r.id, asObj(r.values)]));
   return {
     preinscricoes, formandosTurmas, formandosFin, cursosGold, cursosFin,
     turmasGold, turmasFin, formadores, campanhas, blogPosts, pagamentos,
+    catalogs, settings,
   };
 }

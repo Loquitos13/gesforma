@@ -183,7 +183,19 @@ export function ListsProvider({
     }).catch(() => undefined);
   }, []);
   const patchFormandoTurma = useCallback((id: number, patch: Partial<FormandoTurma>) => {
-    setFT(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x));
+    setFT(xs => {
+      const next = xs.map(x => x.id === id ? { ...x, ...patch } : x);
+      const row = next.find(x => x.id === id);
+      if (row && patch.estado && /conclu/i.test(patch.estado) && row.email) {
+        void emitAutomation("formando.completed", {
+          email: row.email,
+          nome: `${row.nome} ${row.apelido}`.trim(),
+          curso: row.curso,
+          turma: row.turma,
+        }, `formando.completed:${id}`);
+      }
+      return next;
+    });
     void apiPatchFormandoGold(id, patch).catch(() => undefined);
   }, []);
   const removeFormandoTurma = useCallback((id: number) => {

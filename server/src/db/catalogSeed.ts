@@ -149,11 +149,11 @@ const SEED: SeedRow[] = [
 ];
 
 export async function seedCatalogs(db: Db) {
-  const count = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM catalog_items");
-  if ((count.rows[0]?.n ?? 0) > 0) return;
   for (const r of SEED) {
     await db.query(
-      "INSERT INTO catalog_items (id, kind, regime, payload) VALUES ($1,$2,$3,$4::jsonb)",
+      `INSERT INTO catalog_items (id, kind, regime, payload)
+       VALUES ($1,$2,$3,$4::jsonb)
+       ON CONFLICT (kind, id) DO NOTHING`,
       [r.id, r.kind, r.regime, JSON.stringify(r.payload)],
     );
   }

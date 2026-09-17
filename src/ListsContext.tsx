@@ -37,7 +37,7 @@ export type Preinscricao = {
   id: number; inscrito: string; nome: string; apelido: string; email: string; telf: string;
   inicioCurso: string; concelho: string; local: string; curso: string; preco: number;
   estado: string; campanha: string; origem: string;
-  contactadoEm?: string | null; notas?: string;
+  contactadoEm?: string | null; notas?: string; proximoContacto?: string;
 };
 export type FormandoTurma = {
   id: number; nome: string; apelido: string; telf: string; email: string; inscrito: string;
@@ -57,7 +57,7 @@ export type CursoFinRow = {
   id: number; ufcdCod: string; ufcd: string; nomeComercial: string;
   regime: string; horas: number; estado: string;
 };
-export type BlogPostRow = { id: number; titulo: string; slug: string; data: string; status: string };
+export type BlogPostRow = { id: number; titulo: string; slug: string; data: string; status: string; tematica?: string };
 export type CampanhaRow = {
   id: number; nome: string; data: string; encarregado: string;
   preinscricoes: number; pagos: number; receita: number; custo: number;

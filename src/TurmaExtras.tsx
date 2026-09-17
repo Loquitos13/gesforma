@@ -1,8 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { ApiError, apiUploadDrive, type DriveFile, type DriveUploadContext } from "./api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ApiError, apiDriveFiles, apiFormadorDocs, apiInqueritoRespostas, apiSaveFormadorDocs, apiUploadDrive,
+  type DriveFile, type DriveUploadContext, type InqueritoResposta,
+} from "./api";
 import { useCatalogList } from "./CatalogsContext";
 import { useDrive } from "./DriveContext";
+import { useFormadores } from "./FormadoresContext";
 import { AppModal } from "./FormKit";
+import { useTurmas } from "./TurmasContext";
 
 const I = {
   x: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>,
@@ -294,23 +299,63 @@ export function PresencasSessaoModal({ open, onClose, sessao, formandos, onSave 
 }
 
 type DocField = { id: string; label: string; required: boolean; uploaded: boolean; fileName?: string };
-const defaultFormadorDocs: DocField[] = [
-  { id: "cc", label: "Cartão de Cidadão", required: true, uploaded: true, fileName: "cc_isac_silva.pdf" },
-  { id: "ccp", label: "Certificado de Competências Pedagógicas (CCP)", required: true, uploaded: true, fileName: "ccp_isac_2024.pdf" },
-  { id: "cv", label: "Curriculum Vitae", required: true, uploaded: true, fileName: "cv_isac_silva.pdf" },
-  { id: "habilitacoes", label: "Certificado de Habilitações", required: true, uploaded: false },
-  { id: "nib", label: "NIB / IBAN", required: true, uploaded: false },
-  { id: "decl_irs", label: "Declaração para efeitos de IRS", required: false, uploaded: false },
-  { id: "seguro", label: "Apólice de Seguro de Acidentes de Trabalho", required: false, uploaded: false },
+const DOCS_FORMADOR: { id: string; label: string; required: boolean }[] = [
+  { id: "cc", label: "Cartão de Cidadão", required: true },
+  { id: "ccp", label: "Certificado de Competências Pedagógicas (CCP)", required: true },
+  { id: "cv", label: "Curriculum Vitae", required: true },
+  { id: "habilitacoes", label: "Certificado de Habilitações", required: true },
+  { id: "nib", label: "NIB / IBAN", required: true },
+  { id: "decl_irs", label: "Declaração para efeitos de IRS", required: false },
+  { id: "seguro", label: "Apólice de Seguro de Acidentes de Trabalho", required: false },
 ];
 
-export function FormadorProfileSlideOver({ open, onClose, nome, telf = "914 547 554", accent = "gold" }: { open: boolean; onClose: () => void; nome: string; telf?: string; accent?: "gold" | "fin" }) {
-  const [docs, setDocs] = useState<DocField[]>(defaultFormadorDocs);
+export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "gold" }: { open: boolean; onClose: () => void; nome: string; telf?: string; accent?: "gold" | "fin" }) {
+  const { formadores } = useFormadores();
+  const formador = formadores.find(f => f.nome === nome);
+  const { gold, fin } = useTurmas();
+  const [docs, setDocs] = useState<DocField[]>(() => DOCS_FORMADOR.map(d => ({ ...d, uploaded: false })));
   const [uploadFor, setUploadFor] = useState<string | null>(null);
+  const [ficheiros, setFicheiros] = useState<DriveFile[]>([]);
+
+  const cursos = useMemo(() => {
+    const nomes = new Set<string>();
+    for (const t of [...gold, ...fin]) {
+      const daTurma = t.cronograma.some(s => (s.formadores ?? []).includes(nome)) || t.formador === nome;
+      if (daTurma && t.curso) nomes.add(t.curso);
+    }
+    return [...nomes];
+  }, [fin, gold, nome]);
+
+  useEffect(() => {
+    if (!open || !formador) return;
+    let alive = true;
+    apiFormadorDocs(formador.id)
+      .then(r => {
+        if (!alive) return;
+        setDocs(DOCS_FORMADOR.map(d => {
+          const saved = r.docs.find(x => x.id === d.id);
+          return { ...d, uploaded: saved?.uploaded ?? false, fileName: saved?.fileName };
+        }));
+      })
+      .catch(() => undefined);
+    apiDriveFiles({ kind: "formador-doc", regime: accent, formando: nome })
+      .then(r => { if (alive) setFicheiros(r.files); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, [accent, formador, nome, open]);
 
   function markUploaded(id: string, fileName: string) {
-    setDocs(prev => prev.map(d => d.id === id ? { ...d, uploaded: true, fileName } : d));
+    const next = docs.map(d => d.id === id ? { ...d, uploaded: true, fileName } : d);
+    setDocs(next);
     setUploadFor(null);
+    if (formador) {
+      void apiSaveFormadorDocs(formador.id, next.map(d => ({ id: d.id, uploaded: d.uploaded, fileName: d.fileName ?? "" }))).catch(() => undefined);
+    }
+  }
+
+  function abrirFicheiro(doc: DocField) {
+    const ficheiro = ficheiros.find(f => f.label === doc.label || f.name === doc.fileName);
+    if (ficheiro) window.open(ficheiro.openUrl, "_blank", "noreferrer");
   }
 
   return (
@@ -321,14 +366,17 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf = "914 547 
             <div className="w-14 h-14 rounded-2xl bg-violet-600 flex items-center justify-center text-white text-xl font-bold flex-shrink-0">{nome[0]}</div>
             <div>
               <p className="text-sm font-bold text-slate-800">{nome}</p>
-              <p className="text-xs text-slate-500">Formador / Formadora</p>
-              <p className="text-xs text-violet-600 font-medium mt-1">CCP válido · {telf}</p>
+              <p className="text-xs text-slate-500">{formador?.especialidade || "Formador / Formadora"}</p>
+              <p className="text-xs text-violet-600 font-medium mt-1">
+                {formador?.ccp ? `CCP ${formador.ccp}` : "CCP não registado"}{(telf || formador?.telf) ? ` · ${telf || formador?.telf}` : ""}
+              </p>
             </div>
           </div>
           <div>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Cursos atribuídos</p>
             <div className="space-y-1.5">
-              {["Formação de Formadores - CCP", "Comunicação e Dinamização de Grupos"].map(c => (
+              {cursos.length === 0 && <p className="text-xs text-slate-400">Sem turmas atribuídas no cronograma.</p>}
+              {cursos.map(c => (
                 <div key={c} className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
                   <span className="text-xs text-slate-700">{c}</span>
@@ -356,7 +404,7 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf = "914 547 
                   </div>
                   {doc.uploaded
                     ? <div className="flex gap-1">
-                        <ActBtn icon={I.eye} label="Ver" color="gray" />
+                        <ActBtn icon={I.eye} label="Ver" color="gray" onClick={() => abrirFicheiro(doc)} />
                         <ActBtn icon={I.edit} label="Substituir" onClick={() => setUploadFor(doc.id)} />
                       </div>
                     : <button onClick={() => setUploadFor(doc.id)} className="text-xs font-semibold px-2.5 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 whitespace-nowrap">Upload</button>}
@@ -702,6 +750,66 @@ const inqueritosFin: Inquerito[] = [{
   ],
 }];
 
+const tipoLabelsCsv: Record<PerguntaTipo, string> = {
+  escala: "Escala 1-5",
+  multipla: "Escolha múltipla",
+  simnao: "Sim / Não",
+  texto: "Texto livre",
+};
+
+function exportarInquerito(inq: Inquerito) {
+  const linhas = [
+    ["#", "Pergunta", "Tipo", "Opções"],
+    ...inq.perguntas.map((p, i) => [String(i + 1), p.texto, tipoLabelsCsv[p.tipo], (p.opcoes ?? []).join(" | ")]),
+  ];
+  const csv = linhas.map(l => l.map(c => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
+  const blob = new Blob([`\uFEFF${inq.titulo}\n\n${csv}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `inquerito-${inq.titulo.replace(/[^\w-]+/g, "-").toLowerCase().slice(0, 50)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function InqueritoPreviewModal({ inq, onClose }: { inq: Inquerito | null; onClose: () => void }) {
+  return (
+    <AppModal open={!!inq} onClose={onClose} title={inq?.titulo ?? "Inquérito"} sub="É assim que o formando vê o questionário" size="lg">
+      <div className="p-5 space-y-4">
+        {inq?.perguntas.length === 0 && <p className="text-sm text-slate-400">Este inquérito ainda não tem perguntas.</p>}
+        {inq?.perguntas.map((p, i) => (
+          <div key={p.id} className="space-y-2">
+            <p className="text-sm font-semibold text-slate-800">{i + 1}. {p.texto || "(pergunta sem texto)"}</p>
+            {p.tipo === "escala" && (
+              <div className="flex gap-2">
+                {[1, 2, 3, 4, 5].map(n => (
+                  <span key={n} className="w-9 h-9 rounded-full border-2 border-slate-200 flex items-center justify-center text-xs font-bold text-slate-500">{n}</span>
+                ))}
+              </div>
+            )}
+            {p.tipo === "simnao" && (
+              <div className="flex gap-2">
+                <span className="px-4 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600">Sim</span>
+                <span className="px-4 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600">Não</span>
+              </div>
+            )}
+            {p.tipo === "multipla" && (
+              <div className="space-y-1.5">
+                {(p.opcoes ?? []).map((op, oi) => (
+                  <label key={oi} className="flex items-center gap-2 text-sm text-slate-600">
+                    <span className="w-4 h-4 rounded-full border-2 border-slate-300" />{op}
+                  </label>
+                ))}
+              </div>
+            )}
+            {p.tipo === "texto" && <div className="h-20 border border-slate-200 rounded-lg bg-slate-50" />}
+          </div>
+        ))}
+      </div>
+    </AppModal>
+  );
+}
+
 export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
   const isGold = acento === "gold";
   const [inqueritos, setInqueritos] = useCatalogList<Inquerito>("inqueritos", isGold ? "gold" : "fin", isGold ? inqueritosGold : inqueritosFin);
@@ -709,6 +817,8 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
   const [creating, setCreating] = useState(false);
   const [novoTitulo, setNovoTitulo] = useState("");
   const [editId, setEditId] = useState<number | null>(null);
+  const [preview, setPreview] = useState<Inquerito | null>(null);
+  const [respostas, setRespostas] = useState<InqueritoResposta[]>([]);
   const inq = inqueritos.find(i => i.id === selected);
 
   function addInquerito() {
@@ -735,6 +845,15 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
   const accent = isGold
     ? { bg: "bg-amber-500", text: "text-amber-600", light: "bg-amber-50", border: "border-amber-200", pill: "bg-amber-100 text-amber-800" }
     : { bg: "bg-blue-600", text: "text-blue-600", light: "bg-blue-50", border: "border-blue-200", pill: "bg-blue-100 text-blue-800" };
+
+  useEffect(() => {
+    if (!inq) { setRespostas([]); return; }
+    let alive = true;
+    apiInqueritoRespostas(inq.id)
+      .then(r => { if (alive) setRespostas(r.respostas); })
+      .catch(() => { if (alive) setRespostas([]); });
+    return () => { alive = false; };
+  }, [inq]);
 
   return (
     <div className="space-y-5">
@@ -770,6 +889,15 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
               <p className="text-xs text-slate-400 mt-1">{i.perguntas.length} perguntas</p>
             </button>
           ))}
+          {inq && (
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Respostas recebidas</p>
+              <p className="text-2xl font-bold text-slate-800 mt-1">{respostas.length}</p>
+              {respostas.length === 0
+                ? <p className="text-xs text-slate-400 mt-1">Ainda sem respostas deste inquérito.</p>
+                : <p className="text-xs text-slate-500 mt-1">Última em {respostas[0]?.data}</p>}
+            </div>
+          )}
         </div>
         <div className="lg:col-span-2">
           {!inq ? (
@@ -784,8 +912,8 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
                   <p className="text-sm font-bold text-slate-800 mt-0.5">{inq.titulo}</p>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
-                  <button className="text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 inline-flex items-center gap-1">{I.eye} Pré-visualizar</button>
-                  <button className={`text-xs font-semibold px-2.5 py-1.5 ${accent.bg} text-white rounded-lg hover:opacity-90 inline-flex items-center gap-1`}>{I.download} Exportar</button>
+                  <button type="button" onClick={() => setPreview(inq)} className="text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 inline-flex items-center gap-1">{I.eye} Pré-visualizar</button>
+                  <button type="button" onClick={() => exportarInquerito(inq)} className={`text-xs font-semibold px-2.5 py-1.5 ${accent.bg} text-white rounded-lg hover:opacity-90 inline-flex items-center gap-1`}>{I.download} Exportar</button>
                 </div>
               </div>
               <div className="divide-y divide-slate-50">
@@ -842,6 +970,7 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
               </div>
               <div className={`px-4 py-3 border-t ${accent.border} ${accent.light}`}>
                 <p className="text-xs font-semibold text-slate-500 mb-2">Adicionar pergunta:</p>
+                <InqueritoPreviewModal inq={preview} onClose={() => setPreview(null)} />
                 <div className="flex flex-wrap gap-2">
                   {(Object.keys(tipoLabels) as PerguntaTipo[]).map(tipo => (
                     <button key={tipo} onClick={() => addPergunta(tipo)}

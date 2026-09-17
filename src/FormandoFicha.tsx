@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EnviarReciboModal, ReferenciaMbModal } from "./ActionSurfaces";
+import { apiAddFormandoNota, apiFormandoDossier, apiSaveFormandoDocs, type FormandoNota } from "./api";
 import { FileUploadModal } from "./TurmaExtras";
 import { useTurmas } from "./TurmasContext";
 import { isTurmaActiva } from "./turmaModel";
@@ -35,18 +36,51 @@ function estadoBadge(estado: string) {
   return <Badge label={estado} variant={m[estado] ?? "gray"} />;
 }
 
+const DOCS_GOLD: { id: string; label: string }[] = [
+  { id: "cc", label: "Cartão de Cidadão" },
+  { id: "contrato", label: "Contrato de formação" },
+  { id: "pip", label: "PIP - Projeto de Intervenção Pedagógica" },
+  { id: "exp", label: "Comprovativo de 5 anos de experiência" },
+  { id: "regulamento", label: "Regulamento de formação aceite" },
+];
+
 function DocumentosGoldPanel({ formando, avulso }: { formando: FormandoTurma; avulso?: boolean }) {
-  const [docs, setDocs] = useState(() => [
-    { id: "cc", label: "Cartão de Cidadão", ok: true, data: formando.inscrito.slice(0, 10), fileName: "" },
-    { id: "contrato", label: "Contrato de formação", ok: formando.pago, data: formando.pago ? formando.inscrito.slice(0, 10) : "", fileName: "" },
-    { id: "pip", label: "PIP - Projeto de Intervenção Pedagógica", ok: avulso ? formando.pago : formando.id % 3 !== 0, data: avulso ? (formando.pago ? "2026-08-20" : "") : (formando.id % 3 !== 0 ? "2026-08-20" : ""), fileName: "" },
-    { id: "exp", label: "Comprovativo de 5 anos de experiência", ok: avulso ? true : formando.id % 2 === 0, data: avulso ? formando.inscrito.slice(0, 10) : (formando.id % 2 === 0 ? "2026-08-12" : ""), fileName: "" },
-    { id: "regulamento", label: "Regulamento de formação aceite", ok: true, data: formando.inscrito.slice(0, 10), fileName: "" },
-  ]);
+  const [docs, setDocs] = useState(() => DOCS_GOLD.map(d => ({ ...d, ok: false, data: "", fileName: "" })));
   const [uploadFor, setUploadFor] = useState<string | null>(null);
+  const [estado, setEstado] = useState<"loading" | "ready" | "offline">("loading");
   const emFalta = docs.filter(d => !d.ok).length;
+
+  useEffect(() => {
+    let alive = true;
+    apiFormandoDossier("gold", formando.id)
+      .then(r => {
+        if (!alive) return;
+        setDocs(DOCS_GOLD.map(d => {
+          const saved = r.docs.find(x => x.id === d.id);
+          return { ...d, ok: saved?.ok ?? false, data: saved?.data ?? "", fileName: saved?.fileName ?? "" };
+        }));
+        setEstado("ready");
+      })
+      .catch(() => { if (alive) setEstado("offline"); });
+    return () => { alive = false; };
+  }, [formando.id]);
+
+  function gravar(next: typeof docs) {
+    setDocs(next);
+    void apiSaveFormandoDocs("gold", formando.id, next.map(d => ({ id: d.id, ok: d.ok, fileName: d.fileName, data: d.data }))).catch(() => undefined);
+  }
+
+  if (estado === "loading") {
+    return <p className="py-8 text-center text-sm text-slate-400">A ler os documentos do formando…</p>;
+  }
+
   return (
     <div className="space-y-3">
+      {estado === "offline" && (
+        <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+          Sem ligação à API. As alterações aos documentos não ficam gravadas.
+        </p>
+      )}
       <div className={`rounded-xl p-4 flex items-center gap-3 ${emFalta === 0 ? "bg-emerald-50 border border-emerald-200" : "bg-amber-50 border border-amber-200"}`}>
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${emFalta === 0 ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"}`}>
           {emFalta === 0 ? I.check : I.warn}
@@ -61,7 +95,7 @@ function DocumentosGoldPanel({ formando, avulso }: { formando: FormandoTurma; av
       <div className="space-y-2">
         {docs.map(d => (
           <div key={d.id} className={`flex items-center gap-3 p-3 rounded-xl border ${d.ok ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
-            <button type="button" onClick={() => setDocs(xs => xs.map(x => x.id === d.id ? { ...x, ok: !x.ok, data: !x.ok ? new Date().toISOString().slice(0, 10) : "" } : x))}
+            <button type="button" onClick={() => gravar(docs.map(x => x.id === d.id ? { ...x, ok: !x.ok, data: !x.ok ? new Date().toISOString().slice(0, 10) : "" } : x))}
               className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 ${d.ok ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-red-300"}`}>
               {d.ok && I.check}
             </button>
@@ -88,7 +122,7 @@ function DocumentosGoldPanel({ formando, avulso }: { formando: FormandoTurma; av
         }}
         onConfirm={file => {
           if (!uploadFor) return;
-          setDocs(xs => xs.map(x => x.id === uploadFor ? { ...x, ok: true, data: new Date().toISOString().slice(0, 10), fileName: file.name } : x));
+          gravar(docs.map(x => x.id === uploadFor ? { ...x, ok: true, data: new Date().toISOString().slice(0, 10), fileName: file.name } : x));
         }}
       />
     </div>
@@ -102,10 +136,33 @@ export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "
 }) {
   const [tab, setTab] = useState<"info" | "documentos" | "pagamentos" | "historico" | "notas">(initialTab);
   const [nota, setNota] = useState("");
-  const [notas, setNotas] = useState([
-    { id: 1, texto: avulso ? "Inscrição avulso pelo site. Pediu fatura no email pessoal." : "Ligou a questionar sobre o horário de sábado. Confirmou presença.", data: "2026-09-02 10:15", autor: "Tania" },
-  ]);
+  const [notas, setNotas] = useState<FormandoNota[]>([]);
+  const [notasEstado, setNotasEstado] = useState<"loading" | "ready" | "offline">("loading");
+  const [notaBusy, setNotaBusy] = useState(false);
   const [pay, setPay] = useState<"mb" | "mbway" | "recibo" | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    apiFormandoDossier(tipo, formando.id)
+      .then(r => { if (alive) { setNotas(r.notas); setNotasEstado("ready"); } })
+      .catch(() => { if (alive) setNotasEstado("offline"); });
+    return () => { alive = false; };
+  }, [formando.id, tipo]);
+
+  async function guardarNota() {
+    const texto = nota.trim();
+    if (!texto) return;
+    setNotaBusy(true);
+    try {
+      const r = await apiAddFormandoNota(tipo, formando.id, texto);
+      setNotas(prev => [r.nota, ...prev]);
+      setNota("");
+    } catch {
+      setNotasEstado("offline");
+    } finally {
+      setNotaBusy(false);
+    }
+  }
 
   const { gold } = useTurmas();
   const turma = avulso ? undefined : gold.find(t => t.id === formando.turmaId);
@@ -211,10 +268,10 @@ export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "
           <div className="space-y-2">
             {[
               { acao: avulso ? "Inscrição avulso recebida" : "Pré-inscrição recebida", data: formando.inscrito, tipo: "inscricao" },
-              { acao: "Email de boas-vindas enviado", data: formando.inscrito, tipo: "email" },
-              { acao: "Pagamento confirmado (" + formando.metodo + ")", data: "2026-09-03 18:00", tipo: "pagamento" },
-              { acao: avulso ? "Curso e-learning libertado" : "Atribuído à turma " + formando.turma, data: "2026-09-03 18:05", tipo: "turma" },
-            ].filter(h => formando.pago || h.tipo !== "pagamento").map((h, i) => (
+              ...(formando.pago ? [{ acao: `Pagamento confirmado (${formando.metodo})`, data: `€ ${formando.valor}`, tipo: "pagamento" }] : []),
+              ...(avulso ? [] : [{ acao: `Na turma ${formando.turma}`, data: turma?.dataInicio ?? "", tipo: "turma" }]),
+              ...(notas.length ? [{ acao: `${notas.length} ${notas.length === 1 ? "nota registada" : "notas registadas"}`, data: notas[0]?.data ?? "", tipo: "email" }] : []),
+            ].map((h, i) => (
               <div key={i} className="flex gap-3 items-start">
                 <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${h.tipo === "pagamento" ? "bg-emerald-500" : h.tipo === "email" ? "bg-blue-500" : h.tipo === "turma" ? "bg-violet-500" : "bg-amber-500"}`} />
                 <div>
@@ -228,10 +285,19 @@ export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "
 
         {tab === "notas" && (
           <div className="space-y-3">
+            {notasEstado === "loading" && <p className="py-6 text-center text-sm text-slate-400">A ler as notas…</p>}
+            {notasEstado === "offline" && (
+              <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                Sem ligação à API. As notas não ficam gravadas.
+              </p>
+            )}
+            {notasEstado === "ready" && notas.length === 0 && (
+              <p className="text-sm text-slate-400">Ainda sem notas. Registe aqui as chamadas e os emails.</p>
+            )}
             <div className="space-y-2">
               {notas.map(n => (
                 <div key={n.id} className="bg-amber-50 border border-amber-100 rounded-xl p-3">
-                  <p className="text-xs text-slate-700">{n.texto}</p>
+                  <p className="text-xs text-slate-700 whitespace-pre-line">{n.texto}</p>
                   <p className="text-xs text-slate-400 mt-1">{n.autor} · {n.data}</p>
                 </div>
               ))}
@@ -239,8 +305,10 @@ export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "
             <div>
               <textarea value={nota} onChange={e => setNota(e.target.value)} rows={3} placeholder="Adicionar nota de chamada, email ou observação…"
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
-              <button onClick={() => { if (nota.trim()) { setNotas(p => [...p, { id: Date.now(), texto: nota, data: new Date().toISOString().slice(0, 16).replace("T", " "), autor: "Tania" }]); setNota(""); } }}
-                className="mt-2 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors">Guardar nota</button>
+              <button disabled={notaBusy || !nota.trim()} onClick={() => void guardarNota()}
+                className="mt-2 w-full py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors">
+                {notaBusy ? "A guardar…" : "Guardar nota"}
+              </button>
             </div>
           </div>
         )}

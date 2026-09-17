@@ -32,11 +32,11 @@ import {
 import { CronogramaEditor, FormadoresAtribuidosCard, TurmaActivaToggle, TurmaInactivaBanner, TurmaInscricaoHint } from "./TurmaCronograma";
 import { FormadoresView } from "./FormadoresView";
 import { FORMADORES_SEED } from "./formadorModel";
-import { useFormadorOptions } from "./FormadoresContext";
+import { useFormadorOptions, useFormadores } from "./FormadoresContext";
 import { useTurmas } from "./TurmasContext";
 import { cronogramaToSessoes, formatSessaoLabel, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
 import { apiDriveFiles } from "./api";
-import { ListsProvider, nextListId, useLists, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
+import { ListsProvider, nextListId, useLists, type BlogPostRow, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
 import { useAuth } from "./AuthGate";
 import { useNotificacoes } from "./NotificacoesContext";
 import { presencasDaSessao, useCriteriosAvaliacao, useDtpResumo, useTurmaPedagogia, type PresencaRow } from "./PedagogiaContext";
@@ -507,46 +507,6 @@ function EmailPreviewPane({
     </div>
   );
 }
-
-const transacoesData = [
-  { id: "TRX-17550", nome: "Tiago Bento", valor: 125, metodo: "MB Way", curso: "Formação de Formadores - CCP", data: "2026-09-03 16:21", estado: "Pago" },
-  { id: "TRX-17539", nome: "Aline Cristina Pereira", valor: 120, metodo: "Cartão", curso: "Formação de Formadores - CCP", data: "2026-09-04 11:07", estado: "Pago" },
-  { id: "TRX-17536", nome: "Priscila Damasceno", valor: 300, metodo: "Transferência", curso: "Auxiliar de Medicina Dentária", data: "2026-09-04 09:52", estado: "Pendente" },
-  { id: "TRX-17530", nome: "Maria Mota", valor: 120, metodo: "Cartão", curso: "Formação de Formadores - CCP", data: "2026-09-01 09:36", estado: "Pago" },
-  { id: "TRX-17522", nome: "Hugo Baldaia", valor: 145, metodo: "MB Way", curso: "Formação de Formadores - CCP", data: "2026-08-31 14:32", estado: "Pago" },
-];
-
-const metodosPagamento = [
-  { metodo: "MB Way", valor: 127840, pct: 42, color: "#F59E0B" },
-  { metodo: "Cartão de Crédito/Débito", valor: 91520, pct: 30, color: "#3B82F6" },
-  { metodo: "Transferência Bancária", valor: 51840, pct: 17, color: "#8B5CF6" },
-  { metodo: "Multibanco (MB)", valor: 24360, pct: 8, color: "#10B981" },
-  { metodo: "PayPal", valor: 9120, pct: 3, color: "#6366F1" },
-];
-
-const receitaMensal = [
-  { mes: "Out", v: 18420 }, { mes: "Nov", v: 22180 }, { mes: "Dez", v: 19640 },
-  { mes: "Jan", v: 24800 }, { mes: "Fev", v: 21350 }, { mes: "Mar", v: 28960 },
-  { mes: "Abr", v: 31240 }, { mes: "Mai", v: 27580 }, { mes: "Jun", v: 33410 },
-  { mes: "Jul", v: 29870 }, { mes: "Ago", v: 26540 }, { mes: "Set", v: 35200 },
-];
-
-const topCursos = [
-  { nome: "Formação de Formadores - CCP", inscritos: 4821, receita: 120525, taxa: 78 },
-  { nome: "Auxiliar de Medicina Dentária", inscritos: 642, receita: 192600, taxa: 65 },
-  { nome: "Auxiliar de Medicina Veterinária", inscritos: 418, receita: 167200, taxa: 61 },
-  { nome: "Publicidade nas Redes Sociais", inscritos: 389, receita: 48625, taxa: 54 },
-];
-
-const conhecimentoEna = [
-  { id: "web", fonte: "Website / pesquisa Google", curto: "Website", detalhe: "ena.pt e resultados orgânicos", n: 2472, pct: 38, color: "#F59E0B" },
-  { id: "ref", fonte: "Referência", curto: "Referência", detalhe: "Formando, formador ou empresa", n: 1106, pct: 17, color: "#10B981" },
-  { id: "ig", fonte: "Instagram", curto: "Instagram", detalhe: "Reels e campanhas pagas", n: 976, pct: 15, color: "#E1306C" },
-  { id: "fb", fonte: "Facebook", curto: "Facebook", detalhe: "Grupos e anúncios", n: 781, pct: 12, color: "#3B82F6" },
-  { id: "li", fonte: "LinkedIn", curto: "LinkedIn", detalhe: "CCP e formação para empresas", n: 455, pct: 7, color: "#0A66C2" },
-  { id: "iefp", fonte: "IEFP / Centro de emprego", curto: "IEFP", detalhe: "Turmas financiadas", n: 390, pct: 6, color: "#8B5CF6" },
-  { id: "outro", fonte: "Outdoor, feira ou outro", curto: "Outro", detalhe: "Eventos e material impresso", n: 325, pct: 5, color: "#94A3B8" },
-];
 
 // ─── UI Primitives ────────────────────────────────────────────────────────────
 
@@ -2472,10 +2432,11 @@ function KanbanBoard({ onCardClick, visible, items, onMove }: {
 
 // ─── Modal Ficha Comercial (pré-inscrição) ────────────────────────────────────
 
-function FichaComercial({ item, open, onClose, onConvert, onContactar }: { item: Preinscricao | null; open: boolean; onClose: () => void; onConvert?: (turma: string) => void; onContactar?: (nota: string) => void }) {
+function FichaComercial({ item, open, onClose, onConvert, onContactar, onPatch }: { item: Preinscricao | null; open: boolean; onClose: () => void; onConvert?: (turma: string) => void; onContactar?: (nota: string) => void; onPatch?: (patch: { notas?: string; proximoContacto?: string }) => void }) {
   const { gold } = useTurmas();
   const [notas, setNotas] = useState("");
-  const [proximoContacto, setProximoContacto] = useState("2026-09-06");
+  const [proximoContacto, setProximoContacto] = useState("");
+  const [seguimentoMsg, setSeguimentoMsg] = useState("");
   const [escolherTurma, setEscolherTurma] = useState(false);
   const [turmaConv, setTurmaConv] = useState("");
   const [convMsg, setConvMsg] = useState("");
@@ -2483,8 +2444,10 @@ function FichaComercial({ item, open, onClose, onConvert, onContactar }: { item:
     setEscolherTurma(false);
     setTurmaConv("");
     setConvMsg("");
+    setSeguimentoMsg("");
     setNotas(item?.notas ?? "");
-  }, [item?.id, item?.notas, open]);
+    setProximoContacto(item?.proximoContacto ?? "");
+  }, [item?.id, item?.notas, item?.proximoContacto, open]);
   if (!item) return null;
   const turmaOpts = turmaGoldOpts(gold, { curso: item.curso });
   return (
@@ -2509,6 +2472,21 @@ function FichaComercial({ item, open, onClose, onConvert, onContactar }: { item:
         <Field label="Notas da chamada">
           <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={3} className={`${iCls} resize-none`} />
         </Field>
+        <div className="flex items-center justify-between gap-3">
+          {seguimentoMsg
+            ? <p className="text-xs font-semibold text-emerald-700">{seguimentoMsg}</p>
+            : <p className="text-xs text-slate-400">A data e as notas ficam na base, para quem apanhar o lead depois.</p>}
+          <button
+            type="button"
+            onClick={() => {
+              onPatch?.({ notas, proximoContacto });
+              setSeguimentoMsg("Seguimento gravado.");
+            }}
+            className="px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 whitespace-nowrap"
+          >
+            Guardar seguimento
+          </button>
+        </div>
         <div className="flex gap-2">
           <a href={`tel:${item.telf}`} className="flex-1 py-2 bg-slate-800 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5 hover:bg-slate-700 transition-colors">{I.phone} Ligar</a>
           <a href={`https://wa.me/351${item.telf.replace(/\D/g, "")}`} className="flex-1 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5 hover:bg-emerald-700 transition-colors">{I.whatsapp} WhatsApp</a>
@@ -2973,6 +2951,10 @@ function PreInscricoesGoldView() {
         if (!fichaItem) return;
         contactarPreinscricao(fichaItem.id, nota);
         setFichaItem({ ...fichaItem, estado: fichaItem.estado === "Não contactado" ? "1º Contacto" : fichaItem.estado, notas: nota });
+      }} onPatch={patch => {
+        if (!fichaItem) return;
+        patchPreinscricao(fichaItem.id, patch);
+        setFichaItem({ ...fichaItem, ...patch });
       }} onConvert={turmaNome => {
         if (!fichaItem) return;
         const t = gold.find(x => x.nome === turmaNome);
@@ -3800,6 +3782,7 @@ function BlogView() {
   const [tematica, setTematica] = useState("");
   const [titulo, setTitulo] = useState("");
   const [slug, setSlug] = useState("");
+  const [apagarPost, setApagarPost] = useState<BlogPostRow | null>(null);
   const f = blogPosts.filter(x => x.titulo.toLowerCase().includes(s.toLowerCase()) && (filtro === "Todos" || x.status === filtro));
   return (
     <div className="space-y-4">
@@ -3812,16 +3795,18 @@ function BlogView() {
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr><Th>Id</Th><Th>Título</Th><Th>Slug</Th><Th>Data</Th><Th>Status</Th><Th>Ações</Th></tr></thead>
+            <thead><tr><Th>Id</Th><Th>Título</Th><Th>Temática</Th><Th>Slug</Th><Th>Data</Th><Th>Status</Th><Th>Ações</Th></tr></thead>
             <tbody className="divide-y divide-slate-100">
+              {f.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-400">Nenhum post nesta pesquisa.</td></tr>}
               {f.map(r => (
                 <tr key={r.id} className="hover:bg-slate-50">
                   <Td><IdCell id={r.id} /></Td>
                   <Td className="text-sm font-medium text-slate-700 max-w-[220px]">{r.titulo}</Td>
+                  <Td className="text-xs text-slate-600">{r.tematica || "—"}</Td>
                   <Td className="font-mono text-xs text-slate-500">{r.slug}</Td>
                   <Td className="font-mono text-xs text-slate-500">{r.data}</Td>
                   <Td>{estadoBadge(r.status)}</Td>
-                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => { setEditId(r.id); setTitulo(r.titulo); setSlug(r.slug); setTematica(""); setOpen(true); }} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => removeBlogPost(r.id)} /></div></Td>
+                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => { setEditId(r.id); setTitulo(r.titulo); setSlug(r.slug); setTematica(r.tematica ?? ""); setOpen(true); }} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagarPost(r)} /></div></Td>
                 </tr>
               ))}
             </tbody>
@@ -3839,13 +3824,21 @@ function BlogView() {
             <button onClick={() => {
               if (!titulo.trim()) return;
               const s = (slug.trim() || titulo).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-              if (editId != null) patchBlogPost(editId, { titulo: titulo.trim(), slug: s });
-              else addBlogPost({ id: nextListId(blogPosts), titulo: titulo.trim(), slug: s, data: new Date().toISOString().slice(0, 10), status: "Ativo" });
+              if (editId != null) patchBlogPost(editId, { titulo: titulo.trim(), slug: s, tematica });
+              else addBlogPost({ id: nextListId(blogPosts), titulo: titulo.trim(), slug: s, data: new Date().toISOString().slice(0, 10), status: "Ativo", tematica });
               setOpen(false); setTitulo(""); setSlug(""); setTematica(""); setEditId(null);
             }} disabled={!titulo.trim()} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editId != null ? "Guardar" : "Criar post"}</button>
           </div>
         </div>
       </SlideOver>
+      <ConfirmDangerModal
+        open={!!apagarPost}
+        onClose={() => setApagarPost(null)}
+        title="Eliminar post"
+        body={apagarPost ? `O post “${apagarPost.titulo}” sai do site da ENA.` : ""}
+        risk="A ação não se desfaz. Prefira marcar como Inactivo se quiser manter o histórico."
+        onConfirm={() => { if (apagarPost) removeBlogPost(apagarPost.id); }}
+      />
     </div>
   );
 }
@@ -4405,7 +4398,13 @@ function EmailsView() {
 
 function PagamentosView() {
   const { pagamentos, addPagamento } = useLists();
-  const lista = pagamentos.length ? pagamentos : transacoesData;
+  const lista = pagamentos;
+  const [dash, setDash] = useState<Dashboard | null>(null);
+  useEffect(() => {
+    let alive = true;
+    apiDashboard().then(r => { if (alive) setDash(r); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [pagamentos.length]);
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtro, setFiltro] = useState("Todos");
@@ -4431,15 +4430,22 @@ function PagamentosView() {
         onClear={() => { setFiltroCurso(""); setFiltro("Todos"); setP(1); }}
       />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[{ l: "Receita Total", v: "€ 304 680", c: "text-slate-800" }, { l: "Este Mês", v: "€ 35 200", c: "text-emerald-600" }, { l: "Pendente", v: "€ 8 400", c: "text-amber-600" }, { l: "Reembolsados", v: "€ 1 240", c: "text-red-500" }].map(s => (
+        {[
+          { l: "Receita confirmada", v: dash ? eur(dash.financeiro.receitaTotal) : "—", c: "text-slate-800" },
+          { l: "Este mês", v: dash ? eur(dash.financeiro.receitaMes) : "—", c: "text-emerald-600" },
+          { l: "Pendente", v: dash ? eur(dash.financeiro.pendentes.valor) : "—", c: "text-amber-600" },
+          { l: "Ticket médio", v: dash ? eur(dash.financeiro.ticketMedio) : "—", c: "text-blue-600" },
+        ].map(s => (
           <Card key={s.l} className="p-4"><p className="text-xs text-slate-400 uppercase tracking-wide mb-1">{s.l}</p><p className={`text-xl font-bold ${s.c}`}>{s.v}</p></Card>
         ))}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-4">Métodos de Pagamento</p>
+          <p className="text-sm font-semibold text-slate-700 mb-4">Métodos de pagamento</p>
+          {!dash && <p className="text-xs text-slate-400">A ler os totais…</p>}
+          {dash?.financeiro.metodosPagamento.length === 0 && <p className="text-xs text-slate-400">Ainda sem pagamentos confirmados.</p>}
           <div className="space-y-3">
-            {metodosPagamento.map(m => (
+            {(dash?.financeiro.metodosPagamento ?? []).map(m => (
               <div key={m.metodo}>
                 <div className="flex justify-between mb-1"><span className="text-xs font-medium text-slate-700">{m.metodo}</span><span className="text-xs font-bold text-slate-700">{m.pct}%</span></div>
                 <div className="w-full bg-slate-100 rounded-full h-2"><div className="h-2 rounded-full" style={{ width: `${m.pct}%`, backgroundColor: m.color }} /></div>
@@ -4448,8 +4454,10 @@ function PagamentosView() {
           </div>
         </Card>
         <Card className="p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-2">Receita Mensal</p>
-          <MiniBarChart data={receitaMensal} color="#F59E0B" />
+          <p className="text-sm font-semibold text-slate-700 mb-2">Receita mensal</p>
+          {dash
+            ? <MiniBarChart data={dash.financeiro.receitaMensal} color="#F59E0B" />
+            : <p className="text-xs text-slate-400">A ler a receita…</p>}
         </Card>
       </div>
       <Card>
@@ -4542,38 +4550,71 @@ function PagamentosView() {
 
 // ─── Pesquisa Global (Ctrl+K) ─────────────────────────────────────────────────
 
-const allSearchable: Array<{ tipo: string; nome: string; sub: string } & NavTarget> = [
-  ...formandosTurmasData.map(f => ({ tipo: "Formando Gold", nome: `${f.nome} ${f.apelido}`, sub: f.email, view: "gold-formandos-turmas" as View })),
-  ...finFormandosData.map(f => ({ tipo: "Formando Financiado", nome: `${f.nome} ${f.apelido}`, sub: f.email, view: "fin-formandos" as View })),
-  ...turmasGoldData.map(t => ({ tipo: "Turma Gold", nome: t.nome, sub: `${t.local} · ${t.curso}`, view: "gold-cockpit-turma" as View, turmaId: t.id, tab: "overview" as CockpitTab })),
-  ...finTurmasData.map(t => ({ tipo: "Turma Financiada", nome: t.nome, sub: `UFCD ${t.ufcdCod}`, view: "fin-cockpit-turma" as View, turmaId: t.id, tab: "overview" as CockpitTab })),
-  ...cursosGoldData.map(c => ({ tipo: "Curso Gold", nome: c.nome, sub: c.categoria, view: "gold-curso-ficha" as View, cursoId: c.id })),
-  ...finCursosData.map(c => ({ tipo: "UFCD", nome: `${c.ufcdCod} · ${c.ufcd}`, sub: c.nomeComercial, view: "fin-curso-ficha" as View, cursoId: c.id })),
-  { tipo: "DTP", nome: "Dossiê da turma VNG-SM-07/09", sub: "CCP · Gold", view: "gold-cockpit-turma" as View, turmaId: 943, tab: "dtp" as CockpitTab },
-  { tipo: "DTP", nome: "Dossiê da turma UFCD 3564 · T1", sub: "Primeiros Socorros · Financiada", view: "fin-cockpit-turma" as View, turmaId: 218, tab: "dtp" as CockpitTab },
-  { tipo: "Inquérito", nome: "Satisfação CCP", sub: "Gold · 5 perguntas", view: "gold-inqueritos" as View },
-  { tipo: "Inquérito", nome: "Satisfação UFCD 3564", sub: "Financiada · 4 perguntas", view: "fin-inqueritos" as View },
-  { tipo: "Atalho", nome: "Utilizadores", sub: "Sistema · Gestão de contas da secretaria", view: "utilizadores" as View },
-  ...FORMADORES_SEED.map(f => ({
-    tipo: f.regimes.includes("gold") ? "Formador Gold" : "Formador Financiado",
-    nome: f.nome,
-    sub: f.especialidade || f.email,
-    view: (f.regimes.includes("gold") ? "gold-formadores" : "fin-formadores") as View,
-  })),
-];
+type SearchRow = { tipo: string; nome: string; sub: string } & NavTarget;
 
-const atalhosDoDia: Array<{ tipo: string; nome: string; sub: string } & NavTarget> = [
-  { tipo: "Atalho", nome: "Pré-inscrições por contactar", sub: "Gold · fila comercial do dia", view: "gold-preinscricoes" },
-  { tipo: "Atalho", nome: "Pagamentos pendentes", sub: "Gold · por confirmar", view: "pagamentos" },
-  { tipo: "Atalho", nome: "DTP Gold incompleto", sub: "VNG-SM-07/09 · dossiê da turma", view: "gold-cockpit-turma", turmaId: 943, tab: "dtp" },
-  { tipo: "Atalho", nome: "DTP Financiada incompleto", sub: "UFCD 3564 · T1 · dossiê da turma", view: "fin-cockpit-turma", turmaId: 218, tab: "dtp" },
-  { tipo: "Atalho", nome: "Inscrições a analisar", sub: "Financiada · elegibilidade", view: "fin-inscricoes" },
-];
+/** O índice da pesquisa sai dos dados carregados, não de listas fixas. */
+function useSearchIndex(): SearchRow[] {
+  const { formandosTurmas, formandosFin, cursosGold, cursosFin, preinscricoes } = useLists();
+  const { gold, fin } = useTurmas();
+  const { formadores } = useFormadores();
+
+  return useMemo(() => [
+    ...formandosTurmas.map(f => ({ tipo: "Formando Gold", nome: `${f.nome} ${f.apelido}`, sub: `${f.email} · ${f.turma || "sem turma"}`, view: "gold-formandos-turmas" as View })),
+    ...formandosFin.map(f => ({ tipo: "Formando Financiado", nome: `${f.nome} ${f.apelido}`, sub: `${f.email} · ${f.turma || "sem turma"}`, view: "fin-formandos" as View })),
+    ...preinscricoes.map(l => ({ tipo: "Pré-inscrição", nome: `${l.nome} ${l.apelido}`, sub: `${l.curso || "sem curso"} · ${l.estado}`, view: "gold-preinscricoes" as View })),
+    ...gold.map(t => ({ tipo: "Turma Gold", nome: t.nome, sub: `${t.local} · ${t.curso}`, view: "gold-cockpit-turma" as View, turmaId: t.id, tab: "overview" as CockpitTab })),
+    ...fin.map(t => ({ tipo: "Turma Financiada", nome: t.nome, sub: `UFCD ${t.ufcdCod} · ${t.curso}`, view: "fin-cockpit-turma" as View, turmaId: t.id, tab: "overview" as CockpitTab })),
+    ...cursosGold.map(c => ({ tipo: "Curso Gold", nome: c.nome, sub: c.categoria, view: "gold-curso-ficha" as View, cursoId: c.id })),
+    ...cursosFin.map(c => ({ tipo: "UFCD", nome: `${c.ufcdCod} · ${c.ufcd}`, sub: c.nomeComercial, view: "fin-curso-ficha" as View, cursoId: c.id })),
+    ...gold.map(t => ({ tipo: "DTP", nome: `Dossiê da turma ${t.nome}`, sub: `${t.curso} · Gold`, view: "gold-cockpit-turma" as View, turmaId: t.id, tab: "dtp" as CockpitTab })),
+    ...fin.map(t => ({ tipo: "DTP", nome: `Dossiê da turma ${t.nome}`, sub: `UFCD ${t.ufcdCod} · Financiada`, view: "fin-cockpit-turma" as View, turmaId: t.id, tab: "dtp" as CockpitTab })),
+    ...formadores.map(f => ({
+      tipo: f.regimes.includes("gold") ? "Formador Gold" : "Formador Financiado",
+      nome: f.nome,
+      sub: f.especialidade || f.email,
+      view: (f.regimes.includes("gold") ? "gold-formadores" : "fin-formadores") as View,
+    })),
+    { tipo: "Atalho", nome: "Utilizadores", sub: "Sistema · Gestão de contas da secretaria", view: "utilizadores" as View },
+    { tipo: "Atalho", nome: "Emails automáticos", sub: "Sistema · regras e templates", view: "emails" as View },
+    { tipo: "Atalho", nome: "Configurações", sub: "Sistema · entidade e Google Drive", view: "configuracoes" as View },
+  ], [cursosFin, cursosGold, fin, formadores, formandosFin, formandosTurmas, gold, preinscricoes]);
+}
+
+/** Atalhos do dia: só aparecem quando há realmente trabalho pendente. */
+function useAtalhosDoDia(): SearchRow[] {
+  const { preinscricoes, pagamentos, formandosFin } = useLists();
+  const { gold, fin } = useTurmas();
+  const dtpGold = useDtpResumo("gold");
+  const dtpFin = useDtpResumo("fin");
+
+  return useMemo(() => {
+    const out: SearchRow[] = [];
+    const porContactar = preinscricoes.filter(l => !l.contactadoEm).length;
+    if (porContactar) out.push({ tipo: "Atalho", nome: `${porContactar} pré-inscrições por contactar`, sub: "Gold · fila comercial do dia", view: "gold-preinscricoes" });
+    const pendentes = pagamentos.filter(t => t.estado !== "Pago").length;
+    if (pendentes) out.push({ tipo: "Atalho", nome: `${pendentes} pagamentos por confirmar`, sub: "Tesouraria", view: "pagamentos" });
+
+    const piorGold = [...gold].sort((a, b) => (dtpGold.pct[a.id] ?? 100) - (dtpGold.pct[b.id] ?? 100))[0];
+    if (piorGold && (dtpGold.pct[piorGold.id] ?? 100) < 80) {
+      out.push({ tipo: "Atalho", nome: `DTP de ${piorGold.nome} a ${dtpGold.pct[piorGold.id] ?? 0}%`, sub: "Gold · dossiê da turma", view: "gold-cockpit-turma", turmaId: piorGold.id, tab: "dtp" });
+    }
+    const piorFin = [...fin].sort((a, b) => (dtpFin.pct[a.id] ?? 100) - (dtpFin.pct[b.id] ?? 100))[0];
+    if (piorFin && (dtpFin.pct[piorFin.id] ?? 100) < 80) {
+      out.push({ tipo: "Atalho", nome: `DTP de ${piorFin.nome} a ${dtpFin.pct[piorFin.id] ?? 0}%`, sub: "Financiada · dossiê da turma", view: "fin-cockpit-turma", turmaId: piorFin.id, tab: "dtp" });
+    }
+    const semDocs = formandosFin.filter(f => !["cc", "ch", "cu", "ci", "ce"].every(k => f[k as DocKey].ok)).length;
+    if (semDocs) out.push({ tipo: "Atalho", nome: `${semDocs} formandos sem documentos`, sub: "Financiada · elegibilidade", view: "fin-formandos" });
+    if (!out.length) out.push({ tipo: "Atalho", nome: "Painel", sub: "Sem pendências sinalizadas", view: "painel" });
+    return out;
+  }, [dtpFin, dtpGold, fin, formandosFin, gold, pagamentos, preinscricoes]);
+}
 
 function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: () => void; onNavigate: (t: NavTarget) => void }) {
   const [q, setQ] = useState("");
   const [hi, setHi] = useState(0);
-  const results = q.length > 1 ? allSearchable.filter(r => `${r.nome} ${r.sub} ${r.tipo}`.toLowerCase().includes(q.toLowerCase())).slice(0, 8) : [];
+  const indice = useSearchIndex();
+  const atalhosDoDia = useAtalhosDoDia();
+  const results = q.length > 1 ? indice.filter(r => `${r.nome} ${r.sub} ${r.tipo}`.toLowerCase().includes(q.toLowerCase())).slice(0, 8) : [];
   const shown = q.length > 1 ? results : atalhosDoDia;
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -4607,6 +4648,7 @@ function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: (
     "Turma Gold": "bg-violet-100 text-violet-700", "Turma Financiada": "bg-teal-100 text-teal-700",
     "Curso Gold": "bg-orange-100 text-orange-700", "UFCD": "bg-emerald-100 text-emerald-700",
     "Formador Gold": "bg-violet-100 text-violet-700", "Formador Financiado": "bg-blue-100 text-blue-700",
+    "Pré-inscrição": "bg-slate-100 text-slate-600",
     DTP: "bg-red-100 text-red-700", Inquérito: "bg-slate-100 text-slate-600", Atalho: "bg-amber-100 text-amber-800",
   };
 
@@ -4748,18 +4790,36 @@ const sidebarConfig: NavGroup[] = [
   ]},
 ];
 
+/** Cada perfil vê o seu trabalho: a Comercial Gold não entra na Financiada e vice-versa. */
+function gruposDoPerfil(role: string): string[] {
+  if (role === "comercial") return ["Principal", "Gold", "Gestão"];
+  if (role === "financiada") return ["Principal", "Financiada", "Gestão"];
+  return ["Principal", "Gold", "Financiada", "Gestão", "Sistema"];
+}
+
+function navParaPerfil(role: string): NavGroup[] {
+  const permitidos = gruposDoPerfil(role);
+  return sidebarConfig
+    .filter(g => permitidos.includes(g.group))
+    .map(g => {
+      if (g.group !== "Sistema" || role === "admin") return g;
+      return { ...g, items: g.items.filter(item => item.label !== "Gestão") };
+    });
+}
+
 function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v: View | NavTarget) => void; onClose?: () => void }) {
   const { user, logout } = useAuth();
+  const sidebarConfig = useMemo(() => navParaPerfil(user.role), [user.role]);
   const [openGroups, setOpenGroups] = useState<string[]>(() => {
     const open: string[] = ["Principal"];
-    sidebarConfig.forEach(g => {
+    navParaPerfil(user.role).forEach(g => {
       if (g.items.some(item => item.view === view || item.children?.some(c => c.view === view))) open.push(g.group);
     });
     return open;
   });
   const [openLeaves, setOpenLeaves] = useState<string[]>(() => {
     const open: string[] = [];
-    sidebarConfig.forEach(g => g.items.forEach(item => {
+    navParaPerfil(user.role).forEach(g => g.items.forEach(item => {
       if (item.children?.some(c => c.view === view)) open.push(item.label);
     }));
     return open;
@@ -4784,7 +4844,7 @@ function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v:
         });
       }
     });
-  }, [view]);
+  }, [sidebarConfig, view]);
 
   function isActive(v?: View) {
     if (v === view) return true;
@@ -4909,7 +4969,7 @@ export default function App() {
       cursosFin: finCursosData,
       blogPosts: blogPostsData,
       campanhas: campanhasData,
-      pagamentos: transacoesData,
+      pagamentos: [],
     }}>
       <AppShell />
     </ListsProvider>

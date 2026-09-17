@@ -33,6 +33,33 @@ async function backfillCronogramas(db: Db) {
 }
 
 /**
+ * O número de inscritos da turma é um contador mantido pela app. Recalcula-se no arranque
+ * para o cockpit não dizer 14 formandos quando a lista só tem 10.
+ */
+async function syncContagensDeTurma(db: Db) {
+  await db.query(`
+    UPDATE turmas_gold t SET total_alunos = (
+      SELECT count(*)::int FROM formandos_gold f WHERE f.turma_id = t.id OR f.turma = t.nome
+    )
+    WHERE t.total_alunos <> (
+      SELECT count(*)::int FROM formandos_gold f WHERE f.turma_id = t.id OR f.turma = t.nome
+    )
+  `);
+  await db.query(`
+    UPDATE turmas_fin t SET alunos = (
+      SELECT count(*)::int FROM formandos_fin f
+       WHERE f.turma = t.nome
+          OR (f.curso = t.curso AND NOT EXISTS (SELECT 1 FROM turmas_fin t2 WHERE t2.nome = f.turma))
+    )
+    WHERE t.alunos <> (
+      SELECT count(*)::int FROM formandos_fin f
+       WHERE f.turma = t.nome
+          OR (f.curso = t.curso AND NOT EXISTS (SELECT 1 FROM turmas_fin t2 WHERE t2.nome = f.turma))
+    )
+  `);
+}
+
+/**
  * Documentos administrativos que a ENA arquiva quando abre a turma. Os itens pedagógicos
  * (planos, sumários, presenças, PIP, simulações, certificados) ficam de fora: saem dos dados reais.
  */
@@ -260,6 +287,7 @@ export async function seedOperational(db: Db) {
   await seedCatalogs(db);
   await backfillCronogramas(db);
   await seedDtpBase(db);
+  await syncContagensDeTurma(db);
 
   await db.query(`
     SELECT setval('ops_id_seq', GREATEST(

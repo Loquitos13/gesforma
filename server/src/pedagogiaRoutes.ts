@@ -158,9 +158,13 @@ async function formandosDaTurma(db: Db, regime: Regime, turma: TurmaRow) {
     );
     return rows.rows.map(r => ({ id: r.id, nome: `${r.nome} ${r.apelido}`.trim(), docs: {} as Record<string, unknown> }));
   }
+  // Na Financiada o campo turma é texto livre: quem não aponta para uma turma existente conta pelo curso.
   const rows = await db.query<{ id: number; nome: string; apelido: string; docs: unknown }>(
-    "SELECT id, nome, apelido, docs FROM formandos_fin WHERE turma = $1 ORDER BY nome",
-    [turma.nome],
+    `SELECT id, nome, apelido, docs FROM formandos_fin f
+      WHERE f.turma = $1
+         OR (f.curso = $2 AND NOT EXISTS (SELECT 1 FROM turmas_fin t WHERE t.nome = f.turma))
+      ORDER BY nome`,
+    [turma.nome, turma.curso],
   );
   return rows.rows.map(r => ({ id: r.id, nome: `${r.nome} ${r.apelido}`.trim(), docs: asObj(r.docs) }));
 }

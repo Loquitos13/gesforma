@@ -257,7 +257,7 @@ export function registerOpsRoutes(
     const docs = { cc: d.cc ?? { ok: false, data: "" }, ch: d.ch ?? { ok: false, data: "" }, cu: d.cu ?? { ok: false, data: "" }, ci: d.ci ?? { ok: false, data: "" }, ce: d.ce ?? { ok: false, data: "" } };
     await db.query(
       "INSERT INTO formandos_fin (id, nome, apelido, turma, telf, email, curso, estado, docs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)",
-      [id, d.nome, d.apelido, d.turma, d.telf, d.email, d.curso, d.estado, JSON.stringify(docs)],
+      [id, d.nome, d.apelido, d.turma, d.telf, d.email, d.curso, d.estado, docs],
     );
     const row = await one(db, "SELECT * FROM formandos_fin WHERE id = $1", [id]);
     return { formando: row ? mapFormandoFin(row) : { id } };
@@ -279,7 +279,7 @@ export function registerOpsRoutes(
       `UPDATE formandos_fin SET nome = COALESCE($2, nome), apelido = COALESCE($3, apelido), turma = COALESCE($4, turma),
          telf = COALESCE($5, telf), email = COALESCE($6, email), curso = COALESCE($7, curso), estado = COALESCE($8, estado), docs = $9::jsonb
        WHERE id = $1`,
-      [id, d.nome ?? null, d.apelido ?? null, d.turma ?? null, d.telf ?? null, d.email ?? null, d.curso ?? null, d.estado ?? null, JSON.stringify(docs)],
+      [id, d.nome ?? null, d.apelido ?? null, d.turma ?? null, d.telf ?? null, d.email ?? null, d.curso ?? null, d.estado ?? null, docs],
     );
     const row = await one(db, "SELECT * FROM formandos_fin WHERE id = $1", [id]);
     return { formando: row ? mapFormandoFin(row) : null };
@@ -398,7 +398,7 @@ export function registerOpsRoutes(
     await db.query(
       `INSERT INTO turmas_gold (id, data_inicio, nome, curso, local, horario, total_alunos, vagas, estado, formador, horas, cronograma)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
-      [id, d.dataInicio, d.nome, d.curso, d.local, d.horario, d.totalAlunos, d.vagas, d.estado, d.formador, d.horas, JSON.stringify(d.cronograma ?? [])],
+      [id, d.dataInicio, d.nome, d.curso, d.local, d.horario, d.totalAlunos, d.vagas, d.estado, d.formador, d.horas, d.cronograma ?? []],
     );
     const row = await one(db, "SELECT * FROM turmas_gold WHERE id = $1", [id]);
     return { turma: row ? mapTurmaGold(row) : { id } };
@@ -414,7 +414,7 @@ export function registerOpsRoutes(
          local = COALESCE($5, local), horario = COALESCE($6, horario), total_alunos = COALESCE($7, total_alunos),
          vagas = COALESCE($8, vagas), estado = COALESCE($9, estado), formador = COALESCE($10, formador),
          horas = COALESCE($11, horas), cronograma = COALESCE($12::jsonb, cronograma) WHERE id = $1`,
-      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.local ?? null, d.horario ?? null, d.totalAlunos ?? null, d.vagas ?? null, d.estado ?? null, d.formador ?? null, d.horas ?? null, d.cronograma ? JSON.stringify(d.cronograma) : null],
+      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.local ?? null, d.horario ?? null, d.totalAlunos ?? null, d.vagas ?? null, d.estado ?? null, d.formador ?? null, d.horas ?? null, d.cronograma ?? null],
     );
     const row = await one(db, "SELECT * FROM turmas_gold WHERE id = $1", [id]);
     return { turma: row ? mapTurmaGold(row) : null };
@@ -449,7 +449,7 @@ export function registerOpsRoutes(
     await db.query(
       `INSERT INTO turmas_fin (id, data_inicio, nome, curso, ufcd_cod, local, horario, alunos, alunos_total, estado, horas, formador, activa, cronograma)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)`,
-      [id, d.dataInicio, d.nome, d.curso, d.ufcdCod, d.local, d.horario, d.alunos, d.alunosTotal, d.estado, d.horas, d.formador, d.activa, JSON.stringify(d.cronograma ?? [])],
+      [id, d.dataInicio, d.nome, d.curso, d.ufcdCod, d.local, d.horario, d.alunos, d.alunosTotal, d.estado, d.horas, d.formador, d.activa, d.cronograma ?? []],
     );
     const row = await one(db, "SELECT * FROM turmas_fin WHERE id = $1", [id]);
     return { turma: row ? mapTurmaFin(row) : { id } };
@@ -466,7 +466,7 @@ export function registerOpsRoutes(
          alunos = COALESCE($8, alunos), alunos_total = COALESCE($9, alunos_total), estado = COALESCE($10, estado),
          horas = COALESCE($11, horas), formador = COALESCE($12, formador), activa = COALESCE($13, activa),
          cronograma = COALESCE($14::jsonb, cronograma) WHERE id = $1`,
-      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.ufcdCod ?? null, d.local ?? null, d.horario ?? null, d.alunos ?? null, d.alunosTotal ?? null, d.estado ?? null, d.horas ?? null, d.formador ?? null, d.activa ?? null, d.cronograma ? JSON.stringify(d.cronograma) : null],
+      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.ufcdCod ?? null, d.local ?? null, d.horario ?? null, d.alunos ?? null, d.alunosTotal ?? null, d.estado ?? null, d.horas ?? null, d.formador ?? null, d.activa ?? null, d.cronograma ?? null],
     );
     const row = await one(db, "SELECT * FROM turmas_fin WHERE id = $1", [id]);
     return { turma: row ? mapTurmaFin(row) : null };
@@ -495,7 +495,7 @@ export function registerOpsRoutes(
     const id = await nextOpsId(db);
     await db.query(
       "INSERT INTO formadores (id, nome, telf, email, especialidade, ccp, nif, regimes, estado) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)",
-      [id, d.nome, d.telf, d.email, d.especialidade, d.ccp, d.nif, JSON.stringify(d.regimes), d.estado],
+      [id, d.nome, d.telf, d.email, d.especialidade, d.ccp, d.nif, d.regimes, d.estado],
     );
     const row = await one(db, "SELECT * FROM formadores WHERE id = $1", [id]);
     return { formador: row ? mapFormador(row) : { id } };
@@ -510,7 +510,7 @@ export function registerOpsRoutes(
       `UPDATE formadores SET nome = COALESCE($2, nome), telf = COALESCE($3, telf), email = COALESCE($4, email),
          especialidade = COALESCE($5, especialidade), ccp = COALESCE($6, ccp), nif = COALESCE($7, nif),
          regimes = COALESCE($8::jsonb, regimes), estado = COALESCE($9, estado) WHERE id = $1`,
-      [id, d.nome ?? null, d.telf ?? null, d.email ?? null, d.especialidade ?? null, d.ccp ?? null, d.nif ?? null, d.regimes ? JSON.stringify(d.regimes) : null, d.estado ?? null],
+      [id, d.nome ?? null, d.telf ?? null, d.email ?? null, d.especialidade ?? null, d.ccp ?? null, d.nif ?? null, d.regimes ?? null, d.estado ?? null],
     );
     const row = await one(db, "SELECT * FROM formadores WHERE id = $1", [id]);
     return { formador: row ? mapFormador(row) : null };

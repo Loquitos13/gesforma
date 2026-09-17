@@ -154,7 +154,7 @@ export async function seedCatalogs(db: Db) {
       `INSERT INTO catalog_items (id, kind, regime, payload)
        VALUES ($1,$2,$3,$4::jsonb)
        ON CONFLICT (kind, id) DO NOTHING`,
-      [r.id, r.kind, r.regime, JSON.stringify(r.payload)],
+      [r.id, r.kind, r.regime, r.payload],
     );
   }
 }

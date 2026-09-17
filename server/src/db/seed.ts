@@ -124,7 +124,7 @@ export async function seed(db: Db) {
          body_lines = CASE WHEN email_templates.body_lines = '[]'::jsonb THEN EXCLUDED.body_lines ELSE email_templates.body_lines END,
          cta_href = CASE WHEN email_templates.cta_href = '' THEN EXCLUDED.cta_href ELSE email_templates.cta_href END,
          cta_ambito = CASE WHEN email_templates.cta_href = '' THEN EXCLUDED.cta_ambito ELSE email_templates.cta_ambito END`,
-      [t.tipo, t.nome, t.assunto, JSON.stringify(t.linhas), t.cta, t.href, t.ambito],
+      [t.tipo, t.nome, t.assunto, t.linhas, t.cta, t.href, t.ambito],
     );
     const row = await db.query<{ body_lines: unknown; body_xml: string; cta_href: string }>(
       "SELECT body_lines, body_xml, cta_href FROM email_templates WHERE tipo = $1",
@@ -136,7 +136,7 @@ export async function seed(db: Db) {
     if (empty) {
       await db.query(
         "UPDATE email_templates SET assunto = $2, body_lines = $3::jsonb, cta = $4, cta_href = $5, cta_ambito = $6, body_xml = $7, updated_at = now() WHERE tipo = $1",
-        [t.tipo, t.assunto, JSON.stringify(t.linhas), t.cta, t.href, t.ambito, xml],
+        [t.tipo, t.assunto, t.linhas, t.cta, t.href, t.ambito, xml],
       );
     } else if (!row.rows[0]?.body_xml?.trim()) {
       await db.query("UPDATE email_templates SET body_xml = $2, updated_at = now() WHERE tipo = $1", [t.tipo, xml]);
@@ -170,5 +170,9 @@ export async function seed(db: Db) {
     }
   }
 
-  await seedOperational(db);
+  try {
+    await seedOperational(db);
+  } catch (err) {
+    console.error("seed operacional falhou", err);
+  }
 }

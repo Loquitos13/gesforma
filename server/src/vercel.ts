@@ -12,11 +12,20 @@ let boot: Promise<FastifyInstance> | undefined;
 async function getApp() {
   if (!boot) {
     boot = (async () => {
-      assertSecureConfig();
-      const db = await createDb();
-      await migrate(db);
-      await seed(db);
-      return buildApp(db, { worker: false });
+      try {
+        assertSecureConfig();
+        const db = await createDb();
+        await migrate(db);
+        try {
+          await seed(db);
+        } catch (err) {
+          console.error("seed falhou; a API continua a servir", err);
+        }
+        return buildApp(db, { worker: false });
+      } catch (err) {
+        boot = undefined;
+        throw err;
+      }
     })();
   }
   return boot;

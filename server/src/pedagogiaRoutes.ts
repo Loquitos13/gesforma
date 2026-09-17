@@ -451,9 +451,9 @@ export function registerPedagogiaRoutes(
         regime,
         id,
         n,
-        patch.plano ? JSON.stringify(patch.plano) : null,
-        patch.sumario ? JSON.stringify(patch.sumario) : null,
-        patch.presencas ? JSON.stringify(patch.presencas) : null,
+        patch.plano ?? null,
+        patch.sumario ?? null,
+        patch.presencas ?? null,
       ],
     );
     const acao = patch.plano ? "turma.plano" : patch.sumario ? "turma.sumario" : "turma.presencas";
@@ -487,7 +487,7 @@ export function registerPedagogiaRoutes(
          detalhe = EXCLUDED.detalhe,
          payload = COALESCE(EXCLUDED.payload, turma_documentos.payload),
          updated_at = now()`,
-      [regime, id, doc.grupoId, doc.label, doc.estado, doc.detalhe, doc.payload === undefined ? null : JSON.stringify(doc.payload)],
+      [regime, id, doc.grupoId, doc.label, doc.estado, doc.detalhe, doc.payload === undefined ? null : doc.payload],
     );
     await audit(db, req.actor!.id, "turma.documento", "turma", String(id), req.ip, { regime, label: doc.label, estado: doc.estado });
     return { ok: true };
@@ -596,7 +596,7 @@ export function registerPedagogiaRoutes(
          excluidos = EXCLUDED.excluidos,
          extra = EXCLUDED.extra,
          updated_at = now()`,
-      [regime, id, JSON.stringify(excluidos), JSON.stringify(extra)],
+      [regime, id, excluidos, extra],
     );
     await audit(db, req.actor!.id, "curso.dtp_modelo", "curso", String(id), req.ip, {
       regime,
@@ -634,8 +634,8 @@ export function registerPedagogiaRoutes(
       [
         regime,
         id,
-        parsed.data.payload ? JSON.stringify(parsed.data.payload) : null,
-        parsed.data.criterios ? JSON.stringify(parsed.data.criterios) : null,
+        parsed.data.payload ?? null,
+        parsed.data.criterios ?? null,
       ],
     );
     await audit(db, req.actor!.id, "curso.ficha", "curso", String(id), req.ip, { regime });
@@ -776,7 +776,7 @@ export function registerPedagogiaRoutes(
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     await db.query(
       "INSERT INTO inquerito_respostas (inquerito_id, turma, formando, respostas) VALUES ($1, $2, $3, $4::jsonb)",
-      [id, parsed.data.turma, parsed.data.formando, JSON.stringify(parsed.data.respostas)],
+      [id, parsed.data.turma, parsed.data.formando, parsed.data.respostas],
     );
     await audit(db, req.actor!.id, "inquerito.resposta", "inquerito", String(id), req.ip);
     return { ok: true };

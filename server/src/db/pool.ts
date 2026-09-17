@@ -44,7 +44,10 @@ export async function createDb(): Promise<Db> {
   return {
     driver: "pglite",
     async query<T extends Record<string, unknown>>(text: string, params: unknown[] = []) {
-      const res = await client.query<T>(text, params);
+      const mapped = params.map(p => (
+        p !== null && typeof p === "object" && !(p instanceof Date) ? JSON.stringify(p) : p
+      ));
+      const res = await client.query<T>(text, mapped);
       return { rows: res.rows };
     },
     async close() {

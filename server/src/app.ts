@@ -109,7 +109,7 @@ function clientOk(req: FastifyRequest) {
 async function audit(db: Db, actorId: string | undefined, action: string, entity: string, entityId?: string, ip?: string, meta: Record<string, unknown> = {}) {
   await db.query(
     "INSERT INTO audit_log (actor_id, action, entity, entity_id, ip, meta) VALUES ($1, $2, $3, $4, $5, $6::jsonb)",
-    [actorId ?? null, action, entity, entityId ?? null, ip ?? null, JSON.stringify(meta)],
+    [actorId ?? null, action, entity, entityId ?? null, ip ?? null, meta],
   );
 }
 
@@ -436,7 +436,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
         id,
         patch.nome ?? null,
         patch.assunto ?? null,
-        patch.body_lines ? JSON.stringify(patch.body_lines) : null,
+        patch.body_lines ?? null,
         patch.cta ?? null,
         patch.body_xml ?? null,
         patch.cta_href ?? null,

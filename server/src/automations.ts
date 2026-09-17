@@ -43,7 +43,7 @@ export async function ingestEvent(
      VALUES ($1, $2, $3, $4::jsonb)
      ON CONFLICT (idempotency_key) DO NOTHING
      RETURNING id`,
-    [eventId, type, idempotencyKey.slice(0, 200), JSON.stringify(payload)],
+    [eventId, type, idempotencyKey.slice(0, 200), payload],
   );
   const id = inserted.rows[0]?.id;
   if (!id) return { eventId: null, queued: 0, duplicate: true };
@@ -81,7 +81,7 @@ export async function ingestEvent(
       `INSERT INTO email_jobs (id, rule_id, event_id, to_email, to_name, subject, body_text, scheduled_at, payload)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
        ON CONFLICT (rule_id, event_id) DO NOTHING`,
-      [jobId, rule.id, id, email, nome, subject, sanitizeText(body, 8000), when, JSON.stringify(payload)],
+      [jobId, rule.id, id, email, nome, subject, sanitizeText(body, 8000), when, payload],
     );
     queued += 1;
   }

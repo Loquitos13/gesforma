@@ -16,7 +16,11 @@ async function backfillCronogramas(db: Db) {
   for (const table of ["turmas_gold", "turmas_fin"] as const) {
     const rows = await db.query<TurmaCronogramaRow>(
       `SELECT id, data_inicio, horario, horas, formador, curso FROM ${table}
-        WHERE cronograma IS NULL OR jsonb_array_length(cronograma) = 0`,
+        WHERE cronograma IS NULL
+           OR CASE jsonb_typeof(cronograma)
+                WHEN 'array' THEN jsonb_array_length(cronograma) = 0
+                ELSE true
+              END`,
     );
     for (const t of rows.rows) {
       const horario = table === "turmas_fin" && (!t.horario || t.horario === "Online") ? "Pós Laboral" : t.horario;
@@ -27,7 +31,7 @@ async function backfillCronogramas(db: Db) {
         formador: t.formador,
         curso: t.curso,
       });
-      await db.query(`UPDATE ${table} SET cronograma = $2::jsonb WHERE id = $1`, [t.id, JSON.stringify(sessoes)]);
+      await db.query(`UPDATE ${table} SET cronograma = $2::jsonb WHERE id = $1`, [t.id, sessoes]);
     }
   }
 }
@@ -216,7 +220,7 @@ export async function seedOperational(db: Db) {
     for (const r of FORMADORES) {
       await db.query(
         "INSERT INTO formadores (id, nome, telf, email, especialidade, ccp, nif, regimes, estado) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)",
-        [r[0], r[1], r[2], r[3], r[4], r[5], r[6], JSON.stringify(r[7]), r[8]],
+        [r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8]],
       );
     }
   }
@@ -258,7 +262,7 @@ export async function seedOperational(db: Db) {
     for (const r of FORMANDOS_FIN) {
       await db.query(
         "INSERT INTO formandos_fin (id, nome, apelido, turma, telf, email, curso, estado, docs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)",
-        [r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], JSON.stringify(r[8])],
+        [r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8]],
       );
     }
   }

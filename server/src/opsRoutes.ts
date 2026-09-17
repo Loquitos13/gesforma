@@ -32,6 +32,8 @@ const preSchema = z.object({
   preco: z.number().min(0).max(20000).optional().default(0),
   campanha: z.string().trim().max(80).optional().default(""),
   estado: z.string().trim().max(40).optional(),
+  proximoContacto: z.string().trim().max(40).optional(),
+  notas: z.string().max(4000).optional(),
 });
 
 function nowStamp() {
@@ -126,9 +128,10 @@ export function registerOpsRoutes(
          nome = COALESCE($2, nome), apelido = COALESCE($3, apelido), email = COALESCE($4, email),
          telf = COALESCE($5, telf), concelho = COALESCE($6, concelho), origem = COALESCE($7, origem),
          curso = COALESCE($8, curso), local = COALESCE($9, local), inicio_curso = COALESCE($10, inicio_curso),
-         preco = COALESCE($11, preco), campanha = COALESCE($12, campanha), estado = COALESCE($13, estado)
+         preco = COALESCE($11, preco), campanha = COALESCE($12, campanha), estado = COALESCE($13, estado),
+         proximo_contacto = COALESCE($14, proximo_contacto), notas = COALESCE($15, notas)
        WHERE id = $1`,
-      [id, d.nome ?? null, d.apelido ?? null, d.email ? normalizeEmail(d.email) : null, d.telf ?? null, d.concelho ?? null, d.origem ?? null, d.curso ?? null, d.local ?? null, d.inicioCurso ?? null, d.preco ?? null, d.campanha ?? null, d.estado ?? null],
+      [id, d.nome ?? null, d.apelido ?? null, d.email ? normalizeEmail(d.email) : null, d.telf ?? null, d.concelho ?? null, d.origem ?? null, d.curso ?? null, d.local ?? null, d.inicioCurso ?? null, d.preco ?? null, d.campanha ?? null, d.estado ?? null, d.proximoContacto ?? null, d.notas ?? null],
     );
     const row = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
     return { preinscricao: row ? mapPreinscricao(row) : null };
@@ -565,6 +568,7 @@ export function registerOpsRoutes(
     slug: z.string().trim().min(1).max(200),
     data: z.string().max(20),
     status: z.string().max(20).optional().default("Ativo"),
+    tematica: z.string().max(120).optional().default(""),
   });
   app.post("/v1/blog", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
@@ -572,7 +576,7 @@ export function registerOpsRoutes(
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
     const id = await nextOpsId(db);
-    await db.query("INSERT INTO blog_posts (id, titulo, slug, data, status) VALUES ($1,$2,$3,$4,$5)", [id, d.titulo, d.slug, d.data, d.status]);
+    await db.query("INSERT INTO blog_posts (id, titulo, slug, data, status, tematica) VALUES ($1,$2,$3,$4,$5,$6)", [id, d.titulo, d.slug, d.data, d.status, d.tematica]);
     const row = await one(db, "SELECT * FROM blog_posts WHERE id = $1", [id]);
     return { post: row ? mapBlog(row) : { id } };
   });
@@ -583,8 +587,8 @@ export function registerOpsRoutes(
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
     await db.query(
-      "UPDATE blog_posts SET titulo = COALESCE($2, titulo), slug = COALESCE($3, slug), data = COALESCE($4, data), status = COALESCE($5, status) WHERE id = $1",
-      [id, d.titulo ?? null, d.slug ?? null, d.data ?? null, d.status ?? null],
+      "UPDATE blog_posts SET titulo = COALESCE($2, titulo), slug = COALESCE($3, slug), data = COALESCE($4, data), status = COALESCE($5, status), tematica = COALESCE($6, tematica) WHERE id = $1",
+      [id, d.titulo ?? null, d.slug ?? null, d.data ?? null, d.status ?? null, d.tematica ?? null],
     );
     const row = await one(db, "SELECT * FROM blog_posts WHERE id = $1", [id]);
     return { post: row ? mapBlog(row) : null };

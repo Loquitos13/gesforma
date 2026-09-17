@@ -46,6 +46,7 @@ export function mapPreinscricao(r: Record<string, unknown>) {
     origem: String(r.origem ?? "Website"),
     contactadoEm: r.contactado_em ? String(r.contactado_em) : null,
     notas: String(r.notas ?? ""),
+    proximoContacto: String(r.proximo_contacto ?? ""),
   };
 }
 
@@ -186,6 +187,7 @@ export function mapBlog(r: Record<string, unknown>) {
     slug: String(r.slug ?? ""),
     data: String(r.data ?? ""),
     status: String(r.status ?? "Ativo"),
+    tematica: String(r.tematica ?? ""),
   };
 }
 

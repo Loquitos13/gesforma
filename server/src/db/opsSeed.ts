@@ -1,5 +1,65 @@
+import { generateCronograma } from "../cronograma.js";
 import { seedCatalogs } from "./catalogSeed.js";
 import type { Db } from "./pool.js";
+
+type TurmaCronogramaRow = {
+  id: number;
+  data_inicio: string;
+  horario: string;
+  horas: number;
+  formador: string;
+  curso: string;
+};
+
+/** Sem cronograma na base o DTP e os planos de sessão não têm denominador real. */
+async function backfillCronogramas(db: Db) {
+  for (const table of ["turmas_gold", "turmas_fin"] as const) {
+    const rows = await db.query<TurmaCronogramaRow>(
+      `SELECT id, data_inicio, horario, horas, formador, curso FROM ${table}
+        WHERE cronograma IS NULL OR jsonb_array_length(cronograma) = 0`,
+    );
+    for (const t of rows.rows) {
+      const horario = table === "turmas_fin" && (!t.horario || t.horario === "Online") ? "Pós Laboral" : t.horario;
+      const sessoes = generateCronograma({
+        inicio: t.data_inicio,
+        horario,
+        horas: Number(t.horas) || (table === "turmas_gold" ? 90 : 25),
+        formador: t.formador,
+        curso: t.curso,
+      });
+      await db.query(`UPDATE ${table} SET cronograma = $2::jsonb WHERE id = $1`, [t.id, JSON.stringify(sessoes)]);
+    }
+  }
+}
+
+/**
+ * Documentos administrativos que a ENA arquiva quando abre a turma. Os itens pedagógicos
+ * (planos, sumários, presenças, PIP, simulações, certificados) ficam de fora: saem dos dados reais.
+ */
+const DTP_BASE = [
+  "id-turma", "ufcd", "programa", "regulamento", "divulgacao", "fichas",
+  "contrato-formador", "cv-formador", "ccp-formador", "habil-formador",
+  "instalacoes", "rgpd", "ocorrencias", "materiais",
+] as const;
+
+async function seedDtpBase(db: Db) {
+  for (const [table, regime] of [["turmas_gold", "gold"], ["turmas_fin", "fin"]] as const) {
+    const rows = await db.query<{ id: number }>(
+      `SELECT t.id FROM ${table} t
+        WHERE NOT EXISTS (SELECT 1 FROM turma_dtp d WHERE d.regime = $1 AND d.turma_id = t.id)`,
+      [regime],
+    );
+    for (const t of rows.rows) {
+      for (const item of DTP_BASE) {
+        await db.query(
+          `INSERT INTO turma_dtp (regime, turma_id, item_id, estado) VALUES ($1, $2, $3, 'ok')
+           ON CONFLICT (regime, turma_id, item_id) DO NOTHING`,
+          [regime, t.id, item],
+        );
+      }
+    }
+  }
+}
 
 const CURSOS_GOLD = [
   [100, "Formação de Formadores - CCP", "CCP e Gestão da Formação", "Gold", 125, "b-learning", 90, "Ativo"],
@@ -198,6 +258,8 @@ export async function seedOperational(db: Db) {
   }
 
   await seedCatalogs(db);
+  await backfillCronogramas(db);
+  await seedDtpBase(db);
 
   await db.query(`
     SELECT setval('ops_id_seq', GREATEST(

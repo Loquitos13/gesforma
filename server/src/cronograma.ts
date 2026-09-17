@@ -1,0 +1,80 @@
+export type SessaoCronograma = {
+  id: string;
+  data: string;
+  horaInicio: string;
+  horaFim: string;
+  modulos: string[];
+  formadores: string[];
+};
+
+const CCP_MODULOS = [
+  "M1 · Aprendizagem e pedagogia",
+  "M2 · Comunicação e dinâmica de grupos",
+  "M3 · Avaliação da formação",
+  "M4 · Simulação pedagógica",
+  "M5 · Plataformas digitais e e-learning",
+];
+
+const UFCD_3564_MODULOS = [
+  "UFCD 3564 · Avaliação primária e SVB",
+  "UFCD 3564 · Trauma e hemorragias",
+  "UFCD 3564 · Queimaduras e intoxicações",
+  "UFCD 3564 · Emergências médicas",
+  "UFCD 3564 · Simulação e avaliação",
+];
+
+function horarioSlots(horario: string) {
+  if (horario === "Sábado manhã") return { start: "09:00", end: "13:00", hours: 4, weekdays: [6] };
+  if (horario === "Pós Laboral") return { start: "19:00", end: "22:00", hours: 3, weekdays: [1, 2, 3, 4] };
+  if (horario === "Laboral Manhã") return { start: "09:00", end: "13:00", hours: 4, weekdays: [1, 2, 3, 4, 5] };
+  return { start: "19:00", end: "22:00", hours: 3, weekdays: [] as number[] };
+}
+
+function parseIso(iso: string) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y || 2026, (m || 1) - 1, d || 1);
+}
+
+function toIso(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function modulosForIndex(i: number, n: number, curso?: string) {
+  const pool = curso?.includes("Primeiros Socorros") || curso?.includes("3564") ? UFCD_3564_MODULOS : CCP_MODULOS;
+  return [pool[Math.min(pool.length - 1, Math.floor((i * pool.length) / n))] ?? pool[0]!];
+}
+
+/** Mesmo plano de sessões que o cockpit desenha - a base guarda o cronograma real da turma. */
+export function generateCronograma(opts: {
+  inicio: string;
+  horario: string;
+  horas: number;
+  formador: string;
+  curso?: string;
+}): SessaoCronograma[] {
+  const slot = horarioSlots(opts.horario);
+  const n = Math.min(16, Math.max(4, Math.ceil((opts.horas || 25) / slot.hours)));
+  const cursor = parseIso(opts.inicio || "2026-09-07");
+  const weekdays = slot.weekdays.length ? slot.weekdays : [cursor.getDay() || 3];
+  for (let i = 0; i < 7; i++) {
+    if (weekdays.includes(cursor.getDay())) break;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  const sessions: SessaoCronograma[] = [];
+  for (let i = 0; i < n; i++) {
+    sessions.push({
+      id: `s-${opts.inicio || "new"}-${i + 1}`,
+      data: toIso(cursor),
+      horaInicio: slot.start,
+      horaFim: slot.end,
+      modulos: modulosForIndex(i, n, opts.curso),
+      formadores: opts.formador && opts.formador !== "A definir" ? [opts.formador] : [],
+    });
+    cursor.setDate(cursor.getDate() + 1);
+    for (let j = 0; j < 14; j++) {
+      if (weekdays.includes(cursor.getDay())) break;
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+  return sessions;
+}

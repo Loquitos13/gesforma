@@ -164,6 +164,25 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function SlideOver({ open, onClose, title, sub, children, size = "md" }: { open: boolean; onClose: () => void; title: string; sub?: string; children: React.ReactNode; size?: "sm" | "md" | "lg" | "xl" }) {
   return <AppModal open={open} onClose={onClose} title={title} sub={sub} size={size}>{children}</AppModal>;
 }
+function ApagarCatalogoModal({ nome, tipo, open, onClose, onConfirm }: {
+  nome: string;
+  tipo: string;
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <ConfirmDangerModal
+      open={open}
+      onClose={onClose}
+      title={`Eliminar ${tipo}`}
+      body={`${nome} sai do catálogo da ENA.`}
+      risk="As turmas e fichas que já referem este registo mantêm o texto, mas deixa de estar disponível para escolher."
+      onConfirm={onConfirm}
+    />
+  );
+}
+
 function EmptyState({ text }: { text: string }) {
   return <tr><td colSpan={12} className="px-4 py-12 text-center text-sm text-slate-400">{text}</td></tr>;
 }
@@ -500,6 +519,7 @@ function DatasCatalogView({ accent }: { accent: Accent }) {
   const seed = accent === "gold" ? datasGoldData : datasFinData;
   const cursosOpts = accent === "gold" ? cursosGoldOpts : cursosFinOpts;
   const [lista, setLista] = useCatalogList("datas", accent, seed);
+  const [apagar, setApagar] = useState<typeof lista[number] | null>(null);
   const [s, setS] = useState(""); const [p, setP] = useState(1);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
@@ -576,7 +596,7 @@ function DatasCatalogView({ accent }: { accent: Accent }) {
                       <a href={`https://${r.link}`} className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline" onClick={e => e.preventDefault()}>{I.link} Link</a>
                     </Td>
                     <Td>{estadoBadge(r.status)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -599,6 +619,13 @@ function DatasCatalogView({ accent }: { accent: Accent }) {
           <FormActions accent={accent} onClose={() => setOpen(null)} onSave={guardar} disabled={!curso || !inicio} label={editing ? "Guardar" : "Criar edição"} />
         </div>
       </SlideOver>
+      <ApagarCatalogoModal
+        tipo="edição"
+        nome={apagar?.curso ?? ""}
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        onConfirm={() => { if (apagar) setLista(xs => xs.filter(x => x.id !== apagar.id)); }}
+      />
     </>
   );
 }
@@ -612,6 +639,7 @@ export function LocaisFinView() {
 
 function LocaisCatalogView({ accent }: { accent: Accent }) {
   const [lista, setLista] = useCatalogList("locais", accent, accent === "gold" ? locaisData : locaisFinData);
+  const [apagar, setApagar] = useState<typeof lista[number] | null>(null);
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof locaisData[number] | null>(null);
@@ -656,7 +684,7 @@ function LocaisCatalogView({ accent }: { accent: Accent }) {
                     <Td className="text-center text-xs text-slate-600">{r.salas || "-"}</Td>
                     <Td className="text-center text-xs font-semibold text-slate-700">{r.turmas}</Td>
                     <Td>{estadoBadge(r.status)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -672,6 +700,13 @@ function LocaisCatalogView({ accent }: { accent: Accent }) {
           <FormActions accent={accent} onClose={() => setOpen(null)} onSave={guardar} disabled={!nome.trim()} label={editing ? "Guardar" : "Criar local"} />
         </div>
       </SlideOver>
+      <ApagarCatalogoModal
+        tipo="local"
+        nome={apagar?.nome ?? ""}
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        onConfirm={() => { if (apagar) setLista(xs => xs.filter(x => x.id !== apagar.id)); }}
+      />
     </>
   );
 }
@@ -685,6 +720,7 @@ export function AreasTematicasFinView() {
 
 function AreasCatalogView({ accent }: { accent: Accent }) {
   const [lista, setLista] = useCatalogList("areas", accent, accent === "gold" ? areasTematicasData : areasFinData);
+  const [apagar, setApagar] = useState<typeof lista[number] | null>(null);
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof areasTematicasData[number] | null>(null);
@@ -717,7 +753,7 @@ function AreasCatalogView({ accent }: { accent: Accent }) {
                     <Td className="text-sm font-medium text-slate-800">{r.nome}</Td>
                     <Td className="text-center text-xs font-semibold text-slate-700">{r.cursos}</Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -731,6 +767,13 @@ function AreasCatalogView({ accent }: { accent: Accent }) {
           <FormActions accent={accent} onClose={() => setOpen(null)} onSave={guardar} disabled={!nome.trim()} label={editing ? "Guardar" : "Criar área"} />
         </div>
       </SlideOver>
+      <ApagarCatalogoModal
+        tipo="área temática"
+        nome={apagar?.nome ?? ""}
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        onConfirm={() => { if (apagar) setLista(xs => xs.filter(x => x.id !== apagar.id)); }}
+      />
     </>
   );
 }
@@ -747,6 +790,7 @@ export function ModulosView({ cursoInicial, accent = "gold" }: { cursoInicial?: 
   const [estado, setEstado] = useState("Todos");
   const [cursoFiltro, setCursoFiltro] = useState(cursoInicial ?? "");
   const [lista, setLista] = useCatalogList<ModuloRow>("modulos", accent, accent === "gold" ? modulosData : modulosFinData);
+  const [apagar, setApagar] = useState<ModuloRow | null>(null);
   const [open, setOpen] = useState<"new" | ModuloRow | null>(null);
   const [curso, setCurso] = useState("");
   const [codigo, setCodigo] = useState("");
@@ -838,7 +882,7 @@ export function ModulosView({ cursoInicial, accent = "gold" }: { cursoInicial?: 
                     <Td className="text-xs text-slate-600">{r.tipo}</Td>
                     <Td className="text-center text-xs font-semibold">{r.horas}h</Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(prev => prev.filter(x => x.id !== r.id))} /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -880,6 +924,13 @@ export function ModulosView({ cursoInicial, accent = "gold" }: { cursoInicial?: 
           </div>
         </div>
       </SlideOver>
+      <ApagarCatalogoModal
+        tipo="módulo"
+        nome={apagar?.nome ?? ""}
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        onConfirm={() => { if (apagar) setLista(xs => xs.filter(x => x.id !== apagar.id)); }}
+      />
     </>
   );
 }
@@ -896,6 +947,7 @@ export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtroModulo, setFiltroModulo] = useState("");
   const [lista, setLista] = useCatalogList<ConteudoRow>("conteudos", accent, accent === "gold" ? conteudosData : conteudosFinData);
+  const [apagar, setApagar] = useState<ConteudoRow | null>(null);
   const [open, setOpen] = useState<"new" | typeof conteudosData[number] | null>(null);
   const [abrir, setAbrir] = useState<ConteudoPreview | null>(null);
   const [curso, setCurso] = useState("");
@@ -1021,7 +1073,7 @@ export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
                     <Td className="text-xs text-slate-600 whitespace-nowrap">{labelModulo(r.modulo, r.curso, catalogoModulos)}</Td>
                     <Td className="text-xs text-slate-500">{r.tamanho}</Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Abrir" onClick={() => setAbrir(r)} /><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(prev => prev.filter(x => x.id !== r.id))} /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Abrir" onClick={() => setAbrir(r)} /><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -1091,6 +1143,13 @@ export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
           </div>
         </div>
       </SlideOver>
+      <ApagarCatalogoModal
+        tipo="conteúdo"
+        nome={apagar?.titulo ?? ""}
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        onConfirm={() => { if (apagar) setLista(xs => xs.filter(x => x.id !== apagar.id)); }}
+      />
       <ConteudoAbrirModal open={!!abrir} onClose={() => setAbrir(null)} item={abrir} accent={accent} />
     </>
   );
@@ -1258,6 +1317,7 @@ export function FinInscricoesView() {
 
 export function BlogTematicasView() {
   const [lista, setLista] = useCatalogList("blog_tematicas", "gold", blogTematicasData);
+  const [apagar, setApagar] = useState<typeof lista[number] | null>(null);
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof blogTematicasData[number] | null>(null);
@@ -1289,7 +1349,7 @@ export function BlogTematicasView() {
                     <Td className="text-xs font-mono text-slate-500">/{r.slug}</Td>
                     <Td className="text-center text-xs font-semibold">{r.posts}</Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -1316,6 +1376,13 @@ export function BlogTematicasView() {
           }} disabled={!nome.trim()} label={editing ? "Guardar" : "Criar temática"} />
         </div>
       </SlideOver>
+      <ApagarCatalogoModal
+        tipo="temática"
+        nome={apagar?.nome ?? ""}
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        onConfirm={() => { if (apagar) setLista(xs => xs.filter(x => x.id !== apagar.id)); }}
+      />
     </>
   );
 }
@@ -1350,6 +1417,7 @@ const configCards = [
     texto: "Preços, métodos de pagamento e regras do CCP.",
     fields: [
       { label: "Métodos de pagamento", value: "MB Way, Multibanco, cartão, transferência, PayPal" },
+      { label: "Entidade Multibanco", value: "" },
       { label: "Curso-bandeira", value: "Formação de Formadores - CCP" },
       { label: "Preço CCP", value: "125 €" },
       { label: "DTP", value: "Núcleo DGERT + PIP e simulações" },

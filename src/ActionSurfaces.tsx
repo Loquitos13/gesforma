@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useCatalogs } from "./CatalogsContext";
 import { AppModal } from "./FormKit";
 import { EmptyHint, NotifKind, sortNotifs } from "./SecretaryUX";
 
@@ -56,6 +57,24 @@ function refMb(seed: string) {
   return `${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6, 9)}`;
 }
 
+function imprimir(titulo: string, html: string) {
+  const w = window.open("", "_blank", "width=820,height=900");
+  if (!w) return;
+  w.document.write(`<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>${titulo}</title>
+    <style>
+      body { font-family: -apple-system, system-ui, sans-serif; color: #0f172a; margin: 32px; }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      p.sub { color: #64748b; font-size: 12px; margin: 0 0 24px; }
+      table { border-collapse: collapse; width: 100%; font-size: 13px; }
+      th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #e2e8f0; }
+      th { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+      .total { margin-top: 20px; font-size: 20px; font-weight: 700; }
+    </style></head><body>${html}</body></html>`);
+  w.document.close();
+  w.focus();
+  w.print();
+}
+
 export type TransacaoPreview = {
   id: string;
   nome: string;
@@ -93,6 +112,9 @@ export type ExportTurmaInfo = {
   local: string;
   formandos: number;
   accent?: Accent;
+  lista?: { nome: string; email: string; telf: string; estado: string }[];
+  sessoes?: { n: number; data: string; hora: string; modulo: string; formador: string; sumario: boolean; presencas: number }[];
+  dtp?: { label: string; estado: string; detalhe: string }[];
 };
 
 function Badge({ label, ok }: { label: string; ok?: boolean }) {
@@ -128,7 +150,7 @@ function ReciboPaper({ t }: { t: TransacaoPreview }) {
           ))}
         </div>
         <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-          <p className="text-xs text-slate-500">IVA incluído · documento de tesouraria (protótipo)</p>
+          <p className="text-xs text-slate-500">IVA incluído · documento de tesouraria</p>
           <p className="text-xl font-bold text-slate-900">€ {t.valor}</p>
         </div>
       </div>
@@ -202,8 +224,23 @@ export function ReciboModal({
         )}
         <div className="flex flex-col sm:flex-row justify-end gap-2">
           <button type="button" onClick={() => { setEnviado(false); onClose(); }} className="px-4 py-2 border border-slate-200 text-sm font-semibold text-slate-600 rounded-lg hover:bg-slate-50">Fechar</button>
-          <button type="button" onClick={() => setEnviado(true)} className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5">
-            {I.download} Descarregar PDF
+          <button
+            type="button"
+            onClick={() => imprimir(`Recibo ${transacao.id}`, `
+              <h1>Recibo de pagamento ${transacao.id}</h1>
+              <p class="sub">ENA · Escola de Negócios e Administração</p>
+              <table>
+                <tr><th>Formando</th><td>${transacao.nome}</td></tr>
+                <tr><th>Curso</th><td>${transacao.curso}</td></tr>
+                <tr><th>Método</th><td>${transacao.metodo}</td></tr>
+                <tr><th>Data</th><td>${transacao.data}</td></tr>
+                <tr><th>Estado</th><td>${transacao.estado}</td></tr>
+              </table>
+              <p class="total">€ ${transacao.valor}</p>
+            `)}
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5"
+          >
+            {I.download} Imprimir / PDF
           </button>
           <button type="button" onClick={() => setEnviado(true)} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5">
             {I.mail} Enviar por email
@@ -221,7 +258,8 @@ export function ReferenciaMbModal({
 }) {
   const [copied, setCopied] = useState(false);
   const [enviado, setEnviado] = useState(false);
-  const entidade = "12345";
+  const { settings } = useCatalogs();
+  const entidade = (settings.gold?.["Entidade Multibanco"] ?? "").trim();
   const referencia = refMb(nome + String(valor));
   const isWay = modo === "mbway";
   return (
@@ -240,10 +278,17 @@ export function ReferenciaMbModal({
             </>
           ) : (
             <div className="space-y-2 font-mono">
-              <div className="flex justify-between text-sm"><span className="text-amber-700">Entidade</span><span className="font-bold text-slate-900">{entidade}</span></div>
+              <div className="flex justify-between text-sm">
+                <span className="text-amber-700">Entidade</span>
+                <span className="font-bold text-slate-900">{entidade || "por definir"}</span>
+              </div>
               <div className="flex justify-between text-sm"><span className="text-amber-700">Referência</span><span className="font-bold text-slate-900">{referencia}</span></div>
               <div className="flex justify-between text-sm"><span className="text-amber-700">Valor</span><span className="font-bold text-slate-900">€ {valor.toFixed(2)}</span></div>
-              <p className="text-[11px] text-amber-700 font-sans pt-1">Válida até 72 horas. Protótipo — não gera cobrança real.</p>
+              <p className="text-[11px] text-amber-700 font-sans pt-1">
+                {entidade
+                  ? "Válida 72 horas. A cobrança só entra quando o banco confirmar."
+                  : "Grave a entidade Multibanco em Configurações → Gold para a referência ser aceite no banco."}
+              </p>
             </div>
           )}
         </div>
@@ -375,17 +420,42 @@ export function CertificadoVerModal({
             {cert.nota != null && <span>Nota {cert.nota}/20</span>}
             <span>{cert.data ?? "2026-09-08"}</span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-5">Documento de arquivo · protótipo sem assinatura digital</p>
+          <p className="text-[11px] text-slate-400 mt-5">Documento de arquivo · a assinatura é aposta no portal NetForce / SIGO</p>
         </div>
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-200 text-sm font-semibold text-slate-600 rounded-lg hover:bg-slate-50">Fechar</button>
-          <button type="button" onClick={onClose} className={`px-4 py-2 ${t.btn} text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5`}>
-            {I.download} Descarregar PDF
+          <button
+            type="button"
+            onClick={() => imprimir(`Certificado ${cert.nome}`, `
+              <h1>Certificado de conclusão</h1>
+              <p class="sub">ENA · Escola de Negócios e Administração</p>
+              <table>
+                <tr><th>Formando</th><td>${cert.nome}</td></tr>
+                <tr><th>Formação</th><td>${cert.curso ?? "Formação ENA"}</td></tr>
+                ${cert.turma ? `<tr><th>Turma</th><td>${cert.turma}</td></tr>` : ""}
+                ${cert.nota != null ? `<tr><th>Nota final</th><td>${cert.nota}/20</td></tr>` : ""}
+                <tr><th>Data</th><td>${cert.data ?? new Date().toISOString().slice(0, 10)}</td></tr>
+              </table>
+            `)}
+            className={`px-4 py-2 ${t.btn} text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5`}
+          >
+            {I.download} Imprimir / PDF
           </button>
         </div>
       </div>
     </AppModal>
   );
+}
+
+function baixarCsv(nome: string, linhas: (string | number)[][]) {
+  const csv = linhas.map(l => l.map(c => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${nome.replace(/[^\w-]+/g, "-").toLowerCase()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export function ExportTurmaModal({
@@ -396,24 +466,76 @@ export function ExportTurmaModal({
   const [done, setDone] = useState<string | null>(null);
   if (!turma) return null;
   const t = tone(turma.accent ?? "gold");
+  const lista = turma.lista ?? [];
+  const sessoes = turma.sessoes ?? [];
+  const dtp = turma.dtp ?? [];
+
   const packs = [
-    { id: "formandos", label: "Lista de formandos", detalhe: "CSV com nome, email, telemóvel e estado" },
-    { id: "cronograma", label: "Cronograma", detalhe: "PDF das sessões, módulos e formadores" },
-    { id: "presencas", label: "Folhas de presença", detalhe: "PDF por sessão, pronto a assinar" },
-    { id: "dtp", label: "Dossiê TP (índice)", detalhe: "ZIP com o índice e os ficheiros já no dossiê" },
+    {
+      id: "formandos",
+      label: "Lista de formandos",
+      detalhe: lista.length ? `CSV com ${lista.length} formandos desta turma` : "Sem formandos inscritos",
+      disabled: lista.length === 0,
+      run: () => baixarCsv(`formandos-${turma.nome}`, [
+        ["Nome", "Email", "Telemóvel", "Estado"],
+        ...lista.map(f => [f.nome, f.email, f.telf, f.estado]),
+      ]),
+    },
+    {
+      id: "cronograma",
+      label: "Cronograma",
+      detalhe: sessoes.length ? `CSV com ${sessoes.length} sessões, módulos e formadores` : "A turma ainda não tem cronograma",
+      disabled: sessoes.length === 0,
+      run: () => baixarCsv(`cronograma-${turma.nome}`, [
+        ["Sessão", "Data", "Hora", "Módulos", "Formadores", "Sumário", "Presenças registadas"],
+        ...sessoes.map(x => [x.n, x.data, x.hora, x.modulo, x.formador, x.sumario ? "Assinado" : "Em falta", x.presencas]),
+      ]),
+    },
+    {
+      id: "presencas",
+      label: "Folhas de presença",
+      detalhe: lista.length && sessoes.length ? "Folha por sessão, pronta a imprimir e assinar" : "Precisa de formandos e cronograma",
+      disabled: lista.length === 0 || sessoes.length === 0,
+      run: () => imprimir(`Presenças ${turma.nome}`, sessoes.map(sx => `
+        <h1>Folha de presenças · Sessão ${sx.n}</h1>
+        <p class="sub">${turma.nome} · ${turma.curso} · ${sx.data} ${sx.hora}</p>
+        <table>
+          <tr><th>Formando</th><th>Assinatura</th></tr>
+          ${lista.map(f => `<tr><td>${f.nome}</td><td style="width:45%"></td></tr>`).join("")}
+        </table>
+        <p class="sub" style="margin-top:24px">Formador: ${sx.formador || "___________________"}</p>
+        <div style="page-break-after:always"></div>
+      `).join("")),
+    },
+    {
+      id: "dtp",
+      label: "Dossiê TP (índice)",
+      detalhe: dtp.length ? `CSV com ${dtp.length} documentos e o estado de cada um` : "Sem dossiê carregado",
+      disabled: dtp.length === 0,
+      run: () => baixarCsv(`dtp-${turma.nome}`, [
+        ["Documento", "Estado", "Detalhe"],
+        ...dtp.map(d => [d.label, d.estado, d.detalhe]),
+      ]),
+    },
   ];
+
   return (
     <AppModal open={open} onClose={() => { setDone(null); onClose(); }} title="Exportar turma" sub={`${turma.nome} · ${turma.curso}`} size="lg">
       <div className="p-5 space-y-3">
-        <p className="text-sm text-slate-600">{turma.formandos} formandos · {turma.local}. Escolha o pacote. Neste protótipo o download fica registado, sem ficheiro real.</p>
+        <p className="text-sm text-slate-600">{turma.formandos} formandos · {turma.local}. Escolha o pacote: o ficheiro é gerado com os dados desta turma.</p>
         {packs.map(p => (
           <div key={p.id} className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-slate-800">{p.label}</p>
               <p className="text-xs text-slate-500 mt-0.5">{p.detalhe}</p>
             </div>
-            <button type="button" onClick={() => setDone(p.label)} className={`px-3 py-1.5 ${t.btn} text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1`}>
-              {I.download} Descarregar
+            <button
+              type="button"
+              disabled={p.disabled}
+              onClick={() => { p.run(); setDone(p.label); }}
+              className={`px-3 py-1.5 ${t.btn} disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1`}
+            >
+              {I.download} {p.id === "presencas" ? "Imprimir" : "Descarregar"}
             </button>
           </div>
         ))}

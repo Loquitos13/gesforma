@@ -1375,6 +1375,28 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
   );
 }
 
+function exportPayload(
+  base: { nome: string; curso: string; local: string; formandos: number; accent: "gold" | "fin" },
+  lista: { nome: string; email: string; telf: string; estado: string }[],
+  sessoes: SessaoMeta[],
+  ped: { sumarios: Record<number, SumarioSessaoData>; presencas: Record<number, PresencaRow[]>; dtp: { items: { label: string; estado: string; detalhe: string }[] } },
+): ExportTurmaInfo {
+  return {
+    ...base,
+    lista,
+    sessoes: sessoes.map(x => ({
+      n: x.n,
+      data: x.data,
+      hora: x.hora,
+      modulo: x.modulo,
+      formador: x.formador,
+      sumario: Boolean(ped.sumarios[x.n]?.assinado),
+      presencas: ped.presencas[x.n]?.length ?? 0,
+    })),
+    dtp: ped.dtp.items.map(d => ({ label: d.label, estado: d.estado, detalhe: d.detalhe })),
+  };
+}
+
 function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab; onNavigate?: (v: View) => void }) {
   const { gold, toggleGold, setGoldCronograma, patchGold } = useTurmas();
   const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma } = useLists();
@@ -1445,7 +1467,12 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                 setEditFormador(turma.formador); setEditInicio(turma.dataInicio); setEditVagas(turma.vagas);
                 setEditTurma(true);
               }} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>
-              <button type="button" onClick={() => setExportTurma({ nome: turma.nome, curso: turma.curso, local: turma.local, formandos: turma.totalAlunos, accent: "gold" })} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-lg transition-colors" aria-label="Exportar turma">{I.download}</button>
+              <button type="button" onClick={() => setExportTurma(exportPayload(
+                { nome: turma.nome, curso: turma.curso, local: turma.local, formandos: turma.totalAlunos, accent: "gold" },
+                membros.map(f => ({ nome: `${f.nome} ${f.apelido}`, email: f.email, telf: f.telf, estado: f.pago ? "Pago" : "Por pagar" })),
+                sessoesTurma,
+                ped,
+              ))} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-lg transition-colors" aria-label="Exportar turma">{I.download}</button>
             </div>
           </div>
           {/* Progress bar */}
@@ -1973,7 +2000,12 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
               setEditNome(turma.nome); setEditCurso(turma.curso); setEditFormador(turma.formador);
               setEditLocal(turma.local); setEditInicio(turma.dataInicio); setEditTurma(true);
             }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>
-            <button type="button" onClick={() => setExportTurma({ nome: turma.nome, curso: turma.curso, local: turma.local, formandos: turma.alunos, accent: "fin" })} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-lg transition-colors" aria-label="Exportar turma">{I.download}</button>
+            <button type="button" onClick={() => setExportTurma(exportPayload(
+              { nome: turma.nome, curso: turma.curso, local: turma.local, formandos: turma.alunos, accent: "fin" },
+              listaFormandos.map(f => ({ nome: `${f.nome} ${f.apelido}`, email: f.email, telf: f.telf, estado: f.estado })),
+              sessoesTurma,
+              ped,
+            ))} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-lg transition-colors" aria-label="Exportar turma">{I.download}</button>
           </div>
         </div>
         <div className="mt-4">
@@ -2537,6 +2569,23 @@ const docLabels: Record<DocKey, string> = {
   cc: "Cartão de Cidadão", ch: "Certif. Habilitações", cu: "Curriculum Vitae", ci: "IBAN / Certif. Emprego", ce: "Comp. Emprego",
 };
 
+/** Sem gateway de email transacional para a Financiada, o lembrete sai do cliente de email da secretaria. */
+function lembreteDocsHref(formando: FinFormando, emFalta: string[]) {
+  const assunto = `Documentos em falta · ${formando.curso}`;
+  const corpo = [
+    `Olá ${formando.nome},`,
+    "",
+    `Para concluir a inscrição na formação ${formando.curso} faltam os seguintes documentos:`,
+    ...emFalta.map(d => `- ${d}`),
+    "",
+    "Pode responder a este email com os ficheiros em anexo.",
+    "",
+    "Obrigado,",
+    "Secretaria ENA · formacao@ena.pt",
+  ].join("\n");
+  return `mailto:${formando.email}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
+}
+
 function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
   const { formandosFin, patchFormandoFin } = useLists();
   const live = formandosFin.find(f => f.id === formando.id) ?? formando;
@@ -2583,7 +2632,14 @@ function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
         ))}
       </div>
 
-      <button className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors">Enviar lembrete de documentos</button>
+      {!completo && (
+        <a
+          href={lembreteDocsHref(docs, keys.filter(k => !docs[k].ok).map(k => docLabels[k]))}
+          className="block w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors text-center"
+        >
+          Enviar lembrete de documentos
+        </a>
+      )}
     </div>
   );
 }
@@ -2974,7 +3030,7 @@ function PreInscricoesGoldView() {
         onClose={() => setApagar(null)}
         title="Eliminar pré-inscrição"
         body={apagar ? `Remover ${apagar.nome} ${apagar.apelido} da fila comercial?` : ""}
-        risk="O pedido sai da lista de contacto. Esta acção não se desfaz neste protótipo."
+        risk="O pedido sai da lista de contacto e a acção não se desfaz. Prefira marcar como Indeferido se quiser manter o histórico."
         onConfirm={() => { if (apagar) removePreinscricao(apagar.id); }}
       />
       <SlideOver open={novo} onClose={() => { setNovo(false); setEditLead(null); }} title={editLead ? `Editar ${editLead.nome}` : "Nova pré-inscrição"} sub="Lead comercial Gold">
@@ -3161,7 +3217,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
         onClose={() => setApagar(null)}
         title="Eliminar turma Gold"
         body={apagar ? `Apagar a turma ${apagar.nome}?` : ""}
-        risk="Formandos, cronograma e dossiê desta turma deixam de aparecer neste protótipo."
+        risk="Formandos, cronograma e dossiê desta turma deixam de estar acessíveis. Prefira marcar a turma como inativa."
         onConfirm={() => { if (apagar) removeGold(apagar.id); }}
       />
       <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `Editar ${editing.nome}` : "Nova turma Gold"} sub="Código interno da turma - o objeto de gestão é a turma, não a ação." size="xl">
@@ -3655,7 +3711,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
         onClose={() => setApagar(null)}
         title="Eliminar turma financiada"
         body={apagar ? `Apagar a turma ${apagar.nome}?` : ""}
-        risk="Formandos, cronograma e dossiê desta turma deixam de aparecer neste protótipo."
+        risk="Formandos, cronograma e dossiê desta turma deixam de estar acessíveis. Prefira marcar a turma como inativa."
         onConfirm={() => { if (apagar) removeFin(apagar.id); }}
       />
       <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? editing.nome : "Nova turma financiada"} sub="UFCD e turma - o objeto de gestão é a turma." size="xl">

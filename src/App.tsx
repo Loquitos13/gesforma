@@ -20,7 +20,7 @@ import {
   InqueritosView, emptyPlano, emptySumario, sumarioPreenchido,
   seedListaFromDetalhe, seedPipItems, seedSimItems,
   getParametrosAvaliacao,
-  type CriterioAvaliacao, type SessaoMeta, type SumarioSessaoData, type ResolveDocTarget, type PipItem, type SimItem,
+  type CriterioAvaliacao, type PlanoSessaoData, type SessaoMeta, type SumarioSessaoData, type ResolveDocTarget, type PipItem, type SimItem,
 } from "./TurmaExtras";
 import { ResolverDocumentoModal } from "./DocResolver";
 import { CursoFichaView } from "./CursoFichaView";
@@ -953,11 +953,13 @@ function sumarioBtnCls(s: SumarioSessaoData | undefined, gold: boolean) {
 }
 
 function SessoesTurmaTab({
-  accent, turmaNome, sessoes, sumarios, onNovaSessao, onPlano, onSumario, onPresencas, onOpenFormador,
+  accent, turmaNome, sessoes, planos, presencas, sumarios, onNovaSessao, onPlano, onSumario, onPresencas, onOpenFormador,
 }: {
   accent: "gold" | "fin";
   turmaNome: string;
   sessoes: SessaoMeta[];
+  planos: Record<number, PlanoSessaoData>;
+  presencas: Record<number, PresencaRow[]>;
   sumarios: Record<number, SumarioSessaoData>;
   onNovaSessao: () => void;
   onPlano: (s: SessaoMeta) => void;
@@ -985,6 +987,8 @@ function SessoesTurmaTab({
           <tbody className="divide-y divide-slate-100">
             {sessoes.map(s => {
               const sum = sumarios[s.n];
+              const temPlano = Boolean(planos[s.n]);
+              const folha = presencas[s.n];
               const realizada = s.estado === "Realizada";
               return (
                 <tr key={s.n} className="hover:bg-slate-50">
@@ -997,8 +1001,8 @@ function SessoesTurmaTab({
                   <Td><FormadoresCell sessao={s} onOpen={onOpenFormador} /></Td>
                   <Td>
                     <button type="button" onClick={() => onPlano(s)}
-                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${s.plano ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100" : planoTodo}`}>
-                      {s.plano ? "Ver plano" : "+ Preencher plano"}
+                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${temPlano ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100" : planoTodo}`}>
+                      {temPlano ? "Ver plano" : "+ Preencher plano"}
                     </button>
                   </Td>
                   <Td>
@@ -1010,16 +1014,20 @@ function SessoesTurmaTab({
                   <Td>
                     <button
                       type="button"
-                      disabled={!realizada}
-                      title={realizada ? "Marcar presenças desta sessão" : "As presenças só se marcam depois da sessão"}
-                      onClick={() => realizada && onPresencas(s)}
+                      disabled={!realizada && !folha}
+                      title={realizada || folha ? "Folha de presenças desta sessão" : "As presenças só se marcam depois da sessão"}
+                      onClick={() => (realizada || folha) && onPresencas(s)}
                       className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${
-                        realizada
-                          ? "text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100"
-                          : "text-slate-400 bg-slate-50 border-slate-200 cursor-not-allowed"
+                        folha
+                          ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
+                          : realizada
+                            ? "text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100"
+                            : "text-slate-400 bg-slate-50 border-slate-200 cursor-not-allowed"
                       }`}
                     >
-                      {realizada ? "Marcar presenças" : "Após a sessão"}
+                      {folha
+                        ? `${folha.filter(p => p.presente).length}/${folha.length} presentes`
+                        : realizada ? "Marcar presenças" : "Após a sessão"}
                     </button>
                   </Td>
                   <Td>{estadoBadge(s.estado)}</Td>
@@ -1528,6 +1536,8 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             accent="gold"
             turmaNome={turma.nome}
             sessoes={sessoesTurma}
+            planos={ped.planos}
+            presencas={ped.presencas}
             sumarios={sumarios}
             onNovaSessao={() => { setFormadoresSessao(turma.formador ? [turma.formador] : []); setModuloSessao([]); setNovaSessao(true); }}
             onPlano={setPlanoSessao}
@@ -2048,6 +2058,8 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           accent="fin"
           turmaNome={turma.nome}
           sessoes={sessoesTurma}
+          planos={ped.planos}
+          presencas={ped.presencas}
           sumarios={sumarios}
           onNovaSessao={() => { setFormadoresSessao(turma.formador ? [turma.formador] : []); setModuloSessao([]); setNovaSessao(true); }}
           onPlano={setPlanoSessao}

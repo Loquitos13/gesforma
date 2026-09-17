@@ -1558,7 +1558,7 @@ function DriveSettingsCard() {
           <input className={iCls} value={clientId} onChange={e => setClientId(e.target.value)} placeholder="xxxx.apps.googleusercontent.com" autoComplete="off" disabled={status.fromEnv} />
         </Field>
         <Field label="Client secret">
-          <input className={iCls} type="password" value={clientSecret} onChange={e => setClientSecret(e.target.value)} placeholder={status.hasSecret ? "•••• já gravado — deixe vazio para manter" : "Cole o secret do cliente Web"} autoComplete="new-password" disabled={status.fromEnv} />
+          <input className={iCls} type="password" value={clientSecret} onChange={e => setClientSecret(e.target.value)} placeholder={status.hasSecret ? "•••• já gravado - deixe vazio para manter" : "Cole o secret do cliente Web"} autoComplete="new-password" disabled={status.fromEnv} />
         </Field>
       </div>
       <div className="flex justify-end">

@@ -103,7 +103,11 @@ export function isTurmaActiva(t: { estado?: string; activa?: boolean }) {
   return t.estado === "Ativa" || t.estado === "Ativo";
 }
 
-export const CRONOGRAMA_HOJE = "2026-09-07";
+/** Data de hoje: o estado das sessões e o cronograma seguem o calendário real. */
+export function hojeIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 const MONTHS_FULL_PT = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -150,13 +154,13 @@ export function sessaoDuracaoHoras(s: Pick<SessaoCronograma, "horaInicio" | "hor
   return Math.max(0, ((eh * 60 + em) - (sh * 60 + sm)) / 60);
 }
 
-export function proximaSessao(sessoes: SessaoCronograma[], today = CRONOGRAMA_HOJE) {
+export function proximaSessao(sessoes: SessaoCronograma[], today = hojeIso()) {
   return [...sessoes]
     .filter(s => s.data && s.data >= today)
     .sort((a, b) => a.data.localeCompare(b.data) || a.horaInicio.localeCompare(b.horaInicio))[0];
 }
 
-export function sessaoEstado(s: SessaoCronograma, today = CRONOGRAMA_HOJE, nextId?: string): SessaoEstado {
+export function sessaoEstado(s: SessaoCronograma, today = hojeIso(), nextId?: string): SessaoEstado {
   if (!s.data) return "por-agendar";
   if (s.data < today) return "realizada";
   if (s.data === today) return "hoje";
@@ -231,7 +235,7 @@ export function generateCronograma(opts: {
 }): SessaoCronograma[] {
   const slot = horarioSlots(opts.horario);
   const n = Math.min(16, Math.max(4, Math.ceil((opts.horas || 25) / slot.hours)));
-  const cursor = parseIso(opts.inicio || "2026-09-07");
+  const cursor = parseIso(opts.inicio || hojeIso());
   const weekdays = slot.weekdays.length ? slot.weekdays : [cursor.getDay() || 3];
   for (let i = 0; i < 7; i++) {
     if (weekdays.includes(cursor.getDay())) break;
@@ -275,7 +279,7 @@ export function horasCronograma(sessoes: SessaoCronograma[]) {
   }, 0);
 }
 
-export function cronogramaToSessoes(c: SessaoCronograma[], today = "2026-09-06"): SessaoMeta[] {
+export function cronogramaToSessoes(c: SessaoCronograma[], today = hojeIso()): SessaoMeta[] {
   return c.map((s, i) => {
     const formadores = sessaoFormadores(s);
     return {

@@ -285,7 +285,7 @@ export function UsersView() {
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-800">Utilizadores</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Contas da secretaria. Quem não estiver aqui não entra — nem com Google.</p>
+          <p className="text-sm text-slate-500 mt-0.5">Contas da secretaria. Quem não estiver aqui não entra - nem com Google.</p>
         </div>
         <button type="button" onClick={openNew} className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg shadow-sm whitespace-nowrap">
           {I.plus}Novo utilizador

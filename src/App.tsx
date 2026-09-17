@@ -34,7 +34,7 @@ import { FormadoresView } from "./FormadoresView";
 import { FORMADORES_SEED } from "./formadorModel";
 import { useFormadorOptions, useFormadores } from "./FormadoresContext";
 import { useTurmas } from "./TurmasContext";
-import { cronogramaToSessoes, formatSessaoLabel, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
+import { cronogramaToSessoes, formatSessaoLabel, hojeIso, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
 import { apiDriveFiles } from "./api";
 import { ListsProvider, nextListId, useLists, type BlogPostRow, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
 import { useAuth } from "./AuthGate";
@@ -1331,7 +1331,7 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
                       <input
                         type="number" min={0} max={100} value={c.elearning ?? ""}
                         onChange={e => onNota?.(c.id, { elearning: e.target.value === "" ? null : Math.max(0, Math.min(100, Number(e.target.value))) })}
-                        placeholder="—"
+                        placeholder="-"
                         aria-label={`E-learning de ${c.nome}`}
                         className="w-16 px-2 py-1 text-xs text-center border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
                       />
@@ -1340,7 +1340,7 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
                       <input
                         type="number" min={0} max={20} step="0.1" value={c.nota ?? ""}
                         onChange={e => onNota?.(c.id, { nota: e.target.value === "" ? null : Math.max(0, Math.min(20, Number(e.target.value))) })}
-                        placeholder="—"
+                        placeholder="-"
                         aria-label={`Nota final de ${c.nome}`}
                         className={`w-16 px-2 py-1 text-xs text-center border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 ${c.nota != null && c.nota < 10 ? "border-red-300 text-red-600" : "border-slate-200"}`}
                       />
@@ -1665,13 +1665,13 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           <Card className="p-4">
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Próximas Sessões</p>
             <div className="space-y-2">
-              {(turma.cronograma.length ? turma.cronograma : []).filter(s => s.data >= "2026-09-06").slice(0, 3).map((s, i) => (
+              {turma.cronograma.filter(s => s.data >= hojeIso()).slice(0, 3).map((s, i) => (
                 <div key={s.id ?? i} className="flex items-center gap-2 text-xs">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
                   <span className="text-slate-600">{formatSessaoLine(s)}</span>
                 </div>
               ))}
-              {turma.cronograma.filter(s => s.data >= "2026-09-06").length === 0 && (
+              {turma.cronograma.filter(s => s.data >= hojeIso()).length === 0 && (
                 <p className="text-xs text-slate-400">Sem sessões futuras. Edite o cronograma da turma.</p>
               )}
             </div>
@@ -2190,13 +2190,13 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
             <Card className="p-4">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Próximas Sessões</p>
               <div className="space-y-2">
-                {turma.cronograma.filter(s => s.data >= "2026-09-06").slice(0, 3).map((s, i) => (
+                {turma.cronograma.filter(s => s.data >= hojeIso()).slice(0, 3).map((s, i) => (
                   <div key={s.id ?? i} className="flex items-center gap-2 text-xs">
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
                     <span className="text-slate-600">{formatSessaoLine(s)}</span>
                   </div>
                 ))}
-                {turma.cronograma.filter(s => s.data >= "2026-09-06").length === 0 && (
+                {turma.cronograma.filter(s => s.data >= hojeIso()).length === 0 && (
                   <p className="text-xs text-slate-400">Sem sessões futuras. Edite o cronograma da turma.</p>
                 )}
               </div>
@@ -2846,7 +2846,7 @@ function PainelView({ onNavigate }: { onNavigate: (v: View | NavTarget) => void 
                   <p className="text-xs text-slate-400">{c.inscritos.toLocaleString("pt-PT")} pré-inscritos · {eur(c.receita)}</p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-xs font-bold text-emerald-600">{c.taxa == null ? "—" : `${c.taxa}%`}</p>
+                  <p className="text-xs font-bold text-emerald-600">{c.taxa == null ? "-" : `${c.taxa}%`}</p>
                   <p className="text-xs text-slate-400">conversão</p>
                 </div>
               </div>
@@ -3849,7 +3849,7 @@ function BlogView() {
                 <tr key={r.id} className="hover:bg-slate-50">
                   <Td><IdCell id={r.id} /></Td>
                   <Td className="text-sm font-medium text-slate-700 max-w-[220px]">{r.titulo}</Td>
-                  <Td className="text-xs text-slate-600">{r.tematica || "—"}</Td>
+                  <Td className="text-xs text-slate-600">{r.tematica || "-"}</Td>
                   <Td className="font-mono text-xs text-slate-500">{r.slug}</Td>
                   <Td className="font-mono text-xs text-slate-500">{r.data}</Td>
                   <Td>{estadoBadge(r.status)}</Td>
@@ -4349,7 +4349,7 @@ function EmailsView() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {([
                       { id: "preinscricao" as const, title: "Pré-inscrição", sub: "Formulário público. A secretaria contacta a seguir." },
-                      { id: "contacto" as const, title: "Contacto da secretaria", sub: "Email formacao@ena.pt — sem área de formando." },
+                      { id: "contacto" as const, title: "Contacto da secretaria", sub: "Email formacao@ena.pt - sem área de formando." },
                     ]).map(opt => (
                       <button
                         key={opt.id}
@@ -4467,10 +4467,10 @@ function PagamentosView() {
       />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { l: "Receita confirmada", v: dash ? eur(dash.financeiro.receitaTotal) : "—", c: "text-slate-800" },
-          { l: "Este mês", v: dash ? eur(dash.financeiro.receitaMes) : "—", c: "text-emerald-600" },
-          { l: "Pendente", v: dash ? eur(dash.financeiro.pendentes.valor) : "—", c: "text-amber-600" },
-          { l: "Ticket médio", v: dash ? eur(dash.financeiro.ticketMedio) : "—", c: "text-blue-600" },
+          { l: "Receita confirmada", v: dash ? eur(dash.financeiro.receitaTotal) : "-", c: "text-slate-800" },
+          { l: "Este mês", v: dash ? eur(dash.financeiro.receitaMes) : "-", c: "text-emerald-600" },
+          { l: "Pendente", v: dash ? eur(dash.financeiro.pendentes.valor) : "-", c: "text-amber-600" },
+          { l: "Ticket médio", v: dash ? eur(dash.financeiro.ticketMedio) : "-", c: "text-blue-600" },
         ].map(s => (
           <Card key={s.l} className="p-4"><p className="text-xs text-slate-400 uppercase tracking-wide mb-1">{s.l}</p><p className={`text-xl font-bold ${s.c}`}>{s.v}</p></Card>
         ))}

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { MultiSearchSelect, modulosOptsForCurso } from "./FormKit";
 import { useFormadorOptions } from "./FormadoresContext";
 import {
-  CRONOGRAMA_HOJE,
+  hojeIso,
   emptySessao,
   formatDiaMes,
   formatHoraRange,
@@ -419,7 +419,7 @@ export function CronogramaEditor({
                     key={sessao.id}
                     n={n}
                     sessao={sessao}
-                    estado={sessaoEstado(sessao, CRONOGRAMA_HOJE, next?.id)}
+                    estado={sessaoEstado(sessao, hojeIso(), next?.id)}
                     gold={gold}
                     expanded={openId === sessao.id}
                     onToggle={() => setOpenId(id => id === sessao.id ? null : sessao.id)}

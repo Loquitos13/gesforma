@@ -104,7 +104,7 @@ export function FileUploadModal({
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 ${gold ? "bg-amber-100 text-amber-600" : "bg-blue-100 text-blue-600"}`}>{I.download}</div>
               <p className="text-sm font-semibold text-slate-700">Arraste o ficheiro para aqui</p>
               <p className="text-xs text-slate-400 mt-1">ou clique para escolher do computador</p>
-              <p className="text-xs text-slate-400 mt-1">PDF, DOC, JPG, PNG, MP4 — máx. 10 MB</p>
+              <p className="text-xs text-slate-400 mt-1">PDF, DOC, JPG, PNG, MP4 - máx. 10 MB</p>
               <input ref={inputRef} type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setFile(f); }} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.mp4,.webm" />
             </div>
           ) : (

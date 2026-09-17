@@ -19,6 +19,16 @@ import {
   googleUserEmail,
   purgeExpiredStates,
 } from "./googleDrive.js";
+import {
+  disconnectMicrosoft,
+  exchangeMicrosoftCode,
+  getMicrosoftStatus,
+  microsoftConfigured,
+  microsoftCreds,
+  microsoftLoginAuthUrl,
+  microsoftUserEmail,
+  saveMicrosoftConfig,
+} from "./microsoftAuth.js";
 import { registerDashboardRoutes } from "./dashboardRoutes.js";
 import { registerOpsRoutes } from "./opsRoutes.js";
 import { registerPedagogiaRoutes } from "./pedagogiaRoutes.js";
@@ -43,6 +53,12 @@ declare module "fastify" {
 const loginSchema = z.object({
   email: z.string().max(254),
   password: z.string().min(8).max(200),
+});
+
+const microsoftConfigSchema = z.object({
+  clientId: z.string().trim().min(12).max(200),
+  clientSecret: z.string().trim().min(12).max(400).optional(),
+  tenantId: z.string().trim().max(200).optional(),
 });
 
 const ruleSchema = z.object({
@@ -277,6 +293,101 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
         return fail("inactivo");
       }
       await createSession(reply, { id: found.id, email, name: found.name, role: found.role }, req, "auth.google");
+      return reply.redirect(`${origin}/`);
+    } catch {
+      return fail("oauth-falhou");
+    }
+  });
+
+  app.get("/v1/auth/microsoft", async (req, reply) => {
+    const creds = await microsoftCreds(db);
+    // O ecrã de login precisa de saber se o botão está activo antes de haver sessão.
+    if (!req.actor) {
+      return { configured: microsoftConfigured(creds), redirectUri: creds.redirectUri };
+    }
+    if (req.actor.role !== "admin") {
+      return { configured: microsoftConfigured(creds), redirectUri: creds.redirectUri };
+    }
+    return getMicrosoftStatus(db);
+  });
+
+  app.put("/v1/auth/microsoft/config", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (req.actor!.role !== "admin") {
+      return reply.code(403).send({ error: "só a administração configura o login Microsoft" });
+    }
+    const parsed = microsoftConfigSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    try {
+      await saveMicrosoftConfig(db, parsed.data);
+      await audit(db, req.actor!.id, "auth.microsoft_config", "microsoft_config", "microsoft", req.ip);
+      return getMicrosoftStatus(db);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : "configuração recusada" });
+    }
+  });
+
+  app.post("/v1/auth/microsoft/disconnect", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (req.actor!.role !== "admin") {
+      return reply.code(403).send({ error: "só a administração configura o login Microsoft" });
+    }
+    await disconnectMicrosoft(db);
+    await audit(db, req.actor!.id, "auth.microsoft_disconnect", "microsoft_config", "microsoft", req.ip);
+    return getMicrosoftStatus(db);
+  });
+
+  app.get("/v1/auth/microsoft/start", {
+    config: { rateLimit: { max: 12, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    const origin = config.appOrigin.replace(/\/$/, "");
+    const creds = await microsoftCreds(db);
+    if (!microsoftConfigured(creds)) {
+      return reply.redirect(`${origin}/?login=sem-cliente-microsoft`);
+    }
+    await purgeExpiredStates(db);
+    const state = newToken(24);
+    const exp = new Date(Date.now() + 10 * 60_000).toISOString();
+    await db.query(
+      "INSERT INTO oauth_states (state, user_id, redirect_to, expires_at, purpose) VALUES ($1, NULL, $2, $3, 'login-microsoft')",
+      [state, `${origin}/`, exp],
+    );
+    return reply.redirect(microsoftLoginAuthUrl(state, creds));
+  });
+
+  app.get("/v1/auth/microsoft/callback", async (req, reply) => {
+    const origin = config.appOrigin.replace(/\/$/, "");
+    const fail = (reason: string) => reply.redirect(`${origin}/?login=${encodeURIComponent(reason)}`);
+    const q = req.query as { code?: string; state?: string; error?: string };
+    if (q.error) return fail("oauth-falhou");
+    if (!q.code || !q.state) return fail("pedido-invalido");
+    const row = await db.query<{ purpose: string | null }>(
+      "SELECT purpose FROM oauth_states WHERE state = $1 AND expires_at > now()",
+      [q.state],
+    );
+    const st = row.rows[0];
+    await db.query("DELETE FROM oauth_states WHERE state = $1", [q.state]);
+    if (!st || st.purpose !== "login-microsoft") return fail("pedido-invalido");
+    try {
+      const creds = await microsoftCreds(db);
+      if (!microsoftConfigured(creds)) return fail("sem-cliente-microsoft");
+      const tokens = await exchangeMicrosoftCode(q.code, creds);
+      const email = normalizeEmail((await microsoftUserEmail(tokens.access_token)) ?? "");
+      if (!isEmail(email)) return fail("oauth-falhou");
+      const user = await db.query<{ id: string; name: string; role: string; active: boolean }>(
+        "SELECT id, name, role, active FROM users WHERE email = $1",
+        [email],
+      );
+      const found = user.rows[0];
+      if (!found) {
+        await audit(db, undefined, "auth.microsoft_denied", "user", email, req.ip);
+        return fail("sem-conta");
+      }
+      if (!found.active) {
+        await audit(db, found.id, "auth.microsoft_denied", "user", found.id, req.ip);
+        return fail("inactivo");
+      }
+      await createSession(reply, { id: found.id, email, name: found.name, role: found.role }, req, "auth.microsoft");
       return reply.redirect(`${origin}/`);
     } catch {
       return fail("oauth-falhou");

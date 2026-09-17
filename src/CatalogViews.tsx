@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AppModal, SearchSelect, ViewFilters, matchesFilter, uniqueOpts,
   cursosFinOpts, cursosGoldOpts, horariosOpts, locaisOpts,
@@ -9,7 +9,10 @@ import { turmaFinOpts } from "./turmaModel";
 import { FichaFormando } from "./FormandoFicha";
 import { ConteudoAbrirModal, type ConteudoPreview } from "./ActionSurfaces";
 import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./SecretaryUX";
-import { apiPutDriveConfig, apiUploadDrive, driveOAuthStartUrl } from "./api";
+import {
+  apiMicrosoftDisconnect, apiMicrosoftLoginStatus, apiPutDriveConfig, apiPutMicrosoftConfig, apiUploadDrive,
+  driveOAuthStartUrl, type MicrosoftStatus,
+} from "./api";
 import { useCatalogList, useCatalogs } from "./CatalogsContext";
 import { useDrive } from "./DriveContext";
 import type { FormandoTurma } from "./ListsContext";
@@ -1571,6 +1574,152 @@ function DriveSettingsCard() {
   );
 }
 
+function MicrosoftSettingsCard() {
+  const [status, setStatus] = useState<MicrosoftStatus | null>(null);
+  const [estado, setEstado] = useState<"loading" | "ready" | "erro">("loading");
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [tenantId, setTenantId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const carregar = useCallback(() => {
+    apiMicrosoftLoginStatus()
+      .then(r => {
+        setStatus(r);
+        setClientId(r.clientId ?? "");
+        setTenantId(r.tenantId ?? "");
+        setEstado("ready");
+      })
+      .catch(() => setEstado("erro"));
+  }, []);
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const redirectUri = status?.redirectUri || `${window.location.origin}/api/v1/auth/microsoft/callback`;
+
+  async function guardar() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await apiPutMicrosoftConfig({
+        clientId: clientId.trim(),
+        clientSecret: clientSecret.trim() || undefined,
+        tenantId: tenantId.trim() || undefined,
+      });
+      setStatus(r);
+      setClientSecret("");
+      setMsg("Aplicação Microsoft gravada. O botão «Continuar com Microsoft» já está activo no login.");
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Não foi possível gravar a aplicação Microsoft.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function desligar() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await apiMicrosoftDisconnect();
+      setStatus(r);
+      setClientId("");
+      setClientSecret("");
+      setTenantId(r.tenantId ?? "");
+      setMsg("Login Microsoft desligado. Fica só o email e o Google.");
+    } catch {
+      setMsg("Não foi possível desligar o login Microsoft.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 md:col-span-2 xl:col-span-3 space-y-4">
+      <div className="flex flex-col md:flex-row md:items-start gap-4">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-slate-800">Entrar com Microsoft</p>
+          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+            Microsoft Entra ID (Azure AD). Quem tem conta da organização entra sem palavra-passe — mas só se o email já existir em
+            <span className="font-semibold text-slate-700"> Sistema → Gestão → Utilizadores</span>.
+          </p>
+          <p className="text-xs text-slate-500 mt-2">
+            {estado === "loading" ? "A ler o estado…" : estado === "erro" ? "Não foi possível ler o estado." : status?.hint}
+          </p>
+          {status?.fromEnv && (
+            <p className="text-xs font-semibold text-slate-600 mt-1">Definido por variáveis de ambiente no servidor.</p>
+          )}
+          {msg && <p className="text-xs font-semibold text-amber-700 mt-2">{msg}</p>}
+        </div>
+        <div className="flex gap-2 flex-shrink-0">
+          <span className={`px-3 py-2.5 text-sm font-semibold rounded-lg ${status?.configured ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-500"}`}>
+            {status?.configured ? "Activo" : "Inactivo"}
+          </span>
+          {status?.configured && !status.fromEnv && (
+            <button type="button" disabled={busy} onClick={() => void desligar()} className="px-4 py-2.5 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+              Desligar
+            </button>
+          )}
+        </div>
+      </div>
+
+      <ol className="text-xs text-slate-600 space-y-1 list-decimal pl-4">
+        <li>Portal Azure → <span className="font-semibold">Microsoft Entra ID</span> → Registos de aplicações → Novo registo.</li>
+        <li>Tipo de conta: «Apenas contas neste diretório» para deixar entrar só a organização da ENA.</li>
+        <li>Adicione o URI de redireccionamento abaixo como plataforma <span className="font-semibold">Web</span>.</li>
+        <li>Certificados e segredos → Novo segredo do cliente. Copie o valor (só aparece uma vez).</li>
+        <li>Cole aqui o Application (client) ID, o segredo e o Directory (tenant) ID, e grave.</li>
+      </ol>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Field label="URI de redireccionamento">
+          <input className={iCls} readOnly value={redirectUri} onFocus={e => e.currentTarget.select()} />
+        </Field>
+        <Field label="Directory (tenant) ID">
+          <input
+            className={iCls}
+            value={tenantId}
+            onChange={e => setTenantId(e.target.value)}
+            placeholder="common = qualquer organização"
+            autoComplete="off"
+            disabled={status?.fromEnv}
+          />
+        </Field>
+        <Field label="Application (client) ID">
+          <input
+            className={iCls}
+            value={clientId}
+            onChange={e => setClientId(e.target.value)}
+            placeholder="00000000-0000-0000-0000-000000000000"
+            autoComplete="off"
+            disabled={status?.fromEnv}
+          />
+        </Field>
+        <Field label="Client secret">
+          <input
+            className={iCls}
+            type="password"
+            value={clientSecret}
+            onChange={e => setClientSecret(e.target.value)}
+            placeholder={status?.hasSecret ? "•••• já gravado — deixe vazio para manter" : "Cole o valor do segredo do cliente"}
+            autoComplete="new-password"
+            disabled={status?.fromEnv}
+          />
+        </Field>
+      </div>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          disabled={busy || status?.fromEnv || clientId.trim().length < 12 || (!status?.hasSecret && clientSecret.trim().length < 12)}
+          onClick={() => void guardar()}
+          className="px-4 py-2.5 text-sm font-semibold rounded-lg bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white"
+        >
+          {busy ? "A gravar…" : status?.fromEnv ? "Definido no servidor" : "Gravar aplicação Microsoft"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ConfiguracoesView() {
   const { settings, saveSettings } = useCatalogs();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -1597,6 +1746,7 @@ export function ConfiguracoesView() {
         <PageHeader title="Configurações" sub={saved ? "Alterações guardadas na base." : "Parâmetros da entidade - a ENA gere por turmas, não por ação de formação."} />
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           <DriveSettingsCard />
+          <MicrosoftSettingsCard />
           {configCards.map(c => (
             <button key={c.id} type="button" onClick={() => setOpenId(c.id)}
               className={`text-left bg-white rounded-xl border shadow-sm p-5 hover:border-amber-300 hover:shadow-md transition-all ${openId === c.id ? "border-amber-400 ring-1 ring-amber-200" : "border-slate-200"}`}>

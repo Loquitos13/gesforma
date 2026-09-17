@@ -55,6 +55,11 @@ export const config = {
     ?? `${appOrigin}/api/v1/drive/oauth/callback`,
   googleLoginRedirectUri: process.env.GOOGLE_LOGIN_REDIRECT_URI
     ?? `${appOrigin}/api/v1/auth/google/callback`,
+  microsoftClientId: process.env.MICROSOFT_CLIENT_ID ?? "",
+  microsoftClientSecret: process.env.MICROSOFT_CLIENT_SECRET ?? "",
+  microsoftTenantId: process.env.MICROSOFT_TENANT_ID ?? "",
+  microsoftLoginRedirectUri: process.env.MICROSOFT_LOGIN_REDIRECT_URI
+    ?? `${appOrigin}/api/v1/auth/microsoft/callback`,
   googleDriveFolder: process.env.GOOGLE_DRIVE_FOLDER ?? "GesForma",
   googleDriveFolderId: process.env.GOOGLE_DRIVE_FOLDER_ID ?? "",
   googleDriveScope: (process.env.GOOGLE_DRIVE_SCOPE ?? "drive.file") as "drive.file" | "drive",

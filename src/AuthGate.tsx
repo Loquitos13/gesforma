@@ -1,5 +1,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { apiGoogleLoginStatus, apiLogin, apiLogout, apiMe, googleLoginStartUrl, type SessionUser } from "./api";
+import {
+  apiGoogleLoginStatus, apiLogin, apiLogout, apiMe, apiMicrosoftLoginStatus,
+  googleLoginStartUrl, microsoftLoginStartUrl, type SessionUser,
+} from "./api";
 
 type AuthCtx = {
   user: SessionUser;
@@ -22,6 +25,17 @@ function GoogleMark() {
       <path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.93-2.91l-3.88-3.01c-1.08.72-2.45 1.15-4.05 1.15-3.11 0-5.75-2.1-6.69-4.92H1.3v3.09A12 12 0 0 0 12 24Z" />
       <path fill="#FBBC05" d="M5.31 14.31A7.21 7.21 0 0 1 4.93 12c0-.8.14-1.58.38-2.31V6.6H1.3A12 12 0 0 0 0 12c0 1.94.46 3.78 1.3 5.4l4.01-3.09Z" />
       <path fill="#EA4335" d="M12 4.75c1.76 0 3.34.61 4.59 1.8l3.44-3.44C17.95 1.14 15.24 0 12 0 7.31 0 3.26 2.69 1.3 6.6l4.01 3.09C6.25 6.87 8.89 4.75 12 4.75Z" />
+    </svg>
+  );
+}
+
+function MicrosoftMark() {
+  return (
+    <svg viewBox="0 0 23 23" className="w-[18px] h-[18px]" aria-hidden>
+      <path fill="#F25022" d="M1 1h10v10H1z" />
+      <path fill="#7FBA00" d="M12 1h10v10H12z" />
+      <path fill="#00A4EF" d="M1 12h10v10H1z" />
+      <path fill="#FFB900" d="M12 12h10v10H12z" />
     </svg>
   );
 }
@@ -71,18 +85,21 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [offline, setOffline] = useState(false);
   const [googleReady, setGoogleReady] = useState(false);
   const [googleOn, setGoogleOn] = useState(false);
+  const [microsoftReady, setMicrosoftReady] = useState(false);
+  const [microsoftOn, setMicrosoftOn] = useState(false);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("login");
     if (!q) return;
     const msgs: Record<string, string> = {
       "sem-cliente": "O cliente Google ainda não está configurado. Entre com email e peça à administração para gravar o OAuth.",
-      "sem-conta": "Esta conta Google não tem acesso à secretaria. O email tem de existir como utilizador.",
+      "sem-cliente-microsoft": "A aplicação Microsoft ainda não está configurada. Entre com email e peça à administração para a registar em Configurações.",
+      "sem-conta": "Esta conta não tem acesso à secretaria. O email tem de existir como utilizador.",
       inactivo: "Esta conta está desactivada.",
-      "oauth-falhou": "Não foi possível entrar com o Google. Tente de novo.",
-      "pedido-invalido": "O pedido Google expirou. Tente de novo.",
+      "oauth-falhou": "Não foi possível concluir a autenticação. Tente de novo.",
+      "pedido-invalido": "O pedido expirou. Tente de novo.",
     };
-    setError(msgs[q] ?? "Não foi possível entrar com o Google.");
+    setError(msgs[q] ?? "Não foi possível entrar com a conta externa.");
     window.history.replaceState({}, "", window.location.pathname);
   }, []);
 
@@ -91,6 +108,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
       .then(r => setGoogleOn(r.configured))
       .catch(() => setGoogleOn(false))
       .finally(() => setGoogleReady(true));
+    apiMicrosoftLoginStatus()
+      .then(r => setMicrosoftOn(r.configured))
+      .catch(() => setMicrosoftOn(false))
+      .finally(() => setMicrosoftReady(true));
   }, []);
 
   useEffect(() => {
@@ -172,22 +193,42 @@ export function AuthGate({ children }: { children: ReactNode }) {
             </p>
           )}
           {error && !offline && <p className="text-xs font-medium text-red-600">{error}</p>}
-          <a
-            href={googleOn ? googleLoginStartUrl() : undefined}
-            aria-disabled={!googleOn}
-            onClick={e => {
-              if (!googleOn) {
-                e.preventDefault();
-                setError("O cliente Google ainda não está configurado. Entre com email ou grave o OAuth nas Configurações.");
-              }
-            }}
-            className={`flex items-center justify-center gap-3 w-full h-12 rounded-full text-white text-[15px] font-medium tracking-tight transition-opacity ${
-              googleOn || !googleReady ? "bg-[#0b1220] hover:bg-[#111827]" : "bg-[#0b1220]/40 cursor-not-allowed"
-            }`}
-          >
-            <GoogleMark />
-            Continuar com Google
-          </a>
+          <div className="space-y-2.5">
+            <a
+              href={googleOn ? googleLoginStartUrl() : undefined}
+              aria-disabled={!googleOn}
+              onClick={e => {
+                if (!googleOn) {
+                  e.preventDefault();
+                  setError("O cliente Google ainda não está configurado. Entre com email ou grave o OAuth nas Configurações.");
+                }
+              }}
+              className={`flex items-center justify-center gap-3 w-full h-12 rounded-full text-white text-[15px] font-medium tracking-tight transition-opacity ${
+                googleOn || !googleReady ? "bg-[#0b1220] hover:bg-[#111827]" : "bg-[#0b1220]/40 cursor-not-allowed"
+              }`}
+            >
+              <GoogleMark />
+              Continuar com Google
+            </a>
+            <a
+              href={microsoftOn ? microsoftLoginStartUrl() : undefined}
+              aria-disabled={!microsoftOn}
+              onClick={e => {
+                if (!microsoftOn) {
+                  e.preventDefault();
+                  setError("A aplicação Microsoft ainda não está configurada. Entre com email ou registe-a nas Configurações.");
+                }
+              }}
+              className={`flex items-center justify-center gap-3 w-full h-12 rounded-full border text-[15px] font-medium tracking-tight transition-colors ${
+                microsoftOn || !microsoftReady
+                  ? "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                  : "border-slate-200 bg-white/60 text-slate-400 cursor-not-allowed"
+              }`}
+            >
+              <MicrosoftMark />
+              Continuar com Microsoft
+            </a>
+          </div>
           <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             <span className="flex-1 h-px bg-slate-200" />
             ou

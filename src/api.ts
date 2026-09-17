@@ -308,6 +308,24 @@ export function googleLoginStartUrl() {
   return `${BASE}/v1/auth/google/start`;
 }
 
+export type MicrosoftStatus = {
+  configured: boolean;
+  redirectUri: string;
+  tenantId?: string;
+  clientId?: string;
+  hasSecret?: boolean;
+  fromEnv?: boolean;
+  hint?: string;
+};
+export const apiMicrosoftLoginStatus = () => api<MicrosoftStatus>("/v1/auth/microsoft");
+export const apiPutMicrosoftConfig = (body: { clientId: string; clientSecret?: string; tenantId?: string }) =>
+  api<MicrosoftStatus>("/v1/auth/microsoft/config", { method: "PUT", body: JSON.stringify(body) });
+export const apiMicrosoftDisconnect = () =>
+  api<MicrosoftStatus>("/v1/auth/microsoft/disconnect", { method: "POST" });
+export function microsoftLoginStartUrl() {
+  return `${BASE}/v1/auth/microsoft/start`;
+}
+
 export const apiEmailRules = () => api<{ rules: EmailRule[] }>("/v1/email/rules");
 export const apiCreateRule = (body: Record<string, unknown>) =>
   api<{ id: number }>("/v1/email/rules", { method: "POST", body: JSON.stringify(body) });

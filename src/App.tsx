@@ -41,6 +41,7 @@ import { useAuth } from "./AuthGate";
 import { useNotificacoes } from "./NotificacoesContext";
 import { presencasDaSessao, useCriteriosAvaliacao, useDtpResumo, useTurmaPedagogia, type PresencaRow } from "./PedagogiaContext";
 import { UsersView, roleLabel } from "./UsersView";
+import { ViewLoadingOverlay } from "./ViewLoading";
 import { EmailXmlEditor } from "./EmailTemplateEditor";
 import {
   type CtaAmbito,
@@ -5231,7 +5232,10 @@ function AppShell() {
             </div>
           </header>
 
-          <main className="flex-1 p-4 sm:p-5 overflow-auto">{renderView()}</main>
+          <main className="relative flex-1 p-4 sm:p-5 overflow-auto">
+            {renderView()}
+            <ViewLoadingOverlay />
+          </main>
 
           <footer className="bg-white border-t border-slate-100 px-5 py-2.5 text-center flex-shrink-0">
             <p className="text-xs text-slate-400">GesForma © 2026 · <span className="font-semibold text-slate-500">ENA</span> - Escola de Negócios e Administração</p>

@@ -1,3 +1,5 @@
+import { beginViewLoad, endViewLoad, isSilentViewPath } from "./viewLoadingBus";
+
 const BASE = (import.meta.env.VITE_API_URL as string | undefined) || "/api";
 
 export class ApiError extends Error {
@@ -103,11 +105,18 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   headers.set("Accept", "application/json");
   headers.set("X-Gesforma-Client", "web");
   if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  const res = await fetch(`${BASE}${path}`, { ...init, credentials: "include", headers });
-  if (res.status === 204) return undefined as T;
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, typeof data.error === "string" ? data.error : "pedido recusado");
-  return data as T;
+  const method = (init.method ?? "GET").toUpperCase();
+  const track = method === "GET" && !isSilentViewPath(path);
+  if (track) beginViewLoad();
+  try {
+    const res = await fetch(`${BASE}${path}`, { ...init, credentials: "include", headers });
+    if (res.status === 204) return undefined as T;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new ApiError(res.status, typeof data.error === "string" ? data.error : "pedido recusado");
+    return data as T;
+  } finally {
+    if (track) endViewLoad();
+  }
 }
 
 export type DriveStatus = {

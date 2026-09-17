@@ -42,6 +42,7 @@ import { useNotificacoes } from "./NotificacoesContext";
 import { presencasDaSessao, useCriteriosAvaliacao, useDtpResumo, useTurmaPedagogia, type PresencaRow } from "./PedagogiaContext";
 import { UsersView, roleLabel } from "./UsersView";
 import { ViewLoadingOverlay } from "./ViewLoading";
+import { armViewLoading, beginViewLoad, endViewLoad } from "./viewLoadingBus";
 import { EmailXmlEditor } from "./EmailTemplateEditor";
 import {
   type CtaAmbito,
@@ -5041,10 +5042,25 @@ function AppShell() {
   const notifRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
+  const firstView = useRef(true);
   const go = useCallback((v: View) => {
     setView(v); setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
+
+  useEffect(() => {
+    if (firstView.current) {
+      firstView.current = false;
+      return;
+    }
+    armViewLoading();
+    beginViewLoad();
+    const hold = window.setTimeout(() => endViewLoad(), 750);
+    return () => {
+      window.clearTimeout(hold);
+      endViewLoad();
+    };
+  }, [view]);
 
   const navigate = useCallback((target: View | NavTarget) => {
     const t: NavTarget = typeof target === "string" ? { view: target } : target;

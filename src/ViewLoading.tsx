@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { beginViewLoad, endViewLoad, subscribeViewLoading } from "./viewLoadingBus";
 
-const FADE_MS = 450;
-const MIN_VISIBLE_MS = 420;
+const FADE_MS = 500;
+const MIN_VISIBLE_MS = 700;
 
 function EnaLogoPng() {
   return (

@@ -185,7 +185,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
           <div>
             <EnaLogo className="h-9 w-auto" />
             <h1 className="text-xl font-bold text-slate-800 mt-4">Entrar na secretaria</h1>
-            <p className="text-sm text-slate-500 mt-1">Sessão com cookie httpOnly. A API recusa origens que não sejam a app.</p>
           </div>
           {offline && (
             <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">

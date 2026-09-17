@@ -222,7 +222,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
               className={`flex items-center justify-center gap-3 w-full h-12 rounded-full border text-[15px] font-medium tracking-tight transition-colors ${
                 microsoftOn || !microsoftReady
                   ? "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                  : "border-slate-200 bg-white/60 text-slate-400 cursor-not-allowed"
+                  : "border-slate-200 bg-slate-50 text-slate-400 opacity-50 cursor-not-allowed"
               }`}
             >
               <MicrosoftMark />

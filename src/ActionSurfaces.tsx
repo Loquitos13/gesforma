@@ -431,11 +431,10 @@ export function ExportTurmaModal({
 }
 
 export type NotifRow = {
-  id: number;
+  chave: string;
   tipo: string;
   titulo: string;
   texto: string;
-  tempo: string;
   lida: boolean;
   view: string;
   turmaId?: number;
@@ -444,15 +443,20 @@ export type NotifRow = {
 
 export function NotificacoesView({
   items,
+  estado = "ready",
   onOpen,
+  onMarcarLida,
+  onMarcarTodas,
 }: {
   items: NotifRow[];
+  estado?: "loading" | "ready" | "offline";
   onOpen: (n: NotifRow) => void;
+  onMarcarLida: (chave: string) => void;
+  onMarcarTodas: () => void;
 }) {
-  const [lista, setLista] = useState(items);
   const [filtro, setFiltro] = useState<"Todas" | "Não lidas" | "Bloqueio" | "Aviso" | "Info" | "Gold" | "Financiada">("Todas");
-  const naoLidas = lista.filter(n => !n.lida).length;
-  const f = sortNotifs(lista.filter(n => {
+  const naoLidas = items.filter(n => !n.lida).length;
+  const f = sortNotifs(items.filter(n => {
     if (filtro === "Não lidas") return !n.lida;
     if (filtro === "Bloqueio") return n.tipo === "error";
     if (filtro === "Aviso") return n.tipo === "warn";
@@ -468,11 +472,11 @@ export function NotificacoesView({
         <div>
           <h1 className="text-xl font-bold text-slate-800 leading-tight">Notificações</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            {naoLidas === 0 ? "Tudo lido." : `${naoLidas} por ler.`} Acompanhe vagas, DTP, pagamentos e novas inscrições.
+            {naoLidas === 0 ? "Tudo lido." : `${naoLidas} por ler.`} Vagas, DTP, pagamentos e documentos em falta, calculados a partir dos dados da secretaria.
           </p>
         </div>
         {naoLidas > 0 && (
-          <button type="button" onClick={() => setLista(xs => xs.map(n => ({ ...n, lida: true })))} className="text-sm font-semibold text-amber-600 hover:text-amber-700">
+          <button type="button" onClick={onMarcarTodas} className="text-sm font-semibold text-amber-600 hover:text-amber-700">
             Marcar todas como lidas
           </button>
         )}
@@ -486,12 +490,14 @@ export function NotificacoesView({
         ))}
       </div>
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden divide-y divide-slate-100">
-        {f.length === 0 && <EmptyHint text="Nenhuma notificação neste filtro." action="Ver todas" onAction={() => setFiltro("Todas")} />}
+        {estado === "loading" && <p className="px-4 py-10 text-center text-sm text-slate-400">A ler as notificações…</p>}
+        {estado === "offline" && <p className="px-4 py-10 text-center text-sm text-amber-700">Sem ligação à API: não há notificações para mostrar.</p>}
+        {estado === "ready" && f.length === 0 && <EmptyHint text="Nenhuma notificação neste filtro." action="Ver todas" onAction={() => setFiltro("Todas")} />}
         {f.map(n => (
           <button
-            key={n.id}
+            key={n.chave}
             type="button"
-            onClick={() => { setLista(xs => xs.map(x => x.id === n.id ? { ...x, lida: true } : x)); onOpen(n); }}
+            onClick={() => { onMarcarLida(n.chave); onOpen(n); }}
             className={`w-full flex gap-3 px-4 py-3.5 text-left hover:bg-slate-50 ${n.lida ? "opacity-70" : ""}`}
           >
             <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${n.tipo === "warn" ? "bg-amber-100 text-amber-600" : n.tipo === "error" ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"}`}>
@@ -506,7 +512,6 @@ export function NotificacoesView({
                 </div>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">{n.texto}</p>
-              <p className="text-xs text-slate-400 mt-1">há {n.tempo}</p>
             </div>
           </button>
         ))}

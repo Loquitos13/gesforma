@@ -164,6 +164,145 @@ export const apiPatchUser = (id: string, body: { name?: string; email?: string; 
 export const apiSetUserPassword = (id: string, password: string, revokeSessions = true) =>
   api<{ ok: boolean }>(`/v1/users/${id}/password`, { method: "POST", body: JSON.stringify({ password, revokeSessions }) });
 export const apiDeleteUser = (id: string) => api<{ ok: boolean }>(`/v1/users/${id}`, { method: "DELETE" });
+
+export type Regime = "gold" | "fin";
+export type DtpEstado = "ok" | "parcial" | "falta";
+
+export type DtpItem = {
+  id: string;
+  fase: "antes" | "durante" | "depois";
+  label: string;
+  fonte: string;
+  hint: string;
+  estado: DtpEstado;
+  detalhe: string;
+  origem: "auto" | "manual";
+  bloqueante?: boolean;
+};
+
+export type DtpSnapshot = {
+  items: DtpItem[];
+  pct: number;
+  ok: number;
+  parcial: number;
+  falta: number;
+  total: number;
+  facts: {
+    sessoes: { done: number; total: number };
+    planos: { done: number; total: number };
+    sumarios: { done: number; total: number };
+    presencas: { done: number; total: number };
+    formandos: number;
+    certificados: { done: number; total: number };
+  };
+};
+
+export type SessaoPedagogica = {
+  n: number;
+  plano: Record<string, unknown> | null;
+  sumario: Record<string, unknown> | null;
+  presencas: { id: number; nome: string; presente: boolean }[];
+};
+
+export type TurmaDocumento = {
+  grupoId: string;
+  label: string;
+  estado: DtpEstado;
+  detalhe: string;
+  payload: unknown;
+};
+
+export type TurmaCertificado = {
+  formandoId: number;
+  emitido: boolean;
+  nota: number | null;
+  elearning: number | null;
+};
+
+export type PedagogiaSnapshot = {
+  sessoes: SessaoPedagogica[];
+  documentos: TurmaDocumento[];
+  certificados: TurmaCertificado[];
+  dtp: DtpSnapshot;
+};
+
+export const apiPedagogia = (regime: Regime, turmaId: number) =>
+  api<PedagogiaSnapshot>(`/v1/turmas/${regime}/${turmaId}/pedagogia`);
+export const apiSaveSessao = (
+  regime: Regime,
+  turmaId: number,
+  n: number,
+  body: { plano?: unknown; sumario?: unknown; presencas?: unknown },
+) => api<{ sessao: SessaoPedagogica }>(`/v1/turmas/${regime}/${turmaId}/sessoes/${n}`, { method: "PUT", body: JSON.stringify(body) });
+export const apiSaveTurmaDocumento = (regime: Regime, turmaId: number, body: TurmaDocumento) =>
+  api<{ ok: boolean }>(`/v1/turmas/${regime}/${turmaId}/documentos`, { method: "PUT", body: JSON.stringify(body) });
+export const apiSaveDtpItem = (regime: Regime, turmaId: number, itemId: string, estado: DtpEstado | "auto") =>
+  api<{ dtp: DtpSnapshot }>(`/v1/turmas/${regime}/${turmaId}/dtp/${itemId}`, { method: "PUT", body: JSON.stringify({ estado }) });
+export const apiSaveCertificado = (
+  regime: Regime,
+  turmaId: number,
+  formandoId: number,
+  body: { emitido?: boolean; nota?: number | null; elearning?: number | null },
+) => api<{ ok: boolean }>(`/v1/turmas/${regime}/${turmaId}/certificados/${formandoId}`, { method: "PUT", body: JSON.stringify(body) });
+export const apiDtpResumo = (regime: Regime) => api<{ pct: Record<string, number> }>(`/v1/dtp/${regime}`);
+
+export type CursoFicha = { payload: Record<string, unknown>; criterios: { id: string; label: string }[] };
+export const apiCursoFicha = (regime: Regime, cursoId: number) =>
+  api<{ ficha: CursoFicha | null }>(`/v1/cursos/${regime}/${cursoId}/ficha`);
+export const apiCursoFichas = (regime: Regime) =>
+  api<{ fichas: { cursoId: number; payload: Record<string, unknown>; criterios: { id: string; label: string }[] }[] }>(`/v1/cursos/${regime}/fichas`);
+export const apiSaveCursoFicha = (regime: Regime, cursoId: number, body: Partial<CursoFicha>) =>
+  api<{ ok: boolean }>(`/v1/cursos/${regime}/${cursoId}/ficha`, { method: "PUT", body: JSON.stringify(body) });
+
+export type FormandoDoc = { id: string; ok: boolean; fileName: string; data: string };
+export type FormandoNota = { id: number; autor: string; texto: string; data: string };
+export const apiFormandoDossier = (regime: Regime, id: number) =>
+  api<{ docs: FormandoDoc[]; notas: FormandoNota[] }>(`/v1/formandos/${regime}/${id}/dossier`);
+export const apiSaveFormandoDocs = (regime: Regime, id: number, docs: FormandoDoc[]) =>
+  api<{ ok: boolean }>(`/v1/formandos/${regime}/${id}/docs`, { method: "PUT", body: JSON.stringify({ docs }) });
+export const apiAddFormandoNota = (regime: Regime, id: number, texto: string) =>
+  api<{ nota: FormandoNota }>(`/v1/formandos/${regime}/${id}/notas`, { method: "POST", body: JSON.stringify({ texto }) });
+
+export type FormadorDoc = { id: string; uploaded: boolean; fileName: string };
+export const apiFormadorDocs = (id: number) => api<{ docs: FormadorDoc[] }>(`/v1/formadores/${id}/docs`);
+export const apiSaveFormadorDocs = (id: number, docs: FormadorDoc[]) =>
+  api<{ ok: boolean }>(`/v1/formadores/${id}/docs`, { method: "PUT", body: JSON.stringify({ docs }) });
+
+export type InqueritoResposta = { id: number; turma: string; formando: string; respostas: Record<string, unknown>; data: string };
+export const apiInqueritoRespostas = (id: number) => api<{ respostas: InqueritoResposta[] }>(`/v1/inqueritos/${id}/respostas`);
+export const apiAddInqueritoResposta = (id: number, body: { turma?: string; formando?: string; respostas: Record<string, unknown> }) =>
+  api<{ ok: boolean }>(`/v1/inqueritos/${id}/respostas`, { method: "POST", body: JSON.stringify(body) });
+
+export type Dashboard = {
+  cards: {
+    preinscritos: number; formandosAtivos: number; formandosGold: number; formandosFin: number;
+    turmasAtivas: number; turmasTotal: number; cursosAtivos: number; cursosGold: number; cursosFin: number;
+  };
+  financeiro: {
+    receitaTotal: number; receitaMes: number; receitaMesAnterior: number; variacaoMes: number | null;
+    receitaMensal: { mes: string; v: number }[]; receita12m: number;
+    pendentes: { valor: number; n: number }; pagos: number; ticketMedio: number;
+    metodosPagamento: { metodo: string; valor: number; pct: number; color: string }[];
+  };
+  funil: { l: string; v: number }[];
+  conhecimento: { id: string; fonte: string; curto: string; detalhe: string; color: string; n: number; pct: number }[];
+  topCursos: { nome: string; inscritos: number; receita: number; taxa: number | null }[];
+};
+export const apiDashboard = () => api<Dashboard>("/v1/dashboard");
+
+export type Notificacao = {
+  chave: string;
+  tipo: "error" | "warn" | "info";
+  titulo: string;
+  texto: string;
+  view: string;
+  turmaId?: number;
+  tab?: string;
+  lida: boolean;
+};
+export const apiNotificacoes = () => api<{ notificacoes: Notificacao[]; naoLidas: number }>("/v1/notificacoes");
+export const apiMarcarLidas = (chaves: string[]) =>
+  api<{ ok: boolean }>("/v1/notificacoes/lidas", { method: "POST", body: JSON.stringify({ chaves }) });
 export const apiGoogleLoginStatus = () =>
   api<{ configured: boolean; redirectUri: string }>("/v1/auth/google");
 export function googleLoginStartUrl() {

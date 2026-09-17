@@ -156,20 +156,11 @@ export const criteriosCcp: CriterioAvaliacao[] = [
   { id: "aval", label: "Avaliação das aprendizagens" },
 ];
 
-const parametrosPorCurso: Record<string, CriterioAvaliacao[]> = {
-  "Formação de Formadores - CCP": criteriosCcp.map(c => ({ ...c })),
-  "CCP - Formação de Formadores para Empresas": criteriosCcp.map(c => ({ ...c })),
-};
-
+/** Sem ficha de curso gravada, o CCP usa a grelha padrão da simulação pedagógica. */
 export function getParametrosAvaliacao(curso?: string) {
   const nome = curso ?? "Formação de Formadores - CCP";
-  const saved = parametrosPorCurso[nome];
-  if (saved) return { curso: nome, criterios: saved.map(c => ({ ...c })) };
-  if (/ccp/i.test(nome)) return { curso: nome, criterios: criteriosCcp.map(c => ({ ...c })) };
+  if (/ccp|formadores/i.test(nome)) return { curso: nome, criterios: criteriosCcp.map(c => ({ ...c })) };
   return { curso: nome, criterios: [] };
-}
-export function setParametrosAvaliacao(curso: string, criterios: CriterioAvaliacao[]) {
-  parametrosPorCurso[curso] = criterios.map(c => ({ ...c }));
 }
 
 export function seedPipItems(nomes: string[], saved?: PipItem[]): PipItem[] {
@@ -403,48 +394,6 @@ function formadoresDaSessaoLabel(s: SessaoMeta) {
 
 export const emptyMomento: MomentoField = { conteudo: "", atividades: "", metodos: "", avaliacao: "", recursos: "", materiais: "" };
 
-export const defaultPlanos: Record<number, PlanoSessaoData> = {
-  1: {
-    objetivosGerais: "Enquadrar os formandos no contexto da formação profissional em Portugal e na Europa.",
-    objetivosEspecificos: "Identificar o quadro legal da formação profissional; Distinguir os diferentes tipos de formação; Conhecer o papel do formador.",
-    momentos: {
-      introducao: {
-        conteudo: "Apresentação da formação e do programa; Enquadramento legal da formação profissional",
-        atividades: "Apresentação dos participantes; Análise de documentos legais",
-        metodos: "Expositivo; Interrogativo",
-        avaliacao: "Observação direta; Questões orais",
-        recursos: "Quadro branco; Projetor",
-        materiais: "Manual do formando; Apresentação PowerPoint",
-      },
-      desenvolvimento: {
-        conteudo: "Sistema nacional de qualificações; Tipos e modalidades de formação; Perfil e competências do formador",
-        atividades: "Análise de casos práticos; Discussão em grupo; Exercícios de aplicação",
-        metodos: "Expositivo; Ativo; Demonstrativo",
-        avaliacao: "Trabalho em grupo; Auto-avaliação",
-        recursos: "Quadro branco; Computador; Projetor",
-        materiais: "Manual do formando; Fichas de trabalho",
-      },
-      conclusao: {
-        conteudo: "Síntese dos conteúdos abordados; Esclarecimento de dúvidas",
-        atividades: "Quiz de consolidação; Reflexão individual",
-        metodos: "Interrogativo; Ativo",
-        avaliacao: "Quiz; Questões orais",
-        recursos: "Quadro branco",
-        materiais: "Ficha de avaliação diagnóstica",
-      },
-    },
-  },
-  2: {
-    objetivosGerais: "Desenvolver competências de planeamento, organização e gestão de turmas de formação.",
-    objetivosEspecificos: "Elaborar um plano de sessão; Selecionar métodos e técnicas pedagógicas adequadas; Gerir o tempo em contexto formativo.",
-    momentos: {
-      introducao: { conteudo: "Revisão da sessão anterior; Introdução ao planeamento formativo", atividades: "Brainstorming; Perguntas de revisão", metodos: "Interrogativo", avaliacao: "Questões orais", recursos: "Quadro branco", materiais: "Manual do formando" },
-      desenvolvimento: { conteudo: "Métodos e técnicas pedagógicas; Elaboração do plano de sessão; Gestão do tempo", atividades: "Elaboração de plano de sessão em grupo; Role-play", metodos: "Ativo; Demonstrativo", avaliacao: "Trabalho em grupo; Observação", recursos: "Computador; Projetor", materiais: "Ficha de plano de sessão; Manual" },
-      conclusao: { conteudo: "Apresentação dos planos elaborados; Feedback", atividades: "Apresentação oral dos grupos; Debate", metodos: "Expositivo; Interrogativo", avaliacao: "Apresentação oral", recursos: "Quadro branco; Projetor", materiais: "Grelha de avaliação" },
-    },
-  },
-};
-
 const momentoLabels: Record<MomentoKey, string> = {
   introducao: "Introdução",
   desenvolvimento: "Desenvolvimento",
@@ -479,39 +428,6 @@ export function emptySumario(): SumarioSessaoData {
 export function sumarioPreenchido(s?: SumarioSessaoData) {
   return !!s && s.conteudos.trim().length > 0;
 }
-
-export const defaultSumarios: Record<number, SumarioSessaoData> = {
-  1: {
-    conteudos: "Enquadramento legal da formação profissional em Portugal; Sistema Nacional de Qualificações; papel e perfil do formador.",
-    atividades: "Apresentação dos participantes; análise de documentos legais; quiz de consolidação.",
-    observacoes: "Grupo participativo. Sem ocorrências.",
-    assinado: true,
-    assinadoEm: "07 Set 2026",
-  },
-  2: {
-    conteudos: "Métodos e técnicas pedagógicas; elaboração do plano de sessão; gestão do tempo em contexto formativo.",
-    atividades: "Elaboração de plano de sessão em grupo; role-play; apresentação oral e feedback.",
-    observacoes: "Dois formandos chegaram 15 minutos atrasados.",
-    assinado: true,
-    assinadoEm: "14 Set 2026",
-  },
-};
-
-export const defaultSumariosFin: Record<number, SumarioSessaoData> = {
-  1: {
-    conteudos: "Enquadramento da UFCD 3564; cadeia de sobrevivência; avaliação primária da vítima.",
-    atividades: "Demonstração de SVB; prática em pares com manequim.",
-    observacoes: "Sessão síncrona. Um formando entrou 10 minutos depois.",
-    assinado: true,
-    assinadoEm: "27 Ago 2026",
-  },
-  2: {
-    conteudos: "Hemorragias, queimaduras e posicionamento da vítima.",
-    atividades: "Simulação de primeiros socorros; correção de técnicas.",
-    observacoes: "",
-    assinado: false,
-  },
-};
 
 export function PlanoSessaoModal({ open, onClose, sessao, plano, onSave }: {
   open: boolean; onClose: () => void;

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { DtpPanel } from "./DtpView";
 import {
   FormandosGoldView, DatasGoldView, LocaisView, AreasTematicasView,
@@ -17,10 +17,10 @@ import {
 } from "./SecretaryUX";
 import {
   FileUploadModal, PresencasSessaoModal, FormadorProfileSlideOver, PlanoSessaoModal, SumarioSessaoModal,
-  InqueritosView, defaultPlanos, emptyPlano, defaultSumarios, defaultSumariosFin, emptySumario, sumarioPreenchido,
+  InqueritosView, emptyPlano, emptySumario, sumarioPreenchido,
   seedListaFromDetalhe, seedPipItems, seedSimItems,
   getParametrosAvaliacao,
-  type PlanoSessaoData, type SessaoMeta, type SumarioSessaoData, type ResolveDocTarget, type PipItem, type SimItem,
+  type CriterioAvaliacao, type SessaoMeta, type SumarioSessaoData, type ResolveDocTarget, type PipItem, type SimItem,
 } from "./TurmaExtras";
 import { ResolverDocumentoModal } from "./DocResolver";
 import { CursoFichaView } from "./CursoFichaView";
@@ -38,6 +38,8 @@ import { cronogramaToSessoes, formatSessaoLabel, isTurmaActiva, sessaoFormadores
 import { apiDriveFiles } from "./api";
 import { ListsProvider, nextListId, useLists, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
 import { useAuth } from "./AuthGate";
+import { useNotificacoes } from "./NotificacoesContext";
+import { presencasDaSessao, useCriteriosAvaliacao, useDtpResumo, useTurmaPedagogia, type PresencaRow } from "./PedagogiaContext";
 import { UsersView, roleLabel } from "./UsersView";
 import { EmailXmlEditor } from "./EmailTemplateEditor";
 import {
@@ -51,8 +53,9 @@ import {
 } from "./emailCta";
 import { formatXmlInner, linesToXml, parseEmailXml, replaceCta, xmlParagraphsRaw, xmlToLines } from "./emailXml";
 import {
-  apiCreateRule, apiDeleteRule, apiEmailJobs, apiEmailRules, apiEmailTemplates, apiPatchRule, apiPatchTemplate,
-  type EmailJob, type EmailJobStats,
+  apiCreateRule, apiDashboard, apiDeleteRule, apiEmailJobs, apiEmailRules, apiEmailTemplates, apiPatchRule, apiPatchTemplate,
+  emitAutomation,
+  type Dashboard, type EmailJob, type EmailJobStats, type TurmaCertificado, type TurmaDocumento,
 } from "./api";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -545,15 +548,6 @@ const conhecimentoEna = [
   { id: "outro", fonte: "Outdoor, feira ou outro", curto: "Outro", detalhe: "Eventos e material impresso", n: 325, pct: 5, color: "#94A3B8" },
 ];
 
-const notificacoesData: Array<{ id: number; tipo: string; titulo: string; texto: string; tempo: string; lida: boolean } & NavTarget> = [
-  { id: 1, tipo: "warn", titulo: "VNG-SM-07/09 sem vagas", texto: "A turma de V.N.Gaia (07/09) atingiu capacidade máxima - 10/10 formandos.", tempo: "2 min", lida: false, view: "gold-cockpit-turma", turmaId: 943, tab: "overview" },
-  { id: 2, tipo: "error", titulo: "67 pagamentos pendentes", texto: "€8 400 por confirmar. 12 com mais de 7 dias sem resposta.", tempo: "15 min", lida: false, view: "pagamentos" },
-  { id: 3, tipo: "warn", titulo: "DTP da turma UFCD 3564 · T1 a 54%", texto: "A turma não arranca: faltam habilitações, CV e comprovativo de emprego.", tempo: "1h", lida: false, view: "fin-cockpit-turma", turmaId: 218, tab: "dtp" },
-  { id: 6, tipo: "warn", titulo: "DTP incompleto - turma VNG-SM-07/09", texto: "PIP, simulações e sumários em falta. Não emitir CCP.", tempo: "45 min", lida: false, view: "gold-cockpit-turma", turmaId: 943, tab: "dtp" },
-  { id: 4, tipo: "info", titulo: "Nova pré-inscrição Gold", texto: "Inês Caetano inscreveu-se em CCP - turma VNG-SM-07/09.", tempo: "2h", lida: true, view: "gold-preinscricoes" },
-  { id: 5, tipo: "info", titulo: "Turma BRG-PL-15/09 com poucas inscrições", texto: "Apenas 2 de 16 vagas preenchidas. A 15/09 está próxima.", tempo: "3h", lida: true, view: "gold-turmas" },
-];
-
 // ─── UI Primitives ────────────────────────────────────────────────────────────
 
 type BadgeVariant = "green" | "gray" | "blue" | "amber" | "indigo" | "red" | "teal" | "orange" | "violet";
@@ -720,8 +714,9 @@ function MiniBarChart({ data, color }: { data: { mes: string; v: number }[]; col
   );
 }
 
-function ConhecimentoEnaCard({ onVerMais }: { onVerMais: () => void }) {
+function ConhecimentoEnaCard({ onVerMais, dados }: { onVerMais: () => void; dados: Dashboard["conhecimento"] }) {
   const [hover, setHover] = useState<string | null>(null);
+  const conhecimentoEna = dados;
   const total = conhecimentoEna.reduce((s, d) => s + d.n, 0);
   const active = conhecimentoEna.find(d => d.id === hover) ?? null;
   const r = 56;
@@ -734,12 +729,23 @@ function ConhecimentoEnaCard({ onVerMais }: { onVerMais: () => void }) {
     return { ...d, len, offset };
   });
 
+  if (!conhecimentoEna.length) {
+    return (
+      <Card className="p-4">
+        <p className="text-sm font-semibold text-slate-700">Como conheceram a ENA</p>
+        <p className="text-xs text-slate-400 mt-1">
+          Ainda sem respostas à pergunta de origem nas pré-inscrições. Assim que entrarem leads, o gráfico aparece aqui.
+        </p>
+      </Card>
+    );
+  }
+
   return (
     <Card className="p-4">
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
           <p className="text-sm font-semibold text-slate-700">Como conheceram a ENA</p>
-          <p className="text-xs text-slate-400 mt-0.5">Pergunta da ficha de inscrição · {total.toLocaleString("pt-PT")} formandos</p>
+          <p className="text-xs text-slate-400 mt-0.5">Pergunta da ficha de inscrição · {total.toLocaleString("pt-PT")} pré-inscrições</p>
         </div>
         <button type="button" onClick={onVerMais} className="text-xs font-semibold text-slate-400 hover:text-amber-600 whitespace-nowrap">
           Pré-inscrições →
@@ -952,22 +958,6 @@ type FormandoRecord = FormandoTurma;
 
 // ─── Cockpit da Turma ─────────────────────────────────────────────────────────
 
-const sessoesSample: SessaoMeta[] = [
-  { n: 1, data: "Sáb, 07 Set 2026", hora: "09h–13h", formador: "Isac Silva", formadores: ["Isac Silva"], estado: "Realizada", plano: true, modulo: "M1 · Aprendizagem e pedagogia", modulos: ["M1 · Aprendizagem e pedagogia"], duracao: "4h" },
-  { n: 2, data: "Sáb, 14 Set 2026", hora: "09h–13h", formador: "Isac Silva", formadores: ["Isac Silva"], estado: "Realizada", plano: true, modulo: "M2 · Comunicação e dinâmica de grupos", modulos: ["M2 · Comunicação e dinâmica de grupos"], duracao: "4h" },
-  { n: 3, data: "Sáb, 21 Set 2026", hora: "09h–13h", formador: "Isac Silva · Ivan Esteves", formadores: ["Isac Silva", "Ivan Esteves"], estado: "Agendada", plano: false, modulo: "M2 · Comunicação e dinâmica de grupos", modulos: ["M2 · Comunicação e dinâmica de grupos"], duracao: "4h" },
-  { n: 4, data: "Sáb, 28 Set 2026", hora: "09h–13h", formador: "Isac Silva", formadores: ["Isac Silva"], estado: "Agendada", plano: false, modulo: "M3 · Avaliação da formação", modulos: ["M3 · Avaliação da formação"], duracao: "4h" },
-  { n: 5, data: "Sáb, 05 Out 2026", hora: "09h–13h", formador: "Isac Silva", formadores: ["Isac Silva"], estado: "Agendada", plano: false, modulo: "M3 · Avaliação da formação", modulos: ["M3 · Avaliação da formação"], duracao: "4h" },
-];
-
-const finSessoesSample: SessaoMeta[] = [
-  { n: 1, data: "Qua, 27 Ago 2026", hora: "19h–22h", formador: "Vânia Fernandes", formadores: ["Vânia Fernandes"], estado: "Realizada", plano: true, modulo: "UFCD 3564 · Avaliação primária e SVB", modulos: ["UFCD 3564 · Avaliação primária e SVB"], duracao: "5h" },
-  { n: 2, data: "Qua, 03 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", formadores: ["Vânia Fernandes"], estado: "Realizada", plano: true, modulo: "UFCD 3564 · Trauma e hemorragias", modulos: ["UFCD 3564 · Trauma e hemorragias"], duracao: "5h" },
-  { n: 3, data: "Qua, 10 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes · Cátia Pinheiro", formadores: ["Vânia Fernandes", "Cátia Pinheiro"], estado: "Agendada", plano: false, modulo: "UFCD 3564 · Queimaduras e intoxicações", modulos: ["UFCD 3564 · Queimaduras e intoxicações"], duracao: "5h" },
-  { n: 4, data: "Qua, 17 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", formadores: ["Vânia Fernandes"], estado: "Agendada", plano: false, modulo: "UFCD 3564 · Emergências médicas", modulos: ["UFCD 3564 · Emergências médicas"], duracao: "5h" },
-  { n: 5, data: "Qua, 24 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", formadores: ["Vânia Fernandes"], estado: "Agendada", plano: false, modulo: "UFCD 3564 · Simulação e avaliação", modulos: ["UFCD 3564 · Simulação e avaliação"], duracao: "5h" },
-];
-
 function ModulosCell({ sessao }: { sessao: { modulo?: string; modulos?: string[] } }) {
   const list = sessaoModulos(sessao);
   if (!list.length) return <span className="text-xs text-slate-400">-</span>;
@@ -1095,17 +1085,6 @@ function SessoesTurmaTab({
   );
 }
 
-const certificadosSample = [
-  { id: 1, nome: "Tiago Bento", presencas: 100, elearning: 90, nota: 17, certificado: true },
-  { id: 2, nome: "Luciana D'Avila", presencas: 80, elearning: 100, nota: 15, certificado: false },
-  { id: 3, nome: "Ciara Gonçalves", presencas: 60, elearning: 70, nota: 10, certificado: false },
-  { id: 4, nome: "Liliana Real", presencas: 100, elearning: 95, nota: 19, certificado: true },
-  { id: 5, nome: "Angélica Ribeiro", presencas: 80, elearning: 85, nota: 14, certificado: false },
-  { id: 6, nome: "Maria Mota", presencas: 100, elearning: 80, nota: 16, certificado: false },
-  { id: 7, nome: "Elisabete Soares", presencas: 40, elearning: 50, nota: 8, certificado: false },
-  { id: 8, nome: "Andreia Arantes", presencas: 100, elearning: 100, nota: 18, certificado: true },
-];
-
 type DocEstado = "ok" | "parcial" | "falta";
 type DocItem = { label: string; detalhe: string; estado: DocEstado; bloqueante?: boolean; payload?: unknown };
 const docsTurmaGrupos: { id: string; label: string; color: string; icon: React.ReactNode; items: DocItem[] }[] = [
@@ -1192,34 +1171,32 @@ function cloneGrupos(src: typeof docsTurmaGrupos) {
   return src.map(g => ({ ...g, items: g.items.map(i => ({ ...i })) }));
 }
 
-function applyDocSave(
-  grupos: typeof docsTurmaGrupos,
-  ref: { grupoId: string; label: string },
-  next: { estado: DocEstado; detalhe: string; payload?: unknown },
-) {
-  return grupos.map(g => g.id !== ref.grupoId ? g : {
-    ...g,
-    items: g.items.map(d => d.label !== ref.label ? d : {
-      ...d,
-      estado: next.estado,
-      detalhe: next.detalhe,
-      payload: next.payload !== undefined ? next.payload : d.payload,
-    }),
-  });
-}
-
-function DocumentosTurmaTab({ regime = "gold", curso }: { regime?: "gold" | "fin"; curso?: string }) {
+function DocumentosTurmaTab({ regime = "gold", curso, guardados, onSaveDoc, criterios }: {
+  regime?: "gold" | "fin";
+  curso?: string;
+  guardados: TurmaDocumento[];
+  onSaveDoc: (doc: TurmaDocumento) => void;
+  criterios?: CriterioAvaliacao[];
+}) {
   const estadoCfg: Record<DocEstado, { dot: string; chip: string; label: string }> = {
     ok: { dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700 border-emerald-200", label: "No dossiê" },
     parcial: { dot: "bg-amber-400", chip: "bg-amber-50 text-amber-700 border-amber-200", label: "Parcial" },
     falta: { dot: "bg-red-400", chip: "bg-red-50 text-red-600 border-red-200", label: "Em falta" },
   };
   const seed = regime === "fin" ? docsFinGrupos : docsTurmaGrupos;
-  const [grupos, setGrupos] = useState(() => cloneGrupos(seed));
   const [resolver, setResolver] = useState<{ grupoId: string; label: string } | null>(null);
   const resolverRef = useRef(resolver);
   resolverRef.current = resolver;
-  useEffect(() => { setGrupos(cloneGrupos(seed)); setResolver(null); }, [regime]);
+  useEffect(() => { setResolver(null); }, [regime]);
+
+  const grupos = useMemo(() => cloneGrupos(seed).map(g => ({
+    ...g,
+    items: g.items.map(item => {
+      const saved = guardados.find(d => d.grupoId === g.id && d.label === item.label);
+      if (!saved) return { ...item, estado: "falta" as DocEstado, detalhe: item.detalhe, payload: undefined };
+      return { ...item, estado: saved.estado as DocEstado, detalhe: saved.detalhe || item.detalhe, payload: saved.payload ?? undefined };
+    }),
+  })), [seed, guardados]);
 
   const { formandosFin, formandosTurmas } = useLists();
   const nomesFormandos = regime === "fin"
@@ -1248,12 +1225,12 @@ function DocumentosTurmaTab({ regime = "gold", curso }: { regime?: "gold" | "fin
       };
     }
     if (isSim) {
-      const params = getParametrosAvaliacao(cursoNome);
+      const lista = criterios?.length ? criterios : getParametrosAvaliacao(cursoNome).criterios;
       return {
         label: doc.label, detalhe: doc.detalhe, estado: doc.estado, kind: "simulacao",
-        simItems: seedSimItems(nomesFormandos, params.criterios, doc.payload as SimItem[] | undefined),
-        criterios: params.criterios,
-        curso: params.curso,
+        simItems: seedSimItems(nomesFormandos, lista, doc.payload as SimItem[] | undefined),
+        criterios: lista,
+        curso: cursoNome ?? getParametrosAvaliacao(cursoNome).curso,
       };
     }
     const lista = /\d+\s*\/\s*\d+/.test(doc.detalhe) || grupoId === "formandos" || grupoId === "sessoes";
@@ -1312,38 +1289,59 @@ function DocumentosTurmaTab({ regime = "gold", curso }: { regime?: "gold" | "fin
         onSave={next => {
           const ref = resolverRef.current;
           if (!ref) return;
-          setGrupos(prev => applyDocSave(prev, ref, next));
+          onSaveDoc({
+            grupoId: ref.grupoId,
+            label: ref.label,
+            estado: next.estado,
+            detalhe: next.detalhe,
+            payload: next.payload ?? null,
+          });
         }}
       />
     </div>
   );
 }
 
-function CertificadosTurmaTab({ formandos, issued, onUpload, onView, curso, turma }: {
+function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegistadas, onUpload, onView, onNota, curso, turma }: {
   formandos: { id: number; nome: string }[];
-  issued?: Record<number, boolean>;
+  certificados: Record<number, TurmaCertificado>;
+  presencas: Record<number, PresencaRow[]>;
+  sessoesRegistadas: number;
   onUpload?: (id: number) => void;
   onView?: (c: CertificadoPreview) => void;
+  onNota?: (id: number, patch: { nota?: number | null; elearning?: number | null }) => void;
   curso?: string;
   turma?: string;
 }) {
-  const rows = (formandos.length ? formandos : certificadosSample.map(c => ({ id: c.id, nome: c.nome }))).map((f, i) => {
-    const sample = certificadosSample[i % certificadosSample.length];
+  const folhas = Object.values(presencas);
+  const rows = formandos.map(f => {
+    const marcadas = folhas.filter(rows => rows.some(r => r.id === f.id));
+    const presentes = marcadas.filter(rows => rows.find(r => r.id === f.id)?.presente).length;
+    const cert = certificados[f.id];
     return {
       id: f.id,
       nome: f.nome,
-      presencas: sample.presencas,
-      elearning: sample.elearning,
-      nota: sample.nota,
-      certificado: issued?.[f.id] ?? sample.certificado,
+      presencas: marcadas.length ? Math.round((presentes / marcadas.length) * 100) : null,
+      folhas: marcadas.length,
+      elearning: cert?.elearning ?? null,
+      nota: cert?.nota ?? null,
+      certificado: cert?.emitido ?? false,
     };
   });
+  const elegivelRow = (c: typeof rows[number]) => c.presencas != null && c.presencas >= 75 && c.nota != null && c.nota >= 10;
+  if (formandos.length === 0) {
+    return (
+      <Card>
+        <EmptyHint text="Sem formandos inscritos nesta turma, não há certificados a emitir." />
+      </Card>
+    );
+  }
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
         {[
-          { l: "Elegíveis", v: rows.filter(c => c.presencas >= 75 && c.nota >= 10).length, color: "text-emerald-600", bg: "bg-emerald-50" },
-          { l: "Não elegíveis", v: rows.filter(c => c.presencas < 75 || c.nota < 10).length, color: "text-red-600", bg: "bg-red-50" },
+          { l: "Elegíveis", v: rows.filter(elegivelRow).length, color: "text-emerald-600", bg: "bg-emerald-50" },
+          { l: "Sem dados suficientes", v: rows.filter(c => c.presencas == null || c.nota == null).length, color: "text-amber-600", bg: "bg-amber-50" },
           { l: "Certificados emitidos", v: rows.filter(c => c.certificado).length, color: "text-blue-600", bg: "bg-blue-50" },
         ].map(s => (
           <Card key={s.l} className={`p-4 ${s.bg}`}>
@@ -1355,35 +1353,56 @@ function CertificadosTurmaTab({ formandos, issued, onUpload, onView, curso, turm
       <Card>
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
           <p className="text-sm font-semibold text-slate-700">Elegibilidade por formando</p>
-          <p className="text-xs text-slate-400 mt-0.5">Mínimo: 75% presenças e nota ≥ 10</p>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Mínimo: 75% presenças e nota ≥ 10. As presenças vêm das {sessoesRegistadas} folhas já registadas nas sessões.
+          </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr><Th>Formando</Th><Th className="text-center">Presenças</Th><Th className="text-center">E-Learning</Th><Th className="text-center">Nota Final</Th><Th className="text-center">Elegibilidade</Th><Th className="text-center">Certificado</Th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map(c => {
-                const elegivel = c.presencas >= 75 && c.nota >= 10;
+                const elegivel = elegivelRow(c);
                 return (
                   <tr key={c.id} className="hover:bg-slate-50">
                     <Td className="text-xs font-medium text-slate-800">{c.nome}</Td>
                     <Td className="text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <div className="w-16 bg-slate-200 rounded-full h-1.5"><div className="h-1.5 rounded-full" style={{ width: `${c.presencas}%`, backgroundColor: c.presencas >= 75 ? "#10B981" : "#EF4444" }} /></div>
-                        <span className={`text-xs font-bold ${c.presencas >= 75 ? "text-emerald-600" : "text-red-600"}`}>{c.presencas}%</span>
-                      </div>
+                      {c.presencas == null ? (
+                        <span className="text-xs text-slate-400">sem folhas</span>
+                      ) : (
+                        <div className="flex items-center justify-center gap-1.5">
+                          <div className="w-16 bg-slate-200 rounded-full h-1.5"><div className="h-1.5 rounded-full" style={{ width: `${c.presencas}%`, backgroundColor: c.presencas >= 75 ? "#10B981" : "#EF4444" }} /></div>
+                          <span className={`text-xs font-bold ${c.presencas >= 75 ? "text-emerald-600" : "text-red-600"}`}>{c.presencas}%</span>
+                        </div>
+                      )}
                     </Td>
                     <Td className="text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <div className="w-16 bg-slate-200 rounded-full h-1.5"><div className="h-1.5 rounded-full bg-blue-500" style={{ width: `${c.elearning}%` }} /></div>
-                        <span className="text-xs font-bold text-blue-600">{c.elearning}%</span>
-                      </div>
+                      <input
+                        type="number" min={0} max={100} value={c.elearning ?? ""}
+                        onChange={e => onNota?.(c.id, { elearning: e.target.value === "" ? null : Math.max(0, Math.min(100, Number(e.target.value))) })}
+                        placeholder="—"
+                        aria-label={`E-learning de ${c.nome}`}
+                        className="w-16 px-2 py-1 text-xs text-center border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      />
                     </Td>
-                    <Td className="text-center"><span className={`text-sm font-bold ${c.nota >= 10 ? "text-emerald-600" : "text-red-600"}`}>{c.nota}/20</span></Td>
-                    <Td className="text-center"><span className={`text-xs font-bold px-2.5 py-1 rounded-full ${elegivel ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>{elegivel ? "Elegível" : "Não elegível"}</span></Td>
+                    <Td className="text-center">
+                      <input
+                        type="number" min={0} max={20} step="0.1" value={c.nota ?? ""}
+                        onChange={e => onNota?.(c.id, { nota: e.target.value === "" ? null : Math.max(0, Math.min(20, Number(e.target.value))) })}
+                        placeholder="—"
+                        aria-label={`Nota final de ${c.nome}`}
+                        className={`w-16 px-2 py-1 text-xs text-center border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 ${c.nota != null && c.nota < 10 ? "border-red-300 text-red-600" : "border-slate-200"}`}
+                      />
+                    </Td>
+                    <Td className="text-center">
+                      {c.presencas == null || c.nota == null
+                        ? <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500">Por avaliar</span>
+                        : <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${elegivel ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>{elegivel ? "Elegível" : "Não elegível"}</span>}
+                    </Td>
                     <Td className="text-center">
                       {c.certificado
-                        ? <div className="flex items-center justify-center gap-1"><span className="text-xs text-emerald-600 font-semibold">Emitido</span><ActBtn icon={I.eye} label="Ver certificado emitido" color="gray" onClick={() => onView?.({ nome: c.nome, nota: c.nota, curso, turma, data: "2026-09-08" })} /></div>
-                        : <button onClick={() => onUpload?.(c.id)} disabled={!elegivel} className="text-xs font-semibold px-2.5 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed">Upload</button>}
+                        ? <div className="flex items-center justify-center gap-1"><span className="text-xs text-emerald-600 font-semibold">Emitido</span><ActBtn icon={I.eye} label="Ver certificado emitido" color="gray" onClick={() => onView?.({ nome: c.nome, nota: c.nota ?? 0, curso, turma, data: new Date().toISOString().slice(0, 10) })} /></div>
+                        : <button onClick={() => onUpload?.(c.id)} disabled={!elegivel} title={elegivel ? "Carregar certificado" : "Precisa de 75% de presenças e nota ≥ 10"} className="text-xs font-semibold px-2.5 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed">Upload</button>}
                     </Td>
                   </tr>
                 );
@@ -1404,36 +1423,24 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const membros = formandosTurmas.filter(f => f.turmaId === turma.id);
   const pagos = membros.filter(f => f.pago).length;
   const vagasLivres = turma.vagas - turma.totalAlunos;
-  const sessoesTurma = turma.cronograma.length ? cronogramaToSessoes(turma.cronograma) : sessoesSample;
+  const sessoesTurma = cronogramaToSessoes(turma.cronograma);
   const [fichaOpen, setFichaOpen] = useState<FormandoRecord | null>(null);
   const [apagarFormando, setApagarFormando] = useState<FormandoRecord | null>(null);
   const [transferirFormando, setTransferirFormando] = useState<FormandoRecord | null>(null);
   const [tab, setTab] = useState<CockpitTab>(initialTab);
+  const { user } = useAuth();
+  const ped = useTurmaPedagogia("gold", turma.id);
+  const criterios = useCriteriosAvaliacao("gold", turma.curso);
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
-  const [planos, setPlanos] = useState<Record<number, PlanoSessaoData>>(defaultPlanos);
   const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
-  const [sumarios, setSumarios] = useState<Record<number, SumarioSessaoData>>(defaultSumarios);
   const [presencasSession, setPresencasSession] = useState<SessaoMeta | null>(null);
-  const [presencasBySessao, setPresencasBySessao] = useState<Record<number, { id: number; nome: string; presente: boolean }[]>>({});
   const [uploadCert, setUploadCert] = useState<number | null>(null);
-  const [certsIssued, setCertsIssued] = useState<Record<number, boolean>>({});
   const [verCert, setVerCert] = useState<CertificadoPreview | null>(null);
   const [exportTurma, setExportTurma] = useState<ExportTurmaInfo | null>(null);
   const [formadorOpen, setFormadorOpen] = useState<string | null>(null);
   const [novaSessao, setNovaSessao] = useState(false);
   const [formadoresSessao, setFormadoresSessao] = useState<string[]>(["Isac Silva"]);
-  useEffect(() => {
-    apiDriveFiles({ kind: "certificado", regime: "gold", turma: turma.nome }).then(r => {
-      setCertsIssued(prev => {
-        const next = { ...prev };
-        for (const f of r.files) {
-          const id = Number(f.formando);
-          if (Number.isFinite(id)) next[id] = true;
-        }
-        return next;
-      });
-    }).catch(() => undefined);
-  }, [turma.nome]);
+  const sumarios = ped.sumarios;
   const formadorOptsSessao = useFormadorOptions(formadoresSessao);
   const [moduloSessao, setModuloSessao] = useState<string[]>([]);
   const [dataSessao, setDataSessao] = useState("");
@@ -1500,7 +1507,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
 
         {(() => {
           const porPagar = membros.filter(f => !f.pago).length;
-          const dtp = dtpPctGold(turma.id);
+          const dtp = ped.dtp.pct;
           const semSumario = sessoesTurma.filter(s => !sumarioPreenchido(sumarios[s.n])).length;
           const next: NextAction[] = [];
           if (dtp < 70) next.push({ tone: "error", title: `DTP a ${dtp}%`, detail: "O dossiê bloqueia o fecho da turma.", onClick: () => setTab("dtp") });
@@ -1510,7 +1517,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           return <NextActions accent="gold" actions={next.slice(0, 3)} />;
         })()}
 
-        <TurmaTabBar tab={tab} onChange={setTab} accent="gold" dtpPct={dtpPctGold(turma.id)} />
+        <TurmaTabBar tab={tab} onChange={setTab} accent="gold" dtpPct={ped.dtp.pct} />
 
         {!activa && (
           <TurmaInactivaBanner nome={turma.nome} onActivate={() => toggleGold(turma.id, true)} />
@@ -1530,7 +1537,13 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         )}
 
         {tab === "dtp" && (
-          <DtpPanel regime="gold" turma={{ codigo: turma.nome, id: turma.id, titulo: turma.curso, sub: `${turma.local} · ${turma.horario}` }} />
+          <DtpPanel
+            regime="gold"
+            turma={{ codigo: turma.nome, id: turma.id, titulo: turma.curso, sub: `${turma.local} · ${turma.horario}` }}
+            dtp={ped.dtp}
+            estado={ped.estado}
+            onToggle={(item, proximo) => void ped.guardarDtp(item.id, proximo)}
+          />
         )}
         {tab === "sessoes" && (
           <SessoesTurmaTab
@@ -1545,8 +1558,28 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             onOpenFormador={setFormadorOpen}
           />
         )}
-        {tab === "documentos" && <DocumentosTurmaTab regime="gold" curso={turma.curso} />}
-        {tab === "certificados" && <CertificadosTurmaTab formandos={nomesCockpit} issued={certsIssued} onUpload={id => setUploadCert(id)} onView={setVerCert} curso={turma.curso} turma={turma.nome} />}
+        {tab === "documentos" && (
+          <DocumentosTurmaTab
+            regime="gold"
+            curso={turma.curso}
+            criterios={criterios}
+            guardados={ped.documentos}
+            onSaveDoc={doc => void ped.guardarDocumento(doc)}
+          />
+        )}
+        {tab === "certificados" && (
+          <CertificadosTurmaTab
+            formandos={nomesCockpit}
+            certificados={ped.certificados}
+            presencas={ped.presencas}
+            sessoesRegistadas={ped.dtp.facts.presencas.done}
+            onUpload={id => setUploadCert(id)}
+            onView={setVerCert}
+            onNota={(id, patch) => void ped.guardarCertificado(id, patch)}
+            curso={turma.curso}
+            turma={turma.nome}
+          />
+        )}
 
         {tab === "overview" && <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1707,26 +1740,36 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         open={!!planoSessao}
         onClose={() => setPlanoSessao(null)}
         sessao={planoSessao ?? undefined}
-        plano={planoSessao ? (planos[planoSessao.n] ?? emptyPlano()) : emptyPlano()}
-        onSave={data => { if (planoSessao) setPlanos(prev => ({ ...prev, [planoSessao.n]: data })); }}
+        plano={planoSessao ? ped.plano(planoSessao.n) : emptyPlano()}
+        onSave={data => { if (planoSessao) void ped.guardarPlano(planoSessao.n, data); }}
       />
       <SumarioSessaoModal
         open={!!sumarioSessao}
         onClose={() => setSumarioSessao(null)}
         sessao={sumarioSessao ?? undefined}
-        sumario={sumarioSessao ? (sumarios[sumarioSessao.n] ?? emptySumario()) : emptySumario()}
-        onSave={data => { if (sumarioSessao) setSumarios(prev => ({ ...prev, [sumarioSessao.n]: data })); }}
+        sumario={sumarioSessao ? ped.sumario(sumarioSessao.n) : emptySumario()}
+        onSave={data => {
+          if (!sumarioSessao) return;
+          void ped.guardarSumario(sumarioSessao.n, data);
+          if (data.assinado) {
+            void emitAutomation(
+              "sessao.summary_signed",
+              { email: user.email, nome: turma.formador || user.name, curso: turma.curso, turma: turma.nome },
+              `sumario:gold:${turma.id}:${sumarioSessao.n}`,
+            );
+          }
+        }}
       />
       <PresencasSessaoModal
         open={!!presencasSession}
         onClose={() => setPresencasSession(null)}
         sessao={presencasSession ?? undefined}
-        formandos={nomesCockpit}
-        onSave={rows => { if (presencasSession) setPresencasBySessao(p => ({ ...p, [presencasSession.n]: rows })); }}
+        formandos={presencasSession ? presencasDaSessao(nomesCockpit, ped.presencas[presencasSession.n]) : nomesCockpit}
+        onSave={rows => { if (presencasSession) void ped.guardarPresencas(presencasSession.n, rows); }}
       />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado"
         context={{ kind: "certificado", regime: "gold", turma: turma.nome, formando: uploadCert != null ? String(uploadCert) : undefined, label: "Certificado" }}
-        onConfirm={() => { if (uploadCert != null) setCertsIssued(p => ({ ...p, [uploadCert]: true })); }} />
+        onConfirm={() => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true }); }} />
       <CertificadoVerModal open={!!verCert} onClose={() => setVerCert(null)} cert={verCert} accent="gold" />
       <ExportTurmaModal open={!!exportTurma} onClose={() => setExportTurma(null)} turma={exportTurma} />
       <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? ""} />
@@ -1833,23 +1876,15 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   );
 }
 
-function dtpPctGold(id: number) {
-  const map: Record<number, number> = { 947: 72, 946: 61, 945: 40, 944: 55, 943: 48, 940: 68, 939: 52, 938: 58, 937: 91, 936: 88 };
-  return map[id] ?? 50;
-}
-function dtpPctFin(id: number) {
-  const map: Record<number, number> = { 222: 38, 220: 62, 219: 71, 218: 54, 217: 66 };
-  return map[id] ?? 50;
-}
-
 function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (id: number) => void }) {
   const { gold, fin } = useTurmas();
   const isGold = regime === "gold";
+  const resumo = useDtpResumo(regime);
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtroLocal, setFiltroLocal] = useState("");
   const all = isGold
-    ? gold.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, local: t.local, extra: `${t.local} · ${t.horario}`, estado: t.estado, pct: dtpPctGold(t.id) }))
-    : fin.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, local: t.local, extra: `UFCD ${t.ufcdCod} · ${t.formador}`, estado: isTurmaActiva(t) ? t.estado : "Inativa", pct: dtpPctFin(t.id) }));
+    ? gold.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, local: t.local, extra: `${t.local} · ${t.horario}`, estado: t.estado, pct: resumo.pct[t.id] ?? 0 }))
+    : fin.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, local: t.local, extra: `UFCD ${t.ufcdCod} · ${t.formador}`, estado: isTurmaActiva(t) ? t.estado : "Inativa", pct: resumo.pct[t.id] ?? 0 }));
   const rows = all.filter(t => matchesFilter(t.curso, filtroCurso) && (!isGold || matchesFilter(t.local, filtroLocal)));
   return (
     <div className="space-y-4">
@@ -1870,6 +1905,12 @@ function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (
           <table className="w-full text-sm">
             <thead><tr><Th>Código interno</Th><Th>Curso</Th><Th>Detalhe</Th><Th>Estado</Th><Th>DTP</Th><Th>Ações</Th></tr></thead>
             <tbody className="divide-y divide-slate-100">
+              {resumo.estado === "loading" && (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-xs text-slate-400">A calcular a completude dos dossiês…</td></tr>
+              )}
+              {resumo.estado === "offline" && (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-xs text-amber-700">Sem ligação à API: as percentagens do DTP não estão disponíveis.</td></tr>
+              )}
               {rows.map(t => (
                 <tr key={t.id} className="hover:bg-slate-50">
                   <Td>
@@ -1906,29 +1947,18 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const { formandosFin, addFormandoFin, patchFormandoFin, removeFormandoFin } = useLists();
   const turma = fin.find(t => t.id === turmaId) ?? fin.find(t => t.ufcdCod === "3564") ?? fin[0];
   const activa = isTurmaActiva(turma);
-  const sessoesTurma = turma.cronograma.length ? cronogramaToSessoes(turma.cronograma) : finSessoesSample;
+  const sessoesTurma = cronogramaToSessoes(turma.cronograma);
   const [tab, setTab] = useState<CockpitTab>(initialTab);
   const [formadorOpen, setFormadorOpen] = useState<string | null>(null);
   const [uploadCert, setUploadCert] = useState<number | null>(null);
-  const [certsIssued, setCertsIssued] = useState<Record<number, boolean>>({});
   const [verCert, setVerCert] = useState<CertificadoPreview | null>(null);
   const [exportTurma, setExportTurma] = useState<ExportTurmaInfo | null>(null);
-  useEffect(() => {
-    apiDriveFiles({ kind: "certificado", regime: "fin", turma: turma.nome }).then(r => {
-      setCertsIssued(prev => {
-        const next = { ...prev };
-        for (const f of r.files) {
-          const id = Number(f.formando);
-          if (Number.isFinite(id)) next[id] = true;
-        }
-        return next;
-      });
-    }).catch(() => undefined);
-  }, [turma.nome]);
+  const { user } = useAuth();
+  const ped = useTurmaPedagogia("fin", turma.id);
+  const criterios = useCriteriosAvaliacao("fin", turma.curso);
+  const sumarios = ped.sumarios;
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
-  const [planos, setPlanos] = useState<Record<number, PlanoSessaoData>>(defaultPlanos);
   const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
-  const [sumarios, setSumarios] = useState<Record<number, SumarioSessaoData>>(defaultSumariosFin);
   const [presencasSession, setPresencasSession] = useState<SessaoMeta | null>(null);
   const [novaSessao, setNovaSessao] = useState(false);
   const [formadoresSessao, setFormadoresSessao] = useState<string[]>([]);
@@ -1998,15 +2028,15 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
       </div>
       {(() => {
         const docsFalta = listaFormandos.filter(f => !["cc", "ch", "cu", "ci", "ce"].every(k => f[k as DocKey].ok)).length;
-        const dtp = dtpPctFin(turma.id);
-        const semPlano = sessoesTurma.filter(s => !planos[s.n]).length;
+        const dtp = ped.dtp.pct;
+        const semPlano = sessoesTurma.filter(s => !ped.planos[s.n]).length;
         const next: NextAction[] = [];
         if (dtp < 70) next.push({ tone: "error", title: `DTP a ${dtp}%`, detail: "Sem dossiê a turma financiada não arranca.", onClick: () => setTab("dtp") });
         if (docsFalta) next.push({ tone: "error", title: `${docsFalta} com documentos em falta`, detail: "CC, habilitações, CV, IBAN ou emprego.", onClick: () => setTab("overview") });
         if (semPlano) next.push({ tone: "warn", title: `${semPlano} sessões sem plano`, detail: "O formador ainda não carregou o plano de sessão.", onClick: () => setTab("sessoes") });
         return <NextActions accent="fin" actions={next.slice(0, 3)} />;
       })()}
-      <TurmaTabBar tab={tab} onChange={setTab} accent="fin" dtpPct={dtpPctFin(turma.id)} />
+      <TurmaTabBar tab={tab} onChange={setTab} accent="fin" dtpPct={ped.dtp.pct} />
       {!activa && <TurmaInactivaBanner nome={turma.nome} onActivate={() => toggleFin(turma.id, true)} />}
       {tab === "cronograma" && (
         <CronogramaEditor
@@ -2022,7 +2052,13 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
         />
       )}
       {tab === "dtp" && (
-        <DtpPanel regime="fin" turma={{ codigo: turma.ufcdCod === "3564" ? "UFCD 3564 · T1" : turma.nome, id: turma.id, titulo: turma.curso, sub: `UFCD ${turma.ufcdCod} · ${turma.horas}h` }} />
+        <DtpPanel
+          regime="fin"
+          turma={{ codigo: turma.nome, id: turma.id, titulo: turma.curso, sub: `UFCD ${turma.ufcdCod} · ${turma.horas}h` }}
+          dtp={ped.dtp}
+          estado={ped.estado}
+          onToggle={(item, proximo) => void ped.guardarDtp(item.id, proximo)}
+        />
       )}
       {tab === "sessoes" && (
         <SessoesTurmaTab
@@ -2037,8 +2073,28 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           onOpenFormador={setFormadorOpen}
         />
       )}
-      {tab === "documentos" && <DocumentosTurmaTab regime="fin" curso={turma.curso} />}
-      {tab === "certificados" && <CertificadosTurmaTab formandos={nomesCockpit} issued={certsIssued} onUpload={id => setUploadCert(id)} onView={setVerCert} curso={turma.curso} turma={turma.nome} />}
+      {tab === "documentos" && (
+        <DocumentosTurmaTab
+          regime="fin"
+          curso={turma.curso}
+          criterios={criterios}
+          guardados={ped.documentos}
+          onSaveDoc={doc => void ped.guardarDocumento(doc)}
+        />
+      )}
+      {tab === "certificados" && (
+        <CertificadosTurmaTab
+          formandos={nomesCockpit}
+          certificados={ped.certificados}
+          presencas={ped.presencas}
+          sessoesRegistadas={ped.dtp.facts.presencas.done}
+          onUpload={id => setUploadCert(id)}
+          onView={setVerCert}
+          onNota={(id, patch) => void ped.guardarCertificado(id, patch)}
+          curso={turma.curso}
+          turma={turma.nome}
+        />
+      )}
       {tab === "overview" && (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -2169,23 +2225,33 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
         open={!!planoSessao}
         onClose={() => setPlanoSessao(null)}
         sessao={planoSessao ?? undefined}
-        plano={planoSessao ? (planos[planoSessao.n] ?? emptyPlano()) : emptyPlano()}
-        onSave={data => { if (planoSessao) setPlanos(prev => ({ ...prev, [planoSessao.n]: data })); }}
+        plano={planoSessao ? ped.plano(planoSessao.n) : emptyPlano()}
+        onSave={data => { if (planoSessao) void ped.guardarPlano(planoSessao.n, data); }}
       />
       <SumarioSessaoModal
         open={!!sumarioSessao}
         onClose={() => setSumarioSessao(null)}
         accent="fin"
         sessao={sumarioSessao ?? undefined}
-        sumario={sumarioSessao ? (sumarios[sumarioSessao.n] ?? emptySumario()) : emptySumario()}
-        onSave={data => { if (sumarioSessao) setSumarios(prev => ({ ...prev, [sumarioSessao.n]: data })); }}
+        sumario={sumarioSessao ? ped.sumario(sumarioSessao.n) : emptySumario()}
+        onSave={data => {
+          if (!sumarioSessao) return;
+          void ped.guardarSumario(sumarioSessao.n, data);
+          if (data.assinado) {
+            void emitAutomation(
+              "sessao.summary_signed",
+              { email: user.email, nome: turma.formador || user.name, curso: turma.curso, turma: turma.nome },
+              `sumario:fin:${turma.id}:${sumarioSessao.n}`,
+            );
+          }
+        }}
       />
       <PresencasSessaoModal
         open={!!presencasSession}
         onClose={() => setPresencasSession(null)}
         sessao={presencasSession ?? undefined}
-        formandos={nomesCockpit}
-        onSave={() => setPresencasSession(null)}
+        formandos={presencasSession ? presencasDaSessao(nomesCockpit, ped.presencas[presencasSession.n]) : nomesCockpit}
+        onSave={rows => { if (presencasSession) void ped.guardarPresencas(presencasSession.n, rows); }}
       />
       <SlideOver open={!!docsOpen} onClose={() => setDocsOpen(null)} title="Ficha do Formando" sub={docsOpen ? `#${docsOpen.id}` : ""} size="lg">
         {docsOpen && <FichaFormandoFin formando={docsOpen} onClose={() => setDocsOpen(null)} />}
@@ -2223,7 +2289,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
       <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? turma.formador} />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" accent="fin"
         context={{ kind: "certificado", regime: "fin", turma: turma.nome, formando: uploadCert != null ? String(uploadCert) : undefined, label: "Certificado" }}
-        onConfirm={() => { if (uploadCert != null) setCertsIssued(p => ({ ...p, [uploadCert]: true })); }} />
+        onConfirm={() => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true }); }} />
       <CertificadoVerModal open={!!verCert} onClose={() => setVerCert(null)} cert={verCert} accent="fin" />
       <ExportTurmaModal open={!!exportTurma} onClose={() => setExportTurma(null)} turma={exportTurma} />
       <SlideOver open={addFormando} onClose={() => setAddFormando(false)} title="Inscrever formando" sub={turma.nome}>
@@ -2602,17 +2668,63 @@ function FichaFormandoFin({ formando, onClose }: { formando: FormandoFin; onClos
 
 // ─── Painel ───────────────────────────────────────────────────────────────────
 
+function eur(v: number) {
+  return `\u20ac ${v.toLocaleString("pt-PT")}`;
+}
+
 function PainelView({ onNavigate }: { onNavigate: (v: View | NavTarget) => void }) {
+  const [dash, setDash] = useState<Dashboard | null>(null);
+  const [estado, setEstado] = useState<"loading" | "ready" | "offline">("loading");
+
+  const carregar = useCallback(() => {
+    setEstado("loading");
+    apiDashboard()
+      .then(r => { setDash(r); setEstado("ready"); })
+      .catch(() => setEstado("offline"));
+  }, []);
+  useEffect(() => { carregar(); }, [carregar]);
+
+  if (estado === "loading") {
+    return (
+      <div className="space-y-5">
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          {[0, 1, 2, 3].map(i => (
+            <Card key={i} className="p-4">
+              <div className="h-3 w-24 bg-slate-100 rounded animate-pulse" />
+              <div className="h-7 w-16 bg-slate-100 rounded mt-3 animate-pulse" />
+            </Card>
+          ))}
+        </div>
+        <Card className="p-8"><p className="text-center text-sm text-slate-400">A calcular os números da secretaria…</p></Card>
+      </div>
+    );
+  }
+
+  if (estado === "offline" || !dash) {
+    return (
+      <Card className="p-8 text-center">
+        <p className="text-sm font-semibold text-slate-800">Sem ligação à API</p>
+        <p className="text-sm text-slate-500 mt-1">O painel mostra dados reais da base, por isso não inventa números quando a API não responde.</p>
+        <button type="button" onClick={carregar} className="mt-4 px-4 py-2 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white">
+          Tentar outra vez
+        </button>
+      </Card>
+    );
+  }
+
+  const { cards, financeiro, funil, topCursos } = dash;
+  const base = funil[0]?.v || 1;
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         {[
-          { label: "Pré-inscritos", value: "16 537", sub: "+124 esta semana", color: "text-blue-600", bg: "bg-blue-50", icon: I.clipboard, view: "gold-preinscricoes" as View },
-          { label: "Formandos Ativos", value: "6 505", sub: "+38 este mês", color: "text-emerald-600", bg: "bg-emerald-50", icon: I.users, view: "gold-formandos-turmas" as View },
-          { label: "Turmas ativas", value: "13", sub: "167 total", color: "text-violet-600", bg: "bg-violet-50", icon: I.school, view: "gold-turmas" as View },
-          { label: "Cursos Ativos", value: "8", sub: "3 Gold · 5 Financiados", color: "text-amber-600", bg: "bg-amber-50", icon: I.book, view: "gold-cursos" as View },
+          { label: "Pré-inscritos", value: cards.preinscritos.toLocaleString("pt-PT"), sub: `${funil[1]?.v ?? 0} já contactados`, color: "text-blue-600", bg: "bg-blue-50", icon: I.clipboard, view: "gold-preinscricoes" as View },
+          { label: "Formandos", value: cards.formandosAtivos.toLocaleString("pt-PT"), sub: `${cards.formandosGold} Gold \u00b7 ${cards.formandosFin} financiados`, color: "text-emerald-600", bg: "bg-emerald-50", icon: I.users, view: "gold-formandos-turmas" as View },
+          { label: "Turmas ativas", value: String(cards.turmasAtivas), sub: `${cards.turmasTotal} no total`, color: "text-violet-600", bg: "bg-violet-50", icon: I.school, view: "gold-turmas" as View },
+          { label: "Cursos ativos", value: String(cards.cursosAtivos), sub: `${cards.cursosGold} Gold \u00b7 ${cards.cursosFin} financiados`, color: "text-amber-600", bg: "bg-amber-50", icon: I.book, view: "gold-cursos" as View },
         ].map(s => (
-          <Card key={s.label} className="p-4 hover:shadow-md transition-shadow cursor-pointer">
+          <Card key={s.label} className="p-4 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between mb-3">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{s.label}</p>
               <div className={`w-8 h-8 rounded-lg ${s.bg} flex items-center justify-center ${s.color}`}>{s.icon}</div>
@@ -2627,10 +2739,17 @@ function PainelView({ onNavigate }: { onNavigate: (v: View | NavTarget) => void 
       </div>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         {[
-          { label: "Receita Total", value: "€ 304 680", sub: "Desde o início", c: "text-slate-800" },
-          { label: "Receita Este Mês", value: "€ 35 200", sub: "+32% vs mês anterior", c: "text-emerald-600" },
-          { label: "Ticket Médio", value: "€ 127", sub: "Por formando ativo", c: "text-blue-600" },
-          { label: "Pagamentos Pendentes", value: "€ 8 400", sub: "67 transações", c: "text-amber-600" },
+          { label: "Receita confirmada", value: eur(financeiro.receitaTotal), sub: `${financeiro.pagos} pagamentos pagos`, c: "text-slate-800" },
+          {
+            label: "Receita este mês",
+            value: eur(financeiro.receitaMes),
+            sub: financeiro.variacaoMes == null
+              ? "Sem mês anterior para comparar"
+              : `${financeiro.variacaoMes >= 0 ? "+" : ""}${financeiro.variacaoMes}% vs mês anterior`,
+            c: "text-emerald-600",
+          },
+          { label: "Ticket médio", value: eur(financeiro.ticketMedio), sub: "Por pagamento confirmado", c: "text-blue-600" },
+          { label: "Pagamentos pendentes", value: eur(financeiro.pendentes.valor), sub: `${financeiro.pendentes.n} transações`, c: "text-amber-600" },
         ].map(s => (
           <Card key={s.label} className="p-4">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{s.label}</p>
@@ -2642,38 +2761,48 @@ function PainelView({ onNavigate }: { onNavigate: (v: View | NavTarget) => void 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="p-4 lg:col-span-2">
           <div className="flex items-center justify-between mb-3">
-            <div><p className="text-sm font-semibold text-slate-700">Receita Mensal</p><p className="text-xs text-slate-400">Últimos 12 meses</p></div>
-            <span className="text-sm font-bold text-emerald-600">€ 339 190</span>
+            <div><p className="text-sm font-semibold text-slate-700">Receita mensal</p><p className="text-xs text-slate-400">Últimos 12 meses</p></div>
+            <span className="text-sm font-bold text-emerald-600">{eur(financeiro.receita12m)}</span>
           </div>
-          <MiniBarChart data={receitaMensal} color="#F59E0B" />
+          <MiniBarChart data={financeiro.receitaMensal} color="#F59E0B" />
         </Card>
         <Card className="p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-3">Funil de Conversão</p>
+          <p className="text-sm font-semibold text-slate-700 mb-3">Funil de conversão</p>
           <div className="space-y-2">
-            {[
-              { l: "Pré-inscritos", v: 16537, pct: 100, c: "#94A3B8" },
-              { l: "Contactados", v: 10800, pct: 65, c: "#60A5FA" },
-              { l: "Pagaram", v: 6379, pct: 39, c: "#F59E0B" },
-              { l: "Formandos", v: 6505, pct: 39, c: "#10B981" },
-            ].map(f => (
-              <div key={f.l}>
-                <div className="flex justify-between text-xs mb-0.5"><span className="text-slate-600">{f.l}</span><span className="font-semibold text-slate-700">{f.v.toLocaleString("pt-PT")}</span></div>
-                <div className="w-full bg-slate-100 rounded-full h-2"><div className="h-2 rounded-full" style={{ width: `${f.pct}%`, backgroundColor: f.c }} /></div>
-              </div>
-            ))}
+            {funil.map((f, i) => {
+              const pct = Math.min(100, Math.round((f.v / base) * 100));
+              const cores = ["#94A3B8", "#60A5FA", "#F59E0B", "#10B981"];
+              return (
+                <div key={f.l}>
+                  <div className="flex justify-between text-xs mb-0.5">
+                    <span className="text-slate-600">{f.l}</span>
+                    <span className="font-semibold text-slate-700">{f.v.toLocaleString("pt-PT")}</span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-2">
+                    <div className="h-2 rounded-full" style={{ width: `${pct}%`, backgroundColor: cores[i] ?? "#94A3B8" }} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </Card>
       </div>
-      <ConhecimentoEnaCard onVerMais={() => onNavigate("gold-preinscricoes")} />
+      <ConhecimentoEnaCard onVerMais={() => onNavigate("gold-preinscricoes")} dados={dash.conhecimento} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-4">Métodos de Pagamento</p>
+          <p className="text-sm font-semibold text-slate-700 mb-4">Métodos de pagamento</p>
+          {financeiro.metodosPagamento.length === 0 && (
+            <p className="text-xs text-slate-400">Ainda sem pagamentos confirmados.</p>
+          )}
           <div className="space-y-3">
-            {metodosPagamento.map(m => (
+            {financeiro.metodosPagamento.map(m => (
               <div key={m.metodo}>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-medium text-slate-700">{m.metodo}</span>
-                  <div className="flex gap-2"><span className="text-xs text-slate-500">€{(m.valor / 1000).toFixed(0)}k</span><span className="text-xs font-bold text-slate-700 w-8 text-right">{m.pct}%</span></div>
+                  <div className="flex gap-2">
+                    <span className="text-xs text-slate-500">{eur(m.valor)}</span>
+                    <span className="text-xs font-bold text-slate-700 w-8 text-right">{m.pct}%</span>
+                  </div>
                 </div>
                 <div className="w-full bg-slate-100 rounded-full h-2"><div className="h-2 rounded-full" style={{ width: `${m.pct}%`, backgroundColor: m.color }} /></div>
               </div>
@@ -2681,17 +2810,18 @@ function PainelView({ onNavigate }: { onNavigate: (v: View | NavTarget) => void 
           </div>
         </Card>
         <Card className="p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-3">Top Cursos</p>
+          <p className="text-sm font-semibold text-slate-700 mb-3">Top cursos por receita</p>
+          {topCursos.length === 0 && <p className="text-xs text-slate-400">Sem receita por curso para mostrar.</p>}
           <div className="space-y-2.5">
             {topCursos.map((c, i) => (
-              <div key={i} className="flex items-center gap-3">
+              <div key={c.nome} className="flex items-center gap-3">
                 <span className="text-xs font-bold text-slate-400 w-4">{i + 1}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-slate-700 truncate">{c.nome}</p>
-                  <p className="text-xs text-slate-400">{c.inscritos.toLocaleString("pt-PT")} inscritos · €{(c.receita / 1000).toFixed(0)}k</p>
+                  <p className="text-xs text-slate-400">{c.inscritos.toLocaleString("pt-PT")} pré-inscritos · {eur(c.receita)}</p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-xs font-bold text-emerald-600">{c.taxa}%</p>
+                  <p className="text-xs font-bold text-emerald-600">{c.taxa == null ? "—" : `${c.taxa}%`}</p>
                   <p className="text-xs text-slate-400">conversão</p>
                 </div>
               </div>
@@ -4518,12 +4648,21 @@ function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: (
 
 // ─── Notificações ─────────────────────────────────────────────────────────────
 
-function NotificacoesPanel({ onNavigate, onClose }: { onNavigate: (t: NavTarget) => void; onClose: () => void }) {
-  const [items, setItems] = useState(notificacoesData);
-  const naoLidas = items.filter(n => !n.lida).length;
+function NotificacoesCentro({ onNavigate }: { onNavigate: (t: View | NavTarget) => void }) {
+  const { items, estado, marcarLida, marcarTodas } = useNotificacoes();
+  return (
+    <NotificacoesView
+      items={items as NotifRow[]}
+      estado={estado}
+      onMarcarLida={marcarLida}
+      onMarcarTodas={marcarTodas}
+      onOpen={n => onNavigate({ view: n.view as View, turmaId: n.turmaId, tab: n.tab as CockpitTab | undefined })}
+    />
+  );
+}
 
-  function markRead(id: number) { setItems(p => p.map(n => n.id === id ? { ...n, lida: true } : n)); }
-  function markAllRead() { setItems(p => p.map(n => ({ ...n, lida: true }))); }
+function NotificacoesPanel({ onNavigate, onClose }: { onNavigate: (t: NavTarget) => void; onClose: () => void }) {
+  const { items, naoLidas, estado, marcarLida, marcarTodas } = useNotificacoes();
 
   return (
     <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50" style={{ animation: "dropIn 0.15s ease" }}>
@@ -4532,11 +4671,14 @@ function NotificacoesPanel({ onNavigate, onClose }: { onNavigate: (t: NavTarget)
           <p className="text-sm font-bold text-slate-800">Notificações</p>
           {naoLidas > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{naoLidas}</span>}
         </div>
-        {naoLidas > 0 && <button onClick={markAllRead} className="text-xs text-amber-600 hover:text-amber-700 font-semibold">Marcar todas como lidas</button>}
+        {naoLidas > 0 && <button onClick={marcarTodas} className="text-xs text-amber-600 hover:text-amber-700 font-semibold">Marcar todas como lidas</button>}
       </div>
       <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
+        {estado === "loading" && <p className="px-4 py-6 text-center text-xs text-slate-400">A ler…</p>}
+        {estado === "offline" && <p className="px-4 py-6 text-center text-xs text-amber-700">Sem ligação à API.</p>}
+        {estado === "ready" && items.length === 0 && <p className="px-4 py-6 text-center text-xs text-slate-400">Nada a sinalizar. Bom trabalho.</p>}
         {sortNotifs(items).map(n => (
-          <button key={n.id} onClick={() => { markRead(n.id); onNavigate({ view: n.view, turmaId: n.turmaId, tab: n.tab }); onClose(); }}
+          <button key={n.chave} onClick={() => { marcarLida(n.chave); onNavigate({ view: n.view as View, turmaId: n.turmaId, tab: n.tab as CockpitTab | undefined }); onClose(); }}
             className={`w-full flex gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors ${n.lida ? "opacity-60" : ""}`}>
             <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${n.tipo === "warn" ? "bg-amber-100 text-amber-600" : n.tipo === "error" ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"}`}>
               {n.tipo === "error" ? I.warn : n.tipo === "warn" ? I.warn : I.info}
@@ -4550,7 +4692,6 @@ function NotificacoesPanel({ onNavigate, onClose }: { onNavigate: (t: NavTarget)
                 </div>
               </div>
               <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.texto}</p>
-              <p className="text-xs text-slate-400 mt-1">há {n.tempo}</p>
             </div>
           </button>
         ))}
@@ -4868,8 +5009,7 @@ function AppShell() {
     : (view === "fin-cockpit-turma" || view === "fin-presencas") && finTurma
       ? `UFCD ${finTurma.ufcdCod} · ${finTurma.curso}`
       : undefined;
-  const bloqueios = notificacoesData.filter(n => !n.lida && n.tipo === "error").length;
-  const naoLidas = notificacoesData.filter(n => !n.lida).length;
+  const { naoLidas, bloqueios } = useNotificacoes();
 
   function renderView() {
     switch (view) {
@@ -4893,7 +5033,7 @@ function AppShell() {
       case "fin-datas": return <DatasFinView />;
       case "fin-locais": return <LocaisFinView />;
       case "fin-areas-tematicas": return <AreasTematicasFinView />;
-      case "notificacoes": return <NotificacoesView items={notificacoesData as NotifRow[]} onOpen={n => navigate({ view: n.view as View, turmaId: n.turmaId, tab: n.tab as CockpitTab | undefined })} />;
+      case "notificacoes": return <NotificacoesCentro onNavigate={navigate} />;
       case "gold-inqueritos": return <InqueritosView acento="gold" />;
       case "gold-formadores":
       case "formadores": return <FormadoresView regime="gold" />;

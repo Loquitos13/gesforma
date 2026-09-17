@@ -5,6 +5,7 @@ import { AuthGate } from "./AuthGate";
 import { CatalogsProvider } from "./CatalogsContext";
 import { DriveProvider } from "./DriveContext";
 import { FormadoresProvider } from "./FormadoresContext";
+import { NotificacoesProvider } from "./NotificacoesContext";
 import { PublicPreinscricao } from "./PublicPreinscricao";
 import { TurmasProvider } from "./TurmasContext";
 import "./index.css";
@@ -21,7 +22,9 @@ createRoot(document.getElementById("root")!).render(
           <FormadoresProvider>
             <CatalogsProvider>
               <DriveProvider>
-                <App />
+                <NotificacoesProvider>
+                  <App />
+                </NotificacoesProvider>
               </DriveProvider>
             </CatalogsProvider>
           </FormadoresProvider>

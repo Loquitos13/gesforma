@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SearchSelect, categoriasGoldOpts } from "./FormKit";
-import { getParametrosAvaliacao, setParametrosAvaliacao, type CriterioAvaliacao } from "./TurmaExtras";
+import { apiCursoFicha, apiSaveCursoFicha } from "./api";
+import { getParametrosAvaliacao, type CriterioAvaliacao } from "./TurmaExtras";
 
 export type CursoFichaSeed = {
   id: number;
@@ -452,7 +453,24 @@ export function CursoFichaView({
   const [criterios, setCriterios] = useState<CriterioAvaliacao[]>(() => getParametrosAvaliacao(curso?.nome || curso?.ufcd).criterios);
   const [novoCriterio, setNovoCriterio] = useState("");
   const [saved, setSaved] = useState(false);
+  const [erro, setErro] = useState("");
+  const [gravando, setGravando] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    const id = curso?.id;
+    if (id == null) return;
+    let alive = true;
+    apiCursoFicha(accent, id)
+      .then(r => {
+        if (!alive || !r.ficha) return;
+        const guardado = r.ficha.payload as Partial<CursoSite>;
+        if (Object.keys(guardado).length) setData(prev => ({ ...prev, ...guardado }));
+        if (r.ficha.criterios.length) setCriterios(r.ficha.criterios);
+      })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, [accent, curso?.id]);
 
   const temAvaliacao = accent === "gold"
     ? /ccp/i.test(data.titulo) || /ccp/i.test(data.categoria)
@@ -478,13 +496,16 @@ export function CursoFichaView({
   function patch(p: Partial<CursoSite>) {
     setData(prev => ({ ...prev, ...p }));
     setSaved(false);
+    setErro("");
   }
 
-  function guardar() {
-    if (temAvaliacao) setParametrosAvaliacao(data.titulo || curso?.nome || "Curso", criterios.filter(c => c.label.trim()));
+  async function guardar() {
+    setGravando(true);
+    setErro("");
+    const id = curso?.id ?? Date.now() % 100000;
     if (onCommit && data.titulo.trim()) {
       onCommit({
-        id: curso?.id ?? Date.now() % 100000,
+        id,
         nome: data.titulo.trim(),
         categoria: data.categoria,
         tipo: data.tipo,
@@ -496,8 +517,18 @@ export function CursoFichaView({
         ufcd: data.ufcd,
       });
     }
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 2400);
+    try {
+      await apiSaveCursoFicha(accent, id, {
+        payload: { ...data } as unknown as Record<string, unknown>,
+        criterios: temAvaliacao ? criterios.filter(c => c.label.trim()) : [],
+      });
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2400);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Não foi possível gravar a ficha no servidor.");
+    } finally {
+      setGravando(false);
+    }
   }
 
   const metaLine = accent === "fin"
@@ -544,11 +575,12 @@ export function CursoFichaView({
               className="lg:hidden px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
               {previewOpen ? "Editar" : "Ver site"}
             </button>
-            <button type="button" onClick={guardar} className={`px-4 py-2 ${t.save} text-white text-sm font-semibold rounded-lg shadow-sm`}>
-              {saved ? "Guardado" : "Guardar"}
+            <button type="button" disabled={gravando} onClick={() => void guardar()} className={`px-4 py-2 ${t.save} disabled:opacity-50 text-white text-sm font-semibold rounded-lg shadow-sm`}>
+              {gravando ? "A gravar…" : saved ? "Guardado" : "Guardar"}
             </button>
           </div>
         </div>
+        {erro && <p className="px-4 sm:px-6 pb-2 text-xs font-semibold text-red-600">{erro}</p>}
         <div className="px-4 sm:px-6 flex gap-1 overflow-x-auto">
           {tabs.map(x => (
             <button key={x.id} type="button" onClick={() => { setTab(x.id); setPreviewOpen(false); }}

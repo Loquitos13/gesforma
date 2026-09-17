@@ -11,7 +11,7 @@ O **dossiê técnico-pedagógico (DTP) vive dentro da turma** (separador no cock
 
 O menu **Dossiê TP** lista as turmas com a completude do dossiê e abre o DTP dessa turma.
 
-**Inquéritos** (Gold e Financiada) permitem montar questionários de satisfação com texto, escolha múltipla, escala 1–5 e sim/não.
+**Inquéritos** (Gold e Financiada) permitem montar questionários de satisfação com texto, escolha múltipla, escala 1–5 e sim/não. **Pré-visualizar** abre o questionário como o formando o vê e permite lançar uma resposta recebida; **Exportar** dá o CSV das perguntas. A contagem de respostas gravadas aparece ao lado da lista.
 
 No cockpit da turma (Gold e Financiada, os mesmos separadores): plano de sessão, **sumário por sessão** e **presenças dentro da sessão** - não há menu isolado de presenças. O perfil do formador e os certificados também vivem na turma.
 
@@ -28,11 +28,13 @@ O catálogo **Módulos, Conteúdos, Datas, Locais e Áreas** existe nos dois lad
 
 Gold e Financiada têm cada uma o menu **Formadores**: ficha (contacto, CCP, NIF, especialidade), estado Ativo/Inactivo e os regimes em que lecciona. Quem marca os dois regimes aparece nas duas listas. Criar ou editar um formador actualiza os dropdowns do cronograma e das turmas.
 
-No **Painel**, o bloco **Como conheceram a ENA** mostra a origem dos formandos (website, referência, redes, IEFP) a partir da pergunta da ficha de inscrição.
+O **Painel** e as **notificações** são calculados na API a partir dos dados reais: pré-inscritos, formandos, turmas e cursos ativos, receita confirmada, receita do mês, ticket médio, pendentes, funil, métodos de pagamento, top cursos e o bloco **Como conheceram a ENA** (a partir da origem das pré-inscrições). Sem ligação à API o painel diz que está offline em vez de inventar números. As notificações sinalizam pagamentos pendentes, leads por contactar, turmas lotadas ou vazias, documentos de elegibilidade em falta e DTP abaixo de 60%; marcar como lida fica gravado por utilizador.
 
 Em **Configurações**, cada cartão abre um **modal centrado** só com essa secção (Cancelar / Guardar). Não há gaveta lateral nem lista de separadores à esquerda.
 
-A **secretaria** trabalha com rasto no topo (regime + percurso clicável), bloco **A fazer agora** no cockpit, listas em **cartões no telemóvel** e **acções com rótulo** no desktop (menu ⋯ no ecrã estreito). Eliminar pede sempre a mesma confirmação. A pesquisa **⌘K** abre atalhos do dia (pré-inscrições por contactar, pagamentos pendentes, DTP incompleto, inscrições a analisar). As notificações classificam-se em **Bloqueio**, **Aviso** e **Info**.
+A **secretaria** trabalha com rasto no topo (regime + percurso clicável), bloco **A fazer agora** no cockpit, listas em **cartões no telemóvel** e **acções com rótulo** no desktop (menu ⋯ no ecrã estreito). Eliminar pede sempre a mesma confirmação, incluindo nos catálogos e no blog. A pesquisa **⌘K** indexa os formandos, leads, turmas, cursos, UFCD, dossiês e formadores carregados, e os atalhos do dia só aparecem quando há trabalho pendente a sério. As notificações classificam-se em **Bloqueio**, **Aviso** e **Info**.
+
+O **menu segue o perfil** do utilizador: a Comercial Gold vê Gold e Gestão, a Secretaria Financiada vê Financiada e Gestão, e só a Administração vê Sistema.
 
 Os formulários de criar e editar (pré-inscrição, turma, formando, sessão, etc.) abrem em **modal ao centro**, não numa gaveta que desliza da direita.
 
@@ -46,7 +48,11 @@ Cada **turma** tem um **cronograma** e um toggle **Ativa / Inativa**. No cockpit
 
 A secretaria entra com sessão (cookie httpOnly, SameSite=strict). A API Fastify fala **Postgres** na VPS; em desenvolvimento, se `DATABASE_URL` estiver vazio, usa **PGlite** (o mesmo SQL, ficheiro em `server/data/`).
 
-As migrações estão em `server/src/db/migrations/` (`001` … `011`) e correm no arranque. O seed cria o admin, os templates de email e, se as tabelas estiverem vazias, o operacional (cursos, turmas, formadores, leads, pagamentos) e os **catálogos** (módulos, locais, datas, conteúdos, áreas, formandos avulso, inscrições financiadas, temáticas do blog, inquéritos). O backoffice lê `GET /v1/ops` e grava nos CRUD e em `/v1/catalog/:kind`. As **Configurações** ficam em `app_settings`.
+As migrações estão em `server/src/db/migrations/` (`001` … `012`) e correm no arranque. O seed cria o admin, os templates de email e, se as tabelas estiverem vazias, o operacional (cursos, turmas, formadores, leads, pagamentos) e os **catálogos** (módulos, locais, datas, conteúdos, áreas, formandos avulso, inscrições financiadas, temáticas do blog, inquéritos). O backoffice lê `GET /v1/ops` e grava nos CRUD e em `/v1/catalog/:kind`. As **Configurações** ficam em `app_settings`.
+
+A **execução pedagógica da turma** vive na base: `turma_sessoes` (plano, sumário e presenças por sessão), `turma_documentos` (PIP, simulações e listas do separador Documentos), `turma_dtp` (estado manual do dossiê), `turma_certificados` (nota, e-learning e emissão), `curso_fichas` (conteúdo do site e critérios da simulação), `formando_docs` / `formando_notas`, `formador_docs` e `inquerito_respostas`. As rotas são `/v1/turmas/:regime/:id/pedagogia`, `/v1/dtp/:regime`, `/v1/cursos/:regime/:id/ficha`, `/v1/formandos/:regime/:id/dossier`, `/v1/formadores/:id/docs`, `/v1/inqueritos/:id/respostas`, `/v1/dashboard` e `/v1/notificacoes`.
+
+A **completude do DTP** é calculada e não escrita à mão: o cronograma, os planos, os sumários assinados, as folhas de presença, o PIP, as simulações, os contratos, os documentos de elegibilidade e os certificados emitidos saem dos dados da turma (aparecem marcados como *automático*). Os documentos administrativos ficam em estado manual e podem ser validados no painel — ou devolvidos ao estado automático. **Exportar pasta DTP** dá o CSV do índice do dossiê com o estado de cada documento.
 
 Em **Sistema → Gestão → Utilizadores** a administração cria contas da secretaria (nome, email, perfil, palavra-passe, activo). Quem não estiver nesta lista não entra - nem com Google. Os perfis são Administração, Secretaria, Comercial Gold e Secretaria Financiada. Não se pode desactivar nem apagar o último administrador.
 

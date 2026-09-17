@@ -55,7 +55,7 @@ import { formatXmlInner, linesToXml, parseEmailXml, replaceCta, xmlParagraphsRaw
 import {
   apiCreateRule, apiDashboard, apiDeleteRule, apiEmailJobs, apiEmailRules, apiEmailTemplates, apiPatchRule, apiPatchTemplate,
   emitAutomation,
-  type Dashboard, type EmailJob, type EmailJobStats, type TurmaCertificado, type TurmaDocumento,
+  type Dashboard, type EmailJob, type EmailJobStats, type EmailRule, type TurmaCertificado, type TurmaDocumento,
 } from "./api";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -226,15 +226,6 @@ const campanhasData = [
   { id: 4, nome: "Setembro 2026", data: "2026-09-01", encarregado: "Aguilar", preinscricoes: 421, pagos: 38, receita: 4750, custo: 380 },
   { id: 3, nome: "CCP 2020", data: "2022-05-30", encarregado: "Aguilar", preinscricoes: 890, pagos: 212, receita: 25440, custo: 890 },
   { id: 1, nome: "Outubro - Março - CCP", data: "2021-03-09", encarregado: "Escola", preinscricoes: 1240, pagos: 480, receita: 57600, custo: 1800 },
-];
-
-const emailRegras = [
-  { id: 1, nome: "Boas-vindas ao registo", gatilho: "Nova pré-inscrição recebida", template: "welcome", ativo: true, envios: 16537, taxaAbertura: 94.2 },
-  { id: 2, nome: "Confirmação de pagamento", gatilho: "Pagamento confirmado", template: "payment", ativo: true, envios: 6379, taxaAbertura: 98.1 },
-  { id: 3, nome: "Contacto após a venda", gatilho: "Contacto após a venda", template: "sale_followup", ativo: true, envios: 0, taxaAbertura: 0 },
-  { id: 4, nome: "Lembrete 24h antes do curso", gatilho: "24 horas antes do início", template: "reminder_24h", ativo: true, envios: 4892, taxaAbertura: 91.7 },
-  { id: 5, nome: "Certificado de conclusão", gatilho: "Formando marcado como concluído", template: "certificate", ativo: true, envios: 3821, taxaAbertura: 99.2 },
-  { id: 6, nome: "Reengajamento 30 dias", gatilho: "30 dias sem compra", template: "reengagement", ativo: false, envios: 8941, taxaAbertura: 76.3 },
 ];
 
 type EmailTpl = {
@@ -3997,7 +3988,7 @@ function FinCursosView({ onOpen }: { onOpen: (id: number | "new") => void }) {
 
 function EmailsView() {
   const [tab, setTab] = useState<"regras" | "templates" | "historico">("regras");
-  const [regras, setRegras] = useState(emailRegras);
+  const [regras, setRegras] = useState<EmailRule[]>([]);
   const [templates, setTemplates] = useState(emailTemplates);
   const [jobs, setJobs] = useState<EmailJob[]>([]);
   const [jobStats, setJobStats] = useState<EmailJobStats>({ sent: 0, queued: 0, failed: 0 });
@@ -4089,7 +4080,7 @@ function EmailsView() {
     setNovaRegra(true);
   }
 
-  function abrirEditarRegra(r: typeof emailRegras[number] & { atraso?: string; curso?: string | null }) {
+  function abrirEditarRegra(r: EmailRule) {
     setEditRegraId(r.id);
     setNomeRegra(r.nome);
     setNomeTouched(true);
@@ -4119,23 +4110,13 @@ function EmailsView() {
     const body = { nome: nomeRegra.trim(), gatilho, templateTipo, atraso, curso: cursoEmail || null, ativo: ativoRegra };
     setBusyRegra(true);
     try {
-      if (apiOn) {
-        if (editRegraId != null) await apiPatchRule(editRegraId, body);
-        else await apiCreateRule(body);
-        await recarregar();
-      } else if (editRegraId != null) {
-        setRegras(prev => prev.map(x => x.id === editRegraId ? { ...x, nome: nomeRegra.trim(), gatilho, template: templateTipo, ativo: ativoRegra } : x));
-      } else {
-        setRegras(prev => [{
-          id: Date.now() % 100000,
-          nome: nomeRegra.trim(),
-          gatilho,
-          template: templateTipo,
-          ativo: ativoRegra,
-          envios: 0,
-          taxaAbertura: 0,
-        }, ...prev]);
+      if (!apiOn) {
+        setErroRegra("Sem ligação à API: a regra não seria enviada a ninguém. Volte a tentar quando a API responder.");
+        return;
       }
+      if (editRegraId != null) await apiPatchRule(editRegraId, body);
+      else await apiCreateRule(body);
+      await recarregar();
       setNovaRegra(false);
       setEditRegraId(null);
     } catch (err) {
@@ -4175,7 +4156,6 @@ function EmailsView() {
                   </p>
                   <div className="flex gap-4 mt-1.5">
                     <span className="text-xs text-slate-400">{r.envios.toLocaleString("pt-PT")} enviados</span>
-                    <span className="text-xs text-slate-400">{r.taxaAbertura}% abertura</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">

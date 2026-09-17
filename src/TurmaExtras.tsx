@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ApiError, apiDriveFiles, apiFormadorDocs, apiInqueritoRespostas, apiSaveFormadorDocs, apiUploadDrive,
+  ApiError, apiAddInqueritoResposta, apiDriveFiles, apiFormadorDocs, apiInqueritoRespostas, apiSaveFormadorDocs, apiUploadDrive,
   type DriveFile, type DriveUploadContext, type InqueritoResposta,
 } from "./api";
 import { useCatalogList } from "./CatalogsContext";
@@ -772,39 +772,120 @@ function exportarInquerito(inq: Inquerito) {
   URL.revokeObjectURL(url);
 }
 
-function InqueritoPreviewModal({ inq, onClose }: { inq: Inquerito | null; onClose: () => void }) {
+/** Preenche e grava uma resposta: é assim que a secretaria lança os inquéritos de papel. */
+function InqueritoPreviewModal({ inq, onClose, onGravada }: { inq: Inquerito | null; onClose: () => void; onGravada: () => void }) {
+  const [respostas, setRespostas] = useState<Record<string, unknown>>({});
+  const [formando, setFormando] = useState("");
+  const [turma, setTurma] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => { setRespostas({}); setFormando(""); setTurma(""); setMsg(""); }, [inq]);
+
+  const preenchidas = Object.values(respostas).filter(v => v !== "" && v != null).length;
+
+  async function gravar() {
+    if (!inq) return;
+    setBusy(true);
+    setMsg("");
+    try {
+      await apiAddInqueritoResposta(inq.id, { turma: turma.trim(), formando: formando.trim(), respostas });
+      setMsg("Resposta gravada.");
+      setRespostas({});
+      setFormando("");
+      onGravada();
+    } catch {
+      setMsg("Não foi possível gravar a resposta.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const campo = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400";
+
   return (
-    <AppModal open={!!inq} onClose={onClose} title={inq?.titulo ?? "Inquérito"} sub="É assim que o formando vê o questionário" size="lg">
+    <AppModal
+      open={!!inq}
+      onClose={onClose}
+      title={inq?.titulo ?? "Inquérito"}
+      sub="É assim que o formando vê o questionário. Pode lançar aqui uma resposta recebida."
+      size="lg"
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Fechar</button>
+          <button type="button" disabled={busy || preenchidas === 0} onClick={() => void gravar()} className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white">
+            {busy ? "A gravar…" : "Gravar resposta"}
+          </button>
+        </>
+      }
+    >
       <div className="p-5 space-y-4">
+        {msg && <p className="text-xs font-semibold text-emerald-700">{msg}</p>}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <input className={campo} value={formando} onChange={e => setFormando(e.target.value)} placeholder="Formando (opcional)" />
+          <input className={campo} value={turma} onChange={e => setTurma(e.target.value)} placeholder="Turma (opcional)" />
+        </div>
         {inq?.perguntas.length === 0 && <p className="text-sm text-slate-400">Este inquérito ainda não tem perguntas.</p>}
-        {inq?.perguntas.map((p, i) => (
-          <div key={p.id} className="space-y-2">
-            <p className="text-sm font-semibold text-slate-800">{i + 1}. {p.texto || "(pergunta sem texto)"}</p>
-            {p.tipo === "escala" && (
-              <div className="flex gap-2">
-                {[1, 2, 3, 4, 5].map(n => (
-                  <span key={n} className="w-9 h-9 rounded-full border-2 border-slate-200 flex items-center justify-center text-xs font-bold text-slate-500">{n}</span>
-                ))}
-              </div>
-            )}
-            {p.tipo === "simnao" && (
-              <div className="flex gap-2">
-                <span className="px-4 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600">Sim</span>
-                <span className="px-4 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600">Não</span>
-              </div>
-            )}
-            {p.tipo === "multipla" && (
-              <div className="space-y-1.5">
-                {(p.opcoes ?? []).map((op, oi) => (
-                  <label key={oi} className="flex items-center gap-2 text-sm text-slate-600">
-                    <span className="w-4 h-4 rounded-full border-2 border-slate-300" />{op}
-                  </label>
-                ))}
-              </div>
-            )}
-            {p.tipo === "texto" && <div className="h-20 border border-slate-200 rounded-lg bg-slate-50" />}
-          </div>
-        ))}
+        {inq?.perguntas.map((p, i) => {
+          const key = String(p.id);
+          const valor = respostas[key];
+          return (
+            <div key={p.id} className="space-y-2">
+              <p className="text-sm font-semibold text-slate-800">{i + 1}. {p.texto || "(pergunta sem texto)"}</p>
+              {p.tipo === "escala" && (
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setRespostas(prev => ({ ...prev, [key]: n }))}
+                      className={`w-9 h-9 rounded-full border-2 flex items-center justify-center text-xs font-bold ${valor === n ? "bg-amber-500 border-amber-500 text-white" : "border-slate-200 text-slate-500 hover:border-amber-300"}`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {p.tipo === "simnao" && (
+                <div className="flex gap-2">
+                  {["Sim", "Não"].map(op => (
+                    <button
+                      key={op}
+                      type="button"
+                      onClick={() => setRespostas(prev => ({ ...prev, [key]: op }))}
+                      className={`px-4 py-1.5 border rounded-lg text-xs font-semibold ${valor === op ? "bg-slate-800 border-slate-800 text-white" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                    >
+                      {op}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {p.tipo === "multipla" && (
+                <div className="space-y-1.5">
+                  {(p.opcoes ?? []).map((op, oi) => (
+                    <button
+                      key={oi}
+                      type="button"
+                      onClick={() => setRespostas(prev => ({ ...prev, [key]: op }))}
+                      className="flex items-center gap-2 text-sm text-slate-600 w-full text-left"
+                    >
+                      <span className={`w-4 h-4 rounded-full border-2 ${valor === op ? "border-amber-500 bg-amber-500" : "border-slate-300"}`} />{op}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {p.tipo === "texto" && (
+                <textarea
+                  rows={3}
+                  value={typeof valor === "string" ? valor : ""}
+                  onChange={e => setRespostas(prev => ({ ...prev, [key]: e.target.value }))}
+                  className={`${campo} resize-none`}
+                  placeholder="Resposta do formando…"
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
     </AppModal>
   );
@@ -970,7 +1051,14 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
               </div>
               <div className={`px-4 py-3 border-t ${accent.border} ${accent.light}`}>
                 <p className="text-xs font-semibold text-slate-500 mb-2">Adicionar pergunta:</p>
-                <InqueritoPreviewModal inq={preview} onClose={() => setPreview(null)} />
+                <InqueritoPreviewModal
+                  inq={preview}
+                  onClose={() => setPreview(null)}
+                  onGravada={() => {
+                    if (!inq) return;
+                    void apiInqueritoRespostas(inq.id).then(r => setRespostas(r.respostas)).catch(() => undefined);
+                  }}
+                />
                 <div className="flex flex-wrap gap-2">
                   {(Object.keys(tipoLabels) as PerguntaTipo[]).map(tipo => (
                     <button key={tipo} onClick={() => addPergunta(tipo)}

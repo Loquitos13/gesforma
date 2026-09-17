@@ -31,7 +31,6 @@ export type EmailRule = {
   curso: string | null;
   ativo: boolean;
   envios: number;
-  taxaAbertura: number;
 };
 
 export type EmailTemplate = {

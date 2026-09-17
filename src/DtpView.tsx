@@ -167,7 +167,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle }: Pro
               {fase === "todas" ? "Documentos desta turma" : fases.find(f => f.id === fase)?.label}
             </p>
             <p className="text-xs text-slate-400">
-              Os itens marcados <span className="font-semibold">automático</span> saem dos dados reais da turma (sessões, presenças, documentos dos formandos). Nos restantes, clique no estado para validar.
+              Os itens marcados <span className="font-semibold">automático</span> saem dos dados reais da turma (sessões, presenças, documentos dos formandos). Nos restantes, clique no estado para validar. A lista vem da estrutura definida na ficha do curso.
             </p>
           </div>
           <button onClick={() => setFase("todas")} className="text-xs font-semibold text-slate-500 hover:text-slate-800 whitespace-nowrap">Ver tudo</button>
@@ -190,9 +190,12 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle }: Pro
                     {doc.bloqueante && doc.estado !== "ok" && (
                       <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">bloqueante</span>
                     )}
-                    {doc.origem === "auto"
-                      ? <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">automático</span>
-                      : null}
+                    {doc.origem === "auto" && (
+                      <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">automático</span>
+                    )}
+                    {doc.extra && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide ${isGold ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>curso</span>
+                    )}
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">{doc.detalhe}</p>
                   {doc.origem === "manual" && onToggle && (

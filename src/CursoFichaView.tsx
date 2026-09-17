@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SearchSelect, categoriasGoldOpts } from "./FormKit";
 import { apiCursoFicha, apiSaveCursoFicha } from "./api";
+import { DtpModeloEditor } from "./DtpModeloEditor";
 import { getParametrosAvaliacao, type CriterioAvaliacao } from "./TurmaExtras";
 
 export type CursoFichaSeed = {
@@ -19,7 +20,7 @@ export type CursoFichaSeed = {
 export type CursoGold = CursoFichaSeed;
 export type CursoAccent = "gold" | "fin";
 
-type TabId = "identidade" | "conteudo" | "avaliacao" | "publicacao";
+type TabId = "identidade" | "conteudo" | "avaliacao" | "dtp" | "publicacao";
 type MediaSlot = { name: string; url: string };
 
 type CursoSite = {
@@ -484,6 +485,7 @@ export function CursoFichaView({
       { id: "identidade", label: "Identidade" },
       { id: "conteudo", label: "Conteúdo do site" },
       { id: "avaliacao", label: "Avaliação" },
+      { id: "dtp", label: "Dossiê TP" },
       { id: "publicacao", label: "Publicação" },
     ];
     return temAvaliacao ? base : base.filter(x => x.id !== "avaliacao");
@@ -732,6 +734,10 @@ export function CursoFichaView({
                 </button>
               </div>
             </div>
+          )}
+
+          {tab === "dtp" && (
+            <DtpModeloEditor accent={accent} cursoId={curso?.id} />
           )}
 
           {tab === "publicacao" && (

@@ -177,6 +177,9 @@ export type DtpItem = {
   detalhe: string;
   origem: "auto" | "manual";
   bloqueante?: boolean;
+  obrigatorio?: boolean;
+  /** Documento acrescentado na ficha do curso, fora da base do regime. */
+  extra?: boolean;
 };
 
 export type DtpSnapshot = {
@@ -244,6 +247,42 @@ export const apiSaveCertificado = (
   body: { emitido?: boolean; nota?: number | null; elearning?: number | null },
 ) => api<{ ok: boolean }>(`/v1/turmas/${regime}/${turmaId}/certificados/${formandoId}`, { method: "PUT", body: JSON.stringify(body) });
 export const apiDtpResumo = (regime: Regime) => api<{ pct: Record<string, number> }>(`/v1/dtp/${regime}`);
+
+export type DtpFase = "antes" | "durante" | "depois";
+export type DtpDef = {
+  id: string;
+  fase: DtpFase;
+  label: string;
+  fonte: string;
+  hint: string;
+  bloqueante?: boolean;
+  obrigatorio?: boolean;
+};
+export type DtpExtra = {
+  id?: string;
+  fase: DtpFase;
+  label: string;
+  fonte?: string;
+  hint?: string;
+  bloqueante?: boolean;
+};
+export type DtpModelo = {
+  excluidos: string[];
+  extra: { id: string; fase: DtpFase; label: string; fonte: string; hint: string; bloqueante?: boolean }[];
+};
+export type DtpModeloResposta = {
+  fases: { id: DtpFase; label: string; hint: string }[];
+  base: DtpDef[];
+  modelo: DtpModelo;
+  estrutura: DtpDef[];
+};
+export const apiDtpModelo = (regime: Regime, cursoId: number) =>
+  api<DtpModeloResposta>(`/v1/cursos/${regime}/${cursoId}/dtp-modelo`);
+export const apiSaveDtpModelo = (regime: Regime, cursoId: number, body: { excluidos: string[]; extra: DtpExtra[] }) =>
+  api<Pick<DtpModeloResposta, "modelo" | "estrutura">>(`/v1/cursos/${regime}/${cursoId}/dtp-modelo`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
 
 export type CursoFicha = { payload: Record<string, unknown>; criterios: { id: string; label: string }[] };
 export const apiCursoFicha = (regime: Regime, cursoId: number) =>

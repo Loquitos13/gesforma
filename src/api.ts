@@ -8,7 +8,19 @@ export class ApiError extends Error {
   }
 }
 
-export type SessionUser = { id: string; email: string; name: string; role: string };
+export type StaffRole = "admin" | "secretaria" | "comercial" | "financiada";
+export type SessionUser = { id: string; email: string; name: string; role: StaffRole | string };
+
+export type StaffUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: StaffRole;
+  active: boolean;
+  created_at: string;
+  last_login_at: string | null;
+  sessions_open: number;
+};
 
 export type EmailRule = {
   id: number;
@@ -144,6 +156,14 @@ export const apiMe = () => api<{ user: SessionUser }>("/v1/me");
 export const apiLogin = (email: string, password: string) =>
   api<{ user: SessionUser }>("/v1/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
 export const apiLogout = () => api<{ ok: boolean }>("/v1/auth/logout", { method: "POST" });
+export const apiUsers = () => api<{ users: StaffUser[] }>("/v1/users");
+export const apiCreateUser = (body: { name: string; email: string; password: string; role: StaffRole; active?: boolean }) =>
+  api<{ user: StaffUser }>("/v1/users", { method: "POST", body: JSON.stringify(body) });
+export const apiPatchUser = (id: string, body: { name?: string; email?: string; role?: StaffRole; active?: boolean }) =>
+  api<{ user: StaffUser }>(`/v1/users/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+export const apiSetUserPassword = (id: string, password: string, revokeSessions = true) =>
+  api<{ ok: boolean }>(`/v1/users/${id}/password`, { method: "POST", body: JSON.stringify({ password, revokeSessions }) });
+export const apiDeleteUser = (id: string) => api<{ ok: boolean }>(`/v1/users/${id}`, { method: "DELETE" });
 export const apiGoogleLoginStatus = () =>
   api<{ configured: boolean; redirectUri: string }>("/v1/auth/google");
 export function googleLoginStartUrl() {

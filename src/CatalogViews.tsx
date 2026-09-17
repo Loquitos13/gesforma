@@ -1377,16 +1377,6 @@ const configCards = [
       { label: "Regras ativas", value: "4" },
     ],
   },
-  {
-    id: "users",
-    titulo: "Utilizadores",
-    texto: "Acessos ao GesForma.",
-    fields: [
-      { label: "Tania", value: "Administradora" },
-      { label: "Aguilar", value: "Comercial Gold" },
-      { label: "Secretariado", value: "Financiada" },
-    ],
-  },
 ];
 
 function seedConfigDrafts() {

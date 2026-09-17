@@ -46,7 +46,9 @@ Cada **turma** tem um **cronograma** e um toggle **Ativa / Inativa**. No cockpit
 
 A secretaria entra com sessão (cookie httpOnly, SameSite=strict). A API Fastify fala **Postgres** na VPS; em desenvolvimento, se `DATABASE_URL` estiver vazio, usa **PGlite** (o mesmo SQL, ficheiro em `server/data/`).
 
-As migrações estão em `server/src/db/migrations/` (`001` … `007`) e correm no arranque. O seed cria o admin, os templates de email e, se as tabelas estiverem vazias, o operacional (cursos, turmas, formadores, leads, pagamentos) e os **catálogos** (módulos, locais, datas, conteúdos, áreas, formandos avulso, inscrições financiadas, temáticas do blog, inquéritos). O backoffice lê `GET /v1/ops` e grava nos CRUD e em `/v1/catalog/:kind`. As **Configurações** ficam em `app_settings`.
+As migrações estão em `server/src/db/migrations/` (`001` … `011`) e correm no arranque. O seed cria o admin, os templates de email e, se as tabelas estiverem vazias, o operacional (cursos, turmas, formadores, leads, pagamentos) e os **catálogos** (módulos, locais, datas, conteúdos, áreas, formandos avulso, inscrições financiadas, temáticas do blog, inquéritos). O backoffice lê `GET /v1/ops` e grava nos CRUD e em `/v1/catalog/:kind`. As **Configurações** ficam em `app_settings`.
+
+Em **Sistema → Gestão → Utilizadores** a administração cria contas da secretaria (nome, email, perfil, palavra-passe, activo). Quem não estiver nesta lista não entra — nem com Google. Os perfis são Administração, Secretaria, Comercial Gold e Secretaria Financiada. Não se pode desactivar nem apagar o último administrador.
 
 Os ficheiros da secretaria (PIP, certificados, conteúdos, documentos do formador) vão para o **Google Drive da entidade**. Em Configurações a administradora liga a conta Google via **OAuth 2.0**. Enquanto a conta não estiver ligada, o upload fica no servidor (`server/data/drive-files/`) para o trabalho não parar. Na Vercel sem Drive os ficheiros locais vão para `/tmp` e somem entre invocações — ligue a conta da ENA.
 

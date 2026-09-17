@@ -4,6 +4,7 @@ import { apiGoogleLoginStatus, apiLogin, apiLogout, apiMe, googleLoginStartUrl, 
 type AuthCtx = {
   user: SessionUser;
   logout: () => Promise<void>;
+  refresh: () => Promise<void>;
 };
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -236,5 +237,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return <Ctx.Provider value={{ user, logout }}>{children}</Ctx.Provider>;
+  async function refresh() {
+    const r = await apiMe();
+    setUser(r.user);
+  }
+
+  return <Ctx.Provider value={{ user, logout, refresh }}>{children}</Ctx.Provider>;
 }

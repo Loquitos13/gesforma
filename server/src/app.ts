@@ -20,6 +20,7 @@ import {
   purgeExpiredStates,
 } from "./googleDrive.js";
 import { registerOpsRoutes } from "./opsRoutes.js";
+import { registerUserRoutes } from "./userRoutes.js";
 import {
   delayLabelFromSeconds,
   delaySecondsFromLabel,
@@ -478,6 +479,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   registerOpsRoutes(app, db, { requireAuth, audit });
   registerCatalogRoutes(app, db, { requireAuth });
   registerDriveRoutes(app, db, { requireAuth, audit });
+  registerUserRoutes(app, db, { requireAuth, audit });
 
   if (opts.worker !== false && !onVercel) {
     const tick = async () => {

@@ -38,6 +38,7 @@ import { cronogramaToSessoes, formatSessaoLabel, isTurmaActiva, sessaoFormadores
 import { apiDriveFiles } from "./api";
 import { ListsProvider, nextListId, useLists, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
 import { useAuth } from "./AuthGate";
+import { UsersView, roleLabel } from "./UsersView";
 import { EmailXmlEditor } from "./EmailTemplateEditor";
 import {
   type CtaAmbito,
@@ -116,7 +117,7 @@ type View =
   | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-formadores" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
   | "fin-modulos" | "fin-conteudos" | "fin-datas" | "fin-locais" | "fin-areas-tematicas"
   | "formadores" | "blog-posts" | "blog-tematicas"
-  | "emails" | "pagamentos" | "configuracoes" | "notificacoes";
+  | "emails" | "pagamentos" | "configuracoes" | "utilizadores" | "notificacoes";
 
 type CockpitTab = "overview" | "cronograma" | "sessoes" | "documentos" | "dtp" | "certificados";
 type NavTarget = { view: View; turmaId?: number; tab?: CockpitTab; cursoId?: number | "new"; cursoNome?: string };
@@ -4422,6 +4423,7 @@ const allSearchable: Array<{ tipo: string; nome: string; sub: string } & NavTarg
   { tipo: "DTP", nome: "Dossiê da turma UFCD 3564 · T1", sub: "Primeiros Socorros · Financiada", view: "fin-cockpit-turma" as View, turmaId: 218, tab: "dtp" as CockpitTab },
   { tipo: "Inquérito", nome: "Satisfação CCP", sub: "Gold · 5 perguntas", view: "gold-inqueritos" as View },
   { tipo: "Inquérito", nome: "Satisfação UFCD 3564", sub: "Financiada · 4 perguntas", view: "fin-inqueritos" as View },
+  { tipo: "Atalho", nome: "Utilizadores", sub: "Sistema · Gestão de contas da secretaria", view: "utilizadores" as View },
   ...FORMADORES_SEED.map(f => ({
     tipo: f.regimes.includes("gold") ? "Formador Gold" : "Formador Financiado",
     nome: f.nome,
@@ -4598,6 +4600,7 @@ const sidebarConfig: NavGroup[] = [
     { label: "Blog", icon: I.blog, children: [{ label: "Posts", view: "blog-posts" }, { label: "Temáticas", view: "blog-tematicas" }] },
   ]},
   { group: "Sistema", items: [
+    { label: "Gestão", icon: I.users, children: [{ label: "Utilizadores", view: "utilizadores" }] },
     { label: "Emails Automáticos", view: "emails", icon: I.mail },
     { label: "Pagamentos", view: "pagamentos", icon: I.creditcard },
     { label: "Configurações", view: "configuracoes", icon: I.settings },
@@ -4725,7 +4728,7 @@ function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v:
       <div className="flex-shrink-0 border-t border-white/10 p-3">
         <div className="flex items-center gap-3 px-2 py-2">
           <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-white text-sm font-bold">{user.name.slice(0, 1)}</div>
-          <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-white truncate">{user.name}</p><p className="text-xs text-slate-500 truncate">{user.role}</p></div>
+          <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-white truncate">{user.name}</p><p className="text-xs text-slate-500 truncate">{roleLabel(user.role)}</p></div>
           <button type="button" title="Sair" onClick={() => void logout()} className="p-1.5 text-slate-500 hover:text-white rounded-lg hover:bg-white/10 transition-colors">{I.power}</button>
         </div>
       </div>
@@ -4752,7 +4755,7 @@ const viewTitles: Partial<Record<View, string>> = {
   "fin-areas-tematicas": "Áreas Temáticas · Financiada",
   notificacoes: "Notificações",
   formadores: "Formadores Gold", "blog-posts": "Blog - Posts", "blog-tematicas": "Blog - Temáticas",
-  emails: "Emails Automáticos", pagamentos: "Pagamentos", configuracoes: "Configurações",
+  emails: "Emails Automáticos", pagamentos: "Pagamentos", configuracoes: "Configurações", utilizadores: "Utilizadores",
 };
 
 export default function App() {
@@ -4857,6 +4860,7 @@ function AppShell() {
     }
     if (view.startsWith("gold-")) return [{ label: "Gold", onClick: () => navigate("painel") }, { label: viewTitles[view] ?? "Gold" }];
     if (view.startsWith("fin-")) return [{ label: "Financiada", onClick: () => navigate("painel") }, { label: viewTitles[view] ?? "Financiada" }];
+    if (view === "utilizadores") return [{ label: "Sistema", onClick: () => navigate("configuracoes") }, { label: "Gestão" }, { label: "Utilizadores" }];
     return [{ label: viewTitles[view] ?? "GesForma" }];
   })();
   const headerDetail = view === "gold-cockpit-turma" && goldTurma
@@ -4911,6 +4915,7 @@ function AppShell() {
       case "emails": return <EmailsView />;
       case "pagamentos": return <PagamentosView />;
       case "configuracoes": return <ConfiguracoesView />;
+      case "utilizadores": return <UsersView />;
       default: return <PainelView onNavigate={navigate} />;
     }
   }

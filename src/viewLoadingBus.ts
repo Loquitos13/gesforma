@@ -1,12 +1,28 @@
-type Listener = (pending: number) => void;
+type Listener = (busy: boolean) => void;
 
 const listeners = new Set<Listener>();
 let pending = 0;
 let armed = false;
+let curtain = false;
+let curtainUntil = 0;
+let curtainTimer: number | undefined;
+
+function busy() {
+  return curtain || pending > 0;
+}
+
+function notify() {
+  const on = busy();
+  listeners.forEach(fn => fn(on));
+}
+
+export function isViewLoading() {
+  return busy();
+}
 
 export function subscribeViewLoading(fn: Listener) {
   listeners.add(fn);
-  fn(pending);
+  fn(busy());
   return () => { listeners.delete(fn); };
 }
 
@@ -15,16 +31,30 @@ export function armViewLoading() {
   armed = true;
 }
 
+/** Cortina mínima na mudança de view. Não é cancelada pelo StrictMode/unmount. */
+export function showViewCurtain(ms = 1800) {
+  armed = true;
+  curtain = true;
+  curtainUntil = Math.max(curtainUntil, performance.now() + ms);
+  if (curtainTimer) window.clearTimeout(curtainTimer);
+  curtainTimer = window.setTimeout(() => {
+    curtain = false;
+    curtainTimer = undefined;
+    notify();
+  }, Math.max(0, curtainUntil - performance.now()));
+  notify();
+}
+
 export function beginViewLoad() {
   if (!armed) return;
   pending += 1;
-  listeners.forEach(fn => fn(pending));
+  notify();
 }
 
 export function endViewLoad() {
   if (pending === 0) return;
   pending = Math.max(0, pending - 1);
-  listeners.forEach(fn => fn(pending));
+  notify();
 }
 
 export function isSilentViewPath(path: string) {

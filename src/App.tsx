@@ -42,7 +42,7 @@ import { useNotificacoes } from "./NotificacoesContext";
 import { presencasDaSessao, useCriteriosAvaliacao, useDtpResumo, useTurmaPedagogia, type PresencaRow } from "./PedagogiaContext";
 import { UsersView, roleLabel } from "./UsersView";
 import { ViewLoadingOverlay } from "./ViewLoading";
-import { armViewLoading } from "./viewLoadingBus";
+import { armViewLoading, showViewCurtain } from "./viewLoadingBus";
 import { EmailXmlEditor } from "./EmailTemplateEditor";
 import {
   type CtaAmbito,
@@ -5044,25 +5044,15 @@ function AppShell() {
 
   const viewRef = useRef(view);
   viewRef.current = view;
-  const [viewCurtain, setViewCurtain] = useState(false);
-  const [curtainTick, setCurtainTick] = useState(0);
   const go = useCallback((v: View) => {
     if (viewRef.current !== v) {
       viewRef.current = v;
-      armViewLoading();
-      setViewCurtain(true);
-      setCurtainTick(n => n + 1);
+      showViewCurtain(1800);
     }
     setView(v);
     setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
-
-  useEffect(() => {
-    if (!viewCurtain) return;
-    const hold = window.setTimeout(() => setViewCurtain(false), 1500);
-    return () => window.clearTimeout(hold);
-  }, [viewCurtain, curtainTick]);
 
   useEffect(() => {
     const later = window.setTimeout(() => armViewLoading(), 2000);
@@ -5259,7 +5249,7 @@ function AppShell() {
             <main className="h-full p-4 sm:p-5 overflow-auto">
               {renderView()}
             </main>
-            <ViewLoadingOverlay active={viewCurtain} />
+            <ViewLoadingOverlay />
           </div>
 
           <footer className="bg-white border-t border-slate-100 px-5 py-2.5 text-center flex-shrink-0">

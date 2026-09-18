@@ -35,9 +35,11 @@ body {
   border-radius: 4px;
 }
 
-@keyframes view-loading-enter {
-  from { opacity: 0; }
-  to { opacity: 1; }
+@keyframes view-loading-cycle {
+  0% { opacity: 0; }
+  22% { opacity: 1; }
+  78% { opacity: 1; }
+  100% { opacity: 1; }
 }
 
 @keyframes view-loading-exit {
@@ -50,8 +52,8 @@ body {
   50% { opacity: 0.28; }
 }
 
-.view-loading-enter {
-  animation: view-loading-enter 480ms ease-out forwards;
+.view-loading-cycle {
+  animation: view-loading-cycle 1.8s ease-out forwards;
 }
 
 .view-loading-exit {

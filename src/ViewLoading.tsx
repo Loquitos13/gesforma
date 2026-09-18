@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { beginViewLoad, endViewLoad, subscribeViewLoading } from "./viewLoadingBus";
 
-const ENTER_MS = 480;
-const HOLD_MS = 420;
 const EXIT_MS = 480;
 
 function EnaLogoPng() {
@@ -23,56 +22,43 @@ function EnaLogoPng() {
  */
 export function ViewLoadingOverlay({ active }: { active: boolean }) {
   const [pending, setPending] = useState(0);
-  const [phase, setPhase] = useState<"off" | "in" | "out">("off");
-  const phaseRef = useRef(phase);
-  const shownAt = useRef(0);
-  const timers = useRef<number[]>([]);
-
-  phaseRef.current = phase;
+  const [holding, setHolding] = useState(false);
+  const [exiting, setExiting] = useState(false);
 
   useEffect(() => subscribeViewLoading(setPending), []);
   const show = active || pending > 0;
+  const visible = show || holding;
 
   useEffect(() => {
-    timers.current.forEach(id => window.clearTimeout(id));
-    timers.current = [];
-
     if (show) {
-      if (phaseRef.current === "off" || phaseRef.current === "out") {
-        shownAt.current = performance.now();
-      }
-      setPhase("in");
+      setHolding(true);
+      setExiting(false);
       return;
     }
+    if (!holding) return;
+    setExiting(true);
+    const t = window.setTimeout(() => {
+      setHolding(false);
+      setExiting(false);
+    }, EXIT_MS);
+    return () => window.clearTimeout(t);
+  }, [show, holding]);
 
-    if (phaseRef.current === "off") return;
+  if (!visible || typeof document === "undefined") return null;
 
-    const wait = Math.max(0, ENTER_MS + HOLD_MS - (performance.now() - shownAt.current));
-    const startExit = window.setTimeout(() => {
-      setPhase("out");
-      const hide = window.setTimeout(() => setPhase("off"), EXIT_MS);
-      timers.current.push(hide);
-    }, wait);
-    timers.current.push(startExit);
-    return () => {
-      timers.current.forEach(id => window.clearTimeout(id));
-      timers.current = [];
-    };
-  }, [show]);
-
-  if (phase === "off") return null;
-
-  return (
+  return createPortal(
     <div
-      className={`absolute inset-0 z-40 flex items-center justify-center bg-white ${
-        phase === "in" ? "view-loading-enter" : "view-loading-exit"
+      data-testid="view-loading"
+      className={`fixed top-14 right-0 bottom-0 left-0 lg:left-60 z-20 flex items-center justify-center bg-white ${
+        exiting ? "view-loading-exit" : "view-loading-enter"
       }`}
       role="status"
       aria-live="polite"
       aria-label="A carregar"
     >
       <EnaLogoPng />
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -5042,25 +5042,32 @@ function AppShell() {
   const notifRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  const prevView = useRef<View | null>(null);
+  const viewRef = useRef(view);
+  viewRef.current = view;
   const [viewCurtain, setViewCurtain] = useState(false);
+  const [curtainTick, setCurtainTick] = useState(0);
   const go = useCallback((v: View) => {
-    setView(v); setSidebarOpen(false);
+    if (viewRef.current !== v) {
+      viewRef.current = v;
+      armViewLoading();
+      setViewCurtain(true);
+      setCurtainTick(n => n + 1);
+    }
+    setView(v);
+    setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
   useEffect(() => {
-    const prev = prevView.current;
-    prevView.current = view;
-    if (prev === null || prev === view) {
-      const later = window.setTimeout(() => armViewLoading(), 1800);
-      return () => window.clearTimeout(later);
-    }
-    armViewLoading();
-    setViewCurtain(true);
-    const hold = window.setTimeout(() => setViewCurtain(false), 1100);
+    if (!viewCurtain) return;
+    const hold = window.setTimeout(() => setViewCurtain(false), 1500);
     return () => window.clearTimeout(hold);
-  }, [view]);
+  }, [viewCurtain, curtainTick]);
+
+  useEffect(() => {
+    const later = window.setTimeout(() => armViewLoading(), 2000);
+    return () => window.clearTimeout(later);
+  }, []);
 
   const navigate = useCallback((target: View | NavTarget) => {
     const t: NavTarget = typeof target === "string" ? { view: target } : target;
@@ -5079,8 +5086,8 @@ function AppShell() {
     go(t.view);
   }, [go]);
 
-  function openCockpit(id: number, tab: CockpitTab = "overview") { setCockpitId(id); setCockpitTab(tab); setView("gold-cockpit-turma"); }
-  function openFinCockpit(id: number, tab: CockpitTab = "overview") { setFinCockpitId(id); setCockpitTab(tab); setView("fin-cockpit-turma"); }
+  function openCockpit(id: number, tab: CockpitTab = "overview") { setCockpitId(id); setCockpitTab(tab); go("gold-cockpit-turma"); }
+  function openFinCockpit(id: number, tab: CockpitTab = "overview") { setFinCockpitId(id); setCockpitTab(tab); go("fin-cockpit-turma"); }
 
   // Ctrl+K
   useEffect(() => {

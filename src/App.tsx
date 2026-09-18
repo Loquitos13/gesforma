@@ -42,7 +42,7 @@ import { useNotificacoes } from "./NotificacoesContext";
 import { presencasDaSessao, useCriteriosAvaliacao, useDtpResumo, useTurmaPedagogia, type PresencaRow } from "./PedagogiaContext";
 import { UsersView, roleLabel } from "./UsersView";
 import { ViewLoadingOverlay } from "./ViewLoading";
-import { armViewLoading, beginViewLoad, endViewLoad } from "./viewLoadingBus";
+import { armViewLoading } from "./viewLoadingBus";
 import { EmailXmlEditor } from "./EmailTemplateEditor";
 import {
   type CtaAmbito,
@@ -5042,24 +5042,24 @@ function AppShell() {
   const notifRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  const firstView = useRef(true);
+  const prevView = useRef<View | null>(null);
+  const [viewCurtain, setViewCurtain] = useState(false);
   const go = useCallback((v: View) => {
     setView(v); setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
   useEffect(() => {
-    if (firstView.current) {
-      firstView.current = false;
-      return;
+    const prev = prevView.current;
+    prevView.current = view;
+    if (prev === null || prev === view) {
+      const later = window.setTimeout(() => armViewLoading(), 1800);
+      return () => window.clearTimeout(later);
     }
     armViewLoading();
-    beginViewLoad();
-    const hold = window.setTimeout(() => endViewLoad(), 750);
-    return () => {
-      window.clearTimeout(hold);
-      endViewLoad();
-    };
+    setViewCurtain(true);
+    const hold = window.setTimeout(() => setViewCurtain(false), 1100);
+    return () => window.clearTimeout(hold);
   }, [view]);
 
   const navigate = useCallback((target: View | NavTarget) => {
@@ -5248,10 +5248,12 @@ function AppShell() {
             </div>
           </header>
 
-          <main className="relative flex-1 p-4 sm:p-5 overflow-auto">
-            {renderView()}
-            <ViewLoadingOverlay />
-          </main>
+          <div className="relative flex-1 min-h-0 overflow-hidden">
+            <main className="h-full p-4 sm:p-5 overflow-auto">
+              {renderView()}
+            </main>
+            <ViewLoadingOverlay active={viewCurtain} />
+          </div>
 
           <footer className="bg-white border-t border-slate-100 px-5 py-2.5 text-center flex-shrink-0">
             <p className="text-xs text-slate-400">GesForma © 2026 · <span className="font-semibold text-slate-500">ENA</span> - Escola de Negócios e Administração</p>

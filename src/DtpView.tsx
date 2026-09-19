@@ -70,7 +70,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle }: Pro
       </div>
     );
   }
-  if (estado === "offline" || items.length === 0) {
+  if (estado === "offline") {
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
         <p className="text-sm font-semibold text-amber-800">Sem ligação ao dossiê desta turma</p>
@@ -143,7 +143,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle }: Pro
           return (
             <button
               key={f.id}
-              onClick={() => { showViewCurtain(900); setFase(prev => (prev === f.id ? "todas" : f.id)); }}
+              onClick={() => { showViewCurtain(1800); setFase(prev => (prev === f.id ? "todas" : f.id)); }}
               className={`text-left rounded-xl border p-3 transition-colors ${fase === f.id ? (isGold ? "border-amber-400 bg-amber-50" : "border-blue-400 bg-blue-50") : "border-slate-200 bg-white hover:bg-slate-50"}`}
             >
               <p className="text-xs font-bold text-slate-700">{f.label}</p>

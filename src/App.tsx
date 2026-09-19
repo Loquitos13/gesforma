@@ -1135,7 +1135,7 @@ function TurmaTabBar({ tab, onChange, accent = "gold", dtpPct }: { tab: CockpitT
   return (
     <div className="flex gap-0.5 border-b border-slate-200 overflow-x-auto scrollbar-hide">
       {tabs.map(t => (
-        <button key={t.id} onClick={() => { if (tab !== t.id) showViewCurtain(1000); onChange(t.id); }}
+        <button key={t.id} onClick={() => { if (tab !== t.id) showViewCurtain(1800); onChange(t.id); }}
           className={`flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 whitespace-nowrap ${tab === t.id ? active : "border-transparent text-slate-500 hover:text-slate-700"}`}>
           {t.icon} {t.label}
           {t.id === "dtp" && <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${chip}`}>{dtpPct}%</span>}
@@ -1394,13 +1394,14 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
 }
 
 function exportPayload(
-  base: { nome: string; curso: string; local: string; formandos: number; accent: "gold" | "fin" },
+  base: { nome: string; curso: string; local: string; formandos: number; accent: "gold" | "fin"; turmaId: number },
   lista: { nome: string; email: string; telf: string; estado: string }[],
   sessoes: SessaoMeta[],
   ped: { sumarios: Record<number, SumarioSessaoData>; presencas: Record<number, PresencaRow[]>; dtp: { items: { label: string; estado: string; detalhe: string }[] } },
 ): ExportTurmaInfo {
   return {
     ...base,
+    regime: base.accent,
     lista,
     sessoes: sessoes.map(x => ({
       n: x.n,
@@ -1486,7 +1487,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                 setEditTurma(true);
               }} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>
               <button type="button" onClick={() => setExportTurma(exportPayload(
-                { nome: turma.nome, curso: turma.curso, local: turma.local, formandos: turma.totalAlunos, accent: "gold" },
+                { nome: turma.nome, curso: turma.curso, local: turma.local, formandos: turma.totalAlunos, accent: "gold", turmaId: turma.id },
                 membros.map(f => ({ nome: `${f.nome} ${f.apelido}`, email: f.email, telf: f.telf, estado: f.pago ? "Pago" : "Por pagar" })),
                 sessoesTurma,
                 ped,
@@ -2022,7 +2023,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
               setEditLocal(turma.local); setEditInicio(turma.dataInicio); setEditTurma(true);
             }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>
             <button type="button" onClick={() => setExportTurma(exportPayload(
-              { nome: turma.nome, curso: turma.curso, local: turma.local, formandos: turma.alunos, accent: "fin" },
+              { nome: turma.nome, curso: turma.curso, local: turma.local, formandos: turma.alunos, accent: "fin", turmaId: turma.id },
               listaFormandos.map(f => ({ nome: `${f.nome} ${f.apelido}`, email: f.email, telf: f.telf, estado: f.estado })),
               sessoesTurma,
               ped,
@@ -4176,7 +4177,7 @@ function EmailsView() {
       <PageHeader title="Emails Automáticos" sub={apiOn ? "As regras vivem na API. Quando a secretaria regista uma pré-inscrição ou um pagamento, a fila dispara sozinha." : "Uma regra = um gatilho + um template. Sem API as alterações ficam só neste ecrã."} action={<NewBtn label="+ Nova Regra" onClick={abrirNova} />} />
       <div className="flex gap-1 border-b border-slate-200 bg-white rounded-t-xl px-4 pt-3">
         {(["regras", "templates", "historico"] as const).map(t => (
-          <button key={t} onClick={() => { if (tab !== t) showViewCurtain(1000); setTab(t); }}
+          <button key={t} onClick={() => { if (tab !== t) showViewCurtain(1800); setTab(t); }}
             className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors -mb-px ${tab === t ? "bg-white border-t border-l border-r border-slate-200 text-amber-600 border-b-white" : "text-slate-500 hover:text-slate-700"}`}>
             {t === "regras" ? "Regras de Envio" : t === "templates" ? "Templates" : "Histórico"}
           </button>

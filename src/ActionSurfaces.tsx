@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { apiDtpExport } from "./api";
 import { useCatalogs } from "./CatalogsContext";
 import { AppModal } from "./FormKit";
 import { EmptyHint, NotifKind, sortNotifs } from "./SecretaryUX";
+import { toastError } from "./toastBus";
 
 const I = {
   download: (
@@ -112,6 +114,8 @@ export type ExportTurmaInfo = {
   local: string;
   formandos: number;
   accent?: Accent;
+  turmaId?: number;
+  regime?: "gold" | "fin";
   lista?: { nome: string; email: string; telf: string; estado: string }[];
   sessoes?: { n: number; data: string; hora: string; modulo: string; formador: string; sumario: boolean; presencas: number }[];
   dtp?: { label: string; estado: string; detalhe: string }[];
@@ -509,13 +513,16 @@ export function ExportTurmaModal({
     },
     {
       id: "dtp",
-      label: "Dossiê TP (índice)",
-      detalhe: dtp.length ? `CSV com ${dtp.length} documentos e o estado de cada um` : "Sem dossiê carregado",
-      disabled: dtp.length === 0,
-      run: () => baixarCsv(`dtp-${turma.nome}`, [
-        ["Documento", "Estado", "Detalhe"],
-        ...dtp.map(d => [d.label, d.estado, d.detalhe]),
-      ]),
+      label: "Pasta DTP (ZIP)",
+      detalhe: turma.turmaId != null
+        ? `ZIP com os PDFs do Drive desta turma${dtp.length ? ` e o índice (${dtp.length} documentos)` : " e o índice do dossiê"}`
+        : "Abra o cockpit de uma turma para gerar o ZIP",
+      disabled: turma.turmaId == null,
+      run: async () => {
+        if (turma.turmaId == null) return;
+        const codigo = turma.nome.replace(/[^\w-]+/g, "-").toLowerCase();
+        await apiDtpExport(turma.regime ?? turma.accent ?? "gold", turma.turmaId, `dtp-${codigo}.zip`);
+      },
     },
   ];
 
@@ -532,7 +539,11 @@ export function ExportTurmaModal({
             <button
               type="button"
               disabled={p.disabled}
-              onClick={() => { p.run(); setDone(p.label); }}
+              onClick={() => {
+                void Promise.resolve(p.run())
+                  .then(() => setDone(p.label))
+                  .catch(err => toastError(err, "Não foi possível exportar."));
+              }}
               className={`px-3 py-1.5 ${t.btn} disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1`}
             >
               {I.download} {p.id === "presencas" ? "Imprimir" : "Descarregar"}

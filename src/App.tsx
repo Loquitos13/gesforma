@@ -43,7 +43,7 @@ import { useNotificacoes } from "./NotificacoesContext";
 import { presencasDaSessao, useCriteriosAvaliacao, useDtpResumo, useTurmaPedagogia, type PresencaRow } from "./PedagogiaContext";
 import { UsersView, roleLabel } from "./UsersView";
 import { ViewLoadingOverlay } from "./ViewLoading";
-import { armViewLoading, showViewCurtain } from "./viewLoadingBus";
+import { armViewLoading } from "./viewLoadingBus";
 import { EmailXmlEditor } from "./EmailTemplateEditor";
 import {
   type CtaAmbito,
@@ -411,7 +411,7 @@ function destFromGatilho(
   if (lead) return { nome: `${lead.nome} ${lead.apelido}`.trim(), papel: "Lead", email: lead.email };
   const f = formadores.find(x => x.email);
   if (f) return { nome: f.nome, papel: "Formador", email: f.email };
-  return { nome: "Sem destinatário", papel: "ainda sem dados na base", email: "—" };
+  return { nome: "Sem destinatário", papel: "ainda sem dados na base", email: "-" };
 }
 
 function EmailPreviewPane({
@@ -1135,7 +1135,7 @@ function TurmaTabBar({ tab, onChange, accent = "gold", dtpPct }: { tab: CockpitT
   return (
     <div className="flex gap-0.5 border-b border-slate-200 overflow-x-auto scrollbar-hide">
       {tabs.map(t => (
-        <button key={t.id} onClick={() => { if (tab !== t.id) showViewCurtain(1800); onChange(t.id); }}
+        <button key={t.id} onClick={() => onChange(t.id)}
           className={`flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 whitespace-nowrap ${tab === t.id ? active : "border-transparent text-slate-500 hover:text-slate-700"}`}>
           {t.icon} {t.label}
           {t.id === "dtp" && <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${chip}`}>{dtpPct}%</span>}
@@ -3934,7 +3934,7 @@ function CampanhasView() {
   const [dataCamp, setDataCamp] = useState("");
   return (
     <div className="space-y-4">
-      <PageHeader title="Campanhas" sub="Inscrições, pagamentos e receita saem das pré-inscrições e dos pagamentos — não se escrevem à mão." action={<NewBtn label="+ Nova Campanha" onClick={() => { setNomeCamp(""); setDataCamp(""); setCursoCamp(""); setOpen(true); }} />} />
+      <PageHeader title="Campanhas" sub="Inscrições, pagamentos e receita saem das pré-inscrições e dos pagamentos - não se escrevem à mão." action={<NewBtn label="+ Nova Campanha" onClick={() => { setNomeCamp(""); setDataCamp(""); setCursoCamp(""); setOpen(true); }} />} />
       {campanhas.length === 0 && (
         <EmptyHint text="Ainda sem campanhas. Crie uma e associe o curso: os números entram sozinhos quando chegarem pré-inscrições." />
       )}
@@ -4177,7 +4177,7 @@ function EmailsView() {
       <PageHeader title="Emails Automáticos" sub={apiOn ? "As regras vivem na API. Quando a secretaria regista uma pré-inscrição ou um pagamento, a fila dispara sozinha." : "Uma regra = um gatilho + um template. Sem API as alterações ficam só neste ecrã."} action={<NewBtn label="+ Nova Regra" onClick={abrirNova} />} />
       <div className="flex gap-1 border-b border-slate-200 bg-white rounded-t-xl px-4 pt-3">
         {(["regras", "templates", "historico"] as const).map(t => (
-          <button key={t} onClick={() => { if (tab !== t) showViewCurtain(1800); setTab(t); }}
+          <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors -mb-px ${tab === t ? "bg-white border-t border-l border-r border-slate-200 text-amber-600 border-b-white" : "text-slate-500 hover:text-slate-700"}`}>
             {t === "regras" ? "Regras de Envio" : t === "templates" ? "Templates" : "Histórico"}
           </button>
@@ -5078,10 +5078,7 @@ function AppShell() {
   const viewRef = useRef(view);
   viewRef.current = view;
   const go = useCallback((v: View) => {
-    if (viewRef.current !== v) {
-      viewRef.current = v;
-      showViewCurtain(1800);
-    }
+    viewRef.current = v;
     setView(v);
     setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });

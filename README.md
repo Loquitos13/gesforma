@@ -62,7 +62,7 @@ A **taxa de abertura** dos emails automáticos sai do pixel `GET /api/v1/email/o
 
 A ficha do curso e o blog **ficam no GesForma**. Ainda não há publicação em `ena.pt` - falta o código de integração do site.
 
-Se a API falhar, as listas **não ficam com o seed de demonstração**: ficam vazias e aparece um aviso. As gravações (POST/PUT/PATCH/DELETE) mostram toast quando falham. O overlay branco com o logo ENA cobre mudança de vista, filtros, separadores e pedidos à API.
+Se a API falhar, as listas **não ficam com o seed de demonstração**: ficam vazias e aparece um aviso. As gravações (POST/PUT/PATCH/DELETE) mostram toast quando falham. O overlay branco com o logo ENA só aparece se um pedido à API demorar mais de cerca de 2,5 segundos — mudanças de vista com dados já carregados não o disparam.
 
 O login aceita **email e palavra-passe**, **Continuar com Google** e **Continuar com Microsoft**. Nos dois casos externos a sessão só é criada se o email já existir como utilizador activo: a autenticação externa identifica a pessoa, não dá acesso. O cliente Google e a aplicação Microsoft configuram-se em **Configurações** (ou por variáveis de ambiente `GOOGLE_*` / `MICROSOFT_*`, que passam a mandar). A aplicação Microsoft pede o *Application (client) ID*, o *client secret* e o *Directory (tenant) ID* - com o tenant da ENA só entra a organização; com `common` entra qualquer organização. O segredo fica cifrado (AES-256-GCM) como o do Google, e o URI de redireccionamento a registar no portal Azure é `{APP_ORIGIN}/api/v1/auth/microsoft/callback`.
 

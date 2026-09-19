@@ -14,9 +14,8 @@ function EnaLogoPng() {
 }
 
 /**
- * Fundo branco a 100% da view, com o logo PNG.
- * Entrada: aparece. Meio: opacidade 100%. Saída: desvanece.
- * Não substitui o splash 0–100% da primeira entrada na sessão.
+ * Fundo branco com o logo PNG, só quando um fetch passa do atraso (2,5 s).
+ * Entrada e saída por opacidade. Não substitui o splash 0–100% da sessão.
  */
 export function ViewLoadingOverlay() {
   const [busy, setBusy] = useState(isViewLoading);

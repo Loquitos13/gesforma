@@ -4,25 +4,45 @@ const listeners = new Set<Listener>();
 let pending = 0;
 let armed = false;
 let curtain = false;
-let curtainUntil = 0;
-let curtainTimer: number | undefined;
+let delayTimer: number | undefined;
 
-function busy() {
-  return curtain || pending > 0;
-}
+/** Só mostra a cortina se o fetch ainda estiver pendente após este atraso. */
+const SHOW_AFTER_MS = 2500;
 
 function notify() {
-  const on = busy();
+  const on = curtain;
   listeners.forEach(fn => fn(on));
 }
 
+function scheduleCurtain() {
+  if (delayTimer !== undefined || curtain) return;
+  delayTimer = window.setTimeout(() => {
+    delayTimer = undefined;
+    if (pending > 0 && !curtain) {
+      curtain = true;
+      notify();
+    }
+  }, SHOW_AFTER_MS);
+}
+
+function hideCurtain() {
+  if (delayTimer !== undefined) {
+    window.clearTimeout(delayTimer);
+    delayTimer = undefined;
+  }
+  if (curtain) {
+    curtain = false;
+    notify();
+  }
+}
+
 export function isViewLoading() {
-  return busy();
+  return curtain;
 }
 
 export function subscribeViewLoading(fn: Listener) {
   listeners.add(fn);
-  fn(busy());
+  fn(curtain);
   return () => { listeners.delete(fn); };
 }
 
@@ -31,30 +51,16 @@ export function armViewLoading() {
   armed = true;
 }
 
-/** Cortina mínima na mudança de view. Não é cancelada pelo StrictMode/unmount. */
-export function showViewCurtain(ms = 1800) {
-  armed = true;
-  curtain = true;
-  curtainUntil = Math.max(curtainUntil, performance.now() + ms);
-  if (curtainTimer) window.clearTimeout(curtainTimer);
-  curtainTimer = window.setTimeout(() => {
-    curtain = false;
-    curtainTimer = undefined;
-    notify();
-  }, Math.max(0, curtainUntil - performance.now()));
-  notify();
-}
-
 export function beginViewLoad() {
   if (!armed) return;
   pending += 1;
-  notify();
+  if (pending === 1) scheduleCurtain();
 }
 
 export function endViewLoad() {
   if (pending === 0) return;
   pending = Math.max(0, pending - 1);
-  notify();
+  if (pending === 0) hideCurtain();
 }
 
 export function isSilentViewPath(path: string) {

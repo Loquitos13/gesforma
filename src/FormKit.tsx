@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { showViewCurtain } from "./viewLoadingBus";
 
 const modalSizes = {
   sm: "max-w-md",
@@ -432,7 +431,7 @@ export function FilterChips({ options, value, onChange, accent = "gold" }: {
   return (
     <div className="flex flex-wrap gap-2">
       {options.map(o => (
-        <button key={o} type="button" onClick={() => { if (o !== value) showViewCurtain(1800); onChange(o); }}
+        <button key={o} type="button" onClick={() => onChange(o)}
           className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${value === o ? on : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
           {o}
         </button>
@@ -493,7 +492,7 @@ export function ViewFilters({
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{f.label}</label>
               <SearchSelect
                 value={f.value}
-                onChange={v => { if (v !== f.value) showViewCurtain(1800); f.onChange(v); }}
+                onChange={f.onChange}
                 options={f.options}
                 placeholder={f.placeholder ?? `Pesquisar ${f.label.toLowerCase()}…`}
                 allowEmpty
@@ -509,7 +508,7 @@ export function ViewFilters({
             ? <FilterChips options={chips.options} value={chips.value} onChange={chips.onChange} accent={accent} />
             : <span />}
           {active && onClear && (
-            <button type="button" onClick={() => { showViewCurtain(1800); onClear(); }} className="text-xs font-semibold text-slate-500 hover:text-slate-800 whitespace-nowrap">
+            <button type="button" onClick={onClear} className="text-xs font-semibold text-slate-500 hover:text-slate-800 whitespace-nowrap">
               Limpar filtros
             </button>
           )}

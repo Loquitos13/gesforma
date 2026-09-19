@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiDtpExport, type DtpEstado, type DtpItem, type DtpSnapshot } from "./api";
 import { toastError, toastOk } from "./toastBus";
-import { showViewCurtain } from "./viewLoadingBus";
 
 export type DtpRegime = "gold" | "fin";
 type DtpFase = "antes" | "durante" | "depois";
@@ -143,7 +142,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle }: Pro
           return (
             <button
               key={f.id}
-              onClick={() => { showViewCurtain(1800); setFase(prev => (prev === f.id ? "todas" : f.id)); }}
+              onClick={() => { setFase(prev => (prev === f.id ? "todas" : f.id)); }}
               className={`text-left rounded-xl border p-3 transition-colors ${fase === f.id ? (isGold ? "border-amber-400 bg-amber-50" : "border-blue-400 bg-blue-50") : "border-slate-200 bg-white hover:bg-slate-50"}`}
             >
               <p className="text-xs font-bold text-slate-700">{f.label}</p>

@@ -28,6 +28,7 @@ import {
   emitAutomation,
 } from "./api";
 import { loadOps } from "./opsCache";
+import { persist, toastError } from "./toastBus";
 
 export function nextListId<T extends { id: number }>(xs: T[]) {
   return Math.max(0, ...xs.map(x => x.id), 1000) + 1;
@@ -60,7 +61,7 @@ export type CursoFinRow = {
 export type BlogPostRow = { id: number; titulo: string; slug: string; data: string; status: string; tematica?: string };
 export type CampanhaRow = {
   id: number; nome: string; data: string; encarregado: string;
-  preinscricoes: number; pagos: number; receita: number; custo: number;
+  curso?: string; preinscricoes: number; pagos: number; receita: number; custo: number;
 };
 export type PagamentoRow = {
   id: string; nome: string; valor: number; metodo: string; curso: string; data: string; estado: string;
@@ -145,45 +146,70 @@ export function ListsProvider({
       setBlog(snap.blogPosts);
       setCamp(snap.campanhas);
       setPag(snap.pagamentos);
-    }).catch(() => undefined);
+    }).catch(() => {
+      if (!alive) return;
+      toastError(new Error("A API não respondeu. As listas ficam vazias — os números de demonstração não entram."));
+      setPre([]);
+      setFT([]);
+      setFF([]);
+      setCG([]);
+      setCF([]);
+      setBlog([]);
+      setCamp([]);
+      setPag([]);
+    });
     return () => { alive = false; };
   }, []);
 
   const addPreinscricao = useCallback((row: Preinscricao) => {
     setPre(xs => [row, ...xs]);
-    void apiCreatePreinscricao(row).then(r => {
+    void persist(apiCreatePreinscricao(row).then(r => {
       if (r.preinscricao) setPre(xs => replaceById(xs, row.id, r.preinscricao));
-    }).catch(() => {
-      void emitAutomation("preinscricao.created", {
-        email: row.email,
-        nome: `${row.nome} ${row.apelido}`.trim(),
-        curso: row.curso,
-      }, `preinscricao:${row.id}:${row.email}`);
-    });
+    }), () => setPre(xs => xs.filter(x => x.id !== row.id)));
   }, []);
   const patchPreinscricao = useCallback((id: number, patch: Partial<Preinscricao>) => {
-    setPre(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x));
-    void apiPatchPreinscricao(id, patch).catch(() => undefined);
+    let before: Preinscricao | undefined;
+    setPre(xs => {
+      before = xs.find(x => x.id === id);
+      return xs.map(x => x.id === id ? { ...x, ...patch } : x);
+    });
+    void persist(apiPatchPreinscricao(id, patch), () => {
+      if (before) setPre(xs => xs.map(x => x.id === id ? before! : x));
+    });
   }, []);
   const removePreinscricao = useCallback((id: number) => {
-    setPre(xs => xs.filter(x => x.id !== id));
-    void apiDeletePreinscricao(id).catch(() => undefined);
+    let before: Preinscricao | undefined;
+    setPre(xs => {
+      before = xs.find(x => x.id === id);
+      return xs.filter(x => x.id !== id);
+    });
+    void persist(apiDeletePreinscricao(id), () => {
+      if (before) setPre(xs => [before!, ...xs]);
+    });
   }, []);
   const contactarPreinscricao = useCallback((id: number, nota = "") => {
-    setPre(xs => xs.map(x => x.id === id && x.estado === "Não contactado" ? { ...x, estado: "1º Contacto", notas: [x.notas, nota].filter(Boolean).join("\n") } : x));
-    void apiContactarPreinscricao(id, nota).then(r => {
+    let before: Preinscricao | undefined;
+    setPre(xs => {
+      before = xs.find(x => x.id === id);
+      return xs.map(x => x.id === id && x.estado === "Não contactado" ? { ...x, estado: "1º Contacto", notas: [x.notas, nota].filter(Boolean).join("\n") } : x);
+    });
+    void persist(apiContactarPreinscricao(id, nota).then(r => {
       if (r.preinscricao) setPre(xs => xs.map(x => x.id === id ? r.preinscricao! : x));
-    }).catch(() => undefined);
+    }), () => {
+      if (before) setPre(xs => xs.map(x => x.id === id ? before! : x));
+    });
   }, []);
 
   const addFormandoTurma = useCallback((row: FormandoTurma) => {
     setFT(xs => [row, ...xs]);
-    void apiCreateFormandoGold(row).then(r => {
+    void persist(apiCreateFormandoGold(row).then(r => {
       if (r.formando) setFT(xs => replaceById(xs, row.id, r.formando));
-    }).catch(() => undefined);
+    }), () => setFT(xs => xs.filter(x => x.id !== row.id)));
   }, []);
   const patchFormandoTurma = useCallback((id: number, patch: Partial<FormandoTurma>) => {
+    let before: FormandoTurma | undefined;
     setFT(xs => {
+      before = xs.find(x => x.id === id);
       const next = xs.map(x => x.id === id ? { ...x, ...patch } : x);
       const row = next.find(x => x.id === id);
       if (row && patch.estado && /conclu/i.test(patch.estado) && row.email) {
@@ -196,105 +222,181 @@ export function ListsProvider({
       }
       return next;
     });
-    void apiPatchFormandoGold(id, patch).catch(() => undefined);
+    void persist(apiPatchFormandoGold(id, patch), () => {
+      if (before) setFT(xs => xs.map(x => x.id === id ? before! : x));
+    });
   }, []);
   const removeFormandoTurma = useCallback((id: number) => {
-    setFT(xs => xs.filter(x => x.id !== id));
-    void apiDeleteFormandoGold(id).catch(() => undefined);
+    let before: FormandoTurma | undefined;
+    setFT(xs => {
+      before = xs.find(x => x.id === id);
+      return xs.filter(x => x.id !== id);
+    });
+    void persist(apiDeleteFormandoGold(id), () => {
+      if (before) setFT(xs => [before!, ...xs]);
+    });
   }, []);
 
   const addFormandoFin = useCallback((row: FormandoFin) => {
     setFF(xs => [row, ...xs]);
-    void apiCreateFormandoFin(row).then(r => {
+    void persist(apiCreateFormandoFin(row).then(r => {
       if (r.formando) setFF(xs => replaceById(xs, row.id, r.formando));
-    }).catch(() => undefined);
+    }), () => setFF(xs => xs.filter(x => x.id !== row.id)));
   }, []);
   const patchFormandoFin = useCallback((id: number, patch: Partial<FormandoFin>) => {
-    setFF(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x));
-    void apiPatchFormandoFin(id, patch).catch(() => undefined);
+    let before: FormandoFin | undefined;
+    setFF(xs => {
+      before = xs.find(x => x.id === id);
+      return xs.map(x => x.id === id ? { ...x, ...patch } : x);
+    });
+    void persist(apiPatchFormandoFin(id, patch), () => {
+      if (before) setFF(xs => xs.map(x => x.id === id ? before! : x));
+    });
   }, []);
   const removeFormandoFin = useCallback((id: number) => {
-    setFF(xs => xs.filter(x => x.id !== id));
-    void apiDeleteFormandoFin(id).catch(() => undefined);
+    let before: FormandoFin | undefined;
+    setFF(xs => {
+      before = xs.find(x => x.id === id);
+      return xs.filter(x => x.id !== id);
+    });
+    void persist(apiDeleteFormandoFin(id), () => {
+      if (before) setFF(xs => [before!, ...xs]);
+    });
   }, []);
 
   const addCursoGold = useCallback((row: CursoGoldRow) => {
     setCG(xs => [row, ...xs]);
-    void apiCreateCursoGold(row).then(r => {
+    void persist(apiCreateCursoGold(row).then(r => {
       if (r.curso) setCG(xs => replaceById(xs, row.id, r.curso));
-    }).catch(() => undefined);
+    }), () => setCG(xs => xs.filter(x => x.id !== row.id)));
   }, []);
   const patchCursoGold = useCallback((id: number, patch: Partial<CursoGoldRow>) => {
-    setCG(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x));
-    void apiPatchCursoGold(id, patch).catch(() => undefined);
+    let before: CursoGoldRow | undefined;
+    setCG(xs => {
+      before = xs.find(x => x.id === id);
+      return xs.map(x => x.id === id ? { ...x, ...patch } : x);
+    });
+    void persist(apiPatchCursoGold(id, patch), () => {
+      if (before) setCG(xs => xs.map(x => x.id === id ? before! : x));
+    });
   }, []);
   const removeCursoGold = useCallback((id: number) => {
-    setCG(xs => xs.filter(x => x.id !== id));
-    void apiDeleteCursoGold(id).catch(() => undefined);
+    let before: CursoGoldRow | undefined;
+    setCG(xs => {
+      before = xs.find(x => x.id === id);
+      return xs.filter(x => x.id !== id);
+    });
+    void persist(apiDeleteCursoGold(id), () => {
+      if (before) setCG(xs => [before!, ...xs]);
+    });
   }, []);
 
   const addCursoFin = useCallback((row: CursoFinRow) => {
     setCF(xs => [row, ...xs]);
-    void apiCreateCursoFin(row).then(r => {
+    void persist(apiCreateCursoFin(row).then(r => {
       if (r.curso) setCF(xs => replaceById(xs, row.id, r.curso));
-    }).catch(() => undefined);
+    }), () => setCF(xs => xs.filter(x => x.id !== row.id)));
   }, []);
   const patchCursoFin = useCallback((id: number, patch: Partial<CursoFinRow>) => {
-    setCF(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x));
-    void apiPatchCursoFin(id, patch).catch(() => undefined);
+    let before: CursoFinRow | undefined;
+    setCF(xs => {
+      before = xs.find(x => x.id === id);
+      return xs.map(x => x.id === id ? { ...x, ...patch } : x);
+    });
+    void persist(apiPatchCursoFin(id, patch), () => {
+      if (before) setCF(xs => xs.map(x => x.id === id ? before! : x));
+    });
   }, []);
   const removeCursoFin = useCallback((id: number) => {
-    setCF(xs => xs.filter(x => x.id !== id));
-    void apiDeleteCursoFin(id).catch(() => undefined);
+    let before: CursoFinRow | undefined;
+    setCF(xs => {
+      before = xs.find(x => x.id === id);
+      return xs.filter(x => x.id !== id);
+    });
+    void persist(apiDeleteCursoFin(id), () => {
+      if (before) setCF(xs => [before!, ...xs]);
+    });
   }, []);
 
   const addBlogPost = useCallback((row: BlogPostRow) => {
     setBlog(xs => [row, ...xs]);
-    void apiCreateBlog(row).then(r => {
+    void persist(apiCreateBlog(row).then(r => {
       if (r.post) setBlog(xs => replaceById(xs, row.id, r.post));
-    }).catch(() => undefined);
+    }), () => setBlog(xs => xs.filter(x => x.id !== row.id)));
   }, []);
   const patchBlogPost = useCallback((id: number, patch: Partial<BlogPostRow>) => {
-    setBlog(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x));
-    void apiPatchBlog(id, patch).catch(() => undefined);
+    let before: BlogPostRow | undefined;
+    setBlog(xs => {
+      before = xs.find(x => x.id === id);
+      return xs.map(x => x.id === id ? { ...x, ...patch } : x);
+    });
+    void persist(apiPatchBlog(id, patch), () => {
+      if (before) setBlog(xs => xs.map(x => x.id === id ? before! : x));
+    });
   }, []);
   const removeBlogPost = useCallback((id: number) => {
-    setBlog(xs => xs.filter(x => x.id !== id));
-    void apiDeleteBlog(id).catch(() => undefined);
+    let before: BlogPostRow | undefined;
+    setBlog(xs => {
+      before = xs.find(x => x.id === id);
+      return xs.filter(x => x.id !== id);
+    });
+    void persist(apiDeleteBlog(id), () => {
+      if (before) setBlog(xs => [before!, ...xs]);
+    });
   }, []);
 
   const addCampanha = useCallback((row: CampanhaRow) => {
     setCamp(xs => [row, ...xs]);
-    void apiCreateCampanha(row).then(r => {
+    void persist(apiCreateCampanha(row).then(r => {
       if (r.campanha) setCamp(xs => replaceById(xs, row.id, r.campanha));
-    }).catch(() => undefined);
+    }), () => setCamp(xs => xs.filter(x => x.id !== row.id)));
   }, []);
   const patchCampanha = useCallback((id: number, patch: Partial<CampanhaRow>) => {
-    setCamp(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x));
-    void apiPatchCampanha(id, patch).catch(() => undefined);
+    let before: CampanhaRow | undefined;
+    setCamp(xs => {
+      before = xs.find(x => x.id === id);
+      return xs.map(x => x.id === id ? { ...x, ...patch } : x);
+    });
+    void persist(apiPatchCampanha(id, patch), () => {
+      if (before) setCamp(xs => xs.map(x => x.id === id ? before! : x));
+    });
   }, []);
   const removeCampanha = useCallback((id: number) => {
-    setCamp(xs => xs.filter(x => x.id !== id));
-    void apiDeleteCampanha(id).catch(() => undefined);
+    let before: CampanhaRow | undefined;
+    setCamp(xs => {
+      before = xs.find(x => x.id === id);
+      return xs.filter(x => x.id !== id);
+    });
+    void persist(apiDeleteCampanha(id), () => {
+      if (before) setCamp(xs => [before!, ...xs]);
+    });
   }, []);
 
   const addPagamento = useCallback((row: PagamentoRow, email?: string) => {
     setPag(xs => [row, ...xs]);
-    void apiCreatePagamento({ ...row, email }).then(r => {
+    void persist(apiCreatePagamento({ ...row, email }).then(r => {
       if (r.pagamento) setPag(xs => xs.map(x => x.id === row.id ? r.pagamento : x));
-    }).catch(() => {
-      if (email) {
-        void emitAutomation("payment.confirmed", { email, nome: row.nome, curso: row.curso }, `payment:${row.id}:${email}`);
-      }
-    });
+    }), () => setPag(xs => xs.filter(x => x.id !== row.id)));
   }, []);
   const patchPagamento = useCallback((id: string, patch: Partial<PagamentoRow>) => {
-    setPag(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x));
-    void apiPatchPagamento(id, patch).catch(() => undefined);
+    let before: PagamentoRow | undefined;
+    setPag(xs => {
+      before = xs.find(x => x.id === id);
+      return xs.map(x => x.id === id ? { ...x, ...patch } : x);
+    });
+    void persist(apiPatchPagamento(id, patch), () => {
+      if (before) setPag(xs => xs.map(x => x.id === id ? before! : x));
+    });
   }, []);
   const removePagamento = useCallback((id: string) => {
-    setPag(xs => xs.filter(x => x.id !== id));
-    void apiDeletePagamento(id).catch(() => undefined);
+    let before: PagamentoRow | undefined;
+    setPag(xs => {
+      before = xs.find(x => x.id === id);
+      return xs.filter(x => x.id !== id);
+    });
+    void persist(apiDeletePagamento(id), () => {
+      if (before) setPag(xs => [before!, ...xs]);
+    });
   }, []);
 
   const value = useMemo(() => ({

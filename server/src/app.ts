@@ -455,10 +455,11 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     if (!requireAuth(req, reply)) return;
     const rows = await db.query<{
       id: number; nome: string; gatilho_label: string; template_tipo: string;
-      delay_seconds: number; curso: string | null; ativo: boolean; envios: number;
+      delay_seconds: number; curso: string | null; ativo: boolean; envios: number; abertos: number;
     }>(
       `SELECT r.id, r.nome, r.gatilho_label, r.template_tipo, r.delay_seconds, r.curso, r.ativo,
-              (SELECT count(*)::int FROM email_jobs j WHERE j.rule_id = r.id AND j.status = 'sent') AS envios
+              (SELECT count(*)::int FROM email_jobs j WHERE j.rule_id = r.id AND j.status = 'sent') AS envios,
+              (SELECT count(*)::int FROM email_jobs j WHERE j.rule_id = r.id AND j.opened_at IS NOT NULL) AS abertos
        FROM email_rules r ORDER BY r.id`,
     );
     return {
@@ -471,7 +472,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
         curso: r.curso,
         ativo: r.ativo,
         envios: r.envios,
-        taxaAbertura: 0,
+        taxaAbertura: r.envios > 0 ? Math.round((r.abertos / r.envios) * 100) : 0,
       })),
     };
   });
@@ -541,6 +542,22 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     await db.query("DELETE FROM email_rules WHERE id = $1", [id]);
     await audit(db, req.actor!.id, "email.rule_delete", "email_rule", String(id), req.ip);
     return { ok: true };
+  });
+
+  const PIXEL_GIF = Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64");
+  app.get("/v1/email/open/:id", async (req, reply) => {
+    const raw = String((req.params as { id: string }).id).replace(/\.gif$/i, "");
+    if (/^[0-9a-f-]{36}$/i.test(raw)) {
+      await db.query(
+        "UPDATE email_jobs SET opened_at = COALESCE(opened_at, now()) WHERE id = $1 AND status = 'sent'",
+        [raw],
+      ).catch(() => undefined);
+    }
+    return reply
+      .header("Content-Type", "image/gif")
+      .header("Cache-Control", "no-store, no-cache, must-revalidate, private")
+      .header("Pragma", "no-cache")
+      .send(PIXEL_GIF);
   });
 
   app.get("/v1/cron/email", async (req, reply) => {

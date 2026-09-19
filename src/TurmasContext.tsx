@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { apiCreateTurmaFin, apiCreateTurmaGold, apiDeleteTurmaFin, apiDeleteTurmaGold, apiPatchTurmaFin, apiPatchTurmaGold } from "./api";
 import { loadOps } from "./opsCache";
+import { persist, toastError } from "./toastBus";
 import { generateCronograma, seedFinTurmas, seedGoldTurmas, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
 
 type TurmasCtx = {
@@ -64,55 +65,72 @@ export function TurmasProvider({ children }: { children: ReactNode }) {
       if (!alive) return;
       setGold(snap.turmasGold.map(hydrateGold));
       setFin(snap.turmasFin.map(hydrateFin));
-    }).catch(() => undefined);
+    }).catch(() => {
+      if (!alive) return;
+      toastError(new Error("A API não respondeu. As turmas de demonstração saíram da lista."));
+      setGold([]);
+      setFin([]);
+    });
     return () => { alive = false; };
   }, []);
 
   const patchGold = useCallback((id: number, patch: Partial<TurmaGold>) => {
     setGold(xs => xs.map(t => t.id === id ? { ...t, ...patch } : t));
-    void apiPatchTurmaGold(id, patch).catch(() => undefined);
+    void persist(apiPatchTurmaGold(id, patch));
   }, []);
   const addGold = useCallback((turma: TurmaGold) => {
     setGold(xs => [turma, ...xs]);
-    void apiCreateTurmaGold(turma).then(r => {
+    void persist(apiCreateTurmaGold(turma).then(r => {
       if (r.turma) setGold(xs => xs.map(t => t.id === turma.id ? hydrateGold(r.turma) : t));
-    }).catch(() => undefined);
+    }), () => setGold(xs => xs.filter(t => t.id !== turma.id)));
   }, []);
   const removeGold = useCallback((id: number) => {
-    setGold(xs => xs.filter(t => t.id !== id));
-    void apiDeleteTurmaGold(id).catch(() => undefined);
+    let before: TurmaGold | undefined;
+    setGold(xs => {
+      before = xs.find(t => t.id === id);
+      return xs.filter(t => t.id !== id);
+    });
+    void persist(apiDeleteTurmaGold(id), () => {
+      if (before) setGold(xs => [before!, ...xs]);
+    });
   }, []);
   const setGoldCronograma = useCallback((id: number, cronograma: SessaoCronograma[]) => {
     setGold(xs => xs.map(t => t.id === id ? { ...t, cronograma } : t));
-    void apiPatchTurmaGold(id, { cronograma }).catch(() => undefined);
+    void persist(apiPatchTurmaGold(id, { cronograma }));
   }, []);
   const toggleGold = useCallback((id: number, activa: boolean) => {
     const estado = activa ? "Ativa" : "Inativa";
     setGold(xs => xs.map(t => t.id === id ? { ...t, estado } : t));
-    void apiPatchTurmaGold(id, { estado }).catch(() => undefined);
+    void persist(apiPatchTurmaGold(id, { estado }));
   }, []);
 
   const patchFin = useCallback((id: number, patch: Partial<TurmaFin>) => {
     setFin(xs => xs.map(t => t.id === id ? { ...t, ...patch } : t));
-    void apiPatchTurmaFin(id, patch).catch(() => undefined);
+    void persist(apiPatchTurmaFin(id, patch));
   }, []);
   const addFin = useCallback((turma: TurmaFin) => {
     setFin(xs => [turma, ...xs]);
-    void apiCreateTurmaFin(turma).then(r => {
+    void persist(apiCreateTurmaFin(turma).then(r => {
       if (r.turma) setFin(xs => xs.map(t => t.id === turma.id ? hydrateFin(r.turma) : t));
-    }).catch(() => undefined);
+    }), () => setFin(xs => xs.filter(t => t.id !== turma.id)));
   }, []);
   const removeFin = useCallback((id: number) => {
-    setFin(xs => xs.filter(t => t.id !== id));
-    void apiDeleteTurmaFin(id).catch(() => undefined);
+    let before: TurmaFin | undefined;
+    setFin(xs => {
+      before = xs.find(t => t.id === id);
+      return xs.filter(t => t.id !== id);
+    });
+    void persist(apiDeleteTurmaFin(id), () => {
+      if (before) setFin(xs => [before!, ...xs]);
+    });
   }, []);
   const setFinCronograma = useCallback((id: number, cronograma: SessaoCronograma[]) => {
     setFin(xs => xs.map(t => t.id === id ? { ...t, cronograma } : t));
-    void apiPatchTurmaFin(id, { cronograma }).catch(() => undefined);
+    void persist(apiPatchTurmaFin(id, { cronograma }));
   }, []);
   const toggleFin = useCallback((id: number, activa: boolean) => {
     setFin(xs => xs.map(t => t.id === id ? { ...t, activa } : t));
-    void apiPatchTurmaFin(id, { activa }).catch(() => undefined);
+    void persist(apiPatchTurmaFin(id, { activa }));
   }, []);
 
   const value = useMemo(() => ({

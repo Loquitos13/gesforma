@@ -33,6 +33,7 @@ export type EmailRule = {
   curso: string | null;
   ativo: boolean;
   envios: number;
+  taxaAbertura: number;
 };
 
 export type EmailTemplate = {
@@ -79,7 +80,7 @@ export type OpsSnapshot = {
     id: number; nome: string; telf: string; email: string; especialidade: string; ccp: string; nif: string;
     regimes: string[]; estado: string;
   }>;
-  campanhas: Array<{ id: number; nome: string; data: string; encarregado: string; preinscricoes: number; pagos: number; receita: number; custo: number }>;
+  campanhas: Array<{ id: number; nome: string; data: string; encarregado: string; curso?: string; preinscricoes: number; pagos: number; receita: number; custo: number }>;
   blogPosts: Array<{ id: number; titulo: string; slug: string; data: string; status: string }>;
   pagamentos: Array<{ id: string; nome: string; valor: number; metodo: string; curso: string; data: string; estado: string }>;
   catalogs?: Record<string, Array<Record<string, unknown> & { id: number }>>;
@@ -106,7 +107,7 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   headers.set("X-Gesforma-Client", "web");
   if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const method = (init.method ?? "GET").toUpperCase();
-  const track = method === "GET" && !isSilentViewPath(path);
+  const track = !isSilentViewPath(path);
   if (track) beginViewLoad();
   try {
     const res = await fetch(`${BASE}${path}`, { ...init, credentials: "include", headers });
@@ -497,14 +498,44 @@ export async function apiUploadDrive(file: File, ctx: DriveUploadContext = { kin
   const headers = new Headers();
   headers.set("Accept", "application/json");
   headers.set("X-Gesforma-Client", "web");
-  const res = await fetch(`${BASE}/v1/drive/files`, { method: "POST", credentials: "include", headers, body: fd });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, typeof data.error === "string" ? data.error : "upload recusado");
-  return (data as { file: DriveFile }).file;
+  beginViewLoad();
+  try {
+    const res = await fetch(`${BASE}/v1/drive/files`, { method: "POST", credentials: "include", headers, body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new ApiError(res.status, typeof data.error === "string" ? data.error : "upload recusado");
+    return (data as { file: DriveFile }).file;
+  } finally {
+    endViewLoad();
+  }
 }
 
 export function driveOAuthStartUrl() {
   return `${BASE}/v1/drive/oauth/start`;
+}
+
+export async function apiDtpExport(regime: Regime, turmaId: number, filename?: string) {
+  const headers = new Headers();
+  headers.set("Accept", "application/zip");
+  headers.set("X-Gesforma-Client", "web");
+  beginViewLoad();
+  try {
+    const res = await fetch(`${BASE}/v1/dtp/${regime}/${turmaId}/export`, { credentials: "include", headers });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, typeof data.error === "string" ? data.error : "exportação recusada");
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename ?? `dtp-${turmaId}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } finally {
+    endViewLoad();
+  }
 }
 
 export function emitAutomation(

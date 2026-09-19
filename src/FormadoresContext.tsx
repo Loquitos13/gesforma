@@ -3,6 +3,7 @@ import { apiCreateFormador, apiDeleteFormador, apiPatchFormador } from "./api";
 import { formadoresAtivos, formadorSub, FORMADORES_SEED, type Formador, type FormadorRegime } from "./formadorModel";
 import { formadoresOptsWithFrom, formadoresToOpts, type SelectOption } from "./FormKit";
 import { loadOps } from "./opsCache";
+import { persist, toastError } from "./toastBus";
 
 type FormadoresCtx = {
   formadores: Formador[];
@@ -36,27 +37,37 @@ export function FormadoresProvider({ children }: { children: ReactNode }) {
     loadOps().then(snap => {
       if (!alive) return;
       setFormadores(snap.formadores.map(asFormador));
-    }).catch(() => undefined);
+    }).catch(() => {
+      if (!alive) return;
+      toastError(new Error("A API não respondeu. A lista de formadores ficou vazia."));
+      setFormadores([]);
+    });
     return () => { alive = false; };
   }, []);
 
   const addFormador = useCallback((draft: Omit<Formador, "id">) => {
     const created: Formador = { ...draft, id: Date.now() % 100000 };
     setFormadores(xs => [created, ...xs]);
-    void apiCreateFormador(created).then(r => {
+    void persist(apiCreateFormador(created).then(r => {
       if (r.formador) setFormadores(xs => xs.map(f => f.id === created.id ? asFormador(r.formador) : f));
-    }).catch(() => undefined);
+    }), () => setFormadores(xs => xs.filter(f => f.id !== created.id)));
     return created;
   }, []);
 
   const patchFormador = useCallback((id: number, patch: Partial<Formador>) => {
     setFormadores(xs => xs.map(f => f.id === id ? { ...f, ...patch } : f));
-    void apiPatchFormador(id, patch).catch(() => undefined);
+    void persist(apiPatchFormador(id, patch));
   }, []);
 
   const removeFormador = useCallback((id: number) => {
-    setFormadores(xs => xs.filter(f => f.id !== id));
-    void apiDeleteFormador(id).catch(() => undefined);
+    let before: Formador | undefined;
+    setFormadores(xs => {
+      before = xs.find(f => f.id === id);
+      return xs.filter(f => f.id !== id);
+    });
+    void persist(apiDeleteFormador(id), () => {
+      if (before) setFormadores(xs => [before!, ...xs]);
+    });
   }, []);
 
   const options = useCallback((current?: string | string[], regime?: FormadorRegime) => {

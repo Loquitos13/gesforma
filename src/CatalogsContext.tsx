@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { apiCreateCatalog, apiDeleteCatalog, apiPatchCatalog, apiPutSettings } from "./api";
 import { loadOps } from "./opsCache";
+import { persist, toastError } from "./toastBus";
 
 export type CatalogItem = { id: number } & Record<string, unknown>;
 
@@ -44,13 +45,19 @@ export function CatalogsProvider({ children }: { children: ReactNode }) {
       }
       setSettings(next);
       setReady(true);
-    }).catch(() => setReady(true));
+    }).catch(() => {
+      if (!alive) return;
+      toastError(new Error("A API não respondeu. Os catálogos ficam vazios — o seed de demonstração não entra."));
+      setLists({});
+      setSettings({});
+      setReady(true);
+    });
     return () => { alive = false; };
   }, []);
 
   const saveSettings = useCallback((id: string, values: Record<string, string>) => {
     setSettings(prev => ({ ...prev, [id]: values }));
-    void apiPutSettings(id, values).catch(() => undefined);
+    void persist(apiPutSettings(id, values));
   }, []);
 
   const value = useMemo(() => ({ lists, settings, saveSettings, ready }), [lists, settings, saveSettings, ready]);
@@ -71,11 +78,11 @@ export function useCatalogList<T extends { id: number }>(kind: string, regime: "
   const setLists = useContext(CatalogState);
   if (!setLists) throw new Error("useCatalogList precisa de CatalogsProvider");
   const key = keyOf(kind, regime);
-  const lista = (ready ? (lists[key] as T[] | undefined) ?? seed : seed);
+  const lista = (ready ? (lists[key] as T[] | undefined) ?? [] : seed);
 
   const setLista = useCallback<Dispatch<SetStateAction<T[]>>>((updater) => {
     setLists(prev => {
-      const current = ((prev[key] && prev[key]!.length ? prev[key] : seed) as T[]);
+      const current = ((prev[key] as T[] | undefined) ?? (ready ? [] : seed));
       const next = typeof updater === "function" ? (updater as (p: T[]) => T[])(current) : updater;
       if (ready) {
         const prevIds = new Set(current.map(x => x.id));
@@ -90,13 +97,15 @@ export function useCatalogList<T extends { id: number }>(kind: string, regime: "
                   [key]: ((xs[key] ?? next) as CatalogItem[]).map(x => x.id === row.id ? { ...x, id: r.item.id } : x),
                 }));
               }
-            }).catch(() => undefined);
+            }).catch(err => {
+              toastError(err, "Não foi possível criar o item do catálogo.");
+            });
           } else if (!sameRow(before, row)) {
-            void apiPatchCatalog(kind, row.id, payloadOf(row), regime).catch(() => undefined);
+            void persist(apiPatchCatalog(kind, row.id, payloadOf(row), regime));
           }
         }
         for (const id of prevIds) {
-          if (!nextIds.has(id)) void apiDeleteCatalog(kind, id).catch(() => undefined);
+          if (!nextIds.has(id)) void persist(apiDeleteCatalog(kind, id));
         }
       }
       return { ...prev, [key]: next as CatalogItem[] };

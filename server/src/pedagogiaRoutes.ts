@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Db } from "./db/pool.js";
+import { listDriveFiles, readDriveContent } from "./googleDrive.js";
+import { zipStore } from "./zipStore.js";
 import {
   buildDtpItems,
   dtpDefs,
@@ -780,5 +782,43 @@ export function registerPedagogiaRoutes(
     );
     await audit(db, req.actor!.id, "inquerito.resposta", "inquerito", String(id), req.ip);
     return { ok: true };
+  });
+
+  app.get("/v1/dtp/:regime/:id/export", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const { regime, id } = params(req);
+    if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
+    const turma = await loadTurma(db, regime, id);
+    if (!turma) return reply.code(404).send({ error: "turma não encontrada" });
+    const files: { name: string; data: Buffer }[] = [];
+    const seen = new Set<string>();
+    const drive = [
+      ...await listDriveFiles(db, { kind: "", regime, turma: turma.nome, limit: 80 }),
+      ...await listDriveFiles(db, { kind: "", regime, turma: String(id), limit: 80 }),
+    ];
+    for (const f of drive) {
+      if (seen.has(f.id)) continue;
+      seen.add(f.id);
+      const content = await readDriveContent(db, f.id).catch(() => null);
+      if (!content?.bytes) continue;
+      const folder = f.kind || "documentos";
+      const safe = (f.name || "ficheiro").replace(/[^\w.\- ()àáâãéêíóôõúç]+/gi, "_");
+      files.push({ name: `${folder}/${safe}`, data: content.bytes });
+    }
+    const indice = [
+      `Dossiê técnico-pedagógico · ${turma.nome} · ${turma.curso}`,
+      `Regime: ${regime}`,
+      `Ficheiros: ${files.length}`,
+      "",
+      ...files.map(f => f.name),
+      files.length ? "" : "Ainda não há PDFs no Drive desta turma. O índice fica no ZIP para o arquivo.",
+    ].join("\n");
+    files.unshift({ name: "indice-dtp.txt", data: Buffer.from(indice, "utf8") });
+    const zip = zipStore(files);
+    await audit(db, req.actor!.id, "dtp.export", "turma", String(id), req.ip, { ficheiros: files.length - 1 });
+    return reply
+      .header("Content-Type", "application/zip")
+      .header("Content-Disposition", `attachment; filename="dtp-${turma.nome.replace(/[^\w-]+/g, "-")}.zip"`)
+      .send(zip);
   });
 }

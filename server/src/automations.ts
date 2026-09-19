@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Db } from "./db/pool.js";
 import { buildCtaVars, ctaDestino, fillCtaHref } from "./emailCta.js";
 import { parseEmailXml } from "./emailXml.js";
+import { config } from "./config.js";
 import { sendMail } from "./mailer.js";
 import { EVENT_ALIASES, fillVars, isEmail, normalizeEmail, sanitizeHeader, sanitizeText } from "./security.js";
 
@@ -89,14 +90,15 @@ export async function ingestEvent(
 }
 
 async function enqueueTurmaReminders(db: Db) {
-  const day = new Date(Date.now() + 24 * 3600_000).toISOString().slice(0, 10);
-  const gold = await db.query<{ id: number; nome: string; curso: string }>(
-    "SELECT id, nome, curso FROM turmas_gold WHERE data_inicio = $1 AND estado = 'Ativa'",
-    [day],
+  const today = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 24 * 3600_000).toISOString().slice(0, 10);
+  const gold = await db.query<{ id: number; nome: string; curso: string; data_inicio: string }>(
+    "SELECT id, nome, curso, data_inicio FROM turmas_gold WHERE data_inicio IN ($1, $2) AND estado = 'Ativa'",
+    [today, tomorrow],
   );
-  const fin = await db.query<{ id: number; nome: string; curso: string }>(
-    "SELECT id, nome, curso FROM turmas_fin WHERE data_inicio = $1 AND activa = true",
-    [day],
+  const fin = await db.query<{ id: number; nome: string; curso: string; data_inicio: string }>(
+    "SELECT id, nome, curso, data_inicio FROM turmas_fin WHERE data_inicio IN ($1, $2) AND activa = true",
+    [today, tomorrow],
   );
   for (const turma of [...gold.rows, ...fin.rows]) {
     const alunos = await db.query<{ nome: string; apelido: string; email: string; curso: string }>(
@@ -112,7 +114,7 @@ async function enqueueTurmaReminders(db: Db) {
         db,
         "turma.starts_in_24h",
         { email, nome: `${a.nome} ${a.apelido}`.trim(), curso: a.curso || turma.curso, turma: turma.nome },
-        `turma24h:${turma.id}:${email}:${day}`,
+        `turma24h:${turma.id}:${email}:${turma.data_inicio ?? tomorrow}`,
       ).catch(() => undefined);
     }
   }
@@ -139,7 +141,12 @@ export async function processDueJobs(db: Db, limit = 20) {
   let failed = 0;
   for (const job of due.rows) {
     try {
-      await sendMail({ to: job.to_email, name: job.to_name, subject: job.subject, text: job.body_text });
+      const pixel = `${config.appOrigin.replace(/\/$/, "")}/api/v1/email/open/${job.id}.gif`;
+      const html = job.body_text
+        .split("\n")
+        .map(l => l ? `<p>${l.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>` : "<br>")
+        .join("") + `<img src="${pixel}" width="1" height="1" alt="" />`;
+      await sendMail({ to: job.to_email, name: job.to_name, subject: job.subject, text: job.body_text, html });
       await db.query(
         "UPDATE email_jobs SET status = 'sent', sent_at = now(), attempts = attempts + 1, last_error = NULL WHERE id = $1",
         [job.id],

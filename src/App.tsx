@@ -36,6 +36,7 @@ import { useFormadorOptions, useFormadores } from "./FormadoresContext";
 import { useTurmas } from "./TurmasContext";
 import { cronogramaToSessoes, formatSessaoLabel, hojeIso, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
 import { apiDriveFiles } from "./api";
+import { campanhaNums, roiLabel } from "./campanhaStats";
 import { ListsProvider, nextListId, useLists, type BlogPostRow, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
 import { useAuth } from "./AuthGate";
 import { useNotificacoes } from "./NotificacoesContext";
@@ -59,6 +60,7 @@ import {
   emitAutomation,
   type Dashboard, type EmailJob, type EmailJobStats, type EmailRule, type TurmaCertificado, type TurmaDocumento,
 } from "./api";
+import { persist, toastError } from "./toastBus";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -389,14 +391,27 @@ const GATILHO_TEMPLATE: Record<string, string> = {
   "30 dias sem compra": "Reengajamento",
 };
 
-function destFromGatilho(gatilho: string) {
-  if (gatilho.includes("Sumário") || gatilho.toLowerCase().includes("interno")) {
-    return { nome: "Isac Silva", papel: "Formador", email: "isac.silva@ena.pt" };
+function destFromGatilho(
+  gatilho: string,
+  lists: { preinscricoes: Preinscricao[]; formandosTurmas: FormandoTurma[]; formandosFin: FormandoFin[] },
+  formadores: { nome: string; email: string }[],
+) {
+  const g = gatilho.toLowerCase();
+  if (g.includes("sumário") || g.includes("interno")) {
+    const f = formadores.find(x => x.email);
+    if (f) return { nome: f.nome, papel: "Formador", email: f.email };
   }
-  if (gatilho.includes("pré-inscrição") || gatilho.includes("compra")) {
-    return { nome: "Inês Caetano", papel: "Lead", email: "ines.caetano@gmail.com" };
+  if (g.includes("pré-inscrição") || g.includes("compra") || g.includes("3 dias")) {
+    const lead = lists.preinscricoes.find(x => x.email);
+    if (lead) return { nome: `${lead.nome} ${lead.apelido}`.trim(), papel: "Lead", email: lead.email };
   }
-  return { nome: "Inês Caetano", papel: "Formanda", email: "ines.caetano@gmail.com" };
+  const aluno = lists.formandosTurmas.find(x => x.email) ?? lists.formandosFin.find(x => x.email);
+  if (aluno) return { nome: `${aluno.nome} ${aluno.apelido}`.trim(), papel: "Formando", email: aluno.email };
+  const lead = lists.preinscricoes.find(x => x.email);
+  if (lead) return { nome: `${lead.nome} ${lead.apelido}`.trim(), papel: "Lead", email: lead.email };
+  const f = formadores.find(x => x.email);
+  if (f) return { nome: f.nome, papel: "Formador", email: f.email };
+  return { nome: "Sem destinatário", papel: "ainda sem dados na base", email: "—" };
 }
 
 function EmailPreviewPane({
@@ -409,8 +424,10 @@ function EmailPreviewPane({
   templates: EmailTpl[];
   draft?: { nome?: string; assunto: string; linhas: string[]; cta: string; ctaHref?: string; ctaAmbito?: CtaAmbito; xml?: string };
 }) {
+  const lists = useLists();
+  const { formadores } = useFormadores();
   const body = draft ?? bodyFromTemplates(tipo, templates);
-  const dest = destFromGatilho(gatilho);
+  const dest = destFromGatilho(gatilho, lists, formadores);
   const cursoLabel = curso || "Formação de Formadores - CCP";
   const vars = buildCtaVars({ nome: dest.nome, email: dest.email, curso: cursoLabel, turma: "VNG-SM-07/09" });
   const assunto = body ? fillEmailVars(body.assunto, vars) : "Assunto do email";
@@ -447,7 +464,7 @@ function EmailPreviewPane({
       {!tipo || !body ? (
         <div className="px-4 py-10 text-center">
           <p className="text-sm font-semibold text-slate-700">Ainda sem email para mostrar</p>
-          <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">Escolha o gatilho e o template à esquerda. O assunto e o corpo actualizam aqui com dados de exemplo.</p>
+          <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">Escolha o gatilho e o template à esquerda. O assunto e o corpo actualizam com um destinatário real da base.</p>
         </div>
       ) : (
         <div className="p-3 space-y-2">
@@ -1118,7 +1135,7 @@ function TurmaTabBar({ tab, onChange, accent = "gold", dtpPct }: { tab: CockpitT
   return (
     <div className="flex gap-0.5 border-b border-slate-200 overflow-x-auto scrollbar-hide">
       {tabs.map(t => (
-        <button key={t.id} onClick={() => onChange(t.id)}
+        <button key={t.id} onClick={() => { if (tab !== t.id) showViewCurtain(1000); onChange(t.id); }}
           className={`flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 whitespace-nowrap ${tab === t.id ? active : "border-transparent text-slate-500 hover:text-slate-700"}`}>
           {t.icon} {t.label}
           {t.id === "dtp" && <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${chip}`}>{dtpPct}%</span>}
@@ -3909,30 +3926,35 @@ function BlogView() {
 }
 
 function CampanhasView() {
-  const { campanhas, addCampanha, removeCampanha } = useLists();
+  const { campanhas, addCampanha, removeCampanha, preinscricoes, formandosTurmas, pagamentos } = useLists();
   const [open, setOpen] = useState(false);
   const [cursoCamp, setCursoCamp] = useState("");
   const [nomeCamp, setNomeCamp] = useState("");
   const [dataCamp, setDataCamp] = useState("");
   return (
     <div className="space-y-4">
-      <PageHeader title="Campanhas" action={<NewBtn label="+ Nova Campanha" onClick={() => { setNomeCamp(""); setDataCamp(""); setCursoCamp(""); setOpen(true); }} />} />
+      <PageHeader title="Campanhas" sub="Inscrições, pagamentos e receita saem das pré-inscrições e dos pagamentos — não se escrevem à mão." action={<NewBtn label="+ Nova Campanha" onClick={() => { setNomeCamp(""); setDataCamp(""); setCursoCamp(""); setOpen(true); }} />} />
+      {campanhas.length === 0 && (
+        <EmptyHint text="Ainda sem campanhas. Crie uma e associe o curso: os números entram sozinhos quando chegarem pré-inscrições." />
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {campanhas.map(c => (
+        {campanhas.map(c => {
+          const n = campanhaNums(c, preinscricoes, formandosTurmas, pagamentos);
+          return (
           <Card key={c.id} className="p-4 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between mb-3">
               <div>
                 <p className="font-semibold text-slate-800">{c.nome || <span className="italic text-slate-400">sem nome</span>}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{c.data} · {c.encarregado}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{c.data} · {c.encarregado}{c.curso ? ` · ${c.curso}` : ""}</p>
               </div>
               <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => removeCampanha(c.id)} />
             </div>
             <div className="grid grid-cols-2 gap-2 mt-3">
               {[
-                { l: "Inscrições", v: c.preinscricoes.toLocaleString("pt-PT"), c: "text-blue-600" },
-                { l: "Pagamentos", v: c.pagos.toLocaleString("pt-PT"), c: "text-teal-600" },
-                { l: "Receita", v: `€ ${c.receita.toLocaleString("pt-PT")}`, c: "text-emerald-600" },
-                { l: "ROI", v: `${Math.round((c.receita - c.custo) / c.custo * 100)}%`, c: "text-amber-600" },
+                { l: "Inscrições", v: n.preinscricoes.toLocaleString("pt-PT"), c: "text-blue-600" },
+                { l: "Pagamentos", v: n.pagos.toLocaleString("pt-PT"), c: "text-teal-600" },
+                { l: "Receita", v: `€ ${n.receita.toLocaleString("pt-PT")}`, c: "text-emerald-600" },
+                { l: "ROI", v: roiLabel(n.receita, c.custo), c: "text-amber-600" },
               ].map(s => (
                 <div key={s.l} className="bg-slate-50 rounded-xl p-2.5">
                   <p className="text-xs text-slate-400">{s.l}</p>
@@ -3941,9 +3963,10 @@ function CampanhasView() {
               ))}
             </div>
           </Card>
-        ))}
+          );
+        })}
       </div>
-      <SlideOver open={open} onClose={() => setOpen(false)} title="Nova campanha" sub="Campanha comercial Gold">
+      <SlideOver open={open} onClose={() => setOpen(false)} title="Nova campanha" sub="Os números vêm das pré-inscrições ligadas a este nome ou curso.">
         <div className="p-5 space-y-3">
           <Field label="Nome"><input className={iCls} value={nomeCamp} onChange={e => setNomeCamp(e.target.value)} placeholder="Outubro 2026" /></Field>
           <Field label="Curso em destaque"><SearchSelect value={cursoCamp} onChange={setCursoCamp} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
@@ -3952,7 +3975,7 @@ function CampanhasView() {
             <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button onClick={() => {
               if (!nomeCamp.trim()) return;
-              addCampanha({ id: nextListId(campanhas), nome: nomeCamp.trim(), data: dataCamp || new Date().toISOString().slice(0, 10), encarregado: "Aguilar", preinscricoes: 0, pagos: 0, receita: 0, custo: 1 });
+              addCampanha({ id: nextListId(campanhas), nome: nomeCamp.trim(), data: dataCamp || new Date().toISOString().slice(0, 10), encarregado: "Aguilar", curso: cursoCamp, preinscricoes: 0, pagos: 0, receita: 0, custo: 0 });
               setOpen(false);
             }} disabled={!nomeCamp.trim()} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Criar campanha</button>
           </div>
@@ -4056,8 +4079,12 @@ function EmailsView() {
       setJobs(j.jobs);
       setJobStats(j.stats);
       setApiOn(true);
-    } catch {
+    } catch (err) {
       setApiOn(false);
+      setRegras([]);
+      setJobs([]);
+      setJobStats({ sent: 0, queued: 0, failed: 0 });
+      toastError(err, "Não foi possível ler as regras de email. A lista fica vazia.");
     }
   }
   useEffect(() => { void recarregar(); }, []);
@@ -4149,7 +4176,7 @@ function EmailsView() {
       <PageHeader title="Emails Automáticos" sub={apiOn ? "As regras vivem na API. Quando a secretaria regista uma pré-inscrição ou um pagamento, a fila dispara sozinha." : "Uma regra = um gatilho + um template. Sem API as alterações ficam só neste ecrã."} action={<NewBtn label="+ Nova Regra" onClick={abrirNova} />} />
       <div className="flex gap-1 border-b border-slate-200 bg-white rounded-t-xl px-4 pt-3">
         {(["regras", "templates", "historico"] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)}
+          <button key={t} onClick={() => { if (tab !== t) showViewCurtain(1000); setTab(t); }}
             className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors -mb-px ${tab === t ? "bg-white border-t border-l border-r border-slate-200 text-amber-600 border-b-white" : "text-slate-500 hover:text-slate-700"}`}>
             {t === "regras" ? "Regras de Envio" : t === "templates" ? "Templates" : "Histórico"}
           </button>
@@ -4174,12 +4201,13 @@ function EmailsView() {
                   </p>
                   <div className="flex gap-4 mt-1.5">
                     <span className="text-xs text-slate-400">{r.envios.toLocaleString("pt-PT")} enviados</span>
+                    <span className="text-xs text-slate-400">{r.taxaAbertura ?? 0}% abertura</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <Toggle checked={r.ativo} onChange={val => {
                     setRegras(prev => prev.map(x => x.id === r.id ? { ...x, ativo: val } : x));
-                    if (apiOn) void apiPatchRule(r.id, { ativo: val }).catch(() => recarregar());
+                    if (apiOn) void persist(apiPatchRule(r.id, { ativo: val }), () => recarregar());
                   }} />
                   <ActBtn icon={I.eye} label="Preview" color="gray" onClick={() => { setPreviewTipo(r.template); setPreviewGatilho(r.gatilho); }} />
                   <ActBtn icon={I.edit} label="Editar" onClick={() => abrirEditarRegra(r)} />
@@ -4248,7 +4276,7 @@ function EmailsView() {
             <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
               <div>
                 <h2 className="text-base font-bold text-slate-800">{editRegraId != null ? "Editar regra de email" : "Nova regra de email"}</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Quando acontece o gatilho, a ENA envia o template. O email à direita usa dados de exemplo.</p>
+                <p className="text-xs text-slate-500 mt-0.5">Quando acontece o gatilho, a ENA envia o template. O email à direita usa um destinatário real da base.</p>
               </div>
               <button type="button" onClick={() => setNovaRegra(false)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
             </div>
@@ -4443,7 +4471,7 @@ function EmailsView() {
           const id = apagarRegra;
           if (id == null) return;
           setRegras(prev => prev.filter(x => x.id !== id));
-          if (apiOn) void apiDeleteRule(id).catch(() => recarregar());
+          if (apiOn) void persist(apiDeleteRule(id), () => recarregar());
         }}
       />
     </div>

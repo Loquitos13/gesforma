@@ -7,6 +7,7 @@ import { useCatalogList } from "./CatalogsContext";
 import { useDrive } from "./DriveContext";
 import { useFormadores } from "./FormadoresContext";
 import { AppModal } from "./FormKit";
+import { persist } from "./toastBus";
 import { useTurmas } from "./TurmasContext";
 
 const I = {
@@ -349,7 +350,7 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
     setDocs(next);
     setUploadFor(null);
     if (formador) {
-      void apiSaveFormadorDocs(formador.id, next.map(d => ({ id: d.id, uploaded: d.uploaded, fileName: d.fileName ?? "" }))).catch(() => undefined);
+      void persist(apiSaveFormadorDocs(formador.id, next.map(d => ({ id: d.id, uploaded: d.uploaded, fileName: d.fileName ?? "" }))));
     }
   }
 

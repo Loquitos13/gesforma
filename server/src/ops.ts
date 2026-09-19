@@ -167,16 +167,55 @@ export function mapFormador(r: Record<string, unknown>) {
   };
 }
 
+function sameLabel(a: string, b: string) {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
 export function mapCampanha(r: Record<string, unknown>) {
   return {
     id: num(r.id),
     nome: String(r.nome ?? ""),
     data: String(r.data ?? ""),
     encarregado: String(r.encarregado ?? ""),
+    curso: String(r.curso ?? ""),
     preinscricoes: num(r.preinscricoes),
     pagos: num(r.pagos),
     receita: num(r.receita),
     custo: num(r.custo),
+  };
+}
+
+function numsCampanha(
+  campanha: ReturnType<typeof mapCampanha>,
+  leads: ReturnType<typeof mapPreinscricao>[],
+  formandos: ReturnType<typeof mapFormandoGold>[],
+  pagamentos: ReturnType<typeof mapPagamento>[],
+) {
+  const leadsC = leads.filter(l =>
+    sameLabel(l.campanha, campanha.nome) || (campanha.curso && sameLabel(l.curso, campanha.curso)),
+  );
+  const emails = new Set(leadsC.map(l => l.email.trim().toLowerCase()).filter(Boolean));
+  const pagosLead = leadsC.filter(l => /pago|formando/i.test(l.estado));
+  const formandosC = formandos.filter(f =>
+    f.pago && (
+      (f.email && emails.has(f.email.trim().toLowerCase()))
+      || (campanha.curso && sameLabel(f.curso, campanha.curso))
+    ),
+  );
+  const pagamentosC = pagamentos.filter(p =>
+    /pago/i.test(p.estado) && (
+      (campanha.curso && sameLabel(p.curso, campanha.curso))
+      || (!campanha.curso && leadsC.some(l => sameLabel(l.curso, p.curso)))
+    ),
+  );
+  const receitaPag = pagamentosC.reduce((s, p) => s + p.valor, 0);
+  const receitaForm = formandosC.reduce((s, f) => s + f.valor, 0);
+  const receitaLead = pagosLead.reduce((s, l) => s + l.preco, 0);
+  return {
+    ...campanha,
+    preinscricoes: leadsC.length,
+    pagos: Math.max(pagosLead.length, formandosC.length, pagamentosC.length),
+    receita: Math.round(receitaPag || receitaForm || receitaLead),
   };
 }
 
@@ -236,7 +275,9 @@ export async function getOpsSnapshot(db: Db) {
   const settings = Object.fromEntries(settingRows.rows.map(r => [r.id, asObj(r.values)]));
   return {
     preinscricoes, formandosTurmas, formandosFin, cursosGold, cursosFin,
-    turmasGold, turmasFin, formadores, campanhas, blogPosts, pagamentos,
+    turmasGold, turmasFin, formadores,
+    campanhas: campanhas.map(c => numsCampanha(c, preinscricoes, formandosTurmas, pagamentos)),
+    blogPosts, pagamentos,
     catalogs, settings,
   };
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { EnviarReciboModal, ReferenciaMbModal } from "./ActionSurfaces";
 import { apiAddFormandoNota, apiFormandoDossier, apiSaveFormandoDocs, type FormandoNota } from "./api";
+import { persist } from "./toastBus";
 import { FileUploadModal } from "./TurmaExtras";
 import { useTurmas } from "./TurmasContext";
 import { isTurmaActiva } from "./turmaModel";
@@ -67,7 +68,7 @@ function DocumentosGoldPanel({ formando, avulso }: { formando: FormandoTurma; av
 
   function gravar(next: typeof docs) {
     setDocs(next);
-    void apiSaveFormandoDocs("gold", formando.id, next.map(d => ({ id: d.id, ok: d.ok, fileName: d.fileName, data: d.data }))).catch(() => undefined);
+    void persist(apiSaveFormandoDocs("gold", formando.id, next.map(d => ({ id: d.id, ok: d.ok, fileName: d.fileName, data: d.data }))));
   }
 
   if (estado === "loading") {

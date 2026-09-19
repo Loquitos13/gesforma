@@ -54,7 +54,15 @@ A **execução pedagógica da turma** vive na base: `turma_sessoes` (plano, sum�
 
 A **estrutura do dossiê é configurável por curso**, no separador **Dossiê TP** da ficha do curso (`curso_dtp_modelos`). Cada regime tem a sua base: **Gold / autofinanciada** = núcleo DGERT + extras do CCP (PIP, simulações, comprovativo de 5 anos, recibos); **Financiada** = núcleo DGERT + execução do financiador (referencial UFCD, elegibilidade, IBAN, mapa de horas, relatório de execução). Os documentos que são **norma** aparecem travados e não se removem — nas financiadas isso inclui a Portaria 851/2010 da DGERT e o Despacho 5756/2020, precisamente para o dossiê respeitar as normas do DTP da DGERT. O resto liga-se e desliga-se conforme o curso (um curso de Excel não precisa de PIP nem de simulações pedagógicas) e podem acrescentar-se documentos próprios do curso, marcáveis como bloqueantes. As turmas de um curso herdam a estrutura; o estado de cada documento continua a ser por turma.
 
-A **completude do DTP** é calculada e não escrita à mão: o cronograma, os planos, os sumários assinados, as folhas de presença, o PIP, as simulações, os contratos, os documentos de elegibilidade e os certificados emitidos saem dos dados da turma (aparecem marcados como *automático*). Os documentos administrativos ficam em estado manual e podem ser validados no painel — ou devolvidos ao estado automático. **Exportar pasta DTP** dá o CSV do índice do dossiê com o estado de cada documento.
+A **completude do DTP** é calculada e não escrita à mão: o cronograma, os planos, os sumários assinados, as folhas de presença, o PIP, as simulações, os contratos, os documentos de elegibilidade e os certificados emitidos saem dos dados da turma (aparecem marcados como *automático*). Os documentos administrativos ficam em estado manual e podem ser validados no painel — ou devolvidos ao estado automático. **Exportar pasta DTP** descarrega um **ZIP** com os PDFs da turma no Drive (e um `indice-dtp.txt` se ainda não houver ficheiros).
+
+As **campanhas** mostram inscrições, pagamentos e receita **calculados** a partir das pré-inscrições (campo campanha / curso) e dos pagamentos — não são campos manuais. O custo continua a ser da campanha, para o ROI.
+
+A **taxa de abertura** dos emails automáticos sai do pixel `GET /api/v1/email/open/:id.gif`. O preview usa um destinatário real da base (lead, formando ou formador). O cron na Vercel corre **de hora a hora**; o lembrete “24 h antes” cobre turmas que começam hoje ou amanhã, para não falhar a janela se o plano só permitir um cron diário.
+
+A ficha do curso e o blog **ficam no GesForma**. Ainda não há publicação em `ena.pt` — falta o código de integração do site.
+
+Se a API falhar, as listas **não ficam com o seed de demonstração**: ficam vazias e aparece um aviso. As gravações (POST/PUT/PATCH/DELETE) mostram toast quando falham. O overlay branco com o logo ENA cobre mudança de vista, filtros, separadores e pedidos à API.
 
 O login aceita **email e palavra-passe**, **Continuar com Google** e **Continuar com Microsoft**. Nos dois casos externos a sessão só é criada se o email já existir como utilizador activo: a autenticação externa identifica a pessoa, não dá acesso. O cliente Google e a aplicação Microsoft configuram-se em **Configurações** (ou por variáveis de ambiente `GOOGLE_*` / `MICROSOFT_*`, que passam a mandar). A aplicação Microsoft pede o *Application (client) ID*, o *client secret* e o *Directory (tenant) ID* — com o tenant da ENA só entra a organização; com `common` entra qualquer organização. O segredo fica cifrado (AES-256-GCM) como o do Google, e o URI de redireccionamento a registar no portal Azure é `{APP_ORIGIN}/api/v1/auth/microsoft/callback`.
 
@@ -122,7 +130,7 @@ docker compose up -d db api
 
 ### Vercel
 
-A API vai no **mesmo projecto** que a app (`/api`), para o cookie de sessão ser do mesmo domínio. A Vercel é serverless: não há `setInterval`. A fila de email corre no fim de cada evento, ao abrir o histórico, e num cron diário (`/api/v1/cron/email`).
+A API vai no **mesmo projecto** que a app (`/api`), para o cookie de sessão ser do mesmo domínio. A Vercel é serverless: não há `setInterval`. A fila de email corre no fim de cada evento, ao abrir o histórico, e num cron horário (`/api/v1/cron/email`). No plano Hobby a Vercel pode limitar a 1×/dia — a janela do lembrete 24h cobre hoje e amanhã.
 
 1. Claim ou ligue o Git à Vercel.
 2. Variáveis: `DATABASE_URL` (Neon ou Vercel Postgres), `SESSION_SECRET`, `ADMIN_PASSWORD`, `APP_ORIGIN=https://o-seu-dominio.vercel.app`, `MAIL_MODE`, `SMTP_URL`, e para o Drive `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (URI de callback `{APP_ORIGIN}/api/v1/drive/oauth/callback`).

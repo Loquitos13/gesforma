@@ -525,9 +525,7 @@ export function registerOpsRoutes(
     nome: z.string().trim().min(1).max(120),
     data: z.string().max(20),
     encarregado: z.string().max(80).optional().default(""),
-    preinscricoes: z.number().optional().default(0),
-    pagos: z.number().optional().default(0),
-    receita: z.number().optional().default(0),
+    curso: z.string().max(200).optional().default(""),
     custo: z.number().optional().default(0),
   });
   app.post("/v1/campanhas", async (req, reply) => {
@@ -537,8 +535,8 @@ export function registerOpsRoutes(
     const d = parsed.data;
     const id = await nextOpsId(db);
     await db.query(
-      "INSERT INTO campanhas (id, nome, data, encarregado, preinscricoes, pagos, receita, custo) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
-      [id, d.nome, d.data, d.encarregado, d.preinscricoes, d.pagos, d.receita, d.custo],
+      "INSERT INTO campanhas (id, nome, data, encarregado, preinscricoes, pagos, receita, custo, curso) VALUES ($1,$2,$3,$4,0,0,0,$5,$6)",
+      [id, d.nome, d.data, d.encarregado, d.custo, d.curso || null],
     );
     const row = await one(db, "SELECT * FROM campanhas WHERE id = $1", [id]);
     return { campanha: row ? mapCampanha(row) : { id } };
@@ -551,8 +549,8 @@ export function registerOpsRoutes(
     const d = parsed.data;
     await db.query(
       `UPDATE campanhas SET nome = COALESCE($2, nome), data = COALESCE($3, data), encarregado = COALESCE($4, encarregado),
-         preinscricoes = COALESCE($5, preinscricoes), pagos = COALESCE($6, pagos), receita = COALESCE($7, receita), custo = COALESCE($8, custo) WHERE id = $1`,
-      [id, d.nome ?? null, d.data ?? null, d.encarregado ?? null, d.preinscricoes ?? null, d.pagos ?? null, d.receita ?? null, d.custo ?? null],
+         custo = COALESCE($5, custo), curso = COALESCE($6, curso) WHERE id = $1`,
+      [id, d.nome ?? null, d.data ?? null, d.encarregado ?? null, d.custo ?? null, d.curso ?? null],
     );
     const row = await one(db, "SELECT * FROM campanhas WHERE id = $1", [id]);
     return { campanha: row ? mapCampanha(row) : null };

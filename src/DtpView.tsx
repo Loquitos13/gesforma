@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import type { DtpEstado, DtpItem, DtpSnapshot } from "./api";
+import { apiDtpExport, type DtpEstado, type DtpItem, type DtpSnapshot } from "./api";
+import { toastError, toastOk } from "./toastBus";
+import { showViewCurtain } from "./viewLoadingBus";
 
 export type DtpRegime = "gold" | "fin";
 type DtpFase = "antes" | "durante" | "depois";
@@ -37,29 +39,13 @@ function cycle(estado: DtpEstado): DtpEstado {
   return "falta";
 }
 
-function exportarPasta(regime: DtpRegime, turma: DtpTurma | undefined, dtp: DtpSnapshot) {
-  const codigo = turma?.codigo ?? "turma";
-  const linhas = [
-    ["Fase", "Documento", "Estado", "Detalhe", "Fonte legal"],
-    ...dtp.items.map(i => [
-      fases.find(f => f.id === i.fase)?.label ?? i.fase,
-      i.label,
-      estadoStyle[i.estado].label,
-      i.detalhe,
-      i.fonte,
-    ]),
-  ];
-  const csv = linhas
-    .map(l => l.map(c => `"${String(c).replace(/"/g, '""')}"`).join(";"))
-    .join("\n");
-  const cabecalho = `\uFEFFDossiê técnico-pedagógico;${codigo};${regime === "gold" ? "Gold" : "Financiada"};${dtp.pct}% completo\n\n`;
-  const blob = new Blob([cabecalho + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `dtp-${codigo.replace(/[^\w-]+/g, "-").toLowerCase()}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+async function exportarPasta(regime: DtpRegime, turma: DtpTurma | undefined) {
+  if (turma?.id == null) {
+    toastError(new Error("Abra o dossiê a partir de uma turma para descarregar o ZIP com os PDFs."));
+    return;
+  }
+  const codigo = (turma.codigo ?? "turma").replace(/[^\w-]+/g, "-").toLowerCase();
+  await apiDtpExport(regime, turma.id, `dtp-${codigo}.zip`);
 }
 
 /** Dossiê da turma - vive dentro do cockpit, não como “ação de formação”. */
@@ -67,6 +53,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle }: Pro
   const isGold = regime === "gold";
   const codigo = turma?.codigo ?? (isGold ? "turma" : "UFCD");
   const [fase, setFase] = useState<DtpFase | "todas">("todas");
+  const [exportando, setExportando] = useState(false);
 
   useEffect(() => { setFase("todas"); }, [regime, codigo]);
 
@@ -118,10 +105,17 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle }: Pro
             <span className={`text-2xl font-bold ${pct >= 80 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-500"}`}>{pct}%</span>
             <button
               type="button"
-              onClick={() => exportarPasta(regime, turma, dtp)}
-              className={`px-3 py-2 text-xs font-semibold rounded-lg text-white ${isGold ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}
+              disabled={exportando}
+              onClick={() => {
+                setExportando(true);
+                void exportarPasta(regime, turma)
+                  .then(() => toastOk("ZIP do dossiê descarregado (PDFs da turma + índice)."))
+                  .catch(err => toastError(err, "Não foi possível exportar o ZIP do DTP."))
+                  .finally(() => setExportando(false));
+              }}
+              className={`px-3 py-2 text-xs font-semibold rounded-lg text-white disabled:opacity-50 ${isGold ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}
             >
-              Exportar pasta DTP
+              {exportando ? "A gerar ZIP…" : "Exportar pasta DTP"}
             </button>
           </div>
         </div>
@@ -149,7 +143,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle }: Pro
           return (
             <button
               key={f.id}
-              onClick={() => setFase(prev => (prev === f.id ? "todas" : f.id))}
+              onClick={() => { showViewCurtain(900); setFase(prev => (prev === f.id ? "todas" : f.id)); }}
               className={`text-left rounded-xl border p-3 transition-colors ${fase === f.id ? (isGold ? "border-amber-400 bg-amber-50" : "border-blue-400 bg-blue-50") : "border-slate-200 bg-white hover:bg-slate-50"}`}
             >
               <p className="text-xs font-bold text-slate-700">{f.label}</p>

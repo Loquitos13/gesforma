@@ -2,7 +2,7 @@ import nodemailer from "nodemailer";
 import { config } from "./config.js";
 import { sanitizeHeader } from "./security.js";
 
-type SendInput = { to: string; name: string; subject: string; text: string };
+type SendInput = { to: string; name: string; subject: string; text: string; html?: string };
 
 export async function sendMail(input: SendInput) {
   const to = sanitizeHeader(input.to);
@@ -15,6 +15,7 @@ export async function sendMail(input: SendInput) {
       to: `${sanitizeHeader(input.name)} <${to}>`,
       subject,
       text,
+      html: input.html,
     });
     return info.messageId ?? "smtp";
   }

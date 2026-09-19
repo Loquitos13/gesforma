@@ -15,6 +15,7 @@ import {
 } from "./api";
 import { apiCursoFicha } from "./api";
 import { useLists } from "./ListsContext";
+import { persist } from "./toastBus";
 import { criteriosCcp, emptyPlano, emptySumario, type CriterioAvaliacao, type PlanoSessaoData, type SumarioSessaoData } from "./TurmaExtras";
 
 export type PresencaRow = { id: number; nome: string; presente: boolean };
@@ -134,21 +135,21 @@ export function useTurmaPedagogia(regime: Regime, turmaId: number | undefined) {
   const guardarPlano = useCallback(async (n: number, plano: PlanoSessaoData) => {
     mergeSessao(n, { plano });
     if (turmaId == null) return;
-    await apiSaveSessao(regime, turmaId, n, { plano }).catch(() => undefined);
+    await persist(apiSaveSessao(regime, turmaId, n, { plano }));
     void recarregar();
   }, [mergeSessao, recarregar, regime, turmaId]);
 
   const guardarSumario = useCallback(async (n: number, sumario: SumarioSessaoData) => {
     mergeSessao(n, { sumario });
     if (turmaId == null) return;
-    await apiSaveSessao(regime, turmaId, n, { sumario }).catch(() => undefined);
+    await persist(apiSaveSessao(regime, turmaId, n, { sumario }));
     void recarregar();
   }, [mergeSessao, recarregar, regime, turmaId]);
 
   const guardarPresencas = useCallback(async (n: number, rows: PresencaRow[]) => {
     mergeSessao(n, { presencas: rows });
     if (turmaId == null) return;
-    await apiSaveSessao(regime, turmaId, n, { presencas: rows }).catch(() => undefined);
+    await persist(apiSaveSessao(regime, turmaId, n, { presencas: rows }));
     void recarregar();
   }, [mergeSessao, recarregar, regime, turmaId]);
 
@@ -163,13 +164,13 @@ export function useTurmaPedagogia(regime: Regime, turmaId: number | undefined) {
       };
     });
     if (turmaId == null) return;
-    await apiSaveTurmaDocumento(regime, turmaId, doc).catch(() => undefined);
+    await persist(apiSaveTurmaDocumento(regime, turmaId, doc));
     void recarregar();
   }, [recarregar, regime, turmaId]);
 
   const guardarDtp = useCallback(async (itemId: string, estadoNovo: DtpEstado | "auto") => {
     if (turmaId == null) return;
-    const r = await apiSaveDtpItem(regime, turmaId, itemId, estadoNovo).catch(() => null);
+    const r = await persist(apiSaveDtpItem(regime, turmaId, itemId, estadoNovo));
     if (r) setSnap(prev => ({ ...prev, dtp: r.dtp }));
   }, [regime, turmaId]);
 
@@ -185,7 +186,7 @@ export function useTurmaPedagogia(regime: Regime, turmaId: number | undefined) {
       };
     });
     if (turmaId == null) return;
-    await apiSaveCertificado(regime, turmaId, formandoId, patch).catch(() => undefined);
+    await persist(apiSaveCertificado(regime, turmaId, formandoId, patch));
     void recarregar();
   }, [recarregar, regime, turmaId]);
 

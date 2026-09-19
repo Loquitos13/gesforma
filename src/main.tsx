@@ -7,6 +7,7 @@ import { DriveProvider } from "./DriveContext";
 import { FormadoresProvider } from "./FormadoresContext";
 import { NotificacoesProvider } from "./NotificacoesContext";
 import { PublicPreinscricao } from "./PublicPreinscricao";
+import { ToastHost } from "./ToastHost";
 import { TurmasProvider } from "./TurmasContext";
 import "./index.css";
 
@@ -24,6 +25,7 @@ createRoot(document.getElementById("root")!).render(
               <DriveProvider>
                 <NotificacoesProvider>
                   <App />
+                  <ToastHost />
                 </NotificacoesProvider>
               </DriveProvider>
             </CatalogsProvider>

@@ -1,26 +1,33 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useCatalogs } from "./CatalogsContext";
 import { modulosOptsForCurso } from "./FormKit";
 import {
   addDays,
   cellLabel,
   cellTone,
+  datasImpressao,
   datesFromRange,
+  defaultSlot,
   matchLinha,
   dayNum,
   generateEnaCronograma,
   grelhaPeriodo,
   grupoLinha,
-  LINHA_PRESETS,
   linhaId,
   linhaLabel,
   linhasFromSessoes,
+  mergeLinhas,
+  METODOLOGIA_OPTS,
   monthSpans,
+  normHora,
   setMatricula,
   upsertCell,
   weekdayCode,
   type GrelhaLinha,
 } from "./cronogramaGrelha";
-import { codigoModulo, formatDiaMes, type SessaoCronograma } from "./turmaModel";
+import { mapLocalTurma, type LocalCatalogo } from "./cronogramaLocal";
+import { imprimirCronogramaEna } from "./cronogramaPrint";
+import { codigoModulo, formatDiaMes, type SessaoCronograma, type SessaoModalidade } from "./turmaModel";
 
 const TONE: Record<string, string> = {
   presencial: "bg-[#a60000] text-white",
@@ -150,9 +157,20 @@ export function CronogramaGrelha({
   const [linhas, setLinhas] = useState<GrelhaLinha[]>(() => linhasFromSessoes(sessoes, horario));
   const [open, setOpen] = useState<{ date: string; linha: string } | null>(null);
   const [addLinha, setAddLinha] = useState(false);
+  const [novaMod, setNovaMod] = useState<Exclude<SessaoModalidade, "matricula" | "avaliacao">>("presencial");
+  const [novaInicio, setNovaInicio] = useState(() => defaultSlot(horario, "presencial").horaInicio);
+  const [novaFim, setNovaFim] = useState(() => defaultSlot(horario, "presencial").horaFim);
+  const [addErro, setAddErro] = useState("");
+  const { lists } = useCatalogs();
+  const locaisCatalogo = useMemo<LocalCatalogo[]>(() => {
+    const gold = (lists["locais:gold"] ?? []) as LocalCatalogo[];
+    const fin = (lists["locais:fin"] ?? []) as LocalCatalogo[];
+    return [...gold, ...fin];
+  }, [lists]);
+  const localMapeado = useMemo(() => mapLocalTurma(local, locaisCatalogo), [local, locaisCatalogo]);
 
   useEffect(() => {
-    setLinhas(linhasFromSessoes(sessoes, horario));
+    setLinhas(prev => mergeLinhas(linhasFromSessoes(sessoes, horario), prev));
   }, [sessoes, horario]);
 
   useEffect(() => {
@@ -207,7 +225,7 @@ export function CronogramaGrelha({
           </p>
           <p className="flex items-center gap-2">
             <span className="text-slate-500 w-40 flex-shrink-0">Local de realização</span>
-            <span className="font-semibold text-slate-800">{local || "—"}</span>
+            <span className="font-semibold text-slate-800">{localMapeado.localizacao}</span>
           </p>
           <label className="flex items-center gap-2">
             <span className="text-slate-500 w-40 flex-shrink-0">Data de fim</span>
@@ -252,7 +270,19 @@ export function CronogramaGrelha({
                 <tr key={linha.id}>
                   <th className="sticky left-0 z-10 bg-white border-r border-b border-slate-200 px-2 py-1 text-left align-middle font-semibold text-slate-700 w-44 min-w-[11rem]">
                     {i === 0 && <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{grupoLinha(grupo)}</p>}
-                    <p className="text-[11px] font-medium text-slate-600 leading-tight">{linhaLabel(linha)}</p>
+                    <div className="flex items-center gap-1">
+                      <p className="text-[11px] font-medium text-slate-600 leading-tight flex-1">{linhaLabel(linha)}</p>
+                      {!dates.some(d => cellLabel(sessoes, d, linha)) && (
+                        <button
+                          type="button"
+                          title="Remover linha"
+                          onClick={() => setLinhas(xs => xs.filter(x => x.id !== linha.id))}
+                          className="text-slate-300 hover:text-red-600 text-xs px-1"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
                   </th>
                   {dates.map(d => {
                     const tone = d === matricula && grupo === "presencial" && i === 0 && !cellLabel(sessoes, d, linha)
@@ -301,29 +331,97 @@ export function CronogramaGrelha({
           {sessoes.length ? "Gerar grelha ENA" : "Gerar cronograma ENA"}
         </button>
         <div className="relative">
-          <button type="button" onClick={() => setAddLinha(v => !v)} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+          <button type="button" onClick={() => { setAddLinha(v => !v); setAddErro(""); }} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
             + Linha de horário
           </button>
           {addLinha && (
-            <div className="absolute z-30 mt-1 w-56 rounded-xl border border-slate-200 bg-white shadow-lg p-1">
-              {LINHA_PRESETS.map(p => (
-                <button
-                  key={p.linha.id}
-                  type="button"
-                  onClick={() => {
-                    const id = linhaId(p.linha);
-                    setLinhas(xs => xs.some(l => l.id === id) ? xs : [...xs, { ...p.linha, id }]);
-                    setAddLinha(false);
-                  }}
-                  className="block w-full text-left px-2.5 py-1.5 text-xs rounded-lg hover:bg-slate-50"
-                >
-                  {p.label}
+            <form
+              className="absolute z-30 mt-1 w-[20rem] rounded-xl border border-slate-200 bg-white shadow-lg p-3 space-y-2"
+              onSubmit={e => {
+                e.preventDefault();
+                const precisaHora = novaMod !== "auto";
+                const hi = precisaHora ? normHora(novaInicio) : "";
+                const hf = precisaHora ? normHora(novaFim) : "";
+                if (precisaHora && (!hi || !hf)) {
+                  setAddErro("Escolha a hora de início e de fim.");
+                  return;
+                }
+                if (precisaHora && hi >= hf) {
+                  setAddErro("A hora de fim tem de ser depois da de início.");
+                  return;
+                }
+                const linha: GrelhaLinha = { id: "", modalidade: novaMod, horaInicio: hi, horaFim: hf };
+                linha.id = linhaId(linha);
+                setLinhas(xs => xs.some(l => l.id === linha.id) ? xs : [...xs, linha]);
+                setAddLinha(false);
+                setAddErro("");
+              }}
+            >
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Metodologia</p>
+              <div className="space-y-1">
+                {METODOLOGIA_OPTS.map(opt => (
+                  <label key={opt.value} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="metodologia"
+                      checked={novaMod === opt.value}
+                      onChange={() => {
+                        setNovaMod(opt.value);
+                        const slot = defaultSlot(horario, opt.value);
+                        setNovaInicio(slot.horaInicio);
+                        setNovaFim(slot.horaFim);
+                        setAddErro("");
+                      }}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+              {novaMod !== "auto" && (
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <label className="block">
+                    <span className="block text-[11px] font-semibold text-slate-500 mb-1">Início</span>
+                    <input type="time" required value={novaInicio} onChange={e => setNovaInicio(e.target.value)} className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg" />
+                  </label>
+                  <label className="block">
+                    <span className="block text-[11px] font-semibold text-slate-500 mb-1">Fim</span>
+                    <input type="time" required value={novaFim} onChange={e => setNovaFim(e.target.value)} className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg" />
+                  </label>
+                </div>
+              )}
+              {novaMod === "auto" && (
+                <p className="text-[11px] text-slate-500">O e-learning não tem hora de sala — ocupa o dia na grelha.</p>
+              )}
+              {addErro && <p className="text-[11px] text-red-600">{addErro}</p>}
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={() => setAddLinha(false)} className="flex-1 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
+                  Cancelar
                 </button>
-              ))}
-            </div>
+                <button type="submit" className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-[#0F172A] text-white hover:bg-slate-800">
+                  Adicionar
+                </button>
+              </div>
+            </form>
           )}
         </div>
-        <button type="button" onClick={() => window.print()} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+        <button
+          type="button"
+          onClick={() => {
+            const printDates = datasImpressao({ matricula, inicio, fim, sessoes });
+            imprimirCronogramaEna({
+              horario,
+              curso,
+              matricula,
+              inicio,
+              fim: fim || printDates[printDates.length - 1],
+              local: localMapeado,
+              dates: printDates.length ? printDates : dates,
+              linhas,
+              sessoes,
+            });
+          }}
+          className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+        >
           Imprimir / PDF
         </button>
       </div>

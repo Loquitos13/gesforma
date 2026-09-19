@@ -65,13 +65,7 @@ body {
 }
 
 @media print {
-  aside, header, footer, .cronograma-ena button, .cronograma-ena + * {
+  aside, header, footer {
     display: none !important;
-  }
-  .cronograma-ena {
-    display: block !important;
-  }
-  .cronograma-ena table {
-    font-size: 8px;
   }
 }

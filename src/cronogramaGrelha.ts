@@ -56,23 +56,106 @@ export function dayNum(iso: string) {
   return String(parseIso(iso).getDate());
 }
 
+export const METODOLOGIA_OPTS: { value: Exclude<SessaoModalidade, "matricula" | "avaliacao">; label: string }[] = [
+  { value: "presencial", label: "Presencial" },
+  { value: "sincrona", label: "Vídeo-Conferência" },
+  { value: "auto", label: "Assíncrono / E-learning" },
+];
+
+export function normHora(t: string) {
+  const m = (t || "").trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return "";
+  return `${String(Number(m[1])).padStart(2, "0")}:${m[2]}`;
+}
+
+export function horaOficial(t: string) {
+  const n = normHora(t);
+  if (!n) return "";
+  const [h, min] = n.split(":");
+  return `${Number(h)}:${min}`;
+}
+
+export function formatHoraFaixa(inicio: string, fim: string) {
+  const a = horaOficial(inicio);
+  const b = horaOficial(fim);
+  if (a && b) return `das ${a} às ${b}`;
+  return a || b;
+}
+
+export function defaultSlot(horario: string, modalidade: GrelhaLinha["modalidade"]) {
+  if (modalidade === "auto" || modalidade === "avaliacao") return { horaInicio: "", horaFim: "" };
+  if (modalidade === "sincrona") return { horaInicio: "10:00", horaFim: "11:30" };
+  if (/pós laboral|pos laboral/i.test(horario)) return { horaInicio: "19:00", horaFim: "22:00" };
+  if (/sábado|sabado/i.test(horario)) return { horaInicio: "09:00", horaFim: "13:00" };
+  if (/laboral manhã|laboral manha/i.test(horario)) return { horaInicio: "09:00", horaFim: "13:00" };
+  return { horaInicio: "09:00", horaFim: "13:00" };
+}
+
 export function linhaId(l: Pick<GrelhaLinha, "modalidade" | "horaInicio" | "horaFim">) {
-  return `${l.modalidade}|${l.horaInicio || "-"}|${l.horaFim || "-"}`;
+  const hi = l.modalidade === "auto" || l.modalidade === "avaliacao" ? "" : normHora(l.horaInicio);
+  const hf = l.modalidade === "auto" || l.modalidade === "avaliacao" ? "" : normHora(l.horaFim);
+  return `${l.modalidade}|${hi || "-"}|${hf || "-"}`;
 }
 
 export function linhaLabel(l: GrelhaLinha) {
-  if (l.modalidade === "auto") return "Online auto-aprendizagem";
+  if (l.modalidade === "auto") return "Online Auto-aprendizagem";
   if (l.modalidade === "avaliacao") return "Prazo de avaliação";
-  if (l.horaInicio && l.horaFim) return `das ${l.horaInicio} às ${l.horaFim}`;
+  const faixa = formatHoraFaixa(l.horaInicio, l.horaFim);
+  if (faixa) return faixa;
   if (l.modalidade === "sincrona") return "Sessão síncrona";
   return "Aula presencial";
 }
 
 export function grupoLinha(m: GrelhaLinha["modalidade"]) {
   if (m === "presencial") return "Horário das aulas presenciais";
-  if (m === "sincrona") return "Online vídeo-conferência";
-  if (m === "auto") return "Online auto-aprendizagem";
+  if (m === "sincrona") return "Online Vídeo-conferência";
+  if (m === "auto") return "Online Auto-aprendizagem";
   return "Avaliação";
+}
+
+export function mergeLinhas(fromSessoes: GrelhaLinha[], extra: GrelhaLinha[]) {
+  const seen = new Map<string, GrelhaLinha>();
+  for (const l of fromSessoes) seen.set(l.id, l);
+  for (const l of extra) {
+    if (!seen.has(l.id)) seen.set(l.id, l);
+  }
+  const order = (a: GrelhaLinha) => {
+    const g = a.modalidade === "presencial" ? 0 : a.modalidade === "sincrona" ? 1 : a.modalidade === "auto" ? 2 : 3;
+    return `${g}-${a.horaInicio || "99"}`;
+  };
+  return [...seen.values()].sort((a, b) => order(a).localeCompare(order(b)));
+}
+
+export function datasImpressao(opts: {
+  matricula?: string;
+  inicio?: string;
+  fim?: string;
+  sessoes: SessaoCronograma[];
+}) {
+  const lectivas = opts.sessoes
+    .filter(s => sessaoModalidade(s) !== "matricula")
+    .map(s => s.data)
+    .filter(Boolean)
+    .sort();
+  const start = opts.inicio || lectivas[0] || "";
+  const end = opts.fim && start && opts.fim >= start ? opts.fim : (lectivas[lectivas.length - 1] || start);
+  const days = start ? datesFromRange(start, end || start) : [];
+  const mat = opts.matricula;
+  if (mat && (!start || mat < start)) return [mat, ...days.filter(d => d !== mat)];
+  if (mat && !days.includes(mat)) return [mat, ...days];
+  return days;
+}
+
+export function cellLabelPrint(sessoes: SessaoCronograma[], date: string, l: GrelhaLinha) {
+  const label = cellLabel(sessoes, date, l);
+  if (label === "Síncrona") return "Sessão Síncrona";
+  return label;
+}
+
+export function formatDataOficial(iso: string) {
+  const [y, m, d] = (iso || "").split("-");
+  if (!y || !m || !d) return "—";
+  return `${d}/${m}/${y}`;
 }
 
 export function matchLinha(s: SessaoCronograma, l: GrelhaLinha) {
@@ -81,7 +164,7 @@ export function matchLinha(s: SessaoCronograma, l: GrelhaLinha) {
   if (l.modalidade === "auto") return m === "auto";
   if (l.modalidade === "avaliacao") return m === "avaliacao";
   if (m !== l.modalidade && m !== "avaliacao") return false;
-  return (s.horaInicio || "") === (l.horaInicio || "") && (s.horaFim || "") === (l.horaFim || "");
+  return normHora(s.horaInicio || "") === normHora(l.horaInicio || "") && normHora(s.horaFim || "") === normHora(l.horaFim || "");
 }
 
 export function cellSessoes(sessoes: SessaoCronograma[], date: string, l: GrelhaLinha) {
@@ -110,8 +193,8 @@ export function linhasFromSessoes(sessoes: SessaoCronograma[], horario?: string)
     const linha: GrelhaLinha = {
       id: "",
       modalidade: m,
-      horaInicio: m === "auto" || m === "avaliacao" ? "" : (s.horaInicio || ""),
-      horaFim: m === "auto" || m === "avaliacao" ? "" : (s.horaFim || ""),
+      horaInicio: m === "auto" || m === "avaliacao" ? "" : normHora(s.horaInicio || ""),
+      horaFim: m === "auto" || m === "avaliacao" ? "" : normHora(s.horaFim || ""),
     };
     linha.id = linhaId(linha);
     if (!seen.has(linha.id)) seen.set(linha.id, linha);
@@ -186,8 +269,8 @@ export function upsertCell(
     ...base,
     id: sid("c"),
     data: date,
-    horaInicio: linha.horaInicio,
-    horaFim: linha.horaFim,
+    horaInicio: linha.modalidade === "auto" || linha.modalidade === "avaliacao" ? "" : normHora(linha.horaInicio),
+    horaFim: linha.modalidade === "auto" || linha.modalidade === "avaliacao" ? "" : normHora(linha.horaFim),
     modulos: next.modulos,
     formadores: next.formadores ?? [],
     modalidade,

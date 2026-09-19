@@ -141,9 +141,17 @@ export function datasImpressao(opts: {
   const end = opts.fim && start && opts.fim >= start ? opts.fim : (lectivas[lectivas.length - 1] || start);
   const days = start ? datesFromRange(start, end || start) : [];
   const mat = opts.matricula;
-  if (mat && (!start || mat < start)) return [mat, ...days.filter(d => d !== mat)];
-  if (mat && !days.includes(mat)) return [mat, ...days];
-  return days;
+  let out = days;
+  if (mat && (!start || mat < start)) out = [mat, ...days.filter(d => d !== mat)];
+  else if (mat && !days.includes(mat)) out = [mat, ...days];
+  if (out.length <= 36) return out;
+  const marked = new Set(opts.sessoes.map(s => s.data).filter(Boolean));
+  if (mat) marked.add(mat);
+  if (start) marked.add(start);
+  const last = out[out.length - 1];
+  if (last) marked.add(last);
+  const compact = out.filter(d => marked.has(d));
+  return compact.length ? compact : out.slice(0, 36);
 }
 
 export function cellLabelPrint(sessoes: SessaoCronograma[], date: string, l: GrelhaLinha) {

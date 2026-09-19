@@ -163,19 +163,19 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
     .brand h1 { margin: 0; font-size: 13px; letter-spacing: 0.01em; }
     .brand p { margin: 3px 0 0; font-size: 8px; color: #333; }
     h2.title { margin: 10px 0 2px; font-size: 18px; }
-    .course { margin: 0 0 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .course { margin: 0 0 8px; font-size: 12px; font-weight: 700; }
     .meta { width: 100%; border-collapse: collapse; margin: 0 0 8px; font-size: 11px; }
     .meta td { border: none; padding: 2px 4px 2px 0; text-align: left; }
     .meta b { font-weight: 700; }
     table.grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
     table.grid th, table.grid td { border: 1px solid #222; padding: 1px 1px; vertical-align: middle; }
-    .corner { background: #fff; width: 148px; }
+    .corner { background: #fff; width: 168px; }
     .month { background: #f3f4f6; font-size: 9px; text-transform: none; font-weight: 700; }
     .day { font-size: 8px; font-weight: 700; height: 16px; }
     .wd { font-size: 7px; font-weight: 600; text-transform: lowercase; color: #222; }
-    .group { text-align: left; font-size: 8px; font-weight: 700; width: 72px; padding: 3px 4px; line-height: 1.2; background: #fff; }
-    .time { text-align: left; font-size: 8px; font-weight: 600; width: 76px; padding: 2px 4px; white-space: nowrap; background: #fff; }
-    .cell { font-size: 7px; font-weight: 700; height: 22px; line-height: 1.05; text-align: center; word-break: break-word; }
+    .group { text-align: left; font-size: 8px; font-weight: 700; width: 88px; padding: 3px 4px; line-height: 1.25; background: #fff; white-space: normal; }
+    .time { text-align: left; font-size: 8px; font-weight: 600; width: 80px; padding: 2px 4px; white-space: nowrap; background: #fff; }
+    .cell { font-size: 8px; font-weight: 700; height: 24px; line-height: 1.05; text-align: center; word-break: break-word; }
     .pres { background: #a60000; color: #fff; }
     .sinc { background: #1d4ed8; color: #fff; }
     .auto { background: #d4d4d4; color: #111; }

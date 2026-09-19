@@ -137,21 +137,39 @@ export function datasImpressao(opts: {
     .map(s => s.data)
     .filter(Boolean)
     .sort();
-  const start = opts.inicio || lectivas[0] || "";
+  const start = [opts.matricula, opts.inicio, lectivas[0]].filter(Boolean).sort()[0] ?? "";
   const end = opts.fim && start && opts.fim >= start ? opts.fim : (lectivas[lectivas.length - 1] || start);
-  const days = start ? datesFromRange(start, end || start) : [];
-  const mat = opts.matricula;
-  let out = days;
-  if (mat && (!start || mat < start)) out = [mat, ...days.filter(d => d !== mat)];
-  else if (mat && !days.includes(mat)) out = [mat, ...days];
-  if (out.length <= 36) return out;
-  const marked = new Set(opts.sessoes.map(s => s.data).filter(Boolean));
-  if (mat) marked.add(mat);
-  if (start) marked.add(start);
-  const last = out[out.length - 1];
-  if (last) marked.add(last);
-  const compact = out.filter(d => marked.has(d));
-  return compact.length ? compact : out.slice(0, 36);
+  return start ? datesFromRange(start, end || start) : [];
+}
+
+export function buildLinha(
+  modalidade: Exclude<SessaoModalidade, "matricula">,
+  horaInicio: string,
+  horaFim: string,
+): GrelhaLinha {
+  const timed = modalidade !== "auto" && modalidade !== "avaliacao";
+  const linha: GrelhaLinha = {
+    id: "",
+    modalidade,
+    horaInicio: timed ? normHora(horaInicio) : "",
+    horaFim: timed ? normHora(horaFim) : "",
+  };
+  linha.id = linhaId(linha);
+  return linha;
+}
+
+export function aplicarEvento(
+  sessoes: SessaoCronograma[],
+  date: string,
+  linha: GrelhaLinha,
+  next: { modulos: string[]; formadores?: string[]; modalidade?: SessaoModalidade } | null,
+  previous?: GrelhaLinha | null,
+): SessaoCronograma[] {
+  let out = sessoes;
+  if (previous && previous.id !== linha.id) {
+    out = upsertCell(out, date, previous, null);
+  }
+  return upsertCell(out, date, linha, next);
 }
 
 export function cellLabelPrint(sessoes: SessaoCronograma[], date: string, l: GrelhaLinha) {

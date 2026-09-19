@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useCatalogs } from "./CatalogsContext";
 import { modulosOptsForCurso } from "./FormKit";
 import {
   addDays,
+  aplicarEvento,
+  buildLinha,
   cellLabel,
+  cellSessoes,
   cellTone,
-  datasImpressao,
   datesFromRange,
   defaultSlot,
-  matchLinha,
   dayNum,
   generateEnaCronograma,
   grelhaPeriodo,
@@ -21,7 +23,6 @@ import {
   monthSpans,
   normHora,
   setMatricula,
-  upsertCell,
   weekdayCode,
   type GrelhaLinha,
 } from "./cronogramaGrelha";
@@ -77,92 +78,149 @@ const TONE: Record<string, string> = {
   empty: "bg-white hover:bg-slate-50 text-slate-400",
 };
 
-function CellEditor({
+type MetodologiaLinha = Exclude<SessaoModalidade, "matricula" | "avaliacao">;
+
+function EventoModal({
   date,
   linha,
   sessoes,
+  horario,
   moduloOpts,
   formador,
   onClose,
   onApply,
 }: {
   date: string;
-  linha: GrelhaLinha;
+  linha?: GrelhaLinha;
   sessoes: SessaoCronograma[];
+  horario: string;
   moduloOpts: { value: string; sub?: string }[];
   formador?: string;
   onClose: () => void;
-  onApply: (next: SessaoCronograma[]) => void;
+  onApply: (next: SessaoCronograma[], extra: GrelhaLinha) => void;
 }) {
-  const hits = sessoes.filter(s => s.data === date && matchLinha(s, linha));
-  const initial = hits.flatMap(s => s.modulos ?? []);
-  const [picked, setPicked] = useState<string[]>(initial);
-  const [sinc, setSinc] = useState(linha.modalidade === "sincrona" && (hits.some(s => (s.modalidade ?? "") === "sincrona") || !initial.length));
-  const [aval, setAval] = useState(hits.some(s => (s.modalidade ?? "") === "avaliacao"));
-  const ref = useRef<HTMLDivElement>(null);
+  const hits = linha ? cellSessoes(sessoes, date, linha) : [];
+  const editing = hits.length > 0;
+  const initialMod = (linha?.modalidade === "avaliacao" ? "presencial" : linha?.modalidade) as MetodologiaLinha | undefined;
+  const [mod, setMod] = useState<MetodologiaLinha>(initialMod ?? "presencial");
+  const slot = defaultSlot(horario, initialMod ?? "presencial");
+  const [horaInicio, setHoraInicio] = useState(linha?.horaInicio || slot.horaInicio);
+  const [horaFim, setHoraFim] = useState(linha?.horaFim || slot.horaFim);
+  const [picked, setPicked] = useState<string[]>(hits.flatMap(s => s.modulos ?? []));
+  const [erro, setErro] = useState("");
 
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [onClose]);
-
-  function toggle(m: string) {
-    setPicked(xs => xs.includes(m) ? xs.filter(x => x !== m) : [...xs, m]);
-    setSinc(false);
+  function escolherMod(next: MetodologiaLinha) {
+    setMod(next);
+    if (next === "auto") {
+      setHoraInicio("");
+      setHoraFim("");
+    } else if (mod === "auto") {
+      const d = defaultSlot(horario, next);
+      setHoraInicio(d.horaInicio);
+      setHoraFim(d.horaFim);
+    }
+    setErro("");
   }
 
-  function save() {
-    if (!picked.length && !sinc && !aval) {
-      onApply(upsertCell(sessoes, date, linha, null));
-      onClose();
+  function guardar() {
+    const precisaHora = mod !== "auto";
+    const hi = precisaHora ? normHora(horaInicio) : "";
+    const hf = precisaHora ? normHora(horaFim) : "";
+    if (precisaHora && (!hi || !hf)) {
+      setErro("Escolha a hora de início e de fim.");
       return;
     }
-    const modalidade = aval ? "avaliacao" : sinc ? "sincrona" : linha.modalidade;
-    onApply(upsertCell(sessoes, date, linha, {
+    if (precisaHora && hi >= hf) {
+      setErro("A hora de fim tem de ser depois da de início.");
+      return;
+    }
+    const nextLinha = buildLinha(mod, hi, hf);
+    const next = aplicarEvento(sessoes, date, nextLinha, {
       modulos: picked,
-      formadores: modalidade === "presencial" || modalidade === "sincrona"
+      formadores: mod === "presencial" || mod === "sincrona"
         ? (formador && formador !== "A definir" ? [formador] : [])
         : [],
-      modalidade,
-    }));
+      modalidade: mod,
+    }, editing ? linha : null);
+    onApply(next, nextLinha);
     onClose();
   }
 
-  return (
-    <div ref={ref} className="absolute z-50 left-1/2 top-full mt-1 w-64 -translate-x-1/2 rounded-xl border border-slate-200 bg-white shadow-xl p-3 text-left">
-      <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{formatDiaMes(date)}</p>
-      <p className="text-xs text-slate-600 mt-0.5">{linhaLabel(linha)}</p>
-      <div className="mt-2 max-h-44 overflow-auto space-y-1">
-        {moduloOpts.map(o => (
-          <label key={o.value} className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
-            <input type="checkbox" className="mt-0.5" checked={picked.includes(o.value)} onChange={() => toggle(o.value)} />
-            <span><span className="font-semibold">{codigoModulo(o.value)}</span> · {o.value.replace(/^[^·]+·\s*/, "")}</span>
-          </label>
-        ))}
-        {!moduloOpts.length && <p className="text-xs text-slate-400">Não há módulos neste curso.</p>}
-      </div>
-      {linha.modalidade === "sincrona" && (
-        <label className="mt-2 flex items-center gap-2 text-xs text-slate-700">
-          <input type="checkbox" checked={sinc} onChange={e => { setSinc(e.target.checked); if (e.target.checked) setAval(false); }} />
-          Sessão síncrona (vídeo-conferência)
-        </label>
-      )}
-      <label className="mt-1.5 flex items-center gap-2 text-xs text-slate-700">
-        <input type="checkbox" checked={aval} onChange={e => { setAval(e.target.checked); if (e.target.checked) setSinc(false); }} />
-        Data limite de avaliação
-      </label>
-      <div className="flex gap-2 mt-3">
-        <button type="button" onClick={() => { onApply(upsertCell(sessoes, date, linha, null)); onClose(); }} className="flex-1 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
-          Limpar
-        </button>
-        <button type="button" onClick={save} className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-[#0F172A] text-white hover:bg-slate-800">
-          Aplicar
-        </button>
-      </div>
-    </div>
+  return createPortal(
+    <div className="fixed inset-0 z-[80] bg-slate-900/40 flex items-center justify-center p-4" onClick={onClose}>
+      <form
+        className="w-full max-w-sm rounded-2xl bg-white shadow-2xl p-4 space-y-3"
+        onClick={e => e.stopPropagation()}
+        onSubmit={e => { e.preventDefault(); guardar(); }}
+      >
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+            {editing ? "Editar evento" : "Adicionar evento"}
+          </p>
+          <p className="text-sm font-semibold text-slate-800 mt-0.5">{formatDiaMes(date)}</p>
+        </div>
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Metodologia</p>
+          <div className="space-y-1">
+            {METODOLOGIA_OPTS.map(opt => (
+              <label key={opt.value} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                <input type="radio" name="evento-metodologia" checked={mod === opt.value} onChange={() => escolherMod(opt.value)} />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+        </div>
+        {mod !== "auto" && (
+          <div className="grid grid-cols-2 gap-2">
+            <HoraField label="Início" value={horaInicio} onChange={setHoraInicio} />
+            <HoraField label="Fim" value={horaFim} onChange={setHoraFim} />
+          </div>
+        )}
+        {mod === "auto" && (
+          <p className="text-[11px] text-slate-500">O e-learning não tem hora de sala — ocupa o dia na grelha.</p>
+        )}
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Módulos <span className="font-medium normal-case tracking-normal text-slate-400">(opcional, pode ser mais do que um)</span></p>
+          <div className="max-h-40 overflow-auto space-y-1 border border-slate-100 rounded-lg p-2">
+            {moduloOpts.map(o => (
+              <label key={o.value} className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={picked.includes(o.value)}
+                  onChange={() => setPicked(xs => xs.includes(o.value) ? xs.filter(x => x !== o.value) : [...xs, o.value])}
+                />
+                <span><span className="font-semibold">{codigoModulo(o.value)}</span> · {o.value.replace(/^[^·]+·\s*/, "")}</span>
+              </label>
+            ))}
+            {!moduloOpts.length && <p className="text-xs text-slate-400">Não há módulos neste curso.</p>}
+          </div>
+        </div>
+        {erro && <p className="text-[11px] text-red-600">{erro}</p>}
+        <div className="flex gap-2">
+          {editing && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!linha) return;
+                onApply(aplicarEvento(sessoes, date, linha, null), linha);
+                onClose();
+              }}
+              className="flex-1 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+            >
+              Remover
+            </button>
+          )}
+          <button type="button" onClick={onClose} className="flex-1 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
+            Cancelar
+          </button>
+          <button type="submit" className="flex-1 py-2 text-xs font-semibold rounded-lg bg-[#0F172A] text-white hover:bg-slate-800">
+            {editing ? "Guardar" : "Adicionar"}
+          </button>
+        </div>
+      </form>
+    </div>,
+    document.body,
   );
 }
 
@@ -194,7 +252,7 @@ export function CronogramaGrelha({
   const [fim, setFim] = useState(periodo.fim);
   const [matricula, setMatriculaDate] = useState(periodo.matricula ?? "");
   const [linhas, setLinhas] = useState<GrelhaLinha[]>(() => linhasFromSessoes(sessoes, horario));
-  const [open, setOpen] = useState<{ date: string; linha: string } | null>(null);
+  const [evento, setEvento] = useState<{ date: string; linha?: GrelhaLinha } | null>(null);
   const [addLinha, setAddLinha] = useState(false);
   const [novaMod, setNovaMod] = useState<Exclude<SessaoModalidade, "matricula" | "avaliacao">>("presencial");
   const [novaInicio, setNovaInicio] = useState(() => defaultSlot(horario, "presencial").horaInicio);
@@ -247,6 +305,11 @@ export function CronogramaGrelha({
     setFim(v);
   }
 
+  function aplicarEventoGrelha(next: SessaoCronograma[], extra: GrelhaLinha) {
+    setLinhas(xs => mergeLinhas(linhasFromSessoes(next, horario), [...xs, extra]));
+    onChange(next);
+  }
+
   return (
     <div className="space-y-3 cronograma-ena">
       <header className="rounded-xl border border-slate-200 bg-white px-4 py-3">
@@ -288,15 +351,29 @@ export function CronogramaGrelha({
             </tr>
             <tr>
               {dates.map(d => (
-                <th key={`n-${d}`} className={`border-b border-slate-100 px-0 py-1 text-center font-bold w-8 min-w-8 ${d === matricula ? "bg-[#ffa900]/40" : d === inicio ? "bg-emerald-50" : ""}`}>
-                  {dayNum(d)}
+                <th key={`n-${d}`} className={`border-b border-slate-100 px-0 py-0 text-center font-bold w-8 min-w-8 ${d === matricula ? "bg-[#ffa900]/40" : d === inicio ? "bg-emerald-50" : ""}`}>
+                  <button
+                    type="button"
+                    onClick={() => setEvento({ date: d })}
+                    title={`Adicionar evento em ${formatDiaMes(d)}`}
+                    className="block w-8 min-w-8 py-1 hover:bg-slate-100"
+                  >
+                    {dayNum(d)}
+                  </button>
                 </th>
               ))}
             </tr>
             <tr>
               {dates.map(d => (
-                <th key={`w-${d}`} className={`border-b border-slate-200 px-0 py-0.5 text-center font-medium text-slate-500 ${d === matricula ? "bg-[#ffa900]/30" : ""}`}>
-                  {weekdayCode(d)}
+                <th key={`w-${d}`} className={`border-b border-slate-200 px-0 py-0 text-center font-medium text-slate-500 ${d === matricula ? "bg-[#ffa900]/30" : ""}`}>
+                  <button
+                    type="button"
+                    onClick={() => setEvento({ date: d })}
+                    title={`Adicionar evento em ${formatDiaMes(d)}`}
+                    className="block w-8 min-w-8 py-0.5 hover:bg-slate-100"
+                  >
+                    {weekdayCode(d)}
+                  </button>
                 </th>
               ))}
             </tr>
@@ -328,28 +405,16 @@ export function CronogramaGrelha({
                       ? "matricula"
                       : cellTone(sessoes, d, linha);
                     const label = d === matricula && tone === "matricula" ? "Matrícula" : cellLabel(sessoes, d, linha);
-                    const opened = open?.date === d && open.linha === linha.id;
                     return (
                       <td key={`${linha.id}-${d}`} className="relative border border-slate-100 p-0 text-center align-middle">
                         <button
                           type="button"
-                          onClick={() => setOpen(opened ? null : { date: d, linha: linha.id })}
+                          onClick={() => setEvento({ date: d, linha })}
                           className={`block w-8 min-w-8 h-10 px-0.5 text-[9px] font-bold leading-tight ${TONE[tone] ?? TONE.empty} ${d === matricula ? "ring-1 ring-[#ffa900]" : ""}`}
                           title={`${formatDiaMes(d)} · ${linhaLabel(linha)}`}
                         >
                           {label}
                         </button>
-                        {opened && (
-                          <CellEditor
-                            date={d}
-                            linha={linha}
-                            sessoes={sessoes}
-                            moduloOpts={moduloOpts}
-                            formador={formador}
-                            onClose={() => setOpen(null)}
-                            onApply={onChange}
-                          />
-                        )}
                       </td>
                     );
                   })}
@@ -444,15 +509,14 @@ export function CronogramaGrelha({
         <button
           type="button"
           onClick={() => {
-            const printDates = datasImpressao({ matricula, inicio, fim, sessoes });
             imprimirCronogramaEna({
               horario,
               curso,
               matricula,
               inicio,
-              fim: fim || printDates[printDates.length - 1],
+              fim: fim || dates[dates.length - 1],
               local: localMapeado,
-              dates: printDates.length ? printDates : dates,
+              dates,
               linhas,
               sessoes,
             });
@@ -462,6 +526,21 @@ export function CronogramaGrelha({
           Imprimir / PDF
         </button>
       </div>
+
+      {evento && (
+        <EventoModal
+          date={evento.date}
+          linha={evento.linha}
+          sessoes={sessoes}
+          horario={horario}
+          moduloOpts={moduloOpts}
+          formador={formador}
+          onClose={() => setEvento(null)}
+          onApply={aplicarEventoGrelha}
+        />
+      )}
+
+      <p className="text-[11px] text-slate-500 px-1">Clique num dia (número ou célula) para adicionar um evento. Se o horário ainda não existir, a grelha cria uma linha nova.</p>
 
       <ul className="text-[11px] text-slate-600 space-y-1 px-1">
         <li className="flex items-center gap-2"><span className="w-3.5 h-3.5 rounded-sm bg-[#ffa900]" /> Data limite de matrícula e instruções de início (email)</li>

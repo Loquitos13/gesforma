@@ -5,14 +5,19 @@ export type SessaoCronograma = {
   horaFim: string;
   modulos: string[];
   formadores: string[];
+  modalidade?: "presencial" | "sincrona" | "auto" | "avaliacao" | "matricula";
 };
 
 const CCP_MODULOS = [
-  "M1 · Aprendizagem e pedagogia",
-  "M2 · Comunicação e dinâmica de grupos",
-  "M3 · Avaliação da formação",
-  "M4 · Simulação pedagógica",
-  "M5 · Plataformas digitais e e-learning",
+  "M1 · Formador: sistemas, contextos e perfil",
+  "M2 · Simulação pedagógica inicial",
+  "M3 · Comunicação e dinamização de grupos",
+  "M4 · Metodologias e estratégias pedagógicas",
+  "M5 · Operacionalização da formação",
+  "M6 · Recursos didáticos e multimédia",
+  "M7 · Plataformas colaborativas e de aprendizagem",
+  "M8 · Avaliação da formação e das aprendizagens",
+  "M9 · Simulação pedagógica final",
 ];
 
 const UFCD_3564_MODULOS = [
@@ -69,6 +74,7 @@ export function generateCronograma(opts: {
       horaFim: slot.end,
       modulos: modulosForIndex(i, n, opts.curso),
       formadores: opts.formador && opts.formador !== "A definir" ? [opts.formador] : [],
+      modalidade: "presencial",
     });
     cursor.setDate(cursor.getDate() + 1);
     for (let j = 0; j < 14; j++) {

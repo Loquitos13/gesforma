@@ -1521,6 +1521,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             horas={turma.horas}
             formador={turma.formador}
             curso={turma.curso}
+            local={turma.local}
           />
         )}
 
@@ -2044,6 +2045,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           horas={turma.horas}
           formador={turma.formador}
           curso={turma.curso}
+          local={turma.local}
         />
       )}
       {tab === "dtp" && (
@@ -3247,6 +3249,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
             horas={horasCurso}
             formador={formador}
             curso={curso}
+            local={local}
           />
           <div className="flex gap-2 pt-2">
             <button onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
@@ -3736,6 +3739,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
             horas={editing?.horas ?? 25}
             formador={formador}
             curso={curso}
+            local={localFin}
           />
           <div className="flex gap-2 pt-2">
             <button onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>

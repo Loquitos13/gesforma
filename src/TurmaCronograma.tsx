@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { CronogramaGrelha } from "./CronogramaGrelha";
+import { generateEnaCronograma } from "./cronogramaGrelha";
 import { MultiSearchSelect, modulosOptsForCurso } from "./FormKit";
 import { useFormadorOptions } from "./FormadoresContext";
 import {
@@ -9,9 +11,9 @@ import {
   formatMesAno,
   formadoresLabel,
   formadoresNasSessoes,
-  generateCronograma,
   groupCronogramaByMonth,
   horasCronograma,
+  isSessaoLectiva,
   modulosLabel,
   periodoCronograma,
   proximaSessao,
@@ -82,14 +84,6 @@ export function TurmaInactivaBanner({ nome, onActivate }: { nome: string; onActi
         </button>
       )}
     </div>
-  );
-}
-
-function IconCalendar() {
-  return (
-    <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-      <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-    </svg>
   );
 }
 
@@ -250,7 +244,7 @@ function SessaoRow({
 }
 
 export function CronogramaEditor({
-  sessoes, onChange, inicio, horario, horas, formador, curso, accent = "gold",
+  sessoes, onChange, inicio, horario, horas, formador, curso, local, accent = "gold",
   layout = "compact",
 }: {
   sessoes: SessaoCronograma[];
@@ -260,6 +254,7 @@ export function CronogramaEditor({
   horas: number;
   formador: string;
   curso?: string;
+  local?: string;
   accent?: "gold" | "fin";
   layout?: "page" | "compact";
 }) {
@@ -269,7 +264,8 @@ export function CronogramaEditor({
   const totalH = Math.round(horasCronograma(sessoes) * 10) / 10;
   const next = proximaSessao(sessoes);
   const periodo = periodoCronograma(sessoes);
-  const groups = useMemo(() => groupCronogramaByMonth(sessoes), [sessoes]);
+  const lectivas = useMemo(() => sessoes.filter(isSessaoLectiva), [sessoes]);
+  const groups = useMemo(() => groupCronogramaByMonth(lectivas), [lectivas]);
   const [confirmRegen, setConfirmRegen] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -279,7 +275,7 @@ export function CronogramaEditor({
 
   function aplicarGerado() {
     if (!inicio) return;
-    onChange(generateCronograma({ inicio, horario, horas, formador, curso }));
+    onChange(generateEnaCronograma({ inicio, horario, horas, formador, curso, modulos: moduloOpts.map(o => o.value) }));
     setConfirmRegen(false);
     setOpenId(null);
   }
@@ -302,7 +298,7 @@ export function CronogramaEditor({
 
   const kpiGrid = (
     <div className={`grid gap-3 ${page ? "grid-cols-2 lg:grid-cols-4" : "grid-cols-2"}`}>
-      <KpiCard accent={accent} label="Sessões" value={String(sessoes.length)} hint={sessoes.length ? `${groups.length} ${groups.length === 1 ? "mês" : "meses"} no plano` : "Ainda por gerar"} />
+      <KpiCard accent={accent} label="Sessões lectivas" value={String(lectivas.length)} hint={lectivas.length ? `${groups.length} ${groups.length === 1 ? "mês" : "meses"} no plano` : "Ainda por gerar"} />
       <KpiCard
         accent={accent}
         label="Horas"
@@ -332,7 +328,7 @@ export function CronogramaEditor({
   const actions = (
     <div className="flex gap-2 flex-shrink-0 flex-wrap">
       <button type="button" onClick={pedirGerar} disabled={!inicio} className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg ${btn} disabled:opacity-40`}>
-        {sessoes.length ? "Regenerar plano" : "Gerar cronograma"}
+        {sessoes.length ? "Regenerar grelha" : "Gerar grelha ENA"}
       </button>
       <button type="button" onClick={addSessao} className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border bg-white ${ghost}`}>
         <IconPlus /> Sessão
@@ -345,14 +341,14 @@ export function CronogramaEditor({
       <div className={`flex flex-col sm:flex-row sm:items-start justify-between gap-3 ${page ? "bg-white rounded-xl border border-slate-200 px-4 py-4" : ""}`}>
         <div className="min-w-0">
           <p className={page ? "text-base font-bold text-slate-800" : "text-xs font-bold text-slate-500 uppercase tracking-wider"}>
-            {page ? "Plano de sessões" : "Cronograma"}
+            {page ? "Cronograma da turma" : "Cronograma"}
           </p>
           <p className="text-xs text-slate-500 mt-0.5">
             {sessoes.length === 0
-              ? "Gere o plano a partir da data de início e do horário da turma, ou adicione sessões à mão."
+              ? "A grelha segue o modelo da ENA: aulas presenciais, sessões síncronas e auto-aprendizagem por dia."
               : page
-                ? "Clique numa sessão para ajustar data, horário, módulos ou formadores. Regenerar substitui o plano atual."
-                : `${sessoes.length} sessões · ${totalH}h calendarizadas${horas ? ` de ${horas}h` : ""}`}
+                ? "Clique numa célula para marcar o módulo. A lista abaixo serve para formadores das sessões lectivas."
+                : `${lectivas.length} sessões lectivas · ${totalH}h em sala ou síncronas${horas ? ` de ${horas}h` : ""}`}
           </p>
           <div className="flex flex-wrap gap-1.5 mt-2">
             {horario && <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${soft}`}>{horario}</span>}
@@ -384,28 +380,28 @@ export function CronogramaEditor({
 
       {sessoes.length > 0 && kpiGrid}
 
-      {sessoes.length === 0 ? (
-        <div className={`rounded-xl border border-dashed border-slate-200 bg-white px-5 ${page ? "py-12" : "py-8"} text-center`}>
-          <div className={`mx-auto mb-3 w-11 h-11 rounded-2xl flex items-center justify-center ${gold ? "bg-amber-50 text-amber-600" : "bg-blue-50 text-blue-600"}`}>
-            <IconCalendar />
-          </div>
-          <p className="text-sm font-semibold text-slate-800">Ainda não há sessões neste plano</p>
-          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-            {inicio
-              ? `Vamos marcar sessões de ${horario || "horário da turma"} a partir de ${formatDiaMes(inicio)}${horas ? `, até cobrir cerca de ${horas}h` : ""}. Sem cronograma a turma pode ficar ativa, mas o cockpit de sessões fica vazio.`
-              : "Defina primeiro a data de início da turma. Depois pode gerar o plano ou adicionar a primeira sessão."}
-          </p>
-          <div className="flex justify-center gap-2 mt-4">
-            <button type="button" onClick={pedirGerar} disabled={!inicio} className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg ${btn} disabled:opacity-40`}>
-              Gerar cronograma
-            </button>
-            <button type="button" onClick={addSessao} className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg border bg-white ${ghost}`}>
-              <IconPlus /> Sessão manual
-            </button>
-          </div>
-        </div>
-      ) : (
+      <CronogramaGrelha
+        sessoes={sessoes}
+        onChange={onChange}
+        inicio={inicio}
+        horario={horario}
+        horas={horas}
+        formador={formador}
+        curso={curso}
+        local={local}
+        accent={accent}
+        compact={!page}
+      />
+
+      {page && lectivas.length === 0 && (
+        <p className="text-xs text-slate-500 px-0.5">
+          As aulas presenciais e as sessões síncronas da grelha aparecem abaixo para atribuir formadores e abrir planos de sessão.
+        </p>
+      )}
+
+      {lectivas.length > 0 && (
         <div className={page ? "space-y-4" : "max-h-80 overflow-y-auto space-y-3 pr-0.5"}>
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Sessões lectivas (presencial e síncrona)</p>
           {groups.map(g => (
             <section key={g.key} className="space-y-2">
               <div className="flex items-center gap-2 px-0.5">

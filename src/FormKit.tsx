@@ -222,11 +222,15 @@ export const categoriasGoldOpts: SelectOption[] = [
 export type ModuloCatalog = SelectOption & { curso?: string };
 
 export const catalogoModulos: ModuloCatalog[] = [
-  { value: "M1 · Aprendizagem e pedagogia", sub: "CCP · 20h", curso: "Formação de Formadores - CCP" },
-  { value: "M2 · Comunicação e dinâmica de grupos", sub: "CCP · 20h", curso: "Formação de Formadores - CCP" },
-  { value: "M3 · Avaliação da formação", sub: "CCP · 15h", curso: "Formação de Formadores - CCP" },
-  { value: "M4 · Simulação pedagógica", sub: "CCP · 25h", curso: "Formação de Formadores - CCP" },
-  { value: "M5 · Plataformas digitais e e-learning", sub: "CCP · 10h", curso: "Formação de Formadores - CCP" },
+  { value: "M1 · Formador: sistemas, contextos e perfil", sub: "CCP · 10h", curso: "Formação de Formadores - CCP" },
+  { value: "M2 · Simulação pedagógica inicial", sub: "CCP · 10h", curso: "Formação de Formadores - CCP" },
+  { value: "M3 · Comunicação e dinamização de grupos", sub: "CCP · 10h", curso: "Formação de Formadores - CCP" },
+  { value: "M4 · Metodologias e estratégias pedagógicas", sub: "CCP · 12h", curso: "Formação de Formadores - CCP" },
+  { value: "M5 · Operacionalização da formação", sub: "CCP · 8h", curso: "Formação de Formadores - CCP" },
+  { value: "M6 · Recursos didáticos e multimédia", sub: "CCP · 8h", curso: "Formação de Formadores - CCP" },
+  { value: "M7 · Plataformas colaborativas e de aprendizagem", sub: "CCP · 8h", curso: "Formação de Formadores - CCP" },
+  { value: "M8 · Avaliação da formação e das aprendizagens", sub: "CCP · 12h", curso: "Formação de Formadores - CCP" },
+  { value: "M9 · Simulação pedagógica final", sub: "CCP · 12h", curso: "Formação de Formadores - CCP" },
   { value: "EX1 · Tabelas dinâmicas e dashboards", sub: "Excel · 4h", curso: "Excel do Básico ao Avançado" },
   { value: "AV1 · Voz e respiração", sub: "6h", curso: "A Arte de Comunicar e Falar em Público: B-learning" },
   { value: "AV2 · Estrutura do discurso", sub: "5h", curso: "A Arte de Comunicar e Falar em Público: B-learning" },

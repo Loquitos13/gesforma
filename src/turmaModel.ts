@@ -1,6 +1,8 @@
 import type { SelectOption } from "./FormKit";
 import type { SessaoMeta } from "./TurmaExtras";
 
+export type SessaoModalidade = "presencial" | "sincrona" | "auto" | "avaliacao" | "matricula";
+
 export type SessaoCronograma = {
   id: string;
   data: string;
@@ -8,7 +10,30 @@ export type SessaoCronograma = {
   horaFim: string;
   modulos: string[];
   formadores: string[];
+  modalidade?: SessaoModalidade;
 };
+
+export function sessaoModalidade(s: Pick<SessaoCronograma, "modalidade">): SessaoModalidade {
+  return s.modalidade ?? "presencial";
+}
+
+export function isSessaoLectiva(s: Pick<SessaoCronograma, "modalidade">) {
+  const m = sessaoModalidade(s);
+  return m === "presencial" || m === "sincrona";
+}
+
+export function codigoModulo(nome: string) {
+  const raw = nome.trim();
+  const tagged = raw.match(/^(M\d+|UFCD\s*\d+|EX\d+|AV\d+)/i);
+  if (tagged) return tagged[1].replace(/\s+/g, " ");
+  const before = raw.split("·")[0]?.trim();
+  return before || raw;
+}
+
+export function codigosModulos(modulos: string[] | undefined) {
+  const codes = [...new Set((modulos ?? []).map(codigoModulo).filter(Boolean))];
+  return codes.join("/");
+}
 
 export function modulosLabel(modulos: string[] | undefined, empty = "Módulo por definir") {
   const list = (modulos ?? []).map(m => m.trim()).filter(Boolean);
@@ -83,11 +108,15 @@ const WEEKDAYS_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const MONTHS_PT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 const CCP_MODULOS = [
-  "M1 · Aprendizagem e pedagogia",
-  "M2 · Comunicação e dinâmica de grupos",
-  "M3 · Avaliação da formação",
-  "M4 · Simulação pedagógica",
-  "M5 · Plataformas digitais e e-learning",
+  "M1 · Formador: sistemas, contextos e perfil",
+  "M2 · Simulação pedagógica inicial",
+  "M3 · Comunicação e dinamização de grupos",
+  "M4 · Metodologias e estratégias pedagógicas",
+  "M5 · Operacionalização da formação",
+  "M6 · Recursos didáticos e multimédia",
+  "M7 · Plataformas colaborativas e de aprendizagem",
+  "M8 · Avaliação da formação e das aprendizagens",
+  "M9 · Simulação pedagógica final",
 ];
 
 const UFCD_3564_MODULOS = [
@@ -156,7 +185,7 @@ export function sessaoDuracaoHoras(s: Pick<SessaoCronograma, "horaInicio" | "hor
 
 export function proximaSessao(sessoes: SessaoCronograma[], today = hojeIso()) {
   return [...sessoes]
-    .filter(s => s.data && s.data >= today)
+    .filter(s => isSessaoLectiva(s) && s.data && s.data >= today)
     .sort((a, b) => a.data.localeCompare(b.data) || a.horaInicio.localeCompare(b.horaInicio))[0];
 }
 
@@ -244,12 +273,13 @@ export function generateCronograma(opts: {
   const sessions: SessaoCronograma[] = [];
   for (let i = 0; i < n; i++) {
     sessions.push({
-        id: `s-${opts.inicio || "new"}-${i + 1}`,
+      id: `s-${opts.inicio || "new"}-${i + 1}`,
       data: toIso(cursor),
       horaInicio: slot.start,
       horaFim: slot.end,
       modulos: modulosForIndex(i, n, opts.curso),
       formadores: opts.formador && opts.formador !== "A definir" ? [opts.formador] : [],
+      modalidade: "presencial",
     });
     cursor.setDate(cursor.getDate() + 1);
     for (let j = 0; j < 14; j++) {
@@ -268,11 +298,13 @@ export function emptySessao(formador = "A definir"): SessaoCronograma {
     horaFim: "13:00",
     modulos: [],
     formadores: formador && formador !== "A definir" ? [formador] : [],
+    modalidade: "presencial",
   };
 }
 
 export function horasCronograma(sessoes: SessaoCronograma[]) {
   return sessoes.reduce((acc, s) => {
+    if (!isSessaoLectiva(s)) return acc;
     const [sh, sm] = (s.horaInicio || "00:00").split(":").map(Number);
     const [eh, em] = (s.horaFim || "00:00").split(":").map(Number);
     return acc + Math.max(0, ((eh * 60 + em) - (sh * 60 + sm)) / 60);
@@ -280,7 +312,7 @@ export function horasCronograma(sessoes: SessaoCronograma[]) {
 }
 
 export function cronogramaToSessoes(c: SessaoCronograma[], today = hojeIso()): SessaoMeta[] {
-  return c.map((s, i) => {
+  return c.filter(isSessaoLectiva).map((s, i) => {
     const formadores = sessaoFormadores(s);
     return {
       n: i + 1,

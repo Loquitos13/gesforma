@@ -111,21 +111,66 @@ function groupRowsHtml(
   }).join("");
 }
 
-function paginaLarguraMm(n: number) {
-  if (n <= 34) return 297;
-  return Math.min(1400, Math.round(52 + n * 7.2));
+/** Uma tabela contínua no período curto do documento ENA; por mês quando o período já não cabe em A4. */
+export function printDateChunks(dates: string[]) {
+  const months = monthSpans(dates);
+  if (dates.length <= 36 && months.length <= 2) return [dates];
+  const chunks: string[][] = [];
+  let current: string[] = [];
+  let key = "";
+  for (const d of dates) {
+    const next = d.slice(0, 7);
+    if (key && next !== key) {
+      chunks.push(current);
+      current = [];
+    }
+    key = next;
+    current.push(d);
+  }
+  if (current.length) chunks.push(current);
+  return chunks.length ? chunks : [dates];
 }
 
-export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
-  const dates = input.dates;
+function gridHtml(
+  dates: string[],
+  linhas: GrelhaLinha[],
+  sessoes: SessaoCronograma[],
+  matricula?: string,
+) {
   const months = monthSpans(dates);
   const leftCols = 2;
   const monthRow = months.map(m => `<th class="month" colspan="${m.count}">${esc(m.label)}</th>`).join("");
-  const dayRow = dates.map(d => `<th class="day${d === input.matricula ? " mat" : ""}">${esc(String(Number(d.slice(8))))}</th>`).join("");
-  const weekRow = dates.map(d => `<th class="wd${d === input.matricula ? " mat" : ""}">${esc(weekdayCode(d))}</th>`).join("");
+  const dayRow = dates.map(d => `<th class="day${d === matricula ? " mat" : ""}">${esc(String(Number(d.slice(8))))}</th>`).join("");
+  const weekRow = dates.map(d => `<th class="wd${d === matricula ? " mat" : ""}">${esc(weekdayCode(d))}</th>`).join("");
   const grupos = (["presencial", "sincrona", "auto", "avaliacao"] as const)
-    .map(g => groupRowsHtml(g, input.linhas.filter(l => l.modalidade === g), dates, input.sessoes, input.matricula))
+    .map(g => groupRowsHtml(g, linhas.filter(l => l.modalidade === g), dates, sessoes, matricula))
     .join("");
+  return `<table class="grid">
+      <thead>
+        <tr>
+          <th class="corner" colspan="${leftCols}"></th>
+          ${monthRow}
+        </tr>
+        <tr>
+          <th class="corner" colspan="${leftCols}"></th>
+          ${dayRow}
+        </tr>
+        <tr>
+          <th class="corner" colspan="${leftCols}"></th>
+          ${weekRow}
+        </tr>
+      </thead>
+      <tbody>
+        ${grupos || `<tr><td colspan="${leftCols + dates.length}" style="text-align:left;padding:8px">Sem linhas de horário neste cronograma.</td></tr>`}
+      </tbody>
+    </table>`;
+}
+
+export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
+  const chunks = printDateChunks(input.dates);
+  const grids = chunks.map((dates, i) => (
+    `<div class="grid-block${i ? " next" : ""}">${gridHtml(dates, input.linhas, input.sessoes, input.matricula)}</div>`
+  )).join("");
 
   const mods = legendModulos(input.sessoes);
   const mid = Math.ceil(mods.length / 2);
@@ -144,8 +189,6 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
     && !input.local.localizacao.includes(input.local.morada)
     ? input.local.morada
     : "";
-  const pageMm = paginaLarguraMm(dates.length);
-  const cellPx = dates.length > 40 ? 18 : 22;
 
   return `<!DOCTYPE html>
 <html lang="pt">
@@ -153,7 +196,7 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
   <meta charset="utf-8" />
   <title>${esc(tituloCronograma(input.horario))}</title>
   <style>
-    @page { size: ${pageMm}mm 210mm; margin: 8mm 7mm; }
+    @page { size: A4 landscape; margin: 8mm 7mm; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: #fff; color: #111; }
     body { font-family: Arial, Helvetica, sans-serif; font-size: 10px; padding: 8px 10px 14px; }
@@ -168,15 +211,16 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
     .meta { width: 100%; border-collapse: collapse; margin: 0 0 8px; font-size: 11px; }
     .meta td { border: none; padding: 2px 4px 2px 0; text-align: left; vertical-align: top; }
     .meta b { font-weight: 700; }
+    .grid-block.next { margin-top: 16px; page-break-inside: avoid; }
     table.grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
     table.grid th, table.grid td { border: 1px solid #222; padding: 1px; vertical-align: middle; }
     .corner { background: #fff; width: 168px; }
     .month { background: #eee; font-size: 9px; font-weight: 700; }
-    .day { font-size: 8px; font-weight: 700; height: 16px; width: ${cellPx}px; }
-    .wd { font-size: 7px; font-weight: 600; text-transform: lowercase; color: #222; width: ${cellPx}px; }
+    .day { font-size: 9px; font-weight: 700; height: 18px; }
+    .wd { font-size: 8px; font-weight: 600; text-transform: lowercase; color: #222; }
     .group { text-align: left; font-size: 8px; font-weight: 700; width: 88px; padding: 3px 4px; line-height: 1.25; background: #fff; white-space: normal; }
     .time { text-align: left; font-size: 8px; font-weight: 600; width: 80px; padding: 2px 4px; white-space: nowrap; background: #fff; }
-    .cell { font-size: 7px; font-weight: 700; height: 22px; line-height: 1.05; text-align: center; word-break: break-word; width: ${cellPx}px; }
+    .cell { font-size: 8px; font-weight: 700; height: 24px; line-height: 1.05; text-align: center; word-break: break-word; }
     .pres { background: #a60000; color: #fff; }
     .sinc { background: #1d4ed8; color: #fff; }
     .auto { background: #d4d4d4; color: #111; }
@@ -219,25 +263,7 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
         <td>Data de fim: <b>${esc(input.fim ? formatDataOficial(input.fim) : "—")}</b></td>
       </tr>
     </table>
-    <table class="grid">
-      <thead>
-        <tr>
-          <th class="corner" colspan="${leftCols}"></th>
-          ${monthRow}
-        </tr>
-        <tr>
-          <th class="corner" colspan="${leftCols}"></th>
-          ${dayRow}
-        </tr>
-        <tr>
-          <th class="corner" colspan="${leftCols}"></th>
-          ${weekRow}
-        </tr>
-      </thead>
-      <tbody>
-        ${grupos || `<tr><td colspan="${leftCols + dates.length}" style="text-align:left;padding:8px">Sem linhas de horário neste cronograma.</td></tr>`}
-      </tbody>
-    </table>
+    ${grids}
     <div class="legend">
       <h3>Legenda:</h3>
       <div class="swatch"><span class="box mat"></span><span>Data limite para realizar a matrícula e Instruções para início do curso (informação enviada por e-mail)</span></div>

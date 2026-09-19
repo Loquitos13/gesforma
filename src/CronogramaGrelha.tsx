@@ -29,6 +29,45 @@ import { mapLocalTurma, type LocalCatalogo } from "./cronogramaLocal";
 import { imprimirCronogramaEna } from "./cronogramaPrint";
 import { codigoModulo, formatDiaMes, type SessaoCronograma, type SessaoModalidade } from "./turmaModel";
 
+function HoraField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const n = normHora(value) || "09:00";
+  const [h, m] = n.split(":");
+  const hours = Array.from({ length: 17 }, (_, i) => String(i + 7).padStart(2, "0"));
+  const mins = ["00", "15", "30", "45"];
+  if (m && !mins.includes(m)) mins.push(m);
+  mins.sort();
+  return (
+    <label className="block">
+      <span className="block text-[11px] font-semibold text-slate-500 mb-1">{label}</span>
+      <div className="flex items-center gap-1">
+        <select
+          value={h}
+          onChange={e => onChange(`${e.target.value}:${m}`)}
+          className="flex-1 px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white"
+        >
+          {hours.map(x => <option key={x} value={x}>{x}h</option>)}
+        </select>
+        <span className="text-slate-400 text-xs">:</span>
+        <select
+          value={m}
+          onChange={e => onChange(`${h}:${e.target.value}`)}
+          className="flex-1 px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white"
+        >
+          {mins.map(x => <option key={x} value={x}>{x}</option>)}
+        </select>
+      </div>
+    </label>
+  );
+}
+
 const TONE: Record<string, string> = {
   presencial: "bg-[#a60000] text-white",
   sincrona: "bg-[#1d4ed8] text-white",
@@ -352,7 +391,11 @@ export function CronogramaGrelha({
                 }
                 const linha: GrelhaLinha = { id: "", modalidade: novaMod, horaInicio: hi, horaFim: hf };
                 linha.id = linhaId(linha);
-                setLinhas(xs => xs.some(l => l.id === linha.id) ? xs : [...xs, linha]);
+                if (linhas.some(l => l.id === linha.id)) {
+                  setAddErro("Esta linha já existe na grelha. Escolha outro horário.");
+                  return;
+                }
+                setLinhas(xs => [...xs, linha]);
                 setAddLinha(false);
                 setAddErro("");
               }}
@@ -379,14 +422,8 @@ export function CronogramaGrelha({
               </div>
               {novaMod !== "auto" && (
                 <div className="grid grid-cols-2 gap-2 pt-1">
-                  <label className="block">
-                    <span className="block text-[11px] font-semibold text-slate-500 mb-1">Início</span>
-                    <input type="time" required value={novaInicio} onChange={e => setNovaInicio(e.target.value)} className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg" />
-                  </label>
-                  <label className="block">
-                    <span className="block text-[11px] font-semibold text-slate-500 mb-1">Fim</span>
-                    <input type="time" required value={novaFim} onChange={e => setNovaFim(e.target.value)} className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg" />
-                  </label>
+                  <HoraField label="Início" value={novaInicio} onChange={setNovaInicio} />
+                  <HoraField label="Fim" value={novaFim} onChange={setNovaFim} />
                 </div>
               )}
               {novaMod === "auto" && (

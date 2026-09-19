@@ -200,7 +200,7 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
 <body>
   <div class="sheet">
     <div class="head">
-      <img class="logo" src="${esc(typeof window !== "undefined" ? `${window.location.origin}/imagens/ena_logo.svg` : "/imagens/ena_logo.svg")}" alt="ENA" />
+      <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 93.847 24.161" aria-label="ENA"><g transform="translate(-2081 -901)"><g transform="translate(-2)"><rect width="9" height="24" rx="4.5" transform="translate(2125 901)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(2125.853 907.433) rotate(-90)" fill="#a60000"/><rect width="7" height="24" rx="3.5" transform="translate(2142 901)" fill="#a60000"/></g><g transform="translate(2095.462 901.355)"><rect width="6.179" height="23.603" rx="3.09" transform="translate(0 6.179) rotate(-90)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(6.179 23.603) rotate(180)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(24.211 17.525) rotate(90)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(24.211 8.611) rotate(90)" fill="#a60000"/><rect width="6.179" height="14.79" rx="3.09" transform="translate(18.032 0)" fill="#a60000"/></g><rect width="10" height="24" rx="2" transform="translate(2081 901)" fill="#ffa900"/><g transform="translate(2150.635 901.456)"><rect width="6.179" height="23.603" rx="3.09" transform="translate(24.211 17.525) rotate(90)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(18.032 0.101)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(0 6.179) rotate(-90)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(0 15.094) rotate(-90)" fill="#a60000"/><rect width="6.179" height="14.79" rx="3.09" transform="translate(0 8.915)" fill="#a60000"/></g></g></svg>
       <div class="brand">
         <h1>VIVER APRENDER - Escola de Negócios e Administração, lda.</h1>
         <p>Rua Conselheiro Veloso da Cruz nº 524 - 4400-092 Vila Nova de Gaia :: Telf: 22 378 11 00 :: Fax: 22 378 11 09 :: E-mail: geral@ena.pt :: Site: www.ena.pt</p>
@@ -254,42 +254,38 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
       <button type="button" class="ghost" onclick="window.close()">Fechar</button>
     </div>
   </div>
+  <script>
+    window.addEventListener("load", function () {
+      setTimeout(function () { window.print(); }, 400);
+    });
+  </script>
 </body>
 </html>`;
 }
 
 export function imprimirCronogramaEna(input: CronogramaPrintInput) {
   const html = buildCronogramaPrintHtml(input);
-  const w = window.open("", "_blank", "noopener,noreferrer,width=1280,height=860");
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, "_blank");
   if (w) {
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
-    const run = () => {
-      w.focus();
-      w.print();
-    };
-    if (w.document.readyState === "complete") setTimeout(run, 250);
-    else w.onload = () => setTimeout(run, 250);
+    w.focus();
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
     return;
   }
   const iframe = document.createElement("iframe");
-  iframe.setAttribute("aria-hidden", "true");
-  iframe.style.position = "fixed";
-  iframe.style.right = "0";
-  iframe.style.bottom = "0";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  iframe.style.border = "0";
-  document.body.appendChild(iframe);
-  const doc = iframe.contentDocument;
-  if (!doc) return;
-  doc.open();
-  doc.write(html);
-  doc.close();
-  setTimeout(() => {
-    iframe.contentWindow?.focus();
-    iframe.contentWindow?.print();
-    setTimeout(() => iframe.remove(), 1500);
-  }, 350);
+  iframe.title = "Cronograma ENA";
+  iframe.src = url;
+  iframe.style.cssText = "position:fixed;inset:12px;width:auto;height:auto;z-index:99999;background:#fff;border:1px solid #111;border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,.25)";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.textContent = "Fechar pré-visualização";
+  close.style.cssText = "position:fixed;top:20px;right:24px;z-index:100000;font:600 12px Arial,sans-serif;padding:8px 12px;border-radius:6px;border:1px solid #111;background:#111;color:#fff;cursor:pointer";
+  const cleanup = () => {
+    iframe.remove();
+    close.remove();
+    URL.revokeObjectURL(url);
+  };
+  close.onclick = cleanup;
+  document.body.append(iframe, close);
 }

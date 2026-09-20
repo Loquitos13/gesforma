@@ -30,6 +30,28 @@ export function codigoModulo(nome: string) {
   return before || raw;
 }
 
+function chaveModulo(nome: string) {
+  return nome.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/**
+ * O mesmo módulo aparece escrito de maneiras diferentes conforme a origem: o
+ * catálogo da base ("M1 · Aprendizagem e pedagogia"), o catálogo do formulário
+ * ("M1 · Formador: sistemas, contextos e perfil") e cronogramas antigos. O
+ * código é a única parte estável, mas há cursos onde vários módulos partilham
+ * o mesmo código (UFCD 3564), por isso só serve quando é único na lista.
+ */
+export function casarModulo(valor: string, opcoes: string[]): string | null {
+  const alvo = chaveModulo(valor);
+  if (!alvo) return null;
+  const exacto = opcoes.find(o => chaveModulo(o) === alvo);
+  if (exacto) return exacto;
+  const codigo = codigoModulo(valor).toLowerCase();
+  if (!codigo) return null;
+  const mesmoCodigo = opcoes.filter(o => codigoModulo(o).toLowerCase() === codigo);
+  return mesmoCodigo.length === 1 ? mesmoCodigo[0]! : null;
+}
+
 export function codigosModulos(modulos: string[] | undefined) {
   const codes = [...new Set((modulos ?? []).map(codigoModulo).filter(Boolean))];
   return codes.join("/");

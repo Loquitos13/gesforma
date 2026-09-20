@@ -30,7 +30,7 @@ import {
 } from "./cronogramaGrelha";
 import { mapLocalTurma, type LocalCatalogo } from "./cronogramaLocal";
 import { imprimirCronogramaEna } from "./cronogramaPrint";
-import { codigoModulo, formatDiaMes, type SessaoCronograma, type SessaoModalidade } from "./turmaModel";
+import { casarModulo, codigoModulo, formatDiaMes, sessaoModulos, type SessaoCronograma, type SessaoModalidade } from "./turmaModel";
 
 function HoraField({
   label,
@@ -100,7 +100,7 @@ function formInicial(alvo: EventoDia | null, linha: GrelhaLinha | undefined, hor
       mod: alvo.linha.modalidade,
       horaInicio: alvo.linha.horaInicio,
       horaFim: alvo.linha.horaFim,
-      modulos: [...new Set(alvo.sessoes.flatMap(s => s.modulos ?? []))],
+      modulos: [...new Set(alvo.sessoes.flatMap(sessaoModulos))],
       formadores: [...new Set(alvo.sessoes.flatMap(s => s.formadores ?? []))],
     };
   }
@@ -111,6 +111,21 @@ function formInicial(alvo: EventoDia | null, linha: GrelhaLinha | undefined, hor
       ? { horaInicio: linha.horaInicio, horaFim: linha.horaFim }
       : defaultSlot(horario, mod);
   return { mod, horaInicio: slot.horaInicio, horaFim: slot.horaFim, modulos: [], formadores: [] };
+}
+
+/** A que opção da lista corresponde um módulo já guardado na sessão. */
+function opcaoDoModulo(modulo: string, catalogo: string[]) {
+  return casarModulo(modulo, catalogo) ?? modulo;
+}
+
+function moduloEscolhido(modulos: string[], opcao: string, catalogo: string[]) {
+  return modulos.some(m => opcaoDoModulo(m, catalogo) === opcao);
+}
+
+function alternarModulo(modulos: string[], opcao: string, catalogo: string[]) {
+  return moduloEscolhido(modulos, opcao, catalogo)
+    ? modulos.filter(m => opcaoDoModulo(m, catalogo) !== opcao)
+    : [...modulos, opcao];
 }
 
 function EventoModal({
@@ -140,6 +155,14 @@ function EventoModal({
   const [form, setForm] = useState<EventoForm>(() => formInicial(inicial, linha, horario));
   const [erro, setErro] = useState("");
   const editing = Boolean(alvo);
+  const catalogo = useMemo(() => moduloOpts.map(o => o.value), [moduloOpts]);
+  // Módulos que já estão nas sessões deste dia mas não casam com o catálogo do
+  // curso entram na lista à mesma, para não ficarem escolhidos sem se verem.
+  const opcoes = useMemo(() => {
+    const fora = [...new Set(eventos.flatMap(e => e.sessoes.flatMap(sessaoModulos)))]
+      .filter(m => !casarModulo(m, catalogo));
+    return [...catalogo, ...fora];
+  }, [catalogo, eventos]);
 
   function abrir(ev: EventoDia | null) {
     setAlvo(ev);
@@ -189,7 +212,7 @@ function EventoModal({
   return createPortal(
     <div className="fixed inset-0 z-[80] bg-slate-900/40 flex items-center justify-center p-4" onClick={onClose}>
       <form
-        className="w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl p-4 space-y-3"
+        className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl p-5 space-y-3"
         onClick={e => e.stopPropagation()}
         onSubmit={e => { e.preventDefault(); guardar(); }}
       >
@@ -229,7 +252,7 @@ function EventoModal({
         )}
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Metodologia</p>
-          <div className="space-y-1">
+          <div className="grid gap-1 sm:grid-cols-2">
             {EVENTO_OPTS.map(opt => (
               <label key={opt.value} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
                 <input type="radio" name="evento-metodologia" checked={form.mod === opt.value} onChange={() => escolherMod(opt.value)} />
@@ -239,13 +262,13 @@ function EventoModal({
           </div>
         </div>
         {!semHoras(form.mod) && (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3 sm:max-w-md">
             <HoraField label="Início" value={form.horaInicio} onChange={v => setForm(f => ({ ...f, horaInicio: v }))} />
             <HoraField label="Fim" value={form.horaFim} onChange={v => setForm(f => ({ ...f, horaFim: v }))} />
           </div>
         )}
         {form.mod === "auto" && (
-          <p className="text-[11px] text-slate-500">O e-learning não tem hora de sala — ocupa o dia na grelha.</p>
+          <p className="text-[11px] text-slate-500">O e-learning não tem hora de sala - ocupa o dia na grelha.</p>
         )}
         {form.mod === "avaliacao" && (
           <p className="text-[11px] text-slate-500">Marca este dia como limite de entrega de tarefas / avaliação dos módulos escolhidos.</p>
@@ -257,27 +280,24 @@ function EventoModal({
               {form.mod === "avaliacao" ? "(obrigatório)" : "(opcional, pode ser mais do que um)"}
             </span>
           </p>
-          <div className="max-h-40 overflow-auto space-y-1 border border-slate-100 rounded-lg p-2">
-            {moduloOpts.map(o => (
-              <label key={o.value} className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
+          <div className="max-h-56 overflow-auto border border-slate-100 rounded-lg p-2 grid gap-1 sm:grid-cols-2">
+            {opcoes.map(valor => (
+              <label key={valor} className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
                 <input
                   type="checkbox"
-                  className="mt-0.5"
-                  checked={form.modulos.includes(o.value)}
-                  onChange={() => setForm(f => ({
-                    ...f,
-                    modulos: f.modulos.includes(o.value) ? f.modulos.filter(x => x !== o.value) : [...f.modulos, o.value],
-                  }))}
+                  className="mt-0.5 shrink-0"
+                  checked={moduloEscolhido(form.modulos, valor, catalogo)}
+                  onChange={() => setForm(f => ({ ...f, modulos: alternarModulo(f.modulos, valor, catalogo) }))}
                 />
-                <span><span className="font-semibold">{codigoModulo(o.value)}</span> · {o.value.replace(/^[^·]+·\s*/, "")}</span>
+                <span><span className="font-semibold">{codigoModulo(valor)}</span> · {valor.replace(/^[^·]+·\s*/, "")}</span>
               </label>
             ))}
-            {!moduloOpts.length && <p className="text-xs text-slate-400">Não há módulos neste curso.</p>}
+            {!opcoes.length && <p className="text-xs text-slate-400">Não há módulos neste curso.</p>}
           </div>
           <p className="text-[11px] text-slate-400 mt-1">Só aparecem na grelha os módulos escolhidos aqui.</p>
         </div>
         {erro && <p className="text-[11px] text-red-600">{erro}</p>}
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 pt-1">
           {alvo && (
             <button
               type="button"
@@ -285,15 +305,15 @@ function EventoModal({
                 onApply(aplicarEvento(sessoes, date, alvo.linha, null), alvo.linha);
                 onClose();
               }}
-              className="flex-1 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+              className="flex-1 sm:flex-none sm:mr-auto px-4 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
             >
               Remover
             </button>
           )}
-          <button type="button" onClick={onClose} className="flex-1 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
+          <button type="button" onClick={onClose} className="flex-1 sm:flex-none px-4 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
             Cancelar
           </button>
-          <button type="submit" className="flex-1 py-2 text-xs font-semibold rounded-lg bg-[#0F172A] text-white hover:bg-slate-800">
+          <button type="submit" className="flex-1 sm:flex-none px-5 py-2 text-xs font-semibold rounded-lg bg-[#0F172A] text-white hover:bg-slate-800">
             {editing ? "Guardar" : "Adicionar"}
           </button>
         </div>
@@ -402,7 +422,7 @@ export function CronogramaGrelha({
           </label>
           <p className="flex items-center gap-2">
             <span className="text-slate-500 w-40 flex-shrink-0">Data de início</span>
-            <span className="font-semibold text-slate-800">{inicio ? formatDiaMes(inicio) : "—"}</span>
+            <span className="font-semibold text-slate-800">{inicio ? formatDiaMes(inicio) : "-"}</span>
           </p>
           <p className="flex items-center gap-2">
             <span className="text-slate-500 w-40 flex-shrink-0">Local de realização</span>
@@ -571,7 +591,7 @@ export function CronogramaGrelha({
                 </div>
               )}
               {novaMod === "auto" && (
-                <p className="text-[11px] text-slate-500">O e-learning não tem hora de sala — ocupa o dia na grelha.</p>
+                <p className="text-[11px] text-slate-500">O e-learning não tem hora de sala - ocupa o dia na grelha.</p>
               )}
               {addErro && <p className="text-[11px] text-red-600">{addErro}</p>}
               <div className="flex gap-2 pt-1">

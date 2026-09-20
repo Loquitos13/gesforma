@@ -154,6 +154,7 @@ function EventoModal({
   const [alvo, setAlvo] = useState<EventoDia | null>(inicial);
   const [form, setForm] = useState<EventoForm>(() => formInicial(inicial, linha, horario));
   const [erro, setErro] = useState("");
+  const [aRemover, setARemover] = useState(false);
   const editing = Boolean(alvo);
   const catalogo = useMemo(() => moduloOpts.map(o => o.value), [moduloOpts]);
   // Módulos que já estão nas sessões deste dia mas não casam com o catálogo do
@@ -168,6 +169,13 @@ function EventoModal({
     setAlvo(ev);
     setForm(formInicial(ev, ev ? undefined : linha, horario));
     setErro("");
+    setARemover(false);
+  }
+
+  function remover() {
+    if (!alvo) return;
+    onApply(aplicarEvento(sessoes, date, alvo.linha, null), alvo.linha);
+    onClose();
   }
 
   function escolherMod(next: EventoMod) {
@@ -301,10 +309,7 @@ function EventoModal({
           {alvo && (
             <button
               type="button"
-              onClick={() => {
-                onApply(aplicarEvento(sessoes, date, alvo.linha, null), alvo.linha);
-                onClose();
-              }}
+              onClick={() => setARemover(true)}
               className="flex-1 sm:flex-none sm:mr-auto px-4 py-2 text-xs font-semibold rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-300"
             >
               Remover
@@ -318,6 +323,30 @@ function EventoModal({
           </button>
         </div>
       </form>
+      {aRemover && alvo && (
+        <div
+          className="fixed inset-0 z-[90] bg-slate-900/50 flex items-center justify-center p-4"
+          onClick={e => { e.stopPropagation(); setARemover(false); }}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
+            <div>
+              <p className="text-sm font-bold text-slate-800">Remover evento</p>
+              <p className="text-xs text-slate-600 mt-1">
+                {linhaLabel(alvo.linha)} sai do cronograma em {formatDiaMes(date)}.
+              </p>
+              <p className="text-[11px] text-slate-400 mt-1">Os módulos marcados neste evento deixam de aparecer na grelha deste dia.</p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setARemover(false)} className="px-4 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
+                Cancelar
+              </button>
+              <button type="button" onClick={remover} className="px-5 py-2 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">
+                Remover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>,
     document.body,
   );

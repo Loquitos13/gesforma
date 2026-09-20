@@ -7,6 +7,7 @@ import { useCatalogList } from "./CatalogsContext";
 import { useDrive } from "./DriveContext";
 import { useFormadores } from "./FormadoresContext";
 import { AppModal } from "./FormKit";
+import { ConfirmDangerModal } from "./SecretaryUX";
 import { persist } from "./toastBus";
 import { useTurmas } from "./TurmasContext";
 
@@ -900,6 +901,7 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
   const [novoTitulo, setNovoTitulo] = useState("");
   const [editId, setEditId] = useState<number | null>(null);
   const [preview, setPreview] = useState<Inquerito | null>(null);
+  const [apagar, setApagar] = useState<Inquerito | null>(null);
   const [respostas, setRespostas] = useState<InqueritoResposta[]>([]);
   const inq = inqueritos.find(i => i.id === selected);
 
@@ -922,6 +924,11 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
   function removePergunta(pId: number) {
     if (!selected) return;
     setInqueritos(prev => prev.map(i => i.id !== selected ? i : { ...i, perguntas: i.perguntas.filter(p => p.id !== pId) }));
+  }
+  function removeInquerito(id: number) {
+    setInqueritos(prev => prev.filter(i => i.id !== id));
+    setSelected(s => (s === id ? null : s));
+    setPreview(p => (p?.id === id ? null : p));
   }
 
   const accent = isGold
@@ -964,12 +971,17 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="space-y-2">
           {inqueritos.map(i => (
-            <button key={i.id} onClick={() => setSelected(i.id)}
-              className={`w-full text-left p-3 rounded-xl border transition-all ${selected === i.id ? `${accent.light} ${accent.border} shadow-sm` : "bg-white border-slate-200 hover:border-slate-300"}`}>
-              <p className={`text-xs font-bold mb-1 ${selected === i.id ? accent.text : "text-slate-400"}`}>INQUÉRITO</p>
-              <p className="text-sm font-semibold text-slate-800 leading-snug">{i.titulo}</p>
-              <p className="text-xs text-slate-400 mt-1">{i.perguntas.length} perguntas</p>
-            </button>
+            <div key={i.id}
+              className={`relative rounded-xl border transition-all ${selected === i.id ? `${accent.light} ${accent.border} shadow-sm` : "bg-white border-slate-200 hover:border-slate-300"}`}>
+              <button type="button" onClick={() => setSelected(i.id)} className="w-full text-left p-3 pr-12">
+                <p className={`text-xs font-bold mb-1 ${selected === i.id ? accent.text : "text-slate-400"}`}>INQUÉRITO</p>
+                <p className="text-sm font-semibold text-slate-800 leading-snug">{i.titulo}</p>
+                <p className="text-xs text-slate-400 mt-1">{i.perguntas.length} perguntas</p>
+              </button>
+              <div className="absolute top-2 right-2">
+                <ActBtn icon={I.trash} label="Eliminar inquérito" color="red" onClick={() => setApagar(i)} />
+              </div>
+            </div>
           ))}
           {inq && (
             <div className="rounded-xl border border-slate-200 bg-white p-3">
@@ -1074,6 +1086,15 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
           )}
         </div>
       </div>
+
+      <ConfirmDangerModal
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        title="Eliminar inquérito"
+        body={`${apagar?.titulo ?? ""} deixa de estar disponível para preencher ou exportar.`}
+        risk="As respostas já recebidas deixam de ser acessíveis a partir daqui."
+        onConfirm={() => { if (apagar) removeInquerito(apagar.id); }}
+      />
     </div>
   );
 }

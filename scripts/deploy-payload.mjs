@@ -34,6 +34,7 @@ const PATCHED = [
   "src/cronogramaGrelha.ts",
   "src/cronogramaPrint.ts",
   "src/turmaModel.ts",
+  "src/TurmaExtras.tsx",
 ];
 
 const SKIP = new Set([

@@ -305,7 +305,7 @@ function EventoModal({
                 onApply(aplicarEvento(sessoes, date, alvo.linha, null), alvo.linha);
                 onClose();
               }}
-              className="flex-1 sm:flex-none sm:mr-auto px-4 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+              className="flex-1 sm:flex-none sm:mr-auto px-4 py-2 text-xs font-semibold rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-300"
             >
               Remover
             </button>

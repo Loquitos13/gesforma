@@ -1,0 +1,1121 @@
+ icon: I.trash, tone: "red", onClick: () => setApagar(t) },
+                      ]} />
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
+      </Card>
+      <ConfirmDangerModal
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        title="Eliminar turma Gold"
+        body={apagar ? `Apagar a turma ${apagar.nome}?` : ""}
+        risk="Formandos, cronograma e dossiê desta turma deixam de aparecer neste protótipo."
+        onConfirm={() => { if (apagar) removeGold(apagar.id); }}
+      />
+      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `Editar ${editing.nome}` : "Nova turma Gold"} sub="Código interno da turma - o objeto de gestão é a turma, não a ação." size="xl">
+        <div className="p-5 space-y-3">
+          <TurmaActivaToggle activa={activa} onChange={setActiva} />
+          <Field label="Código interno"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="VNG-SM-07/09" /></Field>
+          <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Local"><SearchSelect value={local} onChange={setLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
+            <Field label="Horário"><SearchSelect value={horario} onChange={setHorario} options={horariosOpts} /></Field>
+          </div>
+          <Field label="Formador"><SearchSelect value={formador} onChange={setFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Data de início"><input type="date" className={iCls} value={dataInicio} onChange={e => setDataInicio(e.target.value)} /></Field>
+            <Field label="Vagas"><input type="number" className={iCls} value={vagas} onChange={e => setVagas(Number(e.target.value) || 0)} /></Field>
+          </div>
+          <CronogramaEditor
+            sessoes={cronograma}
+            onChange={setCronograma}
+            inicio={dataInicio}
+            horario={horario}
+            horas={horasCurso}
+            formador={formador}
+            curso={curso}
+          />
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={guardar} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+          </div>
+        </div>
+      </SlideOver>
+    </div>
+  );
+}
+
+// ─── Formandos Turmas ─────────────────────────────────────────────────────────
+
+function FormandosTurmasView() {
+  const { gold, patchGold } = useTurmas();
+  const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma } = useLists();
+  const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
+  const [filtro, setFiltro] = useState("Todos");
+  const [filtroCurso, setFiltroCurso] = useState("");
+  const [filtroLocal, setFiltroLocal] = useState("");
+  const [fichaOpen, setFichaOpen] = useState<FormandoRecord | null>(null);
+  const [apagar, setApagar] = useState<FormandoRecord | null>(null);
+  const [edit, setEdit] = useState<FormandoRecord | "new" | null>(null);
+  const [turma, setTurma] = useState("");
+  const [cursoEdit, setCursoEdit] = useState("");
+  const [nomeNovo, setNomeNovo] = useState("");
+  const [emailNovo, setEmailNovo] = useState("");
+  const [telfNovo, setTelfNovo] = useState("");
+  const editing = edit && edit !== "new" ? edit : null;
+  const turmaOpts = turmaGoldOpts(gold, { curso: cursoEdit || undefined, includeNome: editing?.turma });
+  const f = formandosTurmas.filter(x => {
+    const q = `${x.nome} ${x.apelido} ${x.turma}`.toLowerCase().includes(s.toLowerCase());
+    const byPago = filtro === "Todos" || (filtro === "Pago" ? x.pago : filtro === "Por pagar" ? !x.pago : true);
+    return q && byPago && matchesFilter(x.curso, filtroCurso) && matchesFilter(x.local, filtroLocal);
+  });
+  const rows = f.slice((p - 1) * pp, p * pp);
+  useEffect(() => {
+    if (edit === "new") {
+      setTurma(""); setCursoEdit("Formação de Formadores - CCP"); setNomeNovo(""); setEmailNovo(""); setTelfNovo("");
+    } else if (edit) { setTurma(edit.turma); setCursoEdit(edit.curso); }
+  }, [edit]);
+  return (
+    <>
+      <div className="space-y-4">
+        <PageHeader title="Formandos Turmas" sub={`${formandosTurmas.length} formandos em turma`} action={<NewBtn label="+ Novo formando" onClick={() => setEdit("new")} />} />
+        <ViewFilters
+          fields={[
+            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(formandosTurmas.map(x => x.curso)) },
+            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(formandosTurmas.map(x => x.local)) },
+          ]}
+          chips={{ options: ["Todos", "Pago", "Por pagar"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+          onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
+        />
+        <Card>
+          <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
+          {rows.length === 0 && <EmptyHint text="Nenhum formando neste filtro." action="Limpar filtros" onAction={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setS(""); setP(1); }} />}
+          <div className="md:hidden p-3 space-y-2">
+            {rows.map(r => (
+              <MobileCard
+                key={r.id}
+                title={`${r.nome} ${r.apelido}`}
+                sub={r.email}
+                badge={r.pago ? <span className="text-[11px] font-bold text-emerald-700">Pago</span> : <span className="text-[11px] font-bold text-amber-700">Por pagar</span>}
+                meta={[r.turma, r.local]}
+                onOpen={() => setFichaOpen(r)}
+                actions={[
+                  { label: "Ficha", icon: I.eye, onClick: () => setFichaOpen(r) },
+                  { label: "Editar", icon: I.edit, onClick: () => setEdit(r) },
+                  { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
+                ]}
+              />
+            ))}
+          </div>
+          <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
+            <table className="w-full text-sm">
+              <thead><tr><Th>Id</Th><Th>Nome</Th><Th>Turma</Th><Th>Curso</Th><Th>Local</Th><Th className="text-center">Pago</Th><Th>Ações</Th></tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map(r => (
+                  <tr key={r.id} className="hover:bg-slate-50 transition-colors">
+                    <Td><IdCell id={r.id} /></Td>
+                    <Td>
+                      <button onClick={() => setFichaOpen(r)} className="text-left">
+                        <p className="text-xs font-medium text-blue-600 hover:text-blue-800">{r.nome} {r.apelido}</p>
+                        <p className="text-xs text-slate-400 truncate max-w-[140px]">{r.email}</p>
+                      </button>
+                    </Td>
+                    <Td className="text-xs font-semibold text-blue-600 whitespace-nowrap">{r.turma}</Td>
+                    <Td className="text-xs text-slate-600 max-w-[130px]">{r.curso}</Td>
+                    <Td className="text-xs text-slate-600 whitespace-nowrap">{r.local}</Td>
+                    <Td className="text-center">
+                      <span className={`w-5 h-5 inline-flex items-center justify-center rounded-full text-white text-xs ${r.pago ? "bg-emerald-500" : "bg-amber-400"}`}>
+                        {r.pago ? I.check : "€"}
+                      </span>
+                    </Td>
+                    <Td>
+                      <RowActions actions={[
+                        { label: "Ficha", icon: I.eye, onClick: () => setFichaOpen(r) },
+                        { label: "Editar", icon: I.edit, onClick: () => setEdit(r) },
+                        { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
+                      ]} />
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
+        </Card>
+      </div>
+      <SlideOver open={!!fichaOpen} onClose={() => setFichaOpen(null)} title="Ficha do Formando" sub={fichaOpen ? `#${fichaOpen.id}` : ""} size="lg">
+        {fichaOpen && <FichaFormando formando={fichaOpen} onClose={() => setFichaOpen(null)} />}
+      </SlideOver>
+      <SlideOver open={!!edit} onClose={() => setEdit(null)} title={editing ? `${editing.nome} ${editing.apelido}` : "Novo formando"} sub={editing ? "Mover de turma ou actualizar dados" : "Inscrever numa turma ativa"}>
+        <div className="p-5 space-y-3">
+          {!editing && (
+            <>
+              <Field label="Nome"><input className={iCls} value={nomeNovo} onChange={e => setNomeNovo(e.target.value)} placeholder="Nome completo" /></Field>
+              <Field label="Email"><input className={iCls} type="email" value={emailNovo} onChange={e => setEmailNovo(e.target.value)} /></Field>
+              <Field label="Telemóvel"><input className={iCls} value={telfNovo} onChange={e => setTelfNovo(e.target.value)} /></Field>
+            </>
+          )}
+          <Field label="Turma">
+            <SearchSelect value={turma} onChange={setTurma} options={turmaOpts} placeholder="Só turmas ativas…" empty="Não há turmas ativas para este curso." />
+          </Field>
+          <TurmaInscricaoHint optsLen={turmaOpts.length} curso={cursoEdit || undefined} />
+          <Field label="Curso"><SearchSelect value={cursoEdit} onChange={v => { setCursoEdit(v); if (turma && !turmaGoldOpts(gold, { curso: v, includeNome: editing?.turma }).some(o => o.value === turma)) setTurma(""); }} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setEdit(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button disabled={!turma || (!editing && !nomeNovo.trim())} onClick={() => {
+              const dest = gold.find(x => x.nome === turma);
+              if (!dest) return;
+              if (editing) {
+                const prev = gold.find(x => x.id === editing.turmaId);
+                patchFormandoTurma(editing.id, { turma: dest.nome, turmaId: dest.id, curso: dest.curso || cursoEdit, local: dest.local });
+                if (prev && prev.id !== dest.id) {
+                  patchGold(prev.id, { totalAlunos: Math.max(0, prev.totalAlunos - 1) });
+                  patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
+                }
+              } else {
+                const { nome, apelido } = splitNome(nomeNovo);
+                addFormandoTurma({
+                  id: nextListId(formandosTurmas),
+                  nome, apelido: apelido || "-",
+                  telf: telfNovo.trim() || "-",
+                  email: emailNovo.trim() || `${nome.toLowerCase()}@mail.pt`,
+                  inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
+                  estado: "Formando", pago: false, valor: 125, metodo: "-",
+                });
+                patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
+              }
+              setEdit(null);
+            }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editing ? "Guardar" : "Inscrever"}</button>
+          </div>
+        </div>
+      </SlideOver>
+      <ConfirmDangerModal
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        title="Eliminar formando"
+        body={apagar ? `Remover ${apagar.nome} ${apagar.apelido} da turma ${apagar.turma}?` : ""}
+        risk="Sai da lista da turma. Deixa de contar para vagas, presenças e certificados."
+        onConfirm={() => {
+          if (!apagar) return;
+          const t = gold.find(x => x.id === apagar.turmaId);
+          removeFormandoTurma(apagar.id);
+          if (t) patchGold(t.id, { totalAlunos: Math.max(0, t.totalAlunos - 1) });
+        }}
+      />
+    </>
+  );
+}
+
+// ─── Formandos Financiada com Documentos ─────────────────────────────────────
+
+function FinFormandosView() {
+  const { fin, patchFin } = useTurmas();
+  const { formandosFin, addFormandoFin, removeFormandoFin } = useLists();
+  const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
+  const [filtro, setFiltro] = useState("Todos");
+  const [filtroCurso, setFiltroCurso] = useState("");
+  const [docsOpen, setDocsOpen] = useState<FinFormando | null>(null);
+  const [apagar, setApagar] = useState<FinFormando | null>(null);
+  const [novo, setNovo] = useState(false);
+  const [nomeNovo, setNomeNovo] = useState("");
+  const [emailNovo, setEmailNovo] = useState("");
+  const [telfNovo, setTelfNovo] = useState("");
+  const [cursoNovo, setCursoNovo] = useState("");
+  const [turmaNovo, setTurmaNovo] = useState("");
+  const f = formandosFin.filter(x => {
+    const q = `${x.nome} ${x.apelido} ${x.email}`.toLowerCase().includes(s.toLowerCase());
+    return q && matchesFilter(x.curso, filtroCurso) && (filtro === "Todos" || x.estado === filtro);
+  });
+  const rows = f.slice((p - 1) * pp, p * pp);
+  const turmaOpts = fin.filter(t => !cursoNovo || t.curso === cursoNovo).map(t => ({ value: t.nome, sub: t.curso }));
+  return (
+    <>
+      <div className="space-y-4">
+        <PageHeader title="Formandos Financiados" sub={`${formandosFin.length} formandos`} action={<NewBtn accent="fin" label="+ Novo formando" onClick={() => { setNomeNovo(""); setEmailNovo(""); setTelfNovo(""); setCursoNovo(""); setTurmaNovo(""); setNovo(true); }} />} />
+        <ViewFilters
+          accent="fin"
+          fields={[{ label: "Curso / UFCD", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(formandosFin.map(x => x.curso)) }]}
+          chips={{ options: ["Todos", "Elegível"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+          onClear={() => { setFiltroCurso(""); setFiltro("Todos"); setP(1); }}
+        />
+        <Card>
+          <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
+          {rows.length === 0 && (
+            <EmptyHint
+              accent="fin"
+              text={formandosFin.length === 0 ? "Ainda sem formandos financiados." : "Nenhum formando neste filtro."}
+              action={formandosFin.length === 0 ? "Novo formando" : "Limpar filtros"}
+              onAction={formandosFin.length === 0 ? () => { setNomeNovo(""); setEmailNovo(""); setTelfNovo(""); setCursoNovo(""); setTurmaNovo(""); setNovo(true); } : () => { setFiltroCurso(""); setFiltro("Todos"); setS(""); setP(1); }}
+            />
+          )}
+          <div className="md:hidden p-3 space-y-2">
+            {rows.map(r => {
+              const keys: DocKey[] = ["cc", "ch", "cu", "ci", "ce"];
+              const okCount = keys.filter(k => r[k].ok).length;
+              return (
+                <MobileCard
+                  key={r.id}
+                  title={`${r.nome} ${r.apelido}`}
+                  sub={r.curso}
+                  badge={estadoBadge(r.estado)}
+                  meta={[r.turma, `${okCount}/5 docs`]}
+                  onOpen={() => setDocsOpen(r)}
+                  actions={[
+                    { label: "Documentos", icon: I.doc, tone: "teal", onClick: () => setDocsOpen(r) },
+                    { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
+                  ]}
+                />
+              );
+            })}
+          </div>
+          <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  <Th>Nome</Th><Th>Turma</Th><Th>Curso</Th><Th>Estado</Th>
+                  <Th>Documentos</Th><Th>Ações</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map(r => {
+                  const keys: DocKey[] = ["cc", "ch", "cu", "ci", "ce"];
+                  const okCount = keys.filter(k => r[k].ok).length;
+                  const complete = okCount === 5;
+                  return (
+                    <tr key={r.id} className="hover:bg-slate-50 transition-colors">
+                      <Td>
+                        <p className="text-xs font-medium text-blue-600">{r.nome} {r.apelido}</p>
+                        <p className="text-xs text-slate-400 truncate max-w-[140px]">{r.email}</p>
+                      </Td>
+                      <Td className="text-xs text-slate-600 whitespace-nowrap">{r.turma}</Td>
+                      <Td className="text-xs text-slate-600 max-w-[130px]">{r.curso}</Td>
+                      <Td>{estadoBadge(r.estado)}</Td>
+                      <Td>
+                        <button onClick={() => setDocsOpen(r)} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${complete ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
+                          {complete ? "✓ Completos" : `${okCount}/5 · ${5 - okCount} em falta`}
+                        </button>
+                      </Td>
+                      <Td>
+                        <RowActions actions={[
+                          { label: "Documentos", icon: I.doc, tone: "teal", onClick: () => setDocsOpen(r) },
+                          { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
+                        ]} />
+                      </Td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
+        </Card>
+      </div>
+      <ConfirmDangerModal
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        title="Eliminar formando financiado"
+        body={apagar ? `Remover ${apagar.nome} ${apagar.apelido} da turma ${apagar.turma}?` : ""}
+        risk="Sai da lista e deixa de contar para documentos e elegibilidade."
+        onConfirm={() => {
+          if (!apagar) return;
+          const dest = fin.find(t => t.nome === apagar.turma);
+          removeFormandoFin(apagar.id);
+          if (dest) patchFin(dest.id, { alunos: Math.max(0, dest.alunos - 1) });
+        }}
+      />
+      <SlideOver open={!!docsOpen} onClose={() => setDocsOpen(null)} title="Documentos do formando" sub={docsOpen ? `${docsOpen.nome} ${docsOpen.apelido}` : ""}>
+        {docsOpen && <DocumentosFinPanel formando={docsOpen} />}
+      </SlideOver>
+      <SlideOver open={novo} onClose={() => setNovo(false)} title="Novo formando financiado" sub="Candidato elegível numa turma">
+        <div className="p-5 space-y-3">
+          <Field label="Nome"><input className={iCls} value={nomeNovo} onChange={e => setNomeNovo(e.target.value)} placeholder="Nome completo" /></Field>
+          <Field label="Email"><input className={iCls} type="email" value={emailNovo} onChange={e => setEmailNovo(e.target.value)} /></Field>
+          <Field label="Telemóvel"><input className={iCls} value={telfNovo} onChange={e => setTelfNovo(e.target.value)} /></Field>
+          <Field label="Curso / UFCD"><SearchSelect value={cursoNovo} onChange={v => { setCursoNovo(v); setTurmaNovo(""); }} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
+          <Field label="Turma"><SearchSelect value={turmaNovo} onChange={setTurmaNovo} options={turmaOpts} placeholder="Turma destino…" empty="Não há turmas para esta UFCD." /></Field>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setNovo(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button disabled={!nomeNovo.trim() || !cursoNovo} onClick={() => {
+              const { nome, apelido } = splitNome(nomeNovo);
+              addFormandoFin({
+                id: nextListId(formandosFin),
+                nome, apelido: apelido || "-",
+                turma: turmaNovo || "-", telf: telfNovo.trim() || "-",
+                email: emailNovo.trim() || `${nome.toLowerCase()}@mail.pt`,
+                curso: cursoNovo, estado: "Elegível",
+                ...emptyFinDocs(),
+              });
+              const dest = fin.find(t => t.nome === turmaNovo);
+              if (dest) patchFin(dest.id, { alunos: dest.alunos + 1 });
+              setNovo(false);
+            }} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Criar formando</button>
+          </div>
+        </div>
+      </SlideOver>
+    </>
+  );
+}
+
+// ─── Turmas Financiadas ───────────────────────────────────────────────────────
+
+function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab) => void }) {
+  const { fin, patchFin, addFin, removeFin, toggleFin } = useTurmas();
+  const formadorOpts = useFormadorOptions();
+  const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
+  const [filtro, setFiltro] = useState("Todos");
+  const [filtroCurso, setFiltroCurso] = useState("");
+  const [open, setOpen] = useState<TurmaFin | "new" | null>(null);
+  const [apagar, setApagar] = useState<TurmaFin | null>(null);
+  const [nome, setNome] = useState("");
+  const [curso, setCurso] = useState("");
+  const [formador, setFormador] = useState("");
+  const [localFin, setLocalFin] = useState("");
+  const [dataInicio, setDataInicio] = useState("");
+  const [activa, setActiva] = useState(true);
+  const [cronograma, setCronograma] = useState<SessaoCronograma[]>([]);
+  const editing = open && open !== "new" ? open : null;
+  const ativas = fin.filter(t => isTurmaActiva(t)).length;
+  const f = fin.filter(t => {
+    const q = `${t.nome} ${t.curso}`.toLowerCase().includes(s.toLowerCase());
+    const activaLbl = isTurmaActiva(t) ? "Ativa" : "Inativa";
+    return q && matchesFilter(t.curso, filtroCurso) && (filtro === "Todos" || t.estado === filtro || activaLbl === filtro);
+  });
+  const rows = f.slice((p - 1) * pp, p * pp);
+  useEffect(() => {
+    if (open) {
+      setNome(editing?.nome ?? "");
+      setCurso(editing?.curso ?? "");
+      setFormador(editing?.formador ?? "");
+      setLocalFin(editing?.local ?? "Sala Virtual");
+      setDataInicio(editing?.dataInicio ?? "");
+      setActiva(editing ? isTurmaActiva(editing) : true);
+      setCronograma(editing?.cronograma ?? []);
+    }
+  }, [open, editing]);
+  function guardar() {
+    const horas = editing?.horas ?? 25;
+    const payload = {
+      nome: nome.trim() || "Nova turma",
+      curso, formador, local: localFin, dataInicio, activa, cronograma, horas,
+    };
+    if (editing) patchFin(editing.id, payload);
+    else addFin({
+      id: Date.now() % 100000,
+      ufcdCod: "0000",
+      horario: "Online",
+      alunos: 0,
+      alunosTotal: 20,
+      estado: "A montar",
+      ...payload,
+    });
+    setOpen(null);
+  }
+  return (
+    <div className="space-y-4">
+      <PageHeader title="Turmas Financiadas" sub={`${ativas} ativas · ${fin.length} no total · só as ativas aceitam novas inscrições`} action={<NewBtn label="+ Nova Turma" onClick={() => setOpen("new")} />} />
+      <ViewFilters
+        accent="fin"
+        fields={[{ label: "Curso / UFCD", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(fin.map(t => t.curso)) }]}
+        chips={{ options: ["Todos", "Ativa", "Inativa", "A montar", "A decorrer"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+        onClear={() => { setFiltroCurso(""); setFiltro("Todos"); setP(1); }}
+      />
+      <Card>
+        <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
+        {rows.length === 0 && (
+          <EmptyHint
+            accent="fin"
+            text={fin.length === 0 ? "Ainda sem turmas financiadas. A turma é o objecto de gestão." : "Nenhuma turma neste filtro."}
+            action={fin.length === 0 ? "Nova turma" : "Limpar filtros"}
+            onAction={fin.length === 0 ? () => setOpen("new") : () => { setFiltroCurso(""); setFiltro("Todos"); setS(""); setP(1); }}
+          />
+        )}
+        <div className="md:hidden p-3 space-y-2">
+          {rows.map(t => {
+            const prontos = Math.floor(t.alunos * 0.8);
+            return (
+              <MobileCard
+                key={t.id}
+                title={t.nome}
+                sub={t.curso}
+                badge={estadoBadge(t.estado)}
+                meta={[`UFCD ${t.ufcdCod}`, `${prontos}/${t.alunos} prontos`, t.dataInicio]}
+                onOpen={() => onCockpit(t.id, "overview")}
+                actions={[
+                  { label: "Cockpit", icon: I.eye, tone: "teal", onClick: () => onCockpit(t.id, "overview") },
+                  { label: "Presenças", icon: I.attend, tone: "teal", onClick: () => onCockpit(t.id, "sessoes") },
+                  { label: "Dossiê", icon: I.doc, tone: "orange", onClick: () => onCockpit(t.id, "dtp") },
+                  { label: "Editar", icon: I.edit, onClick: () => setOpen(t) },
+                  { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(t) },
+                ]}
+              />
+            );
+          })}
+        </div>
+        <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
+          <table className="w-full text-sm">
+            <thead><tr><Th>Id</Th><Th>Início</Th><Th>UFCD</Th><Th>Turma / Curso</Th><Th>Formador</Th><Th>Elegíveis</Th><Th>Estado</Th><Th>Inscrições</Th><Th>Ações</Th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map(t => {
+                const prontos = Math.floor(t.alunos * 0.8);
+                return (
+                  <tr key={t.id} className="hover:bg-slate-50 transition-colors">
+                    <Td><IdCell id={t.id} /></Td>
+                    <Td className="font-mono text-xs text-slate-500 whitespace-nowrap">{t.dataInicio}</Td>
+                    <Td><span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-600 text-white">{t.ufcdCod}</span></Td>
+                    <Td>
+                      <button onClick={() => onCockpit(t.id, "overview")} className="text-left">
+                        <p className="text-xs font-semibold text-blue-600 max-w-[160px] hover:text-blue-800">{t.nome}</p>
+                        <p className="text-xs text-slate-400 truncate max-w-[160px]">{t.curso} · {t.cronograma.length} sessões</p>
+                      </button>
+                    </Td>
+                    <Td className="text-xs text-slate-600 whitespace-nowrap">{t.formador}</Td>
+                    <Td>
+                      <div>
+                        <span className={`text-xs font-bold ${prontos === t.alunos ? "text-emerald-600" : "text-amber-600"}`}>{prontos}/{t.alunos} prontos</span>
+                        <div className="w-20 bg-slate-100 rounded-full h-1.5 mt-0.5">
+                          <div className="h-1.5 rounded-full" style={{ width: `${(prontos / t.alunos) * 100}%`, backgroundColor: prontos === t.alunos ? "#10B981" : "#F59E0B" }} />
+                        </div>
+                      </div>
+                    </Td>
+                    <Td>{estadoBadge(t.estado)}</Td>
+                    <Td>
+                      <TurmaActivaToggle compact accent="fin" activa={isTurmaActiva(t)} onChange={v => toggleFin(t.id, v)} />
+                    </Td>
+                    <Td>
+                      <RowActions primary={3} actions={[
+                        { label: "Cockpit", icon: I.eye, tone: "teal", onClick: () => onCockpit(t.id, "overview") },
+                        { label: "Presenças", icon: I.attend, tone: "teal", onClick: () => onCockpit(t.id, "sessoes") },
+                        { label: "Dossiê", icon: I.doc, tone: "orange", onClick: () => onCockpit(t.id, "dtp") },
+                        { label: "Editar", icon: I.edit, onClick: () => setOpen(t) },
+                        { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(t) },
+                      ]} />
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
+      </Card>
+      <ConfirmDangerModal
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        title="Eliminar turma financiada"
+        body={apagar ? `Apagar a turma ${apagar.nome}?` : ""}
+        risk="Formandos, cronograma e dossiê desta turma deixam de aparecer neste protótipo."
+        onConfirm={() => { if (apagar) removeFin(apagar.id); }}
+      />
+      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? editing.nome : "Nova turma financiada"} sub="UFCD e turma - o objeto de gestão é a turma." size="xl">
+        <div className="p-5 space-y-3">
+          <TurmaActivaToggle accent="fin" activa={activa} onChange={setActiva} />
+          <Field label="Curso / UFCD"><SearchSelect value={curso} onChange={setCurso} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
+          <Field label="Código da turma"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="UFCD 3564 · T1" /></Field>
+          <Field label="Formador"><SearchSelect value={formador} onChange={setFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
+          <Field label="Local"><SearchSelect value={localFin} onChange={setLocalFin} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
+          <Field label="Data de início"><input type="date" className={iCls} value={dataInicio} onChange={e => setDataInicio(e.target.value)} /></Field>
+          <CronogramaEditor
+            accent="fin"
+            sessoes={cronograma}
+            onChange={setCronograma}
+            inicio={dataInicio}
+            horario={editing?.horario ?? "Pós Laboral"}
+            horas={editing?.horas ?? 25}
+            formador={formador}
+            curso={curso}
+          />
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={guardar} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">Guardar</button>
+          </div>
+        </div>
+      </SlideOver>
+    </div>
+  );
+}
+
+// ─── Remaining views (simplified) ────────────────────────────────────────────
+
+function GoldCursoFichaScreen({ cursoId, onBack, onOpenModulos }: { cursoId?: number | "new"; onBack: () => void; onOpenModulos: (nome: string) => void }) {
+  const { cursosGold, addCursoGold, patchCursoGold } = useLists();
+  const curso = cursoId && cursoId !== "new" ? cursosGold.find(c => c.id === cursoId) : undefined;
+  return (
+    <CursoFichaView
+      curso={curso}
+      onBack={onBack}
+      onOpenModulos={onOpenModulos}
+      onCommit={saved => {
+        if (curso) patchCursoGold(curso.id, { nome: saved.nome, categoria: saved.categoria ?? curso.categoria, tipo: saved.tipo ?? curso.tipo, preco: saved.preco ?? curso.preco, regime: saved.regime, horas: saved.horas, estado: saved.estado });
+        else addCursoGold({ id: saved.id, nome: saved.nome, categoria: saved.categoria || "CCP e Gestão da Formação", tipo: saved.tipo || "Gold", preco: saved.preco ?? 0, regime: saved.regime, horas: saved.horas, estado: saved.estado || "Ativo" });
+      }}
+    />
+  );
+}
+
+function FinCursoFichaScreen({ cursoId, onBack, onOpenModulos }: { cursoId?: number | "new"; onBack: () => void; onOpenModulos: (nome: string) => void }) {
+  const { cursosFin, addCursoFin, patchCursoFin } = useLists();
+  const raw = cursoId && cursoId !== "new" ? cursosFin.find(c => c.id === cursoId) : undefined;
+  return (
+    <CursoFichaView
+      accent="fin"
+      curso={raw ? { id: raw.id, nome: raw.nomeComercial, ufcdCod: raw.ufcdCod, ufcd: raw.ufcd, regime: raw.regime, horas: raw.horas, estado: raw.estado } : undefined}
+      onBack={onBack}
+      onOpenModulos={onOpenModulos}
+      onCommit={saved => {
+        const ufcdCod = saved.ufcdCod || raw?.ufcdCod || "0000";
+        const row = { id: saved.id, ufcdCod, ufcd: saved.ufcd || saved.nome, nomeComercial: saved.nome, regime: saved.regime, horas: saved.horas, estado: saved.estado || "Ativo" };
+        if (raw) patchCursoFin(raw.id, row);
+        else addCursoFin(row);
+      }}
+    />
+  );
+}
+
+function CursosGoldView({ onOpen }: { onOpen: (id: number | "new") => void }) {
+  const { cursosGold, removeCursoGold } = useLists();
+  const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
+  const [filtro, setFiltro] = useState("Todos");
+  const [filtroCat, setFiltroCat] = useState("");
+  const f = cursosGold.filter(c => {
+    const q = `${c.nome} ${c.categoria}`.toLowerCase().includes(s.toLowerCase());
+    return q && matchesFilter(c.categoria, filtroCat) && (filtro === "Todos" || c.estado === filtro);
+  });
+  const rows = f.slice((p - 1) * pp, p * pp);
+
+  return (
+    <div>
+      <PageHeader title="Cursos Gold" sub="Clique num curso para editar a página pública e a ficha operacional." action={<NewBtn label="+ Novo Curso" onClick={() => onOpen("new")} />} />
+      <div className="mb-4">
+        <ViewFilters
+          fields={[{ label: "Área temática", value: filtroCat, onChange: v => { setFiltroCat(v); setP(1); }, options: uniqueOpts(cursosGold.map(c => c.categoria)) }]}
+          chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+          onClear={() => { setFiltroCat(""); setFiltro("Todos"); setP(1); }}
+        />
+      </div>
+      <Card>
+        <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr><Th>Id</Th><Th>Nome</Th><Th>Categoria</Th><Th>Tipo</Th><Th>Preço</Th><Th>Regime</Th><Th className="text-center">Horas</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map(c => (
+                <tr key={c.id} className="hover:bg-slate-50">
+                  <Td><IdCell id={c.id} /></Td>
+                  <Td className="max-w-[200px]"><button onClick={() => onOpen(c.id)} className="text-xs font-medium text-blue-600 leading-snug text-left hover:underline">{c.nome}</button></Td>
+                  <Td className="text-xs text-slate-600 whitespace-nowrap">{c.categoria}</Td>
+                  <Td><Badge label={c.tipo} variant={c.tipo === "Gold" ? "amber" : "gray"} /></Td>
+                  <Td className="text-xs font-semibold text-amber-600">€ {c.preco}</Td>
+                  <Td><span className={`text-xs px-1.5 py-0.5 rounded font-medium ${c.regime === "e-learning" ? "bg-blue-50 text-blue-700" : "bg-violet-50 text-violet-700"}`}>{c.regime}</span></Td>
+                  <Td className="text-center text-xs text-slate-600">{c.horas || "-"}</Td>
+                  <Td>{estadoBadge(c.estado)}</Td>
+                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar página" onClick={() => onOpen(c.id)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => removeCursoGold(c.id)} /></div></Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
+      </Card>
+    </div>
+  );
+}
+
+
+function BlogView() {
+  const { blogPosts, addBlogPost, patchBlogPost, removeBlogPost } = useLists();
+  const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
+  const [filtro, setFiltro] = useState("Todos");
+  const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [tematica, setTematica] = useState("");
+  const [titulo, setTitulo] = useState("");
+  const [slug, setSlug] = useState("");
+  const f = blogPosts.filter(x => x.titulo.toLowerCase().includes(s.toLowerCase()) && (filtro === "Todos" || x.status === filtro));
+  return (
+    <div className="space-y-4">
+      <PageHeader title="Blog - Posts" action={<NewBtn label="+ Novo Post" onClick={() => { setEditId(null); setTitulo(""); setSlug(""); setTematica(""); setOpen(true); }} />} />
+      <ViewFilters
+        chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+        onClear={() => setFiltro("Todos")}
+      />
+      <Card>
+        <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr><Th>Id</Th><Th>Título</Th><Th>Slug</Th><Th>Data</Th><Th>Status</Th><Th>Ações</Th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {f.map(r => (
+                <tr key={r.id} className="hover:bg-slate-50">
+                  <Td><IdCell id={r.id} /></Td>
+                  <Td className="text-sm font-medium text-slate-700 max-w-[220px]">{r.titulo}</Td>
+                  <Td className="font-mono text-xs text-slate-500">{r.slug}</Td>
+                  <Td className="font-mono text-xs text-slate-500">{r.data}</Td>
+                  <Td>{estadoBadge(r.status)}</Td>
+                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => { setEditId(r.id); setTitulo(r.titulo); setSlug(r.slug); setTematica(""); setOpen(true); }} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => removeBlogPost(r.id)} /></div></Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
+      </Card>
+      <SlideOver open={open} onClose={() => setOpen(false)} title={editId != null ? "Editar post" : "Novo post"} sub="Artigo no site da ENA">
+        <div className="p-5 space-y-3">
+          <Field label="Título"><input className={iCls} value={titulo} onChange={e => setTitulo(e.target.value)} /></Field>
+          <Field label="Temática"><SearchSelect value={tematica} onChange={setTematica} options={blogTematicasOpts} placeholder="Pesquisar temática…" /></Field>
+          <Field label="Slug"><input className={iCls} value={slug} onChange={e => setSlug(e.target.value)} placeholder="ccp-formacao-formadores" /></Field>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={() => {
+              if (!titulo.trim()) return;
+              const s = (slug.trim() || titulo).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+              if (editId != null) patchBlogPost(editId, { titulo: titulo.trim(), slug: s });
+              else addBlogPost({ id: nextListId(blogPosts), titulo: titulo.trim(), slug: s, data: new Date().toISOString().slice(0, 10), status: "Ativo" });
+              setOpen(false); setTitulo(""); setSlug(""); setTematica(""); setEditId(null);
+            }} disabled={!titulo.trim()} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editId != null ? "Guardar" : "Criar post"}</button>
+          </div>
+        </div>
+      </SlideOver>
+    </div>
+  );
+}
+
+function CampanhasView() {
+  const { campanhas, addCampanha, removeCampanha } = useLists();
+  const [open, setOpen] = useState(false);
+  const [cursoCamp, setCursoCamp] = useState("");
+  const [nomeCamp, setNomeCamp] = useState("");
+  const [dataCamp, setDataCamp] = useState("");
+  return (
+    <div className="space-y-4">
+      <PageHeader title="Campanhas" action={<NewBtn label="+ Nova Campanha" onClick={() => { setNomeCamp(""); setDataCamp(""); setCursoCamp(""); setOpen(true); }} />} />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {campanhas.map(c => (
+          <Card key={c.id} className="p-4 hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="font-semibold text-slate-800">{c.nome || <span className="italic text-slate-400">sem nome</span>}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{c.data} · {c.encarregado}</p>
+              </div>
+              <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => removeCampanha(c.id)} />
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              {[
+                { l: "Inscrições", v: c.preinscricoes.toLocaleString("pt-PT"), c: "text-blue-600" },
+                { l: "Pagamentos", v: c.pagos.toLocaleString("pt-PT"), c: "text-teal-600" },
+                { l: "Receita", v: `€ ${c.receita.toLocaleString("pt-PT")}`, c: "text-emerald-600" },
+                { l: "ROI", v: `${Math.round((c.receita - c.custo) / c.custo * 100)}%`, c: "text-amber-600" },
+              ].map(s => (
+                <div key={s.l} className="bg-slate-50 rounded-xl p-2.5">
+                  <p className="text-xs text-slate-400">{s.l}</p>
+                  <p className={`text-sm font-bold ${s.c} mt-0.5`}>{s.v}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ))}
+      </div>
+      <SlideOver open={open} onClose={() => setOpen(false)} title="Nova campanha" sub="Campanha comercial Gold">
+        <div className="p-5 space-y-3">
+          <Field label="Nome"><input className={iCls} value={nomeCamp} onChange={e => setNomeCamp(e.target.value)} placeholder="Outubro 2026" /></Field>
+          <Field label="Curso em destaque"><SearchSelect value={cursoCamp} onChange={setCursoCamp} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <Field label="Data de início"><input type="date" className={iCls} value={dataCamp} onChange={e => setDataCamp(e.target.value)} /></Field>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={() => {
+              if (!nomeCamp.trim()) return;
+              addCampanha({ id: nextListId(campanhas), nome: nomeCamp.trim(), data: dataCamp || new Date().toISOString().slice(0, 10), encarregado: "Aguilar", preinscricoes: 0, pagos: 0, receita: 0, custo: 1 });
+              setOpen(false);
+            }} disabled={!nomeCamp.trim()} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Criar campanha</button>
+          </div>
+        </div>
+      </SlideOver>
+    </div>
+  );
+}
+
+function FinCursosView({ onOpen }: { onOpen: (id: number | "new") => void }) {
+  const { cursosFin, removeCursoFin } = useLists();
+  const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
+  const [filtro, setFiltro] = useState("Todos");
+  const [filtroRegime, setFiltroRegime] = useState("");
+  const f = cursosFin.filter(c => `${c.ufcd} ${c.nomeComercial}`.toLowerCase().includes(s.toLowerCase()) && matchesFilter(c.regime, filtroRegime) && (filtro === "Todos" || c.estado === filtro));
+  const rows = f.slice((p - 1) * pp, p * pp);
+  return (
+    <div className="space-y-4">
+      <PageHeader title="Cursos Financiados" sub="Clique numa UFCD para editar a página pública e a ficha operacional." action={<NewBtn label="+ Novo Curso" onClick={() => onOpen("new")} />} />
+      <ViewFilters
+        accent="fin"
+        fields={[{ label: "Regime", value: filtroRegime, onChange: v => { setFiltroRegime(v); setP(1); }, options: uniqueOpts(cursosFin.map(c => c.regime)) }]}
+        chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+        onClear={() => { setFiltroRegime(""); setFiltro("Todos"); setP(1); }}
+      />
+      <Card>
+        <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr><Th>Cód. UFCD</Th><Th>UFCD</Th><Th>Nome Comercial</Th><Th>Regime</Th><Th className="text-center">Horas</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map(c => (
+                <tr key={c.id} className="hover:bg-slate-50">
+                  <Td><span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-600 text-white">{c.ufcdCod}</span></Td>
+                  <Td className="max-w-[180px]"><button onClick={() => onOpen(c.id)} className="text-xs text-blue-600 font-medium text-left hover:underline">{c.ufcd}</button></Td>
+                  <Td className="text-xs text-slate-600 max-w-[200px]">{c.nomeComercial}</Td>
+                  <Td><span className={`text-xs px-1.5 py-0.5 rounded font-medium ${c.regime === "e-learning" ? "bg-blue-50 text-blue-700" : "bg-violet-50 text-violet-700"}`}>{c.regime}</span></Td>
+                  <Td className="text-center text-xs text-slate-600">{c.horas || "-"}</Td>
+                  <Td>{estadoBadge(c.estado)}</Td>
+                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar página" onClick={() => onOpen(c.id)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => removeCursoFin(c.id)} /></div></Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
+      </Card>
+    </div>
+  );
+}
+
+function EmailsView() {
+  const [tab, setTab] = useState<"regras" | "templates" | "historico">("regras");
+  const [regras, setRegras] = useState(emailRegras);
+  const [templates, setTemplates] = useState(emailTemplates);
+  const [jobs, setJobs] = useState<EmailJob[]>([]);
+  const [jobStats, setJobStats] = useState<EmailJobStats>({ sent: 0, queued: 0, failed: 0 });
+  const [apiOn, setApiOn] = useState(false);
+  const [editRegraId, setEditRegraId] = useState<number | null>(null);
+  const [apagarRegra, setApagarRegra] = useState<number | null>(null);
+  const [editTpl, setEditTpl] = useState<typeof emailTemplates[number] | null>(null);
+  const [novaRegra, setNovaRegra] = useState(false);
+  const [previewTipo, setPreviewTipo] = useState<string | null>(null);
+  const [previewGatilho, setPreviewGatilho] = useState("");
+  const [nomeRegra, setNomeRegra] = useState("");
+  const [nomeTouched, setNomeTouched] = useState(false);
+  const [gatilho, setGatilho] = useState("");
+  const [templateNome, setTemplateNome] = useState("");
+  const [cursoEmail, setCursoEmail] = useState("");
+  const [atraso, setAtraso] = useState("Imediatamente");
+  const [ativoRegra, setAtivoRegra] = useState(true);
+  const [erroRegra, setErroRegra] = useState("");
+  const [busyRegra, setBusyRegra] = useState(false);
+
+  async function recarregar() {
+    try {
+      const [r, t, j] = await Promise.all([apiEmailRules(), apiEmailTemplates(), apiEmailJobs()]);
+      setRegras(r.rules);
+      setTemplates(t.templates.map(x => {
+        const fallback = EMAIL_BODIES[resolveEmailTipo(x.tipo)];
+        const linhas = asTplLines(x.body_lines);
+        const resolvedLinhas = linhas.length ? linhas : (fallback?.linhas ?? []);
+        const parsed = parseEmailXml(x.body_xml ?? "");
+        const dest = ctaDestino(resolveEmailTipo(x.tipo));
+        const cta = x.cta || parsed.cta || fallback?.cta || "";
+        const ctaHref = x.cta_href || parsed.href || fallback?.ctaHref || dest.href;
+        const ctaAmbito = isCtaAmbito(x.cta_ambito) ? x.cta_ambito : (parsed.ambito || fallback?.ctaAmbito || dest.ambito);
+        return {
+          id: x.id,
+          nome: x.nome,
+          assunto: x.assunto,
+          editado: x.updated_at.slice(0, 10),
+          tipo: x.tipo,
+          linhas: resolvedLinhas,
+          cta,
+          ctaHref,
+          ctaAmbito,
+          xml: x.body_xml?.trim() || linesToXml(resolvedLinhas, cta, ctaHref, ctaAmbito),
+        };
+      }));
+      setJobs(j.jobs);
+      setJobStats(j.stats);
+      setApiOn(true);
+    } catch {
+      setApiOn(false);
+    }
+  }
+  useEffect(() => { void recarregar(); }, []);
+
+  const templateOpts = templates.map(t => ({ value: t.nome, sub: t.assunto }));
+  const templateTipo = templates.find(t => t.nome === templateNome)?.tipo ?? "";
+
+  function syncNome(nextGatilho: string, nextTemplate: string) {
+    if (nomeTouched) return;
+    if (nextTemplate && nextGatilho) setNomeRegra(`${nextTemplate} · ${nextGatilho}`);
+    else if (nextTemplate) setNomeRegra(nextTemplate);
+    else setNomeRegra("");
+  }
+
+  function onGatilho(v: string) {
+    setGatilho(v);
+    const sug = GATILHO_TEMPLATE[v];
+    const nextTpl = templateNome || sug || "";
+    if (!templateNome && sug) setTemplateNome(sug);
+    syncNome(v, nextTpl);
+  }
+
+  function onTemplate(v: string) {
+    setTemplateNome(v);
+    syncNome(gatilho, v);
+  }
+
+  function abrirNova() {
+    setEditRegraId(null);
+    setNomeRegra("");
+    setNomeTouched(false);
+    setGatilho("");
+    setTemplateNome("");
+    setCursoEmail("");
+    setAtraso("Imediatamente");
+    setAtivoRegra(true);
+    setErroRegra("");
+    setNovaRegra(true);
+  }
+
+  function abrirEditarRegra(r: typeof emailRegras[number] & { atraso?: string; curso?: string | null }) {
+    setEditRegraId(r.id);
+    setNomeRegra(r.nome);
+    setNomeTouched(true);
+    setGatilho(r.gatilho);
+    const tpl = templates.find(t => t.tipo === r.template);
+    setTemplateNome(tpl?.nome ?? "");
+    setCursoEmail(r.curso ?? "");
+    setAtraso(r.atraso ?? "Imediatamente");
+    setAtivoRegra(r.ativo);
+    setErroRegra("");
+    setNovaRegra(true);
+  }
+
+  async function guardarRegra() {
+    if (!nomeRegra.trim()) {
+      setErroRegra("Dê um nome à regra.");
+      return;
+    }
+    if (!gatilho) {
+      setErroRegra("Escolha o gatilho que dispara o email.");
+      return;
+    }
+    if (!templateTipo) {
+      setErroRegra("Escolha o template que o formando recebe.");
+      return;
+    }
+    const body = { nome: nomeRegra.trim(), gatilho, templateTipo, atraso, curso: cursoEmail || null, ativo: ativoRegra };
+    setBusyRegra(true);
+    try {
+      if (apiOn) {
+        if (editRegraId != null) await apiPatchRule(editRegraId, body);
+        else await apiCreateRule(body);
+        await recarregar();
+      } else if (editRegraId != null) {
+        setRegras(prev => prev.map(x => x.id === editRegraId ? { ...x, nome: nomeRegra.trim(), gatilho, template: templateTipo, ativo: ativoRegra } : x));
+      } else {
+        setRegras(prev => [{
+          id: Date.now() % 100000,
+          nome: nomeRegra.trim(),
+          gatilho,
+          template: templateTipo,
+          ativo: ativoRegra,
+          envios: 0,
+          taxaAbertura: 0,
+        }, ...prev]);
+      }
+      setNovaRegra(false);
+      setEditRegraId(null);
+    } catch (err) {
+      setErroRegra(err instanceof Error ? err.message : "Não foi possível guardar.");
+    } finally {
+      setBusyRegra(false);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader title="Emails Automáticos" sub={apiOn ? "As regras vivem na API. Quando a secretaria regista uma pré-inscrição ou um pagamento, a fila dispara sozinha." : "Uma regra = um gatilho + um template. Sem API as alterações ficam só neste ecrã."} action={<NewBtn label="+ Nova Regra" onClick={abrirNova} />} />
+      <div className="flex gap-1 border-b border-slate-200 bg-white rounded-t-xl px-4 pt-3">
+        {(["regras", "templates", "historico"] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            className={`px-4 py-2 text-sm font-semibold rounded-t-lg transition-colors -mb-px ${tab === t ? "bg-white border-t border-l border-r border-slate-200 text-amber-600 border-b-white" : "text-slate-500 hover:text-slate-700"}`}>
+            {t === "regras" ? "Regras de Envio" : t === "templates" ? "Templates" : "Histórico"}
+          </button>
+        ))}
+      </div>
+      {tab === "regras" && (
+        <Card>
+          <div className="divide-y divide-slate-100">
+            {regras.map(r => {
+              const tpl = templates.find(t => t.tipo === resolveEmailTipo(r.template));
+              return (
+              <div key={r.id} className="px-4 py-4 flex flex-col sm:flex-row sm:items-center gap-3 hover:bg-slate-50">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-semibold text-slate-800">{r.nome}</p>
+                    <Badge label={r.ativo ? "Ativo" : "Inativo"} variant={r.ativo ? "green" : "gray"} />
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">⚡ {r.gatilho}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    ✉ {tpl?.nome ?? r.template}
+                    {tpl?.assunto ? <span className="text-slate-400"> · {tpl.assunto}</span> : null}
+                  </p>
+                  <div className="flex gap-4 mt-1.5">
+                    <span className="text-xs text-slate-400">{r.envios.toLocaleString("pt-PT")} enviados</span>
+                    <span className="text-xs text-slate-400">{r.taxaAbertura}% abertura</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <Toggle checked={r.ativo} onChange={val => {
+                    setRegras(prev => prev.map(x => x.id === r.id ? { ...x, ativo: val } : x));
+                    if (apiOn) void apiPatchRule(r.id, { ativo: val }).catch(() => recarregar());
+                  }} />
+                  <ActBtn icon={I.eye} label="Preview" color="gray" onClick={() => { setPreviewTipo(r.template); setPreviewGatilho(r.gatilho); }} />
+                  <ActBtn icon={I.edit} label="Editar" onClick={() => abrirEditarRegra(r)} />
+                  <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagarRegra(r.id)} />
+                </div>
+              </div>
+            );})}
+          </div>
+        </Card>
+      )}
+      {tab === "templates" && (
+        <Card>
+          <div className="divide-y divide-slate-100">
+            {templates.map(t => (
+              <div key={t.id} className="px-4 py-4 flex items-center gap-3 hover:bg-slate-50">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white ${t.tipo === "welcome" ? "bg-blue-500" : t.tipo === "payment" ? "bg-emerald-500" : t.tipo === "certificate" ? "bg-violet-500" : "bg-amber-500"}`}>{I.mail}</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-800">{t.nome}</p>
+                  <p className="text-xs text-slate-500 truncate">{t.assunto}</p>
+                  <p className="text-xs text-slate-400 truncate">{t.linhas[0] ?? "Sem corpo"}</p>
+                  <p className="text-xs text-slate-500 truncate">
+                    Botão: {t.cta} · {ctaAmbitoLabel(t.ctaAmbito)} · {ctaDestino(t.tipo).funcao}
+                  </p>
+                  <p className="text-xs text-slate-400">Editado {t.editado}</p>
+                </div>
+                <div className="flex gap-1 flex-shrink-0">
+                  <ActBtn icon={I.edit} label="Editar" onClick={() => setEditTpl(t)} />
+                  <ActBtn icon={I.eye} label="Preview" color="gray" onClick={() => { setPreviewTipo(t.tipo); setPreviewGatilho(""); }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+      {tab === "historico" && (
+        <Card>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-slate-100">
+            {[{ l: "Enviados", v: String(jobStats.sent), c: "text-slate-800" }, { l: "Na fila", v: String(jobStats.queued), c: "text-amber-600" }, { l: "Erros", v: String(jobStats.failed), c: "text-red-500" }].map(s => (
+              <div key={s.l} className="bg-white p-4"><p className="text-xs text-slate-400">{s.l}</p><p className={`text-xl font-bold mt-1 ${s.c}`}>{s.v}</p></div>
+            ))}
+          </div>
+          {jobs.length === 0 ? (
+            <div className="p-4 text-center text-xs text-slate-400">Os disparos reais aparecem aqui. Crie uma pré-inscrição ou registe um pagamento.</div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {jobs.map(j => (
+                <div key={j.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{j.subject}</p>
+                    <p className="text-xs text-slate-500 truncate">{j.to_name} · {j.to_email} · {j.regra}</p>
+                  </div>
+                  <span className={`text-xs font-bold ${j.status === "sent" ? "text-emerald-700" : j.status === "failed" ? "text-red-600" : "text-amber-700"}`}>
+                    {j.status === "sent" ? "Enviado" : j.status === "failed" ? "Erro" : "Na fila"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {novaRegra && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setNovaRegra(false)} />
+          <div className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden" style={{ animation: "scaleIn 0.15s ease" }}>
+            <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
+              <div>
+                <h2 className="text-base font-bold text-slate-800">{editRegraId != null ? "Editar regra de email" : "Nova regra de email"}</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Quando acontece o gatilho, a ENA envia o template. O email à direita usa dados de exemplo.</p>
+              </div>
+              <button type="button" onClick={() => setNovaRegra(false)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <div className="space-y-3">
+                <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5 text-xs text-slate-600">
+                  {gatilho || templateNome ? (
+                    <>Quando <span className="font-semibold text-slate-800">{gatilho || "…"}</span>, enviar <span className="font-semibold text-slate-800">{templateNome || "…"}</span> {atraso.toLowerCase()}{cursoEmail ? ` em ${cursoEmail}` : ""}.</>
+                  ) : (
+                    <>Comece pelo gatilho - o template e o nome da regra preenchem-se sozinhos.</>
+                  )}
+                </div>
+                <Field label="1. Gatilho">
+                  <SearchSelect value={gatilho} onChange={onGatilho} options={emailGatilhosOpts} placeholder="Quando disparar…" />
+                </Field>
+                <Field label="2. Template">
+                  <SearchSelect value={templateNome} onChange={onTemplate} options={templateOpts} placeholder="Que email enviar…" />
+                </Field>
+                <Field label="3. Atraso">
+                  <SearchSelect value={atraso} onChange={setAtraso} options={emailAtrasosOpts} />
+                </Field>
+                <Field label="Curso (opcional)">
+                  <SearchSelect value={cursoEmail} onChange={setCursoEmail} options={cursosGoldOpts} placeholder="Todas as turmas, ou só este curso…" allowEmpty />
+                </Field>
+                <Field label="Nome da regra">
+                  <input
+                    className={iCls}
+                    value={nomeRegra}
+                    onChange={e => { setNomeTouched(true); setNomeRegra(e.target.value); }}
+                    placeholder="Preenche-se com o gatilho e o template"
+                  />
+                </Field>
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700">Regra activa</p>
+                    <p className="text-[11px] text-slate-400">Desligada fica guardada mas não dispara.</p>
+                  </div>
+                  <Toggle checked={ativoRegra} onChange={setAtivoRegra} />
+                </div>
+                {erroRegra && <p className="text-xs font-medium text-red-600">{erroRegra}</p>}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Preview do novo email</p>
+                <EmailPreviewPane tipo={templateTipo} curso={cursoEmail} gatilho={gatilho} atraso={atraso} templates={templates} />
+              </div>
+            </div>
+            <div className="flex gap-2 px-5 py-4 border-t border-slate-100 flex-shrink-0">
+              <button type="button" onClick={() => setNovaRegra(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+              <button type="button" disabled={busyRegra} onClick={() => void guardarRegra()} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editRegraId != null ? "Guardar regra" : "Criar regra"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {previewTipo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setPreviewTipo(null)} />
+          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ animation: "scaleIn 0.15s ease" }}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+              <p className="text-sm font-bold text-slate-800">Preview do email</p>
+              <button type="button" onClick={() => setPreviewTipo(null)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
+            </div>
+            <div className="p-4">
+              <EmailPreviewPane tipo={previewTipo} curso="Formação de Formadores - CCP" gatilho={previewGatilho} templates={templates} />
+            </div>
+          </div>
+        </div>
+      )}
+      {editTpl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setEditTpl(null)} />
+          <div className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden" style={{ animation: "scaleIn 0.15s ease" }}>
+            <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
+              <div>
+                <h2 className="text-base font-bold text-slate-800">Editar {editTpl.nome}</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Editor do corpo do email. O preview à direita usa dados de exemplo.</p>
+              </div>
+              <button type="button" onClick={() => setEditTpl(null)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <div className="space-y-3 min-w-0">
+  

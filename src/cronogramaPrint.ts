@@ -111,24 +111,25 @@ function groupRowsHtml(
   }).join("");
 }
 
-/** Uma tabela contínua no período curto do documento ENA; por mês quando o período já não cabe em A4. */
-export function printDateChunks(dates: string[]) {
-  const months = monthSpans(dates);
-  if (dates.length <= 36 && months.length <= 2) return [dates];
-  const chunks: string[][] = [];
-  let current: string[] = [];
-  let key = "";
-  for (const d of dates) {
-    const next = d.slice(0, 7);
-    if (key && next !== key) {
-      chunks.push(current);
-      current = [];
-    }
-    key = next;
-    current.push(d);
-  }
-  if (current.length) chunks.push(current);
-  return chunks.length ? chunks : [dates];
+const GRUPO_MM = 26;
+const HORA_MM = 22;
+const MARGEM_MM = 7;
+const DIA_MIN_MM = 6;
+const A4_LARGURA_MM = 297;
+
+/**
+ * O cronograma oficial é uma tabela única: o mesmo horário fica sempre na mesma
+ * linha, com os meses lado a lado. Quando o período é longo demais para caber
+ * em A4 apaisado, é a folha que cresce em largura, não a tabela que se parte.
+ */
+export function printPageSize(dias: number, linhas: number) {
+  const fixo = GRUPO_MM + HORA_MM + MARGEM_MM * 2;
+  const disponivel = A4_LARGURA_MM - fixo;
+  const cabeEmA4 = dias > 0 && disponivel / dias >= DIA_MIN_MM;
+  const diaMm = cabeEmA4 ? disponivel / dias : DIA_MIN_MM;
+  const largura = cabeEmA4 ? A4_LARGURA_MM : Math.ceil(fixo + dias * DIA_MIN_MM);
+  const altura = Math.max(210, Math.ceil(140 + linhas * 9));
+  return { largura, altura, diaMm: Math.round(diaMm * 100) / 100, tabelaMm: Math.round((GRUPO_MM + HORA_MM + dias * diaMm) * 100) / 100 };
 }
 
 function gridHtml(
@@ -142,10 +143,12 @@ function gridHtml(
   const monthRow = months.map(m => `<th class="month" colspan="${m.count}">${esc(m.label)}</th>`).join("");
   const dayRow = dates.map(d => `<th class="day${d === matricula ? " mat" : ""}">${esc(String(Number(d.slice(8))))}</th>`).join("");
   const weekRow = dates.map(d => `<th class="wd${d === matricula ? " mat" : ""}">${esc(weekdayCode(d))}</th>`).join("");
+  const cols = `<col class="c-group" /><col class="c-time" />${dates.map(() => `<col class="c-day" />`).join("")}`;
   const grupos = (["presencial", "sincrona", "auto", "avaliacao"] as const)
     .map(g => groupRowsHtml(g, linhas.filter(l => l.modalidade === g), dates, sessoes, matricula))
     .join("");
   return `<table class="grid">
+      <colgroup>${cols}</colgroup>
       <thead>
         <tr>
           <th class="corner" colspan="${leftCols}"></th>
@@ -167,10 +170,8 @@ function gridHtml(
 }
 
 export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
-  const chunks = printDateChunks(input.dates);
-  const grids = chunks.map((dates, i) => (
-    `<div class="grid-block${i ? " next" : ""}">${gridHtml(dates, input.linhas, input.sessoes, input.matricula)}</div>`
-  )).join("");
+  const page = printPageSize(input.dates.length, input.linhas.length);
+  const grid = gridHtml(input.dates, input.linhas, input.sessoes, input.matricula);
 
   const mods = legendModulos(input.sessoes);
   const mid = Math.ceil(mods.length / 2);
@@ -196,11 +197,11 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
   <meta charset="utf-8" />
   <title>${esc(tituloCronograma(input.horario))}</title>
   <style>
-    @page { size: A4 landscape; margin: 8mm 7mm; }
+    @page { size: ${page.largura}mm ${page.altura}mm; margin: 8mm ${MARGEM_MM}mm; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: #fff; color: #111; }
     body { font-family: Arial, Helvetica, sans-serif; font-size: 10px; padding: 8px 10px 14px; }
-    .sheet { width: 100%; background: #fff; }
+    .sheet { width: ${page.tabelaMm}mm; min-width: 100%; background: #fff; }
     .head { display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #a60000; padding-bottom: 6px; }
     .logo { height: 28px; width: auto; }
     .brand { flex: 1; text-align: center; }
@@ -211,22 +212,24 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
     .meta { width: 100%; border-collapse: collapse; margin: 0 0 8px; font-size: 11px; }
     .meta td { border: none; padding: 2px 4px 2px 0; text-align: left; vertical-align: top; }
     .meta b { font-weight: 700; }
-    .grid-block.next { margin-top: 16px; page-break-inside: avoid; }
-    table.grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    table.grid { width: ${page.tabelaMm}mm; border-collapse: collapse; table-layout: fixed; }
     table.grid th, table.grid td { border: 1px solid #222; padding: 1px; vertical-align: middle; }
-    .corner { background: #fff; width: 168px; }
+    col.c-group { width: ${GRUPO_MM}mm; }
+    col.c-time { width: ${HORA_MM}mm; }
+    col.c-day { width: ${page.diaMm}mm; }
+    .corner { background: #fff; }
     .month { background: #eee; font-size: 9px; font-weight: 700; }
     .day { font-size: 9px; font-weight: 700; height: 18px; }
     .wd { font-size: 8px; font-weight: 600; text-transform: lowercase; color: #222; }
-    .group { text-align: left; font-size: 8px; font-weight: 700; width: 88px; padding: 3px 4px; line-height: 1.25; background: #fff; white-space: normal; }
-    .time { text-align: left; font-size: 8px; font-weight: 600; width: 80px; padding: 2px 4px; white-space: nowrap; background: #fff; }
+    .group { text-align: left; font-size: 8px; font-weight: 700; padding: 3px 4px; line-height: 1.25; background: #fff; white-space: normal; }
+    .time { text-align: left; font-size: 8px; font-weight: 600; padding: 2px 4px; white-space: nowrap; background: #fff; }
     .cell { font-size: 8px; font-weight: 700; height: 24px; line-height: 1.05; text-align: center; word-break: break-word; }
     .pres { background: #a60000; color: #fff; }
     .sinc { background: #1d4ed8; color: #fff; }
     .auto { background: #d4d4d4; color: #111; }
     .aval { background: #f5c518; color: #111; }
-    .mat { background: #ffa900; color: #111; }
-    .legend { margin-top: 12px; }
+    .mat { background: #15803d; color: #fff; }
+    .legend { margin-top: 12px; max-width: 260mm; }
     .legend h3 { margin: 0 0 6px; font-size: 11px; }
     .swatch { display: flex; align-items: flex-start; gap: 8px; margin: 3px 0; font-size: 9px; }
     .box { width: 13px; height: 13px; border: 1px solid #333; flex-shrink: 0; margin-top: 1px; }
@@ -263,7 +266,7 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
         <td>Data de fim: <b>${esc(input.fim ? formatDataOficial(input.fim) : "—")}</b></td>
       </tr>
     </table>
-    ${grids}
+    ${grid}
     <div class="legend">
       <h3>Legenda:</h3>
       <div class="swatch"><span class="box mat"></span><span>Data limite para realizar a matrícula e Instruções para início do curso (informação enviada por e-mail)</span></div>

@@ -1,0 +1,838 @@
+              <Field label="Nome"><input className={iCls} value={editTpl.nome} onChange={e => setEditTpl({ ...editTpl, nome: e.target.value })} /></Field>
+                <Field label="Assunto"><input className={iCls} value={editTpl.assunto} onChange={e => setEditTpl({ ...editTpl, assunto: e.target.value })} /></Field>
+                <Field label="Corpo do email">
+                  <EmailXmlEditor
+                    xml={editTpl.xml}
+                    onChange={xml => {
+                      const parsed = xmlToLines(xml);
+                      setEditTpl({
+                        ...editTpl,
+                        xml,
+                        linhas: parsed.linhas,
+                        cta: parsed.cta || editTpl.cta,
+                        ctaHref: parsed.href || editTpl.ctaHref,
+                        ctaAmbito: parsed.ambito || editTpl.ctaAmbito,
+                      });
+                    }}
+                  />
+                </Field>
+                <Field label="Texto do botão">
+                  <input
+                    className={iCls}
+                    value={editTpl.cta}
+                    onChange={e => {
+                      const cta = e.target.value;
+                      setEditTpl({ ...editTpl, cta, xml: replaceCta(editTpl.xml, cta, editTpl.ctaHref, editTpl.ctaAmbito) });
+                    }}
+                    placeholder="Pode usar {{nome}}, {{curso}} e {{turma}}"
+                  />
+                </Field>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Destino do botão</p>
+                  <p className="text-[11px] text-slate-500 mb-2">
+                    Este template aponta para {ctaAmbitoLabel(ctaDestino(editTpl.tipo).ambito).toLowerCase()}: {ctaDestino(editTpl.tipo).funcao}.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {([
+                      { id: "preinscricao" as const, title: "Pré-inscrição", sub: "Formulário público. A secretaria contacta a seguir." },
+                      { id: "contacto" as const, title: "Contacto da secretaria", sub: "Email formacao@ena.pt - sem área de formando." },
+                    ]).map(opt => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          const href = hrefForAmbito(editTpl.tipo, opt.id);
+                          setEditTpl({
+                            ...editTpl,
+                            ctaAmbito: opt.id,
+                            ctaHref: href,
+                            xml: replaceCta(editTpl.xml, editTpl.cta, href, opt.id),
+                          });
+                        }}
+                        className={`text-left rounded-xl border px-3 py-2.5 ${editTpl.ctaAmbito === opt.id ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white hover:border-slate-300"}`}
+                      >
+                        <p className="text-xs font-semibold text-slate-800">{opt.title}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">{opt.sub}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Field label="URL do botão">
+                  <input
+                    className={iCls}
+                    value={editTpl.ctaHref}
+                    onChange={e => {
+                      const ctaHref = e.target.value;
+                      setEditTpl({ ...editTpl, ctaHref, xml: replaceCta(editTpl.xml, editTpl.cta, ctaHref, editTpl.ctaAmbito) });
+                    }}
+                    placeholder="mailto:formacao@ena.pt"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Personaliza com {"{{email}}"}, {"{{curso}}"}, {"{{turma}}"} ou {"{{preinscricao_url}}"}.
+                  </p>
+                </Field>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Preview</p>
+                <EmailPreviewPane
+                  tipo={editTpl.tipo}
+                  curso="Formação de Formadores - CCP"
+                  templates={templates}
+                  draft={{ nome: editTpl.nome, assunto: editTpl.assunto, linhas: editTpl.linhas, cta: editTpl.cta, ctaHref: editTpl.ctaHref, ctaAmbito: editTpl.ctaAmbito, xml: editTpl.xml }}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 px-5 py-4 border-t border-slate-100 flex-shrink-0">
+              <button type="button" onClick={() => setEditTpl(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+              <button type="button" onClick={() => {
+                const parsed = xmlToLines(editTpl.xml);
+                const linhas = parsed.linhas.length ? parsed.linhas : editTpl.linhas.map(l => l.trim()).filter(Boolean);
+                const cta = (parsed.cta || editTpl.cta).trim();
+                const ctaHref = (parsed.href || editTpl.ctaHref).trim();
+                const ctaAmbito = parsed.ambito || editTpl.ctaAmbito;
+                if (!linhas.length || !editTpl.assunto.trim() || !editTpl.nome.trim() || !cta || !ctaHref) return;
+                const xml = editTpl.xml.trim() || linesToXml(linhas, cta, ctaHref, ctaAmbito);
+                const next = { ...editTpl, linhas, cta, ctaHref, ctaAmbito, xml, editado: "hoje" };
+                setTemplates(prev => prev.map(t => t.id === editTpl.id ? next : t));
+                if (apiOn) void apiPatchTemplate(editTpl.id, { nome: next.nome, assunto: next.assunto, body_lines: next.linhas, body_xml: next.xml, cta: next.cta, cta_href: next.ctaHref, cta_ambito: next.ctaAmbito });
+                setEditTpl(null);
+              }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+      <ConfirmDangerModal
+        open={apagarRegra != null}
+        onClose={() => setApagarRegra(null)}
+        title="Eliminar regra de email"
+        body="A regra deixa de disparar. Os envios já feitos ficam no histórico."
+        risk="Não se desfaz. Os formandos deixam de receber este email automático."
+        onConfirm={() => {
+          const id = apagarRegra;
+          if (id == null) return;
+          setRegras(prev => prev.filter(x => x.id !== id));
+          if (apiOn) void apiDeleteRule(id).catch(() => recarregar());
+        }}
+      />
+    </div>
+  );
+}
+
+function PagamentosView() {
+  const { pagamentos, addPagamento } = useLists();
+  const lista = pagamentos.length ? pagamentos : transacoesData;
+  const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
+  const [filtroCurso, setFiltroCurso] = useState("");
+  const [filtro, setFiltro] = useState("Todos");
+  const [novo, setNovo] = useState(false);
+  const [nome, setNome] = useState("");
+  const [emailPag, setEmailPag] = useState("");
+  const [curso, setCurso] = useState("");
+  const [valor, setValor] = useState("125");
+  const [metodo, setMetodo] = useState("MB Way");
+  const [detalhe, setDetalhe] = useState<TransacaoPreview | null>(null);
+  const [recibo, setRecibo] = useState<TransacaoPreview | null>(null);
+  const f = lista.filter(t =>
+    `${t.nome} ${t.curso} ${t.metodo}`.toLowerCase().includes(s.toLowerCase())
+    && matchesFilter(t.curso, filtroCurso)
+    && (filtro === "Todos" || t.estado === filtro)
+  );
+  return (
+    <div className="space-y-5">
+      <PageHeader title="Pagamentos" action={<NewBtn label="+ Nova transação" onClick={() => { setNome(""); setEmailPag(""); setCurso(""); setValor("125"); setMetodo("MB Way"); setNovo(true); }} />} />
+      <ViewFilters
+        fields={[{ label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(lista.map(t => t.curso)) }]}
+        chips={{ options: ["Todos", "Pago", "Pendente"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
+        onClear={() => { setFiltroCurso(""); setFiltro("Todos"); setP(1); }}
+      />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[{ l: "Receita Total", v: "€ 304 680", c: "text-slate-800" }, { l: "Este Mês", v: "€ 35 200", c: "text-emerald-600" }, { l: "Pendente", v: "€ 8 400", c: "text-amber-600" }, { l: "Reembolsados", v: "€ 1 240", c: "text-red-500" }].map(s => (
+          <Card key={s.l} className="p-4"><p className="text-xs text-slate-400 uppercase tracking-wide mb-1">{s.l}</p><p className={`text-xl font-bold ${s.c}`}>{s.v}</p></Card>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card className="p-4">
+          <p className="text-sm font-semibold text-slate-700 mb-4">Métodos de Pagamento</p>
+          <div className="space-y-3">
+            {metodosPagamento.map(m => (
+              <div key={m.metodo}>
+                <div className="flex justify-between mb-1"><span className="text-xs font-medium text-slate-700">{m.metodo}</span><span className="text-xs font-bold text-slate-700">{m.pct}%</span></div>
+                <div className="w-full bg-slate-100 rounded-full h-2"><div className="h-2 rounded-full" style={{ width: `${m.pct}%`, backgroundColor: m.color }} /></div>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card className="p-4">
+          <p className="text-sm font-semibold text-slate-700 mb-2">Receita Mensal</p>
+          <MiniBarChart data={receitaMensal} color="#F59E0B" />
+        </Card>
+      </div>
+      <Card>
+        <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center">
+          <p className="text-sm font-semibold text-slate-700">Transações Recentes</p>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{I.search}</span>
+            <input value={s} onChange={e => { setS(e.target.value); setP(1); }} className="pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg w-52 focus:outline-none focus:ring-2 focus:ring-amber-400" placeholder="Pesquisar…" />
+          </div>
+        </div>
+        {f.length === 0 && <EmptyHint text="Nenhuma transação neste filtro." action="Limpar filtros" onAction={() => { setFiltroCurso(""); setFiltro("Todos"); setS(""); }} />}
+        <div className="md:hidden p-3 space-y-2">
+          {f.slice((p - 1) * pp, p * pp).map(t => (
+            <MobileCard
+              key={t.id}
+              title={t.nome}
+              sub={t.curso}
+              badge={estadoBadge(t.estado)}
+              meta={[`€ ${t.valor}`, t.metodo, t.data]}
+              onOpen={() => setDetalhe(t)}
+              actions={[
+                { label: "Detalhes", icon: I.eye, tone: "gray", onClick: () => setDetalhe(t) },
+                { label: "Recibo", icon: I.receipt, onClick: () => setRecibo(t) },
+              ]}
+            />
+          ))}
+        </div>
+        <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
+          <table className="w-full text-sm">
+            <thead><tr><Th>ID</Th><Th>Nome</Th><Th>Curso</Th><Th>Valor</Th><Th>Método</Th><Th>Data</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {f.slice((p - 1) * pp, p * pp).map(t => (
+                <tr key={t.id} className="hover:bg-slate-50">
+                  <Td><IdCell id={t.id} /></Td>
+                  <Td className="text-xs font-medium text-slate-700 whitespace-nowrap">{t.nome}</Td>
+                  <Td className="text-xs text-slate-600 max-w-[150px]">{t.curso}</Td>
+                  <Td className="text-sm font-bold text-slate-800 whitespace-nowrap">€ {t.valor}</Td>
+                  <Td className="text-xs text-slate-600">{t.metodo}</Td>
+                  <Td className="font-mono text-xs text-slate-500 whitespace-nowrap">{t.data}</Td>
+                  <Td>{estadoBadge(t.estado)}</Td>
+                  <Td>
+                    <RowActions actions={[
+                      { label: "Detalhes", icon: I.eye, tone: "gray", onClick: () => setDetalhe(t) },
+                      { label: "Recibo", icon: I.receipt, onClick: () => setRecibo(t) },
+                    ]} />
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
+      </Card>
+      <SlideOver open={novo} onClose={() => setNovo(false)} title="Nova transação" sub="Pagamento Gold">
+        <div className="p-5 space-y-3">
+          <Field label="Nome do formando"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} /></Field>
+          <Field label="Email"><input className={iCls} type="email" value={emailPag} onChange={e => setEmailPag(e.target.value)} placeholder="para o recibo e o contacto após a venda" /></Field>
+          <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Valor (€)"><input className={iCls} type="number" value={valor} onChange={e => setValor(e.target.value)} /></Field>
+            <Field label="Método">
+              <select className={iCls} value={metodo} onChange={e => setMetodo(e.target.value)}>
+                {["MB Way", "Cartão", "Transferência", "Multibanco", "PayPal"].map(m => <option key={m}>{m}</option>)}
+              </select>
+            </Field>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setNovo(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button disabled={!nome.trim() || !curso} onClick={() => {
+              const mail = emailPag.trim() || `${nome.trim().toLowerCase().replace(/\s+/g, ".")}@mail.pt`;
+              addPagamento({
+                id: `TRX-${Date.now() % 100000}`,
+                nome: nome.trim(),
+                valor: Number(valor) || 0,
+                metodo,
+                curso,
+                data: nowStamp(),
+                estado: "Pago",
+              }, mail);
+              setNovo(false);
+            }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Registar</button>
+          </div>
+        </div>
+      </SlideOver>
+      <PagamentoDetalheModal open={!!detalhe} onClose={() => setDetalhe(null)} transacao={detalhe} onRecibo={() => { if (detalhe) { setRecibo(detalhe); setDetalhe(null); } }} />
+      <ReciboModal open={!!recibo} onClose={() => setRecibo(null)} transacao={recibo} />
+    </div>
+  );
+}
+
+// ─── Pesquisa Global (Ctrl+K) ─────────────────────────────────────────────────
+
+const allSearchable: Array<{ tipo: string; nome: string; sub: string } & NavTarget> = [
+  ...formandosTurmasData.map(f => ({ tipo: "Formando Gold", nome: `${f.nome} ${f.apelido}`, sub: f.email, view: "gold-formandos-turmas" as View })),
+  ...finFormandosData.map(f => ({ tipo: "Formando Financiado", nome: `${f.nome} ${f.apelido}`, sub: f.email, view: "fin-formandos" as View })),
+  ...turmasGoldData.map(t => ({ tipo: "Turma Gold", nome: t.nome, sub: `${t.local} · ${t.curso}`, view: "gold-cockpit-turma" as View, turmaId: t.id, tab: "overview" as CockpitTab })),
+  ...finTurmasData.map(t => ({ tipo: "Turma Financiada", nome: t.nome, sub: `UFCD ${t.ufcdCod}`, view: "fin-cockpit-turma" as View, turmaId: t.id, tab: "overview" as CockpitTab })),
+  ...cursosGoldData.map(c => ({ tipo: "Curso Gold", nome: c.nome, sub: c.categoria, view: "gold-curso-ficha" as View, cursoId: c.id })),
+  ...finCursosData.map(c => ({ tipo: "UFCD", nome: `${c.ufcdCod} · ${c.ufcd}`, sub: c.nomeComercial, view: "fin-curso-ficha" as View, cursoId: c.id })),
+  { tipo: "DTP", nome: "Dossiê da turma VNG-SM-07/09", sub: "CCP · Gold", view: "gold-cockpit-turma" as View, turmaId: 943, tab: "dtp" as CockpitTab },
+  { tipo: "DTP", nome: "Dossiê da turma UFCD 3564 · T1", sub: "Primeiros Socorros · Financiada", view: "fin-cockpit-turma" as View, turmaId: 218, tab: "dtp" as CockpitTab },
+  { tipo: "Inquérito", nome: "Satisfação CCP", sub: "Gold · 5 perguntas", view: "gold-inqueritos" as View },
+  { tipo: "Inquérito", nome: "Satisfação UFCD 3564", sub: "Financiada · 4 perguntas", view: "fin-inqueritos" as View },
+  ...FORMADORES_SEED.map(f => ({
+    tipo: f.regimes.includes("gold") ? "Formador Gold" : "Formador Financiado",
+    nome: f.nome,
+    sub: f.especialidade || f.email,
+    view: (f.regimes.includes("gold") ? "gold-formadores" : "fin-formadores") as View,
+  })),
+];
+
+const atalhosDoDia: Array<{ tipo: string; nome: string; sub: string } & NavTarget> = [
+  { tipo: "Atalho", nome: "Pré-inscrições por contactar", sub: "Gold · fila comercial do dia", view: "gold-preinscricoes" },
+  { tipo: "Atalho", nome: "Pagamentos pendentes", sub: "Gold · por confirmar", view: "pagamentos" },
+  { tipo: "Atalho", nome: "DTP Gold incompleto", sub: "VNG-SM-07/09 · dossiê da turma", view: "gold-cockpit-turma", turmaId: 943, tab: "dtp" },
+  { tipo: "Atalho", nome: "DTP Financiada incompleto", sub: "UFCD 3564 · T1 · dossiê da turma", view: "fin-cockpit-turma", turmaId: 218, tab: "dtp" },
+  { tipo: "Atalho", nome: "Inscrições a analisar", sub: "Financiada · elegibilidade", view: "fin-inscricoes" },
+];
+
+function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: () => void; onNavigate: (t: NavTarget) => void }) {
+  const [q, setQ] = useState("");
+  const [hi, setHi] = useState(0);
+  const results = q.length > 1 ? allSearchable.filter(r => `${r.nome} ${r.sub} ${r.tipo}`.toLowerCase().includes(q.toLowerCase())).slice(0, 8) : [];
+  const shown = q.length > 1 ? results : atalhosDoDia;
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) { setQ(""); setHi(0); setTimeout(() => inputRef.current?.focus(), 50); }
+  }, [open]);
+
+  useEffect(() => { setHi(0); }, [q]);
+
+  function openRow(r: (typeof shown)[number]) {
+    onNavigate({ view: r.view, turmaId: r.turmaId, tab: r.tab, cursoId: r.cursoId });
+    onClose();
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); onClose(); return; }
+      if (e.key === "ArrowDown") { e.preventDefault(); setHi(i => Math.min(Math.max(shown.length - 1, 0), i + 1)); }
+      if (e.key === "ArrowUp") { e.preventDefault(); setHi(i => Math.max(0, i - 1)); }
+      if (e.key === "Enter" && shown[hi]) { e.preventDefault(); openRow(shown[hi]); }
+    };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [open, shown, hi, onClose, onNavigate]);
+
+  if (!open) return null;
+
+  const tipoColor: Record<string, string> = {
+    "Formando Gold": "bg-amber-100 text-amber-700", "Formando Financiado": "bg-blue-100 text-blue-700",
+    "Turma Gold": "bg-violet-100 text-violet-700", "Turma Financiada": "bg-teal-100 text-teal-700",
+    "Curso Gold": "bg-orange-100 text-orange-700", "UFCD": "bg-emerald-100 text-emerald-700",
+    "Formador Gold": "bg-violet-100 text-violet-700", "Formador Financiado": "bg-blue-100 text-blue-700",
+    DTP: "bg-red-100 text-red-700", Inquérito: "bg-slate-100 text-slate-600", Atalho: "bg-amber-100 text-amber-800",
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ animation: "scaleIn 0.15s ease" }}>
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100">
+          <span className="text-slate-400">{I.cmdK}</span>
+          <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} placeholder="Pesquisar formandos, turmas, cursos, UFCD…"
+            className="flex-1 text-sm text-slate-800 placeholder-slate-400 focus:outline-none" />
+          <kbd className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-mono">ESC</kbd>
+        </div>
+        {q.length <= 1 && (
+          <p className="px-4 pt-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Atalhos do dia</p>
+        )}
+        <div className="max-h-80 overflow-y-auto">
+          {q.length > 1 && shown.length === 0 ? (
+            <p className="text-center text-sm text-slate-400 py-8">Sem resultados para "{q}"</p>
+          ) : shown.map((r, i) => (
+            <button key={`${r.tipo}-${r.nome}-${i}`} onClick={() => openRow(r)}
+              className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left border-b border-slate-50 last:border-0 ${i === hi ? "bg-slate-100" : "hover:bg-slate-50"}`}>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${tipoColor[r.tipo] ?? "bg-slate-100 text-slate-600"}`}>{r.tipo}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-800 truncate">{r.nome}</p>
+                <p className="text-xs text-slate-400 truncate">{r.sub}</p>
+              </div>
+              <span className="text-slate-300 flex-shrink-0">{I.chevRight}</span>
+            </button>
+          ))}
+        </div>
+        <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex gap-4 text-xs text-slate-400">
+          <span>↑↓ navegar</span><span>↵ abrir</span><span>ESC fechar</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Notificações ─────────────────────────────────────────────────────────────
+
+function NotificacoesPanel({ onNavigate, onClose }: { onNavigate: (t: NavTarget) => void; onClose: () => void }) {
+  const [items, setItems] = useState(notificacoesData);
+  const naoLidas = items.filter(n => !n.lida).length;
+
+  function markRead(id: number) { setItems(p => p.map(n => n.id === id ? { ...n, lida: true } : n)); }
+  function markAllRead() { setItems(p => p.map(n => ({ ...n, lida: true }))); }
+
+  return (
+    <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50" style={{ animation: "dropIn 0.15s ease" }}>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-bold text-slate-800">Notificações</p>
+          {naoLidas > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{naoLidas}</span>}
+        </div>
+        {naoLidas > 0 && <button onClick={markAllRead} className="text-xs text-amber-600 hover:text-amber-700 font-semibold">Marcar todas como lidas</button>}
+      </div>
+      <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
+        {sortNotifs(items).map(n => (
+          <button key={n.id} onClick={() => { markRead(n.id); onNavigate({ view: n.view, turmaId: n.turmaId, tab: n.tab }); onClose(); }}
+            className={`w-full flex gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors ${n.lida ? "opacity-60" : ""}`}>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${n.tipo === "warn" ? "bg-amber-100 text-amber-600" : n.tipo === "error" ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"}`}>
+              {n.tipo === "error" ? I.warn : n.tipo === "warn" ? I.warn : I.info}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-1">
+                <p className="text-xs font-semibold text-slate-800 leading-snug">{n.titulo}</p>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <NotifKind tipo={n.tipo} />
+                  {!n.lida && <span className="w-2 h-2 rounded-full bg-red-500" />}
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.texto}</p>
+              <p className="text-xs text-slate-400 mt-1">há {n.tempo}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+      <div className="px-4 py-2 border-t border-slate-100 text-center">
+        <button type="button" onClick={() => { onNavigate({ view: "notificacoes" }); onClose(); }} className="text-xs text-amber-600 hover:text-amber-700 font-semibold">Ver todas as notificações</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sidebar ─────────────────────────────────────────────────────────────────
+
+type NavGroup = { group: string; items: NavLeaf[] };
+type NavLeaf = { label: string; view?: View; icon: React.ReactNode; children?: { label: string; view: View }[] };
+
+const sidebarConfig: NavGroup[] = [
+  { group: "Principal", items: [{ label: "Painel", view: "painel", icon: I.home }] },
+  { group: "Gold", items: [
+    { label: "Pré-Inscrições", view: "gold-preinscricoes", icon: I.clipboard },
+    { label: "Formandos", icon: I.users, children: [{ label: "Formandos Turmas", view: "gold-formandos-turmas" }, { label: "Formandos Gold", view: "gold-formandos-gold" }] },
+    { label: "Campanhas", view: "gold-campanhas", icon: I.megaphone },
+    { label: "Edição de Cursos", icon: I.book, children: [
+      { label: "Cursos Gold", view: "gold-cursos" }, { label: "Módulos", view: "gold-modulos" },
+      { label: "Conteúdos", view: "gold-conteudos" }, { label: "Datas", view: "gold-datas" },
+      { label: "Locais", view: "gold-locais" }, { label: "Áreas Temáticas", view: "gold-areas-tematicas" },
+    ]},
+    { label: "Turmas", view: "gold-turmas", icon: I.school },
+    { label: "Formadores", view: "gold-formadores", icon: I.person },
+    { label: "Dossiê TP", view: "gold-dtp", icon: I.folder },
+    { label: "Inquéritos", view: "gold-inqueritos", icon: I.doc },
+  ]},
+  { group: "Financiada", items: [
+    { label: "Inscrições", view: "fin-inscricoes", icon: I.clipboard },
+    { label: "Formandos", view: "fin-formandos", icon: I.users },
+    { label: "Turmas", view: "fin-turmas", icon: I.school },
+    { label: "Formadores", view: "fin-formadores", icon: I.person },
+    { label: "Edição de Cursos", icon: I.book, children: [
+      { label: "Cursos", view: "fin-cursos" }, { label: "Módulos", view: "fin-modulos" },
+      { label: "Conteúdos", view: "fin-conteudos" }, { label: "Datas", view: "fin-datas" },
+      { label: "Locais", view: "fin-locais" }, { label: "Áreas Temáticas", view: "fin-areas-tematicas" },
+    ]},
+    { label: "Dossiê TP", view: "fin-dtp", icon: I.folder },
+    { label: "Inquéritos", view: "fin-inqueritos", icon: I.doc },
+  ]},
+  { group: "Gestão", items: [
+    { label: "Blog", icon: I.blog, children: [{ label: "Posts", view: "blog-posts" }, { label: "Temáticas", view: "blog-tematicas" }] },
+  ]},
+  { group: "Sistema", items: [
+    { label: "Emails Automáticos", view: "emails", icon: I.mail },
+    { label: "Pagamentos", view: "pagamentos", icon: I.creditcard },
+    { label: "Configurações", view: "configuracoes", icon: I.settings },
+  ]},
+];
+
+function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v: View | NavTarget) => void; onClose?: () => void }) {
+  const { user, logout } = useAuth();
+  const [openGroups, setOpenGroups] = useState<string[]>(() => {
+    const open: string[] = ["Principal"];
+    sidebarConfig.forEach(g => {
+      if (g.items.some(item => item.view === view || item.children?.some(c => c.view === view))) open.push(g.group);
+    });
+    return open;
+  });
+  const [openLeaves, setOpenLeaves] = useState<string[]>(() => {
+    const open: string[] = [];
+    sidebarConfig.forEach(g => g.items.forEach(item => {
+      if (item.children?.some(c => c.view === view)) open.push(item.label);
+    }));
+    return open;
+  });
+
+  function toggleGroup(name: string) { setOpenGroups(prev => prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name]); }
+  function toggleLeaf(label: string) { setOpenLeaves(prev => prev.includes(label) ? prev.filter(x => x !== label) : [...prev, label]); }
+  useEffect(() => {
+    sidebarConfig.forEach(g => {
+      const hit = g.items.some(item =>
+        item.view === view
+        || item.children?.some(c => c.view === view)
+        || (item.view === "gold-turmas" && view === "gold-cockpit-turma")
+        || (item.view === "fin-turmas" && (view === "fin-cockpit-turma" || view === "fin-presencas"))
+      );
+      if (hit) {
+        setOpenGroups(prev => prev.includes(g.group) ? prev : [...prev, g.group]);
+        g.items.forEach(item => {
+          if (item.children?.some(c => c.view === view)) {
+            setOpenLeaves(prev => prev.includes(item.label) ? prev : [...prev, item.label]);
+          }
+        });
+      }
+    });
+  }, [view]);
+
+  function isActive(v?: View) {
+    if (v === view) return true;
+    if (v === "gold-turmas" && view === "gold-cockpit-turma") return true;
+    if (v === "fin-turmas" && (view === "fin-cockpit-turma" || view === "fin-presencas")) return true;
+    return false;
+  }
+  function groupHasActive(g: NavGroup) {
+    return g.items.some(item => isActive(item.view) || item.children?.some(c => isActive(c.view)));
+  }
+  function leafHasActive(item: NavLeaf) { return item.view === view || item.children?.some(c => c.view === view); }
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between px-4 h-14 flex-shrink-0 border-b border-white/10">
+        <button onClick={() => { onNavigate("painel"); onClose?.(); }}
+          className="bg-amber-500 hover:bg-amber-400 text-white font-extrabold text-sm px-3.5 py-1.5 rounded-lg tracking-widest transition-colors">GESFORMA</button>
+        {onClose && <button onClick={onClose} className="lg:hidden p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors">{I.x}</button>}
+      </div>
+      <nav className="flex-1 overflow-y-auto py-2 px-2 scrollbar-hide">
+        {sidebarConfig.map(group => {
+          const isOpen = openGroups.includes(group.group);
+          const hasActive = groupHasActive(group);
+          if (group.group === "Principal") {
+            return (
+              <div key={group.group} className="mb-1">
+                {group.items.map(item => (
+                  <button key={item.label} onClick={() => { item.view && onNavigate(item.view); onClose?.(); }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${isActive(item.view) ? "bg-amber-500 text-white font-semibold" : "text-slate-400 hover:text-white hover:bg-white/10"}`}>
+                    <span className="flex-shrink-0">{item.icon}</span><span className="truncate">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            );
+          }
+          return (
+            <div key={group.group} className="mb-1">
+              <button onClick={() => toggleGroup(group.group)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors ${isOpen ? "bg-white/10" : ""}`}>
+                <span className={`text-xs font-bold uppercase tracking-widest flex-1 text-left ${isOpen ? "text-slate-300" : "text-slate-500"}`}>{group.group}</span>
+                {hasActive && !isOpen && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />}
+                <span className={`flex-shrink-0 transition-transform text-slate-500 ${isOpen ? "rotate-90" : ""}`}>{I.chevRight}</span>
+              </button>
+              {isOpen && (
+                <div className="mt-0.5 ml-2 space-y-0.5 border-l border-white/10 pl-2">
+                  {group.items.map(item => (
+                    <div key={item.label}>
+                      {item.children ? (
+                        <>
+                          <button onClick={() => toggleLeaf(item.label)}
+                            className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm transition-colors ${leafHasActive(item) ? "text-white" : "text-slate-400 hover:text-white hover:bg-white/10"}`}>
+                            <span className="flex-shrink-0 opacity-70">{item.icon}</span>
+                            <span className="flex-1 text-left truncate text-xs">{item.label}</span>
+                            <span className={`transition-transform flex-shrink-0 ${openLeaves.includes(item.label) ? "rotate-90" : ""}`}>{I.chevRight}</span>
+                          </button>
+                          {openLeaves.includes(item.label) && (
+                            <div className="ml-6 mt-0.5 space-y-0.5">
+                              {item.children.map(child => (
+                                <button key={child.label} onClick={() => { onNavigate(child.view); onClose?.(); }}
+                                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-colors ${isActive(child.view) ? "bg-amber-500 text-white font-semibold" : "text-slate-500 hover:text-white hover:bg-white/10"}`}>
+                                  {child.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <button onClick={() => { item.view && onNavigate(item.view); onClose?.(); }}
+                          className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm transition-colors ${isActive(item.view) ? "bg-amber-500 text-white font-semibold" : "text-slate-400 hover:text-white hover:bg-white/10"}`}>
+                          <span className="flex-shrink-0 opacity-70">{item.icon}</span>
+                          <span className="truncate text-xs">{item.label}</span>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+      <div className="flex-shrink-0 border-t border-white/10 p-3">
+        <div className="flex items-center gap-3 px-2 py-2">
+          <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-white text-sm font-bold">{user.name.slice(0, 1)}</div>
+          <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-white truncate">{user.name}</p><p className="text-xs text-slate-500 truncate">{user.role}</p></div>
+          <button type="button" title="Sair" onClick={() => void logout()} className="p-1.5 text-slate-500 hover:text-white rounded-lg hover:bg-white/10 transition-colors">{I.power}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── App ─────────────────────────────────────────────────────────────────────
+
+const viewTitles: Partial<Record<View, string>> = {
+  painel: "Painel", "gold-preinscricoes": "Pré-Inscrições Gold",
+  "gold-formandos-turmas": "Formandos Turmas", "gold-formandos-gold": "Formandos Gold",
+  "gold-campanhas": "Campanhas", "gold-cursos": "Cursos Gold", "gold-curso-ficha": "Ficha do curso", "gold-datas": "Datas Gold",
+  "gold-locais": "Locais", "gold-areas-tematicas": "Áreas Temáticas",
+  "gold-modulos": "Módulos", "gold-conteudos": "Conteúdos",
+  "gold-turmas": "Turmas Gold", "gold-formadores": "Formadores Gold", "gold-cockpit-turma": "Cockpit da Turma", "gold-dtp": "Dossiê TP - Gold",
+  "gold-inqueritos": "Inquéritos - Gold",
+  "fin-inscricoes": "Inscrições Financiadas", "fin-formandos": "Formandos Financiados",
+  "fin-cursos": "Cursos Financiados", "fin-curso-ficha": "Ficha UFCD", "fin-turmas": "Turmas Financiadas", "fin-formadores": "Formadores Financiada", "fin-presencas": "Sessões da turma",
+  "fin-dtp": "Dossiê TP - Financiada", "fin-cockpit-turma": "Cockpit da Turma Financiada",
+  "fin-inqueritos": "Inquéritos - Financiada",
+  "fin-modulos": "Módulos · Financiada", "fin-conteudos": "Conteúdos · Financiada",
+  "fin-datas": "Datas · Financiada", "fin-locais": "Locais · Financiada",
+  "fin-areas-tematicas": "Áreas Temáticas · Financiada",
+  notificacoes: "Notificações",
+  formadores: "Formadores Gold", "blog-posts": "Blog - Posts", "blog-tematicas": "Blog - Temáticas",
+  emails: "Emails Automáticos", pagamentos: "Pagamentos", configuracoes: "Configurações",
+};
+
+export default function App() {
+  return (
+    <ListsProvider seeds={{
+      preinscricoes: preinscricoesData,
+      formandosTurmas: formandosTurmasData,
+      formandosFin: finFormandosData,
+      cursosGold: cursosGoldData,
+      cursosFin: finCursosData,
+      blogPosts: blogPostsData,
+      campanhas: campanhasData,
+      pagamentos: transacoesData,
+    }}>
+      <AppShell />
+    </ListsProvider>
+  );
+}
+
+function AppShell() {
+  const [view, setView] = useState<View>(() => {
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("drive")) return "configuracoes";
+    return "painel";
+  });
+  const [cockpitId, setCockpitId] = useState<number | undefined>();
+  const [finCockpitId, setFinCockpitId] = useState<number | undefined>();
+  const [cockpitTab, setCockpitTab] = useState<CockpitTab>("overview");
+  const [cursoFichaId, setCursoFichaId] = useState<number | "new" | undefined>();
+  const [moduloCurso, setModuloCurso] = useState<string | undefined>();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  const go = useCallback((v: View) => {
+    setView(v); setSidebarOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
+  const navigate = useCallback((target: View | NavTarget) => {
+    const t: NavTarget = typeof target === "string" ? { view: target } : target;
+    if (t.view === "gold-cockpit-turma") {
+      setCockpitId(t.turmaId); setCockpitTab(t.tab ?? "overview");
+    }
+    if (t.view === "fin-cockpit-turma") {
+      setFinCockpitId(t.turmaId); setCockpitTab(t.tab ?? "overview");
+    }
+    if (t.view === "gold-curso-ficha" || t.view === "fin-curso-ficha") {
+      setCursoFichaId(t.cursoId ?? "new");
+    }
+    if (t.view === "gold-modulos" || t.view === "fin-modulos") {
+      setModuloCurso(t.cursoNome);
+    }
+    go(t.view);
+  }, [go]);
+
+  function openCockpit(id: number, tab: CockpitTab = "overview") { setCockpitId(id); setCockpitTab(tab); setView("gold-cockpit-turma"); }
+  function openFinCockpit(id: number, tab: CockpitTab = "overview") { setFinCockpitId(id); setCockpitTab(tab); setView("fin-cockpit-turma"); }
+
+  // Ctrl+K
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setSearchOpen(p => !p); } };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, []);
+
+  // Close notif on outside click
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  // Close sidebar overlay
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (overlayRef.current === e.target) setSidebarOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  const { gold, fin } = useTurmas();
+  const goldTurma = gold.find(t => t.id === cockpitId) ?? gold[0];
+  const finTurma = fin.find(t => t.id === finCockpitId) ?? fin[0];
+  const regime = regimeOfView(view);
+  const headerCrumbs = (() => {
+    if (view === "gold-cockpit-turma" && goldTurma) {
+      return [
+        { label: "Gold", onClick: () => navigate("painel") },
+        { label: "Turmas", onClick: () => navigate("gold-turmas") },
+        { label: goldTurma.nome, onClick: () => { setCockpitTab("overview"); go("gold-cockpit-turma"); } },
+        { label: cockpitTabLabel[cockpitTab] ?? "Visão geral" },
+      ];
+    }
+    if ((view === "fin-cockpit-turma" || view === "fin-presencas") && finTurma) {
+      return [
+        { label: "Financiada", onClick: () => navigate("painel") },
+        { label: "Turmas", onClick: () => navigate("fin-turmas") },
+        { label: finTurma.nome, onClick: () => { setCockpitTab("overview"); go("fin-cockpit-turma"); } },
+        { label: view === "fin-presencas" ? "Sessões" : (cockpitTabLabel[cockpitTab] ?? "Visão geral") },
+      ];
+    }
+    if (view.startsWith("gold-")) return [{ label: "Gold", onClick: () => navigate("painel") }, { label: viewTitles[view] ?? "Gold" }];
+    if (view.startsWith("fin-")) return [{ label: "Financiada", onClick: () => navigate("painel") }, { label: viewTitles[view] ?? "Financiada" }];
+    return [{ label: viewTitles[view] ?? "GesForma" }];
+  })();
+  const headerDetail = view === "gold-cockpit-turma" && goldTurma
+    ? `${goldTurma.curso} · ${goldTurma.local}`
+    : (view === "fin-cockpit-turma" || view === "fin-presencas") && finTurma
+      ? `UFCD ${finTurma.ufcdCod} · ${finTurma.curso}`
+      : undefined;
+  const bloqueios = notificacoesData.filter(n => !n.lida && n.tipo === "error").length;
+  const naoLidas = notificacoesData.filter(n => !n.lida).length;
+
+  function renderView() {
+    switch (view) {
+      case "painel": return <PainelView onNavigate={navigate} />;
+      case "gold-cursos": return <CursosGoldView onOpen={id => { setCursoFichaId(id); go("gold-curso-ficha"); }} />;
+      case "gold-curso-ficha": return <GoldCursoFichaScreen cursoId={cursoFichaId} onBack={() => navigate("gold-cursos")} onOpenModulos={nome => navigate({ view: "gold-modulos", cursoNome: nome })} />;
+      case "gold-turmas": return <TurmasGoldView onCockpit={openCockpit} />;
+      case "gold-cockpit-turma": return <CockpitTurmaView turmaId={cockpitId} initialTab={cockpitTab} onBack={() => navigate("gold-turmas")} onNavigate={navigate} />;
+      case "gold-dtp": return <DtpTurmasPicker regime="gold" onOpen={(id) => openCockpit(id, "dtp")} />;
+      case "gold-preinscricoes": return <PreInscricoesGoldView />;
+      case "gold-formandos-turmas": return <FormandosTurmasView />;
+      case "gold-formandos-gold": return <FormandosGoldView />;
+      case "gold-campanhas": return <CampanhasView />;
+      case "gold-datas": return <DatasGoldView />;
+      case "gold-locais": return <LocaisView />;
+      case "gold-areas-tematicas": return <AreasTematicasView />;
+      case "gold-modulos": return <ModulosView cursoInicial={moduloCurso} />;
+      case "gold-conteudos": return <ConteudosView />;
+      case "fin-modulos": return <ModulosFinView cursoInicial={moduloCurso} />;
+      case "fin-conteudos": return <ConteudosFinView />;
+      case "fin-datas": return <DatasFinView />;
+      case "fin-locais": return <LocaisFinView />;
+      case "fin-areas-tematicas": return <AreasTematicasFinView />;
+      case "notificacoes": return <NotificacoesView items={notificacoesData as NotifRow[]} onOpen={n => navigate({ view: n.view as View, turmaId: n.turmaId, tab: n.tab as CockpitTab | undefined })} />;
+      case "gold-inqueritos": return <InqueritosView acento="gold" />;
+      case "gold-formadores":
+      case "formadores": return <FormadoresView regime="gold" />;
+      case "fin-inscricoes": return <FinInscricoesView />;
+      case "fin-formandos": return <FinFormandosView />;
+      case "fin-cursos": return <FinCursosView onOpen={id => { setCursoFichaId(id); go("fin-curso-ficha"); }} />;
+      case "fin-curso-ficha": return <FinCursoFichaScreen cursoId={cursoFichaId} onBack={() => navigate("fin-cursos")} onOpenModulos={nome => navigate({ view: "fin-modulos", cursoNome: nome })} />;
+      case "fin-turmas": return <FinTurmasView onCockpit={openFinCockpit} />;
+      case "fin-presencas": {
+        const tid = finCockpitId ?? 218;
+        return <FinCockpitTurmaView turmaId={tid} initialTab="sessoes" onBack={() => navigate("fin-turmas")} onNavigate={navigate} />;
+      }
+      case "fin-dtp": return <DtpTurmasPicker regime="fin" onOpen={(id) => openFinCockpit(id, "dtp")} />;
+      case "fin-cockpit-turma": return <FinCockpitTurmaView turmaId={finCockpitId} initialTab={cockpitTab} onBack={() => navigate("fin-turmas")} onNavigate={navigate} />;
+      case "fin-inqueritos": return <InqueritosView acento="fin" />;
+      case "fin-formadores": return <FormadoresView regime="fin" />;
+      case "blog-posts": return <BlogView />;
+      case "blog-tematicas": return <BlogTematicasView />;
+      case "emails": return <EmailsView />;
+      case "pagamentos": return <PagamentosView />;
+      case "configuracoes": return <ConfiguracoesView />;
+      default: return <PainelView onNavigate={navigate} />;
+    }
+  }
+
+  return (
+    <>
+      <style>{`
+        @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes dropIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+        .scrollbar-hide { scrollbar-width: none; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+      `}</style>
+
+      <div className="flex h-full bg-slate-100">
+        {/* Desktop sidebar */}
+        <aside className="hidden lg:flex w-60 flex-col bg-[#0F172A] flex-shrink-0 h-full sticky top-0">
+          <SidebarNav view={view} onNavigate={navigate} />
+        </aside>
+
+        {/* Mobile sidebar overlay */}
+        {sidebarOpen && (
+          <div ref={overlayRef} className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm">
+            <aside className="w-64 h-full bg-[#0F172A] flex flex-col shadow-2xl">
+              <SidebarNav view={view} onNavigate={navigate} onClose={() => setSidebarOpen(false)} />
+            </aside>
+          </div>
+        )}
+
+        {/* Main */}
+        <div className="flex-1 flex flex-col min-w-0 min-h-full">
+          {/* Top bar */}
+          <header className="sticky top-0 z-30 bg-white border-b border-slate-200 flex items-center gap-3 px-4 min-h-14 py-2 flex-shrink-0 shadow-sm">
+            <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 -ml-1 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors" aria-label="Abrir menu">{I.menu}</button>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <RegimeBadge regime={regime} />
+                <PageTrail crumbs={headerCrumbs} />
+              </div>
+              {headerDetail && <p className="text-[11px] text-slate-400 truncate mt-0.5">{headerDetail}</p>}
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Global search button */}
+              <button onClick={() => setSearchOpen(true)}
+                className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-xs text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
+                {I.cmdK}<span>Pesquisar</span><kbd className="font-mono text-slate-300">⌘K</kbd>
+              </button>
+              <button onClick={() => setSearchOpen(true)} className="sm:hidden p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">{I.search}</button>
+
+              {/* Notifications */}
+              <div ref={notifRef} className="relative">
+                <button onClick={() => setNotifOpen(p => !p)} className="relative p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">
+                  {I.bell}
+                  {naoLidas > 0 && (
+                    <span className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${bloqueios > 0 ? "bg-red-500" : "bg-amber-400"}`} />
+                  )}
+                </button>
+                {notifOpen && <NotificacoesPanel onNavigate={v => { navigate(v); setNotifOpen(false); }} onClose={() => setNotifOpen(false)} />}
+              </div>
+
+              <a href="https://ena.pt" target="_blank" rel="noreferrer"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                {I.link} <span>ena.pt</span>
+              </a>
+            </div>
+          </header>
+
+          <main className="flex-1 p-4 sm:p-5 overflow-auto">{renderView()}</main>
+
+          <footer className="bg-white border-t border-slate-100 px-5 py-2.5 text-center flex-shrink-0">
+            <p className="text-xs text-slate-400">GesForma © 2026 · <span className="font-semibold text-slate-500">ENA</span> - Escola de Negócios e Administração</p>
+          </footer>
+        </div>
+      </div>
+
+      <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} onNavigate={navigate} />
+    </>
+  );
+}

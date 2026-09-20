@@ -1,0 +1,1149 @@
+       >
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
+                    <span className={`text-xs truncate ${on ? "font-semibold text-slate-800" : "font-medium text-slate-700"}`}>{d.fonte}</span>
+                  </span>
+                  <span className="text-xs font-bold text-slate-700 flex-shrink-0">{d.pct}%</span>
+                </div>
+                <div className="flex items-center gap-2 pl-4">
+                  <div className="flex-1 bg-slate-100 rounded-full h-1.5">
+                    <div className="h-1.5 rounded-full" style={{ width: `${d.pct}%`, backgroundColor: d.color }} />
+                  </div>
+                  <span className="text-[11px] text-slate-400 w-10 text-right">{d.n.toLocaleString("pt-PT")}</span>
+                </div>
+                {on && <p className="text-[11px] text-slate-400 pl-4 mt-0.5">{d.detalhe}</p>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// ─── Modal (substitui as antigas gavetas laterais) ────────────────────────────
+
+function SlideOver({ open, onClose, title, sub, children, size = "md" }: {
+  open: boolean; onClose: () => void; title: string; sub?: string;
+  children: React.ReactNode; size?: "sm" | "md" | "lg" | "xl";
+}) {
+  return <AppModal open={open} onClose={onClose} title={title} sub={sub} size={size}>{children}</AppModal>;
+}
+
+// ─── Modal ────────────────────────────────────────────────────────────────────
+
+function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
+  return <AppModal open={open} onClose={onClose} title={title} size="md">{children}</AppModal>;
+}
+
+type DestinoTurma = {
+  id: number; nome: string; curso: string; horario: string; local: string;
+  ocupadas: number; vagas: number; activa: boolean;
+};
+
+function ConfirmEliminarFormandoModal({
+  open, onClose, nome, turma, onConfirm,
+}: {
+  open: boolean; onClose: () => void; nome: string; turma: string; onConfirm: () => void;
+}) {
+  return (
+    <AppModal
+      open={open}
+      onClose={onClose}
+      title="Eliminar formando"
+      sub={nome}
+      size="sm"
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Cancelar</button>
+          <button type="button" onClick={() => { onConfirm(); onClose(); }} className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white">Eliminar</button>
+        </>
+      }
+    >
+      <div className="p-5 space-y-2">
+        <p className="text-sm text-slate-700">
+          Remover <span className="font-semibold">{nome}</span> da turma <span className="font-semibold">{turma}</span>?
+        </p>
+        <p className="text-xs text-slate-500">Sai da lista desta turma. Deixa de contar para vagas, presenças e certificados.</p>
+      </div>
+    </AppModal>
+  );
+}
+
+function TransferirTurmaModal({
+  open, onClose, nome, turmaAtual, destinos, onTransfer, accent = "gold",
+}: {
+  open: boolean;
+  onClose: () => void;
+  nome: string;
+  turmaAtual: string;
+  destinos: DestinoTurma[];
+  onTransfer: (dest: DestinoTurma) => void;
+  accent?: "gold" | "fin";
+}) {
+  const [curso, setCurso] = useState("");
+  const [horario, setHorario] = useState("");
+  const [turmaNome, setTurmaNome] = useState("");
+  useEffect(() => {
+    if (open) { setCurso(""); setHorario(""); setTurmaNome(""); }
+  }, [open]);
+
+  const cursoOpts = uniqueOpts(destinos.map(d => d.curso));
+  const horarioOpts = uniqueOpts(destinos.filter(d => !curso || d.curso === curso).map(d => d.horario));
+  const turmas = destinos.filter(d =>
+    (!curso || d.curso === curso) && (!horario || d.horario === horario)
+  );
+  const turmaOpts = turmas.map(d => ({
+    value: d.nome,
+    sub: `${d.local} · ${d.horario} · ${d.ocupadas}/${d.vagas}${!d.activa ? " · inativa" : d.ocupadas >= d.vagas ? " · lotada" : " vagas"}`,
+  }));
+  const dest = turmas.find(d => d.nome === turmaNome);
+  const bloqueada = dest ? (!dest.activa || dest.ocupadas >= dest.vagas) : true;
+  const btn = accent === "fin" ? "bg-blue-600 hover:bg-blue-700" : "bg-amber-500 hover:bg-amber-600";
+
+  return (
+    <AppModal
+      open={open}
+      onClose={onClose}
+      title="Transferir de turma"
+      sub={nome}
+      size="md"
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Cancelar</button>
+          <button
+            type="button"
+            disabled={bloqueada}
+            onClick={() => { if (!dest || bloqueada) return; onTransfer(dest); onClose(); }}
+            className={`px-5 py-2.5 text-sm font-semibold rounded-lg text-white disabled:opacity-40 ${btn}`}
+          >
+            Transferir
+          </button>
+        </>
+      }
+    >
+      <div className="p-5 space-y-3">
+        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-xs text-slate-600">
+          Está em <span className="font-semibold text-slate-800">{turmaAtual}</span>. Escolha o curso, o horário e a turma de destino.
+        </div>
+        <Field label="Curso">
+          <SearchSelect
+            value={curso}
+            onChange={v => { setCurso(v); setHorario(""); setTurmaNome(""); }}
+            options={cursoOpts}
+            placeholder="Pesquisar curso…"
+            empty="Não há outros cursos com turmas."
+          />
+        </Field>
+        <Field label="Horário">
+          <SearchSelect
+            value={horario}
+            onChange={v => { setHorario(v); setTurmaNome(""); }}
+            options={horarioOpts}
+            placeholder={curso ? "Pesquisar horário…" : "Escolha primeiro o curso…"}
+            empty="Sem horários para este curso."
+          />
+        </Field>
+        <Field label="Turma">
+          <SearchSelect
+            value={turmaNome}
+            onChange={setTurmaNome}
+            options={turmaOpts}
+            placeholder={horario || curso ? "Pesquisar turma…" : "Escolha curso e horário…"}
+            empty="Não há turmas para este filtro."
+          />
+        </Field>
+        {dest && !dest.activa && <p className="text-xs font-medium text-amber-700">Esta turma está inativa e não aceita transferências.</p>}
+        {dest && dest.activa && dest.ocupadas >= dest.vagas && <p className="text-xs font-medium text-red-600">A turma {dest.nome} está lotada ({dest.ocupadas}/{dest.vagas}).</p>}
+        {dest && dest.activa && dest.ocupadas < dest.vagas && (
+          <p className="text-xs text-slate-500">{dest.nome} · {dest.local} · {dest.vagas - dest.ocupadas} vagas livres.</p>
+        )}
+        {destinos.length === 0 && <p className="text-xs text-slate-500">Não há outras turmas para onde transferir.</p>}
+      </div>
+    </AppModal>
+  );
+}
+
+type FormandoRecord = FormandoTurma;
+
+// ─── Cockpit da Turma ─────────────────────────────────────────────────────────
+
+const sessoesSample: SessaoMeta[] = [
+  { n: 1, data: "Sáb, 07 Set 2026", hora: "09h–13h", formador: "Isac Silva", formadores: ["Isac Silva"], estado: "Realizada", plano: true, modulo: "M1 · Aprendizagem e pedagogia", modulos: ["M1 · Aprendizagem e pedagogia"], duracao: "4h" },
+  { n: 2, data: "Sáb, 14 Set 2026", hora: "09h–13h", formador: "Isac Silva", formadores: ["Isac Silva"], estado: "Realizada", plano: true, modulo: "M2 · Comunicação e dinâmica de grupos", modulos: ["M2 · Comunicação e dinâmica de grupos"], duracao: "4h" },
+  { n: 3, data: "Sáb, 21 Set 2026", hora: "09h–13h", formador: "Isac Silva · Ivan Esteves", formadores: ["Isac Silva", "Ivan Esteves"], estado: "Agendada", plano: false, modulo: "M2 · Comunicação e dinâmica de grupos", modulos: ["M2 · Comunicação e dinâmica de grupos"], duracao: "4h" },
+  { n: 4, data: "Sáb, 28 Set 2026", hora: "09h–13h", formador: "Isac Silva", formadores: ["Isac Silva"], estado: "Agendada", plano: false, modulo: "M3 · Avaliação da formação", modulos: ["M3 · Avaliação da formação"], duracao: "4h" },
+  { n: 5, data: "Sáb, 05 Out 2026", hora: "09h–13h", formador: "Isac Silva", formadores: ["Isac Silva"], estado: "Agendada", plano: false, modulo: "M3 · Avaliação da formação", modulos: ["M3 · Avaliação da formação"], duracao: "4h" },
+];
+
+const finSessoesSample: SessaoMeta[] = [
+  { n: 1, data: "Qua, 27 Ago 2026", hora: "19h–22h", formador: "Vânia Fernandes", formadores: ["Vânia Fernandes"], estado: "Realizada", plano: true, modulo: "UFCD 3564 · Avaliação primária e SVB", modulos: ["UFCD 3564 · Avaliação primária e SVB"], duracao: "5h" },
+  { n: 2, data: "Qua, 03 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", formadores: ["Vânia Fernandes"], estado: "Realizada", plano: true, modulo: "UFCD 3564 · Trauma e hemorragias", modulos: ["UFCD 3564 · Trauma e hemorragias"], duracao: "5h" },
+  { n: 3, data: "Qua, 10 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes · Cátia Pinheiro", formadores: ["Vânia Fernandes", "Cátia Pinheiro"], estado: "Agendada", plano: false, modulo: "UFCD 3564 · Queimaduras e intoxicações", modulos: ["UFCD 3564 · Queimaduras e intoxicações"], duracao: "5h" },
+  { n: 4, data: "Qua, 17 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", formadores: ["Vânia Fernandes"], estado: "Agendada", plano: false, modulo: "UFCD 3564 · Emergências médicas", modulos: ["UFCD 3564 · Emergências médicas"], duracao: "5h" },
+  { n: 5, data: "Qua, 24 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", formadores: ["Vânia Fernandes"], estado: "Agendada", plano: false, modulo: "UFCD 3564 · Simulação e avaliação", modulos: ["UFCD 3564 · Simulação e avaliação"], duracao: "5h" },
+];
+
+function ModulosCell({ sessao }: { sessao: { modulo?: string; modulos?: string[] } }) {
+  const list = sessaoModulos(sessao);
+  if (!list.length) return <span className="text-xs text-slate-400">-</span>;
+  return (
+    <div className="flex flex-col gap-0.5 min-w-[10rem] max-w-[16rem]">
+      {list.map(m => (
+        <span key={m} className="text-xs text-slate-700 leading-snug">{m}</span>
+      ))}
+    </div>
+  );
+}
+
+function FormadoresCell({
+  sessao, onOpen,
+}: {
+  sessao: { formador?: string; formadores?: string[] };
+  onOpen?: (nome: string) => void;
+}) {
+  const list = sessaoFormadores(sessao);
+  if (!list.length) return <span className="text-xs text-slate-400">-</span>;
+  return (
+    <div className="flex flex-col gap-0.5 min-w-[8rem] max-w-[14rem]">
+      {list.map(nome => onOpen ? (
+        <button key={nome} type="button" onClick={() => onOpen(nome)} className="text-left text-xs font-medium text-slate-700 hover:text-violet-700">
+          {nome}
+        </button>
+      ) : (
+        <span key={nome} className="text-xs font-medium text-slate-700">{nome}</span>
+      ))}
+    </div>
+  );
+}
+
+function sumarioLabel(s?: SumarioSessaoData) {
+  if (s?.assinado && sumarioPreenchido(s)) return "Ver sumário";
+  if (sumarioPreenchido(s)) return "Assinar sumário";
+  return "+ Preencher sumário";
+}
+function sumarioBtnCls(s: SumarioSessaoData | undefined, gold: boolean) {
+  if (s?.assinado && sumarioPreenchido(s)) return "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100";
+  return gold ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100";
+}
+
+function SessoesTurmaTab({
+  accent, turmaNome, sessoes, sumarios, onNovaSessao, onPlano, onSumario, onPresencas, onOpenFormador,
+}: {
+  accent: "gold" | "fin";
+  turmaNome: string;
+  sessoes: SessaoMeta[];
+  sumarios: Record<number, SumarioSessaoData>;
+  onNovaSessao: () => void;
+  onPlano: (s: SessaoMeta) => void;
+  onSumario: (s: SessaoMeta) => void;
+  onPresencas: (s: SessaoMeta) => void;
+  onOpenFormador?: (nome: string) => void;
+}) {
+  const gold = accent === "gold";
+  const numCls = gold ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700";
+  const planoTodo = gold ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100";
+  return (
+    <Card>
+      <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-700">Sessões - {turmaNome}</p>
+        <NewBtn accent={accent} label="+ Nova Sessão" onClick={onNovaSessao} />
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <Th>Nº</Th><Th>Data / Hora</Th><Th>Módulo</Th><Th>Formadores</Th>
+              <Th>Plano de Sessão</Th><Th>Sumário</Th><Th>Presenças</Th><Th>Estado</Th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {sessoes.map(s => {
+              const sum = sumarios[s.n];
+              const realizada = s.estado === "Realizada";
+              return (
+                <tr key={s.n} className="hover:bg-slate-50">
+                  <Td><span className={`w-7 h-7 rounded-full ${numCls} text-xs font-bold flex items-center justify-center`}>{s.n}</span></Td>
+                  <Td>
+                    <p className="text-xs font-medium text-slate-800 whitespace-nowrap">{s.data}</p>
+                    <p className="text-xs text-slate-400">{s.hora}</p>
+                  </Td>
+                  <Td><ModulosCell sessao={s} /></Td>
+                  <Td><FormadoresCell sessao={s} onOpen={onOpenFormador} /></Td>
+                  <Td>
+                    <button type="button" onClick={() => onPlano(s)}
+                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${s.plano ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100" : planoTodo}`}>
+                      {s.plano ? "Ver plano" : "+ Preencher plano"}
+                    </button>
+                  </Td>
+                  <Td>
+                    <button type="button" onClick={() => onSumario(s)}
+                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${sumarioBtnCls(sum, gold)}`}>
+                      {sumarioLabel(sum)}
+                    </button>
+                  </Td>
+                  <Td>
+                    <button
+                      type="button"
+                      disabled={!realizada}
+                      title={realizada ? "Marcar presenças desta sessão" : "As presenças só se marcam depois da sessão"}
+                      onClick={() => realizada && onPresencas(s)}
+                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${
+                        realizada
+                          ? "text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100"
+                          : "text-slate-400 bg-slate-50 border-slate-200 cursor-not-allowed"
+                      }`}
+                    >
+                      {realizada ? "Marcar presenças" : "Após a sessão"}
+                    </button>
+                  </Td>
+                  <Td>{estadoBadge(s.estado)}</Td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {sessoes.length === 0 && (
+        <p className="px-4 py-8 text-center text-xs text-slate-400">Ainda não há sessões. Gere o cronograma ou adicione a primeira sessão.</p>
+      )}
+    </Card>
+  );
+}
+
+const certificadosSample = [
+  { id: 1, nome: "Tiago Bento", presencas: 100, elearning: 90, nota: 17, certificado: true },
+  { id: 2, nome: "Luciana D'Avila", presencas: 80, elearning: 100, nota: 15, certificado: false },
+  { id: 3, nome: "Ciara Gonçalves", presencas: 60, elearning: 70, nota: 10, certificado: false },
+  { id: 4, nome: "Liliana Real", presencas: 100, elearning: 95, nota: 19, certificado: true },
+  { id: 5, nome: "Angélica Ribeiro", presencas: 80, elearning: 85, nota: 14, certificado: false },
+  { id: 6, nome: "Maria Mota", presencas: 100, elearning: 80, nota: 16, certificado: false },
+  { id: 7, nome: "Elisabete Soares", presencas: 40, elearning: 50, nota: 8, certificado: false },
+  { id: 8, nome: "Andreia Arantes", presencas: 100, elearning: 100, nota: 18, certificado: true },
+];
+
+type DocEstado = "ok" | "parcial" | "falta";
+type DocItem = { label: string; detalhe: string; estado: DocEstado; bloqueante?: boolean; payload?: unknown };
+const docsTurmaGrupos: { id: string; label: string; color: string; icon: React.ReactNode; items: DocItem[] }[] = [
+  { id: "turma", label: "Documentos da turma", color: "bg-amber-50 border-amber-200 text-amber-800", icon: I.school, items: [
+    { label: "Programa de formação", detalhe: "Objetivos, conteúdos, metodologias e avaliação.", estado: "ok" },
+    { label: "Regulamento de formação", detalhe: "Regulamento ENA aceite pelos formandos.", estado: "ok" },
+    { label: "Cronograma da turma", detalhe: "12 sábados · 09h–13h + 4 síncronas.", estado: "ok" },
+    { label: "Registo de ocorrências", detalhe: "Sem ocorrências registadas.", estado: "ok" },
+    { label: "Relatório final da turma", detalhe: "Fecha o DTP.", estado: "falta", bloqueante: true },
+  ]},
+  { id: "sessoes", label: "Documentos das sessões", color: "bg-slate-50 border-slate-200 text-slate-700", icon: I.calendar, items: [
+    { label: "Planos de sessão", detalhe: "12/16 planos carregados.", estado: "parcial" },
+    { label: "Sumários assinados", detalhe: "3/16 sessões.", estado: "falta", bloqueante: true },
+    { label: "Folhas de presença", detalhe: "Assinatura do formador por período.", estado: "parcial" },
+  ]},
+  { id: "formandos", label: "Documentos dos formandos", color: "bg-blue-50 border-blue-200 text-blue-800", icon: I.users, items: [
+    { label: "Contratos de formação", detalhe: "8/10 assinados.", estado: "parcial" },
+    { label: "PIP", detalhe: "0/10 projetos arquivados.", estado: "falta", bloqueante: true },
+    { label: "Simulação pedagógica inicial", detalhe: "Grelhas em falta.", estado: "falta", bloqueante: true },
+    { label: "Simulação pedagógica final", detalhe: "Aguardar módulo final.", estado: "falta" },
+    { label: "Comprovativo de 5 anos de experiência", detalhe: "7/10 com declaração.", estado: "parcial" },
+  ]},
+  { id: "formadores", label: "Documentos dos formadores", color: "bg-violet-50 border-violet-200 text-violet-800", icon: I.person, items: [
+    { label: "CCP / CCPE do formador", detalhe: "CCP n.º F-44821 · válido.", estado: "ok" },
+    { label: "CV do formador", detalhe: "Atualizado em 2026-04-12.", estado: "ok" },
+    { label: "Contrato do formador", detalhe: "Isac Silva · 2026/CCP-17.", estado: "ok" },
+  ]},
+];
+
+const docsFinGrupos: typeof docsTurmaGrupos = [
+  { id: "turma", label: "Documentos da turma", color: "bg-blue-50 border-blue-200 text-blue-800", icon: I.school, items: [
+    { label: "Programa de formação UFCD", detalhe: "UFCD 3564 · Primeiros Socorros · 25h.", estado: "ok" },
+    { label: "Regulamento de formação", detalhe: "Regulamento ENA + regras do financiador.", estado: "ok" },
+    { label: "Cronograma da turma", detalhe: "5 sessões síncronas · Sala Virtual.", estado: "ok" },
+    { label: "Enquadramento do financiador", detalhe: "Candidatura e regras da tipologia.", estado: "ok" },
+    { label: "Relatório de execução", detalhe: "Fecha o DTP da turma financiada.", estado: "falta", bloqueante: true },
+  ]},
+  { id: "sessoes", label: "Documentos das sessões", color: "bg-slate-50 border-slate-200 text-slate-700", icon: I.calendar, items: [
+    { label: "Planos de sessão", detalhe: "0/5 planos carregados.", estado: "falta", bloqueante: true },
+    { label: "Sumários assinados", detalhe: "Ainda sem sessões fechadas.", estado: "falta" },
+    { label: "Folhas de presença", detalhe: "Assinatura digital por sessão.", estado: "falta" },
+    { label: "Mapa de assiduidade em horas", detalhe: "Obrigatório no regime financiado.", estado: "falta", bloqueante: true },
+  ]},
+  { id: "formandos", label: "Documentos dos formandos", color: "bg-emerald-50 border-emerald-200 text-emerald-800", icon: I.users, items: [
+    { label: "Contratos de formação", detalhe: "14/17 assinados.", estado: "parcial" },
+    { label: "Cartão de cidadão", detalhe: "15/17 nos documentos.", estado: "parcial" },
+    { label: "Certificado de habilitações", detalhe: "12/17 validados.", estado: "parcial" },
+    { label: "Curriculum vitae", detalhe: "14/17.", estado: "parcial" },
+    { label: "IBAN", detalhe: "3/17. Sem IBAN não há apoios.", estado: "falta", bloqueante: true },
+    { label: "Comprovativo de emprego", detalhe: "10/17.", estado: "parcial" },
+  ]},
+  { id: "formadores", label: "Documentos dos formadores", color: "bg-violet-50 border-violet-200 text-violet-800", icon: I.person, items: [
+    { label: "CCP / CCPE do formador", detalhe: "Vânia Fernandes · CCP válido.", estado: "ok" },
+    { label: "CV do formador", detalhe: "Atualizado em 2026-03-02.", estado: "ok" },
+    { label: "Contrato do formador", detalhe: "2026/UFCD-3564.", estado: "ok" },
+  ]},
+];
+
+function TurmaTabBar({ tab, onChange, accent = "gold", dtpPct }: { tab: CockpitTab; onChange: (t: CockpitTab) => void; accent?: "gold" | "fin"; dtpPct: number }) {
+  const active = accent === "gold" ? "border-amber-500 text-amber-600" : "border-blue-600 text-blue-600";
+  const chip = accent === "gold" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700";
+  const tabs: { id: CockpitTab; label: string; icon: React.ReactNode }[] = [
+    { id: "overview", label: "Visão Geral", icon: I.school },
+    { id: "cronograma", label: "Cronograma", icon: I.calendar },
+    { id: "sessoes", label: "Sessões", icon: I.calendar },
+    { id: "documentos", label: "Documentos", icon: I.file },
+    { id: "dtp", label: "Dossiê TP", icon: I.folder },
+    { id: "certificados", label: "Certificados", icon: I.doc },
+  ];
+  return (
+    <div className="flex gap-0.5 border-b border-slate-200 overflow-x-auto scrollbar-hide">
+      {tabs.map(t => (
+        <button key={t.id} onClick={() => onChange(t.id)}
+          className={`flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 whitespace-nowrap ${tab === t.id ? active : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+          {t.icon} {t.label}
+          {t.id === "dtp" && <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${chip}`}>{dtpPct}%</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function cloneGrupos(src: typeof docsTurmaGrupos) {
+  return src.map(g => ({ ...g, items: g.items.map(i => ({ ...i })) }));
+}
+
+function applyDocSave(
+  grupos: typeof docsTurmaGrupos,
+  ref: { grupoId: string; label: string },
+  next: { estado: DocEstado; detalhe: string; payload?: unknown },
+) {
+  return grupos.map(g => g.id !== ref.grupoId ? g : {
+    ...g,
+    items: g.items.map(d => d.label !== ref.label ? d : {
+      ...d,
+      estado: next.estado,
+      detalhe: next.detalhe,
+      payload: next.payload !== undefined ? next.payload : d.payload,
+    }),
+  });
+}
+
+function DocumentosTurmaTab({ regime = "gold", curso }: { regime?: "gold" | "fin"; curso?: string }) {
+  const estadoCfg: Record<DocEstado, { dot: string; chip: string; label: string }> = {
+    ok: { dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700 border-emerald-200", label: "No dossiê" },
+    parcial: { dot: "bg-amber-400", chip: "bg-amber-50 text-amber-700 border-amber-200", label: "Parcial" },
+    falta: { dot: "bg-red-400", chip: "bg-red-50 text-red-600 border-red-200", label: "Em falta" },
+  };
+  const seed = regime === "fin" ? docsFinGrupos : docsTurmaGrupos;
+  const [grupos, setGrupos] = useState(() => cloneGrupos(seed));
+  const [resolver, setResolver] = useState<{ grupoId: string; label: string } | null>(null);
+  const resolverRef = useRef(resolver);
+  resolverRef.current = resolver;
+  useEffect(() => { setGrupos(cloneGrupos(seed)); setResolver(null); }, [regime]);
+
+  const { formandosFin, formandosTurmas } = useLists();
+  const nomesFormandos = regime === "fin"
+    ? formandosFin.map(f => `${f.nome} ${f.apelido}`)
+    : formandosTurmas.map(f => `${f.nome} ${f.apelido}`);
+  const nomesSessoes = regime === "fin"
+    ? ["Sessão 1 · 27 Ago", "Sessão 2 · 03 Set", "Sessão 3 · 10 Set", "Sessão 4 · 17 Set", "Sessão 5 · 24 Set"]
+    : Array.from({ length: 16 }, (_, i) => `Sessão ${i + 1}`);
+  const cursoNome = curso ?? (regime === "gold" ? "Formação de Formadores - CCP" : undefined);
+
+  const aberto = resolver
+    ? grupos.flatMap(g => g.items.filter(d => g.id === resolver.grupoId && d.label === resolver.label).map(d => ({ grupoId: g.id, grupo: g.id, doc: d })))[0]
+    : undefined;
+
+  function abrir(grupoId: string, doc: { label: string; detalhe: string; estado: DocEstado }) {
+    setResolver({ grupoId, label: doc.label });
+  }
+
+  function targetFromDoc(grupoId: string, doc: DocItem): ResolveDocTarget {
+    const isPip = doc.label === "PIP";
+    const isSim = /simula/i.test(doc.label);
+    if (isPip) {
+      return {
+        label: doc.label, detalhe: doc.detalhe, estado: doc.estado, kind: "pip",
+        pipItems: seedPipItems(nomesFormandos, doc.payload as PipItem[] | undefined),
+      };
+    }
+    if (isSim) {
+      const params = getParametrosAvaliacao(cursoNome);
+      return {
+        label: doc.label, detalhe: doc.detalhe, estado: doc.estado, kind: "simulacao",
+        simItems: seedSimItems(nomesFormandos, params.criterios, doc.payload as SimItem[] | undefined),
+        criterios: params.criterios,
+        curso: params.curso,
+      };
+    }
+    const lista = /\d+\s*\/\s*\d+/.test(doc.detalhe) || grupoId === "formandos" || grupoId === "sessoes";
+    const nomes = grupoId === "sessoes" ? nomesSessoes : nomesFormandos;
+    return {
+      label: doc.label,
+      detalhe: doc.detalhe,
+      estado: doc.estado,
+      kind: lista ? "lista" : "ficheiro",
+      items: lista ? seedListaFromDetalhe(doc.detalhe, nomes) : undefined,
+    };
+  }
+
+  return (
+    <div className="space-y-4">
+      {grupos.map(g => {
+        const ok = g.items.filter(d => d.estado === "ok").length;
+        return (
+          <Card key={g.id}>
+            <div className={`px-4 py-3 border-b flex items-center justify-between ${g.color} rounded-t-xl`}>
+              <div className="flex items-center gap-2"><span>{g.icon}</span><p className="text-sm font-semibold">{g.label}</p></div>
+              <span className="text-xs font-bold">{ok}/{g.items.length} no dossiê</span>
+            </div>
+            <div className="divide-y divide-slate-50">
+              {g.items.map(doc => {
+                const cfg = estadoCfg[doc.estado];
+                return (
+                  <div key={doc.label} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-xs font-medium text-slate-800">{doc.label}</p>
+                        {doc.bloqueante && <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-semibold">bloqueante</span>}
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">{doc.detalhe}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => abrir(g.id, doc)}
+                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${doc.estado === "ok" ? "bg-white text-slate-600 border-slate-200 hover:bg-slate-50" : regime === "gold" ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"}`}>
+                        {doc.estado === "ok" ? "Substituir" : "Resolver"}
+                      </button>
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${cfg.chip} whitespace-nowrap`}>{cfg.label}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        );
+      })}
+      <ResolverDocumentoModal
+        open={!!aberto}
+        onClose={() => setResolver(null)}
+        accent={regime}
+        target={aberto ? targetFromDoc(aberto.grupoId, aberto.doc) : null}
+        onSave={next => {
+          const ref = resolverRef.current;
+          if (!ref) return;
+          setGrupos(prev => applyDocSave(prev, ref, next));
+        }}
+      />
+    </div>
+  );
+}
+
+function CertificadosTurmaTab({ formandos, issued, onUpload, onView, curso, turma }: {
+  formandos: { id: number; nome: string }[];
+  issued?: Record<number, boolean>;
+  onUpload?: (id: number) => void;
+  onView?: (c: CertificadoPreview) => void;
+  curso?: string;
+  turma?: string;
+}) {
+  const rows = (formandos.length ? formandos : certificadosSample.map(c => ({ id: c.id, nome: c.nome }))).map((f, i) => {
+    const sample = certificadosSample[i % certificadosSample.length];
+    return {
+      id: f.id,
+      nome: f.nome,
+      presencas: sample.presencas,
+      elearning: sample.elearning,
+      nota: sample.nota,
+      certificado: issued?.[f.id] ?? sample.certificado,
+    };
+  });
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { l: "Elegíveis", v: rows.filter(c => c.presencas >= 75 && c.nota >= 10).length, color: "text-emerald-600", bg: "bg-emerald-50" },
+          { l: "Não elegíveis", v: rows.filter(c => c.presencas < 75 || c.nota < 10).length, color: "text-red-600", bg: "bg-red-50" },
+          { l: "Certificados emitidos", v: rows.filter(c => c.certificado).length, color: "text-blue-600", bg: "bg-blue-50" },
+        ].map(s => (
+          <Card key={s.l} className={`p-4 ${s.bg}`}>
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">{s.l}</p>
+            <p className={`text-2xl font-bold ${s.color}`}>{s.v}</p>
+          </Card>
+        ))}
+      </div>
+      <Card>
+        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
+          <p className="text-sm font-semibold text-slate-700">Elegibilidade por formando</p>
+          <p className="text-xs text-slate-400 mt-0.5">Mínimo: 75% presenças e nota ≥ 10</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr><Th>Formando</Th><Th className="text-center">Presenças</Th><Th className="text-center">E-Learning</Th><Th className="text-center">Nota Final</Th><Th className="text-center">Elegibilidade</Th><Th className="text-center">Certificado</Th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map(c => {
+                const elegivel = c.presencas >= 75 && c.nota >= 10;
+                return (
+                  <tr key={c.id} className="hover:bg-slate-50">
+                    <Td className="text-xs font-medium text-slate-800">{c.nome}</Td>
+                    <Td className="text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <div className="w-16 bg-slate-200 rounded-full h-1.5"><div className="h-1.5 rounded-full" style={{ width: `${c.presencas}%`, backgroundColor: c.presencas >= 75 ? "#10B981" : "#EF4444" }} /></div>
+                        <span className={`text-xs font-bold ${c.presencas >= 75 ? "text-emerald-600" : "text-red-600"}`}>{c.presencas}%</span>
+                      </div>
+                    </Td>
+                    <Td className="text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <div className="w-16 bg-slate-200 rounded-full h-1.5"><div className="h-1.5 rounded-full bg-blue-500" style={{ width: `${c.elearning}%` }} /></div>
+                        <span className="text-xs font-bold text-blue-600">{c.elearning}%</span>
+                      </div>
+                    </Td>
+                    <Td className="text-center"><span className={`text-sm font-bold ${c.nota >= 10 ? "text-emerald-600" : "text-red-600"}`}>{c.nota}/20</span></Td>
+                    <Td className="text-center"><span className={`text-xs font-bold px-2.5 py-1 rounded-full ${elegivel ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>{elegivel ? "Elegível" : "Não elegível"}</span></Td>
+                    <Td className="text-center">
+                      {c.certificado
+                        ? <div className="flex items-center justify-center gap-1"><span className="text-xs text-emerald-600 font-semibold">Emitido</span><ActBtn icon={I.eye} label="Ver certificado emitido" color="gray" onClick={() => onView?.({ nome: c.nome, nota: c.nota, curso, turma, data: "2026-09-08" })} /></div>
+                        : <button onClick={() => onUpload?.(c.id)} disabled={!elegivel} className="text-xs font-semibold px-2.5 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed">Upload</button>}
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab; onNavigate?: (v: View) => void }) {
+  const { gold, toggleGold, setGoldCronograma, patchGold } = useTurmas();
+  const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma } = useLists();
+  const turma = gold.find(t => t.id === turmaId) ?? gold[0];
+  const activa = isTurmaActiva(turma);
+  const membros = formandosTurmas.filter(f => f.turmaId === turma.id);
+  const pagos = membros.filter(f => f.pago).length;
+  const vagasLivres = turma.vagas - turma.totalAlunos;
+  const sessoesTurma = turma.cronograma.length ? cronogramaToSessoes(turma.cronograma) : sessoesSample;
+  const [fichaOpen, setFichaOpen] = useState<FormandoRecord | null>(null);
+  const [apagarFormando, setApagarFormando] = useState<FormandoRecord | null>(null);
+  const [transferirFormando, setTransferirFormando] = useState<FormandoRecord | null>(null);
+  const [tab, setTab] = useState<CockpitTab>(initialTab);
+  const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
+  const [planos, setPlanos] = useState<Record<number, PlanoSessaoData>>(defaultPlanos);
+  const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
+  const [sumarios, setSumarios] = useState<Record<number, SumarioSessaoData>>(defaultSumarios);
+  const [presencasSession, setPresencasSession] = useState<SessaoMeta | null>(null);
+  const [presencasBySessao, setPresencasBySessao] = useState<Record<number, { id: number; nome: string; presente: boolean }[]>>({});
+  const [uploadCert, setUploadCert] = useState<number | null>(null);
+  const [certsIssued, setCertsIssued] = useState<Record<number, boolean>>({});
+  const [verCert, setVerCert] = useState<CertificadoPreview | null>(null);
+  const [exportTurma, setExportTurma] = useState<ExportTurmaInfo | null>(null);
+  const [formadorOpen, setFormadorOpen] = useState<string | null>(null);
+  const [novaSessao, setNovaSessao] = useState(false);
+  const [formadoresSessao, setFormadoresSessao] = useState<string[]>(["Isac Silva"]);
+  useEffect(() => {
+    apiDriveFiles({ kind: "certificado", regime: "gold", turma: turma.nome }).then(r => {
+      setCertsIssued(prev => {
+        const next = { ...prev };
+        for (const f of r.files) {
+          const id = Number(f.formando);
+          if (Number.isFinite(id)) next[id] = true;
+        }
+        return next;
+      });
+    }).catch(() => undefined);
+  }, [turma.nome]);
+  const formadorOptsSessao = useFormadorOptions(formadoresSessao);
+  const [moduloSessao, setModuloSessao] = useState<string[]>([]);
+  const [dataSessao, setDataSessao] = useState("");
+  const [horaSessao, setHoraSessao] = useState("09:00");
+  const [addFormando, setAddFormando] = useState(false);
+  const [novoNome, setNovoNome] = useState("");
+  const [novoEmail, setNovoEmail] = useState("");
+  const [novoTelf, setNovoTelf] = useState("");
+  const [editTurma, setEditTurma] = useState(false);
+  const [editNome, setEditNome] = useState("");
+  const [editLocal, setEditLocal] = useState("");
+  const [editHorario, setEditHorario] = useState("");
+  const [editFormador, setEditFormador] = useState("");
+  const [editInicio, setEditInicio] = useState("");
+  const [editVagas, setEditVagas] = useState(16);
+  const formadorOpts = useFormadorOptions();
+  useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
+  const nomesCockpit = membros.map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }));
+
+  return (
+    <>
+      <div className="space-y-5">
+        {/* Hero card */}
+        <div className="bg-gradient-to-br from-[#0F172A] to-[#1E293B] rounded-2xl p-5 text-white">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="bg-amber-500 text-white text-xs font-bold px-2.5 py-1 rounded-lg">{turma.nome}</span>
+                {estadoBadge(turma.estado)}
+                <TurmaActivaToggle compact light activa={activa} onChange={v => toggleGold(turma.id, v)} />
+              </div>
+              <p className="text-lg font-bold mt-1">{turma.curso}</p>
+              <div className="flex flex-wrap gap-4 mt-2 text-slate-300 text-xs">
+                <span className="flex items-center gap-1">{I.location} {turma.local}</span>
+                <span className="flex items-center gap-1">{I.calendar} {turma.dataInicio}</span>
+                <span className="flex items-center gap-1">{I.school} {turma.horario}</span>
+              </div>
+            </div>
+            <div className="flex gap-3 flex-shrink-0">
+              <button onClick={() => {
+                setEditNome(turma.nome); setEditLocal(turma.local); setEditHorario(turma.horario);
+                setEditFormador(turma.formador); setEditInicio(turma.dataInicio); setEditVagas(turma.vagas);
+                setEditTurma(true);
+              }} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>
+              <button type="button" onClick={() => setExportTurma({ nome: turma.nome, curso: turma.curso, local: turma.local, formandos: turma.totalAlunos, accent: "gold" })} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-lg transition-colors" aria-label="Exportar turma">{I.download}</button>
+            </div>
+          </div>
+          {/* Progress bar */}
+          <div className="mt-4">
+            <div className="flex justify-between text-xs mb-1.5">
+              <span className="text-slate-300">{turma.totalAlunos} formandos inscritos</span>
+              <span className={vagasLivres === 0 ? "text-red-400 font-bold" : vagasLivres <= 3 ? "text-amber-400 font-bold" : "text-emerald-400"}>
+                {vagasLivres === 0 ? "LOTADA" : `${vagasLivres} vagas livres`}
+              </span>
+            </div>
+            <div className="w-full bg-white/10 rounded-full h-2">
+              <div className="h-2 rounded-full transition-all" style={{ width: `${(turma.totalAlunos / turma.vagas) * 100}%`, backgroundColor: vagasLivres === 0 ? "#EF4444" : vagasLivres <= 3 ? "#F59E0B" : "#10B981" }} />
+            </div>
+            <div className="flex justify-between text-xs mt-1 text-slate-400">
+              <span>0</span><span>{turma.vagas} vagas total</span>
+            </div>
+          </div>
+        </div>
+
+        {(() => {
+          const porPagar = membros.filter(f => !f.pago).length;
+          const dtp = dtpPctGold(turma.id);
+          const semSumario = sessoesTurma.filter(s => !sumarioPreenchido(sumarios[s.n])).length;
+          const next: NextAction[] = [];
+          if (dtp < 70) next.push({ tone: "error", title: `DTP a ${dtp}%`, detail: "O dossiê bloqueia o fecho da turma.", onClick: () => setTab("dtp") });
+          if (porPagar) next.push({ tone: "warn", title: `${porPagar} por pagar`, detail: "Gerar MB ou confirmar na ficha do formando.", onClick: () => setTab("overview") });
+          if (semSumario) next.push({ tone: "warn", title: `${semSumario} sessões sem sumário`, detail: "O formador ainda não fechou a sessão.", onClick: () => setTab("sessoes") });
+          if (vagasLivres === 0) next.push({ tone: "info", title: "Turma lotada", detail: "Novas pré-inscrições não entram aqui.", onClick: () => setTab("overview") });
+          return <NextActions accent="gold" actions={next.slice(0, 3)} />;
+        })()}
+
+        <TurmaTabBar tab={tab} onChange={setTab} accent="gold" dtpPct={dtpPctGold(turma.id)} />
+
+        {!activa && (
+          <TurmaInactivaBanner nome={turma.nome} onActivate={() => toggleGold(turma.id, true)} />
+        )}
+
+        {tab === "cronograma" && (
+          <CronogramaEditor
+            layout="page"
+            sessoes={turma.cronograma}
+            onChange={next => setGoldCronograma(turma.id, next)}
+            inicio={turma.dataInicio}
+            horario={turma.horario}
+            horas={turma.horas}
+            formador={turma.formador}
+            curso={turma.curso}
+          />
+        )}
+
+        {tab === "dtp" && (
+          <DtpPanel regime="gold" turma={{ codigo: turma.nome, id: turma.id, titulo: turma.curso, sub: `${turma.local} · ${turma.horario}` }} />
+        )}
+        {tab === "sessoes" && (
+          <SessoesTurmaTab
+            accent="gold"
+            turmaNome={turma.nome}
+            sessoes={sessoesTurma}
+            sumarios={sumarios}
+            onNovaSessao={() => { setFormadoresSessao(turma.formador ? [turma.formador] : []); setModuloSessao([]); setNovaSessao(true); }}
+            onPlano={setPlanoSessao}
+            onSumario={setSumarioSessao}
+            onPresencas={setPresencasSession}
+            onOpenFormador={setFormadorOpen}
+          />
+        )}
+        {tab === "documentos" && <DocumentosTurmaTab regime="gold" curso={turma.curso} />}
+        {tab === "certificados" && <CertificadosTurmaTab formandos={nomesCockpit} issued={certsIssued} onUpload={id => setUploadCert(id)} onView={setVerCert} curso={turma.curso} turma={turma.nome} />}
+
+        {tab === "overview" && <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { l: "Formandos", v: turma.totalAlunos, c: "text-slate-800" },
+              { l: "Pagamentos ok", v: `${pagos}/${membros.length}`, c: pagos === membros.length ? "text-emerald-600" : "text-amber-600" },
+              { l: "Receita confirmada", v: `€ ${pagos * 125}`, c: "text-emerald-600" },
+              { l: "Por cobrar", v: `€ ${(membros.length - pagos) * 125}`, c: (membros.length - pagos) > 0 ? "text-amber-600" : "text-slate-400" },
+            ].map(s => (
+              <Card key={s.l} className="p-4">
+                <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">{s.l}</p>
+                <p className={`text-xl font-bold ${s.c}`}>{s.v}</p>
+              </Card>
+            ))}
+          </div>
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Programa de Formação</p>
+              <button onClick={() => onNavigate?.("gold-cursos")} className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800">{I.edit} Editar programa →</button>
+            </div>
+            <div className="space-y-2">
+              {[
+                "Módulo 1 - Fundamentos da Formação Profissional (8h)",
+                "Módulo 2 - Planeamento e Organização da Formação (16h)",
+                "Módulo 3 - Comunicação e Dinamização de Grupos (16h)",
+                "Módulo 4 - Avaliação das Aprendizagens (8h)",
+                "Módulo 5 - Elaboração do Portefólio (8h)",
+              ].map((line, i) => (
+                <div key={i} className="flex items-start gap-2 text-sm text-slate-700">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 flex-shrink-0" />
+                  <span>{line}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+        {/* Formandos table */}
+        <Card>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+            <p className="text-sm font-semibold text-slate-700">Lista de Formandos</p>
+            {activa
+              ? <NewBtn label="Adicionar" onClick={() => setAddFormando(true)} />
+              : <button disabled title="Turma inativa - não aceita novas inscrições" className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-200 text-slate-400 text-sm font-semibold rounded-lg cursor-not-allowed">Adicionar</button>}
+          </div>
+          {membros.length === 0 && (
+            <EmptyHint text="Ainda sem formandos nesta turma." action={activa ? "Adicionar o primeiro formando" : undefined} onAction={activa ? () => setAddFormando(true) : undefined} />
+          )}
+          <div className="md:hidden p-3 space-y-2">
+            {membros.map(f => (
+              <MobileCard
+                key={f.id}
+                title={`${f.nome} ${f.apelido}`}
+                sub={f.email}
+                badge={f.pago ? <span className="text-[11px] font-bold text-emerald-700">Pago</span> : <span className="text-[11px] font-bold text-amber-700">Por pagar</span>}
+                meta={[f.telf, f.inscrito.slice(0, 10)]}
+                onOpen={() => setFichaOpen(f)}
+                actions={[
+                  { label: "Ficha", icon: I.eye, onClick: () => setFichaOpen(f) },
+                  { label: "Transferir", icon: I.transfer, tone: "purple", onClick: () => setTransferirFormando(f) },
+                  { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagarFormando(f) },
+                ]}
+              />
+            ))}
+          </div>
+          <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
+            <table className="w-full text-sm">
+              <thead><tr><Th>Nome</Th><Th>Contacto</Th><Th>Inscrito a</Th><Th className="text-center">Pago</Th><Th>Método</Th><Th>Ações</Th></tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {membros.map(f => (
+                  <tr key={f.id} className="hover:bg-slate-50 transition-colors">
+                    <Td>
+                      <button onClick={() => setFichaOpen(f)} className="text-left">
+                        <p className="text-xs font-semibold text-blue-600 hover:text-blue-800">{f.nome} {f.apelido}</p>
+                        <p className="text-xs text-slate-400 truncate max-w-[140px]">{f.email}</p>
+                      </button>
+                    </Td>
+                    <Td className="font-mono text-xs text-slate-500">{f.telf}</Td>
+                    <Td className="font-mono text-xs text-slate-500 whitespace-nowrap">{f.inscrito.slice(0, 10)}</Td>
+                    <Td className="text-center">
+                      <span className={`w-5 h-5 inline-flex items-center justify-center rounded-full text-white ${f.pago ? "bg-emerald-500" : "bg-slate-200"}`}>
+                        {f.pago ? I.check : ""}
+                      </span>
+                    </Td>
+                    <Td className="text-xs text-slate-600">{f.metodo}</Td>
+                    <Td>
+                      <RowActions actions={[
+                        { label: "Ficha", icon: I.eye, onClick: () => setFichaOpen(f) },
+                        { label: "Transferir", icon: I.transfer, tone: "purple", onClick: () => setTransferirFormando(f) },
+                        { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagarFormando(f) },
+                      ]} />
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormadoresAtribuidosCard
+            sessoes={turma.cronograma}
+            fallback={turma.formador}
+            onOpen={setFormadorOpen}
+          />
+          <Card className="p-4">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Próximas Sessões</p>
+            <div className="space-y-2">
+              {(turma.cronograma.length ? turma.cronograma : []).filter(s => s.data >= "2026-09-06").slice(0, 3).map((s, i) => (
+                <div key={s.id ?? i} className="flex items-center gap-2 text-xs">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
+                  <span className="text-slate-600">{formatSessaoLine(s)}</span>
+                </div>
+              ))}
+              {turma.cronograma.filter(s => s.data >= "2026-09-06").length === 0 && (
+                <p className="text-xs text-slate-400">Sem sessões futuras. Edite o cronograma da turma.</p>
+              )}
+            </div>
+          </Card>
+        </div>
+        </>}
+      </div>
+
+      <SlideOver open={!!fichaOpen} onClose={() => setFichaOpen(null)} title="Ficha do Formando" sub={fichaOpen ? `#${fichaOpen.id}` : ""} size="lg">
+        {fichaOpen && <FichaFormando formando={fichaOpen} onClose={() => setFichaOpen(null)} initialTab="documentos" />}
+      </SlideOver>
+      <ConfirmEliminarFormandoModal
+        open={!!apagarFormando}
+        onClose={() => setApagarFormando(null)}
+        nome={apagarFormando ? `${apagarFormando.nome} ${apagarFormando.apelido}` : ""}
+        turma={turma.nome}
+        onConfirm={() => {
+          if (!apagarFormando) return;
+          removeFormandoTurma(apagarFormando.id);
+          patchGold(turma.id, { totalAlunos: Math.max(0, turma.totalAlunos - 1) });
+          if (fichaOpen?.id === apagarFormando.id) setFichaOpen(null);
+        }}
+      />
+      <TransferirTurmaModal
+        open={!!transferirFormando}
+        onClose={() => setTransferirFormando(null)}
+        nome={transferirFormando ? `${transferirFormando.nome} ${transferirFormando.apelido}` : ""}
+        turmaAtual={turma.nome}
+        destinos={gold.filter(t => t.id !== turma.id).map(t => ({
+          id: t.id, nome: t.nome, curso: t.curso, horario: t.horario, local: t.local,
+          ocupadas: t.totalAlunos, vagas: t.vagas, activa: isTurmaActiva(t),
+        }))}
+        onTransfer={dest => {
+          if (!transferirFormando) return;
+          patchFormandoTurma(transferirFormando.id, {
+            turma: dest.nome, turmaId: dest.id, curso: dest.curso, local: dest.local,
+          });
+          patchGold(turma.id, { totalAlunos: Math.max(0, turma.totalAlunos - 1) });
+          patchGold(dest.id, { totalAlunos: dest.ocupadas + 1 });
+          if (fichaOpen?.id === transferirFormando.id) setFichaOpen(null);
+        }}
+      />
+      <PlanoSessaoModal
+        open={!!planoSessao}
+        onClose={() => setPlanoSessao(null)}
+        sessao={planoSessao ?? undefined}
+        plano={planoSessao ? (planos[planoSessao.n] ?? emptyPlano()) : emptyPlano()}
+        onSave={data => { if (planoSessao) setPlanos(prev => ({ ...prev, [planoSessao.n]: data })); }}
+      />
+      <SumarioSessaoModal
+        open={!!sumarioSessao}
+        onClose={() => setSumarioSessao(null)}
+        sessao={sumarioSessao ?? undefined}
+        sumario={sumarioSessao ? (sumarios[sumarioSessao.n] ?? emptySumario()) : emptySumario()}
+        onSave={data => { if (sumarioSessao) setSumarios(prev => ({ ...prev, [sumarioSessao.n]: data })); }}
+      />
+      <PresencasSessaoModal
+        open={!!presencasSession}
+        onClose={() => setPresencasSession(null)}
+        sessao={presencasSession ?? undefined}
+        formandos={nomesCockpit}
+        onSave={rows => { if (presencasSession) setPresencasBySessao(p => ({ ...p, [presencasSession.n]: rows })); }}
+      />
+      <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado"
+        context={{ kind: "certificado", regime: "gold", turma: turma.nome, formando: uploadCert != null ? String(uploadCert) : undefined, label: "Certificado" }}
+        onConfirm={() => { if (uploadCert != null) setCertsIssued(p => ({ ...p, [uploadCert]: true })); }} />
+      <CertificadoVerModal open={!!verCert} onClose={() => setVerCert(null)} cert={verCert} accent="gold" />
+      <ExportTurmaModal open={!!exportTurma} onClose={() => setExportTurma(null)} turma={exportTurma} />
+      <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? ""} />
+      <SlideOver open={novaSessao} onClose={() => setNovaSessao(false)} title="Nova sessão" sub={turma.nome}>
+        <div className="p-5 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Data"><input type="date" className={iCls} value={dataSessao} onChange={e => setDataSessao(e.target.value)} /></Field>
+            <Field label="Hora início"><input type="time" className={iCls} value={horaSessao} onChange={e => setHoraSessao(e.target.value)} /></Field>
+          </div>
+          <Field label="Formadores">
+            <MultiSearchSelect
+              values={formadoresSessao}
+              onChange={setFormadoresSessao}
+              options={formadorOptsSessao}
+              placeholder="Pesquisar formador…"
+              noneLabel="Selecionar formadores…"
+              unitSingular="formador"
+              unitPlural="formadores"
+            />
+          </Field>
+          <Field label="Módulos">
+            <MultiSearchSelect
+              values={moduloSessao}
+              onChange={setModuloSessao}
+              options={modulosOptsForCurso(turma.curso)}
+              placeholder="Pesquisar módulo do curso…"
+              noneLabel="Selecionar módulos…"
+              unitSingular="módulo"
+              unitPlural="módulos"
+            />
+          </Field>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setNovaSessao(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={() => {
+              if (!dataSessao) return;
+              const [h, m] = (horaSessao || "09:00").split(":").map(Number);
+              const endH = String((h || 9) + 4).padStart(2, "0");
+              setGoldCronograma(turma.id, [...turma.cronograma, {
+                id: `s-manual-${Date.now()}`,
+                data: dataSessao,
+                horaInicio: horaSessao || "09:00",
+                horaFim: `${endH}:${String(m || 0).padStart(2, "0")}`,
+                modulos: moduloSessao,
+                formadores: formadoresSessao,
+              }]);
+              setNovaSessao(false);
+            }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Criar sessão</button>
+          </div>
+        </div>
+      </SlideOver>
+      <SlideOver open={addFormando} onClose={() => setAddFormando(false)} title="Inscrever formando" sub={turma.nome}>
+        <div className="p-5 space-y-3">
+          {activa ? (
+            <>
+              <p className="text-xs text-slate-500">A turma está ativa e tem {Math.max(0, turma.vagas - turma.totalAlunos)} vagas. Só turmas ativas aceitam novas inscrições.</p>
+              <Field label="Nome"><input className={iCls} value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="Nome completo" /></Field>
+              <Field label="Email"><input className={iCls} type="email" value={novoEmail} onChange={e => setNovoEmail(e.target.value)} /></Field>
+              <Field label="Telemóvel"><input className={iCls} value={novoTelf} onChange={e => setNovoTelf(e.target.value)} /></Field>
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setAddFormando(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+                <button disabled={!novoNome.trim() || vagasLivres <= 0} onClick={() => {
+                  const { nome, apelido } = splitNome(novoNome);
+                  addFormandoTurma({
+                    id: nextListId(formandosTurmas),
+                    nome, apelido: apelido || "-",
+                    telf: novoTelf.trim() || "-",
+                    email: novoEmail.trim() || `${nome.toLowerCase()}@mail.pt`,
+                    inscrito: nowStamp(),
+                    local: turma.local, curso: turma.curso, turma: turma.nome, turmaId: turma.id,
+                    estado: "Formando", pago: false, valor: 125, metodo: "-",
+                  });
+                  patchGold(turma.id, { totalAlunos: turma.totalAlunos + 1 });
+                  setAddFormando(false); setNovoNome(""); setNovoEmail(""); setNovoTelf("");
+                }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Inscrever</button>
+              </div>
+            </>
+          ) : (
+            <TurmaInactivaBanner nome={turma.nome} onActivate={() => toggleGold(turma.id, true)} />
+          )}
+        </div>
+      </SlideOver>
+      <SlideOver open={editTurma} onClose={() => setEditTurma(false)} title={`Editar ${turma.nome}`} sub="Dados da turma Gold" size="lg">
+        <div className="p-5 space-y-3">
+          <Field label="Código interno"><input className={iCls} value={editNome} onChange={e => setEditNome(e.target.value)} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Local"><SearchSelect value={editLocal} onChange={setEditLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
+            <Field label="Horário"><SearchSelect value={editHorario} onChange={setEditHorario} options={horariosOpts} /></Field>
+          </div>
+          <Field label="Formador"><SearchSelect value={editFormador} onChange={setEditFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Data de início"><input type="date" className={iCls} value={editInicio} onChange={e => setEditInicio(e.target.value)} /></Field>
+            <Field label="Vagas"><input type="number" className={iCls} value={editVagas} onChange={e => setEditVagas(Number(e.target.value) || 0)} /></Field>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setEditTurma(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+            <button onClick={() => {
+              patchGold(turma.id, { nome: editNome.trim() || turma.nome, local: editLocal, horario: editHorario, formador: editFormador, dataInicio: editInicio, vagas: editVagas });
+              setEditTurma(false);
+            }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+          </div>
+        </div>
+      </SlideOver>
+    </>
+  );
+}
+
+function dtpPctGold(id: number) {
+  const map: Record<number, number> = { 947: 72, 946: 61, 945: 40, 944: 55, 943: 48, 940: 68, 939: 52, 938: 58, 937: 91, 936: 88 };
+  return map[id] ?? 50;
+}
+function dtpPctFin(id: number) {
+  const map: Record<number, number> = { 222: 38, 220: 62, 219: 71, 218: 54, 217: 66 };
+  return map[id] ?? 50;
+}
+
+function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (id: number) => void }) {
+  const { gold, fin } = useTurmas();
+  const isGold = regime === "gold";
+  const [filtroCurso, setFiltroCurso] = useState("");
+  const [filtroLocal, setFiltroLocal] = useState("");
+  const all = isGold
+    ? gold.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, local: t.local, extra: `${t.local} · ${t.horario}`, estado: t.estado, pct: dtpPctGold(t.id) }))
+    : fin.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, local: t.local, extra: `UFCD ${t.ufcdCod} · ${t.formador}`, estado: isTurmaActiva(t) ? t.estado : "Inativa", pct: dtpPctFin(t.id) }));
+  const rows = all.filter(t => matchesFilter(t.curso, filtroCurso) && (!isGold || matchesFilter(t.local, filtroLocal)));
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        title={isGold ? "Dossiê TP - Gold" : "Dossiê TP - Financiada"}
+        sub="Na ENA o DTP vive dentro da turma. O código interno (VNG-SM-07/09, UFCD 3564) identifica a turma - não é uma “ação” à parte."
+      />
+      <ViewFilters
+        accent={isGold ? "gold" : "fin"}
+        fields={[
+          { label: "Curso", value: filtroCurso, onChange: setFiltroCurso, options: uniqueOpts(all.map(t => t.curso)) },
+          ...(isGold ? [{ label: "Local", value: filtroLocal, onChange: setFiltroLocal, options: uniqueOpts(all.map(t => t.local)) }] : []),
+        ]}
+        onClear={() => { setFiltroCurso(""); setFiltroLocal(""); }}
+      />
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr><Th>Código interno</Th><Th>Curso</Th><Th>Detalhe</Th><Th>Estado</Th><Th>DTP</Th><Th>Ações</Th></tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map(t => (
+                <tr key={t.id} className="hover:bg-slate-50">
+                  <Td>
+                    <button onClick={() => onOpen(t.id)} className="text-xs font-bold font-mono text-blue-600 hover:text-blue-800">{t.codigo}</button>
+                  </Td>
+                  <Td className="text-xs text-slate-600 max-w-[200px]">{t.curso}</Td>
+                  <Td className="text-xs text-slate-500">{t.extra}</Td>
+                  <Td>{estadoBadge(t.estado)}</Td>
+                  <Td>
+                    <div className="flex items-center gap-2 min-w-[110px]">
+                      <div className="flex-1 bg-slate-100 rounded-full h-1.5">
+                        <div className="h-1.5 rounded-full" style={{ width: `${t.pct}%`, backgroundColor: t.pct >= 80 ? "#10B981" : t.pct >= 50 ? (isGold ? "#F59E0B" : "#2563EB") : "#EF4444" }} />
+                      </div>
+                      <span className={`text-xs font-bold ${t.pct >= 80 ? "text-emerald-600" : t.pct >= 50 ? "text-amber-600" : "text-red-500"}`}>{t.pct}%</span>
+                    </div>
+                  </Td>
+                  <Td>
+                    <button onClick={() => onOpen(t.id)} className={`px-3 py-1.5 text-xs font-semibold rounded-lg text-white ${isGold ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}>
+                      Abrir dossiê
+                    </button>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab; onNavigate?: (v: View | NavTarget) => void }) {
+  const { fin, toggleFin, setFinCronograma, patchFin } = useTurmas();
+  const { formandosFin, addFormandoFin, patchFormandoFin, removeFormandoFin } = useLists();
+  const turma = fin.find(t => t.id === turmaId) ?? fin.find(t => t.ufcdCod === "3564") ?? fin[0];
+  const activa = isTurmaActiva(turma);
+  const sessoesTurma = turma.cronograma.length ? cronogramaToSessoes(turma.cronograma) : finSessoesSample;
+  const [tab, setTab] = useState<CockpitTab>(initialTab);
+  const [formadorOpen, setFormadorOpen] = useState<string | null>(null);
+  const [uploadCert, setUploadCert] = useState<number | null>(null);
+  const [certsIssued, setCertsIssued] = useState<Record<number, boolean>>({});
+  const [verCert, setVerCert] = useState<CertificadoPreview | null>(null);
+  const [exportTurma, setExportTurma] = useState<ExportTurmaInfo | null>(null);
+  useEffect(() => {
+    apiDriveFiles({ kind: "certificado", regime: "fin", turma: turma.nome }).then(r => {
+      setCertsIssued(prev => {
+        const next = { ...prev };
+        for (const f of r.files) {
+          const id = Number(f.formando);
+          if (Number.isFinite(id)) next[id] = true;
+        }
+        return next;
+      });
+    }).catch(() => undefined);
+  }, [turma.nome]);
+  const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
+  const [planos, setPlanos] = useState<Record<number, PlanoSessaoData>>(defaultPlanos);
+  const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
+  const [sumarios, setSumarios] = useState<Record<number, SumarioSessaoData>>(defaultSumariosFin);
+  const [presencasSession, setPresencasSessio

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { CronogramaGrelha } from "./CronogramaGrelha";
-import { generateEnaCronograma } from "./cronogramaGrelha";
+import { generateEnaCronograma, SESSAO_MODALIDADE_OPTS } from "./cronogramaGrelha";
 import { MultiSearchSelect, modulosOptsForCurso } from "./FormKit";
 import { useFormadorOptions } from "./FormadoresContext";
 import {
@@ -20,6 +20,7 @@ import {
   sessaoDuracaoHoras,
   sessaoEstado,
   sessaoFormadores,
+  sessaoModalidade,
   sessaoModulos,
   weekdayShort,
   type SessaoCronograma,
@@ -198,17 +199,44 @@ function SessaoRow({
       </div>
       {expanded && (
         <div className="px-3 pb-3 sm:px-4 sm:pb-4 border-t border-slate-100 pt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="col-span-2 sm:col-span-4">
+            <span className="block text-[11px] font-semibold text-slate-500 mb-1">Metodologia da sessão</span>
+            <div className="flex flex-wrap gap-1.5">
+              {SESSAO_MODALIDADE_OPTS.map(opt => {
+                const on = sessaoModalidade(sessao) === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => onPatch(opt.value === "auto"
+                      ? { modalidade: opt.value, horaInicio: "", horaFim: "" }
+                      : { modalidade: opt.value })}
+                    className={`px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border ${on
+                      ? gold ? "border-amber-400 bg-amber-50 text-amber-800" : "border-blue-400 bg-blue-50 text-blue-800"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            {sessaoModalidade(sessao) === "auto" && (
+              <p className="text-[11px] text-slate-400 mt-1">
+                Sessões assíncronas não ocupam sala nem horas de contacto: passam para a linha de auto-aprendizagem da grelha.
+              </p>
+            )}
+          </div>
           <label className="block">
             <span className="block text-[11px] font-semibold text-slate-500 mb-1">Data</span>
             <input type="date" value={sessao.data} onChange={e => onPatch({ data: e.target.value })} className={iCls} />
           </label>
           <label className="block">
             <span className="block text-[11px] font-semibold text-slate-500 mb-1">Início</span>
-            <input type="time" value={sessao.horaInicio} onChange={e => onPatch({ horaInicio: e.target.value })} className={iCls} />
+            <input type="time" value={sessao.horaInicio} onChange={e => onPatch({ horaInicio: e.target.value })} className={iCls} disabled={sessaoModalidade(sessao) === "auto"} />
           </label>
           <label className="block">
             <span className="block text-[11px] font-semibold text-slate-500 mb-1">Fim</span>
-            <input type="time" value={sessao.horaFim} onChange={e => onPatch({ horaFim: e.target.value })} className={iCls} />
+            <input type="time" value={sessao.horaFim} onChange={e => onPatch({ horaFim: e.target.value })} className={iCls} disabled={sessaoModalidade(sessao) === "auto"} />
           </label>
           <label className="block col-span-2 sm:col-span-4">
             <span className="block text-[11px] font-semibold text-slate-500 mb-1">Formadores desta sessão</span>
@@ -265,9 +293,15 @@ export function CronogramaEditor({
   const next = proximaSessao(sessoes);
   const periodo = periodoCronograma(sessoes);
   const lectivas = useMemo(() => sessoes.filter(isSessaoLectiva), [sessoes]);
-  const groups = useMemo(() => groupCronogramaByMonth(lectivas), [lectivas]);
   const [confirmRegen, setConfirmRegen] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  // A sessão aberta continua na lista mesmo depois de passar a assíncrona, para
+  // dar para voltar atrás sem a ir procurar à grelha.
+  const listadas = useMemo(
+    () => sessoes.filter(s => isSessaoLectiva(s) || (openId !== null && s.id === openId)),
+    [sessoes, openId],
+  );
+  const groups = useMemo(() => groupCronogramaByMonth(listadas), [listadas]);
 
   const btn = gold ? "bg-amber-500 hover:bg-amber-600 text-white" : "bg-blue-600 hover:bg-blue-700 text-white";
   const ghost = gold ? "border-amber-200 text-amber-800 hover:bg-amber-50" : "border-blue-200 text-blue-800 hover:bg-blue-50";
@@ -399,7 +433,7 @@ export function CronogramaEditor({
         </p>
       )}
 
-      {lectivas.length > 0 && (
+      {listadas.length > 0 && (
         <div className={page ? "space-y-4" : "max-h-80 overflow-y-auto space-y-3 pr-0.5"}>
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Sessões lectivas (presencial e síncrona)</p>
           {groups.map(g => (

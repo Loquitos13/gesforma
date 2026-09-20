@@ -62,6 +62,21 @@ export const METODOLOGIA_OPTS: { value: Exclude<SessaoModalidade, "matricula" | 
   { value: "auto", label: "Assíncrono / E-learning" },
 ];
 
+/** Metodologias de uma sessão do cronograma (usadas no collapse de cada sessão). */
+export const SESSAO_MODALIDADE_OPTS: { value: Exclude<SessaoModalidade, "matricula" | "avaliacao">; label: string }[] = [
+  { value: "presencial", label: "Presencial" },
+  { value: "sincrona", label: "Síncrona em Vídeo-Conferência" },
+  { value: "auto", label: "Assíncrona / Auto-Aprendizagem" },
+];
+
+/** O que se pode marcar num dia da grelha, incluindo o prazo de avaliação. */
+export const EVENTO_OPTS: { value: Exclude<SessaoModalidade, "matricula">; label: string }[] = [
+  { value: "presencial", label: "Aula presencial" },
+  { value: "sincrona", label: "Síncrona em vídeo-conferência" },
+  { value: "auto", label: "Assíncrona / auto-aprendizagem" },
+  { value: "avaliacao", label: "Limite de entrega / avaliação" },
+];
+
 export function normHora(t: string) {
   const m = (t || "").trim().match(/^(\d{1,2}):(\d{2})/);
   if (!m) return "";
@@ -209,6 +224,28 @@ export function cellLabel(sessoes: SessaoCronograma[], date: string, l: GrelhaLi
   }
   const codes = [...new Set(hits.flatMap(s => (s.modulos ?? []).map(codigoModulo)).filter(Boolean))];
   return codes.join("/");
+}
+
+export function linhaDaSessao(s: SessaoCronograma): GrelhaLinha | null {
+  const m = sessaoModalidade(s);
+  if (m === "matricula") return null;
+  return buildLinha(m, s.horaInicio || "", s.horaFim || "");
+}
+
+export type EventoDia = { linha: GrelhaLinha; sessoes: SessaoCronograma[] };
+
+/** Eventos marcados num dia, agrupados pela linha da grelha a que pertencem. */
+export function eventosDoDia(sessoes: SessaoCronograma[], date: string): EventoDia[] {
+  const map = new Map<string, EventoDia>();
+  for (const s of sessoes) {
+    if (s.data !== date) continue;
+    const linha = linhaDaSessao(s);
+    if (!linha) continue;
+    const hit = map.get(linha.id);
+    if (hit) hit.sessoes.push(s);
+    else map.set(linha.id, { linha, sessoes: [s] });
+  }
+  return [...map.values()].sort((a, b) => a.linha.id.localeCompare(b.linha.id));
 }
 
 export function linhasFromSessoes(sessoes: SessaoCronograma[], horario?: string): GrelhaLinha[] {

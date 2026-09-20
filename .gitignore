@@ -8,3 +8,4 @@ server/data
 backups/*.dump
 backups/*.tgz
 backups/*.sql
+.deploy-payload

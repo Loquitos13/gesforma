@@ -33,6 +33,7 @@ const PATCHED = [
   "src/TurmaCronograma.tsx",
   "src/cronogramaGrelha.ts",
   "src/cronogramaPrint.ts",
+  "src/turmaModel.ts",
 ];
 
 const SKIP = new Set([
@@ -110,14 +111,24 @@ for (const file of tracked) {
   manifest.push({ dest: file, parts });
 }
 
-const manifestBuf = Buffer.from(JSON.stringify(manifest));
-uploads.push({ file: ".deploy-parts/manifest.json", sha: add(".deploy-parts/manifest.json", manifestBuf), buf: manifestBuf });
-
+// O blob do patch também viaja partido: um upload de 20 kB não passa no
+// limite de argumento da ferramenta. O assemble-parts reconstrói o manifesto
+// antes de ler o patch, por isso chega registá-lo como mais um ficheiro.
 const patchJson = Buffer.from(JSON.stringify(Object.fromEntries(PATCHED.map(f => [f, readFileSync(f, "utf8")]))));
 const patchBuf = brotliCompressSync(patchJson, {
   params: { [constants.BROTLI_PARAM_QUALITY]: 11, [constants.BROTLI_PARAM_SIZE_HINT]: patchJson.length },
 });
-uploads.push({ file: ".deploy-parts/patch.br", sha: add(".deploy-parts/patch.br", patchBuf), buf: patchBuf });
+const patchParts = [];
+for (let i = 0, n = 1; i < patchBuf.length; i += CHUNK, n++) {
+  const name = `.deploy-parts/patch.br.${String(n).padStart(3, "0")}`;
+  const buf = patchBuf.subarray(i, i + CHUNK);
+  uploads.push({ file: name, sha: add(name, buf), buf });
+  patchParts.push(name);
+}
+manifest.push({ dest: ".deploy-parts/patch.br", parts: patchParts });
+
+const manifestBuf = Buffer.from(JSON.stringify(manifest));
+uploads.push({ file: ".deploy-parts/manifest.json", sha: add(".deploy-parts/manifest.json", manifestBuf), buf: manifestBuf });
 
 const assembleBuf = readFileSync("scripts/assemble-parts.mjs");
 uploads.push({ file: "scripts/assemble-parts.mjs", sha: add("scripts/assemble-parts.mjs", assembleBuf), buf: assembleBuf });

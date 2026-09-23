@@ -12,6 +12,8 @@ import {
   ModulosView, ConteudosView, FinInscricoesView, BlogTematicasView, ConfiguracoesView,
   DatasFinView, LocaisFinView, AreasTematicasFinView, ModulosFinView, ConteudosFinView,
 } from "./CatalogViews";
+import { CrmMainView } from "./CrmViews";
+import { UsersView } from "./UsersView";
 import { FichaFormando } from "./FormandoFicha";
 import { ErrorBoundary } from "./ErrorBoundary";
 import {
@@ -112,6 +114,8 @@ const I = {
   attend: <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/></svg>,
   folder: <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>,
   transfer: <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path d="M8 5a1 1 0 011 1v8a1 1 0 11-2 0V8.414L5.707 9.707a1 1 0 11-1.414-1.414l3-3A1 1 0 018 5zm4 10a1 1 0 01-1-1V6a1 1 0 112 0v5.586l1.293-1.293a1 1 0 111.414 1.414l-3 3A1 1 0 0112 15z"/></svg>,
+  funnel: <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd"/></svg>,
+  handshake: <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"/></svg>,
 };
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -123,7 +127,8 @@ type View =
   | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-formadores" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
   | "fin-modulos" | "fin-conteudos" | "fin-datas" | "fin-locais" | "fin-areas-tematicas"
   | "formadores" | "blog-posts" | "blog-tematicas"
-  | "emails" | "pagamentos" | "configuracoes" | "notificacoes";
+  | "emails" | "pagamentos" | "configuracoes" | "notificacoes"
+  | "crm-leads" | "crm-notas" | "crm-parceiros" | "utilizadores";
 
 type CockpitTab = "overview" | "cronograma" | "sessoes" | "documentos" | "dtp" | "certificados";
 type NavTarget = { view: View; turmaId?: number; tab?: CockpitTab; cursoId?: number | "new"; cursoNome?: string };
@@ -4693,6 +4698,11 @@ type NavLeaf = { label: string; view?: View; icon: React.ReactNode; children?: {
 
 const sidebarConfig: NavGroup[] = [
   { group: "Principal", items: [{ label: "Painel", view: "painel", icon: I.home }] },
+  { group: "CRM", items: [
+    { label: "Leads", view: "crm-leads", icon: I.funnel },
+    { label: "Notas Comerciais", view: "crm-notas", icon: I.note },
+    { label: "Parceiros", view: "crm-parceiros", icon: I.handshake },
+  ]},
   { group: "Gold", items: [
     { label: "Pré-Inscrições", view: "gold-preinscricoes", icon: I.clipboard },
     { label: "Formandos", icon: I.users, children: [{ label: "Formandos Turmas", view: "gold-formandos-turmas" }, { label: "Formandos Gold", view: "gold-formandos-gold" }] },
@@ -4726,6 +4736,7 @@ const sidebarConfig: NavGroup[] = [
   { group: "Sistema", items: [
     { label: "Emails Automáticos", view: "emails", icon: I.mail },
     { label: "Pagamentos", view: "pagamentos", icon: I.creditcard },
+    { label: "Gestão de Utilizadores", view: "utilizadores", icon: I.users },
     { label: "Configurações", view: "configuracoes", icon: I.settings },
   ]},
 ];
@@ -4733,7 +4744,7 @@ const sidebarConfig: NavGroup[] = [
 function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v: View | NavTarget) => void; onClose?: () => void }) {
   const { user, logout } = useAuth();
   const [openGroups, setOpenGroups] = useState<string[]>(() => {
-    const open: string[] = ["Principal"];
+    const open: string[] = ["Principal", "CRM"];
     sidebarConfig.forEach(g => {
       if (g.items.some(item => item.view === view || item.children?.some(c => c.view === view))) open.push(g.group);
     });
@@ -4879,6 +4890,10 @@ const viewTitles: Partial<Record<View, string>> = {
   notificacoes: "Notificações",
   formadores: "Formadores Gold", "blog-posts": "Blog - Posts", "blog-tematicas": "Blog - Temáticas",
   emails: "Emails Automáticos", pagamentos: "Pagamentos", configuracoes: "Configurações",
+  "crm-leads": "CRM - Leads e Pipeline",
+  "crm-notas": "CRM - Notas Comerciais",
+  "crm-parceiros": "CRM - Parceiros e Protocolos",
+  utilizadores: "Gestão de Utilizadores",
 };
 
 export default function App() {
@@ -4998,6 +5013,8 @@ function AppShell() {
     }
     if (view.startsWith("gold-")) return [{ label: "Gold", onClick: () => navigate("painel") }, { label: viewTitles[view] ?? "Gold" }];
     if (view.startsWith("fin-")) return [{ label: "Financiada", onClick: () => navigate("painel") }, { label: viewTitles[view] ?? "Financiada" }];
+    if (view.startsWith("crm-")) return [{ label: "CRM", onClick: () => navigate("crm-leads") }, { label: viewTitles[view] ?? "CRM" }];
+    if (view === "utilizadores") return [{ label: "Sistema", onClick: () => navigate("configuracoes") }, { label: "Gestão de Utilizadores" }];
     return [{ label: viewTitles[view] ?? "GesForma" }];
   })();
   const headerDetail = view === "gold-cockpit-turma" && goldTurma
@@ -5011,6 +5028,10 @@ function AppShell() {
   function renderView() {
     switch (view) {
       case "painel": return <PainelView onNavigate={navigate} />;
+      case "crm-leads": return <CrmMainView initialTab="leads" onNavigateTab={tab => navigate(`crm-${tab}` as View)} />;
+      case "crm-notas": return <CrmMainView initialTab="notas" onNavigateTab={tab => navigate(`crm-${tab}` as View)} />;
+      case "crm-parceiros": return <CrmMainView initialTab="parceiros" onNavigateTab={tab => navigate(`crm-${tab}` as View)} />;
+      case "utilizadores": return <UsersView />;
       case "gold-cursos": return <CursosGoldView onOpen={id => { setCursoFichaId(id); go("gold-curso-ficha"); }} />;
       case "gold-curso-ficha": return <GoldCursoFichaScreen cursoId={cursoFichaId} onBack={() => navigate("gold-cursos")} onOpenModulos={nome => navigate({ view: "gold-modulos", cursoNome: nome })} />;
       case "gold-turmas": return <TurmasGoldView onCockpit={openCockpit} />;
@@ -5051,7 +5072,7 @@ function AppShell() {
       case "blog-tematicas": return <BlogTematicasView />;
       case "emails": return <EmailsView />;
       case "pagamentos": return <PagamentosView />;
-      case "configuracoes": return <ConfiguracoesView />;
+      case "configuracoes": return <ConfiguracoesView onNavigate={navigate} />;
       default: return <PainelView onNavigate={navigate} />;
     }
   }

@@ -1378,7 +1378,7 @@ function seedConfigDrafts() {
   return out;
 }
 
-export function ConfiguracoesView() {
+export function ConfiguracoesView({ onNavigate }: { onNavigate?: (view: any) => void } = {}) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState(seedConfigDrafts);
   const [saved, setSaved] = useState(false);
@@ -1410,14 +1410,33 @@ export function ConfiguracoesView() {
       <div className="space-y-4">
         <PageHeader title="Configurações" sub={saved ? "Alterações guardadas com sucesso." : "Parâmetros da entidade: a ENA gere por turmas, não por ação de formação."} />
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {configCards.map(c => (
-            <button key={c.id} type="button" onClick={() => setOpenId(c.id)}
-              className={`text-left bg-white rounded-xl border shadow-sm p-5 hover:border-amber-300 hover:shadow-md transition-all ${openId === c.id ? "border-amber-400 ring-1 ring-amber-200" : "border-slate-200"}`}>
-              <p className="text-sm font-bold text-slate-800">{c.titulo}</p>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed">{c.texto}</p>
-              <p className="text-xs font-semibold text-amber-600 mt-3">Abrir →</p>
-            </button>
-          ))}
+          {configCards.map(c => {
+            if (c.id === "users" && onNavigate) {
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => onNavigate("utilizadores")}
+                  className="text-left bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:border-amber-400 hover:shadow-md transition-all group"
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-bold text-slate-800">{c.titulo}</p>
+                    <span className="text-[10px] uppercase font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded">Menu Sistema</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">Contas de acesso ao GesForma e seleção individual de permissões.</p>
+                  <p className="text-xs font-semibold text-amber-600 mt-3 group-hover:text-amber-700">Abrir Gestão de Utilizadores e Permissões →</p>
+                </button>
+              );
+            }
+            return (
+              <button key={c.id} type="button" onClick={() => setOpenId(c.id)}
+                className={`text-left bg-white rounded-xl border shadow-sm p-5 hover:border-amber-300 hover:shadow-md transition-all ${openId === c.id ? "border-amber-400 ring-1 ring-amber-200" : "border-slate-200"}`}>
+                <p className="text-sm font-bold text-slate-800">{c.titulo}</p>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">{c.texto}</p>
+                <p className="text-xs font-semibold text-amber-600 mt-3">Abrir →</p>
+              </button>
+            );
+          })}
         </div>
       </div>
 

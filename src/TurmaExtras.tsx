@@ -300,7 +300,7 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf = "914 547 
       <SlideOver open={open} onClose={onClose} title={`Perfil - ${nome}`} sub="Formador / Formadora">
         <div className="p-4 space-y-5">
           <div className="flex items-center gap-4 p-4 bg-violet-50 border border-violet-200 rounded-xl">
-            <div className="w-14 h-14 rounded-2xl bg-violet-600 flex items-center justify-center text-white text-xl font-bold flex-shrink-0">{nome[0]}</div>
+            <div className="w-14 h-14 rounded-2xl bg-violet-600 flex items-center justify-center text-white text-xl font-bold flex-shrink-0">{nome ? nome[0] : "F"}</div>
             <div>
               <p className="text-sm font-bold text-slate-800">{nome}</p>
               <p className="text-xs text-slate-500">Formador / Formadora</p>

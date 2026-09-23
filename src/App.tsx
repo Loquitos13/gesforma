@@ -13,6 +13,7 @@ import {
   DatasFinView, LocaisFinView, AreasTematicasFinView, ModulosFinView, ConteudosFinView,
 } from "./CatalogViews";
 import { FichaFormando } from "./FormandoFicha";
+import { ErrorBoundary } from "./ErrorBoundary";
 import {
   PagamentoDetalheModal, ReciboModal, CertificadoVerModal, ExportTurmaModal, NotificacoesView,
   type TransacaoPreview, type CertificadoPreview, type ExportTurmaInfo, type NotifRow,
@@ -2513,28 +2514,115 @@ function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
   );
 }
 
-function FichaFormandoFin({ formando, onClose }: { formando: FormandoFin; onClose: () => void }) {
-  const [tab, setTab] = useState<"info" | "documentos">("documentos");
-  const { formandosFin } = useLists();
-  const live = formandosFin.find(f => f.id === formando.id) ?? formando;
+function FichaFormandoFin({ formando: initialFormando, onClose, initialEditing = false }: { formando: FormandoFin; onClose: () => void; initialEditing?: boolean }) {
+  const [tab, setTab] = useState<"info" | "documentos">(initialEditing ? "info" : "documentos");
+  const [editing, setEditing] = useState(initialEditing);
+  const { formandosFin, patchFormandoFin } = useLists();
+  const live = formandosFin.find(f => f.id === initialFormando.id) ?? initialFormando;
+  const formando = live;
+
+  const [draft, setDraft] = useState({
+    nome: formando.nome,
+    apelido: formando.apelido,
+    email: formando.email,
+    telf: formando.telf,
+    curso: formando.curso,
+    turma: formando.turma,
+    estado: formando.estado,
+  });
+
+  useEffect(() => {
+    setDraft({
+      nome: formando.nome,
+      apelido: formando.apelido,
+      email: formando.email,
+      telf: formando.telf,
+      curso: formando.curso,
+      turma: formando.turma,
+      estado: formando.estado,
+    });
+  }, [formando]);
+
+  const hasChanges =
+    draft.nome.trim() !== formando.nome ||
+    draft.apelido.trim() !== formando.apelido ||
+    draft.email.trim() !== formando.email ||
+    draft.telf.trim() !== formando.telf ||
+    draft.turma !== formando.turma ||
+    draft.curso !== formando.curso ||
+    draft.estado !== formando.estado;
+
+  function handleSave() {
+    const nomeLimpo = draft.nome.trim();
+    if (!nomeLimpo) return;
+    patchFormandoFin(formando.id, {
+      nome: nomeLimpo,
+      apelido: draft.apelido.trim() || "-",
+      email: draft.email.trim() || formando.email,
+      telf: draft.telf.trim() || "-",
+      turma: draft.turma,
+      curso: draft.curso,
+      estado: draft.estado,
+    });
+    setEditing(false);
+  }
+
+  function handleCancel() {
+    setDraft({
+      nome: formando.nome,
+      apelido: formando.apelido,
+      email: formando.email,
+      telf: formando.telf,
+      curso: formando.curso,
+      turma: formando.turma,
+      estado: formando.estado,
+    });
+    setEditing(false);
+  }
+
   return (
     <div className="flex flex-col h-full">
       <div className="px-5 py-4 border-b bg-blue-50 border-blue-100">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white text-lg font-bold flex-shrink-0 bg-blue-600">
-            {live.nome[0]}{live.apelido[0]}
+            {(formando.nome[0] ?? "F")}{(formando.apelido[0] ?? "")}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-slate-800">{live.nome} {live.apelido}</p>
-            <p className="text-xs text-slate-500 truncate">{live.email}</p>
-            <div className="flex items-center gap-2 mt-1">{estadoBadge(live.estado)}<span className="text-xs text-slate-400">{live.turma}</span></div>
+            <p className="font-bold text-slate-800 text-base">{formando.nome} {formando.apelido}</p>
+            <p className="text-xs text-slate-500 truncate">{formando.email}</p>
+            <div className="flex items-center gap-2 mt-1">{estadoBadge(formando.estado)}<span className="text-xs text-slate-400">{formando.turma}</span></div>
           </div>
         </div>
-        <div className="flex gap-2 mt-3 flex-wrap">
-          <a href={`tel:${live.telf}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50">{I.phone} {live.telf}</a>
-          <a href={`mailto:${live.email}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 rounded-lg text-xs font-semibold text-white hover:bg-blue-700">{I.mail} Email</a>
+
+        <div className="flex items-center justify-between gap-2 mt-3 flex-wrap">
+          <div className="flex gap-2 flex-wrap items-center">
+            <a href={`tel:${formando.telf}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50">{I.phone} {formando.telf}</a>
+            <a href={`mailto:${formando.email}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 rounded-lg text-xs font-semibold text-white hover:bg-blue-700">{I.mail} Email</a>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (editing) {
+                handleCancel();
+              } else {
+                setTab("info");
+                setEditing(true);
+              }
+            }}
+            title={editing ? "Fechar edição" : "Editar informações do formando"}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shadow-sm ${
+              editing
+                ? "bg-blue-100 text-blue-900 border-blue-300 hover:bg-blue-200"
+                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            {I.edit}
+            <span>{editing ? "A editar" : "Editar"}</span>
+          </button>
         </div>
       </div>
+
       <div className="flex border-b border-slate-100 px-5 bg-white flex-shrink-0">
         {(["info", "documentos"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
@@ -2543,27 +2631,99 @@ function FichaFormandoFin({ formando, onClose }: { formando: FormandoFin; onClos
           </button>
         ))}
       </div>
-      <div className="flex-1 overflow-y-auto">
+
+      <div className="flex-1 overflow-y-auto p-5 space-y-4">
         {tab === "info" && (
-          <div className="p-5 grid grid-cols-2 gap-3">
-            {[
-              { l: "Curso", v: live.curso },
-              { l: "Turma", v: live.turma },
-              { l: "Telemóvel", v: live.telf },
-              { l: "Email", v: live.email },
-              { l: "Estado", v: live.estado },
-            ].map(f => (
-              <div key={f.l} className="bg-slate-50 rounded-xl p-3">
-                <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{f.l}</p>
-                <p className="text-sm font-semibold text-slate-700 mt-0.5 break-all">{f.v}</p>
+          <div className="space-y-4">
+            {editing ? (
+              <div className="space-y-4 bg-white p-4 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="text-blue-600">{I.edit}</span>
+                    <h3 className="text-sm font-bold text-slate-800">Editar dados do formando</h3>
+                  </div>
+                  {hasChanges ? (
+                    <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
+                      Alterações por guardar
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-400">Sem alterações</span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Nome</label>
+                    <input className={iCls} value={draft.nome} onChange={e => setDraft({ ...draft, nome: e.target.value })} placeholder="Primeiro nome" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Apelido</label>
+                    <input className={iCls} value={draft.apelido} onChange={e => setDraft({ ...draft, apelido: e.target.value })} placeholder="Apelido" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Email</label>
+                    <input className={iCls} type="email" value={draft.email} onChange={e => setDraft({ ...draft, email: e.target.value })} placeholder="email@dominio.pt" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Telemóvel</label>
+                    <input className={iCls} value={draft.telf} onChange={e => setDraft({ ...draft, telf: e.target.value })} placeholder="9xx xxx xxx" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Curso</label>
+                    <input className={iCls} value={draft.curso} onChange={e => setDraft({ ...draft, curso: e.target.value })} placeholder="Curso / UFCD" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Turma</label>
+                    <input className={iCls} value={draft.turma} onChange={e => setDraft({ ...draft, turma: e.target.value })} placeholder="Turma" />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Estado</label>
+                  <select className={iCls} value={draft.estado} onChange={e => setDraft({ ...draft, estado: e.target.value })}>
+                    <option value="Elegível">Elegível</option>
+                    <option value="Ativo">Ativo</option>
+                    <option value="Inactivo">Inactivo</option>
+                    <option value="Formando">Formando</option>
+                  </select>
+                </div>
+
+                {hasChanges && (
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button type="button" onClick={handleCancel} className="px-3.5 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                      Cancelar
+                    </button>
+                    <button type="button" onClick={handleSave} className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm">
+                      Guardar alterações
+                    </button>
+                  </div>
+                )}
               </div>
-            ))}
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { l: "Curso", v: formando.curso },
+                  { l: "Turma", v: formando.turma },
+                  { l: "Telemóvel", v: formando.telf },
+                  { l: "Email", v: formando.email },
+                  { l: "Estado", v: formando.estado },
+                ].map(f => (
+                  <div key={f.l} className="bg-slate-50 rounded-xl p-3">
+                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{f.l}</p>
+                    <p className="text-sm font-semibold text-slate-700 mt-0.5 break-all">{f.v}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
-        {tab === "documentos" && <DocumentosFinPanel formando={live} />}
-      </div>
-      <div className="flex-shrink-0 px-5 py-3 border-t border-slate-100 bg-slate-50 flex justify-end">
-        <button onClick={onClose} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-50">Fechar</button>
+        {tab === "documentos" && <DocumentosFinPanel formando={formando} />}
       </div>
     </div>
   );
@@ -3058,15 +3218,15 @@ function FormandosTurmasView() {
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtroLocal, setFiltroLocal] = useState("");
   const [fichaOpen, setFichaOpen] = useState<FormandoRecord | null>(null);
+  const [fichaEditMode, setFichaEditMode] = useState(false);
   const [apagar, setApagar] = useState<FormandoRecord | null>(null);
-  const [edit, setEdit] = useState<FormandoRecord | "new" | null>(null);
+  const [edit, setEdit] = useState<"new" | null>(null);
   const [turma, setTurma] = useState("");
   const [cursoEdit, setCursoEdit] = useState("");
   const [nomeNovo, setNomeNovo] = useState("");
   const [emailNovo, setEmailNovo] = useState("");
   const [telfNovo, setTelfNovo] = useState("");
-  const editing = edit && edit !== "new" ? edit : null;
-  const turmaOpts = turmaGoldOpts(gold, { curso: cursoEdit || undefined, includeNome: editing?.turma });
+  const turmaOpts = turmaGoldOpts(gold, { curso: cursoEdit || undefined });
   const f = formandosTurmas.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.turma}`.toLowerCase().includes(s.toLowerCase());
     const byPago = filtro === "Todos" || (filtro === "Pago" ? x.pago : filtro === "Por pagar" ? !x.pago : true);
@@ -3076,7 +3236,7 @@ function FormandosTurmasView() {
   useEffect(() => {
     if (edit === "new") {
       setTurma(""); setCursoEdit("Formação de Formadores - CCP"); setNomeNovo(""); setEmailNovo(""); setTelfNovo("");
-    } else if (edit) { setTurma(edit.turma); setCursoEdit(edit.curso); }
+    }
   }, [edit]);
   return (
     <>
@@ -3101,10 +3261,10 @@ function FormandosTurmasView() {
                 sub={r.email}
                 badge={r.pago ? <span className="text-[11px] font-bold text-emerald-700">Pago</span> : <span className="text-[11px] font-bold text-amber-700">Por pagar</span>}
                 meta={[r.turma, r.local]}
-                onOpen={() => setFichaOpen(r)}
+                onOpen={() => { setFichaOpen(r); setFichaEditMode(false); }}
                 actions={[
-                  { label: "Ficha", icon: I.eye, onClick: () => setFichaOpen(r) },
-                  { label: "Editar", icon: I.edit, onClick: () => setEdit(r) },
+                  { label: "Ficha", icon: I.eye, onClick: () => { setFichaOpen(r); setFichaEditMode(false); } },
+                  { label: "Editar", icon: I.edit, onClick: () => { setFichaOpen(r); setFichaEditMode(true); } },
                   { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
                 ]}
               />
@@ -3118,7 +3278,7 @@ function FormandosTurmasView() {
                   <tr key={r.id} className="hover:bg-slate-50 transition-colors">
                     <Td><IdCell id={r.id} /></Td>
                     <Td>
-                      <button onClick={() => setFichaOpen(r)} className="text-left">
+                      <button onClick={() => { setFichaOpen(r); setFichaEditMode(false); }} className="text-left">
                         <p className="text-xs font-medium text-blue-600 hover:text-blue-800">{r.nome} {r.apelido}</p>
                         <p className="text-xs text-slate-400 truncate max-w-[140px]">{r.email}</p>
                       </button>
@@ -3133,8 +3293,8 @@ function FormandosTurmasView() {
                     </Td>
                     <Td>
                       <RowActions actions={[
-                        { label: "Ficha", icon: I.eye, onClick: () => setFichaOpen(r) },
-                        { label: "Editar", icon: I.edit, onClick: () => setEdit(r) },
+                        { label: "Ficha", icon: I.eye, onClick: () => { setFichaOpen(r); setFichaEditMode(false); } },
+                        { label: "Editar", icon: I.edit, onClick: () => { setFichaOpen(r); setFichaEditMode(true); } },
                         { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
                       ]} />
                     </Td>
@@ -3147,48 +3307,35 @@ function FormandosTurmasView() {
         </Card>
       </div>
       <SlideOver open={!!fichaOpen} onClose={() => setFichaOpen(null)} title="Ficha do Formando" sub={fichaOpen ? `#${fichaOpen.id}` : ""} size="lg">
-        {fichaOpen && <FichaFormando formando={fichaOpen} onClose={() => setFichaOpen(null)} />}
+        {fichaOpen && <FichaFormando formando={fichaOpen} onClose={() => setFichaOpen(null)} initialEditing={fichaEditMode} />}
       </SlideOver>
-      <SlideOver open={!!edit} onClose={() => setEdit(null)} title={editing ? `${editing.nome} ${editing.apelido}` : "Novo formando"} sub={editing ? "Mover de turma ou actualizar dados" : "Inscrever numa turma ativa"}>
+      <SlideOver open={edit === "new"} onClose={() => setEdit(null)} title="Novo formando" sub="Inscrever numa turma ativa">
         <div className="p-5 space-y-3">
-          {!editing && (
-            <>
-              <Field label="Nome"><input className={iCls} value={nomeNovo} onChange={e => setNomeNovo(e.target.value)} placeholder="Nome completo" /></Field>
-              <Field label="Email"><input className={iCls} type="email" value={emailNovo} onChange={e => setEmailNovo(e.target.value)} /></Field>
-              <Field label="Telemóvel"><input className={iCls} value={telfNovo} onChange={e => setTelfNovo(e.target.value)} /></Field>
-            </>
-          )}
+          <Field label="Nome"><input className={iCls} value={nomeNovo} onChange={e => setNomeNovo(e.target.value)} placeholder="Nome completo" /></Field>
+          <Field label="Email"><input className={iCls} type="email" value={emailNovo} onChange={e => setEmailNovo(e.target.value)} /></Field>
+          <Field label="Telemóvel"><input className={iCls} value={telfNovo} onChange={e => setTelfNovo(e.target.value)} /></Field>
           <Field label="Turma">
             <SearchSelect value={turma} onChange={setTurma} options={turmaOpts} placeholder="Só turmas ativas…" empty="Não há turmas ativas para este curso." />
           </Field>
           <TurmaInscricaoHint optsLen={turmaOpts.length} curso={cursoEdit || undefined} />
-          <Field label="Curso"><SearchSelect value={cursoEdit} onChange={v => { setCursoEdit(v); if (turma && !turmaGoldOpts(gold, { curso: v, includeNome: editing?.turma }).some(o => o.value === turma)) setTurma(""); }} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <Field label="Curso"><SearchSelect value={cursoEdit} onChange={v => { setCursoEdit(v); if (turma && !turmaGoldOpts(gold, { curso: v }).some(o => o.value === turma)) setTurma(""); }} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setEdit(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button disabled={!turma || (!editing && !nomeNovo.trim())} onClick={() => {
+            <button disabled={!turma || !nomeNovo.trim()} onClick={() => {
               const dest = gold.find(x => x.nome === turma);
               if (!dest) return;
-              if (editing) {
-                const prev = gold.find(x => x.id === editing.turmaId);
-                patchFormandoTurma(editing.id, { turma: dest.nome, turmaId: dest.id, curso: dest.curso || cursoEdit, local: dest.local });
-                if (prev && prev.id !== dest.id) {
-                  patchGold(prev.id, { totalAlunos: Math.max(0, prev.totalAlunos - 1) });
-                  patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
-                }
-              } else {
-                const { nome, apelido } = splitNome(nomeNovo);
-                addFormandoTurma({
-                  id: nextListId(formandosTurmas),
-                  nome, apelido: apelido || "-",
-                  telf: telfNovo.trim() || "-",
-                  email: emailNovo.trim() || `${nome.toLowerCase()}@mail.pt`,
-                  inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
-                  estado: "Formando", pago: false, valor: 125, metodo: "-",
-                });
-                patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
-              }
+              const { nome, apelido } = splitNome(nomeNovo);
+              addFormandoTurma({
+                id: nextListId(formandosTurmas),
+                nome, apelido: apelido || "-",
+                telf: telfNovo.trim() || "-",
+                email: emailNovo.trim() || `${nome.toLowerCase()}@mail.pt`,
+                inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
+                estado: "Formando", pago: false, valor: 125, metodo: "-",
+              });
+              patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
               setEdit(null);
-            }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editing ? "Guardar" : "Inscrever"}</button>
+            }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Inscrever</button>
           </div>
         </div>
       </SlideOver>
@@ -4980,7 +5127,11 @@ function AppShell() {
             </div>
           </header>
 
-          <main className="flex-1 p-4 sm:p-5 overflow-auto">{renderView()}</main>
+          <main className="flex-1 p-4 sm:p-5 overflow-auto">
+            <ErrorBoundary key={view} onReset={() => setView(view)}>
+              {renderView()}
+            </ErrorBoundary>
+          </main>
 
           <footer className="bg-white border-t border-slate-100 px-5 py-2.5 text-center flex-shrink-0">
             <p className="text-xs text-slate-400">GesForma © 2026 · <span className="font-semibold text-slate-500">ENA</span> - Escola de Negócios e Administração</p>

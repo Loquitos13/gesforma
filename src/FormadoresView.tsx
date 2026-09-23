@@ -123,9 +123,21 @@ function toggleRegime(list: FormadorRegime[], regime: FormadorRegime) {
   return list.includes(regime) ? list.filter(r => r !== regime) : [...list, regime];
 }
 
-function turmaTemFormador(nome: string, formadorTurma: string, cronograma: { formadores?: string[]; formador?: string }[]) {
+function turmaTemFormador(nome: string, formadorTurma?: string, cronograma?: any) {
+  if (!nome) return false;
   if (formadorTurma === nome) return true;
-  return cronograma.some(s => sessaoFormadores(s).includes(nome));
+  let parsed: any[] = [];
+  if (Array.isArray(cronograma)) {
+    parsed = cronograma;
+  } else if (typeof cronograma === "string") {
+    try {
+      const p = JSON.parse(cronograma);
+      if (Array.isArray(p)) parsed = p;
+    } catch {
+      parsed = [];
+    }
+  }
+  return parsed.some(s => s && sessaoFormadores(s).includes(nome));
 }
 
 export function FormadoresView({ regime }: { regime: FormadorRegime }) {
@@ -142,23 +154,28 @@ export function FormadoresView({ regime }: { regime: FormadorRegime }) {
   const [perfil, setPerfil] = useState<Formador | null>(null);
   const [apagar, setApagar] = useState<Formador | null>(null);
 
-  const noRegime = formadoresDoRegime(formadores, regime);
-  const especialidades = uniqueOpts(noRegime.map(f => f.especialidade));
+  const safeFormadores = Array.isArray(formadores) ? formadores : [];
+  const noRegime = formadoresDoRegime(safeFormadores, regime);
+  const especialidades = uniqueOpts(noRegime.map(f => f?.especialidade ?? ""));
 
   const filtrados = noRegime.filter(f => {
-    const q = `${f.nome} ${f.email} ${f.telf} ${f.ccp} ${f.especialidade}`.toLowerCase().includes(s.toLowerCase());
+    if (!f) return false;
+    const q = `${f.nome ?? ""} ${f.email ?? ""} ${f.telf ?? ""} ${f.ccp ?? ""} ${f.especialidade ?? ""}`.toLowerCase().includes(s.toLowerCase());
     return q && matchesFilter(f.especialidade, filtroEsp) && (filtroEstado === "Todos" || f.estado === filtroEstado);
   });
   const rows = filtrados.slice((p - 1) * pp, p * pp);
 
-  const ativos = noRegime.filter(f => f.estado === "Ativo").length;
-  const both = noRegime.filter(f => f.regimes.includes("gold") && f.regimes.includes("fin")).length;
+  const ativos = noRegime.filter(f => f?.estado === "Ativo").length;
+  const both = noRegime.filter(f => Array.isArray(f?.regimes) && f.regimes.includes("gold") && f.regimes.includes("fin")).length;
 
   function turmasDoFormador(nome: string) {
+    if (!nome) return [];
+    const listGold = Array.isArray(turmas?.gold) ? turmas.gold : [];
+    const listFin = Array.isArray(turmas?.fin) ? turmas.fin : [];
     const list = gold
-      ? turmas.gold.filter(t => turmaTemFormador(nome, t.formador, t.cronograma))
-      : turmas.fin.filter(t => turmaTemFormador(nome, t.formador, t.cronograma));
-    return list.map(t => t.nome);
+      ? listGold.filter(t => t && turmaTemFormador(nome, t.formador, t.cronograma))
+      : listFin.filter(t => t && turmaTemFormador(nome, t.formador, t.cronograma));
+    return list.map(t => t?.nome ?? "").filter(Boolean);
   }
 
   function abrirNovo() {
@@ -270,8 +287,8 @@ export function FormadoresView({ regime }: { regime: FormadorRegime }) {
                         <Td className="font-mono text-xs text-slate-600 whitespace-nowrap">{f.ccp || "-"}</Td>
                         <Td>
                           <div className="flex flex-wrap gap-1">
-                            {f.regimes.includes("gold") && <Badge label="Gold" variant="amber" />}
-                            {f.regimes.includes("fin") && <Badge label="Financiada" variant="blue" />}
+                            {Array.isArray(f.regimes) && f.regimes.includes("gold") && <Badge label="Gold" variant="amber" />}
+                            {Array.isArray(f.regimes) && f.regimes.includes("fin") && <Badge label="Financiada" variant="blue" />}
                           </div>
                         </Td>
                         <Td className="text-xs text-slate-600 whitespace-nowrap">

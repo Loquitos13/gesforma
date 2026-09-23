@@ -35,14 +35,17 @@ export function emptyFormador(regime: FormadorRegime): Formador {
   };
 }
 
-export function formadoresDoRegime(list: Formador[], regime: FormadorRegime) {
-  return list.filter(f => f.regimes.includes(regime));
+export function formadoresDoRegime(list: Formador[] | undefined, regime: FormadorRegime): Formador[] {
+  if (!Array.isArray(list)) return [];
+  return list.filter(f => Boolean(f && Array.isArray(f.regimes) && f.regimes.includes(regime)));
 }
 
-export function formadoresAtivos(list: Formador[], regime?: FormadorRegime) {
-  return list.filter(f => f.estado === "Ativo" && (!regime || f.regimes.includes(regime)));
+export function formadoresAtivos(list: Formador[] | undefined, regime?: FormadorRegime): Formador[] {
+  if (!Array.isArray(list)) return [];
+  return list.filter(f => Boolean(f && f.estado === "Ativo" && (!regime || (Array.isArray(f.regimes) && f.regimes.includes(regime)))));
 }
 
-export function formadorSub(f: Pick<Formador, "telf" | "especialidade" | "ccp">) {
+export function formadorSub(f: Pick<Formador, "telf" | "especialidade" | "ccp"> | undefined) {
+  if (!f) return "";
   return [f.telf, f.especialidade || (f.ccp ? `CCP ${f.ccp}` : "")].filter(Boolean).join(" · ");
 }

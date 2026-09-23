@@ -26,17 +26,30 @@ export function FormadoresProvider({ children }: { children: ReactNode }) {
     apiGetFormadores().then(res => {
       if (!alive) return;
       if (res?.formadores?.length) {
-        setFormadores(res.formadores.map((f: any) => ({
-          id: f.id,
-          nome: f.nome,
-          telf: f.telf,
-          email: f.email,
-          especialidade: f.especialidade,
-          ccp: f.ccp,
-          nif: f.nif,
-          regimes: Array.isArray(f.regimes) ? f.regimes : ["gold"],
-          estado: f.estado || "Ativo",
-        })));
+        setFormadores(res.formadores.map((f: any) => {
+          let regimesList: FormadorRegime[] = ["gold"];
+          if (Array.isArray(f.regimes)) {
+            regimesList = f.regimes;
+          } else if (typeof f.regimes === "string") {
+            try {
+              const p = JSON.parse(f.regimes);
+              if (Array.isArray(p)) regimesList = p;
+            } catch {
+              regimesList = ["gold"];
+            }
+          }
+          return {
+            id: Number(f.id) || Date.now() % 100000,
+            nome: String(f.nome ?? ""),
+            telf: String(f.telf ?? ""),
+            email: String(f.email ?? ""),
+            especialidade: String(f.especialidade ?? ""),
+            ccp: String(f.ccp ?? ""),
+            nif: String(f.nif ?? ""),
+            regimes: regimesList,
+            estado: (f.estado === "Inactivo" ? "Inactivo" : "Ativo") as "Ativo" | "Inactivo",
+          };
+        }));
       }
     }).catch(() => undefined);
     return () => { alive = false; };

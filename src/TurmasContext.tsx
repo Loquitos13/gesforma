@@ -34,8 +34,24 @@ export function TurmasProvider({ children }: { children: ReactNode }) {
     let alive = true;
     apiGetTurmas().then(res => {
       if (!alive) return;
-      if (res?.gold?.length) setGold(res.gold);
-      if (res?.fin?.length) setFin(res.fin);
+      const parseCronograma = (c: any): SessaoCronograma[] => {
+        if (Array.isArray(c)) return c;
+        if (typeof c === "string") {
+          try {
+            const p = JSON.parse(c);
+            return Array.isArray(p) ? p : [];
+          } catch {
+            return [];
+          }
+        }
+        return [];
+      };
+      if (Array.isArray(res?.gold)) {
+        setGold(res.gold.map((t: any) => ({ ...t, cronograma: parseCronograma(t.cronograma) })));
+      }
+      if (Array.isArray(res?.fin)) {
+        setFin(res.fin.map((t: any) => ({ ...t, cronograma: parseCronograma(t.cronograma) })));
+      }
     }).catch(() => undefined);
     return () => { alive = false; };
   }, []);

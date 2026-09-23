@@ -11,14 +11,14 @@ O **dossiê técnico-pedagógico (DTP) vive dentro da turma** (separador no cock
 
 O menu **Dossiê TP** lista as turmas com a completude do dossiê e abre o DTP dessa turma.
 
-**Inquéritos** (Gold e Financiada) permitem montar questionários de satisfação com texto, escolha múltipla, escala 1–5 e sim/não.
+**Inquéritos** (Gold e Financiada) permitem montar questionários de satisfação com texto, escolha múltipla, escala 1-5 e sim/não.
 
 No cockpit da turma (Gold e Financiada, os mesmos separadores): plano de sessão, **sumário por sessão** e **presenças dentro da sessão** - não há menu isolado de presenças. O perfil do formador e os certificados também vivem na turma.
 
 No separador **Documentos** (Gold / CCP):
 
 - **PIP** - um ficheiro por formando. O estado passa a *Em falta*, *Parcial* ou *No dossiê* conforme os projetos carregados.
-- **Simulação pedagógica inicial e final** - por aluno: um vídeo e uma folha de avaliação. A grelha usa os **parâmetros de avaliação do curso** (editáveis em Edição de Cursos), escala 1–5. Só fica no dossiê quando o vídeo e a grelha estão completos.
+- **Simulação pedagógica inicial e final** - por aluno: um vídeo e uma folha de avaliação. A grelha usa os **parâmetros de avaliação do curso** (editáveis em Edição de Cursos), escala 1-5. Só fica no dossiê quando o vídeo e a grelha estão completos.
 
 Cada **curso Gold** e cada **UFCD financiada** tem uma ficha própria (não um painel lateral): identidade visual, textos da página pública, parâmetros de avaliação quando aplicável, e publicação. A coluna da direita mostra a pré-visualização do que aparece em `ena.pt/cursos/…`. O progresso “Pronto para o site” indica o que ainda falta para publicar. Nas UFCD o código e a designação oficial do CNQ ficam separados do nome comercial.
 
@@ -48,13 +48,13 @@ A secretaria entra com sessão (cookie httpOnly, SameSite=strict). A API Fastify
 
 Arquitectura na VPS: **um Compose, três papéis, rede só interna**.
 
-1. `db` — Postgres 16. Não é publicado na internet.
-2. `api` — só em `127.0.0.1:43148`. O Caddy/nginx faz TLS e encaminha `/api` para aqui.
-3. `web` — esta app Vite, no mesmo domínio, para os cookies funcionarem.
+1. `db`  -  Postgres 16. Não é publicado na internet.
+2. `api`  -  só em `127.0.0.1:43148`. O Caddy/nginx faz TLS e encaminha `/api` para aqui.
+3. `web`  -  esta app Vite, no mesmo domínio, para os cookies funcionarem.
 
 Não separam a base para outro servidor até haver necessidade: um contentor Postgres no mesmo host é mais rápido, o backup é um `pg_dump` e a API não atravessa a rede pública.
 
-**Emails automáticos** — uma regra = gatilho + template + atraso. A secretaria regista uma pré-inscrição ou um pagamento; a API enfileira o envio (incluindo **contacto após a venda**, 1 hora depois do pagamento). O worker corre na própria API, sem Redis. Sem SMTP (`MAIL_MODE=log`) o email fica no histórico; com `SMTP_URL` sai pelo correio.
+**Emails automáticos**  -  uma regra = gatilho + template + atraso. A secretaria regista uma pré-inscrição ou um pagamento; a API enfileira o envio (incluindo **contacto após a venda**, 1 hora depois do pagamento). O worker corre na própria API, sem Redis. Sem SMTP (`MAIL_MODE=log`) o email fica no histórico; com `SMTP_URL` sai pelo correio.
 
 ### Segurança
 
@@ -74,7 +74,7 @@ docker compose --profile backup run --rm backup
 npm run backup
 ```
 
-Os ficheiros ficam em `backups/`. Para ponto-no-tempo (WAL) no futuro: pgBackRest — não é preciso no primeiro servidor.
+Os ficheiros ficam em `backups/`. Para ponto-no-tempo (WAL) no futuro: pgBackRest  -  não é preciso no primeiro servidor.
 
 ### Correr localmente
 
@@ -83,7 +83,7 @@ cp .env.example .env
 # em desenvolvimento: ADMIN_PASSWORD=altere-me-no-primeiro-arranque
 npm install
 npm install --prefix server
-npm run api    # outra consola — http://127.0.0.1:43148/health
+npm run api    # outra consola  -  http://127.0.0.1:43148/health
 npm run dev    # http://127.0.0.1:43147
 ```
 
@@ -101,6 +101,6 @@ A API vai no **mesmo projecto** que a app (`/api`), para o cookie de sessão ser
 
 1. Claim ou ligue o Git à Vercel.
 2. Variáveis: `DATABASE_URL` (Neon ou Vercel Postgres), `SESSION_SECRET`, `ADMIN_PASSWORD`, `APP_ORIGIN=https://o-seu-dominio.vercel.app`, `MAIL_MODE`, `SMTP_URL`.
-3. Sem `DATABASE_URL` a função usa PGlite em `/tmp` — some entre invocações. Para produção, Neon é o par habitual da Vercel.
+3. Sem `DATABASE_URL` a função usa PGlite em `/tmp`  -  some entre invocações. Para produção, Neon é o par habitual da Vercel.
 
 `vercel.json` já encaminha `/api/*` para a função.

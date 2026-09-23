@@ -155,7 +155,7 @@ export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "
             {avulso && (
               <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
                 <p className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-1">Venda avulso</p>
-                <p className="text-xs text-slate-600">Este formando não está numa turma. Os documentos e o pagamento ficam nesta ficha — o mesmo modelo da lista da turma.</p>
+                <p className="text-xs text-slate-600">Este formando não está numa turma. Os documentos e o pagamento ficam nesta ficha  -  o mesmo modelo da lista da turma.</p>
               </div>
             )}
           </>

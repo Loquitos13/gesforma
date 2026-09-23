@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AppModal } from "./FormKit";
+import { apiCreateInquerito, apiGetInqueritos, apiUploadFicheiro } from "./api";
 
 const I = {
   x: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>,
@@ -34,7 +35,24 @@ export function FileUploadModal({ open, onClose, title, accent = "gold", onConfi
   const gold = accent === "gold";
 
   function handleClose() { setFile(null); onClose(); }
-  function handleConfirm() { setFile(null); onConfirm?.(); onClose(); }
+  function handleConfirm() {
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = String(reader.result || "");
+        void apiUploadFicheiro({
+          nome: file.name,
+          mimeType: file.type || "application/octet-stream",
+          base64,
+          contexto: "modal_upload",
+        }).catch(() => undefined);
+      };
+      reader.readAsDataURL(file);
+    }
+    setFile(null);
+    onConfirm?.();
+    onClose();
+  }
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -707,7 +725,7 @@ type Inquerito = { id: number; titulo: string; perguntas: Pergunta[] };
 const tipoLabels: Record<PerguntaTipo, string> = {
   texto: "Texto livre",
   multipla: "Escolha múltipla",
-  escala: "Escala 1–5",
+  escala: "Escala 1-5",
   simnao: "Sim / Não",
 };
 const tipoIcons: Record<PerguntaTipo, React.ReactNode> = {
@@ -747,11 +765,43 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
   const [editId, setEditId] = useState<number | null>(null);
   const inq = inqueritos.find(i => i.id === selected);
 
-  function addInquerito() {
+  useEffect(() => {
+    let alive = true;
+    apiGetInqueritos().then(res => {
+      if (!alive || !res?.inqueritos?.length) return;
+      const regimeMatch = res.inqueritos.filter((i: any) => i.regime === (isGold ? "gold" : "fin"));
+      if (regimeMatch.length > 0) {
+        setInqueritos(regimeMatch.map((i: any) => ({
+          id: i.id,
+          titulo: i.titulo,
+          perguntas: Array.isArray(i.perguntas) ? i.perguntas : [],
+        })));
+        setSelected(regimeMatch[0].id);
+      }
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [isGold]);
+
+  async function addInquerito() {
     if (!novoTitulo.trim()) return;
-    const id = Date.now();
-    setInqueritos(prev => [...prev, { id, titulo: novoTitulo.trim(), perguntas: [] }]);
-    setSelected(id); setCreating(false); setNovoTitulo("");
+    const titulo = novoTitulo.trim();
+    try {
+      const res = await apiCreateInquerito({
+        regime: isGold ? "gold" : "fin",
+        titulo,
+        perguntas: [],
+        ativo: true,
+      });
+      const id = res?.inquerito?.id ?? Date.now();
+      setInqueritos(prev => [...prev, { id, titulo, perguntas: [] }]);
+      setSelected(id);
+    } catch {
+      const id = Date.now();
+      setInqueritos(prev => [...prev, { id, titulo, perguntas: [] }]);
+      setSelected(id);
+    }
+    setCreating(false);
+    setNovoTitulo("");
   }
   function addPergunta(tipo: PerguntaTipo) {
     if (!selected) return;

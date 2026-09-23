@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppModal } from "./FormKit";
 import { EmptyHint, NotifKind, sortNotifs } from "./SecretaryUX";
+import { apiExportTurmaUrl, apiWebhookPagamento, apiMarcarNotificacaoLida, apiMarcarTodasNotificacoesLidas } from "./api";
 
 const I = {
   download: (
@@ -85,6 +86,7 @@ export type CertificadoPreview = {
 };
 
 export type ExportTurmaInfo = {
+  id?: number;
   nome: string;
   curso: string;
   local: string;
@@ -240,7 +242,7 @@ export function ReferenciaMbModal({
               <div className="flex justify-between text-sm"><span className="text-amber-700">Entidade</span><span className="font-bold text-slate-900">{entidade}</span></div>
               <div className="flex justify-between text-sm"><span className="text-amber-700">Referência</span><span className="font-bold text-slate-900">{referencia}</span></div>
               <div className="flex justify-between text-sm"><span className="text-amber-700">Valor</span><span className="font-bold text-slate-900">€ {valor.toFixed(2)}</span></div>
-              <p className="text-[11px] text-amber-700 font-sans pt-1">Válida até 72 horas. Protótipo — não gera cobrança real.</p>
+              <p className="text-[11px] text-amber-700 font-sans pt-1">Válida até 72 horas. Protótipo  -  não gera cobrança real.</p>
             </div>
           )}
         </div>
@@ -256,7 +258,14 @@ export function ReferenciaMbModal({
               {I.copy} Copiar
             </button>
           )}
-          <button type="button" onClick={() => setEnviado(true)} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">
+          <button
+            type="button"
+            onClick={() => {
+              setEnviado(true);
+              void apiWebhookPagamento({ nome, valor, curso, metodo: isWay ? "MB Way" : "Multibanco" }).catch(() => undefined);
+            }}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg"
+          >
             {isWay ? "Enviar pedido" : "Enviar ao formando"}
           </button>
         </div>
@@ -311,7 +320,7 @@ export function ConteudoAbrirModal({
         {item.tipo === "PDF" && (
           <div className="rounded-xl border border-slate-200 bg-slate-50 min-h-[220px] p-6 flex flex-col items-center justify-center text-center">
             <p className="text-sm font-bold text-slate-800">Pré-visualização do PDF</p>
-            <p className="text-xs text-slate-500 mt-1 max-w-sm">Página 1 de {item.titulo}. Neste protótipo o ficheiro não está alojado — o botão descarrega um comprovativo local.</p>
+            <p className="text-xs text-slate-500 mt-1 max-w-sm">Página 1 de {item.titulo}. Neste protótipo o ficheiro não está alojado  -  o botão descarrega um comprovativo local.</p>
           </div>
         )}
         {item.tipo === "Vídeo" && (
@@ -397,7 +406,14 @@ export function ExportTurmaModal({
               <p className="text-sm font-semibold text-slate-800">{p.label}</p>
               <p className="text-xs text-slate-500 mt-0.5">{p.detalhe}</p>
             </div>
-            <button type="button" onClick={() => setDone(p.label)} className={`px-3 py-1.5 ${t.btn} text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1`}>
+            <button
+              type="button"
+              onClick={() => {
+                setDone(p.label);
+                window.open(apiExportTurmaUrl(turma.id || 943, p.id), "_blank");
+              }}
+              className={`px-3 py-1.5 ${t.btn} text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1`}
+            >
               {I.download} Descarregar
             </button>
           </div>
@@ -430,11 +446,19 @@ export type NotifRow = {
 export function NotificacoesView({
   items,
   onOpen,
+  onMarkRead,
+  onMarkAllRead,
 }: {
   items: NotifRow[];
   onOpen: (n: NotifRow) => void;
+  onMarkRead?: (id: number) => void;
+  onMarkAllRead?: () => void;
 }) {
   const [lista, setLista] = useState(items);
+  useEffect(() => {
+    setLista(items);
+  }, [items]);
+
   const [filtro, setFiltro] = useState<"Todas" | "Não lidas" | "Bloqueio" | "Aviso" | "Info" | "Gold" | "Financiada">("Todas");
   const naoLidas = lista.filter(n => !n.lida).length;
   const f = sortNotifs(lista.filter(n => {
@@ -447,6 +471,19 @@ export function NotificacoesView({
     return true;
   }));
 
+  const handleMarkAll = () => {
+    setLista(xs => xs.map(n => ({ ...n, lida: true })));
+    apiMarcarTodasNotificacoesLidas().catch(() => {});
+    if (onMarkAllRead) onMarkAllRead();
+  };
+
+  const handleClick = (n: NotifRow) => {
+    setLista(xs => xs.map(x => x.id === n.id ? { ...x, lida: true } : x));
+    apiMarcarNotificacaoLida(n.id).catch(() => {});
+    if (onMarkRead) onMarkRead(n.id);
+    onOpen(n);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
@@ -457,7 +494,7 @@ export function NotificacoesView({
           </p>
         </div>
         {naoLidas > 0 && (
-          <button type="button" onClick={() => setLista(xs => xs.map(n => ({ ...n, lida: true })))} className="text-sm font-semibold text-amber-600 hover:text-amber-700">
+          <button type="button" onClick={handleMarkAll} className="text-sm font-semibold text-amber-600 hover:text-amber-700">
             Marcar todas como lidas
           </button>
         )}
@@ -476,7 +513,7 @@ export function NotificacoesView({
           <button
             key={n.id}
             type="button"
-            onClick={() => { setLista(xs => xs.map(x => x.id === n.id ? { ...x, lida: true } : x)); onOpen(n); }}
+            onClick={() => handleClick(n)}
             className={`w-full flex gap-3 px-4 py-3.5 text-left hover:bg-slate-50 ${n.lida ? "opacity-70" : ""}`}
           >
             <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${n.tipo === "warn" ? "bg-amber-100 text-amber-600" : n.tipo === "error" ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"}`}>

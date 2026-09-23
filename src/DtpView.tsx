@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { apiGetDtp, apiSaveDtp } from "./api";
 
 export type DtpRegime = "gold" | "fin";
 type DtpFase = "antes" | "durante" | "depois";
@@ -46,7 +47,7 @@ function docsGold(codigo: string): DtpDoc[] {
     { id: "exp-formandos", fase: "antes", label: "Comprovativo de 5 anos de experiência (formandos)", fonte: "IEFP · Anexo 5 · acesso FPIF", detalhe: "Obrigatório no CCP. 7/10 com declaração.", estado: "parcial" },
     { id: "rgpd", fase: "antes", label: "Autorizações RGPD / imagem / dados digitais", fonte: "IEFP · Anexo 5 · RGPD", detalhe: "Necessário em b-learning (gravação de sessões).", estado: "parcial" },
     { id: "recibos", fase: "antes", label: "Comprovativos de pagamento / recibos", fonte: "Gold · autofinanciada", detalhe: "Específico do regime comercial desta turma.", estado: "parcial" },
-    { id: "cronograma", fase: "antes", label: "Cronograma da turma", fonte: "DGERT / IEFP", detalhe: "12 sábados · 09h–13h + 4 síncronas online.", estado: "ok" },
+    { id: "cronograma", fase: "antes", label: "Cronograma da turma", fonte: "DGERT / IEFP", detalhe: "12 sábados · 09h-13h + 4 síncronas online.", estado: "ok" },
     { id: "planos", fase: "antes", label: "Planos de sessão", fonte: "DGERT · Portaria 851/2010 j)", detalhe: "12/16 planos carregados.", estado: "parcial" },
     { id: "sumarios", fase: "durante", label: "Sumários assinados pelo formador", fonte: "DGERT · Portaria 851/2010 l)", detalhe: "3/16 sessões. Sem sumário a sessão não existiu para auditoria.", estado: "falta" },
     { id: "presencas", fase: "durante", label: "Folhas de presença (formandos + formador)", fonte: "DGERT · Portaria 851/2010 l)", detalhe: "Assinatura do formador por período.", estado: "parcial" },
@@ -55,7 +56,7 @@ function docsGold(codigo: string): DtpDoc[] {
     { id: "sim-fim", fase: "durante", label: "Simulação pedagógica final", fonte: "IEFP · Anexo 5 · FPIF", detalhe: "Aguardar módulo final.", estado: "falta" },
     { id: "instrumentos", fase: "durante", label: "Instrumentos de avaliação (enunciados / grelhas)", fonte: "DGERT · Portaria 851/2010 m) n)", detalhe: "Classificação sem instrumento não é verificável.", estado: "falta" },
     { id: "ocorrencias", fase: "durante", label: "Registo de ocorrências", fonte: "DGERT · Portaria 851/2010 r)", detalhe: "Desistências, troca de formador, alteração de calendário.", estado: "ok" },
-    { id: "materiais", fase: "durante", label: "Materiais e textos de apoio", fonte: "DGERT · Portaria 851/2010", detalhe: "Manual CCP + slides módulos 1–3.", estado: "parcial" },
+    { id: "materiais", fase: "durante", label: "Materiais e textos de apoio", fonte: "DGERT · Portaria 851/2010", detalhe: "Manual CCP + slides módulos 1-3.", estado: "parcial" },
     { id: "pauta", fase: "depois", label: "Pauta / classificação final", fonte: "DGERT · Portaria 851/2010 o)", detalhe: "Turma ainda a decorrer.", estado: "falta" },
     { id: "satisfacao", fase: "depois", label: "Avaliação de satisfação dos formandos", fonte: "DGERT · Portaria 851/2010 q)", detalhe: "Questionário de reação no último dia.", estado: "falta" },
     { id: "aval-formador", fase: "depois", label: "Avaliação de desempenho do formador", fonte: "DGERT · Portaria 851/2010 p)", detalhe: "Coordenador pedagógico.", estado: "falta" },
@@ -121,8 +122,35 @@ export function DtpPanel({ regime, turma }: Props) {
 
   useEffect(() => {
     setFase("todas");
-    setItems(isGold ? docsGold(codigo) : docsFin(codigo));
-  }, [isGold, codigo]);
+    const baseDocs = isGold ? docsGold(codigo) : docsFin(codigo);
+    if (!turma?.id) {
+      setItems(baseDocs);
+      return;
+    }
+    let alive = true;
+    apiGetDtp(turma.id)
+      .then(res => {
+        if (!alive || !res?.dtp?.dados) return;
+        const saved = res.dtp.dados;
+        if (Array.isArray(saved.items) && saved.items.length > 0) {
+          setItems(saved.items);
+        } else if (Array.isArray(saved) && saved.length > 0) {
+          setItems(saved);
+        }
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [isGold, codigo, turma?.id]);
+
+  const handleToggleDoc = (docId: string) => {
+    setItems((prev) => {
+      const next = prev.map((d) => (d.id === docId ? { ...d, estado: cycle(d.estado) } : d));
+      if (turma?.id) {
+        apiSaveDtp(turma.id, { dados: { items: next } }).catch(() => {});
+      }
+      return next;
+    });
+  };
 
   const visiveis = useMemo(
     () => (fase === "todas" ? items : items.filter((d) => d.fase === fase)),
@@ -210,7 +238,7 @@ export function DtpPanel({ regime, turma }: Props) {
             return (
               <div key={doc.id} className={`px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 ${s.row}`}>
                 <button
-                  onClick={() => setItems((prev) => prev.map((d) => (d.id === doc.id ? { ...d, estado: cycle(d.estado) } : d)))}
+                  onClick={() => handleToggleDoc(doc.id)}
                   className={`self-start sm:self-center text-[11px] font-bold px-2 py-1 rounded-full border whitespace-nowrap ${s.badge}`}
                 >
                   {s.label}

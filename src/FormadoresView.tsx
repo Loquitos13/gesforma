@@ -105,7 +105,7 @@ function TableFooter({ page, perPage, total, onChange }: { page: number; perPage
   const to = Math.min(page * perPage, total);
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-t border-slate-100">
-      <p className="text-xs text-slate-500">A mostrar <strong className="text-slate-700">{from}–{to}</strong> de <strong className="text-slate-700">{total.toLocaleString("pt-PT")}</strong></p>
+      <p className="text-xs text-slate-500">A mostrar <strong className="text-slate-700">{from}-{to}</strong> de <strong className="text-slate-700">{total.toLocaleString("pt-PT")}</strong></p>
       <div className="flex items-center gap-1">
         <button type="button" onClick={() => onChange(page - 1)} disabled={page === 1} className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40">‹</button>
         <span className="text-xs text-slate-500 px-2">{page}/{pages}</span>

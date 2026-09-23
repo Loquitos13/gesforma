@@ -660,8 +660,8 @@ export function CursoFichaView({
                 <p className="text-sm font-semibold text-slate-800">Parâmetros da folha de avaliação</p>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {accent === "fin"
-                    ? "Usados nas entregas práticas desta UFCD (plano de sessão, exercícios). Escala 1–5. Não aparecem no website."
-                    : "Usados nas simulações inicial e final das turmas deste curso. Escala 1–5. Não aparecem no website."}
+                    ? "Usados nas entregas práticas desta UFCD (plano de sessão, exercícios). Escala 1-5. Não aparecem no website."
+                    : "Usados nas simulações inicial e final das turmas deste curso. Escala 1-5. Não aparecem no website."}
                 </p>
               </div>
               {criterios.length === 0 && (

@@ -1,5 +1,5 @@
 # GesForma na VPS: Postgres + API na mesma máquina, rede só interna.
-# A base não é publicada. A API só escuta em 127.0.0.1 — o Caddy/nginx faz TLS.
+# A base não é publicada. A API só escuta em 127.0.0.1 - o Caddy/nginx faz TLS.
 #
 #   cp .env.example .env   # gere passwords e SESSION_SECRET
 #   docker compose up -d db api

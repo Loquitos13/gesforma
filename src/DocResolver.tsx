@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { apiUploadFicheiro } from "./api";
 import {
   getParametrosAvaliacao, grelhaCompleta, pipEstado, simAlunoEstado, simEstado,
   type PipItem, type ResolveDocEstado, type ResolveDocTarget,
@@ -88,6 +89,18 @@ export function ResolverDocumentoModal({
     const dest = rowUploadRef.current;
     rowUploadRef.current = null;
     if (!f || !dest) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = String(reader.result || "");
+      void apiUploadFicheiro({
+        nome: f.name,
+        mimeType: f.type || "application/octet-stream",
+        base64,
+        contexto: dest.field,
+        referenciaId: dest.id,
+      }).catch(() => undefined);
+    };
+    reader.readAsDataURL(f);
     if (dest.field === "pip") {
       const next = pipItems.map(x => x.id === dest.id ? { ...x, fileName: f.name } : x);
       setPipItems(next);
@@ -173,7 +186,7 @@ export function ResolverDocumentoModal({
         {doc.kind === "simulacao" && (
           <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
             <div className="px-5 py-2.5 bg-violet-50 text-xs text-violet-700">
-              Folha de avaliação do curso <strong>{curso}</strong> · {criterios.length} critérios · escala 1–5
+              Folha de avaliação do curso <strong>{curso}</strong> · {criterios.length} critérios · escala 1-5
             </div>
             {simItems.map(item => {
               const est = simAlunoEstado(item, criterios);

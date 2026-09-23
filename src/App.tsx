@@ -1,4 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import {
+  apiGetNotificacoes,
+  apiMarcarNotificacaoLida,
+  apiMarcarTodasNotificacoesLidas,
+  apiGetTransacoes,
+  apiCreateTransacao,
+} from "./api";
 import { DtpPanel } from "./DtpView";
 import {
   FormandosGoldView, DatasGoldView, LocaisView, AreasTematicasView,
@@ -276,7 +283,7 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
     ctaAmbito: ctaDestino("welcome").ambito,
   },
   payment: {
-    assunto: "Pagamento confirmado – {{curso}}",
+    assunto: "Pagamento confirmado - {{curso}}",
     linhas: [
       "{{nome}}, o pagamento de {{curso}} chegou.",
       "Já está inscrita na turma {{turma}}. O cronograma e o acesso à plataforma seguem nas próximas horas.",
@@ -576,7 +583,7 @@ function estadoBadge(estado: string) {
 }
 
 function formatSessaoLine(s: SessaoCronograma) {
-  return `${formatSessaoLabel(s.data)} · ${(s.horaInicio || "").replace(":", "h")}–${(s.horaFim || "").replace(":", "h")}`;
+  return `${formatSessaoLabel(s.data)} · ${(s.horaInicio || "").replace(":", "h")}-${(s.horaFim || "").replace(":", "h")}`;
 }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -641,7 +648,7 @@ function TableFooter({ page, perPage, total, note, onChange }: { page: number; p
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-t border-slate-100">
       <div>
-        <p className="text-xs text-slate-500">A mostrar <strong className="text-slate-700">{from}–{to}</strong> de <strong className="text-slate-700">{total.toLocaleString("pt-PT")}</strong></p>
+        <p className="text-xs text-slate-500">A mostrar <strong className="text-slate-700">{from}-{to}</strong> de <strong className="text-slate-700">{total.toLocaleString("pt-PT")}</strong></p>
         {note && <p className="text-xs text-slate-400 mt-0.5">{note}</p>}
       </div>
       <Pagination page={page} total={total} perPage={perPage} onChange={onChange} />
@@ -951,19 +958,19 @@ type FormandoRecord = FormandoTurma;
 // ─── Cockpit da Turma ─────────────────────────────────────────────────────────
 
 const sessoesSample: SessaoMeta[] = [
-  { n: 1, data: "Sáb, 07 Set 2026", hora: "09h–13h", formador: "Isac Silva", formadores: ["Isac Silva"], estado: "Realizada", plano: true, modulo: "M1 · Aprendizagem e pedagogia", modulos: ["M1 · Aprendizagem e pedagogia"], duracao: "4h" },
-  { n: 2, data: "Sáb, 14 Set 2026", hora: "09h–13h", formador: "Isac Silva", formadores: ["Isac Silva"], estado: "Realizada", plano: true, modulo: "M2 · Comunicação e dinâmica de grupos", modulos: ["M2 · Comunicação e dinâmica de grupos"], duracao: "4h" },
-  { n: 3, data: "Sáb, 21 Set 2026", hora: "09h–13h", formador: "Isac Silva · Ivan Esteves", formadores: ["Isac Silva", "Ivan Esteves"], estado: "Agendada", plano: false, modulo: "M2 · Comunicação e dinâmica de grupos", modulos: ["M2 · Comunicação e dinâmica de grupos"], duracao: "4h" },
-  { n: 4, data: "Sáb, 28 Set 2026", hora: "09h–13h", formador: "Isac Silva", formadores: ["Isac Silva"], estado: "Agendada", plano: false, modulo: "M3 · Avaliação da formação", modulos: ["M3 · Avaliação da formação"], duracao: "4h" },
-  { n: 5, data: "Sáb, 05 Out 2026", hora: "09h–13h", formador: "Isac Silva", formadores: ["Isac Silva"], estado: "Agendada", plano: false, modulo: "M3 · Avaliação da formação", modulos: ["M3 · Avaliação da formação"], duracao: "4h" },
+  { n: 1, data: "Sáb, 07 Set 2026", hora: "09h-13h", formador: "Isac Silva", formadores: ["Isac Silva"], estado: "Realizada", plano: true, modulo: "M1 · Aprendizagem e pedagogia", modulos: ["M1 · Aprendizagem e pedagogia"], duracao: "4h" },
+  { n: 2, data: "Sáb, 14 Set 2026", hora: "09h-13h", formador: "Isac Silva", formadores: ["Isac Silva"], estado: "Realizada", plano: true, modulo: "M2 · Comunicação e dinâmica de grupos", modulos: ["M2 · Comunicação e dinâmica de grupos"], duracao: "4h" },
+  { n: 3, data: "Sáb, 21 Set 2026", hora: "09h-13h", formador: "Isac Silva · Ivan Esteves", formadores: ["Isac Silva", "Ivan Esteves"], estado: "Agendada", plano: false, modulo: "M2 · Comunicação e dinâmica de grupos", modulos: ["M2 · Comunicação e dinâmica de grupos"], duracao: "4h" },
+  { n: 4, data: "Sáb, 28 Set 2026", hora: "09h-13h", formador: "Isac Silva", formadores: ["Isac Silva"], estado: "Agendada", plano: false, modulo: "M3 · Avaliação da formação", modulos: ["M3 · Avaliação da formação"], duracao: "4h" },
+  { n: 5, data: "Sáb, 05 Out 2026", hora: "09h-13h", formador: "Isac Silva", formadores: ["Isac Silva"], estado: "Agendada", plano: false, modulo: "M3 · Avaliação da formação", modulos: ["M3 · Avaliação da formação"], duracao: "4h" },
 ];
 
 const finSessoesSample: SessaoMeta[] = [
-  { n: 1, data: "Qua, 27 Ago 2026", hora: "19h–22h", formador: "Vânia Fernandes", formadores: ["Vânia Fernandes"], estado: "Realizada", plano: true, modulo: "UFCD 3564 · Avaliação primária e SVB", modulos: ["UFCD 3564 · Avaliação primária e SVB"], duracao: "5h" },
-  { n: 2, data: "Qua, 03 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", formadores: ["Vânia Fernandes"], estado: "Realizada", plano: true, modulo: "UFCD 3564 · Trauma e hemorragias", modulos: ["UFCD 3564 · Trauma e hemorragias"], duracao: "5h" },
-  { n: 3, data: "Qua, 10 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes · Cátia Pinheiro", formadores: ["Vânia Fernandes", "Cátia Pinheiro"], estado: "Agendada", plano: false, modulo: "UFCD 3564 · Queimaduras e intoxicações", modulos: ["UFCD 3564 · Queimaduras e intoxicações"], duracao: "5h" },
-  { n: 4, data: "Qua, 17 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", formadores: ["Vânia Fernandes"], estado: "Agendada", plano: false, modulo: "UFCD 3564 · Emergências médicas", modulos: ["UFCD 3564 · Emergências médicas"], duracao: "5h" },
-  { n: 5, data: "Qua, 24 Set 2026", hora: "19h–22h", formador: "Vânia Fernandes", formadores: ["Vânia Fernandes"], estado: "Agendada", plano: false, modulo: "UFCD 3564 · Simulação e avaliação", modulos: ["UFCD 3564 · Simulação e avaliação"], duracao: "5h" },
+  { n: 1, data: "Qua, 27 Ago 2026", hora: "19h-22h", formador: "Vânia Fernandes", formadores: ["Vânia Fernandes"], estado: "Realizada", plano: true, modulo: "UFCD 3564 · Avaliação primária e SVB", modulos: ["UFCD 3564 · Avaliação primária e SVB"], duracao: "5h" },
+  { n: 2, data: "Qua, 03 Set 2026", hora: "19h-22h", formador: "Vânia Fernandes", formadores: ["Vânia Fernandes"], estado: "Realizada", plano: true, modulo: "UFCD 3564 · Trauma e hemorragias", modulos: ["UFCD 3564 · Trauma e hemorragias"], duracao: "5h" },
+  { n: 3, data: "Qua, 10 Set 2026", hora: "19h-22h", formador: "Vânia Fernandes · Cátia Pinheiro", formadores: ["Vânia Fernandes", "Cátia Pinheiro"], estado: "Agendada", plano: false, modulo: "UFCD 3564 · Queimaduras e intoxicações", modulos: ["UFCD 3564 · Queimaduras e intoxicações"], duracao: "5h" },
+  { n: 4, data: "Qua, 17 Set 2026", hora: "19h-22h", formador: "Vânia Fernandes", formadores: ["Vânia Fernandes"], estado: "Agendada", plano: false, modulo: "UFCD 3564 · Emergências médicas", modulos: ["UFCD 3564 · Emergências médicas"], duracao: "5h" },
+  { n: 5, data: "Qua, 24 Set 2026", hora: "19h-22h", formador: "Vânia Fernandes", formadores: ["Vânia Fernandes"], estado: "Agendada", plano: false, modulo: "UFCD 3564 · Simulação e avaliação", modulos: ["UFCD 3564 · Simulação e avaliação"], duracao: "5h" },
 ];
 
 function ModulosCell({ sessao }: { sessao: { modulo?: string; modulos?: string[] } }) {
@@ -1110,7 +1117,7 @@ const docsTurmaGrupos: { id: string; label: string; color: string; icon: React.R
   { id: "turma", label: "Documentos da turma", color: "bg-amber-50 border-amber-200 text-amber-800", icon: I.school, items: [
     { label: "Programa de formação", detalhe: "Objetivos, conteúdos, metodologias e avaliação.", estado: "ok" },
     { label: "Regulamento de formação", detalhe: "Regulamento ENA aceite pelos formandos.", estado: "ok" },
-    { label: "Cronograma da turma", detalhe: "12 sábados · 09h–13h + 4 síncronas.", estado: "ok" },
+    { label: "Cronograma da turma", detalhe: "12 sábados · 09h-13h + 4 síncronas.", estado: "ok" },
     { label: "Registo de ocorrências", detalhe: "Sem ocorrências registadas.", estado: "ok" },
     { label: "Relatório final da turma", detalhe: "Fecha o DTP.", estado: "falta", bloqueante: true },
   ]},
@@ -4242,6 +4249,15 @@ function PagamentosView() {
   const [metodo, setMetodo] = useState("MB Way");
   const [detalhe, setDetalhe] = useState<TransacaoPreview | null>(null);
   const [recibo, setRecibo] = useState<TransacaoPreview | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    apiGetTransacoes().then(res => {
+      if (!alive || !res?.transacoes?.length) return;
+      setLista(res.transacoes);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
   const f = lista.filter(t =>
     `${t.nome} ${t.curso} ${t.metodo}`.toLowerCase().includes(s.toLowerCase())
     && matchesFilter(t.curso, filtroCurso)
@@ -4345,10 +4361,12 @@ function PagamentosView() {
             <button onClick={() => setNovo(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button disabled={!nome.trim() || !curso} onClick={() => {
               const id = `TRX-${Date.now() % 100000}`;
-              setLista(xs => [{
+              const nova = {
                 id, nome: nome.trim(), valor: Number(valor) || 0, metodo, curso,
                 data: nowStamp(), estado: "Pago",
-              }, ...xs]);
+              };
+              setLista(xs => [nova, ...xs]);
+              void apiCreateTransacao(nova).catch(() => undefined);
               const mail = emailPag.trim() || `${nome.trim().toLowerCase().replace(/\s+/g, ".")}@mail.pt`;
               void emitAutomation("payment.confirmed", { email: mail, nome: nome.trim(), curso }, `payment:${id}:${mail}`);
               setNovo(false);
@@ -4469,12 +4487,20 @@ function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: (
 
 // ─── Notificações ─────────────────────────────────────────────────────────────
 
-function NotificacoesPanel({ onNavigate, onClose }: { onNavigate: (t: NavTarget) => void; onClose: () => void }) {
-  const [items, setItems] = useState(notificacoesData);
+function NotificacoesPanel({
+  items,
+  onMarkRead,
+  onMarkAllRead,
+  onNavigate,
+  onClose,
+}: {
+  items: Array<{ id: number; tipo: string; titulo: string; texto: string; tempo: string; lida: boolean } & NavTarget>;
+  onMarkRead: (id: number) => void;
+  onMarkAllRead: () => void;
+  onNavigate: (t: NavTarget) => void;
+  onClose: () => void;
+}) {
   const naoLidas = items.filter(n => !n.lida).length;
-
-  function markRead(id: number) { setItems(p => p.map(n => n.id === id ? { ...n, lida: true } : n)); }
-  function markAllRead() { setItems(p => p.map(n => ({ ...n, lida: true }))); }
 
   return (
     <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50" style={{ animation: "dropIn 0.15s ease" }}>
@@ -4483,11 +4509,11 @@ function NotificacoesPanel({ onNavigate, onClose }: { onNavigate: (t: NavTarget)
           <p className="text-sm font-bold text-slate-800">Notificações</p>
           {naoLidas > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{naoLidas}</span>}
         </div>
-        {naoLidas > 0 && <button onClick={markAllRead} className="text-xs text-amber-600 hover:text-amber-700 font-semibold">Marcar todas como lidas</button>}
+        {naoLidas > 0 && <button onClick={onMarkAllRead} className="text-xs text-amber-600 hover:text-amber-700 font-semibold">Marcar todas como lidas</button>}
       </div>
       <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
         {sortNotifs(items).map(n => (
-          <button key={n.id} onClick={() => { markRead(n.id); onNavigate({ view: n.view, turmaId: n.turmaId, tab: n.tab }); onClose(); }}
+          <button key={n.id} onClick={() => { onMarkRead(n.id); onNavigate({ view: n.view, turmaId: n.turmaId, tab: n.tab }); onClose(); }}
             className={`w-full flex gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors ${n.lida ? "opacity-60" : ""}`}>
             <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${n.tipo === "warn" ? "bg-amber-100 text-amber-600" : n.tipo === "error" ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"}`}>
               {n.tipo === "error" ? I.warn : n.tipo === "warn" ? I.warn : I.info}
@@ -4734,8 +4760,27 @@ function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [notifList, setNotifList] = useState(notificacoesData);
   const notifRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    apiGetNotificacoes().then(data => {
+      if (data?.notificacoes && data.notificacoes.length > 0) {
+        setNotifList(data.notificacoes as any);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const handleMarkNotifRead = useCallback((id: number) => {
+    setNotifList(prev => prev.map(n => n.id === id ? { ...n, lida: true } : n));
+    apiMarcarNotificacaoLida(id).catch(() => {});
+  }, []);
+
+  const handleMarkAllNotifsRead = useCallback(() => {
+    setNotifList(prev => prev.map(n => ({ ...n, lida: true })));
+    apiMarcarTodasNotificacoesLidas().catch(() => {});
+  }, []);
 
   const go = useCallback((v: View) => {
     setView(v); setSidebarOpen(false);
@@ -4813,8 +4858,8 @@ function AppShell() {
     : (view === "fin-cockpit-turma" || view === "fin-presencas") && finTurma
       ? `UFCD ${finTurma.ufcdCod} · ${finTurma.curso}`
       : undefined;
-  const bloqueios = notificacoesData.filter(n => !n.lida && n.tipo === "error").length;
-  const naoLidas = notificacoesData.filter(n => !n.lida).length;
+  const bloqueios = notifList.filter(n => !n.lida && n.tipo === "error").length;
+  const naoLidas = notifList.filter(n => !n.lida).length;
 
   function renderView() {
     switch (view) {
@@ -4838,7 +4883,7 @@ function AppShell() {
       case "fin-datas": return <DatasFinView />;
       case "fin-locais": return <LocaisFinView />;
       case "fin-areas-tematicas": return <AreasTematicasFinView />;
-      case "notificacoes": return <NotificacoesView items={notificacoesData as NotifRow[]} onOpen={n => navigate({ view: n.view as View, turmaId: n.turmaId, tab: n.tab as CockpitTab | undefined })} />;
+      case "notificacoes": return <NotificacoesView items={notifList as NotifRow[]} onOpen={n => { handleMarkNotifRead(n.id); navigate({ view: n.view as View, turmaId: n.turmaId, tab: n.tab as CockpitTab | undefined }); }} onMarkRead={handleMarkNotifRead} onMarkAllRead={handleMarkAllNotifsRead} />;
       case "gold-inqueritos": return <InqueritosView acento="gold" />;
       case "gold-formadores":
       case "formadores": return <FormadoresView regime="gold" />;
@@ -4917,7 +4962,15 @@ function AppShell() {
                     <span className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${bloqueios > 0 ? "bg-red-500" : "bg-amber-400"}`} />
                   )}
                 </button>
-                {notifOpen && <NotificacoesPanel onNavigate={v => { navigate(v); setNotifOpen(false); }} onClose={() => setNotifOpen(false)} />}
+                {notifOpen && (
+                  <NotificacoesPanel
+                    items={notifList}
+                    onMarkRead={handleMarkNotifRead}
+                    onMarkAllRead={handleMarkAllNotifsRead}
+                    onNavigate={v => { navigate(v); setNotifOpen(false); }}
+                    onClose={() => setNotifOpen(false)}
+                  />
+                )}
               </div>
 
               <a href="https://ena.pt" target="_blank" rel="noreferrer"

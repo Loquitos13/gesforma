@@ -1,5 +1,26 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import { emitAutomation } from "./api";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  apiCreateCurso,
+  apiCreateFormandoFin,
+  apiCreateFormandoTurma,
+  apiCreatePreinscricao,
+  apiDeleteCurso,
+  apiDeleteFormandoFin,
+  apiDeleteFormandoTurma,
+  apiDeletePreinscricao,
+  apiGetCatalogo,
+  apiCreateCatalogo,
+  apiDeleteCatalogo,
+  apiGetCursos,
+  apiGetFormandosFin,
+  apiGetFormandosTurmas,
+  apiGetPreinscricoes,
+  apiPatchCurso,
+  apiPatchFormandoFin,
+  apiPatchFormandoTurma,
+  apiPatchPreinscricao,
+  emitAutomation,
+} from "./api";
 
 export function nextListId<T extends { id: number }>(xs: T[]) {
   return Math.max(0, ...xs.map(x => x.id), 1000) + 1;
@@ -90,34 +111,162 @@ export function ListsProvider({
   const [blogPosts, setBlog] = useState(seeds.blogPosts);
   const [campanhas, setCamp] = useState(seeds.campanhas);
 
+  useEffect(() => {
+    let alive = true;
+    Promise.allSettled([
+      apiGetPreinscricoes(),
+      apiGetFormandosTurmas(),
+      apiGetFormandosFin(),
+      apiGetCursos(),
+      apiGetCatalogo("blog_posts"),
+      apiGetCatalogo("campanhas"),
+    ]).then(([preRes, ftRes, ffRes, cursosRes, blogRes, campRes]) => {
+      if (!alive) return;
+      if (preRes.status === "fulfilled" && preRes.value?.preinscricoes?.length) {
+        setPre(preRes.value.preinscricoes);
+      }
+      if (ftRes.status === "fulfilled" && ftRes.value?.formandosTurmas?.length) {
+        setFT(ftRes.value.formandosTurmas);
+      }
+      if (ffRes.status === "fulfilled" && ffRes.value?.formandosFin?.length) {
+        setFF(ffRes.value.formandosFin);
+      }
+      if (cursosRes.status === "fulfilled" && cursosRes.value?.cursos?.length) {
+        const rows = cursosRes.value.cursos;
+        const goldList: CursoGoldRow[] = rows
+          .filter((c: any) => c.regime === "gold")
+          .map((c: any) => ({
+            id: c.id,
+            nome: c.nome,
+            categoria: c.categoria,
+            tipo: c.tipo,
+            preco: Number(c.preco),
+            regime: c.regime,
+            horas: Number(c.horas),
+            estado: c.estado,
+          }));
+        const finList: CursoFinRow[] = rows
+          .filter((c: any) => c.regime === "fin")
+          .map((c: any) => ({
+            id: c.id,
+            ufcdCod: c.ufcd_cod || c.ufcdCod,
+            ufcd: c.ufcd,
+            nomeComercial: c.nome_comercial || c.nomeComercial,
+            regime: c.regime,
+            horas: Number(c.horas),
+            estado: c.estado,
+          }));
+        if (goldList.length) setCG(goldList);
+        if (finList.length) setCF(finList);
+      }
+      if (blogRes.status === "fulfilled" && blogRes.value?.items?.length) {
+        setBlog(blogRes.value.items.map((i: any) => i.dados || i));
+      }
+      if (campRes.status === "fulfilled" && campRes.value?.items?.length) {
+        setCamp(campRes.value.items.map((i: any) => i.dados || i));
+      }
+    });
+    return () => { alive = false; };
+  }, []);
+
   const addPreinscricao = useCallback((row: Preinscricao) => {
     setPre(xs => [row, ...xs]);
+    void apiCreatePreinscricao(row).catch(() => undefined);
     void emitAutomation("preinscricao.created", {
       email: row.email,
       nome: `${row.nome} ${row.apelido}`.trim(),
       curso: row.curso,
     }, `preinscricao:${row.id}:${row.email}`);
   }, []);
-  const patchPreinscricao = useCallback((id: number, patch: Partial<Preinscricao>) => setPre(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x)), []);
-  const removePreinscricao = useCallback((id: number) => setPre(xs => xs.filter(x => x.id !== id)), []);
-  const addFormandoTurma = useCallback((row: FormandoTurma) => setFT(xs => [row, ...xs]), []);
-  const patchFormandoTurma = useCallback((id: number, patch: Partial<FormandoTurma>) => setFT(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x)), []);
-  const removeFormandoTurma = useCallback((id: number) => setFT(xs => xs.filter(x => x.id !== id)), []);
-  const addFormandoFin = useCallback((row: FormandoFin) => setFF(xs => [row, ...xs]), []);
-  const patchFormandoFin = useCallback((id: number, patch: Partial<FormandoFin>) => setFF(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x)), []);
-  const removeFormandoFin = useCallback((id: number) => setFF(xs => xs.filter(x => x.id !== id)), []);
-  const addCursoGold = useCallback((row: CursoGoldRow) => setCG(xs => [row, ...xs]), []);
-  const patchCursoGold = useCallback((id: number, patch: Partial<CursoGoldRow>) => setCG(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x)), []);
-  const removeCursoGold = useCallback((id: number) => setCG(xs => xs.filter(x => x.id !== id)), []);
-  const addCursoFin = useCallback((row: CursoFinRow) => setCF(xs => [row, ...xs]), []);
-  const patchCursoFin = useCallback((id: number, patch: Partial<CursoFinRow>) => setCF(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x)), []);
-  const removeCursoFin = useCallback((id: number) => setCF(xs => xs.filter(x => x.id !== id)), []);
-  const addBlogPost = useCallback((row: BlogPostRow) => setBlog(xs => [row, ...xs]), []);
+
+  const patchPreinscricao = useCallback((id: number, patch: Partial<Preinscricao>) => {
+    setPre(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x));
+    void apiPatchPreinscricao(id, patch).catch(() => undefined);
+  }, []);
+
+  const removePreinscricao = useCallback((id: number) => {
+    setPre(xs => xs.filter(x => x.id !== id));
+    void apiDeletePreinscricao(id).catch(() => undefined);
+  }, []);
+
+  const addFormandoTurma = useCallback((row: FormandoTurma) => {
+    setFT(xs => [row, ...xs]);
+    void apiCreateFormandoTurma(row).catch(() => undefined);
+  }, []);
+
+  const patchFormandoTurma = useCallback((id: number, patch: Partial<FormandoTurma>) => {
+    setFT(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x));
+    void apiPatchFormandoTurma(id, patch).catch(() => undefined);
+  }, []);
+
+  const removeFormandoTurma = useCallback((id: number) => {
+    setFT(xs => xs.filter(x => x.id !== id));
+    void apiDeleteFormandoTurma(id).catch(() => undefined);
+  }, []);
+
+  const addFormandoFin = useCallback((row: FormandoFin) => {
+    setFF(xs => [row, ...xs]);
+    void apiCreateFormandoFin(row).catch(() => undefined);
+  }, []);
+
+  const patchFormandoFin = useCallback((id: number, patch: Partial<FormandoFin>) => {
+    setFF(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x));
+    void apiPatchFormandoFin(id, patch).catch(() => undefined);
+  }, []);
+
+  const removeFormandoFin = useCallback((id: number) => {
+    setFF(xs => xs.filter(x => x.id !== id));
+    void apiDeleteFormandoFin(id).catch(() => undefined);
+  }, []);
+
+  const addCursoGold = useCallback((row: CursoGoldRow) => {
+    setCG(xs => [row, ...xs]);
+    void apiCreateCurso(row).catch(() => undefined);
+  }, []);
+
+  const patchCursoGold = useCallback((id: number, patch: Partial<CursoGoldRow>) => {
+    setCG(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x));
+    void apiPatchCurso(id, patch).catch(() => undefined);
+  }, []);
+
+  const removeCursoGold = useCallback((id: number) => {
+    setCG(xs => xs.filter(x => x.id !== id));
+    void apiDeleteCurso(id).catch(() => undefined);
+  }, []);
+
+  const addCursoFin = useCallback((row: CursoFinRow) => {
+    setCF(xs => [row, ...xs]);
+    void apiCreateCurso({ ...row, regime: "fin" }).catch(() => undefined);
+  }, []);
+
+  const patchCursoFin = useCallback((id: number, patch: Partial<CursoFinRow>) => {
+    setCF(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x));
+    void apiPatchCurso(id, patch).catch(() => undefined);
+  }, []);
+
+  const removeCursoFin = useCallback((id: number) => {
+    setCF(xs => xs.filter(x => x.id !== id));
+    void apiDeleteCurso(id).catch(() => undefined);
+  }, []);
+
+  const addBlogPost = useCallback((row: BlogPostRow) => {
+    setBlog(xs => [row, ...xs]);
+    void apiCreateCatalogo("blog_posts", row).catch(() => undefined);
+  }, []);
   const patchBlogPost = useCallback((id: number, patch: Partial<BlogPostRow>) => setBlog(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x)), []);
-  const removeBlogPost = useCallback((id: number) => setBlog(xs => xs.filter(x => x.id !== id)), []);
-  const addCampanha = useCallback((row: CampanhaRow) => setCamp(xs => [row, ...xs]), []);
+  const removeBlogPost = useCallback((id: number) => {
+    setBlog(xs => xs.filter(x => x.id !== id));
+    void apiDeleteCatalogo("blog_posts", id).catch(() => undefined);
+  }, []);
+  const addCampanha = useCallback((row: CampanhaRow) => {
+    setCamp(xs => [row, ...xs]);
+    void apiCreateCatalogo("campanhas", row).catch(() => undefined);
+  }, []);
   const patchCampanha = useCallback((id: number, patch: Partial<CampanhaRow>) => setCamp(xs => xs.map(x => x.id === id ? { ...x, ...patch } : x)), []);
-  const removeCampanha = useCallback((id: number) => setCamp(xs => xs.filter(x => x.id !== id)), []);
+  const removeCampanha = useCallback((id: number) => {
+    setCamp(xs => xs.filter(x => x.id !== id));
+    void apiDeleteCatalogo("campanhas", id).catch(() => undefined);
+  }, []);
 
   const value = useMemo(() => ({
     preinscricoes, addPreinscricao, patchPreinscricao, removePreinscricao,

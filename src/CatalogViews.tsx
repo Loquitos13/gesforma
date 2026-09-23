@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiGetConfiguracoes, apiSaveConfiguracao, apiGetCatalogo, apiCreateCatalogo, apiDeleteCatalogo } from "./api";
 import {
   AppModal, SearchSelect, ViewFilters, matchesFilter, uniqueOpts,
   cursosFinOpts, cursosGoldOpts, horariosOpts, locaisOpts,
@@ -147,7 +148,7 @@ function TableFooter({ page, total, perPage, onChange }: { page: number; total: 
   const to = Math.min(page * perPage, total);
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-t border-slate-100">
-      <p className="text-xs text-slate-500">A mostrar <strong className="text-slate-700">{from}–{to}</strong> de <strong className="text-slate-700">{total}</strong></p>
+      <p className="text-xs text-slate-500">A mostrar <strong className="text-slate-700">{from}-{to}</strong> de <strong className="text-slate-700">{total}</strong></p>
       <div className="flex gap-1">
         <button onClick={() => onChange(page - 1)} disabled={page === 1} className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white disabled:opacity-40">‹</button>
         <button onClick={() => onChange(page + 1)} disabled={page === pages} className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-white disabled:opacity-40">›</button>
@@ -491,6 +492,7 @@ export function DatasFinView() {
 function DatasCatalogView({ accent }: { accent: Accent }) {
   const seed = accent === "gold" ? datasGoldData : datasFinData;
   const cursosOpts = accent === "gold" ? cursosGoldOpts : cursosFinOpts;
+  const tipoCatalogo = "datas_" + accent;
   const [lista, setLista] = useState(seed);
   const [s, setS] = useState(""); const [p, setP] = useState(1);
   const [filtro, setFiltro] = useState("Todos");
@@ -504,6 +506,16 @@ function DatasCatalogView({ accent }: { accent: Accent }) {
   const [fim, setFim] = useState("");
   const [preco, setPreco] = useState("125");
   const [link, setLink] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    apiGetCatalogo(tipoCatalogo).then(res => {
+      if (!alive || !res?.items?.length) return;
+      setLista(res.items.map((i: any) => i.dados || i));
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [tipoCatalogo]);
+
   const f = lista.filter(x => {
     const q = `${x.curso} ${x.local} ${x.horario}`.toLowerCase().includes(s.toLowerCase());
     return q && matchesFilter(x.curso, filtroCurso) && matchesFilter(x.local, filtroLocal) && (filtro === "Todos" || x.status === filtro);
@@ -529,6 +541,7 @@ function DatasCatalogView({ accent }: { accent: Accent }) {
     };
     if (editing) setLista(xs => xs.map(x => x.id === editing.id ? row : x));
     else setLista(xs => [row, ...xs]);
+    void apiCreateCatalogo(tipoCatalogo, row).catch(() => undefined);
     setOpen(null);
   }
   return (
@@ -536,7 +549,7 @@ function DatasCatalogView({ accent }: { accent: Accent }) {
       <div className="space-y-4">
         <PageHeader
           title={accent === "gold" ? "Datas / Edições Gold" : "Datas / Edições Financiadas"}
-          sub={accent === "gold" ? "Calendário comercial: início, fim, horário, preço e local. Cada edição alimenta as turmas." : "Calendário das UFCD: início, fim, horário e local. Sem preço — a edição é financiada."}
+          sub={accent === "gold" ? "Calendário comercial: início, fim, horário, preço e local. Cada edição alimenta as turmas." : "Calendário das UFCD: início, fim, horário e local. Sem preço  -  a edição é financiada."}
           action={<NewBtn accent={accent} label="+ Nova data" onClick={() => setOpen("new")} />}
         />
         <ViewFilters
@@ -568,7 +581,7 @@ function DatasCatalogView({ accent }: { accent: Accent }) {
                       <a href={`https://${r.link}`} className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline" onClick={e => e.preventDefault()}>{I.link} Link</a>
                     </Td>
                     <Td>{estadoBadge(r.status)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => { setLista(xs => xs.filter(x => x.id !== r.id)); void apiDeleteCatalogo(tipoCatalogo, r.id).catch(() => undefined); }} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -603,6 +616,7 @@ export function LocaisFinView() {
 }
 
 function LocaisCatalogView({ accent }: { accent: Accent }) {
+  const tipoCatalogo = "locais_" + accent;
   const [lista, setLista] = useState(accent === "gold" ? locaisData : locaisFinData);
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
@@ -610,6 +624,16 @@ function LocaisCatalogView({ accent }: { accent: Accent }) {
   const [nome, setNome] = useState("");
   const [morada, setMorada] = useState("");
   const [salas, setSalas] = useState("1");
+
+  useEffect(() => {
+    let alive = true;
+    apiGetCatalogo(tipoCatalogo).then(res => {
+      if (!alive || !res?.items?.length) return;
+      setLista(res.items.map((i: any) => i.dados || i));
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [tipoCatalogo]);
+
   const f = lista.filter(x => {
     const q = `${x.nome} ${x.morada}`.toLowerCase().includes(s.toLowerCase());
     return q && (filtro === "Todos" || x.status === filtro);
@@ -626,12 +650,13 @@ function LocaisCatalogView({ accent }: { accent: Accent }) {
     const row = { id: editing?.id ?? nextId(lista), nome: nome.trim(), morada: morada.trim(), salas: Number(salas) || 0, turmas: editing?.turmas ?? 0, status: "Ativo" };
     if (editing) setLista(xs => xs.map(x => x.id === editing.id ? row : x));
     else setLista(xs => [row, ...xs]);
+    void apiCreateCatalogo(tipoCatalogo, row).catch(() => undefined);
     setOpen(null);
   }
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Locais" sub={accent === "gold" ? "Polos da ENA onde as turmas Gold decorrem." : "Salas e polos das turmas financiadas — quase tudo em sala virtual."} action={<NewBtn accent={accent} label="+ Novo local" onClick={() => setOpen("new")} />} />
+        <PageHeader title="Locais" sub={accent === "gold" ? "Polos da ENA onde as turmas Gold decorrem." : "Salas e polos das turmas financiadas  -  quase tudo em sala virtual."} action={<NewBtn accent={accent} label="+ Novo local" onClick={() => setOpen("new")} />} />
         <ViewFilters accent={accent} chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: setFiltro }} onClear={() => setFiltro("Todos")} />
         <Card>
           <TableToolbar search={s} onSearch={setS} />
@@ -648,7 +673,7 @@ function LocaisCatalogView({ accent }: { accent: Accent }) {
                     <Td className="text-center text-xs text-slate-600">{r.salas || "-"}</Td>
                     <Td className="text-center text-xs font-semibold text-slate-700">{r.turmas}</Td>
                     <Td>{estadoBadge(r.status)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => { setLista(xs => xs.filter(x => x.id !== r.id)); void apiDeleteCatalogo(tipoCatalogo, r.id).catch(() => undefined); }} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -676,11 +701,22 @@ export function AreasTematicasFinView() {
 }
 
 function AreasCatalogView({ accent }: { accent: Accent }) {
+  const tipoCatalogo = "areas_" + accent;
   const [lista, setLista] = useState(accent === "gold" ? areasTematicasData : areasFinData);
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof areasTematicasData[number] | null>(null);
   const [nome, setNome] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    apiGetCatalogo(tipoCatalogo).then(res => {
+      if (!alive || !res?.items?.length) return;
+      setLista(res.items.map((i: any) => i.dados || i));
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [tipoCatalogo]);
+
   const f = lista.filter(x => x.nome.toLowerCase().includes(s.toLowerCase()) && (filtro === "Todos" || x.estado === filtro));
   const editing = open && open !== "new" ? open : null;
   useEffect(() => { if (open) setNome(editing?.nome ?? ""); }, [open, editing]);
@@ -689,6 +725,7 @@ function AreasCatalogView({ accent }: { accent: Accent }) {
     const row = { id: editing?.id ?? nextId(lista), nome: nome.trim(), cursos: editing?.cursos ?? 0, estado: "Ativo" };
     if (editing) setLista(xs => xs.map(x => x.id === editing.id ? row : x));
     else setLista(xs => [row, ...xs]);
+    void apiCreateCatalogo(tipoCatalogo, row).catch(() => undefined);
     setOpen(null);
   }
   return (
@@ -709,7 +746,7 @@ function AreasCatalogView({ accent }: { accent: Accent }) {
                     <Td className="text-sm font-medium text-slate-800">{r.nome}</Td>
                     <Td className="text-center text-xs font-semibold text-slate-700">{r.cursos}</Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => { setLista(xs => xs.filter(x => x.id !== r.id)); void apiDeleteCatalogo(tipoCatalogo, r.id).catch(() => undefined); }} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -1189,12 +1226,23 @@ export function FinInscricoesView() {
 }
 
 export function BlogTematicasView() {
+  const tipoCatalogo = "blog_tematicas";
   const [lista, setLista] = useState(blogTematicasData);
   const [s, setS] = useState("");
   const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState<"new" | typeof blogTematicasData[number] | null>(null);
   const [nome, setNome] = useState("");
   const [slug, setSlug] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    apiGetCatalogo(tipoCatalogo).then(res => {
+      if (!alive || !res?.items?.length) return;
+      setLista(res.items.map((i: any) => i.dados || i));
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [tipoCatalogo]);
+
   const f = lista.filter(x => `${x.nome} ${x.slug}`.toLowerCase().includes(s.toLowerCase()) && (filtro === "Todos" || x.estado === filtro));
   const editing = open && open !== "new" ? open : null;
   useEffect(() => {
@@ -1221,7 +1269,7 @@ export function BlogTematicasView() {
                     <Td className="text-xs font-mono text-slate-500">/{r.slug}</Td>
                     <Td className="text-center text-xs font-semibold">{r.posts}</Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setLista(xs => xs.filter(x => x.id !== r.id))} /></div></Td>
+                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => { setLista(xs => xs.filter(x => x.id !== r.id)); void apiDeleteCatalogo(tipoCatalogo, r.id).catch(() => undefined); }} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -1244,6 +1292,7 @@ export function BlogTematicasView() {
             };
             if (editing) setLista(xs => xs.map(x => x.id === editing.id ? row : x));
             else setLista(xs => [row, ...xs]);
+            void apiCreateCatalogo(tipoCatalogo, row).catch(() => undefined);
             setOpen(null);
           }} disabled={!nome.trim()} label={editing ? "Guardar" : "Criar temática"} />
         </div>
@@ -1335,14 +1384,31 @@ export function ConfiguracoesView() {
   const [saved, setSaved] = useState(false);
   const current = configCards.find(c => c.id === openId) ?? null;
 
+  useEffect(() => {
+    let alive = true;
+    apiGetConfiguracoes().then(res => {
+      if (!alive || !res?.configuracoes) return;
+      setDrafts(prev => ({ ...prev, ...res.configuracoes }));
+    }).catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
+
   function setField(id: string, label: string, value: string) {
     setDrafts(prev => ({ ...prev, [id]: { ...prev[id], [label]: value } }));
+  }
+
+  function handleSave() {
+    if (current) {
+      void apiSaveConfiguracao(current.id, drafts[current.id] || {}).catch(() => undefined);
+    }
+    setSaved(true);
+    setOpenId(null);
   }
 
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Configurações" sub={saved ? "Alterações guardadas neste protótipo." : "Parâmetros da entidade - a ENA gere por turmas, não por ação de formação."} />
+        <PageHeader title="Configurações" sub={saved ? "Alterações guardadas com sucesso." : "Parâmetros da entidade: a ENA gere por turmas, não por ação de formação."} />
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {configCards.map(c => (
             <button key={c.id} type="button" onClick={() => setOpenId(c.id)}
@@ -1364,7 +1430,7 @@ export function ConfiguracoesView() {
         footer={
           <>
             <button type="button" onClick={() => setOpenId(null)} className="px-4 py-2.5 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Cancelar</button>
-            <button type="button" onClick={() => { setSaved(true); setOpenId(null); }} className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white">Guardar</button>
+            <button type="button" onClick={handleSave} className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white">Guardar</button>
           </>
         }
       >

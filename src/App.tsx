@@ -60,7 +60,7 @@ import {
   emitAutomation,
   type Dashboard, type EmailJob, type EmailJobStats, type EmailRule, type TurmaCertificado, type TurmaDocumento,
 } from "./api";
-import { persist, toastError } from "./toastBus";
+import { persist, toastError, toastOk } from "./toastBus";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -718,7 +718,7 @@ function ConhecimentoEnaCard({ onVerMais, dados }: { onVerMais: () => void; dado
           <p className="text-xs text-slate-400 mt-0.5">Pergunta da ficha de inscrição · {total.toLocaleString("pt-PT")} pré-inscrições</p>
         </div>
         <button type="button" onClick={onVerMais} className="text-xs font-semibold text-slate-400 hover:text-amber-600 whitespace-nowrap">
-          Pré-inscrições →
+          CRM →
         </button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 items-center">
@@ -2416,21 +2416,41 @@ const kanbanCols = [
   { id: "Formando", label: "Formando ✓", color: "border-emerald-400 bg-emerald-50", dot: "bg-emerald-400" },
 ];
 
+function telDigits(telf: string) {
+  const d = telf.replace(/\D/g, "");
+  if (!d) return "";
+  return d.startsWith("351") ? d : `351${d}`;
+}
+
+function crmAtrasado(p: Preinscricao) {
+  if (!p.proximoContacto) return false;
+  if (p.estado === "Pago" || p.estado === "Formando") return false;
+  return p.proximoContacto < hojeIso();
+}
+
 function KanbanCard({ item, onClick }: { item: Preinscricao; onClick: () => void }) {
+  const wa = telDigits(item.telf);
+  const late = crmAtrasado(item);
   return (
-    <button onClick={onClick} className="w-full text-left bg-white rounded-xl border border-slate-200 shadow-sm p-3 hover:shadow-md hover:border-amber-300 transition-all">
+    <button type="button" onClick={onClick} className={`w-full text-left bg-white rounded-xl border shadow-sm p-3 hover:shadow-md transition-all ${late ? "border-red-300 hover:border-red-400" : "border-slate-200 hover:border-amber-300"}`}>
       <div className="flex items-start justify-between gap-1">
         <p className="text-xs font-bold text-slate-800 leading-snug">{item.nome} {item.apelido}</p>
-        <span className="text-xs font-bold text-amber-600 whitespace-nowrap">€{item.preco}</span>
+        <span className="text-xs font-bold text-amber-600 whitespace-nowrap">€ {item.preco}</span>
       </div>
       <p className="text-xs text-slate-500 mt-0.5 truncate">{item.curso}</p>
-      <div className="flex items-center justify-between mt-2">
-        <span className="text-xs text-blue-600 font-medium">{item.local}</span>
-        <span className="text-xs text-slate-400">{item.inscrito.slice(5, 10)}</span>
+      <div className="flex items-center justify-between mt-2 gap-2">
+        <span className="text-xs text-slate-600 font-medium truncate">{item.local}</span>
+        {late
+          ? <span className="text-[10px] font-bold uppercase tracking-wide text-red-600">Atrasado</span>
+          : item.proximoContacto
+            ? <span className="text-[10px] font-semibold text-slate-400">{item.proximoContacto.slice(5)}</span>
+            : <span className="text-xs text-slate-400">{item.inscrito.slice(5, 10)}</span>}
       </div>
       <div className="flex gap-2 mt-2">
-        <a href={`tel:${item.telf}`} onClick={e => e.stopPropagation()} className="flex-1 py-1 text-center bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1">{I.phone}</a>
-        <a href={`https://wa.me/351${item.telf}`} onClick={e => e.stopPropagation()} className="flex-1 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1">{I.whatsapp}</a>
+        <a href={`tel:${item.telf}`} onClick={e => e.stopPropagation()} className="flex-1 py-1.5 text-center bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg transition-colors inline-flex items-center justify-center gap-1">{I.phone} Ligar</a>
+        {wa && (
+          <a href={`https://wa.me/${wa}`} onClick={e => e.stopPropagation()} className="flex-1 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 text-xs font-medium rounded-lg transition-colors inline-flex items-center justify-center gap-1">{I.whatsapp} WhatsApp</a>
+        )}
       </div>
     </button>
   );
@@ -2477,7 +2497,7 @@ function KanbanBoard({ onCardClick, visible, items, onMove }: {
                 </div>
               ))}
               {colItems.length === 0 && (
-                <div className="py-8 text-center text-xs text-slate-400">Arrasta cartões aqui</div>
+                <div className="py-8 text-center text-xs text-slate-400 px-2">Nenhum lead nesta etapa.</div>
               )}
             </div>
           </div>
@@ -2489,7 +2509,7 @@ function KanbanBoard({ onCardClick, visible, items, onMove }: {
 
 // ─── Modal Ficha Comercial (pré-inscrição) ────────────────────────────────────
 
-function FichaComercial({ item, open, onClose, onConvert, onContactar, onPatch }: { item: Preinscricao | null; open: boolean; onClose: () => void; onConvert?: (turma: string) => void; onContactar?: (nota: string) => void; onPatch?: (patch: { notas?: string; proximoContacto?: string }) => void }) {
+function FichaComercial({ item, open, onClose, onConvert, onContactar, onPatch }: { item: Preinscricao | null; open: boolean; onClose: () => void; onConvert?: (turma: string) => void; onContactar?: (nota: string) => void; onPatch?: (patch: Partial<Preinscricao>) => void }) {
   const { gold } = useTurmas();
   const [notas, setNotas] = useState("");
   const [proximoContacto, setProximoContacto] = useState("");
@@ -2507,27 +2527,62 @@ function FichaComercial({ item, open, onClose, onConvert, onContactar, onPatch }
   }, [item?.id, item?.notas, item?.proximoContacto, open]);
   if (!item) return null;
   const turmaOpts = turmaGoldOpts(gold, { curso: item.curso });
+  const wa = telDigits(item.telf);
+  const late = crmAtrasado(item);
+  const etapaIdx = Math.max(0, kanbanCols.findIndex(c => c.id === item.estado));
   return (
-    <Modal open={open} onClose={onClose} title={`${item.nome} ${item.apelido}`}>
+    <AppModal open={open} onClose={onClose} title={`${item.nome} ${item.apelido}`} sub={`${item.curso} · ${item.local}`} size="lg">
       <div className="p-5 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm">{item.nome[0]}{item.apelido[0]}</div>
-          <div>
-            <p className="text-xs text-slate-500">{item.email} · {item.telf}</p>
-            <p className="text-xs text-slate-500 mt-0.5">Origem: <strong>{item.origem}</strong> · Campanha: <strong>{item.campanha}</strong></p>
+        <div className="flex items-start gap-3">
+          <div className="w-11 h-11 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm flex-shrink-0">{item.nome[0]}{item.apelido[0]}</div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-slate-500 truncate">{item.email} · {item.telf}</p>
+            <p className="text-xs text-slate-500 mt-0.5">Origem <strong>{item.origem}</strong> · Campanha <strong>{item.campanha}</strong></p>
+            {late && <p className="text-xs font-bold text-red-600 mt-1">Contacto em atraso · {item.proximoContacto}</p>}
+          </div>
+          {estadoBadge(item.estado)}
+        </div>
+
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Pipeline</p>
+          <div className="grid grid-cols-5 gap-1">
+            {kanbanCols.map((col, i) => {
+              const active = col.id === item.estado;
+              const done = i < etapaIdx;
+              return (
+                <button
+                  key={col.id}
+                  type="button"
+                  disabled={col.id === "Formando"}
+                  title={col.id === "Formando" ? "Inscreva na turma para converter." : `Passar para ${col.label}`}
+                  onClick={() => {
+                    if (col.id === item.estado || col.id === "Formando") return;
+                    onPatch?.({ estado: col.id });
+                  }}
+                  className={`rounded-lg px-1 py-2 text-center border transition-colors ${
+                    active ? "bg-amber-500 border-amber-500 text-white"
+                    : done ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                    : "bg-slate-50 border-slate-200 text-slate-500 hover:border-amber-300"
+                  } ${col.id === "Formando" ? "cursor-default" : ""}`}
+                >
+                  <span className="block text-[10px] font-bold leading-tight">{col.label.replace(" ✓", "")}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
+
         <div className="grid grid-cols-2 gap-3 text-xs">
           <div className="bg-slate-50 rounded-xl p-3"><p className="text-slate-400">Curso</p><p className="font-semibold text-slate-700 mt-0.5">{item.curso}</p></div>
-          <div className="bg-slate-50 rounded-xl p-3"><p className="text-slate-400">Local / Início</p><p className="font-semibold text-slate-700 mt-0.5">{item.local}</p></div>
+          <div className="bg-slate-50 rounded-xl p-3"><p className="text-slate-400">Local</p><p className="font-semibold text-slate-700 mt-0.5">{item.local}</p></div>
           <div className="bg-amber-50 rounded-xl p-3"><p className="text-amber-600">Valor</p><p className="font-bold text-amber-700 mt-0.5 text-base">€ {item.preco}</p></div>
-          <div className="bg-slate-50 rounded-xl p-3"><p className="text-slate-400">Estado</p><div className="mt-0.5">{estadoBadge(item.estado)}</div></div>
+          <div className="bg-slate-50 rounded-xl p-3"><p className="text-slate-400">Inscrito a</p><p className="font-semibold text-slate-700 mt-0.5">{item.inscrito}</p></div>
         </div>
         <Field label="Próximo contacto">
           <input type="date" value={proximoContacto} onChange={e => setProximoContacto(e.target.value)} className={iCls} />
         </Field>
         <Field label="Notas da chamada">
-          <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={3} className={`${iCls} resize-none`} />
+          <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={3} className={`${iCls} resize-none`} placeholder="O que ficou combinado, objecções, horário preferido…" />
         </Field>
         <div className="flex items-center justify-between gap-3">
           {seguimentoMsg
@@ -2538,6 +2593,7 @@ function FichaComercial({ item, open, onClose, onConvert, onContactar, onPatch }
             onClick={() => {
               onPatch?.({ notas, proximoContacto });
               setSeguimentoMsg("Seguimento gravado.");
+              toastOk("Seguimento gravado.");
             }}
             className="px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 whitespace-nowrap"
           >
@@ -2546,7 +2602,9 @@ function FichaComercial({ item, open, onClose, onConvert, onContactar, onPatch }
         </div>
         <div className="flex gap-2">
           <a href={`tel:${item.telf}`} className="flex-1 py-2 bg-slate-800 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5 hover:bg-slate-700 transition-colors">{I.phone} Ligar</a>
-          <a href={`https://wa.me/351${item.telf.replace(/\D/g, "")}`} className="flex-1 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5 hover:bg-emerald-700 transition-colors">{I.whatsapp} WhatsApp</a>
+          {wa
+            ? <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="flex-1 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5 hover:bg-emerald-700 transition-colors">{I.whatsapp} WhatsApp</a>
+            : <span className="flex-1 py-2 bg-slate-100 text-slate-400 text-sm font-semibold rounded-lg flex items-center justify-center">Sem telemóvel</span>}
         </div>
         {item.estado === "Não contactado" && (
           <button
@@ -2557,8 +2615,17 @@ function FichaComercial({ item, open, onClose, onConvert, onContactar, onPatch }
             Registar 1.º contacto
           </button>
         )}
-        {!escolherTurma ? (
-          <button onClick={() => { setEscolherTurma(true); setConvMsg(""); }} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2">{I.convert} Converter em Formando - Escolher turma</button>
+        {item.estado !== "Pago" && item.estado !== "Formando" && (
+          <button
+            type="button"
+            onClick={() => { onPatch?.({ estado: "Pago" }); toastOk("Marcado como pago."); }}
+            className="w-full py-2 border border-teal-200 bg-teal-50 text-sm font-semibold text-teal-800 rounded-lg hover:bg-teal-100"
+          >
+            Marcar pagamento recebido
+          </button>
+        )}
+        {item.estado !== "Formando" && (!escolherTurma ? (
+          <button onClick={() => { setEscolherTurma(true); setConvMsg(""); }} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2">{I.convert} Inscrever numa turma</button>
         ) : (
           <div className="space-y-2">
             <Field label="Turma ativa">
@@ -2572,7 +2639,8 @@ function FichaComercial({ item, open, onClose, onConvert, onContactar, onPatch }
                 disabled={!turmaConv}
                 onClick={() => {
                   onConvert?.(turmaConv);
-                  setConvMsg(`${item.nome} ${item.apelido} inscrita na turma ${turmaConv}.`);
+                  setConvMsg(`${item.nome} ${item.apelido} inscrito na turma ${turmaConv}.`);
+                  toastOk("Lead convertido em formando.");
                 }}
                 className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg"
               >
@@ -2580,9 +2648,9 @@ function FichaComercial({ item, open, onClose, onConvert, onContactar, onPatch }
               </button>
             </div>
           </div>
-        )}
+        ))}
       </div>
-    </Modal>
+    </AppModal>
   );
 }
 
@@ -2778,7 +2846,7 @@ function PainelView({ onNavigate }: { onNavigate: (v: View | NavTarget) => void 
     <div className="space-y-5">
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         {[
-          { label: "Pré-inscritos", value: cards.preinscritos.toLocaleString("pt-PT"), sub: `${funil[1]?.v ?? 0} já contactados`, color: "text-blue-600", bg: "bg-blue-50", icon: I.clipboard, view: "gold-preinscricoes" as View },
+          { label: "CRM · leads", value: cards.preinscritos.toLocaleString("pt-PT"), sub: `${funil[1]?.v ?? 0} já contactados`, color: "text-blue-600", bg: "bg-blue-50", icon: I.clipboard, view: "gold-preinscricoes" as View },
           { label: "Formandos", value: cards.formandosAtivos.toLocaleString("pt-PT"), sub: `${cards.formandosGold} Gold \u00b7 ${cards.formandosFin} financiados`, color: "text-emerald-600", bg: "bg-emerald-50", icon: I.users, view: "gold-formandos-turmas" as View },
           { label: "Turmas ativas", value: String(cards.turmasAtivas), sub: `${cards.turmasTotal} no total`, color: "text-violet-600", bg: "bg-violet-50", icon: I.school, view: "gold-turmas" as View },
           { label: "Cursos ativos", value: String(cards.cursosAtivos), sub: `${cards.cursosGold} Gold \u00b7 ${cards.cursosFin} financiados`, color: "text-amber-600", bg: "bg-amber-50", icon: I.book, view: "gold-cursos" as View },
@@ -2895,7 +2963,7 @@ function PainelView({ onNavigate }: { onNavigate: (v: View | NavTarget) => void 
 // ─── PreInscricoes Gold (tabela + kanban) ─────────────────────────────────────
 
 function PreInscricoesGoldView() {
-  const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
+  const [viewMode, setViewMode] = useState<"table" | "kanban">("kanban");
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
   const [fichaItem, setFichaItem] = useState<Preinscricao | null>(null);
@@ -2931,22 +2999,43 @@ function PreInscricoesGoldView() {
     matchesFilter(x.curso, filtroCurso) && matchesFilter(x.local, filtroLocal);
 
   const f = preinscricoes.filter(x => {
-    const q = `${x.nome} ${x.apelido} ${x.email} ${x.curso}`.toLowerCase().includes(s.toLowerCase());
+    const q = `${x.nome} ${x.apelido} ${x.email} ${x.curso} ${x.telf}`.toLowerCase().includes(s.toLowerCase());
     return q && matchRow(x) && (filtro === "Todos" || x.estado === filtro);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
+  const hoje = hojeIso();
+  const porContactar = preinscricoes.filter(x => x.estado === "Não contactado");
+  const atrasados = preinscricoes.filter(crmAtrasado);
+  const hojeSeguir = preinscricoes.filter(x => x.proximoContacto === hoje && x.estado !== "Pago" && x.estado !== "Formando");
+  const aConverter = preinscricoes.filter(x => x.estado === "Pago");
+  const emCurso = preinscricoes.filter(x => x.estado === "1º Contacto" || x.estado === "2º Contacto").length;
+  const convertidos = preinscricoes.filter(x => x.estado === "Formando").length;
+  const valorAberto = preinscricoes.filter(x => x.estado !== "Formando").reduce((acc, x) => acc + x.preco, 0);
+
+  async function copiarFormularioPublico() {
+    const url = `${window.location.origin}/pre-inscricao`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toastOk("Ligação do formulário público copiada.");
+    } catch {
+      toastError("Não foi possível copiar. Abra /pre-inscricao e copie o endereço.");
+    }
+  }
 
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Pré-Inscrições Gold" sub={`${preinscricoes.length} pré-inscrições`}
+        <PageHeader title="CRM · Gold" sub="Fila comercial: contactar, seguir, converter. Arraste no pipeline ou abra a ficha."
           action={
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <button type="button" onClick={() => void copiarFormularioPublico()} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1.5">
+                {I.link} Formulário público
+              </button>
               <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden">
-                <button onClick={() => setViewMode("table")} className={`px-3 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5 ${viewMode === "table" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>{I.list} Lista</button>
-                <button onClick={() => setViewMode("kanban")} className={`px-3 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5 ${viewMode === "kanban" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>{I.kanban} Kanban</button>
+                <button type="button" onClick={() => setViewMode("kanban")} className={`px-3 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5 ${viewMode === "kanban" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>{I.kanban} Pipeline</button>
+                <button type="button" onClick={() => setViewMode("table")} className={`px-3 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5 ${viewMode === "table" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>{I.list} Lista</button>
               </div>
-              <NewBtn label="+ Nova" onClick={() => {
+              <NewBtn label="+ Lead" onClick={() => {
                 setEditLead(null);
                 resetLeadForm();
                 setNovo(true);
@@ -2954,24 +3043,72 @@ function PreInscricoesGoldView() {
             </div>
           }
         />
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          {[
+            { label: "Leads abertos", value: String(preinscricoes.filter(x => x.estado !== "Formando").length), sub: `${preinscricoes.length} no total`, tone: "text-slate-800" },
+            { label: "Por contactar", value: String(porContactar.length), sub: `${atrasados.length} em atraso`, tone: atrasados.length ? "text-red-600" : "text-amber-600" },
+            { label: "Em conversa", value: String(emCurso), sub: `${aConverter.length} pagos a converter`, tone: "text-blue-600" },
+            { label: "Convertidos", value: String(convertidos), sub: `€ ${valorAberto.toLocaleString("pt-PT")} em aberto`, tone: "text-emerald-600" },
+          ].map(c => (
+            <Card key={c.label} className="p-4">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{c.label}</p>
+              <p className={`text-2xl font-bold mt-1 ${c.tone}`}>{c.value}</p>
+              <p className="text-xs text-slate-400 mt-1">{c.sub}</p>
+            </Card>
+          ))}
+        </div>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Fila do dia</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <button type="button" onClick={() => { setFiltro("Não contactado"); setViewMode("table"); setP(1); }}
+              className="text-left rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 hover:shadow-sm">
+              <p className="text-sm font-bold text-amber-800">{porContactar.length} por contactar</p>
+              <p className="text-xs text-slate-600 mt-0.5">{porContactar[0] ? `Seguinte: ${porContactar[0].nome} ${porContactar[0].apelido}` : "Fila vazia."}</p>
+            </button>
+            <button type="button" onClick={() => { if (atrasados[0]) openFicha(atrasados[0]); }}
+              className={`text-left rounded-xl border px-3.5 py-3 hover:shadow-sm ${atrasados.length ? "border-red-200 bg-red-50" : "border-slate-200 bg-white"}`}>
+              <p className={`text-sm font-bold ${atrasados.length ? "text-red-700" : "text-slate-700"}`}>{atrasados.length} atrasados</p>
+              <p className="text-xs text-slate-600 mt-0.5">{atrasados[0] ? `Abrir ${atrasados[0].nome} ${atrasados[0].apelido}` : "Nenhum follow-up em atraso."}</p>
+            </button>
+            <button type="button" onClick={() => { if (aConverter[0]) openFicha(aConverter[0]); else if (hojeSeguir[0]) openFicha(hojeSeguir[0]); }}
+              className="text-left rounded-xl border border-teal-200 bg-teal-50 px-3.5 py-3 hover:shadow-sm">
+              <p className="text-sm font-bold text-teal-800">{aConverter.length} a converter</p>
+              <p className="text-xs text-slate-600 mt-0.5">{hojeSeguir.length ? `${hojeSeguir.length} marcados para hoje` : "Pagos prontos a inscrever na turma."}</p>
+            </button>
+          </div>
+        </div>
         <ViewFilters
           fields={[
             { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(preinscricoes.map(x => x.curso)) },
             { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(preinscricoes.map(x => x.local)) },
           ]}
-          chips={viewMode === "table" ? { options: ["Todos", "Não contactado", "1º Contacto", "2º Contacto", "Pago", "Formando"], value: filtro, onChange: v => { setFiltro(v); setP(1); } } : undefined}
+          chips={{ options: ["Todos", "Não contactado", "1º Contacto", "2º Contacto", "Pago", "Formando"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
           onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
         />
 
         {viewMode === "kanban" ? (
-          <KanbanBoard items={preinscricoes} onMove={(id, estado) => patchPreinscricao(id, { estado })} onCardClick={openFicha} visible={matchRow} />
+          <div className="space-y-3">
+            <div className="relative max-w-sm">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{I.search}</span>
+              <input type="text" value={s} onChange={e => setS(e.target.value)} placeholder="Nome, email, curso ou telemóvel…" className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            </div>
+            {f.length === 0 ? (
+              <EmptyHint
+                text={preinscricoes.length === 0 ? "Ainda sem leads. Cole o formulário público no site ou registe um pedido de telefone." : "Nenhum lead neste filtro."}
+                action={preinscricoes.length === 0 ? "Novo lead" : "Limpar filtros"}
+                onAction={preinscricoes.length === 0 ? () => { setEditLead(null); resetLeadForm(); setNovo(true); } : () => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setS(""); setP(1); }}
+              />
+            ) : (
+              <KanbanBoard items={f} onMove={(id, estado) => { patchPreinscricao(id, { estado }); toastOk("Etapa actualizada."); }} onCardClick={openFicha} />
+            )}
+          </div>
         ) : (
           <Card>
             <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
             {rows.length === 0 && (
               <EmptyHint
-                text={preinscricoes.length === 0 ? "Ainda sem pré-inscrições. Registe o pedido do site ou do telefone." : "Nenhuma pré-inscrição neste filtro."}
-                action={preinscricoes.length === 0 ? "Nova pré-inscrição" : "Limpar filtros"}
+                text={preinscricoes.length === 0 ? "Ainda sem leads. Cole o formulário público no site ou registe um pedido de telefone." : "Nenhum lead neste filtro."}
+                action={preinscricoes.length === 0 ? "Novo lead" : "Limpar filtros"}
                 onAction={preinscricoes.length === 0 ? () => { setEditLead(null); resetLeadForm(); setNovo(true); } : () => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setS(""); setP(1); }}
               />
             )}
@@ -3044,7 +3181,7 @@ function PreInscricoesGoldView() {
           id: nextListId(formandosTurmas),
           nome: fichaItem.nome, apelido: fichaItem.apelido, telf: fichaItem.telf, email: fichaItem.email,
           inscrito: nowStamp(), local: t.local, curso: t.curso, turma: t.nome, turmaId: t.id,
-          estado: "Formando", pago: false, valor: fichaItem.preco, metodo: "-",
+          estado: "Formando", pago: fichaItem.estado === "Pago", valor: fichaItem.preco, metodo: "-",
         });
         patchGold(t.id, { totalAlunos: t.totalAlunos + 1 });
         patchPreinscricao(fichaItem.id, { estado: "Formando" });
@@ -3053,12 +3190,12 @@ function PreInscricoesGoldView() {
       <ConfirmDangerModal
         open={!!apagar}
         onClose={() => setApagar(null)}
-        title="Eliminar pré-inscrição"
+        title="Eliminar lead"
         body={apagar ? `Remover ${apagar.nome} ${apagar.apelido} da fila comercial?` : ""}
         risk="O pedido sai da lista de contacto e a acção não se desfaz. Prefira marcar como Indeferido se quiser manter o histórico."
         onConfirm={() => { if (apagar) removePreinscricao(apagar.id); }}
       />
-      <SlideOver open={novo} onClose={() => { setNovo(false); setEditLead(null); }} title={editLead ? `Editar ${editLead.nome}` : "Nova pré-inscrição"} sub="Lead comercial Gold">
+      <SlideOver open={novo} onClose={() => { setNovo(false); setEditLead(null); }} title={editLead ? `Editar ${editLead.nome}` : "Novo lead"} sub="CRM Gold · entra na fila por contactar">
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Nome"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} /></Field>
@@ -4644,7 +4781,7 @@ function useSearchIndex(): SearchRow[] {
   return useMemo(() => [
     ...formandosTurmas.map(f => ({ tipo: "Formando Gold", nome: `${f.nome} ${f.apelido}`, sub: `${f.email} · ${f.turma || "sem turma"}`, view: "gold-formandos-turmas" as View })),
     ...formandosFin.map(f => ({ tipo: "Formando Financiado", nome: `${f.nome} ${f.apelido}`, sub: `${f.email} · ${f.turma || "sem turma"}`, view: "fin-formandos" as View })),
-    ...preinscricoes.map(l => ({ tipo: "Pré-inscrição", nome: `${l.nome} ${l.apelido}`, sub: `${l.curso || "sem curso"} · ${l.estado}`, view: "gold-preinscricoes" as View })),
+    ...preinscricoes.map(l => ({ tipo: "CRM", nome: `${l.nome} ${l.apelido}`, sub: `${l.curso || "sem curso"} · ${l.estado}`, view: "gold-preinscricoes" as View })),
     ...gold.map(t => ({ tipo: "Turma Gold", nome: t.nome, sub: `${t.local} · ${t.curso}`, view: "gold-cockpit-turma" as View, turmaId: t.id, tab: "overview" as CockpitTab })),
     ...fin.map(t => ({ tipo: "Turma Financiada", nome: t.nome, sub: `UFCD ${t.ufcdCod} · ${t.curso}`, view: "fin-cockpit-turma" as View, turmaId: t.id, tab: "overview" as CockpitTab })),
     ...cursosGold.map(c => ({ tipo: "Curso Gold", nome: c.nome, sub: c.categoria, view: "gold-curso-ficha" as View, cursoId: c.id })),
@@ -4673,7 +4810,7 @@ function useAtalhosDoDia(): SearchRow[] {
   return useMemo(() => {
     const out: SearchRow[] = [];
     const porContactar = preinscricoes.filter(l => !l.contactadoEm).length;
-    if (porContactar) out.push({ tipo: "Atalho", nome: `${porContactar} pré-inscrições por contactar`, sub: "Gold · fila comercial do dia", view: "gold-preinscricoes" });
+    if (porContactar) out.push({ tipo: "Atalho", nome: `${porContactar} leads por contactar`, sub: "CRM Gold · fila do dia", view: "gold-preinscricoes" });
     const pendentes = pagamentos.filter(t => t.estado !== "Pago").length;
     if (pendentes) out.push({ tipo: "Atalho", nome: `${pendentes} pagamentos por confirmar`, sub: "Tesouraria", view: "pagamentos" });
 
@@ -4731,7 +4868,7 @@ function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: (
     "Turma Gold": "bg-violet-100 text-violet-700", "Turma Financiada": "bg-teal-100 text-teal-700",
     "Curso Gold": "bg-orange-100 text-orange-700", "UFCD": "bg-emerald-100 text-emerald-700",
     "Formador Gold": "bg-violet-100 text-violet-700", "Formador Financiado": "bg-blue-100 text-blue-700",
-    "Pré-inscrição": "bg-slate-100 text-slate-600",
+    "Pré-inscrição": "bg-slate-100 text-slate-600", CRM: "bg-amber-100 text-amber-800",
     DTP: "bg-red-100 text-red-700", Inquérito: "bg-slate-100 text-slate-600", Atalho: "bg-amber-100 text-amber-800",
   };
 
@@ -4836,7 +4973,7 @@ type NavLeaf = { label: string; view?: View; icon: React.ReactNode; children?: {
 const sidebarConfig: NavGroup[] = [
   { group: "Principal", items: [{ label: "Painel", view: "painel", icon: I.home }] },
   { group: "Gold", items: [
-    { label: "Pré-Inscrições", view: "gold-preinscricoes", icon: I.clipboard },
+    { label: "CRM", view: "gold-preinscricoes", icon: I.clipboard },
     { label: "Formandos", icon: I.users, children: [{ label: "Formandos Turmas", view: "gold-formandos-turmas" }, { label: "Formandos Gold", view: "gold-formandos-gold" }] },
     { label: "Campanhas", view: "gold-campanhas", icon: I.megaphone },
     { label: "Edição de Cursos", icon: I.book, children: [
@@ -5023,7 +5160,7 @@ function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v:
 // ─── App ─────────────────────────────────────────────────────────────────────
 
 const viewTitles: Partial<Record<View, string>> = {
-  painel: "Painel", "gold-preinscricoes": "Pré-Inscrições Gold",
+  painel: "Painel", "gold-preinscricoes": "CRM · Gold",
   "gold-formandos-turmas": "Formandos Turmas", "gold-formandos-gold": "Formandos Gold",
   "gold-campanhas": "Campanhas", "gold-cursos": "Cursos Gold", "gold-curso-ficha": "Ficha do curso", "gold-datas": "Datas Gold",
   "gold-locais": "Locais", "gold-areas-tematicas": "Áreas Temáticas",

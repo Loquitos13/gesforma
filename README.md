@@ -40,7 +40,7 @@ Os formulários de criar e editar (pré-inscrição, turma, formando, sessão, e
 
 Em **Emails automáticos**, a nova regra pede gatilho, template, curso e atraso, com **preview do email** ao lado. O olho nas regras e nos templates abre o mesmo preview.
 
-Não existe `formandos.ena.pt` nem área de formando. O pedido público é a **pré-inscrição** (`/pre-inscricao`) e o **inquérito de satisfação** (`/inquerito/:token`). A secretaria contacta a pessoa a seguir (telefone, WhatsApp ou email). Os emails automáticos levam a esse formulário ou a `mailto:formacao@ena.pt`.
+Não existe `formandos.ena.pt` nem área de formando. O pedido público é a **pré-inscrição** (`/pre-inscricao`) e o **inquérito de satisfação** (`/inquerito/:token`). No backoffice, esses pedidos entram no **CRM** (menu Gold → CRM): fila do dia, pipeline e ficha do lead (ligar, WhatsApp, seguimento, marcar pago, inscrever numa turma). A secretaria contacta a pessoa a seguir. Os emails automáticos levam ao formulário público ou a `mailto:formacao@ena.pt`.
 
 A referência Multibanco / MB Way na ficha do formando grava um pagamento **Pendente** (com email e referência). O banco confirma em `GET|POST /api/v1/public/pagamentos/webhook` (`chave`, `referencia` ou `id`, `valor`). A chave vive em `PAYMENT_WEBHOOK_KEY` ou em Configurações → Gold → **Chave webhook pagamentos**. A confirmação marca o pagamento como Pago, actualiza o formando Gold e dispara `payment.confirmed` na fila de email. Recibos legais certificados (Moloni) e o contrato Ifthenpay/SIBS ficam de fora até existirem credenciais.
 

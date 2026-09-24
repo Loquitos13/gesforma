@@ -29,6 +29,7 @@ const CHUNKED = [
 
 // Ficheiros alterados nesta ronda: vão num blob comprimido só deles.
 const PATCHED = [
+  "src/App.tsx",
   "src/TurmaExtras.tsx",
   "src/ActionSurfaces.tsx",
   "src/api.ts",

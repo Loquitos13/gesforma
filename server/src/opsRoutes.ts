@@ -4,6 +4,8 @@ import { ingestEvent } from "./automations.js";
 import type { Db } from "./db/pool.js";
 import { isEmail, normalizeEmail, sanitizeHeader } from "./security.js";
 import {
+  confirmarPagamento,
+  findPagamentoPorReferencia,
   getOpsSnapshot,
   mapBlog,
   mapCampanha,
@@ -18,6 +20,7 @@ import {
   mapTurmaGold,
   nextOpsId,
 } from "./ops.js";
+import { config } from "./config.js";
 
 const preSchema = z.object({
   nome: z.string().trim().min(1).max(80),
@@ -605,6 +608,7 @@ export function registerOpsRoutes(
     data: z.string().max(40).optional(),
     estado: z.string().max(20).optional().default("Pago"),
     email: z.string().max(254).optional(),
+    referencia: z.string().max(40).optional(),
   });
   app.post("/v1/pagamentos", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
@@ -612,19 +616,16 @@ export function registerOpsRoutes(
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
     const id = `TRX-${await nextOpsId(db)}`;
+    const email = d.email ? normalizeEmail(d.email) : "";
     await db.query(
-      "INSERT INTO pagamentos (id, nome, valor, metodo, curso, data, estado) VALUES ($1,$2,$3,$4,$5,$6,$7)",
-      [id, d.nome, d.valor, d.metodo, d.curso, d.data || nowStamp(), d.estado],
+      "INSERT INTO pagamentos (id, nome, valor, metodo, curso, data, estado, email, referencia) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+      [id, d.nome, d.valor, d.metodo, d.curso, d.data || nowStamp(), d.estado, email, d.referencia ?? ""],
     );
-    if (d.email && isEmail(normalizeEmail(d.email))) {
-      await ingestEvent(db, "payment.confirmed", {
-        email: normalizeEmail(d.email),
-        nome: d.nome,
-        curso: d.curso,
-      }, `payment:${id}:${normalizeEmail(d.email)}`).catch(() => undefined);
-    }
+    let mapped = null as ReturnType<typeof mapPagamento> | null;
     const row = await one(db, "SELECT * FROM pagamentos WHERE id = $1", [id]);
-    return { pagamento: row ? mapPagamento(row) : { id } };
+    if (row && /pago/i.test(d.estado)) mapped = await confirmarPagamento(db, row as Record<string, unknown>);
+    else mapped = row ? mapPagamento(row as Record<string, unknown>) : { id, nome: d.nome, valor: d.valor, metodo: d.metodo, curso: d.curso, data: d.data || nowStamp(), estado: d.estado, email, referencia: d.referencia ?? "" };
+    return { pagamento: mapped };
   });
   app.patch("/v1/pagamentos/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
@@ -632,16 +633,56 @@ export function registerOpsRoutes(
     const parsed = pagSchema.partial().safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
+    const before = await one(db, "SELECT * FROM pagamentos WHERE id = $1", [id]);
+    if (!before) return reply.code(404).send({ error: "pagamento inexistente" });
     await db.query(
-      "UPDATE pagamentos SET nome = COALESCE($2, nome), valor = COALESCE($3, valor), metodo = COALESCE($4, metodo), curso = COALESCE($5, curso), data = COALESCE($6, data), estado = COALESCE($7, estado) WHERE id = $1",
-      [id, d.nome ?? null, d.valor ?? null, d.metodo ?? null, d.curso ?? null, d.data ?? null, d.estado ?? null],
+      "UPDATE pagamentos SET nome = COALESCE($2, nome), valor = COALESCE($3, valor), metodo = COALESCE($4, metodo), curso = COALESCE($5, curso), data = COALESCE($6, data), estado = COALESCE($7, estado), email = COALESCE($8, email), referencia = COALESCE($9, referencia) WHERE id = $1",
+      [id, d.nome ?? null, d.valor ?? null, d.metodo ?? null, d.curso ?? null, d.data ?? null, d.estado ?? null, d.email ? normalizeEmail(d.email) : null, d.referencia ?? null],
     );
     const row = await one(db, "SELECT * FROM pagamentos WHERE id = $1", [id]);
-    return { pagamento: row ? mapPagamento(row) : null };
+    const passouAPago = d.estado && /pago/i.test(d.estado) && !/pago/i.test(String((before as { estado?: string }).estado ?? ""));
+    const mapped = row && passouAPago
+      ? await confirmarPagamento(db, row as Record<string, unknown>)
+      : row ? mapPagamento(row as Record<string, unknown>) : null;
+    return { pagamento: mapped };
   });
   app.delete("/v1/pagamentos/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     await db.query("DELETE FROM pagamentos WHERE id = $1", [(req.params as { id: string }).id]);
     return { ok: true };
   });
+
+  async function webhookChave(db: Db) {
+    if (config.paymentWebhookKey) return config.paymentWebhookKey;
+    const row = await one(db, "SELECT values FROM app_settings WHERE id = $1", ["gold"]);
+    const values = (row?.values ?? {}) as Record<string, string>;
+    return String(values["Chave webhook pagamentos"] ?? values["chaveWebhook"] ?? "").trim();
+  }
+
+  async function handlePagamentoWebhook(req: FastifyRequest, reply: FastifyReply) {
+    const q = req.query as Record<string, string | undefined>;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const chave = String(q.chave ?? q.key ?? body.chave ?? body.key ?? req.headers["x-webhook-key"] ?? "").trim();
+    const expected = await webhookChave(db);
+    if (!expected) return reply.code(503).send({ error: "webhook sem chave: grave-a em Configurações → Gold ou em PAYMENT_WEBHOOK_KEY" });
+    if (chave !== expected) return reply.code(401).send({ error: "chave inválida" });
+    const referencia = String(q.referencia ?? body.referencia ?? body.ref ?? "").trim();
+    const id = String(q.id ?? body.id ?? "").trim();
+    const valorRaw = q.valor ?? body.valor;
+    const valor = valorRaw == null || valorRaw === "" ? undefined : Number(String(valorRaw).replace(",", "."));
+    const found = id
+      ? await one(db, "SELECT * FROM pagamentos WHERE id = $1", [id])
+      : await findPagamentoPorReferencia(db, referencia, valor);
+    if (!found) return reply.code(404).send({ error: "referência desconhecida" });
+    const mapped = await confirmarPagamento(db, found as Record<string, unknown>);
+    await audit(db, undefined, "pagamento.webhook", "pagamento", mapped.id, req.ip, { referencia, valor });
+    return { ok: true, pagamento: mapped };
+  }
+
+  app.get("/v1/public/pagamentos/webhook", {
+    config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+  }, handlePagamentoWebhook);
+  app.post("/v1/public/pagamentos/webhook", {
+    config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+  }, handlePagamentoWebhook);
 }

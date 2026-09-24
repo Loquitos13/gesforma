@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { apiDtpExport } from "./api";
 import { useCatalogs } from "./CatalogsContext";
 import { AppModal } from "./FormKit";
+import { useLists } from "./ListsContext";
 import { EmptyHint, NotifKind, sortNotifs } from "./SecretaryUX";
-import { toastError } from "./toastBus";
+import { toastError, toastOk } from "./toastBus";
 
 const I = {
   download: (
@@ -256,20 +257,44 @@ export function ReciboModal({
 }
 
 export function ReferenciaMbModal({
-  open, onClose, nome, valor, curso, modo = "mb",
+  open, onClose, nome, valor, curso, modo = "mb", email = "",
 }: {
-  open: boolean; onClose: () => void; nome: string; valor: number; curso: string; modo?: "mb" | "mbway";
+  open: boolean; onClose: () => void; nome: string; valor: number; curso: string; modo?: "mb" | "mbway"; email?: string;
 }) {
   const [copied, setCopied] = useState(false);
   const [enviado, setEnviado] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const gravado = useRef(false);
   const { settings } = useCatalogs();
+  const { addPagamento } = useLists();
   const entidade = (settings.gold?.["Entidade Multibanco"] ?? "").trim();
   const referencia = refMb(nome + String(valor));
   const isWay = modo === "mbway";
+
+  async function gravarPendente() {
+    if (gravado.current) return;
+    gravado.current = true;
+    setBusy(true);
+    try {
+      addPagamento({
+        id: `TRX-${Date.now() % 100000}`,
+        nome,
+        valor,
+        metodo: isWay ? "MB Way" : "Multibanco",
+        curso,
+        data: toastNow(),
+        estado: "Pendente",
+      }, { email, referencia: referencia.replace(/\s/g, "") });
+      toastOk(isWay ? "Pedido MB Way registado como pendente." : "Referência Multibanco gravada. O webhook do banco confirma o pagamento.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <AppModal
       open={open}
-      onClose={() => { setCopied(false); setEnviado(false); onClose(); }}
+      onClose={() => { setCopied(false); setEnviado(false); gravado.current = false; onClose(); }}
       title={isWay ? "Pedido MB Way" : "Referência Multibanco"}
       sub={`${nome} · ${curso}`}
     >
@@ -302,13 +327,13 @@ export function ReferenciaMbModal({
           </div>
         )}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={() => { setCopied(false); setEnviado(false); onClose(); }} className="px-4 py-2 border border-slate-200 text-sm font-semibold text-slate-600 rounded-lg hover:bg-slate-50">Fechar</button>
+          <button type="button" onClick={() => { setCopied(false); setEnviado(false); gravado.current = false; onClose(); }} className="px-4 py-2 border border-slate-200 text-sm font-semibold text-slate-600 rounded-lg hover:bg-slate-50">Fechar</button>
           {!isWay && (
-            <button type="button" onClick={() => { void navigator.clipboard?.writeText(`${entidade} ${referencia} €${valor}`); setCopied(true); }} className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5">
+            <button type="button" disabled={busy} onClick={() => { void navigator.clipboard?.writeText(`${entidade} ${referencia} €${valor}`); setCopied(true); void gravarPendente(); }} className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5">
               {I.copy} Copiar
             </button>
           )}
-          <button type="button" onClick={() => setEnviado(true)} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">
+          <button type="button" disabled={busy} onClick={() => { setEnviado(true); void gravarPendente(); }} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">
             {isWay ? "Enviar pedido" : "Enviar ao formando"}
           </button>
         </div>
@@ -318,15 +343,33 @@ export function ReferenciaMbModal({
 }
 
 export function EnviarReciboModal({
-  open, onClose, nome, valor, curso, metodo,
+  open, onClose, nome, valor, curso, metodo, email = "",
 }: {
-  open: boolean; onClose: () => void; nome: string; valor: number; curso: string; metodo: string;
+  open: boolean; onClose: () => void; nome: string; valor: number; curso: string; metodo: string; email?: string;
 }) {
   const [ok, setOk] = useState(false);
+  const { pagamentos, addPagamento, patchPagamento } = useLists();
   const t: TransacaoPreview = {
     id: `REC-${String(valor).padStart(4, "0")}`,
     nome, valor, metodo, curso, data: toastNow(), estado: "Pago",
   };
+
+  function enviar() {
+    const existente = pagamentos.find(p =>
+      p.nome === nome && p.curso === curso && Math.abs(p.valor - valor) < 0.02,
+    );
+    if (existente && existente.estado !== "Pago") {
+      patchPagamento(existente.id, { estado: "Pago" });
+    } else if (!existente) {
+      addPagamento({
+        id: `TRX-${Date.now() % 100000}`,
+        nome, valor, metodo: metodo || "Multibanco", curso, data: toastNow(), estado: "Pago",
+      }, email);
+    }
+    setOk(true);
+    toastOk("Recibo na fila de email (pagamento.confirmed), se o formando tiver email.");
+  }
+
   return (
     <AppModal open={open} onClose={() => { setOk(false); onClose(); }} title="Enviar recibo" sub={nome} size="lg">
       <div className="p-5 space-y-4">
@@ -338,7 +381,7 @@ export function EnviarReciboModal({
         )}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={() => { setOk(false); onClose(); }} className="px-4 py-2 border border-slate-200 text-sm font-semibold text-slate-600 rounded-lg hover:bg-slate-50">Fechar</button>
-          <button type="button" onClick={() => setOk(true)} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5">
+          <button type="button" onClick={enviar} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5">
             {I.mail} Enviar recibo
           </button>
         </div>

@@ -82,7 +82,7 @@ export type OpsSnapshot = {
   }>;
   campanhas: Array<{ id: number; nome: string; data: string; encarregado: string; curso?: string; preinscricoes: number; pagos: number; receita: number; custo: number }>;
   blogPosts: Array<{ id: number; titulo: string; slug: string; data: string; status: string }>;
-  pagamentos: Array<{ id: string; nome: string; valor: number; metodo: string; curso: string; data: string; estado: string }>;
+  pagamentos: Array<{ id: string; nome: string; valor: number; metodo: string; curso: string; data: string; estado: string; email?: string; referencia?: string }>;
   catalogs?: Record<string, Array<Record<string, unknown> & { id: number }>>;
   settings?: Record<string, Record<string, string>>;
 };
@@ -317,9 +317,30 @@ export const apiSaveFormadorDocs = (id: number, docs: FormadorDoc[]) =>
   api<{ ok: boolean }>(`/v1/formadores/${id}/docs`, { method: "PUT", body: JSON.stringify({ docs }) });
 
 export type InqueritoResposta = { id: number; turma: string; formando: string; respostas: Record<string, unknown>; data: string };
-export const apiInqueritoRespostas = (id: number) => api<{ respostas: InqueritoResposta[] }>(`/v1/inqueritos/${id}/respostas`);
+export type InqueritoMetrica = {
+  id: number; tipo: string; n: number;
+  media?: number | null; pctSim?: number | null; contagens?: Record<string, number>;
+};
+export const apiInqueritoRespostas = (id: number) =>
+  api<{ respostas: InqueritoResposta[]; metricas?: InqueritoMetrica[] }>(`/v1/inqueritos/${id}/respostas`);
 export const apiAddInqueritoResposta = (id: number, body: { turma?: string; formando?: string; respostas: Record<string, unknown> }) =>
   api<{ ok: boolean }>(`/v1/inqueritos/${id}/respostas`, { method: "POST", body: JSON.stringify(body) });
+export const apiInqueritoPublicoLink = (id: number) =>
+  api<{ token: string; url: string }>(`/v1/inqueritos/${id}/publico`);
+export type InqueritoPublico = {
+  id: number;
+  titulo: string;
+  perguntas: { id: number; tipo: string; texto: string; opcoes: string[] }[];
+};
+export const apiPublicInquerito = (token: string) =>
+  api<InqueritoPublico>(`/v1/public/inqueritos/${encodeURIComponent(token)}`);
+export const apiPublicInqueritoResposta = (
+  token: string,
+  body: { turma?: string; formando?: string; respostas: Record<string, unknown> },
+) => api<{ ok: boolean }>(`/v1/public/inqueritos/${encodeURIComponent(token)}/respostas`, {
+  method: "POST",
+  body: JSON.stringify(body),
+});
 
 export type Dashboard = {
   cards: {

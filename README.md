@@ -11,7 +11,7 @@ O **dossiê técnico-pedagógico (DTP) vive dentro da turma** (separador no cock
 
 O menu **Dossiê TP** lista as turmas com a completude do dossiê e abre o DTP dessa turma.
 
-**Inquéritos** (Gold e Financiada) permitem montar questionários de satisfação com texto, escolha múltipla, escala 1–5 e sim/não. **Pré-visualizar** abre o questionário como o formando o vê e permite lançar uma resposta recebida; **Exportar** dá o CSV das perguntas. A contagem de respostas gravadas aparece ao lado da lista.
+**Inquéritos** (Gold e Financiada) permitem montar questionários de satisfação com texto, escolha múltipla, escala 1–5 e sim/não. **Pré-visualizar** abre o questionário como o formando o vê e permite lançar uma resposta recebida; **Ligação pública** gera um token (`/inquerito/:token`) para o formando responder online; **Exportar** dá o CSV das perguntas. A contagem e as métricas (média 1–5, % Sim, opção mais escolhida) saem das respostas gravadas.
 
 No cockpit da turma (Gold e Financiada, os mesmos separadores): plano de sessão, **sumário por sessão** e **presenças dentro da sessão** - não há menu isolado de presenças. O perfil do formador e os certificados também vivem na turma.
 
@@ -40,7 +40,9 @@ Os formulários de criar e editar (pré-inscrição, turma, formando, sessão, e
 
 Em **Emails automáticos**, a nova regra pede gatilho, template, curso e atraso, com **preview do email** ao lado. O olho nas regras e nos templates abre o mesmo preview.
 
-Não existe `formandos.ena.pt` nem área de formando. O pedido público é a **pré-inscrição** (`/pre-inscricao`). A secretaria contacta a pessoa a seguir (telefone, WhatsApp ou email). Os emails automáticos levam a esse formulário ou a `mailto:formacao@ena.pt`.
+Não existe `formandos.ena.pt` nem área de formando. O pedido público é a **pré-inscrição** (`/pre-inscricao`) e o **inquérito de satisfação** (`/inquerito/:token`). A secretaria contacta a pessoa a seguir (telefone, WhatsApp ou email). Os emails automáticos levam a esse formulário ou a `mailto:formacao@ena.pt`.
+
+A referência Multibanco / MB Way na ficha do formando grava um pagamento **Pendente** (com email e referência). O banco confirma em `GET|POST /api/v1/public/pagamentos/webhook` (`chave`, `referencia` ou `id`, `valor`). A chave vive em `PAYMENT_WEBHOOK_KEY` ou em Configurações → Gold → **Chave webhook pagamentos**. A confirmação marca o pagamento como Pago, actualiza o formando Gold e dispara `payment.confirmed` na fila de email. Recibos legais certificados (Moloni) e o contrato Ifthenpay/SIBS ficam de fora até existirem credenciais.
 
 Cada **turma** tem um **cronograma** e um toggle **Ativa / Inativa**. No cockpit, o separador Cronograma mostra a **grelha ENA** com **todos os dias** do período (mesmo sem eventos). Clique num dia para adicionar um evento: metodologia, horário e módulos (opcional, vários). Se o horário ainda não existir, a grelha cria uma linha nova. **+ Linha de horário** faz o mesmo sem escolher o dia. **Imprimir / PDF** abre o cronograma oficial numa **única tabela** (cabeçalho da escola, datas, local mapeado, meses em colunas e legendas), como no documento da ENA. A lista de sessões lectivas por baixo serve para formadores. Regenerar pede confirmação porque substitui o plano atual. Só turmas ativas aparecem nas pré-inscrições Gold, na conversão de lead em formando, na mudança de turma de um formando e nas inscrições financiadas. Uma turma inativa mantém os formandos já inscritos, mas fecha novas entradas.
 

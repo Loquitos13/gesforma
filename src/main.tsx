@@ -6,17 +6,22 @@ import { CatalogsProvider } from "./CatalogsContext";
 import { DriveProvider } from "./DriveContext";
 import { FormadoresProvider } from "./FormadoresContext";
 import { NotificacoesProvider } from "./NotificacoesContext";
+import { PublicInquerito } from "./PublicInquerito";
 import { PublicPreinscricao } from "./PublicPreinscricao";
 import { ToastHost } from "./ToastHost";
 import { TurmasProvider } from "./TurmasContext";
 import "./index.css";
 
-const publicForm = window.location.pathname.replace(/\/+$/, "") === "/pre-inscricao";
+const path = window.location.pathname.replace(/\/+$/, "") || "/";
+const publicForm = path === "/pre-inscricao";
+const inqToken = path.startsWith("/inquerito/") ? decodeURIComponent(path.slice("/inquerito/".length).split("/")[0] ?? "") : "";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     {publicForm ? (
       <PublicPreinscricao />
+    ) : inqToken ? (
+      <PublicInquerito token={inqToken} />
     ) : (
       <AuthGate>
         <TurmasProvider>

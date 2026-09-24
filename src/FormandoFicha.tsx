@@ -325,6 +325,7 @@ export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "
         nome={`${formando.nome} ${formando.apelido}`}
         valor={formando.valor}
         curso={formando.curso}
+        email={formando.email}
         modo={pay === "mbway" ? "mbway" : "mb"}
       />
       <EnviarReciboModal
@@ -334,6 +335,7 @@ export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "
         valor={formando.valor}
         curso={formando.curso}
         metodo={formando.metodo}
+        email={formando.email}
       />
     </div>
   );

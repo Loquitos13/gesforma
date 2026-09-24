@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ApiError, apiAddInqueritoResposta, apiDriveFiles, apiFormadorDocs, apiInqueritoRespostas, apiSaveFormadorDocs, apiUploadDrive,
-  type DriveFile, type DriveUploadContext, type InqueritoResposta,
+  ApiError, apiAddInqueritoResposta, apiDriveFiles, apiFormadorDocs, apiInqueritoPublicoLink, apiInqueritoRespostas, apiSaveFormadorDocs, apiUploadDrive,
+  type DriveFile, type DriveUploadContext, type InqueritoMetrica, type InqueritoResposta,
 } from "./api";
 import { useCatalogList } from "./CatalogsContext";
 import { useDrive } from "./DriveContext";
@@ -18,6 +18,7 @@ const I = {
   edit: <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>,
   eye: <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/></svg>,
   trash: <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"/></svg>,
+  copy: <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" /><path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" /></svg>,
 };
 
 function ActBtn({ icon, label, color = "blue", onClick }: { icon: React.ReactNode; label: string; color?: string; onClick?: () => void }) {
@@ -903,6 +904,9 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
   const [preview, setPreview] = useState<Inquerito | null>(null);
   const [apagar, setApagar] = useState<Inquerito | null>(null);
   const [respostas, setRespostas] = useState<InqueritoResposta[]>([]);
+  const [metricas, setMetricas] = useState<InqueritoMetrica[]>([]);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkBusy, setLinkBusy] = useState(false);
   const inq = inqueritos.find(i => i.id === selected);
 
   function addInquerito() {
@@ -936,11 +940,11 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
     : { bg: "bg-blue-600", text: "text-blue-600", light: "bg-blue-50", border: "border-blue-200", pill: "bg-blue-100 text-blue-800" };
 
   useEffect(() => {
-    if (!inq) { setRespostas([]); return; }
+    if (!inq) { setRespostas([]); setMetricas([]); setLinkUrl(""); return; }
     let alive = true;
     apiInqueritoRespostas(inq.id)
-      .then(r => { if (alive) setRespostas(r.respostas); })
-      .catch(() => { if (alive) setRespostas([]); });
+      .then(r => { if (alive) { setRespostas(r.respostas); setMetricas(r.metricas ?? []); } })
+      .catch(() => { if (alive) { setRespostas([]); setMetricas([]); } });
     return () => { alive = false; };
   }, [inq]);
 
@@ -984,12 +988,26 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
             </div>
           ))}
           {inq && (
-            <div className="rounded-xl border border-slate-200 bg-white p-3">
+            <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Respostas recebidas</p>
               <p className="text-2xl font-bold text-slate-800 mt-1">{respostas.length}</p>
               {respostas.length === 0
                 ? <p className="text-xs text-slate-400 mt-1">Ainda sem respostas deste inquérito.</p>
                 : <p className="text-xs text-slate-500 mt-1">Última em {respostas[0]?.data}</p>}
+              {metricas.length > 0 && respostas.length > 0 && (
+                <ul className="text-xs text-slate-600 space-y-1 pt-1 border-t border-slate-100">
+                  {metricas.map(m => {
+                    const pergunta = inq.perguntas.find(p => p.id === m.id);
+                    if (m.tipo === "escala") return <li key={m.id}>Escala: média {m.media ?? "—"} ({m.n})</li>;
+                    if (m.tipo === "simnao") return <li key={m.id}>Sim: {m.pctSim ?? "—"}% ({m.n})</li>;
+                    if (m.tipo === "multipla") {
+                      const top = Object.entries(m.contagens ?? {}).sort((a, b) => b[1] - a[1])[0];
+                      return <li key={m.id}>{pergunta?.texto || "Escolha"}: {top ? `${top[0]} (${top[1]})` : "—"}</li>;
+                    }
+                    return <li key={m.id}>{pergunta?.texto || "Texto"}: {m.n} respostas</li>;
+                  })}
+                </ul>
+              )}
             </div>
           )}
         </div>
@@ -1005,11 +1023,33 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
                   <p className={`text-xs font-bold ${accent.text}`}>{isGold ? "GOLD" : "FINANCIADA"}</p>
                   <p className="text-sm font-bold text-slate-800 mt-0.5">{inq.titulo}</p>
                 </div>
-                <div className="flex gap-2 flex-shrink-0">
+                <div className="flex gap-2 flex-shrink-0 flex-wrap justify-end">
                   <button type="button" onClick={() => setPreview(inq)} className="text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 inline-flex items-center gap-1">{I.eye} Pré-visualizar</button>
+                  <button
+                    type="button"
+                    disabled={linkBusy}
+                    onClick={() => {
+                      setLinkBusy(true);
+                      void apiInqueritoPublicoLink(inq.id)
+                        .then(async r => {
+                          setLinkUrl(r.url);
+                          try { await navigator.clipboard?.writeText(r.url); } catch { /* mostra o URL */ }
+                        })
+                        .catch(() => undefined)
+                        .finally(() => setLinkBusy(false));
+                    }}
+                    className="text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 inline-flex items-center gap-1"
+                  >
+                    {I.copy} {linkBusy ? "A gerar…" : "Ligação pública"}
+                  </button>
                   <button type="button" onClick={() => exportarInquerito(inq)} className={`text-xs font-semibold px-2.5 py-1.5 ${accent.bg} text-white rounded-lg hover:opacity-90 inline-flex items-center gap-1`}>{I.download} Exportar</button>
                 </div>
               </div>
+              {linkUrl && (
+                <p className="px-4 py-2 text-[11px] font-mono text-slate-600 bg-slate-50 border-b border-slate-100 break-all">
+                  {linkUrl}
+                </p>
+              )}
               <div className="divide-y divide-slate-50">
                 {inq.perguntas.map((p, idx) => (
                   <div key={p.id} className="p-4 group">
@@ -1069,7 +1109,7 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
                   onClose={() => setPreview(null)}
                   onGravada={() => {
                     if (!inq) return;
-                    void apiInqueritoRespostas(inq.id).then(r => setRespostas(r.respostas)).catch(() => undefined);
+                    void apiInqueritoRespostas(inq.id).then(r => { setRespostas(r.respostas); setMetricas(r.metricas ?? []); }).catch(() => undefined);
                   }}
                 />
                 <div className="flex flex-wrap gap-2">

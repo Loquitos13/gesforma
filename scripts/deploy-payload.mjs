@@ -29,12 +29,17 @@ const CHUNKED = [
 
 // Ficheiros alterados nesta ronda: vão num blob comprimido só deles.
 const PATCHED = [
-  "src/CronogramaGrelha.tsx",
-  "src/TurmaCronograma.tsx",
-  "src/cronogramaGrelha.ts",
-  "src/cronogramaPrint.ts",
-  "src/turmaModel.ts",
   "src/TurmaExtras.tsx",
+  "src/ActionSurfaces.tsx",
+  "src/api.ts",
+  "src/CatalogViews.tsx",
+  "src/FormandoFicha.tsx",
+  "src/ListsContext.tsx",
+  "src/main.tsx",
+  "server/src/pedagogiaRoutes.ts",
+  "server/src/opsRoutes.ts",
+  "server/src/ops.ts",
+  "server/src/config.ts",
 ];
 
 const SKIP = new Set([

@@ -1421,6 +1421,7 @@ const configCards = [
     fields: [
       { label: "Métodos de pagamento", value: "MB Way, Multibanco, cartão, transferência, PayPal" },
       { label: "Entidade Multibanco", value: "" },
+      { label: "Chave webhook pagamentos", value: "" },
       { label: "Curso-bandeira", value: "Formação de Formadores - CCP" },
       { label: "Preço CCP", value: "125 €" },
       { label: "DTP", value: "Núcleo DGERT + PIP e simulações" },

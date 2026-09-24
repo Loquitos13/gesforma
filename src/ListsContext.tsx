@@ -98,7 +98,7 @@ type ListsCtx = {
   patchCampanha: (id: number, patch: Partial<CampanhaRow>) => void;
   removeCampanha: (id: number) => void;
   pagamentos: PagamentoRow[];
-  addPagamento: (row: PagamentoRow, email?: string) => void;
+  addPagamento: (row: PagamentoRow, extra?: string | { email?: string; referencia?: string }) => void;
   patchPagamento: (id: string, patch: Partial<PagamentoRow>) => void;
   removePagamento: (id: string) => void;
 };
@@ -372,9 +372,11 @@ export function ListsProvider({
     });
   }, []);
 
-  const addPagamento = useCallback((row: PagamentoRow, email?: string) => {
+  const addPagamento = useCallback((row: PagamentoRow, extra?: string | { email?: string; referencia?: string }) => {
+    const email = typeof extra === "string" ? extra : extra?.email;
+    const referencia = typeof extra === "object" ? extra?.referencia : undefined;
     setPag(xs => [row, ...xs]);
-    void persist(apiCreatePagamento({ ...row, email }).then(r => {
+    void persist(apiCreatePagamento({ ...row, email, referencia }).then(r => {
       if (r.pagamento) setPag(xs => xs.map(x => x.id === row.id ? r.pagamento : x));
     }), () => setPag(xs => xs.filter(x => x.id !== row.id)));
   }, []);

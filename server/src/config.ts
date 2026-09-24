@@ -66,6 +66,7 @@ export const config = {
   driveDir: process.env.DRIVE_DIR
     ?? (process.env.VERCEL ? "/tmp/gesforma-drive" : new URL("../data/drive-files", import.meta.url).pathname),
   driveMaxBytes: Number(process.env.DRIVE_MAX_BYTES ?? 10 * 1024 * 1024),
+  paymentWebhookKey: process.env.PAYMENT_WEBHOOK_KEY ?? "",
 };
 
 export function allowedOrigins() {

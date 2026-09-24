@@ -1,4 +1,6 @@
 import type { Db } from "./db/pool.js";
+import { ingestEvent } from "./automations.js";
+import { isEmail, normalizeEmail } from "./security.js";
 
 export async function nextOpsId(db: Db) {
   const row = await db.query<{ id: number }>("SELECT nextval('ops_id_seq')::int AS id");
@@ -239,7 +241,57 @@ export function mapPagamento(r: Record<string, unknown>) {
     curso: String(r.curso ?? ""),
     data: String(r.data ?? ""),
     estado: String(r.estado ?? "Pendente"),
+    email: String(r.email ?? ""),
+    referencia: String(r.referencia ?? ""),
   };
+}
+
+function stamp() {
+  return new Date().toISOString().slice(0, 16).replace("T", " ");
+}
+
+function refDigits(raw: string) {
+  return raw.replace(/\D/g, "");
+}
+
+/** Marca o pagamento como Pago, dispara o email e actualiza o formando Gold com o mesmo email. */
+export async function confirmarPagamento(db: Db, row: Record<string, unknown>) {
+  const mapped = mapPagamento(row);
+  if (!/pago/i.test(mapped.estado)) {
+    await db.query(
+      "UPDATE pagamentos SET estado = 'Pago', data = $2 WHERE id = $1",
+      [mapped.id, stamp()],
+    );
+  }
+  const email = mapped.email ? normalizeEmail(mapped.email) : "";
+  if (email && isEmail(email)) {
+    await ingestEvent(db, "payment.confirmed", {
+      email,
+      nome: mapped.nome,
+      curso: mapped.curso,
+    }, `payment:${mapped.id}:${email}`).catch(() => undefined);
+    await db.query(
+      "UPDATE formandos_gold SET pago = true, metodo = CASE WHEN metodo = '-' OR metodo = '' THEN $2 ELSE metodo END WHERE lower(email) = $1",
+      [email, mapped.metodo || "Multibanco"],
+    );
+  }
+  const next = await db.query("SELECT * FROM pagamentos WHERE id = $1", [mapped.id]);
+  return next.rows[0] ? mapPagamento(next.rows[0] as Record<string, unknown>) : mapped;
+}
+
+export async function findPagamentoPorReferencia(db: Db, referencia: string, valor?: number) {
+  const digits = refDigits(referencia);
+  if (!digits) return null;
+  const rows = await db.query(
+    `SELECT * FROM pagamentos
+      WHERE referencia <> ''
+        AND (referencia = $1 OR regexp_replace(referencia, '[^0-9]', '', 'g') = $2)
+      ORDER BY data DESC`,
+    [referencia, digits],
+  );
+  const list = rows.rows as Record<string, unknown>[];
+  if (valor == null || !Number.isFinite(valor)) return list[0] ?? null;
+  return list.find(r => Math.abs(num(r.valor) - valor) < 0.02) ?? null;
 }
 
 export async function listMapped<T>(db: Db, sql: string, map: (r: Record<string, unknown>) => T) {

@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { randomBytes } from "node:crypto";
 import { z } from "zod";
+import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { listDriveFiles, readDriveContent } from "./googleDrive.js";
 import { zipStore } from "./zipStore.js";
@@ -760,14 +762,20 @@ export function registerPedagogiaRoutes(
       "SELECT id, turma, formando, respostas, created_at FROM inquerito_respostas WHERE inquerito_id = $1 ORDER BY created_at DESC LIMIT 200",
       [id],
     );
+    const cat = await db.query<{ payload: unknown }>(
+      "SELECT payload FROM catalog_items WHERE id = $1 AND kind = 'inqueritos'",
+      [id],
+    );
+    const respostas = rows.rows.map(r => ({
+      id: Number(r.id),
+      turma: r.turma,
+      formando: r.formando,
+      respostas: asObj(r.respostas),
+      data: (r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at)).slice(0, 16).replace("T", " "),
+    }));
     return {
-      respostas: rows.rows.map(r => ({
-        id: Number(r.id),
-        turma: r.turma,
-        formando: r.formando,
-        respostas: asObj(r.respostas),
-        data: (r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at)).slice(0, 16).replace("T", " "),
-      })),
+      respostas,
+      metricas: metricasInquerito(perguntasDe(asObj(cat.rows[0]?.payload)), respostas.map(r => r.respostas)),
     };
   });
 
@@ -781,6 +789,98 @@ export function registerPedagogiaRoutes(
       [id, parsed.data.turma, parsed.data.formando, parsed.data.respostas],
     );
     await audit(db, req.actor!.id, "inquerito.resposta", "inquerito", String(id), req.ip);
+    return { ok: true };
+  });
+
+  function perguntasDe(payload: Record<string, unknown>) {
+    return asArr(payload.perguntas).map(raw => {
+      const p = asObj(raw);
+      return {
+        id: Number(p.id) || 0,
+        tipo: String(p.tipo ?? "texto"),
+        texto: String(p.texto ?? ""),
+        opcoes: asArr(p.opcoes).map(String),
+      };
+    }).filter(p => p.id);
+  }
+
+  function metricasInquerito(
+    perguntas: { id: number; tipo: string; opcoes: string[] }[],
+    respostas: Record<string, unknown>[],
+  ) {
+    return perguntas.map(p => {
+      const vals = respostas.map(r => r[String(p.id)]).filter(v => v != null && v !== "");
+      if (p.tipo === "escala") {
+        const nums = vals.map(Number).filter(n => Number.isFinite(n));
+        const media = nums.length ? Math.round((nums.reduce((s, n) => s + n, 0) / nums.length) * 10) / 10 : null;
+        return { id: p.id, tipo: p.tipo, n: nums.length, media };
+      }
+      if (p.tipo === "simnao") {
+        const sim = vals.filter(v => /^sim$/i.test(String(v))).length;
+        const nao = vals.filter(v => /^n[aã]o$/i.test(String(v))).length;
+        return { id: p.id, tipo: p.tipo, n: sim + nao, pctSim: sim + nao ? Math.round((sim / (sim + nao)) * 100) : null };
+      }
+      if (p.tipo === "multipla") {
+        const contagens: Record<string, number> = {};
+        for (const v of vals) contagens[String(v)] = (contagens[String(v)] ?? 0) + 1;
+        return { id: p.id, tipo: p.tipo, n: vals.length, contagens };
+      }
+      return { id: p.id, tipo: p.tipo, n: vals.length };
+    });
+  }
+
+  app.get("/v1/inqueritos/:id/publico", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
+    let row = await db.query<{ public_token: string | null }>(
+      "SELECT public_token FROM catalog_items WHERE id = $1 AND kind = 'inqueritos'",
+      [id],
+    );
+    if (!row.rows[0]) return reply.code(404).send({ error: "inquérito inexistente" });
+    let token = row.rows[0].public_token;
+    if (!token) {
+      token = randomBytes(18).toString("base64url");
+      await db.query("UPDATE catalog_items SET public_token = $2, updated_at = now() WHERE id = $1", [id, token]);
+    }
+    return { token, url: `${config.appOrigin}/inquerito/${token}` };
+  });
+
+  app.get("/v1/public/inqueritos/:token", {
+    config: { rateLimit: { max: 40, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    const token = String((req.params as { token: string }).token ?? "");
+    if (token.length < 8) return reply.code(400).send({ error: "ligação inválida" });
+    const row = await db.query<{ id: number; payload: unknown }>(
+      "SELECT id, payload FROM catalog_items WHERE public_token = $1 AND kind = 'inqueritos'",
+      [token],
+    );
+    const found = row.rows[0];
+    if (!found) return reply.code(404).send({ error: "inquérito inexistente ou ligação revogada" });
+    const payload = asObj(found.payload);
+    return {
+      id: Number(found.id),
+      titulo: String(payload.titulo ?? "Inquérito de satisfação"),
+      perguntas: perguntasDe(payload),
+    };
+  });
+
+  app.post("/v1/public/inqueritos/:token/respostas", {
+    config: { rateLimit: { max: 8, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    const token = String((req.params as { token: string }).token ?? "");
+    const parsed = respostaSchema.safeParse(req.body);
+    if (token.length < 8 || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    const row = await db.query<{ id: number }>(
+      "SELECT id FROM catalog_items WHERE public_token = $1 AND kind = 'inqueritos'",
+      [token],
+    );
+    const found = row.rows[0];
+    if (!found) return reply.code(404).send({ error: "inquérito inexistente" });
+    await db.query(
+      "INSERT INTO inquerito_respostas (inquerito_id, turma, formando, respostas) VALUES ($1, $2, $3, $4::jsonb)",
+      [found.id, parsed.data.turma, parsed.data.formando, parsed.data.respostas],
+    );
     return { ok: true };
   });
 

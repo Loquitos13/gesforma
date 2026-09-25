@@ -51,6 +51,6 @@ export function campanhaNums(
 }
 
 export function roiLabel(receita: number, custo: number) {
-  if (!custo) return "—";
+  if (!custo) return "-";
   return `${Math.round(((receita - custo) / custo) * 100)}%`;
 }

@@ -328,7 +328,7 @@ export async function globalSearch(db: Db, qRaw: string, limitPer = 8): Promise<
           grupo: "turmas",
           tipo: "Turma Financiada",
           nome: String(row.nome ?? ""),
-          sub: `UFCD ${row.ufcd_cod || "—"} · ${row.curso || "sem curso"} · ${row.local || ""}`,
+          sub: `UFCD ${row.ufcd_cod || "-"} · ${row.curso || "sem curso"} · ${row.local || ""}`,
           view: "fin-cockpit-turma",
           turmaId: Number(row.id),
           tab: "overview",

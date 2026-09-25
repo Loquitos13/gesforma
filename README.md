@@ -24,7 +24,7 @@ Cada **curso Gold** e cada **UFCD financiada** tem uma ficha própria (não um p
 
 A vista **Módulos** começa pelo filtro de curso: lista só os blocos desse curso e o botão **+ Novo módulo** está sempre disponível (no cabeçalho, no filtro e no estado vazio). A partir da ficha de um curso Gold ou de uma UFCD, **Módulos** abre já filtrado.
 
-O catálogo **Módulos, Conteúdos, Datas, Locais e Áreas** existe nos dois lados (Gold e Financiada), com o mesmo layout e acento âmbar / azul. Em **Formandos Gold** (avulso) o olho abre a ficha com documentos - o lápis continua a editar. **Detalhes / Recibo** em Pagamentos, **Abrir** em Conteúdos, **Ver certificado**, **Gerar MB / Enviar recibo**, **download** no cockpit e **Ver todas as notificações** abrem ecrãs ou modais. Pré-inscrições, turmas, formadores, cursos, campanhas, blog e pagamentos persistem na base. Os uploads de documentos saem no Drive da entidade (pasta `GesForma / Gold|Financiada / …`).
+O catálogo **Módulos, Conteúdos, Datas, Locais e Áreas** existe nos dois lados (Gold e Financiada), com o mesmo *shell* profissional: kicker de regime, KPIs, pesquisa no painel, linha clicável, cartões no telemóvel e sem coluna de Id. Em **Formandos Gold** (avulso) o olho abre a ficha com documentos - o lápis continua a editar. **Detalhes / Recibo** em Pagamentos, **Abrir** em Conteúdos, **Ver certificado**, **Gerar MB / Enviar recibo**, **download** no cockpit e **Ver todas as notificações** abrem ecrãs ou modais. Pré-inscrições, turmas, formadores, cursos, campanhas, blog e pagamentos persistem na base. Os uploads de documentos saem no Drive da entidade (pasta `GesForma / Gold|Financiada / …`).
 
 Gold e Financiada têm cada uma o menu **Formadores**: ficha (contacto, CCP, NIF, especialidade), estado Ativo/Inactivo e os regimes em que lecciona. Quem marca os dois regimes aparece nas duas listas. Criar ou editar um formador actualiza os dropdowns do cronograma e das turmas.
 
@@ -34,7 +34,9 @@ Em **Configurações**, cada cartão abre um **modal centrado** só com essa sec
 
 A **secretaria** trabalha com rasto no topo (regime + percurso clicável), bloco **A fazer agora** no cockpit, listas em **cartões no telemóvel** e **acções com rótulo** no desktop (menu ⋯ no ecrã estreito). Eliminar pede sempre a mesma confirmação, incluindo nos catálogos e no blog. A pesquisa geral **⌘K** é larga, reconhece nome, telemóvel, email ou id, consulta a base de dados e agrupa os resultados; ao clicar abre a ficha do formando/formador ou a view da formação/turma. As notificações classificam-se em **Bloqueio**, **Aviso** e **Info**.
 
-O **menu segue o perfil** do utilizador: a Comercial Gold vê Principal (Painel e CRM), Gold e Gestão; a Secretaria Financiada vê Principal, Financiada e Gestão; só a Administração vê Sistema.
+O **menu segue o perfil** do utilizador: a Comercial Gold vê Principal (Painel, CRM e Equipa), Gold e Gestão; a Secretaria Financiada vê Principal, Financiada e Gestão; só a Administração vê Sistema.
+
+A vista **Equipa** (Principal) lista os comerciais Gold: estatísticas na lista e, na ficha, propostas comerciais (estado + resposta do cliente), leads atribuídos com notas, e o diário de contactos. As contas com perfil *Comercial* criam-se em Utilizadores; a API é `GET /v1/equipa` e `GET /v1/equipa/:id`.
 
 Os formulários de criar e editar (pré-inscrição, turma, formando, sessão, etc.) abrem em **modal ao centro**, não numa gaveta que desliza da direita.
 
@@ -50,7 +52,7 @@ Cada **turma** tem um **cronograma** e um toggle **Ativa / Inativa**. No cockpit
 
 A secretaria entra com sessão (cookie httpOnly, SameSite=strict). A API Fastify fala **Postgres** na VPS; em desenvolvimento, se `DATABASE_URL` estiver vazio, usa **PGlite** (o mesmo SQL, ficheiro em `server/data/`).
 
-As migrações estão em `server/src/db/migrations/` (`001` … `018`) e correm no arranque. O seed cria o admin, os templates de email e, se as tabelas estiverem vazias, o operacional (cursos, turmas, formadores, leads, pagamentos) e os **catálogos** (módulos, locais, datas, conteúdos, áreas, formandos avulso, inscrições financiadas, temáticas do blog, inquéritos). O backoffice lê `GET /v1/ops` e grava nos CRUD e em `/v1/catalog/:kind`. As **Configurações** ficam em `app_settings`.
+As migrações estão em `server/src/db/migrations/` (`001` … `019`) e correm no arranque. O seed cria o admin, dois comerciais de demonstração (`ines.costa@ena.pt` / `tiago.melo@ena.pt`), os templates de email e, se as tabelas estiverem vazias, o operacional (cursos, turmas, formadores, leads, pagamentos) e os **catálogos** (módulos, locais, datas, conteúdos, áreas, formandos avulso, inscrições financiadas, temáticas do blog, inquéritos). Leads sem comercial recebem um da equipa; propostas de exemplo são gravadas uma vez. O backoffice lê `GET /v1/ops` e grava nos CRUD e em `/v1/catalog/:kind`. As **Configurações** ficam em `app_settings`.
 
 A **execução pedagógica da turma** vive na base: `turma_sessoes` (plano, sumário e presenças por sessão), `turma_documentos` (PIP, simulações e listas do separador Documentos), `turma_dtp` (estado manual do dossiê), `turma_certificados` (nota, e-learning e emissão), `curso_fichas` (conteúdo do site e critérios da simulação), `formando_docs` / `formando_notas`, `formador_docs` e `inquerito_respostas`. As rotas são `/v1/turmas/:regime/:id/pedagogia`, `/v1/dtp/:regime`, `/v1/cursos/:regime/:id/ficha`, `/v1/formandos/:regime/:id/dossier`, `/v1/formadores/:id/docs`, `/v1/inqueritos/:id/respostas`, `/v1/dashboard` e `/v1/notificacoes`.
 
@@ -64,7 +66,7 @@ A **taxa de abertura** dos emails automáticos sai do pixel `GET /api/v1/email/o
 
 A ficha do curso e o blog **ficam no GesForma**. Ainda não há publicação em `ena.pt` - falta o código de integração do site.
 
-Se a API falhar, as listas **não ficam com o seed de demonstração**: ficam vazias e aparece um aviso. As gravações (POST/PUT/PATCH/DELETE) mostram toast quando falham. O overlay branco com o logo ENA só aparece se um pedido à API demorar mais de cerca de 2,5 segundos — mudanças de vista com dados já carregados não o disparam.
+Se a API falhar, as listas **não ficam com o seed de demonstração**: ficam vazias e aparece um aviso. As gravações (POST/PUT/PATCH/DELETE) mostram toast quando falham. O overlay branco com o logo ENA só aparece se um pedido à API demorar mais de cerca de 2,5 segundos - mudanças de vista com dados já carregados não o disparam.
 
 O login aceita **email e palavra-passe**, **Continuar com Google** e **Continuar com Microsoft**. Nos dois casos externos a sessão só é criada se o email já existir como utilizador activo: a autenticação externa identifica a pessoa, não dá acesso. O cliente Google e a aplicação Microsoft configuram-se em **Configurações** (ou por variáveis de ambiente `GOOGLE_*` / `MICROSOFT_*`, que passam a mandar). A aplicação Microsoft pede o *Application (client) ID*, o *client secret* e o *Directory (tenant) ID* - com o tenant da ENA só entra a organização; com `common` entra qualquer organização. O segredo fica cifrado (AES-256-GCM) como o do Google, e o URI de redireccionamento a registar no portal Azure é `{APP_ORIGIN}/api/v1/auth/microsoft/callback`.
 

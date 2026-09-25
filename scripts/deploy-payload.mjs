@@ -30,15 +30,19 @@ const CHUNKED = [
 // Ficheiros alterados nesta ronda: vão num blob comprimido só deles.
 const PATCHED = [
   "src/App.tsx",
+  "src/CatalogViews.tsx",
+  "src/CrmView.tsx",
+  "src/FormadoresView.tsx",
+  "src/api.ts",
+  "src/viewLoadingBus.ts",
   "src/TurmaExtras.tsx",
   "src/ActionSurfaces.tsx",
-  "src/api.ts",
-  "src/CatalogViews.tsx",
   "src/FormandoFicha.tsx",
   "src/ListsContext.tsx",
   "src/main.tsx",
-  "server/src/pedagogiaRoutes.ts",
+  "server/src/globalSearch.ts",
   "server/src/opsRoutes.ts",
+  "server/src/pedagogiaRoutes.ts",
   "server/src/ops.ts",
   "server/src/config.ts",
 ];
@@ -58,7 +62,7 @@ const SKIP = new Set([
 
 // Já presentes no armazenamento da Vercel com o conteúdo que queremos.
 const PRESET = [
-  { file: ".gitignore", sha: "fe012497bcce575902f4891d43d595c351583b0c", size: 120 },
+  { file: ".gitignore", sha: "684c0792d4647d868597311158aa91fc24eb8744", size: 120 },
   { file: "vercel.json", sha: "567d3451868644d1e54603b9e1db788829b0d3a9", size: 542 },
 ];
 

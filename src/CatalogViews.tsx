@@ -97,32 +97,47 @@ function estadoBadge(estado: string) {
 }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden ${className}`}>{children}</div>;
+  return <div className={`bg-white rounded-2xl border border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.05)] overflow-hidden ${className}`}>{children}</div>;
 }
-function PageHeader({ title, sub, action }: { title: string; sub?: string; action?: React.ReactNode }) {
+function PageHeader({ title, sub, action, kicker }: { title: string; sub?: string; action?: React.ReactNode; kicker?: string }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-5">
-      <div>
-        <h1 className="text-xl font-bold text-slate-800 leading-tight">{title}</h1>
-        {sub && <p className="text-sm text-slate-500 mt-0.5">{sub}</p>}
+    <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+      <div className="min-w-0">
+        {kicker && <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{kicker}</p>}
+        <h1 className="text-[1.65rem] font-semibold tracking-tight text-slate-900 mt-0.5 leading-tight">{title}</h1>
+        {sub && <p className="text-sm text-slate-500 mt-1.5 max-w-2xl leading-relaxed">{sub}</p>}
       </div>
       {action}
+    </div>
+  );
+}
+function CatalogKpis({ items }: { items: Array<{ label: string; value: string | number; sub?: string }> }) {
+  if (!items.length) return null;
+  return (
+    <div className={`grid gap-2 ${items.length >= 4 ? "grid-cols-2 xl:grid-cols-4" : "grid-cols-2 sm:grid-cols-3"}`}>
+      {items.map(k => (
+        <div key={k.label} className="bg-white rounded-2xl border border-slate-200/80 px-4 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">{k.label}</p>
+          <p className="mt-1 text-[1.35rem] font-semibold tabular-nums tracking-tight text-slate-900">{k.value}</p>
+          {k.sub ? <p className="text-xs text-slate-500 mt-0.5">{k.sub}</p> : null}
+        </div>
+      ))}
     </div>
   );
 }
 function NewBtn({ label, onClick, accent = "gold" }: { label: string; onClick?: () => void; accent?: Accent }) {
   const text = label.replace(/^\+\s*/, "");
   return (
-    <button onClick={onClick} className={`inline-flex items-center gap-1.5 px-4 py-2 ${accentBtn(accent)} text-white text-sm font-semibold rounded-lg transition-colors shadow-sm whitespace-nowrap`}>
+    <button onClick={onClick} className={`inline-flex items-center gap-1.5 px-4 py-2.5 ${accentBtn(accent)} text-white text-sm font-semibold rounded-xl transition-colors shadow-sm whitespace-nowrap`}>
       {I.plus}{text}
     </button>
   );
 }
 function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <th className={`text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap bg-slate-50 border-b border-slate-200 sticky top-0 z-10 ${className}`}>{children}</th>;
+  return <th className={`text-left px-4 py-3 text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] whitespace-nowrap bg-slate-50/90 backdrop-blur border-b border-slate-200 sticky top-0 z-10 ${className}`}>{children}</th>;
 }
-function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <td className={`px-3 py-2.5 ${className}`}>{children}</td>;
+function Td({ children, className = "", onClick }: { children: React.ReactNode; className?: string; onClick?: (e: React.MouseEvent) => void }) {
+  return <td className={`px-4 py-3 ${className}`} onClick={onClick}>{children}</td>;
 }
 function ActBtn({ icon, label, color = "blue", onClick }: { icon: React.ReactNode; label: string; color?: string; onClick?: () => void }) {
   const colorMap: Record<string, string> = {
@@ -137,12 +152,15 @@ function ActBtn({ icon, label, color = "blue", onClick }: { icon: React.ReactNod
     </button>
   );
 }
-function TableToolbar({ search, onSearch }: { search: string; onSearch: (v: string) => void }) {
+function TableToolbar({ search, onSearch, count, noun = "registos" }: { search: string; onSearch: (v: string) => void; count?: number; noun?: string }) {
   return (
-    <div className="flex items-center justify-end px-4 py-3 border-b border-slate-100">
-      <div className="relative w-full sm:w-52">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3.5 border-b border-slate-100 bg-gradient-to-b from-slate-50/80 to-white">
+      <p className="text-xs text-slate-500">
+        {count == null ? "Catálogo" : <><strong className="text-slate-800 tabular-nums">{count}</strong> {noun}</>}
+      </p>
+      <div className="relative w-full sm:w-72">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{I.search}</span>
-        <input value={search} onChange={e => onSearch(e.target.value)} placeholder="Pesquisar…" className="pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 w-full" />
+        <input value={search} onChange={e => onSearch(e.target.value)} placeholder="Filtrar por nome, curso, local…" className="pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 w-full" />
       </div>
     </div>
   );
@@ -423,7 +441,7 @@ export function FormandosGoldView({ openId, onOpened }: { openId?: number; onOpe
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Formandos Gold" sub="Formandos individuais - sem turma atribuída. Cursos e-learning e vendas avulso." action={<NewBtn label="+ Novo formando" onClick={() => setOpen("new")} />} />
+        <PageHeader title="Formandos Gold" kicker="Catálogo Gold" sub="Formandos individuais — sem turma atribuída. Cursos e-learning e vendas avulso." action={<NewBtn label="+ Novo formando" onClick={() => setOpen("new")} />} />
         <ViewFilters
           fields={[
             { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(lista.map(x => x.curso)) },
@@ -433,7 +451,7 @@ export function FormandosGoldView({ openId, onOpened }: { openId?: number; onOpe
           onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
         />
         <Card>
-          <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} />
+          <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} count={f.length} noun="formandos" />
           {rows.length === 0 && (
             <EmptyHint
               text={lista.length === 0 ? "Ainda sem formandos avulso. Use para e-learning e vendas sem turma." : "Nenhum formando Gold individual corresponde à pesquisa."}
@@ -460,11 +478,10 @@ export function FormandosGoldView({ openId, onOpened }: { openId?: number; onOpe
           </div>
           <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
             <table className="w-full text-sm">
-              <thead><tr><Th>Id</Th><Th>Nome</Th><Th>Curso</Th><Th>Local</Th><Th>Inscrito</Th><Th>Valor</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
+              <thead><tr><Th>Nome</Th><Th>Curso</Th><Th>Local</Th><Th>Inscrito</Th><Th>Valor</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {rows.map(r => (
-                  <tr key={r.id} className="hover:bg-slate-50">
-                    <Td><span className="text-slate-400 font-mono text-xs">{r.id}</span></Td>
+                  <tr key={r.id} className="hover:bg-slate-50/80 cursor-pointer" onClick={() => setFicha(r)}>
                     <Td>
                       <button type="button" onClick={() => setFicha(r)} className="text-left">
                         <p className="text-xs font-medium text-blue-600 hover:text-blue-800">{r.nome} {r.apelido}</p>
@@ -574,10 +591,17 @@ function DatasCatalogView({ accent }: { accent: Accent }) {
     <>
       <div className="space-y-4">
         <PageHeader
-          title={accent === "gold" ? "Datas / Edições Gold" : "Datas / Edições Financiadas"}
-          sub={accent === "gold" ? "Calendário comercial: início, fim, horário, preço e local. Cada edição alimenta as turmas." : "Calendário das UFCD: início, fim, horário e local. Sem preço - a edição é financiada."}
+          kicker={accent === "gold" ? "Catálogo Gold" : "Catálogo Financiada"}
+          title={accent === "gold" ? "Datas / Edições" : "Datas / Edições"}
+          sub={accent === "gold" ? "Calendário comercial: início, fim, horário, preço e local. Cada edição alimenta as turmas." : "Calendário das UFCD: início, fim, horário e local. Sem preço — a edição é financiada."}
           action={<NewBtn accent={accent} label="+ Nova data" onClick={() => setOpen("new")} />}
         />
+        <CatalogKpis items={[
+          { label: "Edições", value: lista.length },
+          { label: "Activas", value: lista.filter(x => x.status === "Ativo").length },
+          { label: "Locais", value: uniqueOpts(lista.map(x => x.local)).length },
+          { label: accent === "gold" ? "Preço médio" : "UFCD", value: accent === "gold" ? `€ ${Math.round(lista.reduce((a, x) => a + x.preco, 0) / Math.max(1, lista.length))}` : uniqueOpts(lista.map(x => x.curso)).length },
+        ]} />
         <ViewFilters
           accent={accent}
           fields={[
@@ -588,26 +612,41 @@ function DatasCatalogView({ accent }: { accent: Accent }) {
           onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
         />
         <Card>
-          <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} />
-          <div className="overflow-x-auto">
+          <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} count={f.length} noun="edições" />
+          <div className="md:hidden p-3 space-y-2">
+            {rows.map(r => (
+              <MobileCard
+                key={r.id}
+                title={r.curso}
+                sub={`${r.local} · ${r.horario}`}
+                badge={estadoBadge(r.status)}
+                meta={[r.inicio, r.fim, accent === "gold" ? `€ ${r.preco}` : "Financiado"]}
+                onOpen={() => setOpen(r)}
+                actions={[
+                  { label: "Editar", icon: I.edit, onClick: () => setOpen(r) },
+                  { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
+                ]}
+              />
+            ))}
+          </div>
+          <div className="hidden md:block overflow-x-auto max-h-[min(70vh,640px)]">
             <table className="w-full text-sm">
-              <thead><tr><Th>Id</Th><Th>Início</Th><Th>Fim</Th><Th>Horário</Th><Th>Local</Th><Th>Curso</Th><Th>{accent === "gold" ? "Preço" : "Regime"}</Th><Th>Inscrição</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
+              <thead><tr><Th>Início</Th><Th>Fim</Th><Th>Horário</Th><Th>Local</Th><Th>Curso</Th><Th>{accent === "gold" ? "Preço" : "Regime"}</Th><Th>Inscrição</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {rows.length === 0 && <EmptyState text="Nenhuma edição corresponde à pesquisa." />}
                 {rows.map(r => (
-                  <tr key={r.id} className="hover:bg-slate-50">
-                    <Td><span className="text-slate-400 font-mono text-xs">{r.id}</span></Td>
+                  <tr key={r.id} className="hover:bg-slate-50/80 cursor-pointer" onClick={() => setOpen(r)}>
                     <Td className="font-mono text-xs text-slate-500 whitespace-nowrap">{r.inicio}</Td>
                     <Td className="font-mono text-xs text-slate-500 whitespace-nowrap">{r.fim}</Td>
                     <Td className="text-xs text-slate-600 whitespace-nowrap">{r.horario}</Td>
                     <Td className="text-xs text-slate-600 whitespace-nowrap">{r.local}</Td>
-                    <Td className="text-xs text-slate-600 max-w-[160px]">{r.curso}</Td>
-                    <Td className={`text-xs font-bold ${accent === "gold" ? "text-amber-600" : "text-blue-600"}`}>{accent === "gold" ? `€ ${r.preco}` : "Financiado"}</Td>
+                    <Td className="text-sm font-medium text-slate-800 max-w-[200px]">{r.curso}</Td>
+                    <Td className={`text-xs font-semibold ${accent === "gold" ? "text-amber-700" : "text-blue-700"}`}>{accent === "gold" ? `€ ${r.preco}` : "Financiado"}</Td>
                     <Td>
                       <a href={`https://${r.link}`} className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline" onClick={e => e.preventDefault()}>{I.link} Link</a>
                     </Td>
                     <Td>{estadoBadge(r.status)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
+                    <Td onClick={e => e.stopPropagation()}><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -678,24 +717,45 @@ function LocaisCatalogView({ accent }: { accent: Accent }) {
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Locais" sub={accent === "gold" ? "Polos da ENA onde as turmas Gold decorrem." : "Salas e polos das turmas financiadas - quase tudo em sala virtual."} action={<NewBtn accent={accent} label="+ Novo local" onClick={() => setOpen("new")} />} />
+        <PageHeader kicker={accent === "gold" ? "Catálogo Gold" : "Catálogo Financiada"} title="Locais" sub={accent === "gold" ? "Polos da ENA onde as turmas Gold decorrem." : "Salas e polos das turmas financiadas — quase tudo em sala virtual."} action={<NewBtn accent={accent} label="+ Novo local" onClick={() => setOpen("new")} />} />
+        <CatalogKpis items={[
+          { label: "Polos", value: lista.length },
+          { label: "Activos", value: lista.filter(x => x.status === "Ativo").length },
+          { label: "Salas", value: lista.reduce((a, x) => a + x.salas, 0) },
+          { label: "Turmas", value: lista.reduce((a, x) => a + x.turmas, 0) },
+        ]} />
         <ViewFilters accent={accent} chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: setFiltro }} onClear={() => setFiltro("Todos")} />
         <Card>
-          <TableToolbar search={s} onSearch={setS} />
-          <div className="overflow-x-auto">
+          <TableToolbar search={s} onSearch={setS} count={f.length} noun="locais" />
+          <div className="md:hidden p-3 space-y-2">
+            {f.map(r => (
+              <MobileCard
+                key={r.id}
+                title={r.nome}
+                sub={r.morada}
+                badge={estadoBadge(r.status)}
+                meta={[`${r.salas || 0} salas`, `${r.turmas} turmas`]}
+                onOpen={() => setOpen(r)}
+                actions={[
+                  { label: "Editar", icon: I.edit, onClick: () => setOpen(r) },
+                  { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
+                ]}
+              />
+            ))}
+          </div>
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr><Th>Id</Th><Th>Local</Th><Th>Morada / plataforma</Th><Th className="text-center">Salas</Th><Th className="text-center">Turmas</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
+              <thead><tr><Th>Local</Th><Th>Morada / plataforma</Th><Th className="text-center">Salas</Th><Th className="text-center">Turmas</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {f.length === 0 && <EmptyState text="Nenhum local encontrado." />}
                 {f.map(r => (
-                  <tr key={r.id} className="hover:bg-slate-50">
-                    <Td><span className="text-slate-400 font-mono text-xs">{r.id}</span></Td>
-                    <Td className="text-sm font-semibold text-slate-800">{r.nome}</Td>
-                    <Td className="text-xs text-slate-500 max-w-[240px]">{r.morada}</Td>
-                    <Td className="text-center text-xs text-slate-600">{r.salas || "-"}</Td>
-                    <Td className="text-center text-xs font-semibold text-slate-700">{r.turmas}</Td>
+                  <tr key={r.id} className="hover:bg-slate-50/80 cursor-pointer" onClick={() => setOpen(r)}>
+                    <Td className="text-sm font-semibold text-slate-900">{r.nome}</Td>
+                    <Td className="text-xs text-slate-500 max-w-[280px] leading-relaxed">{r.morada}</Td>
+                    <Td className="text-center text-xs text-slate-600">{r.salas || "—"}</Td>
+                    <Td className="text-center text-sm font-semibold text-slate-800 tabular-nums">{r.turmas}</Td>
                     <Td>{estadoBadge(r.status)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
+                    <Td onClick={e => e.stopPropagation()}><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -749,22 +809,32 @@ function AreasCatalogView({ accent }: { accent: Accent }) {
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Áreas Temáticas" sub={accent === "gold" ? "Agrupam os cursos Gold no site e no backoffice." : "Agrupam as UFCD no backoffice e nos relatórios ao financiador."} action={<NewBtn accent={accent} label="+ Nova área" onClick={() => setOpen("new")} />} />
+        <PageHeader kicker={accent === "gold" ? "Catálogo Gold" : "Catálogo Financiada"} title="Áreas temáticas" sub={accent === "gold" ? "Agrupam os cursos Gold no site e no backoffice." : "Agrupam as UFCD no backoffice e nos relatórios ao financiador."} action={<NewBtn accent={accent} label="+ Nova área" onClick={() => setOpen("new")} />} />
+        <CatalogKpis items={[
+          { label: "Áreas", value: lista.length },
+          { label: "Activas", value: lista.filter(x => x.estado === "Ativo").length },
+          { label: "Cursos", value: lista.reduce((a, x) => a + x.cursos, 0) },
+        ]} />
         <ViewFilters accent={accent} chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: setFiltro }} onClear={() => setFiltro("Todos")} />
         <Card>
-          <TableToolbar search={s} onSearch={setS} />
-          <div className="overflow-x-auto">
+          <TableToolbar search={s} onSearch={setS} count={f.length} noun="áreas" />
+          <div className="md:hidden p-3 space-y-2">
+            {f.map(r => (
+              <MobileCard key={r.id} title={r.nome} sub={`${r.cursos} cursos`} badge={estadoBadge(r.estado)} onOpen={() => setOpen(r)}
+                actions={[{ label: "Editar", icon: I.edit, onClick: () => setOpen(r) }, { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) }]} />
+            ))}
+          </div>
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr><Th>Id</Th><Th>Área</Th><Th className="text-center">Cursos</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
+              <thead><tr><Th>Área</Th><Th className="text-center">Cursos</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {f.length === 0 && <EmptyState text="Nenhuma área temática encontrada." />}
                 {f.map(r => (
-                  <tr key={r.id} className="hover:bg-slate-50">
-                    <Td><span className="text-slate-400 font-mono text-xs">{r.id}</span></Td>
-                    <Td className="text-sm font-medium text-slate-800">{r.nome}</Td>
-                    <Td className="text-center text-xs font-semibold text-slate-700">{r.cursos}</Td>
+                  <tr key={r.id} className="hover:bg-slate-50/80 cursor-pointer" onClick={() => setOpen(r)}>
+                    <Td className="text-sm font-medium text-slate-900">{r.nome}</Td>
+                    <Td className="text-center text-sm font-semibold tabular-nums text-slate-800">{r.cursos}</Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
+                    <Td onClick={e => e.stopPropagation()}><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -854,10 +924,16 @@ export function ModulosView({ cursoInicial, accent = "gold" }: { cursoInicial?: 
     <>
       <div className="space-y-4">
         <PageHeader
-          title={accent === "gold" ? "Módulos" : "Módulos · Financiada"}
+          kicker={accent === "gold" ? "Catálogo Gold" : "Catálogo Financiada"}
+          title={accent === "gold" ? "Módulos" : "Módulos"}
           sub={cursoFiltro ? `${f.length} módulo${f.length === 1 ? "" : "s"} · ${horasCurso}h neste curso` : (accent === "gold" ? "Escolha um curso para ver e criar os seus módulos." : "Escolha a UFCD para ver e criar os seus módulos.")}
           action={<NewBtn accent={accent} label="+ Novo módulo" onClick={abrirNovo} />}
         />
+        <CatalogKpis items={[
+          { label: "Módulos", value: f.length },
+          { label: "Horas", value: `${horasCurso}h` },
+          { label: "Cursos", value: uniqueOpts(lista.map(x => x.curso)).length },
+        ]} />
         <ViewFilters
           accent={accent}
           fields={[{ label: accent === "gold" ? "Curso" : "Curso / UFCD", value: cursoFiltro, onChange: setCursoFiltro, options: cursosOpts, placeholder: accent === "gold" ? "Pesquisar curso…" : "Pesquisar UFCD…" }]}
@@ -865,14 +941,20 @@ export function ModulosView({ cursoInicial, accent = "gold" }: { cursoInicial?: 
           onClear={() => { setCursoFiltro(""); setEstado("Todos"); }}
         />
         <Card>
-          <TableToolbar search={s} onSearch={setS} />
-          <div className="overflow-x-auto">
+          <TableToolbar search={s} onSearch={setS} count={f.length} noun="módulos" />
+          <div className="md:hidden p-3 space-y-2">
+            {f.map(r => (
+              <MobileCard key={r.id} title={`${r.codigo} · ${r.nome}`} sub={r.curso} badge={estadoBadge(r.estado)} meta={[r.tipo, `${r.horas}h`]} onOpen={() => setOpen(r)}
+                actions={[{ label: "Editar", icon: I.edit, onClick: () => setOpen(r) }, { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) }]} />
+            ))}
+          </div>
+          <div className="hidden md:block overflow-x-auto max-h-[min(70vh,640px)]">
             <table className="w-full text-sm">
-              <thead><tr><Th>Id</Th><Th>Código</Th><Th>Módulo</Th><Th>Curso</Th><Th>Tipo</Th><Th className="text-center">Horas</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
+              <thead><tr><Th>Código</Th><Th>Módulo</Th><Th>Curso</Th><Th>Tipo</Th><Th className="text-center">Horas</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {f.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center">
+                    <td colSpan={7} className="px-4 py-10 text-center">
                       <p className="text-sm text-slate-500">
                         {!cursoFiltro
                           ? "Selecione um curso acima para listar os módulos."
@@ -885,15 +967,14 @@ export function ModulosView({ cursoInicial, accent = "gold" }: { cursoInicial?: 
                   </tr>
                 )}
                 {f.map(r => (
-                  <tr key={r.id} className="hover:bg-slate-50">
-                    <Td><span className="text-slate-400 font-mono text-xs">{r.id}</span></Td>
+                  <tr key={r.id} className="hover:bg-slate-50/80 cursor-pointer" onClick={() => setOpen(r)}>
                     <Td><span className={`text-xs font-bold font-mono px-1.5 py-0.5 rounded ${accent === "gold" ? "text-amber-700 bg-amber-50" : "text-blue-700 bg-blue-50"}`}>{r.codigo}</span></Td>
-                    <Td className="text-sm font-medium text-slate-800">{r.nome}</Td>
+                    <Td className="text-sm font-medium text-slate-900">{r.nome}</Td>
                     <Td className="text-xs text-slate-500 max-w-[180px]">{r.curso}</Td>
                     <Td className="text-xs text-slate-600">{r.tipo}</Td>
-                    <Td className="text-center text-xs font-semibold">{r.horas}h</Td>
+                    <Td className="text-center text-sm font-semibold tabular-nums">{r.horas}h</Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
+                    <Td onClick={e => e.stopPropagation()}><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -1058,7 +1139,13 @@ export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title={accent === "gold" ? "Conteúdos" : "Conteúdos · Financiada"} sub="Materiais do módulo: PDF, vídeo ou ligação. Sem módulo o ficheiro não entra no DTP." action={<NewBtn accent={accent} label="Novo conteúdo" onClick={() => setOpen("new")} />} />
+        <PageHeader kicker={accent === "gold" ? "Catálogo Gold" : "Catálogo Financiada"} title="Conteúdos" sub="Materiais do módulo: PDF, vídeo ou ligação. Sem módulo o ficheiro não entra no DTP." action={<NewBtn accent={accent} label="Novo conteúdo" onClick={() => setOpen("new")} />} />
+        <CatalogKpis items={[
+          { label: "Materiais", value: lista.length },
+          { label: "PDF", value: lista.filter(x => x.tipo === "PDF").length },
+          { label: "Vídeo", value: lista.filter(x => x.tipo === "Vídeo").length },
+          { label: "Ligações", value: lista.filter(x => x.tipo === "Link").length },
+        ]} />
         <ViewFilters
           accent={accent}
           fields={[
@@ -1069,22 +1156,27 @@ export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
           onClear={() => { setFiltroCurso(""); setFiltroModulo(""); setFiltro("Todos"); }}
         />
         <Card>
-          <TableToolbar search={s} onSearch={setS} />
-          <div className="overflow-x-auto">
+          <TableToolbar search={s} onSearch={setS} count={f.length} noun="conteúdos" />
+          <div className="md:hidden p-3 space-y-2">
+            {f.map(r => (
+              <MobileCard key={r.id} title={r.titulo} sub={`${r.curso} · ${labelModulo(r.modulo, r.curso, catalogoModulos)}`} badge={estadoBadge(r.tipo)} meta={[r.tamanho, r.estado]} onOpen={() => setAbrir(r)}
+                actions={[{ label: "Abrir", icon: I.eye, onClick: () => setAbrir(r) }, { label: "Editar", icon: I.edit, onClick: () => setOpen(r) }, { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) }]} />
+            ))}
+          </div>
+          <div className="hidden md:block overflow-x-auto max-h-[min(70vh,640px)]">
             <table className="w-full text-sm">
-              <thead><tr><Th>Id</Th><Th>Título</Th><Th>Tipo</Th><Th>Curso</Th><Th>Módulo</Th><Th>Tamanho</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
+              <thead><tr><Th>Título</Th><Th>Tipo</Th><Th>Curso</Th><Th>Módulo</Th><Th>Tamanho</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {f.length === 0 && <EmptyState text="Nenhum conteúdo neste curso ou módulo." />}
                 {f.map(r => (
-                  <tr key={r.id} className="hover:bg-slate-50">
-                    <Td><span className="text-slate-400 font-mono text-xs">{r.id}</span></Td>
-                    <Td className="text-sm font-medium text-slate-800 max-w-[220px]">{r.titulo}</Td>
+                  <tr key={r.id} className="hover:bg-slate-50/80 cursor-pointer" onClick={() => setAbrir(r)}>
+                    <Td className="text-sm font-medium text-slate-900 max-w-[240px]">{r.titulo}</Td>
                     <Td>{estadoBadge(r.tipo)}</Td>
                     <Td className="text-xs text-slate-600 max-w-[160px]">{r.curso}</Td>
                     <Td className="text-xs text-slate-600 whitespace-nowrap">{labelModulo(r.modulo, r.curso, catalogoModulos)}</Td>
                     <Td className="text-xs text-slate-500">{r.tamanho}</Td>
                     <Td>{estadoBadge(r.estado)}</Td>
-                    <Td><div className="flex gap-1"><ActBtn icon={I.eye} label="Abrir" onClick={() => setAbrir(r)} /><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
+                    <Td onClick={e => e.stopPropagation()}><div className="flex gap-1"><ActBtn icon={I.eye} label="Abrir" onClick={() => setAbrir(r)} /><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
                   </tr>
                 ))}
               </tbody>
@@ -1648,7 +1740,7 @@ function MicrosoftSettingsCard() {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-slate-800">Entrar com Microsoft</p>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-            Microsoft Entra ID (Azure AD). Quem tem conta da organização entra sem palavra-passe — mas só se o email já existir em
+            Microsoft Entra ID (Azure AD). Quem tem conta da organização entra sem palavra-passe - mas só se o email já existir em
             <span className="font-semibold text-slate-700"> Sistema → Gestão → Utilizadores</span>.
           </p>
           <p className="text-xs text-slate-500 mt-2">
@@ -1709,7 +1801,7 @@ function MicrosoftSettingsCard() {
             type="password"
             value={clientSecret}
             onChange={e => setClientSecret(e.target.value)}
-            placeholder={status?.hasSecret ? "•••• já gravado — deixe vazio para manter" : "Cole o valor do segredo do cliente"}
+            placeholder={status?.hasSecret ? "•••• já gravado - deixe vazio para manter" : "Cole o valor do segredo do cliente"}
             autoComplete="new-password"
             disabled={status?.fromEnv}
           />

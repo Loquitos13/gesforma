@@ -998,11 +998,11 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
                 <ul className="text-xs text-slate-600 space-y-1 pt-1 border-t border-slate-100">
                   {metricas.map(m => {
                     const pergunta = inq.perguntas.find(p => p.id === m.id);
-                    if (m.tipo === "escala") return <li key={m.id}>Escala: média {m.media ?? "—"} ({m.n})</li>;
-                    if (m.tipo === "simnao") return <li key={m.id}>Sim: {m.pctSim ?? "—"}% ({m.n})</li>;
+                    if (m.tipo === "escala") return <li key={m.id}>Escala: média {m.media ?? "-"} ({m.n})</li>;
+                    if (m.tipo === "simnao") return <li key={m.id}>Sim: {m.pctSim ?? "-"}% ({m.n})</li>;
                     if (m.tipo === "multipla") {
                       const top = Object.entries(m.contagens ?? {}).sort((a, b) => b[1] - a[1])[0];
-                      return <li key={m.id}>{pergunta?.texto || "Escolha"}: {top ? `${top[0]} (${top[1]})` : "—"}</li>;
+                      return <li key={m.id}>{pergunta?.texto || "Escolha"}: {top ? `${top[0]} (${top[1]})` : "-"}</li>;
                     }
                     return <li key={m.id}>{pergunta?.texto || "Texto"}: {m.n} respostas</li>;
                   })}

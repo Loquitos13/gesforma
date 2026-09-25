@@ -407,7 +407,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                         <td className="px-3 py-1.5 text-xs text-slate-600 whitespace-nowrap">{r.local}</td>
                         <td className="px-3 py-1.5 text-xs font-bold text-amber-600 whitespace-nowrap">€ {r.preco}</td>
                         <td className={`px-3 py-1.5 text-[11px] whitespace-nowrap ${late ? "font-bold text-red-600" : "text-slate-500"}`}>
-                          {r.proximoContacto || "—"}
+                          {r.proximoContacto || "-"}
                         </td>
                         <td className="px-3 py-1.5">{badge(r.estado)}</td>
                         <td className="px-3 py-1.5">
@@ -438,7 +438,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
             </div>
           </div>
         )}
-        <p className="text-[11px] text-slate-400">Shift+clique selecciona um intervalo. / foca a pesquisa. O pipeline mostra no máximo 20 cartões por etapa — use a lista para o resto.</p>
+        <p className="text-[11px] text-slate-400">Shift+clique selecciona um intervalo. / foca a pesquisa. O pipeline mostra no máximo 20 cartões por etapa - use a lista para o resto.</p>
       </div>
 
       <Ficha

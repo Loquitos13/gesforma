@@ -47,7 +47,7 @@ export function CatalogsProvider({ children }: { children: ReactNode }) {
       setReady(true);
     }).catch(() => {
       if (!alive) return;
-      toastError(new Error("A API não respondeu. Os catálogos ficam vazios — o seed de demonstração não entra."));
+      toastError(new Error("A API não respondeu. Os catálogos ficam vazios - o seed de demonstração não entra."));
       setLists({});
       setSettings({});
       setReady(true);

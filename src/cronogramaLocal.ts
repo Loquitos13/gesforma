@@ -75,9 +75,9 @@ export function mapLocalTurma(codigo: string | undefined, catalogos: LocalCatalo
   const morada = moradaCatalogo || MORADA_OFICIAL[keyOf(cidade)] || "";
   const virtual = /sala virtual|e-learning|moodle|zoom/i.test(`${cidade} ${morada}`);
   const localizacao = !raw
-    ? "—"
+    ? "-"
     : virtual
       ? (morada ? `${cidade} (${morada})` : cidade)
       : cidade;
-  return { codigo: raw, cidade: cidade || raw || "—", morada, localizacao };
+  return { codigo: raw, cidade: cidade || raw || "-", morada, localizacao };
 }

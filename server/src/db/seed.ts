@@ -109,9 +109,64 @@ async function upsertUser(db: Db, user: { name: string; email: string; password:
      ON CONFLICT (email) DO UPDATE SET
        password_hash = EXCLUDED.password_hash,
        name = CASE WHEN users.name = '' THEN EXCLUDED.name ELSE users.name END,
+       role = CASE WHEN users.role IN ('admin', 'secretaria') AND EXCLUDED.role = 'comercial' THEN users.role ELSE COALESCE(EXCLUDED.role, users.role) END,
        active = true`,
     [randomUUID(), user.name, email, hash, user.role ?? "admin"],
   );
+}
+
+async function seedPropostasDemo(db: Db) {
+  const comerciais = await db.query<{ id: string; name: string }>(
+    "SELECT id, name FROM users WHERE role = 'comercial' AND active = true ORDER BY name",
+  );
+  if (!comerciais.rows.length) return;
+
+  const unassigned = await db.query<{ id: number }>(
+    "SELECT id FROM preinscricoes WHERE comercial_id IS NULL ORDER BY id",
+  );
+  for (let i = 0; i < unassigned.rows.length; i++) {
+    const comercial = comerciais.rows[i % comerciais.rows.length];
+    await db.query("UPDATE preinscricoes SET comercial_id = $2 WHERE id = $1", [unassigned.rows[i].id, comercial.id]);
+  }
+
+  const existing = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM propostas_comerciais");
+  if ((existing.rows[0]?.n ?? 0) > 0) return;
+
+  const leads = await db.query<{ id: number; nome: string; apelido: string; email: string; curso: string; preco: number; comercial_id: string }>(
+    "SELECT id, nome, apelido, email, curso, preco, comercial_id FROM preinscricoes WHERE comercial_id IS NOT NULL ORDER BY id LIMIT 12",
+  );
+  const estados = ["Enviada", "Negociação", "Aceite", "Recusada", "Enviada", "Aceite"] as const;
+  const respostas: Record<string, string> = {
+    Aceite: "Confirmado por email. Pede fatura e data de início.",
+    Recusada: "Disse que o horário não serve e vai pensar noutro curso.",
+    Negociação: "Pediu desconto de 10% e pagamento em duas prestações.",
+    Enviada: "",
+  };
+  let i = 0;
+  for (const lead of leads.rows) {
+    const estado = estados[i % estados.length];
+    const idRow = await db.query<{ id: number }>("SELECT nextval('ops_id_seq')::int AS id");
+    const pid = idRow.rows[0]?.id ?? 9000 + i;
+    await db.query(
+      `INSERT INTO propostas_comerciais
+         (id, comercial_id, preinscricao_id, cliente_nome, cliente_email, curso, valor, estado, resposta_cliente, resposta_em, notas)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       ON CONFLICT (id) DO NOTHING`,
+      [
+        pid, lead.comercial_id, lead.id,
+        `${lead.nome} ${lead.apelido}`.trim(), lead.email, lead.curso, Number(lead.preco) || 125,
+        estado, respostas[estado] ?? "", estado === "Enviada" ? null : new Date(),
+        estado === "Negociação" ? "Aguardar resposta até sexta." : "",
+      ],
+    );
+    if (i % 3 === 0) {
+      await db.query(
+        "INSERT INTO preinscricao_contactos (preinscricao_id, actor_id, nota) VALUES ($1,$2,$3)",
+        [lead.id, lead.comercial_id, "Primeiro contacto: apresentou o CCP e enviou proposta por email."],
+      );
+    }
+    i += 1;
+  }
 }
 
 export async function seed(db: Db) {
@@ -124,6 +179,8 @@ export async function seed(db: Db) {
     );
   }
   await upsertUser(db, SECRETARIA_SEED);
+  await upsertUser(db, { name: "Inês Costa", email: "ines.costa@ena.pt", password: SECRETARIA_SEED.password, role: "comercial" });
+  await upsertUser(db, { name: "Tiago Melo", email: "tiago.melo@ena.pt", password: SECRETARIA_SEED.password, role: "comercial" });
 
   for (const t of TEMPLATES) {
     await db.query(
@@ -190,6 +247,7 @@ export async function seed(db: Db) {
 
   try {
     await seedOperational(db);
+    await seedPropostasDemo(db);
   } catch (err) {
     console.error("seed operacional falhou", err);
   }

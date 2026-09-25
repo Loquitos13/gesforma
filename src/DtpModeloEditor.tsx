@@ -231,7 +231,7 @@ export function DtpModeloEditor({ accent, cursoId }: { accent: Regime; cursoId?:
       <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">
         <div>
           <p className="text-sm font-semibold text-slate-800">Acrescentar documento a este curso</p>
-          <p className="text-xs text-slate-500 mt-0.5">Para exigências que não estão na base do regime — uma ficha técnica, um termo de responsabilidade, um ficheiro de exercícios.</p>
+          <p className="text-xs text-slate-500 mt-0.5">Para exigências que não estão na base do regime - uma ficha técnica, um termo de responsabilidade, um ficheiro de exercícios.</p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_170px] gap-3">
           <input

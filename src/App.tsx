@@ -42,6 +42,7 @@ import { PreInscricoesGoldView } from "./CrmView";
 import { useAuth } from "./AuthGate";
 import { useNotificacoes } from "./NotificacoesContext";
 import { presencasDaSessao, useCriteriosAvaliacao, useDtpResumo, useTurmaPedagogia, type PresencaRow } from "./PedagogiaContext";
+import { EquipaView } from "./EquipaView";
 import { UsersView, roleLabel } from "./UsersView";
 import { ViewLoadingOverlay } from "./ViewLoading";
 import { armViewLoading } from "./viewLoadingBus";
@@ -125,7 +126,7 @@ type View =
   | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-formadores" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
   | "fin-modulos" | "fin-conteudos" | "fin-datas" | "fin-locais" | "fin-areas-tematicas"
   | "formadores" | "blog-posts" | "blog-tematicas"
-  | "emails" | "pagamentos" | "configuracoes" | "utilizadores" | "notificacoes";
+  | "emails" | "pagamentos" | "configuracoes" | "utilizadores" | "equipa" | "notificacoes";
 
 type CockpitTab = "overview" | "cronograma" | "sessoes" | "documentos" | "dtp" | "certificados";
 type NavTarget = {
@@ -4537,6 +4538,7 @@ const sidebarConfig: NavGroup[] = [
   { group: "Principal", items: [
     { label: "Painel", view: "painel", icon: I.home },
     { label: "CRM", view: "gold-preinscricoes", icon: I.clipboard },
+    { label: "Equipa", view: "equipa", icon: I.users },
   ] },
   { group: "Gold", items: [
     { label: "Formandos", icon: I.users, children: [{ label: "Formandos Turmas", view: "gold-formandos-turmas" }, { label: "Formandos Gold", view: "gold-formandos-gold" }] },
@@ -4587,8 +4589,12 @@ function navParaPerfil(role: string): NavGroup[] {
   return sidebarConfig
     .filter(g => permitidos.includes(g.group))
     .map(g => {
-      if (g.group !== "Sistema" || role === "admin") return g;
-      return { ...g, items: g.items.filter(item => item.label !== "Gestão") };
+      let items = g.items;
+      if (g.group === "Principal" && role === "financiada") {
+        items = items.filter(item => item.view !== "equipa" && item.view !== "gold-preinscricoes");
+      }
+      if (g.group !== "Sistema" || role === "admin") return { ...g, items };
+      return { ...g, items: items.filter(item => item.label !== "Gestão") };
     });
 }
 
@@ -4741,7 +4747,7 @@ const viewTitles: Partial<Record<View, string>> = {
   "fin-areas-tematicas": "Áreas Temáticas · Financiada",
   notificacoes: "Notificações",
   formadores: "Formadores Gold", "blog-posts": "Blog - Posts", "blog-tematicas": "Blog - Temáticas",
-  emails: "Emails Automáticos", pagamentos: "Pagamentos", configuracoes: "Configurações", utilizadores: "Utilizadores",
+  emails: "Emails Automáticos", pagamentos: "Pagamentos", configuracoes: "Configurações", utilizadores: "Utilizadores", equipa: "Equipa",
 };
 
 export default function App() {
@@ -4864,6 +4870,7 @@ function AppShell() {
     if (view === "gold-preinscricoes") return [{ label: "CRM" }];
     if (view.startsWith("gold-")) return [{ label: "Gold", onClick: () => navigate("painel") }, { label: viewTitles[view] ?? "Gold" }];
     if (view.startsWith("fin-")) return [{ label: "Financiada", onClick: () => navigate("painel") }, { label: viewTitles[view] ?? "Financiada" }];
+    if (view === "equipa") return [{ label: "Principal" }, { label: "Equipa" }];
     if (view === "utilizadores") return [{ label: "Sistema", onClick: () => navigate("configuracoes") }, { label: "Gestão" }, { label: "Utilizadores" }];
     return [{ label: viewTitles[view] ?? "GesForma" }];
   })();
@@ -4918,6 +4925,7 @@ function AppShell() {
       case "emails": return <EmailsView />;
       case "pagamentos": return <PagamentosView />;
       case "configuracoes": return <ConfiguracoesView />;
+      case "equipa": return <EquipaView />;
       case "utilizadores": return <UsersView />;
       default: return <PainelView onNavigate={navigate} />;
     }

@@ -195,7 +195,7 @@ export function cellLabelPrint(sessoes: SessaoCronograma[], date: string, l: Gre
 
 export function formatDataOficial(iso: string) {
   const [y, m, d] = (iso || "").split("-");
-  if (!y || !m || !d) return "—";
+  if (!y || !m || !d) return "-";
   return `${d}/${m}/${y}`;
 }
 

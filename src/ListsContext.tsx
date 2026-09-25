@@ -148,7 +148,7 @@ export function ListsProvider({
       setPag(snap.pagamentos);
     }).catch(() => {
       if (!alive) return;
-      toastError(new Error("A API não respondeu. As listas ficam vazias — os números de demonstração não entram."));
+      toastError(new Error("A API não respondeu. As listas ficam vazias - os números de demonstração não entram."));
       setPre([]);
       setFT([]);
       setFF([]);

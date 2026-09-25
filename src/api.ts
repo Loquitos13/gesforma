@@ -54,6 +54,7 @@ export type OpsSnapshot = {
     id: number; inscrito: string; nome: string; apelido: string; email: string; telf: string;
     inicioCurso: string; concelho: string; local: string; curso: string; preco: number;
     estado: string; campanha: string; origem: string; contactadoEm: string | null; notas: string;
+    comercialId?: string | null;
   }>;
   formandosTurmas: Array<{
     id: number; nome: string; apelido: string; telf: string; email: string; inscrito: string;
@@ -173,6 +174,78 @@ export const apiPatchUser = (id: string, body: { name?: string; email?: string; 
 export const apiSetUserPassword = (id: string, password: string, revokeSessions = true) =>
   api<{ ok: boolean }>(`/v1/users/${id}/password`, { method: "POST", body: JSON.stringify({ password, revokeSessions }) });
 export const apiDeleteUser = (id: string) => api<{ ok: boolean }>(`/v1/users/${id}`, { method: "DELETE" });
+
+export type EquipaStats = {
+  leads: number;
+  porContactar: number;
+  emConversa: number;
+  pagos: number;
+  conversao: number;
+  propostas: number;
+  propostasAceites: number;
+  propostasRecusadas: number;
+  pipeline: number;
+  receita: number;
+};
+
+export type EquipaComercial = {
+  id: string;
+  name: string;
+  email: string;
+  active: boolean;
+  lastLoginAt: string | null;
+  stats: EquipaStats;
+};
+
+export type EquipaProposta = {
+  id: number;
+  comercialId: string;
+  preinscricaoId: number | null;
+  clienteNome: string;
+  clienteEmail: string;
+  curso: string;
+  valor: number;
+  estado: string;
+  respostaCliente: string;
+  respostaEm: string | null;
+  enviadaEm: string | null;
+  notas: string;
+};
+
+export type EquipaNota = {
+  id: number;
+  preinscricaoId: number;
+  leadNome: string;
+  leadCurso: string;
+  nota: string;
+  createdAt: string | null;
+};
+
+export const apiEquipa = () => api<{
+  totais: { comerciais: number; activos: number; leads: number; propostas: number; pipeline: number; receita: number };
+  comerciais: EquipaComercial[];
+}>("/v1/equipa");
+
+export const apiEquipaFicha = (id: string) => api<{
+  comercial: EquipaComercial;
+  propostas: EquipaProposta[];
+  leads: OpsSnapshot["preinscricoes"];
+  notas: EquipaNota[];
+}>(`/v1/equipa/${id}`);
+
+export const apiEquipaProposta = (comercialId: string, body: {
+  clienteNome: string; clienteEmail?: string; curso?: string; valor?: number;
+  estado?: "Enviada" | "Negociação" | "Aceite" | "Recusada" | "Expirada";
+  respostaCliente?: string; notas?: string; preinscricaoId?: number | null;
+}) => api<{ proposta: EquipaProposta }>(`/v1/equipa/${comercialId}/propostas`, { method: "POST", body: JSON.stringify(body) });
+
+export const apiPatchProposta = (id: number, body: {
+  estado?: string; respostaCliente?: string; valor?: number; notas?: string; curso?: string;
+}) => api<{ proposta: EquipaProposta }>(`/v1/equipa/propostas/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export const apiEquipaNota = (comercialId: string, body: { preinscricaoId: number; nota: string }) =>
+  api<{ ok: boolean }>(`/v1/equipa/${comercialId}/notas`, { method: "POST", body: JSON.stringify(body) });
+
 
 export type Regime = "gold" | "fin";
 export type DtpEstado = "ok" | "parcial" | "falta";

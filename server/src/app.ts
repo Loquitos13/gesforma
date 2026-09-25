@@ -32,6 +32,7 @@ import {
 import { registerDashboardRoutes } from "./dashboardRoutes.js";
 import { registerOpsRoutes } from "./opsRoutes.js";
 import { registerPedagogiaRoutes } from "./pedagogiaRoutes.js";
+import { registerEquipaRoutes } from "./equipa.js";
 import { registerUserRoutes } from "./userRoutes.js";
 import {
   delayLabelFromSeconds,
@@ -612,6 +613,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   registerCatalogRoutes(app, db, { requireAuth });
   registerDriveRoutes(app, db, { requireAuth, audit });
   registerUserRoutes(app, db, { requireAuth, audit });
+  registerEquipaRoutes(app, db, { requireAuth, audit });
   registerPedagogiaRoutes(app, db, { requireAuth, audit });
   registerDashboardRoutes(app, db, { requireAuth });
 

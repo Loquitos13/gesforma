@@ -39,6 +39,7 @@ const preSchema = z.object({
   estado: z.string().trim().max(40).optional(),
   proximoContacto: z.string().trim().max(40).optional(),
   notas: z.string().max(4000).optional(),
+  comercialId: z.string().uuid().optional().nullable(),
 });
 
 function nowStamp() {
@@ -226,12 +227,13 @@ export function registerOpsRoutes(
     const email = normalizeEmail(d.email);
     if (!isEmail(email)) return reply.code(400).send({ error: "email inválido" });
     const id = await nextOpsId(db);
+    const comercialId = d.comercialId ?? (req.actor?.role === "comercial" ? req.actor.id : null);
     await db.query(
-      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, comercial_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
       [
         id, nowStamp(), d.nome, d.apelido, email, d.telf, d.inicioCurso || "-",
-        d.concelho, d.local, d.curso, d.preco ?? 0, d.estado || "Não contactado", d.campanha, d.origem,
+        d.concelho, d.local, d.curso, d.preco ?? 0, d.estado || "Não contactado", d.campanha, d.origem, comercialId,
       ],
     );
     await ingestEvent(db, "preinscricao.created", { email, nome: `${d.nome} ${d.apelido}`.trim(), curso: d.curso, preinscricaoId: id }, `preinscricao:${id}:${email}`).catch(() => undefined);
@@ -252,9 +254,10 @@ export function registerOpsRoutes(
          telf = COALESCE($5, telf), concelho = COALESCE($6, concelho), origem = COALESCE($7, origem),
          curso = COALESCE($8, curso), local = COALESCE($9, local), inicio_curso = COALESCE($10, inicio_curso),
          preco = COALESCE($11, preco), campanha = COALESCE($12, campanha), estado = COALESCE($13, estado),
-         proximo_contacto = COALESCE($14, proximo_contacto), notas = COALESCE($15, notas)
+         proximo_contacto = COALESCE($14, proximo_contacto), notas = COALESCE($15, notas),
+         comercial_id = COALESCE($16, comercial_id)
        WHERE id = $1`,
-      [id, d.nome ?? null, d.apelido ?? null, d.email ? normalizeEmail(d.email) : null, d.telf ?? null, d.concelho ?? null, d.origem ?? null, d.curso ?? null, d.local ?? null, d.inicioCurso ?? null, d.preco ?? null, d.campanha ?? null, d.estado ?? null, d.proximoContacto ?? null, d.notas ?? null],
+      [id, d.nome ?? null, d.apelido ?? null, d.email ? normalizeEmail(d.email) : null, d.telf ?? null, d.concelho ?? null, d.origem ?? null, d.curso ?? null, d.local ?? null, d.inicioCurso ?? null, d.preco ?? null, d.campanha ?? null, d.estado ?? null, d.proximoContacto ?? null, d.notas ?? null, d.comercialId ?? null],
     );
     const row = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
     if (row && d.estado === "Pago") {

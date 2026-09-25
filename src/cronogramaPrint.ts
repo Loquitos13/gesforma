@@ -258,12 +258,12 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
     <p class="course">${esc(tituloCurso(input.curso))}</p>
     <table class="meta">
       <tr>
-        <td>Data limite para realizar a matrícula : <b>${esc(input.matricula ? formatDataOficial(input.matricula) : "—")}</b></td>
-        <td>Data de início: <b>${esc(input.inicio ? formatDataOficial(input.inicio) : "—")}</b></td>
+        <td>Data limite para realizar a matrícula : <b>${esc(input.matricula ? formatDataOficial(input.matricula) : "-")}</b></td>
+        <td>Data de início: <b>${esc(input.inicio ? formatDataOficial(input.inicio) : "-")}</b></td>
       </tr>
       <tr>
         <td>Local de Realização: <b>${esc(localLinha)}</b>${moradaExtra ? ` &nbsp; ${esc(moradaExtra)}` : ""}</td>
-        <td>Data de fim: <b>${esc(input.fim ? formatDataOficial(input.fim) : "—")}</b></td>
+        <td>Data de fim: <b>${esc(input.fim ? formatDataOficial(input.fim) : "-")}</b></td>
       </tr>
     </table>
     ${grid}

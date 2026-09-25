@@ -35,9 +35,10 @@ import { FORMADORES_SEED } from "./formadorModel";
 import { useFormadorOptions, useFormadores } from "./FormadoresContext";
 import { useTurmas } from "./TurmasContext";
 import { cronogramaToSessoes, formatSessaoLabel, hojeIso, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
-import { apiDriveFiles } from "./api";
+import { apiCrmSearch, apiDriveFiles } from "./api";
 import { campanhaNums, roiLabel } from "./campanhaStats";
 import { ListsProvider, nextListId, useLists, type BlogPostRow, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
+import { PreInscricoesGoldView } from "./CrmView";
 import { useAuth } from "./AuthGate";
 import { useNotificacoes } from "./NotificacoesContext";
 import { presencasDaSessao, useCriteriosAvaliacao, useDtpResumo, useTurmaPedagogia, type PresencaRow } from "./PedagogiaContext";
@@ -2418,255 +2419,6 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   );
 }
 
-// ─── Kanban Pré-inscrições Gold ───────────────────────────────────────────────
-
-const kanbanCols = [
-  { id: "Não contactado", label: "Não contactado", color: "border-amber-400 bg-amber-50", dot: "bg-amber-400" },
-  { id: "1º Contacto", label: "1.º Contacto", color: "border-blue-400 bg-blue-50", dot: "bg-blue-400" },
-  { id: "2º Contacto", label: "2.º Contacto", color: "border-indigo-400 bg-indigo-50", dot: "bg-indigo-400" },
-  { id: "Pago", label: "Pago", color: "border-teal-400 bg-teal-50", dot: "bg-teal-400" },
-  { id: "Formando", label: "Formando ✓", color: "border-emerald-400 bg-emerald-50", dot: "bg-emerald-400" },
-];
-
-function telDigits(telf: string) {
-  const d = telf.replace(/\D/g, "");
-  if (!d) return "";
-  return d.startsWith("351") ? d : `351${d}`;
-}
-
-function crmAtrasado(p: Preinscricao) {
-  if (!p.proximoContacto) return false;
-  if (p.estado === "Pago" || p.estado === "Formando") return false;
-  return p.proximoContacto < hojeIso();
-}
-
-function KanbanCard({ item, onClick }: { item: Preinscricao; onClick: () => void }) {
-  const wa = telDigits(item.telf);
-  const late = crmAtrasado(item);
-  return (
-    <button type="button" onClick={onClick} className={`w-full text-left bg-white rounded-xl border shadow-sm p-3 hover:shadow-md transition-all ${late ? "border-red-300 hover:border-red-400" : "border-slate-200 hover:border-amber-300"}`}>
-      <div className="flex items-start justify-between gap-1">
-        <p className="text-xs font-bold text-slate-800 leading-snug">{item.nome} {item.apelido}</p>
-        <span className="text-xs font-bold text-amber-600 whitespace-nowrap">€ {item.preco}</span>
-      </div>
-      <p className="text-xs text-slate-500 mt-0.5 truncate">{item.curso}</p>
-      <div className="flex items-center justify-between mt-2 gap-2">
-        <span className="text-xs text-slate-600 font-medium truncate">{item.local}</span>
-        {late
-          ? <span className="text-[10px] font-bold uppercase tracking-wide text-red-600">Atrasado</span>
-          : item.proximoContacto
-            ? <span className="text-[10px] font-semibold text-slate-400">{item.proximoContacto.slice(5)}</span>
-            : <span className="text-xs text-slate-400">{item.inscrito.slice(5, 10)}</span>}
-      </div>
-      <div className="flex gap-2 mt-2">
-        <a href={`tel:${item.telf}`} onClick={e => e.stopPropagation()} className="flex-1 py-1.5 text-center bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg transition-colors inline-flex items-center justify-center gap-1">{I.phone} Ligar</a>
-        {wa && (
-          <a href={`https://wa.me/${wa}`} onClick={e => e.stopPropagation()} className="flex-1 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 text-xs font-medium rounded-lg transition-colors inline-flex items-center justify-center gap-1">{I.whatsapp} WhatsApp</a>
-        )}
-      </div>
-    </button>
-  );
-}
-
-function KanbanBoard({ onCardClick, visible, items, onMove }: {
-  onCardClick: (item: Preinscricao) => void;
-  visible?: (item: Preinscricao) => boolean;
-  items: Preinscricao[];
-  onMove: (id: number, estado: string) => void;
-}) {
-  const [dragId, setDragId] = useState<number | null>(null);
-  const [dragOver, setDragOver] = useState<string | null>(null);
-
-  function onDragStart(id: number) { setDragId(id); }
-  function onDrop(col: string) {
-    if (dragId === null) return;
-    onMove(dragId, col);
-    setDragId(null); setDragOver(null);
-  }
-
-  return (
-    <div className="flex gap-3 overflow-x-auto pb-4 min-h-[500px]">
-      {kanbanCols.map(col => {
-        const colItems = items.filter(i => i.estado === col.id && (visible ? visible(i) : true));
-        return (
-          <div key={col.id}
-            className={`flex-shrink-0 w-64 rounded-xl border-t-4 ${col.color} ${dragOver === col.id ? "ring-2 ring-amber-400" : ""} transition-all`}
-            onDragOver={e => { e.preventDefault(); setDragOver(col.id); }}
-            onDragLeave={() => setDragOver(null)}
-            onDrop={() => onDrop(col.id)}
-          >
-            <div className="px-3 py-2.5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${col.dot}`} />
-                <span className="text-xs font-bold text-slate-700">{col.label}</span>
-              </div>
-              <span className="text-xs font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded-full">{colItems.length}</span>
-            </div>
-            <div className="px-2 pb-2 space-y-2">
-              {colItems.map(item => (
-                <div key={item.id} draggable onDragStart={() => onDragStart(item.id)}>
-                  <KanbanCard item={item} onClick={() => onCardClick(item)} />
-                </div>
-              ))}
-              {colItems.length === 0 && (
-                <div className="py-8 text-center text-xs text-slate-400 px-2">Nenhum lead nesta etapa.</div>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Modal Ficha Comercial (pré-inscrição) ────────────────────────────────────
-
-function FichaComercial({ item, open, onClose, onConvert, onContactar, onPatch }: { item: Preinscricao | null; open: boolean; onClose: () => void; onConvert?: (turma: string) => void; onContactar?: (nota: string) => void; onPatch?: (patch: Partial<Preinscricao>) => void }) {
-  const { gold } = useTurmas();
-  const [notas, setNotas] = useState("");
-  const [proximoContacto, setProximoContacto] = useState("");
-  const [seguimentoMsg, setSeguimentoMsg] = useState("");
-  const [escolherTurma, setEscolherTurma] = useState(false);
-  const [turmaConv, setTurmaConv] = useState("");
-  const [convMsg, setConvMsg] = useState("");
-  useEffect(() => {
-    setEscolherTurma(false);
-    setTurmaConv("");
-    setConvMsg("");
-    setSeguimentoMsg("");
-    setNotas(item?.notas ?? "");
-    setProximoContacto(item?.proximoContacto ?? "");
-  }, [item?.id, item?.notas, item?.proximoContacto, open]);
-  if (!item) return null;
-  const turmaOpts = turmaGoldOpts(gold, { curso: item.curso });
-  const wa = telDigits(item.telf);
-  const late = crmAtrasado(item);
-  const etapaIdx = Math.max(0, kanbanCols.findIndex(c => c.id === item.estado));
-  return (
-    <AppModal open={open} onClose={onClose} title={`${item.nome} ${item.apelido}`} sub={`${item.curso} · ${item.local}`} size="lg">
-      <div className="p-5 space-y-4">
-        <div className="flex items-start gap-3">
-          <div className="w-11 h-11 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm flex-shrink-0">{item.nome[0]}{item.apelido[0]}</div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs text-slate-500 truncate">{item.email} · {item.telf}</p>
-            <p className="text-xs text-slate-500 mt-0.5">Origem <strong>{item.origem}</strong> · Campanha <strong>{item.campanha}</strong></p>
-            {late && <p className="text-xs font-bold text-red-600 mt-1">Contacto em atraso · {item.proximoContacto}</p>}
-          </div>
-          {estadoBadge(item.estado)}
-        </div>
-
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Pipeline</p>
-          <p className="text-xs text-slate-500 mb-2">Boas-vindas → Não contactado. Chamada → 1.º. Lembrete 3 dias → 2.º. Pagamento → Pago. Turma → Formando.</p>
-          <div className="grid grid-cols-5 gap-1">
-            {kanbanCols.map((col, i) => {
-              const active = col.id === item.estado;
-              const done = i < etapaIdx;
-              return (
-                <button
-                  key={col.id}
-                  type="button"
-                  disabled={col.id === "Formando"}
-                  title={col.id === "Formando" ? "Inscreva na turma para converter." : `Passar para ${col.label}`}
-                  onClick={() => {
-                    if (col.id === item.estado || col.id === "Formando") return;
-                    onPatch?.({ estado: col.id });
-                  }}
-                  className={`rounded-lg px-1 py-2 text-center border transition-colors ${
-                    active ? "bg-amber-500 border-amber-500 text-white"
-                    : done ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                    : "bg-slate-50 border-slate-200 text-slate-500 hover:border-amber-300"
-                  } ${col.id === "Formando" ? "cursor-default" : ""}`}
-                >
-                  <span className="block text-[10px] font-bold leading-tight">{col.label.replace(" ✓", "")}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 text-xs">
-          <div className="bg-slate-50 rounded-xl p-3"><p className="text-slate-400">Curso</p><p className="font-semibold text-slate-700 mt-0.5">{item.curso}</p></div>
-          <div className="bg-slate-50 rounded-xl p-3"><p className="text-slate-400">Local</p><p className="font-semibold text-slate-700 mt-0.5">{item.local}</p></div>
-          <div className="bg-amber-50 rounded-xl p-3"><p className="text-amber-600">Valor</p><p className="font-bold text-amber-700 mt-0.5 text-base">€ {item.preco}</p></div>
-          <div className="bg-slate-50 rounded-xl p-3"><p className="text-slate-400">Inscrito a</p><p className="font-semibold text-slate-700 mt-0.5">{item.inscrito}</p></div>
-        </div>
-        <Field label="Próximo contacto">
-          <input type="date" value={proximoContacto} onChange={e => setProximoContacto(e.target.value)} className={iCls} />
-        </Field>
-        <Field label="Notas da chamada">
-          <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={3} className={`${iCls} resize-none`} placeholder="O que ficou combinado, objecções, horário preferido…" />
-        </Field>
-        <div className="flex items-center justify-between gap-3">
-          {seguimentoMsg
-            ? <p className="text-xs font-semibold text-emerald-700">{seguimentoMsg}</p>
-            : <p className="text-xs text-slate-400">A data e as notas ficam na base, para quem apanhar o lead depois.</p>}
-          <button
-            type="button"
-            onClick={() => {
-              onPatch?.({ notas, proximoContacto });
-              setSeguimentoMsg("Seguimento gravado.");
-              toastOk("Seguimento gravado.");
-            }}
-            className="px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 whitespace-nowrap"
-          >
-            Guardar seguimento
-          </button>
-        </div>
-        <div className="flex gap-2">
-          <a href={`tel:${item.telf}`} className="flex-1 py-2 bg-slate-800 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5 hover:bg-slate-700 transition-colors">{I.phone} Ligar</a>
-          {wa
-            ? <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="flex-1 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5 hover:bg-emerald-700 transition-colors">{I.whatsapp} WhatsApp</a>
-            : <span className="flex-1 py-2 bg-slate-100 text-slate-400 text-sm font-semibold rounded-lg flex items-center justify-center">Sem telemóvel</span>}
-        </div>
-        {item.estado === "Não contactado" && (
-          <button
-            type="button"
-            onClick={() => onContactar?.(notas.trim())}
-            className="w-full py-2 border border-slate-200 text-sm font-semibold text-slate-700 rounded-lg hover:bg-slate-50"
-          >
-            Registar 1.º contacto
-          </button>
-        )}
-        {item.estado !== "Pago" && item.estado !== "Formando" && (
-          <button
-            type="button"
-            onClick={() => { onPatch?.({ estado: "Pago" }); toastOk("Marcado como pago."); }}
-            className="w-full py-2 border border-teal-200 bg-teal-50 text-sm font-semibold text-teal-800 rounded-lg hover:bg-teal-100"
-          >
-            Marcar pagamento recebido
-          </button>
-        )}
-        {item.estado !== "Formando" && (!escolherTurma ? (
-          <button onClick={() => { setEscolherTurma(true); setConvMsg(""); }} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2">{I.convert} Inscrever numa turma</button>
-        ) : (
-          <div className="space-y-2">
-            <Field label="Turma ativa">
-              <SearchSelect value={turmaConv} onChange={setTurmaConv} options={turmaOpts} placeholder="Só turmas ativas…" empty="Não há turmas ativas para este curso." />
-            </Field>
-            <TurmaInscricaoHint optsLen={turmaOpts.length} curso={item.curso} />
-            {convMsg && <p className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">{convMsg}</p>}
-            <div className="flex gap-2">
-              <button onClick={() => setEscolherTurma(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-              <button
-                disabled={!turmaConv}
-                onClick={() => {
-                  onConvert?.(turmaConv);
-                  setConvMsg(`${item.nome} ${item.apelido} inscrito na turma ${turmaConv}.`);
-                  toastOk("Lead convertido em formando.");
-                }}
-                className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg"
-              >
-                Confirmar inscrição
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </AppModal>
-  );
-}
-
 // ─── Documentos Financiada (CC, CH, CU, CI, CE) ───────────────────────────────
 
 type FinFormando = FormandoFin;
@@ -2974,289 +2726,6 @@ function PainelView({ onNavigate }: { onNavigate: (v: View | NavTarget) => void 
 }
 
 // ─── PreInscricoes Gold (tabela + kanban) ─────────────────────────────────────
-
-function PreInscricoesGoldView() {
-  const [viewMode, setViewMode] = useState<"table" | "kanban">("kanban");
-  const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
-  const [filtro, setFiltro] = useState("Todos");
-  const [fichaItem, setFichaItem] = useState<Preinscricao | null>(null);
-  const [fichaOpen, setFichaOpen] = useState(false);
-  const [novo, setNovo] = useState(false);
-  const [editLead, setEditLead] = useState<Preinscricao | null>(null);
-  const [apagar, setApagar] = useState<Preinscricao | null>(null);
-  const { gold, patchGold } = useTurmas();
-  const { preinscricoes, addPreinscricao, patchPreinscricao, removePreinscricao, contactarPreinscricao, addFormandoTurma, formandosTurmas, cursosGold } = useLists();
-  const [nome, setNome] = useState("");
-  const [apelido, setApelido] = useState("");
-  const [email, setEmail] = useState("");
-  const [telf, setTelf] = useState("");
-  const [curso, setCurso] = useState("");
-  const [turma, setTurma] = useState("");
-  const [local, setLocal] = useState("");
-  const [filtroCurso, setFiltroCurso] = useState("");
-  const [filtroLocal, setFiltroLocal] = useState("");
-  const turmaOpts = turmaGoldOpts(gold, { curso: curso || undefined });
-
-  function openFicha(item: Preinscricao) { setFichaItem(item); setFichaOpen(true); }
-  function resetLeadForm(lead?: Preinscricao) {
-    setNome(lead?.nome ?? "");
-    setApelido(lead?.apelido ?? "");
-    setEmail(lead?.email ?? "");
-    setTelf(lead?.telf ?? "");
-    setCurso(lead?.curso ?? "Formação de Formadores - CCP");
-    setLocal(lead?.local ?? "V.N.Gaia");
-    setTurma(turmaGoldOpts(gold, { curso: lead?.curso ?? "Formação de Formadores - CCP" })[0]?.value ?? "");
-  }
-
-  const matchRow = (x: Preinscricao) =>
-    matchesFilter(x.curso, filtroCurso) && matchesFilter(x.local, filtroLocal);
-
-  const f = preinscricoes.filter(x => {
-    const q = `${x.nome} ${x.apelido} ${x.email} ${x.curso} ${x.telf}`.toLowerCase().includes(s.toLowerCase());
-    return q && matchRow(x) && (filtro === "Todos" || x.estado === filtro);
-  });
-  const rows = f.slice((p - 1) * pp, p * pp);
-  const hoje = hojeIso();
-  const porContactar = preinscricoes.filter(x => x.estado === "Não contactado");
-  const atrasados = preinscricoes.filter(crmAtrasado);
-  const hojeSeguir = preinscricoes.filter(x => x.proximoContacto === hoje && x.estado !== "Pago" && x.estado !== "Formando");
-  const aConverter = preinscricoes.filter(x => x.estado === "Pago");
-  const emCurso = preinscricoes.filter(x => x.estado === "1º Contacto" || x.estado === "2º Contacto").length;
-  const convertidos = preinscricoes.filter(x => x.estado === "Formando").length;
-  const valorAberto = preinscricoes.filter(x => x.estado !== "Formando").reduce((acc, x) => acc + x.preco, 0);
-
-  async function copiarFormularioPublico() {
-    const url = `${window.location.origin}/pre-inscricao`;
-    try {
-      await navigator.clipboard.writeText(url);
-      toastOk("Ligação do formulário público copiada.");
-    } catch {
-      toastError("Não foi possível copiar. Abra /pre-inscricao e copie o endereço.");
-    }
-  }
-
-  return (
-    <>
-      <div className="space-y-4">
-        <PageHeader title="CRM" sub="Fila comercial: contactar, seguir, converter. Os emails automáticos avançam o pipeline."
-          action={
-            <div className="flex items-center gap-2 flex-wrap justify-end">
-              <button type="button" onClick={() => void copiarFormularioPublico()} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1.5">
-                {I.link} Formulário público
-              </button>
-              <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden">
-                <button type="button" onClick={() => setViewMode("kanban")} className={`px-3 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5 ${viewMode === "kanban" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>{I.kanban} Pipeline</button>
-                <button type="button" onClick={() => setViewMode("table")} className={`px-3 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5 ${viewMode === "table" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>{I.list} Lista</button>
-              </div>
-              <NewBtn label="+ Lead" onClick={() => {
-                setEditLead(null);
-                resetLeadForm();
-                setNovo(true);
-              }} />
-            </div>
-          }
-        />
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-          {[
-            { label: "Leads abertos", value: String(preinscricoes.filter(x => x.estado !== "Formando").length), sub: `${preinscricoes.length} no total`, tone: "text-slate-800" },
-            { label: "Por contactar", value: String(porContactar.length), sub: `${atrasados.length} em atraso`, tone: atrasados.length ? "text-red-600" : "text-amber-600" },
-            { label: "Em conversa", value: String(emCurso), sub: `${aConverter.length} pagos a converter`, tone: "text-blue-600" },
-            { label: "Convertidos", value: String(convertidos), sub: `€ ${valorAberto.toLocaleString("pt-PT")} em aberto`, tone: "text-emerald-600" },
-          ].map(c => (
-            <Card key={c.label} className="p-4">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{c.label}</p>
-              <p className={`text-2xl font-bold mt-1 ${c.tone}`}>{c.value}</p>
-              <p className="text-xs text-slate-400 mt-1">{c.sub}</p>
-            </Card>
-          ))}
-        </div>
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Fila do dia</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <button type="button" onClick={() => { setFiltro("Não contactado"); setViewMode("table"); setP(1); }}
-              className="text-left rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 hover:shadow-sm">
-              <p className="text-sm font-bold text-amber-800">{porContactar.length} por contactar</p>
-              <p className="text-xs text-slate-600 mt-0.5">{porContactar[0] ? `Seguinte: ${porContactar[0].nome} ${porContactar[0].apelido}` : "Fila vazia."}</p>
-            </button>
-            <button type="button" onClick={() => { if (atrasados[0]) openFicha(atrasados[0]); }}
-              className={`text-left rounded-xl border px-3.5 py-3 hover:shadow-sm ${atrasados.length ? "border-red-200 bg-red-50" : "border-slate-200 bg-white"}`}>
-              <p className={`text-sm font-bold ${atrasados.length ? "text-red-700" : "text-slate-700"}`}>{atrasados.length} atrasados</p>
-              <p className="text-xs text-slate-600 mt-0.5">{atrasados[0] ? `Abrir ${atrasados[0].nome} ${atrasados[0].apelido}` : "Nenhum follow-up em atraso."}</p>
-            </button>
-            <button type="button" onClick={() => { if (aConverter[0]) openFicha(aConverter[0]); else if (hojeSeguir[0]) openFicha(hojeSeguir[0]); }}
-              className="text-left rounded-xl border border-teal-200 bg-teal-50 px-3.5 py-3 hover:shadow-sm">
-              <p className="text-sm font-bold text-teal-800">{aConverter.length} a converter</p>
-              <p className="text-xs text-slate-600 mt-0.5">{hojeSeguir.length ? `${hojeSeguir.length} marcados para hoje` : "Pagos prontos a inscrever na turma."}</p>
-            </button>
-          </div>
-        </div>
-        <ViewFilters
-          fields={[
-            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(preinscricoes.map(x => x.curso)) },
-            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(preinscricoes.map(x => x.local)) },
-          ]}
-          chips={{ options: ["Todos", "Não contactado", "1º Contacto", "2º Contacto", "Pago", "Formando"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
-          onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
-        />
-        <p className="text-xs text-slate-500 -mt-2">
-          Email de boas-vindas deixa o lead em <strong>Não contactado</strong>. O 1.º contacto é da secretaria.
-          Sem pagamento em 3 dias o lembrete passa a <strong>2.º Contacto</strong>. Pagamento confirmado passa a <strong>Pago</strong>.
-          Inscrever na turma passa a <strong>Formando</strong>. Aos 30 dias sem compra sai o reengajamento.
-        </p>
-
-        {viewMode === "kanban" ? (
-          <div className="space-y-3">
-            <div className="relative max-w-sm">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{I.search}</span>
-              <input type="text" value={s} onChange={e => setS(e.target.value)} placeholder="Nome, email, curso ou telemóvel…" className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400" />
-            </div>
-            {f.length === 0 ? (
-              <EmptyHint
-                text={preinscricoes.length === 0 ? "Ainda sem leads. Cole o formulário público no site ou registe um pedido de telefone." : "Nenhum lead neste filtro."}
-                action={preinscricoes.length === 0 ? "Novo lead" : "Limpar filtros"}
-                onAction={preinscricoes.length === 0 ? () => { setEditLead(null); resetLeadForm(); setNovo(true); } : () => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setS(""); setP(1); }}
-              />
-            ) : (
-              <KanbanBoard items={f} onMove={(id, estado) => { patchPreinscricao(id, { estado }); toastOk("Etapa actualizada."); }} onCardClick={openFicha} />
-            )}
-          </div>
-        ) : (
-          <Card>
-            <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
-            {rows.length === 0 && (
-              <EmptyHint
-                text={preinscricoes.length === 0 ? "Ainda sem leads. Cole o formulário público no site ou registe um pedido de telefone." : "Nenhum lead neste filtro."}
-                action={preinscricoes.length === 0 ? "Novo lead" : "Limpar filtros"}
-                onAction={preinscricoes.length === 0 ? () => { setEditLead(null); resetLeadForm(); setNovo(true); } : () => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setS(""); setP(1); }}
-              />
-            )}
-            <div className="md:hidden p-3 space-y-2">
-              {rows.map(r => (
-                <MobileCard
-                  key={r.id}
-                  title={`${r.nome} ${r.apelido}`}
-                  sub={r.curso}
-                  badge={estadoBadge(r.estado)}
-                  meta={[r.local, `€ ${r.preco}`, r.inscrito]}
-                  onOpen={() => openFicha(r)}
-                  actions={[
-                    ...(r.estado === "Não contactado" ? [{ label: "Contactar", icon: I.phone, onClick: () => { contactarPreinscricao(r.id); openFicha({ ...r, estado: "1º Contacto" }); } }] : []),
-                    { label: "Ficha", icon: I.eye, onClick: () => openFicha(r) },
-                    { label: "Editar", icon: I.edit, onClick: () => { setEditLead(r); resetLeadForm(r); setNovo(true); } },
-                    { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
-                  ]}
-                />
-              ))}
-            </div>
-            <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
-              <table className="w-full text-sm">
-                <thead><tr><Th>Id</Th><Th>Inscrito a</Th><Th>Nome</Th><Th>Curso</Th><Th>Local</Th><Th>Valor</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
-                <tbody className="divide-y divide-slate-100">
-                  {rows.map(r => (
-                    <tr key={r.id} className="hover:bg-slate-50 transition-colors">
-                      <Td><IdCell id={r.id} /></Td>
-                      <Td className="font-mono text-xs text-slate-500 whitespace-nowrap">{r.inscrito}</Td>
-                      <Td>
-                        <button onClick={() => openFicha(r)} className="text-left">
-                          <p className="text-xs font-medium text-blue-600 hover:text-blue-800 whitespace-nowrap">{r.nome} {r.apelido}</p>
-                          <p className="text-xs text-slate-400 truncate max-w-[120px]">{r.email}</p>
-                        </button>
-                      </Td>
-                      <Td className="text-xs text-slate-600 max-w-[130px]">{r.curso}</Td>
-                      <Td className="text-xs text-slate-600 whitespace-nowrap">{r.local}</Td>
-                      <Td className="text-xs font-bold text-amber-600">€ {r.preco}</Td>
-                      <Td>{estadoBadge(r.estado)}</Td>
-                      <Td>
-                        <RowActions actions={[
-                          ...(r.estado === "Não contactado" ? [{ label: "Contactar", icon: I.phone, onClick: () => { contactarPreinscricao(r.id); setFichaItem({ ...r, estado: "1º Contacto" }); setFichaOpen(true); } }] : []),
-                          { label: "Ficha", icon: I.eye, onClick: () => openFicha(r) },
-                          { label: "Editar", icon: I.edit, onClick: () => { setEditLead(r); resetLeadForm(r); setNovo(true); } },
-                          { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(r) },
-                        ]} />
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
-          </Card>
-        )}
-      </div>
-      <FichaComercial item={fichaItem} open={fichaOpen} onClose={() => setFichaOpen(false)} onContactar={nota => {
-        if (!fichaItem) return;
-        contactarPreinscricao(fichaItem.id, nota);
-        setFichaItem({ ...fichaItem, estado: fichaItem.estado === "Não contactado" ? "1º Contacto" : fichaItem.estado, notas: nota });
-      }} onPatch={patch => {
-        if (!fichaItem) return;
-        patchPreinscricao(fichaItem.id, patch);
-        setFichaItem({ ...fichaItem, ...patch });
-      }} onConvert={turmaNome => {
-        if (!fichaItem) return;
-        const t = gold.find(x => x.nome === turmaNome);
-        if (!t || t.vagas - t.totalAlunos <= 0) return;
-        addFormandoTurma({
-          id: nextListId(formandosTurmas),
-          nome: fichaItem.nome, apelido: fichaItem.apelido, telf: fichaItem.telf, email: fichaItem.email,
-          inscrito: nowStamp(), local: t.local, curso: t.curso, turma: t.nome, turmaId: t.id,
-          estado: "Formando", pago: fichaItem.estado === "Pago", valor: fichaItem.preco, metodo: "-",
-        });
-        patchGold(t.id, { totalAlunos: t.totalAlunos + 1 });
-        patchPreinscricao(fichaItem.id, { estado: "Formando" });
-        setFichaItem({ ...fichaItem, estado: "Formando" });
-      }} />
-      <ConfirmDangerModal
-        open={!!apagar}
-        onClose={() => setApagar(null)}
-        title="Eliminar lead"
-        body={apagar ? `Remover ${apagar.nome} ${apagar.apelido} da fila comercial?` : ""}
-        risk="O pedido sai da lista de contacto e a acção não se desfaz. Prefira marcar como Indeferido se quiser manter o histórico."
-        onConfirm={() => { if (apagar) removePreinscricao(apagar.id); }}
-      />
-      <SlideOver open={novo} onClose={() => { setNovo(false); setEditLead(null); }} title={editLead ? `Editar ${editLead.nome}` : "Novo lead"} sub="CRM · entra na fila por contactar">
-        <div className="p-5 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Nome"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} /></Field>
-            <Field label="Apelido"><input className={iCls} value={apelido} onChange={e => setApelido(e.target.value)} /></Field>
-          </div>
-          <Field label="Email"><input className={iCls} type="email" value={email} onChange={e => setEmail(e.target.value)} /></Field>
-          <Field label="Telemóvel"><input className={iCls} value={telf} onChange={e => setTelf(e.target.value)} /></Field>
-          <Field label="Curso"><SearchSelect value={curso} onChange={v => { setCurso(v); setTurma(""); }} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
-          <Field label="Turma">
-            <SearchSelect value={turma} onChange={setTurma} options={turmaOpts} placeholder="Só turmas ativas…" empty="Não há turmas ativas para este curso." />
-          </Field>
-          <TurmaInscricaoHint optsLen={turmaOpts.length} curso={curso || undefined} />
-          <Field label="Local"><SearchSelect value={local} onChange={setLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
-          <div className="flex gap-2 pt-2">
-            <button onClick={() => { setNovo(false); setEditLead(null); }} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button disabled={!nome.trim()} onClick={() => {
-              const cursoRow = cursosGold.find(c => c.nome === curso);
-              const t = gold.find(x => x.nome === turma);
-              const row: Preinscricao = {
-                id: editLead?.id ?? nextListId(preinscricoes),
-                inscrito: editLead?.inscrito ?? nowStamp(),
-                nome: nome.trim(), apelido: apelido.trim(),
-                email: email.trim() || `${nome.trim().toLowerCase().replace(/\s+/g, ".")}@mail.pt`,
-                telf: telf.trim() || "-",
-                inicioCurso: t?.dataInicio ?? editLead?.inicioCurso ?? "-",
-                concelho: editLead?.concelho ?? "",
-                local: local || t?.local || "V.N.Gaia",
-                curso: curso || "Formação de Formadores - CCP",
-                preco: cursoRow?.preco ?? editLead?.preco ?? 125,
-                estado: editLead?.estado ?? "Não contactado",
-                campanha: editLead?.campanha ?? "Setembro 2026",
-                origem: editLead?.origem ?? "Manual",
-              };
-              if (editLead) patchPreinscricao(editLead.id, row);
-              else addPreinscricao(row);
-              setNovo(false); setEditLead(null);
-            }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editLead ? "Guardar" : "Criar lead"}</button>
-          </div>
-        </div>
-      </SlideOver>
-    </>
-  );
-}
 
 // ─── Turmas Gold ──────────────────────────────────────────────────────────────
 
@@ -4850,17 +4319,36 @@ function useAtalhosDoDia(): SearchRow[] {
 function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: () => void; onNavigate: (t: NavTarget) => void }) {
   const [q, setQ] = useState("");
   const [hi, setHi] = useState(0);
+  const [crmHits, setCrmHits] = useState<SearchRow[]>([]);
   const indice = useSearchIndex();
   const atalhosDoDia = useAtalhosDoDia();
-  const results = q.length > 1 ? indice.filter(r => `${r.nome} ${r.sub} ${r.tipo}`.toLowerCase().includes(q.toLowerCase())).slice(0, 8) : [];
+  const localHits = q.length > 1 ? indice.filter(r => `${r.nome} ${r.sub} ${r.tipo}`.toLowerCase().includes(q.toLowerCase())).slice(0, 8) : [];
+  const results = q.length > 1
+    ? [...crmHits, ...localHits.filter(r => r.tipo !== "CRM" || !crmHits.some(c => c.nome === r.nome && c.sub === r.sub))].slice(0, 10)
+    : [];
   const shown = q.length > 1 ? results : atalhosDoDia;
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (open) { setQ(""); setHi(0); setTimeout(() => inputRef.current?.focus(), 50); }
+    if (open) { setQ(""); setHi(0); setCrmHits([]); setTimeout(() => inputRef.current?.focus(), 50); }
   }, [open]);
 
   useEffect(() => { setHi(0); }, [q]);
+
+  useEffect(() => {
+    if (!open || q.trim().length < 2) { setCrmHits([]); return; }
+    const t = window.setTimeout(() => {
+      apiCrmSearch(q.trim()).then(r => {
+        setCrmHits(r.leads.map(l => ({
+          tipo: "CRM",
+          nome: `${l.nome} ${l.apelido}`,
+          sub: `${l.curso || "sem curso"} · ${l.estado} · ${l.email}`,
+          view: "gold-preinscricoes" as View,
+        })));
+      }).catch(() => setCrmHits([]));
+    }, 220);
+    return () => window.clearTimeout(t);
+  }, [q, open]);
 
   function openRow(r: (typeof shown)[number]) {
     onNavigate({ view: r.view, turmaId: r.turmaId, tab: r.tab, cursoId: r.cursoId });
@@ -4896,7 +4384,7 @@ function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: (
       <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ animation: "scaleIn 0.15s ease" }}>
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100">
           <span className="text-slate-400">{I.cmdK}</span>
-          <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} placeholder="Pesquisar formandos, turmas, cursos, UFCD…"
+          <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} placeholder="Pesquisar CRM, formandos, turmas, cursos…"
             className="flex-1 text-sm text-slate-800 placeholder-slate-400 focus:outline-none" />
           <kbd className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-mono">ESC</kbd>
         </div>

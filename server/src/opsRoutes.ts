@@ -20,6 +20,7 @@ import {
   mapTurmaGold,
   nextOpsId,
 } from "./ops.js";
+import { exportCrmLeads, queryCrmLeads, searchCrmLeads, type CrmFila, type CrmSort } from "./crm.js";
 import { config } from "./config.js";
 
 const preSchema = z.object({
@@ -61,6 +62,117 @@ export function registerOpsRoutes(
   app.get("/v1/ops", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     return getOpsSnapshot(db);
+  });
+
+  const crmFila = z.enum(["contactar", "atrasados", "hoje", "converter", "abertos"]).optional();
+  const crmSort = z.enum(["inscrito", "proximo", "valor", "nome"]).optional();
+
+  function crmParamsFromQuery(q: Record<string, unknown>) {
+    const str = (k: string) => String(q[k] ?? "").trim();
+    const fila = crmFila.safeParse(str("fila") || undefined);
+    const sort = crmSort.safeParse(str("sort") || "inscrito");
+    return {
+      q: str("q").slice(0, 80),
+      estado: str("estado"),
+      curso: str("curso"),
+      local: str("local"),
+      origem: str("origem"),
+      campanha: str("campanha"),
+      fila: (fila.success ? fila.data : "") as CrmFila | "",
+      page: Number(q.page) || 1,
+      perPage: Number(q.perPage) || 50,
+      sort: (sort.success ? sort.data : "inscrito") as CrmSort,
+      kanban: str("kanban") === "1" || str("kanban") === "true",
+    };
+  }
+
+  function hojeDe(q: Record<string, unknown>) {
+    const h = String(q.hoje ?? "").trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(h) ? h : new Date().toISOString().slice(0, 10);
+  }
+
+  app.get("/v1/crm/leads", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const q = (req.query ?? {}) as Record<string, unknown>;
+    return queryCrmLeads(db, crmParamsFromQuery(q), hojeDe(q));
+  });
+
+  app.get("/v1/crm/search", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const q = String((req.query as { q?: string } | undefined)?.q ?? "").trim();
+    if (q.length < 2) return { leads: [] };
+    return { leads: await searchCrmLeads(db, q, 12) };
+  });
+
+  app.get("/v1/crm/export", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const q = (req.query ?? {}) as Record<string, unknown>;
+    const rows = await exportCrmLeads(db, crmParamsFromQuery(q), hojeDe(q));
+    const head = ["id", "inscrito", "nome", "apelido", "email", "telf", "curso", "local", "preco", "estado", "origem", "campanha", "proximoContacto"];
+    const esc = (v: unknown) => {
+      const s = String(v ?? "");
+      return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const body = [head.join(";"), ...rows.map(r => head.map(k => esc((r as Record<string, unknown>)[k])).join(";"))].join("\n");
+    reply.header("Content-Type", "text/csv; charset=utf-8");
+    reply.header("Content-Disposition", "attachment; filename=crm-leads.csv");
+    return reply.send("\uFEFF" + body);
+  });
+
+  const loteSchema = z.object({
+    ids: z.array(z.number().int().positive()).min(1).max(100),
+    acao: z.enum(["contactar", "estado", "seguimento"]),
+    estado: z.string().trim().max(40).optional(),
+    proximoContacto: z.string().trim().max(40).optional(),
+    nota: z.string().max(800).optional(),
+  });
+
+  app.post("/v1/crm/lote", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const parsed = loteSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    const d = parsed.data;
+    let updated = 0;
+    for (const id of d.ids) {
+      const current = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
+      if (!current) continue;
+      if (d.acao === "contactar") {
+        const estado = String(current.estado);
+        const nextEstado = estado === "Não contactado" ? "1º Contacto" : estado;
+        const nota = (d.nota ?? "").trim();
+        await db.query(
+          `UPDATE preinscricoes SET estado = $2, contactado_em = now(), notas = CASE WHEN $3 = '' THEN notas ELSE trim(both from notas || E'\n' || $3) END WHERE id = $1`,
+          [id, nextEstado, nota],
+        );
+        await db.query(
+          "INSERT INTO preinscricao_contactos (preinscricao_id, actor_id, nota) VALUES ($1,$2,$3)",
+          [id, req.actor!.id, nota],
+        );
+        updated += 1;
+      } else if (d.acao === "estado" && d.estado) {
+        await db.query("UPDATE preinscricoes SET estado = $2 WHERE id = $1 AND estado <> 'Formando'", [id, d.estado]);
+        if (d.estado === "Pago") {
+          const email = normalizeEmail(String(current.email ?? ""));
+          if (isEmail(email)) {
+            await ingestEvent(db, "payment.confirmed", {
+              email,
+              nome: `${current.nome} ${current.apelido}`.trim(),
+              curso: String(current.curso ?? ""),
+              preinscricaoId: id,
+            }, `payment:pre:${id}:${email}`).catch(() => undefined);
+          }
+        }
+        updated += 1;
+      } else if (d.acao === "seguimento") {
+        await db.query(
+          "UPDATE preinscricoes SET proximo_contacto = COALESCE($2, proximo_contacto), notas = CASE WHEN $3 = '' THEN notas ELSE trim(both from notas || E'\n' || $3) END WHERE id = $1",
+          [id, d.proximoContacto ?? null, (d.nota ?? "").trim()],
+        );
+        updated += 1;
+      }
+    }
+    await audit(db, req.actor!.id, "crm.lote", "preinscricao", String(d.ids.length), req.ip, { acao: d.acao, n: updated });
+    return { updated };
   });
 
   app.get("/v1/public/cursos", async () => {

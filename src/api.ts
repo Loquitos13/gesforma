@@ -421,6 +421,79 @@ export const apiContactarPreinscricao = (id: number, nota = "") =>
   api<{ preinscricao: OpsSnapshot["preinscricoes"][number] | null }>(`/v1/preinscricoes/${id}/contactar`, { method: "POST", body: JSON.stringify({ nota }) });
 export const apiDeletePreinscricao = (id: number) => api<{ ok: boolean }>(`/v1/preinscricoes/${id}`, { method: "DELETE" });
 
+export type CrmFila = "contactar" | "atrasados" | "hoje" | "converter" | "abertos";
+export type CrmSort = "inscrito" | "proximo" | "valor" | "nome";
+export type CrmLead = OpsSnapshot["preinscricoes"][number] & { proximoContacto?: string };
+
+export type CrmListQuery = {
+  q?: string;
+  estado?: string;
+  curso?: string;
+  local?: string;
+  origem?: string;
+  campanha?: string;
+  fila?: CrmFila | "";
+  page?: number;
+  perPage?: number;
+  sort?: CrmSort;
+  kanban?: boolean;
+  hoje?: string;
+};
+
+export type CrmListResult = {
+  items: CrmLead[];
+  total: number;
+  page: number;
+  perPage: number;
+  counts: {
+    total: number; abertos: number; porContactar: number; conversa: number;
+    pagos: number; formando: number; atrasados: number; hoje: number; converter: number; valorAberto: number;
+  };
+  porEstado: Record<string, number>;
+  facets: { cursos: string[]; locais: string[]; origens: string[]; campanhas: string[] };
+  columns?: { estado: string; total: number; items: CrmLead[] }[];
+};
+
+function crmQs(q: CrmListQuery) {
+  const p = new URLSearchParams();
+  if (q.q) p.set("q", q.q);
+  if (q.estado && q.estado !== "Todos") p.set("estado", q.estado);
+  if (q.curso) p.set("curso", q.curso);
+  if (q.local) p.set("local", q.local);
+  if (q.origem) p.set("origem", q.origem);
+  if (q.campanha) p.set("campanha", q.campanha);
+  if (q.fila) p.set("fila", q.fila);
+  if (q.page) p.set("page", String(q.page));
+  if (q.perPage) p.set("perPage", String(q.perPage));
+  if (q.sort) p.set("sort", q.sort);
+  if (q.kanban) p.set("kanban", "1");
+  if (q.hoje) p.set("hoje", q.hoje);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
+
+export const apiCrmLeads = (q: CrmListQuery) => api<CrmListResult>(`/v1/crm/leads${crmQs(q)}`);
+export const apiCrmSearch = (q: string) => api<{ leads: CrmLead[] }>(`/v1/crm/search?q=${encodeURIComponent(q)}`);
+export const apiCrmLote = (body: { ids: number[]; acao: "contactar" | "estado" | "seguimento"; estado?: string; proximoContacto?: string; nota?: string }) =>
+  api<{ updated: number }>("/v1/crm/lote", { method: "POST", body: JSON.stringify(body) });
+
+export async function apiCrmExport(q: CrmListQuery) {
+  const headers = new Headers();
+  headers.set("Accept", "text/csv");
+  headers.set("X-Gesforma-Client", "web");
+  const res = await fetch(`${BASE}/v1/crm/export${crmQs(q)}`, { credentials: "include", headers });
+  if (!res.ok) throw new ApiError(res.status, "Não foi possível exportar.");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "crm-leads.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export const apiCreateFormandoGold = (body: Record<string, unknown>) =>
   api<{ formando: OpsSnapshot["formandosTurmas"][number] }>("/v1/formandos-gold", { method: "POST", body: JSON.stringify(body) });
 export const apiPatchFormandoGold = (id: number, body: Record<string, unknown>) =>

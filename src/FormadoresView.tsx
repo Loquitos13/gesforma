@@ -128,7 +128,7 @@ function turmaTemFormador(nome: string, formadorTurma: string, cronograma: { for
   return cronograma.some(s => sessaoFormadores(s).includes(nome));
 }
 
-export function FormadoresView({ regime }: { regime: FormadorRegime }) {
+export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorRegime; openId?: number; onOpened?: () => void }) {
   const gold = regime === "gold";
   const { formadores, addFormador, patchFormador, removeFormador } = useFormadores();
   const turmas = useTurmas();
@@ -144,6 +144,15 @@ export function FormadoresView({ regime }: { regime: FormadorRegime }) {
 
   const noRegime = formadoresDoRegime(formadores, regime);
   const especialidades = uniqueOpts(noRegime.map(f => f.especialidade));
+
+  useEffect(() => {
+    if (!openId) return;
+    const row = formadores.find(f => f.id === openId);
+    if (!row) return;
+    setPerfil(row);
+    onOpened?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- abrir uma vez por id
+  }, [openId, formadores]);
 
   const filtrados = noRegime.filter(f => {
     const q = `${f.nome} ${f.email} ${f.telf} ${f.ccp} ${f.especialidade}`.toLowerCase().includes(s.toLowerCase());

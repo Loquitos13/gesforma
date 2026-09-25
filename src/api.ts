@@ -474,6 +474,32 @@ function crmQs(q: CrmListQuery) {
 
 export const apiCrmLeads = (q: CrmListQuery) => api<CrmListResult>(`/v1/crm/leads${crmQs(q)}`);
 export const apiCrmSearch = (q: string) => api<{ leads: CrmLead[] }>(`/v1/crm/search?q=${encodeURIComponent(q)}`);
+
+export type GlobalSearchKind = "email" | "telemovel" | "id" | "nome";
+export type GlobalSearchGrupo = "formandos" | "formadores" | "formacoes" | "turmas" | "crm";
+export type GlobalSearchHit = {
+  grupo: GlobalSearchGrupo;
+  tipo: string;
+  nome: string;
+  sub: string;
+  view: string;
+  formandoId?: number;
+  formandoOrigem?: "gold-turma" | "gold-avulso" | "fin";
+  formadorId?: number;
+  leadId?: number;
+  turmaId?: number;
+  cursoId?: number;
+  tab?: "overview" | "dtp";
+};
+export type GlobalSearchResult = {
+  q: string;
+  kind: GlobalSearchKind;
+  kindLabel: string;
+  groups: { grupo: GlobalSearchGrupo; label: string; items: GlobalSearchHit[] }[];
+  total: number;
+};
+export const apiGlobalSearch = (q: string) =>
+  api<GlobalSearchResult>(`/v1/search?q=${encodeURIComponent(q)}`);
 export const apiCrmLote = (body: { ids: number[]; acao: "contactar" | "estado" | "seguimento"; estado?: string; proximoContacto?: string; nota?: string }) =>
   api<{ updated: number }>("/v1/crm/lote", { method: "POST", body: JSON.stringify(body) });
 

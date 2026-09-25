@@ -370,7 +370,7 @@ function asFichaAvulso(r: typeof formandosGoldData[number]): FormandoTurma {
   return { ...r, turma: "Sem turma", turmaId: 0 };
 }
 
-export function FormandosGoldView() {
+export function FormandosGoldView({ openId, onOpened }: { openId?: number; onOpened?: () => void } = {}) {
   const [lista, setLista] = useCatalogList("formandos_avulso", "gold", formandosGoldData);
   const [s, setS] = useState(""); const [p, setP] = useState(1);
   const [filtro, setFiltro] = useState("Todos");
@@ -385,6 +385,14 @@ export function FormandosGoldView() {
   const [email, setEmail] = useState("");
   const [telf, setTelf] = useState("");
   const [valor, setValor] = useState("0");
+  useEffect(() => {
+    if (!openId) return;
+    const row = lista.find(x => x.id === openId);
+    if (!row) return;
+    setFicha(row);
+    onOpened?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, lista]);
   const f = lista.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.curso} ${x.email}`.toLowerCase().includes(s.toLowerCase());
     return q && matchesFilter(x.curso, filtroCurso) && matchesFilter(x.local, filtroLocal) && (filtro === "Todos" || x.estado === filtro);

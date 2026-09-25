@@ -21,6 +21,7 @@ import {
   nextOpsId,
 } from "./ops.js";
 import { exportCrmLeads, queryCrmLeads, searchCrmLeads, type CrmFila, type CrmSort } from "./crm.js";
+import { globalSearch } from "./globalSearch.js";
 import { config } from "./config.js";
 
 const preSchema = z.object({
@@ -102,6 +103,13 @@ export function registerOpsRoutes(
     const q = String((req.query as { q?: string } | undefined)?.q ?? "").trim();
     if (q.length < 2) return { leads: [] };
     return { leads: await searchCrmLeads(db, q, 12) };
+  });
+
+  app.get("/v1/search", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const q = String((req.query as { q?: string } | undefined)?.q ?? "").trim();
+    if (q.length < 1) return { q: "", kind: "nome", kindLabel: "nome", groups: [], total: 0 };
+    return globalSearch(db, q);
   });
 
   app.get("/v1/crm/export", async (req, reply) => {

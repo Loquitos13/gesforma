@@ -32,7 +32,7 @@ O **Painel** e as **notificações** são calculados na API a partir dos dados r
 
 Em **Configurações**, cada cartão abre um **modal centrado** só com essa secção (Cancelar / Guardar). Não há gaveta lateral nem lista de separadores à esquerda.
 
-A **secretaria** trabalha com rasto no topo (regime + percurso clicável), bloco **A fazer agora** no cockpit, listas em **cartões no telemóvel** e **acções com rótulo** no desktop (menu ⋯ no ecrã estreito). Eliminar pede sempre a mesma confirmação, incluindo nos catálogos e no blog. A pesquisa **⌘K** indexa os formandos, leads, turmas, cursos, UFCD, dossiês e formadores carregados, e os atalhos do dia só aparecem quando há trabalho pendente a sério. As notificações classificam-se em **Bloqueio**, **Aviso** e **Info**.
+A **secretaria** trabalha com rasto no topo (regime + percurso clicável), bloco **A fazer agora** no cockpit, listas em **cartões no telemóvel** e **acções com rótulo** no desktop (menu ⋯ no ecrã estreito). Eliminar pede sempre a mesma confirmação, incluindo nos catálogos e no blog. A pesquisa geral **⌘K** é larga, reconhece nome, telemóvel, email ou id, consulta a base de dados e agrupa os resultados; ao clicar abre a ficha do formando/formador ou a view da formação/turma. As notificações classificam-se em **Bloqueio**, **Aviso** e **Info**.
 
 O **menu segue o perfil** do utilizador: a Comercial Gold vê Principal (Painel e CRM), Gold e Gestão; a Secretaria Financiada vê Principal, Financiada e Gestão; só a Administração vê Sistema.
 
@@ -40,7 +40,7 @@ Os formulários de criar e editar (pré-inscrição, turma, formando, sessão, e
 
 Em **Emails automáticos**, a nova regra pede gatilho, template, curso e atraso, com **preview do email** ao lado. O olho nas regras e nos templates abre o mesmo preview.
 
-Não existe `formandos.ena.pt` nem área de formando. O pedido público é a **pré-inscrição** (`/pre-inscricao`) e o **inquérito de satisfação** (`/inquerito/:token`). No backoffice, esses pedidos entram no **CRM** (menu Principal): a lista é **paginada no servidor** (pesquisa, filtros, CSV até 2 000 linhas, acções em lote até 100 leads). A fila do dia (por contactar / atrasados / a converter) é o trabalho do dia; o pipeline só mostra 20 cartões por etapa. Ctrl+K pesquisa leads na base, não só os já carregados.
+Não existe `formandos.ena.pt` nem área de formando. O pedido público é a **pré-inscrição** (`/pre-inscricao`) e o **inquérito de satisfação** (`/inquerito/:token`). No backoffice, esses pedidos entram no **CRM** (menu Principal): a lista é **paginada no servidor** (pesquisa, filtros, CSV até 2 000 linhas, acções em lote até 100 leads). A fila do dia (por contactar / atrasados / a converter) é o trabalho do dia; o pipeline só mostra 20 cartões por etapa. A pesquisa global (⌘K) consulta formandos, formadores, turmas, formações e CRM na base de dados.
 
 A referência Multibanco / MB Way na ficha do formando grava um pagamento **Pendente** (com email e referência). O banco confirma em `GET|POST /api/v1/public/pagamentos/webhook` (`chave`, `referencia` ou `id`, `valor`). A chave vive em `PAYMENT_WEBHOOK_KEY` ou em Configurações → Gold → **Chave webhook pagamentos**. A confirmação marca o pagamento como Pago, actualiza o formando Gold, passa o lead do CRM a **Pago** e dispara `payment.confirmed` na fila de email. Recibos legais certificados (Moloni) e o contrato Ifthenpay/SIBS ficam de fora até existirem credenciais.
 

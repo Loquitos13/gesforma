@@ -35,7 +35,7 @@ import { FORMADORES_SEED } from "./formadorModel";
 import { useFormadorOptions, useFormadores } from "./FormadoresContext";
 import { useTurmas } from "./TurmasContext";
 import { cronogramaToSessoes, formatSessaoLabel, hojeIso, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
-import { apiCrmSearch, apiDriveFiles } from "./api";
+import { apiGlobalSearch, apiDriveFiles, type GlobalSearchHit } from "./api";
 import { campanhaNums, roiLabel } from "./campanhaStats";
 import { ListsProvider, nextListId, useLists, type BlogPostRow, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
 import { PreInscricoesGoldView } from "./CrmView";
@@ -128,7 +128,17 @@ type View =
   | "emails" | "pagamentos" | "configuracoes" | "utilizadores" | "notificacoes";
 
 type CockpitTab = "overview" | "cronograma" | "sessoes" | "documentos" | "dtp" | "certificados";
-type NavTarget = { view: View; turmaId?: number; tab?: CockpitTab; cursoId?: number | "new"; cursoNome?: string };
+type NavTarget = {
+  view: View;
+  turmaId?: number;
+  tab?: CockpitTab;
+  cursoId?: number | "new";
+  cursoNome?: string;
+  formandoId?: number;
+  formandoOrigem?: "gold-turma" | "gold-avulso" | "fin";
+  formadorId?: number;
+  leadId?: number;
+};
 
 function nowStamp() {
   const d = new Date();
@@ -2905,7 +2915,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
 
 // ─── Formandos Turmas ─────────────────────────────────────────────────────────
 
-function FormandosTurmasView() {
+function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?: () => void }) {
   const { gold, patchGold } = useTurmas();
   const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma } = useLists();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
@@ -2921,6 +2931,14 @@ function FormandosTurmasView() {
   const [emailNovo, setEmailNovo] = useState("");
   const [telfNovo, setTelfNovo] = useState("");
   const editing = edit && edit !== "new" ? edit : null;
+  useEffect(() => {
+    if (!openId) return;
+    const row = formandosTurmas.find(x => x.id === openId);
+    if (!row) return;
+    setFichaOpen(row);
+    onOpened?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, formandosTurmas]);
   const turmaOpts = turmaGoldOpts(gold, { curso: cursoEdit || undefined, includeNome: editing?.turma });
   const f = formandosTurmas.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.turma}`.toLowerCase().includes(s.toLowerCase());
@@ -3066,7 +3084,7 @@ function FormandosTurmasView() {
 
 // ─── Formandos Financiada com Documentos ─────────────────────────────────────
 
-function FinFormandosView() {
+function FinFormandosView({ openId, onOpened }: { openId?: number; onOpened?: () => void }) {
   const { fin, patchFin } = useTurmas();
   const { formandosFin, addFormandoFin, removeFormandoFin } = useLists();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
@@ -3080,6 +3098,14 @@ function FinFormandosView() {
   const [telfNovo, setTelfNovo] = useState("");
   const [cursoNovo, setCursoNovo] = useState("");
   const [turmaNovo, setTurmaNovo] = useState("");
+  useEffect(() => {
+    if (!openId) return;
+    const row = formandosFin.find(x => x.id === openId);
+    if (!row) return;
+    setDocsOpen(row);
+    onOpened?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, formandosFin]);
   const f = formandosFin.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.email}`.toLowerCase().includes(s.toLowerCase());
     return q && matchesFilter(x.curso, filtroCurso) && (filtro === "Todos" || x.estado === filtro);
@@ -4257,34 +4283,23 @@ function PagamentosView() {
 
 // ─── Pesquisa Global (Ctrl+K) ─────────────────────────────────────────────────
 
-type SearchRow = { tipo: string; nome: string; sub: string } & NavTarget;
+type SearchRow = { tipo: string; nome: string; sub: string; grupo?: string } & NavTarget;
 
-/** O índice da pesquisa sai dos dados carregados, não de listas fixas. */
-function useSearchIndex(): SearchRow[] {
-  const { formandosTurmas, formandosFin, cursosGold, cursosFin, preinscricoes } = useLists();
-  const { gold, fin } = useTurmas();
-  const { formadores } = useFormadores();
-
-  return useMemo(() => [
-    ...formandosTurmas.map(f => ({ tipo: "Formando Gold", nome: `${f.nome} ${f.apelido}`, sub: `${f.email} · ${f.turma || "sem turma"}`, view: "gold-formandos-turmas" as View })),
-    ...formandosFin.map(f => ({ tipo: "Formando Financiado", nome: `${f.nome} ${f.apelido}`, sub: `${f.email} · ${f.turma || "sem turma"}`, view: "fin-formandos" as View })),
-    ...preinscricoes.map(l => ({ tipo: "CRM", nome: `${l.nome} ${l.apelido}`, sub: `${l.curso || "sem curso"} · ${l.estado}`, view: "gold-preinscricoes" as View })),
-    ...gold.map(t => ({ tipo: "Turma Gold", nome: t.nome, sub: `${t.local} · ${t.curso}`, view: "gold-cockpit-turma" as View, turmaId: t.id, tab: "overview" as CockpitTab })),
-    ...fin.map(t => ({ tipo: "Turma Financiada", nome: t.nome, sub: `UFCD ${t.ufcdCod} · ${t.curso}`, view: "fin-cockpit-turma" as View, turmaId: t.id, tab: "overview" as CockpitTab })),
-    ...cursosGold.map(c => ({ tipo: "Curso Gold", nome: c.nome, sub: c.categoria, view: "gold-curso-ficha" as View, cursoId: c.id })),
-    ...cursosFin.map(c => ({ tipo: "UFCD", nome: `${c.ufcdCod} · ${c.ufcd}`, sub: c.nomeComercial, view: "fin-curso-ficha" as View, cursoId: c.id })),
-    ...gold.map(t => ({ tipo: "DTP", nome: `Dossiê da turma ${t.nome}`, sub: `${t.curso} · Gold`, view: "gold-cockpit-turma" as View, turmaId: t.id, tab: "dtp" as CockpitTab })),
-    ...fin.map(t => ({ tipo: "DTP", nome: `Dossiê da turma ${t.nome}`, sub: `UFCD ${t.ufcdCod} · Financiada`, view: "fin-cockpit-turma" as View, turmaId: t.id, tab: "dtp" as CockpitTab })),
-    ...formadores.map(f => ({
-      tipo: f.regimes.includes("gold") ? "Formador Gold" : "Formador Financiado",
-      nome: f.nome,
-      sub: f.especialidade || f.email,
-      view: (f.regimes.includes("gold") ? "gold-formadores" : "fin-formadores") as View,
-    })),
-    { tipo: "Atalho", nome: "Utilizadores", sub: "Sistema · Gestão de contas da secretaria", view: "utilizadores" as View },
-    { tipo: "Atalho", nome: "Emails automáticos", sub: "Sistema · regras e templates", view: "emails" as View },
-    { tipo: "Atalho", nome: "Configurações", sub: "Sistema · entidade e Google Drive", view: "configuracoes" as View },
-  ], [cursosFin, cursosGold, fin, formadores, formandosFin, formandosTurmas, gold, preinscricoes]);
+function hitToNav(h: GlobalSearchHit): SearchRow {
+  return {
+    tipo: h.tipo,
+    nome: h.nome,
+    sub: h.sub,
+    grupo: h.grupo,
+    view: h.view as View,
+    turmaId: h.turmaId,
+    tab: h.tab,
+    cursoId: h.cursoId,
+    formandoId: h.formandoId,
+    formandoOrigem: h.formandoOrigem,
+    formadorId: h.formadorId,
+    leadId: h.leadId,
+  };
 }
 
 /** Atalhos do dia: só aparecem quando há realmente trabalho pendente. */
@@ -4319,39 +4334,47 @@ function useAtalhosDoDia(): SearchRow[] {
 function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: () => void; onNavigate: (t: NavTarget) => void }) {
   const [q, setQ] = useState("");
   const [hi, setHi] = useState(0);
-  const [crmHits, setCrmHits] = useState<SearchRow[]>([]);
-  const indice = useSearchIndex();
+  const [busy, setBusy] = useState(false);
+  const [kindLabel, setKindLabel] = useState<string | null>(null);
+  const [groups, setGroups] = useState<{ label: string; items: SearchRow[] }[]>([]);
   const atalhosDoDia = useAtalhosDoDia();
-  const localHits = q.length > 1 ? indice.filter(r => `${r.nome} ${r.sub} ${r.tipo}`.toLowerCase().includes(q.toLowerCase())).slice(0, 8) : [];
-  const results = q.length > 1
-    ? [...crmHits, ...localHits.filter(r => r.tipo !== "CRM" || !crmHits.some(c => c.nome === r.nome && c.sub === r.sub))].slice(0, 10)
-    : [];
-  const shown = q.length > 1 ? results : atalhosDoDia;
+  const results = groups.flatMap(g => g.items);
+  const shown = q.trim().length >= 2 ? results : atalhosDoDia;
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (open) { setQ(""); setHi(0); setCrmHits([]); setTimeout(() => inputRef.current?.focus(), 50); }
+    if (open) { setQ(""); setHi(0); setGroups([]); setKindLabel(null); setTimeout(() => inputRef.current?.focus(), 50); }
   }, [open]);
 
   useEffect(() => { setHi(0); }, [q]);
 
   useEffect(() => {
-    if (!open || q.trim().length < 2) { setCrmHits([]); return; }
+    const query = q.trim();
+    if (!open || query.length < 2) { setGroups([]); setKindLabel(null); setBusy(false); return; }
+    setBusy(true);
     const t = window.setTimeout(() => {
-      apiCrmSearch(q.trim()).then(r => {
-        setCrmHits(r.leads.map(l => ({
-          tipo: "CRM",
-          nome: `${l.nome} ${l.apelido}`,
-          sub: `${l.curso || "sem curso"} · ${l.estado} · ${l.email}`,
-          view: "gold-preinscricoes" as View,
-        })));
-      }).catch(() => setCrmHits([]));
-    }, 220);
+      apiGlobalSearch(query).then(r => {
+        setKindLabel(r.kindLabel);
+        setGroups(r.groups.map(g => ({ label: g.label, items: g.items.map(hitToNav) })));
+      }).catch(() => {
+        setKindLabel(null);
+        setGroups([]);
+      }).finally(() => setBusy(false));
+    }, 180);
     return () => window.clearTimeout(t);
   }, [q, open]);
 
-  function openRow(r: (typeof shown)[number]) {
-    onNavigate({ view: r.view, turmaId: r.turmaId, tab: r.tab, cursoId: r.cursoId });
+  function openRow(r: SearchRow) {
+    onNavigate({
+      view: r.view,
+      turmaId: r.turmaId,
+      tab: r.tab,
+      cursoId: r.cursoId,
+      formandoId: r.formandoId,
+      formandoOrigem: r.formandoOrigem,
+      formadorId: r.formadorId,
+      leadId: r.leadId,
+    });
     onClose();
   }
 
@@ -4370,7 +4393,9 @@ function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: (
   if (!open) return null;
 
   const tipoColor: Record<string, string> = {
-    "Formando Gold": "bg-amber-100 text-amber-700", "Formando Financiado": "bg-blue-100 text-blue-700",
+    "Formando Gold": "bg-amber-100 text-amber-700",
+    "Formando Gold avulso": "bg-amber-50 text-amber-800",
+    "Formando Financiado": "bg-blue-100 text-blue-700",
     "Turma Gold": "bg-violet-100 text-violet-700", "Turma Financiada": "bg-teal-100 text-teal-700",
     "Curso Gold": "bg-orange-100 text-orange-700", "UFCD": "bg-emerald-100 text-emerald-700",
     "Formador Gold": "bg-violet-100 text-violet-700", "Formador Financiado": "bg-blue-100 text-blue-700",
@@ -4378,25 +4403,56 @@ function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: (
     DTP: "bg-red-100 text-red-700", Inquérito: "bg-slate-100 text-slate-600", Atalho: "bg-amber-100 text-amber-800",
   };
 
+  let flat = 0;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 sm:pt-16 px-3 sm:px-6">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ animation: "scaleIn 0.15s ease" }}>
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100">
+      <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ animation: "scaleIn 0.15s ease" }}>
+        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-100">
           <span className="text-slate-400">{I.cmdK}</span>
-          <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} placeholder="Pesquisar CRM, formandos, turmas, cursos…"
-            className="flex-1 text-sm text-slate-800 placeholder-slate-400 focus:outline-none" />
+          <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)}
+            placeholder="Nome, telemóvel, email, formação ou turma…"
+            className="flex-1 text-base text-slate-800 placeholder-slate-400 focus:outline-none" />
+          {kindLabel && q.trim().length >= 2 && (
+            <span className="hidden sm:inline text-[11px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full whitespace-nowrap">
+              {kindLabel}
+            </span>
+          )}
           <kbd className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-mono">ESC</kbd>
         </div>
-        {q.length <= 1 && (
-          <p className="px-4 pt-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Atalhos do dia</p>
+        {q.trim().length < 2 && (
+          <p className="px-5 pt-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Atalhos do dia</p>
         )}
-        <div className="max-h-80 overflow-y-auto">
-          {q.length > 1 && shown.length === 0 ? (
-            <p className="text-center text-sm text-slate-400 py-8">Sem resultados para "{q}"</p>
+        <div className="max-h-[min(70vh,560px)] overflow-y-auto">
+          {q.trim().length >= 2 && busy && shown.length === 0 ? (
+            <p className="text-center text-sm text-slate-400 py-10">A pesquisar na base de dados…</p>
+          ) : q.trim().length >= 2 && !busy && shown.length === 0 ? (
+            <p className="text-center text-sm text-slate-400 py-10">Sem resultados para “{q}”</p>
+          ) : q.trim().length >= 2 ? (
+            groups.map(g => (
+              <div key={g.label}>
+                <p className="px-5 pt-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 sticky top-0 bg-white/95">{g.label}</p>
+                {g.items.map((r, i) => {
+                  const idx = flat++;
+                  return (
+                    <button key={`${r.tipo}-${r.nome}-${r.formandoId ?? r.formadorId ?? r.leadId ?? r.turmaId ?? r.cursoId ?? i}`}
+                      onClick={() => openRow(r)}
+                      className={`w-full flex items-center gap-3 px-5 py-3 transition-colors text-left border-b border-slate-50 last:border-0 ${idx === hi ? "bg-slate-100" : "hover:bg-slate-50"}`}>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${tipoColor[r.tipo] ?? "bg-slate-100 text-slate-600"}`}>{r.tipo}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-800 truncate">{r.nome}</p>
+                        <p className="text-xs text-slate-400 truncate">{r.sub}</p>
+                      </div>
+                      <span className="text-slate-300 flex-shrink-0">{I.chevRight}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))
           ) : shown.map((r, i) => (
             <button key={`${r.tipo}-${r.nome}-${i}`} onClick={() => openRow(r)}
-              className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left border-b border-slate-50 last:border-0 ${i === hi ? "bg-slate-100" : "hover:bg-slate-50"}`}>
+              className={`w-full flex items-center gap-3 px-5 py-3 transition-colors text-left border-b border-slate-50 last:border-0 ${i === hi ? "bg-slate-100" : "hover:bg-slate-50"}`}>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ${tipoColor[r.tipo] ?? "bg-slate-100 text-slate-600"}`}>{r.tipo}</span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-slate-800 truncate">{r.nome}</p>
@@ -4406,8 +4462,9 @@ function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: (
             </button>
           ))}
         </div>
-        <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex gap-4 text-xs text-slate-400">
-          <span>↑↓ navegar</span><span>↵ abrir</span><span>ESC fechar</span>
+        <div className="px-5 py-2 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+          <span>↑↓ navegar</span><span>↵ abrir ficha</span><span>ESC fechar</span>
+          <span className="ml-auto">Pesquisa na base de dados</span>
         </div>
       </div>
     </div>
@@ -4714,6 +4771,10 @@ function AppShell() {
   const [cockpitTab, setCockpitTab] = useState<CockpitTab>("overview");
   const [cursoFichaId, setCursoFichaId] = useState<number | "new" | undefined>();
   const [moduloCurso, setModuloCurso] = useState<string | undefined>();
+  const [openFormandoId, setOpenFormandoId] = useState<number | undefined>();
+  const [openFormandoOrigem, setOpenFormandoOrigem] = useState<"gold-turma" | "gold-avulso" | "fin" | undefined>();
+  const [openFormadorId, setOpenFormadorId] = useState<number | undefined>();
+  const [openLeadId, setOpenLeadId] = useState<number | undefined>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -4736,6 +4797,10 @@ function AppShell() {
 
   const navigate = useCallback((target: View | NavTarget) => {
     const t: NavTarget = typeof target === "string" ? { view: target } : target;
+    setOpenFormandoId(t.formandoId);
+    setOpenFormandoOrigem(t.formandoOrigem);
+    setOpenFormadorId(t.formadorId);
+    setOpenLeadId(t.leadId);
     if (t.view === "gold-cockpit-turma") {
       setCockpitId(t.turmaId); setCockpitTab(t.tab ?? "overview");
     }
@@ -4817,9 +4882,9 @@ function AppShell() {
       case "gold-turmas": return <TurmasGoldView onCockpit={openCockpit} />;
       case "gold-cockpit-turma": return <CockpitTurmaView turmaId={cockpitId} initialTab={cockpitTab} onBack={() => navigate("gold-turmas")} onNavigate={navigate} />;
       case "gold-dtp": return <DtpTurmasPicker regime="gold" onOpen={(id) => openCockpit(id, "dtp")} />;
-      case "gold-preinscricoes": return <PreInscricoesGoldView />;
-      case "gold-formandos-turmas": return <FormandosTurmasView />;
-      case "gold-formandos-gold": return <FormandosGoldView />;
+      case "gold-preinscricoes": return <PreInscricoesGoldView openLeadId={openLeadId} onOpened={() => setOpenLeadId(undefined)} />;
+      case "gold-formandos-turmas": return <FormandosTurmasView openId={openFormandoOrigem === "gold-avulso" || openFormandoOrigem === "fin" ? undefined : openFormandoId} onOpened={() => setOpenFormandoId(undefined)} />;
+      case "gold-formandos-gold": return <FormandosGoldView openId={openFormandoOrigem === "gold-avulso" ? openFormandoId : undefined} onOpened={() => setOpenFormandoId(undefined)} />;
       case "gold-campanhas": return <CampanhasView />;
       case "gold-datas": return <DatasGoldView />;
       case "gold-locais": return <LocaisView />;
@@ -4834,9 +4899,9 @@ function AppShell() {
       case "notificacoes": return <NotificacoesCentro onNavigate={navigate} />;
       case "gold-inqueritos": return <InqueritosView acento="gold" />;
       case "gold-formadores":
-      case "formadores": return <FormadoresView regime="gold" />;
+      case "formadores": return <FormadoresView regime="gold" openId={openFormadorId} onOpened={() => setOpenFormadorId(undefined)} />;
       case "fin-inscricoes": return <FinInscricoesView />;
-      case "fin-formandos": return <FinFormandosView />;
+      case "fin-formandos": return <FinFormandosView openId={openFormandoOrigem === "fin" ? openFormandoId : undefined} onOpened={() => setOpenFormandoId(undefined)} />;
       case "fin-cursos": return <FinCursosView onOpen={id => { setCursoFichaId(id); go("fin-curso-ficha"); }} />;
       case "fin-curso-ficha": return <FinCursoFichaScreen cursoId={cursoFichaId} onBack={() => navigate("fin-cursos")} onOpenModulos={nome => navigate({ view: "fin-modulos", cursoNome: nome })} />;
       case "fin-turmas": return <FinTurmasView onCockpit={openFinCockpit} />;
@@ -4847,7 +4912,7 @@ function AppShell() {
       case "fin-dtp": return <DtpTurmasPicker regime="fin" onOpen={(id) => openFinCockpit(id, "dtp")} />;
       case "fin-cockpit-turma": return <FinCockpitTurmaView turmaId={finCockpitId} initialTab={cockpitTab} onBack={() => navigate("fin-turmas")} onNavigate={navigate} />;
       case "fin-inqueritos": return <InqueritosView acento="fin" />;
-      case "fin-formadores": return <FormadoresView regime="fin" />;
+      case "fin-formadores": return <FormadoresView regime="fin" openId={openFormadorId} onOpened={() => setOpenFormadorId(undefined)} />;
       case "blog-posts": return <BlogView />;
       case "blog-tematicas": return <BlogTematicasView />;
       case "emails": return <EmailsView />;
@@ -4888,19 +4953,18 @@ function AppShell() {
           {/* Top bar */}
           <header className="sticky top-0 z-30 bg-white border-b border-slate-200 flex items-center gap-3 px-4 min-h-14 py-2 flex-shrink-0 shadow-sm">
             <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 -ml-1 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors" aria-label="Abrir menu">{I.menu}</button>
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0 shrink">
               <div className="flex items-center gap-2 min-w-0">
                 <RegimeBadge regime={regime} />
                 <PageTrail crumbs={headerCrumbs} />
               </div>
-              {headerDetail && <p className="text-[11px] text-slate-400 truncate mt-0.5">{headerDetail}</p>}
+              {headerDetail && <p className="text-[11px] text-slate-400 truncate mt-0.5 hidden md:block">{headerDetail}</p>}
             </div>
-            <div className="flex items-center gap-2">
-              {/* Global search button */}
-              <button onClick={() => setSearchOpen(true)}
-                className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-xs text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
-                {I.cmdK}<span>Pesquisar</span><kbd className="font-mono text-slate-300">⌘K</kbd>
-              </button>
+            <button onClick={() => setSearchOpen(true)}
+              className="hidden sm:flex flex-1 min-w-[12rem] max-w-3xl items-center gap-2 px-4 py-2 text-sm text-slate-400 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+              {I.cmdK}<span className="flex-1 text-left truncate">Nome, telemóvel, email, formação ou turma…</span><kbd className="font-mono text-slate-300 text-[11px]">⌘K</kbd>
+            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
               <button onClick={() => setSearchOpen(true)} className="sm:hidden p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">{I.search}</button>
 
               {/* Notifications */}

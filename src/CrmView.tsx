@@ -73,7 +73,7 @@ function loadPrefs(): { view: "table" | "kanban"; perPage: number; sort: CrmSort
   }
 }
 
-export function PreInscricoesGoldView() {
+export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: number; onOpened?: () => void } = {}) {
   const prefs = useRef(loadPrefs()).current;
   const [viewMode, setViewMode] = useState<"table" | "kanban">(prefs.view);
   const [qInput, setQInput] = useState("");
@@ -132,6 +132,29 @@ export function PreInscricoesGoldView() {
   }, [query]);
 
   useEffect(() => { carregar(); }, [carregar]);
+
+  useEffect(() => {
+    if (!openLeadId) return;
+    const fromList = preinscricoes.find(l => l.id === openLeadId);
+    const fromPage = data?.items.find(l => l.id === openLeadId);
+    if (fromPage) {
+      setFicha(fromPage);
+      onOpened?.();
+      return;
+    }
+    if (fromList) {
+      setFicha(fromList as CrmLead);
+      onOpened?.();
+      return;
+    }
+    apiCrmLeads({ q: String(openLeadId), perPage: 20, page: 1, sort: "inscrito" })
+      .then(r => {
+        const hit = r.items.find(x => x.id === openLeadId);
+        if (hit) setFicha(hit);
+      })
+      .finally(() => onOpened?.());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openLeadId, data, preinscricoes]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {

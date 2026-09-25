@@ -70,6 +70,7 @@ export function isSilentViewPath(path: string) {
     || path.startsWith("/v1/auth/")
     || path.startsWith("/v1/notificacoes")
     || path.startsWith("/v1/crm/")
+    || path === "/v1/search"
     || path.startsWith("/v1/public/")
     || path === "/v1/drive/status"
   );

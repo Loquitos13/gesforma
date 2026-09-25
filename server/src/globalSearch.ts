@@ -44,9 +44,11 @@ const KIND_LABEL: Record<SearchKind, string> = {
 export function detectQueryKind(q: string): { kind: SearchKind; digits: string; needle: string } {
   const needle = q.trim().slice(0, 80);
   const digits = needle.replace(/\D/g, "");
+  const onlyDigits = /^\d[\d\s./+-]*$/.test(needle) && digits.length > 0;
   if (needle.includes("@")) return { kind: "email", digits, needle };
   if (digits.length >= 9) return { kind: "telemovel", digits, needle };
-  if (/^\d{1,6}$/.test(needle)) return { kind: "id", digits, needle };
+  if (onlyDigits && digits.startsWith("9") && digits.length >= 3) return { kind: "telemovel", digits, needle };
+  if (onlyDigits && digits.length <= 6) return { kind: "id", digits, needle };
   return { kind: "nome", digits, needle };
 }
 

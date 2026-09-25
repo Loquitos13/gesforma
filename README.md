@@ -34,15 +34,15 @@ Em **Configurações**, cada cartão abre um **modal centrado** só com essa sec
 
 A **secretaria** trabalha com rasto no topo (regime + percurso clicável), bloco **A fazer agora** no cockpit, listas em **cartões no telemóvel** e **acções com rótulo** no desktop (menu ⋯ no ecrã estreito). Eliminar pede sempre a mesma confirmação, incluindo nos catálogos e no blog. A pesquisa **⌘K** indexa os formandos, leads, turmas, cursos, UFCD, dossiês e formadores carregados, e os atalhos do dia só aparecem quando há trabalho pendente a sério. As notificações classificam-se em **Bloqueio**, **Aviso** e **Info**.
 
-O **menu segue o perfil** do utilizador: a Comercial Gold vê Gold e Gestão, a Secretaria Financiada vê Financiada e Gestão, e só a Administração vê Sistema.
+O **menu segue o perfil** do utilizador: a Comercial Gold vê Principal (Painel e CRM), Gold e Gestão; a Secretaria Financiada vê Principal, Financiada e Gestão; só a Administração vê Sistema.
 
 Os formulários de criar e editar (pré-inscrição, turma, formando, sessão, etc.) abrem em **modal ao centro**, não numa gaveta que desliza da direita.
 
 Em **Emails automáticos**, a nova regra pede gatilho, template, curso e atraso, com **preview do email** ao lado. O olho nas regras e nos templates abre o mesmo preview.
 
-Não existe `formandos.ena.pt` nem área de formando. O pedido público é a **pré-inscrição** (`/pre-inscricao`) e o **inquérito de satisfação** (`/inquerito/:token`). No backoffice, esses pedidos entram no **CRM** (menu Gold → CRM): fila do dia, pipeline e ficha do lead (ligar, WhatsApp, seguimento, marcar pago, inscrever numa turma). A secretaria contacta a pessoa a seguir. Os emails automáticos levam ao formulário público ou a `mailto:formacao@ena.pt`.
+Não existe `formandos.ena.pt` nem área de formando. O pedido público é a **pré-inscrição** (`/pre-inscricao`) e o **inquérito de satisfação** (`/inquerito/:token`). No backoffice, esses pedidos entram no **CRM** (menu Principal): fila do dia, pipeline e ficha do lead (ligar, WhatsApp, seguimento, marcar pago, inscrever numa turma). Os emails automáticos levam ao formulário público ou a `mailto:formacao@ena.pt` e avançam o estado do lead.
 
-A referência Multibanco / MB Way na ficha do formando grava um pagamento **Pendente** (com email e referência). O banco confirma em `GET|POST /api/v1/public/pagamentos/webhook` (`chave`, `referencia` ou `id`, `valor`). A chave vive em `PAYMENT_WEBHOOK_KEY` ou em Configurações → Gold → **Chave webhook pagamentos**. A confirmação marca o pagamento como Pago, actualiza o formando Gold e dispara `payment.confirmed` na fila de email. Recibos legais certificados (Moloni) e o contrato Ifthenpay/SIBS ficam de fora até existirem credenciais.
+A referência Multibanco / MB Way na ficha do formando grava um pagamento **Pendente** (com email e referência). O banco confirma em `GET|POST /api/v1/public/pagamentos/webhook` (`chave`, `referencia` ou `id`, `valor`). A chave vive em `PAYMENT_WEBHOOK_KEY` ou em Configurações → Gold → **Chave webhook pagamentos**. A confirmação marca o pagamento como Pago, actualiza o formando Gold, passa o lead do CRM a **Pago** e dispara `payment.confirmed` na fila de email. Recibos legais certificados (Moloni) e o contrato Ifthenpay/SIBS ficam de fora até existirem credenciais.
 
 Cada **turma** tem um **cronograma** e um toggle **Ativa / Inativa**. No cockpit, o separador Cronograma mostra a **grelha ENA** com **todos os dias** do período (mesmo sem eventos). Clique num dia para adicionar um evento: metodologia, horário e módulos (opcional, vários). Se o horário ainda não existir, a grelha cria uma linha nova. **+ Linha de horário** faz o mesmo sem escolher o dia. **Imprimir / PDF** abre o cronograma oficial numa **única tabela** (cabeçalho da escola, datas, local mapeado, meses em colunas e legendas), como no documento da ENA. A lista de sessões lectivas por baixo serve para formadores. Regenerar pede confirmação porque substitui o plano atual. Só turmas ativas aparecem nas pré-inscrições Gold, na conversão de lead em formando, na mudança de turma de um formando e nas inscrições financiadas. Uma turma inativa mantém os formandos já inscritos, mas fecha novas entradas.
 
@@ -72,9 +72,9 @@ Em **Sistema → Gestão → Utilizadores** a administração cria contas da sec
 
 Os ficheiros da secretaria (PIP, certificados, conteúdos, documentos do formador) vão para o **Google Drive da entidade**. Em Configurações a administradora liga a conta Google via **OAuth 2.0**. Enquanto a conta não estiver ligada, o upload fica no servidor (`server/data/drive-files/`) para o trabalho não parar. Na Vercel sem Drive os ficheiros locais vão para `/tmp` e somem entre invocações - ligue a conta da ENA.
 
-O worker de email também dispara o lembrete **24h antes do início** da turma (formandos da turma) e o certificado quando o estado do formando passa a concluído.
+O worker de email também dispara o lembrete **24h antes do início** da turma (formandos da turma) e o certificado quando o estado do formando passa a concluído. No CRM, o cron (`/api/v1/cron/email`) envia o lembrete **sem pagamento há 3 dias** (estado **2.º Contacto**) e o **reengajamento aos 30 dias**.
 
-O formulário público `POST /v1/public/preinscricoes` (8 pedidos / minuto) cria um lead em **Não contactado**. Na lista Gold, **Contactar** passa a **1.º Contacto** e regista a nota.
+O formulário público `POST /v1/public/preinscricoes` (8 pedidos / minuto) cria um lead em **Não contactado** e dispara as boas-vindas. **Contactar** passa a **1.º Contacto** e regista a nota. Marcar pago (ficha ou webhook) passa a **Pago** e envia a confirmação + contacto após a venda. Inscrever numa turma passa a **Formando**.
 
 Arquitectura na VPS: **um Compose, três papéis, rede só interna**.
 
@@ -84,7 +84,7 @@ Arquitectura na VPS: **um Compose, três papéis, rede só interna**.
 
 Não separam a base para outro servidor até haver necessidade: um contentor Postgres no mesmo host é mais rápido, o backup é um `pg_dump` e a API não atravessa a rede pública.
 
-**Emails automáticos** - uma regra = gatilho + template + atraso. A secretaria regista uma pré-inscrição ou um pagamento; a API enfileira o envio (incluindo **contacto após a venda**, 1 hora depois do pagamento). O worker corre na própria API, sem Redis. Sem SMTP (`MAIL_MODE=log`) o email fica no histórico; com `SMTP_URL` sai pelo correio.
+**Emails automáticos** - uma regra = gatilho + template + atraso. A secretaria regista uma pré-inscrição ou um pagamento; a API enfileira o envio (incluindo **contacto após a venda**, 1 hora depois do pagamento) e actualiza o funil do CRM. O worker corre na própria API, sem Redis. Sem SMTP (`MAIL_MODE=log`) o email fica no histórico; com `SMTP_URL` sai pelo correio.
 
 ### Segurança
 

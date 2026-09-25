@@ -92,7 +92,7 @@ export function registerOpsRoutes(
       ],
     );
     const nome = `${d.nome} ${d.apelido}`.trim();
-    await ingestEvent(db, "preinscricao.created", { email, nome, curso }, `preinscricao:${id}:${email}`).catch(() => undefined);
+    await ingestEvent(db, "preinscricao.created", { email, nome, curso, preinscricaoId: id }, `preinscricao:${id}:${email}`).catch(() => undefined);
     await audit(db, undefined, "preinscricao.public_create", "preinscricao", String(id), req.ip, { curso });
     const row = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
     return { preinscricao: row ? mapPreinscricao(row) : { id }, aviso: "A secretaria contacta-o em breve." };
@@ -114,7 +114,7 @@ export function registerOpsRoutes(
         d.concelho, d.local, d.curso, d.preco ?? 0, d.estado || "Não contactado", d.campanha, d.origem,
       ],
     );
-    await ingestEvent(db, "preinscricao.created", { email, nome: `${d.nome} ${d.apelido}`.trim(), curso: d.curso }, `preinscricao:${id}:${email}`).catch(() => undefined);
+    await ingestEvent(db, "preinscricao.created", { email, nome: `${d.nome} ${d.apelido}`.trim(), curso: d.curso, preinscricaoId: id }, `preinscricao:${id}:${email}`).catch(() => undefined);
     await audit(db, req.actor!.id, "preinscricao.create", "preinscricao", String(id), req.ip);
     const row = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
     return { preinscricao: row ? mapPreinscricao(row) : { id } };
@@ -137,6 +137,17 @@ export function registerOpsRoutes(
       [id, d.nome ?? null, d.apelido ?? null, d.email ? normalizeEmail(d.email) : null, d.telf ?? null, d.concelho ?? null, d.origem ?? null, d.curso ?? null, d.local ?? null, d.inicioCurso ?? null, d.preco ?? null, d.campanha ?? null, d.estado ?? null, d.proximoContacto ?? null, d.notas ?? null],
     );
     const row = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
+    if (row && d.estado === "Pago") {
+      const email = normalizeEmail(String(row.email ?? ""));
+      if (isEmail(email)) {
+        await ingestEvent(db, "payment.confirmed", {
+          email,
+          nome: `${row.nome} ${row.apelido}`.trim(),
+          curso: String(row.curso ?? ""),
+          preinscricaoId: id,
+        }, `payment:pre:${id}:${email}`).catch(() => undefined);
+      }
+    }
     return { preinscricao: row ? mapPreinscricao(row) : null };
   });
 
@@ -157,6 +168,15 @@ export function registerOpsRoutes(
       "INSERT INTO preinscricao_contactos (preinscricao_id, actor_id, nota) VALUES ($1,$2,$3)",
       [id, req.actor!.id, nota],
     );
+    const email = normalizeEmail(String(current.email ?? ""));
+    if (isEmail(email)) {
+      await ingestEvent(db, "preinscricao.contacted", {
+        email,
+        nome: `${current.nome} ${current.apelido}`.trim(),
+        curso: String(current.curso ?? ""),
+        preinscricaoId: id,
+      }, `contacted:${id}:${email}`).catch(() => undefined);
+    }
     await audit(db, req.actor!.id, "preinscricao.contactar", "preinscricao", String(id), req.ip);
     const row = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
     return { preinscricao: row ? mapPreinscricao(row) : null };

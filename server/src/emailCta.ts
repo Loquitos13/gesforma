@@ -27,6 +27,11 @@ export const CTA_BY_TIPO: Record<string, CtaDestino> = {
     href: SECRETARIA_HREF,
     funcao: "Pedir fatura, recibo ou alteração de dados",
   },
+  unpaid_3d: {
+    ambito: "contacto",
+    href: SECRETARIA_HREF,
+    funcao: "Pedir dados de pagamento à secretaria",
+  },
   reminder_24h: {
     ambito: "contacto",
     href: SECRETARIA_HREF,

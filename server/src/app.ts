@@ -73,6 +73,7 @@ const ruleSchema = z.object({
 const eventSchema = z.object({
   type: z.enum([
     "preinscricao.created",
+    "preinscricao.contacted",
     "payment.confirmed",
     "sale.followup",
     "formando.completed",
@@ -86,6 +87,7 @@ const eventSchema = z.object({
     nome: z.string().min(1).max(160),
     curso: z.string().max(200).optional(),
     turma: z.string().max(120).optional(),
+    preinscricaoId: z.number().int().positive().optional(),
   }),
   idempotencyKey: z.string().min(8).max(200),
 });

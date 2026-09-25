@@ -274,6 +274,10 @@ export async function confirmarPagamento(db: Db, row: Record<string, unknown>) {
       "UPDATE formandos_gold SET pago = true, metodo = CASE WHEN metodo = '-' OR metodo = '' THEN $2 ELSE metodo END WHERE lower(email) = $1",
       [email, mapped.metodo || "Multibanco"],
     );
+    await db.query(
+      "UPDATE preinscricoes SET estado = 'Pago' WHERE lower(email) = $1 AND estado <> 'Formando'",
+      [email],
+    );
   }
   const next = await db.query("SELECT * FROM pagamentos WHERE id = $1", [mapped.id]);
   return next.rows[0] ? mapPagamento(next.rows[0] as Record<string, unknown>) : mapped;

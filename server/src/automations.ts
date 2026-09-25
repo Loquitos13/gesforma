@@ -4,7 +4,7 @@ import { buildCtaVars, ctaDestino, fillCtaHref } from "./emailCta.js";
 import { parseEmailXml } from "./emailXml.js";
 import { config } from "./config.js";
 import { sendMail } from "./mailer.js";
-import { EVENT_ALIASES, fillVars, isEmail, normalizeEmail, sanitizeHeader, sanitizeText } from "./security.js";
+import { CRM_ESTADO_RANK, crmEstadoFromEvent, EVENT_ALIASES, fillVars, isEmail, normalizeEmail, sanitizeHeader, sanitizeText } from "./security.js";
 
 type Rule = {
   id: number;
@@ -86,7 +86,75 @@ export async function ingestEvent(
     );
     queued += 1;
   }
+  await applyCrmEstado(db, type, payload).catch(() => undefined);
   return { eventId: id, queued, duplicate: false };
+}
+
+/** Avança o lead no funil quando a automatização dispara. Nunca recua Pago/Formando. */
+export async function applyCrmEstado(db: Db, type: string, payload: Record<string, unknown>) {
+  const target = crmEstadoFromEvent(type);
+  if (!target) return;
+  const rank = CRM_ESTADO_RANK[target] ?? 0;
+  const email = normalizeEmail(String(payload.email ?? ""));
+  const pid = Number(payload.preinscricaoId ?? payload.preinscricao_id ?? 0);
+  if (!Number.isInteger(pid) && !isEmail(email)) return;
+  const idOk = Number.isInteger(pid) && pid > 0;
+  await db.query(
+    `UPDATE preinscricoes SET estado = $1
+      WHERE ($3::int > 0 AND id = $3 OR $4 <> '' AND lower(email) = $4)
+        AND COALESCE((CASE estado
+          WHEN 'Não contactado' THEN 0
+          WHEN '1º Contacto' THEN 1
+          WHEN '2º Contacto' THEN 2
+          WHEN 'Pago' THEN 3
+          WHEN 'Formando' THEN 4
+          ELSE 0 END), 0) < $2
+        AND estado <> 'Formando'`,
+    [target, rank, idOk ? pid : 0, email],
+  );
+}
+
+function leadAtSql() {
+  return `CASE
+    WHEN inscrito ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN to_timestamp(substring(inscrito from 1 for 16), 'YYYY-MM-DD HH24:MI')
+    ELSE created_at
+  END`;
+}
+
+async function enqueueCrmReminders(db: Db) {
+  const leadAt = leadAtSql();
+  const unpaid = await db.query<{ id: number; nome: string; apelido: string; email: string; curso: string }>(
+    `SELECT id, nome, apelido, email, curso FROM preinscricoes
+      WHERE estado NOT IN ('Pago', 'Formando')
+        AND email <> ''
+        AND (${leadAt}) <= now() - interval '3 days'`,
+  );
+  for (const row of unpaid.rows) {
+    const email = normalizeEmail(row.email);
+    if (!isEmail(email)) continue;
+    await ingestEvent(
+      db,
+      "preinscricao.unpaid_3d",
+      { email, nome: `${row.nome} ${row.apelido}`.trim(), curso: row.curso, preinscricaoId: row.id },
+      `unpaid3d:${row.id}:${email}`,
+    ).catch(() => undefined);
+  }
+  const stale = await db.query<{ id: number; nome: string; apelido: string; email: string; curso: string }>(
+    `SELECT id, nome, apelido, email, curso FROM preinscricoes
+      WHERE estado NOT IN ('Pago', 'Formando')
+        AND email <> ''
+        AND (${leadAt}) <= now() - interval '30 days'`,
+  );
+  for (const row of stale.rows) {
+    const email = normalizeEmail(row.email);
+    if (!isEmail(email)) continue;
+    await ingestEvent(
+      db,
+      "lead.stale_30d",
+      { email, nome: `${row.nome} ${row.apelido}`.trim(), curso: row.curso, preinscricaoId: row.id },
+      `stale30d:${row.id}:${email}`,
+    ).catch(() => undefined);
+  }
 }
 
 async function enqueueTurmaReminders(db: Db) {
@@ -122,6 +190,7 @@ async function enqueueTurmaReminders(db: Db) {
 
 export async function processDueJobs(db: Db, limit = 20) {
   await enqueueTurmaReminders(db).catch(() => undefined);
+  await enqueueCrmReminders(db).catch(() => undefined);
   const due = await db.query<{
     id: string;
     to_email: string;

@@ -40,6 +40,16 @@ const TEMPLATES = [
     cta: "Falar com a secretaria",
   },
   {
+    tipo: "unpaid_3d",
+    nome: "Lembrete de pagamento (3 dias)",
+    assunto: "{{nome}}, o pagamento de {{curso}} ainda não chegou",
+    linhas: [
+      "Há três dias que a pré-inscrição em {{curso}} está sem pagamento.",
+      "Se ainda quiser a vaga, responda a este email ou ligue para a secretaria. Enviamos a referência Multibanco.",
+    ],
+    cta: "Pedir dados de pagamento",
+  },
+  {
     tipo: "reminder_24h",
     nome: "Lembrete 24h",
     assunto: "Amanhã começa {{curso}}",
@@ -76,11 +86,12 @@ const TEMPLATES = [
 
 const RULES = [
   { nome: "Boas-vindas ao registo", gatilho: "Nova pré-inscrição recebida", key: "preinscricao.created", tipo: "welcome", delay: 0 },
+  { nome: "Lembrete sem pagamento (3 dias)", gatilho: "Pré-inscrição sem pagamento há 3 dias", key: "preinscricao.unpaid_3d", tipo: "unpaid_3d", delay: 0 },
   { nome: "Confirmação de pagamento", gatilho: "Pagamento confirmado", key: "payment.confirmed", tipo: "payment", delay: 0 },
   { nome: "Contacto após a venda", gatilho: "Contacto após a venda", key: "sale.followup", tipo: "sale_followup", delay: 3600 },
   { nome: "Lembrete 24h antes do curso", gatilho: "24 horas antes do início", key: "turma.starts_in_24h", tipo: "reminder_24h", delay: 0 },
   { nome: "Certificado de conclusão", gatilho: "Formando marcado como concluído", key: "formando.completed", tipo: "certificate", delay: 0 },
-  { nome: "Reengajamento 30 dias", gatilho: "30 dias sem compra", key: "lead.stale_30d", tipo: "reengagement", delay: 0, ativo: false },
+  { nome: "Reengajamento 30 dias", gatilho: "30 dias sem compra", key: "lead.stale_30d", tipo: "reengagement", delay: 0 },
 ];
 
 const SECRETARIA_SEED = {
@@ -159,15 +170,22 @@ export async function seed(db: Db) {
     }
   }
 
-  const count = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM email_rules");
-  if ((count.rows[0]?.n ?? 0) === 0) {
-    for (const r of RULES) {
-      await db.query(
-        `INSERT INTO email_rules (nome, trigger_key, gatilho_label, template_tipo, delay_seconds, ativo)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [r.nome, r.key, r.gatilho, r.tipo, r.delay, r.ativo !== false],
-      );
+  for (const r of RULES) {
+    const existing = await db.query<{ id: number }>(
+      "SELECT id FROM email_rules WHERE trigger_key = $1 ORDER BY id LIMIT 1",
+      [r.key],
+    );
+    if (existing.rows[0]) {
+      if (r.key === "lead.stale_30d" || r.key === "preinscricao.unpaid_3d") {
+        await db.query("UPDATE email_rules SET ativo = true WHERE id = $1", [existing.rows[0].id]);
+      }
+      continue;
     }
+    await db.query(
+      `INSERT INTO email_rules (nome, trigger_key, gatilho_label, template_tipo, delay_seconds, ativo)
+       VALUES ($1, $2, $3, $4, $5, true)`,
+      [r.nome, r.key, r.gatilho, r.tipo, r.delay],
+    );
   }
 
   try {

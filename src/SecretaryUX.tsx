@@ -241,6 +241,7 @@ export function sortNotifs<T extends { tipo: string; lida: boolean }>(items: T[]
 }
 
 export function regimeOfView(view: string): Regime {
+  if (view === "gold-preinscricoes") return "sistema";
   if (view.startsWith("gold") || view === "formadores") return "gold";
   if (view.startsWith("fin")) return "fin";
   return "sistema";

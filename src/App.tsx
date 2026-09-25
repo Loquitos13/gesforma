@@ -246,13 +246,14 @@ type EmailTpl = {
 };
 
 const emailGatilhosOpts = [
-  { value: "Nova pré-inscrição recebida", sub: "Lead acaba de se inscrever no site" },
-  { value: "Pré-inscrição sem pagamento há 3 dias", sub: "Lembrete de cobrança" },
-  { value: "Pagamento confirmado", sub: "Lead passa a formando" },
-  { value: "Contacto após a venda", sub: "Secretaria confirma turma e próximos passos" },
+  { value: "Nova pré-inscrição recebida", sub: "Lead em Não contactado · email de boas-vindas" },
+  { value: "1.º contacto registado", sub: "Secretaria marca 1.º Contacto (email opcional)" },
+  { value: "Pré-inscrição sem pagamento há 3 dias", sub: "Passa a 2.º Contacto · lembrete de cobrança" },
+  { value: "Pagamento confirmado", sub: "Passa a Pago · comprovativo" },
+  { value: "Contacto após a venda", sub: "1 hora depois do pagamento · turma e próximos passos" },
   { value: "24 horas antes do início", sub: "Turma a começar" },
   { value: "Formando marcado como concluído", sub: "Emite certificado" },
-  { value: "30 dias sem compra", sub: "Reengajamento" },
+  { value: "30 dias sem compra", sub: "Reengajamento · 2.º Contacto" },
   { value: "Sumário da sessão assinado", sub: "Aviso interno" },
 ];
 
@@ -295,6 +296,16 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
     cta: "Falar com a secretaria",
     ctaHref: ctaDestino("sale_followup").href,
     ctaAmbito: ctaDestino("sale_followup").ambito,
+  },
+  unpaid_3d: {
+    assunto: "{{nome}}, o pagamento de {{curso}} ainda não chegou",
+    linhas: [
+      "Há três dias que a pré-inscrição em {{curso}} está sem pagamento.",
+      "Se ainda quiser a vaga, responda a este email ou ligue para a secretaria. Enviamos a referência Multibanco.",
+    ],
+    cta: "Pedir dados de pagamento",
+    ctaHref: ctaDestino("unpaid_3d").href,
+    ctaAmbito: ctaDestino("unpaid_3d").ambito,
   },
   reminder_24h: {
     assunto: "Amanhã começa {{curso}}",
@@ -352,6 +363,7 @@ const emailTemplates: EmailTpl[] = (
     { id: 1, nome: "Boas-vindas", editado: "2026-08-15", tipo: "welcome" },
     { id: 2, nome: "Confirmação de Pagamento", editado: "2026-07-22", tipo: "payment" },
     { id: 3, nome: "Contacto após a venda", editado: "2026-09-15", tipo: "sale_followup" },
+    { id: 7, nome: "Lembrete de pagamento (3 dias)", editado: "2026-09-25", tipo: "unpaid_3d" },
     { id: 4, nome: "Lembrete 24h", editado: "2026-08-20", tipo: "reminder_24h" },
     { id: 5, nome: "Certificado de Conclusão", editado: "2026-08-01", tipo: "certificate" },
     { id: 6, nome: "Reengajamento", editado: "2026-07-10", tipo: "reengagement" },
@@ -2545,6 +2557,7 @@ function FichaComercial({ item, open, onClose, onConvert, onContactar, onPatch }
 
         <div>
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Pipeline</p>
+          <p className="text-xs text-slate-500 mb-2">Boas-vindas → Não contactado. Chamada → 1.º. Lembrete 3 dias → 2.º. Pagamento → Pago. Turma → Formando.</p>
           <div className="grid grid-cols-5 gap-1">
             {kanbanCols.map((col, i) => {
               const active = col.id === item.estado;
@@ -3025,7 +3038,7 @@ function PreInscricoesGoldView() {
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="CRM · Gold" sub="Fila comercial: contactar, seguir, converter. Arraste no pipeline ou abra a ficha."
+        <PageHeader title="CRM" sub="Fila comercial: contactar, seguir, converter. Os emails automáticos avançam o pipeline."
           action={
             <div className="flex items-center gap-2 flex-wrap justify-end">
               <button type="button" onClick={() => void copiarFormularioPublico()} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1.5">
@@ -3085,6 +3098,11 @@ function PreInscricoesGoldView() {
           chips={{ options: ["Todos", "Não contactado", "1º Contacto", "2º Contacto", "Pago", "Formando"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
           onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
         />
+        <p className="text-xs text-slate-500 -mt-2">
+          Email de boas-vindas deixa o lead em <strong>Não contactado</strong>. O 1.º contacto é da secretaria.
+          Sem pagamento em 3 dias o lembrete passa a <strong>2.º Contacto</strong>. Pagamento confirmado passa a <strong>Pago</strong>.
+          Inscrever na turma passa a <strong>Formando</strong>. Aos 30 dias sem compra sai o reengajamento.
+        </p>
 
         {viewMode === "kanban" ? (
           <div className="space-y-3">
@@ -3195,7 +3213,7 @@ function PreInscricoesGoldView() {
         risk="O pedido sai da lista de contacto e a acção não se desfaz. Prefira marcar como Indeferido se quiser manter o histórico."
         onConfirm={() => { if (apagar) removePreinscricao(apagar.id); }}
       />
-      <SlideOver open={novo} onClose={() => { setNovo(false); setEditLead(null); }} title={editLead ? `Editar ${editLead.nome}` : "Novo lead"} sub="CRM Gold · entra na fila por contactar">
+      <SlideOver open={novo} onClose={() => { setNovo(false); setEditLead(null); }} title={editLead ? `Editar ${editLead.nome}` : "Novo lead"} sub="CRM · entra na fila por contactar">
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Nome"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} /></Field>
@@ -4311,7 +4329,7 @@ function EmailsView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Emails Automáticos" sub={apiOn ? "As regras vivem na API. Quando a secretaria regista uma pré-inscrição ou um pagamento, a fila dispara sozinha." : "Uma regra = um gatilho + um template. Sem API as alterações ficam só neste ecrã."} action={<NewBtn label="+ Nova Regra" onClick={abrirNova} />} />
+      <PageHeader title="Emails Automáticos" sub={apiOn ? "Cada gatilho envia um template e, no CRM, avança o estado do lead (boas-vindas, 3 dias sem pagar, pagamento, 30 dias)." : "Uma regra = um gatilho + um template. Sem API as alterações ficam só neste ecrã."} action={<NewBtn label="+ Nova Regra" onClick={abrirNova} />} />
       <div className="flex gap-1 border-b border-slate-200 bg-white rounded-t-xl px-4 pt-3">
         {(["regras", "templates", "historico"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
@@ -4810,7 +4828,7 @@ function useAtalhosDoDia(): SearchRow[] {
   return useMemo(() => {
     const out: SearchRow[] = [];
     const porContactar = preinscricoes.filter(l => !l.contactadoEm).length;
-    if (porContactar) out.push({ tipo: "Atalho", nome: `${porContactar} leads por contactar`, sub: "CRM Gold · fila do dia", view: "gold-preinscricoes" });
+    if (porContactar) out.push({ tipo: "Atalho", nome: `${porContactar} leads por contactar`, sub: "CRM · fila do dia", view: "gold-preinscricoes" });
     const pendentes = pagamentos.filter(t => t.estado !== "Pago").length;
     if (pendentes) out.push({ tipo: "Atalho", nome: `${pendentes} pagamentos por confirmar`, sub: "Tesouraria", view: "pagamentos" });
 
@@ -4971,9 +4989,11 @@ type NavGroup = { group: string; items: NavLeaf[] };
 type NavLeaf = { label: string; view?: View; icon: React.ReactNode; children?: { label: string; view: View }[] };
 
 const sidebarConfig: NavGroup[] = [
-  { group: "Principal", items: [{ label: "Painel", view: "painel", icon: I.home }] },
-  { group: "Gold", items: [
+  { group: "Principal", items: [
+    { label: "Painel", view: "painel", icon: I.home },
     { label: "CRM", view: "gold-preinscricoes", icon: I.clipboard },
+  ] },
+  { group: "Gold", items: [
     { label: "Formandos", icon: I.users, children: [{ label: "Formandos Turmas", view: "gold-formandos-turmas" }, { label: "Formandos Gold", view: "gold-formandos-gold" }] },
     { label: "Campanhas", view: "gold-campanhas", icon: I.megaphone },
     { label: "Edição de Cursos", icon: I.book, children: [
@@ -5160,7 +5180,7 @@ function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v:
 // ─── App ─────────────────────────────────────────────────────────────────────
 
 const viewTitles: Partial<Record<View, string>> = {
-  painel: "Painel", "gold-preinscricoes": "CRM · Gold",
+  painel: "Painel", "gold-preinscricoes": "CRM",
   "gold-formandos-turmas": "Formandos Turmas", "gold-formandos-gold": "Formandos Gold",
   "gold-campanhas": "Campanhas", "gold-cursos": "Cursos Gold", "gold-curso-ficha": "Ficha do curso", "gold-datas": "Datas Gold",
   "gold-locais": "Locais", "gold-areas-tematicas": "Áreas Temáticas",
@@ -5288,6 +5308,7 @@ function AppShell() {
         { label: view === "fin-presencas" ? "Sessões" : (cockpitTabLabel[cockpitTab] ?? "Visão geral") },
       ];
     }
+    if (view === "gold-preinscricoes") return [{ label: "CRM" }];
     if (view.startsWith("gold-")) return [{ label: "Gold", onClick: () => navigate("painel") }, { label: viewTitles[view] ?? "Gold" }];
     if (view.startsWith("fin-")) return [{ label: "Financiada", onClick: () => navigate("painel") }, { label: viewTitles[view] ?? "Financiada" }];
     if (view === "utilizadores") return [{ label: "Sistema", onClick: () => navigate("configuracoes") }, { label: "Gestão" }, { label: "Utilizadores" }];

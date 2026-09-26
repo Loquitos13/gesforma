@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { ApiError, apiPublicOferta, apiPublicPreinscricao } from "./api";
+import { ApiError, apiPublicOferta, apiPublicOpcoes, apiPublicPreinscricao } from "./api";
 import { CursoOfertaCampos } from "./CursoOfertaCampos";
+import { SearchSelect } from "./FormKit";
+import { LISTAS_OPCOES } from "./listaOpcoes";
 import { OFERTA_VAZIA, type CursoOfertaSel, type OfertaTurma } from "./oferta";
 
 const CONCELHOS = [
@@ -16,16 +18,7 @@ const CONCELHOS = [
   "Vila Real", "Viseu",
 ];
 
-const ORIGENS = [
-  "Website",
-  "Facebook",
-  "Instagram",
-  "Google",
-  "Referência",
-  "IEFP",
-  "LinkedIn",
-  "Outro",
-];
+const ORIGENS = [...LISTAS_OPCOES.origens.fallback];
 
 const fieldCls = "w-full bg-transparent border-0 border-b border-slate-300 px-0 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#1b2330] rounded-none";
 const labelCls = "block text-[13px] text-slate-700 mb-1";
@@ -39,6 +32,7 @@ export function PublicPreinscricao() {
   const [email, setEmail] = useState(params.get("email") ?? "");
   const [concelho, setConcelho] = useState("");
   const [origem, setOrigem] = useState("");
+  const [origens, setOrigens] = useState<string[]>(ORIGENS);
   const [oferta, setOferta] = useState<CursoOfertaSel>({ ...OFERTA_VAZIA, curso: cursoParam });
   const [cursos, setCursos] = useState<{ nome: string; preco: number }[]>([]);
   const [turmas, setTurmas] = useState<OfertaTurma[]>([]);
@@ -53,6 +47,9 @@ export function PublicPreinscricao() {
         setTurmas(r.turmas);
       })
       .catch(() => setError("Não foi possível carregar as turmas liberadas."));
+    void apiPublicOpcoes("origens")
+      .then(r => { if (r.opcoes?.length) setOrigens(r.opcoes); })
+      .catch(() => undefined);
   }, []);
 
   async function submit(e: FormEvent) {
@@ -141,10 +138,13 @@ export function PublicPreinscricao() {
               </label>
               <label>
                 <span className={labelCls}>Como tomou conhecimento?</span>
-                <select className={`${fieldCls} ${origem ? "text-slate-800" : "text-slate-400"}`} value={origem} onChange={e => setOrigem(e.target.value)}>
-                  <option value="">Seleccione uma opção</option>
-                  {ORIGENS.map(o => <option key={o} value={o}>{o}</option>)}
-                </select>
+                <SearchSelect
+                  value={origem}
+                  onChange={setOrigem}
+                  options={origens.map(o => ({ value: o }))}
+                  placeholder="Pesquisar origem…"
+                  allowEmpty
+                />
               </label>
             </div>
 

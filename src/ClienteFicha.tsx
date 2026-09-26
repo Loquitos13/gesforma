@@ -5,12 +5,13 @@ import {
   type CrmCampoTipo, type CrmDossier, type CrmEtiqueta, type CrmLead,
 } from "./api";
 import { useAuth } from "./AuthGate";
-import { CRM_MEIOS, etiquetaChip } from "./crmUi";
+import { etiquetaChip } from "./crmUi";
 import {
   badgeEstadoCls, camposEmFalta, CRM_COLS, estadoPodeEntregar, isSecretariaRole,
-  MODELOS_NOTA, MOTIVOS_DESISTENCIA, RESULTADOS_CONTACTO,
+  MODELOS_NOTA,
 } from "./crmPipeline";
 import { AppModal, SearchSelect } from "./FormKit";
+import { OptionSelect } from "./OptionSelect";
 import type { Preinscricao } from "./ListsContext";
 import { persist, toastError, toastOk } from "./toastBus";
 import { TurmaInscricaoHint } from "./TurmaCronograma";
@@ -279,13 +280,8 @@ export function ClienteFicha({
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <select className={inp} value={meio} onChange={e => setMeio(e.target.value)}>
-                  {CRM_MEIOS.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-                <select className={inp} value={resultado} onChange={e => setResultado(e.target.value)}>
-                  <option value="">Resultado…</option>
-                  {RESULTADOS_CONTACTO.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
+                <OptionSelect lista="meios_contacto" value={meio} onChange={setMeio} />
+                <OptionSelect lista="resultados_contacto" value={resultado} onChange={setResultado} allowEmpty placeholder="Resultado…" />
               </div>
               <textarea className={`${inp} resize-none`} rows={2} value={notaNova} onChange={e => setNotaNova(e.target.value)} placeholder="O que ficou combinado…" />
               <div className="flex gap-2 items-end">
@@ -406,17 +402,11 @@ export function ClienteFicha({
               }}>
                 {CRM_COLS.filter(c => c.id !== "Formando" && c.id !== "Desistiu").map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
               </select>
-              <select className={inp} value={pagMetodo} onChange={e => setPagMetodo(e.target.value)}>
-                <option value="">Método de pagamento</option>
-                {["MB Way", "Multibanco", "Transferência", "Numerário"].map(m => <option key={m}>{m}</option>)}
-              </select>
+              <OptionSelect lista="metodos_pagamento" value={pagMetodo} onChange={setPagMetodo} allowEmpty placeholder="Método de pagamento" />
             </div>
             <div className="rounded-lg border border-slate-200 p-3 space-y-2">
               <p className="text-xs font-semibold text-slate-600">Desistiu</p>
-              <select className={inp} value={motivo} onChange={e => setMotivo(e.target.value)}>
-                <option value="">Motivo…</option>
-                {MOTIVOS_DESISTENCIA.map(m => <option key={m}>{m}</option>)}
-              </select>
+              <OptionSelect lista="motivos_desistencia" value={motivo} onChange={setMotivo} allowEmpty placeholder="Motivo…" />
               <button type="button" disabled={!motivo} onClick={() => onPatch?.({ estado: "Desistiu", motivoDesistencia: motivo })}
                 className="w-full py-1.5 text-xs font-semibold rounded-lg border border-slate-300">Marcar desistência</button>
             </div>

@@ -1,15 +1,21 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { apiCreateCatalog, apiDeleteCatalog, apiPatchCatalog, apiPutSettings } from "./api";
+import { LISTAS_OPCOES, type ListaOpcoesId } from "./listaOpcoes";
 import { loadOps } from "./opsCache";
-import { persist, toastError } from "./toastBus";
+import { persist, toastError, toastOk } from "./toastBus";
 
 export type CatalogItem = { id: number } & Record<string, unknown>;
+export type ListaOpcao = { id: number; lista: string; nome: string };
+
+const LISTA_KEY = "lista_opcoes:gold";
 
 type CatalogsCtx = {
   lists: Record<string, CatalogItem[]>;
   settings: Record<string, Record<string, string>>;
   saveSettings: (id: string, values: Record<string, string>) => void;
   ready: boolean;
+  addListaOpcao: (lista: ListaOpcoesId | string, nome: string) => Promise<string | null>;
+  removeListaOpcao: (id: number) => void;
 };
 
 const Ctx = createContext<CatalogsCtx | null>(null);
@@ -60,7 +66,50 @@ export function CatalogsProvider({ children }: { children: ReactNode }) {
     void persist(apiPutSettings(id, values));
   }, []);
 
-  const value = useMemo(() => ({ lists, settings, saveSettings, ready }), [lists, settings, saveSettings, ready]);
+  const addListaOpcao = useCallback(async (lista: ListaOpcoesId | string, nome: string) => {
+    const clean = nome.trim();
+    if (!clean) return null;
+    const current = (listsRef.current[LISTA_KEY] ?? []) as ListaOpcao[];
+    const dup = current.find(r => r.lista === lista && r.nome.toLowerCase() === clean.toLowerCase());
+    if (dup) {
+      toastOk("Essa opção já existe nesta lista.");
+      return dup.nome;
+    }
+    const tempId = Math.max(10_000, ...current.map(x => x.id), Date.now() % 100_000) + 1;
+    const temp: ListaOpcao = { id: tempId, lista, nome: clean };
+    setLists(prev => ({ ...prev, [LISTA_KEY]: [...((prev[LISTA_KEY] ?? []) as CatalogItem[]), temp] }));
+    try {
+      const r = await apiCreateCatalog("lista_opcoes", "gold", { lista, nome: clean });
+      if (r.item?.id) {
+        setLists(xs => ({
+          ...xs,
+          [LISTA_KEY]: ((xs[LISTA_KEY] ?? []) as CatalogItem[]).map(x => x.id === tempId ? { ...x, id: r.item.id, nome: String(r.item.nome ?? clean), lista } : x),
+        }));
+      }
+      toastOk("Opção guardada no catálogo.");
+      return clean;
+    } catch (err) {
+      setLists(prev => ({
+        ...prev,
+        [LISTA_KEY]: ((prev[LISTA_KEY] ?? []) as CatalogItem[]).filter(x => x.id !== tempId),
+      }));
+      toastError(err, "Não foi possível guardar a opção.");
+      return null;
+    }
+  }, []);
+
+  const removeListaOpcao = useCallback((id: number) => {
+    setLists(prev => ({
+      ...prev,
+      [LISTA_KEY]: ((prev[LISTA_KEY] ?? []) as CatalogItem[]).filter(x => x.id !== id),
+    }));
+    void persist(apiDeleteCatalog("lista_opcoes", id));
+  }, []);
+
+  const value = useMemo(
+    () => ({ lists, settings, saveSettings, ready, addListaOpcao, removeListaOpcao }),
+    [lists, settings, saveSettings, ready, addListaOpcao, removeListaOpcao],
+  );
 
   return <CatalogState.Provider value={setLists}><Ctx.Provider value={value}>{children}</Ctx.Provider></CatalogState.Provider>;
 }
@@ -113,6 +162,23 @@ export function useCatalogList<T extends { id: number }>(kind: string, regime: "
   }, [kind, regime, key, ready, seed, setLists]);
 
   return [lista, setLista];
+}
+
+export function useListaOpcoes(lista: ListaOpcoesId | string): {
+  nomes: string[];
+  rows: ListaOpcao[];
+  add: (nome: string) => Promise<string | null>;
+} {
+  const { lists, addListaOpcao, ready } = useCatalogs();
+  const fallback = lista in LISTAS_OPCOES ? [...LISTAS_OPCOES[lista as ListaOpcoesId].fallback] : [];
+  const rows = ((lists[LISTA_KEY] ?? []) as ListaOpcao[]).filter(r => String(r.lista) === lista && String(r.nome ?? "").trim());
+  const nomes = (ready ? rows.map(r => String(r.nome)) : (rows.length ? rows.map(r => String(r.nome)) : fallback));
+  const unique = [...new Set(nomes.length ? nomes : fallback)];
+  return {
+    nomes: unique,
+    rows,
+    add: (nome: string) => addListaOpcao(lista, nome),
+  };
 }
 
 export function useSettingsDraft(cardId: string, fallback: Record<string, string>) {

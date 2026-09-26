@@ -494,6 +494,8 @@ export const apiPublicOferta = () =>
   api<{ cursos: { nome: string; preco: number }[]; turmas: import("./oferta").OfertaTurma[] }>("/v1/public/oferta");
 export const apiPublicPreinscricao = (body: Record<string, unknown>) =>
   api<{ preinscricao: { id: number }; aviso: string }>("/v1/public/preinscricoes", { method: "POST", body: JSON.stringify(body) });
+export const apiPublicOpcoes = (lista: string) =>
+  api<{ lista: string; opcoes: string[] }>(`/v1/public/opcoes?lista=${encodeURIComponent(lista)}`);
 
 export const apiCreatePreinscricao = (body: Record<string, unknown>) =>
   api<{ preinscricao: OpsSnapshot["preinscricoes"][number] }>("/v1/preinscricoes", { method: "POST", body: JSON.stringify(body) });

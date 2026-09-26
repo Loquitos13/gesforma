@@ -53,7 +53,7 @@ export function AppModal({
   if (!open || typeof document === "undefined") return null;
   const drawer = variant === "drawer";
   return createPortal(
-    <div className={`fixed inset-0 z-50 flex ${drawer ? "justify-end items-stretch" : "items-end sm:items-center justify-center p-0 sm:p-6"}`} role="dialog" aria-modal="true" aria-labelledby="app-modal-title">
+    <div className={`fixed inset-0 z-[120] flex ${drawer ? "justify-end items-stretch" : "items-end sm:items-center justify-center p-0 sm:p-6"}`} role="dialog" aria-modal="true" aria-labelledby="app-modal-title">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-[2px]" onClick={onClose} />
       <div
         ref={panelRef}
@@ -284,6 +284,7 @@ export const blogTematicasOpts: SelectOption[] = [
 
 export function SearchSelect({
   value, onChange, options, placeholder = "Pesquisar…", empty = "Nenhum resultado.", allowEmpty,
+  onAdd, addLabel = "Adicionar opção",
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -291,6 +292,8 @@ export function SearchSelect({
   placeholder?: string;
   empty?: string;
   allowEmpty?: boolean;
+  onAdd?: () => void;
+  addLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -305,8 +308,10 @@ export function SearchSelect({
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
-  const filtered = options.filter(o => `${o.value} ${o.sub ?? ""}`.toLowerCase().includes(q.toLowerCase()));
-  const selected = options.find(o => o.value === value);
+  const extras: SelectOption[] = value && !options.some(o => o.value === value) ? [{ value }] : [];
+  const all = [...options, ...extras];
+  const filtered = all.filter(o => `${o.value} ${o.sub ?? ""}`.toLowerCase().includes(q.toLowerCase()));
+  const selected = all.find(o => o.value === value);
   return (
     <div ref={triggerRef} className="relative">
       <button type="button" onClick={() => { setOpen(v => !v); setQ(""); }}
@@ -317,9 +322,22 @@ export function SearchSelect({
         <span className="text-slate-400 flex-shrink-0">▾</span>
       </button>
       <MenuPortal open={open} triggerRef={triggerRef} panelRef={panelRef}>
-        <div className="p-2 border-b border-slate-100">
+        <div className="p-2 border-b border-slate-100 flex items-center gap-1.5 bg-white">
           <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={placeholder}
-            className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            className="min-w-0 flex-1 px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          {onAdd && (
+            <button
+              type="button"
+              title={addLabel}
+              aria-label={addLabel}
+              onClick={() => { setOpen(false); onAdd(); }}
+              className="flex-shrink-0 w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-800 flex items-center justify-center"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
         </div>
         <div className="max-h-52 overflow-y-auto bg-white">
           {allowEmpty && (

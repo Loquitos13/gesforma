@@ -24,11 +24,12 @@ import {
 } from "./TurmaExtras";
 import { ResolverDocumentoModal } from "./DocResolver";
 import { CursoFichaView } from "./CursoFichaView";
-import {
-  AppModal, SearchSelect, MultiSearchSelect, ViewFilters, matchesFilter, uniqueOpts,
+import { AppModal, SearchSelect, MultiSearchSelect, ViewFilters, matchesFilter, uniqueOpts,
   blogTematicasOpts, cursosFinOpts, cursosGoldOpts,
   horariosOpts, locaisOpts, modulosOptsForCurso,
 } from "./FormKit";
+import { OptionSelect } from "./OptionSelect";
+import { ListasOpcoesView } from "./ListasOpcoesView";
 import { CronogramaEditor, FormadoresAtribuidosCard, TurmaActivaToggle, TurmaInactivaBanner, TurmaInscricaoHint } from "./TurmaCronograma";
 import { FormadoresView } from "./FormadoresView";
 import { FORMADORES_SEED } from "./formadorModel";
@@ -126,7 +127,7 @@ type View =
   | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-formadores" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
   | "fin-modulos" | "fin-conteudos" | "fin-datas" | "fin-locais" | "fin-areas-tematicas"
   | "formadores" | "blog-posts" | "blog-tematicas"
-  | "emails" | "pagamentos" | "configuracoes" | "utilizadores" | "equipa" | "notificacoes";
+  | "emails" | "pagamentos" | "configuracoes" | "utilizadores" | "equipa" | "notificacoes" | "listas-opcoes";
 
 type CockpitTab = "overview" | "cronograma" | "sessoes" | "documentos" | "dtp" | "certificados";
 type NavTarget = {
@@ -4253,9 +4254,7 @@ function PagamentosView() {
           <div className="grid grid-cols-2 gap-3">
             <Field label="Valor (€)"><input className={iCls} type="number" value={valor} onChange={e => setValor(e.target.value)} /></Field>
             <Field label="Método">
-              <select className={iCls} value={metodo} onChange={e => setMetodo(e.target.value)}>
-                {["MB Way", "Cartão", "Transferência", "Multibanco", "PayPal"].map(m => <option key={m}>{m}</option>)}
-              </select>
+              <OptionSelect lista="metodos_pagamento" value={metodo} onChange={setMetodo} />
             </Field>
           </div>
           <div className="flex gap-2 pt-2">
@@ -4569,6 +4568,7 @@ const sidebarConfig: NavGroup[] = [
   ]},
   { group: "Gestão", items: [
     { label: "Blog", icon: I.blog, children: [{ label: "Posts", view: "blog-posts" }, { label: "Temáticas", view: "blog-tematicas" }] },
+    { label: "Listas de opções", view: "listas-opcoes", icon: I.list },
   ]},
   { group: "Sistema", items: [
     { label: "Gestão", icon: I.users, children: [{ label: "Utilizadores", view: "utilizadores" }] },
@@ -4749,6 +4749,7 @@ const viewTitles: Partial<Record<View, string>> = {
   notificacoes: "Notificações",
   formadores: "Formadores Gold", "blog-posts": "Blog - Posts", "blog-tematicas": "Blog - Temáticas",
   emails: "Emails Automáticos", pagamentos: "Pagamentos", configuracoes: "Configurações", utilizadores: "Utilizadores", equipa: "Equipa",
+  "listas-opcoes": "Listas de opções",
 };
 
 export default function App() {
@@ -4924,6 +4925,7 @@ function AppShell() {
       case "fin-formadores": return <FormadoresView regime="fin" openId={openFormadorId} onOpened={() => setOpenFormadorId(undefined)} />;
       case "blog-posts": return <BlogView />;
       case "blog-tematicas": return <BlogTematicasView />;
+      case "listas-opcoes": return <ListasOpcoesView />;
       case "emails": return <EmailsView />;
       case "pagamentos": return <PagamentosView />;
       case "configuracoes": return <ConfiguracoesView />;

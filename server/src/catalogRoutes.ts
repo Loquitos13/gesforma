@@ -72,6 +72,19 @@ export function registerCatalogRoutes(
     return { ok: true };
   });
 
+  app.get("/v1/public/opcoes", async (req) => {
+    const lista = String((req.query as { lista?: string }).lista ?? "").trim().slice(0, 80);
+    if (!/^[a-z][a-z0-9_]{1,40}$/.test(lista)) return { lista: "", opcoes: [] as string[] };
+    const rows = await db.query<{ nome: string }>(
+      `SELECT payload->>'nome' AS nome
+         FROM catalog_items
+        WHERE kind = 'lista_opcoes' AND payload->>'lista' = $1
+        ORDER BY id`,
+      [lista],
+    );
+    return { lista, opcoes: rows.rows.map(r => r.nome).filter(Boolean) };
+  });
+
   app.get("/v1/settings", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const rows = await db.query<{ id: string; values: Record<string, string> }>("SELECT id, values FROM app_settings");

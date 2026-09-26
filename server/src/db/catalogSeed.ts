@@ -11,6 +11,7 @@ export const CATALOG_KINDS = [
   "inscricoes_fin",
   "blog_tematicas",
   "inqueritos",
+  "lista_opcoes",
 ] as const;
 
 export type CatalogKind = (typeof CATALOG_KINDS)[number];
@@ -153,7 +154,45 @@ const SEED: SeedRow[] = [
       { id: 4, tipo: "texto", texto: "Sugestões para a próxima turma:" },
     ] },
   ]),
+  ...rows("lista_opcoes", "gold", listaOpcoesSeed()),
 ];
+
+function listaOpcoesSeed(): Array<{ id: number; lista: string; nome: string }> {
+  const listas: Array<{ lista: string; nomes: string[] }> = [
+    {
+      lista: "origens",
+      nomes: [
+        "Website", "Facebook", "Instagram", "Google", "LinkedIn", "IEFP",
+        "Referência", "Telefone", "WhatsApp", "Email", "Balcão", "Indicação", "Outro",
+      ],
+    },
+    { lista: "meios_contacto", nomes: ["Telefone", "WhatsApp", "Email", "SMS", "Presencial"] },
+    { lista: "metodos_pagamento", nomes: ["MB Way", "Multibanco", "Transferência", "Numerário", "Cartão", "PayPal"] },
+    { lista: "motivos_desistencia", nomes: ["Preço", "Horário", "Local", "Sem vagas", "Concorrência", "Silêncio", "Não elegível", "Outro"] },
+    { lista: "resultados_contacto", nomes: ["Atendeu", "Não atendeu", "Mailbox", "Interessado", "A pensar", "Recusou"] },
+    { lista: "tipos_modulo", nomes: ["Teórico-prático", "Teórico", "Prático", "B-learning"] },
+    { lista: "tipos_conteudo", nomes: ["PDF", "Vídeo", "Link"] },
+    {
+      lista: "tipos_parceria",
+      nomes: [
+        "Protocolo de Estágio", "Empresa Cliente", "Entidade Formadora",
+        "Agente Comercial", "Instituição de Ensino", "Associação Setorial",
+      ],
+    },
+    { lista: "tipos_curso", nomes: ["Gold", "Pré-inscrição"] },
+    { lista: "regimes_curso", nomes: ["b-learning", "e-learning", "presencial"] },
+    { lista: "categorias_gold", nomes: ["CCP e Gestão da Formação", "Saúde e bem estar", "Desenvolvimento Pessoal"] },
+    { lista: "areas_fin", nomes: ["Saúde e segurança", "Marketing digital", "TIC e cibersegurança", "Formação de formadores"] },
+  ];
+  let id = 9101;
+  const out: Array<{ id: number; lista: string; nome: string }> = [];
+  for (const bloco of listas) {
+    for (const nome of bloco.nomes) {
+      out.push({ id: id++, lista: bloco.lista, nome });
+    }
+  }
+  return out;
+}
 
 export async function seedCatalogs(db: Db) {
   for (const r of SEED) {

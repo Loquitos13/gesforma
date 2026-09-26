@@ -6,6 +6,7 @@ import {
 import { ClienteFicha } from "./ClienteFicha";
 import { entradaChip, etiquetaChip, leadMarkStyle, meioChip } from "./crmUi";
 import { AppModal, ViewFilters, cursosGoldOpts, locaisOpts } from "./FormKit";
+import { OptionSelect } from "./OptionSelect";
 import { nextListId, useLists, type Preinscricao } from "./ListsContext";
 import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./SecretaryUX";
 import { persist, toastError, toastOk } from "./toastBus";
@@ -682,9 +683,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
             <input className={inp} value={form.concelho} onChange={e => setForm(f => ({ ...f, concelho: e.target.value }))} />
           </label>
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Como entrou em contacto
-            <select className={inp} value={form.origem} onChange={e => setForm(f => ({ ...f, origem: e.target.value }))}>
-              {["Telefone", "WhatsApp", "Email", "Balcão", "Indicação"].map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
+            <OptionSelect lista="origens" value={form.origem} onChange={v => setForm(f => ({ ...f, origem: v }))} />
           </label>
           <CursoOfertaCampos
             variant="crm"

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SearchSelect, categoriasGoldOpts } from "./FormKit";
+import { SearchSelect } from "./FormKit";
+import { OptionSelect } from "./OptionSelect";
 import { apiCursoFicha, apiSaveCursoFicha } from "./api";
 import { DtpModeloEditor } from "./DtpModeloEditor";
 import { getParametrosAvaliacao, type CriterioAvaliacao } from "./TurmaExtras";
@@ -45,24 +46,6 @@ type CursoSite = {
   ufcdCod: string;
   ufcd: string;
 };
-
-const tipoOpts = [
-  { value: "Gold", sub: "Pago · página comercial no site" },
-  { value: "Pré-inscrição", sub: "Lista de espera / captação" },
-];
-
-const regimeOpts = [
-  { value: "b-learning", sub: "Sessões síncronas + trabalho autónomo" },
-  { value: "e-learning", sub: "100% assíncrono" },
-  { value: "presencial", sub: "Sala física" },
-];
-
-const areasFinOpts = [
-  { value: "Saúde e segurança" },
-  { value: "Marketing digital" },
-  { value: "TIC e cibersegurança" },
-  { value: "Formação de formadores" },
-];
 
 function theme(accent: CursoAccent) {
   if (accent === "fin") {
@@ -638,9 +621,9 @@ export function CursoFichaView({
                 {accent === "gold" ? (
                   <>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                      <Field label="Tipo de curso"><SearchSelect value={data.tipo} onChange={v => patch({ tipo: v })} options={tipoOpts} /></Field>
-                      <Field label="Categoria"><SearchSelect value={data.categoria} onChange={v => patch({ categoria: v })} options={categoriasGoldOpts} /></Field>
-                      <Field label="Regime"><SearchSelect value={data.regime} onChange={v => patch({ regime: v })} options={regimeOpts} /></Field>
+                      <Field label="Tipo de curso"><OptionSelect lista="tipos_curso" value={data.tipo} onChange={v => patch({ tipo: v })} /></Field>
+                      <Field label="Categoria"><OptionSelect lista="categorias_gold" value={data.categoria} onChange={v => patch({ categoria: v })} /></Field>
+                      <Field label="Regime"><OptionSelect lista="regimes_curso" value={data.regime} onChange={v => patch({ regime: v })} /></Field>
                       <Field label="Vídeo" hint="ID Vimeo ou URL">
                         <input className={t.iCls} value={data.video} onChange={e => patch({ video: e.target.value })} placeholder="384729105" />
                       </Field>
@@ -658,8 +641,8 @@ export function CursoFichaView({
                   </>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <Field label="Área"><SearchSelect value={data.categoria} onChange={v => patch({ categoria: v })} options={areasFinOpts} /></Field>
-                    <Field label="Regime"><SearchSelect value={data.regime} onChange={v => patch({ regime: v })} options={regimeOpts} /></Field>
+                    <Field label="Área"><OptionSelect lista="areas_fin" value={data.categoria} onChange={v => patch({ categoria: v })} /></Field>
+                    <Field label="Regime"><OptionSelect lista="regimes_curso" value={data.regime} onChange={v => patch({ regime: v })} /></Field>
                     <Field label="Horas"><input className={t.iCls} type="number" value={data.horas} onChange={e => patch({ horas: e.target.value })} /></Field>
                     <Field label="Vídeo" hint="ID Vimeo ou URL">
                       <input className={t.iCls} value={data.video} onChange={e => patch({ video: e.target.value })} />

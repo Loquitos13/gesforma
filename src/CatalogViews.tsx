@@ -15,6 +15,7 @@ import {
   type MicrosoftStatus, type WhatsappStatus,
 } from "./api";
 import { useCatalogList, useCatalogs } from "./CatalogsContext";
+import { OptionSelect } from "./OptionSelect";
 import { useDrive } from "./DriveContext";
 import type { FormandoTurma } from "./ListsContext";
 
@@ -334,13 +335,6 @@ const areasFinData = [
   { id: 62, nome: "Marketing digital", cursos: 1, estado: "Ativo" },
   { id: 63, nome: "Cibersegurança", cursos: 1, estado: "Ativo" },
   { id: 64, nome: "Pedagogia e formação", cursos: 1, estado: "Ativo" },
-];
-
-const tiposModuloOpts = [
-  { value: "Teórico-prático" },
-  { value: "Teórico" },
-  { value: "Prático" },
-  { value: "B-learning" },
 ];
 
 function nextCodigoModulo(lista: Array<{ codigo: string; curso: string }>, curso: string, accent: Accent = "gold") {
@@ -1092,7 +1086,7 @@ export function ModulosView({ cursoInicial, accent = "gold" }: { cursoInicial?: 
             <Field label="Horas"><input type="number" min={1} className={iCls} value={horas} onChange={e => setHoras(e.target.value)} /></Field>
           </div>
           <Field label="Nome do módulo *"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex.: Avaliação da formação" /></Field>
-          <Field label="Tipo"><SearchSelect value={tipo} onChange={setTipo} options={tiposModuloOpts} /></Field>
+          <Field label="Tipo"><OptionSelect lista="tipos_modulo" value={tipo} onChange={setTipo} /></Field>
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button type="button" onClick={guardarModulo} disabled={!nome.trim() || !curso}
@@ -1300,9 +1294,7 @@ export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
           )}
           <Field label="Título *"><input className={iCls} value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex.: Manual do módulo 1" /></Field>
           <Field label="Tipo">
-            <select className={iCls} value={tipo} onChange={e => setTipo(e.target.value)}>
-              <option>PDF</option><option>Vídeo</option><option>Link</option>
-            </select>
+            <OptionSelect lista="tipos_conteudo" value={tipo} onChange={setTipo} />
           </Field>
           <Field label={tipo === "Link" ? "URL" : "Ficheiro (Drive da entidade)"}>
             {tipo === "Link" ? (

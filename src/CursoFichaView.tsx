@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SearchSelect } from "./FormKit";
+import { useCatalogList } from "./CatalogsContext";
+import { AppModal, MultiSearchSelect, SearchSelect } from "./FormKit";
 import { OptionSelect } from "./OptionSelect";
 import { apiCursoFicha, apiSaveCursoFicha } from "./api";
 import { DtpModeloEditor } from "./DtpModeloEditor";
+import { fmtDataPt } from "./oferta";
 import { getParametrosAvaliacao, type CriterioAvaliacao } from "./TurmaExtras";
+import { useTurmas } from "./TurmasContext";
+import { isTurmaActiva } from "./turmaModel";
 
 export type CursoFichaSeed = {
   id: number;
@@ -21,8 +25,19 @@ export type CursoFichaSeed = {
 export type CursoGold = CursoFichaSeed;
 export type CursoAccent = "gold" | "fin";
 
-type TabId = "identidade" | "conteudo" | "avaliacao" | "dtp" | "publicacao";
+type TabId = "identidade" | "oferta" | "conteudo" | "avaliacao" | "dtp" | "publicacao";
 type MediaSlot = { name: string; url: string };
+type LocalCatalogo = { id: number; nome: string; morada: string; salas: number; turmas: number; status: string };
+
+type CursoTurmaPrev = {
+  id: number;
+  nome: string;
+  local: string;
+  horario: string;
+  dataInicio: string;
+  vagasLivres: number;
+  libertada: boolean;
+};
 
 type CursoSite = {
   titulo: string;
@@ -45,6 +60,7 @@ type CursoSite = {
   funcionamento: string;
   ufcdCod: string;
   ufcd: string;
+  locais: string[];
 };
 
 function theme(accent: CursoAccent) {
@@ -238,6 +254,7 @@ function seedSite(curso?: CursoFichaSeed, accent: CursoAccent = "gold"): CursoSi
     funcionamento: pack.funcionamento,
     ufcdCod: curso?.ufcdCod ?? "",
     ufcd: curso?.ufcd ?? "",
+    locais: [],
   };
 }
 
@@ -336,11 +353,20 @@ function EditorBlock({
   );
 }
 
-function SitePreview({ data, accent }: { data: CursoSite; accent: CursoAccent }) {
+function SitePreview({ data, accent, turmas }: { data: CursoSite; accent: CursoAccent; turmas: CursoTurmaPrev[] }) {
   const t = theme(accent);
   const bullets = (txt: string) =>
     txt.split("\n").map(l => l.replace(/^[•\-]\s*/, "").trim()).filter(Boolean).slice(0, 5);
   const cta = accent === "fin" ? "Candidatar-me" : "Quero inscrever-me";
+  const abertas = turmas.filter(x => x.libertada);
+  const locais = [...new Set(abertas.map(x => x.local))];
+  const [local, setLocal] = useState("");
+  const [horario, setHorario] = useState("");
+  useEffect(() => {
+    if (local && !locais.includes(local)) { setLocal(""); setHorario(""); }
+  }, [local, locais]);
+  const horarios = [...new Set(abertas.filter(x => !local || x.local === local).map(x => x.horario))];
+  const datas = abertas.filter(x => (!local || x.local === local) && (!horario || x.horario === horario));
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -410,6 +436,40 @@ function SitePreview({ data, accent }: { data: CursoSite; accent: CursoAccent })
               {data.funcionamento || "Logística, grupos, plataforma e certificação."}
             </p>
           </section>
+          <section className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+            <p className={`text-[11px] font-bold uppercase tracking-wide ${t.preview}`}>Turmas disponíveis</p>
+            <p className="text-[11px] text-slate-500">Local e horário vêm das turmas libertadas. Depois da local, só os horários dessa turma.</p>
+            {abertas.length === 0 ? (
+              <p className="text-xs text-slate-500">Ainda não há turma libertada deste curso. Crie a turma (local, horário, datas e vagas) e liberte-a.</p>
+            ) : (
+              <>
+                <label className="block text-[11px] font-semibold text-slate-500">Local
+                  <select className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-200 rounded-lg bg-white"
+                    value={local} onChange={e => { setLocal(e.target.value); setHorario(""); }}>
+                    <option value="">Todos os locais</option>
+                    {locais.map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                </label>
+                <label className="block text-[11px] font-semibold text-slate-500">Horário
+                  <select className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-200 rounded-lg bg-white"
+                    value={horario} disabled={!local} onChange={e => setHorario(e.target.value)}>
+                    <option value="">{local ? "Seleccione o horário" : "Escolha primeiro o local"}</option>
+                    {horarios.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </label>
+                <ul className="space-y-1.5 pt-1">
+                  {datas.map(x => (
+                    <li key={x.id} className="text-xs text-slate-700 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
+                      <span className="font-semibold">{x.local}</span>
+                      {" · "}{x.horario}
+                      {" · "}{fmtDataPt(x.dataInicio)}
+                      {" · "}{x.vagasLivres > 0 ? `${x.vagasLivres} vagas` : "lotada"}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
           <button type="button" className={`w-full py-2.5 rounded-lg ${t.cta} text-white text-sm font-semibold`}>{cta}</button>
         </div>
       </div>
@@ -431,6 +491,8 @@ export function CursoFichaView({
   accent?: CursoAccent;
 }) {
   const t = theme(accent);
+  const { gold, fin } = useTurmas();
+  const [locaisCat, setLocaisCat] = useCatalogList<LocalCatalogo>("locais", accent, []);
   const [tab, setTab] = useState<TabId>("identidade");
   const [data, setData] = useState<CursoSite>(() => seedSite(curso, accent));
   const [slugLocked, setSlugLocked] = useState(true);
@@ -440,6 +502,10 @@ export function CursoFichaView({
   const [erro, setErro] = useState("");
   const [gravando, setGravando] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [novoLocal, setNovoLocal] = useState(false);
+  const [localNome, setLocalNome] = useState("");
+  const [localMorada, setLocalMorada] = useState("");
+  const locaisSeeded = useRef(false);
 
   useEffect(() => {
     const id = curso?.id;
@@ -449,7 +515,13 @@ export function CursoFichaView({
       .then(r => {
         if (!alive || !r.ficha) return;
         const guardado = r.ficha.payload as Partial<CursoSite>;
-        if (Object.keys(guardado).length) setData(prev => ({ ...prev, ...guardado }));
+        if (Object.keys(guardado).length) {
+          setData(prev => {
+            const locais = Array.isArray(guardado.locais) ? guardado.locais.map(String).filter(Boolean) : prev.locais;
+            if (Array.isArray(guardado.locais)) locaisSeeded.current = true;
+            return { ...prev, ...guardado, locais };
+          });
+        }
         if (r.ficha.criterios.length) setCriterios(r.ficha.criterios);
       })
       .catch(() => undefined);
@@ -463,9 +535,49 @@ export function CursoFichaView({
   const done = lista.filter(c => c.ok).length;
   const pct = Math.round((done / lista.length) * 100);
 
+  const turmasCurso = useMemo<CursoTurmaPrev[]>(() => {
+    const nome = data.titulo || curso?.nome || "";
+    if (!nome) return [];
+    if (accent === "gold") {
+      return gold.filter(x => x.curso === nome).map(x => ({
+        id: x.id,
+        nome: x.nome,
+        local: x.local,
+        horario: x.horario,
+        dataInicio: x.dataInicio,
+        vagasLivres: Math.max(0, x.vagas - x.totalAlunos),
+        libertada: isTurmaActiva(x),
+      }));
+    }
+    return fin.filter(x => x.curso === nome).map(x => ({
+      id: x.id,
+      nome: x.nome,
+      local: x.local,
+      horario: x.horario,
+      dataInicio: x.dataInicio,
+      vagasLivres: Math.max(0, (x.alunosTotal || 0) - (x.alunos || 0)),
+      libertada: isTurmaActiva(x),
+    }));
+  }, [accent, gold, fin, data.titulo, curso?.nome]);
+
+  useEffect(() => {
+    if (locaisSeeded.current) return;
+    const fromTurmas = [...new Set(turmasCurso.map(x => x.local).filter(Boolean))];
+    if (!fromTurmas.length) return;
+    locaisSeeded.current = true;
+    setData(prev => (prev.locais.length ? prev : { ...prev, locais: fromTurmas }));
+  }, [turmasCurso]);
+
+  const proximaTurma = useMemo(() => {
+    const hoje = new Date().toISOString().slice(0, 10);
+    return [...turmasCurso].filter(x => x.libertada && x.dataInicio >= hoje).sort((a, b) => a.dataInicio.localeCompare(b.dataInicio))[0]
+      ?? [...turmasCurso].filter(x => x.libertada).sort((a, b) => a.dataInicio.localeCompare(b.dataInicio))[0];
+  }, [turmasCurso]);
+
   const tabs = useMemo(() => {
     const base: { id: TabId; label: string }[] = [
       { id: "identidade", label: "Identidade" },
+      { id: "oferta", label: "Oferta" },
       { id: "conteudo", label: "Conteúdo do site" },
       { id: "avaliacao", label: "Avaliação" },
       { id: "dtp", label: "Dossiê TP" },
@@ -482,6 +594,20 @@ export function CursoFichaView({
     setData(prev => ({ ...prev, ...p }));
     setSaved(false);
     setErro("");
+  }
+
+  function criarLocal() {
+    const nome = localNome.trim();
+    if (!nome) return;
+    const existe = locaisCat.some(x => x.nome.toLowerCase() === nome.toLowerCase());
+    if (!existe) {
+      const id = Math.max(0, ...locaisCat.map(x => x.id), 1000) + 1;
+      setLocaisCat(xs => [{ id, nome, morada: localMorada.trim(), salas: 0, turmas: 0, status: "Ativo" }, ...xs]);
+    }
+    patch({ locais: data.locais.includes(nome) ? data.locais : [...data.locais, nome] });
+    setLocalNome("");
+    setLocalMorada("");
+    setNovoLocal(false);
   }
 
   async function guardar() {
@@ -618,42 +744,83 @@ export function CursoFichaView({
                       value={data.slug} onChange={e => { setSlugLocked(false); patch({ slug: slugify(e.target.value) }); }} />
                   </div>
                 </Field>
+                <Field label="Vídeo" hint="ID Vimeo ou URL do vídeo de apresentação">
+                  <input className={t.iCls} value={data.video} onChange={e => patch({ video: e.target.value })} placeholder="384729105" />
+                </Field>
+              </div>
+            </div>
+          )}
+
+          {tab === "oferta" && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-4">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Dados da oferta</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Tipo, categoria e regime alimentam o catálogo. O «+» grava a opção na base e passa a aparecer noutros cursos.</p>
+                </div>
                 {accent === "gold" ? (
-                  <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                      <Field label="Tipo de curso"><OptionSelect lista="tipos_curso" value={data.tipo} onChange={v => patch({ tipo: v })} /></Field>
-                      <Field label="Categoria"><OptionSelect lista="categorias_gold" value={data.categoria} onChange={v => patch({ categoria: v })} /></Field>
-                      <Field label="Regime"><OptionSelect lista="regimes_curso" value={data.regime} onChange={v => patch({ regime: v })} /></Field>
-                      <Field label="Vídeo" hint="ID Vimeo ou URL">
-                        <input className={t.iCls} value={data.video} onChange={e => patch({ video: e.target.value })} placeholder="384729105" />
-                      </Field>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                      <Field label="Preço (€)"><input className={t.iCls} type="number" value={data.preco} onChange={e => patch({ preco: e.target.value })} /></Field>
-                      <Field label="Horas"><input className={t.iCls} type="number" value={data.horas} onChange={e => patch({ horas: e.target.value })} /></Field>
-                      <Field label="Tags" hint="Separadas por vírgula">
-                        <input className={t.iCls} value={data.tags} onChange={e => patch({ tags: e.target.value })} placeholder="comunicacao, voz" />
-                      </Field>
-                      <Field label="Data de início">
-                        <input className={t.iCls} type="date" value={data.dataInicio} onChange={e => patch({ dataInicio: e.target.value })} />
-                      </Field>
-                    </div>
-                  </>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <Field label="Tipo de curso"><OptionSelect lista="tipos_curso" value={data.tipo} onChange={v => patch({ tipo: v })} /></Field>
+                    <Field label="Categoria"><OptionSelect lista="categorias_gold" value={data.categoria} onChange={v => patch({ categoria: v })} /></Field>
+                    <Field label="Regime"><OptionSelect lista="regimes_curso" value={data.regime} onChange={v => patch({ regime: v })} /></Field>
+                    <Field label="Preço (€)"><input className={t.iCls} type="number" value={data.preco} onChange={e => patch({ preco: e.target.value })} /></Field>
+                    <Field label="Horas"><input className={t.iCls} type="number" value={data.horas} onChange={e => patch({ horas: e.target.value })} /></Field>
+                    <Field label="Tags" hint="Separadas por vírgula">
+                      <input className={t.iCls} value={data.tags} onChange={e => patch({ tags: e.target.value })} placeholder="comunicacao, voz" />
+                    </Field>
+                  </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     <Field label="Área"><OptionSelect lista="areas_fin" value={data.categoria} onChange={v => patch({ categoria: v })} /></Field>
                     <Field label="Regime"><OptionSelect lista="regimes_curso" value={data.regime} onChange={v => patch({ regime: v })} /></Field>
                     <Field label="Horas"><input className={t.iCls} type="number" value={data.horas} onChange={e => patch({ horas: e.target.value })} /></Field>
-                    <Field label="Vídeo" hint="ID Vimeo ou URL">
-                      <input className={t.iCls} value={data.video} onChange={e => patch({ video: e.target.value })} />
-                    </Field>
                     <Field label="Tags" hint="Separadas por vírgula">
                       <input className={t.iCls} value={data.tags} onChange={e => patch({ tags: e.target.value })} placeholder="primeiros socorros, ufcd" />
                     </Field>
-                    <Field label="Data de início">
-                      <input className={t.iCls} type="date" value={data.dataInicio} onChange={e => patch({ dataInicio: e.target.value })} />
-                    </Field>
                   </div>
+                )}
+                <Field
+                  label="Locais deste curso"
+                  hint="Pode marcar vários polos. O «+» cria um local no catálogo. Horário, datas e vagas só se definem ao criar a turma."
+                >
+                  <MultiSearchSelect
+                    values={data.locais}
+                    onChange={v => patch({ locais: v })}
+                    options={locaisCat.filter(x => x.status !== "Inactivo").map(x => ({ value: x.nome, sub: x.morada }))}
+                    placeholder="Pesquisar local…"
+                    noneLabel="Escolher locais…"
+                    unitSingular="local"
+                    unitPlural="locais"
+                    onAdd={() => { setLocalNome(""); setLocalMorada(""); setNovoLocal(true); }}
+                    addLabel="Novo local"
+                  />
+                </Field>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Turmas deste curso</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Na página pública o visitante escolhe o local e, a seguir, o horário das turmas libertadas. Crie a turma para atribuir local, horário, início, fim e vagas.
+                  </p>
+                </div>
+                {turmasCurso.length === 0 ? (
+                  <p className="text-sm text-slate-500 rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center">
+                    Ainda não há turmas. Quando existirem (e estiverem libertadas), aparecem sozinhas nesta lista e na página do curso.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100">
+                    {turmasCurso.map(x => (
+                      <li key={x.id} className="px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 text-sm">
+                        <div>
+                          <p className="font-semibold text-slate-800">{x.local} · {x.horario}</p>
+                          <p className="text-xs text-slate-500">{x.nome} · início {fmtDataPt(x.dataInicio)} · {x.vagasLivres} vagas</p>
+                        </div>
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${x.libertada ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                          {x.libertada ? "Libertada" : "Não libertada"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
             </div>
@@ -740,8 +907,8 @@ export function CursoFichaView({
                     <SearchSelect value={data.estado} onChange={v => patch({ estado: v, visivelSite: v === "Ativo" })}
                       options={[{ value: "Ativo" }, { value: "Inactivo" }]} />
                   </Field>
-                  <Field label="Próxima data pública">
-                    <input className={t.iCls} type="date" value={data.dataInicio} onChange={e => patch({ dataInicio: e.target.value })} />
+                  <Field label="Próxima data pública" hint="Calculada a partir da próxima turma libertada. Não se edita aqui — muda ao criar ou libertar a turma.">
+                    <input className={t.iCls} type="text" readOnly value={proximaTurma ? `${fmtDataPt(proximaTurma.dataInicio)} · ${proximaTurma.local} · ${proximaTurma.horario}` : "Sem turma libertada"} />
                   </Field>
                 </div>
               </div>
@@ -773,10 +940,35 @@ export function CursoFichaView({
                 {data.visivelSite ? "Publicada" : "Rascunho"}
               </span>
             </div>
-            <SitePreview data={data} accent={accent} />
+            <SitePreview data={data} accent={accent} turmas={turmasCurso} />
           </div>
         </aside>
       </div>
+      <AppModal
+        open={novoLocal}
+        onClose={() => setNovoLocal(false)}
+        title="Novo local"
+        sub="Fica no catálogo de locais e fica associado a este curso."
+        size="sm"
+        footer={(
+          <>
+            <button type="button" onClick={() => setNovoLocal(false)} className="px-4 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg">Cancelar</button>
+            <button type="button" disabled={!localNome.trim()} onClick={criarLocal}
+              className={`px-4 py-2 ${t.save} disabled:opacity-40 text-white text-sm font-semibold rounded-lg`}>Guardar</button>
+          </>
+        )}
+      >
+        <div className="p-5 space-y-3">
+          <Field label="Nome">
+            <input autoFocus className={t.iCls} value={localNome} onChange={e => setLocalNome(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); criarLocal(); } }}
+              placeholder="Ex.: V.N.Gaia" />
+          </Field>
+          <Field label="Morada / plataforma" hint="Opcional. Pode completar depois em Edição de Cursos → Locais.">
+            <input className={t.iCls} value={localMorada} onChange={e => setLocalMorada(e.target.value)} placeholder="Rua… ou Sala Virtual" />
+          </Field>
+        </div>
+      </AppModal>
     </div>
   );
 }

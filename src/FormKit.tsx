@@ -361,6 +361,7 @@ export function SearchSelect({
 export function MultiSearchSelect({
   values, onChange, options, placeholder = "Pesquisar…", empty = "Nenhum resultado.",
   noneLabel = "Selecionar…", unitSingular = "item", unitPlural = "itens",
+  onAdd, addLabel = "Adicionar opção",
 }: {
   values: string[];
   onChange: (next: string[]) => void;
@@ -370,6 +371,8 @@ export function MultiSearchSelect({
   noneLabel?: string;
   unitSingular?: string;
   unitPlural?: string;
+  onAdd?: () => void;
+  addLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -416,9 +419,22 @@ export function MultiSearchSelect({
         <span className="text-slate-400 flex-shrink-0">▾</span>
       </button>
       <MenuPortal open={open} triggerRef={triggerRef} panelRef={panelRef} bump={selected.length}>
-        <div className="p-2 border-b border-slate-100 bg-white">
+        <div className="p-2 border-b border-slate-100 bg-white flex items-center gap-1.5">
           <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={placeholder}
-            className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            className="min-w-0 flex-1 px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          {onAdd && (
+            <button
+              type="button"
+              title={addLabel}
+              aria-label={addLabel}
+              onClick={() => { setOpen(false); onAdd(); }}
+              className="flex-shrink-0 w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-800 flex items-center justify-center"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
         </div>
         <div className="max-h-52 overflow-y-auto bg-white">
           {filtered.length === 0 && <p className="px-3 py-4 text-xs text-slate-400 text-center">{empty}</p>}

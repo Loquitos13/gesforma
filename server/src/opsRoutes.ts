@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { ingestEvent } from "./automations.js";
 import type { Db } from "./db/pool.js";
-import { isEmail, normalizeEmail, sanitizeHeader } from "./security.js";
+import { isEmail, normalizeEmail } from "./security.js";
 import {
   confirmarPagamento,
   findPagamentoPorReferencia,
@@ -27,6 +27,7 @@ import {
 } from "./crmDossier.js";
 import { globalSearch } from "./globalSearch.js";
 import { config } from "./config.js";
+import { criarPreinscricaoPublica } from "./preinscricaoPublica.js";
 
 const preSchema = z.object({
   nome: z.string().trim().min(1).max(80),
@@ -297,27 +298,23 @@ export function registerOpsRoutes(
     const parsed = preSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
-    const email = normalizeEmail(d.email);
-    if (!isEmail(email)) return reply.code(400).send({ error: "email inválido" });
-    const curso = sanitizeHeader(d.curso || "Formação de Formadores - CCP");
-    const precoRow = await one(db, "SELECT preco FROM cursos_gold WHERE nome = $1", [curso]);
-    const id = await nextOpsId(db);
-    await db.query(
-      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, entrada)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Não contactado',$12,$13,'preinscricao')`,
-      [
-        id, nowStamp(), sanitizeHeader(d.nome), sanitizeHeader(d.apelido), email,
-        sanitizeHeader(d.telf), d.inicioCurso || "-", sanitizeHeader(d.concelho),
-        sanitizeHeader(d.local), curso, Number(precoRow?.preco ?? d.preco ?? 0),
-        sanitizeHeader(d.campanha || ""), sanitizeHeader(d.origem || "Website"),
-      ],
-    );
-    const nome = `${d.nome} ${d.apelido}`.trim();
-    await ingestEvent(db, "preinscricao.created", { email, nome, curso, preinscricaoId: id }, `preinscricao:${id}:${email}`).catch(() => undefined);
-    await logLeadEvent(db, id, undefined, "criacao", "Pré-inscrição recebida", `Formulário público · ${sanitizeHeader(d.origem || "Website")} · ${curso}`);
-    await audit(db, undefined, "preinscricao.public_create", "preinscricao", String(id), req.ip, { curso });
-    const row = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
-    return { preinscricao: row ? mapPreinscricao(row) : { id }, aviso: "A secretaria contacta-o em breve." };
+    const created = await criarPreinscricaoPublica(db, {
+      nome: d.nome,
+      apelido: d.apelido,
+      email: d.email,
+      telf: d.telf,
+      concelho: d.concelho,
+      origem: d.origem || "Website",
+      curso: d.curso,
+      local: d.local,
+      inicioCurso: d.inicioCurso,
+      campanha: d.campanha,
+      preco: d.preco,
+      meioContacto: "Website",
+    }, { ip: req.ip });
+    if ("error" in created) return reply.code(400).send({ error: created.error });
+    await audit(db, undefined, "preinscricao.public_create", "preinscricao", String(created.preinscricao.id), req.ip, { curso: d.curso, duplicado: created.duplicado });
+    return { preinscricao: created.preinscricao, aviso: created.aviso, duplicado: created.duplicado };
   });
 
   app.post("/v1/preinscricoes", async (req, reply) => {

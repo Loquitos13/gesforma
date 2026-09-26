@@ -12,6 +12,7 @@ import { persist, toastError, toastOk } from "./toastBus";
 import { TurmaInscricaoHint } from "./TurmaCronograma";
 import { useTurmas } from "./TurmasContext";
 import { hojeIso, turmaGoldOpts } from "./turmaModel";
+import { WhatsappSimulador } from "./WhatsappSimulador";
 
 const PREFS_KEY = "gesforma.crm.prefs";
 
@@ -99,6 +100,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
   const [novo, setNovo] = useState(false);
   const [editLead, setEditLead] = useState<CrmLead | null>(null);
   const [apagar, setApagar] = useState<CrmLead | null>(null);
+  const [waOpen, setWaOpen] = useState(false);
   const [loteEstado, setLoteEstado] = useState("2º Contacto");
   const [loteData, setLoteData] = useState("");
   const [form, setForm] = useState({ nome: "", apelido: "", email: "", telf: "", curso: "Formação de Formadores - CCP", turma: "", local: "V.N.Gaia", origem: "Telefone", nota: "" });
@@ -252,7 +254,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
           <div>
             <h1 className="text-xl font-bold text-slate-800 leading-tight">CRM</h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Dois inputs: o formulário de pré-inscrição e o registo manual (telefone, WhatsApp, balcão). {counts.total.toLocaleString("pt-PT")} leads na base.
+              Dois inputs no site e no balcão, mais o bot WhatsApp para pré-inscrição e consulta de estado. {counts.total.toLocaleString("pt-PT")} leads na base.
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -265,7 +267,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
           <div className={`rounded-xl border px-4 py-3 ${entrada === "preinscricao" ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white"}`}>
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Input 1 · principal</p>
             <p className="text-sm font-bold text-slate-800 mt-0.5">Pré-inscrição</p>
@@ -284,6 +286,15 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
               <button type="button" onClick={() => { setEditLead(null); resetForm(); setNovo(true); }}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg">{ic.plus} Nova lead</button>
               <button type="button" onClick={() => { setEntrada(entrada === "manual" ? "" : "manual"); setPage(1); }} className="ml-auto px-3 py-1.5 text-xs font-semibold text-sky-800">{entrada === "manual" ? "Ver todas" : "Filtrar estas"}</button>
+            </div>
+          </div>
+          <div className={`rounded-xl border px-4 py-3 ${origem === "WhatsApp" ? "border-emerald-400 bg-emerald-50" : "border-slate-200 bg-white"}`}>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Input 3 · automático</p>
+            <p className="text-sm font-bold text-slate-800 mt-0.5">WhatsApp</p>
+            <p className="text-xs text-slate-500 mt-1">O bot pede nome, email e curso e grava a pré-inscrição. Também diz o estado do pedido. Sem token Meta usa o simulador.</p>
+            <div className="flex gap-2 mt-3">
+              <button type="button" onClick={() => setWaOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg">{ic.wa} Simular conversa</button>
+              <button type="button" onClick={() => { setOrigem(origem === "WhatsApp" ? "" : "WhatsApp"); setPage(1); }} className="ml-auto px-3 py-1.5 text-xs font-semibold text-emerald-800">{origem === "WhatsApp" ? "Ver todas" : "Filtrar estas"}</button>
             </div>
           </div>
         </div>
@@ -430,7 +441,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                         </td>
                         <td className="px-3 py-1.5">{entradaChip(r.entrada)}</td>
                         <td className="px-3 py-1.5">{meioChip(r.meioContacto)}</td>
-                        <td className="px-3 py-1.5">{etiquetaChip(r.etiquetaNome, r.etiquetaCor) ?? <span className="text-[11px] text-slate-400">—</span>}</td>
+                        <td className="px-3 py-1.5">{etiquetaChip(r.etiquetaNome, r.etiquetaCor) ?? <span className="text-[11px] text-slate-400">-</span>}</td>
                         <td className="px-3 py-1.5 font-mono text-[11px] text-slate-500 whitespace-nowrap">{r.inscrito.slice(0, 16)}</td>
                         <td className="px-3 py-1.5 text-xs text-slate-600 max-w-[180px] truncate" title={r.curso}>{r.curso}</td>
                         <td className="px-3 py-1.5 text-xs text-slate-600 whitespace-nowrap">{r.local}</td>
@@ -515,7 +526,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
         onConfirm={() => { if (apagar) { removePreinscricao(apagar.id); setTimeout(carregar, 200); } }}
       />
 
-      <AppModal open={novo} onClose={() => { setNovo(false); setEditLead(null); }} title={editLead ? `Editar ${editLead.nome}` : "Lead manual"} sub={editLead ? "Actualiza os dados da ficha" : "Telefone, WhatsApp ou balcão — entra na fila com a primeira nota comercial"} size="lg">
+      <AppModal open={novo} onClose={() => { setNovo(false); setEditLead(null); }} title={editLead ? `Editar ${editLead.nome}` : "Lead manual"} sub={editLead ? "Actualiza os dados da ficha" : "Telefone, WhatsApp ou balcão - entra na fila com a primeira nota comercial"} size="lg">
         <div className="p-5 space-y-3">
           {!editLead && (
             <p className="text-xs text-slate-600 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2">
@@ -586,6 +597,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
           </div>
         </div>
       </AppModal>
+      <WhatsappSimulador open={waOpen} onClose={() => setWaOpen(false)} onLeadCreated={() => setTimeout(carregar, 200)} />
     </>
   );
 }

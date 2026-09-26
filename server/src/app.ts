@@ -31,6 +31,7 @@ import {
 } from "./microsoftAuth.js";
 import { registerDashboardRoutes } from "./dashboardRoutes.js";
 import { registerOpsRoutes } from "./opsRoutes.js";
+import { registerWhatsappRoutes } from "./whatsapp.js";
 import { registerPedagogiaRoutes } from "./pedagogiaRoutes.js";
 import { registerEquipaRoutes } from "./equipa.js";
 import { registerUserRoutes } from "./userRoutes.js";
@@ -610,6 +611,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   });
 
   registerOpsRoutes(app, db, { requireAuth, audit });
+  registerWhatsappRoutes(app, db, { requireAuth });
   registerCatalogRoutes(app, db, { requireAuth });
   registerDriveRoutes(app, db, { requireAuth, audit });
   registerUserRoutes(app, db, { requireAuth, audit });

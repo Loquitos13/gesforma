@@ -612,6 +612,18 @@ export const apiCrmEtiquetaCreate = (body: { nome: string; cor: string }) =>
 export const apiCrmEtiquetaDelete = (id: number) =>
   api<{ ok: boolean }>(`/v1/crm/etiquetas/${id}`, { method: "DELETE" });
 
+export const apiWhatsappStatus = () =>
+  api<{ ligado: boolean; sessoes: number; webhook: string }>("/v1/crm/whatsapp");
+export const apiWhatsappConversa = (telefone: string) =>
+  api<{ telefone: string; mensagens: { direccao: "in" | "out"; corpo: string; createdAt: string }[] }>(
+    `/v1/crm/whatsapp/conversa?telefone=${encodeURIComponent(telefone)}`,
+  );
+export const apiWhatsappSimular = (telefone: string, texto: string) =>
+  api<{ replies: string[]; telefone: string; passo?: string; leadId?: number | null }>(
+    "/v1/crm/whatsapp/simular",
+    { method: "POST", body: JSON.stringify({ telefone, texto }) },
+  );
+
 export async function apiCrmExport(q: CrmListQuery) {
   const headers = new Headers();
   headers.set("Accept", "text/csv");

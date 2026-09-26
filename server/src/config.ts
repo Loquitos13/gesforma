@@ -67,6 +67,9 @@ export const config = {
     ?? (process.env.VERCEL ? "/tmp/gesforma-drive" : new URL("../data/drive-files", import.meta.url).pathname),
   driveMaxBytes: Number(process.env.DRIVE_MAX_BYTES ?? 10 * 1024 * 1024),
   paymentWebhookKey: process.env.PAYMENT_WEBHOOK_KEY ?? "",
+  whatsappToken: process.env.WHATSAPP_TOKEN ?? "",
+  whatsappPhoneId: process.env.WHATSAPP_PHONE_ID ?? "",
+  whatsappVerifyToken: process.env.WHATSAPP_VERIFY_TOKEN ?? "",
 };
 
 export function allowedOrigins() {

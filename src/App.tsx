@@ -4491,7 +4491,7 @@ function NotificacoesPanel({ onNavigate, onClose }: { onNavigate: (t: NavTarget)
   const { items, naoLidas, estado, marcarLida, marcarTodas } = useNotificacoes();
 
   return (
-    <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50" style={{ animation: "dropIn 0.15s ease" }}>
+    <div className="absolute right-0 top-full mt-2 w-80 bg-white text-slate-800 rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50" style={{ animation: "dropIn 0.15s ease", colorScheme: "light" }}>
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
         <div className="flex items-center gap-2">
           <p className="text-sm font-bold text-slate-800">Notificações</p>

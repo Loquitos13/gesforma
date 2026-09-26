@@ -21,6 +21,9 @@ import {
   nextOpsId,
 } from "./ops.js";
 import { exportCrmLeads, queryCrmLeads, searchCrmLeads, type CrmFila, type CrmSort } from "./crm.js";
+import {
+  addLeadNota, createCrmCampo, getLeadDossier, listCrmCampos, logLeadEvent, setCampoValores, type CrmCampoTipo,
+} from "./crmDossier.js";
 import { globalSearch } from "./globalSearch.js";
 import { config } from "./config.js";
 
@@ -157,9 +160,11 @@ export function registerOpsRoutes(
           "INSERT INTO preinscricao_contactos (preinscricao_id, actor_id, nota) VALUES ($1,$2,$3)",
           [id, req.actor!.id, nota],
         );
+        await logLeadEvent(db, id, req.actor!.id, "contacto", "Contacto em lote", nota || `Passou a ${nextEstado}`);
         updated += 1;
       } else if (d.acao === "estado" && d.estado) {
         await db.query("UPDATE preinscricoes SET estado = $2 WHERE id = $1 AND estado <> 'Formando'", [id, d.estado]);
+        await logLeadEvent(db, id, req.actor!.id, "estado", `Passou a ${d.estado}`, `De ${String(current.estado)}`);
         if (d.estado === "Pago") {
           const email = normalizeEmail(String(current.email ?? ""));
           if (isEmail(email)) {
@@ -177,11 +182,70 @@ export function registerOpsRoutes(
           "UPDATE preinscricoes SET proximo_contacto = COALESCE($2, proximo_contacto), notas = CASE WHEN $3 = '' THEN notas ELSE trim(both from notas || E'\n' || $3) END WHERE id = $1",
           [id, d.proximoContacto ?? null, (d.nota ?? "").trim()],
         );
+        await logLeadEvent(db, id, req.actor!.id, "seguimento", "Seguimento em lote", d.proximoContacto ? `Próximo contacto ${d.proximoContacto}` : (d.nota ?? ""));
         updated += 1;
       }
     }
     await audit(db, req.actor!.id, "crm.lote", "preinscricao", String(d.ids.length), req.ip, { acao: d.acao, n: updated });
     return { updated };
+  });
+
+  app.get("/v1/crm/campos", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    return { campos: await listCrmCampos(db) };
+  });
+
+  const campoSchema = z.object({
+    label: z.string().trim().min(1).max(80),
+    tipo: z.enum(["texto", "numero", "data", "lista"]).optional().default("texto"),
+    opcoes: z.array(z.string().trim().min(1).max(80)).max(30).optional().default([]),
+  });
+
+  app.post("/v1/crm/campos", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const parsed = campoSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    const d = parsed.data;
+    const campo = await createCrmCampo(db, d.label, d.tipo as CrmCampoTipo, d.opcoes);
+    await audit(db, req.actor!.id, "crm.campo.create", "crm_campo", String(campo.id), req.ip);
+    return { campo };
+  });
+
+  app.get("/v1/crm/leads/:id", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ error: "pedido inválido" });
+    const dossier = await getLeadDossier(db, id);
+    if (!dossier) return reply.code(404).send({ error: "lead inexistente" });
+    return dossier;
+  });
+
+  app.post("/v1/crm/leads/:id/campos", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string }).id);
+    const parsed = z.object({
+      valores: z.array(z.object({
+        campoId: z.number().int().positive(),
+        valor: z.string().max(2000),
+      })).min(1).max(40),
+    }).safeParse(req.body);
+    if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    const exists = await one(db, "SELECT id FROM preinscricoes WHERE id = $1", [id]);
+    if (!exists) return reply.code(404).send({ error: "lead inexistente" });
+    await setCampoValores(db, id, req.actor!.id, parsed.data.valores);
+    return getLeadDossier(db, id);
+  });
+
+  app.post("/v1/crm/leads/:id/notas", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string }).id);
+    const parsed = z.object({ nota: z.string().trim().min(1).max(2000) }).safeParse(req.body);
+    if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    const exists = await one(db, "SELECT id FROM preinscricoes WHERE id = $1", [id]);
+    if (!exists) return reply.code(404).send({ error: "lead inexistente" });
+    await addLeadNota(db, id, req.actor!.id, parsed.data.nota);
+    await audit(db, req.actor!.id, "crm.nota", "preinscricao", String(id), req.ip);
+    return getLeadDossier(db, id);
   });
 
   app.get("/v1/public/cursos", async () => {
@@ -214,6 +278,7 @@ export function registerOpsRoutes(
     );
     const nome = `${d.nome} ${d.apelido}`.trim();
     await ingestEvent(db, "preinscricao.created", { email, nome, curso, preinscricaoId: id }, `preinscricao:${id}:${email}`).catch(() => undefined);
+    await logLeadEvent(db, id, undefined, "criacao", "Lead criada", `Pedido via ${sanitizeHeader(d.origem || "Website")} · ${curso}`);
     await audit(db, undefined, "preinscricao.public_create", "preinscricao", String(id), req.ip, { curso });
     const row = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
     return { preinscricao: row ? mapPreinscricao(row) : { id }, aviso: "A secretaria contacta-o em breve." };
@@ -237,6 +302,7 @@ export function registerOpsRoutes(
       ],
     );
     await ingestEvent(db, "preinscricao.created", { email, nome: `${d.nome} ${d.apelido}`.trim(), curso: d.curso, preinscricaoId: id }, `preinscricao:${id}:${email}`).catch(() => undefined);
+    await logLeadEvent(db, id, req.actor!.id, "criacao", "Lead criada", `Pedido via ${d.origem || "Manual"} · ${d.curso}`);
     await audit(db, req.actor!.id, "preinscricao.create", "preinscricao", String(id), req.ip);
     const row = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
     return { preinscricao: row ? mapPreinscricao(row) : { id } };
@@ -248,6 +314,7 @@ export function registerOpsRoutes(
     const parsed = preSchema.partial().safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
+    const before = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
     await db.query(
       `UPDATE preinscricoes SET
          nome = COALESCE($2, nome), apelido = COALESCE($3, apelido), email = COALESCE($4, email),
@@ -260,6 +327,12 @@ export function registerOpsRoutes(
       [id, d.nome ?? null, d.apelido ?? null, d.email ? normalizeEmail(d.email) : null, d.telf ?? null, d.concelho ?? null, d.origem ?? null, d.curso ?? null, d.local ?? null, d.inicioCurso ?? null, d.preco ?? null, d.campanha ?? null, d.estado ?? null, d.proximoContacto ?? null, d.notas ?? null, d.comercialId ?? null],
     );
     const row = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
+    if (before && d.estado && d.estado !== String(before.estado)) {
+      await logLeadEvent(db, id, req.actor!.id, "estado", `Passou a ${d.estado}`, `De ${String(before.estado)}`);
+    }
+    if (before && d.proximoContacto && d.proximoContacto !== String(before.proximo_contacto ?? "")) {
+      await logLeadEvent(db, id, req.actor!.id, "seguimento", "Próximo contacto", d.proximoContacto);
+    }
     if (row && d.estado === "Pago") {
       const email = normalizeEmail(String(row.email ?? ""));
       if (isEmail(email)) {
@@ -291,6 +364,7 @@ export function registerOpsRoutes(
       "INSERT INTO preinscricao_contactos (preinscricao_id, actor_id, nota) VALUES ($1,$2,$3)",
       [id, req.actor!.id, nota],
     );
+    await logLeadEvent(db, id, req.actor!.id, "contacto", nextEstado === estado ? "Contacto registado" : "1.º contacto", nota || `Passou a ${nextEstado}`);
     const email = normalizeEmail(String(current.email ?? ""));
     if (isEmail(email)) {
       await ingestEvent(db, "preinscricao.contacted", {

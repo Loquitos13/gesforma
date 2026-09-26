@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Db } from "./db/pool.js";
+import { logLeadEvent } from "./crmDossier.js";
 import { mapPreinscricao, nextOpsId } from "./ops.js";
 
 const ESTADOS_PROPOSTA = ["Enviada", "Negociação", "Aceite", "Recusada", "Expirada"] as const;
@@ -219,6 +220,7 @@ export function registerEquipaRoutes(
     );
     if (d.preinscricaoId) {
       await db.query("UPDATE preinscricoes SET comercial_id = COALESCE(comercial_id, $2) WHERE id = $1", [d.preinscricaoId, comercialId]);
+      await logLeadEvent(db, d.preinscricaoId, req.actor!.id, "proposta", `Proposta ${d.estado ?? "Enviada"}`, `${d.curso} · € ${d.valor ?? 0}`);
     }
     await audit(db, req.actor!.id, "proposta.create", "proposta", String(pid), req.ip, { comercialId });
     const row = await db.query("SELECT * FROM propostas_comerciais WHERE id = $1", [pid]);
@@ -269,6 +271,7 @@ export function registerEquipaRoutes(
       [parsed.data.preinscricaoId, line],
     );
     await audit(db, req.actor!.id, "equipa.nota", "preinscricao", String(parsed.data.preinscricaoId), req.ip);
+    await logLeadEvent(db, parsed.data.preinscricaoId, req.actor!.id, "nota", "Nota comercial", parsed.data.nota);
     return { ok: true };
   });
 }

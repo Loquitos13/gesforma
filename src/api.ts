@@ -576,6 +576,30 @@ export const apiGlobalSearch = (q: string) =>
 export const apiCrmLote = (body: { ids: number[]; acao: "contactar" | "estado" | "seguimento"; estado?: string; proximoContacto?: string; nota?: string }) =>
   api<{ updated: number }>("/v1/crm/lote", { method: "POST", body: JSON.stringify(body) });
 
+export type CrmCampoTipo = "texto" | "numero" | "data" | "lista";
+export type CrmCampo = { id: number; label: string; chave: string; tipo: CrmCampoTipo; opcoes: string[]; valor?: string };
+export type CrmLeadEvento = { id: number; tipo: string; titulo: string; detalhe: string; createdAt: string; actorName: string | null };
+export type CrmLeadNota = { id: number; nota: string; createdAt: string; actorName: string | null };
+export type CrmDossier = {
+  lead: CrmLead;
+  cliente: boolean;
+  papel: "cliente" | "potencial";
+  campos: CrmCampo[];
+  notas: CrmLeadNota[];
+  eventos: CrmLeadEvento[];
+  outrosPedidos: CrmLead[];
+  propostas: { id: number; curso: string; estado: string; valor: number; enviadaEm: string }[];
+};
+
+export const apiCrmDossier = (id: number) => api<CrmDossier>(`/v1/crm/leads/${id}`);
+export const apiCrmCampos = () => api<{ campos: CrmCampo[] }>("/v1/crm/campos");
+export const apiCrmCampoCreate = (body: { label: string; tipo: CrmCampoTipo; opcoes?: string[] }) =>
+  api<{ campo: CrmCampo }>("/v1/crm/campos", { method: "POST", body: JSON.stringify(body) });
+export const apiCrmLeadCampos = (id: number, valores: { campoId: number; valor: string }[]) =>
+  api<CrmDossier>(`/v1/crm/leads/${id}/campos`, { method: "POST", body: JSON.stringify({ valores }) });
+export const apiCrmLeadNota = (id: number, nota: string) =>
+  api<CrmDossier>(`/v1/crm/leads/${id}/notas`, { method: "POST", body: JSON.stringify({ nota }) });
+
 export async function apiCrmExport(q: CrmListQuery) {
   const headers = new Headers();
   headers.set("Accept", "text/csv");

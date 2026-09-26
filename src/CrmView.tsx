@@ -3,6 +3,7 @@ import {
   apiCrmExport, apiCrmLeads, apiCrmLote,
   type CrmFila, type CrmLead, type CrmListQuery, type CrmListResult, type CrmSort,
 } from "./api";
+import { ClienteFicha } from "./ClienteFicha";
 import { AppModal, SearchSelect, ViewFilters, cursosGoldOpts, locaisOpts } from "./FormKit";
 import { nextListId, useLists, type Preinscricao } from "./ListsContext";
 import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./SecretaryUX";
@@ -320,20 +321,20 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
         {erro && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{erro}</p>}
 
         {sel.size > 0 && (
-          <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 bg-slate-900 text-white rounded-xl px-3 py-2.5 shadow-lg">
+          <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 bg-amber-50 text-slate-800 rounded-xl px-3 py-2.5 border border-amber-200 shadow-sm" style={{ colorScheme: "light" }}>
             <p className="text-xs font-semibold mr-2">{sel.size} seleccionados</p>
-            <button type="button" onClick={() => void lote("contactar")} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white/15 hover:bg-white/25">Marcar contactados</button>
+            <button type="button" onClick={() => void lote("contactar")} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 hover:bg-amber-100">Marcar contactados</button>
             <span className="flex items-center gap-1">
-              <select value={loteEstado} onChange={e => setLoteEstado(e.target.value)} className="text-xs rounded-lg bg-white text-slate-800 px-2 py-1">
+              <select value={loteEstado} onChange={e => setLoteEstado(e.target.value)} className="text-xs rounded-lg bg-white text-slate-800 px-2 py-1 border border-slate-200">
                 {ESTADOS.filter(e => e !== "Formando").map(e => <option key={e}>{e}</option>)}
               </select>
-              <button type="button" onClick={() => void lote("estado", { estado: loteEstado })} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white/15 hover:bg-white/25">Passar etapa</button>
+              <button type="button" onClick={() => void lote("estado", { estado: loteEstado })} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 hover:bg-amber-100">Passar etapa</button>
             </span>
             <span className="flex items-center gap-1">
-              <input type="date" value={loteData} onChange={e => setLoteData(e.target.value)} className="text-xs rounded-lg bg-white text-slate-800 px-2 py-1" />
-              <button type="button" disabled={!loteData} onClick={() => void lote("seguimento", { proximoContacto: loteData })} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white/15 hover:bg-white/25 disabled:opacity-40">Agendar</button>
+              <input type="date" value={loteData} onChange={e => setLoteData(e.target.value)} className="text-xs rounded-lg bg-white text-slate-800 px-2 py-1 border border-slate-200" />
+              <button type="button" disabled={!loteData} onClick={() => void lote("seguimento", { proximoContacto: loteData })} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 hover:bg-amber-100 disabled:opacity-40">Agendar</button>
             </span>
-            <button type="button" onClick={() => setSel(new Set())} className="ml-auto text-xs text-white/70 hover:text-white">Limpar</button>
+            <button type="button" onClick={() => setSel(new Set())} className="ml-auto text-xs text-slate-500 hover:text-slate-800">Limpar</button>
           </div>
         )}
 
@@ -441,7 +442,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
         <p className="text-[11px] text-slate-400">Shift+clique selecciona um intervalo. / foca a pesquisa. O pipeline mostra no máximo 20 cartões por etapa - use a lista para o resto.</p>
       </div>
 
-      <Ficha
+      <ClienteFicha
         item={ficha}
         onClose={() => setFicha(null)}
         hasPrev={fichaIdx > 0}
@@ -619,106 +620,6 @@ function Kanban({
         );
       })}
     </div>
-  );
-}
-
-function Ficha({
-  item, onClose, onConvert, onContactar, onPatch, hasPrev, hasNext, onPrev, onNext,
-}: {
-  item: CrmLead | null;
-  onClose: () => void;
-  onConvert?: (turma: string) => void;
-  onContactar?: (nota: string) => void;
-  onPatch?: (patch: Partial<Preinscricao>) => void;
-  hasPrev: boolean;
-  hasNext: boolean;
-  onPrev: () => void;
-  onNext: () => void;
-}) {
-  const { gold } = useTurmas();
-  const [notas, setNotas] = useState("");
-  const [proximoContacto, setProximoContacto] = useState("");
-  const [escolherTurma, setEscolherTurma] = useState(false);
-  const [turmaConv, setTurmaConv] = useState("");
-  useEffect(() => {
-    setEscolherTurma(false);
-    setTurmaConv("");
-    setNotas(item?.notas ?? "");
-    setProximoContacto(item?.proximoContacto ?? "");
-  }, [item?.id, item?.notas, item?.proximoContacto]);
-  useEffect(() => {
-    if (!item) return;
-    const h = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft" && hasPrev) { e.preventDefault(); onPrev(); }
-      if (e.key === "ArrowRight" && hasNext) { e.preventDefault(); onNext(); }
-    };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [item, hasPrev, hasNext, onPrev, onNext]);
-  if (!item) return null;
-  const turmaOpts = turmaGoldOpts(gold, { curso: item.curso });
-  const wa = telDigits(item.telf);
-  const etapaIdx = Math.max(0, COLS.findIndex(c => c.id === item.estado));
-  return (
-    <AppModal open onClose={onClose} title={`${item.nome} ${item.apelido}`} sub={`${item.curso} · ${item.local}`} size="lg">
-      <div className="p-5 space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <button type="button" disabled={!hasPrev} onClick={onPrev} className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30">‹ Anterior</button>
-          {badge(item.estado)}
-          <button type="button" disabled={!hasNext} onClick={onNext} className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30">Seguinte ›</button>
-        </div>
-        <p className="text-xs text-slate-500">{item.email} · {item.telf} · {item.origem} · {item.campanha}</p>
-        <div className="grid grid-cols-5 gap-1">
-          {COLS.map((col, i) => (
-            <button key={col.id} type="button" disabled={col.id === "Formando"}
-              onClick={() => { if (col.id !== item.estado && col.id !== "Formando") onPatch?.({ estado: col.id }); }}
-              className={`rounded-lg px-1 py-2 text-center border text-[10px] font-bold ${
-                col.id === item.estado ? "bg-amber-500 border-amber-500 text-white"
-                : i < etapaIdx ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                : "bg-slate-50 border-slate-200 text-slate-500"
-              }`}>
-              {col.label}
-            </button>
-          ))}
-        </div>
-        <div className="grid grid-cols-2 gap-3 text-xs">
-          <div className="bg-slate-50 rounded-xl p-3"><p className="text-slate-400">Valor</p><p className="font-bold text-amber-700 text-base">€ {item.preco}</p></div>
-          <div className="bg-slate-50 rounded-xl p-3"><p className="text-slate-400">Inscrito</p><p className="font-semibold text-slate-700">{item.inscrito}</p></div>
-        </div>
-        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Próximo contacto
-          <input type="date" value={proximoContacto} onChange={e => setProximoContacto(e.target.value)} className={inp} />
-        </label>
-        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Notas
-          <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={3} className={`${inp} resize-none`} placeholder="Objecção, horário, o que ficou combinado…" />
-        </label>
-        <button type="button" onClick={() => { onPatch?.({ notas, proximoContacto }); toastOk("Seguimento gravado."); }}
-          className="w-full py-2 text-xs font-semibold rounded-lg border border-slate-200">Guardar seguimento</button>
-        <div className="flex gap-2">
-          <a href={`tel:${item.telf}`} className="flex-1 py-2 bg-slate-800 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5">{ic.phone} Ligar</a>
-          {wa
-            ? <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="flex-1 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-1.5">{ic.wa} WhatsApp</a>
-            : <span className="flex-1 py-2 bg-slate-100 text-slate-400 text-sm font-semibold rounded-lg text-center">Sem telemóvel</span>}
-        </div>
-        {item.estado === "Não contactado" && (
-          <button type="button" onClick={() => onContactar?.(notas.trim())} className="w-full py-2 border text-sm font-semibold rounded-lg">Registar 1.º contacto</button>
-        )}
-        {item.estado !== "Pago" && item.estado !== "Formando" && (
-          <button type="button" onClick={() => { onPatch?.({ estado: "Pago" }); toastOk("Marcado como pago."); }} className="w-full py-2 border border-teal-200 bg-teal-50 text-sm font-semibold text-teal-800 rounded-lg">Marcar pagamento recebido</button>
-        )}
-        {item.estado !== "Formando" && (!escolherTurma ? (
-          <button type="button" onClick={() => setEscolherTurma(true)} className="w-full py-2.5 bg-amber-500 text-white text-sm font-bold rounded-lg">Inscrever numa turma</button>
-        ) : (
-          <div className="space-y-2">
-            <SearchSelect value={turmaConv} onChange={setTurmaConv} options={turmaOpts} placeholder="Só turmas ativas…" empty="Não há turmas ativas para este curso." />
-            <TurmaInscricaoHint optsLen={turmaOpts.length} curso={item.curso} />
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setEscolherTurma(false)} className="flex-1 py-2 border text-sm rounded-lg">Cancelar</button>
-              <button type="button" disabled={!turmaConv} onClick={() => onConvert?.(turmaConv)} className="flex-1 py-2.5 bg-amber-500 disabled:opacity-40 text-white text-sm font-bold rounded-lg">Confirmar</button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </AppModal>
   );
 }
 

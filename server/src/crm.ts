@@ -10,6 +10,7 @@ export type CrmListParams = {
   curso?: string;
   local?: string;
   origem?: string;
+  entrada?: "preinscricao" | "manual" | "";
   campanha?: string;
   fila?: CrmFila | "";
   page?: number;
@@ -47,6 +48,7 @@ function addWhere(params: CrmListParams, hoje: string, skipEstado = false) {
   if (params.curso) push("curso = ?", params.curso);
   if (params.local) push("local = ?", params.local);
   if (params.origem) push("origem = ?", params.origem);
+  if (params.entrada === "preinscricao" || params.entrada === "manual") push("entrada = ?", params.entrada);
   if (params.campanha) push("campanha = ?", params.campanha);
   if (params.fila === "contactar") parts.push("estado = 'Não contactado'");
   if (params.fila === "atrasados") {
@@ -83,6 +85,7 @@ export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string)
   const counts = await db.query<{
     total: number; abertos: number; por_contactar: number; conversa: number; pagos: number;
     formando: number; atrasados: number; hoje: number; valor_aberto: number;
+    preinscricoes: number; manuais: number;
   }>(
     `SELECT
       count(*)::int AS total,
@@ -93,7 +96,9 @@ export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string)
       count(*) FILTER (WHERE estado = 'Formando')::int AS formando,
       count(*) FILTER (WHERE proximo_contacto <> '' AND proximo_contacto < $1 AND estado NOT IN ('Pago','Formando'))::int AS atrasados,
       count(*) FILTER (WHERE proximo_contacto = $1 AND estado NOT IN ('Pago','Formando'))::int AS hoje,
-      COALESCE(sum(preco) FILTER (WHERE estado <> 'Formando'), 0)::float AS valor_aberto
+      COALESCE(sum(preco) FILTER (WHERE estado <> 'Formando'), 0)::float AS valor_aberto,
+      count(*) FILTER (WHERE entrada = 'preinscricao')::int AS preinscricoes,
+      count(*) FILTER (WHERE entrada = 'manual')::int AS manuais
      FROM preinscricoes`,
     [hoje],
   );
@@ -155,6 +160,8 @@ export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string)
       hoje: c?.hoje ?? 0,
       converter: c?.pagos ?? 0,
       valorAberto: Number(c?.valor_aberto ?? 0),
+      preinscricoes: c?.preinscricoes ?? 0,
+      manuais: c?.manuais ?? 0,
     },
     porEstado,
     facets: { cursos, locais, origens, campanhas },

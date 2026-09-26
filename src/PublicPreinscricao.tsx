@@ -58,6 +58,8 @@ export function PublicPreinscricao() {
         concelho,
         origem,
         curso,
+        campanha: params.get("campanha") ?? "",
+        local: params.get("local") ?? "",
       });
       setDone(true);
     } catch (err) {

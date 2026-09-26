@@ -34,6 +34,8 @@ const preSchema = z.object({
   telf: z.string().trim().max(30).optional().default(""),
   concelho: z.string().trim().max(80).optional().default(""),
   origem: z.string().trim().max(80).optional().default("Website"),
+  entrada: z.enum(["preinscricao", "manual"]).optional(),
+  nota: z.string().max(2000).optional(),
   curso: z.string().trim().max(200).optional().default(""),
   local: z.string().trim().max(120).optional().default(""),
   inicioCurso: z.string().trim().max(40).optional().default("-"),
@@ -82,6 +84,7 @@ export function registerOpsRoutes(
       curso: str("curso"),
       local: str("local"),
       origem: str("origem"),
+      entrada: (str("entrada") === "manual" ? "manual" : str("entrada") === "preinscricao" ? "preinscricao" : "") as "" | "preinscricao" | "manual",
       campanha: str("campanha"),
       fila: (fila.success ? fila.data : "") as CrmFila | "",
       page: Number(q.page) || 1,
@@ -267,18 +270,18 @@ export function registerOpsRoutes(
     const precoRow = await one(db, "SELECT preco FROM cursos_gold WHERE nome = $1", [curso]);
     const id = await nextOpsId(db);
     await db.query(
-      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Não contactado',$12,$13)`,
+      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, entrada)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Não contactado',$12,$13,'preinscricao')`,
       [
         id, nowStamp(), sanitizeHeader(d.nome), sanitizeHeader(d.apelido), email,
         sanitizeHeader(d.telf), d.inicioCurso || "-", sanitizeHeader(d.concelho),
         sanitizeHeader(d.local), curso, Number(precoRow?.preco ?? d.preco ?? 0),
-        "", sanitizeHeader(d.origem || "Website"),
+        sanitizeHeader(d.campanha || ""), sanitizeHeader(d.origem || "Website"),
       ],
     );
     const nome = `${d.nome} ${d.apelido}`.trim();
     await ingestEvent(db, "preinscricao.created", { email, nome, curso, preinscricaoId: id }, `preinscricao:${id}:${email}`).catch(() => undefined);
-    await logLeadEvent(db, id, undefined, "criacao", "Lead criada", `Pedido via ${sanitizeHeader(d.origem || "Website")} · ${curso}`);
+    await logLeadEvent(db, id, undefined, "criacao", "Pré-inscrição recebida", `Formulário público · ${sanitizeHeader(d.origem || "Website")} · ${curso}`);
     await audit(db, undefined, "preinscricao.public_create", "preinscricao", String(id), req.ip, { curso });
     const row = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
     return { preinscricao: row ? mapPreinscricao(row) : { id }, aviso: "A secretaria contacta-o em breve." };
@@ -294,16 +297,18 @@ export function registerOpsRoutes(
     const id = await nextOpsId(db);
     const comercialId = d.comercialId ?? (req.actor?.role === "comercial" ? req.actor.id : null);
     await db.query(
-      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, comercial_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, comercial_id, entrada)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'manual')`,
       [
         id, nowStamp(), d.nome, d.apelido, email, d.telf, d.inicioCurso || "-",
-        d.concelho, d.local, d.curso, d.preco ?? 0, d.estado || "Não contactado", d.campanha, d.origem, comercialId,
+        d.concelho, d.local, d.curso, d.preco ?? 0, d.estado || "Não contactado", d.campanha, d.origem || "Telefone", comercialId,
       ],
     );
     await ingestEvent(db, "preinscricao.created", { email, nome: `${d.nome} ${d.apelido}`.trim(), curso: d.curso, preinscricaoId: id }, `preinscricao:${id}:${email}`).catch(() => undefined);
-    await logLeadEvent(db, id, req.actor!.id, "criacao", "Lead criada", `Pedido via ${d.origem || "Manual"} · ${d.curso}`);
-    await audit(db, req.actor!.id, "preinscricao.create", "preinscricao", String(id), req.ip);
+    await logLeadEvent(db, id, req.actor!.id, "criacao", "Lead manual criada", `${d.origem || "Telefone"} · ${d.curso}`);
+    const nota = (d.nota ?? "").trim();
+    if (nota) await addLeadNota(db, id, req.actor!.id, nota);
+    await audit(db, req.actor!.id, "preinscricao.create", "preinscricao", String(id), req.ip, { entrada: "manual" });
     const row = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
     return { preinscricao: row ? mapPreinscricao(row) : { id } };
   });

@@ -176,6 +176,9 @@ export function ClienteFicha({
             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border ${
               papel === "cliente" ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-sky-50 text-sky-800 border-sky-200"
             }`}>{papel === "cliente" ? "Cliente" : "Potencial"}</span>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+              lead.entrada === "manual" ? "bg-sky-50 text-sky-800 border-sky-200" : "bg-amber-50 text-amber-800 border-amber-200"
+            }`}>{lead.entrada === "manual" ? "Lead manual" : "Pré-inscrição"}</span>
             {badge(lead.estado)}
           </div>
           <button type="button" disabled={!hasNext} onClick={onNext} className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30">Seguinte ›</button>

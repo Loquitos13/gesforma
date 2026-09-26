@@ -46,6 +46,7 @@ export function mapPreinscricao(r: Record<string, unknown>) {
     estado: String(r.estado ?? "Não contactado"),
     campanha: String(r.campanha ?? ""),
     origem: String(r.origem ?? "Website"),
+    entrada: String(r.entrada ?? "preinscricao") === "manual" ? "manual" : "preinscricao",
     contactadoEm: r.contactado_em ? String(r.contactado_em) : null,
     notas: String(r.notas ?? ""),
     proximoContacto: String(r.proximo_contacto ?? ""),

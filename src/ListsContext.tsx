@@ -38,6 +38,7 @@ export type Preinscricao = {
   id: number; inscrito: string; nome: string; apelido: string; email: string; telf: string;
   inicioCurso: string; concelho: string; local: string; curso: string; preco: number;
   estado: string; campanha: string; origem: string;
+  entrada?: "preinscricao" | "manual";
   contactadoEm?: string | null; notas?: string; proximoContacto?: string;
 };
 export type FormandoTurma = {
@@ -69,7 +70,7 @@ export type PagamentoRow = {
 
 type ListsCtx = {
   preinscricoes: Preinscricao[];
-  addPreinscricao: (row: Preinscricao) => void;
+  addPreinscricao: (row: Preinscricao, extra?: { nota?: string }) => void;
   patchPreinscricao: (id: number, patch: Partial<Preinscricao>) => void;
   removePreinscricao: (id: number) => void;
   contactarPreinscricao: (id: number, nota?: string) => void;
@@ -161,9 +162,9 @@ export function ListsProvider({
     return () => { alive = false; };
   }, []);
 
-  const addPreinscricao = useCallback((row: Preinscricao) => {
+  const addPreinscricao = useCallback((row: Preinscricao, extra?: { nota?: string }) => {
     setPre(xs => [row, ...xs]);
-    void persist(apiCreatePreinscricao(row).then(r => {
+    void persist(apiCreatePreinscricao({ ...row, entrada: row.entrada ?? "manual", nota: extra?.nota }).then(r => {
       if (r.preinscricao) setPre(xs => replaceById(xs, row.id, r.preinscricao));
     }), () => setPre(xs => xs.filter(x => x.id !== row.id)));
   }, []);

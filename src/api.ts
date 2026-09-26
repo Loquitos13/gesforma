@@ -53,7 +53,8 @@ export type OpsSnapshot = {
   preinscricoes: Array<{
     id: number; inscrito: string; nome: string; apelido: string; email: string; telf: string;
     inicioCurso: string; concelho: string; local: string; curso: string; preco: number;
-    estado: string; campanha: string; origem: string; contactadoEm: string | null; notas: string;
+    estado: string; campanha: string; origem: string; entrada?: "preinscricao" | "manual";
+    contactadoEm: string | null; notas: string;
     comercialId?: string | null;
   }>;
   formandosTurmas: Array<{
@@ -504,6 +505,7 @@ export type CrmListQuery = {
   curso?: string;
   local?: string;
   origem?: string;
+  entrada?: "preinscricao" | "manual" | "";
   campanha?: string;
   fila?: CrmFila | "";
   page?: number;
@@ -521,6 +523,7 @@ export type CrmListResult = {
   counts: {
     total: number; abertos: number; porContactar: number; conversa: number;
     pagos: number; formando: number; atrasados: number; hoje: number; converter: number; valorAberto: number;
+    preinscricoes: number; manuais: number;
   };
   porEstado: Record<string, number>;
   facets: { cursos: string[]; locais: string[]; origens: string[]; campanhas: string[] };
@@ -534,6 +537,7 @@ function crmQs(q: CrmListQuery) {
   if (q.curso) p.set("curso", q.curso);
   if (q.local) p.set("local", q.local);
   if (q.origem) p.set("origem", q.origem);
+  if (q.entrada) p.set("entrada", q.entrada);
   if (q.campanha) p.set("campanha", q.campanha);
   if (q.fila) p.set("fila", q.fila);
   if (q.page) p.set("page", String(q.page));

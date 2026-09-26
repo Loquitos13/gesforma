@@ -5,13 +5,14 @@ import {
 } from "./api";
 import { ClienteFicha } from "./ClienteFicha";
 import { entradaChip, etiquetaChip, leadMarkStyle, meioChip } from "./crmUi";
-import { AppModal, SearchSelect, ViewFilters, cursosGoldOpts, locaisOpts } from "./FormKit";
+import { AppModal, ViewFilters, cursosGoldOpts, locaisOpts } from "./FormKit";
 import { nextListId, useLists, type Preinscricao } from "./ListsContext";
 import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./SecretaryUX";
 import { persist, toastError, toastOk } from "./toastBus";
-import { TurmaInscricaoHint } from "./TurmaCronograma";
 import { useTurmas } from "./TurmasContext";
-import { hojeIso, turmaGoldOpts } from "./turmaModel";
+import { hojeIso, isTurmaActiva } from "./turmaModel";
+import { CursoOfertaCampos } from "./CursoOfertaCampos";
+import { type CursoOfertaSel } from "./oferta";
 import { WhatsappSimulador } from "./WhatsappSimulador";
 
 const PREFS_KEY = "gesforma.crm.prefs";
@@ -103,7 +104,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
   const [waOpen, setWaOpen] = useState(false);
   const [loteEstado, setLoteEstado] = useState("2º Contacto");
   const [loteData, setLoteData] = useState("");
-  const [form, setForm] = useState({ nome: "", apelido: "", email: "", telf: "", curso: "Formação de Formadores - CCP", turma: "", local: "V.N.Gaia", origem: "Telefone", nota: "" });
+  const [form, setForm] = useState({ nome: "", apelido: "", email: "", telf: "", concelho: "", curso: "", turma: "", local: "", horario: "", dataInicio: "", turmaId: 0, origem: "Telefone", nota: "" });
 
   const { gold, patchGold } = useTurmas();
   const {
@@ -195,9 +196,13 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
       apelido: lead?.apelido ?? "",
       email: lead?.email ?? "",
       telf: lead?.telf ?? "",
-      curso: lead?.curso ?? "Formação de Formadores - CCP",
-      turma: turmaGoldOpts(gold, { curso: lead?.curso ?? "Formação de Formadores - CCP" })[0]?.value ?? "",
-      local: lead?.local ?? "V.N.Gaia",
+      concelho: lead?.concelho ?? "",
+      curso: lead?.curso ?? "",
+      turma: "",
+      local: lead?.local ?? "",
+      horario: lead?.horario ?? "",
+      dataInicio: lead?.inicioCurso && lead.inicioCurso !== "-" ? lead.inicioCurso : "",
+      turmaId: lead?.turmaId ?? 0,
       origem: lead?.origem && lead.entrada === "manual" ? lead.origem : "Telefone",
       nota: "",
     });
@@ -399,7 +404,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                       title={`${r.nome} ${r.apelido}`}
                       sub={r.curso}
                       badge={badge(r.estado)}
-                      meta={[r.entrada === "manual" ? "Manual" : "Pré-inscrição", r.meioContacto || "sem meio", r.etiquetaNome || "sem etiqueta", r.local, `€ ${r.preco}`]}
+                      meta={[r.entrada === "manual" ? "Manual" : "Pré-inscrição", r.meioContacto || "sem meio", r.etiquetaNome || "sem etiqueta", [r.local, r.horario, r.inicioCurso && r.inicioCurso !== "-" ? r.inicioCurso : ""].filter(Boolean).join(" · ") || "sem turma", `€ ${r.preco}`]}
                       onOpen={() => openFicha(r)}
                       actions={[
                         ...(r.estado === "Não contactado" ? [{ label: "Contactar", icon: ic.phone, onClick: () => { contactarPreinscricao(r.id); openFicha({ ...r, estado: "1º Contacto" }); } }] : []),
@@ -419,7 +424,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                     <th className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 px-3 py-2 w-10">
                       <input type="checkbox" checked={items.length > 0 && sel.size === items.length} onChange={toggleAll} aria-label="Seleccionar página" />
                     </th>
-                    {["Lead", "Origem", "Meio", "Etiqueta", "Inscrito", "Curso", "Local", "Valor", "Seguimento", "Estado", ""].map(h => (
+                    {["Lead", "Origem", "Meio", "Etiqueta", "Inscrito", "Curso", "Turma", "Valor", "Seguimento", "Estado", ""].map(h => (
                       <th key={h} className="sticky top-0 z-10 text-left px-3 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide bg-slate-50 border-b border-slate-200 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -444,7 +449,10 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                         <td className="px-3 py-1.5">{etiquetaChip(r.etiquetaNome, r.etiquetaCor) ?? <span className="text-[11px] text-slate-400">-</span>}</td>
                         <td className="px-3 py-1.5 font-mono text-[11px] text-slate-500 whitespace-nowrap">{r.inscrito.slice(0, 16)}</td>
                         <td className="px-3 py-1.5 text-xs text-slate-600 max-w-[180px] truncate" title={r.curso}>{r.curso}</td>
-                        <td className="px-3 py-1.5 text-xs text-slate-600 whitespace-nowrap">{r.local}</td>
+                        <td className="px-3 py-1.5 text-xs text-slate-600 max-w-[200px]" title={[r.local, r.horario, r.inicioCurso].filter(Boolean).join(" · ")}>
+                          <p>{r.local || "-"}</p>
+                          <p className="text-[11px] text-slate-400">{[r.horario, r.inicioCurso && r.inicioCurso !== "-" ? r.inicioCurso : ""].filter(Boolean).join(" · ")}</p>
+                        </td>
                         <td className="px-3 py-1.5 text-xs font-bold text-amber-600 whitespace-nowrap">€ {r.preco}</td>
                         <td className={`px-3 py-1.5 text-[11px] whitespace-nowrap ${late ? "font-bold text-red-600" : "text-slate-500"}`}>
                           {r.proximoContacto || "-"}
@@ -547,21 +555,24 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Telemóvel
             <input className={inp} value={form.telf} onChange={e => setForm(f => ({ ...f, telf: e.target.value }))} />
           </label>
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Concelho
+            <input className={inp} value={form.concelho} onChange={e => setForm(f => ({ ...f, concelho: e.target.value }))} />
+          </label>
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Como entrou em contacto
             <select className={inp} value={form.origem} onChange={e => setForm(f => ({ ...f, origem: e.target.value }))}>
               {["Telefone", "WhatsApp", "Email", "Balcão", "Indicação"].map(o => <option key={o} value={o}>{o}</option>)}
             </select>
           </label>
-          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Curso
-            <SearchSelect value={form.curso} onChange={v => setForm(f => ({ ...f, curso: v, turma: "" }))} options={cursosGoldOpts} placeholder="Pesquisar curso…" />
-          </label>
-          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Turma
-            <SearchSelect value={form.turma} onChange={v => setForm(f => ({ ...f, turma: v }))} options={turmaGoldOpts(gold, { curso: form.curso || undefined })} placeholder="Só turmas ativas…" empty="Não há turmas ativas para este curso." />
-          </label>
-          <TurmaInscricaoHint optsLen={turmaGoldOpts(gold, { curso: form.curso || undefined }).length} curso={form.curso || undefined} />
-          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Local
-            <SearchSelect value={form.local} onChange={v => setForm(f => ({ ...f, local: v }))} options={locaisOpts} placeholder="Pesquisar local…" />
-          </label>
+          <CursoOfertaCampos
+            variant="crm"
+            turmas={gold.filter(isTurmaActiva).map(t => ({
+              turmaId: t.id, nome: t.nome, curso: t.curso, local: t.local, horario: t.horario,
+              dataInicio: t.dataInicio, vagasLivres: Math.max(0, t.vagas - t.totalAlunos),
+            }))}
+            cursos={cursosGold.map(c => ({ nome: c.nome, preco: c.preco }))}
+            value={{ curso: form.curso, local: form.local, horario: form.horario, dataInicio: form.dataInicio, turmaId: form.turmaId }}
+            onChange={(v: CursoOfertaSel) => setForm(f => ({ ...f, ...v, turma: gold.find(t => t.id === v.turmaId)?.nome ?? "" }))}
+          />
           {!editLead && (
             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Nota comercial
               <textarea className={`${inp} resize-none`} rows={3} value={form.nota} onChange={e => setForm(f => ({ ...f, nota: e.target.value }))}
@@ -572,17 +583,19 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
             <button type="button" onClick={() => { setNovo(false); setEditLead(null); }} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg">Cancelar</button>
             <button type="button" disabled={!form.nome.trim()} onClick={() => {
               const cursoRow = cursosGold.find(c => c.nome === form.curso);
-              const t = gold.find(x => x.nome === form.turma);
+              const t = gold.find(x => x.id === form.turmaId) ?? gold.find(x => x.nome === form.turma);
               const row: Preinscricao = {
                 id: editLead?.id ?? nextListId(preinscricoes),
                 inscrito: editLead?.inscrito ?? nowStamp(),
                 nome: form.nome.trim(), apelido: form.apelido.trim(),
                 email: form.email.trim() || `${form.nome.trim().toLowerCase().replace(/\s+/g, ".")}@mail.pt`,
                 telf: form.telf.trim() || "-",
-                inicioCurso: t?.dataInicio ?? editLead?.inicioCurso ?? "-",
-                concelho: editLead?.concelho ?? "",
-                local: form.local || t?.local || "V.N.Gaia",
-                curso: form.curso || "Formação de Formadores - CCP",
+                inicioCurso: form.dataInicio || t?.dataInicio || editLead?.inicioCurso || "-",
+                concelho: form.concelho.trim() || editLead?.concelho || "",
+                local: form.local || t?.local || "",
+                horario: form.horario || t?.horario || "",
+                turmaId: form.turmaId || t?.id || 0,
+                curso: form.curso || t?.curso || "",
                 preco: cursoRow?.preco ?? editLead?.preco ?? 125,
                 estado: editLead?.estado ?? "Não contactado",
                 campanha: editLead?.campanha ?? "",
@@ -670,6 +683,7 @@ function Kanban({
                       </div>
                       {item.meioContacto ? <p className="text-[11px] text-slate-600 mt-1">Meio: {item.meioContacto}</p> : null}
                       <p className="text-xs text-slate-500 mt-0.5 truncate">{item.curso}</p>
+                      <p className="text-[11px] text-slate-400 truncate">{[item.local, item.horario, item.inicioCurso && item.inicioCurso !== "-" ? item.inicioCurso : ""].filter(Boolean).join(" · ")}</p>
                       <div className="flex gap-2 mt-2">
                         <a href={`tel:${item.telf}`} onClick={e => e.stopPropagation()} className="flex-1 py-1 text-center bg-slate-100 text-slate-700 text-xs font-medium rounded-lg inline-flex items-center justify-center gap-1">{ic.phone} Ligar</a>
                         {wa && <a href={`https://wa.me/${wa}`} onClick={e => e.stopPropagation()} className="flex-1 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-lg inline-flex items-center justify-center gap-1">{ic.wa} WA</a>}

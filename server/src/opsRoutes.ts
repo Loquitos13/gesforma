@@ -28,6 +28,7 @@ import {
 import { globalSearch } from "./globalSearch.js";
 import { config } from "./config.js";
 import { criarPreinscricaoPublica } from "./preinscricaoPublica.js";
+import { listCursosGoldActivos, listOfertaGold } from "./ofertaGold.js";
 
 const preSchema = z.object({
   nome: z.string().trim().min(1).max(80),
@@ -41,6 +42,8 @@ const preSchema = z.object({
   curso: z.string().trim().max(200).optional().default(""),
   local: z.string().trim().max(120).optional().default(""),
   inicioCurso: z.string().trim().max(40).optional().default("-"),
+  horario: z.string().trim().max(80).optional().default(""),
+  turmaId: z.number().int().positive().optional(),
   preco: z.number().min(0).max(20000).optional().default(0),
   campanha: z.string().trim().max(80).optional().default(""),
   estado: z.string().trim().max(40).optional(),
@@ -132,7 +135,7 @@ export function registerOpsRoutes(
     if (!requireAuth(req, reply)) return;
     const q = (req.query ?? {}) as Record<string, unknown>;
     const rows = await exportCrmLeads(db, crmParamsFromQuery(q), hojeDe(q));
-    const head = ["id", "inscrito", "nome", "apelido", "email", "telf", "curso", "local", "preco", "estado", "origem", "entrada", "meioContacto", "etiquetaNome", "campanha", "proximoContacto"];
+    const head = ["id", "inscrito", "nome", "apelido", "email", "telf", "curso", "local", "horario", "inicioCurso", "preco", "estado", "origem", "entrada", "meioContacto", "etiquetaNome", "campanha", "proximoContacto"];
     const esc = (v: unknown) => {
       const s = String(v ?? "");
       return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -286,10 +289,12 @@ export function registerOpsRoutes(
   });
 
   app.get("/v1/public/cursos", async () => {
-    const rows = await db.query<{ nome: string; preco: number }>(
-      "SELECT nome, preco FROM cursos_gold WHERE estado = 'Ativo' ORDER BY nome",
-    );
-    return { cursos: rows.rows.map(r => ({ nome: r.nome, preco: Number(r.preco) })) };
+    return { cursos: await listCursosGoldActivos(db) };
+  });
+
+  app.get("/v1/public/oferta", async () => {
+    const [cursos, turmas] = await Promise.all([listCursosGoldActivos(db), listOfertaGold(db)]);
+    return { cursos, turmas };
   });
 
   app.post("/v1/public/preinscricoes", {
@@ -308,11 +313,16 @@ export function registerOpsRoutes(
       curso: d.curso,
       local: d.local,
       inicioCurso: d.inicioCurso,
+      horario: d.horario,
+      turmaId: d.turmaId,
       campanha: d.campanha,
       preco: d.preco,
       meioContacto: "Website",
     }, { ip: req.ip });
-    if ("error" in created) return reply.code(400).send({ error: created.error });
+    if ("error" in created) {
+      const code = created.error === "email inválido" ? 400 : 409;
+      return reply.code(code).send({ error: created.error });
+    }
     await audit(db, undefined, "preinscricao.public_create", "preinscricao", String(created.preinscricao.id), req.ip, { curso: d.curso, duplicado: created.duplicado });
     return { preinscricao: created.preinscricao, aviso: created.aviso, duplicado: created.duplicado };
   });
@@ -327,12 +337,12 @@ export function registerOpsRoutes(
     const id = await nextOpsId(db);
     const comercialId = d.comercialId ?? (req.actor?.role === "comercial" ? req.actor.id : null);
     await db.query(
-      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, comercial_id, entrada, meio_contacto, etiqueta_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'manual',$16,$17)`,
+      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, comercial_id, entrada, meio_contacto, etiqueta_id, horario, turma_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'manual',$16,$17,$18,$19)`,
       [
         id, nowStamp(), d.nome, d.apelido, email, d.telf, d.inicioCurso || "-",
         d.concelho, d.local, d.curso, d.preco ?? 0, d.estado || "Não contactado", d.campanha, d.origem || "Telefone", comercialId,
-        d.meioContacto || d.origem || "Telefone", d.etiquetaId ?? null,
+        d.meioContacto || d.origem || "Telefone", d.etiquetaId ?? null, d.horario || "", d.turmaId ?? null,
       ],
     );
     await ingestEvent(db, "preinscricao.created", { email, nome: `${d.nome} ${d.apelido}`.trim(), curso: d.curso, preinscricaoId: id }, `preinscricao:${id}:${email}`).catch(() => undefined);
@@ -360,12 +370,16 @@ export function registerOpsRoutes(
          proximo_contacto = COALESCE($14, proximo_contacto), notas = COALESCE($15, notas),
          comercial_id = COALESCE($16, comercial_id),
          meio_contacto = COALESCE($17, meio_contacto),
-         etiqueta_id = CASE WHEN $18::int = -1 THEN etiqueta_id WHEN $18 = 0 THEN NULL ELSE $18 END
+         etiqueta_id = CASE WHEN $18::int = -1 THEN etiqueta_id WHEN $18 = 0 THEN NULL ELSE $18 END,
+         horario = COALESCE($19, horario),
+         turma_id = COALESCE($20, turma_id)
        WHERE id = $1`,
       [
         id, d.nome ?? null, d.apelido ?? null, d.email ? normalizeEmail(d.email) : null, d.telf ?? null, d.concelho ?? null, d.origem ?? null, d.curso ?? null, d.local ?? null, d.inicioCurso ?? null, d.preco ?? null, d.campanha ?? null, d.estado ?? null, d.proximoContacto ?? null, d.notas ?? null, d.comercialId ?? null,
         d.meioContacto ?? null,
         d.etiquetaId === undefined ? -1 : (d.etiquetaId ?? 0),
+        d.horario ?? null,
+        d.turmaId ?? null,
       ],
     );
     const row = await oneLead(db, id);

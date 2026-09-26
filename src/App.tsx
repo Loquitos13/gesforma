@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { DtpPanel } from "./DtpView";
 import {
-  FormandosGoldView, DatasGoldView, LocaisView, AreasTematicasView,
+  FormandosGoldView, DatasGoldView, LocaisView, HorariosGoldView, AreasTematicasView,
   ModulosView, ConteudosView, FinInscricoesView, BlogTematicasView, ConfiguracoesView,
   DatasFinView, LocaisFinView, AreasTematicasFinView, ModulosFinView, ConteudosFinView,
 } from "./CatalogViews";
@@ -121,7 +121,7 @@ const I = {
 
 type View =
   | "painel" | "gold-preinscricoes" | "gold-formandos-turmas" | "gold-formandos-gold"
-  | "gold-campanhas" | "gold-cursos" | "gold-datas" | "gold-locais" | "gold-areas-tematicas"
+  | "gold-campanhas" | "gold-cursos" | "gold-datas" | "gold-horarios" | "gold-locais" | "gold-areas-tematicas"
   | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-formadores" | "gold-cockpit-turma" | "gold-curso-ficha" | "gold-dtp" | "gold-inqueritos"
   | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-formadores" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
   | "fin-modulos" | "fin-conteudos" | "fin-datas" | "fin-locais" | "fin-areas-tematicas"
@@ -2793,7 +2793,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   }
   return (
     <div className="space-y-4">
-      <PageHeader title="Turmas Gold" sub={`${ativas} ativas · ${gold.length} no total · só as ativas aceitam inscrições`} action={<NewBtn label="+ Nova Turma" onClick={() => setOpen("new")} />} />
+      <PageHeader title="Turmas Gold" sub={`${ativas} libertadas · ${gold.length} no total · cada turma é um curso + local + horário + data de início; só as libertadas entram na pré-inscrição e no WhatsApp`} action={<NewBtn label="+ Nova Turma" onClick={() => setOpen("new")} />} />
       <ViewFilters
         fields={[
           { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(gold.map(t => t.curso)) },
@@ -2806,7 +2806,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
         {rows.length === 0 && (
           <EmptyHint
-            text={gold.length === 0 ? "Ainda sem turmas Gold. A turma é o objecto de gestão." : "Nenhuma turma neste filtro."}
+            text={gold.length === 0 ? "Ainda sem turmas Gold. Crie uma turma (curso + local + horário + data) e liberte-a para aparecer na pré-inscrição." : "Nenhuma turma neste filtro."}
             action={gold.length === 0 ? "Nova turma" : "Limpar filtros"}
             onAction={gold.length === 0 ? () => setOpen("new") : () => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setS(""); setP(1); }}
           />
@@ -2880,7 +2880,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
         risk="Formandos, cronograma e dossiê desta turma deixam de estar acessíveis. Prefira marcar a turma como inativa."
         onConfirm={() => { if (apagar) removeGold(apagar.id); }}
       />
-      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `Editar ${editing.nome}` : "Nova turma Gold"} sub="Código interno da turma - o objeto de gestão é a turma, não a ação." size="xl">
+      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `Editar ${editing.nome}` : "Nova turma Gold"} sub="A turma Gold é o objecto da pré-inscrição: curso + local + horário + data de início. Só se estiver libertada (activa) aparece no site e no WhatsApp." size="xl">
         <div className="p-5 space-y-3">
           <TurmaActivaToggle activa={activa} onChange={setActiva} />
           <Field label="Código interno"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="VNG-SM-07/09" /></Field>
@@ -4546,7 +4546,8 @@ const sidebarConfig: NavGroup[] = [
     { label: "Edição de Cursos", icon: I.book, children: [
       { label: "Cursos Gold", view: "gold-cursos" }, { label: "Módulos", view: "gold-modulos" },
       { label: "Conteúdos", view: "gold-conteudos" }, { label: "Datas", view: "gold-datas" },
-      { label: "Locais", view: "gold-locais" }, { label: "Áreas Temáticas", view: "gold-areas-tematicas" },
+      { label: "Locais", view: "gold-locais" }, { label: "Horários", view: "gold-horarios" },
+      { label: "Áreas Temáticas", view: "gold-areas-tematicas" },
     ]},
     { label: "Turmas", view: "gold-turmas", icon: I.school },
     { label: "Formadores", view: "gold-formadores", icon: I.person },
@@ -4734,7 +4735,7 @@ const viewTitles: Partial<Record<View, string>> = {
   painel: "Painel", "gold-preinscricoes": "CRM",
   "gold-formandos-turmas": "Formandos Turmas", "gold-formandos-gold": "Formandos Gold",
   "gold-campanhas": "Campanhas", "gold-cursos": "Cursos Gold", "gold-curso-ficha": "Ficha do curso", "gold-datas": "Datas Gold",
-  "gold-locais": "Locais", "gold-areas-tematicas": "Áreas Temáticas",
+  "gold-horarios": "Horários", "gold-locais": "Locais", "gold-areas-tematicas": "Áreas Temáticas",
   "gold-modulos": "Módulos", "gold-conteudos": "Conteúdos",
   "gold-turmas": "Turmas Gold", "gold-formadores": "Formadores Gold", "gold-cockpit-turma": "Cockpit da Turma", "gold-dtp": "Dossiê TP - Gold",
   "gold-inqueritos": "Inquéritos - Gold",
@@ -4894,6 +4895,7 @@ function AppShell() {
       case "gold-formandos-gold": return <FormandosGoldView openId={openFormandoOrigem === "gold-avulso" ? openFormandoId : undefined} onOpened={() => setOpenFormandoId(undefined)} />;
       case "gold-campanhas": return <CampanhasView />;
       case "gold-datas": return <DatasGoldView />;
+      case "gold-horarios": return <HorariosGoldView />;
       case "gold-locais": return <LocaisView />;
       case "gold-areas-tematicas": return <AreasTematicasView />;
       case "gold-modulos": return <ModulosView cursoInicial={moduloCurso} />;

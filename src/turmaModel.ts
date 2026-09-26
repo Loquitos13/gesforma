@@ -257,8 +257,9 @@ function toIso(d: Date) {
 
 function horarioSlots(horario: string) {
   if (horario === "Sábado manhã") return { start: "09:00", end: "13:00", hours: 4, weekdays: [6] };
-  if (horario === "Pós Laboral") return { start: "19:00", end: "22:00", hours: 3, weekdays: [1, 2, 3, 4] };
-  if (horario === "Laboral Manhã") return { start: "09:00", end: "13:00", hours: 4, weekdays: [1, 2, 3, 4, 5] };
+  if (horario === "Pós Laboral" || horario === "Pós-Laboral") return { start: "19:00", end: "22:00", hours: 3, weekdays: [1, 2, 3, 4] };
+  if (horario === "Laboral Manhã" || horario === "Laboral manhã") return { start: "09:00", end: "13:00", hours: 4, weekdays: [1, 2, 3, 4, 5] };
+  if (horario === "Laboral Tarde" || horario === "Laboral tarde") return { start: "14:00", end: "18:00", hours: 4, weekdays: [1, 2, 3, 4, 5] };
   return { start: "19:00", end: "22:00", hours: 3, weekdays: [] as number[] };
 }
 

@@ -240,6 +240,13 @@ const datasGoldData = [
   { id: 27, inicio: "2025-08-22", fim: "2025-10-08", horario: "Pós Laboral", preco: 125, local: "Aveiro", curso: "Formação de Formadores - CCP", status: "Inactivo", link: "ena.pt/ccp/aveiro-2025" },
 ];
 
+const horariosGoldData = [
+  { id: 71, nome: "Laboral manhã", descricao: "Dias úteis de manhã", status: "Ativo" },
+  { id: 72, nome: "Laboral tarde", descricao: "Dias úteis de tarde", status: "Ativo" },
+  { id: 73, nome: "Pós-Laboral", descricao: "Dias úteis ao fim do dia", status: "Ativo" },
+  { id: 74, nome: "Sábado manhã", descricao: "Sábados de manhã", status: "Ativo" },
+];
+
 const locaisData = [
   { id: 15, nome: "V.N.Gaia", morada: "Rua da Formação 12, 4400-000 V.N. Gaia", salas: 3, turmas: 6, status: "Ativo" },
   { id: 16, nome: "Aveiro", morada: "Av. Dr. Lourenço Peixinho 88, 3800 Aveiro", salas: 1, turmas: 0, status: "Ativo" },
@@ -594,7 +601,7 @@ function DatasCatalogView({ accent }: { accent: Accent }) {
         <PageHeader
           kicker={accent === "gold" ? "Catálogo Gold" : "Catálogo Financiada"}
           title={accent === "gold" ? "Datas / Edições" : "Datas / Edições"}
-          sub={accent === "gold" ? "Calendário comercial: início, fim, horário, preço e local. Cada edição alimenta as turmas." : "Calendário das UFCD: início, fim, horário e local. Sem preço — a edição é financiada."}
+          sub={accent === "gold" ? "Calendário comercial de referência. A pré-inscrição e o WhatsApp não leem estas datas: só uma turma Gold libertada (curso + local + horário + data) fica visível." : "Calendário das UFCD: início, fim, horário e local. Sem preço — a edição é financiada."}
           action={<NewBtn accent={accent} label="+ Nova data" onClick={() => setOpen("new")} />}
         />
         <CatalogKpis items={[
@@ -688,6 +695,84 @@ export function LocaisFinView() {
   return <LocaisCatalogView accent="fin" />;
 }
 
+export function HorariosGoldView() {
+  const [lista, setLista] = useCatalogList("horarios", "gold", horariosGoldData);
+  const [apagar, setApagar] = useState<typeof lista[number] | null>(null);
+  const [s, setS] = useState("");
+  const [open, setOpen] = useState<"new" | typeof horariosGoldData[number] | null>(null);
+  const [nome, setNome] = useState("");
+  const [descricao, setDescricao] = useState("");
+  const f = lista.filter(x => `${x.nome} ${x.descricao}`.toLowerCase().includes(s.toLowerCase()));
+  const editing = open && open !== "new" ? open : null;
+  useEffect(() => {
+    if (!open) return;
+    setNome(editing?.nome ?? "");
+    setDescricao(editing?.descricao ?? "");
+  }, [open, editing]);
+  function guardar() {
+    if (!nome.trim()) return;
+    const row = { id: editing?.id ?? nextId(lista), nome: nome.trim(), descricao: descricao.trim(), status: "Ativo" };
+    if (editing) setLista(xs => xs.map(x => x.id === editing.id ? row : x));
+    else setLista(xs => [row, ...xs]);
+    setOpen(null);
+  }
+  return (
+    <>
+      <div className="space-y-4">
+        <PageHeader
+          kicker="Catálogo Gold"
+          title="Horários"
+          sub="Tipos de horário da plataforma (laboral manhã/tarde, pós-laboral, sábado…). A pré-inscrição só mostra os que estão numa turma Gold activa daquele curso e local."
+          action={<NewBtn label="+ Novo horário" onClick={() => setOpen("new")} />}
+        />
+        <CatalogKpis items={[
+          { label: "Horários", value: lista.length },
+          { label: "Activos", value: lista.filter(x => x.status === "Ativo").length },
+        ]} />
+        <Card>
+          <TableToolbar search={s} onSearch={setS} count={f.length} noun="horários" />
+          <div className="overflow-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  <Th>Nome</Th><Th>Descrição</Th><Th>Estado</Th><Th>Ações</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {f.length === 0 && (
+                  <tr><td colSpan={4} className="px-4 py-8 text-sm text-slate-500 text-center">Ainda sem horários. Crie os tipos (laboral, pós-laboral, sábado…) — a pré-inscrição só mostra os que estão numa turma Gold libertada.</td></tr>
+                )}
+                {f.map(r => (
+                  <tr key={r.id} className="hover:bg-slate-50/80 cursor-pointer" onClick={() => setOpen(r)}>
+                    <Td className="text-sm font-semibold text-slate-900">{r.nome}</Td>
+                    <Td className="text-xs text-slate-500">{r.descricao}</Td>
+                    <Td>{estadoBadge(r.status)}</Td>
+                    <Td onClick={e => e.stopPropagation()}><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+      <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? editing.nome : "Novo horário"}>
+        <div className="p-5 space-y-3">
+          <Field label="Nome"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="Laboral tarde" /></Field>
+          <Field label="Descrição"><input className={iCls} value={descricao} onChange={e => setDescricao(e.target.value)} /></Field>
+          <FormActions onClose={() => setOpen(null)} onSave={guardar} disabled={!nome.trim()} label={editing ? "Guardar" : "Criar horário"} />
+        </div>
+      </SlideOver>
+      <ApagarCatalogoModal
+        tipo="horário"
+        nome={apagar?.nome ?? ""}
+        open={!!apagar}
+        onClose={() => setApagar(null)}
+        onConfirm={() => { if (apagar) setLista(xs => xs.filter(x => x.id !== apagar.id)); }}
+      />
+    </>
+  );
+}
+
 function LocaisCatalogView({ accent }: { accent: Accent }) {
   const [lista, setLista] = useCatalogList("locais", accent, accent === "gold" ? locaisData : locaisFinData);
   const [apagar, setApagar] = useState<typeof lista[number] | null>(null);
@@ -718,7 +803,7 @@ function LocaisCatalogView({ accent }: { accent: Accent }) {
   return (
     <>
       <div className="space-y-4">
-        <PageHeader kicker={accent === "gold" ? "Catálogo Gold" : "Catálogo Financiada"} title="Locais" sub={accent === "gold" ? "Polos da ENA onde as turmas Gold decorrem." : "Salas e polos das turmas financiadas — quase tudo em sala virtual."} action={<NewBtn accent={accent} label="+ Novo local" onClick={() => setOpen("new")} />} />
+        <PageHeader kicker={accent === "gold" ? "Catálogo Gold" : "Catálogo Financiada"} title="Locais" sub={accent === "gold" ? "Polos pré-configurados. Na pré-inscrição o local só aparece se existir uma turma Gold libertada daquele curso nesse polo (com horário e data)." : "Salas e polos das turmas financiadas — quase tudo em sala virtual."} action={<NewBtn accent={accent} label="+ Novo local" onClick={() => setOpen("new")} />} />
         <CatalogKpis items={[
           { label: "Polos", value: lista.length },
           { label: "Activos", value: lista.filter(x => x.status === "Ativo").length },

@@ -72,7 +72,7 @@ export function WhatsappSimulador({
     >
       <div className="space-y-3">
         <p className="text-xs text-slate-500">
-          O interessado escolhe pré-inscrição, consulta o estado pelo número/email ou pede a lista de cursos.
+          A pré-inscrição pede nome, apelido, telemóvel, email e concelho; depois dados do curso: curso → local → horário → data (só turmas Gold libertadas).
           O pagamento não se confirma neste chat — só pelo webhook MB / MB Way.
         </p>
         {webhook ? (

@@ -7,6 +7,7 @@ export const CATALOG_KINDS = [
   "areas",
   "modulos",
   "conteudos",
+  "horarios",
   "inscricoes_fin",
   "blog_tematicas",
   "inqueritos",
@@ -112,6 +113,12 @@ const SEED: SeedRow[] = [
     { id: 204, titulo: "Moodle UFCD 10785", tipo: "Link", curso: "Publicidade nas Redes Sociais", modulo: "R1", tamanho: "-", estado: "Ativo" },
     { id: 205, titulo: "Guia de campanhas Meta", tipo: "PDF", curso: "Publicidade nas Redes Sociais", modulo: "R2", tamanho: "890 KB", estado: "Ativo" },
     { id: 206, titulo: "Checklist de higiene digital", tipo: "PDF", curso: "Fundamentos de cibersegurança", modulo: "C2", tamanho: "140 KB", estado: "Ativo" },
+  ]),
+  ...rows("horarios", "gold", [
+    { id: 71, nome: "Laboral manhã", descricao: "Dias úteis de manhã", status: "Ativo" },
+    { id: 72, nome: "Laboral tarde", descricao: "Dias úteis de tarde", status: "Ativo" },
+    { id: 73, nome: "Pós-Laboral", descricao: "Dias úteis ao fim do dia", status: "Ativo" },
+    { id: 74, nome: "Sábado manhã", descricao: "Sábados de manhã", status: "Ativo" },
   ]),
   ...rows("inscricoes_fin", "fin", [
     { id: 501, inscrito: "2026-09-01", nome: "Mariana", apelido: "Sousa Pereira", email: "mariana98pereira@gmail.com", telf: "932874093", ufcd: "3564", curso: "Primeiros Socorros", turma: "UFCD 3564 · T1", estado: "Em análise", docs: { cc: false, ch: false, cu: false, ci: false, ce: false } },

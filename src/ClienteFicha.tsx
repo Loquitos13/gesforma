@@ -178,7 +178,7 @@ export function ClienteFicha({
       open
       onClose={onClose}
       title={`${lead.nome} ${lead.apelido}`}
-      sub={`${lead.curso} · ${lead.local}`}
+      sub={`${lead.curso} · ${[lead.local, lead.horario, lead.inicioCurso && lead.inicioCurso !== "-" ? lead.inicioCurso : ""].filter(Boolean).join(" · ")}`}
       size="2xl"
     >
       <div className="p-5 space-y-4">
@@ -196,7 +196,14 @@ export function ClienteFicha({
           <button type="button" disabled={!hasNext} onClick={onNext} className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30">Seguinte ›</button>
         </div>
 
-        <p className="text-xs text-slate-500">{lead.email} · {lead.telf} · {lead.origem}{lead.campanha ? ` · ${lead.campanha}` : ""}</p>
+        <p className="text-xs text-slate-500">{lead.email} · {lead.telf}{lead.concelho ? ` · ${lead.concelho}` : ""} · {lead.origem}{lead.campanha ? ` · ${lead.campanha}` : ""}</p>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Dados do curso</p>
+          <p className="text-sm font-semibold text-slate-800 mt-0.5">{lead.curso || "—"}</p>
+          <p className="text-xs text-slate-600 mt-0.5">
+            {[lead.local, lead.horario, lead.inicioCurso && lead.inicioCurso !== "-" ? `início ${lead.inicioCurso}` : ""].filter(Boolean).join(" · ") || "Turma ainda por escolher"}
+          </p>
+        </div>
         {busy && !dossier && <p className="text-xs text-slate-400">A carregar o histórico…</p>}
         {erro && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{erro}</p>}
 

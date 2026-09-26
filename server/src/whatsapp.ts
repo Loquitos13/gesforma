@@ -5,10 +5,11 @@ import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
 import { mapPreinscricao } from "./ops.js";
 import { criarPreinscricaoPublica } from "./preinscricaoPublica.js";
+import { filtrarOferta, fmtDataPt, listCursosGoldActivos, listOfertaGold, uniqueOferta, type OfertaTurma } from "./ofertaGold.js";
 import { openSecret, sealSecret } from "./secretBox.js";
 import { isEmail, normalizeEmail, sanitizeHeader, sanitizeText } from "./security.js";
 
-type Passo = "menu" | "nome" | "apelido" | "email" | "concelho" | "curso" | "consulta";
+type Passo = "menu" | "nome" | "apelido" | "email" | "concelho" | "curso" | "local" | "horario" | "data" | "consulta";
 
 type Dados = {
   nome?: string;
@@ -16,12 +17,16 @@ type Dados = {
   email?: string;
   concelho?: string;
   curso?: string;
+  local?: string;
+  horario?: string;
+  dataInicio?: string;
+  turmaId?: number;
 };
 
 const MENU = [
   "Olá, sou o assistente da ENA Formação.",
   "Como posso ajudar?",
-  "1 · Pré-inscrição num curso",
+  "1 · Pré-inscrição num curso (dados pessoais + curso, local, horário e data)",
   "2 · Ver o estado do meu pedido",
   "3 · Lista de cursos",
   "Escreva o número ou *menu* para voltar aqui.",
@@ -49,15 +54,21 @@ function parseDados(raw: unknown): Dados {
 }
 
 async function cursosActivos(db: Db) {
-  const rows = await db.query<{ nome: string; preco: number }>(
-    "SELECT nome, preco FROM cursos_gold WHERE estado = 'Ativo' ORDER BY nome LIMIT 12",
-  );
-  return rows.rows.map(r => ({ nome: r.nome, preco: Number(r.preco) }));
+  return listCursosGoldActivos(db);
 }
 
-function listaCursos(cursos: { nome: string; preco: number }[]) {
-  if (!cursos.length) return "Neste momento não há cursos activos na lista. Escreva *menu*.";
-  return ["Cursos Gold activos:", ...cursos.map((c, i) => `${i + 1}. ${c.nome} · € ${c.preco}`), "", "Responda com o número ou o nome do curso."].join("\n");
+function pickOpcao(text: string, opcoes: string[]) {
+  const n = Number(text);
+  if (Number.isInteger(n) && n >= 1 && n <= opcoes.length) return opcoes[n - 1] ?? null;
+  const q = text.toLowerCase();
+  return opcoes.find(o => o.toLowerCase() === q)
+    ?? opcoes.find(o => o.toLowerCase().includes(q) || q.includes(o.toLowerCase().slice(0, 10)))
+    ?? null;
+}
+
+function listaNumerada(titulo: string, items: string[], extra = "") {
+  if (!items.length) return extra || "Não há opções libertadas. Escreva *menu*.";
+  return [titulo, ...items.map((c, i) => `${i + 1}. ${c}`), "", "Responda com o número."].join("\n");
 }
 
 async function leadsPorTelefone(db: Db, telefone: string) {
@@ -77,8 +88,11 @@ function textoEstado(lead: ReturnType<typeof mapPreinscricao>) {
   const linhas = [
     `Pedido nº ${lead.id} · ${nome}`,
     `Curso: ${lead.curso || "-"}`,
+    lead.local ? `Local: ${lead.local}` : "",
+    lead.horario ? `Horário: ${lead.horario}` : "",
+    lead.inicioCurso && lead.inicioCurso !== "-" ? `Início: ${fmtDataPt(lead.inicioCurso)}` : "",
     `Estado: ${lead.estado}`,
-  ];
+  ].filter(Boolean);
   if (lead.estado === "Pago" || lead.estado === "Formando") {
     linhas.push("A inscrição está confirmada do lado da secretaria. Qualquer dúvida, ligue para a ENA.");
   } else if (lead.estado === "Não contactado") {
@@ -178,7 +192,8 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
         say("Não encontro um pedido neste número. Envie o *email* da pré-inscrição, ou escreva *1* para se pré-inscrever.");
       }
     } else if (text === "3" || /curso/i.test(text)) {
-      say(listaCursos(await cursosActivos(db)));
+      const cursos = await cursosActivos(db);
+      say(listaNumerada("Cursos Gold activos:", cursos.map(c => `${c.nome} · € ${c.preco}`)));
       passo = "menu";
     } else {
       say(MENU);
@@ -222,44 +237,106 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
   } else if (passo === "concelho") {
     dados.concelho = sanitizeHeader(text).slice(0, 80);
     passo = "curso";
-    say(listaCursos(await cursosActivos(db)));
+    const cursos = await cursosActivos(db);
+    say("Agora os *dados do curso*. A turma é o conjunto local + horário + data de início, e só entra se estiver *liberada* (turma Gold activa).");
+    say(listaNumerada("Curso a que se quer inscrever:", cursos.map(c => c.nome)));
   } else if (passo === "curso") {
     const cursos = await cursosActivos(db);
-    const n = Number(text);
-    let curso = "";
-    if (Number.isInteger(n) && n >= 1 && n <= cursos.length) curso = cursos[n - 1]!.nome;
-    else {
-      const q = text.toLowerCase();
-      const hit = cursos.find(c => c.nome.toLowerCase() === q)
-        ?? cursos.find(c => c.nome.toLowerCase().includes(q) || q.includes(c.nome.toLowerCase().slice(0, 12)));
-      curso = hit?.nome || sanitizeHeader(text).slice(0, 200);
-    }
-    dados.curso = curso || "Formação de Formadores - CCP";
-    const created = await criarPreinscricaoPublica(db, {
-      nome: dados.nome || "WhatsApp",
-      apelido: dados.apelido || "",
-      email: dados.email || "",
-      telf: telefone,
-      concelho: dados.concelho || "",
-      curso: dados.curso,
-      origem: "WhatsApp",
-      meioContacto: "WhatsApp",
-    });
-    if ("error" in created) {
-      say("O email ficou inválido. Escreva *menu* e recomece.");
-      passo = "menu";
+    const curso = pickOpcao(text, cursos.map(c => c.nome)) || sanitizeHeader(text).slice(0, 200);
+    dados.curso = curso;
+    dados.local = undefined;
+    dados.horario = undefined;
+    dados.dataInicio = undefined;
+    const oferta = filtrarOferta(await listOfertaGold(db), { curso });
+    const locais = uniqueOferta(oferta, "local");
+    if (!locais.length) {
+      say(`Ainda não há turma liberada para *${curso}* (falta local + horário + data). Escolha outro curso ou escreva *menu*.`);
     } else {
-      leadId = created.preinscricao.id;
-      await logLeadEvent(db, leadId, undefined, "whatsapp", created.duplicado ? "Consulta WhatsApp" : "Pré-inscrição via WhatsApp", telefone);
-      if (created.duplicado) {
-        say(`Já tínhamos este email. ${created.aviso}`);
-        const mapped = created.preinscricao as ReturnType<typeof mapPreinscricao>;
-        if ("estado" in mapped) say(textoEstado(mapped));
+      passo = "local";
+      say(listaNumerada(`Local para ${curso}:`, locais));
+    }
+  } else if (passo === "local") {
+    const oferta = filtrarOferta(await listOfertaGold(db), { curso: dados.curso });
+    const locais = uniqueOferta(oferta, "local");
+    const local = pickOpcao(text, locais);
+    if (!local) {
+      say(listaNumerada("Não percebi o local. Escolha um número:", locais));
+    } else {
+      dados.local = local;
+      dados.horario = undefined;
+      dados.dataInicio = undefined;
+      const horarios = uniqueOferta(filtrarOferta(oferta, { local }), "horario");
+      if (!horarios.length) {
+        say(`Neste local ainda não há horário liberado. Escreva *menu* ou escolha outro local.`);
       } else {
-        say(`Pré-inscrição nº ${leadId} gravada no CRM.\n${created.aviso}\nCurso: ${dados.curso}\n\nO pagamento *não* se faz neste chat - quando houver referência MB / MB Way, o banco confirma sozinho.`);
+        passo = "horario";
+        say(listaNumerada(`Horário em ${local}:`, horarios, "O horário depende do local e só aparece se a turma estiver activa."));
       }
-      passo = "menu";
-      dados = {};
+    }
+  } else if (passo === "horario") {
+    const oferta = filtrarOferta(await listOfertaGold(db), { curso: dados.curso, local: dados.local });
+    const horarios = uniqueOferta(oferta, "horario");
+    const horario = pickOpcao(text, horarios);
+    if (!horario) {
+      say(listaNumerada("Não percebi o horário. Escolha um número:", horarios));
+    } else {
+      dados.horario = horario;
+      const datas = oferta.filter(t => t.horario === horario);
+      if (!datas.length) {
+        say("Não há data de início libertada para este horário. Escreva *menu*.");
+      } else {
+        passo = "data";
+        say(listaNumerada(
+          `Data de início (${dados.local} · ${horario}):`,
+          datas.map(t => `${fmtDataPt(t.dataInicio)} · ${t.nome}${t.vagasLivres ? ` · ${t.vagasLivres} vagas` : " · lotada"}`),
+        ));
+      }
+    }
+  } else if (passo === "data") {
+    const oferta = filtrarOferta(await listOfertaGold(db), {
+      curso: dados.curso, local: dados.local, horario: dados.horario,
+    });
+    const n = Number(text);
+    const turma: OfertaTurma | undefined = (Number.isInteger(n) && n >= 1 && n <= oferta.length)
+      ? oferta[n - 1]
+      : oferta.find(t => t.dataInicio === text || fmtDataPt(t.dataInicio) === text);
+    if (!turma) {
+      say(listaNumerada("Escolha a data pelo número:", oferta.map(t => `${fmtDataPt(t.dataInicio)} · ${t.nome}`)));
+    } else {
+      dados.dataInicio = turma.dataInicio;
+      dados.turmaId = turma.turmaId;
+      const created = await criarPreinscricaoPublica(db, {
+        nome: dados.nome || "WhatsApp",
+        apelido: dados.apelido || "",
+        email: dados.email || "",
+        telf: telefone,
+        concelho: dados.concelho || "",
+        curso: turma.curso,
+        local: turma.local,
+        horario: turma.horario,
+        inicioCurso: turma.dataInicio,
+        turmaId: turma.turmaId,
+        origem: "WhatsApp",
+        meioContacto: "WhatsApp",
+      });
+      if ("error" in created) {
+        say(created.error === "email inválido"
+          ? "O email ficou inválido. Escreva *menu* e recomece."
+          : "Essa turma já não está liberada. Escreva *menu* e escolha outra.");
+        passo = "menu";
+      } else {
+        leadId = created.preinscricao.id;
+        await logLeadEvent(db, leadId, undefined, "whatsapp", created.duplicado ? "Consulta WhatsApp" : "Pré-inscrição via WhatsApp", telefone);
+        if (created.duplicado) {
+          say(`Já tínhamos este email. ${created.aviso}`);
+          const mapped = created.preinscricao as ReturnType<typeof mapPreinscricao>;
+          if ("estado" in mapped) say(textoEstado(mapped));
+        } else {
+          say(`Pré-inscrição nº ${leadId} gravada.\n${turma.curso}\n${turma.local} · ${turma.horario} · ${fmtDataPt(turma.dataInicio)}\n${created.aviso}\n\nO pagamento *não* se faz neste chat.`);
+        }
+        passo = "menu";
+        dados = {};
+      }
     }
   }
 

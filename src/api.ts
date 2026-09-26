@@ -53,7 +53,7 @@ export type OpsSnapshot = {
   preinscricoes: Array<{
     id: number; inscrito: string; nome: string; apelido: string; email: string; telf: string;
     inicioCurso: string; concelho: string; local: string; curso: string; preco: number;
-    estado: string; campanha: string; origem: string; entrada?: "preinscricao" | "manual";
+    estado: string; campanha: string; origem: string; horario?: string; turmaId?: number; entrada?: "preinscricao" | "manual";
     meioContacto?: string; etiquetaId?: number | null; etiquetaNome?: string; etiquetaCor?: string;
     contactadoEm: string | null; notas: string;
     comercialId?: string | null;
@@ -485,6 +485,8 @@ export const apiPatchTemplate = (id: number, body: { nome?: string; assunto?: st
 
 export const apiOps = () => api<OpsSnapshot>("/v1/ops");
 export const apiPublicCursos = () => api<{ cursos: { nome: string; preco: number }[] }>("/v1/public/cursos");
+export const apiPublicOferta = () =>
+  api<{ cursos: { nome: string; preco: number }[]; turmas: import("./oferta").OfertaTurma[] }>("/v1/public/oferta");
 export const apiPublicPreinscricao = (body: Record<string, unknown>) =>
   api<{ preinscricao: { id: number }; aviso: string }>("/v1/public/preinscricoes", { method: "POST", body: JSON.stringify(body) });
 

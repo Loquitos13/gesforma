@@ -59,10 +59,12 @@ export function TurmaActivaToggle({
         <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${activa ? "translate-x-4.5" : "translate-x-0.5"}`} />
       </span>
       <span className="min-w-0">
-        <span className={`block text-xs font-bold ${light ? (activa ? "text-emerald-300" : "text-slate-300") : (activa ? "text-emerald-700" : "text-slate-500")}`}>{activa ? "Ativa" : "Inativa"}</span>
+        <span className={`block text-xs font-bold ${light ? (activa ? "text-emerald-300" : "text-slate-300") : (activa ? "text-emerald-700" : "text-slate-500")}`}>{activa ? "Liberada" : "Não liberada"}</span>
         {!compact && (
           <span className="block text-xs text-slate-500 leading-snug">
-            {activa ? "Aceita novas inscrições de formandos." : "Fechada a novas inscrições. Os formandos já inscritos mantêm-se."}
+            {activa
+              ? "Visível na pré-inscrição (site e WhatsApp) para este curso + local + horário + data."
+              : "Fechada a novas pré-inscrições. Os formandos já inscritos mantêm-se."}
           </span>
         )}
       </span>
@@ -76,7 +78,7 @@ export function TurmaInactivaBanner({ nome, onActivate }: { nome: string; onActi
       <div className="flex-1">
         <p className="text-sm font-bold text-slate-800">Turma inativa</p>
         <p className="text-xs text-slate-500 mt-0.5">
-          {nome} não aparece nas inscrições nem na conversão de pré-inscritos. Não é possível adicionar ou mover formandos para aqui.
+          {nome} não está libertada: não aparece na pré-inscrição (site nem WhatsApp) nem na conversão de leads. Não é possível adicionar ou mover formandos para aqui.
         </p>
       </div>
       {onActivate && (
@@ -527,8 +529,8 @@ export function TurmaInscricaoHint({ optsLen, curso }: { optsLen: number; curso?
   return (
     <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
       {curso
-        ? `Não há turmas ativas para «${curso}». Ative uma turma existente ou crie uma nova.`
-        : "Não há turmas ativas. Só turmas ativas aceitam novas inscrições."}
+        ? `Não há turmas libertadas para «${curso}». Active uma turma Gold (local + horário + data) ou crie uma nova.`
+        : "Não há turmas libertadas. Só turmas activas aparecem na pré-inscrição."}
     </p>
   );
 }

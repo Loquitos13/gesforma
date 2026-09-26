@@ -208,10 +208,13 @@ export function formadoresOptsWith(current?: string | string[]): SelectOption[] 
 }
 
 export const horariosOpts: SelectOption[] = [
-  { value: "Sábado manhã" },
-  { value: "Pós Laboral" },
+  { value: "Laboral manhã" },
   { value: "Laboral Manhã" },
-  { value: "Online" },
+  { value: "Laboral tarde" },
+  { value: "Laboral Tarde" },
+  { value: "Pós-Laboral" },
+  { value: "Pós Laboral" },
+  { value: "Sábado manhã" },
 ];
 
 export const categoriasGoldOpts: SelectOption[] = [

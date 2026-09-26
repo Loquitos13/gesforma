@@ -46,6 +46,8 @@ export function mapPreinscricao(r: Record<string, unknown>) {
     estado: String(r.estado ?? "Não contactado"),
     campanha: String(r.campanha ?? ""),
     origem: String(r.origem ?? "Website"),
+    horario: String(r.horario ?? ""),
+    turmaId: r.turma_id == null || r.turma_id === "" ? 0 : num(r.turma_id),
     entrada: String(r.entrada ?? "preinscricao") === "manual" ? "manual" : "preinscricao",
     meioContacto: String(r.meio_contacto ?? ""),
     etiquetaId: r.etiqueta_id == null || r.etiqueta_id === "" ? null : num(r.etiqueta_id),

@@ -38,6 +38,7 @@ export type Preinscricao = {
   id: number; inscrito: string; nome: string; apelido: string; email: string; telf: string;
   inicioCurso: string; concelho: string; local: string; curso: string; preco: number;
   estado: string; campanha: string; origem: string;
+  horario?: string; turmaId?: number;
   entrada?: "preinscricao" | "manual";
   meioContacto?: string;
   etiquetaId?: number | null;

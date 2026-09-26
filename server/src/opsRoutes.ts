@@ -59,6 +59,11 @@ async function one(db: Db, sql: string, params: unknown[]) {
   return rows.rows[0] ?? null;
 }
 
+async function oneLead(db: Db, id: number) {
+  return one(db, `SELECT p.*, e.nome AS etiqueta_nome, e.cor AS etiqueta_cor
+     FROM preinscricoes p LEFT JOIN crm_etiquetas e ON e.id = p.etiqueta_id WHERE p.id = $1`, [id]);
+}
+
 export function registerOpsRoutes(
   app: FastifyInstance,
   db: Db,
@@ -338,7 +343,7 @@ export function registerOpsRoutes(
     const nota = (d.nota ?? "").trim();
     if (nota) await addLeadNota(db, id, req.actor!.id, nota, d.meioContacto || d.origem || "Telefone");
     await audit(db, req.actor!.id, "preinscricao.create", "preinscricao", String(id), req.ip, { entrada: "manual" });
-    const row = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
+    const row = await oneLead(db, id);
     return { preinscricao: row ? mapPreinscricao(row) : { id } };
   });
 
@@ -366,7 +371,7 @@ export function registerOpsRoutes(
         d.etiquetaId === undefined ? -1 : (d.etiquetaId ?? 0),
       ],
     );
-    const row = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
+    const row = await oneLead(db, id);
     if (before && d.estado && d.estado !== String(before.estado)) {
       await logLeadEvent(db, id, req.actor!.id, "estado", `Passou a ${d.estado}`, `De ${String(before.estado)}`);
     }
@@ -419,7 +424,7 @@ export function registerOpsRoutes(
       }, `contacted:${id}:${email}`).catch(() => undefined);
     }
     await audit(db, req.actor!.id, "preinscricao.contactar", "preinscricao", String(id), req.ip);
-    const row = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
+    const row = await oneLead(db, id);
     return { preinscricao: row ? mapPreinscricao(row) : null };
   });
 

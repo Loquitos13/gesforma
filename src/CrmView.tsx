@@ -4,6 +4,7 @@ import {
   type CrmFila, type CrmLead, type CrmListQuery, type CrmListResult, type CrmSort,
 } from "./api";
 import { ClienteFicha } from "./ClienteFicha";
+import { entradaChip, etiquetaChip, leadMarkStyle, meioChip } from "./crmUi";
 import { AppModal, SearchSelect, ViewFilters, cursosGoldOpts, locaisOpts } from "./FormKit";
 import { nextListId, useLists, type Preinscricao } from "./ListsContext";
 import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./SecretaryUX";
@@ -57,15 +58,6 @@ function badge(estado: string) {
     Formando: "bg-emerald-50 text-emerald-700 border-emerald-200",
   };
   return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${m[estado] ?? "bg-slate-100 text-slate-600 border-slate-200"}`}>{estado}</span>;
-}
-
-function entradaChip(entrada?: string) {
-  const manual = entrada === "manual";
-  return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
-      manual ? "bg-sky-50 text-sky-800 border-sky-200" : "bg-amber-50 text-amber-800 border-amber-200"
-    }`}>{manual ? "Manual" : "Pré-inscrição"}</span>
-  );
 }
 
 function loadPrefs(): { view: "table" | "kanban"; perPage: number; sort: CrmSort } {
@@ -396,7 +388,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                       title={`${r.nome} ${r.apelido}`}
                       sub={r.curso}
                       badge={badge(r.estado)}
-                      meta={[r.entrada === "manual" ? "Manual" : "Pré-inscrição", r.local, `€ ${r.preco}`, r.inscrito]}
+                      meta={[r.entrada === "manual" ? "Manual" : "Pré-inscrição", r.meioContacto || "sem meio", r.etiquetaNome || "sem etiqueta", r.local, `€ ${r.preco}`]}
                       onOpen={() => openFicha(r)}
                       actions={[
                         ...(r.estado === "Não contactado" ? [{ label: "Contactar", icon: ic.phone, onClick: () => { contactarPreinscricao(r.id); openFicha({ ...r, estado: "1º Contacto" }); } }] : []),
@@ -416,7 +408,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                     <th className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 px-3 py-2 w-10">
                       <input type="checkbox" checked={items.length > 0 && sel.size === items.length} onChange={toggleAll} aria-label="Seleccionar página" />
                     </th>
-                    {["Lead", "Inscrito", "Curso", "Local", "Valor", "Seguimento", "Estado", ""].map(h => (
+                    {["Lead", "Origem", "Meio", "Etiqueta", "Inscrito", "Curso", "Local", "Valor", "Seguimento", "Estado", ""].map(h => (
                       <th key={h} className="sticky top-0 z-10 text-left px-3 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide bg-slate-50 border-b border-slate-200 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -425,17 +417,20 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                   {items.map((r, idx) => {
                     const late = Boolean(r.proximoContacto && r.proximoContacto < hoje && r.estado !== "Pago" && r.estado !== "Formando");
                     return (
-                      <tr key={r.id} className={`hover:bg-slate-50 ${sel.has(r.id) ? "bg-amber-50/60" : ""}`}>
+                      <tr key={r.id} className={`hover:brightness-[0.98] ${sel.has(r.id) ? "ring-1 ring-amber-300" : ""}`}
+                        style={leadMarkStyle(r.etiquetaCor)}>
                         <td className="px-3 py-1.5">
                           <input type="checkbox" checked={sel.has(r.id)} onChange={e => toggleSel(r.id, idx, (e.nativeEvent as MouseEvent).shiftKey)} aria-label={`Seleccionar ${r.nome}`} />
                         </td>
                         <td className="px-3 py-1.5">
                           <button type="button" onClick={() => openFicha(r)} className="text-left">
                             <p className="text-xs font-semibold text-blue-700 hover:text-blue-900">{r.nome} {r.apelido}</p>
-                            <p className="text-[11px] text-slate-400 truncate max-w-[220px]">{r.email} · {r.telf}</p>
-                            <span className="mt-0.5 inline-block">{entradaChip(r.entrada)}</span>
+                            <p className="text-[11px] text-slate-500 truncate max-w-[220px]">{r.email} · {r.telf}</p>
                           </button>
                         </td>
+                        <td className="px-3 py-1.5">{entradaChip(r.entrada)}</td>
+                        <td className="px-3 py-1.5">{meioChip(r.meioContacto)}</td>
+                        <td className="px-3 py-1.5">{etiquetaChip(r.etiquetaNome, r.etiquetaCor) ?? <span className="text-[11px] text-slate-400">—</span>}</td>
                         <td className="px-3 py-1.5 font-mono text-[11px] text-slate-500 whitespace-nowrap">{r.inscrito.slice(0, 16)}</td>
                         <td className="px-3 py-1.5 text-xs text-slate-600 max-w-[180px] truncate" title={r.curso}>{r.curso}</td>
                         <td className="px-3 py-1.5 text-xs text-slate-600 whitespace-nowrap">{r.local}</td>
@@ -482,10 +477,10 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
         hasNext={fichaIdx >= 0 && fichaIdx < items.length - 1}
         onPrev={() => { if (fichaIdx > 0) setFicha(items[fichaIdx - 1]); }}
         onNext={() => { if (fichaIdx >= 0 && fichaIdx < items.length - 1) setFicha(items[fichaIdx + 1]); }}
-        onContactar={nota => {
+        onContactar={(nota, meio) => {
           if (!ficha) return;
-          contactarPreinscricao(ficha.id, nota);
-          setFicha({ ...ficha, estado: ficha.estado === "Não contactado" ? "1º Contacto" : ficha.estado, notas: nota });
+          contactarPreinscricao(ficha.id, nota, meio);
+          setFicha({ ...ficha, estado: ficha.estado === "Não contactado" ? "1º Contacto" : ficha.estado, notas: nota, meioContacto: meio || ficha.meioContacto });
           setTimeout(carregar, 250);
         }}
         onPatch={patch => {
@@ -647,12 +642,21 @@ function Kanban({
                 const wa = telDigits(item.telf);
                 return (
                   <div key={item.id} draggable onDragStart={() => setDragId(item.id)}>
-                    <button type="button" onClick={() => onOpen(item)} className="w-full text-left bg-white rounded-xl border border-slate-200 shadow-sm p-3 hover:border-amber-300">
+                    <button type="button" onClick={() => onOpen(item)}
+                      className="w-full text-left rounded-xl border shadow-sm p-3 hover:brightness-[0.98]"
+                      style={{
+                        ...leadMarkStyle(item.etiquetaCor),
+                        borderColor: item.etiquetaCor || undefined,
+                      }}>
                       <div className="flex items-start justify-between gap-1">
                         <p className="text-xs font-bold text-slate-800 leading-snug">{item.nome} {item.apelido}</p>
                         <span className="text-xs font-bold text-amber-600">€ {item.preco}</span>
                       </div>
-                      <div className="mt-1">{entradaChip(item.entrada)}</div>
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {entradaChip(item.entrada)}
+                        {etiquetaChip(item.etiquetaNome, item.etiquetaCor)}
+                      </div>
+                      {item.meioContacto ? <p className="text-[11px] text-slate-600 mt-1">Meio: {item.meioContacto}</p> : null}
                       <p className="text-xs text-slate-500 mt-0.5 truncate">{item.curso}</p>
                       <div className="flex gap-2 mt-2">
                         <a href={`tel:${item.telf}`} onClick={e => e.stopPropagation()} className="flex-1 py-1 text-center bg-slate-100 text-slate-700 text-xs font-medium rounded-lg inline-flex items-center justify-center gap-1">{ic.phone} Ligar</a>

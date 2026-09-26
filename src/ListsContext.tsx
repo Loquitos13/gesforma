@@ -39,6 +39,10 @@ export type Preinscricao = {
   inicioCurso: string; concelho: string; local: string; curso: string; preco: number;
   estado: string; campanha: string; origem: string;
   entrada?: "preinscricao" | "manual";
+  meioContacto?: string;
+  etiquetaId?: number | null;
+  etiquetaNome?: string;
+  etiquetaCor?: string;
   contactadoEm?: string | null; notas?: string; proximoContacto?: string;
 };
 export type FormandoTurma = {
@@ -73,7 +77,7 @@ type ListsCtx = {
   addPreinscricao: (row: Preinscricao, extra?: { nota?: string }) => void;
   patchPreinscricao: (id: number, patch: Partial<Preinscricao>) => void;
   removePreinscricao: (id: number) => void;
-  contactarPreinscricao: (id: number, nota?: string) => void;
+  contactarPreinscricao: (id: number, nota?: string, meio?: string) => void;
   formandosTurmas: FormandoTurma[];
   addFormandoTurma: (row: FormandoTurma) => void;
   patchFormandoTurma: (id: number, patch: Partial<FormandoTurma>) => void;
@@ -188,13 +192,13 @@ export function ListsProvider({
       if (before) setPre(xs => [before!, ...xs]);
     });
   }, []);
-  const contactarPreinscricao = useCallback((id: number, nota = "") => {
+  const contactarPreinscricao = useCallback((id: number, nota = "", meio = "") => {
     let before: Preinscricao | undefined;
     setPre(xs => {
       before = xs.find(x => x.id === id);
-      return xs.map(x => x.id === id && x.estado === "Não contactado" ? { ...x, estado: "1º Contacto", notas: [x.notas, nota].filter(Boolean).join("\n") } : x);
+      return xs.map(x => x.id === id && x.estado === "Não contactado" ? { ...x, estado: "1º Contacto", notas: [x.notas, nota].filter(Boolean).join("\n"), meioContacto: meio || x.meioContacto } : x);
     });
-    void persist(apiContactarPreinscricao(id, nota).then(r => {
+    void persist(apiContactarPreinscricao(id, nota, meio).then(r => {
       if (r.preinscricao) setPre(xs => xs.map(x => x.id === id ? r.preinscricao! : x));
     }), () => {
       if (before) setPre(xs => xs.map(x => x.id === id ? before! : x));

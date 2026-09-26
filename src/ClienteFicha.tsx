@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  apiCrmCampoCreate, apiCrmDossier, apiCrmLeadCampos, apiCrmLeadNota,
-  type CrmCampoTipo, type CrmDossier, type CrmLead,
+  apiCrmCampoCreate, apiCrmDossier, apiCrmEtiquetaCreate, apiCrmEtiquetas, apiCrmLeadCampos, apiCrmLeadNota,
+  type CrmCampoTipo, type CrmDossier, type CrmEtiqueta, type CrmLead,
 } from "./api";
+import { CRM_ETIQUETA_CORES, CRM_MEIOS, etiquetaChip } from "./crmUi";
 import { AppModal, SearchSelect } from "./FormKit";
 import type { Preinscricao } from "./ListsContext";
-import { persist, toastError, toastOk } from "./toastBus";
+import { persist, toastOk } from "./toastBus";
 import { TurmaInscricaoHint } from "./TurmaCronograma";
 import { useTurmas } from "./TurmasContext";
 import { turmaGoldOpts } from "./turmaModel";
@@ -59,7 +60,7 @@ export function ClienteFicha({
   item: CrmLead | null;
   onClose: () => void;
   onConvert?: (turma: string) => void;
-  onContactar?: (nota: string) => void;
+  onContactar?: (nota: string, meio?: string) => void;
   onPatch?: (patch: Partial<Preinscricao>) => void;
   hasPrev: boolean;
   hasNext: boolean;
@@ -81,6 +82,11 @@ export function ClienteFicha({
   const [campoTipo, setCampoTipo] = useState<CrmCampoTipo>("texto");
   const [campoOpcoes, setCampoOpcoes] = useState("");
   const [notaNova, setNotaNova] = useState("");
+  const [meio, setMeio] = useState("");
+  const [etiquetas, setEtiquetas] = useState<CrmEtiqueta[]>([]);
+  const [novaEtiq, setNovaEtiq] = useState(false);
+  const [etiqNome, setEtiqNome] = useState("");
+  const [etiqCor, setEtiqCor] = useState(CRM_ETIQUETA_CORES[0]);
 
   const carregar = useCallback((id: number) => {
     setBusy(true);
@@ -89,6 +95,7 @@ export function ClienteFicha({
       .then(d => {
         setDossier(d);
         setVals(Object.fromEntries(d.campos.map(c => [c.id, c.valor ?? ""])));
+        setMeio(d.lead.meioContacto || "");
         setBusy(false);
       })
       .catch(() => {
@@ -103,8 +110,13 @@ export function ClienteFicha({
     setTab("ficha");
     setNovoCampo(false);
     setNotaNova("");
+    setNovaEtiq(false);
     setDossier(null);
   }, [item?.id]);
+
+  useEffect(() => {
+    apiCrmEtiquetas().then(r => setEtiquetas(r.etiquetas)).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (!item) return;
@@ -154,7 +166,7 @@ export function ClienteFicha({
 
   async function gravarNota() {
     if (!item || !notaNova.trim()) return;
-    const r = await persist(apiCrmLeadNota(item.id, notaNova.trim()));
+    const r = await persist(apiCrmLeadNota(item.id, notaNova.trim(), meio));
     if (!r) return;
     setDossier(r);
     setNotaNova("");
@@ -216,6 +228,53 @@ export function ClienteFicha({
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div className="bg-slate-50 rounded-xl p-3"><p className="text-slate-400">Valor</p><p className="font-bold text-amber-700 text-base">€ {lead.preco}</p></div>
                 <div className="bg-slate-50 rounded-xl p-3"><p className="text-slate-400">Inscrito</p><p className="font-semibold text-slate-700">{lead.inscrito}</p></div>
+              </div>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Meio de comunicação
+                <select className={inp} value={meio} onChange={e => {
+                  const v = e.target.value;
+                  setMeio(v);
+                  onPatch?.({ meioContacto: v });
+                }}>
+                  <option value="">Ainda sem contacto</option>
+                  {CRM_MEIOS.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </label>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Etiqueta</p>
+                  <button type="button" onClick={() => setNovaEtiq(v => !v)} className="text-xs font-semibold text-amber-700">{novaEtiq ? "Cancelar" : "+ Etiqueta"}</button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <button type="button" onClick={() => onPatch?.({ etiquetaId: null, etiquetaNome: "", etiquetaCor: "" })}
+                    className={`px-2 py-1 text-[11px] rounded-md border ${!lead.etiquetaId ? "border-slate-800 text-slate-800" : "border-slate-200 text-slate-500"}`}>Sem etiqueta</button>
+                  {etiquetas.map(e => (
+                    <button key={e.id} type="button"
+                      onClick={() => onPatch?.({ etiquetaId: e.id, etiquetaNome: e.nome, etiquetaCor: e.cor })}
+                      className={`rounded-md ${lead.etiquetaId === e.id ? "ring-2 ring-offset-1 ring-slate-400" : ""}`}>
+                      {etiquetaChip(e.nome, e.cor)}
+                    </button>
+                  ))}
+                </div>
+                {novaEtiq && (
+                  <div className="mt-2 rounded-xl border border-slate-200 p-3 space-y-2">
+                    <input className={inp} value={etiqNome} onChange={e => setEtiqNome(e.target.value)} placeholder="Nome da etiqueta (ex. Quente)" />
+                    <div className="flex flex-wrap gap-1.5">
+                      {CRM_ETIQUETA_CORES.map(c => (
+                        <button key={c} type="button" onClick={() => setEtiqCor(c)}
+                          className={`w-6 h-6 rounded-full border-2 ${etiqCor === c ? "border-slate-800" : "border-white"}`}
+                          style={{ backgroundColor: c }} aria-label={c} />
+                      ))}
+                    </div>
+                    <button type="button" disabled={!etiqNome.trim()} onClick={() => void (async () => {
+                      const r = await persist(apiCrmEtiquetaCreate({ nome: etiqNome.trim(), cor: etiqCor }));
+                      if (!r) return;
+                      setEtiquetas(xs => [...xs, r.etiqueta].sort((a, b) => a.nome.localeCompare(b.nome, "pt")));
+                      onPatch?.({ etiquetaId: r.etiqueta.id, etiquetaNome: r.etiqueta.nome, etiquetaCor: r.etiqueta.cor });
+                      setNovaEtiq(false); setEtiqNome("");
+                      toastOk("Etiqueta criada e atribuída.");
+                    })()} className="w-full py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white disabled:opacity-40">Criar e atribuir</button>
+                  </div>
+                )}
               </div>
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Próximo contacto
                 <input type="date" value={proximoContacto} onChange={e => setProximoContacto(e.target.value)} className={inp} />
@@ -303,7 +362,7 @@ export function ClienteFicha({
                   : <span className="flex-1 py-2 bg-slate-100 text-slate-400 text-sm font-semibold rounded-lg text-center">Sem telemóvel</span>}
               </div>
               {lead.estado === "Não contactado" && (
-                <button type="button" onClick={() => onContactar?.(notas.trim())} className="w-full py-2 border text-sm font-semibold rounded-lg">Registar 1.º contacto</button>
+                <button type="button" onClick={() => onContactar?.(notas.trim(), meio)} className="w-full py-2 border text-sm font-semibold rounded-lg">Registar 1.º contacto</button>
               )}
               {lead.estado !== "Pago" && lead.estado !== "Formando" && (
                 <button type="button" onClick={() => { onPatch?.({ estado: "Pago" }); toastOk("Marcado como pago."); }} className="w-full py-2 border border-teal-200 bg-teal-50 text-sm font-semibold text-teal-800 rounded-lg">Marcar pagamento recebido</button>
@@ -326,6 +385,12 @@ export function ClienteFicha({
 
         {tab === "notas" && (
           <div className="space-y-3">
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Meio deste contacto
+              <select className={inp} value={meio} onChange={e => setMeio(e.target.value)}>
+                <option value="">Escolher meio…</option>
+                {CRM_MEIOS.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </label>
             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Nova nota comercial
               <textarea value={notaNova} onChange={e => setNotaNova(e.target.value)} rows={3} className={`${inp} resize-none`} placeholder="O que ficou combinado, objecção, quem atendeu…" />
             </label>
@@ -335,7 +400,7 @@ export function ClienteFicha({
             <ul className="space-y-2">
               {(dossier?.notas ?? []).map(n => (
                 <li key={n.id} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                  <p className="text-[11px] text-slate-400">{fmtWhen(n.createdAt)}{n.actorName ? ` · ${n.actorName}` : ""}</p>
+                  <p className="text-[11px] text-slate-400">{fmtWhen(n.createdAt)}{n.actorName ? ` · ${n.actorName}` : ""}{n.meio ? ` · ${n.meio}` : ""}</p>
                   <p className="text-sm text-slate-700 mt-0.5 whitespace-pre-wrap">{n.nota || "Contacto sem texto."}</p>
                 </li>
               ))}

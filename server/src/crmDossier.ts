@@ -71,22 +71,32 @@ export async function createCrmCampo(db: Db, label: string, tipo: CrmCampoTipo, 
   return { id: inserted.rows[0]!.id, label, chave, tipo, opcoes };
 }
 
-export async function addLeadNota(db: Db, leadId: number, actorId: string | undefined, nota: string) {
+export async function addLeadNota(db: Db, leadId: number, actorId: string | undefined, nota: string, meio = "") {
   const texto = nota.trim().slice(0, 2000);
   if (!texto) return;
+  const canal = meio.trim().slice(0, 40);
   await db.query(
-    "INSERT INTO preinscricao_contactos (preinscricao_id, actor_id, nota) VALUES ($1,$2,$3)",
-    [leadId, actorId ?? null, texto],
+    "INSERT INTO preinscricao_contactos (preinscricao_id, actor_id, nota, meio) VALUES ($1,$2,$3,$4)",
+    [leadId, actorId ?? null, texto, canal],
   );
   await db.query(
-    `UPDATE preinscricoes SET notas = CASE WHEN $2 = '' THEN notas ELSE trim(both from notas || E'\n' || $2) END WHERE id = $1`,
-    [leadId, texto],
+    `UPDATE preinscricoes SET
+       notas = CASE WHEN $2 = '' THEN notas ELSE trim(both from notas || E'\n' || $2) END,
+       meio_contacto = CASE WHEN $3 = '' THEN meio_contacto ELSE $3 END
+     WHERE id = $1`,
+    [leadId, texto, canal],
   );
-  await logLeadEvent(db, leadId, actorId, "nota", "Nota comercial", texto);
+  await logLeadEvent(db, leadId, actorId, "nota", canal ? `Nota comercial · ${canal}` : "Nota comercial", texto);
 }
 
 export async function getLeadDossier(db: Db, id: number) {
-  const leadQ = await db.query("SELECT * FROM preinscricoes WHERE id = $1", [id]);
+  const leadQ = await db.query(
+    `SELECT p.*, e.nome AS etiqueta_nome, e.cor AS etiqueta_cor
+       FROM preinscricoes p
+       LEFT JOIN crm_etiquetas e ON e.id = p.etiqueta_id
+      WHERE p.id = $1`,
+    [id],
+  );
   const row = leadQ.rows[0];
   if (!row) return null;
   const lead = mapPreinscricao(row as Record<string, unknown>);
@@ -99,9 +109,9 @@ export async function getLeadDossier(db: Db, id: number) {
   for (const v of vals.rows) valores[v.campo_id] = v.valor;
 
   const notas = await db.query<{
-    id: number; nota: string; created_at: string | Date; actor_id: string | null; actor_name: string | null;
+    id: number; nota: string; meio: string; created_at: string | Date; actor_id: string | null; actor_name: string | null;
   }>(
-    `SELECT c.id, c.nota, c.created_at, c.actor_id, u.name AS actor_name
+    `SELECT c.id, c.nota, c.meio, c.created_at, c.actor_id, u.name AS actor_name
        FROM preinscricao_contactos c
        LEFT JOIN users u ON u.id = c.actor_id
       WHERE c.preinscricao_id = $1
@@ -148,6 +158,7 @@ export async function getLeadDossier(db: Db, id: number) {
     notas: notas.rows.map(n => ({
       id: n.id,
       nota: n.nota,
+      meio: n.meio || "",
       createdAt: iso(n.created_at),
       actorName: n.actor_name,
     })),
@@ -197,4 +208,29 @@ export async function setCampoValores(
   if (changed.length) {
     await logLeadEvent(db, leadId, actorId, "campo", "Campos actualizados", changed.join(" · "));
   }
+}
+
+function normCor(cor: string) {
+  const c = cor.trim();
+  return /^#[0-9a-f]{6}$/i.test(c) ? c.toLowerCase() : "#64748b";
+}
+
+export async function listCrmEtiquetas(db: Db) {
+  const rows = await db.query<{ id: number; nome: string; cor: string }>(
+    "SELECT id, nome, cor FROM crm_etiquetas ORDER BY nome",
+  );
+  return rows.rows.map(r => ({ id: r.id, nome: r.nome, cor: r.cor }));
+}
+
+export async function createCrmEtiqueta(db: Db, nome: string, cor: string) {
+  const inserted = await db.query<{ id: number; nome: string; cor: string }>(
+    "INSERT INTO crm_etiquetas (nome, cor) VALUES ($1,$2) RETURNING id, nome, cor",
+    [nome.trim().slice(0, 40), normCor(cor)],
+  );
+  return inserted.rows[0]!;
+}
+
+export async function deleteCrmEtiqueta(db: Db, id: number) {
+  await db.query("UPDATE preinscricoes SET etiqueta_id = NULL WHERE etiqueta_id = $1", [id]);
+  await db.query("DELETE FROM crm_etiquetas WHERE id = $1", [id]);
 }

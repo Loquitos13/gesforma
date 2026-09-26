@@ -54,6 +54,7 @@ export type OpsSnapshot = {
     id: number; inscrito: string; nome: string; apelido: string; email: string; telf: string;
     inicioCurso: string; concelho: string; local: string; curso: string; preco: number;
     estado: string; campanha: string; origem: string; entrada?: "preinscricao" | "manual";
+    meioContacto?: string; etiquetaId?: number | null; etiquetaNome?: string; etiquetaCor?: string;
     contactadoEm: string | null; notas: string;
     comercialId?: string | null;
   }>;
@@ -491,8 +492,8 @@ export const apiCreatePreinscricao = (body: Record<string, unknown>) =>
   api<{ preinscricao: OpsSnapshot["preinscricoes"][number] }>("/v1/preinscricoes", { method: "POST", body: JSON.stringify(body) });
 export const apiPatchPreinscricao = (id: number, body: Record<string, unknown>) =>
   api<{ preinscricao: OpsSnapshot["preinscricoes"][number] | null }>(`/v1/preinscricoes/${id}`, { method: "PATCH", body: JSON.stringify(body) });
-export const apiContactarPreinscricao = (id: number, nota = "") =>
-  api<{ preinscricao: OpsSnapshot["preinscricoes"][number] | null }>(`/v1/preinscricoes/${id}/contactar`, { method: "POST", body: JSON.stringify({ nota }) });
+export const apiContactarPreinscricao = (id: number, nota = "", meio = "") =>
+  api<{ preinscricao: OpsSnapshot["preinscricoes"][number] | null }>(`/v1/preinscricoes/${id}/contactar`, { method: "POST", body: JSON.stringify({ nota, meio }) });
 export const apiDeletePreinscricao = (id: number) => api<{ ok: boolean }>(`/v1/preinscricoes/${id}`, { method: "DELETE" });
 
 export type CrmFila = "contactar" | "atrasados" | "hoje" | "converter" | "abertos";
@@ -583,7 +584,7 @@ export const apiCrmLote = (body: { ids: number[]; acao: "contactar" | "estado" |
 export type CrmCampoTipo = "texto" | "numero" | "data" | "lista";
 export type CrmCampo = { id: number; label: string; chave: string; tipo: CrmCampoTipo; opcoes: string[]; valor?: string };
 export type CrmLeadEvento = { id: number; tipo: string; titulo: string; detalhe: string; createdAt: string; actorName: string | null };
-export type CrmLeadNota = { id: number; nota: string; createdAt: string; actorName: string | null };
+export type CrmLeadNota = { id: number; nota: string; meio?: string; createdAt: string; actorName: string | null };
 export type CrmDossier = {
   lead: CrmLead;
   cliente: boolean;
@@ -601,8 +602,15 @@ export const apiCrmCampoCreate = (body: { label: string; tipo: CrmCampoTipo; opc
   api<{ campo: CrmCampo }>("/v1/crm/campos", { method: "POST", body: JSON.stringify(body) });
 export const apiCrmLeadCampos = (id: number, valores: { campoId: number; valor: string }[]) =>
   api<CrmDossier>(`/v1/crm/leads/${id}/campos`, { method: "POST", body: JSON.stringify({ valores }) });
-export const apiCrmLeadNota = (id: number, nota: string) =>
-  api<CrmDossier>(`/v1/crm/leads/${id}/notas`, { method: "POST", body: JSON.stringify({ nota }) });
+export const apiCrmLeadNota = (id: number, nota: string, meio = "") =>
+  api<CrmDossier>(`/v1/crm/leads/${id}/notas`, { method: "POST", body: JSON.stringify({ nota, meio }) });
+
+export type CrmEtiqueta = { id: number; nome: string; cor: string };
+export const apiCrmEtiquetas = () => api<{ etiquetas: CrmEtiqueta[] }>("/v1/crm/etiquetas");
+export const apiCrmEtiquetaCreate = (body: { nome: string; cor: string }) =>
+  api<{ etiqueta: CrmEtiqueta }>("/v1/crm/etiquetas", { method: "POST", body: JSON.stringify(body) });
+export const apiCrmEtiquetaDelete = (id: number) =>
+  api<{ ok: boolean }>(`/v1/crm/etiquetas/${id}`, { method: "DELETE" });
 
 export async function apiCrmExport(q: CrmListQuery) {
   const headers = new Headers();

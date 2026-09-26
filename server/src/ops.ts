@@ -47,6 +47,10 @@ export function mapPreinscricao(r: Record<string, unknown>) {
     campanha: String(r.campanha ?? ""),
     origem: String(r.origem ?? "Website"),
     entrada: String(r.entrada ?? "preinscricao") === "manual" ? "manual" : "preinscricao",
+    meioContacto: String(r.meio_contacto ?? ""),
+    etiquetaId: r.etiqueta_id == null || r.etiqueta_id === "" ? null : num(r.etiqueta_id),
+    etiquetaNome: String(r.etiqueta_nome ?? ""),
+    etiquetaCor: String(r.etiqueta_cor ?? ""),
     contactadoEm: r.contactado_em ? String(r.contactado_em) : null,
     notas: String(r.notas ?? ""),
     proximoContacto: String(r.proximo_contacto ?? ""),
@@ -311,7 +315,9 @@ export async function getOpsSnapshot(db: Db) {
     turmasGold, turmasFin, formadores, campanhas, blogPosts, pagamentos,
     catalogRows, settingRows,
   ] = await Promise.all([
-    listMapped(db, "SELECT * FROM preinscricoes ORDER BY inscrito DESC", mapPreinscricao),
+    listMapped(db, `SELECT p.*, e.nome AS etiqueta_nome, e.cor AS etiqueta_cor
+       FROM preinscricoes p LEFT JOIN crm_etiquetas e ON e.id = p.etiqueta_id
+      ORDER BY p.inscrito DESC`, mapPreinscricao),
     listMapped(db, "SELECT * FROM formandos_gold ORDER BY inscrito DESC", mapFormandoGold),
     listMapped(db, "SELECT * FROM formandos_fin ORDER BY id", mapFormandoFin),
     listMapped(db, "SELECT * FROM cursos_gold ORDER BY nome", mapCursoGold),

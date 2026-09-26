@@ -62,6 +62,12 @@ function addWhere(params: CrmListParams, hoje: string, skipEstado = false) {
   return { sql: parts.join(" AND "), vals };
 }
 
+function withEtiqueta(inner: string) {
+  return `SELECT p.*, e.nome AS etiqueta_nome, e.cor AS etiqueta_cor
+            FROM (${inner}) p
+            LEFT JOIN crm_etiquetas e ON e.id = p.etiqueta_id`;
+}
+
 function orderSql(sort: CrmSort | undefined) {
   if (sort === "proximo") return "CASE WHEN proximo_contacto = '' THEN '9999-12-31' ELSE proximo_contacto END ASC, inscrito DESC";
   if (sort === "valor") return "preco DESC, inscrito DESC";
@@ -77,8 +83,8 @@ export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string)
   const total = count.rows[0]?.n ?? 0;
   const offset = (page - 1) * perPage;
   const rows = await db.query(
-    `SELECT * FROM preinscricoes WHERE ${sql} ORDER BY ${orderSql(params.sort)} LIMIT $${vals.length + 1} OFFSET $${vals.length + 2}`,
-    [...vals, perPage, offset],
+    withEtiqueta(`SELECT * FROM preinscricoes WHERE ${sql} ORDER BY ${orderSql(params.sort)} LIMIT ${perPage} OFFSET ${offset}`),
+    vals,
   );
   const items = rows.rows.map(r => mapPreinscricao(r as Record<string, unknown>));
 
@@ -132,8 +138,8 @@ export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string)
         colVals,
       );
       const list = await db.query(
-        `SELECT * FROM preinscricoes WHERE ${sqlK} AND estado = $${colVals.length}
-         ORDER BY ${orderSql(params.sort)} LIMIT 20`,
+        withEtiqueta(`SELECT * FROM preinscricoes WHERE ${sqlK} AND estado = $${colVals.length}
+         ORDER BY ${orderSql(params.sort)} LIMIT 20`),
         colVals,
       );
       columns.push({
@@ -173,11 +179,11 @@ export async function searchCrmLeads(db: Db, q: string, limit = 12) {
   const needle = like(q.trim());
   if (needle === "%%") return [];
   const rows = await db.query(
-    `SELECT * FROM preinscricoes
+    withEtiqueta(`SELECT * FROM preinscricoes
       WHERE nome ILIKE $1 OR apelido ILIKE $1 OR email ILIKE $1 OR telf ILIKE $1 OR curso ILIKE $1
          OR CAST(id AS text) = $2
       ORDER BY inscrito DESC
-      LIMIT $3`,
+      LIMIT $3`),
     [needle, q.trim().slice(0, 12), Math.min(30, Math.max(1, limit))],
   );
   return rows.rows.map(r => mapPreinscricao(r as Record<string, unknown>));
@@ -186,7 +192,7 @@ export async function searchCrmLeads(db: Db, q: string, limit = 12) {
 export async function exportCrmLeads(db: Db, params: CrmListParams, hoje: string) {
   const { sql, vals } = addWhere(params, hoje);
   const rows = await db.query(
-    `SELECT * FROM preinscricoes WHERE ${sql} ORDER BY ${orderSql(params.sort)} LIMIT 2000`,
+    withEtiqueta(`SELECT * FROM preinscricoes WHERE ${sql} ORDER BY ${orderSql(params.sort)} LIMIT 2000`),
     vals,
   );
   return rows.rows.map(r => mapPreinscricao(r as Record<string, unknown>));

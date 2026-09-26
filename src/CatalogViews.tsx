@@ -10,8 +10,9 @@ import { FichaFormando } from "./FormandoFicha";
 import { ConteudoAbrirModal, type ConteudoPreview } from "./ActionSurfaces";
 import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./SecretaryUX";
 import {
-  apiMicrosoftDisconnect, apiMicrosoftLoginStatus, apiPutDriveConfig, apiPutMicrosoftConfig, apiUploadDrive,
-  driveOAuthStartUrl, type MicrosoftStatus,
+  apiMicrosoftDisconnect, apiMicrosoftLoginStatus, apiPutDriveConfig, apiPutMicrosoftConfig, apiPutWhatsappConfig,
+  apiUploadDrive, apiWhatsappDesligar, apiWhatsappStatus, driveOAuthStartUrl,
+  type MicrosoftStatus, type WhatsappStatus,
 } from "./api";
 import { useCatalogList, useCatalogs } from "./CatalogsContext";
 import { useDrive } from "./DriveContext";
@@ -1675,6 +1676,150 @@ function DriveSettingsCard() {
   );
 }
 
+function copyText(value: string) {
+  void navigator.clipboard.writeText(value).catch(() => undefined);
+}
+
+function WhatsappSettingsCard() {
+  const [status, setStatus] = useState<WhatsappStatus | null>(null);
+  const [estado, setEstado] = useState<"loading" | "ready" | "erro">("loading");
+  const [token, setToken] = useState("");
+  const [phoneId, setPhoneId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const carregar = useCallback(() => {
+    apiWhatsappStatus()
+      .then(r => {
+        setStatus(r);
+        setPhoneId(r.phoneId || "");
+        setEstado("ready");
+      })
+      .catch(() => setEstado("erro"));
+  }, []);
+  useEffect(() => { carregar(); }, [carregar]);
+
+  async function guardar() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await apiPutWhatsappConfig({
+        token: token.trim() || undefined,
+        phoneId: phoneId.trim() || undefined,
+      });
+      setStatus(r);
+      setToken("");
+      setPhoneId(r.phoneId || "");
+      setMsg(r.ligado
+        ? "Token gravado. O bot já pode responder no número de teste."
+        : "Token gravado. Se o Meta não preencheu o Phone number ID, cole-o na caixa extra e grave outra vez.");
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Não foi possível gravar o token.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function desligar() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await apiWhatsappDesligar();
+      setStatus(r);
+      setToken("");
+      setPhoneId("");
+      setMsg("WhatsApp desligado. O simulador no CRM continua a gravar leads.");
+    } catch {
+      setMsg("Não foi possível desligar o WhatsApp.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const precisaPhone = Boolean(status?.hasToken && !status.phoneId);
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 md:col-span-2 xl:col-span-3 space-y-4">
+      <div className="flex flex-col md:flex-row md:items-start gap-4">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-slate-800">WhatsApp · bot de pré-inscrição</p>
+          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+            Para testar: no Meta Developers abra a app → WhatsApp → API Setup, copie o <span className="font-semibold text-slate-700">token temporário</span> e grave aqui. O número de teste e o verify token saem sozinhos.
+          </p>
+          <p className="text-xs text-slate-500 mt-2">
+            {estado === "loading" ? "A ler o estado…" : estado === "erro" ? "Não foi possível ler o estado." : status?.hint}
+          </p>
+          {status?.displayPhone && (
+            <p className="text-xs font-semibold text-emerald-700 mt-1">Número de teste {status.displayPhone}</p>
+          )}
+          {msg && <p className="text-xs font-semibold text-amber-700 mt-2">{msg}</p>}
+        </div>
+        <div className="flex gap-2 flex-shrink-0">
+          <span className={`px-3 py-2.5 text-sm font-semibold rounded-lg ${status?.ligado ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-500"}`}>
+            {status?.ligado ? "Activo" : "Inactivo"}
+          </span>
+          {status?.hasToken && !status.fromEnv && (
+            <button type="button" disabled={busy} onClick={() => void desligar()} className="px-4 py-2.5 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+              Desligar
+            </button>
+          )}
+        </div>
+      </div>
+
+      <Field label="Token da Cloud API">
+        <input
+          className={iCls}
+          type="password"
+          value={token}
+          onChange={e => setToken(e.target.value)}
+          placeholder={status?.hasToken ? "•••• já gravado — cole um token novo para substituir" : "Cole o token temporário (API Setup)"}
+          autoComplete="new-password"
+          disabled={status?.fromEnv}
+        />
+      </Field>
+      {precisaPhone && (
+        <Field label="Phone number ID (só se o Meta não preencher sozinho)">
+          <input
+            className={iCls}
+            value={phoneId}
+            onChange={e => setPhoneId(e.target.value)}
+            placeholder="O ID numérico ao lado do token na API Setup"
+            autoComplete="off"
+            disabled={status?.fromEnv}
+          />
+        </Field>
+      )}
+      <div className="flex justify-end">
+        <button
+          type="button"
+          disabled={busy || status?.fromEnv || (token.trim().length < 20 && !(status?.hasToken && phoneId.trim()))}
+          onClick={() => void guardar()}
+          className="px-4 py-2.5 text-sm font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white"
+        >
+          {busy ? "A gravar…" : status?.fromEnv ? "Definido no servidor" : "Gravar token"}
+        </button>
+      </div>
+
+      {status?.hasToken && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+          <Field label="Callback URL (copiar para o Meta)">
+            <div className="flex gap-2">
+              <input className={iCls} readOnly value={status.webhook} onFocus={e => e.currentTarget.select()} />
+              <button type="button" onClick={() => copyText(status.webhook)} className="px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 shrink-0">Copiar</button>
+            </div>
+          </Field>
+          <Field label="Verify token (copiar para o Meta)">
+            <div className="flex gap-2">
+              <input className={iCls} readOnly value={status.verifyToken} onFocus={e => e.currentTarget.select()} />
+              <button type="button" onClick={() => copyText(status.verifyToken)} className="px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 shrink-0">Copiar</button>
+            </div>
+          </Field>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MicrosoftSettingsCard() {
   const [status, setStatus] = useState<MicrosoftStatus | null>(null);
   const [estado, setEstado] = useState<"loading" | "ready" | "erro">("loading");
@@ -1848,6 +1993,7 @@ export function ConfiguracoesView() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           <DriveSettingsCard />
           <MicrosoftSettingsCard />
+          <WhatsappSettingsCard />
           {configCards.map(c => (
             <button key={c.id} type="button" onClick={() => setOpenId(c.id)}
               className={`text-left bg-white rounded-xl border shadow-sm p-5 hover:border-amber-300 hover:shadow-md transition-all ${openId === c.id ? "border-amber-400 ring-1 ring-amber-200" : "border-slate-200"}`}>

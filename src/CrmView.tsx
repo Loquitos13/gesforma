@@ -291,7 +291,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
           <div className={`rounded-xl border px-4 py-3 ${origem === "WhatsApp" ? "border-emerald-400 bg-emerald-50" : "border-slate-200 bg-white"}`}>
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Input 3 · automático</p>
             <p className="text-sm font-bold text-slate-800 mt-0.5">WhatsApp</p>
-            <p className="text-xs text-slate-500 mt-1">O bot pede nome, email e curso e grava a pré-inscrição. Também diz o estado do pedido. Sem token Meta usa o simulador.</p>
+            <p className="text-xs text-slate-500 mt-1">O bot pede nome, email e curso e grava a pré-inscrição. Cole o token em Configurações para responder no telemóvel; sem token usa o simulador.</p>
             <div className="flex gap-2 mt-3">
               <button type="button" onClick={() => setWaOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg">{ic.wa} Simular conversa</button>
               <button type="button" onClick={() => { setOrigem(origem === "WhatsApp" ? "" : "WhatsApp"); setPage(1); }} className="ml-auto px-3 py-1.5 text-xs font-semibold text-emerald-800">{origem === "WhatsApp" ? "Ver todas" : "Filtrar estas"}</button>

@@ -612,8 +612,22 @@ export const apiCrmEtiquetaCreate = (body: { nome: string; cor: string }) =>
 export const apiCrmEtiquetaDelete = (id: number) =>
   api<{ ok: boolean }>(`/v1/crm/etiquetas/${id}`, { method: "DELETE" });
 
-export const apiWhatsappStatus = () =>
-  api<{ ligado: boolean; sessoes: number; webhook: string }>("/v1/crm/whatsapp");
+export type WhatsappStatus = {
+  ligado: boolean;
+  hasToken: boolean;
+  fromEnv: boolean;
+  phoneId: string;
+  displayPhone: string;
+  verifyToken: string;
+  sessoes: number;
+  webhook: string;
+  hint: string;
+};
+export const apiWhatsappStatus = () => api<WhatsappStatus>("/v1/crm/whatsapp");
+export const apiPutWhatsappConfig = (body: { token?: string; phoneId?: string }) =>
+  api<WhatsappStatus>("/v1/crm/whatsapp/config", { method: "PUT", body: JSON.stringify(body) });
+export const apiWhatsappDesligar = () =>
+  api<WhatsappStatus>("/v1/crm/whatsapp/desligar", { method: "POST" });
 export const apiWhatsappConversa = (telefone: string) =>
   api<{ telefone: string; mensagens: { direccao: "in" | "out"; corpo: string; createdAt: string }[] }>(
     `/v1/crm/whatsapp/conversa?telefone=${encodeURIComponent(telefone)}`,

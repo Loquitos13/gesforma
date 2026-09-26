@@ -42,11 +42,11 @@ export const LISTAS_OPCOES = {
     ],
   },
   tipos_curso: {
-    titulo: "Tipo de curso",
-    fallback: ["Gold", "Pré-inscrição"],
+    titulo: "Tipo comercial",
+    fallback: ["Pago", "Pré-inscrição"],
   },
   regimes_curso: {
-    titulo: "Regime",
+    titulo: "Modalidade",
     fallback: ["b-learning", "e-learning", "presencial"],
   },
   categorias_gold: {

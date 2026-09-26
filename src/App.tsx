@@ -3433,7 +3433,7 @@ function GoldCursoFichaScreen({ cursoId, onBack, onOpenModulos }: { cursoId?: nu
       onOpenModulos={onOpenModulos}
       onCommit={saved => {
         if (curso) patchCursoGold(curso.id, { nome: saved.nome, categoria: saved.categoria ?? curso.categoria, tipo: saved.tipo ?? curso.tipo, preco: saved.preco ?? curso.preco, regime: saved.regime, horas: saved.horas, estado: saved.estado });
-        else addCursoGold({ id: saved.id, nome: saved.nome, categoria: saved.categoria || "CCP e Gestão da Formação", tipo: saved.tipo || "Gold", preco: saved.preco ?? 0, regime: saved.regime, horas: saved.horas, estado: saved.estado || "Ativo" });
+        else addCursoGold({ id: saved.id, nome: saved.nome, categoria: saved.categoria || "CCP e Gestão da Formação", tipo: saved.tipo || "Pago", preco: saved.preco ?? 0, regime: saved.regime, horas: saved.horas, estado: saved.estado || "Ativo" });
       }}
     />
   );
@@ -3650,7 +3650,7 @@ function FinCursosView({ onOpen }: { onOpen: (id: number | "new") => void }) {
       <PageHeader title="Cursos Financiados" sub="Clique numa UFCD para editar a página pública e a ficha operacional." action={<NewBtn label="+ Novo Curso" onClick={() => onOpen("new")} />} />
       <ViewFilters
         accent="fin"
-        fields={[{ label: "Regime", value: filtroRegime, onChange: v => { setFiltroRegime(v); setP(1); }, options: uniqueOpts(cursosFin.map(c => c.regime)) }]}
+        fields={[{ label: "Modalidade", value: filtroRegime, onChange: v => { setFiltroRegime(v); setP(1); }, options: uniqueOpts(cursosFin.map(c => c.regime)) }]}
         chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
         onClear={() => { setFiltroRegime(""); setFiltro("Todos"); setP(1); }}
       />

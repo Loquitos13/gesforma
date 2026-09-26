@@ -721,18 +721,18 @@ export function registerOpsRoutes(
 
   const cursoGoldSchema = z.object({
     nome: z.string().trim().min(1).max(200),
-    categoria: z.string().max(120).optional().default(""),
-    tipo: z.string().max(40).optional().default("Gold"),
-    preco: z.number().optional().default(0),
-    regime: z.string().max(40).optional().default("b-learning"),
-    horas: z.number().optional().default(0),
+    categoria: z.string().trim().min(1).max(120),
+    tipo: z.string().trim().min(1).max(40),
+    preco: z.number().min(0),
+    regime: z.string().trim().min(1).max(40),
+    horas: z.number().min(1),
     estado: z.string().max(40).optional().default("Ativo"),
   });
 
   app.post("/v1/cursos-gold", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const parsed = cursoGoldSchema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    if (!parsed.success) return reply.code(400).send({ error: "preencha nome, categoria, tipo comercial, modalidade, preço e horas" });
     const d = parsed.data;
     const id = await nextOpsId(db);
     await db.query(
@@ -763,17 +763,17 @@ export function registerOpsRoutes(
   });
 
   const cursoFinSchema = z.object({
-    ufcdCod: z.string().max(20).optional().default(""),
+    ufcdCod: z.string().trim().min(1).max(20),
     ufcd: z.string().trim().min(1).max(200),
-    nomeComercial: z.string().max(200).optional().default(""),
-    regime: z.string().max(40).optional().default("e-learning"),
-    horas: z.number().optional().default(25),
+    nomeComercial: z.string().trim().min(1).max(200),
+    regime: z.string().trim().min(1).max(40),
+    horas: z.number().min(1),
     estado: z.string().max(40).optional().default("Ativo"),
   });
   app.post("/v1/cursos-fin", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const parsed = cursoFinSchema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    if (!parsed.success) return reply.code(400).send({ error: "preencha código UFCD, designação, nome comercial, modalidade e horas" });
     const d = parsed.data;
     const id = await nextOpsId(db);
     await db.query(

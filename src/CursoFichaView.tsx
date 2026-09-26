@@ -108,12 +108,20 @@ function theme(accent: CursoAccent) {
   };
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function inputCls(base: string, invalid?: boolean) {
+  return invalid ? `${base} border-red-400 focus:ring-red-400` : base;
+}
+
+function Field({ label, hint, error, required, children }: {
+  label: string; hint?: string; error?: string; required?: boolean; children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</label>
+      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
       {children}
-      {hint && <p className="text-[11px] text-slate-400 leading-snug">{hint}</p>}
+      {error ? <p className="text-[11px] text-red-600 leading-snug">{error}</p> : hint ? <p className="text-[11px] text-slate-400 leading-snug">{hint}</p> : null}
     </div>
   );
 }
@@ -142,6 +150,32 @@ function filled(v: string | MediaSlot | null | undefined) {
   if (!v) return false;
   if (typeof v === "string") return v.trim().length > 0;
   return !!v.url;
+}
+
+type CampoFalta = { key: string; label: string; tab: TabId };
+
+function camposObrigatorios(d: CursoSite, accent: CursoAccent): CampoFalta[] {
+  const out: CampoFalta[] = [];
+  if (!d.titulo.trim()) out.push({ key: "titulo", label: accent === "fin" ? "Nome comercial" : "Título", tab: "identidade" });
+  if (!d.slug.trim()) out.push({ key: "slug", label: "Slug", tab: "identidade" });
+  if (accent === "fin") {
+    if (!d.ufcdCod.trim()) out.push({ key: "ufcdCod", label: "Código UFCD", tab: "identidade" });
+    if (!d.ufcd.trim()) out.push({ key: "ufcd", label: "Designação oficial", tab: "identidade" });
+    if (!d.categoria.trim()) out.push({ key: "categoria", label: "Área", tab: "oferta" });
+  } else {
+    if (!d.tipo.trim()) out.push({ key: "tipo", label: "Tipo comercial", tab: "oferta" });
+    if (!d.categoria.trim()) out.push({ key: "categoria", label: "Categoria", tab: "oferta" });
+    if (!d.preco.trim() || Number(d.preco) < 0 || Number.isNaN(Number(d.preco))) {
+      out.push({ key: "preco", label: "Preço", tab: "oferta" });
+    }
+  }
+  if (!d.regime.trim()) out.push({ key: "regime", label: "Modalidade", tab: "oferta" });
+  if (!d.horas.trim() || Number(d.horas) <= 0 || Number.isNaN(Number(d.horas))) {
+    out.push({ key: "horas", label: "Horas", tab: "oferta" });
+  }
+  if (!d.tags.trim()) out.push({ key: "tags", label: "Tags", tab: "oferta" });
+  if (!d.locais.length) out.push({ key: "locais", label: "Locais", tab: "oferta" });
+  return out;
 }
 
 const conteudoComunicar = {
@@ -236,13 +270,13 @@ function seedSite(curso?: CursoFichaSeed, accent: CursoAccent = "gold"): CursoSi
   return {
     titulo: curso?.nome ?? "",
     slug: curso ? slugify(curso.nome) : "",
-    tipo: accent === "fin" ? "Financiada" : (curso?.tipo ?? "Gold"),
+    tipo: accent === "fin" ? "Financiada" : (curso?.tipo ?? ""),
     categoria: areaFromCurso(curso) || pack.categoria,
     regime: curso?.regime ?? (accent === "fin" ? "e-learning" : "b-learning"),
     video: isComunicar ? "384729105" : isCcp ? "221904831" : finPack ? "551002210" : "",
     preco: accent === "fin" ? "" : String(curso?.preco ?? ""),
-    horas: String(curso?.horas ?? (accent === "fin" ? 25 : "")),
-    tags: "tags" in pack ? pack.tags : "",
+    horas: String(curso?.horas ?? ""),
+    tags: curso ? ("tags" in pack ? pack.tags : "") : "",
     dataInicio: "",
     estado: curso?.estado ?? "Ativo",
     visivelSite: curso?.estado === "Ativo",
@@ -505,6 +539,7 @@ export function CursoFichaView({
   const [novoLocal, setNovoLocal] = useState(false);
   const [localNome, setLocalNome] = useState("");
   const [localMorada, setLocalMorada] = useState("");
+  const [falhas, setFalhas] = useState<Record<string, string>>({});
   const locaisSeeded = useRef(false);
 
   useEffect(() => {
@@ -594,6 +629,11 @@ export function CursoFichaView({
     setData(prev => ({ ...prev, ...p }));
     setSaved(false);
     setErro("");
+    setFalhas(prev => {
+      const next = { ...prev };
+      for (const k of Object.keys(p)) delete next[k];
+      return next;
+    });
   }
 
   function criarLocal() {
@@ -611,6 +651,15 @@ export function CursoFichaView({
   }
 
   async function guardar() {
+    const faltas = camposObrigatorios(data, accent);
+    if (faltas.length) {
+      setFalhas(Object.fromEntries(faltas.map(f => [f.key, `${f.label} é obrigatório para criar o curso.`])));
+      setErro(`Falta preencher: ${faltas.map(f => f.label).join(", ")}.`);
+      setTab(faltas[0]!.tab);
+      setPreviewOpen(false);
+      return;
+    }
+    setFalhas({});
     setGravando(true);
     setErro("");
     const id = curso?.id ?? Date.now() % 100000;
@@ -721,24 +770,24 @@ export function CursoFichaView({
 
               <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-4">
                 <p className="text-sm font-semibold text-slate-800">Dados que o visitante lê</p>
-                <Field label={accent === "fin" ? "Nome comercial" : "Título"} hint={accent === "fin" ? "Título no website. Pode ser mais comercial do que a designação oficial da UFCD." : "Nome comercial no website. Evite códigos internos."}>
-                  <input className={t.iCls} value={data.titulo}
+                <Field label={accent === "fin" ? "Nome comercial" : "Título"} required error={falhas.titulo} hint={accent === "fin" ? "Título no website. Pode ser mais comercial do que a designação oficial da UFCD." : "Nome comercial no website. Evite códigos internos."}>
+                  <input className={inputCls(t.iCls, !!falhas.titulo)} value={data.titulo}
                     onChange={e => { const titulo = e.target.value; patch({ titulo, slug: slugLocked ? slugify(titulo) : data.slug }); }} />
                 </Field>
                 {accent === "fin" && (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <Field label="Código UFCD" hint="Catálogo Nacional de Qualificações">
-                      <input className={t.iCls} value={data.ufcdCod} onChange={e => patch({ ufcdCod: e.target.value.replace(/\D/g, "").slice(0, 6) })} placeholder="3564" />
+                    <Field label="Código UFCD" required error={falhas.ufcdCod} hint="Catálogo Nacional de Qualificações">
+                      <input className={inputCls(t.iCls, !!falhas.ufcdCod)} value={data.ufcdCod} onChange={e => patch({ ufcdCod: e.target.value.replace(/\D/g, "").slice(0, 6) })} placeholder="3564" />
                     </Field>
                     <div className="sm:col-span-2">
-                      <Field label="Designação oficial" hint="Nome da UFCD no CNQ. Distinto do nome comercial.">
-                        <input className={t.iCls} value={data.ufcd} onChange={e => patch({ ufcd: e.target.value })} />
+                      <Field label="Designação oficial" required error={falhas.ufcd} hint="Nome da UFCD no CNQ. Distinto do nome comercial.">
+                        <input className={inputCls(t.iCls, !!falhas.ufcd)} value={data.ufcd} onChange={e => patch({ ufcd: e.target.value })} />
                       </Field>
                     </div>
                   </div>
                 )}
-                <Field label="Slug" hint="Endereço público. Alterar um slug publicado parte ligações antigas.">
-                  <div className="flex-1 flex items-center rounded-lg border border-slate-200 bg-slate-50 overflow-hidden">
+                <Field label="Slug" required error={falhas.slug} hint="Endereço público. Alterar um slug publicado parte ligações antigas.">
+                  <div className={`flex-1 flex items-center rounded-lg border overflow-hidden ${falhas.slug ? "border-red-400" : "border-slate-200 bg-slate-50"}`}>
                     <span className="px-3 text-[11px] font-mono text-slate-400 whitespace-nowrap">ena.pt/cursos/</span>
                     <input className={`flex-1 px-2 py-2 text-sm bg-white border-l border-slate-200 focus:outline-none focus:ring-2 ${t.ring}`}
                       value={data.slug} onChange={e => { setSlugLocked(false); patch({ slug: slugify(e.target.value) }); }} />
@@ -756,44 +805,77 @@ export function CursoFichaView({
               <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-4">
                 <div>
                   <p className="text-sm font-semibold text-slate-800">Dados da oferta</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Tipo, categoria e regime alimentam o catálogo. O «+» grava a opção na base e passa a aparecer noutros cursos.</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Gold ou Financiada vem do menu onde criou o curso. Aqui só completa o que o catálogo e a página precisam — os campos com * são obrigatórios.
+                  </p>
+                </div>
+                <div className={`rounded-xl border px-3 py-2.5 ${accent === "fin" ? "border-blue-200 bg-blue-50" : "border-amber-200 bg-amber-50"}`}>
+                  <p className={`text-[10px] font-bold uppercase tracking-wider ${accent === "fin" ? "text-blue-700" : "text-amber-800"}`}>Canal (pela rota)</p>
+                  <p className={`text-sm font-semibold ${accent === "fin" ? "text-blue-900" : "text-amber-950"}`}>
+                    {accent === "fin" ? "Financiada" : "Gold / autofinanciada"}
+                  </p>
+                  <p className={`text-[11px] mt-0.5 ${accent === "fin" ? "text-blue-800" : "text-amber-900"}`}>
+                    {accent === "fin"
+                      ? "Abriu «Novo curso» em Financiada, por isso esta ficha é uma UFCD. Não volta a escolher Gold."
+                      : "Abriu «Novo curso» em Gold, por isso esta ficha é autofinanciada. Não volta a escolher Financiada."}
+                  </p>
                 </div>
                 {accent === "gold" ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    <Field label="Tipo de curso"><OptionSelect lista="tipos_curso" value={data.tipo} onChange={v => patch({ tipo: v })} /></Field>
-                    <Field label="Categoria"><OptionSelect lista="categorias_gold" value={data.categoria} onChange={v => patch({ categoria: v })} /></Field>
-                    <Field label="Regime"><OptionSelect lista="regimes_curso" value={data.regime} onChange={v => patch({ regime: v })} /></Field>
-                    <Field label="Preço (€)"><input className={t.iCls} type="number" value={data.preco} onChange={e => patch({ preco: e.target.value })} /></Field>
-                    <Field label="Horas"><input className={t.iCls} type="number" value={data.horas} onChange={e => patch({ horas: e.target.value })} /></Field>
-                    <Field label="Tags" hint="Separadas por vírgula">
-                      <input className={t.iCls} value={data.tags} onChange={e => patch({ tags: e.target.value })} placeholder="comunicacao, voz" />
+                    <Field label="Tipo comercial" required error={falhas.tipo} hint="Pago no catálogo ou lista de espera. Não é Gold vs Financiada.">
+                      <OptionSelect lista="tipos_curso" value={data.tipo} onChange={v => patch({ tipo: v })} />
+                    </Field>
+                    <Field label="Categoria" required error={falhas.categoria}>
+                      <OptionSelect lista="categorias_gold" value={data.categoria} onChange={v => patch({ categoria: v })} />
+                    </Field>
+                    <Field label="Modalidade" required error={falhas.regime} hint="b-learning, e-learning ou presencial.">
+                      <OptionSelect lista="regimes_curso" value={data.regime} onChange={v => patch({ regime: v })} />
+                    </Field>
+                    <Field label="Preço (€)" required error={falhas.preco}>
+                      <input className={inputCls(t.iCls, !!falhas.preco)} type="number" min={0} value={data.preco} onChange={e => patch({ preco: e.target.value })} />
+                    </Field>
+                    <Field label="Horas" required error={falhas.horas}>
+                      <input className={inputCls(t.iCls, !!falhas.horas)} type="number" min={1} value={data.horas} onChange={e => patch({ horas: e.target.value })} />
+                    </Field>
+                    <Field label="Tags" required error={falhas.tags} hint="Separadas por vírgula">
+                      <input className={inputCls(t.iCls, !!falhas.tags)} value={data.tags} onChange={e => patch({ tags: e.target.value })} placeholder="comunicacao, voz" />
                     </Field>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    <Field label="Área"><OptionSelect lista="areas_fin" value={data.categoria} onChange={v => patch({ categoria: v })} /></Field>
-                    <Field label="Regime"><OptionSelect lista="regimes_curso" value={data.regime} onChange={v => patch({ regime: v })} /></Field>
-                    <Field label="Horas"><input className={t.iCls} type="number" value={data.horas} onChange={e => patch({ horas: e.target.value })} /></Field>
-                    <Field label="Tags" hint="Separadas por vírgula">
-                      <input className={t.iCls} value={data.tags} onChange={e => patch({ tags: e.target.value })} placeholder="primeiros socorros, ufcd" />
+                    <Field label="Área" required error={falhas.categoria}>
+                      <OptionSelect lista="areas_fin" value={data.categoria} onChange={v => patch({ categoria: v })} />
+                    </Field>
+                    <Field label="Modalidade" required error={falhas.regime} hint="b-learning, e-learning ou presencial.">
+                      <OptionSelect lista="regimes_curso" value={data.regime} onChange={v => patch({ regime: v })} />
+                    </Field>
+                    <Field label="Horas" required error={falhas.horas}>
+                      <input className={inputCls(t.iCls, !!falhas.horas)} type="number" min={1} value={data.horas} onChange={e => patch({ horas: e.target.value })} />
+                    </Field>
+                    <Field label="Tags" required error={falhas.tags} hint="Separadas por vírgula">
+                      <input className={inputCls(t.iCls, !!falhas.tags)} value={data.tags} onChange={e => patch({ tags: e.target.value })} placeholder="primeiros socorros, ufcd" />
                     </Field>
                   </div>
                 )}
                 <Field
                   label="Locais deste curso"
-                  hint="Pode marcar vários polos. O «+» cria um local no catálogo. Horário, datas e vagas só se definem ao criar a turma."
+                  required
+                  error={falhas.locais}
+                  hint="Pelo menos um polo. O «+» cria um local no catálogo. Horário, datas e vagas só se definem ao criar a turma."
                 >
-                  <MultiSearchSelect
-                    values={data.locais}
-                    onChange={v => patch({ locais: v })}
-                    options={locaisCat.filter(x => x.status !== "Inactivo").map(x => ({ value: x.nome, sub: x.morada }))}
-                    placeholder="Pesquisar local…"
-                    noneLabel="Escolher locais…"
-                    unitSingular="local"
-                    unitPlural="locais"
-                    onAdd={() => { setLocalNome(""); setLocalMorada(""); setNovoLocal(true); }}
-                    addLabel="Novo local"
-                  />
+                  <div className={falhas.locais ? "rounded-lg ring-2 ring-red-300" : ""}>
+                    <MultiSearchSelect
+                      values={data.locais}
+                      onChange={v => patch({ locais: v })}
+                      options={locaisCat.filter(x => x.status !== "Inactivo").map(x => ({ value: x.nome, sub: x.morada }))}
+                      placeholder="Pesquisar local…"
+                      noneLabel="Escolher locais…"
+                      unitSingular="local"
+                      unitPlural="locais"
+                      onAdd={() => { setLocalNome(""); setLocalMorada(""); setNovoLocal(true); }}
+                      addLabel="Novo local"
+                    />
+                  </div>
                 </Field>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">

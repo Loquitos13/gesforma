@@ -22,18 +22,19 @@ import {
 } from "./ops.js";
 import { exportCrmLeads, queryCrmLeads, searchCrmLeads, type CrmFila, type CrmSort } from "./crm.js";
 import {
-  addLeadNota, createCrmCampo, createCrmEtiqueta, deleteCrmEtiqueta, getLeadDossier,
+  addLeadNota, createCrmCampo, createCrmEtiqueta, deleteCrmEtiqueta, findDuplicados, fixarNota, getLeadDossier,
   listCrmCampos, listCrmEtiquetas, logLeadEvent, setCampoValores, type CrmCampoTipo,
 } from "./crmDossier.js";
 import { globalSearch } from "./globalSearch.js";
 import { config } from "./config.js";
 import { criarPreinscricaoPublica } from "./preinscricaoPublica.js";
 import { listCursosGoldActivos, listOfertaGold } from "./ofertaGold.js";
+import { camposEmFalta, podeArrastar } from "./crmRegras.js";
 
 const preSchema = z.object({
   nome: z.string().trim().min(1).max(80),
   apelido: z.string().trim().max(80).optional().default(""),
-  email: z.string().trim().min(3).max(254),
+  email: z.string().trim().max(254).optional().default(""),
   telf: z.string().trim().max(30).optional().default(""),
   concelho: z.string().trim().max(80).optional().default(""),
   origem: z.string().trim().max(80).optional().default("Website"),
@@ -52,6 +53,11 @@ const preSchema = z.object({
   comercialId: z.string().uuid().optional().nullable(),
   meioContacto: z.string().trim().max(40).optional(),
   etiquetaId: z.number().int().positive().nullable().optional(),
+  nif: z.string().trim().max(20).optional(),
+  moradaFiscal: z.string().trim().max(200).optional(),
+  codigoPostal: z.string().trim().max(20).optional(),
+  motivoDesistencia: z.string().trim().max(80).optional(),
+  pagamentoMetodo: z.string().trim().max(40).optional(),
 });
 
 function nowStamp() {
@@ -64,8 +70,11 @@ async function one(db: Db, sql: string, params: unknown[]) {
 }
 
 async function oneLead(db: Db, id: number) {
-  return one(db, `SELECT p.*, e.nome AS etiqueta_nome, e.cor AS etiqueta_cor
-     FROM preinscricoes p LEFT JOIN crm_etiquetas e ON e.id = p.etiqueta_id WHERE p.id = $1`, [id]);
+  return one(db, `SELECT p.*, e.nome AS etiqueta_nome, e.cor AS etiqueta_cor, u.name AS comercial_nome
+     FROM preinscricoes p
+     LEFT JOIN crm_etiquetas e ON e.id = p.etiqueta_id
+     LEFT JOIN users u ON u.id = p.comercial_id
+     WHERE p.id = $1`, [id]);
 }
 
 export function registerOpsRoutes(
@@ -83,8 +92,8 @@ export function registerOpsRoutes(
     return getOpsSnapshot(db);
   });
 
-  const crmFila = z.enum(["contactar", "atrasados", "hoje", "converter", "abertos"]).optional();
-  const crmSort = z.enum(["inscrito", "proximo", "valor", "nome"]).optional();
+  const crmFila = z.enum(["contactar", "atrasados", "hoje", "agenda", "converter", "abertos", "secretaria", "preinscricao", "minhas"]).optional();
+  const crmSort = z.enum(["inscrito", "proximo", "valor", "nome", "actividade"]).optional();
 
   function crmParamsFromQuery(q: Record<string, unknown>) {
     const str = (k: string) => String(q[k] ?? "").trim();
@@ -98,6 +107,7 @@ export function registerOpsRoutes(
       origem: str("origem"),
       entrada: (str("entrada") === "manual" ? "manual" : str("entrada") === "preinscricao" ? "preinscricao" : "") as "" | "preinscricao" | "manual",
       campanha: str("campanha"),
+      comercialId: str("comercialId"),
       fila: (fila.success ? fila.data : "") as CrmFila | "",
       page: Number(q.page) || 1,
       perPage: Number(q.perPage) || 50,
@@ -114,7 +124,7 @@ export function registerOpsRoutes(
   app.get("/v1/crm/leads", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const q = (req.query ?? {}) as Record<string, unknown>;
-    return queryCrmLeads(db, crmParamsFromQuery(q), hojeDe(q));
+    return queryCrmLeads(db, { ...crmParamsFromQuery(q), actorId: req.actor!.id }, hojeDe(q));
   });
 
   app.get("/v1/crm/search", async (req, reply) => {
@@ -148,10 +158,13 @@ export function registerOpsRoutes(
 
   const loteSchema = z.object({
     ids: z.array(z.number().int().positive()).min(1).max(100),
-    acao: z.enum(["contactar", "estado", "seguimento"]),
+    acao: z.enum(["contactar", "estado", "seguimento", "atribuir", "etiqueta", "adiar"]),
     estado: z.string().trim().max(40).optional(),
     proximoContacto: z.string().trim().max(40).optional(),
     nota: z.string().max(800).optional(),
+    comercialId: z.string().uuid().optional(),
+    etiquetaId: z.number().int().positive().nullable().optional(),
+    dias: z.number().int().min(1).max(30).optional(),
   });
 
   app.post("/v1/crm/lote", async (req, reply) => {
@@ -178,6 +191,11 @@ export function registerOpsRoutes(
         await logLeadEvent(db, id, req.actor!.id, "contacto", "Contacto em lote", nota || `Passou a ${nextEstado}`);
         updated += 1;
       } else if (d.acao === "estado" && d.estado) {
+        const gate = podeArrastar(String(current.estado), d.estado, {
+          role: req.actor!.role,
+          secretariaEm: current.secretaria_em ? String(current.secretaria_em) : null,
+        });
+        if (!gate.ok) continue;
         await db.query("UPDATE preinscricoes SET estado = $2 WHERE id = $1 AND estado <> 'Formando'", [id, d.estado]);
         await logLeadEvent(db, id, req.actor!.id, "estado", `Passou a ${d.estado}`, `De ${String(current.estado)}`);
         if (d.estado === "Pago") {
@@ -198,6 +216,24 @@ export function registerOpsRoutes(
           [id, d.proximoContacto ?? null, (d.nota ?? "").trim()],
         );
         await logLeadEvent(db, id, req.actor!.id, "seguimento", "Seguimento em lote", d.proximoContacto ? `Próximo contacto ${d.proximoContacto}` : (d.nota ?? ""));
+        updated += 1;
+      } else if (d.acao === "atribuir" && d.comercialId) {
+        await db.query("UPDATE preinscricoes SET comercial_id = $2 WHERE id = $1", [id, d.comercialId]);
+        await logLeadEvent(db, id, req.actor!.id, "estado", "Comercial atribuído", d.comercialId);
+        updated += 1;
+      } else if (d.acao === "etiqueta") {
+        await db.query("UPDATE preinscricoes SET etiqueta_id = $2 WHERE id = $1", [id, d.etiquetaId ?? null]);
+        updated += 1;
+      } else if (d.acao === "adiar") {
+        const dias = d.dias ?? 2;
+        const base = String(current.proximo_contacto || "").slice(0, 10);
+        const start = /^\d{4}-\d{2}-\d{2}$/.test(base) && base >= new Date().toISOString().slice(0, 10)
+          ? new Date(base + "T12:00:00")
+          : new Date();
+        start.setDate(start.getDate() + dias);
+        const next = start.toISOString().slice(0, 10);
+        await db.query("UPDATE preinscricoes SET proximo_contacto = $2 WHERE id = $1", [id, next]);
+        await logLeadEvent(db, id, req.actor!.id, "seguimento", `Adiado ${dias} dias`, next);
         updated += 1;
       }
     }
@@ -279,12 +315,77 @@ export function registerOpsRoutes(
   app.post("/v1/crm/leads/:id/notas", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const id = Number((req.params as { id: string }).id);
-    const parsed = z.object({ nota: z.string().trim().min(1).max(2000), meio: z.string().trim().max(40).optional() }).safeParse(req.body);
+    const parsed = z.object({
+      nota: z.string().trim().max(2000).optional().default(""),
+      meio: z.string().trim().max(40).optional(),
+      resultado: z.string().trim().max(40).optional(),
+    }).safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    if (!parsed.data.nota && !parsed.data.resultado) return reply.code(400).send({ error: "escreva uma nota ou um resultado" });
     const exists = await one(db, "SELECT id FROM preinscricoes WHERE id = $1", [id]);
     if (!exists) return reply.code(404).send({ error: "lead inexistente" });
-    await addLeadNota(db, id, req.actor!.id, parsed.data.nota, parsed.data.meio ?? "");
+    await addLeadNota(db, id, req.actor!.id, parsed.data.nota, parsed.data.meio ?? "", parsed.data.resultado ?? "");
     await audit(db, req.actor!.id, "crm.nota", "preinscricao", String(id), req.ip);
+    return getLeadDossier(db, id);
+  });
+
+  app.post("/v1/crm/leads/:id/notas/:nid/fixar", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string; nid: string }).id);
+    const nid = Number((req.params as { id: string; nid: string }).nid);
+    const fixada = (req.body as { fixada?: boolean } | undefined)?.fixada !== false;
+    if (!Number.isInteger(id) || !Number.isInteger(nid)) return reply.code(400).send({ error: "pedido inválido" });
+    await fixarNota(db, id, nid, fixada);
+    return getLeadDossier(db, id);
+  });
+
+  app.get("/v1/crm/duplicados", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const q = req.query as { email?: string; telf?: string; exceptId?: string };
+    const dups = await findDuplicados(db, String(q.email ?? ""), String(q.telf ?? ""), Number(q.exceptId) || 0);
+    return { duplicados: dups };
+  });
+
+  app.get("/v1/crm/comerciais", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const rows = await db.query<{ id: string; name: string }>(
+      "SELECT id, name FROM users WHERE active = true AND role IN ('comercial','admin','secretaria') ORDER BY name",
+    );
+    return { comerciais: rows.rows };
+  });
+
+  app.post("/v1/crm/leads/:id/completar", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
+    const parsed = preSchema.partial().safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    const d = parsed.data;
+    await db.query(
+      `UPDATE preinscricoes SET
+         nome = COALESCE(NULLIF($2,''), nome), apelido = COALESCE(NULLIF($3,''), apelido),
+         email = COALESCE(NULLIF($4,''), email), telf = COALESCE(NULLIF($5,''), telf),
+         concelho = COALESCE(NULLIF($6,''), concelho), curso = COALESCE(NULLIF($7,''), curso),
+         local = COALESCE(NULLIF($8,''), local), horario = COALESCE(NULLIF($9,''), horario),
+         inicio_curso = COALESCE(NULLIF($10,''), inicio_curso),
+         nif = COALESCE(NULLIF($11,''), nif), morada_fiscal = COALESCE(NULLIF($12,''), morada_fiscal),
+         codigo_postal = COALESCE(NULLIF($13,''), codigo_postal),
+         estado = 'Pré-inscrição'
+       WHERE id = $1`,
+      [
+        id, d.nome ?? "", d.apelido ?? "", d.email ? normalizeEmail(d.email) : "", d.telf ?? "",
+        d.concelho ?? "", d.curso ?? "", d.local ?? "", d.horario ?? "", d.inicioCurso ?? "",
+        (d.nif ?? "").replace(/\s/g, ""), d.moradaFiscal ?? "", d.codigoPostal ?? "",
+      ],
+    );
+    const row = await oneLead(db, id);
+    if (!row) return reply.code(404).send({ error: "lead inexistente" });
+    const mapped = mapPreinscricao(row);
+    const falta = camposEmFalta(mapped);
+    if (falta.length) return reply.code(400).send({ error: `Falta: ${falta.map(f => f.label).join(", ")}`, falta: falta.map(f => f.key) });
+    await db.query("UPDATE preinscricoes SET secretaria_em = now(), ultima_actividade_em = now() WHERE id = $1", [id]);
+    await logLeadEvent(db, id, req.actor!.id, "estado", "Entregue à secretaria", "Pré-inscrição completa (NIF e morada fiscal).");
+    await audit(db, req.actor!.id, "crm.completar", "preinscricao", String(id), req.ip);
     return getLeadDossier(db, id);
   });
 
@@ -332,17 +433,20 @@ export function registerOpsRoutes(
     const parsed = preSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
-    const email = normalizeEmail(d.email);
-    if (!isEmail(email)) return reply.code(400).send({ error: "email inválido" });
+    if (!d.telf.trim() && !d.email.trim()) return reply.code(400).send({ error: "indique telemóvel ou email" });
+    const email = d.email.trim() ? normalizeEmail(d.email) : "";
+    if (email && !isEmail(email)) return reply.code(400).send({ error: "email inválido" });
+    const dups = await findDuplicados(db, email, d.telf);
     const id = await nextOpsId(db);
     const comercialId = d.comercialId ?? (req.actor?.role === "comercial" ? req.actor.id : null);
     await db.query(
-      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, comercial_id, entrada, meio_contacto, etiqueta_id, horario, turma_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'manual',$16,$17,$18,$19)`,
+      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, comercial_id, entrada, meio_contacto, etiqueta_id, horario, turma_id, nif, morada_fiscal, codigo_postal)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'manual',$16,$17,$18,$19,$20,$21,$22)`,
       [
         id, nowStamp(), d.nome, d.apelido, email, d.telf, d.inicioCurso || "-",
         d.concelho, d.local, d.curso, d.preco ?? 0, d.estado || "Não contactado", d.campanha, d.origem || "Telefone", comercialId,
         d.meioContacto || d.origem || "Telefone", d.etiquetaId ?? null, d.horario || "", d.turmaId ?? null,
+        d.nif ?? "", d.moradaFiscal ?? "", d.codigoPostal ?? "",
       ],
     );
     await ingestEvent(db, "preinscricao.created", { email, nome: `${d.nome} ${d.apelido}`.trim(), curso: d.curso, preinscricaoId: id }, `preinscricao:${id}:${email}`).catch(() => undefined);
@@ -351,7 +455,7 @@ export function registerOpsRoutes(
     if (nota) await addLeadNota(db, id, req.actor!.id, nota, d.meioContacto || d.origem || "Telefone");
     await audit(db, req.actor!.id, "preinscricao.create", "preinscricao", String(id), req.ip, { entrada: "manual" });
     const row = await oneLead(db, id);
-    return { preinscricao: row ? mapPreinscricao(row) : { id } };
+    return { preinscricao: row ? mapPreinscricao(row) : { id }, duplicados: dups };
   });
 
   app.patch("/v1/preinscricoes/:id", async (req, reply) => {
@@ -361,6 +465,21 @@ export function registerOpsRoutes(
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
     const before = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
+    if (!before) return reply.code(404).send({ error: "lead inexistente" });
+    if (d.estado && d.estado !== String(before.estado)) {
+      const gate = podeArrastar(String(before.estado), d.estado, {
+        role: req.actor!.role,
+        secretariaEm: before.secretaria_em ? String(before.secretaria_em) : null,
+        motivo: d.motivoDesistencia,
+      });
+      if (!gate.ok) return reply.code(409).send({ error: gate.erro });
+      if (d.estado === "Desistiu" && !(d.motivoDesistencia || String(before.motivo_desistencia ?? ""))) {
+        return reply.code(400).send({ error: "indique o motivo da desistência" });
+      }
+      if (d.estado === "Formando" && req.actor!.role === "comercial") {
+        return reply.code(409).send({ error: "Só a secretaria inscreve na turma." });
+      }
+    }
     await db.query(
       `UPDATE preinscricoes SET
          nome = COALESCE($2, nome), apelido = COALESCE($3, apelido), email = COALESCE($4, email),
@@ -372,7 +491,12 @@ export function registerOpsRoutes(
          meio_contacto = COALESCE($17, meio_contacto),
          etiqueta_id = CASE WHEN $18::int = -1 THEN etiqueta_id WHEN $18 = 0 THEN NULL ELSE $18 END,
          horario = COALESCE($19, horario),
-         turma_id = COALESCE($20, turma_id)
+         turma_id = COALESCE($20, turma_id),
+         nif = COALESCE($21, nif),
+         morada_fiscal = COALESCE($22, morada_fiscal),
+         codigo_postal = COALESCE($23, codigo_postal),
+         motivo_desistencia = COALESCE($24, motivo_desistencia),
+         pagamento_metodo = COALESCE($25, pagamento_metodo)
        WHERE id = $1`,
       [
         id, d.nome ?? null, d.apelido ?? null, d.email ? normalizeEmail(d.email) : null, d.telf ?? null, d.concelho ?? null, d.origem ?? null, d.curso ?? null, d.local ?? null, d.inicioCurso ?? null, d.preco ?? null, d.campanha ?? null, d.estado ?? null, d.proximoContacto ?? null, d.notas ?? null, d.comercialId ?? null,
@@ -380,6 +504,11 @@ export function registerOpsRoutes(
         d.etiquetaId === undefined ? -1 : (d.etiquetaId ?? 0),
         d.horario ?? null,
         d.turmaId ?? null,
+        d.nif !== undefined ? d.nif.replace(/\s/g, "") : null,
+        d.moradaFiscal ?? null,
+        d.codigoPostal ?? null,
+        d.motivoDesistencia ?? null,
+        d.pagamentoMetodo ?? null,
       ],
     );
     const row = await oneLead(db, id);

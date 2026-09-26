@@ -45,6 +45,12 @@ export type Preinscricao = {
   etiquetaNome?: string;
   etiquetaCor?: string;
   contactadoEm?: string | null; notas?: string; proximoContacto?: string;
+  comercialId?: string | null;
+  comercialNome?: string;
+  nif?: string; moradaFiscal?: string; codigoPostal?: string;
+  motivoDesistencia?: string; pagamentoMetodo?: string;
+  secretariaEm?: string | null;
+  ultimaNota?: string; ultimaActividadeEm?: string | null; ultimaResultado?: string;
 };
 export type FormandoTurma = {
   id: number; nome: string; apelido: string; telf: string; email: string; inscrito: string;

@@ -102,6 +102,7 @@ export type Notificacao = {
   texto: string;
   view: string;
   turmaId?: number;
+  leadId?: number;
   tab?: string;
   lida: boolean;
 };
@@ -122,7 +123,9 @@ async function buildNotificacoes(db: Db, actorId: string): Promise<Notificacao[]
     db.query<{ n: number; total: unknown }>(
       "SELECT count(*)::int AS n, COALESCE(sum(valor), 0) AS total FROM pagamentos WHERE estado <> 'Pago'",
     ),
-    db.query<{ n: number }>("SELECT count(*)::int AS n FROM preinscricoes WHERE contactado_em IS NULL"),
+    db.query<{ n: number; id: number | null }>(
+      "SELECT count(*)::int AS n, (SELECT id FROM preinscricoes WHERE contactado_em IS NULL ORDER BY inscrito DESC LIMIT 1) AS id FROM preinscricoes WHERE contactado_em IS NULL",
+    ),
     db.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM formandos_fin
         WHERE NOT (COALESCE((docs->'cc'->>'ok')::boolean, false)
@@ -153,8 +156,26 @@ async function buildNotificacoes(db: Db, actorId: string): Promise<Notificacao[]
       chave: `leads-por-contactar-${porContactar}`,
       tipo: porContactar > 20 ? "warn" : "info",
       titulo: `${porContactar} pré-inscrições por contactar`,
-      texto: "A fila comercial do dia está em Pré-Inscrições Gold.",
+      texto: "A fila comercial do dia está no CRM.",
       view: "gold-preinscricoes",
+      leadId: leads.rows[0]?.id ? Number(leads.rows[0].id) : undefined,
+    });
+  }
+
+  const secFila = await db.query<{ n: number; id: number | null }>(
+    `SELECT count(*)::int AS n,
+            (SELECT id FROM preinscricoes WHERE estado = 'Pré-inscrição' AND secretaria_em IS NOT NULL ORDER BY secretaria_em DESC LIMIT 1) AS id
+       FROM preinscricoes WHERE estado = 'Pré-inscrição' AND secretaria_em IS NOT NULL`,
+  );
+  const nSec = Number(secFila.rows[0]?.n ?? 0);
+  if (nSec > 0) {
+    out.push({
+      chave: `secretaria-pre-${nSec}`,
+      tipo: "warn",
+      titulo: `${nSec} pré-inscrição(ões) na secretaria`,
+      texto: "O comercial completou o dossiê. Falta inscrever o formando na turma.",
+      view: "gold-preinscricoes",
+      leadId: secFila.rows[0]?.id ? Number(secFila.rows[0].id) : undefined,
     });
   }
 

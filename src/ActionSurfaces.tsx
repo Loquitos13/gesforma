@@ -614,6 +614,7 @@ export type NotifRow = {
   lida: boolean;
   view: string;
   turmaId?: number;
+  leadId?: number;
   tab?: string;
 };
 

@@ -71,29 +71,59 @@ export async function createCrmCampo(db: Db, label: string, tipo: CrmCampoTipo, 
   return { id: inserted.rows[0]!.id, label, chave, tipo, opcoes };
 }
 
-export async function addLeadNota(db: Db, leadId: number, actorId: string | undefined, nota: string, meio = "") {
+export async function addLeadNota(db: Db, leadId: number, actorId: string | undefined, nota: string, meio = "", resultado = "") {
   const texto = nota.trim().slice(0, 2000);
-  if (!texto) return;
   const canal = meio.trim().slice(0, 40);
+  const res = resultado.trim().slice(0, 40);
+  if (!texto && !res) return;
+  const corpo = texto || (res ? `Tentativa · ${res}` : "Contacto registado.");
   await db.query(
-    "INSERT INTO preinscricao_contactos (preinscricao_id, actor_id, nota, meio) VALUES ($1,$2,$3,$4)",
-    [leadId, actorId ?? null, texto, canal],
+    "INSERT INTO preinscricao_contactos (preinscricao_id, actor_id, nota, meio, resultado) VALUES ($1,$2,$3,$4,$5)",
+    [leadId, actorId ?? null, corpo, canal, res],
   );
   await db.query(
     `UPDATE preinscricoes SET
        notas = CASE WHEN $2 = '' THEN notas ELSE trim(both from notas || E'\n' || $2) END,
-       meio_contacto = CASE WHEN $3 = '' THEN meio_contacto ELSE $3 END
+       meio_contacto = CASE WHEN $3 = '' THEN meio_contacto ELSE $3 END,
+       ultima_nota = $2,
+       ultima_actividade_em = now(),
+       ultima_resultado = CASE WHEN $4 = '' THEN ultima_resultado ELSE $4 END
      WHERE id = $1`,
-    [leadId, texto, canal],
+    [leadId, corpo, canal, res],
   );
-  await logLeadEvent(db, leadId, actorId, "nota", canal ? `Nota comercial · ${canal}` : "Nota comercial", texto);
+  await logLeadEvent(db, leadId, actorId, res ? "contacto" : "nota", canal ? `${res || "Nota"} · ${canal}` : (res || "Nota comercial"), corpo);
+}
+
+export async function fixarNota(db: Db, leadId: number, notaId: number, fixada: boolean) {
+  await db.query(
+    "UPDATE preinscricao_contactos SET fixada = $3 WHERE id = $1 AND preinscricao_id = $2",
+    [notaId, leadId, fixada],
+  );
+}
+
+export async function findDuplicados(db: Db, email: string, telf: string, exceptId = 0) {
+  const mail = email.trim().toLowerCase();
+  const n9 = telf.replace(/\D/g, "").slice(-9);
+  const rows = await db.query(
+    `SELECT id, nome, apelido, email, telf, estado, curso, inscrito
+       FROM preinscricoes
+      WHERE id <> $1
+        AND (
+          ($2 <> '' AND lower(email) = $2)
+          OR ($3 <> '' AND length($3) = 9 AND (telf LIKE '%' || $3 OR telf LIKE '%' || '351' || $3))
+        )
+      ORDER BY id DESC LIMIT 8`,
+    [exceptId, mail, n9],
+  );
+  return rows.rows;
 }
 
 export async function getLeadDossier(db: Db, id: number) {
   const leadQ = await db.query(
-    `SELECT p.*, e.nome AS etiqueta_nome, e.cor AS etiqueta_cor
+    `SELECT p.*, e.nome AS etiqueta_nome, e.cor AS etiqueta_cor, u.name AS comercial_nome
        FROM preinscricoes p
        LEFT JOIN crm_etiquetas e ON e.id = p.etiqueta_id
+       LEFT JOIN users u ON u.id = p.comercial_id
       WHERE p.id = $1`,
     [id],
   );
@@ -109,13 +139,13 @@ export async function getLeadDossier(db: Db, id: number) {
   for (const v of vals.rows) valores[v.campo_id] = v.valor;
 
   const notas = await db.query<{
-    id: number; nota: string; meio: string; created_at: string | Date; actor_id: string | null; actor_name: string | null;
+    id: number; nota: string; meio: string; resultado: string; fixada: boolean; created_at: string | Date; actor_id: string | null; actor_name: string | null;
   }>(
-    `SELECT c.id, c.nota, c.meio, c.created_at, c.actor_id, u.name AS actor_name
+    `SELECT c.id, c.nota, c.meio, c.resultado, c.fixada, c.created_at, c.actor_id, u.name AS actor_name
        FROM preinscricao_contactos c
        LEFT JOIN users u ON u.id = c.actor_id
       WHERE c.preinscricao_id = $1
-      ORDER BY c.created_at DESC`,
+      ORDER BY c.fixada DESC, c.created_at DESC`,
     [id],
   );
 
@@ -131,11 +161,15 @@ export async function getLeadDossier(db: Db, id: number) {
     [id],
   );
 
+  const n9 = String(lead.telf ?? "").replace(/\D/g, "").slice(-9);
   const irmaos = await db.query(
     `SELECT * FROM preinscricoes
-      WHERE lower(email) = lower($1) AND id <> $2 AND email <> ''
+      WHERE id <> $2 AND (
+        (email <> '' AND lower(email) = lower($1))
+        OR (telf <> '' AND $3 <> '' AND (telf LIKE '%' || $3))
+      )
       ORDER BY inscrito DESC LIMIT 20`,
-    [lead.email, id],
+    [lead.email, id, n9],
   );
 
   const propostas = await db.query<{
@@ -159,6 +193,8 @@ export async function getLeadDossier(db: Db, id: number) {
       id: n.id,
       nota: n.nota,
       meio: n.meio || "",
+      resultado: n.resultado || "",
+      fixada: Boolean(n.fixada),
       createdAt: iso(n.created_at),
       actorName: n.actor_name,
     })),

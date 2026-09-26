@@ -17,6 +17,7 @@ export function AppModal({
   children,
   footer,
   size = "md",
+  variant = "modal",
 }: {
   open: boolean;
   onClose: () => void;
@@ -25,6 +26,7 @@ export function AppModal({
   children: ReactNode;
   footer?: ReactNode;
   size?: keyof typeof modalSizes;
+  variant?: "modal" | "drawer";
 }) {
   useEffect(() => {
     if (!open) return;
@@ -49,13 +51,18 @@ export function AppModal({
   }, [open]);
 
   if (!open || typeof document === "undefined") return null;
+  const drawer = variant === "drawer";
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="app-modal-title">
+    <div className={`fixed inset-0 z-50 flex ${drawer ? "justify-end items-stretch" : "items-end sm:items-center justify-center p-0 sm:p-6"}`} role="dialog" aria-modal="true" aria-labelledby="app-modal-title">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-[2px]" onClick={onClose} />
       <div
         ref={panelRef}
-        className={`relative w-full ${modalSizes[size]} max-h-[92vh] bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200/80 flex flex-col overflow-hidden`}
-        style={{ animation: "scaleIn 0.16s ease" }}
+        className={`relative bg-white shadow-2xl border-slate-200/80 flex flex-col overflow-hidden ${
+          drawer
+            ? "w-full max-w-none sm:max-w-xl lg:max-w-2xl h-full max-h-none rounded-none border-l"
+            : `w-full ${modalSizes[size]} max-h-[92vh] rounded-t-2xl sm:rounded-2xl border`
+        }`}
+        style={{ animation: drawer ? "none" : "scaleIn 0.16s ease" }}
       >
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100 flex-shrink-0">
           <div className="min-w-0">

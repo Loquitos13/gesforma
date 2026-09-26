@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  apiCrmExport, apiCrmLeads, apiCrmLote,
-  type CrmFila, type CrmLead, type CrmListQuery, type CrmListResult, type CrmSort,
+  apiCrmComerciais, apiCrmDuplicados, apiCrmEtiquetas, apiCrmExport, apiCrmLeads, apiCrmLote,
+  type CrmEtiqueta, type CrmFila, type CrmLead, type CrmListQuery, type CrmListResult, type CrmSort,
 } from "./api";
-import { ClienteFicha } from "./ClienteFicha";
+import { ClienteFicha, badgeEstado } from "./ClienteFicha";
 import { entradaChip, etiquetaChip, leadMarkStyle, meioChip } from "./crmUi";
 import { AppModal, ViewFilters, cursosGoldOpts, locaisOpts } from "./FormKit";
 import { nextListId, useLists, type Preinscricao } from "./ListsContext";
@@ -14,18 +14,29 @@ import { hojeIso, isTurmaActiva } from "./turmaModel";
 import { CursoOfertaCampos } from "./CursoOfertaCampos";
 import { type CursoOfertaSel } from "./oferta";
 import { WhatsappSimulador } from "./WhatsappSimulador";
+import { useAuth } from "./AuthGate";
+import { badgeEstadoCls, CRM_COLS, CRM_ESTADOS, fmtRelativo, isSecretariaRole, podeArrastar } from "./crmPipeline";
 
 const PREFS_KEY = "gesforma.crm.prefs";
 
-const ESTADOS = ["Não contactado", "1º Contacto", "2º Contacto", "Pago", "Formando"] as const;
+function badge(estado: string) {
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${badgeEstadoCls(estado)}`}>{estado}</span>;
+}
 
-const COLS = [
-  { id: "Não contactado", label: "Não contactado", color: "border-amber-400 bg-amber-50", dot: "bg-amber-400" },
-  { id: "1º Contacto", label: "1.º Contacto", color: "border-blue-400 bg-blue-50", dot: "bg-blue-400" },
-  { id: "2º Contacto", label: "2.º Contacto", color: "border-indigo-400 bg-indigo-50", dot: "bg-indigo-400" },
-  { id: "Pago", label: "Pago", color: "border-teal-400 bg-teal-50", dot: "bg-teal-400" },
-  { id: "Formando", label: "Formando", color: "border-emerald-400 bg-emerald-50", dot: "bg-emerald-400" },
-];
+function loadPrefs(): { view: "hoje" | "table" | "kanban"; perPage: number; sort: CrmSort } {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY) || sessionStorage.getItem(PREFS_KEY);
+    if (!raw) return { view: "hoje", perPage: 50, sort: "proximo" };
+    const p = JSON.parse(raw) as { view?: string; perPage?: number; sort?: CrmSort };
+    return {
+      view: p.view === "kanban" ? "kanban" : p.view === "table" ? "table" : "hoje",
+      perPage: [25, 50, 100].includes(p.perPage ?? 0) ? p.perPage! : 50,
+      sort: p.sort === "proximo" || p.sort === "valor" || p.sort === "nome" || p.sort === "actividade" ? p.sort : "inscrito",
+    };
+  } catch {
+    return { view: "hoje", perPage: 50, sort: "proximo" };
+  }
+}
 
 const ic = {
   search: <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd"/></svg>,
@@ -37,6 +48,7 @@ const ic = {
   link: <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"/><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/></svg>,
   plus: <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd"/></svg>,
   list: <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd"/></svg>,
+  hoje: <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm9 8H5v6h10v-6z"/></svg>,
   kanban: <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path d="M3 3h4v14H3V3zm5 0h4v9H8V3zm5 0h4v11h-4V3z"/></svg>,
   download: <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd"/></svg>,
 };
@@ -51,35 +63,10 @@ function nowStamp() {
   return new Date().toISOString().slice(0, 16).replace("T", " ");
 }
 
-function badge(estado: string) {
-  const m: Record<string, string> = {
-    "1º Contacto": "bg-blue-50 text-blue-700 border-blue-200",
-    "2º Contacto": "bg-indigo-50 text-indigo-700 border-indigo-200",
-    "Não contactado": "bg-amber-50 text-amber-700 border-amber-200",
-    Pago: "bg-teal-50 text-teal-700 border-teal-200",
-    Formando: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  };
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${m[estado] ?? "bg-slate-100 text-slate-600 border-slate-200"}`}>{estado}</span>;
-}
-
-function loadPrefs(): { view: "table" | "kanban"; perPage: number; sort: CrmSort } {
-  try {
-    const raw = sessionStorage.getItem(PREFS_KEY);
-    if (!raw) return { view: "table", perPage: 50, sort: "inscrito" };
-    const p = JSON.parse(raw) as { view?: string; perPage?: number; sort?: CrmSort };
-    return {
-      view: p.view === "kanban" ? "kanban" : "table",
-      perPage: [25, 50, 100].includes(p.perPage ?? 0) ? p.perPage! : 50,
-      sort: p.sort === "proximo" || p.sort === "valor" || p.sort === "nome" ? p.sort : "inscrito",
-    };
-  } catch {
-    return { view: "table", perPage: 50, sort: "inscrito" };
-  }
-}
-
 export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: number; onOpened?: () => void } = {}) {
+  const { user } = useAuth();
   const prefs = useRef(loadPrefs()).current;
-  const [viewMode, setViewMode] = useState<"table" | "kanban">(prefs.view);
+  const [viewMode, setViewMode] = useState<"hoje" | "table" | "kanban">(prefs.view);
   const [qInput, setQInput] = useState("");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
@@ -105,6 +92,13 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
   const [loteEstado, setLoteEstado] = useState("2º Contacto");
   const [loteData, setLoteData] = useState("");
   const [form, setForm] = useState({ nome: "", apelido: "", email: "", telf: "", concelho: "", curso: "", turma: "", local: "", horario: "", dataInicio: "", turmaId: 0, origem: "Telefone", nota: "" });
+  const [dups, setDups] = useState<{ id: number; nome: string; apelido: string; estado: string }[]>([]);
+  const [comerciais, setComerciais] = useState<{ id: string; name: string }[]>([]);
+  const [comercialFiltro, setComercialFiltro] = useState("");
+  const [etiquetas, setEtiquetas] = useState<CrmEtiqueta[]>([]);
+  const [loteComercial, setLoteComercial] = useState("");
+  const [loteEtiqueta, setLoteEtiqueta] = useState("");
+  const [confirmMove, setConfirmMove] = useState<{ id: number; estado: string; item: CrmLead } | null>(null);
 
   const { gold, patchGold } = useTurmas();
   const {
@@ -114,8 +108,11 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
 
   const hoje = hojeIso();
   const query: CrmListQuery = useMemo(() => ({
-    q, estado, curso, local, origem, entrada, fila, page, perPage, sort, kanban: viewMode === "kanban", hoje,
-  }), [q, estado, curso, local, origem, entrada, fila, page, perPage, sort, viewMode, hoje]);
+    q, estado, curso, local, origem, entrada,
+    fila: viewMode === "hoje" && !fila ? "agenda" : fila,
+    page, perPage, sort, kanban: viewMode === "kanban", hoje,
+    comercialId: comercialFiltro,
+  }), [q, estado, curso, local, origem, entrada, fila, page, perPage, sort, viewMode, hoje, comercialFiltro]);
 
   useEffect(() => {
     const t = window.setTimeout(() => { setQ(qInput.trim()); setPage(1); }, 280);
@@ -124,6 +121,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
 
   useEffect(() => {
     sessionStorage.setItem(PREFS_KEY, JSON.stringify({ view: viewMode, perPage, sort }));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ view: viewMode, perPage, sort }));
   }, [viewMode, perPage, sort]);
 
   const carregar = useCallback(() => {
@@ -138,6 +136,21 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
   }, [query]);
 
   useEffect(() => { carregar(); }, [carregar]);
+  useEffect(() => {
+    apiCrmComerciais().then(r => setComerciais(r.comerciais)).catch(() => undefined);
+    apiCrmEtiquetas().then(r => setEtiquetas(r.etiquetas)).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!novo || editLead) { setDups([]); return; }
+    const telf = form.telf.trim();
+    const email = form.email.trim();
+    if (telf.length < 6 && email.length < 5) { setDups([]); return; }
+    const h = window.setTimeout(() => {
+      apiCrmDuplicados(email, telf).then(r => setDups(r.duplicados)).catch(() => setDups([]));
+    }, 350);
+    return () => window.clearTimeout(h);
+  }, [novo, editLead, form.telf, form.email]);
 
   useEffect(() => {
     if (!openLeadId) return;
@@ -182,7 +195,9 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
   const counts = data?.counts ?? {
     total: preinscricoes.length, abertos: 0, porContactar: 0, conversa: 0,
     pagos: 0, formando: 0, atrasados: 0, hoje: 0, converter: 0, valorAberto: 0, preinscricoes: 0, manuais: 0,
+    filaPre: 0, filaSec: 0, desistiu: 0,
   };
+  const secRole = isSecretariaRole(user.role);
   const facets = data?.facets ?? { cursos: [], locais: [], origens: [], campanhas: [] };
   const total = data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / perPage));
@@ -227,7 +242,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
     else setSel(new Set(items.map(x => x.id)));
   }
 
-  async function lote(acao: "contactar" | "estado" | "seguimento", extra?: { estado?: string; proximoContacto?: string }) {
+  async function lote(acao: "contactar" | "estado" | "seguimento" | "atribuir" | "etiqueta" | "adiar", extra?: { estado?: string; proximoContacto?: string; comercialId?: string; etiquetaId?: number; dias?: number }) {
     const ids = [...sel];
     if (!ids.length) return;
     try {
@@ -259,13 +274,14 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
           <div>
             <h1 className="text-xl font-bold text-slate-800 leading-tight">CRM</h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Dois inputs no site e no balcão, mais o bot WhatsApp para pré-inscrição e consulta de estado. {counts.total.toLocaleString("pt-PT")} leads na base.
+              Lead rápida no balcão; NIF e morada só na etapa Pré-inscrição, depois a secretaria inscreve. {counts.total.toLocaleString("pt-PT")} leads na base.
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <button type="button" onClick={() => void apiCrmExport(query).then(() => toastOk("CSV descarregado (máx. 2 000).")).catch(e => toastError(e, "Exportação falhou."))}
               className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1.5">{ic.download} CSV</button>
             <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden">
+              <button type="button" onClick={() => { setViewMode("hoje"); setFila(""); setPage(1); }} className={`px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5 ${viewMode === "hoje" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>{ic.hoje} Hoje</button>
               <button type="button" onClick={() => { setViewMode("table"); setPage(1); }} className={`px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5 ${viewMode === "table" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>{ic.list} Lista</button>
               <button type="button" onClick={() => { setViewMode("kanban"); setPage(1); }} className={`px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5 ${viewMode === "kanban" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>{ic.kanban} Pipeline</button>
             </div>
@@ -304,12 +320,13 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
           </div>
         </div>
 
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 xl:grid-cols-5 gap-2">
           {[
             { label: "Na base", value: counts.total.toLocaleString("pt-PT"), sub: `${counts.abertos.toLocaleString("pt-PT")} abertos`, tone: "text-slate-800", onClick: () => { setFila("abertos"); setEstado("Todos"); setPage(1); setViewMode("table"); } },
             { label: "Por contactar", value: String(counts.porContactar), sub: `${counts.atrasados} em atraso`, tone: counts.atrasados ? "text-red-600" : "text-amber-600", onClick: () => { setFila("contactar"); setEstado("Todos"); setPage(1); setViewMode("table"); } },
-            { label: "Em conversa", value: String(counts.conversa), sub: `${counts.pagos} pagos`, tone: "text-blue-600", onClick: () => { setFila(""); setEstado("1º Contacto"); setPage(1); setViewMode("table"); } },
+            { label: "Pré-inscrição", value: String(counts.filaPre ?? 0), sub: `${counts.filaSec ?? 0} na secretaria`, tone: "text-violet-700", onClick: () => { setFila("preinscricao"); setEstado("Todos"); setPage(1); setViewMode("table"); } },
             { label: "Convertidos", value: String(counts.formando), sub: `€ ${Math.round(counts.valorAberto).toLocaleString("pt-PT")} aberto`, tone: "text-emerald-600", onClick: () => { setFila(""); setEstado("Formando"); setPage(1); setViewMode("table"); } },
+            { label: "Agenda de hoje", value: String(counts.hoje), sub: `${counts.pagos} pagos`, tone: "text-blue-600", onClick: () => { setFila(""); setViewMode("hoje"); setPage(1); } },
           ].map(c => (
             <button key={c.label} type="button" onClick={c.onClick} className="text-left bg-white rounded-xl border border-slate-200 px-3.5 py-3 hover:border-amber-300">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{c.label}</p>
@@ -319,10 +336,12 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
           ))}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
           <FilaBtn active={fila === "contactar"} tone="amber" title={`${counts.porContactar} por contactar`} sub="Primeiro trabalho do dia" onClick={() => { setFila(fila === "contactar" ? "" : "contactar"); setEstado("Todos"); setPage(1); setViewMode("table"); }} />
           <FilaBtn active={fila === "atrasados"} tone={counts.atrasados ? "red" : "slate"} title={`${counts.atrasados} atrasados`} sub={counts.hoje ? `${counts.hoje} marcados para hoje` : "Follow-up em atraso"} onClick={() => { setFila(fila === "atrasados" ? "" : "atrasados"); setEstado("Todos"); setPage(1); setViewMode("table"); }} />
-          <FilaBtn active={fila === "converter"} tone="teal" title={`${counts.converter} a converter`} sub="Pagos a inscrever na turma" onClick={() => { setFila(fila === "converter" ? "" : "converter"); setEstado("Todos"); setPage(1); setViewMode("table"); }} />
+          <FilaBtn active={fila === "preinscricao"} tone="teal" title={`${counts.filaPre ?? 0} a completar`} sub="NIF e morada em falta" onClick={() => { setFila(fila === "preinscricao" ? "" : "preinscricao"); setEstado("Todos"); setPage(1); setViewMode("table"); }} />
+          <FilaBtn active={fila === "secretaria"} tone="teal" title={`${counts.filaSec ?? 0} na secretaria`} sub="Inscrever na turma" onClick={() => { setFila(fila === "secretaria" ? "" : "secretaria"); setEstado("Todos"); setPage(1); setViewMode("table"); }} />
+          <FilaBtn active={fila === "minhas" || comercialFiltro === "eu"} tone="slate" title="As minhas" sub={user.name} onClick={() => { setComercialFiltro(comercialFiltro === "eu" ? "" : "eu"); setFila(""); setPage(1); }} />
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-3">
@@ -339,8 +358,17 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
               <option value="proximo">Próximo contacto</option>
               <option value="valor">Valor</option>
               <option value="nome">Nome A–Z</option>
+              <option value="actividade">Última actividade</option>
             </select>
-            {viewMode === "table" && (
+            {comerciais.length > 0 && (
+              <select value={comercialFiltro} onChange={e => { setComercialFiltro(e.target.value); setPage(1); }}
+                className="text-xs border border-slate-200 rounded-lg px-2 py-2 bg-white">
+                <option value="">Todos os comerciais</option>
+                <option value="eu">As minhas</option>
+                {comerciais.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            )}
+            {(viewMode === "table" || viewMode === "hoje") && (
               <select value={perPage} onChange={e => { setPerPage(Number(e.target.value)); setPage(1); }}
                 className="text-xs border border-slate-200 rounded-lg px-2 py-2 bg-white">
                 {[25, 50, 100].map(n => <option key={n} value={n}>{n} / pág.</option>)}
@@ -353,8 +381,8 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
               { label: "Local", value: local, onChange: v => { setLocal(v); setPage(1); }, options: facets.locais.length ? facets.locais.map(x => ({ value: x })) : locaisOpts },
               { label: "Origem", value: origem, onChange: v => { setOrigem(v); setPage(1); }, options: facets.origens.map(x => ({ value: x })) },
             ]}
-            chips={{ options: ["Todos", ...ESTADOS], value: estado, onChange: v => { setEstado(v); setFila(""); setPage(1); } }}
-            onClear={() => { setCurso(""); setLocal(""); setOrigem(""); setEstado("Todos"); setFila(""); setEntrada(""); setQInput(""); setQ(""); setPage(1); }}
+            chips={{ options: ["Todos", ...CRM_ESTADOS], value: estado, onChange: v => { setEstado(v); setFila(""); setPage(1); } }}
+            onClear={() => { setCurso(""); setLocal(""); setOrigem(""); setEstado("Todos"); setFila(""); setEntrada(""); setComercialFiltro(""); setQInput(""); setQ(""); setPage(1); }}
           />
         </div>
 
@@ -366,24 +394,58 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
             <button type="button" onClick={() => void lote("contactar")} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 hover:bg-amber-100">Marcar contactados</button>
             <span className="flex items-center gap-1">
               <select value={loteEstado} onChange={e => setLoteEstado(e.target.value)} className="text-xs rounded-lg bg-white text-slate-800 px-2 py-1 border border-slate-200">
-                {ESTADOS.filter(e => e !== "Formando").map(e => <option key={e}>{e}</option>)}
+                {CRM_ESTADOS.filter(e => e !== "Formando").map(e => <option key={e}>{e}</option>)}
               </select>
               <button type="button" onClick={() => void lote("estado", { estado: loteEstado })} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 hover:bg-amber-100">Passar etapa</button>
             </span>
             <span className="flex items-center gap-1">
-              <input type="date" value={loteData} onChange={e => setLoteData(e.target.value)} className="text-xs rounded-lg bg-white text-slate-800 px-2 py-1 border border-slate-200" />
-              <button type="button" disabled={!loteData} onClick={() => void lote("seguimento", { proximoContacto: loteData })} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 hover:bg-amber-100 disabled:opacity-40">Agendar</button>
+              <input type="datetime-local" value={loteData} onChange={e => setLoteData(e.target.value)} className="text-xs rounded-lg bg-white text-slate-800 px-2 py-1 border border-slate-200" />
+              <button type="button" disabled={!loteData} onClick={() => void lote("seguimento", { proximoContacto: loteData.replace("T", " ").slice(0, 16) })} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 hover:bg-amber-100 disabled:opacity-40">Agendar</button>
             </span>
+            <button type="button" onClick={() => void lote("adiar", { dias: 2 })} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 hover:bg-amber-100">Adiar 2 d</button>
+            {comerciais.length > 0 && (
+              <span className="flex items-center gap-1">
+                <select value={loteComercial} onChange={e => setLoteComercial(e.target.value)} className="text-xs rounded-lg bg-white px-2 py-1 border">
+                  <option value="">Comercial…</option>
+                  {comerciais.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <button type="button" disabled={!loteComercial} onClick={() => void lote("atribuir", { comercialId: loteComercial })} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 disabled:opacity-40">Atribuir</button>
+              </span>
+            )}
+            {etiquetas.length > 0 && (
+              <span className="flex items-center gap-1">
+                <select value={loteEtiqueta} onChange={e => setLoteEtiqueta(e.target.value)} className="text-xs rounded-lg bg-white px-2 py-1 border">
+                  <option value="">Etiqueta…</option>
+                  {etiquetas.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
+                </select>
+                <button type="button" disabled={!loteEtiqueta} onClick={() => void lote("etiqueta", { etiquetaId: Number(loteEtiqueta) })} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 disabled:opacity-40">Marcar</button>
+              </span>
+            )}
             <button type="button" onClick={() => setSel(new Set())} className="ml-auto text-xs text-slate-500 hover:text-slate-800">Limpar</button>
           </div>
         )}
 
+        {viewMode === "hoje" && (
+          <p className="text-xs text-slate-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+            Agenda do dia: não contactados, atrasados e follow-ups até hoje. NIF e morada fiscal ficam para a coluna Pré-inscrição.
+          </p>
+        )}
+
         {viewMode === "kanban" ? (
           <Kanban
-            columns={data?.columns ?? COLS.map(c => ({ estado: c.id, total: data?.porEstado[c.id] ?? 0, items: items.filter(i => i.estado === c.id).slice(0, 20) }))}
+            columns={data?.columns ?? CRM_COLS.map(c => ({ estado: c.id, total: data?.porEstado[c.id] ?? 0, items: items.filter(i => i.estado === c.id).slice(0, 80) }))}
             busy={busy}
+            role={user.role}
             onOpen={openFicha}
-            onMove={(id, est) => { patchPreinscricao(id, { estado: est }); toastOk("Etapa actualizada."); setTimeout(carregar, 200); }}
+            onMove={(item, est) => {
+              const gate = podeArrastar(item.estado, est, { role: user.role, secretariaEm: item.secretariaEm });
+              if (!gate.ok) { toastError(gate.erro); return; }
+              if (est === "Formando") { setConfirmMove({ id: item.id, estado: est, item }); return; }
+              if (est === "Desistiu" && !item.motivoDesistencia) { openFicha(item); toastError("Indique o motivo da desistência na ficha."); return; }
+              patchPreinscricao(item.id, { estado: est });
+              toastOk("Etapa actualizada.");
+              setTimeout(carregar, 200);
+            }}
           />
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -424,14 +486,14 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                     <th className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 px-3 py-2 w-10">
                       <input type="checkbox" checked={items.length > 0 && sel.size === items.length} onChange={toggleAll} aria-label="Seleccionar página" />
                     </th>
-                    {["Lead", "Origem", "Meio", "Etiqueta", "Inscrito", "Curso", "Turma", "Valor", "Seguimento", "Estado", ""].map(h => (
+                    {["Lead", "Comercial", "Origem", "Meio", "Etiqueta", "Inscrito", "Curso", "Turma", "Valor", "Seguimento", "Nota", "Estado", ""].map(h => (
                       <th key={h} className="sticky top-0 z-10 text-left px-3 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide bg-slate-50 border-b border-slate-200 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {items.map((r, idx) => {
-                    const late = Boolean(r.proximoContacto && r.proximoContacto < hoje && r.estado !== "Pago" && r.estado !== "Formando");
+                    const late = Boolean(r.proximoContacto && r.proximoContacto.slice(0, 10) < hoje && r.estado !== "Pago" && r.estado !== "Formando" && r.estado !== "Pré-inscrição" && r.estado !== "Desistiu");
                     return (
                       <tr key={r.id} className={`hover:brightness-[0.98] ${sel.has(r.id) ? "ring-1 ring-amber-300" : ""}`}
                         style={leadMarkStyle(r.etiquetaCor)}>
@@ -441,9 +503,10 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                         <td className="px-3 py-1.5">
                           <button type="button" onClick={() => openFicha(r)} className="text-left">
                             <p className="text-xs font-semibold text-blue-700 hover:text-blue-900">{r.nome} {r.apelido}</p>
-                            <p className="text-[11px] text-slate-500 truncate max-w-[220px]">{r.email} · {r.telf}</p>
+                            <p className="text-[11px] text-slate-500 truncate max-w-[220px]">{r.email || "sem email"} · {r.telf || "sem telemóvel"}</p>
                           </button>
                         </td>
+                        <td className="px-3 py-1.5 text-[11px] text-slate-600 whitespace-nowrap">{r.comercialNome || "—"}</td>
                         <td className="px-3 py-1.5">{entradaChip(r.entrada)}</td>
                         <td className="px-3 py-1.5">{meioChip(r.meioContacto)}</td>
                         <td className="px-3 py-1.5">{etiquetaChip(r.etiquetaNome, r.etiquetaCor) ?? <span className="text-[11px] text-slate-400">-</span>}</td>
@@ -457,7 +520,15 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                         <td className={`px-3 py-1.5 text-[11px] whitespace-nowrap ${late ? "font-bold text-red-600" : "text-slate-500"}`}>
                           {r.proximoContacto || "-"}
                         </td>
-                        <td className="px-3 py-1.5">{badge(r.estado)}</td>
+                        <td className="px-3 py-1.5 text-[11px] text-slate-500 max-w-[180px] truncate" title={r.ultimaNota}>
+                          {r.ultimaNota ? <><span className="text-slate-400">{fmtRelativo(r.ultimaActividadeEm)} · </span>{r.ultimaNota}</> : <span className="text-slate-300">—</span>}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <div className="flex flex-col gap-0.5">
+                            {badge(r.estado)}
+                            {r.secretariaEm && r.estado === "Pré-inscrição" && <span className="text-[10px] font-semibold text-violet-700">Na secretaria</span>}
+                          </div>
+                        </td>
                         <td className="px-3 py-1.5">
                           <RowActions primary={1} actions={[
                             ...(r.estado === "Não contactado" ? [{ label: "Contactar", icon: ic.phone, onClick: () => { contactarPreinscricao(r.id); setFicha({ ...r, estado: "1º Contacto" }); } }] : []),
@@ -486,7 +557,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
             </div>
           </div>
         )}
-        <p className="text-[11px] text-slate-400">Shift+clique selecciona um intervalo. / foca a pesquisa. O pipeline mostra no máximo 20 cartões por etapa - use a lista para o resto.</p>
+        <p className="text-[11px] text-slate-400">Shift+clique selecciona um intervalo. / foca a pesquisa. O pipeline mostra no máximo 80 cartões por etapa.</p>
       </div>
 
       <ClienteFicha
@@ -496,6 +567,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
         hasNext={fichaIdx >= 0 && fichaIdx < items.length - 1}
         onPrev={() => { if (fichaIdx > 0) setFicha(items[fichaIdx - 1]); }}
         onNext={() => { if (fichaIdx >= 0 && fichaIdx < items.length - 1) setFicha(items[fichaIdx + 1]); }}
+        comerciais={comerciais}
         onContactar={(nota, meio) => {
           if (!ficha) return;
           contactarPreinscricao(ficha.id, nota, meio);
@@ -510,6 +582,8 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
         }}
         onConvert={turmaNome => {
           if (!ficha) return;
+          if (!secRole) { toastError("Só a secretaria inscreve na turma."); return; }
+          if (!ficha.secretariaEm) { toastError("A pré-inscrição ainda não foi entregue à secretaria."); return; }
           const t = gold.find(x => x.nome === turmaNome);
           if (!t || t.vagas - t.totalAlunos <= 0) return;
           addFormandoTurma({
@@ -526,6 +600,20 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
       />
 
       <ConfirmDangerModal
+        open={!!confirmMove}
+        onClose={() => setConfirmMove(null)}
+        title="Inscrever como formando"
+        body={confirmMove ? `Confirmar inscrição de ${confirmMove.item.nome} ${confirmMove.item.apelido}? Só a secretaria deve fazê-lo depois da pré-inscrição completa.` : ""}
+        confirmLabel="Inscrever"
+        onConfirm={() => {
+          if (!confirmMove) return;
+          patchPreinscricao(confirmMove.id, { estado: "Formando" });
+          toastOk("Passou a Formando.");
+          setTimeout(carregar, 200);
+        }}
+      />
+
+      <ConfirmDangerModal
         open={!!apagar}
         onClose={() => setApagar(null)}
         title="Eliminar lead"
@@ -534,12 +622,31 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
         onConfirm={() => { if (apagar) { removePreinscricao(apagar.id); setTimeout(carregar, 200); } }}
       />
 
-      <AppModal open={novo} onClose={() => { setNovo(false); setEditLead(null); }} title={editLead ? `Editar ${editLead.nome}` : "Lead manual"} sub={editLead ? "Actualiza os dados da ficha" : "Telefone, WhatsApp ou balcão - entra na fila com a primeira nota comercial"} size="lg">
+      <AppModal open={novo} onClose={() => { setNovo(false); setEditLead(null); setDups([]); }} title={editLead ? `Editar ${editLead.nome}` : "Lead rápida"} sub={editLead ? "Actualiza os dados da ficha" : "Só precisa de nome e um contacto. NIF e morada fiscal ficam para a Pré-inscrição."} size="lg">
         <div className="p-5 space-y-3">
           {!editLead && (
             <p className="text-xs text-slate-600 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2">
-              Os pedidos do site entram pelo formulário de pré-inscrição. Use este ecrã só para quem contactou a ENA fora do site.
+              Os pedidos do site entram sozinhos. Use este ecrã para quem ligou ou passou no balcão. Email e concelho são opcionais agora.
             </p>
+          )}
+          {dups.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              Já existe {dups.length} lead(s) com este contacto:
+              {dups.slice(0, 4).map(d => (
+                <button key={d.id} type="button" className="block mt-1 text-left font-semibold text-amber-800 hover:underline"
+                  onClick={() => {
+                    setNovo(false); setEditLead(null);
+                    const hit = preinscricoes.find(x => x.id === d.id) ?? data?.items.find(x => x.id === d.id);
+                    if (hit) { setFicha(hit as CrmLead); return; }
+                    apiCrmLeads({ q: String(d.id), page: 1, perPage: 8, sort: "inscrito" }).then(r => {
+                      const x = r.items.find(i => i.id === d.id);
+                      if (x) setFicha(x);
+                    }).catch(() => undefined);
+                  }}>
+                  #{d.id} · {d.nome} {d.apelido} · {d.estado}
+                </button>
+              ))}
+            </div>
           )}
           <div className="grid grid-cols-2 gap-3">
             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Nome
@@ -549,13 +656,13 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
               <input className={inp} value={form.apelido} onChange={e => setForm(f => ({ ...f, apelido: e.target.value }))} />
             </label>
           </div>
-          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Email
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Email (opcional se tiver telemóvel)
             <input className={inp} type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
           </label>
-          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Telemóvel
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Telemóvel (opcional se tiver email)
             <input className={inp} value={form.telf} onChange={e => setForm(f => ({ ...f, telf: e.target.value }))} />
           </label>
-          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Concelho
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Concelho (opcional agora)
             <input className={inp} value={form.concelho} onChange={e => setForm(f => ({ ...f, concelho: e.target.value }))} />
           </label>
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Como entrou em contacto
@@ -581,15 +688,15 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
           )}
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={() => { setNovo(false); setEditLead(null); }} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg">Cancelar</button>
-            <button type="button" disabled={!form.nome.trim()} onClick={() => {
+            <button type="button" disabled={!form.nome.trim() || (!form.telf.trim() && !form.email.trim())} onClick={() => {
               const cursoRow = cursosGold.find(c => c.nome === form.curso);
               const t = gold.find(x => x.id === form.turmaId) ?? gold.find(x => x.nome === form.turma);
               const row: Preinscricao = {
                 id: editLead?.id ?? nextListId(preinscricoes),
                 inscrito: editLead?.inscrito ?? nowStamp(),
                 nome: form.nome.trim(), apelido: form.apelido.trim(),
-                email: form.email.trim() || `${form.nome.trim().toLowerCase().replace(/\s+/g, ".")}@mail.pt`,
-                telf: form.telf.trim() || "-",
+                email: form.email.trim(),
+                telf: form.telf.trim(),
                 inicioCurso: form.dataInicio || t?.dataInicio || editLead?.inicioCurso || "-",
                 concelho: form.concelho.trim() || editLead?.concelho || "",
                 local: form.local || t?.local || "",
@@ -604,7 +711,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
               };
               if (editLead) patchPreinscricao(editLead.id, row);
               else addPreinscricao(row, { nota: form.nota.trim() });
-              setNovo(false); setEditLead(null);
+              setNovo(false); setEditLead(null); setDups([]);
               setTimeout(carregar, 250);
             }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editLead ? "Guardar" : "Criar lead"}</button>
           </div>
@@ -634,25 +741,33 @@ function FilaBtn({ active, tone, title, sub, onClick }: { active: boolean; tone:
 }
 
 function Kanban({
-  columns, busy, onOpen, onMove,
+  columns, busy, onOpen, onMove, role,
 }: {
-  columns: { estado: string; total: number; items: CrmLead[] }[];
+  columns: { estado: string; total: number; valor?: number; items: CrmLead[] }[];
   busy: boolean;
+  role: string;
   onOpen: (item: CrmLead) => void;
-  onMove: (id: number, estado: string) => void;
+  onMove: (item: CrmLead, estado: string) => void;
 }) {
   const [dragId, setDragId] = useState<number | null>(null);
+  const [dragItem, setDragItem] = useState<CrmLead | null>(null);
   const [over, setOver] = useState<string | null>(null);
+  const [showDesistiu, setShowDesistiu] = useState(false);
+  const cols = CRM_COLS.filter(c => c.id !== "Desistiu" || showDesistiu);
   return (
-    <div className="flex gap-3 overflow-x-auto pb-4 min-h-[420px]">
-      {COLS.map(col => {
+    <div className="space-y-2">
+      <button type="button" onClick={() => setShowDesistiu(s => !s)} className="text-[11px] text-slate-500 hover:text-slate-800">
+        {showDesistiu ? "Ocultar Desistiu" : "Mostrar coluna Desistiu"}
+      </button>
+      <div className="flex gap-3 overflow-x-auto pb-4 min-h-[420px]">
+      {cols.map(col => {
         const pack = columns.find(c => c.estado === col.id) ?? { estado: col.id, total: 0, items: [] };
         return (
           <div key={col.id}
             className={`flex-shrink-0 w-64 rounded-xl border-t-4 ${col.color} ${over === col.id ? "ring-2 ring-amber-400" : ""}`}
             onDragOver={e => { e.preventDefault(); setOver(col.id); }}
             onDragLeave={() => setOver(null)}
-            onDrop={() => { if (dragId != null) onMove(dragId, col.id); setDragId(null); setOver(null); }}
+            onDrop={() => { if (dragItem) onMove(dragItem, col.id); setDragId(null); setDragItem(null); setOver(null); }}
           >
             <div className="px-3 py-2 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -661,12 +776,21 @@ function Kanban({
               </div>
               <span className="text-xs font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded-full">{pack.total.toLocaleString("pt-PT")}</span>
             </div>
+            {typeof pack.valor === "number" && pack.valor > 0 && (
+              <p className="px-3 -mt-1 mb-1 text-[11px] font-semibold text-amber-700">€ {Math.round(pack.valor).toLocaleString("pt-PT")}</p>
+            )}
+            {col.id === "Pré-inscrição" && (
+              <p className="px-3 pb-1 text-[10px] text-violet-700">Completar NIF/morada · entregar à secretaria</p>
+            )}
+            {col.id === "Formando" && !isSecretariaRole(role) && (
+              <p className="px-3 pb-1 text-[10px] text-slate-500">Só a secretaria arrasta para aqui</p>
+            )}
             <div className="px-2 pb-2 space-y-2">
               {busy && pack.items.length === 0 && <p className="py-6 text-center text-xs text-slate-400">A carregar…</p>}
               {pack.items.map(item => {
                 const wa = telDigits(item.telf);
                 return (
-                  <div key={item.id} draggable onDragStart={() => setDragId(item.id)}>
+                  <div key={item.id} draggable onDragStart={() => { setDragId(item.id); setDragItem(item); }}>
                     <button type="button" onClick={() => onOpen(item)}
                       className="w-full text-left rounded-xl border shadow-sm p-3 hover:brightness-[0.98]"
                       style={{
@@ -680,10 +804,16 @@ function Kanban({
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {entradaChip(item.entrada)}
                         {etiquetaChip(item.etiquetaNome, item.etiquetaCor)}
+                        {item.secretariaEm && item.estado === "Pré-inscrição" && (
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-800">Secretaria</span>
+                        )}
                       </div>
+                      {item.comercialNome ? <p className="text-[11px] text-slate-500 mt-1">{item.comercialNome}</p> : null}
                       {item.meioContacto ? <p className="text-[11px] text-slate-600 mt-1">Meio: {item.meioContacto}</p> : null}
+                      {item.ultimaNota ? <p className="text-[11px] text-slate-500 mt-1 truncate">{item.ultimaNota}</p> : null}
                       <p className="text-xs text-slate-500 mt-0.5 truncate">{item.curso}</p>
                       <p className="text-[11px] text-slate-400 truncate">{[item.local, item.horario, item.inicioCurso && item.inicioCurso !== "-" ? item.inicioCurso : ""].filter(Boolean).join(" · ")}</p>
+                      {item.proximoContacto ? <p className="text-[11px] text-slate-400 mt-0.5">{item.proximoContacto}</p> : null}
                       <div className="flex gap-2 mt-2">
                         <a href={`tel:${item.telf}`} onClick={e => e.stopPropagation()} className="flex-1 py-1 text-center bg-slate-100 text-slate-700 text-xs font-medium rounded-lg inline-flex items-center justify-center gap-1">{ic.phone} Ligar</a>
                         {wa && <a href={`https://wa.me/${wa}`} onClick={e => e.stopPropagation()} className="flex-1 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-lg inline-flex items-center justify-center gap-1">{ic.wa} WA</a>}
@@ -700,6 +830,8 @@ function Kanban({
           </div>
         );
       })}
+      </div>
+      {dragId ? <span className="sr-only">A arrastar {dragId}</span> : null}
     </div>
   );
 }

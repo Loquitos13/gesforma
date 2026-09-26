@@ -93,8 +93,10 @@ function textoEstado(lead: ReturnType<typeof mapPreinscricao>) {
     lead.inicioCurso && lead.inicioCurso !== "-" ? `Início: ${fmtDataPt(lead.inicioCurso)}` : "",
     `Estado: ${lead.estado}`,
   ].filter(Boolean);
-  if (lead.estado === "Pago" || lead.estado === "Formando") {
-    linhas.push("A inscrição está confirmada do lado da secretaria. Qualquer dúvida, ligue para a ENA.");
+  if (lead.estado === "Pago" || lead.estado === "Formando" || lead.estado === "Pré-inscrição") {
+    linhas.push(lead.estado === "Pré-inscrição"
+      ? "O pedido está na pré-inscrição. A secretaria trata da inscrição na turma."
+      : "A inscrição está confirmada do lado da secretaria. Qualquer dúvida, ligue para a ENA.");
   } else if (lead.estado === "Não contactado") {
     linhas.push("Ainda está na fila. A secretaria contacta-o em breve - não precisa de se pré-inscrever outra vez.");
   } else {

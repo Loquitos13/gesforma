@@ -4482,7 +4482,7 @@ function NotificacoesCentro({ onNavigate }: { onNavigate: (t: View | NavTarget) 
       estado={estado}
       onMarcarLida={marcarLida}
       onMarcarTodas={marcarTodas}
-      onOpen={n => onNavigate({ view: n.view as View, turmaId: n.turmaId, tab: n.tab as CockpitTab | undefined })}
+      onOpen={n => onNavigate({ view: n.view as View, turmaId: n.turmaId, leadId: n.leadId, tab: n.tab as CockpitTab | undefined })}
     />
   );
 }
@@ -4504,7 +4504,7 @@ function NotificacoesPanel({ onNavigate, onClose }: { onNavigate: (t: NavTarget)
         {estado === "offline" && <p className="px-4 py-6 text-center text-xs text-amber-700">Sem ligação à API.</p>}
         {estado === "ready" && items.length === 0 && <p className="px-4 py-6 text-center text-xs text-slate-400">Nada a sinalizar. Bom trabalho.</p>}
         {sortNotifs(items).map(n => (
-          <button key={n.chave} onClick={() => { marcarLida(n.chave); onNavigate({ view: n.view as View, turmaId: n.turmaId, tab: n.tab as CockpitTab | undefined }); onClose(); }}
+          <button key={n.chave} onClick={() => { marcarLida(n.chave); onNavigate({ view: n.view as View, turmaId: n.turmaId, leadId: n.leadId, tab: n.tab as CockpitTab | undefined }); onClose(); }}
             className={`w-full flex gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors ${n.lida ? "opacity-60" : ""}`}>
             <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${n.tipo === "warn" ? "bg-amber-100 text-amber-600" : n.tipo === "error" ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"}`}>
               {n.tipo === "error" ? I.warn : n.tipo === "warn" ? I.warn : I.info}

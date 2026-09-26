@@ -57,6 +57,16 @@ export function mapPreinscricao(r: Record<string, unknown>) {
     notas: String(r.notas ?? ""),
     proximoContacto: String(r.proximo_contacto ?? ""),
     comercialId: r.comercial_id ? String(r.comercial_id) : null,
+    comercialNome: String(r.comercial_nome ?? ""),
+    nif: String(r.nif ?? ""),
+    moradaFiscal: String(r.morada_fiscal ?? ""),
+    codigoPostal: String(r.codigo_postal ?? ""),
+    motivoDesistencia: String(r.motivo_desistencia ?? ""),
+    pagamentoMetodo: String(r.pagamento_metodo ?? ""),
+    secretariaEm: r.secretaria_em ? String(r.secretaria_em) : null,
+    ultimaNota: String(r.ultima_nota ?? ""),
+    ultimaActividadeEm: r.ultima_actividade_em ? String(r.ultima_actividade_em) : null,
+    ultimaResultado: String(r.ultima_resultado ?? ""),
   };
 }
 

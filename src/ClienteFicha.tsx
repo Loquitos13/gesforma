@@ -1,23 +1,23 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  apiCrmCampoCreate, apiCrmDossier, apiCrmEtiquetaCreate, apiCrmEtiquetas, apiCrmLeadCampos, apiCrmLeadNota,
+  apiCrmCompletar, apiCrmDossier, apiCrmEtiquetas,
+  apiCrmLeadNota, apiCrmNotaFixar, apiCrmLeadCampos, apiCrmCampoCreate,
   type CrmCampoTipo, type CrmDossier, type CrmEtiqueta, type CrmLead,
 } from "./api";
-import { CRM_ETIQUETA_CORES, CRM_MEIOS, etiquetaChip } from "./crmUi";
+import { useAuth } from "./AuthGate";
+import { CRM_MEIOS, etiquetaChip } from "./crmUi";
+import {
+  badgeEstadoCls, camposEmFalta, CRM_COLS, isSecretariaRole,
+  MODELOS_NOTA, MOTIVOS_DESISTENCIA, RESULTADOS_CONTACTO,
+} from "./crmPipeline";
 import { AppModal, SearchSelect } from "./FormKit";
 import type { Preinscricao } from "./ListsContext";
-import { persist, toastOk } from "./toastBus";
+import { persist, toastError, toastOk } from "./toastBus";
 import { TurmaInscricaoHint } from "./TurmaCronograma";
 import { useTurmas } from "./TurmasContext";
-import { turmaGoldOpts } from "./turmaModel";
-
-const COLS = [
-  { id: "Não contactado", label: "Não contactado" },
-  { id: "1º Contacto", label: "1.º Contacto" },
-  { id: "2º Contacto", label: "2.º Contacto" },
-  { id: "Pago", label: "Pago" },
-  { id: "Formando", label: "Formando" },
-];
+import { isTurmaActiva, turmaGoldOpts } from "./turmaModel";
+import { CursoOfertaCampos } from "./CursoOfertaCampos";
+import { OFERTA_VAZIA, type CursoOfertaSel } from "./oferta";
 
 const inp = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400";
 
@@ -27,35 +27,19 @@ function telDigits(telf: string) {
   return d.startsWith("351") ? d : `351${d}`;
 }
 
-function badge(estado: string) {
-  const m: Record<string, string> = {
-    "1º Contacto": "bg-blue-50 text-blue-700 border-blue-200",
-    "2º Contacto": "bg-indigo-50 text-indigo-700 border-indigo-200",
-    "Não contactado": "bg-amber-50 text-amber-700 border-amber-200",
-    Pago: "bg-teal-50 text-teal-700 border-teal-200",
-    Formando: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  };
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${m[estado] ?? "bg-slate-100 text-slate-600 border-slate-200"}`}>{estado}</span>;
-}
-
 function fmtWhen(iso: string) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso.slice(0, 16).replace("T", " ");
-  return d.toLocaleString("pt-PT", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString("pt-PT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 const TIPO_DOT: Record<string, string> = {
-  criacao: "bg-slate-400",
-  contacto: "bg-blue-500",
-  nota: "bg-amber-500",
-  estado: "bg-indigo-500",
-  seguimento: "bg-teal-500",
-  campo: "bg-violet-500",
-  proposta: "bg-emerald-500",
+  criacao: "bg-slate-400", contacto: "bg-blue-500", nota: "bg-amber-500",
+  estado: "bg-indigo-500", seguimento: "bg-teal-500", campo: "bg-violet-500", proposta: "bg-emerald-500",
 };
 
 export function ClienteFicha({
-  item, onClose, onConvert, onContactar, onPatch, hasPrev, hasNext, onPrev, onNext,
+  item, onClose, onConvert, onContactar, onPatch, hasPrev, hasNext, onPrev, onNext, comerciais = [],
 }: {
   item: CrmLead | null;
   onClose: () => void;
@@ -66,27 +50,33 @@ export function ClienteFicha({
   hasNext: boolean;
   onPrev: () => void;
   onNext: () => void;
+  comerciais?: { id: string; name: string }[];
 }) {
+  const { user } = useAuth();
+  const sec = isSecretariaRole(user.role);
   const { gold } = useTurmas();
   const [dossier, setDossier] = useState<CrmDossier | null>(null);
   const [erro, setErro] = useState("");
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<"ficha" | "notas" | "historico">("ficha");
-  const [notas, setNotas] = useState("");
-  const [proximoContacto, setProximoContacto] = useState("");
+  const [tab, setTab] = useState<"actividade" | "dados" | "secretaria">("actividade");
+  const [notaNova, setNotaNova] = useState("");
+  const [meio, setMeio] = useState("Telefone");
+  const [resultado, setResultado] = useState("");
+  const [proximo, setProximo] = useState("");
+  const [filtroEv, setFiltroEv] = useState("todos");
+  const [etiquetas, setEtiquetas] = useState<CrmEtiqueta[]>([]);
+  const [motivo, setMotivo] = useState("");
+  const [pagMetodo, setPagMetodo] = useState("");
   const [escolherTurma, setEscolherTurma] = useState(false);
   const [turmaConv, setTurmaConv] = useState("");
+  const [dados, setDados] = useState({
+    nome: "", apelido: "", email: "", telf: "", concelho: "", nif: "", moradaFiscal: "", codigoPostal: "",
+  });
+  const [oferta, setOferta] = useState<CursoOfertaSel>(OFERTA_VAZIA);
   const [vals, setVals] = useState<Record<number, string>>({});
   const [novoCampo, setNovoCampo] = useState(false);
   const [campoLabel, setCampoLabel] = useState("");
   const [campoTipo, setCampoTipo] = useState<CrmCampoTipo>("texto");
-  const [campoOpcoes, setCampoOpcoes] = useState("");
-  const [notaNova, setNotaNova] = useState("");
-  const [meio, setMeio] = useState("");
-  const [etiquetas, setEtiquetas] = useState<CrmEtiqueta[]>([]);
-  const [novaEtiq, setNovaEtiq] = useState(false);
-  const [etiqNome, setEtiqNome] = useState("");
-  const [etiqCor, setEtiqCor] = useState(CRM_ETIQUETA_CORES[0]);
 
   const carregar = useCallback((id: number) => {
     setBusy(true);
@@ -94,24 +84,35 @@ export function ClienteFicha({
     apiCrmDossier(id)
       .then(d => {
         setDossier(d);
+        setMeio(d.lead.meioContacto || "Telefone");
+        setProximo(d.lead.proximoContacto ?? "");
+        setMotivo(d.lead.motivoDesistencia ?? "");
+        setPagMetodo(d.lead.pagamentoMetodo ?? "");
+        setDados({
+          nome: d.lead.nome, apelido: d.lead.apelido, email: d.lead.email, telf: d.lead.telf,
+          concelho: d.lead.concelho, nif: d.lead.nif ?? "", moradaFiscal: d.lead.moradaFiscal ?? "",
+          codigoPostal: d.lead.codigoPostal ?? "",
+        });
+        setOferta({
+          curso: d.lead.curso, local: d.lead.local ?? "", horario: d.lead.horario ?? "",
+          dataInicio: d.lead.inicioCurso && d.lead.inicioCurso !== "-" ? d.lead.inicioCurso : "",
+          turmaId: d.lead.turmaId ?? 0,
+        });
         setVals(Object.fromEntries(d.campos.map(c => [c.id, c.valor ?? ""])));
-        setMeio(d.lead.meioContacto || "");
         setBusy(false);
       })
       .catch(() => {
-        setErro("Não foi possível abrir o dossiê. A mostrar os dados da lista.");
+        setErro("Não foi possível abrir o dossiê.");
         setBusy(false);
       });
   }, []);
 
   useEffect(() => {
-    setEscolherTurma(false);
-    setTurmaConv("");
-    setTab("ficha");
-    setNovoCampo(false);
+    setTab("actividade");
     setNotaNova("");
-    setNovaEtiq(false);
+    setEscolherTurma(false);
     setDossier(null);
+    setResultado("");
   }, [item?.id]);
 
   useEffect(() => {
@@ -120,10 +121,8 @@ export function ClienteFicha({
 
   useEffect(() => {
     if (!item) return;
-    setNotas(item.notas ?? "");
-    setProximoContacto(item.proximoContacto ?? "");
     carregar(item.id);
-  }, [item?.id, item?.estado, item?.notas, item?.proximoContacto, carregar]);
+  }, [item?.id, item?.estado, carregar]);
 
   useEffect(() => {
     if (!item) return;
@@ -135,307 +134,311 @@ export function ClienteFicha({
     return () => document.removeEventListener("keydown", h);
   }, [item, hasPrev, hasNext, onPrev, onNext]);
 
-  if (!item) return null;
   const lead = dossier?.lead ?? item;
-  const papel = dossier?.papel ?? (lead.estado === "Pago" || lead.estado === "Formando" ? "cliente" : "potencial");
-  const turmaOpts = turmaGoldOpts(gold, { curso: lead.curso });
+  const falta = useMemo(() => lead ? camposEmFalta({
+    nome: dados.nome || lead.nome, apelido: dados.apelido || lead.apelido,
+    telf: dados.telf || lead.telf, email: dados.email || lead.email,
+    concelho: dados.concelho || lead.concelho, curso: oferta.curso || lead.curso,
+    local: oferta.local || lead.local, horario: oferta.horario || lead.horario,
+    inicioCurso: oferta.dataInicio || lead.inicioCurso,
+    nif: dados.nif, moradaFiscal: dados.moradaFiscal,
+  }) : [], [lead, dados, oferta]);
+
+  if (!item || !lead) return null;
   const wa = telDigits(lead.telf);
-  const etapaIdx = Math.max(0, COLS.findIndex(c => c.id === lead.estado));
+  const turmaOpts = turmaGoldOpts(gold, { curso: lead.curso });
+  const entregue = Boolean(lead.secretariaEm);
 
-  async function guardarCampos() {
+  async function gravarNota(texto = notaNova, res = resultado) {
     if (!item) return;
-    const valores = Object.entries(vals).map(([campoId, valor]) => ({ campoId: Number(campoId), valor }));
-    const r = await persist(apiCrmLeadCampos(item.id, valores));
-    if (!r) return;
-    setDossier(r);
-    toastOk("Campos gravados.");
-  }
-
-  async function criarCampo() {
-    const label = campoLabel.trim();
-    if (!label) return;
-    const opcoes = campoTipo === "lista" ? campoOpcoes.split(",").map(s => s.trim()).filter(Boolean) : [];
-    const r = await persist(apiCrmCampoCreate({ label, tipo: campoTipo, opcoes }));
-    if (!r) return;
-    toastOk("Campo criado. Passa a estar disponível em todas as leads.");
-    setNovoCampo(false);
-    setCampoLabel("");
-    setCampoOpcoes("");
-    if (item) carregar(item.id);
-  }
-
-  async function gravarNota() {
-    if (!item || !notaNova.trim()) return;
-    const r = await persist(apiCrmLeadNota(item.id, notaNova.trim(), meio));
+    const r = await persist(apiCrmLeadNota(item.id, texto, meio, res));
     if (!r) return;
     setDossier(r);
     setNotaNova("");
-    toastOk("Nota comercial registada.");
+    toastOk("Actividade registada.");
+    if (lead?.estado === "Não contactado") onContactar?.(texto, meio);
+    if (proximo) onPatch?.({ proximoContacto: proximo });
   }
+
+  async function entregar() {
+    if (!item) return;
+    try {
+      const r = await apiCrmCompletar(item.id, {
+        ...dados, curso: oferta.curso, local: oferta.local, horario: oferta.horario, inicioCurso: oferta.dataInicio,
+      });
+      setDossier(r);
+      onPatch?.({ estado: "Pré-inscrição", ...dados, curso: oferta.curso, local: oferta.local, horario: oferta.horario, inicioCurso: oferta.dataInicio, secretariaEm: r.lead.secretariaEm });
+      toastOk("Pré-inscrição entregue à secretaria.");
+      setTab("actividade");
+    } catch (e) {
+      toastError(e, "Ainda faltam dados obrigatórios.");
+    }
+  }
+
+  function guardarDados() {
+    onPatch?.({
+      ...dados, curso: oferta.curso, local: oferta.local, horario: oferta.horario,
+      inicioCurso: oferta.dataInicio || "-", turmaId: oferta.turmaId,
+    });
+    toastOk("Dados gravados.");
+  }
+
+  const eventos = (dossier?.eventos ?? []).filter(e => filtroEv === "todos" || e.tipo === filtroEv);
 
   return (
     <AppModal
       open
+      variant="drawer"
       onClose={onClose}
-      title={`${lead.nome} ${lead.apelido}`}
-      sub={`${lead.curso} · ${[lead.local, lead.horario, lead.inicioCurso && lead.inicioCurso !== "-" ? lead.inicioCurso : ""].filter(Boolean).join(" · ")}`}
-      size="2xl"
+      title={`${lead.nome} ${lead.apelido}`.trim() || `Lead #${lead.id}`}
+      sub={`${lead.curso || "Sem curso"} · ${[lead.local, lead.horario, lead.inicioCurso && lead.inicioCurso !== "-" ? lead.inicioCurso : ""].filter(Boolean).join(" · ") || "turma por definir"}`}
     >
-      <div className="p-5 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <button type="button" disabled={!hasPrev} onClick={onPrev} className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30">‹ Anterior</button>
-          <div className="flex items-center gap-2">
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border ${
-              papel === "cliente" ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-sky-50 text-sky-800 border-sky-200"
-            }`}>{papel === "cliente" ? "Cliente" : "Potencial"}</span>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
-              lead.entrada === "manual" ? "bg-sky-50 text-sky-800 border-sky-200" : "bg-amber-50 text-amber-800 border-amber-200"
-            }`}>{lead.entrada === "manual" ? "Lead manual" : "Pré-inscrição"}</span>
-            {badge(lead.estado)}
+      <div className="p-4 space-y-4">
+        <div className="flex items-center justify-between text-xs">
+          <button type="button" disabled={!hasPrev} onClick={onPrev} className="px-2 py-1 border rounded-lg disabled:opacity-30">‹ Anterior</button>
+          <div className="flex flex-wrap gap-1 justify-center">
+            <span className={`px-2 py-0.5 rounded-full border font-semibold ${badgeEstadoCls(lead.estado)}`}>{lead.estado}</span>
+            {entregue && <span className="px-2 py-0.5 rounded-full border border-violet-300 bg-violet-50 text-violet-800 font-semibold">Na secretaria</span>}
+            {lead.comercialNome && <span className="px-2 py-0.5 rounded-full border border-slate-200 text-slate-600">{lead.comercialNome}</span>}
           </div>
-          <button type="button" disabled={!hasNext} onClick={onNext} className="px-2 py-1 text-xs border rounded-lg disabled:opacity-30">Seguinte ›</button>
+          <button type="button" disabled={!hasNext} onClick={onNext} className="px-2 py-1 border rounded-lg disabled:opacity-30">Seguinte ›</button>
         </div>
 
-        <p className="text-xs text-slate-500">{lead.email} · {lead.telf}{lead.concelho ? ` · ${lead.concelho}` : ""} · {lead.origem}{lead.campanha ? ` · ${lead.campanha}` : ""}</p>
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Dados do curso</p>
-          <p className="text-sm font-semibold text-slate-800 mt-0.5">{lead.curso || "—"}</p>
-          <p className="text-xs text-slate-600 mt-0.5">
-            {[lead.local, lead.horario, lead.inicioCurso && lead.inicioCurso !== "-" ? `início ${lead.inicioCurso}` : ""].filter(Boolean).join(" · ") || "Turma ainda por escolher"}
-          </p>
+        <p className="text-xs text-slate-500">{lead.email || "sem email"} · {lead.telf || "sem telemóvel"}{lead.concelho ? ` · ${lead.concelho}` : ""}</p>
+
+        {(dossier?.outrosPedidos.length ?? 0) > 0 && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            {dossier!.outrosPedidos.length} outro(s) pedido(s) deste contacto
+            {dossier!.outrosPedidos.slice(0, 3).map(o => (
+              <p key={o.id} className="text-amber-800 mt-0.5">#{o.id} · {o.curso} · {o.estado}</p>
+            ))}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <a href={lead.telf ? `tel:${lead.telf}` : undefined} onClick={() => { if (lead.telf) void gravarNota("Tentativa de chamada.", resultado || "Não atendeu"); }}
+            className="flex-1 py-2 bg-slate-800 text-white text-sm font-semibold rounded-lg text-center">Ligar</a>
+          {wa
+            ? <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" onClick={() => void gravarNota("Abriu WhatsApp.", resultado || "Atendeu")}
+                className="flex-1 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg text-center">WhatsApp</a>
+            : <span className="flex-1 py-2 bg-slate-100 text-slate-400 text-sm font-semibold rounded-lg text-center">Sem WA</span>}
         </div>
-        {busy && !dossier && <p className="text-xs text-slate-400">A carregar o histórico…</p>}
-        {erro && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{erro}</p>}
 
         <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
-          {([["ficha", "Ficha"], ["notas", "Notas"], ["historico", `Histórico${dossier ? ` (${dossier.eventos.length})` : ""}`]] as const).map(([id, label]) => (
+          {([["actividade", "Actividade"], ["dados", "Dados"], ["secretaria", `Secretaria${falta.length ? ` (${falta.length})` : ""}`]] as const).map(([id, label]) => (
             <button key={id} type="button" onClick={() => setTab(id)}
               className={`flex-1 py-1.5 text-xs font-semibold rounded-md ${tab === id ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}>
               {label}
             </button>
           ))}
         </div>
+        {erro && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{erro}</p>}
 
-        {tab === "ficha" && (
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-            <div className="lg:col-span-3 space-y-4">
-              <div className="grid grid-cols-5 gap-1">
-                {COLS.map((col, i) => (
-                  <button key={col.id} type="button" disabled={col.id === "Formando"}
-                    onClick={() => { if (col.id !== lead.estado && col.id !== "Formando") onPatch?.({ estado: col.id }); }}
-                    className={`rounded-lg px-1 py-2 text-center border text-[10px] font-bold ${
-                      col.id === lead.estado ? "bg-amber-500 border-amber-500 text-white"
-                      : i < etapaIdx ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                      : "bg-slate-50 border-slate-200 text-slate-500"
-                    }`}>
-                    {col.label}
+        {tab === "actividade" && (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-slate-200 p-3 space-y-2 bg-slate-50">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Registar contacto</p>
+              <div className="flex flex-wrap gap-1">
+                {MODELOS_NOTA.map(m => (
+                  <button key={m.label} type="button" onClick={() => { setNotaNova(m.texto); setResultado(m.resultado); }}
+                    className="px-2 py-1 text-[11px] rounded-md border border-slate-200 bg-white hover:bg-amber-50">{m.label}</button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <select className={inp} value={meio} onChange={e => setMeio(e.target.value)}>
+                  {CRM_MEIOS.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select className={inp} value={resultado} onChange={e => setResultado(e.target.value)}>
+                  <option value="">Resultado…</option>
+                  {RESULTADOS_CONTACTO.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <textarea className={`${inp} resize-none`} rows={2} value={notaNova} onChange={e => setNotaNova(e.target.value)} placeholder="O que ficou combinado…" />
+              <div className="flex gap-2 items-end">
+                <label className="flex-1 text-[10px] font-bold uppercase text-slate-400">Próximo
+                  <input className={inp} type="datetime-local" value={proximo.length === 10 ? `${proximo}T09:00` : proximo.slice(0, 16).replace(" ", "T")}
+                    onChange={e => setProximo(e.target.value.replace("T", " ").slice(0, 16))} />
+                </label>
+                <button type="button" onClick={() => {
+                  const d = new Date(); d.setDate(d.getDate() + 1);
+                  setProximo(`${d.toISOString().slice(0, 10)} 09:00`);
+                }} className="px-2 py-2 text-[11px] border rounded-lg">+1 d</button>
+                <button type="button" onClick={() => {
+                  const d = new Date(); d.setDate(d.getDate() + 3);
+                  setProximo(`${d.toISOString().slice(0, 10)} 09:00`);
+                }} className="px-2 py-2 text-[11px] border rounded-lg">+3 d</button>
+              </div>
+              <button type="button" disabled={!notaNova.trim() && !resultado} onClick={() => void gravarNota()}
+                className="w-full py-2 bg-amber-500 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Gravar actividade</button>
+            </div>
+
+            <div className="flex flex-wrap gap-1">
+              {["todos", "contacto", "nota", "estado", "seguimento"].map(f => (
+                <button key={f} type="button" onClick={() => setFiltroEv(f)}
+                  className={`px-2 py-0.5 text-[11px] rounded-full border ${filtroEv === f ? "bg-slate-800 text-white border-slate-800" : "border-slate-200 text-slate-500"}`}>
+                  {f === "todos" ? "Tudo" : f}
+                </button>
+              ))}
+            </div>
+            {(dossier?.notas ?? []).filter(n => n.fixada).map(n => (
+              <div key={n.id} className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
+                <p className="text-[11px] text-amber-800 font-semibold">Fixada · {n.actorName}</p>
+                <p className="whitespace-pre-wrap">{n.nota}</p>
+              </div>
+            ))}
+            <ol className="relative border-l border-slate-200 ml-2 space-y-3 max-h-[360px] overflow-y-auto pr-2">
+              {eventos.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">{busy ? "A carregar…" : "Ainda sem actividade."}</p>}
+              {eventos.map(e => (
+                <li key={e.id} className="ml-4">
+                  <span className={`absolute -left-1.5 mt-1.5 w-3 h-3 rounded-full border-2 border-white ${TIPO_DOT[e.tipo] ?? "bg-slate-400"}`} />
+                  <p className="text-[11px] text-slate-400">{fmtWhen(e.createdAt)}{e.actorName ? ` · ${e.actorName}` : ""}</p>
+                  <p className="text-sm font-semibold text-slate-800">{e.titulo}</p>
+                  {e.detalhe && <p className="text-xs text-slate-600 mt-0.5 whitespace-pre-wrap">{e.detalhe}</p>}
+                </li>
+              ))}
+            </ol>
+            {(dossier?.notas ?? []).slice(0, 6).map(n => (
+              <button key={`n-${n.id}`} type="button" onClick={() => void persist(apiCrmNotaFixar(item.id, n.id, !n.fixada)).then(r => r && setDossier(r))}
+                className="text-[11px] text-slate-400 hover:text-amber-700 block">{n.fixada ? "Desafixar" : `Fixar: ${n.nota.slice(0, 40)}`}</button>
+            ))}
+          </div>
+        )}
+
+        {tab === "dados" && (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-500">NIF e morada fiscal são opcionais até à etapa Pré-inscrição.</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(["nome", "apelido", "telf", "email", "concelho"] as const).map(k => (
+                <label key={k} className="text-xs font-semibold text-slate-500 uppercase flex flex-col gap-1">
+                  {k}
+                  <input className={inp} value={dados[k]} onChange={e => setDados(d => ({ ...d, [k]: e.target.value }))} />
+                </label>
+              ))}
+            </div>
+            <CursoOfertaCampos
+              variant="crm"
+              turmas={gold.filter(isTurmaActiva).map(t => ({
+                turmaId: t.id, nome: t.nome, curso: t.curso, local: t.local, horario: t.horario,
+                dataInicio: t.dataInicio, vagasLivres: Math.max(0, t.vagas - t.totalAlunos),
+              }))}
+              cursos={[...new Set(gold.map(t => t.curso))].map(nome => ({ nome }))}
+              value={oferta}
+              onChange={setOferta}
+            />
+            <label className="text-xs font-semibold text-slate-500 uppercase flex flex-col gap-1">NIF (opcional agora)
+              <input className={inp} value={dados.nif} onChange={e => setDados(d => ({ ...d, nif: e.target.value }))} placeholder="9 dígitos" />
+            </label>
+            <label className="text-xs font-semibold text-slate-500 uppercase flex flex-col gap-1">Morada fiscal (opcional agora)
+              <input className={inp} value={dados.moradaFiscal} onChange={e => setDados(d => ({ ...d, moradaFiscal: e.target.value }))} />
+            </label>
+            <label className="text-xs font-semibold text-slate-500 uppercase flex flex-col gap-1">Código postal
+              <input className={inp} value={dados.codigoPostal} onChange={e => setDados(d => ({ ...d, codigoPostal: e.target.value }))} />
+            </label>
+            <label className="text-xs font-semibold text-slate-500 uppercase flex flex-col gap-1">Comercial
+              <select className={inp} value={lead.comercialId ?? ""} onChange={e => onPatch?.({ comercialId: e.target.value || null })}>
+                <option value="">Sem dono</option>
+                {comerciais.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </label>
+            <div>
+              <p className="text-xs font-bold uppercase text-slate-400 mb-1">Etiqueta</p>
+              <div className="flex flex-wrap gap-1.5">
+                {etiquetas.map(e => (
+                  <button key={e.id} type="button" onClick={() => onPatch?.({ etiquetaId: e.id, etiquetaNome: e.nome, etiquetaCor: e.cor })}>
+                    {etiquetaChip(e.nome, e.cor)}
                   </button>
                 ))}
               </div>
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="bg-slate-50 rounded-xl p-3"><p className="text-slate-400">Valor</p><p className="font-bold text-amber-700 text-base">€ {lead.preco}</p></div>
-                <div className="bg-slate-50 rounded-xl p-3"><p className="text-slate-400">Inscrito</p><p className="font-semibold text-slate-700">{lead.inscrito}</p></div>
-              </div>
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Meio de comunicação
-                <select className={inp} value={meio} onChange={e => {
-                  const v = e.target.value;
-                  setMeio(v);
-                  onPatch?.({ meioContacto: v });
-                }}>
-                  <option value="">Ainda sem contacto</option>
-                  {CRM_MEIOS.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </label>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Etiqueta</p>
-                  <button type="button" onClick={() => setNovaEtiq(v => !v)} className="text-xs font-semibold text-amber-700">{novaEtiq ? "Cancelar" : "+ Etiqueta"}</button>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  <button type="button" onClick={() => onPatch?.({ etiquetaId: null, etiquetaNome: "", etiquetaCor: "" })}
-                    className={`px-2 py-1 text-[11px] rounded-md border ${!lead.etiquetaId ? "border-slate-800 text-slate-800" : "border-slate-200 text-slate-500"}`}>Sem etiqueta</button>
-                  {etiquetas.map(e => (
-                    <button key={e.id} type="button"
-                      onClick={() => onPatch?.({ etiquetaId: e.id, etiquetaNome: e.nome, etiquetaCor: e.cor })}
-                      className={`rounded-md ${lead.etiquetaId === e.id ? "ring-2 ring-offset-1 ring-slate-400" : ""}`}>
-                      {etiquetaChip(e.nome, e.cor)}
-                    </button>
-                  ))}
-                </div>
-                {novaEtiq && (
-                  <div className="mt-2 rounded-xl border border-slate-200 p-3 space-y-2">
-                    <input className={inp} value={etiqNome} onChange={e => setEtiqNome(e.target.value)} placeholder="Nome da etiqueta (ex. Quente)" />
-                    <div className="flex flex-wrap gap-1.5">
-                      {CRM_ETIQUETA_CORES.map(c => (
-                        <button key={c} type="button" onClick={() => setEtiqCor(c)}
-                          className={`w-6 h-6 rounded-full border-2 ${etiqCor === c ? "border-slate-800" : "border-white"}`}
-                          style={{ backgroundColor: c }} aria-label={c} />
-                      ))}
-                    </div>
-                    <button type="button" disabled={!etiqNome.trim()} onClick={() => void (async () => {
-                      const r = await persist(apiCrmEtiquetaCreate({ nome: etiqNome.trim(), cor: etiqCor }));
-                      if (!r) return;
-                      setEtiquetas(xs => [...xs, r.etiqueta].sort((a, b) => a.nome.localeCompare(b.nome, "pt")));
-                      onPatch?.({ etiquetaId: r.etiqueta.id, etiquetaNome: r.etiqueta.nome, etiquetaCor: r.etiqueta.cor });
-                      setNovaEtiq(false); setEtiqNome("");
-                      toastOk("Etiqueta criada e atribuída.");
-                    })()} className="w-full py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white disabled:opacity-40">Criar e atribuir</button>
-                  </div>
-                )}
-              </div>
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Próximo contacto
-                <input type="date" value={proximoContacto} onChange={e => setProximoContacto(e.target.value)} className={inp} />
-              </label>
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Notas de seguimento
-                <textarea value={notas} onChange={e => setNotas(e.target.value)} rows={2} className={`${inp} resize-none`} placeholder="Objecção, horário, o que ficou combinado…" />
-              </label>
-              <button type="button" onClick={() => { onPatch?.({ notas, proximoContacto }); toastOk("Seguimento gravado."); }}
-                className="w-full py-2 text-xs font-semibold rounded-lg border border-slate-200">Guardar seguimento</button>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Campos da lead</p>
-                  <button type="button" onClick={() => setNovoCampo(v => !v)} className="text-xs font-semibold text-amber-700 hover:text-amber-800">
-                    {novoCampo ? "Cancelar" : "+ Campo"}
-                  </button>
-                </div>
-                {novoCampo && (
-                  <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
-                    <p className="text-[11px] text-amber-800">O campo fica disponível em todas as leads, não só nesta.</p>
-                    <input className={inp} value={campoLabel} onChange={e => setCampoLabel(e.target.value)} placeholder="Nome do campo (ex. NIF, empresa)" />
-                    <div className="grid grid-cols-2 gap-2">
-                      <select className={inp} value={campoTipo} onChange={e => setCampoTipo(e.target.value as CrmCampoTipo)}>
-                        <option value="texto">Texto</option>
-                        <option value="numero">Número</option>
-                        <option value="data">Data</option>
-                        <option value="lista">Lista</option>
-                      </select>
-                      {campoTipo === "lista" && (
-                        <input className={inp} value={campoOpcoes} onChange={e => setCampoOpcoes(e.target.value)} placeholder="Opções, separadas por vírgula" />
-                      )}
-                    </div>
-                    <button type="button" disabled={!campoLabel.trim()} onClick={() => void criarCampo()}
-                      className="w-full py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white disabled:opacity-40">Criar campo</button>
-                  </div>
-                )}
-                {(!dossier || dossier.campos.length === 0) && !busy && (
-                  <p className="text-xs text-slate-400 py-2">Ainda sem campos extra. Crie NIF, empresa ou o que a comercial precisar.</p>
-                )}
-                <div className="space-y-2">
-                  {(dossier?.campos ?? []).map(c => (
-                    <label key={c.id} className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">
-                      {c.label}
-                      {c.tipo === "lista" ? (
-                        <select className={inp} value={vals[c.id] ?? ""} onChange={e => setVals(v => ({ ...v, [c.id]: e.target.value }))}>
-                          <option value="">—</option>
-                          {c.opcoes.map(o => <option key={o} value={o}>{o}</option>)}
-                        </select>
-                      ) : (
-                        <input
-                          className={inp}
-                          type={c.tipo === "numero" ? "number" : c.tipo === "data" ? "date" : "text"}
-                          value={vals[c.id] ?? ""}
-                          onChange={e => setVals(v => ({ ...v, [c.id]: e.target.value }))}
-                        />
-                      )}
-                    </label>
-                  ))}
-                </div>
-                {(dossier?.campos.length ?? 0) > 0 && (
-                  <button type="button" onClick={() => void guardarCampos()} className="mt-2 w-full py-2 text-xs font-semibold rounded-lg border border-slate-200">
-                    Guardar campos
-                  </button>
-                )}
-              </div>
-
-              {(dossier?.outrosPedidos.length ?? 0) > 0 && (
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-1">Outros pedidos deste contacto</p>
-                  <ul className="text-xs text-slate-600 space-y-1">
-                    {dossier!.outrosPedidos.map(o => (
-                      <li key={o.id}>{o.curso} · {o.estado} · {o.inscrito.slice(0, 10)}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
+            <button type="button" onClick={guardarDados} className="w-full py-2 border text-sm font-semibold rounded-lg">Guardar dados</button>
+            <div className="grid grid-cols-2 gap-2">
+              <select className={inp} value={lead.estado} onChange={e => {
+                const est = e.target.value;
+                if (est === "Pago") {
+                  onPatch?.({ estado: "Pago", pagamentoMetodo: pagMetodo || "MB Way" });
+                  return;
+                }
+                onPatch?.({ estado: est });
+              }}>
+                {CRM_COLS.filter(c => c.id !== "Formando" && c.id !== "Desistiu").map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+              </select>
+              <select className={inp} value={pagMetodo} onChange={e => setPagMetodo(e.target.value)}>
+                <option value="">Método de pagamento</option>
+                {["MB Way", "Multibanco", "Transferência", "Numerário"].map(m => <option key={m}>{m}</option>)}
+              </select>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+              <p className="text-xs font-semibold text-slate-600">Desistiu</p>
+              <select className={inp} value={motivo} onChange={e => setMotivo(e.target.value)}>
+                <option value="">Motivo…</option>
+                {MOTIVOS_DESISTENCIA.map(m => <option key={m}>{m}</option>)}
+              </select>
+              <button type="button" disabled={!motivo} onClick={() => onPatch?.({ estado: "Desistiu", motivoDesistencia: motivo })}
+                className="w-full py-1.5 text-xs font-semibold rounded-lg border border-slate-300">Marcar desistência</button>
+            </div>
+          </div>
+        )}
 
-            <div className="lg:col-span-2 space-y-3">
-              <Timeline eventos={dossier?.eventos ?? []} empty={busy ? "A carregar…" : "Ainda sem eventos. Contactos, notas e mudanças de etapa aparecem aqui."} />
-              <div className="flex gap-2">
-                <a href={`tel:${lead.telf}`} className="flex-1 py-2 bg-slate-800 text-white text-sm font-semibold rounded-lg text-center">Ligar</a>
-                {wa
-                  ? <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="flex-1 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg text-center">WhatsApp</a>
-                  : <span className="flex-1 py-2 bg-slate-100 text-slate-400 text-sm font-semibold rounded-lg text-center">Sem telemóvel</span>}
-              </div>
-              {lead.estado === "Não contactado" && (
-                <button type="button" onClick={() => onContactar?.(notas.trim(), meio)} className="w-full py-2 border text-sm font-semibold rounded-lg">Registar 1.º contacto</button>
+        {tab === "secretaria" && (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600">
+              Para entregar à secretaria faltam os dados da pré-inscrição mais NIF e morada fiscal.
+              O comercial completa aqui; a secretaria inscreve na turma.
+            </p>
+            {falta.length === 0
+              ? <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">Dossier completo.</p>
+              : (
+                <ul className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 list-disc list-inside">
+                  {falta.map(f => <li key={f.key}>{f.label}</li>)}
+                </ul>
               )}
-              {lead.estado !== "Pago" && lead.estado !== "Formando" && (
-                <button type="button" onClick={() => { onPatch?.({ estado: "Pago" }); toastOk("Marcado como pago."); }} className="w-full py-2 border border-teal-200 bg-teal-50 text-sm font-semibold text-teal-800 rounded-lg">Marcar pagamento recebido</button>
-              )}
-              {lead.estado !== "Formando" && (!escolherTurma ? (
-                <button type="button" onClick={() => setEscolherTurma(true)} className="w-full py-2.5 bg-amber-500 text-white text-sm font-bold rounded-lg">Inscrever numa turma</button>
+            <label className="text-xs font-semibold uppercase text-slate-500 flex flex-col gap-1">NIF
+              <input className={inp} value={dados.nif} onChange={e => setDados(d => ({ ...d, nif: e.target.value }))} />
+            </label>
+            <label className="text-xs font-semibold uppercase text-slate-500 flex flex-col gap-1">Morada fiscal
+              <input className={inp} value={dados.moradaFiscal} onChange={e => setDados(d => ({ ...d, moradaFiscal: e.target.value }))} />
+            </label>
+            {!entregue && (
+              <button type="button" disabled={falta.length > 0} onClick={() => void entregar()}
+                className="w-full py-2.5 bg-violet-600 disabled:opacity-40 text-white text-sm font-bold rounded-lg">
+                Entregar à secretaria
+              </button>
+            )}
+            {entregue && sec && (
+              !escolherTurma ? (
+                <button type="button" onClick={() => setEscolherTurma(true)} className="w-full py-2.5 bg-emerald-600 text-white text-sm font-bold rounded-lg">
+                  Inscrever numa turma
+                </button>
               ) : (
                 <div className="space-y-2">
-                  <SearchSelect value={turmaConv} onChange={setTurmaConv} options={turmaOpts} placeholder="Só turmas ativas…" empty="Não há turmas ativas para este curso." />
+                  <SearchSelect value={turmaConv} onChange={setTurmaConv} options={turmaOpts} placeholder="Turmas libertadas…" empty="Não há turmas libertadas." />
                   <TurmaInscricaoHint optsLen={turmaOpts.length} curso={lead.curso} />
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => setEscolherTurma(false)} className="flex-1 py-2 border text-sm rounded-lg">Cancelar</button>
-                    <button type="button" disabled={!turmaConv} onClick={() => onConvert?.(turmaConv)} className="flex-1 py-2.5 bg-amber-500 disabled:opacity-40 text-white text-sm font-bold rounded-lg">Confirmar</button>
-                  </div>
+                  <button type="button" disabled={!turmaConv} onClick={() => onConvert?.(turmaConv)} className="w-full py-2 bg-emerald-600 disabled:opacity-40 text-white text-sm font-bold rounded-lg">Confirmar inscrição</button>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {tab === "notas" && (
-          <div className="space-y-3">
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Meio deste contacto
-              <select className={inp} value={meio} onChange={e => setMeio(e.target.value)}>
-                <option value="">Escolher meio…</option>
-                {CRM_MEIOS.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </label>
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Nova nota comercial
-              <textarea value={notaNova} onChange={e => setNotaNova(e.target.value)} rows={3} className={`${inp} resize-none`} placeholder="O que ficou combinado, objecção, quem atendeu…" />
-            </label>
-            <button type="button" disabled={!notaNova.trim()} onClick={() => void gravarNota()}
-              className="w-full py-2 bg-amber-500 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Registar nota</button>
-            {(dossier?.notas.length ?? 0) === 0 && <p className="text-sm text-slate-400 text-center py-6">Ainda não há notas nesta lead.</p>}
-            <ul className="space-y-2">
-              {(dossier?.notas ?? []).map(n => (
-                <li key={n.id} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                  <p className="text-[11px] text-slate-400">{fmtWhen(n.createdAt)}{n.actorName ? ` · ${n.actorName}` : ""}{n.meio ? ` · ${n.meio}` : ""}</p>
-                  <p className="text-sm text-slate-700 mt-0.5 whitespace-pre-wrap">{n.nota || "Contacto sem texto."}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {tab === "historico" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2">
-              <Timeline eventos={dossier?.eventos ?? []} empty={busy ? "A carregar…" : "Ainda sem eventos nesta lead."} />
-            </div>
-            <div className="space-y-3">
-              {(dossier?.propostas.length ?? 0) > 0 && (
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Propostas</p>
-                  <ul className="space-y-1.5">
-                    {dossier!.propostas.map(p => (
-                      <li key={p.id} className="rounded-lg border border-slate-200 px-3 py-2 text-xs">
-                        <p className="font-semibold text-slate-700">{p.curso || "Proposta"}</p>
-                        <p className="text-slate-500">{p.estado} · € {p.valor}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <p className="text-[11px] text-slate-400">Criação, contactos, notas, campos, etapas e propostas entram neste rasto.</p>
-            </div>
+              )
+            )}
+            {entregue && !sec && (
+              <p className="text-xs text-violet-800 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">À espera da secretaria para colocar o formando na turma.</p>
+            )}
+            {novoCampo ? (
+              <div className="rounded-lg border p-3 space-y-2">
+                <input className={inp} value={campoLabel} onChange={e => setCampoLabel(e.target.value)} placeholder="Novo campo (todas as leads)" />
+                <select className={inp} value={campoTipo} onChange={e => setCampoTipo(e.target.value as CrmCampoTipo)}>
+                  <option value="texto">Texto</option><option value="numero">Número</option><option value="data">Data</option>
+                </select>
+                <button type="button" onClick={() => void persist(apiCrmCampoCreate({ label: campoLabel, tipo: campoTipo })).then(() => item && carregar(item.id))} className="text-xs font-semibold">Criar</button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setNovoCampo(true)} className="text-xs text-slate-400">+ Campo extra (todas as leads)</button>
+            )}
+            {(dossier?.campos ?? []).map(c => (
+              <label key={c.id} className="text-xs font-semibold uppercase text-slate-500 flex flex-col gap-1">{c.label}
+                <input className={inp} value={vals[c.id] ?? ""} onChange={e => setVals(v => ({ ...v, [c.id]: e.target.value }))} />
+              </label>
+            ))}
+            {(dossier?.campos.length ?? 0) > 0 && (
+              <button type="button" onClick={() => void persist(apiCrmLeadCampos(item.id, Object.entries(vals).map(([campoId, valor]) => ({ campoId: Number(campoId), valor })))).then(r => r && setDossier(r))} className="w-full py-2 border text-xs font-semibold rounded-lg">Guardar campos extra</button>
+            )}
           </div>
         )}
       </div>
@@ -443,18 +446,6 @@ export function ClienteFicha({
   );
 }
 
-function Timeline({ eventos, empty }: { eventos: CrmDossier["eventos"]; empty: string }) {
-  if (eventos.length === 0) return <p className="text-sm text-slate-400 py-6 text-center">{empty}</p>;
-  return (
-    <ol className="relative border-l border-slate-200 ml-2 space-y-3 max-h-[420px] overflow-y-auto pr-2">
-      {eventos.map(e => (
-        <li key={e.id} className="ml-4">
-          <span className={`absolute -left-1.5 mt-1.5 w-3 h-3 rounded-full border-2 border-white ${TIPO_DOT[e.tipo] ?? "bg-slate-400"}`} />
-          <p className="text-[11px] text-slate-400">{fmtWhen(e.createdAt)}{e.actorName ? ` · ${e.actorName}` : ""}</p>
-          <p className="text-sm font-semibold text-slate-800">{e.titulo}</p>
-          {e.detalhe && <p className="text-xs text-slate-600 mt-0.5 whitespace-pre-wrap">{e.detalhe}</p>}
-        </li>
-      ))}
-    </ol>
-  );
+export function badgeEstado(estado: string) {
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${badgeEstadoCls(estado)}`}>{estado}</span>;
 }

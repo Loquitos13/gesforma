@@ -92,6 +92,18 @@ export function estadoFechado(estado: string) {
   return estado === "Formando" || estado === "Desistiu";
 }
 
+export function estadoPodeEntregar(estado: string) {
+  return estado === "Pré-inscrição";
+}
+
+export function slaSeguimento(proximo: string | undefined, hoje: string, estado: string) {
+  if (!proximo || estado === "Formando" || estado === "Desistiu" || estado === "Pré-inscrição") return { late: false, label: proximo || "-" };
+  const dia = proximo.slice(0, 10);
+  if (dia < hoje) return { late: true, label: `atrasado · ${fmtRelativo(dia)}` };
+  if (dia === hoje) return { late: false, label: `hoje · ${proximo.slice(11, 16) || "09:00"}` };
+  return { late: false, label: proximo };
+}
+
 export function podeArrastar(de: string, para: string, opts: { role: string; secretariaEm?: string | null }) {
   if (de === para) return { ok: true as const };
   if (de === "Formando") return { ok: false as const, erro: "Um formando não volta no funil. Crie um novo pedido se precisar." };

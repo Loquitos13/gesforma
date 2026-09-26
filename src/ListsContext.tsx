@@ -185,7 +185,10 @@ export function ListsProvider({
       before = xs.find(x => x.id === id);
       return xs.map(x => x.id === id ? { ...x, ...patch } : x);
     });
-    void persist(apiPatchPreinscricao(id, patch), () => {
+    void persist(apiPatchPreinscricao(id, patch).then(r => {
+      if (r.preinscricao) setPre(xs => xs.map(x => x.id === id ? { ...x, ...r.preinscricao } : x));
+      return r;
+    }), () => {
       if (before) setPre(xs => xs.map(x => x.id === id ? before! : x));
     });
   }, []);

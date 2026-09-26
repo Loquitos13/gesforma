@@ -7,7 +7,7 @@ import {
 import { useAuth } from "./AuthGate";
 import { CRM_MEIOS, etiquetaChip } from "./crmUi";
 import {
-  badgeEstadoCls, camposEmFalta, CRM_COLS, isSecretariaRole,
+  badgeEstadoCls, camposEmFalta, CRM_COLS, estadoPodeEntregar, isSecretariaRole,
   MODELOS_NOTA, MOTIVOS_DESISTENCIA, RESULTADOS_CONTACTO,
 } from "./crmPipeline";
 import { AppModal, SearchSelect } from "./FormKit";
@@ -67,6 +67,7 @@ export function ClienteFicha({
   const [etiquetas, setEtiquetas] = useState<CrmEtiqueta[]>([]);
   const [motivo, setMotivo] = useState("");
   const [pagMetodo, setPagMetodo] = useState("");
+  const [entregando, setEntregando] = useState(false);
   const [escolherTurma, setEscolherTurma] = useState(false);
   const [turmaConv, setTurmaConv] = useState("");
   const [dados, setDados] = useState({
@@ -113,6 +114,7 @@ export function ClienteFicha({
     setEscolherTurma(false);
     setDossier(null);
     setResultado("");
+    setEntregando(false);
   }, [item?.id]);
 
   useEffect(() => {
@@ -144,6 +146,32 @@ export function ClienteFicha({
     nif: dados.nif, moradaFiscal: dados.moradaFiscal,
   }) : [], [lead, dados, oferta]);
 
+  useEffect(() => {
+    if (!item || !lead || lead.secretariaEm || entregando) return;
+    if (!estadoPodeEntregar(lead.estado) || falta.length > 0) return;
+    const t = window.setTimeout(async () => {
+      setEntregando(true);
+      try {
+        const r = await apiCrmCompletar(item.id, {
+          ...dados, curso: oferta.curso, local: oferta.local, horario: oferta.horario, inicioCurso: oferta.dataInicio,
+        });
+        setDossier(r);
+        onPatch?.({
+          estado: "Pré-inscrição", ...dados, curso: oferta.curso, local: oferta.local,
+          horario: oferta.horario, inicioCurso: oferta.dataInicio, secretariaEm: r.lead.secretariaEm,
+        });
+        toastOk("Pré-inscrição entregue à secretaria.");
+      } catch {
+        /* ainda em falta no servidor */
+      } finally {
+        setEntregando(false);
+      }
+    }, 700);
+    return () => window.clearTimeout(t);
+    // onPatch muda a cada render do CRM
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item?.id, lead?.estado, lead?.secretariaEm, falta.length, entregando, dados, oferta]);
+
   if (!item || !lead) return null;
   const wa = telDigits(lead.telf);
   const turmaOpts = turmaGoldOpts(gold, { curso: lead.curso });
@@ -161,7 +189,8 @@ export function ClienteFicha({
   }
 
   async function entregar() {
-    if (!item) return;
+    if (!item || entregando) return;
+    setEntregando(true);
     try {
       const r = await apiCrmCompletar(item.id, {
         ...dados, curso: oferta.curso, local: oferta.local, horario: oferta.horario, inicioCurso: oferta.dataInicio,
@@ -172,15 +201,20 @@ export function ClienteFicha({
       setTab("actividade");
     } catch (e) {
       toastError(e, "Ainda faltam dados obrigatórios.");
+    } finally {
+      setEntregando(false);
     }
   }
 
-  function guardarDados() {
+  async function guardarDados() {
     onPatch?.({
       ...dados, curso: oferta.curso, local: oferta.local, horario: oferta.horario,
       inicioCurso: oferta.dataInicio || "-", turmaId: oferta.turmaId,
     });
     toastOk("Dados gravados.");
+    if (falta.length === 0 && estadoPodeEntregar(lead?.estado ?? "") && !lead?.secretariaEm) {
+      await entregar();
+    }
   }
 
   const eventos = (dossier?.eventos ?? []).filter(e => filtroEv === "todos" || e.tipo === filtroEv);
@@ -282,7 +316,10 @@ export function ClienteFicha({
             </div>
             {(dossier?.notas ?? []).filter(n => n.fixada).map(n => (
               <div key={n.id} className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
-                <p className="text-[11px] text-amber-800 font-semibold">Fixada · {n.actorName}</p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-[11px] text-amber-800 font-semibold">Fixada · {n.actorName}</p>
+                  <button type="button" className="text-[11px] text-amber-700 font-semibold" onClick={() => void persist(apiCrmNotaFixar(item.id, n.id, false)).then(r => r && setDossier(r))}>Desafixar</button>
+                </div>
                 <p className="whitespace-pre-wrap">{n.nota}</p>
               </div>
             ))}
@@ -297,10 +334,17 @@ export function ClienteFicha({
                 </li>
               ))}
             </ol>
-            {(dossier?.notas ?? []).slice(0, 6).map(n => (
-              <button key={`n-${n.id}`} type="button" onClick={() => void persist(apiCrmNotaFixar(item.id, n.id, !n.fixada)).then(r => r && setDossier(r))}
-                className="text-[11px] text-slate-400 hover:text-amber-700 block">{n.fixada ? "Desafixar" : `Fixar: ${n.nota.slice(0, 40)}`}</button>
-            ))}
+            <div className="space-y-1">
+              {(dossier?.notas ?? []).map(n => (
+                <div key={`n-${n.id}`} className="flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                  <p className="truncate">{n.fixada ? "★ " : ""}{n.nota.slice(0, 72)}</p>
+                  <button type="button" onClick={() => void persist(apiCrmNotaFixar(item.id, n.id, !n.fixada)).then(r => r && setDossier(r))}
+                    className={`shrink-0 font-semibold ${n.fixada ? "text-amber-700" : "text-slate-400 hover:text-amber-700"}`}>
+                    {n.fixada ? "Desafixar" : "Fixar"}
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -382,27 +426,24 @@ export function ClienteFicha({
         {tab === "secretaria" && (
           <div className="space-y-3">
             <p className="text-sm text-slate-600">
-              Para entregar à secretaria faltam os dados da pré-inscrição mais NIF e morada fiscal.
-              O comercial completa aqui; a secretaria inscreve na turma.
+              Complete o que falta (NIF e morada fiscal inclusive). Quando o dossiê ficar completo, o pedido passa sozinho para a secretaria.
             </p>
+            {entregando && <p className="text-xs text-violet-800">A entregar à secretaria…</p>}
             {falta.length === 0
-              ? <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">Dossier completo.</p>
+              ? <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">{entregue ? "Na secretaria." : "Dossier completo — a entregar à secretaria."}</p>
               : (
                 <ul className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 list-disc list-inside">
                   {falta.map(f => <li key={f.key}>{f.label}</li>)}
                 </ul>
               )}
             <label className="text-xs font-semibold uppercase text-slate-500 flex flex-col gap-1">NIF
-              <input className={inp} value={dados.nif} onChange={e => setDados(d => ({ ...d, nif: e.target.value }))} />
+              <input className={inp} value={dados.nif} onChange={e => setDados(d => ({ ...d, nif: e.target.value }))} onBlur={() => { if (falta.length <= 1) void guardarDados(); }} />
             </label>
             <label className="text-xs font-semibold uppercase text-slate-500 flex flex-col gap-1">Morada fiscal
-              <input className={inp} value={dados.moradaFiscal} onChange={e => setDados(d => ({ ...d, moradaFiscal: e.target.value }))} />
+              <input className={inp} value={dados.moradaFiscal} onChange={e => setDados(d => ({ ...d, moradaFiscal: e.target.value }))} onBlur={() => { if (falta.length <= 1) void guardarDados(); }} />
             </label>
-            {!entregue && (
-              <button type="button" disabled={falta.length > 0} onClick={() => void entregar()}
-                className="w-full py-2.5 bg-violet-600 disabled:opacity-40 text-white text-sm font-bold rounded-lg">
-                Entregar à secretaria
-              </button>
+            {!entregue && falta.length > 0 && (
+              <p className="text-xs text-slate-500">O botão deixa de ser necessário: ao gravar o último campo o processo segue para a secretaria.</p>
             )}
             {entregue && sec && (
               !escolherTurma ? (

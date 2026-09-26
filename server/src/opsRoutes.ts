@@ -29,7 +29,7 @@ import { globalSearch } from "./globalSearch.js";
 import { config } from "./config.js";
 import { criarPreinscricaoPublica } from "./preinscricaoPublica.js";
 import { listCursosGoldActivos, listOfertaGold } from "./ofertaGold.js";
-import { camposEmFalta, podeArrastar } from "./crmRegras.js";
+import { camposEmFalta, estadoPodeEntregar, podeArrastar } from "./crmRegras.js";
 
 const preSchema = z.object({
   nome: z.string().trim().min(1).max(80),
@@ -75,6 +75,21 @@ async function oneLead(db: Db, id: number) {
      LEFT JOIN crm_etiquetas e ON e.id = p.etiqueta_id
      LEFT JOIN users u ON u.id = p.comercial_id
      WHERE p.id = $1`, [id]);
+}
+
+async function entregarSeCompleto(db: Db, id: number, actorId: string) {
+  const row = await oneLead(db, id);
+  if (!row) return null;
+  const mapped = mapPreinscricao(row);
+  if (mapped.secretariaEm) return mapped;
+  if (!estadoPodeEntregar(mapped.estado)) return mapped;
+  if (camposEmFalta(mapped).length) return mapped;
+  await db.query(
+    "UPDATE preinscricoes SET secretaria_em = now(), ultima_actividade_em = now(), estado = 'Pré-inscrição' WHERE id = $1 AND secretaria_em IS NULL",
+    [id],
+  );
+  await logLeadEvent(db, id, actorId, "estado", "Entregue à secretaria", "Pré-inscrição completa — passou automaticamente à secretaria.");
+  return mapPreinscricao((await oneLead(db, id)) ?? row);
 }
 
 export function registerOpsRoutes(
@@ -383,8 +398,10 @@ export function registerOpsRoutes(
     const mapped = mapPreinscricao(row);
     const falta = camposEmFalta(mapped);
     if (falta.length) return reply.code(400).send({ error: `Falta: ${falta.map(f => f.label).join(", ")}`, falta: falta.map(f => f.key) });
-    await db.query("UPDATE preinscricoes SET secretaria_em = now(), ultima_actividade_em = now() WHERE id = $1", [id]);
-    await logLeadEvent(db, id, req.actor!.id, "estado", "Entregue à secretaria", "Pré-inscrição completa (NIF e morada fiscal).");
+    if (!mapped.secretariaEm) {
+      await db.query("UPDATE preinscricoes SET secretaria_em = now(), ultima_actividade_em = now() WHERE id = $1 AND secretaria_em IS NULL", [id]);
+      await logLeadEvent(db, id, req.actor!.id, "estado", "Entregue à secretaria", "Pré-inscrição completa (NIF e morada fiscal).");
+    }
     await audit(db, req.actor!.id, "crm.completar", "preinscricao", String(id), req.ip);
     return getLeadDossier(db, id);
   });
@@ -529,7 +546,8 @@ export function registerOpsRoutes(
         }, `payment:pre:${id}:${email}`).catch(() => undefined);
       }
     }
-    return { preinscricao: row ? mapPreinscricao(row) : null };
+    const handed = await entregarSeCompleto(db, id, req.actor!.id);
+    return { preinscricao: handed };
   });
 
   app.post("/v1/preinscricoes/:id/contactar", async (req, reply) => {

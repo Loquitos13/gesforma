@@ -83,6 +83,10 @@ export function camposEmFalta(lead: LeadCamposSecretaria) {
   });
 }
 
+export function estadoPodeEntregar(estado: string) {
+  return estado === "Pré-inscrição";
+}
+
 export function podeArrastar(de: string, para: string, opts: { role: string; secretariaEm?: string | null; motivo?: string }) {
   if (de === para) return { ok: true as const };
   if (de === "Formando") return { ok: false as const, erro: "Um formando não volta no funil. Crie um novo pedido se precisar." };

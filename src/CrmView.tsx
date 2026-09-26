@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  apiCrmComerciais, apiCrmDuplicados, apiCrmEtiquetas, apiCrmExport, apiCrmLeads, apiCrmLote,
+  apiCrmComerciais, apiCrmDuplicados, apiCrmEtiquetas, apiCrmExport, apiCrmLeadNota, apiCrmLeads, apiCrmLote,
   type CrmEtiqueta, type CrmFila, type CrmLead, type CrmListQuery, type CrmListResult, type CrmSort,
 } from "./api";
-import { ClienteFicha, badgeEstado } from "./ClienteFicha";
+import { ClienteFicha } from "./ClienteFicha";
 import { entradaChip, etiquetaChip, leadMarkStyle, meioChip } from "./crmUi";
 import { AppModal, ViewFilters, cursosGoldOpts, locaisOpts } from "./FormKit";
 import { nextListId, useLists, type Preinscricao } from "./ListsContext";
@@ -15,7 +15,7 @@ import { CursoOfertaCampos } from "./CursoOfertaCampos";
 import { type CursoOfertaSel } from "./oferta";
 import { WhatsappSimulador } from "./WhatsappSimulador";
 import { useAuth } from "./AuthGate";
-import { badgeEstadoCls, CRM_COLS, CRM_ESTADOS, fmtRelativo, isSecretariaRole, podeArrastar } from "./crmPipeline";
+import { badgeEstadoCls, CRM_COLS, CRM_ESTADOS, fmtRelativo, isSecretariaRole, podeArrastar, slaSeguimento } from "./crmPipeline";
 
 const PREFS_KEY = "gesforma.crm.prefs";
 
@@ -267,6 +267,15 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
 
   const fichaIdx = ficha ? items.findIndex(x => x.id === ficha.id) : -1;
 
+  async function logContacto(item: CrmLead, canal: "Telefone" | "WhatsApp") {
+    const texto = canal === "WhatsApp" ? "Abriu WhatsApp." : "Tentativa de chamada.";
+    const res = canal === "WhatsApp" ? "Atendeu" : "Não atendeu";
+    const r = await persist(apiCrmLeadNota(item.id, texto, canal, res));
+    if (!r) return;
+    toastOk("Contacto registado na ficha.");
+    setTimeout(carregar, 200);
+  }
+
   return (
     <>
       <div className="space-y-3">
@@ -436,6 +445,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
             columns={data?.columns ?? CRM_COLS.map(c => ({ estado: c.id, total: data?.porEstado[c.id] ?? 0, items: items.filter(i => i.estado === c.id).slice(0, 80) }))}
             busy={busy}
             role={user.role}
+            hoje={hoje}
             onOpen={openFicha}
             onMove={(item, est) => {
               const gate = podeArrastar(item.estado, est, { role: user.role, secretariaEm: item.secretariaEm });
@@ -443,9 +453,10 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
               if (est === "Formando") { setConfirmMove({ id: item.id, estado: est, item }); return; }
               if (est === "Desistiu" && !item.motivoDesistencia) { openFicha(item); toastError("Indique o motivo da desistência na ficha."); return; }
               patchPreinscricao(item.id, { estado: est });
-              toastOk("Etapa actualizada.");
-              setTimeout(carregar, 200);
+              toastOk(est === "Pré-inscrição" ? "Pré-inscrição: complete NIF e morada se faltarem — a secretaria recebe automaticamente." : "Etapa actualizada.");
+              setTimeout(carregar, 400);
             }}
+            onLogContact={(item, canal) => void logContacto(item, canal)}
           />
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -469,6 +480,8 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                       meta={[r.entrada === "manual" ? "Manual" : "Pré-inscrição", r.meioContacto || "sem meio", r.etiquetaNome || "sem etiqueta", [r.local, r.horario, r.inicioCurso && r.inicioCurso !== "-" ? r.inicioCurso : ""].filter(Boolean).join(" · ") || "sem turma", `€ ${r.preco}`]}
                       onOpen={() => openFicha(r)}
                       actions={[
+                        ...(r.telf ? [{ label: "Ligar", icon: ic.phone, onClick: () => { void logContacto(r, "Telefone"); window.location.href = `tel:${r.telf}`; } }] : []),
+                        ...(telDigits(r.telf) ? [{ label: "WhatsApp", icon: ic.wa, onClick: () => { void logContacto(r, "WhatsApp"); window.open(`https://wa.me/${telDigits(r.telf)}`, "_blank"); } }] : []),
                         ...(r.estado === "Não contactado" ? [{ label: "Contactar", icon: ic.phone, onClick: () => { contactarPreinscricao(r.id); openFicha({ ...r, estado: "1º Contacto" }); } }] : []),
                         { label: "Ficha", icon: ic.eye, onClick: () => openFicha(r) },
                         { label: "Editar", icon: ic.edit, onClick: () => { setEditLead(r); resetForm(r); setNovo(true); } },
@@ -493,7 +506,8 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {items.map((r, idx) => {
-                    const late = Boolean(r.proximoContacto && r.proximoContacto.slice(0, 10) < hoje && r.estado !== "Pago" && r.estado !== "Formando" && r.estado !== "Pré-inscrição" && r.estado !== "Desistiu");
+                    const sla = slaSeguimento(r.proximoContacto, hoje, r.estado);
+                    const late = sla.late;
                     return (
                       <tr key={r.id} className={`hover:brightness-[0.98] ${sel.has(r.id) ? "ring-1 ring-amber-300" : ""}`}
                         style={leadMarkStyle(r.etiquetaCor)}>
@@ -518,7 +532,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                         </td>
                         <td className="px-3 py-1.5 text-xs font-bold text-amber-600 whitespace-nowrap">€ {r.preco}</td>
                         <td className={`px-3 py-1.5 text-[11px] whitespace-nowrap ${late ? "font-bold text-red-600" : "text-slate-500"}`}>
-                          {r.proximoContacto || "-"}
+                          {sla.label}
                         </td>
                         <td className="px-3 py-1.5 text-[11px] text-slate-500 max-w-[180px] truncate" title={r.ultimaNota}>
                           {r.ultimaNota ? <><span className="text-slate-400">{fmtRelativo(r.ultimaActividadeEm)} · </span>{r.ultimaNota}</> : <span className="text-slate-300">—</span>}
@@ -531,6 +545,8 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                         </td>
                         <td className="px-3 py-1.5">
                           <RowActions primary={1} actions={[
+                            ...(r.telf ? [{ label: "Ligar", icon: ic.phone, onClick: () => { void logContacto(r, "Telefone"); window.location.href = `tel:${r.telf}`; } }] : []),
+                            ...(telDigits(r.telf) ? [{ label: "WhatsApp", icon: ic.wa, onClick: () => { void logContacto(r, "WhatsApp"); window.open(`https://wa.me/${telDigits(r.telf)}`, "_blank"); } }] : []),
                             ...(r.estado === "Não contactado" ? [{ label: "Contactar", icon: ic.phone, onClick: () => { contactarPreinscricao(r.id); setFicha({ ...r, estado: "1º Contacto" }); } }] : []),
                             { label: "Ficha", icon: ic.eye, onClick: () => openFicha(r) },
                             { label: "Editar", icon: ic.edit, onClick: () => { setEditLead(r); resetForm(r); setNovo(true); } },
@@ -741,13 +757,15 @@ function FilaBtn({ active, tone, title, sub, onClick }: { active: boolean; tone:
 }
 
 function Kanban({
-  columns, busy, onOpen, onMove, role,
+  columns, busy, onOpen, onMove, onLogContact, role, hoje,
 }: {
   columns: { estado: string; total: number; valor?: number; items: CrmLead[] }[];
   busy: boolean;
   role: string;
+  hoje: string;
   onOpen: (item: CrmLead) => void;
   onMove: (item: CrmLead, estado: string) => void;
+  onLogContact: (item: CrmLead, canal: "Telefone" | "WhatsApp") => void;
 }) {
   const [dragId, setDragId] = useState<number | null>(null);
   const [dragItem, setDragItem] = useState<CrmLead | null>(null);
@@ -789,14 +807,15 @@ function Kanban({
               {busy && pack.items.length === 0 && <p className="py-6 text-center text-xs text-slate-400">A carregar…</p>}
               {pack.items.map(item => {
                 const wa = telDigits(item.telf);
+                const sla = slaSeguimento(item.proximoContacto, hoje, item.estado);
                 return (
-                  <div key={item.id} draggable onDragStart={() => { setDragId(item.id); setDragItem(item); }}>
-                    <button type="button" onClick={() => onOpen(item)}
-                      className="w-full text-left rounded-xl border shadow-sm p-3 hover:brightness-[0.98]"
-                      style={{
-                        ...leadMarkStyle(item.etiquetaCor),
-                        borderColor: item.etiquetaCor || undefined,
-                      }}>
+                  <div key={item.id} draggable onDragStart={() => { setDragId(item.id); setDragItem(item); }}
+                    className="rounded-xl border shadow-sm p-3 hover:brightness-[0.98]"
+                    style={{
+                      ...leadMarkStyle(item.etiquetaCor),
+                      borderColor: item.etiquetaCor || undefined,
+                    }}>
+                    <button type="button" onClick={() => onOpen(item)} className="w-full text-left">
                       <div className="flex items-start justify-between gap-1">
                         <p className="text-xs font-bold text-slate-800 leading-snug">{item.nome} {item.apelido}</p>
                         <span className="text-xs font-bold text-amber-600">€ {item.preco}</span>
@@ -813,12 +832,14 @@ function Kanban({
                       {item.ultimaNota ? <p className="text-[11px] text-slate-500 mt-1 truncate">{item.ultimaNota}</p> : null}
                       <p className="text-xs text-slate-500 mt-0.5 truncate">{item.curso}</p>
                       <p className="text-[11px] text-slate-400 truncate">{[item.local, item.horario, item.inicioCurso && item.inicioCurso !== "-" ? item.inicioCurso : ""].filter(Boolean).join(" · ")}</p>
-                      {item.proximoContacto ? <p className="text-[11px] text-slate-400 mt-0.5">{item.proximoContacto}</p> : null}
-                      <div className="flex gap-2 mt-2">
-                        <a href={`tel:${item.telf}`} onClick={e => e.stopPropagation()} className="flex-1 py-1 text-center bg-slate-100 text-slate-700 text-xs font-medium rounded-lg inline-flex items-center justify-center gap-1">{ic.phone} Ligar</a>
-                        {wa && <a href={`https://wa.me/${wa}`} onClick={e => e.stopPropagation()} className="flex-1 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-lg inline-flex items-center justify-center gap-1">{ic.wa} WA</a>}
-                      </div>
+                      {item.proximoContacto ? <p className={`text-[11px] mt-0.5 ${sla.late ? "text-red-600 font-semibold" : "text-slate-400"}`}>{sla.label}</p> : null}
                     </button>
+                    <div className="flex gap-2 mt-2">
+                      {item.telf
+                        ? <a href={`tel:${item.telf}`} onClick={e => { e.stopPropagation(); onLogContact(item, "Telefone"); }} className="flex-1 py-1 text-center bg-slate-100 text-slate-700 text-xs font-medium rounded-lg inline-flex items-center justify-center gap-1">{ic.phone} Ligar</a>
+                        : <span className="flex-1 py-1 text-center bg-slate-50 text-slate-300 text-xs rounded-lg">Sem tel.</span>}
+                      {wa && <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" onClick={e => { e.stopPropagation(); onLogContact(item, "WhatsApp"); }} className="flex-1 py-1 text-center bg-emerald-100 text-emerald-700 text-xs font-medium rounded-lg inline-flex items-center justify-center gap-1">{ic.wa} WA</a>}
+                    </div>
                   </div>
                 );
               })}

@@ -44,7 +44,10 @@ export function AppModal({
   useEffect(() => {
     if (!open) return;
     const t = window.setTimeout(() => {
-      const el = panelRef.current?.querySelector<HTMLElement>("button, [href], input, select, textarea");
+      const body = panelRef.current?.querySelector<HTMLElement>("[data-app-modal-body]");
+      const el = body?.querySelector<HTMLElement>("input:not([type=hidden]), select, textarea")
+        ?? body?.querySelector<HTMLElement>("button")
+        ?? panelRef.current?.querySelector<HTMLElement>("button, [href], input, select, textarea");
       el?.focus();
     }, 20);
     return () => window.clearTimeout(t);
@@ -75,7 +78,7 @@ export function AppModal({
             </svg>
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        <div data-app-modal-body className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         {footer && (
           <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-100 flex-shrink-0 bg-white">
             {footer}
@@ -127,7 +130,7 @@ function MenuPortal({
   return createPortal(
     <div
       ref={panelRef}
-      style={{ position: "fixed", top: box.top, left: box.left, width: box.width, zIndex: 80 }}
+      style={{ position: "fixed", top: box.top, left: box.left, width: box.width, zIndex: 200 }}
       className="bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden"
     >
       {children}
@@ -281,6 +284,21 @@ export const blogTematicasOpts: SelectOption[] = [
   { value: "Carreiras na saúde", sub: "saude" },
   { value: "Notícias ENA", sub: "noticias" },
 ];
+
+export function optsFromCursos(
+  cursos: { nome?: string; ufcd?: string; nomeComercial?: string; tipo?: string; horas?: number; regime?: string; estado?: string }[],
+): SelectOption[] {
+  const out: SelectOption[] = [];
+  for (const c of cursos) {
+    const value = (c.nome || c.nomeComercial || c.ufcd || "").trim();
+    if (!value) continue;
+    const sub = [c.tipo, c.horas ? `${c.horas}h` : "", c.regime, c.estado && c.estado !== "Ativo" ? c.estado : ""]
+      .filter(Boolean)
+      .join(" · ");
+    out.push(sub ? { value, sub } : { value });
+  }
+  return out;
+}
 
 export function SearchSelect({
   value, onChange, options, placeholder = "Pesquisar…", empty = "Nenhum resultado.", allowEmpty,

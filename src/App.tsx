@@ -24,8 +24,8 @@ import {
 } from "./TurmaExtras";
 import { ResolverDocumentoModal } from "./DocResolver";
 import { CursoFichaView } from "./CursoFichaView";
-import { AppModal, SearchSelect, MultiSearchSelect, ViewFilters, matchesFilter, uniqueOpts,
-  blogTematicasOpts, cursosFinOpts, cursosGoldOpts,
+import {   AppModal, SearchSelect, MultiSearchSelect, ViewFilters, matchesFilter, uniqueOpts,
+  blogTematicasOpts, cursosFinOpts, cursosGoldOpts, optsFromCursos,
   horariosOpts, locaisOpts, modulosOptsForCurso,
 } from "./FormKit";
 import { OptionSelect } from "./OptionSelect";
@@ -2743,6 +2743,7 @@ function PainelView({ onNavigate }: { onNavigate: (v: View | NavTarget) => void 
 
 function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   const { gold, patchGold, addGold, removeGold, toggleGold } = useTurmas();
+  const { cursosGold } = useLists();
   const formadorOpts = useFormadorOptions();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
@@ -2751,7 +2752,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   const [open, setOpen] = useState<TurmaGold | "new" | null>(null);
   const [apagar, setApagar] = useState<TurmaGold | null>(null);
   const [nome, setNome] = useState("");
-  const [curso, setCurso] = useState("Formação de Formadores - CCP");
+  const [curso, setCurso] = useState("");
   const [local, setLocal] = useState("");
   const [horario, setHorario] = useState("");
   const [formador, setFormador] = useState("Isac Silva");
@@ -2761,16 +2762,20 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   const [cronograma, setCronograma] = useState<SessaoCronograma[]>([]);
   const editing = open && open !== "new" ? open : null;
   const ativas = gold.filter(t => isTurmaActiva(t)).length;
+  const cursoOpts = useMemo(() => {
+    const live = optsFromCursos(cursosGold);
+    return live.length ? live : cursosGoldOpts;
+  }, [cursosGold]);
   const f = gold.filter(t => {
     const q = `${t.nome} ${t.local} ${t.curso}`.toLowerCase().includes(s.toLowerCase());
     return q && matchesFilter(t.curso, filtroCurso) && matchesFilter(t.local, filtroLocal) && (filtro === "Todos" || t.estado === filtro);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
-  const horasCurso = cursosGoldData.find(c => c.nome === curso)?.horas ?? 90;
+  const horasCurso = cursosGold.find(c => c.nome === curso)?.horas ?? cursosGoldData.find(c => c.nome === curso)?.horas ?? 90;
   useEffect(() => {
     if (open) {
       setNome(editing?.nome ?? "");
-      setCurso(editing?.curso ?? "Formação de Formadores - CCP");
+      setCurso(editing?.curso ?? "");
       setLocal(editing?.local ?? "");
       setHorario(editing?.horario ?? "");
       setFormador(editing?.formador ?? "Isac Silva");
@@ -2781,6 +2786,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
     }
   }, [open, editing]);
   function guardar() {
+    if (!curso.trim()) return;
     const payload = {
       nome: nome.trim() || "Nova turma",
       curso, local, horario, formador, dataInicio, vagas,
@@ -2885,7 +2891,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
         <div className="p-5 space-y-3">
           <TurmaActivaToggle activa={activa} onChange={setActiva} />
           <Field label="Código interno"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="VNG-SM-07/09" /></Field>
-          <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursoOpts} placeholder="Pesquisar curso…" allowEmpty /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Local"><SearchSelect value={local} onChange={setLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
             <Field label="Horário"><SearchSelect value={horario} onChange={setHorario} options={horariosOpts} /></Field>
@@ -2907,7 +2913,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
           />
           <div className="flex gap-2 pt-2">
             <button onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button onClick={guardar} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
+            <button onClick={guardar} disabled={!curso.trim()} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Guardar</button>
           </div>
         </div>
       </SlideOver>

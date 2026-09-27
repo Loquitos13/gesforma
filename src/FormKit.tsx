@@ -302,7 +302,7 @@ export function optsFromCursos(
 
 export function SearchSelect({
   value, onChange, options, placeholder = "Pesquisar…", empty = "Nenhum resultado.", allowEmpty,
-  onAdd, addLabel = "Adicionar opção",
+  onAdd, addLabel = "Adicionar opção", disabled,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -312,6 +312,7 @@ export function SearchSelect({
   allowEmpty?: boolean;
   onAdd?: () => void;
   addLabel?: string;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -332,14 +333,14 @@ export function SearchSelect({
   const selected = all.find(o => o.value === value);
   return (
     <div ref={triggerRef} className="relative">
-      <button type="button" onClick={() => { setOpen(v => !v); setQ(""); }}
-        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-amber-400">
+      <button type="button" disabled={disabled} onClick={() => { if (disabled) return; setOpen(v => !v); setQ(""); }}
+        className={`w-full px-3 py-2 text-sm border border-slate-200 rounded-lg text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-amber-400 ${disabled ? "bg-slate-50 cursor-not-allowed opacity-70" : "bg-white"}`}>
         <span className={`truncate ${selected || value ? "text-slate-800" : "text-slate-400"}`}>
           {selected?.value ?? (value || "Selecionar…")}
         </span>
         <span className="text-slate-400 flex-shrink-0">▾</span>
       </button>
-      <MenuPortal open={open} triggerRef={triggerRef} panelRef={panelRef}>
+      <MenuPortal open={open && !disabled} triggerRef={triggerRef} panelRef={panelRef}>
         <div className="p-2 border-b border-slate-100 flex items-center gap-1.5 bg-white">
           <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={placeholder}
             className="min-w-0 flex-1 px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400" />

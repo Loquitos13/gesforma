@@ -26,8 +26,9 @@ import { ResolverDocumentoModal } from "./DocResolver";
 import { CursoFichaView } from "./CursoFichaView";
 import {   AppModal, SearchSelect, MultiSearchSelect, ViewFilters, matchesFilter, uniqueOpts,
   blogTematicasOpts, cursosFinOpts, cursosGoldOpts, optsFromCursos,
-  horariosOpts, locaisOpts, modulosOptsForCurso,
+  horariosOpts, modulosOptsForCurso,
 } from "./FormKit";
+import { useLocaisOptsDoCurso } from "./cursoLocais";
 import { OptionSelect } from "./OptionSelect";
 import { ListasOpcoesView } from "./ListasOpcoesView";
 import { CronogramaEditor, FormadoresAtribuidosCard, TurmaActivaToggle, TurmaInactivaBanner, TurmaInscricaoHint } from "./TurmaCronograma";
@@ -1443,7 +1444,7 @@ function exportPayload(
 
 function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab; onNavigate?: (v: View) => void }) {
   const { gold, toggleGold, setGoldCronograma, patchGold } = useTurmas();
-  const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma } = useLists();
+  const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma, cursosGold } = useLists();
   const turma = gold.find(t => t.id === turmaId) ?? gold[0];
   const activa = isTurmaActiva(turma);
   const membros = formandosTurmas.filter(f => f.turmaId === turma.id);
@@ -1483,6 +1484,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const [editInicio, setEditInicio] = useState("");
   const [editVagas, setEditVagas] = useState(16);
   const formadorOpts = useFormadorOptions();
+  const locaisDoCurso = useLocaisOptsDoCurso("gold", cursosGold, turma.curso);
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
   const nomesCockpit = membros.map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }));
 
@@ -1889,7 +1891,16 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         <div className="p-5 space-y-3">
           <Field label="Código interno"><input className={iCls} value={editNome} onChange={e => setEditNome(e.target.value)} /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Local"><SearchSelect value={editLocal} onChange={setEditLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
+            <Field label="Local">
+              <SearchSelect
+                value={editLocal}
+                onChange={setEditLocal}
+                options={locaisDoCurso.options}
+                disabled={locaisDoCurso.disabled}
+                placeholder={locaisDoCurso.placeholder}
+                empty={locaisDoCurso.empty}
+              />
+            </Field>
             <Field label="Horário"><SearchSelect value={editHorario} onChange={setEditHorario} options={horariosOpts} /></Field>
           </div>
           <Field label="Formador"><SearchSelect value={editFormador} onChange={setEditFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
@@ -1978,7 +1989,7 @@ function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (
 
 function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab; onNavigate?: (v: View | NavTarget) => void }) {
   const { fin, toggleFin, setFinCronograma, patchFin } = useTurmas();
-  const { formandosFin, addFormandoFin, patchFormandoFin, removeFormandoFin } = useLists();
+  const { formandosFin, addFormandoFin, patchFormandoFin, removeFormandoFin, cursosFin } = useLists();
   const turma = fin.find(t => t.id === turmaId) ?? fin.find(t => t.ufcdCod === "3564") ?? fin[0];
   const activa = isTurmaActiva(turma);
   const sessoesTurma = cronogramaToSessoes(turma.cronograma);
@@ -2014,6 +2025,11 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const [editLocal, setEditLocal] = useState("");
   const [editInicio, setEditInicio] = useState("");
   const formadorOpts = useFormadorOptions();
+  const locaisDoCurso = useLocaisOptsDoCurso("fin", cursosFin, editCurso);
+  const cursoFinOptsLive = useMemo(() => {
+    const live = optsFromCursos(cursosFin);
+    return live.length ? live : cursosFinOpts;
+  }, [cursosFin]);
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
   const membros = formandosFin.filter(f => {
     if (f.turma === turma.nome) return true;
@@ -2367,9 +2383,28 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
       <SlideOver open={editTurma} onClose={() => setEditTurma(false)} title={`Editar ${turma.nome}`} sub="Dados da turma financiada" size="lg">
         <div className="p-5 space-y-3">
           <Field label="Código da turma"><input className={iCls} value={editNome} onChange={e => setEditNome(e.target.value)} /></Field>
-          <Field label="Curso / UFCD"><SearchSelect value={editCurso} onChange={setEditCurso} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
+          <Field label="Curso / UFCD">
+            <SearchSelect
+              value={editCurso}
+              onChange={v => {
+                setEditCurso(v);
+                setEditLocal(prev => locaisDoCurso.locaisFor(v).includes(prev) ? prev : "");
+              }}
+              options={cursoFinOptsLive}
+              placeholder="Pesquisar UFCD…"
+            />
+          </Field>
           <Field label="Formador"><SearchSelect value={editFormador} onChange={setEditFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
-          <Field label="Local"><SearchSelect value={editLocal} onChange={setEditLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
+          <Field label="Local">
+            <SearchSelect
+              value={editLocal}
+              onChange={setEditLocal}
+              options={locaisDoCurso.options}
+              disabled={locaisDoCurso.disabled}
+              placeholder={locaisDoCurso.placeholder}
+              empty={locaisDoCurso.empty}
+            />
+          </Field>
           <Field label="Data de início"><input type="date" className={iCls} value={editInicio} onChange={e => setEditInicio(e.target.value)} /></Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setEditTurma(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
@@ -2766,6 +2801,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
     const live = optsFromCursos(cursosGold);
     return live.length ? live : cursosGoldOpts;
   }, [cursosGold]);
+  const locaisDoCurso = useLocaisOptsDoCurso("gold", cursosGold, curso);
   const f = gold.filter(t => {
     const q = `${t.nome} ${t.local} ${t.curso}`.toLowerCase().includes(s.toLowerCase());
     return q && matchesFilter(t.curso, filtroCurso) && matchesFilter(t.local, filtroLocal) && (filtro === "Todos" || t.estado === filtro);
@@ -2891,9 +2927,29 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
         <div className="p-5 space-y-3">
           <TurmaActivaToggle activa={activa} onChange={setActiva} />
           <Field label="Código interno"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="VNG-SM-07/09" /></Field>
-          <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursoOpts} placeholder="Pesquisar curso…" allowEmpty /></Field>
+          <Field label="Curso">
+            <SearchSelect
+              value={curso}
+              onChange={v => {
+                setCurso(v);
+                setLocal(prev => locaisDoCurso.locaisFor(v).includes(prev) ? prev : "");
+              }}
+              options={cursoOpts}
+              placeholder="Pesquisar curso…"
+              allowEmpty
+            />
+          </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Local"><SearchSelect value={local} onChange={setLocal} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
+            <Field label="Local">
+              <SearchSelect
+                value={local}
+                onChange={setLocal}
+                options={locaisDoCurso.options}
+                disabled={locaisDoCurso.disabled}
+                placeholder={locaisDoCurso.placeholder}
+                empty={locaisDoCurso.empty}
+              />
+            </Field>
             <Field label="Horário"><SearchSelect value={horario} onChange={setHorario} options={horariosOpts} /></Field>
           </div>
           <Field label="Formador"><SearchSelect value={formador} onChange={setFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
@@ -3252,6 +3308,7 @@ function FinFormandosView({ openId, onOpened }: { openId?: number; onOpened?: ()
 
 function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab) => void }) {
   const { fin, patchFin, addFin, removeFin, toggleFin } = useTurmas();
+  const { cursosFin } = useLists();
   const formadorOpts = useFormadorOptions();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
@@ -3266,6 +3323,11 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
   const [activa, setActiva] = useState(true);
   const [cronograma, setCronograma] = useState<SessaoCronograma[]>([]);
   const editing = open && open !== "new" ? open : null;
+  const locaisDoCurso = useLocaisOptsDoCurso("fin", cursosFin, curso);
+  const cursoFinOpts = useMemo(() => {
+    const live = optsFromCursos(cursosFin);
+    return live.length ? live : cursosFinOpts;
+  }, [cursosFin]);
   const ativas = fin.filter(t => isTurmaActiva(t)).length;
   const f = fin.filter(t => {
     const q = `${t.nome} ${t.curso}`.toLowerCase().includes(s.toLowerCase());
@@ -3278,7 +3340,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
       setNome(editing?.nome ?? "");
       setCurso(editing?.curso ?? "");
       setFormador(editing?.formador ?? "");
-      setLocalFin(editing?.local ?? "Sala Virtual");
+      setLocalFin(editing?.local ?? "");
       setDataInicio(editing?.dataInicio ?? "");
       setActiva(editing ? isTurmaActiva(editing) : true);
       setCronograma(editing?.cronograma ?? []);
@@ -3401,10 +3463,29 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
       <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? editing.nome : "Nova turma financiada"} sub="UFCD e turma - o objeto de gestão é a turma." size="xl">
         <div className="p-5 space-y-3">
           <TurmaActivaToggle accent="fin" activa={activa} onChange={setActiva} />
-          <Field label="Curso / UFCD"><SearchSelect value={curso} onChange={setCurso} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
+          <Field label="Curso / UFCD">
+            <SearchSelect
+              value={curso}
+              onChange={v => {
+                setCurso(v);
+                setLocalFin(prev => locaisDoCurso.locaisFor(v).includes(prev) ? prev : "");
+              }}
+              options={cursoFinOpts}
+              placeholder="Pesquisar UFCD…"
+            />
+          </Field>
           <Field label="Código da turma"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="UFCD 3564 · T1" /></Field>
           <Field label="Formador"><SearchSelect value={formador} onChange={setFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
-          <Field label="Local"><SearchSelect value={localFin} onChange={setLocalFin} options={locaisOpts} placeholder="Pesquisar local…" /></Field>
+          <Field label="Local">
+            <SearchSelect
+              value={localFin}
+              onChange={setLocalFin}
+              options={locaisDoCurso.options}
+              disabled={locaisDoCurso.disabled}
+              placeholder={locaisDoCurso.placeholder}
+              empty={locaisDoCurso.empty}
+            />
+          </Field>
           <Field label="Data de início"><input type="date" className={iCls} value={dataInicio} onChange={e => setDataInicio(e.target.value)} /></Field>
           <CronogramaEditor
             accent="fin"

@@ -89,6 +89,8 @@ const formandoDocsSchema = z.object({
     ok: z.boolean(),
     fileName: z.string().max(240).default(""),
     data: z.string().max(40).default(""),
+    driveFileId: z.string().max(80).optional().default(""),
+    driveUrl: z.string().max(500).optional().default(""),
   })).max(40),
 });
 
@@ -99,6 +101,8 @@ const formadorDocsSchema = z.object({
     id: z.string().min(1).max(60),
     uploaded: z.boolean(),
     fileName: z.string().max(240).default(""),
+    driveFileId: z.string().max(80).optional().default(""),
+    driveUrl: z.string().max(500).optional().default(""),
   })).max(40),
 });
 
@@ -111,6 +115,7 @@ const dtpModeloSchema = z.object({
     fonte: z.string().trim().max(120).optional(),
     hint: z.string().trim().max(240).optional(),
     bloqueante: z.boolean().optional(),
+    ambito: z.enum(["turma", "formando", "formador"]).optional().default("turma"),
   })).max(30).default([]),
 });
 
@@ -213,6 +218,7 @@ function mapModelo(row: { excluidos: unknown; extra: unknown } | undefined): Dtp
         fonte: String(x.fonte ?? "ENA · exigência do curso"),
         hint: String(x.hint ?? ""),
         bloqueante: Boolean(x.bloqueante),
+        ambito: (x.ambito === "formando" || x.ambito === "formador" ? x.ambito : "turma") as "turma" | "formando" | "formador",
       };
     }).filter(x => x.id && x.label),
   };
@@ -281,26 +287,24 @@ async function turmaFacts(db: Db, regime: Regime, turma: TurmaRow): Promise<DtpF
   const docs: Record<string, DtpCounts> = {};
   const total = formandos.length;
   if (total > 0) {
+    const ids = formandos.map(f => f.id);
     if (regime === "fin") {
       for (const key of ["cc", "ch", "cu", "ci", "ce"]) {
         const done = formandos.filter(f => Boolean(asObj(f.docs[key]).ok)).length;
         docs[key] = { done, total };
       }
-    } else {
-      const ids = formandos.map(f => f.id);
-      const rows = ids.length
-        ? await db.query<{ doc_id: string; n: number }>(
-          `SELECT doc_id, count(*)::int AS n FROM formando_docs
-             WHERE regime = 'gold' AND ok = true AND formando_id = ANY($1::int[])
-             GROUP BY doc_id`,
-          [ids],
-        )
-        : { rows: [] as { doc_id: string; n: number }[] };
-      for (const r of rows.rows) docs[r.doc_id] = { done: Number(r.n) || 0, total };
-      for (const key of ["cc", "contrato", "pip", "exp", "regulamento"]) {
-        docs[key] ??= { done: 0, total };
-      }
     }
+    const rows = ids.length
+      ? await db.query<{ doc_id: string; n: number }>(
+        `SELECT doc_id, count(*)::int AS n FROM formando_docs
+           WHERE regime = $1 AND ok = true AND formando_id = ANY($2::int[])
+           GROUP BY doc_id`,
+        [regime, ids],
+      )
+      : { rows: [] as { doc_id: string; n: number }[] };
+    for (const r of rows.rows) docs[r.doc_id] = { done: Number(r.n) || 0, total };
+    const bases = regime === "gold" ? ["cc", "contrato", "pip", "exp", "regulamento"] : ["cc", "ch", "cu", "ci", "ce"];
+    for (const key of bases) docs[key] ??= { done: 0, total };
   }
 
   return {
@@ -327,12 +331,26 @@ async function manualDtp(db: Db, regime: Regime, turmaId: number) {
 }
 
 async function dtpForTurma(db: Db, regime: Regime, turma: TurmaRow, modeloPre?: DtpModelo) {
-  const [facts, manual, modelo] = await Promise.all([
+  const [facts, manual, modelo, anexos] = await Promise.all([
     turmaFacts(db, regime, turma),
     manualDtp(db, regime, turma.id),
     modeloPre ? Promise.resolve(modeloPre) : modeloDaTurma(db, regime, turma),
+    db.query<{ item_id: string; drive_file_id: string; file_name: string; drive_url: string }>(
+      "SELECT item_id, drive_file_id, file_name, drive_url FROM dtp_anexos WHERE regime = $1 AND turma_id = $2",
+      [regime, turma.id],
+    ).catch(() => ({ rows: [] as { item_id: string; drive_file_id: string; file_name: string; drive_url: string }[] })),
   ]);
-  const items = buildDtpItems(regime, facts, manual, modelo);
+  const byItem = new Map(anexos.rows.map(r => [r.item_id, r]));
+  const items = buildDtpItems(regime, facts, manual, modelo).map(item => {
+    const a = byItem.get(item.id);
+    const anexo = a?.drive_file_id
+      ? { fileName: a.file_name, url: a.drive_url, driveFileId: a.drive_file_id }
+      : null;
+    if (anexo && item.origem === "manual" && item.estado === "falta") {
+      return { ...item, anexo, estado: "ok" as const, detalhe: `Ficheiro no Drive: ${anexo.fileName}` };
+    }
+    return { ...item, anexo };
+  });
   return {
     items,
     pct: dtpPct(items),
@@ -517,6 +535,34 @@ export function registerPedagogiaRoutes(
     return { dtp: await dtpForTurma(db, regime, turma) };
   });
 
+  app.put("/v1/turmas/:regime/:id/dtp/:itemId/anexo", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const { regime, id, itemId } = params(req);
+    const parsed = z.object({
+      driveFileId: z.string().min(1).max(80),
+      fileName: z.string().max(240).default(""),
+      driveUrl: z.string().max(500).optional().default(""),
+    }).safeParse(req.body);
+    if (!regime || id == null || !itemId || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    await db.query(
+      `INSERT INTO dtp_anexos (regime, turma_id, item_id, drive_file_id, file_name, drive_url)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (regime, turma_id, item_id) DO UPDATE SET
+         drive_file_id = EXCLUDED.drive_file_id, file_name = EXCLUDED.file_name,
+         drive_url = EXCLUDED.drive_url, updated_at = now()`,
+      [regime, id, itemId, parsed.data.driveFileId, parsed.data.fileName, parsed.data.driveUrl ?? ""],
+    );
+    await db.query(
+      `INSERT INTO turma_dtp (regime, turma_id, item_id, estado) VALUES ($1, $2, $3, 'ok')
+       ON CONFLICT (regime, turma_id, item_id) DO UPDATE SET estado = 'ok', updated_at = now()`,
+      [regime, id, itemId],
+    );
+    const turma = await loadTurma(db, regime, id);
+    if (!turma) return reply.code(404).send({ error: "turma não encontrada" });
+    await audit(db, req.actor!.id, "turma.dtp_anexo", "turma", String(id), req.ip, { regime, item: itemId });
+    return { dtp: await dtpForTurma(db, regime, turma) };
+  });
+
   app.put("/v1/turmas/:regime/:id/certificados/:formandoId", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const { regime, id, formandoId } = params(req);
@@ -586,6 +632,7 @@ export function registerPedagogiaRoutes(
         fonte: (x.fonte?.trim() || "ENA · exigência do curso").slice(0, 120),
         hint: (x.hint?.trim() || "").slice(0, 240),
         bloqueante: Boolean(x.bloqueante),
+        ambito: x.ambito ?? "turma",
       }))
       .filter(x => {
         if (!x.id || !x.label || usados.has(x.id)) return false;
@@ -664,8 +711,8 @@ export function registerPedagogiaRoutes(
     const { regime, id } = params(req);
     if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
     const [docs, notas] = await Promise.all([
-      db.query<{ doc_id: string; ok: boolean; file_name: string; data: string }>(
-        "SELECT doc_id, ok, file_name, data FROM formando_docs WHERE regime = $1 AND formando_id = $2",
+      db.query<{ doc_id: string; ok: boolean; file_name: string; data: string; drive_file_id?: string; drive_url?: string }>(
+        "SELECT doc_id, ok, file_name, data, drive_file_id, drive_url FROM formando_docs WHERE regime = $1 AND formando_id = $2",
         [regime, id],
       ),
       db.query<{ id: number; autor: string; texto: string; created_at: string | Date }>(
@@ -674,7 +721,10 @@ export function registerPedagogiaRoutes(
       ),
     ]);
     return {
-      docs: docs.rows.map(r => ({ id: r.doc_id, ok: r.ok, fileName: r.file_name, data: r.data })),
+      docs: docs.rows.map(r => ({
+        id: r.doc_id, ok: r.ok, fileName: r.file_name, data: r.data,
+        driveFileId: r.drive_file_id ?? "", driveUrl: r.drive_url ?? "",
+      })),
       notas: notas.rows.map(r => ({
         id: Number(r.id),
         autor: r.autor,
@@ -691,11 +741,12 @@ export function registerPedagogiaRoutes(
     if (!regime || id == null || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     for (const doc of parsed.data.docs) {
       await db.query(
-        `INSERT INTO formando_docs (regime, formando_id, doc_id, ok, file_name, data)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO formando_docs (regime, formando_id, doc_id, ok, file_name, data, drive_file_id, drive_url)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (regime, formando_id, doc_id) DO UPDATE SET
-           ok = EXCLUDED.ok, file_name = EXCLUDED.file_name, data = EXCLUDED.data, updated_at = now()`,
-        [regime, id, doc.id, doc.ok, doc.fileName, doc.data],
+           ok = EXCLUDED.ok, file_name = EXCLUDED.file_name, data = EXCLUDED.data,
+           drive_file_id = EXCLUDED.drive_file_id, drive_url = EXCLUDED.drive_url, updated_at = now()`,
+        [regime, id, doc.id, doc.ok, doc.fileName, doc.data, doc.driveFileId ?? "", doc.driveUrl ?? ""],
       );
     }
     await audit(db, req.actor!.id, "formando.docs", "formando", String(id), req.ip, { regime });
@@ -729,11 +780,14 @@ export function registerPedagogiaRoutes(
     if (!requireAuth(req, reply)) return;
     const id = Number((req.params as { id: string }).id);
     if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
-    const rows = await db.query<{ doc_id: string; uploaded: boolean; file_name: string }>(
-      "SELECT doc_id, uploaded, file_name FROM formador_docs WHERE formador_id = $1",
+    const rows = await db.query<{ doc_id: string; uploaded: boolean; file_name: string; drive_file_id?: string; drive_url?: string }>(
+      "SELECT doc_id, uploaded, file_name, drive_file_id, drive_url FROM formador_docs WHERE formador_id = $1",
       [id],
     );
-    return { docs: rows.rows.map(r => ({ id: r.doc_id, uploaded: r.uploaded, fileName: r.file_name })) };
+    return { docs: rows.rows.map(r => ({
+      id: r.doc_id, uploaded: r.uploaded, fileName: r.file_name,
+      driveFileId: r.drive_file_id ?? "", driveUrl: r.drive_url ?? "",
+    })) };
   });
 
   app.put("/v1/formadores/:id/docs", async (req, reply) => {
@@ -743,11 +797,12 @@ export function registerPedagogiaRoutes(
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     for (const doc of parsed.data.docs) {
       await db.query(
-        `INSERT INTO formador_docs (formador_id, doc_id, uploaded, file_name)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO formador_docs (formador_id, doc_id, uploaded, file_name, drive_file_id, drive_url)
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (formador_id, doc_id) DO UPDATE SET
-           uploaded = EXCLUDED.uploaded, file_name = EXCLUDED.file_name, updated_at = now()`,
-        [id, doc.id, doc.uploaded, doc.fileName],
+           uploaded = EXCLUDED.uploaded, file_name = EXCLUDED.file_name,
+           drive_file_id = EXCLUDED.drive_file_id, drive_url = EXCLUDED.drive_url, updated_at = now()`,
+        [id, doc.id, doc.uploaded, doc.fileName, doc.driveFileId ?? "", doc.driveUrl ?? ""],
       );
     }
     await audit(db, req.actor!.id, "formador.docs", "formador", String(id), req.ip);

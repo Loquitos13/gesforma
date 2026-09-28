@@ -8,12 +8,12 @@ import {
   type Regime,
 } from "./api";
 
-type ExtraDraft = { id: string; fase: DtpFase; label: string; fonte: string; hint: string; bloqueante: boolean };
+type ExtraDraft = { id: string; fase: DtpFase; label: string; fonte: string; hint: string; bloqueante: boolean; ambito: "turma" | "formando" | "formador" };
 
 const iCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent";
 
 function novoExtra(fase: DtpFase): ExtraDraft {
-  return { id: "", fase, label: "", fonte: "", hint: "", bloqueante: false };
+  return { id: "", fase, label: "", fonte: "", hint: "", bloqueante: false, ambito: "turma" };
 }
 
 /**
@@ -42,7 +42,7 @@ export function DtpModeloEditor({ accent, cursoId }: { accent: Regime; cursoId?:
         if (!alive) return;
         setDados(r);
         setExcluidos(new Set(r.modelo.excluidos));
-        setExtra(r.modelo.extra.map(x => ({ ...x, bloqueante: Boolean(x.bloqueante) })));
+        setExtra(r.modelo.extra.map(x => ({ ...x, bloqueante: Boolean(x.bloqueante), ambito: x.ambito ?? "turma" })));
         setEstado("ready");
       })
       .catch(() => { if (alive) setEstado("offline"); });
@@ -77,10 +77,11 @@ export function DtpModeloEditor({ accent, cursoId }: { accent: Regime; cursoId?:
             fonte: x.fonte.trim() || undefined,
             hint: x.hint.trim() || undefined,
             bloqueante: x.bloqueante,
+            ambito: x.ambito ?? "turma",
           })),
       });
       setExcluidos(new Set(r.modelo.excluidos));
-      setExtra(r.modelo.extra.map(x => ({ ...x, bloqueante: Boolean(x.bloqueante) })));
+      setExtra(r.modelo.extra.map(x => ({ ...x, bloqueante: Boolean(x.bloqueante), ambito: x.ambito ?? "turma" })));
       setMsg(`Estrutura gravada: ${r.estrutura.length} documentos no dossiê das turmas deste curso.`);
     } catch (err) {
       setMsg(err instanceof Error ? err.message : "Não foi possível gravar a estrutura.");
@@ -211,6 +212,15 @@ export function DtpModeloEditor({ accent, cursoId }: { accent: Regime; cursoId?:
                     />
                     Bloqueia o fecho da turma
                   </label>
+                  <select
+                    className={iCls}
+                    value={x.ambito ?? "turma"}
+                    onChange={e => setExtra(prev => prev.map(y => (y === x ? { ...y, ambito: e.target.value as ExtraDraft["ambito"] } : y)))}
+                  >
+                    <option value="turma">Ficheiro da turma (dossiê)</option>
+                    <option value="formando">Um por cada formando</option>
+                    <option value="formador">No perfil do formador</option>
+                  </select>
                 </div>
                 <button
                   type="button"
@@ -231,9 +241,9 @@ export function DtpModeloEditor({ accent, cursoId }: { accent: Regime; cursoId?:
       <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">
         <div>
           <p className="text-sm font-semibold text-slate-800">Acrescentar documento a este curso</p>
-          <p className="text-xs text-slate-500 mt-0.5">Para exigências que não estão na base do regime - uma ficha técnica, um termo de responsabilidade, um ficheiro de exercícios.</p>
+          <p className="text-xs text-slate-500 mt-0.5">Para exigências que não estão na base do regime. Indique se o ficheiro é da turma, de cada formando ou do formador.</p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_170px] gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_170px_170px] gap-3">
           <input
             className={iCls}
             value={draft.label}
@@ -242,6 +252,11 @@ export function DtpModeloEditor({ accent, cursoId }: { accent: Regime; cursoId?:
           />
           <select className={iCls} value={draft.fase} onChange={e => setDraft(d => ({ ...d, fase: e.target.value as DtpFase }))}>
             {dados.fases.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+          </select>
+          <select className={iCls} value={draft.ambito} onChange={e => setDraft(d => ({ ...d, ambito: e.target.value as ExtraDraft["ambito"] }))}>
+            <option value="turma">Turma</option>
+            <option value="formando">Formando</option>
+            <option value="formador">Formador</option>
           </select>
         </div>
         <input

@@ -1,5 +1,6 @@
 export type DtpFase = "antes" | "durante" | "depois";
 export type DtpEstado = "ok" | "parcial" | "falta";
+export type DtpAmbito = "turma" | "formando" | "formador";
 
 /** Chave de derivação: quando existe, o estado sai dos dados reais da turma. */
 export type DtpAuto =
@@ -30,9 +31,11 @@ export type DtpDef = {
   bloqueante?: boolean;
   /** Norma legal: fica no dossiê de todos os cursos do regime e não se pode remover. */
   obrigatorio?: boolean;
+  ambito?: DtpAmbito;
 };
 
 /** Documento acrescentado por um curso concreto, além da estrutura base do regime. */
+
 export type DtpExtraDef = {
   id: string;
   fase: DtpFase;
@@ -40,6 +43,8 @@ export type DtpExtraDef = {
   fonte: string;
   hint: string;
   bloqueante?: boolean;
+  /** Onde o ficheiro vive: dossiê da turma, de cada formando ou do formador. */
+  ambito?: DtpAmbito;
 };
 
 /** Modelo do dossiê de um curso: o que se retira da base e o que se acrescenta. */
@@ -163,13 +168,24 @@ function factFor(auto: DtpAuto, facts: DtpFacts): DtpCounts | null {
   }
 }
 
-export type DtpItem = DtpDef & { estado: DtpEstado; detalhe: string; origem: "auto" | "manual"; extra?: boolean };
+export type DtpItem = DtpDef & {
+  estado: DtpEstado;
+  detalhe: string;
+  origem: "auto" | "manual";
+  extra?: boolean;
+  ambito?: DtpAmbito;
+  anexo?: { fileName: string; url: string; driveFileId: string } | null;
+};
 
 /** Estrutura do dossiê de um curso: base do regime menos o que foi retirado, mais os extras. */
 export function dtpEstrutura(regime: "gold" | "fin", modelo: DtpModelo = DTP_MODELO_VAZIO): DtpDef[] {
   const fora = new Set(modelo.excluidos);
   const base = dtpDefs(regime).filter(def => def.obrigatorio || !fora.has(def.id));
-  const extras: DtpDef[] = modelo.extra.map(x => ({ ...x, id: `extra:${x.id}` }));
+  const extras: DtpDef[] = modelo.extra.map(x => ({
+    ...x,
+    id: `extra:${x.id}`,
+    auto: x.ambito === "formando" || x.ambito === "formador" ? (`doc-${x.id}` as DtpAuto) : undefined,
+  }));
   const ordem: Record<DtpFase, number> = { antes: 0, durante: 1, depois: 2 };
   return [...base, ...extras].sort((a, b) => ordem[a.fase] - ordem[b.fase]);
 }
@@ -184,13 +200,13 @@ export function buildDtpItems(
     const extra = def.id.startsWith("extra:");
     const override = manual[def.id];
     if (override) {
-      return { ...def, estado: override, detalhe: def.hint, origem: "manual" as const, extra };
+      return { ...def, estado: override, detalhe: def.hint, origem: "manual" as const, extra, ambito: def.ambito };
     }
     const derived = def.auto ? estadoFromCounts(factFor(def.auto, facts)) : null;
     if (derived) {
-      return { ...def, estado: derived.estado, detalhe: `${derived.detalhe} ${def.hint}`.trim(), origem: "auto" as const, extra };
+      return { ...def, estado: derived.estado, detalhe: `${derived.detalhe} ${def.hint}`.trim(), origem: "auto" as const, extra, ambito: def.ambito };
     }
-    return { ...def, estado: "falta" as DtpEstado, detalhe: def.hint, origem: "manual" as const, extra };
+    return { ...def, estado: "falta" as DtpEstado, detalhe: def.hint, origem: "manual" as const, extra, ambito: def.ambito };
   });
 }
 

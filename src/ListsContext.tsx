@@ -74,6 +74,7 @@ export type BlogPostRow = { id: number; titulo: string; slug: string; data: stri
 export type CampanhaRow = {
   id: number; nome: string; data: string; encarregado: string;
   curso?: string; preinscricoes: number; pagos: number; receita: number; custo: number;
+  fim?: string; canal?: string; notas?: string;
 };
 export type PagamentoRow = {
   id: string; nome: string; valor: number; metodo: string; curso: string; data: string; estado: string;

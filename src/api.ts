@@ -87,7 +87,11 @@ export type OpsSnapshot = {
     id: number; nome: string; telf: string; email: string; especialidade: string; ccp: string; nif: string;
     regimes: string[]; estado: string;
   }>;
-  campanhas: Array<{ id: number; nome: string; data: string; encarregado: string; curso?: string; preinscricoes: number; pagos: number; receita: number; custo: number }>;
+  campanhas: Array<{
+    id: number; nome: string; data: string; encarregado: string; curso?: string;
+    preinscricoes: number; pagos: number; receita: number; custo: number;
+    fim?: string; canal?: string; notas?: string;
+  }>;
   blogPosts: Array<{ id: number; titulo: string; slug: string; data: string; status: string }>;
   pagamentos: Array<{ id: string; nome: string; valor: number; metodo: string; curso: string; data: string; estado: string; email?: string; referencia?: string }>;
   catalogs?: Record<string, Array<Record<string, unknown> & { id: number }>>;
@@ -269,6 +273,7 @@ export type DtpItem = {
   obrigatorio?: boolean;
   /** Documento acrescentado na ficha do curso, fora da base do regime. */
   extra?: boolean;
+  anexo?: { fileName: string; url: string; driveFileId: string } | null;
 };
 
 export type DtpSnapshot = {
@@ -329,6 +334,13 @@ export const apiSaveTurmaDocumento = (regime: Regime, turmaId: number, body: Tur
   api<{ ok: boolean }>(`/v1/turmas/${regime}/${turmaId}/documentos`, { method: "PUT", body: JSON.stringify(body) });
 export const apiSaveDtpItem = (regime: Regime, turmaId: number, itemId: string, estado: DtpEstado | "auto") =>
   api<{ dtp: DtpSnapshot }>(`/v1/turmas/${regime}/${turmaId}/dtp/${itemId}`, { method: "PUT", body: JSON.stringify({ estado }) });
+export const apiSaveDtpAnexo = (
+  regime: Regime,
+  turmaId: number,
+  itemId: string,
+  body: { driveFileId: string; fileName: string; driveUrl?: string },
+) =>
+  api<{ dtp: DtpSnapshot }>(`/v1/turmas/${regime}/${turmaId}/dtp/${itemId}/anexo`, { method: "PUT", body: JSON.stringify(body) });
 export const apiSaveCertificado = (
   regime: Regime,
   turmaId: number,
@@ -347,6 +359,7 @@ export type DtpDef = {
   bloqueante?: boolean;
   obrigatorio?: boolean;
 };
+export type DtpAmbito = "turma" | "formando" | "formador";
 export type DtpExtra = {
   id?: string;
   fase: DtpFase;
@@ -354,10 +367,11 @@ export type DtpExtra = {
   fonte?: string;
   hint?: string;
   bloqueante?: boolean;
+  ambito?: DtpAmbito;
 };
 export type DtpModelo = {
   excluidos: string[];
-  extra: { id: string; fase: DtpFase; label: string; fonte: string; hint: string; bloqueante?: boolean }[];
+  extra: { id: string; fase: DtpFase; label: string; fonte: string; hint: string; bloqueante?: boolean; ambito?: DtpAmbito }[];
 };
 export type DtpModeloResposta = {
   fases: { id: DtpFase; label: string; hint: string }[];
@@ -381,7 +395,7 @@ export const apiCursoFichas = (regime: Regime) =>
 export const apiSaveCursoFicha = (regime: Regime, cursoId: number, body: Partial<CursoFicha>) =>
   api<{ ok: boolean }>(`/v1/cursos/${regime}/${cursoId}/ficha`, { method: "PUT", body: JSON.stringify(body) });
 
-export type FormandoDoc = { id: string; ok: boolean; fileName: string; data: string };
+export type FormandoDoc = { id: string; ok: boolean; fileName: string; data: string; driveFileId?: string; driveUrl?: string };
 export type FormandoNota = { id: number; autor: string; texto: string; data: string };
 export const apiFormandoDossier = (regime: Regime, id: number) =>
   api<{ docs: FormandoDoc[]; notas: FormandoNota[] }>(`/v1/formandos/${regime}/${id}/dossier`);
@@ -390,7 +404,7 @@ export const apiSaveFormandoDocs = (regime: Regime, id: number, docs: FormandoDo
 export const apiAddFormandoNota = (regime: Regime, id: number, texto: string) =>
   api<{ nota: FormandoNota }>(`/v1/formandos/${regime}/${id}/notas`, { method: "POST", body: JSON.stringify({ texto }) });
 
-export type FormadorDoc = { id: string; uploaded: boolean; fileName: string };
+export type FormadorDoc = { id: string; uploaded: boolean; fileName: string; driveFileId?: string; driveUrl?: string };
 export const apiFormadorDocs = (id: number) => api<{ docs: FormadorDoc[] }>(`/v1/formadores/${id}/docs`);
 export const apiSaveFormadorDocs = (id: number, docs: FormadorDoc[]) =>
   api<{ ok: boolean }>(`/v1/formadores/${id}/docs`, { method: "PUT", body: JSON.stringify({ docs }) });

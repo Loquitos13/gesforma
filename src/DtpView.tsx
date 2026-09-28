@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiDtpExport, type DtpEstado, type DtpItem, type DtpSnapshot } from "./api";
 import { toastError, toastOk } from "./toastBus";
+import { FileUploadModal } from "./TurmaExtras";
 
 export type DtpRegime = "gold" | "fin";
 type DtpFase = "antes" | "durante" | "depois";
@@ -18,6 +19,7 @@ type Props = {
   dtp: DtpSnapshot;
   estado?: "loading" | "ready" | "offline";
   onToggle?: (item: DtpItem, proximo: DtpEstado | "auto") => void;
+  onAnexo?: (item: DtpItem, file: { id: string; name: string; openUrl: string }) => void;
 };
 
 const fases: { id: DtpFase; label: string; hint: string }[] = [
@@ -48,11 +50,12 @@ async function exportarPasta(regime: DtpRegime, turma: DtpTurma | undefined) {
 }
 
 /** Dossiê da turma - vive dentro do cockpit, não como “ação de formação”. */
-export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle }: Props) {
+export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAnexo }: Props) {
   const isGold = regime === "gold";
   const codigo = turma?.codigo ?? (isGold ? "turma" : "UFCD");
   const [fase, setFase] = useState<DtpFase | "todas">("todas");
   const [exportando, setExportando] = useState(false);
+  const [uploadFor, setUploadFor] = useState<DtpItem | null>(null);
 
   useEffect(() => { setFase("todas"); }, [regime, codigo]);
 
@@ -191,18 +194,47 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle }: Pro
                     )}
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">{doc.detalhe}</p>
+                  {doc.anexo?.url && (
+                    <a href={doc.anexo.url} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 mt-1 inline-block">
+                      {doc.anexo.fileName || "Abrir no Drive"}
+                    </a>
+                  )}
                   {doc.origem === "manual" && onToggle && (
                     <button type="button" onClick={() => onToggle(doc, "auto")} className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 mt-1">
                       Voltar ao estado automático
                     </button>
                   )}
                 </div>
-                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400 sm:text-right sm:max-w-[180px]">{doc.fonte}</p>
+                <div className="flex items-center gap-2 sm:flex-col sm:items-end">
+                  <button
+                    type="button"
+                    onClick={() => setUploadFor(doc)}
+                    className={`text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${isGold ? "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100" : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"}`}
+                  >
+                    {doc.anexo?.fileName ? "Substituir ficheiro" : "Anexar no Drive"}
+                  </button>
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400 sm:text-right sm:max-w-[180px]">{doc.fonte}</p>
+                </div>
               </div>
             );
           })}
         </div>
       </div>
+      <FileUploadModal
+        open={!!uploadFor}
+        onClose={() => setUploadFor(null)}
+        title={`Anexar: ${uploadFor?.label ?? ""}`}
+        accent={regime}
+        context={{
+          kind: "dtp",
+          regime,
+          turma: turma?.codigo ?? String(turma?.id ?? ""),
+          label: uploadFor?.label,
+        }}
+        onConfirm={file => {
+          if (uploadFor) onAnexo?.(uploadFor, { id: file.id, name: file.name, openUrl: file.openUrl });
+        }}
+      />
     </div>
   );
 }

@@ -954,6 +954,9 @@ export function registerOpsRoutes(
     encarregado: z.string().max(80).optional().default(""),
     curso: z.string().max(200).optional().default(""),
     custo: z.number().optional().default(0),
+    fim: z.string().max(20).optional().default(""),
+    canal: z.string().max(80).optional().default(""),
+    notas: z.string().max(2000).optional().default(""),
   });
   app.post("/v1/campanhas", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
@@ -962,8 +965,8 @@ export function registerOpsRoutes(
     const d = parsed.data;
     const id = await nextOpsId(db);
     await db.query(
-      "INSERT INTO campanhas (id, nome, data, encarregado, preinscricoes, pagos, receita, custo, curso) VALUES ($1,$2,$3,$4,0,0,0,$5,$6)",
-      [id, d.nome, d.data, d.encarregado, d.custo, d.curso || null],
+      "INSERT INTO campanhas (id, nome, data, encarregado, preinscricoes, pagos, receita, custo, curso, fim, canal, notas) VALUES ($1,$2,$3,$4,0,0,0,$5,$6,$7,$8,$9)",
+      [id, d.nome, d.data, d.encarregado, d.custo, d.curso || null, d.fim ?? "", d.canal ?? "", d.notas ?? ""],
     );
     const row = await one(db, "SELECT * FROM campanhas WHERE id = $1", [id]);
     return { campanha: row ? mapCampanha(row) : { id } };
@@ -976,8 +979,9 @@ export function registerOpsRoutes(
     const d = parsed.data;
     await db.query(
       `UPDATE campanhas SET nome = COALESCE($2, nome), data = COALESCE($3, data), encarregado = COALESCE($4, encarregado),
-         custo = COALESCE($5, custo), curso = COALESCE($6, curso) WHERE id = $1`,
-      [id, d.nome ?? null, d.data ?? null, d.encarregado ?? null, d.custo ?? null, d.curso ?? null],
+         custo = COALESCE($5, custo), curso = COALESCE($6, curso), fim = COALESCE($7, fim), canal = COALESCE($8, canal),
+         notas = COALESCE($9, notas) WHERE id = $1`,
+      [id, d.nome ?? null, d.data ?? null, d.encarregado ?? null, d.custo ?? null, d.curso ?? null, d.fim ?? null, d.canal ?? null, d.notas ?? null],
     );
     const row = await one(db, "SELECT * FROM campanhas WHERE id = $1", [id]);
     return { campanha: row ? mapCampanha(row) : null };

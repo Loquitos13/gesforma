@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ApiError, apiAddInqueritoResposta, apiDriveFiles, apiFormadorDocs, apiInqueritoPublicoLink, apiInqueritoRespostas, apiSaveFormadorDocs, apiUploadDrive,
+  ApiError, apiAddInqueritoResposta, apiDriveFiles, apiDtpModelo, apiFormadorDocs, apiInqueritoPublicoLink, apiInqueritoRespostas, apiSaveFormadorDocs, apiUploadDrive,
   type DriveFile, type DriveUploadContext, type InqueritoMetrica, type InqueritoResposta,
 } from "./api";
+import { DOCS_FORMADOR, fundirDocTipos } from "./dossierDocs";
 import { useCatalogList } from "./CatalogsContext";
 import { useDrive } from "./DriveContext";
 import { useFormadores } from "./FormadoresContext";
@@ -10,6 +11,7 @@ import { AppModal } from "./FormKit";
 import { ConfirmDangerModal } from "./SecretaryUX";
 import { persist } from "./toastBus";
 import { useTurmas } from "./TurmasContext";
+import { useLists } from "./ListsContext";
 
 const I = {
   x: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>,
@@ -94,7 +96,7 @@ export function FileUploadModal({
           <div className={`rounded-xl border px-3 py-2.5 text-xs ${status.connected ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-slate-50 border-slate-200 text-slate-600"}`}>
             {status.connected
               ? <>Vai para o Drive da entidade · <span className="font-semibold">{dest || status.folderName}</span></>
-              : <>Ainda sem Drive ligado. O ficheiro fica no servidor até ligar a conta Google em Configurações.</>}
+              : <>Ainda sem Drive ligado. Em produção o upload é recusado — ligue a conta Google em Configurações. Em desenvolvimento local o ficheiro fica em disco só como recurso.</>}
           </div>
           {!file ? (
             <div
@@ -301,22 +303,14 @@ export function PresencasSessaoModal({ open, onClose, sessao, formandos, onSave 
   );
 }
 
-type DocField = { id: string; label: string; required: boolean; uploaded: boolean; fileName?: string };
-const DOCS_FORMADOR: { id: string; label: string; required: boolean }[] = [
-  { id: "cc", label: "Cartão de Cidadão", required: true },
-  { id: "ccp", label: "Certificado de Competências Pedagógicas (CCP)", required: true },
-  { id: "cv", label: "Curriculum Vitae", required: true },
-  { id: "habilitacoes", label: "Certificado de Habilitações", required: true },
-  { id: "nib", label: "NIB / IBAN", required: true },
-  { id: "decl_irs", label: "Declaração para efeitos de IRS", required: false },
-  { id: "seguro", label: "Apólice de Seguro de Acidentes de Trabalho", required: false },
-];
+type DocField = { id: string; label: string; required: boolean; uploaded: boolean; fileName?: string; driveUrl?: string; driveFileId?: string };
 
 export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "gold" }: { open: boolean; onClose: () => void; nome: string; telf?: string; accent?: "gold" | "fin" }) {
   const { formadores } = useFormadores();
   const formador = formadores.find(f => f.nome === nome);
   const { gold, fin } = useTurmas();
-  const [docs, setDocs] = useState<DocField[]>(() => DOCS_FORMADOR.map(d => ({ ...d, uploaded: false })));
+  const { cursosGold, cursosFin } = useLists();
+  const [docs, setDocs] = useState<DocField[]>(() => DOCS_FORMADOR.map(d => ({ ...d, uploaded: false, required: Boolean(d.required) })));
   const [uploadFor, setUploadFor] = useState<string | null>(null);
   const [ficheiros, setFicheiros] = useState<DriveFile[]>([]);
 
@@ -333,11 +327,31 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
     if (!open || !formador) return;
     let alive = true;
     apiFormadorDocs(formador.id)
-      .then(r => {
+      .then(async r => {
         if (!alive) return;
-        setDocs(DOCS_FORMADOR.map(d => {
+        const extras: { id: string; label: string }[] = [];
+        for (const nomeCurso of cursos) {
+          const goldId = cursosGold.find(c => c.nome === nomeCurso)?.id;
+          const finId = cursosFin.find(c => c.ufcd === nomeCurso || c.nomeComercial === nomeCurso)?.id;
+          if (goldId != null) {
+            const m = await apiDtpModelo("gold", goldId).catch(() => null);
+            extras.push(...(m?.modelo.extra.filter(x => x.ambito === "formador").map(x => ({ id: x.id, label: x.label })) ?? []));
+          }
+          if (finId != null) {
+            const m = await apiDtpModelo("fin", finId).catch(() => null);
+            extras.push(...(m?.modelo.extra.filter(x => x.ambito === "formador").map(x => ({ id: x.id, label: x.label })) ?? []));
+          }
+        }
+        const lista = fundirDocTipos(DOCS_FORMADOR, extras).map(d => ({ ...d, required: Boolean(d.required), uploaded: false as boolean }));
+        setDocs(lista.map(d => {
           const saved = r.docs.find(x => x.id === d.id);
-          return { ...d, uploaded: saved?.uploaded ?? false, fileName: saved?.fileName };
+          return {
+            ...d,
+            uploaded: saved?.uploaded ?? false,
+            fileName: saved?.fileName,
+            driveUrl: saved?.driveUrl,
+            driveFileId: saved?.driveFileId,
+          };
         }));
       })
       .catch(() => undefined);
@@ -345,20 +359,22 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
       .then(r => { if (alive) setFicheiros(r.files); })
       .catch(() => undefined);
     return () => { alive = false; };
-  }, [accent, formador, nome, open]);
+  }, [accent, cursos, cursosFin, cursosGold, formador, nome, open]);
 
-  function markUploaded(id: string, fileName: string) {
-    const next = docs.map(d => d.id === id ? { ...d, uploaded: true, fileName } : d);
+  function markUploaded(id: string, file: DriveFile) {
+    const next = docs.map(d => d.id === id ? { ...d, uploaded: true, fileName: file.name, driveUrl: file.openUrl, driveFileId: file.id } : d);
     setDocs(next);
     setUploadFor(null);
     if (formador) {
-      void persist(apiSaveFormadorDocs(formador.id, next.map(d => ({ id: d.id, uploaded: d.uploaded, fileName: d.fileName ?? "" }))));
+      void persist(apiSaveFormadorDocs(formador.id, next.map(d => ({
+        id: d.id, uploaded: d.uploaded, fileName: d.fileName ?? "", driveFileId: d.driveFileId ?? "", driveUrl: d.driveUrl ?? "",
+      }))));
     }
   }
 
   function abrirFicheiro(doc: DocField) {
-    const ficheiro = ficheiros.find(f => f.label === doc.label || f.name === doc.fileName);
-    if (ficheiro) window.open(ficheiro.openUrl, "_blank", "noreferrer");
+    const url = doc.driveUrl || ficheiros.find(f => f.label === doc.label || f.name === doc.fileName)?.openUrl;
+    if (url) window.open(url, "_blank", "noreferrer");
   }
 
   return (
@@ -423,7 +439,7 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
         title={`Carregar: ${docs.find(d => d.id === uploadFor)?.label ?? ""}`}
         accent={accent}
         context={{ kind: "formador-doc", regime: accent, formando: nome, label: docs.find(d => d.id === uploadFor)?.label }}
-        onConfirm={file => { if (uploadFor) markUploaded(uploadFor, file.name); }}
+        onConfirm={file => { if (uploadFor) markUploaded(uploadFor, file); }}
       />
     </>
   );

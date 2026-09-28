@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync, readFileSync, unlinkSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { config, newToken } from "./config.js";
+import { config, newToken, onVercel } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { openSecret, sealSecret } from "./secretBox.js";
 
@@ -481,6 +481,10 @@ export async function storeDriveFile(
   const creds = await driveCreds(db);
   const pathLabel = folderSegments(ctx, creds.folderName).join(" / ");
   const token = googleConfigured(creds) ? await accessToken(db).catch(() => null) : null;
+
+  if (!token && onVercel) {
+    throw new Error("Ligue a conta Google em Configurações. Na cloud os ficheiros só ficam no Drive, não no disco do servidor.");
+  }
 
   if (token) {
     const parent = await ensureFolderPath(db, token, folderSegments(ctx, creds.folderName), creds.folderId);

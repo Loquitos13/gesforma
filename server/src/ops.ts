@@ -202,6 +202,9 @@ export function mapCampanha(r: Record<string, unknown>) {
     pagos: num(r.pagos),
     receita: num(r.receita),
     custo: num(r.custo),
+    fim: String(r.fim ?? ""),
+    canal: String(r.canal ?? ""),
+    notas: String(r.notas ?? ""),
   };
 }
 

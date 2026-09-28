@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EnviarReciboModal, ReferenciaMbModal } from "./ActionSurfaces";
-import { apiAddFormandoNota, apiFormandoDossier, apiSaveFormandoDocs, type FormandoNota } from "./api";
+import { apiAddFormandoNota, apiDtpModelo, apiFormandoDossier, apiSaveFormandoDocs, type FormandoNota } from "./api";
+import { docsFormandoBase, fundirDocTipos } from "./dossierDocs";
 import { persist } from "./toastBus";
 import { FileUploadModal } from "./TurmaExtras";
+import { useLists } from "./ListsContext";
 import { useTurmas } from "./TurmasContext";
 import { isTurmaActiva } from "./turmaModel";
 import type { FormandoTurma } from "./ListsContext";
@@ -37,38 +39,49 @@ function estadoBadge(estado: string) {
   return <Badge label={estado} variant={m[estado] ?? "gray"} />;
 }
 
-const DOCS_GOLD: { id: string; label: string }[] = [
-  { id: "cc", label: "Cartão de Cidadão" },
-  { id: "contrato", label: "Contrato de formação" },
-  { id: "pip", label: "PIP - Projeto de Intervenção Pedagógica" },
-  { id: "exp", label: "Comprovativo de 5 anos de experiência" },
-  { id: "regulamento", label: "Regulamento de formação aceite" },
-];
-
-function DocumentosGoldPanel({ formando, avulso }: { formando: FormandoTurma; avulso?: boolean }) {
-  const [docs, setDocs] = useState(() => DOCS_GOLD.map(d => ({ ...d, ok: false, data: "", fileName: "" })));
+function DocumentosGoldPanel({ formando, avulso, tipo = "gold" }: { formando: FormandoTurma; avulso?: boolean; tipo?: "gold" | "fin" }) {
+  const { cursosGold, cursosFin } = useLists();
+  const cursoId = useMemo(() => {
+    if (tipo === "gold") return cursosGold.find(c => c.nome === formando.curso)?.id;
+    return cursosFin.find(c => c.ufcd === formando.curso || c.nomeComercial === formando.curso)?.id;
+  }, [cursosFin, cursosGold, formando.curso, tipo]);
+  const [docs, setDocs] = useState(() => docsFormandoBase(tipo).map(d => ({ ...d, ok: false, data: "", fileName: "", driveUrl: "", driveFileId: "" })));
   const [uploadFor, setUploadFor] = useState<string | null>(null);
   const [estado, setEstado] = useState<"loading" | "ready" | "offline">("loading");
   const emFalta = docs.filter(d => !d.ok).length;
 
   useEffect(() => {
     let alive = true;
-    apiFormandoDossier("gold", formando.id)
-      .then(r => {
+    const extrasP = cursoId != null
+      ? apiDtpModelo(tipo, cursoId).then(r => r.modelo.extra.filter(x => x.ambito === "formando").map(x => ({ id: x.id, label: x.label })))
+      : Promise.resolve([] as { id: string; label: string }[]);
+    Promise.all([apiFormandoDossier(tipo, formando.id), extrasP])
+      .then(([r, extras]) => {
         if (!alive) return;
-        setDocs(DOCS_GOLD.map(d => {
+        const lista = fundirDocTipos(docsFormandoBase(tipo), extras);
+        setDocs(lista.map(d => {
           const saved = r.docs.find(x => x.id === d.id);
-          return { ...d, ok: saved?.ok ?? false, data: saved?.data ?? "", fileName: saved?.fileName ?? "" };
+          return {
+            ...d,
+            ok: saved?.ok ?? false,
+            data: saved?.data ?? "",
+            fileName: saved?.fileName ?? "",
+            driveUrl: saved?.driveUrl ?? "",
+            driveFileId: saved?.driveFileId ?? "",
+          };
         }));
         setEstado("ready");
       })
       .catch(() => { if (alive) setEstado("offline"); });
     return () => { alive = false; };
-  }, [formando.id]);
+  }, [cursoId, formando.id, tipo]);
 
   function gravar(next: typeof docs) {
     setDocs(next);
-    void persist(apiSaveFormandoDocs("gold", formando.id, next.map(d => ({ id: d.id, ok: d.ok, fileName: d.fileName, data: d.data }))));
+    void persist(apiSaveFormandoDocs(tipo, formando.id, next.map(d => ({
+      id: d.id, ok: d.ok, fileName: d.fileName, data: d.data,
+      driveFileId: d.driveFileId, driveUrl: d.driveUrl,
+    }))));
   }
 
   if (estado === "loading") {
@@ -102,7 +115,12 @@ function DocumentosGoldPanel({ formando, avulso }: { formando: FormandoTurma; av
             </button>
             <div className="flex-1 min-w-0">
               <p className={`text-xs font-semibold ${d.ok ? "text-emerald-700" : "text-red-600"}`}>{d.label}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{d.fileName ? d.fileName : d.ok && d.data ? `Validado em ${d.data}` : "Em falta"}</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {d.fileName ? d.fileName : d.ok && d.data ? `Validado em ${d.data}` : "Em falta"}
+              </p>
+              {d.driveUrl && (
+                <a href={d.driveUrl} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-blue-600">Abrir no Drive</a>
+              )}
             </div>
             <button type="button" onClick={() => setUploadFor(d.id)} className="text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">
               {d.ok ? "Substituir" : "Carregar"}
@@ -115,15 +133,17 @@ function DocumentosGoldPanel({ formando, avulso }: { formando: FormandoTurma; av
         onClose={() => setUploadFor(null)}
         title={`Carregar: ${docs.find(d => d.id === uploadFor)?.label ?? ""}`}
         context={{
-          kind: uploadFor === "pip" ? "pip" : "documento",
-          regime: "gold",
+          kind: uploadFor === "pip" ? "pip" : "formando-doc",
+          regime: tipo,
           turma: avulso ? "avulso" : formando.turma,
           formando: String(formando.id),
           label: docs.find(d => d.id === uploadFor)?.label,
         }}
         onConfirm={file => {
           if (!uploadFor) return;
-          gravar(docs.map(x => x.id === uploadFor ? { ...x, ok: true, data: new Date().toISOString().slice(0, 10), fileName: file.name } : x));
+          gravar(docs.map(x => x.id === uploadFor
+            ? { ...x, ok: true, data: new Date().toISOString().slice(0, 10), fileName: file.name, driveUrl: file.openUrl, driveFileId: file.id }
+            : x));
         }}
       />
     </div>
@@ -240,7 +260,7 @@ export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "
           </>
         )}
 
-        {tab === "documentos" && <DocumentosGoldPanel formando={formando} avulso={avulso} />}
+        {tab === "documentos" && <DocumentosGoldPanel formando={formando} avulso={avulso} tipo={tipo} />}
 
         {tab === "pagamentos" && (
           <div className="space-y-3">

@@ -37,13 +37,13 @@ import { FORMADORES_SEED } from "./formadorModel";
 import { useFormadorOptions, useFormadores } from "./FormadoresContext";
 import { useTurmas } from "./TurmasContext";
 import { cronogramaToSessoes, formatSessaoLabel, hojeIso, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
-import { apiGlobalSearch, apiDriveFiles, type GlobalSearchHit } from "./api";
-import { campanhaNums, roiLabel } from "./campanhaStats";
+import { apiGlobalSearch, apiDriveFiles, apiSaveFormandoDocs, type GlobalSearchHit } from "./api";
+import { CampanhasView } from "./CampanhasView";
 import { ListsProvider, nextListId, useLists, type BlogPostRow, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
 import { PreInscricoesGoldView } from "./CrmView";
 import { useAuth } from "./AuthGate";
 import { useNotificacoes } from "./NotificacoesContext";
-import { presencasDaSessao, useCriteriosAvaliacao, useDtpResumo, useTurmaPedagogia, type PresencaRow } from "./PedagogiaContext";
+import { presencasDaSessao, useCriteriosAvaliacao, useCursoPrograma, useDtpResumo, useTurmaPedagogia, type PresencaRow } from "./PedagogiaContext";
 import { EquipaView } from "./EquipaView";
 import { UsersView, roleLabel } from "./UsersView";
 import { ViewLoadingOverlay } from "./ViewLoading";
@@ -1458,6 +1458,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const { user } = useAuth();
   const ped = useTurmaPedagogia("gold", turma.id);
   const criterios = useCriteriosAvaliacao("gold", turma.curso);
+  const programaTurma = useCursoPrograma("gold", turma.curso);
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
   const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
   const [presencasSession, setPresencasSession] = useState<SessaoMeta | null>(null);
@@ -1577,6 +1578,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             dtp={ped.dtp}
             estado={ped.estado}
             onToggle={(item, proximo) => void ped.guardarDtp(item.id, proximo)}
+            onAnexo={(item, file) => void ped.guardarDtpAnexo(item.id, file)}
           />
         )}
         {tab === "sessoes" && (
@@ -1637,13 +1639,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
               <button onClick={() => onNavigate?.("gold-cursos")} className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800">{I.edit} Editar programa →</button>
             </div>
             <div className="space-y-2">
-              {[
-                "Módulo 1 - Fundamentos da Formação Profissional (8h)",
-                "Módulo 2 - Planeamento e Organização da Formação (16h)",
-                "Módulo 3 - Comunicação e Dinamização de Grupos (16h)",
-                "Módulo 4 - Avaliação das Aprendizagens (8h)",
-                "Módulo 5 - Elaboração do Portefólio (8h)",
-              ].map((line, i) => (
+              {(programaTurma.length ? programaTurma : ["Ainda sem módulos na ficha deste curso. Edite o programa na ficha do curso."]).map((line, i) => (
                 <div key={i} className="flex items-start gap-2 text-sm text-slate-700">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 flex-shrink-0" />
                   <span>{line}</span>
@@ -2001,6 +1997,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const { user } = useAuth();
   const ped = useTurmaPedagogia("fin", turma.id);
   const criterios = useCriteriosAvaliacao("fin", turma.curso);
+  const programaTurmaFin = useCursoPrograma("fin", turma.curso);
   const sumarios = ped.sumarios;
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
   const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
@@ -2114,6 +2111,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           dtp={ped.dtp}
           estado={ped.estado}
           onToggle={(item, proximo) => void ped.guardarDtp(item.id, proximo)}
+          onAnexo={(item, file) => void ped.guardarDtpAnexo(item.id, file)}
         />
       )}
       {tab === "sessoes" && (
@@ -2174,11 +2172,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
               <button onClick={() => onNavigate?.("fin-cursos")} className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800">{I.edit} Editar programa →</button>
             </div>
             <div className="space-y-2">
-              {[
-                `UFCD ${turma.ufcdCod} · ${turma.curso} (${turma.horas}h)`,
-                "Sessões síncronas em sala virtual + trabalho na plataforma",
-                "Assiduidade e avaliação contínua para certificado",
-              ].map((line, i) => (
+              {(programaTurmaFin.length ? programaTurmaFin : [`UFCD ${turma.ufcdCod} · ${turma.curso} (${turma.horas}h)`]).map((line, i) => (
                 <div key={i} className="flex items-start gap-2 text-sm text-slate-700">
                   <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 flex-shrink-0" />
                   <span>{line}</span>
@@ -2495,6 +2489,8 @@ function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
   const { formandosFin, patchFormandoFin } = useLists();
   const live = formandosFin.find(f => f.id === formando.id) ?? formando;
   const [docs, setDocs] = useState(live);
+  const [uploadFor, setUploadFor] = useState<DocKey | null>(null);
+  const [ficheiros, setFicheiros] = useState<Record<string, string>>({});
   useEffect(() => { setDocs(live); }, [live]);
   const keys: DocKey[] = ["cc", "ch", "cu", "ci", "ce"];
   const completo = keys.every(k => docs[k].ok);
@@ -2503,10 +2499,23 @@ function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
     setDocs(next);
     patchFormandoFin(docs.id, { [k]: next[k] });
   }
+  function marcarFicheiro(k: DocKey, file: { name: string; openUrl: string; id: string }) {
+    const next = { ...docs, [k]: { ok: true, data: new Date().toISOString().slice(0, 10) } };
+    setDocs(next);
+    patchFormandoFin(docs.id, { [k]: next[k] });
+    setFicheiros(prev => ({ ...prev, [k]: file.openUrl }));
+    void persist(apiSaveFormandoDocs("fin", docs.id, keys.map(id => ({
+      id,
+      ok: id === k ? true : next[id].ok,
+      fileName: id === k ? file.name : "",
+      data: next[id].data,
+      driveFileId: id === k ? file.id : "",
+      driveUrl: id === k ? file.openUrl : "",
+    }))));
+  }
 
   return (
     <div className="p-5 space-y-5">
-      {/* Status banner */}
       <div className={`rounded-xl p-4 flex items-center gap-3 ${completo ? "bg-emerald-50 border border-emerald-200" : "bg-amber-50 border border-amber-200"}`}>
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${completo ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"}`}>
           {completo ? I.check : I.warn}
@@ -2519,11 +2528,10 @@ function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
         </div>
       </div>
 
-      {/* Doc checklist */}
       <div className="space-y-2">
         {keys.map(k => (
           <div key={k} className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${docs[k].ok ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
-            <button onClick={() => toggleDoc(k)}
+            <button type="button" onClick={() => toggleDoc(k)}
               className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-colors ${docs[k].ok ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-red-300"}`}>
               {docs[k].ok && I.check}
             </button>
@@ -2531,8 +2539,13 @@ function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
               <p className={`text-xs font-semibold ${docs[k].ok ? "text-emerald-700" : "text-red-600"}`}>{docLabels[k]}</p>
               {docs[k].ok && docs[k].data && <p className="text-xs text-slate-400 mt-0.5">Validado em {docs[k].data}</p>}
               {!docs[k].ok && <p className="text-xs text-red-400 mt-0.5">Em falta</p>}
+              {ficheiros[k] && (
+                <a href={ficheiros[k]} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-blue-600">Abrir no Drive</a>
+              )}
             </div>
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{k.toUpperCase()}</span>
+            <button type="button" onClick={() => setUploadFor(k)} className="text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">
+              {docs[k].ok ? "Substituir" : "Carregar"}
+            </button>
           </div>
         ))}
       </div>
@@ -2545,6 +2558,14 @@ function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
           Enviar lembrete de documentos
         </a>
       )}
+      <FileUploadModal
+        open={!!uploadFor}
+        onClose={() => setUploadFor(null)}
+        title={`Carregar: ${uploadFor ? docLabels[uploadFor] : ""}`}
+        accent="fin"
+        context={{ kind: "formando-doc", regime: "fin", turma: docs.turma, formando: String(docs.id), label: uploadFor ? docLabels[uploadFor] : undefined }}
+        onConfirm={file => { if (uploadFor) marcarFicheiro(uploadFor, file); }}
+      />
     </div>
   );
 }
@@ -3661,66 +3682,6 @@ function BlogView() {
         risk="A ação não se desfaz. Prefira marcar como Inactivo se quiser manter o histórico."
         onConfirm={() => { if (apagarPost) removeBlogPost(apagarPost.id); }}
       />
-    </div>
-  );
-}
-
-function CampanhasView() {
-  const { campanhas, addCampanha, removeCampanha, preinscricoes, formandosTurmas, pagamentos } = useLists();
-  const [open, setOpen] = useState(false);
-  const [cursoCamp, setCursoCamp] = useState("");
-  const [nomeCamp, setNomeCamp] = useState("");
-  const [dataCamp, setDataCamp] = useState("");
-  return (
-    <div className="space-y-4">
-      <PageHeader title="Campanhas" sub="Inscrições, pagamentos e receita saem das pré-inscrições e dos pagamentos - não se escrevem à mão." action={<NewBtn label="+ Nova Campanha" onClick={() => { setNomeCamp(""); setDataCamp(""); setCursoCamp(""); setOpen(true); }} />} />
-      {campanhas.length === 0 && (
-        <EmptyHint text="Ainda sem campanhas. Crie uma e associe o curso: os números entram sozinhos quando chegarem pré-inscrições." />
-      )}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {campanhas.map(c => {
-          const n = campanhaNums(c, preinscricoes, formandosTurmas, pagamentos);
-          return (
-          <Card key={c.id} className="p-4 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <p className="font-semibold text-slate-800">{c.nome || <span className="italic text-slate-400">sem nome</span>}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{c.data} · {c.encarregado}{c.curso ? ` · ${c.curso}` : ""}</p>
-              </div>
-              <ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => removeCampanha(c.id)} />
-            </div>
-            <div className="grid grid-cols-2 gap-2 mt-3">
-              {[
-                { l: "Inscrições", v: n.preinscricoes.toLocaleString("pt-PT"), c: "text-blue-600" },
-                { l: "Pagamentos", v: n.pagos.toLocaleString("pt-PT"), c: "text-teal-600" },
-                { l: "Receita", v: `€ ${n.receita.toLocaleString("pt-PT")}`, c: "text-emerald-600" },
-                { l: "ROI", v: roiLabel(n.receita, c.custo), c: "text-amber-600" },
-              ].map(s => (
-                <div key={s.l} className="bg-slate-50 rounded-xl p-2.5">
-                  <p className="text-xs text-slate-400">{s.l}</p>
-                  <p className={`text-sm font-bold ${s.c} mt-0.5`}>{s.v}</p>
-                </div>
-              ))}
-            </div>
-          </Card>
-          );
-        })}
-      </div>
-      <SlideOver open={open} onClose={() => setOpen(false)} title="Nova campanha" sub="Os números vêm das pré-inscrições ligadas a este nome ou curso.">
-        <div className="p-5 space-y-3">
-          <Field label="Nome"><input className={iCls} value={nomeCamp} onChange={e => setNomeCamp(e.target.value)} placeholder="Outubro 2026" /></Field>
-          <Field label="Curso em destaque"><SearchSelect value={cursoCamp} onChange={setCursoCamp} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
-          <Field label="Data de início"><input type="date" className={iCls} value={dataCamp} onChange={e => setDataCamp(e.target.value)} /></Field>
-          <div className="flex gap-2 pt-2">
-            <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button onClick={() => {
-              if (!nomeCamp.trim()) return;
-              addCampanha({ id: nextListId(campanhas), nome: nomeCamp.trim(), data: dataCamp || new Date().toISOString().slice(0, 10), encarregado: "Aguilar", curso: cursoCamp, preinscricoes: 0, pagos: 0, receita: 0, custo: 0 });
-              setOpen(false);
-            }} disabled={!nomeCamp.trim()} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Criar campanha</button>
-          </div>
-        </div>
-      </SlideOver>
     </div>
   );
 }

@@ -104,7 +104,7 @@ export function PublicPreinscricao() {
             <h1 className="mt-4 text-2xl font-semibold text-slate-900">Será contactado brevemente.</h1>
             <p className="mt-3 text-sm text-slate-600 leading-relaxed">
               Pedido para {resumo || "a formação escolhida"}. A secretaria da ENA liga ou escreve para {email} / {telf}.
-              Não existe área de formando online — o próximo passo é este contacto.
+              Não existe área de formando online - o próximo passo é este contacto.
             </p>
           </div>
         ) : (

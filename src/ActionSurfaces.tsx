@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { apiDtpExport } from "./api";
+import { dtpZipNome } from "./dtpPasta";
 import { useCatalogs } from "./CatalogsContext";
 import { AppModal } from "./FormKit";
 import { useLists } from "./ListsContext";
@@ -558,13 +559,12 @@ export function ExportTurmaModal({
       id: "dtp",
       label: "Pasta DTP (ZIP)",
       detalhe: turma.turmaId != null
-        ? `ZIP com os PDFs do Drive desta turma${dtp.length ? ` e o índice (${dtp.length} documentos)` : " e o índice do dossiê"}`
+        ? `ZIP ${turma.nome}: 01-Antes, 02-Durante, 03-Fecho, formandos e formador${dtp.length ? ` · ${dtp.length} documentos no índice` : ""}`
         : "Abra o cockpit de uma turma para gerar o ZIP",
       disabled: turma.turmaId == null,
       run: async () => {
         if (turma.turmaId == null) return;
-        const codigo = turma.nome.replace(/[^\w-]+/g, "-").toLowerCase();
-        await apiDtpExport(turma.regime ?? turma.accent ?? "gold", turma.turmaId, `dtp-${codigo}.zip`);
+        await apiDtpExport(turma.regime ?? turma.accent ?? "gold", turma.turmaId, dtpZipNome(turma.regime ?? turma.accent ?? "gold", turma.nome));
       },
     },
   ];

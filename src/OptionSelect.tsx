@@ -80,7 +80,7 @@ export function OptionSelect({
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
           </label>
-          <p className="text-xs text-slate-500">Não apague opções em uso nas fichas — pode desactivar mais tarde na vista Listas.</p>
+          <p className="text-xs text-slate-500">Não apague opções em uso nas fichas - pode desactivar mais tarde na vista Listas.</p>
         </div>
       </AppModal>
     </>

@@ -88,7 +88,7 @@ async function entregarSeCompleto(db: Db, id: number, actorId: string) {
     "UPDATE preinscricoes SET secretaria_em = now(), ultima_actividade_em = now(), estado = 'Pré-inscrição' WHERE id = $1 AND secretaria_em IS NULL",
     [id],
   );
-  await logLeadEvent(db, id, actorId, "estado", "Entregue à secretaria", "Pré-inscrição completa — passou automaticamente à secretaria.");
+  await logLeadEvent(db, id, actorId, "estado", "Entregue à secretaria", "Pré-inscrição completa - passou automaticamente à secretaria.");
   return mapPreinscricao((await oneLead(db, id)) ?? row);
 }
 

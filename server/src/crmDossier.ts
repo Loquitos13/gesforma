@@ -239,7 +239,7 @@ export async function setCampoValores(
       [leadId, v.campoId, next],
     );
     const campo = await db.query<{ label: string }>("SELECT label FROM crm_campos WHERE id = $1", [v.campoId]);
-    changed.push(`${campo.rows[0]?.label ?? "campo"}: ${next || "—"}`);
+    changed.push(`${campo.rows[0]?.label ?? "campo"}: ${next || "-"}`);
   }
   if (changed.length) {
     await logLeadEvent(db, leadId, actorId, "campo", "Campos actualizados", changed.join(" · "));

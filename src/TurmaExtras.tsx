@@ -57,9 +57,15 @@ export function FileUploadModal({
   const inputRef = useRef<HTMLInputElement>(null);
   const gold = accent === "gold";
   const { status } = useDrive();
-  const dest = [status.folderName, context?.regime === "fin" ? "Financiada" : context?.regime === "gold" ? "Gold" : null, context?.turma, context?.label ?? context?.kind]
-    .filter(Boolean)
-    .join(" / ");
+  const dest = [
+    status.folderName,
+    context?.regime === "fin" ? "Financiada" : context?.regime === "gold" ? "Gold" : null,
+    context?.turma
+      ? `DTP ${context.regime === "fin" ? "Financiada" : "Gold"} ${context.turma}`
+      : null,
+    context?.fase === "durante" ? "02-Durante" : context?.fase === "depois" ? "03-Fecho" : context?.turma && context.kind === "dtp" ? "01-Antes da turma" : null,
+    context?.label ?? context?.kind,
+  ].filter(Boolean).join(" / ");
 
   function handleClose() {
     if (busy) return;
@@ -96,7 +102,7 @@ export function FileUploadModal({
           <div className={`rounded-xl border px-3 py-2.5 text-xs ${status.connected ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-slate-50 border-slate-200 text-slate-600"}`}>
             {status.connected
               ? <>Vai para o Drive da entidade · <span className="font-semibold">{dest || status.folderName}</span></>
-              : <>Ainda sem Drive ligado. Em produção o upload é recusado — ligue a conta Google em Configurações. Em desenvolvimento local o ficheiro fica em disco só como recurso.</>}
+              : <>Ainda sem Drive ligado. Em produção o upload é recusado - ligue a conta Google em Configurações. Em desenvolvimento local o ficheiro fica em disco só como recurso.</>}
           </div>
           {!file ? (
             <div
@@ -305,7 +311,7 @@ export function PresencasSessaoModal({ open, onClose, sessao, formandos, onSave 
 
 type DocField = { id: string; label: string; required: boolean; uploaded: boolean; fileName?: string; driveUrl?: string; driveFileId?: string };
 
-export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "gold" }: { open: boolean; onClose: () => void; nome: string; telf?: string; accent?: "gold" | "fin" }) {
+export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "gold", turma }: { open: boolean; onClose: () => void; nome: string; telf?: string; accent?: "gold" | "fin"; turma?: string }) {
   const { formadores } = useFormadores();
   const formador = formadores.find(f => f.nome === nome);
   const { gold, fin } = useTurmas();
@@ -438,7 +444,7 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
         onClose={() => setUploadFor(null)}
         title={`Carregar: ${docs.find(d => d.id === uploadFor)?.label ?? ""}`}
         accent={accent}
-        context={{ kind: "formador-doc", regime: accent, formando: nome, label: docs.find(d => d.id === uploadFor)?.label }}
+        context={{ kind: "formador-doc", regime: accent, turma, formando: nome, label: docs.find(d => d.id === uploadFor)?.label }}
         onConfirm={file => { if (uploadFor) markUploaded(uploadFor, file); }}
       />
     </>

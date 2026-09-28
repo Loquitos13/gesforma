@@ -420,7 +420,7 @@ export function ClienteFicha({
             </p>
             {entregando && <p className="text-xs text-violet-800">A entregar à secretaria…</p>}
             {falta.length === 0
-              ? <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">{entregue ? "Na secretaria." : "Dossier completo — a entregar à secretaria."}</p>
+              ? <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">{entregue ? "Na secretaria." : "Dossier completo - a entregar à secretaria."}</p>
               : (
                 <ul className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 list-disc list-inside">
                   {falta.map(f => <li key={f.key}>{f.label}</li>)}

@@ -1804,7 +1804,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         onConfirm={() => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true }); }} />
       <CertificadoVerModal open={!!verCert} onClose={() => setVerCert(null)} cert={verCert} accent="gold" />
       <ExportTurmaModal open={!!exportTurma} onClose={() => setExportTurma(null)} turma={exportTurma} />
-      <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? ""} />
+      <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? ""} accent="gold" turma={turma.nome} />
       <SlideOver open={novaSessao} onClose={() => setNovaSessao(false)} title="Nova sessão" sub={turma.nome}>
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -2338,7 +2338,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           if (docsOpen?.id === transferirFormando.id) setDocsOpen(null);
         }}
       />
-      <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? turma.formador} />
+      <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? turma.formador} accent="fin" turma={turma.nome} />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" accent="fin"
         context={{ kind: "certificado", regime: "fin", turma: turma.nome, formando: uploadCert != null ? String(uploadCert) : undefined, label: "Certificado" }}
         onConfirm={() => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true }); }} />

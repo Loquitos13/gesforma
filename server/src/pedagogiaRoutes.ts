@@ -4,6 +4,7 @@ import { z } from "zod";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { listDriveFiles, readDriveContent } from "./googleDrive.js";
+import { dtpFasePasta, dtpPastaNome, dtpZipNome, dtpZipRelPath, pastaSegura } from "./dtpPasta.js";
 import { zipStore } from "./zipStore.js";
 import {
   buildDtpItems,
@@ -184,12 +185,34 @@ function simCounts(payload: unknown): DtpCounts | null {
   return { done, total: items.length };
 }
 
-type TurmaRow = { id: number; nome: string; curso: string; cronograma: unknown };
+type TurmaRow = { id: number; nome: string; curso: string; cronograma: unknown; formador?: string };
 
 async function loadTurma(db: Db, regime: Regime, id: number): Promise<TurmaRow | null> {
   const table = regime === "gold" ? "turmas_gold" : "turmas_fin";
-  const row = await db.query<TurmaRow>(`SELECT id, nome, curso, cronograma FROM ${table} WHERE id = $1`, [id]);
+  const row = await db.query<TurmaRow>(`SELECT id, nome, curso, cronograma, formador FROM ${table} WHERE id = $1`, [id]);
   return row.rows[0] ?? null;
+}
+
+function uniqueZipPath(used: Set<string>, path: string) {
+  if (!used.has(path)) {
+    used.add(path);
+    return path;
+  }
+  const i = path.lastIndexOf(".");
+  const base = i > 0 ? path.slice(0, i) : path;
+  const ext = i > 0 ? path.slice(i) : "";
+  let n = 2;
+  while (used.has(`${base}-${n}${ext}`)) n += 1;
+  const next = `${base}-${n}${ext}`;
+  used.add(next);
+  return next;
+}
+
+function nomeArquivoDtp(label: string | undefined, original: string) {
+  const orig = pastaSegura(original || "ficheiro.pdf");
+  if (!label) return orig;
+  if (orig.toLowerCase().includes(label.toLowerCase().slice(0, 16))) return orig;
+  return pastaSegura(`${label} - ${orig}`);
 }
 
 /** O curso da turma é texto: resolve-se pelo nome (Gold) ou pela UFCD / nome comercial (Financiada). */
@@ -945,35 +968,163 @@ export function registerPedagogiaRoutes(
     if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
     const turma = await loadTurma(db, regime, id);
     if (!turma) return reply.code(404).send({ error: "turma não encontrada" });
+    const dtp = await dtpForTurma(db, regime, turma);
+    const root = dtpPastaNome(regime, turma.nome);
+    const used = new Set<string>();
     const files: { name: string; data: Buffer }[] = [];
+    const add = (rel: string, data: Buffer) => {
+      files.push({ name: uniqueZipPath(used, rel), data });
+    };
+
+    const porFase = (["antes", "durante", "depois"] as const).map(fase => ({
+      fase,
+      pasta: dtpFasePasta(fase),
+      itens: dtp.items.filter(i => i.fase === fase),
+    }));
+    for (const bloco of porFase) {
+      const linhas = [
+        `${bloco.pasta} · ${turma.nome}`,
+        `${turma.curso}`,
+        "",
+        ...bloco.itens.map(i => {
+          const marca = i.estado === "ok" ? "[x]" : i.estado === "parcial" ? "[~]" : "[ ]";
+          return `${marca} ${i.label}${i.anexo?.fileName ? ` · ${i.anexo.fileName}` : ""}`;
+        }),
+      ];
+      add(`${root}/${bloco.pasta}/_indice.txt`, Buffer.from(linhas.join("\n"), "utf8"));
+    }
+
+    const formandos = await formandosDaTurma(db, regime, turma);
+    add(`${root}/04-Formandos/_indice.txt`, Buffer.from(
+      [`Formandos · ${turma.nome}`, "", ...formandos.map(f => f.nome)].join("\n") || `Formandos · ${turma.nome}\n\nAinda sem formandos.`,
+      "utf8",
+    ));
+    add(`${root}/05-Formador/_indice.txt`, Buffer.from(
+      [`Formador · ${turma.nome}`, "", turma.formador?.trim() || "Formador por atribuir nesta turma."].join("\n"),
+      "utf8",
+    ));
+
     const seen = new Set<string>();
+    const pushDrive = async (
+      fileId: string,
+      rel: string,
+    ) => {
+      if (!fileId || seen.has(fileId)) return;
+      const content = await readDriveContent(db, fileId).catch(() => null);
+      if (!content?.bytes) return;
+      seen.add(fileId);
+      add(rel, content.bytes);
+    };
+
+    for (const item of dtp.items) {
+      if (!item.anexo?.driveFileId) continue;
+      const rel = dtpZipRelPath({
+        root,
+        fase: item.fase,
+        ambito: item.ambito,
+        itemLabel: item.label,
+        fileName: nomeArquivoDtp(item.label, item.anexo.fileName || "anexo.pdf"),
+      });
+      await pushDrive(item.anexo.driveFileId, rel);
+    }
+
     const drive = [
-      ...await listDriveFiles(db, { kind: "", regime, turma: turma.nome, limit: 80 }),
-      ...await listDriveFiles(db, { kind: "", regime, turma: String(id), limit: 80 }),
+      ...await listDriveFiles(db, { kind: "", regime, turma: turma.nome, limit: 200 }),
+      ...await listDriveFiles(db, { kind: "", regime, turma: String(id), limit: 200 }),
     ];
     for (const f of drive) {
       if (seen.has(f.id)) continue;
-      seen.add(f.id);
-      const content = await readDriveContent(db, f.id).catch(() => null);
-      if (!content?.bytes) continue;
-      const folder = f.kind || "documentos";
-      const safe = (f.name || "ficheiro").replace(/[^\w.\- ()àáâãéêíóôõúç]+/gi, "_");
-      files.push({ name: `${folder}/${safe}`, data: content.bytes });
+      const item = dtp.items.find(i => i.label === f.label || i.id === f.label);
+      const rel = dtpZipRelPath({
+        root,
+        fase: item?.fase,
+        ambito: item?.ambito ?? (f.kind === "formando-doc" || f.kind === "pip" ? "formando" : f.kind === "formador-doc" ? "formador" : "turma"),
+        itemLabel: item?.label || f.label || undefined,
+        pessoa: f.formando ?? undefined,
+        kind: f.kind,
+        fileName: nomeArquivoDtp(item?.label || f.label || undefined, f.name),
+      });
+      await pushDrive(f.id, rel);
     }
+
+    const ids = formandos.map(f => f.id);
+    if (ids.length) {
+      const docs = await db.query<{ doc_id: string; file_name: string; drive_file_id: string; formando_id: number }>(
+        `SELECT formando_id, doc_id, file_name, drive_file_id FROM formando_docs
+          WHERE regime = $1 AND formando_id = ANY($2::int[]) AND drive_file_id <> ''`,
+        [regime, ids],
+      ).catch(() => ({ rows: [] as { doc_id: string; file_name: string; drive_file_id: string; formando_id: number }[] }));
+      for (const row of docs.rows) {
+        const pessoa = formandos.find(f => f.id === row.formando_id)?.nome ?? String(row.formando_id);
+        const rel = dtpZipRelPath({
+          root,
+          ambito: "formando",
+          itemLabel: row.doc_id,
+          pessoa,
+          fileName: nomeArquivoDtp(row.doc_id, row.file_name || "documento.pdf"),
+        });
+        await pushDrive(row.drive_file_id, rel);
+      }
+    }
+
+    const formadorNome = (turma.formador ?? "").trim();
+    if (formadorNome) {
+      const fr = await db.query<{ id: number }>("SELECT id FROM formadores WHERE nome = $1 LIMIT 1", [formadorNome]);
+      const fid = fr.rows[0]?.id;
+      if (fid != null) {
+        const fdocs = await db.query<{ doc_id: string; file_name: string; drive_file_id: string }>(
+          "SELECT doc_id, file_name, drive_file_id FROM formador_docs WHERE formador_id = $1 AND drive_file_id <> ''",
+          [fid],
+        ).catch(() => ({ rows: [] as { doc_id: string; file_name: string; drive_file_id: string }[] }));
+        for (const row of fdocs.rows) {
+          const rel = dtpZipRelPath({
+            root,
+            ambito: "formador",
+            itemLabel: row.doc_id,
+            fileName: nomeArquivoDtp(row.doc_id, row.file_name || "documento.pdf"),
+          });
+          await pushDrive(row.drive_file_id, rel);
+        }
+      }
+    }
+
+    const pdfs = files.filter(f => !f.name.endsWith("/_indice.txt") && !f.name.endsWith("/00-Indice geral.txt"));
     const indice = [
-      `Dossiê técnico-pedagógico · ${turma.nome} · ${turma.curso}`,
-      `Regime: ${regime}`,
-      `Ficheiros: ${files.length}`,
+      `Dossiê técnico-pedagógico`,
+      root,
+      `Turma: ${turma.nome}`,
+      `Curso: ${turma.curso}`,
+      `Regime: ${regime === "fin" ? "Financiada" : "Gold"}`,
+      `Completude: ${dtp.pct}% · ${dtp.ok} no dossiê · ${dtp.parcial} parciais · ${dtp.falta} em falta`,
+      `Ficheiros: ${pdfs.length}`,
       "",
-      ...files.map(f => f.name),
-      files.length ? "" : "Ainda não há PDFs no Drive desta turma. O índice fica no ZIP para o arquivo.",
+      "Organização da pasta:",
+      `  ${root}/`,
+      "    01-Antes da turma/",
+      "    02-Durante/",
+      "    03-Fecho/",
+      "    04-Formandos/",
+      "    05-Formador/",
+      "",
+      "Documentos do dossiê:",
+      ...dtp.items.map(i => {
+        const pasta = i.ambito === "formando" ? "04-Formandos" : i.ambito === "formador" ? "05-Formador" : dtpFasePasta(i.fase);
+        const marca = i.estado === "ok" ? "ok" : i.estado === "parcial" ? "parcial" : "falta";
+        return `  [${marca}] ${pasta} / ${i.label}`;
+      }),
+      "",
+      "Ficheiros neste ZIP:",
+      ...files.map(f => `  ${f.name}`),
+      pdfs.length ? "" : "Ainda não há PDFs no Drive desta turma. As pastas e o índice ficam no ZIP para o arquivo.",
     ].join("\n");
-    files.unshift({ name: "indice-dtp.txt", data: Buffer.from(indice, "utf8") });
+    add(`${root}/00-Indice geral.txt`, Buffer.from(indice, "utf8"));
+
     const zip = zipStore(files);
-    await audit(db, req.actor!.id, "dtp.export", "turma", String(id), req.ip, { ficheiros: files.length - 1 });
+    const zipName = dtpZipNome(regime, turma.nome);
+    await audit(db, req.actor!.id, "dtp.export", "turma", String(id), req.ip, { ficheiros: pdfs.length, pasta: root });
     return reply
       .header("Content-Type", "application/zip")
-      .header("Content-Disposition", `attachment; filename="dtp-${turma.nome.replace(/[^\w-]+/g, "-")}.zip"`)
+      .header("Content-Disposition", `attachment; filename="${zipName}"`)
       .send(zip);
   });
 }

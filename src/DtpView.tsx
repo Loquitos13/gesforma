@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiDtpExport, type DtpEstado, type DtpItem, type DtpSnapshot } from "./api";
+import { dtpPastaNome, dtpZipNome } from "./dtpPasta";
 import { toastError, toastOk } from "./toastBus";
 import { FileUploadModal } from "./TurmaExtras";
 
@@ -45,8 +46,8 @@ async function exportarPasta(regime: DtpRegime, turma: DtpTurma | undefined) {
     toastError(new Error("Abra o dossiê a partir de uma turma para descarregar o ZIP com os PDFs."));
     return;
   }
-  const codigo = (turma.codigo ?? "turma").replace(/[^\w-]+/g, "-").toLowerCase();
-  await apiDtpExport(regime, turma.id, `dtp-${codigo}.zip`);
+  const codigo = (turma.codigo ?? "turma").trim();
+  await apiDtpExport(regime, turma.id, dtpZipNome(regime, codigo));
 }
 
 /** Dossiê da turma - vive dentro do cockpit, não como “ação de formação”. */
@@ -111,20 +112,23 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
               onClick={() => {
                 setExportando(true);
                 void exportarPasta(regime, turma)
-                  .then(() => toastOk("ZIP do dossiê descarregado (PDFs da turma + índice)."))
+                  .then(() => toastOk(`ZIP ${dtpPastaNome(regime, codigo)} descarregado.`))
                   .catch(err => toastError(err, "Não foi possível exportar o ZIP do DTP."))
                   .finally(() => setExportando(false));
               }}
               className={`px-3 py-2 text-xs font-semibold rounded-lg text-white disabled:opacity-50 ${isGold ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}
             >
-              {exportando ? "A gerar ZIP…" : "Exportar pasta DTP"}
+              {exportando ? "A gerar ZIP…" : `Descarregar ${dtpPastaNome(regime, codigo)}`}
             </button>
           </div>
         </div>
         <div className="w-full bg-slate-100 rounded-full h-2 mt-3">
           <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: bar }} />
         </div>
-        <p className="text-xs text-slate-400 mt-2">Arquivar 10 anos (IEFP) ou o prazo do programa - o mais longo. Na ENA o DTP é da turma, não de uma “ação” à parte.</p>
+        <p className="text-xs text-slate-400 mt-2">
+          Pasta no Drive e no ZIP: <span className="font-semibold text-slate-600">{dtpPastaNome(regime, codigo)}</span>
+          {" · "}01-Antes · 02-Durante · 03-Fecho · 04-Formandos · 05-Formador. Arquivar 10 anos (IEFP) ou o prazo do programa - o mais longo.
+        </p>
       </div>
 
       <div className={`rounded-xl border p-4 ${podeEncerrar ? "bg-emerald-50 border-emerald-200" : isGold ? "bg-amber-50 border-amber-200" : "bg-blue-50 border-blue-200"}`}>
@@ -230,6 +234,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
           regime,
           turma: turma?.codigo ?? String(turma?.id ?? ""),
           label: uploadFor?.label,
+          fase: uploadFor?.fase,
         }}
         onConfirm={file => {
           if (uploadFor) onAnexo?.(uploadFor, { id: file.id, name: file.name, openUrl: file.openUrl });

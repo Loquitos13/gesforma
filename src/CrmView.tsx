@@ -454,7 +454,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
               if (est === "Formando") { setConfirmMove({ id: item.id, estado: est, item }); return; }
               if (est === "Desistiu" && !item.motivoDesistencia) { openFicha(item); toastError("Indique o motivo da desistência na ficha."); return; }
               patchPreinscricao(item.id, { estado: est });
-              toastOk(est === "Pré-inscrição" ? "Pré-inscrição: complete NIF e morada se faltarem — a secretaria recebe automaticamente." : "Etapa actualizada.");
+              toastOk(est === "Pré-inscrição" ? "Pré-inscrição: complete NIF e morada se faltarem - a secretaria recebe automaticamente." : "Etapa actualizada.");
               setTimeout(carregar, 400);
             }}
             onLogContact={(item, canal) => void logContacto(item, canal)}
@@ -521,7 +521,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                             <p className="text-[11px] text-slate-500 truncate max-w-[220px]">{r.email || "sem email"} · {r.telf || "sem telemóvel"}</p>
                           </button>
                         </td>
-                        <td className="px-3 py-1.5 text-[11px] text-slate-600 whitespace-nowrap">{r.comercialNome || "—"}</td>
+                        <td className="px-3 py-1.5 text-[11px] text-slate-600 whitespace-nowrap">{r.comercialNome || "-"}</td>
                         <td className="px-3 py-1.5">{entradaChip(r.entrada)}</td>
                         <td className="px-3 py-1.5">{meioChip(r.meioContacto)}</td>
                         <td className="px-3 py-1.5">{etiquetaChip(r.etiquetaNome, r.etiquetaCor) ?? <span className="text-[11px] text-slate-400">-</span>}</td>
@@ -536,7 +536,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                           {sla.label}
                         </td>
                         <td className="px-3 py-1.5 text-[11px] text-slate-500 max-w-[180px] truncate" title={r.ultimaNota}>
-                          {r.ultimaNota ? <><span className="text-slate-400">{fmtRelativo(r.ultimaActividadeEm)} · </span>{r.ultimaNota}</> : <span className="text-slate-300">—</span>}
+                          {r.ultimaNota ? <><span className="text-slate-400">{fmtRelativo(r.ultimaActividadeEm)} · </span>{r.ultimaNota}</> : <span className="text-slate-300">-</span>}
                         </td>
                         <td className="px-3 py-1.5">
                           <div className="flex flex-col gap-0.5">

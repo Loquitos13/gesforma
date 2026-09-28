@@ -169,6 +169,7 @@ export type DriveUploadContext = {
   turma?: string;
   formando?: string;
   label?: string;
+  fase?: string;
 };
 
 export const apiHealth = () => api<{ ok: boolean; driver: string; mail: string; drive?: boolean }>("/health");
@@ -273,6 +274,7 @@ export type DtpItem = {
   obrigatorio?: boolean;
   /** Documento acrescentado na ficha do curso, fora da base do regime. */
   extra?: boolean;
+  ambito?: DtpAmbito;
   anexo?: { fileName: string; url: string; driveFileId: string } | null;
 };
 
@@ -787,6 +789,7 @@ export async function apiUploadDrive(file: File, ctx: DriveUploadContext = { kin
   if (ctx.turma) fd.append("turma", ctx.turma);
   if (ctx.formando) fd.append("formando", ctx.formando);
   if (ctx.label) fd.append("label", ctx.label);
+  if (ctx.fase) fd.append("fase", ctx.fase);
   const headers = new Headers();
   headers.set("Accept", "application/json");
   headers.set("X-Gesforma-Client", "web");
@@ -820,7 +823,9 @@ export async function apiDtpExport(regime: Regime, turmaId: number, filename?: s
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = filename ?? `dtp-${turmaId}.zip`;
+    const cd = res.headers.get("content-disposition") ?? "";
+    const named = cd.match(/filename="([^"]+)"/)?.[1];
+    a.download = named || filename || `dtp-${turmaId}.zip`;
     document.body.appendChild(a);
     a.click();
     a.remove();

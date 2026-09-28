@@ -806,7 +806,7 @@ export function CursoFichaView({
                 <div>
                   <p className="text-sm font-semibold text-slate-800">Dados da oferta</p>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Gold ou Financiada vem do menu onde criou o curso. Aqui só completa o que o catálogo e a página precisam — os campos com * são obrigatórios.
+                    Gold ou Financiada vem do menu onde criou o curso. Aqui só completa o que o catálogo e a página precisam - os campos com * são obrigatórios.
                   </p>
                 </div>
                 <div className={`rounded-xl border px-3 py-2.5 ${accent === "fin" ? "border-blue-200 bg-blue-50" : "border-amber-200 bg-amber-50"}`}>
@@ -989,7 +989,7 @@ export function CursoFichaView({
                     <SearchSelect value={data.estado} onChange={v => patch({ estado: v, visivelSite: v === "Ativo" })}
                       options={[{ value: "Ativo" }, { value: "Inactivo" }]} />
                   </Field>
-                  <Field label="Próxima data pública" hint="Calculada a partir da próxima turma libertada. Não se edita aqui — muda ao criar ou libertar a turma.">
+                  <Field label="Próxima data pública" hint="Calculada a partir da próxima turma libertada. Não se edita aqui - muda ao criar ou libertar a turma.">
                     <input className={t.iCls} type="text" readOnly value={proximaTurma ? `${fmtDataPt(proximaTurma.dataInicio)} · ${proximaTurma.local} · ${proximaTurma.horario}` : "Sem turma libertada"} />
                   </Field>
                 </div>

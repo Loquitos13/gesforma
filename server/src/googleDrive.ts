@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync, readFileSync, unlinkSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { config, newToken, onVercel } from "./config.js";
+import { dtpDriveSegments } from "./dtpPasta.js";
 import type { Db } from "./db/pool.js";
 import { openSecret, sealSecret } from "./secretBox.js";
 
@@ -31,6 +32,7 @@ export type DriveContext = {
   turma?: string;
   formando?: string;
   label?: string;
+  fase?: string;
 };
 
 export type DriveFileRow = {
@@ -197,6 +199,8 @@ function kindFolder(kind: string) {
 }
 
 export function folderSegments(ctx: DriveContext, rootName = config.googleDriveFolder) {
+  const dtp = dtpDriveSegments(ctx, rootName);
+  if (dtp) return dtp;
   const segs = [rootName];
   if (ctx.regime === "fin") segs.push("Financiada");
   else if (ctx.regime === "gold") segs.push("Gold");

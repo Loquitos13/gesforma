@@ -46,6 +46,6 @@ export function etiquetaChip(nome?: string | null, cor?: string | null) {
 }
 
 export function meioChip(meio?: string | null) {
-  if (!meio) return <span className="text-[11px] text-slate-400">—</span>;
+  if (!meio) return <span className="text-[11px] text-slate-400">-</span>;
   return <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/80 text-slate-700 border border-slate-200">{meio}</span>;
 }

@@ -183,6 +183,7 @@ export function registerDriveRoutes(
         turma: fields.turma?.slice(0, 120),
         formando: fields.formando?.slice(0, 80),
         label: fields.label?.slice(0, 160),
+        fase: fields.fase?.slice(0, 20),
       });
       await audit(db, req.actor!.id, "drive.upload", "drive_file", file.id, req.ip, {
         name: file.name, kind: file.kind, storedIn: file.storedIn,

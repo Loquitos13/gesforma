@@ -141,8 +141,8 @@ export function CampanhasView() {
                   { l: "Pagamentos", v: n.pagos.toLocaleString("pt-PT"), c: "text-teal-600" },
                   { l: "Receita", v: euro(n.receita), c: "text-emerald-600" },
                   { l: "ROI", v: roiLabel(n.receita, c.custo), c: "text-amber-600" },
-                  { l: "Conversão", v: n.preinscricoes ? `${n.conversaoPct}%` : "—", c: "text-violet-600" },
-                  { l: "Ticket médio", v: n.pagos ? euro(n.ticketMedio) : "—", c: "text-slate-700" },
+                  { l: "Conversão", v: n.preinscricoes ? `${n.conversaoPct}%` : "-", c: "text-violet-600" },
+                  { l: "Ticket médio", v: n.pagos ? euro(n.ticketMedio) : "-", c: "text-slate-700" },
                   { l: "Por contactar", v: String(n.naoContactados), c: n.naoContactados ? "text-amber-600" : "text-slate-400" },
                   { l: "Desistiram", v: String(n.desistiram), c: n.desistiram ? "text-red-500" : "text-slate-400" },
                 ].map(s => (
@@ -214,9 +214,9 @@ export function CampanhasView() {
               {[
                 { l: "Leads", v: String(preview.preinscricoes) },
                 { l: "Pagos", v: String(preview.pagos) },
-                { l: "Conversão", v: preview.preinscricoes ? `${preview.conversaoPct}%` : "—" },
+                { l: "Conversão", v: preview.preinscricoes ? `${preview.conversaoPct}%` : "-" },
                 { l: "Receita", v: euro(preview.receita) },
-                { l: "Ticket", v: preview.pagos ? euro(preview.ticketMedio) : "—" },
+                { l: "Ticket", v: preview.pagos ? euro(preview.ticketMedio) : "-" },
                 { l: "Por contactar", v: String(preview.naoContactados) },
                 { l: "Formandos", v: String(preview.formandos) },
                 { l: "ROI", v: roiLabel(preview.receita, draft.custo) },

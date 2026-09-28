@@ -443,7 +443,7 @@ export function FormandosGoldView({ openId, onOpened }: { openId?: number; onOpe
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Formandos Gold" kicker="Catálogo Gold" sub="Formandos individuais — sem turma atribuída. Cursos e-learning e vendas avulso." action={<NewBtn label="+ Novo formando" onClick={() => setOpen("new")} />} />
+        <PageHeader title="Formandos Gold" kicker="Catálogo Gold" sub="Formandos individuais - sem turma atribuída. Cursos e-learning e vendas avulso." action={<NewBtn label="+ Novo formando" onClick={() => setOpen("new")} />} />
         <ViewFilters
           fields={[
             { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(lista.map(x => x.curso)) },
@@ -595,7 +595,7 @@ function DatasCatalogView({ accent }: { accent: Accent }) {
         <PageHeader
           kicker={accent === "gold" ? "Catálogo Gold" : "Catálogo Financiada"}
           title={accent === "gold" ? "Datas / Edições" : "Datas / Edições"}
-          sub={accent === "gold" ? "Calendário comercial de referência. A pré-inscrição e o WhatsApp não leem estas datas: só uma turma Gold libertada (curso + local + horário + data) fica visível." : "Calendário das UFCD: início, fim, horário e local. Sem preço — a edição é financiada."}
+          sub={accent === "gold" ? "Calendário comercial de referência. A pré-inscrição e o WhatsApp não leem estas datas: só uma turma Gold libertada (curso + local + horário + data) fica visível." : "Calendário das UFCD: início, fim, horário e local. Sem preço - a edição é financiada."}
           action={<NewBtn accent={accent} label="+ Nova data" onClick={() => setOpen("new")} />}
         />
         <CatalogKpis items={[
@@ -734,7 +734,7 @@ export function HorariosGoldView() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {f.length === 0 && (
-                  <tr><td colSpan={4} className="px-4 py-8 text-sm text-slate-500 text-center">Ainda sem horários. Crie os tipos (laboral, pós-laboral, sábado…) — a pré-inscrição só mostra os que estão numa turma Gold libertada.</td></tr>
+                  <tr><td colSpan={4} className="px-4 py-8 text-sm text-slate-500 text-center">Ainda sem horários. Crie os tipos (laboral, pós-laboral, sábado…) - a pré-inscrição só mostra os que estão numa turma Gold libertada.</td></tr>
                 )}
                 {f.map(r => (
                   <tr key={r.id} className="hover:bg-slate-50/80 cursor-pointer" onClick={() => setOpen(r)}>
@@ -797,7 +797,7 @@ function LocaisCatalogView({ accent }: { accent: Accent }) {
   return (
     <>
       <div className="space-y-4">
-        <PageHeader kicker={accent === "gold" ? "Catálogo Gold" : "Catálogo Financiada"} title="Locais" sub={accent === "gold" ? "Polos pré-configurados. Na pré-inscrição o local só aparece se existir uma turma Gold libertada daquele curso nesse polo (com horário e data)." : "Salas e polos das turmas financiadas — quase tudo em sala virtual."} action={<NewBtn accent={accent} label="+ Novo local" onClick={() => setOpen("new")} />} />
+        <PageHeader kicker={accent === "gold" ? "Catálogo Gold" : "Catálogo Financiada"} title="Locais" sub={accent === "gold" ? "Polos pré-configurados. Na pré-inscrição o local só aparece se existir uma turma Gold libertada daquele curso nesse polo (com horário e data)." : "Salas e polos das turmas financiadas - quase tudo em sala virtual."} action={<NewBtn accent={accent} label="+ Novo local" onClick={() => setOpen("new")} />} />
         <CatalogKpis items={[
           { label: "Polos", value: lista.length },
           { label: "Activos", value: lista.filter(x => x.status === "Ativo").length },
@@ -832,7 +832,7 @@ function LocaisCatalogView({ accent }: { accent: Accent }) {
                   <tr key={r.id} className="hover:bg-slate-50/80 cursor-pointer" onClick={() => setOpen(r)}>
                     <Td className="text-sm font-semibold text-slate-900">{r.nome}</Td>
                     <Td className="text-xs text-slate-500 max-w-[280px] leading-relaxed">{r.morada}</Td>
-                    <Td className="text-center text-xs text-slate-600">{r.salas || "—"}</Td>
+                    <Td className="text-center text-xs text-slate-600">{r.salas || "-"}</Td>
                     <Td className="text-center text-sm font-semibold text-slate-800 tabular-nums">{r.turmas}</Td>
                     <Td>{estadoBadge(r.status)}</Td>
                     <Td onClick={e => e.stopPropagation()}><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>
@@ -1849,7 +1849,7 @@ function WhatsappSettingsCard() {
           type="password"
           value={token}
           onChange={e => setToken(e.target.value)}
-          placeholder={status?.hasToken ? "•••• já gravado — cole um token novo para substituir" : "Cole o token temporário (API Setup)"}
+          placeholder={status?.hasToken ? "•••• já gravado - cole um token novo para substituir" : "Cole o token temporário (API Setup)"}
           autoComplete="new-password"
           disabled={status?.fromEnv}
         />

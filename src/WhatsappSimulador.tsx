@@ -67,13 +67,13 @@ export function WhatsappSimulador({
       open={open}
       onClose={onClose}
       title="Bot WhatsApp"
-      sub={ligado ? "Cloud API ligada — as respostas também saem no telemóvel." : "Modo simulador: sem token Meta. O CRM grava na mesma."}
+      sub={ligado ? "Cloud API ligada - as respostas também saem no telemóvel." : "Modo simulador: sem token Meta. O CRM grava na mesma."}
       size="lg"
     >
       <div className="space-y-3">
         <p className="text-xs text-slate-500">
           A pré-inscrição pede nome, apelido, telemóvel, email e concelho; depois dados do curso: curso → local → horário → data (só turmas Gold libertadas).
-          O pagamento não se confirma neste chat — só pelo webhook MB / MB Way.
+          O pagamento não se confirma neste chat - só pelo webhook MB / MB Way.
         </p>
         {webhook ? (
           <p className="text-[11px] font-mono text-slate-400 break-all">Webhook Meta: {webhook}</p>

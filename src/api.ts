@@ -350,6 +350,12 @@ export const apiSaveCertificado = (
   formandoId: number,
   body: { emitido?: boolean; nota?: number | null; elearning?: number | null },
 ) => api<{ ok: boolean }>(`/v1/turmas/${regime}/${turmaId}/certificados/${formandoId}`, { method: "PUT", body: JSON.stringify(body) });
+
+export type NotaAvaliacaoApi = { formandoId: number; moduloId: string; parametroId: string; nota: number | null };
+export const apiTurmaAvaliacao = (regime: Regime, turmaId: number) =>
+  api<{ notas: NotaAvaliacaoApi[] }>(`/v1/turmas/${regime}/${turmaId}/avaliacao`);
+export const apiSaveTurmaAvaliacao = (regime: Regime, turmaId: number, notas: NotaAvaliacaoApi[]) =>
+  api<{ ok: boolean }>(`/v1/turmas/${regime}/${turmaId}/avaliacao`, { method: "PUT", body: JSON.stringify({ notas }) });
 export const apiDtpResumo = (regime: Regime) => api<{ pct: Record<string, number> }>(`/v1/dtp/${regime}`);
 
 export type DtpFase = "antes" | "durante" | "depois";

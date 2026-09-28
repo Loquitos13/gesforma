@@ -83,6 +83,15 @@ const certificadoSchema = z.object({
   elearning: z.number().int().min(0).max(100).nullable().optional(),
 });
 
+const avaliacaoNotasSchema = z.object({
+  notas: z.array(z.object({
+    formandoId: z.number().int(),
+    moduloId: z.string().max(120).default(""),
+    parametroId: z.string().min(1).max(80),
+    nota: z.number().nullable(),
+  })).max(4000),
+});
+
 const fichaSchema = z.object({
   payload: z.record(z.unknown()).optional(),
   criterios: z.array(z.object({ id: z.string().max(60), label: z.string().max(200) })).max(40).optional(),
@@ -610,6 +619,42 @@ export function registerPedagogiaRoutes(
       [regime, id, formandoId, c.emitido ?? null, c.nota ?? null, c.elearning ?? null],
     );
     await audit(db, req.actor!.id, "turma.certificado", "formando", String(formandoId), req.ip, { regime, turma: id, emitido: c.emitido });
+    return { ok: true };
+  });
+
+  app.get("/v1/turmas/:regime/:id/avaliacao", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const { regime, id } = params(req);
+    if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
+    const rows = await db.query<{ formando_id: number; modulo_id: string; parametro_id: string; nota: unknown }>(
+      "SELECT formando_id, modulo_id, parametro_id, nota FROM turma_avaliacoes WHERE regime = $1 AND turma_id = $2",
+      [regime, id],
+    ).catch(() => ({ rows: [] as { formando_id: number; modulo_id: string; parametro_id: string; nota: unknown }[] }));
+    return {
+      notas: rows.rows.map(r => ({
+        formandoId: Number(r.formando_id),
+        moduloId: r.modulo_id ?? "",
+        parametroId: r.parametro_id,
+        nota: r.nota == null ? null : Number(r.nota),
+      })),
+    };
+  });
+
+  app.put("/v1/turmas/:regime/:id/avaliacao", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const { regime, id } = params(req);
+    const parsed = avaliacaoNotasSchema.safeParse(req.body);
+    if (!regime || id == null || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    await db.query("DELETE FROM turma_avaliacoes WHERE regime = $1 AND turma_id = $2", [regime, id]);
+    for (const n of parsed.data.notas) {
+      if (n.nota == null || !Number.isFinite(n.nota)) continue;
+      await db.query(
+        `INSERT INTO turma_avaliacoes (regime, turma_id, formando_id, modulo_id, parametro_id, nota)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [regime, id, n.formandoId, n.moduloId || "", n.parametroId, n.nota],
+      );
+    }
+    await audit(db, req.actor!.id, "turma.avaliacao", "turma", String(id), req.ip, { regime, notas: parsed.data.notas.length });
     return { ok: true };
   });
 

@@ -385,7 +385,7 @@ export function CronogramaEditor({
             {sessoes.length === 0
               ? "A grelha segue o modelo da ENA: aulas presenciais, sessões síncronas e auto-aprendizagem por dia."
               : page
-                ? "Arraste uma sessão na grelha para mudar dia, hora ou metodologia. Clique na célula para editar os módulos."
+                ? "Arraste uma sessão na grelha para mudar dia, hora ou metodologia. Clique na célula para editar. As sessões lectivas abrem-se no separador Sessões."
                 : `${lectivas.length} sessões lectivas · ${totalH}h em sala ou síncronas${horas ? ` de ${horas}h` : ""}`}
           </p>
           <div className="flex flex-wrap gap-1.5 mt-2">
@@ -431,14 +431,8 @@ export function CronogramaEditor({
         compact={!page}
       />
 
-      {page && lectivas.length === 0 && (
-        <p className="text-xs text-slate-500 px-0.5">
-          As aulas presenciais e as sessões síncronas da grelha aparecem abaixo para atribuir formadores e abrir planos de sessão.
-        </p>
-      )}
-
-      {listadas.length > 0 && (
-        <div className={page ? "space-y-4" : "max-h-80 overflow-y-auto space-y-3 pr-0.5"}>
+      {!page && listadas.length > 0 && (
+        <div className="max-h-80 overflow-y-auto space-y-3 pr-0.5">
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Sessões lectivas (presencial e síncrona)</p>
           {groups.map(g => (
             <section key={g.key} className="space-y-2">

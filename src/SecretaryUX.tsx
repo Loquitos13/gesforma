@@ -251,6 +251,7 @@ export const cockpitTabLabel: Record<string, string> = {
   overview: "Visão geral",
   cronograma: "Cronograma",
   sessoes: "Sessões",
+  avaliacao: "Avaliação",
   documentos: "Documentos",
   dtp: "Dossiê TP",
   certificados: "Certificados",

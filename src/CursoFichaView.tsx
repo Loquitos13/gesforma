@@ -4,6 +4,13 @@ import { AppModal, MultiSearchSelect, SearchSelect } from "./FormKit";
 import { OptionSelect } from "./OptionSelect";
 import { apiCursoFicha, apiSaveCursoFicha } from "./api";
 import { DtpModeloEditor } from "./DtpModeloEditor";
+import {
+  avaliacaoPadrao,
+  fracoesPeso,
+  novoParametroId,
+  parseAvaliacaoCurso,
+  type AvaliacaoCurso,
+} from "./avaliacaoCurso";
 import { codigoTopico, novoTopicoId, programaDePayload, type OrganizacaoPrograma, type TopicoPrograma } from "./cursoPrograma";
 import { fmtDataPt } from "./oferta";
 import { getParametrosAvaliacao, type CriterioAvaliacao } from "./TurmaExtras";
@@ -64,6 +71,7 @@ type CursoSite = {
   locais: string[];
   organizacaoPrograma: OrganizacaoPrograma;
   topicosPrograma: TopicoPrograma[];
+  avaliacaoCurso: AvaliacaoCurso;
 };
 
 function theme(accent: CursoAccent) {
@@ -294,6 +302,7 @@ function seedSite(curso?: CursoFichaSeed, accent: CursoAccent = "gold"): CursoSi
     locais: [],
     organizacaoPrograma: accent === "fin" ? "modular" : (/comunicar/i.test(curso?.nome ?? "") ? "livre" : "modular"),
     topicosPrograma: topicosDeSeed(pack.programa, accent === "fin" ? "modular" : (/comunicar/i.test(curso?.nome ?? "") ? "livre" : "modular")),
+    avaliacaoCurso: avaliacaoPadrao(),
   };
 }
 
@@ -578,6 +587,7 @@ export function CursoFichaView({
               locais,
               organizacaoPrograma: accent === "fin" ? "modular" : parsed.organizacao,
               topicosPrograma: parsed.topicos.length ? parsed.topicos : prev.topicosPrograma,
+              avaliacaoCurso: parseAvaliacaoCurso({ ...guardado } as Record<string, unknown>),
             };
           });
         }
@@ -643,12 +653,8 @@ export function CursoFichaView({
       { id: "dtp", label: "Dossiê TP" },
       { id: "publicacao", label: "Publicação" },
     ];
-    return temAvaliacao ? base : base.filter(x => x.id !== "avaliacao");
-  }, [temAvaliacao]);
-
-  useEffect(() => {
-    if (!temAvaliacao && tab === "avaliacao") setTab("conteudo");
-  }, [temAvaliacao, tab]);
+    return base;
+  }, []);
 
   function patch(p: Partial<CursoSite>) {
     setData(prev => ({ ...prev, ...p }));
@@ -659,6 +665,10 @@ export function CursoFichaView({
       for (const k of Object.keys(p)) delete next[k];
       return next;
     });
+  }
+
+  function patchAv(p: Partial<AvaliacaoCurso>) {
+    patch({ avaliacaoCurso: { ...data.avaliacaoCurso, ...p } });
   }
 
   function criarLocal() {
@@ -707,6 +717,7 @@ export function CursoFichaView({
         payload: {
           ...data,
           organizacaoPrograma: accent === "fin" ? "modular" : data.organizacaoPrograma,
+          avaliacaoCurso: data.avaliacaoCurso,
         } as unknown as Record<string, unknown>,
         criterios: temAvaliacao ? criterios.filter(c => c.label.trim()) : [],
       });
@@ -1035,50 +1046,167 @@ export function CursoFichaView({
           )}
 
           {tab === "avaliacao" && (
-            <div className="rounded-xl border border-violet-200 bg-white p-4 sm:p-5 space-y-4">
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Parâmetros da folha de avaliação</p>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {accent === "fin"
-                    ? "Usados nas entregas práticas desta UFCD (plano de sessão, exercícios). Escala 1–5. Não aparecem no website."
-                    : "Usados nas simulações inicial e final das turmas deste curso. Escala 1–5. Não aparecem no website."}
-                </p>
-              </div>
-              {criterios.length === 0 && (
-                <p className="text-sm text-slate-500 rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center">
-                  Ainda não há critérios. Adicione o primeiro abaixo.
-                </p>
-              )}
-              <div className="space-y-2">
-                {criterios.map((c, i) => (
-                  <div key={c.id} className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-slate-400 w-5">{i + 1}</span>
-                    <input className={t.iCls} value={c.label}
-                      onChange={e => setCriterios(prev => prev.map(x => x.id === c.id ? { ...x, label: e.target.value } : x))} />
-                    <button type="button" onClick={() => setCriterios(prev => prev.filter(x => x.id !== c.id))}
-                      className="px-2 py-2 text-xs text-slate-400 hover:text-red-500" aria-label="Remover critério">Remover</button>
+            <div className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-4">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Parâmetros de avaliação do curso</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    A avaliação é sempre por formando e todos os parâmetros têm de ser preenchidos. Na turma, o formador lança as notas nesta grelha.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field label="Modo" hint={data.avaliacaoCurso.modo === "modulos"
+                    ? `Nota de cada ${data.organizacaoPrograma === "livre" ? "capítulo" : "módulo"} = soma (nota × peso). Nota final = média dessas notas.`
+                    : "Cada parâmetro avalia-se uma vez. Nota final = soma (nota × peso)."}>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button type="button"
+                        onClick={() => patchAv({ modo: "final" })}
+                        className={`px-3 py-2 text-xs font-semibold rounded-lg border ${
+                          data.avaliacaoCurso.modo === "final"
+                            ? `${t.save} text-white border-transparent`
+                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                        }`}>
+                        Avaliação final
+                      </button>
+                      <button type="button"
+                        onClick={() => patchAv({ modo: "modulos" })}
+                        className={`px-3 py-2 text-xs font-semibold rounded-lg border ${
+                          data.avaliacaoCurso.modo === "modulos"
+                            ? `${t.save} text-white border-transparent`
+                            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                        }`}>
+                        {data.organizacaoPrograma === "livre" ? "Por capítulo" : "Por módulo"}
+                      </button>
+                    </div>
+                  </Field>
+                  <Field label="Unidade da escala" hint="Ex. valores, %, pontos">
+                    <input className={t.iCls} value={data.avaliacaoCurso.unidade}
+                      onChange={e => patchAv({ unidade: e.target.value })} />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <Field label="Mínimo da escala">
+                    <input className={t.iCls} type="number" value={data.avaliacaoCurso.escalaMin}
+                      onChange={e => patchAv({ escalaMin: Number(e.target.value) })} />
+                  </Field>
+                  <Field label="Máximo da escala">
+                    <input className={t.iCls} type="number" value={data.avaliacaoCurso.escalaMax}
+                      onChange={e => patchAv({ escalaMax: Number(e.target.value) })} />
+                  </Field>
+                  <Field label="Mínimo para aprovação">
+                    <input className={t.iCls} type="number" value={data.avaliacaoCurso.minimoAprovacao}
+                      onChange={e => patchAv({ minimoAprovacao: Number(e.target.value) })} />
+                  </Field>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: "0–20 valores", escalaMin: 0, escalaMax: 20, unidade: "valores", minimoAprovacao: 10 },
+                    { label: "0–100 %", escalaMin: 0, escalaMax: 100, unidade: "%", minimoAprovacao: 50 },
+                    { label: "1–5 pontos", escalaMin: 1, escalaMax: 5, unidade: "pontos", minimoAprovacao: 3 },
+                  ].map(p => (
+                    <button key={p.label} type="button"
+                      onClick={() => patchAv(p)}
+                      className="px-2.5 py-1 text-[11px] font-semibold rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50">
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+                <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3 cursor-pointer hover:bg-slate-50">
+                  <input type="checkbox" className={`mt-0.5 w-4 h-4 ${t.accentChk}`}
+                    checked={data.avaliacaoCurso.pesosEquitativos}
+                    onChange={e => patchAv({ pesosEquitativos: e.target.checked })} />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">Pesos equitativos</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Cada parâmetro vale o mesmo. Desative para atribuir um peso individual.</p>
                   </div>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <input className={t.iCls} value={novoCriterio} placeholder="Novo critério (ex. Gestão do tempo)"
-                  onChange={e => setNovoCriterio(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === "Enter" && novoCriterio.trim()) {
-                      setCriterios(prev => [...prev, { id: slugCriterio(novoCriterio, prev), label: novoCriterio.trim() }]);
-                      setNovoCriterio("");
-                    }
-                  }} />
-                <button type="button"
-                  onClick={() => {
-                    if (!novoCriterio.trim()) return;
-                    setCriterios(prev => [...prev, { id: slugCriterio(novoCriterio, prev), label: novoCriterio.trim() }]);
-                    setNovoCriterio("");
-                  }}
-                  className="px-3 py-2 text-xs font-semibold rounded-lg border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 whitespace-nowrap">
-                  + Critério
+                </label>
+                {data.avaliacaoCurso.parametros.length === 0 && (
+                  <p className="text-sm text-slate-500 rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center">
+                    Ainda não há parâmetros. Adicione o primeiro (ex. Assiduidade, Trabalho prático, Teste).
+                  </p>
+                )}
+                <div className="space-y-2">
+                  {data.avaliacaoCurso.parametros.map((p, i) => {
+                    const frac = fracoesPeso(data.avaliacaoCurso)[p.id] ?? 0;
+                    return (
+                      <div key={p.id} className="flex items-center gap-2">
+                        <span className="text-xs font-mono text-slate-400 w-5">{i + 1}</span>
+                        <input className={t.iCls} value={p.label} placeholder="Nome do parâmetro"
+                          onChange={e => patchAv({
+                            parametros: data.avaliacaoCurso.parametros.map(x => x.id === p.id ? { ...x, label: e.target.value } : x),
+                          })} />
+                        <input className={`${t.iCls} w-24`} type="number" min={0} step="0.1"
+                          disabled={data.avaliacaoCurso.pesosEquitativos}
+                          value={p.peso}
+                          onChange={e => patchAv({
+                            parametros: data.avaliacaoCurso.parametros.map(x => x.id === p.id ? { ...x, peso: Number(e.target.value) || 0 } : x),
+                          })} />
+                        <span className="text-[11px] text-slate-400 w-12 text-right">{Math.round(frac * 100)}%</span>
+                        <button type="button"
+                          onClick={() => patchAv({ parametros: data.avaliacaoCurso.parametros.filter(x => x.id !== p.id) })}
+                          className="px-2 py-2 text-xs text-slate-400 hover:text-red-500">Remover</button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => patchAv({
+                    parametros: [...data.avaliacaoCurso.parametros, { id: novoParametroId(), label: "", peso: 1 }],
+                  })}
+                  className={`px-3 py-2 text-xs font-semibold rounded-lg text-white ${t.save}`}
+                >
+                  + Parâmetro
                 </button>
               </div>
+
+              {temAvaliacao && (
+                <div className="rounded-xl border border-violet-200 bg-white p-4 sm:p-5 space-y-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">Folha de simulação (escala 1–5)</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {accent === "fin"
+                        ? "Critérios das entregas práticas desta UFCD (plano de sessão, exercícios). Não entram na pauta ponderada acima."
+                        : "Critérios das simulações inicial e final. Não entram na pauta ponderada acima."}
+                    </p>
+                  </div>
+                  {criterios.length === 0 && (
+                    <p className="text-sm text-slate-500 rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center">
+                      Ainda não há critérios. Adicione o primeiro abaixo.
+                    </p>
+                  )}
+                  <div className="space-y-2">
+                    {criterios.map((c, i) => (
+                      <div key={c.id} className="flex items-center gap-2">
+                        <span className="text-xs font-mono text-slate-400 w-5">{i + 1}</span>
+                        <input className={t.iCls} value={c.label}
+                          onChange={e => setCriterios(prev => prev.map(x => x.id === c.id ? { ...x, label: e.target.value } : x))} />
+                        <button type="button" onClick={() => setCriterios(prev => prev.filter(x => x.id !== c.id))}
+                          className="px-2 py-2 text-xs text-slate-400 hover:text-red-500" aria-label="Remover critério">Remover</button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input className={t.iCls} value={novoCriterio} placeholder="Novo critério (ex. Gestão do tempo)"
+                      onChange={e => setNovoCriterio(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && novoCriterio.trim()) {
+                          setCriterios(prev => [...prev, { id: slugCriterio(novoCriterio, prev), label: novoCriterio.trim() }]);
+                          setNovoCriterio("");
+                        }
+                      }} />
+                    <button type="button"
+                      onClick={() => {
+                        if (!novoCriterio.trim()) return;
+                        setCriterios(prev => [...prev, { id: slugCriterio(novoCriterio, prev), label: novoCriterio.trim() }]);
+                        setNovoCriterio("");
+                      }}
+                      className="px-3 py-2 text-xs font-semibold rounded-lg border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 whitespace-nowrap">
+                      + Critério
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

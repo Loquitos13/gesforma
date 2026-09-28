@@ -34,6 +34,7 @@ import { useLocaisOptsDoCurso } from "./cursoLocais";
 import { OptionSelect } from "./OptionSelect";
 import { ListasOpcoesView } from "./ListasOpcoesView";
 import { CronogramaEditor, FormadoresAtribuidosCard, TurmaActivaToggle, TurmaInactivaBanner, TurmaInscricaoHint } from "./TurmaCronograma";
+import { TurmaAvaliacao } from "./TurmaAvaliacao";
 import { FormadoresView } from "./FormadoresView";
 import { FORMADORES_SEED } from "./formadorModel";
 import { useFormadorOptions, useFormadores } from "./FormadoresContext";
@@ -132,7 +133,7 @@ type View =
   | "formadores" | "blog-posts" | "blog-tematicas"
   | "emails" | "pagamentos" | "configuracoes" | "utilizadores" | "equipa" | "notificacoes" | "listas-opcoes";
 
-type CockpitTab = "overview" | "cronograma" | "sessoes" | "documentos" | "dtp" | "certificados";
+type CockpitTab = "overview" | "cronograma" | "sessoes" | "avaliacao" | "documentos" | "dtp" | "certificados";
 type NavTarget = {
   view: View;
   turmaId?: number;
@@ -1185,6 +1186,7 @@ function TurmaTabBar({ tab, onChange, accent = "gold", dtpPct }: { tab: CockpitT
     { id: "overview", label: "Visão Geral", icon: I.school },
     { id: "cronograma", label: "Cronograma", icon: I.calendar },
     { id: "sessoes", label: "Sessões", icon: I.calendar },
+    { id: "avaliacao", label: "Avaliação", icon: I.clipboard },
     { id: "documentos", label: "Documentos", icon: I.file },
     { id: "dtp", label: "Dossiê TP", icon: I.folder },
     { id: "certificados", label: "Certificados", icon: I.doc },
@@ -1628,6 +1630,16 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             onSumario={setSumarioSessao}
             onPresencas={setPresencasSession}
             onOpenFormador={setFormadorOpen}
+          />
+        )}
+        {tab === "avaliacao" && (
+          <TurmaAvaliacao
+            key={turma.id}
+            regime="gold"
+            turmaId={turma.id}
+            cursoNome={turma.curso}
+            accent="gold"
+            formandos={nomesCockpit}
           />
         )}
         {tab === "documentos" && (
@@ -2166,6 +2178,16 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           onSumario={setSumarioSessao}
           onPresencas={setPresencasSession}
           onOpenFormador={setFormadorOpen}
+        />
+      )}
+      {tab === "avaliacao" && (
+        <TurmaAvaliacao
+          key={turma.id}
+          regime="fin"
+          turmaId={turma.id}
+          cursoNome={turma.curso}
+          accent="fin"
+          formandos={nomesCockpit}
         />
       )}
       {tab === "documentos" && (

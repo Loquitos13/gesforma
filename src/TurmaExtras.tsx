@@ -12,6 +12,7 @@ import { ConfirmDangerModal } from "./SecretaryUX";
 import { persist } from "./toastBus";
 import { useTurmas } from "./TurmasContext";
 import { useLists } from "./ListsContext";
+import { dtpCategoriaPasta, dtpPastaNome } from "./dtpPasta";
 
 const I = {
   x: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>,
@@ -60,10 +61,20 @@ export function FileUploadModal({
   const dest = [
     status.folderName,
     context?.regime === "fin" ? "Financiada" : context?.regime === "gold" ? "Gold" : null,
+    context?.turma ? dtpPastaNome(context.regime === "fin" ? "fin" : "gold", context.turma) : null,
     context?.turma
-      ? `DTP ${context.regime === "fin" ? "Financiada" : "Gold"} ${context.turma}`
+      ? dtpCategoriaPasta({
+          id: context.itemId,
+          kind: context.kind,
+          ambito:
+            context.kind === "formando-doc" || context.kind === "pip"
+              ? "formando"
+              : context.kind === "formador-doc"
+                ? "formador"
+                : undefined,
+        })
       : null,
-    context?.fase === "durante" ? "02-Durante" : context?.fase === "depois" ? "03-Fecho" : context?.turma && context.kind === "dtp" ? "01-Antes da turma" : null,
+    context?.formando ?? null,
     context?.label ?? context?.kind,
   ].filter(Boolean).join(" / ");
 

@@ -184,6 +184,7 @@ export function registerDriveRoutes(
         formando: fields.formando?.slice(0, 80),
         label: fields.label?.slice(0, 160),
         fase: fields.fase?.slice(0, 20),
+        itemId: fields.itemId?.slice(0, 80),
       });
       await audit(db, req.actor!.id, "drive.upload", "drive_file", file.id, req.ip, {
         name: file.name, kind: file.kind, storedIn: file.storedIn,

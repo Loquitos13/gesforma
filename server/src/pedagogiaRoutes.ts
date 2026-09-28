@@ -4,7 +4,7 @@ import { z } from "zod";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { listDriveFiles, readDriveContent } from "./googleDrive.js";
-import { dtpFasePasta, dtpPastaNome, dtpZipNome, dtpZipRelPath, pastaSegura } from "./dtpPasta.js";
+import { DTP_CATEGORIAS, dtpCategoriaDe, dtpCategoriaPasta, dtpPastaNome, dtpZipNome, dtpZipRelPath, pastaSegura } from "./dtpPasta.js";
 import { zipStore } from "./zipStore.js";
 import {
   buildDtpItems,
@@ -976,33 +976,24 @@ export function registerPedagogiaRoutes(
       files.push({ name: uniqueZipPath(used, rel), data });
     };
 
-    const porFase = (["antes", "durante", "depois"] as const).map(fase => ({
-      fase,
-      pasta: dtpFasePasta(fase),
-      itens: dtp.items.filter(i => i.fase === fase),
-    }));
-    for (const bloco of porFase) {
+    const formandos = await formandosDaTurma(db, regime, turma);
+    for (const cat of DTP_CATEGORIAS) {
+      const itens = dtp.items.filter(i => dtpCategoriaDe(i) === cat.id);
+      const extra: string[] = [];
+      if (cat.id === "formandos") extra.push("", "Formandos da turma:", ...(formandos.length ? formandos.map(f => `  ${f.nome}`) : ["  Ainda sem formandos."]));
+      if (cat.id === "formador") extra.push("", `Formador: ${turma.formador?.trim() || "por atribuir nesta turma."}`);
       const linhas = [
-        `${bloco.pasta} · ${turma.nome}`,
+        `${cat.pasta} · ${turma.nome}`,
         `${turma.curso}`,
         "",
-        ...bloco.itens.map(i => {
+        ...itens.map(i => {
           const marca = i.estado === "ok" ? "[x]" : i.estado === "parcial" ? "[~]" : "[ ]";
           return `${marca} ${i.label}${i.anexo?.fileName ? ` · ${i.anexo.fileName}` : ""}`;
         }),
+        ...extra,
       ];
-      add(`${root}/${bloco.pasta}/_indice.txt`, Buffer.from(linhas.join("\n"), "utf8"));
+      add(`${root}/${cat.pasta}/_indice.txt`, Buffer.from(linhas.join("\n"), "utf8"));
     }
-
-    const formandos = await formandosDaTurma(db, regime, turma);
-    add(`${root}/04-Formandos/_indice.txt`, Buffer.from(
-      [`Formandos · ${turma.nome}`, "", ...formandos.map(f => f.nome)].join("\n") || `Formandos · ${turma.nome}\n\nAinda sem formandos.`,
-      "utf8",
-    ));
-    add(`${root}/05-Formador/_indice.txt`, Buffer.from(
-      [`Formador · ${turma.nome}`, "", turma.formador?.trim() || "Formador por atribuir nesta turma."].join("\n"),
-      "utf8",
-    ));
 
     const seen = new Set<string>();
     const pushDrive = async (
@@ -1020,8 +1011,8 @@ export function registerPedagogiaRoutes(
       if (!item.anexo?.driveFileId) continue;
       const rel = dtpZipRelPath({
         root,
-        fase: item.fase,
         ambito: item.ambito,
+        itemId: item.id,
         itemLabel: item.label,
         fileName: nomeArquivoDtp(item.label, item.anexo.fileName || "anexo.pdf"),
       });
@@ -1037,8 +1028,8 @@ export function registerPedagogiaRoutes(
       const item = dtp.items.find(i => i.label === f.label || i.id === f.label);
       const rel = dtpZipRelPath({
         root,
-        fase: item?.fase,
         ambito: item?.ambito ?? (f.kind === "formando-doc" || f.kind === "pip" ? "formando" : f.kind === "formador-doc" ? "formador" : "turma"),
+        itemId: item?.id,
         itemLabel: item?.label || f.label || undefined,
         pessoa: f.formando ?? undefined,
         kind: f.kind,
@@ -1059,8 +1050,10 @@ export function registerPedagogiaRoutes(
         const rel = dtpZipRelPath({
           root,
           ambito: "formando",
+          itemId: row.doc_id,
           itemLabel: row.doc_id,
           pessoa,
+          kind: "formando-doc",
           fileName: nomeArquivoDtp(row.doc_id, row.file_name || "documento.pdf"),
         });
         await pushDrive(row.drive_file_id, rel);
@@ -1080,7 +1073,9 @@ export function registerPedagogiaRoutes(
           const rel = dtpZipRelPath({
             root,
             ambito: "formador",
+            itemId: row.doc_id,
             itemLabel: row.doc_id,
+            kind: "formador-doc",
             fileName: nomeArquivoDtp(row.doc_id, row.file_name || "documento.pdf"),
           });
           await pushDrive(row.drive_file_id, rel);
@@ -1098,17 +1093,13 @@ export function registerPedagogiaRoutes(
       `Completude: ${dtp.pct}% · ${dtp.ok} no dossiê · ${dtp.parcial} parciais · ${dtp.falta} em falta`,
       `Ficheiros: ${pdfs.length}`,
       "",
-      "Organização da pasta:",
+      "Organização da pasta (por categoria):",
       `  ${root}/`,
-      "    01-Antes da turma/",
-      "    02-Durante/",
-      "    03-Fecho/",
-      "    04-Formandos/",
-      "    05-Formador/",
+      ...DTP_CATEGORIAS.map(c => `    ${c.pasta}/`),
       "",
       "Documentos do dossiê:",
       ...dtp.items.map(i => {
-        const pasta = i.ambito === "formando" ? "04-Formandos" : i.ambito === "formador" ? "05-Formador" : dtpFasePasta(i.fase);
+        const pasta = dtpCategoriaPasta(i);
         const marca = i.estado === "ok" ? "ok" : i.estado === "parcial" ? "parcial" : "falta";
         return `  [${marca}] ${pasta} / ${i.label}`;
       }),

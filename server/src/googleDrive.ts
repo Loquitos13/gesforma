@@ -33,6 +33,7 @@ export type DriveContext = {
   formando?: string;
   label?: string;
   fase?: string;
+  itemId?: string;
 };
 
 export type DriveFileRow = {

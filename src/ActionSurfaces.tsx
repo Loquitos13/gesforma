@@ -559,7 +559,7 @@ export function ExportTurmaModal({
       id: "dtp",
       label: "Pasta DTP (ZIP)",
       detalhe: turma.turmaId != null
-        ? `ZIP ${turma.nome}: 01-Antes, 02-Durante, 03-Fecho, formandos e formador${dtp.length ? ` · ${dtp.length} documentos no índice` : ""}`
+        ? `ZIP ${turma.nome}: identificação, formandos, formador, pedagogia, avaliação e certificação${dtp.length ? ` · ${dtp.length} documentos no índice` : ""}`
         : "Abra o cockpit de uma turma para gerar o ZIP",
       disabled: turma.turmaId == null,
       run: async () => {

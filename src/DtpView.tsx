@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiDtpExport, type DtpEstado, type DtpItem, type DtpSnapshot } from "./api";
-import { dtpPastaNome, dtpZipNome } from "./dtpPasta";
+import { DTP_CATEGORIAS, dtpCategoriaDe, dtpPastaNome, dtpZipNome, type DtpCategoriaId } from "./dtpPasta";
 import { toastError, toastOk } from "./toastBus";
 import { FileUploadModal } from "./TurmaExtras";
 
 export type DtpRegime = "gold" | "fin";
-type DtpFase = "antes" | "durante" | "depois";
 
 export type DtpTurma = {
   codigo: string;
@@ -22,12 +21,6 @@ type Props = {
   onToggle?: (item: DtpItem, proximo: DtpEstado | "auto") => void;
   onAnexo?: (item: DtpItem, file: { id: string; name: string; openUrl: string }) => void;
 };
-
-const fases: { id: DtpFase; label: string; hint: string }[] = [
-  { id: "antes", label: "Antes da turma", hint: "Abre o dossiê no dia em que a turma é aprovada." },
-  { id: "durante", label: "Durante", hint: "O que só se recolhe em sala - não se reconstitui depois." },
-  { id: "depois", label: "Fecho", hint: "Sem isto a turma não se encerra nem se emite certificado." },
-];
 
 const estadoStyle: Record<DtpEstado, { badge: string; row: string; label: string }> = {
   ok: { badge: "bg-emerald-50 text-emerald-700 border-emerald-200", row: "border-emerald-100 bg-white", label: "No dossiê" },
@@ -54,17 +47,18 @@ async function exportarPasta(regime: DtpRegime, turma: DtpTurma | undefined) {
 export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAnexo }: Props) {
   const isGold = regime === "gold";
   const codigo = turma?.codigo ?? (isGold ? "turma" : "UFCD");
-  const [fase, setFase] = useState<DtpFase | "todas">("todas");
+  const [categoria, setCategoria] = useState<DtpCategoriaId | "todas">("todas");
   const [exportando, setExportando] = useState(false);
   const [uploadFor, setUploadFor] = useState<DtpItem | null>(null);
 
-  useEffect(() => { setFase("todas"); }, [regime, codigo]);
+  useEffect(() => { setCategoria("todas"); }, [regime, codigo]);
 
   const items = dtp.items;
-  const visiveis = useMemo(
-    () => (fase === "todas" ? items : items.filter(d => d.fase === fase)),
-    [items, fase],
-  );
+  const visiveis = useMemo(() => {
+    const list = categoria === "todas" ? items : items.filter(d => dtpCategoriaDe(d) === categoria);
+    const ordem = Object.fromEntries(DTP_CATEGORIAS.map((c, i) => [c.id, i]));
+    return [...list].sort((a, b) => (ordem[dtpCategoriaDe(a)] ?? 0) - (ordem[dtpCategoriaDe(b)] ?? 0));
+  }, [items, categoria]);
 
   if (estado === "loading") {
     return (
@@ -91,6 +85,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
   const bloqueio = bloqueantes.length
     ? `Bloqueado por ${bloqueantes.length} ${bloqueantes.length === 1 ? "documento obrigatório" : "documentos obrigatórios"}: ${bloqueantes.slice(0, 3).map(i => i.label).join(", ")}.`
     : "Faltam documentos para fechar o dossiê desta turma.";
+  const catActiva = DTP_CATEGORIAS.find(c => c.id === categoria);
 
   return (
     <div className="space-y-4">
@@ -127,7 +122,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
         </div>
         <p className="text-xs text-slate-400 mt-2">
           Pasta no Drive e no ZIP: <span className="font-semibold text-slate-600">{dtpPastaNome(regime, codigo)}</span>
-          {" · "}01-Antes · 02-Durante · 03-Fecho · 04-Formandos · 05-Formador. Arquivar 10 anos (IEFP) ou o prazo do programa - o mais longo.
+          {" · "}{DTP_CATEGORIAS.map(c => c.pasta.replace(/^\d+-/, "")).join(" · ")}. Arquivar 10 anos (IEFP) ou o prazo do programa - o mais longo.
         </p>
       </div>
 
@@ -142,19 +137,20 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        {fases.map(f => {
-          const subset = items.filter(d => d.fase === f.id);
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+        {DTP_CATEGORIAS.map(c => {
+          const subset = items.filter(d => dtpCategoriaDe(d) === c.id);
           const done = subset.filter(d => d.estado === "ok").length;
           return (
             <button
-              key={f.id}
-              onClick={() => { setFase(prev => (prev === f.id ? "todas" : f.id)); }}
-              className={`text-left rounded-xl border p-3 transition-colors ${fase === f.id ? (isGold ? "border-amber-400 bg-amber-50" : "border-blue-400 bg-blue-50") : "border-slate-200 bg-white hover:bg-slate-50"}`}
+              key={c.id}
+              type="button"
+              onClick={() => { setCategoria(prev => (prev === c.id ? "todas" : c.id)); }}
+              className={`text-left rounded-xl border p-3 transition-colors ${categoria === c.id ? (isGold ? "border-amber-400 bg-amber-50" : "border-blue-400 bg-blue-50") : "border-slate-200 bg-white hover:bg-slate-50"}`}
             >
-              <p className="text-xs font-bold text-slate-700">{f.label}</p>
+              <p className="text-xs font-bold text-slate-700">{c.label}</p>
               <p className="text-lg font-bold text-slate-800 mt-1">{done}/{subset.length}</p>
-              <p className="text-[11px] text-slate-500 mt-1 leading-snug">{f.hint}</p>
+              <p className="text-[11px] text-slate-500 mt-1 leading-snug">{c.hint}</p>
             </button>
           );
         })}
@@ -164,21 +160,22 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
         <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center gap-3">
           <div>
             <p className="text-sm font-semibold text-slate-800">
-              {fase === "todas" ? "Documentos desta turma" : fases.find(f => f.id === fase)?.label}
+              {categoria === "todas" ? "Documentos desta turma" : catActiva?.label}
             </p>
             <p className="text-xs text-slate-400">
               Os itens marcados <span className="font-semibold">automático</span> saem dos dados reais da turma (sessões, presenças, documentos dos formandos). Nos restantes, clique no estado para validar. A lista vem da estrutura definida na ficha do curso.
             </p>
           </div>
-          <button onClick={() => setFase("todas")} className="text-xs font-semibold text-slate-500 hover:text-slate-800 whitespace-nowrap">Ver tudo</button>
+          <button type="button" onClick={() => setCategoria("todas")} className="text-xs font-semibold text-slate-500 hover:text-slate-800 whitespace-nowrap">Ver tudo</button>
         </div>
         <div className="divide-y divide-slate-100">
           {visiveis.map(doc => {
             const s = estadoStyle[doc.estado];
+            const cat = DTP_CATEGORIAS.find(c => c.id === dtpCategoriaDe(doc));
             return (
               <div key={doc.id} className={`px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 ${s.row}`}>
                 <button
-                  onClick={() => onToggle?.(doc, doc.origem === "auto" ? cycle(doc.estado) : cycle(doc.estado))}
+                  onClick={() => onToggle?.(doc, cycle(doc.estado))}
                   title={doc.origem === "auto" ? "Sai dos dados da turma. Clique para forçar outro estado." : "Marcar estado"}
                   className={`self-start sm:self-center text-[11px] font-bold px-2 py-1 rounded-full border whitespace-nowrap ${s.badge}`}
                 >
@@ -187,6 +184,9 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <p className="text-sm font-semibold text-slate-800">{doc.label}</p>
+                    {categoria === "todas" && cat && (
+                      <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">{cat.label}</span>
+                    )}
                     {doc.bloqueante && doc.estado !== "ok" && (
                       <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">bloqueante</span>
                     )}
@@ -234,7 +234,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
           regime,
           turma: turma?.codigo ?? String(turma?.id ?? ""),
           label: uploadFor?.label,
-          fase: uploadFor?.fase,
+          itemId: uploadFor?.id,
         }}
         onConfirm={file => {
           if (uploadFor) onAnexo?.(uploadFor, { id: file.id, name: file.name, openUrl: file.openUrl });

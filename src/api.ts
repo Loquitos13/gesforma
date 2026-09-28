@@ -170,6 +170,7 @@ export type DriveUploadContext = {
   formando?: string;
   label?: string;
   fase?: string;
+  itemId?: string;
 };
 
 export const apiHealth = () => api<{ ok: boolean; driver: string; mail: string; drive?: boolean }>("/health");
@@ -790,6 +791,7 @@ export async function apiUploadDrive(file: File, ctx: DriveUploadContext = { kin
   if (ctx.formando) fd.append("formando", ctx.formando);
   if (ctx.label) fd.append("label", ctx.label);
   if (ctx.fase) fd.append("fase", ctx.fase);
+  if (ctx.itemId) fd.append("itemId", ctx.itemId);
   const headers = new Headers();
   headers.set("Accept", "application/json");
   headers.set("X-Gesforma-Client", "web");

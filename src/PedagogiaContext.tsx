@@ -19,7 +19,7 @@ import {
 import { useLists } from "./ListsContext";
 import { persist } from "./toastBus";
 import { criteriosCcp, emptyPlano, emptySumario, type CriterioAvaliacao, type PlanoSessaoData, type SumarioSessaoData } from "./TurmaExtras";
-import { modulosOptsForCurso } from "./FormKit";
+import { useProgramaDoCurso } from "./cursoPrograma";
 
 export type PresencaRow = { id: number; nome: string; presente: boolean };
 
@@ -56,36 +56,9 @@ export function useCriteriosAvaliacao(regime: Regime, cursoNome: string | undefi
   return /ccp/i.test(cursoNome ?? "") ? criteriosCcp : [];
 }
 
-/** Programa da turma: módulos do catálogo do curso, ou o texto da ficha. */
+/** Programa pedagógico da ficha do curso (módulos ou capítulos). */
 export function useCursoPrograma(regime: Regime, cursoNome: string | undefined) {
-  const { cursosGold, cursosFin } = useLists();
-  const [fichaLinhas, setFichaLinhas] = useState<string[]>([]);
-  const cursoId = useMemo(() => {
-    if (!cursoNome) return null;
-    if (regime === "gold") return cursosGold.find(c => c.nome === cursoNome)?.id ?? null;
-    return cursosFin.find(c => c.ufcd === cursoNome || c.nomeComercial === cursoNome)?.id ?? null;
-  }, [cursoNome, cursosFin, cursosGold, regime]);
-
-  useEffect(() => {
-    if (cursoId == null) { setFichaLinhas([]); return; }
-    let alive = true;
-    apiCursoFicha(regime, cursoId)
-      .then(r => {
-        if (!alive) return;
-        const programa = String(r.ficha?.payload?.programa ?? "");
-        const linhas = programa.split(/\n+/).map(s => s.trim()).filter(Boolean).slice(0, 12);
-        setFichaLinhas(linhas);
-      })
-      .catch(() => { if (alive) setFichaLinhas([]); });
-    return () => { alive = false; };
-  }, [cursoId, regime]);
-
-  const mods = modulosOptsForCurso(cursoNome);
-  if (mods.length && !/^(módulo|modulo)/i.test(mods[0]?.value ?? "")) {
-    return mods.map(m => m.sub ? `${m.value} · ${m.sub}` : m.value);
-  }
-  if (mods.length) return mods.map(m => m.sub ? `${m.value} · ${m.sub}` : m.value);
-  return fichaLinhas;
+  return useProgramaDoCurso(regime, cursoNome).labels;
 }
 
 const vazio: PedagogiaSnapshot = {

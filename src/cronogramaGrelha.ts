@@ -187,6 +187,33 @@ export function aplicarEvento(
   return upsertCell(out, date, linha, next);
 }
 
+/** Move um evento para outro dia/hora/metodologia, sem alterar os módulos. */
+export function moverEvento(
+  sessoes: SessaoCronograma[],
+  fromDate: string,
+  fromLinha: GrelhaLinha,
+  toDate: string,
+  toLinha: GrelhaLinha,
+): SessaoCronograma[] {
+  if (fromDate === toDate && fromLinha.id === toLinha.id) return sessoes;
+  const origem = cellSessoes(sessoes, fromDate, fromLinha);
+  if (!origem.length) return sessoes;
+  const destino = cellSessoes(sessoes, toDate, toLinha);
+  const pack = (hits: SessaoCronograma[], linha: GrelhaLinha) => {
+    const lectiva = linha.modalidade === "presencial" || linha.modalidade === "sincrona";
+    return {
+      modulos: [...new Set(hits.flatMap(s => s.modulos ?? []))],
+      formadores: lectiva ? [...new Set(hits.flatMap(s => s.formadores ?? []))] : [],
+      modalidade: linha.modalidade,
+    };
+  };
+  let out = upsertCell(sessoes, fromDate, fromLinha, null);
+  out = upsertCell(out, toDate, toLinha, null);
+  out = upsertCell(out, toDate, toLinha, pack(origem, toLinha));
+  if (destino.length) out = upsertCell(out, fromDate, fromLinha, pack(destino, fromLinha));
+  return out;
+}
+
 export function cellLabelPrint(sessoes: SessaoCronograma[], date: string, l: GrelhaLinha) {
   const label = cellLabel(sessoes, date, l);
   if (label === "Síncrona") return "Sessão Síncrona";

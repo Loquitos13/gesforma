@@ -4,6 +4,7 @@ import { AppModal, MultiSearchSelect, SearchSelect } from "./FormKit";
 import { OptionSelect } from "./OptionSelect";
 import { apiCursoFicha, apiSaveCursoFicha } from "./api";
 import { DtpModeloEditor } from "./DtpModeloEditor";
+import { codigoTopico, novoTopicoId, programaDePayload, type OrganizacaoPrograma, type TopicoPrograma } from "./cursoPrograma";
 import { fmtDataPt } from "./oferta";
 import { getParametrosAvaliacao, type CriterioAvaliacao } from "./TurmaExtras";
 import { useTurmas } from "./TurmasContext";
@@ -25,7 +26,7 @@ export type CursoFichaSeed = {
 export type CursoGold = CursoFichaSeed;
 export type CursoAccent = "gold" | "fin";
 
-type TabId = "identidade" | "oferta" | "conteudo" | "avaliacao" | "dtp" | "publicacao";
+type TabId = "identidade" | "oferta" | "conteudo" | "programa" | "avaliacao" | "dtp" | "publicacao";
 type MediaSlot = { name: string; url: string };
 type LocalCatalogo = { id: number; nome: string; morada: string; salas: number; turmas: number; status: string };
 
@@ -61,6 +62,8 @@ type CursoSite = {
   ufcdCod: string;
   ufcd: string;
   locais: string[];
+  organizacaoPrograma: OrganizacaoPrograma;
+  topicosPrograma: TopicoPrograma[];
 };
 
 function theme(accent: CursoAccent) {
@@ -289,7 +292,21 @@ function seedSite(curso?: CursoFichaSeed, accent: CursoAccent = "gold"): CursoSi
     ufcdCod: curso?.ufcdCod ?? "",
     ufcd: curso?.ufcd ?? "",
     locais: [],
+    organizacaoPrograma: accent === "fin" ? "modular" : (/comunicar/i.test(curso?.nome ?? "") ? "livre" : "modular"),
+    topicosPrograma: topicosDeSeed(pack.programa, accent === "fin" ? "modular" : (/comunicar/i.test(curso?.nome ?? "") ? "livre" : "modular")),
   };
+}
+
+function topicosDeSeed(texto: string, _org: OrganizacaoPrograma): TopicoPrograma[] {
+  return texto.split(/\n/).map(s => s.trim()).filter(s => s && !s.startsWith("•") && !s.startsWith("-")).map(linha => {
+    const titulo = linha
+      .replace(/^(M|C|AV|EX)\s*\d+\s*[·.\-–:]+\s*/i, "")
+      .replace(/^\d+\s*[.)\-–]\s*/, "")
+      .replace(/\s*[·\-–]\s*\d+\s*h\s*$/i, "")
+      .trim();
+    const horas = linha.match(/(\d+)\s*h\b/i)?.[1];
+    return { id: novoTopicoId(), titulo: titulo || linha, horas: horas ? `${horas}h` : "" };
+  });
 }
 
 function checks(d: CursoSite, accent: CursoAccent) {
@@ -303,7 +320,7 @@ function checks(d: CursoSite, accent: CursoAccent) {
     meta,
     { id: "sintese", label: "Síntese", ok: filled(d.sintese) },
     { id: "objetivos", label: "Objetivos", ok: filled(d.objetivos) },
-    { id: "programa", label: "Programa", ok: filled(d.programa) },
+    { id: "programa", label: "Programa", ok: d.topicosPrograma.some(t => t.titulo.trim()) || filled(d.programa) },
     { id: "funcionamento", label: "Funcionamento", ok: filled(d.funcionamento) },
   ];
 }
@@ -554,7 +571,14 @@ export function CursoFichaView({
           setData(prev => {
             const locais = Array.isArray(guardado.locais) ? guardado.locais.map(String).filter(Boolean) : prev.locais;
             if (Array.isArray(guardado.locais)) locaisSeeded.current = true;
-            return { ...prev, ...guardado, locais };
+            const parsed = programaDePayload({ ...guardado } as Record<string, unknown>, accent);
+            return {
+              ...prev,
+              ...guardado,
+              locais,
+              organizacaoPrograma: accent === "fin" ? "modular" : parsed.organizacao,
+              topicosPrograma: parsed.topicos.length ? parsed.topicos : prev.topicosPrograma,
+            };
           });
         }
         if (r.ficha.criterios.length) setCriterios(r.ficha.criterios);
@@ -614,6 +638,7 @@ export function CursoFichaView({
       { id: "identidade", label: "Identidade" },
       { id: "oferta", label: "Oferta" },
       { id: "conteudo", label: "Conteúdo do site" },
+      { id: "programa", label: "Programa" },
       { id: "avaliacao", label: "Avaliação" },
       { id: "dtp", label: "Dossiê TP" },
       { id: "publicacao", label: "Publicação" },
@@ -679,7 +704,10 @@ export function CursoFichaView({
     }
     try {
       await apiSaveCursoFicha(accent, id, {
-        payload: { ...data } as unknown as Record<string, unknown>,
+        payload: {
+          ...data,
+          organizacaoPrograma: accent === "fin" ? "modular" : data.organizacaoPrograma,
+        } as unknown as Record<string, unknown>,
         criterios: temAvaliacao ? criterios.filter(c => c.label.trim()) : [],
       });
       setSaved(true);
@@ -699,7 +727,7 @@ export function CursoFichaView({
 
   return (
     <div className="-m-4 sm:-m-5 min-h-[calc(100vh-7.5rem)] flex flex-col bg-slate-100">
-      <header className="sticky top-0 z-20 bg-white border-b border-slate-200">
+      <header className="relative z-10 bg-white border-b border-slate-200">
         <div className="px-4 sm:px-6 py-3 flex flex-col lg:flex-row lg:items-center gap-3">
           <div className="flex items-start gap-3 min-w-0 flex-1">
             <button type="button" onClick={onBack}
@@ -915,8 +943,94 @@ export function CursoFichaView({
               </div>
               <EditorBlock accent={accent} label="Síntese do curso" siteHint="Primeiro parágrafo abaixo do banner. Responda: para quem é e o que se leva daqui." value={data.sintese} onChange={v => patch({ sintese: v })} rows={7} />
               <EditorBlock accent={accent} label="Objetivos" siteHint="Lista do que o formando será capaz de fazer. Uma ideia por linha." value={data.objetivos} onChange={v => patch({ objetivos: v })} rows={7} />
-              <EditorBlock accent={accent} label="Programa / percurso" siteHint="Aulas virtuais ou módulos. Use títulos curtos e tópicos por baixo." value={data.programa} onChange={v => patch({ programa: v })} rows={10} />
+              <EditorBlock accent={accent} label="Programa no site" siteHint="Texto público. A estrutura pedagógica (módulos ou capítulos) configura-se no separador Programa." value={data.programa} onChange={v => patch({ programa: v })} rows={10} />
               <EditorBlock accent={accent} label="Funcionamento" siteHint="Logística: sessões, elegibilidade, plataforma, assiduidade e certificado." value={data.funcionamento} onChange={v => patch({ funcionamento: v })} rows={7} />
+            </div>
+          )}
+
+          {tab === "programa" && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-4">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Programa pedagógico</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Estas unidades aparecem no cronograma e na nova sessão da turma. Não confundir com o texto do website.
+                  </p>
+                </div>
+                {accent === "gold" ? (
+                  <Field label="Organização" hint="Modular numera M1, M2, M3… Programa livre numera C1, C2, C3… (capítulos).">
+                    <SearchSelect
+                      value={data.organizacaoPrograma === "livre" ? "Programa livre" : "Modular"}
+                      onChange={v => patch({ organizacaoPrograma: v === "Programa livre" ? "livre" : "modular" })}
+                      options={[{ value: "Modular" }, { value: "Programa livre" }]}
+                    />
+                  </Field>
+                ) : (
+                  <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5 text-xs text-blue-900">
+                    As formações financiadas são sempre <span className="font-semibold">modulares</span> (M1, M2, M3…). A organização não se altera.
+                  </div>
+                )}
+                <div className="space-y-2">
+                  {data.topicosPrograma.map((topico, i) => (
+                    <div key={topico.id} className="flex items-start gap-2 rounded-lg border border-slate-100 bg-slate-50/60 p-2.5">
+                      <span className={`mt-2 w-10 flex-shrink-0 text-xs font-bold ${accent === "fin" ? "text-blue-700" : "text-amber-700"}`}>
+                        {codigoTopico(accent === "fin" ? "modular" : data.organizacaoPrograma, i)}
+                      </span>
+                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-[1fr_6rem] gap-2">
+                        <input
+                          className={t.iCls}
+                          value={topico.titulo}
+                          placeholder={data.organizacaoPrograma === "livre" && accent !== "fin" ? "Título do capítulo" : "Título do módulo"}
+                          onChange={e => patch({
+                            topicosPrograma: data.topicosPrograma.map(x => x.id === topico.id ? { ...x, titulo: e.target.value } : x),
+                          })}
+                        />
+                        <input
+                          className={t.iCls}
+                          value={topico.horas}
+                          placeholder="Horas"
+                          onChange={e => patch({
+                            topicosPrograma: data.topicosPrograma.map(x => x.id === topico.id ? { ...x, horas: e.target.value } : x),
+                          })}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <button type="button" disabled={i === 0}
+                          onClick={() => {
+                            const next = [...data.topicosPrograma];
+                            [next[i - 1], next[i]] = [next[i]!, next[i - 1]!];
+                            patch({ topicosPrograma: next });
+                          }}
+                          className="px-2 py-1 text-[10px] font-semibold text-slate-500 hover:text-slate-800 disabled:opacity-30">↑</button>
+                        <button type="button" disabled={i === data.topicosPrograma.length - 1}
+                          onClick={() => {
+                            const next = [...data.topicosPrograma];
+                            [next[i + 1], next[i]] = [next[i]!, next[i + 1]!];
+                            patch({ topicosPrograma: next });
+                          }}
+                          className="px-2 py-1 text-[10px] font-semibold text-slate-500 hover:text-slate-800 disabled:opacity-30">↓</button>
+                      </div>
+                      <button type="button"
+                        onClick={() => patch({ topicosPrograma: data.topicosPrograma.filter(x => x.id !== topico.id) })}
+                        className="px-2 py-2 text-xs text-slate-400 hover:text-red-500">Remover</button>
+                    </div>
+                  ))}
+                  {data.topicosPrograma.length === 0 && (
+                    <p className="text-sm text-slate-500 rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center">
+                      Ainda não há {accent === "fin" || data.organizacaoPrograma === "modular" ? "módulos" : "capítulos"}. Adicione o primeiro.
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => patch({
+                    topicosPrograma: [...data.topicosPrograma, { id: novoTopicoId(), titulo: "", horas: "" }],
+                  })}
+                  className={`px-3 py-2 text-xs font-semibold rounded-lg text-white ${t.save}`}
+                >
+                  + {accent === "fin" || data.organizacaoPrograma === "modular" ? "Módulo" : "Capítulo"}
+                </button>
+              </div>
             </div>
           )}
 
@@ -1015,7 +1129,7 @@ export function CursoFichaView({
         </div>
 
         <aside className={`${previewOpen ? "block" : "hidden"} xl:block min-w-0`}>
-          <div className="xl:sticky xl:top-[7.5rem] space-y-3">
+          <div className="xl:sticky xl:top-4 space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Página no website</p>
               <span className={`text-[11px] font-semibold ${data.visivelSite ? "text-emerald-600" : "text-slate-400"}`}>

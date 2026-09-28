@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { apiDtpExport } from "./api";
 import { dtpZipNome } from "./dtpPasta";
+import { imprimirFolhasPresencas } from "./presencasPrint";
 import { useCatalogs } from "./CatalogsContext";
 import { AppModal } from "./FormKit";
 import { useLists } from "./ListsContext";
@@ -542,18 +543,18 @@ export function ExportTurmaModal({
     {
       id: "presencas",
       label: "Folhas de presença",
-      detalhe: lista.length && sessoes.length ? "Folha por sessão, pronta a imprimir e assinar" : "Precisa de formandos e cronograma",
-      disabled: lista.length === 0 || sessoes.length === 0,
-      run: () => imprimir(`Presenças ${turma.nome}`, sessoes.map(sx => `
-        <h1>Folha de presenças · Sessão ${sx.n}</h1>
-        <p class="sub">${turma.nome} · ${turma.curso} · ${sx.data} ${sx.hora}</p>
-        <table>
-          <tr><th>Formando</th><th>Assinatura</th></tr>
-          ${lista.map(f => `<tr><td>${f.nome}</td><td style="width:45%"></td></tr>`).join("")}
-        </table>
-        <p class="sub" style="margin-top:24px">Formador: ${sx.formador || "___________________"}</p>
-        <div style="page-break-after:always"></div>
-      `).join("")),
+      detalhe: lista.length
+        ? (sessoes.length
+          ? `Uma folha por sessão, com ${lista.length} inscritos e coluna de assinatura — disponível antes da sessão`
+          : `Folha da turma com ${lista.length} inscritos e coluna de assinatura`)
+        : "Inscreva formandos para gerar a folha",
+      disabled: lista.length === 0,
+      run: () => imprimirFolhasPresencas({
+        turma: turma.nome,
+        curso: turma.curso,
+        formandos: lista,
+        sessoes: sessoes.map(sx => ({ n: sx.n, data: sx.data, hora: sx.hora, modulo: sx.modulo, formador: sx.formador })),
+      }),
     },
     {
       id: "dtp",

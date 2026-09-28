@@ -12,6 +12,7 @@ import { ConfirmDangerModal } from "./SecretaryUX";
 import { persist } from "./toastBus";
 import { useTurmas } from "./TurmasContext";
 import { useLists } from "./ListsContext";
+import { imprimirFolhasPresencas } from "./presencasPrint";
 import { dtpCategoriaPasta, dtpPastaNome } from "./dtpPasta";
 
 const I = {
@@ -254,11 +255,13 @@ const PRESENCAS_GOLD_SEED = [
   { id: 10, nome: "Marta Maia", presente: true },
 ];
 
-export function PresencasSessaoModal({ open, onClose, sessao, formandos, onSave }: {
+export function PresencasSessaoModal({ open, onClose, sessao, formandos, onSave, turmaNome, cursoNome }: {
   open: boolean; onClose: () => void;
-  sessao?: { n: number; data: string; hora: string };
+  sessao?: { n: number; data: string; hora: string; modulo?: string; formador?: string };
   formandos?: { id: number; nome: string; presente?: boolean }[];
   onSave?: (rows: { id: number; nome: string; presente: boolean }[]) => void;
+  turmaNome?: string;
+  cursoNome?: string;
 }) {
   function seed() {
     const src = formandos?.length ? formandos : PRESENCAS_GOLD_SEED;
@@ -313,6 +316,18 @@ export function PresencasSessaoModal({ open, onClose, sessao, formandos, onSave 
         </div>
         <div className="flex gap-2 px-5 py-4 border-t border-slate-100 flex-shrink-0">
           <button onClick={onClose} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+          <button
+            type="button"
+            onClick={() => imprimirFolhasPresencas({
+              turma: turmaNome || "Turma",
+              curso: cursoNome || "",
+              formandos: presencas,
+              sessoes: [{ n: sessao?.n ?? 0, data: sessao?.data ?? "", hora: sessao?.hora ?? "", modulo: sessao?.modulo, formador: sessao?.formador }],
+            })}
+            className="flex-1 py-2 border border-slate-200 text-sm font-semibold text-slate-700 rounded-lg hover:bg-slate-50"
+          >
+            Imprimir folha
+          </button>
           <button onClick={() => { onSave?.(presencas); onClose(); }} className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">Guardar presenças</button>
         </div>
       </div>

@@ -24,7 +24,7 @@ export function isSessaoLectiva(s: Pick<SessaoCronograma, "modalidade">) {
 
 export function codigoModulo(nome: string) {
   const raw = nome.trim();
-  const tagged = raw.match(/^(M\d+|UFCD\s*\d+|EX\d+|AV\d+)/i);
+  const tagged = raw.match(/^(M\d+|C\d+|UFCD\s*\d+|EX\d+|AV\d+)/i);
   if (tagged) return tagged[1].replace(/\s+/g, " ");
   const before = raw.split("·")[0]?.trim();
   return before || raw;

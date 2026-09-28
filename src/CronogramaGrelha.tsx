@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useCatalogs } from "./CatalogsContext";
-import { modulosOptsForCurso } from "./FormKit";
+import { useProgramaDoCurso } from "./cursoPrograma";
 import {
   addDays,
   aplicarEvento,
@@ -22,6 +22,7 @@ import {
   mergeLinhas,
   METODOLOGIA_OPTS,
   monthSpans,
+  moverEvento,
   normHora,
   setMatricula,
   weekdayCode,
@@ -134,6 +135,7 @@ function EventoModal({
   sessoes,
   horario,
   moduloOpts,
+  unidade = "módulo",
   formador,
   onClose,
   onApply,
@@ -143,6 +145,7 @@ function EventoModal({
   sessoes: SessaoCronograma[];
   horario: string;
   moduloOpts: { value: string; sub?: string }[];
+  unidade?: string;
   formador?: string;
   onClose: () => void;
   onApply: (next: SessaoCronograma[], extra: GrelhaLinha) => void;
@@ -283,7 +286,7 @@ function EventoModal({
         )}
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">
-            Módulos{" "}
+            {unidade === "capítulo" ? "Capítulos" : "Módulos"}{" "}
             <span className="font-medium normal-case tracking-normal text-slate-400">
               {form.mod === "avaliacao" ? "(obrigatório)" : "(opcional, pode ser mais do que um)"}
             </span>
@@ -300,7 +303,7 @@ function EventoModal({
                 <span><span className="font-semibold">{codigoModulo(valor)}</span> · {valor.replace(/^[^·]+·\s*/, "")}</span>
               </label>
             ))}
-            {!opcoes.length && <p className="text-xs text-slate-400">Não há módulos neste curso.</p>}
+            {!opcoes.length && <p className="text-xs text-slate-400">Defina o programa na ficha do curso para escolher {unidade === "capítulo" ? "capítulos" : "módulos"}.</p>}
           </div>
           <p className="text-[11px] text-slate-400 mt-1">Só aparecem na grelha os módulos escolhidos aqui.</p>
         </div>
@@ -375,12 +378,17 @@ export function CronogramaGrelha({
   accent?: "gold" | "fin";
   compact?: boolean;
 }) {
-  const moduloOpts = useMemo(() => modulosOptsForCurso(curso), [curso]);
+  const programa = useProgramaDoCurso(accent, curso);
+  const moduloOpts = programa.options;
+  const unidade = programa.unidade.singular;
   const periodo = useMemo(() => grelhaPeriodo(sessoes, inicio), [sessoes, inicio]);
   const [fim, setFim] = useState(periodo.fim);
   const [matricula, setMatriculaDate] = useState(periodo.matricula ?? "");
   const [linhas, setLinhas] = useState<GrelhaLinha[]>(() => linhasFromSessoes(sessoes, horario));
   const [evento, setEvento] = useState<{ date: string; linha?: GrelhaLinha } | null>(null);
+  const [arrasto, setArrasto] = useState<{ date: string; linha: GrelhaLinha } | null>(null);
+  const [sobre, setSobre] = useState<string | null>(null);
+  const arrastou = useRef(false);
   const [addLinha, setAddLinha] = useState(false);
   const [novaMod, setNovaMod] = useState<Exclude<SessaoModalidade, "matricula" | "avaliacao">>("presencial");
   const [novaInicio, setNovaInicio] = useState(() => defaultSlot(horario, "presencial").horaInicio);
@@ -533,13 +541,51 @@ export function CronogramaGrelha({
                       ? "matricula"
                       : cellTone(sessoes, d, linha);
                     const label = d === matricula && tone === "matricula" ? "Matrícula" : cellLabel(sessoes, d, linha);
+                    const chave = `${linha.id}-${d}`;
+                    const preenchida = Boolean(label) && tone !== "empty" && tone !== "matricula";
+                    const aSoltar = sobre === chave && arrasto && !(arrasto.date === d && arrasto.linha.id === linha.id);
                     return (
-                      <td key={`${linha.id}-${d}`} className="relative border border-slate-100 p-0 text-center align-middle">
+                      <td
+                        key={chave}
+                        className={`relative border border-slate-100 p-0 text-center align-middle ${aSoltar ? "ring-2 ring-amber-400 ring-inset" : ""}`}
+                        onDragOver={e => {
+                          if (!arrasto || tone === "matricula") return;
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          setSobre(chave);
+                        }}
+                        onDragLeave={() => { if (sobre === chave) setSobre(null); }}
+                        onDrop={e => {
+                          e.preventDefault();
+                          setSobre(null);
+                          if (!arrasto || tone === "matricula") return;
+                          arrastou.current = true;
+                          onChange(moverEvento(sessoes, arrasto.date, arrasto.linha, d, linha));
+                          setArrasto(null);
+                        }}
+                      >
                         <button
                           type="button"
-                          onClick={() => setEvento({ date: d, linha })}
-                          className={`block w-8 min-w-8 h-10 px-0.5 text-[9px] font-bold leading-tight ${TONE[tone] ?? TONE.empty} ${d === matricula ? "ring-1 ring-[#15803d]" : ""}`}
-                          title={`${formatDiaMes(d)} · ${linhaLabel(linha)}`}
+                          draggable={preenchida}
+                          onDragStart={e => {
+                            if (!preenchida) return;
+                            arrastou.current = false;
+                            setArrasto({ date: d, linha });
+                            e.dataTransfer.effectAllowed = "move";
+                            e.dataTransfer.setData("text/plain", chave);
+                          }}
+                          onDragEnd={() => { setArrasto(null); setSobre(null); }}
+                          onClick={() => {
+                            if (arrastou.current) {
+                              arrastou.current = false;
+                              return;
+                            }
+                            setEvento({ date: d, linha });
+                          }}
+                          className={`block w-8 min-w-8 h-10 px-0.5 text-[9px] font-bold leading-tight ${TONE[tone] ?? TONE.empty} ${d === matricula ? "ring-1 ring-[#15803d]" : ""} ${preenchida ? "cursor-grab active:cursor-grabbing" : ""}`}
+                          title={preenchida
+                            ? `${formatDiaMes(d)} · ${linhaLabel(linha)} · arraste para mudar dia, hora ou metodologia; clique para editar os ${unidade === "capítulo" ? "capítulos" : "módulos"}`
+                            : `${formatDiaMes(d)} · ${linhaLabel(linha)}`}
                         >
                           {label}
                         </button>
@@ -662,6 +708,7 @@ export function CronogramaGrelha({
           sessoes={sessoes}
           horario={horario}
           moduloOpts={moduloOpts}
+          unidade={unidade}
           formador={formador}
           onClose={() => setEvento(null)}
           onApply={aplicarEventoGrelha}
@@ -669,8 +716,7 @@ export function CronogramaGrelha({
       )}
 
       <p className="text-[11px] text-slate-500 px-1">
-        Clique num dia (número ou célula) para adicionar um evento ou marcar o limite de entrega / avaliação de um módulo.
-        Clicar num evento já marcado abre-o preenchido para edição. Se o horário ainda não existir, a grelha cria uma linha nova.
+        Arraste uma sessão para outra célula para mudar o dia, a hora ou a metodologia. Os {unidade === "capítulo" ? "capítulos" : "módulos"} só se alteram ao clicar na sessão. Clique numa célula vazia para adicionar.
       </p>
 
       <ul className="text-[11px] text-slate-600 space-y-1 px-1">

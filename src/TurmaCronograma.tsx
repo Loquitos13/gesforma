@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { CronogramaGrelha } from "./CronogramaGrelha";
 import { generateEnaCronograma, SESSAO_MODALIDADE_OPTS } from "./cronogramaGrelha";
-import { MultiSearchSelect, modulosOptsForCurso } from "./FormKit";
+import { MultiSearchSelect } from "./FormKit";
+import { useProgramaDoCurso } from "./cursoPrograma";
 import { useFormadorOptions } from "./FormadoresContext";
 import {
   hojeIso,
@@ -290,7 +291,8 @@ export function CronogramaEditor({
 }) {
   const gold = accent === "gold";
   const page = layout === "page";
-  const moduloOpts = useMemo(() => modulosOptsForCurso(curso), [curso]);
+  const programa = useProgramaDoCurso(accent, curso);
+  const moduloOpts = programa.options;
   const totalH = Math.round(horasCronograma(sessoes) * 10) / 10;
   const next = proximaSessao(sessoes);
   const periodo = periodoCronograma(sessoes);
@@ -383,7 +385,7 @@ export function CronogramaEditor({
             {sessoes.length === 0
               ? "A grelha segue o modelo da ENA: aulas presenciais, sessões síncronas e auto-aprendizagem por dia."
               : page
-                ? "Clique numa célula para marcar o módulo. A lista abaixo serve para formadores das sessões lectivas."
+                ? "Arraste uma sessão na grelha para mudar dia, hora ou metodologia. Clique na célula para editar os módulos."
                 : `${lectivas.length} sessões lectivas · ${totalH}h em sala ou síncronas${horas ? ` de ${horas}h` : ""}`}
           </p>
           <div className="flex flex-wrap gap-1.5 mt-2">

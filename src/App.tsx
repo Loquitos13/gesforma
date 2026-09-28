@@ -26,8 +26,10 @@ import { ResolverDocumentoModal } from "./DocResolver";
 import { CursoFichaView } from "./CursoFichaView";
 import {   AppModal, SearchSelect, MultiSearchSelect, ViewFilters, matchesFilter, uniqueOpts,
   blogTematicasOpts, cursosFinOpts, cursosGoldOpts, optsFromCursos,
-  horariosOpts, modulosOptsForCurso,
+  horariosOpts,
 } from "./FormKit";
+import { useProgramaDoCurso } from "./cursoPrograma";
+import { imprimirFolhasPresencas } from "./presencasPrint";
 import { useLocaisOptsDoCurso } from "./cursoLocais";
 import { OptionSelect } from "./OptionSelect";
 import { ListasOpcoesView } from "./ListasOpcoesView";
@@ -43,7 +45,7 @@ import { ListsProvider, nextListId, useLists, type BlogPostRow, type FormandoFin
 import { PreInscricoesGoldView } from "./CrmView";
 import { useAuth } from "./AuthGate";
 import { useNotificacoes } from "./NotificacoesContext";
-import { presencasDaSessao, useCriteriosAvaliacao, useCursoPrograma, useDtpResumo, useTurmaPedagogia, type PresencaRow } from "./PedagogiaContext";
+import { presencasDaSessao, useCriteriosAvaliacao, useDtpResumo, useTurmaPedagogia, type PresencaRow } from "./PedagogiaContext";
 import { EquipaView } from "./EquipaView";
 import { UsersView, roleLabel } from "./UsersView";
 import { ViewLoadingOverlay } from "./ViewLoading";
@@ -998,14 +1000,16 @@ function sumarioBtnCls(s: SumarioSessaoData | undefined, gold: boolean) {
 }
 
 function SessoesTurmaTab({
-  accent, turmaNome, sessoes, planos, presencas, sumarios, onNovaSessao, onPlano, onSumario, onPresencas, onOpenFormador,
+  accent, turmaNome, cursoNome, sessoes, planos, presencas, sumarios, formandos, onNovaSessao, onPlano, onSumario, onPresencas, onOpenFormador,
 }: {
   accent: "gold" | "fin";
   turmaNome: string;
+  cursoNome: string;
   sessoes: SessaoMeta[];
   planos: Record<number, PlanoSessaoData>;
   presencas: Record<number, PresencaRow[]>;
   sumarios: Record<number, SumarioSessaoData>;
+  formandos: { id: number; nome: string }[];
   onNovaSessao: () => void;
   onPlano: (s: SessaoMeta) => void;
   onSumario: (s: SessaoMeta) => void;
@@ -1015,11 +1019,32 @@ function SessoesTurmaTab({
   const gold = accent === "gold";
   const numCls = gold ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700";
   const planoTodo = gold ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100";
+  function imprimirFolha(s?: SessaoMeta) {
+    imprimirFolhasPresencas({
+      turma: turmaNome,
+      curso: cursoNome,
+      formandos,
+      sessoes: s
+        ? [{ n: s.n, data: s.data, hora: s.hora, modulo: s.modulos?.join(" · ") || s.modulo, formador: s.formador }]
+        : sessoes.map(x => ({ n: x.n, data: x.data, hora: x.hora, modulo: x.modulos?.join(" · ") || x.modulo, formador: x.formador })),
+    });
+  }
   return (
     <Card>
-      <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-2 flex-wrap">
         <p className="text-sm font-semibold text-slate-700">Sessões - {turmaNome}</p>
-        <NewBtn accent={accent} label="+ Nova Sessão" onClick={onNovaSessao} />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={formandos.length === 0}
+            title={formandos.length ? "Folha gerada com todos os inscritos, mesmo antes da sessão" : "Inscreva formandos para gerar a folha"}
+            onClick={() => imprimirFolha()}
+            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+          >
+            Imprimir folhas
+          </button>
+          <NewBtn accent={accent} label="+ Nova Sessão" onClick={onNovaSessao} />
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -1034,7 +1059,6 @@ function SessoesTurmaTab({
               const sum = sumarios[s.n];
               const temPlano = Boolean(planos[s.n]);
               const folha = presencas[s.n];
-              const realizada = s.estado === "Realizada";
               return (
                 <tr key={s.n} className="hover:bg-slate-50">
                   <Td><span className={`w-7 h-7 rounded-full ${numCls} text-xs font-bold flex items-center justify-center`}>{s.n}</span></Td>
@@ -1057,23 +1081,30 @@ function SessoesTurmaTab({
                     </button>
                   </Td>
                   <Td>
-                    <button
-                      type="button"
-                      disabled={!realizada && !folha}
-                      title={realizada || folha ? "Folha de presenças desta sessão" : "As presenças só se marcam depois da sessão"}
-                      onClick={() => (realizada || folha) && onPresencas(s)}
-                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${
-                        folha
-                          ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
-                          : realizada
-                            ? "text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100"
-                            : "text-slate-400 bg-slate-50 border-slate-200 cursor-not-allowed"
-                      }`}
-                    >
-                      {folha
-                        ? `${folha.filter(p => p.presente).length}/${folha.length} presentes`
-                        : realizada ? "Marcar presenças" : "Após a sessão"}
-                    </button>
+                    <div className="flex flex-col gap-1 items-start">
+                      <button
+                        type="button"
+                        disabled={formandos.length === 0}
+                        title="Folha gerada pela plataforma, disponível antes da sessão"
+                        onClick={() => imprimirFolha(s)}
+                        className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 whitespace-nowrap"
+                      >
+                        Imprimir folha
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onPresencas(s)}
+                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${
+                          folha
+                            ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
+                            : "text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100"
+                        }`}
+                      >
+                        {folha
+                          ? `${folha.filter(p => p.presente).length}/${folha.length} presentes`
+                          : "Marcar presenças"}
+                      </button>
+                    </div>
                   </Td>
                   <Td>{estadoBadge(s.estado)}</Td>
                 </tr>
@@ -1458,7 +1489,8 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const { user } = useAuth();
   const ped = useTurmaPedagogia("gold", turma.id);
   const criterios = useCriteriosAvaliacao("gold", turma.curso);
-  const programaTurma = useCursoPrograma("gold", turma.curso);
+  const programaCurso = useProgramaDoCurso("gold", turma.curso);
+  const programaTurma = programaCurso.labels;
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
   const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
   const [presencasSession, setPresencasSession] = useState<SessaoMeta | null>(null);
@@ -1585,10 +1617,12 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           <SessoesTurmaTab
             accent="gold"
             turmaNome={turma.nome}
+            cursoNome={turma.curso}
             sessoes={sessoesTurma}
             planos={ped.planos}
             presencas={ped.presencas}
             sumarios={sumarios}
+            formandos={nomesCockpit}
             onNovaSessao={() => { setFormadoresSessao(turma.formador ? [turma.formador] : []); setModuloSessao([]); setNovaSessao(true); }}
             onPlano={setPlanoSessao}
             onSumario={setSumarioSessao}
@@ -1796,6 +1830,8 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         open={!!presencasSession}
         onClose={() => setPresencasSession(null)}
         sessao={presencasSession ?? undefined}
+        turmaNome={turma.nome}
+        cursoNome={turma.curso}
         formandos={presencasSession ? presencasDaSessao(nomesCockpit, ped.presencas[presencasSession.n]) : nomesCockpit}
         onSave={rows => { if (presencasSession) void ped.guardarPresencas(presencasSession.n, rows); }}
       />
@@ -1822,15 +1858,15 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
               unitPlural="formadores"
             />
           </Field>
-          <Field label="Módulos">
+          <Field label={programaCurso.unidade.plural.charAt(0).toUpperCase() + programaCurso.unidade.plural.slice(1)}>
             <MultiSearchSelect
               values={moduloSessao}
               onChange={setModuloSessao}
-              options={modulosOptsForCurso(turma.curso)}
-              placeholder="Pesquisar módulo do curso…"
-              noneLabel="Selecionar módulos…"
-              unitSingular="módulo"
-              unitPlural="módulos"
+              options={programaCurso.options}
+              placeholder={`Pesquisar ${programaCurso.unidade.singular} do curso…`}
+              noneLabel={`Selecionar ${programaCurso.unidade.plural}…`}
+              unitSingular={programaCurso.unidade.singular}
+              unitPlural={programaCurso.unidade.plural}
             />
           </Field>
           <div className="flex gap-2 pt-2">
@@ -1997,7 +2033,8 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const { user } = useAuth();
   const ped = useTurmaPedagogia("fin", turma.id);
   const criterios = useCriteriosAvaliacao("fin", turma.curso);
-  const programaTurmaFin = useCursoPrograma("fin", turma.curso);
+  const programaCursoFin = useProgramaDoCurso("fin", turma.curso);
+  const programaTurmaFin = programaCursoFin.labels;
   const sumarios = ped.sumarios;
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
   const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
@@ -2118,10 +2155,12 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
         <SessoesTurmaTab
           accent="fin"
           turmaNome={turma.nome}
+          cursoNome={turma.curso}
           sessoes={sessoesTurma}
           planos={ped.planos}
           presencas={ped.presencas}
           sumarios={sumarios}
+          formandos={nomesCockpit}
           onNovaSessao={() => { setFormadoresSessao(turma.formador ? [turma.formador] : []); setModuloSessao([]); setNovaSessao(true); }}
           onPlano={setPlanoSessao}
           onSumario={setSumarioSessao}
@@ -2302,6 +2341,8 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
         open={!!presencasSession}
         onClose={() => setPresencasSession(null)}
         sessao={presencasSession ?? undefined}
+        turmaNome={turma.nome}
+        cursoNome={turma.curso}
         formandos={presencasSession ? presencasDaSessao(nomesCockpit, ped.presencas[presencasSession.n]) : nomesCockpit}
         onSave={rows => { if (presencasSession) void ped.guardarPresencas(presencasSession.n, rows); }}
       />
@@ -2426,15 +2467,15 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
               unitPlural="formadores"
             />
           </Field>
-          <Field label="Módulos">
+          <Field label={programaCursoFin.unidade.plural.charAt(0).toUpperCase() + programaCursoFin.unidade.plural.slice(1)}>
             <MultiSearchSelect
               values={moduloSessao}
               onChange={setModuloSessao}
-              options={modulosOptsForCurso(turma.curso)}
-              placeholder="Pesquisar módulo do curso…"
-              noneLabel="Selecionar módulos…"
-              unitSingular="módulo"
-              unitPlural="módulos"
+              options={programaCursoFin.options}
+              placeholder={`Pesquisar ${programaCursoFin.unidade.singular} do curso…`}
+              noneLabel={`Selecionar ${programaCursoFin.unidade.plural}…`}
+              unitSingular={programaCursoFin.unidade.singular}
+              unitPlural={programaCursoFin.unidade.plural}
             />
           </Field>
           <div className="flex gap-2 pt-2">

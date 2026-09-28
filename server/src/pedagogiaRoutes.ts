@@ -21,6 +21,10 @@ import {
 
 type Regime = "gold" | "fin";
 
+function pgIntArray(ids: number[]) {
+  return `{${ids.filter(n => Number.isFinite(n)).map(n => Math.trunc(Number(n))).join(",")}}`;
+}
+
 const regimeSchema = z.enum(["gold", "fin"]);
 const estadoSchema = z.enum(["ok", "parcial", "falta"]);
 
@@ -322,7 +326,7 @@ async function turmaFacts(db: Db, regime: Regime, turma: TurmaRow): Promise<DtpF
         `SELECT doc_id, count(*)::int AS n FROM formando_docs
            WHERE regime = $1 AND ok = true AND formando_id = ANY($2::int[])
            GROUP BY doc_id`,
-        [regime, ids],
+        [regime, pgIntArray(ids)],
       )
       : { rows: [] as { doc_id: string; n: number }[] };
     for (const r of rows.rows) docs[r.doc_id] = { done: Number(r.n) || 0, total };
@@ -969,7 +973,7 @@ export function registerPedagogiaRoutes(
     const turma = await loadTurma(db, regime, id);
     if (!turma) return reply.code(404).send({ error: "turma não encontrada" });
     const dtp = await dtpForTurma(db, regime, turma);
-    const root = dtpPastaNome(regime, turma.nome);
+    const root = pastaSegura(dtpPastaNome(regime, turma.nome));
     const used = new Set<string>();
     const files: { name: string; data: Buffer }[] = [];
     const add = (rel: string, data: Buffer) => {
@@ -1043,7 +1047,7 @@ export function registerPedagogiaRoutes(
       const docs = await db.query<{ doc_id: string; file_name: string; drive_file_id: string; formando_id: number }>(
         `SELECT formando_id, doc_id, file_name, drive_file_id FROM formando_docs
           WHERE regime = $1 AND formando_id = ANY($2::int[]) AND drive_file_id <> ''`,
-        [regime, ids],
+        [regime, pgIntArray(ids)],
       ).catch(() => ({ rows: [] as { doc_id: string; file_name: string; drive_file_id: string; formando_id: number }[] }));
       for (const row of docs.rows) {
         const pessoa = formandos.find(f => f.id === row.formando_id)?.nome ?? String(row.formando_id);

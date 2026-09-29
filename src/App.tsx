@@ -3698,9 +3698,12 @@ function GoldCursoFichaScreen({ cursoId, onBack, onOpenModulos }: { cursoId?: nu
       curso={curso}
       onBack={onBack}
       onOpenModulos={onOpenModulos}
-      onCommit={saved => {
-        if (curso) patchCursoGold(curso.id, { nome: saved.nome, categoria: saved.categoria ?? curso.categoria, tipo: saved.tipo ?? curso.tipo, preco: saved.preco ?? curso.preco, regime: saved.regime, horas: saved.horas, estado: saved.estado });
-        else addCursoGold({ id: saved.id, nome: saved.nome, categoria: saved.categoria || "CCP e Gestão da Formação", tipo: saved.tipo || "Pago", preco: saved.preco ?? 0, regime: saved.regime, horas: saved.horas, estado: saved.estado || "Ativo" });
+      onCommit={async saved => {
+        if (curso) {
+          patchCursoGold(curso.id, { nome: saved.nome, categoria: saved.categoria ?? curso.categoria, tipo: saved.tipo ?? curso.tipo, preco: saved.preco ?? curso.preco, regime: saved.regime, horas: saved.horas, estado: saved.estado });
+          return curso.id;
+        }
+        return addCursoGold({ id: saved.id, nome: saved.nome, categoria: saved.categoria || "CCP e Gestão da Formação", tipo: saved.tipo || "Pago", preco: saved.preco ?? 0, regime: saved.regime, horas: saved.horas, estado: saved.estado || "Ativo" });
       }}
     />
   );
@@ -3715,11 +3718,14 @@ function FinCursoFichaScreen({ cursoId, onBack, onOpenModulos }: { cursoId?: num
       curso={raw ? { id: raw.id, nome: raw.nomeComercial, ufcdCod: raw.ufcdCod, ufcd: raw.ufcd, regime: raw.regime, horas: raw.horas, estado: raw.estado } : undefined}
       onBack={onBack}
       onOpenModulos={onOpenModulos}
-      onCommit={saved => {
+      onCommit={async saved => {
         const ufcdCod = saved.ufcdCod || raw?.ufcdCod || "0000";
         const row = { id: saved.id, ufcdCod, ufcd: saved.ufcd || saved.nome, nomeComercial: saved.nome, regime: saved.regime, horas: saved.horas, estado: saved.estado || "Ativo" };
-        if (raw) patchCursoFin(raw.id, row);
-        else addCursoFin(row);
+        if (raw) {
+          patchCursoFin(raw.id, row);
+          return raw.id;
+        }
+        return addCursoFin(row);
       }}
     />
   );

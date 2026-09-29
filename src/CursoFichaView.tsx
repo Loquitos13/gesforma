@@ -547,7 +547,7 @@ export function CursoFichaView({
   curso?: CursoFichaSeed;
   onBack: () => void;
   onOpenModulos?: (cursoNome: string) => void;
-  onCommit?: (saved: CursoFichaSeed) => void;
+  onCommit?: (saved: CursoFichaSeed) => void | Promise<number | undefined>;
   accent?: CursoAccent;
 }) {
   const t = theme(accent);
@@ -561,6 +561,7 @@ export function CursoFichaView({
   const [saved, setSaved] = useState(false);
   const [erro, setErro] = useState("");
   const [gravando, setGravando] = useState(false);
+  const [cursoPersistId, setCursoPersistId] = useState<number | undefined>(curso?.id);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [novoLocal, setNovoLocal] = useState(false);
   const [localNome, setLocalNome] = useState("");
@@ -697,10 +698,11 @@ export function CursoFichaView({
     setFalhas({});
     setGravando(true);
     setErro("");
-    const id = curso?.id ?? Date.now() % 100000;
+    let id = cursoPersistId ?? curso?.id;
+    const draftId = id ?? (Date.now() % 100000);
     if (onCommit && data.titulo.trim()) {
-      onCommit({
-        id,
+      const realId = await onCommit({
+        id: draftId,
         nome: data.titulo.trim(),
         categoria: data.categoria,
         tipo: data.tipo,
@@ -711,7 +713,14 @@ export function CursoFichaView({
         ufcdCod: data.ufcdCod,
         ufcd: data.ufcd,
       });
+      if (typeof realId === "number") id = realId;
     }
+    if (id == null) {
+      setErro("O curso não chegou a gravar na base. Tente outra vez.");
+      setGravando(false);
+      return;
+    }
+    setCursoPersistId(id);
     try {
       await apiSaveCursoFicha(accent, id, {
         payload: {

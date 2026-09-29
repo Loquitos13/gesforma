@@ -148,6 +148,10 @@ export function useCatalogList<T extends { id: number }>(kind: string, regime: "
               }
             }).catch(err => {
               toastError(err, "Não foi possível criar o item do catálogo.");
+              setLists(xs => ({
+                ...xs,
+                [key]: ((xs[key] ?? []) as CatalogItem[]).filter(x => x.id !== row.id),
+              }));
             });
           } else if (!sameRow(before, row)) {
             void persist(apiPatchCatalog(kind, row.id, payloadOf(row), regime));

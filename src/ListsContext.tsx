@@ -95,11 +95,11 @@ type ListsCtx = {
   patchFormandoFin: (id: number, patch: Partial<FormandoFin>) => void;
   removeFormandoFin: (id: number) => void;
   cursosGold: CursoGoldRow[];
-  addCursoGold: (row: CursoGoldRow) => void;
+  addCursoGold: (row: CursoGoldRow) => Promise<number | undefined>;
   patchCursoGold: (id: number, patch: Partial<CursoGoldRow>) => void;
   removeCursoGold: (id: number) => void;
   cursosFin: CursoFinRow[];
-  addCursoFin: (row: CursoFinRow) => void;
+  addCursoFin: (row: CursoFinRow) => Promise<number | undefined>;
   patchCursoFin: (id: number, patch: Partial<CursoFinRow>) => void;
   removeCursoFin: (id: number) => void;
   blogPosts: BlogPostRow[];
@@ -280,11 +280,13 @@ export function ListsProvider({
     });
   }, []);
 
-  const addCursoGold = useCallback((row: CursoGoldRow) => {
+  const addCursoGold = useCallback(async (row: CursoGoldRow) => {
     setCG(xs => [row, ...xs]);
-    void persist(apiCreateCursoGold(row).then(r => {
-      if (r.curso) setCG(xs => replaceById(xs, row.id, r.curso));
+    const r = await persist(apiCreateCursoGold(row).then(res => {
+      if (res.curso) setCG(xs => replaceById(xs, row.id, res.curso));
+      return res;
     }), () => setCG(xs => xs.filter(x => x.id !== row.id)));
+    return r?.curso?.id;
   }, []);
   const patchCursoGold = useCallback((id: number, patch: Partial<CursoGoldRow>) => {
     let before: CursoGoldRow | undefined;
@@ -307,11 +309,13 @@ export function ListsProvider({
     });
   }, []);
 
-  const addCursoFin = useCallback((row: CursoFinRow) => {
+  const addCursoFin = useCallback(async (row: CursoFinRow) => {
     setCF(xs => [row, ...xs]);
-    void persist(apiCreateCursoFin(row).then(r => {
-      if (r.curso) setCF(xs => replaceById(xs, row.id, r.curso));
+    const r = await persist(apiCreateCursoFin(row).then(res => {
+      if (res.curso) setCF(xs => replaceById(xs, row.id, res.curso));
+      return res;
     }), () => setCF(xs => xs.filter(x => x.id !== row.id)));
+    return r?.curso?.id;
   }, []);
   const patchCursoFin = useCallback((id: number, patch: Partial<CursoFinRow>) => {
     let before: CursoFinRow | undefined;

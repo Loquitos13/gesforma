@@ -550,7 +550,7 @@ export function ExportTurmaModal({
       label: "Folhas de presença",
       detalhe: lista.length
         ? (sessoes.length
-          ? `Uma folha por sessão, com ${lista.length} inscritos e coluna de assinatura — disponível antes da sessão`
+          ? `Uma folha por sessão, com ${lista.length} inscritos e coluna de assinatura, disponível antes da sessão`
           : `Folha da turma com ${lista.length} inscritos e coluna de assinatura`)
         : "Inscreva formandos para gerar a folha",
       disabled: lista.length === 0,

@@ -21,7 +21,7 @@ const TEMPLATES = [
   {
     tipo: "payment",
     nome: "Confirmação de Pagamento",
-    assunto: "Pagamento confirmado – {{curso}}",
+    assunto: "Pagamento confirmado: {{curso}}",
     linhas: [
       "{{nome}}, o pagamento de {{curso}} chegou.",
       "A secretaria confirma-lhe a turma {{turma}} e o horário por telefone ou por este email.",

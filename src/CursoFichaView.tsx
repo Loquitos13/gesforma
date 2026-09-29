@@ -1109,9 +1109,9 @@ export function CursoFichaView({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {[
-                    { label: "0–20 valores", escalaMin: 0, escalaMax: 20, unidade: "valores", minimoAprovacao: 10 },
-                    { label: "0–100 %", escalaMin: 0, escalaMax: 100, unidade: "%", minimoAprovacao: 50 },
-                    { label: "1–5 pontos", escalaMin: 1, escalaMax: 5, unidade: "pontos", minimoAprovacao: 3 },
+                    { label: "0 a 20 valores", escalaMin: 0, escalaMax: 20, unidade: "valores", minimoAprovacao: 10 },
+                    { label: "0 a 100 %", escalaMin: 0, escalaMax: 100, unidade: "%", minimoAprovacao: 50 },
+                    { label: "1 a 5 pontos", escalaMin: 1, escalaMax: 5, unidade: "pontos", minimoAprovacao: 3 },
                   ].map(p => (
                     <button key={p.label} type="button"
                       onClick={() => patchAv(p)}
@@ -1172,7 +1172,7 @@ export function CursoFichaView({
               {temAvaliacao && (
                 <div className="rounded-xl border border-violet-200 bg-white p-4 sm:p-5 space-y-4">
                   <div>
-                    <p className="text-sm font-semibold text-slate-800">Folha de simulação (escala 1–5)</p>
+                    <p className="text-sm font-semibold text-slate-800">Folha de simulação (escala 1 a 5)</p>
                     <p className="text-xs text-slate-500 mt-0.5">
                       {accent === "fin"
                         ? "Critérios das entregas práticas desta UFCD (plano de sessão, exercícios). Não entram na pauta ponderada acima."

@@ -168,7 +168,7 @@ export function roundNota(n: number) {
 }
 
 export function formatNota(n: number | null, unidade: string) {
-  if (n == null) return "—";
+  if (n == null) return "-";
   const txt = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
   return unidade === "%" ? `${txt} %` : `${txt} ${unidade}`;
 }

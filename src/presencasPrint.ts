@@ -25,8 +25,8 @@ export function htmlFolhaPresencas(opts: {
       <h1>Folha de presenças${sx.n ? ` · Sessão ${sx.n}` : ""}</h1>
       <p class="sub">${escapeHtml(opts.turma)} · ${escapeHtml(opts.curso)}</p>
       <table class="meta">
-        <tr><th>Data</th><td>${escapeHtml(sx.data || "—")}</td><th>Hora</th><td>${escapeHtml(sx.hora || "—")}</td></tr>
-        <tr><th>${sx.modulo && /C\d+/.test(sx.modulo) ? "Capítulo" : "Módulo"}</th><td colspan="3">${escapeHtml(sx.modulo || "—")}</td></tr>
+        <tr><th>Data</th><td>${escapeHtml(sx.data || "-")}</td><th>Hora</th><td>${escapeHtml(sx.hora || "-")}</td></tr>
+        <tr><th>${sx.modulo && /C\d+/.test(sx.modulo) ? "Capítulo" : "Módulo"}</th><td colspan="3">${escapeHtml(sx.modulo || "-")}</td></tr>
       </table>
       <table class="lista">
         <thead>

@@ -85,7 +85,7 @@ export function InscreverFormandoPanel({
       {filtrada.length === 0 ? (
         <p className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-3">
           {lista.length === 0
-            ? "Ninguém se pré-inscreveu para este curso, local e horário — ou já estão inscritos nesta turma."
+            ? "Ninguém se pré-inscreveu para este curso, local e horário, ou já estão inscritos nesta turma."
             : "Nenhum resultado nesta pesquisa."}
         </p>
       ) : (
@@ -240,7 +240,7 @@ export function EscolherTurmaPicker({
         placeholder="Pesquisar turma, horário ou data…"
       />
       {bloco("Adequadas à pré-inscrição", adequadas, "Mesmo curso, local e horário. Escolha uma destas.")}
-      {bloco("Outros horários no mesmo local", outros, "Ainda não começaram, mas o horário é outro — ficam visíveis só para consulta.")}
+      {bloco("Outros horários no mesmo local", outros, "Ainda não começaram, mas o horário é outro. Ficam visíveis só para consulta.")}
       {filtradas.length === 0 && (
         <p className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-3">
           Não há turmas deste curso neste local para mostrar.

@@ -173,7 +173,7 @@ export function ResolverDocumentoModal({
         {doc.kind === "simulacao" && (
           <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
             <div className="px-5 py-2.5 bg-violet-50 text-xs text-violet-700">
-              Folha de avaliação do curso <strong>{curso}</strong> · {criterios.length} critérios · escala 1–5
+              Folha de avaliação do curso <strong>{curso}</strong> · {criterios.length} critérios · escala 1 a 5
             </div>
             {simItems.map(item => {
               const est = simAlunoEstado(item, criterios);

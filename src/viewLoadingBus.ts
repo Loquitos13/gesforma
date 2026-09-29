@@ -46,7 +46,7 @@ export function subscribeViewLoading(fn: Listener) {
   return () => { listeners.delete(fn); };
 }
 
-/** Só depois da primeira view da sessão: o splash 0–100% já cobriu a entrada. */
+/** Só depois da primeira view da sessão: o splash 0 a 100% já cobriu a entrada. */
 export function armViewLoading() {
   armed = true;
 }

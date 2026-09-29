@@ -355,7 +355,7 @@ export function CronogramaEditor({
           <KpiCard
             accent={accent}
             label="Período"
-            value={periodo ? `${formatDiaMes(periodo.inicio)} – ${formatDiaMes(periodo.fim)}` : "-"}
+            value={periodo ? `${formatDiaMes(periodo.inicio)} a ${formatDiaMes(periodo.fim)}` : "-"}
             hint={periodo ? `${formatMesAno(periodo.inicio)}${periodo.inicio.slice(0, 7) !== periodo.fim.slice(0, 7) ? ` → ${formatMesAno(periodo.fim)}` : ""}` : "Defina datas nas sessões"}
           />
         </>

@@ -296,7 +296,7 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
     ctaAmbito: ctaDestino("welcome").ambito,
   },
   payment: {
-    assunto: "Pagamento confirmado – {{curso}}",
+    assunto: "Pagamento confirmado: {{curso}}",
     linhas: [
       "{{nome}}, o pagamento de {{curso}} chegou.",
       "A secretaria confirma-lhe a turma {{turma}} e o horário por telefone ou por este email.",
@@ -573,7 +573,7 @@ function estadoBadge(estado: string) {
 }
 
 function formatSessaoLine(s: SessaoCronograma) {
-  return `${formatSessaoLabel(s.data)} · ${(s.horaInicio || "").replace(":", "h")}–${(s.horaFim || "").replace(":", "h")}`;
+  return `${formatSessaoLabel(s.data)} · ${(s.horaInicio || "").replace(":", "h")} a ${(s.horaFim || "").replace(":", "h")}`;
 }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -638,7 +638,7 @@ function TableFooter({ page, perPage, total, note, onChange }: { page: number; p
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-t border-slate-100">
       <div>
-        <p className="text-xs text-slate-500">A mostrar <strong className="text-slate-700">{from}–{to}</strong> de <strong className="text-slate-700">{total.toLocaleString("pt-PT")}</strong></p>
+        <p className="text-xs text-slate-500">A mostrar <strong className="text-slate-700">{from} a {to}</strong> de <strong className="text-slate-700">{total.toLocaleString("pt-PT")}</strong></p>
         {note && <p className="text-xs text-slate-400 mt-0.5">{note}</p>}
       </div>
       <Pagination page={page} total={total} perPage={perPage} onChange={onChange} />
@@ -1129,7 +1129,7 @@ const docsTurmaGrupos: { id: string; label: string; color: string; icon: React.R
   { id: "turma", label: "Documentos da turma", color: "bg-amber-50 border-amber-200 text-amber-800", icon: I.school, items: [
     { label: "Programa de formação", detalhe: "Objetivos, conteúdos, metodologias e avaliação.", estado: "ok" },
     { label: "Regulamento de formação", detalhe: "Regulamento ENA aceite pelos formandos.", estado: "ok" },
-    { label: "Cronograma da turma", detalhe: "12 sábados · 09h–13h + 4 síncronas.", estado: "ok" },
+    { label: "Cronograma da turma", detalhe: "12 sábados · 09h a 13h + 4 síncronas.", estado: "ok" },
     { label: "Registo de ocorrências", detalhe: "Sem ocorrências registadas.", estado: "ok" },
     { label: "Relatório final da turma", detalhe: "Fecha o DTP.", estado: "falta", bloqueante: true },
   ]},

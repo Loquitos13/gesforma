@@ -405,7 +405,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
               <option value="inscrito">Mais recentes</option>
               <option value="proximo">Próximo contacto</option>
               <option value="valor">Valor</option>
-              <option value="nome">Nome A–Z</option>
+              <option value="nome">Nome A a Z</option>
               <option value="actividade">Última actividade</option>
             </select>
             {comerciais.length > 0 && (
@@ -601,7 +601,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-2.5 border-t border-slate-100">
               <p className="text-xs text-slate-500">
-                {busy ? "A actualizar…" : <>A mostrar <strong className="text-slate-700">{from}–{to}</strong> de <strong className="text-slate-700">{total.toLocaleString("pt-PT")}</strong> neste filtro</>}
+                {busy ? "A actualizar…" : <>A mostrar <strong className="text-slate-700">{from} a {to}</strong> de <strong className="text-slate-700">{total.toLocaleString("pt-PT")}</strong> neste filtro</>}
               </p>
               <div className="flex items-center gap-1">
                 <button type="button" disabled={page <= 1} onClick={() => setPage(1)} className="px-2 py-1 text-xs border rounded-lg disabled:opacity-40">«</button>

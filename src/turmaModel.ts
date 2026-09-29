@@ -196,7 +196,7 @@ export function formatHoraRange(inicio: string, fim: string) {
   const a = (inicio || "").replace(":", "h");
   const b = (fim || "").replace(":", "h");
   if (!a && !b) return "Horário por definir";
-  return `${a}–${b}`;
+  return `${a} a ${b}`;
 }
 
 export function sessaoDuracaoHoras(s: Pick<SessaoCronograma, "horaInicio" | "horaFim">) {
@@ -340,7 +340,7 @@ export function cronogramaToSessoes(c: SessaoCronograma[], today = hojeIso()): S
     return {
       n: i + 1,
       data: formatSessaoLabel(s.data),
-      hora: `${(s.horaInicio || "").replace(":", "h")}–${(s.horaFim || "").replace(":", "h")}`,
+      hora: `${(s.horaInicio || "").replace(":", "h")} a ${(s.horaFim || "").replace(":", "h")}`,
       formador: formadoresLabel(formadores, ""),
       formadores,
       estado: s.data && s.data < today ? "Realizada" : "Agendada",

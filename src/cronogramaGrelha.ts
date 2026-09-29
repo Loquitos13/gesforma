@@ -14,11 +14,11 @@ export type GrelhaLinha = {
 };
 
 export const LINHA_PRESETS: { label: string; linha: GrelhaLinha }[] = [
-  { label: "Presencial 11:00–13:00", linha: { id: "p-11-13", modalidade: "presencial", horaInicio: "11:00", horaFim: "13:00" } },
-  { label: "Presencial 09:00–13:30", linha: { id: "p-9-1330", modalidade: "presencial", horaInicio: "09:00", horaFim: "13:30" } },
-  { label: "Presencial 09:00–13:00", linha: { id: "p-9-13", modalidade: "presencial", horaInicio: "09:00", horaFim: "13:00" } },
-  { label: "Presencial 19:00–22:00", linha: { id: "p-19-22", modalidade: "presencial", horaInicio: "19:00", horaFim: "22:00" } },
-  { label: "Síncrona 10:00–11:30", linha: { id: "s-10-1130", modalidade: "sincrona", horaInicio: "10:00", horaFim: "11:30" } },
+  { label: "Presencial 11:00 a 13:00", linha: { id: "p-11-13", modalidade: "presencial", horaInicio: "11:00", horaFim: "13:00" } },
+  { label: "Presencial 09:00 a 13:30", linha: { id: "p-9-1330", modalidade: "presencial", horaInicio: "09:00", horaFim: "13:30" } },
+  { label: "Presencial 09:00 a 13:00", linha: { id: "p-9-13", modalidade: "presencial", horaInicio: "09:00", horaFim: "13:00" } },
+  { label: "Presencial 19:00 a 22:00", linha: { id: "p-19-22", modalidade: "presencial", horaInicio: "19:00", horaFim: "22:00" } },
+  { label: "Síncrona 10:00 a 11:30", linha: { id: "s-10-1130", modalidade: "sincrona", horaInicio: "10:00", horaFim: "11:30" } },
   { label: "Auto-aprendizagem", linha: { id: "auto", modalidade: "auto", horaInicio: "", horaFim: "" } },
 ];
 

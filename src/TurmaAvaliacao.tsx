@@ -226,7 +226,7 @@ export function TurmaAvaliacao({
           {!faltaParams && (
             <div className="flex flex-wrap gap-1.5 mt-2">
               <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${accentSoft}`}>
-                Escala {cfg.escalaMin}–{cfg.escalaMax} {cfg.unidade}
+                Escala {cfg.escalaMin} a {cfg.escalaMax} {cfg.unidade}
               </span>
               <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">
                 Aprovação ≥ {formatNota(cfg.minimoAprovacao, cfg.unidade)}
@@ -327,7 +327,7 @@ export function TurmaAvaliacao({
                                 } ${ring} focus:outline-none`}
                                 inputMode="decimal"
                                 value={shown}
-                                placeholder="—"
+                                placeholder="-"
                                 onFocus={() => setSel({ r0: r, c0: c, r1: r, c1: c })}
                                 onChange={e => {
                                   drafts.current[key] = e.target.value;

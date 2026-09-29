@@ -770,7 +770,7 @@ type Inquerito = { id: number; titulo: string; perguntas: Pergunta[] };
 const tipoLabels: Record<PerguntaTipo, string> = {
   texto: "Texto livre",
   multipla: "Escolha múltipla",
-  escala: "Escala 1–5",
+  escala: "Escala 1 a 5",
   simnao: "Sim / Não",
 };
 const tipoIcons: Record<PerguntaTipo, React.ReactNode> = {

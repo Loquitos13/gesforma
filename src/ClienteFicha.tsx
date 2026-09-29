@@ -63,7 +63,7 @@ export function ClienteFicha({
   const [dossier, setDossier] = useState<CrmDossier | null>(null);
   const [erro, setErro] = useState("");
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState<"actividade" | "dados" | "secretaria">("actividade");
+  const [tab, setTab] = useState<"actividade" | "dados" | "documentos" | "secretaria">("actividade");
   const [notaNova, setNotaNova] = useState("");
   const [meio, setMeio] = useState("Telefone");
   const [resultado, setResultado] = useState("");
@@ -270,7 +270,7 @@ export function ClienteFicha({
         )}
 
         <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
-          {([["actividade", "Actividade"], ["dados", "Dados"], ["secretaria", `Secretaria${falta.length ? ` (${falta.length})` : ""}`]] as const).map(([id, label]) => (
+          {([["actividade", "Actividade"], ["dados", "Dados"], ["documentos", "Documentos"], ["secretaria", `Secretaria${falta.length ? ` (${falta.length})` : ""}`]] as const).map(([id, label]) => (
             <button key={id} type="button" onClick={() => setTab(id)}
               className={`flex-1 py-1.5 text-xs font-semibold rounded-md ${tab === id ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}>
               {label}
@@ -420,6 +420,45 @@ export function ClienteFicha({
               <button type="button" disabled={!motivo} onClick={() => onPatch?.({ estado: "Desistiu", motivoDesistencia: motivo })}
                 className="w-full py-1.5 text-xs font-semibold rounded-lg border border-slate-300">Marcar desistência</button>
             </div>
+          </div>
+        )}
+
+        {tab === "documentos" && (
+          <div className="space-y-3">
+            {dossier?.docsUrl && (
+              <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">Ligação pessoal</p>
+                <p className="text-xs text-violet-900 break-all mt-1">{dossier.docsUrl}</p>
+                <button type="button" className="mt-2 text-xs font-semibold text-violet-800"
+                  onClick={() => void navigator.clipboard?.writeText(dossier.docsUrl ?? "")}>Copiar ligação</button>
+              </div>
+            )}
+            {dossier?.pagamento && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Pagamento</p>
+                <p className="text-slate-800 mt-1">Entidade {dossier.pagamento.entidade || "—"} · Ref. {dossier.pagamento.referencia}</p>
+                <p className="text-slate-700">€ {dossier.pagamento.valor.toLocaleString("pt-PT")} · {dossier.pagamento.estado}</p>
+              </div>
+            )}
+            {!!dossier?.docsEmFalta?.length && (
+              <p className="text-xs text-amber-800">Ainda falta: {dossier.docsEmFalta.join(", ")}</p>
+            )}
+            {(dossier?.documentos ?? []).length === 0 && (
+              <p className="text-sm text-slate-400">Ainda sem ficheiros nesta ficha. O formando envia-os pela ligação pessoal.</p>
+            )}
+            <ul className="space-y-2">
+              {(dossier?.documentos ?? []).map(d => (
+                <li key={d.id} className="rounded-lg border border-slate-200 px-3 py-2 flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-800">{d.label}</p>
+                    <p className="text-xs text-slate-500 truncate">{d.nome}</p>
+                  </div>
+                  {d.url
+                    ? <a href={d.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-amber-700 shrink-0">Abrir</a>
+                    : <span className="text-xs text-slate-400">no Drive</span>}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 

@@ -1,5 +1,6 @@
 import type { Db } from "./db/pool.js";
-import { mapPreinscricao } from "./ops.js";
+import { documentosUrl, docsDoCurso, docsCompletos, ensureDocsToken, listarDocsLead } from "./docsLink.js";
+import { mapPagamento, mapPreinscricao } from "./ops.js";
 
 export type CrmCampoTipo = "texto" | "numero" | "data" | "lista";
 
@@ -183,6 +184,33 @@ export async function getLeadDossier(db: Db, id: number) {
   );
 
   const cliente = lead.estado === "Formando" || lead.estado === "Pago";
+  const regime = String(row.regime ?? "gold") === "fin" ? "fin" : "gold";
+  const pedidos = await docsDoCurso(db, lead.curso, regime);
+  const ficheiros = await listarDocsLead(db, id);
+  const labels = new Map(pedidos.map(p => [p.id, p.label]));
+  labels.set("comprovativo", "Comprovativo de pagamento");
+  const { ok, emFalta } = docsCompletos(pedidos, ficheiros.map(f => f.tipo));
+  let docsUrl = "";
+  try { docsUrl = documentosUrl(await ensureDocsToken(db, id)); } catch { docsUrl = ""; }
+  let pagamento: { id: string; referencia: string; valor: number; estado: string; entidade: string } | null = null;
+  const pagId = String(row.pagamento_id ?? "");
+  if (pagId) {
+    const pag = await db.query("SELECT * FROM pagamentos WHERE id = $1", [pagId]);
+    if (pag.rows[0]) {
+      const mapped = mapPagamento(pag.rows[0] as Record<string, unknown>);
+      const settings = await db.query<{ values: unknown }>("SELECT values FROM app_settings WHERE id = 'gold'");
+      const values = settings.rows[0]?.values && typeof settings.rows[0].values === "object"
+        ? settings.rows[0].values as Record<string, string> : {};
+      const ref = mapped.referencia.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3") || mapped.referencia;
+      pagamento = {
+        id: mapped.id,
+        referencia: ref,
+        valor: mapped.valor,
+        estado: mapped.estado,
+        entidade: String(values["Entidade Multibanco"] ?? ""),
+      };
+    }
+  }
 
   return {
     lead,
@@ -214,6 +242,18 @@ export async function getLeadDossier(db: Db, id: number) {
       valor: Number(p.valor) || 0,
       enviadaEm: p.enviada_em ? iso(p.enviada_em) : "",
     })),
+    docsUrl,
+    docsCompletos: ok,
+    docsEmFalta: emFalta.map(d => d.label),
+    documentos: ficheiros.map(f => ({
+      id: f.id,
+      tipo: f.tipo,
+      label: labels.get(f.tipo) ?? f.tipo,
+      nome: f.nome,
+      url: f.drive_url || (f.drive_file_id ? `/api/v1/drive/files/${f.drive_file_id}/content` : ""),
+      createdAt: iso(f.created_at),
+    })),
+    pagamento,
   };
 }
 

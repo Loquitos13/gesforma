@@ -45,7 +45,7 @@ export type EmailTemplate = {
   body_xml?: string;
   cta?: string;
   cta_href?: string;
-  cta_ambito?: "preinscricao" | "contacto" | "documentos";
+  cta_ambito?: "preinscricao" | "contacto" | "documentos" | "pagamento";
   updated_at: string;
 };
 
@@ -501,7 +501,15 @@ export const apiAplicarTurmaRegras = (regime?: "gold" | "fin") =>
   });
 
 export const apiPublicDocumentos = (token: string) =>
-  api<{ nome: string; curso: string; tipos: { id: string; label: string }[]; ficheiros: { id: number; tipo: string; nome: string; created_at: string }[] }>(
+  api<{
+    nome: string; curso: string;
+    tipos: { id: string; label: string; required?: boolean }[];
+    ficheiros: { id: number; tipo: string; nome: string; created_at: string }[];
+    docsCompletos?: boolean;
+    emFalta?: string[];
+    precisaPagamento?: boolean;
+    pagamento?: { entidade: string; referencia: string; valor: number; estado: string } | null;
+  }>(
     `/v1/public/documentos/${encodeURIComponent(token)}`,
   );
 export async function apiPublicDocumentoUpload(token: string, file: File, tipo: string) {
@@ -566,7 +574,7 @@ export const apiDeleteRule = (id: number) =>
   api<{ ok: boolean }>(`/v1/email/rules/${id}`, { method: "DELETE" });
 
 export const apiEmailTemplates = () => api<{ templates: EmailTemplate[] }>("/v1/email/templates");
-export const apiPatchTemplate = (id: number, body: { nome?: string; assunto?: string; body_lines?: string[]; body_xml?: string; cta?: string; cta_href?: string; cta_ambito?: "preinscricao" | "contacto" | "documentos" }) =>
+export const apiPatchTemplate = (id: number, body: { nome?: string; assunto?: string; body_lines?: string[]; body_xml?: string; cta?: string; cta_href?: string; cta_ambito?: "preinscricao" | "contacto" | "documentos" | "pagamento" }) =>
   api<{ template: EmailTemplate }>(`/v1/email/templates/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 
 export const apiOps = () => api<OpsSnapshot>("/v1/ops");
@@ -691,6 +699,11 @@ export type CrmDossier = {
   eventos: CrmLeadEvento[];
   outrosPedidos: CrmLead[];
   propostas: { id: number; curso: string; estado: string; valor: number; enviadaEm: string }[];
+  docsUrl?: string;
+  docsCompletos?: boolean;
+  docsEmFalta?: string[];
+  documentos?: { id: number; tipo: string; label: string; nome: string; url: string; createdAt: string }[];
+  pagamento?: { id: string; referencia: string; valor: number; estado: string; entidade: string } | null;
 };
 
 export const apiCrmDossier = (id: number) => api<CrmDossier>(`/v1/crm/leads/${id}`);

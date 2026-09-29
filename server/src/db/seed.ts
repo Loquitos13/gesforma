@@ -13,10 +13,21 @@ const TEMPLATES = [
     assunto: "Bem-vindo(a) à ENA, {{nome}}",
     linhas: [
       "Confirmámos o seu interesse em {{curso}}.",
-      "Use a ligação pessoal abaixo para enviar os documentos de cada formando (CC, contrato e restantes ficheiros).",
-      "A secretaria da ENA contacta-o em breve para confirmar horário, turma e pagamento.",
+      "Use a ligação pessoal abaixo para enviar os documentos pedidos neste curso: {{documentos_lista}}.",
+      "Depois de os recebermos, enviamos a referência Multibanco para pagamento.",
     ],
     cta: "Enviar documentos",
+  },
+  {
+    tipo: "pagamento_ref",
+    nome: "Referência de pagamento",
+    assunto: "Pagamento de {{curso}} · referência {{referencia}}",
+    linhas: [
+      "Recebemos os documentos de {{curso}}.",
+      "Pague por Multibanco: entidade {{entidade}}, referência {{referencia}}, valor € {{valor}}.",
+      "Em seguida anexe o comprovativo na mesma ligação pessoal.",
+    ],
+    cta: "Anexar comprovativo",
   },
   {
     tipo: "payment",
@@ -87,6 +98,7 @@ const TEMPLATES = [
 const RULES = [
   { nome: "Boas-vindas ao registo", gatilho: "Nova pré-inscrição recebida", key: "preinscricao.created", tipo: "welcome", delay: 0 },
   { nome: "Documentos na pré-inscrição", gatilho: "Lead passou a pré-inscrito", key: "preinscricao.promoted", tipo: "welcome", delay: 0 },
+  { nome: "Referência após documentos", gatilho: "Documentos da pré-inscrição submetidos", key: "preinscricao.docs_completos", tipo: "pagamento_ref", delay: 0 },
   { nome: "Lembrete sem pagamento (3 dias)", gatilho: "Pré-inscrição sem pagamento há 3 dias", key: "preinscricao.unpaid_3d", tipo: "unpaid_3d", delay: 0 },
   { nome: "Confirmação de pagamento", gatilho: "Pagamento confirmado", key: "payment.confirmed", tipo: "payment", delay: 0 },
   { nome: "Contacto após a venda", gatilho: "Contacto após a venda", key: "sale.followup", tipo: "sale_followup", delay: 3600 },

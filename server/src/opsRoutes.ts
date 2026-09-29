@@ -30,7 +30,7 @@ import { config } from "./config.js";
 import { criarPreinscricaoPublica } from "./preinscricaoPublica.js";
 import { listCursosGoldActivos, listOfertaGold } from "./ofertaGold.js";
 import { generateCronograma } from "./cronograma.js";
-import { firePreinscricaoEmail, notificarDocumentos } from "./docsLink.js";
+import { COMPROVATIVO, firePreinscricaoEmail, listarDocsLead, maybeEnviarPagamentoAposDocs, notificarDocumentos, popularFichaPessoa, docsDoCurso, docsCompletos } from "./docsLink.js";
 import { storeDriveFile } from "./googleDrive.js";
 import { aplicarTurmaRegras, listTurmaRegras } from "./turmaRegras.js";
 import { camposEmFalta, estadoPodeEntregar, podeArrastar } from "./crmRegras.js";
@@ -623,30 +623,44 @@ export function registerOpsRoutes(
     return { ok: true };
   });
 
-  const DOCS_PUBLICOS = [
-    { id: "cc", label: "Cartão de Cidadão" },
-    { id: "contrato", label: "Contrato de formação" },
-    { id: "nif", label: "Comprovativo de NIF / morada" },
-    { id: "iban", label: "IBAN" },
-    { id: "outro", label: "Outro documento" },
-  ];
+  const DOCS_PUBLICOS = COMPROVATIVO;
 
   app.get("/v1/public/documentos/:token", {
     config: { rateLimit: { max: 40, timeWindow: "1 minute" } },
   }, async (req, reply) => {
     const token = String((req.params as { token: string }).token ?? "");
     if (token.length < 12) return reply.code(400).send({ error: "ligação inválida" });
-    const lead = await one(db, "SELECT id, nome, apelido, curso, email FROM preinscricoes WHERE docs_token = $1", [token]);
+    const lead = await one(db, "SELECT * FROM preinscricoes WHERE docs_token = $1", [token]);
     if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
-    const docs = await db.query<{ id: number; tipo: string; nome: string; created_at: string }>(
-      "SELECT id, tipo, nome, created_at FROM preinscricao_docs WHERE preinscricao_id = $1 ORDER BY created_at",
-      [lead.id],
-    );
+    const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
+    const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime);
+    const docs = await listarDocsLead(db, Number(lead.id));
+    const { ok, emFalta } = docsCompletos(pedidos, docs.map(d => d.tipo));
+    let pagamento: { entidade: string; referencia: string; valor: number; estado: string } | null = null;
+    if (lead.pagamento_id) {
+      const pag = await one(db, "SELECT * FROM pagamentos WHERE id = $1", [String(lead.pagamento_id)]);
+      if (pag) {
+        const settings = await one(db, "SELECT values FROM app_settings WHERE id = $1", ["gold"]);
+        const values = settings?.values && typeof settings.values === "object" ? settings.values as Record<string, string> : {};
+        const ref = String(pag.referencia ?? "");
+        pagamento = {
+          entidade: String(values["Entidade Multibanco"] ?? ""),
+          referencia: ref.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3") || ref,
+          valor: Number(pag.valor) || 0,
+          estado: String(pag.estado ?? "Pendente"),
+        };
+      }
+    }
+    const tipos = ok ? [...pedidos, COMPROVATIVO] : pedidos;
     return {
       nome: `${lead.nome} ${lead.apelido}`.trim(),
       curso: lead.curso,
-      tipos: DOCS_PUBLICOS,
-      ficheiros: docs.rows,
+      tipos,
+      ficheiros: docs,
+      docsCompletos: ok,
+      emFalta: emFalta.map(d => d.label),
+      pagamento,
+      precisaPagamento: regime === "gold" && Number(lead.preco) > 0,
     };
   });
 
@@ -655,7 +669,7 @@ export function registerOpsRoutes(
   }, async (req, reply) => {
     const token = String((req.params as { token: string }).token ?? "");
     if (token.length < 12) return reply.code(400).send({ error: "ligação inválida" });
-    const lead = await one(db, "SELECT id, nome, apelido, curso FROM preinscricoes WHERE docs_token = $1", [token]);
+    const lead = await one(db, "SELECT * FROM preinscricoes WHERE docs_token = $1", [token]);
     if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
     let name = "ficheiro";
     let mime = "application/octet-stream";
@@ -674,20 +688,37 @@ export function registerOpsRoutes(
       return reply.code(400).send({ error: "upload inválido" });
     }
     if (!bytes) return reply.code(400).send({ error: "ficheiro em falta" });
+    const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
+    const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime);
+    const permitido = new Set([...pedidos.map(p => p.id), COMPROVATIVO.id, "outro"]);
+    if (!permitido.has(tipo)) tipo = "outro";
     try {
       const file = await storeDriveFile(db, undefined, { name, mime, bytes }, {
-        kind: "preinscricao-doc",
-        regime: "gold",
+        kind: tipo === "comprovativo" ? "comprovativo-pagamento" : "preinscricao-doc",
+        regime,
         formando: `${lead.nome} ${lead.apelido}`.trim(),
         label: tipo,
         itemId: String(lead.id),
       });
       await db.query(
-        "INSERT INTO preinscricao_docs (preinscricao_id, tipo, nome, drive_file_id) VALUES ($1,$2,$3,$4)",
-        [lead.id, tipo, file.name, file.id],
+        "INSERT INTO preinscricao_docs (preinscricao_id, tipo, nome, drive_file_id, drive_url) VALUES ($1,$2,$3,$4,$5)",
+        [lead.id, tipo, file.name, file.id, file.openUrl ?? ""],
       );
-      await logLeadEvent(db, Number(lead.id), undefined, "campo", `Documento recebido · ${tipo}`, file.name);
-      return { ok: true, nome: file.name };
+      const pessoa = {
+        id: Number(lead.id),
+        email: String(lead.email ?? ""),
+        nome: String(lead.nome ?? ""),
+        apelido: String(lead.apelido ?? ""),
+        curso: String(lead.curso ?? ""),
+        regime,
+      };
+      await popularFichaPessoa(db, pessoa, {
+        tipo, nome: file.name, driveFileId: file.id, driveUrl: file.openUrl ?? "",
+      });
+      const titulo = tipo === "comprovativo" ? "Comprovativo de pagamento na ficha" : `Documento na ficha · ${tipo}`;
+      await logLeadEvent(db, Number(lead.id), undefined, "campo", titulo, file.name);
+      const pagMail = await maybeEnviarPagamentoAposDocs(db, Number(lead.id));
+      return { ok: true, nome: file.name, pagamentoEnviado: Boolean(pagMail && "enviou" in pagMail && pagMail.enviou) };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : "upload recusado" });
     }

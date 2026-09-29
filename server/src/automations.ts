@@ -68,6 +68,11 @@ export async function ingestEvent(
   const vars = buildCtaVars({
     nome, email, curso, turma,
     documentosUrl: String(payload.documentos_url ?? ""),
+    comprovativoUrl: String(payload.comprovativo_url ?? ""),
+    referencia: String(payload.referencia ?? ""),
+    entidade: String(payload.entidade ?? ""),
+    valor: String(payload.valor ?? ""),
+    documentosLista: String(payload.documentos_lista ?? ""),
   });
   let queued = 0;
   for (const rule of rules.rows) {
@@ -192,9 +197,7 @@ async function enqueueTurmaReminders(db: Db) {
   }
 }
 
-export async function processDueJobs(db: Db, limit = 20) {
-  await enqueueTurmaReminders(db).catch(() => undefined);
-  await enqueueCrmReminders(db).catch(() => undefined);
+export async function flushQueuedJobs(db: Db, limit = 20) {
   const due = await db.query<{
     id: string;
     to_email: string;
@@ -236,4 +239,10 @@ export async function processDueJobs(db: Db, limit = 20) {
     }
   }
   return { picked: due.rows.length, sent, failed };
+}
+
+export async function processDueJobs(db: Db, limit = 20) {
+  await enqueueTurmaReminders(db).catch(() => undefined);
+  await enqueueCrmReminders(db).catch(() => undefined);
+  return flushQueuedJobs(db, limit);
 }

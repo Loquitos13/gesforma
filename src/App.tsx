@@ -267,7 +267,9 @@ type EmailTpl = {
 };
 
 const emailGatilhosOpts = [
-  { value: "Nova pré-inscrição recebida", sub: "Lead em Não contactado · email de boas-vindas" },
+  { value: "Nova pré-inscrição recebida", sub: "Email com ligação única para os documentos do curso" },
+  { value: "Lead passou a pré-inscrito", sub: "Volta a enviar a ligação de documentos" },
+  { value: "Documentos da pré-inscrição submetidos", sub: "Referência Multibanco + comprovativo" },
   { value: "1.º contacto registado", sub: "Secretaria marca 1.º Contacto (email opcional)" },
   { value: "Pré-inscrição sem pagamento há 3 dias", sub: "Passa a 2.º Contacto · lembrete de cobrança" },
   { value: "Pagamento confirmado", sub: "Passa a Pago · comprovativo" },
@@ -290,12 +292,23 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
     assunto: "Bem-vindo(a) à ENA, {{nome}}",
     linhas: [
       "Confirmámos o seu interesse em {{curso}}.",
-      "A secretaria da ENA contacta-o em breve para confirmar horário, turma e pagamento.",
-      "Não precisa de fazer mais nada neste momento. Se tiver urgência, responda a este email.",
+      "Use a ligação abaixo para enviar: {{documentos_lista}}.",
+      "Depois de os recebermos, enviamos a referência de pagamento.",
     ],
-    cta: "Responder à secretaria",
+    cta: "Enviar documentos",
     ctaHref: ctaDestino("welcome").href,
     ctaAmbito: ctaDestino("welcome").ambito,
+  },
+  pagamento_ref: {
+    assunto: "Pagamento de {{curso}} · referência {{referencia}}",
+    linhas: [
+      "Recebemos os documentos de {{curso}}.",
+      "Pague por Multibanco: entidade {{entidade}}, referência {{referencia}}, valor € {{valor}}.",
+      "Anexe o comprovativo na ligação pessoal.",
+    ],
+    cta: "Anexar comprovativo",
+    ctaHref: ctaDestino("pagamento_ref").href,
+    ctaAmbito: ctaDestino("pagamento_ref").ambito,
   },
   payment: {
     assunto: "Pagamento confirmado: {{curso}}",
@@ -4168,6 +4181,7 @@ function EmailsView() {
                     {([
                       { id: "preinscricao" as const, title: "Pré-inscrição", sub: "Formulário público. A secretaria contacta a seguir." },
                       { id: "documentos" as const, title: "Link de documentos", sub: "Ligação pessoal {{documentos_url}} para enviar ficheiros." },
+                      { id: "pagamento" as const, title: "Comprovativo", sub: "Ligação {{comprovativo_url}} para anexar o pagamento." },
                       { id: "contacto" as const, title: "Contacto da secretaria", sub: "Email formacao@ena.pt - sem área de formando." },
                     ]).map(opt => (
                       <button

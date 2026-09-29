@@ -1,4 +1,4 @@
-import { firePreinscricaoEmail } from "./docsLink.js";
+import { firePreinscricaoEmail, maybeEnviarPagamentoAposDocs } from "./docsLink.js";
 import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
 import { mapPreinscricao, nextOpsId } from "./ops.js";
@@ -56,10 +56,14 @@ export async function criarPreinscricaoPublica(
   );
   if (dup.rows[0]) {
     const row = dup.rows[0] as Record<string, unknown>;
+    const existingId = Number(row.id);
+    await firePreinscricaoEmail(db, {
+      id: existingId, email, nome: String(row.nome ?? input.nome), apelido: String(row.apelido ?? ""), curso: String(row.curso ?? curso),
+    }, "preinscricao.created", `preinscricao:${existingId}:${email}`).catch(() => undefined);
     return {
       duplicado: true as const,
       preinscricao: mapPreinscricao(row),
-      aviso: `Já temos o pedido ${row.id} (${row.estado}). A secretaria trata do seguimento.`,
+      aviso: `Já temos o pedido ${row.id} (${row.estado}). Reenviámos a ligação para os documentos.`,
     };
   }
 
@@ -77,12 +81,13 @@ export async function criarPreinscricaoPublica(
   );
   const detalhe = [origem, curso, local, horario, inicio !== "-" ? inicio : ""].filter(Boolean).join(" · ");
   await firePreinscricaoEmail(db, { id, email, nome: input.nome, apelido: input.apelido, curso }, "preinscricao.created", `preinscricao:${id}:${email}`).catch(() => undefined);
+  await maybeEnviarPagamentoAposDocs(db, id).catch(() => undefined);
   await logLeadEvent(db, id, undefined, "criacao", "Pré-inscrição recebida", detalhe);
   const row = await db.query("SELECT * FROM preinscricoes WHERE id = $1", [id]);
   return {
     duplicado: false as const,
     preinscricao: row.rows[0] ? mapPreinscricao(row.rows[0] as Record<string, unknown>) : { id },
-    aviso: "A secretaria contacta-o em breve.",
+    aviso: "Enviámos um email com a ligação para submeter os documentos do curso.",
     ip: meta.ip,
   };
 }

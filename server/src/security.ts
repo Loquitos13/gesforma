@@ -73,7 +73,7 @@ export function delayLabelFromSeconds(sec: number) {
 
 export const TRIGGER_MAP: Record<string, string> = {
   "Nova pré-inscrição recebida": "preinscricao.created",
-  "Lead passou a pré-inscrito": "preinscricao.promoted",
+  "Documentos da pré-inscrição submetidos": "preinscricao.docs_completos",
   "1.º contacto registado": "preinscricao.contacted",
   "Pré-inscrição sem pagamento há 3 dias": "preinscricao.unpaid_3d",
   "Pagamento confirmado": "payment.confirmed",
@@ -87,6 +87,7 @@ export const TRIGGER_MAP: Record<string, string> = {
 export const EVENT_ALIASES: Record<string, string[]> = {
   "preinscricao.created": ["preinscricao.created"],
   "preinscricao.promoted": ["preinscricao.promoted", "preinscricao.created"],
+  "preinscricao.docs_completos": ["preinscricao.docs_completos"],
   "preinscricao.contacted": ["preinscricao.contacted"],
   "payment.confirmed": ["payment.confirmed", "sale.followup"],
   "sale.followup": ["sale.followup"],

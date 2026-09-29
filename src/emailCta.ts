@@ -1,4 +1,4 @@
-export type CtaAmbito = "preinscricao" | "contacto";
+export type CtaAmbito = "preinscricao" | "contacto" | "documentos";
 
 export type CtaDestino = {
   ambito: CtaAmbito;
@@ -16,9 +16,9 @@ function appOrigin() {
 
 export const CTA_BY_TIPO: Record<string, CtaDestino> = {
   welcome: {
-    ambito: "contacto",
-    href: SECRETARIA_HREF,
-    funcao: "Abrir o email da secretaria",
+    ambito: "documentos",
+    href: "{{documentos_url}}",
+    funcao: "Enviar os documentos da pré-inscrição",
   },
   payment: {
     ambito: "contacto",
@@ -53,7 +53,7 @@ export const CTA_BY_TIPO: Record<string, CtaDestino> = {
 };
 
 export function isCtaAmbito(value: string | undefined): value is CtaAmbito {
-  return value === "preinscricao" || value === "contacto";
+  return value === "preinscricao" || value === "contacto" || value === "documentos";
 }
 
 export function ctaDestino(tipo: string): CtaDestino {
@@ -65,16 +65,20 @@ export function ctaDestino(tipo: string): CtaDestino {
 }
 
 export function ctaAmbitoLabel(ambito: CtaAmbito) {
-  return ambito === "preinscricao" ? "Pré-inscrição" : "Contacto da secretaria";
+  if (ambito === "preinscricao") return "Pré-inscrição";
+  if (ambito === "documentos") return "Link de documentos";
+  return "Contacto da secretaria";
 }
 
 export function hrefForAmbito(tipo: string, ambito: CtaAmbito) {
   const def = ctaDestino(tipo);
   if (def.ambito === ambito) return def.href;
-  return ambito === "preinscricao" ? "{{preinscricao_url}}" : SECRETARIA_HREF;
+  if (ambito === "preinscricao") return "{{preinscricao_url}}";
+  if (ambito === "documentos") return "{{documentos_url}}";
+  return SECRETARIA_HREF;
 }
 
-export function buildCtaVars(p: { nome: string; email: string; curso: string; turma: string }) {
+export function buildCtaVars(p: { nome: string; email: string; curso: string; turma: string; documentosUrl?: string }) {
   const q = new URLSearchParams({ email: p.email, curso: p.curso, turma: p.turma });
   return {
     nome: p.nome,
@@ -82,13 +86,14 @@ export function buildCtaVars(p: { nome: string; email: string; curso: string; tu
     curso: p.curso,
     turma: p.turma,
     preinscricao_url: `${appOrigin()}/pre-inscricao?${q.toString()}`,
+    documentos_url: p.documentosUrl || `${appOrigin()}/pre-inscricao?${q.toString()}`,
     secretaria_url: SECRETARIA_HREF,
   };
 }
 
 export function fillCtaHref(href: string, vars: Record<string, string>) {
   return href.replace(/\{\{(\w+)\}\}/g, (_, k: string) => {
-    if (k === "preinscricao_url" || k === "secretaria_url") return vars[k] ?? "";
+    if (k === "preinscricao_url" || k === "secretaria_url" || k === "documentos_url") return vars[k] ?? "";
     return encodeURIComponent(vars[k] ?? "");
   });
 }

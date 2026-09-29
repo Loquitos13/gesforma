@@ -45,7 +45,7 @@ export type EmailTemplate = {
   body_xml?: string;
   cta?: string;
   cta_href?: string;
-  cta_ambito?: "preinscricao" | "contacto";
+  cta_ambito?: "preinscricao" | "contacto" | "documentos";
   updated_at: string;
 };
 
@@ -459,9 +459,65 @@ export type Dashboard = {
   funil: { l: string; v: number }[];
   conhecimento: { id: string; fonte: string; curto: string; detalhe: string; color: string; n: number; pct: number }[];
   topCursos: { nome: string; inscritos: number; receita: number; taxa: number | null }[];
+  desagregar?: "curso" | "local" | "horario";
+  desagregacao?: { chave: string; n: number; receita: number; pct: number }[];
+  precos?: { curso: string; local: string; horario: string; inicio: string; preco: number }[];
+  receitaMesCursos?: { nome: string; receita: number; pct: number; color: string }[];
+  mesSeleccionado?: string;
+  filtros?: { cursos: string[]; locais: string[]; horarios: string[] };
 };
-export const apiDashboard = (regime?: "gold" | "fin") =>
-  api<Dashboard>(regime ? `/v1/dashboard?regime=${regime}` : "/v1/dashboard");
+export type DashboardQuery = {
+  regime?: "gold" | "fin";
+  de?: string; ate?: string; curso?: string; local?: string; horario?: string;
+  audiencia?: "todos" | "pre" | "formandos";
+  desagregar?: "curso" | "local" | "horario";
+  mes?: string;
+};
+export const apiDashboard = (q: DashboardQuery = {}) => {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(q)) {
+    if (v) p.set(k, v);
+  }
+  const qs = p.toString();
+  return api<Dashboard>(`/v1/dashboard${qs ? `?${qs}` : ""}`);
+};
+
+export type TurmaRegra = {
+  id: number; regime: "gold" | "fin"; curso: string; local: string; horario: string;
+  vagas: number; horas: number; horasSessao: number; formador: string;
+  proximaData: string; nomePrefixo: string; activa: boolean;
+};
+export const apiTurmaRegras = (regime?: "gold" | "fin") =>
+  api<{ regras: TurmaRegra[] }>(`/v1/turma-regras${regime ? `?regime=${regime}` : ""}`);
+export const apiCreateTurmaRegra = (body: Record<string, unknown>) =>
+  api<{ id: number }>("/v1/turma-regras", { method: "POST", body: JSON.stringify(body) });
+export const apiPatchTurmaRegra = (id: number, body: Record<string, unknown>) =>
+  api<{ ok: boolean }>(`/v1/turma-regras/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+export const apiDeleteTurmaRegra = (id: number) =>
+  api<{ ok: boolean }>(`/v1/turma-regras/${id}`, { method: "DELETE" });
+export const apiAplicarTurmaRegras = (regime?: "gold" | "fin") =>
+  api<{ n: number; criadas: { id: number; nome: string; regime: string }[] }>("/v1/turmas/auto-regras", {
+    method: "POST", body: JSON.stringify({ regime }),
+  });
+
+export const apiPublicDocumentos = (token: string) =>
+  api<{ nome: string; curso: string; tipos: { id: string; label: string }[]; ficheiros: { id: number; tipo: string; nome: string; created_at: string }[] }>(
+    `/v1/public/documentos/${encodeURIComponent(token)}`,
+  );
+export async function apiPublicDocumentoUpload(token: string, file: File, tipo: string) {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("tipo", tipo);
+  const headers = new Headers();
+  headers.set("Accept", "application/json");
+  headers.set("X-Gesforma-Client", "web");
+  const res = await fetch(`${BASE}/v1/public/documentos/${encodeURIComponent(token)}`, {
+    method: "POST", credentials: "include", headers, body: fd,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, typeof data.error === "string" ? data.error : "upload recusado");
+  return data as { ok: boolean; nome: string };
+}
 
 export type Notificacao = {
   chave: string;
@@ -510,7 +566,7 @@ export const apiDeleteRule = (id: number) =>
   api<{ ok: boolean }>(`/v1/email/rules/${id}`, { method: "DELETE" });
 
 export const apiEmailTemplates = () => api<{ templates: EmailTemplate[] }>("/v1/email/templates");
-export const apiPatchTemplate = (id: number, body: { nome?: string; assunto?: string; body_lines?: string[]; body_xml?: string; cta?: string; cta_href?: string; cta_ambito?: "preinscricao" | "contacto" }) =>
+export const apiPatchTemplate = (id: number, body: { nome?: string; assunto?: string; body_lines?: string[]; body_xml?: string; cta?: string; cta_href?: string; cta_ambito?: "preinscricao" | "contacto" | "documentos" }) =>
   api<{ template: EmailTemplate }>(`/v1/email/templates/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 
 export const apiOps = () => api<OpsSnapshot>("/v1/ops");

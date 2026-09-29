@@ -262,6 +262,12 @@ export function ClienteFicha({
                 className="flex-1 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg text-center">WhatsApp</a>
             : <span className="flex-1 py-2 bg-slate-100 text-slate-400 text-sm font-semibold rounded-lg text-center">Sem WA</span>}
         </div>
+        {lead.estado !== "Pré-inscrição" && lead.estado !== "Formando" && lead.estado !== "Desistiu" && (
+          <button type="button" onClick={() => onPatch?.({ estado: "Pré-inscrição" })}
+            className="w-full py-2 bg-violet-600 text-white text-sm font-semibold rounded-lg">
+            Passar a pré-inscrito
+          </button>
+        )}
 
         <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
           {([["actividade", "Actividade"], ["dados", "Dados"], ["secretaria", `Secretaria${falta.length ? ` (${falta.length})` : ""}`]] as const).map(([id, label]) => (

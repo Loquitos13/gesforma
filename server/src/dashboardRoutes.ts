@@ -274,6 +274,75 @@ async function buildNotificacoes(db: Db, actorId: string): Promise<Notificacao[]
 
 const lidasSchema = z.object({ chaves: z.array(z.string().min(1).max(120)).max(60) });
 
+const dashQuery = z.object({
+  regime: z.enum(["gold", "fin"]).optional(),
+  de: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  ate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  curso: z.string().max(200).optional(),
+  local: z.string().max(120).optional(),
+  horario: z.string().max(80).optional(),
+  audiencia: z.enum(["todos", "pre", "formandos"]).optional(),
+  desagregar: z.enum(["curso", "local", "horario"]).optional(),
+  mes: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+});
+
+function leadAt(alias = "p") {
+  return `CASE
+    WHEN ${alias}.inscrito ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN to_timestamp(substring(${alias}.inscrito from 1 for 16), 'YYYY-MM-DD HH24:MI')
+    ELSE ${alias}.created_at
+  END`;
+}
+
+function payDate(alias = "pg") {
+  return `CASE
+    WHEN ${alias}.data ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN substring(${alias}.data from 1 for 10)
+    ELSE NULL
+  END`;
+}
+
+type Filter = {
+  regime?: "gold" | "fin";
+  de?: string;
+  ate?: string;
+  curso?: string;
+  local?: string;
+  horario?: string;
+  audiencia: "todos" | "pre" | "formandos";
+  desagregar: "curso" | "local" | "horario";
+  mes?: string;
+};
+
+function parseFiltro(q: unknown): Filter {
+  const p = dashQuery.safeParse(q);
+  const d = p.success ? p.data : {};
+  return {
+    regime: d.regime,
+    de: d.de,
+    ate: d.ate,
+    curso: d.curso?.trim() || undefined,
+    local: d.local?.trim() || undefined,
+    horario: d.horario?.trim() || undefined,
+    audiencia: d.audiencia ?? "todos",
+    desagregar: d.desagregar ?? "curso",
+    mes: d.mes,
+  };
+}
+
+function leadWhere(f: Filter) {
+  const conds: string[] = ["true"];
+  const params: unknown[] = [];
+  let i = 1;
+  if (f.regime) { conds.push(`p.regime = $${i}`); params.push(f.regime); i += 1; }
+  if (f.de) { conds.push(`(${leadAt("p")})::date >= $${i}::date`); params.push(f.de); i += 1; }
+  if (f.ate) { conds.push(`(${leadAt("p")})::date <= $${i}::date`); params.push(f.ate); i += 1; }
+  if (f.curso) { conds.push(`p.curso = $${i}`); params.push(f.curso); i += 1; }
+  if (f.local) { conds.push(`p.local = $${i}`); params.push(f.local); i += 1; }
+  if (f.horario) { conds.push(`p.horario = $${i}`); params.push(f.horario); i += 1; }
+  if (f.audiencia === "pre") conds.push(`p.estado IN ('Pré-inscrição','Não contactado','1º Contacto','2º Contacto','Pago')`);
+  if (f.audiencia === "formandos") conds.push(`p.estado = 'Formando'`);
+  return { sql: conds.join(" AND "), params };
+}
+
 export function registerDashboardRoutes(
   app: FastifyInstance,
   db: Db,
@@ -283,53 +352,147 @@ export function registerDashboardRoutes(
 
   app.get("/v1/dashboard", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    const rawRegime = String((req.query as { regime?: string } | undefined)?.regime ?? "");
-    const regime = rawRegime === "gold" || rawRegime === "fin" ? rawRegime : "";
     const now = new Date();
-    const leadWhere = regime ? `WHERE regime = '${regime}'` : "";
-    const leadAnd = regime ? `AND regime = '${regime}'` : "";
+    const f = parseFiltro(req.query);
+    const lw = leadWhere(f);
+    const payConds = ["true"];
+    const payParams: unknown[] = [];
+    let pi = 1;
+    if (f.de) { payConds.push(`${payDate("pg")} >= $${pi}`); payParams.push(f.de); pi += 1; }
+    if (f.ate) { payConds.push(`${payDate("pg")} <= $${pi}`); payParams.push(f.ate); pi += 1; }
+    if (f.curso) { payConds.push(`pg.curso = $${pi}`); payParams.push(f.curso); pi += 1; }
     const cursoFinMatch = `EXISTS (
       SELECT 1 FROM cursos_fin c
-       WHERE lower(trim(c.nome_comercial)) = lower(trim(pagamentos.curso))
-          OR lower(trim(c.ufcd)) = lower(trim(pagamentos.curso))
+       WHERE lower(trim(c.nome_comercial)) = lower(trim(pg.curso))
+          OR lower(trim(c.ufcd)) = lower(trim(pg.curso))
     )`;
-    const payWhere = regime === "fin" ? `WHERE ${cursoFinMatch}` : regime === "gold" ? `WHERE NOT ${cursoFinMatch}` : "";
-    const payAnd = regime === "fin" ? `AND ${cursoFinMatch}` : regime === "gold" ? `AND NOT ${cursoFinMatch}` : "";
-    const [counts, pagamentosRows, origens, cursosPorReceita, leadsPorCurso] = await Promise.all([
+    if (f.regime === "fin") payConds.push(cursoFinMatch);
+    if (f.regime === "gold") payConds.push(`NOT ${cursoFinMatch}`);
+    const payJoin = (f.local || f.horario || f.audiencia !== "todos")
+      ? `LEFT JOIN preinscricoes p ON (NULLIF(pg.email,'') IS NOT NULL AND lower(p.email) = lower(pg.email))`
+      : "";
+    if (f.local) { payConds.push(`COALESCE(p.local, fg.local, '') = $${pi}`); payParams.push(f.local); pi += 1; }
+    if (f.horario) { payConds.push(`COALESCE(p.horario, tg.horario, '') = $${pi}`); payParams.push(f.horario); pi += 1; }
+    if (f.audiencia === "pre") payConds.push(`(p.id IS NULL OR p.estado <> 'Formando')`);
+    if (f.audiencia === "formandos") payConds.push(`(p.estado = 'Formando' OR fg.id IS NOT NULL)`);
+    const pieMesIdx = pi;
+    const pieParams = [...payParams, `${f.mes ?? monthKey(now)}%`];
+
+    const [counts, pagamentosRows, origens, cursosPorReceita, leadsPorCurso, desag, filtros, precos, pieCursos] = await Promise.all([
       db.query<{
         preinscritos: number; contactados: number; formandos_gold: number; formandos_fin: number;
         turmas_gold_ativas: number; turmas_gold: number; turmas_fin_ativas: number; turmas_fin: number;
         cursos_gold: number; cursos_fin: number;
       }>(
         `SELECT
-           (SELECT count(*)::int FROM preinscricoes ${leadWhere}) AS preinscritos,
-           (SELECT count(*)::int FROM preinscricoes WHERE contactado_em IS NOT NULL ${leadAnd}) AS contactados,
-           (SELECT count(*)::int FROM formandos_gold) AS formandos_gold,
-           (SELECT count(*)::int FROM formandos_fin) AS formandos_fin,
-           (SELECT count(*)::int FROM turmas_gold WHERE estado = 'Ativa') AS turmas_gold_ativas,
-           (SELECT count(*)::int FROM turmas_gold) AS turmas_gold,
-           (SELECT count(*)::int FROM turmas_fin WHERE activa = true) AS turmas_fin_ativas,
-           (SELECT count(*)::int FROM turmas_fin) AS turmas_fin,
-           (SELECT count(*)::int FROM cursos_gold WHERE estado = 'Ativo') AS cursos_gold,
-           (SELECT count(*)::int FROM cursos_fin WHERE estado = 'Ativo') AS cursos_fin`,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.estado <> 'Formando') AS preinscritos,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.contactado_em IS NOT NULL) AS contactados,
+           (SELECT count(*)::int FROM formandos_gold fg
+              WHERE ($1::text IS NULL OR fg.curso = $1)
+                AND ($2::text IS NULL OR fg.local = $2)
+                AND ($3::text IS NULL OR EXISTS (SELECT 1 FROM turmas_gold tg WHERE tg.id = fg.turma_id AND tg.horario = $3))
+                AND ($4::text IS NULL OR substring(fg.inscrito from 1 for 10) >= $4)
+                AND ($5::text IS NULL OR substring(fg.inscrito from 1 for 10) <= $5)
+           ) AS formandos_gold,
+           (SELECT count(*)::int FROM formandos_fin ff
+              WHERE ($1::text IS NULL OR ff.curso = $1)
+           ) AS formandos_fin,
+           (SELECT count(*)::int FROM turmas_gold WHERE estado = 'Ativa'
+              AND ($1::text IS NULL OR curso = $1) AND ($2::text IS NULL OR local = $2) AND ($3::text IS NULL OR horario = $3)) AS turmas_gold_ativas,
+           (SELECT count(*)::int FROM turmas_gold
+              WHERE ($1::text IS NULL OR curso = $1) AND ($2::text IS NULL OR local = $2) AND ($3::text IS NULL OR horario = $3)) AS turmas_gold,
+           (SELECT count(*)::int FROM turmas_fin WHERE activa = true
+              AND ($1::text IS NULL OR curso = $1) AND ($2::text IS NULL OR local = $2) AND ($3::text IS NULL OR horario = $3)) AS turmas_fin_ativas,
+           (SELECT count(*)::int FROM turmas_fin
+              WHERE ($1::text IS NULL OR curso = $1) AND ($2::text IS NULL OR local = $2) AND ($3::text IS NULL OR horario = $3)) AS turmas_fin,
+           (SELECT count(*)::int FROM cursos_gold WHERE estado = 'Ativo' AND ($1::text IS NULL OR nome = $1)) AS cursos_gold,
+           (SELECT count(*)::int FROM cursos_fin WHERE estado = 'Ativo' AND ($1::text IS NULL OR ufcd = $1 OR nome_comercial = $1)) AS cursos_fin`,
+        [f.curso ?? null, f.local ?? null, f.horario ?? null, f.de ?? null, f.ate ?? null],
       ),
-      db.query<PagamentoRow>(`SELECT valor, metodo, curso, data, estado FROM pagamentos ${payWhere}`),
-      db.query<{ origem: string; n: number }>(`SELECT origem, count(*)::int AS n FROM preinscricoes ${leadWhere} GROUP BY origem`),
+      db.query<PagamentoRow>(
+        `SELECT DISTINCT ON (pg.id) pg.valor, pg.metodo, pg.curso, pg.data, pg.estado
+           FROM pagamentos pg
+           LEFT JOIN formandos_gold fg ON lower(fg.email) = lower(NULLIF(pg.email,''))
+           LEFT JOIN turmas_gold tg ON tg.id = fg.turma_id
+           ${payJoin}
+          WHERE ${payConds.join(" AND ")}
+          ORDER BY pg.id`,
+        payParams,
+      ),
+      db.query<{ origem: string; n: number }>(
+        `SELECT p.origem, count(*)::int AS n FROM preinscricoes p WHERE ${lw.sql} GROUP BY p.origem`,
+        lw.params,
+      ),
       db.query<{ curso: string; receita: unknown; pagos: number }>(
-        `SELECT curso, COALESCE(sum(valor), 0) AS receita, count(*)::int AS pagos
-           FROM pagamentos WHERE estado = 'Pago' AND curso <> '' ${payAnd} GROUP BY curso ORDER BY 2 DESC LIMIT 6`,
+        `SELECT pg.curso, COALESCE(sum(pg.valor), 0) AS receita, count(*)::int AS pagos
+           FROM pagamentos pg
+           LEFT JOIN formandos_gold fg ON lower(fg.email) = lower(NULLIF(pg.email,''))
+           LEFT JOIN turmas_gold tg ON tg.id = fg.turma_id
+           ${payJoin}
+          WHERE pg.estado = 'Pago' AND pg.curso <> '' AND ${payConds.join(" AND ")}
+          GROUP BY pg.curso ORDER BY 2 DESC LIMIT 12`,
+        payParams,
       ),
       db.query<{ curso: string; n: number }>(
-        `SELECT curso, count(*)::int AS n FROM preinscricoes WHERE curso <> '' ${leadAnd} GROUP BY curso`,
+        `SELECT p.curso, count(*)::int AS n FROM preinscricoes p WHERE ${lw.sql} AND p.curso <> '' GROUP BY p.curso`,
+        lw.params,
+      ),
+      db.query<{ chave: string; n: number; receita: unknown }>(
+        f.desagregar === "local"
+          ? `SELECT COALESCE(NULLIF(p.local,''), 'Sem local') AS chave, count(*)::int AS n,
+                    COALESCE((SELECT sum(pg.valor) FROM pagamentos pg WHERE pg.estado='Pago' AND pg.curso = p.curso), 0) AS receita
+               FROM preinscricoes p WHERE ${lw.sql} GROUP BY 1 ORDER BY 2 DESC LIMIT 12`
+          : f.desagregar === "horario"
+            ? `SELECT COALESCE(NULLIF(p.horario,''), 'Sem horário') AS chave, count(*)::int AS n,
+                      COALESCE((SELECT sum(pg.valor) FROM pagamentos pg WHERE pg.estado='Pago' AND pg.curso = p.curso), 0) AS receita
+                 FROM preinscricoes p WHERE ${lw.sql} GROUP BY 1 ORDER BY 2 DESC LIMIT 12`
+            : `SELECT COALESCE(NULLIF(p.curso,''), 'Sem curso') AS chave, count(*)::int AS n,
+                      COALESCE((SELECT sum(pg.valor) FROM pagamentos pg WHERE pg.estado='Pago' AND pg.curso = p.curso), 0) AS receita
+                 FROM preinscricoes p WHERE ${lw.sql} GROUP BY 1 ORDER BY 2 DESC LIMIT 12`,
+        lw.params,
+      ),
+      db.query<{ curso: string; local: string; horario: string }>(
+        f.regime
+          ? `SELECT DISTINCT curso, local, horario FROM preinscricoes WHERE regime = $1`
+          : `SELECT DISTINCT curso, local, horario FROM preinscricoes`,
+        f.regime ? [f.regime] : [],
+      ),
+      db.query<{ curso: string; local: string; horario: string; preco: unknown; inicio: string }>(
+        `SELECT COALESCE(payload->>'curso','') AS curso,
+                COALESCE(payload->>'local','') AS local,
+                COALESCE(payload->>'horario','') AS horario,
+                COALESCE(payload->>'preco','0') AS preco,
+                COALESCE(payload->>'inicio','') AS inicio
+           FROM catalog_items
+          WHERE kind = 'datas'
+            AND ($1::text IS NULL OR payload->>'curso' = $1)
+            AND ($2::text IS NULL OR payload->>'local' = $2)
+            AND ($3::text IS NULL OR payload->>'horario' = $3)
+          ORDER BY payload->>'curso', payload->>'local'`,
+        [f.curso ?? null, f.local ?? null, f.horario ?? null],
+      ),
+      db.query<{ curso: string; receita: unknown }>(
+        `SELECT pg.curso, COALESCE(sum(pg.valor), 0) AS receita
+           FROM pagamentos pg
+           LEFT JOIN formandos_gold fg ON lower(fg.email) = lower(NULLIF(pg.email,''))
+           LEFT JOIN turmas_gold tg ON tg.id = fg.turma_id
+           ${payJoin}
+          WHERE pg.estado = 'Pago' AND pg.curso <> ''
+            AND ${payDate("pg")} LIKE $${pieMesIdx}
+            AND ${payConds.join(" AND ")}
+          GROUP BY pg.curso ORDER BY 2 DESC LIMIT 8`,
+        pieParams,
       ),
     ]);
 
     const c = counts.rows[0];
     const fin = financeiro(pagamentosRows.rows, now);
-    const formandosGold = regime === "fin" ? 0 : Number(c?.formandos_gold ?? 0);
-    const formandosFin = regime === "gold" ? 0 : Number(c?.formandos_fin ?? 0);
+    const regime = f.regime;
+    let formandosGold = regime === "fin" ? 0 : Number(c?.formandos_gold ?? 0);
+    let formandosFin = regime === "gold" ? 0 : Number(c?.formandos_fin ?? 0);
+    if (f.audiencia === "pre") { formandosGold = 0; formandosFin = 0; }
     const formandosAtivos = formandosGold + formandosFin;
-    const preinscritos = Number(c?.preinscritos ?? 0);
+    const preinscritos = f.audiencia === "formandos" ? 0 : Number(c?.preinscritos ?? 0);
     const turmasAtivas = regime === "gold"
       ? Number(c?.turmas_gold_ativas ?? 0)
       : regime === "fin"
@@ -369,6 +532,26 @@ export function registerDashboardRoutes(
       };
     });
 
+    const desagSoma = desag.rows.reduce((s, r) => s + Number(r.n), 0);
+    const desagregacao = desag.rows.map(r => ({
+      chave: r.chave,
+      n: Number(r.n),
+      receita: Math.round(num(r.receita)),
+      pct: desagSoma > 0 ? Math.round((Number(r.n) / desagSoma) * 100) : 0,
+    }));
+
+    const pieSoma = pieCursos.rows.reduce((s, r) => s + num(r.receita), 0);
+    const COLORS = ["#F59E0B", "#10B981", "#3B82F6", "#8B5CF6", "#E1306C", "#0A66C2", "#94A3B8", "#14B8A6"];
+    const receitaMesCursos = pieCursos.rows.map((r, i) => ({
+      nome: r.curso,
+      receita: Math.round(num(r.receita)),
+      pct: pieSoma > 0 ? Math.round((num(r.receita) / pieSoma) * 100) : 0,
+      color: COLORS[i % COLORS.length]!,
+    }));
+
+    const optsRows = filtros.rows;
+    const uniq = (key: "curso" | "local" | "horario") =>
+      [...new Set(optsRows.map(r => r[key]).filter(s => s && s.trim()))].sort((a, b) => a.localeCompare(b, "pt"));
     return {
       cards: {
         preinscritos,
@@ -393,6 +576,22 @@ export function registerDashboardRoutes(
       ],
       conhecimento,
       topCursos,
+      desagregar: f.desagregar,
+      desagregacao,
+      precos: precos.rows.map(r => ({
+        curso: r.curso,
+        local: r.local,
+        horario: r.horario,
+        inicio: r.inicio,
+        preco: Math.round(num(r.preco)),
+      })),
+      receitaMesCursos,
+      mesSeleccionado: f.mes ?? monthKey(now),
+      filtros: {
+        cursos: uniq("curso"),
+        locais: uniq("local"),
+        horarios: uniq("horario"),
+      },
     };
   });
 

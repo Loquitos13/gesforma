@@ -1,6 +1,6 @@
 import { config } from "./config.js";
 
-export type CtaAmbito = "preinscricao" | "contacto";
+export type CtaAmbito = "preinscricao" | "contacto" | "documentos";
 
 export type CtaDestino = {
   ambito: CtaAmbito;
@@ -13,9 +13,9 @@ export const SECRETARIA_HREF = `mailto:${SECRETARIA_MAIL}`;
 
 export const CTA_BY_TIPO: Record<string, CtaDestino> = {
   welcome: {
-    ambito: "contacto",
-    href: SECRETARIA_HREF,
-    funcao: "Abrir o email da secretaria",
+    ambito: "documentos",
+    href: "{{documentos_url}}",
+    funcao: "Enviar os documentos da pré-inscrição",
   },
   payment: {
     ambito: "contacto",
@@ -50,7 +50,7 @@ export const CTA_BY_TIPO: Record<string, CtaDestino> = {
 };
 
 export function isCtaAmbito(value: string | undefined): value is CtaAmbito {
-  return value === "preinscricao" || value === "contacto";
+  return value === "preinscricao" || value === "contacto" || value === "documentos";
 }
 
 export function ctaDestino(tipo: string): CtaDestino {
@@ -61,7 +61,7 @@ export function ctaDestino(tipo: string): CtaDestino {
   };
 }
 
-export function buildCtaVars(p: { nome: string; email: string; curso: string; turma: string }) {
+export function buildCtaVars(p: { nome: string; email: string; curso: string; turma: string; documentosUrl?: string }) {
   const origin = config.appOrigin.replace(/\/$/, "");
   const q = new URLSearchParams({ email: p.email, curso: p.curso, turma: p.turma });
   return {
@@ -70,13 +70,14 @@ export function buildCtaVars(p: { nome: string; email: string; curso: string; tu
     curso: p.curso,
     turma: p.turma,
     preinscricao_url: `${origin}/pre-inscricao?${q.toString()}`,
+    documentos_url: p.documentosUrl || `${origin}/pre-inscricao?${q.toString()}`,
     secretaria_url: SECRETARIA_HREF,
   };
 }
 
 export function fillCtaHref(href: string, vars: Record<string, string>) {
   return href.replace(/\{\{(\w+)\}\}/g, (_, k: string) => {
-    if (k === "preinscricao_url" || k === "secretaria_url") return vars[k] ?? "";
+    if (k === "preinscricao_url" || k === "secretaria_url" || k === "documentos_url") return vars[k] ?? "";
     return encodeURIComponent(vars[k] ?? "");
   });
 }

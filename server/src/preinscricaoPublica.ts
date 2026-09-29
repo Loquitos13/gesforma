@@ -1,4 +1,4 @@
-import { ingestEvent } from "./automations.js";
+import { firePreinscricaoEmail } from "./docsLink.js";
 import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
 import { mapPreinscricao, nextOpsId } from "./ops.js";
@@ -75,9 +75,8 @@ export async function criarPreinscricaoPublica(
       sanitizeHeader(input.campanha || ""), origem, meio, horario, turmaId,
     ],
   );
-  const nome = `${input.nome} ${input.apelido || ""}`.trim();
   const detalhe = [origem, curso, local, horario, inicio !== "-" ? inicio : ""].filter(Boolean).join(" · ");
-  await ingestEvent(db, "preinscricao.created", { email, nome, curso, preinscricaoId: id }, `preinscricao:${id}:${email}`).catch(() => undefined);
+  await firePreinscricaoEmail(db, { id, email, nome: input.nome, apelido: input.apelido, curso }, "preinscricao.created", `preinscricao:${id}:${email}`).catch(() => undefined);
   await logLeadEvent(db, id, undefined, "criacao", "Pré-inscrição recebida", detalhe);
   const row = await db.query("SELECT * FROM preinscricoes WHERE id = $1", [id]);
   return {

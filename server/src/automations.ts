@@ -65,7 +65,10 @@ export async function ingestEvent(
     keys,
   );
 
-  const vars = buildCtaVars({ nome, email, curso, turma });
+  const vars = buildCtaVars({
+    nome, email, curso, turma,
+    documentosUrl: String(payload.documentos_url ?? ""),
+  });
   let queued = 0;
   for (const rule of rules.rows) {
     if (rule.curso && curso && rule.curso !== curso) continue;
@@ -107,7 +110,8 @@ export async function applyCrmEstado(db: Db, type: string, payload: Record<strin
           WHEN '1º Contacto' THEN 1
           WHEN '2º Contacto' THEN 2
           WHEN 'Pago' THEN 3
-          WHEN 'Formando' THEN 4
+          WHEN 'Pré-inscrição' THEN 4
+          WHEN 'Formando' THEN 5
           ELSE 0 END), 0) < $2
         AND estado <> 'Formando'`,
     [target, rank, idOk ? pid : 0, email],

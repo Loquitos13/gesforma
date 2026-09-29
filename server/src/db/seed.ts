@@ -13,10 +13,10 @@ const TEMPLATES = [
     assunto: "Bem-vindo(a) à ENA, {{nome}}",
     linhas: [
       "Confirmámos o seu interesse em {{curso}}.",
+      "Use a ligação pessoal abaixo para enviar os documentos de cada formando (CC, contrato e restantes ficheiros).",
       "A secretaria da ENA contacta-o em breve para confirmar horário, turma e pagamento.",
-      "Não precisa de fazer mais nada neste momento. Se tiver urgência, responda a este email.",
     ],
-    cta: "Responder à secretaria",
+    cta: "Enviar documentos",
   },
   {
     tipo: "payment",
@@ -86,6 +86,7 @@ const TEMPLATES = [
 
 const RULES = [
   { nome: "Boas-vindas ao registo", gatilho: "Nova pré-inscrição recebida", key: "preinscricao.created", tipo: "welcome", delay: 0 },
+  { nome: "Documentos na pré-inscrição", gatilho: "Lead passou a pré-inscrito", key: "preinscricao.promoted", tipo: "welcome", delay: 0 },
   { nome: "Lembrete sem pagamento (3 dias)", gatilho: "Pré-inscrição sem pagamento há 3 dias", key: "preinscricao.unpaid_3d", tipo: "unpaid_3d", delay: 0 },
   { nome: "Confirmação de pagamento", gatilho: "Pagamento confirmado", key: "payment.confirmed", tipo: "payment", delay: 0 },
   { nome: "Contacto após a venda", gatilho: "Contacto após a venda", key: "sale.followup", tipo: "sale_followup", delay: 3600 },

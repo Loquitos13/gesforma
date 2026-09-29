@@ -75,6 +75,7 @@ const ruleSchema = z.object({
 const eventSchema = z.object({
   type: z.enum([
     "preinscricao.created",
+    "preinscricao.promoted",
     "preinscricao.contacted",
     "payment.confirmed",
     "sale.followup",
@@ -101,7 +102,7 @@ const templatePatchSchema = z.object({
   body_xml: z.string().trim().min(8).max(8000).optional(),
   cta: z.string().trim().min(1).max(120).optional(),
   cta_href: z.string().trim().min(1).max(500).optional(),
-  cta_ambito: z.enum(["preinscricao", "contacto"]).optional(),
+  cta_ambito: z.enum(["preinscricao", "contacto", "documentos"]).optional(),
 });
 
 function clientOk(req: FastifyRequest) {

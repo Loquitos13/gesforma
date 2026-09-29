@@ -29,6 +29,10 @@ import { globalSearch } from "./globalSearch.js";
 import { config } from "./config.js";
 import { criarPreinscricaoPublica } from "./preinscricaoPublica.js";
 import { listCursosGoldActivos, listOfertaGold } from "./ofertaGold.js";
+import { generateCronograma } from "./cronograma.js";
+import { firePreinscricaoEmail, notificarDocumentos } from "./docsLink.js";
+import { storeDriveFile } from "./googleDrive.js";
+import { aplicarTurmaRegras, listTurmaRegras } from "./turmaRegras.js";
 import { camposEmFalta, estadoPodeEntregar, podeArrastar } from "./crmRegras.js";
 
 const preSchema = z.object({
@@ -420,6 +424,7 @@ export function registerOpsRoutes(
       await logLeadEvent(db, id, req.actor!.id, "estado", "Entregue à secretaria", "Pré-inscrição completa (NIF e morada fiscal).");
     }
     await audit(db, req.actor!.id, "crm.completar", "preinscricao", String(id), req.ip);
+    await notificarDocumentos(db, id, req.actor!.id).catch(() => undefined);
     return getLeadDossier(db, id);
   });
 
@@ -484,7 +489,9 @@ export function registerOpsRoutes(
         d.nif ?? "", d.moradaFiscal ?? "", d.codigoPostal ?? "", regime,
       ],
     );
-    await ingestEvent(db, "preinscricao.created", { email, nome: `${d.nome} ${d.apelido}`.trim(), curso: d.curso, preinscricaoId: id }, `preinscricao:${id}:${email}`).catch(() => undefined);
+    await firePreinscricaoEmail(db, {
+      id, email, nome: d.nome, apelido: d.apelido, curso: d.curso,
+    }, "preinscricao.created", `preinscricao:${id}:${email}`).catch(() => undefined);
     await logLeadEvent(db, id, req.actor!.id, "criacao", "Lead manual criada", `${d.origem || "Telefone"} · ${d.curso}`);
     const nota = (d.nota ?? "").trim();
     if (nota) await addLeadNota(db, id, req.actor!.id, nota, d.meioContacto || d.origem || "Telefone");
@@ -554,6 +561,9 @@ export function registerOpsRoutes(
     if (before && d.proximoContacto && d.proximoContacto !== String(before.proximo_contacto ?? "")) {
       await logLeadEvent(db, id, req.actor!.id, "seguimento", "Próximo contacto", d.proximoContacto);
     }
+    if (row && d.estado === "Pré-inscrição" && String(before.estado) !== "Pré-inscrição") {
+      await notificarDocumentos(db, id, req.actor!.id).catch(() => undefined);
+    }
     if (row && d.estado === "Pago") {
       const email = normalizeEmail(String(row.email ?? ""));
       if (isEmail(email)) {
@@ -611,6 +621,143 @@ export function registerOpsRoutes(
     if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
     await db.query("DELETE FROM preinscricoes WHERE id = $1", [id]);
     return { ok: true };
+  });
+
+  const DOCS_PUBLICOS = [
+    { id: "cc", label: "Cartão de Cidadão" },
+    { id: "contrato", label: "Contrato de formação" },
+    { id: "nif", label: "Comprovativo de NIF / morada" },
+    { id: "iban", label: "IBAN" },
+    { id: "outro", label: "Outro documento" },
+  ];
+
+  app.get("/v1/public/documentos/:token", {
+    config: { rateLimit: { max: 40, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    const token = String((req.params as { token: string }).token ?? "");
+    if (token.length < 12) return reply.code(400).send({ error: "ligação inválida" });
+    const lead = await one(db, "SELECT id, nome, apelido, curso, email FROM preinscricoes WHERE docs_token = $1", [token]);
+    if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
+    const docs = await db.query<{ id: number; tipo: string; nome: string; created_at: string }>(
+      "SELECT id, tipo, nome, created_at FROM preinscricao_docs WHERE preinscricao_id = $1 ORDER BY created_at",
+      [lead.id],
+    );
+    return {
+      nome: `${lead.nome} ${lead.apelido}`.trim(),
+      curso: lead.curso,
+      tipos: DOCS_PUBLICOS,
+      ficheiros: docs.rows,
+    };
+  });
+
+  app.post("/v1/public/documentos/:token", {
+    config: { rateLimit: { max: 12, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    const token = String((req.params as { token: string }).token ?? "");
+    if (token.length < 12) return reply.code(400).send({ error: "ligação inválida" });
+    const lead = await one(db, "SELECT id, nome, apelido, curso FROM preinscricoes WHERE docs_token = $1", [token]);
+    if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
+    let name = "ficheiro";
+    let mime = "application/octet-stream";
+    let bytes: Buffer | null = null;
+    let tipo = "outro";
+    try {
+      const parts = req.parts();
+      for await (const part of parts) {
+        if (part.type === "file") {
+          name = part.filename || name;
+          mime = part.mimetype || mime;
+          bytes = await part.toBuffer();
+        } else if (part.fieldname === "tipo") tipo = String(part.value ?? "outro").slice(0, 40);
+      }
+    } catch {
+      return reply.code(400).send({ error: "upload inválido" });
+    }
+    if (!bytes) return reply.code(400).send({ error: "ficheiro em falta" });
+    try {
+      const file = await storeDriveFile(db, undefined, { name, mime, bytes }, {
+        kind: "preinscricao-doc",
+        regime: "gold",
+        formando: `${lead.nome} ${lead.apelido}`.trim(),
+        label: tipo,
+        itemId: String(lead.id),
+      });
+      await db.query(
+        "INSERT INTO preinscricao_docs (preinscricao_id, tipo, nome, drive_file_id) VALUES ($1,$2,$3,$4)",
+        [lead.id, tipo, file.name, file.id],
+      );
+      await logLeadEvent(db, Number(lead.id), undefined, "campo", `Documento recebido · ${tipo}`, file.name);
+      return { ok: true, nome: file.name };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : "upload recusado" });
+    }
+  });
+
+  const regraSchema = z.object({
+    regime: z.enum(["gold", "fin"]).optional().default("gold"),
+    curso: z.string().trim().min(1).max(200),
+    local: z.string().trim().max(120).optional().default(""),
+    horario: z.string().trim().max(80).optional().default("Pós Laboral"),
+    vagas: z.number().int().min(1).max(80).optional().default(16),
+    horas: z.number().min(1).max(400).optional().default(25),
+    horasSessao: z.number().min(1).max(8).optional().default(3),
+    formador: z.string().trim().max(120).optional().default(""),
+    proximaData: z.string().max(20).optional().default(""),
+    nomePrefixo: z.string().trim().max(40).optional().default(""),
+    activa: z.boolean().optional().default(true),
+  });
+
+  app.get("/v1/turma-regras", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const regime = String((req.query as { regime?: string }).regime ?? "");
+    return { regras: await listTurmaRegras(db, regime === "fin" || regime === "gold" ? regime : undefined) };
+  });
+
+  app.post("/v1/turma-regras", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const parsed = regraSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    const d = parsed.data;
+    const horasSessao = d.regime === "fin" ? 3 : d.horasSessao;
+    const row = await db.query<{ id: number }>(
+      `INSERT INTO turma_regras (regime, curso, local, horario, vagas, horas, horas_sessao, formador, proxima_data, nome_prefixo, activa)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+      [d.regime, d.curso, d.local, d.horario, d.vagas, d.horas, horasSessao, d.formador, d.proximaData, d.nomePrefixo, d.activa],
+    );
+    return { id: row.rows[0]?.id };
+  });
+
+  app.patch("/v1/turma-regras/:id", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string }).id);
+    const parsed = regraSchema.partial().safeParse(req.body);
+    if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    const d = parsed.data;
+    await db.query(
+      `UPDATE turma_regras SET
+         curso = COALESCE($2, curso), local = COALESCE($3, local), horario = COALESCE($4, horario),
+         vagas = COALESCE($5, vagas), horas = COALESCE($6, horas), horas_sessao = COALESCE($7, horas_sessao),
+         formador = COALESCE($8, formador), proxima_data = COALESCE($9, proxima_data),
+         nome_prefixo = COALESCE($10, nome_prefixo), activa = COALESCE($11, activa)
+       WHERE id = $1`,
+      [id, d.curso ?? null, d.local ?? null, d.horario ?? null, d.vagas ?? null, d.horas ?? null, d.horasSessao ?? null, d.formador ?? null, d.proximaData ?? null, d.nomePrefixo ?? null, d.activa ?? null],
+    );
+    return { ok: true };
+  });
+
+  app.delete("/v1/turma-regras/:id", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string }).id);
+    await db.query("DELETE FROM turma_regras WHERE id = $1", [id]);
+    return { ok: true };
+  });
+
+  app.post("/v1/turmas/auto-regras", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const regime = (req.body as { regime?: string } | undefined)?.regime;
+    const r = await aplicarTurmaRegras(db, regime === "fin" || regime === "gold" ? regime : undefined);
+    await audit(db, req.actor!.id, "turmas.auto", "turma_regra", String(r.n), req.ip, r);
+    return r;
   });
 
   const formandoGoldSchema = z.object({
@@ -841,10 +988,19 @@ export function registerOpsRoutes(
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
     const id = await nextOpsId(db);
+    const cronograma = (d.cronograma && d.cronograma.length)
+      ? d.cronograma
+      : generateCronograma({
+        inicio: d.dataInicio,
+        horario: d.horario,
+        horas: d.horas,
+        formador: d.formador,
+        curso: d.curso,
+      });
     await db.query(
       `INSERT INTO turmas_gold (id, data_inicio, nome, curso, local, horario, total_alunos, vagas, estado, formador, horas, cronograma)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
-      [id, d.dataInicio, d.nome, d.curso, d.local, d.horario, d.totalAlunos, d.vagas, d.estado, d.formador, d.horas, d.cronograma ?? []],
+      [id, d.dataInicio, d.nome, d.curso, d.local, d.horario, d.totalAlunos, d.vagas, d.estado, d.formador, d.horas, cronograma],
     );
     const row = await one(db, "SELECT * FROM turmas_gold WHERE id = $1", [id]);
     return { turma: row ? mapTurmaGold(row) : { id } };
@@ -892,10 +1048,20 @@ export function registerOpsRoutes(
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
     const id = await nextOpsId(db);
+    const cronograma = (d.cronograma && d.cronograma.length)
+      ? d.cronograma
+      : generateCronograma({
+        inicio: d.dataInicio,
+        horario: d.horario === "Online" ? "Pós Laboral" : d.horario,
+        horas: d.horas,
+        formador: d.formador,
+        curso: d.curso,
+        hoursPerSession: 3,
+      });
     await db.query(
       `INSERT INTO turmas_fin (id, data_inicio, nome, curso, ufcd_cod, local, horario, alunos, alunos_total, estado, horas, formador, activa, cronograma)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)`,
-      [id, d.dataInicio, d.nome, d.curso, d.ufcdCod, d.local, d.horario, d.alunos, d.alunosTotal, d.estado, d.horas, d.formador, d.activa, d.cronograma ?? []],
+      [id, d.dataInicio, d.nome, d.curso, d.ufcdCod, d.local, d.horario, d.alunos, d.alunosTotal, d.estado, d.horas, d.formador, d.activa, cronograma],
     );
     const row = await one(db, "SELECT * FROM turmas_fin WHERE id = $1", [id]);
     return { turma: row ? mapTurmaFin(row) : { id } };

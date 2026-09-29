@@ -28,10 +28,19 @@ const UFCD_3564_MODULOS = [
   "UFCD 3564 · Simulação e avaliação",
 ];
 
+function addHours(start: string, hours: number) {
+  const [h, m] = start.split(":").map(Number);
+  const total = (h || 0) * 60 + (m || 0) + Math.round(hours * 60);
+  const eh = Math.floor(total / 60) % 24;
+  const em = total % 60;
+  return `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
+}
+
 function horarioSlots(horario: string) {
   if (horario === "Sábado manhã") return { start: "09:00", end: "13:00", hours: 4, weekdays: [6] };
-  if (horario === "Pós Laboral") return { start: "19:00", end: "22:00", hours: 3, weekdays: [1, 2, 3, 4] };
-  if (horario === "Laboral Manhã") return { start: "09:00", end: "13:00", hours: 4, weekdays: [1, 2, 3, 4, 5] };
+  if (horario === "Pós Laboral" || horario === "Pós-Laboral") return { start: "19:00", end: "22:00", hours: 3, weekdays: [1, 2, 3, 4] };
+  if (horario === "Laboral Manhã" || horario === "Laboral manhã") return { start: "09:00", end: "13:00", hours: 4, weekdays: [1, 2, 3, 4, 5] };
+  if (horario === "Laboral Tarde" || horario === "Laboral tarde") return { start: "14:00", end: "18:00", hours: 4, weekdays: [1, 2, 3, 4, 5] };
   return { start: "19:00", end: "22:00", hours: 3, weekdays: [] as number[] };
 }
 
@@ -56,9 +65,12 @@ export function generateCronograma(opts: {
   horas: number;
   formador: string;
   curso?: string;
+  hoursPerSession?: number;
 }): SessaoCronograma[] {
   const slot = horarioSlots(opts.horario);
-  const n = Math.min(16, Math.max(4, Math.ceil((opts.horas || 25) / slot.hours)));
+  const hours = opts.hoursPerSession && opts.hoursPerSession > 0 ? opts.hoursPerSession : slot.hours;
+  const end = opts.hoursPerSession && opts.hoursPerSession > 0 ? addHours(slot.start, hours) : slot.end;
+  const n = Math.min(24, Math.max(4, Math.ceil((opts.horas || 25) / hours)));
   const cursor = parseIso(opts.inicio || "2026-09-07");
   const weekdays = slot.weekdays.length ? slot.weekdays : [cursor.getDay() || 3];
   for (let i = 0; i < 7; i++) {
@@ -71,7 +83,7 @@ export function generateCronograma(opts: {
       id: `s-${opts.inicio || "new"}-${i + 1}`,
       data: toIso(cursor),
       horaInicio: slot.start,
-      horaFim: slot.end,
+      horaFim: end,
       modulos: modulosForIndex(i, n, opts.curso),
       formadores: opts.formador && opts.formador !== "A definir" ? [opts.formador] : [],
       modalidade: "presencial",

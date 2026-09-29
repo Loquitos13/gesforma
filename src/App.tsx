@@ -34,13 +34,14 @@ import { useLocaisOptsDoCurso } from "./cursoLocais";
 import { OptionSelect } from "./OptionSelect";
 import { ListasOpcoesView } from "./ListasOpcoesView";
 import { CronogramaEditor, FormadoresAtribuidosCard, TurmaActivaToggle, TurmaInactivaBanner, TurmaInscricaoHint } from "./TurmaCronograma";
+import { TurmaRegrasPanel } from "./TurmaRegrasPanel";
 import { InscreverFormandoPanel, EscolherTurmaModal, FormandosKanban } from "./TurmaInscricao";
 import { TurmaAvaliacao } from "./TurmaAvaliacao";
 import { FormadoresView } from "./FormadoresView";
 import { FORMADORES_SEED } from "./formadorModel";
 import { useFormadorOptions, useFormadores } from "./FormadoresContext";
 import { useTurmas } from "./TurmasContext";
-import { cronogramaToSessoes, formatSessaoLabel, hojeIso, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
+import { cronogramaToSessoes, formatSessaoLabel, generateCronograma, hojeIso, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
 import { apiGlobalSearch, apiDriveFiles, apiSaveFormandoDocs, type GlobalSearchHit } from "./api";
 import { CampanhasView } from "./CampanhasView";
 import { ListsProvider, tempNumericId, useLists, type BlogPostRow, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
@@ -68,6 +69,7 @@ import {
   emitAutomation,
   type Dashboard, type EmailJob, type EmailJobStats, type EmailRule, type TurmaCertificado, type TurmaDocumento,
 } from "./api";
+import { PainelView } from "./PainelView";
 import { persist, toastError, toastOk } from "./toastBus";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -2735,177 +2737,12 @@ function eur(v: number) {
   return `\u20ac ${v.toLocaleString("pt-PT")}`;
 }
 
-function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onNavigate: (v: View | NavTarget) => void }) {
-  const [dash, setDash] = useState<Dashboard | null>(null);
-  const [estado, setEstado] = useState<"loading" | "ready" | "offline">("loading");
-  const crmView: View = regime === "fin" ? "fin-preinscricoes" : "gold-preinscricoes";
-  const formandosView: View = regime === "fin" ? "fin-formandos" : "gold-formandos-turmas";
-  const turmasView: View = regime === "fin" ? "fin-turmas" : "gold-turmas";
-  const cursosView: View = regime === "fin" ? "fin-cursos" : "gold-cursos";
-
-  const carregar = useCallback(() => {
-    setEstado("loading");
-    apiDashboard(regime)
-      .then(r => { setDash(r); setEstado("ready"); })
-      .catch(() => setEstado("offline"));
-  }, [regime]);
-  useEffect(() => { carregar(); }, [carregar]);
-
-  if (estado === "loading") {
-    return (
-      <div className="space-y-5">
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-          {[0, 1, 2, 3].map(i => (
-            <Card key={i} className="p-4">
-              <div className="h-3 w-24 bg-slate-100 rounded animate-pulse" />
-              <div className="h-7 w-16 bg-slate-100 rounded mt-3 animate-pulse" />
-            </Card>
-          ))}
-        </div>
-        <Card className="p-8"><p className="text-center text-sm text-slate-400">A calcular os números {regime === "fin" ? "da Financiada" : "do Gold"}…</p></Card>
-      </div>
-    );
-  }
-
-  if (estado === "offline" || !dash) {
-    return (
-      <Card className="p-8 text-center">
-        <p className="text-sm font-semibold text-slate-800">Sem ligação à API</p>
-        <p className="text-sm text-slate-500 mt-1">O painel mostra dados reais da base, por isso não inventa números quando a API não responde.</p>
-        <button type="button" onClick={carregar} className="mt-4 px-4 py-2 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white">
-          Tentar outra vez
-        </button>
-      </Card>
-    );
-  }
-
-  const { cards, financeiro, funil, topCursos } = dash;
-  const base = funil[0]?.v || 1;
-
-  return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        {[
-          { label: "CRM · leads", value: cards.preinscritos.toLocaleString("pt-PT"), sub: `${funil[1]?.v ?? 0} já contactados`, color: "text-blue-600", bg: "bg-blue-50", icon: I.clipboard, view: crmView },
-          { label: "Formandos", value: cards.formandosAtivos.toLocaleString("pt-PT"), sub: regime === "fin" ? "Formação financiada" : "Gold", color: "text-emerald-600", bg: "bg-emerald-50", icon: I.users, view: formandosView },
-          { label: "Turmas ativas", value: String(cards.turmasAtivas), sub: `${cards.turmasTotal} no total`, color: "text-violet-600", bg: "bg-violet-50", icon: I.school, view: turmasView },
-          { label: "Cursos ativos", value: String(cards.cursosAtivos), sub: regime === "fin" ? "UFCD e cursos financiados" : "Cursos Gold", color: "text-amber-600", bg: "bg-amber-50", icon: I.book, view: cursosView },
-        ].map(s => (
-          <Card key={s.label} className="p-4 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-3">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{s.label}</p>
-              <div className={`w-8 h-8 rounded-lg ${s.bg} flex items-center justify-center ${s.color}`}>{s.icon}</div>
-            </div>
-            <p className={`text-2xl font-bold ${s.color} leading-none`}>{s.value}</p>
-            <div className="flex items-center justify-between mt-2">
-              <p className="text-xs text-slate-400">{s.sub}</p>
-              <button onClick={() => onNavigate(s.view)} className="text-xs font-semibold text-slate-400 hover:text-amber-600 transition-colors">Ver →</button>
-            </div>
-          </Card>
-        ))}
-      </div>
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        {[
-          { label: "Receita confirmada", value: eur(financeiro.receitaTotal), sub: `${financeiro.pagos} pagamentos pagos`, c: "text-slate-800" },
-          {
-            label: "Receita este mês",
-            value: eur(financeiro.receitaMes),
-            sub: financeiro.variacaoMes == null
-              ? "Sem mês anterior para comparar"
-              : `${financeiro.variacaoMes >= 0 ? "+" : ""}${financeiro.variacaoMes}% vs mês anterior`,
-            c: "text-emerald-600",
-          },
-          { label: "Ticket médio", value: eur(financeiro.ticketMedio), sub: "Por pagamento confirmado", c: "text-blue-600" },
-          { label: "Pagamentos pendentes", value: eur(financeiro.pendentes.valor), sub: `${financeiro.pendentes.n} transações`, c: "text-amber-600" },
-        ].map(s => (
-          <Card key={s.label} className="p-4">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{s.label}</p>
-            <p className={`text-xl font-bold ${s.c}`}>{s.value}</p>
-            <p className="text-xs text-slate-400 mt-1">{s.sub}</p>
-          </Card>
-        ))}
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="p-4 lg:col-span-2">
-          <div className="flex items-center justify-between mb-3">
-            <div><p className="text-sm font-semibold text-slate-700">Receita mensal</p><p className="text-xs text-slate-400">Últimos 12 meses</p></div>
-            <span className="text-sm font-bold text-emerald-600">{eur(financeiro.receita12m)}</span>
-          </div>
-          <MiniBarChart data={financeiro.receitaMensal} color="#F59E0B" />
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-3">Funil de conversão</p>
-          <div className="space-y-2">
-            {funil.map((f, i) => {
-              const pct = Math.min(100, Math.round((f.v / base) * 100));
-              const cores = ["#94A3B8", "#60A5FA", "#F59E0B", "#10B981"];
-              return (
-                <div key={f.l}>
-                  <div className="flex justify-between text-xs mb-0.5">
-                    <span className="text-slate-600">{f.l}</span>
-                    <span className="font-semibold text-slate-700">{f.v.toLocaleString("pt-PT")}</span>
-                  </div>
-                  <div className="w-full bg-slate-100 rounded-full h-2">
-                    <div className="h-2 rounded-full" style={{ width: `${pct}%`, backgroundColor: cores[i] ?? "#94A3B8" }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      </div>
-      <ConhecimentoEnaCard onVerMais={() => onNavigate(crmView)} dados={dash.conhecimento} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-4">Métodos de pagamento</p>
-          {financeiro.metodosPagamento.length === 0 && (
-            <p className="text-xs text-slate-400">Ainda sem pagamentos confirmados.</p>
-          )}
-          <div className="space-y-3">
-            {financeiro.metodosPagamento.map(m => (
-              <div key={m.metodo}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-slate-700">{m.metodo}</span>
-                  <div className="flex gap-2">
-                    <span className="text-xs text-slate-500">{eur(m.valor)}</span>
-                    <span className="text-xs font-bold text-slate-700 w-8 text-right">{m.pct}%</span>
-                  </div>
-                </div>
-                <div className="w-full bg-slate-100 rounded-full h-2"><div className="h-2 rounded-full" style={{ width: `${m.pct}%`, backgroundColor: m.color }} /></div>
-              </div>
-            ))}
-          </div>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-3">Top cursos por receita</p>
-          {topCursos.length === 0 && <p className="text-xs text-slate-400">Sem receita por curso para mostrar.</p>}
-          <div className="space-y-2.5">
-            {topCursos.map((c, i) => (
-              <div key={c.nome} className="flex items-center gap-3">
-                <span className="text-xs font-bold text-slate-400 w-4">{i + 1}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-slate-700 truncate">{c.nome}</p>
-                  <p className="text-xs text-slate-400">{c.inscritos.toLocaleString("pt-PT")} pré-inscritos · {eur(c.receita)}</p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-xs font-bold text-emerald-600">{c.taxa == null ? "-" : `${c.taxa}%`}</p>
-                  <p className="text-xs text-slate-400">conversão</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
 // ─── PreInscricoes Gold (tabela + kanban) ─────────────────────────────────────
 
 // ─── Turmas Gold ──────────────────────────────────────────────────────────────
 
 function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
-  const { gold, patchGold, addGold, removeGold, toggleGold } = useTurmas();
+  const { gold, patchGold, addGold, removeGold, toggleGold, reload } = useTurmas();
   const { cursosGold } = useLists();
   const formadorOpts = useFormadorOptions();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
@@ -2969,6 +2806,13 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   return (
     <div className="space-y-4">
       <PageHeader title="Turmas Gold" sub={`${ativas} libertadas · ${gold.length} no total · cada turma é um curso + local + horário + data de início; só as libertadas entram na pré-inscrição e no WhatsApp`} action={<NewBtn label="+ Nova Turma" onClick={() => setOpen("new")} />} />
+      <TurmaRegrasPanel
+        regime="gold"
+        cursos={cursoOpts.map(o => o.value)}
+        locais={[...new Set(gold.map(t => t.local).filter(Boolean))]}
+        horarios={[...new Set(gold.map(t => t.horario).filter(Boolean))]}
+        onApplied={() => void reload()}
+      />
       <ViewFilters
         fields={[
           { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(gold.map(t => t.curso)) },
@@ -3518,7 +3362,7 @@ function FinFormandosView({ openId, onOpened }: { openId?: number; onOpened?: ()
 // ─── Turmas Financiadas ───────────────────────────────────────────────────────
 
 function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab) => void }) {
-  const { fin, patchFin, addFin, removeFin, toggleFin } = useTurmas();
+  const { fin, patchFin, addFin, removeFin, toggleFin, reload } = useTurmas();
   const { cursosFin } = useLists();
   const formadorOpts = useFormadorOptions();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
@@ -3530,6 +3374,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
   const [curso, setCurso] = useState("");
   const [formador, setFormador] = useState("");
   const [localFin, setLocalFin] = useState("");
+  const [horarioFin, setHorarioFin] = useState("Pós Laboral");
   const [dataInicio, setDataInicio] = useState("");
   const [activa, setActiva] = useState(true);
   const [cronograma, setCronograma] = useState<SessaoCronograma[]>([]);
@@ -3552,6 +3397,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
       setCurso(editing?.curso ?? "");
       setFormador(editing?.formador ?? "");
       setLocalFin(editing?.local ?? "");
+      setHorarioFin(editing?.horario && editing.horario !== "Online" ? editing.horario : "Pós Laboral");
       setDataInicio(editing?.dataInicio ?? "");
       setActiva(editing ? isTurmaActiva(editing) : true);
       setCronograma(editing?.cronograma ?? []);
@@ -3559,9 +3405,19 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
   }, [open, editing]);
   async function guardar() {
     const horas = editing?.horas ?? 25;
+    const crono = cronograma.length
+      ? cronograma
+      : generateCronograma({
+        inicio: dataInicio,
+        horario: horarioFin,
+        horas,
+        formador,
+        curso,
+        hoursPerSession: 3,
+      });
     const payload = {
       nome: nome.trim() || "Nova turma",
-      curso, formador, local: localFin, dataInicio, activa, cronograma, horas,
+      curso, formador, local: localFin, dataInicio, activa, cronograma: crono, horas, horario: horarioFin,
     };
     if (editing) {
       patchFin(editing.id, payload);
@@ -3571,7 +3427,6 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
     const id = await addFin({
       id: -Date.now(),
       ufcdCod: "0000",
-      horario: "Online",
       alunos: 0,
       alunosTotal: 20,
       estado: "A montar",
@@ -3581,7 +3436,14 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
   }
   return (
     <div className="space-y-4">
-      <PageHeader title="Turmas Financiadas" sub={`${ativas} ativas · ${fin.length} no total · só as ativas aceitam novas inscrições`} action={<NewBtn label="+ Nova Turma" onClick={() => setOpen("new")} />} />
+      <PageHeader title="Turmas Financiadas" sub={`${ativas} ativas · ${fin.length} no total · sessões de 3 horas · só as ativas aceitam novas inscrições`} action={<NewBtn label="+ Nova Turma" onClick={() => setOpen("new")} />} />
+      <TurmaRegrasPanel
+        regime="fin"
+        cursos={cursoFinOpts.map(o => o.value)}
+        locais={[...new Set(fin.map(t => t.local).filter(Boolean))]}
+        horarios={["Pós Laboral", "Sábado manhã", "Laboral Manhã"]}
+        onApplied={() => void reload()}
+      />
       <ViewFilters
         accent="fin"
         fields={[{ label: "Curso / UFCD", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(fin.map(t => t.curso)) }]}
@@ -3701,13 +3563,16 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
               empty={locaisDoCurso.empty}
             />
           </Field>
+          <Field label="Horário (sessões de 3 h)">
+            <SearchSelect value={horarioFin} onChange={setHorarioFin} options={horariosOpts} placeholder="Pós Laboral…" />
+          </Field>
           <Field label="Data de início"><input type="date" className={iCls} value={dataInicio} onChange={e => setDataInicio(e.target.value)} /></Field>
           <CronogramaEditor
             accent="fin"
             sessoes={cronograma}
             onChange={setCronograma}
             inicio={dataInicio}
-            horario={editing?.horario ?? "Pós Laboral"}
+            horario={horarioFin}
             horas={editing?.horas ?? 25}
             formador={formador}
             curso={curso}
@@ -4302,6 +4167,7 @@ function EmailsView() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {([
                       { id: "preinscricao" as const, title: "Pré-inscrição", sub: "Formulário público. A secretaria contacta a seguir." },
+                      { id: "documentos" as const, title: "Link de documentos", sub: "Ligação pessoal {{documentos_url}} para enviar ficheiros." },
                       { id: "contacto" as const, title: "Contacto da secretaria", sub: "Email formacao@ena.pt - sem área de formando." },
                     ]).map(opt => (
                       <button
@@ -5140,8 +5006,8 @@ function AppShell() {
   function renderView() {
     switch (view) {
       case "painel":
-      case "gold-painel": return <PainelView regime="gold" onNavigate={navigate} />;
-      case "fin-painel": return <PainelView regime="fin" onNavigate={navigate} />;
+      case "gold-painel": return <PainelView regime="gold" onNavigate={v => navigate(v as View)} />;
+      case "fin-painel": return <PainelView regime="fin" onNavigate={v => navigate(v as View)} />;
       case "gold-cursos": return <CursosGoldView onOpen={id => { setCursoFichaId(id); go("gold-curso-ficha"); }} />;
       case "gold-curso-ficha": return <GoldCursoFichaScreen cursoId={cursoFichaId} onBack={() => navigate("gold-cursos")} onOpenModulos={nome => navigate({ view: "gold-modulos", cursoNome: nome })} />;
       case "gold-turmas": return <TurmasGoldView onCockpit={openCockpit} />;
@@ -5190,7 +5056,7 @@ function AppShell() {
       case "gold-equipa": return <EquipaView regime="gold" />;
       case "fin-equipa": return <EquipaView regime="fin" />;
       case "utilizadores": return <UsersView />;
-      default: return <PainelView regime={user.role === "financiada" ? "fin" : "gold"} onNavigate={navigate} />;
+      default: return <PainelView regime={user.role === "financiada" ? "fin" : "gold"} onNavigate={v => navigate(v as View)} />;
     }
   }
 

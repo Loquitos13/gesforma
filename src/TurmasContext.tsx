@@ -7,6 +7,7 @@ import { generateCronograma, seedFinTurmas, seedGoldTurmas, type SessaoCronogram
 type TurmasCtx = {
   gold: TurmaGold[];
   fin: TurmaFin[];
+  reload: () => Promise<void>;
   patchGold: (id: number, patch: Partial<TurmaGold>) => void;
   addGold: (turma: TurmaGold) => Promise<number | undefined>;
   removeGold: (id: number) => void;
@@ -51,6 +52,7 @@ function hydrateFin(t: Omit<TurmaFin, "cronograma"> & { cronograma?: unknown }):
       horas: t.horas || 25,
       formador: t.formador,
       curso: t.curso,
+      hoursPerSession: 3,
     }),
   };
 }
@@ -143,9 +145,15 @@ export function TurmasProvider({ children }: { children: ReactNode }) {
     void persist(apiPatchTurmaFin(id, { activa }));
   }, []);
 
+  const reload = useCallback(async () => {
+    const snap = await loadOps();
+    setGold(snap.turmasGold.map(hydrateGold));
+    setFin(snap.turmasFin.map(hydrateFin));
+  }, []);
+
   const value = useMemo(() => ({
-    gold, fin, patchGold, addGold, removeGold, setGoldCronograma, toggleGold, patchFin, addFin, removeFin, setFinCronograma, toggleFin,
-  }), [gold, fin, patchGold, addGold, removeGold, setGoldCronograma, toggleGold, patchFin, addFin, removeFin, setFinCronograma, toggleFin]);
+    gold, fin, reload, patchGold, addGold, removeGold, setGoldCronograma, toggleGold, patchFin, addFin, removeFin, setFinCronograma, toggleFin,
+  }), [gold, fin, reload, patchGold, addGold, removeGold, setGoldCronograma, toggleGold, patchFin, addFin, removeFin, setFinCronograma, toggleFin]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

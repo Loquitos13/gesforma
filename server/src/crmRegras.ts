@@ -98,8 +98,8 @@ export function podeArrastar(de: string, para: string, opts: { role: string; sec
     }
     return { ok: true as const };
   }
-  if (para === "Pré-inscrição" && !["2º Contacto", "Pago", "Pré-inscrição"].includes(de)) {
-    return { ok: false as const, erro: "Passe primeiro a 2.º contacto ou Pago, depois complete a pré-inscrição." };
+  if (para === "Pré-inscrição" && de === "Desistiu") {
+    return { ok: false as const, erro: "Um pedido desistido não volta a pré-inscrição. Crie um lead novo." };
   }
   return { ok: true as const };
 }

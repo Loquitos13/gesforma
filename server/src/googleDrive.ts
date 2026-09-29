@@ -379,54 +379,109 @@ async function driveApi<T>(token: string, url: string, init: RequestInit = {}) {
   return googleJson<T>(url, { ...init, headers });
 }
 
-async function findChildFolder(token: string, parentId: string, name: string) {
+function usableFolderId(id: string | null | undefined) {
+  const value = (id ?? "").trim();
+  if (!value || value === "." || value === "root") return "";
+  return value;
+}
+
+function isNotFound(err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /not found/i.test(msg);
+}
+
+/** Listar a raiz com includeItemsFromAllDrives faz o Drive responder 404 «File not found: .». */
+export function driveChildListUrl(parentId: string, name: string) {
+  const parent = usableFolderId(parentId) || "root";
   const q = [
     `name='${name.replace(/'/g, "\\'")}'`,
     `mimeType='${FOLDER_MIME}'`,
-    `'${parentId}' in parents`,
+    `'${parent}' in parents`,
     "trashed=false",
   ].join(" and ");
-  const res = await driveApi<{ files?: Array<{ id: string; name: string }> }>(
-    token,
-    `${DRIVE_FILES}?q=${encodeURIComponent(q)}&fields=files(id,name)&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=5`,
-  );
-  return res.files?.[0] ?? null;
+  const params = new URLSearchParams({
+    q,
+    fields: "files(id,name)",
+    pageSize: "5",
+    supportsAllDrives: "true",
+  });
+  if (parent !== "root") params.set("includeItemsFromAllDrives", "true");
+  return `${DRIVE_FILES}?${params.toString()}`;
+}
+
+export function folderCreateBody(name: string, parentId?: string) {
+  const parent = usableFolderId(parentId);
+  const body: { name: string; mimeType: string; parents?: string[] } = {
+    name,
+    mimeType: FOLDER_MIME,
+  };
+  if (parent) body.parents = [parent];
+  return body;
+}
+
+async function findChildFolder(token: string, parentId: string, name: string) {
+  try {
+    const res = await driveApi<{ files?: Array<{ id: string; name: string }> }>(
+      token,
+      driveChildListUrl(parentId, name),
+    );
+    return res.files?.[0] ?? null;
+  } catch (err) {
+    if (isNotFound(err)) return null;
+    throw err;
+  }
 }
 
 async function createFolder(token: string, name: string, parentId?: string) {
-  return driveApi<{ id: string; name: string }>(token, `${DRIVE_FILES}?supportsAllDrives=true`, {
+  const created = await driveApi<{ id: string; name: string }>(token, `${DRIVE_FILES}?supportsAllDrives=true`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name,
-      mimeType: FOLDER_MIME,
-      parents: parentId ? [parentId] : undefined,
-    }),
+    body: JSON.stringify(folderCreateBody(name, parentId)),
   });
+  if (!created.id) throw new Error("O Drive não devolveu a pasta criada.");
+  return created;
+}
+
+async function ensureChild(token: string, parentId: string, name: string) {
+  const found = await findChildFolder(token, parentId, name);
+  if (found?.id) return found.id;
+  const created = await createFolder(token, name, parentId);
+  return created.id;
+}
+
+async function nestFolders(token: string, parentId: string, names: string[]) {
+  let parent = parentId;
+  for (const name of names) {
+    if (!name.trim()) continue;
+    parent = await ensureChild(token, parent, name);
+  }
+  return parent;
 }
 
 async function ensureFolderPath(db: Db, token: string, segments: string[], folderId?: string) {
   const account = await loadAccount(db);
-  const pinned = folderId || account?.folder_id || "";
-  let parent = pinned || "root";
-  if (!pinned) {
-    const existing = parent === "root"
-      ? await findChildFolder(token, "root", segments[0] ?? config.googleDriveFolder)
-      : { id: parent, name: account?.folder_name ?? config.googleDriveFolder };
-    const root = existing ?? await createFolder(token, segments[0] ?? config.googleDriveFolder);
-    parent = root.id;
+  const pinned = usableFolderId(folderId) || usableFolderId(account?.folder_id);
+  const rootName = segments[0] ?? config.googleDriveFolder;
+  const rest = segments.slice(1).filter(name => name.trim());
+  const remember = async (id: string) => {
     await db.query(
       "UPDATE oauth_accounts SET folder_id = $1, folder_name = $2, updated_at = now() WHERE provider = 'google'",
-      [parent, segments[0] ?? config.googleDriveFolder],
+      [id, rootName],
     );
+  };
+  if (!pinned) {
+    const rootId = await ensureChild(token, "root", rootName);
+    await remember(rootId);
+    return nestFolders(token, rootId, rest);
   }
-  const rest = segments.slice(1);
-  for (const name of rest) {
-    const found = await findChildFolder(token, parent, name);
-    const folder = found ?? await createFolder(token, name, parent);
-    parent = folder.id;
+  try {
+    return await nestFolders(token, pinned, rest);
+  } catch (err) {
+    if (!isNotFound(err)) throw err;
+    const rootId = await ensureChild(token, "root", rootName);
+    await remember(rootId);
+    return nestFolders(token, rootId, rest);
   }
-  return parent;
 }
 
 async function uploadToGoogle(token: string, parentId: string, name: string, mime: string, bytes: Buffer) {
@@ -447,7 +502,10 @@ async function uploadToGoogle(token: string, parentId: string, name: string, mim
     webContentLink?: string;
   }>(token, url, {
     method: "POST",
-    headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
+    headers: {
+      "Content-Type": `multipart/related; boundary=${boundary}`,
+      "Content-Length": String(body.length),
+    },
     body,
   });
 }
@@ -492,7 +550,16 @@ export async function storeDriveFile(
   }
 
   if (token) {
-    const parent = await ensureFolderPath(db, token, folderSegments(ctx, creds.folderName), creds.folderId);
+    let parent: string;
+    try {
+      parent = await ensureFolderPath(db, token, folderSegments(ctx, creds.folderName), creds.folderId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (isNotFound(err)) {
+        throw new Error("A conta Google não consegue usar essa pasta. Em Configurações apague o ID da pasta, desligue a conta e volte a ligar.");
+      }
+      throw err instanceof Error ? err : new Error(msg || "upload recusado");
+    }
     const uploaded = await uploadToGoogle(token, parent, name, file.mime, file.bytes);
     await db.query(
       `INSERT INTO drive_files

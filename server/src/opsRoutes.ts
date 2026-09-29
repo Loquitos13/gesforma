@@ -690,8 +690,8 @@ export function registerOpsRoutes(
     if (!bytes) return reply.code(400).send({ error: "ficheiro em falta" });
     const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
     const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime);
-    const permitido = new Set([...pedidos.map(p => p.id), COMPROVATIVO.id, "outro"]);
-    if (!permitido.has(tipo)) tipo = "outro";
+    const permitido = new Set([...pedidos.map(p => p.id), DOCS_PUBLICOS.id]);
+    if (!permitido.has(tipo)) return reply.code(400).send({ error: "Este tipo de documento não faz parte do curso." });
     try {
       const file = await storeDriveFile(db, undefined, { name, mime, bytes }, {
         kind: tipo === "comprovativo" ? "comprovativo-pagamento" : "preinscricao-doc",
@@ -700,6 +700,10 @@ export function registerOpsRoutes(
         label: tipo,
         itemId: String(lead.id),
       });
+      await db.query(
+        "DELETE FROM preinscricao_docs WHERE preinscricao_id = $1 AND tipo = $2",
+        [lead.id, tipo],
+      );
       await db.query(
         "INSERT INTO preinscricao_docs (preinscricao_id, tipo, nome, drive_file_id, drive_url) VALUES ($1,$2,$3,$4,$5)",
         [lead.id, tipo, file.name, file.id, file.openUrl ?? ""],

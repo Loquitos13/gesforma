@@ -274,7 +274,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
     try {
       const r = await persist(apiCrmLote({ ids, acao, ...extra }));
       if (!r) return;
-      toastOk(`${r.updated} leads actualizados.`);
+      toastOk(`${r.updated} pré-inscrições actualizadas.`);
       setSel(new Set());
       carregar();
     } catch (err) {
@@ -311,9 +311,9 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
             <h1 className="text-xl font-bold text-slate-800 leading-tight">CRM</h1>
             <p className="text-sm text-slate-500 mt-0.5">
               {regime === "fin"
-                ? "Leads da formação financiada. O formulário público continua a ser da oferta Gold."
-                : "Lead rápida no balcão; NIF e morada só na etapa Pré-inscrição, depois a secretaria inscreve."}
-              {" "}{counts.total.toLocaleString("pt-PT")} leads neste regime.
+                ? "Pré-inscrições da formação financiada. O formulário público continua a ser da oferta Gold."
+                : "Pré-inscrição rápida no balcão; NIF e morada só na etapa Pré-inscrição, depois a secretaria inscreve."}
+              {" "}{counts.total.toLocaleString("pt-PT")} pré-inscrições neste regime.
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -349,11 +349,11 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
           </div>
           <div className={`rounded-xl border px-4 py-3 ${entrada === "manual" ? "border-sky-400 bg-sky-50" : "border-slate-200 bg-white"}`}>
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Input 2</p>
-            <p className="text-sm font-bold text-slate-800 mt-0.5">Lead manual</p>
+            <p className="text-sm font-bold text-slate-800 mt-0.5">Pré-inscrição manual</p>
             <p className="text-xs text-slate-500 mt-1">Quem ligou, escreveu ou passou no balcão. {counts.manuais.toLocaleString("pt-PT")} registadas à mão, com nota comercial.</p>
             <div className="flex gap-2 mt-3">
               <button type="button" onClick={() => { setEditLead(null); resetForm(); setNovo(true); }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg">{ic.plus} Nova lead</button>
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg">{ic.plus} Nova pré-inscrição</button>
               <button type="button" onClick={() => { setEntrada(entrada === "manual" ? "" : "manual"); setPage(1); }} className="ml-auto px-3 py-1.5 text-xs font-semibold text-sky-800">{entrada === "manual" ? "Ver todas" : "Filtrar estas"}</button>
             </div>
           </div>
@@ -397,7 +397,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
             <div className="relative flex-1">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{ic.search}</span>
               <input ref={searchRef} value={qInput} onChange={e => setQInput(e.target.value)}
-                placeholder="Nome, email, telemóvel, curso ou nº do lead…  (atalho /)"
+                placeholder="Nome, email, telemóvel, curso ou nº da pré-inscrição…  (atalho /)"
                 className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400" />
             </div>
             <select value={sort} onChange={e => { setSort(e.target.value as CrmSort); setPage(1); }}
@@ -503,8 +503,8 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
             {busy && items.length === 0 && <p className="text-sm text-slate-400 text-center py-10">A carregar a página…</p>}
             {!busy && items.length === 0 && (
               <EmptyHint
-                text={counts.total === 0 ? "Ainda sem leads. Cole o formulário público no site ou registe um pedido de telefone." : "Nenhum lead neste filtro."}
-                action={counts.total === 0 ? "Novo lead" : "Limpar filtros"}
+                text={counts.total === 0 ? "Ainda sem pré-inscrições. Cole o formulário público no site ou registe um pedido de telefone." : "Nenhuma pré-inscrição neste filtro."}
+                action={counts.total === 0 ? "Nova pré-inscrição" : "Limpar filtros"}
                 onAction={counts.total === 0 ? () => { setEditLead(null); resetForm(); setNovo(true); } : () => { setCurso(""); setLocal(""); setOrigem(""); setEstado("Todos"); setFila(""); setEntrada(""); setQInput(""); setQ(""); setPage(1); }}
               />
             )}
@@ -539,7 +539,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
                     <th className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 px-3 py-2 w-10">
                       <input type="checkbox" checked={items.length > 0 && sel.size === items.length} onChange={toggleAll} aria-label="Seleccionar página" />
                     </th>
-                    {["Lead", "Comercial", "Origem", "Meio", "Etiqueta", "Inscrito", "Curso", "Turma", "Valor", "Seguimento", "Nota", "Estado", ""].map(h => (
+                    {["Pré-inscrição", "Comercial", "Origem", "Meio", "Etiqueta", "Inscrito", "Curso", "Turma", "Valor", "Seguimento", "Nota", "Estado", ""].map(h => (
                       <th key={h} className="sticky top-0 z-10 text-left px-3 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide bg-slate-50 border-b border-slate-200 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -712,13 +712,13 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
       <ConfirmDangerModal
         open={!!apagar}
         onClose={() => setApagar(null)}
-        title="Eliminar lead"
+        title="Eliminar pré-inscrição"
         body={apagar ? `Remover ${apagar.nome} ${apagar.apelido} da fila comercial?` : ""}
         risk="Sai da lista de contacto. Prefira deixar o histórico se ainda puder converter."
         onConfirm={() => { if (apagar) { removePreinscricao(apagar.id); setTimeout(carregar, 200); } }}
       />
 
-      <AppModal open={novo} onClose={() => { setNovo(false); setEditLead(null); setDups([]); }} title={editLead ? `Editar ${editLead.nome}` : "Lead rápida"} sub={editLead ? "Actualiza os dados da ficha" : "Só precisa de nome e um contacto. NIF e morada fiscal ficam para a Pré-inscrição."} size="lg">
+      <AppModal open={novo} onClose={() => { setNovo(false); setEditLead(null); setDups([]); }} title={editLead ? `Editar ${editLead.nome}` : "Pré-inscrição rápida"} sub={editLead ? "Actualiza os dados da ficha" : "Só precisa de nome e um contacto. NIF e morada fiscal ficam para a etapa Pré-inscrição."} size="lg">
         <div className="p-5 space-y-3">
           {!editLead && (
             <p className="text-xs text-slate-600 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2">
@@ -727,7 +727,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
           )}
           {dups.length > 0 && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              Já existe {dups.length} lead(s) com este contacto:
+              Já existe {dups.length} pré-inscrição(ões) com este contacto:
               {dups.slice(0, 4).map(d => (
                 <button key={d.id} type="button" className="block mt-1 text-left font-semibold text-amber-800 hover:underline"
                   onClick={() => {
@@ -817,7 +817,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
                 setNovo(false); setEditLead(null); setDups([]);
                 setTimeout(carregar, 250);
               }
-            }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editLead ? "Guardar" : "Criar lead"}</button>
+            }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editLead ? "Guardar" : "Criar pré-inscrição"}</button>
           </div>
         </div>
       </AppModal>

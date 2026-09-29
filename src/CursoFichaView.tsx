@@ -3,6 +3,7 @@ import { useCatalogList } from "./CatalogsContext";
 import { AppModal, MultiSearchSelect, SearchSelect } from "./FormKit";
 import { OptionSelect } from "./OptionSelect";
 import { apiCursoFicha, apiSaveCursoFicha } from "./api";
+import { CursoDocumentos } from "./CursoDocumentos";
 import { DtpModeloEditor } from "./DtpModeloEditor";
 import {
   avaliacaoPadrao,
@@ -33,7 +34,7 @@ export type CursoFichaSeed = {
 export type CursoGold = CursoFichaSeed;
 export type CursoAccent = "gold" | "fin";
 
-type TabId = "identidade" | "oferta" | "conteudo" | "programa" | "avaliacao" | "dtp" | "publicacao";
+type TabId = "identidade" | "oferta" | "conteudo" | "programa" | "avaliacao" | "documentos" | "dtp" | "publicacao";
 type MediaSlot = { name: string; url: string };
 type LocalCatalogo = { id: number; nome: string; morada: string; salas: number; turmas: number; status: string };
 
@@ -651,6 +652,7 @@ export function CursoFichaView({
       { id: "conteudo", label: "Conteúdo do site" },
       { id: "programa", label: "Programa" },
       { id: "avaliacao", label: "Avaliação" },
+      { id: "documentos", label: "Documentos" },
       { id: "dtp", label: "Dossiê TP" },
       { id: "publicacao", label: "Publicação" },
     ];
@@ -1217,6 +1219,10 @@ export function CursoFichaView({
                 </div>
               )}
             </div>
+          )}
+
+          {tab === "documentos" && (
+            <CursoDocumentos accent={accent} cursoId={cursoPersistId ?? curso?.id} />
           )}
 
           {tab === "dtp" && (

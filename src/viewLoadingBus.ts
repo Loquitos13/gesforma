@@ -69,6 +69,7 @@ export function isSilentViewPath(path: string) {
     || path === "/v1/me"
     || path.startsWith("/v1/auth/")
     || path.startsWith("/v1/notificacoes")
+    || path.startsWith("/v1/alertas/")
     || path.startsWith("/v1/crm/")
     || path === "/v1/search"
     || path.startsWith("/v1/public/")

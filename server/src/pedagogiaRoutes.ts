@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
-import { listDriveFiles, readDriveContent } from "./googleDrive.js";
+import { listDriveFiles, readDriveContent, storeDriveFile } from "./googleDrive.js";
 import { DTP_CATEGORIAS, dtpCategoriaDe, dtpCategoriaPasta, dtpPastaNome, dtpZipNome, dtpZipRelPath, pastaSegura } from "./dtpPasta.js";
 import { zipStore } from "./zipStore.js";
 import {
@@ -11,8 +11,10 @@ import {
   dtpDefs,
   dtpEstrutura,
   dtpPct,
+  estadoPorFicheirosCurso,
   DTP_FASES,
   DTP_MODELO_VAZIO,
+  type CursoFicheiroRef,
   type DtpCounts,
   type DtpEstado,
   type DtpFacts,
@@ -23,6 +25,13 @@ type Regime = "gold" | "fin";
 
 function pgIntArray(ids: number[]) {
   return `{${ids.filter(n => Number.isFinite(n)).map(n => Math.trunc(Number(n))).join(",")}}`;
+}
+
+function pgTextArray(values: string[]) {
+  const body = values
+    .map(v => `"${v.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`)
+    .join(",");
+  return `{${body}}`;
 }
 
 const regimeSchema = z.enum(["gold", "fin"]);
@@ -377,15 +386,39 @@ async function dtpForTurma(db: Db, regime: Regime, turma: TurmaRow, modeloPre?: 
     ).catch(() => ({ rows: [] as { item_id: string; drive_file_id: string; file_name: string; drive_url: string }[] })),
   ]);
   const byItem = new Map(anexos.rows.map(r => [r.item_id, r]));
+  const cursoId = await cursoIdDaTurma(db, regime, turma.curso);
+  const ficheiroRows = cursoId == null
+    ? []
+    : (await db.query<{ ambito: string; requisito_id: string; pessoa_id: number | null; pessoa_nome: string }>(
+      `SELECT ambito, requisito_id, pessoa_id, pessoa_nome
+         FROM curso_ficheiros
+        WHERE regime = $1 AND curso_id = $2 AND requisito_id <> ''`,
+      [regime, cursoId],
+    ).catch(() => ({ rows: [] as { ambito: string; requisito_id: string; pessoa_id: number | null; pessoa_nome: string }[] }))).rows;
+  const refs: CursoFicheiroRef[] = ficheiroRows.map(f => ({
+    ambito: f.ambito,
+    requisitoId: f.requisito_id,
+    pessoaId: f.pessoa_id,
+    pessoaNome: f.pessoa_nome,
+  }));
+  const formandosCurso = refs.some(f => f.ambito === "formando") ? await formandosDaTurma(db, regime, turma) : [];
   const items = buildDtpItems(regime, facts, manual, modelo).map(item => {
     const a = byItem.get(item.id);
     const anexo = a?.drive_file_id
       ? { fileName: a.file_name, url: a.drive_url, driveFileId: a.drive_file_id }
       : null;
+    let next = item;
     if (anexo && item.origem === "manual" && item.estado === "falta") {
-      return { ...item, anexo, estado: "ok" as const, detalhe: `Ficheiro no Drive: ${anexo.fileName}` };
+      next = { ...item, estado: "ok" as const, detalhe: `Ficheiro no Drive: ${anexo.fileName}` };
     }
-    return { ...item, anexo };
+    const porPartes = estadoPorFicheirosCurso(next.id, refs, formandosCurso, turma.formador ?? "");
+    if (porPartes?.estado === "ok") {
+      return { ...next, anexo, estado: "ok" as const, detalhe: porPartes.detalhe };
+    }
+    if (porPartes?.estado === "parcial" && next.estado !== "ok") {
+      return { ...next, anexo, estado: "parcial" as const, detalhe: porPartes.detalhe };
+    }
+    return { ...next, anexo };
   });
   return {
     items,
@@ -401,7 +434,7 @@ async function dtpForTurma(db: Db, regime: Regime, turma: TurmaRow, modeloPre?: 
 export async function dtpResumo(db: Db, regime: Regime) {
   const table = regime === "gold" ? "turmas_gold" : "turmas_fin";
   const [rows, modelos] = await Promise.all([
-    db.query<TurmaRow>(`SELECT id, nome, curso, cronograma FROM ${table}`),
+    db.query<TurmaRow>(`SELECT id, nome, curso, cronograma, formador FROM ${table}`),
     db.query<{ curso_id: number; excluidos: unknown; extra: unknown }>(
       "SELECT curso_id, excluidos, extra FROM curso_dtp_modelos WHERE regime = $1",
       [regime],
@@ -728,6 +761,180 @@ export function registerPedagogiaRoutes(
     });
     const modelo: DtpModelo = { excluidos, extra };
     return { modelo, estrutura: dtpEstrutura(regime, modelo) };
+  });
+
+  async function nomesDoCurso(regime: Regime, cursoId: number) {
+    if (regime === "gold") {
+      const row = await db.query<{ nome: string }>("SELECT nome FROM cursos_gold WHERE id = $1", [cursoId]);
+      const nome = row.rows[0]?.nome?.trim() ?? "";
+      return nome ? [nome] : [];
+    }
+    const row = await db.query<{ ufcd: string; nome_comercial: string }>(
+      "SELECT ufcd, nome_comercial FROM cursos_fin WHERE id = $1",
+      [cursoId],
+    );
+    const found = row.rows[0];
+    if (!found) return [];
+    return [...new Set([found.ufcd, found.nome_comercial].map(s => s.trim()).filter(Boolean))];
+  }
+
+  async function pessoasDoCurso(regime: Regime, cursoId: number) {
+    const nomes = await nomesDoCurso(regime, cursoId);
+    if (!nomes.length) return { formandos: [] as { id: number; nome: string }[], formadores: [] as { id: number | null; nome: string }[] };
+    const lista = pgTextArray(nomes);
+    const tableF = regime === "gold" ? "formandos_gold" : "formandos_fin";
+    const tableT = regime === "gold" ? "turmas_gold" : "turmas_fin";
+    const [formandos, formadorNomes, catalogo] = await Promise.all([
+      db.query<{ id: number; nome: string; apelido: string }>(
+        `SELECT DISTINCT f.id, f.nome, f.apelido FROM ${tableF} f
+          WHERE f.curso = ANY($1::text[])
+             OR f.turma IN (SELECT nome FROM ${tableT} WHERE curso = ANY($1::text[]))
+          ORDER BY f.nome, f.apelido`,
+        [lista],
+      ),
+      db.query<{ formador: string }>(
+        `SELECT DISTINCT trim(formador) AS formador FROM ${tableT}
+          WHERE curso = ANY($1::text[]) AND trim(formador) <> ''
+          ORDER BY 1`,
+        [lista],
+      ),
+      db.query<{ id: number; nome: string }>("SELECT id, nome FROM formadores"),
+    ]);
+    return {
+      formandos: formandos.rows.map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}`.trim() })),
+      formadores: formadorNomes.rows.map(r => {
+        const hit = catalogo.rows.find(c => c.nome.trim().toLowerCase() === r.formador.trim().toLowerCase());
+        return { id: hit?.id ?? null, nome: hit?.nome ?? r.formador };
+      }),
+    };
+  }
+
+  app.get("/v1/cursos/:regime/:id/documentos", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const { regime, id } = params(req);
+    if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
+    const modelo = await loadModelo(db, regime, id);
+    const estrutura = dtpEstrutura(regime, modelo);
+    const pessoas = await pessoasDoCurso(regime, id);
+    const ficheiros = await db.query<{
+      id: string; ambito: string; requisito_id: string; pessoa_id: number | null; pessoa_nome: string;
+      nome: string; drive_file_id: string | null; drive_url: string; created_at: string;
+    }>(
+      `SELECT id, ambito, requisito_id, pessoa_id, pessoa_nome, nome, drive_file_id, drive_url, created_at
+         FROM curso_ficheiros WHERE regime = $1 AND curso_id = $2 ORDER BY created_at DESC`,
+      [regime, id],
+    );
+    return {
+      fases: DTP_FASES,
+      requisitos: estrutura.map(d => ({ id: d.id, fase: d.fase, label: d.label, universal: Boolean(d.universal) })),
+      formandos: pessoas.formandos,
+      formadores: pessoas.formadores,
+      ficheiros: ficheiros.rows.map(f => ({
+        id: f.id,
+        ambito: f.ambito,
+        requisitoId: f.requisito_id,
+        pessoaId: f.pessoa_id,
+        pessoaNome: f.pessoa_nome,
+        nome: f.nome,
+        url: f.drive_url || (f.drive_file_id ? `/api/v1/drive/files/${f.drive_file_id}/content` : ""),
+        createdAt: f.created_at,
+      })),
+    };
+  });
+
+  app.post("/v1/cursos/:regime/:id/documentos", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const { regime, id } = params(req);
+    if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
+    let name = "ficheiro";
+    let mime = "application/octet-stream";
+    let bytes: Buffer | null = null;
+    let ambito = "curso";
+    let requisitoId = "";
+    let pessoaId: number | null = null;
+    let pessoaNome = "";
+    try {
+      const parts = req.parts();
+      for await (const part of parts) {
+        if (part.type === "file") {
+          name = part.filename || name;
+          mime = part.mimetype || mime;
+          bytes = await part.toBuffer();
+        } else if (part.fieldname === "ambito") ambito = String(part.value ?? "curso");
+        else if (part.fieldname === "requisitoId") requisitoId = String(part.value ?? "").slice(0, 80);
+        else if (part.fieldname === "pessoaId") {
+          const n = Number(part.value);
+          pessoaId = Number.isInteger(n) ? n : null;
+        } else if (part.fieldname === "pessoaNome") pessoaNome = String(part.value ?? "").trim().slice(0, 160);
+      }
+    } catch {
+      return reply.code(400).send({ error: "upload inválido" });
+    }
+    if (!bytes) return reply.code(400).send({ error: "ficheiro em falta" });
+    if (ambito !== "curso" && ambito !== "formando" && ambito !== "formador") {
+      return reply.code(400).send({ error: "Âmbito inválido." });
+    }
+    const modelo = await loadModelo(db, regime, id);
+    const ids = new Set(dtpEstrutura(regime, modelo).map(d => d.id));
+    if (!requisitoId || !ids.has(requisitoId)) return reply.code(400).send({ error: "Associe o ficheiro a um requisito do dossiê." });
+    const pessoas = await pessoasDoCurso(regime, id);
+    if (ambito === "formando") {
+      const hit = pessoas.formandos.find(f => f.id === pessoaId);
+      if (!hit) return reply.code(400).send({ error: "Escolha o formando." });
+      pessoaNome = hit.nome;
+    } else if (ambito === "formador") {
+      const hit = pessoas.formadores.find(f => f.nome.trim().toLowerCase() === pessoaNome.trim().toLowerCase());
+      if (!hit) return reply.code(400).send({ error: "Escolha o formador." });
+      pessoaNome = hit.nome;
+      pessoaId = hit.id;
+    } else {
+      pessoaId = null;
+      pessoaNome = "";
+    }
+    try {
+      const file = await storeDriveFile(db, req.actor!.id, { name, mime, bytes }, {
+        kind: "curso-doc",
+        regime,
+        label: requisitoId,
+        formando: pessoaNome,
+        itemId: String(id),
+      });
+      if (ambito === "curso") {
+        await db.query(
+          "DELETE FROM curso_ficheiros WHERE regime = $1 AND curso_id = $2 AND ambito = 'curso' AND requisito_id = $3",
+          [regime, id, requisitoId],
+        );
+      } else if (ambito === "formando") {
+        await db.query(
+          "DELETE FROM curso_ficheiros WHERE regime = $1 AND curso_id = $2 AND ambito = 'formando' AND requisito_id = $3 AND pessoa_id = $4",
+          [regime, id, requisitoId, pessoaId],
+        );
+      } else {
+        await db.query(
+          "DELETE FROM curso_ficheiros WHERE regime = $1 AND curso_id = $2 AND ambito = 'formador' AND requisito_id = $3 AND lower(pessoa_nome) = lower($4)",
+          [regime, id, requisitoId, pessoaNome],
+        );
+      }
+      const ficheiroId = randomBytes(12).toString("base64url");
+      await db.query(
+        `INSERT INTO curso_ficheiros (id, regime, curso_id, ambito, requisito_id, pessoa_id, pessoa_nome, nome, drive_file_id, drive_url)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [ficheiroId, regime, id, ambito, requisitoId, pessoaId, pessoaNome, file.name, file.id, file.openUrl ?? ""],
+      );
+      await audit(db, req.actor!.id, "curso.documento", "curso", String(id), req.ip, { regime, ambito, requisitoId });
+      return { ok: true, id: ficheiroId, nome: file.name };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : "upload recusado" });
+    }
+  });
+
+  app.delete("/v1/cursos/:regime/:id/documentos/:ficheiroId", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const { regime, id } = params(req);
+    const ficheiroId = String((req.params as { ficheiroId?: string }).ficheiroId ?? "");
+    if (!regime || id == null || !ficheiroId) return reply.code(400).send({ error: "pedido inválido" });
+    await db.query("DELETE FROM curso_ficheiros WHERE id = $1 AND regime = $2 AND curso_id = $3", [ficheiroId, regime, id]);
+    return { ok: true };
   });
 
   app.get("/v1/cursos/:regime/:id/ficha", async (req, reply) => {

@@ -56,8 +56,9 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
   const items = dtp.items;
   const visiveis = useMemo(() => {
     const list = categoria === "todas" ? items : items.filter(d => dtpCategoriaDe(d) === categoria);
+    const faseOrdem = { antes: 0, durante: 1, depois: 2 };
     const ordem = Object.fromEntries(DTP_CATEGORIAS.map((c, i) => [c.id, i]));
-    return [...list].sort((a, b) => (ordem[dtpCategoriaDe(a)] ?? 0) - (ordem[dtpCategoriaDe(b)] ?? 0));
+    return [...list].sort((a, b) => (faseOrdem[a.fase] - faseOrdem[b.fase]) || ((ordem[dtpCategoriaDe(a)] ?? 0) - (ordem[dtpCategoriaDe(b)] ?? 0)));
   }, [items, categoria]);
 
   if (estado === "loading") {
@@ -133,7 +134,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
         <p className="text-xs text-slate-600 mt-0.5">
           {isGold
             ? "Núcleo DGERT + extras CCP (PIP, simulações, 5 anos de experiência) + recibos."
-            : "Núcleo DGERT + extras de financiamento (UFCD, elegibilidade, IBAN, horas, execução)."}
+            : "Na financiada o dossiê é o mesmo em todas as UFCD: antes, durante e fecho."}
         </p>
       </div>
 
@@ -169,11 +170,17 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
           <button type="button" onClick={() => setCategoria("todas")} className="text-xs font-semibold text-slate-500 hover:text-slate-800 whitespace-nowrap">Ver tudo</button>
         </div>
         <div className="divide-y divide-slate-100">
-          {visiveis.map(doc => {
+          {visiveis.map((doc, idx) => {
+            const faseLabel = doc.fase === "antes" ? "Antes" : doc.fase === "durante" ? "Durante" : "Fecho";
+            const faseNova = idx === 0 || visiveis[idx - 1]?.fase !== doc.fase;
             const s = estadoStyle[doc.estado];
             const cat = DTP_CATEGORIAS.find(c => c.id === dtpCategoriaDe(doc));
             return (
-              <div key={doc.id} className={`px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 ${s.row}`}>
+              <div key={doc.id}>
+              {faseNova && (
+                <p className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50 border-b border-slate-100">{faseLabel}</p>
+              )}
+              <div className={`px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 ${s.row}`}>
                 <button
                   onClick={() => onToggle?.(doc, cycle(doc.estado))}
                   title={doc.origem === "auto" ? "Sai dos dados da turma. Clique para forçar outro estado." : "Marcar estado"}
@@ -195,6 +202,9 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
                     )}
                     {doc.extra && (
                       <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide ${isGold ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>curso</span>
+                    )}
+                    {doc.universal && (
+                      <span className="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">universal</span>
                     )}
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">{doc.detalhe}</p>
@@ -219,6 +229,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
                   </button>
                   <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400 sm:text-right sm:max-w-[180px]">{doc.fonte}</p>
                 </div>
+              </div>
               </div>
             );
           })}

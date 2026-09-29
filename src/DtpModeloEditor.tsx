@@ -12,10 +12,6 @@ type ExtraDraft = { id: string; fase: DtpFase; label: string; fonte: string; hin
 
 const iCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent";
 
-function novoExtra(fase: DtpFase): ExtraDraft {
-  return { id: "", fase, label: "", fonte: "", hint: "", bloqueante: false, ambito: "turma" };
-}
-
 /**
  * Estrutura do dossiê técnico-pedagógico deste curso. A base vem do regime; os documentos
  * que são norma (DGERT e, na financiada, execução do financiador) ficam travados.
@@ -25,7 +21,6 @@ export function DtpModeloEditor({ accent, cursoId }: { accent: Regime; cursoId?:
   const [estado, setEstado] = useState<"loading" | "ready" | "offline">("loading");
   const [excluidos, setExcluidos] = useState<Set<string>>(new Set());
   const [extra, setExtra] = useState<ExtraDraft[]>([]);
-  const [draft, setDraft] = useState<ExtraDraft>(() => novoExtra("durante"));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -58,7 +53,9 @@ export function DtpModeloEditor({ accent, cursoId }: { accent: Regime; cursoId?:
     }));
   }, [dados, extra]);
 
-  const total = (dados?.base ?? []).filter(d => d.obrigatorio || !excluidos.has(d.id)).length + extra.length;
+  const total = gold
+    ? (dados?.base ?? []).filter(d => d.obrigatorio || !excluidos.has(d.id)).length + extra.length
+    : (dados?.base ?? []).length;
   const normas = (dados?.base ?? []).filter(d => d.obrigatorio).length;
 
   async function guardar() {
@@ -129,8 +126,8 @@ export function DtpModeloEditor({ accent, cursoId }: { accent: Regime; cursoId?:
             <p className="text-sm font-semibold text-slate-800">Estrutura do dossiê técnico-pedagógico</p>
             <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
               {gold
-                ? "Base das formações Gold (autofinanciadas): núcleo DGERT mais os extras do CCP. Ligue ou desligue o que este curso exige."
-                : "Base das formações financiadas: núcleo DGERT mais a execução do financiador. Ligue ou desligue o que a tipologia exige."}
+                ? "Antes, durante e fecho. Os requisitos universais valem para a autofinanciada e para a financiada. Ligue ou desligue o que este curso exige."
+                : "Na formação financiada o dossiê é o mesmo para todas as UFCD: antes, durante e fecho, com os requisitos universais e os da execução do financiador."}
             </p>
           </div>
           <div className="flex items-center gap-3 flex-shrink-0">
@@ -138,9 +135,11 @@ export function DtpModeloEditor({ accent, cursoId }: { accent: Regime; cursoId?:
               <p className="text-2xl font-bold text-slate-800 leading-none">{total}</p>
               <p className="text-[11px] text-slate-400 mt-0.5">documentos</p>
             </div>
-            <button type="button" disabled={busy} onClick={() => void guardar()} className={`px-4 py-2.5 text-sm font-semibold rounded-lg ${acento.btn} disabled:opacity-40 text-white`}>
-              {busy ? "A gravar…" : "Gravar estrutura"}
-            </button>
+            {gold && (
+              <button type="button" disabled={busy} onClick={() => void guardar()} className={`px-4 py-2.5 text-sm font-semibold rounded-lg ${acento.btn} disabled:opacity-40 text-white`}>
+                {busy ? "A gravar…" : "Gravar estrutura"}
+              </button>
+            )}
           </div>
         </div>
         <p className="text-xs text-slate-500">
@@ -168,8 +167,8 @@ export function DtpModeloEditor({ accent, cursoId }: { accent: Regime; cursoId?:
                   <input
                     type="checkbox"
                     className={`mt-0.5 w-4 h-4 ${acento.chk} disabled:opacity-60`}
-                    checked={dentro}
-                    disabled={def.obrigatorio}
+                    checked={gold ? dentro : true}
+                    disabled={def.obrigatorio || !gold}
                     onChange={() => toggle(def)}
                   />
                   <div className="flex-1 min-w-0">
@@ -177,6 +176,9 @@ export function DtpModeloEditor({ accent, cursoId }: { accent: Regime; cursoId?:
                       <p className={`text-sm font-medium ${dentro ? "text-slate-800" : "text-slate-400 line-through"}`}>{def.label}</p>
                       {def.obrigatorio && (
                         <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">norma</span>
+                      )}
+                      {def.universal && (
+                        <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">universal</span>
                       )}
                       {def.bloqueante && (
                         <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-600">bloqueante</span>
@@ -188,7 +190,7 @@ export function DtpModeloEditor({ accent, cursoId }: { accent: Regime; cursoId?:
                 </label>
               );
             })}
-            {f.extras.map(x => (
+            {gold && f.extras.map(x => (
               <div key={x.id || x.label} className="flex items-start gap-3 px-4 py-3 bg-white">
                 <span className={`mt-1 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${acento.chip}`}>curso</span>
                 <div className="flex-1 min-w-0 space-y-1.5">
@@ -238,57 +240,6 @@ export function DtpModeloEditor({ accent, cursoId }: { accent: Regime; cursoId?:
         </div>
       ))}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">
-        <div>
-          <p className="text-sm font-semibold text-slate-800">Acrescentar documento a este curso</p>
-          <p className="text-xs text-slate-500 mt-0.5">Para exigências que não estão na base do regime. Indique se o ficheiro é da turma, de cada formando ou do formador.</p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_170px_170px] gap-3">
-          <input
-            className={iCls}
-            value={draft.label}
-            placeholder="Nome do documento"
-            onChange={e => setDraft(d => ({ ...d, label: e.target.value }))}
-          />
-          <select className={iCls} value={draft.fase} onChange={e => setDraft(d => ({ ...d, fase: e.target.value as DtpFase }))}>
-            {dados.fases.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
-          </select>
-          <select className={iCls} value={draft.ambito} onChange={e => setDraft(d => ({ ...d, ambito: e.target.value as ExtraDraft["ambito"] }))}>
-            <option value="turma">Turma</option>
-            <option value="formando">Formando</option>
-            <option value="formador">Formador</option>
-          </select>
-        </div>
-        <input
-          className={iCls}
-          value={draft.hint}
-          placeholder="O que a secretaria tem de arquivar (opcional)"
-          onChange={e => setDraft(d => ({ ...d, hint: e.target.value }))}
-        />
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <label className="flex items-center gap-2 text-xs text-slate-600">
-            <input
-              type="checkbox"
-              className={`w-3.5 h-3.5 ${acento.chk}`}
-              checked={draft.bloqueante}
-              onChange={e => setDraft(d => ({ ...d, bloqueante: e.target.checked }))}
-            />
-            Bloqueia o fecho da turma
-          </label>
-          <button
-            type="button"
-            disabled={draft.label.trim().length < 3}
-            onClick={() => {
-              setExtra(prev => [...prev, { ...draft, label: draft.label.trim(), fonte: "ENA · exigência do curso" }]);
-              setDraft(novoExtra(draft.fase));
-              setMsg("");
-            }}
-            className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-          >
-            Acrescentar
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

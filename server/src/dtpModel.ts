@@ -31,6 +31,8 @@ export type DtpDef = {
   bloqueante?: boolean;
   /** Norma legal: fica no dossiê de todos os cursos do regime e não se pode remover. */
   obrigatorio?: boolean;
+  /** Existe na autofinanciada e na financiada, em qualquer formação. */
+  universal?: boolean;
   ambito?: DtpAmbito;
 };
 
@@ -126,8 +128,60 @@ const FIN: DtpDef[] = [
   { id: "relatorio", fase: "depois", label: "Relatório final da turma", fonte: "DGERT · Portaria 851/2010 t)", hint: "Fecha o DTP pedagógico.", bloqueante: true, obrigatorio: true },
 ];
 
+const UNIVERSAL_IDS = new Set(GOLD.map(d => d.id).filter(id => FIN.some(f => f.id === id)));
+
+export function dtpUniversal(id: string) {
+  return UNIVERSAL_IDS.has(id);
+}
+
 export function dtpDefs(regime: "gold" | "fin") {
-  return regime === "gold" ? GOLD : FIN;
+  return (regime === "gold" ? GOLD : FIN).map(d => ({ ...d, universal: UNIVERSAL_IDS.has(d.id) }));
+}
+
+export type CursoFicheiroRef = {
+  ambito: string;
+  requisitoId: string;
+  pessoaId: number | null;
+  pessoaNome: string;
+};
+
+/** O visto no dossiê só fecha quando todas as partes associadas ao requisito entregaram. */
+export function estadoPorFicheirosCurso(
+  requisitoId: string,
+  files: CursoFicheiroRef[],
+  formandos: { id: number }[],
+  formadorNome: string,
+): { estado: DtpEstado; detalhe: string } | null {
+  const grupo = files.filter(f => f.requisitoId === requisitoId);
+  if (!grupo.length) return null;
+  const ambitos = new Set(grupo.map(f => f.ambito));
+  const partes: DtpEstado[] = [];
+  const notas: string[] = [];
+  if (ambitos.has("curso")) {
+    const n = grupo.filter(f => f.ambito === "curso").length;
+    partes.push(n > 0 ? "ok" : "falta");
+    notas.push(n > 0 ? "ficheiro do curso" : "falta o ficheiro do curso");
+  }
+  if (ambitos.has("formando")) {
+    const ids = new Set(grupo.filter(f => f.ambito === "formando" && f.pessoaId != null).map(f => f.pessoaId));
+    const total = formandos.length;
+    const done = formandos.filter(f => ids.has(f.id)).length;
+    partes.push(total > 0 && done >= total ? "ok" : done > 0 ? "parcial" : "falta");
+    notas.push(total > 0 ? `${done}/${total} formandos` : "sem formandos na turma");
+  }
+  if (ambitos.has("formador")) {
+    const nome = formadorNome.trim().toLowerCase();
+    const hit = Boolean(nome) && grupo.some(f => f.ambito === "formador" && f.pessoaNome.trim().toLowerCase() === nome);
+    partes.push(hit ? "ok" : "falta");
+    notas.push(hit ? "formador entregue" : "falta o formador da turma");
+  }
+  if (!partes.length) return null;
+  const estado: DtpEstado = partes.every(p => p === "ok")
+    ? "ok"
+    : partes.some(p => p === "ok" || p === "parcial")
+      ? "parcial"
+      : "falta";
+  return { estado, detalhe: notas.join(" · ") };
 }
 
 export type DtpCounts = { done: number; total: number };
@@ -174,14 +228,17 @@ export type DtpItem = DtpDef & {
   origem: "auto" | "manual";
   extra?: boolean;
   ambito?: DtpAmbito;
+  universal?: boolean;
   anexo?: { fileName: string; url: string; driveFileId: string } | null;
 };
 
 /** Estrutura do dossiê de um curso: base do regime menos o que foi retirado, mais os extras. */
 export function dtpEstrutura(regime: "gold" | "fin", modelo: DtpModelo = DTP_MODELO_VAZIO): DtpDef[] {
-  const fora = new Set(modelo.excluidos);
+  // Na financiada o dossiê é o mesmo para todas as UFCD.
+  const efectivo = regime === "fin" ? DTP_MODELO_VAZIO : modelo;
+  const fora = new Set(efectivo.excluidos);
   const base = dtpDefs(regime).filter(def => def.obrigatorio || !fora.has(def.id));
-  const extras: DtpDef[] = modelo.extra.map(x => ({
+  const extras: DtpDef[] = efectivo.extra.map(x => ({
     ...x,
     id: `extra:${x.id}`,
     auto: x.ambito === "formando" || x.ambito === "formador" ? (`doc-${x.id}` as DtpAuto) : undefined,
@@ -199,14 +256,15 @@ export function buildDtpItems(
   return dtpEstrutura(regime, modelo).map(def => {
     const extra = def.id.startsWith("extra:");
     const override = manual[def.id];
+    const universal = dtpUniversal(def.id);
     if (override) {
-      return { ...def, estado: override, detalhe: def.hint, origem: "manual" as const, extra, ambito: def.ambito };
+      return { ...def, estado: override, detalhe: def.hint, origem: "manual" as const, extra, ambito: def.ambito, universal };
     }
     const derived = def.auto ? estadoFromCounts(factFor(def.auto, facts)) : null;
     if (derived) {
-      return { ...def, estado: derived.estado, detalhe: `${derived.detalhe} ${def.hint}`.trim(), origem: "auto" as const, extra, ambito: def.ambito };
+      return { ...def, estado: derived.estado, detalhe: `${derived.detalhe} ${def.hint}`.trim(), origem: "auto" as const, extra, ambito: def.ambito, universal };
     }
-    return { ...def, estado: "falta" as DtpEstado, detalhe: def.hint, origem: "manual" as const, extra, ambito: def.ambito };
+    return { ...def, estado: "falta" as DtpEstado, detalhe: def.hint, origem: "manual" as const, extra, ambito: def.ambito, universal };
   });
 }
 

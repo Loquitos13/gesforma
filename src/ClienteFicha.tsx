@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   apiCrmCompletar, apiCrmDossier, apiCrmEtiquetas,
   apiCrmLeadNota, apiCrmNotaFixar, apiCrmLeadCampos, apiCrmCampoCreate,
+  apiCrmDocValidar, apiCrmDocRecusar, apiCrmDocAlertar,
   type CrmCampoTipo, type CrmDossier, type CrmEtiqueta, type CrmLead,
 } from "./api";
 import { useAuth } from "./AuthGate";
@@ -13,7 +14,7 @@ import {
 import { AppModal } from "./FormKit";
 import { OptionSelect } from "./OptionSelect";
 import type { Preinscricao } from "./ListsContext";
-import { persist, toastError, toastOk } from "./toastBus";
+import { dismissAlertsForLead, persist, toastError, toastOk } from "./toastBus";
 import { useTurmas } from "./TurmasContext";
 import { EscolherTurmaPicker } from "./TurmaInscricao";
 import { isTurmaActiva, type TurmaGold } from "./turmaModel";
@@ -63,6 +64,7 @@ export function ClienteFicha({
   const [dossier, setDossier] = useState<CrmDossier | null>(null);
   const [erro, setErro] = useState("");
   const [busy, setBusy] = useState(false);
+  const [obsDoc, setObsDoc] = useState<Record<number, string>>({});
   const [tab, setTab] = useState<"actividade" | "dados" | "documentos" | "secretaria">("actividade");
   const [notaNova, setNotaNova] = useState("");
   const [meio, setMeio] = useState("Telefone");
@@ -229,7 +231,7 @@ export function ClienteFicha({
       open
       variant="drawer"
       onClose={onClose}
-      title={`${lead.nome} ${lead.apelido}`.trim() || `Lead #${lead.id}`}
+      title={`${lead.nome} ${lead.apelido}`.trim() || `Pré-inscrição #${lead.id}`}
       sub={`${lead.curso || "Sem curso"} · ${[lead.local, lead.horario, lead.inicioCurso && lead.inicioCurso !== "-" ? lead.inicioCurso : ""].filter(Boolean).join(" · ") || "turma por definir"}`}
     >
       <div className="p-4 space-y-4">
@@ -425,7 +427,9 @@ export function ClienteFicha({
 
         {tab === "documentos" && (
           <div className="space-y-3">
-            {dossier?.docsUrl && (
+            {dossier?.docsFechado ? (
+              <p className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">Ligação encerrada. Os documentos obrigatórios estão validados.</p>
+            ) : dossier?.docsUrl && (
               <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">Ligação pessoal</p>
                 <p className="text-xs text-violet-900 break-all mt-1">{dossier.docsUrl}</p>
@@ -444,21 +448,60 @@ export function ClienteFicha({
               <p className="text-xs text-amber-800">Ainda falta: {dossier.docsEmFalta.join(", ")}</p>
             )}
             {(dossier?.documentos ?? []).length === 0 && (
-              <p className="text-sm text-slate-400">Ainda sem ficheiros nesta ficha. O formando envia-os pela ligação pessoal.</p>
+              <p className="text-sm text-slate-400">Ainda sem ficheiros nesta ficha. A pessoa envia-os pela ligação pessoal.</p>
             )}
             <ul className="space-y-2">
-              {(dossier?.documentos ?? []).map(d => (
-                <li key={d.id} className="rounded-lg border border-slate-200 px-3 py-2 flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-slate-800">{d.label}</p>
-                    <p className="text-xs text-slate-500 truncate">{d.nome}</p>
-                  </div>
-                  {d.url
-                    ? <a href={d.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-amber-700 shrink-0">Abrir</a>
-                    : <span className="text-xs text-slate-400">no Drive</span>}
-                </li>
-              ))}
+              {(dossier?.documentos ?? []).map(d => {
+                const estado = d.estado || "pendente";
+                return (
+                  <li key={d.id} className="rounded-lg border border-slate-200 px-3 py-2 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-slate-800">{d.label}</p>
+                        <p className="text-xs text-slate-500 truncate">{d.nome}</p>
+                        <p className={`text-[11px] font-semibold mt-1 ${estado === "validado" ? "text-emerald-700" : estado === "recusado" ? "text-red-700" : "text-amber-700"}`}>
+                          {estado === "validado" ? "Validado" : estado === "recusado" ? "Recusado" : "Por validar"}
+                        </p>
+                        {d.observacao && <p className="text-xs text-red-800 mt-1">{d.observacao}</p>}
+                      </div>
+                      {d.url
+                        ? <a href={d.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-amber-700 shrink-0">Abrir</a>
+                        : <span className="text-xs text-slate-400">no Drive</span>}
+                    </div>
+                    {estado !== "validado" && (
+                      <div className="space-y-1.5">
+                        <textarea
+                          className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg"
+                          rows={2}
+                          placeholder="O que está incorrecto"
+                          value={obsDoc[d.id] ?? d.observacao ?? ""}
+                          onChange={e => setObsDoc(prev => ({ ...prev, [d.id]: e.target.value }))}
+                        />
+                        <div className="flex gap-2">
+                          <button type="button" className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white" onClick={() => {
+                            void persist(apiCrmDocValidar(item.id, d.id)).then(r => {
+                              if (!r) return;
+                              setDossier(r);
+                              dismissAlertsForLead(item.id);
+                            });
+                          }}>Validar</button>
+                          <button type="button" className="flex-1 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-700" onClick={() => {
+                            const nota = (obsDoc[d.id] ?? d.observacao ?? "").trim();
+                            if (!nota) { toastError(new Error("Escreva o que está incorrecto.")); return; }
+                            void persist(apiCrmDocRecusar(item.id, d.id, nota)).then(r => { if (r) setDossier(r); });
+                          }}>Recusar</button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
+            {(dossier?.documentos ?? []).some(d => d.estado === "recusado") && !dossier?.docsFechado && (
+              <button type="button" className="w-full py-2 text-sm font-semibold rounded-lg bg-amber-500 text-white" onClick={() => {
+                void persist(apiCrmDocAlertar(item.id)).then(r => { if (r) toastOk("Email enviado com o que está incorrecto."); });
+              }}>Alertar documentos incorrectos</button>
+            )}
           </div>
         )}
 
@@ -501,14 +544,14 @@ export function ClienteFicha({
             )}
             {novoCampo ? (
               <div className="rounded-lg border p-3 space-y-2">
-                <input className={inp} value={campoLabel} onChange={e => setCampoLabel(e.target.value)} placeholder="Novo campo (todas as leads)" />
+                <input className={inp} value={campoLabel} onChange={e => setCampoLabel(e.target.value)} placeholder="Novo campo (todas as pré-inscrições)" />
                 <select className={inp} value={campoTipo} onChange={e => setCampoTipo(e.target.value as CrmCampoTipo)}>
                   <option value="texto">Texto</option><option value="numero">Número</option><option value="data">Data</option>
                 </select>
                 <button type="button" onClick={() => void persist(apiCrmCampoCreate({ label: campoLabel, tipo: campoTipo })).then(() => item && carregar(item.id))} className="text-xs font-semibold">Criar</button>
               </div>
             ) : (
-              <button type="button" onClick={() => setNovoCampo(true)} className="text-xs text-slate-400">+ Campo extra (todas as leads)</button>
+              <button type="button" onClick={() => setNovoCampo(true)} className="text-xs text-slate-400">+ Campo extra (todas as pré-inscrições)</button>
             )}
             {(dossier?.campos ?? []).map(c => (
               <label key={c.id} className="text-xs font-semibold uppercase text-slate-500 flex flex-col gap-1">{c.label}

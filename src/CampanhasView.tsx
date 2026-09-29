@@ -161,7 +161,7 @@ export function CampanhasView() {
                 </p>
               )}
               {c.custo > 0 && (
-                <p className="text-[11px] text-slate-400 mt-1">Custo anunciado {euro(c.custo)} · receita estimada das leads {euro(n.receitaEstimada)}</p>
+                <p className="text-[11px] text-slate-400 mt-1">Custo anunciado {euro(c.custo)} · receita estimada das pré-inscrições {euro(n.receitaEstimada)}</p>
               )}
             </div>
           );
@@ -215,7 +215,7 @@ export function CampanhasView() {
             <p className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2">Pré-visualização com dados reais</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[
-                { l: "Leads", v: String(preview.preinscricoes) },
+                { l: "Pré-inscrições", v: String(preview.preinscricoes) },
                 { l: "Pagos", v: String(preview.pagos) },
                 { l: "Conversão", v: preview.preinscricoes ? `${preview.conversaoPct}%` : "-" },
                 { l: "Receita", v: euro(preview.receita) },
@@ -234,7 +234,7 @@ export function CampanhasView() {
               <p className="text-[11px] text-slate-600 mt-2">Origens: {preview.origens.map(o => `${o.origem} (${o.n})`).join(" · ")}</p>
             )}
             {!preview.preinscricoes && (
-              <p className="text-[11px] text-slate-500 mt-2">Ainda não há leads com este nome de campanha ou curso. Os números aparecem quando o CRM e a pré-inscrição pública usarem o mesmo nome.</p>
+              <p className="text-[11px] text-slate-500 mt-2">Ainda não há pré-inscrições com este nome de campanha ou curso. Os números aparecem quando o CRM e a pré-inscrição pública usarem o mesmo nome.</p>
             )}
           </div>
 

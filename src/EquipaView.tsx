@@ -86,8 +86,8 @@ export function EquipaView({ regime = "gold" }: { regime?: "gold" | "fin" }) {
           <h1 className="text-[1.65rem] font-semibold tracking-tight text-slate-900 mt-1">Equipa</h1>
           <p className="text-sm text-slate-500 mt-1 max-w-2xl leading-relaxed">
             {regime === "fin"
-              ? "Quem trata a formação financiada: leads deste regime, propostas e o diário de contactos."
-              : "Comerciais da ENA: volume de leads Gold, propostas enviadas e a resposta do cliente. Abra a ficha para notas e pipeline."}
+              ? "Quem trata a formação financiada: pré-inscrições deste regime, propostas e o diário de contactos."
+              : "Comerciais da ENA: volume de pré-inscrições Gold, propostas enviadas e a resposta do cliente. Abra a ficha para notas e pipeline."}
           </p>
         </div>
         <div className="relative w-full sm:w-72">
@@ -102,7 +102,7 @@ export function EquipaView({ regime = "gold" }: { regime?: "gold" | "fin" }) {
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
         <Kpi label="Comerciais" value={totais.activos} sub={`${totais.comerciais} na lista`} />
-        <Kpi label="Leads na carteira" value={totais.leads.toLocaleString("pt-PT")} />
+        <Kpi label="Pré-inscrições na carteira" value={totais.leads.toLocaleString("pt-PT")} />
         <Kpi label="Propostas" value={totais.propostas} sub={`${euro(totais.pipeline)} em aberto`} />
         <Kpi label="Receita fechada" value={euro(totais.receita)} />
       </div>
@@ -141,7 +141,7 @@ export function EquipaView({ regime = "gold" }: { regime?: "gold" | "fin" }) {
             </div>
             <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
               <div className="rounded-xl bg-slate-50 py-2">
-                <dt className="text-[10px] uppercase tracking-wide text-slate-400">Leads</dt>
+                <dt className="text-[10px] uppercase tracking-wide text-slate-400">Pré-inscrições</dt>
                 <dd className="text-sm font-semibold text-slate-800">{c.stats.leads}</dd>
               </div>
               <div className="rounded-xl bg-slate-50 py-2">
@@ -262,7 +262,7 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
         {erro && <p className="text-sm text-rose-600">{erro}</p>}
         {s && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <Kpi label="Leads" value={s.leads} sub={`${s.porContactar} por contactar`} />
+            <Kpi label="Pré-inscrições" value={s.leads} sub={`${s.porContactar} por contactar`} />
             <Kpi label="Propostas" value={s.propostas} sub={`${s.propostasAceites} aceites`} />
             <Kpi label="Pipeline" value={euro(s.pipeline)} />
             <Kpi label="Conversão" value={`${s.conversao}%`} sub={`${s.pagos} pagos`} />
@@ -272,7 +272,7 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
         <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
           {([
             ["propostas", "Propostas"],
-            ["leads", "Leads e notas"],
+            ["leads", "Pré-inscrições e notas"],
             ["notas", "Diário comercial"],
           ] as const).map(([k, l]) => (
             <button
@@ -341,7 +341,7 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
 
         {tab === "leads" && (
           <div className="space-y-2">
-            {leads.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">Sem leads atribuídos.</p>}
+            {leads.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">Sem pré-inscrições atribuídas.</p>}
             {leads.map(l => (
               <div key={l.id} className="rounded-xl border border-slate-200 bg-white px-3.5 py-3">
                 <div className="flex items-start justify-between gap-2">
@@ -353,7 +353,7 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
                 </div>
                 {l.notas
                   ? <p className="mt-2 text-xs text-slate-600 whitespace-pre-wrap bg-slate-50 rounded-lg px-2.5 py-2 border border-slate-100">{l.notas}</p>
-                  : <p className="mt-2 text-xs text-slate-400">Sem notas comerciais nesta lead.</p>}
+                  : <p className="mt-2 text-xs text-slate-400">Sem notas comerciais nesta pré-inscrição.</p>}
               </div>
             ))}
           </div>
@@ -364,7 +364,7 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
               <p className="text-xs font-semibold text-slate-600">Nova nota comercial</p>
               <select className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white" value={notaLead} onChange={e => setNotaLead(e.target.value ? Number(e.target.value) : "")}>
-                <option value="">Escolher lead…</option>
+                <option value="">Escolher pré-inscrição…</option>
                 {leads.map(l => <option key={l.id} value={l.id}>{l.nome} {l.apelido} · {l.curso}</option>)}
               </select>
               <textarea className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white min-h-[80px]" value={notaTxt} onChange={e => setNotaTxt(e.target.value)} placeholder="O que ficou combinado, objecções, próximo passo…" />
@@ -402,7 +402,7 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
               </select>
             </Field>
           </div>
-          <Field label="Lead (opcional)">
+          <Field label="Pré-inscrição (opcional)">
             <select className={iCls} value={draft.preinscricaoId} onChange={e => {
               const lead = leads.find(l => String(l.id) === e.target.value);
               setDraft({
@@ -414,7 +414,7 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
                 valor: lead ? String(lead.preco || 125) : draft.valor,
               });
             }}>
-              <option value="">Sem ligação a lead</option>
+              <option value="">Sem ligação a pré-inscrição</option>
               {leads.map(l => <option key={l.id} value={l.id}>{l.nome} {l.apelido}</option>)}
             </select>
           </Field>

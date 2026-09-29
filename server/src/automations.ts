@@ -91,15 +91,18 @@ export async function ingestEvent(
       origin: config.appOrigin, pixelUrl: pixel,
     });
     const when = new Date(Date.now() + rule.delay_seconds * 1000).toISOString();
-    await db.query(
+    const job = await db.query<{ id: string }>(
       `INSERT INTO email_jobs (id, rule_id, event_id, to_email, to_name, subject, body_text, body_html, scheduled_at, payload)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
-       ON CONFLICT (rule_id, event_id) DO NOTHING`,
+       ON CONFLICT (rule_id, event_id) DO NOTHING
+       RETURNING id`,
       [jobId, rule.id, id, email, nome, subject, sanitizeText(mail.text, 8000), mail.html.slice(0, 20000), when, payload],
     );
-    queued += 1;
+    queued += job.rows.length;
   }
-  await applyCrmEstado(db, type, payload).catch(() => undefined);
+  if (type !== "preinscricao.created" || queued > 0) {
+    await applyCrmEstado(db, type, payload).catch(() => undefined);
+  }
   return { eventId: id, queued, duplicate: false };
 }
 
@@ -296,7 +299,7 @@ export async function sendRuleTest(db: Db, ruleId: number, to: { email: string; 
   const mail = renderAutomaticEmail({
     nome, xml: rule.body_xml ?? "", linhas, cta, href, vars,
     origin, pixelUrl: pixel,
-    note: "Este envio é um teste da regra. Não altera o estado de nenhum lead.",
+    note: "Este envio é um teste da regra. Não altera o estado de nenhuma pré-inscrição.",
   });
   const body = sanitizeText(mail.text, 8000);
   await db.query(

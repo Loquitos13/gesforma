@@ -30,7 +30,11 @@ import { config } from "./config.js";
 import { criarPreinscricaoPublica } from "./preinscricaoPublica.js";
 import { listCursosGoldActivos, listOfertaGold } from "./ofertaGold.js";
 import { generateCronograma } from "./cronograma.js";
-import { COMPROVATIVO, firePreinscricaoEmail, listarDocsLead, maybeEnviarPagamentoAposDocs, notificarDocumentos, popularFichaPessoa, docsDoCurso, docsCompletos } from "./docsLink.js";
+import {
+  COMPROVATIVO, firePreinscricaoEmail, listarDocsLead, maybeEnviarPagamentoAposDocs, notificarDocumentos,
+  popularFichaPessoa, docsDoCurso, docsCompletos, abrirAlerta, alertarDocumentosIncorrectos,
+  definirEstadoDoc, dispensarAlerta, listarAlertasAbertas, syncLigacao,
+} from "./docsLink.js";
 import { storeDriveFile } from "./googleDrive.js";
 import { aplicarTurmaRegras, listTurmaRegras } from "./turmaRegras.js";
 import { camposEmFalta, estadoPodeEntregar, podeArrastar } from "./crmRegras.js";
@@ -324,7 +328,7 @@ export function registerOpsRoutes(
     const id = Number((req.params as { id: string }).id);
     if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ error: "pedido inválido" });
     const dossier = await getLeadDossier(db, id);
-    if (!dossier) return reply.code(404).send({ error: "lead inexistente" });
+    if (!dossier) return reply.code(404).send({ error: "pré-inscrição inexistente" });
     return dossier;
   });
 
@@ -339,7 +343,7 @@ export function registerOpsRoutes(
     }).safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const exists = await one(db, "SELECT id FROM preinscricoes WHERE id = $1", [id]);
-    if (!exists) return reply.code(404).send({ error: "lead inexistente" });
+    if (!exists) return reply.code(404).send({ error: "pré-inscrição inexistente" });
     await setCampoValores(db, id, req.actor!.id, parsed.data.valores);
     return getLeadDossier(db, id);
   });
@@ -355,7 +359,7 @@ export function registerOpsRoutes(
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     if (!parsed.data.nota && !parsed.data.resultado) return reply.code(400).send({ error: "escreva uma nota ou um resultado" });
     const exists = await one(db, "SELECT id FROM preinscricoes WHERE id = $1", [id]);
-    if (!exists) return reply.code(404).send({ error: "lead inexistente" });
+    if (!exists) return reply.code(404).send({ error: "pré-inscrição inexistente" });
     await addLeadNota(db, id, req.actor!.id, parsed.data.nota, parsed.data.meio ?? "", parsed.data.resultado ?? "");
     await audit(db, req.actor!.id, "crm.nota", "preinscricao", String(id), req.ip);
     return getLeadDossier(db, id);
@@ -415,7 +419,7 @@ export function registerOpsRoutes(
       ],
     );
     const row = await oneLead(db, id);
-    if (!row) return reply.code(404).send({ error: "lead inexistente" });
+    if (!row) return reply.code(404).send({ error: "pré-inscrição inexistente" });
     const mapped = mapPreinscricao(row);
     const falta = camposEmFalta(mapped);
     if (falta.length) return reply.code(400).send({ error: `Falta: ${falta.map(f => f.label).join(", ")}`, falta: falta.map(f => f.key) });
@@ -492,7 +496,7 @@ export function registerOpsRoutes(
     await firePreinscricaoEmail(db, {
       id, email, nome: d.nome, apelido: d.apelido, curso: d.curso,
     }, "preinscricao.created", `preinscricao:${id}:${email}`).catch(() => undefined);
-    await logLeadEvent(db, id, req.actor!.id, "criacao", "Lead manual criada", `${d.origem || "Telefone"} · ${d.curso}`);
+    await logLeadEvent(db, id, req.actor!.id, "criacao", "Pré-inscrição manual criada", `${d.origem || "Telefone"} · ${d.curso}`);
     const nota = (d.nota ?? "").trim();
     if (nota) await addLeadNota(db, id, req.actor!.id, nota, d.meioContacto || d.origem || "Telefone");
     await audit(db, req.actor!.id, "preinscricao.create", "preinscricao", String(id), req.ip, { entrada: "manual" });
@@ -507,7 +511,7 @@ export function registerOpsRoutes(
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
     const before = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
-    if (!before) return reply.code(404).send({ error: "lead inexistente" });
+    if (!before) return reply.code(404).send({ error: "pré-inscrição inexistente" });
     if (d.estado && d.estado !== String(before.estado)) {
       const gate = podeArrastar(String(before.estado), d.estado, {
         role: req.actor!.role,
@@ -651,16 +655,37 @@ export function registerOpsRoutes(
         };
       }
     }
-    const tipos = ok ? [...pedidos, COMPROVATIVO] : pedidos;
+    const recusados = docs.filter(d => d.estado === "recusado");
+    const fechado = Boolean(lead.docs_fechado_em);
+    const pagPago = Boolean(pagamento && /pago/i.test(pagamento.estado));
+    const comp = docs.find(d => d.tipo === "comprovativo");
+    const precisaComp = regime === "gold" && Number(lead.preco) > 0 && !pagPago && comp?.estado !== "validado";
+    const correcao = !fechado && recusados.length > 0;
+    let tipos = ok ? [...pedidos, COMPROVATIVO] : pedidos;
+    let encerrada = false;
+    if (fechado && precisaComp) tipos = [COMPROVATIVO];
+    else if (fechado) {
+      encerrada = true;
+      tipos = [];
+    } else if (correcao) {
+      const ids = new Set(recusados.map(d => d.tipo));
+      tipos = pedidos.filter(p => ids.has(p.id));
+      if (ids.has(COMPROVATIVO.id) && !tipos.some(t => t.id === COMPROVATIVO.id)) tipos = [...tipos, COMPROVATIVO];
+    }
     return {
       nome: `${lead.nome} ${lead.apelido}`.trim(),
       curso: lead.curso,
       tipos,
-      ficheiros: docs,
+      ficheiros: docs.map(d => ({
+        id: d.id, tipo: d.tipo, nome: d.nome, created_at: d.created_at,
+        estado: d.estado, observacao: d.observacao,
+      })),
       docsCompletos: ok,
       emFalta: emFalta.map(d => d.label),
       pagamento,
       precisaPagamento: regime === "gold" && Number(lead.preco) > 0,
+      encerrada,
+      correcao,
     };
   });
 
@@ -692,6 +717,14 @@ export function registerOpsRoutes(
     const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime);
     const permitido = new Set([...pedidos.map(p => p.id), DOCS_PUBLICOS.id]);
     if (!permitido.has(tipo)) return reply.code(400).send({ error: "Este tipo de documento não faz parte do curso." });
+    if (lead.docs_fechado_em && tipo !== "comprovativo") {
+      return reply.code(403).send({ error: "Esta ligação já foi encerrada. Os documentos foram validados." });
+    }
+    const ja = await listarDocsLead(db, Number(lead.id));
+    const recusados = ja.filter(d => d.estado === "recusado").map(d => d.tipo);
+    if (recusados.length && !recusados.includes(tipo)) {
+      return reply.code(400).send({ error: "Nesta correcção só pode enviar os documentos indicados." });
+    }
     try {
       const file = await storeDriveFile(db, undefined, { name, mime, bytes }, {
         kind: tipo === "comprovativo" ? "comprovativo-pagamento" : "preinscricao-doc",
@@ -721,11 +754,72 @@ export function registerOpsRoutes(
       });
       const titulo = tipo === "comprovativo" ? "Comprovativo de pagamento na ficha" : `Documento na ficha · ${tipo}`;
       await logLeadEvent(db, Number(lead.id), undefined, "campo", titulo, file.name);
+      await syncLigacao(db, Number(lead.id));
+      await abrirAlerta(db, Number(lead.id));
       const pagMail = await maybeEnviarPagamentoAposDocs(db, Number(lead.id));
       return { ok: true, nome: file.name, pagamentoEnviado: Boolean(pagMail && "enviou" in pagMail && pagMail.enviou) };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : "upload recusado" });
     }
+  });
+
+  app.get("/v1/alertas/documentos", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const alertas = await listarAlertasAbertas(db);
+    return {
+      alertas: alertas.map(a => ({
+        id: a.id,
+        preinscricaoId: a.preinscricao_id,
+        nome: a.nome,
+        apelido: a.apelido,
+        curso: a.curso,
+        regime: a.regime === "fin" ? "fin" : "gold",
+        createdAt: a.created_at,
+      })),
+    };
+  });
+
+  app.post("/v1/alertas/documentos/:id/dispensar", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = String((req.params as { id: string }).id ?? "");
+    if (!id) return reply.code(400).send({ error: "pedido inválido" });
+    await dispensarAlerta(db, id);
+    return { ok: true };
+  });
+
+  app.post("/v1/crm/leads/:id/documentos/:docId/validar", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string }).id);
+    const docId = Number((req.params as { docId: string }).docId);
+    if (!Number.isInteger(id) || !Number.isInteger(docId)) return reply.code(400).send({ error: "pedido inválido" });
+    const ok = await definirEstadoDoc(db, id, docId, "validado");
+    if (!ok) return reply.code(404).send({ error: "documento inexistente" });
+    await logLeadEvent(db, id, req.actor!.id, "campo", "Documento validado", String(docId));
+    return getLeadDossier(db, id);
+  });
+
+  app.post("/v1/crm/leads/:id/documentos/:docId/recusar", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string }).id);
+    const docId = Number((req.params as { docId: string }).docId);
+    const body = req.body && typeof req.body === "object" ? req.body as { observacao?: string } : {};
+    const observacao = String(body.observacao ?? "").trim().slice(0, 500);
+    if (!Number.isInteger(id) || !Number.isInteger(docId)) return reply.code(400).send({ error: "pedido inválido" });
+    if (!observacao) return reply.code(400).send({ error: "Escreva o que está incorrecto." });
+    const ok = await definirEstadoDoc(db, id, docId, "recusado", observacao);
+    if (!ok) return reply.code(404).send({ error: "documento inexistente" });
+    await logLeadEvent(db, id, req.actor!.id, "campo", "Documento recusado", observacao);
+    return getLeadDossier(db, id);
+  });
+
+  app.post("/v1/crm/leads/:id/documentos/alertar", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
+    const r = await alertarDocumentosIncorrectos(db, id);
+    if (!r) return reply.code(404).send({ error: "pré-inscrição inexistente" });
+    if (!r.enviado) return reply.code(400).send({ error: r.erro });
+    return { ok: true };
   });
 
   const regraSchema = z.object({

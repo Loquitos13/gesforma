@@ -73,6 +73,8 @@ export function delayLabelFromSeconds(sec: number) {
 
 export const TRIGGER_MAP: Record<string, string> = {
   "Nova pré-inscrição recebida": "preinscricao.created",
+  "Pré-inscrição promovida": "preinscricao.promoted",
+  "Lead passou a pré-inscrito": "preinscricao.promoted",
   "Documentos da pré-inscrição submetidos": "preinscricao.docs_completos",
   "1.º contacto registado": "preinscricao.contacted",
   "Pré-inscrição sem pagamento há 3 dias": "preinscricao.unpaid_3d",
@@ -109,7 +111,7 @@ export const CRM_ESTADO_RANK: Record<string, number> = {
 };
 
 export function crmEstadoFromEvent(type: string): string | null {
-  if (type === "preinscricao.contacted") return "1º Contacto";
+  if (type === "preinscricao.created" || type === "preinscricao.contacted") return "1º Contacto";
   if (type === "preinscricao.unpaid_3d" || type === "lead.stale_30d") return "2º Contacto";
   if (type === "payment.confirmed" || type === "sale.followup") return "Pago";
   if (type === "preinscricao.promoted") return "Pré-inscrição";

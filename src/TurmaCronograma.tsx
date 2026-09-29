@@ -79,7 +79,7 @@ export function TurmaInactivaBanner({ nome, onActivate }: { nome: string; onActi
       <div className="flex-1">
         <p className="text-sm font-bold text-slate-800">Turma inativa</p>
         <p className="text-xs text-slate-500 mt-0.5">
-          {nome} não está libertada: não aparece na pré-inscrição (site nem WhatsApp) nem na conversão de leads. Não é possível adicionar ou mover formandos para aqui.
+          {nome} não está libertada: não aparece na pré-inscrição (site nem WhatsApp) nem na conversão de pré-inscrições. Não é possível adicionar ou mover formandos para aqui.
         </p>
       </div>
       {onActivate && (

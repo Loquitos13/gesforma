@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ApiError, apiPublicDocumentoUpload, apiPublicDocumentos } from "./api";
 
 type TipoDoc = { id: string; label: string; required?: boolean };
-type Ficheiro = { id: number; tipo: string; nome: string };
+type Ficheiro = { id: number; tipo: string; nome: string; estado?: string; observacao?: string };
 
 export function PublicDocumentos({ token }: { token: string }) {
   const fase = useMemo(() => {
@@ -22,6 +22,8 @@ export function PublicDocumentos({ token }: { token: string }) {
   const [completos, setCompletos] = useState(false);
   const [precisaPagamento, setPrecisaPagamento] = useState(false);
   const [pagamento, setPagamento] = useState<{ entidade: string; referencia: string; valor: number; estado: string } | null>(null);
+  const [encerrada, setEncerrada] = useState(false);
+  const [correcao, setCorrecao] = useState(false);
 
   function recarregar() {
     apiPublicDocumentos(token)
@@ -33,6 +35,8 @@ export function PublicDocumentos({ token }: { token: string }) {
         setCompletos(Boolean(r.docsCompletos));
         setPrecisaPagamento(Boolean(r.precisaPagamento));
         setPagamento(r.pagamento ?? null);
+        setEncerrada(Boolean(r.encerrada));
+        setCorrecao(Boolean(r.correcao));
         setEstado("ready");
       })
       .catch(err => {
@@ -49,12 +53,16 @@ export function PublicDocumentos({ token }: { token: string }) {
   }, [ficheiros]);
 
   const mostrarPagamento = (completos && precisaPagamento) || fase === "pagamento";
-  const obrigatorios = tipos.filter(t => t.required);
-  const feitosObrigatorios = obrigatorios.filter(t => porTipo.has(t.id)).length;
-  const proximo = tipos.find(t => t.required && !porTipo.has(t.id)) ?? tipos.find(t => !porTipo.has(t.id));
+  function aceite(id: string) {
+    const f = porTipo.get(id);
+    return Boolean(f) && f?.estado !== "recusado";
+  }
+  const obrigatorios = tipos.filter(t => t.required || correcao);
+  const feitosObrigatorios = obrigatorios.filter(t => aceite(t.id)).length;
+  const proximo = tipos.find(t => (t.required || correcao) && !aceite(t.id)) ?? tipos.find(t => !aceite(t.id));
   const activoId = foco && tipos.some(t => t.id === foco) ? foco : proximo?.id ?? null;
   const activo = tipos.find(t => t.id === activoId) ?? null;
-  const tudoFeito = tipos.length > 0 && tipos.every(t => porTipo.has(t.id));
+  const tudoFeito = tipos.length > 0 && tipos.every(t => aceite(t.id));
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -105,15 +113,25 @@ export function PublicDocumentos({ token }: { token: string }) {
           <p className="text-sm text-[#5c564c]">Não foi possível abrir a pasta. Tente dentro de momentos.</p>
         )}
 
-        {estado === "ready" && (
+        {estado === "ready" && encerrada && (
+          <article className="rounded-2xl bg-white px-6 py-8 shadow-sm ring-1 ring-[#e7e1d6]">
+            <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Documentos validados</p>
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight">{nome}</h1>
+            <p className="mt-3 text-sm leading-relaxed text-[#5c564c]">A ligação de {curso} foi encerrada. A secretaria já validou os documentos.</p>
+          </article>
+        )}
+
+        {estado === "ready" && !encerrada && (
           <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[#e7e1d6]">
             <div className="px-6 pt-7 pb-5 sm:px-8">
               <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#c48400]">
-                {mostrarPagamento && activo?.id === "comprovativo" ? "Pagamento" : "Documentos da pré-inscrição"}
+                {correcao ? "Documentos a corrigir" : mostrarPagamento && activo?.id === "comprovativo" ? "Pagamento" : "Documentos da pré-inscrição"}
               </p>
               <h1 className="mt-2 text-[1.65rem] font-semibold tracking-tight leading-tight">{nome}</h1>
               <p className="mt-2 text-sm leading-relaxed text-[#5c564c]">
-                {curso}. Anexa um documento de cada vez. Cada ficheiro fica registado no tipo correspondente, na sua ficha.
+                {correcao
+                  ? `${curso}. Há ficheiros que não ficaram correctos. Envie apenas os que estão indicados, com a observação da secretaria.`
+                  : `${curso}. Anexa um documento de cada vez. Cada ficheiro fica registado no tipo correspondente, na sua ficha.`}
               </p>
               {obrigatorios.length > 0 && (
                 <div className="mt-5">
@@ -146,25 +164,29 @@ export function PublicDocumentos({ token }: { token: string }) {
             <ol className="divide-y divide-[#efeae1] border-t border-[#efeae1]">
               {tipos.map((t, i) => {
                 const anexo = porTipo.get(t.id);
+                const recusado = anexo?.estado === "recusado";
                 const aberto = t.id === activoId;
-                const feito = Boolean(anexo) && !aberto;
+                const feito = Boolean(anexo) && !recusado && !aberto;
                 return (
                   <li key={t.id} className={aberto ? "bg-[#fffaf2]" : "bg-white"}>
                     <div className="flex gap-3 px-6 py-4 sm:px-8">
                       <span className={`mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                        anexo ? "bg-emerald-600 text-white" : aberto ? "bg-[#1b2330] text-white" : "bg-[#efeae1] text-[#8a8172]"
+                        anexo && !recusado ? "bg-emerald-600 text-white" : recusado ? "bg-red-600 text-white" : aberto ? "bg-[#1b2330] text-white" : "bg-[#efeae1] text-[#8a8172]"
                       }`} aria-hidden>
-                        {anexo ? (
+                        {anexo && !recusado ? (
                           <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.2 7.2a1 1 0 01-1.4 0L3.3 9.1a1 1 0 011.4-1.4l4.1 4.1 6.5-6.5a1 1 0 011.4 0z" clipRule="evenodd" /></svg>
                         ) : i + 1}
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-baseline justify-between gap-2">
                           <p className="text-sm font-semibold">{t.label}</p>
-                          <span className="text-[11px] uppercase tracking-wide text-[#8a8172]">{t.required ? "Obrigatório" : "Opcional"}</span>
+                          <span className="text-[11px] uppercase tracking-wide text-[#8a8172]">{recusado ? "A corrigir" : t.required ? "Obrigatório" : "Opcional"}</span>
                         </div>
-                        {anexo && (
+                        {anexo && !recusado && (
                           <p className="mt-1 truncate text-sm text-emerald-800">{anexo.nome}</p>
+                        )}
+                        {recusado && anexo?.observacao && (
+                          <p className="mt-1 text-sm text-red-800">{anexo.observacao}</p>
                         )}
                         {feito && (
                           <button

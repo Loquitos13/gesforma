@@ -252,7 +252,10 @@ export async function getLeadDossier(db: Db, id: number) {
       nome: f.nome,
       url: f.drive_url || (f.drive_file_id ? `/api/v1/drive/files/${f.drive_file_id}/content` : ""),
       createdAt: iso(f.created_at),
+      estado: f.estado || "pendente",
+      observacao: f.observacao || "",
     })),
+    docsFechado: Boolean(row.docs_fechado_em),
     pagamento,
   };
 }

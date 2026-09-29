@@ -97,7 +97,7 @@ const TEMPLATES = [
 
 const RULES = [
   { nome: "Boas-vindas ao registo", gatilho: "Nova pré-inscrição recebida", key: "preinscricao.created", tipo: "welcome", delay: 0 },
-  { nome: "Documentos na pré-inscrição", gatilho: "Lead passou a pré-inscrito", key: "preinscricao.promoted", tipo: "welcome", delay: 0 },
+  { nome: "Documentos na pré-inscrição", gatilho: "Pré-inscrição promovida", key: "preinscricao.promoted", tipo: "welcome", delay: 0 },
   { nome: "Referência após documentos", gatilho: "Documentos da pré-inscrição submetidos", key: "preinscricao.docs_completos", tipo: "pagamento_ref", delay: 0 },
   { nome: "Lembrete sem pagamento (3 dias)", gatilho: "Pré-inscrição sem pagamento há 3 dias", key: "preinscricao.unpaid_3d", tipo: "unpaid_3d", delay: 0 },
   { nome: "Confirmação de pagamento", gatilho: "Pagamento confirmado", key: "payment.confirmed", tipo: "payment", delay: 0 },

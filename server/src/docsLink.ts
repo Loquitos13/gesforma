@@ -4,6 +4,8 @@ import { config } from "./config.js";
 import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
 import { COMPROVATIVO, docsCompletos, docsDoCurso } from "./docsCurso.js";
+import { renderAutomaticEmail } from "./emailHtml.js";
+import { sendMail } from "./mailer.js";
 import { firePagamentoRefEmail } from "./pagamentoPedido.js";
 import { isEmail, normalizeEmail } from "./security.js";
 
@@ -104,12 +106,155 @@ export async function promoverPreinscricao(
   return { skipped: false as const, ...mail };
 }
 
+export type DocLead = {
+  id: number;
+  tipo: string;
+  nome: string;
+  drive_file_id: string;
+  drive_url: string;
+  created_at: string;
+  estado: string;
+  observacao: string;
+};
+
 export async function listarDocsLead(db: Db, leadId: number) {
-  const docs = await db.query<{ id: number; tipo: string; nome: string; drive_file_id: string; drive_url: string; created_at: string }>(
-    "SELECT id, tipo, nome, drive_file_id, drive_url, created_at FROM preinscricao_docs WHERE preinscricao_id = $1 ORDER BY created_at",
+  const docs = await db.query<DocLead>(
+    `SELECT id, tipo, nome, drive_file_id, drive_url, created_at,
+            COALESCE(estado, 'pendente') AS estado,
+            COALESCE(observacao, '') AS observacao
+       FROM preinscricao_docs WHERE preinscricao_id = $1 ORDER BY created_at`,
     [leadId],
   );
   return docs.rows;
+}
+
+export async function abrirAlerta(db: Db, preinscricaoId: number) {
+  const open = await db.query<{ id: string }>(
+    "SELECT id FROM doc_alertas WHERE preinscricao_id = $1 AND dispensada_em IS NULL LIMIT 1",
+    [preinscricaoId],
+  );
+  if (open.rows[0]) return open.rows[0].id;
+  const id = randomBytes(12).toString("base64url");
+  await db.query("INSERT INTO doc_alertas (id, preinscricao_id) VALUES ($1, $2)", [id, preinscricaoId]);
+  return id;
+}
+
+export async function dispensarAlertas(db: Db, preinscricaoId: number) {
+  await db.query(
+    "UPDATE doc_alertas SET dispensada_em = now() WHERE preinscricao_id = $1 AND dispensada_em IS NULL",
+    [preinscricaoId],
+  );
+}
+
+export async function dispensarAlerta(db: Db, alertaId: string) {
+  await db.query(
+    "UPDATE doc_alertas SET dispensada_em = now() WHERE id = $1 AND dispensada_em IS NULL",
+    [alertaId],
+  );
+}
+
+/** Fecha a ligação quando todos os documentos obrigatórios estão validados. */
+export async function syncLigacao(db: Db, leadId: number) {
+  const lead = await db.query<{ curso: string; regime: string }>(
+    "SELECT curso, COALESCE(regime, 'gold') AS regime FROM preinscricoes WHERE id = $1",
+    [leadId],
+  );
+  const row = lead.rows[0];
+  if (!row) return false;
+  const regime = row.regime === "fin" ? "fin" : "gold";
+  const pedidos = await docsDoCurso(db, row.curso, regime);
+  const required = pedidos.filter(d => d.required);
+  const ficheiros = await listarDocsLead(db, leadId);
+  const byTipo = new Map(ficheiros.map(f => [f.tipo, f]));
+  const todos = required.length > 0 && required.every(d => byTipo.get(d.id)?.estado === "validado");
+  if (todos) {
+    await db.query(
+      "UPDATE preinscricoes SET docs_fechado_em = COALESCE(docs_fechado_em, now()) WHERE id = $1",
+      [leadId],
+    );
+  } else {
+    await db.query("UPDATE preinscricoes SET docs_fechado_em = NULL WHERE id = $1", [leadId]);
+  }
+  return todos;
+}
+
+export async function definirEstadoDoc(
+  db: Db,
+  leadId: number,
+  docId: number,
+  estado: "validado" | "recusado",
+  observacao = "",
+) {
+  const upd = await db.query<{ id: number }>(
+    `UPDATE preinscricao_docs
+        SET estado = $3, observacao = $4
+      WHERE id = $1 AND preinscricao_id = $2
+      RETURNING id`,
+    [docId, leadId, estado, estado === "recusado" ? observacao.trim() : ""],
+  );
+  if (!upd.rows[0]) return null;
+  if (estado === "validado") await dispensarAlertas(db, leadId);
+  await syncLigacao(db, leadId);
+  return upd.rows[0].id;
+}
+
+export async function alertarDocumentosIncorrectos(db: Db, leadId: number) {
+  const row = await db.query<{ nome: string; apelido: string; email: string; curso: string; regime: string }>(
+    "SELECT nome, apelido, email, curso, COALESCE(regime, 'gold') AS regime FROM preinscricoes WHERE id = $1",
+    [leadId],
+  );
+  const lead = row.rows[0];
+  if (!lead) return null;
+  const email = normalizeEmail(lead.email);
+  if (!isEmail(email)) return { enviado: false as const, erro: "A ficha não tem email." };
+  const regime = lead.regime === "fin" ? "fin" : "gold";
+  const pedidos = await docsDoCurso(db, lead.curso, regime);
+  const labels = new Map(pedidos.map(p => [p.id, p.label]));
+  labels.set("comprovativo", "Comprovativo de pagamento");
+  const ficheiros = await listarDocsLead(db, leadId);
+  const recusados = ficheiros.filter(f => f.estado === "recusado");
+  if (!recusados.length) return { enviado: false as const, erro: "Não há documentos recusados." };
+  const token = await ensureDocsToken(db, leadId);
+  const url = documentosUrl(token);
+  const nome = `${lead.nome} ${lead.apelido}`.trim();
+  const linhas = [
+    `Revimos os documentos de ${lead.curso}.`,
+    ...recusados.map(d => `${labels.get(d.tipo) ?? d.tipo}: ${d.observacao.trim() || "não está correcto. Volte a enviar o ficheiro."}`),
+    "Use o botão para enviar apenas estes documentos.",
+  ];
+  const mail = renderAutomaticEmail({
+    nome,
+    xml: "",
+    linhas,
+    cta: "Corrigir documentos",
+    href: url,
+    vars: { nome, curso: lead.curso, documentos_url: url },
+    origin: config.appOrigin,
+  });
+  await sendMail(db, {
+    to: email,
+    name: nome,
+    subject: `Documentos a corrigir · ${lead.curso}`,
+    text: mail.text,
+    html: mail.html,
+  });
+  await logLeadEvent(db, leadId, undefined, "contacto", "Documentos incorrectos", linhas.slice(1, -1).join(" · "));
+  return { enviado: true as const, url };
+}
+
+export async function listarAlertasAbertas(db: Db) {
+  const rows = await db.query<{
+    id: string; preinscricao_id: number; created_at: string;
+    nome: string; apelido: string; curso: string; regime: string;
+  }>(
+    `SELECT a.id, a.preinscricao_id, a.created_at, p.nome, p.apelido, p.curso, COALESCE(p.regime, 'gold') AS regime
+       FROM doc_alertas a
+       JOIN preinscricoes p ON p.id = a.preinscricao_id
+      WHERE a.dispensada_em IS NULL
+      ORDER BY a.created_at DESC
+      LIMIT 20`,
+  );
+  return rows.rows;
 }
 
 export async function maybeEnviarPagamentoAposDocs(db: Db, leadId: number) {

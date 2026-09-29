@@ -116,7 +116,7 @@ export function podeArrastar(de: string, para: string, opts: { role: string; sec
     return { ok: true as const };
   }
   if (para === "Pré-inscrição" && de === "Desistiu") {
-    return { ok: false as const, erro: "Um pedido desistido não volta a pré-inscrição. Crie um lead novo." };
+    return { ok: false as const, erro: "Um pedido desistido não volta a pré-inscrição. Crie uma pré-inscrição nova." };
   }
   return { ok: true as const };
 }

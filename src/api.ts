@@ -272,6 +272,7 @@ export type DtpItem = {
   estado: DtpEstado;
   detalhe: string;
   origem: "auto" | "manual";
+  universal?: boolean;
   bloqueante?: boolean;
   obrigatorio?: boolean;
   /** Documento acrescentado na ficha do curso, fora da base do regime. */
@@ -368,6 +369,7 @@ export type DtpDef = {
   hint: string;
   bloqueante?: boolean;
   obrigatorio?: boolean;
+  universal?: boolean;
 };
 export type DtpAmbito = "turma" | "formando" | "formador";
 export type DtpExtra = {
@@ -396,6 +398,50 @@ export const apiSaveDtpModelo = (regime: Regime, cursoId: number, body: { exclui
     method: "PUT",
     body: JSON.stringify(body),
   });
+
+export type CursoDocumentoFicheiro = {
+  id: string;
+  ambito: "curso" | "formando" | "formador" | string;
+  requisitoId: string;
+  pessoaId: number | null;
+  pessoaNome: string;
+  nome: string;
+  url: string;
+  createdAt: string;
+};
+export type CursoDocumentosResposta = {
+  fases: { id: DtpFase; label: string; hint: string }[];
+  requisitos: { id: string; fase: DtpFase; label: string; universal?: boolean }[];
+  formandos: { id: number; nome: string }[];
+  formadores: { id: number | null; nome: string }[];
+  ficheiros: CursoDocumentoFicheiro[];
+};
+export const apiCursoDocumentos = (regime: Regime, cursoId: number) =>
+  api<CursoDocumentosResposta>(`/v1/cursos/${regime}/${cursoId}/documentos`);
+export async function apiCursoDocumentoUpload(
+  regime: Regime,
+  cursoId: number,
+  file: File,
+  ctx: { ambito: string; requisitoId: string; pessoaId?: number; pessoaNome?: string },
+) {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("ambito", ctx.ambito);
+  fd.append("requisitoId", ctx.requisitoId);
+  if (ctx.pessoaId != null) fd.append("pessoaId", String(ctx.pessoaId));
+  if (ctx.pessoaNome) fd.append("pessoaNome", ctx.pessoaNome);
+  const headers = new Headers();
+  headers.set("Accept", "application/json");
+  headers.set("X-Gesforma-Client", "web");
+  const res = await fetch(`${BASE}/v1/cursos/${regime}/${cursoId}/documentos`, {
+    method: "POST", credentials: "include", headers, body: fd,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, typeof data.error === "string" ? data.error : "upload recusado");
+  return data as { ok: boolean; id: string; nome: string };
+}
+export const apiCursoDocumentoApagar = (regime: Regime, cursoId: number, ficheiroId: string) =>
+  api<{ ok: boolean }>(`/v1/cursos/${regime}/${cursoId}/documentos/${encodeURIComponent(ficheiroId)}`, { method: "DELETE" });
 
 export type CursoFicha = { payload: Record<string, unknown>; criterios: { id: string; label: string }[] };
 export const apiCursoFicha = (regime: Regime, cursoId: number) =>
@@ -504,11 +550,13 @@ export const apiPublicDocumentos = (token: string) =>
   api<{
     nome: string; curso: string;
     tipos: { id: string; label: string; required?: boolean }[];
-    ficheiros: { id: number; tipo: string; nome: string; created_at: string }[];
+    ficheiros: { id: number; tipo: string; nome: string; created_at: string; estado?: string; observacao?: string }[];
     docsCompletos?: boolean;
     emFalta?: string[];
     precisaPagamento?: boolean;
     pagamento?: { entidade: string; referencia: string; valor: number; estado: string } | null;
+    encerrada?: boolean;
+    correcao?: boolean;
   }>(
     `/v1/public/documentos/${encodeURIComponent(token)}`,
   );
@@ -731,9 +779,20 @@ export type CrmDossier = {
   docsUrl?: string;
   docsCompletos?: boolean;
   docsEmFalta?: string[];
-  documentos?: { id: number; tipo: string; label: string; nome: string; url: string; createdAt: string }[];
+  documentos?: { id: number; tipo: string; label: string; nome: string; url: string; createdAt: string; estado?: string; observacao?: string }[];
+  docsFechado?: boolean;
   pagamento?: { id: string; referencia: string; valor: number; estado: string; entidade: string } | null;
 };
+export const apiCrmDocValidar = (id: number, docId: number) =>
+  api<CrmDossier>(`/v1/crm/leads/${id}/documentos/${docId}/validar`, { method: "POST", body: JSON.stringify({}) });
+export const apiCrmDocRecusar = (id: number, docId: number, observacao: string) =>
+  api<CrmDossier>(`/v1/crm/leads/${id}/documentos/${docId}/recusar`, { method: "POST", body: JSON.stringify({ observacao }) });
+export const apiCrmDocAlertar = (id: number) =>
+  api<{ ok: boolean }>(`/v1/crm/leads/${id}/documentos/alertar`, { method: "POST", body: JSON.stringify({}) });
+export const apiDocAlertas = () =>
+  api<{ alertas: { id: string; preinscricaoId: number; nome: string; apelido: string; curso: string; regime: "gold" | "fin"; createdAt: string }[] }>("/v1/alertas/documentos");
+export const apiDocAlertaDispensar = (id: string) =>
+  api<{ ok: boolean }>(`/v1/alertas/documentos/${encodeURIComponent(id)}/dispensar`, { method: "POST", body: JSON.stringify({}) });
 
 export const apiCrmDossier = (id: number) => api<CrmDossier>(`/v1/crm/leads/${id}`);
 export const apiCrmCampos = () => api<{ campos: CrmCampo[] }>("/v1/crm/campos");

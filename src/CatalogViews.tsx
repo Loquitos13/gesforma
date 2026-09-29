@@ -1820,7 +1820,7 @@ function WhatsappSettingsCard() {
       setStatus(r);
       setToken("");
       setPhoneId("");
-      setMsg("WhatsApp desligado. O simulador no CRM continua a gravar leads.");
+      setMsg("WhatsApp desligado. O simulador no CRM continua a gravar pré-inscrições.");
     } catch {
       setMsg("Não foi possível desligar o WhatsApp.");
     } finally {

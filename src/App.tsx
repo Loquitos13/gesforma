@@ -70,6 +70,7 @@ import {
   type Dashboard, type EmailJob, type EmailJobStats, type EmailRule, type TurmaCertificado, type TurmaDocumento,
 } from "./api";
 import { PainelView } from "./PainelView";
+import { DocAlertas } from "./DocAlertas";
 import { persist, toastError, toastOk } from "./toastBus";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -268,7 +269,7 @@ type EmailTpl = {
 
 const emailGatilhosOpts = [
   { value: "Nova pré-inscrição recebida", sub: "Email com ligação única para os documentos do curso" },
-  { value: "Lead passou a pré-inscrito", sub: "Volta a enviar a ligação de documentos" },
+  { value: "Pré-inscrição promovida", sub: "Volta a enviar a ligação de documentos" },
   { value: "Documentos da pré-inscrição submetidos", sub: "Referência Multibanco + comprovativo" },
   { value: "1.º contacto registado", sub: "Secretaria marca 1.º Contacto (email opcional)" },
   { value: "Pré-inscrição sem pagamento há 3 dias", sub: "Passa a 2.º Contacto · lembrete de cobrança" },
@@ -449,12 +450,12 @@ function destFromGatilho(
   }
   if (g.includes("pré-inscrição") || g.includes("compra") || g.includes("3 dias")) {
     const lead = lists.preinscricoes.find(x => x.email);
-    if (lead) return { nome: `${lead.nome} ${lead.apelido}`.trim(), papel: "Lead", email: lead.email };
+    if (lead) return { nome: `${lead.nome} ${lead.apelido}`.trim(), papel: "Pré-inscrição", email: lead.email };
   }
   const aluno = lists.formandosTurmas.find(x => x.email) ?? lists.formandosFin.find(x => x.email);
   if (aluno) return { nome: `${aluno.nome} ${aluno.apelido}`.trim(), papel: "Formando", email: aluno.email };
   const lead = lists.preinscricoes.find(x => x.email);
-  if (lead) return { nome: `${lead.nome} ${lead.apelido}`.trim(), papel: "Lead", email: lead.email };
+  if (lead) return { nome: `${lead.nome} ${lead.apelido}`.trim(), papel: "Pré-inscrição", email: lead.email };
   const f = formadores.find(x => x.email);
   if (f) return { nome: f.nome, papel: "Formador", email: f.email };
   return { nome: "Sem destinatário", papel: "ainda sem dados na base", email: "-" };
@@ -750,7 +751,7 @@ function ConhecimentoEnaCard({ onVerMais, dados }: { onVerMais: () => void; dado
       <Card className="p-4">
         <p className="text-sm font-semibold text-slate-700">Como conheceram a ENA</p>
         <p className="text-xs text-slate-400 mt-1">
-          Ainda sem respostas à pergunta de origem nas pré-inscrições. Assim que entrarem leads, o gráfico aparece aqui.
+          Ainda sem respostas à pergunta de origem nas pré-inscrições. Assim que entrarem pré-inscrições, o gráfico aparece aqui.
         </p>
       </Card>
     );
@@ -3978,7 +3979,7 @@ function EmailsView() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Emails Automáticos" sub={apiOn ? "Cada gatilho envia um template e, no CRM, avança o estado do lead (boas-vindas, 3 dias sem pagar, pagamento, 30 dias)." : "Uma regra = um gatilho + um template. Sem API as alterações ficam só neste ecrã."} action={<NewBtn label="+ Nova Regra" onClick={abrirNova} />} />
+      <PageHeader title="Emails Automáticos" sub={apiOn ? "Cada gatilho envia um template e, no CRM, avança o estado da pré-inscrição (boas-vindas, 3 dias sem pagar, pagamento, 30 dias)." : "Uma regra = um gatilho + um template. Sem API as alterações ficam só neste ecrã."} action={<NewBtn label="+ Nova Regra" onClick={abrirNova} />} />
       <div className="flex gap-1 border-b border-slate-200 bg-white rounded-t-xl px-4 pt-3">
         {(["regras", "templates", "historico"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
@@ -4477,8 +4478,8 @@ function useAtalhosDoDia(): SearchRow[] {
     const porContactar = preinscricoes.filter(l => !l.contactadoEm).length;
     const porContactarGold = preinscricoes.filter(l => (l.regime ?? "gold") !== "fin" && !l.contactadoEm).length;
     const porContactarFin = preinscricoes.filter(l => l.regime === "fin" && !l.contactadoEm).length;
-    if (porContactarGold) out.push({ tipo: "Atalho", nome: `${porContactarGold} leads por contactar`, sub: "CRM Gold · fila do dia", view: "gold-preinscricoes" });
-    if (porContactarFin) out.push({ tipo: "Atalho", nome: `${porContactarFin} leads por contactar`, sub: "CRM Financiada · fila do dia", view: "fin-preinscricoes" });
+    if (porContactarGold) out.push({ tipo: "Atalho", nome: `${porContactarGold} pré-inscrições por contactar`, sub: "CRM Gold · fila do dia", view: "gold-preinscricoes" });
+    if (porContactarFin) out.push({ tipo: "Atalho", nome: `${porContactarFin} pré-inscrições por contactar`, sub: "CRM Financiada · fila do dia", view: "fin-preinscricoes" });
     const pendentes = pagamentos.filter(t => t.estado !== "Pago").length;
     if (pendentes) out.push({ tipo: "Atalho", nome: `${pendentes} pagamentos por confirmar`, sub: "Tesouraria", view: "pagamentos" });
 
@@ -5177,6 +5178,7 @@ function AppShell() {
         </div>
       </div>
 
+      <DocAlertas onOpen={(id, regime) => navigate({ view: regime === "fin" ? "fin-preinscricoes" : "gold-preinscricoes", leadId: id })} />
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} onNavigate={navigate} />
     </>
   );

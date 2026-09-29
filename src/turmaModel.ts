@@ -435,12 +435,30 @@ export type TurmaInscricaoLinha = {
   motivo: string;
 };
 
-export function turmaAdequadaAoLead(lead: LeadOfertaRef, turma: TurmaGold) {
+/** Horário da pré-inscrição, ou o da turma com a mesma data de início no mesmo local. */
+export function horarioPreferidoDoLead(lead: LeadOfertaRef, turmas: TurmaGold[] = []) {
+  const partido = partirLocalHorario(lead.local, lead.horario);
+  if (chaveHorario(partido.horario)) return partido.horario;
+  if (lead.turmaId) {
+    const pin = turmas.find(t => t.id === lead.turmaId);
+    if (pin?.horario) return pin.horario;
+  }
+  const inicio = (lead.inicioCurso ?? "").slice(0, 10);
+  if (!inicio) return "";
+  const hit = turmas.find(t =>
+    chaveOferta(t.curso) === chaveOferta(lead.curso)
+    && locaisEquivalentes(t.local, partido.local)
+    && t.dataInicio.slice(0, 10) === inicio
+    && chaveHorario(t.horario));
+  return hit?.horario ?? "";
+}
+
+export function turmaAdequadaAoLead(lead: LeadOfertaRef, turma: TurmaGold, turmas: TurmaGold[] = []) {
   if (lead.turmaId && lead.turmaId === turma.id) return true;
   if (chaveOferta(lead.curso) !== chaveOferta(turma.curso)) return false;
   const partido = partirLocalHorario(lead.local, lead.horario);
   if (!locaisEquivalentes(partido.local, turma.local)) return false;
-  const hLead = chaveHorario(partido.horario);
+  const hLead = chaveHorario(horarioPreferidoDoLead(lead, turmas.length ? turmas : [turma]));
   if (hLead) return hLead === chaveHorario(turma.horario);
   const inicio = (lead.inicioCurso ?? "").slice(0, 10);
   return Boolean(inicio && inicio === turma.dataInicio.slice(0, 10));
@@ -450,7 +468,7 @@ export function linhasTurmaInscricao(turmas: TurmaGold[], lead: LeadOfertaRef, h
   const partido = partirLocalHorario(lead.local, lead.horario);
   const mesmoCursoLocal = turmas.filter(t =>
     chaveOferta(t.curso) === chaveOferta(lead.curso) && locaisEquivalentes(t.local, partido.local));
-  const adequadas = mesmoCursoLocal.filter(t => turmaAdequadaAoLead(lead, t));
+  const adequadas = mesmoCursoLocal.filter(t => turmaAdequadaAoLead(lead, t, turmas));
   const ids = new Set(adequadas.map(t => t.id));
   const outros = mesmoCursoLocal.filter(t =>
     !ids.has(t.id) && t.dataInicio.slice(0, 10) >= hoje);

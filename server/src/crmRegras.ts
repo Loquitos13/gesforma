@@ -95,9 +95,6 @@ export function podeArrastar(de: string, para: string, opts: { role: string; sec
     if (opts.role !== "admin" && opts.role !== "secretaria") {
       return { ok: false as const, erro: "Só a secretaria inscreve na turma (Formando)." };
     }
-    if (!opts.secretariaEm) {
-      return { ok: false as const, erro: "A pré-inscrição ainda não foi entregue à secretaria." };
-    }
     return { ok: true as const };
   }
   if (para === "Pré-inscrição" && !["2º Contacto", "Pago", "Pré-inscrição"].includes(de)) {

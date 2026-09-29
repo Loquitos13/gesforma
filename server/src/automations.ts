@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "./db/pool.js";
 import { buildCtaVars, ctaDestino, fillCtaHref } from "./emailCta.js";
+import { renderAutomaticEmail } from "./emailHtml.js";
 import { parseEmailXml } from "./emailXml.js";
 import { config } from "./config.js";
 import { sendMail } from "./mailer.js";
@@ -79,18 +80,22 @@ export async function ingestEvent(
     if (rule.curso && curso && rule.curso !== curso) continue;
     const subject = fillVars(rule.assunto, vars);
     const fromXml = parseEmailXml(rule.body_xml ?? "");
-    const linhas = (fromXml.linhas.length ? fromXml.linhas : asLines(rule.body_lines)).map(l => fillVars(l, vars));
-    const cta = fillVars(fromXml.cta || rule.cta, vars);
+    const linhas = fromXml.linhas.length ? fromXml.linhas : asLines(rule.body_lines);
+    const cta = fromXml.cta || rule.cta;
     const hrefTpl = fromXml.href || rule.cta_href || ctaDestino(rule.template_tipo).href;
     const href = fillCtaHref(hrefTpl, vars);
-    const body = [`Olá ${nome.split(" ")[0] || nome},`, "", ...linhas, "", cta, href, "", "Equipa ENA · formacao@ena.pt"].join("\n");
     const jobId = randomUUID();
+    const pixel = `${config.appOrigin.replace(/\/$/, "")}/api/v1/email/open/${jobId}.gif`;
+    const mail = renderAutomaticEmail({
+      nome, xml: rule.body_xml ?? "", linhas, cta, href, vars,
+      origin: config.appOrigin, pixelUrl: pixel,
+    });
     const when = new Date(Date.now() + rule.delay_seconds * 1000).toISOString();
     await db.query(
-      `INSERT INTO email_jobs (id, rule_id, event_id, to_email, to_name, subject, body_text, scheduled_at, payload)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+      `INSERT INTO email_jobs (id, rule_id, event_id, to_email, to_name, subject, body_text, body_html, scheduled_at, payload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
        ON CONFLICT (rule_id, event_id) DO NOTHING`,
-      [jobId, rule.id, id, email, nome, subject, sanitizeText(body, 8000), when, payload],
+      [jobId, rule.id, id, email, nome, subject, sanitizeText(mail.text, 8000), mail.html.slice(0, 20000), when, payload],
     );
     queued += 1;
   }
@@ -204,9 +209,10 @@ export async function flushQueuedJobs(db: Db, limit = 20) {
     to_name: string;
     subject: string;
     body_text: string;
+    body_html: string;
     attempts: number;
   }>(
-    `SELECT id, to_email, to_name, subject, body_text, attempts
+    `SELECT id, to_email, to_name, subject, body_text, body_html, attempts
      FROM email_jobs
      WHERE status = 'queued' AND scheduled_at <= now()
      ORDER BY scheduled_at
@@ -218,10 +224,12 @@ export async function flushQueuedJobs(db: Db, limit = 20) {
   for (const job of due.rows) {
     try {
       const pixel = `${config.appOrigin.replace(/\/$/, "")}/api/v1/email/open/${job.id}.gif`;
-      const html = job.body_text
-        .split("\n")
-        .map(l => l ? `<p>${l.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>` : "<br>")
-        .join("") + `<img src="${pixel}" width="1" height="1" alt="" />`;
+      const html = job.body_html?.includes("<a ")
+        ? job.body_html
+        : job.body_text
+          .split("\n")
+          .map(l => l ? `<p>${l.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>` : "<br>")
+          .join("") + `<img src="${pixel}" width="1" height="1" alt="" />`;
       await sendMail(db, { to: job.to_email, name: job.to_name, subject: job.subject, text: job.body_text, html });
       await db.query(
         "UPDATE email_jobs SET status = 'sent', sent_at = now(), attempts = attempts + 1, last_error = NULL WHERE id = $1",
@@ -278,42 +286,31 @@ export async function sendRuleTest(db: Db, ruleId: number, to: { email: string; 
   });
   const subject = sanitizeHeader(`Teste · ${fillVars(rule.assunto, vars)}`);
   const fromXml = parseEmailXml(rule.body_xml ?? "");
-  const linhas = (fromXml.linhas.length ? fromXml.linhas : asLines(rule.body_lines)).map(l => fillVars(l, vars));
-  const cta = fillVars(fromXml.cta || rule.cta, vars);
+  const linhas = fromXml.linhas.length ? fromXml.linhas : asLines(rule.body_lines);
+  const cta = fromXml.cta || rule.cta;
   const hrefTpl = fromXml.href || rule.cta_href || ctaDestino(rule.template_tipo).href;
   const href = fillCtaHref(hrefTpl, vars);
-  const text = [
-    `Olá ${nome.split(" ")[0] || nome},`,
-    "",
-    ...linhas,
-    "",
-    cta,
-    href,
-    "",
-    "Equipa ENA · formacao@ena.pt",
-    "",
-    "Este envio é um teste da regra. Não altera o estado de nenhum lead.",
-  ].join("\n");
-  const body = sanitizeText(text, 8000);
   const eventId = randomUUID();
   const jobId = randomUUID();
+  const pixel = `${origin}/api/v1/email/open/${jobId}.gif`;
+  const mail = renderAutomaticEmail({
+    nome, xml: rule.body_xml ?? "", linhas, cta, href, vars,
+    origin, pixelUrl: pixel,
+    note: "Este envio é um teste da regra. Não altera o estado de nenhum lead.",
+  });
+  const body = sanitizeText(mail.text, 8000);
   await db.query(
     `INSERT INTO automation_events (id, type, idempotency_key, payload)
      VALUES ($1, 'email.test', $2, $3::jsonb)`,
     [eventId, `test:${ruleId}:${jobId}`, JSON.stringify({ email, nome, curso, turma, teste: true, ruleId })],
   );
   await db.query(
-    `INSERT INTO email_jobs (id, rule_id, event_id, to_email, to_name, subject, body_text, scheduled_at, status, payload)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, now(), 'queued', $8::jsonb)`,
-    [jobId, rule.id, eventId, email, nome, subject, body, JSON.stringify({ teste: true, ruleId: rule.id })],
+    `INSERT INTO email_jobs (id, rule_id, event_id, to_email, to_name, subject, body_text, body_html, scheduled_at, status, payload)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), 'queued', $9::jsonb)`,
+    [jobId, rule.id, eventId, email, nome, subject, body, mail.html.slice(0, 20000), JSON.stringify({ teste: true, ruleId: rule.id })],
   );
-  const pixel = `${origin}/api/v1/email/open/${jobId}.gif`;
-  const html = body
-    .split("\n")
-    .map(l => l ? `<p>${l.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>` : "<br>")
-    .join("") + `<img src="${pixel}" width="1" height="1" alt="" />`;
   try {
-    const mailId = await sendMail(db, { to: email, name: nome, subject, text: body, html });
+    const mailId = await sendMail(db, { to: email, name: nome, subject, text: body, html: mail.html });
     const logged = String(mailId).startsWith("log:");
     await db.query(
       "UPDATE email_jobs SET status = 'sent', sent_at = now(), attempts = 1, last_error = $2 WHERE id = $1",

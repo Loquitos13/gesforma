@@ -160,10 +160,10 @@ export function googleAuthUrl(state: string, creds: DriveCreds) {
   return `${AUTH_URL}?${q.toString()}`;
 }
 
-export function googleLoginAuthUrl(state: string, creds: DriveCreds) {
+export function googleLoginAuthUrl(state: string, creds: DriveCreds, redirectUri = config.googleLoginRedirectUri) {
   const q = new URLSearchParams({
     client_id: creds.clientId,
-    redirect_uri: config.googleLoginRedirectUri,
+    redirect_uri: redirectUri,
     response_type: "code",
     scope: "openid email profile",
     prompt: "select_account",

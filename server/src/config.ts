@@ -82,6 +82,51 @@ export function allowedOrigins() {
   return origins;
 }
 
+export type HeaderMap = { [key: string]: string | string[] | undefined };
+
+const HOST_RE = /^(?:localhost|127\.0\.0\.1|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?::\d{1,5})?$/i;
+
+function firstHeader(value: string | string[] | undefined) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return (raw ?? "").split(",")[0].trim().toLowerCase();
+}
+
+/**
+ * Origem pública estável para o OAuth.
+ * Um anfitrião `*.vercel.app` de um deployment muda em cada deploy e o Google
+ * responde 400 redirect_uri_mismatch. Nesses casos fica APP_ORIGIN.
+ */
+export function siteOriginFromHeaders(headers: HeaderMap) {
+  const app = config.appOrigin.replace(/\/$/, "");
+  const host = firstHeader(headers["x-forwarded-host"] ?? headers.host);
+  const protoRaw = firstHeader(headers["x-forwarded-proto"]);
+  const loopback = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+  const proto = protoRaw === "http" || protoRaw === "https" ? protoRaw : loopback ? "http" : "https";
+  if (!host || !HOST_RE.test(host)) return app;
+  const origin = `${proto}://${host}`;
+  if (loopback && origin !== app) return app;
+  if (origin === app) return origin;
+  if (host.endsWith(".vercel.app")) return app;
+  if (allowedOrigins().has(origin)) return origin;
+  if (onVercel && proto === "https") return origin;
+  return app;
+}
+
+export function oauthRedirectUri(headers: HeaderMap, path: string, explicit = "") {
+  const origin = siteOriginFromHeaders(headers);
+  const pinned = explicit.trim();
+  if (pinned) {
+    try {
+      const url = new URL(pinned);
+      if (`${url.protocol}//${url.host}` === origin) {
+        const pathname = url.pathname.replace(/\/$/, "") || path;
+        return `${origin}${pathname}`;
+      }
+    } catch { /* URI explícito noutro anfitrião: usa o site aberto */ }
+  }
+  return `${origin}${path}`;
+}
+
 export function assertSecureConfig() {
   if (onVercel && !config.databaseUrl) {
     console.warn("Vercel sem DATABASE_URL: a API usa PGlite em /tmp (some entre invocações). Ligue Neon ou Vercel Postgres.");

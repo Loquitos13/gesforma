@@ -1639,10 +1639,12 @@ function DriveSettingsCard() {
   const { status, ready, disconnect, refresh } = useDrive();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [copied, setCopied] = useState<"drive" | "login" | null>(null);
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [folderId, setFolderId] = useState("");
   const redirectUri = status.redirectUri || `${window.location.origin}/api/v1/drive/oauth/callback`;
+  const loginRedirectUri = status.loginRedirectUri || `${window.location.origin}/api/v1/auth/google/callback`;
 
   useEffect(() => {
     if (status.clientId) setClientId(status.clientId);
@@ -1659,7 +1661,9 @@ function DriveSettingsCard() {
     void refresh();
     if (drive === "ligado") setMsg("Conta Google da entidade ligada. Os próximos uploads vão para o Drive.");
     else if (drive === "sem-cliente") setMsg("Grave primeiro o Client ID e o secret do cliente OAuth.");
-    else if (drive === "oauth-falhou" || drive === "estado-expirado" || drive === "pedido-invalido") {
+    else if (drive === "redirect_uri_mismatch") {
+      setMsg("O Google recusou o endereço de retorno. Cole os dois URI abaixo, sem os alterar, em URIs de redireccionamento autorizados e grave.");
+    } else if (drive === "oauth-falhou" || drive === "estado-expirado" || drive === "pedido-invalido") {
       setMsg("Não foi possível concluir o OAuth. Confirme o URI de redireccionamento no Google Cloud e tente outra vez.");
     }
   }, [refresh]);
@@ -1717,19 +1721,32 @@ function DriveSettingsCard() {
         </div>
       </div>
 
+      {!status.connected && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-xs text-red-800 leading-relaxed">
+          <p className="font-semibold">O Google responde «Erro 400: redirect_uri_mismatch» quando o endereço de retorno não está na lista do cliente.</p>
+          <p className="mt-1">Em Google Cloud Console → Clientes OAuth → a aplicação Web deste Client ID → «URIs de redireccionamento autorizados», cole os dois endereços abaixo. Sem barra no fim, com https, e com o caminho completo. Grave, espere um minuto, e volte a carregar em Ligar conta Google.</p>
+        </div>
+      )}
+
       <ol className="text-xs text-slate-600 space-y-1 list-decimal pl-4">
         <li>Google Cloud Console → projecto da ENA → active a <span className="font-semibold">Google Drive API</span>.</li>
         <li>Ecrã de consentimento OAuth (interno, se for Google Workspace).</li>
-        <li>Clientes OAuth → «Aplicação Web». Adicione os dois URI de redireccionamento das caixas abaixo (Drive e login).</li>
+        <li>Clientes OAuth → «Aplicação Web». Adicione os dois URI das caixas abaixo, carácter a carácter.</li>
         <li>Cole o Client ID e o secret, grave, e ligue com a conta da secretaria (não uma conta pessoal).</li>
       </ol>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Field label="URI de redireccionamento do Drive">
-          <input className={iCls} readOnly value={redirectUri} onFocus={e => e.currentTarget.select()} />
+          <div className="flex gap-2">
+            <input className={iCls} readOnly value={redirectUri} onFocus={e => e.currentTarget.select()} />
+            <button type="button" onClick={() => { copyText(redirectUri); setCopied("drive"); }} className="px-3 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 shrink-0">{copied === "drive" ? "Copiado" : "Copiar"}</button>
+          </div>
         </Field>
         <Field label="URI de redireccionamento do login Google">
-          <input className={iCls} readOnly value={status.loginRedirectUri ?? `${window.location.origin}/api/v1/auth/google/callback`} onFocus={e => e.currentTarget.select()} />
+          <div className="flex gap-2">
+            <input className={iCls} readOnly value={loginRedirectUri} onFocus={e => e.currentTarget.select()} />
+            <button type="button" onClick={() => { copyText(loginRedirectUri); setCopied("login"); }} className="px-3 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 shrink-0">{copied === "login" ? "Copiado" : "Copiar"}</button>
+          </div>
         </Field>
         <Field label="Pasta no Drive (ID opcional de uma pasta já existente)">
           <input className={iCls} value={folderId} onChange={e => setFolderId(e.target.value)} placeholder="vazio = cria a pasta GesForma" disabled={status.fromEnv} />

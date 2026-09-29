@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { config, newToken } from "./config.js";
+import { config, newToken, oauthRedirectUri, siteOriginFromHeaders } from "./config.js";
 import type { Db } from "./db/pool.js";
 import {
   deleteDriveFile,
@@ -18,10 +18,12 @@ import {
   storeDriveFile,
 } from "./googleDrive.js";
 
+function driveCallbackUri(req: FastifyRequest) {
+  return oauthRedirectUri(req.headers, "/api/v1/drive/oauth/callback", process.env.GOOGLE_REDIRECT_URI ?? "");
+}
+
 function publicOrigin(req: FastifyRequest) {
-  const origin = req.headers.origin;
-  if (origin) return origin.replace(/\/$/, "");
-  return config.appOrigin.replace(/\/$/, "");
+  return siteOriginFromHeaders(req.headers);
 }
 
 export function registerDriveRoutes(
@@ -44,7 +46,12 @@ export function registerDriveRoutes(
 
   app.get("/v1/drive/status", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    return getDriveStatus(db);
+    const status = await getDriveStatus(db);
+    return {
+      ...status,
+      redirectUri: driveCallbackUri(req),
+      loginRedirectUri: oauthRedirectUri(req.headers, "/api/v1/auth/google/callback", process.env.GOOGLE_LOGIN_REDIRECT_URI ?? ""),
+    };
   });
 
   app.put("/v1/drive/config", async (req, reply) => {
@@ -59,7 +66,12 @@ export function registerDriveRoutes(
     try {
       await saveDriveConfig(db, body);
       await audit(db, req.actor!.id, "drive.config", "drive_config", "google", req.ip);
-      return getDriveStatus(db);
+      const status = await getDriveStatus(db);
+      return {
+        ...status,
+        redirectUri: driveCallbackUri(req),
+        loginRedirectUri: oauthRedirectUri(req.headers, "/api/v1/auth/google/callback", process.env.GOOGLE_LOGIN_REDIRECT_URI ?? ""),
+      };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : "configuração recusada" });
     }
@@ -74,20 +86,22 @@ export function registerDriveRoutes(
     await purgeExpiredStates(db);
     const state = newToken(24);
     const exp = new Date(Date.now() + 10 * 60_000).toISOString();
+    const redirectUri = driveCallbackUri(req);
     await db.query(
-      "INSERT INTO oauth_states (state, user_id, redirect_to, expires_at) VALUES ($1, $2, $3, $4)",
-      [state, req.actor!.id, `${publicOrigin(req)}/?drive=ligado`, exp],
+      "INSERT INTO oauth_states (state, user_id, redirect_to, expires_at, oauth_redirect_uri) VALUES ($1, $2, $3, $4, $5)",
+      [state, req.actor!.id, `${publicOrigin(req)}/?drive=ligado`, exp, redirectUri],
     );
-    return reply.redirect(googleAuthUrl(state, creds));
+    return reply.redirect(googleAuthUrl(state, { ...creds, redirectUri }));
   });
 
   app.get("/v1/drive/oauth/callback", async (req, reply) => {
     const q = req.query as { code?: string; state?: string; error?: string };
-    const fail = (reason: string) => reply.redirect(`${config.appOrigin}/?drive=${encodeURIComponent(reason)}`);
+    const home = publicOrigin(req);
+    const fail = (reason: string) => reply.redirect(`${home}/?drive=${encodeURIComponent(reason)}`);
     if (q.error) return fail(q.error);
     if (!q.code || !q.state) return fail("pedido-invalido");
-    const row = await db.query<{ user_id: string; redirect_to: string | null }>(
-      "SELECT user_id, redirect_to FROM oauth_states WHERE state = $1 AND expires_at > now()",
+    const row = await db.query<{ user_id: string; redirect_to: string | null; oauth_redirect_uri: string | null }>(
+      "SELECT user_id, redirect_to, oauth_redirect_uri FROM oauth_states WHERE state = $1 AND expires_at > now()",
       [q.state],
     );
     const st = row.rows[0];
@@ -96,7 +110,7 @@ export function registerDriveRoutes(
     try {
       const creds = await driveCreds(db);
       if (!googleConfigured(creds)) return fail("sem-cliente");
-      const tokens = await exchangeCode(q.code, creds);
+      const tokens = await exchangeCode(q.code, creds, st.oauth_redirect_uri || driveCallbackUri(req));
       const saved = await saveGoogleAccount(db, tokens);
       await audit(db, st.user_id, "drive.connect", "oauth_account", "google", req.ip, { email: saved.email });
       return reply.redirect(st.redirect_to || `${config.appOrigin}/?drive=ligado`);

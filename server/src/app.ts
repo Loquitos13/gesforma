@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { ingestEvent, processDueJobs, sendRuleTest } from "./automations.js";
-import { allowedOrigins, config, newToken, onVercel } from "./config.js";
+import { allowedOrigins, config, newToken, oauthRedirectUri, onVercel, siteOriginFromHeaders } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { registerCatalogRoutes } from "./catalogRoutes.js";
 import { registerDriveRoutes } from "./driveRoutes.js";
@@ -241,18 +241,18 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     return createSession(reply, { id: row.id, email, name: row.name, role: row.role }, req);
   });
 
-  app.get("/v1/auth/google", async () => {
+  app.get("/v1/auth/google", async (req) => {
     const creds = await driveCreds(db);
     return {
       configured: googleConfigured(creds),
-      redirectUri: config.googleLoginRedirectUri,
+      redirectUri: oauthRedirectUri(req.headers, "/api/v1/auth/google/callback", process.env.GOOGLE_LOGIN_REDIRECT_URI ?? ""),
     };
   });
 
   app.get("/v1/auth/google/start", {
     config: { rateLimit: { max: 12, timeWindow: "1 minute" } },
   }, async (req, reply) => {
-    const origin = config.appOrigin.replace(/\/$/, "");
+    const origin = siteOriginFromHeaders(req.headers);
     const creds = await driveCreds(db);
     if (!googleConfigured(creds)) {
       return reply.redirect(`${origin}/?login=sem-cliente`);
@@ -260,21 +260,22 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     await purgeExpiredStates(db);
     const state = newToken(24);
     const exp = new Date(Date.now() + 10 * 60_000).toISOString();
+    const redirectUri = oauthRedirectUri(req.headers, "/api/v1/auth/google/callback", process.env.GOOGLE_LOGIN_REDIRECT_URI ?? "");
     await db.query(
-      "INSERT INTO oauth_states (state, user_id, redirect_to, expires_at, purpose) VALUES ($1, NULL, $2, $3, 'login')",
-      [state, `${origin}/`, exp],
+      "INSERT INTO oauth_states (state, user_id, redirect_to, expires_at, purpose, oauth_redirect_uri) VALUES ($1, NULL, $2, $3, 'login', $4)",
+      [state, `${origin}/`, exp, redirectUri],
     );
-    return reply.redirect(googleLoginAuthUrl(state, creds));
+    return reply.redirect(googleLoginAuthUrl(state, creds, redirectUri));
   });
 
   app.get("/v1/auth/google/callback", async (req, reply) => {
-    const origin = config.appOrigin.replace(/\/$/, "");
+    const origin = siteOriginFromHeaders(req.headers);
     const fail = (reason: string) => reply.redirect(`${origin}/?login=${encodeURIComponent(reason)}`);
     const q = req.query as { code?: string; state?: string; error?: string };
     if (q.error) return fail("oauth-falhou");
     if (!q.code || !q.state) return fail("pedido-invalido");
-    const row = await db.query<{ purpose: string | null }>(
-      "SELECT purpose FROM oauth_states WHERE state = $1 AND expires_at > now()",
+    const row = await db.query<{ purpose: string | null; oauth_redirect_uri: string | null }>(
+      "SELECT purpose, oauth_redirect_uri FROM oauth_states WHERE state = $1 AND expires_at > now()",
       [q.state],
     );
     const st = row.rows[0];
@@ -283,7 +284,9 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     try {
       const creds = await driveCreds(db);
       if (!googleConfigured(creds)) return fail("sem-cliente");
-      const tokens = await exchangeCode(q.code, creds, config.googleLoginRedirectUri);
+      const redirectUri = st.oauth_redirect_uri
+        || oauthRedirectUri(req.headers, "/api/v1/auth/google/callback", process.env.GOOGLE_LOGIN_REDIRECT_URI ?? "");
+      const tokens = await exchangeCode(q.code, creds, redirectUri);
       const email = normalizeEmail((await googleUserEmail(tokens.access_token)) ?? "");
       if (!isEmail(email)) return fail("oauth-falhou");
       const user = await db.query<{ id: string; name: string; role: string; active: boolean }>(

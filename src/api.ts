@@ -579,7 +579,7 @@ export const apiPutSmtpConfig = (body: {
   replyTo: string;
 }) => api<SmtpStatus>("/v1/settings/smtp", { method: "PUT", body: JSON.stringify(body) });
 export const apiSmtpDesligar = () =>
-  api<SmtpStatus>("/v1/settings/smtp/desligar", { method: "POST" });
+  api<SmtpStatus>("/v1/settings/smtp/desligar", { method: "POST", body: JSON.stringify({}) });
 export const apiSmtpTeste = (to?: string) =>
   api<{ ok: boolean; id: string }>("/v1/settings/smtp/teste", { method: "POST", body: JSON.stringify({ to }) });
 

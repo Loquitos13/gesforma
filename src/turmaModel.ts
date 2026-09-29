@@ -352,6 +352,74 @@ export function cronogramaToSessoes(c: SessaoCronograma[], today = hojeIso()): S
   });
 }
 
+export function chaveOferta(s: string) {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[./_,;:()]/g, " ")
+    .replace(/[-–—]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function chaveHorario(s: string) {
+  const k = chaveOferta(s).replace(/\s+/g, " ");
+  if (!k) return "";
+  if (/^pos[- ]?laboral$/.test(k)) return "pos laboral";
+  if (/^laboral\s*manha$/.test(k)) return "laboral manha";
+  if (/^laboral\s*tarde$/.test(k)) return "laboral tarde";
+  if (/^sabado\s*manha$/.test(k)) return "sabado manha";
+  return k;
+}
+
+export function chaveLocal(s: string) {
+  return chaveOferta(s)
+    .replace(/\bvila nova de gaia\b/g, "vn gaia")
+    .replace(/\bv n gaia\b/g, "vn gaia")
+    .replace(/\bvngaia\b/g, "vn gaia");
+}
+
+/** Alguns pedidos antigos juntam local e horário em «Lisboa - Pós Laboral». */
+export function partirLocalHorario(local: string, horario?: string) {
+  const loc = local.trim();
+  const hor = (horario ?? "").trim();
+  const m = loc.match(/^(.*?)\s*[-–—]\s*(.+)$/);
+  if (m && chaveHorario(m[2])) {
+    return { local: m[1].trim(), horario: hor || m[2].trim() };
+  }
+  return { local: loc, horario: hor };
+}
+
+export function locaisEquivalentes(a: string, b: string) {
+  const x = chaveLocal(a);
+  const y = chaveLocal(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [curto, longo] = x.length <= y.length ? [x, y] : [y, x];
+  if (curto.length < 8) return false;
+  return longo.includes(curto);
+}
+
+export type OfertaTurmaRef = { id: number; curso: string; local: string; horario: string; dataInicio?: string };
+
+export function preinscricaoCasaComTurma(
+  lead: { curso: string; local: string; horario?: string; turmaId?: number; estado: string; inicioCurso?: string },
+  turma: OfertaTurmaRef,
+) {
+  if (lead.estado === "Formando" || lead.estado === "Desistiu") return false;
+  if (lead.turmaId && lead.turmaId === turma.id) return true;
+  if (chaveOferta(lead.curso) !== chaveOferta(turma.curso)) return false;
+  const partido = partirLocalHorario(lead.local, lead.horario);
+  if (!locaisEquivalentes(partido.local, turma.local)) return false;
+  const hLead = chaveHorario(partido.horario);
+  const hTurma = chaveHorario(turma.horario);
+  if (hLead) return hLead === hTurma;
+  const inicio = (lead.inicioCurso ?? "").slice(0, 10);
+  const dataTurma = (turma.dataInicio ?? "").slice(0, 10);
+  return Boolean(inicio && dataTurma && inicio === dataTurma);
+}
+
 export function turmaGoldOpts(
   turmas: TurmaGold[],
   opts?: { curso?: string; includeNome?: string },

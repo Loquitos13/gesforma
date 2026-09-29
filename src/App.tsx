@@ -34,6 +34,7 @@ import { useLocaisOptsDoCurso } from "./cursoLocais";
 import { OptionSelect } from "./OptionSelect";
 import { ListasOpcoesView } from "./ListasOpcoesView";
 import { CronogramaEditor, FormadoresAtribuidosCard, TurmaActivaToggle, TurmaInactivaBanner, TurmaInscricaoHint } from "./TurmaCronograma";
+import { InscreverFormandoPanel } from "./TurmaInscricao";
 import { TurmaAvaliacao } from "./TurmaAvaliacao";
 import { FormadoresView } from "./FormadoresView";
 import { FORMADORES_SEED } from "./formadorModel";
@@ -1477,7 +1478,7 @@ function exportPayload(
 
 function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab; onNavigate?: (v: View) => void }) {
   const { gold, toggleGold, setGoldCronograma, patchGold } = useTurmas();
-  const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma, cursosGold } = useLists();
+  const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma, cursosGold, preinscricoes, patchPreinscricao } = useLists();
   const turma = gold.find(t => t.id === turmaId) ?? gold[0];
   const activa = isTurmaActiva(turma);
   const membros = formandosTurmas.filter(f => f.turmaId === turma.id);
@@ -1508,9 +1509,6 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const [dataSessao, setDataSessao] = useState("");
   const [horaSessao, setHoraSessao] = useState("09:00");
   const [addFormando, setAddFormando] = useState(false);
-  const [novoNome, setNovoNome] = useState("");
-  const [novoEmail, setNovoEmail] = useState("");
-  const [novoTelf, setNovoTelf] = useState("");
   const [editTurma, setEditTurma] = useState(false);
   const [editNome, setEditNome] = useState("");
   const [editLocal, setEditLocal] = useState("");
@@ -1900,36 +1898,49 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           </div>
         </div>
       </SlideOver>
-      <SlideOver open={addFormando} onClose={() => setAddFormando(false)} title="Inscrever formando" sub={turma.nome}>
-        <div className="p-5 space-y-3">
-          {activa ? (
-            <>
-              <p className="text-xs text-slate-500">A turma está ativa e tem {Math.max(0, turma.vagas - turma.totalAlunos)} vagas. Só turmas ativas aceitam novas inscrições.</p>
-              <Field label="Nome"><input className={iCls} value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="Nome completo" /></Field>
-              <Field label="Email"><input className={iCls} type="email" value={novoEmail} onChange={e => setNovoEmail(e.target.value)} /></Field>
-              <Field label="Telemóvel"><input className={iCls} value={novoTelf} onChange={e => setNovoTelf(e.target.value)} /></Field>
-              <div className="flex gap-2 pt-2">
-                <button onClick={() => setAddFormando(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-                <button disabled={!novoNome.trim() || vagasLivres <= 0} onClick={() => {
-                  const { nome, apelido } = splitNome(novoNome);
-                  addFormandoTurma({
-                    id: nextListId(formandosTurmas),
-                    nome, apelido: apelido || "-",
-                    telf: novoTelf.trim() || "-",
-                    email: novoEmail.trim() || `${nome.toLowerCase()}@mail.pt`,
-                    inscrito: nowStamp(),
-                    local: turma.local, curso: turma.curso, turma: turma.nome, turmaId: turma.id,
-                    estado: "Formando", pago: false, valor: 125, metodo: "-",
-                  });
-                  patchGold(turma.id, { totalAlunos: turma.totalAlunos + 1 });
-                  setAddFormando(false); setNovoNome(""); setNovoEmail(""); setNovoTelf("");
-                }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Inscrever</button>
-              </div>
-            </>
-          ) : (
+      <SlideOver open={addFormando} onClose={() => setAddFormando(false)} title="Inscrever formando" sub={`${turma.curso} · ${turma.local} · ${turma.horario}`}>
+        {activa ? (
+          <InscreverFormandoPanel
+            turma={turma}
+            leads={preinscricoes}
+            emailsInscritos={membros.map(f => f.email)}
+            vagasLivres={vagasLivres}
+            accent="gold"
+            onCancel={() => setAddFormando(false)}
+            onInscreverLead={lead => {
+              if (vagasLivres <= 0) return;
+              addFormandoTurma({
+                id: nextListId(formandosTurmas),
+                nome: lead.nome, apelido: lead.apelido || "-",
+                telf: lead.telf || "-",
+                email: lead.email,
+                inscrito: nowStamp(),
+                local: turma.local, curso: turma.curso, turma: turma.nome, turmaId: turma.id,
+                estado: "Formando", pago: lead.estado === "Pago", valor: lead.preco || 125, metodo: lead.pagamentoMetodo || "-",
+              });
+              patchGold(turma.id, { totalAlunos: turma.totalAlunos + 1 });
+              patchPreinscricao(lead.id, { estado: "Formando" });
+            }}
+            onInscreverManual={dados => {
+              if (vagasLivres <= 0) return;
+              const { nome, apelido } = splitNome(dados.nome);
+              addFormandoTurma({
+                id: nextListId(formandosTurmas),
+                nome, apelido: apelido || "-",
+                telf: dados.telf || "-",
+                email: dados.email || `${nome.toLowerCase()}@mail.pt`,
+                inscrito: nowStamp(),
+                local: turma.local, curso: turma.curso, turma: turma.nome, turmaId: turma.id,
+                estado: "Formando", pago: false, valor: 125, metodo: "-",
+              });
+              patchGold(turma.id, { totalAlunos: turma.totalAlunos + 1 });
+            }}
+          />
+        ) : (
+          <div className="p-5">
             <TurmaInactivaBanner nome={turma.nome} onActivate={() => toggleGold(turma.id, true)} />
-          )}
-        </div>
+          </div>
+        )}
       </SlideOver>
       <SlideOver open={editTurma} onClose={() => setEditTurma(false)} title={`Editar ${turma.nome}`} sub="Dados da turma Gold" size="lg">
         <div className="p-5 space-y-3">
@@ -2033,7 +2044,7 @@ function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (
 
 function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab; onNavigate?: (v: View | NavTarget) => void }) {
   const { fin, toggleFin, setFinCronograma, patchFin } = useTurmas();
-  const { formandosFin, addFormandoFin, patchFormandoFin, removeFormandoFin, cursosFin } = useLists();
+  const { formandosFin, addFormandoFin, patchFormandoFin, removeFormandoFin, cursosFin, preinscricoes, patchPreinscricao } = useLists();
   const turma = fin.find(t => t.id === turmaId) ?? fin.find(t => t.ufcdCod === "3564") ?? fin[0];
   const activa = isTurmaActiva(turma);
   const sessoesTurma = cronogramaToSessoes(turma.cronograma);
@@ -2061,9 +2072,6 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const [apagarFormando, setApagarFormando] = useState<FinFormando | null>(null);
   const [transferirFormando, setTransferirFormando] = useState<FinFormando | null>(null);
   const [addFormando, setAddFormando] = useState(false);
-  const [novoNome, setNovoNome] = useState("");
-  const [novoEmail, setNovoEmail] = useState("");
-  const [novoTelf, setNovoTelf] = useState("");
   const [editTurma, setEditTurma] = useState(false);
   const [editNome, setEditNome] = useState("");
   const [editCurso, setEditCurso] = useState("");
@@ -2245,7 +2253,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <p className="text-sm font-semibold text-slate-700">Lista de Formandos</p>
               {activa
-                ? <NewBtn accent="fin" label="Adicionar" onClick={() => { setNovoNome(""); setNovoEmail(""); setNovoTelf(""); setAddFormando(true); }} />
+                ? <NewBtn accent="fin" label="Adicionar" onClick={() => setAddFormando(true)} />
                 : <button disabled title="Turma inativa - não aceita novas inscrições" className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-200 text-slate-400 text-sm font-semibold rounded-lg cursor-not-allowed">Adicionar</button>}
             </div>
             {listaFormandos.length === 0 && (
@@ -2407,35 +2415,47 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
         onConfirm={() => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true }); }} />
       <CertificadoVerModal open={!!verCert} onClose={() => setVerCert(null)} cert={verCert} accent="fin" />
       <ExportTurmaModal open={!!exportTurma} onClose={() => setExportTurma(null)} turma={exportTurma} />
-      <SlideOver open={addFormando} onClose={() => setAddFormando(false)} title="Inscrever formando" sub={turma.nome}>
-        <div className="p-5 space-y-3">
-          {activa ? (
-            <>
-              <p className="text-xs text-slate-500">A turma tem {Math.max(0, turma.alunosTotal - turma.alunos)} vagas.</p>
-              <Field label="Nome"><input className={iCls} value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="Nome completo" /></Field>
-              <Field label="Email"><input className={iCls} type="email" value={novoEmail} onChange={e => setNovoEmail(e.target.value)} /></Field>
-              <Field label="Telemóvel"><input className={iCls} value={novoTelf} onChange={e => setNovoTelf(e.target.value)} /></Field>
-              <div className="flex gap-2 pt-2">
-                <button onClick={() => setAddFormando(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-                <button disabled={!novoNome.trim()} onClick={() => {
-                  const { nome, apelido } = splitNome(novoNome);
-                  addFormandoFin({
-                    id: nextListId(formandosFin),
-                    nome, apelido: apelido || "-",
-                    turma: turma.nome, telf: novoTelf.trim() || "-",
-                    email: novoEmail.trim() || `${nome.toLowerCase()}@mail.pt`,
-                    curso: turma.curso, estado: "Elegível",
-                    ...emptyFinDocs(),
-                  });
-                  patchFin(turma.id, { alunos: turma.alunos + 1 });
-                  setAddFormando(false);
-                }} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Inscrever</button>
-              </div>
-            </>
-          ) : (
+      <SlideOver open={addFormando} onClose={() => setAddFormando(false)} title="Inscrever formando" sub={`${turma.curso} · ${turma.local} · ${turma.horario}`}>
+        {activa ? (
+          <InscreverFormandoPanel
+            turma={turma}
+            leads={preinscricoes}
+            emailsInscritos={membros.map(f => f.email)}
+            vagasLivres={Math.max(0, turma.alunosTotal - turma.alunos)}
+            accent="fin"
+            onCancel={() => setAddFormando(false)}
+            onInscreverLead={lead => {
+              if (turma.alunosTotal - turma.alunos <= 0) return;
+              addFormandoFin({
+                id: nextListId(formandosFin),
+                nome: lead.nome, apelido: lead.apelido || "-",
+                turma: turma.nome, telf: lead.telf || "-",
+                email: lead.email,
+                curso: turma.curso, estado: "Elegível",
+                ...emptyFinDocs(),
+              });
+              patchFin(turma.id, { alunos: turma.alunos + 1 });
+              patchPreinscricao(lead.id, { estado: "Formando" });
+            }}
+            onInscreverManual={dados => {
+              if (turma.alunosTotal - turma.alunos <= 0) return;
+              const { nome, apelido } = splitNome(dados.nome);
+              addFormandoFin({
+                id: nextListId(formandosFin),
+                nome, apelido: apelido || "-",
+                turma: turma.nome, telf: dados.telf || "-",
+                email: dados.email || `${nome.toLowerCase()}@mail.pt`,
+                curso: turma.curso, estado: "Elegível",
+                ...emptyFinDocs(),
+              });
+              patchFin(turma.id, { alunos: turma.alunos + 1 });
+            }}
+          />
+        ) : (
+          <div className="p-5">
             <TurmaInactivaBanner nome={turma.nome} onActivate={() => toggleFin(turma.id, true)} />
-          )}
-        </div>
+          </div>
+        )}
       </SlideOver>
       <SlideOver open={editTurma} onClose={() => setEditTurma(false)} title={`Editar ${turma.nome}`} sub="Dados da turma financiada" size="lg">
         <div className="p-5 space-y-3">

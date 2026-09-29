@@ -130,6 +130,9 @@ const TURMAS_GOLD = [
   [938, "2026-09-02", "PEN-SM-02/09", "Formação de Formadores - CCP", "Penafiel", "Sábado manhã", 13, 16, "Ativa"],
   [937, "2026-08-28", "VNG-SM-28/08", "Formação de Formadores - CCP", "V.N.Gaia", "Sábado manhã", 12, 16, "Inativa"],
   [936, "2026-09-03", "VNG-LM-03/09", "Formação de Formadores - CCP", "V.N.Gaia", "Laboral Manhã", 12, 16, "Inativa"],
+  [952, "2026-10-12", "VNG-PL-12/10", "Formação de Formadores - CCP", "V.N.Gaia", "Pós Laboral", 3, 16, "Ativa"],
+  [951, "2026-10-17", "VNG-SM-17/10", "Formação de Formadores - CCP", "V.N.Gaia", "Sábado manhã", 4, 16, "Ativa"],
+  [950, "2026-10-06", "BRG-LM-06/10", "Formação de Formadores - CCP", "Braga", "Laboral Manhã", 5, 16, "Ativa"],
 ] as const;
 
 const TURMAS_FIN = [
@@ -228,6 +231,13 @@ export async function seedOperational(db: Db) {
     for (const r of TURMAS_GOLD) {
       await db.query(
         "INSERT INTO turmas_gold (id, data_inicio, nome, curso, local, horario, total_alunos, vagas, estado, formador, horas) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+        [...r, "Isac Silva", 90],
+      );
+    }
+  } else {
+    for (const r of TURMAS_GOLD.filter(t => t[0] >= 950)) {
+      await db.query(
+        "INSERT INTO turmas_gold (id, data_inicio, nome, curso, local, horario, total_alunos, vagas, estado, formador, horas) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (id) DO NOTHING",
         [...r, "Isac Silva", 90],
       );
     }

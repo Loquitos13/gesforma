@@ -420,6 +420,64 @@ export function preinscricaoCasaComTurma(
   return Boolean(inicio && dataTurma && inicio === dataTurma);
 }
 
+export type LeadOfertaRef = {
+  curso: string;
+  local: string;
+  horario?: string;
+  turmaId?: number;
+  inicioCurso?: string;
+};
+
+export type TurmaInscricaoLinha = {
+  turma: TurmaGold;
+  grupo: "adequada" | "outro";
+  disabled: boolean;
+  motivo: string;
+};
+
+export function turmaAdequadaAoLead(lead: LeadOfertaRef, turma: TurmaGold) {
+  if (lead.turmaId && lead.turmaId === turma.id) return true;
+  if (chaveOferta(lead.curso) !== chaveOferta(turma.curso)) return false;
+  const partido = partirLocalHorario(lead.local, lead.horario);
+  if (!locaisEquivalentes(partido.local, turma.local)) return false;
+  const hLead = chaveHorario(partido.horario);
+  if (hLead) return hLead === chaveHorario(turma.horario);
+  const inicio = (lead.inicioCurso ?? "").slice(0, 10);
+  return Boolean(inicio && inicio === turma.dataInicio.slice(0, 10));
+}
+
+export function linhasTurmaInscricao(turmas: TurmaGold[], lead: LeadOfertaRef, hoje = hojeIso()): TurmaInscricaoLinha[] {
+  const partido = partirLocalHorario(lead.local, lead.horario);
+  const mesmoCursoLocal = turmas.filter(t =>
+    chaveOferta(t.curso) === chaveOferta(lead.curso) && locaisEquivalentes(t.local, partido.local));
+  const adequadas = mesmoCursoLocal.filter(t => turmaAdequadaAoLead(lead, t));
+  const ids = new Set(adequadas.map(t => t.id));
+  const outros = mesmoCursoLocal.filter(t =>
+    !ids.has(t.id) && t.dataInicio.slice(0, 10) >= hoje);
+
+  const linhaAdequada = (t: TurmaGold): TurmaInscricaoLinha => {
+    const vagas = Math.max(0, t.vagas - t.totalAlunos);
+    if (!isTurmaActiva(t)) return { turma: t, grupo: "adequada", disabled: true, motivo: "Não libertada" };
+    if (vagas <= 0) return { turma: t, grupo: "adequada", disabled: true, motivo: "Sem vagas" };
+    return { turma: t, grupo: "adequada", disabled: false, motivo: `${vagas} vaga${vagas === 1 ? "" : "s"}` };
+  };
+  const linhaOutro = (t: TurmaGold): TurmaInscricaoLinha => ({
+    turma: t,
+    grupo: "outro",
+    disabled: true,
+    motivo: `Outro horário · começa ${formatDiaMes(t.dataInicio)}`,
+  });
+
+  const sortData = (a: TurmaGold, b: TurmaGold) => a.dataInicio.localeCompare(b.dataInicio) || a.nome.localeCompare(b.nome, "pt");
+  return [
+    ...adequadas.slice().sort((a, b) => {
+      const pin = (t: TurmaGold) => (lead.turmaId && t.id === lead.turmaId ? 0 : 1);
+      return pin(a) - pin(b) || sortData(a, b);
+    }).map(linhaAdequada),
+    ...outros.slice().sort(sortData).map(linhaOutro),
+  ];
+}
+
 export function turmaGoldOpts(
   turmas: TurmaGold[],
   opts?: { curso?: string; includeNome?: string },
@@ -467,6 +525,9 @@ export const GOLD_TURMAS_SEED: Omit<TurmaGold, "cronograma" | "formador" | "hora
   { id: 938, dataInicio: "2026-09-02", nome: "PEN-SM-02/09", curso: "Formação de Formadores - CCP", local: "Penafiel", horario: "Sábado manhã", totalAlunos: 13, vagas: 16 },
   { id: 937, dataInicio: "2026-08-28", nome: "VNG-SM-28/08", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Sábado manhã", totalAlunos: 12, vagas: 16 },
   { id: 936, dataInicio: "2026-09-03", nome: "VNG-LM-03/09", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Laboral Manhã", totalAlunos: 12, vagas: 16 },
+  { id: 952, dataInicio: "2026-10-12", nome: "VNG-PL-12/10", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Pós Laboral", totalAlunos: 3, vagas: 16 },
+  { id: 951, dataInicio: "2026-10-17", nome: "VNG-SM-17/10", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Sábado manhã", totalAlunos: 4, vagas: 16 },
+  { id: 950, dataInicio: "2026-10-06", nome: "BRG-LM-06/10", curso: "Formação de Formadores - CCP", local: "Braga", horario: "Laboral Manhã", totalAlunos: 5, vagas: 16 },
 ];
 
 const GOLD_INATIVAS = new Set([937, 936]);

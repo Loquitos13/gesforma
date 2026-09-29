@@ -34,7 +34,7 @@ import { useLocaisOptsDoCurso } from "./cursoLocais";
 import { OptionSelect } from "./OptionSelect";
 import { ListasOpcoesView } from "./ListasOpcoesView";
 import { CronogramaEditor, FormadoresAtribuidosCard, TurmaActivaToggle, TurmaInactivaBanner, TurmaInscricaoHint } from "./TurmaCronograma";
-import { InscreverFormandoPanel } from "./TurmaInscricao";
+import { InscreverFormandoPanel, EscolherTurmaModal, FormandosKanban } from "./TurmaInscricao";
 import { TurmaAvaliacao } from "./TurmaAvaliacao";
 import { FormadoresView } from "./FormadoresView";
 import { FORMADORES_SEED } from "./formadorModel";
@@ -3085,14 +3085,16 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
 
 function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?: () => void }) {
   const { gold, patchGold } = useTurmas();
-  const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma } = useLists();
+  const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma, preinscricoes, patchPreinscricao } = useLists();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtroLocal, setFiltroLocal] = useState("");
+  const [viewMode, setViewMode] = useState<"table" | "kanban">("kanban");
   const [fichaOpen, setFichaOpen] = useState<FormandoRecord | null>(null);
   const [apagar, setApagar] = useState<FormandoRecord | null>(null);
   const [edit, setEdit] = useState<FormandoRecord | "new" | null>(null);
+  const [escolher, setEscolher] = useState<Preinscricao | null>(null);
   const [turma, setTurma] = useState("");
   const [cursoEdit, setCursoEdit] = useState("");
   const [nomeNovo, setNomeNovo] = useState("");
@@ -3108,6 +3110,14 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId, formandosTurmas]);
   const turmaOpts = turmaGoldOpts(gold, { curso: cursoEdit || undefined, includeNome: editing?.turma });
+  const emailsTurma = useMemo(() => new Set(formandosTurmas.map(x => x.email.trim().toLowerCase()).filter(Boolean)), [formandosTurmas]);
+  const preinscritos = useMemo(() => preinscricoes.filter(l => {
+    if (l.estado === "Formando" || l.estado === "Desistiu") return false;
+    if (emailsTurma.has(l.email.trim().toLowerCase())) return false;
+    const blob = `${l.nome} ${l.apelido} ${l.curso} ${l.local} ${l.horario ?? ""}`.toLowerCase();
+    if (s && !blob.includes(s.toLowerCase())) return false;
+    return matchesFilter(l.curso, filtroCurso) && matchesFilter(l.local, filtroLocal);
+  }), [preinscricoes, emailsTurma, s, filtroCurso, filtroLocal]);
   const f = formandosTurmas.filter(x => {
     const q = `${x.nome} ${x.apelido} ${x.turma}`.toLowerCase().includes(s.toLowerCase());
     const byPago = filtro === "Todos" || (filtro === "Pago" ? x.pago : filtro === "Por pagar" ? !x.pago : true);
@@ -3119,18 +3129,76 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
       setTurma(""); setCursoEdit("Formação de Formadores - CCP"); setNomeNovo(""); setEmailNovo(""); setTelfNovo("");
     } else if (edit) { setTurma(edit.turma); setCursoEdit(edit.curso); }
   }, [edit]);
+
+  function inscreverNaTurma(lead: Preinscricao, dest: TurmaGold) {
+    if (!isTurmaActiva(dest) || dest.vagas - dest.totalAlunos <= 0) {
+      toastError("Essa turma não aceita inscrições.");
+      return;
+    }
+    addFormandoTurma({
+      id: nextListId(formandosTurmas),
+      nome: lead.nome, apelido: lead.apelido || "-",
+      telf: lead.telf || "-", email: lead.email,
+      inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
+      estado: "Formando", pago: lead.estado === "Pago", valor: lead.preco || 125, metodo: lead.pagamentoMetodo || "-",
+    });
+    patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
+    patchPreinscricao(lead.id, { estado: "Formando" });
+    toastOk(`${lead.nome} ${lead.apelido} inscrito em ${dest.nome}.`);
+    setEscolher(null);
+  }
+
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Formandos Turmas" sub={`${formandosTurmas.length} formandos em turma`} action={<NewBtn label="+ Novo formando" onClick={() => setEdit("new")} />} />
+        <PageHeader
+          title="Formandos Turmas"
+          sub={`${formandosTurmas.length} inscritos em turma · ${preinscritos.length} pré-inscrições por colocar`}
+          action={
+            <div className="flex items-center gap-2">
+              <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden bg-white">
+                <button type="button" onClick={() => setViewMode("kanban")} className={`px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5 ${viewMode === "kanban" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>
+                  {I.kanban} Kanban
+                </button>
+                <button type="button" onClick={() => setViewMode("table")} className={`px-3 py-1.5 text-xs font-semibold ${viewMode === "table" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>Lista</button>
+              </div>
+              <NewBtn label="+ Novo formando" onClick={() => setEdit("new")} />
+            </div>
+          }
+        />
         <ViewFilters
           fields={[
-            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(formandosTurmas.map(x => x.curso)) },
-            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(formandosTurmas.map(x => x.local)) },
+            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts([...formandosTurmas.map(x => x.curso), ...preinscricoes.map(x => x.curso)]) },
+            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts([...formandosTurmas.map(x => x.local), ...preinscricoes.map(x => x.local)]) },
           ]}
           chips={{ options: ["Todos", "Pago", "Por pagar"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
           onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
         />
+        {viewMode === "kanban" ? (
+          <Card>
+            <div className="px-4 py-3 border-b border-slate-100">
+              <div className="relative max-w-xl">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{I.search}</span>
+                <input
+                  type="text"
+                  value={s}
+                  onChange={e => setS(e.target.value)}
+                  placeholder="Pesquisar formando, curso, local ou horário…"
+                  className="pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 w-full"
+                />
+              </div>
+            </div>
+            <div className="p-4">
+              <FormandosKanban
+                preinscritos={preinscritos}
+                inscritos={f}
+                onOpenLead={() => undefined}
+                onOpenFormando={r => setFichaOpen(r)}
+                onPedirTurma={setEscolher}
+              />
+            </div>
+          </Card>
+        ) : (
         <Card>
           <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
           {rows.length === 0 && <EmptyHint text="Nenhum formando neste filtro." action="Limpar filtros" onAction={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setS(""); setP(1); }} />}
@@ -3186,7 +3254,15 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
           </div>
           <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
         </Card>
+        )}
       </div>
+      <EscolherTurmaModal
+        open={!!escolher}
+        lead={escolher}
+        turmas={gold}
+        onClose={() => setEscolher(null)}
+        onConfirm={dest => { if (escolher) inscreverNaTurma(escolher, dest); }}
+      />
       <SlideOver open={!!fichaOpen} onClose={() => setFichaOpen(null)} title="Ficha do Formando" sub={fichaOpen ? `#${fichaOpen.id}` : ""} size="lg">
         {fichaOpen && <FichaFormando formando={fichaOpen} onClose={() => setFichaOpen(null)} />}
       </SlideOver>

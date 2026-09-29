@@ -10,13 +10,13 @@ import {
   badgeEstadoCls, camposEmFalta, CRM_COLS, estadoPodeEntregar, isSecretariaRole,
   MODELOS_NOTA,
 } from "./crmPipeline";
-import { AppModal, SearchSelect } from "./FormKit";
+import { AppModal } from "./FormKit";
 import { OptionSelect } from "./OptionSelect";
 import type { Preinscricao } from "./ListsContext";
 import { persist, toastError, toastOk } from "./toastBus";
-import { TurmaInscricaoHint } from "./TurmaCronograma";
 import { useTurmas } from "./TurmasContext";
-import { isTurmaActiva, turmaGoldOpts } from "./turmaModel";
+import { EscolherTurmaPicker } from "./TurmaInscricao";
+import { isTurmaActiva, type TurmaGold } from "./turmaModel";
 import { CursoOfertaCampos } from "./CursoOfertaCampos";
 import { OFERTA_VAZIA, type CursoOfertaSel } from "./oferta";
 
@@ -70,7 +70,7 @@ export function ClienteFicha({
   const [pagMetodo, setPagMetodo] = useState("");
   const [entregando, setEntregando] = useState(false);
   const [escolherTurma, setEscolherTurma] = useState(false);
-  const [turmaConv, setTurmaConv] = useState("");
+  const [turmaSel, setTurmaSel] = useState<TurmaGold | null>(null);
   const [dados, setDados] = useState({
     nome: "", apelido: "", email: "", telf: "", concelho: "", nif: "", moradaFiscal: "", codigoPostal: "",
   });
@@ -113,6 +113,7 @@ export function ClienteFicha({
     setTab("actividade");
     setNotaNova("");
     setEscolherTurma(false);
+    setTurmaSel(null);
     setDossier(null);
     setResultado("");
     setEntregando(false);
@@ -175,7 +176,6 @@ export function ClienteFicha({
 
   if (!item || !lead) return null;
   const wa = telDigits(lead.telf);
-  const turmaOpts = turmaGoldOpts(gold, { curso: lead.curso });
   const entregue = Boolean(lead.secretariaEm);
 
   async function gravarNota(texto = notaNova, res = resultado) {
@@ -442,9 +442,8 @@ export function ClienteFicha({
                 </button>
               ) : (
                 <div className="space-y-2">
-                  <SearchSelect value={turmaConv} onChange={setTurmaConv} options={turmaOpts} placeholder="Turmas libertadas…" empty="Não há turmas libertadas." />
-                  <TurmaInscricaoHint optsLen={turmaOpts.length} curso={lead.curso} />
-                  <button type="button" disabled={!turmaConv} onClick={() => onConvert?.(turmaConv)} className="w-full py-2 bg-emerald-600 disabled:opacity-40 text-white text-sm font-bold rounded-lg">Confirmar inscrição</button>
+                  <EscolherTurmaPicker lead={lead} turmas={gold} valueId={turmaSel?.id ?? null} onChange={setTurmaSel} />
+                  <button type="button" disabled={!turmaSel} onClick={() => turmaSel && onConvert?.(turmaSel.nome)} className="w-full py-2 bg-emerald-600 disabled:opacity-40 text-white text-sm font-bold rounded-lg">Confirmar inscrição</button>
                 </div>
               )
             )}

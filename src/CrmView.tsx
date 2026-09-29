@@ -11,7 +11,8 @@ import { nextListId, useLists, type Preinscricao } from "./ListsContext";
 import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./SecretaryUX";
 import { persist, toastError, toastOk } from "./toastBus";
 import { useTurmas } from "./TurmasContext";
-import { hojeIso, isTurmaActiva } from "./turmaModel";
+import { EscolherTurmaModal } from "./TurmaInscricao";
+import { hojeIso, isTurmaActiva, type TurmaGold } from "./turmaModel";
 import { CursoOfertaCampos } from "./CursoOfertaCampos";
 import { type CursoOfertaSel } from "./oferta";
 import { WhatsappSimulador } from "./WhatsappSimulador";
@@ -616,16 +617,28 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
         }}
       />
 
-      <ConfirmDangerModal
+      <EscolherTurmaModal
         open={!!confirmMove}
+        lead={confirmMove ? confirmMove.item as Preinscricao : null}
+        turmas={gold}
         onClose={() => setConfirmMove(null)}
-        title="Inscrever como formando"
-        body={confirmMove ? `Confirmar inscrição de ${confirmMove.item.nome} ${confirmMove.item.apelido}? Só a secretaria deve fazê-lo depois da pré-inscrição completa.` : ""}
-        confirmLabel="Inscrever"
-        onConfirm={() => {
+        onConfirm={(dest: TurmaGold) => {
           if (!confirmMove) return;
-          patchPreinscricao(confirmMove.id, { estado: "Formando" });
-          toastOk("Passou a Formando.");
+          if (!isTurmaActiva(dest) || dest.vagas - dest.totalAlunos <= 0) {
+            toastError("Essa turma não aceita inscrições.");
+            return;
+          }
+          const item = confirmMove.item;
+          addFormandoTurma({
+            id: nextListId(formandosTurmas),
+            nome: item.nome, apelido: item.apelido || "-", telf: item.telf || "-", email: item.email,
+            inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
+            estado: "Formando", pago: item.estado === "Pago", valor: item.preco || 125, metodo: item.pagamentoMetodo || "-",
+          });
+          patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
+          patchPreinscricao(item.id, { estado: "Formando" });
+          toastOk(`${item.nome} ${item.apelido} inscrito em ${dest.nome}.`);
+          setConfirmMove(null);
           setTimeout(carregar, 200);
         }}
       />

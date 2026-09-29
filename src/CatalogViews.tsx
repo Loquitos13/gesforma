@@ -10,9 +10,10 @@ import { FichaFormando } from "./FormandoFicha";
 import { ConteudoAbrirModal, type ConteudoPreview } from "./ActionSurfaces";
 import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./SecretaryUX";
 import {
-  apiMicrosoftDisconnect, apiMicrosoftLoginStatus, apiPutDriveConfig, apiPutMicrosoftConfig, apiPutWhatsappConfig,
-  apiUploadDrive, apiWhatsappDesligar, apiWhatsappStatus, driveOAuthStartUrl,
-  type MicrosoftStatus, type WhatsappStatus,
+  apiMicrosoftDisconnect, apiMicrosoftLoginStatus, apiPutDriveConfig, apiPutMicrosoftConfig, apiPutSmtpConfig,
+  apiPutWhatsappConfig, apiSmtpDesligar, apiSmtpStatus, apiSmtpTeste, apiUploadDrive, apiWhatsappDesligar,
+  apiWhatsappStatus, driveOAuthStartUrl,
+  type MicrosoftStatus, type SmtpStatus, type WhatsappStatus,
 } from "./api";
 import { useCatalogList, useCatalogs } from "./CatalogsContext";
 import { OptionSelect } from "./OptionSelect";
@@ -1618,13 +1619,10 @@ const configCards = [
   },
   {
     id: "emails",
-    titulo: "Emails automáticos",
-    texto: "Remetente, assinatura e regras ativas.",
+    titulo: "Assinatura dos emails",
+    texto: "Texto de fecho nos templates. O SMTP da Brevo, o remetente e o email das respostas estão no cartão acima.",
     fields: [
-      { label: "Remetente", value: "formacao@ena.pt" },
-      { label: "Nome visível", value: "ENA Formação" },
       { label: "Assinatura", value: "Equipa ENA" },
-      { label: "Regras ativas", value: "4" },
     ],
   },
 ];
@@ -2043,6 +2041,204 @@ function MicrosoftSettingsCard() {
   );
 }
 
+function SmtpSettingsCard() {
+  const [status, setStatus] = useState<SmtpStatus | null>(null);
+  const [estado, setEstado] = useState<"loading" | "ready" | "erro">("loading");
+  const [login, setLogin] = useState("");
+  const [smtpKey, setSmtpKey] = useState("");
+  const [fromName, setFromName] = useState("ENA Formação");
+  const [fromEmail, setFromEmail] = useState("");
+  const [replyTo, setReplyTo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const carregar = useCallback(() => {
+    apiSmtpStatus()
+      .then(r => {
+        setStatus(r);
+        setLogin(r.login || "");
+        setFromName(r.fromName || "ENA Formação");
+        setFromEmail(r.fromEmail || "");
+        setReplyTo(r.replyTo || "");
+        setEstado("ready");
+      })
+      .catch(() => setEstado("erro"));
+  }, []);
+  useEffect(() => { carregar(); }, [carregar]);
+
+  async function guardar() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await apiPutSmtpConfig({
+        login: login.trim(),
+        smtpKey: smtpKey.trim() || undefined,
+        fromName: fromName.trim(),
+        fromEmail: fromEmail.trim(),
+        replyTo: replyTo.trim(),
+      });
+      setStatus(r);
+      setSmtpKey("");
+      setLogin(r.login || "");
+      setFromName(r.fromName || "ENA Formação");
+      setFromEmail(r.fromEmail || "");
+      setReplyTo(r.replyTo || "");
+      setMsg("SMTP da Brevo gravado. Os emails automáticos saem com este remetente; as respostas vão para o email de redireccionamento.");
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Não foi possível gravar o SMTP.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function desligar() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await apiSmtpDesligar();
+      setStatus(r);
+      setLogin("");
+      setSmtpKey("");
+      setFromEmail("");
+      setReplyTo("");
+      setMsg("SMTP desligado. Os emails automáticos ficam só no histórico até ligar outra vez.");
+    } catch {
+      setMsg("Não foi possível desligar o SMTP.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function teste() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await apiSmtpTeste();
+      setMsg("Email de teste enviado para a sua conta. Confirme a caixa e, se responder, o destino das respostas.");
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "O teste não saiu.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const podeGravar = login.trim().length >= 3
+    && fromEmail.trim().includes("@")
+    && replyTo.trim().includes("@")
+    && (smtpKey.trim().length >= 8 || Boolean(status?.hasPassword));
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 md:col-span-2 xl:col-span-3 space-y-4">
+      <div className="flex flex-col md:flex-row md:items-start gap-4">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-slate-800">Emails · SMTP Brevo</p>
+          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+            Serviço de envio dos emails automáticos (pré-inscrição, documentos, referência MB). Na Brevo abra
+            {" "}<span className="font-semibold text-slate-700">Transactional → SMTP &amp; API → SMTP</span>
+            {" "}e cole o login e a chave. O remetente tem de estar verificado na Brevo. As respostas dos destinatários vão para o email de redireccionamento, não para o remetente.
+          </p>
+          <p className="text-xs text-slate-500 mt-2">
+            {estado === "loading" ? "A ler o estado…" : estado === "erro" ? "Não foi possível ler o estado." : status?.hint}
+          </p>
+          {status?.fromEnv && (
+            <p className="text-xs font-semibold text-slate-600 mt-1">Definido por SMTP_URL no servidor.</p>
+          )}
+          {msg && <p className="text-xs font-semibold text-amber-700 mt-2">{msg}</p>}
+        </div>
+        <div className="flex gap-2 flex-shrink-0 flex-wrap justify-end">
+          <span className={`px-3 py-2.5 text-sm font-semibold rounded-lg ${status?.configured ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-500"}`}>
+            {status?.configured ? "Activo" : "Inactivo"}
+          </span>
+          {status?.configured && !status.fromEnv && (
+            <button type="button" disabled={busy} onClick={() => void desligar()} className="px-4 py-2.5 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+              Desligar
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Field label="Login SMTP (Brevo)">
+          <input
+            className={iCls}
+            value={login}
+            onChange={e => setLogin(e.target.value)}
+            placeholder="O login SMTP da conta Brevo"
+            autoComplete="off"
+            disabled={status?.fromEnv}
+          />
+        </Field>
+        <Field label="Chave SMTP">
+          <input
+            className={iCls}
+            type="password"
+            value={smtpKey}
+            onChange={e => setSmtpKey(e.target.value)}
+            placeholder={status?.hasPassword ? "•••• já gravada - deixe vazio para manter" : "Cole a chave SMTP da Brevo"}
+            autoComplete="new-password"
+            disabled={status?.fromEnv}
+          />
+        </Field>
+        <Field label="Nome visível no remetente">
+          <input
+            className={iCls}
+            value={fromName}
+            onChange={e => setFromName(e.target.value)}
+            placeholder="ENA Formação"
+            autoComplete="off"
+            disabled={status?.fromEnv}
+          />
+        </Field>
+        <Field label="Email dos envios automáticos">
+          <input
+            className={iCls}
+            type="email"
+            value={fromEmail}
+            onChange={e => setFromEmail(e.target.value)}
+            placeholder="formacao@ena.pt"
+            autoComplete="off"
+            disabled={status?.fromEnv}
+          />
+        </Field>
+        <div className="md:col-span-2">
+          <Field label="Email para redireccionar as respostas (Reply-To)">
+            <input
+              className={iCls}
+              type="email"
+              value={replyTo}
+              onChange={e => setReplyTo(e.target.value)}
+              placeholder="secretaria@ena.pt"
+              autoComplete="off"
+              disabled={status?.fromEnv}
+            />
+          </Field>
+        </div>
+      </div>
+      <p className="text-[11px] text-slate-400">
+        Servidor {status?.host || "smtp-relay.brevo.com"} · porta {status?.port || 587} (STARTTLS). A chave fica cifrada na base.
+      </p>
+      <div className="flex flex-col sm:flex-row justify-end gap-2">
+        <button
+          type="button"
+          disabled={busy || !status?.configured}
+          onClick={() => void teste()}
+          className="px-4 py-2.5 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+        >
+          Enviar teste
+        </button>
+        <button
+          type="button"
+          disabled={busy || status?.fromEnv || !podeGravar}
+          onClick={() => void guardar()}
+          className="px-4 py-2.5 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white"
+        >
+          {busy ? "A gravar…" : status?.fromEnv ? "Definido no servidor" : "Gravar SMTP Brevo"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ConfiguracoesView() {
   const { settings, saveSettings } = useCatalogs();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -2071,6 +2267,7 @@ export function ConfiguracoesView() {
           <DriveSettingsCard />
           <MicrosoftSettingsCard />
           <WhatsappSettingsCard />
+          <SmtpSettingsCard />
           {configCards.map(c => (
             <button key={c.id} type="button" onClick={() => setOpenId(c.id)}
               className={`text-left bg-white rounded-xl border shadow-sm p-5 hover:border-amber-300 hover:shadow-md transition-all ${openId === c.id ? "border-amber-400 ring-1 ring-amber-200" : "border-slate-200"}`}>

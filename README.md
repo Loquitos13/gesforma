@@ -32,7 +32,7 @@ Gold e Financiada têm cada uma o menu **Formadores**: ficha (contacto, CCP, NIF
 
 O **Painel** (um em Gold e outro em Financiada) e as **notificações** saem da API com os dados reais desse regime. Aceita filtros de **período, curso, local, horário** e **pré-inscritos vs formandos** (inscritos). A receita, o funil, a desagregação e o ranking seguem o mesmo filtro. Há preço por local+horário (catálogo de datas), circular de receita mensal com anel interior por curso, e ranking de receita por curso. Sem ligação à API o painel fica offline em vez de inventar números. As notificações sinalizam pagamentos pendentes, leads por contactar, turmas lotadas ou vazias, documentos de elegibilidade em falta e DTP abaixo de 60%; marcar como lida fica gravado por utilizador.
 
-Em **Configurações**, cada cartão abre um **modal centrado** só com essa secção (Cancelar / Guardar). Não há gaveta lateral nem lista de separadores à esquerda.
+Em **Configurações**, cada cartão abre um **modal centrado** só com essa secção (Cancelar / Guardar), excepto os cartões de integração (Drive, Microsoft, WhatsApp e **SMTP Brevo**), que se editam na própria grelha.
 
 A **secretaria** trabalha com rasto no topo (regime + percurso clicável), bloco **A fazer agora** no cockpit, listas em **cartões no telemóvel** e **acções com rótulo** no desktop (menu ⋯ no ecrã estreito). Eliminar pede sempre a mesma confirmação, incluindo nos catálogos e no blog. A pesquisa geral **⌘K** é larga, reconhece nome, telemóvel, email ou id, consulta a base de dados e agrupa os resultados; ao clicar abre a ficha do formando/formador ou a view da formação/turma. As notificações classificam-se em **Bloqueio**, **Aviso** e **Info**.
 
@@ -60,7 +60,7 @@ Cada **turma Gold** tem um **cronograma** e um toggle **Liberada / Não libertad
 
 A secretaria entra com sessão (cookie httpOnly, SameSite=strict). A API Fastify fala **Postgres** na VPS; em desenvolvimento, se `DATABASE_URL` estiver vazio, usa **PGlite** (o mesmo SQL, ficheiro em `server/data/`).
 
-As migrações estão em `server/src/db/migrations/` (`001` … `032`) e correm no arranque. O seed cria o admin, dois comerciais de demonstração (`ines.costa@ena.pt` / `tiago.melo@ena.pt`), os templates de email e, se as tabelas estiverem vazias, o operacional (cursos, turmas, formadores, leads, pagamentos) e os **catálogos** (módulos, locais, horários, datas, conteúdos, áreas, formandos avulso, inscrições financiadas, temáticas do blog, inquéritos). Leads sem comercial recebem um da equipa; propostas de exemplo são gravadas uma vez. O backoffice lê `GET /v1/ops` e grava nos CRUD e em `/v1/catalog/:kind`. As **Configurações** ficam em `app_settings`.
+As migrações estão em `server/src/db/migrations/` (`001` … `034`) e correm no arranque. O seed cria o admin, dois comerciais de demonstração (`ines.costa@ena.pt` / `tiago.melo@ena.pt`), os templates de email e, se as tabelas estiverem vazias, o operacional (cursos, turmas, formadores, leads, pagamentos) e os **catálogos** (módulos, locais, horários, datas, conteúdos, áreas, formandos avulso, inscrições financiadas, temáticas do blog, inquéritos). Leads sem comercial recebem um da equipa; propostas de exemplo são gravadas uma vez. O backoffice lê `GET /v1/ops` e grava nos CRUD e em `/v1/catalog/:kind`. As **Configurações** ficam em `app_settings`.
 
 A **execução pedagógica da turma** vive na base: `turma_sessoes` (plano, sumário e presenças por sessão), `turma_documentos` (PIP, simulações e listas do separador Documentos), `turma_dtp` (estado manual do dossiê), `turma_certificados` (nota, e-learning e emissão), `curso_fichas` (conteúdo do site e critérios da simulação), `formando_docs` / `formando_notas`, `formador_docs` e `inquerito_respostas`. As rotas são `/v1/turmas/:regime/:id/pedagogia`, `/v1/dtp/:regime`, `/v1/cursos/:regime/:id/ficha`, `/v1/formandos/:regime/:id/dossier`, `/v1/formadores/:id/docs`, `/v1/inqueritos/:id/respostas`, `/v1/dashboard` e `/v1/notificacoes`.
 
@@ -96,7 +96,7 @@ Arquitectura na VPS: **um Compose, três papéis, rede só interna**.
 
 Não separam a base para outro servidor até haver necessidade: um contentor Postgres no mesmo host é mais rápido, o backup é um `pg_dump` e a API não atravessa a rede pública.
 
-**Emails automáticos** - uma regra = gatilho + template + atraso. A secretaria regista uma pré-inscrição ou um pagamento; a API enfileira o envio (incluindo **contacto após a venda**, 1 hora depois do pagamento) e actualiza o funil do CRM. O worker corre na própria API, sem Redis. Sem SMTP (`MAIL_MODE=log`) o email fica no histórico; com `SMTP_URL` sai pelo correio.
+**Emails automáticos** - uma regra = gatilho + template + atraso. A secretaria regista uma pré-inscrição ou um pagamento; a API enfileira o envio (incluindo **contacto após a venda**, 1 hora depois do pagamento) e actualiza o funil do CRM. O worker de email corre na própria API, sem Redis. Sem SMTP, o email fica no histórico. O envio real configura-se em **Configurações → Emails · SMTP Brevo** (login e chave SMTP, email dos automáticos e email para redireccionar as respostas; a chave fica cifrada). `SMTP_URL` / `MAIL_FROM` / `MAIL_REPLY_TO` no servidor mandam sobre o que está na app.
 
 ### Segurança
 
@@ -147,7 +147,7 @@ docker compose up -d db api
 A API vai no **mesmo projecto** que a app (`/api`), para o cookie de sessão ser do mesmo domínio. A Vercel é serverless: não há `setInterval`. A fila de email corre no fim de cada evento, ao abrir o histórico, e num cron horário (`/api/v1/cron/email`). No plano Hobby a Vercel pode limitar a 1×/dia - a janela do lembrete 24h cobre hoje e amanhã.
 
 1. Claim ou ligue o Git à Vercel.
-2. Variáveis: `DATABASE_URL` (Neon ou Vercel Postgres), `SESSION_SECRET`, `ADMIN_PASSWORD`, `APP_ORIGIN=https://o-seu-dominio.vercel.app`, `MAIL_MODE`, `SMTP_URL`, e para o Drive `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (URI de callback `{APP_ORIGIN}/api/v1/drive/oauth/callback`). Para o WhatsApp (opcional): `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_VERIFY_TOKEN` - o callback no Meta é `{APP_ORIGIN}/api/v1/public/whatsapp/webhook`.
+2. Variáveis: `DATABASE_URL` (Neon ou Vercel Postgres), `SESSION_SECRET`, `ADMIN_PASSWORD`, `APP_ORIGIN=https://o-seu-dominio.vercel.app`. SMTP também se configura na app (Brevo). `SMTP_URL` é opcional e manda sobre a app. Drive: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (URI de callback `{APP_ORIGIN}/api/v1/drive/oauth/callback`). WhatsApp (opcional): `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_VERIFY_TOKEN` - o callback no Meta é `{APP_ORIGIN}/api/v1/public/whatsapp/webhook`.
 3. Sem `DATABASE_URL` a função usa PGlite em `/tmp` - some entre invocações. Para produção, Neon é o par habitual da Vercel.
 
 `vercel.json` já encaminha `/api/*` para a função.

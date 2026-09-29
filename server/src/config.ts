@@ -44,6 +44,7 @@ export const config = {
   mailMode: (process.env.MAIL_MODE ?? "log") as "log" | "smtp",
   smtpUrl: process.env.SMTP_URL ?? "",
   mailFrom: process.env.MAIL_FROM ?? "ENA Formação <formacao@ena.pt>",
+  mailReplyTo: (process.env.MAIL_REPLY_TO ?? "").trim(),
   databaseUrl: process.env.DATABASE_URL ?? "",
   pgliteDir: process.env.PGLITE_DIR
     ?? (process.env.VERCEL ? "/tmp/gesforma-pglite" : new URL("../data/pglite", import.meta.url).pathname),

@@ -556,6 +556,33 @@ export type MicrosoftStatus = {
   fromEnv?: boolean;
   hint?: string;
 };
+export type SmtpStatus = {
+  configured: boolean;
+  fromEnv: boolean;
+  hasPassword: boolean;
+  host: string;
+  port: number;
+  login: string;
+  fromName: string;
+  fromEmail: string;
+  replyTo: string;
+  hint: string;
+};
+export const apiSmtpStatus = () => api<SmtpStatus>("/v1/settings/smtp");
+export const apiPutSmtpConfig = (body: {
+  host?: string;
+  port?: number;
+  login: string;
+  smtpKey?: string;
+  fromName?: string;
+  fromEmail: string;
+  replyTo: string;
+}) => api<SmtpStatus>("/v1/settings/smtp", { method: "PUT", body: JSON.stringify(body) });
+export const apiSmtpDesligar = () =>
+  api<SmtpStatus>("/v1/settings/smtp/desligar", { method: "POST" });
+export const apiSmtpTeste = (to?: string) =>
+  api<{ ok: boolean; id: string }>("/v1/settings/smtp/teste", { method: "POST", body: JSON.stringify({ to }) });
+
 export const apiMicrosoftLoginStatus = () => api<MicrosoftStatus>("/v1/auth/microsoft");
 export const apiPutMicrosoftConfig = (body: { clientId: string; clientSecret?: string; tenantId?: string }) =>
   api<MicrosoftStatus>("/v1/auth/microsoft/config", { method: "PUT", body: JSON.stringify(body) });

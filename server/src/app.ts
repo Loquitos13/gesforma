@@ -35,6 +35,7 @@ import { registerWhatsappRoutes } from "./whatsapp.js";
 import { registerPedagogiaRoutes } from "./pedagogiaRoutes.js";
 import { registerEquipaRoutes } from "./equipa.js";
 import { registerUserRoutes } from "./userRoutes.js";
+import { registerSmtpRoutes } from "./smtpRoutes.js";
 import {
   delayLabelFromSeconds,
   delaySecondsFromLabel,
@@ -612,6 +613,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     }
   });
 
+  registerSmtpRoutes(app, db, { requireAuth, audit });
   registerOpsRoutes(app, db, { requireAuth, audit });
   registerWhatsappRoutes(app, db, { requireAuth });
   registerCatalogRoutes(app, db, { requireAuth });

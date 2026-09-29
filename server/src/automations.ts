@@ -222,7 +222,7 @@ export async function flushQueuedJobs(db: Db, limit = 20) {
         .split("\n")
         .map(l => l ? `<p>${l.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>` : "<br>")
         .join("") + `<img src="${pixel}" width="1" height="1" alt="" />`;
-      await sendMail({ to: job.to_email, name: job.to_name, subject: job.subject, text: job.body_text, html });
+      await sendMail(db, { to: job.to_email, name: job.to_name, subject: job.subject, text: job.body_text, html });
       await db.query(
         "UPDATE email_jobs SET status = 'sent', sent_at = now(), attempts = attempts + 1, last_error = NULL WHERE id = $1",
         [job.id],

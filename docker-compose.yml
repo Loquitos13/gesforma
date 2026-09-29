@@ -47,6 +47,7 @@ services:
       MAIL_MODE: ${MAIL_MODE:-log}
       SMTP_URL: ${SMTP_URL:-}
       MAIL_FROM: ${MAIL_FROM:-ENA Formação <formacao@ena.pt>}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
       API_PORT: "43148"
       TRUST_PROXY: "true"
     ports:

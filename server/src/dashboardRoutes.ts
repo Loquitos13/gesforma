@@ -123,8 +123,12 @@ async function buildNotificacoes(db: Db, actorId: string): Promise<Notificacao[]
     db.query<{ n: number; total: unknown }>(
       "SELECT count(*)::int AS n, COALESCE(sum(valor), 0) AS total FROM pagamentos WHERE estado <> 'Pago'",
     ),
-    db.query<{ n: number; id: number | null }>(
-      "SELECT count(*)::int AS n, (SELECT id FROM preinscricoes WHERE contactado_em IS NULL ORDER BY inscrito DESC LIMIT 1) AS id FROM preinscricoes WHERE contactado_em IS NULL",
+    db.query<{ n: number; id: number | null; regime: string }>(
+      `SELECT regime, count(*)::int AS n,
+              (array_agg(id ORDER BY inscrito DESC))[1] AS id
+         FROM preinscricoes
+        WHERE contactado_em IS NULL
+        GROUP BY regime`,
     ),
     db.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM formandos_fin
@@ -150,32 +154,38 @@ async function buildNotificacoes(db: Db, actorId: string): Promise<Notificacao[]
     });
   }
 
-  const porContactar = Number(leads.rows[0]?.n ?? 0);
-  if (porContactar > 0) {
+  for (const fila of leads.rows) {
+    const porContactar = Number(fila.n ?? 0);
+    if (porContactar <= 0) continue;
+    const fin = fila.regime === "fin";
     out.push({
-      chave: `leads-por-contactar-${porContactar}`,
+      chave: `leads-por-contactar-${fin ? "fin" : "gold"}-${porContactar}`,
       tipo: porContactar > 20 ? "warn" : "info",
-      titulo: `${porContactar} pré-inscrições por contactar`,
-      texto: "A fila comercial do dia está no CRM.",
-      view: "gold-preinscricoes",
-      leadId: leads.rows[0]?.id ? Number(leads.rows[0].id) : undefined,
+      titulo: `${porContactar} pré-inscrições por contactar${fin ? " · Financiada" : ""}`,
+      texto: fin ? "A fila do dia está no CRM da Financiada." : "A fila comercial do dia está no CRM Gold.",
+      view: fin ? "fin-preinscricoes" : "gold-preinscricoes",
+      leadId: fila.id ? Number(fila.id) : undefined,
     });
   }
 
-  const secFila = await db.query<{ n: number; id: number | null }>(
-    `SELECT count(*)::int AS n,
-            (SELECT id FROM preinscricoes WHERE estado = 'Pré-inscrição' AND secretaria_em IS NOT NULL ORDER BY secretaria_em DESC LIMIT 1) AS id
-       FROM preinscricoes WHERE estado = 'Pré-inscrição' AND secretaria_em IS NOT NULL`,
+  const secFila = await db.query<{ n: number; id: number | null; regime: string }>(
+    `SELECT regime, count(*)::int AS n,
+            (array_agg(id ORDER BY secretaria_em DESC))[1] AS id
+       FROM preinscricoes
+      WHERE estado = 'Pré-inscrição' AND secretaria_em IS NOT NULL
+      GROUP BY regime`,
   );
-  const nSec = Number(secFila.rows[0]?.n ?? 0);
-  if (nSec > 0) {
+  for (const fila of secFila.rows) {
+    const nSec = Number(fila.n ?? 0);
+    if (nSec <= 0) continue;
+    const fin = fila.regime === "fin";
     out.push({
-      chave: `secretaria-pre-${nSec}`,
+      chave: `secretaria-pre-${fin ? "fin" : "gold"}-${nSec}`,
       tipo: "warn",
-      titulo: `${nSec} pré-inscrição(ões) na secretaria`,
-      texto: "O comercial completou o dossiê. Falta inscrever o formando na turma.",
-      view: "gold-preinscricoes",
-      leadId: secFila.rows[0]?.id ? Number(secFila.rows[0].id) : undefined,
+      titulo: `${nSec} pré-inscrição(ões) na secretaria${fin ? " · Financiada" : ""}`,
+      texto: "O dossiê está completo. Falta inscrever o formando na turma.",
+      view: fin ? "fin-preinscricoes" : "gold-preinscricoes",
+      leadId: fila.id ? Number(fila.id) : undefined,
     });
   }
 
@@ -273,7 +283,18 @@ export function registerDashboardRoutes(
 
   app.get("/v1/dashboard", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    const rawRegime = String((req.query as { regime?: string } | undefined)?.regime ?? "");
+    const regime = rawRegime === "gold" || rawRegime === "fin" ? rawRegime : "";
     const now = new Date();
+    const leadWhere = regime ? `WHERE regime = '${regime}'` : "";
+    const leadAnd = regime ? `AND regime = '${regime}'` : "";
+    const cursoFinMatch = `EXISTS (
+      SELECT 1 FROM cursos_fin c
+       WHERE lower(trim(c.nome_comercial)) = lower(trim(pagamentos.curso))
+          OR lower(trim(c.ufcd)) = lower(trim(pagamentos.curso))
+    )`;
+    const payWhere = regime === "fin" ? `WHERE ${cursoFinMatch}` : regime === "gold" ? `WHERE NOT ${cursoFinMatch}` : "";
+    const payAnd = regime === "fin" ? `AND ${cursoFinMatch}` : regime === "gold" ? `AND NOT ${cursoFinMatch}` : "";
     const [counts, pagamentosRows, origens, cursosPorReceita, leadsPorCurso] = await Promise.all([
       db.query<{
         preinscritos: number; contactados: number; formandos_gold: number; formandos_fin: number;
@@ -281,8 +302,8 @@ export function registerDashboardRoutes(
         cursos_gold: number; cursos_fin: number;
       }>(
         `SELECT
-           (SELECT count(*)::int FROM preinscricoes) AS preinscritos,
-           (SELECT count(*)::int FROM preinscricoes WHERE contactado_em IS NOT NULL) AS contactados,
+           (SELECT count(*)::int FROM preinscricoes ${leadWhere}) AS preinscritos,
+           (SELECT count(*)::int FROM preinscricoes WHERE contactado_em IS NOT NULL ${leadAnd}) AS contactados,
            (SELECT count(*)::int FROM formandos_gold) AS formandos_gold,
            (SELECT count(*)::int FROM formandos_fin) AS formandos_fin,
            (SELECT count(*)::int FROM turmas_gold WHERE estado = 'Ativa') AS turmas_gold_ativas,
@@ -292,21 +313,35 @@ export function registerDashboardRoutes(
            (SELECT count(*)::int FROM cursos_gold WHERE estado = 'Ativo') AS cursos_gold,
            (SELECT count(*)::int FROM cursos_fin WHERE estado = 'Ativo') AS cursos_fin`,
       ),
-      db.query<PagamentoRow>("SELECT valor, metodo, curso, data, estado FROM pagamentos"),
-      db.query<{ origem: string; n: number }>("SELECT origem, count(*)::int AS n FROM preinscricoes GROUP BY origem"),
+      db.query<PagamentoRow>(`SELECT valor, metodo, curso, data, estado FROM pagamentos ${payWhere}`),
+      db.query<{ origem: string; n: number }>(`SELECT origem, count(*)::int AS n FROM preinscricoes ${leadWhere} GROUP BY origem`),
       db.query<{ curso: string; receita: unknown; pagos: number }>(
         `SELECT curso, COALESCE(sum(valor), 0) AS receita, count(*)::int AS pagos
-           FROM pagamentos WHERE estado = 'Pago' AND curso <> '' GROUP BY curso ORDER BY 2 DESC LIMIT 6`,
+           FROM pagamentos WHERE estado = 'Pago' AND curso <> '' ${payAnd} GROUP BY curso ORDER BY 2 DESC LIMIT 6`,
       ),
       db.query<{ curso: string; n: number }>(
-        "SELECT curso, count(*)::int AS n FROM preinscricoes WHERE curso <> '' GROUP BY curso",
+        `SELECT curso, count(*)::int AS n FROM preinscricoes WHERE curso <> '' ${leadAnd} GROUP BY curso`,
       ),
     ]);
 
     const c = counts.rows[0];
     const fin = financeiro(pagamentosRows.rows, now);
-    const formandosAtivos = Number(c?.formandos_gold ?? 0) + Number(c?.formandos_fin ?? 0);
+    const formandosGold = regime === "fin" ? 0 : Number(c?.formandos_gold ?? 0);
+    const formandosFin = regime === "gold" ? 0 : Number(c?.formandos_fin ?? 0);
+    const formandosAtivos = formandosGold + formandosFin;
     const preinscritos = Number(c?.preinscritos ?? 0);
+    const turmasAtivas = regime === "gold"
+      ? Number(c?.turmas_gold_ativas ?? 0)
+      : regime === "fin"
+        ? Number(c?.turmas_fin_ativas ?? 0)
+        : Number(c?.turmas_gold_ativas ?? 0) + Number(c?.turmas_fin_ativas ?? 0);
+    const turmasTotal = regime === "gold"
+      ? Number(c?.turmas_gold ?? 0)
+      : regime === "fin"
+        ? Number(c?.turmas_fin ?? 0)
+        : Number(c?.turmas_gold ?? 0) + Number(c?.turmas_fin ?? 0);
+    const cursosGold = regime === "fin" ? 0 : Number(c?.cursos_gold ?? 0);
+    const cursosFin = regime === "gold" ? 0 : Number(c?.cursos_fin ?? 0);
 
     const origemTotais = new Map<string, number>();
     for (const r of origens.rows) {
@@ -338,13 +373,13 @@ export function registerDashboardRoutes(
       cards: {
         preinscritos,
         formandosAtivos,
-        formandosGold: Number(c?.formandos_gold ?? 0),
-        formandosFin: Number(c?.formandos_fin ?? 0),
-        turmasAtivas: Number(c?.turmas_gold_ativas ?? 0) + Number(c?.turmas_fin_ativas ?? 0),
-        turmasTotal: Number(c?.turmas_gold ?? 0) + Number(c?.turmas_fin ?? 0),
-        cursosAtivos: Number(c?.cursos_gold ?? 0) + Number(c?.cursos_fin ?? 0),
-        cursosGold: Number(c?.cursos_gold ?? 0),
-        cursosFin: Number(c?.cursos_fin ?? 0),
+        formandosGold,
+        formandosFin,
+        turmasAtivas,
+        turmasTotal,
+        cursosAtivos: cursosGold + cursosFin,
+        cursosGold,
+        cursosFin,
       },
       financeiro: {
         ...fin,

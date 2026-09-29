@@ -56,6 +56,7 @@ export type Preinscricao = {
   motivoDesistencia?: string; pagamentoMetodo?: string;
   secretariaEm?: string | null;
   ultimaNota?: string; ultimaActividadeEm?: string | null; ultimaResultado?: string;
+  regime?: "gold" | "fin";
 };
 export type FormandoTurma = {
   id: number; nome: string; apelido: string; telf: string; email: string; inscrito: string;

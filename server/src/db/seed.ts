@@ -181,6 +181,7 @@ export async function seed(db: Db) {
   await upsertUser(db, SECRETARIA_SEED);
   await upsertUser(db, { name: "Inês Costa", email: "ines.costa@ena.pt", password: SECRETARIA_SEED.password, role: "comercial" });
   await upsertUser(db, { name: "Tiago Melo", email: "tiago.melo@ena.pt", password: SECRETARIA_SEED.password, role: "comercial" });
+  await upsertUser(db, { name: "Marta Lopes", email: "marta.lopes@ena.pt", password: SECRETARIA_SEED.password, role: "financiada" });
 
   for (const t of TEMPLATES) {
     await db.query(

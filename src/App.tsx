@@ -126,7 +126,8 @@ const I = {
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type View =
-  | "painel" | "gold-preinscricoes" | "gold-formandos-turmas" | "gold-formandos-gold"
+  | "painel" | "gold-painel" | "fin-painel" | "gold-preinscricoes" | "fin-preinscricoes" | "gold-equipa" | "fin-equipa"
+  | "gold-formandos-turmas" | "gold-formandos-gold"
   | "gold-campanhas" | "gold-cursos" | "gold-datas" | "gold-horarios" | "gold-locais" | "gold-areas-tematicas"
   | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-formadores" | "gold-cockpit-turma" | "gold-curso-ficha" | "gold-dtp" | "gold-inqueritos"
   | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-formadores" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
@@ -2734,16 +2735,20 @@ function eur(v: number) {
   return `\u20ac ${v.toLocaleString("pt-PT")}`;
 }
 
-function PainelView({ onNavigate }: { onNavigate: (v: View | NavTarget) => void }) {
+function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onNavigate: (v: View | NavTarget) => void }) {
   const [dash, setDash] = useState<Dashboard | null>(null);
   const [estado, setEstado] = useState<"loading" | "ready" | "offline">("loading");
+  const crmView: View = regime === "fin" ? "fin-preinscricoes" : "gold-preinscricoes";
+  const formandosView: View = regime === "fin" ? "fin-formandos" : "gold-formandos-turmas";
+  const turmasView: View = regime === "fin" ? "fin-turmas" : "gold-turmas";
+  const cursosView: View = regime === "fin" ? "fin-cursos" : "gold-cursos";
 
   const carregar = useCallback(() => {
     setEstado("loading");
-    apiDashboard()
+    apiDashboard(regime)
       .then(r => { setDash(r); setEstado("ready"); })
       .catch(() => setEstado("offline"));
-  }, []);
+  }, [regime]);
   useEffect(() => { carregar(); }, [carregar]);
 
   if (estado === "loading") {
@@ -2757,7 +2762,7 @@ function PainelView({ onNavigate }: { onNavigate: (v: View | NavTarget) => void 
             </Card>
           ))}
         </div>
-        <Card className="p-8"><p className="text-center text-sm text-slate-400">A calcular os números da secretaria…</p></Card>
+        <Card className="p-8"><p className="text-center text-sm text-slate-400">A calcular os números {regime === "fin" ? "da Financiada" : "do Gold"}…</p></Card>
       </div>
     );
   }
@@ -2781,10 +2786,10 @@ function PainelView({ onNavigate }: { onNavigate: (v: View | NavTarget) => void 
     <div className="space-y-5">
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         {[
-          { label: "CRM · leads", value: cards.preinscritos.toLocaleString("pt-PT"), sub: `${funil[1]?.v ?? 0} já contactados`, color: "text-blue-600", bg: "bg-blue-50", icon: I.clipboard, view: "gold-preinscricoes" as View },
-          { label: "Formandos", value: cards.formandosAtivos.toLocaleString("pt-PT"), sub: `${cards.formandosGold} Gold \u00b7 ${cards.formandosFin} financiados`, color: "text-emerald-600", bg: "bg-emerald-50", icon: I.users, view: "gold-formandos-turmas" as View },
-          { label: "Turmas ativas", value: String(cards.turmasAtivas), sub: `${cards.turmasTotal} no total`, color: "text-violet-600", bg: "bg-violet-50", icon: I.school, view: "gold-turmas" as View },
-          { label: "Cursos ativos", value: String(cards.cursosAtivos), sub: `${cards.cursosGold} Gold \u00b7 ${cards.cursosFin} financiados`, color: "text-amber-600", bg: "bg-amber-50", icon: I.book, view: "gold-cursos" as View },
+          { label: "CRM · leads", value: cards.preinscritos.toLocaleString("pt-PT"), sub: `${funil[1]?.v ?? 0} já contactados`, color: "text-blue-600", bg: "bg-blue-50", icon: I.clipboard, view: crmView },
+          { label: "Formandos", value: cards.formandosAtivos.toLocaleString("pt-PT"), sub: regime === "fin" ? "Formação financiada" : "Gold", color: "text-emerald-600", bg: "bg-emerald-50", icon: I.users, view: formandosView },
+          { label: "Turmas ativas", value: String(cards.turmasAtivas), sub: `${cards.turmasTotal} no total`, color: "text-violet-600", bg: "bg-violet-50", icon: I.school, view: turmasView },
+          { label: "Cursos ativos", value: String(cards.cursosAtivos), sub: regime === "fin" ? "UFCD e cursos financiados" : "Cursos Gold", color: "text-amber-600", bg: "bg-amber-50", icon: I.book, view: cursosView },
         ].map(s => (
           <Card key={s.label} className="p-4 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between mb-3">
@@ -2849,7 +2854,7 @@ function PainelView({ onNavigate }: { onNavigate: (v: View | NavTarget) => void 
           </div>
         </Card>
       </div>
-      <ConhecimentoEnaCard onVerMais={() => onNavigate("gold-preinscricoes")} dados={dash.conhecimento} />
+      <ConhecimentoEnaCard onVerMais={() => onNavigate(crmView)} dados={dash.conhecimento} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="p-4">
           <p className="text-sm font-semibold text-slate-700 mb-4">Métodos de pagamento</p>
@@ -4553,6 +4558,7 @@ function hitToNav(h: GlobalSearchHit): SearchRow {
 
 /** Atalhos do dia: só aparecem quando há realmente trabalho pendente. */
 function useAtalhosDoDia(): SearchRow[] {
+  const { user } = useAuth();
   const { preinscricoes, pagamentos, formandosFin } = useLists();
   const { gold, fin } = useTurmas();
   const dtpGold = useDtpResumo("gold");
@@ -4561,7 +4567,10 @@ function useAtalhosDoDia(): SearchRow[] {
   return useMemo(() => {
     const out: SearchRow[] = [];
     const porContactar = preinscricoes.filter(l => !l.contactadoEm).length;
-    if (porContactar) out.push({ tipo: "Atalho", nome: `${porContactar} leads por contactar`, sub: "CRM · fila do dia", view: "gold-preinscricoes" });
+    const porContactarGold = preinscricoes.filter(l => (l.regime ?? "gold") !== "fin" && !l.contactadoEm).length;
+    const porContactarFin = preinscricoes.filter(l => l.regime === "fin" && !l.contactadoEm).length;
+    if (porContactarGold) out.push({ tipo: "Atalho", nome: `${porContactarGold} leads por contactar`, sub: "CRM Gold · fila do dia", view: "gold-preinscricoes" });
+    if (porContactarFin) out.push({ tipo: "Atalho", nome: `${porContactarFin} leads por contactar`, sub: "CRM Financiada · fila do dia", view: "fin-preinscricoes" });
     const pendentes = pagamentos.filter(t => t.estado !== "Pago").length;
     if (pendentes) out.push({ tipo: "Atalho", nome: `${pendentes} pagamentos por confirmar`, sub: "Tesouraria", view: "pagamentos" });
 
@@ -4575,9 +4584,9 @@ function useAtalhosDoDia(): SearchRow[] {
     }
     const semDocs = formandosFin.filter(f => !["cc", "ch", "cu", "ci", "ce"].every(k => f[k as DocKey].ok)).length;
     if (semDocs) out.push({ tipo: "Atalho", nome: `${semDocs} formandos sem documentos`, sub: "Financiada · elegibilidade", view: "fin-formandos" });
-    if (!out.length) out.push({ tipo: "Atalho", nome: "Painel", sub: "Sem pendências sinalizadas", view: "painel" });
+    if (!out.length) out.push({ tipo: "Atalho", nome: "Painel", sub: "Sem pendências sinalizadas", view: user.role === "financiada" ? "fin-painel" : "gold-painel" });
     return out;
-  }, [dtpFin, dtpGold, fin, formandosFin, gold, pagamentos, preinscricoes]);
+  }, [dtpFin, dtpGold, fin, formandosFin, gold, pagamentos, preinscricoes, user.role]);
 }
 
 function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: () => void; onNavigate: (t: NavTarget) => void }) {
@@ -4783,12 +4792,10 @@ type NavGroup = { group: string; items: NavLeaf[] };
 type NavLeaf = { label: string; view?: View; icon: React.ReactNode; children?: { label: string; view: View }[] };
 
 const sidebarConfig: NavGroup[] = [
-  { group: "Principal", items: [
-    { label: "Painel", view: "painel", icon: I.home },
-    { label: "CRM", view: "gold-preinscricoes", icon: I.clipboard },
-    { label: "Equipa", view: "equipa", icon: I.users },
-  ] },
   { group: "Gold", items: [
+    { label: "Painel", view: "gold-painel", icon: I.home },
+    { label: "CRM", view: "gold-preinscricoes", icon: I.clipboard },
+    { label: "Equipa", view: "gold-equipa", icon: I.users },
     { label: "Formandos", icon: I.users, children: [{ label: "Formandos Turmas", view: "gold-formandos-turmas" }, { label: "Formandos Gold", view: "gold-formandos-gold" }] },
     { label: "Campanhas", view: "gold-campanhas", icon: I.megaphone },
     { label: "Edição de Cursos", icon: I.book, children: [
@@ -4803,6 +4810,9 @@ const sidebarConfig: NavGroup[] = [
     { label: "Inquéritos", view: "gold-inqueritos", icon: I.doc },
   ]},
   { group: "Financiada", items: [
+    { label: "Painel", view: "fin-painel", icon: I.home },
+    { label: "CRM", view: "fin-preinscricoes", icon: I.clipboard },
+    { label: "Equipa", view: "fin-equipa", icon: I.users },
     { label: "Inscrições", view: "fin-inscricoes", icon: I.clipboard },
     { label: "Formandos", view: "fin-formandos", icon: I.users },
     { label: "Turmas", view: "fin-turmas", icon: I.school },
@@ -4828,10 +4838,14 @@ const sidebarConfig: NavGroup[] = [
 ];
 
 /** Cada perfil vê o seu trabalho: a Comercial Gold não entra na Financiada e vice-versa. */
+function painelDoPerfil(role: string): View {
+  return role === "financiada" ? "fin-painel" : "gold-painel";
+}
+
 function gruposDoPerfil(role: string): string[] {
-  if (role === "comercial") return ["Principal", "Gold", "Gestão"];
-  if (role === "financiada") return ["Principal", "Financiada", "Gestão"];
-  return ["Principal", "Gold", "Financiada", "Gestão", "Sistema"];
+  if (role === "comercial") return ["Gold", "Gestão"];
+  if (role === "financiada") return ["Financiada", "Gestão"];
+  return ["Gold", "Financiada", "Gestão", "Sistema"];
 }
 
 function navParaPerfil(role: string): NavGroup[] {
@@ -4839,12 +4853,8 @@ function navParaPerfil(role: string): NavGroup[] {
   return sidebarConfig
     .filter(g => permitidos.includes(g.group))
     .map(g => {
-      let items = g.items;
-      if (g.group === "Principal" && role === "financiada") {
-        items = items.filter(item => item.view !== "equipa" && item.view !== "gold-preinscricoes");
-      }
-      if (g.group !== "Sistema" || role === "admin") return { ...g, items };
-      return { ...g, items: items.filter(item => item.label !== "Gestão") };
+      if (g.group !== "Sistema" || role === "admin") return g;
+      return { ...g, items: g.items.filter(item => item.label !== "Gestão") };
     });
 }
 
@@ -4852,7 +4862,7 @@ function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v:
   const { user, logout } = useAuth();
   const sidebarConfig = useMemo(() => navParaPerfil(user.role), [user.role]);
   const [openGroups, setOpenGroups] = useState<string[]>(() => {
-    const open: string[] = ["Principal"];
+    const open: string[] = [user.role === "financiada" ? "Financiada" : "Gold"];
     navParaPerfil(user.role).forEach(g => {
       if (g.items.some(item => item.view === view || item.children?.some(c => c.view === view))) open.push(g.group);
     });
@@ -4901,7 +4911,7 @@ function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v:
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-4 h-14 flex-shrink-0 border-b border-white/10">
-        <button onClick={() => { onNavigate("painel"); onClose?.(); }}
+        <button onClick={() => { onNavigate(painelDoPerfil(user.role)); onClose?.(); }}
           className="bg-amber-500 hover:bg-amber-400 text-white font-extrabold text-sm px-3.5 py-1.5 rounded-lg tracking-widest transition-colors">GESFORMA</button>
         {onClose && <button onClick={onClose} className="lg:hidden p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors">{I.x}</button>}
       </div>
@@ -4909,18 +4919,6 @@ function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v:
         {sidebarConfig.map(group => {
           const isOpen = openGroups.includes(group.group);
           const hasActive = groupHasActive(group);
-          if (group.group === "Principal") {
-            return (
-              <div key={group.group} className="mb-1">
-                {group.items.map(item => (
-                  <button key={item.label} onClick={() => { item.view && onNavigate(item.view); onClose?.(); }}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${isActive(item.view) ? "bg-amber-500 text-white font-semibold" : "text-slate-400 hover:text-white hover:bg-white/10"}`}>
-                    <span className="flex-shrink-0">{item.icon}</span><span className="truncate">{item.label}</span>
-                  </button>
-                ))}
-              </div>
-            );
-          }
           return (
             <div key={group.group} className="mb-1">
               <button onClick={() => toggleGroup(group.group)}
@@ -4981,7 +4979,9 @@ function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v:
 // ─── App ─────────────────────────────────────────────────────────────────────
 
 const viewTitles: Partial<Record<View, string>> = {
-  painel: "Painel", "gold-preinscricoes": "CRM",
+  painel: "Painel", "gold-painel": "Painel", "fin-painel": "Painel",
+  "gold-preinscricoes": "CRM", "fin-preinscricoes": "CRM",
+  "gold-equipa": "Equipa", "fin-equipa": "Equipa",
   "gold-formandos-turmas": "Formandos Turmas", "gold-formandos-gold": "Formandos Gold",
   "gold-campanhas": "Campanhas", "gold-cursos": "Cursos Gold", "gold-curso-ficha": "Ficha do curso", "gold-datas": "Datas Gold",
   "gold-horarios": "Horários", "gold-locais": "Locais", "gold-areas-tematicas": "Áreas Temáticas",
@@ -5019,9 +5019,10 @@ export default function App() {
 }
 
 function AppShell() {
+  const { user } = useAuth();
   const [view, setView] = useState<View>(() => {
     if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("drive")) return "configuracoes";
-    return "painel";
+    return painelDoPerfil(user.role);
   });
   const [cockpitId, setCockpitId] = useState<number | undefined>();
   const [finCockpitId, setFinCockpitId] = useState<number | undefined>();
@@ -5104,7 +5105,7 @@ function AppShell() {
   const headerCrumbs = (() => {
     if (view === "gold-cockpit-turma" && goldTurma) {
       return [
-        { label: "Gold", onClick: () => navigate("painel") },
+        { label: "Gold", onClick: () => navigate("gold-painel") },
         { label: "Turmas", onClick: () => navigate("gold-turmas") },
         { label: goldTurma.nome, onClick: () => { setCockpitTab("overview"); go("gold-cockpit-turma"); } },
         { label: cockpitTabLabel[cockpitTab] ?? "Visão geral" },
@@ -5112,16 +5113,20 @@ function AppShell() {
     }
     if ((view === "fin-cockpit-turma" || view === "fin-presencas") && finTurma) {
       return [
-        { label: "Financiada", onClick: () => navigate("painel") },
+        { label: "Financiada", onClick: () => navigate("fin-painel") },
         { label: "Turmas", onClick: () => navigate("fin-turmas") },
         { label: finTurma.nome, onClick: () => { setCockpitTab("overview"); go("fin-cockpit-turma"); } },
         { label: view === "fin-presencas" ? "Sessões" : (cockpitTabLabel[cockpitTab] ?? "Visão geral") },
       ];
     }
-    if (view === "gold-preinscricoes") return [{ label: "CRM" }];
-    if (view.startsWith("gold-")) return [{ label: "Gold", onClick: () => navigate("painel") }, { label: viewTitles[view] ?? "Gold" }];
-    if (view.startsWith("fin-")) return [{ label: "Financiada", onClick: () => navigate("painel") }, { label: viewTitles[view] ?? "Financiada" }];
-    if (view === "equipa") return [{ label: "Principal" }, { label: "Equipa" }];
+    if (view === "gold-painel" || view === "painel") return [{ label: "Gold" }, { label: "Painel" }];
+    if (view === "fin-painel") return [{ label: "Financiada" }, { label: "Painel" }];
+    if (view === "gold-preinscricoes") return [{ label: "Gold", onClick: () => navigate("gold-painel") }, { label: "CRM" }];
+    if (view === "fin-preinscricoes") return [{ label: "Financiada", onClick: () => navigate("fin-painel") }, { label: "CRM" }];
+    if (view === "gold-equipa" || view === "equipa") return [{ label: "Gold", onClick: () => navigate("gold-painel") }, { label: "Equipa" }];
+    if (view === "fin-equipa") return [{ label: "Financiada", onClick: () => navigate("fin-painel") }, { label: "Equipa" }];
+    if (view.startsWith("gold-")) return [{ label: "Gold", onClick: () => navigate("gold-painel") }, { label: viewTitles[view] ?? "Gold" }];
+    if (view.startsWith("fin-")) return [{ label: "Financiada", onClick: () => navigate("fin-painel") }, { label: viewTitles[view] ?? "Financiada" }];
     if (view === "utilizadores") return [{ label: "Sistema", onClick: () => navigate("configuracoes") }, { label: "Gestão" }, { label: "Utilizadores" }];
     return [{ label: viewTitles[view] ?? "GesForma" }];
   })();
@@ -5134,13 +5139,16 @@ function AppShell() {
 
   function renderView() {
     switch (view) {
-      case "painel": return <PainelView onNavigate={navigate} />;
+      case "painel":
+      case "gold-painel": return <PainelView regime="gold" onNavigate={navigate} />;
+      case "fin-painel": return <PainelView regime="fin" onNavigate={navigate} />;
       case "gold-cursos": return <CursosGoldView onOpen={id => { setCursoFichaId(id); go("gold-curso-ficha"); }} />;
       case "gold-curso-ficha": return <GoldCursoFichaScreen cursoId={cursoFichaId} onBack={() => navigate("gold-cursos")} onOpenModulos={nome => navigate({ view: "gold-modulos", cursoNome: nome })} />;
       case "gold-turmas": return <TurmasGoldView onCockpit={openCockpit} />;
       case "gold-cockpit-turma": return <CockpitTurmaView turmaId={cockpitId} initialTab={cockpitTab} onBack={() => navigate("gold-turmas")} onNavigate={navigate} />;
       case "gold-dtp": return <DtpTurmasPicker regime="gold" onOpen={(id) => openCockpit(id, "dtp")} />;
-      case "gold-preinscricoes": return <PreInscricoesGoldView openLeadId={openLeadId} onOpened={() => setOpenLeadId(undefined)} />;
+      case "gold-preinscricoes": return <PreInscricoesGoldView regime="gold" openLeadId={openLeadId} onOpened={() => setOpenLeadId(undefined)} />;
+      case "fin-preinscricoes": return <PreInscricoesGoldView regime="fin" openLeadId={openLeadId} onOpened={() => setOpenLeadId(undefined)} />;
       case "gold-formandos-turmas": return <FormandosTurmasView openId={openFormandoOrigem === "gold-avulso" || openFormandoOrigem === "fin" ? undefined : openFormandoId} onOpened={() => setOpenFormandoId(undefined)} />;
       case "gold-formandos-gold": return <FormandosGoldView openId={openFormandoOrigem === "gold-avulso" ? openFormandoId : undefined} onOpened={() => setOpenFormandoId(undefined)} />;
       case "gold-campanhas": return <CampanhasView />;
@@ -5178,9 +5186,11 @@ function AppShell() {
       case "emails": return <EmailsView />;
       case "pagamentos": return <PagamentosView />;
       case "configuracoes": return <ConfiguracoesView />;
-      case "equipa": return <EquipaView />;
+      case "equipa":
+      case "gold-equipa": return <EquipaView regime="gold" />;
+      case "fin-equipa": return <EquipaView regime="fin" />;
       case "utilizadores": return <UsersView />;
-      default: return <PainelView onNavigate={navigate} />;
+      default: return <PainelView regime={user.role === "financiada" ? "fin" : "gold"} onNavigate={navigate} />;
     }
   }
 

@@ -58,7 +58,18 @@ const preSchema = z.object({
   codigoPostal: z.string().trim().max(20).optional(),
   motivoDesistencia: z.string().trim().max(80).optional(),
   pagamentoMetodo: z.string().trim().max(40).optional(),
+  regime: z.enum(["gold", "fin"]).optional(),
 });
+
+function regimeDoPedido(role: string | undefined, pedido?: string): "gold" | "fin" {
+  if (role === "financiada") return "fin";
+  if (role === "comercial") return "gold";
+  return pedido === "fin" ? "fin" : "gold";
+}
+
+function regimeDaLinha(row: { regime?: unknown } | null | undefined): "gold" | "fin" {
+  return String(row?.regime ?? "") === "fin" ? "fin" : "gold";
+}
 
 function nowStamp() {
   return new Date().toISOString().slice(0, 16).replace("T", " ");
@@ -128,6 +139,7 @@ export function registerOpsRoutes(
       perPage: Number(q.perPage) || 50,
       sort: (sort.success ? sort.data : "inscrito") as CrmSort,
       kanban: str("kanban") === "1" || str("kanban") === "true",
+      regime: (str("regime") === "fin" ? "fin" : str("regime") === "gold" ? "gold" : "") as "" | "gold" | "fin",
     };
   }
 
@@ -209,6 +221,7 @@ export function registerOpsRoutes(
         const gate = podeArrastar(String(current.estado), d.estado, {
           role: req.actor!.role,
           secretariaEm: current.secretaria_em ? String(current.secretaria_em) : null,
+          regime: regimeDaLinha(current),
         });
         if (!gate.ok) continue;
         await db.query("UPDATE preinscricoes SET estado = $2 WHERE id = $1 AND estado <> 'Formando'", [id, d.estado]);
@@ -363,8 +376,12 @@ export function registerOpsRoutes(
 
   app.get("/v1/crm/comerciais", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    const regime = String((req.query as { regime?: string } | undefined)?.regime ?? "");
+    const equipa = regime === "fin" ? "financiada" : regime === "gold" ? "comercial" : "";
+    const roles = equipa ? [equipa, "admin", "secretaria"] : ["comercial", "financiada", "admin", "secretaria"];
     const rows = await db.query<{ id: string; name: string }>(
-      "SELECT id, name FROM users WHERE active = true AND role IN ('comercial','admin','secretaria') ORDER BY name",
+      "SELECT id, name FROM users WHERE active = true AND role = ANY($1::text[]) ORDER BY name",
+      [roles],
     );
     return { comerciais: rows.rows };
   });
@@ -455,15 +472,16 @@ export function registerOpsRoutes(
     if (email && !isEmail(email)) return reply.code(400).send({ error: "email inválido" });
     const dups = await findDuplicados(db, email, d.telf);
     const id = await nextOpsId(db);
-    const comercialId = d.comercialId ?? (req.actor?.role === "comercial" ? req.actor.id : null);
+    const regime = regimeDoPedido(req.actor?.role, d.regime);
+    const comercialId = d.comercialId ?? ((req.actor?.role === "comercial" || req.actor?.role === "financiada") ? req.actor.id : null);
     await db.query(
-      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, comercial_id, entrada, meio_contacto, etiqueta_id, horario, turma_id, nif, morada_fiscal, codigo_postal)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'manual',$16,$17,$18,$19,$20,$21,$22)`,
+      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, comercial_id, entrada, meio_contacto, etiqueta_id, horario, turma_id, nif, morada_fiscal, codigo_postal, regime)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'manual',$16,$17,$18,$19,$20,$21,$22,$23)`,
       [
         id, nowStamp(), d.nome, d.apelido, email, d.telf, d.inicioCurso || "-",
         d.concelho, d.local, d.curso, d.preco ?? 0, d.estado || "Não contactado", d.campanha, d.origem || "Telefone", comercialId,
         d.meioContacto || d.origem || "Telefone", d.etiquetaId ?? null, d.horario || "", d.turmaId ?? null,
-        d.nif ?? "", d.moradaFiscal ?? "", d.codigoPostal ?? "",
+        d.nif ?? "", d.moradaFiscal ?? "", d.codigoPostal ?? "", regime,
       ],
     );
     await ingestEvent(db, "preinscricao.created", { email, nome: `${d.nome} ${d.apelido}`.trim(), curso: d.curso, preinscricaoId: id }, `preinscricao:${id}:${email}`).catch(() => undefined);
@@ -488,6 +506,7 @@ export function registerOpsRoutes(
         role: req.actor!.role,
         secretariaEm: before.secretaria_em ? String(before.secretaria_em) : null,
         motivo: d.motivoDesistencia,
+        regime: regimeDaLinha(before),
       });
       if (!gate.ok) return reply.code(409).send({ error: gate.erro });
       if (d.estado === "Desistiu" && !(d.motivoDesistencia || String(before.motivo_desistencia ?? ""))) {

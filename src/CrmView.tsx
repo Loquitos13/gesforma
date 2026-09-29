@@ -12,7 +12,7 @@ import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./Secreta
 import { persist, toastError, toastOk } from "./toastBus";
 import { useTurmas } from "./TurmasContext";
 import { EscolherTurmaModal } from "./TurmaInscricao";
-import { hojeIso, isTurmaActiva, type TurmaGold } from "./turmaModel";
+import { hojeIso, isTurmaActiva, type TurmaFin, type TurmaGold } from "./turmaModel";
 import { CursoOfertaCampos } from "./CursoOfertaCampos";
 import { type CursoOfertaSel } from "./oferta";
 import { WhatsappSimulador } from "./WhatsappSimulador";
@@ -65,7 +65,29 @@ function nowStamp() {
   return new Date().toISOString().slice(0, 16).replace("T", " ");
 }
 
-export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: number; onOpened?: () => void } = {}) {
+function finComoTurma(t: TurmaFin): TurmaGold {
+  return {
+    id: t.id,
+    dataInicio: t.dataInicio,
+    nome: t.nome,
+    curso: t.curso,
+    local: t.local,
+    horario: t.horario,
+    totalAlunos: t.alunos,
+    vagas: t.alunosTotal,
+    estado: t.activa ? "Ativa" : "Inativa",
+    formador: t.formador,
+    horas: t.horas,
+    cronograma: t.cronograma,
+  };
+}
+
+const docsFinVazios = () => ({
+  cc: { ok: false, data: "" }, ch: { ok: false, data: "" }, cu: { ok: false, data: "" },
+  ci: { ok: false, data: "" }, ce: { ok: false, data: "" },
+});
+
+export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }: { regime?: "gold" | "fin"; openLeadId?: number; onOpened?: () => void } = {}) {
   const { user } = useAuth();
   const prefs = useRef(loadPrefs()).current;
   const [viewMode, setViewMode] = useState<"hoje" | "table" | "kanban">(prefs.view);
@@ -102,11 +124,12 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
   const [loteEtiqueta, setLoteEtiqueta] = useState("");
   const [confirmMove, setConfirmMove] = useState<{ id: number; estado: string; item: CrmLead } | null>(null);
 
-  const { gold, patchGold } = useTurmas();
+  const { gold, fin, patchGold, patchFin } = useTurmas();
   const {
     preinscricoes, addPreinscricao, patchPreinscricao, removePreinscricao, contactarPreinscricao,
-    addFormandoTurma, formandosTurmas, cursosGold,
+    addFormandoTurma, addFormandoFin, cursosGold, cursosFin,
   } = useLists();
+  const turmasInscricao = regime === "fin" ? fin.map(finComoTurma) : gold;
 
   const hoje = hojeIso();
   const query: CrmListQuery = useMemo(() => ({
@@ -114,7 +137,8 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
     fila: viewMode === "hoje" && !fila ? "agenda" : fila,
     page, perPage, sort, kanban: viewMode === "kanban", hoje,
     comercialId: comercialFiltro,
-  }), [q, estado, curso, local, origem, entrada, fila, page, perPage, sort, viewMode, hoje, comercialFiltro]);
+    regime,
+  }), [q, estado, curso, local, origem, entrada, fila, page, perPage, sort, viewMode, hoje, comercialFiltro, regime]);
 
   useEffect(() => {
     const t = window.setTimeout(() => { setQ(qInput.trim()); setPage(1); }, 280);
@@ -139,9 +163,9 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
 
   useEffect(() => { carregar(); }, [carregar]);
   useEffect(() => {
-    apiCrmComerciais().then(r => setComerciais(r.comerciais)).catch(() => undefined);
+    apiCrmComerciais(regime).then(r => setComerciais(r.comerciais)).catch(() => undefined);
     apiCrmEtiquetas().then(r => setEtiquetas(r.etiquetas)).catch(() => undefined);
-  }, []);
+  }, [regime]);
 
   useEffect(() => {
     if (!novo || editLead) { setDups([]); return; }
@@ -168,7 +192,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
       onOpened?.();
       return;
     }
-    apiCrmLeads({ q: String(openLeadId), perPage: 20, page: 1, sort: "inscrito" })
+    apiCrmLeads({ q: String(openLeadId), perPage: 20, page: 1, sort: "inscrito", regime })
       .then(r => {
         const hit = r.items.find(x => x.id === openLeadId);
         if (hit) setFicha(hit);
@@ -199,7 +223,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
     pagos: 0, formando: 0, atrasados: 0, hoje: 0, converter: 0, valorAberto: 0, preinscricoes: 0, manuais: 0,
     filaPre: 0, filaSec: 0, desistiu: 0,
   };
-  const secRole = isSecretariaRole(user.role);
+  const secRole = isSecretariaRole(user.role, regime);
   const facets = data?.facets ?? { cursos: [], locais: [], origens: [], campanhas: [] };
   const total = data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / perPage));
@@ -283,9 +307,13 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
       <div className="space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
           <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{regime === "fin" ? "Financiada" : "Gold"}</p>
             <h1 className="text-xl font-bold text-slate-800 leading-tight">CRM</h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Lead rápida no balcão; NIF e morada só na etapa Pré-inscrição, depois a secretaria inscreve. {counts.total.toLocaleString("pt-PT")} leads na base.
+              {regime === "fin"
+                ? "Leads da formação financiada. O formulário público continua a ser da oferta Gold."
+                : "Lead rápida no balcão; NIF e morada só na etapa Pré-inscrição, depois a secretaria inscreve."}
+              {" "}{counts.total.toLocaleString("pt-PT")} leads neste regime.
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -303,10 +331,19 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
           <div className={`rounded-xl border px-4 py-3 ${entrada === "preinscricao" ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white"}`}>
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Input 1 · principal</p>
             <p className="text-sm font-bold text-slate-800 mt-0.5">Pré-inscrição</p>
-            <p className="text-xs text-slate-500 mt-1">O pedido do site entra sozinho na fila. {counts.preinscricoes.toLocaleString("pt-PT")} nesta base.</p>
+            <p className="text-xs text-slate-500 mt-1">
+              {regime === "fin"
+                ? "Pedidos deste regime entram no balcão. O site público é só Gold."
+                : "O pedido do site entra sozinho na fila."}
+              {" "}{counts.preinscricoes.toLocaleString("pt-PT")} nesta base.
+            </p>
             <div className="flex gap-2 mt-3">
-              <button type="button" onClick={() => void copiarFormulario()} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 inline-flex items-center gap-1.5">{ic.link} Copiar ligação</button>
-              <a href="/pre-inscricao" target="_blank" rel="noreferrer" className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50">Abrir formulário</a>
+              {regime === "gold" && (
+                <>
+                  <button type="button" onClick={() => void copiarFormulario()} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 inline-flex items-center gap-1.5">{ic.link} Copiar ligação</button>
+                  <a href="/pre-inscricao" target="_blank" rel="noreferrer" className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50">Abrir formulário</a>
+                </>
+              )}
               <button type="button" onClick={() => { setEntrada(entrada === "preinscricao" ? "" : "preinscricao"); setPage(1); }} className="ml-auto px-3 py-1.5 text-xs font-semibold text-amber-800">{entrada === "preinscricao" ? "Ver todas" : "Filtrar estas"}</button>
             </div>
           </div>
@@ -320,7 +357,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
               <button type="button" onClick={() => { setEntrada(entrada === "manual" ? "" : "manual"); setPage(1); }} className="ml-auto px-3 py-1.5 text-xs font-semibold text-sky-800">{entrada === "manual" ? "Ver todas" : "Filtrar estas"}</button>
             </div>
           </div>
-          <div className={`rounded-xl border px-4 py-3 ${origem === "WhatsApp" ? "border-emerald-400 bg-emerald-50" : "border-slate-200 bg-white"}`}>
+          {regime === "gold" && <div className={`rounded-xl border px-4 py-3 ${origem === "WhatsApp" ? "border-emerald-400 bg-emerald-50" : "border-slate-200 bg-white"}`}>
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Input 3 · automático</p>
             <p className="text-sm font-bold text-slate-800 mt-0.5">WhatsApp</p>
             <p className="text-xs text-slate-500 mt-1">O bot pede nome, email e curso e grava a pré-inscrição. Cole o token em Configurações para responder no telemóvel; sem token usa o simulador.</p>
@@ -328,7 +365,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
               <button type="button" onClick={() => setWaOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg">{ic.wa} Simular conversa</button>
               <button type="button" onClick={() => { setOrigem(origem === "WhatsApp" ? "" : "WhatsApp"); setPage(1); }} className="ml-auto px-3 py-1.5 text-xs font-semibold text-emerald-800">{origem === "WhatsApp" ? "Ver todas" : "Filtrar estas"}</button>
             </div>
-          </div>
+          </div>}
         </div>
 
         <div className="grid grid-cols-2 xl:grid-cols-5 gap-2">
@@ -447,10 +484,11 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
             columns={data?.columns ?? CRM_COLS.map(c => ({ estado: c.id, total: data?.porEstado[c.id] ?? 0, items: items.filter(i => i.estado === c.id).slice(0, 80) }))}
             busy={busy}
             role={user.role}
+            regime={regime}
             hoje={hoje}
             onOpen={openFicha}
             onMove={(item, est) => {
-              const gate = podeArrastar(item.estado, est, { role: user.role, secretariaEm: item.secretariaEm });
+              const gate = podeArrastar(item.estado, est, { role: user.role, secretariaEm: item.secretariaEm, regime });
               if (!gate.ok) { toastError(gate.erro); return; }
               if (est === "Formando") { setConfirmMove({ id: item.id, estado: est, item }); return; }
               if (est === "Desistiu" && !item.motivoDesistencia) { openFicha(item); toastError("Indique o motivo da desistência na ficha."); return; }
@@ -598,20 +636,34 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
           setFicha({ ...ficha, ...patch });
           setTimeout(carregar, 250);
         }}
+        regime={regime}
+        turmas={turmasInscricao}
         onConvert={async turmaNome => {
           if (!ficha) return;
           if (!secRole) { toastError("Só a secretaria inscreve na turma."); return; }
           if (!ficha.secretariaEm) { toastError("A pré-inscrição ainda não foi entregue à secretaria."); return; }
-          const t = gold.find(x => x.nome === turmaNome);
-          if (!t || t.vagas - t.totalAlunos <= 0) return;
-          const id = await addFormandoTurma({
-            id: tempNumericId(),
-            nome: ficha.nome, apelido: ficha.apelido, telf: ficha.telf, email: ficha.email,
-            inscrito: nowStamp(), local: t.local, curso: t.curso, turma: t.nome, turmaId: t.id,
-            estado: "Formando", pago: ficha.estado === "Pago", valor: ficha.preco, metodo: "-",
-          });
-          if (!id) return;
-          patchGold(t.id, { totalAlunos: t.totalAlunos + 1 });
+          if (regime === "fin") {
+            const t = fin.find(x => x.nome === turmaNome);
+            if (!t || !t.activa || t.alunosTotal - t.alunos <= 0) return;
+            const id = await addFormandoFin({
+              id: tempNumericId(),
+              nome: ficha.nome, apelido: ficha.apelido, turma: t.nome, telf: ficha.telf, email: ficha.email,
+              curso: t.curso, estado: "Elegível", ...docsFinVazios(),
+            });
+            if (!id) return;
+            patchFin(t.id, { alunos: t.alunos + 1 });
+          } else {
+            const t = gold.find(x => x.nome === turmaNome);
+            if (!t || t.vagas - t.totalAlunos <= 0) return;
+            const id = await addFormandoTurma({
+              id: tempNumericId(),
+              nome: ficha.nome, apelido: ficha.apelido, telf: ficha.telf, email: ficha.email,
+              inscrito: nowStamp(), local: t.local, curso: t.curso, turma: t.nome, turmaId: t.id,
+              estado: "Formando", pago: ficha.estado === "Pago", valor: ficha.preco, metodo: "-",
+            });
+            if (!id) return;
+            patchGold(t.id, { totalAlunos: t.totalAlunos + 1 });
+          }
           patchPreinscricao(ficha.id, { estado: "Formando" });
           setFicha({ ...ficha, estado: "Formando" });
           setTimeout(carregar, 250);
@@ -621,7 +673,7 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
       <EscolherTurmaModal
         open={!!confirmMove}
         lead={confirmMove ? confirmMove.item as Preinscricao : null}
-        turmas={gold}
+        turmas={turmasInscricao}
         onClose={() => setConfirmMove(null)}
         onConfirm={async (dest: TurmaGold) => {
           if (!confirmMove) return;
@@ -630,14 +682,26 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
             return;
           }
           const item = confirmMove.item;
-          const id = await addFormandoTurma({
-            id: tempNumericId(),
-            nome: item.nome, apelido: item.apelido || "-", telf: item.telf || "-", email: item.email,
-            inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
-            estado: "Formando", pago: item.estado === "Pago", valor: item.preco || 125, metodo: item.pagamentoMetodo || "-",
-          });
-          if (!id) return;
-          patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
+          if (regime === "fin") {
+            const origem = fin.find(t => t.id === dest.id);
+            if (!origem) return;
+            const id = await addFormandoFin({
+              id: tempNumericId(),
+              nome: item.nome, apelido: item.apelido || "-", turma: origem.nome, telf: item.telf || "-", email: item.email,
+              curso: origem.curso, estado: "Elegível", ...docsFinVazios(),
+            });
+            if (!id) return;
+            patchFin(origem.id, { alunos: origem.alunos + 1 });
+          } else {
+            const id = await addFormandoTurma({
+              id: tempNumericId(),
+              nome: item.nome, apelido: item.apelido || "-", telf: item.telf || "-", email: item.email,
+              inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
+              estado: "Formando", pago: item.estado === "Pago", valor: item.preco || 125, metodo: item.pagamentoMetodo || "-",
+            });
+            if (!id) return;
+            patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
+          }
           patchPreinscricao(item.id, { estado: "Formando" });
           toastOk(`${item.nome} ${item.apelido} inscrito em ${dest.nome}.`);
           setConfirmMove(null);
@@ -702,13 +766,15 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
           </label>
           <CursoOfertaCampos
             variant="crm"
-            turmas={gold.filter(isTurmaActiva).map(t => ({
+            turmas={turmasInscricao.filter(isTurmaActiva).map(t => ({
               turmaId: t.id, nome: t.nome, curso: t.curso, local: t.local, horario: t.horario,
               dataInicio: t.dataInicio, vagasLivres: Math.max(0, t.vagas - t.totalAlunos),
             }))}
-            cursos={cursosGold.map(c => ({ nome: c.nome, preco: c.preco }))}
+            cursos={regime === "fin"
+              ? cursosFin.map(c => ({ nome: c.nomeComercial || c.ufcd, preco: 0 }))
+              : cursosGold.map(c => ({ nome: c.nome, preco: c.preco }))}
             value={{ curso: form.curso, local: form.local, horario: form.horario, dataInicio: form.dataInicio, turmaId: form.turmaId }}
-            onChange={(v: CursoOfertaSel) => setForm(f => ({ ...f, ...v, turma: gold.find(t => t.id === v.turmaId)?.nome ?? "" }))}
+            onChange={(v: CursoOfertaSel) => setForm(f => ({ ...f, ...v, turma: turmasInscricao.find(t => t.id === v.turmaId)?.nome ?? "" }))}
           />
           {!editLead && (
             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Nota comercial
@@ -719,8 +785,8 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={() => { setNovo(false); setEditLead(null); }} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg">Cancelar</button>
             <button type="button" disabled={!form.nome.trim() || (!form.telf.trim() && !form.email.trim())} onClick={async () => {
-              const cursoRow = cursosGold.find(c => c.nome === form.curso);
-              const t = gold.find(x => x.id === form.turmaId) ?? gold.find(x => x.nome === form.turma);
+              const cursoRow = regime === "fin" ? undefined : cursosGold.find(c => c.nome === form.curso);
+              const t = turmasInscricao.find(x => x.id === form.turmaId) ?? turmasInscricao.find(x => x.nome === form.turma);
               const row: Preinscricao = {
                 id: editLead?.id ?? tempNumericId(),
                 inscrito: editLead?.inscrito ?? nowStamp(),
@@ -733,11 +799,12 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                 horario: form.horario || t?.horario || "",
                 turmaId: form.turmaId || t?.id || 0,
                 curso: form.curso || t?.curso || "",
-                preco: cursoRow?.preco ?? editLead?.preco ?? 125,
+                preco: cursoRow?.preco ?? editLead?.preco ?? (regime === "fin" ? 0 : 125),
                 estado: editLead?.estado ?? "Não contactado",
                 campanha: editLead?.campanha ?? "",
                 origem: form.origem || "Telefone",
                 entrada: editLead?.entrada ?? "manual",
+                regime,
               };
               if (editLead) {
                 patchPreinscricao(editLead.id, row);
@@ -778,11 +845,12 @@ function FilaBtn({ active, tone, title, sub, onClick }: { active: boolean; tone:
 }
 
 function Kanban({
-  columns, busy, onOpen, onMove, onLogContact, role, hoje,
+  columns, busy, onOpen, onMove, onLogContact, role, regime, hoje,
 }: {
   columns: { estado: string; total: number; valor?: number; items: CrmLead[] }[];
   busy: boolean;
   role: string;
+  regime: "gold" | "fin";
   hoje: string;
   onOpen: (item: CrmLead) => void;
   onMove: (item: CrmLead, estado: string) => void;
@@ -821,7 +889,7 @@ function Kanban({
             {col.id === "Pré-inscrição" && (
               <p className="px-3 pb-1 text-[10px] text-violet-700">Completar NIF/morada · entregar à secretaria</p>
             )}
-            {col.id === "Formando" && !isSecretariaRole(role) && (
+            {col.id === "Formando" && !isSecretariaRole(role, regime) && (
               <p className="px-3 pb-1 text-[10px] text-slate-500">Só a secretaria arrasta para aqui</p>
             )}
             <div className="px-2 pb-2 space-y-2">

@@ -233,22 +233,23 @@ export type EquipaNota = {
   createdAt: string | null;
 };
 
-export const apiEquipa = () => api<{
+export const apiEquipa = (regime: "gold" | "fin" = "gold") => api<{
   totais: { comerciais: number; activos: number; leads: number; propostas: number; pipeline: number; receita: number };
   comerciais: EquipaComercial[];
-}>("/v1/equipa");
+}>(`/v1/equipa?regime=${regime}`);
 
-export const apiEquipaFicha = (id: string) => api<{
+export const apiEquipaFicha = (id: string, regime: "gold" | "fin" = "gold") => api<{
   comercial: EquipaComercial;
   propostas: EquipaProposta[];
   leads: OpsSnapshot["preinscricoes"];
   notas: EquipaNota[];
-}>(`/v1/equipa/${id}`);
+}>(`/v1/equipa/${id}?regime=${regime}`);
 
 export const apiEquipaProposta = (comercialId: string, body: {
   clienteNome: string; clienteEmail?: string; curso?: string; valor?: number;
   estado?: "Enviada" | "Negociação" | "Aceite" | "Recusada" | "Expirada";
   respostaCliente?: string; notas?: string; preinscricaoId?: number | null;
+  regime?: "gold" | "fin";
 }) => api<{ proposta: EquipaProposta }>(`/v1/equipa/${comercialId}/propostas`, { method: "POST", body: JSON.stringify(body) });
 
 export const apiPatchProposta = (id: number, body: {
@@ -459,7 +460,8 @@ export type Dashboard = {
   conhecimento: { id: string; fonte: string; curto: string; detalhe: string; color: string; n: number; pct: number }[];
   topCursos: { nome: string; inscritos: number; receita: number; taxa: number | null }[];
 };
-export const apiDashboard = () => api<Dashboard>("/v1/dashboard");
+export const apiDashboard = (regime?: "gold" | "fin") =>
+  api<Dashboard>(regime ? `/v1/dashboard?regime=${regime}` : "/v1/dashboard");
 
 export type Notificacao = {
   chave: string;
@@ -547,6 +549,7 @@ export type CrmListQuery = {
   sort?: CrmSort;
   kanban?: boolean;
   hoje?: string;
+  regime?: "gold" | "fin";
 };
 
 export type CrmListResult = {
@@ -580,6 +583,7 @@ function crmQs(q: CrmListQuery) {
   if (q.sort) p.set("sort", q.sort);
   if (q.kanban) p.set("kanban", "1");
   if (q.hoje) p.set("hoje", q.hoje);
+  if (q.regime) p.set("regime", q.regime);
   const s = p.toString();
   return s ? `?${s}` : "";
 }
@@ -649,7 +653,8 @@ export const apiCrmDuplicados = (email: string, telf: string, exceptId = 0) =>
   api<{ duplicados: { id: number; nome: string; apelido: string; email: string; telf: string; estado: string; curso: string }[] }>(
     `/v1/crm/duplicados?email=${encodeURIComponent(email)}&telf=${encodeURIComponent(telf)}&exceptId=${exceptId}`,
   );
-export const apiCrmComerciais = () => api<{ comerciais: { id: string; name: string }[] }>("/v1/crm/comerciais");
+export const apiCrmComerciais = (regime?: "gold" | "fin") =>
+  api<{ comerciais: { id: string; name: string }[] }>(`/v1/crm/comerciais${regime ? `?regime=${regime}` : ""}`);
 
 export type CrmEtiqueta = { id: number; nome: string; cor: string };
 export const apiCrmEtiquetas = () => api<{ etiquetas: CrmEtiqueta[] }>("/v1/crm/etiquetas");

@@ -16,6 +16,7 @@ const propostaSchema = z.object({
   estado: z.enum(ESTADOS_PROPOSTA).optional().default("Enviada"),
   respostaCliente: z.string().trim().max(4000).optional().default(""),
   notas: z.string().trim().max(4000).optional().default(""),
+  regime: z.enum(["gold", "fin"]).optional(),
 });
 
 const patchPropostaSchema = z.object({
@@ -31,14 +32,23 @@ const notaSchema = z.object({
   nota: z.string().trim().min(1).max(4000),
 });
 
-function canSeeEquipa(role: string | undefined) {
-  return role === "admin" || role === "secretaria" || role === "comercial";
+function regimeDe(raw: unknown): "gold" | "fin" {
+  return raw === "fin" ? "fin" : "gold";
 }
 
-function requireEquipa(req: FastifyRequest, reply: FastifyReply, requireAuth: (req: FastifyRequest, reply: FastifyReply) => boolean) {
+function roleDaEquipa(regime: "gold" | "fin") {
+  return regime === "fin" ? "financiada" : "comercial";
+}
+
+function canSeeEquipa(role: string | undefined, regime: "gold" | "fin") {
+  if (role === "admin" || role === "secretaria") return true;
+  return role === roleDaEquipa(regime);
+}
+
+function requireEquipa(req: FastifyRequest, reply: FastifyReply, requireAuth: (req: FastifyRequest, reply: FastifyReply) => boolean, regime: "gold" | "fin") {
   if (!requireAuth(req, reply)) return false;
-  if (!canSeeEquipa(req.actor?.role)) {
-    reply.code(403).send({ error: "sem acesso à equipa comercial" });
+  if (!canSeeEquipa(req.actor?.role, regime)) {
+    reply.code(403).send({ error: "sem acesso a esta equipa" });
     return false;
   }
   return true;
@@ -100,18 +110,18 @@ function mapNota(r: Record<string, unknown>) {
   };
 }
 
-async function statsFor(db: Db, comercialId: string) {
+async function statsFor(db: Db, comercialId: string, regime: "gold" | "fin") {
   const leads = await db.query<{ estado: string; n: number; valor: number }>(
     `SELECT estado, count(*)::int AS n, coalesce(sum(preco),0)::float AS valor
-       FROM preinscricoes WHERE comercial_id = $1
+       FROM preinscricoes WHERE comercial_id = $1 AND regime = $2
      GROUP BY estado`,
-    [comercialId],
+    [comercialId, regime],
   );
   const props = await db.query<{ estado: string; n: number; valor: number }>(
     `SELECT estado, count(*)::int AS n, coalesce(sum(valor),0)::float AS valor
-       FROM propostas_comerciais WHERE comercial_id = $1
+       FROM propostas_comerciais WHERE comercial_id = $1 AND regime = $2
      GROUP BY estado`,
-    [comercialId],
+    [comercialId, regime],
   );
   const byLead = Object.fromEntries(leads.rows.map(r => [r.estado, { n: r.n, valor: r.valor }]));
   const byProp = Object.fromEntries(props.rows.map(r => [r.estado, { n: r.n, valor: r.valor }]));
@@ -146,17 +156,19 @@ export function registerEquipaRoutes(
   const { requireAuth, audit } = helpers;
 
   app.get("/v1/equipa", async (req, reply) => {
-    if (!requireEquipa(req, reply, requireAuth)) return;
+    const regime = regimeDe((req.query as { regime?: string } | undefined)?.regime);
+    if (!requireEquipa(req, reply, requireAuth, regime)) return;
     const rows = await db.query<ComercialRow>(
       `SELECT u.id, u.name, u.email, u.active,
               (SELECT max(s.created_at) FROM sessions s WHERE s.user_id = u.id) AS last_login_at
          FROM users u
-        WHERE u.role = 'comercial'
+        WHERE u.role = $1
         ORDER BY u.active DESC, u.name ASC`,
+      [roleDaEquipa(regime)],
     );
     const comerciais = [];
     for (const row of rows.rows) {
-      comerciais.push({ ...mapComercial(row), stats: await statsFor(db, row.id) });
+      comerciais.push({ ...mapComercial(row), stats: await statsFor(db, row.id, regime) });
     }
     const totais = comerciais.reduce((acc, c) => ({
       comerciais: acc.comerciais + 1,
@@ -170,32 +182,33 @@ export function registerEquipaRoutes(
   });
 
   app.get("/v1/equipa/:id", async (req, reply) => {
-    if (!requireEquipa(req, reply, requireAuth)) return;
+    const regime = regimeDe((req.query as { regime?: string } | undefined)?.regime);
+    if (!requireEquipa(req, reply, requireAuth, regime)) return;
     const id = (req.params as { id: string }).id;
     const row = await db.query<ComercialRow>(
       `SELECT u.id, u.name, u.email, u.active,
               (SELECT max(s.created_at) FROM sessions s WHERE s.user_id = u.id) AS last_login_at
-         FROM users u WHERE u.id = $1 AND u.role = 'comercial'`,
-      [id],
+         FROM users u WHERE u.id = $1 AND u.role = $2`,
+      [id, roleDaEquipa(regime)],
     );
     const comercial = row.rows[0];
     if (!comercial) return reply.code(404).send({ error: "comercial não encontrado" });
 
-    const leadsQ = await db.query("SELECT * FROM preinscricoes WHERE comercial_id = $1 ORDER BY inscrito DESC LIMIT 200", [id]);
-    const propsQ = await db.query("SELECT * FROM propostas_comerciais WHERE comercial_id = $1 ORDER BY enviada_em DESC LIMIT 200", [id]);
+    const leadsQ = await db.query("SELECT * FROM preinscricoes WHERE comercial_id = $1 AND regime = $2 ORDER BY inscrito DESC LIMIT 200", [id, regime]);
+    const propsQ = await db.query("SELECT * FROM propostas_comerciais WHERE comercial_id = $1 AND regime = $2 ORDER BY enviada_em DESC LIMIT 200", [id, regime]);
     const notasQ = await db.query(
       `SELECT c.id, c.preinscricao_id, c.nota, c.created_at,
               p.nome AS lead_nome, p.apelido AS lead_apelido, p.curso AS lead_curso
          FROM preinscricao_contactos c
          JOIN preinscricoes p ON p.id = c.preinscricao_id
-        WHERE p.comercial_id = $1
+        WHERE p.comercial_id = $1 AND p.regime = $2
         ORDER BY c.created_at DESC
         LIMIT 200`,
-      [id],
+      [id, regime],
     );
 
     return {
-      comercial: { ...mapComercial(comercial), stats: await statsFor(db, id) },
+      comercial: { ...mapComercial(comercial), stats: await statsFor(db, id, regime) },
       propostas: propsQ.rows.map(r => mapProposta(r as Record<string, unknown>)),
       leads: leadsQ.rows.map(r => mapPreinscricao(r as Record<string, unknown>)),
       notas: notasQ.rows.map(r => mapNota(r as Record<string, unknown>)),
@@ -203,20 +216,21 @@ export function registerEquipaRoutes(
   });
 
   app.post("/v1/equipa/:id/propostas", async (req, reply) => {
-    if (!requireEquipa(req, reply, requireAuth)) return;
     const comercialId = (req.params as { id: string }).id;
     const parsed = propostaSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
-    const exists = await db.query<{ id: string }>("SELECT id FROM users WHERE id = $1 AND role = 'comercial'", [comercialId]);
+    const regime = regimeDe(parsed.data.regime);
+    if (!requireEquipa(req, reply, requireAuth, regime)) return;
+    const exists = await db.query<{ id: string }>("SELECT id FROM users WHERE id = $1 AND role = $2", [comercialId, roleDaEquipa(regime)]);
     if (!exists.rows[0]) return reply.code(404).send({ error: "comercial não encontrado" });
     const d = parsed.data;
     const pid = await nextOpsId(db);
     const respostaEm = d.respostaCliente ? new Date() : null;
     await db.query(
       `INSERT INTO propostas_comerciais
-         (id, comercial_id, preinscricao_id, cliente_nome, cliente_email, curso, valor, estado, resposta_cliente, resposta_em, notas)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [pid, comercialId, d.preinscricaoId ?? null, d.clienteNome, d.clienteEmail, d.curso, d.valor ?? 0, d.estado ?? "Enviada", d.respostaCliente, respostaEm, d.notas],
+         (id, comercial_id, preinscricao_id, cliente_nome, cliente_email, curso, valor, estado, resposta_cliente, resposta_em, notas, regime)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [pid, comercialId, d.preinscricaoId ?? null, d.clienteNome, d.clienteEmail, d.curso, d.valor ?? 0, d.estado ?? "Enviada", d.respostaCliente, respostaEm, d.notas, regime],
     );
     if (d.preinscricaoId) {
       await db.query("UPDATE preinscricoes SET comercial_id = COALESCE(comercial_id, $2) WHERE id = $1", [d.preinscricaoId, comercialId]);
@@ -228,13 +242,15 @@ export function registerEquipaRoutes(
   });
 
   app.patch("/v1/equipa/propostas/:pid", async (req, reply) => {
-    if (!requireEquipa(req, reply, requireAuth)) return;
+    if (!requireAuth(req, reply)) return;
     const pid = Number((req.params as { pid: string }).pid);
     const parsed = patchPropostaSchema.safeParse(req.body);
     if (!Number.isInteger(pid) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
     const current = await db.query("SELECT * FROM propostas_comerciais WHERE id = $1", [pid]);
     if (!current.rows[0]) return reply.code(404).send({ error: "proposta não encontrada" });
+    const regime = regimeDe((current.rows[0] as { regime?: string }).regime);
+    if (!canSeeEquipa(req.actor?.role, regime)) return reply.code(403).send({ error: "sem acesso a esta equipa" });
     const resposta = d.respostaCliente;
     await db.query(
       `UPDATE propostas_comerciais SET
@@ -253,12 +269,15 @@ export function registerEquipaRoutes(
   });
 
   app.post("/v1/equipa/:id/notas", async (req, reply) => {
-    if (!requireEquipa(req, reply, requireAuth)) return;
+    if (!requireAuth(req, reply)) return;
     const comercialId = (req.params as { id: string }).id;
     const parsed = notaSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
-    const lead = await db.query<{ id: number; notas: string }>("SELECT id, notas FROM preinscricoes WHERE id = $1", [parsed.data.preinscricaoId]);
+    const lead = await db.query<{ id: number; notas: string; regime: string }>("SELECT id, notas, regime FROM preinscricoes WHERE id = $1", [parsed.data.preinscricaoId]);
     if (!lead.rows[0]) return reply.code(404).send({ error: "lead não encontrado" });
+    if (!canSeeEquipa(req.actor?.role, regimeDe(lead.rows[0].regime))) {
+      return reply.code(403).send({ error: "sem acesso a esta equipa" });
+    }
     await db.query("UPDATE preinscricoes SET comercial_id = COALESCE(comercial_id, $2) WHERE id = $1", [parsed.data.preinscricaoId, comercialId]);
     await db.query(
       "INSERT INTO preinscricao_contactos (preinscricao_id, actor_id, nota) VALUES ($1,$2,$3)",

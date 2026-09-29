@@ -19,6 +19,7 @@ export type CrmListParams = {
   perPage?: number;
   sort?: CrmSort;
   kanban?: boolean;
+  regime?: "gold" | "fin" | "";
 };
 
 function like(raw: string) {
@@ -75,6 +76,7 @@ function addWhere(params: CrmListParams, hoje: string, skipEstado = false) {
   if (params.fila === "preinscricao") parts.push("estado = 'Pré-inscrição' AND secretaria_em IS NULL");
   if (params.fila === "secretaria") parts.push("estado = 'Pré-inscrição' AND secretaria_em IS NOT NULL");
   if (params.fila === "abertos") parts.push("estado NOT IN ('Formando','Desistiu')");
+  if (params.regime === "gold" || params.regime === "fin") push("regime = ?", params.regime);
   return { sql: parts.join(" AND "), vals };
 }
 
@@ -106,6 +108,9 @@ export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string)
   );
   const items = rows.rows.map(r => mapPreinscricao(r as Record<string, unknown>));
 
+  const scoped = params.regime === "gold" || params.regime === "fin";
+  const regimeWhere = scoped ? "WHERE regime = $2" : "";
+  const countVals: unknown[] = scoped ? [hoje, params.regime] : [hoje];
   const counts = await db.query<{
     total: number; abertos: number; por_contactar: number; conversa: number; pagos: number;
     formando: number; atrasados: number; hoje: number; valor_aberto: number;
@@ -126,20 +131,26 @@ export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string)
       count(*) FILTER (WHERE estado = 'Pré-inscrição' AND secretaria_em IS NULL)::int AS fila_pre,
       count(*) FILTER (WHERE estado = 'Pré-inscrição' AND secretaria_em IS NOT NULL)::int AS fila_sec,
       count(*) FILTER (WHERE estado = 'Desistiu')::int AS desistiu
-     FROM preinscricoes`,
-    [hoje],
+     FROM preinscricoes ${regimeWhere}`,
+    countVals,
   );
   const c = counts.rows[0];
 
   const porEstadoRows = await db.query<{ estado: string; n: number }>(
-    "SELECT estado, count(*)::int AS n FROM preinscricoes GROUP BY estado",
+    scoped
+      ? "SELECT estado, count(*)::int AS n FROM preinscricoes WHERE regime = $1 GROUP BY estado"
+      : "SELECT estado, count(*)::int AS n FROM preinscricoes GROUP BY estado",
+    scoped ? [params.regime] : [],
   );
   const porEstado: Record<string, number> = {};
   for (const r of porEstadoRows.rows) porEstado[r.estado] = r.n;
 
   const facet = async (col: string) => {
     const r = await db.query<{ v: string }>(
-      `SELECT ${col} AS v FROM preinscricoes WHERE ${col} <> '' GROUP BY ${col} ORDER BY count(*) DESC, ${col} LIMIT 80`,
+      scoped
+        ? `SELECT ${col} AS v FROM preinscricoes WHERE ${col} <> '' AND regime = $1 GROUP BY ${col} ORDER BY count(*) DESC, ${col} LIMIT 80`
+        : `SELECT ${col} AS v FROM preinscricoes WHERE ${col} <> '' GROUP BY ${col} ORDER BY count(*) DESC, ${col} LIMIT 80`,
+      scoped ? [params.regime] : [],
     );
     return r.rows.map(x => x.v);
   };

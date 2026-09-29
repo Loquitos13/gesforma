@@ -67,6 +67,7 @@ export function mapPreinscricao(r: Record<string, unknown>) {
     ultimaNota: String(r.ultima_nota ?? ""),
     ultimaActividadeEm: r.ultima_actividade_em ? String(r.ultima_actividade_em) : null,
     ultimaResultado: String(r.ultima_resultado ?? ""),
+    regime: String(r.regime ?? "gold") === "fin" ? "fin" as const : "gold" as const,
   };
 }
 

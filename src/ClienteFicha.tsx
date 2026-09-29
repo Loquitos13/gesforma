@@ -41,6 +41,7 @@ const TIPO_DOT: Record<string, string> = {
 
 export function ClienteFicha({
   item, onClose, onConvert, onContactar, onPatch, hasPrev, hasNext, onPrev, onNext, comerciais = [],
+  regime = "gold", turmas,
 }: {
   item: CrmLead | null;
   onClose: () => void;
@@ -52,10 +53,13 @@ export function ClienteFicha({
   onPrev: () => void;
   onNext: () => void;
   comerciais?: { id: string; name: string }[];
+  regime?: "gold" | "fin";
+  turmas?: TurmaGold[];
 }) {
   const { user } = useAuth();
-  const sec = isSecretariaRole(user.role);
+  const sec = isSecretariaRole(user.role, regime);
   const { gold } = useTurmas();
+  const turmasLista = turmas ?? gold;
   const [dossier, setDossier] = useState<CrmDossier | null>(null);
   const [erro, setErro] = useState("");
   const [busy, setBusy] = useState(false);
@@ -357,11 +361,11 @@ export function ClienteFicha({
             </div>
             <CursoOfertaCampos
               variant="crm"
-              turmas={gold.filter(isTurmaActiva).map(t => ({
+              turmas={turmasLista.filter(isTurmaActiva).map(t => ({
                 turmaId: t.id, nome: t.nome, curso: t.curso, local: t.local, horario: t.horario,
                 dataInicio: t.dataInicio, vagasLivres: Math.max(0, t.vagas - t.totalAlunos),
               }))}
-              cursos={[...new Set(gold.map(t => t.curso))].map(nome => ({ nome }))}
+              cursos={[...new Set(turmasLista.map(t => t.curso))].map(nome => ({ nome }))}
               value={oferta}
               onChange={setOferta}
             />
@@ -442,7 +446,7 @@ export function ClienteFicha({
                 </button>
               ) : (
                 <div className="space-y-2">
-                  <EscolherTurmaPicker lead={lead} turmas={gold} valueId={turmaSel?.id ?? null} onChange={setTurmaSel} />
+                  <EscolherTurmaPicker lead={lead} turmas={turmasLista} valueId={turmaSel?.id ?? null} onChange={setTurmaSel} />
                   <button type="button" disabled={!turmaSel} onClick={() => turmaSel && void onConvert?.(turmaSel.nome)} className="w-full py-2 bg-emerald-600 disabled:opacity-40 text-white text-sm font-bold rounded-lg">Confirmar inscrição</button>
                 </div>
               )

@@ -104,12 +104,13 @@ export function slaSeguimento(proximo: string | undefined, hoje: string, estado:
   return { late: false, label: proximo };
 }
 
-export function podeArrastar(de: string, para: string, opts: { role: string; secretariaEm?: string | null }) {
+export function podeArrastar(de: string, para: string, opts: { role: string; secretariaEm?: string | null; regime?: "gold" | "fin" }) {
   if (de === para) return { ok: true as const };
   if (de === "Formando") return { ok: false as const, erro: "Um formando não volta no funil. Crie um novo pedido se precisar." };
   if (para === "Desistiu") return { ok: true as const };
   if (para === "Formando") {
-    if (opts.role !== "admin" && opts.role !== "secretaria") {
+    const secretaria = opts.role === "admin" || opts.role === "secretaria" || (opts.role === "financiada" && opts.regime === "fin");
+    if (!secretaria) {
       return { ok: false as const, erro: "Só a secretaria inscreve na turma (Formando)." };
     }
     return { ok: true as const };
@@ -120,8 +121,9 @@ export function podeArrastar(de: string, para: string, opts: { role: string; sec
   return { ok: true as const };
 }
 
-export function isSecretariaRole(role: string) {
-  return role === "admin" || role === "secretaria";
+export function isSecretariaRole(role: string, regime: "gold" | "fin" = "gold") {
+  if (role === "admin" || role === "secretaria") return true;
+  return regime === "fin" && role === "financiada";
 }
 
 export function badgeEstadoCls(estado: string) {

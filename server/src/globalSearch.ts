@@ -250,16 +250,16 @@ export async function globalSearch(db: Db, qRaw: string, limitPer = 8): Promise<
       }
     }),
     db.query(
-      `SELECT id, nome, apelido, email, telf, curso, estado, local FROM preinscricoes WHERE ${crmPred.sql} ORDER BY inscrito DESC LIMIT ${lim}`,
+      `SELECT id, nome, apelido, email, telf, curso, estado, local, regime FROM preinscricoes WHERE ${crmPred.sql} ORDER BY inscrito DESC LIMIT ${lim}`,
       crmPred.vals,
     ).then(r => {
       for (const row of r.rows as Record<string, unknown>[]) {
         hits.push({
           grupo: "crm",
-          tipo: "CRM",
+          tipo: row.regime === "fin" ? "CRM Financiada" : "CRM Gold",
           nome: `${row.nome ?? ""} ${row.apelido ?? ""}`.trim(),
           sub: `${row.curso || "sem curso"} · ${row.estado} · ${row.telf || row.email || ""}`,
-          view: "gold-preinscricoes",
+          view: row.regime === "fin" ? "fin-preinscricoes" : "gold-preinscricoes",
           leadId: Number(row.id),
         });
       }

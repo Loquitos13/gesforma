@@ -51,7 +51,7 @@ function Kpi({ label, value, sub }: { label: string; value: string | number; sub
   );
 }
 
-export function EquipaView() {
+export function EquipaView({ regime = "gold" }: { regime?: "gold" | "fin" }) {
   const [lista, setLista] = useState<EquipaComercial[]>([]);
   const [totais, setTotais] = useState({ comerciais: 0, activos: 0, leads: 0, propostas: 0, pipeline: 0, receita: 0 });
   const [q, setQ] = useState("");
@@ -62,15 +62,15 @@ export function EquipaView() {
   function load() {
     setLoading(true);
     setError(null);
-    apiEquipa()
+    apiEquipa(regime)
       .then(r => { setLista(r.comerciais); setTotais(r.totais); })
       .catch(err => setError(err instanceof ApiError && err.status === 403
-        ? "Esta vista é para administração, secretaria e comerciais."
+        ? "Sem acesso a esta equipa."
         : err instanceof Error ? err.message : "Não foi possível ler a equipa."))
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [regime]);
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -82,17 +82,19 @@ export function EquipaView() {
     <div className="space-y-5">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Comercial Gold</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{regime === "fin" ? "Financiada" : "Comercial Gold"}</p>
           <h1 className="text-[1.65rem] font-semibold tracking-tight text-slate-900 mt-1">Equipa</h1>
           <p className="text-sm text-slate-500 mt-1 max-w-2xl leading-relaxed">
-            Comerciais da ENA: volume de leads, propostas enviadas e a resposta do cliente. Abra a ficha para notas e pipeline.
+            {regime === "fin"
+              ? "Quem trata a formação financiada: leads deste regime, propostas e o diário de contactos."
+              : "Comerciais da ENA: volume de leads Gold, propostas enviadas e a resposta do cliente. Abra a ficha para notas e pipeline."}
           </p>
         </div>
         <div className="relative w-full sm:w-72">
           <input
             value={q}
             onChange={e => setQ(e.target.value)}
-            placeholder="Pesquisar comercial…"
+            placeholder={regime === "fin" ? "Pesquisar na equipa…" : "Pesquisar comercial…"}
             className="w-full pl-3 pr-3 py-2 text-sm border border-slate-200 rounded-xl bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
           />
         </div>
@@ -161,6 +163,7 @@ export function EquipaView() {
       {fichaId && (
         <FichaComercial
           id={fichaId}
+          regime={regime}
           onClose={() => { setFichaId(null); load(); }}
         />
       )}
@@ -168,7 +171,7 @@ export function EquipaView() {
   );
 }
 
-function FichaComercial({ id, onClose }: { id: string; onClose: () => void }) {
+function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | "fin"; onClose: () => void }) {
   const [tab, setTab] = useState<"propostas" | "leads" | "notas">("propostas");
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
@@ -189,7 +192,7 @@ function FichaComercial({ id, onClose }: { id: string; onClose: () => void }) {
 
   function load() {
     setLoading(true);
-    apiEquipaFicha(id)
+    apiEquipaFicha(id, regime)
       .then(r => {
         setComercial(r.comercial);
         setPropostas(r.propostas);
@@ -201,7 +204,7 @@ function FichaComercial({ id, onClose }: { id: string; onClose: () => void }) {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); }, [id, regime]);
 
   async function criarProposta() {
     if (!draft.clienteNome.trim()) return;
@@ -216,6 +219,7 @@ function FichaComercial({ id, onClose }: { id: string; onClose: () => void }) {
         respostaCliente: draft.respostaCliente.trim(),
         notas: draft.notas.trim(),
         preinscricaoId: draft.preinscricaoId ? Number(draft.preinscricaoId) : null,
+        regime,
       });
       setNova(false);
       setDraft({ clienteNome: "", clienteEmail: "", curso: "", valor: "125", estado: "Enviada", respostaCliente: "", notas: "", preinscricaoId: "" });

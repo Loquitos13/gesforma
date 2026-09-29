@@ -87,12 +87,13 @@ export function estadoPodeEntregar(estado: string) {
   return estado === "Pré-inscrição";
 }
 
-export function podeArrastar(de: string, para: string, opts: { role: string; secretariaEm?: string | null; motivo?: string }) {
+export function podeArrastar(de: string, para: string, opts: { role: string; secretariaEm?: string | null; motivo?: string; regime?: "gold" | "fin" }) {
   if (de === para) return { ok: true as const };
   if (de === "Formando") return { ok: false as const, erro: "Um formando não volta no funil. Crie um novo pedido se precisar." };
   if (para === "Desistiu") return { ok: true as const };
   if (para === "Formando") {
-    if (opts.role !== "admin" && opts.role !== "secretaria") {
+    const secretaria = opts.role === "admin" || opts.role === "secretaria" || (opts.role === "financiada" && opts.regime === "fin");
+    if (!secretaria) {
       return { ok: false as const, erro: "Só a secretaria inscreve na turma (Formando)." };
     }
     return { ok: true as const };

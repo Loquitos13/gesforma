@@ -44,7 +44,7 @@ export function ClienteFicha({
 }: {
   item: CrmLead | null;
   onClose: () => void;
-  onConvert?: (turma: string) => void;
+  onConvert?: (turma: string) => void | Promise<void>;
   onContactar?: (nota: string, meio?: string) => void;
   onPatch?: (patch: Partial<Preinscricao>) => void;
   hasPrev: boolean;
@@ -443,7 +443,7 @@ export function ClienteFicha({
               ) : (
                 <div className="space-y-2">
                   <EscolherTurmaPicker lead={lead} turmas={gold} valueId={turmaSel?.id ?? null} onChange={setTurmaSel} />
-                  <button type="button" disabled={!turmaSel} onClick={() => turmaSel && onConvert?.(turmaSel.nome)} className="w-full py-2 bg-emerald-600 disabled:opacity-40 text-white text-sm font-bold rounded-lg">Confirmar inscrição</button>
+                  <button type="button" disabled={!turmaSel} onClick={() => turmaSel && void onConvert?.(turmaSel.nome)} className="w-full py-2 bg-emerald-600 disabled:opacity-40 text-white text-sm font-bold rounded-lg">Confirmar inscrição</button>
                 </div>
               )
             )}

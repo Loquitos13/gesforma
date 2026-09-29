@@ -4,7 +4,7 @@ import {
   type DriveFile, type DriveUploadContext, type InqueritoMetrica, type InqueritoResposta,
 } from "./api";
 import { DOCS_FORMADOR, fundirDocTipos } from "./dossierDocs";
-import { useCatalogList } from "./CatalogsContext";
+import { catalogIdRemapSubscribe, useCatalogList } from "./CatalogsContext";
 import { useDrive } from "./DriveContext";
 import { useFormadores } from "./FormadoresContext";
 import { AppModal } from "./FormKit";
@@ -944,7 +944,8 @@ function InqueritoPreviewModal({ inq, onClose, onGravada }: { inq: Inquerito | n
 
 export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
   const isGold = acento === "gold";
-  const [inqueritos, setInqueritos] = useCatalogList<Inquerito>("inqueritos", isGold ? "gold" : "fin", isGold ? inqueritosGold : inqueritosFin);
+  const regime = isGold ? "gold" : "fin";
+  const [inqueritos, setInqueritos] = useCatalogList<Inquerito>("inqueritos", regime, isGold ? inqueritosGold : inqueritosFin);
   const [selected, setSelected] = useState<number | null>(1);
   const [creating, setCreating] = useState(false);
   const [novoTitulo, setNovoTitulo] = useState("");
@@ -957,9 +958,14 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
   const [linkBusy, setLinkBusy] = useState(false);
   const inq = inqueritos.find(i => i.id === selected);
 
+  useEffect(() => catalogIdRemapSubscribe((k, from, to) => {
+    if (k !== `inqueritos:${regime}`) return;
+    setSelected(s => s === from ? to : s);
+  }), [regime]);
+
   function addInquerito() {
     if (!novoTitulo.trim()) return;
-    const id = Date.now();
+    const id = -Date.now();
     setInqueritos(prev => [...prev, { id, titulo: novoTitulo.trim(), perguntas: [] }]);
     setSelected(id); setCreating(false); setNovoTitulo("");
   }

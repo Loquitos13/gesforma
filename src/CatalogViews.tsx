@@ -209,8 +209,8 @@ function ApagarCatalogoModal({ nome, tipo, open, onClose, onConfirm }: {
 function EmptyState({ text }: { text: string }) {
   return <tr><td colSpan={12} className="px-4 py-12 text-center text-sm text-slate-400">{text}</td></tr>;
 }
-function nextId<T extends { id: number }>(xs: T[]) {
-  return Math.max(0, ...xs.map(x => x.id), 1000) + 1;
+function nextId<T extends { id: number }>(_xs: T[]) {
+  return -Date.now();
 }
 
 function FormActions({ onClose, onSave, disabled, label = "Guardar", accent = "gold" }: { onClose: () => void; onSave?: () => void; disabled?: boolean; label?: string; accent?: Accent }) {
@@ -986,7 +986,7 @@ export function ModulosView({ cursoInicial, accent = "gold" }: { cursoInicial?: 
   function guardarModulo() {
     if (!nome.trim() || !curso) return;
     if (open === "new") {
-      const id = Math.max(0, ...lista.map(x => x.id)) + 1;
+      const id = -Date.now();
       setLista(prev => [...prev, {
         id, codigo: codigo.trim() || `M${id}`, nome: nome.trim(), horas: Number(horas) || 0,
         curso, tipo: tipo.trim() || "Teórico-prático", estado: "Ativo",
@@ -1206,7 +1206,7 @@ export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
       driveUrl: tipo === "Link" ? origem.trim() : meta.url,
     };
     if (open === "new") {
-      const id = Math.max(0, ...lista.map(x => x.id)) + 1;
+      const id = -Date.now();
       setLista(prev => [...prev, { id, ...row }]);
       if (!filtroCurso) setFiltroCurso(curso);
       if (!filtroModulo) setFiltroModulo(modulo);

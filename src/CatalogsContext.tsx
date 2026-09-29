@@ -33,6 +33,19 @@ function payloadOf(row: CatalogItem) {
   return rest;
 }
 
+type CatalogRemapFn = (key: string, from: number, to: number) => void;
+const catalogRemapListeners = new Set<CatalogRemapFn>();
+
+export function catalogIdRemapSubscribe(fn: CatalogRemapFn) {
+  catalogRemapListeners.add(fn);
+  return () => { catalogRemapListeners.delete(fn); };
+}
+
+function emitCatalogRemap(key: string, from: number, to: number) {
+  if (from === to) return;
+  for (const fn of catalogRemapListeners) fn(key, from, to);
+}
+
 export function CatalogsProvider({ children }: { children: ReactNode }) {
   const [lists, setLists] = useState<Record<string, CatalogItem[]>>({});
   const [settings, setSettings] = useState<Record<string, Record<string, string>>>({});
@@ -128,6 +141,7 @@ export function useCatalogList<T extends { id: number }>(kind: string, regime: "
   if (!setLists) throw new Error("useCatalogList precisa de CatalogsProvider");
   const key = keyOf(kind, regime);
   const lista = (ready ? (lists[key] as T[] | undefined) ?? [] : seed);
+  const inflight = useRef(new Map<number, Promise<number>>());
 
   const setLista = useCallback<Dispatch<SetStateAction<T[]>>>((updater) => {
     setLists(prev => {
@@ -139,26 +153,47 @@ export function useCatalogList<T extends { id: number }>(kind: string, regime: "
         for (const row of next) {
           const before = current.find(x => x.id === row.id);
           if (!before) {
-            void apiCreateCatalog(kind, regime, payloadOf(row)).then(r => {
-              if (r.item?.id && r.item.id !== row.id) {
+            const tempId = row.id;
+            const created = apiCreateCatalog(kind, regime, payloadOf(row)).then(r => {
+              const realId = r.item?.id ?? tempId;
+              if (realId !== tempId) {
                 setLists(xs => ({
                   ...xs,
-                  [key]: ((xs[key] ?? next) as CatalogItem[]).map(x => x.id === row.id ? { ...x, id: r.item.id } : x),
+                  [key]: ((xs[key] ?? []) as CatalogItem[]).map(x => x.id === tempId ? { ...x, id: realId } : x),
                 }));
+                emitCatalogRemap(key, tempId, realId);
               }
+              return realId;
             }).catch(err => {
               toastError(err, "Não foi possível criar o item do catálogo.");
               setLists(xs => ({
                 ...xs,
-                [key]: ((xs[key] ?? []) as CatalogItem[]).filter(x => x.id !== row.id),
+                [key]: ((xs[key] ?? []) as CatalogItem[]).filter(x => x.id !== tempId),
               }));
+              inflight.current.delete(tempId);
+              throw err;
             });
+            inflight.current.set(tempId, created);
           } else if (!sameRow(before, row)) {
-            void persist(apiPatchCatalog(kind, row.id, payloadOf(row), regime));
+            const pending = inflight.current.get(row.id);
+            if (pending) {
+              const queued = pending.then(realId => persist(apiPatchCatalog(kind, realId, payloadOf(row), regime)).then(() => realId));
+              inflight.current.set(row.id, queued);
+            } else {
+              void persist(apiPatchCatalog(kind, row.id, payloadOf(row), regime));
+            }
           }
         }
         for (const id of prevIds) {
-          if (!nextIds.has(id)) void persist(apiDeleteCatalog(kind, id));
+          if (!nextIds.has(id)) {
+            const pending = inflight.current.get(id);
+            if (pending) {
+              void pending.then(realId => persist(apiDeleteCatalog(kind, realId)));
+              inflight.current.delete(id);
+            } else {
+              void persist(apiDeleteCatalog(kind, id));
+            }
+          }
         }
       }
       return { ...prev, [key]: next as CatalogItem[] };

@@ -9,10 +9,6 @@ const iCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-whi
 
 const canais = ["Website", "Facebook", "Instagram", "Google", "Email", "WhatsApp", "Referência", "Parceiro"];
 
-function nextListId(rows: { id: number }[]) {
-  return (rows.reduce((m, r) => Math.max(m, r.id), 0) || 0) + 1;
-}
-
 export function CampanhasView() {
   const { user } = useAuth();
   const {
@@ -29,6 +25,7 @@ export function CampanhasView() {
   const [encarregado, setEncarregado] = useState("");
   const [canal, setCanal] = useState("");
   const [notas, setNotas] = useState("");
+  const [gravando, setGravando] = useState(false);
 
   const cursosOpts = useMemo(() => {
     const gold = optsFromCursos(cursosGold);
@@ -84,10 +81,10 @@ export function CampanhasView() {
     setOpen(true);
   }
 
-  function guardar() {
-    if (!nome.trim()) return;
+  async function guardar() {
+    if (!nome.trim() || gravando) return;
     const row: CampanhaRow = {
-      id: editing?.id ?? nextListId(campanhas),
+      id: editing?.id ?? -Date.now(),
       nome: nome.trim(),
       data: data || new Date().toISOString().slice(0, 10),
       encarregado: encarregado.trim() || user?.name || "",
@@ -100,9 +97,15 @@ export function CampanhasView() {
       canal,
       notas: notas.trim(),
     };
-    if (editing) patchCampanha(editing.id, row);
-    else addCampanha(row);
-    setOpen(false);
+    if (editing) {
+      patchCampanha(editing.id, row);
+      setOpen(false);
+      return;
+    }
+    setGravando(true);
+    const id = await addCampanha(row);
+    setGravando(false);
+    if (id) setOpen(false);
   }
 
   return (
@@ -237,7 +240,7 @@ export function CampanhasView() {
 
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={() => setOpen(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button type="button" onClick={guardar} disabled={!nome.trim()} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">
+            <button type="button" onClick={() => void guardar()} disabled={!nome.trim() || gravando} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">
               {editing ? "Guardar alterações" : "Criar campanha"}
             </button>
           </div>

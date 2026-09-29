@@ -278,8 +278,8 @@ export function ReferenciaMbModal({
     gravado.current = true;
     setBusy(true);
     try {
-      addPagamento({
-        id: `TRX-${Date.now() % 100000}`,
+      const id = await addPagamento({
+        id: `tmp-${Date.now()}`,
         nome,
         valor,
         metodo: isWay ? "MB Way" : "Multibanco",
@@ -287,6 +287,10 @@ export function ReferenciaMbModal({
         data: toastNow(),
         estado: "Pendente",
       }, { email, referencia: referencia.replace(/\s/g, "") });
+      if (!id) {
+        gravado.current = false;
+        return;
+      }
       toastOk(isWay ? "Pedido MB Way registado como pendente." : "Referência Multibanco gravada. O webhook do banco confirma o pagamento.");
     } finally {
       setBusy(false);
@@ -356,17 +360,18 @@ export function EnviarReciboModal({
     nome, valor, metodo, curso, data: toastNow(), estado: "Pago",
   };
 
-  function enviar() {
+  async function enviar() {
     const existente = pagamentos.find(p =>
       p.nome === nome && p.curso === curso && Math.abs(p.valor - valor) < 0.02,
     );
     if (existente && existente.estado !== "Pago") {
       patchPagamento(existente.id, { estado: "Pago" });
     } else if (!existente) {
-      addPagamento({
-        id: `TRX-${Date.now() % 100000}`,
+      const id = await addPagamento({
+        id: `tmp-${Date.now()}`,
         nome, valor, metodo: metodo || "Multibanco", curso, data: toastNow(), estado: "Pago",
       }, email);
+      if (!id) return;
     }
     setOk(true);
     toastOk("Recibo na fila de email (pagamento.confirmed), se o formando tiver email.");
@@ -383,7 +388,7 @@ export function EnviarReciboModal({
         )}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={() => { setOk(false); onClose(); }} className="px-4 py-2 border border-slate-200 text-sm font-semibold text-slate-600 rounded-lg hover:bg-slate-50">Fechar</button>
-          <button type="button" onClick={enviar} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5">
+          <button type="button" onClick={() => void enviar()} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5">
             {I.mail} Enviar recibo
           </button>
         </div>

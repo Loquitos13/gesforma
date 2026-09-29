@@ -34,6 +34,11 @@ export function nextListId<T extends { id: number }>(xs: T[]) {
   return Math.max(0, ...xs.map(x => x.id), 1000) + 1;
 }
 
+/** ID local até a API devolver o `nextOpsId`. Nunca gravar PATCH contra este valor. */
+export function tempNumericId() {
+  return -Date.now();
+}
+
 export type Preinscricao = {
   id: number; inscrito: string; nome: string; apelido: string; email: string; telf: string;
   inicioCurso: string; concelho: string; local: string; curso: string; preco: number;
@@ -82,16 +87,16 @@ export type PagamentoRow = {
 
 type ListsCtx = {
   preinscricoes: Preinscricao[];
-  addPreinscricao: (row: Preinscricao, extra?: { nota?: string }) => void;
+  addPreinscricao: (row: Preinscricao, extra?: { nota?: string }) => Promise<number | undefined>;
   patchPreinscricao: (id: number, patch: Partial<Preinscricao>) => void;
   removePreinscricao: (id: number) => void;
   contactarPreinscricao: (id: number, nota?: string, meio?: string) => void;
   formandosTurmas: FormandoTurma[];
-  addFormandoTurma: (row: FormandoTurma) => void;
+  addFormandoTurma: (row: FormandoTurma) => Promise<number | undefined>;
   patchFormandoTurma: (id: number, patch: Partial<FormandoTurma>) => void;
   removeFormandoTurma: (id: number) => void;
   formandosFin: FormandoFin[];
-  addFormandoFin: (row: FormandoFin) => void;
+  addFormandoFin: (row: FormandoFin) => Promise<number | undefined>;
   patchFormandoFin: (id: number, patch: Partial<FormandoFin>) => void;
   removeFormandoFin: (id: number) => void;
   cursosGold: CursoGoldRow[];
@@ -103,15 +108,15 @@ type ListsCtx = {
   patchCursoFin: (id: number, patch: Partial<CursoFinRow>) => void;
   removeCursoFin: (id: number) => void;
   blogPosts: BlogPostRow[];
-  addBlogPost: (row: BlogPostRow) => void;
+  addBlogPost: (row: BlogPostRow) => Promise<number | undefined>;
   patchBlogPost: (id: number, patch: Partial<BlogPostRow>) => void;
   removeBlogPost: (id: number) => void;
   campanhas: CampanhaRow[];
-  addCampanha: (row: CampanhaRow) => void;
+  addCampanha: (row: CampanhaRow) => Promise<number | undefined>;
   patchCampanha: (id: number, patch: Partial<CampanhaRow>) => void;
   removeCampanha: (id: number) => void;
   pagamentos: PagamentoRow[];
-  addPagamento: (row: PagamentoRow, extra?: string | { email?: string; referencia?: string }) => void;
+  addPagamento: (row: PagamentoRow, extra?: string | { email?: string; referencia?: string }) => Promise<string | undefined>;
   patchPagamento: (id: string, patch: Partial<PagamentoRow>) => void;
   removePagamento: (id: string) => void;
 };
@@ -174,13 +179,16 @@ export function ListsProvider({
     return () => { alive = false; };
   }, []);
 
-  const addPreinscricao = useCallback((row: Preinscricao, extra?: { nota?: string }) => {
+  const addPreinscricao = useCallback(async (row: Preinscricao, extra?: { nota?: string }) => {
     setPre(xs => [row, ...xs]);
-    void persist(apiCreatePreinscricao({ ...row, entrada: row.entrada ?? "manual", nota: extra?.nota }).then(r => {
-      if (r.preinscricao) setPre(xs => replaceById(xs, row.id, r.preinscricao));
+    const r = await persist(apiCreatePreinscricao({ ...row, entrada: row.entrada ?? "manual", nota: extra?.nota }).then(res => {
+      if (res.preinscricao) setPre(xs => replaceById(xs, row.id, res.preinscricao));
+      return res;
     }), () => setPre(xs => xs.filter(x => x.id !== row.id)));
+    return r?.preinscricao?.id;
   }, []);
   const patchPreinscricao = useCallback((id: number, patch: Partial<Preinscricao>) => {
+    if (id < 0) return;
     let before: Preinscricao | undefined;
     setPre(xs => {
       before = xs.find(x => x.id === id);
@@ -216,13 +224,16 @@ export function ListsProvider({
     });
   }, []);
 
-  const addFormandoTurma = useCallback((row: FormandoTurma) => {
+  const addFormandoTurma = useCallback(async (row: FormandoTurma) => {
     setFT(xs => [row, ...xs]);
-    void persist(apiCreateFormandoGold(row).then(r => {
-      if (r.formando) setFT(xs => replaceById(xs, row.id, r.formando));
+    const r = await persist(apiCreateFormandoGold(row).then(res => {
+      if (res.formando) setFT(xs => replaceById(xs, row.id, res.formando));
+      return res;
     }), () => setFT(xs => xs.filter(x => x.id !== row.id)));
+    return r?.formando?.id;
   }, []);
   const patchFormandoTurma = useCallback((id: number, patch: Partial<FormandoTurma>) => {
+    if (id < 0) return;
     let before: FormandoTurma | undefined;
     setFT(xs => {
       before = xs.find(x => x.id === id);
@@ -253,13 +264,16 @@ export function ListsProvider({
     });
   }, []);
 
-  const addFormandoFin = useCallback((row: FormandoFin) => {
+  const addFormandoFin = useCallback(async (row: FormandoFin) => {
     setFF(xs => [row, ...xs]);
-    void persist(apiCreateFormandoFin(row).then(r => {
-      if (r.formando) setFF(xs => replaceById(xs, row.id, r.formando));
+    const r = await persist(apiCreateFormandoFin(row).then(res => {
+      if (res.formando) setFF(xs => replaceById(xs, row.id, res.formando));
+      return res;
     }), () => setFF(xs => xs.filter(x => x.id !== row.id)));
+    return r?.formando?.id;
   }, []);
   const patchFormandoFin = useCallback((id: number, patch: Partial<FormandoFin>) => {
+    if (id < 0) return;
     let before: FormandoFin | undefined;
     setFF(xs => {
       before = xs.find(x => x.id === id);
@@ -289,6 +303,7 @@ export function ListsProvider({
     return r?.curso?.id;
   }, []);
   const patchCursoGold = useCallback((id: number, patch: Partial<CursoGoldRow>) => {
+    if (id < 0) return;
     let before: CursoGoldRow | undefined;
     setCG(xs => {
       before = xs.find(x => x.id === id);
@@ -318,6 +333,7 @@ export function ListsProvider({
     return r?.curso?.id;
   }, []);
   const patchCursoFin = useCallback((id: number, patch: Partial<CursoFinRow>) => {
+    if (id < 0) return;
     let before: CursoFinRow | undefined;
     setCF(xs => {
       before = xs.find(x => x.id === id);
@@ -338,13 +354,16 @@ export function ListsProvider({
     });
   }, []);
 
-  const addBlogPost = useCallback((row: BlogPostRow) => {
+  const addBlogPost = useCallback(async (row: BlogPostRow) => {
     setBlog(xs => [row, ...xs]);
-    void persist(apiCreateBlog(row).then(r => {
-      if (r.post) setBlog(xs => replaceById(xs, row.id, r.post));
+    const r = await persist(apiCreateBlog(row).then(res => {
+      if (res.post) setBlog(xs => replaceById(xs, row.id, res.post));
+      return res;
     }), () => setBlog(xs => xs.filter(x => x.id !== row.id)));
+    return r?.post?.id;
   }, []);
   const patchBlogPost = useCallback((id: number, patch: Partial<BlogPostRow>) => {
+    if (id < 0) return;
     let before: BlogPostRow | undefined;
     setBlog(xs => {
       before = xs.find(x => x.id === id);
@@ -365,13 +384,16 @@ export function ListsProvider({
     });
   }, []);
 
-  const addCampanha = useCallback((row: CampanhaRow) => {
+  const addCampanha = useCallback(async (row: CampanhaRow) => {
     setCamp(xs => [row, ...xs]);
-    void persist(apiCreateCampanha(row).then(r => {
-      if (r.campanha) setCamp(xs => replaceById(xs, row.id, r.campanha));
+    const r = await persist(apiCreateCampanha(row).then(res => {
+      if (res.campanha) setCamp(xs => replaceById(xs, row.id, res.campanha));
+      return res;
     }), () => setCamp(xs => xs.filter(x => x.id !== row.id)));
+    return r?.campanha?.id;
   }, []);
   const patchCampanha = useCallback((id: number, patch: Partial<CampanhaRow>) => {
+    if (id < 0) return;
     let before: CampanhaRow | undefined;
     setCamp(xs => {
       before = xs.find(x => x.id === id);
@@ -392,15 +414,18 @@ export function ListsProvider({
     });
   }, []);
 
-  const addPagamento = useCallback((row: PagamentoRow, extra?: string | { email?: string; referencia?: string }) => {
+  const addPagamento = useCallback(async (row: PagamentoRow, extra?: string | { email?: string; referencia?: string }) => {
     const email = typeof extra === "string" ? extra : extra?.email;
     const referencia = typeof extra === "object" ? extra?.referencia : undefined;
     setPag(xs => [row, ...xs]);
-    void persist(apiCreatePagamento({ ...row, email, referencia }).then(r => {
-      if (r.pagamento) setPag(xs => xs.map(x => x.id === row.id ? r.pagamento : x));
+    const r = await persist(apiCreatePagamento({ ...row, email, referencia }).then(res => {
+      if (res.pagamento) setPag(xs => xs.map(x => x.id === row.id ? res.pagamento : x));
+      return res;
     }), () => setPag(xs => xs.filter(x => x.id !== row.id)));
+    return r?.pagamento?.id;
   }, []);
   const patchPagamento = useCallback((id: string, patch: Partial<PagamentoRow>) => {
+    if (id.startsWith("tmp-")) return;
     let before: PagamentoRow | undefined;
     setPag(xs => {
       before = xs.find(x => x.id === id);

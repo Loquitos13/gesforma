@@ -43,7 +43,7 @@ import { useTurmas } from "./TurmasContext";
 import { cronogramaToSessoes, formatSessaoLabel, hojeIso, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
 import { apiGlobalSearch, apiDriveFiles, apiSaveFormandoDocs, type GlobalSearchHit } from "./api";
 import { CampanhasView } from "./CampanhasView";
-import { ListsProvider, nextListId, useLists, type BlogPostRow, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
+import { ListsProvider, tempNumericId, useLists, type BlogPostRow, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
 import { PreInscricoesGoldView } from "./CrmView";
 import { useAuth } from "./AuthGate";
 import { useNotificacoes } from "./NotificacoesContext";
@@ -1479,20 +1479,20 @@ function exportPayload(
 function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab; onNavigate?: (v: View) => void }) {
   const { gold, toggleGold, setGoldCronograma, patchGold } = useTurmas();
   const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma, cursosGold, preinscricoes, patchPreinscricao } = useLists();
-  const turma = gold.find(t => t.id === turmaId) ?? gold[0];
-  const activa = isTurmaActiva(turma);
-  const membros = formandosTurmas.filter(f => f.turmaId === turma.id);
+  const turma = turmaId != null ? gold.find(t => t.id === turmaId) : gold[0];
+  const activa = turma ? isTurmaActiva(turma) : false;
+  const membros = turma ? formandosTurmas.filter(f => f.turmaId === turma.id) : [];
   const pagos = membros.filter(f => f.pago).length;
-  const vagasLivres = turma.vagas - turma.totalAlunos;
-  const sessoesTurma = cronogramaToSessoes(turma.cronograma);
+  const vagasLivres = turma ? turma.vagas - turma.totalAlunos : 0;
+  const sessoesTurma = cronogramaToSessoes(turma?.cronograma ?? []);
   const [fichaOpen, setFichaOpen] = useState<FormandoRecord | null>(null);
   const [apagarFormando, setApagarFormando] = useState<FormandoRecord | null>(null);
   const [transferirFormando, setTransferirFormando] = useState<FormandoRecord | null>(null);
   const [tab, setTab] = useState<CockpitTab>(initialTab);
   const { user } = useAuth();
-  const ped = useTurmaPedagogia("gold", turma.id);
-  const criterios = useCriteriosAvaliacao("gold", turma.curso);
-  const programaCurso = useProgramaDoCurso("gold", turma.curso);
+  const ped = useTurmaPedagogia("gold", turma?.id ?? 0);
+  const criterios = useCriteriosAvaliacao("gold", turma?.curso);
+  const programaCurso = useProgramaDoCurso("gold", turma?.curso ?? "");
   const programaTurma = programaCurso.labels;
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
   const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
@@ -1517,9 +1517,17 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const [editInicio, setEditInicio] = useState("");
   const [editVagas, setEditVagas] = useState(16);
   const formadorOpts = useFormadorOptions();
-  const locaisDoCurso = useLocaisOptsDoCurso("gold", cursosGold, turma.curso);
+  const locaisDoCurso = useLocaisOptsDoCurso("gold", cursosGold, turma?.curso ?? "");
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
   const nomesCockpit = membros.map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }));
+
+  if (!turma) {
+    return (
+      <div className="space-y-4">
+        <EmptyHint text="Esta turma ainda não está na base, ou já não existe." action="Voltar às turmas" onAction={onBack} />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -1907,10 +1915,10 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             vagasLivres={vagasLivres}
             accent="gold"
             onCancel={() => setAddFormando(false)}
-            onInscreverLead={lead => {
+            onInscreverLead={async lead => {
               if (vagasLivres <= 0) return;
-              addFormandoTurma({
-                id: nextListId(formandosTurmas),
+              const id = await addFormandoTurma({
+                id: tempNumericId(),
                 nome: lead.nome, apelido: lead.apelido || "-",
                 telf: lead.telf || "-",
                 email: lead.email,
@@ -1918,14 +1926,15 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                 local: turma.local, curso: turma.curso, turma: turma.nome, turmaId: turma.id,
                 estado: "Formando", pago: lead.estado === "Pago", valor: lead.preco || 125, metodo: lead.pagamentoMetodo || "-",
               });
+              if (!id) return;
               patchGold(turma.id, { totalAlunos: turma.totalAlunos + 1 });
               patchPreinscricao(lead.id, { estado: "Formando" });
             }}
-            onInscreverManual={dados => {
+            onInscreverManual={async dados => {
               if (vagasLivres <= 0) return;
               const { nome, apelido } = splitNome(dados.nome);
-              addFormandoTurma({
-                id: nextListId(formandosTurmas),
+              const id = await addFormandoTurma({
+                id: tempNumericId(),
                 nome, apelido: apelido || "-",
                 telf: dados.telf || "-",
                 email: dados.email || `${nome.toLowerCase()}@mail.pt`,
@@ -1933,6 +1942,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                 local: turma.local, curso: turma.curso, turma: turma.nome, turmaId: turma.id,
                 estado: "Formando", pago: false, valor: 125, metodo: "-",
               });
+              if (!id) return;
               patchGold(turma.id, { totalAlunos: turma.totalAlunos + 1 });
             }}
           />
@@ -2045,18 +2055,18 @@ function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (
 function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab; onNavigate?: (v: View | NavTarget) => void }) {
   const { fin, toggleFin, setFinCronograma, patchFin } = useTurmas();
   const { formandosFin, addFormandoFin, patchFormandoFin, removeFormandoFin, cursosFin, preinscricoes, patchPreinscricao } = useLists();
-  const turma = fin.find(t => t.id === turmaId) ?? fin.find(t => t.ufcdCod === "3564") ?? fin[0];
-  const activa = isTurmaActiva(turma);
-  const sessoesTurma = cronogramaToSessoes(turma.cronograma);
+  const turma = turmaId != null ? fin.find(t => t.id === turmaId) : (fin.find(t => t.ufcdCod === "3564") ?? fin[0]);
+  const activa = turma ? isTurmaActiva(turma) : false;
+  const sessoesTurma = cronogramaToSessoes(turma?.cronograma ?? []);
   const [tab, setTab] = useState<CockpitTab>(initialTab);
   const [formadorOpen, setFormadorOpen] = useState<string | null>(null);
   const [uploadCert, setUploadCert] = useState<number | null>(null);
   const [verCert, setVerCert] = useState<CertificadoPreview | null>(null);
   const [exportTurma, setExportTurma] = useState<ExportTurmaInfo | null>(null);
   const { user } = useAuth();
-  const ped = useTurmaPedagogia("fin", turma.id);
-  const criterios = useCriteriosAvaliacao("fin", turma.curso);
-  const programaCursoFin = useProgramaDoCurso("fin", turma.curso);
+  const ped = useTurmaPedagogia("fin", turma?.id ?? 0);
+  const criterios = useCriteriosAvaliacao("fin", turma?.curso);
+  const programaCursoFin = useProgramaDoCurso("fin", turma?.curso ?? "");
   const programaTurmaFin = programaCursoFin.labels;
   const sumarios = ped.sumarios;
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
@@ -2085,6 +2095,13 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
     return live.length ? live : cursosFinOpts;
   }, [cursosFin]);
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
+  if (!turma) {
+    return (
+      <div className="space-y-4">
+        <EmptyHint accent="fin" text="Esta turma ainda não está na base, ou já não existe." action="Voltar às turmas" onAction={onBack} />
+      </div>
+    );
+  }
   const membros = formandosFin.filter(f => {
     if (f.turma === turma.nome) return true;
     const noutra = fin.some(t => t.id !== turma.id && t.nome === f.turma);
@@ -2424,30 +2441,32 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
             vagasLivres={Math.max(0, turma.alunosTotal - turma.alunos)}
             accent="fin"
             onCancel={() => setAddFormando(false)}
-            onInscreverLead={lead => {
+            onInscreverLead={async lead => {
               if (turma.alunosTotal - turma.alunos <= 0) return;
-              addFormandoFin({
-                id: nextListId(formandosFin),
+              const id = await addFormandoFin({
+                id: tempNumericId(),
                 nome: lead.nome, apelido: lead.apelido || "-",
                 turma: turma.nome, telf: lead.telf || "-",
                 email: lead.email,
                 curso: turma.curso, estado: "Elegível",
                 ...emptyFinDocs(),
               });
+              if (!id) return;
               patchFin(turma.id, { alunos: turma.alunos + 1 });
               patchPreinscricao(lead.id, { estado: "Formando" });
             }}
-            onInscreverManual={dados => {
+            onInscreverManual={async dados => {
               if (turma.alunosTotal - turma.alunos <= 0) return;
               const { nome, apelido } = splitNome(dados.nome);
-              addFormandoFin({
-                id: nextListId(formandosFin),
+              const id = await addFormandoFin({
+                id: tempNumericId(),
                 nome, apelido: apelido || "-",
                 turma: turma.nome, telf: dados.telf || "-",
                 email: dados.email || `${nome.toLowerCase()}@mail.pt`,
                 curso: turma.curso, estado: "Elegível",
                 ...emptyFinDocs(),
               });
+              if (!id) return;
               patchFin(turma.id, { alunos: turma.alunos + 1 });
             }}
           />
@@ -2925,7 +2944,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
       setCronograma(editing?.cronograma ?? []);
     }
   }, [open, editing]);
-  function guardar() {
+  async function guardar() {
     if (!curso.trim()) return;
     const payload = {
       nome: nome.trim() || "Nova turma",
@@ -2934,9 +2953,13 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
       horas: horasCurso,
       cronograma,
     };
-    if (editing) patchGold(editing.id, payload);
-    else addGold({ id: Date.now() % 100000, totalAlunos: 0, ...payload });
-    setOpen(null);
+    if (editing) {
+      patchGold(editing.id, payload);
+      setOpen(null);
+      return;
+    }
+    const id = await addGold({ id: -Date.now(), totalAlunos: 0, ...payload });
+    if (id) setOpen(null);
   }
   return (
     <div className="space-y-4">
@@ -3130,18 +3153,19 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
     } else if (edit) { setTurma(edit.turma); setCursoEdit(edit.curso); }
   }, [edit]);
 
-  function inscreverNaTurma(lead: Preinscricao, dest: TurmaGold) {
+  async function inscreverNaTurma(lead: Preinscricao, dest: TurmaGold) {
     if (!isTurmaActiva(dest) || dest.vagas - dest.totalAlunos <= 0) {
       toastError("Essa turma não aceita inscrições.");
       return;
     }
-    addFormandoTurma({
-      id: nextListId(formandosTurmas),
+    const id = await addFormandoTurma({
+      id: tempNumericId(),
       nome: lead.nome, apelido: lead.apelido || "-",
       telf: lead.telf || "-", email: lead.email,
       inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
       estado: "Formando", pago: lead.estado === "Pago", valor: lead.preco || 125, metodo: lead.pagamentoMetodo || "-",
     });
+    if (!id) return;
     patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
     patchPreinscricao(lead.id, { estado: "Formando" });
     toastOk(`${lead.nome} ${lead.apelido} inscrito em ${dest.nome}.`);
@@ -3282,7 +3306,7 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
           <Field label="Curso"><SearchSelect value={cursoEdit} onChange={v => { setCursoEdit(v); if (turma && !turmaGoldOpts(gold, { curso: v, includeNome: editing?.turma }).some(o => o.value === turma)) setTurma(""); }} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setEdit(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button disabled={!turma || (!editing && !nomeNovo.trim())} onClick={() => {
+            <button disabled={!turma || (!editing && !nomeNovo.trim())} onClick={async () => {
               const dest = gold.find(x => x.nome === turma);
               if (!dest) return;
               if (editing) {
@@ -3294,14 +3318,15 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
                 }
               } else {
                 const { nome, apelido } = splitNome(nomeNovo);
-                addFormandoTurma({
-                  id: nextListId(formandosTurmas),
+                const id = await addFormandoTurma({
+                  id: tempNumericId(),
                   nome, apelido: apelido || "-",
                   telf: telfNovo.trim() || "-",
                   email: emailNovo.trim() || `${nome.toLowerCase()}@mail.pt`,
                   inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
                   estado: "Formando", pago: false, valor: 125, metodo: "-",
                 });
+                if (!id) return;
                 patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
               }
               setEdit(null);
@@ -3463,16 +3488,17 @@ function FinFormandosView({ openId, onOpened }: { openId?: number; onOpened?: ()
           <Field label="Turma"><SearchSelect value={turmaNovo} onChange={setTurmaNovo} options={turmaOpts} placeholder="Turma destino…" empty="Não há turmas para esta UFCD." /></Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setNovo(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button disabled={!nomeNovo.trim() || !cursoNovo} onClick={() => {
+            <button disabled={!nomeNovo.trim() || !cursoNovo} onClick={async () => {
               const { nome, apelido } = splitNome(nomeNovo);
-              addFormandoFin({
-                id: nextListId(formandosFin),
+              const id = await addFormandoFin({
+                id: tempNumericId(),
                 nome, apelido: apelido || "-",
                 turma: turmaNovo || "-", telf: telfNovo.trim() || "-",
                 email: emailNovo.trim() || `${nome.toLowerCase()}@mail.pt`,
                 curso: cursoNovo, estado: "Elegível",
                 ...emptyFinDocs(),
               });
+              if (!id) return;
               const dest = fin.find(t => t.nome === turmaNovo);
               if (dest) patchFin(dest.id, { alunos: dest.alunos + 1 });
               setNovo(false);
@@ -3526,15 +3552,19 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
       setCronograma(editing?.cronograma ?? []);
     }
   }, [open, editing]);
-  function guardar() {
+  async function guardar() {
     const horas = editing?.horas ?? 25;
     const payload = {
       nome: nome.trim() || "Nova turma",
       curso, formador, local: localFin, dataInicio, activa, cronograma, horas,
     };
-    if (editing) patchFin(editing.id, payload);
-    else addFin({
-      id: Date.now() % 100000,
+    if (editing) {
+      patchFin(editing.id, payload);
+      setOpen(null);
+      return;
+    }
+    const id = await addFin({
+      id: -Date.now(),
       ufcdCod: "0000",
       horario: "Online",
       alunos: 0,
@@ -3542,7 +3572,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
       estado: "A montar",
       ...payload,
     });
-    setOpen(null);
+    if (id) setOpen(null);
   }
   return (
     <div className="space-y-4">
@@ -3832,9 +3862,15 @@ function BlogView() {
             <button onClick={() => {
               if (!titulo.trim()) return;
               const s = (slug.trim() || titulo).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-              if (editId != null) patchBlogPost(editId, { titulo: titulo.trim(), slug: s, tematica });
-              else addBlogPost({ id: nextListId(blogPosts), titulo: titulo.trim(), slug: s, data: new Date().toISOString().slice(0, 10), status: "Ativo", tematica });
-              setOpen(false); setTitulo(""); setSlug(""); setTematica(""); setEditId(null);
+              void (async () => {
+                if (editId != null) {
+                  patchBlogPost(editId, { titulo: titulo.trim(), slug: s, tematica });
+                } else {
+                  const id = await addBlogPost({ id: -Date.now(), titulo: titulo.trim(), slug: s, data: new Date().toISOString().slice(0, 10), status: "Ativo", tematica });
+                  if (!id) return;
+                }
+                setOpen(false); setTitulo(""); setSlug(""); setTematica(""); setEditId(null);
+              })();
             }} disabled={!titulo.trim()} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editId != null ? "Guardar" : "Criar post"}</button>
           </div>
         </div>
@@ -4472,10 +4508,10 @@ function PagamentosView() {
           </div>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setNovo(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button disabled={!nome.trim() || !curso} onClick={() => {
+            <button disabled={!nome.trim() || !curso} onClick={async () => {
               const mail = emailPag.trim() || `${nome.trim().toLowerCase().replace(/\s+/g, ".")}@mail.pt`;
-              addPagamento({
-                id: `TRX-${Date.now() % 100000}`,
+              const id = await addPagamento({
+                id: `tmp-${Date.now()}`,
                 nome: nome.trim(),
                 valor: Number(valor) || 0,
                 metodo,
@@ -4483,7 +4519,7 @@ function PagamentosView() {
                 data: nowStamp(),
                 estado: "Pago",
               }, mail);
-              setNovo(false);
+              if (id) setNovo(false);
             }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Registar</button>
           </div>
         </div>

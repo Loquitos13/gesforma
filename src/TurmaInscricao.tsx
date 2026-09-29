@@ -40,8 +40,8 @@ export function InscreverFormandoPanel({
   emailsInscritos: Iterable<string>;
   vagasLivres: number;
   accent?: "gold" | "fin";
-  onInscreverLead: (lead: Preinscricao) => void;
-  onInscreverManual: (dados: { nome: string; email: string; telf: string }) => void;
+  onInscreverLead: (lead: Preinscricao) => void | Promise<void>;
+  onInscreverManual: (dados: { nome: string; email: string; telf: string }) => void | Promise<void>;
   onCancel: () => void;
 }) {
   const [q, setQ] = useState("");
@@ -49,6 +49,7 @@ export function InscreverFormandoPanel({
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telf, setTelf] = useState("");
+  const [busy, setBusy] = useState(false);
   const btn = accent === "gold"
     ? "bg-amber-500 hover:bg-amber-600"
     : "bg-blue-600 hover:bg-blue-700";
@@ -98,8 +99,11 @@ export function InscreverFormandoPanel({
               </div>
               <button
                 type="button"
-                disabled={semVagas}
-                onClick={() => onInscreverLead(l)}
+                disabled={semVagas || busy}
+                onClick={() => {
+                  setBusy(true);
+                  void Promise.resolve(onInscreverLead(l)).finally(() => setBusy(false));
+                }}
                 className={`flex-shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg text-white disabled:opacity-40 ${btn}`}
               >
                 Inscrever
@@ -133,10 +137,12 @@ export function InscreverFormandoPanel({
           </label>
           <button
             type="button"
-            disabled={!nome.trim() || semVagas}
+            disabled={!nome.trim() || semVagas || busy}
             onClick={() => {
-              onInscreverManual({ nome: nome.trim(), email: email.trim(), telf: telf.trim() });
-              setNome(""); setEmail(""); setTelf("");
+              setBusy(true);
+              void Promise.resolve(onInscreverManual({ nome: nome.trim(), email: email.trim(), telf: telf.trim() }))
+                .then(() => { setNome(""); setEmail(""); setTelf(""); })
+                .finally(() => setBusy(false));
             }}
             className={`w-full py-2 text-sm font-semibold rounded-lg text-white disabled:opacity-40 ${btn}`}
           >
@@ -255,7 +261,7 @@ export function EscolherTurmaModal({
   lead: Preinscricao | null;
   turmas: TurmaGold[];
   onClose: () => void;
-  onConfirm: (turma: TurmaGold) => void;
+  onConfirm: (turma: TurmaGold) => void | Promise<void>;
 }) {
   const [sel, setSel] = useState<TurmaGold | null>(null);
   useEffect(() => {
@@ -277,7 +283,7 @@ export function EscolherTurmaModal({
           <button
             type="button"
             disabled={!sel}
-            onClick={() => { if (sel) onConfirm(sel); }}
+            onClick={() => { if (sel) void onConfirm(sel); }}
             className="px-4 py-2 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white"
           >
             Inscrever nesta turma

@@ -7,7 +7,7 @@ import { ClienteFicha } from "./ClienteFicha";
 import { entradaChip, etiquetaChip, leadMarkStyle, meioChip } from "./crmUi";
 import { AppModal, ViewFilters, cursosGoldOpts, locaisOpts } from "./FormKit";
 import { OptionSelect } from "./OptionSelect";
-import { nextListId, useLists, type Preinscricao } from "./ListsContext";
+import { tempNumericId, useLists, type Preinscricao } from "./ListsContext";
 import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./SecretaryUX";
 import { persist, toastError, toastOk } from "./toastBus";
 import { useTurmas } from "./TurmasContext";
@@ -598,18 +598,19 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
           setFicha({ ...ficha, ...patch });
           setTimeout(carregar, 250);
         }}
-        onConvert={turmaNome => {
+        onConvert={async turmaNome => {
           if (!ficha) return;
           if (!secRole) { toastError("Só a secretaria inscreve na turma."); return; }
           if (!ficha.secretariaEm) { toastError("A pré-inscrição ainda não foi entregue à secretaria."); return; }
           const t = gold.find(x => x.nome === turmaNome);
           if (!t || t.vagas - t.totalAlunos <= 0) return;
-          addFormandoTurma({
-            id: nextListId(formandosTurmas),
+          const id = await addFormandoTurma({
+            id: tempNumericId(),
             nome: ficha.nome, apelido: ficha.apelido, telf: ficha.telf, email: ficha.email,
             inscrito: nowStamp(), local: t.local, curso: t.curso, turma: t.nome, turmaId: t.id,
             estado: "Formando", pago: ficha.estado === "Pago", valor: ficha.preco, metodo: "-",
           });
+          if (!id) return;
           patchGold(t.id, { totalAlunos: t.totalAlunos + 1 });
           patchPreinscricao(ficha.id, { estado: "Formando" });
           setFicha({ ...ficha, estado: "Formando" });
@@ -622,19 +623,20 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
         lead={confirmMove ? confirmMove.item as Preinscricao : null}
         turmas={gold}
         onClose={() => setConfirmMove(null)}
-        onConfirm={(dest: TurmaGold) => {
+        onConfirm={async (dest: TurmaGold) => {
           if (!confirmMove) return;
           if (!isTurmaActiva(dest) || dest.vagas - dest.totalAlunos <= 0) {
             toastError("Essa turma não aceita inscrições.");
             return;
           }
           const item = confirmMove.item;
-          addFormandoTurma({
-            id: nextListId(formandosTurmas),
+          const id = await addFormandoTurma({
+            id: tempNumericId(),
             nome: item.nome, apelido: item.apelido || "-", telf: item.telf || "-", email: item.email,
             inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
             estado: "Formando", pago: item.estado === "Pago", valor: item.preco || 125, metodo: item.pagamentoMetodo || "-",
           });
+          if (!id) return;
           patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
           patchPreinscricao(item.id, { estado: "Formando" });
           toastOk(`${item.nome} ${item.apelido} inscrito em ${dest.nome}.`);
@@ -716,11 +718,11 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
           )}
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={() => { setNovo(false); setEditLead(null); }} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg">Cancelar</button>
-            <button type="button" disabled={!form.nome.trim() || (!form.telf.trim() && !form.email.trim())} onClick={() => {
+            <button type="button" disabled={!form.nome.trim() || (!form.telf.trim() && !form.email.trim())} onClick={async () => {
               const cursoRow = cursosGold.find(c => c.nome === form.curso);
               const t = gold.find(x => x.id === form.turmaId) ?? gold.find(x => x.nome === form.turma);
               const row: Preinscricao = {
-                id: editLead?.id ?? nextListId(preinscricoes),
+                id: editLead?.id ?? tempNumericId(),
                 inscrito: editLead?.inscrito ?? nowStamp(),
                 nome: form.nome.trim(), apelido: form.apelido.trim(),
                 email: form.email.trim(),
@@ -737,10 +739,17 @@ export function PreInscricoesGoldView({ openLeadId, onOpened }: { openLeadId?: n
                 origem: form.origem || "Telefone",
                 entrada: editLead?.entrada ?? "manual",
               };
-              if (editLead) patchPreinscricao(editLead.id, row);
-              else addPreinscricao(row, { nota: form.nota.trim() });
-              setNovo(false); setEditLead(null); setDups([]);
-              setTimeout(carregar, 250);
+              if (editLead) {
+                patchPreinscricao(editLead.id, row);
+                setNovo(false); setEditLead(null); setDups([]);
+                setTimeout(carregar, 250);
+                return;
+              }
+              const id = await addPreinscricao(row, { nota: form.nota.trim() });
+              if (id) {
+                setNovo(false); setEditLead(null); setDups([]);
+                setTimeout(carregar, 250);
+              }
             }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editLead ? "Guardar" : "Criar lead"}</button>
           </div>
         </div>

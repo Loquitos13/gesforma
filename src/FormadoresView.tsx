@@ -141,6 +141,7 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
   const [erro, setErro] = useState("");
   const [perfil, setPerfil] = useState<Formador | null>(null);
   const [apagar, setApagar] = useState<Formador | null>(null);
+  const [gravando, setGravando] = useState(false);
 
   const noRegime = formadoresDoRegime(formadores, regime);
   const especialidades = uniqueOpts(noRegime.map(f => f.especialidade));
@@ -180,8 +181,8 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
     setDraft({ ...f, regimes: [...f.regimes] });
   }
 
-  function guardar() {
-    if (!draft) return;
+  async function guardar() {
+    if (!draft || gravando) return;
     const nome = draft.nome.trim();
     if (!nome) {
       setErro("Indique o nome do formador.");
@@ -200,10 +201,20 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
       ccp: draft.ccp.trim(),
       nif: draft.nif.trim(),
     };
-    if (draft.id) patchFormador(draft.id, payload);
-    else addFormador(payload);
-    setDraft(null);
-    setErro("");
+    if (draft.id) {
+      patchFormador(draft.id, payload);
+      setDraft(null);
+      setErro("");
+      return;
+    }
+    const { id: _id, ...rest } = payload;
+    setGravando(true);
+    const id = await addFormador(rest);
+    setGravando(false);
+    if (id) {
+      setDraft(null);
+      setErro("");
+    }
   }
 
   const saveCls = gold ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700";
@@ -376,7 +387,7 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
             {erro && <p className="text-xs font-medium text-red-600">{erro}</p>}
             <div className="flex gap-2 pt-2">
               <button type="button" onClick={() => { setDraft(null); setErro(""); }} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-              <button type="button" onClick={guardar} className={`flex-1 py-2 ${saveCls} text-white text-sm font-semibold rounded-lg`}>{editing ? "Guardar alterações" : "Criar formador"}</button>
+              <button type="button" disabled={gravando} onClick={() => void guardar()} className={`flex-1 py-2 ${saveCls} disabled:opacity-40 text-white text-sm font-semibold rounded-lg`}>{editing ? "Guardar alterações" : "Criar formador"}</button>
             </div>
           </div>
         )}

@@ -7,7 +7,7 @@ import { persist, toastError } from "./toastBus";
 
 type FormadoresCtx = {
   formadores: Formador[];
-  addFormador: (f: Omit<Formador, "id">) => Formador;
+  addFormador: (f: Omit<Formador, "id">) => Promise<number | undefined>;
   patchFormador: (id: number, patch: Partial<Formador>) => void;
   removeFormador: (id: number) => void;
   options: (current?: string | string[], regime?: FormadorRegime) => SelectOption[];
@@ -45,16 +45,18 @@ export function FormadoresProvider({ children }: { children: ReactNode }) {
     return () => { alive = false; };
   }, []);
 
-  const addFormador = useCallback((draft: Omit<Formador, "id">) => {
-    const created: Formador = { ...draft, id: Date.now() % 100000 };
+  const addFormador = useCallback(async (draft: Omit<Formador, "id">) => {
+    const created: Formador = { ...draft, id: -Date.now() };
     setFormadores(xs => [created, ...xs]);
-    void persist(apiCreateFormador(created).then(r => {
-      if (r.formador) setFormadores(xs => xs.map(f => f.id === created.id ? asFormador(r.formador) : f));
+    const r = await persist(apiCreateFormador(created).then(res => {
+      if (res.formador) setFormadores(xs => xs.map(f => f.id === created.id ? asFormador(res.formador) : f));
+      return res;
     }), () => setFormadores(xs => xs.filter(f => f.id !== created.id)));
-    return created;
+    return r?.formador ? asFormador(r.formador).id : undefined;
   }, []);
 
   const patchFormador = useCallback((id: number, patch: Partial<Formador>) => {
+    if (id < 0) return;
     setFormadores(xs => xs.map(f => f.id === id ? { ...f, ...patch } : f));
     void persist(apiPatchFormador(id, patch));
   }, []);

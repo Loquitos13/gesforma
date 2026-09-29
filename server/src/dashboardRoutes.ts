@@ -358,8 +358,8 @@ export function registerDashboardRoutes(
     const payConds = ["true"];
     const payParams: unknown[] = [];
     let pi = 1;
-    if (f.de) { payConds.push(`${payDate("pg")} >= $${pi}`); payParams.push(f.de); pi += 1; }
-    if (f.ate) { payConds.push(`${payDate("pg")} <= $${pi}`); payParams.push(f.ate); pi += 1; }
+    if (f.de) { payConds.push(`${payDate("pg")} >= $${pi}::text`); payParams.push(f.de); pi += 1; }
+    if (f.ate) { payConds.push(`${payDate("pg")} <= $${pi}::text`); payParams.push(f.ate); pi += 1; }
     if (f.curso) { payConds.push(`pg.curso = $${pi}`); payParams.push(f.curso); pi += 1; }
     const cursoFinMatch = `EXISTS (
       SELECT 1 FROM cursos_fin c
@@ -378,35 +378,39 @@ export function registerDashboardRoutes(
     const pieMesIdx = pi;
     const pieParams = [...payParams, `${f.mes ?? monthKey(now)}%`];
 
-    const [counts, pagamentosRows, origens, cursosPorReceita, leadsPorCurso, desag, filtros, precos, pieCursos] = await Promise.all([
+    const [leadCounts, entityCounts, pagamentosRows, origens, cursosPorReceita, leadsPorCurso, desag, filtros, precos, pieCursos] = await Promise.all([
+      db.query<{ preinscritos: number; contactados: number }>(
+        `SELECT
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.estado <> 'Formando') AS preinscritos,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.contactado_em IS NOT NULL) AS contactados`,
+        lw.params,
+      ),
       db.query<{
-        preinscritos: number; contactados: number; formandos_gold: number; formandos_fin: number;
+        formandos_gold: number; formandos_fin: number;
         turmas_gold_ativas: number; turmas_gold: number; turmas_fin_ativas: number; turmas_fin: number;
         cursos_gold: number; cursos_fin: number;
       }>(
         `SELECT
-           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.estado <> 'Formando') AS preinscritos,
-           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.contactado_em IS NOT NULL) AS contactados,
            (SELECT count(*)::int FROM formandos_gold fg
-              WHERE ($1::text IS NULL OR fg.curso = $1)
-                AND ($2::text IS NULL OR fg.local = $2)
-                AND ($3::text IS NULL OR EXISTS (SELECT 1 FROM turmas_gold tg WHERE tg.id = fg.turma_id AND tg.horario = $3))
-                AND ($4::text IS NULL OR substring(fg.inscrito from 1 for 10) >= $4)
-                AND ($5::text IS NULL OR substring(fg.inscrito from 1 for 10) <= $5)
+              WHERE ($1::text IS NULL OR fg.curso = $1::text)
+                AND ($2::text IS NULL OR fg.local = $2::text)
+                AND ($3::text IS NULL OR EXISTS (SELECT 1 FROM turmas_gold tg WHERE tg.id = fg.turma_id AND tg.horario = $3::text))
+                AND ($4::text IS NULL OR substring(fg.inscrito from 1 for 10) >= $4::text)
+                AND ($5::text IS NULL OR substring(fg.inscrito from 1 for 10) <= $5::text)
            ) AS formandos_gold,
            (SELECT count(*)::int FROM formandos_fin ff
-              WHERE ($1::text IS NULL OR ff.curso = $1)
+              WHERE ($1::text IS NULL OR ff.curso = $1::text)
            ) AS formandos_fin,
            (SELECT count(*)::int FROM turmas_gold WHERE estado = 'Ativa'
-              AND ($1::text IS NULL OR curso = $1) AND ($2::text IS NULL OR local = $2) AND ($3::text IS NULL OR horario = $3)) AS turmas_gold_ativas,
+              AND ($1::text IS NULL OR curso = $1::text) AND ($2::text IS NULL OR local = $2::text) AND ($3::text IS NULL OR horario = $3::text)) AS turmas_gold_ativas,
            (SELECT count(*)::int FROM turmas_gold
-              WHERE ($1::text IS NULL OR curso = $1) AND ($2::text IS NULL OR local = $2) AND ($3::text IS NULL OR horario = $3)) AS turmas_gold,
+              WHERE ($1::text IS NULL OR curso = $1::text) AND ($2::text IS NULL OR local = $2::text) AND ($3::text IS NULL OR horario = $3::text)) AS turmas_gold,
            (SELECT count(*)::int FROM turmas_fin WHERE activa = true
-              AND ($1::text IS NULL OR curso = $1) AND ($2::text IS NULL OR local = $2) AND ($3::text IS NULL OR horario = $3)) AS turmas_fin_ativas,
+              AND ($1::text IS NULL OR curso = $1::text) AND ($2::text IS NULL OR local = $2::text) AND ($3::text IS NULL OR horario = $3::text)) AS turmas_fin_ativas,
            (SELECT count(*)::int FROM turmas_fin
-              WHERE ($1::text IS NULL OR curso = $1) AND ($2::text IS NULL OR local = $2) AND ($3::text IS NULL OR horario = $3)) AS turmas_fin,
-           (SELECT count(*)::int FROM cursos_gold WHERE estado = 'Ativo' AND ($1::text IS NULL OR nome = $1)) AS cursos_gold,
-           (SELECT count(*)::int FROM cursos_fin WHERE estado = 'Ativo' AND ($1::text IS NULL OR ufcd = $1 OR nome_comercial = $1)) AS cursos_fin`,
+              WHERE ($1::text IS NULL OR curso = $1::text) AND ($2::text IS NULL OR local = $2::text) AND ($3::text IS NULL OR horario = $3::text)) AS turmas_fin,
+           (SELECT count(*)::int FROM cursos_gold WHERE estado = 'Ativo' AND ($1::text IS NULL OR nome = $1::text)) AS cursos_gold,
+           (SELECT count(*)::int FROM cursos_fin WHERE estado = 'Ativo' AND ($1::text IS NULL OR ufcd = $1::text OR nome_comercial = $1::text)) AS cursos_fin`,
         [f.curso ?? null, f.local ?? null, f.horario ?? null, f.de ?? null, f.ate ?? null],
       ),
       db.query<PagamentoRow>(
@@ -440,15 +444,21 @@ export function registerDashboardRoutes(
       db.query<{ chave: string; n: number; receita: unknown }>(
         f.desagregar === "local"
           ? `SELECT COALESCE(NULLIF(p.local,''), 'Sem local') AS chave, count(*)::int AS n,
-                    COALESCE((SELECT sum(pg.valor) FROM pagamentos pg WHERE pg.estado='Pago' AND pg.curso = p.curso), 0) AS receita
-               FROM preinscricoes p WHERE ${lw.sql} GROUP BY 1 ORDER BY 2 DESC LIMIT 12`
+                    COALESCE(MAX(pay.receita), 0) AS receita
+               FROM preinscricoes p
+               LEFT JOIN (SELECT curso, sum(valor) AS receita FROM pagamentos WHERE estado = 'Pago' GROUP BY curso) pay ON pay.curso = p.curso
+              WHERE ${lw.sql} GROUP BY 1 ORDER BY 2 DESC LIMIT 12`
           : f.desagregar === "horario"
             ? `SELECT COALESCE(NULLIF(p.horario,''), 'Sem horário') AS chave, count(*)::int AS n,
-                      COALESCE((SELECT sum(pg.valor) FROM pagamentos pg WHERE pg.estado='Pago' AND pg.curso = p.curso), 0) AS receita
-                 FROM preinscricoes p WHERE ${lw.sql} GROUP BY 1 ORDER BY 2 DESC LIMIT 12`
+                      COALESCE(MAX(pay.receita), 0) AS receita
+                 FROM preinscricoes p
+                 LEFT JOIN (SELECT curso, sum(valor) AS receita FROM pagamentos WHERE estado = 'Pago' GROUP BY curso) pay ON pay.curso = p.curso
+                WHERE ${lw.sql} GROUP BY 1 ORDER BY 2 DESC LIMIT 12`
             : `SELECT COALESCE(NULLIF(p.curso,''), 'Sem curso') AS chave, count(*)::int AS n,
-                      COALESCE((SELECT sum(pg.valor) FROM pagamentos pg WHERE pg.estado='Pago' AND pg.curso = p.curso), 0) AS receita
-                 FROM preinscricoes p WHERE ${lw.sql} GROUP BY 1 ORDER BY 2 DESC LIMIT 12`,
+                      COALESCE(MAX(pay.receita), 0) AS receita
+                 FROM preinscricoes p
+                 LEFT JOIN (SELECT curso, sum(valor) AS receita FROM pagamentos WHERE estado = 'Pago' GROUP BY curso) pay ON pay.curso = p.curso
+                WHERE ${lw.sql} GROUP BY 1 ORDER BY 2 DESC LIMIT 12`,
         lw.params,
       ),
       db.query<{ curso: string; local: string; horario: string }>(
@@ -478,14 +488,14 @@ export function registerDashboardRoutes(
            LEFT JOIN turmas_gold tg ON tg.id = fg.turma_id
            ${payJoin}
           WHERE pg.estado = 'Pago' AND pg.curso <> ''
-            AND ${payDate("pg")} LIKE $${pieMesIdx}
+            AND ${payDate("pg")} LIKE $${pieMesIdx}::text
             AND ${payConds.join(" AND ")}
           GROUP BY pg.curso ORDER BY 2 DESC LIMIT 8`,
         pieParams,
       ),
     ]);
 
-    const c = counts.rows[0];
+    const c = { ...(entityCounts.rows[0] ?? {}), ...(leadCounts.rows[0] ?? {}) };
     const fin = financeiro(pagamentosRows.rows, now);
     const regime = f.regime;
     let formandosGold = regime === "fin" ? 0 : Number(c?.formandos_gold ?? 0);

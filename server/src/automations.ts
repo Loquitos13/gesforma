@@ -246,3 +246,86 @@ export async function processDueJobs(db: Db, limit = 20) {
   await enqueueCrmReminders(db).catch(() => undefined);
   return flushQueuedJobs(db, limit);
 }
+
+/** Envia já o template da regra para um email de teste. Não avança o CRM nem respeita o atraso. */
+export async function sendRuleTest(db: Db, ruleId: number, to: { email: string; name: string }) {
+  const email = normalizeEmail(to.email);
+  const nome = sanitizeHeader(to.name || "Teste");
+  if (!isEmail(email)) throw new Error("Email de teste inválido");
+  const found = await db.query<Rule>(
+    `SELECT r.id, r.template_tipo, r.delay_seconds, r.curso, t.assunto, t.body_lines, t.body_xml, t.cta, t.cta_href, t.cta_ambito
+     FROM email_rules r
+     JOIN email_templates t ON t.tipo = r.template_tipo
+     WHERE r.id = $1`,
+    [ruleId],
+  );
+  const rule = found.rows[0];
+  if (!rule) throw new Error("Regra desconhecida");
+  const curso = sanitizeHeader(rule.curso || "Formação de Formadores - CCP");
+  const turma = "VNG-SM-07/09";
+  const origin = config.appOrigin.replace(/\/$/, "");
+  const vars = buildCtaVars({
+    nome,
+    email,
+    curso,
+    turma,
+    documentosUrl: `${origin}/documentos/teste`,
+    comprovativoUrl: `${origin}/documentos/teste?fase=pagamento`,
+    referencia: "123 456 789",
+    entidade: "12345",
+    valor: "125 €",
+    documentosLista: "Cartão de cidadão, contrato, regulamento",
+  });
+  const subject = sanitizeHeader(`Teste · ${fillVars(rule.assunto, vars)}`);
+  const fromXml = parseEmailXml(rule.body_xml ?? "");
+  const linhas = (fromXml.linhas.length ? fromXml.linhas : asLines(rule.body_lines)).map(l => fillVars(l, vars));
+  const cta = fillVars(fromXml.cta || rule.cta, vars);
+  const hrefTpl = fromXml.href || rule.cta_href || ctaDestino(rule.template_tipo).href;
+  const href = fillCtaHref(hrefTpl, vars);
+  const text = [
+    `Olá ${nome.split(" ")[0] || nome},`,
+    "",
+    ...linhas,
+    "",
+    cta,
+    href,
+    "",
+    "Equipa ENA · formacao@ena.pt",
+    "",
+    "Este envio é um teste da regra. Não altera o estado de nenhum lead.",
+  ].join("\n");
+  const body = sanitizeText(text, 8000);
+  const eventId = randomUUID();
+  const jobId = randomUUID();
+  await db.query(
+    `INSERT INTO automation_events (id, type, idempotency_key, payload)
+     VALUES ($1, 'email.test', $2, $3::jsonb)`,
+    [eventId, `test:${ruleId}:${jobId}`, JSON.stringify({ email, nome, curso, turma, teste: true, ruleId })],
+  );
+  await db.query(
+    `INSERT INTO email_jobs (id, rule_id, event_id, to_email, to_name, subject, body_text, scheduled_at, status, payload)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, now(), 'queued', $8::jsonb)`,
+    [jobId, rule.id, eventId, email, nome, subject, body, JSON.stringify({ teste: true, ruleId: rule.id })],
+  );
+  const pixel = `${origin}/api/v1/email/open/${jobId}.gif`;
+  const html = body
+    .split("\n")
+    .map(l => l ? `<p>${l.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>` : "<br>")
+    .join("") + `<img src="${pixel}" width="1" height="1" alt="" />`;
+  try {
+    const mailId = await sendMail(db, { to: email, name: nome, subject, text: body, html });
+    const logged = String(mailId).startsWith("log:");
+    await db.query(
+      "UPDATE email_jobs SET status = 'sent', sent_at = now(), attempts = 1, last_error = $2 WHERE id = $1",
+      [jobId, logged ? "SMTP desligado: ficou só no registo da API" : null],
+    );
+    return { ok: true as const, to: email, logged, id: String(mailId) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message.slice(0, 400) : "falha no envio";
+    await db.query(
+      "UPDATE email_jobs SET status = 'failed', attempts = 1, last_error = $2 WHERE id = $1",
+      [jobId, message],
+    );
+    throw err instanceof Error ? err : new Error(message);
+  }
+}

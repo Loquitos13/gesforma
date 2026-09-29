@@ -6,7 +6,7 @@ import rateLimit from "@fastify/rate-limit";
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
-import { ingestEvent, processDueJobs } from "./automations.js";
+import { ingestEvent, processDueJobs, sendRuleTest } from "./automations.js";
 import { allowedOrigins, config, newToken, onVercel } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { registerCatalogRoutes } from "./catalogRoutes.js";
@@ -465,8 +465,8 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
       delay_seconds: number; curso: string | null; ativo: boolean; envios: number; abertos: number;
     }>(
       `SELECT r.id, r.nome, r.gatilho_label, r.template_tipo, r.delay_seconds, r.curso, r.ativo,
-              (SELECT count(*)::int FROM email_jobs j WHERE j.rule_id = r.id AND j.status = 'sent') AS envios,
-              (SELECT count(*)::int FROM email_jobs j WHERE j.rule_id = r.id AND j.opened_at IS NOT NULL) AS abertos
+              (SELECT count(*)::int FROM email_jobs j WHERE j.rule_id = r.id AND j.status = 'sent' AND COALESCE(j.payload->>'teste', '') <> 'true') AS envios,
+              (SELECT count(*)::int FROM email_jobs j WHERE j.rule_id = r.id AND j.opened_at IS NOT NULL AND COALESCE(j.payload->>'teste', '') <> 'true') AS abertos
        FROM email_rules r ORDER BY r.id`,
     );
     return {
@@ -540,6 +540,19 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     );
     await audit(db, req.actor!.id, "email.rule_update", "email_rule", String(id), req.ip);
     return { ok: true };
+  });
+
+  app.post("/v1/email/rules/:id/teste", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
+    try {
+      const result = await sendRuleTest(db, id, { email: req.actor!.email, name: req.actor!.name });
+      await audit(db, req.actor!.id, "email.rule_test", "email_rule", String(id), req.ip);
+      return result;
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : "o teste não saiu" });
+    }
   });
 
   app.delete("/v1/email/rules/:id", async (req, reply) => {

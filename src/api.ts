@@ -599,6 +599,8 @@ export const apiPatchRule = (id: number, body: Record<string, unknown>) =>
   api<{ ok: boolean }>(`/v1/email/rules/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 export const apiDeleteRule = (id: number) =>
   api<{ ok: boolean }>(`/v1/email/rules/${id}`, { method: "DELETE" });
+export const apiTestEmailRule = (id: number) =>
+  api<{ ok: boolean; to: string; logged: boolean; id: string }>(`/v1/email/rules/${id}/teste`, { method: "POST", body: JSON.stringify({}) });
 
 export const apiEmailTemplates = () => api<{ templates: EmailTemplate[] }>("/v1/email/templates");
 export const apiPatchTemplate = (id: number, body: { nome?: string; assunto?: string; body_lines?: string[]; body_xml?: string; cta?: string; cta_href?: string; cta_ambito?: "preinscricao" | "contacto" | "documentos" | "pagamento" }) =>

@@ -65,7 +65,7 @@ import {
 } from "./emailCta";
 import { formatXmlInner, linesToXml, parseEmailXml, replaceCta, xmlParagraphsRaw, xmlToLines } from "./emailXml";
 import {
-  apiCreateRule, apiDashboard, apiDeleteRule, apiEmailJobs, apiEmailRules, apiEmailTemplates, apiPatchRule, apiPatchTemplate,
+  apiCreateRule, apiDashboard, apiDeleteRule, apiEmailJobs, apiEmailRules, apiEmailTemplates, apiPatchRule, apiPatchTemplate, apiTestEmailRule,
   emitAutomation,
   type Dashboard, type EmailJob, type EmailJobStats, type EmailRule, type TurmaCertificado, type TurmaDocumento,
 } from "./api";
@@ -3834,6 +3834,26 @@ function EmailsView() {
   const [ativoRegra, setAtivoRegra] = useState(true);
   const [erroRegra, setErroRegra] = useState("");
   const [busyRegra, setBusyRegra] = useState(false);
+  const [testandoId, setTestandoId] = useState<number | null>(null);
+
+  async function testarRegra(r: EmailRule) {
+    if (!apiOn) {
+      toastError(new Error("Sem ligação à API: o teste não sai."));
+      return;
+    }
+    setTestandoId(r.id);
+    try {
+      const out = await apiTestEmailRule(r.id);
+      toastOk(out.logged
+        ? `Teste de «${r.nome}» registado para ${out.to}. O SMTP não está ligado, por isso não saiu da caixa.`
+        : `Teste de «${r.nome}» enviado para ${out.to}.`);
+      await recarregar();
+    } catch (err) {
+      toastError(err, "Não foi possível enviar o teste.");
+    } finally {
+      setTestandoId(null);
+    }
+  }
 
   async function recarregar() {
     try {
@@ -3989,7 +4009,15 @@ function EmailsView() {
                     <span className="text-xs text-slate-400">{r.taxaAbertura ?? 0}% abertura</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
+                <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+                  <button
+                    type="button"
+                    disabled={testandoId === r.id}
+                    onClick={() => void testarRegra(r)}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 disabled:opacity-40"
+                  >
+                    {testandoId === r.id ? "A enviar…" : "Testar"}
+                  </button>
                   <Toggle checked={r.ativo} onChange={val => {
                     setRegras(prev => prev.map(x => x.id === r.id ? { ...x, ativo: val } : x));
                     if (apiOn) void persist(apiPatchRule(r.id, { ativo: val }), () => recarregar());

@@ -29,19 +29,15 @@ function anel(cx: number, cy: number, r: number, r0: number, a0: number, a1: num
 }
 
 function evolucao(atual: number, anterior: number) {
-  if (anterior <= 0) {
-    return atual > 0
-      ? { texto: "novo", tom: "bg-amber-50 text-amber-800" }
-      : { texto: "0%", tom: "bg-slate-100 text-slate-600" };
-  }
+  if (anterior <= 0) return null;
   const pct = Math.round(((atual - anterior) / anterior) * 100);
   if (pct > 0) return { texto: `+${pct}%`, tom: "bg-emerald-50 text-emerald-700" };
   if (pct < 0) return { texto: `${pct}%`, tom: "bg-red-50 text-red-700" };
   return { texto: "0%", tom: "bg-slate-100 text-slate-600" };
 }
 
-function fraseEvolucao(texto: string, rotulo: string) {
-  if (texto === "novo") return `Não havia receita em ${rotulo}.`;
+function fraseEvolucao(texto: string | null, rotulo: string, atual: number) {
+  if (!texto) return atual > 0 ? `Não havia receita em ${rotulo}.` : `Igual a ${rotulo}.`;
   if (texto === "0%") return `Igual a ${rotulo}.`;
   const valor = texto.replace(/^[+-]/, "");
   return texto.startsWith("-") ? `${valor} abaixo de ${rotulo}.` : `${valor} acima de ${rotulo}.`;
@@ -114,8 +110,8 @@ function ReceitaCircular({ meses }: { meses: MesReceita[] }) {
   const totalEvo = aberto && periodo ? evolucao(aberto.v, periodo.v) : null;
 
   return (
-    <div className="flex flex-col xl:flex-row xl:items-start gap-5">
-      <div className="shrink-0">
+    <div className="relative">
+      <div className="shrink-0 max-w-xs">
         {fatias.length === 0 ? (
           <p className="text-sm text-slate-400 py-10">Sem receita confirmada neste filtro.</p>
         ) : (
@@ -173,7 +169,7 @@ function ReceitaCircular({ meses }: { meses: MesReceita[] }) {
       </div>
       {aberto && periodo && activa && (
         <div
-          className="relative flex-1 min-w-0"
+          className="absolute z-40 top-0 left-60 w-80 max-w-[min(20rem,calc(100vw-18rem))]"
           onMouseEnter={() => entrar(aberto.chave)}
           onMouseLeave={deixar}
         >
@@ -244,7 +240,7 @@ function ReceitaCircular({ meses }: { meses: MesReceita[] }) {
                   ))}
                 </div>
               </div>
-              {totalEvo && (
+              {aberto && (
                 <div className="rounded-xl bg-slate-50 px-3 py-3">
                   <div className="grid grid-cols-3 gap-2">
                     <div>
@@ -257,10 +253,12 @@ function ReceitaCircular({ meses }: { meses: MesReceita[] }) {
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Evolução</p>
-                      <p className={`inline-flex mt-1 px-1.5 py-0.5 rounded-full text-xs font-bold ${totalEvo.tom}`}>{totalEvo.texto}</p>
+                      {totalEvo
+                        ? <p className={`inline-flex mt-1 px-1.5 py-0.5 rounded-full text-xs font-bold ${totalEvo.tom}`}>{totalEvo.texto}</p>
+                        : <p className="text-sm font-bold text-slate-400 mt-1">—</p>}
                     </div>
                   </div>
-                    <p className="text-[11px] text-slate-500 mt-2">{fraseEvolucao(totalEvo.texto, periodo.rotulo)}</p>
+                    <p className="text-[11px] text-slate-500 mt-2">{fraseEvolucao(totalEvo?.texto ?? null, periodo.rotulo, aberto.v)}</p>
                 </div>
               )}
               <p className="text-[11px] font-semibold text-slate-500 mt-3 mb-2">Por curso</p>
@@ -273,7 +271,9 @@ function ReceitaCircular({ meses }: { meses: MesReceita[] }) {
                     <li key={c.nome}>
                       <div className="flex items-center justify-between gap-2">
                         <p className="min-w-0 text-xs font-medium text-slate-700 truncate" title={c.nome}>{c.nome}</p>
-                        <span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[11px] font-semibold ${evo.tom}`}>{evo.texto}</span>
+                        {evo
+                          ? <span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[11px] font-semibold ${evo.tom}`}>{evo.texto}</span>
+                          : <span className="shrink-0 text-[11px] text-slate-400">—</span>}
                       </div>
                       <p className="text-[11px] text-slate-400 mt-0.5">
                         {eur(c.receita)} este mês · {eur(outro.receita)} em {periodo.rotulo}
@@ -564,7 +564,7 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
             ))}
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <Card clip={false} className="p-4 lg:col-span-2">
+            <Card clip={false} className="p-4 lg:col-span-2 relative z-20">
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <p className="text-sm font-semibold text-slate-700">Receita por mês</p>

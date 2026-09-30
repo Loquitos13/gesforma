@@ -517,6 +517,13 @@ export function registerOpsRoutes(
     const d = parsed.data;
     const before = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
     if (!before) return reply.code(404).send({ error: "pré-inscrição inexistente" });
+    if (regimeDaLinha(before) !== "fin" && (d.curso !== undefined || d.local !== undefined || d.horario !== undefined || d.preco !== undefined)) {
+      const curso = d.curso ?? String(before.curso ?? "");
+      const local = d.local ?? String(before.local ?? "");
+      const horario = d.horario ?? String(before.horario ?? "");
+      const resolved = curso ? await precoParaOferta(db, curso, local, horario) : null;
+      if (resolved != null) d.preco = resolved;
+    }
     if (d.estado && d.estado !== String(before.estado)) {
       const gate = podeArrastar(String(before.estado), d.estado, {
         role: req.actor!.role,
@@ -915,11 +922,24 @@ export function registerOpsRoutes(
     const parsed = formandoGoldSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
+    let horario = "";
+    let local = d.local;
+    let curso = d.curso;
+    if (d.turmaId) {
+      const turma = await one(db, "SELECT curso, local, horario FROM turmas_gold WHERE id = $1", [d.turmaId]);
+      if (turma) {
+        curso = String(turma.curso ?? curso);
+        local = String(turma.local ?? local);
+        horario = String(turma.horario ?? "");
+      }
+    }
+    const resolved = curso ? await precoParaOferta(db, curso, local, horario) : null;
+    const valor = resolved ?? d.valor;
     const id = await nextOpsId(db);
     await db.query(
       `INSERT INTO formandos_gold (id, nome, apelido, telf, email, inscrito, local, curso, turma, turma_id, estado, pago, valor, metodo)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-      [id, d.nome, d.apelido, d.telf, d.email, d.inscrito || nowStamp(), d.local, d.curso, d.turma, d.turmaId ?? null, d.estado, d.pago, d.valor, d.metodo],
+      [id, d.nome, d.apelido, d.telf, d.email, d.inscrito || nowStamp(), local, curso, d.turma, d.turmaId ?? null, d.estado, d.pago, valor, d.metodo],
     );
     const row = await one(db, "SELECT * FROM formandos_gold WHERE id = $1", [id]);
     return { formando: row ? mapFormandoGold(row) : { id } };
@@ -931,6 +951,23 @@ export function registerOpsRoutes(
     const parsed = formandoGoldSchema.partial().safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
+    if (d.turmaId !== undefined || d.local !== undefined || d.curso !== undefined) {
+      const antes = await one(db, "SELECT curso, local, turma_id FROM formandos_gold WHERE id = $1", [id]);
+      const turmaId = d.turmaId ?? (antes?.turma_id == null ? undefined : Number(antes.turma_id));
+      let curso = d.curso ?? String(antes?.curso ?? "");
+      let local = d.local ?? String(antes?.local ?? "");
+      let horario = "";
+      if (turmaId) {
+        const turma = await one(db, "SELECT curso, local, horario FROM turmas_gold WHERE id = $1", [turmaId]);
+        if (turma) {
+          curso = String(turma.curso ?? curso);
+          local = String(turma.local ?? local);
+          horario = String(turma.horario ?? "");
+        }
+      }
+      const resolved = curso ? await precoParaOferta(db, curso, local, horario) : null;
+      if (resolved != null) d.valor = resolved;
+    }
     await db.query(
       `UPDATE formandos_gold SET
          nome = COALESCE($2, nome), apelido = COALESCE($3, apelido), telf = COALESCE($4, telf),

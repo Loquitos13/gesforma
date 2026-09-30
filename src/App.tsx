@@ -1941,7 +1941,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                 email: lead.email,
                 inscrito: nowStamp(),
                 local: turma.local, curso: turma.curso, turma: turma.nome, turmaId: turma.id,
-                estado: "Formando", pago: lead.estado === "Pago", valor: lead.preco || 125, metodo: lead.pagamentoMetodo || "-",
+                estado: "Formando", pago: lead.estado === "Pago", valor: lead.preco, metodo: lead.pagamentoMetodo || "-",
               });
               if (!id) return;
               patchGold(turma.id, { totalAlunos: turma.totalAlunos + 1 });
@@ -1957,7 +1957,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                 email: dados.email || `${nome.toLowerCase()}@mail.pt`,
                 inscrito: nowStamp(),
                 local: turma.local, curso: turma.curso, turma: turma.nome, turmaId: turma.id,
-                estado: "Formando", pago: false, valor: 125, metodo: "-",
+                estado: "Formando", pago: false, valor: 0, metodo: "-",
               });
               if (!id) return;
               patchGold(turma.id, { totalAlunos: turma.totalAlunos + 1 });
@@ -3026,7 +3026,7 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
       nome: lead.nome, apelido: lead.apelido || "-",
       telf: lead.telf || "-", email: lead.email,
       inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
-      estado: "Formando", pago: lead.estado === "Pago", valor: lead.preco || 125, metodo: lead.pagamentoMetodo || "-",
+      estado: "Formando", pago: lead.estado === "Pago", valor: lead.preco, metodo: lead.pagamentoMetodo || "-",
     });
     if (!id) return;
     patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
@@ -3187,7 +3187,7 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
                   telf: telfNovo.trim() || "-",
                   email: emailNovo.trim() || `${nome.toLowerCase()}@mail.pt`,
                   inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
-                  estado: "Formando", pago: false, valor: 125, metodo: "-",
+                  estado: "Formando", pago: false, valor: 0, metodo: "-",
                 });
                 if (!id) return;
                 patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });

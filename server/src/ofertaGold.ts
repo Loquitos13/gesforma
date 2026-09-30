@@ -1,4 +1,5 @@
 import type { Db } from "./db/pool.js";
+import { mapaPrecosGold, precoNoMapa } from "./precoOferta.js";
 
 export type OfertaTurma = {
   turmaId: number;
@@ -8,6 +9,7 @@ export type OfertaTurma = {
   horario: string;
   dataInicio: string;
   vagasLivres: number;
+  preco: number | null;
 };
 
 export function fmtDataPt(iso: string) {
@@ -26,15 +28,22 @@ export async function listOfertaGold(db: Db): Promise<OfertaTurma[]> {
      WHERE estado = 'Ativa'
      ORDER BY curso, local, horario, data_inicio`,
   );
-  return rows.rows.map(r => ({
-    turmaId: Number(r.id),
-    nome: r.nome,
-    curso: r.curso,
-    local: r.local,
-    horario: r.horario,
-    dataInicio: String(r.data_inicio ?? "").slice(0, 10),
-    vagasLivres: Math.max(0, Number(r.vagas ?? 0) - Number(r.total_alunos ?? 0)),
-  }));
+  const mapa = await mapaPrecosGold(db);
+  return rows.rows.map(r => {
+    const local = r.local;
+    const horario = r.horario;
+    const curso = r.curso;
+    return {
+      turmaId: Number(r.id),
+      nome: r.nome,
+      curso,
+      local,
+      horario,
+      dataInicio: String(r.data_inicio ?? "").slice(0, 10),
+      vagasLivres: Math.max(0, Number(r.vagas ?? 0) - Number(r.total_alunos ?? 0)),
+      preco: precoNoMapa(mapa, curso, local, horario),
+    };
+  });
 }
 
 export async function listCursosGoldActivos(db: Db) {

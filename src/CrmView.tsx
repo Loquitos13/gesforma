@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   apiCrmComerciais, apiCrmDuplicados, apiCrmEtiquetas, apiCrmExport, apiCrmLeadNota, apiCrmLeads, apiCrmLote,
+  apiPublicOferta,
   type CrmEtiqueta, type CrmFila, type CrmLead, type CrmListQuery, type CrmListResult, type CrmSort,
 } from "./api";
 import { ClienteFicha } from "./ClienteFicha";
@@ -123,6 +124,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
   const [loteComercial, setLoteComercial] = useState("");
   const [loteEtiqueta, setLoteEtiqueta] = useState("");
   const [confirmMove, setConfirmMove] = useState<{ id: number; estado: string; item: CrmLead } | null>(null);
+  const [precosTurma, setPrecosTurma] = useState<Map<number, number | null>>(new Map());
 
   const { gold, fin, patchGold, patchFin } = useTurmas();
   const {
@@ -130,6 +132,12 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
     addFormandoTurma, addFormandoFin, cursosGold, cursosFin,
   } = useLists();
   const turmasInscricao = regime === "fin" ? fin.map(finComoTurma) : gold;
+  useEffect(() => {
+    if (regime === "fin") return;
+    void apiPublicOferta()
+      .then(r => setPrecosTurma(new Map(r.turmas.map(t => [t.turmaId, t.preco ?? null]))))
+      .catch(() => undefined);
+  }, [regime]);
 
   const hoje = hojeIso();
   const query: CrmListQuery = useMemo(() => ({
@@ -697,7 +705,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
               id: tempNumericId(),
               nome: item.nome, apelido: item.apelido || "-", telf: item.telf || "-", email: item.email,
               inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
-              estado: "Formando", pago: item.estado === "Pago", valor: item.preco || 125, metodo: item.pagamentoMetodo || "-",
+              estado: "Formando", pago: item.estado === "Pago", valor: item.preco, metodo: item.pagamentoMetodo || "-",
             });
             if (!id) return;
             patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
@@ -769,6 +777,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
             turmas={turmasInscricao.filter(isTurmaActiva).map(t => ({
               turmaId: t.id, nome: t.nome, curso: t.curso, local: t.local, horario: t.horario,
               dataInicio: t.dataInicio, vagasLivres: Math.max(0, t.vagas - t.totalAlunos),
+              preco: precosTurma.get(t.id) ?? null,
             }))}
             cursos={regime === "fin"
               ? cursosFin.map(c => ({ nome: c.nomeComercial || c.ufcd, preco: 0 }))

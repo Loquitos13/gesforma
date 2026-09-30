@@ -2,24 +2,31 @@ import type { Db } from "./db/pool.js";
 
 export type RegraPreco = { local: string; horario: string; preco: number };
 
-function norm(s: string) {
-  return s.trim().toLowerCase();
+type CursoPreco = { nome: string; base: number; regras: RegraPreco[] };
+
+export function normPreco(s: string) {
+  return s
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 export function escolherPreco(base: number, local: string, horario: string, regras: RegraPreco[]) {
-  const L = norm(local);
-  const H = norm(horario);
-  const lista = regras.filter(r => Number.isFinite(r.preco) && r.preco >= 0 && (norm(r.local) || norm(r.horario)));
-  const ambos = lista.find(r => norm(r.local) === L && L !== "" && norm(r.horario) === H && H !== "");
+  const L = normPreco(local);
+  const H = normPreco(horario);
+  const lista = regras.filter(r => Number.isFinite(r.preco) && r.preco >= 0 && (normPreco(r.local) || normPreco(r.horario)));
+  const ambos = lista.find(r => normPreco(r.local) === L && L !== "" && normPreco(r.horario) === H && H !== "");
   if (ambos) return ambos.preco;
-  const soLocal = lista.find(r => norm(r.local) === L && L !== "" && norm(r.horario) === "");
+  const soLocal = lista.find(r => normPreco(r.local) === L && L !== "" && normPreco(r.horario) === "");
   if (soLocal) return soLocal.preco;
-  const soHorario = lista.find(r => norm(r.local) === "" && norm(r.horario) === H && H !== "");
+  const soHorario = lista.find(r => normPreco(r.local) === "" && normPreco(r.horario) === H && H !== "");
   if (soHorario) return soHorario.preco;
   return base;
 }
 
-function regrasDoPayload(raw: unknown): RegraPreco[] {
+export function regrasDoPayload(raw: unknown): RegraPreco[] {
   const payload = typeof raw === "string" ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : raw;
   if (!payload || typeof payload !== "object") return [];
   const lista = (payload as { precosOferta?: unknown }).precosOferta;
@@ -33,16 +40,27 @@ function regrasDoPayload(raw: unknown): RegraPreco[] {
   });
 }
 
-export async function precoParaOferta(db: Db, curso: string, local: string, horario: string) {
-  const row = await db.query<{ preco: number; payload: unknown }>(
-    `SELECT cg.preco, cf.payload
+export async function mapaPrecosGold(db: Db): Promise<CursoPreco[]> {
+  const rows = await db.query<{ nome: string; preco: number; payload: unknown }>(
+    `SELECT cg.nome, cg.preco, cf.payload
        FROM cursos_gold cg
-       LEFT JOIN curso_fichas cf ON cf.regime = 'gold' AND cf.curso_id = cg.id
-      WHERE lower(trim(cg.nome)) = lower(trim($1))
-      LIMIT 1`,
-    [curso],
+       LEFT JOIN curso_fichas cf ON cf.regime = 'gold' AND cf.curso_id = cg.id`,
   );
-  if (!row.rows[0]) return null;
-  const base = Number(row.rows[0].preco ?? 0);
-  return escolherPreco(base, local, horario, regrasDoPayload(row.rows[0].payload));
+  return rows.rows.map(r => ({
+    nome: r.nome,
+    base: Number(r.preco ?? 0),
+    regras: regrasDoPayload(r.payload),
+  }));
+}
+
+export function precoNoMapa(mapa: CursoPreco[], curso: string, local: string, horario: string) {
+  const chave = normPreco(curso);
+  if (!chave) return null;
+  const hit = mapa.find(c => normPreco(c.nome) === chave);
+  if (!hit) return null;
+  return escolherPreco(hit.base, local, horario, hit.regras);
+}
+
+export async function precoParaOferta(db: Db, curso: string, local: string, horario: string) {
+  return precoNoMapa(await mapaPrecosGold(db), curso, local, horario);
 }

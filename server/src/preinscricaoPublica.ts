@@ -1,4 +1,5 @@
 import { firePreinscricaoEmail, maybeEnviarPagamentoAposDocs } from "./docsLink.js";
+import { precoParaOferta } from "./precoOferta.js";
 import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
 import { mapPreinscricao, nextOpsId } from "./ops.js";
@@ -67,7 +68,7 @@ export async function criarPreinscricaoPublica(
     };
   }
 
-  const precoRow = await db.query<{ preco: number }>("SELECT preco FROM cursos_gold WHERE nome = $1", [curso]);
+  const preco = await precoParaOferta(db, curso, local, horario);
   const id = await nextOpsId(db);
   await db.query(
     `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, entrada, meio_contacto, horario, turma_id)
@@ -75,7 +76,7 @@ export async function criarPreinscricaoPublica(
     [
       id, nowStamp(), sanitizeHeader(input.nome), sanitizeHeader(input.apelido || ""), email,
       telf, inicio, sanitizeHeader(input.concelho || ""),
-      local, curso, Number(precoRow.rows[0]?.preco ?? input.preco ?? 0),
+      local, curso, preco ?? Number(input.preco ?? 0),
       sanitizeHeader(input.campanha || ""), origem, meio, horario, turmaId,
     ],
   );

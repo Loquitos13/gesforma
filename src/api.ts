@@ -498,7 +498,15 @@ export type Dashboard = {
   };
   financeiro: {
     receitaTotal: number; receitaMes: number; receitaMesAnterior: number; variacaoMes: number | null;
-    receitaMensal: { mes: string; v: number }[]; receita12m: number;
+    receitaMensal: {
+      chave: string; mes: string; ano: number; v: number;
+      cursos: { nome: string; n: number; receita: number }[];
+      comparar: {
+        mesPassado: { chave: string; rotulo: string; cursos: { nome: string; n: number; receita: number }[] };
+        anoPassado: { chave: string; rotulo: string; cursos: { nome: string; n: number; receita: number }[] };
+      };
+    }[];
+    receita12m: number;
     pendentes: { valor: number; n: number }; pagos: number; ticketMedio: number;
     metodosPagamento: { metodo: string; valor: number; pct: number; color: string }[];
   };
@@ -507,9 +515,6 @@ export type Dashboard = {
   topCursos: { nome: string; inscritos: number; receita: number; taxa: number | null }[];
   desagregar?: "curso" | "local" | "horario";
   desagregacao?: { chave: string; n: number; receita: number; pct: number }[];
-  precos?: { curso: string; local: string; horario: string; inicio: string; preco: number }[];
-  receitaMesCursos?: { nome: string; receita: number; pct: number; color: string }[];
-  mesSeleccionado?: string;
   filtros?: { cursos: string[]; locais: string[]; horarios: string[] };
 };
 export type DashboardQuery = {
@@ -517,7 +522,6 @@ export type DashboardQuery = {
   de?: string; ate?: string; curso?: string; local?: string; horario?: string;
   audiencia?: "todos" | "pre" | "formandos";
   desagregar?: "curso" | "local" | "horario";
-  mes?: string;
 };
 export const apiDashboard = (q: DashboardQuery = {}) => {
   const p = new URLSearchParams();

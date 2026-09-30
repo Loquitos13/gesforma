@@ -20,7 +20,7 @@ Cada requisito descreve comportamento que já existe.
 ### Painel
 
 - RF-05. Gold e Financiada têm painéis separados, calculados na API com os dados desse regime. Os filtros são período, curso, local, horário e pré-inscritos ou formandos. Receita, funil, desagregação e ranking seguem o mesmo filtro.
-- RF-06. O painel mostra pré-inscritos, formandos, turmas e cursos activos, receita confirmada, receita do mês, ticket médio, pendentes, funil, métodos de pagamento, top cursos e origens ("como conheceram a ENA"). Há preço por local e horário, e ranking de receita por curso.
+- RF-06. O painel mostra pré-inscritos, formandos, turmas e cursos activos, receita confirmada, receita do mês, ticket médio, pendentes, funil, métodos de pagamento, top cursos e origens ("como conheceram a ENA"). A receita por mês é um gráfico circular que segue os filtros: cada mês tem cor própria; o rato abre o mês, a receita e os cursos mais vendidos, com comparação ao mês passado ou ao ano passado; o clique fixa esse balão até ao X ou a outra fatia.
 - RF-07. Sem API, o painel diz que está offline. Não inventa números.
 - RF-08. As notificações sinalizam pagamentos pendentes, pré-inscrições por contactar, turmas lotadas ou vazias, documentos de elegibilidade em falta e DTP abaixo de 60%. A leitura fica gravada por utilizador, em Bloqueio, Aviso ou Info.
 
@@ -63,7 +63,7 @@ Cada requisito descreve comportamento que já existe.
 
 ### Formação
 
-- RF-34. Cursos Gold e UFCD financiadas têm ficha própria: identidade, oferta (tipo, categoria, modalidade, preço, horas, tags, vários locais), textos públicos, programa, avaliação, **Documentos**, **Dossiê TP** e publicação interna. O separador Documentos fica imediatamente antes do Dossiê TP.
+- RF-34. Cursos Gold e UFCD financiadas têm ficha própria: identidade, oferta (tipo, categoria, modalidade, preço, horas, tags, vários locais), textos públicos, programa, avaliação, **Documentos**, **Dossiê TP** e publicação interna. O separador Documentos fica imediatamente antes do Dossiê TP. Na Oferta Gold, além do preço do curso, pode fixar-se um preço para um local, um horário, ou os dois. A pré-inscrição (site, WhatsApp ou manual) usa essa regra quando coincide; se houver local e horário ao mesmo tempo, essa regra ganha às que só têm um dos dois.
 - RF-35. O regime da ficha vem da rota. Não se escolhe Gold ou Financiada dentro do formulário.
 - RF-36. Guardar só cria o curso se a identidade e a oferta obrigatórias estiverem preenchidas.
 - RF-37. A pré-visualização lista turmas libertadas (local, horário, data). O progresso "Pronto para o site" indica o que falta. A publicação em `ena.pt` ainda não existe.

@@ -1,6 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiDashboard, type Dashboard } from "./api";
 import { SearchSelect } from "./FormKit";
+
+type MesReceita = Dashboard["financeiro"]["receitaMensal"][number];
+type CursoMes = MesReceita["cursos"][number];
+
+const CORES_MES = ["#F59E0B", "#10B981", "#3B82F6", "#8B5CF6", "#E11D48", "#0EA5E9", "#F97316", "#14B8A6", "#A855F7", "#84CC16", "#EC4899", "#64748B", "#CA8A04", "#059669", "#4F46E5", "#DB2777", "#0891B2", "#65A30D"];
 
 function eur(v: number) {
   return `\u20ac ${v.toLocaleString("pt-PT")}`;
@@ -10,48 +15,229 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
   return <div className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden ${className}`}>{children}</div>;
 }
 
-function MiniBarChart({ data, color }: { data: { mes: string; v: number }[]; color: string }) {
-  const [hover, setHover] = useState<number | null>(null);
-  const max = Math.max(...data.map(d => d.v), 1);
+function polar(cx: number, cy: number, r: number, a: number) {
+  return [cx + r * Math.cos(a), cy + r * Math.sin(a)] as const;
+}
+
+function fatia(cx: number, cy: number, r: number, a0: number, a1: number) {
+  const large = a1 - a0 > Math.PI ? 1 : 0;
+  const [x0, y0] = polar(cx, cy, r, a0);
+  const [x1, y1] = polar(cx, cy, r, a1);
+  return `M ${cx} ${cy} L ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} Z`;
+}
+
+function delta(atual: number, anterior: number) {
+  if (anterior <= 0) return atual > 0 ? "novo" : "-";
+  const pct = Math.round(((atual - anterior) / anterior) * 100);
+  return `${pct >= 0 ? "+" : ""}${pct}%`;
+}
+
+function cursoDe(lista: CursoMes[], nome: string) {
+  return lista.find(c => c.nome === nome) ?? { nome, n: 0, receita: 0 };
+}
+
+function ReceitaCircular({ meses }: { meses: MesReceita[] }) {
+  const [hover, setHover] = useState<string | null>(null);
+  const [pinned, setPinned] = useState<string | null>(null);
+  const [comparar, setComparar] = useState<"mes" | "ano">("mes");
+  const sair = useRef<number | null>(null);
+  const suprimir = useRef(false);
+  const comValor = meses.filter(m => m.v > 0);
+  const total = comValor.reduce((s, m) => s + m.v, 0);
+  const abertoId = pinned ?? hover;
+  const aberto = comValor.find(m => m.chave === abertoId) ?? null;
+  const fixo = pinned != null && aberto?.chave === pinned;
+
+  function entrar(chave: string) {
+    if (suprimir.current) return;
+    if (sair.current) window.clearTimeout(sair.current);
+    if (!pinned) setHover(chave);
+  }
+  function deixar() {
+    suprimir.current = false;
+    if (pinned) return;
+    if (sair.current) window.clearTimeout(sair.current);
+    sair.current = window.setTimeout(() => setHover(null), 220);
+  }
+  function fechar() {
+    suprimir.current = true;
+    setPinned(null);
+    setHover(null);
+  }
+  function fixar(chave: string) {
+    suprimir.current = false;
+    setPinned(chave);
+  }
+
+  const cx = 90;
+  const cy = 90;
+  const r = 78;
+  let ang = -Math.PI / 2;
+  const fatias = comValor.map((m, i) => {
+    const a0 = ang;
+    const frac = total > 0 ? m.v / total : 0;
+    const a1 = a0 + frac * Math.PI * 2;
+    ang = a1;
+    return { ...m, a0, a1, color: CORES_MES[i % CORES_MES.length]!, cheia: frac >= 0.999 };
+  });
+
+  const periodo = aberto
+    ? (comparar === "ano" ? aberto.comparar.anoPassado : aberto.comparar.mesPassado)
+    : null;
+  const top = (aberto?.cursos ?? []).slice(0, 5);
+  const rotuloComparar = comparar === "ano" ? "Ano passado" : "Mês passado";
+
   return (
-    <div className="relative" onMouseLeave={() => setHover(null)}>
-      <div className="flex items-end gap-1.5 h-40" role="img" aria-label="Receita mensal">
-        {data.map((d, i) => {
-          const pct = Math.max(8, (d.v / max) * 100);
-          const active = hover === i;
-          const dim = hover !== null && !active;
-          return (
-            <div key={d.mes} className="relative flex-1 h-full flex items-end cursor-pointer"
-              onMouseEnter={() => setHover(i)}>
-              {active && (
-                <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-0 z-10">
-                  <div className="bg-slate-800 text-white rounded-lg px-2.5 py-1 shadow-lg whitespace-nowrap">
-                    <p className="text-xs font-semibold">{d.mes}</p>
-                    <p className="text-xs text-emerald-300 font-bold">{eur(d.v)}</p>
-                  </div>
-                </div>
-              )}
-              <div
-                className="w-full rounded-t-md"
-                style={{
-                  height: `${pct}%`,
-                  backgroundColor: color,
-                  opacity: active ? 1 : dim ? 0.22 : i === data.length - 1 ? 1 : 0.5,
-                  transform: active ? "translateY(-4px)" : undefined,
-                  transition: "opacity 160ms ease, transform 160ms ease",
-                }}
-              />
+    <div className="flex flex-col xl:flex-row xl:items-start gap-4">
+      <div className="shrink-0">
+        {fatias.length === 0 ? (
+          <p className="text-xs text-slate-400 py-8">Sem receita confirmada neste filtro.</p>
+        ) : (
+          <svg viewBox="0 0 180 180" className="w-52 h-52" role="img" aria-label="Receita por mês">
+            {fatias.map(s => {
+              const activo = aberto?.chave === s.chave;
+              const meio = (s.a0 + s.a1) / 2;
+              const [dx, dy] = polar(0, 0, activo ? 4 : 0, meio);
+              return s.cheia ? (
+                <circle
+                  key={s.chave}
+                  cx={cx + dx} cy={cy + dy} r={r}
+                  fill={s.color}
+                  className="cursor-pointer"
+                  opacity={aberto && !activo ? 0.45 : 1}
+                  onMouseEnter={() => entrar(s.chave)}
+                  onMouseLeave={deixar}
+                  onClick={() => fixar(s.chave)}
+                >
+                  <title>{s.mes} {s.ano} · {eur(s.v)}</title>
+                </circle>
+              ) : (
+                <path
+                  key={s.chave}
+                  d={fatia(cx + dx, cy + dy, r, s.a0, s.a1)}
+                  fill={s.color}
+                  className="cursor-pointer"
+                  opacity={aberto && !activo ? 0.45 : 1}
+                  onMouseEnter={() => entrar(s.chave)}
+                  onMouseLeave={deixar}
+                  onClick={() => fixar(s.chave)}
+                >
+                  <title>{s.mes} {s.ano} · {eur(s.v)}</title>
+                </path>
+              );
+            })}
+            <circle cx={cx} cy={cy} r={36} fill="white" className="pointer-events-none" />
+            <text x={cx} y={cy - 4} textAnchor="middle" className="fill-slate-800 pointer-events-none" style={{ fontSize: 11, fontWeight: 700 }}>
+              {aberto ? aberto.mes : "Total"}
+            </text>
+            <text x={cx} y={cy + 12} textAnchor="middle" className="fill-slate-500 pointer-events-none" style={{ fontSize: 9 }}>
+              {eur(aberto ? aberto.v : total)}
+            </text>
+          </svg>
+        )}
+        {fatias.length > 0 && (
+          <ul className="mt-2 space-y-1 max-h-40 overflow-auto pr-1">
+            {fatias.map(s => (
+              <li key={s.chave}>
+                <button
+                  type="button"
+                  className={`w-full flex items-center justify-between gap-2 text-left rounded-md px-1.5 py-1 ${aberto?.chave === s.chave ? "bg-slate-50" : ""}`}
+                  onMouseEnter={() => entrar(s.chave)}
+                  onMouseLeave={deixar}
+                  onClick={() => fixar(s.chave)}
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                    <span className="text-xs text-slate-700 truncate">{s.mes} {s.ano}</span>
+                  </span>
+                  <span className="text-xs font-semibold text-slate-600 shrink-0">{eur(s.v)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {aberto && periodo && (
+        <div
+          className="relative flex-1 min-w-0 rounded-lg border border-slate-200 bg-white shadow-lg p-3"
+          style={{ borderTopWidth: 4, borderTopColor: fatias.find(s => s.chave === aberto.chave)?.color }}
+          onMouseEnter={() => entrar(aberto.chave)}
+          onMouseLeave={deixar}
+        >
+          <span className="hidden xl:block absolute -left-1.5 top-8 w-3 h-3 bg-white border-l border-b border-slate-200 rotate-45" />
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">{aberto.mes} {aberto.ano}</p>
+              <p className="text-lg font-bold text-emerald-600 leading-tight">{eur(aberto.v)}</p>
             </div>
-          );
-        })}
-      </div>
-      <div className="flex gap-1.5 mt-2">
-        {data.map((d, i) => (
-          <span key={d.mes} className={`flex-1 text-center text-xs ${hover === i ? "text-slate-700 font-semibold" : "text-slate-400"}`}>
-            {d.mes}
-          </span>
-        ))}
-      </div>
+            {fixo && (
+              <button type="button" aria-label="Fechar" onClick={fechar}
+                className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+                  <path strokeLinecap="round" d="M5 5l10 10M15 5L5 15" />
+                </svg>
+              </button>
+            )}
+          </div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-3 mb-1.5">Cursos mais vendidos</p>
+          {top.length === 0 && <p className="text-xs text-slate-400">Sem cursos com receita neste mês.</p>}
+          <ul className="space-y-1">
+            {top.map(c => (
+              <li key={c.nome} className="flex items-baseline justify-between gap-3 text-xs">
+                <span className="text-slate-700 truncate">{c.nome}</span>
+                <span className="font-semibold text-slate-800 shrink-0">{c.n} · {eur(c.receita)}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-3 pt-3 border-t border-slate-100">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Comparação</p>
+              <label className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                Ver evolução
+                <select
+                  className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700"
+                  value={comparar}
+                  onChange={e => setComparar(e.target.value === "ano" ? "ano" : "mes")}
+                  onClick={ev => ev.stopPropagation()}
+                >
+                  <option value="mes">Mês passado · {aberto.comparar.mesPassado.rotulo}</option>
+                  <option value="ano">Ano passado · {aberto.comparar.anoPassado.rotulo}</option>
+                </select>
+              </label>
+            </div>
+            {top.length === 0 ? null : (
+              <div className="overflow-auto">
+                <table className="w-full text-[11px]">
+                  <thead>
+                    <tr className="text-slate-400 text-left">
+                      <th className="pb-1 font-semibold pr-2">Curso</th>
+                      <th className="pb-1 font-semibold pr-2">Vendidos</th>
+                      <th className="pb-1 font-semibold pr-2">Receita</th>
+                      <th className="pb-1 font-semibold pr-2">{rotuloComparar}</th>
+                      <th className="pb-1 font-semibold">Evolução</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {top.map(c => {
+                      const outro = cursoDe(periodo.cursos, c.nome);
+                      return (
+                        <tr key={c.nome} className="border-t border-slate-50">
+                          <td className="py-1 pr-2 text-slate-700 max-w-[140px] truncate">{c.nome}</td>
+                          <td className="py-1 pr-2 text-slate-600">{c.n} <span className="text-slate-400">vs {outro.n}</span></td>
+                          <td className="py-1 pr-2 text-slate-800 font-semibold">{eur(c.receita)}</td>
+                          <td className="py-1 pr-2 text-slate-600">{eur(outro.receita)}</td>
+                          <td className="py-1 text-slate-700">{delta(c.receita, outro.receita)} <span className="text-slate-400">· {delta(c.n, outro.n)} vendas</span></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {!fixo && <p className="text-[11px] text-slate-400 mt-2">Clique na fatia para fixar e mudar a comparação. Fecha com o X ou noutra fatia.</p>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -186,7 +372,6 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
   const [horario, setHorario] = useState("");
   const [audiencia, setAudiencia] = useState<"todos" | "pre" | "formandos">("todos");
   const [desagregar, setDesagregar] = useState<"curso" | "local" | "horario">("curso");
-  const [mes, setMes] = useState("");
   const crmView = regime === "fin" ? "fin-preinscricoes" : "gold-preinscricoes";
   const formandosView = regime === "fin" ? "fin-formandos" : "gold-formandos-turmas";
   const turmasView = regime === "fin" ? "fin-turmas" : "gold-turmas";
@@ -201,8 +386,7 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
     horario: horario || undefined,
     audiencia: audiencia === "todos" ? undefined : audiencia,
     desagregar,
-    mes: mes || undefined,
-  }), [regime, de, ate, curso, local, horario, audiencia, desagregar, mes]);
+  }), [regime, de, ate, curso, local, horario, audiencia, desagregar]);
 
   const carregar = useCallback(() => {
     setEstado("loading");
@@ -326,40 +510,15 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
             ))}
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <Card className="p-4 lg:col-span-2">
+            <Card className="p-4 lg:col-span-2 overflow-visible">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-sm font-semibold text-slate-700">Receita mensal</p>
-                  <p className="text-xs text-slate-400">Clique num mês na circular para comparar cursos</p>
+                  <p className="text-sm font-semibold text-slate-700">Receita por mês</p>
+                  <p className="text-xs text-slate-400">Cada fatia é um mês do filtro. Passe o rato para o detalhe e clique para fixar a comparação.</p>
                 </div>
                 <span className="text-sm font-bold text-emerald-600">{eur(financeiro.receita12m)}</span>
               </div>
-              <MiniBarChart data={financeiro.receitaMensal} color="#F59E0B" />
-              <div className="mt-5 pt-4 border-t border-slate-100">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm font-semibold text-slate-700">Circular · mês {mes || dash.mesSeleccionado}</p>
-                  <select className="text-xs border border-slate-200 rounded-lg px-2 py-1" value={mes} onChange={e => setMes(e.target.value)}>
-                    {financeiro.receitaMensal.map((m, i) => {
-                      const d = new Date();
-                      d.setMonth(d.getMonth() - (11 - i));
-                      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-                      return <option key={key} value={key}>{m.mes} {d.getFullYear()}</option>;
-                    })}
-                  </select>
-                </div>
-                <Donut
-                  slices={financeiro.receitaMensal.filter(m => m.v > 0).map((m, i) => ({
-                    id: String(i),
-                    label: m.mes,
-                    pct: financeiro.receita12m > 0 ? Math.round((m.v / financeiro.receita12m) * 100) : 0,
-                    color: ["#F59E0B", "#FBBF24", "#FCD34D", "#10B981", "#3B82F6", "#8B5CF6", "#E1306C", "#0A66C2", "#14B8A6", "#94A3B8", "#6366F1", "#F97316"][i]!,
-                    valor: eur(m.v),
-                  }))}
-                  center={{ title: "12 meses", sub: eur(financeiro.receita12m) }}
-                  inner={(dash.receitaMesCursos ?? []).map(c => ({ id: c.nome, label: c.nome, pct: c.pct, color: c.color }))}
-                />
-                <p className="text-[11px] text-slate-400 mt-2">O anel interior compara a receita por curso no mês seleccionado.</p>
-              </div>
+              <ReceitaCircular meses={financeiro.receitaMensal} />
             </Card>
             <Card className="p-4">
               <p className="text-sm font-semibold text-slate-700 mb-3">Funil de conversão</p>
@@ -422,7 +581,7 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
             </Card>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card className="p-4">
+            <Card className="p-4 lg:col-span-2">
               <p className="text-sm font-semibold text-slate-700 mb-3">Métodos de pagamento</p>
               {financeiro.metodosPagamento.length === 0 && (
                 <p className="text-xs text-slate-400">Ainda sem pagamentos confirmados neste filtro.</p>
@@ -440,32 +599,6 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
                     <div className="w-full bg-slate-100 rounded-full h-2"><div className="h-2 rounded-full" style={{ width: `${m.pct}%`, backgroundColor: m.color }} /></div>
                   </div>
                 ))}
-              </div>
-            </Card>
-            <Card className="p-4">
-              <p className="text-sm font-semibold text-slate-700 mb-3">Preço por local e horário</p>
-              {(dash.precos ?? []).length === 0 && <p className="text-xs text-slate-400">Sem edições no catálogo de datas para este filtro.</p>}
-              <div className="overflow-auto max-h-64">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-slate-400 text-left">
-                      <th className="pb-2 font-semibold">Curso</th>
-                      <th className="pb-2 font-semibold">Local</th>
-                      <th className="pb-2 font-semibold">Horário</th>
-                      <th className="pb-2 font-semibold text-right">Preço</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {(dash.precos ?? []).map(p => (
-                      <tr key={`${p.curso}-${p.local}-${p.horario}-${p.inicio}`}>
-                        <td className="py-1.5 pr-2 text-slate-700">{p.curso}</td>
-                        <td className="py-1.5 pr-2 text-slate-600 whitespace-nowrap">{p.local}</td>
-                        <td className="py-1.5 pr-2 text-slate-600 whitespace-nowrap">{p.horario}</td>
-                        <td className="py-1.5 text-right font-semibold text-slate-800">{p.preco ? eur(p.preco) : "Financiada"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             </Card>
           </div>

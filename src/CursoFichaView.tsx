@@ -48,6 +48,8 @@ type CursoTurmaPrev = {
   libertada: boolean;
 };
 
+type PrecoOferta = { id: string; local: string; horario: string; preco: string };
+
 type CursoSite = {
   titulo: string;
   slug: string;
@@ -73,6 +75,7 @@ type CursoSite = {
   organizacaoPrograma: OrganizacaoPrograma;
   topicosPrograma: TopicoPrograma[];
   avaliacaoCurso: AvaliacaoCurso;
+  precosOferta: PrecoOferta[];
 };
 
 function theme(accent: CursoAccent) {
@@ -304,7 +307,25 @@ function seedSite(curso?: CursoFichaSeed, accent: CursoAccent = "gold"): CursoSi
     organizacaoPrograma: accent === "fin" ? "modular" : (/comunicar/i.test(curso?.nome ?? "") ? "livre" : "modular"),
     topicosPrograma: topicosDeSeed(pack.programa, accent === "fin" ? "modular" : (/comunicar/i.test(curso?.nome ?? "") ? "livre" : "modular")),
     avaliacaoCurso: avaliacaoPadrao(),
+    precosOferta: [],
   };
+}
+
+function parsePrecosOferta(raw: unknown): PrecoOferta[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap(item => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as { id?: unknown; local?: unknown; horario?: unknown; preco?: unknown };
+    const local = String(row.local ?? "").trim();
+    const horario = String(row.horario ?? "").trim();
+    if (!local && !horario) return [];
+    return [{
+      id: String(row.id ?? `preco-${local}-${horario}`),
+      local,
+      horario,
+      preco: String(row.preco ?? ""),
+    }];
+  });
 }
 
 function topicosDeSeed(texto: string, _org: OrganizacaoPrograma): TopicoPrograma[] {
@@ -554,6 +575,7 @@ export function CursoFichaView({
   const t = theme(accent);
   const { gold, fin } = useTurmas();
   const [locaisCat, setLocaisCat] = useCatalogList<LocalCatalogo>("locais", accent, []);
+  const [horariosCat] = useCatalogList<{ id: number; nome: string; status?: string }>("horarios", accent === "fin" ? "fin" : "gold", []);
   const [tab, setTab] = useState<TabId>("identidade");
   const [data, setData] = useState<CursoSite>(() => seedSite(curso, accent));
   const [slugLocked, setSlugLocked] = useState(true);
@@ -590,6 +612,7 @@ export function CursoFichaView({
               organizacaoPrograma: accent === "fin" ? "modular" : parsed.organizacao,
               topicosPrograma: parsed.topicos.length ? parsed.topicos : prev.topicosPrograma,
               avaliacaoCurso: parseAvaliacaoCurso({ ...guardado } as Record<string, unknown>),
+              precosOferta: parsePrecosOferta(guardado.precosOferta),
             };
           });
         }
@@ -630,6 +653,19 @@ export function CursoFichaView({
       libertada: isTurmaActiva(x),
     }));
   }, [accent, gold, fin, data.titulo, curso?.nome]);
+
+  const horariosPreco = useMemo(() => {
+    const nomes = new Set<string>();
+    for (const h of horariosCat) if (h.nome && h.status !== "Inactivo") nomes.add(h.nome);
+    for (const t of turmasCurso) if (t.horario) nomes.add(t.horario);
+    return [...nomes].sort((a, b) => a.localeCompare(b, "pt"));
+  }, [horariosCat, turmasCurso]);
+
+  const locaisPreco = useMemo(() => {
+    const nomes = new Set<string>(data.locais.filter(Boolean));
+    for (const t of turmasCurso) if (t.local) nomes.add(t.local);
+    return [...nomes].sort((a, b) => a.localeCompare(b, "pt"));
+  }, [data.locais, turmasCurso]);
 
   useEffect(() => {
     if (locaisSeeded.current) return;
@@ -694,6 +730,13 @@ export function CursoFichaView({
       setFalhas(Object.fromEntries(faltas.map(f => [f.key, `${f.label} é obrigatório para criar o curso.`])));
       setErro(`Falta preencher: ${faltas.map(f => f.label).join(", ")}.`);
       setTab(faltas[0]!.tab);
+      setPreviewOpen(false);
+      return;
+    }
+    if (accent === "gold" && data.precosOferta.some(p => (!p.local.trim() && !p.horario.trim()) || p.preco.trim() === "" || Number(p.preco) < 0 || Number.isNaN(Number(p.preco)))) {
+      setFalhas({ precosOferta: "Cada preço especial precisa de um local, um horário, ou os dois, e de um valor." });
+      setErro("Há um preço por local ou horário incompleto.");
+      setTab("oferta");
       setPreviewOpen(false);
       return;
     }
@@ -927,6 +970,72 @@ export function CursoFichaView({
                     />
                   </div>
                 </Field>
+                {accent === "gold" && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">Preço por local e horário</p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        O preço acima vale para o curso inteiro. Aqui pode fixar outro valor para um local, para um horário, ou para os dois ao mesmo tempo. Se coincidirem, vale a regra com local e horário.
+                      </p>
+                    </div>
+                    {data.precosOferta.length === 0 && (
+                      <p className="text-xs text-slate-400">Ainda sem preços especiais. A pré-inscrição usa o preço do curso.</p>
+                    )}
+                    <div className="space-y-2">
+                      {data.precosOferta.map(row => (
+                        <div key={row.id} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_7rem_auto] gap-2 items-end">
+                          <div>
+                            <p className="text-[11px] font-semibold text-slate-500 uppercase mb-1">Local</p>
+                            <SearchSelect
+                              value={row.local}
+                              onChange={v => patch({ precosOferta: data.precosOferta.map(p => p.id === row.id ? { ...p, local: v } : p) })}
+                              options={locaisPreco.map(value => ({ value }))}
+                              allowEmpty
+                              placeholder="Qualquer local"
+                            />
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-semibold text-slate-500 uppercase mb-1">Horário</p>
+                            <SearchSelect
+                              value={row.horario}
+                              onChange={v => patch({ precosOferta: data.precosOferta.map(p => p.id === row.id ? { ...p, horario: v } : p) })}
+                              options={horariosPreco.map(value => ({ value }))}
+                              allowEmpty
+                              placeholder="Qualquer horário"
+                            />
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-semibold text-slate-500 uppercase mb-1">Preço (€)</p>
+                            <input
+                              className={inputCls(t.iCls, !!falhas.precosOferta)}
+                              type="number"
+                              min={0}
+                              value={row.preco}
+                              onChange={e => patch({ precosOferta: data.precosOferta.map(p => p.id === row.id ? { ...p, preco: e.target.value } : p) })}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            className="px-2 py-2 text-xs font-semibold text-slate-500 hover:text-red-600"
+                            onClick={() => patch({ precosOferta: data.precosOferta.filter(p => p.id !== row.id) })}
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    {falhas.precosOferta && <p className="text-[11px] text-red-600">{falhas.precosOferta}</p>}
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-amber-700"
+                      onClick={() => patch({
+                        precosOferta: [...data.precosOferta, { id: `preco-${Date.now()}`, local: "", horario: "", preco: data.preco }],
+                      })}
+                    >
+                      + Adicionar preço
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">
                 <div>

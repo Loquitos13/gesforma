@@ -28,6 +28,7 @@ import {
 import { globalSearch } from "./globalSearch.js";
 import { config } from "./config.js";
 import { criarPreinscricaoPublica } from "./preinscricaoPublica.js";
+import { precoParaOferta } from "./precoOferta.js";
 import { listCursosGoldActivos, listOfertaGold } from "./ofertaGold.js";
 import { generateCronograma } from "./cronograma.js";
 import {
@@ -483,12 +484,16 @@ export function registerOpsRoutes(
     const id = await nextOpsId(db);
     const regime = regimeDoPedido(req.actor?.role, d.regime);
     const comercialId = d.comercialId ?? ((req.actor?.role === "comercial" || req.actor?.role === "financiada") ? req.actor.id : null);
+    const precoOferta = regime === "fin" || !d.curso
+      ? null
+      : await precoParaOferta(db, d.curso, d.local || "", d.horario || "");
+    const preco = precoOferta ?? d.preco ?? 0;
     await db.query(
       `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, comercial_id, entrada, meio_contacto, etiqueta_id, horario, turma_id, nif, morada_fiscal, codigo_postal, regime)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'manual',$16,$17,$18,$19,$20,$21,$22,$23)`,
       [
         id, nowStamp(), d.nome, d.apelido, email, d.telf, d.inicioCurso || "-",
-        d.concelho, d.local, d.curso, d.preco ?? 0, d.estado || "Não contactado", d.campanha, d.origem || "Telefone", comercialId,
+        d.concelho, d.local, d.curso, preco, d.estado || "Não contactado", d.campanha, d.origem || "Telefone", comercialId,
         d.meioContacto || d.origem || "Telefone", d.etiquetaId ?? null, d.horario || "", d.turmaId ?? null,
         d.nif ?? "", d.moradaFiscal ?? "", d.codigoPostal ?? "", regime,
       ],

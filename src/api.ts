@@ -502,8 +502,8 @@ export type Dashboard = {
       chave: string; mes: string; ano: number; v: number;
       cursos: { nome: string; n: number; receita: number }[];
       comparar: {
-        mesPassado: { chave: string; rotulo: string; cursos: { nome: string; n: number; receita: number }[] };
-        anoPassado: { chave: string; rotulo: string; cursos: { nome: string; n: number; receita: number }[] };
+        mesPassado: { chave: string; rotulo: string; v: number; cursos: { nome: string; n: number; receita: number }[] };
+        anoPassado: { chave: string; rotulo: string; v: number; cursos: { nome: string; n: number; receita: number }[] };
       };
     }[];
     receita12m: number;

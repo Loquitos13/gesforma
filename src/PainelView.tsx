@@ -28,10 +28,23 @@ function anel(cx: number, cy: number, r: number, r0: number, a0: number, a1: num
   return `M ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} L ${ix1} ${iy1} A ${r0} ${r0} 0 ${large} 0 ${ix0} ${iy0} Z`;
 }
 
-function delta(atual: number, anterior: number) {
-  if (anterior <= 0) return atual > 0 ? "novo" : "-";
+function evolucao(atual: number, anterior: number) {
+  if (anterior <= 0) {
+    return atual > 0
+      ? { texto: "novo", tom: "bg-amber-50 text-amber-800" }
+      : { texto: "0%", tom: "bg-slate-100 text-slate-600" };
+  }
   const pct = Math.round(((atual - anterior) / anterior) * 100);
-  return `${pct >= 0 ? "+" : ""}${pct}%`;
+  if (pct > 0) return { texto: `+${pct}%`, tom: "bg-emerald-50 text-emerald-700" };
+  if (pct < 0) return { texto: `${pct}%`, tom: "bg-red-50 text-red-700" };
+  return { texto: "0%", tom: "bg-slate-100 text-slate-600" };
+}
+
+function fraseEvolucao(texto: string, rotulo: string) {
+  if (texto === "novo") return `Não havia receita em ${rotulo}.`;
+  if (texto === "0%") return `Igual a ${rotulo}.`;
+  const valor = texto.replace(/^[+-]/, "");
+  return texto.startsWith("-") ? `${valor} abaixo de ${rotulo}.` : `${valor} acima de ${rotulo}.`;
 }
 
 function cursoDe(lista: CursoMes[], nome: string) {
@@ -98,6 +111,7 @@ function ReceitaCircular({ meses }: { meses: MesReceita[] }) {
   const maxCurso = Math.max(...top.map(c => c.receita), 1);
   const parte = aberto && total > 0 ? Math.round((aberto.v / total) * 100) : 0;
   const caret = activa ? Math.min(78, Math.max(18, ((Math.sin(activa.meio) + 1) / 2) * 100)) : 28;
+  const totalEvo = aberto && periodo ? evolucao(aberto.v, periodo.v) : null;
 
   return (
     <div className="flex flex-col xl:flex-row xl:items-start gap-5">
@@ -230,22 +244,40 @@ function ReceitaCircular({ meses }: { meses: MesReceita[] }) {
                   ))}
                 </div>
               </div>
-              <p className="text-[11px] text-slate-400 mb-2">{periodo.rotulo}</p>
-              <ul className="space-y-2">
+              {totalEvo && (
+                <div className="rounded-xl bg-slate-50 px-3 py-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Este mês</p>
+                      <p className="text-sm font-bold text-slate-900 mt-1">{eur(aberto.v)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 truncate" title={periodo.rotulo}>{periodo.rotulo}</p>
+                      <p className="text-sm font-bold text-slate-900 mt-1">{eur(periodo.v)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Evolução</p>
+                      <p className={`inline-flex mt-1 px-1.5 py-0.5 rounded-full text-xs font-bold ${totalEvo.tom}`}>{totalEvo.texto}</p>
+                    </div>
+                  </div>
+                    <p className="text-[11px] text-slate-500 mt-2">{fraseEvolucao(totalEvo.texto, periodo.rotulo)}</p>
+                </div>
+              )}
+              <p className="text-[11px] font-semibold text-slate-500 mt-3 mb-2">Por curso</p>
+              {top.length === 0 && <p className="text-xs text-slate-400">Sem cursos com receita neste mês.</p>}
+              <ul className="space-y-2.5">
                 {top.map(c => {
                   const outro = cursoDe(periodo.cursos, c.nome);
-                  const evolucao = delta(c.receita, outro.receita);
-                  const tom = evolucao === "novo"
-                    ? "bg-amber-50 text-amber-800"
-                    : evolucao.startsWith("-")
-                      ? "bg-red-50 text-red-700"
-                      : "bg-emerald-50 text-emerald-700";
+                  const evo = evolucao(c.receita, outro.receita);
                   return (
-                    <li key={c.nome} className="flex items-center gap-2 text-xs">
-                      <span className="min-w-0 flex-1 truncate text-slate-600" title={c.nome}>{c.nome}</span>
-                      <span className="font-semibold text-slate-900 shrink-0">{eur(c.receita)}</span>
-                      <span className="text-slate-400 shrink-0">vs {eur(outro.receita)}</span>
-                      <span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[11px] font-semibold ${tom}`}>{evolucao}</span>
+                    <li key={c.nome}>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="min-w-0 text-xs font-medium text-slate-700 truncate" title={c.nome}>{c.nome}</p>
+                        <span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[11px] font-semibold ${evo.tom}`}>{evo.texto}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {eur(c.receita)} este mês · {eur(outro.receita)} em {periodo.rotulo}
+                      </p>
                     </li>
                   );
                 })}

@@ -87,6 +87,17 @@ function pagoNoDia(p: PagamentoRow, de?: string, ate?: string) {
   return d;
 }
 
+function totaisPorMes(pagamentos: PagamentoRow[], de?: string, ate?: string) {
+  const map = new Map<string, number>();
+  for (const p of pagamentos) {
+    const d = pagoNoDia(p, de, ate);
+    if (!d) continue;
+    const k = monthKey(d);
+    map.set(k, (map.get(k) ?? 0) + num(p.valor));
+  }
+  return map;
+}
+
 function cursosNoMes(pagamentos: PagamentoRow[], de?: string, ate?: string) {
   const byMonth = new Map<string, Map<string, { n: number; receita: number }>>();
   for (const p of pagamentos) {
@@ -132,21 +143,20 @@ function financeiro(pagamentos: PagamentoRow[], now: Date, de?: string, ate?: st
   const janela = janelaMeses(now, de, ate);
   const noPeriodo = cursosNoMes(pagamentos, de, ate);
   const paraComparar = de || ate ? cursosNoMes(pagamentos) : noPeriodo;
+  const totaisComparar = de || ate ? totaisPorMes(pagamentos) : porMes;
+  const periodoComparacao = (chave: string) => ({
+    chave,
+    rotulo: rotuloMes(chave),
+    v: Math.round(totaisComparar.get(chave) ?? 0),
+    cursos: paraComparar.get(chave) ?? [],
+  });
   const receitaMensal = janela.map(m => ({
     ...m,
     v: Math.round(porMes.get(m.chave) ?? 0),
     cursos: noPeriodo.get(m.chave) ?? [],
     comparar: {
-      mesPassado: {
-        chave: shiftMonth(m.chave, -1),
-        rotulo: rotuloMes(shiftMonth(m.chave, -1)),
-        cursos: paraComparar.get(shiftMonth(m.chave, -1)) ?? [],
-      },
-      anoPassado: {
-        chave: shiftMonth(m.chave, -12),
-        rotulo: rotuloMes(shiftMonth(m.chave, -12)),
-        cursos: paraComparar.get(shiftMonth(m.chave, -12)) ?? [],
-      },
+      mesPassado: periodoComparacao(shiftMonth(m.chave, -1)),
+      anoPassado: periodoComparacao(shiftMonth(m.chave, -12)),
     },
   }));
 

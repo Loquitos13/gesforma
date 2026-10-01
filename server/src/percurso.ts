@@ -274,13 +274,20 @@ export async function turmasDoPercurso(db: Db, lead: LeadPercurso, agora = new D
   return { lista, escolhida };
 }
 
+function valoresSettings(raw: unknown) {
+  return raw && typeof raw === "object" ? raw as Record<string, string> : {};
+}
+
 async function ibanEntidade(db: Db) {
-  const row = await db.query<{ values: unknown }>("SELECT values FROM app_settings WHERE id = 'gold'");
-  const values = row.rows[0]?.values;
-  const obj = values && typeof values === "object" ? values as Record<string, string> : {};
+  const rows = await db.query<{ id: string; values: unknown }>(
+    "SELECT id, values FROM app_settings WHERE id IN ('entidade', 'gold')",
+  );
+  const porId = new Map(rows.rows.map(r => [r.id, valoresSettings(r.values)]));
+  const geral = porId.get("entidade") ?? {};
+  const gold = porId.get("gold") ?? {};
   return {
-    iban: String(obj.IBAN ?? "").trim(),
-    entidade: String(obj["Entidade Multibanco"] ?? "").trim(),
+    iban: String(geral.IBAN ?? "").trim(),
+    entidade: String(gold["Entidade Multibanco"] ?? "").trim(),
   };
 }
 

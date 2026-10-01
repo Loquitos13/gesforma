@@ -1573,13 +1573,14 @@ const configCards = [
   {
     id: "entidade",
     titulo: "Entidade formadora",
-    texto: "ENA - Escola de Negócios e Administração. NIF, certificação DGERT e dados de contacto.",
+    texto: "ENA - Escola de Negócios e Administração. NIF, certificação DGERT, contacto e IBAN usado nos pagamentos.",
     fields: [
       { label: "Designação", value: "ENA - Escola de Negócios e Administração" },
       { label: "NIF", value: "510 000 000" },
       { label: "Certificação DGERT", value: "Válida" },
       { label: "Email", value: "formacao@ena.pt" },
       { label: "Telefone", value: "22 374 40 50" },
+      { label: "IBAN", value: "" },
     ],
   },
   {
@@ -1599,7 +1600,6 @@ const configCards = [
     texto: "Preços, métodos de pagamento e regras do CCP.",
     fields: [
       { label: "Métodos de pagamento", value: "MB Way, Multibanco, cartão, transferência, PayPal" },
-      { label: "IBAN", value: "" },
       { label: "Entidade Multibanco", value: "" },
       { label: "Chave webhook pagamentos", value: "" },
       { label: "Curso-bandeira", value: "Formação de Formadores - CCP" },

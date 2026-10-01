@@ -75,6 +75,7 @@ function finComoTurma(t: TurmaFin): TurmaGold {
     horario: t.horario,
     totalAlunos: t.alunos,
     vagas: t.alunosTotal,
+    inscricoesAdicionais: t.inscricoesAdicionais,
     estado: t.activa ? "Ativa" : "Inativa",
     formador: t.formador,
     horas: t.horas,

@@ -427,8 +427,11 @@ export function ClienteFicha({
 
         {tab === "documentos" && (
           <div className="space-y-3">
+            {dossier?.percursoConcluido && !dossier?.docsFechado && (
+              <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">O percurso da ligação já fechou. Falta validar os documentos pessoais e o pagamento.</p>
+            )}
             {dossier?.docsFechado ? (
-              <p className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">Ligação encerrada. Os documentos obrigatórios estão validados.</p>
+              <p className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">Documentos obrigatórios validados pela secretaria.</p>
             ) : dossier?.docsUrl && (
               <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">Ligação pessoal</p>

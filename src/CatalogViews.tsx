@@ -1599,6 +1599,7 @@ const configCards = [
     texto: "Preços, métodos de pagamento e regras do CCP.",
     fields: [
       { label: "Métodos de pagamento", value: "MB Way, Multibanco, cartão, transferência, PayPal" },
+      { label: "IBAN", value: "" },
       { label: "Entidade Multibanco", value: "" },
       { label: "Chave webhook pagamentos", value: "" },
       { label: "Curso-bandeira", value: "Formação de Formadores - CCP" },

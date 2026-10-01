@@ -27,11 +27,12 @@ function asCronograma(raw: unknown): SessaoCronograma[] {
   return raw.filter((x): x is SessaoCronograma => !!x && typeof x === "object" && "id" in x);
 }
 
-function hydrateGold(t: Omit<TurmaGold, "cronograma" | "estado"> & { estado: string; cronograma?: unknown }): TurmaGold {
+function hydrateGold(t: Omit<TurmaGold, "cronograma" | "estado" | "inscricoesAdicionais"> & { estado: string; inscricoesAdicionais?: number; cronograma?: unknown }): TurmaGold {
   const cronograma = asCronograma(t.cronograma);
   return {
     ...t,
     estado: t.estado === "Inativa" ? "Inativa" : "Ativa",
+    inscricoesAdicionais: Number(t.inscricoesAdicionais ?? 0),
     cronograma: cronograma.length ? cronograma : generateCronograma({
       inicio: t.dataInicio,
       horario: t.horario,
@@ -42,10 +43,11 @@ function hydrateGold(t: Omit<TurmaGold, "cronograma" | "estado"> & { estado: str
   };
 }
 
-function hydrateFin(t: Omit<TurmaFin, "cronograma"> & { cronograma?: unknown }): TurmaFin {
+function hydrateFin(t: Omit<TurmaFin, "cronograma" | "inscricoesAdicionais"> & { inscricoesAdicionais?: number; cronograma?: unknown }): TurmaFin {
   const cronograma = asCronograma(t.cronograma);
   return {
     ...t,
+    inscricoesAdicionais: Number(t.inscricoesAdicionais ?? 0),
     cronograma: cronograma.length ? cronograma : generateCronograma({
       inicio: t.dataInicio,
       horario: t.horario === "Online" ? "Pós Laboral" : t.horario,

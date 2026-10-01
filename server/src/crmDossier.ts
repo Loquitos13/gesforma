@@ -256,6 +256,7 @@ export async function getLeadDossier(db: Db, id: number) {
       observacao: f.observacao || "",
     })),
     docsFechado: Boolean(row.docs_fechado_em),
+    percursoConcluido: Boolean(row.percurso_concluido_em),
     pagamento,
   };
 }

@@ -77,11 +77,11 @@ export type OpsSnapshot = {
   cursosFin: Array<{ id: number; ufcdCod: string; ufcd: string; nomeComercial: string; regime: string; horas: number; estado: string }>;
   turmasGold: Array<{
     id: number; dataInicio: string; nome: string; curso: string; local: string; horario: string;
-    totalAlunos: number; vagas: number; estado: string; formador: string; horas: number; cronograma: unknown[];
+    totalAlunos: number; vagas: number; inscricoesAdicionais?: number; estado: string; formador: string; horas: number; cronograma: unknown[];
   }>;
   turmasFin: Array<{
     id: number; dataInicio: string; nome: string; curso: string; ufcdCod: string; local: string; horario: string;
-    alunos: number; alunosTotal: number; estado: string; horas: number; formador: string; activa: boolean; cronograma: unknown[];
+    alunos: number; alunosTotal: number; inscricoesAdicionais?: number; estado: string; horas: number; formador: string; activa: boolean; cronograma: unknown[];
   }>;
   formadores: Array<{
     id: number; nome: string; telf: string; email: string; especialidade: string; ccp: string; nif: string;
@@ -546,20 +546,31 @@ export const apiAplicarTurmaRegras = (regime?: "gold" | "fin") =>
     method: "POST", body: JSON.stringify({ regime }),
   });
 
+export type PercursoTurma = {
+  id: number; nome: string; local: string; horario: string; dataInicio: string;
+  cronograma: { data: string; horaInicio: string; horaFim: string; modulos: string[]; modalidade: string }[];
+};
+export type PercursoVista = {
+  nome: string; curso: string; local?: string; horario?: string; preco?: number;
+  tipos: { id: string; label: string; required?: boolean }[];
+  ficheiros: { id: number; tipo: string; nome: string; created_at: string; estado?: string; observacao?: string }[];
+  docsCompletos?: boolean;
+  emFalta?: string[];
+  precisaPagamento?: boolean;
+  pagamento?: { entidade: string; referencia: string; valor: number; estado: string } | null;
+  iban?: string;
+  turmas?: PercursoTurma[];
+  turmaEscolhida?: PercursoTurma | null;
+  passo?: "documentos" | "turma" | "pagamento" | "concluido" | "correcao";
+  encerrada?: boolean;
+  correcao?: boolean;
+};
 export const apiPublicDocumentos = (token: string) =>
-  api<{
-    nome: string; curso: string;
-    tipos: { id: string; label: string; required?: boolean }[];
-    ficheiros: { id: number; tipo: string; nome: string; created_at: string; estado?: string; observacao?: string }[];
-    docsCompletos?: boolean;
-    emFalta?: string[];
-    precisaPagamento?: boolean;
-    pagamento?: { entidade: string; referencia: string; valor: number; estado: string } | null;
-    encerrada?: boolean;
-    correcao?: boolean;
-  }>(
-    `/v1/public/documentos/${encodeURIComponent(token)}`,
-  );
+  api<PercursoVista>(`/v1/public/documentos/${encodeURIComponent(token)}`);
+export const apiPublicEscolherTurma = (token: string, turmaId: number) =>
+  api<PercursoVista>(`/v1/public/documentos/${encodeURIComponent(token)}/turma`, {
+    method: "POST", body: JSON.stringify({ turmaId }),
+  });
 export async function apiPublicDocumentoUpload(token: string, file: File, tipo: string) {
   const fd = new FormData();
   fd.append("file", file);
@@ -781,6 +792,7 @@ export type CrmDossier = {
   docsEmFalta?: string[];
   documentos?: { id: number; tipo: string; label: string; nome: string; url: string; createdAt: string; estado?: string; observacao?: string }[];
   docsFechado?: boolean;
+  percursoConcluido?: boolean;
   pagamento?: { id: string; referencia: string; valor: number; estado: string; entidade: string } | null;
 };
 export const apiCrmDocValidar = (id: number, docId: number) =>

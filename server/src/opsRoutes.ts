@@ -31,10 +31,11 @@ import { criarPreinscricaoPublica } from "./preinscricaoPublica.js";
 import { listCursosGoldActivos, listOfertaGold } from "./ofertaGold.js";
 import { generateCronograma } from "./cronograma.js";
 import {
-  COMPROVATIVO, firePreinscricaoEmail, listarDocsLead, maybeEnviarPagamentoAposDocs, notificarDocumentos,
-  popularFichaPessoa, docsDoCurso, docsCompletos, abrirAlerta, alertarDocumentosIncorrectos,
+  COMPROVATIVO, firePreinscricaoEmail, listarDocsLead, notificarDocumentos,
+  popularFichaPessoa, docsDoCurso, abrirAlerta, alertarDocumentosIncorrectos,
   definirEstadoDoc, dispensarAlerta, listarAlertasAbertas, syncLigacao,
 } from "./docsLink.js";
+import { docsDoPercursoProntos, mapLeadPercurso, reservarTurmaPercurso, tentarConcluirPercurso, vistaPercurso } from "./percurso.js";
 import { storeDriveFile } from "./googleDrive.js";
 import { aplicarTurmaRegras, listTurmaRegras } from "./turmaRegras.js";
 import { camposEmFalta, estadoPodeEntregar, podeArrastar } from "./crmRegras.js";
@@ -636,57 +637,23 @@ export function registerOpsRoutes(
     if (token.length < 12) return reply.code(400).send({ error: "ligação inválida" });
     const lead = await one(db, "SELECT * FROM preinscricoes WHERE docs_token = $1", [token]);
     if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
-    const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
-    const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime);
-    const docs = await listarDocsLead(db, Number(lead.id));
-    const { ok, emFalta } = docsCompletos(pedidos, docs.map(d => d.tipo));
-    let pagamento: { entidade: string; referencia: string; valor: number; estado: string } | null = null;
-    if (lead.pagamento_id) {
-      const pag = await one(db, "SELECT * FROM pagamentos WHERE id = $1", [String(lead.pagamento_id)]);
-      if (pag) {
-        const settings = await one(db, "SELECT values FROM app_settings WHERE id = $1", ["gold"]);
-        const values = settings?.values && typeof settings.values === "object" ? settings.values as Record<string, string> : {};
-        const ref = String(pag.referencia ?? "");
-        pagamento = {
-          entidade: String(values["Entidade Multibanco"] ?? ""),
-          referencia: ref.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3") || ref,
-          valor: Number(pag.valor) || 0,
-          estado: String(pag.estado ?? "Pendente"),
-        };
-      }
-    }
-    const recusados = docs.filter(d => d.estado === "recusado");
-    const fechado = Boolean(lead.docs_fechado_em);
-    const pagPago = Boolean(pagamento && /pago/i.test(pagamento.estado));
-    const comp = docs.find(d => d.tipo === "comprovativo");
-    const precisaComp = regime === "gold" && Number(lead.preco) > 0 && !pagPago && comp?.estado !== "validado";
-    const correcao = !fechado && recusados.length > 0;
-    let tipos = ok ? [...pedidos, COMPROVATIVO] : pedidos;
-    let encerrada = false;
-    if (fechado && precisaComp) tipos = [COMPROVATIVO];
-    else if (fechado) {
-      encerrada = true;
-      tipos = [];
-    } else if (correcao) {
-      const ids = new Set(recusados.map(d => d.tipo));
-      tipos = pedidos.filter(p => ids.has(p.id));
-      if (ids.has(COMPROVATIVO.id) && !tipos.some(t => t.id === COMPROVATIVO.id)) tipos = [...tipos, COMPROVATIVO];
-    }
-    return {
-      nome: `${lead.nome} ${lead.apelido}`.trim(),
-      curso: lead.curso,
-      tipos,
-      ficheiros: docs.map(d => ({
-        id: d.id, tipo: d.tipo, nome: d.nome, created_at: d.created_at,
-        estado: d.estado, observacao: d.observacao,
-      })),
-      docsCompletos: ok,
-      emFalta: emFalta.map(d => d.label),
-      pagamento,
-      precisaPagamento: regime === "gold" && Number(lead.preco) > 0,
-      encerrada,
-      correcao,
-    };
+    return vistaPercurso(db, lead);
+  });
+
+  app.post("/v1/public/documentos/:token/turma", {
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    const token = String((req.params as { token: string }).token ?? "");
+    if (token.length < 12) return reply.code(400).send({ error: "ligação inválida" });
+    const body = req.body && typeof req.body === "object" ? req.body as { turmaId?: number } : {};
+    const turmaId = Number(body.turmaId);
+    if (!Number.isInteger(turmaId)) return reply.code(400).send({ error: "Escolha uma turma." });
+    const lead = await one(db, "SELECT * FROM preinscricoes WHERE docs_token = $1", [token]);
+    if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
+    const r = await reservarTurmaPercurso(db, Number(lead.id), turmaId);
+    if (!r.ok) return reply.code(400).send({ error: r.error });
+    const again = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [lead.id]);
+    return again ? vistaPercurso(db, again) : { ok: true };
   });
 
   app.post("/v1/public/documentos/:token", {
@@ -717,13 +684,22 @@ export function registerOpsRoutes(
     const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime);
     const permitido = new Set([...pedidos.map(p => p.id), DOCS_PUBLICOS.id]);
     if (!permitido.has(tipo)) return reply.code(400).send({ error: "Este tipo de documento não faz parte do curso." });
-    if (lead.docs_fechado_em && tipo !== "comprovativo") {
-      return reply.code(403).send({ error: "Esta ligação já foi encerrada. Os documentos foram validados." });
-    }
+    const pessoaLead = mapLeadPercurso(lead);
     const ja = await listarDocsLead(db, Number(lead.id));
     const recusados = ja.filter(d => d.estado === "recusado").map(d => d.tipo);
+    if (pessoaLead.percursoConcluido && !recusados.includes(tipo)) {
+      return reply.code(403).send({ error: "Este percurso já foi concluído. A ligação está encerrada." });
+    }
     if (recusados.length && !recusados.includes(tipo)) {
       return reply.code(400).send({ error: "Nesta correcção só pode enviar os documentos indicados." });
+    }
+    if (tipo === "comprovativo") {
+      if (!docsDoPercursoProntos(pedidos, ja).ok) {
+        return reply.code(400).send({ error: "Submeta primeiro os documentos pessoais." });
+      }
+      if (!pessoaLead.percursoTurmaId) {
+        return reply.code(400).send({ error: "Escolha a turma antes do comprovativo." });
+      }
     }
     try {
       const file = await storeDriveFile(db, undefined, { name, mime, bytes }, {
@@ -756,8 +732,8 @@ export function registerOpsRoutes(
       await logLeadEvent(db, Number(lead.id), undefined, "campo", titulo, file.name);
       await syncLigacao(db, Number(lead.id));
       await abrirAlerta(db, Number(lead.id));
-      const pagMail = await maybeEnviarPagamentoAposDocs(db, Number(lead.id));
-      return { ok: true, nome: file.name, pagamentoEnviado: Boolean(pagMail && "enviou" in pagMail && pagMail.enviou) };
+      const fim = await tentarConcluirPercurso(db, Number(lead.id));
+      return { ok: true, nome: file.name, percursoConcluido: fim.concluido };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : "upload recusado" });
     }
@@ -1106,6 +1082,7 @@ export function registerOpsRoutes(
     horario: z.string().max(80).optional().default(""),
     totalAlunos: z.number().optional().default(0),
     vagas: z.number().optional().default(16),
+    inscricoesAdicionais: z.number().int().min(0).max(200).optional(),
     estado: z.string().max(20).optional().default("Ativa"),
     formador: z.string().max(120).optional().default(""),
     horas: z.number().optional().default(90),
@@ -1127,9 +1104,9 @@ export function registerOpsRoutes(
         curso: d.curso,
       });
     await db.query(
-      `INSERT INTO turmas_gold (id, data_inicio, nome, curso, local, horario, total_alunos, vagas, estado, formador, horas, cronograma)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
-      [id, d.dataInicio, d.nome, d.curso, d.local, d.horario, d.totalAlunos, d.vagas, d.estado, d.formador, d.horas, cronograma],
+      `INSERT INTO turmas_gold (id, data_inicio, nome, curso, local, horario, total_alunos, vagas, inscricoes_adicionais, estado, formador, horas, cronograma)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)`,
+      [id, d.dataInicio, d.nome, d.curso, d.local, d.horario, d.totalAlunos, d.vagas, d.inscricoesAdicionais ?? 0, d.estado, d.formador, d.horas, cronograma],
     );
     const row = await one(db, "SELECT * FROM turmas_gold WHERE id = $1", [id]);
     return { turma: row ? mapTurmaGold(row) : { id } };
@@ -1143,9 +1120,10 @@ export function registerOpsRoutes(
     await db.query(
       `UPDATE turmas_gold SET data_inicio = COALESCE($2, data_inicio), nome = COALESCE($3, nome), curso = COALESCE($4, curso),
          local = COALESCE($5, local), horario = COALESCE($6, horario), total_alunos = COALESCE($7, total_alunos),
-         vagas = COALESCE($8, vagas), estado = COALESCE($9, estado), formador = COALESCE($10, formador),
-         horas = COALESCE($11, horas), cronograma = COALESCE($12::jsonb, cronograma) WHERE id = $1`,
-      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.local ?? null, d.horario ?? null, d.totalAlunos ?? null, d.vagas ?? null, d.estado ?? null, d.formador ?? null, d.horas ?? null, d.cronograma ?? null],
+         vagas = COALESCE($8, vagas), inscricoes_adicionais = COALESCE($9, inscricoes_adicionais),
+         estado = COALESCE($10, estado), formador = COALESCE($11, formador),
+         horas = COALESCE($12, horas), cronograma = COALESCE($13::jsonb, cronograma) WHERE id = $1`,
+      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.local ?? null, d.horario ?? null, d.totalAlunos ?? null, d.vagas ?? null, d.inscricoesAdicionais ?? null, d.estado ?? null, d.formador ?? null, d.horas ?? null, d.cronograma ?? null],
     );
     const row = await one(db, "SELECT * FROM turmas_gold WHERE id = $1", [id]);
     return { turma: row ? mapTurmaGold(row) : null };
@@ -1165,6 +1143,7 @@ export function registerOpsRoutes(
     horario: z.string().max(80).optional().default(""),
     alunos: z.number().optional().default(0),
     alunosTotal: z.number().optional().default(20),
+    inscricoesAdicionais: z.number().int().min(0).max(200).optional(),
     estado: z.string().max(40).optional().default("A montar"),
     horas: z.number().optional().default(25),
     formador: z.string().max(120).optional().default(""),
@@ -1188,9 +1167,9 @@ export function registerOpsRoutes(
         hoursPerSession: 3,
       });
     await db.query(
-      `INSERT INTO turmas_fin (id, data_inicio, nome, curso, ufcd_cod, local, horario, alunos, alunos_total, estado, horas, formador, activa, cronograma)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)`,
-      [id, d.dataInicio, d.nome, d.curso, d.ufcdCod, d.local, d.horario, d.alunos, d.alunosTotal, d.estado, d.horas, d.formador, d.activa, cronograma],
+      `INSERT INTO turmas_fin (id, data_inicio, nome, curso, ufcd_cod, local, horario, alunos, alunos_total, inscricoes_adicionais, estado, horas, formador, activa, cronograma)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)`,
+      [id, d.dataInicio, d.nome, d.curso, d.ufcdCod, d.local, d.horario, d.alunos, d.alunosTotal, d.inscricoesAdicionais ?? 0, d.estado, d.horas, d.formador, d.activa, cronograma],
     );
     const row = await one(db, "SELECT * FROM turmas_fin WHERE id = $1", [id]);
     return { turma: row ? mapTurmaFin(row) : { id } };
@@ -1204,10 +1183,11 @@ export function registerOpsRoutes(
     await db.query(
       `UPDATE turmas_fin SET data_inicio = COALESCE($2, data_inicio), nome = COALESCE($3, nome), curso = COALESCE($4, curso),
          ufcd_cod = COALESCE($5, ufcd_cod), local = COALESCE($6, local), horario = COALESCE($7, horario),
-         alunos = COALESCE($8, alunos), alunos_total = COALESCE($9, alunos_total), estado = COALESCE($10, estado),
-         horas = COALESCE($11, horas), formador = COALESCE($12, formador), activa = COALESCE($13, activa),
-         cronograma = COALESCE($14::jsonb, cronograma) WHERE id = $1`,
-      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.ufcdCod ?? null, d.local ?? null, d.horario ?? null, d.alunos ?? null, d.alunosTotal ?? null, d.estado ?? null, d.horas ?? null, d.formador ?? null, d.activa ?? null, d.cronograma ?? null],
+         alunos = COALESCE($8, alunos), alunos_total = COALESCE($9, alunos_total),
+         inscricoes_adicionais = COALESCE($10, inscricoes_adicionais), estado = COALESCE($11, estado),
+         horas = COALESCE($12, horas), formador = COALESCE($13, formador), activa = COALESCE($14, activa),
+         cronograma = COALESCE($15::jsonb, cronograma) WHERE id = $1`,
+      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.ufcdCod ?? null, d.local ?? null, d.horario ?? null, d.alunos ?? null, d.alunosTotal ?? null, d.inscricoesAdicionais ?? null, d.estado ?? null, d.horas ?? null, d.formador ?? null, d.activa ?? null, d.cronograma ?? null],
     );
     const row = await one(db, "SELECT * FROM turmas_fin WHERE id = $1", [id]);
     return { turma: row ? mapTurmaFin(row) : null };

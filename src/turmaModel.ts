@@ -103,6 +103,7 @@ export type TurmaGold = {
   horario: string;
   totalAlunos: number;
   vagas: number;
+  inscricoesAdicionais: number;
   estado: "Ativa" | "Inativa";
   formador: string;
   horas: number;
@@ -119,6 +120,7 @@ export type TurmaFin = {
   horario: string;
   alunos: number;
   alunosTotal: number;
+  inscricoesAdicionais: number;
   estado: string;
   horas: number;
   formador: string;
@@ -543,7 +545,7 @@ export function turmaFinOpts(
     }));
 }
 
-export const GOLD_TURMAS_SEED: Omit<TurmaGold, "cronograma" | "formador" | "horas" | "estado">[] = [
+export const GOLD_TURMAS_SEED: Omit<TurmaGold, "cronograma" | "formador" | "horas" | "estado" | "inscricoesAdicionais">[] = [
   { id: 947, dataInicio: "2026-09-03", nome: "2176/2026", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Laboral Manhã", totalAlunos: 16, vagas: 16 },
   { id: 946, dataInicio: "2026-07-06", nome: "IRN LSB 01/09", curso: "Formação de Formadores - CCP", local: "Lisboa", horario: "Laboral Manhã", totalAlunos: 12, vagas: 16 },
   { id: 945, dataInicio: "2026-09-15", nome: "BRG-PL-15/09", curso: "Formação de Formadores - CCP", local: "Braga", horario: "Pós Laboral", totalAlunos: 2, vagas: 16 },
@@ -575,6 +577,7 @@ export function seedGoldTurmas(): TurmaGold[] {
     }
     return {
       ...t,
+      inscricoesAdicionais: 0,
       estado: GOLD_INATIVAS.has(t.id) ? "Inativa" : "Ativa",
       formador: "Isac Silva",
       horas: 90,
@@ -583,7 +586,7 @@ export function seedGoldTurmas(): TurmaGold[] {
   });
 }
 
-export const FIN_TURMAS_SEED: Omit<TurmaFin, "cronograma" | "activa">[] = [
+export const FIN_TURMAS_SEED: Omit<TurmaFin, "cronograma" | "activa" | "inscricoesAdicionais">[] = [
   { id: 222, dataInicio: "2026-09-18", nome: "UFCD 9109 - Cuidados Básicos", curso: "Masterclass em Estética Facial", ufcdCod: "9109", local: "Sala Virtual / E-Learning", horario: "Online", alunos: 1, alunosTotal: 20, estado: "A montar", horas: 25, formador: "Cátia" },
   { id: 220, dataInicio: "2026-07-31", nome: "UC02282 - Criar campanhas", curso: "Publicidade nas Redes Sociais", ufcdCod: "10785", local: "Sala Virtual / E-Learning", horario: "Online", alunos: 17, alunosTotal: 20, estado: "A montar", horas: 25, formador: "Isac" },
   { id: 219, dataInicio: "2026-08-31", nome: "UCUC00033 - Comunicar", curso: "Comunicar e interagir em contexto profissional", ufcdCod: "3564", local: "Sala Virtual / E-Learning", horario: "Online", alunos: 17, alunosTotal: 20, estado: "A decorrer", horas: 25, formador: "António" },
@@ -605,6 +608,7 @@ export function seedFinTurmas(): TurmaFin[] {
     }
     return {
       ...t,
+      inscricoesAdicionais: 0,
       activa: t.id !== 222,
       cronograma,
     };

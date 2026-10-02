@@ -53,7 +53,7 @@ function DocumentosGoldPanel({ formando, avulso, tipo = "gold" }: { formando: Fo
   useEffect(() => {
     let alive = true;
     const extrasP = cursoId != null
-      ? apiDtpModelo(tipo, cursoId).then(r => r.modelo.extra.filter(x => x.ambito === "formando").map(x => ({ id: x.id, label: x.label })))
+      ? apiDtpModelo(tipo, cursoId).then(r => (r.efectivo ?? r.modelo).extra.filter(x => x.ambito === "formando").map(x => ({ id: x.id, label: x.label })))
       : Promise.resolve([] as { id: string; label: string }[]);
     Promise.all([apiFormandoDossier(tipo, formando.id), extrasP])
       .then(([r, extras]) => {

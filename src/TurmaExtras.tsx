@@ -367,11 +367,11 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
           const finId = cursosFin.find(c => c.ufcd === nomeCurso || c.nomeComercial === nomeCurso)?.id;
           if (goldId != null) {
             const m = await apiDtpModelo("gold", goldId).catch(() => null);
-            extras.push(...(m?.modelo.extra.filter(x => x.ambito === "formador").map(x => ({ id: x.id, label: x.label })) ?? []));
+            extras.push(...((m?.efectivo ?? m?.modelo)?.extra.filter(x => x.ambito === "formador").map(x => ({ id: x.id, label: x.label })) ?? []));
           }
           if (finId != null) {
             const m = await apiDtpModelo("fin", finId).catch(() => null);
-            extras.push(...(m?.modelo.extra.filter(x => x.ambito === "formador").map(x => ({ id: x.id, label: x.label })) ?? []));
+            extras.push(...((m?.efectivo ?? m?.modelo)?.extra.filter(x => x.ambito === "formador").map(x => ({ id: x.id, label: x.label })) ?? []));
           }
         }
         const lista = fundirDocTipos(DOCS_FORMADOR, extras).map(d => ({ ...d, required: Boolean(d.required), uploaded: false as boolean }));

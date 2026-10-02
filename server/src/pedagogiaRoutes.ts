@@ -8,10 +8,12 @@ import { DTP_CATEGORIAS, dtpCategoriaDe, dtpCategoriaPasta, dtpPastaNome, dtpZip
 import { zipStore } from "./zipStore.js";
 import {
   buildDtpItems,
+  comporModelo,
   dtpDefs,
   dtpEstrutura,
   dtpPct,
   estadoPorFicheirosCurso,
+  parseDtpModelo,
   DTP_FASES,
   DTP_MODELO_VAZIO,
   type CursoFicheiroRef,
@@ -131,6 +133,7 @@ const formadorDocsSchema = z.object({
 
 const dtpModeloSchema = z.object({
   excluidos: z.array(z.string().max(60)).max(80).default([]),
+  incluidos: z.array(z.string().max(60)).max(80).optional().default([]),
   extra: z.array(z.object({
     id: z.string().max(40).optional(),
     fase: z.enum(["antes", "durante", "depois"]),
@@ -141,6 +144,37 @@ const dtpModeloSchema = z.object({
     ambito: z.enum(["turma", "formando", "formador"]).optional().default("turma"),
   })).max(30).default([]),
 });
+
+function normalizarExtras(
+  extra: { id?: string; fase: "antes" | "durante" | "depois"; label: string; fonte?: string; hint?: string; bloqueante?: boolean; ambito?: "turma" | "formando" | "formador" }[],
+  fonteDefault: string,
+) {
+  const usados = new Set<string>();
+  return extra
+    .map(x => ({
+      id: (x.id?.trim() || slugExtra(x.label)).slice(0, 40),
+      fase: x.fase,
+      label: x.label.trim(),
+      fonte: (x.fonte?.trim() || fonteDefault).slice(0, 120),
+      hint: (x.hint?.trim() || "").slice(0, 240),
+      bloqueante: Boolean(x.bloqueante),
+      ambito: x.ambito ?? "turma" as const,
+    }))
+    .filter(x => {
+      if (!x.id || !x.label || usados.has(x.id)) return false;
+      usados.add(x.id);
+      return true;
+    });
+}
+
+function idsBase(regime: Regime, ids: string[], opts?: { extras?: boolean }) {
+  const travados = new Set(dtpDefs(regime).filter(d => d.obrigatorio).map(d => d.id));
+  const conhecidos = new Set(dtpDefs(regime).map(d => d.id));
+  return [...new Set(ids)].filter(x => {
+    if (x.startsWith("extra:")) return Boolean(opts?.extras) && x.length > "extra:".length;
+    return conhecidos.has(x) && !travados.has(x);
+  });
+}
 
 function slugExtra(label: string) {
   return label
@@ -249,38 +283,50 @@ async function cursoIdDaTurma(db: Db, regime: Regime, curso: string) {
   return row.rows[0]?.id ?? null;
 }
 
-function mapModelo(row: { excluidos: unknown; extra: unknown } | undefined): DtpModelo {
-  if (!row) return DTP_MODELO_VAZIO;
-  return {
-    excluidos: asArr(row.excluidos).map(String),
-    extra: asArr(row.extra).map(raw => {
-      const x = asObj(raw);
-      const fase = String(x.fase ?? "antes");
-      return {
-        id: String(x.id ?? ""),
-        fase: (fase === "durante" || fase === "depois" ? fase : "antes") as "antes" | "durante" | "depois",
-        label: String(x.label ?? ""),
-        fonte: String(x.fonte ?? "ENA · exigência do curso"),
-        hint: String(x.hint ?? ""),
-        bloqueante: Boolean(x.bloqueante),
-        ambito: (x.ambito === "formando" || x.ambito === "formador" ? x.ambito : "turma") as "turma" | "formando" | "formador",
-      };
-    }).filter(x => x.id && x.label),
-  };
+function mapModelo(row: { excluidos: unknown; extra: unknown; incluidos?: unknown } | undefined): DtpModelo {
+  return parseDtpModelo(row);
 }
 
 async function loadModelo(db: Db, regime: Regime, cursoId: number | null): Promise<DtpModelo> {
   if (cursoId == null) return DTP_MODELO_VAZIO;
-  const row = await db.query<{ excluidos: unknown; extra: unknown }>(
-    "SELECT excluidos, extra FROM curso_dtp_modelos WHERE regime = $1 AND curso_id = $2",
+  const row = await db.query<{ excluidos: unknown; extra: unknown; incluidos: unknown }>(
+    "SELECT excluidos, extra, incluidos FROM curso_dtp_modelos WHERE regime = $1 AND curso_id = $2",
     [regime, cursoId],
   );
   return mapModelo(row.rows[0]);
 }
 
+type EntidadeDtp = { id: number; nome: string; modelo: DtpModelo };
+
+async function entidadeDoCurso(db: Db, cursoId: number | null): Promise<EntidadeDtp | null> {
+  if (cursoId == null) return null;
+  const row = await db.query<{ id: number; nome: string; excluidos: unknown; extra: unknown }>(
+    `SELECT e.id, e.nome, e.excluidos, e.extra
+       FROM cursos_gold c
+       JOIN dtp_entidades e ON e.id = c.entidade_responsavel_id
+      WHERE c.id = $1`,
+    [cursoId],
+  );
+  const found = row.rows[0];
+  if (!found) return null;
+  return { id: Number(found.id), nome: String(found.nome ?? ""), modelo: mapModelo(found) };
+}
+
+async function packDoCurso(db: Db, regime: Regime, cursoId: number | null) {
+  const curso = await loadModelo(db, regime, cursoId);
+  if (regime !== "gold") return { curso, entidade: null as EntidadeDtp | null, efectivo: curso };
+  const entidade = await entidadeDoCurso(db, cursoId);
+  return {
+    curso,
+    entidade,
+    efectivo: comporModelo(entidade?.modelo ?? DTP_MODELO_VAZIO, curso),
+  };
+}
+
 async function modeloDaTurma(db: Db, regime: Regime, turma: TurmaRow) {
   const cursoId = await cursoIdDaTurma(db, regime, turma.curso);
-  return loadModelo(db, regime, cursoId);
+  const pack = await packDoCurso(db, regime, cursoId);
+  return { modelo: pack.efectivo, entidade: pack.entidade?.nome ?? null };
 }
 
 async function formandosDaTurma(db: Db, regime: Regime, turma: TurmaRow) {
@@ -375,11 +421,14 @@ async function manualDtp(db: Db, regime: Regime, turmaId: number) {
   return Object.fromEntries(rows.rows.map(r => [r.item_id, r.estado])) as Record<string, DtpEstado>;
 }
 
-async function dtpForTurma(db: Db, regime: Regime, turma: TurmaRow, modeloPre?: DtpModelo) {
-  const [facts, manual, modelo, anexos] = await Promise.all([
+async function dtpForTurma(db: Db, regime: Regime, turma: TurmaRow, modeloPre?: DtpModelo, entidadePre?: string | null) {
+  const carregado = modeloPre
+    ? { modelo: modeloPre, entidade: entidadePre ?? null }
+    : await modeloDaTurma(db, regime, turma);
+  const modelo = carregado.modelo;
+  const [facts, manual, anexos] = await Promise.all([
     turmaFacts(db, regime, turma),
     manualDtp(db, regime, turma.id),
-    modeloPre ? Promise.resolve(modeloPre) : modeloDaTurma(db, regime, turma),
     db.query<{ item_id: string; drive_file_id: string; file_name: string; drive_url: string }>(
       "SELECT item_id, drive_file_id, file_name, drive_url FROM dtp_anexos WHERE regime = $1 AND turma_id = $2",
       [regime, turma.id],
@@ -428,25 +477,41 @@ async function dtpForTurma(db: Db, regime: Regime, turma: TurmaRow, modeloPre?: 
     falta: items.filter(i => i.estado === "falta").length,
     total: items.length,
     facts,
+    entidade: carregado.entidade,
   };
 }
 
 export async function dtpResumo(db: Db, regime: Regime) {
   const table = regime === "gold" ? "turmas_gold" : "turmas_fin";
-  const [rows, modelos] = await Promise.all([
+  const [rows, modelos, entidades, ligacoes] = await Promise.all([
     db.query<TurmaRow>(`SELECT id, nome, curso, cronograma, formador FROM ${table}`),
-    db.query<{ curso_id: number; excluidos: unknown; extra: unknown }>(
-      "SELECT curso_id, excluidos, extra FROM curso_dtp_modelos WHERE regime = $1",
+    db.query<{ curso_id: number; excluidos: unknown; extra: unknown; incluidos: unknown }>(
+      "SELECT curso_id, excluidos, extra, incluidos FROM curso_dtp_modelos WHERE regime = $1",
       [regime],
     ),
+    regime === "gold"
+      ? db.query<{ id: number; excluidos: unknown; extra: unknown }>("SELECT id, excluidos, extra FROM dtp_entidades")
+      : Promise.resolve({ rows: [] as { id: number; excluidos: unknown; extra: unknown }[] }),
+    regime === "gold"
+      ? db.query<{ id: number; entidade_responsavel_id: number | null }>(
+        "SELECT id, entidade_responsavel_id FROM cursos_gold",
+      )
+      : Promise.resolve({ rows: [] as { id: number; entidade_responsavel_id: number | null }[] }),
   ]);
-  // Um lookup por curso evita repetir a consulta do modelo em cada turma.
   const porCurso = new Map<number, DtpModelo>(modelos.rows.map(r => [Number(r.curso_id), mapModelo(r)]));
+  const porEntidade = new Map<number, DtpModelo>(entidades.rows.map(r => [Number(r.id), mapModelo(r)]));
+  const entidadePorCurso = new Map<number, number>();
+  for (const lig of ligacoes.rows) {
+    if (lig.entidade_responsavel_id != null) entidadePorCurso.set(Number(lig.id), Number(lig.entidade_responsavel_id));
+  }
   const out: Record<number, number> = {};
   for (const turma of rows.rows) {
-    const cursoId = porCurso.size ? await cursoIdDaTurma(db, regime, turma.curso) : null;
-    const modelo = cursoId != null ? porCurso.get(cursoId) ?? DTP_MODELO_VAZIO : DTP_MODELO_VAZIO;
-    const dtp = await dtpForTurma(db, regime, turma, modelo);
+    const cursoId = await cursoIdDaTurma(db, regime, turma.curso);
+    const curso = cursoId != null ? porCurso.get(cursoId) ?? DTP_MODELO_VAZIO : DTP_MODELO_VAZIO;
+    const entidadeId = cursoId != null ? entidadePorCurso.get(cursoId) : undefined;
+    const entidade = entidadeId != null ? porEntidade.get(entidadeId) ?? DTP_MODELO_VAZIO : DTP_MODELO_VAZIO;
+    const modelo = regime === "gold" ? comporModelo(entidade, curso) : curso;
+    const dtp = await dtpForTurma(db, regime, turma, modelo, null);
     out[turma.id] = dtp.pct;
   }
   return out;
@@ -705,17 +770,130 @@ export function registerPedagogiaRoutes(
     return { fases: DTP_FASES, base: dtpDefs(regime) };
   });
 
-  app.get("/v1/cursos/:regime/:id/dtp-modelo", async (req, reply) => {
-    if (!requireAuth(req, reply)) return;
-    const { regime, id } = params(req);
-    if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
-    const modelo = await loadModelo(db, regime, id);
+  function respostaModelo(regime: Regime, modelo: DtpModelo, entidade: EntidadeDtp | null) {
+    const efectivo = regime === "gold" ? comporModelo(entidade?.modelo ?? DTP_MODELO_VAZIO, modelo) : modelo;
     return {
       fases: DTP_FASES,
       base: dtpDefs(regime),
       modelo,
-      estrutura: dtpEstrutura(regime, modelo),
+      entidade: entidade ? { id: entidade.id, nome: entidade.nome, modelo: entidade.modelo } : null,
+      efectivo,
+      estrutura: dtpEstrutura(regime, efectivo),
     };
+  }
+
+  app.get("/v1/dtp/gold/entidades", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const rows = await db.query<{ id: number; nome: string; excluidos: unknown; extra: unknown }>(
+      "SELECT id, nome, excluidos, extra FROM dtp_entidades ORDER BY nome",
+    );
+    return {
+      entidades: rows.rows.map(r => ({
+        id: Number(r.id),
+        nome: r.nome,
+        documentos: dtpEstrutura("gold", mapModelo(r)).length,
+      })),
+    };
+  });
+
+  app.post("/v1/dtp/gold/entidades", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const parsed = z.object({ nome: z.string().trim().min(2).max(120) }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Indique o nome da entidade." });
+    const nome = parsed.data.nome;
+    const dup = await db.query<{ id: number }>(
+      "SELECT id FROM dtp_entidades WHERE lower(trim(nome)) = lower(trim($1)) LIMIT 1",
+      [nome],
+    );
+    if (dup.rows[0]) return reply.code(409).send({ error: "Já existe uma entidade com esse nome." });
+    const row = await db.query<{ id: number }>(
+      "INSERT INTO dtp_entidades (nome) VALUES ($1) RETURNING id",
+      [nome],
+    );
+    const id = Number(row.rows[0]?.id);
+    await audit(db, req.actor!.id, "dtp.entidade", "dtp_entidade", String(id), req.ip, { nome });
+    return { entidade: { id, nome, documentos: dtpEstrutura("gold", DTP_MODELO_VAZIO).length } };
+  });
+
+  app.patch("/v1/dtp/gold/entidades/:id", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string }).id);
+    const parsed = z.object({ nome: z.string().trim().min(2).max(120) }).safeParse(req.body);
+    if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "Indique o nome da entidade." });
+    const nome = parsed.data.nome;
+    const dup = await db.query<{ id: number }>(
+      "SELECT id FROM dtp_entidades WHERE lower(trim(nome)) = lower(trim($1)) AND id <> $2 LIMIT 1",
+      [nome, id],
+    );
+    if (dup.rows[0]) return reply.code(409).send({ error: "Já existe uma entidade com esse nome." });
+    const row = await db.query<{ id: number; excluidos: unknown; extra: unknown }>(
+      "UPDATE dtp_entidades SET nome = $2, updated_at = now() WHERE id = $1 RETURNING id, excluidos, extra",
+      [id, nome],
+    );
+    const saved = row.rows[0];
+    if (!saved) return reply.code(404).send({ error: "Entidade não encontrada." });
+    await audit(db, req.actor!.id, "dtp.entidade", "dtp_entidade", String(id), req.ip, { nome });
+    return { entidade: { id, nome, documentos: dtpEstrutura("gold", mapModelo(saved)).length } };
+  });
+
+  app.delete("/v1/dtp/gold/entidades/:id", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
+    const row = await db.query<{ id: number }>("DELETE FROM dtp_entidades WHERE id = $1 RETURNING id", [id]);
+    if (!row.rows[0]) return reply.code(404).send({ error: "Entidade não encontrada." });
+    await audit(db, req.actor!.id, "dtp.entidade.apagar", "dtp_entidade", String(id), req.ip);
+    return { ok: true };
+  });
+
+  app.get("/v1/dtp/gold/entidades/:id/modelo", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
+    const row = await db.query<{ id: number; nome: string; excluidos: unknown; extra: unknown }>(
+      "SELECT id, nome, excluidos, extra FROM dtp_entidades WHERE id = $1",
+      [id],
+    );
+    const found = row.rows[0];
+    if (!found) return reply.code(404).send({ error: "Entidade não encontrada." });
+    const modelo = mapModelo(found);
+    return {
+      fases: DTP_FASES,
+      base: dtpDefs("gold"),
+      modelo,
+      entidade: null,
+      efectivo: modelo,
+      estrutura: dtpEstrutura("gold", modelo),
+    };
+  });
+
+  app.put("/v1/dtp/gold/entidades/:id/modelo", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string }).id);
+    const parsed = dtpModeloSchema.safeParse(req.body);
+    if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    const existe = await db.query<{ id: number }>("SELECT id FROM dtp_entidades WHERE id = $1", [id]);
+    if (!existe.rows[0]) return reply.code(404).send({ error: "Entidade não encontrada." });
+    const excluidos = idsBase("gold", parsed.data.excluidos);
+    const extra = normalizarExtras(parsed.data.extra, "ENA · entidade responsável");
+    await db.query(
+      "UPDATE dtp_entidades SET excluidos = $2::jsonb, extra = $3::jsonb, updated_at = now() WHERE id = $1",
+      [id, excluidos, extra],
+    );
+    await audit(db, req.actor!.id, "dtp.entidade.modelo", "dtp_entidade", String(id), req.ip, {
+      excluidos: excluidos.length,
+      extra: extra.length,
+    });
+    const modelo: DtpModelo = { excluidos, incluidos: [], extra };
+    return { modelo, estrutura: dtpEstrutura("gold", modelo) };
+  });
+
+  app.get("/v1/cursos/:regime/:id/dtp-modelo", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const { regime, id } = params(req);
+    if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
+    const pack = await packDoCurso(db, regime, id);
+    return respostaModelo(regime, pack.curso, pack.entidade);
   });
 
   app.put("/v1/cursos/:regime/:id/dtp-modelo", async (req, reply) => {
@@ -724,43 +902,30 @@ export function registerPedagogiaRoutes(
     const parsed = dtpModeloSchema.safeParse(req.body);
     if (!regime || id == null || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
 
-    // As normas legais do regime não se removem, mesmo que o pedido as inclua.
-    const travados = new Set(dtpDefs(regime).filter(d => d.obrigatorio).map(d => d.id));
-    const conhecidos = new Set(dtpDefs(regime).map(d => d.id));
-    const excluidos = [...new Set(parsed.data.excluidos)].filter(x => conhecidos.has(x) && !travados.has(x));
-    const usados = new Set<string>();
-    const extra = parsed.data.extra
-      .map(x => ({
-        id: (x.id?.trim() || slugExtra(x.label)).slice(0, 40),
-        fase: x.fase,
-        label: x.label.trim(),
-        fonte: (x.fonte?.trim() || "ENA · exigência do curso").slice(0, 120),
-        hint: (x.hint?.trim() || "").slice(0, 240),
-        bloqueante: Boolean(x.bloqueante),
-        ambito: x.ambito ?? "turma",
-      }))
-      .filter(x => {
-        if (!x.id || !x.label || usados.has(x.id)) return false;
-        usados.add(x.id);
-        return true;
-      });
+    const entidade = regime === "gold" ? await entidadeDoCurso(db, id) : null;
+    const idsEntidade = new Set((entidade?.modelo.extra ?? []).map(x => x.id));
+    const excluidos = idsBase(regime, parsed.data.excluidos, { extras: true });
+    const incluidos = idsBase(regime, parsed.data.incluidos).filter(x => entidade?.modelo.excluidos.includes(x));
+    const extra = normalizarExtras(parsed.data.extra, "ENA · exigência do curso").filter(x => !idsEntidade.has(x.id));
 
     await db.query(
-      `INSERT INTO curso_dtp_modelos (regime, curso_id, excluidos, extra)
-       VALUES ($1, $2, $3::jsonb, $4::jsonb)
+      `INSERT INTO curso_dtp_modelos (regime, curso_id, excluidos, incluidos, extra)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb)
        ON CONFLICT (regime, curso_id) DO UPDATE SET
          excluidos = EXCLUDED.excluidos,
+         incluidos = EXCLUDED.incluidos,
          extra = EXCLUDED.extra,
          updated_at = now()`,
-      [regime, id, excluidos, extra],
+      [regime, id, excluidos, incluidos, extra],
     );
     await audit(db, req.actor!.id, "curso.dtp_modelo", "curso", String(id), req.ip, {
       regime,
       excluidos: excluidos.length,
+      incluidos: incluidos.length,
       extra: extra.length,
     });
-    const modelo: DtpModelo = { excluidos, extra };
-    return { modelo, estrutura: dtpEstrutura(regime, modelo) };
+    const modelo: DtpModelo = { excluidos, incluidos, extra };
+    return respostaModelo(regime, modelo, entidade);
   });
 
   async function nomesDoCurso(regime: Regime, cursoId: number) {
@@ -813,8 +978,8 @@ export function registerPedagogiaRoutes(
     if (!requireAuth(req, reply)) return;
     const { regime, id } = params(req);
     if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
-    const modelo = await loadModelo(db, regime, id);
-    const estrutura = dtpEstrutura(regime, modelo);
+    const pack = await packDoCurso(db, regime, id);
+    const estrutura = dtpEstrutura(regime, pack.efectivo);
     const pessoas = await pessoasDoCurso(regime, id);
     const ficheiros = await db.query<{
       id: string; ambito: string; requisito_id: string; pessoa_id: number | null; pessoa_nome: string;
@@ -874,8 +1039,8 @@ export function registerPedagogiaRoutes(
     if (ambito !== "curso" && ambito !== "formando" && ambito !== "formador") {
       return reply.code(400).send({ error: "Âmbito inválido." });
     }
-    const modelo = await loadModelo(db, regime, id);
-    const ids = new Set(dtpEstrutura(regime, modelo).map(d => d.id));
+    const pack = await packDoCurso(db, regime, id);
+    const ids = new Set(dtpEstrutura(regime, pack.efectivo).map(d => d.id));
     if (!requisitoId || !ids.has(requisitoId)) return reply.code(400).send({ error: "Associe o ficheiro a um requisito do dossiê." });
     const pessoas = await pessoasDoCurso(regime, id);
     if (ambito === "formando") {

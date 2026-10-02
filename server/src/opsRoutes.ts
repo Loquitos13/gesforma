@@ -998,6 +998,7 @@ export function registerOpsRoutes(
     regime: z.string().trim().min(1).max(40),
     horas: z.number().min(1),
     estado: z.string().max(40).optional().default("Ativo"),
+    entidadeResponsavelId: z.number().int().positive().nullable().optional(),
   });
 
   app.post("/v1/cursos-gold", async (req, reply) => {
@@ -1006,9 +1007,13 @@ export function registerOpsRoutes(
     if (!parsed.success) return reply.code(400).send({ error: "preencha nome, categoria, tipo comercial, modalidade, preço e horas" });
     const d = parsed.data;
     const id = await nextOpsId(db);
+    if (d.entidadeResponsavelId != null) {
+      const ok = await db.query("SELECT 1 FROM dtp_entidades WHERE id = $1", [d.entidadeResponsavelId]);
+      if (!ok.rows.length) return reply.code(400).send({ error: "Entidade responsável não encontrada." });
+    }
     await db.query(
-      "INSERT INTO cursos_gold (id, nome, categoria, tipo, preco, regime, horas, estado) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
-      [id, d.nome, d.categoria, d.tipo, d.preco, d.regime, d.horas, d.estado],
+      "INSERT INTO cursos_gold (id, nome, categoria, tipo, preco, regime, horas, estado, entidade_responsavel_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+      [id, d.nome, d.categoria, d.tipo, d.preco, d.regime, d.horas, d.estado, d.entidadeResponsavelId ?? null],
     );
     const row = await one(db, "SELECT * FROM cursos_gold WHERE id = $1", [id]);
     return { curso: row ? mapCursoGold(row) : { id } };
@@ -1019,10 +1024,19 @@ export function registerOpsRoutes(
     const parsed = cursoGoldSchema.partial().safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
+    const body = req.body && typeof req.body === "object" ? req.body as Record<string, unknown> : {};
+    const tocarEntidade = "entidadeResponsavelId" in body;
+    const estado = "estado" in body ? (d.estado ?? null) : null;
+    if (tocarEntidade && d.entidadeResponsavelId != null) {
+      const ok = await db.query("SELECT 1 FROM dtp_entidades WHERE id = $1", [d.entidadeResponsavelId]);
+      if (!ok.rows.length) return reply.code(400).send({ error: "Entidade responsável não encontrada." });
+    }
     await db.query(
       `UPDATE cursos_gold SET nome = COALESCE($2, nome), categoria = COALESCE($3, categoria), tipo = COALESCE($4, tipo),
-         preco = COALESCE($5, preco), regime = COALESCE($6, regime), horas = COALESCE($7, horas), estado = COALESCE($8, estado) WHERE id = $1`,
-      [id, d.nome ?? null, d.categoria ?? null, d.tipo ?? null, d.preco ?? null, d.regime ?? null, d.horas ?? null, d.estado ?? null],
+         preco = COALESCE($5, preco), regime = COALESCE($6, regime), horas = COALESCE($7, horas), estado = COALESCE($8, estado),
+         entidade_responsavel_id = CASE WHEN $9::boolean THEN $10::integer ELSE entidade_responsavel_id END
+       WHERE id = $1`,
+      [id, d.nome ?? null, d.categoria ?? null, d.tipo ?? null, d.preco ?? null, d.regime ?? null, d.horas ?? null, estado, tocarEntidade, d.entidadeResponsavelId ?? null],
     );
     const row = await one(db, "SELECT * FROM cursos_gold WHERE id = $1", [id]);
     return { curso: row ? mapCursoGold(row) : null };

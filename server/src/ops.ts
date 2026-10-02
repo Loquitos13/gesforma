@@ -123,6 +123,9 @@ export function mapCursoGold(r: Record<string, unknown>) {
     regime: String(r.regime ?? ""),
     horas: num(r.horas),
     estado: String(r.estado ?? "Ativo"),
+    entidadeResponsavelId: r.entidade_responsavel_id == null || r.entidade_responsavel_id === ""
+      ? null
+      : num(r.entidade_responsavel_id),
   };
 }
 

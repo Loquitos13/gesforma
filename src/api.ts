@@ -73,7 +73,7 @@ export type OpsSnapshot = {
     cc: { ok: boolean; data: string }; ch: { ok: boolean; data: string };
     cu: { ok: boolean; data: string }; ci: { ok: boolean; data: string }; ce: { ok: boolean; data: string };
   }>;
-  cursosGold: Array<{ id: number; nome: string; categoria: string; tipo: string; preco: number; regime: string; horas: number; estado: string }>;
+  cursosGold: Array<{ id: number; nome: string; categoria: string; tipo: string; preco: number; regime: string; horas: number; estado: string; entidadeResponsavelId?: number | null }>;
   cursosFin: Array<{ id: number; ufcdCod: string; ufcd: string; nomeComercial: string; regime: string; horas: number; estado: string }>;
   turmasGold: Array<{
     id: number; dataInicio: string; nome: string; curso: string; local: string; horario: string;
@@ -288,6 +288,8 @@ export type DtpSnapshot = {
   parcial: number;
   falta: number;
   total: number;
+  /** Nome da entidade responsável cuja estrutura este dossiê usa. */
+  entidade?: string | null;
   facts: {
     sessoes: { done: number; total: number };
     planos: { done: number; total: number };
@@ -383,18 +385,37 @@ export type DtpExtra = {
 };
 export type DtpModelo = {
   excluidos: string[];
+  incluidos?: string[];
   extra: { id: string; fase: DtpFase; label: string; fonte: string; hint: string; bloqueante?: boolean; ambito?: DtpAmbito }[];
 };
+export type DtpEntidadeRef = { id: number; nome: string; modelo: DtpModelo };
 export type DtpModeloResposta = {
   fases: { id: DtpFase; label: string; hint: string }[];
   base: DtpDef[];
   modelo: DtpModelo;
+  entidade: DtpEntidadeRef | null;
+  efectivo?: DtpModelo;
   estrutura: DtpDef[];
 };
+export type DtpEntidade = { id: number; nome: string; documentos: number };
+export const apiDtpEntidades = () => api<{ entidades: DtpEntidade[] }>("/v1/dtp/gold/entidades");
+export const apiCreateDtpEntidade = (nome: string) =>
+  api<{ entidade: DtpEntidade }>("/v1/dtp/gold/entidades", { method: "POST", body: JSON.stringify({ nome }) });
+export const apiRenameDtpEntidade = (id: number, nome: string) =>
+  api<{ entidade: DtpEntidade }>(`/v1/dtp/gold/entidades/${id}`, { method: "PATCH", body: JSON.stringify({ nome }) });
+export const apiDeleteDtpEntidade = (id: number) =>
+  api<{ ok: boolean }>(`/v1/dtp/gold/entidades/${id}`, { method: "DELETE" });
+export const apiDtpEntidadeModelo = (id: number) =>
+  api<DtpModeloResposta>(`/v1/dtp/gold/entidades/${id}/modelo`);
+export const apiSaveDtpEntidadeModelo = (id: number, body: { excluidos: string[]; extra: DtpExtra[] }) =>
+  api<Pick<DtpModeloResposta, "modelo" | "estrutura">>(`/v1/dtp/gold/entidades/${id}/modelo`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
 export const apiDtpModelo = (regime: Regime, cursoId: number) =>
   api<DtpModeloResposta>(`/v1/cursos/${regime}/${cursoId}/dtp-modelo`);
-export const apiSaveDtpModelo = (regime: Regime, cursoId: number, body: { excluidos: string[]; extra: DtpExtra[] }) =>
-  api<Pick<DtpModeloResposta, "modelo" | "estrutura">>(`/v1/cursos/${regime}/${cursoId}/dtp-modelo`, {
+export const apiSaveDtpModelo = (regime: Regime, cursoId: number, body: { excluidos: string[]; incluidos?: string[]; extra: DtpExtra[] }) =>
+  api<DtpModeloResposta>(`/v1/cursos/${regime}/${cursoId}/dtp-modelo`, {
     method: "PUT",
     body: JSON.stringify(body),
   });

@@ -49,13 +49,82 @@ export type DtpExtraDef = {
   ambito?: DtpAmbito;
 };
 
-/** Modelo do dossiê de um curso: o que se retira da base e o que se acrescenta. */
+/** Modelo do dossiê: o que se retira da base, o que se repõe e o que se acrescenta. */
 export type DtpModelo = {
   excluidos: string[];
+  /** Itens da base que a entidade retirou e este curso voltou a ligar. */
+  incluidos?: string[];
   extra: DtpExtraDef[];
 };
 
-export const DTP_MODELO_VAZIO: DtpModelo = { excluidos: [], extra: [] };
+export const DTP_MODELO_VAZIO: DtpModelo = { excluidos: [], incluidos: [], extra: [] };
+
+function jsonArr(v: unknown): unknown[] {
+  if (Array.isArray(v)) return v;
+  if (typeof v === "string") {
+    try {
+      const p = JSON.parse(v) as unknown;
+      return Array.isArray(p) ? p : [];
+    } catch { return []; }
+  }
+  return [];
+}
+
+function jsonObj(v: unknown): Record<string, unknown> {
+  if (v && typeof v === "object" && !Array.isArray(v)) return v as Record<string, unknown>;
+  if (typeof v === "string") {
+    try {
+      const p = JSON.parse(v) as unknown;
+      return p && typeof p === "object" && !Array.isArray(p) ? p as Record<string, unknown> : {};
+    } catch { return {}; }
+  }
+  return {};
+}
+
+export function parseDtpModelo(row?: { excluidos?: unknown; extra?: unknown; incluidos?: unknown }): DtpModelo {
+  if (!row) return DTP_MODELO_VAZIO;
+  return {
+    excluidos: jsonArr(row.excluidos).map(String),
+    incluidos: jsonArr(row.incluidos).map(String),
+    extra: jsonArr(row.extra).map(raw => {
+      const x = jsonObj(raw);
+      const fase = String(x.fase ?? "antes");
+      return {
+        id: String(x.id ?? ""),
+        fase: (fase === "durante" || fase === "depois" ? fase : "antes") as DtpFase,
+        label: String(x.label ?? ""),
+        fonte: String(x.fonte ?? "ENA · exigência do curso"),
+        hint: String(x.hint ?? ""),
+        bloqueante: Boolean(x.bloqueante),
+        ambito: (x.ambito === "formando" || x.ambito === "formador" ? x.ambito : "turma") as DtpAmbito,
+      };
+    }).filter(x => x.id && x.label),
+  };
+}
+
+/**
+ * A entidade define a estrutura. O curso só guarda o que muda:
+ * exclusões a mais, itens da base que a entidade tirou e o curso repõe, e extras próprios.
+ */
+export function comporModelo(entidade: DtpModelo, curso: DtpModelo): DtpModelo {
+  const repor = new Set(curso.incluidos ?? []);
+  const excluidos = new Set<string>();
+  for (const id of entidade.excluidos) {
+    if (!repor.has(id)) excluidos.add(id);
+  }
+  for (const id of curso.excluidos) {
+    if (!repor.has(id)) excluidos.add(id);
+  }
+  const extra: DtpExtraDef[] = [];
+  const seen = new Set<string>();
+  for (const x of [...entidade.extra, ...curso.extra]) {
+    if (!x.id || seen.has(x.id)) continue;
+    if (excluidos.has(x.id) || excluidos.has(`extra:${x.id}`)) continue;
+    seen.add(x.id);
+    extra.push(x);
+  }
+  return { excluidos: [...excluidos], incluidos: [...repor], extra };
+}
 
 export const DTP_FASES: { id: DtpFase; label: string; hint: string }[] = [
   { id: "antes", label: "Antes da turma", hint: "Abre o dossiê no dia em que a turma é aprovada." },
@@ -238,7 +307,7 @@ export function dtpEstrutura(regime: "gold" | "fin", modelo: DtpModelo = DTP_MOD
   const efectivo = regime === "fin" ? DTP_MODELO_VAZIO : modelo;
   const fora = new Set(efectivo.excluidos);
   const base = dtpDefs(regime).filter(def => def.obrigatorio || !fora.has(def.id));
-  const extras: DtpDef[] = efectivo.extra.map(x => ({
+  const extras: DtpDef[] = efectivo.extra.filter(x => x.id && !fora.has(x.id) && !fora.has(`extra:${x.id}`)).map(x => ({
     ...x,
     id: `extra:${x.id}`,
     auto: x.ambito === "formando" || x.ambito === "formador" ? (`doc-${x.id}` as DtpAuto) : undefined,

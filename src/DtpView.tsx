@@ -97,6 +97,9 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
             <p className="text-sm font-semibold text-slate-800 mt-0.5">
               Código interno <span className="font-mono text-amber-700">{codigo}</span>
               {turma?.id != null && <span className="text-slate-400 font-normal"> · #{turma.id}</span>}
+              {dtp.entidade && (
+                <span className="ml-2 align-middle text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">{dtp.entidade}</span>
+              )}
             </p>
             <p className="text-xs text-slate-500 mt-0.5">{ok} no dossiê · {parcial} parciais · {falta} em falta · {total} documentos</p>
           </div>

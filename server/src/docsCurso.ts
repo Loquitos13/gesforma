@@ -1,4 +1,5 @@
 import type { Db } from "./db/pool.js";
+import { comporModelo, DTP_MODELO_VAZIO, parseDtpModelo } from "./dtpModel.js";
 
 export type DocPedido = { id: string; label: string; required: boolean };
 
@@ -24,18 +25,6 @@ export const COMPROVATIVO: DocPedido = {
   required: false,
 };
 
-function parseExtra(raw: unknown): { id: string; label: string; ambito?: string; bloqueante?: boolean }[] {
-  if (!raw) return [];
-  const v = typeof raw === "string" ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : raw;
-  return Array.isArray(v) ? v as { id: string; label: string; ambito?: string; bloqueante?: boolean }[] : [];
-}
-
-function parseExcluidos(raw: unknown): string[] {
-  if (!raw) return [];
-  const v = typeof raw === "string" ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : raw;
-  return Array.isArray(v) ? v.map(String) : [];
-}
-
 export async function docsDoCurso(db: Db, curso: string, regime: "gold" | "fin"): Promise<DocPedido[]> {
   const base = (regime === "fin" ? FIN : GOLD).map(d => ({ ...d }));
   const cursoRow = regime === "fin"
@@ -49,14 +38,26 @@ export async function docsDoCurso(db: Db, curso: string, regime: "gold" | "fin")
     );
   const cursoId = cursoRow.rows[0]?.id;
   if (!cursoId) return base;
-  const modelo = await db.query<{ extra: unknown; excluidos: unknown }>(
-    "SELECT extra, excluidos FROM curso_dtp_modelos WHERE regime = $1 AND curso_id = $2",
+  const modelo = await db.query<{ extra: unknown; excluidos: unknown; incluidos: unknown }>(
+    "SELECT extra, excluidos, incluidos FROM curso_dtp_modelos WHERE regime = $1 AND curso_id = $2",
     [regime, cursoId],
   );
-  const excluidos = new Set(parseExcluidos(modelo.rows[0]?.excluidos));
+  const cursoModelo = parseDtpModelo(modelo.rows[0]);
+  let composto = cursoModelo;
+  if (regime === "gold") {
+    const entidade = await db.query<{ excluidos: unknown; extra: unknown }>(
+      `SELECT e.excluidos, e.extra
+         FROM cursos_gold c
+         JOIN dtp_entidades e ON e.id = c.entidade_responsavel_id
+        WHERE c.id = $1`,
+      [cursoId],
+    );
+    composto = comporModelo(parseDtpModelo(entidade.rows[0] ?? DTP_MODELO_VAZIO), cursoModelo);
+  }
+  const excluidos = new Set(composto.excluidos);
   const kept = base.filter(d => !excluidos.has(d.id));
   const seen = new Set(kept.map(d => d.id));
-  for (const extra of parseExtra(modelo.rows[0]?.extra)) {
+  for (const extra of composto.extra) {
     if (extra.ambito !== "formando" || !extra.id || seen.has(extra.id)) continue;
     seen.add(extra.id);
     kept.push({ id: extra.id, label: extra.label || extra.id, required: Boolean(extra.bloqueante) });

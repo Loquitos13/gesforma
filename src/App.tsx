@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { DtpPanel } from "./DtpView";
+import { DtpEntidadesPanel } from "./DtpEntidadesPanel";
 import {
   FormandosGoldView, DatasGoldView, LocaisView, HorariosGoldView, AreasTematicasView,
   ModulosView, ConteudosView, FinInscricoesView, BlogTematicasView, ConfiguracoesView,
@@ -1554,9 +1555,12 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         <div className="bg-gradient-to-br from-[#0F172A] to-[#1E293B] rounded-2xl p-5 text-white">
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="bg-amber-500 text-white text-xs font-bold px-2.5 py-1 rounded-lg">{turma.nome}</span>
                 {estadoBadge(turma.estado)}
+                {ped.dtp.entidade && (
+                  <span className="bg-white/15 text-amber-200 text-xs font-bold px-2.5 py-1 rounded-lg">{ped.dtp.entidade}</span>
+                )}
                 <TurmaActivaToggle compact light activa={activa} onChange={v => toggleGold(turma.id, v)} />
               </div>
               <p className="text-lg font-bold mt-1">{turma.curso}</p>
@@ -2009,13 +2013,20 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
 
 function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (id: number) => void }) {
   const { gold, fin } = useTurmas();
+  const { cursosGold } = useLists();
   const isGold = regime === "gold";
   const resumo = useDtpResumo(regime);
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtroLocal, setFiltroLocal] = useState("");
+  const [entidades, setEntidades] = useState<{ id: number; nome: string }[]>([]);
+  const entidadeDoCurso = (curso: string) => {
+    const id = cursosGold.find(c => c.nome === curso)?.entidadeResponsavelId;
+    if (id == null) return "";
+    return entidades.find(e => e.id === id)?.nome ?? "";
+  };
   const all = isGold
-    ? gold.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, local: t.local, extra: `${t.local} · ${t.horario}`, estado: t.estado, pct: resumo.pct[t.id] ?? 0 }))
-    : fin.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, local: t.local, extra: `UFCD ${t.ufcdCod} · ${t.formador}`, estado: isTurmaActiva(t) ? t.estado : "Inativa", pct: resumo.pct[t.id] ?? 0 }));
+    ? gold.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, local: t.local, entidade: entidadeDoCurso(t.curso), extra: `${t.local} · ${t.horario}`, estado: t.estado, pct: resumo.pct[t.id] ?? 0 }))
+    : fin.map(t => ({ id: t.id, codigo: t.nome, curso: t.curso, local: t.local, entidade: "", extra: `UFCD ${t.ufcdCod} · ${t.formador}`, estado: isTurmaActiva(t) ? t.estado : "Inativa", pct: resumo.pct[t.id] ?? 0 }));
   const rows = all.filter(t => matchesFilter(t.curso, filtroCurso) && (!isGold || matchesFilter(t.local, filtroLocal)));
   return (
     <div className="space-y-4">
@@ -2023,6 +2034,7 @@ function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (
         title={isGold ? "Dossiê TP - Gold" : "Dossiê TP - Financiada"}
         sub="Na ENA o DTP vive dentro da turma. O código interno (VNG-SM-07/09, UFCD 3564) identifica a turma - não é uma “ação” à parte."
       />
+      {isGold && <DtpEntidadesPanel onEntidades={setEntidades} />}
       <ViewFilters
         accent={isGold ? "gold" : "fin"}
         fields={[
@@ -2034,13 +2046,13 @@ function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr><Th>Código interno</Th><Th>Curso</Th><Th>Detalhe</Th><Th>Estado</Th><Th>DTP</Th><Th>Ações</Th></tr></thead>
+            <thead><tr><Th>Código interno</Th><Th>Curso</Th>{isGold && <Th>Entidade</Th>}<Th>Detalhe</Th><Th>Estado</Th><Th>DTP</Th><Th>Ações</Th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {resumo.estado === "loading" && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-xs text-slate-400">A calcular a completude dos dossiês…</td></tr>
+                <tr><td colSpan={isGold ? 7 : 6} className="px-4 py-8 text-center text-xs text-slate-400">A calcular a completude dos dossiês…</td></tr>
               )}
               {resumo.estado === "offline" && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-xs text-amber-700">Sem ligação à API: as percentagens do DTP não estão disponíveis.</td></tr>
+                <tr><td colSpan={isGold ? 7 : 6} className="px-4 py-8 text-center text-xs text-amber-700">Sem ligação à API: as percentagens do DTP não estão disponíveis.</td></tr>
               )}
               {rows.map(t => (
                 <tr key={t.id} className="hover:bg-slate-50">
@@ -2048,6 +2060,13 @@ function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (
                     <button onClick={() => onOpen(t.id)} className="text-xs font-bold font-mono text-blue-600 hover:text-blue-800">{t.codigo}</button>
                   </Td>
                   <Td className="text-xs text-slate-600 max-w-[200px]">{t.curso}</Td>
+                  {isGold && (
+                    <Td>
+                      {t.entidade
+                        ? <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">{t.entidade}</span>
+                        : <span className="text-[11px] text-slate-300">sem entidade</span>}
+                    </Td>
+                  )}
                   <Td className="text-xs text-slate-500">{t.extra}</Td>
                   <Td>{estadoBadge(t.estado)}</Td>
                   <Td>
@@ -3633,12 +3652,13 @@ function GoldCursoFichaScreen({ cursoId, onBack, onOpenModulos }: { cursoId?: nu
       curso={curso}
       onBack={onBack}
       onOpenModulos={onOpenModulos}
+      onAssignEntidade={id => (curso ? patchCursoGold(curso.id, { entidadeResponsavelId: id }) : undefined)}
       onCommit={async saved => {
         if (curso) {
-          patchCursoGold(curso.id, { nome: saved.nome, categoria: saved.categoria ?? curso.categoria, tipo: saved.tipo ?? curso.tipo, preco: saved.preco ?? curso.preco, regime: saved.regime, horas: saved.horas, estado: saved.estado });
+          patchCursoGold(curso.id, { nome: saved.nome, categoria: saved.categoria ?? curso.categoria, tipo: saved.tipo ?? curso.tipo, preco: saved.preco ?? curso.preco, regime: saved.regime, horas: saved.horas, estado: saved.estado, entidadeResponsavelId: saved.entidadeResponsavelId ?? null });
           return curso.id;
         }
-        return addCursoGold({ id: saved.id, nome: saved.nome, categoria: saved.categoria || "CCP e Gestão da Formação", tipo: saved.tipo || "Pago", preco: saved.preco ?? 0, regime: saved.regime, horas: saved.horas, estado: saved.estado || "Ativo" });
+        return addCursoGold({ id: saved.id, nome: saved.nome, categoria: saved.categoria || "CCP e Gestão da Formação", tipo: saved.tipo || "Pago", preco: saved.preco ?? 0, regime: saved.regime, horas: saved.horas, estado: saved.estado || "Ativo", entidadeResponsavelId: saved.entidadeResponsavelId ?? null });
       }}
     />
   );

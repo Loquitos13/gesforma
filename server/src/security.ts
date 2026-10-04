@@ -46,6 +46,11 @@ export function sanitizeHeader(value: string) {
   return value.replace(/[\r\n\0]/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
 }
 
+/** Texto vindo de um formulário: sem quebras de cabeçalho e sem marcas HTML. */
+export function textoDePessoa(value: string, max = 200) {
+  return sanitizeHeader(value).replace(/[<>]/g, "").slice(0, max);
+}
+
 export function sanitizeText(value: string, max = 4000) {
   return value.replace(/\0/g, "").slice(0, max);
 }

@@ -18,7 +18,12 @@ const iCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-whi
  * Estrutura do dossiê. No curso Gold importa a entidade responsável e só grava
  * a personalização desse curso. Na entidade grava a estrutura que os cursos herdam.
  */
-export function DtpModeloEditor({ accent, cursoId, entidadeId }: { accent: Regime; cursoId?: number; entidadeId?: number }) {
+export function DtpModeloEditor({ accent, cursoId, entidadeId, onSaved }: {
+  accent: Regime;
+  cursoId?: number;
+  entidadeId?: number;
+  onSaved?: (info: { documentos: number }) => void;
+}) {
   const [dados, setDados] = useState<DtpModeloResposta | null>(null);
   const [estado, setEstado] = useState<"loading" | "ready" | "offline">("loading");
   const [excluidos, setExcluidos] = useState<Set<string>>(new Set());
@@ -108,6 +113,7 @@ export function DtpModeloEditor({ accent, cursoId, entidadeId }: { accent: Regim
       if (modoEntidade) {
         const r = await apiSaveDtpEntidadeModelo(entidadeId, { excluidos: [...excluidos], extra: extraBody });
         aplicar(r.modelo);
+        onSaved?.({ documentos: r.estrutura.length });
         setMsg(`Estrutura gravada: ${r.estrutura.length} documentos para os cursos desta entidade.`);
       } else {
         const r = await apiSaveDtpModelo(accent, cursoId!, { excluidos: [...excluidos], incluidos: [...incluidos], extra: extraBody });

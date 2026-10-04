@@ -26,9 +26,8 @@ import {
 import { ResolverDocumentoModal } from "./DocResolver";
 import { CursoFichaView } from "./CursoFichaView";
 import {   AppModal, SearchSelect, MultiSearchSelect, ViewFilters, matchesFilter, uniqueOpts,
-  blogTematicasOpts, cursosFinOpts, cursosGoldOpts, optsFromCursos,
-  horariosOpts,
 } from "./FormKit";
+import { precoDoCurso, useCursosOpts, useHorariosOpts, useTematicasOpts } from "./liveOpts";
 import { useProgramaDoCurso } from "./cursoPrograma";
 import { imprimirFolhasPresencas } from "./presencasPrint";
 import { useLocaisOptsDoCurso } from "./cursoLocais";
@@ -1497,6 +1496,7 @@ function exportPayload(
 function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab; onNavigate?: (v: View) => void }) {
   const { gold, toggleGold, setGoldCronograma, patchGold } = useTurmas();
   const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma, cursosGold, preinscricoes, patchPreinscricao } = useLists();
+  const horariosLista = useHorariosOpts();
   const turma = turmaId != null ? gold.find(t => t.id === turmaId) : gold[0];
   const activa = turma ? isTurmaActiva(turma) : false;
   const membros = turma ? formandosTurmas.filter(f => f.turmaId === turma.id) : [];
@@ -1698,8 +1698,8 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             {[
               { l: "Formandos", v: turma.totalAlunos, c: "text-slate-800" },
               { l: "Pagamentos ok", v: `${pagos}/${membros.length}`, c: pagos === membros.length ? "text-emerald-600" : "text-amber-600" },
-              { l: "Receita confirmada", v: `€ ${pagos * 125}`, c: "text-emerald-600" },
-              { l: "Por cobrar", v: `€ ${(membros.length - pagos) * 125}`, c: (membros.length - pagos) > 0 ? "text-amber-600" : "text-slate-400" },
+              { l: "Receita confirmada", v: `€ ${membros.filter(f => f.pago).reduce((s, f) => s + (f.valor || 0), 0)}`, c: "text-emerald-600" },
+              { l: "Por cobrar", v: `€ ${membros.filter(f => !f.pago).reduce((s, f) => s + (f.valor || 0), 0)}`, c: membros.some(f => !f.pago) ? "text-amber-600" : "text-slate-400" },
             ].map(s => (
               <Card key={s.l} className="p-4">
                 <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">{s.l}</p>
@@ -1946,7 +1946,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                 email: lead.email,
                 inscrito: nowStamp(),
                 local: turma.local, curso: turma.curso, turma: turma.nome, turmaId: turma.id,
-                estado: "Formando", pago: lead.estado === "Pago", valor: lead.preco || 125, metodo: lead.pagamentoMetodo || "-",
+                estado: "Formando", pago: lead.estado === "Pago", valor: lead.preco || precoDoCurso(cursosGold, lead.curso), metodo: lead.pagamentoMetodo || "-",
               });
               if (!id) return;
               patchGold(turma.id, { totalAlunos: turma.totalAlunos + 1 });
@@ -1962,7 +1962,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                 email: dados.email || `${nome.toLowerCase()}@mail.pt`,
                 inscrito: nowStamp(),
                 local: turma.local, curso: turma.curso, turma: turma.nome, turmaId: turma.id,
-                estado: "Formando", pago: false, valor: 125, metodo: "-",
+                estado: "Formando", pago: false, valor: precoDoCurso(cursosGold, turma.curso), metodo: "-",
               });
               if (!id) return;
               patchGold(turma.id, { totalAlunos: turma.totalAlunos + 1 });
@@ -1988,7 +1988,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                 empty={locaisDoCurso.empty}
               />
             </Field>
-            <Field label="Horário"><SearchSelect value={editHorario} onChange={setEditHorario} options={horariosOpts} /></Field>
+            <Field label="Horário"><SearchSelect value={editHorario} onChange={setEditHorario} options={horariosLista} /></Field>
           </div>
           <Field label="Formador"><SearchSelect value={editFormador} onChange={setEditFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
           <div className="grid grid-cols-2 gap-3">
@@ -2131,10 +2131,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const [editExtraFin, setEditExtraFin] = useState(0);
   const formadorOpts = useFormadorOptions();
   const locaisDoCurso = useLocaisOptsDoCurso("fin", cursosFin, editCurso);
-  const cursoFinOptsLive = useMemo(() => {
-    const live = optsFromCursos(cursosFin);
-    return live.length ? live : cursosFinOpts;
-  }, [cursosFin]);
+  const cursoFinOptsLive = useCursosOpts("fin");
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
   if (!turma) {
     return (
@@ -2804,17 +2801,15 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   const [cronograma, setCronograma] = useState<SessaoCronograma[]>([]);
   const editing = open && open !== "new" ? open : null;
   const ativas = gold.filter(t => isTurmaActiva(t)).length;
-  const cursoOpts = useMemo(() => {
-    const live = optsFromCursos(cursosGold);
-    return live.length ? live : cursosGoldOpts;
-  }, [cursosGold]);
+  const cursoOpts = useCursosOpts("gold");
+  const horariosLista = useHorariosOpts();
   const locaisDoCurso = useLocaisOptsDoCurso("gold", cursosGold, curso);
   const f = gold.filter(t => {
     const q = `${t.nome} ${t.local} ${t.curso}`.toLowerCase().includes(s.toLowerCase());
     return q && matchesFilter(t.curso, filtroCurso) && matchesFilter(t.local, filtroLocal) && (filtro === "Todos" || t.estado === filtro);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
-  const horasCurso = cursosGold.find(c => c.nome === curso)?.horas ?? cursosGoldData.find(c => c.nome === curso)?.horas ?? 90;
+  const horasCurso = cursosGold.find(c => c.nome.trim().toLowerCase() === curso.trim().toLowerCase())?.horas || 0;
   useEffect(() => {
     if (open) {
       setNome(editing?.nome ?? "");
@@ -2969,7 +2964,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
                 empty={locaisDoCurso.empty}
               />
             </Field>
-            <Field label="Horário"><SearchSelect value={horario} onChange={setHorario} options={horariosOpts} /></Field>
+            <Field label="Horário"><SearchSelect value={horario} onChange={setHorario} options={horariosLista} /></Field>
           </div>
           <Field label="Formador"><SearchSelect value={formador} onChange={setFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
           <div className="grid grid-cols-2 gap-3">
@@ -3004,7 +2999,8 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
 
 function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?: () => void }) {
   const { gold, patchGold } = useTurmas();
-  const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma, preinscricoes, patchPreinscricao } = useLists();
+  const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma, preinscricoes, patchPreinscricao, cursosGold } = useLists();
+  const cursosLista = useCursosOpts("gold");
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
@@ -3059,7 +3055,7 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
       nome: lead.nome, apelido: lead.apelido || "-",
       telf: lead.telf || "-", email: lead.email,
       inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
-      estado: "Formando", pago: lead.estado === "Pago", valor: lead.preco || 125, metodo: lead.pagamentoMetodo || "-",
+      estado: "Formando", pago: lead.estado === "Pago", valor: lead.preco || precoDoCurso(cursosGold, lead.curso), metodo: lead.pagamentoMetodo || "-",
     });
     if (!id) return;
     patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
@@ -3199,7 +3195,7 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
             <SearchSelect value={turma} onChange={setTurma} options={turmaOpts} placeholder="Só turmas ativas…" empty="Não há turmas ativas para este curso." />
           </Field>
           <TurmaInscricaoHint optsLen={turmaOpts.length} curso={cursoEdit || undefined} />
-          <Field label="Curso"><SearchSelect value={cursoEdit} onChange={v => { setCursoEdit(v); if (turma && !turmaGoldOpts(gold, { curso: v, includeNome: editing?.turma }).some(o => o.value === turma)) setTurma(""); }} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <Field label="Curso"><SearchSelect value={cursoEdit} onChange={v => { setCursoEdit(v); if (turma && !turmaGoldOpts(gold, { curso: v, includeNome: editing?.turma }).some(o => o.value === turma)) setTurma(""); }} options={cursosLista} placeholder="Pesquisar curso…" /></Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setEdit(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button disabled={!turma || (!editing && !nomeNovo.trim())} onClick={async () => {
@@ -3220,7 +3216,7 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
                   telf: telfNovo.trim() || "-",
                   email: emailNovo.trim() || `${nome.toLowerCase()}@mail.pt`,
                   inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
-                  estado: "Formando", pago: false, valor: 125, metodo: "-",
+                  estado: "Formando", pago: false, valor: precoDoCurso(cursosGold, dest.curso), metodo: "-",
                 });
                 if (!id) return;
                 patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
@@ -3252,6 +3248,7 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
 function FinFormandosView({ openId, onOpened }: { openId?: number; onOpened?: () => void }) {
   const { fin, patchFin } = useTurmas();
   const { formandosFin, addFormandoFin, removeFormandoFin } = useLists();
+  const cursosListaFin = useCursosOpts("fin");
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
@@ -3380,7 +3377,7 @@ function FinFormandosView({ openId, onOpened }: { openId?: number; onOpened?: ()
           <Field label="Nome"><input className={iCls} value={nomeNovo} onChange={e => setNomeNovo(e.target.value)} placeholder="Nome completo" /></Field>
           <Field label="Email"><input className={iCls} type="email" value={emailNovo} onChange={e => setEmailNovo(e.target.value)} /></Field>
           <Field label="Telemóvel"><input className={iCls} value={telfNovo} onChange={e => setTelfNovo(e.target.value)} /></Field>
-          <Field label="Curso / UFCD"><SearchSelect value={cursoNovo} onChange={v => { setCursoNovo(v); setTurmaNovo(""); }} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
+          <Field label="Curso / UFCD"><SearchSelect value={cursoNovo} onChange={v => { setCursoNovo(v); setTurmaNovo(""); }} options={cursosListaFin} placeholder="Pesquisar UFCD…" /></Field>
           <Field label="Turma"><SearchSelect value={turmaNovo} onChange={setTurmaNovo} options={turmaOpts} placeholder="Turma destino…" empty="Não há turmas para esta UFCD." /></Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setNovo(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
@@ -3428,10 +3425,8 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
   const [cronograma, setCronograma] = useState<SessaoCronograma[]>([]);
   const editing = open && open !== "new" ? open : null;
   const locaisDoCurso = useLocaisOptsDoCurso("fin", cursosFin, curso);
-  const cursoFinOpts = useMemo(() => {
-    const live = optsFromCursos(cursosFin);
-    return live.length ? live : cursosFinOpts;
-  }, [cursosFin]);
+  const cursoFinOpts = useCursosOpts("fin");
+  const horariosLista = useHorariosOpts();
   const ativas = fin.filter(t => isTurmaActiva(t)).length;
   const f = fin.filter(t => {
     const q = `${t.nome} ${t.curso}`.toLowerCase().includes(s.toLowerCase());
@@ -3491,7 +3486,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
         regime="fin"
         cursos={cursoFinOpts.map(o => o.value)}
         locais={[...new Set(fin.map(t => t.local).filter(Boolean))]}
-        horarios={["Pós Laboral", "Sábado manhã", "Laboral Manhã"]}
+        horarios={horariosLista.map(o => o.value)}
         onApplied={() => void reload()}
       />
       <ViewFilters
@@ -3614,7 +3609,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
             />
           </Field>
           <Field label="Horário (sessões de 3 h)">
-            <SearchSelect value={horarioFin} onChange={setHorarioFin} options={horariosOpts} placeholder="Pós Laboral…" />
+            <SearchSelect value={horarioFin} onChange={setHorarioFin} options={horariosLista} placeholder="Pós Laboral…" />
           </Field>
           <Field label="Data de início"><input type="date" className={iCls} value={dataInicio} onChange={e => setDataInicio(e.target.value)} /></Field>
           <Field label="Quantidade de inscrições adicionais permitidas">
@@ -3738,6 +3733,7 @@ function CursosGoldView({ onOpen }: { onOpen: (id: number | "new") => void }) {
 
 function BlogView() {
   const { blogPosts, addBlogPost, patchBlogPost, removeBlogPost } = useLists();
+  const tematicas = useTematicasOpts();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
   const [open, setOpen] = useState(false);
@@ -3780,7 +3776,7 @@ function BlogView() {
       <SlideOver open={open} onClose={() => setOpen(false)} title={editId != null ? "Editar post" : "Novo post"} sub="Artigo no site da ENA">
         <div className="p-5 space-y-3">
           <Field label="Título"><input className={iCls} value={titulo} onChange={e => setTitulo(e.target.value)} /></Field>
-          <Field label="Temática"><SearchSelect value={tematica} onChange={setTematica} options={blogTematicasOpts} placeholder="Pesquisar temática…" /></Field>
+          <Field label="Temática"><SearchSelect value={tematica} onChange={setTematica} options={tematicas} placeholder="Pesquisar temática…" /></Field>
           <Field label="Slug"><input className={iCls} value={slug} onChange={e => setSlug(e.target.value)} placeholder="ccp-formacao-formadores" /></Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
@@ -3855,6 +3851,7 @@ function FinCursosView({ onOpen }: { onOpen: (id: number | "new") => void }) {
 }
 
 function EmailsView() {
+  const cursosEmail = useCursosOpts("gold");
   const [tab, setTab] = useState<"regras" | "templates" | "historico">("regras");
   const [regras, setRegras] = useState<EmailRule[]>([]);
   const [templates, setTemplates] = useState(emailTemplates);
@@ -4154,7 +4151,7 @@ function EmailsView() {
                   <SearchSelect value={atraso} onChange={setAtraso} options={emailAtrasosOpts} />
                 </Field>
                 <Field label="Curso (opcional)">
-                  <SearchSelect value={cursoEmail} onChange={setCursoEmail} options={cursosGoldOpts} placeholder="Todas as turmas, ou só este curso…" allowEmpty />
+                  <SearchSelect value={cursoEmail} onChange={setCursoEmail} options={cursosEmail} placeholder="Todas as turmas, ou só este curso…" allowEmpty />
                 </Field>
                 <Field label="Nome da regra">
                   <input
@@ -4336,7 +4333,8 @@ function EmailsView() {
 }
 
 function PagamentosView() {
-  const { pagamentos, addPagamento } = useLists();
+  const { pagamentos, addPagamento, cursosGold } = useLists();
+  const cursosLista = useCursosOpts("gold");
   const lista = pagamentos;
   const [dash, setDash] = useState<Dashboard | null>(null);
   useEffect(() => {
@@ -4362,7 +4360,7 @@ function PagamentosView() {
   );
   return (
     <div className="space-y-5">
-      <PageHeader title="Pagamentos" action={<NewBtn label="+ Nova transação" onClick={() => { setNome(""); setEmailPag(""); setCurso(""); setValor("125"); setMetodo("MB Way"); setNovo(true); }} />} />
+      <PageHeader title="Pagamentos" action={<NewBtn label="+ Nova transação" onClick={() => { setNome(""); setEmailPag(""); setCurso(""); setValor(""); setMetodo("MB Way"); setNovo(true); }} />} />
       <ViewFilters
         fields={[{ label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(lista.map(t => t.curso)) }]}
         chips={{ options: ["Todos", "Pago", "Pendente"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
@@ -4454,7 +4452,7 @@ function PagamentosView() {
         <div className="p-5 space-y-3">
           <Field label="Nome do formando"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} /></Field>
           <Field label="Email"><input className={iCls} type="email" value={emailPag} onChange={e => setEmailPag(e.target.value)} placeholder="para o recibo e o contacto após a venda" /></Field>
-          <Field label="Curso"><SearchSelect value={curso} onChange={setCurso} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
+          <Field label="Curso"><SearchSelect value={curso} onChange={v => { setCurso(v); const preco = precoDoCurso(cursosGold, v); if (preco > 0) setValor(String(preco)); }} options={cursosLista} placeholder="Pesquisar curso…" /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Valor (€)"><input className={iCls} type="number" value={valor} onChange={e => setValor(e.target.value)} /></Field>
             <Field label="Método">

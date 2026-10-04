@@ -3,7 +3,7 @@ import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
 import { mapPreinscricao, nextOpsId } from "./ops.js";
 import { resolverTurmaOferta } from "./ofertaGold.js";
-import { isEmail, normalizeEmail, sanitizeHeader } from "./security.js";
+import { isEmail, normalizeEmail, sanitizeHeader, textoDePessoa } from "./security.js";
 
 function nowStamp() {
   return new Date().toISOString().slice(0, 16).replace("T", " ");
@@ -67,14 +67,14 @@ export async function criarPreinscricaoPublica(
     };
   }
 
-  const precoRow = await db.query<{ preco: number }>("SELECT preco FROM cursos_gold WHERE nome = $1", [curso]);
+  const precoRow = await db.query<{ preco: number }>("SELECT preco FROM cursos_gold WHERE lower(trim(nome)) = lower(trim($1))", [curso]);
   const id = await nextOpsId(db);
   await db.query(
     `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, entrada, meio_contacto, horario, turma_id)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Não contactado',$12,$13,'preinscricao',$14,$15,$16)`,
     [
-      id, nowStamp(), sanitizeHeader(input.nome), sanitizeHeader(input.apelido || ""), email,
-      telf, inicio, sanitizeHeader(input.concelho || ""),
+      id, nowStamp(), textoDePessoa(input.nome), textoDePessoa(input.apelido || ""), email,
+      telf, inicio, textoDePessoa(input.concelho || ""),
       local, curso, Number(precoRow.rows[0]?.preco ?? input.preco ?? 0),
       sanitizeHeader(input.campanha || ""), origem, meio, horario, turmaId,
     ],

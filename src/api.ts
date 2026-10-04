@@ -279,6 +279,8 @@ export type DtpItem = {
   extra?: boolean;
   ambito?: DtpAmbito;
   anexo?: { fileName: string; url: string; driveFileId: string } | null;
+  /** Ficheiros do percurso público: submetido ainda não é validado pela secretaria. */
+  percurso?: { submetidos: number; validados: number; recusados: number; total: number };
 };
 
 export type DtpSnapshot = {

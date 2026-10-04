@@ -5,7 +5,8 @@ import {
 } from "./api";
 import { ClienteFicha } from "./ClienteFicha";
 import { entradaChip, etiquetaChip, leadMarkStyle, meioChip } from "./crmUi";
-import { AppModal, ViewFilters, cursosGoldOpts, locaisOpts } from "./FormKit";
+import { AppModal, ViewFilters } from "./FormKit";
+import { precoDoCurso, useCursosOpts, useLocaisOpts } from "./liveOpts";
 import { OptionSelect } from "./OptionSelect";
 import { tempNumericId, useLists, type Preinscricao } from "./ListsContext";
 import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./SecretaryUX";
@@ -126,6 +127,8 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
   const [confirmMove, setConfirmMove] = useState<{ id: number; estado: string; item: CrmLead } | null>(null);
 
   const { gold, fin, patchGold, patchFin } = useTurmas();
+  const cursosFiltro = useCursosOpts(regime);
+  const locaisFiltro = useLocaisOpts(regime === "fin" ? "fin" : "gold");
   const {
     preinscricoes, addPreinscricao, patchPreinscricao, removePreinscricao, contactarPreinscricao,
     addFormandoTurma, addFormandoFin, cursosGold, cursosFin,
@@ -426,8 +429,8 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
           </div>
           <ViewFilters
             fields={[
-              { label: "Curso", value: curso, onChange: v => { setCurso(v); setPage(1); }, options: facets.cursos.length ? facets.cursos.map(x => ({ value: x })) : cursosGoldOpts },
-              { label: "Local", value: local, onChange: v => { setLocal(v); setPage(1); }, options: facets.locais.length ? facets.locais.map(x => ({ value: x })) : locaisOpts },
+              { label: "Curso", value: curso, onChange: v => { setCurso(v); setPage(1); }, options: facets.cursos.length ? facets.cursos.map(x => ({ value: x })) : cursosFiltro },
+              { label: "Local", value: local, onChange: v => { setLocal(v); setPage(1); }, options: facets.locais.length ? facets.locais.map(x => ({ value: x })) : locaisFiltro },
               { label: "Origem", value: origem, onChange: v => { setOrigem(v); setPage(1); }, options: facets.origens.map(x => ({ value: x })) },
             ]}
             chips={{ options: ["Todos", ...CRM_ESTADOS], value: estado, onChange: v => { setEstado(v); setFila(""); setPage(1); } }}
@@ -698,7 +701,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
               id: tempNumericId(),
               nome: item.nome, apelido: item.apelido || "-", telf: item.telf || "-", email: item.email,
               inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
-              estado: "Formando", pago: item.estado === "Pago", valor: item.preco || 125, metodo: item.pagamentoMetodo || "-",
+              estado: "Formando", pago: item.estado === "Pago", valor: item.preco || precoDoCurso(cursosGold, dest.curso), metodo: item.pagamentoMetodo || "-",
             });
             if (!id) return;
             patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
@@ -800,7 +803,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
                 horario: form.horario || t?.horario || "",
                 turmaId: form.turmaId || t?.id || 0,
                 curso: form.curso || t?.curso || "",
-                preco: cursoRow?.preco ?? editLead?.preco ?? (regime === "fin" ? 0 : 125),
+                preco: regime === "fin" ? (editLead?.preco ?? 0) : (precoDoCurso(cursosGold, form.curso || t?.curso || "") || editLead?.preco || 0),
                 estado: editLead?.estado ?? "Não contactado",
                 campanha: editLead?.campanha ?? "",
                 origem: form.origem || "Telefone",

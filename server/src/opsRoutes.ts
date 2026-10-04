@@ -954,7 +954,9 @@ export function registerOpsRoutes(
     const id = await nextOpsId(db);
     const docs = { cc: d.cc ?? { ok: false, data: "" }, ch: d.ch ?? { ok: false, data: "" }, cu: d.cu ?? { ok: false, data: "" }, ci: d.ci ?? { ok: false, data: "" }, ce: d.ce ?? { ok: false, data: "" } };
     await db.query(
-      "INSERT INTO formandos_fin (id, nome, apelido, turma, telf, email, curso, estado, docs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)",
+      `INSERT INTO formandos_fin (id, nome, apelido, turma, telf, email, curso, estado, docs, turma_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,
+         (SELECT id FROM turmas_fin WHERE lower(trim(nome)) = lower(trim($4)) LIMIT 1))`,
       [id, d.nome, d.apelido, d.turma, d.telf, d.email, d.curso, d.estado, docs],
     );
     const row = await one(db, "SELECT * FROM formandos_fin WHERE id = $1", [id]);
@@ -975,7 +977,9 @@ export function registerOpsRoutes(
     };
     await db.query(
       `UPDATE formandos_fin SET nome = COALESCE($2, nome), apelido = COALESCE($3, apelido), turma = COALESCE($4, turma),
-         telf = COALESCE($5, telf), email = COALESCE($6, email), curso = COALESCE($7, curso), estado = COALESCE($8, estado), docs = $9::jsonb
+         telf = COALESCE($5, telf), email = COALESCE($6, email), curso = COALESCE($7, curso), estado = COALESCE($8, estado), docs = $9::jsonb,
+         turma_id = CASE WHEN $4::text IS NULL THEN turma_id
+           ELSE (SELECT id FROM turmas_fin WHERE lower(trim(nome)) = lower(trim($4)) LIMIT 1) END
        WHERE id = $1`,
       [id, d.nome ?? null, d.apelido ?? null, d.turma ?? null, d.telf ?? null, d.email ?? null, d.curso ?? null, d.estado ?? null, docs],
     );

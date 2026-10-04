@@ -7,6 +7,7 @@ import { listDriveFiles, readDriveContent, storeDriveFile } from "./googleDrive.
 import { DTP_CATEGORIAS, dtpCategoriaDe, dtpCategoriaPasta, dtpPastaNome, dtpZipNome, dtpZipRelPath, pastaSegura } from "./dtpPasta.js";
 import { zipStore } from "./zipStore.js";
 import {
+  aplicarPercursoNoItem,
   buildDtpItems,
   comporModelo,
   dtpDefs,
@@ -14,13 +15,16 @@ import {
   dtpPct,
   estadoPorFicheirosCurso,
   parseDtpModelo,
+  tipoPercursoDoItem,
   DTP_FASES,
   DTP_MODELO_VAZIO,
   type CursoFicheiroRef,
   type DtpCounts,
   type DtpEstado,
   type DtpFacts,
+  type DtpItem,
   type DtpModelo,
+  type DtpPercurso,
 } from "./dtpModel.js";
 
 type Regime = "gold" | "fin";
@@ -275,9 +279,9 @@ function nomeArquivoDtp(label: string | undefined, original: string) {
 async function cursoIdDaTurma(db: Db, regime: Regime, curso: string) {
   if (!curso.trim()) return null;
   const row = regime === "gold"
-    ? await db.query<{ id: number }>("SELECT id FROM cursos_gold WHERE nome = $1 LIMIT 1", [curso])
+    ? await db.query<{ id: number }>("SELECT id FROM cursos_gold WHERE lower(trim(nome)) = lower(trim($1)) LIMIT 1", [curso])
     : await db.query<{ id: number }>(
-      "SELECT id FROM cursos_fin WHERE ufcd = $1 OR nome_comercial = $1 LIMIT 1",
+      "SELECT id FROM cursos_fin WHERE lower(trim(ufcd)) = lower(trim($1)) OR lower(trim(nome_comercial)) = lower(trim($1)) LIMIT 1",
       [curso],
     );
   return row.rows[0]?.id ?? null;
@@ -340,10 +344,11 @@ async function formandosDaTurma(db: Db, regime: Regime, turma: TurmaRow) {
   // Na Financiada o campo turma é texto livre: quem não aponta para uma turma existente conta pelo curso.
   const rows = await db.query<{ id: number; nome: string; apelido: string; docs: unknown }>(
     `SELECT id, nome, apelido, docs FROM formandos_fin f
-      WHERE f.turma = $1
-         OR (f.curso = $2 AND NOT EXISTS (SELECT 1 FROM turmas_fin t WHERE t.nome = f.turma))
+      WHERE f.turma_id = $1
+         OR (f.turma_id IS NULL AND f.turma = $2)
+         OR (f.turma_id IS NULL AND f.curso = $3 AND NOT EXISTS (SELECT 1 FROM turmas_fin t WHERE t.nome = f.turma))
       ORDER BY nome`,
-    [turma.nome, turma.curso],
+    [turma.id, turma.nome, turma.curso],
   );
   return rows.rows.map(r => ({ id: r.id, nome: `${r.nome} ${r.apelido}`.trim(), docs: asObj(r.docs) }));
 }
@@ -421,6 +426,65 @@ async function manualDtp(db: Db, regime: Regime, turmaId: number) {
   return Object.fromEntries(rows.rows.map(r => [r.item_id, r.estado])) as Record<string, DtpEstado>;
 }
 
+async function percursoGoldDaTurma(db: Db, turma: TurmaRow) {
+  const formandos = await db.query<{ id: number; email: string }>(
+    `SELECT id, lower(trim(email)) AS email
+       FROM formandos_gold
+      WHERE turma_id = $1 OR turma = $2`,
+    [turma.id, turma.nome],
+  );
+  const total = formandos.rows.length;
+  const vazio = new Map<string, Pick<DtpPercurso, "submetidos" | "validados" | "recusados">>();
+  if (total === 0) return { total, porTipo: vazio };
+  const emails = [...new Set(formandos.rows.map(r => r.email).filter(Boolean))];
+  const leads = emails.length
+    ? await db.query<{ email: string; id: number }>(
+      `SELECT DISTINCT ON (lower(email)) lower(email) AS email, id
+         FROM preinscricoes
+        WHERE lower(email) = ANY($1::text[])
+          AND COALESCE(regime, 'gold') = 'gold'
+          AND (lower(trim(curso)) = lower(trim($2)) OR percurso_turma_id = $3)
+        ORDER BY lower(email), (percurso_turma_id = $3) DESC, id DESC`,
+      [pgTextArray(emails), turma.curso, turma.id],
+    )
+    : { rows: [] as { email: string; id: number }[] };
+  const porEmail = new Map(leads.rows.map(r => [r.email, r.id]));
+  const leadIds = [...new Set(leads.rows.map(r => r.id))];
+  const docs = leadIds.length
+    ? await db.query<{ preinscricao_id: number; tipo: string; estado: string }>(
+      `SELECT preinscricao_id, tipo, COALESCE(estado, 'pendente') AS estado
+         FROM preinscricao_docs
+        WHERE preinscricao_id = ANY($1::int[])`,
+      [pgIntArray(leadIds)],
+    )
+    : { rows: [] as { preinscricao_id: number; tipo: string; estado: string }[] };
+  const rank = { validado: 3, pendente: 2, recusado: 1 } as const;
+  const melhor = new Map<string, keyof typeof rank>();
+  for (const doc of docs.rows) {
+    const estado = doc.estado === "validado" || doc.estado === "recusado" ? doc.estado : "pendente";
+    const chave = `${doc.preinscricao_id}:${doc.tipo}`;
+    const anterior = melhor.get(chave);
+    if (!anterior || rank[estado] > rank[anterior]) melhor.set(chave, estado);
+  }
+  const tipos = new Set(docs.rows.map(d => d.tipo).filter(Boolean));
+  const porTipo = new Map<string, Pick<DtpPercurso, "submetidos" | "validados" | "recusados">>();
+  for (const tipo of tipos) {
+    let submetidos = 0;
+    let validados = 0;
+    let recusados = 0;
+    for (const formando of formandos.rows) {
+      const leadId = formando.email ? porEmail.get(formando.email) : undefined;
+      if (leadId == null) continue;
+      const estado = melhor.get(`${leadId}:${tipo}`);
+      if (estado === "validado") validados += 1;
+      else if (estado === "pendente") submetidos += 1;
+      else if (estado === "recusado") recusados += 1;
+    }
+    porTipo.set(tipo, { submetidos, validados, recusados });
+  }
+  return { total, porTipo };
+}
+
 async function dtpForTurma(db: Db, regime: Regime, turma: TurmaRow, modeloPre?: DtpModelo, entidadePre?: string | null) {
   const carregado = modeloPre
     ? { modelo: modeloPre, entidade: entidadePre ?? null }
@@ -451,7 +515,7 @@ async function dtpForTurma(db: Db, regime: Regime, turma: TurmaRow, modeloPre?: 
     pessoaNome: f.pessoa_nome,
   }));
   const formandosCurso = refs.some(f => f.ambito === "formando") ? await formandosDaTurma(db, regime, turma) : [];
-  const items = buildDtpItems(regime, facts, manual, modelo).map(item => {
+  let items: DtpItem[] = buildDtpItems(regime, facts, manual, modelo).map(item => {
     const a = byItem.get(item.id);
     const anexo = a?.drive_file_id
       ? { fileName: a.file_name, url: a.drive_url, driveFileId: a.drive_file_id }
@@ -469,6 +533,15 @@ async function dtpForTurma(db: Db, regime: Regime, turma: TurmaRow, modeloPre?: 
     }
     return { ...next, anexo };
   });
+  if (regime === "gold") {
+    const percurso = await percursoGoldDaTurma(db, turma);
+    items = items.map(item => {
+      const tipo = tipoPercursoDoItem(item);
+      if (!tipo) return item;
+      const contagem = percurso.porTipo.get(tipo) ?? { submetidos: 0, validados: 0, recusados: 0 };
+      return aplicarPercursoNoItem(item, { ...contagem, total: percurso.total }, Boolean(manual[item.id]));
+    });
+  }
   return {
     items,
     pct: dtpPct(items),
@@ -1483,7 +1556,7 @@ export function registerPedagogiaRoutes(
 
     const formadorNome = (turma.formador ?? "").trim();
     if (formadorNome) {
-      const fr = await db.query<{ id: number }>("SELECT id FROM formadores WHERE nome = $1 LIMIT 1", [formadorNome]);
+      const fr = await db.query<{ id: number }>("SELECT id FROM formadores WHERE lower(trim(nome)) = lower(trim($1)) LIMIT 1", [formadorNome]);
       const fid = fr.rows[0]?.id;
       if (fid != null) {
         const fdocs = await db.query<{ doc_id: string; file_name: string; drive_file_id: string }>(

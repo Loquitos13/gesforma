@@ -29,7 +29,10 @@ export async function createDb(): Promise<Db> {
     return {
       driver: "postgres",
       async query<T extends Record<string, unknown>>(text: string, params: unknown[] = []) {
-        const rows = await sql.unsafe(text, params as never[]);
+        const rows = await sql.begin(async (tx) => {
+          await tx.unsafe("SELECT set_config('gesforma.api', '1', true)");
+          return tx.unsafe(text, params as never[]);
+        });
         return { rows: [...rows] as unknown as T[] };
       },
       async close() {
@@ -41,6 +44,7 @@ export async function createDb(): Promise<Db> {
   mkdirSync(dirname(config.pgliteDir), { recursive: true });
   const client = new PGlite(config.pgliteDir);
   await client.waitReady;
+  await client.query("SELECT set_config('gesforma.api', '1', false)");
   return {
     driver: "pglite",
     async query<T extends Record<string, unknown>>(text: string, params: unknown[] = []) {

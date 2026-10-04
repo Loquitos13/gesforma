@@ -299,7 +299,55 @@ export type DtpItem = DtpDef & {
   ambito?: DtpAmbito;
   universal?: boolean;
   anexo?: { fileName: string; url: string; driveFileId: string } | null;
+  /** Contagem do percurso público de inscrição, só em Gold. */
+  percurso?: DtpPercurso;
 };
+
+export type DtpPercurso = {
+  submetidos: number;
+  validados: number;
+  recusados: number;
+  total: number;
+};
+
+/** Tipo do documento no percurso público, quando o item do dossiê Gold corresponde a um. */
+export function tipoPercursoDoItem(item: { id: string; auto?: string; ambito?: string }): string | null {
+  if (item.auto === "contratos") return "contrato";
+  if (item.auto === "doc-regulamento") return "regulamento";
+  if (item.auto === "doc-exp") return "exp";
+  if (item.id === "recibos") return "comprovativo";
+  if (item.id.startsWith("extra:") && item.ambito === "formando") return item.id.slice("extra:".length);
+  return null;
+}
+
+function detalhePercurso(p: DtpPercurso) {
+  const partes: string[] = [];
+  if (p.submetidos) partes.push(`${p.submetidos} ${p.submetidos === 1 ? "submetido" : "submetidos"}`);
+  if (p.validados) partes.push(`${p.validados} ${p.validados === 1 ? "validado" : "validados"} pela secretaria`);
+  if (p.recusados) partes.push(`${p.recusados} ${p.recusados === 1 ? "recusado" : "recusados"}`);
+  const emFalta = p.total - p.submetidos - p.validados - p.recusados;
+  if (emFalta > 0 && (p.submetidos || p.validados || p.recusados)) partes.push(`${emFalta} em falta`);
+  return partes.join(" · ");
+}
+
+/**
+ * Em Gold, um ficheiro do percurso só conta como no dossiê depois de a secretaria validar.
+ * Submetido (pendente) fica parcial. A marcação manual da turma mantém-se.
+ */
+export function aplicarPercursoNoItem(item: DtpItem, percurso: DtpPercurso, manual: boolean): DtpItem {
+  const com = { ...item, percurso };
+  if (manual || percurso.total <= 0) return com;
+  const chegou = percurso.submetidos + percurso.validados + percurso.recusados;
+  if (chegou <= 0) return com;
+  const detalhe = detalhePercurso(percurso);
+  if (percurso.validados === percurso.total) {
+    return { ...com, estado: "ok", detalhe, origem: "auto" };
+  }
+  if (percurso.submetidos + percurso.validados > 0) {
+    return { ...com, estado: "parcial", detalhe, origem: "auto" };
+  }
+  return { ...com, estado: "falta", detalhe, origem: "auto" };
+}
 
 /** Estrutura do dossiê de um curso: base do regime menos o que foi retirado, mais os extras. */
 export function dtpEstrutura(regime: "gold" | "fin", modelo: DtpModelo = DTP_MODELO_VAZIO): DtpDef[] {

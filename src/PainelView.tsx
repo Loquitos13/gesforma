@@ -277,7 +277,11 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
             }}>Limpar filtros</button>
           )}
         </div>
-        <p className="text-[11px] text-slate-400">Formandos = inscritos em turma. Receita, funil e ranking seguem o mesmo filtro.</p>
+        <p className="text-[11px] text-slate-400">
+          {regime === "gold"
+            ? "Pré-inscritos são cursos sem pagamento automático (turma e documentos). Pré-pagos pagam e entram. O total de formandos soma quem pagou em cada via."
+            : "Formandos = inscritos em turma. Receita, funil e ranking seguem o mesmo filtro."}
+        </p>
       </Card>
 
       {estado === "loading" && !cards && (
@@ -363,6 +367,24 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
             </Card>
             <Card className="p-4">
               <p className="text-sm font-semibold text-slate-700 mb-3">Funil de conversão</p>
+              {regime === "gold" && dash.comercial ? (
+                <div className="space-y-3">
+                  {[
+                    { l: "Pré-inscritos", v: dash.comercial.preInscritos.toLocaleString("pt-PT"), s: "Ainda sem ser formando" },
+                    { l: "Conversão", v: dash.comercial.conversaoPct == null ? String(dash.comercial.convertidos) : `${dash.comercial.convertidos} · ${dash.comercial.conversaoPct}%`, s: "Pré-inscritos que passaram a pago ou formando" },
+                    { l: "Pré-pagos", v: dash.comercial.prePagos.toLocaleString("pt-PT"), s: "E-learning com acesso depois do pagamento" },
+                    { l: "Total de formandos", v: dash.comercial.totalFormandos.toLocaleString("pt-PT"), s: `${dash.comercial.formandosPre} da pré-inscrição · ${dash.comercial.formandosAuto} pré-pagos` },
+                  ].map(row => (
+                    <div key={row.l} className="border-b border-slate-100 pb-2 last:border-0">
+                      <div className="flex justify-between text-xs gap-2">
+                        <span className="text-slate-600">{row.l}</span>
+                        <span className="font-semibold text-slate-800">{row.v}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">{row.s}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
               <div className="space-y-2">
                 {funil.map((f, i) => {
                   const pct = Math.min(100, Math.round((f.v / base) * 100));
@@ -380,6 +402,7 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
                   );
                 })}
               </div>
+              )}
             </Card>
           </div>
           <ConhecimentoEnaCard onVerMais={() => onNavigate(crmView)} dados={dash.conhecimento} />

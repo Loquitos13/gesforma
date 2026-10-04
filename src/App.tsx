@@ -27,7 +27,8 @@ import { ResolverDocumentoModal } from "./DocResolver";
 import { CursoFichaView } from "./CursoFichaView";
 import {   AppModal, SearchSelect, MultiSearchSelect, ViewFilters, matchesFilter, uniqueOpts,
 } from "./FormKit";
-import { precoDoCurso, useCursosOpts, useHorariosOpts, useTematicasOpts } from "./liveOpts";
+import { precoDaInscricao, useCursosOpts, useHorariosOpts, useLocaisOpts, useRegrasPreco, useTematicasOpts } from "./liveOpts";
+import { useCatalogList } from "./CatalogsContext";
 import { useProgramaDoCurso } from "./cursoPrograma";
 import { imprimirFolhasPresencas } from "./presencasPrint";
 import { useLocaisOptsDoCurso } from "./cursoLocais";
@@ -35,7 +36,7 @@ import { OptionSelect } from "./OptionSelect";
 import { ListasOpcoesView } from "./ListasOpcoesView";
 import { CronogramaEditor, FormadoresAtribuidosCard, TurmaActivaToggle, TurmaInactivaBanner, TurmaInscricaoHint } from "./TurmaCronograma";
 import { TurmaRegrasPanel } from "./TurmaRegrasPanel";
-import { InscreverFormandoPanel, EscolherTurmaModal, FormandosKanban } from "./TurmaInscricao";
+import { InscreverFormandoPanel, EscolherTurmaModal } from "./TurmaInscricao";
 import { TurmaAvaliacao } from "./TurmaAvaliacao";
 import { FormadoresView } from "./FormadoresView";
 import { FORMADORES_SEED } from "./formadorModel";
@@ -1051,7 +1052,10 @@ function SessoesTurmaTab({
   return (
     <Card>
       <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-2 flex-wrap">
-        <p className="text-sm font-semibold text-slate-700">Sessões - {turmaNome}</p>
+        <div>
+          <p className="text-sm font-semibold text-slate-700">Sessões - {turmaNome}</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">Cada sessão é uma linha lectiva do cronograma. O dia, a hora e os formadores editam-se no cronograma. Aqui ficam presenças, sumário e plano.</p>
+        </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -1497,6 +1501,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const { gold, toggleGold, setGoldCronograma, patchGold } = useTurmas();
   const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma, cursosGold, preinscricoes, patchPreinscricao } = useLists();
   const horariosLista = useHorariosOpts();
+  const regrasPreco = useRegrasPreco();
   const turma = turmaId != null ? gold.find(t => t.id === turmaId) : gold[0];
   const activa = turma ? isTurmaActiva(turma) : false;
   const membros = turma ? formandosTurmas.filter(f => f.turmaId === turma.id) : [];
@@ -1570,7 +1575,10 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                 <span className="flex items-center gap-1">{I.school} {turma.horario}</span>
               </div>
             </div>
-            <div className="flex gap-3 flex-shrink-0">
+            <div className="flex gap-3 flex-shrink-0 flex-wrap">
+              {activa && (
+                <button type="button" onClick={() => setAddFormando(true)} className="px-4 py-2 bg-white text-slate-900 text-sm font-semibold rounded-lg hover:bg-amber-50">Inscrever formando</button>
+              )}
               <button onClick={() => {
                 setEditNome(turma.nome); setEditLocal(turma.local); setEditHorario(turma.horario);
                 setEditFormador(turma.formador); setEditInicio(turma.dataInicio); setEditVagas(turma.vagas); setEditExtra(turma.inscricoesAdicionais ?? 0);
@@ -1946,7 +1954,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                 email: lead.email,
                 inscrito: nowStamp(),
                 local: turma.local, curso: turma.curso, turma: turma.nome, turmaId: turma.id,
-                estado: "Formando", pago: lead.estado === "Pago", valor: lead.preco || precoDoCurso(cursosGold, lead.curso), metodo: lead.pagamentoMetodo || "-",
+                estado: "Formando", pago: lead.estado === "Pago", valor: lead.preco || precoDaInscricao(cursosGold, regrasPreco, { curso: turma.curso, local: turma.local, horario: turma.horario, inicio: turma.dataInicio }), metodo: lead.pagamentoMetodo || "-",
               });
               if (!id) return;
               patchGold(turma.id, { totalAlunos: turma.totalAlunos + 1 });
@@ -1962,7 +1970,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                 email: dados.email || `${nome.toLowerCase()}@mail.pt`,
                 inscrito: nowStamp(),
                 local: turma.local, curso: turma.curso, turma: turma.nome, turmaId: turma.id,
-                estado: "Formando", pago: false, valor: precoDoCurso(cursosGold, turma.curso), metodo: "-",
+                estado: "Formando", pago: false, valor: precoDaInscricao(cursosGold, regrasPreco, { curso: turma.curso, local: turma.local, horario: turma.horario, inicio: turma.dataInicio }), metodo: "-",
               });
               if (!id) return;
               patchGold(turma.id, { totalAlunos: turma.totalAlunos + 1 });
@@ -2787,6 +2795,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtroLocal, setFiltroLocal] = useState("");
+  const [filtroHorario, setFiltroHorario] = useState("");
   const [open, setOpen] = useState<TurmaGold | "new" | null>(null);
   const [apagar, setApagar] = useState<TurmaGold | null>(null);
   const [nome, setNome] = useState("");
@@ -2805,8 +2814,8 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   const horariosLista = useHorariosOpts();
   const locaisDoCurso = useLocaisOptsDoCurso("gold", cursosGold, curso);
   const f = gold.filter(t => {
-    const q = `${t.nome} ${t.local} ${t.curso}`.toLowerCase().includes(s.toLowerCase());
-    return q && matchesFilter(t.curso, filtroCurso) && matchesFilter(t.local, filtroLocal) && (filtro === "Todos" || t.estado === filtro);
+    const q = `${t.nome} ${t.local} ${t.horario} ${t.curso}`.toLowerCase().includes(s.toLowerCase());
+    return q && matchesFilter(t.curso, filtroCurso) && matchesFilter(t.local, filtroLocal) && matchesFilter(t.horario, filtroHorario) && (filtro === "Todos" || t.estado === filtro);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
   const horasCurso = cursosGold.find(c => c.nome.trim().toLowerCase() === curso.trim().toLowerCase())?.horas || 0;
@@ -2855,9 +2864,10 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
         fields={[
           { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(gold.map(t => t.curso)) },
           { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(gold.map(t => t.local)) },
+          { label: "Horário", value: filtroHorario, onChange: v => { setFiltroHorario(v); setP(1); }, options: uniqueOpts(gold.map(t => t.horario)) },
         ]}
         chips={{ options: ["Todos", "Ativa", "Inativa"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
-        onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
+        onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltroHorario(""); setFiltro("Todos"); setP(1); }}
       />
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
@@ -2865,7 +2875,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
           <EmptyHint
             text={gold.length === 0 ? "Ainda sem turmas Gold. Crie uma turma (curso + local + horário + data) e liberte-a para aparecer na pré-inscrição." : "Nenhuma turma neste filtro."}
             action={gold.length === 0 ? "Nova turma" : "Limpar filtros"}
-            onAction={gold.length === 0 ? () => setOpen("new") : () => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setS(""); setP(1); }}
+            onAction={gold.length === 0 ? () => setOpen("new") : () => { setFiltroCurso(""); setFiltroLocal(""); setFiltroHorario(""); setFiltro("Todos"); setS(""); setP(1); }}
           />
         )}
         <div className="md:hidden p-3 space-y-2">
@@ -3001,11 +3011,13 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
   const { gold, patchGold } = useTurmas();
   const { formandosTurmas, addFormandoTurma, patchFormandoTurma, removeFormandoTurma, preinscricoes, patchPreinscricao, cursosGold } = useLists();
   const cursosLista = useCursosOpts("gold");
+  const regrasPreco = useRegrasPreco();
+  const [avulso, setAvulso] = useCatalogList<{ id: number; nome: string; apelido: string; email: string; telf: string; curso: string; local: string; inscrito: string; pago: boolean; valor: number; metodo: string; estado: string }>("formandos_avulso", "gold", []);
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtroLocal, setFiltroLocal] = useState("");
-  const [viewMode, setViewMode] = useState<"table" | "kanban">("kanban");
+  const [filtroTurma, setFiltroTurma] = useState("Todos");
   const [fichaOpen, setFichaOpen] = useState<FormandoRecord | null>(null);
   const [apagar, setApagar] = useState<FormandoRecord | null>(null);
   const [edit, setEdit] = useState<FormandoRecord | "new" | null>(null);
@@ -3026,17 +3038,20 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
   }, [openId, formandosTurmas]);
   const turmaOpts = turmaGoldOpts(gold, { curso: cursoEdit || undefined, includeNome: editing?.turma });
   const emailsTurma = useMemo(() => new Set(formandosTurmas.map(x => x.email.trim().toLowerCase()).filter(Boolean)), [formandosTurmas]);
-  const preinscritos = useMemo(() => preinscricoes.filter(l => {
-    if (l.estado === "Formando" || l.estado === "Desistiu") return false;
-    if (emailsTurma.has(l.email.trim().toLowerCase())) return false;
-    const blob = `${l.nome} ${l.apelido} ${l.curso} ${l.local} ${l.horario ?? ""}`.toLowerCase();
-    if (s && !blob.includes(s.toLowerCase())) return false;
-    return matchesFilter(l.curso, filtroCurso) && matchesFilter(l.local, filtroLocal);
-  }), [preinscricoes, emailsTurma, s, filtroCurso, filtroLocal]);
-  const f = formandosTurmas.filter(x => {
-    const q = `${x.nome} ${x.apelido} ${x.turma}`.toLowerCase().includes(s.toLowerCase());
+  const semTurma = useMemo(() => avulso
+    .filter(a => !emailsTurma.has(String(a.email ?? "").trim().toLowerCase()))
+    .map(a => ({
+      id: a.id, nome: String(a.nome ?? ""), apelido: String(a.apelido ?? ""), telf: String(a.telf ?? ""),
+      email: String(a.email ?? ""), inscrito: String(a.inscrito ?? ""), local: String(a.local ?? ""),
+      curso: String(a.curso ?? ""), turma: "Sem turma", turmaId: 0, estado: String(a.estado ?? "Ativo"),
+      pago: Boolean(a.pago), valor: Number(a.valor ?? 0), metodo: String(a.metodo ?? "-"),
+    })), [avulso, emailsTurma]);
+  const f = [...formandosTurmas, ...semTurma].filter(x => {
+    const q = `${x.nome} ${x.apelido} ${x.turma} ${x.curso}`.toLowerCase().includes(s.toLowerCase());
     const byPago = filtro === "Todos" || (filtro === "Pago" ? x.pago : filtro === "Por pagar" ? !x.pago : true);
-    return q && byPago && matchesFilter(x.curso, filtroCurso) && matchesFilter(x.local, filtroLocal);
+    const emTurma = x.turmaId > 0;
+    const byTurma = filtroTurma === "Todos" || (filtroTurma === "Em turma" ? emTurma : !emTurma);
+    return q && byPago && byTurma && matchesFilter(x.curso, filtroCurso) && matchesFilter(x.local, filtroLocal);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
   useEffect(() => {
@@ -3055,7 +3070,7 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
       nome: lead.nome, apelido: lead.apelido || "-",
       telf: lead.telf || "-", email: lead.email,
       inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
-      estado: "Formando", pago: lead.estado === "Pago", valor: lead.preco || precoDoCurso(cursosGold, lead.curso), metodo: lead.pagamentoMetodo || "-",
+      estado: "Formando", pago: lead.estado === "Pago", valor: lead.preco || precoDaInscricao(cursosGold, regrasPreco, { curso: dest.curso, local: dest.local, horario: dest.horario, inicio: dest.dataInicio }), metodo: lead.pagamentoMetodo || "-",
     });
     if (!id) return;
     patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
@@ -3068,53 +3083,22 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
     <>
       <div className="space-y-4">
         <PageHeader
-          title="Formandos Turmas"
-          sub={`${formandosTurmas.length} inscritos em turma · ${preinscritos.length} pré-inscrições por colocar`}
-          action={
-            <div className="flex items-center gap-2">
-              <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden bg-white">
-                <button type="button" onClick={() => setViewMode("kanban")} className={`px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5 ${viewMode === "kanban" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>
-                  {I.kanban} Kanban
-                </button>
-                <button type="button" onClick={() => setViewMode("table")} className={`px-3 py-1.5 text-xs font-semibold ${viewMode === "table" ? "bg-amber-500 text-white" : "text-slate-500 hover:bg-slate-50"}`}>Lista</button>
-              </div>
-              <NewBtn label="+ Novo formando" onClick={() => setEdit("new")} />
-            </div>
-          }
+          title="Formandos"
+          sub={`${formandosTurmas.length} em turma · ${semTurma.length} sem turma. O filtro por curso junta as duas listas.`}
+          action={<NewBtn label="+ Novo formando" onClick={() => setEdit("new")} />}
         />
         <ViewFilters
           fields={[
-            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts([...formandosTurmas.map(x => x.curso), ...preinscricoes.map(x => x.curso)]) },
-            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts([...formandosTurmas.map(x => x.local), ...preinscricoes.map(x => x.local)]) },
+            { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts([...formandosTurmas.map(x => x.curso), ...semTurma.map(x => x.curso)]) },
+            { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts([...formandosTurmas.map(x => x.local), ...semTurma.map(x => x.local)]) },
           ]}
-          chips={{ options: ["Todos", "Pago", "Por pagar"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
-          onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
+          chips={{ options: ["Todos", "Pago", "Por pagar", "Em turma", "Sem turma"], value: filtro === "Todos" ? filtroTurma : filtro, onChange: v => {
+            if (v === "Em turma" || v === "Sem turma") { setFiltroTurma(v); setFiltro("Todos"); }
+            else { setFiltro(v); setFiltroTurma("Todos"); }
+            setP(1);
+          } }}
+          onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setFiltroTurma("Todos"); setP(1); }}
         />
-        {viewMode === "kanban" ? (
-          <Card>
-            <div className="px-4 py-3 border-b border-slate-100">
-              <div className="relative max-w-xl">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{I.search}</span>
-                <input
-                  type="text"
-                  value={s}
-                  onChange={e => setS(e.target.value)}
-                  placeholder="Pesquisar formando, curso, local ou horário…"
-                  className="pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 w-full"
-                />
-              </div>
-            </div>
-            <div className="p-4">
-              <FormandosKanban
-                preinscritos={preinscritos}
-                inscritos={f}
-                onOpenLead={() => undefined}
-                onOpenFormando={r => setFichaOpen(r)}
-                onPedirTurma={setEscolher}
-              />
-            </div>
-          </Card>
-        ) : (
         <Card>
           <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
           {rows.length === 0 && <EmptyHint text="Nenhum formando neste filtro." action="Limpar filtros" onAction={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setS(""); setP(1); }} />}
@@ -3170,7 +3154,6 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
           </div>
           <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
         </Card>
-        )}
       </div>
       <EscolherTurmaModal
         open={!!escolher}
@@ -3201,7 +3184,18 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
             <button disabled={!turma || (!editing && !nomeNovo.trim())} onClick={async () => {
               const dest = gold.find(x => x.nome === turma);
               if (!dest) return;
-              if (editing) {
+              if (editing && editing.turmaId === 0) {
+                const id = await addFormandoTurma({
+                  id: tempNumericId(),
+                  nome: editing.nome, apelido: editing.apelido || "-",
+                  telf: editing.telf || "-", email: editing.email,
+                  inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
+                  estado: "Formando", pago: editing.pago, valor: editing.valor || precoDaInscricao(cursosGold, regrasPreco, { curso: dest.curso, local: dest.local, horario: dest.horario, inicio: dest.dataInicio }), metodo: editing.metodo || "-",
+                });
+                if (!id) return;
+                setAvulso(xs => xs.filter(x => x.id !== editing.id));
+                patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
+              } else if (editing) {
                 const prev = gold.find(x => x.id === editing.turmaId);
                 patchFormandoTurma(editing.id, { turma: dest.nome, turmaId: dest.id, curso: dest.curso || cursoEdit, local: dest.local });
                 if (prev && prev.id !== dest.id) {
@@ -3216,7 +3210,7 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
                   telf: telfNovo.trim() || "-",
                   email: emailNovo.trim() || `${nome.toLowerCase()}@mail.pt`,
                   inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
-                  estado: "Formando", pago: false, valor: precoDoCurso(cursosGold, dest.curso), metodo: "-",
+                  estado: "Formando", pago: false, valor: precoDaInscricao(cursosGold, regrasPreco, { curso: dest.curso, local: dest.local, horario: dest.horario, inicio: dest.dataInicio }), metodo: "-",
                 });
                 if (!id) return;
                 patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
@@ -3234,6 +3228,10 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
         risk="Sai da lista da turma. Deixa de contar para vagas, presenças e certificados."
         onConfirm={() => {
           if (!apagar) return;
+          if (apagar.turmaId === 0) {
+            setAvulso(xs => xs.filter(x => x.id !== apagar.id));
+            return;
+          }
           const t = gold.find(x => x.id === apagar.turmaId);
           removeFormandoTurma(apagar.id);
           if (t) patchGold(t.id, { totalAlunos: Math.max(0, t.totalAlunos - 1) });
@@ -4335,6 +4333,9 @@ function EmailsView() {
 function PagamentosView() {
   const { pagamentos, addPagamento, cursosGold } = useLists();
   const cursosLista = useCursosOpts("gold");
+  const locaisLista = useLocaisOpts("gold");
+  const horariosLista = useHorariosOpts();
+  const regrasPreco = useRegrasPreco();
   const lista = pagamentos;
   const [dash, setDash] = useState<Dashboard | null>(null);
   useEffect(() => {
@@ -4349,7 +4350,9 @@ function PagamentosView() {
   const [nome, setNome] = useState("");
   const [emailPag, setEmailPag] = useState("");
   const [curso, setCurso] = useState("");
-  const [valor, setValor] = useState("125");
+  const [localPag, setLocalPag] = useState("");
+  const [horarioPag, setHorarioPag] = useState("");
+  const [valor, setValor] = useState("");
   const [metodo, setMetodo] = useState("MB Way");
   const [detalhe, setDetalhe] = useState<TransacaoPreview | null>(null);
   const [recibo, setRecibo] = useState<TransacaoPreview | null>(null);
@@ -4360,7 +4363,7 @@ function PagamentosView() {
   );
   return (
     <div className="space-y-5">
-      <PageHeader title="Pagamentos" action={<NewBtn label="+ Nova transação" onClick={() => { setNome(""); setEmailPag(""); setCurso(""); setValor(""); setMetodo("MB Way"); setNovo(true); }} />} />
+      <PageHeader title="Pagamentos" action={<NewBtn label="+ Nova transação" onClick={() => { setNome(""); setEmailPag(""); setCurso(""); setLocalPag(""); setHorarioPag(""); setValor(""); setMetodo("MB Way"); setNovo(true); }} />} />
       <ViewFilters
         fields={[{ label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(lista.map(t => t.curso)) }]}
         chips={{ options: ["Todos", "Pago", "Pendente"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
@@ -4452,7 +4455,11 @@ function PagamentosView() {
         <div className="p-5 space-y-3">
           <Field label="Nome do formando"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} /></Field>
           <Field label="Email"><input className={iCls} type="email" value={emailPag} onChange={e => setEmailPag(e.target.value)} placeholder="para o recibo e o contacto após a venda" /></Field>
-          <Field label="Curso"><SearchSelect value={curso} onChange={v => { setCurso(v); const preco = precoDoCurso(cursosGold, v); if (preco > 0) setValor(String(preco)); }} options={cursosLista} placeholder="Pesquisar curso…" /></Field>
+          <Field label="Curso"><SearchSelect value={curso} onChange={v => { setCurso(v); const preco = precoDaInscricao(cursosGold, regrasPreco, { curso: v, local: localPag, horario: horarioPag }); if (preco > 0) setValor(String(preco)); }} options={cursosLista} placeholder="Pesquisar curso…" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Local"><SearchSelect value={localPag} onChange={v => { setLocalPag(v); const preco = precoDaInscricao(cursosGold, regrasPreco, { curso, local: v, horario: horarioPag }); if (preco > 0) setValor(String(preco)); }} options={locaisLista} placeholder="Pesquisar local…" /></Field>
+            <Field label="Horário"><SearchSelect value={horarioPag} onChange={v => { setHorarioPag(v); const preco = precoDaInscricao(cursosGold, regrasPreco, { curso, local: localPag, horario: v }); if (preco > 0) setValor(String(preco)); }} options={horariosLista} /></Field>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Valor (€)"><input className={iCls} type="number" value={valor} onChange={e => setValor(e.target.value)} /></Field>
             <Field label="Método">
@@ -4744,7 +4751,7 @@ const sidebarConfig: NavGroup[] = [
     { label: "Painel", view: "gold-painel", icon: I.home },
     { label: "CRM", view: "gold-preinscricoes", icon: I.clipboard },
     { label: "Equipa", view: "gold-equipa", icon: I.users },
-    { label: "Formandos", icon: I.users, children: [{ label: "Formandos Turmas", view: "gold-formandos-turmas" }, { label: "Formandos Gold", view: "gold-formandos-gold" }] },
+    { label: "Formandos", view: "gold-formandos-turmas", icon: I.users },
     { label: "Campanhas", view: "gold-campanhas", icon: I.megaphone },
     { label: "Edição de Cursos", icon: I.book, children: [
       { label: "Cursos Gold", view: "gold-cursos" }, { label: "Módulos", view: "gold-modulos" },
@@ -4930,7 +4937,7 @@ const viewTitles: Partial<Record<View, string>> = {
   painel: "Painel", "gold-painel": "Painel", "fin-painel": "Painel",
   "gold-preinscricoes": "CRM", "fin-preinscricoes": "CRM",
   "gold-equipa": "Equipa", "fin-equipa": "Equipa",
-  "gold-formandos-turmas": "Formandos Turmas", "gold-formandos-gold": "Formandos Gold",
+  "gold-formandos-turmas": "Formandos", "gold-formandos-gold": "Formandos",
   "gold-campanhas": "Campanhas", "gold-cursos": "Cursos Gold", "gold-curso-ficha": "Ficha do curso", "gold-datas": "Datas Gold",
   "gold-horarios": "Horários", "gold-locais": "Locais", "gold-areas-tematicas": "Áreas Temáticas",
   "gold-modulos": "Módulos", "gold-conteudos": "Conteúdos",
@@ -5098,7 +5105,7 @@ function AppShell() {
       case "gold-preinscricoes": return <PreInscricoesGoldView regime="gold" openLeadId={openLeadId} onOpened={() => setOpenLeadId(undefined)} />;
       case "fin-preinscricoes": return <PreInscricoesGoldView regime="fin" openLeadId={openLeadId} onOpened={() => setOpenLeadId(undefined)} />;
       case "gold-formandos-turmas": return <FormandosTurmasView openId={openFormandoOrigem === "gold-avulso" || openFormandoOrigem === "fin" ? undefined : openFormandoId} onOpened={() => setOpenFormandoId(undefined)} />;
-      case "gold-formandos-gold": return <FormandosGoldView openId={openFormandoOrigem === "gold-avulso" ? openFormandoId : undefined} onOpened={() => setOpenFormandoId(undefined)} />;
+      case "gold-formandos-gold": return <FormandosTurmasView openId={openFormandoOrigem === "gold-avulso" ? openFormandoId : undefined} onOpened={() => setOpenFormandoId(undefined)} />;
       case "gold-campanhas": return <CampanhasView />;
       case "gold-datas": return <DatasGoldView />;
       case "gold-horarios": return <HorariosGoldView />;

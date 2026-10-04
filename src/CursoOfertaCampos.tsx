@@ -13,6 +13,7 @@ export function CursoOfertaCampos({
   onChange,
   variant = "public",
   cursoLocked = false,
+  preco,
 }: {
   turmas: OfertaTurma[];
   cursos: { nome: string; preco?: number }[];
@@ -20,6 +21,7 @@ export function CursoOfertaCampos({
   onChange: (v: CursoOfertaSel) => void;
   variant?: "public" | "crm";
   cursoLocked?: boolean;
+  preco?: number;
 }) {
   const locais = uniqueVals(ofertaFiltrada(turmas, { curso: value.curso }), "local");
   const horarios = uniqueVals(ofertaFiltrada(turmas, { curso: value.curso, local: value.local }), "horario");
@@ -62,7 +64,7 @@ export function CursoOfertaCampos({
           onChange={e => setCurso(e.target.value)}
         >
           <option value="">Seleccione o curso</option>
-          {cursos.map(c => <option key={c.nome} value={c.nome}>{c.nome}{c.preco != null ? ` · € ${c.preco}` : ""}</option>)}
+          {cursos.map(c => <option key={c.nome} value={c.nome}>{c.nome}</option>)}
         </select>
       </Label>
       <Label className={labelCls}>
@@ -108,6 +110,14 @@ export function CursoOfertaCampos({
       {value.curso && !locais.length && (
         <p className={variant === "crm" ? "text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2" : "sm:col-span-2 text-sm text-amber-800"}>
           Ainda não há turma liberada para este curso (local + horário + data de início). A secretaria tem de activar uma turma Gold.
+        </p>
+      )}
+      {typeof preco === "number" && preco > 0 && (
+        <p className={variant === "crm" ? "text-sm font-semibold text-amber-700" : "sm:col-span-2 text-sm text-slate-700"}>
+          Valor da inscrição: € {preco}
+          <span className="block text-xs font-normal text-slate-500 mt-1">
+            Segue o curso. Se o local, o horário ou os dois tiverem preço próprio, fica esse.
+          </span>
         </p>
       )}
       {value.local && !horarios.length && (

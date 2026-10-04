@@ -13,6 +13,8 @@ import {
   mapCursoGold,
   mapFormandoFin,
   mapFormandoGold,
+  faixasDisponibilidade,
+  formadorEmTurmaActiva,
   mapFormador,
   mapPagamento,
   mapPreinscricao,
@@ -29,6 +31,7 @@ import { globalSearch } from "./globalSearch.js";
 import { config } from "./config.js";
 import { criarPreinscricaoPublica } from "./preinscricaoPublica.js";
 import { listCursosGoldActivos, listOfertaGold } from "./ofertaGold.js";
+import { listRegrasPrecoGold, precoInscricaoNaBase } from "./precoInscricaoDb.js";
 import { generateCronograma } from "./cronograma.js";
 import {
   COMPROVATIVO, firePreinscricaoEmail, listarDocsLead, notificarDocumentos,
@@ -438,8 +441,12 @@ export function registerOpsRoutes(
   });
 
   app.get("/v1/public/oferta", async () => {
-    const [cursos, turmas] = await Promise.all([listCursosGoldActivos(db), listOfertaGold(db)]);
-    return { cursos, turmas };
+    const [cursos, turmas, edicoes] = await Promise.all([
+      listCursosGoldActivos(db),
+      listOfertaGold(db),
+      listRegrasPrecoGold(db),
+    ]);
+    return { cursos, turmas, edicoes };
   });
 
   app.post("/v1/public/preinscricoes", {
@@ -484,12 +491,19 @@ export function registerOpsRoutes(
     const id = await nextOpsId(db);
     const regime = regimeDoPedido(req.actor?.role, d.regime);
     const comercialId = d.comercialId ?? ((req.actor?.role === "comercial" || req.actor?.role === "financiada") ? req.actor.id : null);
+    let preco = d.preco ?? 0;
+    if (regime === "gold") {
+      const calculado = await precoInscricaoNaBase(db, {
+        curso: d.curso, local: d.local, horario: d.horario, inicio: d.inicioCurso,
+      });
+      if (calculado > 0) preco = calculado;
+    }
     await db.query(
       `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, comercial_id, entrada, meio_contacto, etiqueta_id, horario, turma_id, nif, morada_fiscal, codigo_postal, regime)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'manual',$16,$17,$18,$19,$20,$21,$22,$23)`,
       [
         id, nowStamp(), d.nome, d.apelido, email, d.telf, d.inicioCurso || "-",
-        d.concelho, d.local, d.curso, d.preco ?? 0, d.estado || "Não contactado", d.campanha, d.origem || "Telefone", comercialId,
+        d.concelho, d.local, d.curso, preco, d.estado || "Não contactado", d.campanha, d.origem || "Telefone", comercialId,
         d.meioContacto || d.origem || "Telefone", d.etiquetaId ?? null, d.horario || "", d.turmaId ?? null,
         d.nif ?? "", d.moradaFiscal ?? "", d.codigoPostal ?? "", regime,
       ],
@@ -528,6 +542,17 @@ export function registerOpsRoutes(
         return reply.code(409).send({ error: "Só a secretaria inscreve na turma." });
       }
     }
+    let precoPatch = d.preco ?? null;
+    const mexeEscolha = d.curso !== undefined || d.local !== undefined || d.horario !== undefined || d.inicioCurso !== undefined;
+    if (regimeDaLinha(before) === "gold" && mexeEscolha) {
+      const calculado = await precoInscricaoNaBase(db, {
+        curso: d.curso ?? String(before.curso ?? ""),
+        local: d.local ?? String(before.local ?? ""),
+        horario: d.horario ?? String(before.horario ?? ""),
+        inicio: d.inicioCurso ?? String(before.inicio_curso ?? ""),
+      });
+      if (calculado > 0) precoPatch = calculado;
+    }
     await db.query(
       `UPDATE preinscricoes SET
          nome = COALESCE($2, nome), apelido = COALESCE($3, apelido), email = COALESCE($4, email),
@@ -547,7 +572,7 @@ export function registerOpsRoutes(
          pagamento_metodo = COALESCE($25, pagamento_metodo)
        WHERE id = $1`,
       [
-        id, d.nome ?? null, d.apelido ?? null, d.email ? normalizeEmail(d.email) : null, d.telf ?? null, d.concelho ?? null, d.origem ?? null, d.curso ?? null, d.local ?? null, d.inicioCurso ?? null, d.preco ?? null, d.campanha ?? null, d.estado ?? null, d.proximoContacto ?? null, d.notas ?? null, d.comercialId ?? null,
+        id, d.nome ?? null, d.apelido ?? null, d.email ? normalizeEmail(d.email) : null, d.telf ?? null, d.concelho ?? null, d.origem ?? null, d.curso ?? null, d.local ?? null, d.inicioCurso ?? null, precoPatch, d.campanha ?? null, d.estado ?? null, d.proximoContacto ?? null, d.notas ?? null, d.comercialId ?? null,
         d.meioContacto ?? null,
         d.etiquetaId === undefined ? -1 : (d.etiquetaId ?? 0),
         d.horario ?? null,
@@ -1225,6 +1250,7 @@ export function registerOpsRoutes(
     nif: z.string().max(40).optional().default(""),
     regimes: z.array(z.enum(["gold", "fin"])).optional().default(["gold"]),
     estado: z.enum(["Ativo", "Inactivo"]).optional().default("Ativo"),
+    disponibilidade: z.array(z.enum(["laboral", "pos", "sabado-manha", "sabado-tarde"])).optional(),
   });
   app.post("/v1/formadores", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
@@ -1233,8 +1259,8 @@ export function registerOpsRoutes(
     const d = parsed.data;
     const id = await nextOpsId(db);
     await db.query(
-      "INSERT INTO formadores (id, nome, telf, email, especialidade, ccp, nif, regimes, estado) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)",
-      [id, d.nome, d.telf, d.email, d.especialidade, d.ccp, d.nif, d.regimes, d.estado],
+      "INSERT INTO formadores (id, nome, telf, email, especialidade, ccp, nif, regimes, estado, disponibilidade) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10::jsonb)",
+      [id, d.nome, d.telf, d.email, d.especialidade, d.ccp, d.nif, d.regimes, d.estado, d.disponibilidade ?? []],
     );
     const row = await one(db, "SELECT * FROM formadores WHERE id = $1", [id]);
     return { formador: row ? mapFormador(row) : { id } };
@@ -1245,11 +1271,21 @@ export function registerOpsRoutes(
     const parsed = formadorSchema.partial().safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
+    if (d.disponibilidade && req.actor!.role !== "admin" && req.actor!.role !== "secretaria") {
+      const atual = await one(db, "SELECT nome, disponibilidade FROM formadores WHERE id = $1", [id]);
+      const antes = [...faixasDisponibilidade(atual?.disponibilidade)].sort().join(",");
+      const depois = [...d.disponibilidade].sort().join(",");
+      const mudou = antes !== depois;
+      if (mudou && atual && await formadorEmTurmaActiva(db, String(atual.nome ?? ""))) {
+        return reply.code(403).send({ error: "Este formador já está numa turma ativa. Só a administração ou a secretaria alteram a disponibilidade." });
+      }
+    }
     await db.query(
       `UPDATE formadores SET nome = COALESCE($2, nome), telf = COALESCE($3, telf), email = COALESCE($4, email),
          especialidade = COALESCE($5, especialidade), ccp = COALESCE($6, ccp), nif = COALESCE($7, nif),
-         regimes = COALESCE($8::jsonb, regimes), estado = COALESCE($9, estado) WHERE id = $1`,
-      [id, d.nome ?? null, d.telf ?? null, d.email ?? null, d.especialidade ?? null, d.ccp ?? null, d.nif ?? null, d.regimes ?? null, d.estado ?? null],
+         regimes = COALESCE($8::jsonb, regimes), estado = COALESCE($9, estado),
+         disponibilidade = COALESCE($10::jsonb, disponibilidade) WHERE id = $1`,
+      [id, d.nome ?? null, d.telf ?? null, d.email ?? null, d.especialidade ?? null, d.ccp ?? null, d.nif ?? null, d.regimes ?? null, d.estado ?? null, d.disponibilidade ?? null],
     );
     const row = await one(db, "SELECT * FROM formadores WHERE id = $1", [id]);
     return { formador: row ? mapFormador(row) : null };

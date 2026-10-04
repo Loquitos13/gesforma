@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { apiCreateFormador, apiDeleteFormador, apiPatchFormador } from "./api";
-import { formadoresAtivos, formadorSub, FORMADORES_SEED, type Formador, type FormadorRegime } from "./formadorModel";
+import { faixasValidas, formadoresAtivos, formadorSub, FORMADORES_SEED, type Formador, type FormadorRegime } from "./formadorModel";
 import { formadoresOptsWithFrom, formadoresToOpts, type SelectOption } from "./FormKit";
 import { loadOps } from "./opsCache";
 import { persist, toastError } from "./toastBus";
@@ -15,7 +15,7 @@ type FormadoresCtx = {
 
 const Ctx = createContext<FormadoresCtx | null>(null);
 
-function asFormador(r: { id: number; nome: string; telf: string; email: string; especialidade: string; ccp: string; nif: string; regimes: string[]; estado: string }): Formador {
+function asFormador(r: { id: number; nome: string; telf: string; email: string; especialidade: string; ccp: string; nif: string; regimes: string[]; estado: string; disponibilidade?: string[] }): Formador {
   return {
     id: r.id,
     nome: r.nome,
@@ -26,6 +26,7 @@ function asFormador(r: { id: number; nome: string; telf: string; email: string; 
     nif: r.nif,
     regimes: r.regimes.filter((x): x is FormadorRegime => x === "gold" || x === "fin"),
     estado: r.estado === "Inactivo" ? "Inactivo" : "Ativo",
+    disponibilidade: faixasValidas(r.disponibilidade),
   };
 }
 

@@ -179,6 +179,12 @@ export function mapTurmaFin(r: Record<string, unknown>) {
   };
 }
 
+const FAIXAS_FORMADOR = new Set(["laboral", "pos", "sabado-manha", "sabado-tarde"]);
+
+export function faixasDisponibilidade(v: unknown) {
+  return asArr(v).map(x => String(x)).filter(x => FAIXAS_FORMADOR.has(x));
+}
+
 export function mapFormador(r: Record<string, unknown>) {
   return {
     id: num(r.id),
@@ -190,7 +196,37 @@ export function mapFormador(r: Record<string, unknown>) {
     nif: String(r.nif ?? ""),
     regimes: asArr(r.regimes),
     estado: String(r.estado ?? "Ativo"),
+    disponibilidade: faixasDisponibilidade(r.disponibilidade),
   };
+}
+
+/** Nome igual ao da turma ou a uma sessão, numa turma que ainda está activa. */
+export async function formadorEmTurmaActiva(db: Db, nome: string) {
+  const alvo = nome.trim().toLowerCase();
+  if (!alvo) return false;
+  const row = await db.query(
+    `SELECT 1 AS hit FROM (
+       SELECT formador, cronograma FROM turmas_gold WHERE estado IN ('Ativa', 'Ativo')
+       UNION ALL
+       SELECT formador, cronograma FROM turmas_fin WHERE activa = true
+     ) t
+     WHERE lower(trim(t.formador)) = $1
+        OR EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(CASE WHEN jsonb_typeof(t.cronograma) = 'array' THEN t.cronograma ELSE '[]'::jsonb END) s
+          WHERE lower(trim(COALESCE(s->>'formador', ''))) = $1
+             OR EXISTS (
+               SELECT 1
+               FROM jsonb_array_elements_text(
+                 CASE WHEN jsonb_typeof(s->'formadores') = 'array' THEN s->'formadores' ELSE '[]'::jsonb END
+               ) f
+               WHERE lower(trim(f)) = $1
+             )
+        )
+     LIMIT 1`,
+    [alvo],
+  );
+  return row.rows.length > 0;
 }
 
 function sameLabel(a: string, b: string) {

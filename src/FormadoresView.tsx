@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "./AuthGate";
 import { AppModal, ViewFilters, matchesFilter, uniqueOpts } from "./FormKit";
 import { useFormadores } from "./FormadoresContext";
-import { emptyFormador, formadoresDoRegime, type Formador, type FormadorRegime } from "./formadorModel";
+import { emptyFormador, FAIXAS_DISPONIBILIDADE, formadoresDoRegime, type FaixaDisponibilidade, type Formador, type FormadorRegime } from "./formadorModel";
 import { FormadorProfileSlideOver } from "./TurmaExtras";
 import { useTurmas } from "./TurmasContext";
-import { sessaoFormadores } from "./turmaModel";
+import { isTurmaActiva, sessaoFormadores } from "./turmaModel";
 
 const I = {
   plus: <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>,
@@ -130,8 +131,10 @@ function turmaTemFormador(nome: string, formadorTurma: string, cronograma: { for
 
 export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorRegime; openId?: number; onOpened?: () => void }) {
   const gold = regime === "gold";
+  const { user } = useAuth();
   const { formadores, addFormador, patchFormador, removeFormador } = useFormadores();
   const turmas = useTurmas();
+  const podeGerirDisp = user.role === "admin" || user.role === "secretaria";
   const [s, setS] = useState("");
   const [p, setP] = useState(1);
   const [pp, setPp] = useState(10);
@@ -169,6 +172,10 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
       ? turmas.gold.filter(t => turmaTemFormador(nome, t.formador, t.cronograma))
       : turmas.fin.filter(t => turmaTemFormador(nome, t.formador, t.cronograma));
     return list.map(t => t.nome);
+  }
+
+  function alocadoEmTurmaActiva(nome: string) {
+    return [...turmas.gold, ...turmas.fin].some(t => isTurmaActiva(t) && turmaTemFormador(nome, t.formador, t.cronograma));
   }
 
   function abrirNovo() {
@@ -219,6 +226,16 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
 
   const saveCls = gold ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700";
   const editing = Boolean(draft?.id);
+  const dispBloqueada = Boolean(editing && draft && alocadoEmTurmaActiva(draft.nome) && !podeGerirDisp);
+
+  function toggleFaixa(id: FaixaDisponibilidade) {
+    if (!draft || dispBloqueada) return;
+    const on = draft.disponibilidade.includes(id);
+    setDraft({
+      ...draft,
+      disponibilidade: on ? draft.disponibilidade.filter(f => f !== id) : [...draft.disponibilidade, id],
+    });
+  }
 
   return (
     <div className="space-y-4">
@@ -374,6 +391,33 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
                 })}
               </div>
               <p className="text-[11px] text-slate-400">Quem marca os dois regimes aparece nas duas listas e nos dropdowns de ambas.</p>
+            </Field>
+            <Field label="Disponibilidade">
+              <div className="flex flex-wrap gap-2">
+                {FAIXAS_DISPONIBILIDADE.map(faixa => {
+                  const on = draft.disponibilidade.includes(faixa.id);
+                  return (
+                    <button
+                      key={faixa.id}
+                      type="button"
+                      disabled={dispBloqueada}
+                      onClick={() => toggleFaixa(faixa.id)}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors disabled:opacity-50 ${
+                        on
+                          ? gold ? "bg-amber-500 text-white border-amber-500" : "bg-blue-600 text-white border-blue-600"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      {faixa.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-slate-400">
+                {dispBloqueada
+                  ? "Este formador já está numa turma ativa. Só a administração ou a secretaria alteram a disponibilidade."
+                  : "Estas faixas entram no cronograma. Depois de alocado a uma turma ativa, só a administração ou a secretaria as mudam."}
+              </p>
             </Field>
             <Field label="Estado">
               <button

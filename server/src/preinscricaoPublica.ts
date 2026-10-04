@@ -3,6 +3,7 @@ import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
 import { mapPreinscricao, nextOpsId } from "./ops.js";
 import { resolverTurmaOferta } from "./ofertaGold.js";
+import { precoInscricaoNaBase } from "./precoInscricaoDb.js";
 import { isEmail, normalizeEmail, sanitizeHeader, textoDePessoa } from "./security.js";
 
 function nowStamp() {
@@ -67,7 +68,8 @@ export async function criarPreinscricaoPublica(
     };
   }
 
-  const precoRow = await db.query<{ preco: number }>("SELECT preco FROM cursos_gold WHERE lower(trim(nome)) = lower(trim($1))", [curso]);
+  const calculado = await precoInscricaoNaBase(db, { curso, local, horario, inicio });
+  const preco = calculado > 0 ? calculado : Number(input.preco ?? 0);
   const id = await nextOpsId(db);
   await db.query(
     `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, entrada, meio_contacto, horario, turma_id)
@@ -75,7 +77,7 @@ export async function criarPreinscricaoPublica(
     [
       id, nowStamp(), textoDePessoa(input.nome), textoDePessoa(input.apelido || ""), email,
       telf, inicio, textoDePessoa(input.concelho || ""),
-      local, curso, Number(precoRow.rows[0]?.preco ?? input.preco ?? 0),
+      local, curso, preco,
       sanitizeHeader(input.campanha || ""), origem, meio, horario, turmaId,
     ],
   );

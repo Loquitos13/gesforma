@@ -1,4 +1,8 @@
-import { useCatalogList } from "./CatalogsContext";
+import { useCatalogList, useCatalogs } from "./CatalogsContext";
+import { precoDaInscricao, type EscolhaPreco, type RegraPreco } from "../server/src/precoInscricao.ts";
+
+export { precoDaInscricao };
+export type { EscolhaPreco, RegraPreco };
 import {
   blogTematicasOpts,
   cursosFinOpts,
@@ -22,6 +26,21 @@ function nomesParaOpcoes(nomes: string[], extra?: (nome: string) => string | und
     out.push(sub ? { value, sub } : { value });
   }
   return out;
+}
+
+/** Edições Gold com preço: por local, por horário, ou pelos dois. */
+export function useRegrasPreco(): RegraPreco[] {
+  const { lists, ready } = useCatalogs();
+  if (!ready) return [];
+  const rows = (lists["datas:gold"] ?? []) as Array<Record<string, unknown>>;
+  return rows.map(r => ({
+    curso: String(r.curso ?? ""),
+    local: String(r.local ?? ""),
+    horario: String(r.horario ?? ""),
+    inicio: String(r.inicio ?? ""),
+    preco: Number(r.preco ?? 0),
+    status: String(r.status ?? ""),
+  }));
 }
 
 /** Preço que está na ficha do curso. Zero quando o curso ainda não tem preço. */

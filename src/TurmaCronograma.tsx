@@ -3,7 +3,8 @@ import { CronogramaGrelha } from "./CronogramaGrelha";
 import { generateEnaCronograma, SESSAO_MODALIDADE_OPTS } from "./cronogramaGrelha";
 import { MultiSearchSelect } from "./FormKit";
 import { useProgramaDoCurso } from "./cursoPrograma";
-import { useFormadorOptions } from "./FormadoresContext";
+import { useFormadorOptions, useFormadores } from "./FormadoresContext";
+import { faixaDoHorario, labelFaixa } from "./formadorModel";
 import {
   hojeIso,
   emptySessao,
@@ -14,6 +15,7 @@ import {
   formadoresNasSessoes,
   groupCronogramaByMonth,
   horasCronograma,
+  horasPorFormador,
   isSessaoLectiva,
   modulosLabel,
   periodoCronograma,
@@ -292,8 +294,25 @@ export function CronogramaEditor({
   const gold = accent === "gold";
   const page = layout === "page";
   const programa = useProgramaDoCurso(accent, curso);
+  const { formadores } = useFormadores();
   const moduloOpts = programa.options;
   const totalH = Math.round(horasCronograma(sessoes) * 10) / 10;
+  const horasFormador = useMemo(() => horasPorFormador(sessoes), [sessoes]);
+  const faixa = faixaDoHorario(horario);
+  const avisosDisp = useMemo(() => {
+    const nomes = new Set(horasFormador.map(h => h.nome));
+    if (formador.trim() && formador !== "A definir") nomes.add(formador.trim());
+    const fora: string[] = [];
+    const vazios: string[] = [];
+    if (!faixa) return { fora, vazios };
+    for (const nome of nomes) {
+      const ficha = formadores.find(f => f.nome === nome);
+      if (!ficha) continue;
+      if (ficha.disponibilidade.length === 0) vazios.push(nome);
+      else if (!ficha.disponibilidade.includes(faixa)) fora.push(nome);
+    }
+    return { fora, vazios };
+  }, [faixa, formador, formadores, horasFormador]);
   const next = proximaSessao(sessoes);
   const periodo = periodoCronograma(sessoes);
   const lectivas = useMemo(() => sessoes.filter(isSessaoLectiva), [sessoes]);
@@ -392,10 +411,31 @@ export function CronogramaEditor({
             {horario && <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${soft}`}>{horario}</span>}
             {inicio && <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">Início {formatDiaMes(inicio)}</span>}
             {formador && <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">{formador}</span>}
+            {horasFormador.map(h => (
+              <span key={h.nome} className="text-[11px] font-medium px-2 py-0.5 rounded-full border border-slate-200 bg-white text-slate-600">{h.nome} · {h.horas}h</span>
+            ))}
           </div>
         </div>
         {actions}
       </div>
+
+      {(avisosDisp.fora.length > 0 || (horario && !faixa && horasFormador.length > 0)) && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 space-y-1">
+          {horario && !faixa && (
+            <p className="text-xs text-amber-900">O horário «{horario}» não corresponde a nenhuma faixa de disponibilidade (laboral de manhã, pós-laboral ou sábado).</p>
+          )}
+          {faixa && avisosDisp.fora.length > 0 && (
+            <p className="text-xs text-amber-900">
+              O horário da turma é {labelFaixa(faixa).toLowerCase()}. Fora dessa faixa: {avisosDisp.fora.join(", ")}.
+            </p>
+          )}
+        </div>
+      )}
+      {avisosDisp.vazios.length > 0 && (
+        <p className="text-xs text-slate-500">
+          Ainda sem disponibilidade registada: {avisosDisp.vazios.join(", ")}.
+        </p>
+      )}
 
       {confirmRegen && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -476,6 +516,7 @@ export function FormadoresAtribuidosCard({
   onOpen?: (nome: string) => void;
 }) {
   const lista = formadoresNasSessoes(sessoes, fallback);
+  const horas = horasPorFormador(sessoes);
   const catalogo = useFormadorOptions(lista.map(f => f.nome));
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -495,6 +536,7 @@ export function FormadoresAtribuidosCard({
         <ul className="divide-y divide-slate-100">
           {lista.map(f => {
             const opt = catalogo.find(o => o.value === f.nome);
+            const carga = horas.find(h => h.nome === f.nome);
             const inicial = f.nome.trim().charAt(0).toUpperCase() || "?";
             return (
               <li key={f.nome} className="px-4 py-3 flex items-center gap-3">
@@ -503,6 +545,7 @@ export function FormadoresAtribuidosCard({
                   <p className="text-sm font-semibold text-slate-800 truncate">{f.nome}</p>
                   <p className="text-xs text-slate-500 truncate">
                     {f.sessoes === 0 ? "Formador da turma" : f.sessoes === 1 ? "1 sessão" : `${f.sessoes} sessões`}
+                    {carga ? ` · ${carga.horas}h` : ""}
                     {opt?.sub ? ` · ${opt.sub}` : ""}
                   </p>
                 </div>

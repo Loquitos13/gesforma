@@ -6,7 +6,7 @@ import {
 import { ClienteFicha } from "./ClienteFicha";
 import { entradaChip, etiquetaChip, leadMarkStyle, meioChip } from "./crmUi";
 import { AppModal, ViewFilters } from "./FormKit";
-import { precoDoCurso, useCursosOpts, useLocaisOpts } from "./liveOpts";
+import { precoDaInscricao, useCursosOpts, useLocaisOpts, useRegrasPreco } from "./liveOpts";
 import { OptionSelect } from "./OptionSelect";
 import { tempNumericId, useLists, type Preinscricao } from "./ListsContext";
 import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./SecretaryUX";
@@ -133,6 +133,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
     preinscricoes, addPreinscricao, patchPreinscricao, removePreinscricao, contactarPreinscricao,
     addFormandoTurma, addFormandoFin, cursosGold, cursosFin,
   } = useLists();
+  const regrasPreco = useRegrasPreco();
   const turmasInscricao = regime === "fin" ? fin.map(finComoTurma) : gold;
 
   const hoje = hojeIso();
@@ -701,7 +702,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
               id: tempNumericId(),
               nome: item.nome, apelido: item.apelido || "-", telf: item.telf || "-", email: item.email,
               inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
-              estado: "Formando", pago: item.estado === "Pago", valor: item.preco || precoDoCurso(cursosGold, dest.curso), metodo: item.pagamentoMetodo || "-",
+              estado: "Formando", pago: item.estado === "Pago", valor: item.preco || precoDaInscricao(cursosGold, regrasPreco, { curso: dest.curso, local: dest.local, horario: dest.horario, inicio: dest.dataInicio }), metodo: item.pagamentoMetodo || "-",
             });
             if (!id) return;
             patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
@@ -779,6 +780,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
               : cursosGold.map(c => ({ nome: c.nome, preco: c.preco }))}
             value={{ curso: form.curso, local: form.local, horario: form.horario, dataInicio: form.dataInicio, turmaId: form.turmaId }}
             onChange={(v: CursoOfertaSel) => setForm(f => ({ ...f, ...v, turma: turmasInscricao.find(t => t.id === v.turmaId)?.nome ?? "" }))}
+            preco={regime === "fin" ? undefined : precoDaInscricao(cursosGold, regrasPreco, { curso: form.curso, local: form.local, horario: form.horario, inicio: form.dataInicio })}
           />
           {!editLead && (
             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Nota comercial
@@ -803,7 +805,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
                 horario: form.horario || t?.horario || "",
                 turmaId: form.turmaId || t?.id || 0,
                 curso: form.curso || t?.curso || "",
-                preco: regime === "fin" ? (editLead?.preco ?? 0) : (precoDoCurso(cursosGold, form.curso || t?.curso || "") || editLead?.preco || 0),
+                preco: regime === "fin" ? (editLead?.preco ?? 0) : (precoDaInscricao(cursosGold, regrasPreco, { curso: form.curso || t?.curso || "", local: form.local || t?.local, horario: form.horario || t?.horario, inicio: form.dataInicio || t?.dataInicio }) || editLead?.preco || 0),
                 estado: editLead?.estado ?? "Não contactado",
                 campanha: editLead?.campanha ?? "",
                 origem: form.origem || "Telefone",

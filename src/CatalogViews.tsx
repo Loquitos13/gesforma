@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   AppModal, SearchSelect, ViewFilters, matchesFilter, uniqueOpts,
 } from "./FormKit";
-import { precoDoCurso, useCursosOpts, useHorariosOpts, useLocaisOpts } from "./liveOpts";
+import { precoDaInscricao, useCursosOpts, useHorariosOpts, useLocaisOpts, useRegrasPreco } from "./liveOpts";
 import { useLists } from "./ListsContext";
 import { TurmaInscricaoHint } from "./TurmaCronograma";
 import { useTurmas } from "./TurmasContext";
@@ -395,6 +395,9 @@ function asFichaAvulso(r: typeof formandosGoldData[number]): FormandoTurma {
 export function FormandosGoldView({ openId, onOpened }: { openId?: number; onOpened?: () => void } = {}) {
   const { cursosGold } = useLists();
   const cursosLista = useCursosOpts("gold");
+  const locaisLista = useLocaisOpts("gold");
+  const horariosLista = useHorariosOpts();
+  const regrasPreco = useRegrasPreco();
   const [lista, setLista] = useCatalogList("formandos_avulso", "gold", formandosGoldData);
   const [s, setS] = useState(""); const [p, setP] = useState(1);
   const [filtro, setFiltro] = useState("Todos");
@@ -404,6 +407,8 @@ export function FormandosGoldView({ openId, onOpened }: { openId?: number; onOpe
   const [ficha, setFicha] = useState<typeof formandosGoldData[number] | null>(null);
   const [apagar, setApagar] = useState<typeof formandosGoldData[number] | null>(null);
   const [curso, setCurso] = useState("");
+  const [localForm, setLocalForm] = useState("");
+  const [horarioForm, setHorarioForm] = useState("");
   const [nome, setNome] = useState("");
   const [apelido, setApelido] = useState("");
   const [email, setEmail] = useState("");
@@ -426,6 +431,8 @@ export function FormandosGoldView({ openId, onOpened }: { openId?: number; onOpe
   useEffect(() => {
     if (!open) return;
     setCurso(editing?.curso ?? "");
+    setLocalForm(editing?.local ?? "");
+    setHorarioForm("");
     setNome(editing?.nome ?? "");
     setApelido(editing?.apelido ?? "");
     setEmail(editing?.email ?? "");
@@ -437,7 +444,7 @@ export function FormandosGoldView({ openId, onOpened }: { openId?: number; onOpe
     const row = {
       id: editing?.id ?? nextId(lista),
       nome: nome.trim(), apelido: apelido.trim(), email: email.trim(), telf: telf.trim(),
-      curso, local: "E-learning", inscrito: editing?.inscrito ?? new Date().toISOString().slice(0, 10),
+      curso, local: localForm || "E-learning", inscrito: editing?.inscrito ?? new Date().toISOString().slice(0, 10),
       pago: Number(valor) > 0, valor: Number(valor) || 0, metodo: editing?.metodo ?? "MB Way", estado: "Ativo",
     };
     if (editing) setLista(xs => xs.map(x => x.id === editing.id ? row : x));
@@ -533,7 +540,11 @@ export function FormandosGoldView({ openId, onOpened }: { openId?: number; onOpe
           </div>
           <Field label="Email"><input className={iCls} value={email} onChange={e => setEmail(e.target.value)} /></Field>
           <Field label="Telemóvel"><input className={iCls} value={telf} onChange={e => setTelf(e.target.value)} /></Field>
-          <Field label="Curso"><SearchSelect value={curso} onChange={v => { setCurso(v); if (!editing) { const preco = precoDoCurso(cursosGold, v); if (preco > 0) setValor(String(preco)); } }} options={cursosLista} placeholder="Pesquisar curso…" /></Field>
+          <Field label="Curso"><SearchSelect value={curso} onChange={v => { setCurso(v); const preco = precoDaInscricao(cursosGold, regrasPreco, { curso: v, local: localForm, horario: horarioForm }); if (preco > 0) setValor(String(preco)); }} options={cursosLista} placeholder="Pesquisar curso…" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Local"><SearchSelect value={localForm} onChange={v => { setLocalForm(v); const preco = precoDaInscricao(cursosGold, regrasPreco, { curso, local: v, horario: horarioForm }); if (preco > 0) setValor(String(preco)); }} options={locaisLista} placeholder="Pesquisar local…" /></Field>
+            <Field label="Horário"><SearchSelect value={horarioForm} onChange={v => { setHorarioForm(v); const preco = precoDaInscricao(cursosGold, regrasPreco, { curso, local: localForm, horario: v }); if (preco > 0) setValor(String(preco)); }} options={horariosLista} /></Field>
+          </div>
           <Field label="Valor (€)"><input className={iCls} type="number" value={valor} onChange={e => setValor(e.target.value)} /></Field>
           <FormActions onClose={() => setOpen(null)} onSave={guardar} disabled={!nome.trim() || !curso} label={editing ? "Guardar" : "Criar formando"} />
         </div>
@@ -555,6 +566,7 @@ function DatasCatalogView({ accent }: { accent: Accent }) {
   const cursosOpts = useCursosOpts(accent);
   const horariosLista = useHorariosOpts();
   const locaisLista = useLocaisOpts(accent);
+  const regrasPreco = useRegrasPreco();
   const [lista, setLista] = useCatalogList("datas", accent, seed);
   const [apagar, setApagar] = useState<typeof lista[number] | null>(null);
   const [s, setS] = useState(""); const [p, setP] = useState(1);
@@ -582,7 +594,7 @@ function DatasCatalogView({ accent }: { accent: Accent }) {
     setHorario(editing?.horario ?? "");
     setInicio(editing?.inicio ?? "");
     setFim(editing?.fim ?? "");
-    setPreco(String(editing?.preco ?? (precoDoCurso(cursosGold, editing?.curso ?? "") || "")));
+    setPreco(String(editing?.preco ?? (precoDaInscricao(cursosGold, regrasPreco, { curso: editing?.curso ?? "", local: editing?.local ?? "", horario: editing?.horario ?? "" }) || "")));
     setLink(editing?.link ?? "");
   }, [open, editing]);
   function guardar() {
@@ -666,13 +678,13 @@ function DatasCatalogView({ accent }: { accent: Accent }) {
       </div>
       <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `Edição #${editing.id}` : "Nova data / edição"} sub={accent === "gold" ? "Define o calendário comercial da turma" : "Define o calendário da UFCD"}>
         <div className="p-5 space-y-3">
-          <Field label={accent === "gold" ? "Curso" : "Curso / UFCD"}><SearchSelect value={curso} onChange={v => { setCurso(v); if (accent === "gold" && !editing) { const preco = precoDoCurso(cursosGold, v); if (preco > 0) setPreco(String(preco)); } }} options={cursosOpts} placeholder={accent === "gold" ? "Pesquisar curso…" : "Pesquisar UFCD…"} /></Field>
+          <Field label={accent === "gold" ? "Curso" : "Curso / UFCD"}><SearchSelect value={curso} onChange={v => { setCurso(v); if (accent === "gold" && !editing) { const preco = precoDaInscricao(cursosGold, regrasPreco, { curso: v, local, horario }); if (preco > 0) setPreco(String(preco)); } }} options={cursosOpts} placeholder={accent === "gold" ? "Pesquisar curso…" : "Pesquisar UFCD…"} /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Início"><input type="date" className={iCls} value={inicio} onChange={e => setInicio(e.target.value)} /></Field>
             <Field label="Fim"><input type="date" className={iCls} value={fim} onChange={e => setFim(e.target.value)} /></Field>
           </div>
-          <Field label="Horário"><SearchSelect value={horario} onChange={setHorario} options={horariosLista} /></Field>
-          <Field label="Local"><SearchSelect value={local} onChange={setLocal} options={locaisLista} placeholder="Pesquisar local…" /></Field>
+          <Field label="Horário"><SearchSelect value={horario} onChange={v => { setHorario(v); if (accent === "gold" && !editing) { const preco = precoDaInscricao(cursosGold, regrasPreco, { curso, local, horario: v }); if (preco > 0) setPreco(String(preco)); } }} options={horariosLista} /></Field>
+          <Field label="Local"><SearchSelect value={local} onChange={v => { setLocal(v); if (accent === "gold" && !editing) { const preco = precoDaInscricao(cursosGold, regrasPreco, { curso, local: v, horario }); if (preco > 0) setPreco(String(preco)); } }} options={locaisLista} placeholder="Pesquisar local…" /></Field>
           {accent === "gold" && <Field label="Preço (€)"><input type="number" className={iCls} value={preco} onChange={e => setPreco(e.target.value)} /></Field>}
           <Field label="Link de inscrição"><input className={iCls} value={link} onChange={e => setLink(e.target.value)} /></Field>
           <FormActions accent={accent} onClose={() => setOpen(null)} onSave={guardar} disabled={!curso || !inicio} label={editing ? "Guardar" : "Criar edição"} />

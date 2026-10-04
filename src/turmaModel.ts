@@ -338,6 +338,21 @@ export function emptySessao(formador = "A definir"): SessaoCronograma {
   };
 }
 
+export function horasPorFormador(sessoes: SessaoCronograma[]) {
+  const map = new Map<string, number>();
+  for (const s of sessoes) {
+    if (!isSessaoLectiva(s)) continue;
+    const h = sessaoDuracaoHoras(s);
+    for (const nome of sessaoFormadores(s)) {
+      if (!nome || nome === "A definir") continue;
+      map.set(nome, (map.get(nome) ?? 0) + h);
+    }
+  }
+  return [...map.entries()]
+    .map(([nome, horas]) => ({ nome, horas: Math.round(horas * 10) / 10 }))
+    .sort((a, b) => b.horas - a.horas || a.nome.localeCompare(b.nome, "pt"));
+}
+
 export function horasCronograma(sessoes: SessaoCronograma[]) {
   return sessoes.reduce((acc, s) => {
     if (!isSessaoLectiva(s)) return acc;

@@ -85,7 +85,7 @@ export type OpsSnapshot = {
   }>;
   formadores: Array<{
     id: number; nome: string; telf: string; email: string; especialidade: string; ccp: string; nif: string;
-    regimes: string[]; estado: string;
+    regimes: string[]; estado: string; disponibilidade?: string[];
   }>;
   campanhas: Array<{
     id: number; nome: string; data: string; encarregado: string; curso?: string;
@@ -526,6 +526,15 @@ export type Dashboard = {
     metodosPagamento: { metodo: string; valor: number; pct: number; color: string }[];
   };
   funil: { l: string; v: number }[];
+  comercial?: {
+    preInscritos: number;
+    convertidos: number;
+    conversaoPct: number | null;
+    prePagos: number;
+    formandosPre: number;
+    formandosAuto: number;
+    totalFormandos: number;
+  } | null;
   conhecimento: { id: string; fonte: string; curto: string; detalhe: string; color: string; n: number; pct: number }[];
   topCursos: { nome: string; inscritos: number; receita: number; taxa: number | null }[];
   desagregar?: "curso" | "local" | "horario";
@@ -691,7 +700,11 @@ export const apiPatchTemplate = (id: number, body: { nome?: string; assunto?: st
 export const apiOps = () => api<OpsSnapshot>("/v1/ops");
 export const apiPublicCursos = () => api<{ cursos: { nome: string; preco: number }[] }>("/v1/public/cursos");
 export const apiPublicOferta = () =>
-  api<{ cursos: { nome: string; preco: number }[]; turmas: import("./oferta").OfertaTurma[] }>("/v1/public/oferta");
+  api<{
+    cursos: { nome: string; preco: number }[];
+    turmas: import("./oferta").OfertaTurma[];
+    edicoes?: { curso: string; local?: string; horario?: string; inicio?: string; preco: number; status?: string }[];
+  }>("/v1/public/oferta");
 export const apiPublicPreinscricao = (body: Record<string, unknown>) =>
   api<{ preinscricao: { id: number }; aviso: string }>("/v1/public/preinscricoes", { method: "POST", body: JSON.stringify(body) });
 export const apiPublicOpcoes = (lista: string) =>

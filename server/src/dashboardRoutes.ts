@@ -378,7 +378,7 @@ export function registerDashboardRoutes(
     const pieMesIdx = pi;
     const pieParams = [...payParams, `${f.mes ?? monthKey(now)}%`];
 
-    const [leadCounts, entityCounts, pagamentosRows, origens, cursosPorReceita, leadsPorCurso, desag, filtros, precos, pieCursos] = await Promise.all([
+    const [leadCounts, entityCounts, pagamentosRows, origens, cursosPorReceita, leadsPorCurso, desag, filtros, precos, pieCursos, viasLead, viasFormando] = await Promise.all([
       db.query<{ preinscritos: number; contactados: number }>(
         `SELECT
            (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.estado <> 'Formando') AS preinscritos,
@@ -493,6 +493,45 @@ export function registerDashboardRoutes(
           GROUP BY pg.curso ORDER BY 2 DESC LIMIT 8`,
         pieParams,
       ),
+      db.query<{ pre_inscritos: number; pre_convertidos: number; pre_total: number; pre_pagos: number }>(
+        `SELECT
+           count(*) FILTER (WHERE v.via = 'pre' AND p.estado <> 'Formando')::int AS pre_inscritos,
+           count(*) FILTER (WHERE v.via = 'pre' AND p.estado IN ('Pago', 'Formando'))::int AS pre_convertidos,
+           count(*) FILTER (WHERE v.via = 'pre')::int AS pre_total,
+           count(*) FILTER (WHERE v.via = 'auto' AND p.estado IN ('Pago', 'Formando'))::int AS pre_pagos
+         FROM preinscricoes p
+         LEFT JOIN cursos_gold c ON lower(trim(c.nome)) = lower(trim(p.curso))
+         CROSS JOIN LATERAL (
+           SELECT CASE
+             WHEN lower(trim(coalesce(c.tipo, ''))) IN ('pré-inscrição', 'pre-inscricao', 'preinscricao') THEN 'pre'
+             WHEN lower(trim(coalesce(c.regime, ''))) = 'e-learning' THEN 'auto'
+             ELSE 'pre'
+           END AS via
+         ) v
+         WHERE ${lw.sql}`,
+        lw.params,
+      ),
+      db.query<{ formandos_pre: number; formandos_auto: number }>(
+        `SELECT
+           count(*) FILTER (WHERE v.via = 'pre' AND fg.pago)::int AS formandos_pre,
+           count(*) FILTER (WHERE v.via = 'auto' AND fg.pago)::int AS formandos_auto
+         FROM formandos_gold fg
+         LEFT JOIN cursos_gold c ON lower(trim(c.nome)) = lower(trim(fg.curso))
+         LEFT JOIN turmas_gold tg ON tg.id = fg.turma_id
+         CROSS JOIN LATERAL (
+           SELECT CASE
+             WHEN lower(trim(coalesce(c.tipo, ''))) IN ('pré-inscrição', 'pre-inscricao', 'preinscricao') THEN 'pre'
+             WHEN lower(trim(coalesce(c.regime, ''))) = 'e-learning' THEN 'auto'
+             ELSE 'pre'
+           END AS via
+         ) v
+         WHERE ($1::text IS NULL OR fg.curso = $1::text)
+           AND ($2::text IS NULL OR fg.local = $2::text)
+           AND ($3::text IS NULL OR coalesce(tg.horario, '') = $3::text)
+           AND ($4::text IS NULL OR substring(fg.inscrito from 1 for 10) >= $4::text)
+           AND ($5::text IS NULL OR substring(fg.inscrito from 1 for 10) <= $5::text)`,
+        [f.curso ?? null, f.local ?? null, f.horario ?? null, f.de ?? null, f.ate ?? null],
+      ),
     ]);
 
     const c = { ...(entityCounts.rows[0] ?? {}), ...(leadCounts.rows[0] ?? {}) };
@@ -559,6 +598,22 @@ export function registerDashboardRoutes(
       color: COLORS[i % COLORS.length]!,
     }));
 
+    const viaL = viasLead.rows[0];
+    const viaF = viasFormando.rows[0];
+    const preTotal = Number(viaL?.pre_total ?? 0);
+    const convertidos = Number(viaL?.pre_convertidos ?? 0);
+    const formandosPre = Number(viaF?.formandos_pre ?? 0);
+    const formandosAuto = Number(viaF?.formandos_auto ?? 0);
+    const comercial = f.regime === "fin" ? null : {
+      preInscritos: Number(viaL?.pre_inscritos ?? 0),
+      convertidos,
+      conversaoPct: preTotal > 0 ? Math.round((convertidos / preTotal) * 100) : null,
+      prePagos: Number(viaL?.pre_pagos ?? 0),
+      formandosPre,
+      formandosAuto,
+      totalFormandos: formandosPre + formandosAuto,
+    };
+
     const optsRows = filtros.rows;
     const uniq = (key: "curso" | "local" | "horario") =>
       [...new Set(optsRows.map(r => r[key]).filter(s => s && s.trim()))].sort((a, b) => a.localeCompare(b, "pt"));
@@ -584,6 +639,7 @@ export function registerDashboardRoutes(
         { l: "Pagaram", v: fin.pagos },
         { l: "Formandos", v: formandosAtivos },
       ],
+      comercial,
       conhecimento,
       topCursos,
       desagregar: f.desagregar,

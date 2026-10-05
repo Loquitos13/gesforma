@@ -1339,7 +1339,7 @@ export function CursoFichaView({
           )}
 
           {tab === "documentos" && (
-            <CursoDocumentos accent={accent} cursoId={cursoPersistId ?? curso?.id} />
+            <CursoDocumentos accent={accent} cursoId={cursoPersistId ?? curso?.id} tipo={data.tipo} />
           )}
 
           {tab === "dtp" && (

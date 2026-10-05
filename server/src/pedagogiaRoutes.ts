@@ -5,6 +5,12 @@ import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { listDriveFiles, readDriveContent, storeDriveFile } from "./googleDrive.js";
 import { podeGravarSessao } from "./sessaoAcesso.js";
+import {
+  cursoPedeDocsPreinscricao,
+  docsBase,
+  gravarDocsPreinscricao,
+  lerDocsPreinscricao,
+} from "./docsCurso.js";
 import { DTP_CATEGORIAS, dtpCategoriaDe, dtpCategoriaPasta, dtpPastaNome, dtpZipNome, dtpZipRelPath, pastaSegura } from "./dtpPasta.js";
 import { zipStore } from "./zipStore.js";
 import {
@@ -946,6 +952,80 @@ export function registerPedagogiaRoutes(
     const ficheiroId = String((req.params as { ficheiroId?: string }).ficheiroId ?? "");
     if (!regime || id == null || !ficheiroId) return reply.code(400).send({ error: "pedido inválido" });
     await db.query("DELETE FROM curso_ficheiros WHERE id = $1 AND regime = $2 AND curso_id = $3", [ficheiroId, regime, id]);
+    return { ok: true };
+  });
+
+  async function tipoDoCurso(regime: Regime, cursoId: number) {
+    if (regime === "fin") return "Financiada";
+    const row = await db.query<{ tipo: string }>("SELECT tipo FROM cursos_gold WHERE id = $1", [cursoId]);
+    return String(row.rows[0]?.tipo ?? "");
+  }
+
+  app.get("/v1/cursos/:regime/:id/docs-preinscricao", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const { regime, id } = params(req);
+    if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
+    const tipo = await tipoDoCurso(regime, id);
+    const aplica = cursoPedeDocsPreinscricao(regime, tipo);
+    if (!aplica) return { aplica: false, tipo, docs: [] };
+    const cfg = await lerDocsPreinscricao(db, regime, id);
+    const ocultos = new Set(cfg.ocultos);
+    const modelo = await loadModelo(db, regime, id);
+    const docs = [
+      ...docsBase(regime).map(d => ({ id: d.id, label: d.label, required: d.required, pedido: !ocultos.has(d.id), origem: "base" as const })),
+      ...cfg.extra.map(d => ({ id: d.id, label: d.label, required: d.required, pedido: true, origem: "extra" as const })),
+      ...modelo.extra
+        .filter(d => d.ambito === "formando")
+        .filter(d => !cfg.extra.some(x => x.id === d.id) && !docsBase(regime).some(b => b.id === d.id))
+        .map(d => ({ id: d.id, label: d.label, required: Boolean(d.bloqueante), pedido: true, origem: "dossie" as const })),
+    ];
+    return { aplica, tipo, docs };
+  });
+
+  const docsPreSchema = z.object({
+    ocultos: z.array(z.string().max(60)).max(40).default([]),
+    extra: z.array(z.object({
+      id: z.string().max(48).optional(),
+      label: z.string().trim().min(3).max(160),
+      required: z.boolean(),
+    })).max(30).default([]),
+  });
+
+  app.put("/v1/cursos/:regime/:id/docs-preinscricao", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const { regime, id } = params(req);
+    const parsed = docsPreSchema.safeParse(req.body);
+    if (!regime || id == null || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    const tipo = await tipoDoCurso(regime, id);
+    if (!cursoPedeDocsPreinscricao(regime, tipo)) {
+      return reply.code(400).send({ error: "Este curso não pede documentos na pré-inscrição." });
+    }
+    const baseIds = new Set(docsBase(regime).map(d => d.id));
+    const ocultos = [...new Set(parsed.data.ocultos.filter(x => baseIds.has(x)))];
+    const usados = new Set(baseIds);
+    const extra = parsed.data.extra.map(item => {
+      let docId = (item.id ?? "").trim();
+      if (!docId || baseIds.has(docId)) {
+        const slug = item.label
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "")
+          .slice(0, 36);
+        docId = `pre-${slug || "doc"}`;
+      }
+      let n = 2;
+      const raiz = docId;
+      while (usados.has(docId)) {
+        docId = `${raiz}-${n}`;
+        n += 1;
+      }
+      usados.add(docId);
+      return { id: docId, label: item.label, required: item.required };
+    });
+    await gravarDocsPreinscricao(db, regime, id, { ocultos, extra });
+    await audit(db, req.actor!.id, "curso.docs_preinscricao", "curso", String(id), req.ip, { regime, extra: extra.length });
     return { ok: true };
   });
 

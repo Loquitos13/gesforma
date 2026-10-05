@@ -2906,7 +2906,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
       setCronograma(editing?.cronograma ?? []);
     }
   }, [open, editing]);
-  const codigoAuto = codigoInternoTurma(local, horario, dataInicio);
+  const codigoAuto = codigoInternoTurma(curso, local, horario, dataInicio);
   useEffect(() => {
     if (open !== "new" || nomeManual.current) return;
     if (codigoAuto) setNome(codigoAuto);
@@ -3042,8 +3042,8 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
         <div className="p-5 space-y-3">
           <TurmaActivaToggle activa={activa} onChange={setActiva} />
           <Field label="Nome">
-            <input className={iCls} value={nome} onChange={e => { nomeManual.current = true; setNome(e.target.value); }} placeholder="VNG - SM - 07/09" />
-            <p className="text-[11px] text-slate-400 mt-1">Código interno: {codigoAuto || "preencha local, horário e data de início"}.</p>
+            <input className={iCls} value={nome} onChange={e => { nomeManual.current = true; setNome(e.target.value); }} placeholder="CCP - VNG - SM - 07/09" />
+            <p className="text-[11px] text-slate-400 mt-1">Código interno: {codigoAuto || "preencha curso, local, horário e data de início"}.</p>
           </Field>
           <Field label="Curso">
             <SearchSelect

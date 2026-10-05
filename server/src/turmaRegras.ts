@@ -1,6 +1,7 @@
 import { generateCronograma } from "./cronograma.js";
 import type { Db } from "./db/pool.js";
 import { nextOpsId } from "./ops.js";
+import { codigoInternoTurma } from "../../src/turmaCodigo.js";
 
 export type TurmaRegra = {
   id: number;
@@ -43,11 +44,8 @@ export async function listTurmaRegras(db: Db, regime?: string) {
 
 function codigoTurma(regra: TurmaRegra, data: string) {
   const prefix = regra.nomePrefixo.trim();
-  const local = regra.local.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || "TUR";
-  const hor = /sab/i.test(regra.horario) ? "SM" : /laboral\s*man/i.test(regra.horario) ? "LM" : "PL";
-  const dia = data.slice(8, 10);
-  const mes = data.slice(5, 7);
-  return prefix || `${local}-${hor}-${dia}/${mes}`;
+  if (prefix) return prefix;
+  return codigoInternoTurma(regra.curso, regra.local, regra.horario, data);
 }
 
 function nextData(iso: string) {

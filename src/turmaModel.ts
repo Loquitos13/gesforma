@@ -88,7 +88,9 @@ export function formadoresNasSessoes(
       counts.set(nome, (counts.get(nome) ?? 0) + 1);
     }
   }
-  if (counts.size === 0 && fallback?.trim()) counts.set(fallback.trim(), 0);
+  if (counts.size === 0 && fallback?.trim()) {
+    for (const nome of fallback.split("·").map(s => s.trim()).filter(Boolean)) counts.set(nome, 0);
+  }
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pt"))
     .map(([nome, sessoesN]) => ({ nome, sessoes: sessoesN }));

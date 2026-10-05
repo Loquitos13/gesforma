@@ -13,7 +13,7 @@ import {
   mapCursoGold,
   mapFormandoFin,
   mapFormandoGold,
-  faixasDisponibilidade,
+  diasDisponibilidade,
   formadorEmTurmaActiva,
   mapFormador,
   mapPagamento,
@@ -1250,7 +1250,14 @@ export function registerOpsRoutes(
     nif: z.string().max(40).optional().default(""),
     regimes: z.array(z.enum(["gold", "fin"])).optional().default(["gold"]),
     estado: z.enum(["Ativo", "Inactivo"]).optional().default("Ativo"),
-    disponibilidade: z.array(z.enum(["laboral", "pos", "sabado-manha", "sabado-tarde"])).optional(),
+    disponibilidade: z.array(z.object({
+      data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      estado: z.enum(["disponivel", "indisponivel"]),
+      horarios: z.array(z.object({
+        inicio: z.string().regex(/^\d{2}:\d{2}$/),
+        fim: z.string().regex(/^\d{2}:\d{2}$/),
+      })).max(4).optional().default([]),
+    })).max(400).optional(),
   });
   app.post("/v1/formadores", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
@@ -1273,8 +1280,8 @@ export function registerOpsRoutes(
     const d = parsed.data;
     if (d.disponibilidade && req.actor!.role !== "admin" && req.actor!.role !== "secretaria") {
       const atual = await one(db, "SELECT nome, disponibilidade FROM formadores WHERE id = $1", [id]);
-      const antes = [...faixasDisponibilidade(atual?.disponibilidade)].sort().join(",");
-      const depois = [...d.disponibilidade].sort().join(",");
+      const antes = JSON.stringify(diasDisponibilidade(atual?.disponibilidade));
+      const depois = JSON.stringify(diasDisponibilidade(d.disponibilidade));
       const mudou = antes !== depois;
       if (mudou && atual && await formadorEmTurmaActiva(db, String(atual.nome ?? ""))) {
         return reply.code(403).send({ error: "Este formador já está numa turma ativa. Só a administração ou a secretaria alteram a disponibilidade." });

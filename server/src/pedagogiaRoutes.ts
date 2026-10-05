@@ -6,6 +6,7 @@ import type { Db } from "./db/pool.js";
 import { listDriveFiles, readDriveContent, storeDriveFile } from "./googleDrive.js";
 import { DTP_CATEGORIAS, dtpCategoriaDe, dtpCategoriaPasta, dtpPastaNome, dtpZipNome, dtpZipRelPath, pastaSegura } from "./dtpPasta.js";
 import { zipStore } from "./zipStore.js";
+import { pdfsDoDossie, type SessaoPedagogicaPdf } from "./dtpPdfs.js";
 import {
   aplicarPercursoNoItem,
   buildDtpItems,
@@ -245,12 +246,60 @@ function simCounts(payload: unknown): DtpCounts | null {
   return { done, total: items.length };
 }
 
-type TurmaRow = { id: number; nome: string; curso: string; cronograma: unknown; formador?: string };
+type TurmaRow = { id: number; nome: string; curso: string; cronograma: unknown; formador?: string; local?: string; horario?: string };
 
 async function loadTurma(db: Db, regime: Regime, id: number): Promise<TurmaRow | null> {
   const table = regime === "gold" ? "turmas_gold" : "turmas_fin";
-  const row = await db.query<TurmaRow>(`SELECT id, nome, curso, cronograma, formador FROM ${table} WHERE id = $1`, [id]);
+  const row = await db.query<TurmaRow>(`SELECT id, nome, curso, cronograma, formador, local, horario FROM ${table} WHERE id = $1`, [id]);
   return row.rows[0] ?? null;
+}
+
+async function montarPdfsDossie(db: Db, regime: Regime, turma: TurmaRow) {
+  const [sessoesRows, formandos] = await Promise.all([
+    db.query<{ sessao_n: number; plano: unknown; sumario: unknown; presencas: unknown }>(
+      "SELECT sessao_n, plano, sumario, presencas FROM turma_sessoes WHERE regime = $1 AND turma_id = $2 ORDER BY sessao_n",
+      [regime, turma.id],
+    ),
+    formandosDaTurma(db, regime, turma),
+  ]);
+  const sessoes: SessaoPedagogicaPdf[] = sessoesRows.rows.map(r => ({
+    n: Number(r.sessao_n),
+    plano: r.plano && typeof r.plano === "object" ? r.plano as SessaoPedagogicaPdf["plano"] : null,
+    sumario: r.sumario && typeof r.sumario === "object" ? r.sumario as SessaoPedagogicaPdf["sumario"] : null,
+    presencas: Array.isArray(r.presencas) ? r.presencas as SessaoPedagogicaPdf["presencas"] : [],
+  }));
+  return pdfsDoDossie({
+    turma: turma.nome,
+    curso: turma.curso,
+    local: turma.local,
+    horario: turma.horario,
+    cronograma: turma.cronograma,
+    sessoes,
+    formandos: formandos.map(f => f.nome),
+  });
+}
+
+async function gravarPdfsDossie(db: Db, actorId: string | undefined, regime: Regime, turma: TurmaRow) {
+  const pdfs = await montarPdfsDossie(db, regime, turma);
+  const folhas = await storeDriveFile(db, actorId, {
+    name: "Folhas de presenca e sumarios.pdf", mime: "application/pdf", bytes: pdfs.folhas,
+  }, { kind: "dtp", regime, turma: turma.nome, label: "presencas" });
+  const pares = [
+    { itemId: "cronograma", file: await storeDriveFile(db, actorId, { name: "Cronograma.pdf", mime: "application/pdf", bytes: pdfs.cronograma }, { kind: "dtp", regime, turma: turma.nome, label: "cronograma" }) },
+    { itemId: "presencas", file: folhas },
+    { itemId: "sumarios", file: folhas },
+    { itemId: "planos", file: await storeDriveFile(db, actorId, { name: "Planos de sessao.pdf", mime: "application/pdf", bytes: pdfs.planos }, { kind: "dtp", regime, turma: turma.nome, label: "planos" }) },
+  ];
+  for (const par of pares) {
+    await db.query(
+      `INSERT INTO dtp_anexos (regime, turma_id, item_id, drive_file_id, file_name, drive_url)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (regime, turma_id, item_id) DO UPDATE SET
+         drive_file_id = EXCLUDED.drive_file_id, file_name = EXCLUDED.file_name,
+         drive_url = EXCLUDED.drive_url, updated_at = now()`,
+      [regime, turma.id, par.itemId, par.file.id, par.file.name, par.file.openUrl],
+    );
+  }
 }
 
 function uniqueZipPath(used: Set<string>, path: string) {
@@ -768,6 +817,22 @@ export function registerPedagogiaRoutes(
     if (!turma) return reply.code(404).send({ error: "turma não encontrada" });
     await audit(db, req.actor!.id, "turma.dtp_anexo", "turma", String(id), req.ip, { regime, item: itemId });
     return { dtp: await dtpForTurma(db, regime, turma) };
+  });
+
+  app.post("/v1/turmas/:regime/:id/dtp/pdfs", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const { regime, id } = params(req);
+    if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
+    const turma = await loadTurma(db, regime, id);
+    if (!turma) return reply.code(404).send({ error: "turma não encontrada" });
+    try {
+      await gravarPdfsDossie(db, req.actor!.id, regime, turma);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "não foi possível gravar os PDFs";
+      return reply.code(400).send({ error: msg });
+    }
+    await audit(db, req.actor!.id, "turma.dtp_pdfs", "turma", String(id), req.ip, { regime });
+    return { ok: true, dtp: await dtpForTurma(db, regime, turma) };
   });
 
   app.put("/v1/turmas/:regime/:id/certificados/:formandoId", async (req, reply) => {
@@ -1576,6 +1641,13 @@ export function registerPedagogiaRoutes(
         }
       }
     }
+
+    const gerados = await montarPdfsDossie(db, regime, turma);
+    const pastaPed = DTP_CATEGORIAS.find(c => c.id === "pedagogia")?.pasta ?? "04-Pedagogia";
+    add(`${root}/${pastaPed}/Cronograma.pdf`, gerados.cronograma);
+    add(`${root}/${pastaPed}/Folhas de presenca e sumarios.pdf`, gerados.folhas);
+    add(`${root}/${pastaPed}/Planos de sessao.pdf`, gerados.planos);
+    await gravarPdfsDossie(db, req.actor!.id, regime, turma).catch(() => undefined);
 
     const pdfs = files.filter(f => !f.name.endsWith("/_indice.txt") && !f.name.endsWith("/00-Indice geral.txt"));
     const indice = [

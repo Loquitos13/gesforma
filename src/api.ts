@@ -85,7 +85,7 @@ export type OpsSnapshot = {
   }>;
   formadores: Array<{
     id: number; nome: string; telf: string; email: string; especialidade: string; ccp: string; nif: string;
-    regimes: string[]; estado: string; disponibilidade?: string[];
+    regimes: string[]; estado: string; disponibilidade?: unknown;
   }>;
   campanhas: Array<{
     id: number; nome: string; data: string; encarregado: string; curso?: string;
@@ -343,6 +343,8 @@ export const apiSaveTurmaDocumento = (regime: Regime, turmaId: number, body: Tur
   api<{ ok: boolean }>(`/v1/turmas/${regime}/${turmaId}/documentos`, { method: "PUT", body: JSON.stringify(body) });
 export const apiSaveDtpItem = (regime: Regime, turmaId: number, itemId: string, estado: DtpEstado | "auto") =>
   api<{ dtp: DtpSnapshot }>(`/v1/turmas/${regime}/${turmaId}/dtp/${itemId}`, { method: "PUT", body: JSON.stringify({ estado }) });
+export const apiArquivarDtpPdfs = (regime: Regime, turmaId: number) =>
+  api<{ ok: boolean; dtp: DtpSnapshot }>(`/v1/turmas/${regime}/${turmaId}/dtp/pdfs`, { method: "POST" });
 export const apiSaveDtpAnexo = (
   regime: Regime,
   turmaId: number,

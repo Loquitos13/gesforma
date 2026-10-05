@@ -1,41 +1,43 @@
 export type FormadorRegime = "gold" | "fin";
 
-export const FAIXAS_DISPONIBILIDADE = [
-  { id: "laboral", label: "Laboral, 9h às 13h" },
-  { id: "pos", label: "Pós-laboral, 16h30 às 23h" },
-  { id: "sabado-manha", label: "Sábado de manhã, 9h às 13h" },
-  { id: "sabado-tarde", label: "Sábado à tarde, 14h às 19h" },
-] as const;
+export type HorarioDia = { inicio: string; fim: string };
 
-export type FaixaDisponibilidade = (typeof FAIXAS_DISPONIBILIDADE)[number]["id"];
+export type DiaDisponibilidade = {
+  data: string;
+  estado: "disponivel" | "indisponivel";
+  horarios: HorarioDia[];
+};
 
-const FAIXA_IDS = new Set<string>(FAIXAS_DISPONIBILIDADE.map(f => f.id));
+const HORA = /^\d{2}:\d{2}$/;
+const DATA = /^\d{4}-\d{2}-\d{2}$/;
 
-export function faixasValidas(v: unknown): FaixaDisponibilidade[] {
-  const list = Array.isArray(v) ? v : [];
-  return list.map(x => String(x)).filter((x): x is FaixaDisponibilidade => FAIXA_IDS.has(x));
+export function diasDisponibilidade(v: unknown): DiaDisponibilidade[] {
+  if (!Array.isArray(v)) return [];
+  const out: DiaDisponibilidade[] = [];
+  for (const item of v) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const data = String(row.data ?? "");
+    if (!DATA.test(data)) continue;
+    const estado = row.estado === "indisponivel" ? "indisponivel" : "disponivel";
+    const horarios = Array.isArray(row.horarios)
+      ? row.horarios.flatMap(h => {
+          if (!h || typeof h !== "object") return [];
+          const inicio = String((h as { inicio?: string }).inicio ?? "");
+          const fim = String((h as { fim?: string }).fim ?? "");
+          if (!HORA.test(inicio) || !HORA.test(fim) || fim <= inicio) return [];
+          return [{ inicio, fim }];
+        })
+      : [];
+    out.push({ data, estado, horarios: estado === "indisponivel" ? [] : horarios });
+  }
+  out.sort((a, b) => a.data.localeCompare(b.data));
+  return out;
 }
 
-export function labelFaixa(id: string) {
-  return FAIXAS_DISPONIBILIDADE.find(f => f.id === id)?.label ?? id;
-}
-
-/** Liga o nome do horário da turma à faixa que o formador marca na ficha. */
-export function faixaDoHorario(horario: string): FaixaDisponibilidade | null {
-  const h = horario
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[-_/]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!h) return null;
-  if (h.includes("sabado") && h.includes("tarde")) return "sabado-tarde";
-  if (h.includes("sabado")) return "sabado-manha";
-  if (/\bpos\b/.test(h)) return "pos";
-  if (h.includes("laboral") && h.includes("tarde")) return null;
-  if (h.includes("laboral")) return "laboral";
-  return null;
+export function horaCabeNoDia(horarios: HorarioDia[], inicio: string, fim: string) {
+  if (!horarios.length) return true;
+  return horarios.some(h => h.inicio <= inicio && h.fim >= fim);
 }
 
 export type Formador = {
@@ -48,7 +50,7 @@ export type Formador = {
   nif: string;
   regimes: FormadorRegime[];
   estado: "Ativo" | "Inactivo";
-  disponibilidade: FaixaDisponibilidade[];
+  disponibilidade: DiaDisponibilidade[];
 };
 
 export const FORMADORES_SEED: Formador[] = [
@@ -85,4 +87,8 @@ export function formadoresAtivos(list: Formador[], regime?: FormadorRegime) {
 
 export function formadorSub(f: Pick<Formador, "telf" | "especialidade" | "ccp">) {
   return [f.telf, f.especialidade || (f.ccp ? `CCP ${f.ccp}` : "")].filter(Boolean).join(" · ");
+}
+
+export function nomesDoCampoFormador(formador: string | undefined) {
+  return (formador ?? "").split("·").map(s => s.trim()).filter(Boolean);
 }

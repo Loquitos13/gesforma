@@ -179,10 +179,29 @@ export function mapTurmaFin(r: Record<string, unknown>) {
   };
 }
 
-const FAIXAS_FORMADOR = new Set(["laboral", "pos", "sabado-manha", "sabado-tarde"]);
+const HORA_DIA = /^\d{2}:\d{2}$/;
+const DATA_DIA = /^\d{4}-\d{2}-\d{2}$/;
 
-export function faixasDisponibilidade(v: unknown) {
-  return asArr(v).map(x => String(x)).filter(x => FAIXAS_FORMADOR.has(x));
+export function diasDisponibilidade(v: unknown) {
+  const out: { data: string; estado: "disponivel" | "indisponivel"; horarios: { inicio: string; fim: string }[] }[] = [];
+  for (const item of asArr(v)) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const data = String(row.data ?? "");
+    if (!DATA_DIA.test(data)) continue;
+    const estado = row.estado === "indisponivel" ? "indisponivel" as const : "disponivel" as const;
+    const horarios = Array.isArray(row.horarios)
+      ? row.horarios.flatMap(h => {
+          if (!h || typeof h !== "object") return [];
+          const inicio = String((h as { inicio?: string }).inicio ?? "");
+          const fim = String((h as { fim?: string }).fim ?? "");
+          if (!HORA_DIA.test(inicio) || !HORA_DIA.test(fim) || fim <= inicio) return [];
+          return [{ inicio, fim }];
+        })
+      : [];
+    out.push({ data, estado, horarios: estado === "indisponivel" ? [] : horarios });
+  }
+  return out.sort((a, b) => a.data.localeCompare(b.data));
 }
 
 export function mapFormador(r: Record<string, unknown>) {
@@ -196,7 +215,7 @@ export function mapFormador(r: Record<string, unknown>) {
     nif: String(r.nif ?? ""),
     regimes: asArr(r.regimes),
     estado: String(r.estado ?? "Ativo"),
-    disponibilidade: faixasDisponibilidade(r.disponibilidade),
+    disponibilidade: diasDisponibilidade(r.disponibilidade),
   };
 }
 
@@ -211,6 +230,10 @@ export async function formadorEmTurmaActiva(db: Db, nome: string) {
        SELECT formador, cronograma FROM turmas_fin WHERE activa = true
      ) t
      WHERE lower(trim(t.formador)) = $1
+        OR EXISTS (
+          SELECT 1 FROM regexp_split_to_table(COALESCE(t.formador, ''), '·') parte
+          WHERE lower(trim(parte)) = $1
+        )
         OR EXISTS (
           SELECT 1
           FROM jsonb_array_elements(CASE WHEN jsonb_typeof(t.cronograma) = 'array' THEN t.cronograma ELSE '[]'::jsonb END) s

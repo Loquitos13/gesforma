@@ -7,7 +7,7 @@ import { DOCS_FORMADOR, fundirDocTipos } from "./dossierDocs";
 import { catalogIdRemapSubscribe, useCatalogList } from "./CatalogsContext";
 import { useDrive } from "./DriveContext";
 import { useFormadores } from "./FormadoresContext";
-import { FAIXAS_DISPONIBILIDADE } from "./formadorModel";
+import type { DiaDisponibilidade } from "./formadorModel";
 import { AppModal } from "./FormKit";
 import { ConfirmDangerModal } from "./SecretaryUX";
 import { persist } from "./toastBus";
@@ -338,6 +338,23 @@ export function PresencasSessaoModal({ open, onClose, sessao, formandos, onSave,
 
 type DocField = { id: string; label: string; required: boolean; uploaded: boolean; fileName?: string; driveUrl?: string; driveFileId?: string };
 
+function ResumoCalendario({ dias }: { dias: DiaDisponibilidade[] }) {
+  if (!dias.length) return <p className="text-xs text-slate-400">O calendário ainda está vazio. Marca-se na ficha do formador.</p>;
+  const livres = dias.filter(d => d.estado === "disponivel");
+  const fora = dias.filter(d => d.estado === "indisponivel");
+  const amostra = livres.slice(0, 4).map(d => {
+    const [y, m, dia] = d.data.split("-");
+    const horas = d.horarios.map(h => `${h.inicio}-${h.fim}`).join(", ");
+    return `${dia}/${m}/${y}${horas ? ` ${horas}` : ""}`;
+  });
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-slate-600">{livres.length} dias disponíveis, {fora.length} indisponíveis.</p>
+      {amostra.map(linha => <p key={linha} className="text-[11px] text-violet-800">{linha}</p>)}
+    </div>
+  );
+}
+
 export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "gold", turma }: { open: boolean; onClose: () => void; nome: string; telf?: string; accent?: "gold" | "fin"; turma?: string }) {
   const { formadores } = useFormadores();
   const formador = formadores.find(f => f.nome === nome);
@@ -426,15 +443,7 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
           </div>
           <div>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Disponibilidade</p>
-            {(formador?.disponibilidade.length ?? 0) === 0 ? (
-              <p className="text-xs text-slate-400">Ainda sem faixas registadas.</p>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {FAIXAS_DISPONIBILIDADE.filter(f => formador?.disponibilidade.includes(f.id)).map(f => (
-                  <span key={f.id} className="text-[11px] font-semibold px-2 py-0.5 rounded-full border border-violet-200 bg-violet-50 text-violet-800">{f.label}</span>
-                ))}
-              </div>
-            )}
+            <ResumoCalendario dias={formador?.disponibilidade ?? []} />
           </div>
           <div>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Cursos atribuídos</p>

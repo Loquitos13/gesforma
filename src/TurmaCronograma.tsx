@@ -4,7 +4,7 @@ import { generateEnaCronograma, SESSAO_MODALIDADE_OPTS } from "./cronogramaGrelh
 import { MultiSearchSelect } from "./FormKit";
 import { useProgramaDoCurso } from "./cursoPrograma";
 import { useFormadorOptions, useFormadores } from "./FormadoresContext";
-import { faixaDoHorario, labelFaixa } from "./formadorModel";
+import { horaCabeNoDia } from "./formadorModel";
 import {
   hojeIso,
   emptySessao,
@@ -278,7 +278,7 @@ function SessaoRow({
 
 export function CronogramaEditor({
   sessoes, onChange, inicio, horario, horas, formador, curso, local, accent = "gold",
-  layout = "compact",
+  layout = "compact", onDossie, dossieAGravar,
 }: {
   sessoes: SessaoCronograma[];
   onChange: (next: SessaoCronograma[]) => void;
@@ -290,6 +290,8 @@ export function CronogramaEditor({
   local?: string;
   accent?: "gold" | "fin";
   layout?: "page" | "compact";
+  onDossie?: () => void;
+  dossieAGravar?: boolean;
 }) {
   const gold = accent === "gold";
   const page = layout === "page";
@@ -298,21 +300,32 @@ export function CronogramaEditor({
   const moduloOpts = programa.options;
   const totalH = Math.round(horasCronograma(sessoes) * 10) / 10;
   const horasFormador = useMemo(() => horasPorFormador(sessoes), [sessoes]);
-  const faixa = faixaDoHorario(horario);
   const avisosDisp = useMemo(() => {
-    const nomes = new Set(horasFormador.map(h => h.nome));
-    if (formador.trim() && formador !== "A definir") nomes.add(formador.trim());
     const fora: string[] = [];
-    const vazios: string[] = [];
-    if (!faixa) return { fora, vazios };
-    for (const nome of nomes) {
-      const ficha = formadores.find(f => f.nome === nome);
-      if (!ficha) continue;
-      if (ficha.disponibilidade.length === 0) vazios.push(nome);
-      else if (!ficha.disponibilidade.includes(faixa)) fora.push(nome);
+    const vazios = new Set<string>();
+    const vistos = new Set<string>();
+    for (const s of sessoes) {
+      if (!isSessaoLectiva(s) || !s.data) continue;
+      for (const nome of sessaoFormadores(s)) {
+        if (!nome || nome === "A definir") continue;
+        const ficha = formadores.find(f => f.nome === nome);
+        if (!ficha) continue;
+        if (ficha.disponibilidade.length === 0) {
+          vazios.add(nome);
+          continue;
+        }
+        const dia = ficha.disponibilidade.find(d => d.data === s.data);
+        if (!dia) continue;
+        const chave = `${nome}|${s.data}`;
+        if (vistos.has(chave)) continue;
+        if (dia.estado === "indisponivel" || !horaCabeNoDia(dia.horarios, s.horaInicio, s.horaFim)) {
+          vistos.add(chave);
+          fora.push(`${nome} a ${s.data}`);
+        }
+      }
     }
-    return { fora, vazios };
-  }, [faixa, formador, formadores, horasFormador]);
+    return { fora, vazios: [...vazios] };
+  }, [formadores, sessoes]);
   const next = proximaSessao(sessoes);
   const periodo = periodoCronograma(sessoes);
   const lectivas = useMemo(() => sessoes.filter(isSessaoLectiva), [sessoes]);
@@ -390,6 +403,11 @@ export function CronogramaEditor({
       <button type="button" onClick={addSessao} className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border bg-white ${ghost}`}>
         <IconPlus /> Sessão
       </button>
+      {onDossie && (
+        <button type="button" onClick={onDossie} disabled={dossieAGravar || sessoes.length === 0} className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border bg-white ${ghost} disabled:opacity-40`}>
+          {dossieAGravar ? "A gravar PDF…" : "PDF no dossiê"}
+        </button>
+      )}
     </div>
   );
 
@@ -419,16 +437,11 @@ export function CronogramaEditor({
         {actions}
       </div>
 
-      {(avisosDisp.fora.length > 0 || (horario && !faixa && horasFormador.length > 0)) && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 space-y-1">
-          {horario && !faixa && (
-            <p className="text-xs text-amber-900">O horário «{horario}» não corresponde a nenhuma faixa de disponibilidade (laboral de manhã, pós-laboral ou sábado).</p>
-          )}
-          {faixa && avisosDisp.fora.length > 0 && (
-            <p className="text-xs text-amber-900">
-              O horário da turma é {labelFaixa(faixa).toLowerCase()}. Fora dessa faixa: {avisosDisp.fora.join(", ")}.
-            </p>
-          )}
+      {avisosDisp.fora.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-xs text-amber-900">
+            O calendário do formador não cobre estas sessões: {avisosDisp.fora.join(", ")}.
+          </p>
         </div>
       )}
       {avisosDisp.vazios.length > 0 && (

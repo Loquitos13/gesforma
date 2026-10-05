@@ -43,7 +43,7 @@ import { FORMADORES_SEED } from "./formadorModel";
 import { useFormadorOptions, useFormadores } from "./FormadoresContext";
 import { useTurmas } from "./TurmasContext";
 import { cronogramaToSessoes, formatSessaoLabel, generateCronograma, hojeIso, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
-import { apiGlobalSearch, apiDriveFiles, apiSaveFormandoDocs, type GlobalSearchHit } from "./api";
+import { apiArquivarDtpPdfs, apiGlobalSearch, apiDriveFiles, apiSaveFormandoDocs, type GlobalSearchHit } from "./api";
 import { CampanhasView } from "./CampanhasView";
 import { ListsProvider, tempNumericId, useLists, type BlogPostRow, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
 import { PreInscricoesGoldView } from "./CrmView";
@@ -1019,8 +1019,13 @@ function sumarioBtnCls(s: SumarioSessaoData | undefined, gold: boolean) {
   return gold ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100";
 }
 
+function textoSumario(s?: SumarioSessaoData) {
+  if (!s?.conteudos.trim()) return "";
+  return [s.conteudos, s.atividades, s.observacoes].map(x => x.trim()).filter(Boolean).join("\n");
+}
+
 function SessoesTurmaTab({
-  accent, turmaNome, cursoNome, sessoes, planos, presencas, sumarios, formandos, onNovaSessao, onPlano, onSumario, onPresencas, onOpenFormador,
+  accent, turmaNome, cursoNome, sessoes, planos, presencas, sumarios, formandos, onNovaSessao, onPlano, onSumario, onPresencas, onOpenFormador, onDossie, dossieAGravar,
 }: {
   accent: "gold" | "fin";
   turmaNome: string;
@@ -1035,6 +1040,8 @@ function SessoesTurmaTab({
   onSumario: (s: SessaoMeta) => void;
   onPresencas: (s: SessaoMeta) => void;
   onOpenFormador?: (nome: string) => void;
+  onDossie?: () => void;
+  dossieAGravar?: boolean;
 }) {
   const gold = accent === "gold";
   const numCls = gold ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700";
@@ -1045,8 +1052,8 @@ function SessoesTurmaTab({
       curso: cursoNome,
       formandos,
       sessoes: s
-        ? [{ n: s.n, data: s.data, hora: s.hora, modulo: s.modulos?.join(" · ") || s.modulo, formador: s.formador }]
-        : sessoes.map(x => ({ n: x.n, data: x.data, hora: x.hora, modulo: x.modulos?.join(" · ") || x.modulo, formador: x.formador })),
+        ? [{ n: s.n, data: s.data, hora: s.hora, modulo: s.modulos?.join(" · ") || s.modulo, formador: s.formador, sumario: textoSumario(sumarios[s.n]) }]
+        : sessoes.map(x => ({ n: x.n, data: x.data, hora: x.hora, modulo: x.modulos?.join(" · ") || x.modulo, formador: x.formador, sumario: textoSumario(sumarios[x.n]) })),
     });
   }
   return (
@@ -1054,7 +1061,7 @@ function SessoesTurmaTab({
       <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-2 flex-wrap">
         <div>
           <p className="text-sm font-semibold text-slate-700">Sessões - {turmaNome}</p>
-          <p className="text-[11px] text-slate-500 mt-0.5">Cada sessão é uma linha lectiva do cronograma. O dia, a hora e os formadores editam-se no cronograma. Aqui ficam presenças, sumário e plano.</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">As sessões lectivas do cronograma aparecem aqui com o mesmo dia, hora, módulo e formadores. Uma sessão criada aqui entra no cronograma. Presenças, sumário e plano ficam nesta lista. O sumário vai na folha de presenças.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -1066,6 +1073,11 @@ function SessoesTurmaTab({
           >
             Imprimir folhas
           </button>
+          {onDossie && (
+            <button type="button" disabled={dossieAGravar || sessoes.length === 0} onClick={onDossie} className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40">
+              {dossieAGravar ? "A gravar…" : "PDF no dossiê"}
+            </button>
+          )}
           <NewBtn accent={accent} label="+ Nova Sessão" onClick={onNovaSessao} />
         </div>
       </div>
@@ -1531,16 +1543,27 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const [moduloSessao, setModuloSessao] = useState<string[]>([]);
   const [dataSessao, setDataSessao] = useState("");
   const [horaSessao, setHoraSessao] = useState("09:00");
+  const [horaFimSessao, setHoraFimSessao] = useState("13:00");
+  const [dossieAGravar, setDossieAGravar] = useState(false);
   const [addFormando, setAddFormando] = useState(false);
   const [editTurma, setEditTurma] = useState(false);
   const [editNome, setEditNome] = useState("");
   const [editLocal, setEditLocal] = useState("");
   const [editHorario, setEditHorario] = useState("");
-  const [editFormador, setEditFormador] = useState("");
+  const [editFormadores, setEditFormadores] = useState<string[]>([]);
   const [editInicio, setEditInicio] = useState("");
   const [editVagas, setEditVagas] = useState(16);
   const [editExtra, setEditExtra] = useState(0);
-  const formadorOpts = useFormadorOptions();
+  const formadorOpts = useFormadorOptions(editFormadores);
+  async function arquivarDossie(regime: "gold" | "fin", id: number) {
+    setDossieAGravar(true);
+    const r = await persist(apiArquivarDtpPdfs(regime, id));
+    setDossieAGravar(false);
+    if (r) {
+      toastOk("Os PDFs do cronograma, das folhas e dos planos ficaram no dossiê.");
+      void ped.recarregar();
+    }
+  }
   const locaisDoCurso = useLocaisOptsDoCurso("gold", cursosGold, turma?.curso ?? "");
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
   const nomesCockpit = membros.map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }));
@@ -1581,7 +1604,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
               )}
               <button onClick={() => {
                 setEditNome(turma.nome); setEditLocal(turma.local); setEditHorario(turma.horario);
-                setEditFormador(turma.formador); setEditInicio(turma.dataInicio); setEditVagas(turma.vagas); setEditExtra(turma.inscricoesAdicionais ?? 0);
+                setEditFormadores(turma.formador.split("·").map(s => s.trim()).filter(Boolean)); setEditInicio(turma.dataInicio); setEditVagas(turma.vagas); setEditExtra(turma.inscricoesAdicionais ?? 0);
                 setEditTurma(true);
               }} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>
               <button type="button" onClick={() => setExportTurma(exportPayload(
@@ -1638,6 +1661,8 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             formador={turma.formador}
             curso={turma.curso}
             local={turma.local}
+            onDossie={() => void arquivarDossie("gold", turma.id)}
+            dossieAGravar={dossieAGravar}
           />
         )}
 
@@ -1661,11 +1686,13 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             presencas={ped.presencas}
             sumarios={sumarios}
             formandos={nomesCockpit}
-            onNovaSessao={() => { setFormadoresSessao(turma.formador ? [turma.formador] : []); setModuloSessao([]); setNovaSessao(true); }}
+            onNovaSessao={() => { setFormadoresSessao(turma.formador.split("·").map(s => s.trim()).filter(Boolean)); setModuloSessao([]); setNovaSessao(true); }}
             onPlano={setPlanoSessao}
             onSumario={setSumarioSessao}
             onPresencas={setPresencasSession}
             onOpenFormador={setFormadorOpen}
+            onDossie={() => void arquivarDossie("gold", turma.id)}
+            dossieAGravar={dossieAGravar}
           />
         )}
         {tab === "avaliacao" && (
@@ -1895,6 +1922,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             <Field label="Data"><input type="date" className={iCls} value={dataSessao} onChange={e => setDataSessao(e.target.value)} /></Field>
             <Field label="Hora início"><input type="time" className={iCls} value={horaSessao} onChange={e => setHoraSessao(e.target.value)} /></Field>
           </div>
+          <Field label="Hora fim"><input type="time" className={iCls} value={horaFimSessao} onChange={e => setHoraFimSessao(e.target.value)} /></Field>
           <Field label="Formadores">
             <MultiSearchSelect
               values={formadoresSessao}
@@ -1920,14 +1948,13 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           <div className="flex gap-2 pt-2">
             <button onClick={() => setNovaSessao(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button onClick={() => {
-              if (!dataSessao) return;
-              const [h, m] = (horaSessao || "09:00").split(":").map(Number);
-              const endH = String((h || 9) + 4).padStart(2, "0");
+              if (!dataSessao || !horaSessao || !horaFimSessao || horaFimSessao <= horaSessao) return;
               setGoldCronograma(turma.id, [...turma.cronograma, {
                 id: `s-manual-${Date.now()}`,
                 data: dataSessao,
-                horaInicio: horaSessao || "09:00",
-                horaFim: `${endH}:${String(m || 0).padStart(2, "0")}`,
+                horaInicio: horaSessao,
+                horaFim: horaFimSessao,
+                modalidade: "presencial",
                 modulos: moduloSessao,
                 formadores: formadoresSessao,
               }]);
@@ -1998,7 +2025,18 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             </Field>
             <Field label="Horário"><SearchSelect value={editHorario} onChange={setEditHorario} options={horariosLista} /></Field>
           </div>
-          <Field label="Formador"><SearchSelect value={editFormador} onChange={setEditFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
+          <Field label="Formadores">
+            <MultiSearchSelect
+              values={editFormadores}
+              onChange={setEditFormadores}
+              options={formadorOpts}
+              placeholder="Pesquisar formador…"
+              noneLabel="Selecionar formadores…"
+              unitSingular="formador"
+              unitPlural="formadores"
+            />
+            <p className="text-[11px] text-slate-400">A turma aceita vários. Em cada sessão escolhem-se os que leccionam.</p>
+          </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Data de início"><input type="date" className={iCls} value={editInicio} onChange={e => setEditInicio(e.target.value)} /></Field>
             <Field label="Vagas"><input type="number" className={iCls} value={editVagas} onChange={e => setEditVagas(Number(e.target.value) || 0)} /></Field>
@@ -2009,7 +2047,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           <div className="flex gap-2 pt-2">
             <button onClick={() => setEditTurma(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button onClick={() => {
-              patchGold(turma.id, { nome: editNome.trim() || turma.nome, local: editLocal, horario: editHorario, formador: editFormador, dataInicio: editInicio, vagas: editVagas, inscricoesAdicionais: editExtra });
+              patchGold(turma.id, { nome: editNome.trim() || turma.nome, local: editLocal, horario: editHorario, formador: editFormadores.join(" · "), dataInicio: editInicio, vagas: editVagas, inscricoesAdicionais: editExtra });
               setEditTurma(false);
             }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
           </div>
@@ -2126,6 +2164,8 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const [moduloSessao, setModuloSessao] = useState<string[]>([]);
   const [dataSessao, setDataSessao] = useState("");
   const [horaSessao, setHoraSessao] = useState("19:00");
+  const [horaFimSessao, setHoraFimSessao] = useState("22:00");
+  const [dossieAGravar, setDossieAGravar] = useState(false);
   const [docsOpen, setDocsOpen] = useState<FinFormando | null>(null);
   const [apagarFormando, setApagarFormando] = useState<FinFormando | null>(null);
   const [transferirFormando, setTransferirFormando] = useState<FinFormando | null>(null);
@@ -2133,11 +2173,20 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const [editTurma, setEditTurma] = useState(false);
   const [editNome, setEditNome] = useState("");
   const [editCurso, setEditCurso] = useState("");
-  const [editFormador, setEditFormador] = useState("");
+  const [editFormadores, setEditFormadores] = useState<string[]>([]);
   const [editLocal, setEditLocal] = useState("");
   const [editInicio, setEditInicio] = useState("");
   const [editExtraFin, setEditExtraFin] = useState(0);
-  const formadorOpts = useFormadorOptions();
+  const formadorOpts = useFormadorOptions(editFormadores);
+  async function arquivarDossie(regime: "gold" | "fin", id: number) {
+    setDossieAGravar(true);
+    const r = await persist(apiArquivarDtpPdfs(regime, id));
+    setDossieAGravar(false);
+    if (r) {
+      toastOk("Os PDFs do cronograma, das folhas e dos planos ficaram no dossiê.");
+      void ped.recarregar();
+    }
+  }
   const locaisDoCurso = useLocaisOptsDoCurso("fin", cursosFin, editCurso);
   const cursoFinOptsLive = useCursosOpts("fin");
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
@@ -2177,7 +2226,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           </div>
           <div className="flex gap-3 flex-shrink-0">
             <button onClick={() => {
-              setEditNome(turma.nome); setEditCurso(turma.curso); setEditFormador(turma.formador);
+              setEditNome(turma.nome); setEditCurso(turma.curso); setEditFormadores(turma.formador.split("·").map(s => s.trim()).filter(Boolean));
               setEditLocal(turma.local); setEditInicio(turma.dataInicio); setEditExtraFin(turma.inscricoesAdicionais ?? 0); setEditTurma(true);
             }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>
             <button type="button" onClick={() => setExportTurma(exportPayload(
@@ -2222,6 +2271,8 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           formador={turma.formador}
           curso={turma.curso}
           local={turma.local}
+          onDossie={() => void arquivarDossie("fin", turma.id)}
+          dossieAGravar={dossieAGravar}
         />
       )}
       {tab === "dtp" && (
@@ -2244,11 +2295,13 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           presencas={ped.presencas}
           sumarios={sumarios}
           formandos={nomesCockpit}
-          onNovaSessao={() => { setFormadoresSessao(turma.formador ? [turma.formador] : []); setModuloSessao([]); setNovaSessao(true); }}
+          onNovaSessao={() => { setFormadoresSessao(turma.formador.split("·").map(s => s.trim()).filter(Boolean)); setModuloSessao([]); setNovaSessao(true); }}
           onPlano={setPlanoSessao}
           onSumario={setSumarioSessao}
           onPresencas={setPresencasSession}
           onOpenFormador={setFormadorOpen}
+          onDossie={() => void arquivarDossie("fin", turma.id)}
+          dossieAGravar={dossieAGravar}
         />
       )}
       {tab === "avaliacao" && (
@@ -2536,7 +2589,18 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
               placeholder="Pesquisar UFCD…"
             />
           </Field>
-          <Field label="Formador"><SearchSelect value={editFormador} onChange={setEditFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
+          <Field label="Formadores">
+            <MultiSearchSelect
+              values={editFormadores}
+              onChange={setEditFormadores}
+              options={formadorOpts}
+              placeholder="Pesquisar formador…"
+              noneLabel="Selecionar formadores…"
+              unitSingular="formador"
+              unitPlural="formadores"
+            />
+            <p className="text-[11px] text-slate-400">A turma aceita vários. Em cada sessão escolhem-se os que leccionam.</p>
+          </Field>
           <Field label="Local">
             <SearchSelect
               value={editLocal}
@@ -2554,7 +2618,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           <div className="flex gap-2 pt-2">
             <button onClick={() => setEditTurma(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button onClick={() => {
-              patchFin(turma.id, { nome: editNome.trim() || turma.nome, curso: editCurso, formador: editFormador, local: editLocal, dataInicio: editInicio, inscricoesAdicionais: editExtraFin });
+              patchFin(turma.id, { nome: editNome.trim() || turma.nome, curso: editCurso, formador: editFormadores.join(" · "), local: editLocal, dataInicio: editInicio, inscricoesAdicionais: editExtraFin });
               setEditTurma(false);
             }} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">Guardar</button>
           </div>
@@ -2566,6 +2630,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
             <Field label="Data"><input type="date" className={iCls} value={dataSessao} onChange={e => setDataSessao(e.target.value)} /></Field>
             <Field label="Hora início"><input type="time" className={iCls} value={horaSessao} onChange={e => setHoraSessao(e.target.value)} /></Field>
           </div>
+          <Field label="Hora fim"><input type="time" className={iCls} value={horaFimSessao} onChange={e => setHoraFimSessao(e.target.value)} /></Field>
           <Field label="Formadores">
             <MultiSearchSelect
               values={formadoresSessao}
@@ -2591,14 +2656,13 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           <div className="flex gap-2 pt-2">
             <button onClick={() => setNovaSessao(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button onClick={() => {
-              if (!dataSessao) return;
-              const [h, m] = (horaSessao || "19:00").split(":").map(Number);
-              const endH = String((h || 19) + 3).padStart(2, "0");
+              if (!dataSessao || !horaSessao || !horaFimSessao || horaFimSessao <= horaSessao) return;
               setFinCronograma(turma.id, [...turma.cronograma, {
                 id: `s-manual-${Date.now()}`,
                 data: dataSessao,
-                horaInicio: horaSessao || "19:00",
-                horaFim: `${endH}:${String(m || 0).padStart(2, "0")}`,
+                horaInicio: horaSessao,
+                horaFim: horaFimSessao,
+                modalidade: "presencial",
                 modulos: moduloSessao,
                 formadores: formadoresSessao,
               }]);

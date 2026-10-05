@@ -120,6 +120,8 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
   const [dups, setDups] = useState<{ id: number; nome: string; apelido: string; estado: string }[]>([]);
   const [comerciais, setComerciais] = useState<{ id: string; name: string }[]>([]);
   const [comercialFiltro, setComercialFiltro] = useState("");
+  const [de, setDe] = useState("");
+  const [ate, setAte] = useState("");
   const [etiquetas, setEtiquetas] = useState<CrmEtiqueta[]>([]);
   const [loteComercial, setLoteComercial] = useState("");
   const [loteEtiqueta, setLoteEtiqueta] = useState("");
@@ -140,13 +142,29 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
   }, [regime]);
 
   const hoje = hojeIso();
+  function limparFiltros() {
+    setCurso("");
+    setLocal("");
+    setOrigem("");
+    setEstado("Todos");
+    setFila("");
+    setEntrada("");
+    setComercialFiltro("");
+    setDe("");
+    setAte("");
+    setQInput("");
+    setQ("");
+    setPage(1);
+    setViewMode("table");
+  }
   const query: CrmListQuery = useMemo(() => ({
     q, estado, curso, local, origem, entrada,
     fila: viewMode === "hoje" && !fila ? "agenda" : fila,
     page, perPage, sort, kanban: viewMode === "kanban", hoje,
     comercialId: comercialFiltro,
     regime,
-  }), [q, estado, curso, local, origem, entrada, fila, page, perPage, sort, viewMode, hoje, comercialFiltro, regime]);
+    de, ate,
+  }), [q, estado, curso, local, origem, entrada, fila, page, perPage, sort, viewMode, hoje, comercialFiltro, regime, de, ate]);
 
   useEffect(() => {
     const t = window.setTimeout(() => { setQ(qInput.trim()); setPage(1); }, 280);
@@ -408,6 +426,12 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
                 placeholder="Nome, email, telemóvel, curso ou nº da pré-inscrição…  (atalho /)"
                 className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400" />
             </div>
+            <label className="text-[10px] font-semibold uppercase text-slate-400">De
+              <input type="date" value={de} onChange={e => { setDe(e.target.value); setPage(1); }} className="mt-1 block text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white" />
+            </label>
+            <label className="text-[10px] font-semibold uppercase text-slate-400">Até
+              <input type="date" value={ate} onChange={e => { setAte(e.target.value); setPage(1); }} className="mt-1 block text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white" />
+            </label>
             <select value={sort} onChange={e => { setSort(e.target.value as CrmSort); setPage(1); }}
               className="text-xs border border-slate-200 rounded-lg px-2 py-2 bg-white">
               <option value="inscrito">Mais recentes</option>
@@ -438,7 +462,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
               { label: "Origem", value: origem, onChange: v => { setOrigem(v); setPage(1); }, options: facets.origens.map(x => ({ value: x })) },
             ]}
             chips={{ options: ["Todos", ...CRM_ESTADOS], value: estado, onChange: v => { setEstado(v); setFila(""); setPage(1); } }}
-            onClear={() => { setCurso(""); setLocal(""); setOrigem(""); setEstado("Todos"); setFila(""); setEntrada(""); setComercialFiltro(""); setQInput(""); setQ(""); setPage(1); }}
+            onClear={limparFiltros}
           />
         </div>
 
@@ -513,7 +537,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
               <EmptyHint
                 text={counts.total === 0 ? "Ainda sem pré-inscrições. Cole o formulário público no site ou registe um pedido de telefone." : "Nenhuma pré-inscrição neste filtro."}
                 action={counts.total === 0 ? "Nova pré-inscrição" : "Limpar filtros"}
-                onAction={counts.total === 0 ? () => { setEditLead(null); resetForm(); setNovo(true); } : () => { setCurso(""); setLocal(""); setOrigem(""); setEstado("Todos"); setFila(""); setEntrada(""); setQInput(""); setQ(""); setPage(1); }}
+                onAction={counts.total === 0 ? () => { setEditLead(null); resetForm(); setNovo(true); } : limparFiltros}
               />
             )}
             <div className="md:hidden p-3 space-y-2">

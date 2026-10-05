@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "./AuthGate";
 import {
   ApiError,
-  apiEquipa, apiEquipaFicha, apiEquipaNota, apiEquipaProposta, apiPatchProposta,
-  type EquipaComercial, type EquipaNota, type EquipaProposta,
+  apiEquipa, apiEquipaFicha, apiEquipaNota, apiEquipaObjetivo, apiEquipaProposta, apiPatchProposta, apiPropostaTemplates,
+  type EquipaComercial, type EquipaNota, type EquipaProposta, type PropostaTemplate,
 } from "./api";
 import { AppModal } from "./FormKit";
 import { EmptyHint, MobileCard } from "./SecretaryUX";
@@ -52,6 +53,7 @@ function Kpi({ label, value, sub }: { label: string; value: string | number; sub
 }
 
 export function EquipaView({ regime = "gold" }: { regime?: "gold" | "fin" }) {
+  const { user } = useAuth();
   const [lista, setLista] = useState<EquipaComercial[]>([]);
   const [totais, setTotais] = useState({ comerciais: 0, activos: 0, leads: 0, propostas: 0, pipeline: 0, receita: 0 });
   const [q, setQ] = useState("");
@@ -154,8 +156,25 @@ export function EquipaView({ regime = "gold" }: { regime?: "gold" | "fin" }) {
               </div>
             </dl>
             <p className="mt-3 text-xs text-slate-500">
-              {c.stats.propostasAceites} aceites · {euro(c.stats.receita)} fechados
+              {c.stats.propostasAceites} aceites · sucesso {c.stats.sucessoPropostas ?? 0}%
+              {c.stats.metaPct != null ? ` · objectivo ${c.stats.metaPct}%` : ""} · {euro(c.stats.receita)} fechados
             </p>
+            {user.role === "admin" && (
+              <label className="mt-2 block text-[11px] text-slate-500" onClick={e => e.stopPropagation()}>
+                Objectivo de sucesso das propostas enviadas (%)
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  defaultValue={c.stats.metaPct ?? ""}
+                  className="mt-1 w-full px-2 py-1 text-sm border border-slate-200 rounded-lg"
+                  onBlur={e => {
+                    const n = Number(e.target.value);
+                    if (Number.isFinite(n)) void apiEquipaObjetivo(c.id, Math.min(100, Math.max(0, n))).then(() => load());
+                  }}
+                />
+              </label>
+            )}
           </button>
         ))}
       </div>
@@ -189,6 +208,8 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
   const [resposta, setResposta] = useState<EquipaProposta | null>(null);
   const [respostaTxt, setRespostaTxt] = useState("");
   const [respostaEstado, setRespostaEstado] = useState<(typeof ESTADOS)[number]>("Aceite");
+  const [templates, setTemplates] = useState<PropostaTemplate[]>([]);
+  const [templateId, setTemplateId] = useState<number | "">("");
 
   function load() {
     setLoading(true);
@@ -205,6 +226,7 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
   }
 
   useEffect(() => { load(); }, [id, regime]);
+  useEffect(() => { apiPropostaTemplates().then(r => setTemplates(r.templates)).catch(() => undefined); }, []);
 
   async function criarProposta() {
     if (!draft.clienteNome.trim()) return;
@@ -220,6 +242,8 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
         notas: draft.notas.trim(),
         preinscricaoId: draft.preinscricaoId ? Number(draft.preinscricaoId) : null,
         regime,
+        templateId: templateId === "" ? null : templateId,
+        corpo: templates.find(t => t.id === templateId)?.corpo ?? "",
       });
       setNova(false);
       setDraft({ clienteNome: "", clienteEmail: "", curso: "", valor: "125", estado: "Enviada", respostaCliente: "", notas: "", preinscricaoId: "" });
@@ -391,6 +415,17 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
 
       <AppModal open={nova} onClose={() => setNova(false)} title="Nova proposta" sub={comercial?.name} size="md">
         <div className="p-5 space-y-3">
+          <Field label="Template">
+            <select className={iCls} value={templateId} onChange={e => {
+              const idTpl = e.target.value ? Number(e.target.value) : "";
+              setTemplateId(idTpl);
+              const t = templates.find(x => x.id === idTpl);
+              if (t) setDraft(d => ({ ...d, curso: d.curso || t.curso, valor: d.valor || String(t.valor || "") }));
+            }}>
+              <option value="">Sem template</option>
+              {templates.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            </select>
+          </Field>
           <Field label="Cliente"><input className={iCls} value={draft.clienteNome} onChange={e => setDraft({ ...draft, clienteNome: e.target.value })} /></Field>
           <Field label="Email"><input className={iCls} value={draft.clienteEmail} onChange={e => setDraft({ ...draft, clienteEmail: e.target.value })} /></Field>
           <Field label="Curso"><input className={iCls} value={draft.curso} onChange={e => setDraft({ ...draft, curso: e.target.value })} /></Field>

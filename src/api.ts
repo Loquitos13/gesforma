@@ -10,7 +10,7 @@ export class ApiError extends Error {
   }
 }
 
-export type StaffRole = "admin" | "secretaria" | "comercial" | "financiada";
+export type StaffRole = "admin" | "secretaria" | "comercial" | "financiada" | "formador";
 export type SessionUser = { id: string; email: string; name: string; role: StaffRole | string };
 
 export type StaffUser = {
@@ -195,6 +195,8 @@ export type EquipaStats = {
   conversao: number;
   propostas: number;
   propostasAceites: number;
+  sucessoPropostas?: number;
+  metaPct?: number | null;
   propostasRecusadas: number;
   pipeline: number;
   receita: number;
@@ -249,7 +251,7 @@ export const apiEquipaProposta = (comercialId: string, body: {
   clienteNome: string; clienteEmail?: string; curso?: string; valor?: number;
   estado?: "Enviada" | "Negociação" | "Aceite" | "Recusada" | "Expirada";
   respostaCliente?: string; notas?: string; preinscricaoId?: number | null;
-  regime?: "gold" | "fin";
+  regime?: "gold" | "fin"; corpo?: string; templateId?: number | null;
 }) => api<{ proposta: EquipaProposta }>(`/v1/equipa/${comercialId}/propostas`, { method: "POST", body: JSON.stringify(body) });
 
 export const apiPatchProposta = (id: number, body: {
@@ -511,6 +513,9 @@ export type Dashboard = {
     metodosPagamento: { metodo: string; valor: number; pct: number; color: string }[];
   };
   funil: { l: string; v: number }[];
+  funilPreinscritos?: { l: string; v: number }[];
+  funilPrepagos?: { l: string; v: number }[];
+  formandosOrigem?: { preinscritos: number; prepagos: number };
   conhecimento: { id: string; fonte: string; curto: string; detalhe: string; color: string; n: number; pct: number }[];
   topCursos: { nome: string; inscritos: number; receita: number; taxa: number | null }[];
   desagregar?: "curso" | "local" | "horario";
@@ -695,6 +700,8 @@ export type CrmListQuery = {
   kanban?: boolean;
   hoje?: string;
   regime?: "gold" | "fin";
+  de?: string;
+  ate?: string;
 };
 
 export type CrmListResult = {
@@ -729,6 +736,8 @@ function crmQs(q: CrmListQuery) {
   if (q.kanban) p.set("kanban", "1");
   if (q.hoje) p.set("hoje", q.hoje);
   if (q.regime) p.set("regime", q.regime);
+  if (q.de) p.set("de", q.de);
+  if (q.ate) p.set("ate", q.ate);
   const s = p.toString();
   return s ? `?${s}` : "";
 }
@@ -1008,6 +1017,38 @@ export async function apiDtpExport(regime: Regime, turmaId: number, filename?: s
     endViewLoad();
   }
 }
+
+export const apiEquipaObjetivo = (comercialId: string, metaPct: number) =>
+  api<{ ok: boolean; metaPct: number }>(`/v1/equipa/${comercialId}/objetivo`, { method: "PUT", body: JSON.stringify({ metaPct }) });
+
+export type CrmCliente = { id: number; nome: string; email: string; telf: string; nif: string; notas: string };
+export type CrmParceiro = { id: number; nome: string; email: string; telf: string; tipo: string; notas: string };
+export type DocTemplate = { id: number; nome: string; curso: string; valor: number; corpo: string };
+export type PropostaTemplate = DocTemplate;
+export type ContratoTemplate = DocTemplate;
+export type CrmContrato = {
+  id: number; clienteNome: string; clienteEmail: string; curso: string; valor: number;
+  estado: string; notas: string; corpo: string; templateId: number | null; comercial: string;
+};
+
+export const apiCrmClientes = () => api<{ clientes: CrmCliente[] }>("/v1/crm/clientes");
+export const apiCreateCliente = (body: Omit<CrmCliente, "id">) =>
+  api<{ cliente: CrmCliente }>("/v1/crm/clientes", { method: "POST", body: JSON.stringify(body) });
+export const apiDeleteCliente = (id: number) => api<{ ok: boolean }>(`/v1/crm/clientes/${id}`, { method: "DELETE" });
+export const apiCrmParceiros = () => api<{ parceiros: CrmParceiro[] }>("/v1/crm/parceiros");
+export const apiCreateParceiro = (body: Omit<CrmParceiro, "id" | "notas" | "telf"> & { telf?: string; notas?: string }) =>
+  api<{ parceiro: CrmParceiro }>("/v1/crm/parceiros", { method: "POST", body: JSON.stringify(body) });
+export const apiDeleteParceiro = (id: number) => api<{ ok: boolean }>(`/v1/crm/parceiros/${id}`, { method: "DELETE" });
+export const apiPropostaTemplates = () => api<{ templates: PropostaTemplate[] }>("/v1/crm/proposta-templates");
+export const apiCreatePropostaTemplate = (body: Omit<PropostaTemplate, "id">) =>
+  api<{ template: PropostaTemplate }>("/v1/crm/proposta-templates", { method: "POST", body: JSON.stringify(body) });
+export const apiContratoTemplates = () => api<{ templates: ContratoTemplate[] }>("/v1/crm/contrato-templates");
+export const apiCreateContratoTemplate = (body: Omit<ContratoTemplate, "id">) =>
+  api<{ template: ContratoTemplate }>("/v1/crm/contrato-templates", { method: "POST", body: JSON.stringify(body) });
+export const apiContratos = () => api<{ contratos: CrmContrato[] }>("/v1/crm/contratos");
+export const apiCreateContrato = (body: {
+  clienteNome: string; clienteEmail?: string; curso?: string; valor?: number; corpo?: string; templateId?: number | null;
+}) => api<{ contrato: { id: number } }>("/v1/crm/contratos", { method: "POST", body: JSON.stringify(body) });
 
 export function emitAutomation(
   type: "preinscricao.created" | "payment.confirmed" | "formando.completed" | "sessao.summary_signed",

@@ -21,6 +21,8 @@ import {
   nextOpsId,
 } from "./ops.js";
 import { exportCrmLeads, queryCrmLeads, searchCrmLeads, type CrmFila, type CrmSort } from "./crm.js";
+import { syncTurmaDriveAccess } from "./googleDrive.js";
+import { cronogramaSoMarcas, nomesDoFormador } from "./sessaoAcesso.js";
 import {
   addLeadNota, createCrmCampo, createCrmEtiqueta, deleteCrmEtiqueta, findDuplicados, fixarNota, getLeadDossier,
   listCrmCampos, listCrmEtiquetas, logLeadEvent, setCampoValores, type CrmCampoTipo,
@@ -82,6 +84,29 @@ function regimeDaLinha(row: { regime?: unknown } | null | undefined): "gold" | "
 
 function nowStamp() {
   return new Date().toISOString().slice(0, 16).replace("T", " ");
+}
+
+async function negarFormadorTurma(
+  db: Db,
+  actor: { role: string; email: string; name: string },
+  regime: "gold" | "fin",
+  id: number,
+  body: unknown,
+) {
+  if (actor.role !== "formador") return null;
+  const sent = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  const keys = Object.keys(sent);
+  if (keys.length !== 1 || keys[0] !== "cronograma" || !Array.isArray(sent.cronograma)) {
+    return "O formador só inicia ou fecha as sessões em que está atribuído.";
+  }
+  const table = regime === "gold" ? "turmas_gold" : "turmas_fin";
+  const row = await one(db, `SELECT cronograma FROM ${table} WHERE id = $1`, [id]);
+  if (!row) return "Turma inexistente.";
+  const nomes = await nomesDoFormador(db, actor.email, actor.name);
+  if (!cronogramaSoMarcas(row.cronograma, sent.cronograma, nomes)) {
+    return "Só pode iniciar ou fechar sessões em que está atribuído.";
+  }
+  return null;
 }
 
 async function one(db: Db, sql: string, params: unknown[]) {
@@ -149,6 +174,8 @@ export function registerOpsRoutes(
       sort: (sort.success ? sort.data : "inscrito") as CrmSort,
       kanban: str("kanban") === "1" || str("kanban") === "true",
       regime: (str("regime") === "fin" ? "fin" : str("regime") === "gold" ? "gold" : "") as "" | "gold" | "fin",
+      de: /^\d{4}-\d{2}-\d{2}$/.test(str("de")) ? str("de") : "",
+      ate: /^\d{4}-\d{2}-\d{2}$/.test(str("ate")) ? str("ate") : "",
     };
   }
 
@@ -1150,11 +1177,13 @@ export function registerOpsRoutes(
     vagas: z.number().optional().default(16),
     estado: z.string().max(20).optional().default("Ativa"),
     formador: z.string().max(120).optional().default(""),
+    formadores: z.array(z.string().max(120)).max(12).optional().default([]),
     horas: z.number().optional().default(90),
     cronograma: z.array(z.unknown()).optional(),
   });
   app.post("/v1/turmas-gold", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não cria turmas." });
     const parsed = turmaGoldSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
@@ -1169,16 +1198,21 @@ export function registerOpsRoutes(
         curso: d.curso,
       });
     await db.query(
-      `INSERT INTO turmas_gold (id, data_inicio, nome, curso, local, horario, total_alunos, vagas, estado, formador, horas, cronograma)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
-      [id, d.dataInicio, d.nome, d.curso, d.local, d.horario, d.totalAlunos, d.vagas, d.estado, d.formador, d.horas, cronograma],
+      `INSERT INTO turmas_gold (id, data_inicio, nome, curso, local, horario, total_alunos, vagas, estado, formador, formadores, horas, cronograma)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13::jsonb)`,
+      [id, d.dataInicio, d.nome, d.curso, d.local, d.horario, d.totalAlunos, d.vagas, d.estado, d.formador, JSON.stringify(d.formadores), d.horas, cronograma],
     );
+    void syncTurmaDriveAccess(db, {
+      regime: "gold", turmaId: id, nome: d.nome, formador: d.formador, formadores: d.formadores, cronograma,
+    }).catch(() => undefined);
     const row = await one(db, "SELECT * FROM turmas_gold WHERE id = $1", [id]);
     return { turma: row ? mapTurmaGold(row) : { id } };
   });
   app.patch("/v1/turmas-gold/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const id = Number((req.params as { id: string }).id);
+    const bloqueio = await negarFormadorTurma(db, req.actor!, "gold", id, req.body);
+    if (bloqueio) return reply.code(403).send({ error: bloqueio });
     const parsed = turmaGoldSchema.partial().safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
@@ -1186,14 +1220,26 @@ export function registerOpsRoutes(
       `UPDATE turmas_gold SET data_inicio = COALESCE($2, data_inicio), nome = COALESCE($3, nome), curso = COALESCE($4, curso),
          local = COALESCE($5, local), horario = COALESCE($6, horario), total_alunos = COALESCE($7, total_alunos),
          vagas = COALESCE($8, vagas), estado = COALESCE($9, estado), formador = COALESCE($10, formador),
-         horas = COALESCE($11, horas), cronograma = COALESCE($12::jsonb, cronograma) WHERE id = $1`,
-      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.local ?? null, d.horario ?? null, d.totalAlunos ?? null, d.vagas ?? null, d.estado ?? null, d.formador ?? null, d.horas ?? null, d.cronograma ?? null],
+         formadores = COALESCE($11::jsonb, formadores),
+         horas = COALESCE($12, horas), cronograma = COALESCE($13::jsonb, cronograma) WHERE id = $1`,
+      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.local ?? null, d.horario ?? null, d.totalAlunos ?? null, d.vagas ?? null, d.estado ?? null, d.formador ?? null, d.formadores ? JSON.stringify(d.formadores) : null, d.horas ?? null, d.cronograma ?? null],
     );
     const row = await one(db, "SELECT * FROM turmas_gold WHERE id = $1", [id]);
+    if (row) {
+      void syncTurmaDriveAccess(db, {
+        regime: "gold",
+        turmaId: id,
+        nome: String(row.nome ?? d.nome ?? ""),
+        formador: String(row.formador ?? ""),
+        formadores: Array.isArray(row.formadores) ? row.formadores.map(String) : d.formadores,
+        cronograma: row.cronograma,
+      }).catch(() => undefined);
+    }
     return { turma: row ? mapTurmaGold(row) : null };
   });
   app.delete("/v1/turmas-gold/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não elimina turmas." });
     await db.query("DELETE FROM turmas_gold WHERE id = $1", [Number((req.params as { id: string }).id)]);
     return { ok: true };
   });
@@ -1210,11 +1256,13 @@ export function registerOpsRoutes(
     estado: z.string().max(40).optional().default("A montar"),
     horas: z.number().optional().default(25),
     formador: z.string().max(120).optional().default(""),
+    formadores: z.array(z.string().max(120)).max(12).optional().default([]),
     activa: z.boolean().optional().default(true),
     cronograma: z.array(z.unknown()).optional(),
   });
   app.post("/v1/turmas-fin", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não cria turmas." });
     const parsed = turmaFinSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
@@ -1230,16 +1278,21 @@ export function registerOpsRoutes(
         hoursPerSession: 3,
       });
     await db.query(
-      `INSERT INTO turmas_fin (id, data_inicio, nome, curso, ufcd_cod, local, horario, alunos, alunos_total, estado, horas, formador, activa, cronograma)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)`,
-      [id, d.dataInicio, d.nome, d.curso, d.ufcdCod, d.local, d.horario, d.alunos, d.alunosTotal, d.estado, d.horas, d.formador, d.activa, cronograma],
+      `INSERT INTO turmas_fin (id, data_inicio, nome, curso, ufcd_cod, local, horario, alunos, alunos_total, estado, horas, formador, formadores, activa, cronograma)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb)`,
+      [id, d.dataInicio, d.nome, d.curso, d.ufcdCod, d.local, d.horario, d.alunos, d.alunosTotal, d.estado, d.horas, d.formador, JSON.stringify(d.formadores), d.activa, cronograma],
     );
+    void syncTurmaDriveAccess(db, {
+      regime: "fin", turmaId: id, nome: d.nome, formador: d.formador, formadores: d.formadores, cronograma,
+    }).catch(() => undefined);
     const row = await one(db, "SELECT * FROM turmas_fin WHERE id = $1", [id]);
     return { turma: row ? mapTurmaFin(row) : { id } };
   });
   app.patch("/v1/turmas-fin/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const id = Number((req.params as { id: string }).id);
+    const bloqueio = await negarFormadorTurma(db, req.actor!, "fin", id, req.body);
+    if (bloqueio) return reply.code(403).send({ error: bloqueio });
     const parsed = turmaFinSchema.partial().safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
@@ -1247,15 +1300,27 @@ export function registerOpsRoutes(
       `UPDATE turmas_fin SET data_inicio = COALESCE($2, data_inicio), nome = COALESCE($3, nome), curso = COALESCE($4, curso),
          ufcd_cod = COALESCE($5, ufcd_cod), local = COALESCE($6, local), horario = COALESCE($7, horario),
          alunos = COALESCE($8, alunos), alunos_total = COALESCE($9, alunos_total), estado = COALESCE($10, estado),
-         horas = COALESCE($11, horas), formador = COALESCE($12, formador), activa = COALESCE($13, activa),
-         cronograma = COALESCE($14::jsonb, cronograma) WHERE id = $1`,
-      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.ufcdCod ?? null, d.local ?? null, d.horario ?? null, d.alunos ?? null, d.alunosTotal ?? null, d.estado ?? null, d.horas ?? null, d.formador ?? null, d.activa ?? null, d.cronograma ?? null],
+         horas = COALESCE($11, horas), formador = COALESCE($12, formador),
+         formadores = COALESCE($13::jsonb, formadores), activa = COALESCE($14, activa),
+         cronograma = COALESCE($15::jsonb, cronograma) WHERE id = $1`,
+      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.ufcdCod ?? null, d.local ?? null, d.horario ?? null, d.alunos ?? null, d.alunosTotal ?? null, d.estado ?? null, d.horas ?? null, d.formador ?? null, d.formadores ? JSON.stringify(d.formadores) : null, d.activa ?? null, d.cronograma ?? null],
     );
     const row = await one(db, "SELECT * FROM turmas_fin WHERE id = $1", [id]);
+    if (row) {
+      void syncTurmaDriveAccess(db, {
+        regime: "fin",
+        turmaId: id,
+        nome: String(row.nome ?? ""),
+        formador: String(row.formador ?? ""),
+        formadores: Array.isArray(row.formadores) ? row.formadores.map(String) : d.formadores,
+        cronograma: row.cronograma,
+      }).catch(() => undefined);
+    }
     return { turma: row ? mapTurmaFin(row) : null };
   });
   app.delete("/v1/turmas-fin/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não elimina turmas." });
     await db.query("DELETE FROM turmas_fin WHERE id = $1", [Number((req.params as { id: string }).id)]);
     return { ok: true };
   });

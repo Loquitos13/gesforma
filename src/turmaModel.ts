@@ -11,6 +11,8 @@ export type SessaoCronograma = {
   modulos: string[];
   formadores: string[];
   modalidade?: SessaoModalidade;
+  iniciadaEm?: string;
+  fechadaEm?: string;
 };
 
 export function sessaoModalidade(s: Pick<SessaoCronograma, "modalidade">): SessaoModalidade {
@@ -105,6 +107,7 @@ export type TurmaGold = {
   vagas: number;
   estado: "Ativa" | "Inativa";
   formador: string;
+  formadores?: string[];
   horas: number;
   cronograma: SessaoCronograma[];
 };
@@ -122,6 +125,7 @@ export type TurmaFin = {
   estado: string;
   horas: number;
   formador: string;
+  formadores?: string[];
   activa: boolean;
   cronograma: SessaoCronograma[];
 };
@@ -203,6 +207,15 @@ export function sessaoDuracaoHoras(s: Pick<SessaoCronograma, "horaInicio" | "hor
   const [sh, sm] = (s.horaInicio || "00:00").split(":").map(Number);
   const [eh, em] = (s.horaFim || "00:00").split(":").map(Number);
   return Math.max(0, ((eh * 60 + em) - (sh * 60 + sm)) / 60);
+}
+
+export function horasDoFormador(sessoes: SessaoCronograma[], nome: string) {
+  const alvo = nome.trim().toLowerCase();
+  return Math.round(sessoes.reduce((acc, s) => {
+    if (!isSessaoLectiva(s)) return acc;
+    if (!sessaoFormadores(s).some(f => f.toLowerCase() === alvo)) return acc;
+    return acc + sessaoDuracaoHoras(s);
+  }, 0) * 10) / 10;
 }
 
 export function proximaSessao(sessoes: SessaoCronograma[], today = hojeIso()) {
@@ -354,7 +367,11 @@ export function cronogramaToSessoes(c: SessaoCronograma[], today = hojeIso()): S
       hora: `${(s.horaInicio || "").replace(":", "h")} a ${(s.horaFim || "").replace(":", "h")}`,
       formador: formadoresLabel(formadores, ""),
       formadores,
-      estado: s.data && s.data < today ? "Realizada" : "Agendada",
+      id: s.id,
+      dataIso: s.data,
+      iniciadaEm: s.iniciadaEm,
+      fechadaEm: s.fechadaEm,
+      estado: s.fechadaEm ? "Fechada" : s.iniciadaEm ? "Em curso" : s.data && s.data < today ? "Realizada" : "Agendada",
       plano: Boolean(s.data && s.data < today),
       modulo: modulosLabel(s.modulos, ""),
       modulos: s.modulos,

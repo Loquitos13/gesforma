@@ -478,10 +478,28 @@ export function registerDashboardRoutes(
     if (f.de) { rankConds.push(`${payDate("pg")} >= $${ri}::text`); rankParams.push(f.de); ri += 1; }
     if (f.ate) { rankConds.push(`${payDate("pg")} <= $${ri}::text`); rankParams.push(f.ate); }
     const [leadCounts, entityCounts, pagamentosRows, origens, cursosPorReceita, leadsPorCurso, desag, filtros] = await Promise.all([
-      db.query<{ preinscritos: number; contactados: number }>(
+      db.query<{
+        preinscritos: number; contactados: number;
+        pre_base: number; pre_contactados: number; pre_pagaram: number; formandos_pre: number;
+        pago_base: number; pago_pagos: number; pago_ficha: number; formandos_pago: number;
+      }>(
         `SELECT
            (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.estado <> 'Formando') AS preinscritos,
-           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.contactado_em IS NOT NULL) AS contactados`,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.contactado_em IS NOT NULL) AS contactados,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada = 'preinscricao') AS pre_base,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada = 'preinscricao' AND p.contactado_em IS NOT NULL) AS pre_contactados,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada = 'preinscricao' AND (
+              p.estado IN ('Pago','Pré-inscrição','Formando')
+              OR EXISTS (SELECT 1 FROM pagamentos g WHERE g.estado = 'Pago' AND g.email <> '' AND lower(g.email) = lower(p.email))
+           )) AS pre_pagaram,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada = 'preinscricao' AND p.estado = 'Formando') AS formandos_pre,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada <> 'preinscricao') AS pago_base,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada <> 'preinscricao' AND (
+              p.estado IN ('Pago','Pré-inscrição','Formando')
+              OR EXISTS (SELECT 1 FROM pagamentos g WHERE g.estado = 'Pago' AND g.email <> '' AND lower(g.email) = lower(p.email))
+           )) AS pago_pagos,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada <> 'preinscricao' AND p.estado IN ('Pré-inscrição','Formando')) AS pago_ficha,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada <> 'preinscricao' AND p.estado = 'Formando') AS formandos_pago`,
         lw.params,
       ),
       db.query<{
@@ -576,6 +594,18 @@ export function registerDashboardRoutes(
     if (f.audiencia === "pre") { formandosGold = 0; formandosFin = 0; }
     const formandosAtivos = formandosGold + formandosFin;
     const preinscritos = f.audiencia === "formandos" ? 0 : Number(c?.preinscritos ?? 0);
+    const funilPreinscritos = [
+      { l: "Pré-inscritos", v: f.audiencia === "formandos" ? 0 : Number(c?.pre_base ?? 0) },
+      { l: "Contactados", v: f.audiencia === "formandos" ? 0 : Number(c?.pre_contactados ?? 0) },
+      { l: "Pagaram", v: f.audiencia === "formandos" ? 0 : Number(c?.pre_pagaram ?? 0) },
+      { l: "Formandos", v: Number(c?.formandos_pre ?? 0) },
+    ];
+    const funilPrepagos = [
+      { l: "Pré-pagos", v: f.audiencia === "formandos" ? 0 : Number(c?.pago_base ?? 0) },
+      { l: "Com pagamento", v: f.audiencia === "formandos" ? 0 : Number(c?.pago_pagos ?? 0) },
+      { l: "Pré-inscrição", v: f.audiencia === "formandos" ? 0 : Number(c?.pago_ficha ?? 0) },
+      { l: "Formandos", v: Number(c?.formandos_pago ?? 0) },
+    ];
     const turmasAtivas = regime === "gold"
       ? Number(c?.turmas_gold_ativas ?? 0)
       : regime === "fin"
@@ -642,12 +672,13 @@ export function registerDashboardRoutes(
         ...fin,
         ticketMedio: fin.pagos > 0 ? Math.round(fin.receitaTotal / fin.pagos) : 0,
       },
-      funil: [
-        { l: "Pré-inscritos", v: preinscritos },
-        { l: "Contactados", v: Number(c?.contactados ?? 0) },
-        { l: "Pagaram", v: fin.pagos },
-        { l: "Formandos", v: formandosAtivos },
-      ],
+      funil: funilPreinscritos,
+      funilPreinscritos,
+      funilPrepagos,
+      formandosOrigem: {
+        preinscritos: Number(c?.formandos_pre ?? 0),
+        prepagos: Number(c?.formandos_pago ?? 0),
+      },
       conhecimento,
       topCursos,
       desagregar: f.desagregar,

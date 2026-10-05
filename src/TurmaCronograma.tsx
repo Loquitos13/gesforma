@@ -4,6 +4,8 @@ import { generateEnaCronograma, SESSAO_MODALIDADE_OPTS } from "./cronogramaGrelh
 import { MultiSearchSelect } from "./FormKit";
 import { useProgramaDoCurso } from "./cursoPrograma";
 import { useFormadorOptions } from "./FormadoresContext";
+import { useTurmas } from "./TurmasContext";
+import { formadorIndisponivel } from "./sessaoAcesso";
 import {
   hojeIso,
   emptySessao,
@@ -140,7 +142,7 @@ function KpiCard({
 }
 
 function SessaoRow({
-  n, sessao, estado, gold, expanded, onToggle, onPatch, onRemove, moduloOpts,
+  n, sessao, estado, gold, expanded, onToggle, onPatch, onRemove, moduloOpts, formadoresTurma,
 }: {
   n: number;
   sessao: SessaoCronograma;
@@ -151,10 +153,19 @@ function SessaoRow({
   onPatch: (p: Partial<SessaoCronograma>) => void;
   onRemove: () => void;
   moduloOpts: { value: string; sub?: string }[];
+  formadoresTurma: string[];
 }) {
   const chip = ESTADO_UI[estado];
   const horas = sessaoDuracaoHoras(sessao);
-  const formadorOpts = useFormadorOptions(sessaoFormadores(sessao));
+  const catalogo = useFormadorOptions(sessaoFormadores(sessao));
+  const { gold: turmasGold, fin } = useTurmas();
+  const pool = formadoresTurma.length
+    ? catalogo.filter(o => formadoresTurma.some(n => n.toLowerCase() === o.value.toLowerCase()))
+    : catalogo;
+  const formadorOpts = pool.map(o => {
+    const off = formadorIndisponivel(o.value, sessao.data, sessao.horaInicio, sessao.horaFim, [...turmasGold, ...fin], sessao.id);
+    return off ? { ...o, disabled: true, sub: "Indisponível neste horário" } : o;
+  });
   const ring = estado === "proxima" || estado === "hoje"
     ? gold ? "ring-1 ring-amber-200 bg-amber-50/40" : "ring-1 ring-blue-200 bg-blue-50/40"
     : estado === "realizada" ? "opacity-80" : "";
@@ -252,7 +263,7 @@ function SessaoRow({
               unitSingular="formador"
               unitPlural="formadores"
             />
-            <p className="text-[11px] text-slate-400 mt-1">Pode atribuir mais do que um formador à mesma sessão.</p>
+            <p className="text-[11px] text-slate-400 mt-1">Só formadores desta turma. Quem já tem sessão neste horário fica indisponível.</p>
           </label>
           <label className="block col-span-2 sm:col-span-4">
             <span className="block text-[11px] font-semibold text-slate-500 mb-1">Módulos desta sessão</span>
@@ -275,7 +286,7 @@ function SessaoRow({
 }
 
 export function CronogramaEditor({
-  sessoes, onChange, inicio, horario, horas, formador, curso, local, accent = "gold",
+  sessoes, onChange, inicio, horario, horas, formador, formadoresTurma, curso, local, accent = "gold",
   layout = "compact",
 }: {
   sessoes: SessaoCronograma[];
@@ -284,6 +295,7 @@ export function CronogramaEditor({
   horario: string;
   horas: number;
   formador: string;
+  formadoresTurma?: string[];
   curso?: string;
   local?: string;
   accent?: "gold" | "fin";
@@ -452,6 +464,7 @@ export function CronogramaEditor({
                     expanded={openId === sessao.id}
                     onToggle={() => setOpenId(id => id === sessao.id ? null : sessao.id)}
                     moduloOpts={moduloOpts}
+                    formadoresTurma={[formador, ...(formadoresTurma ?? [])].map(n => n.trim()).filter(Boolean)}
                     onPatch={p => patch(sessao.id, p)}
                     onRemove={() => {
                       onChange(sessoes.filter(x => x.id !== sessao.id));
@@ -469,18 +482,35 @@ export function CronogramaEditor({
 }
 
 export function FormadoresAtribuidosCard({
-  sessoes, fallback, onOpen,
+  sessoes, fallback, extra, onOpen, onChangeExtra,
 }: {
   sessoes: SessaoCronograma[];
   fallback?: string;
+  extra?: string[];
   onOpen?: (nome: string) => void;
+  onChangeExtra?: (nomes: string[]) => void;
 }) {
-  const lista = formadoresNasSessoes(sessoes, fallback);
+  const listaBase = formadoresNasSessoes(sessoes, fallback);
+  const extraNomes = (extra ?? []).map(n => n.trim()).filter(Boolean);
+  const lista = [
+    ...listaBase,
+    ...extraNomes.filter(n => !listaBase.some(f => f.nome.toLowerCase() === n.toLowerCase())).map(nome => ({ nome, sessoes: 0 })),
+  ];
   const catalogo = useFormadorOptions(lista.map(f => f.nome));
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-100">
+      <div className="px-4 py-3 border-b border-slate-100 space-y-2">
         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Formadores</p>
+        {onChangeExtra && (
+          <MultiSearchSelect
+            values={extraNomes}
+            onChange={onChangeExtra}
+            options={catalogo}
+            noneLabel="Adicionar formadores opcionais…"
+            unitSingular="formador"
+            unitPlural="formadores"
+          />
+        )}
         <p className="text-xs text-slate-500 mt-0.5">
           {lista.length === 0
             ? "Ninguém atribuído nas sessões"

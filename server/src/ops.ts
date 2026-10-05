@@ -150,8 +150,11 @@ export function mapTurmaGold(r: Record<string, unknown>) {
     vagas: num(r.vagas),
     estado: String(r.estado ?? "Ativa"),
     formador: String(r.formador ?? ""),
+    formadores: asArr(r.formadores).map(x => String(x)).filter(Boolean),
     horas: num(r.horas),
     cronograma: asArr(r.cronograma),
+    drivePastaId: String(r.drive_pasta_id ?? ""),
+    driveDossieId: String(r.drive_dossie_id ?? ""),
   };
 }
 
@@ -169,8 +172,11 @@ export function mapTurmaFin(r: Record<string, unknown>) {
     estado: String(r.estado ?? "A montar"),
     horas: num(r.horas),
     formador: String(r.formador ?? ""),
+    formadores: asArr(r.formadores).map(x => String(x)).filter(Boolean),
     activa: Boolean(r.activa),
     cronograma: asArr(r.cronograma),
+    drivePastaId: String(r.drive_pasta_id ?? ""),
+    driveDossieId: String(r.drive_dossie_id ?? ""),
   };
 }
 

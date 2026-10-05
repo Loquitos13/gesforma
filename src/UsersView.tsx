@@ -18,6 +18,7 @@ export const STAFF_ROLES: { value: StaffRole; label: string; hint: string }[] = 
   { value: "secretaria", label: "Secretaria", hint: "Acesso geral à secretaria Gold e Financiada." },
   { value: "comercial", label: "Comercial Gold", hint: "Pré-inscrições, campanhas e turmas Gold." },
   { value: "financiada", label: "Secretaria Financiada", hint: "Inscrições, elegibilidade e UFCD." },
+  { value: "formador", label: "Formador", hint: "Vê as turmas em que está atribuído, o calendário, os documentos e o perfil." },
 ];
 
 export function roleLabel(role: string) {

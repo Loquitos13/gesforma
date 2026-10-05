@@ -724,8 +724,9 @@ export function CursoFichaView({
     setNovoLocal(false);
   }
 
-  async function guardar() {
-    const faltas = camposObrigatorios(data, accent);
+  async function guardar(opts?: { rascunho?: boolean }) {
+    const faltas = opts?.rascunho ? [] : camposObrigatorios(data, accent);
+    if (opts?.rascunho && !data.titulo.trim()) return;
     if (faltas.length) {
       setFalhas(Object.fromEntries(faltas.map(f => [f.key, `${f.label} é obrigatório para criar o curso.`])));
       setErro(`Falta preencher: ${faltas.map(f => f.label).join(", ")}.`);
@@ -733,7 +734,7 @@ export function CursoFichaView({
       setPreviewOpen(false);
       return;
     }
-    if (accent === "gold" && data.precosOferta.some(p => (!p.local.trim() && !p.horario.trim()) || p.preco.trim() === "" || Number(p.preco) < 0 || Number.isNaN(Number(p.preco)))) {
+    if (!opts?.rascunho && accent === "gold" && data.precosOferta.some(p => (!p.local.trim() && !p.horario.trim()) || p.preco.trim() === "" || Number(p.preco) < 0 || Number.isNaN(Number(p.preco)))) {
       setFalhas({ precosOferta: "Cada preço especial precisa de um local, um horário, ou os dois, e de um valor." });
       setErro("Há um preço por local ou horário incompleto.");
       setTab("oferta");
@@ -836,7 +837,13 @@ export function CursoFichaView({
         {erro && <p className="px-4 sm:px-6 pb-2 text-xs font-semibold text-red-600">{erro}</p>}
         <div className="px-4 sm:px-6 flex gap-1 overflow-x-auto">
           {tabs.map(x => (
-            <button key={x.id} type="button" onClick={() => { setTab(x.id); setPreviewOpen(false); }}
+            <button key={x.id} type="button" onClick={() => {
+              if ((x.id === "documentos" || x.id === "dtp" || x.id === "avaliacao") && (cursoPersistId ?? curso?.id) == null) {
+                void guardar({ rascunho: true });
+              }
+              setTab(x.id);
+              setPreviewOpen(false);
+            }}
               className={`px-3 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors ${
                 tab === x.id ? t.tabOn : "border-transparent text-slate-500 hover:text-slate-800"
               }`}>
@@ -865,7 +872,8 @@ export function CursoFichaView({
                 <p className="text-sm font-semibold text-slate-800">Dados que o visitante lê</p>
                 <Field label={accent === "fin" ? "Nome comercial" : "Título"} required error={falhas.titulo} hint={accent === "fin" ? "Título no website. Pode ser mais comercial do que a designação oficial da UFCD." : "Nome comercial no website. Evite códigos internos."}>
                   <input className={inputCls(t.iCls, !!falhas.titulo)} value={data.titulo}
-                    onChange={e => { const titulo = e.target.value; patch({ titulo, slug: slugLocked ? slugify(titulo) : data.slug }); }} />
+                    onChange={e => { const titulo = e.target.value; patch({ titulo, slug: slugLocked ? slugify(titulo) : data.slug }); }}
+                    onBlur={() => { if ((cursoPersistId ?? curso?.id) == null) void guardar({ rascunho: true }); }} />
                 </Field>
                 {accent === "fin" && (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

@@ -41,7 +41,11 @@ import { FormadoresView } from "./FormadoresView";
 import { FORMADORES_SEED } from "./formadorModel";
 import { useFormadorOptions, useFormadores } from "./FormadoresContext";
 import { useTurmas } from "./TurmasContext";
-import { cronogramaToSessoes, formatSessaoLabel, generateCronograma, hojeIso, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
+import { codigoInternoTurma } from "./turmaCodigo";
+import { formadorIndisponivel, formadorNaSessao, minutoSeguinte, nomesDoUtilizador, podeMexerDocumento, staffPodeDossie } from "./sessaoAcesso";
+import { CrmClientesView, CrmContratosView, CrmParceirosView } from "./CrmDiretorioView";
+import { FormadorCalendario, eventosDoFormador } from "./FormadorCalendario";
+import { cronogramaToSessoes, formatSessaoLabel, generateCronograma, hojeIso, horasDoFormador, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
 import { apiGlobalSearch, apiDriveFiles, apiSaveFormandoDocs, type GlobalSearchHit } from "./api";
 import { CampanhasView } from "./CampanhasView";
 import { ListsProvider, tempNumericId, useLists, type BlogPostRow, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
@@ -130,6 +134,8 @@ const I = {
 
 type View =
   | "painel" | "gold-painel" | "fin-painel" | "gold-preinscricoes" | "fin-preinscricoes" | "gold-equipa" | "fin-equipa"
+  | "gold-crm-clientes" | "gold-crm-parceiros" | "gold-crm-contratos" | "fin-crm-clientes" | "fin-crm-parceiros" | "fin-crm-contratos"
+  | "formador-turmas" | "formador-calendario" | "formador-perfil"
   | "gold-formandos-turmas" | "gold-formandos-gold"
   | "gold-campanhas" | "gold-cursos" | "gold-datas" | "gold-horarios" | "gold-locais" | "gold-areas-tematicas"
   | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-formadores" | "gold-cockpit-turma" | "gold-curso-ficha" | "gold-dtp" | "gold-inqueritos"
@@ -584,6 +590,7 @@ function estadoBadge(estado: string) {
     "Não contactado": "amber", "Pago": "teal", "Formando": "green", "Matriculado": "green",
     "Elegível": "teal", "A montar": "red", "A decorrer": "green", "Encerrada": "gray",
     "Reembolsado": "violet", "Pendente": "orange", "Realizada": "green", "Agendada": "blue",
+    "Em curso": "amber", "Fechada": "gray",
   };
   return <Badge label={estado} variant={m[estado] ?? "gray"} />;
 }
@@ -1020,6 +1027,7 @@ function sumarioBtnCls(s: SumarioSessaoData | undefined, gold: boolean) {
 
 function SessoesTurmaTab({
   accent, turmaNome, cursoNome, sessoes, planos, presencas, sumarios, formandos, onNovaSessao, onPlano, onSumario, onPresencas, onOpenFormador,
+  podeEditar, podeOperar, podeCriar = true, turmaActiva, onIniciar, onFechar,
 }: {
   accent: "gold" | "fin";
   turmaNome: string;
@@ -1034,6 +1042,12 @@ function SessoesTurmaTab({
   onSumario: (s: SessaoMeta) => void;
   onPresencas: (s: SessaoMeta) => void;
   onOpenFormador?: (nome: string) => void;
+  podeEditar?: (s: SessaoMeta, doc: "plano" | "sumario" | "presencas") => boolean;
+  podeOperar?: (s: SessaoMeta) => boolean;
+  podeCriar?: boolean;
+  turmaActiva?: boolean;
+  onIniciar?: (s: SessaoMeta) => void;
+  onFechar?: (s: SessaoMeta) => void;
 }) {
   const gold = accent === "gold";
   const numCls = gold ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700";
@@ -1062,7 +1076,7 @@ function SessoesTurmaTab({
           >
             Imprimir folhas
           </button>
-          <NewBtn accent={accent} label="+ Nova Sessão" onClick={onNovaSessao} />
+          {podeCriar && <NewBtn accent={accent} label="+ Nova Sessão" onClick={onNovaSessao} />}
         </div>
       </div>
       <div className="overflow-x-auto">
@@ -1078,6 +1092,8 @@ function SessoesTurmaTab({
               const sum = sumarios[s.n];
               const temPlano = Boolean(planos[s.n]);
               const folha = presencas[s.n];
+              const edita = (doc: "plano" | "sumario" | "presencas") => podeEditar ? podeEditar(s, doc) : true;
+              const podeSessao = turmaActiva && !s.fechadaEm && (podeOperar ? podeOperar(s) : (podeEditar ? podeEditar(s, "sumario") || podeEditar(s, "plano") : true));
               return (
                 <tr key={s.n} className="hover:bg-slate-50">
                   <Td><span className={`w-7 h-7 rounded-full ${numCls} text-xs font-bold flex items-center justify-center`}>{s.n}</span></Td>
@@ -1088,14 +1104,14 @@ function SessoesTurmaTab({
                   <Td><ModulosCell sessao={s} /></Td>
                   <Td><FormadoresCell sessao={s} onOpen={onOpenFormador} /></Td>
                   <Td>
-                    <button type="button" onClick={() => onPlano(s)}
-                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${temPlano ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100" : planoTodo}`}>
+                    <button type="button" disabled={!edita("plano")} title={edita("plano") ? "" : "Sem permissão nesta sessão"} onClick={() => onPlano(s)}
+                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap disabled:opacity-40 ${temPlano ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100" : planoTodo}`}>
                       {temPlano ? "Ver plano" : "+ Preencher plano"}
                     </button>
                   </Td>
                   <Td>
-                    <button type="button" onClick={() => onSumario(s)}
-                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${sumarioBtnCls(sum, gold)}`}>
+                    <button type="button" disabled={!edita("sumario")} title={edita("sumario") ? "" : "Sem permissão nesta sessão"} onClick={() => onSumario(s)}
+                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap disabled:opacity-40 ${sumarioBtnCls(sum, gold)}`}>
                       {sumarioLabel(sum)}
                     </button>
                   </Td>
@@ -1112,8 +1128,9 @@ function SessoesTurmaTab({
                       </button>
                       <button
                         type="button"
+                        disabled={!edita("presencas")}
                         onClick={() => onPresencas(s)}
-                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap ${
+                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap disabled:opacity-40 ${
                           folha
                             ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
                             : "text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100"
@@ -1125,7 +1142,17 @@ function SessoesTurmaTab({
                       </button>
                     </div>
                   </Td>
-                  <Td>{estadoBadge(s.estado)}</Td>
+                  <Td>
+                    <div className="flex flex-col gap-1 items-start">
+                      {estadoBadge(s.estado)}
+                      {podeSessao && !s.iniciadaEm && onIniciar && (
+                        <button type="button" onClick={() => onIniciar(s)} className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-emerald-600 text-white">Iniciar sessão</button>
+                      )}
+                      {s.iniciadaEm && !s.fechadaEm && onFechar && podeSessao && (
+                        <button type="button" onClick={() => onFechar(s)} className="text-[11px] font-semibold px-2 py-1 rounded-lg border border-slate-300 text-slate-700">Fechar sessão</button>
+                      )}
+                    </div>
+                  </Td>
                 </tr>
               );
             })}
@@ -1197,18 +1224,19 @@ const docsFinGrupos: typeof docsTurmaGrupos = [
   ]},
 ];
 
-function TurmaTabBar({ tab, onChange, accent = "gold", dtpPct }: { tab: CockpitTab; onChange: (t: CockpitTab) => void; accent?: "gold" | "fin"; dtpPct: number }) {
+function TurmaTabBar({ tab, onChange, accent = "gold", dtpPct, dossie = true, so }: { tab: CockpitTab; onChange: (t: CockpitTab) => void; accent?: "gold" | "fin"; dtpPct: number; dossie?: boolean; so?: CockpitTab[] }) {
   const active = accent === "gold" ? "border-amber-500 text-amber-600" : "border-blue-600 text-blue-600";
   const chip = accent === "gold" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700";
-  const tabs: { id: CockpitTab; label: string; icon: React.ReactNode }[] = [
+  const todas: { id: CockpitTab; label: string; icon: React.ReactNode }[] = [
     { id: "overview", label: "Visão Geral", icon: I.school },
     { id: "cronograma", label: "Cronograma", icon: I.calendar },
     { id: "sessoes", label: "Sessões", icon: I.calendar },
     { id: "avaliacao", label: "Avaliação", icon: I.clipboard },
     { id: "documentos", label: "Documentos", icon: I.file },
-    { id: "dtp", label: "Dossiê TP", icon: I.folder },
+    ...(dossie ? [{ id: "dtp" as const, label: "Dossiê TP", icon: I.folder }] : []),
     { id: "certificados", label: "Certificados", icon: I.doc },
   ];
+  const tabs = so ? todas.filter(t => so.includes(t.id)) : todas;
   return (
     <div className="flex gap-0.5 border-b border-slate-200 overflow-x-auto scrollbar-hide">
       {tabs.map(t => (
@@ -1520,11 +1548,33 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const [formadorOpen, setFormadorOpen] = useState<string | null>(null);
   const [novaSessao, setNovaSessao] = useState(false);
   const [formadoresSessao, setFormadoresSessao] = useState<string[]>(["Isac Silva"]);
-  const sumarios = ped.sumarios;
-  const formadorOptsSessao = useFormadorOptions(formadoresSessao);
-  const [moduloSessao, setModuloSessao] = useState<string[]>([]);
   const [dataSessao, setDataSessao] = useState("");
   const [horaSessao, setHoraSessao] = useState("09:00");
+  const sumarios = ped.sumarios;
+  const { formadores: listaFormadores } = useFormadores();
+  const nomesEu = nomesDoUtilizador(user, listaFormadores);
+  const souFormador = user.role === "formador";
+  function podeOperarSessao(s: SessaoMeta) {
+    if (user.role === "admin" || user.role === "secretaria" || user.role === "financiada") return true;
+    if (souFormador) return formadorNaSessao(nomesEu, s);
+    return true;
+  }
+  function podeDoc(s: SessaoMeta, doc: "plano" | "sumario" | "presencas") {
+    const validado = doc === "plano"
+      ? Boolean(ped.planos[s.n]?.assinado)
+      : doc === "sumario"
+        ? Boolean(sumarios[s.n]?.assinado)
+        : Boolean(sumarios[s.n]?.presencasValidadas);
+    return podeMexerDocumento({ role: user.role, nomes: nomesEu, sessao: s, validado });
+  }
+  const formadorOptsSessao = useFormadorOptions(formadoresSessao);
+  const opcoesNovaSessao = (turma && (turma.formador || (turma.formadores ?? []).length)
+    ? formadorOptsSessao.filter(o => o.value === turma.formador || (turma.formadores ?? []).includes(o.value))
+    : formadorOptsSessao
+  ).map(o => formadorIndisponivel(o.value, dataSessao, horaSessao, minutoSeguinte(horaSessao), gold, undefined)
+    ? { ...o, disabled: true, sub: "Indisponível neste horário" }
+    : o);
+  const [moduloSessao, setModuloSessao] = useState<string[]>([]);
   const [addFormando, setAddFormando] = useState(false);
   const [editTurma, setEditTurma] = useState(false);
   const [editNome, setEditNome] = useState("");
@@ -1556,7 +1606,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
               <div className="flex items-center gap-2 mb-1">
                 <span className="bg-amber-500 text-white text-xs font-bold px-2.5 py-1 rounded-lg">{turma.nome}</span>
                 {estadoBadge(turma.estado)}
-                <TurmaActivaToggle compact light activa={activa} onChange={v => toggleGold(turma.id, v)} />
+                {!souFormador && <TurmaActivaToggle compact light activa={activa} onChange={v => toggleGold(turma.id, v)} />}
               </div>
               <p className="text-lg font-bold mt-1">{turma.curso}</p>
               <div className="flex flex-wrap gap-4 mt-2 text-slate-300 text-xs">
@@ -1566,11 +1616,11 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
               </div>
             </div>
             <div className="flex gap-3 flex-shrink-0">
-              <button onClick={() => {
+              {!souFormador && <button onClick={() => {
                 setEditNome(turma.nome); setEditLocal(turma.local); setEditHorario(turma.horario);
                 setEditFormador(turma.formador); setEditInicio(turma.dataInicio); setEditVagas(turma.vagas);
                 setEditTurma(true);
-              }} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>
+              }} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>}
               <button type="button" onClick={() => setExportTurma(exportPayload(
                 { nome: turma.nome, curso: turma.curso, local: turma.local, formandos: turma.totalAlunos, accent: "gold", turmaId: turma.id },
                 membros.map(f => ({ nome: `${f.nome} ${f.apelido}`, email: f.email, telf: f.telf, estado: f.pago ? "Pago" : "Por pagar" })),
@@ -1608,7 +1658,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           return <NextActions accent="gold" actions={next.slice(0, 3)} />;
         })()}
 
-        <TurmaTabBar tab={tab} onChange={setTab} accent="gold" dtpPct={ped.dtp.pct} />
+        <TurmaTabBar tab={tab} onChange={setTab} accent="gold" dtpPct={ped.dtp.pct} dossie={staffPodeDossie(user.role)} so={souFormador ? ["overview", "sessoes"] : undefined} />
 
         {!activa && (
           <TurmaInactivaBanner nome={turma.nome} onActivate={() => toggleGold(turma.id, true)} />
@@ -1628,7 +1678,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           />
         )}
 
-        {tab === "dtp" && (
+        {tab === "dtp" && staffPodeDossie(user.role) && (
           <DtpPanel
             regime="gold"
             turma={{ codigo: turma.nome, id: turma.id, titulo: turma.curso, sub: `${turma.local} · ${turma.horario}` }}
@@ -1653,6 +1703,12 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             onSumario={setSumarioSessao}
             onPresencas={setPresencasSession}
             onOpenFormador={setFormadorOpen}
+            podeEditar={podeDoc}
+            podeOperar={podeOperarSessao}
+            podeCriar={!souFormador}
+            turmaActiva={activa}
+            onIniciar={s => { if (turma && s.id) setGoldCronograma(turma.id, turma.cronograma.map(x => x.id === s.id ? { ...x, iniciadaEm: new Date().toISOString() } : x)); }}
+            onFechar={s => { if (turma && s.id) setGoldCronograma(turma.id, turma.cronograma.map(x => x.id === s.id ? { ...x, fechadaEm: new Date().toISOString() } : x)); }}
           />
         )}
         {tab === "avaliacao" && (
@@ -1783,6 +1839,8 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           <FormadoresAtribuidosCard
             sessoes={turma.cronograma}
             fallback={turma.formador}
+            extra={turma.formadores}
+            onChangeExtra={souFormador ? undefined : nomes => patchGold(turma.id, { formadores: nomes })}
             onOpen={setFormadorOpen}
           />
           <Card className="p-4">
@@ -1875,7 +1933,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         onConfirm={() => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true }); }} />
       <CertificadoVerModal open={!!verCert} onClose={() => setVerCert(null)} cert={verCert} accent="gold" />
       <ExportTurmaModal open={!!exportTurma} onClose={() => setExportTurma(null)} turma={exportTurma} />
-      <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? ""} accent="gold" turma={turma.nome} />
+      <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? ""} accent="gold" turma={turma.nome} horas={formadorOpen ? horasDoFormador(turma.cronograma, formadorOpen) : undefined} />
       <SlideOver open={novaSessao} onClose={() => setNovaSessao(false)} title="Nova sessão" sub={turma.nome}>
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -1886,7 +1944,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             <MultiSearchSelect
               values={formadoresSessao}
               onChange={setFormadoresSessao}
-              options={formadorOptsSessao}
+              options={opcoesNovaSessao}
               placeholder="Pesquisar formador…"
               noneLabel="Selecionar formadores…"
               unitSingular="formador"
@@ -2070,7 +2128,7 @@ function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (
 }
 
 function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate }: { turmaId?: number; onBack: () => void; initialTab?: CockpitTab; onNavigate?: (v: View | NavTarget) => void }) {
-  const { fin, toggleFin, setFinCronograma, patchFin } = useTurmas();
+  const { fin, gold: goldTodas, toggleFin, setFinCronograma, patchFin } = useTurmas();
   const { formandosFin, addFormandoFin, patchFormandoFin, removeFormandoFin, cursosFin, preinscricoes, patchPreinscricao } = useLists();
   const turma = turmaId != null ? fin.find(t => t.id === turmaId) : (fin.find(t => t.ufcdCod === "3564") ?? fin[0]);
   const activa = turma ? isTurmaActiva(turma) : false;
@@ -2086,15 +2144,37 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const programaCursoFin = useProgramaDoCurso("fin", turma?.curso ?? "");
   const programaTurmaFin = programaCursoFin.labels;
   const sumarios = ped.sumarios;
+  const { formadores: listaFormadoresFin } = useFormadores();
+  const nomesEuFin = nomesDoUtilizador(user, listaFormadoresFin);
+  const souFormadorFin = user.role === "formador";
+  function podeOperarSessaoFin(s: SessaoMeta) {
+    if (user.role === "admin" || user.role === "secretaria" || user.role === "financiada") return true;
+    if (souFormadorFin) return formadorNaSessao(nomesEuFin, s);
+    return true;
+  }
+  function podeDocFin(s: SessaoMeta, doc: "plano" | "sumario" | "presencas") {
+    const validado = doc === "plano"
+      ? Boolean(ped.planos[s.n]?.assinado)
+      : doc === "sumario"
+        ? Boolean(sumarios[s.n]?.assinado)
+        : Boolean(sumarios[s.n]?.presencasValidadas);
+    return podeMexerDocumento({ role: user.role, nomes: nomesEuFin, sessao: s, validado });
+  }
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
   const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
   const [presencasSession, setPresencasSession] = useState<SessaoMeta | null>(null);
   const [novaSessao, setNovaSessao] = useState(false);
   const [formadoresSessao, setFormadoresSessao] = useState<string[]>([]);
-  const formadorOptsSessao = useFormadorOptions(formadoresSessao);
-  const [moduloSessao, setModuloSessao] = useState<string[]>([]);
   const [dataSessao, setDataSessao] = useState("");
   const [horaSessao, setHoraSessao] = useState("19:00");
+  const formadorOptsSessao = useFormadorOptions(formadoresSessao);
+  const opcoesNovaSessaoFin = (turma && (turma.formador || (turma.formadores ?? []).length)
+    ? formadorOptsSessao.filter(o => o.value === turma.formador || (turma.formadores ?? []).includes(o.value))
+    : formadorOptsSessao
+  ).map(o => formadorIndisponivel(o.value, dataSessao, horaSessao, minutoSeguinte(horaSessao), [...goldTodas, ...fin], undefined)
+    ? { ...o, disabled: true, sub: "Indisponível neste horário" }
+    : o);
+  const [moduloSessao, setModuloSessao] = useState<string[]>([]);
   const [docsOpen, setDocsOpen] = useState<FinFormando | null>(null);
   const [apagarFormando, setApagarFormando] = useState<FinFormando | null>(null);
   const [transferirFormando, setTransferirFormando] = useState<FinFormando | null>(null);
@@ -2137,7 +2217,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
               <span className="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-lg">UFCD {turma.ufcdCod}</span>
               <span className="bg-white/10 text-white text-xs font-bold px-2.5 py-1 rounded-lg font-mono">{turma.nome}</span>
               {estadoBadge(turma.estado)}
-              <TurmaActivaToggle compact light accent="fin" activa={activa} onChange={v => toggleFin(turma.id, v)} />
+              {!souFormadorFin && <TurmaActivaToggle compact light accent="fin" activa={activa} onChange={v => toggleFin(turma.id, v)} />}
             </div>
             <p className="text-lg font-bold mt-1">{turma.curso}</p>
             <div className="flex flex-wrap gap-4 mt-2 text-slate-300 text-xs">
@@ -2147,10 +2227,10 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
             </div>
           </div>
           <div className="flex gap-3 flex-shrink-0">
-            <button onClick={() => {
+            {!souFormadorFin && <button onClick={() => {
               setEditNome(turma.nome); setEditCurso(turma.curso); setEditFormador(turma.formador);
               setEditLocal(turma.local); setEditInicio(turma.dataInicio); setEditTurma(true);
-            }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>
+            }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>}
             <button type="button" onClick={() => setExportTurma(exportPayload(
               { nome: turma.nome, curso: turma.curso, local: turma.local, formandos: turma.alunos, accent: "fin", turmaId: turma.id },
               listaFormandos.map(f => ({ nome: `${f.nome} ${f.apelido}`, email: f.email, telf: f.telf, estado: f.estado })),
@@ -2179,7 +2259,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
         if (semPlano) next.push({ tone: "warn", title: `${semPlano} sessões sem plano`, detail: "O formador ainda não carregou o plano de sessão.", onClick: () => setTab("sessoes") });
         return <NextActions accent="fin" actions={next.slice(0, 3)} />;
       })()}
-      <TurmaTabBar tab={tab} onChange={setTab} accent="fin" dtpPct={ped.dtp.pct} />
+      <TurmaTabBar tab={tab} onChange={setTab} accent="fin" dtpPct={ped.dtp.pct} dossie={staffPodeDossie(user.role)} so={souFormadorFin ? ["overview", "sessoes"] : undefined} />
       {!activa && <TurmaInactivaBanner nome={turma.nome} onActivate={() => toggleFin(turma.id, true)} />}
       {tab === "cronograma" && (
         <CronogramaEditor
@@ -2195,7 +2275,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           local={turma.local}
         />
       )}
-      {tab === "dtp" && (
+      {tab === "dtp" && staffPodeDossie(user.role) && (
         <DtpPanel
           regime="fin"
           turma={{ codigo: turma.nome, id: turma.id, titulo: turma.curso, sub: `UFCD ${turma.ufcdCod} · ${turma.horas}h` }}
@@ -2220,6 +2300,12 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           onSumario={setSumarioSessao}
           onPresencas={setPresencasSession}
           onOpenFormador={setFormadorOpen}
+          podeEditar={podeDocFin}
+          podeOperar={podeOperarSessaoFin}
+          podeCriar={!souFormadorFin}
+          turmaActiva={activa}
+          onIniciar={s => { if (turma && s.id) setFinCronograma(turma.id, turma.cronograma.map(x => x.id === s.id ? { ...x, iniciadaEm: new Date().toISOString() } : x)); }}
+          onFechar={s => { if (turma && s.id) setFinCronograma(turma.id, turma.cronograma.map(x => x.id === s.id ? { ...x, fechadaEm: new Date().toISOString() } : x)); }}
         />
       )}
       {tab === "avaliacao" && (
@@ -2357,6 +2443,8 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
             <FormadoresAtribuidosCard
               sessoes={turma.cronograma}
               fallback={turma.formador}
+              extra={turma.formadores}
+              onChangeExtra={souFormadorFin ? undefined : nomes => patchFin(turma.id, { formadores: nomes })}
               onOpen={setFormadorOpen}
             />
             <Card className="p-4">
@@ -2443,7 +2531,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           if (docsOpen?.id === transferirFormando.id) setDocsOpen(null);
         }}
       />
-      <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? turma.formador} accent="fin" turma={turma.nome} />
+      <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? turma.formador} accent="fin" turma={turma.nome} horas={formadorOpen ? horasDoFormador(turma.cronograma, formadorOpen) : undefined} />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" accent="fin"
         context={{ kind: "certificado", regime: "fin", turma: turma.nome, formando: uploadCert != null ? String(uploadCert) : undefined, label: "Certificado" }}
         onConfirm={() => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true }); }} />
@@ -2538,7 +2626,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
             <MultiSearchSelect
               values={formadoresSessao}
               onChange={setFormadoresSessao}
-              options={formadorOptsSessao}
+              options={opcoesNovaSessaoFin}
               placeholder="Pesquisar formador…"
               noneLabel="Selecionar formadores…"
               unitSingular="formador"
@@ -2758,11 +2846,17 @@ function eur(v: number) {
 function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   const { gold, patchGold, addGold, removeGold, toggleGold, reload } = useTurmas();
   const { cursosGold } = useLists();
+  const { user } = useAuth();
+  const { formadores: catalogoFormadores } = useFormadores();
   const formadorOpts = useFormadorOptions();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtroLocal, setFiltroLocal] = useState("");
+  const [filtroDe, setFiltroDe] = useState("");
+  const [filtroAte, setFiltroAte] = useState("");
+  const [formadoresExtra, setFormadoresExtra] = useState<string[]>([]);
+  const nomeManual = useRef(false);
   const [open, setOpen] = useState<TurmaGold | "new" | null>(null);
   const [apagar, setApagar] = useState<TurmaGold | null>(null);
   const [nome, setNome] = useState("");
@@ -2781,9 +2875,19 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
     return live.length ? live : cursosGoldOpts;
   }, [cursosGold]);
   const locaisDoCurso = useLocaisOptsDoCurso("gold", cursosGold, curso);
-  const f = gold.filter(t => {
+  const nomesFormador = nomesDoUtilizador(user, catalogoFormadores);
+  const staffTurma = user.role !== "formador";
+  const goldVisiveis = user.role === "formador"
+    ? gold.filter(t =>
+      nomesFormador.has(t.formador)
+      || (t.formadores ?? []).some(n => nomesFormador.has(n))
+      || t.cronograma.some(s => sessaoFormadores(s).some(n => nomesFormador.has(n))))
+    : gold;
+  const f = goldVisiveis.filter(t => {
     const q = `${t.nome} ${t.local} ${t.curso}`.toLowerCase().includes(s.toLowerCase());
-    return q && matchesFilter(t.curso, filtroCurso) && matchesFilter(t.local, filtroLocal) && (filtro === "Todos" || t.estado === filtro);
+    const dia = (t.dataInicio || "").slice(0, 10);
+    const naData = (!filtroDe || (dia && dia >= filtroDe)) && (!filtroAte || (dia && dia <= filtroAte));
+    return q && naData && matchesFilter(t.curso, filtroCurso) && matchesFilter(t.local, filtroLocal) && (filtro === "Todos" || t.estado === filtro);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
   const horasCurso = cursosGold.find(c => c.nome === curso)?.horas ?? cursosGoldData.find(c => c.nome === curso)?.horas ?? 90;
@@ -2794,17 +2898,24 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
       setLocal(editing?.local ?? "");
       setHorario(editing?.horario ?? "");
       setFormador(editing?.formador ?? "Isac Silva");
+      setFormadoresExtra(editing?.formadores ?? []);
+      nomeManual.current = Boolean(editing);
       setDataInicio(editing?.dataInicio ?? "");
       setVagas(editing?.vagas ?? 16);
       setActiva(editing ? isTurmaActiva(editing) : true);
       setCronograma(editing?.cronograma ?? []);
     }
   }, [open, editing]);
+  const codigoAuto = codigoInternoTurma(local, horario, dataInicio);
+  useEffect(() => {
+    if (open !== "new" || nomeManual.current) return;
+    if (codigoAuto) setNome(codigoAuto);
+  }, [codigoAuto, open]);
   async function guardar() {
     if (!curso.trim()) return;
     const payload = {
-      nome: nome.trim() || "Nova turma",
-      curso, local, horario, formador, dataInicio, vagas,
+      nome: nome.trim() || codigoAuto || "Nova turma",
+      curso, local, horario, formador, formadores: formadoresExtra, dataInicio, vagas,
       estado: (activa ? "Ativa" : "Inativa") as TurmaGold["estado"],
       horas: horasCurso,
       cronograma,
@@ -2819,29 +2930,37 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   }
   return (
     <div className="space-y-4">
-      <PageHeader title="Turmas Gold" sub={`${ativas} libertadas · ${gold.length} no total · cada turma é um curso + local + horário + data de início; só as libertadas entram na pré-inscrição e no WhatsApp`} action={<NewBtn label="+ Nova Turma" onClick={() => setOpen("new")} />} />
-      <TurmaRegrasPanel
+      <PageHeader title="Turmas Gold" sub={`${ativas} libertadas · ${goldVisiveis.length} no total · cada turma é um curso + local + horário + data de início; só as libertadas entram na pré-inscrição e no WhatsApp`} action={user.role === "formador" ? undefined : <NewBtn label="+ Nova Turma" onClick={() => setOpen("new")} />} />
+      {staffTurma && <TurmaRegrasPanel
         regime="gold"
         cursos={cursoOpts.map(o => o.value)}
         locais={[...new Set(gold.map(t => t.local).filter(Boolean))]}
         horarios={[...new Set(gold.map(t => t.horario).filter(Boolean))]}
         onApplied={() => void reload()}
-      />
+      />}
       <ViewFilters
         fields={[
           { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(gold.map(t => t.curso)) },
           { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(gold.map(t => t.local)) },
         ]}
         chips={{ options: ["Todos", "Ativa", "Inativa"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
-        onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setP(1); }}
+        onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setFiltroDe(""); setFiltroAte(""); setP(1); }}
       />
+      <div className="flex flex-wrap gap-3">
+        <label className="text-xs font-semibold text-slate-500 uppercase">Início de
+          <input type="date" className="mt-1 block px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white" value={filtroDe} onChange={e => { setFiltroDe(e.target.value); setP(1); }} />
+        </label>
+        <label className="text-xs font-semibold text-slate-500 uppercase">Início até
+          <input type="date" className="mt-1 block px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white" value={filtroAte} onChange={e => { setFiltroAte(e.target.value); setP(1); }} />
+        </label>
+      </div>
       <Card>
         <TableToolbar search={s} onSearch={v => { setS(v); setP(1); }} perPage={pp} onPerPage={setPp} />
         {rows.length === 0 && (
           <EmptyHint
-            text={gold.length === 0 ? "Ainda sem turmas Gold. Crie uma turma (curso + local + horário + data) e liberte-a para aparecer na pré-inscrição." : "Nenhuma turma neste filtro."}
-            action={gold.length === 0 ? "Nova turma" : "Limpar filtros"}
-            onAction={gold.length === 0 ? () => setOpen("new") : () => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setS(""); setP(1); }}
+            text={goldVisiveis.length === 0 ? "Ainda sem turmas Gold. Crie uma turma (curso + local + horário + data) e liberte-a para aparecer na pré-inscrição." : "Nenhuma turma neste filtro."}
+            action={goldVisiveis.length === 0 ? "Nova turma" : "Limpar filtros"}
+            onAction={goldVisiveis.length === 0 ? () => setOpen("new") : () => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setFiltroDe(""); setFiltroAte(""); setS(""); setP(1); }}
           />
         )}
         <div className="md:hidden p-3 space-y-2">
@@ -2857,8 +2976,10 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
                 onOpen={() => onCockpit(t.id)}
                 actions={[
                   { label: "Cockpit", icon: I.eye, tone: "teal", onClick: () => onCockpit(t.id) },
-                  { label: "Editar", icon: I.edit, onClick: () => setOpen(t) },
-                  { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(t) },
+                  ...(staffTurma ? [
+                    { label: "Editar", icon: I.edit, onClick: () => setOpen(t) },
+                    { label: "Eliminar", icon: I.trash, tone: "red" as const, onClick: () => setApagar(t) },
+                  ] : []),
                 ]}
               />
             );
@@ -2888,13 +3009,17 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
                       </div>
                     </Td>
                     <Td>
-                      <TurmaActivaToggle compact activa={isTurmaActiva(t)} onChange={v => toggleGold(t.id, v)} />
+                      {staffTurma
+                        ? <TurmaActivaToggle compact activa={isTurmaActiva(t)} onChange={v => toggleGold(t.id, v)} />
+                        : estadoBadge(t.estado)}
                     </Td>
                     <Td>
                       <RowActions actions={[
                         { label: "Cockpit", icon: I.eye, tone: "teal", onClick: () => onCockpit(t.id) },
-                        { label: "Editar", icon: I.edit, onClick: () => setOpen(t) },
-                        { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagar(t) },
+                        ...(staffTurma ? [
+                          { label: "Editar", icon: I.edit, onClick: () => setOpen(t) },
+                          { label: "Eliminar", icon: I.trash, tone: "red" as const, onClick: () => setApagar(t) },
+                        ] : []),
                       ]} />
                     </Td>
                   </tr>
@@ -2916,7 +3041,10 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
       <SlideOver open={!!open} onClose={() => setOpen(null)} title={editing ? `Editar ${editing.nome}` : "Nova turma Gold"} sub="A turma Gold é o objecto da pré-inscrição: curso + local + horário + data de início. Só se estiver libertada (activa) aparece no site e no WhatsApp." size="xl">
         <div className="p-5 space-y-3">
           <TurmaActivaToggle activa={activa} onChange={setActiva} />
-          <Field label="Código interno"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="VNG-SM-07/09" /></Field>
+          <Field label="Nome">
+            <input className={iCls} value={nome} onChange={e => { nomeManual.current = true; setNome(e.target.value); }} placeholder="VNG - SM - 07/09" />
+            <p className="text-[11px] text-slate-400 mt-1">Código interno: {codigoAuto || "preencha local, horário e data de início"}.</p>
+          </Field>
           <Field label="Curso">
             <SearchSelect
               value={curso}
@@ -2943,6 +3071,9 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
             <Field label="Horário"><SearchSelect value={horario} onChange={setHorario} options={horariosOpts} /></Field>
           </div>
           <Field label="Formador"><SearchSelect value={formador} onChange={setFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
+          <Field label="Outros formadores">
+            <MultiSearchSelect values={formadoresExtra} onChange={setFormadoresExtra} options={formadorOpts} noneLabel="Formadores opcionais…" unitSingular="formador" unitPlural="formadores" />
+          </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Data de início"><input type="date" className={iCls} value={dataInicio} onChange={e => setDataInicio(e.target.value)} /></Field>
             <Field label="Vagas"><input type="number" className={iCls} value={vagas} onChange={e => setVagas(Number(e.target.value) || 0)} /></Field>
@@ -2954,6 +3085,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
             horario={horario}
             horas={horasCurso}
             formador={formador}
+            formadoresTurma={formadoresExtra}
             curso={curso}
             local={local}
           />
@@ -4703,7 +4835,12 @@ type NavLeaf = { label: string; view?: View; icon: React.ReactNode; children?: {
 const sidebarConfig: NavGroup[] = [
   { group: "Gold", items: [
     { label: "Painel", view: "gold-painel", icon: I.home },
-    { label: "CRM", view: "gold-preinscricoes", icon: I.clipboard },
+    { label: "CRM", icon: I.clipboard, children: [
+      { label: "Pré-inscrições", view: "gold-preinscricoes" },
+      { label: "Clientes", view: "gold-crm-clientes" },
+      { label: "Parceiros", view: "gold-crm-parceiros" },
+      { label: "Contratos", view: "gold-crm-contratos" },
+    ]},
     { label: "Equipa", view: "gold-equipa", icon: I.users },
     { label: "Formandos", icon: I.users, children: [{ label: "Formandos Turmas", view: "gold-formandos-turmas" }, { label: "Formandos Gold", view: "gold-formandos-gold" }] },
     { label: "Campanhas", view: "gold-campanhas", icon: I.megaphone },
@@ -4720,7 +4857,12 @@ const sidebarConfig: NavGroup[] = [
   ]},
   { group: "Financiada", items: [
     { label: "Painel", view: "fin-painel", icon: I.home },
-    { label: "CRM", view: "fin-preinscricoes", icon: I.clipboard },
+    { label: "CRM", icon: I.clipboard, children: [
+      { label: "Pré-inscrições", view: "fin-preinscricoes" },
+      { label: "Clientes", view: "fin-crm-clientes" },
+      { label: "Parceiros", view: "fin-crm-parceiros" },
+      { label: "Contratos", view: "fin-crm-contratos" },
+    ]},
     { label: "Equipa", view: "fin-equipa", icon: I.users },
     { label: "Inscrições", view: "fin-inscricoes", icon: I.clipboard },
     { label: "Formandos", view: "fin-formandos", icon: I.users },
@@ -4748,16 +4890,51 @@ const sidebarConfig: NavGroup[] = [
 
 /** Cada perfil vê o seu trabalho: a Comercial Gold não entra na Financiada e vice-versa. */
 function painelDoPerfil(role: string): View {
+  if (role === "formador") return "formador-turmas";
   return role === "financiada" ? "fin-painel" : "gold-painel";
 }
 
 function gruposDoPerfil(role: string): string[] {
+  if (role === "formador") return ["Formador"];
   if (role === "comercial") return ["Gold", "Gestão"];
   if (role === "financiada") return ["Financiada", "Gestão"];
   return ["Gold", "Financiada", "Gestão", "Sistema"];
 }
 
+function FormadorCalendarioPagina() {
+  const { user } = useAuth();
+  const { gold, fin } = useTurmas();
+  const { formadores } = useFormadores();
+  const nomes = [...nomesDoUtilizador(user, formadores)];
+  const turmas = [...gold, ...fin].map(t => ({ nome: t.nome, cronograma: t.cronograma }));
+  const eventos = nomes.flatMap(n => eventosDoFormador(n, turmas));
+  return (
+    <div className="space-y-3">
+      <h1 className="text-lg font-bold text-slate-800">O meu calendário</h1>
+      <FormadorCalendario nome={nomes[0] ?? user.name} eventos={eventos} />
+    </div>
+  );
+}
+
+function FormadorPerfilPagina() {
+  const { user } = useAuth();
+  const { formadores } = useFormadores();
+  const meu = formadores.find(f => f.email.trim().toLowerCase() === user.email.trim().toLowerCase())
+    ?? formadores.find(f => f.nome.trim().toLowerCase() === user.name.trim().toLowerCase());
+  return <FormadorProfileSlideOver open embutido onClose={() => undefined} nome={meu?.nome ?? user.name} telf={meu?.telf} />;
+}
+
+const navFormador: NavGroup = {
+  group: "Formador",
+  items: [
+    { label: "As minhas turmas", view: "formador-turmas", icon: I.school },
+    { label: "Calendário", view: "formador-calendario", icon: I.calendar },
+    { label: "Documentos e perfil", view: "formador-perfil", icon: I.person },
+  ],
+};
+
 function navParaPerfil(role: string): NavGroup[] {
+  if (role === "formador") return [navFormador];
   const permitidos = gruposDoPerfil(role);
   return sidebarConfig
     .filter(g => permitidos.includes(g.group))
@@ -4889,7 +5066,11 @@ function SidebarNav({ view, onNavigate, onClose }: { view: View; onNavigate: (v:
 
 const viewTitles: Partial<Record<View, string>> = {
   painel: "Painel", "gold-painel": "Painel", "fin-painel": "Painel",
-  "gold-preinscricoes": "CRM", "fin-preinscricoes": "CRM",
+  "gold-preinscricoes": "Pré-inscrições", "fin-preinscricoes": "Pré-inscrições",
+  "gold-crm-clientes": "Clientes", "fin-crm-clientes": "Clientes",
+  "gold-crm-parceiros": "Parceiros", "fin-crm-parceiros": "Parceiros",
+  "gold-crm-contratos": "Contratos", "fin-crm-contratos": "Contratos",
+  "formador-turmas": "As minhas turmas", "formador-calendario": "Calendário", "formador-perfil": "Perfil",
   "gold-equipa": "Equipa", "fin-equipa": "Equipa",
   "gold-formandos-turmas": "Formandos Turmas", "gold-formandos-gold": "Formandos Gold",
   "gold-campanhas": "Campanhas", "gold-cursos": "Cursos Gold", "gold-curso-ficha": "Ficha do curso", "gold-datas": "Datas Gold",
@@ -5058,6 +5239,15 @@ function AppShell() {
       case "gold-dtp": return <DtpTurmasPicker regime="gold" onOpen={(id) => openCockpit(id, "dtp")} />;
       case "gold-preinscricoes": return <PreInscricoesGoldView regime="gold" openLeadId={openLeadId} onOpened={() => setOpenLeadId(undefined)} />;
       case "fin-preinscricoes": return <PreInscricoesGoldView regime="fin" openLeadId={openLeadId} onOpened={() => setOpenLeadId(undefined)} />;
+      case "gold-crm-clientes":
+      case "fin-crm-clientes": return <CrmClientesView />;
+      case "gold-crm-parceiros":
+      case "fin-crm-parceiros": return <CrmParceirosView />;
+      case "gold-crm-contratos":
+      case "fin-crm-contratos": return <CrmContratosView />;
+      case "formador-turmas": return <TurmasGoldView onCockpit={openCockpit} />;
+      case "formador-calendario": return <FormadorCalendarioPagina />;
+      case "formador-perfil": return <FormadorPerfilPagina />;
       case "gold-formandos-turmas": return <FormandosTurmasView openId={openFormandoOrigem === "gold-avulso" || openFormandoOrigem === "fin" ? undefined : openFormandoId} onOpened={() => setOpenFormandoId(undefined)} />;
       case "gold-formandos-gold": return <FormandosGoldView openId={openFormandoOrigem === "gold-avulso" ? openFormandoId : undefined} onOpened={() => setOpenFormandoId(undefined)} />;
       case "gold-campanhas": return <CampanhasView />;

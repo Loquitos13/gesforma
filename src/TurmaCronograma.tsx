@@ -4,7 +4,10 @@ import { generateEnaCronograma, SESSAO_MODALIDADE_OPTS } from "./cronogramaGrelh
 import { MultiSearchSelect } from "./FormKit";
 import { useProgramaDoCurso } from "./cursoPrograma";
 import { useFormadorOptions, useFormadores } from "./FormadoresContext";
-import { horaCabeNoDia } from "./formadorModel";
+import { descarregarCronograma } from "./cronogramaExport";
+import { sessaoCabeNoSlot } from "./disponibilidade";
+import { useTurmas } from "./TurmasContext";
+import { formadorIndisponivel } from "./sessaoAcesso";
 import {
   hojeIso,
   emptySessao,
@@ -15,7 +18,6 @@ import {
   formadoresNasSessoes,
   groupCronogramaByMonth,
   horasCronograma,
-  horasPorFormador,
   isSessaoLectiva,
   modulosLabel,
   periodoCronograma,
@@ -142,7 +144,7 @@ function KpiCard({
 }
 
 function SessaoRow({
-  n, sessao, estado, gold, expanded, onToggle, onPatch, onRemove, moduloOpts,
+  n, sessao, estado, gold, expanded, onToggle, onPatch, onRemove, moduloOpts, formadoresTurma,
 }: {
   n: number;
   sessao: SessaoCronograma;
@@ -153,10 +155,23 @@ function SessaoRow({
   onPatch: (p: Partial<SessaoCronograma>) => void;
   onRemove: () => void;
   moduloOpts: { value: string; sub?: string }[];
+  formadoresTurma: string[];
 }) {
   const chip = ESTADO_UI[estado];
   const horas = sessaoDuracaoHoras(sessao);
-  const formadorOpts = useFormadorOptions(sessaoFormadores(sessao));
+  const catalogo = useFormadorOptions(sessaoFormadores(sessao));
+  const { formadores } = useFormadores();
+  const { gold: turmasGold, fin } = useTurmas();
+  const pool = formadoresTurma.length
+    ? catalogo.filter(o => formadoresTurma.some(n => n.toLowerCase() === o.value.toLowerCase()))
+    : catalogo;
+  const formadorOpts = pool.map(o => {
+    const overlap = formadorIndisponivel(o.value, sessao.data, sessao.horaInicio, sessao.horaFim, [...turmasGold, ...fin], sessao.id);
+    const ficha = formadores.find(f => f.nome.toLowerCase() === o.value.toLowerCase());
+    const foraSlot = gold && Boolean(ficha) && !sessaoCabeNoSlot(sessao.data, sessao.horaInicio, sessao.horaFim, ficha?.disponibilidade);
+    if (!overlap && !foraSlot) return o;
+    return { ...o, disabled: true, sub: foraSlot && !overlap ? "Fora da disponibilidade CCP" : "Indisponível neste horário" };
+  });
   const ring = estado === "proxima" || estado === "hoje"
     ? gold ? "ring-1 ring-amber-200 bg-amber-50/40" : "ring-1 ring-blue-200 bg-blue-50/40"
     : estado === "realizada" ? "opacity-80" : "";
@@ -254,7 +269,7 @@ function SessaoRow({
               unitSingular="formador"
               unitPlural="formadores"
             />
-            <p className="text-[11px] text-slate-400 mt-1">Pode atribuir mais do que um formador à mesma sessão.</p>
+            <p className="text-[11px] text-slate-400 mt-1">Só formadores desta turma. Quem já tem sessão neste horário fica indisponível.</p>
           </label>
           <label className="block col-span-2 sm:col-span-4">
             <span className="block text-[11px] font-semibold text-slate-500 mb-1">Módulos desta sessão</span>
@@ -277,8 +292,8 @@ function SessaoRow({
 }
 
 export function CronogramaEditor({
-  sessoes, onChange, inicio, horario, horas, formador, curso, local, accent = "gold",
-  layout = "compact", onDossie, dossieAGravar,
+  sessoes, onChange, inicio, horario, horas, formador, formadoresTurma, curso, local, accent = "gold",
+  layout = "compact",
 }: {
   sessoes: SessaoCronograma[];
   onChange: (next: SessaoCronograma[]) => void;
@@ -286,46 +301,17 @@ export function CronogramaEditor({
   horario: string;
   horas: number;
   formador: string;
+  formadoresTurma?: string[];
   curso?: string;
   local?: string;
   accent?: "gold" | "fin";
   layout?: "page" | "compact";
-  onDossie?: () => void;
-  dossieAGravar?: boolean;
 }) {
   const gold = accent === "gold";
   const page = layout === "page";
   const programa = useProgramaDoCurso(accent, curso);
-  const { formadores } = useFormadores();
   const moduloOpts = programa.options;
   const totalH = Math.round(horasCronograma(sessoes) * 10) / 10;
-  const horasFormador = useMemo(() => horasPorFormador(sessoes), [sessoes]);
-  const avisosDisp = useMemo(() => {
-    const fora: string[] = [];
-    const vazios = new Set<string>();
-    const vistos = new Set<string>();
-    for (const s of sessoes) {
-      if (!isSessaoLectiva(s) || !s.data) continue;
-      for (const nome of sessaoFormadores(s)) {
-        if (!nome || nome === "A definir") continue;
-        const ficha = formadores.find(f => f.nome === nome);
-        if (!ficha) continue;
-        if (ficha.disponibilidade.length === 0) {
-          vazios.add(nome);
-          continue;
-        }
-        const dia = ficha.disponibilidade.find(d => d.data === s.data);
-        if (!dia) continue;
-        const chave = `${nome}|${s.data}`;
-        if (vistos.has(chave)) continue;
-        if (dia.estado === "indisponivel" || !horaCabeNoDia(dia.horarios, s.horaInicio, s.horaFim)) {
-          vistos.add(chave);
-          fora.push(`${nome} a ${s.data}`);
-        }
-      }
-    }
-    return { fora, vazios: [...vazios] };
-  }, [formadores, sessoes]);
   const next = proximaSessao(sessoes);
   const periodo = periodoCronograma(sessoes);
   const lectivas = useMemo(() => sessoes.filter(isSessaoLectiva), [sessoes]);
@@ -403,11 +389,14 @@ export function CronogramaEditor({
       <button type="button" onClick={addSessao} className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border bg-white ${ghost}`}>
         <IconPlus /> Sessão
       </button>
-      {onDossie && (
-        <button type="button" onClick={onDossie} disabled={dossieAGravar || sessoes.length === 0} className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border bg-white ${ghost} disabled:opacity-40`}>
-          {dossieAGravar ? "A gravar PDF…" : "PDF no dossiê"}
-        </button>
-      )}
+      <button
+        type="button"
+        disabled={sessoes.length === 0}
+        onClick={() => descarregarCronograma({ curso, local, horario, inicio, formador, nome: curso, sessoes })}
+        className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border bg-white ${ghost} disabled:opacity-40`}
+      >
+        Exportar para o sítio e o dossiê
+      </button>
     </div>
   );
 
@@ -429,26 +418,10 @@ export function CronogramaEditor({
             {horario && <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${soft}`}>{horario}</span>}
             {inicio && <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">Início {formatDiaMes(inicio)}</span>}
             {formador && <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">{formador}</span>}
-            {horasFormador.map(h => (
-              <span key={h.nome} className="text-[11px] font-medium px-2 py-0.5 rounded-full border border-slate-200 bg-white text-slate-600">{h.nome} · {h.horas}h</span>
-            ))}
           </div>
         </div>
         {actions}
       </div>
-
-      {avisosDisp.fora.length > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="text-xs text-amber-900">
-            O calendário do formador não cobre estas sessões: {avisosDisp.fora.join(", ")}.
-          </p>
-        </div>
-      )}
-      {avisosDisp.vazios.length > 0 && (
-        <p className="text-xs text-slate-500">
-          Ainda sem disponibilidade registada: {avisosDisp.vazios.join(", ")}.
-        </p>
-      )}
 
       {confirmRegen && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -505,6 +478,7 @@ export function CronogramaEditor({
                     expanded={openId === sessao.id}
                     onToggle={() => setOpenId(id => id === sessao.id ? null : sessao.id)}
                     moduloOpts={moduloOpts}
+                    formadoresTurma={[formador, ...(formadoresTurma ?? [])].map(n => n.trim()).filter(Boolean)}
                     onPatch={p => patch(sessao.id, p)}
                     onRemove={() => {
                       onChange(sessoes.filter(x => x.id !== sessao.id));
@@ -522,19 +496,35 @@ export function CronogramaEditor({
 }
 
 export function FormadoresAtribuidosCard({
-  sessoes, fallback, onOpen,
+  sessoes, fallback, extra, onOpen, onChangeExtra,
 }: {
   sessoes: SessaoCronograma[];
   fallback?: string;
+  extra?: string[];
   onOpen?: (nome: string) => void;
+  onChangeExtra?: (nomes: string[]) => void;
 }) {
-  const lista = formadoresNasSessoes(sessoes, fallback);
-  const horas = horasPorFormador(sessoes);
+  const listaBase = formadoresNasSessoes(sessoes, fallback);
+  const extraNomes = (extra ?? []).map(n => n.trim()).filter(Boolean);
+  const lista = [
+    ...listaBase,
+    ...extraNomes.filter(n => !listaBase.some(f => f.nome.toLowerCase() === n.toLowerCase())).map(nome => ({ nome, sessoes: 0 })),
+  ];
   const catalogo = useFormadorOptions(lista.map(f => f.nome));
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-100">
+      <div className="px-4 py-3 border-b border-slate-100 space-y-2">
         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Formadores</p>
+        {onChangeExtra && (
+          <MultiSearchSelect
+            values={extraNomes}
+            onChange={onChangeExtra}
+            options={catalogo}
+            noneLabel="Adicionar formadores opcionais…"
+            unitSingular="formador"
+            unitPlural="formadores"
+          />
+        )}
         <p className="text-xs text-slate-500 mt-0.5">
           {lista.length === 0
             ? "Ninguém atribuído nas sessões"
@@ -549,7 +539,6 @@ export function FormadoresAtribuidosCard({
         <ul className="divide-y divide-slate-100">
           {lista.map(f => {
             const opt = catalogo.find(o => o.value === f.nome);
-            const carga = horas.find(h => h.nome === f.nome);
             const inicial = f.nome.trim().charAt(0).toUpperCase() || "?";
             return (
               <li key={f.nome} className="px-4 py-3 flex items-center gap-3">
@@ -558,7 +547,6 @@ export function FormadoresAtribuidosCard({
                   <p className="text-sm font-semibold text-slate-800 truncate">{f.nome}</p>
                   <p className="text-xs text-slate-500 truncate">
                     {f.sessoes === 0 ? "Formador da turma" : f.sessoes === 1 ? "1 sessão" : `${f.sessoes} sessões`}
-                    {carga ? ` · ${carga.horas}h` : ""}
                     {opt?.sub ? ` · ${opt.sub}` : ""}
                   </p>
                 </div>

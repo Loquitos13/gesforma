@@ -66,6 +66,23 @@ export function ctaDestino(tipo: string): CtaDestino {
   };
 }
 
+export function hrefForAmbito(tipo: string, ambito: CtaAmbito) {
+  const def = ctaDestino(tipo);
+  if (def.ambito === ambito) return def.href;
+  if (ambito === "preinscricao") return "{{preinscricao_url}}";
+  if (ambito === "documentos") return "{{documentos_url}}";
+  if (ambito === "pagamento") return "{{comprovativo_url}}";
+  return SECRETARIA_HREF;
+}
+
+/** O botão segue o âmbito. Documentos, pagamento e pré-inscrição não usam um href antigo gravado no template. */
+export function hrefDoBotao(tipo: string, ambito: string | undefined, stored: string) {
+  const dest = ctaDestino(tipo);
+  const amb = isCtaAmbito(ambito) ? ambito : dest.ambito;
+  if (amb === "documentos" || amb === "pagamento" || amb === "preinscricao") return hrefForAmbito(tipo, amb);
+  return stored.trim() || dest.href;
+}
+
 export function buildCtaVars(p: {
   nome: string; email: string; curso: string; turma: string;
   documentosUrl?: string; comprovativoUrl?: string;

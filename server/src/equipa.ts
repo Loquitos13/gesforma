@@ -16,6 +16,9 @@ const propostaSchema = z.object({
   estado: z.enum(ESTADOS_PROPOSTA).optional().default("Enviada"),
   respostaCliente: z.string().trim().max(4000).optional().default(""),
   notas: z.string().trim().max(4000).optional().default(""),
+  corpo: z.string().max(8000).optional().default(""),
+  templateId: z.number().int().positive().nullable().optional(),
+  clienteId: z.number().int().positive().nullable().optional(),
   regime: z.enum(["gold", "fin"]).optional(),
 });
 
@@ -129,6 +132,11 @@ async function statsFor(db: Db, comercialId: string, regime: "gold" | "fin") {
   const pagos = (byLead["Pago"]?.n ?? 0) + (byLead["Formando"]?.n ?? 0);
   const propostasTotal = props.rows.reduce((a, r) => a + r.n, 0);
   const propostasAceites = byProp["Aceite"]?.n ?? 0;
+  const meta = await db.query<{ meta_pct: unknown }>(
+    "SELECT meta_pct FROM comercial_objetivos WHERE comercial_id = $1",
+    [comercialId],
+  );
+  const metaPct = meta.rows[0] ? Number(meta.rows[0].meta_pct) : null;
   const pipeline = props.rows.filter(r => r.estado === "Enviada" || r.estado === "Negociação").reduce((a, r) => a + r.valor, 0);
   const receita = (byLead["Pago"]?.valor ?? 0) + (byLead["Formando"]?.valor ?? 0);
   return {
@@ -139,6 +147,8 @@ async function statsFor(db: Db, comercialId: string, regime: "gold" | "fin") {
     conversao: leadsTotal ? Math.round((pagos / leadsTotal) * 100) : 0,
     propostas: propostasTotal,
     propostasAceites,
+    sucessoPropostas: propostasTotal ? Math.round((propostasAceites / propostasTotal) * 100) : 0,
+    metaPct,
     propostasRecusadas: byProp["Recusada"]?.n ?? 0,
     pipeline,
     receita,
@@ -224,13 +234,28 @@ export function registerEquipaRoutes(
     const exists = await db.query<{ id: string }>("SELECT id FROM users WHERE id = $1 AND role = $2", [comercialId, roleDaEquipa(regime)]);
     if (!exists.rows[0]) return reply.code(404).send({ error: "comercial não encontrado" });
     const d = parsed.data;
+    let curso = d.curso;
+    let valor = d.valor ?? 0;
+    let corpo = d.corpo;
+    if (d.templateId) {
+      const tpl = await db.query<{ curso: string; valor: unknown; corpo: string }>(
+        "SELECT curso, valor, corpo FROM proposta_templates WHERE id = $1",
+        [d.templateId],
+      );
+      const t = tpl.rows[0];
+      if (t) {
+        curso = curso || t.curso;
+        if (!valor) valor = Number(t.valor ?? 0);
+        corpo = corpo || t.corpo;
+      }
+    }
     const pid = await nextOpsId(db);
     const respostaEm = d.respostaCliente ? new Date() : null;
     await db.query(
       `INSERT INTO propostas_comerciais
-         (id, comercial_id, preinscricao_id, cliente_nome, cliente_email, curso, valor, estado, resposta_cliente, resposta_em, notas, regime)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [pid, comercialId, d.preinscricaoId ?? null, d.clienteNome, d.clienteEmail, d.curso, d.valor ?? 0, d.estado ?? "Enviada", d.respostaCliente, respostaEm, d.notas, regime],
+         (id, comercial_id, preinscricao_id, cliente_id, cliente_nome, cliente_email, curso, valor, estado, resposta_cliente, resposta_em, notas, regime, corpo)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [pid, comercialId, d.preinscricaoId ?? null, d.clienteId ?? null, d.clienteNome, d.clienteEmail, curso, valor, d.estado ?? "Enviada", d.respostaCliente, respostaEm, d.notas, regime, corpo],
     );
     if (d.preinscricaoId) {
       await db.query("UPDATE preinscricoes SET comercial_id = COALESCE(comercial_id, $2) WHERE id = $1", [d.preinscricaoId, comercialId]);
@@ -292,5 +317,21 @@ export function registerEquipaRoutes(
     await audit(db, req.actor!.id, "equipa.nota", "preinscricao", String(parsed.data.preinscricaoId), req.ip);
     await logLeadEvent(db, parsed.data.preinscricaoId, req.actor!.id, "nota", "Nota comercial", parsed.data.nota);
     return { ok: true };
+  });
+
+  app.put("/v1/equipa/:id/objetivo", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (req.actor!.role !== "admin") return reply.code(403).send({ error: "Só um administrador define o objectivo." });
+    const comercialId = (req.params as { id: string }).id;
+    const parsed = z.object({ metaPct: z.number().min(0).max(100) }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    await db.query(
+      `INSERT INTO comercial_objetivos (comercial_id, meta_pct, updated_at)
+       VALUES ($1, $2, now())
+       ON CONFLICT (comercial_id) DO UPDATE SET meta_pct = EXCLUDED.meta_pct, updated_at = now()`,
+      [comercialId, parsed.data.metaPct],
+    );
+    await audit(db, req.actor!.id, "equipa.objetivo", "user", comercialId, req.ip, { metaPct: parsed.data.metaPct });
+    return { ok: true, metaPct: parsed.data.metaPct };
   });
 }

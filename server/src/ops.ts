@@ -19,6 +19,15 @@ function asObj(v: unknown) {
   return {};
 }
 
+const SLOTS_CCP = ["laboral", "pos-laboral", "sabado-manha", "sabado-tarde"];
+
+function slotsCcp(raw: unknown) {
+  if (raw == null) return [...SLOTS_CCP];
+  const arr = asArr(raw);
+  if (arr.some(item => item && typeof item === "object")) return [...SLOTS_CCP];
+  return arr.map(item => String(item));
+}
+
 function asArr(v: unknown) {
   if (Array.isArray(v)) return v;
   if (typeof v === "string") {
@@ -123,9 +132,6 @@ export function mapCursoGold(r: Record<string, unknown>) {
     regime: String(r.regime ?? ""),
     horas: num(r.horas),
     estado: String(r.estado ?? "Ativo"),
-    entidadeResponsavelId: r.entidade_responsavel_id == null || r.entidade_responsavel_id === ""
-      ? null
-      : num(r.entidade_responsavel_id),
   };
 }
 
@@ -151,11 +157,14 @@ export function mapTurmaGold(r: Record<string, unknown>) {
     horario: String(r.horario ?? ""),
     totalAlunos: num(r.total_alunos),
     vagas: num(r.vagas),
-    inscricoesAdicionais: num(r.inscricoes_adicionais),
     estado: String(r.estado ?? "Ativa"),
     formador: String(r.formador ?? ""),
+    formadores: asArr(r.formadores).map(x => String(x)).filter(Boolean),
     horas: num(r.horas),
+    custoHoraSala: num(r.custo_hora_sala),
     cronograma: asArr(r.cronograma),
+    drivePastaId: String(r.drive_pasta_id ?? ""),
+    driveDossieId: String(r.drive_dossie_id ?? ""),
   };
 }
 
@@ -170,38 +179,15 @@ export function mapTurmaFin(r: Record<string, unknown>) {
     horario: String(r.horario ?? ""),
     alunos: num(r.alunos),
     alunosTotal: num(r.alunos_total),
-    inscricoesAdicionais: num(r.inscricoes_adicionais),
     estado: String(r.estado ?? "A montar"),
     horas: num(r.horas),
     formador: String(r.formador ?? ""),
+    formadores: asArr(r.formadores).map(x => String(x)).filter(Boolean),
     activa: Boolean(r.activa),
     cronograma: asArr(r.cronograma),
+    drivePastaId: String(r.drive_pasta_id ?? ""),
+    driveDossieId: String(r.drive_dossie_id ?? ""),
   };
-}
-
-const HORA_DIA = /^\d{2}:\d{2}$/;
-const DATA_DIA = /^\d{4}-\d{2}-\d{2}$/;
-
-export function diasDisponibilidade(v: unknown) {
-  const out: { data: string; estado: "disponivel" | "indisponivel"; horarios: { inicio: string; fim: string }[] }[] = [];
-  for (const item of asArr(v)) {
-    if (!item || typeof item !== "object") continue;
-    const row = item as Record<string, unknown>;
-    const data = String(row.data ?? "");
-    if (!DATA_DIA.test(data)) continue;
-    const estado = row.estado === "indisponivel" ? "indisponivel" as const : "disponivel" as const;
-    const horarios = Array.isArray(row.horarios)
-      ? row.horarios.flatMap(h => {
-          if (!h || typeof h !== "object") return [];
-          const inicio = String((h as { inicio?: string }).inicio ?? "");
-          const fim = String((h as { fim?: string }).fim ?? "");
-          if (!HORA_DIA.test(inicio) || !HORA_DIA.test(fim) || fim <= inicio) return [];
-          return [{ inicio, fim }];
-        })
-      : [];
-    out.push({ data, estado, horarios: estado === "indisponivel" ? [] : horarios });
-  }
-  return out.sort((a, b) => a.data.localeCompare(b.data));
 }
 
 export function mapFormador(r: Record<string, unknown>) {
@@ -215,41 +201,10 @@ export function mapFormador(r: Record<string, unknown>) {
     nif: String(r.nif ?? ""),
     regimes: asArr(r.regimes),
     estado: String(r.estado ?? "Ativo"),
-    disponibilidade: diasDisponibilidade(r.disponibilidade),
+    disponibilidade: slotsCcp(r.disponibilidade),
+    custoHora: num(r.custo_hora),
+    temAcesso: Boolean(r.user_id),
   };
-}
-
-/** Nome igual ao da turma ou a uma sessão, numa turma que ainda está activa. */
-export async function formadorEmTurmaActiva(db: Db, nome: string) {
-  const alvo = nome.trim().toLowerCase();
-  if (!alvo) return false;
-  const row = await db.query(
-    `SELECT 1 AS hit FROM (
-       SELECT formador, cronograma FROM turmas_gold WHERE estado IN ('Ativa', 'Ativo')
-       UNION ALL
-       SELECT formador, cronograma FROM turmas_fin WHERE activa = true
-     ) t
-     WHERE lower(trim(t.formador)) = $1
-        OR EXISTS (
-          SELECT 1 FROM regexp_split_to_table(COALESCE(t.formador, ''), '·') parte
-          WHERE lower(trim(parte)) = $1
-        )
-        OR EXISTS (
-          SELECT 1
-          FROM jsonb_array_elements(CASE WHEN jsonb_typeof(t.cronograma) = 'array' THEN t.cronograma ELSE '[]'::jsonb END) s
-          WHERE lower(trim(COALESCE(s->>'formador', ''))) = $1
-             OR EXISTS (
-               SELECT 1
-               FROM jsonb_array_elements_text(
-                 CASE WHEN jsonb_typeof(s->'formadores') = 'array' THEN s->'formadores' ELSE '[]'::jsonb END
-               ) f
-               WHERE lower(trim(f)) = $1
-             )
-        )
-     LIMIT 1`,
-    [alvo],
-  );
-  return row.rows.length > 0;
 }
 
 function sameLabel(a: string, b: string) {
@@ -411,6 +366,22 @@ export async function getOpsSnapshot(db: Db) {
     db.query<{ id: number; kind: string; regime: string; payload: unknown }>("SELECT id, kind, regime, payload FROM catalog_items ORDER BY id"),
     db.query<{ id: string; values: unknown }>("SELECT id, values FROM app_settings"),
   ]);
+  const alocados = new Set<string>();
+  const marcar = (nome: unknown) => {
+    const n = String(nome ?? "").trim().toLowerCase();
+    if (n) alocados.add(n);
+  };
+  for (const t of [...turmasGold, ...turmasFin]) {
+    marcar(t.formador);
+    for (const n of t.formadores ?? []) marcar(n);
+    for (const raw of t.cronograma ?? []) {
+      if (!raw || typeof raw !== "object") continue;
+      const s = raw as { formador?: string; formadores?: string[] };
+      if (s.formador) marcar(s.formador);
+      for (const n of s.formadores ?? []) marcar(n);
+    }
+  }
+  const formadoresComAlocacao = formadores.map(f => ({ ...f, alocado: alocados.has(f.nome.trim().toLowerCase()) }));
   const catalogs: Record<string, Array<Record<string, unknown>>> = {};
   for (const r of catalogRows.rows) {
     const key = `${r.kind}:${r.regime}`;
@@ -419,7 +390,7 @@ export async function getOpsSnapshot(db: Db) {
   const settings = Object.fromEntries(settingRows.rows.map(r => [r.id, asObj(r.values)]));
   return {
     preinscricoes, formandosTurmas, formandosFin, cursosGold, cursosFin,
-    turmasGold, turmasFin, formadores,
+    turmasGold, turmasFin, formadores: formadoresComAlocacao,
     campanhas: campanhas.map(c => numsCampanha(c, preinscricoes, formandosTurmas, pagamentos)),
     blogPosts, pagamentos,
     catalogs, settings,

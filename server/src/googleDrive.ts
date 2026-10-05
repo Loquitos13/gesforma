@@ -671,3 +671,123 @@ export async function deleteDriveFile(db: Db, id: string) {
 export function purgeExpiredStates(db: Db) {
   return db.query("DELETE FROM oauth_states WHERE expires_at < now()");
 }
+
+async function shareFolder(token: string, fileId: string, email: string) {
+  await driveApi(token, `${DRIVE_FILES}/${encodeURIComponent(fileId)}/permissions?supportsAllDrives=true&sendNotificationEmail=false`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role: "writer", type: "user", emailAddress: email }),
+  });
+}
+
+function nomesNoCronograma(cronograma: unknown, extra: string[]) {
+  const nomes = new Set(extra.map(n => n.trim()).filter(Boolean));
+  const lista = Array.isArray(cronograma) ? cronograma : [];
+  for (const item of lista) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as { formadores?: unknown; formador?: unknown };
+    if (Array.isArray(row.formadores)) {
+      for (const n of row.formadores) if (typeof n === "string" && n.trim()) nomes.add(n.trim());
+    } else if (typeof row.formador === "string" && row.formador.trim()) {
+      nomes.add(row.formador.trim());
+    }
+  }
+  return [...nomes];
+}
+
+/** Pasta da turma (formandos, formadores e admins) e dossiê à parte (só secretaria e admins). */
+export async function syncTurmaDriveAccess(db: Db, input: {
+  regime: "gold" | "fin";
+  turmaId: number;
+  nome: string;
+  formador?: string;
+  formadores?: string[];
+  cronograma?: unknown;
+}) {
+  const token = await accessToken(db);
+  if (!token) return { ok: false as const, reason: "drive" };
+  const tag = input.regime === "fin" ? "Financiada" : "Gold";
+  const nome = input.nome.trim() || `Turma ${input.turmaId}`;
+  const pasta = await ensureFolderPath(db, token, ["Turmas", tag, nome]);
+  const dossie = await ensureFolderPath(db, token, ["Dossies", tag, nome]);
+  const table = input.regime === "gold" ? "turmas_gold" : "turmas_fin";
+  await db.query(`UPDATE ${table} SET drive_pasta_id = $2, drive_dossie_id = $3 WHERE id = $1`, [input.turmaId, pasta, dossie]);
+
+  const admins = await db.query<{ email: string }>(
+    "SELECT email FROM users WHERE role = 'admin' AND active = true AND email <> ''",
+  );
+  const secretaria = await db.query<{ email: string }>(
+    "SELECT email FROM users WHERE role IN ('admin', 'secretaria') AND active = true AND email <> ''",
+  );
+  const formandos = input.regime === "gold"
+    ? await db.query<{ email: string }>("SELECT email FROM formandos_gold WHERE turma_id = $1 AND email <> ''", [input.turmaId])
+    : await db.query<{ email: string }>(
+      "SELECT email FROM formandos_fin WHERE turma = $1 AND email <> ''",
+      [nome],
+    );
+  const nomes = nomesNoCronograma(input.cronograma, [input.formador ?? "", ...(input.formadores ?? [])]);
+  const formadores = nomes.length
+    ? await db.query<{ email: string }>("SELECT email FROM formadores WHERE nome = ANY($1::text[]) AND email <> ''", [nomes])
+    : { rows: [] as { email: string }[] };
+
+  const turmaEmails = new Set<string>();
+  for (const row of [...admins.rows, ...formandos.rows, ...formadores.rows]) {
+    const email = row.email.trim().toLowerCase();
+    if (email.includes("@")) turmaEmails.add(email);
+  }
+  for (const email of turmaEmails) {
+    await shareFolder(token, pasta, email).catch(() => undefined);
+  }
+  const dossieEmails = new Set<string>();
+  for (const row of secretaria.rows) {
+    const email = row.email.trim().toLowerCase();
+    if (email.includes("@")) dossieEmails.add(email);
+  }
+  for (const email of dossieEmails) {
+    await shareFolder(token, dossie, email).catch(() => undefined);
+  }
+  return { ok: true as const, pasta, dossie };
+}
+
+/** Move um ficheiro para a pasta da turma, dentro de uma subpasta com o nome da pessoa. */
+export async function relocateDriveFile(db: Db, fileId: string, dest: {
+  regime: "gold" | "fin";
+  turmaId: number;
+  turmaNome: string;
+  pessoa: string;
+}) {
+  const found = await db.query<DriveFileRow>("SELECT * FROM drive_files WHERE id = $1", [fileId]);
+  const file = found.rows[0];
+  if (!file) return false;
+  const tag = dest.regime === "fin" ? "Financiada" : "Gold";
+  const pessoa = sanitizeFileName(dest.pessoa.trim() || "Formando");
+  const turmaNome = dest.turmaNome.trim() || `Turma ${dest.turmaId}`;
+  const pathLabel = ["Turmas", tag, turmaNome, pessoa].join(" / ");
+  const token = await accessToken(db).catch(() => null);
+  if (token && file.stored_in === "google" && file.drive_id) {
+    const table = dest.regime === "gold" ? "turmas_gold" : "turmas_fin";
+    const pastaRow = await db.query<{ drive_pasta_id: string }>(
+      `SELECT drive_pasta_id FROM ${table} WHERE id = $1`,
+      [dest.turmaId],
+    );
+    let pasta = pastaRow.rows[0]?.drive_pasta_id?.trim() ?? "";
+    if (!pasta) pasta = await ensureFolderPath(db, token, ["Turmas", tag, turmaNome]);
+    if (pasta && pasta !== pastaRow.rows[0]?.drive_pasta_id) {
+      await db.query(`UPDATE ${table} SET drive_pasta_id = $2 WHERE id = $1 AND drive_pasta_id = ''`, [dest.turmaId, pasta]);
+    }
+    const child = await ensureChild(token, pasta, pessoa);
+    const current = await driveApi<{ parents?: string[] }>(
+      token,
+      `${DRIVE_FILES}/${encodeURIComponent(file.drive_id)}?fields=parents&supportsAllDrives=true`,
+    );
+    const remove = (current.parents ?? []).filter(id => id !== child);
+    const params = new URLSearchParams({ addParents: child, supportsAllDrives: "true", fields: "id,parents" });
+    if (remove.length) params.set("removeParents", remove.join(","));
+    await driveApi(token, `${DRIVE_FILES}/${encodeURIComponent(file.drive_id)}?${params.toString()}`, { method: "PATCH" });
+  }
+  await db.query(
+    "UPDATE drive_files SET folder_path = $2, turma = $3, formando = $4 WHERE id = $1",
+    [fileId, pathLabel, turmaNome, pessoa],
+  );
+  return true;
+}

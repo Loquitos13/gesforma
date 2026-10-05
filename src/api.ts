@@ -10,7 +10,7 @@ export class ApiError extends Error {
   }
 }
 
-export type StaffRole = "admin" | "secretaria" | "comercial" | "financiada";
+export type StaffRole = "admin" | "secretaria" | "comercial" | "financiada" | "formador";
 export type SessionUser = { id: string; email: string; name: string; role: StaffRole | string };
 
 export type StaffUser = {
@@ -73,19 +73,20 @@ export type OpsSnapshot = {
     cc: { ok: boolean; data: string }; ch: { ok: boolean; data: string };
     cu: { ok: boolean; data: string }; ci: { ok: boolean; data: string }; ce: { ok: boolean; data: string };
   }>;
-  cursosGold: Array<{ id: number; nome: string; categoria: string; tipo: string; preco: number; regime: string; horas: number; estado: string; entidadeResponsavelId?: number | null }>;
+  cursosGold: Array<{ id: number; nome: string; categoria: string; tipo: string; preco: number; regime: string; horas: number; estado: string }>;
   cursosFin: Array<{ id: number; ufcdCod: string; ufcd: string; nomeComercial: string; regime: string; horas: number; estado: string }>;
   turmasGold: Array<{
     id: number; dataInicio: string; nome: string; curso: string; local: string; horario: string;
-    totalAlunos: number; vagas: number; inscricoesAdicionais?: number; estado: string; formador: string; horas: number; cronograma: unknown[];
+    totalAlunos: number; vagas: number; estado: string; formador: string; horas: number; custoHoraSala?: number; cronograma: unknown[];
   }>;
   turmasFin: Array<{
     id: number; dataInicio: string; nome: string; curso: string; ufcdCod: string; local: string; horario: string;
-    alunos: number; alunosTotal: number; inscricoesAdicionais?: number; estado: string; horas: number; formador: string; activa: boolean; cronograma: unknown[];
+    alunos: number; alunosTotal: number; estado: string; horas: number; formador: string; activa: boolean; cronograma: unknown[];
   }>;
   formadores: Array<{
     id: number; nome: string; telf: string; email: string; especialidade: string; ccp: string; nif: string;
-    regimes: string[]; estado: string; disponibilidade?: unknown;
+    regimes: string[]; estado: string;
+    disponibilidade?: string[]; custoHora?: number; alocado?: boolean; temAcesso?: boolean;
   }>;
   campanhas: Array<{
     id: number; nome: string; data: string; encarregado: string; curso?: string;
@@ -195,6 +196,8 @@ export type EquipaStats = {
   conversao: number;
   propostas: number;
   propostasAceites: number;
+  sucessoPropostas?: number;
+  metaPct?: number | null;
   propostasRecusadas: number;
   pipeline: number;
   receita: number;
@@ -249,7 +252,7 @@ export const apiEquipaProposta = (comercialId: string, body: {
   clienteNome: string; clienteEmail?: string; curso?: string; valor?: number;
   estado?: "Enviada" | "Negociação" | "Aceite" | "Recusada" | "Expirada";
   respostaCliente?: string; notas?: string; preinscricaoId?: number | null;
-  regime?: "gold" | "fin";
+  regime?: "gold" | "fin"; corpo?: string; templateId?: number | null;
 }) => api<{ proposta: EquipaProposta }>(`/v1/equipa/${comercialId}/propostas`, { method: "POST", body: JSON.stringify(body) });
 
 export const apiPatchProposta = (id: number, body: {
@@ -411,8 +414,8 @@ export const apiDeleteDtpEntidade = (id: number) =>
   api<{ ok: boolean }>(`/v1/dtp/gold/entidades/${id}`, { method: "DELETE" });
 export const apiDtpEntidadeModelo = (id: number) =>
   api<DtpModeloResposta>(`/v1/dtp/gold/entidades/${id}/modelo`);
-export const apiSaveDtpEntidadeModelo = (id: number, body: { excluidos: string[]; extra: DtpExtra[] }) =>
-  api<Pick<DtpModeloResposta, "modelo" | "estrutura">>(`/v1/dtp/gold/entidades/${id}/modelo`, {
+export const apiSaveDtpEntidadeModelo = (id: number, body: { excluidos: string[]; incluidos?: string[]; extra: DtpExtra[] }) =>
+  api<DtpModeloResposta>(`/v1/dtp/gold/entidades/${id}/modelo`, {
     method: "PUT",
     body: JSON.stringify(body),
   });
@@ -536,15 +539,9 @@ export type Dashboard = {
     metodosPagamento: { metodo: string; valor: number; pct: number; color: string }[];
   };
   funil: { l: string; v: number }[];
-  comercial?: {
-    preInscritos: number;
-    convertidos: number;
-    conversaoPct: number | null;
-    prePagos: number;
-    formandosPre: number;
-    formandosAuto: number;
-    totalFormandos: number;
-  } | null;
+  funilPreinscritos?: { l: string; v: number }[];
+  funilPrepagos?: { l: string; v: number }[];
+  formandosOrigem?: { preinscritos: number; prepagos: number };
   conhecimento: { id: string; fonte: string; curto: string; detalhe: string; color: string; n: number; pct: number }[];
   topCursos: { nome: string; inscritos: number; receita: number; taxa: number | null }[];
   desagregar?: "curso" | "local" | "horario";
@@ -584,30 +581,40 @@ export const apiAplicarTurmaRegras = (regime?: "gold" | "fin") =>
     method: "POST", body: JSON.stringify({ regime }),
   });
 
-export type PercursoTurma = {
-  id: number; nome: string; local: string; horario: string; dataInicio: string;
-  cronograma: { data: string; horaInicio: string; horaFim: string; modulos: string[]; modalidade: string }[];
-};
-export type PercursoVista = {
-  nome: string; curso: string; local?: string; horario?: string; preco?: number;
-  tipos: { id: string; label: string; required?: boolean }[];
-  ficheiros: { id: number; tipo: string; nome: string; created_at: string; estado?: string; observacao?: string }[];
-  docsCompletos?: boolean;
-  emFalta?: string[];
-  precisaPagamento?: boolean;
-  pagamento?: { entidade: string; referencia: string; valor: number; estado: string } | null;
-  iban?: string;
-  turmas?: PercursoTurma[];
-  turmaEscolhida?: PercursoTurma | null;
-  passo?: "documentos" | "turma" | "pagamento" | "concluido" | "correcao";
-  encerrada?: boolean;
-  correcao?: boolean;
+export type TurmaPercurso = {
+  id: number;
+  nome: string;
+  local: string;
+  horario: string;
+  dataInicio: string;
+  livres: number;
+  sessoes: { data: string; inicio: string; fim: string }[];
 };
 export const apiPublicDocumentos = (token: string) =>
-  api<PercursoVista>(`/v1/public/documentos/${encodeURIComponent(token)}`);
+  api<{
+    nome: string; curso: string; preco?: number;
+    tipos: { id: string; label: string; required?: boolean }[];
+    ficheiros: { id: number; tipo: string; nome: string; created_at: string; estado?: string; observacao?: string }[];
+    docsCompletos?: boolean;
+    emFalta?: string[];
+    precisaPagamento?: boolean;
+    pagamento?: { entidade: string; referencia: string; valor: number; estado: string } | null;
+    encerrada?: boolean;
+    correcao?: boolean;
+    passo?: 1 | 2 | 3;
+    percursoConcluido?: boolean;
+    turmas?: TurmaPercurso[];
+    turmaEscolhida?: TurmaPercurso | null;
+  }>(
+    `/v1/public/documentos/${encodeURIComponent(token)}`,
+  );
 export const apiPublicEscolherTurma = (token: string, turmaId: number) =>
-  api<PercursoVista>(`/v1/public/documentos/${encodeURIComponent(token)}/turma`, {
+  api<{ ok: boolean }>(`/v1/public/documentos/${encodeURIComponent(token)}/turma`, {
     method: "POST", body: JSON.stringify({ turmaId }),
+  });
+export const apiPublicConcluirPercurso = (token: string) =>
+  api<{ ok: boolean }>(`/v1/public/documentos/${encodeURIComponent(token)}/concluir`, {
+    method: "POST", body: JSON.stringify({}),
   });
 export async function apiPublicDocumentoUpload(token: string, file: File, tipo: string) {
   const fd = new FormData();
@@ -744,6 +751,8 @@ export type CrmListQuery = {
   kanban?: boolean;
   hoje?: string;
   regime?: "gold" | "fin";
+  de?: string;
+  ate?: string;
 };
 
 export type CrmListResult = {
@@ -778,6 +787,8 @@ function crmQs(q: CrmListQuery) {
   if (q.kanban) p.set("kanban", "1");
   if (q.hoje) p.set("hoje", q.hoje);
   if (q.regime) p.set("regime", q.regime);
+  if (q.de) p.set("de", q.de);
+  if (q.ate) p.set("ate", q.ate);
   const s = p.toString();
   return s ? `?${s}` : "";
 }
@@ -834,9 +845,20 @@ export type CrmDossier = {
   docsEmFalta?: string[];
   documentos?: { id: number; tipo: string; label: string; nome: string; url: string; createdAt: string; estado?: string; observacao?: string }[];
   docsFechado?: boolean;
-  percursoConcluido?: boolean;
   pagamento?: { id: string; referencia: string; valor: number; estado: string; entidade: string } | null;
+  percursoConcluido?: boolean;
+  validadaEm?: string | null;
+  recusaMotivo?: string;
+  podeValidar?: boolean;
+  faltaValidar?: string;
+  turmaEscolhida?: { id: number; nome: string; local: string; horario: string; dataInicio: string; livres: number } | null;
 };
+export const apiCrmValidarPreinscricao = (id: number) =>
+  api<CrmDossier>(`/v1/crm/leads/${id}/validar-preinscricao`, { method: "POST", body: JSON.stringify({}) });
+export const apiCrmTurmaCheia = (id: number) =>
+  api<{ ok: boolean; enviadas: number; turmas: { nome: string; horario: string; local: string; dataInicio: string; livres: number }[] }>(
+    `/v1/crm/leads/${id}/turma-cheia`, { method: "POST", body: JSON.stringify({}) },
+  );
 export const apiCrmDocValidar = (id: number, docId: number) =>
   api<CrmDossier>(`/v1/crm/leads/${id}/documentos/${docId}/validar`, { method: "POST", body: JSON.stringify({}) });
 export const apiCrmDocRecusar = (id: number, docId: number, observacao: string) =>
@@ -954,7 +976,7 @@ export const apiPatchTurmaFin = (id: number, body: Record<string, unknown>) =>
 export const apiDeleteTurmaFin = (id: number) => api<{ ok: boolean }>(`/v1/turmas-fin/${id}`, { method: "DELETE" });
 
 export const apiCreateFormador = (body: Record<string, unknown>) =>
-  api<{ formador: OpsSnapshot["formadores"][number] }>("/v1/formadores", { method: "POST", body: JSON.stringify(body) });
+  api<{ formador: OpsSnapshot["formadores"][number]; acesso?: { email: string; password?: string; criado: boolean } | null }>("/v1/formadores", { method: "POST", body: JSON.stringify(body) });
 export const apiPatchFormador = (id: number, body: Record<string, unknown>) =>
   api<{ formador: OpsSnapshot["formadores"][number] | null }>(`/v1/formadores/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 export const apiDeleteFormador = (id: number) => api<{ ok: boolean }>(`/v1/formadores/${id}`, { method: "DELETE" });
@@ -1058,6 +1080,46 @@ export async function apiDtpExport(regime: Regime, turmaId: number, filename?: s
     endViewLoad();
   }
 }
+
+export const apiEquipaObjetivo = (comercialId: string, metaPct: number) =>
+  api<{ ok: boolean; metaPct: number }>(`/v1/equipa/${comercialId}/objetivo`, { method: "PUT", body: JSON.stringify({ metaPct }) });
+
+export type CrmPropostaCliente = { id: number; curso: string; estado: string; valor: number; corpo: string };
+export type CrmCliente = { id: number; nome: string; email: string; telf: string; nif: string; notas: string; propostas?: CrmPropostaCliente[] };
+export type CrmParceiro = {
+  id: number; nome: string; email: string; telf: string; tipo: string; notas: string;
+  comercialId?: string | null; comercial?: string; retribuicao?: string;
+};
+export type DocTemplate = { id: number; nome: string; curso: string; valor: number; corpo: string };
+export type PropostaTemplate = DocTemplate;
+export type ContratoTemplate = DocTemplate;
+export type CrmContrato = {
+  id: number; clienteNome: string; clienteEmail: string; curso: string; valor: number;
+  estado: string; notas: string; corpo: string; templateId: number | null; comercial: string;
+  propostaId?: number | null; clienteId?: number | null;
+};
+
+export const apiCrmClientes = () => api<{ clientes: CrmCliente[] }>("/v1/crm/clientes");
+export const apiCreateCliente = (body: Omit<CrmCliente, "id">) =>
+  api<{ cliente: CrmCliente }>("/v1/crm/clientes", { method: "POST", body: JSON.stringify(body) });
+export const apiDeleteCliente = (id: number) => api<{ ok: boolean }>(`/v1/crm/clientes/${id}`, { method: "DELETE" });
+export const apiCrmParceiros = () => api<{ parceiros: CrmParceiro[] }>("/v1/crm/parceiros");
+export const apiCreateParceiro = (body: Omit<CrmParceiro, "id" | "notas" | "telf" | "comercial"> & { telf?: string; notas?: string }) =>
+  api<{ parceiro: CrmParceiro }>("/v1/crm/parceiros", { method: "POST", body: JSON.stringify(body) });
+export const apiCreateClienteProposta = (clienteId: number, body: { curso?: string; valor?: number; corpo?: string }) =>
+  api<{ proposta: CrmPropostaCliente }>(`/v1/crm/clientes/${clienteId}/propostas`, { method: "POST", body: JSON.stringify(body) });
+export const apiDeleteParceiro = (id: number) => api<{ ok: boolean }>(`/v1/crm/parceiros/${id}`, { method: "DELETE" });
+export const apiPropostaTemplates = () => api<{ templates: PropostaTemplate[] }>("/v1/crm/proposta-templates");
+export const apiCreatePropostaTemplate = (body: Omit<PropostaTemplate, "id">) =>
+  api<{ template: PropostaTemplate }>("/v1/crm/proposta-templates", { method: "POST", body: JSON.stringify(body) });
+export const apiContratoTemplates = () => api<{ templates: ContratoTemplate[] }>("/v1/crm/contrato-templates");
+export const apiCreateContratoTemplate = (body: Omit<ContratoTemplate, "id">) =>
+  api<{ template: ContratoTemplate }>("/v1/crm/contrato-templates", { method: "POST", body: JSON.stringify(body) });
+export const apiContratos = () => api<{ contratos: CrmContrato[] }>("/v1/crm/contratos");
+export const apiCreateContrato = (body: {
+  clienteNome: string; clienteEmail?: string; curso?: string; valor?: number; corpo?: string; templateId?: number | null;
+  clienteId?: number | null; propostaId?: number | null;
+}) => api<{ contrato: { id: number } }>("/v1/crm/contratos", { method: "POST", body: JSON.stringify(body) });
 
 export function emitAutomation(
   type: "preinscricao.created" | "payment.confirmed" | "formando.completed" | "sessao.summary_signed",

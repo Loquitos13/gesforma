@@ -153,7 +153,7 @@ export async function dispensarAlerta(db: Db, alertaId: string) {
   );
 }
 
-/** Fecha a ligação quando todos os documentos obrigatórios estão validados. */
+/** Indica se os documentos obrigatórios estão validados. Não fecha a ligação: isso só acontece na validação da secretaria. */
 export async function syncLigacao(db: Db, leadId: number) {
   const lead = await db.query<{ curso: string; regime: string }>(
     "SELECT curso, COALESCE(regime, 'gold') AS regime FROM preinscricoes WHERE id = $1",
@@ -166,16 +166,7 @@ export async function syncLigacao(db: Db, leadId: number) {
   const required = pedidos.filter(d => d.required);
   const ficheiros = await listarDocsLead(db, leadId);
   const byTipo = new Map(ficheiros.map(f => [f.tipo, f]));
-  const todos = required.length > 0 && required.every(d => byTipo.get(d.id)?.estado === "validado");
-  if (todos) {
-    await db.query(
-      "UPDATE preinscricoes SET docs_fechado_em = COALESCE(docs_fechado_em, now()) WHERE id = $1",
-      [leadId],
-    );
-  } else {
-    await db.query("UPDATE preinscricoes SET docs_fechado_em = NULL WHERE id = $1", [leadId]);
-  }
-  return todos;
+  return required.length > 0 && required.every(d => byTipo.get(d.id)?.estado === "validado");
 }
 
 export async function definirEstadoDoc(
@@ -194,6 +185,12 @@ export async function definirEstadoDoc(
   );
   if (!upd.rows[0]) return null;
   if (estado === "validado") await dispensarAlertas(db, leadId);
+  if (estado === "recusado") {
+    await db.query(
+      "UPDATE preinscricoes SET percurso_concluido_em = NULL WHERE id = $1 AND validada_em IS NULL",
+      [leadId],
+    );
+  }
   await syncLigacao(db, leadId);
   return upd.rows[0].id;
 }

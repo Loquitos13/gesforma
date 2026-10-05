@@ -477,11 +477,29 @@ export function registerDashboardRoutes(
     let ri = pi;
     if (f.de) { rankConds.push(`${payDate("pg")} >= $${ri}::text`); rankParams.push(f.de); ri += 1; }
     if (f.ate) { rankConds.push(`${payDate("pg")} <= $${ri}::text`); rankParams.push(f.ate); }
-    const [leadCounts, entityCounts, pagamentosRows, origens, cursosPorReceita, leadsPorCurso, desag, filtros, viasLead, viasFormando] = await Promise.all([
-      db.query<{ preinscritos: number; contactados: number }>(
+    const [leadCounts, entityCounts, pagamentosRows, origens, cursosPorReceita, leadsPorCurso, desag, filtros] = await Promise.all([
+      db.query<{
+        preinscritos: number; contactados: number;
+        pre_base: number; pre_contactados: number; pre_pagaram: number; formandos_pre: number;
+        pago_base: number; pago_pagos: number; pago_ficha: number; formandos_pago: number;
+      }>(
         `SELECT
            (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.estado <> 'Formando') AS preinscritos,
-           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.contactado_em IS NOT NULL) AS contactados`,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.contactado_em IS NOT NULL) AS contactados,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada = 'preinscricao') AS pre_base,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada = 'preinscricao' AND p.contactado_em IS NOT NULL) AS pre_contactados,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada = 'preinscricao' AND (
+              p.estado IN ('Pago','Pré-inscrição','Formando')
+              OR EXISTS (SELECT 1 FROM pagamentos g WHERE g.estado = 'Pago' AND g.email <> '' AND lower(g.email) = lower(p.email))
+           )) AS pre_pagaram,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada = 'preinscricao' AND p.estado = 'Formando') AS formandos_pre,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada <> 'preinscricao') AS pago_base,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada <> 'preinscricao' AND (
+              p.estado IN ('Pago','Pré-inscrição','Formando')
+              OR EXISTS (SELECT 1 FROM pagamentos g WHERE g.estado = 'Pago' AND g.email <> '' AND lower(g.email) = lower(p.email))
+           )) AS pago_pagos,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada <> 'preinscricao' AND p.estado IN ('Pré-inscrição','Formando')) AS pago_ficha,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada <> 'preinscricao' AND p.estado = 'Formando') AS formandos_pago`,
         lw.params,
       ),
       db.query<{
@@ -566,45 +584,6 @@ export function registerDashboardRoutes(
           : `SELECT DISTINCT curso, local, horario FROM preinscricoes`,
         f.regime ? [f.regime] : [],
       ),
-      db.query<{ pre_inscritos: number; pre_convertidos: number; pre_total: number; pre_pagos: number }>(
-        `SELECT
-           count(*) FILTER (WHERE v.via = 'pre' AND p.estado <> 'Formando')::int AS pre_inscritos,
-           count(*) FILTER (WHERE v.via = 'pre' AND p.estado IN ('Pago', 'Formando'))::int AS pre_convertidos,
-           count(*) FILTER (WHERE v.via = 'pre')::int AS pre_total,
-           count(*) FILTER (WHERE v.via = 'auto' AND p.estado IN ('Pago', 'Formando'))::int AS pre_pagos
-         FROM preinscricoes p
-         LEFT JOIN cursos_gold c ON lower(trim(c.nome)) = lower(trim(p.curso))
-         CROSS JOIN LATERAL (
-           SELECT CASE
-             WHEN lower(trim(coalesce(c.tipo, ''))) IN ('pré-inscrição', 'pre-inscricao', 'preinscricao') THEN 'pre'
-             WHEN lower(trim(coalesce(c.regime, ''))) = 'e-learning' THEN 'auto'
-             ELSE 'pre'
-           END AS via
-         ) v
-         WHERE ${lw.sql}`,
-        lw.params,
-      ),
-      db.query<{ formandos_pre: number; formandos_auto: number }>(
-        `SELECT
-           count(*) FILTER (WHERE v.via = 'pre' AND fg.pago)::int AS formandos_pre,
-           count(*) FILTER (WHERE v.via = 'auto' AND fg.pago)::int AS formandos_auto
-         FROM formandos_gold fg
-         LEFT JOIN cursos_gold c ON lower(trim(c.nome)) = lower(trim(fg.curso))
-         LEFT JOIN turmas_gold tg ON tg.id = fg.turma_id
-         CROSS JOIN LATERAL (
-           SELECT CASE
-             WHEN lower(trim(coalesce(c.tipo, ''))) IN ('pré-inscrição', 'pre-inscricao', 'preinscricao') THEN 'pre'
-             WHEN lower(trim(coalesce(c.regime, ''))) = 'e-learning' THEN 'auto'
-             ELSE 'pre'
-           END AS via
-         ) v
-         WHERE ($1::text IS NULL OR fg.curso = $1::text)
-           AND ($2::text IS NULL OR fg.local = $2::text)
-           AND ($3::text IS NULL OR coalesce(tg.horario, '') = $3::text)
-           AND ($4::text IS NULL OR substring(fg.inscrito from 1 for 10) >= $4::text)
-           AND ($5::text IS NULL OR substring(fg.inscrito from 1 for 10) <= $5::text)`,
-        [f.curso ?? null, f.local ?? null, f.horario ?? null, f.de ?? null, f.ate ?? null],
-      ),
     ]);
 
     const c = { ...(entityCounts.rows[0] ?? {}), ...(leadCounts.rows[0] ?? {}) };
@@ -615,6 +594,18 @@ export function registerDashboardRoutes(
     if (f.audiencia === "pre") { formandosGold = 0; formandosFin = 0; }
     const formandosAtivos = formandosGold + formandosFin;
     const preinscritos = f.audiencia === "formandos" ? 0 : Number(c?.preinscritos ?? 0);
+    const funilPreinscritos = [
+      { l: "Pré-inscritos", v: f.audiencia === "formandos" ? 0 : Number(c?.pre_base ?? 0) },
+      { l: "Contactados", v: f.audiencia === "formandos" ? 0 : Number(c?.pre_contactados ?? 0) },
+      { l: "Pagaram", v: f.audiencia === "formandos" ? 0 : Number(c?.pre_pagaram ?? 0) },
+      { l: "Formandos", v: Number(c?.formandos_pre ?? 0) },
+    ];
+    const funilPrepagos = [
+      { l: "Pré-pagos", v: f.audiencia === "formandos" ? 0 : Number(c?.pago_base ?? 0) },
+      { l: "Com pagamento", v: f.audiencia === "formandos" ? 0 : Number(c?.pago_pagos ?? 0) },
+      { l: "Pré-inscrição", v: f.audiencia === "formandos" ? 0 : Number(c?.pago_ficha ?? 0) },
+      { l: "Formandos", v: Number(c?.formandos_pago ?? 0) },
+    ];
     const turmasAtivas = regime === "gold"
       ? Number(c?.turmas_gold_ativas ?? 0)
       : regime === "fin"
@@ -662,22 +653,6 @@ export function registerDashboardRoutes(
       pct: desagSoma > 0 ? Math.round((Number(r.n) / desagSoma) * 100) : 0,
     }));
 
-    const viaL = viasLead.rows[0];
-    const viaF = viasFormando.rows[0];
-    const preTotal = Number(viaL?.pre_total ?? 0);
-    const convertidos = Number(viaL?.pre_convertidos ?? 0);
-    const formandosPre = Number(viaF?.formandos_pre ?? 0);
-    const formandosAuto = Number(viaF?.formandos_auto ?? 0);
-    const comercial = f.regime === "fin" ? null : {
-      preInscritos: Number(viaL?.pre_inscritos ?? 0),
-      convertidos,
-      conversaoPct: preTotal > 0 ? Math.round((convertidos / preTotal) * 100) : null,
-      prePagos: Number(viaL?.pre_pagos ?? 0),
-      formandosPre,
-      formandosAuto,
-      totalFormandos: formandosPre + formandosAuto,
-    };
-
     const optsRows = filtros.rows;
     const uniq = (key: "curso" | "local" | "horario") =>
       [...new Set(optsRows.map(r => r[key]).filter(s => s && s.trim()))].sort((a, b) => a.localeCompare(b, "pt"));
@@ -697,13 +672,13 @@ export function registerDashboardRoutes(
         ...fin,
         ticketMedio: fin.pagos > 0 ? Math.round(fin.receitaTotal / fin.pagos) : 0,
       },
-      funil: [
-        { l: "Pré-inscritos", v: preinscritos },
-        { l: "Contactados", v: Number(c?.contactados ?? 0) },
-        { l: "Pagaram", v: fin.pagos },
-        { l: "Formandos", v: formandosAtivos },
-      ],
-      comercial,
+      funil: funilPreinscritos,
+      funilPreinscritos,
+      funilPrepagos,
+      formandosOrigem: {
+        preinscritos: Number(c?.formandos_pre ?? 0),
+        prepagos: Number(c?.formandos_pago ?? 0),
+      },
       conhecimento,
       topCursos,
       desagregar: f.desagregar,

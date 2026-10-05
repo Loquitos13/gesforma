@@ -43,7 +43,7 @@ export const LISTAS_OPCOES = {
   },
   tipos_curso: {
     titulo: "Tipo comercial",
-    fallback: ["Pago", "Pré-inscrição"],
+    fallback: ["E-learning", "Pré-inscrição"],
   },
   regimes_curso: {
     titulo: "Modalidade",

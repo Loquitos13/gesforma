@@ -1,543 +1,442 @@
 import { config } from "./config.js";
-import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
-import { docsCompletos, docsDoCurso, type DocPedido } from "./docsCurso.js";
+import { COMPROVATIVO, docsCompletos, docsDoCurso, faltaValidarPreinscricao } from "./docsCurso.js";
+import { documentosUrl, ensureDocsToken, listarDocsLead } from "./docsLink.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
-import { listarDocsLead, type DocLead } from "./docsLink.js";
+import { relocateDriveFile } from "./googleDrive.js";
 import { sendMail } from "./mailer.js";
-import { nextOpsId } from "./ops.js";
-import { ensurePagamentoPendente } from "./pagamentoPedido.js";
+import { precoParaOferta } from "./precoOferta.js";
 import { isEmail, normalizeEmail } from "./security.js";
 
-export type SessaoPercurso = {
-  data: string;
-  horaInicio: string;
-  horaFim: string;
-  modulos: string[];
-  modalidade: string;
-};
+export class PercursoErro extends Error {}
 
-export type TurmaPercurso = {
+export type SessaoPublica = { data: string; inicio: string; fim: string };
+
+export type TurmaPublica = {
   id: number;
   nome: string;
-  curso: string;
   local: string;
   horario: string;
   dataInicio: string;
-  inscritos: number;
-  vagas: number;
-  extra: number;
-  activa: boolean;
-  cronograma: SessaoPercurso[];
+  livres: number;
+  sessoes: SessaoPublica[];
 };
 
-export type LeadPercurso = {
+type TurmaRow = {
   id: number;
   nome: string;
-  apelido: string;
-  email: string;
-  telf: string;
   curso: string;
   local: string;
   horario: string;
-  preco: number;
-  regime: "gold" | "fin";
-  percursoTurmaId: number | null;
-  percursoConcluido: boolean;
-  pagamentoId: string;
+  data_inicio: string;
+  ocupadas: number;
+  vagas: number;
+  estado: string;
+  activa?: boolean;
+  cronograma: unknown;
 };
 
-export function chaveOferta(s: string) {
-  return s
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[./_,;:()]/g, " ")
-    .replace(/[-–—]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+function norm(v: string) {
+  return v.trim().toLowerCase();
 }
 
-export function chaveHorario(s: string) {
-  const k = chaveOferta(s);
-  if (!k) return "";
-  if (/^pos[- ]?laboral$/.test(k)) return "pos laboral";
-  if (/^laboral\s*manha$/.test(k)) return "laboral manha";
-  if (/^laboral\s*tarde$/.test(k)) return "laboral tarde";
-  if (/^sabado\s*manha$/.test(k)) return "sabado manha";
-  return k;
+function hojeIso() {
+  return new Date().toISOString().slice(0, 10);
 }
 
-export function chaveLocal(s: string) {
-  return chaveOferta(s)
-    .replace(/\bvila nova de gaia\b/g, "vn gaia")
-    .replace(/\bv n gaia\b/g, "vn gaia")
-    .replace(/\bvngaia\b/g, "vn gaia");
+function isoData(raw: string) {
+  const s = raw.trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const dmy = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(s);
+  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+  return "";
 }
 
-export function partirLocalHorario(local: string, horario?: string) {
-  const loc = local.trim();
-  const hor = (horario ?? "").trim();
-  const m = loc.match(/^(.*?)\s*[-–—]\s*(.+)$/);
-  if (m && chaveHorario(m[2])) {
-    return { local: m[1].trim(), horario: hor || m[2].trim() };
-  }
-  return { local: loc, horario: hor };
-}
-
-export function locaisEquivalentes(a: string, b: string) {
-  const x = chaveLocal(a);
-  const y = chaveLocal(b);
-  if (!x || !y) return false;
-  if (x === y) return true;
-  const [curto, longo] = x.length <= y.length ? [x, y] : [y, x];
-  if (curto.length < 8) return false;
-  return longo.includes(curto);
-}
-
-export function hojeIso(agora = new Date()) {
-  return `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
-}
-
-function asArr(v: unknown): unknown[] {
-  if (Array.isArray(v)) return v;
-  if (typeof v === "string") {
+function asList(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
     try {
-      const p = JSON.parse(v);
-      return Array.isArray(p) ? p : [];
-    } catch { return []; }
+      const parsed = JSON.parse(raw) as unknown;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
   }
   return [];
 }
 
-export function parseCronograma(raw: unknown): SessaoPercurso[] {
-  return asArr(raw).flatMap(item => {
-    if (!item || typeof item !== "object") return [];
-    const s = item as Record<string, unknown>;
-    const data = String(s.data ?? "").slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return [];
-    const modulos = Array.isArray(s.modulos) ? s.modulos.map(m => String(m)) : s.modulo ? [String(s.modulo)] : [];
-    return [{
-      data,
-      horaInicio: String(s.horaInicio ?? s.hora_inicio ?? ""),
-      horaFim: String(s.horaFim ?? s.hora_fim ?? ""),
-      modulos,
-      modalidade: String(s.modalidade ?? "presencial"),
-    }];
+function sessoesDe(raw: unknown): SessaoPublica[] {
+  const list = asList(raw);
+  const out: SessaoPublica[] = [];
+  for (const item of list) {
+    if (!item || typeof item !== "object") continue;
+    const s = item as { data?: unknown; horaInicio?: unknown; horaFim?: unknown };
+    const data = isoData(String(s.data ?? ""));
+    if (!data) continue;
+    out.push({ data, inicio: String(s.horaInicio ?? ""), fim: String(s.horaFim ?? "") });
+  }
+  return out.sort((a, b) => a.data.localeCompare(b.data) || a.inicio.localeCompare(b.inicio));
+}
+
+function turmaActiva(regime: "gold" | "fin", row: TurmaRow) {
+  if (regime === "fin") return row.activa !== false && row.estado !== "Inativa";
+  return row.estado === "Ativa" || row.estado === "Ativo";
+}
+
+function mapTurma(row: TurmaRow): TurmaPublica {
+  const livres = Math.max(0, Number(row.vagas) - Number(row.ocupadas));
+  const futuras = sessoesDe(row.cronograma).filter(s => s.data >= hojeIso());
+  return {
+    id: Number(row.id),
+    nome: row.nome,
+    local: row.local,
+    horario: row.horario,
+    dataInicio: isoData(row.data_inicio) || row.data_inicio,
+    livres,
+    sessoes: (futuras.length ? futuras : sessoesDe(row.cronograma)).slice(0, 6),
+  };
+}
+
+async function turmasRegime(db: Db, regime: "gold" | "fin", curso: string) {
+  const table = regime === "fin" ? "turmas_fin" : "turmas_gold";
+  const ocup = regime === "fin" ? "alunos" : "total_alunos";
+  const vagas = regime === "fin" ? "alunos_total" : "vagas";
+  const extra = regime === "fin" ? ", activa" : "";
+  const rows = await db.query<TurmaRow>(
+    `SELECT id, nome, curso, local, horario, data_inicio, ${ocup} AS ocupadas, ${vagas} AS vagas, estado, cronograma${extra}
+       FROM ${table}
+      WHERE lower(trim(curso)) = lower(trim($1))
+      ORDER BY data_inicio`,
+    [curso],
+  );
+  return rows.rows.filter(r => turmaActiva(regime, r)).map(mapTurma);
+}
+
+export async function turmasParaEscolha(db: Db, curso: string, regime: "gold" | "fin") {
+  const hoje = hojeIso();
+  const lista = (await turmasRegime(db, regime, curso)).filter(t => t.livres > 0);
+  return lista.sort((a, b) => {
+    const af = a.dataInicio >= hoje ? 0 : 1;
+    const bf = b.dataInicio >= hoje ? 0 : 1;
+    if (af !== bf) return af - bf;
+    return a.dataInicio.localeCompare(b.dataInicio) || a.nome.localeCompare(b.nome);
   });
 }
 
-function sessaoJaComecou(data: string, hora: string, agora: Date) {
-  const hoje = hojeIso(agora);
-  if (data > hoje) return false;
-  if (data < hoje) return true;
-  const [h, m] = (hora || "00:00").split(":").map(Number);
-  const inicio = new Date(agora);
-  inicio.setHours(h || 0, m || 0, 0, 0);
-  return agora.getTime() >= inicio.getTime();
-}
-
-export function turmaCompativelComLead(
-  lead: { curso: string; local: string; horario: string },
-  turma: { curso: string; local: string; horario: string },
+/** Próximas turmas do mesmo curso e do mesmo local, no mesmo horário ou noutro. */
+export async function sugestoesTurmaCheia(
+  db: Db,
+  curso: string,
+  regime: "gold" | "fin",
+  local: string,
+  horario: string,
+  exceptoId = 0,
 ) {
-  if (chaveOferta(lead.curso) !== chaveOferta(turma.curso)) return false;
-  const partido = partirLocalHorario(lead.local, lead.horario);
-  if (!locaisEquivalentes(partido.local, turma.local)) return false;
-  const hLead = chaveHorario(partido.horario);
-  if (!hLead) return false;
-  return hLead === chaveHorario(turma.horario);
+  const hoje = hojeIso();
+  const sitio = norm(local);
+  const hora = norm(horario);
+  return (await turmasRegime(db, regime, curso))
+    .filter(t => t.id !== exceptoId && t.livres > 0 && norm(t.local) === sitio && t.dataInicio >= hoje)
+    .sort((a, b) => {
+      const ah = norm(a.horario) === hora ? 0 : 1;
+      const bh = norm(b.horario) === hora ? 0 : 1;
+      if (ah !== bh) return ah - bh;
+      return a.dataInicio.localeCompare(b.dataInicio);
+    });
 }
 
-export function turmaAbertaNoPercurso(turma: TurmaPercurso, agora = new Date(), opts?: { ignorarLotacao?: boolean }) {
-  if (!turma.activa) return false;
-  const limite = turma.vagas + Math.max(0, turma.extra);
-  if (!opts?.ignorarLotacao && turma.inscritos >= limite) return false;
-  const lectivas = turma.cronograma.filter(s => s.modalidade !== "matricula" && s.modalidade !== "avaliacao");
-  if (lectivas.length) {
-    const primeira = lectivas.slice().sort((a, b) => a.data.localeCompare(b.data) || a.horaInicio.localeCompare(b.horaInicio))[0];
-    if (primeira && sessaoJaComecou(primeira.data, primeira.horaInicio, agora)) return false;
-  } else if (turma.dataInicio && turma.dataInicio <= hojeIso(agora)) {
-    return false;
-  }
-  const matricula = turma.cronograma.find(s => s.modalidade === "matricula")?.data;
-  if (matricula && matricula < hojeIso(agora)) return false;
-  return true;
-}
-
-export function precisaPagamento(lead: { regime: "gold" | "fin"; preco: number }) {
-  return lead.regime === "gold" && Number(lead.preco) > 0;
-}
-
-export function docsDoPercursoProntos(pedidos: DocPedido[], ficheiros: { tipo: string; estado: string }[]) {
-  const required = pedidos.filter(d => d.required);
-  const porTipo = new Map(ficheiros.map(f => [f.tipo, f]));
-  const emFalta = required.filter(d => {
-    const f = porTipo.get(d.id);
-    return !f || f.estado === "recusado";
-  });
-  return { ok: emFalta.length === 0, emFalta };
-}
-
-export function comprovativoPronto(ficheiros: { tipo: string; estado: string }[]) {
-  const f = ficheiros.find(d => d.tipo === "comprovativo");
-  return Boolean(f && f.estado !== "recusado");
-}
-
-function num(v: unknown) {
-  const n = Number(v ?? 0);
-  return Number.isFinite(n) ? n : 0;
-}
-
-export function mapLeadPercurso(row: Record<string, unknown>): LeadPercurso {
-  return {
-    id: num(row.id),
-    nome: String(row.nome ?? ""),
-    apelido: String(row.apelido ?? ""),
-    email: String(row.email ?? ""),
-    telf: String(row.telf ?? ""),
-    curso: String(row.curso ?? ""),
-    local: String(row.local ?? ""),
-    horario: String(row.horario ?? ""),
-    preco: num(row.preco),
-    regime: String(row.regime ?? "gold") === "fin" ? "fin" : "gold",
-    percursoTurmaId: row.percurso_turma_id == null || row.percurso_turma_id === "" ? null : num(row.percurso_turma_id),
-    percursoConcluido: Boolean(row.percurso_concluido_em),
-    pagamentoId: String(row.pagamento_id ?? ""),
-  };
-}
-
-function mapTurmaRow(row: Record<string, unknown>, regime: "gold" | "fin"): TurmaPercurso {
-  const fin = regime === "fin";
-  return {
-    id: num(row.id),
-    nome: String(row.nome ?? ""),
-    curso: String(row.curso ?? ""),
-    local: String(row.local ?? ""),
-    horario: String(row.horario ?? ""),
-    dataInicio: String(row.data_inicio ?? "").slice(0, 10),
-    inscritos: num(fin ? row.alunos : row.total_alunos),
-    vagas: num(fin ? row.alunos_total : row.vagas),
-    extra: num(row.inscricoes_adicionais),
-    activa: fin ? Boolean(row.activa) : (String(row.estado ?? "") === "Ativa" || String(row.estado ?? "") === "Ativo"),
-    cronograma: parseCronograma(row.cronograma),
-  };
-}
-
-function cronogramaPublico(sessoes: SessaoPercurso[]) {
-  return sessoes
-    .filter(s => s.modalidade !== "avaliacao")
-    .slice()
-    .sort((a, b) => a.data.localeCompare(b.data) || a.horaInicio.localeCompare(b.horaInicio))
-    .map(s => ({
-      data: s.data,
-      horaInicio: s.horaInicio,
-      horaFim: s.horaFim,
-      modulos: s.modulos,
-      modalidade: s.modalidade,
-    }));
-}
-
-export function turmaParaCliente(t: TurmaPercurso) {
-  return {
-    id: t.id,
-    nome: t.nome,
-    local: t.local,
-    horario: t.horario,
-    dataInicio: t.dataInicio,
-    cronograma: cronogramaPublico(t.cronograma),
-  };
-}
-
-async function carregarTurmas(db: Db, regime: "gold" | "fin") {
-  const sql = regime === "fin"
-    ? `SELECT id, nome, curso, local, horario, data_inicio, alunos, alunos_total, inscricoes_adicionais, activa, cronograma
-         FROM turmas_fin`
-    : `SELECT id, nome, curso, local, horario, data_inicio, total_alunos, vagas, inscricoes_adicionais, estado, cronograma
-         FROM turmas_gold`;
-  const rows = await db.query(sql);
-  return rows.rows.map(r => mapTurmaRow(r, regime));
-}
-
-export async function turmasDoPercurso(db: Db, lead: LeadPercurso, agora = new Date()) {
-  const todas = await carregarTurmas(db, lead.regime);
-  const compativeis = todas.filter(t => turmaCompativelComLead(lead, t));
-  const abertas = compativeis.filter(t => turmaAbertaNoPercurso(t, agora, {
-    ignorarLotacao: lead.percursoTurmaId === t.id,
-  }) || (lead.percursoTurmaId === t.id && t.activa));
-  const escolhida = lead.percursoTurmaId ? todas.find(t => t.id === lead.percursoTurmaId) ?? null : null;
-  const lista = abertas.filter(t => turmaCompativelComLead(lead, t));
-  if (escolhida && turmaCompativelComLead(lead, escolhida) && !lista.some(t => t.id === escolhida.id)) {
-    lista.unshift(escolhida);
-  }
-  lista.sort((a, b) => a.dataInicio.localeCompare(b.dataInicio) || a.nome.localeCompare(b.nome, "pt"));
-  return { lista, escolhida };
-}
-
-function valoresSettings(raw: unknown) {
-  return raw && typeof raw === "object" ? raw as Record<string, string> : {};
-}
-
-async function ibanEntidade(db: Db) {
-  const rows = await db.query<{ id: string; values: unknown }>(
-    "SELECT id, values FROM app_settings WHERE id IN ('entidade', 'gold')",
+async function turmaPorId(db: Db, regime: "gold" | "fin", id: number) {
+  const table = regime === "fin" ? "turmas_fin" : "turmas_gold";
+  const ocup = regime === "fin" ? "alunos" : "total_alunos";
+  const vagas = regime === "fin" ? "alunos_total" : "vagas";
+  const extra = regime === "fin" ? ", activa" : "";
+  const row = await db.query<TurmaRow>(
+    `SELECT id, nome, curso, local, horario, data_inicio, ${ocup} AS ocupadas, ${vagas} AS vagas, estado, cronograma${extra}
+       FROM ${table} WHERE id = $1`,
+    [id],
   );
-  const porId = new Map(rows.rows.map(r => [r.id, valoresSettings(r.values)]));
-  const geral = porId.get("entidade") ?? {};
-  const gold = porId.get("gold") ?? {};
-  return {
-    iban: String(geral.IBAN ?? "").trim(),
-    entidade: String(gold["Entidade Multibanco"] ?? "").trim(),
-  };
+  const found = row.rows[0];
+  if (!found || !turmaActiva(regime, found)) return null;
+  return mapTurma(found);
 }
 
-export async function vistaPercurso(db: Db, row: Record<string, unknown>) {
-  const lead = mapLeadPercurso(row);
-  const pedidos = await docsDoCurso(db, lead.curso, lead.regime);
-  const ficheiros = await listarDocsLead(db, lead.id);
-  const entregues = ficheiros.map(f => ({ tipo: f.tipo, estado: f.estado }));
-  const docsOk = docsDoPercursoProntos(pedidos, entregues);
-  const catalogoOk = docsCompletos(pedidos, ficheiros.map(f => f.tipo));
-  const paga = precisaPagamento(lead);
-  const compOk = comprovativoPronto(entregues);
-  const recusados = ficheiros.filter(f => f.estado === "recusado");
-  const { lista, escolhida } = docsOk.ok || lead.percursoTurmaId
-    ? await turmasDoPercurso(db, lead)
-    : { lista: [] as TurmaPercurso[], escolhida: null as TurmaPercurso | null };
-  const settings = await ibanEntidade(db);
-  let pagamento: { entidade: string; referencia: string; valor: number; estado: string } | null = null;
-  if (lead.pagamentoId) {
-    const pag = await db.query("SELECT referencia, valor, estado FROM pagamentos WHERE id = $1", [lead.pagamentoId]);
-    const p = pag.rows[0];
-    if (p) {
-      const ref = String(p.referencia ?? "");
-      pagamento = {
-        entidade: settings.entidade,
-        referencia: ref.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3") || ref,
-        valor: num(p.valor) || lead.preco,
-        estado: String(p.estado ?? "Pendente"),
-      };
-    }
-  }
-  const correcao = recusados.length > 0;
-  const encerrada = lead.percursoConcluido && !correcao;
-  let passo: "documentos" | "turma" | "pagamento" | "concluido" | "correcao" = "documentos";
-  if (encerrada) passo = "concluido";
-  else if (correcao && lead.percursoConcluido) passo = "correcao";
-  else if (!docsOk.ok) passo = "documentos";
-  else if (!lead.percursoTurmaId) passo = "turma";
-  else if (paga && !compOk) passo = "pagamento";
-  else passo = "concluido";
-
-  let tipos = pedidos;
-  if (passo === "correcao") {
-    const ids = new Set(recusados.map(d => d.tipo));
-    tipos = pedidos.filter(p => ids.has(p.id));
-    if (ids.has("comprovativo")) tipos = [...tipos, { id: "comprovativo", label: "Comprovativo de pagamento", required: true }];
-  }
-
-  return {
-    nome: `${lead.nome} ${lead.apelido}`.trim(),
-    curso: lead.curso,
-    local: partirLocalHorario(lead.local, lead.horario).local,
-    horario: partirLocalHorario(lead.local, lead.horario).horario || lead.horario,
-    preco: lead.preco,
-    tipos,
-    ficheiros: ficheiros.map(d => ({
-      id: d.id, tipo: d.tipo, nome: d.nome, created_at: d.created_at,
-      estado: d.estado, observacao: d.observacao,
-    })),
-    docsCompletos: docsOk.ok,
-    emFalta: docsOk.emFalta.map(d => d.label),
-    precisaPagamento: paga,
-    pagamento: pagamento ?? (paga ? { entidade: settings.entidade, referencia: "", valor: lead.preco, estado: "Pendente" } : null),
-    iban: settings.iban,
-    turmas: (docsOk.ok ? lista : []).map(turmaParaCliente),
-    turmaEscolhida: escolhida && turmaCompativelComLead(lead, escolhida) ? turmaParaCliente(escolhida) : null,
-    passo,
-    encerrada,
-    correcao,
-    catalogoOk: catalogoOk.ok,
-  };
+function regimeDe(raw: unknown): "gold" | "fin" {
+  return String(raw ?? "") === "fin" ? "fin" : "gold";
 }
 
-async function soltarLugar(db: Db, regime: "gold" | "fin", turmaId: number) {
-  if (regime === "fin") {
-    await db.query("UPDATE turmas_fin SET alunos = GREATEST(alunos - 1, 0) WHERE id = $1", [turmaId]);
-    return;
-  }
-  await db.query("UPDATE turmas_gold SET total_alunos = GREATEST(total_alunos - 1, 0) WHERE id = $1", [turmaId]);
-}
-
-async function ocuparLugar(db: Db, regime: "gold" | "fin", turmaId: number) {
-  if (regime === "fin") {
-    const upd = await db.query<{ id: number }>(
-      `UPDATE turmas_fin
-          SET alunos = alunos + 1
-        WHERE id = $1 AND activa = true AND alunos < alunos_total + GREATEST(inscricoes_adicionais, 0)
-        RETURNING id`,
-      [turmaId],
-    );
-    return Boolean(upd.rows[0]);
-  }
-  const upd = await db.query<{ id: number }>(
-    `UPDATE turmas_gold
-        SET total_alunos = total_alunos + 1
-      WHERE id = $1 AND estado IN ('Ativa', 'Ativo')
-        AND total_alunos < vagas + GREATEST(inscricoes_adicionais, 0)
-      RETURNING id`,
-    [turmaId],
+async function evento(db: Db, leadId: number, actorId: string | undefined, titulo: string, detalhe = "") {
+  await db.query(
+    "INSERT INTO lead_eventos (lead_id, actor_id, tipo, titulo, detalhe) VALUES ($1,$2,'campo',$3,$4)",
+    [leadId, actorId ?? null, titulo.slice(0, 160), detalhe.slice(0, 2000)],
   );
-  return Boolean(upd.rows[0]);
 }
 
-export async function reservarTurmaPercurso(db: Db, leadId: number, turmaId: number) {
-  const row = await db.query("SELECT * FROM preinscricoes WHERE id = $1", [leadId]);
-  const raw = row.rows[0];
-  if (!raw) return { ok: false as const, error: "Pré-inscrição inexistente." };
-  const lead = mapLeadPercurso(raw);
-  if (lead.percursoConcluido) return { ok: false as const, error: "Este percurso já foi concluído." };
-  const pedidos = await docsDoCurso(db, lead.curso, lead.regime);
-  const ficheiros = await listarDocsLead(db, lead.id);
-  if (!docsDoPercursoProntos(pedidos, ficheiros).ok) {
-    return { ok: false as const, error: "Submeta primeiro todos os documentos obrigatórios." };
+export async function escolherTurmaPublica(db: Db, leadId: number, turmaId: number) {
+  const lead = await db.query(
+    "SELECT id, curso, regime, validada_em FROM preinscricoes WHERE id = $1",
+    [leadId],
+  );
+  const row = lead.rows[0] as { id: number; curso: string; regime: string; validada_em: string | null } | undefined;
+  if (!row) throw new PercursoErro("Pré-inscrição inexistente.");
+  if (row.validada_em) throw new PercursoErro("A secretaria já validou esta pré-inscrição.");
+  const regime = regimeDe(row.regime);
+  const turma = await turmaPorId(db, regime, turmaId);
+  if (!turma) throw new PercursoErro("Turma indisponível.");
+  const oferecidas = await turmasParaEscolha(db, String(row.curso), regime);
+  const escolhida = oferecidas.find(t => t.id === turmaId);
+  if (!escolhida) throw new PercursoErro("Essa turma não tem vaga ou não é deste curso.");
+  const preco = regime === "gold" ? await precoParaOferta(db, String(row.curso), escolhida.local, escolhida.horario) : null;
+  await db.query(
+    `UPDATE preinscricoes SET
+       turma_escolhida_id = $2,
+       turma_id = $2,
+       local = $3,
+       horario = $4,
+       inicio_curso = $5,
+       preco = COALESCE($6, preco)
+     WHERE id = $1`,
+    [leadId, escolhida.id, escolhida.local, escolhida.horario, escolhida.dataInicio, preco],
+  );
+  await evento(db, leadId, undefined, "Cronograma escolhido", `${escolhida.nome} · ${escolhida.local} · ${escolhida.horario}`);
+  return escolhida;
+}
+
+function entregueAceite(estado: string | undefined) {
+  return Boolean(estado) && estado !== "recusado";
+}
+
+export async function concluirPercurso(db: Db, leadId: number) {
+  const lead = await db.query(
+    "SELECT id, curso, regime, preco, turma_escolhida_id, validada_em FROM preinscricoes WHERE id = $1",
+    [leadId],
+  );
+  const row = lead.rows[0] as {
+    id: number; curso: string; regime: string; preco: number; turma_escolhida_id: number | null; validada_em: string | null;
+  } | undefined;
+  if (!row) throw new PercursoErro("Pré-inscrição inexistente.");
+  if (row.validada_em) throw new PercursoErro("A secretaria já validou esta pré-inscrição.");
+  const regime = regimeDe(row.regime);
+  const pedidos = await docsDoCurso(db, row.curso, regime);
+  const ficheiros = await listarDocsLead(db, leadId);
+  const by = new Map(ficheiros.map(f => [f.tipo, f]));
+  const obrigatorios = pedidos.filter(d => d.required);
+  if (!obrigatorios.every(d => entregueAceite(by.get(d.id)?.estado))) {
+    throw new PercursoErro("Ainda faltam documentos obrigatórios.");
   }
-  const { lista } = await turmasDoPercurso(db, lead);
-  const turma = lista.find(t => t.id === turmaId);
-  if (!turma || !turmaCompativelComLead(lead, turma) || !turmaAbertaNoPercurso(turma, new Date(), { ignorarLotacao: lead.percursoTurmaId === turma.id })) {
-    return { ok: false as const, error: "Esta turma não corresponde ao curso, local e horário da pré-inscrição, ou já não aceita inscrições." };
-  }
-  if (lead.percursoTurmaId === turma.id) {
-    await tentarConcluirPercurso(db, lead.id);
-    return { ok: true as const };
-  }
-  if (lead.percursoTurmaId) await soltarLugar(db, lead.regime, lead.percursoTurmaId);
-  const ocupou = await ocuparLugar(db, lead.regime, turma.id);
-  if (!ocupou) {
-    if (lead.percursoTurmaId) await ocuparLugar(db, lead.regime, lead.percursoTurmaId);
-    return { ok: false as const, error: "Esta turma já atingiu o limite de inscrições, incluindo as adicionais." };
+  if (!row.turma_escolhida_id) throw new PercursoErro("Escolha o cronograma antes de concluir.");
+  const precisa = regime === "gold" && Number(row.preco) > 0;
+  if (precisa && !entregueAceite(by.get(COMPROVATIVO.id)?.estado)) {
+    throw new PercursoErro("O comprovativo de pagamento é obrigatório.");
   }
   await db.query(
-    "UPDATE preinscricoes SET percurso_turma_id = $2, turma_id = $2, inicio_curso = $3, ultima_actividade_em = now() WHERE id = $1",
-    [lead.id, turma.id, turma.dataInicio || "-"],
+    "UPDATE preinscricoes SET percurso_concluido_em = COALESCE(percurso_concluido_em, now()) WHERE id = $1",
+    [leadId],
   );
-  await logLeadEvent(db, lead.id, undefined, "campo", "Turma escolhida no percurso", `${turma.nome} · ${turma.local} · ${turma.horario}`);
-  if (precisaPagamento(lead)) {
-    await ensurePagamentoPendente(db, {
-      id: lead.id, nome: lead.nome, apelido: lead.apelido, email: lead.email,
-      curso: lead.curso, preco: lead.preco, pagamento_id: lead.pagamentoId || null,
-    }).catch(() => undefined);
-  }
-  await tentarConcluirPercurso(db, lead.id);
+  await evento(db, leadId, undefined, "Percurso de pré-inscrição concluído", "Aguarda validação da secretaria");
   return { ok: true as const };
+}
+
+export async function moverDocsDoLead(db: Db, leadId: number, turmaId: number) {
+  const lead = await db.query(
+    "SELECT id, nome, apelido, regime, curso FROM preinscricoes WHERE id = $1",
+    [leadId],
+  );
+  const row = lead.rows[0] as { id: number; nome: string; apelido: string; regime: string; curso: string } | undefined;
+  if (!row) return { moved: 0 };
+  const regime = regimeDe(row.regime);
+  const turma = await turmaPorId(db, regime, turmaId);
+  if (!turma) return { moved: 0 };
+  const pessoa = `${row.nome} ${row.apelido}`.trim();
+  const docs = await listarDocsLead(db, leadId);
+  let moved = 0;
+  for (const doc of docs) {
+    if (!doc.drive_file_id) continue;
+    const ok = await relocateDriveFile(db, doc.drive_file_id, {
+      regime, turmaId: turma.id, turmaNome: turma.nome, pessoa,
+    });
+    if (ok) moved += 1;
+  }
+  return { moved, turma: turma.nome };
+}
+
+export async function moverDocsParaTurma(db: Db, input: {
+  email: string;
+  turmaId: number;
+  curso?: string;
+  regime: "gold" | "fin";
+}) {
+  const email = normalizeEmail(input.email);
+  if (!isEmail(email)) return { moved: 0 };
+  const leads = await db.query<{ id: number; curso: string }>(
+    "SELECT id, curso FROM preinscricoes WHERE email <> '' AND lower(email) = $1 AND COALESCE(regime, 'gold') = $2",
+    [email, input.regime],
+  );
+  let moved = 0;
+  for (const lead of leads.rows) {
+    if (input.curso && norm(lead.curso) !== norm(input.curso)) continue;
+    const r = await moverDocsDoLead(db, lead.id, input.turmaId);
+    moved += r.moved;
+    await db.query(
+      "UPDATE preinscricoes SET turma_id = $2, turma_escolhida_id = $2 WHERE id = $1",
+      [lead.id, input.turmaId],
+    );
+  }
+  return { moved };
+}
+
+export async function validarPreinscricao(db: Db, leadId: number, actorId?: string) {
+  const lead = await db.query("SELECT * FROM preinscricoes WHERE id = $1", [leadId]);
+  const row = lead.rows[0] as Record<string, unknown> | undefined;
+  if (!row) throw new PercursoErro("Pré-inscrição inexistente.");
+  const regime = regimeDe(row.regime);
+  const pedidos = await docsDoCurso(db, String(row.curso ?? ""), regime);
+  const ficheiros = await listarDocsLead(db, leadId);
+  const turmaId = Number(row.turma_escolhida_id || 0);
+  const turma = turmaId ? await turmaPorId(db, regime, turmaId) : null;
+  const precisa = regime === "gold" && Number(row.preco) > 0;
+  const falta = faltaValidarPreinscricao({
+    validada: Boolean(row.validada_em),
+    concluido: Boolean(row.percurso_concluido_em),
+    turma,
+    pedidos,
+    ficheiros,
+    precisaPagamento: precisa,
+  });
+  if (falta) throw new PercursoErro(falta);
+  await db.query(
+    `UPDATE preinscricoes
+        SET validada_em = COALESCE(validada_em, now()),
+            docs_fechado_em = COALESCE(docs_fechado_em, now()),
+            recusa_motivo = ''
+      WHERE id = $1`,
+    [leadId],
+  );
+  const moved = await moverDocsDoLead(db, leadId, turmaId);
+  await evento(db, leadId, actorId, "Pré-inscrição validada", moved.turma ? `Documentos em ${moved.turma}` : "");
+  return { ok: true as const, moved: moved.moved };
 }
 
 function fmtData(iso: string) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso || "-";
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
 
-async function alocarFormando(db: Db, lead: LeadPercurso, turma: TurmaPercurso) {
-  const email = normalizeEmail(lead.email);
-  if (lead.regime === "fin") {
-    const ja = await db.query<{ id: number }>(
-      "SELECT id FROM formandos_fin WHERE lower(email) = $1 AND turma = $2 LIMIT 1",
-      [email, turma.nome],
-    );
-    if (ja.rows[0]) return ja.rows[0].id;
-    const id = await nextOpsId(db);
-    const docs = { cc: { ok: false, data: "" }, ch: { ok: false, data: "" }, cu: { ok: false, data: "" }, ci: { ok: false, data: "" }, ce: { ok: false, data: "" } };
-    await db.query(
-      "INSERT INTO formandos_fin (id, nome, apelido, turma, telf, email, curso, estado, docs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)",
-      [id, lead.nome, lead.apelido, turma.nome, lead.telf, email, lead.curso, "Elegível", docs],
-    );
-    return id;
-  }
-  const ja = await db.query<{ id: number }>(
-    "SELECT id FROM formandos_gold WHERE lower(email) = $1 AND turma_id = $2 LIMIT 1",
-    [email, turma.id],
-  );
-  if (ja.rows[0]) return ja.rows[0].id;
-  const id = await nextOpsId(db);
-  const agora = new Date().toISOString().slice(0, 16).replace("T", " ");
-  await db.query(
-    `INSERT INTO formandos_gold (id, nome, apelido, telf, email, inscrito, local, curso, turma, turma_id, estado, pago, valor, metodo)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Formando', false, $11, $12)`,
-    [id, lead.nome, lead.apelido, lead.telf, email, agora, turma.local, lead.curso, turma.nome, turma.id, lead.preco, "Transferência"],
-  );
-  return id;
-}
-
-export async function tentarConcluirPercurso(db: Db, leadId: number) {
-  const row = await db.query("SELECT * FROM preinscricoes WHERE id = $1", [leadId]);
-  const raw = row.rows[0];
-  if (!raw) return { concluido: false as const };
-  const lead = mapLeadPercurso(raw);
-  if (lead.percursoConcluido || !lead.percursoTurmaId) return { concluido: lead.percursoConcluido };
-  const pedidos = await docsDoCurso(db, lead.curso, lead.regime);
-  const ficheiros = await listarDocsLead(db, lead.id);
-  if (!docsDoPercursoProntos(pedidos, ficheiros).ok) return { concluido: false as const };
-  if (precisaPagamento(lead) && !comprovativoPronto(ficheiros)) return { concluido: false as const };
-  const turmas = await carregarTurmas(db, lead.regime);
-  const turma = turmas.find(t => t.id === lead.percursoTurmaId);
-  if (!turma || !turmaCompativelComLead(lead, turma)) return { concluido: false as const };
-  await alocarFormando(db, lead, turma);
-  const marcado = await db.query<{ id: number }>(
-    "UPDATE preinscricoes SET percurso_concluido_em = now(), estado = 'Formando', turma_id = $2, ultima_actividade_em = now() WHERE id = $1 AND percurso_concluido_em IS NULL RETURNING id",
-    [lead.id, turma.id],
-  );
-  if (!marcado.rows[0]) return { concluido: true as const };
-  await enviarConfirmacao(db, lead, turma, pedidos, ficheiros);
-  return { concluido: true as const };
-}
-
-async function enviarConfirmacao(
-  db: Db,
-  lead: LeadPercurso,
-  turma: TurmaPercurso,
-  pedidos: DocPedido[],
-  ficheiros: DocLead[],
-) {
-  const email = normalizeEmail(lead.email);
-  const nomes = new Map(pedidos.map(p => [p.id, p.label]));
-  nomes.set("comprovativo", "Comprovativo de pagamento");
-  const entregues = ficheiros
-    .filter(f => f.estado !== "recusado" && f.tipo !== "comprovativo")
-    .map(f => nomes.get(f.tipo) ?? f.tipo);
-  const settings = await ibanEntidade(db);
-  const paga = precisaPagamento(lead);
+export async function enviarSugestaoTurmaCheia(db: Db, leadId: number, actorId?: string) {
+  const lead = await db.query("SELECT * FROM preinscricoes WHERE id = $1", [leadId]);
+  const row = lead.rows[0] as Record<string, unknown> | undefined;
+  if (!row) throw new PercursoErro("Pré-inscrição inexistente.");
+  if (row.validada_em) throw new PercursoErro("A pré-inscrição já foi validada.");
+  const email = normalizeEmail(String(row.email ?? ""));
+  if (!isEmail(email)) throw new PercursoErro("A ficha não tem email.");
+  const regime = regimeDe(row.regime);
+  const curso = String(row.curso ?? "");
+  const turmaId = Number(row.turma_escolhida_id || row.turma_id || 0);
+  const turma = turmaId ? await turmaPorId(db, regime, turmaId) : null;
+  const local = turma?.local || String(row.local ?? "");
+  const horario = turma?.horario || String(row.horario ?? "");
+  if (!local.trim()) throw new PercursoErro("Indique o local da pré-inscrição para sugerir outra turma.");
+  const sugestoes = await sugestoesTurmaCheia(db, curso, regime, local, horario, turmaId);
+  const token = await ensureDocsToken(db, leadId);
+  const url = documentosUrl(token);
+  const nome = `${row.nome ?? ""} ${row.apelido ?? ""}`.trim();
   const linhas = [
-    `A inscrição em ${lead.curso} ficou registada com a turma que escolheu.`,
-    `Turma ${turma.nome}, em ${turma.local}, horário ${turma.horario}, início a ${fmtData(turma.dataInicio)}.`,
-    entregues.length ? `Documentos recebidos: ${entregues.join(", ")}.` : "Os documentos pessoais ficaram na ficha.",
-    paga
-      ? `Pagamento de € ${lead.preco.toFixed(2)} por transferência${settings.iban ? ` para o IBAN ${settings.iban}` : ""}. O comprovativo ficou na ficha e aguarda validação.`
-      : "Esta inscrição não tem pagamento associado.",
-    "A secretaria valida os documentos pessoais e o pagamento. A ligação pessoal fica encerrada.",
+    `A turma de ${curso} em ${local} já não tem vaga.`,
+    sugestoes.length
+      ? "Estas são as próximas turmas do mesmo curso, no mesmo local, no mesmo horário ou noutro horário:"
+      : "Neste momento não há outra turma com vaga nesse local. A secretaria avisa quando abrir uma data.",
+    ...sugestoes.map(t => `${t.nome} · ${t.horario} · início ${fmtData(t.dataInicio)} · ${t.livres} vaga${t.livres === 1 ? "" : "s"}`),
+    "A ligação pessoal continua aberta para escolher outro cronograma.",
   ];
-  const nome = `${lead.nome} ${lead.apelido}`.trim();
-  if (isEmail(email)) {
-    const mail = renderAutomaticEmail({
-      nome,
-      xml: "",
-      linhas,
-      cta: "",
-      href: "",
-      vars: { nome, curso: lead.curso },
-      origin: config.appOrigin,
-    });
-    await sendMail(db, {
-      to: email,
-      name: nome,
-      subject: `Inscrição confirmada · ${lead.curso}`,
-      text: mail.text,
-      html: mail.html,
-    }).catch(() => undefined);
-  }
-  const nota = linhas.slice(0, 3).join(" ");
+  const mail = renderAutomaticEmail({
+    nome,
+    xml: "",
+    linhas,
+    cta: "Escolher outro cronograma",
+    href: url,
+    vars: { nome, curso, documentos_url: url },
+    origin: config.appOrigin,
+  });
+  await sendMail(db, {
+    to: email,
+    name: nome,
+    subject: `Turma cheia · outras datas de ${curso}`,
+    text: mail.text,
+    html: mail.html,
+  });
   await db.query(
-    "INSERT INTO preinscricao_contactos (preinscricao_id, actor_id, nota, meio) VALUES ($1,$2,$3,$4)",
-    [lead.id, null, nota, "Email"],
+    `UPDATE preinscricoes
+        SET recusa_motivo = 'Turma cheia',
+            turma_escolhida_id = NULL,
+            percurso_concluido_em = NULL,
+            docs_fechado_em = NULL
+      WHERE id = $1 AND validada_em IS NULL`,
+    [leadId],
   );
-  await logLeadEvent(db, lead.id, undefined, "seguimento", "Percurso de inscrição concluído", nota);
+  await evento(db, leadId, actorId, "Sugestão por turma cheia", sugestoes.map(t => t.nome).join(", ") || "Sem turmas com vaga");
+  return { ok: true as const, enviadas: sugestoes.length, turmas: sugestoes };
+}
+
+type Ficheiro = { id: number; tipo: string; nome: string; created_at: string; estado: string; observacao: string };
+
+export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknown>) {
+  const id = Number(lead.id);
+  const regime = regimeDe(lead.regime);
+  const curso = String(lead.curso ?? "");
+  const pedidos = await docsDoCurso(db, curso, regime);
+  const docs = await listarDocsLead(db, id) as Ficheiro[];
+  const { ok, emFalta } = docsCompletos(pedidos, docs.map(d => d.tipo));
+  let pagamento: { entidade: string; referencia: string; valor: number; estado: string } | null = null;
+  if (lead.pagamento_id) {
+    const pag = await db.query("SELECT * FROM pagamentos WHERE id = $1", [String(lead.pagamento_id)]);
+    const pagRow = pag.rows[0] as { referencia?: string; valor?: number; estado?: string } | undefined;
+    if (pagRow) {
+      const settings = await db.query("SELECT values FROM app_settings WHERE id = $1", ["gold"]);
+      const values = settings.rows[0]?.values && typeof settings.rows[0].values === "object"
+        ? settings.rows[0].values as Record<string, string> : {};
+      const ref = String(pagRow.referencia ?? "");
+      pagamento = {
+        entidade: String(values["Entidade Multibanco"] ?? ""),
+        referencia: ref.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3") || ref,
+        valor: Number(pagRow.valor) || 0,
+        estado: String(pagRow.estado ?? "Pendente"),
+      };
+    }
+  }
+  const pagPago = Boolean(pagamento && /pago/i.test(pagamento.estado));
+  const precisaPagamento = regime === "gold" && Number(lead.preco) > 0 && !pagPago;
+  const by = new Map(docs.map(d => [d.tipo, d]));
+  const obrigatoriosOk = pedidos.filter(d => d.required).every(d => entregueAceite(by.get(d.id)?.estado));
+  const compOk = !precisaPagamento || entregueAceite(by.get(COMPROVATIVO.id)?.estado);
+  const turmaId = Number(lead.turma_escolhida_id || 0);
+  const turmas = await turmasParaEscolha(db, curso, regime);
+  const turmaEscolhida = turmaId
+    ? turmas.find(t => t.id === turmaId) ?? await turmaPorId(db, regime, turmaId)
+    : null;
+  const recusados = docs.filter(d => d.estado === "recusado");
+  const encerrada = Boolean(lead.validada_em);
+  const percursoConcluido = Boolean(lead.percurso_concluido_em) && obrigatoriosOk && Boolean(turmaEscolhida) && compOk && recusados.length === 0;
+  let passo: 1 | 2 | 3 = 1;
+  if (obrigatoriosOk && turmaEscolhida) passo = 3;
+  else if (obrigatoriosOk) passo = 2;
+  return {
+    nome: `${lead.nome ?? ""} ${lead.apelido ?? ""}`.trim(),
+    curso,
+    preco: Number(lead.preco) || 0,
+    tipos: pedidos,
+    ficheiros: docs.map(d => ({
+      id: d.id, tipo: d.tipo, nome: d.nome, created_at: d.created_at,
+      estado: d.estado, observacao: d.observacao,
+    })),
+    docsCompletos: ok,
+    emFalta: emFalta.map(d => d.label),
+    pagamento,
+    precisaPagamento,
+    encerrada,
+    correcao: !encerrada && recusados.length > 0,
+    passo,
+    percursoConcluido,
+    turmas,
+    turmaEscolhida,
+  };
 }

@@ -20,6 +20,8 @@ export type CrmListParams = {
   sort?: CrmSort;
   kanban?: boolean;
   regime?: "gold" | "fin" | "";
+  de?: string;
+  ate?: string;
 };
 
 function like(raw: string) {
@@ -77,6 +79,12 @@ function addWhere(params: CrmListParams, hoje: string, skipEstado = false) {
   if (params.fila === "secretaria") parts.push("estado = 'Pré-inscrição' AND secretaria_em IS NOT NULL");
   if (params.fila === "abertos") parts.push("estado NOT IN ('Formando','Desistiu')");
   if (params.regime === "gold" || params.regime === "fin") push("regime = ?", params.regime);
+  if (params.de && /^\d{4}-\d{2}-\d{2}$/.test(params.de)) {
+    push("left(inscrito, 10) >= ?", params.de);
+  }
+  if (params.ate && /^\d{4}-\d{2}-\d{2}$/.test(params.ate)) {
+    push("left(inscrito, 10) <= ?", params.ate);
+  }
   return { sql: parts.join(" AND "), vals };
 }
 

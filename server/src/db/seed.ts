@@ -13,10 +13,11 @@ const TEMPLATES = [
     assunto: "Bem-vindo(a) à ENA, {{nome}}",
     linhas: [
       "Confirmámos o seu interesse em {{curso}}.",
-      "Use a ligação pessoal abaixo para enviar os documentos pedidos neste curso: {{documentos_lista}}.",
-      "Depois de os recebermos, enviamos a referência Multibanco para pagamento.",
+      "Abra a ligação pessoal para enviar os documentos: {{documentos_lista}}.",
+      "No mesmo percurso escolhe o cronograma e, quando houver pagamento, anexa o comprovativo.",
+      "A secretaria valida a pré-inscrição. A ligação fica aberta até essa validação.",
     ],
-    cta: "Enviar documentos",
+    cta: "Abrir pré-inscrição",
   },
   {
     tipo: "pagamento_ref",
@@ -239,6 +240,27 @@ export async function seed(db: Db) {
         [t.tipo, t.cta, t.href, t.ambito, xml],
       );
     }
+  }
+
+  const welcome = TEMPLATES.find(t => t.tipo === "welcome");
+  if (welcome) {
+    const xml = linesToXml(welcome.linhas, welcome.cta, welcome.href, welcome.ambito);
+    await db.query(
+      `UPDATE email_templates
+          SET cta = $1, cta_href = $2, cta_ambito = $3, body_xml = $4, body_lines = $5::jsonb, updated_at = now()
+        WHERE tipo = 'welcome'
+          AND (body_xml ILIKE '%Use a ligação%' OR body_lines::text ILIKE '%Use a ligação%')`,
+      [welcome.cta, welcome.href, welcome.ambito, xml, JSON.stringify(welcome.linhas)],
+    );
+    await db.query(
+      `UPDATE email_templates
+          SET cta_href = '{{documentos_url}}',
+              cta_ambito = 'documentos',
+              body_xml = regexp_replace(body_xml, '(<cta\\b[^>]*\\bhref=")[^"]*(")', '\\1{{documentos_url}}\\2'),
+              updated_at = now()
+        WHERE tipo = 'welcome'
+          AND (cta_href IS DISTINCT FROM '{{documentos_url}}' OR COALESCE(body_xml, '') NOT LIKE '%href="{{documentos_url}}"%')`,
+    );
   }
 
   for (const r of RULES) {

@@ -85,6 +85,15 @@ export function hrefForAmbito(tipo: string, ambito: CtaAmbito) {
   return SECRETARIA_HREF;
 }
 
+/** O botão segue o âmbito. Documentos, pagamento e pré-inscrição não usam um href antigo gravado no template. */
+export function hrefDoBotao(tipo: string, ambito: string | undefined, stored: string) {
+  const dest = ctaDestino(tipo);
+  const amb = isCtaAmbito(ambito) ? ambito : dest.ambito;
+  return amb === "documentos" || amb === "pagamento" || amb === "preinscricao"
+    ? hrefForAmbito(tipo, amb)
+    : stored.trim() || dest.href;
+}
+
 export function buildCtaVars(p: {
   nome: string; email: string; curso: string; turma: string;
   documentosUrl?: string; comprovativoUrl?: string;

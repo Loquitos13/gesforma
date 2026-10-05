@@ -70,3 +70,23 @@ export function docsCompletos(pedidos: DocPedido[], tiposEntregues: string[]) {
   const emFalta = pedidos.filter(d => d.required && !got.has(d.id));
   return { ok: emFalta.length === 0, emFalta };
 }
+
+/** Texto vazio quando a secretaria já pode validar a pré-inscrição inteira. */
+export function faltaValidarPreinscricao(input: {
+  validada: boolean;
+  concluido: boolean;
+  turma: { livres: number } | null;
+  pedidos: DocPedido[];
+  ficheiros: { tipo: string; estado?: string }[];
+  precisaPagamento: boolean;
+}) {
+  if (input.validada) return "A pré-inscrição já foi validada.";
+  if (!input.concluido) return "A pessoa ainda não concluiu o percurso na ligação pessoal.";
+  if (!input.turma) return "Ainda não há cronograma escolhido.";
+  if (input.turma.livres <= 0) return "A turma escolhida está cheia.";
+  const by = new Map(input.ficheiros.map(f => [f.tipo, f.estado || "pendente"]));
+  const faltam = input.pedidos.filter(d => d.required && by.get(d.id) !== "validado").map(d => d.label);
+  if (input.precisaPagamento && by.get("comprovativo") !== "validado") faltam.push("Comprovativo de pagamento");
+  if (faltam.length) return `Falta validar: ${faltam.join(", ")}.`;
+  return "";
+}

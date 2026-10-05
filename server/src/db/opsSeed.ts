@@ -315,7 +315,9 @@ export async function seedOperational(db: Db) {
       (SELECT COALESCE(MAX(id), 0) FROM turmas_fin),
       (SELECT COALESCE(MAX(id), 0) FROM formadores),
       (SELECT COALESCE(MAX(id), 0) FROM campanhas),
-      (SELECT COALESCE(MAX(id), 0) FROM blog_posts)
+      (SELECT COALESCE(MAX(id), 0) FROM blog_posts),
+      (SELECT COALESCE(MAX(id), 0) FROM propostas_comerciais),
+      (SELECT COALESCE(MAX(id), 0) FROM contratos_comerciais)
     ))
   `);
 }

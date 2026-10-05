@@ -34,6 +34,7 @@ import { registerOpsRoutes } from "./opsRoutes.js";
 import { registerWhatsappRoutes } from "./whatsapp.js";
 import { registerPedagogiaRoutes } from "./pedagogiaRoutes.js";
 import { registerEquipaRoutes } from "./equipa.js";
+import { registerCrmDiretorioRoutes } from "./crmDiretorio.js";
 import { registerUserRoutes } from "./userRoutes.js";
 import { registerSmtpRoutes } from "./smtpRoutes.js";
 import {
@@ -636,6 +637,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   registerDriveRoutes(app, db, { requireAuth, audit });
   registerUserRoutes(app, db, { requireAuth, audit });
   registerEquipaRoutes(app, db, { requireAuth, audit });
+  registerCrmDiretorioRoutes(app, db, { requireAuth });
   registerPedagogiaRoutes(app, db, { requireAuth, audit });
   registerDashboardRoutes(app, db, { requireAuth });
 

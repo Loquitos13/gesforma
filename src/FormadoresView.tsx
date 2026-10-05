@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "./AuthGate";
 import { AppModal, ViewFilters, matchesFilter, uniqueOpts } from "./FormKit";
 import { useFormadores } from "./FormadoresContext";
-import { FormadorCalendario } from "./FormadorCalendario";
-import { emptyFormador, formadoresDoRegime, nomesDoCampoFormador, type Formador, type FormadorRegime } from "./formadorModel";
+import { emptyFormador, formadoresDoRegime, type Formador, type FormadorRegime } from "./formadorModel";
+import { DisponibilidadeEditor } from "./DisponibilidadeEditor";
 import { FormadorProfileSlideOver } from "./TurmaExtras";
 import { useTurmas } from "./TurmasContext";
-import { isTurmaActiva, sessaoFormadores } from "./turmaModel";
+import { sessaoFormadores } from "./turmaModel";
 
 const I = {
   plus: <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>,
@@ -117,7 +116,7 @@ function TableFooter({ page, perPage, total, onChange }: { page: number; perPage
   );
 }
 
-function SlideOver({ open, onClose, title, sub, children, size = "md" }: { open: boolean; onClose: () => void; title: string; sub?: string; children: React.ReactNode; size?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" }) {
+function SlideOver({ open, onClose, title, sub, children, size = "md" }: { open: boolean; onClose: () => void; title: string; sub?: string; children: React.ReactNode; size?: "sm" | "md" | "lg" | "xl" }) {
   return <AppModal open={open} onClose={onClose} title={title} sub={sub} size={size}>{children}</AppModal>;
 }
 
@@ -126,16 +125,14 @@ function toggleRegime(list: FormadorRegime[], regime: FormadorRegime) {
 }
 
 function turmaTemFormador(nome: string, formadorTurma: string, cronograma: { formadores?: string[]; formador?: string }[]) {
-  if (nomesDoCampoFormador(formadorTurma).includes(nome)) return true;
+  if (formadorTurma === nome) return true;
   return cronograma.some(s => sessaoFormadores(s).includes(nome));
 }
 
 export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorRegime; openId?: number; onOpened?: () => void }) {
   const gold = regime === "gold";
-  const { user } = useAuth();
   const { formadores, addFormador, patchFormador, removeFormador } = useFormadores();
   const turmas = useTurmas();
-  const podeGerirDisp = user.role === "admin" || user.role === "secretaria";
   const [s, setS] = useState("");
   const [p, setP] = useState(1);
   const [pp, setPp] = useState(10);
@@ -146,6 +143,7 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
   const [perfil, setPerfil] = useState<Formador | null>(null);
   const [apagar, setApagar] = useState<Formador | null>(null);
   const [gravando, setGravando] = useState(false);
+  const [acesso, setAcesso] = useState<{ email: string; password?: string; criado: boolean } | null>(null);
 
   const noRegime = formadoresDoRegime(formadores, regime);
   const especialidades = uniqueOpts(noRegime.map(f => f.especialidade));
@@ -173,10 +171,6 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
       ? turmas.gold.filter(t => turmaTemFormador(nome, t.formador, t.cronograma))
       : turmas.fin.filter(t => turmaTemFormador(nome, t.formador, t.cronograma));
     return list.map(t => t.nome);
-  }
-
-  function alocadoEmTurmaActiva(nome: string) {
-    return [...turmas.gold, ...turmas.fin].some(t => isTurmaActiva(t) && turmaTemFormador(nome, t.formador, t.cronograma));
   }
 
   function abrirNovo() {
@@ -217,20 +211,32 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
     }
     const { id: _id, ...rest } = payload;
     setGravando(true);
-    const id = await addFormador(rest);
+    const criado = await addFormador(rest);
     setGravando(false);
-    if (id) {
+    if (criado?.id) {
       setDraft(null);
       setErro("");
+      if (criado.acesso) setAcesso(criado.acesso);
     }
   }
 
   const saveCls = gold ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700";
   const editing = Boolean(draft?.id);
-  const dispBloqueada = Boolean(editing && draft && alocadoEmTurmaActiva(draft.nome) && !podeGerirDisp);
 
   return (
     <div className="space-y-4">
+      {acesso && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold">{acesso.criado ? "Conta de formador criada" : "Ficha ligada a uma conta que já existia"}</p>
+              <p className="text-xs mt-1">Email {acesso.email}</p>
+              {acesso.password && <p className="text-xs mt-1">Palavra-passe inicial: <span className="font-mono font-semibold">{acesso.password}</span>. Guarde-a agora. A plataforma mostra-a só nesta altura.</p>}
+            </div>
+            <button type="button" className="text-xs font-semibold" onClick={() => setAcesso(null)}>Fechar</button>
+          </div>
+        </div>
+      )}
       <PageHeader
         title={gold ? "Formadores Gold" : "Formadores Financiada"}
         sub={`${ativos} ativos · ${noRegime.length} neste regime${both ? ` · ${both} também no outro regime` : ""}`}
@@ -291,7 +297,7 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
                         <Td>
                           <button type="button" onClick={() => setPerfil(f)} className="text-left">
                             <p className="text-xs font-semibold text-blue-600 hover:text-blue-800">{f.nome}</p>
-                            <p className="text-xs text-slate-400 truncate max-w-[180px]">{f.email || "Sem email"}</p>
+                            <p className="text-xs text-slate-400 truncate max-w-[180px]">{f.email || "Sem email"}{f.temAcesso ? " · acesso à plataforma" : ""}</p>
                           </button>
                         </Td>
                         <Td className="font-mono text-xs text-slate-500 whitespace-nowrap">{f.telf || "-"}</Td>
@@ -333,12 +339,10 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
         open={!!draft}
         onClose={() => { setDraft(null); setErro(""); }}
         title={editing ? `Editar ${draft?.nome}` : "Novo formador"}
-        sub={gold ? "Ficha pedagógica Gold - CCP, contacto e calendário" : "Ficha pedagógica Financiada - CCP, contacto e calendário"}
-        size="3xl"
+        sub={gold ? "Ficha pedagógica Gold - CCP, contacto e documentos" : "Ficha pedagógica Financiada - CCP, contacto e UFCD"}
       >
         {draft && (
-          <div className="p-5 grid grid-cols-1 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)_240px] gap-6 items-start">
-          <div className="space-y-3">
+          <div className="p-5 space-y-3">
             <Field label="Nome">
               <input className={iCls} value={draft.nome} onChange={e => setDraft({ ...draft, nome: e.target.value })} placeholder="Nome completo" />
             </Field>
@@ -386,6 +390,18 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
               </div>
               <p className="text-[11px] text-slate-400">Quem marca os dois regimes aparece nas duas listas e nos dropdowns de ambas.</p>
             </Field>
+            <Field label="Valor hora (€)">
+              <input className={iCls} type="number" min={0} step="0.5" value={draft.custoHora ?? 0} onChange={e => setDraft({ ...draft, custoHora: Math.max(0, Number(e.target.value) || 0) })} />
+            </Field>
+            <Field label="Disponibilidade CCP">
+              <DisponibilidadeEditor
+                value={draft.disponibilidade}
+                onChange={slots => setDraft({ ...draft, disponibilidade: slots })}
+                nota={draft.alocado
+                  ? "Este formador já está numa turma. A disponibilidade fica fechada para ele. A secretaria e a administração continuam a poder ajustá-la."
+                  : "Laboral 9h–13h, pós-laboral 16h30–23h, sábado de manhã 9h–13h e sábado à tarde 14h–19h."}
+              />
+            </Field>
             <Field label="Estado">
               <button
                 type="button"
@@ -400,15 +416,6 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
               <button type="button" onClick={() => { setDraft(null); setErro(""); }} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
               <button type="button" disabled={gravando} onClick={() => void guardar()} className={`flex-1 py-2 ${saveCls} disabled:opacity-40 text-white text-sm font-semibold rounded-lg`}>{editing ? "Guardar alterações" : "Criar formador"}</button>
             </div>
-            {dispBloqueada && (
-              <p className="text-[11px] text-slate-500">Este formador já está numa turma ativa. Só a administração ou a secretaria alteram o calendário.</p>
-            )}
-          </div>
-            <FormadorCalendario
-              dias={draft.disponibilidade}
-              disabled={dispBloqueada}
-              onChange={disponibilidade => setDraft({ ...draft, disponibilidade })}
-            />
           </div>
         )}
       </SlideOver>

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { listDriveFiles, readDriveContent, storeDriveFile } from "./googleDrive.js";
+import { podeGravarSessao } from "./sessaoAcesso.js";
 import { DTP_CATEGORIAS, dtpCategoriaDe, dtpCategoriaPasta, dtpPastaNome, dtpZipNome, dtpZipRelPath, pastaSegura } from "./dtpPasta.js";
 import { zipStore } from "./zipStore.js";
 import { pdfsDoDossie, type SessaoPedagogicaPdf } from "./dtpPdfs.js";
@@ -61,6 +62,7 @@ const planoSchema = z.object({
     desenvolvimento: momentoSchema,
     conclusao: momentoSchema,
   }),
+  assinado: z.boolean().optional(),
 });
 
 const sumarioSchema = z.object({
@@ -69,6 +71,7 @@ const sumarioSchema = z.object({
   observacoes: z.string().max(4000).default(""),
   assinado: z.boolean().default(false),
   assinadoEm: z.string().max(40).optional(),
+  presencasValidadas: z.boolean().optional(),
 });
 
 const presencasSchema = z.array(z.object({
@@ -717,6 +720,15 @@ export function registerPedagogiaRoutes(
       return reply.code(400).send({ error: "pedido inválido" });
     }
     const patch = parsed.data;
+    const acesso = await podeGravarSessao(db, req.actor!, {
+      regime,
+      turmaId: id,
+      n,
+      plano: patch.plano,
+      sumario: patch.sumario,
+      presencas: patch.presencas,
+    });
+    if (!acesso.ok) return reply.code(403).send({ error: acesso.erro });
     await db.query(
       `INSERT INTO turma_sessoes (regime, turma_id, sessao_n, plano, sumario, presencas)
        VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, COALESCE($6::jsonb, '[]'::jsonb))

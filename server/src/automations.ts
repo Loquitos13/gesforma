@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "./db/pool.js";
-import { buildCtaVars, ctaDestino, fillCtaHref } from "./emailCta.js";
+import { buildCtaVars, ctaDestino, fillCtaHref, hrefDoBotao } from "./emailCta.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
 import { parseEmailXml } from "./emailXml.js";
 import { config } from "./config.js";
@@ -82,7 +82,8 @@ export async function ingestEvent(
     const fromXml = parseEmailXml(rule.body_xml ?? "");
     const linhas = fromXml.linhas.length ? fromXml.linhas : asLines(rule.body_lines);
     const cta = fromXml.cta || rule.cta;
-    const hrefTpl = fromXml.href || rule.cta_href || ctaDestino(rule.template_tipo).href;
+    const ambito = fromXml.ambito || rule.cta_ambito || ctaDestino(rule.template_tipo).ambito;
+    const hrefTpl = hrefDoBotao(rule.template_tipo, ambito, fromXml.href || rule.cta_href || "");
     const href = fillCtaHref(hrefTpl, vars);
     const jobId = randomUUID();
     const pixel = `${config.appOrigin.replace(/\/$/, "")}/api/v1/email/open/${jobId}.gif`;
@@ -291,7 +292,8 @@ export async function sendRuleTest(db: Db, ruleId: number, to: { email: string; 
   const fromXml = parseEmailXml(rule.body_xml ?? "");
   const linhas = fromXml.linhas.length ? fromXml.linhas : asLines(rule.body_lines);
   const cta = fromXml.cta || rule.cta;
-  const hrefTpl = fromXml.href || rule.cta_href || ctaDestino(rule.template_tipo).href;
+  const ambito = fromXml.ambito || rule.cta_ambito || ctaDestino(rule.template_tipo).ambito;
+  const hrefTpl = hrefDoBotao(rule.template_tipo, ambito, fromXml.href || rule.cta_href || "");
   const href = fillCtaHref(hrefTpl, vars);
   const eventId = randomUUID();
   const jobId = randomUUID();

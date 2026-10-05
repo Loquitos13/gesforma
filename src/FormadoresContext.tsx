@@ -1,13 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { apiCreateFormador, apiDeleteFormador, apiPatchFormador } from "./api";
-import { diasDisponibilidade, formadoresAtivos, formadorSub, FORMADORES_SEED, type Formador, type FormadorRegime } from "./formadorModel";
+import { formadoresAtivos, formadorSub, FORMADORES_SEED, type Formador, type FormadorRegime } from "./formadorModel";
 import { formadoresOptsWithFrom, formadoresToOpts, type SelectOption } from "./FormKit";
 import { loadOps } from "./opsCache";
 import { persist, toastError } from "./toastBus";
 
 type FormadoresCtx = {
   formadores: Formador[];
-  addFormador: (f: Omit<Formador, "id">) => Promise<number | undefined>;
+  addFormador: (f: Omit<Formador, "id">) => Promise<{ id?: number; acesso?: { email: string; password?: string; criado: boolean } | null } | undefined>;
   patchFormador: (id: number, patch: Partial<Formador>) => void;
   removeFormador: (id: number) => void;
   options: (current?: string | string[], regime?: FormadorRegime) => SelectOption[];
@@ -15,7 +15,10 @@ type FormadoresCtx = {
 
 const Ctx = createContext<FormadoresCtx | null>(null);
 
-function asFormador(r: { id: number; nome: string; telf: string; email: string; especialidade: string; ccp: string; nif: string; regimes: string[]; estado: string; disponibilidade?: unknown }): Formador {
+function asFormador(r: {
+  id: number; nome: string; telf: string; email: string; especialidade: string; ccp: string; nif: string;
+  regimes: string[]; estado: string; disponibilidade?: string[]; custoHora?: number; alocado?: boolean; temAcesso?: boolean;
+}): Formador {
   return {
     id: r.id,
     nome: r.nome,
@@ -26,7 +29,10 @@ function asFormador(r: { id: number; nome: string; telf: string; email: string; 
     nif: r.nif,
     regimes: r.regimes.filter((x): x is FormadorRegime => x === "gold" || x === "fin"),
     estado: r.estado === "Inactivo" ? "Inactivo" : "Ativo",
-    disponibilidade: diasDisponibilidade(r.disponibilidade),
+    disponibilidade: r.disponibilidade,
+    custoHora: r.custoHora ?? 0,
+    alocado: Boolean(r.alocado),
+    temAcesso: Boolean(r.temAcesso),
   };
 }
 
@@ -53,7 +59,7 @@ export function FormadoresProvider({ children }: { children: ReactNode }) {
       if (res.formador) setFormadores(xs => xs.map(f => f.id === created.id ? asFormador(res.formador) : f));
       return res;
     }), () => setFormadores(xs => xs.filter(f => f.id !== created.id)));
-    return r?.formador ? asFormador(r.formador).id : undefined;
+    return r?.formador ? { id: asFormador(r.formador).id, acesso: r.acesso } : undefined;
   }, []);
 
   const patchFormador = useCallback((id: number, patch: Partial<Formador>) => {

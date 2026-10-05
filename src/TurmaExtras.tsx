@@ -6,8 +6,10 @@ import {
 import { DOCS_FORMADOR, fundirDocTipos } from "./dossierDocs";
 import { catalogIdRemapSubscribe, useCatalogList } from "./CatalogsContext";
 import { useDrive } from "./DriveContext";
+import { useAuth } from "./AuthGate";
+import { FormadorCalendario, eventosDoFormador } from "./FormadorCalendario";
+import { DisponibilidadeEditor } from "./DisponibilidadeEditor";
 import { useFormadores } from "./FormadoresContext";
-import type { DiaDisponibilidade } from "./formadorModel";
 import { AppModal } from "./FormKit";
 import { ConfirmDangerModal } from "./SecretaryUX";
 import { persist } from "./toastBus";
@@ -39,7 +41,7 @@ function ActBtn({ icon, label, color = "blue", onClick }: { icon: React.ReactNod
   );
 }
 
-function SlideOver({ open, onClose, title, sub, children, size = "md" }: { open: boolean; onClose: () => void; title: string; sub?: string; children: React.ReactNode; size?: "sm" | "md" | "lg" | "xl" }) {
+function SlideOver({ open, onClose, title, sub, children, size = "md" }: { open: boolean; onClose: () => void; title: string; sub?: string; children: React.ReactNode; size?: "sm" | "md" | "lg" | "xl" | "2xl" }) {
   return <AppModal open={open} onClose={onClose} title={title} sub={sub} size={size}>{children}</AppModal>;
 }
 
@@ -338,27 +340,11 @@ export function PresencasSessaoModal({ open, onClose, sessao, formandos, onSave,
 
 type DocField = { id: string; label: string; required: boolean; uploaded: boolean; fileName?: string; driveUrl?: string; driveFileId?: string };
 
-function ResumoCalendario({ dias }: { dias: DiaDisponibilidade[] }) {
-  if (!dias.length) return <p className="text-xs text-slate-400">O calendário ainda está vazio. Marca-se na ficha do formador.</p>;
-  const livres = dias.filter(d => d.estado === "disponivel");
-  const fora = dias.filter(d => d.estado === "indisponivel");
-  const amostra = livres.slice(0, 4).map(d => {
-    const [y, m, dia] = d.data.split("-");
-    const horas = d.horarios.map(h => `${h.inicio}-${h.fim}`).join(", ");
-    return `${dia}/${m}/${y}${horas ? ` ${horas}` : ""}`;
-  });
-  return (
-    <div className="space-y-1">
-      <p className="text-xs text-slate-600">{livres.length} dias disponíveis, {fora.length} indisponíveis.</p>
-      {amostra.map(linha => <p key={linha} className="text-[11px] text-violet-800">{linha}</p>)}
-    </div>
-  );
-}
-
-export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "gold", turma }: { open: boolean; onClose: () => void; nome: string; telf?: string; accent?: "gold" | "fin"; turma?: string }) {
-  const { formadores } = useFormadores();
-  const formador = formadores.find(f => f.nome === nome);
+export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "gold", turma, horas, embutido = false }: { open: boolean; onClose: () => void; nome: string; telf?: string; accent?: "gold" | "fin"; turma?: string; horas?: number; embutido?: boolean }) {
+  const { user } = useAuth();
   const { gold, fin } = useTurmas();
+  const { formadores, patchFormador } = useFormadores();
+  const formador = formadores.find(f => f.nome === nome);
   const { cursosGold, cursosFin } = useLists();
   const [docs, setDocs] = useState<DocField[]>(() => DOCS_FORMADOR.map(d => ({ ...d, uploaded: false, required: Boolean(d.required) })));
   const [uploadFor, setUploadFor] = useState<string | null>(null);
@@ -385,11 +371,11 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
           const finId = cursosFin.find(c => c.ufcd === nomeCurso || c.nomeComercial === nomeCurso)?.id;
           if (goldId != null) {
             const m = await apiDtpModelo("gold", goldId).catch(() => null);
-            extras.push(...((m?.efectivo ?? m?.modelo)?.extra.filter(x => x.ambito === "formador").map(x => ({ id: x.id, label: x.label })) ?? []));
+            extras.push(...(m?.modelo.extra.filter(x => x.ambito === "formador").map(x => ({ id: x.id, label: x.label })) ?? []));
           }
           if (finId != null) {
             const m = await apiDtpModelo("fin", finId).catch(() => null);
-            extras.push(...((m?.efectivo ?? m?.modelo)?.extra.filter(x => x.ambito === "formador").map(x => ({ id: x.id, label: x.label })) ?? []));
+            extras.push(...(m?.modelo.extra.filter(x => x.ambito === "formador").map(x => ({ id: x.id, label: x.label })) ?? []));
           }
         }
         const lista = fundirDocTipos(DOCS_FORMADOR, extras).map(d => ({ ...d, required: Boolean(d.required), uploaded: false as boolean }));
@@ -427,9 +413,13 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
     if (url) window.open(url, "_blank", "noreferrer");
   }
 
-  return (
-    <>
-      <SlideOver open={open} onClose={onClose} title={`Perfil - ${nome}`} sub="Formador / Formadora">
+  const verCalendario = user.role === "admin" || user.role === "secretaria" || user.role === "financiada" || user.role === "formador";
+  const eventos = useMemo(
+    () => eventosDoFormador(nome, [...gold, ...fin].map(t => ({ nome: t.nome, cronograma: t.cronograma }))),
+    [fin, gold, nome],
+  );
+
+  const ficha = (
         <div className="p-4 space-y-5">
           <div className="flex items-center gap-4 p-4 bg-violet-50 border border-violet-200 rounded-xl">
             <div className="w-14 h-14 rounded-2xl bg-violet-600 flex items-center justify-center text-white text-xl font-bold flex-shrink-0">{nome[0]}</div>
@@ -439,12 +429,25 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
               <p className="text-xs text-violet-600 font-medium mt-1">
                 {formador?.ccp ? `CCP ${formador.ccp}` : "CCP não registado"}{(telf || formador?.telf) ? ` · ${telf || formador?.telf}` : ""}
               </p>
+              {horas != null && (
+                <p className="text-xs font-semibold text-slate-700 mt-1">{horas} h de formação nesta turma</p>
+              )}
             </div>
           </div>
-          <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Disponibilidade</p>
-            <ResumoCalendario dias={formador?.disponibilidade ?? []} />
-          </div>
+          {verCalendario && <FormadorCalendario nome={nome} eventos={eventos} />}
+          {formador && (
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Disponibilidade CCP</p>
+              <DisponibilidadeEditor
+                value={formador.disponibilidade}
+                locked={Boolean(formador.alocado) && user.role === "formador"}
+                onChange={slots => patchFormador(formador.id, { disponibilidade: slots })}
+                nota={formador.alocado
+                  ? "Depois de estar numa turma, o formador deixa de alterar estes horários. A secretaria e a administração continuam a poder ajustá-los."
+                  : "Laboral 9h–13h, pós-laboral 16h30–23h, sábado de manhã 9h–13h e sábado à tarde 14h–19h."}
+              />
+            </div>
+          )}
           <div>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Cursos atribuídos</p>
             <div className="space-y-1.5">
@@ -486,7 +489,10 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
             </div>
           </div>
         </div>
-      </SlideOver>
+  );
+  return (
+    <>
+      {embutido ? ficha : <SlideOver open={open} onClose={onClose} title={`Perfil - ${nome}`} sub="Ficha do formador" size="2xl">{ficha}</SlideOver>}
       <FileUploadModal
         open={!!uploadFor}
         onClose={() => setUploadFor(null)}
@@ -501,8 +507,8 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
 
 export type MomentoKey = "introducao" | "desenvolvimento" | "conclusao";
 export type MomentoField = { conteudo: string; atividades: string; metodos: string; avaliacao: string; recursos: string; materiais: string };
-export type PlanoSessaoData = { objetivosGerais: string; objetivosEspecificos: string; momentos: Record<MomentoKey, MomentoField> };
-export type SessaoMeta = { n: number; data: string; hora: string; formador: string; formadores?: string[]; estado: string; plano: boolean; modulo: string; modulos?: string[]; duracao: string };
+export type PlanoSessaoData = { objetivosGerais: string; objetivosEspecificos: string; momentos: Record<MomentoKey, MomentoField>; assinado?: boolean };
+export type SessaoMeta = { n: number; id?: string; data: string; dataIso?: string; hora: string; formador: string; formadores?: string[]; estado: string; plano: boolean; modulo: string; modulos?: string[]; duracao: string; iniciadaEm?: string; fechadaEm?: string };
 
 function formadoresDaSessao(s: SessaoMeta) {
   if (s.formadores?.length) return s.formadores.map(f => f.trim()).filter(Boolean);
@@ -540,6 +546,7 @@ export type SumarioSessaoData = {
   observacoes: string;
   assinado: boolean;
   assinadoEm?: string;
+  presencasValidadas?: boolean;
 };
 
 export function emptySumario(): SumarioSessaoData {

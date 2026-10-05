@@ -15,6 +15,38 @@ function Card({ children, className = "", clip = true }: { children: React.React
   return <div className={`bg-white rounded-xl border border-slate-200 shadow-sm ${clip ? "overflow-hidden" : "overflow-visible"} ${className}`}>{children}</div>;
 }
 
+function taxa(parte: number, base: number) {
+  if (base <= 0) return "—";
+  return `${Math.round((parte / base) * 100)}%`;
+}
+
+function FunilTrack({ titulo, itens, cor }: { titulo: string; itens: { l: string; v: number }[]; cor: string }) {
+  const baseN = itens[0]?.v ?? 0;
+  const base = baseN || 1;
+  return (
+    <div>
+      <p className="text-xs font-semibold text-slate-600 mb-2">{titulo}</p>
+      <div className="space-y-2">
+        {itens.map(f => {
+          const pct = Math.min(100, Math.round((f.v / base) * 100));
+          return (
+            <div key={f.l}>
+              <div className="flex justify-between text-xs mb-0.5 gap-2">
+                <span className="text-slate-600">{f.l}</span>
+                <span className="font-semibold text-slate-700 shrink-0">{f.v.toLocaleString("pt-PT")}{baseN > 0 ? ` · ${taxa(f.v, baseN)}` : ""}</span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-2">
+                <div className="h-2 rounded-full" style={{ width: `${pct}%`, backgroundColor: cor, opacity: 0.45 + (pct / 200) }} />
+              </div>
+            </div>
+          );
+        })}
+        {itens.length === 0 && <p className="text-xs text-slate-400">Sem dados neste filtro.</p>}
+      </div>
+    </div>
+  );
+}
+
 function polar(cx: number, cy: number, r: number, a: number) {
   return [cx + r * Math.cos(a), cy + r * Math.sin(a)] as const;
 }
@@ -466,7 +498,6 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
   const financeiro = dash?.financeiro;
   const funil = dash?.funil ?? [];
   const topCursos = dash?.topCursos ?? [];
-  const base = funil[0]?.v || 1;
   const opts = dash?.filtros ?? { cursos: [], locais: [], horarios: [] };
 
   return (
@@ -515,11 +546,7 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
             }}>Limpar filtros</button>
           )}
         </div>
-        <p className="text-[11px] text-slate-400">
-          {regime === "gold"
-            ? "Pré-inscritos são cursos sem pagamento automático (turma e documentos). Pré-pagos pagam e entram. O total de formandos soma quem pagou em cada via."
-            : "Formandos = inscritos em turma. Receita, funil e ranking seguem o mesmo filtro."}
-        </p>
+        <p className="text-[11px] text-slate-400">Formandos = inscritos em turma. Receita, funil e ranking seguem o mesmo filtro.</p>
       </Card>
 
       {estado === "loading" && !cards && (
@@ -579,43 +606,28 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
               <ReceitaCircular meses={financeiro.receitaMensal} />
             </Card>
             <Card className="p-4">
-              <p className="text-sm font-semibold text-slate-700 mb-3">Funil de conversão</p>
-              {regime === "gold" && dash.comercial ? (
-                <div className="space-y-3">
-                  {[
-                    { l: "Pré-inscritos", v: dash.comercial.preInscritos.toLocaleString("pt-PT"), s: "Ainda sem ser formando" },
-                    { l: "Conversão", v: dash.comercial.conversaoPct == null ? String(dash.comercial.convertidos) : `${dash.comercial.convertidos} · ${dash.comercial.conversaoPct}%`, s: "Pré-inscritos que passaram a pago ou formando" },
-                    { l: "Pré-pagos", v: dash.comercial.prePagos.toLocaleString("pt-PT"), s: "E-learning com acesso depois do pagamento" },
-                    { l: "Total de formandos", v: dash.comercial.totalFormandos.toLocaleString("pt-PT"), s: `${dash.comercial.formandosPre} da pré-inscrição · ${dash.comercial.formandosAuto} pré-pagos` },
-                  ].map(row => (
-                    <div key={row.l} className="border-b border-slate-100 pb-2 last:border-0">
-                      <div className="flex justify-between text-xs gap-2">
-                        <span className="text-slate-600">{row.l}</span>
-                        <span className="font-semibold text-slate-800">{row.v}</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5">{row.s}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-              <div className="space-y-2">
-                {funil.map((f, i) => {
-                  const pct = Math.min(100, Math.round((f.v / base) * 100));
-                  const cores = ["#94A3B8", "#60A5FA", "#F59E0B", "#10B981"];
-                  return (
-                    <div key={f.l}>
-                      <div className="flex justify-between text-xs mb-0.5">
-                        <span className="text-slate-600">{f.l}</span>
-                        <span className="font-semibold text-slate-700">{f.v.toLocaleString("pt-PT")}</span>
-                      </div>
-                      <div className="w-full bg-slate-100 rounded-full h-2">
-                        <div className="h-2 rounded-full" style={{ width: `${pct}%`, backgroundColor: cores[i] ?? "#94A3B8" }} />
-                      </div>
-                    </div>
-                  );
-                })}
+              <p className="text-sm font-semibold text-slate-700">Funil de conversão</p>
+              <p className="text-[11px] text-slate-400 mb-3">Pré-inscritos entram pelo formulário. Pré-pagos entram por pedido manual, já com pagamento ou no balcão.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FunilTrack titulo="Pré-inscritos" itens={dash?.funilPreinscritos ?? funil} cor="#2563EB" />
+                <FunilTrack titulo="Pré-pagos" itens={dash?.funilPrepagos ?? []} cor="#D97706" />
               </div>
-              )}
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <div className="rounded-lg bg-blue-50 px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase text-blue-700">Formandos de pré-inscritos</p>
+                  <p className="text-lg font-bold text-blue-900">{(dash?.formandosOrigem?.preinscritos ?? funil[3]?.v ?? 0).toLocaleString("pt-PT")}</p>
+                  <p className="text-[11px] text-blue-800">{taxa(dash?.formandosOrigem?.preinscritos ?? funil[3]?.v ?? 0, (dash?.funilPreinscritos ?? funil)[0]?.v ?? 0)} da base</p>
+                </div>
+                <div className="rounded-lg bg-amber-50 px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase text-amber-800">Formandos de pré-pagos</p>
+                  <p className="text-lg font-bold text-amber-950">{(dash?.formandosOrigem?.prepagos ?? 0).toLocaleString("pt-PT")}</p>
+                  <p className="text-[11px] text-amber-900">{taxa(dash?.formandosOrigem?.prepagos ?? 0, (dash?.funilPrepagos ?? [])[0]?.v ?? 0)} da base</p>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-2">
+                Pré-inscritos que pagaram: {taxa((dash?.funilPreinscritos ?? funil)[2]?.v ?? 0, (dash?.funilPreinscritos ?? funil)[0]?.v ?? 0)}.
+                Total de formandos: {((dash?.formandosOrigem?.preinscritos ?? funil[3]?.v ?? 0) + (dash?.formandosOrigem?.prepagos ?? 0)).toLocaleString("pt-PT")}.
+              </p>
             </Card>
           </div>
           <ConhecimentoEnaCard onVerMais={() => onNavigate(crmView)} dados={dash.conhecimento} />

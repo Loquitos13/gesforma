@@ -140,7 +140,7 @@ function MenuPortal({
   );
 }
 
-export type SelectOption = { value: string; sub?: string };
+export type SelectOption = { value: string; sub?: string; disabled?: boolean };
 
 export const cursosGoldOpts: SelectOption[] = [
   { value: "Formação de Formadores - CCP", sub: "Gold · 90h · b-learning" },
@@ -413,6 +413,8 @@ export function MultiSearchSelect({
   const filtered = all.filter(o => `${o.value} ${o.sub ?? ""}`.toLowerCase().includes(q.toLowerCase()));
 
   function toggle(v: string) {
+    const opt = all.find(o => o.value === v);
+    if (opt?.disabled && !selected.includes(v)) return;
     onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]);
   }
 
@@ -461,8 +463,8 @@ export function MultiSearchSelect({
           {filtered.map(o => {
             const on = selected.includes(o.value);
             return (
-              <button key={o.value} type="button" onClick={() => toggle(o.value)}
-                className={`w-full text-left px-3 py-2 flex items-start gap-2 hover:bg-amber-50 ${on ? "bg-amber-50" : ""}`}>
+              <button key={o.value} type="button" disabled={o.disabled && !on} onClick={() => toggle(o.value)}
+                className={`w-full text-left px-3 py-2 flex items-start gap-2 hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed ${on ? "bg-amber-50" : ""}`}>
                 <span className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${on ? "bg-amber-500 border-amber-500 text-white" : "border-slate-300 bg-white"}`}>
                   {on && (
                     <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>

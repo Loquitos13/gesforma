@@ -1,5 +1,6 @@
 import type { Db } from "./db/pool.js";
 import { documentosUrl, docsDoCurso, docsCompletos, ensureDocsToken, listarDocsLead } from "./docsLink.js";
+import { faltaValidarPreinscricao } from "./docsCurso.js";
 import { mapPagamento, mapPreinscricao } from "./ops.js";
 
 export type CrmCampoTipo = "texto" | "numero" | "data" | "lista";
@@ -255,9 +256,57 @@ export async function getLeadDossier(db: Db, id: number) {
       estado: f.estado || "pendente",
       observacao: f.observacao || "",
     })),
-    docsFechado: Boolean(row.docs_fechado_em),
-    percursoConcluido: Boolean(row.percurso_concluido_em),
+    docsFechado: Boolean(row.validada_em),
     pagamento,
+    ...(await resumoPercurso(db, row as Record<string, unknown>, regime, pedidos, ficheiros)),
+  };
+}
+
+async function resumoPercurso(
+  db: Db,
+  row: Record<string, unknown>,
+  regime: "gold" | "fin",
+  pedidos: { id: string; label: string; required: boolean }[],
+  ficheiros: { tipo: string; estado?: string }[],
+) {
+  const turmaId = Number(row.turma_escolhida_id || 0);
+  const table = regime === "fin" ? "turmas_fin" : "turmas_gold";
+  const ocup = regime === "fin" ? "alunos" : "total_alunos";
+  const vagas = regime === "fin" ? "alunos_total" : "vagas";
+  let turmaEscolhida: { id: number; nome: string; local: string; horario: string; dataInicio: string; livres: number } | null = null;
+  if (turmaId) {
+    const turma = await db.query<{ id: number; nome: string; local: string; horario: string; data_inicio: string; ocupadas: number; vagas: number }>(
+      `SELECT id, nome, local, horario, data_inicio, ${ocup} AS ocupadas, ${vagas} AS vagas FROM ${table} WHERE id = $1`,
+      [turmaId],
+    );
+    const t = turma.rows[0];
+    if (t) {
+      turmaEscolhida = {
+        id: t.id,
+        nome: t.nome,
+        local: t.local,
+        horario: t.horario,
+        dataInicio: String(t.data_inicio ?? ""),
+        livres: Math.max(0, Number(t.vagas) - Number(t.ocupadas)),
+      };
+    }
+  }
+  const precisaPagamento = regime === "gold" && Number(row.preco) > 0;
+  const faltaValidar = faltaValidarPreinscricao({
+    validada: Boolean(row.validada_em),
+    concluido: Boolean(row.percurso_concluido_em),
+    turma: turmaEscolhida,
+    pedidos,
+    ficheiros,
+    precisaPagamento,
+  });
+  return {
+    percursoConcluido: Boolean(row.percurso_concluido_em),
+    validadaEm: row.validada_em ? String(row.validada_em) : null,
+    recusaMotivo: String(row.recusa_motivo ?? ""),
+    turmaEscolhida,
+    podeValidar: faltaValidar === "",
+    faltaValidar,
   };
 }
 

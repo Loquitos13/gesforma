@@ -35,10 +35,14 @@ import { listCursosGoldActivos, listOfertaGold } from "./ofertaGold.js";
 import { generateCronograma } from "./cronograma.js";
 import {
   COMPROVATIVO, firePreinscricaoEmail, listarDocsLead, maybeEnviarPagamentoAposDocs, notificarDocumentos,
-  popularFichaPessoa, docsDoCurso, docsCompletos, abrirAlerta, alertarDocumentosIncorrectos,
+  popularFichaPessoa, docsDoCurso, abrirAlerta, alertarDocumentosIncorrectos,
   definirEstadoDoc, dispensarAlerta, listarAlertasAbertas, syncLigacao,
 } from "./docsLink.js";
 import { storeDriveFile } from "./googleDrive.js";
+import {
+  PercursoErro, concluirPercurso, escolherTurmaPublica, enviarSugestaoTurmaCheia,
+  moverDocsDoLead, moverDocsParaTurma, validarPreinscricao, vistaDocumentosPublica,
+} from "./percurso.js";
 import { aplicarTurmaRegras, listTurmaRegras } from "./turmaRegras.js";
 import { camposEmFalta, estadoPodeEntregar, podeArrastar } from "./crmRegras.js";
 
@@ -607,6 +611,10 @@ export function registerOpsRoutes(
     if (row && d.estado === "Pré-inscrição" && String(before.estado) !== "Pré-inscrição") {
       await notificarDocumentos(db, id, req.actor!.id).catch(() => undefined);
     }
+    if (row && d.estado === "Formando") {
+      const turmaId = d.turmaId || Number(row.turma_id) || Number(before.turma_escolhida_id) || 0;
+      if (turmaId) await moverDocsDoLead(db, id, turmaId).catch(() => undefined);
+    }
     if (row && d.estado === "Pago") {
       const email = normalizeEmail(String(row.email ?? ""));
       if (isEmail(email)) {
@@ -675,57 +683,39 @@ export function registerOpsRoutes(
     if (token.length < 12) return reply.code(400).send({ error: "ligação inválida" });
     const lead = await one(db, "SELECT * FROM preinscricoes WHERE docs_token = $1", [token]);
     if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
-    const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
-    const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime);
-    const docs = await listarDocsLead(db, Number(lead.id));
-    const { ok, emFalta } = docsCompletos(pedidos, docs.map(d => d.tipo));
-    let pagamento: { entidade: string; referencia: string; valor: number; estado: string } | null = null;
-    if (lead.pagamento_id) {
-      const pag = await one(db, "SELECT * FROM pagamentos WHERE id = $1", [String(lead.pagamento_id)]);
-      if (pag) {
-        const settings = await one(db, "SELECT values FROM app_settings WHERE id = $1", ["gold"]);
-        const values = settings?.values && typeof settings.values === "object" ? settings.values as Record<string, string> : {};
-        const ref = String(pag.referencia ?? "");
-        pagamento = {
-          entidade: String(values["Entidade Multibanco"] ?? ""),
-          referencia: ref.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3") || ref,
-          valor: Number(pag.valor) || 0,
-          estado: String(pag.estado ?? "Pendente"),
-        };
-      }
+    return vistaDocumentosPublica(db, lead);
+  });
+
+  app.post("/v1/public/documentos/:token/turma", {
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    const token = String((req.params as { token: string }).token ?? "");
+    const turmaId = Number((req.body as { turmaId?: number } | undefined)?.turmaId);
+    if (token.length < 12 || !Number.isInteger(turmaId)) return reply.code(400).send({ error: "pedido inválido" });
+    const lead = await one(db, "SELECT id, validada_em FROM preinscricoes WHERE docs_token = $1", [token]);
+    if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
+    try {
+      const turma = await escolherTurmaPublica(db, Number(lead.id), turmaId);
+      return { ok: true, turma };
+    } catch (err) {
+      const msg = err instanceof PercursoErro ? err.message : "Não foi possível escolher a turma.";
+      return reply.code(400).send({ error: msg });
     }
-    const recusados = docs.filter(d => d.estado === "recusado");
-    const fechado = Boolean(lead.docs_fechado_em);
-    const pagPago = Boolean(pagamento && /pago/i.test(pagamento.estado));
-    const comp = docs.find(d => d.tipo === "comprovativo");
-    const precisaComp = regime === "gold" && Number(lead.preco) > 0 && !pagPago && comp?.estado !== "validado";
-    const correcao = !fechado && recusados.length > 0;
-    let tipos = ok ? [...pedidos, COMPROVATIVO] : pedidos;
-    let encerrada = false;
-    if (fechado && precisaComp) tipos = [COMPROVATIVO];
-    else if (fechado) {
-      encerrada = true;
-      tipos = [];
-    } else if (correcao) {
-      const ids = new Set(recusados.map(d => d.tipo));
-      tipos = pedidos.filter(p => ids.has(p.id));
-      if (ids.has(COMPROVATIVO.id) && !tipos.some(t => t.id === COMPROVATIVO.id)) tipos = [...tipos, COMPROVATIVO];
+  });
+
+  app.post("/v1/public/documentos/:token/concluir", {
+    config: { rateLimit: { max: 12, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    const token = String((req.params as { token: string }).token ?? "");
+    if (token.length < 12) return reply.code(400).send({ error: "ligação inválida" });
+    const lead = await one(db, "SELECT id FROM preinscricoes WHERE docs_token = $1", [token]);
+    if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
+    try {
+      return await concluirPercurso(db, Number(lead.id));
+    } catch (err) {
+      const msg = err instanceof PercursoErro ? err.message : "Não foi possível concluir.";
+      return reply.code(400).send({ error: msg });
     }
-    return {
-      nome: `${lead.nome} ${lead.apelido}`.trim(),
-      curso: lead.curso,
-      tipos,
-      ficheiros: docs.map(d => ({
-        id: d.id, tipo: d.tipo, nome: d.nome, created_at: d.created_at,
-        estado: d.estado, observacao: d.observacao,
-      })),
-      docsCompletos: ok,
-      emFalta: emFalta.map(d => d.label),
-      pagamento,
-      precisaPagamento: regime === "gold" && Number(lead.preco) > 0,
-      encerrada,
-      correcao,
-    };
   });
 
   app.post("/v1/public/documentos/:token", {
@@ -756,8 +746,8 @@ export function registerOpsRoutes(
     const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime);
     const permitido = new Set([...pedidos.map(p => p.id), DOCS_PUBLICOS.id]);
     if (!permitido.has(tipo)) return reply.code(400).send({ error: "Este tipo de documento não faz parte do curso." });
-    if (lead.docs_fechado_em && tipo !== "comprovativo") {
-      return reply.code(403).send({ error: "Esta ligação já foi encerrada. Os documentos foram validados." });
+    if (lead.validada_em) {
+      return reply.code(403).send({ error: "Esta ligação já foi encerrada. A secretaria validou a pré-inscrição." });
     }
     const ja = await listarDocsLead(db, Number(lead.id));
     const recusados = ja.filter(d => d.estado === "recusado").map(d => d.tipo);
@@ -859,6 +849,38 @@ export function registerOpsRoutes(
     if (!r) return reply.code(404).send({ error: "pré-inscrição inexistente" });
     if (!r.enviado) return reply.code(400).send({ error: r.erro });
     return { ok: true };
+  });
+
+  function staffValida(role: string | undefined) {
+    return role === "admin" || role === "secretaria" || role === "financiada";
+  }
+
+  app.post("/v1/crm/leads/:id/validar-preinscricao", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (!staffValida(req.actor?.role)) return reply.code(403).send({ error: "Só a secretaria valida a pré-inscrição." });
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
+    try {
+      await validarPreinscricao(db, id, req.actor!.id);
+    } catch (err) {
+      const msg = err instanceof PercursoErro ? err.message : "Não foi possível validar.";
+      return reply.code(400).send({ error: msg });
+    }
+    return getLeadDossier(db, id);
+  });
+
+  app.post("/v1/crm/leads/:id/turma-cheia", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (!staffValida(req.actor?.role)) return reply.code(403).send({ error: "Só a secretaria envia esta sugestão." });
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
+    try {
+      const r = await enviarSugestaoTurmaCheia(db, id, req.actor!.id);
+      return { ok: true, enviadas: r.enviadas, turmas: r.turmas.map(t => ({ nome: t.nome, horario: t.horario, local: t.local, dataInicio: t.dataInicio, livres: t.livres })) };
+    } catch (err) {
+      const msg = err instanceof PercursoErro ? err.message : "Não foi possível enviar o email.";
+      return reply.code(400).send({ error: msg });
+    }
   });
 
   const regraSchema = z.object({
@@ -1006,6 +1028,11 @@ export function registerOpsRoutes(
     );
     const row = await one(db, "SELECT * FROM formandos_gold WHERE id = $1", [id]);
     const mapped = row ? mapFormandoGold(row) : null;
+    if (mapped?.email && d.turmaId && mapped.turmaId) {
+      await moverDocsParaTurma(db, {
+        email: mapped.email, turmaId: mapped.turmaId, curso: mapped.curso, regime: "gold",
+      }).catch(() => undefined);
+    }
     if (mapped && d.estado && /conclu/i.test(d.estado) && mapped.email) {
       await ingestEvent(db, "formando.completed", {
         email: mapped.email,
@@ -1073,6 +1100,15 @@ export function registerOpsRoutes(
       [id, d.nome ?? null, d.apelido ?? null, d.turma ?? null, d.telf ?? null, d.email ?? null, d.curso ?? null, d.estado ?? null, docs],
     );
     const row = await one(db, "SELECT * FROM formandos_fin WHERE id = $1", [id]);
+    if (row && d.turma) {
+      const turma = await one(db, "SELECT id, curso FROM turmas_fin WHERE nome = $1 ORDER BY id DESC LIMIT 1", [String(d.turma)]);
+      const email = String(row.email ?? "");
+      if (turma && email) {
+        await moverDocsParaTurma(db, {
+          email, turmaId: Number(turma.id), curso: String(turma.curso ?? row.curso ?? ""), regime: "fin",
+        }).catch(() => undefined);
+      }
+    }
     return { formando: row ? mapFormandoFin(row) : null };
   });
 

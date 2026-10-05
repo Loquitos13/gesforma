@@ -748,3 +748,46 @@ export async function syncTurmaDriveAccess(db: Db, input: {
   }
   return { ok: true as const, pasta, dossie };
 }
+
+/** Move um ficheiro para a pasta da turma, dentro de uma subpasta com o nome da pessoa. */
+export async function relocateDriveFile(db: Db, fileId: string, dest: {
+  regime: "gold" | "fin";
+  turmaId: number;
+  turmaNome: string;
+  pessoa: string;
+}) {
+  const found = await db.query<DriveFileRow>("SELECT * FROM drive_files WHERE id = $1", [fileId]);
+  const file = found.rows[0];
+  if (!file) return false;
+  const tag = dest.regime === "fin" ? "Financiada" : "Gold";
+  const pessoa = sanitizeFileName(dest.pessoa.trim() || "Formando");
+  const turmaNome = dest.turmaNome.trim() || `Turma ${dest.turmaId}`;
+  const pathLabel = ["Turmas", tag, turmaNome, pessoa].join(" / ");
+  const token = await accessToken(db).catch(() => null);
+  if (token && file.stored_in === "google" && file.drive_id) {
+    const table = dest.regime === "gold" ? "turmas_gold" : "turmas_fin";
+    const pastaRow = await db.query<{ drive_pasta_id: string }>(
+      `SELECT drive_pasta_id FROM ${table} WHERE id = $1`,
+      [dest.turmaId],
+    );
+    let pasta = pastaRow.rows[0]?.drive_pasta_id?.trim() ?? "";
+    if (!pasta) pasta = await ensureFolderPath(db, token, ["Turmas", tag, turmaNome]);
+    if (pasta && pasta !== pastaRow.rows[0]?.drive_pasta_id) {
+      await db.query(`UPDATE ${table} SET drive_pasta_id = $2 WHERE id = $1 AND drive_pasta_id = ''`, [dest.turmaId, pasta]);
+    }
+    const child = await ensureChild(token, pasta, pessoa);
+    const current = await driveApi<{ parents?: string[] }>(
+      token,
+      `${DRIVE_FILES}/${encodeURIComponent(file.drive_id)}?fields=parents&supportsAllDrives=true`,
+    );
+    const remove = (current.parents ?? []).filter(id => id !== child);
+    const params = new URLSearchParams({ addParents: child, supportsAllDrives: "true", fields: "id,parents" });
+    if (remove.length) params.set("removeParents", remove.join(","));
+    await driveApi(token, `${DRIVE_FILES}/${encodeURIComponent(file.drive_id)}?${params.toString()}`, { method: "PATCH" });
+  }
+  await db.query(
+    "UPDATE drive_files SET folder_path = $2, turma = $3, formando = $4 WHERE id = $1",
+    [fileId, pathLabel, turmaNome, pessoa],
+  );
+  return true;
+}

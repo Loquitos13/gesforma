@@ -64,6 +64,7 @@ import {
   ctaAmbitoLabel,
   ctaDestino,
   fillCtaHref,
+  hrefDoBotao,
   hrefForAmbito,
   isCtaAmbito,
 } from "./emailCta";
@@ -299,10 +300,11 @@ const EMAIL_BODIES: Record<string, { assunto: string; linhas: string[]; cta: str
     assunto: "Bem-vindo(a) à ENA, {{nome}}",
     linhas: [
       "Confirmámos o seu interesse em {{curso}}.",
-      "Use a ligação abaixo para enviar: {{documentos_lista}}.",
-      "Depois de os recebermos, enviamos a referência de pagamento.",
+      "Abra a ligação pessoal para enviar: {{documentos_lista}}.",
+      "No mesmo percurso escolhe o cronograma e, quando houver pagamento, anexa o comprovativo.",
+      "A secretaria valida a pré-inscrição. A ligação fica aberta até essa validação.",
     ],
-    cta: "Enviar documentos",
+    cta: "Abrir pré-inscrição",
     ctaHref: ctaDestino("welcome").href,
     ctaAmbito: ctaDestino("welcome").ambito,
   },
@@ -491,7 +493,7 @@ function EmailPreviewPane({
   const cta = parsedXml?.cta || body?.cta || "";
   const fallbackDest = ctaDestino(resolveEmailTipo(tipo));
   const ctaAmbito = parsedXml?.ambito || body?.ctaAmbito || fallbackDest.ambito;
-  const ctaHrefTpl = parsedXml?.href || body?.ctaHref || fallbackDest.href;
+  const ctaHrefTpl = hrefDoBotao(resolveEmailTipo(tipo), ctaAmbito, parsedXml?.href || body?.ctaHref || "");
   const ctaHref = fillCtaHref(ctaHrefTpl, vars);
   const previewLinha = rawParas[0] ? fillEmailVars(parseEmailXml(`<p>${rawParas[0]}</p>`).paragraphs[0] ?? "", vars) : (body ? fillEmailVars(body.linhas[0] ?? "", vars) : "");
 
@@ -2003,7 +2005,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
               });
               if (!id) return;
               patchGold(turma.id, { totalAlunos: turma.totalAlunos + 1 });
-              patchPreinscricao(lead.id, { estado: "Formando" });
+              patchPreinscricao(lead.id, { estado: "Formando", turmaId: turma.id });
             }}
             onInscreverManual={async dados => {
               if (vagasLivres <= 0) return;
@@ -2558,7 +2560,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
               });
               if (!id) return;
               patchFin(turma.id, { alunos: turma.alunos + 1 });
-              patchPreinscricao(lead.id, { estado: "Formando" });
+              patchPreinscricao(lead.id, { estado: "Formando", turmaId: turma.id });
             }}
             onInscreverManual={async dados => {
               if (turma.alunosTotal - turma.alunos <= 0) return;
@@ -3162,7 +3164,7 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
     });
     if (!id) return;
     patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
-    patchPreinscricao(lead.id, { estado: "Formando" });
+    patchPreinscricao(lead.id, { estado: "Formando", turmaId: dest.id });
     toastOk(`${lead.nome} ${lead.apelido} inscrito em ${dest.nome}.`);
     setEscolher(null);
   }
@@ -3999,7 +4001,8 @@ function EmailsView() {
         const parsed = parseEmailXml(x.body_xml ?? "");
         const dest = ctaDestino(resolveEmailTipo(x.tipo));
         const cta = x.cta || parsed.cta || fallback?.cta || "";
-        const ctaHref = x.cta_href || parsed.href || fallback?.ctaHref || dest.href;
+        const storedHref = x.cta_href || parsed.href || fallback?.ctaHref || dest.href;
+        const ctaHref = hrefDoBotao(resolveEmailTipo(x.tipo), isCtaAmbito(x.cta_ambito) ? x.cta_ambito : (parsed.ambito || fallback?.ctaAmbito || dest.ambito), storedHref);
         const ctaAmbito = isCtaAmbito(x.cta_ambito) ? x.cta_ambito : (parsed.ambito || fallback?.ctaAmbito || dest.ambito);
         return {
           id: x.id,

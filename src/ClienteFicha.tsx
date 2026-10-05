@@ -3,6 +3,7 @@ import {
   apiCrmCompletar, apiCrmDossier, apiCrmEtiquetas,
   apiCrmLeadNota, apiCrmNotaFixar, apiCrmLeadCampos, apiCrmCampoCreate,
   apiCrmDocValidar, apiCrmDocRecusar, apiCrmDocAlertar,
+  apiCrmValidarPreinscricao, apiCrmTurmaCheia,
   type CrmCampoTipo, type CrmDossier, type CrmEtiqueta, type CrmLead,
 } from "./api";
 import { useAuth } from "./AuthGate";
@@ -428,7 +429,7 @@ export function ClienteFicha({
         {tab === "documentos" && (
           <div className="space-y-3">
             {dossier?.docsFechado ? (
-              <p className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">Ligação encerrada. Os documentos obrigatórios estão validados.</p>
+              <p className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">Ligação encerrada. A secretaria validou a pré-inscrição.</p>
             ) : dossier?.docsUrl && (
               <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">Ligação pessoal</p>
@@ -527,6 +528,61 @@ export function ClienteFicha({
             {!entregue && falta.length > 0 && (
               <p className="text-xs text-slate-500">O botão deixa de ser necessário: ao gravar o último campo o processo segue para a secretaria.</p>
             )}
+            <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+              <p className="text-xs font-semibold uppercase text-slate-500">Validação da pré-inscrição</p>
+              {dossier?.turmaEscolhida ? (
+                <p className="text-sm text-slate-700">
+                  Cronograma: <span className="font-semibold">{dossier.turmaEscolhida.nome}</span>
+                  {" · "}{dossier.turmaEscolhida.local} · {dossier.turmaEscolhida.horario}
+                  {dossier.turmaEscolhida.livres <= 0 ? " · sem vagas" : ` · ${dossier.turmaEscolhida.livres} vagas`}
+                </p>
+              ) : (
+                <p className="text-sm text-slate-500">A pessoa ainda não escolheu o cronograma na ligação pessoal.</p>
+              )}
+              {dossier?.percursoConcluido && !dossier.docsFechado && (
+                <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Processo concluído. Aguarda validação da secretaria.</p>
+              )}
+              {dossier?.faltaValidar && !dossier.docsFechado && (
+                <p className="text-xs text-slate-500">{dossier.faltaValidar}</p>
+              )}
+              {sec && !dossier?.docsFechado && (
+                <button
+                  type="button"
+                  disabled={!dossier?.podeValidar || busy}
+                  onClick={() => {
+                    void persist(apiCrmValidarPreinscricao(item.id)).then(r => {
+                      if (!r) return;
+                      setDossier(r);
+                      toastOk("Pré-inscrição validada. A ligação pessoal foi encerrada e os documentos seguiram para a pasta da turma.");
+                    });
+                  }}
+                  className="w-full py-2.5 bg-emerald-600 disabled:opacity-40 text-white text-sm font-bold rounded-lg"
+                >
+                  Validar pré-inscrição
+                </button>
+              )}
+              {sec && !dossier?.docsFechado && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    void persist(apiCrmTurmaCheia(item.id)).then(r => {
+                      if (!r) return;
+                      toastOk(r.enviadas
+                        ? `Email enviado com ${r.enviadas} turma${r.enviadas === 1 ? "" : "s"} no mesmo local.`
+                        : "Email enviado. Não há outra turma com vaga nesse local.");
+                      void carregar(item.id);
+                    });
+                  }}
+                  className="w-full py-2 text-sm font-semibold rounded-lg border border-amber-300 text-amber-900 bg-amber-50"
+                >
+                  Turma cheia: enviar outra data
+                </button>
+              )}
+              <p className="text-[11px] leading-relaxed text-slate-500">
+                O email sugere a próxima turma do mesmo curso, no mesmo local, no mesmo horário ou noutro horário. A ligação pessoal continua aberta.
+              </p>
+            </div>
             {entregue && sec && (
               !escolherTurma ? (
                 <button type="button" onClick={() => setEscolherTurma(true)} className="w-full py-2.5 bg-emerald-600 text-white text-sm font-bold rounded-lg">

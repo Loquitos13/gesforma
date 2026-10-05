@@ -1,50 +1,67 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { ApiError, apiPublicDocumentoUpload, apiPublicDocumentos } from "./api";
+import {
+  ApiError, apiPublicConcluirPercurso, apiPublicDocumentoUpload, apiPublicDocumentos, apiPublicEscolherTurma,
+  type TurmaPercurso,
+} from "./api";
 
 type TipoDoc = { id: string; label: string; required?: boolean };
 type Ficheiro = { id: number; tipo: string; nome: string; estado?: string; observacao?: string };
 
+function fmtData(iso: string) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+
+const PASSOS = ["Documentos", "Cronograma", "Pagamento"] as const;
+
 export function PublicDocumentos({ token }: { token: string }) {
-  const fase = useMemo(() => {
-    if (typeof window === "undefined") return "docs";
-    return new URLSearchParams(window.location.search).get("fase") === "pagamento" ? "pagamento" : "docs";
-  }, []);
   const [nome, setNome] = useState("");
   const [curso, setCurso] = useState("");
   const [tipos, setTipos] = useState<TipoDoc[]>([]);
   const [ficheiros, setFicheiros] = useState<Ficheiro[]>([]);
   const [estado, setEstado] = useState<"loading" | "ready" | "missing" | "error">("loading");
+  const [passoServidor, setPassoServidor] = useState<1 | 2 | 3>(1);
+  const [passo, setPasso] = useState<1 | 2 | 3>(1);
+  const [turmas, setTurmas] = useState<TurmaPercurso[]>([]);
+  const [turmaEscolhida, setTurmaEscolhida] = useState<TurmaPercurso | null>(null);
+  const [percursoConcluido, setPercursoConcluido] = useState(false);
+  const [encerrada, setEncerrada] = useState(false);
+  const [correcao, setCorrecao] = useState(false);
+  const [precisaPagamento, setPrecisaPagamento] = useState(false);
+  const [pagamento, setPagamento] = useState<{ entidade: string; referencia: string; valor: number; estado: string } | null>(null);
   const [foco, setFoco] = useState<string | null>(null);
   const [ficheiro, setFicheiro] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
-  const [completos, setCompletos] = useState(false);
-  const [precisaPagamento, setPrecisaPagamento] = useState(false);
-  const [pagamento, setPagamento] = useState<{ entidade: string; referencia: string; valor: number; estado: string } | null>(null);
-  const [encerrada, setEncerrada] = useState(false);
-  const [correcao, setCorrecao] = useState(false);
+
+  function aplicar(r: Awaited<ReturnType<typeof apiPublicDocumentos>>) {
+    setNome(r.nome);
+    setCurso(r.curso);
+    setTipos(r.tipos);
+    setFicheiros(r.ficheiros);
+    setPrecisaPagamento(Boolean(r.precisaPagamento));
+    setPagamento(r.pagamento ?? null);
+    setEncerrada(Boolean(r.encerrada));
+    setCorrecao(Boolean(r.correcao));
+    setTurmas(r.turmas ?? []);
+    setTurmaEscolhida(r.turmaEscolhida ?? null);
+    setPercursoConcluido(Boolean(r.percursoConcluido));
+    const seguinte = r.passo === 2 || r.passo === 3 ? r.passo : 1;
+    setPassoServidor(seguinte);
+    setPasso(seguinte);
+    setEstado("ready");
+  }
 
   function recarregar() {
-    apiPublicDocumentos(token)
-      .then(r => {
-        setNome(r.nome);
-        setCurso(r.curso);
-        setTipos(r.tipos);
-        setFicheiros(r.ficheiros);
-        setCompletos(Boolean(r.docsCompletos));
-        setPrecisaPagamento(Boolean(r.precisaPagamento));
-        setPagamento(r.pagamento ?? null);
-        setEncerrada(Boolean(r.encerrada));
-        setCorrecao(Boolean(r.correcao));
-        setEstado("ready");
-      })
+    return apiPublicDocumentos(token)
+      .then(aplicar)
       .catch(err => {
         setEstado(err instanceof ApiError && err.status === 404 ? "missing" : "error");
       });
   }
 
-  useEffect(() => { recarregar(); }, [token]);
+  useEffect(() => { void recarregar(); }, [token]);
 
   const porTipo = useMemo(() => {
     const map = new Map<string, Ficheiro>();
@@ -52,37 +69,67 @@ export function PublicDocumentos({ token }: { token: string }) {
     return map;
   }, [ficheiros]);
 
-  const mostrarPagamento = (completos && precisaPagamento) || fase === "pagamento";
   function aceite(id: string) {
     const f = porTipo.get(id);
     return Boolean(f) && f?.estado !== "recusado";
   }
-  const obrigatorios = tipos.filter(t => t.required || correcao);
+  const obrigatorios = tipos.filter(t => t.required);
   const feitosObrigatorios = obrigatorios.filter(t => aceite(t.id)).length;
-  const proximo = tipos.find(t => (t.required || correcao) && !aceite(t.id)) ?? tipos.find(t => !aceite(t.id));
-  const activoId = foco && tipos.some(t => t.id === foco) ? foco : proximo?.id ?? null;
-  const activo = tipos.find(t => t.id === activoId) ?? null;
-  const tudoFeito = tipos.length > 0 && tipos.every(t => aceite(t.id));
+  const docsProntos = obrigatorios.length === 0 || obrigatorios.every(t => aceite(t.id));
+  const comprovativo = porTipo.get("comprovativo");
+  const pagamentoPronto = !precisaPagamento || (Boolean(comprovativo) && comprovativo?.estado !== "recusado");
+  const proximo = tipos.find(t => t.required && !aceite(t.id)) ?? tipos.find(t => !aceite(t.id));
+  const activoId = passo === 3
+    ? "comprovativo"
+    : (foco && tipos.some(t => t.id === foco) ? foco : proximo?.id ?? null);
 
-  async function submit(e: FormEvent) {
+  async function enviar(tipo: string, etiqueta: string, e: FormEvent) {
     e.preventDefault();
-    if (!activo) return;
-    if (!ficheiro) { setError("Escolha o ficheiro deste documento."); return; }
+    if (!ficheiro) { setError("Escolha o ficheiro."); return; }
     setBusy(true);
     setError("");
     setOk("");
     try {
-      const r = await apiPublicDocumentoUpload(token, ficheiro, activo.id);
-      setOk(`${activo.label} ficou na sua ficha (${r.nome}).`);
+      const r = await apiPublicDocumentoUpload(token, ficheiro, tipo);
+      setOk(`${etiqueta} ficou na ficha (${r.nome}).`);
       setFicheiro(null);
       setFoco(null);
-      recarregar();
+      await recarregar();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Não foi possível enviar.");
     } finally {
       setBusy(false);
     }
   }
+
+  async function escolher(turmaId: number) {
+    setBusy(true);
+    setError("");
+    try {
+      await apiPublicEscolherTurma(token, turmaId);
+      setOk("Cronograma escolhido.");
+      await recarregar();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Não foi possível escolher a turma.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function concluir() {
+    setBusy(true);
+    setError("");
+    try {
+      await apiPublicConcluirPercurso(token);
+      await recarregar();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Não foi possível concluir.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const espera = estado === "ready" && percursoConcluido && !encerrada;
 
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-[#1b2330]">
@@ -94,14 +141,12 @@ export function PublicDocumentos({ token }: { token: string }) {
             className="h-9 w-auto"
             onError={e => { (e.currentTarget as HTMLImageElement).src = "/imagens/ena_logo.svg"; }}
           />
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a8172]">Formação</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8a8172]">Pré-inscrição</p>
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-xl px-4 py-8 sm:px-0 sm:py-12">
-        {estado === "loading" && (
-          <p className="text-sm text-[#5c564c]">A abrir a sua pasta de documentos…</p>
-        )}
+        {estado === "loading" && <p className="text-sm text-[#5c564c]">A abrir o percurso de pré-inscrição…</p>}
         {estado === "missing" && (
           <article className="rounded-2xl bg-white px-6 py-8 shadow-sm ring-1 ring-[#e7e1d6]">
             <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#c48400]">Ligação inválida</p>
@@ -109,135 +154,217 @@ export function PublicDocumentos({ token }: { token: string }) {
             <p className="mt-3 text-sm leading-relaxed text-[#5c564c]">Peça uma nova ligação à secretaria, em formacao@ena.pt.</p>
           </article>
         )}
-        {estado === "error" && (
-          <p className="text-sm text-[#5c564c]">Não foi possível abrir a pasta. Tente dentro de momentos.</p>
-        )}
+        {estado === "error" && <p className="text-sm text-[#5c564c]">Não foi possível abrir a página. Tente dentro de momentos.</p>}
 
         {estado === "ready" && encerrada && (
           <article className="rounded-2xl bg-white px-6 py-8 shadow-sm ring-1 ring-[#e7e1d6]">
-            <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Documentos validados</p>
+            <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Pré-inscrição validada</p>
             <h1 className="mt-3 text-2xl font-semibold tracking-tight">{nome}</h1>
-            <p className="mt-3 text-sm leading-relaxed text-[#5c564c]">A ligação de {curso} foi encerrada. A secretaria já validou os documentos.</p>
+            <p className="mt-3 text-sm leading-relaxed text-[#5c564c]">A secretaria validou {curso}. Esta ligação foi encerrada.</p>
           </article>
         )}
 
-        {estado === "ready" && !encerrada && (
-          <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[#e7e1d6]">
-            <div className="px-6 pt-7 pb-5 sm:px-8">
-              <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#c48400]">
-                {correcao ? "Documentos a corrigir" : mostrarPagamento && activo?.id === "comprovativo" ? "Pagamento" : "Documentos da pré-inscrição"}
-              </p>
-              <h1 className="mt-2 text-[1.65rem] font-semibold tracking-tight leading-tight">{nome}</h1>
-              <p className="mt-2 text-sm leading-relaxed text-[#5c564c]">
-                {correcao
-                  ? `${curso}. Há ficheiros que não ficaram correctos. Envie apenas os que estão indicados, com a observação da secretaria.`
-                  : `${curso}. Anexa um documento de cada vez. Cada ficheiro fica registado no tipo correspondente, na sua ficha.`}
-              </p>
-              {obrigatorios.length > 0 && (
-                <div className="mt-5">
-                  <div className="flex items-baseline justify-between text-xs">
-                    <span className="font-semibold text-[#1b2330]">{feitosObrigatorios} de {obrigatorios.length} obrigatórios</span>
-                    <span className="text-[#8a8172]">{tudoFeito ? "Pasta completa" : "Um de cada vez"}</span>
-                  </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#efeae1]">
-                    <div
-                      className="h-full rounded-full bg-[#ffa900] transition-all"
-                      style={{ width: `${Math.round((feitosObrigatorios / obrigatorios.length) * 100)}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {mostrarPagamento && pagamento && (
-              <div className="mx-6 mb-2 rounded-xl bg-[#1b2330] px-5 py-4 text-white sm:mx-8">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#ffa900]">Referência Multibanco</p>
-                <dl className="mt-3 space-y-1.5 font-mono text-sm">
-                  <div className="flex justify-between gap-4"><dt className="font-sans text-white/60">Entidade</dt><dd>{pagamento.entidade || "no email"}</dd></div>
-                  <div className="flex justify-between gap-4"><dt className="font-sans text-white/60">Referência</dt><dd className="font-bold tracking-wide">{pagamento.referencia}</dd></div>
-                  <div className="flex justify-between gap-4"><dt className="font-sans text-white/60">Valor</dt><dd>€ {pagamento.valor.toFixed(2)}</dd></div>
-                </dl>
-                <p className="mt-3 font-sans text-xs text-white/70">Estado: {pagamento.estado}. O comprovativo anexa-se no passo correspondente.</p>
+        {espera && (
+          <article className="rounded-2xl bg-white px-6 py-8 shadow-sm ring-1 ring-[#e7e1d6]">
+            <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#c48400]">Processo de pré-inscrição concluído</p>
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight">{nome}</h1>
+            <p className="mt-3 text-sm leading-relaxed text-[#5c564c]">
+              Os documentos, o cronograma e o pagamento de {curso} já estão na ficha. A secretaria vai validar a pré-inscrição. Esta página fica aberta até essa validação.
+            </p>
+            {turmaEscolhida && (
+              <div className="mt-5 rounded-xl bg-[#fffaf2] px-4 py-3 text-sm ring-1 ring-[#efeae1]">
+                <p className="font-semibold">{turmaEscolhida.nome}</p>
+                <p className="mt-1 text-[#5c564c]">{turmaEscolhida.local} · {turmaEscolhida.horario} · início {fmtData(turmaEscolhida.dataInicio)}</p>
               </div>
             )}
+            <p className="mt-5 text-sm font-semibold text-amber-800">Aguarda a validação da secretaria.</p>
+          </article>
+        )}
 
-            <ol className="divide-y divide-[#efeae1] border-t border-[#efeae1]">
-              {tipos.map((t, i) => {
-                const anexo = porTipo.get(t.id);
-                const recusado = anexo?.estado === "recusado";
-                const aberto = t.id === activoId;
-                const feito = Boolean(anexo) && !recusado && !aberto;
-                return (
-                  <li key={t.id} className={aberto ? "bg-[#fffaf2]" : "bg-white"}>
-                    <div className="flex gap-3 px-6 py-4 sm:px-8">
-                      <span className={`mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                        anexo && !recusado ? "bg-emerald-600 text-white" : recusado ? "bg-red-600 text-white" : aberto ? "bg-[#1b2330] text-white" : "bg-[#efeae1] text-[#8a8172]"
-                      }`} aria-hidden>
-                        {anexo && !recusado ? (
-                          <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.2 7.2a1 1 0 01-1.4 0L3.3 9.1a1 1 0 011.4-1.4l4.1 4.1 6.5-6.5a1 1 0 011.4 0z" clipRule="evenodd" /></svg>
-                        ) : i + 1}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-baseline justify-between gap-2">
-                          <p className="text-sm font-semibold">{t.label}</p>
-                          <span className="text-[11px] uppercase tracking-wide text-[#8a8172]">{recusado ? "A corrigir" : t.required ? "Obrigatório" : "Opcional"}</span>
+        {estado === "ready" && !encerrada && !espera && (
+          <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[#e7e1d6]">
+            <div className="px-6 pt-7 pb-5 sm:px-8">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#c48400]">Percurso de pré-inscrição</p>
+              <h1 className="mt-2 text-[1.65rem] font-semibold tracking-tight leading-tight">{nome}</h1>
+              <p className="mt-2 text-sm leading-relaxed text-[#5c564c]">{curso}</p>
+              <ol className="mt-5 grid grid-cols-3 gap-2">
+                {PASSOS.map((label, i) => {
+                  const n = (i + 1) as 1 | 2 | 3;
+                  const aberto = passo === n;
+                  const feito = passoServidor > n || (n === 1 && docsProntos && passo > 1) || (n === 2 && Boolean(turmaEscolhida) && passo > 2);
+                  const pode = n <= passoServidor || (n === 1 && docsProntos) || (n === 2 && docsProntos);
+                  return (
+                    <li key={label}>
+                      <button
+                        type="button"
+                        disabled={!pode || aberto}
+                        onClick={() => { setPasso(n); setError(""); setOk(""); setFicheiro(null); }}
+                        className={`w-full rounded-xl px-2 py-2 text-left text-xs ${aberto ? "bg-[#1b2330] text-white" : feito ? "bg-emerald-50 text-emerald-900" : "bg-[#efeae1] text-[#8a8172]"} disabled:cursor-default`}
+                      >
+                        <span className="block font-bold">{n}</span>
+                        {label}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+              {correcao && <p className="mt-4 text-sm text-red-800">Há ficheiros por corrigir. Volte a enviar os que a secretaria indicou.</p>}
+            </div>
+
+            {passo === 1 && (
+              <section className="border-t border-[#efeae1]">
+                <div className="px-6 py-4 sm:px-8">
+                  <div className="flex items-baseline justify-between text-xs">
+                    <span className="font-semibold">{feitosObrigatorios} de {obrigatorios.length} obrigatórios</span>
+                    <span className="text-[#8a8172]">Passo 1 de 3</span>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#efeae1]">
+                    <div className="h-full rounded-full bg-[#ffa900]" style={{ width: `${obrigatorios.length ? Math.round((feitosObrigatorios / obrigatorios.length) * 100) : 0}%` }} />
+                  </div>
+                </div>
+                <ol className="divide-y divide-[#efeae1] border-t border-[#efeae1]">
+                  {tipos.map(t => {
+                    const anexo = porTipo.get(t.id);
+                    const recusado = anexo?.estado === "recusado";
+                    const aberto = t.id === activoId;
+                    return (
+                      <li key={t.id} className={aberto ? "bg-[#fffaf2]" : "bg-white"}>
+                        <div className="px-6 py-4 sm:px-8">
+                          <div className="flex flex-wrap items-baseline justify-between gap-2">
+                            <p className="text-sm font-semibold">{t.label}</p>
+                            <span className="text-[11px] uppercase tracking-wide text-[#8a8172]">{recusado ? "A corrigir" : t.required ? "Obrigatório" : "Opcional"}</span>
+                          </div>
+                          {anexo && !recusado && <p className="mt-1 truncate text-sm text-emerald-800">{anexo.nome}</p>}
+                          {recusado && anexo?.observacao && <p className="mt-1 text-sm text-red-800">{anexo.observacao}</p>}
+                          {anexo && !aberto && (
+                            <button type="button" className="mt-2 text-xs font-semibold underline decoration-[#ffa900] underline-offset-2" onClick={() => { setFoco(t.id); setFicheiro(null); setError(""); }}>
+                              Substituir
+                            </button>
+                          )}
                         </div>
-                        {anexo && !recusado && (
-                          <p className="mt-1 truncate text-sm text-emerald-800">{anexo.nome}</p>
+                        {aberto && (
+                          <form onSubmit={e => void enviar(t.id, t.label, e)} className="px-6 pb-5 sm:px-8">
+                            <CampoFicheiro onFile={setFicheiro} />
+                            {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
+                            <button type="submit" disabled={busy || !ficheiro} className="mt-4 w-full rounded-lg bg-[#ffa900] px-4 py-3 text-sm font-semibold text-[#1b2330] disabled:opacity-40 sm:w-auto">
+                              {busy ? "A anexar…" : anexo ? `Substituir ${t.label}` : `Anexar ${t.label}`}
+                            </button>
+                          </form>
                         )}
-                        {recusado && anexo?.observacao && (
-                          <p className="mt-1 text-sm text-red-800">{anexo.observacao}</p>
-                        )}
-                        {feito && (
-                          <button
-                            type="button"
-                            className="mt-2 text-xs font-semibold text-[#1b2330] underline decoration-[#ffa900] underline-offset-2"
-                            onClick={() => { setFoco(t.id); setFicheiro(null); setError(""); setOk(""); }}
-                          >
-                            Substituir
-                          </button>
-                        )}
-                        {!anexo && !aberto && (
-                          <p className="mt-1 text-xs text-[#8a8172]">Fica para quando chegar a vez deste documento.</p>
-                        )}
-                      </div>
-                    </div>
-                    {aberto && (
-                      <form onSubmit={submit} className="px-6 pb-5 sm:px-8 sm:pl-[4.25rem]">
-                        <label className="block rounded-xl border border-dashed border-[#d9c9a3] bg-white px-4 py-4">
-                          <span className="block text-xs font-semibold uppercase tracking-wide text-[#8a8172]">Ficheiro PDF, JPG ou PNG</span>
-                          <input
-                            className="mt-2 block w-full text-sm text-[#1b2330] file:mr-3 file:rounded-lg file:border-0 file:bg-[#1b2330] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
-                            type="file"
-                            accept=".pdf,image/jpeg,image/png,application/pdf"
-                            onChange={e => setFicheiro(e.target.files?.[0] ?? null)}
-                          />
-                        </label>
-                        {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
-                        <button
-                          type="submit"
-                          disabled={busy || !ficheiro}
-                          className="mt-4 w-full rounded-lg bg-[#ffa900] px-4 py-3 text-sm font-semibold text-[#1b2330] disabled:opacity-40 sm:w-auto"
-                        >
-                          {busy ? "A anexar…" : anexo ? `Substituir ${t.label}` : `Anexar ${t.label}`}
-                        </button>
-                      </form>
-                    )}
-                  </li>
-                );
-              })}
-            </ol>
+                      </li>
+                    );
+                  })}
+                </ol>
+                <div className="border-t border-[#efeae1] px-6 py-4 sm:px-8">
+                  {ok && <p className="mb-3 text-sm text-emerald-800">{ok}</p>}
+                  <button type="button" disabled={!docsProntos} onClick={() => { setPasso(2); setError(""); setOk(""); }} className="w-full rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white disabled:opacity-40">
+                    Continuar para o cronograma
+                  </button>
+                </div>
+              </section>
+            )}
 
-            {(ok || tudoFeito) && (
-              <p className="border-t border-[#efeae1] px-6 py-4 text-sm text-emerald-800 sm:px-8">
-                {tudoFeito
-                  ? "Todos os documentos desta lista estão na ficha. A secretaria já os vê."
-                  : ok}
-              </p>
+            {passo === 2 && (
+              <section className="border-t border-[#efeae1] px-6 py-5 sm:px-8">
+                <p className="text-sm text-[#5c564c]">Escolha o cronograma mais cómodo. Só aparecem turmas deste curso com vaga.</p>
+                {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
+                {turmas.length === 0 && (
+                  <p className="mt-4 rounded-xl bg-[#fffaf2] px-4 py-3 text-sm text-[#5c564c]">Ainda não há turmas com vaga. Volte mais tarde ou fale com a secretaria.</p>
+                )}
+                <ul className="mt-4 space-y-3">
+                  {turmas.map(t => {
+                    const escolhida = turmaEscolhida?.id === t.id;
+                    return (
+                      <li key={t.id}>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void escolher(t.id)}
+                          className={`w-full rounded-xl px-4 py-3 text-left ring-1 ${escolhida ? "bg-[#fffaf2] ring-[#ffa900]" : "bg-white ring-[#e7e1d6]"}`}
+                        >
+                          <span className="flex items-start justify-between gap-3">
+                            <span>
+                              <span className="block text-sm font-semibold">{t.nome}</span>
+                              <span className="mt-1 block text-sm text-[#5c564c]">{t.local} · {t.horario}</span>
+                              <span className="mt-1 block text-xs text-[#8a8172]">Início {fmtData(t.dataInicio)} · {t.livres} vaga{t.livres === 1 ? "" : "s"}</span>
+                            </span>
+                            <span className={`text-xs font-semibold ${escolhida ? "text-emerald-700" : "text-[#c48400]"}`}>{escolhida ? "Escolhida" : "Escolher"}</span>
+                          </span>
+                          {t.sessoes.length > 0 && (
+                            <span className="mt-2 block text-xs text-[#5c564c]">
+                              {t.sessoes.slice(0, 3).map(s => `${fmtData(s.data)} ${s.inicio}${s.fim ? `–${s.fim}` : ""}`).join(" · ")}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+                  <button type="button" onClick={() => setPasso(1)} className="rounded-lg border border-[#e7e1d6] px-4 py-3 text-sm font-semibold">Voltar</button>
+                  <button type="button" disabled={!turmaEscolhida} onClick={() => setPasso(3)} className="rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white disabled:opacity-40 sm:flex-1">
+                    Continuar para o pagamento
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {passo === 3 && (
+              <section className="border-t border-[#efeae1] px-6 py-5 sm:px-8">
+                {precisaPagamento ? (
+                  <>
+                    <p className="text-sm text-[#5c564c]">Pague e anexe o comprovativo. Sem esse ficheiro o processo não fica concluído.</p>
+                    {pagamento && (
+                      <div className="mt-4 rounded-xl bg-[#1b2330] px-5 py-4 text-white">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#ffa900]">Referência Multibanco</p>
+                        <dl className="mt-3 space-y-1.5 font-mono text-sm">
+                          <div className="flex justify-between gap-4"><dt className="font-sans text-white/60">Entidade</dt><dd>{pagamento.entidade || "no email"}</dd></div>
+                          <div className="flex justify-between gap-4"><dt className="font-sans text-white/60">Referência</dt><dd className="font-bold tracking-wide">{pagamento.referencia}</dd></div>
+                          <div className="flex justify-between gap-4"><dt className="font-sans text-white/60">Valor</dt><dd>€ {pagamento.valor.toFixed(2)}</dd></div>
+                        </dl>
+                      </div>
+                    )}
+                    {!pagamento && <p className="mt-4 text-sm text-[#5c564c]">A referência chega por email. Pode anexar o comprovativo na mesma.</p>}
+                    {comprovativo && comprovativo.estado !== "recusado" && <p className="mt-3 text-sm text-emerald-800">{comprovativo.nome}</p>}
+                    {comprovativo?.estado === "recusado" && comprovativo.observacao && <p className="mt-3 text-sm text-red-800">{comprovativo.observacao}</p>}
+                    <form onSubmit={e => void enviar("comprovativo", "Comprovativo de pagamento", e)} className="mt-4">
+                      <CampoFicheiro onFile={setFicheiro} />
+                      {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
+                      <button type="submit" disabled={busy || !ficheiro} className="mt-4 w-full rounded-lg bg-[#ffa900] px-4 py-3 text-sm font-semibold text-[#1b2330] disabled:opacity-40 sm:w-auto">
+                        {busy ? "A anexar…" : comprovativo ? "Substituir comprovativo" : "Anexar comprovativo"}
+                      </button>
+                    </form>
+                  </>
+                ) : (
+                  <p className="text-sm text-[#5c564c]">Esta formação não tem pagamento. Confirme para enviar o processo à secretaria.</p>
+                )}
+                {ok && <p className="mt-3 text-sm text-emerald-800">{ok}</p>}
+                {!precisaPagamento && error && <p className="mt-3 text-sm text-red-700">{error}</p>}
+                <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+                  <button type="button" onClick={() => setPasso(2)} className="rounded-lg border border-[#e7e1d6] px-4 py-3 text-sm font-semibold">Voltar</button>
+                  <button type="button" disabled={busy || !pagamentoPronto || !turmaEscolhida} onClick={() => void concluir()} className="rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white disabled:opacity-40 sm:flex-1">
+                    {busy ? "A concluir…" : "Concluir pré-inscrição"}
+                  </button>
+                </div>
+              </section>
             )}
           </article>
         )}
       </main>
     </div>
+  );
+}
+
+function CampoFicheiro({ onFile }: { onFile: (f: File | null) => void }) {
+  return (
+    <label className="block rounded-xl border border-dashed border-[#d9c9a3] bg-white px-4 py-4">
+      <span className="block text-xs font-semibold uppercase tracking-wide text-[#8a8172]">Ficheiro PDF, JPG ou PNG</span>
+      <input
+        className="mt-2 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-[#1b2330] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
+        type="file"
+        accept=".pdf,image/jpeg,image/png,application/pdf"
+        onChange={e => onFile(e.target.files?.[0] ?? null)}
+      />
+    </label>
   );
 }

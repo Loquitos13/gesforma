@@ -555,9 +555,18 @@ export const apiAplicarTurmaRegras = (regime?: "gold" | "fin") =>
     method: "POST", body: JSON.stringify({ regime }),
   });
 
+export type TurmaPercurso = {
+  id: number;
+  nome: string;
+  local: string;
+  horario: string;
+  dataInicio: string;
+  livres: number;
+  sessoes: { data: string; inicio: string; fim: string }[];
+};
 export const apiPublicDocumentos = (token: string) =>
   api<{
-    nome: string; curso: string;
+    nome: string; curso: string; preco?: number;
     tipos: { id: string; label: string; required?: boolean }[];
     ficheiros: { id: number; tipo: string; nome: string; created_at: string; estado?: string; observacao?: string }[];
     docsCompletos?: boolean;
@@ -566,9 +575,21 @@ export const apiPublicDocumentos = (token: string) =>
     pagamento?: { entidade: string; referencia: string; valor: number; estado: string } | null;
     encerrada?: boolean;
     correcao?: boolean;
+    passo?: 1 | 2 | 3;
+    percursoConcluido?: boolean;
+    turmas?: TurmaPercurso[];
+    turmaEscolhida?: TurmaPercurso | null;
   }>(
     `/v1/public/documentos/${encodeURIComponent(token)}`,
   );
+export const apiPublicEscolherTurma = (token: string, turmaId: number) =>
+  api<{ ok: boolean }>(`/v1/public/documentos/${encodeURIComponent(token)}/turma`, {
+    method: "POST", body: JSON.stringify({ turmaId }),
+  });
+export const apiPublicConcluirPercurso = (token: string) =>
+  api<{ ok: boolean }>(`/v1/public/documentos/${encodeURIComponent(token)}/concluir`, {
+    method: "POST", body: JSON.stringify({}),
+  });
 export async function apiPublicDocumentoUpload(token: string, file: File, tipo: string) {
   const fd = new FormData();
   fd.append("file", file);
@@ -795,7 +816,19 @@ export type CrmDossier = {
   documentos?: { id: number; tipo: string; label: string; nome: string; url: string; createdAt: string; estado?: string; observacao?: string }[];
   docsFechado?: boolean;
   pagamento?: { id: string; referencia: string; valor: number; estado: string; entidade: string } | null;
+  percursoConcluido?: boolean;
+  validadaEm?: string | null;
+  recusaMotivo?: string;
+  podeValidar?: boolean;
+  faltaValidar?: string;
+  turmaEscolhida?: { id: number; nome: string; local: string; horario: string; dataInicio: string; livres: number } | null;
 };
+export const apiCrmValidarPreinscricao = (id: number) =>
+  api<CrmDossier>(`/v1/crm/leads/${id}/validar-preinscricao`, { method: "POST", body: JSON.stringify({}) });
+export const apiCrmTurmaCheia = (id: number) =>
+  api<{ ok: boolean; enviadas: number; turmas: { nome: string; horario: string; local: string; dataInicio: string; livres: number }[] }>(
+    `/v1/crm/leads/${id}/turma-cheia`, { method: "POST", body: JSON.stringify({}) },
+  );
 export const apiCrmDocValidar = (id: number, docId: number) =>
   api<CrmDossier>(`/v1/crm/leads/${id}/documentos/${docId}/validar`, { method: "POST", body: JSON.stringify({}) });
 export const apiCrmDocRecusar = (id: number, docId: number, observacao: string) =>

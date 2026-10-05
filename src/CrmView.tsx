@@ -696,7 +696,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
             if (!id) return;
             patchGold(t.id, { totalAlunos: t.totalAlunos + 1 });
           }
-          patchPreinscricao(ficha.id, { estado: "Formando" });
+          patchPreinscricao(ficha.id, { estado: "Formando", turmaId: regime === "fin" ? fin.find(x => x.nome === turmaNome)?.id : gold.find(x => x.nome === turmaNome)?.id });
           setFicha({ ...ficha, estado: "Formando" });
           setTimeout(carregar, 250);
         }}
@@ -734,7 +734,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
             if (!id) return;
             patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
           }
-          patchPreinscricao(item.id, { estado: "Formando" });
+          patchPreinscricao(item.id, { estado: "Formando", turmaId: dest.id });
           toastOk(`${item.nome} ${item.apelido} inscrito em ${dest.nome}.`);
           setConfirmMove(null);
           setTimeout(carregar, 200);

@@ -335,9 +335,8 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
           const mapped = created.preinscricao as ReturnType<typeof mapPreinscricao>;
           if ("estado" in mapped) say(textoEstado(mapped));
         } else {
-          const valor = "preco" in created.preinscricao ? Number(created.preinscricao.preco) : 0;
-          const linhaValor = valor > 0 ? `\nValor da inscrição: € ${valor}` : "";
-          say(`Pré-inscrição nº ${leadId} gravada.\n${turma.curso}\n${turma.local} · ${turma.horario} · ${fmtDataPt(turma.dataInicio)}${linhaValor}\n${created.aviso}\n\nO pagamento *não* se faz neste chat.`);
+          const preco = "preco" in created.preinscricao ? Number(created.preinscricao.preco) : turma.preco;
+          say(`Pré-inscrição nº ${leadId} gravada.\n${turma.curso}\n${turma.local} · ${turma.horario} · ${fmtDataPt(turma.dataInicio)}\nPreço: € ${Number.isFinite(preco) ? preco : turma.preco ?? "-"}\n${created.aviso}\n\nO pagamento *não* se faz neste chat.`);
         }
         passo = "menu";
         dados = {};

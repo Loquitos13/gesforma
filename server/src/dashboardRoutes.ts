@@ -37,15 +37,100 @@ function monthKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-type PagamentoRow = { valor: unknown; metodo: string; curso: string; data: string; estado: string };
+function shiftMonth(chave: string, delta: number) {
+  const [y, m] = chave.split("-").map(Number);
+  const d = new Date(y || 2000, (m || 1) - 1 + delta, 1);
+  return monthKey(d);
+}
 
-function financeiro(pagamentos: PagamentoRow[], now: Date) {
-  const pagos = pagamentos.filter(p => /pago/i.test(p.estado));
-  const pendentes = pagamentos.filter(p => !/pago/i.test(p.estado));
+function rotuloMes(chave: string) {
+  const [y, m] = chave.split("-").map(Number);
+  return `${MESES[(m || 1) - 1] ?? chave} ${y || ""}`.trim();
+}
+
+function isoDay(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function janelaMeses(now: Date, de?: string, ate?: string) {
+  const fim = ate ? parseData(ate) ?? now : now;
+  const inicio = de
+    ? parseData(de) ?? new Date(fim.getFullYear(), fim.getMonth() - 11, 1)
+    : new Date(fim.getFullYear(), fim.getMonth() - 11, 1);
+  let y = inicio.getFullYear();
+  let m = inicio.getMonth();
+  const endY = fim.getFullYear();
+  const endM = fim.getMonth();
+  const out: { chave: string; mes: string; ano: number }[] = [];
+  while (y < endY || (y === endY && m <= endM)) {
+    out.push({ chave: `${y}-${String(m + 1).padStart(2, "0")}`, mes: MESES[m] ?? "", ano: y });
+    m += 1;
+    if (m > 11) { m = 0; y += 1; }
+    if (out.length > 18) out.shift();
+  }
+  if (!out.length) {
+    out.push({ chave: monthKey(now), mes: MESES[now.getMonth()] ?? "", ano: now.getFullYear() });
+  }
+  return out;
+}
+
+type PagamentoRow = { valor: unknown; metodo: string; curso: string; data: string; estado: string };
+type CursoMes = { nome: string; n: number; receita: number };
+
+function pagoNoDia(p: PagamentoRow, de?: string, ate?: string) {
+  if (!/pago/i.test(p.estado)) return null;
+  const d = parseData(p.data);
+  if (!d) return null;
+  const dia = isoDay(d);
+  if (de && dia < de) return null;
+  if (ate && dia > ate) return null;
+  return d;
+}
+
+function totaisPorMes(pagamentos: PagamentoRow[], de?: string, ate?: string) {
+  const map = new Map<string, number>();
+  for (const p of pagamentos) {
+    const d = pagoNoDia(p, de, ate);
+    if (!d) continue;
+    const k = monthKey(d);
+    map.set(k, (map.get(k) ?? 0) + num(p.valor));
+  }
+  return map;
+}
+
+function cursosNoMes(pagamentos: PagamentoRow[], de?: string, ate?: string) {
+  const byMonth = new Map<string, Map<string, { n: number; receita: number }>>();
+  for (const p of pagamentos) {
+    const d = pagoNoDia(p, de, ate);
+    if (!d) continue;
+    const mk = monthKey(d);
+    const nome = p.curso.trim() || "Sem curso";
+    let cursos = byMonth.get(mk);
+    if (!cursos) {
+      cursos = new Map();
+      byMonth.set(mk, cursos);
+    }
+    const cur = cursos.get(nome) ?? { n: 0, receita: 0 };
+    cur.n += 1;
+    cur.receita += num(p.valor);
+    cursos.set(nome, cur);
+  }
+  const out = new Map<string, CursoMes[]>();
+  for (const [mk, cursos] of byMonth) {
+    out.set(mk, [...cursos.entries()]
+      .map(([nome, v]) => ({ nome, n: v.n, receita: Math.round(v.receita) }))
+      .sort((a, b) => b.n - a.n || b.receita - a.receita)
+      .slice(0, 12));
+  }
+  return out;
+}
+
+function financeiro(pagamentos: PagamentoRow[], now: Date, de?: string, ate?: string) {
+  const pagos = pagamentos.filter(p => pagoNoDia(p, de, ate));
+  const pendentes = pagamentos.filter(p => !/pago/i.test(p.estado) && pagoNoDia({ ...p, estado: "Pago" }, de, ate));
   const receitaTotal = pagos.reduce((s, p) => s + num(p.valor), 0);
   const mesAtual = monthKey(now);
-  const mesAnteriorDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const mesAnterior = monthKey(mesAnteriorDate);
+  const mesAnterior = shiftMonth(mesAtual, -1);
 
   const porMes = new Map<string, number>();
   for (const p of pagos) {
@@ -55,11 +140,25 @@ function financeiro(pagamentos: PagamentoRow[], now: Date) {
     porMes.set(k, (porMes.get(k) ?? 0) + num(p.valor));
   }
 
-  const receitaMensal: { mes: string; v: number }[] = [];
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    receitaMensal.push({ mes: MESES[d.getMonth()] ?? "", v: Math.round(porMes.get(monthKey(d)) ?? 0) });
-  }
+  const janela = janelaMeses(now, de, ate);
+  const noPeriodo = cursosNoMes(pagamentos, de, ate);
+  const paraComparar = de || ate ? cursosNoMes(pagamentos) : noPeriodo;
+  const totaisComparar = de || ate ? totaisPorMes(pagamentos) : porMes;
+  const periodoComparacao = (chave: string) => ({
+    chave,
+    rotulo: rotuloMes(chave),
+    v: Math.round(totaisComparar.get(chave) ?? 0),
+    cursos: paraComparar.get(chave) ?? [],
+  });
+  const receitaMensal = janela.map(m => ({
+    ...m,
+    v: Math.round(porMes.get(m.chave) ?? 0),
+    cursos: noPeriodo.get(m.chave) ?? [],
+    comparar: {
+      mesPassado: periodoComparacao(shiftMonth(m.chave, -1)),
+      anoPassado: periodoComparacao(shiftMonth(m.chave, -12)),
+    },
+  }));
 
   const receitaMes = Math.round(porMes.get(mesAtual) ?? 0);
   const receitaMesAnterior = Math.round(porMes.get(mesAnterior) ?? 0);
@@ -358,8 +457,6 @@ export function registerDashboardRoutes(
     const payConds = ["true"];
     const payParams: unknown[] = [];
     let pi = 1;
-    if (f.de) { payConds.push(`${payDate("pg")} >= $${pi}::text`); payParams.push(f.de); pi += 1; }
-    if (f.ate) { payConds.push(`${payDate("pg")} <= $${pi}::text`); payParams.push(f.ate); pi += 1; }
     if (f.curso) { payConds.push(`pg.curso = $${pi}`); payParams.push(f.curso); pi += 1; }
     const cursoFinMatch = `EXISTS (
       SELECT 1 FROM cursos_fin c
@@ -375,10 +472,12 @@ export function registerDashboardRoutes(
     if (f.horario) { payConds.push(`COALESCE(p.horario, tg.horario, '') = $${pi}`); payParams.push(f.horario); pi += 1; }
     if (f.audiencia === "pre") payConds.push(`(p.id IS NULL OR p.estado <> 'Formando')`);
     if (f.audiencia === "formandos") payConds.push(`(p.estado = 'Formando' OR fg.id IS NOT NULL)`);
-    const pieMesIdx = pi;
-    const pieParams = [...payParams, `${f.mes ?? monthKey(now)}%`];
-
-    const [leadCounts, entityCounts, pagamentosRows, origens, cursosPorReceita, leadsPorCurso, desag, filtros, precos, pieCursos, viasLead, viasFormando] = await Promise.all([
+    const rankConds = [...payConds];
+    const rankParams = [...payParams];
+    let ri = pi;
+    if (f.de) { rankConds.push(`${payDate("pg")} >= $${ri}::text`); rankParams.push(f.de); ri += 1; }
+    if (f.ate) { rankConds.push(`${payDate("pg")} <= $${ri}::text`); rankParams.push(f.ate); }
+    const [leadCounts, entityCounts, pagamentosRows, origens, cursosPorReceita, leadsPorCurso, desag, filtros, viasLead, viasFormando] = await Promise.all([
       db.query<{ preinscritos: number; contactados: number }>(
         `SELECT
            (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.estado <> 'Formando') AS preinscritos,
@@ -433,9 +532,9 @@ export function registerDashboardRoutes(
            LEFT JOIN formandos_gold fg ON lower(fg.email) = lower(NULLIF(pg.email,''))
            LEFT JOIN turmas_gold tg ON tg.id = fg.turma_id
            ${payJoin}
-          WHERE pg.estado = 'Pago' AND pg.curso <> '' AND ${payConds.join(" AND ")}
+          WHERE pg.estado = 'Pago' AND pg.curso <> '' AND ${rankConds.join(" AND ")}
           GROUP BY pg.curso ORDER BY 2 DESC LIMIT 12`,
-        payParams,
+        rankParams,
       ),
       db.query<{ curso: string; n: number }>(
         `SELECT p.curso, count(*)::int AS n FROM preinscricoes p WHERE ${lw.sql} AND p.curso <> '' GROUP BY p.curso`,
@@ -466,32 +565,6 @@ export function registerDashboardRoutes(
           ? `SELECT DISTINCT curso, local, horario FROM preinscricoes WHERE regime = $1`
           : `SELECT DISTINCT curso, local, horario FROM preinscricoes`,
         f.regime ? [f.regime] : [],
-      ),
-      db.query<{ curso: string; local: string; horario: string; preco: unknown; inicio: string }>(
-        `SELECT COALESCE(payload->>'curso','') AS curso,
-                COALESCE(payload->>'local','') AS local,
-                COALESCE(payload->>'horario','') AS horario,
-                COALESCE(payload->>'preco','0') AS preco,
-                COALESCE(payload->>'inicio','') AS inicio
-           FROM catalog_items
-          WHERE kind = 'datas'
-            AND ($1::text IS NULL OR payload->>'curso' = $1)
-            AND ($2::text IS NULL OR payload->>'local' = $2)
-            AND ($3::text IS NULL OR payload->>'horario' = $3)
-          ORDER BY payload->>'curso', payload->>'local'`,
-        [f.curso ?? null, f.local ?? null, f.horario ?? null],
-      ),
-      db.query<{ curso: string; receita: unknown }>(
-        `SELECT pg.curso, COALESCE(sum(pg.valor), 0) AS receita
-           FROM pagamentos pg
-           LEFT JOIN formandos_gold fg ON lower(fg.email) = lower(NULLIF(pg.email,''))
-           LEFT JOIN turmas_gold tg ON tg.id = fg.turma_id
-           ${payJoin}
-          WHERE pg.estado = 'Pago' AND pg.curso <> ''
-            AND ${payDate("pg")} LIKE $${pieMesIdx}::text
-            AND ${payConds.join(" AND ")}
-          GROUP BY pg.curso ORDER BY 2 DESC LIMIT 8`,
-        pieParams,
       ),
       db.query<{ pre_inscritos: number; pre_convertidos: number; pre_total: number; pre_pagos: number }>(
         `SELECT
@@ -535,7 +608,7 @@ export function registerDashboardRoutes(
     ]);
 
     const c = { ...(entityCounts.rows[0] ?? {}), ...(leadCounts.rows[0] ?? {}) };
-    const fin = financeiro(pagamentosRows.rows, now);
+    const fin = financeiro(pagamentosRows.rows, now, f.de, f.ate);
     const regime = f.regime;
     let formandosGold = regime === "fin" ? 0 : Number(c?.formandos_gold ?? 0);
     let formandosFin = regime === "gold" ? 0 : Number(c?.formandos_fin ?? 0);
@@ -589,15 +662,6 @@ export function registerDashboardRoutes(
       pct: desagSoma > 0 ? Math.round((Number(r.n) / desagSoma) * 100) : 0,
     }));
 
-    const pieSoma = pieCursos.rows.reduce((s, r) => s + num(r.receita), 0);
-    const COLORS = ["#F59E0B", "#10B981", "#3B82F6", "#8B5CF6", "#E1306C", "#0A66C2", "#94A3B8", "#14B8A6"];
-    const receitaMesCursos = pieCursos.rows.map((r, i) => ({
-      nome: r.curso,
-      receita: Math.round(num(r.receita)),
-      pct: pieSoma > 0 ? Math.round((num(r.receita) / pieSoma) * 100) : 0,
-      color: COLORS[i % COLORS.length]!,
-    }));
-
     const viaL = viasLead.rows[0];
     const viaF = viasFormando.rows[0];
     const preTotal = Number(viaL?.pre_total ?? 0);
@@ -644,15 +708,6 @@ export function registerDashboardRoutes(
       topCursos,
       desagregar: f.desagregar,
       desagregacao,
-      precos: precos.rows.map(r => ({
-        curso: r.curso,
-        local: r.local,
-        horario: r.horario,
-        inicio: r.inicio,
-        preco: Math.round(num(r.preco)),
-      })),
-      receitaMesCursos,
-      mesSeleccionado: f.mes ?? monthKey(now),
       filtros: {
         cursos: uniq("curso"),
         locais: uniq("local"),

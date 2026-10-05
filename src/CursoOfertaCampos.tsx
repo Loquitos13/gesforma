@@ -26,6 +26,9 @@ export function CursoOfertaCampos({
   const locais = uniqueVals(ofertaFiltrada(turmas, { curso: value.curso }), "local");
   const horarios = uniqueVals(ofertaFiltrada(turmas, { curso: value.curso, local: value.local }), "horario");
   const datas = ofertaFiltrada(turmas, { curso: value.curso, local: value.local, horario: value.horario });
+  const precoOferta = value.local && value.horario
+    ? datas.find(t => t.preco != null)?.preco ?? null
+    : null;
   const field = variant === "crm" ? fieldCrm : fieldPublic;
   const Label = "label";
   const labelCls = variant === "crm" ? labelCrm : labelPublic;
@@ -112,12 +115,12 @@ export function CursoOfertaCampos({
           Ainda não há turma liberada para este curso (local + horário + data de início). A secretaria tem de activar uma turma Gold.
         </p>
       )}
-      {typeof preco === "number" && preco > 0 && (
-        <p className={variant === "crm" ? "text-sm font-semibold text-amber-700" : "sm:col-span-2 text-sm text-slate-700"}>
-          Valor da inscrição: € {preco}
-          <span className="block text-xs font-normal text-slate-500 mt-1">
-            Segue o curso. Se o local, o horário ou os dois tiverem preço próprio, fica esse.
-          </span>
+      {(precoOferta ?? (typeof preco === "number" && preco > 0 ? preco : null)) != null && (
+        <p className={variant === "crm" ? "text-sm font-semibold text-amber-700" : "sm:col-span-2 text-sm font-semibold text-slate-800"}>
+          Preço desta inscrição: € {(precoOferta ?? preco ?? 0).toLocaleString("pt-PT")}
+          {precoOferta != null && value.local && value.horario && (
+            <span className="font-normal text-slate-500"> · vale para {value.local} e {value.horario}</span>
+          )}
         </p>
       )}
       {value.local && !horarios.length && (

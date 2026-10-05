@@ -4,6 +4,7 @@ import { config } from "./config.js";
 import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
 import { nextOpsId } from "./ops.js";
+import { precoParaOferta } from "./precoOferta.js";
 import { isEmail, normalizeEmail } from "./security.js";
 
 function documentosUrl(token: string) {
@@ -35,13 +36,38 @@ async function entidadeMb(db: Db) {
   return String(obj["Entidade Multibanco"] ?? "").trim();
 }
 
+async function alinharPrecoLead(
+  db: Db,
+  lead: { id: number; curso: string; local?: string; horario?: string; preco: number },
+) {
+  if (!lead.curso) return lead.preco;
+  const resolved = await precoParaOferta(db, lead.curso, lead.local ?? "", lead.horario ?? "");
+  if (resolved == null) return lead.preco;
+  if (resolved !== Number(lead.preco)) {
+    await db.query("UPDATE preinscricoes SET preco = $2 WHERE id = $1", [lead.id, resolved]);
+  }
+  return resolved;
+}
+
 export async function ensurePagamentoPendente(
   db: Db,
-  lead: { id: number; nome: string; apelido: string; email: string; curso: string; preco: number; pagamento_id?: string | null },
+  lead: { id: number; nome: string; apelido: string; email: string; curso: string; local?: string; horario?: string; preco: number; pagamento_id?: string | null },
 ) {
+  lead.preco = await alinharPrecoLead(db, lead);
   if (lead.pagamento_id) {
     const existing = await db.query("SELECT * FROM pagamentos WHERE id = $1", [lead.pagamento_id]);
-    if (existing.rows[0]) return existing.rows[0] as Record<string, unknown>;
+    const row = existing.rows[0] as Record<string, unknown> | undefined;
+    if (row) {
+      if (String(row.estado ?? "") !== "Pago" && Number(row.valor) !== lead.preco) {
+        const referencia = refMb(lead.id, lead.preco).replace(/\s/g, "");
+        await db.query("UPDATE pagamentos SET valor = $2, referencia = $3 WHERE id = $1 AND estado <> 'Pago'", [
+          row.id, lead.preco, referencia,
+        ]);
+        row.valor = lead.preco;
+        row.referencia = referencia;
+      }
+      return row;
+    }
   }
   const email = normalizeEmail(lead.email);
   const dup = await db.query(
@@ -51,10 +77,19 @@ export async function ensurePagamentoPendente(
     [email, lead.curso],
   );
   if (dup.rows[0]) {
+    const existente = dup.rows[0] as Record<string, unknown>;
+    if (String(existente.estado ?? "") !== "Pago" && Number(existente.valor) !== lead.preco) {
+      const referencia = refMb(lead.id, lead.preco).replace(/\s/g, "");
+      await db.query("UPDATE pagamentos SET valor = $2, referencia = $3 WHERE id = $1 AND estado <> 'Pago'", [
+        existente.id, lead.preco, referencia,
+      ]);
+      existente.valor = lead.preco;
+      existente.referencia = referencia;
+    }
     await db.query("UPDATE preinscricoes SET pagamento_id = $2 WHERE id = $1 AND (pagamento_id IS NULL OR pagamento_id = '')", [
-      lead.id, String(dup.rows[0].id),
+      lead.id, String(existente.id),
     ]);
-    return dup.rows[0] as Record<string, unknown>;
+    return existente;
   }
   const id = String(await nextOpsId(db));
   const valor = Number(lead.preco) || 0;
@@ -71,12 +106,12 @@ export async function ensurePagamentoPendente(
 
 export async function firePagamentoRefEmail(db: Db, leadId: number) {
   const row = await db.query(
-    `SELECT id, nome, apelido, email, curso, preco, regime, pagamento_id, horario
+    `SELECT id, nome, apelido, email, curso, local, preco, regime, pagamento_id, horario
        FROM preinscricoes WHERE id = $1`,
     [leadId],
   );
   const lead = row.rows[0] as {
-    id: number; nome: string; apelido: string; email: string; curso: string;
+    id: number; nome: string; apelido: string; email: string; curso: string; local: string;
     preco: number; regime: string; pagamento_id: string | null; horario: string;
   } | undefined;
   if (!lead) return null;

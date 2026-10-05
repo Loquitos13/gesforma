@@ -6,6 +6,7 @@ export type OfertaTurma = {
   horario: string;
   dataInicio: string;
   vagasLivres: number;
+  preco?: number | null;
 };
 
 export type CursoOfertaSel = {

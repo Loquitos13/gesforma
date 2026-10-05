@@ -110,6 +110,7 @@ export function mapFormandoFin(r: Record<string, unknown>) {
     nome: String(r.nome ?? ""),
     apelido: String(r.apelido ?? ""),
     turma: String(r.turma ?? ""),
+    turmaId: r.turma_id == null || r.turma_id === "" ? 0 : num(r.turma_id),
     telf: String(r.telf ?? ""),
     email: String(r.email ?? ""),
     curso: String(r.curso ?? ""),

@@ -723,12 +723,19 @@ export async function syncTurmaDriveAccess(db: Db, input: {
   const formandos = input.regime === "gold"
     ? await db.query<{ email: string }>("SELECT email FROM formandos_gold WHERE turma_id = $1 AND email <> ''", [input.turmaId])
     : await db.query<{ email: string }>(
-      "SELECT email FROM formandos_fin WHERE turma = $1 AND email <> ''",
-      [nome],
+      `SELECT email FROM formandos_fin
+        WHERE email <> ''
+          AND (turma_id = $1 OR lower(trim(turma)) = lower(trim($2)))`,
+      [input.turmaId, nome],
     );
   const nomes = nomesNoCronograma(input.cronograma, [input.formador ?? "", ...(input.formadores ?? [])]);
   const formadores = nomes.length
-    ? await db.query<{ email: string }>("SELECT email FROM formadores WHERE nome = ANY($1::text[]) AND email <> ''", [nomes])
+    ? await db.query<{ email: string }>(
+      `SELECT email FROM formadores
+        WHERE email <> ''
+          AND lower(trim(nome)) IN (SELECT lower(trim(jsonb_array_elements_text($1::jsonb))))`,
+      [nomes],
+    )
     : { rows: [] as { email: string }[] };
 
   const turmaEmails = new Set<string>();

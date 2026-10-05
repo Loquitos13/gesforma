@@ -14,6 +14,7 @@ import { AppModal } from "./FormKit";
 import { ConfirmDangerModal } from "./SecretaryUX";
 import { persist } from "./toastBus";
 import { useTurmas } from "./TurmasContext";
+import { idCursoPorNome } from "./cursoLocais";
 import { useLists } from "./ListsContext";
 import { imprimirFolhasPresencas } from "./presencasPrint";
 import { dtpCategoriaPasta, dtpPastaNome } from "./dtpPasta";
@@ -367,8 +368,8 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
         if (!alive) return;
         const extras: { id: string; label: string }[] = [];
         for (const nomeCurso of cursos) {
-          const goldId = cursosGold.find(c => c.nome === nomeCurso)?.id;
-          const finId = cursosFin.find(c => c.ufcd === nomeCurso || c.nomeComercial === nomeCurso)?.id;
+          const goldId = idCursoPorNome("gold", nomeCurso, cursosGold, cursosFin) ?? undefined;
+          const finId = idCursoPorNome("fin", nomeCurso, cursosGold, cursosFin) ?? undefined;
           if (goldId != null) {
             const m = await apiDtpModelo("gold", goldId).catch(() => null);
             extras.push(...(m?.modelo.extra.filter(x => x.ambito === "formador").map(x => ({ id: x.id, label: x.label })) ?? []));

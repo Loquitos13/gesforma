@@ -13,6 +13,7 @@ import {
   type AvaliacaoCurso,
 } from "./avaliacaoCurso";
 import { codigoTopico, novoTopicoId, programaDePayload, type OrganizacaoPrograma, type TopicoPrograma } from "./cursoPrograma";
+import { refereCurso } from "./cursoLocais";
 import { fmtDataPt } from "./oferta";
 import { getParametrosAvaliacao, type CriterioAvaliacao } from "./TurmaExtras";
 import { useTurmas } from "./TurmasContext";
@@ -651,7 +652,7 @@ export function CursoFichaView({
     const nome = data.titulo || curso?.nome || "";
     if (!nome) return [];
     if (accent === "gold") {
-      return gold.filter(x => x.curso === nome).map(x => ({
+      return gold.filter(x => x.curso === nome || refereCurso(x.curso, { nome })).map(x => ({
         id: x.id,
         nome: x.nome,
         local: x.local,
@@ -661,7 +662,12 @@ export function CursoFichaView({
         libertada: isTurmaActiva(x),
       }));
     }
-    return fin.filter(x => x.curso === nome).map(x => ({
+    return fin.filter(x => refereCurso(x.curso, {
+      nome,
+      nomeComercial: nome,
+      ufcd: curso?.ufcd,
+      ufcdCod: curso?.ufcdCod,
+    })).map(x => ({
       id: x.id,
       nome: x.nome,
       local: x.local,
@@ -670,7 +676,7 @@ export function CursoFichaView({
       vagasLivres: Math.max(0, (x.alunosTotal || 0) - (x.alunos || 0)),
       libertada: isTurmaActiva(x),
     }));
-  }, [accent, gold, fin, data.titulo, curso?.nome]);
+  }, [accent, gold, fin, data.titulo, curso?.nome, curso?.ufcd, curso?.ufcdCod]);
 
   const horariosPreco = useMemo(() => {
     const nomes = new Set<string>();

@@ -43,6 +43,8 @@ import { useFormadorOptions, useFormadores } from "./FormadoresContext";
 import { useTurmas } from "./TurmasContext";
 import { codigoInternoTurma } from "./turmaCodigo";
 import { formadorIndisponivel, formadorNaSessao, minutoSeguinte, nomesDoUtilizador, podeMexerDocumento, staffPodeDossie } from "./sessaoAcesso";
+import { sessaoCabeNoSlot } from "./disponibilidade";
+import { CustosTurmaCard } from "./CustosTurma";
 import { CrmClientesView, CrmContratosView, CrmParceirosView } from "./CrmDiretorioView";
 import { FormadorCalendario, eventosDoFormador } from "./FormadorCalendario";
 import { cronogramaToSessoes, formatSessaoLabel, generateCronograma, hojeIso, horasDoFormador, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
@@ -1439,7 +1441,7 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
           <p className="text-sm font-semibold text-slate-700">Elegibilidade por formando</p>
           <p className="text-xs text-slate-400 mt-0.5">
-            Mínimo: 75% presenças e nota ≥ 10. As presenças vêm das {sessoesRegistadas} folhas já registadas nas sessões.
+            Mínimo: 75% presenças e nota ≥ 10. As presenças vêm das {sessoesRegistadas} folhas já registadas nas sessões. No CCP a nota final é a da avaliação da turma. Nos outros cursos, o resultado de e-learning é o valor a lançar no SIGO.
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -1573,9 +1575,13 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const opcoesNovaSessao = (turma && (turma.formador || (turma.formadores ?? []).length)
     ? formadorOptsSessao.filter(o => o.value === turma.formador || (turma.formadores ?? []).includes(o.value))
     : formadorOptsSessao
-  ).map(o => formadorIndisponivel(o.value, dataSessao, horaSessao, minutoSeguinte(horaSessao), gold, undefined)
-    ? { ...o, disabled: true, sub: "Indisponível neste horário" }
-    : o);
+  ).map(o => {
+    const overlap = formadorIndisponivel(o.value, dataSessao, horaSessao, minutoSeguinte(horaSessao), gold, undefined);
+    const ficha = listaFormadores.find(f => f.nome.toLowerCase() === o.value.toLowerCase());
+    const fora = Boolean(ficha) && !sessaoCabeNoSlot(dataSessao, horaSessao, minutoSeguinte(horaSessao), ficha?.disponibilidade);
+    if (!overlap && !fora) return o;
+    return { ...o, disabled: true, sub: fora && !overlap ? "Fora da disponibilidade CCP" : "Indisponível neste horário" };
+  });
   const [moduloSessao, setModuloSessao] = useState<string[]>([]);
   const [addFormando, setAddFormando] = useState(false);
   const [editTurma, setEditTurma] = useState(false);
@@ -1860,6 +1866,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             </div>
           </Card>
         </div>
+        <CustosTurmaCard turma={turma} canEdit={!souFormador} onSala={valor => patchGold(turma.id, { custoHoraSala: valor })} />
         </>}
       </div>
 
@@ -2855,6 +2862,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   const [filtro, setFiltro] = useState("Todos");
   const [filtroCurso, setFiltroCurso] = useState("");
   const [filtroLocal, setFiltroLocal] = useState("");
+  const [filtroHorario, setFiltroHorario] = useState("");
   const [filtroDe, setFiltroDe] = useState("");
   const [filtroAte, setFiltroAte] = useState("");
   const [formadoresExtra, setFormadoresExtra] = useState<string[]>([]);
@@ -2868,6 +2876,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   const [formador, setFormador] = useState("Isac Silva");
   const [dataInicio, setDataInicio] = useState("");
   const [vagas, setVagas] = useState(16);
+  const [custoHoraSala, setCustoHoraSala] = useState(0);
   const [activa, setActiva] = useState(true);
   const [cronograma, setCronograma] = useState<SessaoCronograma[]>([]);
   const editing = open && open !== "new" ? open : null;
@@ -2889,7 +2898,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
     const q = `${t.nome} ${t.local} ${t.curso}`.toLowerCase().includes(s.toLowerCase());
     const dia = (t.dataInicio || "").slice(0, 10);
     const naData = (!filtroDe || (dia && dia >= filtroDe)) && (!filtroAte || (dia && dia <= filtroAte));
-    return q && naData && matchesFilter(t.curso, filtroCurso) && matchesFilter(t.local, filtroLocal) && (filtro === "Todos" || t.estado === filtro);
+    return q && naData && matchesFilter(t.curso, filtroCurso) && matchesFilter(t.local, filtroLocal) && matchesFilter(t.horario, filtroHorario) && (filtro === "Todos" || t.estado === filtro);
   });
   const rows = f.slice((p - 1) * pp, p * pp);
   const horasCurso = cursosGold.find(c => c.nome === curso)?.horas ?? cursosGoldData.find(c => c.nome === curso)?.horas ?? 90;
@@ -2904,6 +2913,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
       nomeManual.current = Boolean(editing);
       setDataInicio(editing?.dataInicio ?? "");
       setVagas(editing?.vagas ?? 16);
+      setCustoHoraSala(editing?.custoHoraSala ?? 0);
       setActiva(editing ? isTurmaActiva(editing) : true);
       setCronograma(editing?.cronograma ?? []);
     }
@@ -2917,7 +2927,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
     if (!curso.trim()) return;
     const payload = {
       nome: nome.trim() || codigoAuto || "Nova turma",
-      curso, local, horario, formador, formadores: formadoresExtra, dataInicio, vagas,
+      curso, local, horario, formador, formadores: formadoresExtra, dataInicio, vagas, custoHoraSala,
       estado: (activa ? "Ativa" : "Inativa") as TurmaGold["estado"],
       horas: horasCurso,
       cronograma,
@@ -2944,9 +2954,10 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
         fields={[
           { label: "Curso", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(gold.map(t => t.curso)) },
           { label: "Local", value: filtroLocal, onChange: v => { setFiltroLocal(v); setP(1); }, options: uniqueOpts(gold.map(t => t.local)) },
+          { label: "Horário", value: filtroHorario, onChange: v => { setFiltroHorario(v); setP(1); }, options: uniqueOpts(gold.map(t => t.horario)) },
         ]}
         chips={{ options: ["Todos", "Ativa", "Inativa"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
-        onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setFiltroDe(""); setFiltroAte(""); setP(1); }}
+        onClear={() => { setFiltroCurso(""); setFiltroLocal(""); setFiltroHorario(""); setFiltro("Todos"); setFiltroDe(""); setFiltroAte(""); setP(1); }}
       />
       <div className="flex flex-wrap gap-3">
         <label className="text-xs font-semibold text-slate-500 uppercase">Início de
@@ -2962,7 +2973,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
           <EmptyHint
             text={goldVisiveis.length === 0 ? "Ainda sem turmas Gold. Crie uma turma (curso + local + horário + data) e liberte-a para aparecer na pré-inscrição." : "Nenhuma turma neste filtro."}
             action={goldVisiveis.length === 0 ? "Nova turma" : "Limpar filtros"}
-            onAction={goldVisiveis.length === 0 ? () => setOpen("new") : () => { setFiltroCurso(""); setFiltroLocal(""); setFiltro("Todos"); setFiltroDe(""); setFiltroAte(""); setS(""); setP(1); }}
+            onAction={goldVisiveis.length === 0 ? () => setOpen("new") : () => { setFiltroCurso(""); setFiltroLocal(""); setFiltroHorario(""); setFiltro("Todos"); setFiltroDe(""); setFiltroAte(""); setS(""); setP(1); }}
           />
         )}
         <div className="md:hidden p-3 space-y-2">
@@ -3080,6 +3091,9 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
             <Field label="Data de início"><input type="date" className={iCls} value={dataInicio} onChange={e => setDataInicio(e.target.value)} /></Field>
             <Field label="Vagas"><input type="number" className={iCls} value={vagas} onChange={e => setVagas(Number(e.target.value) || 0)} /></Field>
           </div>
+          <Field label="Custo hora da sala (€)">
+            <input type="number" min={0} step="0.5" className={iCls} value={custoHoraSala} onChange={e => setCustoHoraSala(Math.max(0, Number(e.target.value) || 0))} />
+          </Field>
           <CronogramaEditor
             sessoes={cronograma}
             onChange={setCronograma}
@@ -3811,7 +3825,7 @@ function CursosGoldView({ onOpen }: { onOpen: (id: number | "new") => void }) {
                   <Td><IdCell id={c.id} /></Td>
                   <Td className="max-w-[200px]"><button onClick={() => onOpen(c.id)} className="text-xs font-medium text-blue-600 leading-snug text-left hover:underline">{c.nome}</button></Td>
                   <Td className="text-xs text-slate-600 whitespace-nowrap">{c.categoria}</Td>
-                  <Td><Badge label={c.tipo} variant={c.tipo === "Gold" ? "amber" : "gray"} /></Td>
+                  <Td><Badge label={c.tipo} variant={c.tipo === "E-learning" || c.tipo === "Gold" ? "amber" : "gray"} /></Td>
                   <Td className="text-xs font-semibold text-amber-600">€ {c.preco}</Td>
                   <Td><span className={`text-xs px-1.5 py-0.5 rounded font-medium ${c.regime === "e-learning" ? "bg-blue-50 text-blue-700" : "bg-violet-50 text-violet-700"}`}>{c.regime}</span></Td>
                   <Td className="text-center text-xs text-slate-600">{c.horas || "-"}</Td>

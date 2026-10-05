@@ -77,7 +77,7 @@ export type OpsSnapshot = {
   cursosFin: Array<{ id: number; ufcdCod: string; ufcd: string; nomeComercial: string; regime: string; horas: number; estado: string }>;
   turmasGold: Array<{
     id: number; dataInicio: string; nome: string; curso: string; local: string; horario: string;
-    totalAlunos: number; vagas: number; estado: string; formador: string; horas: number; cronograma: unknown[];
+    totalAlunos: number; vagas: number; estado: string; formador: string; horas: number; custoHoraSala?: number; cronograma: unknown[];
   }>;
   turmasFin: Array<{
     id: number; dataInicio: string; nome: string; curso: string; ufcdCod: string; local: string; horario: string;
@@ -86,6 +86,7 @@ export type OpsSnapshot = {
   formadores: Array<{
     id: number; nome: string; telf: string; email: string; especialidade: string; ccp: string; nif: string;
     regimes: string[]; estado: string;
+    disponibilidade?: string[]; custoHora?: number; alocado?: boolean; temAcesso?: boolean;
   }>;
   campanhas: Array<{
     id: number; nome: string; data: string; encarregado: string; curso?: string;
@@ -946,7 +947,7 @@ export const apiPatchTurmaFin = (id: number, body: Record<string, unknown>) =>
 export const apiDeleteTurmaFin = (id: number) => api<{ ok: boolean }>(`/v1/turmas-fin/${id}`, { method: "DELETE" });
 
 export const apiCreateFormador = (body: Record<string, unknown>) =>
-  api<{ formador: OpsSnapshot["formadores"][number] }>("/v1/formadores", { method: "POST", body: JSON.stringify(body) });
+  api<{ formador: OpsSnapshot["formadores"][number]; acesso?: { email: string; password?: string; criado: boolean } | null }>("/v1/formadores", { method: "POST", body: JSON.stringify(body) });
 export const apiPatchFormador = (id: number, body: Record<string, unknown>) =>
   api<{ formador: OpsSnapshot["formadores"][number] | null }>(`/v1/formadores/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 export const apiDeleteFormador = (id: number) => api<{ ok: boolean }>(`/v1/formadores/${id}`, { method: "DELETE" });
@@ -1054,14 +1055,19 @@ export async function apiDtpExport(regime: Regime, turmaId: number, filename?: s
 export const apiEquipaObjetivo = (comercialId: string, metaPct: number) =>
   api<{ ok: boolean; metaPct: number }>(`/v1/equipa/${comercialId}/objetivo`, { method: "PUT", body: JSON.stringify({ metaPct }) });
 
-export type CrmCliente = { id: number; nome: string; email: string; telf: string; nif: string; notas: string };
-export type CrmParceiro = { id: number; nome: string; email: string; telf: string; tipo: string; notas: string };
+export type CrmPropostaCliente = { id: number; curso: string; estado: string; valor: number; corpo: string };
+export type CrmCliente = { id: number; nome: string; email: string; telf: string; nif: string; notas: string; propostas?: CrmPropostaCliente[] };
+export type CrmParceiro = {
+  id: number; nome: string; email: string; telf: string; tipo: string; notas: string;
+  comercialId?: string | null; comercial?: string; retribuicao?: string;
+};
 export type DocTemplate = { id: number; nome: string; curso: string; valor: number; corpo: string };
 export type PropostaTemplate = DocTemplate;
 export type ContratoTemplate = DocTemplate;
 export type CrmContrato = {
   id: number; clienteNome: string; clienteEmail: string; curso: string; valor: number;
   estado: string; notas: string; corpo: string; templateId: number | null; comercial: string;
+  propostaId?: number | null; clienteId?: number | null;
 };
 
 export const apiCrmClientes = () => api<{ clientes: CrmCliente[] }>("/v1/crm/clientes");
@@ -1069,8 +1075,10 @@ export const apiCreateCliente = (body: Omit<CrmCliente, "id">) =>
   api<{ cliente: CrmCliente }>("/v1/crm/clientes", { method: "POST", body: JSON.stringify(body) });
 export const apiDeleteCliente = (id: number) => api<{ ok: boolean }>(`/v1/crm/clientes/${id}`, { method: "DELETE" });
 export const apiCrmParceiros = () => api<{ parceiros: CrmParceiro[] }>("/v1/crm/parceiros");
-export const apiCreateParceiro = (body: Omit<CrmParceiro, "id" | "notas" | "telf"> & { telf?: string; notas?: string }) =>
+export const apiCreateParceiro = (body: Omit<CrmParceiro, "id" | "notas" | "telf" | "comercial"> & { telf?: string; notas?: string }) =>
   api<{ parceiro: CrmParceiro }>("/v1/crm/parceiros", { method: "POST", body: JSON.stringify(body) });
+export const apiCreateClienteProposta = (clienteId: number, body: { curso?: string; valor?: number; corpo?: string }) =>
+  api<{ proposta: CrmPropostaCliente }>(`/v1/crm/clientes/${clienteId}/propostas`, { method: "POST", body: JSON.stringify(body) });
 export const apiDeleteParceiro = (id: number) => api<{ ok: boolean }>(`/v1/crm/parceiros/${id}`, { method: "DELETE" });
 export const apiPropostaTemplates = () => api<{ templates: PropostaTemplate[] }>("/v1/crm/proposta-templates");
 export const apiCreatePropostaTemplate = (body: Omit<PropostaTemplate, "id">) =>
@@ -1081,6 +1089,7 @@ export const apiCreateContratoTemplate = (body: Omit<ContratoTemplate, "id">) =>
 export const apiContratos = () => api<{ contratos: CrmContrato[] }>("/v1/crm/contratos");
 export const apiCreateContrato = (body: {
   clienteNome: string; clienteEmail?: string; curso?: string; valor?: number; corpo?: string; templateId?: number | null;
+  clienteId?: number | null; propostaId?: number | null;
 }) => api<{ contrato: { id: number } }>("/v1/crm/contratos", { method: "POST", body: JSON.stringify(body) });
 
 export function emitAutomation(

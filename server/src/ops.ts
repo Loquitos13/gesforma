@@ -152,6 +152,7 @@ export function mapTurmaGold(r: Record<string, unknown>) {
     formador: String(r.formador ?? ""),
     formadores: asArr(r.formadores).map(x => String(x)).filter(Boolean),
     horas: num(r.horas),
+    custoHoraSala: num(r.custo_hora_sala),
     cronograma: asArr(r.cronograma),
     drivePastaId: String(r.drive_pasta_id ?? ""),
     driveDossieId: String(r.drive_dossie_id ?? ""),
@@ -191,6 +192,9 @@ export function mapFormador(r: Record<string, unknown>) {
     nif: String(r.nif ?? ""),
     regimes: asArr(r.regimes),
     estado: String(r.estado ?? "Ativo"),
+    disponibilidade: r.disponibilidade == null ? ["laboral", "pos-laboral", "sabado-manha", "sabado-tarde"] : asArr(r.disponibilidade).map(x => String(x)),
+    custoHora: num(r.custo_hora),
+    temAcesso: Boolean(r.user_id),
   };
 }
 
@@ -353,6 +357,22 @@ export async function getOpsSnapshot(db: Db) {
     db.query<{ id: number; kind: string; regime: string; payload: unknown }>("SELECT id, kind, regime, payload FROM catalog_items ORDER BY id"),
     db.query<{ id: string; values: unknown }>("SELECT id, values FROM app_settings"),
   ]);
+  const alocados = new Set<string>();
+  const marcar = (nome: unknown) => {
+    const n = String(nome ?? "").trim().toLowerCase();
+    if (n) alocados.add(n);
+  };
+  for (const t of [...turmasGold, ...turmasFin]) {
+    marcar(t.formador);
+    for (const n of t.formadores ?? []) marcar(n);
+    for (const raw of t.cronograma ?? []) {
+      if (!raw || typeof raw !== "object") continue;
+      const s = raw as { formador?: string; formadores?: string[] };
+      if (s.formador) marcar(s.formador);
+      for (const n of s.formadores ?? []) marcar(n);
+    }
+  }
+  const formadoresComAlocacao = formadores.map(f => ({ ...f, alocado: alocados.has(f.nome.trim().toLowerCase()) }));
   const catalogs: Record<string, Array<Record<string, unknown>>> = {};
   for (const r of catalogRows.rows) {
     const key = `${r.kind}:${r.regime}`;
@@ -361,7 +381,7 @@ export async function getOpsSnapshot(db: Db) {
   const settings = Object.fromEntries(settingRows.rows.map(r => [r.id, asObj(r.values)]));
   return {
     preinscricoes, formandosTurmas, formandosFin, cursosGold, cursosFin,
-    turmasGold, turmasFin, formadores,
+    turmasGold, turmasFin, formadores: formadoresComAlocacao,
     campanhas: campanhas.map(c => numsCampanha(c, preinscricoes, formandosTurmas, pagamentos)),
     blogPosts, pagamentos,
     catalogs, settings,

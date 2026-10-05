@@ -18,6 +18,7 @@ const propostaSchema = z.object({
   notas: z.string().trim().max(4000).optional().default(""),
   corpo: z.string().max(8000).optional().default(""),
   templateId: z.number().int().positive().nullable().optional(),
+  clienteId: z.number().int().positive().nullable().optional(),
   regime: z.enum(["gold", "fin"]).optional(),
 });
 
@@ -252,9 +253,9 @@ export function registerEquipaRoutes(
     const respostaEm = d.respostaCliente ? new Date() : null;
     await db.query(
       `INSERT INTO propostas_comerciais
-         (id, comercial_id, preinscricao_id, cliente_nome, cliente_email, curso, valor, estado, resposta_cliente, resposta_em, notas, regime, corpo)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-      [pid, comercialId, d.preinscricaoId ?? null, d.clienteNome, d.clienteEmail, curso, valor, d.estado ?? "Enviada", d.respostaCliente, respostaEm, d.notas, regime, corpo],
+         (id, comercial_id, preinscricao_id, cliente_id, cliente_nome, cliente_email, curso, valor, estado, resposta_cliente, resposta_em, notas, regime, corpo)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [pid, comercialId, d.preinscricaoId ?? null, d.clienteId ?? null, d.clienteNome, d.clienteEmail, curso, valor, d.estado ?? "Enviada", d.respostaCliente, respostaEm, d.notas, regime, corpo],
     );
     if (d.preinscricaoId) {
       await db.query("UPDATE preinscricoes SET comercial_id = COALESCE(comercial_id, $2) WHERE id = $1", [d.preinscricaoId, comercialId]);

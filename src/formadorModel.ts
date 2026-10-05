@@ -10,6 +10,10 @@ export type Formador = {
   nif: string;
   regimes: FormadorRegime[];
   estado: "Ativo" | "Inactivo";
+  disponibilidade?: string[];
+  custoHora?: number;
+  alocado?: boolean;
+  temAcesso?: boolean;
 };
 
 export const FORMADORES_SEED: Formador[] = [
@@ -32,6 +36,8 @@ export function emptyFormador(regime: FormadorRegime): Formador {
     nif: "",
     regimes: [regime],
     estado: "Ativo",
+    disponibilidade: ["laboral", "pos-laboral", "sabado-manha", "sabado-tarde"],
+    custoHora: 0,
   };
 }
 

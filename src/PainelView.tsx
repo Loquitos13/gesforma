@@ -15,8 +15,14 @@ function Card({ children, className = "", clip = true }: { children: React.React
   return <div className={`bg-white rounded-xl border border-slate-200 shadow-sm ${clip ? "overflow-hidden" : "overflow-visible"} ${className}`}>{children}</div>;
 }
 
+function taxa(parte: number, base: number) {
+  if (base <= 0) return "—";
+  return `${Math.round((parte / base) * 100)}%`;
+}
+
 function FunilTrack({ titulo, itens, cor }: { titulo: string; itens: { l: string; v: number }[]; cor: string }) {
-  const base = itens[0]?.v || 1;
+  const baseN = itens[0]?.v ?? 0;
+  const base = baseN || 1;
   return (
     <div>
       <p className="text-xs font-semibold text-slate-600 mb-2">{titulo}</p>
@@ -25,9 +31,9 @@ function FunilTrack({ titulo, itens, cor }: { titulo: string; itens: { l: string
           const pct = Math.min(100, Math.round((f.v / base) * 100));
           return (
             <div key={f.l}>
-              <div className="flex justify-between text-xs mb-0.5">
+              <div className="flex justify-between text-xs mb-0.5 gap-2">
                 <span className="text-slate-600">{f.l}</span>
-                <span className="font-semibold text-slate-700">{f.v.toLocaleString("pt-PT")}</span>
+                <span className="font-semibold text-slate-700 shrink-0">{f.v.toLocaleString("pt-PT")}{baseN > 0 ? ` · ${taxa(f.v, baseN)}` : ""}</span>
               </div>
               <div className="w-full bg-slate-100 rounded-full h-2">
                 <div className="h-2 rounded-full" style={{ width: `${pct}%`, backgroundColor: cor, opacity: 0.45 + (pct / 200) }} />
@@ -610,12 +616,18 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
                 <div className="rounded-lg bg-blue-50 px-3 py-2">
                   <p className="text-[10px] font-semibold uppercase text-blue-700">Formandos de pré-inscritos</p>
                   <p className="text-lg font-bold text-blue-900">{(dash?.formandosOrigem?.preinscritos ?? funil[3]?.v ?? 0).toLocaleString("pt-PT")}</p>
+                  <p className="text-[11px] text-blue-800">{taxa(dash?.formandosOrigem?.preinscritos ?? funil[3]?.v ?? 0, (dash?.funilPreinscritos ?? funil)[0]?.v ?? 0)} da base</p>
                 </div>
                 <div className="rounded-lg bg-amber-50 px-3 py-2">
                   <p className="text-[10px] font-semibold uppercase text-amber-800">Formandos de pré-pagos</p>
                   <p className="text-lg font-bold text-amber-950">{(dash?.formandosOrigem?.prepagos ?? 0).toLocaleString("pt-PT")}</p>
+                  <p className="text-[11px] text-amber-900">{taxa(dash?.formandosOrigem?.prepagos ?? 0, (dash?.funilPrepagos ?? [])[0]?.v ?? 0)} da base</p>
                 </div>
               </div>
+              <p className="text-[11px] text-slate-500 mt-2">
+                Pré-inscritos que pagaram: {taxa((dash?.funilPreinscritos ?? funil)[2]?.v ?? 0, (dash?.funilPreinscritos ?? funil)[0]?.v ?? 0)}.
+                Total de formandos: {((dash?.formandosOrigem?.preinscritos ?? funil[3]?.v ?? 0) + (dash?.formandosOrigem?.prepagos ?? 0)).toLocaleString("pt-PT")}.
+              </p>
             </Card>
           </div>
           <ConhecimentoEnaCard onVerMais={() => onNavigate(crmView)} dados={dash.conhecimento} />

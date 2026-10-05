@@ -8,6 +8,7 @@ import { catalogIdRemapSubscribe, useCatalogList } from "./CatalogsContext";
 import { useDrive } from "./DriveContext";
 import { useAuth } from "./AuthGate";
 import { FormadorCalendario, eventosDoFormador } from "./FormadorCalendario";
+import { DisponibilidadeEditor } from "./DisponibilidadeEditor";
 import { useFormadores } from "./FormadoresContext";
 import { AppModal } from "./FormKit";
 import { ConfirmDangerModal } from "./SecretaryUX";
@@ -342,7 +343,7 @@ type DocField = { id: string; label: string; required: boolean; uploaded: boolea
 export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "gold", turma, horas, embutido = false }: { open: boolean; onClose: () => void; nome: string; telf?: string; accent?: "gold" | "fin"; turma?: string; horas?: number; embutido?: boolean }) {
   const { user } = useAuth();
   const { gold, fin } = useTurmas();
-  const { formadores } = useFormadores();
+  const { formadores, patchFormador } = useFormadores();
   const formador = formadores.find(f => f.nome === nome);
   const { cursosGold, cursosFin } = useLists();
   const [docs, setDocs] = useState<DocField[]>(() => DOCS_FORMADOR.map(d => ({ ...d, uploaded: false, required: Boolean(d.required) })));
@@ -434,6 +435,19 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
             </div>
           </div>
           {verCalendario && <FormadorCalendario nome={nome} eventos={eventos} />}
+          {formador && (
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Disponibilidade CCP</p>
+              <DisponibilidadeEditor
+                value={formador.disponibilidade}
+                locked={Boolean(formador.alocado) && user.role === "formador"}
+                onChange={slots => patchFormador(formador.id, { disponibilidade: slots })}
+                nota={formador.alocado
+                  ? "Depois de estar numa turma, o formador deixa de alterar estes horários. A secretaria e a administração continuam a poder ajustá-los."
+                  : "Laboral 9h–13h, pós-laboral 16h30–23h, sábado de manhã 9h–13h e sábado à tarde 14h–19h."}
+              />
+            </div>
+          )}
           <div>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Cursos atribuídos</p>
             <div className="space-y-1.5">

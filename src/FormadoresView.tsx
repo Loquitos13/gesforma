@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AppModal, ViewFilters, matchesFilter, uniqueOpts } from "./FormKit";
 import { useFormadores } from "./FormadoresContext";
 import { emptyFormador, formadoresDoRegime, type Formador, type FormadorRegime } from "./formadorModel";
+import { DisponibilidadeEditor } from "./DisponibilidadeEditor";
 import { FormadorProfileSlideOver } from "./TurmaExtras";
 import { useTurmas } from "./TurmasContext";
 import { sessaoFormadores } from "./turmaModel";
@@ -142,6 +143,7 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
   const [perfil, setPerfil] = useState<Formador | null>(null);
   const [apagar, setApagar] = useState<Formador | null>(null);
   const [gravando, setGravando] = useState(false);
+  const [acesso, setAcesso] = useState<{ email: string; password?: string; criado: boolean } | null>(null);
 
   const noRegime = formadoresDoRegime(formadores, regime);
   const especialidades = uniqueOpts(noRegime.map(f => f.especialidade));
@@ -209,11 +211,12 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
     }
     const { id: _id, ...rest } = payload;
     setGravando(true);
-    const id = await addFormador(rest);
+    const criado = await addFormador(rest);
     setGravando(false);
-    if (id) {
+    if (criado?.id) {
       setDraft(null);
       setErro("");
+      if (criado.acesso) setAcesso(criado.acesso);
     }
   }
 
@@ -222,6 +225,18 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
 
   return (
     <div className="space-y-4">
+      {acesso && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold">{acesso.criado ? "Conta de formador criada" : "Ficha ligada a uma conta que já existia"}</p>
+              <p className="text-xs mt-1">Email {acesso.email}</p>
+              {acesso.password && <p className="text-xs mt-1">Palavra-passe inicial: <span className="font-mono font-semibold">{acesso.password}</span>. Guarde-a agora. A plataforma mostra-a só nesta altura.</p>}
+            </div>
+            <button type="button" className="text-xs font-semibold" onClick={() => setAcesso(null)}>Fechar</button>
+          </div>
+        </div>
+      )}
       <PageHeader
         title={gold ? "Formadores Gold" : "Formadores Financiada"}
         sub={`${ativos} ativos · ${noRegime.length} neste regime${both ? ` · ${both} também no outro regime` : ""}`}
@@ -282,7 +297,7 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
                         <Td>
                           <button type="button" onClick={() => setPerfil(f)} className="text-left">
                             <p className="text-xs font-semibold text-blue-600 hover:text-blue-800">{f.nome}</p>
-                            <p className="text-xs text-slate-400 truncate max-w-[180px]">{f.email || "Sem email"}</p>
+                            <p className="text-xs text-slate-400 truncate max-w-[180px]">{f.email || "Sem email"}{f.temAcesso ? " · acesso à plataforma" : ""}</p>
                           </button>
                         </Td>
                         <Td className="font-mono text-xs text-slate-500 whitespace-nowrap">{f.telf || "-"}</Td>
@@ -374,6 +389,18 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
                 })}
               </div>
               <p className="text-[11px] text-slate-400">Quem marca os dois regimes aparece nas duas listas e nos dropdowns de ambas.</p>
+            </Field>
+            <Field label="Valor hora (€)">
+              <input className={iCls} type="number" min={0} step="0.5" value={draft.custoHora ?? 0} onChange={e => setDraft({ ...draft, custoHora: Math.max(0, Number(e.target.value) || 0) })} />
+            </Field>
+            <Field label="Disponibilidade CCP">
+              <DisponibilidadeEditor
+                value={draft.disponibilidade}
+                onChange={slots => setDraft({ ...draft, disponibilidade: slots })}
+                nota={draft.alocado
+                  ? "Este formador já está numa turma. A disponibilidade fica fechada para ele. A secretaria e a administração continuam a poder ajustá-la."
+                  : "Laboral 9h–13h, pós-laboral 16h30–23h, sábado de manhã 9h–13h e sábado à tarde 14h–19h."}
+              />
             </Field>
             <Field label="Estado">
               <button

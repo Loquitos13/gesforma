@@ -923,7 +923,7 @@ export function CursoFichaView({
                 </div>
                 {accent === "gold" ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    <Field label="Tipo comercial" required error={falhas.tipo} hint="Pago no catálogo ou lista de espera. Não é Gold vs Financiada.">
+                    <Field label="Tipo comercial" required error={falhas.tipo} hint="E-learning: a pessoa paga e recebe acesso ao curso. Pré-inscrição: entra numa turma e a documentação tem de ser validada.">
                       <OptionSelect lista="tipos_curso" value={data.tipo} onChange={v => patch({ tipo: v })} />
                     </Field>
                     <Field label="Categoria" required error={falhas.categoria}>

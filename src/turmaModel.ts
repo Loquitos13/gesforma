@@ -109,6 +109,7 @@ export type TurmaGold = {
   formador: string;
   formadores?: string[];
   horas: number;
+  custoHoraSala?: number;
   cronograma: SessaoCronograma[];
 };
 

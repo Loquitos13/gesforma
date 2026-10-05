@@ -3,7 +3,9 @@ import { CronogramaGrelha } from "./CronogramaGrelha";
 import { generateEnaCronograma, SESSAO_MODALIDADE_OPTS } from "./cronogramaGrelha";
 import { MultiSearchSelect } from "./FormKit";
 import { useProgramaDoCurso } from "./cursoPrograma";
-import { useFormadorOptions } from "./FormadoresContext";
+import { useFormadorOptions, useFormadores } from "./FormadoresContext";
+import { descarregarCronograma } from "./cronogramaExport";
+import { sessaoCabeNoSlot } from "./disponibilidade";
 import { useTurmas } from "./TurmasContext";
 import { formadorIndisponivel } from "./sessaoAcesso";
 import {
@@ -158,13 +160,17 @@ function SessaoRow({
   const chip = ESTADO_UI[estado];
   const horas = sessaoDuracaoHoras(sessao);
   const catalogo = useFormadorOptions(sessaoFormadores(sessao));
+  const { formadores } = useFormadores();
   const { gold: turmasGold, fin } = useTurmas();
   const pool = formadoresTurma.length
     ? catalogo.filter(o => formadoresTurma.some(n => n.toLowerCase() === o.value.toLowerCase()))
     : catalogo;
   const formadorOpts = pool.map(o => {
-    const off = formadorIndisponivel(o.value, sessao.data, sessao.horaInicio, sessao.horaFim, [...turmasGold, ...fin], sessao.id);
-    return off ? { ...o, disabled: true, sub: "Indisponível neste horário" } : o;
+    const overlap = formadorIndisponivel(o.value, sessao.data, sessao.horaInicio, sessao.horaFim, [...turmasGold, ...fin], sessao.id);
+    const ficha = formadores.find(f => f.nome.toLowerCase() === o.value.toLowerCase());
+    const foraSlot = gold && Boolean(ficha) && !sessaoCabeNoSlot(sessao.data, sessao.horaInicio, sessao.horaFim, ficha?.disponibilidade);
+    if (!overlap && !foraSlot) return o;
+    return { ...o, disabled: true, sub: foraSlot && !overlap ? "Fora da disponibilidade CCP" : "Indisponível neste horário" };
   });
   const ring = estado === "proxima" || estado === "hoje"
     ? gold ? "ring-1 ring-amber-200 bg-amber-50/40" : "ring-1 ring-blue-200 bg-blue-50/40"
@@ -382,6 +388,14 @@ export function CronogramaEditor({
       </button>
       <button type="button" onClick={addSessao} className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border bg-white ${ghost}`}>
         <IconPlus /> Sessão
+      </button>
+      <button
+        type="button"
+        disabled={sessoes.length === 0}
+        onClick={() => descarregarCronograma({ curso, local, horario, inicio, formador, nome: curso, sessoes })}
+        className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border bg-white ${ghost} disabled:opacity-40`}
+      >
+        Exportar para o sítio e o dossiê
       </button>
     </div>
   );

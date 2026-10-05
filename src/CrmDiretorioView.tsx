@@ -3,11 +3,13 @@ import {
   apiContratoTemplates,
   apiContratos,
   apiCreateCliente,
+  apiCreateClienteProposta,
   apiCreateContrato,
   apiCreateContratoTemplate,
   apiCreateParceiro,
   apiCreatePropostaTemplate,
   apiCrmClientes,
+  apiCrmComerciais,
   apiCrmParceiros,
   apiDeleteCliente,
   apiDeleteParceiro,
@@ -51,6 +53,10 @@ export function CrmClientesView() {
   const [telf, setTelf] = useState("");
   const [nif, setNif] = useState("");
   const [erro, setErro] = useState("");
+  const [propostaDe, setPropostaDe] = useState<CrmCliente | null>(null);
+  const [cursoProp, setCursoProp] = useState("");
+  const [valorProp, setValorProp] = useState("");
+  const [corpoProp, setCorpoProp] = useState("");
 
   function load() {
     apiCrmClientes().then(r => setItems(r.clientes)).catch(() => setErro("Não foi possível ler os clientes."));
@@ -67,12 +73,12 @@ export function CrmClientesView() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Clientes" sub="Pessoas e empresas com relação comercial, fora do funil de pré-inscrição." action={<NewBtn label="+ Novo cliente" onClick={() => setOpen(true)} />} />
+      <PageHeader title="Clientes" sub="Empresas e instituições. Cada cliente pode ter propostas e, a partir delas, um contrato." action={<NewBtn label="+ Novo cliente" onClick={() => setOpen(true)} />} />
       {erro && <p className="text-xs text-amber-700">{erro}</p>}
       {items.length === 0 && <EmptyHint text="Ainda sem clientes. Registe quem já compra formação ou pede propostas." action="Novo cliente" onAction={() => setOpen(true)} />}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <table className="w-full text-sm">
-          <thead><tr className="text-left text-xs uppercase text-slate-400 border-b"><th className="px-3 py-2">Nome</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Telemóvel</th><th className="px-3 py-2">NIF</th><th /></tr></thead>
+          <thead><tr className="text-left text-xs uppercase text-slate-400 border-b"><th className="px-3 py-2">Nome</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Telemóvel</th><th className="px-3 py-2">NIF</th><th className="px-3 py-2">Propostas</th><th /></tr></thead>
           <tbody>
             {items.map(c => (
               <tr key={c.id} className="border-t border-slate-100">
@@ -80,6 +86,14 @@ export function CrmClientesView() {
                 <td className="px-3 py-2 text-slate-600">{c.email || "—"}</td>
                 <td className="px-3 py-2 text-slate-600">{c.telf || "—"}</td>
                 <td className="px-3 py-2 text-slate-600">{c.nif || "—"}</td>
+                <td className="px-3 py-2 text-slate-600">
+                  <button type="button" className="text-xs font-semibold text-amber-700" onClick={() => { setPropostaDe(c); setCursoProp(""); setValorProp(""); setCorpoProp(""); }}>
+                    {(c.propostas ?? []).length} · nova
+                  </button>
+                  {(c.propostas ?? []).slice(0, 2).map(p => (
+                    <p key={p.id} className="text-[11px] text-slate-500 truncate max-w-[180px]">{p.curso || "Proposta"} · {p.estado}</p>
+                  ))}
+                </td>
                 <td className="px-3 py-2 text-right">
                   <button type="button" className="text-xs text-red-600" onClick={() => { void apiDeleteCliente(c.id).then(load); }}>Remover</button>
                 </td>
@@ -97,6 +111,24 @@ export function CrmClientesView() {
           <button type="button" disabled={!nome.trim()} onClick={() => void guardar()} className="w-full py-2 bg-amber-500 text-white text-sm font-semibold rounded-lg disabled:opacity-40">Guardar</button>
         </div>
       </AppModal>
+      <AppModal open={!!propostaDe} onClose={() => setPropostaDe(null)} title={propostaDe ? `Proposta · ${propostaDe.nome}` : "Proposta"}>
+        <div className="p-5 space-y-3">
+          {(propostaDe?.propostas ?? []).length === 0 && <p className="text-xs text-slate-400">Ainda sem propostas neste cliente.</p>}
+          {(propostaDe?.propostas ?? []).map(p => (
+            <p key={p.id} className="text-xs text-slate-600">{p.curso || "Sem curso"} · {p.estado} · € {p.valor}</p>
+          ))}
+          <Field label="Curso"><input className={iCls} value={cursoProp} onChange={e => setCursoProp(e.target.value)} /></Field>
+          <Field label="Valor (€)"><input className={iCls} value={valorProp} onChange={e => setValorProp(e.target.value)} /></Field>
+          <Field label="Texto"><textarea className={iCls + " min-h-[100px]"} value={corpoProp} onChange={e => setCorpoProp(e.target.value)} /></Field>
+          <button type="button" disabled={!propostaDe} onClick={() => {
+            if (!propostaDe) return;
+            void apiCreateClienteProposta(propostaDe.id, { curso: cursoProp, valor: Number(valorProp) || 0, corpo: corpoProp }).then(() => {
+              setPropostaDe(null);
+              load();
+            });
+          }} className="w-full py-2 bg-amber-500 text-white text-sm font-semibold rounded-lg">Guardar proposta</button>
+        </div>
+      </AppModal>
     </div>
   );
 }
@@ -107,16 +139,20 @@ export function CrmParceirosView() {
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [tipo, setTipo] = useState("");
+  const [comercialId, setComercialId] = useState("");
+  const [retribuicao, setRetribuicao] = useState("");
+  const [comerciais, setComerciais] = useState<{ id: string; name: string }[]>([]);
   const [erro, setErro] = useState("");
 
   function load() {
     apiCrmParceiros().then(r => setItems(r.parceiros)).catch(() => setErro("Não foi possível ler os parceiros."));
+    apiCrmComerciais("gold").then(r => setComerciais(r.comerciais)).catch(() => undefined);
   }
   useEffect(() => { load(); }, []);
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Parceiros" sub="Entidades que encaminham formandos ou partilham oferta." action={<NewBtn label="+ Novo parceiro" onClick={() => setOpen(true)} />} />
+      <PageHeader title="Parceiros" sub="Cada parceiro fica ligado a um comercial e às condições de retribuição." action={<NewBtn label="+ Novo parceiro" onClick={() => setOpen(true)} />} />
       {erro && <p className="text-xs text-amber-700">{erro}</p>}
       {items.length === 0 && <EmptyHint text="Ainda sem parceiros." action="Novo parceiro" onAction={() => setOpen(true)} />}
       <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
@@ -124,7 +160,8 @@ export function CrmParceirosView() {
           <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-slate-800">{p.nome}</p>
-              <p className="text-xs text-slate-500">{[p.tipo, p.email].filter(Boolean).join(" · ") || "Sem contacto"}</p>
+              <p className="text-xs text-slate-500">{[p.tipo, p.comercial, p.email].filter(Boolean).join(" · ") || "Sem contacto"}</p>
+              {p.retribuicao && <p className="text-[11px] text-slate-600 mt-1 line-clamp-2">{p.retribuicao}</p>}
             </div>
             <button type="button" className="text-xs text-red-600" onClick={() => { void apiDeleteParceiro(p.id).then(load); }}>Remover</button>
           </div>
@@ -135,8 +172,17 @@ export function CrmParceirosView() {
           <Field label="Nome"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} /></Field>
           <Field label="Email"><input className={iCls} value={email} onChange={e => setEmail(e.target.value)} /></Field>
           <Field label="Tipo"><input className={iCls} value={tipo} onChange={e => setTipo(e.target.value)} placeholder="Empresa, câmara, associação…" /></Field>
+          <Field label="Comercial">
+            <select className={iCls} value={comercialId} onChange={e => setComercialId(e.target.value)}>
+              <option value="">Sem comercial</option>
+              {comerciais.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Condições de retribuição"><textarea className={iCls + " min-h-[80px]"} value={retribuicao} onChange={e => setRetribuicao(e.target.value)} placeholder="Percentagem, valor por formando, prazo de pagamento…" /></Field>
           <button type="button" disabled={!nome.trim()} onClick={() => {
-            void apiCreateParceiro({ nome: nome.trim(), email, tipo }).then(() => { setOpen(false); setNome(""); setEmail(""); setTipo(""); load(); });
+            void apiCreateParceiro({ nome: nome.trim(), email, tipo, comercialId: comercialId || null, retribuicao }).then(() => {
+              setOpen(false); setNome(""); setEmail(""); setTipo(""); setComercialId(""); setRetribuicao(""); load();
+            });
           }} className="w-full py-2 bg-amber-500 text-white text-sm font-semibold rounded-lg disabled:opacity-40">Guardar</button>
         </div>
       </AppModal>
@@ -151,6 +197,9 @@ export function CrmContratosView() {
   const [open, setOpen] = useState(false);
   const [tplOpen, setTplOpen] = useState<"contrato" | "proposta" | null>(null);
   const [clienteNome, setClienteNome] = useState("");
+  const [clientes, setClientes] = useState<CrmCliente[]>([]);
+  const [clienteId, setClienteId] = useState<number | "">("");
+  const [propostaId, setPropostaId] = useState<number | "">("");
   const [curso, setCurso] = useState("");
   const [valor, setValor] = useState("");
   const [corpo, setCorpo] = useState("");
@@ -163,6 +212,7 @@ export function CrmContratosView() {
     apiContratos().then(r => setItems(r.contratos)).catch(() => setErro("Não foi possível ler os contratos."));
     apiContratoTemplates().then(r => setTemplates(r.templates)).catch(() => undefined);
     apiPropostaTemplates().then(r => setPropostaTemplates(r.templates)).catch(() => undefined);
+    apiCrmClientes().then(r => setClientes(r.clientes)).catch(() => undefined);
   }
   useEffect(() => { load(); }, []);
 
@@ -195,7 +245,7 @@ export function CrmContratosView() {
               <p className="text-sm font-semibold text-slate-800">{c.clienteNome}</p>
               <span className="text-xs font-semibold text-slate-500">{c.estado}</span>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">{[c.curso, c.valor ? `€ ${c.valor}` : "", c.comercial].filter(Boolean).join(" · ")}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{[c.curso, c.valor ? `€ ${c.valor}` : "", c.comercial, c.propostaId ? `proposta ${c.propostaId}` : ""].filter(Boolean).join(" · ")}</p>
             {c.corpo && <p className="text-xs text-slate-600 mt-2 whitespace-pre-wrap line-clamp-3">{c.corpo}</p>}
           </div>
         ))}
@@ -208,7 +258,35 @@ export function CrmContratosView() {
               {templates.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
             </select>
           </Field>
-          <Field label="Cliente"><input className={iCls} value={clienteNome} onChange={e => setClienteNome(e.target.value)} /></Field>
+          <Field label="Cliente institucional">
+            <select className={iCls} value={clienteId} onChange={e => {
+              const id = e.target.value ? Number(e.target.value) : "";
+              setClienteId(id);
+              setPropostaId("");
+              const c = clientes.find(x => x.id === id);
+              if (c) setClienteNome(c.nome);
+            }}>
+              <option value="">Escolher cliente</option>
+              {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+          </Field>
+          <Field label="Proposta de origem">
+            <select className={iCls} value={propostaId} onChange={e => {
+              const id = e.target.value ? Number(e.target.value) : "";
+              setPropostaId(id);
+              const p = clientes.find(c => c.id === clienteId)?.propostas?.find(x => x.id === id);
+              if (!p) return;
+              if (p.curso) setCurso(p.curso);
+              if (p.valor) setValor(String(p.valor));
+              if (p.corpo) setCorpo(p.corpo);
+            }}>
+              <option value="">Sem proposta</option>
+              {(clientes.find(c => c.id === clienteId)?.propostas ?? []).map(p => (
+                <option key={p.id} value={p.id}>{p.curso || "Proposta"} · {p.estado} · € {p.valor}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Nome no contrato"><input className={iCls} value={clienteNome} onChange={e => setClienteNome(e.target.value)} /></Field>
           <Field label="Curso"><input className={iCls} value={curso} onChange={e => setCurso(e.target.value)} /></Field>
           <Field label="Valor (€)"><input className={iCls} value={valor} onChange={e => setValor(e.target.value)} /></Field>
           <Field label="Texto"><textarea className={iCls + " min-h-[120px]"} value={corpo} onChange={e => setCorpo(e.target.value)} /></Field>
@@ -219,7 +297,9 @@ export function CrmContratosView() {
               valor: Number(valor) || 0,
               corpo,
               templateId: templateId === "" ? null : templateId,
-            }).then(() => { setOpen(false); setClienteNome(""); setCorpo(""); load(); });
+              clienteId: clienteId === "" ? null : clienteId,
+              propostaId: propostaId === "" ? null : propostaId,
+            }).then(() => { setOpen(false); setClienteNome(""); setCorpo(""); setClienteId(""); setPropostaId(""); load(); });
           }} className="w-full py-2 bg-amber-500 text-white text-sm font-semibold rounded-lg disabled:opacity-40">Guardar contrato</button>
         </div>
       </AppModal>

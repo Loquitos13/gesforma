@@ -179,7 +179,7 @@ function listaOpcoesSeed(): Array<{ id: number; lista: string; nome: string }> {
         "Agente Comercial", "Instituição de Ensino", "Associação Setorial",
       ],
     },
-    { lista: "tipos_curso", nomes: ["Gold", "Pré-inscrição"] },
+    { lista: "tipos_curso", nomes: ["E-learning", "Pré-inscrição"] },
     { lista: "regimes_curso", nomes: ["b-learning", "e-learning", "presencial"] },
     { lista: "categorias_gold", nomes: ["CCP e Gestão da Formação", "Saúde e bem estar", "Desenvolvimento Pessoal"] },
     { lista: "areas_fin", nomes: ["Saúde e segurança", "Marketing digital", "TIC e cibersegurança", "Formação de formadores"] },

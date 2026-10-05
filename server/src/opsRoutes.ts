@@ -23,6 +23,7 @@ import {
 import { exportCrmLeads, queryCrmLeads, searchCrmLeads, type CrmFila, type CrmSort } from "./crm.js";
 import { syncTurmaDriveAccess } from "./googleDrive.js";
 import { cronogramaSoMarcas, nomesDoFormador } from "./sessaoAcesso.js";
+import { erroDisponibilidade, formadorEstaAlocado, garantirContaFormador } from "./formadorConta.js";
 import {
   addLeadNota, createCrmCampo, createCrmEtiqueta, deleteCrmEtiqueta, findDuplicados, fixarNota, getLeadDossier,
   listCrmCampos, listCrmEtiquetas, logLeadEvent, setCampoValores, type CrmCampoTipo,
@@ -1215,6 +1216,7 @@ export function registerOpsRoutes(
     formador: z.string().max(120).optional().default(""),
     formadores: z.array(z.string().max(120)).max(12).optional().default([]),
     horas: z.number().optional().default(90),
+    custoHoraSala: z.number().min(0).max(10000).optional(),
     cronograma: z.array(z.unknown()).optional(),
   });
   app.post("/v1/turmas-gold", async (req, reply) => {
@@ -1223,6 +1225,8 @@ export function registerOpsRoutes(
     const parsed = turmaGoldSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
+    const slotErro = await erroDisponibilidade(db, [d.formador, ...d.formadores], d.horario);
+    if (slotErro) return reply.code(400).send({ error: slotErro });
     const id = await nextOpsId(db);
     const cronograma = (d.cronograma && d.cronograma.length)
       ? d.cronograma
@@ -1234,9 +1238,9 @@ export function registerOpsRoutes(
         curso: d.curso,
       });
     await db.query(
-      `INSERT INTO turmas_gold (id, data_inicio, nome, curso, local, horario, total_alunos, vagas, estado, formador, formadores, horas, cronograma)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13::jsonb)`,
-      [id, d.dataInicio, d.nome, d.curso, d.local, d.horario, d.totalAlunos, d.vagas, d.estado, d.formador, JSON.stringify(d.formadores), d.horas, cronograma],
+      `INSERT INTO turmas_gold (id, data_inicio, nome, curso, local, horario, total_alunos, vagas, estado, formador, formadores, horas, cronograma, custo_hora_sala)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13::jsonb,$14)`,
+      [id, d.dataInicio, d.nome, d.curso, d.local, d.horario, d.totalAlunos, d.vagas, d.estado, d.formador, JSON.stringify(d.formadores), d.horas, cronograma, d.custoHoraSala ?? 0],
     );
     void syncTurmaDriveAccess(db, {
       regime: "gold", turmaId: id, nome: d.nome, formador: d.formador, formadores: d.formadores, cronograma,
@@ -1252,13 +1256,22 @@ export function registerOpsRoutes(
     const parsed = turmaGoldSchema.partial().safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
+    if (d.formador != null || d.formadores != null || d.horario != null) {
+      const actual = await one(db, "SELECT formador, formadores, horario FROM turmas_gold WHERE id = $1", [id]);
+      const horario = d.horario ?? String(actual?.horario ?? "");
+      const formador = d.formador ?? String(actual?.formador ?? "");
+      const extras = d.formadores ?? (Array.isArray(actual?.formadores) ? actual.formadores.map(x => String(x)) : []);
+      const slotErro = await erroDisponibilidade(db, [formador, ...extras], horario);
+      if (slotErro) return reply.code(400).send({ error: slotErro });
+    }
     await db.query(
       `UPDATE turmas_gold SET data_inicio = COALESCE($2, data_inicio), nome = COALESCE($3, nome), curso = COALESCE($4, curso),
          local = COALESCE($5, local), horario = COALESCE($6, horario), total_alunos = COALESCE($7, total_alunos),
          vagas = COALESCE($8, vagas), estado = COALESCE($9, estado), formador = COALESCE($10, formador),
          formadores = COALESCE($11::jsonb, formadores),
-         horas = COALESCE($12, horas), cronograma = COALESCE($13::jsonb, cronograma) WHERE id = $1`,
-      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.local ?? null, d.horario ?? null, d.totalAlunos ?? null, d.vagas ?? null, d.estado ?? null, d.formador ?? null, d.formadores ? JSON.stringify(d.formadores) : null, d.horas ?? null, d.cronograma ?? null],
+         horas = COALESCE($12, horas), cronograma = COALESCE($13::jsonb, cronograma),
+         custo_hora_sala = COALESCE($14, custo_hora_sala) WHERE id = $1`,
+      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.local ?? null, d.horario ?? null, d.totalAlunos ?? null, d.vagas ?? null, d.estado ?? null, d.formador ?? null, d.formadores ? JSON.stringify(d.formadores) : null, d.horas ?? null, d.cronograma ?? null, d.custoHoraSala ?? null],
     );
     const row = await one(db, "SELECT * FROM turmas_gold WHERE id = $1", [id]);
     if (row) {
@@ -1370,6 +1383,8 @@ export function registerOpsRoutes(
     nif: z.string().max(40).optional().default(""),
     regimes: z.array(z.enum(["gold", "fin"])).optional().default(["gold"]),
     estado: z.enum(["Ativo", "Inactivo"]).optional().default("Ativo"),
+    disponibilidade: z.array(z.enum(["laboral", "pos-laboral", "sabado-manha", "sabado-tarde"])).optional(),
+    custoHora: z.number().min(0).max(10000).optional(),
   });
   app.post("/v1/formadores", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
@@ -1377,12 +1392,20 @@ export function registerOpsRoutes(
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
     const id = await nextOpsId(db);
+    const slots = d.disponibilidade ?? ["laboral", "pos-laboral", "sabado-manha", "sabado-tarde"];
     await db.query(
-      "INSERT INTO formadores (id, nome, telf, email, especialidade, ccp, nif, regimes, estado) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)",
-      [id, d.nome, d.telf, d.email, d.especialidade, d.ccp, d.nif, d.regimes, d.estado],
+      `INSERT INTO formadores (id, nome, telf, email, especialidade, ccp, nif, regimes, estado, disponibilidade, custo_hora)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10::jsonb,$11)`,
+      [id, d.nome, d.telf, d.email, d.especialidade, d.ccp, d.nif, JSON.stringify(d.regimes), d.estado, JSON.stringify(slots), d.custoHora ?? 0],
     );
+    const conta = await garantirContaFormador(db, d.nome, d.email);
+    if (conta) await db.query("UPDATE formadores SET user_id = $2 WHERE id = $1", [id, conta.userId]);
     const row = await one(db, "SELECT * FROM formadores WHERE id = $1", [id]);
-    return { formador: row ? mapFormador(row) : { id } };
+    const formador = row ? { ...mapFormador(row), alocado: false } : { id };
+    const acesso = conta
+      ? (conta.criado ? { email: conta.email, password: conta.password, criado: true } : { email: conta.email, criado: false })
+      : null;
+    return { formador, acesso };
   });
   app.patch("/v1/formadores/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
@@ -1390,14 +1413,34 @@ export function registerOpsRoutes(
     const parsed = formadorSchema.partial().safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
+    const antes = await one(db, "SELECT nome, email, user_id FROM formadores WHERE id = $1", [id]);
+    if (!antes) return reply.code(404).send({ error: "formador não encontrado" });
+    const alocado = await formadorEstaAlocado(db, String(antes.nome ?? ""));
+    if (req.actor!.role === "formador" && d.disponibilidade && alocado) {
+      return reply.code(403).send({ error: "Depois de estar numa turma, a disponibilidade só é alterada pela secretaria ou pela administração." });
+    }
+    if (req.actor!.role === "formador" && d.custoHora != null) {
+      return reply.code(403).send({ error: "O valor hora é definido pela secretaria ou pela administração." });
+    }
     await db.query(
       `UPDATE formadores SET nome = COALESCE($2, nome), telf = COALESCE($3, telf), email = COALESCE($4, email),
          especialidade = COALESCE($5, especialidade), ccp = COALESCE($6, ccp), nif = COALESCE($7, nif),
-         regimes = COALESCE($8::jsonb, regimes), estado = COALESCE($9, estado) WHERE id = $1`,
-      [id, d.nome ?? null, d.telf ?? null, d.email ?? null, d.especialidade ?? null, d.ccp ?? null, d.nif ?? null, d.regimes ?? null, d.estado ?? null],
+         regimes = COALESCE($8::jsonb, regimes), estado = COALESCE($9, estado),
+         disponibilidade = COALESCE($10::jsonb, disponibilidade), custo_hora = COALESCE($11, custo_hora) WHERE id = $1`,
+      [id, d.nome ?? null, d.telf ?? null, d.email ?? null, d.especialidade ?? null, d.ccp ?? null, d.nif ?? null, d.regimes ? JSON.stringify(d.regimes) : null, d.estado ?? null, d.disponibilidade ? JSON.stringify(d.disponibilidade) : null, d.custoHora ?? null],
     );
+    let acesso: { email: string; password?: string; criado: boolean } | null = null;
+    const email = d.email ?? String(antes.email ?? "");
+    if (!antes.user_id && email) {
+      const conta = await garantirContaFormador(db, d.nome ?? String(antes.nome ?? ""), email);
+      if (conta) {
+        await db.query("UPDATE formadores SET user_id = $2 WHERE id = $1", [id, conta.userId]);
+        acesso = conta.criado ? { email: conta.email, password: conta.password, criado: true } : { email: conta.email, criado: false };
+      }
+    }
     const row = await one(db, "SELECT * FROM formadores WHERE id = $1", [id]);
-    return { formador: row ? mapFormador(row) : null };
+    const formador = row ? { ...mapFormador(row), alocado: await formadorEstaAlocado(db, String(row.nome ?? "")) } : null;
+    return { formador, acesso };
   });
   app.delete("/v1/formadores/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;

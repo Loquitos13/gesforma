@@ -471,6 +471,21 @@ export async function apiCursoDocumentoUpload(
 export const apiCursoDocumentoApagar = (regime: Regime, cursoId: number, ficheiroId: string) =>
   api<{ ok: boolean }>(`/v1/cursos/${regime}/${cursoId}/documentos/${encodeURIComponent(ficheiroId)}`, { method: "DELETE" });
 
+export type DocPreinscricaoCurso = {
+  id: string;
+  label: string;
+  required: boolean;
+  pedido: boolean;
+  origem: "base" | "extra" | "dossie";
+};
+export const apiDocsPreinscricao = (regime: Regime, cursoId: number) =>
+  api<{ aplica: boolean; tipo: string; docs: DocPreinscricaoCurso[] }>(`/v1/cursos/${regime}/${cursoId}/docs-preinscricao`);
+export const apiSaveDocsPreinscricao = (
+  regime: Regime,
+  cursoId: number,
+  body: { ocultos: string[]; extra: { id?: string; label: string; required: boolean }[] },
+) => api<{ ok: boolean }>(`/v1/cursos/${regime}/${cursoId}/docs-preinscricao`, { method: "PUT", body: JSON.stringify(body) });
+
 export type CursoFicha = { payload: Record<string, unknown>; criterios: { id: string; label: string }[] };
 export const apiCursoFicha = (regime: Regime, cursoId: number) =>
   api<{ ficha: CursoFicha | null }>(`/v1/cursos/${regime}/${cursoId}/ficha`);

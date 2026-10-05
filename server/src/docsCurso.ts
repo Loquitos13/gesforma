@@ -25,22 +25,87 @@ export const COMPROVATIVO: DocPedido = {
   required: false,
 };
 
+export type DocExtraPreinscricao = { id: string; label: string; required: boolean };
+
+export type DocsPreinscricaoCfg = {
+  ocultos: string[];
+  extra: DocExtraPreinscricao[];
+};
+
+const CFG_VAZIA: DocsPreinscricaoCfg = { ocultos: [], extra: [] };
+
+export function cursoPedeDocsPreinscricao(regime: "gold" | "fin", tipo: string) {
+  if (regime === "fin") return true;
+  const t = tipo.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+  return t.includes("pre-inscr") || t.includes("preinscr");
+}
+
+export function docsBase(regime: "gold" | "fin"): DocPedido[] {
+  return (regime === "fin" ? FIN : GOLD).map(d => ({ ...d }));
+}
+
+function parseCfg(raw: unknown): DocsPreinscricaoCfg {
+  if (!raw) return CFG_VAZIA;
+  const v = typeof raw === "string" ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : raw;
+  if (!v || typeof v !== "object") return CFG_VAZIA;
+  const row = v as { ocultos?: unknown; extra?: unknown };
+  const ocultos = Array.isArray(row.ocultos) ? row.ocultos.map(String) : [];
+  const extra = Array.isArray(row.extra)
+    ? row.extra.flatMap(item => {
+      if (!item || typeof item !== "object") return [];
+      const x = item as { id?: unknown; label?: unknown; required?: unknown };
+      const id = String(x.id ?? "").trim();
+      const label = String(x.label ?? "").trim();
+      if (!id || !label) return [];
+      return [{ id, label, required: Boolean(x.required) }];
+    })
+    : [];
+  return { ocultos, extra };
+}
+
+export async function lerDocsPreinscricao(db: Db, regime: "gold" | "fin", cursoId: number): Promise<DocsPreinscricaoCfg> {
+  const table = regime === "fin" ? "cursos_fin" : "cursos_gold";
+  const row = await db.query<{ docs_preinscricao: unknown }>(
+    `SELECT docs_preinscricao FROM ${table} WHERE id = $1`,
+    [cursoId],
+  );
+  return parseCfg(row.rows[0]?.docs_preinscricao);
+}
+
+export async function gravarDocsPreinscricao(db: Db, regime: "gold" | "fin", cursoId: number, cfg: DocsPreinscricaoCfg) {
+  const table = regime === "fin" ? "cursos_fin" : "cursos_gold";
+  await db.query(
+    `UPDATE ${table} SET docs_preinscricao = $2::jsonb WHERE id = $1`,
+    [cursoId, cfg],
+  );
+}
+
 export async function docsDoCurso(db: Db, curso: string, regime: "gold" | "fin"): Promise<DocPedido[]> {
-  const base = (regime === "fin" ? FIN : GOLD).map(d => ({ ...d }));
+  const base = docsBase(regime);
   const cursoRow = regime === "fin"
-    ? await db.query<{ id: number }>(
-      "SELECT id FROM cursos_fin WHERE lower(trim(nome_comercial)) = lower(trim($1)) OR lower(trim(ufcd)) = lower(trim($1)) LIMIT 1",
+    ? await db.query<{ id: number; tipo: string }>(
+      "SELECT id, ''::text AS tipo FROM cursos_fin WHERE lower(trim(nome_comercial)) = lower(trim($1)) OR lower(trim(ufcd)) = lower(trim($1)) LIMIT 1",
       [curso],
     )
-    : await db.query<{ id: number }>(
-      "SELECT id FROM cursos_gold WHERE lower(trim(nome)) = lower(trim($1)) LIMIT 1",
+    : await db.query<{ id: number; tipo: string }>(
+      "SELECT id, tipo FROM cursos_gold WHERE lower(trim(nome)) = lower(trim($1)) LIMIT 1",
       [curso],
     );
-  const cursoId = cursoRow.rows[0]?.id;
-  if (!cursoId) return base;
+  const found = cursoRow.rows[0];
+  if (!found) return regime === "fin" ? base : [];
+  if (!cursoPedeDocsPreinscricao(regime, String(found.tipo ?? ""))) return [];
+  const cfg = await lerDocsPreinscricao(db, regime, found.id);
+  const ocultos = new Set(cfg.ocultos);
+  const kept = base.filter(d => !ocultos.has(d.id));
+  const seen = new Set(kept.map(d => d.id));
+  for (const extra of cfg.extra) {
+    if (seen.has(extra.id)) continue;
+    seen.add(extra.id);
+    kept.push({ id: extra.id, label: extra.label, required: extra.required });
+  }
   const modelo = await db.query<{ extra: unknown; excluidos: unknown; incluidos: unknown }>(
     "SELECT extra, excluidos, incluidos FROM curso_dtp_modelos WHERE regime = $1 AND curso_id = $2",
-    [regime, cursoId],
+    [regime, found.id],
   );
   const cursoModelo = parseDtpModelo(modelo.rows[0]);
   let composto = cursoModelo;
@@ -50,13 +115,10 @@ export async function docsDoCurso(db: Db, curso: string, regime: "gold" | "fin")
          FROM cursos_gold c
          JOIN dtp_entidades e ON e.id = c.entidade_responsavel_id
         WHERE c.id = $1`,
-      [cursoId],
+      [found.id],
     );
     composto = comporModelo(parseDtpModelo(entidade.rows[0] ?? DTP_MODELO_VAZIO), cursoModelo);
   }
-  const excluidos = new Set(composto.excluidos);
-  const kept = base.filter(d => !excluidos.has(d.id));
-  const seen = new Set(kept.map(d => d.id));
   for (const extra of composto.extra) {
     if (extra.ambito !== "formando" || !extra.id || seen.has(extra.id)) continue;
     seen.add(extra.id);

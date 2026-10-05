@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiCursoFicha, type Regime } from "./api";
+import { idCursoPorNome } from "./cursoLocais";
 import { useLists } from "./ListsContext";
 
 export type ModoAvaliacao = "modulos" | "final";
@@ -225,8 +226,7 @@ export function useAvaliacaoCurso(regime: Regime, cursoNome: string | undefined)
 
   const cursoId = useMemo(() => {
     if (!cursoNome) return null;
-    if (regime === "gold") return cursosGold.find(c => c.nome === cursoNome)?.id ?? null;
-    return cursosFin.find(c => c.ufcd === cursoNome || c.nomeComercial === cursoNome)?.id ?? null;
+    return idCursoPorNome(regime, cursoNome, cursosGold, cursosFin);
   }, [cursoNome, cursosFin, cursosGold, regime]);
 
   useEffect(() => {

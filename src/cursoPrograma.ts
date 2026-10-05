@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiCursoFicha, type Regime } from "./api";
 import type { SelectOption } from "./FormKit";
+import { idCursoPorNome } from "./cursoLocais";
 import { useLists } from "./ListsContext";
 
 export type OrganizacaoPrograma = "modular" | "livre";
@@ -79,11 +80,10 @@ export function useProgramaDoCurso(regime: Regime, cursoNome: string | undefined
   const [organizacao, setOrganizacao] = useState<OrganizacaoPrograma>(regime === "fin" ? "modular" : "modular");
   const [topicos, setTopicos] = useState<TopicoPrograma[]>([]);
 
-  const cursoId = useMemo(() => {
-    if (!cursoNome) return null;
-    if (regime === "gold") return cursosGold.find(c => c.nome === cursoNome)?.id ?? null;
-    return cursosFin.find(c => c.ufcd === cursoNome || c.nomeComercial === cursoNome)?.id ?? null;
-  }, [cursoNome, cursosFin, cursosGold, regime]);
+  const cursoId = useMemo(
+    () => idCursoPorNome(regime, cursoNome, cursosGold, cursosFin),
+    [cursoNome, cursosFin, cursosGold, regime],
+  );
 
   useEffect(() => {
     if (cursoId == null) {

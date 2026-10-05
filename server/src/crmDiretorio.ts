@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Db } from "./db/pool.js";
+import { bloqueioCliente } from "./ligacoes.js";
 import { nextOpsId } from "./ops.js";
 
 function num(v: unknown) {
@@ -75,7 +76,10 @@ export function registerCrmDiretorioRoutes(
 
   app.delete("/v1/crm/clientes/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    await db.query("DELETE FROM crm_clientes WHERE id = $1", [Number((req.params as { id: string }).id)]);
+    const id = Number((req.params as { id: string }).id);
+    const bloqueio = await bloqueioCliente(db, id);
+    if (bloqueio) return reply.code(409).send({ error: bloqueio });
+    await db.query("DELETE FROM crm_clientes WHERE id = $1", [id]);
     return { ok: true };
   });
 

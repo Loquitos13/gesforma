@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { EnviarReciboModal, ReferenciaMbModal } from "./ActionSurfaces";
 import { apiAddFormandoNota, apiDtpModelo, apiFormandoDossier, apiSaveFormandoDocs, type FormandoNota } from "./api";
+import { idCursoPorNome } from "./cursoLocais";
 import { docsFormandoBase, fundirDocTipos } from "./dossierDocs";
 import { persist } from "./toastBus";
 import { FileUploadModal } from "./TurmaExtras";
@@ -42,8 +43,7 @@ function estadoBadge(estado: string) {
 function DocumentosGoldPanel({ formando, avulso, tipo = "gold" }: { formando: FormandoTurma; avulso?: boolean; tipo?: "gold" | "fin" }) {
   const { cursosGold, cursosFin } = useLists();
   const cursoId = useMemo(() => {
-    if (tipo === "gold") return cursosGold.find(c => c.nome === formando.curso)?.id;
-    return cursosFin.find(c => c.ufcd === formando.curso || c.nomeComercial === formando.curso)?.id;
+    return idCursoPorNome(tipo === "fin" ? "fin" : "gold", formando.curso, cursosGold, cursosFin) ?? undefined;
   }, [cursosFin, cursosGold, formando.curso, tipo]);
   const [docs, setDocs] = useState(() => docsFormandoBase(tipo).map(d => ({ ...d, ok: false, data: "", fileName: "", driveUrl: "", driveFileId: "" })));
   const [uploadFor, setUploadFor] = useState<string | null>(null);

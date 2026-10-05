@@ -16,6 +16,52 @@ export function locaisFromFicha(payload: Record<string, unknown> | undefined): s
   return out;
 }
 
+function semPrefixoCurso(s: string) {
+  return s.trim().toLowerCase().replace(/^curso de\s+/, "");
+}
+
+/** A string guardada aponta para este curso, mesmo que seja o nome curto, a UFCD ou «Curso de …». */
+export function refereCurso(
+  stored: string,
+  curso: { nome?: string; nomeComercial?: string; ufcd?: string; ufcdCod?: string },
+) {
+  const raw = stored.trim();
+  const low = raw.toLowerCase();
+  if (!low) return false;
+  const aliases = [curso.nome, curso.nomeComercial, curso.ufcd, curso.ufcdCod]
+    .map(s => (s || "").trim())
+    .filter(Boolean);
+  if (aliases.some(a => a.toLowerCase() === low)) return true;
+  const canonical = (curso.nome || curso.nomeComercial || curso.ufcd || "").trim();
+  if (!canonical) return false;
+  if (raw.length >= 18 && canonical.toLowerCase().startsWith(low)) {
+    const next = canonical[raw.length] ?? "";
+    if (next === " " || next === ":" || next === "-" || next === "–") return true;
+  }
+  const base = semPrefixoCurso(raw);
+  return base.length >= 8 && (semPrefixoCurso(canonical) === base || aliases.some(a => semPrefixoCurso(a) === base));
+}
+
+export function idCursoPorNome(
+  regime: "gold" | "fin",
+  cursoNome: string | undefined,
+  cursosGold: { id: number; nome?: string }[],
+  cursosFin: { id: number; nome?: string; nomeComercial?: string; ufcd?: string; ufcdCod?: string }[],
+) {
+  const nome = (cursoNome ?? "").trim();
+  if (!nome) return null;
+  if (regime === "gold") {
+    const exact = cursosGold.find(c => (c.nome || "") === nome);
+    if (exact) return exact.id;
+    const loose = cursosGold.filter(c => refereCurso(nome, c));
+    return loose.length === 1 ? loose[0]!.id : null;
+  }
+  const exact = cursosFin.find(c => c.ufcd === nome || c.nomeComercial === nome || c.ufcdCod === nome);
+  if (exact) return exact.id;
+  const loose = cursosFin.filter(c => refereCurso(nome, c));
+  return loose.length === 1 ? loose[0]!.id : null;
+}
+
 export function matchCursoId(
   cursos: { id: number; nome?: string; nomeComercial?: string; ufcd?: string; ufcdCod?: string }[],
   selected: string,

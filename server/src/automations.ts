@@ -190,7 +190,12 @@ async function enqueueTurmaReminders(db: Db) {
     const alunos = await db.query<{ nome: string; apelido: string; email: string; curso: string }>(
       `SELECT nome, apelido, email, curso FROM formandos_gold WHERE turma_id = $1 AND email <> ''
        UNION ALL
-       SELECT nome, apelido, email, curso FROM formandos_fin WHERE turma = $2 AND email <> ''`,
+       SELECT nome, apelido, email, curso FROM formandos_fin
+        WHERE email <> ''
+          AND (
+            lower(trim(turma)) = lower(trim($2))
+            OR turma_id = (SELECT id FROM turmas_fin WHERE id = $1 AND lower(trim(nome)) = lower(trim($2)))
+          )`,
       [turma.id, turma.nome],
     );
     for (const a of alunos.rows) {

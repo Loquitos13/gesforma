@@ -30,7 +30,7 @@ import {   AppModal, SearchSelect, MultiSearchSelect, ViewFilters, matchesFilter
 } from "./FormKit";
 import { useProgramaDoCurso } from "./cursoPrograma";
 import { imprimirFolhasPresencas } from "./presencasPrint";
-import { useLocaisOptsDoCurso } from "./cursoLocais";
+import { refereCurso, useLocaisOptsDoCurso } from "./cursoLocais";
 import { OptionSelect } from "./OptionSelect";
 import { ListasOpcoesView } from "./ListasOpcoesView";
 import { CronogramaEditor, FormadoresAtribuidosCard, TurmaActivaToggle, TurmaInactivaBanner, TurmaInscricaoHint } from "./TurmaCronograma";
@@ -2264,9 +2264,10 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
     );
   }
   const membros = formandosFin.filter(f => {
+    if (f.turmaId && f.turmaId === turma.id) return true;
     if (f.turma === turma.nome) return true;
-    const noutra = fin.some(t => t.id !== turma.id && t.nome === f.turma);
-    return !noutra && f.curso === turma.curso;
+    const noutra = fin.some(t => t.id !== turma.id && (t.nome === f.turma || f.turmaId === t.id));
+    return !noutra && (f.curso === turma.curso || refereCurso(f.curso, { nomeComercial: turma.curso, ufcd: turma.ufcdCod, ufcdCod: turma.ufcdCod }));
   });
   const listaFormandos = membros;
   const prontos = listaFormandos.filter(f => ["cc", "ch", "cu", "ci", "ce"].every(k => f[k as DocKey].ok)).length;

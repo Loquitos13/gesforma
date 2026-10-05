@@ -1,4 +1,5 @@
 import { generateCronograma } from "../cronograma.js";
+import { repararLigacoes } from "../ligacoes.js";
 import { seedCatalogs } from "./catalogSeed.js";
 import type { Db } from "./pool.js";
 
@@ -52,13 +53,27 @@ async function syncContagensDeTurma(db: Db) {
   await db.query(`
     UPDATE turmas_fin t SET alunos = (
       SELECT count(*)::int FROM formandos_fin f
-       WHERE f.turma = t.nome
-          OR (f.curso = t.curso AND NOT EXISTS (SELECT 1 FROM turmas_fin t2 WHERE t2.nome = f.turma))
+       WHERE f.turma_id = t.id
+          OR lower(trim(f.turma)) = lower(trim(t.nome))
+          OR (
+            f.turma_id IS NULL
+            AND lower(trim(f.curso)) = lower(trim(t.curso))
+            AND NOT EXISTS (
+              SELECT 1 FROM turmas_fin t2 WHERE lower(trim(t2.nome)) = lower(trim(f.turma))
+            )
+          )
     )
     WHERE t.alunos <> (
       SELECT count(*)::int FROM formandos_fin f
-       WHERE f.turma = t.nome
-          OR (f.curso = t.curso AND NOT EXISTS (SELECT 1 FROM turmas_fin t2 WHERE t2.nome = f.turma))
+       WHERE f.turma_id = t.id
+          OR lower(trim(f.turma)) = lower(trim(t.nome))
+          OR (
+            f.turma_id IS NULL
+            AND lower(trim(f.curso)) = lower(trim(t.curso))
+            AND NOT EXISTS (
+              SELECT 1 FROM turmas_fin t2 WHERE lower(trim(t2.nome)) = lower(trim(f.turma))
+            )
+          )
     )
   `);
 }
@@ -301,6 +316,7 @@ export async function seedOperational(db: Db) {
   await seedCatalogs(db);
   await backfillCronogramas(db);
   await seedDtpBase(db);
+  await repararLigacoes(db);
   await syncContagensDeTurma(db);
 
   await db.query(`

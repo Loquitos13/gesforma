@@ -19,6 +19,7 @@ import {
 import { useLists } from "./ListsContext";
 import { persist } from "./toastBus";
 import { criteriosCcp, emptyPlano, emptySumario, type CriterioAvaliacao, type PlanoSessaoData, type SumarioSessaoData } from "./TurmaExtras";
+import { idCursoPorNome } from "./cursoLocais";
 import { useProgramaDoCurso } from "./cursoPrograma";
 
 export type PresencaRow = { id: number; nome: string; presente: boolean };
@@ -37,11 +38,10 @@ export function useCriteriosAvaliacao(regime: Regime, cursoNome: string | undefi
   const { cursosGold, cursosFin } = useLists();
   const [criterios, setCriterios] = useState<CriterioAvaliacao[] | null>(null);
 
-  const cursoId = useMemo(() => {
-    if (!cursoNome) return null;
-    if (regime === "gold") return cursosGold.find(c => c.nome === cursoNome)?.id ?? null;
-    return cursosFin.find(c => c.ufcd === cursoNome || c.nomeComercial === cursoNome)?.id ?? null;
-  }, [cursoNome, cursosFin, cursosGold, regime]);
+  const cursoId = useMemo(
+    () => idCursoPorNome(regime, cursoNome, cursosGold, cursosFin),
+    [cursoNome, cursosFin, cursosGold, regime],
+  );
 
   useEffect(() => {
     if (cursoId == null) { setCriterios(null); return; }

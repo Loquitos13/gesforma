@@ -35,6 +35,10 @@ import { precoParaOferta } from "./precoOferta.js";
 import { listCursosGoldActivos, listOfertaGold } from "./ofertaGold.js";
 import { generateCronograma } from "./cronograma.js";
 import {
+  bloqueioCursoFin, bloqueioCursoGold, bloqueioFormador, bloqueioTurma,
+  propagarCurso, propagarCursoDaTurma, propagarFormador, propagarNomeTurma,
+} from "./ligacoes.js";
+import {
   COMPROVATIVO, firePreinscricaoEmail, listarDocsLead, maybeEnviarPagamentoAposDocs, notificarDocumentos,
   popularFichaPessoa, docsDoCurso, abrirAlerta, alertarDocumentosIncorrectos,
   definirEstadoDoc, dispensarAlerta, listarAlertasAbertas, syncLigacao,
@@ -1074,9 +1078,12 @@ export function registerOpsRoutes(
     const d = parsed.data;
     const id = await nextOpsId(db);
     const docs = { cc: d.cc ?? { ok: false, data: "" }, ch: d.ch ?? { ok: false, data: "" }, cu: d.cu ?? { ok: false, data: "" }, ci: d.ci ?? { ok: false, data: "" }, ce: d.ce ?? { ok: false, data: "" } };
+    const turmaLigada = d.turma
+      ? await one(db, "SELECT id FROM turmas_fin WHERE lower(trim(nome)) = lower(trim($1)) ORDER BY id DESC LIMIT 1", [d.turma])
+      : null;
     await db.query(
-      "INSERT INTO formandos_fin (id, nome, apelido, turma, telf, email, curso, estado, docs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)",
-      [id, d.nome, d.apelido, d.turma, d.telf, d.email, d.curso, d.estado, docs],
+      "INSERT INTO formandos_fin (id, nome, apelido, turma, turma_id, telf, email, curso, estado, docs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)",
+      [id, d.nome, d.apelido, d.turma, turmaLigada ? Number(turmaLigada.id) : null, d.telf, d.email, d.curso, d.estado, docs],
     );
     const row = await one(db, "SELECT * FROM formandos_fin WHERE id = $1", [id]);
     return { formando: row ? mapFormandoFin(row) : { id } };
@@ -1101,8 +1108,9 @@ export function registerOpsRoutes(
       [id, d.nome ?? null, d.apelido ?? null, d.turma ?? null, d.telf ?? null, d.email ?? null, d.curso ?? null, d.estado ?? null, docs],
     );
     const row = await one(db, "SELECT * FROM formandos_fin WHERE id = $1", [id]);
-    if (row && d.turma) {
-      const turma = await one(db, "SELECT id, curso FROM turmas_fin WHERE nome = $1 ORDER BY id DESC LIMIT 1", [String(d.turma)]);
+    if (row && d.turma != null) {
+      const turma = await one(db, "SELECT id, curso FROM turmas_fin WHERE lower(trim(nome)) = lower(trim($1)) ORDER BY id DESC LIMIT 1", [String(d.turma)]);
+      await db.query("UPDATE formandos_fin SET turma_id = $2 WHERE id = $1", [id, turma ? Number(turma.id) : null]);
       const email = String(row.email ?? "");
       if (turma && email) {
         await moverDocsParaTurma(db, {
@@ -1149,17 +1157,23 @@ export function registerOpsRoutes(
     const parsed = cursoGoldSchema.partial().safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
+    const antes = await one(db, "SELECT nome FROM cursos_gold WHERE id = $1", [id]);
+    if (!antes) return reply.code(404).send({ error: "curso não encontrado" });
     await db.query(
       `UPDATE cursos_gold SET nome = COALESCE($2, nome), categoria = COALESCE($3, categoria), tipo = COALESCE($4, tipo),
          preco = COALESCE($5, preco), regime = COALESCE($6, regime), horas = COALESCE($7, horas), estado = COALESCE($8, estado) WHERE id = $1`,
       [id, d.nome ?? null, d.categoria ?? null, d.tipo ?? null, d.preco ?? null, d.regime ?? null, d.horas ?? null, d.estado ?? null],
     );
+    if (d.nome && d.nome !== String(antes.nome ?? "")) await propagarCurso(db, String(antes.nome ?? ""), d.nome);
     const row = await one(db, "SELECT * FROM cursos_gold WHERE id = $1", [id]);
     return { curso: row ? mapCursoGold(row) : null };
   });
   app.delete("/v1/cursos-gold/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    await db.query("DELETE FROM cursos_gold WHERE id = $1", [Number((req.params as { id: string }).id)]);
+    const id = Number((req.params as { id: string }).id);
+    const bloqueio = await bloqueioCursoGold(db, id);
+    if (bloqueio) return reply.code(409).send({ error: bloqueio });
+    await db.query("DELETE FROM cursos_gold WHERE id = $1", [id]);
     return { ok: true };
   });
 
@@ -1190,17 +1204,28 @@ export function registerOpsRoutes(
     const parsed = cursoFinSchema.partial().safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
+    const antes = await one(db, "SELECT ufcd, nome_comercial FROM cursos_fin WHERE id = $1", [id]);
+    if (!antes) return reply.code(404).send({ error: "curso não encontrado" });
     await db.query(
       `UPDATE cursos_fin SET ufcd_cod = COALESCE($2, ufcd_cod), ufcd = COALESCE($3, ufcd), nome_comercial = COALESCE($4, nome_comercial),
          regime = COALESCE($5, regime), horas = COALESCE($6, horas), estado = COALESCE($7, estado) WHERE id = $1`,
       [id, d.ufcdCod ?? null, d.ufcd ?? null, d.nomeComercial ?? null, d.regime ?? null, d.horas ?? null, d.estado ?? null],
     );
+    const comercialAntes = String(antes.nome_comercial ?? "");
+    const ufcdAntes = String(antes.ufcd ?? "");
+    if (d.nomeComercial && d.nomeComercial !== comercialAntes) await propagarCurso(db, comercialAntes, d.nomeComercial);
+    if (d.ufcd && d.ufcd !== ufcdAntes && ufcdAntes !== comercialAntes && ufcdAntes !== (d.nomeComercial ?? comercialAntes)) {
+      await propagarCurso(db, ufcdAntes, d.ufcd);
+    }
     const row = await one(db, "SELECT * FROM cursos_fin WHERE id = $1", [id]);
     return { curso: row ? mapCursoFin(row) : null };
   });
   app.delete("/v1/cursos-fin/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    await db.query("DELETE FROM cursos_fin WHERE id = $1", [Number((req.params as { id: string }).id)]);
+    const id = Number((req.params as { id: string }).id);
+    const bloqueio = await bloqueioCursoFin(db, id);
+    if (bloqueio) return reply.code(409).send({ error: bloqueio });
+    await db.query("DELETE FROM cursos_fin WHERE id = $1", [id]);
     return { ok: true };
   });
 
@@ -1256,6 +1281,7 @@ export function registerOpsRoutes(
     const parsed = turmaGoldSchema.partial().safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
+    const antesTurma = await one(db, "SELECT nome, curso FROM turmas_gold WHERE id = $1", [id]);
     if (d.formador != null || d.formadores != null || d.horario != null) {
       const actual = await one(db, "SELECT formador, formadores, horario FROM turmas_gold WHERE id = $1", [id]);
       const horario = d.horario ?? String(actual?.horario ?? "");
@@ -1273,6 +1299,12 @@ export function registerOpsRoutes(
          custo_hora_sala = COALESCE($14, custo_hora_sala) WHERE id = $1`,
       [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.local ?? null, d.horario ?? null, d.totalAlunos ?? null, d.vagas ?? null, d.estado ?? null, d.formador ?? null, d.formadores ? JSON.stringify(d.formadores) : null, d.horas ?? null, d.cronograma ?? null, d.custoHoraSala ?? null],
     );
+    if (antesTurma && d.nome && d.nome !== String(antesTurma.nome ?? "")) {
+      await propagarNomeTurma(db, "gold", id, String(antesTurma.nome ?? ""), d.nome);
+    }
+    if (antesTurma && d.curso && d.curso !== String(antesTurma.curso ?? "")) {
+      await propagarCursoDaTurma(db, "gold", id, String(d.nome ?? antesTurma.nome ?? ""), String(antesTurma.curso ?? ""), d.curso);
+    }
     const row = await one(db, "SELECT * FROM turmas_gold WHERE id = $1", [id]);
     if (row) {
       void syncTurmaDriveAccess(db, {
@@ -1289,7 +1321,10 @@ export function registerOpsRoutes(
   app.delete("/v1/turmas-gold/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não elimina turmas." });
-    await db.query("DELETE FROM turmas_gold WHERE id = $1", [Number((req.params as { id: string }).id)]);
+    const id = Number((req.params as { id: string }).id);
+    const bloqueio = await bloqueioTurma(db, "gold", id);
+    if (bloqueio) return reply.code(409).send({ error: bloqueio });
+    await db.query("DELETE FROM turmas_gold WHERE id = $1", [id]);
     return { ok: true };
   });
 
@@ -1345,6 +1380,7 @@ export function registerOpsRoutes(
     const parsed = turmaFinSchema.partial().safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
+    const antesTurma = await one(db, "SELECT nome, curso FROM turmas_fin WHERE id = $1", [id]);
     await db.query(
       `UPDATE turmas_fin SET data_inicio = COALESCE($2, data_inicio), nome = COALESCE($3, nome), curso = COALESCE($4, curso),
          ufcd_cod = COALESCE($5, ufcd_cod), local = COALESCE($6, local), horario = COALESCE($7, horario),
@@ -1354,6 +1390,12 @@ export function registerOpsRoutes(
          cronograma = COALESCE($15::jsonb, cronograma) WHERE id = $1`,
       [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.ufcdCod ?? null, d.local ?? null, d.horario ?? null, d.alunos ?? null, d.alunosTotal ?? null, d.estado ?? null, d.horas ?? null, d.formador ?? null, d.formadores ? JSON.stringify(d.formadores) : null, d.activa ?? null, d.cronograma ?? null],
     );
+    if (antesTurma && d.nome && d.nome !== String(antesTurma.nome ?? "")) {
+      await propagarNomeTurma(db, "fin", id, String(antesTurma.nome ?? ""), d.nome);
+    }
+    if (antesTurma && d.curso && d.curso !== String(antesTurma.curso ?? "")) {
+      await propagarCursoDaTurma(db, "fin", id, String(d.nome ?? antesTurma.nome ?? ""), String(antesTurma.curso ?? ""), d.curso);
+    }
     const row = await one(db, "SELECT * FROM turmas_fin WHERE id = $1", [id]);
     if (row) {
       void syncTurmaDriveAccess(db, {
@@ -1370,7 +1412,10 @@ export function registerOpsRoutes(
   app.delete("/v1/turmas-fin/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não elimina turmas." });
-    await db.query("DELETE FROM turmas_fin WHERE id = $1", [Number((req.params as { id: string }).id)]);
+    const id = Number((req.params as { id: string }).id);
+    const bloqueio = await bloqueioTurma(db, "fin", id);
+    if (bloqueio) return reply.code(409).send({ error: bloqueio });
+    await db.query("DELETE FROM turmas_fin WHERE id = $1", [id]);
     return { ok: true };
   });
 
@@ -1429,6 +1474,7 @@ export function registerOpsRoutes(
          disponibilidade = COALESCE($10::jsonb, disponibilidade), custo_hora = COALESCE($11, custo_hora) WHERE id = $1`,
       [id, d.nome ?? null, d.telf ?? null, d.email ?? null, d.especialidade ?? null, d.ccp ?? null, d.nif ?? null, d.regimes ? JSON.stringify(d.regimes) : null, d.estado ?? null, d.disponibilidade ? JSON.stringify(d.disponibilidade) : null, d.custoHora ?? null],
     );
+    if (d.nome && d.nome !== String(antes.nome ?? "")) await propagarFormador(db, String(antes.nome ?? ""), d.nome);
     let acesso: { email: string; password?: string; criado: boolean } | null = null;
     const email = d.email ?? String(antes.email ?? "");
     if (!antes.user_id && email) {
@@ -1444,7 +1490,10 @@ export function registerOpsRoutes(
   });
   app.delete("/v1/formadores/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    await db.query("DELETE FROM formadores WHERE id = $1", [Number((req.params as { id: string }).id)]);
+    const id = Number((req.params as { id: string }).id);
+    const bloqueio = await bloqueioFormador(db, id);
+    if (bloqueio) return reply.code(409).send({ error: bloqueio });
+    await db.query("DELETE FROM formadores WHERE id = $1", [id]);
     return { ok: true };
   });
 

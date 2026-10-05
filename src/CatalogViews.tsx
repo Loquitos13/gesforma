@@ -646,7 +646,7 @@ function DatasCatalogView({ accent }: { accent: Accent }) {
                     <Td className="text-sm font-medium text-slate-800 max-w-[200px]">{r.curso}</Td>
                     <Td className={`text-xs font-semibold ${accent === "gold" ? "text-amber-700" : "text-blue-700"}`}>{accent === "gold" ? `€ ${r.preco}` : "Financiado"}</Td>
                     <Td>
-                      <a href={`https://${r.link}`} className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline" onClick={e => e.preventDefault()}>{I.link} Link</a>
+                      <a href={/^https?:\/\//i.test(r.link) ? r.link : `https://${r.link}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>{I.link} Link</a>
                     </Td>
                     <Td>{estadoBadge(r.status)}</Td>
                     <Td onClick={e => e.stopPropagation()}><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => setOpen(r)} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagar(r)} /></div></Td>

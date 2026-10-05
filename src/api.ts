@@ -68,7 +68,7 @@ export type OpsSnapshot = {
     pago: boolean; valor: number; metodo: string;
   }>;
   formandosFin: Array<{
-    id: number; nome: string; apelido: string; turma: string; telf: string; email: string;
+    id: number; nome: string; apelido: string; turma: string; turmaId?: number; telf: string; email: string;
     curso: string; estado: string;
     cc: { ok: boolean; data: string }; ch: { ok: boolean; data: string };
     cu: { ok: boolean; data: string }; ci: { ok: boolean; data: string }; ce: { ok: boolean; data: string };

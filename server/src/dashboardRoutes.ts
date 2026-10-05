@@ -454,6 +454,12 @@ export function registerDashboardRoutes(
     const now = new Date();
     const f = parseFiltro(req.query);
     const lw = leadWhere(f);
+    const tipoNorm = `translate(lower(coalesce(cg.tipo, '')), 'áàâãéêíóôõúç', 'aaaaeeiooouc')`;
+    const tipoPre = `(${tipoNorm} LIKE '%pre-inscr%' OR ${tipoNorm} LIKE '%preinscr%' OR (lower(trim(coalesce(cg.tipo, ''))) IN ('gold', 'pago') AND lower(trim(coalesce(cg.regime, ''))) <> 'e-learning'))`;
+    const cursoPre = `EXISTS (SELECT 1 FROM cursos_gold cg WHERE lower(trim(cg.nome)) = lower(trim(p.curso)) AND ${tipoPre})`;
+    const cursoPago = `EXISTS (SELECT 1 FROM cursos_gold cg WHERE lower(trim(cg.nome)) = lower(trim(p.curso)) AND NOT (${tipoPre}) AND (${tipoNorm} LIKE '%e-learning%' OR ${tipoNorm} LIKE '%elearning%' OR (lower(trim(coalesce(cg.tipo, ''))) IN ('gold', 'pago') AND lower(trim(coalesce(cg.regime, ''))) = 'e-learning')))`;
+    const preExpr = f.regime === "gold" ? cursoPre : `p.entrada = 'preinscricao'`;
+    const pagoExpr = f.regime === "gold" ? cursoPago : `p.entrada <> 'preinscricao'`;
     const payConds = ["true"];
     const payParams: unknown[] = [];
     let pi = 1;
@@ -486,20 +492,20 @@ export function registerDashboardRoutes(
         `SELECT
            (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.estado <> 'Formando') AS preinscritos,
            (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.contactado_em IS NOT NULL) AS contactados,
-           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada = 'preinscricao') AS pre_base,
-           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada = 'preinscricao' AND p.contactado_em IS NOT NULL) AS pre_contactados,
-           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada = 'preinscricao' AND (
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND ${preExpr}) AS pre_base,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND ${preExpr} AND p.contactado_em IS NOT NULL) AS pre_contactados,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND ${preExpr} AND (
               p.estado IN ('Pago','Pré-inscrição','Formando')
               OR EXISTS (SELECT 1 FROM pagamentos g WHERE g.estado = 'Pago' AND g.email <> '' AND lower(g.email) = lower(p.email))
            )) AS pre_pagaram,
-           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada = 'preinscricao' AND p.estado = 'Formando') AS formandos_pre,
-           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada <> 'preinscricao') AS pago_base,
-           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada <> 'preinscricao' AND (
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND ${preExpr} AND p.estado = 'Formando') AS formandos_pre,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND ${pagoExpr}) AS pago_base,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND ${pagoExpr} AND (
               p.estado IN ('Pago','Pré-inscrição','Formando')
               OR EXISTS (SELECT 1 FROM pagamentos g WHERE g.estado = 'Pago' AND g.email <> '' AND lower(g.email) = lower(p.email))
            )) AS pago_pagos,
-           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada <> 'preinscricao' AND p.estado IN ('Pré-inscrição','Formando')) AS pago_ficha,
-           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND p.entrada <> 'preinscricao' AND p.estado = 'Formando') AS formandos_pago`,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND ${pagoExpr} AND p.estado IN ('Pré-inscrição','Formando')) AS pago_ficha,
+           (SELECT count(*)::int FROM preinscricoes p WHERE ${lw.sql} AND ${pagoExpr} AND p.estado = 'Formando') AS formandos_pago`,
         lw.params,
       ),
       db.query<{
@@ -600,10 +606,11 @@ export function registerDashboardRoutes(
       { l: "Pagaram", v: f.audiencia === "formandos" ? 0 : Number(c?.pre_pagaram ?? 0) },
       { l: "Formandos", v: Number(c?.formandos_pre ?? 0) },
     ];
+    const pagoPagos = f.audiencia === "formandos" ? 0 : Number(c?.pago_pagos ?? 0);
     const funilPrepagos = [
       { l: "Pré-pagos", v: f.audiencia === "formandos" ? 0 : Number(c?.pago_base ?? 0) },
-      { l: "Com pagamento", v: f.audiencia === "formandos" ? 0 : Number(c?.pago_pagos ?? 0) },
-      { l: "Pré-inscrição", v: f.audiencia === "formandos" ? 0 : Number(c?.pago_ficha ?? 0) },
+      { l: f.regime === "gold" ? "Pagaram" : "Com pagamento", v: pagoPagos },
+      { l: f.regime === "gold" ? "Acesso Moodle" : "Pré-inscrição", v: f.regime === "gold" ? pagoPagos : (f.audiencia === "formandos" ? 0 : Number(c?.pago_ficha ?? 0)) },
       { l: "Formandos", v: Number(c?.formandos_pago ?? 0) },
     ];
     const turmasAtivas = regime === "gold"

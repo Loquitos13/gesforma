@@ -733,6 +733,22 @@ export const apiPublicOferta = () =>
     turmas: import("./oferta").OfertaTurma[];
     edicoes?: { curso: string; local?: string; horario?: string; inicio?: string; preco: number; status?: string }[];
   }>("/v1/public/oferta");
+export type CronogramaPublico = {
+  nome: string;
+  curso: string;
+  local: string;
+  horario: string;
+  inicio: string;
+  formador: string;
+  sessoes: { data: string; horaInicio: string; horaFim: string; modalidade: string; modulos: string[]; formadores: string[] }[];
+};
+export const apiPublicCronograma = (regime: Regime, turmaId: number) =>
+  api<CronogramaPublico>(`/v1/public/cronograma/${regime}/${turmaId}`);
+export const apiPublicarCronograma = (regime: Regime, turmaId: number, sessoes: unknown[]) =>
+  api<{ ok: boolean; url: string; publicadoEm: string; ficheiro: string }>(`/v1/turmas/${regime}/${turmaId}/cronograma/publicar`, {
+    method: "POST",
+    body: JSON.stringify({ sessoes }),
+  });
 export const apiPublicPreinscricao = (body: Record<string, unknown>) =>
   api<{ preinscricao: { id: number }; aviso: string }>("/v1/public/preinscricoes", { method: "POST", body: JSON.stringify(body) });
 export const apiPublicOpcoes = (lista: string) =>

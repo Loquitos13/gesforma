@@ -7,6 +7,7 @@ export type OfertaTurma = {
   dataInicio: string;
   vagasLivres: number;
   preco?: number | null;
+  cronogramaPublicado?: boolean;
 };
 
 export type CursoOfertaSel = {

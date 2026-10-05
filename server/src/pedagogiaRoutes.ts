@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
+import { htmlCronograma, sessoesPublicas } from "./cronogramaPublico.js";
 import { listDriveFiles, readDriveContent, storeDriveFile } from "./googleDrive.js";
 import { podeGravarSessao } from "./sessaoAcesso.js";
 import {
@@ -874,6 +875,83 @@ export function registerPedagogiaRoutes(
     );
     await audit(db, req.actor!.id, "turma.certificado", "formando", String(formandoId), req.ip, { regime, turma: id, emitido: c.emitido });
     return { ok: true };
+  });
+
+  app.post("/v1/turmas/:regime/:id/cronograma/publicar", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const { regime, id } = params(req);
+    const parsed = z.object({
+      sessoes: z.array(z.unknown()).max(500).optional(),
+    }).safeParse(req.body ?? {});
+    if (!regime || id == null || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    const table = regime === "fin" ? "turmas_fin" : "turmas_gold";
+    if (parsed.data.sessoes && parsed.data.sessoes.length > 0) {
+      await db.query(`UPDATE ${table} SET cronograma = $2::jsonb WHERE id = $1`, [id, parsed.data.sessoes]);
+    }
+    const row = await db.query<{
+      nome: string; curso: string; local: string; horario: string; data_inicio: string; formador: string; cronograma: unknown;
+    }>(
+      `SELECT nome, curso, local, horario, data_inicio, formador, cronograma FROM ${table} WHERE id = $1`,
+      [id],
+    );
+    const turma = row.rows[0];
+    if (!turma) return reply.code(404).send({ error: "turma não encontrada" });
+    const sessoes = sessoesPublicas(turma.cronograma);
+    if (!sessoes.length) return reply.code(400).send({ error: "O cronograma ainda não tem sessões." });
+    const html = htmlCronograma({
+      nome: turma.nome,
+      curso: turma.curso,
+      local: turma.local,
+      horario: turma.horario,
+      inicio: String(turma.data_inicio ?? "").slice(0, 10),
+      formador: turma.formador,
+      sessoes,
+    });
+    const file = await storeDriveFile(db, req.actor!.id, {
+      name: "Cronograma.html",
+      mime: "text/html",
+      bytes: Buffer.from(html, "utf8"),
+    }, { kind: "dtp", regime, turma: turma.nome, label: "cronograma", itemId: "cronograma" });
+    await db.query(`UPDATE ${table} SET cronograma_publicado_em = now() WHERE id = $1`, [id]);
+    await db.query(
+      `INSERT INTO dtp_anexos (regime, turma_id, item_id, drive_file_id, file_name, drive_url)
+       VALUES ($1, $2, 'cronograma', $3, $4, $5)
+       ON CONFLICT (regime, turma_id, item_id) DO UPDATE SET
+         drive_file_id = EXCLUDED.drive_file_id, file_name = EXCLUDED.file_name,
+         drive_url = EXCLUDED.drive_url, updated_at = now()`,
+      [regime, id, file.id, file.name, file.openUrl ?? ""],
+    );
+    await db.query(
+      `INSERT INTO turma_dtp (regime, turma_id, item_id, estado) VALUES ($1, $2, 'cronograma', 'ok')
+       ON CONFLICT (regime, turma_id, item_id) DO UPDATE SET estado = 'ok', updated_at = now()`,
+      [regime, id],
+    );
+    await audit(db, req.actor!.id, "turma.cronograma_publico", "turma", String(id), req.ip, { regime });
+    return { ok: true, url: `/cronograma/${regime}/${id}`, publicadoEm: new Date().toISOString(), ficheiro: file.name };
+  });
+
+  app.get("/v1/public/cronograma/:regime/:id", async (req, reply) => {
+    const { regime, id } = params(req);
+    if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
+    const table = regime === "fin" ? "turmas_fin" : "turmas_gold";
+    const row = await db.query<{
+      nome: string; curso: string; local: string; horario: string; data_inicio: string; formador: string;
+      cronograma: unknown; cronograma_publicado_em: string | null;
+    }>(
+      `SELECT nome, curso, local, horario, data_inicio, formador, cronograma, cronograma_publicado_em FROM ${table} WHERE id = $1`,
+      [id],
+    );
+    const turma = row.rows[0];
+    if (!turma?.cronograma_publicado_em) return reply.code(404).send({ error: "Este cronograma ainda não está no sítio." });
+    return {
+      nome: turma.nome,
+      curso: turma.curso,
+      local: turma.local,
+      horario: turma.horario,
+      inicio: String(turma.data_inicio ?? "").slice(0, 10),
+      formador: turma.formador ?? "",
+      sessoes: sessoesPublicas(turma.cronograma),
+    };
   });
 
   app.get("/v1/turmas/:regime/:id/avaliacao", async (req, reply) => {

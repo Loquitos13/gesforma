@@ -22,9 +22,10 @@ const ALLOWED_MIME = new Set([
   "video/mp4",
   "video/webm",
   "application/octet-stream",
+  "text/html",
 ]);
 
-const ALLOWED_EXT = /\.(pdf|doc|docx|jpe?g|png|mp4|webm)$/i;
+const ALLOWED_EXT = /\.(pdf|doc|docx|jpe?g|png|mp4|webm|html)$/i;
 
 export type DriveContext = {
   kind: string;

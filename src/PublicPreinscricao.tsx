@@ -158,6 +158,13 @@ export function PublicPreinscricao() {
             <p className="text-xs text-slate-500 -mt-6">
               A turma é o conjunto local + horário + data de início. Horário e data só aparecem depois do local, e só se a secretaria tiver libertado essa turma Gold.
             </p>
+            {turmas.find(t => t.turmaId === oferta.turmaId)?.cronogramaPublicado && (
+              <p className="text-sm -mt-4">
+                <a className="font-semibold text-[#1b2330] underline" href={`/cronograma/gold/${oferta.turmaId}`}>
+                  Ver o cronograma desta turma
+                </a>
+              </p>
+            )}
 
             {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex justify-center pt-2">

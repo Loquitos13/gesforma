@@ -607,7 +607,11 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
             </Card>
             <Card className="p-4">
               <p className="text-sm font-semibold text-slate-700">Funil de conversão</p>
-              <p className="text-[11px] text-slate-400 mb-3">Pré-inscritos entram pelo formulário. Pré-pagos entram por pedido manual, já com pagamento ou no balcão.</p>
+              <p className="text-[11px] text-slate-400 mb-3">
+                {regime === "gold"
+                  ? "Pré-inscritos são cursos com turma e validação de documentos. Pré-pagos pagam e recebem acesso automático ao curso. As percentagens são sobre a base de cada coluna."
+                  : "Pré-inscritos entram pelo formulário. Pré-pagos entram por pedido manual, já com pagamento ou no balcão."}
+              </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FunilTrack titulo="Pré-inscritos" itens={dash?.funilPreinscritos ?? funil} cor="#2563EB" />
                 <FunilTrack titulo="Pré-pagos" itens={dash?.funilPrepagos ?? []} cor="#D97706" />

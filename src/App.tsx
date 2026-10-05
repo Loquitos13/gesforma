@@ -37,6 +37,7 @@ import { CronogramaEditor, FormadoresAtribuidosCard, TurmaActivaToggle, TurmaIna
 import { TurmaRegrasPanel } from "./TurmaRegrasPanel";
 import { InscreverFormandoPanel } from "./TurmaInscricao";
 import { TurmaAvaliacao } from "./TurmaAvaliacao";
+import { cursoECcp, mapaNotas, notaFinalFormando, useAvaliacaoCurso, type NotaAvaliacao } from "./avaliacaoCurso";
 import { FormadoresView } from "./FormadoresView";
 import { FORMADORES_SEED } from "./formadorModel";
 import { useFormadorOptions, useFormadores } from "./FormadoresContext";
@@ -48,7 +49,7 @@ import { CustosTurmaCard } from "./CustosTurma";
 import { CrmClientesView, CrmContratosView, CrmParceirosView } from "./CrmDiretorioView";
 import { FormadorCalendario, eventosDoFormador } from "./FormadorCalendario";
 import { cronogramaToSessoes, formatSessaoLabel, generateCronograma, hojeIso, horasDoFormador, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
-import { apiGlobalSearch, apiDriveFiles, apiSaveFormandoDocs, type GlobalSearchHit } from "./api";
+import { apiGlobalSearch, apiDriveFiles, apiSaveFormandoDocs, apiTurmaAvaliacao, type GlobalSearchHit } from "./api";
 import { CampanhasView } from "./CampanhasView";
 import { ListsProvider, tempNumericId, useLists, type BlogPostRow, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
 import { PreInscricoesGoldView } from "./CrmView";
@@ -1389,33 +1390,72 @@ function DocumentosTurmaTab({ regime = "gold", curso, guardados, onSaveDoc, crit
   );
 }
 
-function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegistadas, onUpload, onView, onNota, curso, turma }: {
+function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegistadas, onUpload, onView, onNota, curso, turma, regime, turmaId }: {
   formandos: { id: number; nome: string }[];
   certificados: Record<number, TurmaCertificado>;
   presencas: Record<number, PresencaRow[]>;
   sessoesRegistadas: number;
-  onUpload?: (id: number) => void;
+  onUpload?: (id: number, nota?: number | null) => void;
   onView?: (c: CertificadoPreview) => void;
   onNota?: (id: number, patch: { nota?: number | null; elearning?: number | null }) => void;
   curso?: string;
   turma?: string;
+  regime: "gold" | "fin";
+  turmaId: number;
 }) {
+  const ccp = cursoECcp(curso);
+  const cfg = useAvaliacaoCurso(regime, curso);
+  const programa = useProgramaDoCurso(regime, curso);
+  const [notasAval, setNotasAval] = useState<NotaAvaliacao[]>([]);
+  useEffect(() => {
+    if (!ccp || turmaId <= 0) return;
+    let alive = true;
+    apiTurmaAvaliacao(regime, turmaId)
+      .then(r => { if (alive) setNotasAval(r.notas); })
+      .catch(() => { if (alive) setNotasAval([]); });
+    return () => { alive = false; };
+  }, [ccp, regime, turmaId]);
+  const mapa = useMemo(() => mapaNotas(notasAval), [notasAval]);
+  const momentos = cfg.momentos?.map(m => m.id) ?? [];
+  const modulos = cfg.modo === "modulos" ? (momentos.length ? momentos : programa.topicos.map(t => t.id)) : [];
   const folhas = Object.values(presencas);
   const rows = formandos.map(f => {
     const marcadas = folhas.filter(rows => rows.some(r => r.id === f.id));
     const presentes = marcadas.filter(rows => rows.find(r => r.id === f.id)?.presente).length;
     const cert = certificados[f.id];
+    const notaCcp = ccp ? notaFinalFormando(cfg, mapa, f.id, modulos) : null;
     return {
       id: f.id,
       nome: f.nome,
       presencas: marcadas.length ? Math.round((presentes / marcadas.length) * 100) : null,
       folhas: marcadas.length,
       elearning: cert?.elearning ?? null,
-      nota: cert?.nota ?? null,
+      nota: ccp ? notaCcp : (cert?.nota ?? null),
       certificado: cert?.emitido ?? false,
     };
   });
-  const elegivelRow = (c: typeof rows[number]) => c.presencas != null && c.presencas >= 75 && c.nota != null && c.nota >= 10;
+  const minimo = cfg.minimoAprovacao || 10;
+  const elegivelRow = (c: typeof rows[number]) => {
+    if (c.presencas == null || c.presencas < 75) return false;
+    if (ccp) return c.nota != null && c.nota >= minimo;
+    return c.elearning != null && c.elearning >= 50;
+  };
+  function exportarSigo() {
+    const linhas = ["Nome;Curso;Turma;Presenças %;Resultado e-learning;Elegível"];
+    for (const c of rows) {
+      const eleg = elegivelRow(c) ? "Sim" : "Não";
+      linhas.push([c.nome, curso ?? "", turma ?? "", c.presencas ?? "", c.elearning ?? "", eleg].map(v => String(v).split(";").join(",")).join(";"));
+    }
+    const blob = new Blob([`\uFEFF${linhas.join("\n")}`], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    const nome = (turma || curso || "turma").replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "").slice(0, 60);
+    a.href = URL.createObjectURL(blob);
+    a.download = `sigo-${nome || "turma"}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  }
   if (formandos.length === 0) {
     return (
       <Card>
@@ -1428,7 +1468,7 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
       <div className="grid grid-cols-3 gap-3">
         {[
           { l: "Elegíveis", v: rows.filter(elegivelRow).length, color: "text-emerald-600", bg: "bg-emerald-50" },
-          { l: "Sem dados suficientes", v: rows.filter(c => c.presencas == null || c.nota == null).length, color: "text-amber-600", bg: "bg-amber-50" },
+          { l: "Sem dados suficientes", v: rows.filter(c => c.presencas == null || (ccp ? c.nota == null : c.elearning == null)).length, color: "text-amber-600", bg: "bg-amber-50" },
           { l: "Certificados emitidos", v: rows.filter(c => c.certificado).length, color: "text-blue-600", bg: "bg-blue-50" },
         ].map(s => (
           <Card key={s.l} className={`p-4 ${s.bg}`}>
@@ -1438,15 +1478,30 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
         ))}
       </div>
       <Card>
-        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
-          <p className="text-sm font-semibold text-slate-700">Elegibilidade por formando</p>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Mínimo: 75% presenças e nota ≥ 10. As presenças vêm das {sessoesRegistadas} folhas já registadas nas sessões. No CCP a nota final é a da avaliação da turma. Nos outros cursos, o resultado de e-learning é o valor a lançar no SIGO.
-          </p>
+        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold text-slate-700">Elegibilidade por formando</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {ccp
+                ? `No CCP a nota é a média da grelha de avaliação (simulação inicial e final). Mínimo: 75% de presenças e nota ≥ ${minimo}. As presenças vêm das ${sessoesRegistadas} folhas já registadas.`
+                : `Mínimo: 75% de presenças e resultado de e-learning ≥ 50. Esse resultado é o valor a lançar no SIGO. As presenças vêm das ${sessoesRegistadas} folhas já registadas.`}
+            </p>
+          </div>
+          {!ccp && (
+            <button type="button" onClick={exportarSigo} className="shrink-0 px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+              Exportar para o SIGO
+            </button>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr><Th>Formando</Th><Th className="text-center">Presenças</Th><Th className="text-center">E-Learning</Th><Th className="text-center">Nota Final</Th><Th className="text-center">Elegibilidade</Th><Th className="text-center">Certificado</Th></tr></thead>
+            <thead><tr>
+              <Th>Formando</Th>
+              <Th className="text-center">Presenças</Th>
+              {ccp ? <Th className="text-center">Nota da avaliação</Th> : <Th className="text-center">E-learning / SIGO</Th>}
+              <Th className="text-center">Elegibilidade</Th>
+              <Th className="text-center">Certificado</Th>
+            </tr></thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map(c => {
                 const elegivel = elegivelRow(c);
@@ -1464,32 +1519,27 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
                       )}
                     </Td>
                     <Td className="text-center">
-                      <input
-                        type="number" min={0} max={100} value={c.elearning ?? ""}
-                        onChange={e => onNota?.(c.id, { elearning: e.target.value === "" ? null : Math.max(0, Math.min(100, Number(e.target.value))) })}
-                        placeholder="-"
-                        aria-label={`E-learning de ${c.nome}`}
-                        className="w-16 px-2 py-1 text-xs text-center border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      />
+                      {ccp ? (
+                        <span className={`text-xs font-bold ${c.nota != null && c.nota < minimo ? "text-red-600" : "text-slate-800"}`}>{c.nota == null ? "—" : c.nota}</span>
+                      ) : (
+                        <input
+                          type="number" min={0} max={100} value={c.elearning ?? ""}
+                          onChange={e => onNota?.(c.id, { elearning: e.target.value === "" ? null : Math.max(0, Math.min(100, Number(e.target.value))) })}
+                          placeholder="-"
+                          aria-label={`Resultado de e-learning de ${c.nome}`}
+                          className="w-16 px-2 py-1 text-xs text-center border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        />
+                      )}
                     </Td>
                     <Td className="text-center">
-                      <input
-                        type="number" min={0} max={20} step="0.1" value={c.nota ?? ""}
-                        onChange={e => onNota?.(c.id, { nota: e.target.value === "" ? null : Math.max(0, Math.min(20, Number(e.target.value))) })}
-                        placeholder="-"
-                        aria-label={`Nota final de ${c.nome}`}
-                        className={`w-16 px-2 py-1 text-xs text-center border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 ${c.nota != null && c.nota < 10 ? "border-red-300 text-red-600" : "border-slate-200"}`}
-                      />
-                    </Td>
-                    <Td className="text-center">
-                      {c.presencas == null || c.nota == null
+                      {(ccp ? c.nota == null : c.elearning == null) || c.presencas == null
                         ? <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500">Por avaliar</span>
                         : <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${elegivel ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>{elegivel ? "Elegível" : "Não elegível"}</span>}
                     </Td>
                     <Td className="text-center">
                       {c.certificado
-                        ? <div className="flex items-center justify-center gap-1"><span className="text-xs text-emerald-600 font-semibold">Emitido</span><ActBtn icon={I.eye} label="Ver certificado emitido" color="gray" onClick={() => onView?.({ nome: c.nome, nota: c.nota ?? 0, curso, turma, data: new Date().toISOString().slice(0, 10) })} /></div>
-                        : <button onClick={() => onUpload?.(c.id)} disabled={!elegivel} title={elegivel ? "Carregar certificado" : "Precisa de 75% de presenças e nota ≥ 10"} className="text-xs font-semibold px-2.5 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed">Upload</button>}
+                        ? <div className="flex items-center justify-center gap-1"><span className="text-xs text-emerald-600 font-semibold">Emitido</span><ActBtn icon={I.eye} label="Ver certificado emitido" color="gray" onClick={() => onView?.({ nome: c.nome, nota: c.nota ?? c.elearning ?? 0, curso, turma, data: new Date().toISOString().slice(0, 10) })} /></div>
+                        : <button onClick={() => onUpload?.(c.id, ccp ? c.nota : null)} disabled={!elegivel} title={elegivel ? "Carregar certificado" : ccp ? `Precisa de 75% de presenças e nota ≥ ${minimo}` : "Precisa de 75% de presenças e resultado de e-learning ≥ 50"} className="text-xs font-semibold px-2.5 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed">Upload</button>}
                     </Td>
                   </tr>
                 );
@@ -1547,6 +1597,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
   const [presencasSession, setPresencasSession] = useState<SessaoMeta | null>(null);
   const [uploadCert, setUploadCert] = useState<number | null>(null);
+  const [uploadNota, setUploadNota] = useState<number | null>(null);
   const [verCert, setVerCert] = useState<CertificadoPreview | null>(null);
   const [exportTurma, setExportTurma] = useState<ExportTurmaInfo | null>(null);
   const [formadorOpen, setFormadorOpen] = useState<string | null>(null);
@@ -1675,6 +1726,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         {tab === "cronograma" && (
           <CronogramaEditor
             layout="page"
+            turmaId={turma.id}
             sessoes={turma.cronograma}
             onChange={next => setGoldCronograma(turma.id, next)}
             inicio={turma.dataInicio}
@@ -1744,11 +1796,13 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             certificados={ped.certificados}
             presencas={ped.presencas}
             sessoesRegistadas={ped.dtp.facts.presencas.done}
-            onUpload={id => setUploadCert(id)}
+            onUpload={(id, nota) => { setUploadNota(nota ?? null); setUploadCert(id); }}
             onView={setVerCert}
             onNota={(id, patch) => void ped.guardarCertificado(id, patch)}
             curso={turma.curso}
             turma={turma.nome}
+            regime="gold"
+            turmaId={turma.id}
           />
         )}
 
@@ -1939,7 +1993,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
       />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado"
         context={{ kind: "certificado", regime: "gold", turma: turma.nome, formando: uploadCert != null ? String(uploadCert) : undefined, label: "Certificado" }}
-        onConfirm={() => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true }); }} />
+        onConfirm={() => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true, ...(uploadNota != null ? { nota: uploadNota } : {}) }); }} />
       <CertificadoVerModal open={!!verCert} onClose={() => setVerCert(null)} cert={verCert} accent="gold" />
       <ExportTurmaModal open={!!exportTurma} onClose={() => setExportTurma(null)} turma={exportTurma} />
       <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? ""} accent="gold" turma={turma.nome} horas={formadorOpen ? horasDoFormador(turma.cronograma, formadorOpen) : undefined} />
@@ -2145,6 +2199,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const [tab, setTab] = useState<CockpitTab>(initialTab);
   const [formadorOpen, setFormadorOpen] = useState<string | null>(null);
   const [uploadCert, setUploadCert] = useState<number | null>(null);
+  const [uploadNota, setUploadNota] = useState<number | null>(null);
   const [verCert, setVerCert] = useState<CertificadoPreview | null>(null);
   const [exportTurma, setExportTurma] = useState<ExportTurmaInfo | null>(null);
   const { user } = useAuth();
@@ -2274,6 +2329,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
         <CronogramaEditor
           layout="page"
           accent="fin"
+          turmaId={turma.id}
           sessoes={turma.cronograma}
           onChange={next => setFinCronograma(turma.id, next)}
           inicio={turma.dataInicio}
@@ -2342,11 +2398,13 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           certificados={ped.certificados}
           presencas={ped.presencas}
           sessoesRegistadas={ped.dtp.facts.presencas.done}
-          onUpload={id => setUploadCert(id)}
+          onUpload={(id, nota) => { setUploadNota(nota ?? null); setUploadCert(id); }}
           onView={setVerCert}
           onNota={(id, patch) => void ped.guardarCertificado(id, patch)}
           curso={turma.curso}
           turma={turma.nome}
+          regime="fin"
+          turmaId={turma.id}
         />
       )}
       {tab === "overview" && (
@@ -2543,7 +2601,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
       <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? turma.formador} accent="fin" turma={turma.nome} horas={formadorOpen ? horasDoFormador(turma.cronograma, formadorOpen) : undefined} />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" accent="fin"
         context={{ kind: "certificado", regime: "fin", turma: turma.nome, formando: uploadCert != null ? String(uploadCert) : undefined, label: "Certificado" }}
-        onConfirm={() => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true }); }} />
+        onConfirm={() => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true, ...(uploadNota != null ? { nota: uploadNota } : {}) }); }} />
       <CertificadoVerModal open={!!verCert} onClose={() => setVerCert(null)} cert={verCert} accent="fin" />
       <ExportTurmaModal open={!!exportTurma} onClose={() => setExportTurma(null)} turma={exportTurma} />
       <SlideOver open={addFormando} onClose={() => setAddFormando(false)} title="Inscrever formando" sub={`${turma.curso} · ${turma.local} · ${turma.horario}`}>

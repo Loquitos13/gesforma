@@ -9,6 +9,7 @@ import { NotificacoesProvider } from "./NotificacoesContext";
 import { PublicInquerito } from "./PublicInquerito";
 import { PublicPreinscricao } from "./PublicPreinscricao";
 import { PublicDocumentos } from "./PublicDocumentos";
+import { PublicCronograma } from "./PublicCronograma";
 import { ToastHost } from "./ToastHost";
 import { TurmasProvider } from "./TurmasContext";
 import "./index.css";
@@ -16,12 +17,15 @@ import "./index.css";
 const path = window.location.pathname.replace(/\/+$/, "") || "/";
 const publicForm = path === "/pre-inscricao";
 const docsToken = path.startsWith("/documentos/") ? decodeURIComponent(path.slice("/documentos/".length).split("/")[0] ?? "") : "";
+const cronogramaMatch = path.match(/^\/cronograma\/(gold|fin)\/(\d+)$/);
 const inqToken = path.startsWith("/inquerito/") ? decodeURIComponent(path.slice("/inquerito/".length).split("/")[0] ?? "") : "";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     {publicForm ? (
       <PublicPreinscricao />
+    ) : cronogramaMatch ? (
+      <PublicCronograma regime={cronogramaMatch[1] as "gold" | "fin"} turmaId={Number(cronogramaMatch[2])} />
     ) : docsToken ? (
       <PublicDocumentos token={docsToken} />
     ) : inqToken ? (

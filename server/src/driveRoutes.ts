@@ -154,7 +154,8 @@ export function registerDriveRoutes(
     if (!content) return reply.code(404).send({ error: "ficheiro inexistente" });
     if (content.redirect && !content.bytes) return reply.redirect(content.redirect);
     reply.header("Content-Type", content.mime);
-    reply.header("Content-Disposition", `inline; filename="${content.name.replace(/"/g, "")}"`);
+    const disp = content.mime === "text/html" ? "attachment" : "inline";
+    reply.header("Content-Disposition", `${disp}; filename="${content.name.replace(/"/g, "")}"`);
     return reply.send(content.bytes);
   });
 

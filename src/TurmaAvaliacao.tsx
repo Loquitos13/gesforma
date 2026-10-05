@@ -85,12 +85,13 @@ export function TurmaAvaliacao({
   const handleBg = gold ? "bg-amber-500" : "bg-blue-600";
 
   const abas = useMemo(() => {
+    if (cfg.momentos?.length) return cfg.momentos.map(m => ({ id: m.id, label: m.label }));
     if (cfg.modo === "final") return [{ id: MODULO_FINAL, label: "Avaliação final" }];
     return programa.topicos.map((t, i) => ({
       id: t.id,
       label: labelTopico(programa.organizacao, i, t),
     }));
-  }, [cfg.modo, programa.organizacao, programa.topicos]);
+  }, [cfg.modo, cfg.momentos, programa.organizacao, programa.topicos]);
 
   useEffect(() => {
     setAtivo(0);
@@ -209,7 +210,7 @@ export function TurmaAvaliacao({
 
   const unidadeNome = programa.unidade;
   const faltaParams = cfg.parametros.length === 0;
-  const faltaModulos = cfg.modo === "modulos" && moduloIds.length === 0;
+  const faltaModulos = cfg.modo === "modulos" && !cfg.momentos?.length && moduloIds.length === 0;
 
   return (
     <div className="space-y-4">
@@ -219,9 +220,11 @@ export function TurmaAvaliacao({
           <p className="text-xs text-slate-500 mt-0.5">
             {faltaParams
               ? "Defina os parâmetros na ficha do curso (separador Avaliação) para lançar notas."
-              : cfg.modo === "modulos"
-                ? `Por ${unidadeNome.singular}: preencha todos os parâmetros de cada ${unidadeNome.singular} para cada formando. Arraste o quadrado da seleção para copiar um valor, como no Excel.`
-                : "Avaliação final: cada parâmetro uma vez por formando. Arraste o quadrado da seleção para copiar um valor, como no Excel."}
+              : cfg.momentos?.length
+                ? "Grelha do CCP: a mesma observação na simulação inicial e na final. A nota do certificado é a média das duas."
+                : cfg.modo === "modulos"
+                  ? `Por ${unidadeNome.singular}: preencha todos os parâmetros de cada ${unidadeNome.singular} para cada formando. Arraste o quadrado da seleção para copiar um valor, como no Excel.`
+                  : "Avaliação final: cada parâmetro uma vez por formando. Arraste o quadrado da seleção para copiar um valor, como no Excel."}
           </p>
           {!faltaParams && (
             <div className="flex flex-wrap gap-1.5 mt-2">
@@ -273,7 +276,7 @@ export function TurmaAvaliacao({
                     i === ativo ? `${accentBtn} border-transparent` : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
                   }`}
                 >
-                  {codigoTopico(programa.organizacao, i)} · {programa.topicos[i]?.titulo || a.label}
+                  {cfg.momentos?.length ? a.label : `${codigoTopico(programa.organizacao, i)} · ${programa.topicos[i]?.titulo || a.label}`}
                 </button>
               ))}
             </div>

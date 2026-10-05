@@ -10,6 +10,8 @@ export type ParametroAvaliacao = {
   peso: number;
 };
 
+export type MomentoAvaliacao = { id: string; label: string };
+
 export type AvaliacaoCurso = {
   modo: ModoAvaliacao;
   escalaMin: number;
@@ -18,7 +20,37 @@ export type AvaliacaoCurso = {
   minimoAprovacao: number;
   pesosEquitativos: boolean;
   parametros: ParametroAvaliacao[];
+  /** Quando existe, a grelha da turma usa estes momentos em vez dos módulos do programa. */
+  momentos?: MomentoAvaliacao[];
 };
+
+export function cursoECcp(nome: string | undefined) {
+  return /ccp/i.test(nome ?? "");
+}
+
+/** Grelha de observação das simulações pedagógicas do CCP (inicial e final). */
+export function avaliacaoCcp(): AvaliacaoCurso {
+  return {
+    modo: "modulos",
+    escalaMin: 0,
+    escalaMax: 20,
+    unidade: "valores",
+    minimoAprovacao: 10,
+    pesosEquitativos: false,
+    momentos: [
+      { id: "ccp-sim-inicial", label: "Simulação inicial" },
+      { id: "ccp-sim-final", label: "Simulação final" },
+    ],
+    parametros: [
+      { id: "ccp-planificacao", label: "Planificação da sessão", peso: 20 },
+      { id: "ccp-comunicacao", label: "Comunicação e relação pedagógica", peso: 20 },
+      { id: "ccp-metodos", label: "Métodos e técnicas", peso: 20 },
+      { id: "ccp-recursos", label: "Recursos didáticos", peso: 15 },
+      { id: "ccp-grupo", label: "Gestão do grupo e do tempo", peso: 15 },
+      { id: "ccp-avaliacao", label: "Avaliação das aprendizagens", peso: 10 },
+    ],
+  };
+}
 
 export type NotaAvaliacao = {
   formandoId: number;
@@ -73,6 +105,15 @@ export function parseAvaliacaoCurso(payload: Record<string, unknown> | undefined
     minimoAprovacao: Number.isFinite(minimo) ? minimo : base.minimoAprovacao,
     pesosEquitativos: o.pesosEquitativos !== false,
     parametros,
+    momentos: Array.isArray(o.momentos)
+      ? o.momentos.flatMap(item => {
+        if (!item || typeof item !== "object") return [];
+        const row = item as Record<string, unknown>;
+        const id = String(row.id ?? "").trim();
+        const label = String(row.label ?? "").trim();
+        return id && label ? [{ id, label }] : [];
+      })
+      : undefined,
   };
 }
 
@@ -189,13 +230,18 @@ export function useAvaliacaoCurso(regime: Regime, cursoNome: string | undefined)
   }, [cursoNome, cursosFin, cursosGold, regime]);
 
   useEffect(() => {
-    if (cursoId == null) { setCfg(avaliacaoPadrao()); return; }
+    const ccp = cursoECcp(cursoNome);
+    if (cursoId == null) { setCfg(ccp ? avaliacaoCcp() : avaliacaoPadrao()); return; }
     let alive = true;
     apiCursoFicha(regime, cursoId)
-      .then(r => { if (alive) setCfg(parseAvaliacaoCurso(r.ficha?.payload)); })
-      .catch(() => { if (alive) setCfg(avaliacaoPadrao()); });
+      .then(r => {
+        if (!alive) return;
+        const parsed = parseAvaliacaoCurso(r.ficha?.payload);
+        setCfg(parsed.parametros.length === 0 && ccp ? avaliacaoCcp() : parsed);
+      })
+      .catch(() => { if (alive) setCfg(ccp ? avaliacaoCcp() : avaliacaoPadrao()); });
     return () => { alive = false; };
-  }, [cursoId, regime]);
+  }, [cursoId, cursoNome, regime]);
 
   return cfg;
 }

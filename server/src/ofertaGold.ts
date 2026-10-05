@@ -10,6 +10,7 @@ export type OfertaTurma = {
   dataInicio: string;
   vagasLivres: number;
   preco: number | null;
+  cronogramaPublicado: boolean;
 };
 
 export function fmtDataPt(iso: string) {
@@ -21,9 +22,9 @@ export function fmtDataPt(iso: string) {
 export async function listOfertaGold(db: Db): Promise<OfertaTurma[]> {
   const rows = await db.query<{
     id: number; nome: string; curso: string; local: string; horario: string;
-    data_inicio: string; total_alunos: number; vagas: number;
+    data_inicio: string; total_alunos: number; vagas: number; cronograma_publicado_em: string | null;
   }>(
-    `SELECT id, nome, curso, local, horario, data_inicio, total_alunos, vagas
+    `SELECT id, nome, curso, local, horario, data_inicio, total_alunos, vagas, cronograma_publicado_em
      FROM turmas_gold
      WHERE estado = 'Ativa'
      ORDER BY curso, local, horario, data_inicio`,
@@ -42,6 +43,7 @@ export async function listOfertaGold(db: Db): Promise<OfertaTurma[]> {
       dataInicio: String(r.data_inicio ?? "").slice(0, 10),
       vagasLivres: Math.max(0, Number(r.vagas ?? 0) - Number(r.total_alunos ?? 0)),
       preco: precoNoMapa(mapa, curso, local, horario),
+      cronogramaPublicado: Boolean(r.cronograma_publicado_em),
     };
   });
 }

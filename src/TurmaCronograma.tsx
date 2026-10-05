@@ -5,6 +5,8 @@ import { MultiSearchSelect } from "./FormKit";
 import { useProgramaDoCurso } from "./cursoPrograma";
 import { useFormadorOptions, useFormadores } from "./FormadoresContext";
 import { descarregarCronograma } from "./cronogramaExport";
+import { apiPublicarCronograma } from "./api";
+import { toastError, toastOk } from "./toastBus";
 import { sessaoCabeNoSlot } from "./disponibilidade";
 import { useTurmas } from "./TurmasContext";
 import { formadorIndisponivel } from "./sessaoAcesso";
@@ -293,7 +295,7 @@ function SessaoRow({
 
 export function CronogramaEditor({
   sessoes, onChange, inicio, horario, horas, formador, formadoresTurma, curso, local, accent = "gold",
-  layout = "compact",
+  layout = "compact", turmaId,
 }: {
   sessoes: SessaoCronograma[];
   onChange: (next: SessaoCronograma[]) => void;
@@ -306,6 +308,7 @@ export function CronogramaEditor({
   local?: string;
   accent?: "gold" | "fin";
   layout?: "page" | "compact";
+  turmaId?: number;
 }) {
   const gold = accent === "gold";
   const page = layout === "page";
@@ -317,6 +320,8 @@ export function CronogramaEditor({
   const lectivas = useMemo(() => sessoes.filter(isSessaoLectiva), [sessoes]);
   const [confirmRegen, setConfirmRegen] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [publicando, setPublicando] = useState(false);
+  const [publicadoUrl, setPublicadoUrl] = useState<string | null>(null);
   // A sessão aberta continua na lista mesmo depois de passar a assíncrona, para
   // dar para voltar atrás sem a ir procurar à grelha.
   const listadas = useMemo(
@@ -391,11 +396,30 @@ export function CronogramaEditor({
       </button>
       <button
         type="button"
+        disabled={sessoes.length === 0 || publicando || turmaId == null}
+        title={turmaId == null ? "Grave a turma antes de publicar o cronograma." : "Coloca o cronograma na página pública e no dossiê."}
+        onClick={() => {
+          if (turmaId == null) return;
+          setPublicando(true);
+          void apiPublicarCronograma(accent, turmaId, sessoes)
+            .then(r => {
+              setPublicadoUrl(r.url);
+              toastOk("Cronograma publicado no sítio e arquivado no dossiê.");
+            })
+            .catch(err => toastError(err, "Não foi possível publicar o cronograma."))
+            .finally(() => setPublicando(false));
+        }}
+        className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border bg-white ${ghost} disabled:opacity-40`}
+      >
+        {publicando ? "A publicar…" : "Publicar no sítio e no dossiê"}
+      </button>
+      <button
+        type="button"
         disabled={sessoes.length === 0}
         onClick={() => descarregarCronograma({ curso, local, horario, inicio, formador, nome: curso, sessoes })}
         className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border bg-white ${ghost} disabled:opacity-40`}
       >
-        Exportar para o sítio e o dossiê
+        Descarregar
       </button>
     </div>
   );
@@ -419,6 +443,11 @@ export function CronogramaEditor({
             {inicio && <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">Início {formatDiaMes(inicio)}</span>}
             {formador && <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">{formador}</span>}
           </div>
+          {publicadoUrl && (
+            <a href={publicadoUrl} target="_blank" rel="noreferrer" className="inline-block mt-2 text-xs font-semibold text-blue-700 hover:underline">
+              Ver no sítio
+            </a>
+          )}
         </div>
         {actions}
       </div>

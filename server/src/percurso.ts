@@ -517,7 +517,7 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
   const encerrada = Boolean(lead.validada_em);
   const percursoConcluido = Boolean(lead.percurso_concluido_em) && obrigatoriosOk && Boolean(turmaEscolhida) && recusados.length === 0;
   let passo: 1 | 2 = 1;
-  if (obrigatoriosOk) passo = 2;
+  if (turmaEscolhida) passo = 2;
   return {
     nome: `${lead.nome ?? ""} ${lead.apelido ?? ""}`.trim(),
     curso,

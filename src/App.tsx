@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { DtpPanel } from "./DtpView";
+import { EntidadesResponsaveisPainel } from "./DtpModeloEditor";
 import {
   DatasGoldView, LocaisView, HorariosGoldView, AreasTematicasView,
   ModulosView, ConteudosView, FinInscricoesView, BlogTematicasView, ConfiguracoesView,
@@ -2178,8 +2179,9 @@ function DtpTurmasPicker({ regime, onOpen }: { regime: "gold" | "fin"; onOpen: (
     <div className="space-y-4">
       <PageHeader
         title={isGold ? "Dossiê TP - Gold" : "Dossiê TP - Financiada"}
-        sub="Na ENA o DTP vive dentro da turma. O código interno (VNG-SM-07/09, UFCD 3564) identifica a turma - não é uma “ação” à parte."
+        sub="Na ENA o DTP vive dentro da turma. O código interno (VNG-SM-07/09, UFCD 3564) identifica a turma. A entidade responsável cria-se neste ecrã."
       />
+      {isGold && <EntidadesResponsaveisPainel />}
       <ViewFilters
         accent={isGold ? "gold" : "fin"}
         fields={[

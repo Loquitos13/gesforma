@@ -12,6 +12,7 @@ export const CATALOG_KINDS = [
   "blog_tematicas",
   "inqueritos",
   "lista_opcoes",
+  "entidades",
 ] as const;
 
 export type CatalogKind = (typeof CATALOG_KINDS)[number];

@@ -20,6 +20,67 @@ const iCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-whi
  */
 type EntidadeDtp = { id: number; nome: string; excluidos?: string[]; extra?: ExtraDraft[] };
 
+export function EntidadesResponsaveisPainel() {
+  const [entidades, setEntidades] = useCatalogList<EntidadeDtp>("entidades", "gold", []);
+  const [nome, setNome] = useState("");
+  const [aberta, setAberta] = useState(false);
+
+  function criar() {
+    const limpo = nome.trim();
+    if (!limpo) return;
+    if (entidades.some(e => e.nome.toLowerCase() === limpo.toLowerCase())) {
+      setNome("");
+      setAberta(false);
+      return;
+    }
+    setEntidades(prev => [...prev, { id: -Date.now(), nome: limpo }]);
+    setNome("");
+    setAberta(false);
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-800">Entidades responsáveis</p>
+          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+            Crie a entidade aqui. Para a atribuir a um curso, abra Edição de cursos, o curso, e a tab Dossiê TP.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => { setAberta(true); setNome(""); }}
+          className="shrink-0 px-3 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600"
+        >
+          + Nova entidade
+        </button>
+      </div>
+      {aberta && (
+        <form className="flex flex-col sm:flex-row gap-2" onSubmit={e => { e.preventDefault(); criar(); }}>
+          <input
+            autoFocus
+            className={iCls}
+            value={nome}
+            placeholder="Nome da entidade responsável"
+            onChange={e => setNome(e.target.value)}
+          />
+          <button type="submit" disabled={!nome.trim()} className="px-3 py-2 text-xs font-semibold rounded-lg bg-slate-800 text-white disabled:opacity-40">Criar</button>
+          <button type="button" onClick={() => setAberta(false)} className="px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600">Cancelar</button>
+        </form>
+      )}
+      {entidades.length === 0 ? (
+        <p className="text-xs text-slate-400">Ainda não há entidades. Use «Nova entidade» para criar a primeira.</p>
+      ) : (
+        <ul className="flex flex-wrap gap-2">
+          {entidades.map(e => (
+            <li key={e.id} className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-900 text-xs font-semibold border border-amber-200">{e.nome}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function DtpModeloEditor({
   accent, cursoId, entidadeNome = "", onEntidade,
 }: {

@@ -12,6 +12,28 @@ export type TopicoPrograma = {
   horas: string;
 };
 
+export function partirHoras(raw: string) {
+  const s = raw.trim().toLowerCase().replace(/\s+/g, "");
+  const m = /^(\d+)(?:h|:)?(\d{0,2})/.exec(s);
+  if (!m) return { horas: "", minutos: "" };
+  const minutos = m[2] ? String(Math.min(59, Number(m[2]))).padStart(2, "0") : "";
+  return { horas: m[1] ?? "", minutos };
+}
+
+export function juntarHoras(horas: string, minutos: string) {
+  const h = horas.replace(/\D/g, "");
+  if (!h) return "";
+  const min = minutos.replace(/\D/g, "");
+  if (!min || Number(min) === 0) return `${Number(h)}h`;
+  return `${Number(h)}h${String(Math.min(59, Number(min))).padStart(2, "0")}`;
+}
+
+export function horasDeTexto(linha: string) {
+  const m = linha.match(/(\d+)\s*h(?:\s*(\d{1,2}))?/i);
+  if (!m?.[1]) return "";
+  return juntarHoras(m[1], m[2] ?? "");
+}
+
 export function codigoTopico(organizacao: OrganizacaoPrograma, index: number) {
   return `${organizacao === "livre" ? "C" : "M"}${index + 1}`;
 }
@@ -34,11 +56,11 @@ export function topicosDeTexto(texto: string): TopicoPrograma[] {
     const limpa = linha
       .replace(/^(M|C|AV|EX)\s*\d+\s*[·.\-–:]+\s*/i, "")
       .replace(/^\d+\s*[.)\-–]\s*/, "")
-      .replace(/\s*[·\-–]\s*\d+\s*h\s*$/i, "")
+      .replace(/\s*[·\-–]\s*\d+\s*h(?:\s*\d{1,2})?\s*(?:min)?\s*$/i, "")
       .trim();
-    const horas = linha.match(/(\d+)\s*h\b/i)?.[1];
+    const horas = horasDeTexto(linha);
     if (!limpa) continue;
-    out.push({ id: novoTopicoId(), titulo: limpa, horas: horas ? `${horas}h` : "" });
+    out.push({ id: novoTopicoId(), titulo: limpa, horas });
   }
   return out;
 }
@@ -96,8 +118,10 @@ export function useProgramaDoCurso(regime: Regime, cursoNome: string | undefined
       .then(r => {
         if (!alive) return;
         const parsed = programaDePayload(r.ficha?.payload, regime);
+        const lista = r.ficha?.payload?.topicosPrograma;
+        const estruturados = Array.isArray(lista) && lista.length > 0;
         setOrganizacao(parsed.organizacao);
-        setTopicos(parsed.topicos);
+        setTopicos(estruturados ? parsed.topicos : []);
       })
       .catch(() => {
         if (!alive) return;

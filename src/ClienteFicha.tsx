@@ -18,7 +18,7 @@ import type { Preinscricao } from "./ListsContext";
 import { dismissAlertsForLead, persist, toastError, toastOk } from "./toastBus";
 import { useTurmas } from "./TurmasContext";
 import { EscolherTurmaPicker } from "./TurmaInscricao";
-import { isTurmaActiva, type TurmaGold } from "./turmaModel";
+import { isTurmaActiva, lugaresLivres, type TurmaGold } from "./turmaModel";
 import { CursoOfertaCampos } from "./CursoOfertaCampos";
 import { OFERTA_VAZIA, type CursoOfertaSel } from "./oferta";
 import { fmtDataCalendario } from "./datas";
@@ -373,7 +373,7 @@ export function ClienteFicha({
               variant="crm"
               turmas={turmasLista.filter(isTurmaActiva).map(t => ({
                 turmaId: t.id, nome: t.nome, curso: t.curso, local: t.local, horario: t.horario,
-                dataInicio: t.dataInicio, vagasLivres: Math.max(0, t.vagas - t.totalAlunos),
+                dataInicio: t.dataInicio, vagasLivres: Math.max(0, lugaresLivres(t)),
               }))}
               cursos={[...new Set(turmasLista.map(t => t.curso))].map(nome => ({ nome }))}
               value={oferta}

@@ -23,15 +23,28 @@ function asText(value: unknown) {
   return typeof value === "string" || typeof value === "number" ? String(value).trim() : "";
 }
 
+function codigoModulo(nome: string) {
+  const tagged = nome.trim().match(/^(M\d+|C\d+|UFCD\s*\d+|EX\d+|AV\d+)/i);
+  return (tagged ? tagged[1] : nome.split("·")[0] ?? nome).replace(/\s+/g, " ").trim();
+}
+
+function ordemCodigo(nome: string) {
+  return Number(codigoModulo(nome).match(/(\d+)/)?.[1] ?? 9999);
+}
+
+export function modulosPorOrdem(modulos: string[]) {
+  return [...modulos].sort((a, b) => ordemCodigo(a) - ordemCodigo(b) || codigoModulo(a).localeCompare(codigoModulo(b), "pt"));
+}
+
 export function sessoesPublicas(raw: unknown): SessaoPublica[] {
   const list = Array.isArray(raw) ? raw : [];
   const out: SessaoPublica[] = [];
   for (const item of list) {
     if (!item || typeof item !== "object") continue;
     const s = item as Record<string, unknown>;
-    const modulos = Array.isArray(s.modulos)
+    const modulos = modulosPorOrdem(Array.isArray(s.modulos)
       ? s.modulos.map(asText).filter(Boolean)
-      : [asText(s.modulo)].filter(Boolean);
+      : [asText(s.modulo)].filter(Boolean));
     const formadores = Array.isArray(s.formadores)
       ? s.formadores.map(asText).filter(Boolean)
       : [asText(s.formador)].filter(Boolean);

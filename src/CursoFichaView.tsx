@@ -12,12 +12,12 @@ import {
   parseAvaliacaoCurso,
   type AvaliacaoCurso,
 } from "./avaliacaoCurso";
-import { codigoTopico, novoTopicoId, programaDePayload, type OrganizacaoPrograma, type TopicoPrograma } from "./cursoPrograma";
+import { codigoTopico, horasDeTexto, juntarHoras, novoTopicoId, partirHoras, programaDePayload, type OrganizacaoPrograma, type TopicoPrograma } from "./cursoPrograma";
 import { refereCurso } from "./cursoLocais";
 import { fmtDataPt } from "./oferta";
 import { getParametrosAvaliacao, type CriterioAvaliacao } from "./TurmaExtras";
 import { useTurmas } from "./TurmasContext";
-import { isTurmaActiva } from "./turmaModel";
+import { isTurmaActiva, lugaresLivres } from "./turmaModel";
 
 export type CursoFichaSeed = {
   id: number;
@@ -334,11 +334,37 @@ function topicosDeSeed(texto: string, _org: OrganizacaoPrograma): TopicoPrograma
     const titulo = linha
       .replace(/^(M|C|AV|EX)\s*\d+\s*[·.\-–:]+\s*/i, "")
       .replace(/^\d+\s*[.)\-–]\s*/, "")
-      .replace(/\s*[·\-–]\s*\d+\s*h\s*$/i, "")
+      .replace(/\s*[·\-–]\s*\d+\s*h(?:\s*\d{1,2})?\s*(?:min)?\s*$/i, "")
       .trim();
-    const horas = linha.match(/(\d+)\s*h\b/i)?.[1];
-    return { id: novoTopicoId(), titulo: titulo || linha, horas: horas ? `${horas}h` : "" };
+    return { id: novoTopicoId(), titulo: titulo || linha, horas: horasDeTexto(linha) };
   });
+}
+
+function DuracaoTopico({ value, onChange, className }: { value: string; onChange: (v: string) => void; className: string }) {
+  const partes = partirHoras(value);
+  const minutos = partes.minutos || "00";
+  return (
+    <div className="flex items-center gap-1">
+      <input
+        className={`${className} w-14`}
+        inputMode="numeric"
+        aria-label="Horas"
+        value={partes.horas}
+        placeholder="0"
+        onChange={e => onChange(juntarHoras(e.target.value, partes.minutos))}
+      />
+      <span className="text-xs font-bold text-slate-500">H</span>
+      <input
+        className={`${className} w-14`}
+        inputMode="numeric"
+        aria-label="Minutos"
+        value={minutos}
+        placeholder="00"
+        onChange={e => onChange(juntarHoras(partes.horas, e.target.value))}
+      />
+      <span className="text-xs font-semibold text-slate-500">min</span>
+    </div>
+  );
 }
 
 function checks(d: CursoSite, accent: CursoAccent) {
@@ -640,7 +666,7 @@ export function CursoFichaView({
         local: x.local,
         horario: x.horario,
         dataInicio: x.dataInicio,
-        vagasLivres: Math.max(0, x.vagas - x.totalAlunos),
+        vagasLivres: Math.max(0, lugaresLivres(x)),
         libertada: isTurmaActiva(x),
       }));
     }
@@ -655,7 +681,7 @@ export function CursoFichaView({
       local: x.local,
       horario: x.horario,
       dataInicio: x.dataInicio,
-      vagasLivres: Math.max(0, (x.alunosTotal || 0) - (x.alunos || 0)),
+      vagasLivres: Math.max(0, lugaresLivres(x)),
       libertada: isTurmaActiva(x),
     }));
   }, [accent, gold, fin, data.titulo, curso?.nome, curso?.ufcd, curso?.ufcdCod]);
@@ -1121,7 +1147,7 @@ export function CursoFichaView({
                       <span className={`mt-2 w-10 flex-shrink-0 text-xs font-bold ${accent === "fin" ? "text-blue-700" : "text-amber-700"}`}>
                         {codigoTopico(accent === "fin" ? "modular" : data.organizacaoPrograma, i)}
                       </span>
-                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-[1fr_6rem] gap-2">
+                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2">
                         <input
                           className={t.iCls}
                           value={topico.titulo}
@@ -1130,12 +1156,11 @@ export function CursoFichaView({
                             topicosPrograma: data.topicosPrograma.map(x => x.id === topico.id ? { ...x, titulo: e.target.value } : x),
                           })}
                         />
-                        <input
+                        <DuracaoTopico
                           className={t.iCls}
                           value={topico.horas}
-                          placeholder="Horas"
-                          onChange={e => patch({
-                            topicosPrograma: data.topicosPrograma.map(x => x.id === topico.id ? { ...x, horas: e.target.value } : x),
+                          onChange={horas => patch({
+                            topicosPrograma: data.topicosPrograma.map(x => x.id === topico.id ? { ...x, horas } : x),
                           })}
                         />
                       </div>

@@ -1,8 +1,67 @@
 import { useEffect, useState } from "react";
-import { apiDocsPreinscricao, apiSaveDocsPreinscricao, type DocPreinscricaoCurso, type Regime } from "./api";
+import {
+  apiDocsPreinscricao, apiDocsPreinscricaoApagarModelo, apiDocsPreinscricaoUpload, apiSaveDocsPreinscricao,
+  type DocPreinscricaoCurso, type Regime,
+} from "./api";
 import { toastError, toastOk } from "./toastBus";
 
 const iCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700";
+
+function ModeloDoc({
+  accent, cursoId, doc, busy, onChange,
+}: {
+  accent: Regime;
+  cursoId: number;
+  doc: DocPreinscricaoCurso;
+  busy: boolean;
+  onChange: () => void;
+}) {
+  const [aEnviar, setAEnviar] = useState(false);
+  async function enviar(file: File | null) {
+    if (!file) return;
+    setAEnviar(true);
+    try {
+      await apiDocsPreinscricaoUpload(accent, cursoId, doc.id, file);
+      toastOk("Documento da secretaria gravado. Na pré-inscrição a pessoa tem de o ler até ao fim.");
+      onChange();
+    } catch (err) {
+      toastError(err, "Não foi possível gravar o ficheiro.");
+    } finally {
+      setAEnviar(false);
+    }
+  }
+  async function retirar() {
+    setAEnviar(true);
+    try {
+      await apiDocsPreinscricaoApagarModelo(accent, cursoId, doc.id);
+      toastOk("Ficheiro retirado. A pessoa volta a anexar o seu.");
+      onChange();
+    } catch (err) {
+      toastError(err, "Não foi possível retirar o ficheiro.");
+    } finally {
+      setAEnviar(false);
+    }
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <label className="text-[11px] font-semibold text-slate-500">
+        <span className="block">{doc.modelo ? doc.modelo : "Sem ficheiro · a pessoa anexa"}</span>
+        <input
+          type="file"
+          accept=".pdf,image/jpeg,image/png,application/pdf"
+          disabled={busy || aEnviar}
+          className="mt-1 block max-w-[14rem] text-[11px]"
+          onChange={e => { void enviar(e.target.files?.[0] ?? null); e.currentTarget.value = ""; }}
+        />
+      </label>
+      {doc.modelo && (
+        <button type="button" disabled={busy || aEnviar} onClick={() => void retirar()} className="text-[11px] font-semibold text-slate-400 hover:text-red-600">
+          Retirar
+        </button>
+      )}
+    </div>
+  );
+}
 
 function pedePreinscricao(regime: Regime, tipo: string) {
   if (regime === "fin") return true;
@@ -94,40 +153,44 @@ export function CursoDocumentos({ accent, cursoId, tipo = "" }: { accent: Regime
         <div>
           <p className="text-sm font-semibold text-slate-800">Documentos da pré-inscrição</p>
           <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-            Só entram aqui os ficheiros que o formando tem de anexar na ligação pessoal, antes de escolher a turma.
+            O ficheiro da secretaria é opcional. Sem ficheiro, a pessoa anexa o seu na pré-inscrição. Com ficheiro, abre o documento completo e só continua depois de o ler até ao fim.
           </p>
         </div>
         <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
           {base.map(d => (
-            <li key={d.id} className="flex items-center gap-3 px-3 py-2.5">
-              <input
-                type="checkbox"
-                className={`w-4 h-4 ${chk}`}
-                checked={d.pedido}
-                disabled={busy}
-                onChange={e => {
-                  const next = docs.map(x => x.id === d.id ? { ...x, pedido: e.target.checked } : x);
-                  setDocs(next);
-                  void guardar(next);
-                }}
-              />
-              <div className="min-w-0 flex-1">
-                <p className={`text-sm ${d.pedido ? "text-slate-800" : "text-slate-400 line-through"}`}>{d.label}</p>
+            <li key={d.id} className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <input
+                  type="checkbox"
+                  className={`w-4 h-4 ${chk}`}
+                  checked={d.pedido}
+                  disabled={busy}
+                  onChange={e => {
+                    const next = docs.map(x => x.id === d.id ? { ...x, pedido: e.target.checked } : x);
+                    setDocs(next);
+                    void guardar(next);
+                  }}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className={`text-sm ${d.pedido ? "text-slate-800" : "text-slate-400 line-through"}`}>{d.label}</p>
+                </div>
+                {d.required && d.pedido && (
+                  <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">obrigatório</span>
+                )}
               </div>
-              {d.required && d.pedido && (
-                <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">obrigatório</span>
-              )}
+              {d.pedido && <ModeloDoc accent={accent} cursoId={cursoId} doc={d} busy={busy} onChange={carregar} />}
             </li>
           ))}
         </ul>
         {extra.length > 0 && (
           <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
             {extra.map(d => (
-              <li key={d.id} className="flex items-center gap-3 px-3 py-2.5">
+              <li key={d.id} className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-slate-800">{d.label}</p>
                   <p className="text-[11px] text-slate-400">{d.required ? "Obrigatório na pré-inscrição" : "Opcional na pré-inscrição"}</p>
                 </div>
+                {!d.id.startsWith("novo-") && <ModeloDoc accent={accent} cursoId={cursoId} doc={d} busy={busy} onChange={carregar} />}
                 <button
                   type="button"
                   disabled={busy}

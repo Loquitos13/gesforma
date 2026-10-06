@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
-  ApiError, apiPublicConcluirPercurso, apiPublicDocumentoUpload, apiPublicDocumentos, apiPublicEscolherTurma,
+  ApiError, apiPublicConcluirPercurso, apiPublicConsentir, apiPublicDocumentoUpload, apiPublicDocumentos, apiPublicEscolherTurma,
   type TurmaPercurso,
 } from "./api";
+import { LeituraConsentimento } from "./LeituraConsentimento";
+import { codigoModulo, ordenarCodigos } from "./turmaModel";
 
-type TipoDoc = { id: string; label: string; required?: boolean };
+type TipoDoc = { id: string; label: string; required?: boolean; modelo?: string };
 type Ficheiro = { id: number; tipo: string; nome: string; estado?: string; observacao?: string };
 
 function fmtData(iso: string) {
@@ -13,6 +15,17 @@ function fmtData(iso: string) {
 }
 
 const PASSOS = ["Documentos", "Cronograma", "Pagamento"] as const;
+
+const MODALIDADE: Record<string, string> = {
+  presencial: "Presencial",
+  sincrona: "Síncrona",
+  auto: "Auto-aprendizagem",
+  avaliacao: "Avaliação",
+};
+
+function codigosSessao(modulos: string[] | undefined) {
+  return ordenarCodigos((modulos ?? []).map(codigoModulo)).join(" / ");
+}
 
 export function PublicDocumentos({ token }: { token: string }) {
   const [nome, setNome] = useState("");
@@ -34,6 +47,7 @@ export function PublicDocumentos({ token }: { token: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
+  const [criterios, setCriterios] = useState<{ local: string; horario: string; inicio: string }>({ local: "", horario: "", inicio: "" });
 
   function aplicar(r: Awaited<ReturnType<typeof apiPublicDocumentos>>) {
     setNome(r.nome);
@@ -46,6 +60,7 @@ export function PublicDocumentos({ token }: { token: string }) {
     setCorrecao(Boolean(r.correcao));
     setTurmas(r.turmas ?? []);
     setTurmaEscolhida(r.turmaEscolhida ?? null);
+    setCriterios(r.criterios ?? { local: "", horario: "", inicio: "" });
     setPercursoConcluido(Boolean(r.percursoConcluido));
     const seguinte = r.passo === 2 || r.passo === 3 ? r.passo : 1;
     setPassoServidor(seguinte);
@@ -102,6 +117,22 @@ export function PublicDocumentos({ token }: { token: string }) {
     }
   }
 
+  async function consentir(tipo: string, etiqueta: string) {
+    setBusy(true);
+    setError("");
+    setOk("");
+    try {
+      await apiPublicConsentir(token, tipo);
+      setOk(`Consentimento de ${etiqueta} registado.`);
+      setFoco(null);
+      await recarregar();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Não foi possível registar o consentimento.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function escolher(turmaId: number) {
     setBusy(true);
     setError("");
@@ -134,7 +165,7 @@ export function PublicDocumentos({ token }: { token: string }) {
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-[#1b2330]">
       <header className="bg-white border-b border-[#e7e1d6]">
-        <div className="mx-auto flex max-w-xl items-center justify-between px-5 py-4">
+        <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-4">
           <img
             src="/imagens/ena-logo-nobg.png"
             alt="ENA, Escola de Negócios e Administração"
@@ -145,7 +176,7 @@ export function PublicDocumentos({ token }: { token: string }) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-xl px-4 py-8 sm:px-0 sm:py-12">
+      <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-0 sm:py-12">
         {estado === "loading" && <p className="text-sm text-[#5c564c]">A abrir o percurso de pré-inscrição…</p>}
         {estado === "missing" && (
           <article className="rounded-2xl bg-white px-6 py-8 shadow-sm ring-1 ring-[#e7e1d6]">
@@ -242,7 +273,16 @@ export function PublicDocumentos({ token }: { token: string }) {
                             </button>
                           )}
                         </div>
-                        {aberto && (
+                        {aberto && t.modelo && (
+                          <LeituraConsentimento
+                            token={token}
+                            tipo={t.id}
+                            label={t.label}
+                            busy={busy}
+                            onAceite={() => void consentir(t.id, t.label)}
+                          />
+                        )}
+                        {aberto && !t.modelo && (
                           <form onSubmit={e => void enviar(t.id, t.label, e)} className="px-6 pb-5 sm:px-8">
                             <CampoFicheiro onFile={setFicheiro} />
                             {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
@@ -266,21 +306,21 @@ export function PublicDocumentos({ token }: { token: string }) {
 
             {passo === 2 && (
               <section className="border-t border-[#efeae1] px-6 py-5 sm:px-8">
-                <p className="text-sm text-[#5c564c]">Escolha o cronograma mais cómodo. Só aparecem turmas deste curso com vaga.</p>
+                <p className="text-sm text-[#5c564c]">{textoTurmas(criterios)}</p>
                 {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
                 {turmas.length === 0 && (
-                  <p className="mt-4 rounded-xl bg-[#fffaf2] px-4 py-3 text-sm text-[#5c564c]">Ainda não há turmas com vaga. Volte mais tarde ou fale com a secretaria.</p>
+                  <p className="mt-4 rounded-xl bg-[#fffaf2] px-4 py-3 text-sm text-[#5c564c]">Não há turma com lugar livre para estes requisitos. Volte mais tarde ou fale com a secretaria.</p>
                 )}
-                <ul className="mt-4 space-y-3">
+                <ul className="mt-4 space-y-4">
                   {turmas.map(t => {
                     const escolhida = turmaEscolhida?.id === t.id;
                     return (
-                      <li key={t.id}>
+                      <li key={t.id} className={`rounded-xl ring-1 ${escolhida ? "bg-[#fffaf2] ring-[#ffa900]" : "bg-white ring-[#e7e1d6]"}`}>
                         <button
                           type="button"
                           disabled={busy}
                           onClick={() => void escolher(t.id)}
-                          className={`w-full rounded-xl px-4 py-3 text-left ring-1 ${escolhida ? "bg-[#fffaf2] ring-[#ffa900]" : "bg-white ring-[#e7e1d6]"}`}
+                          className="w-full px-4 py-3 text-left"
                         >
                           <span className="flex items-start justify-between gap-3">
                             <span>
@@ -290,12 +330,32 @@ export function PublicDocumentos({ token }: { token: string }) {
                             </span>
                             <span className={`text-xs font-semibold ${escolhida ? "text-emerald-700" : "text-[#c48400]"}`}>{escolhida ? "Escolhida" : "Escolher"}</span>
                           </span>
-                          {t.sessoes.length > 0 && (
-                            <span className="mt-2 block text-xs text-[#5c564c]">
-                              {t.sessoes.slice(0, 3).map(s => `${fmtData(s.data)} ${s.inicio}${s.fim ? `–${s.fim}` : ""}`).join(" · ")}
-                            </span>
-                          )}
                         </button>
+                        <div className="overflow-x-auto border-t border-[#efeae1]">
+                          <table className="w-full text-left text-xs">
+                            <thead>
+                              <tr className="text-[10px] uppercase tracking-wide text-[#8a8172]">
+                                <th className="px-3 py-2 font-semibold">Data</th>
+                                <th className="px-3 py-2 font-semibold">Horas</th>
+                                <th className="px-3 py-2 font-semibold">Modalidade</th>
+                                <th className="px-3 py-2 font-semibold">Módulos</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {t.sessoes.map((s, i) => (
+                                <tr key={`${s.data}-${s.inicio}-${i}`} className="border-t border-[#efeae1]">
+                                  <td className="px-3 py-2 whitespace-nowrap">{s.data ? fmtData(s.data) : "—"}</td>
+                                  <td className="px-3 py-2 whitespace-nowrap">{s.inicio && s.fim ? `${s.inicio}–${s.fim}` : "—"}</td>
+                                  <td className="px-3 py-2">{MODALIDADE[s.modalidade ?? ""] ?? (s.modalidade || "—")}</td>
+                                  <td className="px-3 py-2">{codigosSessao(s.modulos) || "—"}</td>
+                                </tr>
+                              ))}
+                              {t.sessoes.length === 0 && (
+                                <tr><td colSpan={4} className="px-3 py-4 text-[#8a8172]">Ainda sem sessões neste cronograma.</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
                       </li>
                     );
                   })}
@@ -353,6 +413,12 @@ export function PublicDocumentos({ token }: { token: string }) {
       </main>
     </div>
   );
+}
+
+function textoTurmas(criterios: { local: string; horario: string; inicio: string }) {
+  const partes = [criterios.local, criterios.horario, criterios.inicio ? fmtData(criterios.inicio) : ""].filter(Boolean);
+  if (!partes.length) return "Escolha o cronograma. Só aparecem turmas deste curso que ainda tenham lugar, já com a tolerância de vagas.";
+  return `Só aparecem turmas de ${partes.join(" · ")} que ainda tenham lugar, já com a tolerância de vagas.`;
 }
 
 function CampoFicheiro({ onFile }: { onFile: (f: File | null) => void }) {

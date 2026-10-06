@@ -5,12 +5,20 @@ import { documentosUrl, ensureDocsToken, listarDocsLead } from "./docsLink.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
 import { relocateDriveFile } from "./googleDrive.js";
 import { sendMail } from "./mailer.js";
+import { modulosPorOrdem, sessoesPublicas } from "./cronogramaPublico.js";
 import { precoParaOferta } from "./precoOferta.js";
 import { isEmail, normalizeEmail } from "./security.js";
 
 export class PercursoErro extends Error {}
 
-export type SessaoPublica = { data: string; inicio: string; fim: string };
+export type SessaoPublica = {
+  data: string;
+  inicio: string;
+  fim: string;
+  modalidade: string;
+  modulos: string[];
+  formadores: string[];
+};
 
 export type TurmaPublica = {
   id: number;
@@ -22,6 +30,8 @@ export type TurmaPublica = {
   sessoes: SessaoPublica[];
 };
 
+export type PedidoTurma = { local?: string; horario?: string; inicio?: string };
+
 type TurmaRow = {
   id: number;
   nome: string;
@@ -31,13 +41,28 @@ type TurmaRow = {
   data_inicio: string;
   ocupadas: number;
   vagas: number;
+  tolerancia?: number;
   estado: string;
   activa?: boolean;
   cronograma: unknown;
 };
 
 function norm(v: string) {
-  return v.trim().toLowerCase();
+  return v.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function pedidoUtil(v: string | undefined) {
+  const n = norm(v ?? "");
+  return Boolean(n) && n !== "-" && !n.startsWith("a definir") && !n.startsWith("por definir");
+}
+
+function servePedido(t: TurmaPublica, pedido?: PedidoTurma) {
+  if (!pedido) return true;
+  if (pedidoUtil(pedido.local) && norm(t.local) !== norm(pedido.local ?? "")) return false;
+  if (pedidoUtil(pedido.horario) && norm(t.horario) !== norm(pedido.horario ?? "")) return false;
+  const inicio = isoData(pedido.inicio ?? "");
+  if (inicio && isoData(t.dataInicio) !== inicio) return false;
+  return true;
 }
 
 function hojeIso() {
@@ -53,30 +78,17 @@ function isoData(raw: string) {
   return "";
 }
 
-function asList(raw: unknown): unknown[] {
-  if (Array.isArray(raw)) return raw;
-  if (typeof raw === "string") {
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
-
 function sessoesDe(raw: unknown): SessaoPublica[] {
-  const list = asList(raw);
-  const out: SessaoPublica[] = [];
-  for (const item of list) {
-    if (!item || typeof item !== "object") continue;
-    const s = item as { data?: unknown; horaInicio?: unknown; horaFim?: unknown };
-    const data = isoData(String(s.data ?? ""));
-    if (!data) continue;
-    out.push({ data, inicio: String(s.horaInicio ?? ""), fim: String(s.horaFim ?? "") });
-  }
-  return out.sort((a, b) => a.data.localeCompare(b.data) || a.inicio.localeCompare(b.inicio));
+  return sessoesPublicas(raw)
+    .filter(s => s.modalidade !== "matricula" && s.data)
+    .map(s => ({
+      data: s.data,
+      inicio: s.horaInicio,
+      fim: s.horaFim,
+      modalidade: s.modalidade,
+      modulos: modulosPorOrdem(s.modulos),
+      formadores: s.formadores,
+    }));
 }
 
 function turmaActiva(regime: "gold" | "fin", row: TurmaRow) {
@@ -85,8 +97,8 @@ function turmaActiva(regime: "gold" | "fin", row: TurmaRow) {
 }
 
 function mapTurma(row: TurmaRow): TurmaPublica {
-  const livres = Math.max(0, Number(row.vagas) - Number(row.ocupadas));
-  const futuras = sessoesDe(row.cronograma).filter(s => s.data >= hojeIso());
+  const limite = Number(row.vagas) + Math.max(0, Number(row.tolerancia) || 0);
+  const livres = Math.max(0, limite - Number(row.ocupadas));
   return {
     id: Number(row.id),
     nome: row.nome,
@@ -94,7 +106,7 @@ function mapTurma(row: TurmaRow): TurmaPublica {
     horario: row.horario,
     dataInicio: isoData(row.data_inicio) || row.data_inicio,
     livres,
-    sessoes: (futuras.length ? futuras : sessoesDe(row.cronograma)).slice(0, 6),
+    sessoes: sessoesDe(row.cronograma),
   };
 }
 
@@ -104,7 +116,8 @@ async function turmasRegime(db: Db, regime: "gold" | "fin", curso: string) {
   const vagas = regime === "fin" ? "alunos_total" : "vagas";
   const extra = regime === "fin" ? ", activa" : "";
   const rows = await db.query<TurmaRow>(
-    `SELECT id, nome, curso, local, horario, data_inicio, ${ocup} AS ocupadas, ${vagas} AS vagas, estado, cronograma${extra}
+    `SELECT id, nome, curso, local, horario, data_inicio, ${ocup} AS ocupadas, ${vagas} AS vagas,
+            COALESCE(tolerancia_vagas, 0) AS tolerancia, estado, cronograma${extra}
        FROM ${table}
       WHERE lower(trim(curso)) = lower(trim($1))
       ORDER BY data_inicio`,
@@ -113,9 +126,9 @@ async function turmasRegime(db: Db, regime: "gold" | "fin", curso: string) {
   return rows.rows.filter(r => turmaActiva(regime, r)).map(mapTurma);
 }
 
-export async function turmasParaEscolha(db: Db, curso: string, regime: "gold" | "fin") {
+export async function turmasParaEscolha(db: Db, curso: string, regime: "gold" | "fin", pedido?: PedidoTurma) {
   const hoje = hojeIso();
-  const lista = (await turmasRegime(db, regime, curso)).filter(t => t.livres > 0);
+  const lista = (await turmasRegime(db, regime, curso)).filter(t => t.livres > 0 && servePedido(t, pedido));
   return lista.sort((a, b) => {
     const af = a.dataInicio >= hoje ? 0 : 1;
     const bf = b.dataInicio >= hoje ? 0 : 1;
@@ -152,7 +165,8 @@ async function turmaPorId(db: Db, regime: "gold" | "fin", id: number) {
   const vagas = regime === "fin" ? "alunos_total" : "vagas";
   const extra = regime === "fin" ? ", activa" : "";
   const row = await db.query<TurmaRow>(
-    `SELECT id, nome, curso, local, horario, data_inicio, ${ocup} AS ocupadas, ${vagas} AS vagas, estado, cronograma${extra}
+    `SELECT id, nome, curso, local, horario, data_inicio, ${ocup} AS ocupadas, ${vagas} AS vagas,
+            COALESCE(tolerancia_vagas, 0) AS tolerancia, estado, cronograma${extra}
        FROM ${table} WHERE id = $1`,
     [id],
   );
@@ -174,16 +188,23 @@ async function evento(db: Db, leadId: number, actorId: string | undefined, titul
 
 export async function escolherTurmaPublica(db: Db, leadId: number, turmaId: number) {
   const lead = await db.query(
-    "SELECT id, curso, regime, validada_em FROM preinscricoes WHERE id = $1",
+    "SELECT id, curso, regime, validada_em, local, horario, inicio_curso FROM preinscricoes WHERE id = $1",
     [leadId],
   );
-  const row = lead.rows[0] as { id: number; curso: string; regime: string; validada_em: string | null } | undefined;
+  const row = lead.rows[0] as {
+    id: number; curso: string; regime: string; validada_em: string | null;
+    local?: string; horario?: string; inicio_curso?: string;
+  } | undefined;
   if (!row) throw new PercursoErro("Pré-inscrição inexistente.");
   if (row.validada_em) throw new PercursoErro("A secretaria já validou esta pré-inscrição.");
   const regime = regimeDe(row.regime);
   const turma = await turmaPorId(db, regime, turmaId);
   if (!turma) throw new PercursoErro("Turma indisponível.");
-  const oferecidas = await turmasParaEscolha(db, String(row.curso), regime);
+  const oferecidas = await turmasParaEscolha(db, String(row.curso), regime, {
+    local: String(row.local ?? ""),
+    horario: String(row.horario ?? ""),
+    inicio: String(row.inicio_curso ?? ""),
+  });
   const escolhida = oferecidas.find(t => t.id === turmaId);
   if (!escolhida) throw new PercursoErro("Essa turma não tem vaga ou não é deste curso.");
   const preco = regime === "gold" ? await precoParaOferta(db, String(row.curso), escolhida.local, escolhida.horario) : null;
@@ -409,7 +430,12 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
   const obrigatoriosOk = pedidos.filter(d => d.required).every(d => entregueAceite(by.get(d.id)?.estado));
   const compOk = !precisaPagamento || entregueAceite(by.get(COMPROVATIVO.id)?.estado);
   const turmaId = Number(lead.turma_escolhida_id || 0);
-  const turmas = await turmasParaEscolha(db, curso, regime);
+  const criterios = {
+    local: String(lead.local ?? ""),
+    horario: String(lead.horario ?? ""),
+    inicio: String(lead.inicio_curso ?? ""),
+  };
+  const turmas = await turmasParaEscolha(db, curso, regime, criterios);
   const turmaEscolhida = turmaId
     ? turmas.find(t => t.id === turmaId) ?? await turmaPorId(db, regime, turmaId)
     : null;
@@ -438,5 +464,28 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
     percursoConcluido,
     turmas,
     turmaEscolhida,
+    criterios: {
+      local: pedidoUtil(criterios.local) ? criterios.local : "",
+      horario: pedidoUtil(criterios.horario) ? criterios.horario : "",
+      inicio: isoData(criterios.inicio),
+    },
   };
+}
+
+export async function registarConsentimento(db: Db, leadId: number, tipo: string) {
+  const lead = await db.query("SELECT * FROM preinscricoes WHERE id = $1", [leadId]);
+  const row = lead.rows[0] as Record<string, unknown> | undefined;
+  if (!row) throw new PercursoErro("Pré-inscrição inexistente.");
+  if (row.validada_em) throw new PercursoErro("A secretaria já validou esta pré-inscrição.");
+  const regime = regimeDe(row.regime);
+  const pedidos = await docsDoCurso(db, String(row.curso ?? ""), regime);
+  const pedido = pedidos.find(p => p.id === tipo && p.modelo);
+  if (!pedido) throw new PercursoErro("Este documento não está preparado para consentimento.");
+  await db.query("DELETE FROM preinscricao_docs WHERE preinscricao_id = $1 AND tipo = $2", [leadId, tipo]);
+  await db.query(
+    "INSERT INTO preinscricao_docs (preinscricao_id, tipo, nome, drive_file_id, drive_url) VALUES ($1,$2,$3,'','')",
+    [leadId, tipo, `Consentimento · ${pedido.label}`],
+  );
+  await evento(db, leadId, undefined, "Consentimento", pedido.label);
+  return { ok: true as const, nome: pedido.label };
 }

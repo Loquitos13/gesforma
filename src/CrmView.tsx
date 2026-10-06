@@ -13,7 +13,7 @@ import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./Secreta
 import { persist, toastError, toastOk } from "./toastBus";
 import { useTurmas } from "./TurmasContext";
 import { EscolherTurmaModal } from "./TurmaInscricao";
-import { isTurmaActiva, type TurmaFin, type TurmaGold } from "./turmaModel";
+import { isTurmaActiva, lugaresLivres, type TurmaFin, type TurmaGold } from "./turmaModel";
 import { fmtDataCalendario, fmtStampLisboa, hojeLisboa } from "./datas";
 import { CursoOfertaCampos } from "./CursoOfertaCampos";
 import { type CursoOfertaSel } from "./oferta";
@@ -719,7 +719,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
           if (!ficha.secretariaEm) { toastError("A pré-inscrição ainda não foi entregue à secretaria."); return; }
           if (regime === "fin") {
             const t = fin.find(x => x.nome === turmaNome);
-            if (!t || !t.activa || t.alunosTotal - t.alunos <= 0) return;
+            if (!t || !t.activa || lugaresLivres(t) <= 0) return;
             const id = await addFormandoFin({
               id: tempNumericId(),
               nome: ficha.nome, apelido: ficha.apelido, turma: t.nome, telf: ficha.telf, email: ficha.email,
@@ -729,7 +729,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
             patchFin(t.id, { alunos: t.alunos + 1 });
           } else {
             const t = gold.find(x => x.nome === turmaNome);
-            if (!t || t.vagas - t.totalAlunos <= 0) return;
+            if (!t || lugaresLivres(t) <= 0) return;
             const id = await addFormandoTurma({
               id: tempNumericId(),
               nome: ficha.nome, apelido: ficha.apelido, telf: ficha.telf, email: ficha.email,
@@ -752,7 +752,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
         onClose={() => setConfirmMove(null)}
         onConfirm={async (dest: TurmaGold) => {
           if (!confirmMove) return;
-          if (!isTurmaActiva(dest) || dest.vagas - dest.totalAlunos <= 0) {
+          if (!isTurmaActiva(dest) || lugaresLivres(dest) <= 0) {
             toastError("Essa turma não aceita inscrições.");
             return;
           }
@@ -843,7 +843,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
             variant="crm"
             turmas={turmasInscricao.filter(isTurmaActiva).map(t => ({
               turmaId: t.id, nome: t.nome, curso: t.curso, local: t.local, horario: t.horario,
-              dataInicio: t.dataInicio, vagasLivres: Math.max(0, t.vagas - t.totalAlunos),
+              dataInicio: t.dataInicio, vagasLivres: Math.max(0, lugaresLivres(t)),
               preco: precosTurma.get(t.id) ?? null,
             }))}
             cursos={regime === "fin"

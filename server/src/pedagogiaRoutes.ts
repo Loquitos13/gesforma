@@ -11,6 +11,8 @@ import {
   docsBase,
   gravarDocsPreinscricao,
   lerDocsPreinscricao,
+  limparModelosFora,
+  listarModelosConsentimento,
 } from "./docsCurso.js";
 import { DTP_CATEGORIAS, dtpCategoriaDe, dtpCategoriaPasta, dtpPastaNome, dtpZipNome, dtpZipRelPath, pastaSegura } from "./dtpPasta.js";
 import { zipStore } from "./zipStore.js";
@@ -1057,7 +1059,13 @@ export function registerPedagogiaRoutes(
         .filter(d => !cfg.extra.some(x => x.id === d.id) && !docsBase(regime).some(b => b.id === d.id))
         .map(d => ({ id: d.id, label: d.label, required: Boolean(d.bloqueante), pedido: true, origem: "dossie" as const })),
     ];
-    return { aplica, tipo, docs };
+    const modelos = await listarModelosConsentimento(db, regime, id);
+    const porNome = new Map(modelos.map(m => [m.requisito_id, m.nome]));
+    return {
+      aplica,
+      tipo,
+      docs: docs.map(d => ({ ...d, modelo: porNome.get(d.id) ?? "" })),
+    };
   });
 
   const docsPreSchema = z.object({
@@ -1103,7 +1111,81 @@ export function registerPedagogiaRoutes(
       return { id: docId, label: item.label, required: item.required };
     });
     await gravarDocsPreinscricao(db, regime, id, { ocultos, extra });
+    const activos = [
+      ...docsBase(regime).filter(d => !ocultos.includes(d.id)).map(d => d.id),
+      ...extra.map(d => d.id),
+    ];
+    await limparModelosFora(db, regime, id, activos);
     await audit(db, req.actor!.id, "curso.docs_preinscricao", "curso", String(id), req.ip, { regime, extra: extra.length });
+    return { ok: true };
+  });
+
+  async function docPreActivo(regime: "gold" | "fin", cursoId: number, docId: string) {
+    const tipo = await tipoDoCurso(regime, cursoId);
+    if (!cursoPedeDocsPreinscricao(regime, tipo)) return false;
+    const cfg = await lerDocsPreinscricao(db, regime, cursoId);
+    const ocultos = new Set(cfg.ocultos);
+    if (docsBase(regime).some(d => d.id === docId && !ocultos.has(d.id))) return true;
+    return cfg.extra.some(d => d.id === docId);
+  }
+
+  app.post("/v1/cursos/:regime/:id/docs-preinscricao/:docId/modelo", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const { regime, id } = params(req);
+    const docId = String((req.params as { docId?: string }).docId ?? "").slice(0, 48);
+    if (!regime || id == null || !docId) return reply.code(400).send({ error: "pedido inválido" });
+    if (!(await docPreActivo(regime, id, docId))) {
+      return reply.code(400).send({ error: "Este documento não faz parte da pré-inscrição do curso." });
+    }
+    let name = "documento";
+    let mime = "application/octet-stream";
+    let bytes: Buffer | null = null;
+    try {
+      const parts = req.parts();
+      for await (const part of parts) {
+        if (part.type === "file") {
+          name = part.filename || name;
+          mime = part.mimetype || mime;
+          bytes = await part.toBuffer();
+        }
+      }
+    } catch {
+      return reply.code(400).send({ error: "upload inválido" });
+    }
+    if (!bytes) return reply.code(400).send({ error: "ficheiro em falta" });
+    try {
+      const file = await storeDriveFile(db, req.actor!.id, { name, mime, bytes }, {
+        kind: "curso-doc",
+        regime,
+        label: `consentimento-${docId}`,
+        itemId: String(id),
+      });
+      await db.query(
+        "DELETE FROM curso_ficheiros WHERE regime = $1 AND curso_id = $2 AND ambito = 'consentimento' AND requisito_id = $3",
+        [regime, id, docId],
+      );
+      const ficheiroId = randomBytes(12).toString("base64url");
+      await db.query(
+        `INSERT INTO curso_ficheiros (id, regime, curso_id, ambito, requisito_id, pessoa_id, pessoa_nome, nome, drive_file_id, drive_url)
+         VALUES ($1,$2,$3,'consentimento',$4,NULL,'',$5,$6,$7)`,
+        [ficheiroId, regime, id, docId, file.name, file.id, file.openUrl ?? ""],
+      );
+      await audit(db, req.actor!.id, "curso.consentimento", "curso", String(id), req.ip, { regime, docId });
+      return { ok: true, nome: file.name };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : "upload recusado" });
+    }
+  });
+
+  app.delete("/v1/cursos/:regime/:id/docs-preinscricao/:docId/modelo", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const { regime, id } = params(req);
+    const docId = String((req.params as { docId?: string }).docId ?? "").slice(0, 48);
+    if (!regime || id == null || !docId) return reply.code(400).send({ error: "pedido inválido" });
+    await db.query(
+      "DELETE FROM curso_ficheiros WHERE regime = $1 AND curso_id = $2 AND ambito = 'consentimento' AND requisito_id = $3",
+      [regime, id, docId],
+    );
     return { ok: true };
   });
 

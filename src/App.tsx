@@ -48,7 +48,7 @@ import { sessaoCabeNoSlot } from "./disponibilidade";
 import { CustosTurmaCard } from "./CustosTurma";
 import { CrmClientesView, CrmContratosView, CrmParceirosView } from "./CrmDiretorioView";
 import { FormadorCalendario, eventosDoFormador } from "./FormadorCalendario";
-import { cronogramaToSessoes, formatSessaoLabel, generateCronograma, hojeIso, horasDoFormador, isTurmaActiva, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
+import { cronogramaToSessoes, formatSessaoLabel, generateCronograma, hojeIso, horasDoFormador, isTurmaActiva, lugaresLivres, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
 import { apiGlobalSearch, apiDriveFiles, apiSaveFormandoDocs, apiTurmaAvaliacao, type GlobalSearchHit } from "./api";
 import { CampanhasView } from "./CampanhasView";
 import { ListsProvider, tempNumericId, useLists, type BlogPostRow, type FormandoFin, type FormandoTurma, type Preinscricao } from "./ListsContext";
@@ -630,8 +630,14 @@ function IdCell({ id }: { id: number | string }) {
   return <span className="text-slate-400 font-mono text-xs">{id}</span>;
 }
 const iCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent";
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="flex flex-col gap-1.5"><label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</label>{children}</div>;
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</label>
+      {children}
+      {hint && <p className="text-[11px] text-slate-400 leading-relaxed">{hint}</p>}
+    </div>
+  );
 }
 function ActBtn({ icon, label, color = "blue", onClick }: { icon: React.ReactNode; label: string; color?: string; onClick?: () => void }) {
   const colorMap: Record<string, string> = {
@@ -857,7 +863,7 @@ function Modal({ open, onClose, title, children }: { open: boolean; onClose: () 
 
 type DestinoTurma = {
   id: number; nome: string; curso: string; horario: string; local: string;
-  ocupadas: number; vagas: number; activa: boolean;
+  ocupadas: number; vagas: number; toleranciaVagas?: number; activa: boolean;
 };
 
 function ConfirmEliminarFormandoModal({
@@ -914,10 +920,10 @@ function TransferirTurmaModal({
   );
   const turmaOpts = turmas.map(d => ({
     value: d.nome,
-    sub: `${d.local} · ${d.horario} · ${d.ocupadas}/${d.vagas}${!d.activa ? " · inativa" : d.ocupadas >= d.vagas ? " · lotada" : " vagas"}`,
+    sub: `${d.local} · ${d.horario} · ${d.ocupadas}/${d.vagas}${(d.toleranciaVagas ?? 0) > 0 ? `+${d.toleranciaVagas}` : ""}${!d.activa ? " · inativa" : d.ocupadas >= d.vagas + (d.toleranciaVagas ?? 0) ? " · lotada" : " vagas"}`,
   }));
   const dest = turmas.find(d => d.nome === turmaNome);
-  const bloqueada = dest ? (!dest.activa || dest.ocupadas >= dest.vagas) : true;
+  const bloqueada = dest ? (!dest.activa || dest.ocupadas >= dest.vagas + (dest.toleranciaVagas ?? 0)) : true;
   const btn = accent === "fin" ? "bg-blue-600 hover:bg-blue-700" : "bg-amber-500 hover:bg-amber-600";
 
   return (
@@ -973,9 +979,9 @@ function TransferirTurmaModal({
           />
         </Field>
         {dest && !dest.activa && <p className="text-xs font-medium text-amber-700">Esta turma está inativa e não aceita transferências.</p>}
-        {dest && dest.activa && dest.ocupadas >= dest.vagas && <p className="text-xs font-medium text-red-600">A turma {dest.nome} está lotada ({dest.ocupadas}/{dest.vagas}).</p>}
-        {dest && dest.activa && dest.ocupadas < dest.vagas && (
-          <p className="text-xs text-slate-500">{dest.nome} · {dest.local} · {dest.vagas - dest.ocupadas} vagas livres.</p>
+        {dest && dest.activa && dest.ocupadas >= dest.vagas + (dest.toleranciaVagas ?? 0) && <p className="text-xs font-medium text-red-600">A turma {dest.nome} está lotada ({dest.ocupadas}/{dest.vagas}{(dest.toleranciaVagas ?? 0) > 0 ? `+${dest.toleranciaVagas}` : ""}).</p>}
+        {dest && dest.activa && dest.ocupadas < dest.vagas + (dest.toleranciaVagas ?? 0) && (
+          <p className="text-xs text-slate-500">{dest.nome} · {dest.local} · {dest.vagas + (dest.toleranciaVagas ?? 0) - dest.ocupadas} vagas livres.</p>
         )}
         {destinos.length === 0 && <p className="text-xs text-slate-500">Não há outras turmas para onde transferir.</p>}
       </div>
@@ -1582,7 +1588,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const activa = turma ? isTurmaActiva(turma) : false;
   const membros = turma ? formandosTurmas.filter(f => f.turmaId === turma.id) : [];
   const pagos = membros.filter(f => f.pago).length;
-  const vagasLivres = turma ? turma.vagas - turma.totalAlunos : 0;
+  const vagasLivres = turma ? lugaresLivres(turma) : 0;
   const sessoesTurma = cronogramaToSessoes(turma?.cronograma ?? []);
   const [fichaOpen, setFichaOpen] = useState<FormandoRecord | null>(null);
   const [apagarFormando, setApagarFormando] = useState<FormandoRecord | null>(null);
@@ -1642,6 +1648,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const [editFormador, setEditFormador] = useState("");
   const [editInicio, setEditInicio] = useState("");
   const [editVagas, setEditVagas] = useState(16);
+  const [editTolerancia, setEditTolerancia] = useState(0);
   const formadorOpts = useFormadorOptions();
   const locaisDoCurso = useLocaisOptsDoCurso("gold", cursosGold, turma?.curso ?? "");
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
@@ -1678,6 +1685,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
               {!souFormador && <button onClick={() => {
                 setEditNome(turma.nome); setEditLocal(turma.local); setEditHorario(turma.horario);
                 setEditFormador(turma.formador); setEditInicio(turma.dataInicio); setEditVagas(turma.vagas);
+                setEditTolerancia(turma.toleranciaVagas ?? 0);
                 setEditTurma(true);
               }} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>}
               <button type="button" onClick={() => setExportTurma(exportPayload(
@@ -1946,7 +1954,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         turmaAtual={turma.nome}
         destinos={gold.filter(t => t.id !== turma.id).map(t => ({
           id: t.id, nome: t.nome, curso: t.curso, horario: t.horario, local: t.local,
-          ocupadas: t.totalAlunos, vagas: t.vagas, activa: isTurmaActiva(t),
+          ocupadas: t.totalAlunos, vagas: t.vagas, toleranciaVagas: t.toleranciaVagas ?? 0, activa: isTurmaActiva(t),
         }))}
         onTransfer={dest => {
           if (!transferirFormando) return;
@@ -2111,10 +2119,13 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             <Field label="Data de início"><input type="date" className={iCls} value={editInicio} onChange={e => setEditInicio(e.target.value)} /></Field>
             <Field label="Vagas"><input type="number" className={iCls} value={editVagas} onChange={e => setEditVagas(Number(e.target.value) || 0)} /></Field>
           </div>
+          <Field label="Tolerância de vagas" hint="Lugares extra para overbooking. A pré-inscrição deixa de mostrar a turma quando os inscritos atingem vagas + tolerância.">
+            <input type="number" min={0} className={iCls} value={editTolerancia} onChange={e => setEditTolerancia(Math.max(0, Number(e.target.value) || 0))} />
+          </Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setEditTurma(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button onClick={() => {
-              patchGold(turma.id, { nome: editNome.trim() || turma.nome, local: editLocal, horario: editHorario, formador: editFormador, dataInicio: editInicio, vagas: editVagas });
+              patchGold(turma.id, { nome: editNome.trim() || turma.nome, local: editLocal, horario: editHorario, formador: editFormador, dataInicio: editInicio, vagas: editVagas, toleranciaVagas: editTolerancia });
               setEditTurma(false);
             }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
           </div>
@@ -2249,6 +2260,8 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const [editFormador, setEditFormador] = useState("");
   const [editLocal, setEditLocal] = useState("");
   const [editInicio, setEditInicio] = useState("");
+  const [editVagasFin, setEditVagasFin] = useState(20);
+  const [editToleranciaFin, setEditToleranciaFin] = useState(0);
   const formadorOpts = useFormadorOptions();
   const locaisDoCurso = useLocaisOptsDoCurso("fin", cursosFin, editCurso);
   const cursoFinOptsLive = useMemo(() => {
@@ -2294,7 +2307,8 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           <div className="flex gap-3 flex-shrink-0">
             {!souFormadorFin && <button onClick={() => {
               setEditNome(turma.nome); setEditCurso(turma.curso); setEditFormador(turma.formador);
-              setEditLocal(turma.local); setEditInicio(turma.dataInicio); setEditTurma(true);
+              setEditLocal(turma.local); setEditInicio(turma.dataInicio);
+              setEditVagasFin(turma.alunosTotal); setEditToleranciaFin(turma.toleranciaVagas ?? 0); setEditTurma(true);
             }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>}
             <button type="button" onClick={() => setExportTurma(exportPayload(
               { nome: turma.nome, curso: turma.curso, local: turma.local, formandos: turma.alunos, accent: "fin", turmaId: turma.id },
@@ -2589,7 +2603,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
         accent="fin"
         destinos={fin.filter(t => t.id !== turma.id).map(t => ({
           id: t.id, nome: t.nome, curso: t.curso, horario: t.horario, local: t.local,
-          ocupadas: t.alunos, vagas: t.alunosTotal, activa: isTurmaActiva(t),
+          ocupadas: t.alunos, vagas: t.alunosTotal, toleranciaVagas: t.toleranciaVagas ?? 0, activa: isTurmaActiva(t),
         }))}
         onTransfer={dest => {
           if (!transferirFormando) return;
@@ -2611,11 +2625,11 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
             turma={turma}
             leads={preinscricoes}
             emailsInscritos={membros.map(f => f.email)}
-            vagasLivres={Math.max(0, turma.alunosTotal - turma.alunos)}
+            vagasLivres={Math.max(0, lugaresLivres(turma))}
             accent="fin"
             onCancel={() => setAddFormando(false)}
             onInscreverLead={async lead => {
-              if (turma.alunosTotal - turma.alunos <= 0) return;
+              if (lugaresLivres(turma) <= 0) return;
               const id = await addFormandoFin({
                 id: tempNumericId(),
                 nome: lead.nome, apelido: lead.apelido || "-",
@@ -2629,7 +2643,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
               patchPreinscricao(lead.id, { estado: "Formando", turmaId: turma.id });
             }}
             onInscreverManual={async dados => {
-              if (turma.alunosTotal - turma.alunos <= 0) return;
+              if (lugaresLivres(turma) <= 0) return;
               const { nome, apelido } = splitNome(dados.nome);
               const id = await addFormandoFin({
                 id: tempNumericId(),
@@ -2675,10 +2689,16 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
             />
           </Field>
           <Field label="Data de início"><input type="date" className={iCls} value={editInicio} onChange={e => setEditInicio(e.target.value)} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Vagas"><input type="number" min={1} className={iCls} value={editVagasFin} onChange={e => setEditVagasFin(Math.max(1, Number(e.target.value) || 0))} /></Field>
+            <Field label="Tolerância de vagas" hint="Lugares extra para overbooking.">
+              <input type="number" min={0} className={iCls} value={editToleranciaFin} onChange={e => setEditToleranciaFin(Math.max(0, Number(e.target.value) || 0))} />
+            </Field>
+          </div>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setEditTurma(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button onClick={() => {
-              patchFin(turma.id, { nome: editNome.trim() || turma.nome, curso: editCurso, formador: editFormador, local: editLocal, dataInicio: editInicio });
+              patchFin(turma.id, { nome: editNome.trim() || turma.nome, curso: editCurso, formador: editFormador, local: editLocal, dataInicio: editInicio, alunosTotal: editVagasFin, toleranciaVagas: editToleranciaFin });
               setEditTurma(false);
             }} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">Guardar</button>
           </div>
@@ -2935,6 +2955,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   const [formador, setFormador] = useState("Isac Silva");
   const [dataInicio, setDataInicio] = useState("");
   const [vagas, setVagas] = useState(16);
+  const [tolerancia, setTolerancia] = useState(0);
   const [custoHoraSala, setCustoHoraSala] = useState(0);
   const [activa, setActiva] = useState(true);
   const [cronograma, setCronograma] = useState<SessaoCronograma[]>([]);
@@ -2972,6 +2993,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
       nomeManual.current = Boolean(editing);
       setDataInicio(editing?.dataInicio ?? "");
       setVagas(editing?.vagas ?? 16);
+      setTolerancia(editing?.toleranciaVagas ?? 0);
       setCustoHoraSala(editing?.custoHoraSala ?? 0);
       setActiva(editing ? isTurmaActiva(editing) : true);
       setCronograma(editing?.cronograma ?? []);
@@ -2986,7 +3008,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
     if (!curso.trim()) return;
     const payload = {
       nome: nome.trim() || codigoAuto || "Nova turma",
-      curso, local, horario, formador, formadores: formadoresExtra, dataInicio, vagas, custoHoraSala,
+      curso, local, horario, formador, formadores: formadoresExtra, dataInicio, vagas, toleranciaVagas: tolerancia, custoHoraSala,
       estado: (activa ? "Ativa" : "Inativa") as TurmaGold["estado"],
       horas: horasCurso,
       cronograma,
@@ -3037,7 +3059,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
         )}
         <div className="md:hidden p-3 space-y-2">
           {rows.map(t => {
-            const livre = t.vagas - t.totalAlunos;
+            const livre = lugaresLivres(t);
             return (
               <MobileCard
                 key={t.id}
@@ -3062,7 +3084,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
             <thead><tr><Th>Id</Th><Th>Data Início</Th><Th>Nome</Th><Th>Local</Th><Th>Horário</Th><Th>Vagas</Th><Th>Estado</Th><Th>Ações</Th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map(t => {
-                const livre = t.vagas - t.totalAlunos;
+                const livre = lugaresLivres(t);
                 return (
                   <tr key={t.id} className="hover:bg-slate-50 transition-colors">
                     <Td><IdCell id={t.id} /></Td>
@@ -3075,7 +3097,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
                     <Td className="text-xs text-slate-600 whitespace-nowrap">{t.horario}</Td>
                     <Td>
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs font-bold ${livre === 0 ? "text-red-600" : livre <= 3 ? "text-amber-600" : "text-slate-700"}`}>{t.totalAlunos}/{t.vagas}</span>
+                        <span className={`text-xs font-bold ${livre === 0 ? "text-red-600" : livre <= 3 ? "text-amber-600" : "text-slate-700"}`}>{t.totalAlunos}/{t.vagas}{(t.toleranciaVagas ?? 0) > 0 ? `+${t.toleranciaVagas}` : ""}</span>
                         {livre === 0 && <Badge label="Lotada" variant="red" />}
                         {livre > 0 && livre <= 3 && <Badge label="Quase cheia" variant="amber" />}
                       </div>
@@ -3150,6 +3172,9 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
             <Field label="Data de início"><input type="date" className={iCls} value={dataInicio} onChange={e => setDataInicio(e.target.value)} /></Field>
             <Field label="Vagas"><input type="number" className={iCls} value={vagas} onChange={e => setVagas(Number(e.target.value) || 0)} /></Field>
           </div>
+          <Field label="Tolerância de vagas" hint="Lugares extra para overbooking. A turma sai do percurso de pré-inscrição quando os inscritos atingem vagas + tolerância.">
+            <input type="number" min={0} className={iCls} value={tolerancia} onChange={e => setTolerancia(Math.max(0, Number(e.target.value) || 0))} />
+          </Field>
           <Field label="Custo hora da sala (€)">
             <input type="number" min={0} step="0.5" className={iCls} value={custoHoraSala} onChange={e => setCustoHoraSala(Math.max(0, Number(e.target.value) || 0))} />
           </Field>
@@ -3525,6 +3550,8 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
   const [localFin, setLocalFin] = useState("");
   const [horarioFin, setHorarioFin] = useState("Pós Laboral");
   const [dataInicio, setDataInicio] = useState("");
+  const [vagasFin, setVagasFin] = useState(20);
+  const [toleranciaFin, setToleranciaFin] = useState(0);
   const [activa, setActiva] = useState(true);
   const [cronograma, setCronograma] = useState<SessaoCronograma[]>([]);
   const editing = open && open !== "new" ? open : null;
@@ -3548,25 +3575,18 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
       setLocalFin(editing?.local ?? "");
       setHorarioFin(editing?.horario && editing.horario !== "Online" ? editing.horario : "Pós Laboral");
       setDataInicio(editing?.dataInicio ?? "");
+      setVagasFin(editing?.alunosTotal ?? 20);
+      setToleranciaFin(editing?.toleranciaVagas ?? 0);
       setActiva(editing ? isTurmaActiva(editing) : true);
       setCronograma(editing?.cronograma ?? []);
     }
   }, [open, editing]);
   async function guardar() {
     const horas = editing?.horas ?? 25;
-    const crono = cronograma.length
-      ? cronograma
-      : generateCronograma({
-        inicio: dataInicio,
-        horario: horarioFin,
-        horas,
-        formador,
-        curso,
-        hoursPerSession: 3,
-      });
     const payload = {
       nome: nome.trim() || "Nova turma",
-      curso, formador, local: localFin, dataInicio, activa, cronograma: crono, horas, horario: horarioFin,
+      curso, formador, local: localFin, dataInicio, activa, cronograma, horas, horario: horarioFin,
+      alunosTotal: vagasFin, toleranciaVagas: toleranciaFin,
     };
     if (editing) {
       patchFin(editing.id, payload);
@@ -3577,7 +3597,6 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
       id: -Date.now(),
       ufcdCod: "0000",
       alunos: 0,
-      alunosTotal: 20,
       estado: "A montar",
       ...payload,
     });
@@ -3716,6 +3735,12 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
             <SearchSelect value={horarioFin} onChange={setHorarioFin} options={horariosOpts} placeholder="Pós Laboral…" />
           </Field>
           <Field label="Data de início"><input type="date" className={iCls} value={dataInicio} onChange={e => setDataInicio(e.target.value)} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Vagas"><input type="number" min={1} className={iCls} value={vagasFin} onChange={e => setVagasFin(Math.max(1, Number(e.target.value) || 0))} /></Field>
+            <Field label="Tolerância de vagas" hint="Lugares extra para overbooking.">
+              <input type="number" min={0} className={iCls} value={toleranciaFin} onChange={e => setToleranciaFin(Math.max(0, Number(e.target.value) || 0))} />
+            </Field>
+          </div>
           <CronogramaEditor
             accent="fin"
             sessoes={cronograma}

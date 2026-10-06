@@ -44,10 +44,12 @@ import {
   popularFichaPessoa, docsDoCurso, abrirAlerta, alertarDocumentosIncorrectos,
   definirEstadoDoc, dispensarAlerta, listarAlertasAbertas, syncLigacao,
 } from "./docsLink.js";
-import { storeDriveFile } from "./googleDrive.js";
+import { readDriveContent, storeDriveFile } from "./googleDrive.js";
+import { ficheiroModelo } from "./docsCurso.js";
+import { modulosDaFicha } from "./programaCurso.js";
 import {
   PercursoErro, concluirPercurso, escolherTurmaPublica, enviarSugestaoTurmaCheia,
-  moverDocsDoLead, moverDocsParaTurma, validarPreinscricao, vistaDocumentosPublica,
+  moverDocsDoLead, moverDocsParaTurma, registarConsentimento, validarPreinscricao, vistaDocumentosPublica,
 } from "./percurso.js";
 import { aplicarTurmaRegras, listTurmaRegras } from "./turmaRegras.js";
 import { camposEmFalta, estadoPodeEntregar, podeArrastar } from "./crmRegras.js";
@@ -697,6 +699,42 @@ export function registerOpsRoutes(
     return vistaDocumentosPublica(db, lead);
   });
 
+  app.get("/v1/public/documentos/:token/modelo/:tipo", {
+    config: { rateLimit: { max: 40, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    const token = String((req.params as { token?: string }).token ?? "");
+    const tipo = String((req.params as { tipo?: string }).tipo ?? "").slice(0, 48);
+    if (token.length < 12 || !tipo) return reply.code(400).send({ error: "ligação inválida" });
+    const lead = await one(db, "SELECT curso, regime FROM preinscricoes WHERE docs_token = $1", [token]);
+    if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
+    const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
+    const modelo = await ficheiroModelo(db, regime, String(lead.curso ?? ""), tipo);
+    if (!modelo) return reply.code(404).send({ error: "Este documento não tem ficheiro da secretaria." });
+    const content = await readDriveContent(db, modelo.driveFileId);
+    if (!content) return reply.code(404).send({ error: "ficheiro inexistente" });
+    if (content.redirect && !content.bytes) return reply.redirect(content.redirect);
+    reply.header("Content-Type", content.mime);
+    reply.header("Content-Disposition", `inline; filename="${content.name.replace(/"/g, "")}"`);
+    reply.header("Cache-Control", "private, max-age=60");
+    return reply.send(content.bytes);
+  });
+
+  app.post("/v1/public/documentos/:token/consentir", {
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    const token = String((req.params as { token?: string }).token ?? "");
+    const tipo = String((req.body as { tipo?: string } | undefined)?.tipo ?? "").slice(0, 48);
+    if (token.length < 12 || !tipo) return reply.code(400).send({ error: "pedido inválido" });
+    const lead = await one(db, "SELECT id FROM preinscricoes WHERE docs_token = $1", [token]);
+    if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
+    try {
+      return await registarConsentimento(db, Number(lead.id), tipo);
+    } catch (err) {
+      const msg = err instanceof PercursoErro ? err.message : "Não foi possível registar o consentimento.";
+      return reply.code(400).send({ error: msg });
+    }
+  });
+
   app.post("/v1/public/documentos/:token/turma", {
     config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
   }, async (req, reply) => {
@@ -1243,6 +1281,7 @@ export function registerOpsRoutes(
     horario: z.string().max(80).optional().default(""),
     totalAlunos: z.number().optional().default(0),
     vagas: z.number().optional().default(16),
+    toleranciaVagas: z.number().int().min(0).max(200).optional(),
     estado: z.string().max(20).optional().default("Ativa"),
     formador: z.string().max(120).optional().default(""),
     formadores: z.array(z.string().max(120)).max(12).optional().default([]),
@@ -1259,6 +1298,7 @@ export function registerOpsRoutes(
     const slotErro = await erroDisponibilidade(db, [d.formador, ...d.formadores], d.horario);
     if (slotErro) return reply.code(400).send({ error: slotErro });
     const id = await nextOpsId(db);
+    const modulos = await modulosDaFicha(db, "gold", d.curso);
     const cronograma = (d.cronograma && d.cronograma.length)
       ? d.cronograma
       : generateCronograma({
@@ -1267,11 +1307,12 @@ export function registerOpsRoutes(
         horas: d.horas,
         formador: d.formador,
         curso: d.curso,
+        modulos,
       });
     await db.query(
-      `INSERT INTO turmas_gold (id, data_inicio, nome, curso, local, horario, total_alunos, vagas, estado, formador, formadores, horas, cronograma, custo_hora_sala)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13::jsonb,$14)`,
-      [id, d.dataInicio, d.nome, d.curso, d.local, d.horario, d.totalAlunos, d.vagas, d.estado, d.formador, JSON.stringify(d.formadores), d.horas, cronograma, d.custoHoraSala ?? 0],
+      `INSERT INTO turmas_gold (id, data_inicio, nome, curso, local, horario, total_alunos, vagas, tolerancia_vagas, estado, formador, formadores, horas, cronograma, custo_hora_sala)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14::jsonb,$15)`,
+      [id, d.dataInicio, d.nome, d.curso, d.local, d.horario, d.totalAlunos, d.vagas, d.toleranciaVagas ?? 0, d.estado, d.formador, JSON.stringify(d.formadores), d.horas, cronograma, d.custoHoraSala ?? 0],
     );
     void syncTurmaDriveAccess(db, {
       regime: "gold", turmaId: id, nome: d.nome, formador: d.formador, formadores: d.formadores, cronograma,
@@ -1299,11 +1340,11 @@ export function registerOpsRoutes(
     await db.query(
       `UPDATE turmas_gold SET data_inicio = COALESCE($2, data_inicio), nome = COALESCE($3, nome), curso = COALESCE($4, curso),
          local = COALESCE($5, local), horario = COALESCE($6, horario), total_alunos = COALESCE($7, total_alunos),
-         vagas = COALESCE($8, vagas), estado = COALESCE($9, estado), formador = COALESCE($10, formador),
-         formadores = COALESCE($11::jsonb, formadores),
-         horas = COALESCE($12, horas), cronograma = COALESCE($13::jsonb, cronograma),
-         custo_hora_sala = COALESCE($14, custo_hora_sala) WHERE id = $1`,
-      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.local ?? null, d.horario ?? null, d.totalAlunos ?? null, d.vagas ?? null, d.estado ?? null, d.formador ?? null, d.formadores ? JSON.stringify(d.formadores) : null, d.horas ?? null, d.cronograma ?? null, d.custoHoraSala ?? null],
+         vagas = COALESCE($8, vagas), tolerancia_vagas = COALESCE($9, tolerancia_vagas), estado = COALESCE($10, estado), formador = COALESCE($11, formador),
+         formadores = COALESCE($12::jsonb, formadores),
+         horas = COALESCE($13, horas), cronograma = COALESCE($14::jsonb, cronograma),
+         custo_hora_sala = COALESCE($15, custo_hora_sala) WHERE id = $1`,
+      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.local ?? null, d.horario ?? null, d.totalAlunos ?? null, d.vagas ?? null, d.toleranciaVagas ?? null, d.estado ?? null, d.formador ?? null, d.formadores ? JSON.stringify(d.formadores) : null, d.horas ?? null, d.cronograma ?? null, d.custoHoraSala ?? null],
     );
     if (antesTurma && d.nome && d.nome !== String(antesTurma.nome ?? "")) {
       await propagarNomeTurma(db, "gold", id, String(antesTurma.nome ?? ""), d.nome);
@@ -1343,6 +1384,7 @@ export function registerOpsRoutes(
     horario: z.string().max(80).optional().default(""),
     alunos: z.number().optional().default(0),
     alunosTotal: z.number().optional().default(20),
+    toleranciaVagas: z.number().int().min(0).max(200).optional(),
     estado: z.string().max(40).optional().default("A montar"),
     horas: z.number().optional().default(25),
     formador: z.string().max(120).optional().default(""),
@@ -1357,6 +1399,7 @@ export function registerOpsRoutes(
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
     const id = await nextOpsId(db);
+    const modulos = await modulosDaFicha(db, "fin", d.curso);
     const cronograma = (d.cronograma && d.cronograma.length)
       ? d.cronograma
       : generateCronograma({
@@ -1366,11 +1409,12 @@ export function registerOpsRoutes(
         formador: d.formador,
         curso: d.curso,
         hoursPerSession: 3,
+        modulos,
       });
     await db.query(
-      `INSERT INTO turmas_fin (id, data_inicio, nome, curso, ufcd_cod, local, horario, alunos, alunos_total, estado, horas, formador, formadores, activa, cronograma)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15::jsonb)`,
-      [id, d.dataInicio, d.nome, d.curso, d.ufcdCod, d.local, d.horario, d.alunos, d.alunosTotal, d.estado, d.horas, d.formador, JSON.stringify(d.formadores), d.activa, cronograma],
+      `INSERT INTO turmas_fin (id, data_inicio, nome, curso, ufcd_cod, local, horario, alunos, alunos_total, tolerancia_vagas, estado, horas, formador, formadores, activa, cronograma)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb)`,
+      [id, d.dataInicio, d.nome, d.curso, d.ufcdCod, d.local, d.horario, d.alunos, d.alunosTotal, d.toleranciaVagas ?? 0, d.estado, d.horas, d.formador, JSON.stringify(d.formadores), d.activa, cronograma],
     );
     void syncTurmaDriveAccess(db, {
       regime: "fin", turmaId: id, nome: d.nome, formador: d.formador, formadores: d.formadores, cronograma,
@@ -1390,11 +1434,11 @@ export function registerOpsRoutes(
     await db.query(
       `UPDATE turmas_fin SET data_inicio = COALESCE($2, data_inicio), nome = COALESCE($3, nome), curso = COALESCE($4, curso),
          ufcd_cod = COALESCE($5, ufcd_cod), local = COALESCE($6, local), horario = COALESCE($7, horario),
-         alunos = COALESCE($8, alunos), alunos_total = COALESCE($9, alunos_total), estado = COALESCE($10, estado),
-         horas = COALESCE($11, horas), formador = COALESCE($12, formador),
-         formadores = COALESCE($13::jsonb, formadores), activa = COALESCE($14, activa),
-         cronograma = COALESCE($15::jsonb, cronograma) WHERE id = $1`,
-      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.ufcdCod ?? null, d.local ?? null, d.horario ?? null, d.alunos ?? null, d.alunosTotal ?? null, d.estado ?? null, d.horas ?? null, d.formador ?? null, d.formadores ? JSON.stringify(d.formadores) : null, d.activa ?? null, d.cronograma ?? null],
+         alunos = COALESCE($8, alunos), alunos_total = COALESCE($9, alunos_total), tolerancia_vagas = COALESCE($10, tolerancia_vagas), estado = COALESCE($11, estado),
+         horas = COALESCE($12, horas), formador = COALESCE($13, formador),
+         formadores = COALESCE($14::jsonb, formadores), activa = COALESCE($15, activa),
+         cronograma = COALESCE($16::jsonb, cronograma) WHERE id = $1`,
+      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.ufcdCod ?? null, d.local ?? null, d.horario ?? null, d.alunos ?? null, d.alunosTotal ?? null, d.toleranciaVagas ?? null, d.estado ?? null, d.horas ?? null, d.formador ?? null, d.formadores ? JSON.stringify(d.formadores) : null, d.activa ?? null, d.cronograma ?? null],
     );
     if (antesTurma && d.nome && d.nome !== String(antesTurma.nome ?? "")) {
       await propagarNomeTurma(db, "fin", id, String(antesTurma.nome ?? ""), d.nome);

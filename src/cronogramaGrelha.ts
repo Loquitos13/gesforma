@@ -1,6 +1,7 @@
 import {
   codigoModulo,
   emptySessao,
+  ordenarCodigos,
   sessaoModalidade,
   type SessaoCronograma,
   type SessaoModalidade,
@@ -246,10 +247,10 @@ export function cellLabel(sessoes: SessaoCronograma[], date: string, l: GrelhaLi
     return "Síncrona";
   }
   if (hits.some(s => sessaoModalidade(s) === "avaliacao")) {
-    const codes = hits.flatMap(s => s.modulos ?? []).map(codigoModulo);
-    return codes.length ? `Aval. ${[...new Set(codes)].join("/")}` : "Avaliação";
+    const codes = ordenarCodigos(hits.flatMap(s => s.modulos ?? []).map(codigoModulo));
+    return codes.length ? `Aval. ${codes.join("/")}` : "Avaliação";
   }
-  const codes = [...new Set(hits.flatMap(s => (s.modulos ?? []).map(codigoModulo)).filter(Boolean))];
+  const codes = ordenarCodigos(hits.flatMap(s => (s.modulos ?? []).map(codigoModulo)));
   return codes.join("/");
 }
 
@@ -388,18 +389,6 @@ export function cellTone(sessoes: SessaoCronograma[], date: string, linha: Grelh
   return sessaoModalidade(hits[0]);
 }
 
-const CCP = [
-  "M1 · Formador: sistemas, contextos e perfil",
-  "M2 · Simulação pedagógica inicial",
-  "M3 · Comunicação e dinamização de grupos",
-  "M4 · Metodologias e estratégias pedagógicas",
-  "M5 · Operacionalização da formação",
-  "M6 · Recursos didáticos e multimédia",
-  "M7 · Plataformas colaborativas e de aprendizagem",
-  "M8 · Avaliação da formação e das aprendizagens",
-  "M9 · Simulação pedagógica final",
-];
-
 function eachDay(inicio: string, fim: string) {
   return datesFromRange(inicio, fim);
 }
@@ -421,7 +410,7 @@ export function generateEnaCronograma(opts: {
   if (!inicio) return [];
   const formadores = opts.formador && opts.formador !== "A definir" ? [opts.formador] : [];
   const ccp = /ccp|formadores/i.test(opts.curso ?? "");
-  const mods = (opts.modulos?.length ? opts.modulos : ccp ? CCP : opts.modulos) ?? [];
+  const mods = opts.modulos ?? [];
   const labor = /laboral manhã/i.test(opts.horario);
   const pos = /pós laboral|pos laboral/i.test(opts.horario);
   const allowed = /sábado/i.test(opts.horario) ? [6] : pos ? [1, 2, 3, 4] : [1, 2, 3, 4, 5];

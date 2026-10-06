@@ -38,6 +38,7 @@ function hydrateGold(t: Omit<TurmaGold, "cronograma" | "estado"> & { estado: str
       horas: t.horas || 90,
       formador: t.formador,
       curso: t.curso,
+      modulos: [],
     }),
   };
 }
@@ -53,6 +54,7 @@ function hydrateFin(t: Omit<TurmaFin, "cronograma"> & { cronograma?: unknown }):
       formador: t.formador,
       curso: t.curso,
       hoursPerSession: 3,
+      modulos: [],
     }),
   };
 }

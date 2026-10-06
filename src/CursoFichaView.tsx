@@ -572,7 +572,7 @@ function SitePreview({ data, accent, turmas }: { data: CursoSite; accent: CursoA
                       <span className="font-semibold">{x.local}</span>
                       {" · "}{x.horario}
                       {" · "}{fmtDataPt(x.dataInicio)}
-                      {" · "}{x.vagasLivres > 0 ? `${x.vagasLivres} vagas` : "lotada"}
+                      {" · "}{x.vagasLivres > 0 ? `${x.vagasLivres} vagas restantes` : "sem vagas restantes"}
                     </li>
                   ))}
                 </ul>
@@ -1094,7 +1094,7 @@ export function CursoFichaView({
                       <li key={x.id} className="px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 text-sm">
                         <div>
                           <p className="font-semibold text-slate-800">{x.local} · {x.horario}</p>
-                          <p className="text-xs text-slate-500">{x.nome} · início {fmtDataPt(x.dataInicio)} · {x.vagasLivres} vagas</p>
+                          <p className="text-xs text-slate-500">{x.nome} · início {fmtDataPt(x.dataInicio)} · {x.vagasLivres > 0 ? `${x.vagasLivres} vagas restantes` : "sem vagas restantes"}</p>
                         </div>
                         <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${x.libertada ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
                           {x.libertada ? "Libertada" : "Não libertada"}

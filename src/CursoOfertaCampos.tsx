@@ -103,7 +103,7 @@ export function CursoOfertaCampos({
           <option value="">{value.horario ? "Seleccione a data" : "Escolha primeiro o horário"}</option>
           {datas.map(t => (
             <option key={t.turmaId} value={t.dataInicio}>
-              {fmtDataPt(t.dataInicio)} · {t.nome}{t.vagasLivres ? ` · ${t.vagasLivres} vagas` : " · lotada"}
+              {fmtDataPt(t.dataInicio)} · {t.nome}{t.vagasLivres ? ` · ${t.vagasLivres} vagas restantes` : " · sem vagas restantes"}
             </option>
           ))}
         </select>

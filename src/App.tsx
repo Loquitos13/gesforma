@@ -918,10 +918,11 @@ function TransferirTurmaModal({
   const turmas = destinos.filter(d =>
     (!curso || d.curso === curso) && (!horario || d.horario === horario)
   );
-  const turmaOpts = turmas.map(d => ({
-    value: d.nome,
-    sub: `${d.local} · ${d.horario} · ${d.ocupadas}/${d.vagas}${(d.toleranciaVagas ?? 0) > 0 ? `+${d.toleranciaVagas}` : ""}${!d.activa ? " · inativa" : d.ocupadas >= d.vagas + (d.toleranciaVagas ?? 0) ? " · lotada" : " vagas"}`,
-  }));
+  const turmaOpts = turmas.map(d => {
+    const livres = Math.max(0, d.vagas + Math.max(0, d.toleranciaVagas ?? 0) - d.ocupadas);
+    const vagas = !d.activa ? "inativa" : livres <= 0 ? "sem vagas restantes" : `${livres} vagas restantes`;
+    return { value: d.nome, sub: `${d.local} · ${d.horario} · ${vagas}` };
+  });
   const dest = turmas.find(d => d.nome === turmaNome);
   const bloqueada = dest ? (!dest.activa || dest.ocupadas >= dest.vagas + (dest.toleranciaVagas ?? 0)) : true;
   const btn = accent === "fin" ? "bg-blue-600 hover:bg-blue-700" : "bg-amber-500 hover:bg-amber-600";
@@ -981,7 +982,7 @@ function TransferirTurmaModal({
         {dest && !dest.activa && <p className="text-xs font-medium text-amber-700">Esta turma está inativa e não aceita transferências.</p>}
         {dest && dest.activa && dest.ocupadas >= dest.vagas + (dest.toleranciaVagas ?? 0) && <p className="text-xs font-medium text-red-600">A turma {dest.nome} está lotada ({dest.ocupadas}/{dest.vagas}{(dest.toleranciaVagas ?? 0) > 0 ? `+${dest.toleranciaVagas}` : ""}).</p>}
         {dest && dest.activa && dest.ocupadas < dest.vagas + (dest.toleranciaVagas ?? 0) && (
-          <p className="text-xs text-slate-500">{dest.nome} · {dest.local} · {dest.vagas + (dest.toleranciaVagas ?? 0) - dest.ocupadas} vagas livres.</p>
+          <p className="text-xs text-slate-500">{dest.nome} · {dest.local} · {dest.vagas + (dest.toleranciaVagas ?? 0) - dest.ocupadas} vagas restantes.</p>
         )}
         {destinos.length === 0 && <p className="text-xs text-slate-500">Não há outras turmas para onde transferir.</p>}
       </div>
@@ -1701,7 +1702,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             <div className="flex justify-between text-xs mb-1.5">
               <span className="text-slate-300">{turma.totalAlunos} formandos inscritos</span>
               <span className={vagasLivres === 0 ? "text-red-400 font-bold" : vagasLivres <= 3 ? "text-amber-400 font-bold" : "text-emerald-400"}>
-                {vagasLivres === 0 ? "LOTADA" : `${vagasLivres} vagas livres`}
+                {vagasLivres === 0 ? "LOTADA" : `${vagasLivres} vagas restantes`}
               </span>
             </div>
             <div className="w-full bg-white/10 rounded-full h-2">
@@ -2323,7 +2324,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
         <div className="mt-4">
           <div className="flex justify-between text-xs mb-1.5">
             <span className="text-slate-300">{turma.alunos} formandos · {prontos} com documentos prontos</span>
-            <span className="text-blue-300">{turma.alunosTotal} vagas</span>
+            <span className="text-blue-300">{Math.max(0, lugaresLivres(turma))} vagas restantes</span>
           </div>
           <div className="w-full bg-white/10 rounded-full h-2">
             <div className="h-2 rounded-full bg-blue-400" style={{ width: `${(turma.alunos / turma.alunosTotal) * 100}%` }} />
@@ -3070,7 +3071,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
                 title={t.nome}
                 sub={t.curso}
                 badge={livre === 0 ? <Badge label="Lotada" variant="red" /> : livre <= 3 ? <Badge label="Quase cheia" variant="amber" /> : estadoBadge(t.estado)}
-                meta={[t.local, `${t.totalAlunos}/${t.vagas} vagas`, t.dataInicio]}
+                meta={[t.local, `${livre} vagas restantes`, t.dataInicio]}
                 onOpen={() => onCockpit(t.id)}
                 actions={[
                   { label: "Cockpit", icon: I.eye, tone: "teal", onClick: () => onCockpit(t.id) },
@@ -3101,7 +3102,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
                     <Td className="text-xs text-slate-600 whitespace-nowrap">{t.horario}</Td>
                     <Td>
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs font-bold ${livre === 0 ? "text-red-600" : livre <= 3 ? "text-amber-600" : "text-slate-700"}`}>{t.totalAlunos}/{t.vagas}{(t.toleranciaVagas ?? 0) > 0 ? `+${t.toleranciaVagas}` : ""}</span>
+                        <span className={`text-xs font-bold ${livre === 0 ? "text-red-600" : livre <= 3 ? "text-amber-600" : "text-slate-700"}`}>{livre} restantes</span>
                         {livre === 0 && <Badge label="Lotada" variant="red" />}
                         {livre > 0 && livre <= 3 && <Badge label="Quase cheia" variant="amber" />}
                       </div>

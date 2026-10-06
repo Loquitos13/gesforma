@@ -7,7 +7,7 @@ import { persist } from "./toastBus";
 import { FileUploadModal } from "./TurmaExtras";
 import { useLists } from "./ListsContext";
 import { useTurmas } from "./TurmasContext";
-import { isTurmaActiva } from "./turmaModel";
+import { isTurmaActiva, lugaresLivres } from "./turmaModel";
 import type { FormandoTurma } from "./ListsContext";
 
 const I = {
@@ -247,7 +247,7 @@ export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "
                 <div className="grid grid-cols-3 gap-2 mt-2">
                   <div><p className="text-xs text-slate-400">Início</p><p className="text-xs font-semibold">{turma.dataInicio}</p></div>
                   <div><p className="text-xs text-slate-400">Local</p><p className="text-xs font-semibold">{turma.local}</p></div>
-                  <div><p className="text-xs text-slate-400">Vagas</p><p className="text-xs font-semibold">{turma.totalAlunos}/{turma.vagas}</p></div>
+                  <div><p className="text-xs text-slate-400">Vagas</p><p className="text-xs font-semibold">{Math.max(0, lugaresLivres(turma))} restantes</p></div>
                 </div>
               </div>
             )}

@@ -595,6 +595,7 @@ export type TurmaPercurso = {
   dataInicio: string;
   livres: number;
   sessoes: { data: string; inicio: string; fim: string; modalidade?: string; modulos?: string[]; formadores?: string[] }[];
+  plano?: { id: string; data: string; horaInicio: string; horaFim: string; modalidade: string; modulos: string[]; formadores: string[] }[];
 };
 export const apiPublicDocumentos = (token: string) =>
   api<{
@@ -610,6 +611,7 @@ export const apiPublicDocumentos = (token: string) =>
     passo?: 1 | 2 | 3;
     percursoConcluido?: boolean;
     turmas?: TurmaPercurso[];
+    recomendadas?: TurmaPercurso[];
     turmaEscolhida?: TurmaPercurso | null;
     criterios?: { local: string; horario: string; inicio: string };
   }>(

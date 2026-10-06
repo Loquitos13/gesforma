@@ -25,6 +25,8 @@ export type CronogramaPrintInput = {
   dates: string[];
   linhas: GrelhaLinha[];
   sessoes: SessaoCronograma[];
+  /** Folha para mostrar dentro de outra página, sem abrir a impressão. */
+  embutido?: boolean;
 };
 
 function esc(value: string) {
@@ -299,16 +301,16 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
         ${legendKeys}
       </table>
     </div>
-    <div class="actions">
+    ${input.embutido ? "" : `<div class="actions">
       <button type="button" onclick="window.print()">Imprimir / Guardar PDF</button>
       <button type="button" class="ghost" onclick="window.close()">Fechar</button>
-    </div>
+    </div>`}
   </div>
-  <script>
+  ${input.embutido ? "" : `<script>
     window.addEventListener("load", function () {
       setTimeout(function () { window.print(); }, 400);
     });
-  </script>
+  </script>`}
 </body>
 </html>`;
 }

@@ -148,7 +148,7 @@ export function datasImpressao(opts: {
   fim?: string;
   sessoes: SessaoCronograma[];
 }) {
-  const lectivas = opts.sessoes
+  const lectivas = sessoesSemFim(opts.sessoes)
     .filter(s => sessaoModalidade(s) !== "matricula")
     .map(s => s.data)
     .filter(Boolean)
@@ -236,8 +236,49 @@ export function matchLinha(s: SessaoCronograma, l: GrelhaLinha) {
   return normHora(s.horaInicio || "") === normHora(l.horaInicio || "") && normHora(s.horaFim || "") === normHora(l.horaFim || "");
 }
 
+/** Marca a data de fim do cronograma sem ser uma sessão visível. */
+export const FIM_CRONOGRAMA_ID = "fim-cronograma";
+
+export function eMarcoFim(s: { id?: string }) {
+  return s.id === FIM_CRONOGRAMA_ID;
+}
+
+export function sessoesSemFim(sessoes: SessaoCronograma[]) {
+  return sessoes.filter(s => !eMarcoFim(s));
+}
+
+export function fimDoCronograma(sessoes: SessaoCronograma[]) {
+  return sessoes.find(eMarcoFim)?.data ?? "";
+}
+
+export function comFimCronograma(sessoes: SessaoCronograma[], fim: string) {
+  const sem = sessoesSemFim(sessoes);
+  if (!fim) return sem;
+  return [...sem, {
+    id: FIM_CRONOGRAMA_ID,
+    data: fim,
+    horaInicio: "",
+    horaFim: "",
+    modulos: [],
+    formadores: [],
+    modalidade: "auto" as const,
+  }];
+}
+
+/** A data de fim não recua quando se apaga a última sessão; só avança se houver sessão depois dela. */
+export function fimEstavel(sessoes: SessaoCronograma[], fimActual: string) {
+  const datas = sessoesSemFim(sessoes)
+    .filter(s => sessaoModalidade(s) !== "matricula")
+    .map(s => s.data)
+    .filter(Boolean)
+    .sort();
+  const ultimo = datas[datas.length - 1] ?? "";
+  if (ultimo && fimActual && ultimo > fimActual) return ultimo;
+  return fimActual || ultimo;
+}
+
 export function cellSessoes(sessoes: SessaoCronograma[], date: string, l: GrelhaLinha) {
-  return sessoes.filter(s => s.data === date && matchLinha(s, l));
+  return sessoesSemFim(sessoes).filter(s => s.data === date && matchLinha(s, l));
 }
 
 export function cellLabel(sessoes: SessaoCronograma[], date: string, l: GrelhaLinha) {
@@ -265,7 +306,7 @@ export type EventoDia = { linha: GrelhaLinha; sessoes: SessaoCronograma[] };
 /** Eventos marcados num dia, agrupados pela linha da grelha a que pertencem. */
 export function eventosDoDia(sessoes: SessaoCronograma[], date: string): EventoDia[] {
   const map = new Map<string, EventoDia>();
-  for (const s of sessoes) {
+  for (const s of sessoesSemFim(sessoes)) {
     if (s.data !== date) continue;
     const linha = linhaDaSessao(s);
     if (!linha) continue;
@@ -278,7 +319,7 @@ export function eventosDoDia(sessoes: SessaoCronograma[], date: string): EventoD
 
 export function linhasFromSessoes(sessoes: SessaoCronograma[], horario?: string): GrelhaLinha[] {
   const seen = new Map<string, GrelhaLinha>();
-  for (const s of sessoes) {
+  for (const s of sessoesSemFim(sessoes)) {
     const m = sessaoModalidade(s);
     if (m === "matricula") continue;
     const linha: GrelhaLinha = {
@@ -323,12 +364,44 @@ export function datesFromRange(inicio: string, fim: string) {
 }
 
 export function grelhaPeriodo(sessoes: SessaoCronograma[], inicio?: string) {
-  const datas = sessoes.map(s => s.data).filter(Boolean).sort();
-  const matricula = sessoes.find(s => sessaoModalidade(s) === "matricula")?.data;
+  const vis = sessoesSemFim(sessoes);
+  const datas = vis.map(s => s.data).filter(Boolean).sort();
+  const matricula = vis.find(s => sessaoModalidade(s) === "matricula")?.data;
   const start = [inicio, matricula, datas[0]].filter(Boolean).sort()[0] ?? "";
-  const lectivas = sessoes.filter(s => sessaoModalidade(s) !== "matricula").map(s => s.data).filter(Boolean).sort();
-  const end = lectivas[lectivas.length - 1] ?? (inicio ? addDays(inicio, 31) : "");
+  const lectivas = vis.filter(s => sessaoModalidade(s) !== "matricula").map(s => s.data).filter(Boolean).sort();
+  const ultimo = lectivas[lectivas.length - 1] ?? "";
+  const guardado = fimDoCronograma(sessoes);
+  const end = (guardado && ultimo ? (guardado > ultimo ? guardado : ultimo) : guardado || ultimo)
+    || (inicio ? addDays(inicio, 31) : "");
   return { inicio: start, fim: end, matricula };
+}
+
+/** Caracteres da linha mais comprida. Códigos como M7/M8 ficam juntos; o resto parte nos espaços. */
+export function charsDaCelula(texto: string) {
+  const t = texto.trim();
+  if (!t) return 0;
+  const linhas = t.split(/\s+/).filter(Boolean);
+  return linhas.reduce((m, l) => Math.max(m, l.length), 0);
+}
+
+/** Cada dia fica largo o suficiente para o conteúdo e para o nome do mês não partir. */
+export function larguraDiasEmChars(dates: string[], rotulos: string[][]) {
+  const base = dates.map((d, i) => {
+    const textos = [dayNum(d), weekdayCode(d), ...(rotulos[i] ?? [])];
+    return Math.max(2, ...textos.map(charsDaCelula));
+  });
+  const months = monthSpans(dates);
+  let cursor = 0;
+  for (const m of months) {
+    const soma = base.slice(cursor, cursor + m.count).reduce((a, b) => a + b, 0);
+    const preciso = m.label.length + 1;
+    if (m.count && soma < preciso) {
+      const extra = (preciso - soma) / m.count;
+      for (let k = 0; k < m.count; k++) base[cursor + k] = (base[cursor + k] ?? 0) + extra;
+    }
+    cursor += m.count;
+  }
+  return base;
 }
 
 export function monthSpans(dates: string[]) {

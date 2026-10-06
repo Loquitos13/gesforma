@@ -1,9 +1,11 @@
 import {
   cellLabelPrint,
   cellTone,
+  charsDaCelula,
   formatDataOficial,
   formatHoraFaixa,
   grupoLinha,
+  larguraDiasEmChars,
   monthSpans,
   weekdayCode,
   type GrelhaLinha,
@@ -14,6 +16,8 @@ import { codigoModulo, type SessaoCronograma } from "./turmaModel";
 export type CronogramaPrintInput = {
   horario: string;
   curso?: string;
+  nome?: string;
+  codigo?: string;
   matricula?: string;
   inicio?: string;
   fim?: string;
@@ -114,28 +118,38 @@ function groupRowsHtml(
 const GRUPO_MM = 26;
 const HORA_MM = 22;
 const MARGEM_MM = 7;
-const DIA_MIN_MM = 6;
 const A4_LARGURA_MM = 297;
+
+/** Milímetros da coluna: o texto mais comprido (M7/M8, Aval., nome do mês) define a largura toda. */
+export function largurasColunaMm(dates: string[], linhas: GrelhaLinha[], sessoes: SessaoCronograma[]) {
+  const rotulos = dates.map(d => linhas.map(l => cellLabelPrint(sessoes, d, l)).filter(Boolean));
+  const chars = larguraDiasEmChars(dates, rotulos);
+  return chars.map((n, i) => {
+    const cheio = rotulos[i]?.reduce((m, t) => Math.max(m, charsDaCelula(t)), 0) ?? 0;
+    const mm = Math.max(7, n * 1.8 + (cheio > 4 ? 2.2 : 1.4));
+    return Math.round(mm * 10) / 10;
+  });
+}
 
 /**
  * O cronograma oficial é uma tabela única: o mesmo horário fica sempre na mesma
- * linha, com os meses lado a lado. Quando o período é longo demais para caber
- * em A4 apaisado, é a folha que cresce em largura, não a tabela que se parte.
+ * linha, com os meses lado a lado. Cada dia tem a largura do seu conteúdo.
+ * Quando o período não cabe em A4 apaisado, é a folha que cresce.
  */
-export function printPageSize(dias: number, linhas: number) {
+export function printPageSize(largurasDia: number[], linhas: number) {
+  const soma = largurasDia.reduce((a, b) => a + b, 0);
   const fixo = GRUPO_MM + HORA_MM + MARGEM_MM * 2;
-  const disponivel = A4_LARGURA_MM - fixo;
-  const cabeEmA4 = dias > 0 && disponivel / dias >= DIA_MIN_MM;
-  const diaMm = cabeEmA4 ? disponivel / dias : DIA_MIN_MM;
-  const largura = cabeEmA4 ? A4_LARGURA_MM : Math.ceil(fixo + dias * DIA_MIN_MM);
-  const altura = Math.max(210, Math.ceil(140 + linhas * 9));
-  return { largura, altura, diaMm: Math.round(diaMm * 100) / 100, tabelaMm: Math.round((GRUPO_MM + HORA_MM + dias * diaMm) * 100) / 100 };
+  const tabela = GRUPO_MM + HORA_MM + soma;
+  const largura = Math.max(A4_LARGURA_MM, Math.ceil(fixo + soma));
+  const altura = Math.max(210, Math.ceil(148 + linhas * 10));
+  return { largura, altura, tabelaMm: Math.round(tabela * 100) / 100 };
 }
 
 function gridHtml(
   dates: string[],
   linhas: GrelhaLinha[],
   sessoes: SessaoCronograma[],
+  larguras: number[],
   matricula?: string,
 ) {
   const months = monthSpans(dates);
@@ -143,7 +157,7 @@ function gridHtml(
   const monthRow = months.map(m => `<th class="month" colspan="${m.count}">${esc(m.label)}</th>`).join("");
   const dayRow = dates.map(d => `<th class="day${d === matricula ? " mat" : ""}">${esc(String(Number(d.slice(8))))}</th>`).join("");
   const weekRow = dates.map(d => `<th class="wd${d === matricula ? " mat" : ""}">${esc(weekdayCode(d))}</th>`).join("");
-  const cols = `<col class="c-group" /><col class="c-time" />${dates.map(() => `<col class="c-day" />`).join("")}`;
+  const cols = `<col class="c-group" /><col class="c-time" />${larguras.map(w => `<col style="width:${w}mm" />`).join("")}`;
   const grupos = (["presencial", "sincrona", "auto", "avaliacao"] as const)
     .map(g => groupRowsHtml(g, linhas.filter(l => l.modalidade === g), dates, sessoes, matricula))
     .join("");
@@ -170,8 +184,9 @@ function gridHtml(
 }
 
 export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
-  const page = printPageSize(input.dates.length, input.linhas.length);
-  const grid = gridHtml(input.dates, input.linhas, input.sessoes, input.matricula);
+  const larguras = largurasColunaMm(input.dates, input.linhas, input.sessoes);
+  const page = printPageSize(larguras, input.linhas.length);
+  const grid = gridHtml(input.dates, input.linhas, input.sessoes, larguras, input.matricula);
 
   const mods = legendModulos(input.sessoes);
   const mid = Math.ceil(mods.length / 2);
@@ -216,14 +231,13 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
     table.grid th, table.grid td { border: 1px solid #222; padding: 1px; vertical-align: middle; }
     col.c-group { width: ${GRUPO_MM}mm; }
     col.c-time { width: ${HORA_MM}mm; }
-    col.c-day { width: ${page.diaMm}mm; }
     .corner { background: #fff; }
-    .month { background: #eee; font-size: 9px; font-weight: 700; }
+    .month { background: #eee; font-size: 9px; font-weight: 700; white-space: nowrap; }
     .day { font-size: 9px; font-weight: 700; height: 18px; }
-    .wd { font-size: 8px; font-weight: 600; text-transform: lowercase; color: #222; }
+    .wd { font-size: 8px; font-weight: 600; text-transform: lowercase; color: #222; white-space: nowrap; }
     .group { text-align: left; font-size: 8px; font-weight: 700; padding: 3px 4px; line-height: 1.25; background: #fff; white-space: normal; }
     .time { text-align: left; font-size: 8px; font-weight: 600; padding: 2px 4px; white-space: nowrap; background: #fff; }
-    .cell { font-size: 8px; font-weight: 700; height: 24px; line-height: 1.05; text-align: center; word-break: break-word; }
+    .cell { font-size: 8px; font-weight: 700; min-height: 22px; height: auto; line-height: 1.15; text-align: center; white-space: normal; word-break: keep-all; overflow-wrap: normal; padding: 2px 1px; }
     .pres { background: #a60000; color: #fff; }
     .sinc { background: #1d4ed8; color: #fff; }
     .auto { background: #d4d4d4; color: #111; }
@@ -258,6 +272,13 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
     <p class="course">${esc(tituloCurso(input.curso))}</p>
     <table class="meta">
       <tr>
+        <td>Horário: <b>${esc(input.horario || "-")}</b></td>
+        <td>Turma: <b>${esc(input.nome || "-")}</b></td>
+      </tr>
+      <tr>
+        <td colspan="2">Código interno: <b>${esc(input.codigo || "-")}</b></td>
+      </tr>
+      <tr>
         <td>Data limite para realizar a matrícula : <b>${esc(input.matricula ? formatDataOficial(input.matricula) : "-")}</b></td>
         <td>Data de início: <b>${esc(input.inicio ? formatDataOficial(input.inicio) : "-")}</b></td>
       </tr>
@@ -276,7 +297,6 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
       <div class="swatch"><span class="box aval"></span><span>Data limite para realização da avaliação referente ao(s) módulo(s) em causa</span></div>
       <table class="keys">
         ${legendKeys}
-        <tr><td class="key">Sessão Síncrona</td><td>Aula em vídeo-conferência</td><td></td><td></td></tr>
       </table>
     </div>
     <div class="actions">

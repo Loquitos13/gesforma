@@ -33,7 +33,8 @@ export function EntidadesResponsaveisPainel() {
       setAberta(false);
       return;
     }
-    setEntidades(prev => [...prev, { id: -Date.now(), nome: limpo }]);
+    const id = -Date.now();
+    setEntidades(prev => [...prev, { id, nome: limpo }]);
     setNome("");
     setAberta(false);
   }

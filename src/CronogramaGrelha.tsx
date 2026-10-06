@@ -8,14 +8,17 @@ import {
   buildLinha,
   cellLabel,
   cellTone,
+  comFimCronograma,
   datesFromRange,
   defaultSlot,
   dayNum,
   eventosDoDia,
   EVENTO_OPTS,
+  fimEstavel,
   generateEnaCronograma,
   grelhaPeriodo,
   grupoLinha,
+  larguraDiasEmChars,
   linhaId,
   linhaLabel,
   linhasFromSessoes,
@@ -25,12 +28,14 @@ import {
   moverEvento,
   normHora,
   setMatricula,
+  sessoesSemFim,
   weekdayCode,
   type EventoDia,
   type GrelhaLinha,
 } from "./cronogramaGrelha";
 import { mapLocalTurma, type LocalCatalogo } from "./cronogramaLocal";
 import { imprimirCronogramaEna } from "./cronogramaPrint";
+import { codigoInternoTurma } from "./turmaCodigo";
 import { casarModulo, codigoModulo, formatDiaMes, ordenarCodigos, ordenarModulos, sessaoModulos, type SessaoCronograma, type SessaoModalidade } from "./turmaModel";
 
 function HoraField({
@@ -367,9 +372,11 @@ export function CronogramaGrelha({
   horas,
   formador,
   curso,
+  nome,
   local,
   accent = "gold",
   compact = false,
+  identidade = "",
 }: {
   sessoes: SessaoCronograma[];
   onChange: (next: SessaoCronograma[]) => void;
@@ -378,9 +385,11 @@ export function CronogramaGrelha({
   horas: number;
   formador: string;
   curso?: string;
+  nome?: string;
   local?: string;
   accent?: "gold" | "fin";
   compact?: boolean;
+  identidade?: string;
 }) {
   const programa = useProgramaDoCurso(accent, curso);
   const moduloOpts = programa.options;
@@ -388,6 +397,12 @@ export function CronogramaGrelha({
   const periodo = useMemo(() => grelhaPeriodo(sessoes, inicio), [sessoes, inicio]);
   const [fim, setFim] = useState(periodo.fim);
   const [matricula, setMatriculaDate] = useState(periodo.matricula ?? "");
+  const [vista, setVista] = useState(identidade);
+  if (identidade !== vista) {
+    setVista(identidade);
+    setFim(periodo.fim);
+    setMatriculaDate(periodo.matricula ?? "");
+  }
   const [linhas, setLinhas] = useState<GrelhaLinha[]>(() => linhasFromSessoes(sessoes, horario));
   const [evento, setEvento] = useState<{ date: string; linha?: GrelhaLinha } | null>(null);
   const [arrasto, setArrasto] = useState<{ date: string; linha: GrelhaLinha } | null>(null);
@@ -411,14 +426,33 @@ export function CronogramaGrelha({
   }, [sessoes, horario]);
 
   useEffect(() => {
-    if (periodo.fim) setFim(periodo.fim);
     setMatriculaDate(periodo.matricula ?? "");
-  }, [periodo.fim, periodo.matricula]);
+  }, [periodo.matricula]);
+
+  useEffect(() => {
+    setFim(prev => {
+      if (!periodo.fim) return prev;
+      if (!prev || periodo.fim > prev) return periodo.fim;
+      return prev;
+    });
+  }, [periodo.fim]);
 
   const start = [matricula, inicio, periodo.inicio].filter(Boolean).sort()[0] ?? inicio;
   const dates = useMemo(() => datesFromRange(start, fim || addDays(inicio || start, 31)), [start, fim, inicio]);
   const months = monthSpans(dates);
+  const larguras = useMemo(() => {
+    const rotulos = dates.map(d => linhas.map(l => cellLabel(sessoes, d, l)).filter(Boolean));
+    return larguraDiasEmChars(dates, rotulos);
+  }, [dates, linhas, sessoes]);
+  const codigo = codigoInternoTurma(curso ?? "", local ?? "", horario, inicio);
   const gold = accent === "gold";
+
+  function gravar(next: SessaoCronograma[], fimForcado?: string) {
+    const alvo = fimForcado ?? fimEstavel(next, fim);
+    setFim(alvo);
+    onChange(comFimCronograma(next, alvo));
+    return alvo;
+  }
 
   function aplicarGerado() {
     const next = generateEnaCronograma({
@@ -429,25 +463,24 @@ export function CronogramaGrelha({
       curso,
       modulos: moduloOpts.map(o => o.value),
     });
-    onChange(next);
     const p = grelhaPeriodo(next, inicio);
-    setFim(p.fim);
     setMatriculaDate(p.matricula ?? "");
     setLinhas(linhasFromSessoes(next, horario));
+    gravar(next, p.fim);
   }
 
   function changeMatricula(v: string) {
     setMatriculaDate(v);
-    onChange(setMatricula(sessoes, v));
+    gravar(setMatricula(sessoesSemFim(sessoes), v));
   }
 
   function changeFim(v: string) {
-    setFim(v);
+    gravar(sessoes, v);
   }
 
   function aplicarEventoGrelha(next: SessaoCronograma[], extra: GrelhaLinha) {
     setLinhas(xs => mergeLinhas(linhasFromSessoes(next, horario), [...xs, extra]));
-    onChange(next);
+    gravar(next);
   }
 
   return (
@@ -484,19 +517,19 @@ export function CronogramaGrelha({
                 <span className="sr-only">Horário</span>
               </th>
               {months.map(m => (
-                <th key={m.key} colSpan={m.count} className="border-b border-slate-200 bg-slate-50 px-1 py-1 text-center text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                <th key={m.key} colSpan={m.count} className="border-b border-slate-200 bg-slate-50 px-1 py-1 text-center text-[10px] font-bold uppercase tracking-wider text-slate-600 whitespace-nowrap">
                   {m.label}
                 </th>
               ))}
             </tr>
             <tr>
-              {dates.map(d => (
-                <th key={`n-${d}`} className={`border-b border-slate-100 px-0 py-0 text-center font-bold w-8 min-w-8 ${d === matricula ? "bg-[#15803d]/30" : d === inicio ? "bg-emerald-50" : ""}`}>
+              {dates.map((d, di) => (
+                <th key={`n-${d}`} style={{ minWidth: `${Math.max(2.1, (larguras[di] ?? 2) * 0.62)}rem` }} className={`border-b border-slate-100 px-0 py-0 text-center font-bold ${d === matricula ? "bg-[#15803d]/30" : d === inicio ? "bg-emerald-50" : ""}`}>
                   <button
                     type="button"
                     onClick={() => setEvento({ date: d })}
                     title={`Adicionar evento em ${formatDiaMes(d)}`}
-                    className="block w-8 min-w-8 py-1 hover:bg-slate-100"
+                    className="block w-full py-1 hover:bg-slate-100"
                   >
                     {dayNum(d)}
                   </button>
@@ -510,7 +543,7 @@ export function CronogramaGrelha({
                     type="button"
                     onClick={() => setEvento({ date: d })}
                     title={`Adicionar evento em ${formatDiaMes(d)}`}
-                    className="block w-8 min-w-8 py-0.5 hover:bg-slate-100"
+                    className="block w-full py-0.5 hover:bg-slate-100"
                   >
                     {weekdayCode(d)}
                   </button>
@@ -564,7 +597,7 @@ export function CronogramaGrelha({
                           setSobre(null);
                           if (!arrasto || tone === "matricula") return;
                           arrastou.current = true;
-                          onChange(moverEvento(sessoes, arrasto.date, arrasto.linha, d, linha));
+                          gravar(moverEvento(sessoesSemFim(sessoes), arrasto.date, arrasto.linha, d, linha));
                           setArrasto(null);
                         }}
                       >
@@ -586,7 +619,7 @@ export function CronogramaGrelha({
                             }
                             setEvento({ date: d, linha });
                           }}
-                          className={`block w-8 min-w-8 h-10 px-0.5 text-[9px] font-bold leading-tight ${TONE[tone] ?? TONE.empty} ${d === matricula ? "ring-1 ring-[#15803d]" : ""} ${preenchida ? "cursor-grab active:cursor-grabbing" : ""}`}
+                          className={`block w-full min-h-10 px-0.5 py-1 text-[9px] font-bold leading-tight whitespace-normal ${TONE[tone] ?? TONE.empty} ${d === matricula ? "ring-1 ring-[#15803d]" : ""} ${preenchida ? "cursor-grab active:cursor-grabbing" : ""}`}
                           title={preenchida
                             ? `${formatDiaMes(d)} · ${linhaLabel(linha)} · arraste para mudar dia, hora ou metodologia; clique para editar os ${unidade === "capítulo" ? "capítulos" : "módulos"}`
                             : `${formatDiaMes(d)} · ${linhaLabel(linha)}`}
@@ -610,7 +643,7 @@ export function CronogramaGrelha({
           disabled={!inicio}
           className={`px-3 py-1.5 text-xs font-semibold rounded-lg text-white disabled:opacity-40 ${gold ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}
         >
-          {sessoes.length ? "Gerar grelha ENA" : "Gerar cronograma ENA"}
+          {sessoesSemFim(sessoes).length ? "Gerar grelha ENA" : "Gerar cronograma ENA"}
         </button>
         <div className="relative">
           <button type="button" onClick={() => { setAddLinha(v => !v); setAddErro(""); }} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
@@ -690,13 +723,15 @@ export function CronogramaGrelha({
             imprimirCronogramaEna({
               horario,
               curso,
+              nome,
+              codigo,
               matricula,
               inicio,
               fim: fim || dates[dates.length - 1],
               local: localMapeado,
               dates,
               linhas,
-              sessoes,
+              sessoes: sessoesSemFim(sessoes),
             });
           }}
           className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"

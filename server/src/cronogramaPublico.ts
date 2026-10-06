@@ -42,6 +42,7 @@ export function sessoesPublicas(raw: unknown): SessaoPublica[] {
   for (const item of list) {
     if (!item || typeof item !== "object") continue;
     const s = item as Record<string, unknown>;
+    if (asText(s.id) === "fim-cronograma") continue;
     const modulos = modulosPorOrdem(Array.isArray(s.modulos)
       ? s.modulos.map(asText).filter(Boolean)
       : [asText(s.modulo)].filter(Boolean));

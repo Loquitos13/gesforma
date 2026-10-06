@@ -1735,6 +1735,8 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           <CronogramaEditor
             layout="page"
             turmaId={turma.id}
+            identidade={`gold-${turma.id}`}
+            nome={turma.nome}
             sessoes={turma.cronograma}
             onChange={next => setGoldCronograma(turma.id, next)}
             inicio={turma.dataInicio}
@@ -2345,6 +2347,8 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           layout="page"
           accent="fin"
           turmaId={turma.id}
+          identidade={`fin-${turma.id}`}
+          nome={turma.nome}
           sessoes={turma.cronograma}
           onChange={next => setFinCronograma(turma.id, next)}
           inicio={turma.dataInicio}
@@ -3187,7 +3191,9 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
             formador={formador}
             formadoresTurma={formadoresExtra}
             curso={curso}
+            nome={nome}
             local={local}
+            identidade={editing ? `gold-form-${editing.id}` : "gold-form-new"}
           />
           <div className="flex gap-2 pt-2">
             <button onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
@@ -3750,7 +3756,9 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
             horas={editing?.horas ?? 25}
             formador={formador}
             curso={curso}
+            nome={nome}
             local={localFin}
+            identidade={editing ? `fin-form-${editing.id}` : "fin-form-new"}
           />
           <div className="flex gap-2 pt-2">
             <button onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>

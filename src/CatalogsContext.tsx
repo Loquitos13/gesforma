@@ -154,6 +154,7 @@ export function useCatalogList<T extends { id: number }>(kind: string, regime: "
           const before = current.find(x => x.id === row.id);
           if (!before) {
             const tempId = row.id;
+            if (inflight.current.has(tempId)) continue;
             const created = apiCreateCatalog(kind, regime, payloadOf(row)).then(r => {
               const realId = r.item?.id ?? tempId;
               if (realId !== tempId) {

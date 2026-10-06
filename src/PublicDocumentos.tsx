@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ApiError, apiPublicConcluirPercurso, apiPublicConsentir, apiPublicDocumentoUpload, apiPublicDocumentos, apiPublicEscolherTurma,
   type TurmaPercurso,
@@ -42,8 +42,11 @@ export function PublicDocumentos({ token }: { token: string }) {
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
   const [criterios, setCriterios] = useState<{ local: string; horario: string; inicio: string }>({ local: "", horario: "", inicio: "" });
+  const [direccao, setDireccao] = useState<"frente" | "tras">("frente");
+  const [aSair, setASair] = useState(false);
+  const salto = useRef<number | null>(null);
 
-  function aplicar(r: Awaited<ReturnType<typeof apiPublicDocumentos>>) {
+  function aplicar(r: Awaited<ReturnType<typeof apiPublicDocumentos>>, manterPasso = false) {
     setNome(r.nome);
     setCurso(r.curso);
     setTipos(r.tipos);
@@ -56,19 +59,41 @@ export function PublicDocumentos({ token }: { token: string }) {
     setTurmaEscolhida(r.turmaEscolhida ?? null);
     setCriterios(r.criterios ?? { local: "", horario: "", inicio: "" });
     setPercursoConcluido(Boolean(r.percursoConcluido));
-    const seguinte = r.passo === 2 ? 2 : 1;
+    const seguinte: 1 | 2 = r.turmaEscolhida ? 2 : 1;
     setPassoServidor(seguinte);
-    setPasso(seguinte);
+    if (!manterPasso) setPasso(seguinte);
     setEstado("ready");
   }
 
-  function recarregar() {
+  function recarregar(manterPasso = false) {
     return apiPublicDocumentos(token)
-      .then(aplicar)
+      .then(r => aplicar(r, manterPasso))
       .catch(err => {
         setEstado(err instanceof ApiError && err.status === 404 ? "missing" : "error");
       });
   }
+
+  function irPara(n: 1 | 2) {
+    if (n === passo || aSair) return;
+    setDireccao(n > passo ? "frente" : "tras");
+    setError("");
+    setOk("");
+    setFicheiro(null);
+    const reduzir = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduzir) {
+      setPasso(n);
+      return;
+    }
+    setASair(true);
+    if (salto.current) window.clearTimeout(salto.current);
+    salto.current = window.setTimeout(() => {
+      setPasso(n);
+      setASair(false);
+      salto.current = null;
+    }, 240);
+  }
+
+  useEffect(() => () => { if (salto.current) window.clearTimeout(salto.current); }, []);
 
   useEffect(() => { void recarregar(); }, [token]);
 
@@ -83,8 +108,12 @@ export function PublicDocumentos({ token }: { token: string }) {
     return Boolean(f) && f?.estado !== "recusado";
   }
   const obrigatorios = tipos.filter(t => t.required);
+  const opcionais = tipos.filter(t => !t.required);
   const feitosObrigatorios = obrigatorios.filter(t => aceite(t.id)).length;
+  const feitosOpcionais = opcionais.filter(t => aceite(t.id)).length;
   const docsProntos = obrigatorios.length === 0 || obrigatorios.every(t => aceite(t.id));
+  const percentagemDocs = tipos.length ? Math.round((tipos.filter(t => aceite(t.id)).length / tipos.length) * 100) : 0;
+  const percentagemPasso = aSair ? (direccao === "frente" ? 100 : 50) : passo === 1 ? 50 : 100;
   const proximo = tipos.find(t => t.required && !aceite(t.id)) ?? tipos.find(t => !aceite(t.id));
   const activoId = foco && tipos.some(t => t.id === foco) ? foco : proximo?.id ?? null;
 
@@ -99,7 +128,7 @@ export function PublicDocumentos({ token }: { token: string }) {
       setOk(`${etiqueta} ficou na ficha (${r.nome}).`);
       setFicheiro(null);
       setFoco(null);
-      await recarregar();
+      await recarregar(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Não foi possível enviar.");
     } finally {
@@ -115,7 +144,7 @@ export function PublicDocumentos({ token }: { token: string }) {
       await apiPublicConsentir(token, tipo);
       setOk(`Consentimento de ${etiqueta} registado.`);
       setFoco(null);
-      await recarregar();
+      await recarregar(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Não foi possível registar o consentimento.");
     } finally {
@@ -220,9 +249,9 @@ export function PublicDocumentos({ token }: { token: string }) {
                     <li key={label}>
                       <button
                         type="button"
-                        disabled={!pode || aberto}
-                        onClick={() => { setPasso(n); setError(""); setOk(""); setFicheiro(null); }}
-                        className={`w-full rounded-xl px-2 py-2 text-left text-xs ${aberto ? "bg-[#1b2330] text-white" : feito ? "bg-emerald-50 text-emerald-900" : "bg-[#efeae1] text-[#8a8172]"} disabled:cursor-default`}
+                        disabled={!pode || aberto || aSair}
+                        onClick={() => irPara(n)}
+                        className={`w-full rounded-xl px-2 py-2 text-left text-xs transition-colors duration-300 ${aberto ? "bg-[#1b2330] text-white" : feito ? "bg-emerald-50 text-emerald-900" : "bg-[#efeae1] text-[#8a8172]"} disabled:cursor-default`}
                       >
                         <span className="block font-bold">{n}</span>
                         {label}
@@ -231,19 +260,32 @@ export function PublicDocumentos({ token }: { token: string }) {
                   );
                 })}
               </ol>
+              <div className="mt-3 h-1 overflow-hidden rounded-full bg-[#efeae1]" aria-hidden>
+                <div
+                  className="h-full rounded-full bg-[#ffa900] transition-[width] duration-500 ease-out"
+                  style={{ width: `${percentagemPasso}%` }}
+                />
+              </div>
               {correcao && <p className="mt-4 text-sm text-red-800">Há ficheiros por corrigir. Volte a enviar os que a secretaria indicou.</p>}
             </div>
 
+            <div className={aSair ? (direccao === "frente" ? "percurso-sair-frente" : "percurso-sair-tras") : (direccao === "frente" ? "percurso-entrar-frente" : "percurso-entrar-tras")}>
             {passo === 1 && (
               <section className="border-t border-[#efeae1]">
                 <div className="px-6 py-4 sm:px-8">
-                  <div className="flex items-baseline justify-between text-xs">
-                    <span className="font-semibold">{feitosObrigatorios} de {obrigatorios.length} obrigatórios</span>
+                  <div className="flex items-baseline justify-between gap-3 text-xs">
+                    <span className="font-semibold">{feitosObrigatorios} de {obrigatorios.length} obrigatórios{opcionais.length > 0 ? ` · ${feitosOpcionais} de ${opcionais.length} opcionais` : ""}</span>
                     <span className="text-[#8a8172]">Passo 1 de 2</span>
                   </div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#efeae1]">
-                    <div className="h-full rounded-full bg-[#ffa900]" style={{ width: `${obrigatorios.length ? Math.round((feitosObrigatorios / obrigatorios.length) * 100) : 0}%` }} />
+                    <div
+                      className="h-full rounded-full bg-[#ffa900] transition-[width] duration-700 ease-out"
+                      style={{ width: `${percentagemDocs}%` }}
+                    />
                   </div>
+                  {docsProntos && opcionais.some(t => !aceite(t.id)) && (
+                    <p className="mt-2 text-xs leading-relaxed text-[#5c564c]">Os obrigatórios já estão na ficha. Os opcionais continuam aqui. Avance só quando quiser.</p>
+                  )}
                 </div>
                 <ol className="divide-y divide-[#efeae1] border-t border-[#efeae1]">
                   {tipos.map(t => {
@@ -289,8 +331,8 @@ export function PublicDocumentos({ token }: { token: string }) {
                 </ol>
                 <div className="border-t border-[#efeae1] px-6 py-4 sm:px-8">
                   {ok && <p className="mb-3 text-sm text-emerald-800">{ok}</p>}
-                  <button type="button" disabled={!docsProntos} onClick={() => { setPasso(2); setError(""); setOk(""); }} className="w-full rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white disabled:opacity-40">
-                    Continuar para o cronograma
+                  <button type="button" disabled={!docsProntos || aSair} onClick={() => irPara(2)} className="w-full rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white transition-opacity disabled:opacity-40">
+                    {aSair && direccao === "frente" ? "A avançar…" : "Continuar para o cronograma"}
                   </button>
                 </div>
               </section>
@@ -335,13 +377,16 @@ export function PublicDocumentos({ token }: { token: string }) {
                   </div>
                 )}
                 <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                  <button type="button" onClick={() => setPasso(1)} className="rounded-lg border border-[#e7e1d6] px-4 py-3 text-sm font-semibold">Voltar</button>
-                  <button type="button" disabled={busy || !turmaEscolhida} onClick={() => void concluir()} className="rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white disabled:opacity-40 sm:flex-1">
+                  <button type="button" disabled={aSair} onClick={() => irPara(1)} className="rounded-lg border border-[#e7e1d6] px-4 py-3 text-sm font-semibold disabled:opacity-40">
+                    {aSair && direccao === "tras" ? "A voltar…" : "Voltar"}
+                  </button>
+                  <button type="button" disabled={busy || !turmaEscolhida || aSair} onClick={() => void concluir()} className="rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white disabled:opacity-40 sm:flex-1">
                     {busy ? "A concluir…" : "Concluir pré-inscrição"}
                   </button>
                 </div>
               </section>
             )}
+            </div>
           </article>
         )}
       </main>

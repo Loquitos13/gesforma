@@ -35,7 +35,9 @@ export type CursoFichaSeed = {
 export type CursoGold = CursoFichaSeed;
 export type CursoAccent = "gold" | "fin";
 
-type TabId = "identidade" | "oferta" | "conteudo" | "programa" | "avaliacao" | "documentos" | "dtp" | "publicacao";
+type TabId = "identidade" | "oferta" | "conteudo" | "programa" | "planos" | "avaliacao" | "documentos" | "dtp" | "publicacao";
+type PlanoCursoLinha = { ordem: number; objetivosGerais: string; objetivosEspecificos: string; conteudo: string };
+type ValorFormadorLinha = { nome: string; valorHora: string };
 type MediaSlot = { name: string; url: string };
 type LocalCatalogo = { id: number; nome: string; morada: string; salas: number; turmas: number; status: string };
 
@@ -77,6 +79,9 @@ type CursoSite = {
   topicosPrograma: TopicoPrograma[];
   avaliacaoCurso: AvaliacaoCurso;
   precosOferta: PrecoOferta[];
+  planosSessao: PlanoCursoLinha[];
+  valoresFormador: ValorFormadorLinha[];
+  entidadeResponsavel: string;
 };
 
 function theme(accent: CursoAccent) {
@@ -309,6 +314,9 @@ function seedSite(curso?: CursoFichaSeed, accent: CursoAccent = "gold"): CursoSi
     topicosPrograma: topicosDeSeed(pack.programa, accent === "fin" ? "modular" : (/comunicar/i.test(curso?.nome ?? "") ? "livre" : "modular")),
     avaliacaoCurso: avaliacaoPadrao(),
     precosOferta: [],
+    planosSessao: [],
+    valoresFormador: [],
+    entidadeResponsavel: "",
   };
 }
 
@@ -553,18 +561,14 @@ function SitePreview({ data, accent, turmas }: { data: CursoSite; accent: CursoA
             ) : (
               <>
                 <label className="block text-[11px] font-semibold text-slate-500">Local
-                  <select className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-200 rounded-lg bg-white"
-                    value={local} onChange={e => { setLocal(e.target.value); setHorario(""); }}>
-                    <option value="">Todos os locais</option>
-                    {locais.map(l => <option key={l} value={l}>{l}</option>)}
-                  </select>
+                  <div className="mt-1">
+                    <SearchSelect value={local} onChange={v => { setLocal(v); setHorario(""); }} options={locais.map(value => ({ value }))} allowEmpty placeholder="Todos os locais" />
+                  </div>
                 </label>
                 <label className="block text-[11px] font-semibold text-slate-500">Horário
-                  <select className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-200 rounded-lg bg-white"
-                    value={horario} disabled={!local} onChange={e => setHorario(e.target.value)}>
-                    <option value="">{local ? "Seleccione o horário" : "Escolha primeiro o local"}</option>
-                    {horarios.map(h => <option key={h} value={h}>{h}</option>)}
-                  </select>
+                  <div className="mt-1">
+                    <SearchSelect value={horario} disabled={!local} onChange={setHorario} options={horarios.map(value => ({ value }))} allowEmpty placeholder={local ? "Seleccione o horário" : "Escolha primeiro o local"} />
+                  </div>
                 </label>
                 <ul className="space-y-1.5 pt-1">
                   {datas.map(x => (
@@ -640,6 +644,9 @@ export function CursoFichaView({
               topicosPrograma: parsed.topicos.length ? parsed.topicos : prev.topicosPrograma,
               avaliacaoCurso: parseAvaliacaoCurso({ ...guardado } as Record<string, unknown>),
               precosOferta: parsePrecosOferta(guardado.precosOferta),
+              planosSessao: Array.isArray(guardado.planosSessao) ? guardado.planosSessao : prev.planosSessao,
+              valoresFormador: Array.isArray(guardado.valoresFormador) ? guardado.valoresFormador : prev.valoresFormador,
+              entidadeResponsavel: String(guardado.entidadeResponsavel ?? prev.entidadeResponsavel ?? ""),
             };
           });
         }
@@ -719,6 +726,7 @@ export function CursoFichaView({
       { id: "oferta", label: "Oferta" },
       { id: "conteudo", label: "Conteúdo do site" },
       { id: "programa", label: "Programa" },
+      { id: "planos", label: "Planos de sessão" },
       { id: "avaliacao", label: "Avaliação" },
       { id: "documentos", label: "Documentos" },
       { id: "dtp", label: "Dossiê TP" },
@@ -1079,6 +1087,20 @@ export function CursoFichaView({
               </div>
               <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">
                 <div>
+                  <p className="text-sm font-semibold text-slate-800">Valor base por formador</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Opcional e só interno. Não entra na página pública nem no percurso do formando. A turma pode sobrepor este valor.</p>
+                </div>
+                {data.valoresFormador.map((row, i) => (
+                  <div key={`${row.nome}-${i}`} className="grid grid-cols-1 sm:grid-cols-[1fr_8rem_auto] gap-2">
+                    <input className={t.iCls} value={row.nome} placeholder="Nome do formador" onChange={e => patch({ valoresFormador: data.valoresFormador.map((v, j) => j === i ? { ...v, nome: e.target.value } : v) })} />
+                    <input className={t.iCls} type="number" min={0} step="0.5" value={row.valorHora} placeholder="€/h" onChange={e => patch({ valoresFormador: data.valoresFormador.map((v, j) => j === i ? { ...v, valorHora: e.target.value } : v) })} />
+                    <button type="button" className="text-xs font-semibold text-slate-500" onClick={() => patch({ valoresFormador: data.valoresFormador.filter((_, j) => j !== i) })}>Remover</button>
+                  </div>
+                ))}
+                <button type="button" className={`px-3 py-2 text-xs font-semibold rounded-lg text-white ${t.save}`} onClick={() => patch({ valoresFormador: [...data.valoresFormador, { nome: "", valorHora: "" }] })}>+ Formador</button>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">
+                <div>
                   <p className="text-sm font-semibold text-slate-800">Turmas deste curso</p>
                   <p className="text-xs text-slate-500 mt-0.5">
                     Na página pública o visitante escolhe o local e, a seguir, o horário das turmas libertadas. Crie a turma para atribuir local, horário, início, fim e vagas.
@@ -1201,6 +1223,30 @@ export function CursoFichaView({
                   + {accent === "fin" || data.organizacaoPrograma === "modular" ? "Módulo" : "Capítulo"}
                 </button>
               </div>
+            </div>
+          )}
+
+          {tab === "planos" && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Plano de cada sessão</p>
+                <p className="text-xs text-slate-500 mt-0.5">A turma herda este plano pela ordem da sessão. Se a sessão ainda não tiver plano gravado, a ficha da turma abre já preenchida com este texto.</p>
+              </div>
+              {data.planosSessao.length === 0 && (
+                <p className="text-sm text-slate-500 rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center">Ainda sem planos. Acrescente a primeira sessão.</p>
+              )}
+              {data.planosSessao.map((linha, i) => (
+                <div key={linha.ordem} className="rounded-lg border border-slate-100 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-slate-500">Sessão {linha.ordem}</p>
+                    <button type="button" className="text-xs text-slate-400" onClick={() => patch({ planosSessao: data.planosSessao.filter((_, j) => j !== i).map((p, j) => ({ ...p, ordem: j + 1 })) })}>Remover</button>
+                  </div>
+                  <textarea className={t.iCls} rows={2} placeholder="Objetivos gerais" value={linha.objetivosGerais} onChange={e => patch({ planosSessao: data.planosSessao.map((p, j) => j === i ? { ...p, objetivosGerais: e.target.value } : p) })} />
+                  <textarea className={t.iCls} rows={2} placeholder="Objetivos específicos" value={linha.objetivosEspecificos} onChange={e => patch({ planosSessao: data.planosSessao.map((p, j) => j === i ? { ...p, objetivosEspecificos: e.target.value } : p) })} />
+                  <textarea className={t.iCls} rows={3} placeholder="Conteúdo do desenvolvimento" value={linha.conteudo} onChange={e => patch({ planosSessao: data.planosSessao.map((p, j) => j === i ? { ...p, conteudo: e.target.value } : p) })} />
+                </div>
+              ))}
+              <button type="button" className={`px-3 py-2 text-xs font-semibold rounded-lg text-white ${t.save}`} onClick={() => patch({ planosSessao: [...data.planosSessao, { ordem: data.planosSessao.length + 1, objetivosGerais: "", objetivosEspecificos: "", conteudo: "" }] })}>+ Sessão</button>
             </div>
           )}
 
@@ -1374,7 +1420,12 @@ export function CursoFichaView({
           )}
 
           {tab === "dtp" && (
-            <DtpModeloEditor accent={accent} cursoId={curso?.id} />
+            <DtpModeloEditor
+              accent={accent}
+              cursoId={curso?.id}
+              entidadeNome={data.entidadeResponsavel}
+              onEntidade={nome => patch({ entidadeResponsavel: nome })}
+            />
           )}
 
           {tab === "publicacao" && (

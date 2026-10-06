@@ -10,7 +10,7 @@ import { useAuth } from "./AuthGate";
 import { FormadorCalendario, eventosDoFormador } from "./FormadorCalendario";
 import { DisponibilidadeEditor } from "./DisponibilidadeEditor";
 import { useFormadores } from "./FormadoresContext";
-import { AppModal } from "./FormKit";
+import { AppModal, SearchSelect } from "./FormKit";
 import { ConfirmDangerModal } from "./SecretaryUX";
 import { persist } from "./toastBus";
 import { useTurmas } from "./TurmasContext";
@@ -435,7 +435,7 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
               )}
             </div>
           </div>
-          {verCalendario && <FormadorCalendario nome={nome} eventos={eventos} />}
+          {verCalendario && <FormadorCalendario nome={nome} eventos={eventos} slots={formador?.disponibilidade} />}
           {formador && (
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Disponibilidade CCP</p>
@@ -445,7 +445,7 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
                 onChange={slots => patchFormador(formador.id, { disponibilidade: slots })}
                 nota={formador.alocado
                   ? "Depois de estar numa turma, o formador deixa de alterar estes horários. A secretaria e a administração continuam a poder ajustá-los."
-                  : "Laboral 9h–13h, pós-laboral 16h30–23h, sábado de manhã 9h–13h e sábado à tarde 14h–19h."}
+                  : "Laboral 9h a 13h, pós-laboral 16h30 a 23h, sábado de manhã 9h a 13h e sábado à tarde 14h a 19h."}
               />
             </div>
           )}
@@ -795,7 +795,19 @@ export function SumarioSessaoModal({ open, onClose, sessao, sumario, accent = "g
 
 type PerguntaTipo = "texto" | "multipla" | "escala" | "simnao";
 type Pergunta = { id: number; tipo: PerguntaTipo; texto: string; opcoes?: string[] };
-type Inquerito = { id: number; titulo: string; perguntas: Pergunta[] };
+type PublicoInquerito = "formando" | "formador" | "empresa";
+const PUBLICOS: { value: PublicoInquerito; sub: string }[] = [
+  { value: "formando", sub: "Quem frequenta a turma" },
+  { value: "formador", sub: "Quem lecciona" },
+  { value: "empresa", sub: "Empresa patronal" },
+];
+type Inquerito = { id: number; titulo: string; perguntas: Pergunta[]; publico?: PublicoInquerito };
+
+function rotuloPublico(p?: string) {
+  if (p === "formador") return "Formador";
+  if (p === "empresa") return "Empresa patronal";
+  return "Formando";
+}
 
 const tipoLabels: Record<PerguntaTipo, string> = {
   texto: "Texto livre",
@@ -979,6 +991,7 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
   const [selected, setSelected] = useState<number | null>(1);
   const [creating, setCreating] = useState(false);
   const [novoTitulo, setNovoTitulo] = useState("");
+  const [novoPublico, setNovoPublico] = useState<PublicoInquerito>("formando");
   const [editId, setEditId] = useState<number | null>(null);
   const [preview, setPreview] = useState<Inquerito | null>(null);
   const [apagar, setApagar] = useState<Inquerito | null>(null);
@@ -996,8 +1009,8 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
   function addInquerito() {
     if (!novoTitulo.trim()) return;
     const id = -Date.now();
-    setInqueritos(prev => [...prev, { id, titulo: novoTitulo.trim(), perguntas: [] }]);
-    setSelected(id); setCreating(false); setNovoTitulo("");
+    setInqueritos(prev => [...prev, { id, titulo: novoTitulo.trim(), perguntas: [], publico: novoPublico }]);
+    setSelected(id); setCreating(false); setNovoTitulo(""); setNovoPublico("formando");
   }
   function addPergunta(tipo: PerguntaTipo) {
     if (!selected) return;
@@ -1049,6 +1062,7 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
           <p className="text-sm font-semibold text-slate-700">Novo inquérito</p>
           <input value={novoTitulo} onChange={e => setNovoTitulo(e.target.value)} placeholder="Título do inquérito…"
             className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-400" />
+          <SearchSelect value={novoPublico} onChange={v => setNovoPublico(v as PublicoInquerito)} options={PUBLICOS} placeholder="Público-alvo" />
           <div className="flex gap-2">
             <button onClick={() => { setCreating(false); setNovoTitulo(""); }} className="flex-1 py-2 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-slate-50">Cancelar</button>
             <button onClick={addInquerito} className={`flex-1 py-2 ${accent.bg} text-white text-sm font-semibold rounded-lg hover:opacity-90`}>Criar</button>
@@ -1064,7 +1078,7 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
               <button type="button" onClick={() => setSelected(i.id)} className="w-full text-left p-3 pr-12">
                 <p className={`text-xs font-bold mb-1 ${selected === i.id ? accent.text : "text-slate-400"}`}>INQUÉRITO</p>
                 <p className="text-sm font-semibold text-slate-800 leading-snug">{i.titulo}</p>
-                <p className="text-xs text-slate-400 mt-1">{i.perguntas.length} perguntas</p>
+                <p className="text-xs text-slate-400 mt-1">{rotuloPublico(i.publico)} · {i.perguntas.length} perguntas</p>
               </button>
               <div className="absolute top-2 right-2">
                 <ActBtn icon={I.trash} label="Eliminar inquérito" color="red" onClick={() => setApagar(i)} />
@@ -1106,6 +1120,13 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
                 <div>
                   <p className={`text-xs font-bold ${accent.text}`}>{isGold ? "GOLD" : "FINANCIADA"}</p>
                   <p className="text-sm font-bold text-slate-800 mt-0.5">{inq.titulo}</p>
+                  <div className="mt-2 max-w-xs">
+                    <SearchSelect
+                      value={inq.publico ?? "formando"}
+                      onChange={v => setInqueritos(prev => prev.map(item => item.id === inq.id ? { ...item, publico: v as PublicoInquerito } : item))}
+                      options={PUBLICOS}
+                    />
+                  </div>
                 </div>
                 <div className="flex gap-2 flex-shrink-0 flex-wrap justify-end">
                   <button type="button" onClick={() => setPreview(inq)} className="text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 inline-flex items-center gap-1">{I.eye} Pré-visualizar</button>

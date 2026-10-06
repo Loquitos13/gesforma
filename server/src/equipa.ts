@@ -132,11 +132,10 @@ async function statsFor(db: Db, comercialId: string, regime: "gold" | "fin") {
   const pagos = (byLead["Pago"]?.n ?? 0) + (byLead["Formando"]?.n ?? 0);
   const propostasTotal = props.rows.reduce((a, r) => a + r.n, 0);
   const propostasAceites = byProp["Aceite"]?.n ?? 0;
-  const meta = await db.query<{ meta_pct: unknown }>(
-    "SELECT meta_pct FROM comercial_objetivos WHERE comercial_id = $1",
+  const meta = await db.query<{ meta_pct: unknown; meta_leads: unknown; meta_propostas: unknown; telefone: string; nota: string }>(
+    "SELECT meta_pct, meta_leads, meta_propostas, telefone, nota FROM comercial_objetivos WHERE comercial_id = $1",
     [comercialId],
   );
-  const metaPct = meta.rows[0] ? Number(meta.rows[0].meta_pct) : null;
   const pipeline = props.rows.filter(r => r.estado === "Enviada" || r.estado === "Negociação").reduce((a, r) => a + r.valor, 0);
   const receita = (byLead["Pago"]?.valor ?? 0) + (byLead["Formando"]?.valor ?? 0);
   return {
@@ -148,7 +147,11 @@ async function statsFor(db: Db, comercialId: string, regime: "gold" | "fin") {
     propostas: propostasTotal,
     propostasAceites,
     sucessoPropostas: propostasTotal ? Math.round((propostasAceites / propostasTotal) * 100) : 0,
-    metaPct,
+    metaPct: meta.rows[0] ? Number(meta.rows[0].meta_pct) : null,
+    metaLeads: meta.rows[0] ? Number(meta.rows[0].meta_leads) : 0,
+    metaPropostas: meta.rows[0] ? Number(meta.rows[0].meta_propostas) : 0,
+    telefone: String(meta.rows[0]?.telefone ?? ""),
+    nota: String(meta.rows[0]?.nota ?? ""),
     propostasRecusadas: byProp["Recusada"]?.n ?? 0,
     pipeline,
     receita,
@@ -321,17 +324,57 @@ export function registerEquipaRoutes(
 
   app.put("/v1/equipa/:id/objetivo", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    if (req.actor!.role !== "admin") return reply.code(403).send({ error: "Só um administrador define o objectivo." });
+    if (req.actor!.role !== "admin" && req.actor!.role !== "secretaria") {
+      return reply.code(403).send({ error: "Sem permissão para definir o objectivo." });
+    }
     const comercialId = (req.params as { id: string }).id;
-    const parsed = z.object({ metaPct: z.number().min(0).max(100) }).safeParse(req.body);
+    const parsed = z.object({
+      metaPct: z.number().min(0).max(100).optional(),
+      metaLeads: z.number().int().min(0).max(100000).optional(),
+      metaPropostas: z.number().int().min(0).max(100000).optional(),
+    }).safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     await db.query(
-      `INSERT INTO comercial_objetivos (comercial_id, meta_pct, updated_at)
-       VALUES ($1, $2, now())
-       ON CONFLICT (comercial_id) DO UPDATE SET meta_pct = EXCLUDED.meta_pct, updated_at = now()`,
-      [comercialId, parsed.data.metaPct],
+      `INSERT INTO comercial_objetivos (comercial_id, meta_pct, meta_leads, meta_propostas, updated_at)
+       VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT (comercial_id) DO UPDATE SET
+         meta_pct = COALESCE($2, comercial_objetivos.meta_pct),
+         meta_leads = COALESCE($3, comercial_objetivos.meta_leads),
+         meta_propostas = COALESCE($4, comercial_objetivos.meta_propostas),
+         updated_at = now()`,
+      [comercialId, parsed.data.metaPct ?? null, parsed.data.metaLeads ?? null, parsed.data.metaPropostas ?? null],
     );
-    await audit(db, req.actor!.id, "equipa.objetivo", "user", comercialId, req.ip, { metaPct: parsed.data.metaPct });
-    return { ok: true, metaPct: parsed.data.metaPct };
+    await audit(db, req.actor!.id, "equipa.objetivo", "user", comercialId, req.ip, parsed.data);
+    return { ok: true, ...parsed.data };
+  });
+
+  app.patch("/v1/equipa/:id/perfil", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (req.actor!.role !== "admin" && req.actor!.role !== "secretaria") {
+      return reply.code(403).send({ error: "Sem permissão para editar o perfil comercial." });
+    }
+    const comercialId = (req.params as { id: string }).id;
+    const parsed = z.object({
+      name: z.string().trim().min(2).max(120).optional(),
+      telefone: z.string().max(40).optional(),
+      nota: z.string().max(2000).optional(),
+    }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    const exists = await db.query<{ id: string }>("SELECT id FROM users WHERE id = $1 AND role = 'comercial'", [comercialId]);
+    if (!exists.rows[0]) return reply.code(404).send({ error: "comercial inexistente" });
+    if (parsed.data.name) {
+      await db.query("UPDATE users SET name = $2 WHERE id = $1", [comercialId, parsed.data.name]);
+    }
+    await db.query(
+      `INSERT INTO comercial_objetivos (comercial_id, telefone, nota, updated_at)
+       VALUES ($1, $2, $3, now())
+       ON CONFLICT (comercial_id) DO UPDATE SET
+         telefone = COALESCE($2, comercial_objetivos.telefone),
+         nota = COALESCE($3, comercial_objetivos.nota),
+         updated_at = now()`,
+      [comercialId, parsed.data.telefone ?? null, parsed.data.nota ?? null],
+    );
+    await audit(db, req.actor!.id, "equipa.perfil", "user", comercialId, req.ip);
+    return { ok: true };
   });
 }

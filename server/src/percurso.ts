@@ -1,6 +1,6 @@
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
-import { COMPROVATIVO, docsCompletos, docsDoCurso, faltaValidarPreinscricao } from "./docsCurso.js";
+import { docsCompletos, docsDoCurso, faltaValidarPreinscricao } from "./docsCurso.js";
 import { documentosUrl, ensureDocsToken, listarDocsLead } from "./docsLink.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
 import { relocateDriveFile } from "./googleDrive.js";
@@ -190,6 +190,27 @@ export async function recomendacoesOutroHorario(
   return out;
 }
 
+/** Mesmo curso, local e horário, com início posterior ao pedido. */
+export async function turmasParaBreve(
+  db: Db,
+  curso: string,
+  regime: "gold" | "fin",
+  pedido: PedidoTurma | undefined,
+  exceptoIds: number[],
+) {
+  if (!pedidoUtil(pedido?.local) || !pedidoUtil(pedido?.horario)) return [];
+  const hoje = hojeIso();
+  const sitio = norm(pedido?.local ?? "");
+  const hora = norm(pedido?.horario ?? "");
+  const fora = new Set(exceptoIds);
+  const inicio = isoData(pedido?.inicio ?? "");
+  const lista = (await turmasRegime(db, regime, curso))
+    .filter(t => t.livres > 0 && !fora.has(t.id) && norm(t.local) === sitio && norm(t.horario) === hora && t.dataInicio >= hoje)
+    .filter(t => (inicio ? t.dataInicio > inicio : true))
+    .sort((a, b) => a.dataInicio.localeCompare(b.dataInicio) || a.nome.localeCompare(b.nome, "pt"));
+  return lista.slice(0, 3);
+}
+
 /** Próximas turmas do mesmo curso e do mesmo local, no mesmo horário ou noutro. */
 export async function sugestoesTurmaCheia(
   db: Db,
@@ -260,7 +281,10 @@ export async function escolherTurmaPublica(db: Db, leadId: number, turmaId: numb
   };
   const oferecidas = await turmasParaEscolha(db, String(row.curso), regime, pedido);
   const recomendadas = await recomendacoesOutroHorario(db, String(row.curso), regime, pedido, oferecidas.map(t => t.id));
-  const escolhida = oferecidas.find(t => t.id === turmaId) ?? recomendadas.find(t => t.id === turmaId);
+  const breves = await turmasParaBreve(db, String(row.curso), regime, pedido, [...oferecidas, ...recomendadas].map(t => t.id));
+  const escolhida = oferecidas.find(t => t.id === turmaId)
+    ?? recomendadas.find(t => t.id === turmaId)
+    ?? breves.find(t => t.id === turmaId);
   if (!escolhida) throw new PercursoErro("Essa turma não tem vaga ou não é deste curso.");
   const preco = regime === "gold" ? await precoParaOferta(db, String(row.curso), escolhida.local, escolhida.horario) : null;
   await db.query(
@@ -301,10 +325,6 @@ export async function concluirPercurso(db: Db, leadId: number) {
     throw new PercursoErro("Ainda faltam documentos obrigatórios.");
   }
   if (!row.turma_escolhida_id) throw new PercursoErro("Escolha o cronograma antes de concluir.");
-  const precisa = regime === "gold" && Number(row.preco) > 0;
-  if (precisa && !entregueAceite(by.get(COMPROVATIVO.id)?.estado)) {
-    throw new PercursoErro("O comprovativo de pagamento é obrigatório.");
-  }
   await db.query(
     "UPDATE preinscricoes SET percurso_concluido_em = COALESCE(percurso_concluido_em, now()) WHERE id = $1",
     [leadId],
@@ -479,11 +499,8 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
       };
     }
   }
-  const pagPago = Boolean(pagamento && /pago/i.test(pagamento.estado));
-  const precisaPagamento = regime === "gold" && Number(lead.preco) > 0 && !pagPago;
   const by = new Map(docs.map(d => [d.tipo, d]));
   const obrigatoriosOk = pedidos.filter(d => d.required).every(d => entregueAceite(by.get(d.id)?.estado));
-  const compOk = !precisaPagamento || entregueAceite(by.get(COMPROVATIVO.id)?.estado);
   const turmaId = Number(lead.turma_escolhida_id || 0);
   const criterios = {
     local: String(lead.local ?? ""),
@@ -492,15 +509,15 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
   };
   const turmas = await turmasParaEscolha(db, curso, regime, criterios);
   const recomendadas = await recomendacoesOutroHorario(db, curso, regime, criterios, turmas.map(t => t.id));
+  const breves = await turmasParaBreve(db, curso, regime, criterios, [...turmas, ...recomendadas].map(t => t.id));
   const turmaEscolhida = turmaId
     ? turmas.find(t => t.id === turmaId) ?? await turmaPorId(db, regime, turmaId)
     : null;
   const recusados = docs.filter(d => d.estado === "recusado");
   const encerrada = Boolean(lead.validada_em);
-  const percursoConcluido = Boolean(lead.percurso_concluido_em) && obrigatoriosOk && Boolean(turmaEscolhida) && compOk && recusados.length === 0;
-  let passo: 1 | 2 | 3 = 1;
-  if (obrigatoriosOk && turmaEscolhida) passo = 3;
-  else if (obrigatoriosOk) passo = 2;
+  const percursoConcluido = Boolean(lead.percurso_concluido_em) && obrigatoriosOk && Boolean(turmaEscolhida) && recusados.length === 0;
+  let passo: 1 | 2 = 1;
+  if (obrigatoriosOk) passo = 2;
   return {
     nome: `${lead.nome ?? ""} ${lead.apelido ?? ""}`.trim(),
     curso,
@@ -513,13 +530,14 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
     docsCompletos: ok,
     emFalta: emFalta.map(d => d.label),
     pagamento,
-    precisaPagamento,
+    precisaPagamento: false,
     encerrada,
     correcao: !encerrada && recusados.length > 0,
     passo,
     percursoConcluido,
     turmas,
     recomendadas,
+    breves,
     turmaEscolhida,
     criterios: {
       local: pedidoUtil(criterios.local) ? criterios.local : "",

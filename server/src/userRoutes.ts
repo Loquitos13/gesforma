@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Db } from "./db/pool.js";
+import { mensagemPalavraPasse, palavraPasseValida } from "../../src/passwordPolicy.js";
 import { hashPassword, isEmail, normalizeEmail } from "./security.js";
 
 const ROLES = ["admin", "secretaria", "comercial", "financiada", "formador"] as const;
@@ -10,9 +11,10 @@ export type StaffRole = (typeof ROLES)[number];
 const createSchema = z.object({
   name: z.string().trim().min(2).max(120),
   email: z.string().max(254),
-  password: z.string().min(8).max(200),
+  password: z.string().min(1).max(200),
   role: z.enum(ROLES).default("secretaria"),
   active: z.boolean().optional().default(true),
+  mustChangePassword: z.boolean().optional().default(false),
 });
 
 const patchSchema = z.object({
@@ -23,7 +25,7 @@ const patchSchema = z.object({
 }).refine(v => Object.keys(v).length > 0, { message: "vazio" });
 
 const passwordSchema = z.object({
-  password: z.string().min(8).max(200),
+  password: z.string().min(1).max(200),
   revokeSessions: z.boolean().optional(),
 });
 
@@ -118,11 +120,14 @@ export function registerUserRoutes(
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const email = normalizeEmail(parsed.data.email);
     if (!isEmail(email)) return reply.code(400).send({ error: "email inválido" });
+    if (!palavraPasseValida(parsed.data.password)) {
+      return reply.code(400).send({ error: mensagemPalavraPasse(parsed.data.password) });
+    }
     const id = randomUUID();
     try {
       await db.query(
-        "INSERT INTO users (id, name, email, password_hash, role, active) VALUES ($1, $2, $3, $4, $5, $6)",
-        [id, parsed.data.name, email, await hashPassword(parsed.data.password), parsed.data.role, parsed.data.active ?? true],
+        "INSERT INTO users (id, name, email, password_hash, role, active, must_change_password) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        [id, parsed.data.name, email, await hashPassword(parsed.data.password), parsed.data.role, parsed.data.active ?? true, parsed.data.mustChangePassword],
       );
     } catch (err) {
       if (isUniqueViolation(err)) return reply.code(409).send({ error: "já existe um utilizador com este email" });
@@ -189,6 +194,9 @@ export function registerUserRoutes(
     const id = (req.params as { id: string }).id;
     const parsed = passwordSchema.safeParse(req.body);
     if (!parsed.success || !id) return reply.code(400).send({ error: "pedido inválido" });
+    if (!palavraPasseValida(parsed.data.password)) {
+      return reply.code(400).send({ error: mensagemPalavraPasse(parsed.data.password) });
+    }
     const exists = await db.query<{ id: string }>("SELECT id FROM users WHERE id = $1", [id]);
     if (!exists.rows[0]) return reply.code(404).send({ error: "utilizador não encontrado" });
     await db.query("UPDATE users SET password_hash = $2 WHERE id = $1", [id, await hashPassword(parsed.data.password)]);

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  apiCrmComerciais, apiCrmDuplicados, apiCrmEtiquetas, apiCrmExport, apiCrmLeadNota, apiCrmLeads, apiCrmLote,
+  apiCrmComerciais, apiCrmDuplicados, apiCrmEtiquetaCreate, apiCrmEtiquetas, apiCrmExport, apiCrmLeadNota, apiCrmLeads, apiCrmLote,
   apiPublicOferta,
   type CrmDir, type CrmEtiqueta, type CrmFila, type CrmLead, type CrmListQuery, type CrmListResult, type CrmSort,
 } from "./api";
+import { criarComercialRapido } from "./criarComercialRapido";
 import { ClienteFicha } from "./ClienteFicha";
 import { entradaChip, etiquetaChip, leadMarkStyle, meioChip } from "./crmUi";
-import { AppModal, ViewFilters, cursosGoldOpts, locaisOpts } from "./FormKit";
+import { AppModal, SearchSelect, ViewFilters, cursosGoldOpts, locaisOpts } from "./FormKit";
 import { OptionSelect } from "./OptionSelect";
 import { tempNumericId, useLists, type Preinscricao } from "./ListsContext";
 import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./SecretaryUX";
@@ -350,6 +351,25 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
     }
   }
 
+  async function acrescentarComercial(escolher: (id: string) => void) {
+    const c = await criarComercialRapido();
+    if (!c) return;
+    setComerciais(xs => xs.some(x => x.id === c.id) ? xs : [...xs, c]);
+    escolher(c.id);
+  }
+
+  async function acrescentarEtiqueta() {
+    const nome = window.prompt("Nome da etiqueta");
+    if (!nome?.trim()) return;
+    try {
+      const r = await apiCrmEtiquetaCreate({ nome: nome.trim(), cor: "#d97706" });
+      setEtiquetas(xs => [...xs, r.etiqueta]);
+      setLoteEtiqueta(String(r.etiqueta.id));
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível criar a etiqueta.");
+    }
+  }
+
   const fichaIdx = ficha ? items.findIndex(x => x.id === ficha.id) : -1;
 
   async function logContacto(item: CrmLead, canal: "Telefone" | "WhatsApp") {
@@ -465,24 +485,41 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
             <label className="text-[10px] font-semibold uppercase text-slate-400">Até
               <input type="date" value={ate} onChange={e => { setAte(e.target.value); setPage(1); }} className="mt-1 block text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white" />
             </label>
-            <select value={sort} onChange={e => { const next = e.target.value as CrmSort; setSort(next); setDir(DIR_INICIAL[next]); setPage(1); }}
-              aria-label="Ordenar por"
-              className="text-xs border border-slate-200 rounded-lg px-2 py-2 bg-white">
-              {COLUNAS.filter(c => c.sort).map(c => <option key={c.sort} value={c.sort}>{c.label}</option>)}
-            </select>
-            {comerciais.length > 0 && (
-              <select value={comercialFiltro} onChange={e => { setComercialFiltro(e.target.value); setPage(1); }}
-                className="text-xs border border-slate-200 rounded-lg px-2 py-2 bg-white">
-                <option value="">Todos os comerciais</option>
-                <option value="eu">As minhas</option>
-                {comerciais.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            )}
+            <div className="min-w-[10rem]">
+              <SearchSelect
+                value={sort}
+                placeholder="Ordenar por…"
+                options={COLUNAS.filter(c => c.sort).map(c => ({ value: c.sort!, label: c.label }))}
+                onChange={v => {
+                  const next = v as CrmSort;
+                  if (!(next in DIR_INICIAL)) return;
+                  setSort(next);
+                  setDir(DIR_INICIAL[next]);
+                  setPage(1);
+                }}
+              />
+            </div>
+            <div className="min-w-[12rem]">
+              <SearchSelect
+                value={comercialFiltro}
+                allowEmpty
+                emptyLabel="Todos os comerciais"
+                placeholder="Pesquisar comercial…"
+                options={[{ value: "eu", label: "As minhas" }, ...comerciais.map(c => ({ value: c.id, label: c.name }))]}
+                onChange={v => { setComercialFiltro(v); setPage(1); }}
+                onAdd={() => void acrescentarComercial(id => { setComercialFiltro(id); setPage(1); })}
+                addLabel="Novo comercial"
+              />
+            </div>
             {(viewMode === "table" || viewMode === "hoje") && (
-              <select value={perPage} onChange={e => { setPerPage(Number(e.target.value)); setPage(1); }}
-                className="text-xs border border-slate-200 rounded-lg px-2 py-2 bg-white">
-                {[25, 50, 100].map(n => <option key={n} value={n}>{n} / pág.</option>)}
-              </select>
+              <div className="w-28">
+                <SearchSelect
+                  value={String(perPage)}
+                  placeholder="Por página…"
+                  options={[25, 50, 100].map(n => ({ value: String(n), label: `${n} / pág.` }))}
+                  onChange={v => { setPerPage(Number(v)); setPage(1); }}
+                />
+              </div>
             )}
           </div>
           <ViewFilters
@@ -503,9 +540,14 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
             <p className="text-xs font-semibold mr-2">{sel.size} seleccionados</p>
             <button type="button" onClick={() => void lote("contactar")} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 hover:bg-amber-100">Marcar contactados</button>
             <span className="flex items-center gap-1">
-              <select value={loteEstado} onChange={e => setLoteEstado(e.target.value)} className="text-xs rounded-lg bg-white text-slate-800 px-2 py-1 border border-slate-200">
-                {CRM_ESTADOS.filter(e => e !== "Formando").map(e => <option key={e}>{e}</option>)}
-              </select>
+              <div className="w-40">
+                <SearchSelect
+                  value={loteEstado}
+                  placeholder="Etapa…"
+                  options={CRM_ESTADOS.filter(e => e !== "Formando").map(e => ({ value: e }))}
+                  onChange={setLoteEstado}
+                />
+              </div>
               <button type="button" onClick={() => void lote("estado", { estado: loteEstado })} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 hover:bg-amber-100">Passar etapa</button>
             </span>
             <span className="flex items-center gap-1">
@@ -513,24 +555,36 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
               <button type="button" disabled={!loteData} onClick={() => void lote("seguimento", { proximoContacto: loteData.replace("T", " ").slice(0, 16) })} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 hover:bg-amber-100 disabled:opacity-40">Agendar</button>
             </span>
             <button type="button" onClick={() => void lote("adiar", { dias: 2 })} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 hover:bg-amber-100">Adiar 2 d</button>
-            {comerciais.length > 0 && (
-              <span className="flex items-center gap-1">
-                <select value={loteComercial} onChange={e => setLoteComercial(e.target.value)} className="text-xs rounded-lg bg-white px-2 py-1 border">
-                  <option value="">Comercial…</option>
-                  {comerciais.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                <button type="button" disabled={!loteComercial} onClick={() => void lote("atribuir", { comercialId: loteComercial })} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 disabled:opacity-40">Atribuir</button>
-              </span>
-            )}
-            {etiquetas.length > 0 && (
-              <span className="flex items-center gap-1">
-                <select value={loteEtiqueta} onChange={e => setLoteEtiqueta(e.target.value)} className="text-xs rounded-lg bg-white px-2 py-1 border">
-                  <option value="">Etiqueta…</option>
-                  {etiquetas.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
-                </select>
-                <button type="button" disabled={!loteEtiqueta} onClick={() => void lote("etiqueta", { etiquetaId: Number(loteEtiqueta) })} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 disabled:opacity-40">Marcar</button>
-              </span>
-            )}
+            <span className="flex items-center gap-1">
+              <div className="w-44">
+                <SearchSelect
+                  value={loteComercial}
+                  allowEmpty
+                  emptyLabel="Comercial…"
+                  placeholder="Pesquisar comercial…"
+                  options={comerciais.map(c => ({ value: c.id, label: c.name }))}
+                  onChange={setLoteComercial}
+                  onAdd={() => void acrescentarComercial(setLoteComercial)}
+                  addLabel="Novo comercial"
+                />
+              </div>
+              <button type="button" disabled={!loteComercial} onClick={() => void lote("atribuir", { comercialId: loteComercial })} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 disabled:opacity-40">Atribuir</button>
+            </span>
+            <span className="flex items-center gap-1">
+              <div className="w-40">
+                <SearchSelect
+                  value={loteEtiqueta}
+                  allowEmpty
+                  emptyLabel="Etiqueta…"
+                  placeholder="Pesquisar etiqueta…"
+                  options={etiquetas.map(e => ({ value: String(e.id), label: e.nome }))}
+                  onChange={setLoteEtiqueta}
+                  onAdd={() => void acrescentarEtiqueta()}
+                  addLabel="Nova etiqueta"
+                />
+              </div>
+              <button type="button" disabled={!loteEtiqueta} onClick={() => void lote("etiqueta", { etiquetaId: Number(loteEtiqueta) })} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-amber-200 disabled:opacity-40">Marcar</button>
+            </span>
             <button type="button" onClick={() => setSel(new Set())} className="ml-auto text-xs text-slate-500 hover:text-slate-800">Limpar</button>
           </div>
         )}

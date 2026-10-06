@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import postgres from "postgres";
@@ -5,6 +6,19 @@ import { PGlite } from "@electric-sql/pglite";
 import { config } from "../config.js";
 
 export type QueryResult<T> = { rows: T[] };
+
+export type DbActor = { id: string; role: string };
+
+const actorStore = new AsyncLocalStorage<DbActor>();
+
+/** Define o perfil da linha para o resto deste pedido. Sem perfil, a consulta corre como sistema. */
+export function enterActor(actor: DbActor | null) {
+  actorStore.enterWith(actor && actor.role ? actor : { id: "", role: "system" });
+}
+
+function actorAtual(): DbActor {
+  return actorStore.getStore() ?? { id: "", role: "system" };
+}
 
 export interface Db {
   driver: "postgres" | "pglite";
@@ -29,7 +43,12 @@ export async function createDb(): Promise<Db> {
     return {
       driver: "postgres",
       async query<T extends Record<string, unknown>>(text: string, params: unknown[] = []) {
-        const rows = await sql.unsafe(text, params as never[]);
+        const actor = actorAtual();
+        const rows = await sql.begin(async (tx) => {
+          await tx.unsafe("SELECT set_config('app.role', $1, true)", [actor.role || "system"]);
+          await tx.unsafe("SELECT set_config('app.user_id', $1, true)", [actor.id || ""]);
+          return tx.unsafe(text, params as never[]);
+        });
         return { rows: [...rows] as unknown as T[] };
       },
       async close() {
@@ -41,14 +60,34 @@ export async function createDb(): Promise<Db> {
   mkdirSync(dirname(config.pgliteDir), { recursive: true });
   const client = new PGlite(config.pgliteDir);
   await client.waitReady;
+  let tail: Promise<unknown> = Promise.resolve();
+
+  function exclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const run = tail.then(fn, fn);
+    tail = run.then(() => undefined, () => undefined);
+    return run;
+  }
+
   return {
     driver: "pglite",
     async query<T extends Record<string, unknown>>(text: string, params: unknown[] = []) {
-      const mapped = params.map(p => (
-        p !== null && typeof p === "object" && !(p instanceof Date) ? JSON.stringify(p) : p
-      ));
-      const res = await client.query<T>(text, mapped);
-      return { rows: res.rows };
+      const actor = actorAtual();
+      return exclusive(async () => {
+        const mapped = params.map(p => (
+          p !== null && typeof p === "object" && !(p instanceof Date) ? JSON.stringify(p) : p
+        ));
+        try {
+          await client.exec("BEGIN");
+          await client.query("SELECT set_config('app.role', $1, true)", [actor.role || "system"]);
+          await client.query("SELECT set_config('app.user_id', $1, true)", [actor.id || ""]);
+          const res = await client.query<T>(text, mapped);
+          await client.exec("COMMIT");
+          return { rows: res.rows };
+        } catch (err) {
+          await client.exec("ROLLBACK").catch(() => undefined);
+          throw err;
+        }
+      });
     },
     async close() {
       await client.close();

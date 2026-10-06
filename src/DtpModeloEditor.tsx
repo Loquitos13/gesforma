@@ -7,6 +7,8 @@ import {
   type DtpModeloResposta,
   type Regime,
 } from "./api";
+import { useCatalogList } from "./CatalogsContext";
+import { SearchSelect } from "./FormKit";
 
 type ExtraDraft = { id: string; fase: DtpFase; label: string; fonte: string; hint: string; bloqueante: boolean; ambito: "turma" | "formando" | "formador" };
 
@@ -16,13 +18,25 @@ const iCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-whi
  * Estrutura do dossiê técnico-pedagógico deste curso. A base vem do regime; os documentos
  * que são norma (DGERT e, na financiada, execução do financiador) ficam travados.
  */
-export function DtpModeloEditor({ accent, cursoId }: { accent: Regime; cursoId?: number }) {
+type EntidadeDtp = { id: number; nome: string; excluidos?: string[]; extra?: ExtraDraft[] };
+
+export function DtpModeloEditor({
+  accent, cursoId, entidadeNome = "", onEntidade,
+}: {
+  accent: Regime;
+  cursoId?: number;
+  entidadeNome?: string;
+  onEntidade?: (nome: string) => void;
+}) {
   const [dados, setDados] = useState<DtpModeloResposta | null>(null);
   const [estado, setEstado] = useState<"loading" | "ready" | "offline">("loading");
   const [excluidos, setExcluidos] = useState<Set<string>>(new Set());
   const [extra, setExtra] = useState<ExtraDraft[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [entidades, setEntidades] = useCatalogList<EntidadeDtp>("entidades", "gold", []);
+  const [novaEntidade, setNovaEntidade] = useState(false);
+  const [nomeEntidade, setNomeEntidade] = useState("");
 
   const gold = accent === "gold";
   const acento = gold
@@ -118,8 +132,65 @@ export function DtpModeloEditor({ accent, cursoId }: { accent: Regime; cursoId?:
     setMsg("");
   }
 
+  function estruturaActual() {
+    return {
+      excluidos: [...excluidos],
+      extra: extra.filter(x => x.label.trim()),
+    };
+  }
+
+  function aplicarEntidade(nome: string) {
+    onEntidade?.(nome);
+    const ent = entidades.find(e => e.nome === nome);
+    if (!ent) return;
+    setExcluidos(new Set(ent.excluidos ?? []));
+    setExtra((ent.extra ?? []).map(x => ({ ...x, bloqueante: Boolean(x.bloqueante), ambito: x.ambito ?? "turma" })));
+    setMsg(`Estrutura de ${nome} aplicada a este curso. Grave para a ficar nas turmas.`);
+  }
+
+  function criarEntidade() {
+    const nome = nomeEntidade.trim();
+    if (!nome) return;
+    const id = -Date.now();
+    setEntidades(prev => [...prev, { id, nome, ...estruturaActual() }]);
+    onEntidade?.(nome);
+    setNovaEntidade(false);
+    setNomeEntidade("");
+  }
+
+  function guardarNaEntidade() {
+    const ent = entidades.find(e => e.nome === entidadeNome);
+    if (!ent) return;
+    setEntidades(prev => prev.map(e => e.id === ent.id ? { ...e, ...estruturaActual() } : e));
+    setMsg(`Estrutura gravada na entidade ${ent.nome}.`);
+  }
+
   return (
     <div className="space-y-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-800">Entidade responsável</p>
+          <p className="text-xs text-slate-500 mt-0.5">A estrutura pode viver na entidade e ser aplicada a este curso. A norma do financiador continua travada.</p>
+        </div>
+        <SearchSelect
+          value={entidadeNome}
+          onChange={aplicarEntidade}
+          options={entidades.map(e => ({ value: e.nome }))}
+          placeholder="Pesquisar entidade…"
+          allowEmpty
+          onAdd={() => { setNomeEntidade(""); setNovaEntidade(true); }}
+          addLabel="Nova entidade responsável"
+        />
+        {novaEntidade && (
+          <div className="flex gap-2">
+            <input className={iCls} value={nomeEntidade} placeholder="Nome da entidade" onChange={e => setNomeEntidade(e.target.value)} />
+            <button type="button" className="px-3 py-2 text-xs font-semibold rounded-lg bg-slate-800 text-white" onClick={criarEntidade}>Criar</button>
+          </div>
+        )}
+        {entidadeNome && (
+          <button type="button" className="text-xs font-semibold text-slate-600 underline" onClick={guardarNaEntidade}>Guardar a estrutura actual nesta entidade</button>
+        )}
+      </div>
       <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-2">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div>
@@ -214,15 +285,15 @@ export function DtpModeloEditor({ accent, cursoId }: { accent: Regime; cursoId?:
                     />
                     Bloqueia o fecho da turma
                   </label>
-                  <select
-                    className={iCls}
+                  <SearchSelect
                     value={x.ambito ?? "turma"}
-                    onChange={e => setExtra(prev => prev.map(y => (y === x ? { ...y, ambito: e.target.value as ExtraDraft["ambito"] } : y)))}
-                  >
-                    <option value="turma">Ficheiro da turma (dossiê)</option>
-                    <option value="formando">Um por cada formando</option>
-                    <option value="formador">No perfil do formador</option>
-                  </select>
+                    onChange={v => setExtra(prev => prev.map(y => (y === x ? { ...y, ambito: v as ExtraDraft["ambito"] } : y)))}
+                    options={[
+                      { value: "turma", sub: "Ficheiro da turma" },
+                      { value: "formando", sub: "Um por cada formando" },
+                      { value: "formador", sub: "No perfil do formador" },
+                    ]}
+                  />
                 </div>
                 <button
                   type="button"

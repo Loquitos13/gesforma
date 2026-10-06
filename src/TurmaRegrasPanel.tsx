@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   apiAplicarTurmaRegras, apiCreateTurmaRegra, apiDeleteTurmaRegra, apiTurmaRegras, type TurmaRegra,
 } from "./api";
+import { SearchSelect } from "./FormKit";
 import { persist, toastOk } from "./toastBus";
 
 const inp = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700";
@@ -82,19 +83,19 @@ export function TurmaRegrasPanel({
       {open && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-slate-100">
           <label className="text-xs font-semibold text-slate-500">Curso
-            <select className={`${inp} mt-1`} value={curso} onChange={e => setCurso(e.target.value)}>
-              {cursos.map(c => <option key={c}>{c}</option>)}
-            </select>
+            <div className="mt-1">
+              <SearchSelect value={curso} onChange={setCurso} options={cursos.map(value => ({ value }))} placeholder="Pesquisar curso…" onAdd={() => { const nome = window.prompt("Nome do curso"); if (nome?.trim()) setCurso(nome.trim()); }} addLabel="Novo curso" />
+            </div>
           </label>
           <label className="text-xs font-semibold text-slate-500">Local
-            <select className={`${inp} mt-1`} value={local} onChange={e => setLocal(e.target.value)}>
-              {locais.map(c => <option key={c}>{c}</option>)}
-            </select>
+            <div className="mt-1">
+              <SearchSelect value={local} onChange={setLocal} options={locais.map(value => ({ value }))} placeholder="Pesquisar local…" onAdd={() => { const nome = window.prompt("Nome do local"); if (nome?.trim()) setLocal(nome.trim()); }} addLabel="Novo local" />
+            </div>
           </label>
           <label className="text-xs font-semibold text-slate-500">Horário
-            <select className={`${inp} mt-1`} value={horario} onChange={e => setHorario(e.target.value)}>
-              {(horarios.length ? horarios : ["Pós Laboral", "Sábado manhã", "Laboral Manhã"]).map(c => <option key={c}>{c}</option>)}
-            </select>
+            <div className="mt-1">
+              <SearchSelect value={horario} onChange={setHorario} options={(horarios.length ? horarios : ["Pós Laboral", "Sábado manhã", "Laboral Manhã"]).map(value => ({ value }))} placeholder="Pesquisar horário…" onAdd={() => { const nome = window.prompt("Nome do horário"); if (nome?.trim()) setHorario(nome.trim()); }} addLabel="Novo horário" />
+            </div>
           </label>
           <label className="text-xs font-semibold text-slate-500">Próxima data
             <input type="date" className={`${inp} mt-1`} value={proxima} onChange={e => setProxima(e.target.value)} />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AppModal, ViewFilters, matchesFilter, uniqueOpts } from "./FormKit";
+import { AppModal, SearchSelect, ViewFilters, matchesFilter, uniqueOpts } from "./FormKit";
 import { useFormadores } from "./FormadoresContext";
 import { emptyFormador, formadoresDoRegime, type Formador, type FormadorRegime } from "./formadorModel";
 import { DisponibilidadeEditor } from "./DisponibilidadeEditor";
@@ -87,9 +87,9 @@ function TableToolbar({ search, onSearch, perPage, onPerPage }: { search: string
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-b border-slate-100">
       <div className="flex items-center gap-2">
         <span className="text-xs text-slate-500">Mostrar</span>
-        <select value={perPage} onChange={e => onPerPage(Number(e.target.value))} className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
-          {[10, 25, 50, 100].map(n => <option key={n}>{n}</option>)}
-        </select>
+        <div className="w-24">
+          <SearchSelect value={String(perPage)} onChange={v => onPerPage(Number(v) || 10)} options={[10, 25, 50, 100].map(n => ({ value: String(n) }))} />
+        </div>
         <span className="text-xs text-slate-500">por página</span>
       </div>
       <div className="relative">
@@ -399,7 +399,7 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
                 onChange={slots => setDraft({ ...draft, disponibilidade: slots })}
                 nota={draft.alocado
                   ? "Este formador já está numa turma. A disponibilidade fica fechada para ele. A secretaria e a administração continuam a poder ajustá-la."
-                  : "Laboral 9h–13h, pós-laboral 16h30–23h, sábado de manhã 9h–13h e sábado à tarde 14h–19h."}
+                  : "Laboral 9h a 13h, pós-laboral 16h30 a 23h, sábado de manhã 9h a 13h e sábado à tarde 14h a 19h."}
               />
             </Field>
             <Field label="Estado">

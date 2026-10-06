@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useCatalogs } from "./CatalogsContext";
+import { SearchSelect } from "./FormKit";
 import { useProgramaDoCurso } from "./cursoPrograma";
 import {
   addDays,
@@ -57,21 +58,13 @@ function HoraField({
     <label className="block">
       <span className="block text-[11px] font-semibold text-slate-500 mb-1">{label}</span>
       <div className="flex items-center gap-1">
-        <select
-          value={h}
-          onChange={e => onChange(`${e.target.value}:${m}`)}
-          className="flex-1 px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white"
-        >
-          {hours.map(x => <option key={x} value={x}>{x}h</option>)}
-        </select>
+        <div className="flex-1">
+          <SearchSelect value={h ?? "09"} onChange={v => onChange(`${v}:${m}`)} options={hours.map(x => ({ value: x, sub: "horas" }))} />
+        </div>
         <span className="text-slate-400 text-xs">:</span>
-        <select
-          value={m}
-          onChange={e => onChange(`${h}:${e.target.value}`)}
-          className="flex-1 px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white"
-        >
-          {mins.map(x => <option key={x} value={x}>{x}</option>)}
-        </select>
+        <div className="flex-1">
+          <SearchSelect value={m ?? "00"} onChange={v => onChange(`${h}:${v}`)} options={mins.map(x => ({ value: x, sub: "minutos" }))} />
+        </div>
       </div>
     </label>
   );

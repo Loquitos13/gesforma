@@ -8,7 +8,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { ingestEvent, processDueJobs, sendRuleTest } from "./automations.js";
 import { allowedOrigins, config, newToken, oauthRedirectUri, onVercel, siteOriginFromHeaders } from "./config.js";
-import type { Db } from "./db/pool.js";
+import { enterActor, type Db } from "./db/pool.js";
 import { registerCatalogRoutes } from "./catalogRoutes.js";
 import { registerDriveRoutes } from "./driveRoutes.js";
 import {
@@ -36,12 +36,14 @@ import { registerPedagogiaRoutes } from "./pedagogiaRoutes.js";
 import { registerEquipaRoutes } from "./equipa.js";
 import { registerCrmDiretorioRoutes } from "./crmDiretorio.js";
 import { registerUserRoutes } from "./userRoutes.js";
+import { mensagemPalavraPasse, palavraPasseValida } from "../../src/passwordPolicy.js";
 import { registerSmtpRoutes } from "./smtpRoutes.js";
 import {
   delayLabelFromSeconds,
   delaySecondsFromLabel,
   isEmail,
   normalizeEmail,
+  hashPassword,
   sha256,
   TRIGGER_MAP,
   verifyPassword,
@@ -50,7 +52,7 @@ import {
 declare module "fastify" {
   interface FastifyInstance { db: Db }
   interface FastifyRequest {
-    actor?: { id: string; email: string; name: string; role: string };
+    actor?: { id: string; email: string; name: string; role: string; mustChangePassword?: boolean };
   }
 }
 
@@ -166,17 +168,27 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   });
 
   app.addHook("preHandler", async (req) => {
+    enterActor(null);
     const raw = req.cookies[config.cookieName];
     if (!raw) return;
     const hash = sha256(raw);
-    const row = await db.query<{ id: string; email: string; name: string; role: string }>(
-      `SELECT u.id, u.email, u.name, u.role
+    const row = await db.query<{ id: string; email: string; name: string; role: string; must_change_password?: boolean }>(
+      `SELECT u.id, u.email, u.name, u.role, u.must_change_password
        FROM sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = $1 AND s.expires_at > now() AND u.active = true`,
       [hash],
     );
-    if (row.rows[0]) req.actor = row.rows[0];
+    const found = row.rows[0];
+    if (!found) return;
+    req.actor = {
+      id: found.id,
+      email: found.email,
+      name: found.name,
+      role: found.role,
+      mustChangePassword: Boolean(found.must_change_password),
+    };
+    enterActor({ id: found.id, role: found.role });
   });
 
   function requireAuth(req: FastifyRequest, reply: FastifyReply) {
@@ -199,7 +211,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
 
   async function createSession(
     reply: FastifyReply,
-    user: { id: string; email: string; name: string; role: string },
+    user: { id: string; email: string; name: string; role: string; mustChangePassword?: boolean },
     req: FastifyRequest,
     action = "auth.login",
   ) {
@@ -228,8 +240,8 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const email = normalizeEmail(parsed.data.email);
     if (!isEmail(email)) return reply.code(400).send({ error: "credenciais inválidas" });
-    const user = await db.query<{ id: string; password_hash: string; name: string; role: string; active: boolean }>(
-      "SELECT id, password_hash, name, role, active FROM users WHERE email = $1",
+    const user = await db.query<{ id: string; password_hash: string; name: string; role: string; active: boolean; must_change_password?: boolean }>(
+      "SELECT id, password_hash, name, role, active, must_change_password FROM users WHERE email = $1",
       [email],
     );
     const row = user.rows[0];
@@ -239,7 +251,27 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
       await audit(db, row?.id, "auth.login_failed", "user", row?.id, req.ip);
       return reply.code(401).send({ error: "credenciais inválidas" });
     }
-    return createSession(reply, { id: row.id, email, name: row.name, role: row.role }, req);
+    return createSession(reply, {
+      id: row.id, email, name: row.name, role: row.role, mustChangePassword: Boolean(row.must_change_password),
+    }, req);
+  });
+
+  app.post("/v1/auth/password", {
+    config: { rateLimit: { max: 8, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const parsed = z.object({ password: z.string().min(1).max(200) }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    if (!palavraPasseValida(parsed.data.password)) {
+      return reply.code(400).send({ error: mensagemPalavraPasse(parsed.data.password) });
+    }
+    await db.query(
+      "UPDATE users SET password_hash = $2, must_change_password = false WHERE id = $1",
+      [req.actor!.id, await hashPassword(parsed.data.password)],
+    );
+    await audit(db, req.actor!.id, "auth.password_self", "user", req.actor!.id, req.ip);
+    if (req.actor) req.actor.mustChangePassword = false;
+    return { ok: true, user: { ...req.actor, mustChangePassword: false } };
   });
 
   app.get("/v1/auth/google", async (req) => {

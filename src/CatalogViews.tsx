@@ -1466,9 +1466,7 @@ export function FinInscricoesView() {
           <Field label="Turma"><SearchSelect value={turma} onChange={setTurma} options={turmaOpts} placeholder="Só turmas ativas…" empty="Não há turmas ativas para esta UFCD." allowEmpty /></Field>
           <TurmaInscricaoHint optsLen={turmaOpts.length} curso={curso || undefined} />
           <Field label="Estado">
-            <select className={iCls} value={estadoInsc} onChange={e => setEstadoInsc(e.target.value)}>
-              {estados.filter(e => e !== "Todas").map(e => <option key={e}>{e}</option>)}
-            </select>
+            <SearchSelect value={estadoInsc} onChange={setEstadoInsc} options={estados.filter(e => e !== "Todas").map(value => ({ value }))} onAdd={() => { const nome = window.prompt("Novo estado"); if (nome?.trim()) setEstadoInsc(nome.trim()); }} addLabel="Novo estado" />
           </Field>
           {editing && (
             <div>

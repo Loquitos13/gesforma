@@ -1,9 +1,8 @@
+import { SearchSelect } from "./FormKit";
 import type { OfertaTurma, CursoOfertaSel } from "./oferta";
-import { OFERTA_VAZIA, fmtDataPt, ofertaFiltrada, uniqueVals } from "./oferta";
+import { OFERTA_VAZIA, ofertaFiltrada, uniqueVals } from "./oferta";
 
-const fieldPublic = "w-full bg-transparent border-0 border-b border-slate-300 px-0 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#1b2330] rounded-none";
 const labelPublic = "block text-[13px] text-slate-700 mb-1";
-const fieldCrm = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400";
 const labelCrm = "text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5";
 
 export function CursoOfertaCampos({
@@ -27,10 +26,8 @@ export function CursoOfertaCampos({
   const precoOferta = value.local && value.horario
     ? datas.find(t => t.preco != null)?.preco ?? null
     : null;
-  const field = variant === "crm" ? fieldCrm : fieldPublic;
   const Label = "label";
   const labelCls = variant === "crm" ? labelCrm : labelPublic;
-  const empty = variant === "crm" ? "text-slate-400" : "text-slate-400";
 
   function setCurso(curso: string) {
     onChange({ ...OFERTA_VAZIA, curso });
@@ -58,55 +55,50 @@ export function CursoOfertaCampos({
       )}
       <Label className={labelCls}>
         {variant === "crm" ? "Curso a que se quer inscrever" : <>Curso a que se quer inscrever</>}
-        <select
-          className={`${field} ${value.curso ? "text-slate-800" : empty}`}
+        <SearchSelect
           value={value.curso}
           disabled={cursoLocked}
-          onChange={e => setCurso(e.target.value)}
-        >
-          <option value="">Seleccione o curso</option>
-          {cursos.map(c => <option key={c.nome} value={c.nome}>{c.nome}</option>)}
-        </select>
+          onChange={setCurso}
+          options={cursos.map(c => ({ value: c.nome }))}
+          allowEmpty
+          placeholder="Seleccione o curso"
+        />
       </Label>
       <Label className={labelCls}>
         Local
-        <select
-          className={`${field} ${value.local ? "text-slate-800" : empty}`}
+        <SearchSelect
           value={value.local}
           disabled={!value.curso}
-          onChange={e => setLocal(e.target.value)}
-        >
-          <option value="">{value.curso ? "Seleccione o local" : "Escolha primeiro o curso"}</option>
-          {locais.map(l => <option key={l} value={l}>{l}</option>)}
-        </select>
+          onChange={setLocal}
+          options={locais.map(value => ({ value }))}
+          allowEmpty
+          placeholder={value.curso ? "Seleccione o local" : "Escolha primeiro o curso"}
+        />
       </Label>
       <Label className={labelCls}>
         Horário
-        <select
-          className={`${field} ${value.horario ? "text-slate-800" : empty}`}
+        <SearchSelect
           value={value.horario}
           disabled={!value.local}
-          onChange={e => setHorario(e.target.value)}
-        >
-          <option value="">{value.local ? "Seleccione o horário" : "Escolha primeiro o local"}</option>
-          {horarios.map(h => <option key={h} value={h}>{h}</option>)}
-        </select>
+          onChange={setHorario}
+          options={horarios.map(value => ({ value }))}
+          allowEmpty
+          placeholder={value.local ? "Seleccione o horário" : "Escolha primeiro o local"}
+        />
       </Label>
       <Label className={labelCls}>
         Data de início
-        <select
-          className={`${field} ${value.dataInicio ? "text-slate-800" : empty}`}
+        <SearchSelect
           value={value.dataInicio}
           disabled={!value.horario}
-          onChange={e => setData(e.target.value)}
-        >
-          <option value="">{value.horario ? "Seleccione a data" : "Escolha primeiro o horário"}</option>
-          {datas.map(t => (
-            <option key={t.turmaId} value={t.dataInicio}>
-              {fmtDataPt(t.dataInicio)} · {t.nome}{t.vagasLivres ? ` · ${t.vagasLivres} vagas restantes` : " · sem vagas restantes"}
-            </option>
-          ))}
-        </select>
+          onChange={setData}
+          allowEmpty
+          placeholder={value.horario ? "Seleccione a data" : "Escolha primeiro o horário"}
+          options={datas.map(t => ({
+            value: t.dataInicio,
+            sub: `${t.nome}${t.vagasLivres ? ` · ${t.vagasLivres} vagas restantes` : " · sem vagas restantes"}`,
+          }))}
+        />
       </Label>
       {value.curso && !locais.length && (
         <p className={variant === "crm" ? "text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2" : "sm:col-span-2 text-sm text-amber-800"}>

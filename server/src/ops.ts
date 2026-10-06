@@ -19,6 +19,16 @@ function asObj(v: unknown) {
   return {};
 }
 
+function mapaValores(v: unknown) {
+  const obj = asObj(v);
+  const out: Record<string, number> = {};
+  for (const [k, val] of Object.entries(obj)) {
+    const n = Number(val);
+    if (k.trim() && Number.isFinite(n)) out[k] = n;
+  }
+  return out;
+}
+
 function asArr(v: unknown) {
   if (Array.isArray(v)) return v;
   if (typeof v === "string") {
@@ -155,6 +165,7 @@ export function mapTurmaGold(r: Record<string, unknown>) {
     formadores: asArr(r.formadores).map(x => String(x)).filter(Boolean),
     horas: num(r.horas),
     custoHoraSala: num(r.custo_hora_sala),
+    valoresHoraFormador: mapaValores(r.valores_hora_formador),
     cronograma: asArr(r.cronograma),
     drivePastaId: String(r.drive_pasta_id ?? ""),
     driveDossieId: String(r.drive_dossie_id ?? ""),
@@ -178,6 +189,7 @@ export function mapTurmaFin(r: Record<string, unknown>) {
     formador: String(r.formador ?? ""),
     formadores: asArr(r.formadores).map(x => String(x)).filter(Boolean),
     activa: Boolean(r.activa),
+    valoresHoraFormador: mapaValores(r.valores_hora_formador),
     cronograma: asArr(r.cronograma),
     drivePastaId: String(r.drive_pasta_id ?? ""),
     driveDossieId: String(r.drive_dossie_id ?? ""),

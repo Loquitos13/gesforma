@@ -20,7 +20,8 @@ import {
   type CrmParceiro,
   type PropostaTemplate,
 } from "./api";
-import { AppModal } from "./FormKit";
+import { AppModal, SearchSelect } from "./FormKit";
+import { criarComercialRapido } from "./criarComercialRapido";
 import { EmptyHint } from "./SecretaryUX";
 
 const iCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white";
@@ -173,10 +174,22 @@ export function CrmParceirosView() {
           <Field label="Email"><input className={iCls} value={email} onChange={e => setEmail(e.target.value)} /></Field>
           <Field label="Tipo"><input className={iCls} value={tipo} onChange={e => setTipo(e.target.value)} placeholder="Empresa, câmara, associação…" /></Field>
           <Field label="Comercial">
-            <select className={iCls} value={comercialId} onChange={e => setComercialId(e.target.value)}>
-              <option value="">Sem comercial</option>
-              {comerciais.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <SearchSelect
+              value={comercialId}
+              allowEmpty
+              emptyLabel="Sem comercial"
+              placeholder="Pesquisar comercial…"
+              options={comerciais.map(c => ({ value: c.id, label: c.name }))}
+              onChange={setComercialId}
+              onAdd={() => {
+                void criarComercialRapido().then(c => {
+                  if (!c) return;
+                  setComerciais(xs => xs.some(x => x.id === c.id) ? xs : [...xs, c]);
+                  setComercialId(c.id);
+                });
+              }}
+              addLabel="Novo comercial"
+            />
           </Field>
           <Field label="Condições de retribuição"><textarea className={iCls + " min-h-[80px]"} value={retribuicao} onChange={e => setRetribuicao(e.target.value)} placeholder="Percentagem, valor por formando, prazo de pagamento…" /></Field>
           <button type="button" disabled={!nome.trim()} onClick={() => {
@@ -253,38 +266,84 @@ export function CrmContratosView() {
       <AppModal open={open} onClose={() => setOpen(false)} title="Novo contrato" size="lg">
         <div className="p-5 space-y-3">
           <Field label="Template">
-            <select className={iCls} value={templateId} onChange={e => aplicarTemplate(Number(e.target.value))}>
-              <option value="">Sem template</option>
-              {templates.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
-            </select>
+            <SearchSelect
+              value={templateId === "" ? "" : String(templateId)}
+              allowEmpty
+              emptyLabel="Sem template"
+              placeholder="Pesquisar template…"
+              options={templates.map(t => ({ value: String(t.id), label: t.nome }))}
+              onChange={v => { if (!v) { setTemplateId(""); return; } aplicarTemplate(Number(v)); }}
+              onAdd={() => {
+                const nomeTpl = window.prompt("Nome do template de contrato");
+                if (!nomeTpl?.trim()) return;
+                void apiCreateContratoTemplate({ nome: nomeTpl.trim(), corpo: "", curso: "", valor: 0 }).then(r => {
+                  setTemplates(xs => [...xs, r.template]);
+                  aplicarTemplate(r.template.id);
+                }).catch(e => window.alert(e instanceof Error ? e.message : "Não foi possível criar o template."));
+              }}
+              addLabel="Novo template"
+            />
           </Field>
           <Field label="Cliente institucional">
-            <select className={iCls} value={clienteId} onChange={e => {
-              const id = e.target.value ? Number(e.target.value) : "";
-              setClienteId(id);
-              setPropostaId("");
-              const c = clientes.find(x => x.id === id);
-              if (c) setClienteNome(c.nome);
-            }}>
-              <option value="">Escolher cliente</option>
-              {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </select>
+            <SearchSelect
+              value={clienteId === "" ? "" : String(clienteId)}
+              allowEmpty
+              emptyLabel="Escolher cliente"
+              placeholder="Pesquisar cliente…"
+              options={clientes.map(c => ({ value: String(c.id), label: c.nome }))}
+              onChange={v => {
+                const id = v ? Number(v) : "";
+                setClienteId(id);
+                setPropostaId("");
+                const c = clientes.find(x => x.id === id);
+                if (c) setClienteNome(c.nome);
+              }}
+              onAdd={() => {
+                const nomeCli = window.prompt("Nome do cliente");
+                if (!nomeCli?.trim()) return;
+                void apiCreateCliente({ nome: nomeCli.trim(), email: "", telf: "", nif: "", notas: "" }).then(r => {
+                  setClientes(xs => [...xs, r.cliente]);
+                  setClienteId(r.cliente.id);
+                  setClienteNome(r.cliente.nome);
+                  setPropostaId("");
+                }).catch(e => window.alert(e instanceof Error ? e.message : "Não foi possível criar o cliente."));
+              }}
+              addLabel="Novo cliente"
+            />
           </Field>
           <Field label="Proposta de origem">
-            <select className={iCls} value={propostaId} onChange={e => {
-              const id = e.target.value ? Number(e.target.value) : "";
-              setPropostaId(id);
-              const p = clientes.find(c => c.id === clienteId)?.propostas?.find(x => x.id === id);
-              if (!p) return;
-              if (p.curso) setCurso(p.curso);
-              if (p.valor) setValor(String(p.valor));
-              if (p.corpo) setCorpo(p.corpo);
-            }}>
-              <option value="">Sem proposta</option>
-              {(clientes.find(c => c.id === clienteId)?.propostas ?? []).map(p => (
-                <option key={p.id} value={p.id}>{p.curso || "Proposta"} · {p.estado} · € {p.valor}</option>
-              ))}
-            </select>
+            <SearchSelect
+              value={propostaId === "" ? "" : String(propostaId)}
+              allowEmpty
+              emptyLabel="Sem proposta"
+              placeholder="Pesquisar proposta…"
+              options={(clientes.find(c => c.id === clienteId)?.propostas ?? []).map(p => ({
+                value: String(p.id),
+                label: `${p.curso || "Proposta"} · ${p.estado} · € ${p.valor}`,
+              }))}
+              onChange={v => {
+                const id = v ? Number(v) : "";
+                setPropostaId(id);
+                const p = clientes.find(c => c.id === clienteId)?.propostas?.find(x => x.id === id);
+                if (!p) return;
+                if (p.curso) setCurso(p.curso);
+                if (p.valor) setValor(String(p.valor));
+                if (p.corpo) setCorpo(p.corpo);
+              }}
+              onAdd={() => {
+                if (clienteId === "") {
+                  window.alert("Escolha primeiro o cliente.");
+                  return;
+                }
+                const cursoProp = window.prompt("Curso da proposta") ?? "";
+                void apiCreateClienteProposta(clienteId, { curso: cursoProp, valor: 0, corpo: "" }).then(r => {
+                  setClientes(xs => xs.map(c => c.id === clienteId ? { ...c, propostas: [...(c.propostas ?? []), r.proposta] } : c));
+                  setPropostaId(r.proposta.id);
+                  if (r.proposta.curso) setCurso(r.proposta.curso);
+                }).catch(e => window.alert(e instanceof Error ? e.message : "Não foi possível criar a proposta."));
+              }}
+              addLabel="Nova proposta"
+            />
           </Field>
           <Field label="Nome no contrato"><input className={iCls} value={clienteNome} onChange={e => setClienteNome(e.target.value)} /></Field>
           <Field label="Curso"><input className={iCls} value={curso} onChange={e => setCurso(e.target.value)} /></Field>

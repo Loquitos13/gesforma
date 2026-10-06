@@ -14,7 +14,7 @@ function fmtData(iso: string) {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
 
-const PASSOS = ["Documentos", "Cronograma", "Pagamento"] as const;
+const PASSOS = ["Documentos", "Cronograma"] as const;
 
 function textoVagas(n: number) {
   if (n <= 0) return "Sem vagas restantes";
@@ -27,16 +27,15 @@ export function PublicDocumentos({ token }: { token: string }) {
   const [tipos, setTipos] = useState<TipoDoc[]>([]);
   const [ficheiros, setFicheiros] = useState<Ficheiro[]>([]);
   const [estado, setEstado] = useState<"loading" | "ready" | "missing" | "error">("loading");
-  const [passoServidor, setPassoServidor] = useState<1 | 2 | 3>(1);
-  const [passo, setPasso] = useState<1 | 2 | 3>(1);
+  const [passoServidor, setPassoServidor] = useState<1 | 2>(1);
+  const [passo, setPasso] = useState<1 | 2>(1);
   const [turmas, setTurmas] = useState<TurmaPercurso[]>([]);
   const [recomendadas, setRecomendadas] = useState<TurmaPercurso[]>([]);
+  const [breves, setBreves] = useState<TurmaPercurso[]>([]);
   const [turmaEscolhida, setTurmaEscolhida] = useState<TurmaPercurso | null>(null);
   const [percursoConcluido, setPercursoConcluido] = useState(false);
   const [encerrada, setEncerrada] = useState(false);
   const [correcao, setCorrecao] = useState(false);
-  const [precisaPagamento, setPrecisaPagamento] = useState(false);
-  const [pagamento, setPagamento] = useState<{ entidade: string; referencia: string; valor: number; estado: string } | null>(null);
   const [foco, setFoco] = useState<string | null>(null);
   const [ficheiro, setFicheiro] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -49,16 +48,15 @@ export function PublicDocumentos({ token }: { token: string }) {
     setCurso(r.curso);
     setTipos(r.tipos);
     setFicheiros(r.ficheiros);
-    setPrecisaPagamento(Boolean(r.precisaPagamento));
-    setPagamento(r.pagamento ?? null);
     setEncerrada(Boolean(r.encerrada));
     setCorrecao(Boolean(r.correcao));
     setTurmas(r.turmas ?? []);
     setRecomendadas(r.recomendadas ?? []);
+    setBreves(r.breves ?? []);
     setTurmaEscolhida(r.turmaEscolhida ?? null);
     setCriterios(r.criterios ?? { local: "", horario: "", inicio: "" });
     setPercursoConcluido(Boolean(r.percursoConcluido));
-    const seguinte = r.passo === 2 || r.passo === 3 ? r.passo : 1;
+    const seguinte = r.passo === 2 ? 2 : 1;
     setPassoServidor(seguinte);
     setPasso(seguinte);
     setEstado("ready");
@@ -87,12 +85,8 @@ export function PublicDocumentos({ token }: { token: string }) {
   const obrigatorios = tipos.filter(t => t.required);
   const feitosObrigatorios = obrigatorios.filter(t => aceite(t.id)).length;
   const docsProntos = obrigatorios.length === 0 || obrigatorios.every(t => aceite(t.id));
-  const comprovativo = porTipo.get("comprovativo");
-  const pagamentoPronto = !precisaPagamento || (Boolean(comprovativo) && comprovativo?.estado !== "recusado");
   const proximo = tipos.find(t => t.required && !aceite(t.id)) ?? tipos.find(t => !aceite(t.id));
-  const activoId = passo === 3
-    ? "comprovativo"
-    : (foco && tipos.some(t => t.id === foco) ? foco : proximo?.id ?? null);
+  const activoId = foco && tipos.some(t => t.id === foco) ? foco : proximo?.id ?? null;
 
   async function enviar(tipo: string, etiqueta: string, e: FormEvent) {
     e.preventDefault();
@@ -198,7 +192,7 @@ export function PublicDocumentos({ token }: { token: string }) {
             <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#c48400]">Processo de pré-inscrição concluído</p>
             <h1 className="mt-3 text-2xl font-semibold tracking-tight">{nome}</h1>
             <p className="mt-3 text-sm leading-relaxed text-[#5c564c]">
-              Os documentos, o cronograma e o pagamento de {curso} já estão na ficha. A secretaria vai validar a pré-inscrição. Esta página fica aberta até essa validação.
+              Os documentos e o cronograma de {curso} já estão na ficha. A secretaria vai validar a pré-inscrição. Esta página fica aberta até essa validação.
             </p>
             {turmaEscolhida && (
               <div className="mt-5 rounded-xl bg-[#fffaf2] px-4 py-3 text-sm ring-1 ring-[#efeae1]">
@@ -216,11 +210,11 @@ export function PublicDocumentos({ token }: { token: string }) {
               <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#c48400]">Percurso de pré-inscrição</p>
               <h1 className="mt-2 text-[1.65rem] font-semibold tracking-tight leading-tight">{nome}</h1>
               <p className="mt-2 text-sm leading-relaxed text-[#5c564c]">{curso}</p>
-              <ol className="mt-5 grid grid-cols-3 gap-2">
+              <ol className="mt-5 grid grid-cols-2 gap-2">
                 {PASSOS.map((label, i) => {
-                  const n = (i + 1) as 1 | 2 | 3;
+                  const n = (i + 1) as 1 | 2;
                   const aberto = passo === n;
-                  const feito = passoServidor > n || (n === 1 && docsProntos && passo > 1) || (n === 2 && Boolean(turmaEscolhida) && passo > 2);
+                  const feito = (n === 1 && docsProntos && passo > 1) || (n === 2 && Boolean(turmaEscolhida));
                   const pode = n <= passoServidor || (n === 1 && docsProntos) || (n === 2 && docsProntos);
                   return (
                     <li key={label}>
@@ -245,7 +239,7 @@ export function PublicDocumentos({ token }: { token: string }) {
                 <div className="px-6 py-4 sm:px-8">
                   <div className="flex items-baseline justify-between text-xs">
                     <span className="font-semibold">{feitosObrigatorios} de {obrigatorios.length} obrigatórios</span>
-                    <span className="text-[#8a8172]">Passo 1 de 3</span>
+                    <span className="text-[#8a8172]">Passo 1 de 2</span>
                   </div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#efeae1]">
                     <div className="h-full rounded-full bg-[#ffa900]" style={{ width: `${obrigatorios.length ? Math.round((feitosObrigatorios / obrigatorios.length) * 100) : 0}%` }} />
@@ -327,49 +321,22 @@ export function PublicDocumentos({ token }: { token: string }) {
                     </ul>
                   </div>
                 )}
+                {breves.length > 0 && (
+                  <div className="mt-6">
+                    <p className="text-sm font-semibold text-[#1b2330]">Turma para breve</p>
+                    <p className="mt-1 text-sm text-[#5c564c]">
+                      O mesmo curso, o mesmo local e o mesmo horário, com uma data de início mais à frente.
+                    </p>
+                    <ul className="mt-3 space-y-4">
+                      {breves.map(t => (
+                        <CartaoTurma key={t.id} turma={t} curso={curso} escolhida={turmaEscolhida?.id === t.id} busy={busy} onEscolher={() => void escolher(t.id)} />
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                   <button type="button" onClick={() => setPasso(1)} className="rounded-lg border border-[#e7e1d6] px-4 py-3 text-sm font-semibold">Voltar</button>
-                  <button type="button" disabled={!turmaEscolhida} onClick={() => setPasso(3)} className="rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white disabled:opacity-40 sm:flex-1">
-                    Continuar para o pagamento
-                  </button>
-                </div>
-              </section>
-            )}
-
-            {passo === 3 && (
-              <section className="border-t border-[#efeae1] px-6 py-5 sm:px-8">
-                {precisaPagamento ? (
-                  <>
-                    <p className="text-sm text-[#5c564c]">Pague e anexe o comprovativo. Sem esse ficheiro o processo não fica concluído.</p>
-                    {pagamento && (
-                      <div className="mt-4 rounded-xl bg-[#1b2330] px-5 py-4 text-white">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#ffa900]">Referência Multibanco</p>
-                        <dl className="mt-3 space-y-1.5 font-mono text-sm">
-                          <div className="flex justify-between gap-4"><dt className="font-sans text-white/60">Entidade</dt><dd>{pagamento.entidade || "no email"}</dd></div>
-                          <div className="flex justify-between gap-4"><dt className="font-sans text-white/60">Referência</dt><dd className="font-bold tracking-wide">{pagamento.referencia}</dd></div>
-                          <div className="flex justify-between gap-4"><dt className="font-sans text-white/60">Valor</dt><dd>€ {pagamento.valor.toFixed(2)}</dd></div>
-                        </dl>
-                      </div>
-                    )}
-                    {!pagamento && <p className="mt-4 text-sm text-[#5c564c]">A referência chega por email. Pode anexar o comprovativo na mesma.</p>}
-                    {comprovativo && comprovativo.estado !== "recusado" && <p className="mt-3 text-sm text-emerald-800">{comprovativo.nome}</p>}
-                    {comprovativo?.estado === "recusado" && comprovativo.observacao && <p className="mt-3 text-sm text-red-800">{comprovativo.observacao}</p>}
-                    <form onSubmit={e => void enviar("comprovativo", "Comprovativo de pagamento", e)} className="mt-4">
-                      <CampoFicheiro onFile={setFicheiro} />
-                      {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
-                      <button type="submit" disabled={busy || !ficheiro} className="mt-4 w-full rounded-lg bg-[#ffa900] px-4 py-3 text-sm font-semibold text-[#1b2330] disabled:opacity-40 sm:w-auto">
-                        {busy ? "A anexar…" : comprovativo ? "Substituir comprovativo" : "Anexar comprovativo"}
-                      </button>
-                    </form>
-                  </>
-                ) : (
-                  <p className="text-sm text-[#5c564c]">Esta formação não tem pagamento. Confirme para enviar o processo à secretaria.</p>
-                )}
-                {ok && <p className="mt-3 text-sm text-emerald-800">{ok}</p>}
-                {!precisaPagamento && error && <p className="mt-3 text-sm text-red-700">{error}</p>}
-                <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                  <button type="button" onClick={() => setPasso(2)} className="rounded-lg border border-[#e7e1d6] px-4 py-3 text-sm font-semibold">Voltar</button>
-                  <button type="button" disabled={busy || !pagamentoPronto || !turmaEscolhida} onClick={() => void concluir()} className="rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white disabled:opacity-40 sm:flex-1">
+                  <button type="button" disabled={busy || !turmaEscolhida} onClick={() => void concluir()} className="rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white disabled:opacity-40 sm:flex-1">
                     {busy ? "A concluir…" : "Concluir pré-inscrição"}
                   </button>
                 </div>

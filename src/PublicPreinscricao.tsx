@@ -131,10 +131,7 @@ export function PublicPreinscricao() {
               </label>
               <label>
                 <span className={labelCls}>Concelho</span>
-                <select className={`${fieldCls} ${concelho ? "text-slate-800" : "text-slate-400"}`} value={concelho} onChange={e => setConcelho(e.target.value)}>
-                  <option value="">Seleccione um concelho</option>
-                  {CONCELHOS.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+                <SearchSelect value={concelho} onChange={setConcelho} options={CONCELHOS.map(value => ({ value }))} allowEmpty placeholder="Seleccione um concelho" />
               </label>
               <label>
                 <span className={labelCls}>Como tomou conhecimento?</span>

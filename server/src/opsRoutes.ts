@@ -1287,6 +1287,7 @@ export function registerOpsRoutes(
     formadores: z.array(z.string().max(120)).max(12).optional().default([]),
     horas: z.number().optional().default(90),
     custoHoraSala: z.number().min(0).max(10000).optional(),
+    valoresHoraFormador: z.record(z.string().max(120), z.number().min(0).max(10000)).optional(),
     cronograma: z.array(z.unknown()).optional(),
   });
   app.post("/v1/turmas-gold", async (req, reply) => {
@@ -1310,9 +1311,9 @@ export function registerOpsRoutes(
         modulos,
       });
     await db.query(
-      `INSERT INTO turmas_gold (id, data_inicio, nome, curso, local, horario, total_alunos, vagas, tolerancia_vagas, estado, formador, formadores, horas, cronograma, custo_hora_sala)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14::jsonb,$15)`,
-      [id, d.dataInicio, d.nome, d.curso, d.local, d.horario, d.totalAlunos, d.vagas, d.toleranciaVagas ?? 0, d.estado, d.formador, JSON.stringify(d.formadores), d.horas, cronograma, d.custoHoraSala ?? 0],
+      `INSERT INTO turmas_gold (id, data_inicio, nome, curso, local, horario, total_alunos, vagas, tolerancia_vagas, estado, formador, formadores, horas, cronograma, custo_hora_sala, valores_hora_formador)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14::jsonb,$15,$16::jsonb)`,
+      [id, d.dataInicio, d.nome, d.curso, d.local, d.horario, d.totalAlunos, d.vagas, d.toleranciaVagas ?? 0, d.estado, d.formador, JSON.stringify(d.formadores), d.horas, cronograma, d.custoHoraSala ?? 0, JSON.stringify(d.valoresHoraFormador ?? {})],
     );
     void syncTurmaDriveAccess(db, {
       regime: "gold", turmaId: id, nome: d.nome, formador: d.formador, formadores: d.formadores, cronograma,
@@ -1343,8 +1344,9 @@ export function registerOpsRoutes(
          vagas = COALESCE($8, vagas), tolerancia_vagas = COALESCE($9, tolerancia_vagas), estado = COALESCE($10, estado), formador = COALESCE($11, formador),
          formadores = COALESCE($12::jsonb, formadores),
          horas = COALESCE($13, horas), cronograma = COALESCE($14::jsonb, cronograma),
-         custo_hora_sala = COALESCE($15, custo_hora_sala) WHERE id = $1`,
-      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.local ?? null, d.horario ?? null, d.totalAlunos ?? null, d.vagas ?? null, d.toleranciaVagas ?? null, d.estado ?? null, d.formador ?? null, d.formadores ? JSON.stringify(d.formadores) : null, d.horas ?? null, d.cronograma ?? null, d.custoHoraSala ?? null],
+         custo_hora_sala = COALESCE($15, custo_hora_sala),
+         valores_hora_formador = COALESCE($16::jsonb, valores_hora_formador) WHERE id = $1`,
+      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.local ?? null, d.horario ?? null, d.totalAlunos ?? null, d.vagas ?? null, d.toleranciaVagas ?? null, d.estado ?? null, d.formador ?? null, d.formadores ? JSON.stringify(d.formadores) : null, d.horas ?? null, d.cronograma ?? null, d.custoHoraSala ?? null, d.valoresHoraFormador ? JSON.stringify(d.valoresHoraFormador) : null],
     );
     if (antesTurma && d.nome && d.nome !== String(antesTurma.nome ?? "")) {
       await propagarNomeTurma(db, "gold", id, String(antesTurma.nome ?? ""), d.nome);
@@ -1390,6 +1392,7 @@ export function registerOpsRoutes(
     formador: z.string().max(120).optional().default(""),
     formadores: z.array(z.string().max(120)).max(12).optional().default([]),
     activa: z.boolean().optional().default(true),
+    valoresHoraFormador: z.record(z.string().max(120), z.number().min(0).max(10000)).optional(),
     cronograma: z.array(z.unknown()).optional(),
   });
   app.post("/v1/turmas-fin", async (req, reply) => {
@@ -1412,9 +1415,9 @@ export function registerOpsRoutes(
         modulos,
       });
     await db.query(
-      `INSERT INTO turmas_fin (id, data_inicio, nome, curso, ufcd_cod, local, horario, alunos, alunos_total, tolerancia_vagas, estado, horas, formador, formadores, activa, cronograma)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb)`,
-      [id, d.dataInicio, d.nome, d.curso, d.ufcdCod, d.local, d.horario, d.alunos, d.alunosTotal, d.toleranciaVagas ?? 0, d.estado, d.horas, d.formador, JSON.stringify(d.formadores), d.activa, cronograma],
+      `INSERT INTO turmas_fin (id, data_inicio, nome, curso, ufcd_cod, local, horario, alunos, alunos_total, tolerancia_vagas, estado, horas, formador, formadores, activa, cronograma, valores_hora_formador)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb,$17::jsonb)`,
+      [id, d.dataInicio, d.nome, d.curso, d.ufcdCod, d.local, d.horario, d.alunos, d.alunosTotal, d.toleranciaVagas ?? 0, d.estado, d.horas, d.formador, JSON.stringify(d.formadores), d.activa, cronograma, JSON.stringify(d.valoresHoraFormador ?? {})],
     );
     void syncTurmaDriveAccess(db, {
       regime: "fin", turmaId: id, nome: d.nome, formador: d.formador, formadores: d.formadores, cronograma,
@@ -1437,8 +1440,9 @@ export function registerOpsRoutes(
          alunos = COALESCE($8, alunos), alunos_total = COALESCE($9, alunos_total), tolerancia_vagas = COALESCE($10, tolerancia_vagas), estado = COALESCE($11, estado),
          horas = COALESCE($12, horas), formador = COALESCE($13, formador),
          formadores = COALESCE($14::jsonb, formadores), activa = COALESCE($15, activa),
-         cronograma = COALESCE($16::jsonb, cronograma) WHERE id = $1`,
-      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.ufcdCod ?? null, d.local ?? null, d.horario ?? null, d.alunos ?? null, d.alunosTotal ?? null, d.toleranciaVagas ?? null, d.estado ?? null, d.horas ?? null, d.formador ?? null, d.formadores ? JSON.stringify(d.formadores) : null, d.activa ?? null, d.cronograma ?? null],
+         cronograma = COALESCE($16::jsonb, cronograma),
+         valores_hora_formador = COALESCE($17::jsonb, valores_hora_formador) WHERE id = $1`,
+      [id, d.dataInicio ?? null, d.nome ?? null, d.curso ?? null, d.ufcdCod ?? null, d.local ?? null, d.horario ?? null, d.alunos ?? null, d.alunosTotal ?? null, d.toleranciaVagas ?? null, d.estado ?? null, d.horas ?? null, d.formador ?? null, d.formadores ? JSON.stringify(d.formadores) : null, d.activa ?? null, d.cronograma ?? null, d.valoresHoraFormador ? JSON.stringify(d.valoresHoraFormador) : null],
     );
     if (antesTurma && d.nome && d.nome !== String(antesTurma.nome ?? "")) {
       await propagarNomeTurma(db, "fin", id, String(antesTurma.nome ?? ""), d.nome);

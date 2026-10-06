@@ -42,7 +42,10 @@ import { FormadoresView } from "./FormadoresView";
 import { FORMADORES_SEED } from "./formadorModel";
 import { useFormadorOptions, useFormadores } from "./FormadoresContext";
 import { useTurmas } from "./TurmasContext";
-import { codigoInternoTurma } from "./turmaCodigo";
+import { codigoInternoTurma, proximoNomeTurma } from "./turmaCodigo";
+import { herdarPlanoCurso, usePlanosCurso } from "./planosCurso";
+import { ValoresHoraFormador } from "./ValoresHoraFormador";
+import { apiEnviarInqueritosTurma } from "./api";
 import { formadorIndisponivel, formadorNaSessao, minutoSeguinte, nomesDoUtilizador, podeMexerDocumento, staffPodeDossie } from "./sessaoAcesso";
 import { sessaoCabeNoSlot } from "./disponibilidade";
 import { CustosTurmaCard } from "./CustosTurma";
@@ -684,9 +687,9 @@ function TableToolbar({ search, onSearch, perPage, onPerPage }: { search: string
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-b border-slate-100">
       <div className="flex items-center gap-2">
         <span className="text-xs text-slate-500">Mostrar</span>
-        <select value={perPage} onChange={e => onPerPage(Number(e.target.value))} className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
-          {[10, 25, 50, 100].map(n => <option key={n}>{n}</option>)}
-        </select>
+        <div className="w-24">
+          <SearchSelect value={String(perPage)} onChange={v => onPerPage(Number(v) || 10)} options={[10, 25, 50, 100].map(n => ({ value: String(n) }))} />
+        </div>
         <span className="text-xs text-slate-500">por página</span>
       </div>
       <div className="relative">
@@ -1039,7 +1042,7 @@ function sumarioBtnCls(s: SumarioSessaoData | undefined, gold: boolean) {
 
 function SessoesTurmaTab({
   accent, turmaNome, cursoNome, sessoes, planos, presencas, sumarios, formandos, onNovaSessao, onPlano, onSumario, onPresencas, onOpenFormador,
-  podeEditar, podeOperar, podeCriar = true, turmaActiva, onIniciar, onFechar,
+  podeEditar, podeCriar = true, formadorOpcoes, onFormador,
 }: {
   accent: "gold" | "fin";
   turmaNome: string;
@@ -1057,9 +1060,8 @@ function SessoesTurmaTab({
   podeEditar?: (s: SessaoMeta, doc: "plano" | "sumario" | "presencas") => boolean;
   podeOperar?: (s: SessaoMeta) => boolean;
   podeCriar?: boolean;
-  turmaActiva?: boolean;
-  onIniciar?: (s: SessaoMeta) => void;
-  onFechar?: (s: SessaoMeta) => void;
+  formadorOpcoes?: { value: string }[];
+  onFormador?: (s: SessaoMeta, nome: string) => void;
 }) {
   const gold = accent === "gold";
   const numCls = gold ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700";
@@ -1105,7 +1107,6 @@ function SessoesTurmaTab({
               const temPlano = Boolean(planos[s.n]);
               const folha = presencas[s.n];
               const edita = (doc: "plano" | "sumario" | "presencas") => podeEditar ? podeEditar(s, doc) : true;
-              const podeSessao = turmaActiva && !s.fechadaEm && (podeOperar ? podeOperar(s) : (podeEditar ? podeEditar(s, "sumario") || podeEditar(s, "plano") : true));
               return (
                 <tr key={s.n} className="hover:bg-slate-50">
                   <Td><span className={`w-7 h-7 rounded-full ${numCls} text-xs font-bold flex items-center justify-center`}>{s.n}</span></Td>
@@ -1114,7 +1115,20 @@ function SessoesTurmaTab({
                     <p className="text-xs text-slate-400">{s.hora}</p>
                   </Td>
                   <Td><ModulosCell sessao={s} /></Td>
-                  <Td><FormadoresCell sessao={s} onOpen={onOpenFormador} /></Td>
+                  <Td>
+                    <FormadoresCell sessao={s} onOpen={onOpenFormador} />
+                    {onFormador && formadorOpcoes && (
+                      <div className="mt-1 min-w-[10rem]">
+                        <SearchSelect
+                          value={s.formadores?.[0] || s.formador || ""}
+                          onChange={v => onFormador(s, v)}
+                          options={formadorOpcoes}
+                          placeholder="Formador da sessão…"
+                          allowEmpty
+                        />
+                      </div>
+                    )}
+                  </Td>
                   <Td>
                     <button type="button" disabled={!edita("plano")} title={edita("plano") ? "" : "Sem permissão nesta sessão"} onClick={() => onPlano(s)}
                       className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap disabled:opacity-40 ${temPlano ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100" : planoTodo}`}>
@@ -1154,17 +1168,7 @@ function SessoesTurmaTab({
                       </button>
                     </div>
                   </Td>
-                  <Td>
-                    <div className="flex flex-col gap-1 items-start">
-                      {estadoBadge(s.estado)}
-                      {podeSessao && !s.iniciadaEm && onIniciar && (
-                        <button type="button" onClick={() => onIniciar(s)} className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-emerald-600 text-white">Iniciar sessão</button>
-                      )}
-                      {s.iniciadaEm && !s.fechadaEm && onFechar && podeSessao && (
-                        <button type="button" onClick={() => onFechar(s)} className="text-[11px] font-semibold px-2 py-1 rounded-lg border border-slate-300 text-slate-700">Fechar sessão</button>
-                      )}
-                    </div>
-                  </Td>
+                  <Td>{estadoBadge(s.estado)}</Td>
                 </tr>
               );
             })}
@@ -1650,7 +1654,10 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const [editInicio, setEditInicio] = useState("");
   const [editVagas, setEditVagas] = useState(16);
   const [editTolerancia, setEditTolerancia] = useState(0);
+  const [editValores, setEditValores] = useState<Record<string, number>>({});
+  const [envioInq, setEnvioInq] = useState("");
   const formadorOpts = useFormadorOptions();
+  const modelosCurso = usePlanosCurso("gold", turma?.curso ?? "");
   const locaisDoCurso = useLocaisOptsDoCurso("gold", cursosGold, turma?.curso ?? "");
   useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
   const nomesCockpit = membros.map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }));
@@ -1683,12 +1690,22 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
               </div>
             </div>
             <div className="flex gap-3 flex-shrink-0">
+              {!souFormador && (
+                <button type="button" onClick={() => {
+                  setEnvioInq("A enviar…");
+                  void apiEnviarInqueritosTurma("gold", turma.id)
+                    .then(r => setEnvioInq(`${r.enviados} enviados${r.semEmail ? `, ${r.semEmail} sem email` : ""}`))
+                    .catch(err => setEnvioInq(err instanceof Error ? err.message : "Não foi possível enviar."));
+                }} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-lg">Enviar inquéritos</button>
+              )}
               {!souFormador && <button onClick={() => {
                 setEditNome(turma.nome); setEditLocal(turma.local); setEditHorario(turma.horario);
-                setEditFormador(turma.formador); setEditInicio(turma.dataInicio); setEditVagas(turma.vagas);
+                setEditFormador(turma.formador); setEditInicio(turma.dataInicio);                 setEditVagas(turma.vagas);
                 setEditTolerancia(turma.toleranciaVagas ?? 0);
+                setEditValores(turma.valoresHoraFormador ?? {});
                 setEditTurma(true);
               }} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>}
+              {envioInq && <p className="self-center text-xs text-amber-200 max-w-[10rem]">{envioInq}</p>}
               <button type="button" onClick={() => setExportTurma(exportPayload(
                 { nome: turma.nome, curso: turma.curso, local: turma.local, formandos: turma.totalAlunos, accent: "gold", turmaId: turma.id },
                 membros.map(f => ({ nome: `${f.nome} ${f.apelido}`, email: f.email, telf: f.telf, estado: f.pago ? "Pago" : "Por pagar" })),
@@ -1775,11 +1792,12 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             onPresencas={setPresencasSession}
             onOpenFormador={setFormadorOpen}
             podeEditar={podeDoc}
-            podeOperar={podeOperarSessao}
             podeCriar={!souFormador}
-            turmaActiva={activa}
-            onIniciar={s => { if (turma && s.id) setGoldCronograma(turma.id, turma.cronograma.map(x => x.id === s.id ? { ...x, iniciadaEm: new Date().toISOString() } : x)); }}
-            onFechar={s => { if (turma && s.id) setGoldCronograma(turma.id, turma.cronograma.map(x => x.id === s.id ? { ...x, fechadaEm: new Date().toISOString() } : x)); }}
+            formadorOpcoes={formadorOpts}
+            onFormador={(s, nome) => {
+              if (!turma || !s.id || souFormador) return;
+              setGoldCronograma(turma.id, turma.cronograma.map(x => x.id === s.id ? { ...x, formadores: nome ? [nome] : [] } : x));
+            }}
           />
         )}
         {tab === "avaliacao" && (
@@ -1973,7 +1991,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         open={!!planoSessao}
         onClose={() => setPlanoSessao(null)}
         sessao={planoSessao ?? undefined}
-        plano={planoSessao ? ped.plano(planoSessao.n) : emptyPlano()}
+        plano={planoSessao ? herdarPlanoCurso(modelosCurso.planos, planoSessao.n, ped.plano(planoSessao.n)) : emptyPlano()}
         onSave={data => { if (planoSessao) void ped.guardarPlano(planoSessao.n, data); }}
       />
       <SumarioSessaoModal
@@ -2118,17 +2136,25 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             <Field label="Horário"><SearchSelect value={editHorario} onChange={setEditHorario} options={horariosOpts} /></Field>
           </div>
           <Field label="Formador"><SearchSelect value={editFormador} onChange={setEditFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_7.5rem_1fr] gap-3">
             <Field label="Data de início"><input type="date" className={iCls} value={editInicio} onChange={e => setEditInicio(e.target.value)} /></Field>
             <Field label="Vagas"><input type="number" className={iCls} value={editVagas} onChange={e => setEditVagas(Number(e.target.value) || 0)} /></Field>
+            <Field label="Tolerância de vagas" hint="Lugares extra para overbooking.">
+              <input type="number" min={0} className={iCls} value={editTolerancia} onChange={e => setEditTolerancia(Math.max(0, Number(e.target.value) || 0))} />
+            </Field>
           </div>
-          <Field label="Tolerância de vagas" hint="Lugares extra para overbooking. A pré-inscrição deixa de mostrar a turma quando os inscritos atingem vagas + tolerância.">
-            <input type="number" min={0} className={iCls} value={editTolerancia} onChange={e => setEditTolerancia(Math.max(0, Number(e.target.value) || 0))} />
+          <Field label="Valor por hora do formador">
+            <ValoresHoraFormador
+              formadores={[editFormador, ...(turma.formadores ?? [])]}
+              value={editValores}
+              onChange={setEditValores}
+              base={modelosCurso.valores}
+            />
           </Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setEditTurma(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button onClick={() => {
-              patchGold(turma.id, { nome: editNome.trim() || turma.nome, local: editLocal, horario: editHorario, formador: editFormador, dataInicio: editInicio, vagas: editVagas, toleranciaVagas: editTolerancia });
+              patchGold(turma.id, { nome: editNome.trim() || turma.nome, local: editLocal, horario: editHorario, formador: editFormador, dataInicio: editInicio, vagas: editVagas, toleranciaVagas: editTolerancia, valoresHoraFormador: editValores });
               setEditTurma(false);
             }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Guardar</button>
           </div>
@@ -2217,6 +2243,8 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const [verCert, setVerCert] = useState<CertificadoPreview | null>(null);
   const [exportTurma, setExportTurma] = useState<ExportTurmaInfo | null>(null);
   const { user } = useAuth();
+  const modelosCursoFin = usePlanosCurso("fin", turma?.curso ?? "");
+  const [envioInqFin, setEnvioInqFin] = useState("");
   const ped = useTurmaPedagogia("fin", turma?.id ?? 0);
   const criterios = useCriteriosAvaliacao("fin", turma?.curso);
   const programaCursoFin = useProgramaDoCurso("fin", turma?.curso ?? "");
@@ -2307,7 +2335,16 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
               <span className="flex items-center gap-1">{I.school} {turma.formador} · {turma.horas}h</span>
             </div>
           </div>
-          <div className="flex gap-3 flex-shrink-0">
+          <div className="flex gap-3 flex-shrink-0 items-center">
+            {!souFormadorFin && (
+              <button type="button" onClick={() => {
+                setEnvioInqFin("A enviar…");
+                void apiEnviarInqueritosTurma("fin", turma.id)
+                  .then(r => setEnvioInqFin(`${r.enviados} enviados${r.semEmail ? `, ${r.semEmail} sem email` : ""}`))
+                  .catch(err => setEnvioInqFin(err instanceof Error ? err.message : "Não foi possível enviar."));
+              }} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-lg">Enviar inquéritos</button>
+            )}
+            {envioInqFin && <p className="text-xs text-amber-200 max-w-[8rem]">{envioInqFin}</p>}
             {!souFormadorFin && <button onClick={() => {
               setEditNome(turma.nome); setEditCurso(turma.curso); setEditFormador(turma.formador);
               setEditLocal(turma.local); setEditInicio(turma.dataInicio);
@@ -2386,11 +2423,12 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           onPresencas={setPresencasSession}
           onOpenFormador={setFormadorOpen}
           podeEditar={podeDocFin}
-          podeOperar={podeOperarSessaoFin}
           podeCriar={!souFormadorFin}
-          turmaActiva={activa}
-          onIniciar={s => { if (turma && s.id) setFinCronograma(turma.id, turma.cronograma.map(x => x.id === s.id ? { ...x, iniciadaEm: new Date().toISOString() } : x)); }}
-          onFechar={s => { if (turma && s.id) setFinCronograma(turma.id, turma.cronograma.map(x => x.id === s.id ? { ...x, fechadaEm: new Date().toISOString() } : x)); }}
+          formadorOpcoes={formadorOpts}
+          onFormador={(s, nome) => {
+            if (!turma || !s.id || souFormadorFin) return;
+            setFinCronograma(turma.id, turma.cronograma.map(x => x.id === s.id ? { ...x, formadores: nome ? [nome] : [] } : x));
+          }}
         />
       )}
       {tab === "avaliacao" && (
@@ -2555,7 +2593,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
         open={!!planoSessao}
         onClose={() => setPlanoSessao(null)}
         sessao={planoSessao ?? undefined}
-        plano={planoSessao ? ped.plano(planoSessao.n) : emptyPlano()}
+        plano={planoSessao ? herdarPlanoCurso(modelosCursoFin.planos, planoSessao.n, ped.plano(planoSessao.n)) : emptyPlano()}
         onSave={data => { if (planoSessao) void ped.guardarPlano(planoSessao.n, data); }}
       />
       <SumarioSessaoModal
@@ -2962,6 +3000,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   const [vagas, setVagas] = useState(16);
   const [tolerancia, setTolerancia] = useState(0);
   const [custoHoraSala, setCustoHoraSala] = useState(0);
+  const [valoresHoraFormador, setValoresHoraFormador] = useState<Record<string, number>>({});
   const [activa, setActiva] = useState(true);
   const [cronograma, setCronograma] = useState<SessaoCronograma[]>([]);
   const editing = open && open !== "new" ? open : null;
@@ -3000,6 +3039,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
       setVagas(editing?.vagas ?? 16);
       setTolerancia(editing?.toleranciaVagas ?? 0);
       setCustoHoraSala(editing?.custoHoraSala ?? 0);
+      setValoresHoraFormador(editing?.valoresHoraFormador ?? {});
       setActiva(editing ? isTurmaActiva(editing) : true);
       setCronograma(editing?.cronograma ?? []);
     }
@@ -3007,8 +3047,8 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
   const codigoAuto = codigoInternoTurma(curso, local, horario, dataInicio);
   useEffect(() => {
     if (open !== "new" || nomeManual.current) return;
-    if (codigoAuto) setNome(codigoAuto);
-  }, [codigoAuto, open]);
+    if (codigoAuto) setNome(proximoNomeTurma(codigoAuto, gold.map(t => t.nome)));
+  }, [codigoAuto, open, gold]);
   async function guardar() {
     if (!curso.trim()) return;
     const payload = {
@@ -3016,7 +3056,8 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
       curso, local, horario, formador, formadores: formadoresExtra, dataInicio, vagas, toleranciaVagas: tolerancia, custoHoraSala,
       estado: (activa ? "Ativa" : "Inativa") as TurmaGold["estado"],
       horas: horasCurso,
-      cronograma,
+      cronograma: editing ? cronograma : [],
+      valoresHoraFormador,
     };
     if (editing) {
       patchGold(editing.id, payload);
@@ -3115,6 +3156,7 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
                     <Td>
                       <RowActions actions={[
                         { label: "Cockpit", icon: I.eye, tone: "teal", onClick: () => onCockpit(t.id) },
+                        { label: "Enviar inquéritos", icon: I.mail, onClick: () => { void apiEnviarInqueritosTurma("gold", t.id); } },
                         ...(staffTurma ? [
                           { label: "Editar", icon: I.edit, onClick: () => setOpen(t) },
                           { label: "Eliminar", icon: I.trash, tone: "red" as const, onClick: () => setApagar(t) },
@@ -3173,16 +3215,20 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
           <Field label="Outros formadores">
             <MultiSearchSelect values={formadoresExtra} onChange={setFormadoresExtra} options={formadorOpts} noneLabel="Formadores opcionais…" unitSingular="formador" unitPlural="formadores" />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_7.5rem_1fr] gap-3">
             <Field label="Data de início"><input type="date" className={iCls} value={dataInicio} onChange={e => setDataInicio(e.target.value)} /></Field>
             <Field label="Vagas"><input type="number" className={iCls} value={vagas} onChange={e => setVagas(Number(e.target.value) || 0)} /></Field>
+            <Field label="Tolerância de vagas" hint="Lugares extra para overbooking.">
+              <input type="number" min={0} className={iCls} value={tolerancia} onChange={e => setTolerancia(Math.max(0, Number(e.target.value) || 0))} />
+            </Field>
           </div>
-          <Field label="Tolerância de vagas" hint="Lugares extra para overbooking. A turma sai do percurso de pré-inscrição quando os inscritos atingem vagas + tolerância.">
-            <input type="number" min={0} className={iCls} value={tolerancia} onChange={e => setTolerancia(Math.max(0, Number(e.target.value) || 0))} />
+          <Field label="Valor por hora do formador">
+            <ValoresHoraFormador formadores={[formador, ...formadoresExtra]} value={valoresHoraFormador} onChange={setValoresHoraFormador} />
           </Field>
           <Field label="Custo hora da sala (€)">
             <input type="number" min={0} step="0.5" className={iCls} value={custoHoraSala} onChange={e => setCustoHoraSala(Math.max(0, Number(e.target.value) || 0))} />
           </Field>
+          {editing && (
           <CronogramaEditor
             sessoes={cronograma}
             onChange={setCronograma}
@@ -3194,8 +3240,9 @@ function TurmasGoldView({ onCockpit }: { onCockpit: (id: number) => void }) {
             curso={curso}
             nome={nome}
             local={local}
-            identidade={editing ? `gold-form-${editing.id}` : "gold-form-new"}
+            identidade={`gold-form-${editing.id}`}
           />
+          )}
           <div className="flex gap-2 pt-2">
             <button onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button onClick={guardar} disabled={!curso.trim()} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">Guardar</button>
@@ -3552,8 +3599,10 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
   const [open, setOpen] = useState<TurmaFin | "new" | null>(null);
   const [apagar, setApagar] = useState<TurmaFin | null>(null);
   const [nome, setNome] = useState("");
+  const nomeManual = useRef(false);
   const [curso, setCurso] = useState("");
   const [formador, setFormador] = useState("");
+  const [valoresHoraFormador, setValoresHoraFormador] = useState<Record<string, number>>({});
   const [localFin, setLocalFin] = useState("");
   const [horarioFin, setHorarioFin] = useState("Pós Laboral");
   const [dataInicio, setDataInicio] = useState("");
@@ -3577,8 +3626,10 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
   useEffect(() => {
     if (open) {
       setNome(editing?.nome ?? "");
+      nomeManual.current = Boolean(editing);
       setCurso(editing?.curso ?? "");
       setFormador(editing?.formador ?? "");
+      setValoresHoraFormador(editing?.valoresHoraFormador ?? {});
       setLocalFin(editing?.local ?? "");
       setHorarioFin(editing?.horario && editing.horario !== "Online" ? editing.horario : "Pós Laboral");
       setDataInicio(editing?.dataInicio ?? "");
@@ -3588,12 +3639,17 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
       setCronograma(editing?.cronograma ?? []);
     }
   }, [open, editing]);
+  const codigoAuto = codigoInternoTurma(curso, localFin, horarioFin, dataInicio);
+  useEffect(() => {
+    if (open !== "new" || nomeManual.current) return;
+    if (codigoAuto) setNome(proximoNomeTurma(codigoAuto, fin.map(t => t.nome)));
+  }, [codigoAuto, open, fin]);
   async function guardar() {
     const horas = editing?.horas ?? 25;
     const payload = {
-      nome: nome.trim() || "Nova turma",
-      curso, formador, local: localFin, dataInicio, activa, cronograma, horas, horario: horarioFin,
-      alunosTotal: vagasFin, toleranciaVagas: toleranciaFin,
+      nome: nome.trim() || codigoAuto || "Nova turma",
+      curso, formador, local: localFin, dataInicio, activa, cronograma: editing ? cronograma : [], horas, horario: horarioFin,
+      alunosTotal: vagasFin, toleranciaVagas: toleranciaFin, valoresHoraFormador,
     };
     if (editing) {
       patchFin(editing.id, payload);
@@ -3690,6 +3746,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
                     <Td>
                       <RowActions primary={3} actions={[
                         { label: "Cockpit", icon: I.eye, tone: "teal", onClick: () => onCockpit(t.id, "overview") },
+                        { label: "Enviar inquéritos", icon: I.mail, onClick: () => { void apiEnviarInqueritosTurma("fin", t.id); } },
                         { label: "Presenças", icon: I.attend, tone: "teal", onClick: () => onCockpit(t.id, "sessoes") },
                         { label: "Dossiê", icon: I.doc, tone: "orange", onClick: () => onCockpit(t.id, "dtp") },
                         { label: "Editar", icon: I.edit, onClick: () => setOpen(t) },
@@ -3726,7 +3783,7 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
               placeholder="Pesquisar UFCD…"
             />
           </Field>
-          <Field label="Código da turma"><input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="UFCD 3564 · T1" /></Field>
+          <Field label="Código da turma"><input className={iCls} value={nome} onChange={e => { nomeManual.current = true; setNome(e.target.value); }} placeholder="CCP - VNG - PL - 12/10" /></Field>
           <Field label="Formador"><SearchSelect value={formador} onChange={setFormador} options={formadorOpts} placeholder="Pesquisar formador…" /></Field>
           <Field label="Local">
             <SearchSelect
@@ -3742,13 +3799,16 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
             <SearchSelect value={horarioFin} onChange={setHorarioFin} options={horariosOpts} placeholder="Pós Laboral…" />
           </Field>
           <Field label="Data de início"><input type="date" className={iCls} value={dataInicio} onChange={e => setDataInicio(e.target.value)} /></Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-[7.5rem_1fr] gap-3">
             <Field label="Vagas"><input type="number" min={1} className={iCls} value={vagasFin} onChange={e => setVagasFin(Math.max(1, Number(e.target.value) || 0))} /></Field>
             <Field label="Tolerância de vagas" hint="Lugares extra para overbooking.">
               <input type="number" min={0} className={iCls} value={toleranciaFin} onChange={e => setToleranciaFin(Math.max(0, Number(e.target.value) || 0))} />
             </Field>
           </div>
-          <CronogramaEditor
+          <Field label="Valor por hora do formador">
+            <ValoresHoraFormador formadores={[formador]} value={valoresHoraFormador} onChange={setValoresHoraFormador} />
+          </Field>
+          {editing && <CronogramaEditor
             accent="fin"
             sessoes={cronograma}
             onChange={setCronograma}
@@ -3759,8 +3819,9 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
             curso={curso}
             nome={nome}
             local={localFin}
-            identidade={editing ? `fin-form-${editing.id}` : "fin-form-new"}
+            identidade={`fin-form-${editing.id}`}
           />
+          }
           <div className="flex gap-2 pt-2">
             <button onClick={() => setOpen(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button onClick={guardar} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">Guardar</button>

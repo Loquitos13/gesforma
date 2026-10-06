@@ -1,5 +1,6 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { formadorForaDoSlot, slotsDoFormador } from "../../src/disponibilidade.js";
+import { gerarPalavraPasse } from "../../src/passwordPolicy.js";
 import type { Db } from "./db/pool.js";
 import { hashPassword, isEmail, normalizeEmail } from "./security.js";
 
@@ -12,11 +13,11 @@ export async function garantirContaFormador(db: Db, nome: string, emailRaw: stri
   if (!email || !isEmail(email)) return null;
   const existing = await db.query<{ id: string }>("SELECT id FROM users WHERE lower(email) = $1", [email]);
   if (existing.rows[0]) return { userId: existing.rows[0].id, email, criado: false as const };
-  const password = randomBytes(9).toString("base64url");
+  const password = gerarPalavraPasse();
   const id = randomUUID();
   try {
     await db.query(
-      "INSERT INTO users (id, name, email, password_hash, role, active) VALUES ($1,$2,$3,$4,'formador',true)",
+      "INSERT INTO users (id, name, email, password_hash, role, active, must_change_password) VALUES ($1,$2,$3,$4,'formador',true,true)",
       [id, nome.trim() || email, email, await hashPassword(password)],
     );
   } catch (err) {

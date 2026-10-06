@@ -1,8 +1,8 @@
 export const SLOTS_CCP = [
-  { id: "laboral", label: "Laboral", horas: "9h–13h", dias: "2.ª a 6.ª" },
-  { id: "pos-laboral", label: "Pós-laboral", horas: "16h30–23h", dias: "2.ª a 6.ª" },
-  { id: "sabado-manha", label: "Sábado manhã", horas: "9h–13h", dias: "sábado" },
-  { id: "sabado-tarde", label: "Sábado tarde", horas: "14h–19h", dias: "sábado" },
+  { id: "laboral", label: "Laboral", horas: "9h a 13h", dias: "2.ª a 6.ª" },
+  { id: "pos-laboral", label: "Pós-laboral", horas: "16h30 a 23h", dias: "2.ª a 6.ª" },
+  { id: "sabado-manha", label: "Sábado manhã", horas: "9h a 13h", dias: "sábado" },
+  { id: "sabado-tarde", label: "Sábado tarde", horas: "14h a 19h", dias: "sábado" },
 ] as const;
 
 export type SlotId = (typeof SLOTS_CCP)[number]["id"];

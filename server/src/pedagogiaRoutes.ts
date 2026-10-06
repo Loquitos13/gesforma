@@ -5,7 +5,9 @@ import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { htmlCronograma, sessoesPublicas } from "./cronogramaPublico.js";
 import { listDriveFiles, readDriveContent, storeDriveFile } from "./googleDrive.js";
+import { sendMail } from "./mailer.js";
 import { podeGravarSessao } from "./sessaoAcesso.js";
+import { escapeHtml } from "./xss.js";
 import {
   cursoPedeDocsPreinscricao,
   docsBase,
@@ -218,6 +220,12 @@ function asObj(v: unknown): Record<string, unknown> {
     } catch { return {}; }
   }
   return {};
+}
+
+function fichaParaPapel(payload: Record<string, unknown>, role: string) {
+  if (role === "admin" || role === "secretaria") return payload;
+  const { valoresFormador: _interno, ...resto } = payload;
+  return resto;
 }
 
 function asArr(v: unknown): unknown[] {
@@ -1501,7 +1509,7 @@ export function registerPedagogiaRoutes(
       [regime, id],
     );
     const found = row.rows[0];
-    return { ficha: found ? { payload: asObj(found.payload), criterios: asArr(found.criterios) } : null };
+    return { ficha: found ? { payload: fichaParaPapel(asObj(found.payload), req.actor!.role), criterios: asArr(found.criterios) } : null };
   });
 
   app.put("/v1/cursos/:regime/:id/ficha", async (req, reply) => {
@@ -1509,6 +1517,15 @@ export function registerPedagogiaRoutes(
     const { regime, id } = params(req);
     const parsed = fichaSchema.safeParse(req.body);
     if (!regime || id == null || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    let payload = parsed.data.payload ?? null;
+    if (payload && req.actor!.role !== "admin" && req.actor!.role !== "secretaria") {
+      const prev = await db.query<{ payload: unknown }>(
+        "SELECT payload FROM curso_fichas WHERE regime = $1 AND curso_id = $2",
+        [regime, id],
+      );
+      const antigo = asObj(prev.rows[0]?.payload);
+      payload = { ...payload, valoresFormador: antigo.valoresFormador ?? [] };
+    }
     await db.query(
       `INSERT INTO curso_fichas (regime, curso_id, payload, criterios)
        VALUES ($1, $2, COALESCE($3::jsonb, '{}'::jsonb), COALESCE($4::jsonb, '[]'::jsonb))
@@ -1519,7 +1536,7 @@ export function registerPedagogiaRoutes(
       [
         regime,
         id,
-        parsed.data.payload ?? null,
+        payload,
         parsed.data.criterios ?? null,
       ],
     );
@@ -1536,7 +1553,7 @@ export function registerPedagogiaRoutes(
       [regime],
     );
     return {
-      fichas: rows.rows.map(r => ({ cursoId: Number(r.curso_id), payload: asObj(r.payload), criterios: asArr(r.criterios) })),
+      fichas: rows.rows.map(r => ({ cursoId: Number(r.curso_id), payload: fichaParaPapel(asObj(r.payload), req.actor!.role), criterios: asArr(r.criterios) })),
     };
   });
 
@@ -1733,6 +1750,66 @@ export function registerPedagogiaRoutes(
       await db.query("UPDATE catalog_items SET public_token = $2, updated_at = now() WHERE id = $1", [id, token]);
     }
     return { token, url: `${config.appOrigin}/inquerito/${token}` };
+  });
+
+  app.post("/v1/turmas/:regime/:id/inqueritos/enviar", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não envia inquéritos da turma." });
+    const regime = (req.params as { regime?: string }).regime === "fin" ? "fin" : "gold";
+    const id = Number((req.params as { id?: string }).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
+    const table = regime === "fin" ? "turmas_fin" : "turmas_gold";
+    const turma = await db.query<{ nome: string; curso: string }>(`SELECT nome, curso FROM ${table} WHERE id = $1`, [id]);
+    const row = turma.rows[0];
+    if (!row) return reply.code(404).send({ error: "turma inexistente" });
+    const formandosTable = regime === "fin" ? "formandos_fin" : "formandos_gold";
+    const pessoas = await db.query<{ nome: string; apelido: string; email: string }>(
+      `SELECT nome, apelido, email FROM ${formandosTable}
+        WHERE turma_id = $1 OR lower(trim(turma)) = lower(trim($2))`,
+      [id, row.nome],
+    );
+    const inqs = await db.query<{ id: number; payload: unknown; public_token: string | null }>(
+      "SELECT id, payload, public_token FROM catalog_items WHERE kind = 'inqueritos' AND regime = $1",
+      [regime],
+    );
+    const alvos = inqs.rows.filter(item => {
+      const payload = asObj(item.payload);
+      const publico = String(payload.publico ?? "formando");
+      return publico === "formando";
+    });
+    if (!alvos.length) return reply.code(400).send({ error: "Não há inquérito de formandos neste regime." });
+    const links: { titulo: string; url: string }[] = [];
+    for (const item of alvos) {
+      let token = item.public_token;
+      if (!token) {
+        token = randomBytes(18).toString("base64url");
+        await db.query("UPDATE catalog_items SET public_token = $2, updated_at = now() WHERE id = $1", [item.id, token]);
+      }
+      const payload = asObj(item.payload);
+      links.push({
+        titulo: String(payload.titulo ?? "Inquérito"),
+        url: `${config.appOrigin}/inquerito/${token}`,
+      });
+    }
+    let enviados = 0;
+    let semEmail = 0;
+    for (const pessoa of pessoas.rows) {
+      const email = String(pessoa.email ?? "").trim();
+      if (!email || !email.includes("@")) { semEmail += 1; continue; }
+      const nome = `${pessoa.nome ?? ""} ${pessoa.apelido ?? ""}`.trim() || "formando";
+      const linhas = links.map(l => `${l.titulo}: ${l.url}`).join("\n");
+      const htmlLinks = links.map(l => `<li><a href="${escapeHtml(l.url)}">${escapeHtml(l.titulo)}</a></li>`).join("");
+      await sendMail(db, {
+        to: email,
+        name: nome,
+        subject: `Inquérito da turma ${row.nome}`,
+        text: `Olá ${nome},\n\nPedimos a sua resposta ao inquérito da turma ${row.nome} (${row.curso}).\n\n${linhas}\n`,
+        html: `<p>Olá ${escapeHtml(nome)},</p><p>Pedimos a sua resposta ao inquérito da turma <strong>${escapeHtml(row.nome)}</strong> (${escapeHtml(row.curso)}).</p><ul>${htmlLinks}</ul>`,
+      });
+      enviados += 1;
+    }
+    await audit(db, req.actor!.id, "inquerito.enviar_turma", "turma", String(id), req.ip, { regime, enviados, semEmail });
+    return { ok: true, enviados, semEmail, inqueritos: links.length };
   });
 
   app.get("/v1/public/inqueritos/:token", {

@@ -126,3 +126,14 @@ export function codigoInternoTurma(curso: string, local: string, horario: string
   if (!cur || !loc || !hor || !data) return "";
   return `${cur} - ${loc} - ${hor} - ${data}`;
 }
+
+/** Se o código já existe, acrescenta 2, 3, 4… até ficar livre. */
+export function proximoNomeTurma(base: string, usados: string[]) {
+  const nome = base.trim();
+  if (!nome) return "";
+  const ocupados = new Set(usados.map(u => u.trim().toLowerCase()).filter(Boolean));
+  if (!ocupados.has(nome.toLowerCase())) return nome;
+  let n = 2;
+  while (ocupados.has(`${nome} ${n}`.toLowerCase())) n += 1;
+  return `${nome} ${n}`;
+}

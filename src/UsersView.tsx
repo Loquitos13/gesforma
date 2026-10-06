@@ -10,7 +10,8 @@ import {
   type StaffRole,
   type StaffUser,
 } from "./api";
-import { AppModal } from "./FormKit";
+import { AppModal, SearchSelect } from "./FormKit";
+import { gerarPalavraPasse, mensagemPalavraPasse } from "./passwordPolicy";
 import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions, type RowAction } from "./SecretaryUX";
 
 export const STAFF_ROLES: { value: StaffRole; label: string; hint: string }[] = [
@@ -72,12 +73,6 @@ function formatWhen(iso: string | null) {
   return d.toLocaleString("pt-PT", { dateStyle: "short", timeStyle: "short" });
 }
 
-function generatePassword() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-  const pick = (n: number) => Array.from({ length: n }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
-  return `Ena.${pick(4)}-${pick(4)}`;
-}
-
 function roleBadge(role: string) {
   const variant: Record<string, string> = {
     admin: "bg-amber-100 text-amber-800",
@@ -94,9 +89,9 @@ function estadoBadge(active: boolean) {
     : <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Inactivo</span>;
 }
 
-type Draft = { name: string; email: string; role: StaffRole; password: string; active: boolean };
+type Draft = { name: string; email: string; role: StaffRole; password: string; active: boolean; mustChangePassword: boolean };
 
-const emptyDraft = (): Draft => ({ name: "", email: "", role: "secretaria", password: "", active: true });
+const emptyDraft = (): Draft => ({ name: "", email: "", role: "secretaria", password: "", active: true, mustChangePassword: true });
 
 export function UsersView() {
   const { user: me, refresh } = useAuth();
@@ -162,7 +157,7 @@ export function UsersView() {
   }
 
   function openEdit(u: StaffUser) {
-    setDraft({ name: u.name, email: u.email, role: u.role, password: "", active: u.active });
+    setDraft({ name: u.name, email: u.email, role: u.role, password: "", active: u.active, mustChangePassword: false });
     setShowPass(false);
     setFormError("");
     setEditor(u);
@@ -173,8 +168,9 @@ export function UsersView() {
     setFormError("");
     try {
       if (editor === "new") {
-        if (draft.password.length < 8) {
-          setFormError("A palavra-passe precisa de pelo menos 8 caracteres.");
+        const aviso = mensagemPalavraPasse(draft.password);
+        if (aviso) {
+          setFormError(aviso);
           return;
         }
         await apiCreateUser({
@@ -183,6 +179,7 @@ export function UsersView() {
           password: draft.password,
           role: draft.role,
           active: draft.active,
+          mustChangePassword: draft.mustChangePassword,
         });
         setFlash("Utilizador criado. Pode entrar com email ou com a mesma conta Google.");
       } else if (editor) {
@@ -314,15 +311,23 @@ export function UsersView() {
             placeholder="Pesquisar nome ou email…"
             className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
           />
-          <select value={roleFilter} onChange={e => setRoleFilter(e.target.value as typeof roleFilter)} className="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white">
-            <option value="todos">Todos os perfis</option>
-            {STAFF_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-          </select>
-          <select value={estadoFilter} onChange={e => setEstadoFilter(e.target.value as typeof estadoFilter)} className="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white">
-            <option value="todos">Todos os estados</option>
-            <option value="activo">Activos</option>
-            <option value="inactivo">Inactivos</option>
-          </select>
+          <div className="w-full lg:w-52">
+            <SearchSelect
+              value={roleFilter === "todos" ? "Todos os perfis" : (STAFF_ROLES.find(r => r.value === roleFilter)?.label ?? roleFilter)}
+              onChange={v => {
+                if (v === "Todos os perfis") setRoleFilter("todos");
+                else setRoleFilter((STAFF_ROLES.find(r => r.label === v)?.value ?? "todos") as typeof roleFilter);
+              }}
+              options={[{ value: "Todos os perfis" }, ...STAFF_ROLES.map(r => ({ value: r.label, sub: r.hint }))]}
+            />
+          </div>
+          <div className="w-full lg:w-44">
+            <SearchSelect
+              value={estadoFilter === "activo" ? "Activos" : estadoFilter === "inactivo" ? "Inactivos" : "Todos os estados"}
+              onChange={v => setEstadoFilter(v === "Activos" ? "activo" : v === "Inactivos" ? "inactivo" : "todos")}
+              options={[{ value: "Todos os estados" }, { value: "Activos" }, { value: "Inactivos" }]}
+            />
+          </div>
         </div>
 
         {loading && <p className="px-4 py-10 text-center text-sm text-slate-400">A carregar utilizadores…</p>}
@@ -411,13 +416,15 @@ export function UsersView() {
             <input className={iCls} type="email" value={draft.email} onChange={e => setDraft(d => ({ ...d, email: e.target.value }))} placeholder="nome@ena.pt" />
           </Field>
           <Field label="Perfil">
-            <select className={iCls} value={draft.role} onChange={e => setDraft(d => ({ ...d, role: e.target.value as StaffRole }))}>
-              {STAFF_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
+            <SearchSelect
+              value={STAFF_ROLES.find(r => r.value === draft.role)?.label ?? draft.role}
+              onChange={v => setDraft(d => ({ ...d, role: (STAFF_ROLES.find(r => r.label === v)?.value ?? d.role) }))}
+              options={STAFF_ROLES.map(r => ({ value: r.label, sub: r.hint }))}
+            />
             <p className="text-xs text-slate-400">{STAFF_ROLES.find(r => r.value === draft.role)?.hint}</p>
           </Field>
           {editor === "new" && (
-            <Field label="Palavra-passe inicial" hint="Mínimo 8 caracteres. A pessoa pode depois entrar também com Google.">
+            <Field label="Palavra-passe inicial" hint="10 caracteres, com maiúscula, minúscula, algarismo e símbolo.">
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <input className={`${iCls} pr-11`} type={showPass ? "text" : "password"} value={draft.password} onChange={e => setDraft(d => ({ ...d, password: e.target.value }))} autoComplete="new-password" />
@@ -425,11 +432,17 @@ export function UsersView() {
                     {showPass ? "Ocultar" : "Ver"}
                   </button>
                 </div>
-                <button type="button" onClick={() => { setDraft(d => ({ ...d, password: generatePassword() })); setShowPass(true); }} className="px-3 py-2 text-xs font-semibold border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 whitespace-nowrap">
+                <button type="button" onClick={() => { setDraft(d => ({ ...d, password: gerarPalavraPasse() })); setShowPass(true); }} className="px-3 py-2 text-xs font-semibold border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 whitespace-nowrap">
                   Gerar
                 </button>
               </div>
             </Field>
+          )}
+          {editor === "new" && (
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input type="checkbox" checked={draft.mustChangePassword} onChange={e => setDraft(d => ({ ...d, mustChangePassword: e.target.checked }))} />
+              Obrigar a alterar a palavra-passe no primeiro acesso
+            </label>
           )}
           {editor !== "new" && (
             <label className="flex items-center gap-2 text-sm text-slate-600">
@@ -464,7 +477,7 @@ export function UsersView() {
                   {pwdShow ? "Ocultar" : "Ver"}
                 </button>
               </div>
-              <button type="button" onClick={() => { setPwd(generatePassword()); setPwdShow(true); }} className="px-3 py-2 text-xs font-semibold border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 whitespace-nowrap">
+              <button type="button" onClick={() => { setPwd(gerarPalavraPasse()); setPwdShow(true); }} className="px-3 py-2 text-xs font-semibold border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 whitespace-nowrap">
                 Gerar
               </button>
             </div>

@@ -11,7 +11,7 @@ export class ApiError extends Error {
 }
 
 export type StaffRole = "admin" | "secretaria" | "comercial" | "financiada" | "formador";
-export type SessionUser = { id: string; email: string; name: string; role: StaffRole | string };
+export type SessionUser = { id: string; email: string; name: string; role: StaffRole | string; mustChangePassword?: boolean };
 
 export type StaffUser = {
   id: string;
@@ -178,9 +178,11 @@ export const apiHealth = () => api<{ ok: boolean; driver: string; mail: string; 
 export const apiMe = () => api<{ user: SessionUser }>("/v1/me");
 export const apiLogin = (email: string, password: string) =>
   api<{ user: SessionUser }>("/v1/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+export const apiChangeOwnPassword = (password: string) =>
+  api<{ ok: boolean; user: SessionUser }>("/v1/auth/password", { method: "POST", body: JSON.stringify({ password }) });
 export const apiLogout = () => api<{ ok: boolean }>("/v1/auth/logout", { method: "POST" });
 export const apiUsers = () => api<{ users: StaffUser[] }>("/v1/users");
-export const apiCreateUser = (body: { name: string; email: string; password: string; role: StaffRole; active?: boolean }) =>
+export const apiCreateUser = (body: { name: string; email: string; password: string; role: StaffRole; active?: boolean; mustChangePassword?: boolean }) =>
   api<{ user: StaffUser }>("/v1/users", { method: "POST", body: JSON.stringify(body) });
 export const apiPatchUser = (id: string, body: { name?: string; email?: string; role?: StaffRole; active?: boolean }) =>
   api<{ user: StaffUser }>(`/v1/users/${id}`, { method: "PATCH", body: JSON.stringify(body) });
@@ -198,6 +200,10 @@ export type EquipaStats = {
   propostasAceites: number;
   sucessoPropostas?: number;
   metaPct?: number | null;
+  metaLeads?: number;
+  metaPropostas?: number;
+  telefone?: string;
+  nota?: string;
   propostasRecusadas: number;
   pipeline: number;
   receita: number;
@@ -633,10 +639,11 @@ export const apiPublicDocumentos = (token: string) =>
     pagamento?: { entidade: string; referencia: string; valor: number; estado: string } | null;
     encerrada?: boolean;
     correcao?: boolean;
-    passo?: 1 | 2 | 3;
+    passo?: 1 | 2;
     percursoConcluido?: boolean;
     turmas?: TurmaPercurso[];
     recomendadas?: TurmaPercurso[];
+    breves?: TurmaPercurso[];
     turmaEscolhida?: TurmaPercurso | null;
     criterios?: { local: string; horario: string; inicio: string };
   }>(
@@ -1141,8 +1148,12 @@ export async function apiDtpExport(regime: Regime, turmaId: number, filename?: s
   }
 }
 
-export const apiEquipaObjetivo = (comercialId: string, metaPct: number) =>
-  api<{ ok: boolean; metaPct: number }>(`/v1/equipa/${comercialId}/objetivo`, { method: "PUT", body: JSON.stringify({ metaPct }) });
+export const apiEquipaObjetivo = (comercialId: string, body: { metaPct?: number; metaLeads?: number; metaPropostas?: number }) =>
+  api<{ ok: boolean }>(`/v1/equipa/${comercialId}/objetivo`, { method: "PUT", body: JSON.stringify(body) });
+export const apiEquipaPerfil = (comercialId: string, body: { name?: string; telefone?: string; nota?: string }) =>
+  api<{ ok: boolean }>(`/v1/equipa/${comercialId}/perfil`, { method: "PATCH", body: JSON.stringify(body) });
+export const apiEnviarInqueritosTurma = (regime: "gold" | "fin", turmaId: number) =>
+  api<{ ok: boolean; enviados: number; semEmail: number; inqueritos: number }>(`/v1/turmas/${regime}/${turmaId}/inqueritos/enviar`, { method: "POST", body: "{}" });
 
 export type CrmPropostaCliente = { id: number; curso: string; estado: string; valor: number; corpo: string };
 export type CrmCliente = { id: number; nome: string; email: string; telf: string; nif: string; notas: string; propostas?: CrmPropostaCliente[] };

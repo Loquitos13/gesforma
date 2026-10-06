@@ -140,7 +140,11 @@ function MenuPortal({
   );
 }
 
-export type SelectOption = { value: string; sub?: string; disabled?: boolean };
+export type SelectOption = { value: string; label?: string; sub?: string; disabled?: boolean };
+
+function rotuloOpcao(o: SelectOption) {
+  return o.label || o.value;
+}
 
 export const cursosGoldOpts: SelectOption[] = [
   { value: "Formação de Formadores - CCP", sub: "Gold · 90h · b-learning" },
@@ -303,6 +307,7 @@ export function optsFromCursos(
 
 export function SearchSelect({
   value, onChange, options, placeholder = "Pesquisar…", empty = "Nenhum resultado.", allowEmpty,
+  emptyLabel = "Selecionar…",
   onAdd, addLabel = "Adicionar opção", disabled,
 }: {
   value: string;
@@ -311,6 +316,7 @@ export function SearchSelect({
   placeholder?: string;
   empty?: string;
   allowEmpty?: boolean;
+  emptyLabel?: string;
   onAdd?: () => void;
   addLabel?: string;
   disabled?: boolean;
@@ -330,14 +336,14 @@ export function SearchSelect({
   }, []);
   const extras: SelectOption[] = value && !options.some(o => o.value === value) ? [{ value }] : [];
   const all = [...options, ...extras];
-  const filtered = all.filter(o => `${o.value} ${o.sub ?? ""}`.toLowerCase().includes(q.toLowerCase()));
+  const filtered = all.filter(o => `${rotuloOpcao(o)} ${o.value} ${o.sub ?? ""}`.toLowerCase().includes(q.toLowerCase()));
   const selected = all.find(o => o.value === value);
   return (
     <div ref={triggerRef} className="relative">
       <button type="button" disabled={disabled} onClick={() => { if (disabled) return; setOpen(v => !v); setQ(""); }}
         className={`w-full px-3 py-2 text-sm border border-slate-200 rounded-lg text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-amber-400 ${disabled ? "bg-slate-50 cursor-not-allowed opacity-70" : "bg-white"}`}>
         <span className={`truncate ${selected || value ? "text-slate-800" : "text-slate-400"}`}>
-          {selected?.value ?? (value || "Selecionar…")}
+          {selected ? rotuloOpcao(selected) : (value || emptyLabel)}
         </span>
         <span className="text-slate-400 flex-shrink-0">▾</span>
       </button>
@@ -368,7 +374,7 @@ export function SearchSelect({
           {filtered.map(o => (
             <button key={o.value} type="button" onClick={() => { onChange(o.value); setOpen(false); }}
               className={`w-full text-left px-3 py-2 hover:bg-amber-50 ${o.value === value ? "bg-amber-50" : ""}`}>
-              <p className="text-sm text-slate-800">{o.value}</p>
+              <p className="text-sm text-slate-800">{rotuloOpcao(o)}</p>
               {o.sub && <p className="text-xs text-slate-400">{o.sub}</p>}
             </button>
           ))}
@@ -410,7 +416,7 @@ export function MultiSearchSelect({
   const selected = values.filter(Boolean);
   const extras: SelectOption[] = selected.filter(v => !options.some(o => o.value === v)).map(value => ({ value }));
   const all: SelectOption[] = [...options, ...extras];
-  const filtered = all.filter(o => `${o.value} ${o.sub ?? ""}`.toLowerCase().includes(q.toLowerCase()));
+  const filtered = all.filter(o => `${rotuloOpcao(o)} ${o.value} ${o.sub ?? ""}`.toLowerCase().includes(q.toLowerCase()));
 
   function toggle(v: string) {
     const opt = all.find(o => o.value === v);
@@ -426,7 +432,7 @@ export function MultiSearchSelect({
           {selected.length === 0 && <span className="text-slate-400 py-0.5">{noneLabel}</span>}
           {selected.map(v => (
             <span key={v} className="inline-flex items-center gap-1 max-w-full px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-medium">
-              <span className="truncate">{v}</span>
+              <span className="truncate">{all.find(o => o.value === v) ? rotuloOpcao(all.find(o => o.value === v)!) : v}</span>
               <span
                 role="button"
                 tabIndex={0}
@@ -471,7 +477,7 @@ export function MultiSearchSelect({
                   )}
                 </span>
                 <span className="min-w-0">
-                  <p className="text-sm text-slate-800">{o.value}</p>
+                  <p className="text-sm text-slate-800">{rotuloOpcao(o)}</p>
                   {o.sub && <p className="text-xs text-slate-400">{o.sub}</p>}
                 </span>
               </button>

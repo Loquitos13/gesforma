@@ -12,7 +12,8 @@ import {
   badgeEstadoCls, camposEmFalta, CRM_COLS, estadoPodeEntregar, isSecretariaRole,
   MODELOS_NOTA,
 } from "./crmPipeline";
-import { AppModal } from "./FormKit";
+import { AppModal, SearchSelect } from "./FormKit";
+import { criarComercialRapido } from "./criarComercialRapido";
 import { OptionSelect } from "./OptionSelect";
 import type { Preinscricao } from "./ListsContext";
 import { dismissAlertsForLead, persist, toastError, toastOk } from "./toastBus";
@@ -74,6 +75,7 @@ export function ClienteFicha({
   const [proximo, setProximo] = useState("");
   const [filtroEv, setFiltroEv] = useState("todos");
   const [etiquetas, setEtiquetas] = useState<CrmEtiqueta[]>([]);
+  const [comerciaisExtra, setComerciaisExtra] = useState<{ id: string; name: string }[]>([]);
   const [motivo, setMotivo] = useState("");
   const [pagMetodo, setPagMetodo] = useState("");
   const [entregando, setEntregando] = useState(false);
@@ -389,10 +391,22 @@ export function ClienteFicha({
               <input className={inp} value={dados.codigoPostal} onChange={e => setDados(d => ({ ...d, codigoPostal: e.target.value }))} />
             </label>
             <label className="text-xs font-semibold text-slate-500 uppercase flex flex-col gap-1">Comercial
-              <select className={inp} value={lead.comercialId ?? ""} onChange={e => onPatch?.({ comercialId: e.target.value || null })}>
-                <option value="">Sem dono</option>
-                {comerciais.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <SearchSelect
+                value={lead.comercialId ?? ""}
+                allowEmpty
+                emptyLabel="Sem dono"
+                placeholder="Pesquisar comercial…"
+                options={[...comerciais, ...comerciaisExtra.filter(c => !comerciais.some(x => x.id === c.id))].map(c => ({ value: c.id, label: c.name }))}
+                onChange={v => onPatch?.({ comercialId: v || null })}
+                onAdd={() => {
+                  void criarComercialRapido().then(c => {
+                    if (!c) return;
+                    setComerciaisExtra(xs => [...xs, c]);
+                    onPatch?.({ comercialId: c.id });
+                  });
+                }}
+                addLabel="Novo comercial"
+              />
             </label>
             <div>
               <p className="text-xs font-bold uppercase text-slate-400 mb-1">Etiqueta</p>
@@ -406,16 +420,18 @@ export function ClienteFicha({
             </div>
             <button type="button" onClick={guardarDados} className="w-full py-2 border text-sm font-semibold rounded-lg">Guardar dados</button>
             <div className="grid grid-cols-2 gap-2">
-              <select className={inp} value={lead.estado} onChange={e => {
-                const est = e.target.value;
-                if (est === "Pago") {
-                  onPatch?.({ estado: "Pago", pagamentoMetodo: pagMetodo || "MB Way" });
-                  return;
-                }
-                onPatch?.({ estado: est });
-              }}>
-                {CRM_COLS.filter(c => c.id !== "Formando" && c.id !== "Desistiu").map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-              </select>
+              <SearchSelect
+                value={lead.estado}
+                placeholder="Pesquisar etapa…"
+                options={CRM_COLS.filter(c => c.id !== "Formando" && c.id !== "Desistiu").map(c => ({ value: c.id, label: c.label }))}
+                onChange={est => {
+                  if (est === "Pago") {
+                    onPatch?.({ estado: "Pago", pagamentoMetodo: pagMetodo || "MB Way" });
+                    return;
+                  }
+                  onPatch?.({ estado: est });
+                }}
+              />
               <OptionSelect lista="metodos_pagamento" value={pagMetodo} onChange={setPagMetodo} allowEmpty placeholder="Método de pagamento" />
             </div>
             <div className="rounded-lg border border-slate-200 p-3 space-y-2">
@@ -602,9 +618,16 @@ export function ClienteFicha({
             {novoCampo ? (
               <div className="rounded-lg border p-3 space-y-2">
                 <input className={inp} value={campoLabel} onChange={e => setCampoLabel(e.target.value)} placeholder="Novo campo (todas as pré-inscrições)" />
-                <select className={inp} value={campoTipo} onChange={e => setCampoTipo(e.target.value as CrmCampoTipo)}>
-                  <option value="texto">Texto</option><option value="numero">Número</option><option value="data">Data</option>
-                </select>
+                <SearchSelect
+                  value={campoTipo}
+                  placeholder="Pesquisar tipo…"
+                  options={[
+                    { value: "texto", label: "Texto" },
+                    { value: "numero", label: "Número" },
+                    { value: "data", label: "Data" },
+                  ]}
+                  onChange={v => setCampoTipo(v as CrmCampoTipo)}
+                />
                 <button type="button" onClick={() => void persist(apiCrmCampoCreate({ label: campoLabel, tipo: campoTipo })).then(() => item && carregar(item.id))} className="text-xs font-semibold">Criar</button>
               </div>
             ) : (

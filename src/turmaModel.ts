@@ -135,6 +135,7 @@ export type TurmaGold = {
   formadores?: string[];
   horas: number;
   custoHoraSala?: number;
+  valoresHoraFormador?: Record<string, number>;
   cronograma: SessaoCronograma[];
 };
 
@@ -154,6 +155,7 @@ export type TurmaFin = {
   horas: number;
   formador: string;
   formadores?: string[];
+  valoresHoraFormador?: Record<string, number>;
   activa: boolean;
   cronograma: SessaoCronograma[];
 };

@@ -1,7 +1,8 @@
 import { fillVars } from "./security.js";
+import { escapeHtml } from "./xss.js";
 
 function esc(s: string) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return escapeHtml(s);
 }
 
 function decode(text: string) {

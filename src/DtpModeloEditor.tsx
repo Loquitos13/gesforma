@@ -9,6 +9,7 @@ import {
   type DtpModeloResposta,
   type Regime,
 } from "./api";
+import { SearchSelect } from "./FormKit";
 
 type ExtraDraft = { key: string; id: string; fase: DtpFase; label: string; fonte: string; hint: string; bloqueante: boolean; ambito: "turma" | "formando" | "formador" };
 
@@ -330,15 +331,16 @@ export function DtpModeloEditor({ accent, cursoId, entidadeId, onSaved }: {
                     />
                     Bloqueia o fecho da turma
                   </label>
-                  <select
-                    className={iCls}
+                  <SearchSelect
                     value={x.ambito ?? "turma"}
-                    onChange={e => setExtra(prev => prev.map(y => (y === x ? { ...y, ambito: e.target.value as ExtraDraft["ambito"] } : y)))}
-                  >
-                    <option value="turma">Ficheiro da turma (dossiê)</option>
-                    <option value="formando">Um por cada formando</option>
-                    <option value="formador">No perfil do formador</option>
-                  </select>
+                    placeholder="Pesquisar âmbito…"
+                    options={[
+                      { value: "turma", label: "Ficheiro da turma (dossiê)" },
+                      { value: "formando", label: "Um por cada formando" },
+                      { value: "formador", label: "No perfil do formador" },
+                    ]}
+                    onChange={v => setExtra(prev => prev.map(y => (y === x ? { ...y, ambito: v as ExtraDraft["ambito"] } : y)))}
+                  />
                 </div>
                 <button
                   type="button"

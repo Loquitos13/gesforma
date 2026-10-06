@@ -1,8 +1,9 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import {
-  apiGoogleLoginStatus, apiLogin, apiLogout, apiMe, apiMicrosoftLoginStatus,
+  apiChangeOwnPassword, apiGoogleLoginStatus, apiLogin, apiLogout, apiMe, apiMicrosoftLoginStatus,
   googleLoginStartUrl, microsoftLoginStartUrl, type SessionUser,
 } from "./api";
+import { mensagemPalavraPasse } from "./passwordPolicy";
 
 type AuthCtx = {
   user: SessionUser;
@@ -87,6 +88,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [googleOn, setGoogleOn] = useState(false);
   const [microsoftReady, setMicrosoftReady] = useState(false);
   const [microsoftOn, setMicrosoftOn] = useState(false);
+  const [novaPasse, setNovaPasse] = useState("");
+  const [passeMsg, setPasseMsg] = useState("");
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("login");
@@ -272,6 +275,38 @@ export function AuthGate({ children }: { children: ReactNode }) {
           <button type="submit" disabled={busy} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">
             {busy ? "A entrar…" : "Entrar"}
           </button>
+        </form>
+      </div>
+    );
+  }
+
+  async function trocarPasse(e: React.FormEvent) {
+    e.preventDefault();
+    const aviso = mensagemPalavraPasse(novaPasse);
+    if (aviso) { setPasseMsg(aviso); return; }
+    setBusy(true);
+    setPasseMsg("");
+    try {
+      const r = await apiChangeOwnPassword(novaPasse);
+      setUser(r.user);
+      setNovaPasse("");
+    } catch (err) {
+      setPasseMsg(err instanceof Error ? err.message : "Não foi possível alterar a palavra-passe.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (user.mustChangePassword) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <form onSubmit={e => void trocarPasse(e)} className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-4">
+          <h1 className="text-xl font-bold text-slate-800">Defina a sua palavra-passe</h1>
+          <p className="text-sm text-slate-500">No primeiro acesso tem de escolher uma palavra-passe nova. Precisa de 10 caracteres, com maiúscula, minúscula, algarismo e símbolo.</p>
+          {passeMsg && <p className="text-xs font-medium text-red-600">{passeMsg}</p>}
+          <input type="password" value={novaPasse} onChange={e => setNovaPasse(e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" autoComplete="new-password" />
+          <button type="submit" disabled={busy} className="w-full py-2.5 bg-amber-500 text-white text-sm font-semibold rounded-lg disabled:opacity-40">{busy ? "A gravar…" : "Guardar e entrar"}</button>
+          <button type="button" onClick={() => void logout()} className="w-full text-xs text-slate-500">Sair</button>
         </form>
       </div>
     );

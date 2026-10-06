@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "./AuthGate";
 import {
   ApiError,
-  apiEquipa, apiEquipaFicha, apiEquipaNota, apiEquipaObjetivo, apiEquipaProposta, apiPatchProposta, apiPropostaTemplates,
+  apiCreatePreinscricao, apiCreatePropostaTemplate,
+  apiEquipa, apiEquipaFicha, apiEquipaNota, apiEquipaObjetivo, apiEquipaPerfil, apiEquipaProposta, apiPatchProposta, apiPropostaTemplates,
   type EquipaComercial, type EquipaNota, type EquipaProposta, type PropostaTemplate,
 } from "./api";
 import { AppModal, SearchSelect } from "./FormKit";
@@ -172,7 +173,7 @@ export function EquipaView({ regime = "gold" }: { regime?: "gold" | "fin" }) {
                   className="mt-1 w-full px-2 py-1 text-sm border border-slate-200 rounded-lg"
                   onBlur={e => {
                     const n = Number(e.target.value);
-                    if (Number.isFinite(n)) void apiEquipaObjetivo(c.id, Math.min(100, Math.max(0, n))).then(() => load());
+                    if (Number.isFinite(n)) void apiEquipaObjetivo(c.id, { metaPct: Math.min(100, Math.max(0, n)) }).then(() => load());
                   }}
                 />
               </label>
@@ -197,7 +198,13 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
   const regrasPreco = useRegrasPreco();
   const locaisLista = useLocaisOpts("gold");
   const horariosLista = useHorariosOpts();
-  const [tab, setTab] = useState<"propostas" | "leads" | "notas">("propostas");
+  const [tab, setTab] = useState<"perfil" | "objetivos" | "propostas" | "leads" | "notas">("perfil");
+  const [perfilNome, setPerfilNome] = useState("");
+  const [perfilTel, setPerfilTel] = useState("");
+  const [perfilNota, setPerfilNota] = useState("");
+  const [metaPct, setMetaPct] = useState("");
+  const [metaLeads, setMetaLeads] = useState("");
+  const [metaPropostas, setMetaPropostas] = useState("");
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
   const [comercial, setComercial] = useState<EquipaComercial | null>(null);
@@ -222,6 +229,12 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
     apiEquipaFicha(id, regime)
       .then(r => {
         setComercial(r.comercial);
+        setPerfilNome(r.comercial.name);
+        setPerfilTel(r.comercial.stats.telefone ?? "");
+        setPerfilNota(r.comercial.stats.nota ?? "");
+        setMetaPct(r.comercial.stats.metaPct == null ? "" : String(r.comercial.stats.metaPct));
+        setMetaLeads(String(r.comercial.stats.metaLeads ?? 0));
+        setMetaPropostas(String(r.comercial.stats.metaPropostas ?? 0));
         setPropostas(r.propostas);
         setLeads(r.leads);
         setNotas(r.notas);
@@ -271,6 +284,48 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
     }
   }
 
+  async function novaPreinscricao() {
+    const nome = window.prompt("Nome da pré-inscrição");
+    if (!nome?.trim()) return;
+    const contacto = window.prompt("Email ou telemóvel");
+    if (!contacto?.trim()) return;
+    const partes = nome.trim().split(/\s+/);
+    const email = contacto.includes("@") ? contacto.trim() : "";
+    const telf = email ? "" : contacto.trim();
+    try {
+      const r = await apiCreatePreinscricao({
+        nome: partes[0],
+        apelido: partes.slice(1).join(" "),
+        email,
+        telf,
+        curso: "",
+        comercialId: id,
+        origem: "Telefone",
+        regime,
+      });
+      const novoId = r.preinscricao?.id;
+      if (novoId) {
+        setNotaLead(novoId);
+        setDraft(d => ({ ...d, preinscricaoId: String(novoId), clienteNome: nome.trim() }));
+      }
+      load();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível criar a pré-inscrição.");
+    }
+  }
+
+  async function novoTemplate() {
+    const nome = window.prompt("Nome do template de proposta");
+    if (!nome?.trim()) return;
+    try {
+      const r = await apiCreatePropostaTemplate({ nome: nome.trim(), curso: "", valor: 0, corpo: "" });
+      setTemplates(ts => [...ts, r.template]);
+      setTemplateId(r.template.id);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível criar o template.");
+    }
+  }
+
   async function criarNota() {
     if (!notaLead || !notaTxt.trim()) return;
     setBusy(true);
@@ -301,9 +356,11 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
 
         <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
           {([
+            ["perfil", "Perfil"],
+            ["objetivos", "Objectivos"],
             ["propostas", "Propostas"],
-            ["leads", "Pré-inscrições e notas"],
-            ["notas", "Diário comercial"],
+            ["leads", "Pré-inscrições"],
+            ["notas", "Diário"],
           ] as const).map(([k, l]) => (
             <button
               key={k}
@@ -313,6 +370,51 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
             >{l}</button>
           ))}
         </div>
+
+        {tab === "perfil" && (
+          <div className="space-y-3">
+            <label className="block text-xs font-semibold text-slate-500">Nome
+              <input className="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" value={perfilNome} onChange={e => setPerfilNome(e.target.value)} />
+            </label>
+            <label className="block text-xs font-semibold text-slate-500">Telefone
+              <input className="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" value={perfilTel} onChange={e => setPerfilTel(e.target.value)} />
+            </label>
+            <label className="block text-xs font-semibold text-slate-500">Nota interna
+              <textarea className="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" rows={3} value={perfilNota} onChange={e => setPerfilNota(e.target.value)} />
+            </label>
+            <button type="button" disabled={busy} onClick={() => {
+              setBusy(true);
+              void apiEquipaPerfil(id, { name: perfilNome.trim(), telefone: perfilTel.trim(), nota: perfilNota.trim() })
+                .then(() => load())
+                .finally(() => setBusy(false));
+            }} className="px-3 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-white">Guardar perfil</button>
+          </div>
+        )}
+
+        {tab === "objetivos" && (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-500">Metas do período. A conversão actual é {s?.conversao ?? 0}% e as propostas aceites são {s?.propostasAceites ?? 0}.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <label className="text-xs font-semibold text-slate-500">Conversão (%)
+                <input type="number" min={0} max={100} className="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" value={metaPct} onChange={e => setMetaPct(e.target.value)} />
+              </label>
+              <label className="text-xs font-semibold text-slate-500">Pré-inscrições
+                <input type="number" min={0} className="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" value={metaLeads} onChange={e => setMetaLeads(e.target.value)} />
+              </label>
+              <label className="text-xs font-semibold text-slate-500">Propostas
+                <input type="number" min={0} className="mt-1 w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" value={metaPropostas} onChange={e => setMetaPropostas(e.target.value)} />
+              </label>
+            </div>
+            <button type="button" disabled={busy} onClick={() => {
+              setBusy(true);
+              void apiEquipaObjetivo(id, {
+                metaPct: Number(metaPct) || 0,
+                metaLeads: Number(metaLeads) || 0,
+                metaPropostas: Number(metaPropostas) || 0,
+              }).then(() => load()).finally(() => setBusy(false));
+            }} className="px-3 py-2 text-xs font-semibold rounded-lg bg-slate-800 text-white">Guardar objectivos</button>
+          </div>
+        )}
 
         {tab === "propostas" && (
           <div className="space-y-3">
@@ -393,10 +495,16 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
           <div className="space-y-3">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
               <p className="text-xs font-semibold text-slate-600">Nova nota comercial</p>
-              <select className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white" value={notaLead} onChange={e => setNotaLead(e.target.value ? Number(e.target.value) : "")}>
-                <option value="">Escolher pré-inscrição…</option>
-                {leads.map(l => <option key={l.id} value={l.id}>{l.nome} {l.apelido} · {l.curso}</option>)}
-              </select>
+              <SearchSelect
+                value={notaLead === "" ? "" : String(notaLead)}
+                allowEmpty
+                emptyLabel="Escolher pré-inscrição…"
+                placeholder="Pesquisar pré-inscrição…"
+                options={leads.map(l => ({ value: String(l.id), label: `${l.nome} ${l.apelido}`.trim(), sub: l.curso }))}
+                onChange={v => setNotaLead(v ? Number(v) : "")}
+                onAdd={() => void novaPreinscricao()}
+                addLabel="Nova pré-inscrição"
+              />
               <textarea className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white min-h-[80px]" value={notaTxt} onChange={e => setNotaTxt(e.target.value)} placeholder="O que ficou combinado, objecções, próximo passo…" />
               <div className="flex justify-end">
                 <button type="button" disabled={busy || !notaLead || !notaTxt.trim()} onClick={() => void criarNota()} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white disabled:opacity-40">Registar nota</button>
@@ -422,15 +530,21 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
       <AppModal open={nova} onClose={() => setNova(false)} title="Nova proposta" sub={comercial?.name} size="md">
         <div className="p-5 space-y-3">
           <Field label="Template">
-            <select className={iCls} value={templateId} onChange={e => {
-              const idTpl = e.target.value ? Number(e.target.value) : "";
-              setTemplateId(idTpl);
-              const t = templates.find(x => x.id === idTpl);
-              if (t) setDraft(d => ({ ...d, curso: d.curso || t.curso, valor: d.valor || String(t.valor || "") }));
-            }}>
-              <option value="">Sem template</option>
-              {templates.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
-            </select>
+            <SearchSelect
+              value={templateId === "" ? "" : String(templateId)}
+              allowEmpty
+              emptyLabel="Sem template"
+              placeholder="Pesquisar template…"
+              options={templates.map(t => ({ value: String(t.id), label: t.nome }))}
+              onChange={v => {
+                const idTpl = v ? Number(v) : "";
+                setTemplateId(idTpl);
+                const t = templates.find(x => x.id === idTpl);
+                if (t) setDraft(d => ({ ...d, curso: d.curso || t.curso, valor: d.valor || String(t.valor || "") }));
+              }}
+              onAdd={() => void novoTemplate()}
+              addLabel="Novo template"
+            />
           </Field>
           <Field label="Cliente"><input className={iCls} value={draft.clienteNome} onChange={e => setDraft({ ...draft, clienteNome: e.target.value })} /></Field>
           <Field label="Email"><input className={iCls} value={draft.clienteEmail} onChange={e => setDraft({ ...draft, clienteEmail: e.target.value })} /></Field>
@@ -452,26 +566,35 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Valor (€)"><input type="number" className={iCls} value={draft.valor} onChange={e => setDraft({ ...draft, valor: e.target.value })} /></Field>
             <Field label="Estado">
-              <select className={iCls} value={draft.estado} onChange={e => setDraft({ ...draft, estado: e.target.value as (typeof ESTADOS)[number] })}>
-                {ESTADOS.map(e => <option key={e}>{e}</option>)}
-              </select>
+              <SearchSelect
+                value={draft.estado}
+                placeholder="Pesquisar estado…"
+                options={ESTADOS.map(e => ({ value: e }))}
+                onChange={v => { if ((ESTADOS as readonly string[]).includes(v)) setDraft({ ...draft, estado: v as (typeof ESTADOS)[number] }); }}
+              />
             </Field>
           </div>
           <Field label="Pré-inscrição (opcional)">
-            <select className={iCls} value={draft.preinscricaoId} onChange={e => {
-              const lead = leads.find(l => String(l.id) === e.target.value);
-              setDraft({
-                ...draft,
-                preinscricaoId: e.target.value,
-                clienteNome: lead ? `${lead.nome} ${lead.apelido}`.trim() : draft.clienteNome,
-                clienteEmail: lead?.email ?? draft.clienteEmail,
-                curso: lead?.curso ?? draft.curso,
-                valor: lead ? String(lead.preco || precoDaInscricao(cursosGold, regrasPreco, { curso: lead.curso, local: draft.local, horario: draft.horario }) || "") : draft.valor,
-              });
-            }}>
-              <option value="">Sem ligação a pré-inscrição</option>
-              {leads.map(l => <option key={l.id} value={l.id}>{l.nome} {l.apelido}</option>)}
-            </select>
+            <SearchSelect
+              value={draft.preinscricaoId}
+              allowEmpty
+              emptyLabel="Sem ligação a pré-inscrição"
+              placeholder="Pesquisar pré-inscrição…"
+              options={leads.map(l => ({ value: String(l.id), label: `${l.nome} ${l.apelido}`.trim(), sub: l.curso }))}
+              onChange={v => {
+                const lead = leads.find(l => String(l.id) === v);
+                setDraft({
+                  ...draft,
+                  preinscricaoId: v,
+                  clienteNome: lead ? `${lead.nome} ${lead.apelido}`.trim() : draft.clienteNome,
+                  clienteEmail: lead?.email ?? draft.clienteEmail,
+                  curso: lead?.curso ?? draft.curso,
+                  valor: lead ? String(lead.preco || precoDaInscricao(cursosGold, regrasPreco, { curso: lead.curso, local: draft.local, horario: draft.horario }) || "") : draft.valor,
+                });
+              }}
+              onAdd={() => void novaPreinscricao()}
+              addLabel="Nova pré-inscrição"
+            />
           </Field>
           <Field label="Resposta do cliente"><textarea className={iCls + " min-h-[72px]"} value={draft.respostaCliente} onChange={e => setDraft({ ...draft, respostaCliente: e.target.value })} /></Field>
           <div className="flex justify-end gap-2 pt-2">
@@ -484,9 +607,12 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
       <AppModal open={!!resposta} onClose={() => setResposta(null)} title="Resposta do cliente" sub={resposta?.clienteNome} size="md">
         <div className="p-5 space-y-3">
           <Field label="Estado da proposta">
-            <select className={iCls} value={respostaEstado} onChange={e => setRespostaEstado(e.target.value as (typeof ESTADOS)[number])}>
-              {ESTADOS.map(e => <option key={e}>{e}</option>)}
-            </select>
+            <SearchSelect
+              value={respostaEstado}
+              placeholder="Pesquisar estado…"
+              options={ESTADOS.map(e => ({ value: e }))}
+              onChange={v => { if ((ESTADOS as readonly string[]).includes(v)) setRespostaEstado(v as (typeof ESTADOS)[number]); }}
+            />
           </Field>
           <Field label="O que o cliente respondeu">
             <textarea className={iCls + " min-h-[100px]"} value={respostaTxt} onChange={e => setRespostaTxt(e.target.value)} placeholder="Aceitou, recusou, pediu desconto…" />

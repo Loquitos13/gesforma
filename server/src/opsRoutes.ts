@@ -20,7 +20,8 @@ import {
   mapTurmaGold,
   nextOpsId,
 } from "./ops.js";
-import { exportCrmLeads, queryCrmLeads, searchCrmLeads, type CrmFila, type CrmSort } from "./crm.js";
+import { exportCrmLeads, queryCrmLeads, searchCrmLeads, type CrmDir, type CrmFila, type CrmSort } from "./crm.js";
+import { fmtDataCalendario, fmtStampLisboa, hojeLisboa } from "./datas.js";
 import { syncTurmaDriveAccess } from "./googleDrive.js";
 import { cronogramaSoMarcas, nomesDoFormador } from "./sessaoAcesso.js";
 import { erroDisponibilidade, formadorEstaAlocado, garantirContaFormador } from "./formadorConta.js";
@@ -162,12 +163,14 @@ export function registerOpsRoutes(
   });
 
   const crmFila = z.enum(["contactar", "atrasados", "hoje", "agenda", "converter", "abertos", "secretaria", "preinscricao", "minhas"]).optional();
-  const crmSort = z.enum(["inscrito", "proximo", "valor", "nome", "actividade"]).optional();
+  const crmSort = z.enum(["inscrito", "proximo", "valor", "nome", "actividade", "comercial", "origem", "meio", "etiqueta", "curso", "turma", "estado"]).optional();
+  const crmDir = z.enum(["asc", "desc"]).optional();
 
   function crmParamsFromQuery(q: Record<string, unknown>) {
     const str = (k: string) => String(q[k] ?? "").trim();
     const fila = crmFila.safeParse(str("fila") || undefined);
     const sort = crmSort.safeParse(str("sort") || "inscrito");
+    const dir = crmDir.safeParse(str("dir") || "desc");
     return {
       q: str("q").slice(0, 80),
       estado: str("estado"),
@@ -181,6 +184,7 @@ export function registerOpsRoutes(
       page: Number(q.page) || 1,
       perPage: Number(q.perPage) || 50,
       sort: (sort.success ? sort.data : "inscrito") as CrmSort,
+      dir: (dir.success ? dir.data : "desc") as CrmDir,
       kanban: str("kanban") === "1" || str("kanban") === "true",
       regime: (str("regime") === "fin" ? "fin" : str("regime") === "gold" ? "gold" : "") as "" | "gold" | "fin",
       de: /^\d{4}-\d{2}-\d{2}$/.test(str("de")) ? str("de") : "",
@@ -188,15 +192,14 @@ export function registerOpsRoutes(
     };
   }
 
-  function hojeDe(q: Record<string, unknown>) {
-    const h = String(q.hoje ?? "").trim();
-    return /^\d{4}-\d{2}-\d{2}$/.test(h) ? h : new Date().toISOString().slice(0, 10);
+  function hojeDe() {
+    return hojeLisboa();
   }
 
   app.get("/v1/crm/leads", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const q = (req.query ?? {}) as Record<string, unknown>;
-    return queryCrmLeads(db, { ...crmParamsFromQuery(q), actorId: req.actor!.id }, hojeDe(q));
+    return queryCrmLeads(db, { ...crmParamsFromQuery(q), actorId: req.actor!.id }, hojeDe());
   });
 
   app.get("/v1/crm/search", async (req, reply) => {
@@ -216,13 +219,16 @@ export function registerOpsRoutes(
   app.get("/v1/crm/export", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const q = (req.query ?? {}) as Record<string, unknown>;
-    const rows = await exportCrmLeads(db, crmParamsFromQuery(q), hojeDe(q));
+    const rows = await exportCrmLeads(db, crmParamsFromQuery(q), hojeDe());
     const head = ["id", "inscrito", "nome", "apelido", "email", "telf", "curso", "local", "horario", "inicioCurso", "preco", "estado", "origem", "entrada", "meioContacto", "etiquetaNome", "campanha", "proximoContacto"];
-    const esc = (v: unknown) => {
+    const celula = (k: string, v: unknown) => {
       const s = String(v ?? "");
-      return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      if (k === "inscrito") return fmtStampLisboa(s);
+      if ((k === "inicioCurso" || k === "proximoContacto") && s && s !== "-") return fmtDataCalendario(s);
+      return s;
     };
-    const body = [head.join(";"), ...rows.map(r => head.map(k => esc((r as Record<string, unknown>)[k])).join(";"))].join("\n");
+    const esc = (v: string) => /[",;\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    const body = [head.join(";"), ...rows.map(r => head.map(k => esc(celula(k, (r as Record<string, unknown>)[k]))).join(";"))].join("\n");
     reply.header("Content-Type", "text/csv; charset=utf-8");
     reply.header("Content-Disposition", "attachment; filename=crm-leads.csv");
     return reply.send("\uFEFF" + body);

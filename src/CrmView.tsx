@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   apiCrmComerciais, apiCrmDuplicados, apiCrmEtiquetas, apiCrmExport, apiCrmLeadNota, apiCrmLeads, apiCrmLote,
   apiPublicOferta,
-  type CrmEtiqueta, type CrmFila, type CrmLead, type CrmListQuery, type CrmListResult, type CrmSort,
+  type CrmDir, type CrmEtiqueta, type CrmFila, type CrmLead, type CrmListQuery, type CrmListResult, type CrmSort,
 } from "./api";
 import { ClienteFicha } from "./ClienteFicha";
 import { entradaChip, etiquetaChip, leadMarkStyle, meioChip } from "./crmUi";
@@ -13,7 +13,8 @@ import { ConfirmDangerModal, EmptyHint, MobileCard, RowActions } from "./Secreta
 import { persist, toastError, toastOk } from "./toastBus";
 import { useTurmas } from "./TurmasContext";
 import { EscolherTurmaModal } from "./TurmaInscricao";
-import { hojeIso, isTurmaActiva, type TurmaFin, type TurmaGold } from "./turmaModel";
+import { isTurmaActiva, type TurmaFin, type TurmaGold } from "./turmaModel";
+import { fmtDataCalendario, fmtStampLisboa, hojeLisboa } from "./datas";
 import { CursoOfertaCampos } from "./CursoOfertaCampos";
 import { type CursoOfertaSel } from "./oferta";
 import { WhatsappSimulador } from "./WhatsappSimulador";
@@ -26,18 +27,41 @@ function badge(estado: string) {
   return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${badgeEstadoCls(estado)}`}>{estado}</span>;
 }
 
-function loadPrefs(): { view: "hoje" | "table" | "kanban"; perPage: number; sort: CrmSort } {
+const COLUNAS: { label: string; sort?: CrmSort }[] = [
+  { label: "Pré-inscrição", sort: "nome" },
+  { label: "Comercial", sort: "comercial" },
+  { label: "Origem", sort: "origem" },
+  { label: "Meio", sort: "meio" },
+  { label: "Etiqueta", sort: "etiqueta" },
+  { label: "Inscrito", sort: "inscrito" },
+  { label: "Curso", sort: "curso" },
+  { label: "Turma", sort: "turma" },
+  { label: "Valor", sort: "valor" },
+  { label: "Seguimento", sort: "proximo" },
+  { label: "Nota", sort: "actividade" },
+  { label: "Estado", sort: "estado" },
+  { label: "" },
+];
+
+const DIR_INICIAL: Record<CrmSort, CrmDir> = {
+  nome: "asc", comercial: "asc", origem: "asc", meio: "asc", etiqueta: "asc",
+  curso: "asc", turma: "asc", estado: "asc", proximo: "asc",
+  inscrito: "desc", valor: "desc", actividade: "desc",
+};
+
+function loadPrefs(): { view: "hoje" | "table" | "kanban"; perPage: number; sort: CrmSort; dir: CrmDir } {
+  const base = { view: "hoje" as const, perPage: 50, sort: "inscrito" as const, dir: "desc" as const };
   try {
     const raw = localStorage.getItem(PREFS_KEY) || sessionStorage.getItem(PREFS_KEY);
-    if (!raw) return { view: "hoje", perPage: 50, sort: "proximo" };
-    const p = JSON.parse(raw) as { view?: string; perPage?: number; sort?: CrmSort };
-    return {
-      view: p.view === "kanban" ? "kanban" : p.view === "table" ? "table" : "hoje",
-      perPage: [25, 50, 100].includes(p.perPage ?? 0) ? p.perPage! : 50,
-      sort: p.sort === "proximo" || p.sort === "valor" || p.sort === "nome" || p.sort === "actividade" ? p.sort : "inscrito",
-    };
+    if (!raw) return base;
+    const p = JSON.parse(raw) as { view?: string; perPage?: number; sort?: CrmSort; dir?: string };
+    const view = p.view === "kanban" ? "kanban" : p.view === "table" ? "table" : "hoje";
+    const perPage = [25, 50, 100].includes(p.perPage ?? 0) ? p.perPage! : 50;
+    if (p.dir !== "asc" && p.dir !== "desc") return { ...base, view, perPage };
+    const sort = p.sort && p.sort in DIR_INICIAL ? p.sort : "inscrito";
+    return { view, perPage, sort, dir: p.dir };
   } catch {
-    return { view: "hoje", perPage: 50, sort: "proximo" };
+    return base;
   }
 }
 
@@ -97,6 +121,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(prefs.perPage);
   const [sort, setSort] = useState<CrmSort>(prefs.sort);
+  const [dir, setDir] = useState<CrmDir>(prefs.dir);
   const [estado, setEstado] = useState("Todos");
   const [fila, setFila] = useState<CrmFila | "">("");
   const [curso, setCurso] = useState("");
@@ -141,7 +166,15 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
       .catch(() => undefined);
   }, [regime]);
 
-  const hoje = hojeIso();
+  const hoje = hojeLisboa();
+  function alternarOrdem(col: CrmSort) {
+    if (sort === col) setDir(d => d === "asc" ? "desc" : "asc");
+    else {
+      setSort(col);
+      setDir(DIR_INICIAL[col]);
+    }
+    setPage(1);
+  }
   function limparFiltros() {
     setCurso("");
     setLocal("");
@@ -159,12 +192,12 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
   }
   const query: CrmListQuery = useMemo(() => ({
     q, estado, curso, local, origem, entrada,
-    fila: viewMode === "hoje" && !fila ? "agenda" : fila,
-    page, perPage, sort, kanban: viewMode === "kanban", hoje,
+    fila: viewMode === "hoje" && !fila ? "hoje" : fila,
+    page, perPage, sort, dir, kanban: viewMode === "kanban", hoje,
     comercialId: comercialFiltro,
     regime,
     de, ate,
-  }), [q, estado, curso, local, origem, entrada, fila, page, perPage, sort, viewMode, hoje, comercialFiltro, regime, de, ate]);
+  }), [q, estado, curso, local, origem, entrada, fila, page, perPage, sort, dir, viewMode, hoje, comercialFiltro, regime, de, ate]);
 
   useEffect(() => {
     const t = window.setTimeout(() => { setQ(qInput.trim()); setPage(1); }, 280);
@@ -172,9 +205,9 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
   }, [qInput]);
 
   useEffect(() => {
-    sessionStorage.setItem(PREFS_KEY, JSON.stringify({ view: viewMode, perPage, sort }));
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ view: viewMode, perPage, sort }));
-  }, [viewMode, perPage, sort]);
+    sessionStorage.setItem(PREFS_KEY, JSON.stringify({ view: viewMode, perPage, sort, dir }));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ view: viewMode, perPage, sort, dir }));
+  }, [viewMode, perPage, sort, dir]);
 
   const carregar = useCallback(() => {
     setBusy(true);
@@ -246,7 +279,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
   const items = data?.items ?? [];
   const counts = data?.counts ?? {
     total: preinscricoes.length, abertos: 0, porContactar: 0, conversa: 0,
-    pagos: 0, formando: 0, atrasados: 0, hoje: 0, converter: 0, valorAberto: 0, preinscricoes: 0, manuais: 0,
+    pagos: 0, formando: 0, atrasados: 0, hoje: 0, marcadosHoje: 0, converter: 0, valorAberto: 0, preinscricoes: 0, manuais: 0,
     filaPre: 0, filaSec: 0, desistiu: 0,
   };
   const secRole = isSecretariaRole(user.role, regime);
@@ -400,7 +433,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
             { label: "Por contactar", value: String(counts.porContactar), sub: `${counts.atrasados} em atraso`, tone: counts.atrasados ? "text-red-600" : "text-amber-600", onClick: () => { setFila("contactar"); setEstado("Todos"); setPage(1); setViewMode("table"); } },
             { label: "Pré-inscrição", value: String(counts.filaPre ?? 0), sub: `${counts.filaSec ?? 0} na secretaria`, tone: "text-violet-700", onClick: () => { setFila("preinscricao"); setEstado("Todos"); setPage(1); setViewMode("table"); } },
             { label: "Convertidos", value: String(counts.formando), sub: `€ ${Math.round(counts.valorAberto).toLocaleString("pt-PT")} aberto`, tone: "text-emerald-600", onClick: () => { setFila(""); setEstado("Formando"); setPage(1); setViewMode("table"); } },
-            { label: "Agenda de hoje", value: String(counts.hoje), sub: `${counts.pagos} pagos`, tone: "text-blue-600", onClick: () => { setFila(""); setViewMode("hoje"); setPage(1); } },
+            { label: "Hoje", value: String(counts.hoje), sub: "hora de Lisboa", tone: "text-blue-600", onClick: () => { setFila(""); setViewMode("hoje"); setPage(1); } },
           ].map(c => (
             <button key={c.label} type="button" onClick={c.onClick} className="text-left bg-white rounded-xl border border-slate-200 px-3.5 py-3 hover:border-amber-300">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{c.label}</p>
@@ -412,7 +445,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
           <FilaBtn active={fila === "contactar"} tone="amber" title={`${counts.porContactar} por contactar`} sub="Primeiro trabalho do dia" onClick={() => { setFila(fila === "contactar" ? "" : "contactar"); setEstado("Todos"); setPage(1); setViewMode("table"); }} />
-          <FilaBtn active={fila === "atrasados"} tone={counts.atrasados ? "red" : "slate"} title={`${counts.atrasados} atrasados`} sub={counts.hoje ? `${counts.hoje} marcados para hoje` : "Follow-up em atraso"} onClick={() => { setFila(fila === "atrasados" ? "" : "atrasados"); setEstado("Todos"); setPage(1); setViewMode("table"); }} />
+          <FilaBtn active={fila === "atrasados"} tone={counts.atrasados ? "red" : "slate"} title={`${counts.atrasados} atrasados`} sub={counts.marcadosHoje ? `${counts.marcadosHoje} marcados para hoje` : "Follow-up em atraso"} onClick={() => { setFila(fila === "atrasados" ? "" : "atrasados"); setEstado("Todos"); setPage(1); setViewMode("table"); }} />
           <FilaBtn active={fila === "preinscricao"} tone="teal" title={`${counts.filaPre ?? 0} a completar`} sub="NIF e morada em falta" onClick={() => { setFila(fila === "preinscricao" ? "" : "preinscricao"); setEstado("Todos"); setPage(1); setViewMode("table"); }} />
           <FilaBtn active={fila === "secretaria"} tone="teal" title={`${counts.filaSec ?? 0} na secretaria`} sub="Inscrever na turma" onClick={() => { setFila(fila === "secretaria" ? "" : "secretaria"); setEstado("Todos"); setPage(1); setViewMode("table"); }} />
           <FilaBtn active={fila === "minhas" || comercialFiltro === "eu"} tone="slate" title="As minhas" sub={user.name} onClick={() => { setComercialFiltro(comercialFiltro === "eu" ? "" : "eu"); setFila(""); setPage(1); }} />
@@ -432,13 +465,10 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
             <label className="text-[10px] font-semibold uppercase text-slate-400">Até
               <input type="date" value={ate} onChange={e => { setAte(e.target.value); setPage(1); }} className="mt-1 block text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white" />
             </label>
-            <select value={sort} onChange={e => { setSort(e.target.value as CrmSort); setPage(1); }}
+            <select value={sort} onChange={e => { const next = e.target.value as CrmSort; setSort(next); setDir(DIR_INICIAL[next]); setPage(1); }}
+              aria-label="Ordenar por"
               className="text-xs border border-slate-200 rounded-lg px-2 py-2 bg-white">
-              <option value="inscrito">Mais recentes</option>
-              <option value="proximo">Próximo contacto</option>
-              <option value="valor">Valor</option>
-              <option value="nome">Nome A a Z</option>
-              <option value="actividade">Última actividade</option>
+              {COLUNAS.filter(c => c.sort).map(c => <option key={c.sort} value={c.sort}>{c.label}</option>)}
             </select>
             {comerciais.length > 0 && (
               <select value={comercialFiltro} onChange={e => { setComercialFiltro(e.target.value); setPage(1); }}
@@ -507,7 +537,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
 
         {viewMode === "hoje" && (
           <p className="text-xs text-slate-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-            Agenda do dia: não contactados, atrasados e follow-ups até hoje. NIF e morada fiscal ficam para a coluna Pré-inscrição.
+            Dia {fmtDataCalendario(hoje)} na hora de Lisboa: pré-inscrições recebidas hoje e follow-ups marcados para este dia.
           </p>
         )}
 
@@ -549,7 +579,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
                       title={`${r.nome} ${r.apelido}`}
                       sub={r.curso}
                       badge={badge(r.estado)}
-                      meta={[r.entrada === "manual" ? "Manual" : "Pré-inscrição", r.meioContacto || "sem meio", r.etiquetaNome || "sem etiqueta", [r.local, r.horario, r.inicioCurso && r.inicioCurso !== "-" ? r.inicioCurso : ""].filter(Boolean).join(" · ") || "sem turma", `€ ${r.preco}`]}
+                      meta={[r.entrada === "manual" ? "Manual" : "Pré-inscrição", r.meioContacto || "sem meio", r.etiquetaNome || "sem etiqueta", [r.local, r.horario, r.inicioCurso && r.inicioCurso !== "-" ? fmtDataCalendario(r.inicioCurso) : ""].filter(Boolean).join(" · ") || "sem turma", fmtStampLisboa(r.inscrito), `€ ${r.preco}`]}
                       onOpen={() => openFicha(r)}
                       actions={[
                         ...(r.telf ? [{ label: "Ligar", icon: ic.phone, onClick: () => { void logContacto(r, "Telefone"); window.location.href = `tel:${r.telf}`; } }] : []),
@@ -571,8 +601,21 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
                     <th className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 px-3 py-2 w-10">
                       <input type="checkbox" checked={items.length > 0 && sel.size === items.length} onChange={toggleAll} aria-label="Seleccionar página" />
                     </th>
-                    {["Pré-inscrição", "Comercial", "Origem", "Meio", "Etiqueta", "Inscrito", "Curso", "Turma", "Valor", "Seguimento", "Nota", "Estado", ""].map(h => (
-                      <th key={h} className="sticky top-0 z-10 text-left px-3 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide bg-slate-50 border-b border-slate-200 whitespace-nowrap">{h}</th>
+                    {COLUNAS.map(h => (
+                      <th key={h.label || "accoes"} className="sticky top-0 z-10 text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wide bg-slate-50 border-b border-slate-200 whitespace-nowrap"
+                        aria-sort={h.sort && sort === h.sort ? (dir === "asc" ? "ascending" : "descending") : "none"}>
+                        {h.sort ? (
+                          <button type="button" onClick={() => alternarOrdem(h.sort!)}
+                            className={`inline-flex items-center gap-1 ${sort === h.sort ? "text-slate-900" : "text-slate-500 hover:text-slate-800"}`}
+                            title={sort === h.sort ? (dir === "asc" ? "Ordem ascendente. Clique para inverter." : "Ordem descendente. Clique para inverter.") : `Ordenar por ${h.label}`}>
+                            {h.label}
+                            <span className={sort === h.sort ? "text-amber-600 font-bold" : "text-slate-300"} aria-hidden="true">
+                              {sort === h.sort ? (dir === "asc" ? "↑" : "↓") : "↕"}
+                            </span>
+                            {sort === h.sort && <span className="sr-only">{dir === "asc" ? "ascendente" : "descendente"}</span>}
+                          </button>
+                        ) : h.label}
+                      </th>
                     ))}
                   </tr>
                 </thead>
@@ -596,11 +639,11 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
                         <td className="px-3 py-1.5">{entradaChip(r.entrada)}</td>
                         <td className="px-3 py-1.5">{meioChip(r.meioContacto)}</td>
                         <td className="px-3 py-1.5">{etiquetaChip(r.etiquetaNome, r.etiquetaCor) ?? <span className="text-[11px] text-slate-400">-</span>}</td>
-                        <td className="px-3 py-1.5 font-mono text-[11px] text-slate-500 whitespace-nowrap">{r.inscrito.slice(0, 16)}</td>
+                        <td className="px-3 py-1.5 font-mono text-[11px] text-slate-500 whitespace-nowrap">{fmtStampLisboa(r.inscrito)}</td>
                         <td className="px-3 py-1.5 text-xs text-slate-600 max-w-[180px] truncate" title={r.curso}>{r.curso}</td>
                         <td className="px-3 py-1.5 text-xs text-slate-600 max-w-[200px]" title={[r.local, r.horario, r.inicioCurso].filter(Boolean).join(" · ")}>
                           <p>{r.local || "-"}</p>
-                          <p className="text-[11px] text-slate-400">{[r.horario, r.inicioCurso && r.inicioCurso !== "-" ? r.inicioCurso : ""].filter(Boolean).join(" · ")}</p>
+                          <p className="text-[11px] text-slate-400">{[r.horario, r.inicioCurso && r.inicioCurso !== "-" ? fmtDataCalendario(r.inicioCurso) : ""].filter(Boolean).join(" · ")}</p>
                         </td>
                         <td className="px-3 py-1.5 text-xs font-bold text-amber-600 whitespace-nowrap">€ {r.preco}</td>
                         <td className={`px-3 py-1.5 text-[11px] whitespace-nowrap ${late ? "font-bold text-red-600" : "text-slate-500"}`}>
@@ -953,7 +996,7 @@ function Kanban({
                       {item.meioContacto ? <p className="text-[11px] text-slate-600 mt-1">Meio: {item.meioContacto}</p> : null}
                       {item.ultimaNota ? <p className="text-[11px] text-slate-500 mt-1 truncate">{item.ultimaNota}</p> : null}
                       <p className="text-xs text-slate-500 mt-0.5 truncate">{item.curso}</p>
-                      <p className="text-[11px] text-slate-400 truncate">{[item.local, item.horario, item.inicioCurso && item.inicioCurso !== "-" ? item.inicioCurso : ""].filter(Boolean).join(" · ")}</p>
+                      <p className="text-[11px] text-slate-400 truncate">{[item.local, item.horario, item.inicioCurso && item.inicioCurso !== "-" ? fmtDataCalendario(item.inicioCurso) : ""].filter(Boolean).join(" · ")}</p>
                       {item.proximoContacto ? <p className={`text-[11px] mt-0.5 ${sla.late ? "text-red-600 font-semibold" : "text-slate-400"}`}>{sla.label}</p> : null}
                     </button>
                     <div className="flex gap-2 mt-2">

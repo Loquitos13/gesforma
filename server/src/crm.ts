@@ -2,7 +2,8 @@ import type { Db } from "./db/pool.js";
 import { mapPreinscricao } from "./ops.js";
 
 export type CrmFila = "contactar" | "atrasados" | "hoje" | "agenda" | "converter" | "abertos" | "secretaria" | "preinscricao" | "minhas";
-export type CrmSort = "inscrito" | "proximo" | "valor" | "nome" | "actividade";
+export type CrmSort = "inscrito" | "proximo" | "valor" | "nome" | "actividade" | "comercial" | "origem" | "meio" | "etiqueta" | "curso" | "turma" | "estado";
+export type CrmDir = "asc" | "desc";
 
 export type CrmListParams = {
   q?: string;
@@ -18,6 +19,7 @@ export type CrmListParams = {
   page?: number;
   perPage?: number;
   sort?: CrmSort;
+  dir?: CrmDir;
   kanban?: boolean;
   regime?: "gold" | "fin" | "";
   de?: string;
@@ -66,7 +68,11 @@ function addWhere(params: CrmListParams, hoje: string, skipEstado = false) {
     push("proximo_contacto <> '' AND left(proximo_contacto,10) < ? AND estado NOT IN ('Formando','Desistiu')", hoje);
   }
   if (params.fila === "hoje") {
-    push("left(proximo_contacto,10) = ? AND estado NOT IN ('Formando','Desistiu')", hoje);
+    push(
+      `(${DIA_INSCRITO} = ?::date OR (proximo_contacto <> '' AND left(proximo_contacto, 10) = ? AND estado NOT IN ('Formando','Desistiu')))`,
+      hoje,
+      hoje,
+    );
   }
   if (params.fila === "agenda") {
     push(
@@ -80,10 +86,10 @@ function addWhere(params: CrmListParams, hoje: string, skipEstado = false) {
   if (params.fila === "abertos") parts.push("estado NOT IN ('Formando','Desistiu')");
   if (params.regime === "gold" || params.regime === "fin") push("regime = ?", params.regime);
   if (params.de && /^\d{4}-\d{2}-\d{2}$/.test(params.de)) {
-    push("left(inscrito, 10) >= ?", params.de);
+    push(`${DIA_INSCRITO} >= ?::date`, params.de);
   }
   if (params.ate && /^\d{4}-\d{2}-\d{2}$/.test(params.ate)) {
-    push("left(inscrito, 10) <= ?", params.ate);
+    push(`${DIA_INSCRITO} <= ?::date`, params.ate);
   }
   return { sql: parts.join(" AND "), vals };
 }
@@ -95,12 +101,48 @@ function withEtiqueta(inner: string) {
             LEFT JOIN users u ON u.id = p.comercial_id`;
 }
 
-function orderSql(sort: CrmSort | undefined) {
-  if (sort === "proximo") return "CASE WHEN proximo_contacto = '' THEN '9999-12-31' ELSE proximo_contacto END ASC, inscrito DESC";
-  if (sort === "valor") return "preco DESC, inscrito DESC";
-  if (sort === "nome") return "nome ASC, apelido ASC";
-  if (sort === "actividade") return "COALESCE(ultima_actividade_em, created_at) DESC NULLS LAST, inscrito DESC";
-  return "inscrito DESC, id DESC";
+/** Dia civil da pré-inscrição em Lisboa. O carimbo `inscrito` é UTC sem fuso. */
+const DIA_INSCRITO = `(CASE
+  WHEN inscrito ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}'
+    THEN ((substring(inscrito from 1 for 16) || ':00')::timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Lisbon')::date
+  WHEN inscrito ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+    THEN substring(inscrito from 1 for 10)::date
+  ELSE (created_at AT TIME ZONE 'Europe/Lisbon')::date
+END)`;
+
+function orderSql(sort: CrmSort | undefined, dir: CrmDir | undefined) {
+  const d = dir === "asc" ? "ASC" : "DESC";
+  const id = `id ${d}`;
+  switch (sort) {
+    case "nome":
+      return `nome ${d}, apelido ${d}, ${id}`;
+    case "comercial":
+      return `comercial_nome ${d} NULLS LAST, ${id}`;
+    case "origem":
+      return `origem ${d}, ${id}`;
+    case "meio":
+      return `meio_contacto ${d}, ${id}`;
+    case "etiqueta":
+      return `etiqueta_nome ${d} NULLS LAST, ${id}`;
+    case "curso":
+      return `curso ${d}, ${id}`;
+    case "turma":
+      return `local ${d}, horario ${d}, ${id}`;
+    case "valor":
+      return `preco ${d}, ${id}`;
+    case "proximo":
+      return `CASE WHEN proximo_contacto = '' THEN 1 ELSE 0 END, proximo_contacto ${d}, ${id}`;
+    case "actividade":
+      return `COALESCE(ultima_actividade_em, created_at) ${d} NULLS LAST, ${id}`;
+    case "estado":
+      return `estado ${d}, ${id}`;
+    default:
+      return `inscrito ${d}, ${id}`;
+  }
+}
+
+function listaOrdenada(whereSql: string, sort: CrmSort | undefined, dir: CrmDir | undefined, limitSql: string) {
+  return `${withEtiqueta(`SELECT * FROM preinscricoes WHERE ${whereSql}`)} ORDER BY ${orderSql(sort, dir)} ${limitSql}`;
 }
 
 export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string) {
@@ -111,7 +153,7 @@ export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string)
   const total = count.rows[0]?.n ?? 0;
   const offset = (page - 1) * perPage;
   const rows = await db.query(
-    withEtiqueta(`SELECT * FROM preinscricoes WHERE ${sql} ORDER BY ${orderSql(params.sort)} LIMIT ${perPage} OFFSET ${offset}`),
+    listaOrdenada(sql, params.sort, params.dir, `LIMIT ${perPage} OFFSET ${offset}`),
     vals,
   );
   const items = rows.rows.map(r => mapPreinscricao(r as Record<string, unknown>));
@@ -121,7 +163,7 @@ export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string)
   const countVals: unknown[] = scoped ? [hoje, params.regime] : [hoje];
   const counts = await db.query<{
     total: number; abertos: number; por_contactar: number; conversa: number; pagos: number;
-    formando: number; atrasados: number; hoje: number; valor_aberto: number;
+    formando: number; atrasados: number; hoje: number; marcados_hoje: number; valor_aberto: number;
     preinscricoes: number; manuais: number; fila_pre: number; fila_sec: number; desistiu: number;
   }>(
     `SELECT
@@ -132,7 +174,8 @@ export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string)
       count(*) FILTER (WHERE estado = 'Pago')::int AS pagos,
       count(*) FILTER (WHERE estado = 'Formando')::int AS formando,
       count(*) FILTER (WHERE proximo_contacto <> '' AND left(proximo_contacto,10) < $1 AND estado NOT IN ('Formando','Desistiu'))::int AS atrasados,
-      count(*) FILTER (WHERE left(proximo_contacto,10) = $1 AND estado NOT IN ('Formando','Desistiu'))::int AS hoje,
+      count(*) FILTER (WHERE left(proximo_contacto,10) = $1 AND estado NOT IN ('Formando','Desistiu'))::int AS marcados_hoje,
+      count(*) FILTER (WHERE ${DIA_INSCRITO} = $1::date OR (proximo_contacto <> '' AND left(proximo_contacto,10) = $1 AND estado NOT IN ('Formando','Desistiu')))::int AS hoje,
       COALESCE(sum(preco) FILTER (WHERE estado NOT IN ('Formando','Desistiu')), 0)::float AS valor_aberto,
       count(*) FILTER (WHERE entrada = 'preinscricao')::int AS preinscricoes,
       count(*) FILTER (WHERE entrada = 'manual')::int AS manuais,
@@ -178,8 +221,7 @@ export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string)
         colVals,
       );
       const list = await db.query(
-        withEtiqueta(`SELECT * FROM preinscricoes WHERE ${sqlK} AND estado = $${colVals.length}
-         ORDER BY ${orderSql(params.sort)} LIMIT 80`),
+        listaOrdenada(`${sqlK} AND estado = $${colVals.length}`, params.sort, params.dir, "LIMIT 80"),
         colVals,
       );
       columns.push({
@@ -205,6 +247,7 @@ export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string)
       formando: c?.formando ?? 0,
       atrasados: c?.atrasados ?? 0,
       hoje: c?.hoje ?? 0,
+      marcadosHoje: c?.marcados_hoje ?? 0,
       converter: c?.pagos ?? 0,
       valorAberto: Number(c?.valor_aberto ?? 0),
       preinscricoes: c?.preinscricoes ?? 0,
@@ -237,7 +280,7 @@ export async function searchCrmLeads(db: Db, q: string, limit = 12) {
 export async function exportCrmLeads(db: Db, params: CrmListParams, hoje: string) {
   const { sql, vals } = addWhere(params, hoje);
   const rows = await db.query(
-    withEtiqueta(`SELECT * FROM preinscricoes WHERE ${sql} ORDER BY ${orderSql(params.sort)} LIMIT 2000`),
+    listaOrdenada(sql, params.sort, params.dir, "LIMIT 2000"),
     vals,
   );
   return rows.rows.map(r => mapPreinscricao(r as Record<string, unknown>));

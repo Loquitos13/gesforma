@@ -1,3 +1,5 @@
+import { fmtDataCalendario } from "./datas";
+
 export const CRM_ESTADOS = [
   "Não contactado",
   "1º Contacto",
@@ -97,11 +99,11 @@ export function estadoPodeEntregar(estado: string) {
 }
 
 export function slaSeguimento(proximo: string | undefined, hoje: string, estado: string) {
-  if (!proximo || estado === "Formando" || estado === "Desistiu" || estado === "Pré-inscrição") return { late: false, label: proximo || "-" };
+  if (!proximo || estado === "Formando" || estado === "Desistiu" || estado === "Pré-inscrição") return { late: false, label: proximo ? fmtDataCalendario(proximo) : "-" };
   const dia = proximo.slice(0, 10);
-  if (dia < hoje) return { late: true, label: `atrasado · ${fmtRelativo(dia)}` };
+  if (dia < hoje) return { late: true, label: `atrasado · ${fmtDataCalendario(proximo)}` };
   if (dia === hoje) return { late: false, label: `hoje · ${proximo.slice(11, 16) || "09:00"}` };
-  return { late: false, label: proximo };
+  return { late: false, label: fmtDataCalendario(proximo) };
 }
 
 export function podeArrastar(de: string, para: string, opts: { role: string; secretariaEm?: string | null; regime?: "gold" | "fin" }) {

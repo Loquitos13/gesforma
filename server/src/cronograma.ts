@@ -59,6 +59,14 @@ function modulosForIndex(i: number, n: number, curso?: string) {
 }
 
 /** Mesmo plano de sessões que o cockpit desenha - a base guarda o cronograma real da turma. */
+function moduloGerado(i: number, n: number, curso: string | undefined, lista?: string[]) {
+  if (lista) {
+    if (!lista.length) return [];
+    return [lista[Math.min(lista.length - 1, Math.floor((i * lista.length) / n))]!];
+  }
+  return modulosForIndex(i, n, curso);
+}
+
 export function generateCronograma(opts: {
   inicio: string;
   horario: string;
@@ -66,6 +74,7 @@ export function generateCronograma(opts: {
   formador: string;
   curso?: string;
   hoursPerSession?: number;
+  modulos?: string[];
 }): SessaoCronograma[] {
   const slot = horarioSlots(opts.horario);
   const hours = opts.hoursPerSession && opts.hoursPerSession > 0 ? opts.hoursPerSession : slot.hours;
@@ -84,7 +93,7 @@ export function generateCronograma(opts: {
       data: toIso(cursor),
       horaInicio: slot.start,
       horaFim: end,
-      modulos: modulosForIndex(i, n, opts.curso),
+      modulos: moduloGerado(i, n, opts.curso, opts.modulos),
       formadores: opts.formador && opts.formador !== "A definir" ? [opts.formador] : [],
       modalidade: "presencial",
     });

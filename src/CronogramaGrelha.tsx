@@ -31,7 +31,7 @@ import {
 } from "./cronogramaGrelha";
 import { mapLocalTurma, type LocalCatalogo } from "./cronogramaLocal";
 import { imprimirCronogramaEna } from "./cronogramaPrint";
-import { casarModulo, codigoModulo, formatDiaMes, sessaoModulos, type SessaoCronograma, type SessaoModalidade } from "./turmaModel";
+import { casarModulo, codigoModulo, formatDiaMes, ordenarCodigos, ordenarModulos, sessaoModulos, type SessaoCronograma, type SessaoModalidade } from "./turmaModel";
 
 function HoraField({
   label,
@@ -95,13 +95,21 @@ function semHoras(mod: EventoMod) {
   return mod === "auto" || mod === "avaliacao";
 }
 
-function formInicial(alvo: EventoDia | null, linha: GrelhaLinha | undefined, horario: string): EventoForm {
+function modulosDoAlvo(alvo: EventoDia | null, catalogo: string[]) {
+  if (!alvo || !catalogo.length) return [];
+  const casados = [...new Set(alvo.sessoes.flatMap(sessaoModulos))]
+    .map(m => casarModulo(m, catalogo))
+    .filter((m): m is string => Boolean(m));
+  return ordenarModulos([...new Set(casados)]);
+}
+
+function formInicial(alvo: EventoDia | null, linha: GrelhaLinha | undefined, horario: string, catalogo: string[]): EventoForm {
   if (alvo) {
     return {
       mod: alvo.linha.modalidade,
       horaInicio: alvo.linha.horaInicio,
       horaFim: alvo.linha.horaFim,
-      modulos: [...new Set(alvo.sessoes.flatMap(sessaoModulos))],
+      modulos: modulosDoAlvo(alvo, catalogo),
       formadores: [...new Set(alvo.sessoes.flatMap(s => s.formadores ?? []))],
     };
   }
@@ -124,9 +132,10 @@ function moduloEscolhido(modulos: string[], opcao: string, catalogo: string[]) {
 }
 
 function alternarModulo(modulos: string[], opcao: string, catalogo: string[]) {
-  return moduloEscolhido(modulos, opcao, catalogo)
+  const next = moduloEscolhido(modulos, opcao, catalogo)
     ? modulos.filter(m => opcaoDoModulo(m, catalogo) !== opcao)
     : [...modulos, opcao];
+  return ordenarModulos(next);
 }
 
 function EventoModal({
@@ -155,22 +164,17 @@ function EventoModal({
     ? eventos.find(e => e.linha.id === linha.id) ?? null
     : eventos.length === 1 ? eventos[0]! : null;
   const [alvo, setAlvo] = useState<EventoDia | null>(inicial);
-  const [form, setForm] = useState<EventoForm>(() => formInicial(inicial, linha, horario));
+  const catalogoInicial = moduloOpts.map(o => o.value);
+  const [form, setForm] = useState<EventoForm>(() => formInicial(inicial, linha, horario, catalogoInicial));
   const [erro, setErro] = useState("");
   const [aRemover, setARemover] = useState(false);
   const editing = Boolean(alvo);
   const catalogo = useMemo(() => moduloOpts.map(o => o.value), [moduloOpts]);
-  // Módulos que já estão nas sessões deste dia mas não casam com o catálogo do
-  // curso entram na lista à mesma, para não ficarem escolhidos sem se verem.
-  const opcoes = useMemo(() => {
-    const fora = [...new Set(eventos.flatMap(e => e.sessoes.flatMap(sessaoModulos)))]
-      .filter(m => !casarModulo(m, catalogo));
-    return [...catalogo, ...fora];
-  }, [catalogo, eventos]);
+  const opcoes = catalogo;
 
   function abrir(ev: EventoDia | null) {
     setAlvo(ev);
-    setForm(formInicial(ev, ev ? undefined : linha, horario));
+    setForm(formInicial(ev, ev ? undefined : linha, horario, catalogo));
     setErro("");
     setARemover(false);
   }
@@ -210,7 +214,7 @@ function EventoModal({
     const nextLinha = buildLinha(form.mod, hi, hf);
     const lectiva = form.mod === "presencial" || form.mod === "sincrona";
     const next = aplicarEvento(sessoes, date, nextLinha, {
-      modulos: form.modulos,
+      modulos: ordenarModulos(form.modulos),
       formadores: lectiva
         ? (form.formadores.length ? form.formadores : formador && formador !== "A definir" ? [formador] : [])
         : [],
@@ -239,7 +243,7 @@ function EventoModal({
             <div className="flex flex-wrap gap-1.5">
               {eventos.map(ev => {
                 const on = alvo?.linha.id === ev.linha.id;
-                const codes = [...new Set(ev.sessoes.flatMap(s => (s.modulos ?? []).map(codigoModulo)).filter(Boolean))];
+                const codes = ordenarCodigos(ev.sessoes.flatMap(s => (s.modulos ?? []).map(codigoModulo)));
                 return (
                   <button
                     key={ev.linha.id}
@@ -291,7 +295,7 @@ function EventoModal({
               {form.mod === "avaliacao" ? "(obrigatório)" : "(opcional, pode ser mais do que um)"}
             </span>
           </p>
-          <div className="max-h-56 overflow-auto border border-slate-100 rounded-lg p-2 grid gap-1 sm:grid-cols-2">
+          <div className="border border-slate-100 rounded-lg p-2 grid gap-1.5 sm:grid-cols-2">
             {opcoes.map(valor => (
               <label key={valor} className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
                 <input

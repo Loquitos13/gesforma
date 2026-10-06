@@ -77,11 +77,11 @@ export type OpsSnapshot = {
   cursosFin: Array<{ id: number; ufcdCod: string; ufcd: string; nomeComercial: string; regime: string; horas: number; estado: string }>;
   turmasGold: Array<{
     id: number; dataInicio: string; nome: string; curso: string; local: string; horario: string;
-    totalAlunos: number; vagas: number; estado: string; formador: string; horas: number; custoHoraSala?: number; cronograma: unknown[];
+    totalAlunos: number; vagas: number; toleranciaVagas?: number; estado: string; formador: string; horas: number; custoHoraSala?: number; cronograma: unknown[];
   }>;
   turmasFin: Array<{
     id: number; dataInicio: string; nome: string; curso: string; ufcdCod: string; local: string; horario: string;
-    alunos: number; alunosTotal: number; estado: string; horas: number; formador: string; activa: boolean; cronograma: unknown[];
+    alunos: number; alunosTotal: number; toleranciaVagas?: number; estado: string; horas: number; formador: string; activa: boolean; cronograma: unknown[];
   }>;
   formadores: Array<{
     id: number; nome: string; telf: string; email: string; especialidade: string; ccp: string; nif: string;
@@ -477,6 +477,7 @@ export type DocPreinscricaoCurso = {
   required: boolean;
   pedido: boolean;
   origem: "base" | "extra" | "dossie";
+  modelo?: string;
 };
 export const apiDocsPreinscricao = (regime: Regime, cursoId: number) =>
   api<{ aplica: boolean; tipo: string; docs: DocPreinscricaoCurso[] }>(`/v1/cursos/${regime}/${cursoId}/docs-preinscricao`);
@@ -485,6 +486,21 @@ export const apiSaveDocsPreinscricao = (
   cursoId: number,
   body: { ocultos: string[]; extra: { id?: string; label: string; required: boolean }[] },
 ) => api<{ ok: boolean }>(`/v1/cursos/${regime}/${cursoId}/docs-preinscricao`, { method: "PUT", body: JSON.stringify(body) });
+export async function apiDocsPreinscricaoUpload(regime: Regime, cursoId: number, docId: string, file: File) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const headers = new Headers();
+  headers.set("Accept", "application/json");
+  headers.set("X-Gesforma-Client", "web");
+  const res = await fetch(`${BASE}/v1/cursos/${regime}/${cursoId}/docs-preinscricao/${encodeURIComponent(docId)}/modelo`, {
+    method: "POST", credentials: "include", headers, body: fd,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, typeof data.error === "string" ? data.error : "upload recusado");
+  return data as { ok: boolean; nome: string };
+}
+export const apiDocsPreinscricaoApagarModelo = (regime: Regime, cursoId: number, docId: string) =>
+  api<{ ok: boolean }>(`/v1/cursos/${regime}/${cursoId}/docs-preinscricao/${encodeURIComponent(docId)}/modelo`, { method: "DELETE" });
 
 export type CursoFicha = { payload: Record<string, unknown>; criterios: { id: string; label: string }[] };
 export const apiCursoFicha = (regime: Regime, cursoId: number) =>
@@ -603,12 +619,12 @@ export type TurmaPercurso = {
   horario: string;
   dataInicio: string;
   livres: number;
-  sessoes: { data: string; inicio: string; fim: string }[];
+  sessoes: { data: string; inicio: string; fim: string; modalidade?: string; modulos?: string[]; formadores?: string[] }[];
 };
 export const apiPublicDocumentos = (token: string) =>
   api<{
     nome: string; curso: string; preco?: number;
-    tipos: { id: string; label: string; required?: boolean }[];
+    tipos: { id: string; label: string; required?: boolean; modelo?: string }[];
     ficheiros: { id: number; tipo: string; nome: string; created_at: string; estado?: string; observacao?: string }[];
     docsCompletos?: boolean;
     emFalta?: string[];
@@ -620,9 +636,17 @@ export const apiPublicDocumentos = (token: string) =>
     percursoConcluido?: boolean;
     turmas?: TurmaPercurso[];
     turmaEscolhida?: TurmaPercurso | null;
+    criterios?: { local: string; horario: string; inicio: string };
   }>(
     `/v1/public/documentos/${encodeURIComponent(token)}`,
   );
+export function urlModeloPublico(token: string, tipo: string) {
+  return `${BASE}/v1/public/documentos/${encodeURIComponent(token)}/modelo/${encodeURIComponent(tipo)}`;
+}
+export const apiPublicConsentir = (token: string, tipo: string) =>
+  api<{ ok: boolean; nome: string }>(`/v1/public/documentos/${encodeURIComponent(token)}/consentir`, {
+    method: "POST", body: JSON.stringify({ tipo }),
+  });
 export const apiPublicEscolherTurma = (token: string, turmaId: number) =>
   api<{ ok: boolean }>(`/v1/public/documentos/${encodeURIComponent(token)}/turma`, {
     method: "POST", body: JSON.stringify({ turmaId }),

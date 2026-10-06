@@ -1,7 +1,7 @@
 import type { Db } from "./db/pool.js";
 import { comporModelo, DTP_MODELO_VAZIO, parseDtpModelo } from "./dtpModel.js";
 
-export type DocPedido = { id: string; label: string; required: boolean };
+export type DocPedido = { id: string; label: string; required: boolean; modelo?: string };
 
 const GOLD: DocPedido[] = [
   { id: "cc", label: "Cartão de Cidadão", required: true },
@@ -80,6 +80,55 @@ export async function gravarDocsPreinscricao(db: Db, regime: "gold" | "fin", cur
   );
 }
 
+export async function listarModelosConsentimento(db: Db, regime: "gold" | "fin", cursoId: number) {
+  const rows = await db.query<{ requisito_id: string; nome: string; drive_file_id: string }>(
+    `SELECT requisito_id, nome, drive_file_id
+       FROM curso_ficheiros
+      WHERE regime = $1 AND curso_id = $2 AND ambito = 'consentimento' AND drive_file_id <> ''
+      ORDER BY created_at`,
+    [regime, cursoId],
+  );
+  return rows.rows;
+}
+
+export async function limparModelosFora(db: Db, regime: "gold" | "fin", cursoId: number, activos: string[]) {
+  await db.query(
+    `DELETE FROM curso_ficheiros
+      WHERE regime = $1 AND curso_id = $2 AND ambito = 'consentimento'
+        AND NOT (requisito_id = ANY($3::text[]))`,
+    [regime, cursoId, activos],
+  );
+}
+
+async function idCursoPorNome(db: Db, regime: "gold" | "fin", curso: string) {
+  const cursoRow = regime === "fin"
+    ? await db.query<{ id: number }>(
+      "SELECT id FROM cursos_fin WHERE lower(trim(nome_comercial)) = lower(trim($1)) OR lower(trim(ufcd)) = lower(trim($1)) OR ufcd_cod = $1 LIMIT 1",
+      [curso],
+    )
+    : await db.query<{ id: number }>(
+      "SELECT id FROM cursos_gold WHERE lower(trim(nome)) = lower(trim($1)) LIMIT 1",
+      [curso],
+    );
+  return cursoRow.rows[0]?.id ?? null;
+}
+
+export async function ficheiroModelo(db: Db, regime: "gold" | "fin", curso: string, docId: string) {
+  const cursoId = await idCursoPorNome(db, regime, curso);
+  if (cursoId == null) return null;
+  const pedidos = await docsDoCurso(db, curso, regime);
+  if (!pedidos.some(p => p.id === docId && p.modelo)) return null;
+  const row = await db.query<{ nome: string; drive_file_id: string }>(
+    `SELECT nome, drive_file_id FROM curso_ficheiros
+      WHERE regime = $1 AND curso_id = $2 AND ambito = 'consentimento' AND requisito_id = $3
+      ORDER BY created_at DESC LIMIT 1`,
+    [regime, cursoId, docId],
+  );
+  const found = row.rows[0];
+  if (!found?.drive_file_id) return null;
+  return { nome: found.nome, driveFileId: found.drive_file_id };
+}
+
 export async function docsDoCurso(db: Db, curso: string, regime: "gold" | "fin"): Promise<DocPedido[]> {
   const base = docsBase(regime);
   const cursoRow = regime === "fin"
@@ -124,7 +173,12 @@ export async function docsDoCurso(db: Db, curso: string, regime: "gold" | "fin")
     seen.add(extra.id);
     kept.push({ id: extra.id, label: extra.label || extra.id, required: Boolean(extra.bloqueante) });
   }
-  return kept;
+  const modelos = await listarModelosConsentimento(db, regime, found.id);
+  const porNome = new Map(modelos.map(m => [m.requisito_id, m.nome]));
+  return kept.map(d => {
+    const nome = porNome.get(d.id);
+    return nome ? { ...d, modelo: nome, required: true } : d;
+  });
 }
 
 export function docsCompletos(pedidos: DocPedido[], tiposEntregues: string[]) {

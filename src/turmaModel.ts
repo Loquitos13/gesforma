@@ -54,9 +54,30 @@ export function casarModulo(valor: string, opcoes: string[]): string | null {
   return mesmoCodigo.length === 1 ? mesmoCodigo[0]! : null;
 }
 
+export function ordenarCodigos(codes: string[]) {
+  const n = (code: string) => Number(code.match(/(\d+)/)?.[1] ?? 9999);
+  return [...new Set(codes.filter(Boolean))].sort((a, b) => n(a) - n(b) || a.localeCompare(b, "pt"));
+}
+
+export function ordenarModulos(modulos: string[]) {
+  const n = (nome: string) => Number(codigoModulo(nome).match(/(\d+)/)?.[1] ?? 9999);
+  return [...modulos].sort((a, b) => n(a) - n(b) || codigoModulo(a).localeCompare(codigoModulo(b), "pt"));
+}
+
 export function codigosModulos(modulos: string[] | undefined) {
-  const codes = [...new Set((modulos ?? []).map(codigoModulo).filter(Boolean))];
-  return codes.join("/");
+  return ordenarCodigos((modulos ?? []).map(codigoModulo).filter(Boolean)).join("/");
+}
+
+export function lugaresLivres(t: {
+  vagas?: number;
+  totalAlunos?: number;
+  alunos?: number;
+  alunosTotal?: number;
+  toleranciaVagas?: number;
+}) {
+  const limite = (t.vagas ?? t.alunosTotal ?? 0) + Math.max(0, t.toleranciaVagas ?? 0);
+  const ocupados = t.totalAlunos ?? t.alunos ?? 0;
+  return limite - ocupados;
 }
 
 export function modulosLabel(modulos: string[] | undefined, empty = "Módulo por definir") {
@@ -108,6 +129,7 @@ export type TurmaGold = {
   totalAlunos: number;
   vagas: number;
   inscricoesAdicionais?: number;
+  toleranciaVagas?: number;
   estado: "Ativa" | "Inativa";
   formador: string;
   formadores?: string[];
@@ -127,6 +149,7 @@ export type TurmaFin = {
   alunos: number;
   alunosTotal: number;
   inscricoesAdicionais?: number;
+  toleranciaVagas?: number;
   estado: string;
   horas: number;
   formador: string;
@@ -304,6 +327,14 @@ function modulosForIndex(i: number, n: number, curso?: string) {
   return [pool[Math.min(pool.length - 1, Math.floor((i * pool.length) / n))]];
 }
 
+function moduloGerado(i: number, n: number, curso: string | undefined, lista?: string[]) {
+  if (lista) {
+    if (!lista.length) return [];
+    return [lista[Math.min(lista.length - 1, Math.floor((i * lista.length) / n))]!];
+  }
+  return modulosForIndex(i, n, curso);
+}
+
 export function generateCronograma(opts: {
   inicio: string;
   horario: string;
@@ -311,6 +342,7 @@ export function generateCronograma(opts: {
   formador: string;
   curso?: string;
   hoursPerSession?: number;
+  modulos?: string[];
 }): SessaoCronograma[] {
   const slot = horarioSlots(opts.horario);
   const hours = opts.hoursPerSession && opts.hoursPerSession > 0 ? opts.hoursPerSession : slot.hours;
@@ -329,7 +361,7 @@ export function generateCronograma(opts: {
       data: toIso(cursor),
       horaInicio: slot.start,
       horaFim: end,
-      modulos: modulosForIndex(i, n, opts.curso),
+      modulos: moduloGerado(i, n, opts.curso, opts.modulos),
       formadores: opts.formador && opts.formador !== "A definir" ? [opts.formador] : [],
       modalidade: "presencial",
     });
@@ -522,7 +554,7 @@ export function linhasTurmaInscricao(turmas: TurmaGold[], lead: LeadOfertaRef, h
     !ids.has(t.id) && t.dataInicio.slice(0, 10) >= hoje);
 
   const linhaAdequada = (t: TurmaGold): TurmaInscricaoLinha => {
-    const vagas = Math.max(0, t.vagas - t.totalAlunos);
+    const vagas = Math.max(0, lugaresLivres(t));
     if (!isTurmaActiva(t)) return { turma: t, grupo: "adequada", disabled: true, motivo: "Não libertada" };
     if (vagas <= 0) return { turma: t, grupo: "adequada", disabled: true, motivo: "Sem vagas" };
     return { turma: t, grupo: "adequada", disabled: false, motivo: `${vagas} vaga${vagas === 1 ? "" : "s"}` };
@@ -557,7 +589,7 @@ export function turmaGoldOpts(
     .map(t => ({
       value: t.nome,
       sub: isTurmaActiva(t)
-        ? `${t.local} · ${t.horario} · ${Math.max(0, t.vagas - t.totalAlunos)} vagas`
+        ? `${t.local} · ${t.horario} · ${Math.max(0, lugaresLivres(t))} vagas`
         : `${t.local} · Inativa - não aceita novas inscrições`,
     }));
 }

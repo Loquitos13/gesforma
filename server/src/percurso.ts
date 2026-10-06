@@ -20,6 +20,16 @@ export type SessaoPublica = {
   formadores: string[];
 };
 
+export type PlanoPublico = {
+  id: string;
+  data: string;
+  horaInicio: string;
+  horaFim: string;
+  modalidade: string;
+  modulos: string[];
+  formadores: string[];
+};
+
 export type TurmaPublica = {
   id: number;
   nome: string;
@@ -28,6 +38,7 @@ export type TurmaPublica = {
   dataInicio: string;
   livres: number;
   sessoes: SessaoPublica[];
+  plano: PlanoPublico[];
 };
 
 export type PedidoTurma = { local?: string; horario?: string; inicio?: string };
@@ -91,6 +102,18 @@ function sessoesDe(raw: unknown): SessaoPublica[] {
     }));
 }
 
+function planoDe(raw: unknown): PlanoPublico[] {
+  return sessoesPublicas(raw).map((s, i) => ({
+    id: `p${i}`,
+    data: s.data,
+    horaInicio: s.horaInicio,
+    horaFim: s.horaFim,
+    modalidade: s.modalidade,
+    modulos: modulosPorOrdem(s.modulos),
+    formadores: s.formadores,
+  }));
+}
+
 function turmaActiva(regime: "gold" | "fin", row: TurmaRow) {
   if (regime === "fin") return row.activa !== false && row.estado !== "Inativa";
   return row.estado === "Ativa" || row.estado === "Ativo";
@@ -107,6 +130,7 @@ function mapTurma(row: TurmaRow): TurmaPublica {
     dataInicio: isoData(row.data_inicio) || row.data_inicio,
     livres,
     sessoes: sessoesDe(row.cronograma),
+    plano: planoDe(row.cronograma),
   };
 }
 
@@ -135,6 +159,35 @@ export async function turmasParaEscolha(db: Db, curso: string, regime: "gold" | 
     if (af !== bf) return af - bf;
     return a.dataInicio.localeCompare(b.dataInicio) || a.nome.localeCompare(b.nome);
   });
+}
+
+/** Outro horário, no mesmo curso e no mesmo local, com vagas restantes. */
+export async function recomendacoesOutroHorario(
+  db: Db,
+  curso: string,
+  regime: "gold" | "fin",
+  pedido: PedidoTurma | undefined,
+  exceptoIds: number[],
+) {
+  if (!pedidoUtil(pedido?.local) || !pedidoUtil(pedido?.horario)) return [];
+  const hoje = hojeIso();
+  const sitio = norm(pedido?.local ?? "");
+  const hora = norm(pedido?.horario ?? "");
+  const fora = new Set(exceptoIds);
+  const vistos = new Set<string>();
+  const lista = (await turmasRegime(db, regime, curso))
+    .filter(t => t.livres > 0 && !fora.has(t.id) && norm(t.local) === sitio && t.dataInicio >= hoje)
+    .filter(t => norm(t.horario) !== hora)
+    .sort((a, b) => a.dataInicio.localeCompare(b.dataInicio) || a.nome.localeCompare(b.nome, "pt"));
+  const out: TurmaPublica[] = [];
+  for (const t of lista) {
+    const chave = norm(t.horario);
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    out.push(t);
+    if (out.length >= 3) break;
+  }
+  return out;
 }
 
 /** Próximas turmas do mesmo curso e do mesmo local, no mesmo horário ou noutro. */
@@ -200,12 +253,14 @@ export async function escolherTurmaPublica(db: Db, leadId: number, turmaId: numb
   const regime = regimeDe(row.regime);
   const turma = await turmaPorId(db, regime, turmaId);
   if (!turma) throw new PercursoErro("Turma indisponível.");
-  const oferecidas = await turmasParaEscolha(db, String(row.curso), regime, {
+  const pedido = {
     local: String(row.local ?? ""),
     horario: String(row.horario ?? ""),
     inicio: String(row.inicio_curso ?? ""),
-  });
-  const escolhida = oferecidas.find(t => t.id === turmaId);
+  };
+  const oferecidas = await turmasParaEscolha(db, String(row.curso), regime, pedido);
+  const recomendadas = await recomendacoesOutroHorario(db, String(row.curso), regime, pedido, oferecidas.map(t => t.id));
+  const escolhida = oferecidas.find(t => t.id === turmaId) ?? recomendadas.find(t => t.id === turmaId);
   if (!escolhida) throw new PercursoErro("Essa turma não tem vaga ou não é deste curso.");
   const preco = regime === "gold" ? await precoParaOferta(db, String(row.curso), escolhida.local, escolhida.horario) : null;
   await db.query(
@@ -436,6 +491,7 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
     inicio: String(lead.inicio_curso ?? ""),
   };
   const turmas = await turmasParaEscolha(db, curso, regime, criterios);
+  const recomendadas = await recomendacoesOutroHorario(db, curso, regime, criterios, turmas.map(t => t.id));
   const turmaEscolhida = turmaId
     ? turmas.find(t => t.id === turmaId) ?? await turmaPorId(db, regime, turmaId)
     : null;
@@ -463,6 +519,7 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
     passo,
     percursoConcluido,
     turmas,
+    recomendadas,
     turmaEscolhida,
     criterios: {
       local: pedidoUtil(criterios.local) ? criterios.local : "",

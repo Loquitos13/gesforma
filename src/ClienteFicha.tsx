@@ -535,7 +535,7 @@ export function ClienteFicha({
                 <p className="text-sm text-slate-700">
                   Cronograma: <span className="font-semibold">{dossier.turmaEscolhida.nome}</span>
                   {" · "}{dossier.turmaEscolhida.local} · {dossier.turmaEscolhida.horario}
-                  {dossier.turmaEscolhida.livres <= 0 ? " · sem vagas" : ` · ${dossier.turmaEscolhida.livres} vagas`}
+                  {dossier.turmaEscolhida.livres <= 0 ? " · sem vagas restantes" : ` · ${dossier.turmaEscolhida.livres} vagas restantes`}
                 </p>
               ) : (
                 <p className="text-sm text-slate-500">A pessoa ainda não escolheu o cronograma na ligação pessoal.</p>

@@ -72,7 +72,7 @@ export function InscreverFormandoPanel({
       <p className="text-xs text-slate-500">
         Pré-inscrições em <span className="font-semibold text-slate-700">{turma.curso}</span>
         {" · "}{turma.local}{" · "}{turma.horario}.
-        {semVagas ? " Não há vagas." : ` ${Math.max(0, vagasLivres)} vaga${vagasLivres === 1 ? "" : "s"}.`}
+        {semVagas ? " Sem vagas restantes." : ` ${Math.max(0, vagasLivres)} vaga${vagasLivres === 1 ? "" : "s"} restantes.`}
       </p>
 
       <input

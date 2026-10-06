@@ -589,7 +589,7 @@ export function turmaGoldOpts(
     .map(t => ({
       value: t.nome,
       sub: isTurmaActiva(t)
-        ? `${t.local} · ${t.horario} · ${Math.max(0, lugaresLivres(t))} vagas`
+        ? `${t.local} · ${t.horario} · ${Math.max(0, lugaresLivres(t))} vagas restantes`
         : `${t.local} · Inativa - não aceita novas inscrições`,
     }));
 }
@@ -607,7 +607,7 @@ export function turmaFinOpts(
     .map(t => ({
       value: t.nome,
       sub: isTurmaActiva(t)
-        ? `UFCD ${t.ufcdCod} · ${t.alunos}/${t.alunosTotal} inscritos`
+        ? `UFCD ${t.ufcdCod} · ${Math.max(0, lugaresLivres(t))} vagas restantes`
         : `UFCD ${t.ufcdCod} · Inativa - não aceita novas inscrições`,
     }));
 }

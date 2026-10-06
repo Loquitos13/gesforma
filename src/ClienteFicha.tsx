@@ -21,6 +21,7 @@ import { EscolherTurmaPicker } from "./TurmaInscricao";
 import { isTurmaActiva, type TurmaGold } from "./turmaModel";
 import { CursoOfertaCampos } from "./CursoOfertaCampos";
 import { OFERTA_VAZIA, type CursoOfertaSel } from "./oferta";
+import { fmtDataCalendario } from "./datas";
 
 const inp = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400";
 
@@ -233,7 +234,7 @@ export function ClienteFicha({
       variant="drawer"
       onClose={onClose}
       title={`${lead.nome} ${lead.apelido}`.trim() || `Pré-inscrição #${lead.id}`}
-      sub={`${lead.curso || "Sem curso"} · ${[lead.local, lead.horario, lead.inicioCurso && lead.inicioCurso !== "-" ? lead.inicioCurso : ""].filter(Boolean).join(" · ") || "turma por definir"}`}
+      sub={`${lead.curso || "Sem curso"} · ${[lead.local, lead.horario, lead.inicioCurso && lead.inicioCurso !== "-" ? fmtDataCalendario(lead.inicioCurso) : ""].filter(Boolean).join(" · ") || "turma por definir"}`}
     >
       <div className="p-4 space-y-4">
         <div className="flex items-center justify-between text-xs">

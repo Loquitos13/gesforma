@@ -763,7 +763,8 @@ export const apiContactarPreinscricao = (id: number, nota = "", meio = "") =>
 export const apiDeletePreinscricao = (id: number) => api<{ ok: boolean }>(`/v1/preinscricoes/${id}`, { method: "DELETE" });
 
 export type CrmFila = "contactar" | "atrasados" | "hoje" | "agenda" | "converter" | "abertos" | "secretaria" | "preinscricao" | "minhas";
-export type CrmSort = "inscrito" | "proximo" | "valor" | "nome" | "actividade";
+export type CrmSort = "inscrito" | "proximo" | "valor" | "nome" | "actividade" | "comercial" | "origem" | "meio" | "etiqueta" | "curso" | "turma" | "estado";
+export type CrmDir = "asc" | "desc";
 export type CrmLead = OpsSnapshot["preinscricoes"][number] & { proximoContacto?: string };
 
 export type CrmListQuery = {
@@ -779,6 +780,7 @@ export type CrmListQuery = {
   page?: number;
   perPage?: number;
   sort?: CrmSort;
+  dir?: CrmDir;
   kanban?: boolean;
   hoje?: string;
   regime?: "gold" | "fin";
@@ -793,7 +795,7 @@ export type CrmListResult = {
   perPage: number;
   counts: {
     total: number; abertos: number; porContactar: number; conversa: number;
-    pagos: number; formando: number; atrasados: number; hoje: number; converter: number; valorAberto: number;
+    pagos: number; formando: number; atrasados: number; hoje: number; marcadosHoje?: number; converter: number; valorAberto: number;
     preinscricoes: number; manuais: number; filaPre?: number; filaSec?: number; desistiu?: number;
   };
   porEstado: Record<string, number>;
@@ -815,6 +817,7 @@ function crmQs(q: CrmListQuery) {
   if (q.page) p.set("page", String(q.page));
   if (q.perPage) p.set("perPage", String(q.perPage));
   if (q.sort) p.set("sort", q.sort);
+  if (q.dir) p.set("dir", q.dir);
   if (q.kanban) p.set("kanban", "1");
   if (q.hoje) p.set("hoje", q.hoje);
   if (q.regime) p.set("regime", q.regime);

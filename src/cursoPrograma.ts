@@ -88,6 +88,36 @@ export function programaDePayload(payload: Record<string, unknown> | undefined, 
   return { organizacao, topicos: topicosDeTexto(texto) };
 }
 
+/** Texto público do programa, uma unidade por linha, tal como está no separador Programa. */
+export function textoPrograma(organizacao: OrganizacaoPrograma, topicos: TopicoPrograma[]) {
+  return topicos
+    .map((t, i) => (t.titulo.trim() ? labelTopico(organizacao, i, t) : ""))
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** Percurso inicial quando a ficha ainda não foi gravada. A tab Programa é a fonte depois de gravar. */
+export function linhasProgramaInicial(nome: string, ufcdCod = "") {
+  if (/ccp/i.test(nome)) {
+    return "M1 · Aprendizagem e pedagogia - 20h\nM2 · Comunicação e dinâmica de grupos - 20h\nM3 · Avaliação da formação - 15h\nM4 · Simulação pedagógica - 25h\nM5 · Plataformas digitais e e-learning - 10h";
+  }
+  if (/comunicar/i.test(nome)) {
+    return "Aula Virtual 1 - Técnicas para respirar e potencializar a voz\nAula Virtual 2 - Estrutura do discurso e presença cénica\nAula Virtual 3 - Ensaio e feedback";
+  }
+  const fin: Record<string, string> = {
+    "3564": "1. Enquadramento e cadeia de sobrevivência\n2. Avaliação da vítima e posição de segurança\n3. Suporte básico de vida e DEA\n4. Hemorragias, feridas e queimaduras\n5. Traumatismos e imobilização\n6. Avaliação e encerramento",
+    "10785": "1. Ecossistema de anúncios sociais\n2. Estrutura de conta, pixel e eventos\n3. Criativos e copy para cada formato\n4. Segmentação e orçamento\n5. Leitura de relatórios e otimização\n6. Projeto final: campanha completa",
+    "9188": "1. Conceitos e ameaças atuais\n2. Identidade, acessos e palavras-passe\n3. Correio, ligações e ficheiros suspeitos\n4. Dispositivos, redes e cópias de segurança\n5. Resposta a incidentes e comunicação\n6. Exercício de simulação e fecho",
+    "10394": "1. Aprendizagem de adultos e o método ativo\n2. Técnicas de abertura e quebra-gelo\n3. Trabalho de grupo, caso e simulação\n4. Questionamento e condução de plenário\n5. Avaliação formativa em sessão\n6. Plano de sessão com técnicas ativas",
+  };
+  return fin[ufcdCod] ?? "";
+}
+
+export function organizacaoInicial(nome: string, regime: Regime): OrganizacaoPrograma {
+  if (regime === "fin") return "modular";
+  return /comunicar/i.test(nome) ? "livre" : "modular";
+}
+
 export function opcoesDoPrograma(organizacao: OrganizacaoPrograma, topicos: TopicoPrograma[]): SelectOption[] {
   return topicos
     .filter(t => t.titulo.trim())
@@ -106,6 +136,10 @@ export function useProgramaDoCurso(regime: Regime, cursoNome: string | undefined
     () => idCursoPorNome(regime, cursoNome, cursosGold, cursosFin),
     [cursoNome, cursosFin, cursosGold, regime],
   );
+  const ufcdCod = useMemo(() => {
+    if (regime !== "fin" || cursoId == null) return "";
+    return cursosFin.find(c => c.id === cursoId)?.ufcdCod ?? "";
+  }, [cursoId, cursosFin, regime]);
 
   useEffect(() => {
     if (cursoId == null) {
@@ -117,18 +151,22 @@ export function useProgramaDoCurso(regime: Regime, cursoNome: string | undefined
     apiCursoFicha(regime, cursoId)
       .then(r => {
         if (!alive) return;
-        const parsed = programaDePayload(r.ficha?.payload, regime);
-        const lista = r.ficha?.payload?.topicosPrograma;
-        const estruturados = Array.isArray(lista) && lista.length > 0;
+        if (!r.ficha) {
+          const org = organizacaoInicial(cursoNome ?? "", regime);
+          setOrganizacao(org);
+          setTopicos(topicosDeTexto(linhasProgramaInicial(cursoNome ?? "", ufcdCod)));
+          return;
+        }
+        const parsed = programaDePayload(r.ficha.payload, regime);
         setOrganizacao(parsed.organizacao);
-        setTopicos(estruturados ? parsed.topicos : []);
+        setTopicos(parsed.topicos);
       })
       .catch(() => {
         if (!alive) return;
         setTopicos([]);
       });
     return () => { alive = false; };
-  }, [cursoId, regime]);
+  }, [cursoId, cursoNome, regime, ufcdCod]);
 
   const options = useMemo(() => opcoesDoPrograma(organizacao, topicos), [organizacao, topicos]);
   const labels = useMemo(() => options.map(o => o.value), [options]);

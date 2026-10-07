@@ -40,10 +40,6 @@ export function avaliacaoCcp(): AvaliacaoCurso {
     unidade: "valores",
     minimoAprovacao: 10,
     pesosEquitativos: false,
-    momentos: [
-      { id: "ccp-sim-inicial", label: "Simulação inicial" },
-      { id: "ccp-sim-final", label: "Simulação final" },
-    ],
     parametros: [
       { id: "ccp-planificacao", label: "Planificação da sessão", peso: 20 },
       { id: "ccp-comunicacao", label: "Comunicação e relação pedagógica", peso: 20 },

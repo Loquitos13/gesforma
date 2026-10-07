@@ -13,7 +13,7 @@ import {
   useAvaliacaoCurso,
   type NotaAvaliacao,
 } from "./avaliacaoCurso";
-import { codigoTopico, labelTopico, useProgramaDoCurso } from "./cursoPrograma";
+import { labelTopico, useProgramaDoCurso } from "./cursoPrograma";
 
 type FormandoRow = { id: number; nome: string };
 
@@ -60,7 +60,18 @@ export function TurmaAvaliacao({
   const gold = accent === "gold";
   const cfg = useAvaliacaoCurso(regime, cursoNome);
   const programa = useProgramaDoCurso(regime, cursoNome);
-  const moduloIds = useMemo(() => programa.topicos.map(t => t.id), [programa.topicos]);
+  const abas = useMemo(() => {
+    if (cfg.modo !== "modulos") return [{ id: MODULO_FINAL, label: "Avaliação final" }];
+    if (programa.topicos.length) {
+      return programa.topicos.map((t, i) => ({
+        id: t.id,
+        label: labelTopico(programa.organizacao, i, t),
+      }));
+    }
+    if (cfg.momentos?.length) return cfg.momentos.map(m => ({ id: m.id, label: m.label }));
+    return [];
+  }, [cfg.modo, cfg.momentos, programa.organizacao, programa.topicos]);
+  const moduloIds = useMemo(() => (cfg.modo === "modulos" ? abas.map(a => a.id) : []), [abas, cfg.modo]);
   const [ativo, setAtivo] = useState(0);
   const [notas, setNotas] = useState<NotaAvaliacao[]>([]);
   const [sel, setSel] = useState<Sel | null>(null);
@@ -83,15 +94,6 @@ export function TurmaAvaliacao({
   const accentSoft = gold ? "bg-amber-50 text-amber-800 border-amber-200" : "bg-blue-50 text-blue-800 border-blue-200";
   const selBg = gold ? "bg-amber-50" : "bg-blue-50";
   const handleBg = gold ? "bg-amber-500" : "bg-blue-600";
-
-  const abas = useMemo(() => {
-    if (cfg.momentos?.length) return cfg.momentos.map(m => ({ id: m.id, label: m.label }));
-    if (cfg.modo === "final") return [{ id: MODULO_FINAL, label: "Avaliação final" }];
-    return programa.topicos.map((t, i) => ({
-      id: t.id,
-      label: labelTopico(programa.organizacao, i, t),
-    }));
-  }, [cfg.modo, cfg.momentos, programa.organizacao, programa.topicos]);
 
   useEffect(() => {
     setAtivo(0);
@@ -210,7 +212,8 @@ export function TurmaAvaliacao({
 
   const unidadeNome = programa.unidade;
   const faltaParams = cfg.parametros.length === 0;
-  const faltaModulos = cfg.modo === "modulos" && !cfg.momentos?.length && moduloIds.length === 0;
+  const faltaModulos = cfg.modo === "modulos" && abas.length === 0;
+  const grelhaMomentos = cfg.modo === "modulos" && programa.topicos.length === 0 && (cfg.momentos?.length ?? 0) > 0;
 
   return (
     <div className="space-y-4">
@@ -220,7 +223,7 @@ export function TurmaAvaliacao({
           <p className="text-xs text-slate-500 mt-0.5">
             {faltaParams
               ? "Defina os parâmetros na ficha do curso (separador Avaliação) para lançar notas."
-              : cfg.momentos?.length
+              : grelhaMomentos
                 ? "Grelha do CCP: a mesma observação na simulação inicial e na final. A nota do certificado é a média das duas."
                 : cfg.modo === "modulos"
                   ? `Por ${unidadeNome.singular}: preencha todos os parâmetros de cada ${unidadeNome.singular} para cada formando. Arraste o quadrado da seleção para copiar um valor, como no Excel.`
@@ -276,7 +279,7 @@ export function TurmaAvaliacao({
                     i === ativo ? `${accentBtn} border-transparent` : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
                   }`}
                 >
-                  {cfg.momentos?.length ? a.label : `${codigoTopico(programa.organizacao, i)} · ${programa.topicos[i]?.titulo || a.label}`}
+                  {a.label}
                 </button>
               ))}
             </div>
@@ -396,8 +399,8 @@ export function TurmaAvaliacao({
                   <thead>
                     <tr className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
                       <th className="px-3 py-2 font-semibold">Formando</th>
-                      {programa.topicos.map((t, i) => (
-                        <th key={t.id} className="px-3 py-2 font-semibold text-right">{codigoTopico(programa.organizacao, i)}</th>
+                      {abas.map(a => (
+                        <th key={a.id} className="px-3 py-2 font-semibold text-right">{a.label.split(" · ")[0]}</th>
                       ))}
                       <th className="px-3 py-2 font-semibold text-right">Final</th>
                       <th className="px-3 py-2 font-semibold">Resultado</th>

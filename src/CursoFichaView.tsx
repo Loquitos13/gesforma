@@ -6,13 +6,15 @@ import { apiCreateDtpEntidade, apiCursoFicha, apiDtpEntidades, apiSaveCursoFicha
 import { CursoDocumentos } from "./CursoDocumentos";
 import { DtpModeloEditor } from "./DtpModeloEditor";
 import {
+  avaliacaoCcp,
   avaliacaoPadrao,
   fracoesPeso,
   novoParametroId,
   parseAvaliacaoCurso,
   type AvaliacaoCurso,
 } from "./avaliacaoCurso";
-import { codigoTopico, horasDeTexto, juntarHoras, novoTopicoId, partirHoras, programaDePayload, type OrganizacaoPrograma, type TopicoPrograma } from "./cursoPrograma";
+import { ImportarCsvAvaliacao } from "./ImportarCsvAvaliacao";
+import { codigoTopico, juntarHoras, linhasProgramaInicial, novoTopicoId, partirHoras, programaDePayload, textoPrograma, topicosDeTexto, type OrganizacaoPrograma, type TopicoPrograma } from "./cursoPrograma";
 import { refereCurso } from "./cursoLocais";
 import { fmtDataPt } from "./oferta";
 import { getParametrosAvaliacao, type CriterioAvaliacao } from "./TurmaExtras";
@@ -288,6 +290,8 @@ function seedSite(curso?: CursoFichaSeed, accent: CursoAccent = "gold"): CursoSi
     : isCcp ? { ...conteudoCcp, tags: "ccp, formadores, iefp", categoria: curso?.categoria ?? "" }
     : isComunicar ? { ...conteudoComunicar, tags: "comunicacao, voz, b-learning", categoria: curso?.categoria ?? "" }
     : { sintese: "", objetivos: "", programa: "", funcionamento: "", tags: "", categoria: curso?.categoria ?? "" };
+  const programaTxt = linhasProgramaInicial(curso?.nome ?? "", curso?.ufcdCod ?? "") || pack.programa;
+  const orgPrograma: OrganizacaoPrograma = accent === "fin" ? "modular" : (isComunicar ? "livre" : "modular");
 
   return {
     titulo: curso?.nome ?? "",
@@ -306,14 +310,14 @@ function seedSite(curso?: CursoFichaSeed, accent: CursoAccent = "gold"): CursoSi
     thumb: curso ? { name: "thumb.jpg", url: "" } : null,
     sintese: pack.sintese,
     objetivos: pack.objetivos,
-    programa: pack.programa,
+    programa: programaTxt,
     funcionamento: pack.funcionamento,
     ufcdCod: curso?.ufcdCod ?? "",
     ufcd: curso?.ufcd ?? "",
     locais: [],
-    organizacaoPrograma: accent === "fin" ? "modular" : (/comunicar/i.test(curso?.nome ?? "") ? "livre" : "modular"),
-    topicosPrograma: topicosDeSeed(pack.programa, accent === "fin" ? "modular" : (/comunicar/i.test(curso?.nome ?? "") ? "livre" : "modular")),
-    avaliacaoCurso: avaliacaoPadrao(),
+    organizacaoPrograma: orgPrograma,
+    topicosPrograma: topicosDeTexto(programaTxt),
+    avaliacaoCurso: isCcp ? avaliacaoCcp() : avaliacaoPadrao(),
     precosOferta: [],
     planosSessao: [],
     valoresFormador: [],
@@ -335,17 +339,6 @@ function parsePrecosOferta(raw: unknown): PrecoOferta[] {
       horario,
       preco: String(row.preco ?? ""),
     }];
-  });
-}
-
-function topicosDeSeed(texto: string, _org: OrganizacaoPrograma): TopicoPrograma[] {
-  return texto.split(/\n/).map(s => s.trim()).filter(s => s && !s.startsWith("•") && !s.startsWith("-")).map(linha => {
-    const titulo = linha
-      .replace(/^(M|C|AV|EX)\s*\d+\s*[·.\-–:]+\s*/i, "")
-      .replace(/^\d+\s*[.)\-–]\s*/, "")
-      .replace(/\s*[·\-–]\s*\d+\s*h(?:\s*\d{1,2})?\s*(?:min)?\s*$/i, "")
-      .trim();
-    return { id: novoTopicoId(), titulo: titulo || linha, horas: horasDeTexto(linha) };
   });
 }
 
@@ -545,7 +538,7 @@ function SitePreview({ data, accent, turmas }: { data: CursoSite; accent: CursoA
           <section>
             <p className={`text-[11px] font-bold uppercase tracking-wide ${t.preview} mb-1.5`}>Programa</p>
             <div className="text-sm text-slate-600 whitespace-pre-line leading-relaxed bg-slate-50 rounded-xl p-3">
-              {data.programa || "O percurso de aprendizagem (aulas / módulos) surge nesta secção."}
+              {textoPrograma(accent === "fin" ? "modular" : data.organizacaoPrograma, data.topicosPrograma) || data.programa || "O percurso de aprendizagem (aulas / módulos) surge nesta secção."}
             </div>
           </section>
           <section>
@@ -826,11 +819,14 @@ export function CursoFichaView({
       return;
     }
     setCursoPersistId(id);
+    const orgProgramaGuardar = accent === "fin" ? "modular" : data.organizacaoPrograma;
+    const programaGerado = textoPrograma(orgProgramaGuardar, data.topicosPrograma);
     try {
       await apiSaveCursoFicha(accent, id, {
         payload: {
           ...data,
-          organizacaoPrograma: accent === "fin" ? "modular" : data.organizacaoPrograma,
+          organizacaoPrograma: orgProgramaGuardar,
+          programa: programaGerado || data.programa,
           avaliacaoCurso: data.avaliacaoCurso,
         } as unknown as Record<string, unknown>,
         criterios: temAvaliacao ? criterios.filter(c => c.label.trim()) : [],
@@ -1200,7 +1196,19 @@ export function CursoFichaView({
               </div>
               <EditorBlock accent={accent} label="Síntese do curso" siteHint="Primeiro parágrafo abaixo do banner. Responda: para quem é e o que se leva daqui." value={data.sintese} onChange={v => patch({ sintese: v })} rows={7} />
               <EditorBlock accent={accent} label="Objetivos" siteHint="Lista do que o formando será capaz de fazer. Uma ideia por linha." value={data.objetivos} onChange={v => patch({ objetivos: v })} rows={7} />
-              <EditorBlock accent={accent} label="Programa no site" siteHint="Texto público. A estrutura pedagógica (módulos ou capítulos) configura-se no separador Programa." value={data.programa} onChange={v => patch({ programa: v })} rows={10} />
+              {textoPrograma(accent === "fin" ? "modular" : data.organizacaoPrograma, data.topicosPrograma) ? (
+                <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                  <div className="px-4 py-3 border-b border-slate-100">
+                    <p className="text-sm font-semibold text-slate-800">Programa no site</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Vem do separador Programa. Cada módulo ou capítulo do percurso aparece aqui, por esta ordem.</p>
+                  </div>
+                  <pre className="px-4 py-3 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap font-sans">
+                    {textoPrograma(accent === "fin" ? "modular" : data.organizacaoPrograma, data.topicosPrograma)}
+                  </pre>
+                </div>
+              ) : (
+                <EditorBlock accent={accent} label="Programa no site" siteHint="Ainda sem módulos. Defina o percurso no separador Programa e este texto passa a ser gerado a partir daí." value={data.programa} onChange={v => patch({ programa: v })} rows={10} />
+              )}
               <EditorBlock accent={accent} label="Funcionamento" siteHint="Logística: sessões, elegibilidade, plataforma, assiduidade e certificado." value={data.funcionamento} onChange={v => patch({ funcionamento: v })} rows={7} />
             </div>
           )}
@@ -1211,7 +1219,7 @@ export function CursoFichaView({
                 <div>
                   <p className="text-sm font-semibold text-slate-800">Programa pedagógico</p>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Estas unidades aparecem no cronograma e na nova sessão da turma. Não confundir com o texto do website.
+                    Estas unidades são o percurso do curso. Entram no cronograma, na avaliação por módulo e no programa público.
                   </p>
                 </div>
                 {accent === "gold" ? (
@@ -1446,6 +1454,12 @@ export function CursoFichaView({
                   + Parâmetro
                 </button>
               </div>
+              <ImportarCsvAvaliacao
+                modo={data.avaliacaoCurso.modo}
+                unidade={data.organizacaoPrograma === "livre" && accent !== "fin" ? "capítulo" : "módulo"}
+                saveClass={t.save}
+                onAplicar={parametros => patchAv({ parametros })}
+              />
 
               {temAvaliacao && (
                 <div className="rounded-xl border border-violet-200 bg-white p-4 sm:p-5 space-y-4">

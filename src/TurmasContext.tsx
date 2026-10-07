@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { apiCreateTurmaFin, apiCreateTurmaGold, apiDeleteTurmaFin, apiDeleteTurmaGold, apiPatchTurmaFin, apiPatchTurmaGold } from "./api";
 import { loadOps } from "./opsCache";
 import { persist, toastError } from "./toastBus";
+import { textoSobreposicaoNova } from "./sobreposicaoHorario";
 import { generateCronograma, seedFinTurmas, seedGoldTurmas, type SessaoCronograma, type TurmaFin, type TurmaGold } from "./turmaModel";
 
 type TurmasCtx = {
@@ -11,12 +12,12 @@ type TurmasCtx = {
   patchGold: (id: number, patch: Partial<TurmaGold>) => void;
   addGold: (turma: TurmaGold) => Promise<number | undefined>;
   removeGold: (id: number) => void;
-  setGoldCronograma: (id: number, cronograma: SessaoCronograma[]) => void;
+  setGoldCronograma: (id: number, cronograma: SessaoCronograma[]) => boolean;
   toggleGold: (id: number, activa: boolean) => void;
   patchFin: (id: number, patch: Partial<TurmaFin>) => void;
   addFin: (turma: TurmaFin) => Promise<number | undefined>;
   removeFin: (id: number) => void;
-  setFinCronograma: (id: number, cronograma: SessaoCronograma[]) => void;
+  setFinCronograma: (id: number, cronograma: SessaoCronograma[]) => boolean;
   toggleFin: (id: number, activa: boolean) => void;
 };
 
@@ -104,10 +105,27 @@ export function TurmasProvider({ children }: { children: ReactNode }) {
     });
   }, []);
   const setGoldCronograma = useCallback((id: number, cronograma: SessaoCronograma[]) => {
-    if (id < 0) return;
+    if (id < 0) return false;
+    const atual = gold.find(t => t.id === id);
+    const msg = textoSobreposicaoNova(
+      { chave: `gold:${id}`, nome: atual?.nome ?? "esta turma", cronograma: atual?.cronograma ?? [] },
+      { chave: `gold:${id}`, nome: atual?.nome ?? "esta turma", cronograma },
+      [
+        ...gold.filter(t => t.id !== id).map(t => ({ chave: `gold:${t.id}`, nome: t.nome, cronograma: t.cronograma })),
+        ...fin.map(t => ({ chave: `fin:${t.id}`, nome: t.nome, cronograma: t.cronograma })),
+      ],
+    );
+    if (msg) {
+      toastError(new Error(msg));
+      return false;
+    }
+    const anterior = atual?.cronograma ?? [];
     setGold(xs => xs.map(t => t.id === id ? { ...t, cronograma } : t));
-    void persist(apiPatchTurmaGold(id, { cronograma }));
-  }, []);
+    void persist(apiPatchTurmaGold(id, { cronograma }), () => {
+      setGold(xs => xs.map(t => t.id === id ? { ...t, cronograma: anterior } : t));
+    });
+    return true;
+  }, [fin, gold]);
   const toggleGold = useCallback((id: number, activa: boolean) => {
     if (id < 0) return;
     const estado = activa ? "Ativa" : "Inativa";
@@ -139,10 +157,27 @@ export function TurmasProvider({ children }: { children: ReactNode }) {
     });
   }, []);
   const setFinCronograma = useCallback((id: number, cronograma: SessaoCronograma[]) => {
-    if (id < 0) return;
+    if (id < 0) return false;
+    const atual = fin.find(t => t.id === id);
+    const msg = textoSobreposicaoNova(
+      { chave: `fin:${id}`, nome: atual?.nome ?? "esta turma", cronograma: atual?.cronograma ?? [] },
+      { chave: `fin:${id}`, nome: atual?.nome ?? "esta turma", cronograma },
+      [
+        ...gold.map(t => ({ chave: `gold:${t.id}`, nome: t.nome, cronograma: t.cronograma })),
+        ...fin.filter(t => t.id !== id).map(t => ({ chave: `fin:${t.id}`, nome: t.nome, cronograma: t.cronograma })),
+      ],
+    );
+    if (msg) {
+      toastError(new Error(msg));
+      return false;
+    }
+    const anterior = atual?.cronograma ?? [];
     setFin(xs => xs.map(t => t.id === id ? { ...t, cronograma } : t));
-    void persist(apiPatchTurmaFin(id, { cronograma }));
-  }, []);
+    void persist(apiPatchTurmaFin(id, { cronograma }), () => {
+      setFin(xs => xs.map(t => t.id === id ? { ...t, cronograma: anterior } : t));
+    });
+    return true;
+  }, [fin, gold]);
   const toggleFin = useCallback((id: number, activa: boolean) => {
     if (id < 0) return;
     setFin(xs => xs.map(t => t.id === id ? { ...t, activa } : t));

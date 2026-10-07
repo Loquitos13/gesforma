@@ -47,7 +47,7 @@ import { codigoInternoTurma, proximoNomeTurma } from "./turmaCodigo";
 import { herdarPlanoCurso, usePlanosCurso } from "./planosCurso";
 import { ValoresHoraFormador } from "./ValoresHoraFormador";
 import { apiEnviarInqueritosTurma } from "./api";
-import { formadorIndisponivel, formadorNaSessao, minutoSeguinte, nomesDoUtilizador, podeMexerDocumento, staffPodeDossie } from "./sessaoAcesso";
+import { formadorIndisponivel, formadorNaSessao, horaMais, nomesDoUtilizador, podeMexerDocumento, staffPodeDossie } from "./sessaoAcesso";
 import { sessaoCabeNoSlot } from "./disponibilidade";
 import { CustosTurmaCard } from "./CustosTurma";
 import { CrmClientesView, CrmContratosView, CrmParceirosView } from "./CrmDiretorioView";
@@ -1639,9 +1639,10 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
     ? formadorOptsSessao.filter(o => o.value === turma.formador || (turma.formadores ?? []).includes(o.value))
     : formadorOptsSessao
   ).map(o => {
-    const overlap = formadorIndisponivel(o.value, dataSessao, horaSessao, minutoSeguinte(horaSessao), gold, undefined);
+    const fimSessao = horaMais(horaSessao || "09:00", 4);
+    const overlap = formadorIndisponivel(o.value, dataSessao, horaSessao || "09:00", fimSessao, gold, undefined);
     const ficha = listaFormadores.find(f => f.nome.toLowerCase() === o.value.toLowerCase());
-    const fora = Boolean(ficha) && !sessaoCabeNoSlot(dataSessao, horaSessao, minutoSeguinte(horaSessao), ficha?.disponibilidade);
+    const fora = Boolean(ficha) && !sessaoCabeNoSlot(dataSessao, horaSessao || "09:00", fimSessao, ficha?.disponibilidade);
     if (!overlap && !fora) return o;
     return { ...o, disabled: true, sub: fora && !overlap ? "Fora da disponibilidade CCP" : "Indisponível neste horário" };
   });
@@ -2059,17 +2060,16 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             <button onClick={() => setNovaSessao(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button onClick={() => {
               if (!dataSessao) return;
-              const [h, m] = (horaSessao || "09:00").split(":").map(Number);
-              const endH = String((h || 9) + 4).padStart(2, "0");
-              setGoldCronograma(turma.id, [...turma.cronograma, {
+              const inicio = horaSessao || "09:00";
+              const gravou = setGoldCronograma(turma.id, [...turma.cronograma, {
                 id: `s-manual-${Date.now()}`,
                 data: dataSessao,
-                horaInicio: horaSessao || "09:00",
-                horaFim: `${endH}:${String(m || 0).padStart(2, "0")}`,
+                horaInicio: inicio,
+                horaFim: horaMais(inicio, 4),
                 modulos: moduloSessao,
                 formadores: formadoresSessao,
               }]);
-              setNovaSessao(false);
+              if (gravou) setNovaSessao(false);
             }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg">Criar sessão</button>
           </div>
         </div>
@@ -2294,7 +2294,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const opcoesNovaSessaoFin = (turma && (turma.formador || (turma.formadores ?? []).length)
     ? formadorOptsSessao.filter(o => o.value === turma.formador || (turma.formadores ?? []).includes(o.value))
     : formadorOptsSessao
-  ).map(o => formadorIndisponivel(o.value, dataSessao, horaSessao, minutoSeguinte(horaSessao), [...goldTodas, ...fin], undefined)
+  ).map(o => formadorIndisponivel(o.value, dataSessao, horaSessao || "19:00", horaMais(horaSessao || "19:00", 3), [...goldTodas, ...fin], undefined)
     ? { ...o, disabled: true, sub: "Indisponível neste horário" }
     : o);
   const [moduloSessao, setModuloSessao] = useState<string[]>([]);
@@ -2796,17 +2796,16 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
             <button onClick={() => setNovaSessao(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button onClick={() => {
               if (!dataSessao) return;
-              const [h, m] = (horaSessao || "19:00").split(":").map(Number);
-              const endH = String((h || 19) + 3).padStart(2, "0");
-              setFinCronograma(turma.id, [...turma.cronograma, {
+              const inicio = horaSessao || "19:00";
+              const gravou = setFinCronograma(turma.id, [...turma.cronograma, {
                 id: `s-manual-${Date.now()}`,
                 data: dataSessao,
-                horaInicio: horaSessao || "19:00",
-                horaFim: `${endH}:${String(m || 0).padStart(2, "0")}`,
+                horaInicio: inicio,
+                horaFim: horaMais(inicio, 3),
                 modulos: moduloSessao,
                 formadores: formadoresSessao,
               }]);
-              setNovaSessao(false);
+              if (gravou) setNovaSessao(false);
             }} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">Criar sessão</button>
           </div>
         </div>

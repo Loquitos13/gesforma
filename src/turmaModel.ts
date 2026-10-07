@@ -188,10 +188,27 @@ export function isTurmaActiva(t: { estado?: string; activa?: boolean }) {
   return t.estado === "Ativa" || t.estado === "Ativo";
 }
 
-/** Data de hoje: o estado das sessões e o cronograma seguem o calendário real. */
-export function hojeIso() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** Dia civil do calendário, independente do fuso do browser. */
+export function hojeIso(agora = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Lisbon",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(agora);
+  const p = (tipo: Intl.DateTimeFormatPartTypes) => parts.find(x => x.type === tipo)?.value ?? "";
+  return `${p("year")}-${p("month")}-${p("day")}`;
+}
+
+export function horaAgora(agora = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Lisbon",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(agora);
+  const p = (tipo: Intl.DateTimeFormatPartTypes) => parts.find(x => x.type === tipo)?.value ?? "";
+  return `${p("hour")}:${p("minute")}`;
 }
 
 const MONTHS_FULL_PT = [

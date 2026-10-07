@@ -61,13 +61,27 @@ export function minutoSeguinte(hora: string) {
   return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
+function faixa(inicio: string, fim: string): [number, number] | null {
+  const s = minutos(inicio);
+  const e = minutos(fim);
+  if (s == null || e == null) return null;
+  if (e <= s) return [s, 24 * 60];
+  return [s, e];
+}
+
 export function horariosSobrepoem(a0: string, a1: string, b0: string, b1: string) {
-  const as = minutos(a0);
-  const ae = minutos(a1);
-  const bs = minutos(b0);
-  const be = minutos(b1);
-  if (as == null || ae == null || bs == null || be == null) return false;
-  return as < be && bs < ae;
+  const a = faixa(a0, a1);
+  const b = faixa(b0, b1);
+  if (!a || !b) return false;
+  return a[0] < b[1] && b[0] < a[1];
+}
+
+export function horaMais(hora: string, horas: number) {
+  const [h, m] = hora.split(":").map(Number);
+  if (!Number.isFinite(h)) return hora || "00:00";
+  const total = h * 60 + (Number.isFinite(m) ? m : 0) + Math.round(horas * 60);
+  const limitado = Math.min(24 * 60 - 1, Math.max(0, total));
+  return `${String(Math.floor(limitado / 60)).padStart(2, "0")}:${String(limitado % 60).padStart(2, "0")}`;
 }
 
 export function formadorIndisponivel(
@@ -76,12 +90,12 @@ export function formadorIndisponivel(
   inicio: string,
   fim: string,
   turmas: { cronograma: SessaoCronograma[] }[],
-  exceptoId?: string,
+  excepto?: { id?: string; cronograma?: SessaoCronograma[] },
 ) {
   if (!data || !inicio || !fim) return false;
   for (const t of turmas) {
     for (const s of t.cronograma) {
-      if (exceptoId && s.id === exceptoId) continue;
+      if (excepto?.id && s.id === excepto.id && (!excepto.cronograma || t.cronograma === excepto.cronograma)) continue;
       if (s.data !== data) continue;
       if ((s.modalidade ?? "presencial") === "auto") continue;
       if (!sessaoFormadores(s).some(f => f.toLowerCase() === nome.toLowerCase())) continue;

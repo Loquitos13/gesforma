@@ -146,7 +146,7 @@ function KpiCard({
 }
 
 function SessaoRow({
-  n, sessao, estado, gold, expanded, onToggle, onPatch, onRemove, moduloOpts, formadoresTurma,
+  n, sessao, estado, gold, expanded, onToggle, onPatch, onRemove, moduloOpts, formadoresTurma, cronogramaDesta,
 }: {
   n: number;
   sessao: SessaoCronograma;
@@ -158,6 +158,7 @@ function SessaoRow({
   onRemove: () => void;
   moduloOpts: { value: string; sub?: string }[];
   formadoresTurma: string[];
+  cronogramaDesta: SessaoCronograma[];
 }) {
   const chip = ESTADO_UI[estado];
   const horas = sessaoDuracaoHoras(sessao);
@@ -168,7 +169,7 @@ function SessaoRow({
     ? catalogo.filter(o => formadoresTurma.some(n => n.toLowerCase() === o.value.toLowerCase()))
     : catalogo;
   const formadorOpts = pool.map(o => {
-    const overlap = formadorIndisponivel(o.value, sessao.data, sessao.horaInicio, sessao.horaFim, [...turmasGold, ...fin], sessao.id);
+    const overlap = formadorIndisponivel(o.value, sessao.data, sessao.horaInicio, sessao.horaFim, [...turmasGold, ...fin], { id: sessao.id, cronograma: cronogramaDesta });
     const ficha = formadores.find(f => f.nome.toLowerCase() === o.value.toLowerCase());
     const foraSlot = gold && Boolean(ficha) && !sessaoCabeNoSlot(sessao.data, sessao.horaInicio, sessao.horaFim, ficha?.disponibilidade);
     if (!overlap && !foraSlot) return o;
@@ -513,6 +514,7 @@ export function CronogramaEditor({
                     onToggle={() => setOpenId(id => id === sessao.id ? null : sessao.id)}
                     moduloOpts={moduloOpts}
                     formadoresTurma={[formador, ...(formadoresTurma ?? [])].map(n => n.trim()).filter(Boolean)}
+                    cronogramaDesta={sessoes}
                     onPatch={p => patch(sessao.id, p)}
                     onRemove={() => {
                       onChange(sessoes.filter(x => x.id !== sessao.id));

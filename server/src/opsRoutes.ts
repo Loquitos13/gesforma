@@ -24,6 +24,7 @@ import { exportCrmLeads, queryCrmLeads, searchCrmLeads, type CrmDir, type CrmFil
 import { fmtDataCalendario, fmtStampLisboa, hojeLisboa } from "./datas.js";
 import { syncTurmaDriveAccess } from "./googleDrive.js";
 import { cronogramaSoMarcas, nomesDoFormador } from "./sessaoAcesso.js";
+import { textoSobreposicaoNova } from "../../src/sobreposicaoHorario.js";
 import { erroDisponibilidade, formadorEstaAlocado, garantirContaFormador } from "./formadorConta.js";
 import {
   addLeadNota, createCrmCampo, createCrmEtiqueta, deleteCrmEtiqueta, findDuplicados, fixarNota, getLeadDossier,
@@ -119,6 +120,30 @@ async function negarFormadorTurma(
     return "Só pode iniciar ou fechar sessões em que está atribuído.";
   }
   return null;
+}
+
+function asSessoes(raw: unknown) {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((x): x is {
+    id?: string; data?: string; horaInicio?: string; horaFim?: string;
+    formadores?: string[]; formador?: string; modalidade?: string;
+  } => !!x && typeof x === "object");
+}
+
+async function erroSobreposicao(db: Db, regime: "gold" | "fin", id: number | null, cronograma: unknown) {
+  const goldRows = await db.query<{ id: number; nome: string; cronograma: unknown }>("SELECT id, nome, cronograma FROM turmas_gold");
+  const finRows = await db.query<{ id: number; nome: string; cronograma: unknown }>("SELECT id, nome, cronograma FROM turmas_fin");
+  const blocos = [
+    ...goldRows.rows.map(r => ({ chave: `gold:${r.id}`, nome: String(r.nome ?? "turma"), cronograma: asSessoes(r.cronograma) })),
+    ...finRows.rows.map(r => ({ chave: `fin:${r.id}`, nome: String(r.nome ?? "turma"), cronograma: asSessoes(r.cronograma) })),
+  ];
+  const chave = `${regime}:${id ?? "nova"}`;
+  const atual = blocos.find(b => b.chave === chave);
+  return textoSobreposicaoNova(
+    { chave, nome: atual?.nome ?? "esta turma", cronograma: atual?.cronograma ?? [] },
+    { chave, nome: atual?.nome ?? "esta turma", cronograma: asSessoes(cronograma) },
+    blocos.filter(b => b.chave !== chave),
+  );
 }
 
 async function one(db: Db, sql: string, params: unknown[]) {
@@ -1310,6 +1335,8 @@ export function registerOpsRoutes(
         curso: d.curso,
         modulos,
       });
+    const cruzamento = await erroSobreposicao(db, "gold", null, cronograma);
+    if (cruzamento) return reply.code(400).send({ error: cruzamento });
     await db.query(
       `INSERT INTO turmas_gold (id, data_inicio, nome, curso, local, horario, total_alunos, vagas, tolerancia_vagas, estado, formador, formadores, horas, cronograma, custo_hora_sala, valores_hora_formador)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14::jsonb,$15,$16::jsonb)`,
@@ -1337,6 +1364,10 @@ export function registerOpsRoutes(
       const extras = d.formadores ?? (Array.isArray(actual?.formadores) ? actual.formadores.map(x => String(x)) : []);
       const slotErro = await erroDisponibilidade(db, [formador, ...extras], horario);
       if (slotErro) return reply.code(400).send({ error: slotErro });
+    }
+    if (d.cronograma) {
+      const cruzamento = await erroSobreposicao(db, "gold", id, d.cronograma);
+      if (cruzamento) return reply.code(400).send({ error: cruzamento });
     }
     await db.query(
       `UPDATE turmas_gold SET data_inicio = COALESCE($2, data_inicio), nome = COALESCE($3, nome), curso = COALESCE($4, curso),
@@ -1414,6 +1445,8 @@ export function registerOpsRoutes(
         hoursPerSession: 3,
         modulos,
       });
+    const cruzamento = await erroSobreposicao(db, "fin", null, cronograma);
+    if (cruzamento) return reply.code(400).send({ error: cruzamento });
     await db.query(
       `INSERT INTO turmas_fin (id, data_inicio, nome, curso, ufcd_cod, local, horario, alunos, alunos_total, tolerancia_vagas, estado, horas, formador, formadores, activa, cronograma, valores_hora_formador)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb,$17::jsonb)`,
@@ -1434,6 +1467,10 @@ export function registerOpsRoutes(
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
     const antesTurma = await one(db, "SELECT nome, curso FROM turmas_fin WHERE id = $1", [id]);
+    if (d.cronograma) {
+      const cruzamento = await erroSobreposicao(db, "fin", id, d.cronograma);
+      if (cruzamento) return reply.code(400).send({ error: cruzamento });
+    }
     await db.query(
       `UPDATE turmas_fin SET data_inicio = COALESCE($2, data_inicio), nome = COALESCE($3, nome), curso = COALESCE($4, curso),
          ufcd_cod = COALESCE($5, ufcd_cod), local = COALESCE($6, local), horario = COALESCE($7, horario),

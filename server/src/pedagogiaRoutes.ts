@@ -615,6 +615,7 @@ export function registerPedagogiaRoutes(
 
   app.put("/v1/turmas/:regime/:id/dtp/:itemId", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não altera o dossiê técnico-pedagógico." });
     const { regime, id, itemId } = params(req);
     const parsed = dtpSchema.safeParse(req.body);
     if (!regime || id == null || !itemId || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
@@ -635,6 +636,7 @@ export function registerPedagogiaRoutes(
 
   app.put("/v1/turmas/:regime/:id/dtp/:itemId/anexo", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não altera o dossiê técnico-pedagógico." });
     const { regime, id, itemId } = params(req);
     const parsed = z.object({
       driveFileId: z.string().min(1).max(80),
@@ -799,6 +801,7 @@ export function registerPedagogiaRoutes(
 
   app.get("/v1/dtp/:regime", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não consulta o dossiê técnico-pedagógico." });
     const { regime } = params(req);
     if (!regime) return reply.code(400).send({ error: "pedido inválido" });
     return { pct: await dtpResumo(db, regime) };
@@ -806,6 +809,7 @@ export function registerPedagogiaRoutes(
 
   app.get("/v1/dtp/:regime/base", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não consulta o dossiê técnico-pedagógico." });
     const { regime } = params(req);
     if (!regime) return reply.code(400).send({ error: "pedido inválido" });
     return { fases: DTP_FASES, base: dtpDefs(regime) };
@@ -813,6 +817,7 @@ export function registerPedagogiaRoutes(
 
   app.get("/v1/cursos/:regime/:id/dtp-modelo", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não consulta o dossiê técnico-pedagógico." });
     const { regime, id } = params(req);
     if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
     const modelo = await loadModelo(db, regime, id);
@@ -826,6 +831,7 @@ export function registerPedagogiaRoutes(
 
   app.put("/v1/cursos/:regime/:id/dtp-modelo", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não altera o dossiê técnico-pedagógico." });
     const { regime, id } = params(req);
     const parsed = dtpModeloSchema.safeParse(req.body);
     if (!regime || id == null || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
@@ -1256,6 +1262,7 @@ export function registerPedagogiaRoutes(
 
   app.get("/v1/formandos/:regime/:id/dossier", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não consulta documentos, pagamento, notas nem histórico do formando." });
     const { regime, id } = params(req);
     if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
     const [docs, notas] = await Promise.all([
@@ -1284,6 +1291,7 @@ export function registerPedagogiaRoutes(
 
   app.put("/v1/formandos/:regime/:id/docs", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não consulta documentos, pagamento, notas nem histórico do formando." });
     const { regime, id } = params(req);
     const parsed = formandoDocsSchema.safeParse(req.body);
     if (!regime || id == null || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
@@ -1303,6 +1311,7 @@ export function registerPedagogiaRoutes(
 
   app.post("/v1/formandos/:regime/:id/notas", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não consulta documentos, pagamento, notas nem histórico do formando." });
     const { regime, id } = params(req);
     const parsed = notaSchema.safeParse(req.body);
     if (!regime || id == null || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
@@ -1549,6 +1558,7 @@ export function registerPedagogiaRoutes(
 
   app.get("/v1/dtp/:regime/:id/export", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não consulta o dossiê técnico-pedagógico." });
     const { regime, id } = params(req);
     if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
     const turma = await loadTurma(db, regime, id);

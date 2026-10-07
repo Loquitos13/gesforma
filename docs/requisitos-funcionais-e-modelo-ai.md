@@ -70,14 +70,15 @@ Cada requisito descreve comportamento que já existe.
 - RF-38. Módulos, conteúdos, datas, locais, horários (só Gold) e áreas temáticas são catálogos do regime.
 - RF-39. Uma turma Gold tem cronograma em grelha, sessões arrastáveis, e o estado Libertada ou Não libertada. Só as libertadas aceitam novas entradas. Aplicar regras na Financiada cria sessões de 3 horas.
 - RF-40. O cockpit da turma tem visão geral, cronograma, sessões (plano, sumário, presenças), avaliação, documentos, dossiê técnico-pedagógico e certificados. O separador Documentos da turma (PIP, simulações, listas da sessão) é outro ecrã que o da ficha do curso.
-- RF-41. A avaliação segue a ficha do curso: escala, unidade, mínimo, pesos, e modo por módulo ou nota final.
+- RF-41. A avaliação segue a ficha do curso: escala, unidade, mínimo, pesos, e modo por módulo ou nota final. Um parâmetro pode ficar marcado como nota do Moodle. Só um por curso, e entra na média com o peso dele. TO DO: ler essa nota no Moodle real da turma. Até essa ligação existir, a grelha aceita o valor à mão.
+- RF-41a. O separador Certificados da turma mostra a coluna Nota final, calculada na grelha de avaliação.
 - RF-42. No separador Documentos do curso anexa-se um ficheiro do curso, de um formando ou de um formador, associado a um requisito do dossiê (Antes, Durante ou Fecho). O visto na turma só fecha quando todas as partes responsáveis tiverem enviado: um ficheiro do curso vale para todas as turmas desse curso; no formando conta cada pessoa dessa turma; no formador conta o nome do formador atribuído. Se o mesmo requisito tiver vários âmbitos, todos têm de estar completos. O visto dos ficheiros do curso só sobe: não reabre um item que os dados da turma já marcaram como completo.
 - RF-43. O dossiê lista requisitos em **Antes da turma**, **Durante** e **Fecho**. Os que existem nos dois regimes aparecem como **universais**. Gold acrescenta PIP, simulações, comprovativo de 5 anos e recibos. Financiada acrescenta elegibilidade (cartão de cidadão, habilitações, CV, IBAN, emprego), horas e relatório de execução.
 - RF-44. Na financiada o dossiê é sempre o mesmo, qualquer que seja a UFCD. A lista fica travada: não há modelo por curso, não há extras e não há botão de gravar. No Gold, os documentos de norma ficam travados; o resto liga-se ou desliga-se, e extras já gravados ainda se editam. Não há formulário para acrescentar um documento novo nessa tab: o ficheiro novo entra pelo separador Documentos do curso.
 - RF-45. A completude do dossiê calcula-se a partir dos dados (cronograma, planos, sumários, presenças, PIP, simulações, contratos, elegibilidade, certificados) e, por cima, dos ficheiros do curso. O resto valida-se à mão.
 - RF-46. Exportar o dossiê gera um ZIP por categorias. Os ficheiros vão para o Google Drive da entidade. Sem Drive, em local o ficheiro pode ficar em disco; na Vercel o upload é recusado.
 - RF-47. Formandos Gold existem na turma e avulso. Formandos financiados têm estado de elegibilidade e documentos. Dá para transferir de turma e apagar, com confirmação.
-- RF-48. Formadores têm ficha, CCP, estado activo e os regimes em que leccionam. Quem marca os dois aparece nas duas listas.
+- RF-48. Formadores têm ficha, CCP, estado activo e os regimes em que leccionam. Quem marca os dois aparece nas duas listas. Na turma, o formador vê visão geral, sessões e avaliação. Não vê pagamentos, dossiê técnico-pedagógico, documentos, notas de acompanhamento nem histórico do formando. Não transfere, inscreve ou remove formandos, não muda o custo hora da sala e não muda o formador de uma sessão.
 - RF-49. Inquéritos (texto, escolha múltipla, escala 1 a 5, sim ou não) têm pré-visualização, ligação pública `/inquerito/:token`, respostas gravadas e CSV.
 
 ### Marketing, blog e comunicação
@@ -105,6 +106,7 @@ Cada requisito descreve comportamento que já existe.
 | Marketing | Campanha com custo, canal e ROI real | Textos, anúncios, calendário editorial, ligação às plataformas |
 | Blog | Título, slug, data, estado, temática | Corpo, SEO, revisão, publicação em `ena.pt` |
 | Oferta | Ficha do curso, documentos do curso e turmas libertadas | Site público alimentado pelo GesForma |
+| Avaliação | Grelha por parâmetros. Um parâmetro do curso pode ser a nota do Moodle e a turma mostra a nota final nos certificados | TO DO: ler a nota do Moodle real. Até lá o valor lança-se à mão |
 | Dossiê | Fases antes, durante e fecho, requisitos universais, dossiê financiado único, visto fechado pelos ficheiros do curso | Publicação do dossiê fora do GesForma |
 
 ## 3. Proposta: modelo ENA, de raiz e personalizado

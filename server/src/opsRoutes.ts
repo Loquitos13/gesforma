@@ -1042,6 +1042,7 @@ export function registerOpsRoutes(
 
   app.post("/v1/formandos-gold", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não inscreve nem transfere formandos." });
     const parsed = formandoGoldSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
@@ -1070,6 +1071,7 @@ export function registerOpsRoutes(
 
   app.patch("/v1/formandos-gold/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não transfere formandos nem altera pagamentos." });
     const id = Number((req.params as { id: string }).id);
     const parsed = formandoGoldSchema.partial().safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
@@ -1120,6 +1122,7 @@ export function registerOpsRoutes(
 
   app.delete("/v1/formandos-gold/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não remove formandos da turma." });
     const id = Number((req.params as { id: string }).id);
     await db.query("DELETE FROM formandos_gold WHERE id = $1", [id]);
     return { ok: true };
@@ -1142,6 +1145,7 @@ export function registerOpsRoutes(
 
   app.post("/v1/formandos-fin", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não inscreve nem transfere formandos." });
     const parsed = formandoFinSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
@@ -1160,6 +1164,7 @@ export function registerOpsRoutes(
 
   app.patch("/v1/formandos-fin/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não transfere formandos nem altera pagamentos." });
     const id = Number((req.params as { id: string }).id);
     const parsed = formandoFinSchema.partial().safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
@@ -1192,6 +1197,7 @@ export function registerOpsRoutes(
 
   app.delete("/v1/formandos-fin/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não remove formandos da turma." });
     const id = Number((req.params as { id: string }).id);
     await db.query("DELETE FROM formandos_fin WHERE id = $1", [id]);
     return { ok: true };

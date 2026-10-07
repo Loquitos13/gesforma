@@ -9,6 +9,8 @@ export type ParametroAvaliacao = {
   id: string;
   label: string;
   peso: number;
+  /** Reservado à nota que virá do Moodle. A leitura automática ainda não existe. */
+  moodle?: boolean;
 };
 
 export type MomentoAvaliacao = { id: string; label: string };
@@ -90,9 +92,15 @@ export function parseAvaliacaoCurso(payload: Record<string, unknown> | undefined
           id: String(row.id ?? novoParametroId()),
           label: String(row.label ?? `Parâmetro ${i + 1}`),
           peso: Number(row.peso) > 0 ? Number(row.peso) : 1,
+          moodle: row.moodle === true,
         };
       }).filter(p => p.label.trim())
     : [];
+  let moodleJa = false;
+  for (const p of parametros) {
+    if (!p.moodle || moodleJa) p.moodle = false;
+    else moodleJa = true;
+  }
   const escalaMin = Number(o.escalaMin);
   const escalaMax = Number(o.escalaMax);
   const minimo = Number(o.minimoAprovacao);

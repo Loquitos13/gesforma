@@ -206,7 +206,7 @@ export type Notificacao = {
   lida: boolean;
 };
 
-async function buildNotificacoes(db: Db, actorId: string): Promise<Notificacao[]> {
+async function buildNotificacoes(db: Db, actorId: string, role = ""): Promise<Notificacao[]> {
   const hoje = new Date();
   const em14dias = new Date(hoje.getTime() + 14 * 86400_000).toISOString().slice(0, 10);
   const hojeIso = hoje.toISOString().slice(0, 10);
@@ -368,7 +368,10 @@ async function buildNotificacoes(db: Db, actorId: string): Promise<Notificacao[]
   dtpAvisos.sort((a, b) => (a.tipo === b.tipo ? 0 : a.tipo === "error" ? -1 : 1));
   out.push(...dtpAvisos.slice(0, 4));
 
-  return out.map(n => ({ ...n, lida: lidaSet.has(n.chave) }));
+  const visiveis = role === "formador"
+    ? out.filter(n => n.tab !== "dtp" && n.view !== "pagamentos" && n.view !== "fin-formandos" && !/pagament|dossiê|dtp|document/i.test(`${n.titulo} ${n.texto}`))
+    : out;
+  return visiveis.map(n => ({ ...n, lida: lidaSet.has(n.chave) }));
 }
 
 const lidasSchema = z.object({ chaves: z.array(z.string().min(1).max(120)).max(60) });
@@ -700,7 +703,7 @@ export function registerDashboardRoutes(
 
   app.get("/v1/notificacoes", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    const items = await buildNotificacoes(db, req.actor!.id);
+    const items = await buildNotificacoes(db, req.actor!.id, req.actor!.role);
     return { notificacoes: items, naoLidas: items.filter(n => !n.lida).length };
   });
 

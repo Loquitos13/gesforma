@@ -38,7 +38,7 @@ import { CronogramaEditor, FormadoresAtribuidosCard, TurmaActivaToggle, TurmaIna
 import { TurmaRegrasPanel } from "./TurmaRegrasPanel";
 import { InscreverFormandoPanel } from "./TurmaInscricao";
 import { TurmaAvaliacao } from "./TurmaAvaliacao";
-import { cursoECcp, mapaNotas, notaFinalFormando, useAvaliacaoCurso, type NotaAvaliacao } from "./avaliacaoCurso";
+import { cursoECcp, formatNota, mapaNotas, notaFinalFormando, useAvaliacaoCurso, type NotaAvaliacao } from "./avaliacaoCurso";
 import { FormadoresView } from "./FormadoresView";
 import { FORMADORES_SEED } from "./formadorModel";
 import { useFormadorOptions, useFormadores } from "./FormadoresContext";
@@ -153,6 +153,11 @@ type View =
   | "emails" | "pagamentos" | "configuracoes" | "utilizadores" | "equipa" | "notificacoes" | "listas-opcoes";
 
 type CockpitTab = "overview" | "cronograma" | "sessoes" | "avaliacao" | "documentos" | "dtp" | "certificados";
+const TABS_FORMADOR: CockpitTab[] = ["overview", "sessoes", "avaliacao"];
+function tabDoFormador(tab: CockpitTab | undefined): CockpitTab {
+  return tab && TABS_FORMADOR.includes(tab) ? tab : "overview";
+}
+const VISTAS_FORMADOR = new Set<View>(["formador-turmas", "formador-calendario", "formador-perfil", "gold-cockpit-turma", "fin-cockpit-turma", "gold-turmas"]);
 type NavTarget = {
   view: View;
   turmaId?: number;
@@ -1420,13 +1425,13 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
   const programa = useProgramaDoCurso(regime, curso);
   const [notasAval, setNotasAval] = useState<NotaAvaliacao[]>([]);
   useEffect(() => {
-    if (!ccp || turmaId <= 0) return;
+    if (turmaId <= 0) return;
     let alive = true;
     apiTurmaAvaliacao(regime, turmaId)
       .then(r => { if (alive) setNotasAval(r.notas); })
       .catch(() => { if (alive) setNotasAval([]); });
     return () => { alive = false; };
-  }, [ccp, regime, turmaId]);
+  }, [regime, turmaId]);
   const mapa = useMemo(() => mapaNotas(notasAval), [notasAval]);
   const momentos = cfg.momentos?.map(m => m.id) ?? [];
   const modulos = cfg.modo === "modulos" ? (momentos.length ? momentos : programa.topicos.map(t => t.id)) : [];
@@ -1443,6 +1448,7 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
       folhas: marcadas.length,
       elearning: cert?.elearning ?? null,
       nota: ccp ? notaCcp : (cert?.nota ?? null),
+      notaFinal: notaFinalFormando(cfg, mapa, f.id, modulos),
       certificado: cert?.emitido ?? false,
     };
   });
@@ -1511,6 +1517,7 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
               <Th>Formando</Th>
               <Th className="text-center">Presenças</Th>
               {ccp ? <Th className="text-center">Nota da avaliação</Th> : <Th className="text-center">E-learning / SIGO</Th>}
+              <Th className="text-center">Nota final</Th>
               <Th className="text-center">Elegibilidade</Th>
               <Th className="text-center">Certificado</Th>
             </tr></thead>
@@ -1542,6 +1549,11 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
                           className="w-16 px-2 py-1 text-xs text-center border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
                         />
                       )}
+                    </Td>
+                    <Td className="text-center">
+                      <span className={`text-xs font-bold ${c.notaFinal != null && c.notaFinal < minimo ? "text-red-600" : "text-slate-800"}`}>
+                        {formatNota(c.notaFinal, cfg.unidade)}
+                      </span>
                     </Td>
                     <Td className="text-center">
                       {(ccp ? c.nota == null : c.elearning == null) || c.presencas == null
@@ -1661,7 +1673,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
   const formadorOpts = useFormadorOptions();
   const modelosCurso = usePlanosCurso("gold", turma?.curso ?? "");
   const locaisDoCurso = useLocaisOptsDoCurso("gold", cursosGold, turma?.curso ?? "");
-  useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
+  useEffect(() => { setTab(souFormador ? tabDoFormador(initialTab) : initialTab); }, [initialTab, turmaId, souFormador]);
   const nomesCockpit = membros.map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }));
 
   if (!turma) {
@@ -1708,12 +1720,12 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                 setEditTurma(true);
               }} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>}
               {envioInq && <p className="self-center text-xs text-amber-200 max-w-[10rem]">{envioInq}</p>}
-              <button type="button" onClick={() => setExportTurma(exportPayload(
+              {!souFormador && <button type="button" onClick={() => setExportTurma(exportPayload(
                 { nome: turma.nome, curso: turma.curso, local: turma.local, formandos: turma.totalAlunos, accent: "gold", turmaId: turma.id },
                 membros.map(f => ({ nome: `${f.nome} ${f.apelido}`, email: f.email, telf: f.telf, estado: f.pago ? "Pago" : "Por pagar" })),
                 sessoesTurma,
                 ped,
-              ))} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-lg transition-colors" aria-label="Exportar turma">{I.download}</button>
+              ))} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-lg transition-colors" aria-label="Exportar turma">{I.download}</button>}
             </div>
           </div>
           {/* Progress bar */}
@@ -1738,20 +1750,20 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           const dtp = ped.dtp.pct;
           const semSumario = sessoesTurma.filter(s => !sumarioPreenchido(sumarios[s.n])).length;
           const next: NextAction[] = [];
-          if (dtp < 70) next.push({ tone: "error", title: `DTP a ${dtp}%`, detail: "O dossiê bloqueia o fecho da turma.", onClick: () => setTab("dtp") });
-          if (porPagar) next.push({ tone: "warn", title: `${porPagar} por pagar`, detail: "Gerar MB ou confirmar na ficha do formando.", onClick: () => setTab("overview") });
+          if (!souFormador && dtp < 70) next.push({ tone: "error", title: `DTP a ${dtp}%`, detail: "O dossiê bloqueia o fecho da turma.", onClick: () => setTab("dtp") });
+          if (!souFormador && porPagar) next.push({ tone: "warn", title: `${porPagar} por pagar`, detail: "Gerar MB ou confirmar na ficha do formando.", onClick: () => setTab("overview") });
           if (semSumario) next.push({ tone: "warn", title: `${semSumario} sessões sem sumário`, detail: "O formador ainda não fechou a sessão.", onClick: () => setTab("sessoes") });
           if (vagasLivres === 0) next.push({ tone: "info", title: "Turma lotada", detail: "Novas pré-inscrições não entram aqui.", onClick: () => setTab("overview") });
           return <NextActions accent="gold" actions={next.slice(0, 3)} />;
         })()}
 
-        <TurmaTabBar tab={tab} onChange={setTab} accent="gold" dtpPct={ped.dtp.pct} dossie={staffPodeDossie(user.role)} so={souFormador ? ["overview", "sessoes"] : undefined} />
+        <TurmaTabBar tab={tab} onChange={setTab} accent="gold" dtpPct={ped.dtp.pct} dossie={staffPodeDossie(user.role)} so={souFormador ? TABS_FORMADOR : undefined} />
 
         {!activa && (
           <TurmaInactivaBanner nome={turma.nome} onActivate={() => toggleGold(turma.id, true)} />
         )}
 
-        {tab === "cronograma" && (
+        {tab === "cronograma" && !souFormador && (
           <CronogramaEditor
             layout="page"
             turmaId={turma.id}
@@ -1795,9 +1807,9 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             onOpenFormador={setFormadorOpen}
             podeEditar={podeDoc}
             podeCriar={!souFormador}
-            formadorOpcoes={formadorOpts}
-            onFormador={(s, nome) => {
-              if (!turma || !s.id || souFormador) return;
+            formadorOpcoes={souFormador ? undefined : formadorOpts}
+            onFormador={souFormador ? undefined : (s, nome) => {
+              if (!turma || !s.id) return;
               setGoldCronograma(turma.id, turma.cronograma.map(x => x.id === s.id ? { ...x, formadores: nome ? [nome] : [] } : x));
             }}
           />
@@ -1812,7 +1824,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             formandos={nomesCockpit}
           />
         )}
-        {tab === "documentos" && (
+        {tab === "documentos" && !souFormador && (
           <DocumentosTurmaTab
             regime="gold"
             curso={turma.curso}
@@ -1821,7 +1833,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             onSaveDoc={doc => void ped.guardarDocumento(doc)}
           />
         )}
-        {tab === "certificados" && (
+        {tab === "certificados" && !souFormador && (
           <CertificadosTurmaTab
             formandos={nomesCockpit}
             certificados={ped.certificados}
@@ -1838,13 +1850,18 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         )}
 
         {tab === "overview" && <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { l: "Formandos", v: turma.totalAlunos, c: "text-slate-800" },
-              { l: "Pagamentos ok", v: `${pagos}/${membros.length}`, c: pagos === membros.length ? "text-emerald-600" : "text-amber-600" },
-              { l: "Receita confirmada", v: `€ ${pagos * 125}`, c: "text-emerald-600" },
-              { l: "Por cobrar", v: `€ ${(membros.length - pagos) * 125}`, c: (membros.length - pagos) > 0 ? "text-amber-600" : "text-slate-400" },
-            ].map(s => (
+          <div className={`grid gap-3 ${souFormador ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4"}`}>
+            {(souFormador
+              ? [
+                  { l: "Formandos", v: turma.totalAlunos, c: "text-slate-800" },
+                  { l: "Sessões", v: sessoesTurma.length, c: "text-slate-800" },
+                ]
+              : [
+                  { l: "Formandos", v: turma.totalAlunos, c: "text-slate-800" },
+                  { l: "Pagamentos ok", v: `${pagos}/${membros.length}`, c: pagos === membros.length ? "text-emerald-600" : "text-amber-600" },
+                  { l: "Receita confirmada", v: `€ ${pagos * 125}`, c: "text-emerald-600" },
+                  { l: "Por cobrar", v: `€ ${(membros.length - pagos) * 125}`, c: (membros.length - pagos) > 0 ? "text-amber-600" : "text-slate-400" },
+                ]).map(s => (
               <Card key={s.l} className="p-4">
                 <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">{s.l}</p>
                 <p className={`text-xl font-bold ${s.c}`}>{s.v}</p>
@@ -1854,7 +1871,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
           <Card className="p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Programa de Formação</p>
-              <button onClick={() => onNavigate?.("gold-cursos")} className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800">{I.edit} Editar programa →</button>
+              {!souFormador && <button onClick={() => onNavigate?.("gold-cursos")} className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800">{I.edit} Editar programa →</button>}
             </div>
             <div className="space-y-2">
               {(programaTurma.length ? programaTurma : ["Ainda sem módulos na ficha deste curso. Edite o programa na ficha do curso."]).map((line, i) => (
@@ -1870,9 +1887,9 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
         <Card>
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <p className="text-sm font-semibold text-slate-700">Lista de Formandos</p>
-            {activa
+            {!souFormador && (activa
               ? <NewBtn label="Adicionar" onClick={() => setAddFormando(true)} />
-              : <button disabled title="Turma inativa - não aceita novas inscrições" className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-200 text-slate-400 text-sm font-semibold rounded-lg cursor-not-allowed">Adicionar</button>}
+              : <button disabled title="Turma inativa - não aceita novas inscrições" className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-200 text-slate-400 text-sm font-semibold rounded-lg cursor-not-allowed">Adicionar</button>)}
           </div>
           {membros.length === 0 && (
             <EmptyHint text="Ainda sem formandos nesta turma." action={activa ? "Adicionar o primeiro formando" : undefined} onAction={activa ? () => setAddFormando(true) : undefined} />
@@ -1883,20 +1900,22 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                 key={f.id}
                 title={`${f.nome} ${f.apelido}`}
                 sub={f.email}
-                badge={f.pago ? <span className="text-[11px] font-bold text-emerald-700">Pago</span> : <span className="text-[11px] font-bold text-amber-700">Por pagar</span>}
+                badge={souFormador ? undefined : (f.pago ? <span className="text-[11px] font-bold text-emerald-700">Pago</span> : <span className="text-[11px] font-bold text-amber-700">Por pagar</span>)}
                 meta={[f.telf, f.inscrito.slice(0, 10)]}
                 onOpen={() => setFichaOpen(f)}
                 actions={[
                   { label: "Ficha", icon: I.eye, onClick: () => setFichaOpen(f) },
-                  { label: "Transferir", icon: I.transfer, tone: "purple", onClick: () => setTransferirFormando(f) },
-                  { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagarFormando(f) },
+                  ...(!souFormador ? [
+                    { label: "Transferir", icon: I.transfer, tone: "purple" as const, onClick: () => setTransferirFormando(f) },
+                    { label: "Eliminar", icon: I.trash, tone: "red" as const, onClick: () => setApagarFormando(f) },
+                  ] : []),
                 ]}
               />
             ))}
           </div>
           <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
             <table className="w-full text-sm">
-              <thead><tr><Th>Nome</Th><Th>Contacto</Th><Th>Inscrito a</Th><Th className="text-center">Pago</Th><Th>Método</Th><Th>Ações</Th></tr></thead>
+              <thead><tr><Th>Nome</Th><Th>Contacto</Th><Th>Inscrito a</Th>{!souFormador && <Th className="text-center">Pago</Th>}{!souFormador && <Th>Método</Th>}<Th>Ações</Th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {membros.map(f => (
                   <tr key={f.id} className="hover:bg-slate-50 transition-colors">
@@ -1908,17 +1927,21 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                     </Td>
                     <Td className="font-mono text-xs text-slate-500">{f.telf}</Td>
                     <Td className="font-mono text-xs text-slate-500 whitespace-nowrap">{f.inscrito.slice(0, 10)}</Td>
-                    <Td className="text-center">
-                      <span className={`w-5 h-5 inline-flex items-center justify-center rounded-full text-white ${f.pago ? "bg-emerald-500" : "bg-slate-200"}`}>
-                        {f.pago ? I.check : ""}
-                      </span>
-                    </Td>
-                    <Td className="text-xs text-slate-600">{f.metodo}</Td>
+                    {!souFormador && (
+                      <Td className="text-center">
+                        <span className={`w-5 h-5 inline-flex items-center justify-center rounded-full text-white ${f.pago ? "bg-emerald-500" : "bg-slate-200"}`}>
+                          {f.pago ? I.check : ""}
+                        </span>
+                      </Td>
+                    )}
+                    {!souFormador && <Td className="text-xs text-slate-600">{f.metodo}</Td>}
                     <Td>
                       <RowActions actions={[
                         { label: "Ficha", icon: I.eye, onClick: () => setFichaOpen(f) },
-                        { label: "Transferir", icon: I.transfer, tone: "purple", onClick: () => setTransferirFormando(f) },
-                        { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagarFormando(f) },
+                        ...(!souFormador ? [
+                          { label: "Transferir", icon: I.transfer, tone: "purple" as const, onClick: () => setTransferirFormando(f) },
+                          { label: "Eliminar", icon: I.trash, tone: "red" as const, onClick: () => setApagarFormando(f) },
+                        ] : []),
                       ]} />
                     </Td>
                   </tr>
@@ -1951,12 +1974,12 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             </div>
           </Card>
         </div>
-        <CustosTurmaCard turma={turma} canEdit={!souFormador} onSala={valor => patchGold(turma.id, { custoHoraSala: valor })} />
+        {!souFormador && <CustosTurmaCard turma={turma} canEdit onSala={valor => patchGold(turma.id, { custoHoraSala: valor })} />}
         </>}
       </div>
 
       <SlideOver open={!!fichaOpen} onClose={() => setFichaOpen(null)} title="Ficha do Formando" sub={fichaOpen ? `#${fichaOpen.id}` : ""} size="lg">
-        {fichaOpen && <FichaFormando formando={fichaOpen} onClose={() => setFichaOpen(null)} initialTab="documentos" />}
+        {fichaOpen && <FichaFormando formando={fichaOpen} onClose={() => setFichaOpen(null)} initialTab={souFormador ? "info" : "documentos"} />}
       </SlideOver>
       <ConfirmEliminarFormandoModal
         open={!!apagarFormando}
@@ -2301,7 +2324,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
     const live = optsFromCursos(cursosFin);
     return live.length ? live : cursosFinOpts;
   }, [cursosFin]);
-  useEffect(() => { setTab(initialTab); }, [initialTab, turmaId]);
+  useEffect(() => { setTab(souFormadorFin ? tabDoFormador(initialTab) : initialTab); }, [initialTab, turmaId, souFormadorFin]);
   if (!turma) {
     return (
       <div className="space-y-4">
@@ -2352,17 +2375,17 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
               setEditLocal(turma.local); setEditInicio(turma.dataInicio);
               setEditVagasFin(turma.alunosTotal); setEditToleranciaFin(turma.toleranciaVagas ?? 0); setEditTurma(true);
             }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>}
-            <button type="button" onClick={() => setExportTurma(exportPayload(
+            {!souFormadorFin && <button type="button" onClick={() => setExportTurma(exportPayload(
               { nome: turma.nome, curso: turma.curso, local: turma.local, formandos: turma.alunos, accent: "fin", turmaId: turma.id },
               listaFormandos.map(f => ({ nome: `${f.nome} ${f.apelido}`, email: f.email, telf: f.telf, estado: f.estado })),
               sessoesTurma,
               ped,
-            ))} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-lg transition-colors" aria-label="Exportar turma">{I.download}</button>
+            ))} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-lg transition-colors" aria-label="Exportar turma">{I.download}</button>}
           </div>
         </div>
         <div className="mt-4">
           <div className="flex justify-between text-xs mb-1.5">
-            <span className="text-slate-300">{turma.alunos} formandos · {prontos} com documentos prontos</span>
+            <span className="text-slate-300">{turma.alunos} formandos{souFormadorFin ? "" : ` · ${prontos} com documentos prontos`}</span>
             <span className="text-blue-300">{Math.max(0, lugaresLivres(turma))} vagas restantes</span>
           </div>
           <div className="w-full bg-white/10 rounded-full h-2">
@@ -2375,14 +2398,14 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
         const dtp = ped.dtp.pct;
         const semPlano = sessoesTurma.filter(s => !ped.planos[s.n]).length;
         const next: NextAction[] = [];
-        if (dtp < 70) next.push({ tone: "error", title: `DTP a ${dtp}%`, detail: "Sem dossiê a turma financiada não arranca.", onClick: () => setTab("dtp") });
-        if (docsFalta) next.push({ tone: "error", title: `${docsFalta} com documentos em falta`, detail: "CC, habilitações, CV, IBAN ou emprego.", onClick: () => setTab("overview") });
+        if (!souFormadorFin && dtp < 70) next.push({ tone: "error", title: `DTP a ${dtp}%`, detail: "Sem dossiê a turma financiada não arranca.", onClick: () => setTab("dtp") });
+        if (!souFormadorFin && docsFalta) next.push({ tone: "error", title: `${docsFalta} com documentos em falta`, detail: "CC, habilitações, CV, IBAN ou emprego.", onClick: () => setTab("overview") });
         if (semPlano) next.push({ tone: "warn", title: `${semPlano} sessões sem plano`, detail: "O formador ainda não carregou o plano de sessão.", onClick: () => setTab("sessoes") });
         return <NextActions accent="fin" actions={next.slice(0, 3)} />;
       })()}
-      <TurmaTabBar tab={tab} onChange={setTab} accent="fin" dtpPct={ped.dtp.pct} dossie={staffPodeDossie(user.role)} so={souFormadorFin ? ["overview", "sessoes"] : undefined} />
+      <TurmaTabBar tab={tab} onChange={setTab} accent="fin" dtpPct={ped.dtp.pct} dossie={staffPodeDossie(user.role)} so={souFormadorFin ? TABS_FORMADOR : undefined} />
       {!activa && <TurmaInactivaBanner nome={turma.nome} onActivate={() => toggleFin(turma.id, true)} />}
-      {tab === "cronograma" && (
+      {tab === "cronograma" && !souFormadorFin && (
         <CronogramaEditor
           layout="page"
           accent="fin"
@@ -2426,9 +2449,9 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           onOpenFormador={setFormadorOpen}
           podeEditar={podeDocFin}
           podeCriar={!souFormadorFin}
-          formadorOpcoes={formadorOpts}
-          onFormador={(s, nome) => {
-            if (!turma || !s.id || souFormadorFin) return;
+          formadorOpcoes={souFormadorFin ? undefined : formadorOpts}
+          onFormador={souFormadorFin ? undefined : (s, nome) => {
+            if (!turma || !s.id) return;
             setFinCronograma(turma.id, turma.cronograma.map(x => x.id === s.id ? { ...x, formadores: nome ? [nome] : [] } : x));
           }}
         />
@@ -2443,7 +2466,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           formandos={nomesCockpit}
         />
       )}
-      {tab === "documentos" && (
+      {tab === "documentos" && !souFormadorFin && (
         <DocumentosTurmaTab
           regime="fin"
           curso={turma.curso}
@@ -2452,7 +2475,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           onSaveDoc={doc => void ped.guardarDocumento(doc)}
         />
       )}
-      {tab === "certificados" && (
+      {tab === "certificados" && !souFormadorFin && (
         <CertificadosTurmaTab
           formandos={nomesCockpit}
           certificados={ped.certificados}
@@ -2485,7 +2508,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           <Card className="p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Programa da UFCD</p>
-              <button onClick={() => onNavigate?.("fin-cursos")} className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800">{I.edit} Editar programa →</button>
+              {!souFormadorFin && <button onClick={() => onNavigate?.("fin-cursos")} className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800">{I.edit} Editar programa →</button>}
             </div>
             <div className="space-y-2">
               {(programaTurmaFin.length ? programaTurmaFin : [`UFCD ${turma.ufcdCod} · ${turma.curso} (${turma.horas}h)`]).map((line, i) => (
@@ -2499,9 +2522,9 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           <Card>
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <p className="text-sm font-semibold text-slate-700">Lista de Formandos</p>
-              {activa
+              {!souFormadorFin && (activa
                 ? <NewBtn accent="fin" label="Adicionar" onClick={() => setAddFormando(true)} />
-                : <button disabled title="Turma inativa - não aceita novas inscrições" className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-200 text-slate-400 text-sm font-semibold rounded-lg cursor-not-allowed">Adicionar</button>}
+                : <button disabled title="Turma inativa - não aceita novas inscrições" className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-200 text-slate-400 text-sm font-semibold rounded-lg cursor-not-allowed">Adicionar</button>)}
             </div>
             {listaFormandos.length === 0 && (
               <EmptyHint accent="fin" text="Ainda sem formandos nesta turma." action={activa ? "Adicionar o primeiro formando" : undefined} onAction={activa ? () => setAddFormando(true) : undefined} />
@@ -2515,13 +2538,15 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
                     key={f.id}
                     title={`${f.nome} ${f.apelido}`}
                     sub={f.email}
-                    badge={<span className={`text-[11px] font-bold ${okCount === 5 ? "text-emerald-700" : "text-red-600"}`}>{okCount}/5 docs</span>}
+                    badge={souFormadorFin ? undefined : <span className={`text-[11px] font-bold ${okCount === 5 ? "text-emerald-700" : "text-red-600"}`}>{okCount}/5 docs</span>}
                     meta={[f.telf, f.turma]}
                     onOpen={() => setDocsOpen(f)}
                     actions={[
                       { label: "Ficha", icon: I.eye, onClick: () => setDocsOpen(f) },
-                      { label: "Transferir", icon: I.transfer, tone: "purple", onClick: () => setTransferirFormando(f) },
-                      { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagarFormando(f) },
+                      ...(!souFormadorFin ? [
+                        { label: "Transferir", icon: I.transfer, tone: "purple" as const, onClick: () => setTransferirFormando(f) },
+                        { label: "Eliminar", icon: I.trash, tone: "red" as const, onClick: () => setApagarFormando(f) },
+                      ] : []),
                     ]}
                   />
                 );
@@ -2529,7 +2554,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
             </div>
             <div className="hidden md:block overflow-auto max-h-[min(70vh,640px)]">
               <table className="w-full text-sm">
-                <thead><tr><Th>Nome</Th><Th>Contacto</Th><Th>Turma</Th><Th>Estado</Th><Th>Documentos</Th><Th>Ações</Th></tr></thead>
+                <thead><tr><Th>Nome</Th><Th>Contacto</Th><Th>Turma</Th><Th>Estado</Th>{!souFormadorFin && <Th>Documentos</Th>}<Th>Ações</Th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
                   {listaFormandos.map(f => {
                     const keys: DocKey[] = ["cc", "ch", "cu", "ci", "ce"];
@@ -2546,17 +2571,21 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
                       <Td className="font-mono text-xs text-slate-500">{f.telf}</Td>
                       <Td className="text-xs text-slate-600 whitespace-nowrap">{f.turma}</Td>
                       <Td>{estadoBadge(f.estado)}</Td>
-                      <Td>
-                        <button type="button" onClick={() => setDocsOpen(f)} title="CC · CH · CU · CI · CE"
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${complete ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
-                          {complete ? "✓ Completos" : `${okCount}/5 · ${5 - okCount} em falta`}
-                        </button>
-                      </Td>
+                      {!souFormadorFin && (
+                        <Td>
+                          <button type="button" onClick={() => setDocsOpen(f)} title="CC · CH · CU · CI · CE"
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${complete ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
+                            {complete ? "✓ Completos" : `${okCount}/5 · ${5 - okCount} em falta`}
+                          </button>
+                        </Td>
+                      )}
                       <Td>
                         <RowActions actions={[
                           { label: "Ficha", icon: I.eye, onClick: () => setDocsOpen(f) },
-                          { label: "Transferir", icon: I.transfer, tone: "purple", onClick: () => setTransferirFormando(f) },
-                          { label: "Eliminar", icon: I.trash, tone: "red", onClick: () => setApagarFormando(f) },
+                          ...(!souFormadorFin ? [
+                            { label: "Transferir", icon: I.transfer, tone: "purple" as const, onClick: () => setTransferirFormando(f) },
+                            { label: "Eliminar", icon: I.trash, tone: "red" as const, onClick: () => setApagarFormando(f) },
+                          ] : []),
                         ]} />
                       </Td>
                     </tr>
@@ -2910,7 +2939,9 @@ function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
 }
 
 function FichaFormandoFin({ formando, onClose }: { formando: FormandoFin; onClose: () => void }) {
-  const [tab, setTab] = useState<"info" | "documentos">("documentos");
+  const { user } = useAuth();
+  const formador = user.role === "formador";
+  const [tab, setTab] = useState<"info" | "documentos">(formador ? "info" : "documentos");
   const { formandosFin } = useLists();
   const live = formandosFin.find(f => f.id === formando.id) ?? formando;
   return (
@@ -2932,7 +2963,7 @@ function FichaFormandoFin({ formando, onClose }: { formando: FormandoFin; onClos
         </div>
       </div>
       <div className="flex border-b border-slate-100 px-5 bg-white flex-shrink-0">
-        {(["info", "documentos"] as const).map(t => (
+        {(formador ? ["info"] as const : ["info", "documentos"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-3 py-2.5 text-xs font-semibold border-b-2 -mb-px ${tab === t ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
             {t === "info" ? "Informação" : "Documentos"}
@@ -2956,7 +2987,7 @@ function FichaFormandoFin({ formando, onClose }: { formando: FormandoFin; onClos
             ))}
           </div>
         )}
-        {tab === "documentos" && <DocumentosFinPanel formando={live} />}
+        {tab === "documentos" && !formador && <DocumentosFinPanel formando={live} />}
       </div>
       <div className="flex-shrink-0 px-5 py-3 border-t border-slate-100 bg-slate-50 flex justify-end">
         <button onClick={onClose} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-50">Fechar</button>
@@ -4706,6 +4737,9 @@ function useAtalhosDoDia(): SearchRow[] {
   const dtpFin = useDtpResumo("fin");
 
   return useMemo(() => {
+    if (user.role === "formador") {
+      return [{ tipo: "Atalho", nome: "As minhas turmas", sub: "Sessões e avaliação", view: "formador-turmas" as View }];
+    }
     const out: SearchRow[] = [];
     const porContactar = preinscricoes.filter(l => !l.contactadoEm).length;
     const porContactarGold = preinscricoes.filter(l => (l.regime ?? "gold") !== "fin" && !l.contactadoEm).length;
@@ -4731,6 +4765,7 @@ function useAtalhosDoDia(): SearchRow[] {
 }
 
 function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: () => void; onNavigate: (t: NavTarget) => void }) {
+  const { user } = useAuth();
   const [q, setQ] = useState("");
   const [hi, setHi] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -4754,14 +4789,17 @@ function GlobalSearch({ open, onClose, onNavigate }: { open: boolean; onClose: (
     const t = window.setTimeout(() => {
       apiGlobalSearch(query).then(r => {
         setKindLabel(r.kindLabel);
-        setGroups(r.groups.map(g => ({ label: g.label, items: g.items.map(hitToNav) })));
+        setGroups(r.groups.map(g => ({
+          label: g.label,
+          items: g.items.map(hitToNav).filter(item => user.role !== "formador" || (VISTAS_FORMADOR.has(item.view) && item.tab !== "dtp")),
+        })).filter(g => g.items.length));
       }).catch(() => {
         setKindLabel(null);
         setGroups([]);
       }).finally(() => setBusy(false));
     }, 180);
     return () => window.clearTimeout(t);
-  }, [q, open]);
+  }, [q, open, user.role]);
 
   function openRow(r: SearchRow) {
     onNavigate({
@@ -5244,7 +5282,14 @@ function AppShell() {
   }, []);
 
   const navigate = useCallback((target: View | NavTarget) => {
-    const t: NavTarget = typeof target === "string" ? { view: target } : target;
+    const t: NavTarget = typeof target === "string" ? { view: target } : { ...target };
+    if (user.role === "formador" && !VISTAS_FORMADOR.has(t.view)) {
+      go("formador-turmas");
+      return;
+    }
+    if (user.role === "formador" && (t.view === "gold-cockpit-turma" || t.view === "fin-cockpit-turma")) {
+      t.tab = tabDoFormador(t.tab);
+    }
     setOpenFormandoId(t.formandoId);
     setOpenFormandoOrigem(t.formandoOrigem);
     setOpenFormadorId(t.formadorId);
@@ -5262,7 +5307,7 @@ function AppShell() {
       setModuloCurso(t.cursoNome);
     }
     go(t.view);
-  }, [go]);
+  }, [go, user.role]);
 
   function openCockpit(id: number, tab: CockpitTab = "overview") { setCockpitId(id); setCockpitTab(tab); go("gold-cockpit-turma"); }
   function openFinCockpit(id: number, tab: CockpitTab = "overview") { setFinCockpitId(id); setCockpitTab(tab); go("fin-cockpit-turma"); }
@@ -5294,6 +5339,13 @@ function AppShell() {
   const regime = regimeOfView(view);
   const headerCrumbs = (() => {
     if (view === "gold-cockpit-turma" && goldTurma) {
+      if (user.role === "formador") {
+        return [
+          { label: "As minhas turmas", onClick: () => navigate("formador-turmas") },
+          { label: goldTurma.nome, onClick: () => { setCockpitTab("overview"); go("gold-cockpit-turma"); } },
+          { label: cockpitTabLabel[cockpitTab] ?? "Visão geral" },
+        ];
+      }
       return [
         { label: "Gold", onClick: () => navigate("gold-painel") },
         { label: "Turmas", onClick: () => navigate("gold-turmas") },
@@ -5302,6 +5354,13 @@ function AppShell() {
       ];
     }
     if ((view === "fin-cockpit-turma" || view === "fin-presencas") && finTurma) {
+      if (user.role === "formador") {
+        return [
+          { label: "As minhas turmas", onClick: () => navigate("formador-turmas") },
+          { label: finTurma.nome, onClick: () => { setCockpitTab("overview"); go("fin-cockpit-turma"); } },
+          { label: view === "fin-presencas" ? "Sessões" : (cockpitTabLabel[cockpitTab] ?? "Visão geral") },
+        ];
+      }
       return [
         { label: "Financiada", onClick: () => navigate("fin-painel") },
         { label: "Turmas", onClick: () => navigate("fin-turmas") },

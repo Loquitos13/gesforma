@@ -291,7 +291,8 @@ export function TurmaAvaliacao({
                     {cols.map(p => (
                       <th key={p.id} className="px-2 py-2 font-semibold text-center min-w-[108px]">
                         <span className="block normal-case text-slate-700">{p.label}</span>
-                        <span className="font-medium text-slate-400">
+                        {p.moodle && <span className="mt-0.5 inline-block normal-case text-[10px] font-bold uppercase tracking-wide text-violet-700">Moodle</span>}
+                        <span className="block font-medium text-slate-400">
                           {cfg.pesosEquitativos ? `1/${cols.length}` : `${p.peso}`}
                         </span>
                       </th>
@@ -330,7 +331,8 @@ export function TurmaAvaliacao({
                                 } ${ring} focus:outline-none`}
                                 inputMode="decimal"
                                 value={shown}
-                                placeholder="-"
+                                placeholder={p.moodle ? "Moodle" : "-"}
+                                title={p.moodle ? "Nota do Moodle. A leitura automática ainda não está ligada, por isso lança-se à mão." : undefined}
                                 onFocus={() => setSel({ r0: r, c0: c, r1: r, c1: c })}
                                 onChange={e => {
                                   drafts.current[key] = e.target.value;
@@ -377,6 +379,7 @@ export function TurmaAvaliacao({
             </div>
             <p className="px-4 py-2 text-[11px] text-slate-400 border-t border-slate-100">
               Clique numa célula, arraste para selecionar um retângulo e puxe o quadrado no canto para copiar o valor. Depois pode corrigir célula a célula.
+              {cols.some(p => p.moodle) ? " A coluna Moodle entra na nota final. A leitura automática no Moodle ainda não está ligada." : ""}
             </p>
           </div>
 

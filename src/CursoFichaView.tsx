@@ -1398,9 +1398,9 @@ export function CursoFichaView({
                   {data.avaliacaoCurso.parametros.map((p, i) => {
                     const frac = fracoesPeso(data.avaliacaoCurso)[p.id] ?? 0;
                     return (
-                      <div key={p.id} className="flex items-center gap-2">
+                      <div key={p.id} className="flex flex-wrap items-center gap-2">
                         <span className="text-xs font-mono text-slate-400 w-5">{i + 1}</span>
-                        <input className={t.iCls} value={p.label} placeholder="Nome do parâmetro"
+                        <input className={`${t.iCls} min-w-[10rem] flex-1`} value={p.label} placeholder="Nome do parâmetro"
                           onChange={e => patchAv({
                             parametros: data.avaliacaoCurso.parametros.map(x => x.id === p.id ? { ...x, label: e.target.value } : x),
                           })} />
@@ -1412,12 +1412,30 @@ export function CursoFichaView({
                           })} />
                         <span className="text-[11px] text-slate-400 w-12 text-right">{Math.round(frac * 100)}%</span>
                         <button type="button"
+                          onClick={() => {
+                            const ligar = !p.moodle;
+                            patchAv({
+                              parametros: data.avaliacaoCurso.parametros.map(x => ({ ...x, moodle: ligar && x.id === p.id })),
+                            });
+                          }}
+                          className={`px-2.5 py-2 text-[11px] font-semibold rounded-lg border whitespace-nowrap ${
+                            p.moodle ? "border-violet-300 bg-violet-50 text-violet-800" : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                          }`}
+                        >
+                          {p.moodle ? "Nota do Moodle" : "Marcar Moodle"}
+                        </button>
+                        <button type="button"
                           onClick={() => patchAv({ parametros: data.avaliacaoCurso.parametros.filter(x => x.id !== p.id) })}
                           className="px-2 py-2 text-xs text-slate-400 hover:text-red-500">Remover</button>
                       </div>
                     );
                   })}
                 </div>
+                {data.avaliacaoCurso.parametros.some(p => p.moodle) && (
+                  <p className="text-xs text-violet-800 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2">
+                    O parâmetro marcado é a nota do Moodle e entra na média com o peso dele. A leitura automática no Moodle ainda não está ligada, por isso a turma lança o valor à mão.
+                  </p>
+                )}
                 <button
                   type="button"
                   onClick={() => patchAv({

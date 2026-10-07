@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { EnviarReciboModal, ReferenciaMbModal } from "./ActionSurfaces";
+import { useAuth } from "./AuthGate";
 import { apiAddFormandoNota, apiDtpModelo, apiFormandoDossier, apiSaveFormandoDocs, type FormandoNota } from "./api";
 import { idCursoPorNome } from "./cursoLocais";
 import { docsFormandoBase, fundirDocTipos } from "./dossierDocs";
@@ -155,7 +156,9 @@ export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "
   initialTab?: "info" | "documentos" | "pagamentos" | "historico" | "notas";
   avulso?: boolean;
 }) {
-  const [tab, setTab] = useState<"info" | "documentos" | "pagamentos" | "historico" | "notas">(initialTab);
+  const { user } = useAuth();
+  const formador = user.role === "formador";
+  const [tab, setTab] = useState<"info" | "documentos" | "pagamentos" | "historico" | "notas">(formador ? "info" : initialTab);
   const [nota, setNota] = useState("");
   const [notas, setNotas] = useState<FormandoNota[]>([]);
   const [notasEstado, setNotasEstado] = useState<"loading" | "ready" | "offline">("loading");
@@ -163,12 +166,17 @@ export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "
   const [pay, setPay] = useState<"mb" | "mbway" | "recibo" | null>(null);
 
   useEffect(() => {
+    if (formador) {
+      setNotas([]);
+      setNotasEstado("ready");
+      return;
+    }
     let alive = true;
     apiFormandoDossier(tipo, formando.id)
       .then(r => { if (alive) { setNotas(r.notas); setNotasEstado("ready"); } })
       .catch(() => { if (alive) setNotasEstado("offline"); });
     return () => { alive = false; };
-  }, [formando.id, tipo]);
+  }, [formador, formando.id, tipo]);
 
   async function guardarNota() {
     const texto = nota.trim();
@@ -201,10 +209,12 @@ export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "
             <p className="text-xs text-slate-500 truncate">{formando.email}</p>
             <div className="flex items-center gap-2 mt-1">{estadoBadge(formando.estado)}<span className="text-xs text-slate-400">{turmaLabel}{turma && !isTurmaActiva(turma) ? " · turma inativa" : ""}</span></div>
           </div>
-          <div className={`text-right flex-shrink-0 ${formando.pago ? "text-emerald-600" : "text-amber-600"}`}>
-            <p className="text-lg font-bold">€{formando.valor}</p>
-            <p className="text-xs">{formando.pago ? "Pago" : "Pendente"}</p>
-          </div>
+          {!formador && (
+            <div className={`text-right flex-shrink-0 ${formando.pago ? "text-emerald-600" : "text-amber-600"}`}>
+              <p className="text-lg font-bold">€{formando.valor}</p>
+              <p className="text-xs">{formando.pago ? "Pago" : "Pendente"}</p>
+            </div>
+          )}
         </div>
         <div className="flex gap-2 mt-3 flex-wrap">
           <a href={`tel:${formando.telf}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors">{I.phone} {formando.telf}</a>
@@ -214,7 +224,7 @@ export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "
       </div>
 
       <div className="flex border-b border-slate-100 px-5 bg-white flex-shrink-0 overflow-x-auto">
-        {(["info", "documentos", "pagamentos", "historico", "notas"] as const).map(t => (
+        {(formador ? ["info"] as const : ["info", "documentos", "pagamentos", "historico", "notas"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-3 py-2.5 text-xs font-semibold capitalize transition-colors border-b-2 -mb-px whitespace-nowrap ${tab === t ? "border-amber-500 text-amber-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
             {t === "info" ? "Informação" : t === "documentos" ? "Documentos" : t === "pagamentos" ? "Pagamento" : t === "historico" ? "Histórico" : "Notas"}
@@ -260,9 +270,9 @@ export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "
           </>
         )}
 
-        {tab === "documentos" && <DocumentosGoldPanel formando={formando} avulso={avulso} tipo={tipo} />}
+        {tab === "documentos" && !formador && <DocumentosGoldPanel formando={formando} avulso={avulso} tipo={tipo} />}
 
-        {tab === "pagamentos" && (
+        {tab === "pagamentos" && !formador && (
           <div className="space-y-3">
             <div className={`rounded-xl p-4 border ${formando.pago ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
               <div className="flex items-center justify-between">
@@ -285,7 +295,7 @@ export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "
           </div>
         )}
 
-        {tab === "historico" && (
+        {tab === "historico" && !formador && (
           <div className="space-y-2">
             {[
               { acao: avulso ? "Inscrição avulso recebida" : "Pré-inscrição recebida", data: formando.inscrito, tipo: "inscricao" },
@@ -304,7 +314,7 @@ export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "
           </div>
         )}
 
-        {tab === "notas" && (
+        {tab === "notas" && !formador && (
           <div className="space-y-3">
             {notasEstado === "loading" && <p className="py-6 text-center text-sm text-slate-400">A ler as notas…</p>}
             {notasEstado === "offline" && (

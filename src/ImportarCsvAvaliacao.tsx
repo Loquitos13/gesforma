@@ -1,19 +1,18 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { novoParametroId, type ParametroAvaliacao } from "./avaliacaoCurso";
 import {
   blocosDoCsv,
   colunaLetra,
   colunasParticipantes,
   parametrosDoCsv,
-  limparGrelha,
   parseCsv,
   refCelula,
-  segmentosGrelha,
   type BlocoCsv,
   type Celula,
   type PapelCelula,
   type ParametroCsv,
 } from "./csvAvaliacao";
+import { lerLivroExcel, type EstiloCelula, type FolhaImportada, type UniaoCelula, type VistaFolha } from "./vistaExcel";
 
 export function ImportarCsvAvaliacao({
   modo,
@@ -28,7 +27,7 @@ export function ImportarCsvAvaliacao({
   onAplicar: (parametros: ParametroAvaliacao[]) => void;
   compacto?: boolean;
 }) {
-  const [folhas, setFolhas] = useState<{ nome: string; grid: string[][] }[]>([]);
+  const [folhas, setFolhas] = useState<FolhaImportada[]>([]);
   const [folhaIdx, setFolhaIdx] = useState(0);
   const [nomeFicheiro, setNomeFicheiro] = useState("");
   const [papel, setPapel] = useState<PapelCelula>("nome");
@@ -40,10 +39,10 @@ export function ImportarCsvAvaliacao({
   const [aberto, setAberto] = useState(!compacto);
   const mediaLabel = modo === "modulos" ? `Média do ${unidade}` : "Média final";
 
-  const grid = folhas[folhaIdx]?.grid ?? null;
+  const folha = folhas[folhaIdx] ?? null;
+  const grid = folha?.grid ?? null;
   const participantes = useMemo(() => (grid ? colunasParticipantes(grid) : new Set<number>()), [grid]);
   const blocos = useMemo(() => (grid ? blocosDoCsv(grid) : []), [grid]);
-  const segmentos = useMemo(() => (grid ? segmentosGrelha(grid) : []), [grid]);
 
   const leitura = useMemo(() => {
     if (!grid || !nome || !valor || !media) return { erro: "", parametros: [] as ParametroCsv[] };
@@ -72,14 +71,6 @@ export function ImportarCsvAvaliacao({
     else setMedia(celula);
   }
 
-  function estilo(r: number, c: number) {
-    if (participantes.has(c)) return "bg-slate-50 text-slate-300 cursor-not-allowed";
-    if (nome && nome.r === r && nome.c === c) return "bg-amber-100 ring-2 ring-amber-400";
-    if (valor && valor.r === r && valor.c === c) return "bg-emerald-100 ring-2 ring-emerald-400";
-    if (media && media.r === r && media.c === c) return "bg-violet-100 ring-2 ring-violet-400";
-    return "hover:bg-slate-50";
-  }
-
   function aplicar(lista: ParametroCsv[]) {
     onAplicar(lista.map(p => ({ id: novoParametroId(), label: p.label, peso: p.peso })));
   }
@@ -87,24 +78,9 @@ export function ImportarCsvAvaliacao({
   async function lerFicheiro(file: File) {
     const lower = file.name.toLowerCase();
     try {
-      let lista: { nome: string; grid: string[][] }[];
-      if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
-        const XLSX = await import("xlsx");
-        const livro = XLSX.read(await file.arrayBuffer(), { type: "array" });
-        lista = livro.SheetNames.map(nome => {
-          const bruto = XLSX.utils.sheet_to_json(livro.Sheets[nome]!, {
-            header: 1,
-            raw: false,
-            defval: "",
-          }) as unknown[][];
-          return {
-            nome,
-            grid: limparGrelha(bruto.map(linha => (Array.isArray(linha) ? linha : []).map(celula => String(celula ?? "").trim()))),
-          };
-        }).filter(folha => folha.grid.length);
-      } else {
-        lista = [{ nome: file.name, grid: parseCsv(await file.text()) }];
-      }
+      const lista = lower.endsWith(".xlsx") || lower.endsWith(".xls")
+        ? await lerLivroExcel(await file.arrayBuffer())
+        : [{ nome: file.name, grid: parseCsv(await file.text()), vista: null }];
       if (!lista.length) {
         setFolhas([]);
         setErroFicheiro("O ficheiro não tem células.");
@@ -127,7 +103,6 @@ export function ImportarCsvAvaliacao({
 
   const visiveis = grid ?? [];
   const colunas = visiveis.reduce((m, linha) => Math.max(m, linha.length), 0);
-  const gruposParticipantes = segmentos.filter(s => s.tipo === "participantes").length;
 
   if (compacto && !aberto) {
     return (
@@ -138,11 +113,11 @@ export function ImportarCsvAvaliacao({
   }
 
   return (
-    <div className={`rounded-xl border border-slate-200 bg-white space-y-4 ${compacto ? "p-3" : "p-4 sm:p-5"}`}>
+    <div className={`min-w-0 max-w-full rounded-xl border border-slate-200 bg-white space-y-4 ${compacto ? "p-3" : "p-4 sm:p-5"}`}>
       <div>
         <p className="text-sm font-semibold text-slate-800">Importar parâmetros de CSV ou Excel</p>
         <p className="text-xs text-slate-500 mt-0.5">
-          Aceita CSV e Excel (.xlsx). Num livro com vários separadores, escolha a folha. As colunas de participantes ficam de fora, mesmo quando a grelha vai até BM ou mais. Use um bloco encontrado ou escolha à mão a célula do nome, a do peso e a da {mediaLabel.toLowerCase()}.
+          A folha aparece como no ficheiro, com cores, letras e todas as colunas. As de participantes continuam visíveis e não servem de parâmetro. Escolha o nome, o peso e a {mediaLabel.toLowerCase()} nas restantes, ou use um bloco encontrado.
         </p>
       </div>
       <label className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer">
@@ -160,28 +135,28 @@ export function ImportarCsvAvaliacao({
       </label>
       {nomeFicheiro && <p className="text-xs text-slate-500">{nomeFicheiro}</p>}
       {erroFicheiro && <p className="text-xs text-red-600">{erroFicheiro}</p>}
-      {grid && (
+      {grid && folha && (
         <>
           {folhas.length > 1 && (
             <div className="flex gap-1 overflow-x-auto">
-              {folhas.map((folha, i) => (
+              {folhas.map((item, i) => (
                 <button
-                  key={folha.nome}
+                  key={item.nome}
                   type="button"
                   onClick={() => escolherFolha(i)}
                   className={`px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border whitespace-nowrap ${
                     i === folhaIdx ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 text-slate-600 hover:bg-slate-50"
                   }`}
                 >
-                  {folha.nome}
+                  {item.nome}
                 </button>
               ))}
             </div>
           )}
           <p className="text-xs text-slate-500">
-            {colunas} colunas, até {colunaLetra(colunas - 1)}.
-            {gruposParticipantes > 0
-              ? ` ${participantes.size} colunas de participantes em ${gruposParticipantes} ${gruposParticipantes === 1 ? "grupo" : "grupos"}, ignoradas.`
+            {colunas} colunas, de {colunaLetra(0)} a {colunaLetra(Math.max(0, colunas - 1))}.
+            {participantes.size > 0
+              ? ` ${participantes.size} colunas de participantes continuam visíveis e não entram como parâmetros.`
               : " Sem colunas de participantes."}
           </p>
           {blocos.length > 0 && (
@@ -213,46 +188,15 @@ export function ImportarCsvAvaliacao({
               </button>
             ))}
           </div>
-          <div className="max-h-[28rem] overflow-auto rounded-lg border border-slate-200">
-            <table className="text-xs border-separate border-spacing-0">
-              <thead>
-                <tr>
-                  <th className="sticky top-0 left-0 z-30 bg-slate-100 border-b border-r border-slate-200 px-2 py-1 text-slate-400 font-medium" />
-                  {segmentos.map(seg => seg.tipo === "coluna" ? (
-                    <th key={`h-${seg.c}`} className="sticky top-0 z-20 bg-slate-100 border-b border-r border-slate-200 px-2 py-1 text-left font-medium text-slate-500 min-w-[5.5rem]">
-                      {colunaLetra(seg.c)}
-                    </th>
-                  ) : (
-                    <th key={`h-${seg.de}`} className="sticky top-0 z-20 bg-slate-50 border-b border-r border-slate-200 px-2 py-1 text-left font-medium text-slate-400 min-w-[7rem]">
-                      {colunaLetra(seg.de)} a {colunaLetra(seg.ate)}
-                      <span className="block font-normal text-[10px]">{seg.quantidade} formandos</span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {visiveis.map((linha, r) => (
-                  <tr key={r}>
-                    <th className="sticky left-0 z-10 bg-slate-100 border-b border-r border-slate-200 px-2 py-1 text-slate-400 font-medium">{r + 1}</th>
-                    {segmentos.map(seg => seg.tipo === "coluna" ? (
-                      <td key={seg.c} className="border-b border-r border-slate-100 p-0">
-                        <button
-                          type="button"
-                          onClick={() => marcar({ r, c: seg.c })}
-                          className={`block min-w-[5.5rem] max-w-[14rem] truncate px-2 py-1.5 text-left ${estilo(r, seg.c)}`}
-                          title={linha[seg.c] || refCelula({ r, c: seg.c })}
-                        >
-                          {linha[seg.c] || " "}
-                        </button>
-                      </td>
-                    ) : (
-                      <td key={`p-${seg.de}`} className="border-b border-r border-slate-100 bg-slate-50 px-2 py-1.5 text-slate-300" title="Participantes, ignorados" />
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <GrelhaFolha
+            grid={visiveis}
+            vista={folha.vista}
+            participantes={participantes}
+            nome={nome}
+            valor={valor}
+            media={media}
+            onMarcar={marcar}
+          />
           {leitura.erro && nome && valor && media && <p className="text-xs text-red-600">{leitura.erro}</p>}
           {leitura.parametros.length > 0 && (
             <ul className="text-xs text-slate-600 space-y-1">
@@ -275,6 +219,136 @@ export function ImportarCsvAvaliacao({
   );
 }
 
+function marcaDe(r: number, c: number, nome: Celula | null, valor: Celula | null, media: Celula | null) {
+  if (nome && nome.r === r && nome.c === c) return "inset 0 0 0 2px #d97706";
+  if (valor && valor.r === r && valor.c === c) return "inset 0 0 0 2px #059669";
+  if (media && media.r === r && media.c === c) return "inset 0 0 0 2px #7c3aed";
+  return undefined;
+}
+
+function GrelhaFolha({
+  grid,
+  vista,
+  participantes,
+  nome,
+  valor,
+  media,
+  onMarcar,
+}: {
+  grid: string[][];
+  vista: VistaFolha | null;
+  participantes: Set<number>;
+  nome: Celula | null;
+  valor: Celula | null;
+  media: Celula | null;
+  onMarcar: (celula: Celula) => void;
+}) {
+  const largura = grid.reduce((m, linha) => Math.max(m, linha.length), 0);
+  const ocupadas = useMemo(() => mapaUnioes(vista?.unioes ?? []), [vista]);
+  const soma = 36 + Array.from({ length: largura }, (_, c) => vista?.larguras[c] ?? 96).reduce((a, b) => a + b, 0);
+
+  return (
+    <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-slate-200">
+      <table
+        data-grelha-importada="1"
+        className="border-collapse text-[13px] text-slate-800"
+        style={{ width: vista ? soma : undefined, minWidth: vista ? soma : undefined, tableLayout: vista ? "fixed" : "auto" }}
+      >
+        <colgroup>
+          <col style={{ width: 36 }} />
+          {Array.from({ length: largura }, (_, c) => (
+            <col key={c} style={{ width: vista?.larguras[c] ?? 96 }} />
+          ))}
+        </colgroup>
+        <thead>
+          <tr>
+            <th className="sticky left-0 z-30 bg-slate-100 border border-slate-200" />
+            {Array.from({ length: largura }, (_, c) => (
+              <th key={c} className="bg-slate-100 border border-slate-200 px-1 py-1 text-center text-[10px] font-medium text-slate-500">
+                {colunaLetra(c)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {grid.map((linha, r) => (
+            <tr key={r} style={{ height: vista?.alturas[r] }}>
+              <th className="sticky left-0 z-10 bg-slate-100 border border-slate-200 px-1 text-[10px] font-medium text-slate-400">
+                {r + 1}
+              </th>
+              {Array.from({ length: largura }, (_, c) => {
+                if (ocupadas.cobertas.has(`${r}:${c}`)) return null;
+                const uniao = ocupadas.origem.get(`${r}:${c}`);
+                const estilo = vista?.estilos[r]?.[c] ?? null;
+                const texto = linha[c] ?? "";
+                const formando = participantes.has(c);
+                return (
+                  <td
+                    key={c}
+                    colSpan={uniao?.colunas}
+                    rowSpan={uniao?.linhas}
+                    data-celula={refCelula({ r, c })}
+                    data-bg={estilo?.bg ?? ""}
+                    className="border border-slate-300 p-0 align-middle"
+                    style={estiloCelula(estilo, marcaDe(r, c, nome, valor, media))}
+                  >
+                    <button
+                      type="button"
+                      title={formando ? "Coluna de participantes" : texto || refCelula({ r, c })}
+                      onClick={() => onMarcar({ r, c })}
+                      className={`block w-full bg-transparent border-0 p-1 font-inherit text-inherit ${
+                        formando ? "cursor-default" : "cursor-pointer"
+                      } ${estilo?.rotacao === 90 ? "[writing-mode:vertical-rl] rotate-180" : ""} ${
+                        estilo?.rotacao === 255 ? "[writing-mode:vertical-rl] [text-orientation:upright]" : ""
+                      }`}
+                      style={{
+                        textAlign: "inherit",
+                        whiteSpace: estilo?.rotacao ? "nowrap" : "normal",
+                        overflowWrap: "anywhere",
+                        lineHeight: 1.15,
+                      }}
+                    >
+                      {texto || "\u00a0"}
+                    </button>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function estiloCelula(estilo: EstiloCelula | null, marca?: string): CSSProperties {
+  return {
+    backgroundColor: estilo?.bg,
+    color: estilo?.cor,
+    fontWeight: estilo?.negrito ? 700 : undefined,
+    fontSize: estilo?.tamanho ? `${estilo.tamanho}px` : undefined,
+    fontFamily: estilo?.fonte ? `"${estilo.fonte}", Arial, sans-serif` : undefined,
+    textAlign: estilo?.alinhamento,
+    verticalAlign: estilo?.vertical === "middle" ? "middle" : estilo?.vertical,
+    boxShadow: marca,
+  };
+}
+
+function mapaUnioes(unioes: UniaoCelula[]) {
+  const cobertas = new Set<string>();
+  const origem = new Map<string, UniaoCelula>();
+  for (const uniao of unioes) {
+    if (uniao.linhas < 2 && uniao.colunas < 2) continue;
+    origem.set(`${uniao.r}:${uniao.c}`, uniao);
+    for (let r = uniao.r; r < uniao.r + uniao.linhas; r++) {
+      for (let c = uniao.c; c < uniao.c + uniao.colunas; c++) {
+        if (r !== uniao.r || c !== uniao.c) cobertas.add(`${r}:${c}`);
+      }
+    }
+  }
+  return { cobertas, origem };
+}
+
 function BlocoCard({
   bloco,
   saveClass,
@@ -293,9 +367,9 @@ function BlocoCard({
           Usar este bloco
         </button>
       </div>
-      <ul className="text-xs text-slate-600 space-y-1 max-h-36 overflow-auto">
+      <ul className="text-xs text-slate-600 space-y-1">
         {bloco.parametros.map(p => (
-          <li key={p.label} className="truncate" title={p.label}>
+          <li key={p.label}>
             {p.label}{iguais ? "" : ` · peso ${p.peso}`}
           </li>
         ))}

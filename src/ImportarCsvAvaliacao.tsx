@@ -282,6 +282,8 @@ function GrelhaFolha({
                 const estilo = vista?.estilos[r]?.[c] ?? null;
                 const texto = linha[c] ?? "";
                 const formando = participantes.has(c);
+                const larguraCelula = somaLarguras(vista, c, uniao?.colunas ?? 1);
+                const transborda = textoTransborda(texto, estilo, larguraCelula);
                 return (
                   <td
                     key={c}
@@ -290,25 +292,26 @@ function GrelhaFolha({
                     data-celula={refCelula({ r, c })}
                     data-bg={estilo?.bg ?? ""}
                     className="border border-slate-300 p-0 align-middle"
-                    style={estiloCelula(estilo, marcaDe(r, c, nome, valor, media))}
+                    style={estiloCelula(estilo, marcaDe(r, c, nome, valor, media), transborda)}
                   >
                     <button
                       type="button"
                       title={formando ? "Coluna de participantes" : texto || refCelula({ r, c })}
                       onClick={() => onMarcar({ r, c })}
-                      className={`block w-full bg-transparent border-0 p-1 font-inherit text-inherit ${
+                      className={`relative block w-full bg-transparent border-0 p-1 font-inherit text-inherit ${
                         formando ? "cursor-default" : "cursor-pointer"
                       } ${estilo?.rotacao === 90 ? "[writing-mode:vertical-rl] rotate-180" : ""} ${
                         estilo?.rotacao === 255 ? "[writing-mode:vertical-rl] [text-orientation:upright]" : ""
                       }`}
                       style={{
                         textAlign: "inherit",
-                        whiteSpace: estilo?.rotacao ? "nowrap" : "normal",
-                        overflowWrap: "anywhere",
+                        whiteSpace: estilo?.quebra ? "normal" : "nowrap",
+                        overflowWrap: estilo?.quebra ? "break-word" : "normal",
                         lineHeight: 1.15,
                       }}
                     >
-                      {texto || "\u00a0"}
+                      {transborda ? <span className="absolute left-1 top-1/2 -translate-y-1/2 whitespace-nowrap">{texto}</span> : null}
+                      {transborda ? "\u00a0" : (texto || "\u00a0")}
                     </button>
                   </td>
                 );
@@ -321,7 +324,7 @@ function GrelhaFolha({
   );
 }
 
-function estiloCelula(estilo: EstiloCelula | null, marca?: string): CSSProperties {
+function estiloCelula(estilo: EstiloCelula | null, marca?: string, transborda = false): CSSProperties {
   return {
     backgroundColor: estilo?.bg,
     color: estilo?.cor,
@@ -331,7 +334,22 @@ function estiloCelula(estilo: EstiloCelula | null, marca?: string): CSSPropertie
     textAlign: estilo?.alinhamento,
     verticalAlign: estilo?.vertical === "middle" ? "middle" : estilo?.vertical,
     boxShadow: marca,
+    overflow: "visible",
+    position: transborda ? "relative" : undefined,
+    zIndex: transborda ? 1 : undefined,
   };
+}
+
+function somaLarguras(vista: VistaFolha | null, c: number, n: number) {
+  let soma = 0;
+  for (let i = 0; i < n; i++) soma += vista?.larguras[c + i] ?? 96;
+  return soma;
+}
+
+function textoTransborda(texto: string, estilo: EstiloCelula | null, largura: number) {
+  if (!texto || estilo?.quebra || estilo?.rotacao) return false;
+  const tamanho = estilo?.tamanho ?? 13;
+  return texto.length * tamanho * 0.52 > largura + 8;
 }
 
 function mapaUnioes(unioes: UniaoCelula[]) {

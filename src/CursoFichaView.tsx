@@ -392,26 +392,23 @@ function MediaCard({
 }: {
   label: string; hint: string; value: MediaSlot | null; onChange: (v: MediaSlot | null) => void; tall?: boolean; accent: CursoAccent;
 }) {
-  const ref = useRef<HTMLInputElement>(null);
   const t = theme(accent);
   return (
     <div>
       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{label}</p>
-      <button
-        type="button"
-        onClick={() => ref.current?.click()}
+      <label
         onDragOver={e => e.preventDefault()}
         onDrop={e => {
           e.preventDefault();
           const file = e.dataTransfer.files?.[0];
           if (file) onChange({ name: file.name, url: URL.createObjectURL(file) });
         }}
-        className={`relative w-full ${tall ? "h-40" : "h-32"} rounded-xl border-2 border-dashed border-slate-200 overflow-hidden bg-slate-50 ${t.hoverMedia} transition-colors text-left group`}
+        className={`relative block w-full ${tall ? "h-40" : "h-32"} rounded-xl border-2 border-dashed border-slate-200 overflow-hidden bg-slate-50 ${t.hoverMedia} transition-colors text-left group cursor-pointer`}
       >
         {value?.url ? (
-          <img src={value.url} alt={label} className="absolute inset-0 w-full h-full object-cover" />
+          <img src={value.url} alt="" className="pointer-events-none absolute inset-0 w-full h-full object-cover" />
         ) : (
-          <div className={`absolute inset-0 bg-gradient-to-br ${t.hero}`}>
+          <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${t.hero}`}>
             <div className={`absolute inset-0 opacity-40 ${t.glow}`} />
             <div className="absolute bottom-3 left-3">
               <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide ${t.badge} text-white`}>
@@ -420,13 +417,18 @@ function MediaCard({
             </div>
           </div>
         )}
-        <div className="absolute inset-0 flex items-end justify-between p-3 bg-gradient-to-t from-black/45 to-transparent">
+        <div className="pointer-events-none absolute inset-0 flex items-end justify-between p-3 bg-gradient-to-t from-black/45 to-transparent">
           <span className="text-[11px] text-white/90 truncate pr-2">{value?.name ?? "Arrastar ou clicar para carregar"}</span>
           <span className={`text-[11px] font-semibold text-white bg-white/15 px-2 py-0.5 rounded-md ${t.mediaHover}`}>Alterar</span>
         </div>
-      </button>
-      <input ref={ref} type="file" accept="image/*" className="hidden"
-        onChange={e => { const file = e.target.files?.[0]; if (file) onChange({ name: file.name, url: URL.createObjectURL(file) }); }} />
+        <input
+          type="file"
+          accept="image/*"
+          aria-label={label}
+          className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+          onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onChange({ name: file.name, url: URL.createObjectURL(file) }); }}
+        />
+      </label>
       <p className="text-[11px] text-slate-400 mt-1">{hint}</p>
     </div>
   );
@@ -1622,23 +1624,26 @@ export function CursoFichaView({
         <aside className="hidden xl:flex shrink-0 items-start pt-5">
           <button
             type="button"
+            data-ficha-sticky
             onClick={() => setPreviewRecolhida(v => !v)}
             aria-expanded={!previewRecolhida}
             aria-controls="preview-website"
             aria-label={previewRecolhida ? "Mostrar a página do website" : "Recolher a página do website"}
             className="sticky top-5 z-10 flex w-9 flex-col items-center gap-3 self-start rounded-l-xl border border-slate-200 bg-white px-1 py-3 text-slate-500 shadow-sm hover:text-slate-800"
           >
-            <svg viewBox="0 0 20 20" className={`h-4 w-4 transition-transform duration-300 ease-out motion-reduce:transition-none ${previewRecolhida ? "rotate-180" : ""}`} aria-hidden>
-              <path d="M8 5l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            <svg viewBox="0 0 20 20" className="h-4 w-4" aria-hidden>
+              <path d={previewRecolhida ? "M12 5l-5 5 5 5" : "M8 5l5 5-5 5"} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-semibold uppercase tracking-wide">Página</span>
+            <span className="[writing-mode:sideways-lr] text-[10px] font-semibold uppercase tracking-wide">Página</span>
           </button>
-          <div data-preview-coluna className={`sticky top-5 min-w-0 self-start overflow-hidden transition-[width] duration-300 ease-out motion-reduce:transition-none ${previewRecolhida ? "w-0" : "w-[380px]"}`}>
-            <div
-              id="preview-website"
-              className={`w-[380px] pr-5 pl-3 transition-transform duration-300 ease-out motion-reduce:transition-none ${previewRecolhida ? "translate-x-full" : "translate-x-0"}`}
-            >
-              <PainelSite data={data} accent={accent} turmas={turmasCurso} />
+          <div data-preview-coluna data-ficha-sticky className={`sticky top-5 self-start min-w-0 transition-[width] duration-300 ease-out motion-reduce:transition-none ${previewRecolhida ? "w-0" : "w-[380px]"}`}>
+            <div className="overflow-hidden">
+              <div
+                id="preview-website"
+                className={`w-[380px] pr-5 pl-3 transition-[margin-left] duration-300 ease-out motion-reduce:transition-none ${previewRecolhida ? "ml-[380px]" : "ml-0"}`}
+              >
+                <PainelSite data={data} accent={accent} turmas={turmasCurso} />
+              </div>
             </div>
           </div>
         </aside>

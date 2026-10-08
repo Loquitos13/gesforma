@@ -97,6 +97,15 @@ body {
   }
 }
 
+/* O diálogo nativo de ficheiro, no Chrome, deixa a área de scroll por pintar
+   quando um bloco sticky tem overflow ou transform. Enquanto o input está
+   focado, esses blocos deixam de ser sticky. */
+body:has(input[type="file"]:focus) [data-ficha-sticky] {
+  position: relative;
+  top: auto;
+  transform: none;
+}
+
 @media print {
   aside, header, footer {
     display: none !important;

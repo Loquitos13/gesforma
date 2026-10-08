@@ -35,6 +35,7 @@ export function ImportarCsvAvaliacao({
   const [nome, setNome] = useState<Celula | null>(null);
   const [valor, setValor] = useState<Celula | null>(null);
   const [media, setMedia] = useState<Celula | null>(null);
+  const [foco, setFoco] = useState<Celula | null>(null);
   const [erroFicheiro, setErroFicheiro] = useState("");
   const [aberto, setAberto] = useState(!compacto);
   const mediaLabel = modo === "modulos" ? `Média do ${unidade}` : "Média final";
@@ -59,6 +60,7 @@ export function ImportarCsvAvaliacao({
     setNome(null);
     setValor(null);
     setMedia(null);
+    setFoco(null);
     setPapel("nome");
     papelRef.current = "nome";
   }
@@ -80,7 +82,7 @@ export function ImportarCsvAvaliacao({
     try {
       const lista = lower.endsWith(".xlsx") || lower.endsWith(".xls")
         ? await lerLivroExcel(await file.arrayBuffer())
-        : [{ nome: file.name, grid: parseCsv(await file.text()), vista: null }];
+        : [{ nome: file.name, grid: parseCsv(await file.text()), formulas: [], vista: null }];
       if (!lista.length) {
         setFolhas([]);
         setErroFicheiro("O ficheiro não tem células.");
@@ -93,6 +95,7 @@ export function ImportarCsvAvaliacao({
       setNome(null);
       setValor(null);
       setMedia(null);
+      setFoco(null);
       setPapel("nome");
       papelRef.current = "nome";
     } catch {
@@ -103,6 +106,9 @@ export function ImportarCsvAvaliacao({
 
   const visiveis = grid ?? [];
   const colunas = visiveis.reduce((m, linha) => Math.max(m, linha.length), 0);
+  const nFormulas = (folha?.formulas ?? []).reduce((n, linha) => n + linha.filter(Boolean).length, 0);
+  const formulaFoco = foco ? folha?.formulas[foco.r]?.[foco.c] ?? "" : "";
+  const valorFoco = foco ? visiveis[foco.r]?.[foco.c] ?? "" : "";
 
   if (compacto && !aberto) {
     return (
@@ -117,7 +123,7 @@ export function ImportarCsvAvaliacao({
       <div>
         <p className="text-sm font-semibold text-slate-800">Importar parâmetros de CSV ou Excel</p>
         <p className="text-xs text-slate-500 mt-0.5">
-          A folha aparece como no ficheiro, com cores, letras e todas as colunas. As de participantes continuam visíveis e não servem de parâmetro. Escolha o nome, o peso e a {mediaLabel.toLowerCase()} nas restantes, ou use um bloco encontrado.
+          A folha aparece como no ficheiro, com cores, letras e todas as colunas. Cada célula traz a fórmula do Excel: clique para a ler. As colunas de participantes continuam visíveis e não servem de parâmetro. Escolha o nome, o peso e a {mediaLabel.toLowerCase()} nas restantes, ou use um bloco encontrado.
         </p>
       </div>
       <label className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer">
@@ -158,6 +164,7 @@ export function ImportarCsvAvaliacao({
             {participantes.size > 0
               ? ` ${participantes.size} colunas de participantes continuam visíveis e não entram como parâmetros.`
               : " Sem colunas de participantes."}
+            {nFormulas > 0 ? ` ${nFormulas} ${nFormulas === 1 ? "fórmula" : "fórmulas"}.` : ""}
           </p>
           {blocos.length > 0 && (
             <div className="space-y-3">
@@ -188,14 +195,19 @@ export function ImportarCsvAvaliacao({
               </button>
             ))}
           </div>
+          <BarraFormula celula={foco} formula={formulaFoco} valor={valorFoco} />
           <GrelhaFolha
             grid={visiveis}
+            formulas={folha.formulas}
             vista={folha.vista}
             participantes={participantes}
             nome={nome}
             valor={valor}
             media={media}
-            onMarcar={marcar}
+            onMarcar={celula => {
+              setFoco(celula);
+              marcar(celula);
+            }}
           />
           {leitura.erro && nome && valor && media && <p className="text-xs text-red-600">{leitura.erro}</p>}
           {leitura.parametros.length > 0 && (
@@ -226,8 +238,23 @@ function marcaDe(r: number, c: number, nome: Celula | null, valor: Celula | null
   return undefined;
 }
 
+function BarraFormula({ celula, formula, valor }: { celula: Celula | null; formula: string; valor: string }) {
+  const texto = formula ? `=${formula}` : valor;
+  return (
+    <div data-formula-bar className="flex min-w-0 max-w-full items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+      <span className="shrink-0 rounded bg-white px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-500 border border-slate-200">
+        {celula ? refCelula(celula) : "fx"}
+      </span>
+      <p className="min-w-0 flex-1 break-all font-mono text-[11px] leading-snug text-slate-700">
+        {celula ? (texto || "Célula sem fórmula") : "Clique numa célula para ver a fórmula do Excel."}
+      </p>
+    </div>
+  );
+}
+
 function GrelhaFolha({
   grid,
+  formulas,
   vista,
   participantes,
   nome,
@@ -236,6 +263,7 @@ function GrelhaFolha({
   onMarcar,
 }: {
   grid: string[][];
+  formulas: string[][];
   vista: VistaFolha | null;
   participantes: Set<number>;
   nome: Celula | null;
@@ -281,6 +309,7 @@ function GrelhaFolha({
                 const uniao = ocupadas.origem.get(`${r}:${c}`);
                 const estilo = vista?.estilos[r]?.[c] ?? null;
                 const texto = linha[c] ?? "";
+                const formula = formulas[r]?.[c] ?? "";
                 const formando = participantes.has(c);
                 const larguraCelula = somaLarguras(vista, c, uniao?.colunas ?? 1);
                 const transborda = textoTransborda(texto, estilo, larguraCelula);
@@ -290,13 +319,14 @@ function GrelhaFolha({
                     colSpan={uniao?.colunas}
                     rowSpan={uniao?.linhas}
                     data-celula={refCelula({ r, c })}
+                    data-formula={formula}
                     data-bg={estilo?.bg ?? ""}
                     className="border border-slate-300 p-0 align-middle"
                     style={estiloCelula(estilo, marcaDe(r, c, nome, valor, media), transborda)}
                   >
                     <button
                       type="button"
-                      title={formando ? "Coluna de participantes" : texto || refCelula({ r, c })}
+                      title={formula ? `=${formula}` : (formando ? "Coluna de participantes" : texto || refCelula({ r, c }))}
                       onClick={() => onMarcar({ r, c })}
                       className={`relative block w-full bg-transparent border-0 p-1 font-inherit text-inherit ${
                         formando ? "cursor-default" : "cursor-pointer"
@@ -310,8 +340,11 @@ function GrelhaFolha({
                         lineHeight: 1.15,
                       }}
                     >
+                      {formula && (
+                        <span className="pointer-events-none absolute top-0 right-0 border-t-[6px] border-r-[6px] border-t-transparent border-r-emerald-600" aria-hidden />
+                      )}
                       {transborda ? <span className="absolute left-1 top-1/2 -translate-y-1/2 whitespace-nowrap">{texto}</span> : null}
-                      {transborda ? "\u00a0" : (texto || "\u00a0")}
+                      {transborda ? "\u00a0" : (texto || (formula.length > 0 && formula.length <= 28 ? `=${formula}` : "\u00a0"))}
                     </button>
                   </td>
                 );

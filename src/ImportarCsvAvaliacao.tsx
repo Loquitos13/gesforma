@@ -64,7 +64,7 @@ export function ImportarCsvAvaliacao({
     setPapel("nome");
   }
 
-  const visiveis = grid?.slice(0, 12) ?? [];
+  const visiveis = grid ?? [];
   const colunas = visiveis.reduce((m, linha) => Math.max(m, linha.length), 0);
 
   return (
@@ -110,7 +110,7 @@ export function ImportarCsvAvaliacao({
               </button>
             ))}
           </div>
-          <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <div className="max-h-[28rem] overflow-auto rounded-lg border border-slate-200">
             <table className="text-xs">
               <tbody>
                 {visiveis.map((linha, r) => (
@@ -132,9 +132,6 @@ export function ImportarCsvAvaliacao({
               </tbody>
             </table>
           </div>
-          {grid.length > visiveis.length && (
-            <p className="text-[11px] text-slate-400">A grelha mostra as primeiras {visiveis.length} linhas. A leitura usa o ficheiro todo.</p>
-          )}
           {leitura.erro && nome && valor && media && <p className="text-xs text-red-600">{leitura.erro}</p>}
           {leitura.parametros.length > 0 && (
             <ul className="text-xs text-slate-600 space-y-1">

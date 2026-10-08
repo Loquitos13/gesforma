@@ -28,7 +28,8 @@ export function parseCsv(text: string): string[][] {
     row.push(cur.trim());
     rows.push(row);
   }
-  return rows.filter(r => r.some(c => c !== ""));
+  while (rows.length && rows[rows.length - 1].every(c => c === "")) rows.pop();
+  return rows;
 }
 
 export function colunaLetra(index: number) {

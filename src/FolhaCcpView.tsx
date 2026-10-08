@@ -223,7 +223,7 @@ export function FolhasCcp({
           </table>
         </div>
         <p className="px-4 py-2 text-[11px] text-slate-400 border-t border-slate-100">
-          Cada grupo Participantes tem uma coluna por formando. As células brancas editam-se. As cinzentas e a escala qualitativa calculam-se. Arraste o quadrado da seleção para copiar um valor.
+          Cada grupo Participantes tem uma coluna por formando. As células brancas editam-se. As cinzentas, a escala e a avaliação final calculam-se a partir desses valores. Arraste o quadrado da seleção para copiar um valor.
         </p>
       </div>
     </div>

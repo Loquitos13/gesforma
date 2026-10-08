@@ -288,7 +288,7 @@ function folhaSimulacao(ctx: Ctx, variante: "inicial" | "final"): FolhaModelo {
 
   return {
     id: instId,
-    titulo: `Simulação Pedagógica ${qual}`,
+    titulo: inicial ? "Módulo 2" : "Módulo 9",
     larguras: g.larguras,
     linhas: g.linhas(),
   };
@@ -520,7 +520,7 @@ function folhaElearning(ctx: Ctx): FolhaModelo {
 
   return {
     id: "elearning",
-    titulo: "Módulos e-learning",
+    titulo: "E-learning",
     larguras: g.larguras,
     linhas: g.linhas(),
   };
@@ -593,7 +593,7 @@ function folhaProjeto(ctx: Ctx): FolhaModelo {
     linhas.push({ r: pontuacao + 1, cel: f => celEscala(pontuacaoBloco(bloco, ctx.mapa, f.id, moduloId)) });
   }
   colunasFormandos(g, 4, ctx.formandos, linhas);
-  return { id: "projeto", titulo: "Projeto de Intervenção", larguras: g.larguras, linhas: g.linhas() };
+  return { id: "projeto", titulo: "Projeto de intervenção", larguras: g.larguras, linhas: g.linhas() };
 }
 
 function folhaFinal(ctx: Ctx): FolhaModelo {
@@ -633,7 +633,7 @@ function folhaFinal(ctx: Ctx): FolhaModelo {
   linhas.push({ r: 13, cel: f => celCalculo(notaFinalCcp(ctx.ccp, ctx.mapa, f.id, ctx.topicos)) });
   linhas.push({ r: 14, cel: f => celEscala(notaFinalCcp(ctx.ccp, ctx.mapa, f.id, ctx.topicos)) });
   colunasFormandos(g, 3, ctx.formandos, linhas);
-  return { id: "final", titulo: "Avaliação Final", larguras: g.larguras, linhas: g.linhas() };
+  return { id: "final", titulo: "Avaliação final", larguras: g.larguras, linhas: g.linhas() };
 }
 
 function formulaFinal(ccp: EstruturaCcp) {

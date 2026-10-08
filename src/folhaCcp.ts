@@ -92,14 +92,22 @@ function textoNota(n: number | null) {
   return txt.replace(".", ",");
 }
 
+export const ESCALA_QUALITATIVA_CCP = [
+  { nivel: 1, texto: "Aprovamento Insuficiente" },
+  { nivel: 2, texto: "Aproveitamento Satisfatório" },
+  { nivel: 3, texto: "Aproveitamento Bom" },
+  { nivel: 4, texto: "Aproveitamento Relevante" },
+  { nivel: 5, texto: "Aproveitamento Excelente" },
+] as const;
+
 export function textoEscalaCcp(nota: number | null) {
   if (nota == null || !Number.isFinite(nota)) return "";
   const n = Math.min(5, Math.max(1, Math.round(nota)));
-  if (n <= 1) return "Aproveitamento Insuficiente";
-  if (n === 2) return "Aproveitamento Satisfatório";
-  if (n === 3) return "Aproveitamento Bom";
-  if (n === 4) return "Aproveitamento Relevante";
-  return "Aproveitamento Excelente";
+  return ESCALA_QUALITATIVA_CCP.find(item => item.nivel === n)?.texto ?? "";
+}
+
+function legendaEscala() {
+  return ESCALA_QUALITATIVA_CCP.map(item => `${item.nivel} - ${item.texto}`).join("\n");
 }
 
 function celCalculo(n: number | null, formula?: string): CelulaFolha {
@@ -129,7 +137,10 @@ function arredondar(n: number | null) {
 }
 
 function formulaEscala(ref: string) {
-  return `IF(ROUND(${ref},0)=1,"Aproveitamento Insuficiente",IF(ROUND(${ref},0)=2,"Aproveitamento Satisfatório",IF(ROUND(${ref},0)=3,"Aproveitamento Bom",IF(ROUND(${ref},0)=4,"Aproveitamento Relevante",IF(ROUND(${ref},0)=5,"Aproveitamento Excelente")))))`;
+  return ESCALA_QUALITATIVA_CCP.reduceRight(
+    (resto, item) => `IF(ROUND(${ref},0)=${item.nivel},"${item.texto}"${resto ? `,${resto}` : ""})`,
+    "",
+  );
 }
 
 const FOLHA_INICIAL = "Simulação Pedagógica Inicial";
@@ -284,7 +295,8 @@ function folhaSimulacao(ctx: Ctx, variante: "inicial" | "final"): FolhaModelo {
     ? formulaCanon
     : formulaBlocos(inicial ? "Avaliação Diagnóstica (AD)" : "Avaliação Sumativa (AS)", pesosCp);
   g.set(1, 12, texto(formula, "formula", 2));
-  g.set(1, 13, texto("Escala Qualitativa", "formula", 2));
+  g.set(1, 13, texto("Escala Qualitativa", "formula"));
+  g.set(2, 13, texto(legendaEscala(), "meta"));
 
   const resumo: LinhaValor[] = [
     { r: 8, cel: f => celCalculo(notaCp(cp1, f)) },
@@ -469,7 +481,8 @@ function folhaElearning(ctx: Ctx): FolhaModelo {
     ? "Avaliação Módulos (OP) = (1*OP1 + 1*OP2)/2"
     : formulaBlocos("Avaliação Módulos (OP)", pesos);
   g.set(1, 11, texto(formula, "formula", 2));
-  g.set(1, 12, texto("Escala Qualitativa", "formula", 2));
+  g.set(1, 12, texto("Escala Qualitativa", "formula"));
+  g.set(2, 12, texto(legendaEscala(), "meta"));
 
   const modOp2 = op2 ? idGrelhaBloco("elearning", op2.id) : "";
   const notaOp1 = (f: Pessoa) => (op1 && inst
@@ -653,7 +666,8 @@ function folhaProjeto(ctx: Ctx): FolhaModelo {
   const pontuacao = inicio + params.length + 2;
   g.set(1, pontuacao, texto("Pontuação por formando - AS/PI (Tradução do somatório percentual em classificação por níveis - escala CNQF)", "formula", 2));
   g.set(3, pontuacao, texto(textoNota(ctx.escalaMax) || "5", "peso"));
-  g.set(1, pontuacao + 1, texto("Escala Qualitativa", "formula", 2));
+  g.set(1, pontuacao + 1, texto("Escala Qualitativa", "formula"));
+  g.set(2, pontuacao + 1, texto(legendaEscala(), "meta"));
   const linhas: LinhaValor[] = params.map((p, i) => ({
     r: inicio + i,
     cel: (f: Pessoa) => entrada(f, moduloId, p.id),
@@ -708,7 +722,8 @@ function folhaFinal(
     g.set(2, linha.r, texto(linha.desc, "param"));
   }
   g.set(1, 13, texto(formulaFinal(ctx.ccp), "formula", 2));
-  g.set(1, 14, texto("Escala Qualitativa", "formula", 2));
+  g.set(1, 14, texto("Escala Qualitativa", "formula"));
+  g.set(2, 14, texto(legendaEscala(), "meta"));
   g.set(2, 21, texto("Rubrica do coordenador da ação: _________________________", "meta"));
   g.set(2, 23, texto("Data: _____________________", "meta"));
 

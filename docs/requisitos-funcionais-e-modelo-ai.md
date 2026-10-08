@@ -100,7 +100,9 @@ Cada requisito descreve comportamento que já existe.
 
 ## 2. Funcionalidades, em mapa curto
 
-| Área | Já existe | Ainda não |
+A lista fechada do que falta está na secção TO DO.
+
+| Área | Já existe | TO DO |
 | --- | --- | --- |
 | Pré-inscrições | Captação, funil, dono, diário, lote, duplicados, WhatsApp, ligação de documentos, validação e correcção | Pontuação, próximo passo sugerido, resposta escrita pela máquina |
 | Venda | Propostas na Equipa, passagem a Pago e a Formando | Rascunho de proposta a partir da ficha do curso e da pré-inscrição |
@@ -109,6 +111,24 @@ Cada requisito descreve comportamento que já existe.
 | Oferta | Ficha do curso, documentos do curso e turmas libertadas | Site público alimentado pelo GesForma |
 | Avaliação | Grelha por parâmetros, módulos do programa, importação CSV e nota final. No CCP: e-learning (excepto módulos 2 e 9), simulações desses módulos, projeto e nota final ponderada | TO DO: ler a nota do Moodle real. Até lá o valor lança-se à mão |
 | Dossiê | Fases antes, durante e fecho, requisitos universais, dossiê financiado único, visto fechado pelos ficheiros do curso | Publicação do dossiê fora do GesForma |
+
+## TO DO
+
+O que ainda falta ligar ou construir. O backoffice descrito na secção 1 já está feito, incluindo a avaliação do CCP com colagem e arrasto.
+
+### Ligações externas
+
+- TO DO. Ler a nota real no Moodle da turma. O parâmetro já entra na média. Até esta ligação existir, o valor lança-se à mão.
+- TO DO. Publicar a ficha do curso e o blog em `ena.pt`. O progresso "Pronto para o site" só indica o que falta. O blog ainda não tem corpo, SEO nem revisão.
+- TO DO. Recibos certificados (Moloni) e o contrato Ifthenpay ou SIBS. O pagamento fica pendente até um webhook do banco o marcar como pago.
+- TO DO. Publicar o dossiê fora do GesForma. O ZIP segue para o Google Drive da entidade.
+
+### Por construir
+
+- TO DO. Pré-inscrições: pontuação, próximo passo sugerido e resposta escrita pela máquina.
+- TO DO. Venda: rascunho de proposta a partir da ficha do curso e da pré-inscrição.
+- TO DO. Marketing: textos, anúncios, calendário editorial e ligação às plataformas. A campanha já calcula o ROI.
+- TO DO. Modelo da ENA (secção 3). Linguagem própria, as quatro tarefas (pré-inscrições, venda, marketing e blog) e a consulta à oferta real antes de responder. Não está ligado ao produto. Nada grava nem envia sozinho.
 
 ## 3. Proposta: modelo ENA, de raiz e personalizado
 

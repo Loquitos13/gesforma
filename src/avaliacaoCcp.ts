@@ -296,9 +296,10 @@ export function notaFinalCcp(
   for (const instrumento of instrumentos) {
     const n = notaInstrumentoCcp(instrumento, mapa, formandoId, topicos);
     if (n == null) return null;
-    acc += n * (instrumento.pesoFinal / soma);
+    // A folha final vai buscar a nota já arredondada de cada momento, como o ROUND do Excel.
+    acc += Math.round(n) * (instrumento.pesoFinal / soma);
   }
-  return roundNota(acc);
+  return Math.round(acc);
 }
 
 export function textoFormulaCcp(estrutura: EstruturaCcp) {

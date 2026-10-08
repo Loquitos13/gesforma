@@ -8,6 +8,7 @@ import {
   type PapelTexto,
 } from "./folhaCcp";
 import type { EstruturaCcp } from "./avaliacaoCcp";
+import { colunaLetra } from "./csvAvaliacao";
 import type { TopicoPrograma } from "./cursoPrograma";
 
 type Pessoa = { id: number; nome: string };
@@ -91,6 +92,7 @@ export function FolhasCcp({
     [ccp, cursoNome, escalaMax, formandos, mapa, topicos, turmaNome],
   );
   const [folhaId, setFolhaId] = useState(folhas[0]?.id ?? "");
+  const [foco, setFoco] = useState<{ r: number; c: number } | null>(null);
   const folha = folhas.find(f => f.id === folhaId) ?? folhas[0];
   const [sel, setSel] = useState<Sel | null>(null);
   const dragRef = useRef<"range" | "fill" | null>(null);
@@ -150,7 +152,7 @@ export function FolhasCcp({
           <button
             key={item.id}
             type="button"
-            onClick={() => { setFolhaId(item.id); setSel(null); selRef.current = null; }}
+            onClick={() => { setFolhaId(item.id); setSel(null); selRef.current = null; setFoco(null); }}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap border ${
               item.id === folha.id ? `${accentBtn} border-transparent` : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
             }`}
@@ -160,6 +162,7 @@ export function FolhasCcp({
         ))}
       </div>
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <BarraFormula folha={folha} foco={foco} />
         <div className="max-h-[min(70vh,40rem)] overflow-auto">
           <table className="border-separate border-spacing-0 text-xs select-none">
             <tbody>
@@ -188,7 +191,12 @@ export function FolhasCcp({
                         drafts={drafts.current}
                         mapa={mapa}
                         onDraft={() => setTick(t => t + 1)}
+                        formulaAtiva={foco?.r === r && foco?.c === c && cel.tipo === "valor" && !!cel.formula}
                         onMouseDown={e => {
+                          if (cel.tipo === "valor" && cel.formula) {
+                            setFoco({ r, c });
+                            return;
+                          }
                           if (cel.tipo !== "entrada") return;
                           if ((e.target as HTMLElement).closest("[data-fill-handle]")) return;
                           const next = e.shiftKey && sel ? { ...sel, r1: r, c1: c } : { r0: r, c0: c, r1: r, c1: c };
@@ -223,7 +231,7 @@ export function FolhasCcp({
           </table>
         </div>
         <p className="px-4 py-2 text-[11px] text-slate-400 border-t border-slate-100">
-          Cada grupo Participantes tem uma coluna por formando. As células brancas editam-se. As cinzentas, a escala e a avaliação final calculam-se a partir desses valores. Arraste o quadrado da seleção para copiar um valor.
+          Cada grupo Participantes tem uma coluna por formando. As células brancas editam-se. As cinzentas têm a fórmula da folha. A avaliação final vai buscar a nota do Módulo 2, do E-learning, do Módulo 9 e do projeto. Arraste o quadrado da seleção para copiar um valor.
         </p>
       </div>
     </div>
@@ -260,6 +268,20 @@ function canto(sel: Sel | null, folha: FolhaModelo, r: number, c: number) {
   return r === br && c === bc;
 }
 
+function BarraFormula({ folha, foco }: { folha: FolhaModelo; foco: { r: number; c: number } | null }) {
+  const cel = foco ? folha.linhas[foco.r]?.[foco.c] : undefined;
+  const formula = cel?.tipo === "valor" ? cel.formula ?? "" : "";
+  const endereco = foco ? `${colunaLetra(foco.c)}${foco.r + 1}` : "";
+  return (
+    <div data-formula-bar className="flex min-w-0 items-start gap-2 border-b border-slate-200 bg-slate-50 px-3 py-1.5">
+      <span className="mt-0.5 shrink-0 font-mono text-[11px] font-semibold text-slate-400">{endereco || "fx"}</span>
+      <span className="min-w-0 break-all font-mono text-[11px] text-slate-700">
+        {formula ? `=${formula}` : "Clique numa célula cinzenta para ver a fórmula que vai buscar a nota."}
+      </span>
+    </div>
+  );
+}
+
 function classePapel(papel: PapelTexto | "calculo" | "escala", cabeca: string) {
   if (papel === "titulo") return "bg-slate-800 text-white font-semibold text-left px-2 py-1.5";
   if (papel === "meta") return "bg-slate-50 text-slate-600 text-left px-2 py-1";
@@ -287,6 +309,7 @@ function CelulaTd({
   cabeca,
   sticky,
   temNomes,
+  formulaAtiva,
   drafts,
   mapa,
   onDraft,
@@ -308,6 +331,7 @@ function CelulaTd({
   cabeca: string;
   sticky: boolean;
   temNomes: boolean;
+  formulaAtiva: boolean;
   drafts: Record<string, string>;
   mapa: Map<string, number | null>;
   onDraft: () => void;
@@ -325,7 +349,7 @@ function CelulaTd({
   return (
     <td
       colSpan={span}
-      className={`border border-slate-200 align-middle ${LARGURA[largura]} ${base} ${selected ? selBg : ""} ${sticky ? "sticky left-0 z-10" : ""} ${cel.tipo === "entrada" ? "p-0 relative" : ""}`}
+      className={`border border-slate-200 align-middle ${LARGURA[largura]} ${base} ${selected ? selBg : ""} ${formulaAtiva ? "ring-1 ring-inset ring-emerald-600" : ""} ${sticky ? "sticky left-0 z-10" : ""} ${cel.tipo === "entrada" || (cel.tipo === "valor" && cel.formula) ? "p-0 relative" : ""} ${cel.tipo === "valor" && cel.formula ? "cursor-pointer" : ""}`}
       onMouseDown={onMouseDown}
       onMouseEnter={onMouseEnter}
     >
@@ -340,7 +364,10 @@ function CelulaTd({
         <span className="block whitespace-normal leading-snug">{cel.texto}</span>
       )}
       {cel.tipo === "valor" && (
-        <span className="block px-1 py-1 leading-snug" title={cel.papel === "calculo" ? "Calculado" : cel.texto}>
+        <span className="relative block px-1 py-1 leading-snug" title={cel.formula ? `=${cel.formula}` : cel.texto}>
+          {cel.formula && (
+            <span className="pointer-events-none absolute top-0 right-0 border-t-[7px] border-l-[7px] border-t-emerald-600 border-l-transparent" />
+          )}
           {cel.texto}
         </span>
       )}

@@ -18,7 +18,7 @@ export type LarguraColuna = "gutter" | "codigo" | "texto" | "grupo" | "param" | 
 export type CelulaFolha =
   | { tipo: "vazio" }
   | { tipo: "ocupado" }
-  | { tipo: "texto"; texto: string; papel: PapelTexto; span?: number }
+  | { tipo: "texto"; texto: string; papel: PapelTexto; span?: number; formula?: string }
   | { tipo: "entrada"; formandoId: number; moduloId: string; parametroId: string }
   | { tipo: "valor"; texto: string; papel: "calculo" | "escala"; formula?: string };
 
@@ -81,8 +81,11 @@ class Grelha {
   }
 }
 
-function texto(valor: string, papel: PapelTexto, span?: number): CelulaFolha {
-  return span && span > 1 ? { tipo: "texto", texto: valor, papel, span } : { tipo: "texto", texto: valor, papel };
+function texto(valor: string, papel: PapelTexto, span?: number, formula?: string): CelulaFolha {
+  const base = formula
+    ? { tipo: "texto" as const, texto: valor, papel, formula }
+    : { tipo: "texto" as const, texto: valor, papel };
+  return span && span > 1 ? { ...base, span } : base;
 }
 
 function textoNota(n: number | null) {
@@ -93,7 +96,7 @@ function textoNota(n: number | null) {
 }
 
 export const ESCALA_QUALITATIVA_CCP = [
-  { nivel: 1, texto: "Aprovamento Insuficiente" },
+  { nivel: 1, texto: "Aproveitamento Insuficiente" },
   { nivel: 2, texto: "Aproveitamento Satisfatório" },
   { nivel: 3, texto: "Aproveitamento Bom" },
   { nivel: 4, texto: "Aproveitamento Relevante" },
@@ -202,7 +205,13 @@ function formulaBlocos(rotulo: string, blocos: { codigo: string; peso: number }[
 
 type LinhaValor = { r: number; cel: (f: Pessoa) => CelulaFolha };
 
-function colunasFormandos(g: Grelha, c0: number, formandos: Pessoa[], linhas: LinhaValor[]) {
+function colunasFormandos(
+  g: Grelha,
+  c0: number,
+  formandos: Pessoa[],
+  linhas: LinhaValor[],
+  nomeFormula?: (coluna: number) => string,
+) {
   const n = formandos.length;
   if (!n) {
     g.largura(c0, "formando");
@@ -213,10 +222,33 @@ function colunasFormandos(g: Grelha, c0: number, formandos: Pessoa[], linhas: Li
   formandos.forEach((_, i) => g.largura(c0 + i, "formando"));
   g.set(c0, 6, texto("Participantes", "cabeca", n));
   formandos.forEach((f, i) => {
-    g.set(c0 + i, 7, texto(f.nome, "nome"));
+    g.set(c0 + i, 7, texto(f.nome, "nome", undefined, nomeFormula?.(c0 + i)));
     for (const linha of linhas) g.set(c0 + i, linha.r, linha.cel(f));
   });
   return n;
+}
+
+function formulaSoma(coluna: number, inicio: number, quantidade: number) {
+  if (!quantidade) return "SUM()";
+  return `SUM(${refLocal(coluna, inicio)}:${refLocal(coluna, inicio + quantidade - 1)})`;
+}
+
+function formulaMedia(coluna: number, linhaSoma: number, quantidade: number) {
+  return `ROUND(${refLocal(coluna, linhaSoma)}/${quantidade || 1},0)`;
+}
+
+function formulaPercentual(
+  colunaPeso: number,
+  colunaNota: number,
+  inicio: number,
+  params: { peso: number }[],
+  equitativo: boolean,
+) {
+  if (!params.length) return "ROUND(0,0)";
+  if (equitativo) return `ROUND(${formulaSoma(colunaNota, inicio, params.length)}/${params.length},0)`;
+  const termos = params.map((_, i) => `$${colunaLetra(colunaPeso)}$${inicio + i + 1}*${refLocal(colunaNota, inicio + i)}`);
+  const soma = params.reduce((a, p) => a + (p.peso > 0 ? p.peso : 0), 0);
+  return `ROUND((${termos.join("+")})/${textoNota(soma) || "100"},0)`;
 }
 
 function cabecalhosComuns(g: Grelha, ctx: Ctx, titulo: string, spanTitulo: number) {
@@ -298,10 +330,44 @@ function folhaSimulacao(ctx: Ctx, variante: "inicial" | "final"): FolhaModelo {
   g.set(1, 13, texto("Escala Qualitativa", "formula"));
   g.set(2, 13, texto(legendaEscala(), "meta"));
 
+  const nForm = Math.max(ctx.formandos.length, 1);
+  let cursor = 3 + nForm + 1;
+  const cp1Notas = cursor + 3;
+  const cp1Linha = 8 + (cp1?.parametros.length ?? 0) + 2;
+  cursor = cp1Notas + nForm + 1;
+  const cp2Notas = cursor + 3;
+  const cp2Linha = 8 + (cp2?.parametros.length ?? 0) + 2;
+  cursor = cp2Notas + nForm + 1;
+  const cp3Notas = cursor + 2;
+  const cp3Linha = 8 + (cp3?.parametros.length ?? 0) + 2;
+  const origemCp = [
+    { linha: cp1Linha, coluna: cp1Notas },
+    { linha: cp2Linha, coluna: cp2Notas },
+    { linha: cp3Linha, coluna: cp3Notas },
+  ];
+
   const resumo: LinhaValor[] = [
-    { r: 8, cel: f => celCalculo(notaCp(cp1, f)) },
-    { r: 9, cel: f => celCalculo(notaCp(cp2, f)) },
-    { r: 10, cel: f => celCalculo(notaCp(cp3, f)) },
+    {
+      r: 8,
+      cel: f => {
+        const i = Math.max(0, ctx.formandos.indexOf(f));
+        return celCalculo(arredondar(notaCp(cp1, f)), refLocal(origemCp[0].coluna + i, origemCp[0].linha));
+      },
+    },
+    {
+      r: 9,
+      cel: f => {
+        const i = Math.max(0, ctx.formandos.indexOf(f));
+        return celCalculo(arredondar(notaCp(cp2, f)), refLocal(origemCp[1].coluna + i, origemCp[1].linha));
+      },
+    },
+    {
+      r: 10,
+      cel: f => {
+        const i = Math.max(0, ctx.formandos.indexOf(f));
+        return celCalculo(arredondar(notaCp(cp3, f)), refLocal(origemCp[2].coluna + i, origemCp[2].linha));
+      },
+    },
     {
       r: 12,
       cel: f => {
@@ -320,7 +386,8 @@ function folhaSimulacao(ctx: Ctx, variante: "inicial" | "final"): FolhaModelo {
       },
     },
   ];
-  const usados = colunasFormandos(g, 3, ctx.formandos, resumo);
+  const copiaNome = inicial ? undefined : (coluna: number) => refFolha(FOLHA_INICIAL, coluna, 7);
+  const usados = colunasFormandos(g, 3, ctx.formandos, resumo, copiaNome);
   let c = 3 + usados + 1;
   g.largura(c - 1, "gutter");
 
@@ -397,9 +464,16 @@ function blocoPercentual(
     cel: (f: Pessoa) => entrada(f, opts.moduloId, p.id),
   }));
   if (opts.bloco) {
+    const bloco = opts.bloco;
     linhas.push({
       r: pontuacao,
-      cel: f => celCalculo(pontuacaoBloco(opts.bloco as BlocoCcp, ctx.mapa, f.id, opts.moduloId)),
+      cel: f => {
+        const col = colunaDo(ctx.formandos, f, c0 + 3);
+        return celCalculo(
+          arredondar(pontuacaoBloco(bloco, ctx.mapa, f.id, opts.moduloId)),
+          formulaPercentual(c0 + 2, col, inicio, params, bloco.pesosEquitativos),
+        );
+      },
     });
   }
   const usados = colunasFormandos(g, c0 + 3, ctx.formandos, linhas);
@@ -434,13 +508,23 @@ function blocoCriterios(
     cel: (f: Pessoa) => entrada(f, opts.moduloId, p.id),
   }));
   if (opts.bloco) {
+    const bloco = opts.bloco;
     linhas.push({
       r: soma,
-      cel: f => celCalculo(somaCompleta(params, ctx.mapa, f.id, opts.moduloId)),
+      cel: f => {
+        const col = colunaDo(ctx.formandos, f, c0 + 2);
+        return celCalculo(somaCompleta(params, ctx.mapa, f.id, opts.moduloId), formulaSoma(col, inicio, params.length));
+      },
     });
     linhas.push({
       r: pontuacao,
-      cel: f => celCalculo(pontuacaoBloco(opts.bloco as BlocoCcp, ctx.mapa, f.id, opts.moduloId)),
+      cel: f => {
+        const col = colunaDo(ctx.formandos, f, c0 + 2);
+        return celCalculo(
+          arredondar(pontuacaoBloco(bloco, ctx.mapa, f.id, opts.moduloId)),
+          formulaMedia(col, soma, params.length),
+        );
+      },
     });
   }
   colunasFormandos(g, c0 + 2, ctx.formandos, linhas);
@@ -489,9 +573,35 @@ function folhaElearning(ctx: Ctx): FolhaModelo {
     ? mediaModulos(op1, ctx.mapa, f.id, modulos)
     : null);
   const notaOp2 = (f: Pessoa) => (op2 ? pontuacaoBloco(op2, ctx.mapa, f.id, modOp2) : null);
+  const nEl = Math.max(ctx.formandos.length, 1);
+  const paramsOp1 = op1?.parametros ?? [];
+  const inicioOp = 8;
+  const pontaOp = inicioOp + Math.max(paramsOp1.length, modulos.length, 1) + 2;
+  let previsto = 3 + nEl + 1 + 2;
+  const colsModulo = modulos.map(() => {
+    const coluna = previsto;
+    previsto += nEl + 1;
+    return coluna;
+  });
+  const colMedia = previsto + 1;
+  previsto += 1 + nEl + 1;
+  const colOp2 = previsto + 2;
+  const pontaOp2 = inicioOp + (op2?.parametros.length ?? 0) + 2;
   const resumo: LinhaValor[] = [
-    { r: 8, cel: f => celCalculo(notaOp1(f)) },
-    { r: 9, cel: f => celCalculo(notaOp2(f)) },
+    {
+      r: 8,
+      cel: f => {
+        const i = Math.max(0, ctx.formandos.indexOf(f));
+        return celCalculo(notaOp1(f), modulos.length ? refLocal(colMedia + i, pontaOp) : "");
+      },
+    },
+    {
+      r: 9,
+      cel: f => {
+        const i = Math.max(0, ctx.formandos.indexOf(f));
+        return celCalculo(arredondar(notaOp2(f)), op2 ? refLocal(colOp2 + i, pontaOp2) : "");
+      },
+    },
     {
       r: 11,
       cel: f => {
@@ -512,7 +622,7 @@ function folhaElearning(ctx: Ctx): FolhaModelo {
       },
     },
   ];
-  const usados = colunasFormandos(g, 3, ctx.formandos, resumo);
+  const usados = colunasFormandos(g, 3, ctx.formandos, resumo, coluna => refFolha(FOLHA_INICIAL, coluna, 7));
   let c = 3 + usados + 1;
   g.largura(c - 1, "gutter");
 
@@ -544,13 +654,25 @@ function folhaElearning(ctx: Ctx): FolhaModelo {
     }));
     linhas.push({
       r: somaRow,
-      cel: f => celCalculo(op1 ? somaCompleta(op1.parametros, ctx.mapa, f.id, mod.id) : null),
+      cel: f => {
+        const col = colunaDo(ctx.formandos, f, c);
+        return celCalculo(
+          op1 ? somaCompleta(op1.parametros, ctx.mapa, f.id, mod.id) : null,
+          formulaSoma(col, inicio, params.length),
+        );
+      },
     });
     linhas.push({
       r: pontaRow,
-      cel: f => celCalculo(op1 ? pontuacaoBloco(op1, ctx.mapa, f.id, mod.id) : null),
+      cel: f => {
+        const col = colunaDo(ctx.formandos, f, c);
+        return celCalculo(
+          op1 ? arredondar(pontuacaoBloco(op1, ctx.mapa, f.id, mod.id)) : null,
+          formulaMedia(col, somaRow, params.length),
+        );
+      },
     });
-    const largura = colunasFormandos(g, c, ctx.formandos, linhas);
+    const largura = colunasFormandos(g, c, ctx.formandos, linhas, coluna => `$${colunaLetra(3 + coluna - c)}$$8`);
     c += largura + 1;
     g.largura(c - 1, "gutter");
   }
@@ -562,17 +684,36 @@ function folhaElearning(ctx: Ctx): FolhaModelo {
   });
   const linhasSoma: LinhaValor[] = modulos.map((mod, i) => ({
     r: inicio + i,
-    cel: (f: Pessoa) => celCalculo(op1 ? pontuacaoBloco(op1, ctx.mapa, f.id, mod.id) : null),
+    cel: (f: Pessoa) => {
+      const indice = Math.max(0, ctx.formandos.indexOf(f));
+      const origem = colsModulo[i] + indice;
+      return celCalculo(
+        op1 ? arredondar(pontuacaoBloco(op1, ctx.mapa, f.id, mod.id)) : null,
+        refLocal(origem, pontaRow),
+      );
+    },
   }));
   linhasSoma.push({
     r: somaRow,
-    cel: f => celCalculo(somaModulos(op1, ctx.mapa, f.id, modulos)),
+    cel: f => {
+      const col = colunaDo(ctx.formandos, f, c + 1);
+      return celCalculo(
+        somaModulos(op1, ctx.mapa, f.id, modulos),
+        formulaSoma(col, inicio, modulos.length),
+      );
+    },
   });
   linhasSoma.push({
     r: pontaRow,
-    cel: f => celCalculo(op1 ? mediaModulos(op1, ctx.mapa, f.id, modulos) : null),
+    cel: f => {
+      const col = colunaDo(ctx.formandos, f, c + 1);
+      return celCalculo(
+        op1 ? mediaModulos(op1, ctx.mapa, f.id, modulos) : null,
+        formulaMedia(col, somaRow, modulos.length),
+      );
+    },
   });
-  const larguraSoma = colunasFormandos(g, c + 1, ctx.formandos, linhasSoma);
+  const larguraSoma = colunasFormandos(g, c + 1, ctx.formandos, linhasSoma, coluna => `$${colunaLetra(3 + coluna - (c + 1))}$$8`);
   c += 1 + larguraSoma + 1;
   g.largura(c - 1, "gutter");
 
@@ -596,10 +737,25 @@ function folhaElearning(ctx: Ctx): FolhaModelo {
     cel: (f: Pessoa) => entrada(f, modOp2, p.id),
   }));
   if (op2) {
-    linhas2.push({ r: soma2, cel: f => celCalculo(somaCompleta(params2, ctx.mapa, f.id, modOp2)) });
-    linhas2.push({ r: ponta2, cel: f => celCalculo(pontuacaoBloco(op2, ctx.mapa, f.id, modOp2)) });
+    linhas2.push({
+      r: soma2,
+      cel: f => {
+        const col = colunaDo(ctx.formandos, f, c + 2);
+        return celCalculo(somaCompleta(params2, ctx.mapa, f.id, modOp2), formulaSoma(col, inicio, params2.length));
+      },
+    });
+    linhas2.push({
+      r: ponta2,
+      cel: f => {
+        const col = colunaDo(ctx.formandos, f, c + 2);
+        return celCalculo(
+          arredondar(pontuacaoBloco(op2, ctx.mapa, f.id, modOp2)),
+          formulaMedia(col, soma2, params2.length),
+        );
+      },
+    });
   }
-  colunasFormandos(g, c + 2, ctx.formandos, linhas2);
+  colunasFormandos(g, c + 2, ctx.formandos, linhas2, coluna => `$${colunaLetra(3 + coluna - (c + 2))}$$8`);
 
   return {
     id: "elearning",
@@ -620,9 +776,9 @@ function mediaModulos(
   for (const mod of modulos) {
     const n = pontuacaoBloco(bloco, mapa, formandoId, mod.id);
     if (n == null) return null;
-    notas.push(n);
+    notas.push(Math.round(n));
   }
-  return Math.round((notas.reduce((a, b) => a + b, 0) / notas.length) * 100) / 100;
+  return Math.round(notas.reduce((a, b) => a + b, 0) / notas.length);
 }
 
 function somaModulos(
@@ -636,7 +792,7 @@ function somaModulos(
   for (const mod of modulos) {
     const n = pontuacaoBloco(bloco, mapa, formandoId, mod.id);
     if (n == null) return null;
-    soma += n;
+    soma += Math.round(n);
   }
   return Math.round(soma * 100) / 100;
 }
@@ -694,7 +850,7 @@ function folhaProjeto(ctx: Ctx): FolhaModelo {
       },
     });
   }
-  colunasFormandos(g, 4, ctx.formandos, linhas);
+  colunasFormandos(g, 4, ctx.formandos, linhas, coluna => refFolha(FOLHA_SIM_FINAL, coluna - 1, 7));
   return { id: "projeto", titulo: "Projeto de intervenção", larguras: g.larguras, linhas: g.linhas() };
 }
 
@@ -791,7 +947,7 @@ function folhaFinal(
       return celEscala(af, formulaEscala(`${letra}14`));
     },
   });
-  colunasFormandos(g, 3, ctx.formandos, linhas);
+  colunasFormandos(g, 3, ctx.formandos, linhas, coluna => refFolha(FOLHA_SIM_FINAL, coluna, 7));
   return { id: "final", titulo: "Avaliação final", larguras: g.larguras, linhas: g.linhas() };
 }
 

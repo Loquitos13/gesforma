@@ -191,9 +191,9 @@ export function FolhasCcp({
                         drafts={drafts.current}
                         mapa={mapa}
                         onDraft={() => setTick(t => t + 1)}
-                        formulaAtiva={foco?.r === r && foco?.c === c && cel.tipo === "valor" && !!cel.formula}
+                        formulaAtiva={foco?.r === r && foco?.c === c && (cel.tipo === "valor" || cel.tipo === "texto") && !!cel.formula}
                         onMouseDown={e => {
-                          if (cel.tipo === "valor" && cel.formula) {
+                          if ((cel.tipo === "valor" || cel.tipo === "texto") && cel.formula) {
                             setFoco({ r, c });
                             return;
                           }
@@ -270,7 +270,7 @@ function canto(sel: Sel | null, folha: FolhaModelo, r: number, c: number) {
 
 function BarraFormula({ folha, foco }: { folha: FolhaModelo; foco: { r: number; c: number } | null }) {
   const cel = foco ? folha.linhas[foco.r]?.[foco.c] : undefined;
-  const formula = cel?.tipo === "valor" ? cel.formula ?? "" : "";
+  const formula = cel && (cel.tipo === "valor" || cel.tipo === "texto") ? cel.formula ?? "" : "";
   const endereco = foco ? `${colunaLetra(foco.c)}${foco.r + 1}` : "";
   return (
     <div data-formula-bar className="flex min-w-0 items-start gap-2 border-b border-slate-200 bg-slate-50 px-3 py-1.5">
@@ -349,7 +349,7 @@ function CelulaTd({
   return (
     <td
       colSpan={span}
-      className={`border border-slate-200 align-middle ${LARGURA[largura]} ${base} ${selected ? selBg : ""} ${formulaAtiva ? "ring-1 ring-inset ring-emerald-600" : ""} ${sticky ? "sticky left-0 z-10" : ""} ${cel.tipo === "entrada" || (cel.tipo === "valor" && cel.formula) ? "p-0 relative" : ""} ${cel.tipo === "valor" && cel.formula ? "cursor-pointer" : ""}`}
+      className={`border border-slate-200 align-middle ${LARGURA[largura]} ${base} ${selected ? selBg : ""} ${formulaAtiva ? "ring-1 ring-inset ring-emerald-600" : ""} ${sticky ? "sticky left-0 z-10" : ""} ${cel.tipo === "entrada" || ((cel.tipo === "valor" || cel.tipo === "texto") && cel.formula) ? "p-0 relative" : ""} ${(cel.tipo === "valor" || cel.tipo === "texto") && cel.formula ? "cursor-pointer" : ""}`}
       onMouseDown={onMouseDown}
       onMouseEnter={onMouseEnter}
     >
@@ -361,7 +361,12 @@ function CelulaTd({
         </div>
       )}
       {cel.tipo === "texto" && cel.papel !== "nome" && (
-        <span className="block whitespace-pre-line leading-snug">{cel.texto}</span>
+        <span className="relative block whitespace-pre-line leading-snug" title={cel.formula ? `=${cel.formula}` : cel.texto}>
+          {cel.formula && (
+            <span className="pointer-events-none absolute top-0 right-0 border-t-[7px] border-l-[7px] border-t-emerald-600 border-l-transparent" />
+          )}
+          {cel.texto}
+        </span>
       )}
       {cel.tipo === "valor" && (
         <span className="relative block px-1 py-1 leading-snug" title={cel.formula ? `=${cel.formula}` : cel.texto}>

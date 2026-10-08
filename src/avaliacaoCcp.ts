@@ -234,11 +234,6 @@ export function notaDeParametros(
   return roundNota(acc);
 }
 
-function mediaLista(notas: number[]) {
-  if (!notas.length) return null;
-  return roundNota(notas.reduce((a, b) => a + b, 0) / notas.length);
-}
-
 export function modulosElearning(topicos: Pick<TopicoPrograma, "id" | "titulo">[]) {
   return topicos.flatMap((t, i) => moduloESimulacao(numeroModuloPrograma(i)) ? [] : [{ ...t, numero: numeroModuloPrograma(i) }]);
 }
@@ -256,11 +251,12 @@ function notaBloco(
     for (const mod of modulos) {
       const n = notaDeParametros(bloco.parametros, bloco.pesosEquitativos, mapa, formandoId, mod.id);
       if (n == null) return null;
-      notas.push(n);
+      notas.push(Math.round(n));
     }
-    return mediaLista(notas);
+    return Math.round(notas.reduce((a, b) => a + b, 0) / notas.length);
   }
-  return notaDeParametros(bloco.parametros, bloco.pesosEquitativos, mapa, formandoId, idGrelhaBloco(instrumentoId, bloco.id));
+  const n = notaDeParametros(bloco.parametros, bloco.pesosEquitativos, mapa, formandoId, idGrelhaBloco(instrumentoId, bloco.id));
+  return n == null ? null : Math.round(n);
 }
 
 export function notaInstrumentoCcp(
@@ -280,7 +276,7 @@ export function notaInstrumentoCcp(
     if (n == null) return null;
     acc += n * ((bloco.peso > 0 ? bloco.peso : 0) / soma);
   }
-  return roundNota(acc);
+  return Math.round(acc);
 }
 
 export function notaFinalCcp(

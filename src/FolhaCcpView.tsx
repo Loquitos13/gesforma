@@ -3,6 +3,7 @@ import {
   celulaEntrada,
   montarFolhasCcp,
   type CelulaFolha,
+  type FaixaBloco,
   type FolhaModelo,
   type LarguraColuna,
   type PapelTexto,
@@ -61,6 +62,45 @@ function chave(formandoId: number, moduloId: string, parametroId: string) {
   return `${formandoId}|${moduloId}|${parametroId}`;
 }
 
+function colunasDaFaixa(faixa: FaixaBloco, total: number) {
+  const cols: number[] = [];
+  for (const trecho of faixa.trechos) {
+    for (let c = trecho.de; c < trecho.ate && c < total; c++) cols.push(c);
+  }
+  return cols;
+}
+
+function faixaTemEntrada(folha: FolhaModelo, faixa: FaixaBloco) {
+  const cols = new Set(colunasDaFaixa(faixa, folha.larguras.length));
+  return folha.linhas.some(linha => linha.some((cel, c) => cols.has(c) && cel.tipo === "entrada"));
+}
+
+function projetarLinha(linha: CelulaFolha[], colunas: number[]) {
+  const vis = new Set(colunas);
+  const mostrado = new Set<number>();
+  const out: { cel: CelulaFolha; c: number; span: number }[] = [];
+  for (const c of colunas) {
+    if (mostrado.has(c)) continue;
+    let origem = c;
+    let cel = linha[c];
+    if (!cel || cel.tipo === "ocupado") {
+      while (origem > 0 && (!linha[origem] || linha[origem].tipo === "ocupado")) origem--;
+      cel = linha[origem];
+      if (!cel || cel.tipo === "ocupado" || !vis.has(origem) || mostrado.has(origem)) continue;
+    }
+    const bruto = cel.tipo === "texto" && cel.span && cel.span > 1 ? cel.span : 1;
+    let span = 0;
+    for (let i = 0; i < bruto; i++) {
+      if (!vis.has(origem + i)) break;
+      mostrado.add(origem + i);
+      span++;
+    }
+    if (!span) continue;
+    out.push({ cel, c: origem, span });
+  }
+  return out;
+}
+
 export function FolhasCcp({
   ccp,
   topicos,
@@ -98,8 +138,19 @@ export function FolhasCcp({
     return apenasId ? todas.filter(item => item.id === apenasId) : todas;
   }, [apenasId, ccp, cursoNome, escalaMax, formandos, mapa, topicos, turmaNome]);
   const [folhaId, setFolhaId] = useState(folhas[0]?.id ?? "");
+  const [faixaPorFolha, setFaixaPorFolha] = useState<Record<string, string>>({});
   const [foco, setFoco] = useState<{ r: number; c: number } | null>(null);
   const folha = folhas.find(f => f.id === folhaId) ?? folhas[0];
+  const faixa = folha
+    ? folha.faixas.find(item => item.id === faixaPorFolha[folha.id])
+      ?? folha.faixas.find(item => faixaTemEntrada(folha, item))
+      ?? folha.faixas[0]
+      ?? null
+    : null;
+  const colunas = folha
+    ? (faixa ? colunasDaFaixa(faixa, folha.larguras.length) : folha.larguras.map((_, i) => i).filter(c => folha.larguras[c] !== "gutter"))
+    : [];
+  const stickyCol = colunas.find(c => c > 0 && folha && ["codigo", "texto", "grupo", "param"].includes(folha.larguras[c] ?? "")) ?? colunas[0];
   const [sel, setSel] = useState<Sel | null>(null);
   const dragRef = useRef<"range" | "fill" | null>(null);
   const selRef = useRef<Sel | null>(null);
@@ -169,15 +220,37 @@ export function FolhasCcp({
         ))}
       </div>
       )}
+      {folha.faixas.length > 1 && (
+        <div className="flex gap-1 overflow-x-auto scrollbar-hide -mx-1 px-1" data-blocos={folha.id}>
+          {folha.faixas.map(item => (
+            <button
+              key={item.id}
+              type="button"
+              data-faixa={item.id}
+              onClick={() => {
+                setFaixaPorFolha(prev => ({ ...prev, [folha.id]: item.id }));
+                setSel(null);
+                selRef.current = null;
+                setFoco(null);
+              }}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap border ${
+                item.id === faixa?.id ? "border-slate-800 bg-slate-800 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {item.titulo}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <BarraFormula folha={folha} foco={foco} />
         <div className="max-h-[min(70vh,40rem)] overflow-auto">
           <table className="border-separate border-spacing-0 text-xs select-none">
             <tbody>
               {folha.linhas.map((linha, r) => {
-                const temNomes = linha.some(cel => cel.tipo === "texto" && cel.papel === "nome");
-                const visiveis = celulasVisiveis(linha);
-                if (!visiveis.length) return null;
+                const visiveis = projetarLinha(linha, colunas);
+                if (!visiveis.some(item => item.cel.tipo !== "vazio")) return null;
+                const temNomes = visiveis.some(item => item.cel.tipo === "texto" && item.cel.papel === "nome");
                 return (
                   <tr key={r} className={temNomes ? "" : "h-7"}>
                     {visiveis.map(({ cel, c, span }) => (
@@ -194,7 +267,7 @@ export function FolhasCcp({
                         handleBg={handleBg}
                         ring={ring}
                         cabeca={cabeca}
-                        sticky={c === 1}
+                        sticky={c === stickyCol}
                         temNomes={temNomes}
                         drafts={drafts.current}
                         mapa={mapa}
@@ -202,6 +275,7 @@ export function FolhasCcp({
                         formulaAtiva={foco?.r === r && foco?.c === c && (cel.tipo === "valor" || cel.tipo === "texto") && !!cel.formula}
                         leitura={leitura}
                         onMouseDown={e => {
+                          if ((e.target as HTMLElement).closest("input")) return;
                           if ((cel.tipo === "valor" || cel.tipo === "texto") && cel.formula) {
                             setFoco({ r, c });
                             return;
@@ -241,27 +315,12 @@ export function FolhasCcp({
         </div>
         <p className="px-4 py-2 text-[11px] text-slate-400 border-t border-slate-100">
           {leitura
-            ? "É a tabela desta folha, com os blocos todos lado a lado. Na turma, cada formando inscrito ganha uma coluna e as células brancas editam-se."
-            : "Cada grupo Participantes tem uma coluna por formando. As células brancas editam-se. As cinzentas têm a fórmula da folha. A avaliação final vai buscar a nota do Módulo 2, do E-learning, do Módulo 9 e do projeto. Arraste o quadrado da seleção para copiar um valor."}
+            ? "Cada bloco abre-se à parte, para a folha caber no ecrã. Na turma, as células com rebordo escrevem-se e as cinzentas calculam a fórmula."
+            : "Um bloco de cada vez, com uma coluna por formando. Escreva nas células com rebordo. As cinzentas usam a fórmula da folha: uma célula vazia conta como zero, como no Excel. A avaliação final vai buscar o Módulo 2, o E-learning, o Módulo 9 e o projeto."}
         </p>
       </div>
     </div>
   );
-}
-
-function celulasVisiveis(linha: CelulaFolha[]) {
-  const out: { cel: CelulaFolha; c: number; span: number }[] = [];
-  let skip = 0;
-  linha.forEach((cel, c) => {
-    if (cel.tipo === "ocupado" || skip > 0) {
-      if (skip > 0) skip -= 1;
-      return;
-    }
-    const span = cel.tipo === "texto" && cel.span && cel.span > 1 ? cel.span : 1;
-    out.push({ cel, c, span });
-    if (span > 1) skip = span - 1;
-  });
-  return out;
 }
 
 function canto(sel: Sel | null, folha: FolhaModelo, r: number, c: number) {
@@ -441,7 +500,8 @@ function Entrada({
   const shown = drafts[key] ?? (typeof stored === "number" ? String(stored).replace(".", ",") : "");
   return (
     <input
-      className={`w-full h-8 text-center text-xs bg-white border-0 ${selected ? "ring-1 ring-inset ring-slate-400" : ""} ${ring} focus:outline-none focus:ring-2`}
+      className={`w-full h-8 text-center text-xs bg-white border-0 shadow-[inset_0_0_0_1px_#cbd5e1] select-text ${selected ? "ring-1 ring-inset ring-slate-400" : ""} ${ring} focus:outline-none focus:ring-2`}
+      onMouseDown={e => e.stopPropagation()}
       inputMode="decimal"
       value={shown}
       aria-label="Nota"

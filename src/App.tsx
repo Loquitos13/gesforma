@@ -1820,6 +1820,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
             regime="gold"
             turmaId={turma.id}
             cursoNome={turma.curso}
+            turmaNome={turma.nome}
             accent="gold"
             formandos={nomesCockpit}
           />
@@ -2477,6 +2478,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           regime="fin"
           turmaId={turma.id}
           cursoNome={turma.curso}
+          turmaNome={turma.nome}
           accent="fin"
           formandos={nomesCockpit}
         />

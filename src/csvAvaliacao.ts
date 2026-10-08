@@ -13,6 +13,12 @@ export type SegmentoGrelha =
   | { tipo: "coluna"; c: number }
   | { tipo: "participantes"; de: number; ate: number; quantidade: number };
 
+export function limparGrelha(rows: string[][]) {
+  const grelha = rows.map(linha => linha.map(celula => String(celula ?? "").trim()));
+  while (grelha.length && grelha[grelha.length - 1].every(celula => celula === "")) grelha.pop();
+  return grelha;
+}
+
 export function parseCsv(text: string): string[][] {
   const src = text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   const primeira = src.split("\n").find(l => l.trim()) ?? "";

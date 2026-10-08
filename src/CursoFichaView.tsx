@@ -1512,6 +1512,11 @@ export function CursoFichaView({
               {data.avaliacaoCurso.estrutura === "ccp" && data.avaliacaoCurso.ccp && (
                 <AvaliacaoCcpEditor
                   ccp={data.avaliacaoCurso.ccp}
+                  topicos={data.topicosPrograma}
+                  cursoNome={data.titulo}
+                  escalaMin={data.avaliacaoCurso.escalaMin}
+                  escalaMax={data.avaliacaoCurso.escalaMax}
+                  accent={accent}
                   saveClass={t.save}
                   inputClass={t.iCls}
                   onChange={ccp => patchAv({ ccp, estrutura: "ccp" })}

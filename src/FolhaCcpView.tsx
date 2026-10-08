@@ -73,6 +73,8 @@ export function FolhasCcp({
   accent,
   onNota,
   onLote,
+  apenasId,
+  leitura = false,
 }: {
   ccp: EstruturaCcp;
   topicos: Pick<TopicoPrograma, "id" | "titulo">[];
@@ -85,12 +87,16 @@ export function FolhasCcp({
   accent: "gold" | "fin";
   onNota: (formandoId: number, moduloId: string, parametroId: string, valor: number | null) => void;
   onLote: (alteracoes: Alteracao[]) => void;
+  /** Na ficha do curso, mostra só a folha deste momento. */
+  apenasId?: string;
+  /** A ficha mostra a tabela. As notas editam-se na turma. */
+  leitura?: boolean;
 }) {
   const gold = accent === "gold";
-  const folhas = useMemo(
-    () => montarFolhasCcp({ ccp, topicos, formandos, mapa, cursoNome, turmaNome, escalaMax }),
-    [ccp, cursoNome, escalaMax, formandos, mapa, topicos, turmaNome],
-  );
+  const folhas = useMemo(() => {
+    const todas = montarFolhasCcp({ ccp, topicos, formandos, mapa, cursoNome, turmaNome, escalaMax });
+    return apenasId ? todas.filter(item => item.id === apenasId) : todas;
+  }, [apenasId, ccp, cursoNome, escalaMax, formandos, mapa, topicos, turmaNome]);
   const [folhaId, setFolhaId] = useState(folhas[0]?.id ?? "");
   const [foco, setFoco] = useState<{ r: number; c: number } | null>(null);
   const folha = folhas.find(f => f.id === folhaId) ?? folhas[0];
@@ -147,6 +153,7 @@ export function FolhasCcp({
 
   return (
     <div className="space-y-3" onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
+      {folhas.length > 1 && (
       <div className="flex gap-1 overflow-x-auto scrollbar-hide -mx-1 px-1">
         {folhas.map(item => (
           <button
@@ -161,6 +168,7 @@ export function FolhasCcp({
           </button>
         ))}
       </div>
+      )}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <BarraFormula folha={folha} foco={foco} />
         <div className="max-h-[min(70vh,40rem)] overflow-auto">
@@ -192,12 +200,13 @@ export function FolhasCcp({
                         mapa={mapa}
                         onDraft={() => setTick(t => t + 1)}
                         formulaAtiva={foco?.r === r && foco?.c === c && (cel.tipo === "valor" || cel.tipo === "texto") && !!cel.formula}
+                        leitura={leitura}
                         onMouseDown={e => {
                           if ((cel.tipo === "valor" || cel.tipo === "texto") && cel.formula) {
                             setFoco({ r, c });
                             return;
                           }
-                          if (cel.tipo !== "entrada") return;
+                          if (leitura || cel.tipo !== "entrada") return;
                           if ((e.target as HTMLElement).closest("[data-fill-handle]")) return;
                           const next = e.shiftKey && sel ? { ...sel, r1: r, c1: c } : { r0: r, c0: c, r1: r, c1: c };
                           setSel(next);
@@ -231,7 +240,9 @@ export function FolhasCcp({
           </table>
         </div>
         <p className="px-4 py-2 text-[11px] text-slate-400 border-t border-slate-100">
-          Cada grupo Participantes tem uma coluna por formando. As células brancas editam-se. As cinzentas têm a fórmula da folha. A avaliação final vai buscar a nota do Módulo 2, do E-learning, do Módulo 9 e do projeto. Arraste o quadrado da seleção para copiar um valor.
+          {leitura
+            ? "É a tabela desta folha, com os blocos todos lado a lado. Na turma, cada formando inscrito ganha uma coluna e as células brancas editam-se."
+            : "Cada grupo Participantes tem uma coluna por formando. As células brancas editam-se. As cinzentas têm a fórmula da folha. A avaliação final vai buscar a nota do Módulo 2, do E-learning, do Módulo 9 e do projeto. Arraste o quadrado da seleção para copiar um valor."}
         </p>
       </div>
     </div>
@@ -310,6 +321,7 @@ function CelulaTd({
   sticky,
   temNomes,
   formulaAtiva,
+  leitura,
   drafts,
   mapa,
   onDraft,
@@ -332,6 +344,7 @@ function CelulaTd({
   sticky: boolean;
   temNomes: boolean;
   formulaAtiva: boolean;
+  leitura: boolean;
   drafts: Record<string, string>;
   mapa: Map<string, number | null>;
   onDraft: () => void;
@@ -376,7 +389,7 @@ function CelulaTd({
           {cel.texto}
         </span>
       )}
-      {cel.tipo === "entrada" && (
+      {cel.tipo === "entrada" && !leitura && (
         <Entrada
           cel={cel}
           selected={selected}
@@ -387,7 +400,8 @@ function CelulaTd({
           onCommit={onCommit}
         />
       )}
-      {cel.tipo === "entrada" && handle && (
+      {cel.tipo === "entrada" && leitura && <span className="block h-7 bg-white" />}
+      {cel.tipo === "entrada" && handle && !leitura && (
         <button
           type="button"
           data-fill-handle

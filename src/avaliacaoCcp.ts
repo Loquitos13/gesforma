@@ -522,6 +522,54 @@ function fundirParametros(anteriores: ParametroAvaliacao[], novos: { label: stri
   }));
 }
 
+/** Mete na folha de um momento todos os blocos de parâmetros encontrados nessa grelha. */
+export function aplicarBlocosNaFolha(
+  ccp: EstruturaCcp,
+  instrumentoId: IdInstrumentoCcp,
+  blocos: BlocoCsv[],
+): { ccp: EstruturaCcp; aplicados: BlocoAplicadoCcp[]; ignorados: string[] } {
+  const escolhidos = new Map<string, BlocoCsv>();
+  const ignorados: string[] = [];
+  for (const bloco of blocos) {
+    const blocoId = blocoIdDe(bloco.titulo, instrumentoId);
+    if (!blocoId || !bloco.parametros.length) {
+      ignorados.push(bloco.titulo);
+      continue;
+    }
+    const anterior = escolhidos.get(blocoId);
+    if (!anterior || bloco.parametros.length > anterior.parametros.length) escolhidos.set(blocoId, bloco);
+  }
+
+  const aplicados: BlocoAplicadoCcp[] = [];
+  const seguinte: EstruturaCcp = {
+    instrumentos: ccp.instrumentos.map(inst => {
+      if (inst.id !== instrumentoId) return inst;
+      return {
+        ...inst,
+        blocos: inst.blocos.map(bloco => {
+          const cand = escolhidos.get(bloco.id);
+          if (!cand) return bloco;
+          const parametros = fundirParametros(bloco.parametros, cand.parametros);
+          const primeiro = parametros[0]?.peso;
+          aplicados.push({
+            instrumentoId: inst.id,
+            blocoId: bloco.id,
+            titulo: bloco.titulo,
+            quantidade: parametros.length,
+          });
+          return {
+            ...bloco,
+            parametros,
+            pesosEquitativos: parametros.length > 0 && parametros.every(item => item.peso === primeiro),
+          };
+        }),
+      };
+    }),
+  };
+
+  return { ccp: seguinte, aplicados, ignorados };
+}
+
 /** Reparte os blocos de todas as folhas pelos quatro momentos. A avaliação final só atualiza os pesos. */
 export function aplicarLivroCcp(
   ccp: EstruturaCcp,

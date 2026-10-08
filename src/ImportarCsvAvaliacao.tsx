@@ -14,17 +14,24 @@ import {
 } from "./csvAvaliacao";
 import { lerLivroExcel, type EstiloCelula, type FolhaImportada, type UniaoCelula, type VistaFolha } from "./vistaExcel";
 
+export type AvisoImportacao = { ok: boolean; mensagem: string };
+
 export function ImportarCsvAvaliacao({
   modo,
   unidade,
   saveClass,
   onAplicar,
+  onAplicarBlocos,
+  onAplicarBloco,
   compacto = false,
 }: {
   modo: "modulos" | "final";
   unidade: string;
   saveClass: string;
-  onAplicar: (parametros: ParametroAvaliacao[]) => void;
+  onAplicar?: (parametros: ParametroAvaliacao[]) => void;
+  /** No CCP, o CSV de uma folha mete os blocos todos dessa folha. */
+  onAplicarBlocos?: (blocos: BlocoCsv[]) => AvisoImportacao;
+  onAplicarBloco?: (bloco: BlocoCsv) => AvisoImportacao;
   compacto?: boolean;
 }) {
   const [folhas, setFolhas] = useState<FolhaImportada[]>([]);
@@ -38,6 +45,8 @@ export function ImportarCsvAvaliacao({
   const [foco, setFoco] = useState<Celula | null>(null);
   const [erroFicheiro, setErroFicheiro] = useState("");
   const [aberto, setAberto] = useState(!compacto);
+  const [notaFolha, setNotaFolha] = useState<AvisoImportacao | null>(null);
+  const [notasBloco, setNotasBloco] = useState<Record<number, AvisoImportacao>>({});
   const grelhaRef = useRef<HTMLDivElement>(null);
   const mediaLabel = modo === "modulos" ? `Média do ${unidade}` : "Média final";
 
@@ -74,6 +83,8 @@ export function ImportarCsvAvaliacao({
     setFoco(null);
     setPapel("nome");
     papelRef.current = "nome";
+    setNotaFolha(null);
+    setNotasBloco({});
   }
 
   function marcar(celula: Celula) {
@@ -85,7 +96,25 @@ export function ImportarCsvAvaliacao({
   }
 
   function aplicar(lista: ParametroCsv[]) {
-    onAplicar(lista.map(p => ({ id: novoParametroId(), label: p.label, peso: p.peso })));
+    onAplicar?.(lista.map(p => ({ id: novoParametroId(), label: p.label, peso: p.peso })));
+  }
+
+  function usarFolha() {
+    if (!onAplicarBlocos) return;
+    setNotaFolha(onAplicarBlocos(blocos));
+    setNotasBloco({});
+  }
+
+  function usarBloco(bloco: BlocoCsv, indice: number) {
+    if (onAplicarBloco) {
+      setNotasBloco(prev => ({ ...prev, [indice]: onAplicarBloco(bloco) }));
+      return;
+    }
+    aplicar(bloco.parametros);
+    setNotasBloco(prev => ({
+      ...prev,
+      [indice]: { ok: true, mensagem: `${bloco.parametros.length} ${bloco.parametros.length === 1 ? "parâmetro ficou" : "parâmetros ficaram"} na avaliação, na lista por cima desta folha.` },
+    }));
   }
 
   async function lerFicheiro(file: File) {
@@ -109,6 +138,8 @@ export function ImportarCsvAvaliacao({
       setFoco(null);
       setPapel("nome");
       papelRef.current = "nome";
+      setNotaFolha(null);
+      setNotasBloco({});
     } catch {
       setFolhas([]);
       setErroFicheiro("Não consegui ler este ficheiro. Use CSV ou Excel (.xlsx).");
@@ -124,7 +155,7 @@ export function ImportarCsvAvaliacao({
   if (compacto && !aberto) {
     return (
       <button type="button" onClick={() => setAberto(true)} className="text-xs font-semibold text-slate-600 underline underline-offset-2">
-        Importar este bloco de um CSV ou Excel
+        {onAplicarBlocos ? "Importar o CSV ou o Excel desta folha" : "Importar este bloco de um CSV ou Excel"}
       </button>
     );
   }
@@ -132,9 +163,13 @@ export function ImportarCsvAvaliacao({
   return (
     <div className={`min-w-0 max-w-full rounded-xl border border-slate-200 bg-white space-y-4 ${compacto ? "p-3" : "p-4 sm:p-5"}`}>
       <div>
-        <p className="text-sm font-semibold text-slate-800">Importar parâmetros de CSV ou Excel</p>
+        <p className="text-sm font-semibold text-slate-800">
+          {onAplicarBlocos ? "Importar a folha" : "Importar parâmetros de CSV ou Excel"}
+        </p>
         <p className="text-xs text-slate-500 mt-0.5">
-          A folha aparece como no ficheiro, com cores, letras e todas as colunas. Cada célula traz a fórmula do Excel: clique para a ler. As colunas de participantes continuam visíveis e não servem de parâmetro. Escolha o nome, o peso e a {mediaLabel.toLowerCase()} nas restantes, ou use um bloco encontrado.
+          {onAplicarBlocos
+            ? "Um CSV é uma folha. No Excel, escolha o separador. Entram os blocos todos dessa folha na tabela, não um de cada vez. As colunas de participantes não são parâmetros."
+            : `A folha aparece como no ficheiro, com cores, letras e todas as colunas. Cada célula traz a fórmula do Excel: clique para a ler. As colunas de participantes continuam visíveis e não servem de parâmetro. Escolha o nome, o peso e a ${mediaLabel.toLowerCase()} nas restantes, ou use um bloco encontrado.`}
         </p>
       </div>
       <label className="relative inline-flex items-center overflow-clip px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer">
@@ -196,15 +231,38 @@ export function ImportarCsvAvaliacao({
           </div>
           {blocos.length > 0 && (
             <div className="space-y-3">
-              <p className="text-sm font-semibold text-slate-800">Blocos nesta folha</p>
-              {blocos.map(bloco => (
-                <BlocoCard key={bloco.titulo} bloco={bloco} saveClass={saveClass} onAplicar={() => aplicar(bloco.parametros)} />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-800">Blocos nesta folha</p>
+                {onAplicarBlocos && (
+                  <button type="button" onClick={usarFolha} className={`px-3 py-1.5 text-xs font-semibold rounded-lg text-white ${saveClass}`}>
+                    Usar os blocos desta folha
+                  </button>
+                )}
+              </div>
+              {notaFolha && (
+                <p className={`text-xs rounded-lg border px-3 py-2 ${notaFolha.ok ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+                  {notaFolha.mensagem}
+                </p>
+              )}
+              {blocos.map((bloco, indice) => (
+                <BlocoCard
+                  key={`${bloco.titulo}-${indice}`}
+                  bloco={bloco}
+                  saveClass={saveClass}
+                  nota={notasBloco[indice]}
+                  onAplicar={() => usarBloco(bloco, indice)}
+                />
               ))}
             </div>
           )}
           {blocos.length === 0 && (
-            <p className="text-xs text-slate-500">Não encontrei blocos de parâmetros. Escolha as células à mão.</p>
+            <p className="text-xs text-slate-500">
+              {onAplicarBlocos
+                ? "Não encontrei blocos de parâmetros nesta folha."
+                : "Não encontrei blocos de parâmetros. Escolha as células à mão."}
+            </p>
           )}
+          {!onAplicarBlocos && <>
           <div className="flex flex-wrap gap-2">
             {([
               ["nome", "Nome do parâmetro", nome ? refCelula(nome) : ""],
@@ -231,6 +289,7 @@ export function ImportarCsvAvaliacao({
               ))}
             </ul>
           )}
+          {onAplicar && (
           <button
             type="button"
             disabled={!leitura.parametros.length}
@@ -239,6 +298,8 @@ export function ImportarCsvAvaliacao({
           >
             Usar estas células
           </button>
+          )}
+          </>}
         </>
       )}
     </div>
@@ -420,10 +481,12 @@ function mapaUnioes(unioes: UniaoCelula[]) {
 function BlocoCard({
   bloco,
   saveClass,
+  nota,
   onAplicar,
 }: {
   bloco: BlocoCsv;
   saveClass: string;
+  nota?: AvisoImportacao;
   onAplicar: () => void;
 }) {
   const iguais = bloco.parametros.every(p => p.peso === bloco.parametros[0]?.peso);
@@ -432,9 +495,14 @@ function BlocoCard({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-slate-800">{bloco.titulo}</p>
         <button type="button" onClick={onAplicar} className={`px-3 py-1.5 text-xs font-semibold rounded-lg text-white ${saveClass}`}>
-          Usar este bloco
+          {nota?.ok ? "Na folha" : "Usar este bloco"}
         </button>
       </div>
+      {nota && (
+        <p className={`text-xs rounded-lg border px-3 py-2 ${nota.ok ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+          {nota.mensagem}
+        </p>
+      )}
       <ul className="text-xs text-slate-600 space-y-1">
         {bloco.parametros.map(p => (
           <li key={p.label}>

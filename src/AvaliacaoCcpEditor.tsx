@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { novoParametroId, type ParametroAvaliacao } from "./avaliacaoCurso";
 import {
+  aplicarBlocosNaFolha,
   aplicarLivroCcp,
   ROTULO_MOMENTO_CCP,
   textoFormulaCcp,
@@ -10,8 +11,14 @@ import {
   type InstrumentoCcp,
   type PrevisaoLivroCcp,
 } from "./avaliacaoCcp";
-import { ImportarCsvAvaliacao } from "./ImportarCsvAvaliacao";
+import type { TopicoPrograma } from "./cursoPrograma";
+import { FolhasCcp } from "./FolhaCcpView";
+import { ImportarCsvAvaliacao, type AvisoImportacao } from "./ImportarCsvAvaliacao";
+import type { BlocoCsv } from "./csvAvaliacao";
 import { lerLivroExcel } from "./vistaExcel";
+
+const MAPA_VAZIO = new Map<string, number | null>();
+const COLUNA_EXEMPLO = [{ id: 0, nome: "Participante" }];
 
 const ORDEM_MOMENTOS: IdInstrumentoCcp[] = ["sim-inicial", "elearning", "sim-final", "projeto"];
 
@@ -24,11 +31,21 @@ const AJUDA: Record<string, string> = {
 
 export function AvaliacaoCcpEditor({
   ccp,
+  topicos,
+  cursoNome,
+  escalaMin,
+  escalaMax,
+  accent,
   saveClass,
   inputClass,
   onChange,
 }: {
   ccp: EstruturaCcp;
+  topicos: Pick<TopicoPrograma, "id" | "titulo">[];
+  cursoNome: string;
+  escalaMin: number;
+  escalaMax: number;
+  accent: "gold" | "fin";
   saveClass: string;
   inputClass: string;
   onChange: (ccp: EstruturaCcp) => void;
@@ -51,6 +68,54 @@ export function AvaliacaoCcpEditor({
   const [previsao, setPrevisao] = useState<(PrevisaoLivroCcp & { ficheiro: string }) | null>(null);
   const [erroLivro, setErroLivro] = useState("");
   const [livroAplicado, setLivroAplicado] = useState(false);
+  const [avisosFolha, setAvisosFolha] = useState<Partial<Record<IdInstrumentoCcp, string>>>({});
+  const [folhaViva, setFolhaViva] = useState<IdInstrumentoCcp | null>(null);
+
+  function mostrarFolha(id: IdInstrumentoCcp, mensagem: string) {
+    setAvisosFolha(prev => ({ ...prev, [id]: mensagem }));
+    setFolhaViva(id);
+    window.requestAnimationFrame(() => {
+      document.getElementById(`tabela-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  function usarBlocos(instrumentoId: IdInstrumentoCcp, blocos: BlocoCsv[]): AvisoImportacao {
+    const resultado = aplicarBlocosNaFolha(ccp, instrumentoId, blocos);
+    if (!resultado.aplicados.length) {
+      const esperados = instrumentoId === "elearning"
+        ? "OP1 e OP2"
+        : instrumentoId === "projeto"
+          ? "AS/PI"
+          : "CP1, CP2 e CP3";
+      return {
+        ok: false,
+        mensagem: `Nenhum destes blocos é desta folha. Aqui entram ${esperados}.`,
+      };
+    }
+    onChange(resultado.ccp);
+    const nomes = resultado.aplicados.map(item => `${item.titulo} (${item.quantidade} ${item.quantidade === 1 ? "parâmetro" : "parâmetros"})`).join(", ");
+    const fora = resultado.ignorados.length
+      ? ` Ficou de fora o que é só resumo: ${resultado.ignorados.join(", ")}.`
+      : "";
+    const mensagem = `Entraram os blocos todos desta folha: ${nomes}.${fora} A tabela já os mostra.`;
+    mostrarFolha(instrumentoId, mensagem);
+    return { ok: true, mensagem };
+  }
+
+  function usarUmBloco(instrumentoId: IdInstrumentoCcp, bloco: BlocoCsv): AvisoImportacao {
+    const resultado = aplicarBlocosNaFolha(ccp, instrumentoId, [bloco]);
+    const aplicado = resultado.aplicados[0];
+    if (!aplicado) {
+      return {
+        ok: false,
+        mensagem: `«${bloco.titulo}» não é um bloco de parâmetros desta folha. Use os blocos todos, ou escolha CP1, CP2, CP3, OP1, OP2 ou AS/PI.`,
+      };
+    }
+    onChange(resultado.ccp);
+    const mensagem = `${aplicado.titulo} ficou nesta folha, com ${aplicado.quantidade} ${aplicado.quantidade === 1 ? "parâmetro" : "parâmetros"}. A tabela já o mostra.`;
+    mostrarFolha(instrumentoId, mensagem);
+    return { ok: true, mensagem };
+  }
 
   async function lerLivro(file: File) {
     setLivroAplicado(false);
@@ -78,7 +143,18 @@ export function AvaliacaoCcpEditor({
   function aplicarLivro() {
     if (!previsao?.aplicados.length) return;
     onChange(previsao.ccp);
+    const avisos: Partial<Record<IdInstrumentoCcp, string>> = {};
+    for (const id of ORDEM_MOMENTOS) {
+      const linhas = previsao.aplicados.filter(item => item.instrumentoId === id);
+      if (!linhas.length) continue;
+      avisos[id] = `Blocos nesta folha: ${linhas.map(item => `${item.titulo} (${item.quantidade})`).join(", ")}.`;
+    }
+    setAvisosFolha(avisos);
+    setFolhaViva(ORDEM_MOMENTOS.find(id => avisos[id]) ?? null);
     setLivroAplicado(true);
+    window.requestAnimationFrame(() => {
+      document.getElementById("tabela-sim-inicial")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function patchParametro(instrumentoId: string, blocoId: string, parametroId: string, partial: Partial<ParametroAvaliacao>) {
@@ -95,14 +171,14 @@ export function AvaliacaoCcpEditor({
       <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
         <p className="text-sm font-semibold text-slate-800">Avaliação do CCP</p>
         <p className="text-xs text-slate-500 mt-1">
-          Não é uma lista única de parâmetros. O e-learning cobre todos os módulos do programa excepto o 2 e o 9. Esses dois são as simulações pedagógicas. O projeto de intervenção avalia-se à parte. A nota final junta os quatro instrumentos: {textoFormulaCcp(ccp)}.
+          No CCP trabalha-se com a tabela de cada folha. O Módulo 2 e o Módulo 9 trazem CP1, CP2 e CP3 lado a lado. O E-learning traz OP1 e OP2. O projeto traz o AS/PI. Um CSV é uma folha: entram os blocos todos dessa folha. Na turma, cada formando inscrito tem uma coluna e a nota final junta os quatro momentos: {textoFormulaCcp(ccp)}.
         </p>
       </div>
       <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">
         <div>
           <p className="text-sm font-semibold text-slate-800">Importar todas as folhas</p>
           <p className="text-xs text-slate-500 mt-1">
-            Cada folha traz blocos diferentes. Um Excel mete-os todos de uma vez no Módulo 2, no E-learning, no Módulo 9 e no projeto de intervenção. A avaliação final não se importa: na turma, a nota de cada participante nestes quatro momentos atualiza essa folha.
+            Se o Excel traz as cinco folhas, cada uma fica com os blocos dela: Módulo 2 e Módulo 9 com CP1, CP2 e CP3, E-learning com OP1 e OP2, projeto com AS/PI. A avaliação final não entra como parâmetros. Na turma, essa folha calcula-se a partir das outras.
           </p>
         </div>
         <label className="relative inline-flex items-center overflow-clip px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer">
@@ -161,8 +237,8 @@ export function AvaliacaoCcpEditor({
               </button>
             )}
             {livroAplicado && (
-              <p className="text-xs text-slate-600">
-                Os quatro momentos ficaram com estes blocos. Grave a ficha para o curso os guardar. Na turma, edite a nota de cada participante. A avaliação final atualiza-se.
+              <p className="text-xs text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                Cada folha ficou com os blocos dela. Veja a tabela de cada momento. Grave a ficha para o curso os guardar. Na turma, edite a nota de cada participante.
               </p>
             )}
           </div>
@@ -188,6 +264,42 @@ export function AvaliacaoCcpEditor({
               />
             </label>
           </div>
+          <ImportarCsvAvaliacao
+            modo="final"
+            unidade="folha"
+            saveClass={saveClass}
+            compacto
+            onAplicarBlocos={blocos => usarBlocos(instrumento.id, blocos)}
+            onAplicarBloco={bloco => usarUmBloco(instrumento.id, bloco)}
+          />
+          {avisosFolha[instrumento.id] && (
+            <p className="text-xs text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+              {avisosFolha[instrumento.id]}
+            </p>
+          )}
+          <div
+            id={`tabela-${instrumento.id}`}
+            data-folha={instrumento.id}
+            className={`scroll-mt-24 rounded-xl ${folhaViva === instrumento.id ? "ring-2 ring-emerald-400" : ""}`}
+          >
+            <p className="text-xs font-semibold text-slate-700 mb-2">Tabela desta folha, com os blocos todos</p>
+            <FolhasCcp
+              ccp={ccp}
+              topicos={topicos}
+              formandos={COLUNA_EXEMPLO}
+              mapa={MAPA_VAZIO}
+              cursoNome={cursoNome}
+              turmaNome="Turma"
+              escalaMin={escalaMin}
+              escalaMax={escalaMax}
+              accent={accent}
+              apenasId={instrumento.id}
+              leitura
+              onNota={() => {}}
+              onLote={() => {}}
+            />
+          </div>
+          <p className="text-xs font-semibold text-slate-700">Nomes e pesos destes blocos</p>
           {instrumento.blocos.map(bloco => (
             <div key={bloco.id} className="rounded-lg border border-slate-100 p-3 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -218,7 +330,7 @@ export function AvaliacaoCcpEditor({
                 />
                 Pesos iguais neste bloco
               </label>
-              <div className="space-y-2 max-h-64 overflow-auto">
+              <div className="space-y-2">
                 {bloco.parametros.map((param, i) => (
                   <div key={param.id} className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-mono text-slate-400 w-5">{i + 1}</span>
@@ -257,16 +369,6 @@ export function AvaliacaoCcpEditor({
               >
                 + Parâmetro
               </button>
-              <ImportarCsvAvaliacao
-                modo="final"
-                unidade="bloco"
-                saveClass={saveClass}
-                compacto
-                onAplicar={parametros => patchBloco(instrumento.id, bloco.id, {
-                  parametros: parametros.map(item => ({ ...item, id: novoParametroId() })),
-                  pesosEquitativos: parametros.length > 0 && parametros.every(item => item.peso === parametros[0]?.peso),
-                })}
-              />
             </div>
           ))}
         </div>

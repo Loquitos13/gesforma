@@ -3,8 +3,6 @@ import { apiSaveTurmaAvaliacao, apiTurmaAvaliacao, type Regime } from "./api";
 import {
   grelhasCcp,
   notaDeParametros,
-  notaFinalCcp,
-  notaInstrumentoCcp,
   textoFormulaCcp,
 } from "./avaliacaoCcp";
 import {
@@ -21,6 +19,7 @@ import {
   type ParametroAvaliacao,
 } from "./avaliacaoCurso";
 import { labelTopico, useProgramaDoCurso } from "./cursoPrograma";
+import { FolhasCcp } from "./FolhaCcpView";
 
 type Aba = {
   id: string;
@@ -63,12 +62,14 @@ export function TurmaAvaliacao({
   regime,
   turmaId,
   cursoNome,
+  turmaNome,
   accent = "gold",
   formandos,
 }: {
   regime: Regime;
   turmaId: number;
   cursoNome?: string;
+  turmaNome?: string;
   accent?: "gold" | "fin";
   formandos: FormandoRow[];
 }) {
@@ -161,6 +162,21 @@ export function TurmaAvaliacao({
   dragRef.current = dragging;
   selRef.current = sel;
 
+  function setNotasEmLote(alteracoes: { formandoId: number; moduloId: string; parametroId: string; valor: number | null }[]) {
+    setNotas(prev => {
+      const m = mapaNotas(prev);
+      for (const ch of alteracoes) {
+        m.set(
+          chaveNota(ch.formandoId, ch.moduloId, ch.parametroId),
+          ch.valor == null ? null : clampNota(ch.valor, cfg),
+        );
+      }
+      const next = listaNotas(m);
+      persist(next);
+      return next;
+    });
+  }
+
   function setNota(formandoId: number, paramId: string, valor: number | null, mid = moduloId) {
     const key = chaveNota(formandoId, mid, paramId);
     const clamped = valor == null ? null : clampNota(valor, cfg);
@@ -244,7 +260,6 @@ export function TurmaAvaliacao({
   const faltaParams = ccp ? abas.length === 0 : cfg.parametros.length === 0;
   const faltaModulos = !ccp && cfg.modo === "modulos" && abas.length === 0;
   const grelhaMomentos = !ccp && cfg.modo === "modulos" && programa.topicos.length === 0 && (cfg.momentos?.length ?? 0) > 0;
-  const semElearning = !!ccp && !abas.some(a => a.grupo === "E-learning" && !a.id.startsWith("ccp:"));
 
   return (
     <div className="space-y-4">
@@ -255,7 +270,7 @@ export function TurmaAvaliacao({
             {faltaParams
               ? "Defina os parâmetros na ficha do curso (separador Avaliação) para lançar notas."
               : ccp
-                ? `E-learning em todos os módulos do programa excepto o 2 e o 9. O módulo 2 é a simulação inicial e o 9 a final. O projeto avalia-se à parte. Nota final: ${textoFormulaCcp(ccp)}.`
+                ? `Cinco folhas, com a mesma estrutura da grelha oficial. Onde a folha diz Participantes, há uma coluna por formando. Nota final: ${textoFormulaCcp(ccp)}.`
                 : grelhaMomentos
                   ? "Grelha do CCP: a mesma observação na simulação inicial e na final. A nota do certificado é a média das duas."
                   : cfg.modo === "modulos"
@@ -301,9 +316,25 @@ export function TurmaAvaliacao({
         </p>
       )}
 
-      {!faltaParams && !faltaModulos && formandos.length > 0 && (
+      {!faltaParams && !faltaModulos && formandos.length > 0 && ccp && (
+        <FolhasCcp
+          ccp={ccp}
+          topicos={programa.topicos}
+          formandos={formandos}
+          mapa={mapa}
+          cursoNome={cursoNome}
+          turmaNome={turmaNome}
+          escalaMin={cfg.escalaMin}
+          escalaMax={cfg.escalaMax}
+          accent={accent}
+          onNota={(formandoId, moduloId, parametroId, valor) => setNota(formandoId, parametroId, valor, moduloId)}
+          onLote={setNotasEmLote}
+        />
+      )}
+
+      {!faltaParams && !faltaModulos && formandos.length > 0 && !ccp && (
         <>
-          {(ccp || cfg.modo === "modulos") && (
+          {cfg.modo === "modulos" && (
             <div className="space-y-2">
               {grupos.length > 0 && (
                 <div className="flex gap-1 overflow-x-auto scrollbar-hide -mx-1 px-1">
@@ -320,11 +351,6 @@ export function TurmaAvaliacao({
                     </button>
                   ))}
                 </div>
-              )}
-              {semElearning && grupoActual === "E-learning" && (
-                <p className="text-xs text-slate-500">
-                  O programa ainda não tem módulos de e-learning. O 2.º e o 9.º são as simulações. Os restantes, no separador Programa, aparecem aqui.
-                </p>
               )}
               <div className="flex gap-1 overflow-x-auto scrollbar-hide -mx-1 px-1">
                 {abasVisiveis.map(a => (
@@ -359,7 +385,7 @@ export function TurmaAvaliacao({
                       </th>
                     ))}
                     <th className="px-3 py-2 font-semibold text-right min-w-[120px]">
-                      {ccp ? "Nota" : cfg.modo === "modulos" ? `Nota ${unidadeNome.singular}` : "Nota final"}
+                      {cfg.modo === "modulos" ? `Nota ${unidadeNome.singular}` : "Nota final"}
                     </th>
                   </tr>
                 </thead>
@@ -444,14 +470,12 @@ export function TurmaAvaliacao({
             </p>
           </div>
 
-          {(ccp || cfg.modo === "modulos") && (
+          {cfg.modo === "modulos" && (
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100">
                 <p className="text-sm font-semibold text-slate-800">Pauta final</p>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {ccp
-                    ? `A nota final junta os quatro instrumentos: ${textoFormulaCcp(ccp)}. O e-learning é a média dos módulos (excepto 2 e 9) a meias com o OP2. Cada simulação é (1×CP1 + 1×CP2 + 2×CP3) / 4.`
-                    : `A nota de cada ${unidadeNome.singular} é a soma ponderada dos parâmetros. A nota final é a média das notas dos ${unidadeNome.plural}.`}
+                  {`A nota de cada ${unidadeNome.singular} é a soma ponderada dos parâmetros. A nota final é a média das notas dos ${unidadeNome.plural}.`}
                 </p>
               </div>
               <div className="overflow-x-auto">
@@ -459,11 +483,7 @@ export function TurmaAvaliacao({
                   <thead>
                     <tr className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
                       <th className="px-3 py-2 font-semibold">Formando</th>
-                      {ccp
-                        ? ccp.instrumentos.map(i => (
-                          <th key={i.id} className="px-3 py-2 font-semibold text-right">{i.titulo}</th>
-                        ))
-                        : abas.map(a => (
+                      {abas.map(a => (
                           <th key={a.id} className="px-3 py-2 font-semibold text-right">{a.label.split(" · ")[0]}</th>
                         ))}
                       <th className="px-3 py-2 font-semibold text-right">Final</th>
@@ -472,20 +492,12 @@ export function TurmaAvaliacao({
                   </thead>
                   <tbody>
                     {rows.map(f => {
-                      const final = ccp
-                        ? notaFinalCcp(ccp, mapa, f.id, programa.topicos)
-                        : notaFinalFormando(cfg, mapa, f.id, moduloIds);
+                      const final = notaFinalFormando(cfg, mapa, f.id, moduloIds);
                       const ok = aprovado(final, cfg.minimoAprovacao);
                       return (
                         <tr key={f.id} className="border-t border-slate-100">
                           <td className="px-3 py-2 font-medium text-slate-800">{f.nome}</td>
-                          {ccp
-                            ? ccp.instrumentos.map(i => (
-                              <td key={i.id} className="px-3 py-2 text-right text-slate-600">
-                                {formatNota(notaInstrumentoCcp(i, mapa, f.id, programa.topicos), cfg.unidade)}
-                              </td>
-                            ))
-                            : moduloIds.map(id => (
+                          {moduloIds.map(id => (
                               <td key={id} className="px-3 py-2 text-right text-slate-600">
                                 {formatNota(notaDeParametros(cfg.parametros, cfg.pesosEquitativos, mapa, f.id, id), cfg.unidade)}
                               </td>
@@ -505,7 +517,7 @@ export function TurmaAvaliacao({
             </div>
           )}
 
-          {!ccp && cfg.modo === "final" && (
+          {cfg.modo === "final" && (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
               Resultado: {rows.filter(f => aprovado(notaFinalFormando(cfg, mapa, f.id, moduloIds), cfg.minimoAprovacao) === true).length} aprovados ·{" "}
               {rows.filter(f => aprovado(notaFinalFormando(cfg, mapa, f.id, moduloIds), cfg.minimoAprovacao) === false).length} não aprovados ·{" "}

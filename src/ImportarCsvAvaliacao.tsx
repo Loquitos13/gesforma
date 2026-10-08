@@ -5,6 +5,7 @@ import {
   colunaLetra,
   colunasParticipantes,
   parametrosDoCsv,
+  limparGrelha,
   parseCsv,
   refCelula,
   segmentosGrelha,
@@ -27,7 +28,8 @@ export function ImportarCsvAvaliacao({
   onAplicar: (parametros: ParametroAvaliacao[]) => void;
   compacto?: boolean;
 }) {
-  const [grid, setGrid] = useState<string[][] | null>(null);
+  const [folhas, setFolhas] = useState<{ nome: string; grid: string[][] }[]>([]);
+  const [folhaIdx, setFolhaIdx] = useState(0);
   const [nomeFicheiro, setNomeFicheiro] = useState("");
   const [papel, setPapel] = useState<PapelCelula>("nome");
   const papelRef = useRef<PapelCelula>("nome");
@@ -38,6 +40,7 @@ export function ImportarCsvAvaliacao({
   const [aberto, setAberto] = useState(!compacto);
   const mediaLabel = modo === "modulos" ? `Média do ${unidade}` : "Média final";
 
+  const grid = folhas[folhaIdx]?.grid ?? null;
   const participantes = useMemo(() => (grid ? colunasParticipantes(grid) : new Set<number>()), [grid]);
   const blocos = useMemo(() => (grid ? blocosDoCsv(grid) : []), [grid]);
   const segmentos = useMemo(() => (grid ? segmentosGrelha(grid) : []), [grid]);
@@ -50,6 +53,15 @@ export function ImportarCsvAvaliacao({
   function escolher(next: PapelCelula) {
     papelRef.current = next;
     setPapel(next);
+  }
+
+  function escolherFolha(i: number) {
+    setFolhaIdx(i);
+    setNome(null);
+    setValor(null);
+    setMedia(null);
+    setPapel("nome");
+    papelRef.current = "nome";
   }
 
   function marcar(celula: Celula) {
@@ -73,21 +85,44 @@ export function ImportarCsvAvaliacao({
   }
 
   async function lerFicheiro(file: File) {
-    const text = await file.text();
-    const linhas = parseCsv(text);
-    if (!linhas.length) {
-      setGrid(null);
-      setErroFicheiro("O ficheiro não tem células.");
-      return;
+    const lower = file.name.toLowerCase();
+    try {
+      let lista: { nome: string; grid: string[][] }[];
+      if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
+        const XLSX = await import("xlsx");
+        const livro = XLSX.read(await file.arrayBuffer(), { type: "array" });
+        lista = livro.SheetNames.map(nome => {
+          const bruto = XLSX.utils.sheet_to_json(livro.Sheets[nome]!, {
+            header: 1,
+            raw: false,
+            defval: "",
+          }) as unknown[][];
+          return {
+            nome,
+            grid: limparGrelha(bruto.map(linha => (Array.isArray(linha) ? linha : []).map(celula => String(celula ?? "").trim()))),
+          };
+        }).filter(folha => folha.grid.length);
+      } else {
+        lista = [{ nome: file.name, grid: parseCsv(await file.text()) }];
+      }
+      if (!lista.length) {
+        setFolhas([]);
+        setErroFicheiro("O ficheiro não tem células.");
+        return;
+      }
+      setErroFicheiro("");
+      setNomeFicheiro(file.name);
+      setFolhas(lista);
+      setFolhaIdx(0);
+      setNome(null);
+      setValor(null);
+      setMedia(null);
+      setPapel("nome");
+      papelRef.current = "nome";
+    } catch {
+      setFolhas([]);
+      setErroFicheiro("Não consegui ler este ficheiro. Use CSV ou Excel (.xlsx).");
     }
-    setErroFicheiro("");
-    setNomeFicheiro(file.name);
-    setGrid(linhas);
-    setNome(null);
-    setValor(null);
-    setMedia(null);
-    setPapel("nome");
-    papelRef.current = "nome";
   }
 
   const visiveis = grid ?? [];
@@ -97,7 +132,7 @@ export function ImportarCsvAvaliacao({
   if (compacto && !aberto) {
     return (
       <button type="button" onClick={() => setAberto(true)} className="text-xs font-semibold text-slate-600 underline underline-offset-2">
-        Importar este bloco de um CSV
+        Importar este bloco de um CSV ou Excel
       </button>
     );
   }
@@ -105,16 +140,16 @@ export function ImportarCsvAvaliacao({
   return (
     <div className={`rounded-xl border border-slate-200 bg-white space-y-4 ${compacto ? "p-3" : "p-4 sm:p-5"}`}>
       <div>
-        <p className="text-sm font-semibold text-slate-800">Importar parâmetros de um CSV</p>
+        <p className="text-sm font-semibold text-slate-800">Importar parâmetros de CSV ou Excel</p>
         <p className="text-xs text-slate-500 mt-0.5">
-          Exporte cada separador da folha (simulação, módulos, projeto, avaliação final). As colunas de participantes ficam de fora, mesmo quando a grelha vai até BM ou mais. Use um bloco encontrado ou escolha à mão a célula do nome, a do peso e a da {mediaLabel.toLowerCase()}.
+          Aceita CSV e Excel (.xlsx). Num livro com vários separadores, escolha a folha. As colunas de participantes ficam de fora, mesmo quando a grelha vai até BM ou mais. Use um bloco encontrado ou escolha à mão a célula do nome, a do peso e a da {mediaLabel.toLowerCase()}.
         </p>
       </div>
       <label className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer">
-        Escolher CSV
+        Escolher CSV ou Excel
         <input
           type="file"
-          accept=".csv,text/csv"
+          accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
           className="sr-only"
           onChange={e => {
             const file = e.target.files?.[0];
@@ -127,6 +162,22 @@ export function ImportarCsvAvaliacao({
       {erroFicheiro && <p className="text-xs text-red-600">{erroFicheiro}</p>}
       {grid && (
         <>
+          {folhas.length > 1 && (
+            <div className="flex gap-1 overflow-x-auto">
+              {folhas.map((folha, i) => (
+                <button
+                  key={folha.nome}
+                  type="button"
+                  onClick={() => escolherFolha(i)}
+                  className={`px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border whitespace-nowrap ${
+                    i === folhaIdx ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {folha.nome}
+                </button>
+              ))}
+            </div>
+          )}
           <p className="text-xs text-slate-500">
             {colunas} colunas, até {colunaLetra(colunas - 1)}.
             {gruposParticipantes > 0

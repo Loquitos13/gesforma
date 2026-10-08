@@ -62,7 +62,7 @@ import { useNotificacoes } from "./NotificacoesContext";
 import { presencasDaSessao, useCriteriosAvaliacao, useDtpResumo, useTurmaPedagogia, type PresencaRow } from "./PedagogiaContext";
 import { EquipaView } from "./EquipaView";
 import { UsersView, roleLabel } from "./UsersView";
-import { ViewLoadingOverlay } from "./ViewLoading";
+import { FileDialogPaint, ViewLoadingOverlay } from "./ViewLoading";
 import { armViewLoading } from "./viewLoadingBus";
 import { EmailXmlEditor } from "./EmailTemplateEditor";
 import {
@@ -5521,6 +5521,7 @@ function AppShell() {
               {renderView()}
             </main>
             <ViewLoadingOverlay />
+            <FileDialogPaint />
           </div>
 
           <footer className="bg-white border-t border-slate-100 px-5 py-2.5 text-center flex-shrink-0">

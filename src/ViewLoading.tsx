@@ -62,6 +62,44 @@ export function ViewLoadingOverlay() {
   );
 }
 
+/**
+ * O Chrome descarta a camada da área de scroll ao abrir o diálogo de ficheiro.
+ * Um reflow ao focar e ao fechar volta a desenhar a ficha.
+ */
+export function FileDialogPaint() {
+  useEffect(() => {
+    let dialogo = false;
+    const repaint = () => {
+      const main = document.querySelector("main");
+      if (!main) return;
+      const anterior = main.style.overflow;
+      main.style.overflow = "hidden";
+      void main.offsetHeight;
+      main.style.overflow = anterior;
+    };
+    const onFocusIn = (event: FocusEvent) => {
+      const alvo = event.target;
+      if (!(alvo instanceof HTMLInputElement) || alvo.type !== "file") return;
+      dialogo = true;
+      requestAnimationFrame(repaint);
+    };
+    const onWindowFocus = () => {
+      if (!dialogo) return;
+      dialogo = false;
+      const ativo = document.activeElement;
+      if (ativo instanceof HTMLInputElement && ativo.type === "file") ativo.blur();
+      requestAnimationFrame(repaint);
+    };
+    document.addEventListener("focusin", onFocusIn);
+    window.addEventListener("focus", onWindowFocus);
+    return () => {
+      document.removeEventListener("focusin", onFocusIn);
+      window.removeEventListener("focus", onWindowFocus);
+    };
+  }, []);
+  return null;
+}
+
 /** Marca a view como ocupada por um fenómeno que não passa pelo GET da API. */
 export function useViewLoading(active: boolean) {
   useEffect(() => {

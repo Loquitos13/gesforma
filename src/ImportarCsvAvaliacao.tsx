@@ -126,12 +126,13 @@ export function ImportarCsvAvaliacao({
           A folha aparece como no ficheiro, com cores, letras e todas as colunas. Cada célula traz a fórmula do Excel: clique para a ler. As colunas de participantes continuam visíveis e não servem de parâmetro. Escolha o nome, o peso e a {mediaLabel.toLowerCase()} nas restantes, ou use um bloco encontrado.
         </p>
       </div>
-      <label className="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer">
+      <label className="relative inline-flex items-center overflow-hidden px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer">
         Escolher CSV ou Excel
         <input
           type="file"
           accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-          className="sr-only"
+          aria-label="Escolher CSV ou Excel"
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
           onChange={e => {
             const file = e.target.files?.[0];
             e.target.value = "";

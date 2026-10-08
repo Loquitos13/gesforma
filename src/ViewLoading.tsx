@@ -83,6 +83,13 @@ export function FileDialogPaint() {
       dialogo = true;
       requestAnimationFrame(repaint);
     };
+    const libertar = (event: Event) => {
+      const alvo = event.target;
+      if (!(alvo instanceof HTMLInputElement) || alvo.type !== "file") return;
+      dialogo = false;
+      alvo.blur();
+      requestAnimationFrame(repaint);
+    };
     const onWindowFocus = () => {
       if (!dialogo) return;
       dialogo = false;
@@ -91,9 +98,13 @@ export function FileDialogPaint() {
       requestAnimationFrame(repaint);
     };
     document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("cancel", libertar);
+    document.addEventListener("change", libertar);
     window.addEventListener("focus", onWindowFocus);
     return () => {
       document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("cancel", libertar);
+      document.removeEventListener("change", libertar);
       window.removeEventListener("focus", onWindowFocus);
     };
   }, []);

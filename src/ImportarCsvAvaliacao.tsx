@@ -320,6 +320,9 @@ function GrelhaFolha({
           ))}
         </tbody>
       </table>
+      {vista && soma > 720 && (
+        <p className="sticky left-0 px-2 py-1 text-[11px] text-slate-400">Deslize a folha para o lado. A ficha fica no sítio.</p>
+      )}
     </div>
   );
 }

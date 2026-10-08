@@ -1394,7 +1394,10 @@ export function CursoFichaView({
                 modo={data.avaliacaoCurso.modo}
                 unidade={data.organizacaoPrograma === "livre" && accent !== "fin" ? "capítulo" : "módulo"}
                 saveClass={t.save}
-                onAplicar={parametros => patchAv({ parametros })}
+                onAplicar={parametros => patchAv({
+                  parametros,
+                  pesosEquitativos: parametros.length > 0 && parametros.every(p => p.peso === parametros[0]?.peso),
+                })}
               />
 
               {temAvaliacao && (

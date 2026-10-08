@@ -470,27 +470,18 @@ function PainelSite({
   data,
   accent,
   turmas,
-  onRecolher,
 }: {
   data: CursoSite;
   accent: CursoAccent;
   turmas: CursoTurmaPrev[];
-  onRecolher?: () => void;
 }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Página no website</p>
-        <div className="flex items-center gap-2">
-          <span className={`text-[11px] font-semibold ${data.visivelSite ? "text-emerald-600" : "text-slate-400"}`}>
-            {data.visivelSite ? "Publicada" : "Rascunho"}
-          </span>
-          {onRecolher && (
-            <button type="button" onClick={onRecolher} className="text-[11px] font-semibold text-slate-500 hover:text-slate-800">
-              Recolher
-            </button>
-          )}
-        </div>
+        <span className={`text-[11px] font-semibold ${data.visivelSite ? "text-emerald-600" : "text-slate-400"}`}>
+          {data.visivelSite ? "Publicada" : "Rascunho"}
+        </span>
       </div>
       <SitePreview data={data} accent={accent} turmas={turmas} />
     </div>
@@ -1647,12 +1638,7 @@ export function CursoFichaView({
               id="preview-website"
               className={`w-[380px] pr-5 pl-3 transition-transform duration-300 ease-out motion-reduce:transition-none ${previewRecolhida ? "translate-x-full" : "translate-x-0"}`}
             >
-              <PainelSite
-                data={data}
-                accent={accent}
-                turmas={turmasCurso}
-                onRecolher={() => setPreviewRecolhida(true)}
-              />
+              <PainelSite data={data} accent={accent} turmas={turmasCurso} />
             </div>
           </div>
         </aside>

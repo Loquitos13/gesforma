@@ -361,7 +361,7 @@ function CelulaTd({
         </div>
       )}
       {cel.tipo === "texto" && cel.papel !== "nome" && (
-        <span className="block whitespace-normal leading-snug">{cel.texto}</span>
+        <span className="block whitespace-pre-line leading-snug">{cel.texto}</span>
       )}
       {cel.tipo === "valor" && (
         <span className="relative block px-1 py-1 leading-snug" title={cel.formula ? `=${cel.formula}` : cel.texto}>

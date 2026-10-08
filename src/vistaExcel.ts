@@ -1,5 +1,3 @@
-import { limparGrelha } from "./csvAvaliacao";
-
 export type EstiloCelula = {
   bg?: string;
   cor?: string;
@@ -24,6 +22,8 @@ export type VistaFolha = {
 export type FolhaImportada = {
   nome: string;
   grid: string[][];
+  /** Fórmula de cada célula, sem o "=" inicial. Vazio quando a célula é um valor. */
+  formulas: string[][];
   vista: VistaFolha | null;
 };
 
@@ -50,6 +50,7 @@ type Xlsx = {
   read: (data: ArrayBuffer, opts: Record<string, unknown>) => Livro;
   utils: {
     decode_range: (ref: string) => { s: { r: number; c: number }; e: { r: number; c: number } };
+    decode_cell: (addr: string) => { r: number; c: number };
     sheet_to_json: (sheet: unknown, opts: Record<string, unknown>) => unknown[][];
   };
 };
@@ -104,7 +105,30 @@ function grelhaAlinhada(XLSX: Xlsx, sheet: Record<string, unknown>) {
     }
     linhas.push(linha);
   }
-  return limparGrelha(linhas);
+  return linhas;
+}
+
+function formulasAlinhadas(XLSX: Xlsx, sheet: Record<string, unknown>, linhas: number, colunas: number) {
+  const out = Array.from({ length: linhas }, () => Array.from({ length: colunas }, () => ""));
+  for (const key of Object.keys(sheet)) {
+    if (key.startsWith("!")) continue;
+    const formula = (sheet[key] as { f?: unknown } | undefined)?.f;
+    if (typeof formula !== "string" || !formula) continue;
+    const addr = XLSX.utils.decode_cell(key);
+    if (addr.r >= 0 && addr.r < linhas && addr.c >= 0 && addr.c < colunas) out[addr.r][addr.c] = formula;
+  }
+  return out;
+}
+
+function cortarVazias(grid: string[][], formulas: string[][]) {
+  let n = grid.length;
+  while (n > 0) {
+    const texto = grid[n - 1]?.every(celula => celula === "") ?? true;
+    const formula = formulas[n - 1]?.every(celula => celula === "") ?? true;
+    if (!texto || !formula) break;
+    n -= 1;
+  }
+  return { grid: grid.slice(0, n), formulas: formulas.slice(0, n) };
 }
 
 function estiloDe(xf: Xf | undefined, livro: Livro): EstiloCelula | null {
@@ -179,13 +203,17 @@ export function vistaDaFolha(livro: Livro, indice: number, grid: string[][]): Vi
 
 export async function lerLivroExcel(data: ArrayBuffer): Promise<FolhaImportada[]> {
   const XLSX = await import("xlsx") as unknown as Xlsx;
-  const livro = XLSX.read(data, { type: "array", cellStyles: true, bookFiles: true });
+  const livro = XLSX.read(data, { type: "array", cellStyles: true, cellFormula: true, bookFiles: true });
   return livro.SheetNames.map((nome, indice) => {
-    const grid = grelhaAlinhada(XLSX, livro.Sheets[nome] ?? {});
+    const sheet = livro.Sheets[nome] ?? {};
+    const bruto = grelhaAlinhada(XLSX, sheet);
+    const largura = bruto.reduce((m, linha) => Math.max(m, linha.length), 0);
+    const cortado = cortarVazias(bruto, formulasAlinhadas(XLSX, sheet, bruto.length, largura));
     return {
       nome,
-      grid,
-      vista: grid.length ? vistaDaFolha(livro, indice, grid) : null,
+      grid: cortado.grid,
+      formulas: cortado.formulas,
+      vista: cortado.grid.length ? vistaDaFolha(livro, indice, cortado.grid) : null,
     };
   }).filter(folha => folha.grid.length);
 }

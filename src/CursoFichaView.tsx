@@ -465,6 +465,37 @@ function EditorBlock({
   );
 }
 
+function PainelSite({
+  data,
+  accent,
+  turmas,
+  onRecolher,
+}: {
+  data: CursoSite;
+  accent: CursoAccent;
+  turmas: CursoTurmaPrev[];
+  onRecolher?: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Página no website</p>
+        <div className="flex items-center gap-2">
+          <span className={`text-[11px] font-semibold ${data.visivelSite ? "text-emerald-600" : "text-slate-400"}`}>
+            {data.visivelSite ? "Publicada" : "Rascunho"}
+          </span>
+          {onRecolher && (
+            <button type="button" onClick={onRecolher} className="text-[11px] font-semibold text-slate-500 hover:text-slate-800">
+              Recolher
+            </button>
+          )}
+        </div>
+      </div>
+      <SitePreview data={data} accent={accent} turmas={turmas} />
+    </div>
+  );
+}
+
 function SitePreview({ data, accent, turmas }: { data: CursoSite; accent: CursoAccent; turmas: CursoTurmaPrev[] }) {
   const t = theme(accent);
   const bullets = (txt: string) =>
@@ -612,6 +643,7 @@ export function CursoFichaView({
   const [gravando, setGravando] = useState(false);
   const [cursoPersistId, setCursoPersistId] = useState<number | undefined>(curso?.id);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewRecolhida, setPreviewRecolhida] = useState(false);
   const [novoLocal, setNovoLocal] = useState(false);
   const [localNome, setLocalNome] = useState("");
   const [localMorada, setLocalMorada] = useState("");
@@ -895,8 +927,8 @@ export function CursoFichaView({
         </div>
       </header>
 
-      <div className="flex-1 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-0 xl:gap-5 p-4 sm:p-5">
-        <div className={`${previewOpen ? "hidden lg:block" : ""} space-y-4 min-w-0`}>
+      <div className="flex-1 flex flex-col xl:flex-row min-w-0 items-stretch">
+        <div data-ficha-editor className={`${previewOpen ? "hidden lg:block" : ""} flex-1 min-w-0 space-y-4 p-4 sm:p-5`}>
           {tab === "identidade" && (
             <div className="space-y-4">
               <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-4">
@@ -1534,15 +1566,35 @@ export function CursoFichaView({
           )}
         </div>
 
-        <aside className={`${previewOpen ? "block" : "hidden"} xl:block min-w-0`}>
-          <div className="xl:sticky xl:top-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Página no website</p>
-              <span className={`text-[11px] font-semibold ${data.visivelSite ? "text-emerald-600" : "text-slate-400"}`}>
-                {data.visivelSite ? "Publicada" : "Rascunho"}
-              </span>
+        <aside className={`${previewOpen ? "block" : "hidden"} xl:hidden min-w-0 p-4 sm:p-5`}>
+          <PainelSite data={data} accent={accent} turmas={turmasCurso} />
+        </aside>
+        <aside className="hidden xl:flex shrink-0 items-start pt-5">
+          <button
+            type="button"
+            onClick={() => setPreviewRecolhida(v => !v)}
+            aria-expanded={!previewRecolhida}
+            aria-controls="preview-website"
+            aria-label={previewRecolhida ? "Mostrar a página do website" : "Recolher a página do website"}
+            className="sticky top-5 z-10 flex w-9 flex-col items-center gap-3 self-start rounded-l-xl border border-slate-200 bg-white px-1 py-3 text-slate-500 shadow-sm hover:text-slate-800"
+          >
+            <svg viewBox="0 0 20 20" className={`h-4 w-4 transition-transform duration-300 ease-out motion-reduce:transition-none ${previewRecolhida ? "rotate-180" : ""}`} aria-hidden>
+              <path d="M8 5l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-semibold uppercase tracking-wide">Página</span>
+          </button>
+          <div data-preview-coluna className={`sticky top-5 min-w-0 self-start overflow-hidden transition-[width] duration-300 ease-out motion-reduce:transition-none ${previewRecolhida ? "w-0" : "w-[380px]"}`}>
+            <div
+              id="preview-website"
+              className={`w-[380px] pr-5 pl-3 transition-transform duration-300 ease-out motion-reduce:transition-none ${previewRecolhida ? "translate-x-full" : "translate-x-0"}`}
+            >
+              <PainelSite
+                data={data}
+                accent={accent}
+                turmas={turmasCurso}
+                onRecolher={() => setPreviewRecolhida(true)}
+              />
             </div>
-            <SitePreview data={data} accent={accent} turmas={turmasCurso} />
           </div>
         </aside>
       </div>

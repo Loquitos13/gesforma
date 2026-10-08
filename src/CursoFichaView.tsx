@@ -403,7 +403,7 @@ function MediaCard({
           const file = e.dataTransfer.files?.[0];
           if (file) onChange({ name: file.name, url: URL.createObjectURL(file) });
         }}
-        className={`relative block w-full ${tall ? "h-40" : "h-32"} rounded-xl border-2 border-dashed border-slate-200 overflow-hidden bg-slate-50 ${t.hoverMedia} transition-colors text-left group cursor-pointer`}
+        className={`relative block w-full ${tall ? "h-40" : "h-32"} rounded-xl border-2 border-dashed border-slate-200 overflow-clip bg-slate-50 ${t.hoverMedia} transition-colors text-left group cursor-pointer`}
       >
         {value?.url ? (
           <img src={value.url} alt="" className="pointer-events-none absolute inset-0 w-full h-full object-cover" />

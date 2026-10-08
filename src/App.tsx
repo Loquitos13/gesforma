@@ -5532,7 +5532,7 @@ function AppShell() {
             </div>
           </header>
 
-          <div className="relative flex-1 min-h-0 overflow-hidden">
+          <div className="relative flex-1 min-h-0 overflow-clip">
             <main className="h-full p-4 sm:p-5 overflow-auto">
               {renderView()}
             </main>

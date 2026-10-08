@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiCursoFicha, type Regime } from "./api";
+import { estruturaCcpPadrao, notaFinalCcp, parseEstruturaCcp, type EstruturaCcp } from "./avaliacaoCcp";
 import { idCursoPorNome } from "./cursoLocais";
+import type { TopicoPrograma } from "./cursoPrograma";
 import { useLists } from "./ListsContext";
 
 export type ModoAvaliacao = "modulos" | "final";
@@ -25,29 +27,27 @@ export type AvaliacaoCurso = {
   parametros: ParametroAvaliacao[];
   /** Quando existe, a grelha da turma usa estes momentos em vez dos módulos do programa. */
   momentos?: MomentoAvaliacao[];
+  /** O CCP não usa uma lista única: e-learning, duas simulações, projeto e nota final. */
+  estrutura?: "ccp";
+  ccp?: EstruturaCcp;
 };
 
 export function cursoECcp(nome: string | undefined) {
   return /ccp/i.test(nome ?? "");
 }
 
-/** Grelha de observação das simulações pedagógicas do CCP (inicial e final). */
+/** CCP: e-learning (todos os módulos excepto 2 e 9), simulações desses módulos, projeto e nota final. */
 export function avaliacaoCcp(): AvaliacaoCurso {
   return {
     modo: "modulos",
-    escalaMin: 0,
-    escalaMax: 20,
-    unidade: "valores",
-    minimoAprovacao: 10,
+    escalaMin: 1,
+    escalaMax: 5,
+    unidade: "pontos",
+    minimoAprovacao: 3,
     pesosEquitativos: false,
-    parametros: [
-      { id: "ccp-planificacao", label: "Planificação da sessão", peso: 20 },
-      { id: "ccp-comunicacao", label: "Comunicação e relação pedagógica", peso: 20 },
-      { id: "ccp-metodos", label: "Métodos e técnicas", peso: 20 },
-      { id: "ccp-recursos", label: "Recursos didáticos", peso: 15 },
-      { id: "ccp-grupo", label: "Gestão do grupo e do tempo", peso: 15 },
-      { id: "ccp-avaliacao", label: "Avaliação das aprendizagens", peso: 10 },
-    ],
+    parametros: [],
+    estrutura: "ccp",
+    ccp: estruturaCcpPadrao(),
   };
 }
 
@@ -110,6 +110,8 @@ export function parseAvaliacaoCurso(payload: Record<string, unknown> | undefined
     minimoAprovacao: Number.isFinite(minimo) ? minimo : base.minimoAprovacao,
     pesosEquitativos: o.pesosEquitativos !== false,
     parametros,
+    estrutura: o.estrutura === "ccp" ? "ccp" : undefined,
+    ccp: o.estrutura === "ccp" ? parseEstruturaCcp(o.ccp) ?? estruturaCcpPadrao() : undefined,
     momentos: Array.isArray(o.momentos)
       ? o.momentos.flatMap(item => {
         if (!item || typeof item !== "object") return [];
@@ -175,7 +177,9 @@ export function notaFinalFormando(
   mapa: Map<string, number | null>,
   formandoId: number,
   moduloIds: string[],
+  topicos: Pick<TopicoPrograma, "id" | "titulo">[] = [],
 ): number | null {
+  if (cfg.estrutura === "ccp" && cfg.ccp) return notaFinalCcp(cfg.ccp, mapa, formandoId, topicos);
   if (cfg.modo === "final") return notaPonderada(cfg, mapa, formandoId, MODULO_FINAL);
   if (!moduloIds.length) return null;
   const notas: number[] = [];
@@ -241,7 +245,7 @@ export function useAvaliacaoCurso(regime: Regime, cursoNome: string | undefined)
       .then(r => {
         if (!alive) return;
         const parsed = parseAvaliacaoCurso(r.ficha?.payload);
-        setCfg(parsed.parametros.length === 0 && ccp ? avaliacaoCcp() : parsed);
+        setCfg(ccp && parsed.estrutura !== "ccp" ? avaliacaoCcp() : parsed);
       })
       .catch(() => { if (alive) setCfg(ccp ? avaliacaoCcp() : avaliacaoPadrao()); });
     return () => { alive = false; };

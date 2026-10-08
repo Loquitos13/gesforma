@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiSaveTurmaAvaliacao, apiTurmaAvaliacao, type Regime } from "./api";
 import {
+  grelhasCcp,
+  notaDeParametros,
+  notaFinalCcp,
+  notaInstrumentoCcp,
+  textoFormulaCcp,
+} from "./avaliacaoCcp";
+import {
   aprovado,
   chaveNota,
   clampNota,
@@ -9,11 +16,19 @@ import {
   mapaNotas,
   MODULO_FINAL,
   notaFinalFormando,
-  notaPonderada,
   useAvaliacaoCurso,
   type NotaAvaliacao,
+  type ParametroAvaliacao,
 } from "./avaliacaoCurso";
 import { labelTopico, useProgramaDoCurso } from "./cursoPrograma";
+
+type Aba = {
+  id: string;
+  label: string;
+  grupo: string;
+  parametros: ParametroAvaliacao[];
+  pesosEquitativos: boolean;
+};
 
 type FormandoRow = { id: number; nome: string };
 
@@ -60,19 +75,32 @@ export function TurmaAvaliacao({
   const gold = accent === "gold";
   const cfg = useAvaliacaoCurso(regime, cursoNome);
   const programa = useProgramaDoCurso(regime, cursoNome);
-  const abas = useMemo(() => {
-    if (cfg.modo !== "modulos") return [{ id: MODULO_FINAL, label: "Avaliação final" }];
+  const ccp = cfg.estrutura === "ccp" && cfg.ccp ? cfg.ccp : null;
+  const abas = useMemo((): Aba[] => {
+    if (ccp) return grelhasCcp(ccp, programa.topicos);
+    const pesos = cfg.pesosEquitativos;
+    const params = cfg.parametros;
+    if (cfg.modo !== "modulos") return [{ id: MODULO_FINAL, label: "Avaliação final", grupo: "", parametros: params, pesosEquitativos: pesos }];
     if (programa.topicos.length) {
       return programa.topicos.map((t, i) => ({
         id: t.id,
         label: labelTopico(programa.organizacao, i, t),
+        grupo: "",
+        parametros: params,
+        pesosEquitativos: pesos,
       }));
     }
-    if (cfg.momentos?.length) return cfg.momentos.map(m => ({ id: m.id, label: m.label }));
+    if (cfg.momentos?.length) {
+      return cfg.momentos.map(m => ({ id: m.id, label: m.label, grupo: "", parametros: params, pesosEquitativos: pesos }));
+    }
     return [];
-  }, [cfg.modo, cfg.momentos, programa.organizacao, programa.topicos]);
+  }, [ccp, cfg.modo, cfg.momentos, cfg.parametros, cfg.pesosEquitativos, programa.organizacao, programa.topicos]);
+  const grupos = useMemo(() => [...new Set(abas.map(a => a.grupo).filter(Boolean))], [abas]);
+  const [grupo, setGrupo] = useState("");
+  const grupoActual = grupos.includes(grupo) ? grupo : (grupos[0] ?? "");
+  const abasVisiveis = grupoActual ? abas.filter(a => a.grupo === grupoActual) : abas;
   const moduloIds = useMemo(() => (cfg.modo === "modulos" ? abas.map(a => a.id) : []), [abas, cfg.modo]);
-  const [ativo, setAtivo] = useState(0);
+  const [ativoId, setAtivoId] = useState("");
   const [notas, setNotas] = useState<NotaAvaliacao[]>([]);
   const [sel, setSel] = useState<Sel | null>(null);
   const [dragging, setDragging] = useState<"range" | "fill" | null>(null);
@@ -96,8 +124,9 @@ export function TurmaAvaliacao({
   const handleBg = gold ? "bg-amber-500" : "bg-blue-600";
 
   useEffect(() => {
-    setAtivo(0);
-  }, [cfg.modo, turmaId]);
+    setAtivoId("");
+    setGrupo(ccp ? "E-learning" : "");
+  }, [cfg.modo, turmaId, ccp]);
 
   useEffect(() => {
     let alive = true;
@@ -121,8 +150,9 @@ export function TurmaAvaliacao({
 
   useEffect(() => () => { if (saveTimer.current) window.clearTimeout(saveTimer.current); }, []);
 
-  const moduloId = abas[ativo]?.id ?? MODULO_FINAL;
-  const cols = cfg.parametros;
+  const aba = abasVisiveis.find(a => a.id === ativoId) ?? abasVisiveis[0];
+  const moduloId = aba?.id ?? MODULO_FINAL;
+  const cols = aba?.parametros ?? [];
   const rows = formandos;
   moduloRef.current = moduloId;
   rowsRef.current = rows;
@@ -211,9 +241,10 @@ export function TurmaAvaliacao({
   }
 
   const unidadeNome = programa.unidade;
-  const faltaParams = cfg.parametros.length === 0;
-  const faltaModulos = cfg.modo === "modulos" && abas.length === 0;
-  const grelhaMomentos = cfg.modo === "modulos" && programa.topicos.length === 0 && (cfg.momentos?.length ?? 0) > 0;
+  const faltaParams = ccp ? abas.length === 0 : cfg.parametros.length === 0;
+  const faltaModulos = !ccp && cfg.modo === "modulos" && abas.length === 0;
+  const grelhaMomentos = !ccp && cfg.modo === "modulos" && programa.topicos.length === 0 && (cfg.momentos?.length ?? 0) > 0;
+  const semElearning = !!ccp && !abas.some(a => a.grupo === "E-learning" && !a.id.startsWith("ccp:"));
 
   return (
     <div className="space-y-4">
@@ -223,11 +254,13 @@ export function TurmaAvaliacao({
           <p className="text-xs text-slate-500 mt-0.5">
             {faltaParams
               ? "Defina os parâmetros na ficha do curso (separador Avaliação) para lançar notas."
-              : grelhaMomentos
-                ? "Grelha do CCP: a mesma observação na simulação inicial e na final. A nota do certificado é a média das duas."
-                : cfg.modo === "modulos"
-                  ? `Por ${unidadeNome.singular}: preencha todos os parâmetros de cada ${unidadeNome.singular} para cada formando. Arraste o quadrado da seleção para copiar um valor, como no Excel.`
-                  : "Avaliação final: cada parâmetro uma vez por formando. Arraste o quadrado da seleção para copiar um valor, como no Excel."}
+              : ccp
+                ? `E-learning em todos os módulos do programa excepto o 2 e o 9. O módulo 2 é a simulação inicial e o 9 a final. O projeto avalia-se à parte. Nota final: ${textoFormulaCcp(ccp)}.`
+                : grelhaMomentos
+                  ? "Grelha do CCP: a mesma observação na simulação inicial e na final. A nota do certificado é a média das duas."
+                  : cfg.modo === "modulos"
+                    ? `Por ${unidadeNome.singular}: preencha todos os parâmetros de cada ${unidadeNome.singular} para cada formando. Arraste o quadrado da seleção para copiar um valor, como no Excel.`
+                    : "Avaliação final: cada parâmetro uma vez por formando. Arraste o quadrado da seleção para copiar um valor, como no Excel."}
           </p>
           {!faltaParams && (
             <div className="flex flex-wrap gap-1.5 mt-2">
@@ -237,9 +270,11 @@ export function TurmaAvaliacao({
               <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">
                 Aprovação ≥ {formatNota(cfg.minimoAprovacao, cfg.unidade)}
               </span>
+              {!ccp && (
               <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">
                 {cfg.pesosEquitativos ? "Pesos equitativos" : "Pesos individuais"}
               </span>
+              )}
             </div>
           )}
         </div>
@@ -268,20 +303,43 @@ export function TurmaAvaliacao({
 
       {!faltaParams && !faltaModulos && formandos.length > 0 && (
         <>
-          {cfg.modo === "modulos" && (
-            <div className="flex gap-1 overflow-x-auto scrollbar-hide -mx-1 px-1">
-              {abas.map((a, i) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => { setAtivo(i); setSel(null); }}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap border ${
-                    i === ativo ? `${accentBtn} border-transparent` : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  {a.label}
-                </button>
-              ))}
+          {(ccp || cfg.modo === "modulos") && (
+            <div className="space-y-2">
+              {grupos.length > 0 && (
+                <div className="flex gap-1 overflow-x-auto scrollbar-hide -mx-1 px-1">
+                  {grupos.map(g => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => { setGrupo(g); setAtivoId(""); setSel(null); }}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap border ${
+                        g === grupoActual ? `${accentBtn} border-transparent` : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {semElearning && grupoActual === "E-learning" && (
+                <p className="text-xs text-slate-500">
+                  O programa ainda não tem módulos de e-learning. O 2.º e o 9.º são as simulações. Os restantes, no separador Programa, aparecem aqui.
+                </p>
+              )}
+              <div className="flex gap-1 overflow-x-auto scrollbar-hide -mx-1 px-1">
+                {abasVisiveis.map(a => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => { setAtivoId(a.id); setSel(null); }}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap border ${
+                      a.id === moduloId ? `${accentBtn} border-transparent` : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {a.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -296,18 +354,18 @@ export function TurmaAvaliacao({
                         <span className="block normal-case text-slate-700">{p.label}</span>
                         {p.moodle && <span className="mt-0.5 inline-block normal-case text-[10px] font-bold uppercase tracking-wide text-violet-700">Moodle</span>}
                         <span className="block font-medium text-slate-400">
-                          {cfg.pesosEquitativos ? `1/${cols.length}` : `${p.peso}`}
+                          {aba?.pesosEquitativos ? `1/${cols.length}` : `${p.peso}`}
                         </span>
                       </th>
                     ))}
                     <th className="px-3 py-2 font-semibold text-right min-w-[120px]">
-                      {cfg.modo === "modulos" ? `Nota ${unidadeNome.singular}` : "Nota final"}
+                      {ccp ? "Nota" : cfg.modo === "modulos" ? `Nota ${unidadeNome.singular}` : "Nota final"}
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((f, r) => {
-                    const notaMod = notaPonderada(cfg, mapa, f.id, moduloId);
+                    const notaMod = notaDeParametros(cols, aba?.pesosEquitativos ?? cfg.pesosEquitativos, mapa, f.id, moduloId);
                     const ok = aprovado(notaMod, cfg.minimoAprovacao);
                     return (
                       <tr key={f.id} className="border-t border-slate-100">
@@ -386,12 +444,14 @@ export function TurmaAvaliacao({
             </p>
           </div>
 
-          {cfg.modo === "modulos" && (
+          {(ccp || cfg.modo === "modulos") && (
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100">
                 <p className="text-sm font-semibold text-slate-800">Pauta final</p>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  A nota de cada {unidadeNome.singular} é a soma ponderada dos parâmetros. A nota final é a média das notas dos {unidadeNome.plural}.
+                  {ccp
+                    ? `A nota final junta os quatro instrumentos: ${textoFormulaCcp(ccp)}. O e-learning é a média dos módulos (excepto 2 e 9) a meias com o OP2. Cada simulação é (1×CP1 + 1×CP2 + 2×CP3) / 4.`
+                    : `A nota de cada ${unidadeNome.singular} é a soma ponderada dos parâmetros. A nota final é a média das notas dos ${unidadeNome.plural}.`}
                 </p>
               </div>
               <div className="overflow-x-auto">
@@ -399,25 +459,37 @@ export function TurmaAvaliacao({
                   <thead>
                     <tr className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
                       <th className="px-3 py-2 font-semibold">Formando</th>
-                      {abas.map(a => (
-                        <th key={a.id} className="px-3 py-2 font-semibold text-right">{a.label.split(" · ")[0]}</th>
-                      ))}
+                      {ccp
+                        ? ccp.instrumentos.map(i => (
+                          <th key={i.id} className="px-3 py-2 font-semibold text-right">{i.titulo}</th>
+                        ))
+                        : abas.map(a => (
+                          <th key={a.id} className="px-3 py-2 font-semibold text-right">{a.label.split(" · ")[0]}</th>
+                        ))}
                       <th className="px-3 py-2 font-semibold text-right">Final</th>
                       <th className="px-3 py-2 font-semibold">Resultado</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rows.map(f => {
-                      const final = notaFinalFormando(cfg, mapa, f.id, moduloIds);
+                      const final = ccp
+                        ? notaFinalCcp(ccp, mapa, f.id, programa.topicos)
+                        : notaFinalFormando(cfg, mapa, f.id, moduloIds);
                       const ok = aprovado(final, cfg.minimoAprovacao);
                       return (
                         <tr key={f.id} className="border-t border-slate-100">
                           <td className="px-3 py-2 font-medium text-slate-800">{f.nome}</td>
-                          {moduloIds.map(id => (
-                            <td key={id} className="px-3 py-2 text-right text-slate-600">
-                              {formatNota(notaPonderada(cfg, mapa, f.id, id), cfg.unidade)}
-                            </td>
-                          ))}
+                          {ccp
+                            ? ccp.instrumentos.map(i => (
+                              <td key={i.id} className="px-3 py-2 text-right text-slate-600">
+                                {formatNota(notaInstrumentoCcp(i, mapa, f.id, programa.topicos), cfg.unidade)}
+                              </td>
+                            ))
+                            : moduloIds.map(id => (
+                              <td key={id} className="px-3 py-2 text-right text-slate-600">
+                                {formatNota(notaDeParametros(cfg.parametros, cfg.pesosEquitativos, mapa, f.id, id), cfg.unidade)}
+                              </td>
+                            ))}
                           <td className="px-3 py-2 text-right font-semibold text-slate-800">{formatNota(final, cfg.unidade)}</td>
                           <td className="px-3 py-2">
                             {ok == null ? <span className="text-xs text-slate-400">Incompleto</span>
@@ -433,7 +505,7 @@ export function TurmaAvaliacao({
             </div>
           )}
 
-          {cfg.modo === "final" && (
+          {!ccp && cfg.modo === "final" && (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
               Resultado: {rows.filter(f => aprovado(notaFinalFormando(cfg, mapa, f.id, moduloIds), cfg.minimoAprovacao) === true).length} aprovados ·{" "}
               {rows.filter(f => aprovado(notaFinalFormando(cfg, mapa, f.id, moduloIds), cfg.minimoAprovacao) === false).length} não aprovados ·{" "}

@@ -1440,7 +1440,7 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
     const marcadas = folhas.filter(rows => rows.some(r => r.id === f.id));
     const presentes = marcadas.filter(rows => rows.find(r => r.id === f.id)?.presente).length;
     const cert = certificados[f.id];
-    const notaCcp = ccp ? notaFinalFormando(cfg, mapa, f.id, modulos) : null;
+    const notaCcp = ccp ? notaFinalFormando(cfg, mapa, f.id, modulos, programa.topicos) : null;
     return {
       id: f.id,
       nome: f.nome,
@@ -1448,7 +1448,7 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
       folhas: marcadas.length,
       elearning: cert?.elearning ?? null,
       nota: ccp ? notaCcp : (cert?.nota ?? null),
-      notaFinal: notaFinalFormando(cfg, mapa, f.id, modulos),
+      notaFinal: notaFinalFormando(cfg, mapa, f.id, modulos, programa.topicos),
       certificado: cert?.emitido ?? false,
     };
   });

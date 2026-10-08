@@ -19,11 +19,13 @@ export function ImportarCsvAvaliacao({
   unidade,
   saveClass,
   onAplicar,
+  compacto = false,
 }: {
   modo: "modulos" | "final";
   unidade: string;
   saveClass: string;
   onAplicar: (parametros: ParametroAvaliacao[]) => void;
+  compacto?: boolean;
 }) {
   const [grid, setGrid] = useState<string[][] | null>(null);
   const [nomeFicheiro, setNomeFicheiro] = useState("");
@@ -33,6 +35,7 @@ export function ImportarCsvAvaliacao({
   const [valor, setValor] = useState<Celula | null>(null);
   const [media, setMedia] = useState<Celula | null>(null);
   const [erroFicheiro, setErroFicheiro] = useState("");
+  const [aberto, setAberto] = useState(!compacto);
   const mediaLabel = modo === "modulos" ? `Média do ${unidade}` : "Média final";
 
   const participantes = useMemo(() => (grid ? colunasParticipantes(grid) : new Set<number>()), [grid]);
@@ -91,8 +94,16 @@ export function ImportarCsvAvaliacao({
   const colunas = visiveis.reduce((m, linha) => Math.max(m, linha.length), 0);
   const gruposParticipantes = segmentos.filter(s => s.tipo === "participantes").length;
 
+  if (compacto && !aberto) {
+    return (
+      <button type="button" onClick={() => setAberto(true)} className="text-xs font-semibold text-slate-600 underline underline-offset-2">
+        Importar este bloco de um CSV
+      </button>
+    );
+  }
+
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-4">
+    <div className={`rounded-xl border border-slate-200 bg-white space-y-4 ${compacto ? "p-3" : "p-4 sm:p-5"}`}>
       <div>
         <p className="text-sm font-semibold text-slate-800">Importar parâmetros de um CSV</p>
         <p className="text-xs text-slate-500 mt-0.5">

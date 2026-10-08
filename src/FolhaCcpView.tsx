@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type MouseEvent } from "react";
 import {
   celulaEntrada,
   montarFolhasCcp,
@@ -56,6 +56,14 @@ function parseNota(raw: string, min: number, max: number) {
   const lo = Math.min(min, max);
   const hi = Math.max(min, max);
   return Math.min(hi, Math.max(lo, n));
+}
+
+/** Célula vazia limpa a nota. Texto que não é número fica de fora, para um cabeçalho colado não apagar a grelha. */
+function notaColada(raw: string, min: number, max: number): number | null | undefined {
+  if (!raw.trim()) return null;
+  const t = raw.trim().replace(",", ".");
+  if (!Number.isFinite(Number(t))) return undefined;
+  return parseNota(raw, min, max);
 }
 
 function chave(formandoId: number, moduloId: string, parametroId: string) {
@@ -154,9 +162,17 @@ export function FolhasCcp({
   const [sel, setSel] = useState<Sel | null>(null);
   const dragRef = useRef<"range" | "fill" | null>(null);
   const selRef = useRef<Sel | null>(null);
+  const ancoraRef = useRef<{ r: number; c: number } | null>(null);
   const fillValRef = useRef<number | null>(null);
+  const folhaRef = useRef(folha);
+  const colunasRef = useRef(colunas);
+  const onLoteRef = useRef(onLote);
+  const pintarRef = useRef<(origem: number | null, range: Sel, actual: FolhaModelo) => void>(() => {});
   const drafts = useRef<Record<string, string>>({});
   const [, setTick] = useState(0);
+  folhaRef.current = folha;
+  colunasRef.current = colunas;
+  onLoteRef.current = onLote;
   const accentBtn = gold ? "bg-amber-500 text-white" : "bg-blue-600 text-white";
   const selBg = gold ? "bg-amber-50" : "bg-blue-50";
   const handleBg = gold ? "bg-amber-500" : "bg-blue-600";
@@ -165,10 +181,12 @@ export function FolhasCcp({
 
   function pintar(origem: number | null, range: Sel, actual: FolhaModelo) {
     const n = normSel(range);
+    const visiveis = new Set(colunasRef.current);
     const alteracoes: Alteracao[] = [];
     for (let r = n.r0; r <= n.r1; r++) {
       const linha = actual.linhas[r] ?? [];
       for (let c = n.c0; c <= n.c1; c++) {
+        if (!visiveis.has(c)) continue;
         const cel = linha[c];
         if (!cel || !celulaEntrada(cel)) continue;
         delete drafts.current[chave(cel.formandoId, cel.moduloId, cel.parametroId)];
@@ -180,14 +198,93 @@ export function FolhasCcp({
         });
       }
     }
-    if (alteracoes.length) onLote(alteracoes);
+    if (alteracoes.length) onLoteRef.current(alteracoes);
+    setTick(t => t + 1);
+  }
+  pintarRef.current = pintar;
+
+  useEffect(() => {
+    function up() {
+      const actual = folhaRef.current;
+      if (dragRef.current === "fill" && selRef.current && actual) {
+        pintarRef.current(fillValRef.current, selRef.current, actual);
+      }
+      dragRef.current = null;
+    }
+    window.addEventListener("mouseup", up);
+    return () => window.removeEventListener("mouseup", up);
+  }, []);
+
+  function prepararSelecao(r: number, c: number, shift: boolean) {
+    const base = selRef.current;
+    const next = shift && base ? { ...base, r1: r, c1: c } : { r0: r, c0: c, r1: r, c1: c };
+    selRef.current = next;
+    ancoraRef.current = { r, c };
+    dragRef.current = "range";
+  }
+
+  function focarEntrada(r: number, c: number) {
+    ancoraRef.current = { r, c };
+    if (dragRef.current === "fill") return;
+    const actual = selRef.current;
+    if (dragRef.current === "range" && actual && actual.r1 === r && actual.c1 === c) {
+      setSel(actual);
+      return;
+    }
+    const next = { r0: r, c0: c, r1: r, c1: c };
+    selRef.current = next;
+    setSel(next);
+  }
+
+  function colarTexto(texto: string) {
+    const actual = folhaRef.current;
+    const ancora = ancoraRef.current;
+    if (!actual || !ancora) return;
+    const linhasTexto = texto.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    if (linhasTexto.length && linhasTexto[linhasTexto.length - 1] === "") linhasTexto.pop();
+    if (!linhasTexto.length) return;
+    const visiveis = colunasRef.current;
+    const inicio = visiveis.indexOf(ancora.c);
+    if (inicio < 0) return;
+    const alteracoes: Alteracao[] = [];
+    for (let i = 0; i < linhasTexto.length; i++) {
+      const partes = linhasTexto[i].split("\t");
+      const linha = actual.linhas[ancora.r + i];
+      if (!linha) continue;
+      for (let j = 0; j < partes.length; j++) {
+        const c = visiveis[inicio + j];
+        if (c == null) continue;
+        const cel = linha[c];
+        if (!cel || !celulaEntrada(cel)) continue;
+        const valor = notaColada(partes[j], escalaMin, escalaMax);
+        if (valor === undefined) continue;
+        delete drafts.current[chave(cel.formandoId, cel.moduloId, cel.parametroId)];
+        alteracoes.push({
+          formandoId: cel.formandoId,
+          moduloId: cel.moduloId,
+          parametroId: cel.parametroId,
+          valor,
+        });
+      }
+    }
+    if (alteracoes.length) onLoteRef.current(alteracoes);
     setTick(t => t + 1);
   }
 
-  function valorOrigem(range: Sel, actual: FolhaModelo) {
-    const n = normSel(range);
-    const cel = actual.linhas[n.r0]?.[n.c0];
-    if (!cel || !celulaEntrada(cel)) return null;
+  function onPaste(e: ClipboardEvent<HTMLDivElement>) {
+    if (leitura) return;
+    const texto = e.clipboardData.getData("text/plain");
+    if (!texto || !ancoraRef.current) return;
+    const grelha = /[\t\r\n]/.test(texto);
+    const dentroDoInput = (e.target as HTMLElement).closest("input");
+    if (!grelha && dentroDoInput) return;
+    e.preventDefault();
+    colarTexto(texto);
+  }
+
+  function lerCelula(actual: FolhaModelo, r: number, c: number) {
+    const cel = actual.linhas[r]?.[c];
+    if (!cel || !celulaEntrada(cel)) return undefined;
     const key = chave(cel.formandoId, cel.moduloId, cel.parametroId);
     const draft = drafts.current[key];
     if (draft != null && draft !== "") return parseNota(draft, escalaMin, escalaMax);
@@ -195,22 +292,27 @@ export function FolhasCcp({
     return typeof v === "number" ? v : null;
   }
 
-  function onMouseUp() {
-    if (dragRef.current === "fill" && selRef.current && folha) pintar(fillValRef.current, selRef.current, folha);
-    dragRef.current = null;
+  function valorOrigem(range: Sel, actual: FolhaModelo) {
+    const n = normSel(range);
+    const ancora = ancoraRef.current;
+    if (ancora && ancora.r >= n.r0 && ancora.r <= n.r1 && ancora.c >= n.c0 && ancora.c <= n.c1) {
+      const daAncora = lerCelula(actual, ancora.r, ancora.c);
+      if (daAncora !== undefined) return daAncora;
+    }
+    return lerCelula(actual, n.r0, n.c0) ?? null;
   }
 
   if (!folha) return null;
 
   return (
-    <div className="space-y-3" onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
+    <div className="space-y-3" onPaste={onPaste}>
       {folhas.length > 1 && (
       <div className="flex gap-1 overflow-x-auto scrollbar-hide -mx-1 px-1">
         {folhas.map(item => (
           <button
             key={item.id}
             type="button"
-            onClick={() => { setFolhaId(item.id); setSel(null); selRef.current = null; setFoco(null); }}
+            onClick={() => { setFolhaId(item.id); setSel(null); selRef.current = null; ancoraRef.current = null; setFoco(null); }}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap border ${
               item.id === folha.id ? `${accentBtn} border-transparent` : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
             }`}
@@ -231,6 +333,7 @@ export function FolhasCcp({
                 setFaixaPorFolha(prev => ({ ...prev, [folha.id]: item.id }));
                 setSel(null);
                 selRef.current = null;
+                ancoraRef.current = null;
                 setFoco(null);
               }}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap border ${
@@ -262,7 +365,7 @@ export function FolhasCcp({
                         span={span}
                         largura={folha.larguras[c] ?? "formando"}
                         selected={cel.tipo === "entrada" && inSel(sel, r, c)}
-                        handle={canto(sel, folha, r, c)}
+                        handle={canto(sel, folha, r, c, colunas)}
                         selBg={selBg}
                         handleBg={handleBg}
                         ring={ring}
@@ -274,6 +377,8 @@ export function FolhasCcp({
                         onDraft={() => setTick(t => t + 1)}
                         formulaAtiva={foco?.r === r && foco?.c === c && (cel.tipo === "valor" || cel.tipo === "texto") && !!cel.formula}
                         leitura={leitura}
+                        onPreparar={shift => prepararSelecao(r, c, shift)}
+                        onFocar={() => focarEntrada(r, c)}
                         onMouseDown={e => {
                           if ((e.target as HTMLElement).closest("input")) return;
                           if ((cel.tipo === "valor" || cel.tipo === "texto") && cel.formula) {
@@ -285,6 +390,7 @@ export function FolhasCcp({
                           const next = e.shiftKey && sel ? { ...sel, r1: r, c1: c } : { r0: r, c0: c, r1: r, c1: c };
                           setSel(next);
                           selRef.current = next;
+                          ancoraRef.current = { r, c };
                           dragRef.current = "range";
                         }}
                         onMouseEnter={() => {
@@ -301,7 +407,8 @@ export function FolhasCcp({
                           setTick(t => t + 1);
                         }}
                         onFill={() => {
-                          const range = sel ?? { r0: r, c0: c, r1: r, c1: c };
+                          const range = selRef.current ?? { r0: r, c0: c, r1: r, c1: c };
+                          selRef.current = range;
                           fillValRef.current = valorOrigem(range, folha);
                           dragRef.current = "fill";
                         }}
@@ -316,20 +423,22 @@ export function FolhasCcp({
         <p className="px-4 py-2 text-[11px] text-slate-400 border-t border-slate-100">
           {leitura
             ? "Cada bloco abre-se à parte, para a folha caber no ecrã. Na turma, as células com rebordo escrevem-se e as cinzentas calculam a fórmula."
-            : "Um bloco de cada vez, com uma coluna por formando. Escreva nas células com rebordo. As cinzentas usam a fórmula da folha: uma célula vazia conta como zero, como no Excel. A avaliação final vai buscar o Módulo 2, o E-learning, o Módulo 9 e o projeto."}
+            : "Um bloco de cada vez, com uma coluna por formando. Escreva nas células com rebordo, cole um intervalo copiado do Excel, ou arraste o quadrado do canto para repetir o valor. As cinzentas usam a fórmula da folha: uma célula vazia conta como zero, como no Excel. A avaliação final vai buscar o Módulo 2, o E-learning, o Módulo 9 e o projeto."}
         </p>
       </div>
     </div>
   );
 }
 
-function canto(sel: Sel | null, folha: FolhaModelo, r: number, c: number) {
+function canto(sel: Sel | null, folha: FolhaModelo, r: number, c: number, colunas: number[]) {
   if (!sel || !inSel(sel, r, c)) return false;
+  const vis = new Set(colunas);
   const n = normSel(sel);
   let br = -1;
   let bc = -1;
   for (let rr = n.r0; rr <= n.r1; rr++) {
     for (let cc = n.c0; cc <= n.c1; cc++) {
+      if (!vis.has(cc)) continue;
       const cel = folha.linhas[rr]?.[cc];
       if (!cel || cel.tipo !== "entrada") continue;
       if (rr > br || (rr === br && cc >= bc)) { br = rr; bc = cc; }
@@ -384,6 +493,8 @@ function CelulaTd({
   drafts,
   mapa,
   onDraft,
+  onPreparar,
+  onFocar,
   onMouseDown,
   onMouseEnter,
   onCommit,
@@ -407,6 +518,8 @@ function CelulaTd({
   drafts: Record<string, string>;
   mapa: Map<string, number | null>;
   onDraft: () => void;
+  onPreparar: (shift: boolean) => void;
+  onFocar: () => void;
   onMouseDown: (e: MouseEvent) => void;
   onMouseEnter: () => void;
   onCommit: (valor: string) => void;
@@ -456,6 +569,8 @@ function CelulaTd({
           drafts={drafts}
           mapa={mapa}
           onDraft={onDraft}
+          onPreparar={onPreparar}
+          onFocar={onFocar}
           onCommit={onCommit}
         />
       )}
@@ -465,7 +580,7 @@ function CelulaTd({
           type="button"
           data-fill-handle
           aria-label="Arrastar para preencher"
-          className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-[2px] border border-white ${handleBg} cursor-crosshair z-20`}
+          className={`absolute bottom-0 right-0 w-3 h-3 rounded-[2px] border border-white ${handleBg} cursor-crosshair z-20`}
           onMouseDown={e => {
             e.preventDefault();
             e.stopPropagation();
@@ -485,6 +600,8 @@ function Entrada({
   drafts,
   mapa,
   onDraft,
+  onPreparar,
+  onFocar,
   onCommit,
 }: {
   cel: Extract<CelulaFolha, { tipo: "entrada" }>;
@@ -493,6 +610,8 @@ function Entrada({
   drafts: Record<string, string>;
   mapa: Map<string, number | null>;
   onDraft: () => void;
+  onPreparar: (shift: boolean) => void;
+  onFocar: () => void;
   onCommit: (valor: string) => void;
 }) {
   const key = chave(cel.formandoId, cel.moduloId, cel.parametroId);
@@ -501,7 +620,11 @@ function Entrada({
   return (
     <input
       className={`w-full h-8 text-center text-xs bg-white border-0 shadow-[inset_0_0_0_1px_#cbd5e1] select-text ${selected ? "ring-1 ring-inset ring-slate-400" : ""} ${ring} focus:outline-none focus:ring-2`}
-      onMouseDown={e => e.stopPropagation()}
+      onMouseDown={e => {
+        e.stopPropagation();
+        onPreparar(e.shiftKey);
+      }}
+      onFocus={onFocar}
       inputMode="decimal"
       value={shown}
       aria-label="Nota"

@@ -6,7 +6,7 @@ let armed = false;
 let curtain = false;
 let delayTimer: number | undefined;
 
-/** Só mostra a cortina se o fetch ainda estiver pendente após este atraso. */
+/** Só mostra a cortina se um GET da página ainda estiver pendente após este atraso. */
 const SHOW_AFTER_MS = 2500;
 
 function notify() {

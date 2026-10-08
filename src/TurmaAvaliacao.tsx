@@ -110,6 +110,9 @@ export function TurmaAvaliacao({
   const [, setDraftTick] = useState(0);
   const mapa = useMemo(() => mapaNotas(notas), [notas]);
   const saveTimer = useRef<number | null>(null);
+  const latestNotas = useRef<NotaAvaliacao[] | null>(null);
+  const saving = useRef(false);
+  const vivo = useRef(true);
   const dragRef = useRef<"range" | "fill" | null>(null);
   const selRef = useRef<Sel | null>(null);
   const fillValRef = useRef<number | null>(null);
@@ -137,19 +140,45 @@ export function TurmaAvaliacao({
     return () => { alive = false; };
   }, [regime, turmaId]);
 
+  const flushSave = useCallback(async () => {
+    if (saving.current) return;
+    saving.current = true;
+    try {
+      while (latestNotas.current) {
+        const snapshot = latestNotas.current;
+        await apiSaveTurmaAvaliacao(regime, turmaId, snapshot.filter(n => n.nota != null));
+        if (latestNotas.current === snapshot) {
+          if (vivo.current) setGravando("ok");
+          break;
+        }
+      }
+    } catch {
+      if (vivo.current) setGravando("erro");
+    } finally {
+      saving.current = false;
+    }
+  }, [regime, turmaId]);
+
   const persist = useCallback((next: NotaAvaliacao[]) => {
+    latestNotas.current = next;
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     setGravando("save");
     saveTimer.current = window.setTimeout(() => {
-      apiSaveTurmaAvaliacao(regime, turmaId, next.filter(n => n.nota != null))
-        .then(() => setGravando("ok"))
-        .catch(() => setGravando("erro"));
+      saveTimer.current = null;
+      void flushSave();
     }, 500);
-  }, [regime, turmaId]);
+  }, [flushSave]);
   const persistRef = useRef(persist);
   persistRef.current = persist;
 
-  useEffect(() => () => { if (saveTimer.current) window.clearTimeout(saveTimer.current); }, []);
+  useEffect(() => () => {
+    vivo.current = false;
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+      void flushSave();
+    }
+  }, [flushSave]);
 
   const aba = abasVisiveis.find(a => a.id === ativoId) ?? abasVisiveis[0];
   const moduloId = aba?.id ?? MODULO_FINAL;

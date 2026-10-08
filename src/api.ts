@@ -119,7 +119,8 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   headers.set("X-Gesforma-Client", "web");
   if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const method = (init.method ?? "GET").toUpperCase();
-  const track = !isSilentViewPath(path);
+  // A cortina é o ecrã de abrir a página. Gravar, como o auto-save da grelha, não a abre.
+  const track = method === "GET" && !isSilentViewPath(path);
   if (track) beginViewLoad();
   try {
     const res = await fetch(`${BASE}${path}`, { ...init, credentials: "include", headers });

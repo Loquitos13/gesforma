@@ -270,7 +270,7 @@ export function TurmaAvaliacao({
             {faltaParams
               ? "Defina os parâmetros na ficha do curso (separador Avaliação) para lançar notas."
               : ccp
-                ? `Módulo 2, E-learning, Módulo 9 e projeto de intervenção: em cada um, edite a nota de cada participante. A avaliação final vai buscar essas notas com as fórmulas da folha. ${textoFormulaCcp(ccp)}.`
+                ? `Em cada folha, abra um bloco de cada vez e escreva a nota nas células com rebordo. As cinzentas calculam a fórmula. A avaliação final vai buscar essas notas. ${textoFormulaCcp(ccp)}.`
                 : grelhaMomentos
                   ? "Grelha do CCP: a mesma observação na simulação inicial e na final. A nota do certificado é a média das duas."
                   : cfg.modo === "modulos"

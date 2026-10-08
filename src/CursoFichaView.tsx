@@ -8,11 +8,13 @@ import { DtpModeloEditor } from "./DtpModeloEditor";
 import {
   avaliacaoCcp,
   avaliacaoPadrao,
+  cursoECcp,
   fracoesPeso,
   novoParametroId,
   parseAvaliacaoCurso,
   type AvaliacaoCurso,
 } from "./avaliacaoCurso";
+import { AvaliacaoCcpEditor } from "./AvaliacaoCcpEditor";
 import { ImportarCsvAvaliacao } from "./ImportarCsvAvaliacao";
 import { codigoTopico, juntarHoras, linhasProgramaInicial, novoTopicoId, partirHoras, programaDePayload, textoPrograma, topicosDeTexto, type OrganizacaoPrograma, type TopicoPrograma } from "./cursoPrograma";
 import { refereCurso } from "./cursoLocais";
@@ -635,7 +637,11 @@ export function CursoFichaView({
               locais,
               organizacaoPrograma: accent === "fin" ? "modular" : parsed.organizacao,
               topicosPrograma: parsed.topicos.length ? parsed.topicos : prev.topicosPrograma,
-              avaliacaoCurso: parseAvaliacaoCurso({ ...guardado } as Record<string, unknown>),
+              avaliacaoCurso: (() => {
+                const parsed = parseAvaliacaoCurso({ ...guardado } as Record<string, unknown>);
+                const nome = String((guardado as { titulo?: string }).titulo ?? curso?.nome ?? "");
+                return cursoECcp(nome) && parsed.estrutura !== "ccp" ? avaliacaoCcp() : parsed;
+              })(),
               precosOferta: parsePrecosOferta(guardado.precosOferta),
               planosSessao: Array.isArray(guardado.planosSessao) ? guardado.planosSessao : prev.planosSessao,
               valoresFormador: Array.isArray(guardado.valoresFormador) ? guardado.valoresFormador : prev.valoresFormador,
@@ -1264,9 +1270,12 @@ export function CursoFichaView({
                 <div>
                   <p className="text-sm font-semibold text-slate-800">Parâmetros de avaliação do curso</p>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    A avaliação é sempre por formando e todos os parâmetros têm de ser preenchidos. Na turma, o formador lança as notas nesta grelha.
+                    {data.avaliacaoCurso.estrutura === "ccp"
+                      ? "No CCP a escala vale para todos os instrumentos. A nota final calcula-se a partir do e-learning, das simulações e do projeto."
+                      : "A avaliação é sempre por formando e todos os parâmetros têm de ser preenchidos. Na turma, o formador lança as notas nesta grelha."}
                   </p>
                 </div>
+                {data.avaliacaoCurso.estrutura !== "ccp" && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Modo" hint={data.avaliacaoCurso.modo === "modulos"
                     ? `Nota de cada ${data.organizacaoPrograma === "livre" ? "capítulo" : "módulo"} = soma (nota × peso). Nota final = média dessas notas.`
@@ -1297,6 +1306,13 @@ export function CursoFichaView({
                       onChange={e => patchAv({ unidade: e.target.value })} />
                   </Field>
                 </div>
+                )}
+                {data.avaliacaoCurso.estrutura === "ccp" && (
+                  <Field label="Unidade da escala" hint="Ex. valores, pontos">
+                    <input className={t.iCls} value={data.avaliacaoCurso.unidade}
+                      onChange={e => patchAv({ unidade: e.target.value })} />
+                  </Field>
+                )}
                 <div className="grid grid-cols-3 gap-3">
                   <Field label="Mínimo da escala">
                     <input className={t.iCls} type="number" value={data.avaliacaoCurso.escalaMin}
@@ -1324,6 +1340,7 @@ export function CursoFichaView({
                     </button>
                   ))}
                 </div>
+                {data.avaliacaoCurso.estrutura !== "ccp" && (<>
                 <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3 cursor-pointer hover:bg-slate-50">
                   <input type="checkbox" className={`mt-0.5 w-4 h-4 ${t.accentChk}`}
                     checked={data.avaliacaoCurso.pesosEquitativos}
@@ -1389,7 +1406,9 @@ export function CursoFichaView({
                 >
                   + Parâmetro
                 </button>
+                </>)}
               </div>
+              {data.avaliacaoCurso.estrutura !== "ccp" && (
               <ImportarCsvAvaliacao
                 modo={data.avaliacaoCurso.modo}
                 unidade={data.organizacaoPrograma === "livre" && accent !== "fin" ? "capítulo" : "módulo"}
@@ -1399,6 +1418,16 @@ export function CursoFichaView({
                   pesosEquitativos: parametros.length > 0 && parametros.every(p => p.peso === parametros[0]?.peso),
                 })}
               />
+              )}
+
+              {data.avaliacaoCurso.estrutura === "ccp" && data.avaliacaoCurso.ccp && (
+                <AvaliacaoCcpEditor
+                  ccp={data.avaliacaoCurso.ccp}
+                  saveClass={t.save}
+                  inputClass={t.iCls}
+                  onChange={ccp => patchAv({ ccp, estrutura: "ccp" })}
+                />
+              )}
 
               {temAvaliacao && (
                 <div className="rounded-xl border border-violet-200 bg-white p-4 sm:p-5 space-y-4">
@@ -1407,7 +1436,7 @@ export function CursoFichaView({
                     <p className="text-xs text-slate-500 mt-0.5">
                       {accent === "fin"
                         ? "Critérios das entregas práticas desta UFCD (plano de sessão, exercícios). Não entram na pauta ponderada acima."
-                        : "Critérios das simulações inicial e final. Não entram na pauta ponderada acima."}
+                        : "Folha de observação das simulações, anexada aos documentos da turma. A nota do CCP calcula-se nos instrumentos acima, não nesta lista."}
                     </p>
                   </div>
                   {criterios.length === 0 && (

@@ -1,0 +1,423 @@
+import type { ParametroAvaliacao } from "./avaliacaoCurso";
+import type { TopicoPrograma } from "./cursoPrograma";
+
+export type IdInstrumentoCcp = "elearning" | "sim-inicial" | "sim-final" | "projeto";
+
+export type BlocoCcp = {
+  id: string;
+  titulo: string;
+  /** Peso deste bloco dentro do instrumento. Na simulação, CP3 vale 2 e os outros 1. */
+  peso: number;
+  /** por-modulo repete-se em cada módulo de e-learning. uma-vez é uma grelha só. */
+  ambito: "por-modulo" | "uma-vez";
+  pesosEquitativos: boolean;
+  parametros: ParametroAvaliacao[];
+};
+
+export type InstrumentoCcp = {
+  id: IdInstrumentoCcp;
+  titulo: string;
+  /** Peso na nota final do CCP. A folha usa 10, 30, 30 e 30. */
+  pesoFinal: number;
+  blocos: BlocoCcp[];
+};
+
+export type EstruturaCcp = {
+  instrumentos: InstrumentoCcp[];
+};
+
+export type GrelhaCcp = {
+  id: string;
+  label: string;
+  grupo: string;
+  parametros: ParametroAvaliacao[];
+  pesosEquitativos: boolean;
+};
+
+const MODULOS_SIMULACAO = new Set([2, 9]);
+
+function p(id: string, label: string, peso = 1): ParametroAvaliacao {
+  return { id, label, peso };
+}
+
+function blocoSimulacao(prefixo: string): BlocoCcp[] {
+  return [
+    {
+      id: "cp1",
+      titulo: "CP1 · Plano de sessão",
+      peso: 1,
+      ambito: "uma-vez",
+      pesosEquitativos: false,
+      parametros: [
+        p(`${prefixo}-cp1-1`, "Caracterização da sessão", 20),
+        p(`${prefixo}-cp1-2`, "Coerência entre objetivos e estratégia", 30),
+        p(`${prefixo}-cp1-3`, "Avaliação dos formandos", 10),
+        p(`${prefixo}-cp1-4`, "Recursos didáticos", 10),
+        p(`${prefixo}-cp1-5`, "Plataformas colaborativas", 10),
+        p(`${prefixo}-cp1-6`, "Instrumentos de avaliação", 10),
+        p(`${prefixo}-cp1-7`, "Organização do plano de sessão", 10),
+      ],
+    },
+    {
+      id: "cp2",
+      titulo: "CP2 · Recursos didáticos",
+      peso: 1,
+      ambito: "uma-vez",
+      pesosEquitativos: false,
+      parametros: [
+        p(`${prefixo}-cp2-1`, "Rigor técnico", 40),
+        p(`${prefixo}-cp2-2`, "Estruturação", 40),
+        p(`${prefixo}-cp2-3`, "Criatividade", 20),
+      ],
+    },
+    {
+      id: "cp3",
+      titulo: "CP3 · Desenvolvimento",
+      peso: 2,
+      ambito: "uma-vez",
+      pesosEquitativos: true,
+      parametros: [
+        "Domínio do assunto",
+        "Comunicação dos objetivos",
+        "Verificação dos pré-requisitos",
+        "Métodos e técnicas pedagógicas",
+        "Motivação",
+        "Atividades dos participantes",
+        "Facilitação da estruturação do conteúdo",
+        "Recursos didáticos",
+        "Comportamento físico na interação",
+        "Moderação das discussões",
+        "Autoconfiança",
+        "Verificação dos resultados",
+        "Comunicação dos resultados",
+        "Gestão do tempo",
+        "Criatividade pedagógica",
+        "Atividades em plataformas colaborativas",
+      ].map((label, i) => p(`${prefixo}-cp3-${i + 1}`, label, 1)),
+    },
+  ];
+}
+
+/** Quatro instrumentos do CCP, com os critérios das folhas reais. */
+export function estruturaCcpPadrao(): EstruturaCcp {
+  return {
+    instrumentos: [
+      {
+        id: "elearning",
+        titulo: "E-learning",
+        pesoFinal: 30,
+        blocos: [
+          {
+            id: "op1",
+            titulo: "OP1 · Módulos",
+            peso: 1,
+            ambito: "por-modulo",
+            pesosEquitativos: true,
+            parametros: [
+              p("ccp-op1-1", "Domínio dos assuntos"),
+              p("ccp-op1-2", "Criatividade e autonomia"),
+              p("ccp-op1-3", "Generalização dos saberes"),
+              p("ccp-op1-4", "Participação nos fóruns"),
+              p("ccp-op1-5", "Responsabilidade"),
+              p("ccp-op1-6", "Relações interpessoais"),
+            ],
+          },
+          {
+            id: "op2",
+            titulo: "OP2 · Avaliações intermédias",
+            peso: 1,
+            ambito: "uma-vez",
+            pesosEquitativos: true,
+            parametros: [
+              "Caracteriza tipos e modalidades de formação",
+              "Reconhece fatores de eficácia da formação",
+              "Reconhece o valor das TIC",
+              "Prepara apresentações multimédia",
+              "Explora plataformas colaborativas",
+              "Prepara módulos e sessões",
+              "Define objetivos pedagógicos",
+              "Relaciona objetivos, métodos e avaliação",
+              "Caracteriza estratégias de aprendizagem",
+              "Medeia diferentes grupos",
+            ].map((label, i) => p(`ccp-op2-${i + 1}`, label)),
+          },
+        ],
+      },
+      {
+        id: "sim-inicial",
+        titulo: "Simulação inicial",
+        pesoFinal: 10,
+        blocos: blocoSimulacao("ccp-si"),
+      },
+      {
+        id: "sim-final",
+        titulo: "Simulação final",
+        pesoFinal: 30,
+        blocos: blocoSimulacao("ccp-sf"),
+      },
+      {
+        id: "projeto",
+        titulo: "Projeto de intervenção",
+        pesoFinal: 30,
+        blocos: [
+          {
+            id: "as-pi",
+            titulo: "AS/PI",
+            peso: 1,
+            ambito: "uma-vez",
+            pesosEquitativos: false,
+            parametros: [
+              p("ccp-pi-1", "Estrutura do projeto", 15),
+              p("ccp-pi-2", "Rigor na apresentação dos instrumentos", 30),
+              p("ccp-pi-3", "Criatividade", 25),
+              p("ccp-pi-4", "Fundamentação pedagógica", 20),
+              p("ccp-pi-5", "Recurso às novas tecnologias", 10),
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+export function numeroModuloPrograma(index: number) {
+  return index + 1;
+}
+
+export function moduloESimulacao(numero: number) {
+  return MODULOS_SIMULACAO.has(numero);
+}
+
+export function idGrelhaBloco(instrumentoId: string, blocoId: string) {
+  return `ccp:${instrumentoId}:${blocoId}`;
+}
+
+function roundNota(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+function fracao(params: ParametroAvaliacao[], equitativos: boolean) {
+  if (!params.length) return {} as Record<string, number>;
+  if (equitativos) {
+    const f = 1 / params.length;
+    return Object.fromEntries(params.map(p => [p.id, f]));
+  }
+  const soma = params.reduce((a, p) => a + (p.peso > 0 ? p.peso : 0), 0);
+  if (soma <= 0) {
+    const f = 1 / params.length;
+    return Object.fromEntries(params.map(p => [p.id, f]));
+  }
+  return Object.fromEntries(params.map(item => [item.id, (item.peso > 0 ? item.peso : 0) / soma]));
+}
+
+function lerNota(mapa: Map<string, number | null>, formandoId: number, moduloId: string, parametroId: string) {
+  const v = mapa.get(`${formandoId}|${moduloId}|${parametroId}`);
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+export function notaDeParametros(
+  params: ParametroAvaliacao[],
+  equitativos: boolean,
+  mapa: Map<string, number | null>,
+  formandoId: number,
+  moduloId: string,
+) {
+  if (!params.length) return null;
+  const pesos = fracao(params, equitativos);
+  let acc = 0;
+  for (const item of params) {
+    const n = lerNota(mapa, formandoId, moduloId, item.id);
+    if (n == null) return null;
+    acc += n * (pesos[item.id] ?? 0);
+  }
+  return roundNota(acc);
+}
+
+function mediaLista(notas: number[]) {
+  if (!notas.length) return null;
+  return roundNota(notas.reduce((a, b) => a + b, 0) / notas.length);
+}
+
+export function modulosElearning(topicos: Pick<TopicoPrograma, "id" | "titulo">[]) {
+  return topicos.flatMap((t, i) => moduloESimulacao(numeroModuloPrograma(i)) ? [] : [{ ...t, numero: numeroModuloPrograma(i) }]);
+}
+
+function notaBloco(
+  bloco: BlocoCcp,
+  instrumentoId: string,
+  mapa: Map<string, number | null>,
+  formandoId: number,
+  modulos: { id: string }[],
+) {
+  if (bloco.ambito === "por-modulo") {
+    if (!modulos.length) return null;
+    const notas: number[] = [];
+    for (const mod of modulos) {
+      const n = notaDeParametros(bloco.parametros, bloco.pesosEquitativos, mapa, formandoId, mod.id);
+      if (n == null) return null;
+      notas.push(n);
+    }
+    return mediaLista(notas);
+  }
+  return notaDeParametros(bloco.parametros, bloco.pesosEquitativos, mapa, formandoId, idGrelhaBloco(instrumentoId, bloco.id));
+}
+
+export function notaInstrumentoCcp(
+  instrumento: InstrumentoCcp,
+  mapa: Map<string, number | null>,
+  formandoId: number,
+  topicos: Pick<TopicoPrograma, "id" | "titulo">[],
+) {
+  const blocos = instrumento.blocos.filter(b => b.parametros.length);
+  if (!blocos.length) return null;
+  const modulos = instrumento.id === "elearning" ? modulosElearning(topicos) : [];
+  const soma = blocos.reduce((a, b) => a + (b.peso > 0 ? b.peso : 0), 0);
+  if (soma <= 0) return null;
+  let acc = 0;
+  for (const bloco of blocos) {
+    const n = notaBloco(bloco, instrumento.id, mapa, formandoId, modulos);
+    if (n == null) return null;
+    acc += n * ((bloco.peso > 0 ? bloco.peso : 0) / soma);
+  }
+  return roundNota(acc);
+}
+
+export function notaFinalCcp(
+  estrutura: EstruturaCcp,
+  mapa: Map<string, number | null>,
+  formandoId: number,
+  topicos: Pick<TopicoPrograma, "id" | "titulo">[],
+) {
+  const instrumentos = estrutura.instrumentos.filter(i => i.pesoFinal > 0 && i.blocos.some(b => b.parametros.length));
+  const soma = instrumentos.reduce((a, i) => a + i.pesoFinal, 0);
+  if (!instrumentos.length || soma <= 0) return null;
+  let acc = 0;
+  for (const instrumento of instrumentos) {
+    const n = notaInstrumentoCcp(instrumento, mapa, formandoId, topicos);
+    if (n == null) return null;
+    acc += n * (instrumento.pesoFinal / soma);
+  }
+  return roundNota(acc);
+}
+
+export function textoFormulaCcp(estrutura: EstruturaCcp) {
+  return estrutura.instrumentos
+    .filter(i => i.pesoFinal > 0)
+    .map(i => `${i.pesoFinal}% ${i.titulo.toLowerCase()}`)
+    .join(" + ");
+}
+
+function tituloModulo(numero: number, topico: Pick<TopicoPrograma, "titulo"> | undefined, reserva: string) {
+  const titulo = topico?.titulo.trim();
+  return titulo ? `M${numero} · ${titulo}` : `M${numero} · ${reserva}`;
+}
+
+/** Grelhas da turma: um separador por módulo de e-learning e por bloco das outras fichas. */
+export function grelhasCcp(estrutura: EstruturaCcp, topicos: Pick<TopicoPrograma, "id" | "titulo">[]): GrelhaCcp[] {
+  const out: GrelhaCcp[] = [];
+  const elearning = estrutura.instrumentos.find(i => i.id === "elearning");
+  const op1 = elearning?.blocos.find(b => b.ambito === "por-modulo");
+  if (op1 && op1.parametros.length) {
+    for (const mod of modulosElearning(topicos)) {
+      out.push({
+        id: mod.id,
+        label: `M${mod.numero}`,
+        grupo: "E-learning",
+        parametros: op1.parametros,
+        pesosEquitativos: op1.pesosEquitativos,
+      });
+    }
+  }
+  for (const instrumento of estrutura.instrumentos) {
+    const grupo = instrumento.id === "elearning"
+      ? "E-learning"
+      : instrumento.id === "sim-inicial"
+        ? "Simulação inicial"
+        : instrumento.id === "sim-final"
+          ? "Simulação final"
+          : "Projeto";
+    for (const bloco of instrumento.blocos) {
+      if (!bloco.parametros.length) continue;
+      if (bloco.ambito === "por-modulo") continue;
+      const label = instrumento.id === "sim-inicial"
+        ? tituloModulo(2, topicos[1], "Simulação inicial")
+        : instrumento.id === "sim-final"
+          ? tituloModulo(9, topicos[8], "Simulação final")
+          : bloco.titulo;
+      const curto = instrumento.id === "projeto"
+        ? "Projeto"
+        : instrumento.id === "elearning"
+          ? bloco.titulo
+          : `${label.split(" · ")[0]} · ${bloco.titulo.split(" · ")[0]}`;
+      out.push({
+        id: idGrelhaBloco(instrumento.id, bloco.id),
+        label: curto,
+        grupo,
+        parametros: bloco.parametros,
+        pesosEquitativos: bloco.pesosEquitativos,
+      });
+    }
+  }
+  return out;
+}
+
+function texto(v: unknown) {
+  return String(v ?? "").trim();
+}
+
+function parseParametros(raw: unknown): ParametroAvaliacao[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item, i) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as Record<string, unknown>;
+    const label = texto(row.label);
+    if (!label) return [];
+    const peso = Number(row.peso);
+    return [{
+      id: texto(row.id) || `p-ccp-${i}`,
+      label,
+      peso: Number.isFinite(peso) && peso > 0 ? peso : 1,
+      moodle: row.moodle === true,
+    }];
+  });
+}
+
+export function parseEstruturaCcp(raw: unknown): EstruturaCcp | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const o = raw as Record<string, unknown>;
+  if (!Array.isArray(o.instrumentos)) return undefined;
+  const instrumentos = o.instrumentos.flatMap(item => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as Record<string, unknown>;
+    const id = texto(row.id);
+    if (id !== "elearning" && id !== "sim-inicial" && id !== "sim-final" && id !== "projeto") return [];
+    const blocos = Array.isArray(row.blocos)
+      ? row.blocos.flatMap(bloco => {
+        if (!bloco || typeof bloco !== "object") return [];
+        const b = bloco as Record<string, unknown>;
+        const blocoId = texto(b.id);
+        const titulo = texto(b.titulo);
+        if (!blocoId || !titulo) return [];
+        const peso = Number(b.peso);
+        return [{
+          id: blocoId,
+          titulo,
+          peso: Number.isFinite(peso) && peso > 0 ? peso : 1,
+          ambito: b.ambito === "por-modulo" ? "por-modulo" as const : "uma-vez" as const,
+          pesosEquitativos: b.pesosEquitativos !== false,
+          parametros: parseParametros(b.parametros),
+        }];
+      })
+      : [];
+    const pesoFinal = Number(row.pesoFinal);
+    const instrumento: InstrumentoCcp = {
+      id: id as IdInstrumentoCcp,
+      titulo: texto(row.titulo) || id,
+      pesoFinal: Number.isFinite(pesoFinal) && pesoFinal >= 0 ? pesoFinal : 0,
+      blocos,
+    };
+    return [instrumento];
+  });
+  if (!instrumentos.length) return undefined;
+  return { instrumentos };
+}

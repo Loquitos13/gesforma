@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { novoParametroId, type ParametroAvaliacao } from "./avaliacaoCurso";
 import {
   blocosDoCsv,
@@ -38,12 +38,23 @@ export function ImportarCsvAvaliacao({
   const [foco, setFoco] = useState<Celula | null>(null);
   const [erroFicheiro, setErroFicheiro] = useState("");
   const [aberto, setAberto] = useState(!compacto);
+  const grelhaRef = useRef<HTMLDivElement>(null);
   const mediaLabel = modo === "modulos" ? `Média do ${unidade}` : "Média final";
 
   const folha = folhas[folhaIdx] ?? null;
   const grid = folha?.grid ?? null;
   const participantes = useMemo(() => (grid ? colunasParticipantes(grid) : new Set<number>()), [grid]);
   const blocos = useMemo(() => (grid ? blocosDoCsv(grid) : []), [grid]);
+
+  useEffect(() => {
+    const caixa = grelhaRef.current;
+    const main = caixa?.closest("main");
+    if (!caixa || !main) return;
+    const folhaCaixa = caixa.getBoundingClientRect();
+    const area = main.getBoundingClientRect();
+    if (folhaCaixa.top >= area.top + 8 && folhaCaixa.bottom <= area.bottom - 8) return;
+    main.scrollTop += folhaCaixa.top - area.top - 8;
+  }, [folhaIdx, nomeFicheiro]);
 
   const leitura = useMemo(() => {
     if (!grid || !nome || !valor || !media) return { erro: "", parametros: [] as ParametroCsv[] };
@@ -126,7 +137,7 @@ export function ImportarCsvAvaliacao({
           A folha aparece como no ficheiro, com cores, letras e todas as colunas. Cada célula traz a fórmula do Excel: clique para a ler. As colunas de participantes continuam visíveis e não servem de parâmetro. Escolha o nome, o peso e a {mediaLabel.toLowerCase()} nas restantes, ou use um bloco encontrado.
         </p>
       </div>
-      <label className="relative inline-flex items-center overflow-hidden px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer">
+      <label className="relative inline-flex items-center overflow-clip px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer">
         Escolher CSV ou Excel
         <input
           type="file"
@@ -167,6 +178,22 @@ export function ImportarCsvAvaliacao({
               : " Sem colunas de participantes."}
             {nFormulas > 0 ? ` ${nFormulas} ${nFormulas === 1 ? "fórmula" : "fórmulas"}.` : ""}
           </p>
+          <BarraFormula celula={foco} formula={formulaFoco} valor={valorFoco} />
+          <div ref={grelhaRef}>
+            <GrelhaFolha
+              grid={visiveis}
+              formulas={folha.formulas}
+              vista={folha.vista}
+              participantes={participantes}
+              nome={nome}
+              valor={valor}
+              media={media}
+              onMarcar={celula => {
+                setFoco(celula);
+                marcar(celula);
+              }}
+            />
+          </div>
           {blocos.length > 0 && (
             <div className="space-y-3">
               <p className="text-sm font-semibold text-slate-800">Blocos nesta folha</p>
@@ -196,20 +223,6 @@ export function ImportarCsvAvaliacao({
               </button>
             ))}
           </div>
-          <BarraFormula celula={foco} formula={formulaFoco} valor={valorFoco} />
-          <GrelhaFolha
-            grid={visiveis}
-            formulas={folha.formulas}
-            vista={folha.vista}
-            participantes={participantes}
-            nome={nome}
-            valor={valor}
-            media={media}
-            onMarcar={celula => {
-              setFoco(celula);
-              marcar(celula);
-            }}
-          />
           {leitura.erro && nome && valor && media && <p className="text-xs text-red-600">{leitura.erro}</p>}
           {leitura.parametros.length > 0 && (
             <ul className="text-xs text-slate-600 space-y-1">

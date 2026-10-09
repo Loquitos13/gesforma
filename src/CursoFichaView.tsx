@@ -307,7 +307,7 @@ function seedSite(curso?: CursoFichaSeed, accent: CursoAccent = "gold"): CursoSi
     tags: curso ? ("tags" in pack ? pack.tags : "") : "",
     dataInicio: "",
     estado: curso?.estado ?? "Ativo",
-    visivelSite: curso?.estado === "Ativo",
+    visivelSite: (curso?.estado ?? "Ativo") === "Ativo",
     banner: curso ? { name: "banner.jpg", url: "" } : null,
     thumb: curso ? { name: "thumb.jpg", url: "" } : null,
     sintese: pack.sintese,

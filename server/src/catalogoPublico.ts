@@ -82,6 +82,14 @@ function slugify(value: string) {
     .slice(0, 80);
 }
 
+function numeroPositivo(value: unknown, fallback = 0) {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+  const textoNumero = texto(value).replace(/\s/g, "").replace(",", ".");
+  if (!textoNumero) return fallback;
+  const n = Number(textoNumero);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
 function numeroPreco(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
   const match = texto(value).replace(/\s/g, "").match(/(\d+(?:[.,]\d+)?)/);
@@ -135,10 +143,6 @@ function somar(map: Map<string, number>, nome: string, n: number) {
   map.set(key, (map.get(key) ?? 0) + n);
 }
 
-function visivel(payload: Record<string, unknown>) {
-  return payload.visivelSite !== false;
-}
-
 function linhas(value: unknown) {
   return texto(value)
     .split(/\n+/)
@@ -187,14 +191,12 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
     db.query<{ id: number; nome: string; categoria: string; tipo: string; preco: number; regime: string; horas: number; estado: string; payload: unknown }>(
       `SELECT c.id, c.nome, c.categoria, c.tipo, c.preco, c.regime, c.horas, c.estado, f.payload
        FROM cursos_gold c
-       LEFT JOIN curso_fichas f ON f.regime = 'gold' AND f.curso_id = c.id
-       WHERE lower(c.estado) = 'ativo'`,
+       LEFT JOIN curso_fichas f ON f.regime = 'gold' AND f.curso_id = c.id`,
     ),
     db.query<{ id: number; ufcd: string; nome_comercial: string; regime: string; horas: number; estado: string; payload: unknown }>(
       `SELECT c.id, c.ufcd, c.nome_comercial, c.regime, c.horas, c.estado, f.payload
        FROM cursos_fin c
-       LEFT JOIN curso_fichas f ON f.regime = 'fin' AND f.curso_id = c.id
-       WHERE lower(c.estado) = 'ativo'`,
+       LEFT JOIN curso_fichas f ON f.regime = 'fin' AND f.curso_id = c.id`,
     ),
     db.query<{ curso: string; n: number }>("SELECT curso, count(*)::int AS n FROM formandos_gold GROUP BY curso"),
     db.query<{ curso: string; n: number }>("SELECT curso, count(*)::int AS n FROM pagamentos WHERE lower(trim(estado)) = 'pago' GROUP BY curso"),
@@ -233,16 +235,15 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
   const brutos: CursoBruto[] = [];
   for (const row of gold.rows) {
     const payload = asObj(row.payload);
-    if (!visivel(payload)) continue;
-    const titulo = texto(payload.titulo) || row.nome;
+    const titulo = texto(payload.titulo) || row.nome || "Curso";
     brutos.push({
       id: row.id,
       regime: "gold",
       titulo,
       area: texto(payload.categoria) || row.categoria || "Gold",
       modalidadeTexto: texto(payload.regime) || row.regime,
-      horas: Number(row.horas) || 0,
-      preco: Number(row.preco) || 0,
+      horas: numeroPositivo(payload.horas, Number(row.horas) || 0),
+      preco: numeroPositivo(payload.preco, Number(row.preco) || 0),
       tipo: texto(payload.tipo) || row.tipo,
       payload,
       chaves: [...new Set([chave(row.nome), chave(titulo)].filter(Boolean))],
@@ -250,15 +251,14 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
   }
   for (const row of fin.rows) {
     const payload = asObj(row.payload);
-    if (!visivel(payload)) continue;
-    const titulo = texto(payload.titulo) || row.nome_comercial || row.ufcd;
+    const titulo = texto(payload.titulo) || row.nome_comercial || row.ufcd || "Curso";
     brutos.push({
       id: row.id,
       regime: "fin",
       titulo,
       area: texto(payload.categoria) || "Formação financiada",
       modalidadeTexto: texto(payload.regime) || row.regime,
-      horas: Number(row.horas) || 0,
+      horas: numeroPositivo(payload.horas, Number(row.horas) || 0),
       preco: 0,
       tipo: "Pré-inscrição",
       payload,

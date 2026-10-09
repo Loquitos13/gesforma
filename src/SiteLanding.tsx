@@ -247,18 +247,18 @@ function SplitHero() {
 }
 
 function Home() {
-  const { cursos, estado, recarregar } = useOferta();
+  const { destaques, estado, recarregar } = useOferta();
   const [filter, setFilter] = useState("Todos");
   const [query, setQuery] = useState("");
   const filtros = useMemo(() => {
-    const modos = new Set(cursos.map(curso => curso.format));
+    const modos = new Set(destaques.map(curso => curso.format));
     return ["Todos", ...["Presencial", "B-learning", "E-learning"].filter(modo => modos.has(modo))];
-  }, [cursos]);
+  }, [destaques]);
   const filtered = useMemo(
-    () => cursos.filter((course) =>
+    () => destaques.filter((course) =>
       (filter === "Todos" || course.format === filter) &&
       `${course.title} ${course.area}`.toLowerCase().includes(query.toLowerCase())),
-    [cursos, filter, query],
+    [destaques, filter, query],
   );
 
   return (

@@ -217,7 +217,7 @@ function SplitHero() {
             />
           </div>
           <div className="relative z-20 flex flex-col gap-6 lg:absolute lg:inset-0 lg:block">
-            <article className="ena-flutuar w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:left-0 lg:top-[5%] lg:w-[280px]">
+            <article className="ena-flutuar w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:left-0 lg:top-[8%] lg:w-[360px]">
               <Moldura src={ccp?.miniatura} alt={ccp?.title ?? "Formação de Formadores"} />
               <div className="p-5">
                 <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">{preco}</span>
@@ -226,7 +226,7 @@ function SplitHero() {
                 <a href={ccp ? `/formacao/${ccp.id}` : "/formacao"} className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#A60000]">Inscrever-me agora</a>
               </div>
             </article>
-            <article className="ena-flutuar-b w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:right-8 lg:top-[54%] lg:w-[268px]">
+            <article className="ena-flutuar-b w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:right-3 lg:top-[46%] lg:w-[360px]">
               <Moldura src={financiada?.miniatura} alt="Formação financiada" />
               <div className="p-5">
                 <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">Grátis + Subsídio</span>

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { htmlCronograma, sessoesPublicas } from "./cronogramaPublico.js";
-import { guardarImagemCurso, slotImagem } from "./cursoImagens.js";
+import { guardarImagemCurso, semIdNaMedia, slotImagem, urlsImagemDoCurso } from "./cursoImagens.js";
 import { listDriveFiles, readDriveContent, storeDriveFile } from "./googleDrive.js";
 import { sendMail } from "./mailer.js";
 import { podeGravarSessao } from "./sessaoAcesso.js";
@@ -1545,7 +1545,10 @@ export function registerPedagogiaRoutes(
       [regime, id],
     );
     const found = row.rows[0];
-    return { ficha: found ? { payload: fichaParaPapel(asObj(found.payload), req.actor!.role), criterios: asArr(found.criterios) } : null };
+    if (!found) return { ficha: null };
+    const urls = await urlsImagemDoCurso(db, regime, id);
+    const payload = semIdNaMedia(asObj(found.payload), urls);
+    return { ficha: { payload: fichaParaPapel(payload, req.actor!.role), criterios: asArr(found.criterios) } };
   });
 
   app.put("/v1/cursos/:regime/:id/ficha", async (req, reply) => {
@@ -1561,6 +1564,10 @@ export function registerPedagogiaRoutes(
       );
       const antigo = asObj(prev.rows[0]?.payload);
       payload = { ...payload, valoresFormador: antigo.valoresFormador ?? [] };
+    }
+    if (payload) {
+      const urls = await urlsImagemDoCurso(db, regime, id);
+      payload = semIdNaMedia(payload, urls);
     }
     await db.query(
       `INSERT INTO curso_fichas (regime, curso_id, payload, criterios)

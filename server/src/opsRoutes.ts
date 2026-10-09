@@ -36,6 +36,7 @@ import { criarPreinscricaoPublica } from "./preinscricaoPublica.js";
 import { precoParaOferta } from "./precoOferta.js";
 import { listCursosGoldActivos, listOfertaGold } from "./ofertaGold.js";
 import { listarCatalogoPublico } from "./catalogoPublico.js";
+import { lerImagemCurso, slotImagem } from "./cursoImagens.js";
 import { generateCronograma } from "./cronograma.js";
 import {
   bloqueioCursoFin, bloqueioCursoGold, bloqueioFormador, bloqueioTurma,
@@ -508,6 +509,21 @@ export function registerOpsRoutes(
   });
 
   app.get("/v1/public/catalogo", async () => listarCatalogoPublico(db));
+
+  app.get("/v1/public/cursos/:regime/:id/imagem/:slot", async (req, reply) => {
+    const regime = (req.params as { regime?: string }).regime;
+    const slot = slotImagem(String((req.params as { slot?: string }).slot ?? ""));
+    const id = Number((req.params as { id?: string }).id);
+    if ((regime !== "gold" && regime !== "fin") || !slot || !Number.isInteger(id)) {
+      return reply.code(404).send({ error: "imagem inexistente" });
+    }
+    const imagem = await lerImagemCurso(db, regime, id, slot);
+    if (!imagem) return reply.code(404).send({ error: "imagem inexistente" });
+    return reply
+      .header("cache-control", "public, max-age=300")
+      .type(imagem.mime)
+      .send(imagem.bytes);
+  });
 
   app.get("/v1/public/oferta", async () => {
     const [cursos, turmas] = await Promise.all([listCursosGoldActivos(db), listOfertaGold(db)]);

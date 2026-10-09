@@ -516,6 +516,19 @@ export const apiCursoFichas = (regime: Regime) =>
   api<{ fichas: { cursoId: number; payload: Record<string, unknown>; criterios: { id: string; label: string }[] }[] }>(`/v1/cursos/${regime}/fichas`);
 export const apiSaveCursoFicha = (regime: Regime, cursoId: number, body: Partial<CursoFicha>) =>
   api<{ ok: boolean }>(`/v1/cursos/${regime}/${cursoId}/ficha`, { method: "PUT", body: JSON.stringify(body) });
+export async function apiCursoImagem(regime: Regime, cursoId: number, slot: "banner" | "thumb", file: File) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const headers = new Headers();
+  headers.set("Accept", "application/json");
+  headers.set("X-Gesforma-Client", "web");
+  const res = await fetch(`${BASE}/v1/cursos/${regime}/${cursoId}/imagem/${slot}`, {
+    method: "POST", credentials: "include", headers, body: fd,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, typeof data.error === "string" ? data.error : "upload recusado");
+  return data as { nome: string; url: string };
+}
 
 export type FormandoDoc = { id: string; ok: boolean; fileName: string; data: string; driveFileId?: string; driveUrl?: string };
 export type FormandoNota = { id: number; autor: string; texto: string; data: string };

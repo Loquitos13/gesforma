@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useCatalogList } from "./CatalogsContext";
 import { AppModal, MultiSearchSelect, SearchSelect } from "./FormKit";
 import { OptionSelect } from "./OptionSelect";
-import { apiCreateDtpEntidade, apiCursoFicha, apiDtpEntidades, apiSaveCursoFicha, type DtpEntidade } from "./api";
+import { apiCreateDtpEntidade, apiCursoFicha, apiCursoImagem, apiDtpEntidades, apiSaveCursoFicha, type DtpEntidade } from "./api";
 import { CursoDocumentos } from "./CursoDocumentos";
 import { DtpModeloEditor } from "./DtpModeloEditor";
 import {
@@ -387,12 +387,23 @@ function checks(d: CursoSite, accent: CursoAccent) {
   ];
 }
 
+function urlImagem(url?: string) {
+  if (!url || url.startsWith("blob:")) return "";
+  return url;
+}
+
+function mediaGuardada(slot: MediaSlot | null | undefined): MediaSlot | null {
+  if (!slot) return null;
+  return { name: slot.name, url: urlImagem(slot.url) };
+}
+
 function MediaCard({
-  label, hint, value, onChange, tall, accent,
+  label, hint, value, onFile, tall, accent, aGravar,
 }: {
-  label: string; hint: string; value: MediaSlot | null; onChange: (v: MediaSlot | null) => void; tall?: boolean; accent: CursoAccent;
+  label: string; hint: string; value: MediaSlot | null; onFile: (file: File) => void; tall?: boolean; accent: CursoAccent; aGravar?: boolean;
 }) {
   const t = theme(accent);
+  const src = urlImagem(value?.url);
   return (
     <div>
       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{label}</p>
@@ -401,18 +412,18 @@ function MediaCard({
         onDrop={e => {
           e.preventDefault();
           const file = e.dataTransfer.files?.[0];
-          if (file) onChange({ name: file.name, url: URL.createObjectURL(file) });
+          if (file) onFile(file);
         }}
         className={`relative block w-full ${tall ? "h-40" : "h-32"} rounded-xl border-2 border-dashed border-slate-200 overflow-clip bg-slate-50 ${t.hoverMedia} transition-colors text-left group cursor-pointer`}
       >
-        {value?.url ? (
-          <img src={value.url} alt="" className="pointer-events-none absolute inset-0 w-full h-full object-cover" />
+        {src ? (
+          <img src={src} alt="" className="pointer-events-none absolute inset-0 w-full h-full object-cover" />
         ) : (
           <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${t.hero}`}>
             <div className={`absolute inset-0 opacity-40 ${t.glow}`} />
             <div className="absolute bottom-3 left-3">
               <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide ${t.badge} text-white`}>
-                {label.toUpperCase()}
+                {aGravar ? "A gravar…" : label.toUpperCase()}
               </span>
             </div>
           </div>
@@ -426,7 +437,7 @@ function MediaCard({
           accept="image/*"
           aria-label={label}
           className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
-          onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onChange({ name: file.name, url: URL.createObjectURL(file) }); }}
+          onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; if (file) onFile(file); }}
         />
       </label>
       <p className="text-[11px] text-slate-400 mt-1">{hint}</p>
@@ -646,6 +657,7 @@ export function CursoFichaView({
   const [falhas, setFalhas] = useState<Record<string, string>>({});
   const [entidades, setEntidades] = useState<DtpEntidade[]>([]);
   const [entidadeId, setEntidadeId] = useState<number | null>(curso?.entidadeResponsavelId ?? null);
+  const [imagemAGravar, setImagemAGravar] = useState<"banner" | "thumb" | "">("");
   const locaisSeeded = useRef(false);
 
   useEffect(() => {
@@ -685,6 +697,8 @@ export function CursoFichaView({
                 const nome = String((guardado as { titulo?: string }).titulo ?? curso?.nome ?? "");
                 return cursoECcp(nome) && parsed.estrutura !== "ccp" ? avaliacaoCcp() : parsed;
               })(),
+              banner: mediaGuardada(guardado.banner) ?? prev.banner,
+              thumb: mediaGuardada(guardado.thumb) ?? prev.thumb,
               precosOferta: parsePrecosOferta(guardado.precosOferta),
               planosSessao: Array.isArray(guardado.planosSessao) ? guardado.planosSessao : prev.planosSessao,
               valoresFormador: Array.isArray(guardado.valoresFormador) ? guardado.valoresFormador : prev.valoresFormador,
@@ -777,6 +791,24 @@ export function CursoFichaView({
     return base;
   }, []);
 
+  async function carregarImagem(slot: "banner" | "thumb", file: File) {
+    const id = cursoPersistId ?? curso?.id;
+    if (id == null) {
+      setErro("Grave o curso antes de carregar a imagem.");
+      return;
+    }
+    setImagemAGravar(slot);
+    setErro("");
+    try {
+      const gravada = await apiCursoImagem(accent, id, slot, file);
+      patch({ [slot]: { name: gravada.nome, url: gravada.url } });
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Não foi possível gravar a imagem.");
+    } finally {
+      setImagemAGravar("");
+    }
+  }
+
   function patch(p: Partial<CursoSite>) {
     setData(prev => ({ ...prev, ...p }));
     setSaved(false);
@@ -856,6 +888,8 @@ export function CursoFichaView({
       await apiSaveCursoFicha(accent, id, {
         payload: {
           ...data,
+          banner: mediaGuardada(data.banner),
+          thumb: mediaGuardada(data.thumb),
           organizacaoPrograma: orgProgramaGuardar,
           programa: programaGerado || data.programa,
           avaliacaoCurso: data.avaliacaoCurso,
@@ -946,11 +980,11 @@ export function CursoFichaView({
               <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-4">
                 <div>
                   <p className="text-sm font-semibold text-slate-800">Identidade visual</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Estas imagens alimentam o hero e os cartões do catálogo no site da ENA.</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Estas imagens ficam gravadas na base. O banner abre a página do curso e a miniatura entra no hero e nos cartões.</p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <MediaCard accent={accent} label="Banner" hint="Recomendado 1600×600. Aparece no topo da página do curso." value={data.banner} onChange={v => patch({ banner: v })} tall />
-                  <MediaCard accent={accent} label="Miniatura" hint="Recomendado 800×600. Usada nas listagens e partilhas." value={data.thumb} onChange={v => patch({ thumb: v })} />
+                  <MediaCard accent={accent} label="Banner" hint="Recomendado 1600×600. Aparece no topo da página do curso." value={data.banner} tall aGravar={imagemAGravar === "banner"} onFile={file => void carregarImagem("banner", file)} />
+                  <MediaCard accent={accent} label="Miniatura" hint="Recomendado 800×600. Usada nas listagens e no hero." value={data.thumb} aGravar={imagemAGravar === "thumb"} onFile={file => void carregarImagem("thumb", file)} />
                 </div>
               </div>
 

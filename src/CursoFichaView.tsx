@@ -859,10 +859,9 @@ export function CursoFichaView({
     setGravando(true);
     setErro("");
     let id = cursoPersistId ?? curso?.id;
-    const draftId = id ?? (Date.now() % 100000);
     if (onCommit && data.titulo.trim()) {
       const realId = await onCommit({
-        id: draftId,
+        id: id ?? (Date.now() % 100000),
         nome: data.titulo.trim(),
         categoria: data.categoria,
         tipo: data.tipo,
@@ -897,7 +896,6 @@ export function CursoFichaView({
         criterios: temAvaliacao ? criterios.filter(c => c.label.trim()) : [],
       });
       setSaved(true);
-      window.setTimeout(() => setSaved(false), 2400);
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Não foi possível gravar a ficha no servidor.");
     } finally {

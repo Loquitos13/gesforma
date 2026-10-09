@@ -22,6 +22,7 @@ export type CursoPublico = {
   organizacao: "modular" | "livre";
   programa: { titulo: string; horas: string }[];
   sessoes: { data: string; local: string; horario: string }[];
+  nomeOferta: string;
 };
 
 type CursoBruto = {
@@ -35,6 +36,7 @@ type CursoBruto = {
   tipo: string;
   payload: unknown;
   chaves: string[];
+  nomeOferta: string;
 };
 
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -247,6 +249,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       tipo: texto(payload.tipo) || row.tipo,
       payload,
       chaves: [...new Set([chave(row.nome), chave(titulo)].filter(Boolean))],
+      nomeOferta: row.nome || titulo,
     });
   }
   for (const row of fin.rows) {
@@ -263,6 +266,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       tipo: "Pré-inscrição",
       payload,
       chaves: [...new Set([chave(row.nome_comercial), chave(row.ufcd), chave(titulo)].filter(Boolean))],
+      nomeOferta: row.nome_comercial || titulo,
     });
   }
 
@@ -318,6 +322,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
         .sort((a, b) => a.iso.localeCompare(b.iso))
         .slice(0, 8)
         .map(({ data, local, horario }) => ({ data, local, horario })),
+      nomeOferta: curso.nomeOferta || curso.titulo,
     };
   });
 

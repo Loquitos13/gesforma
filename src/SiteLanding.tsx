@@ -1,4 +1,5 @@
 import { createContext, FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { InscricaoSite, useInscricao } from "./SiteInscricao";
 
 export type Course = {
   id: string;
@@ -20,6 +21,7 @@ export type Course = {
   organizacao: "modular" | "livre";
   programa: { titulo: string; horas: string }[];
   sessoes: { data: string; local: string; horario: string }[];
+  nomeOferta: string;
 };
 
 type CatalogoApi = {
@@ -43,6 +45,7 @@ type CatalogoApi = {
     organizacao?: "modular" | "livre";
     programa?: { titulo: string; horas: string }[];
     sessoes?: { data: string; local: string; horario: string }[];
+    nomeOferta?: string;
   }>;
   destaques: CatalogoApi["cursos"];
   ccp: CatalogoApi["cursos"][number] | null;
@@ -69,6 +72,7 @@ function mapCurso(curso: CatalogoApi["cursos"][number]): Course {
     organizacao: curso.organizacao === "livre" ? "livre" : "modular",
     programa: curso.programa ?? [],
     sessoes: curso.sessoes ?? [],
+    nomeOferta: curso.nomeOferta || curso.titulo,
   };
 }
 
@@ -192,6 +196,7 @@ function Moldura({ src, alt }: { src: string | null | undefined; alt: string }) 
 
 function SplitHero() {
   const { ccp, cursos } = useOferta();
+  const { abrir } = useInscricao();
   const financiada = cursos.find(curso => curso.regime === "fin" && curso.miniatura) ?? cursos.find(curso => curso.regime === "fin");
   const preco = ccp?.precoDesde != null ? `A partir de ${ccp.precoDesde.toLocaleString("pt-PT")}€` : "A partir de 100€";
   return (
@@ -223,7 +228,11 @@ function SplitHero() {
                 <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">{preco}</span>
                 <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">{ccp?.title ?? "Formação de Formadores (CCP)"}</h2>
                 <p className="mt-2 text-sm text-[#1C3350]/55">{ccp?.area ?? "Formação de formadores"}</p>
-                <a href={ccp ? `/formacao/${ccp.id}` : "/formacao"} className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#A60000]">Inscrever-me agora</a>
+                {ccp ? (
+                  <button type="button" onClick={() => abrir(ccp)} className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#A60000]">Inscrever-me agora</button>
+                ) : (
+                  <a href="/formacao" className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#A60000]">Explorar cursos</a>
+                )}
               </div>
             </article>
             <article className="ena-flutuar-b w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:right-3 lg:top-[46%] lg:w-[360px]">
@@ -390,6 +399,7 @@ function WhatsAppAssistant() {
   const [path, setPath] = useState<"all" | "funded" | "gold" | "direct">("all");
   const [format, setFormat] = useState("Todos");
   const { cursos } = useOferta();
+  const { abrir } = useInscricao();
   const [chosen, setChosen] = useState<Course | null>(null);
   const [consent, setConsent] = useState(false);
   const [summarySent, setSummarySent] = useState(false);
@@ -525,11 +535,11 @@ function WhatsAppAssistant() {
                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#075E54]">A sua escolha</span><strong className="mt-1 block">{chosen.title}</strong><span className="mt-2 block text-[#1C3350]/60">{chosen.format} · {chosen.duration} · {chosen.price}</span>
                 </div>
                 <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-white p-3 text-sm leading-6 shadow-sm">
-                  {chosen.enrollment === "Acesso direto" ? `Perfeito, ${name}. A pré-inscrição segue no formulário da ENA.` : `Perfeito, ${name}. A pré-inscrição é gratuita e a equipa ENA irá confirmar consigo os próximos passos.`}
+                  {chosen.enrollment === "Acesso direto" ? `Perfeito, ${name}. Primeiro os seus dados e a turma. O pagamento fica no passo seguinte.` : `Perfeito, ${name}. A pré-inscrição pede os seus dados e a turma. A equipa da ENA confirma os próximos passos.`}
                 </div>
                 <div className="ml-auto grid max-w-[90%] gap-2">
                   <label className="flex items-start gap-2 rounded-xl bg-white p-3 text-xs leading-5 shadow-sm"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-1 accent-[#075E54]" />Aceito que os dados desta conversa sejam usados para tratar a inscrição.</label>
-                  <a href="/pre-inscricao" aria-disabled={!consent} onClick={(event) => { if (!consent) event.preventDefault(); }} className={`flex items-center justify-between rounded-xl bg-[#075E54] px-4 py-3 text-sm font-bold text-white ${consent ? "" : "pointer-events-none opacity-40"}`}>Fazer pré-inscrição<Icon name="arrow" className="h-4 w-4" /></a>
+                  <button type="button" disabled={!consent || !chosen} onClick={() => { if (chosen) abrir(chosen); }} className="flex w-full items-center justify-between rounded-xl bg-[#075E54] px-4 py-3 text-sm font-bold text-white disabled:opacity-40">Fazer pré-inscrição<Icon name="arrow" className="h-4 w-4" /></button>
                   <button type="button" onClick={() => setSummarySent(true)} className="rounded-xl bg-[#DCF8C6] px-4 py-3 text-left text-sm font-bold">{summarySent ? "Resumo enviado para o seu email" : "Enviar-me este resumo por email"}</button>
                   <button type="button" onClick={() => transition("courses")} className="rounded-xl bg-[#DCF8C6] px-4 py-3 text-left text-sm font-bold">Ver outras recomendações</button>
                   <button type="button" onClick={restart} className="px-4 py-2 text-left text-xs font-bold text-[#075E54] underline">Recomeçar conversa</button>
@@ -561,12 +571,14 @@ export function SiteFrame({ children }: { children: ReactNode }) {
   const oferta = useOfertaState();
   return (
     <OfertaCtx.Provider value={oferta}>
-      <div className="site-ena min-h-screen bg-[#F9F9F9] text-[#1C3350]">
-        <Header />
-        {children}
-        <Footer />
-        <WhatsAppAssistant />
-      </div>
+      <InscricaoSite>
+        <div className="site-ena min-h-screen bg-[#F9F9F9] text-[#1C3350]">
+          <Header />
+          {children}
+          <Footer />
+          <WhatsAppAssistant />
+        </div>
+      </InscricaoSite>
     </OfertaCtx.Provider>
   );
 }

@@ -5,7 +5,7 @@ import { SearchSelect } from "./FormKit";
 import { LISTAS_OPCOES } from "./listaOpcoes";
 import { OFERTA_VAZIA, type CursoOfertaSel, type OfertaTurma } from "./oferta";
 
-const CONCELHOS = [
+export const CONCELHOS = [
   "Águeda", "Albergaria-a-Velha", "Alcobaça", "Almada", "Amadora", "Amarante", "Aveiro",
   "Barcelos", "Beja", "Braga", "Bragança", "Caldas da Rainha", "Cascais", "Castelo Branco",
   "Chaves", "Coimbra", "Covilhã", "Évora", "Fafe", "Faro", "Figueira da Foz", "Funchal",

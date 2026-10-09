@@ -84,6 +84,7 @@ const preSchema = z.object({
   codigoPostal: z.string().trim().max(20).optional(),
   motivoDesistencia: z.string().trim().max(80).optional(),
   pagamentoMetodo: z.string().trim().max(40).optional(),
+  acessoImediato: z.boolean().optional(),
   regime: z.enum(["gold", "fin"]).optional(),
 });
 
@@ -550,6 +551,8 @@ export function registerOpsRoutes(
       campanha: d.campanha,
       preco: d.preco,
       meioContacto: "Website",
+      pagamentoMetodo: d.pagamentoMetodo,
+      acessoImediato: d.acessoImediato,
     }, { ip: req.ip });
     if ("error" in created) {
       const code = created.error === "email inválido" ? 400 : 409;

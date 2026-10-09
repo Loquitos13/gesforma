@@ -25,6 +25,8 @@ export type PreinscricaoPublicaInput = {
   campanha?: string;
   preco?: number;
   meioContacto?: string;
+  pagamentoMetodo?: string;
+  acessoImediato?: boolean;
 };
 
 export async function criarPreinscricaoPublica(
@@ -45,11 +47,14 @@ export async function criarPreinscricaoPublica(
     horario: input.horario,
     dataInicio: input.inicioCurso,
   });
-  const local = sanitizeHeader(turma?.local || input.local || "");
+  const acessoImediato = Boolean(input.acessoImediato) && !turma;
+  const local = sanitizeHeader(turma?.local || input.local || (acessoImediato ? "Online" : ""));
   const horario = sanitizeHeader(turma?.horario || input.horario || "");
-  const inicio = turma?.dataInicio || input.inicioCurso || "-";
+  const pedidoInicio = input.inicioCurso && input.inicioCurso !== "-" ? input.inicioCurso : "";
+  const inicio = turma?.dataInicio || pedidoInicio || (acessoImediato ? "Acesso imediato" : "-");
   const turmaId = turma?.turmaId ?? null;
-  if (!turma) return { error: "escolha curso, local, horário e data de uma turma liberada" as const };
+  if (!turma && !acessoImediato) return { error: "escolha curso, local, horário e data de uma turma liberada" as const };
+  const metodo = sanitizeHeader(input.pagamentoMetodo || "");
 
   const dup = await db.query(
     "SELECT * FROM preinscricoes WHERE lower(email) = $1 ORDER BY id DESC LIMIT 1",
@@ -71,13 +76,13 @@ export async function criarPreinscricaoPublica(
   const preco = await precoParaOferta(db, curso, local, horario);
   const id = await nextOpsId(db);
   await db.query(
-    `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, entrada, meio_contacto, horario, turma_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Não contactado',$12,$13,'preinscricao',$14,$15,$16)`,
+    `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, entrada, meio_contacto, horario, turma_id, pagamento_metodo)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Não contactado',$12,$13,'preinscricao',$14,$15,$16,$17)`,
     [
       id, nowStamp(), sanitizeHeader(input.nome), sanitizeHeader(input.apelido || ""), email,
       telf, inicio, sanitizeHeader(input.concelho || ""),
       local, curso, preco ?? Number(input.preco ?? 0),
-      sanitizeHeader(input.campanha || ""), origem, meio, horario, turmaId,
+      sanitizeHeader(input.campanha || ""), origem, meio, horario, turmaId, metodo,
     ],
   );
   const detalhe = [origem, curso, local, horario, inicio !== "-" ? inicio : ""].filter(Boolean).join(" · ");

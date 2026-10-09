@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon, SiteFrame, useOferta, type Course } from "./SiteLanding";
+import { useInscricao } from "./SiteInscricao";
 
 function Catalogo() {
   const { cursos, estado, recarregar } = useOferta();
+  const { abrir } = useInscricao();
   const inicial = new URLSearchParams(window.location.search).get("linha");
   const [query, setQuery] = useState("");
   const [format, setFormat] = useState("Todos");
@@ -182,7 +184,7 @@ function Catalogo() {
                     <p><span className="block text-xs text-[#1C3350]/40">Acesso</span>{course.enrollment}</p>
                     <p><span className="block text-xs text-[#1C3350]/40">Investimento</span><strong>{course.price}</strong></p>
                   </div>
-                  <a href="/pre-inscricao" className="mt-5 block w-full bg-[#1C3350] px-4 py-3 text-center text-sm font-bold text-white">Pré-inscrever</a>
+                  <button type="button" onClick={() => abrir(course)} className="mt-5 block w-full bg-[#1C3350] px-4 py-3 text-center text-sm font-bold text-white">{course.enrollment === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever"}</button>
                 </article>
               ))}
             </div>
@@ -202,6 +204,7 @@ function LinhaCurso({
   onSave: () => void;
   onCompare: () => void;
 }) {
+  const { abrir } = useInscricao();
   return (
     <article className="group grid border border-[#1C3350]/12 bg-white transition-shadow hover:shadow-[0_14px_40px_rgba(28,51,80,.1)] md:grid-cols-[12px_148px_1fr_auto]">
       <div className={course.funding === "Gold" ? "bg-[#FFA900]" : "bg-[#A60000]"} />
@@ -230,7 +233,7 @@ function LinhaCurso({
         </div>
       </div>
       <div className="flex flex-col justify-center gap-2 border-t border-[#1C3350]/10 p-5 md:min-w-[190px] md:border-l md:border-t-0">
-        <a href="/pre-inscricao" className="flex w-full items-center justify-center gap-3 bg-[#A60000] px-4 py-3 text-sm font-bold text-white hover:bg-[#8B0000]">Pré-inscrever <Icon name="arrow" className="h-4 w-4" /></a>
+        <button type="button" onClick={() => abrir(course)} className="flex w-full items-center justify-center gap-3 bg-[#A60000] px-4 py-3 text-sm font-bold text-white hover:bg-[#8B0000]">{course.enrollment === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever"} <Icon name="arrow" className="h-4 w-4" /></button>
         <label className="flex items-center justify-center gap-2 text-xs font-bold text-[#1C3350]/50">
           <input type="checkbox" checked={compared} onChange={onCompare} className="accent-[#A60000]" />
           Comparar

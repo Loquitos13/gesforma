@@ -44,7 +44,7 @@ function Catalogo() {
   }
 
   return (
-    <main className="min-h-[75vh] bg-[#F9F9F9]">
+    <main className="min-h-[75vh] bg-[#16324F]">
       <section className="bg-[#1C3350] px-5 py-14 text-white lg:px-8 lg:py-20">
         <div className="mx-auto max-w-[1240px]">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#FFA900]">Oferta formativa ENA</p>
@@ -61,23 +61,23 @@ function Catalogo() {
           </div>
         </div>
       </section>
-      <section className="border-b border-[#1C3350]/10 bg-white px-5 lg:px-8">
-        <div className="mx-auto flex max-w-[1240px] flex-col gap-px bg-[#1C3350]/10 sm:flex-row">
+      <section className="border-b-4 border-[#FFA900] bg-[#14263D] px-5 lg:px-8">
+        <div className="mx-auto flex max-w-[1240px] flex-col gap-px bg-[#FFA900]/40 sm:flex-row">
           {([
             ["Todas", "Toda a formação", "Explore a oferta completa da ENA"],
             ["Financiada", "Formação financiada", "Percursos elegíveis com financiamento"],
             ["Gold", "ENA Gold", "Formação premium autofinanciada"],
           ] as const).map(([value, title, text]) => (
-            <button key={value} type="button" onClick={() => { setFunding(value); if (value !== "Gold") setEnrollment("Todas"); }} className={`flex-1 px-6 py-5 text-left transition-colors ${funding === value ? "bg-[#FFF1D1] shadow-[inset_0_-4px_0_#FFA900]" : "bg-white hover:bg-[#F9F9F9]"}`}>
+            <button key={value} type="button" onClick={() => { setFunding(value); if (value !== "Gold") setEnrollment("Todas"); }} className={`flex-1 px-6 py-5 text-left transition-colors ${funding === value ? "bg-[#FFA900] text-[#14263D] shadow-[inset_0_-4px_0_#A60000]" : "bg-[#1C3350] text-white hover:bg-[#A60000]"}`}>
               <strong className="block text-sm">{title}</strong>
-              <span className="mt-1 block text-xs text-[#1C3350]/50">{text}</span>
+              <span className={`mt-1 block text-xs ${funding === value ? "text-[#14263D]/70" : "text-white/55"}`}>{text}</span>
             </button>
           ))}
         </div>
       </section>
       <section className="px-5 py-10 lg:px-8 lg:py-14">
         <div className="mx-auto grid max-w-[1240px] gap-8 lg:grid-cols-[240px_1fr]">
-          <aside className="h-fit border border-[#1C3350]/12 bg-white p-5 lg:sticky lg:top-28">
+          <aside className="h-fit border-t-4 border-[#FFA900] bg-white p-5 lg:sticky lg:top-28">
             <div className="flex items-center justify-between border-b border-[#1C3350]/10 pb-4">
               <strong>Filtros</strong>
               <button type="button" onClick={limpar} className="text-xs font-bold text-[#A60000] underline">Limpar</button>
@@ -134,7 +134,7 @@ function Catalogo() {
               <p className="text-sm text-[#1C3350]/60"><strong className="text-[#1C3350]">{estado === "pronto" ? results.length : "…"}</strong> formações encontradas</p>
               <span className="hidden text-xs font-bold uppercase tracking-wider text-[#1C3350]/45 sm:block">Ordenado por vendas</span>
             </div>
-            {estado === "a-carregar" && <p className="border border-[#1C3350]/10 bg-white px-6 py-16 text-center text-[#1C3350]/60">A carregar o catálogo.</p>}
+            {estado === "a-carregar" && <p className="border border-white/10 bg-[#1C3350] px-6 py-16 text-center text-white/70">A carregar o catálogo.</p>}
             {estado === "erro" && (
               <div className="border border-[#1C3350]/10 bg-white px-6 py-16 text-center">
                 <p className="text-[#1C3350]/70">Não foi possível carregar os cursos.</p>

@@ -50,7 +50,7 @@ function Curso({ curso }: { curso: Course }) {
     || (curso.format === "E-learning" ? "Online" : "A anunciar");
 
   return (
-    <main className="bg-[#F9F9F9]">
+    <main className="bg-[#E4EDF6]">
       <section className="bg-[#1C3350] text-white">
         <div className="mx-auto max-w-[1240px] px-5 pt-10 lg:px-8">
           <a href="/formacao" className="inline-flex items-center gap-2 text-sm font-bold text-white/60 hover:text-white">
@@ -77,7 +77,7 @@ function Curso({ curso }: { curso: Course }) {
             <p className="mt-4 text-lg leading-8 text-[#1C3350]/75">{curso.description}</p>
             <div className="mt-8 grid grid-cols-2 gap-px bg-[#1C3350]/10 sm:grid-cols-4">
               {[[curso.duration, "Duração"], [curso.start, "Início"], [local, "Local"], [curso.price, "Investimento"]].map(([value, label]) => (
-                <div key={label} className="bg-white p-4">
+                <div key={label} className="border-t-4 border-[#FFA900] bg-white p-4">
                   <span className="block text-xs uppercase tracking-wider text-[#1C3350]/45">{label}</span>
                   <strong className="mt-2 block text-sm">{value}</strong>
                 </div>
@@ -125,7 +125,7 @@ function Curso({ curso }: { curso: Course }) {
               </>
             )}
           </div>
-          <aside className="h-fit bg-white p-7 shadow-[0_18px_50px_rgba(18,52,59,.1)] lg:sticky lg:top-28">
+          <aside className="h-fit border-t-4 border-[#A60000] bg-white p-7 shadow-[0_18px_50px_rgba(18,52,59,.18)] lg:sticky lg:top-28">
             <div className="mb-5 h-36 max-h-36 w-full max-w-full overflow-hidden bg-[#E7EBF0]">
               {curso.miniatura && <img src={curso.miniatura} alt="" className="h-full max-h-36 w-full object-cover" />}
             </div>

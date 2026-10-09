@@ -176,29 +176,29 @@ function Header() {
   const [open, setOpen] = useState(false);
   const t = useSiteTexto();
   return (
-    <header className="sticky top-0 z-40 border-b border-[#1C3350]/10 bg-[#F9F9F9]/95 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b-4 border-[#FFA900] bg-[#14263D] text-white">
       <div className="mx-auto flex h-20 max-w-[1240px] items-center justify-between px-5 lg:px-8">
         <a href="/" className="group flex items-center gap-3" aria-label="ENA, página inicial">
           <img src="/imagens/ena_logo.svg" alt="ENA" className="h-9 w-auto sm:h-10" />
-          <span className="hidden text-left text-[10px] font-bold uppercase leading-tight tracking-[0.12em] text-[#1C3350]/70 sm:block">{t("marcaLinha1")}<br />{t("marcaLinha2")}</span>
+          <span className="hidden text-left text-[10px] font-bold uppercase leading-tight tracking-[0.12em] text-[#FFA900] sm:block">{t("marcaLinha1")}<br />{t("marcaLinha2")}</span>
         </a>
         <nav className="hidden items-center gap-8 text-sm font-semibold lg:flex" aria-label="Navegação principal">
-          <a href="/formacao" className="hover:text-[#A60000]">{t("navFormacao")}</a>
-          <a href="/#empresas" className="hover:text-[#A60000]">{t("navEmpresas")}</a>
+          <a href="/formacao" className="text-white/85 hover:text-[#FFA900]">{t("navFormacao")}</a>
+          <a href="/#empresas" className="text-white/85 hover:text-[#FFA900]">{t("navEmpresas")}</a>
         </nav>
         <div className="hidden items-center gap-4 lg:flex">
-          <a href="/entrar" className="text-sm font-semibold underline decoration-[#A60000] decoration-2 underline-offset-4">{t("navFormando")}</a>
-          <a href="/entrar" className="bg-[#1C3350] px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-[#A60000]">{t("navEntrar")}</a>
+          <a href="/entrar" className="text-sm font-semibold text-[#FFA900] underline decoration-[#A60000] decoration-2 underline-offset-4">{t("navFormando")}</a>
+          <a href="/entrar" className="bg-[#A60000] px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-[#FFA900] hover:text-[#14263D]">{t("navEntrar")}</a>
         </div>
         <button type="button" onClick={() => setOpen(!open)} className="p-2 lg:hidden" aria-label={open ? "Fechar menu" : "Abrir menu"}><Icon name={open ? "close" : "menu"} /></button>
       </div>
       {open && (
-        <nav className="border-t border-[#1C3350]/10 bg-[#F9F9F9] px-5 py-6 lg:hidden">
+        <nav className="border-t border-white/10 bg-[#14263D] px-5 py-6 text-white lg:hidden">
           <div className="flex flex-col gap-5 font-semibold">
             <a href="/formacao" onClick={() => setOpen(false)}>{t("navFormacao")}</a>
             <a href="/#empresas" onClick={() => setOpen(false)}>{t("navEmpresas")}</a>
-            <a href="/entrar" className="border-t border-[#1C3350]/10 pt-5 text-[#A60000]">{t("navFormando")}</a>
-            <a href="/entrar" className="bg-[#1C3350] px-5 py-3 text-center text-sm font-bold text-white">{t("navEntrar")}</a>
+            <a href="/entrar" className="border-t border-white/15 pt-5 text-[#FFA900]">{t("navFormando")}</a>
+            <a href="/entrar" className="bg-[#A60000] px-5 py-3 text-center text-sm font-bold text-white">{t("navEntrar")}</a>
           </div>
         </nav>
       )}
@@ -223,20 +223,20 @@ function SplitHero() {
   const preco = ccp?.price ?? "";
   return (
     <section className="px-4 pb-2 pt-4 sm:px-6 lg:px-8" aria-label="Destaques">
-      <div className="relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[32px] bg-white shadow-[0_28px_80px_rgba(20,38,61,.08)] lg:min-h-[860px] lg:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)]">
+      <div className="relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[32px] bg-[#1C3350] shadow-[0_28px_80px_rgba(20,38,61,.28)] lg:min-h-[860px] lg:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)]">
         <div className="relative z-20 flex flex-col justify-center px-6 pb-4 pt-10 sm:px-8 lg:px-10 lg:py-12">
-          <h1 className="max-w-[18ch] font-serif text-[2rem] font-bold leading-[1.08] tracking-[-0.03em] text-[#1C3350] sm:text-4xl">
+          <h1 className="max-w-[18ch] font-serif text-[2rem] font-bold leading-[1.08] tracking-[-0.03em] text-white sm:text-4xl">
             {t("heroTitulo")}
           </h1>
-          <p className="mt-4 max-w-xs text-sm leading-6 text-[#1C3350]/60">
+          <p className="mt-4 max-w-xs text-sm leading-6 text-white/70">
             {t("heroTexto")}
           </p>
-          <a href="/formacao" className="mt-5 inline-flex w-fit items-center rounded-full border border-[#1C3350]/30 px-5 py-2.5 text-sm font-semibold text-[#1C3350]/80 transition-colors hover:bg-[#1C3350] hover:text-white">
+          <a href="/formacao" className="mt-5 inline-flex w-fit items-center rounded-full bg-[#FFA900] px-5 py-2.5 text-sm font-bold text-[#14263D] transition-colors hover:bg-[#A60000] hover:text-white">
             {t("heroBotao")}
           </a>
         </div>
         <div className="relative z-20 flex flex-col gap-6 px-4 pb-32 pt-2 lg:block lg:h-auto lg:min-h-full lg:px-0 lg:pb-0 lg:pt-0">
-          <div className="relative mx-auto h-[180px] w-[180px] shrink-0 overflow-hidden rounded-full bg-[#E7EBF0] shadow-[0_0_0_10px_#E7EBF0] sm:h-[220px] sm:w-[220px] lg:absolute lg:right-[-4rem] lg:top-1/2 lg:mx-0 lg:h-[620px] lg:w-[620px] lg:-translate-y-1/2 lg:shadow-[0_0_0_14px_#E7EBF0]">
+          <div className="relative mx-auto h-[180px] w-[180px] shrink-0 overflow-hidden rounded-full bg-[#FFA900] shadow-[0_0_0_10px_#FFA900] sm:h-[220px] sm:w-[220px] lg:absolute lg:right-[-4rem] lg:top-1/2 lg:mx-0 lg:h-[620px] lg:w-[620px] lg:-translate-y-1/2 lg:shadow-[0_0_0_14px_#A60000]">
             {heroImagem && (
               <img
                 src={heroImagem}
@@ -247,26 +247,26 @@ function SplitHero() {
           </div>
           <div className="relative z-20 flex flex-col gap-6 lg:absolute lg:inset-0 lg:block">
             {ccp && (
-              <article className="ena-flutuar w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:left-0 lg:top-[8%] lg:w-[360px]">
+              <article className="ena-flutuar w-full overflow-hidden rounded-2xl border-t-4 border-[#FFA900] bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] lg:absolute lg:left-0 lg:top-[8%] lg:w-[360px]">
                 <Moldura src={ccp.miniatura} alt={ccp.title} />
                 <div className="p-5">
-                  {preco && <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">{preco}</span>}
+                  {preco && <span className="inline-flex rounded-md bg-[#FFA900] px-2.5 py-1 text-[11px] font-extrabold text-[#14263D]">{preco}</span>}
                   <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">{ccp.title}</h2>
                   <p className="mt-2 text-sm text-[#1C3350]/55">{ccp.area}</p>
-                  <button type="button" onClick={() => abrir(ccp)} className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#A60000]">
+                  <button type="button" onClick={() => abrir(ccp)} className="mt-4 flex w-full items-center justify-center rounded-full bg-[#A60000] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#14263D]">
                     {ccp.enrollment === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever"}
                   </button>
                 </div>
               </article>
             )}
             {financiada && (
-              <article className="ena-flutuar-b w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:right-3 lg:top-[46%] lg:w-[360px]">
+              <article className="ena-flutuar-b w-full overflow-hidden rounded-2xl border-t-4 border-[#A60000] bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] lg:absolute lg:right-3 lg:top-[46%] lg:w-[360px]">
                 <Moldura src={financiada.miniatura} alt={financiada.title} />
                 <div className="p-5">
-                  {financiada.price && <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">{financiada.price}</span>}
+                  {financiada.price && <span className="inline-flex rounded-md bg-[#A60000] px-2.5 py-1 text-[11px] font-extrabold text-white">{financiada.price}</span>}
                   <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">{financiada.title}</h2>
                   <p className="mt-2 text-sm text-[#1C3350]/55">{financiada.area}</p>
-                  <button type="button" onClick={() => abrir(financiada)} className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#A60000]">
+                  <button type="button" onClick={() => abrir(financiada)} className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#FFA900] hover:text-[#14263D]">
                     {financiada.enrollment === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever"}
                   </button>
                 </div>
@@ -275,7 +275,7 @@ function SplitHero() {
           </div>
         </div>
         <svg aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 z-10 h-24 w-full sm:h-28" viewBox="0 0 1200 140" preserveAspectRatio="none">
-          <path d="M0 140V72C90 36 180 108 320 78C460 48 540 18 700 42C860 66 940 112 1080 82C1140 68 1170 88 1200 74V140H0Z" fill="#1C3350" />
+          <path d="M0 140V72C90 36 180 108 320 78C460 48 540 18 700 42C860 66 940 112 1080 82C1140 68 1170 88 1200 74V140H0Z" fill="#A60000" />
           <path d="M0 140V104C140 78 240 124 420 106C600 88 700 126 900 108C1040 96 1120 122 1200 104V140H0Z" fill="#FFA900" />
         </svg>
       </div>
@@ -309,30 +309,30 @@ function Home() {
     <main>
       <SplitHero />
 
-      <section id="formacao" className="scroll-mt-24 bg-[#F9F9F9] px-5 py-20 lg:px-8 lg:py-28">
+      <section id="formacao" className="scroll-mt-24 bg-[#16324F] px-5 py-20 text-white lg:px-8 lg:py-28">
         <div className="mx-auto max-w-[1240px]">
           <div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end">
             <div>
-              <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-[#A60000]">{t("ofertaKicker")}</p>
-              <h2 className="font-serif text-4xl leading-tight tracking-[-0.03em] text-[#1C3350] sm:text-5xl">{t("ofertaTitulo")}</h2>
+              <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-[#FFA900]">{t("ofertaKicker")}</p>
+              <h2 className="font-serif text-4xl leading-tight tracking-[-0.03em] text-white sm:text-5xl">{t("ofertaTitulo")}</h2>
             </div>
-            <label className="flex w-full items-center gap-3 border-b-2 border-[#1C3350] pb-3 lg:max-w-sm">
+            <label className="flex w-full items-center gap-3 border-b-2 border-[#FFA900] pb-3 text-white lg:max-w-sm">
               <Icon name="search" />
               <span className="sr-only">Pesquisar formação</span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("ofertaPesquisa")} className="w-full bg-transparent text-sm outline-none placeholder:text-[#1C3350]/45" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("ofertaPesquisa")} className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/45" />
             </label>
           </div>
-          <div className="mt-10 flex flex-wrap gap-2 border-b border-[#1C3350]/15 pb-5">
+          <div className="mt-10 flex flex-wrap gap-2 border-b border-white/15 pb-5">
             {filtros.map((item) => (
-              <button key={item} type="button" onClick={() => setFilter(item)} className={`px-5 py-2.5 text-sm font-bold transition-colors ${filter === item ? "bg-[#1C3350] text-white" : "bg-white text-[#1C3350] hover:bg-[#1C3350]/10"}`}>
+              <button key={item} type="button" onClick={() => setFilter(item)} className={`px-5 py-2.5 text-sm font-bold transition-colors ${filter === item ? "bg-[#FFA900] text-[#14263D]" : "bg-white/10 text-white hover:bg-[#A60000]"}`}>
                 {item}
               </button>
             ))}
-            <span className="ml-auto hidden self-center text-sm text-[#1C3350]/55 sm:block">{filtered.length} formações disponíveis</span>
+            <span className="ml-auto hidden self-center text-sm text-white/60 sm:block">{filtered.length} formações disponíveis</span>
           </div>
           <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             {estado === "pronto" && filtered.map((course) => (
-              <article key={course.id} className="group flex min-h-[390px] max-w-full flex-col overflow-hidden border border-[#1C3350]/12 bg-white transition-all hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(18,52,59,.12)]">
+              <article key={course.id} className="group flex min-h-[390px] max-w-full flex-col overflow-hidden border-t-4 border-[#FFA900] bg-white text-[#1C3350] transition-all hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(8,18,32,.35)]">
                 <a href={`/formacao/${course.id}`} className="relative block h-44 max-h-44 w-full max-w-full overflow-hidden bg-[#E7EBF0]">
                   {course.miniatura && <img src={course.miniatura} alt="" className="h-full max-h-44 w-full max-w-full object-cover" />}
                   <span className={`absolute left-4 top-4 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.1em] ${course.format === "E-learning" ? "bg-[#FFA900] text-[#1C3350]" : "bg-[#1C3350] text-white"}`}>{course.format}</span>
@@ -352,40 +352,40 @@ function Home() {
               </article>
             ))}
           </div>
-          {estado === "a-carregar" && <p className="py-20 text-center text-[#1C3350]/60">A carregar a oferta formativa.</p>}
+          {estado === "a-carregar" && <p className="py-20 text-center text-white/70">A carregar a oferta formativa.</p>}
           {estado === "erro" && (
             <div className="py-16 text-center">
-              <p className="text-[#1C3350]/70">Não foi possível carregar os cursos.</p>
-              <button type="button" onClick={recarregar} className="mt-4 bg-[#1C3350] px-5 py-3 text-sm font-bold text-white">Tentar de novo</button>
+              <p className="text-white/80">Não foi possível carregar os cursos.</p>
+              <button type="button" onClick={recarregar} className="mt-4 bg-[#FFA900] px-5 py-3 text-sm font-bold text-[#14263D]">Tentar de novo</button>
             </div>
           )}
-          {estado === "pronto" && filtered.length === 0 && <p className="py-20 text-center text-[#1C3350]/60">Não encontrámos formações para esta pesquisa.</p>}
+          {estado === "pronto" && filtered.length === 0 && <p className="py-20 text-center text-white/70">Não encontrámos formações para esta pesquisa.</p>}
         </div>
       </section>
 
-      <section id="metodo" className="bg-white px-5 py-20 lg:px-8 lg:py-28">
+      <section id="metodo" className="bg-[#A60000] px-5 py-20 text-white lg:px-8 lg:py-28">
         <div className="mx-auto grid max-w-[1240px] gap-14 lg:grid-cols-[.85fr_1.15fr] lg:items-center">
           <div className="relative">
             <div className="aspect-[4/5] overflow-hidden bg-[#E7EBF0]">
               {metodoImagem && <img src={metodoImagem} alt={t("metodoImagemAlt")} className="h-full w-full object-cover" />}
             </div>
             {t("metodoNota") && (
-              <div className="absolute -bottom-7 -right-3 w-44 bg-[#A60000] p-5 text-white sm:right-8">
+              <div className="absolute -bottom-7 -right-3 w-44 bg-[#FFA900] p-5 text-[#14263D] sm:right-8">
                 <strong className="block font-serif text-4xl">{t("metodoNota")}</strong>
                 {t("metodoNotaLegenda") && <span className="mt-1 block text-xs font-bold uppercase tracking-wider">{t("metodoNotaLegenda")}</span>}
               </div>
             )}
           </div>
           <div>
-            <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-[#A60000]">{t("metodoKicker")}</p>
-            <h2 className="font-serif text-4xl leading-tight tracking-[-0.03em] text-[#1C3350] sm:text-5xl">{t("metodoTitulo")}</h2>
-            <p className="mt-6 max-w-xl text-lg leading-8 text-[#1C3350]/65">{t("metodoTexto")}</p>
+            <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-[#FFA900]">{t("metodoKicker")}</p>
+            <h2 className="font-serif text-4xl leading-tight tracking-[-0.03em] text-white sm:text-5xl">{t("metodoTitulo")}</h2>
+            <p className="mt-6 max-w-xl text-lg leading-8 text-white/80">{t("metodoTexto")}</p>
             <div className="mt-10 grid gap-x-8 gap-y-7 sm:grid-cols-2">
               {pilares.map(({ number, title, text }) => (
-                <div key={number} className="border-t border-[#1C3350]/20 pt-5">
-                  <span className="text-xs font-extrabold text-[#A60000]">{number}</span>
-                  <h3 className="mt-2 font-bold text-[#1C3350]">{title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-[#1C3350]/60">{text}</p>
+                <div key={number} className="border-t border-[#FFA900]/50 pt-5">
+                  <span className="text-xs font-extrabold text-[#FFA900]">{number}</span>
+                  <h3 className="mt-2 font-bold text-white">{title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-white/75">{text}</p>
                 </div>
               ))}
             </div>
@@ -393,14 +393,14 @@ function Home() {
         </div>
       </section>
 
-      <section id="empresas" className="scroll-mt-24 bg-[#EDEEF1] px-5 py-16 lg:px-8">
+      <section id="empresas" className="scroll-mt-24 bg-[#FFA900] px-5 py-16 text-[#14263D] lg:px-8">
         <div className="mx-auto flex max-w-[1240px] flex-col justify-between gap-8 lg:flex-row lg:items-center">
           <div className="max-w-2xl">
             <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#A60000]">{t("empresasKicker")}</p>
-            <h2 className="mt-4 font-serif text-4xl text-[#1C3350]">{t("empresasTitulo")}</h2>
-            <p className="mt-4 text-[#1C3350]/65">{t("empresasTexto")}</p>
+            <h2 className="mt-4 font-serif text-4xl text-[#14263D]">{t("empresasTitulo")}</h2>
+            <p className="mt-4 text-[#14263D]/80">{t("empresasTexto")}</p>
           </div>
-          <a href="#contactos" className="group flex min-w-fit items-center justify-between gap-10 bg-[#1C3350] px-7 py-5 font-bold text-white hover:bg-[#A60000]">{t("empresasBotao")} <Icon name="arrow" className="transition-transform group-hover:translate-x-1" /></a>
+          <a href="#contactos" className="group flex min-w-fit items-center justify-between gap-10 bg-[#A60000] px-7 py-5 font-bold text-white hover:bg-[#14263D]">{t("empresasBotao")} <Icon name="arrow" className="transition-transform group-hover:translate-x-1" /></a>
         </div>
       </section>
     </main>
@@ -414,7 +414,7 @@ function Footer() {
   const contactos = [t("rodapeEmail"), t("rodapeTelefone"), t("rodapeHorario")].filter(Boolean);
   const ano = new Date().getFullYear();
   return (
-    <footer id="contactos" className="scroll-mt-24 bg-[#14263D] px-5 py-14 text-white lg:px-8">
+    <footer id="contactos" className="scroll-mt-24 border-t-4 border-[#FFA900] bg-[#0E1C2E] px-5 py-14 text-white lg:px-8">
       <div className="mx-auto max-w-[1240px]">
         <div className="grid gap-10 border-b border-white/15 pb-12 md:grid-cols-4">
           <div className="md:col-span-2">
@@ -633,7 +633,7 @@ export function SiteFrame({ children }: { children: ReactNode }) {
     <OfertaCtx.Provider value={oferta}>
       <SiteTextoCtx.Provider value={texto}>
       <InscricaoSite>
-        <div className="site-ena min-h-screen bg-[#F9F9F9] text-[#1C3350]">
+        <div className="site-ena min-h-screen bg-[#14263D] text-[#1C3350]">
           <Header />
           {children}
           <Footer />

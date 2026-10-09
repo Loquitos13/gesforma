@@ -133,7 +133,7 @@ body:has(input[type="file"]:focus) [data-ficha-sticky] {
   --font-sans: "Atkinson Hyperlegible", system-ui, sans-serif;
   --font-serif: "Atkinson Hyperlegible", Georgia, serif;
   font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
-  background: #f9f9f9;
+  background: #14263d;
   color: #1c3350;
 }
 

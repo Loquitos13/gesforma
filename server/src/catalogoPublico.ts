@@ -1,4 +1,5 @@
 import type { Db } from "./db/pool.js";
+import { mapaImagensPublicas } from "./cursoImagens.js";
 import { hojeLisboa } from "./datas.js";
 
 export type CursoPublico = {
@@ -15,6 +16,7 @@ export type CursoPublico = {
   financiamento: "Gold" | "Financiada";
   inscricao: "Acesso direto" | "Pré-inscrição";
   miniatura: string | null;
+  banner: string | null;
   vendas: number;
   objetivos: string[];
   programa: string[];
@@ -135,7 +137,7 @@ function linhas(value: unknown) {
 }
 
 export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPublico[]; destaques: CursoPublico[]; ccp: CursoPublico | null }> {
-  const [gold, fin, formandosGold, pagos, formandosFin, turmasGold, turmasFin] = await Promise.all([
+  const [gold, fin, formandosGold, pagos, formandosFin, turmasGold, turmasFin, imagens] = await Promise.all([
     db.query<{ id: number; nome: string; categoria: string; tipo: string; preco: number; regime: string; horas: number; estado: string; payload: unknown }>(
       `SELECT c.id, c.nome, c.categoria, c.tipo, c.preco, c.regime, c.horas, c.estado, f.payload
        FROM cursos_gold c
@@ -157,6 +159,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
     db.query<{ curso: string; local: string; horario: string; data_inicio: string; estado: string }>(
       "SELECT curso, local, horario, data_inicio, estado FROM turmas_fin",
     ),
+    mapaImagensPublicas(db),
   ]);
 
   const vendas = new Map<string, number>();
@@ -227,7 +230,10 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
     const inicio = curso.chaves.map(key => inicios.get(key)).find(Boolean);
     const precos = curso.regime === "gold" ? precosDaFicha(payload, curso.preco) : [];
     const desde = precos.length ? Math.min(...precos) : null;
-    const miniatura = mediaUrl(payload.thumb) || mediaUrl(payload.banner);
+    const gravadaThumb = imagens.get(`${curso.regime}:${curso.id}:thumb`) ?? null;
+    const gravadaBanner = imagens.get(`${curso.regime}:${curso.id}:banner`) ?? null;
+    const miniatura = gravadaThumb || mediaUrl(payload.thumb);
+    const banner = gravadaBanner || mediaUrl(payload.banner) || miniatura;
     return {
       id: `${curso.regime}-${curso.id}`,
       regime: curso.regime,
@@ -244,6 +250,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       financiamento: curso.regime === "fin" ? "Financiada" : "Gold",
       inscricao: entrada,
       miniatura,
+      banner,
       vendas: procura,
       objetivos: linhas(payload.objetivos),
       programa: linhas(payload.programa),

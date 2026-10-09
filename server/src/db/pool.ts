@@ -74,7 +74,7 @@ export async function createDb(): Promise<Db> {
       const actor = actorAtual();
       return exclusive(async () => {
         const mapped = params.map(p => (
-          p !== null && typeof p === "object" && !(p instanceof Date) ? JSON.stringify(p) : p
+          p !== null && typeof p === "object" && !(p instanceof Date) && !(p instanceof Uint8Array) ? JSON.stringify(p) : p
         ));
         try {
           await client.exec("BEGIN");

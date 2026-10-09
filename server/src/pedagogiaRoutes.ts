@@ -4,6 +4,7 @@ import { z } from "zod";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { htmlCronograma, sessoesPublicas } from "./cronogramaPublico.js";
+import { guardarImagemCurso, slotImagem } from "./cursoImagens.js";
 import { listDriveFiles, readDriveContent, storeDriveFile } from "./googleDrive.js";
 import { sendMail } from "./mailer.js";
 import { podeGravarSessao } from "./sessaoAcesso.js";
@@ -1201,6 +1202,36 @@ export function registerPedagogiaRoutes(
       [regime, id, docId],
     );
     return { ok: true };
+  });
+
+  app.post("/v1/cursos/:regime/:id/imagem/:slot", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const { regime, id } = params(req);
+    const slot = slotImagem(String((req.params as { slot?: string }).slot ?? ""));
+    if (!regime || id == null || !slot) return reply.code(400).send({ error: "pedido inválido" });
+    let nome = slot === "banner" ? "banner.jpg" : "thumb.jpg";
+    let mime = "";
+    let bytes: Buffer | null = null;
+    try {
+      const parts = req.parts();
+      for await (const part of parts) {
+        if (part.type === "file") {
+          nome = part.filename || nome;
+          mime = part.mimetype || mime;
+          bytes = await part.toBuffer();
+        }
+      }
+    } catch {
+      return reply.code(400).send({ error: "upload inválido" });
+    }
+    if (!bytes?.length) return reply.code(400).send({ error: "ficheiro em falta" });
+    try {
+      const gravada = await guardarImagemCurso(db, regime, id, slot, { nome, mime, bytes });
+      await audit(db, req.actor!.id, "curso.imagem", "curso", String(id), req.ip, { regime, slot });
+      return gravada;
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : "upload recusado" });
+    }
   });
 
   app.get("/v1/cursos/:regime/:id/ficha", async (req, reply) => {

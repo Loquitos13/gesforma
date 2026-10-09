@@ -12,6 +12,7 @@ export type Course = {
   funding: "Financiada" | "Gold";
   enrollment: "Acesso direto" | "Pré-inscrição";
   miniatura: string | null;
+  banner: string | null;
   precoDesde: number | null;
   vendas: number;
   regime: "gold" | "fin";
@@ -35,6 +36,7 @@ type CatalogoApi = {
     financiamento: "Gold" | "Financiada";
     inscricao: "Acesso direto" | "Pré-inscrição";
     miniatura: string | null;
+    banner?: string | null;
     vendas: number;
     objetivos?: string[];
     programa?: string[];
@@ -57,6 +59,7 @@ function mapCurso(curso: CatalogoApi["cursos"][number]): Course {
     funding: curso.financiamento,
     enrollment: curso.inscricao,
     miniatura: curso.miniatura,
+    banner: curso.banner ?? curso.miniatura,
     precoDesde: curso.precoDesde,
     vendas: curso.vendas,
     regime: curso.regime,
@@ -176,12 +179,21 @@ function Header() {
   );
 }
 
+function Moldura({ src, alt }: { src: string | null | undefined; alt: string }) {
+  return (
+    <div className="h-24 max-h-24 w-full max-w-full overflow-hidden bg-[#E7EBF0]">
+      {src ? <img src={src} alt={alt} className="h-full max-h-24 w-full max-w-full object-cover" /> : null}
+    </div>
+  );
+}
+
 function SplitHero() {
-  const { ccp } = useOferta();
+  const { ccp, cursos } = useOferta();
+  const financiada = cursos.find(curso => curso.regime === "fin" && curso.miniatura) ?? cursos.find(curso => curso.regime === "fin");
   const preco = ccp?.precoDesde != null ? `A partir de ${ccp.precoDesde.toLocaleString("pt-PT")}€` : "A partir de 100€";
   return (
     <section className="px-4 pb-2 pt-4 sm:px-6 lg:px-8" aria-label="Destaques">
-      <div className="relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[32px] bg-white shadow-[0_28px_80px_rgba(20,38,61,.08)] lg:min-h-[660px] lg:grid-cols-[1.05fr_.95fr]">
+      <div className="relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[32px] bg-white shadow-[0_28px_80px_rgba(20,38,61,.08)] lg:min-h-[860px] lg:grid-cols-[1.05fr_.95fr]">
         <div className="relative z-20 flex flex-col justify-center px-6 pb-8 pt-14 sm:px-10 lg:px-14 lg:py-16">
           <h1 className="max-w-[12ch] font-serif text-[2.7rem] font-bold leading-[1.02] tracking-[-0.035em] text-[#1C3350] sm:text-6xl lg:text-[4.35rem]">
             Certifique o seu futuro com formação de referência.
@@ -202,8 +214,8 @@ function SplitHero() {
             />
           </div>
           <div className="relative z-20 flex flex-col gap-4 lg:absolute lg:inset-0 lg:block">
-            <article className="w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.14)] lg:absolute lg:left-0 lg:top-[12%] lg:w-[260px]">
-              {ccp?.miniatura && <img src={ccp.miniatura} alt="" className="h-28 w-full object-cover" />}
+            <article className="w-full max-w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.14)] lg:absolute lg:left-0 lg:top-[4%] lg:w-[260px] lg:max-w-[260px]">
+              <Moldura src={ccp?.miniatura} alt={ccp?.title ?? "Formação de Formadores"} />
               <div className="p-5">
                 <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">{preco}</span>
                 <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">{ccp?.title ?? "Formação de Formadores (CCP)"}</h2>
@@ -211,11 +223,14 @@ function SplitHero() {
                 <a href={ccp ? `/formacao/${ccp.id}` : "/formacao"} className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#A60000]">Inscrever-me agora</a>
               </div>
             </article>
-            <article className="w-full rounded-2xl bg-white p-5 shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:right-8 lg:top-[54%] lg:w-[236px]">
+            <article className="w-full max-w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:right-8 lg:top-[58%] lg:w-[236px] lg:max-w-[236px]">
+              <Moldura src={financiada?.miniatura} alt="Formação financiada" />
+              <div className="p-5">
               <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">Grátis + Subsídio</span>
               <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">Formação Financiada</h2>
               <p className="mt-2 text-sm text-[#1C3350]/55">Grátis + subsídio</p>
               <a href="/formacao?linha=financiada" className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#A60000]">Explorar cursos</a>
+              </div>
             </article>
           </div>
         </div>
@@ -269,30 +284,22 @@ function Home() {
             <span className="ml-auto hidden self-center text-sm text-[#1C3350]/55 sm:block">{filtered.length} formações disponíveis</span>
           </div>
           <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {estado === "pronto" && filtered.map((course, index) => (
-              <article key={course.id} className="group flex min-h-[390px] flex-col overflow-hidden border border-[#1C3350]/12 bg-white transition-all hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(18,52,59,.12)]">
-                {course.miniatura && (
-                  <div className="relative h-40 bg-[#E7EBF0]">
-                    <img src={course.miniatura} alt="" className="h-full w-full object-cover" />
-                    <span className={`absolute left-4 top-4 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.1em] ${course.format === "E-learning" ? "bg-[#FFA900] text-[#1C3350]" : "bg-[#1C3350] text-white"}`}>{course.format}</span>
-                  </div>
-                )}
+            {estado === "pronto" && filtered.map((course) => (
+              <article key={course.id} className="group flex min-h-[390px] max-w-full flex-col overflow-hidden border border-[#1C3350]/12 bg-white transition-all hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(18,52,59,.12)]">
+                <a href={`/formacao/${course.id}`} className="relative block h-44 max-h-44 w-full max-w-full overflow-hidden bg-[#E7EBF0]">
+                  {course.miniatura && <img src={course.miniatura} alt="" className="h-full max-h-44 w-full max-w-full object-cover" />}
+                  <span className={`absolute left-4 top-4 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.1em] ${course.format === "E-learning" ? "bg-[#FFA900] text-[#1C3350]" : "bg-[#1C3350] text-white"}`}>{course.format}</span>
+                </a>
                 <div className="flex flex-1 flex-col p-6">
-                  {!course.miniatura && (
-                    <div className="flex items-start justify-between">
-                      <span className={`px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.1em] ${course.format === "E-learning" ? "bg-[#FFA900] text-[#1C3350]" : "bg-[#1C3350] text-white"}`}>{course.format}</span>
-                      <span className="grid h-12 w-12 place-items-center bg-[#EDEEF1] font-serif text-xl text-[#1C3350]/65">0{index + 1}</span>
-                    </div>
-                  )}
-                  <p className={`${course.miniatura ? "" : "mt-7 "}text-xs font-bold uppercase tracking-[0.12em] text-[#A60000]`}>{course.area}</p>
-                  <h3 className="mt-3 font-serif text-2xl leading-tight text-[#1C3350]">{course.title}</h3>
+                  <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#A60000]">{course.area}</p>
+                  <h3 className="mt-3 font-serif text-2xl leading-tight text-[#1C3350]"><a href={`/formacao/${course.id}`} className="hover:text-[#A60000]">{course.title}</a></h3>
                   <p className="mt-4 text-sm leading-6 text-[#1C3350]/65">{course.description}</p>
                   <div className="mt-auto flex items-end justify-between border-t border-[#1C3350]/10 pt-5">
                     <div className="space-y-2 text-xs font-semibold text-[#1C3350]/65">
                       <span className="flex items-center gap-2"><Icon name="clock" className="h-4 w-4" />{course.duration}</span>
                       <span className="flex items-center gap-2"><Icon name={course.format === "E-learning" ? "screen" : "pin"} className="h-4 w-4" />{course.start}</span>
                     </div>
-                    <a href="/pre-inscricao" aria-label={`Pré-inscrição em ${course.title}`} className="grid h-11 w-11 place-items-center bg-[#1C3350] text-white transition-colors group-hover:bg-[#A60000]"><Icon name="arrow" /></a>
+                    <a href={`/formacao/${course.id}`} aria-label={`Ver ${course.title}`} className="grid h-11 w-11 place-items-center bg-[#1C3350] text-white transition-colors group-hover:bg-[#A60000]"><Icon name="arrow" /></a>
                   </div>
                 </div>
               </article>

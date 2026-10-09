@@ -203,15 +203,15 @@ function LinhaCurso({
   onCompare: () => void;
 }) {
   return (
-    <article className={`group grid border border-[#1C3350]/12 bg-white transition-shadow hover:shadow-[0_14px_40px_rgba(28,51,80,.1)] ${course.miniatura ? "md:grid-cols-[12px_148px_1fr_auto]" : "md:grid-cols-[12px_1fr_auto]"}`}>
+    <article className="group grid border border-[#1C3350]/12 bg-white transition-shadow hover:shadow-[0_14px_40px_rgba(28,51,80,.1)] md:grid-cols-[12px_148px_1fr_auto]">
       <div className={course.funding === "Gold" ? "bg-[#FFA900]" : "bg-[#A60000]"} />
-      {course.miniatura && (
-        <div className="hidden bg-[#E7EBF0] md:block">
-          <img src={course.miniatura} alt="" className="h-full w-full object-cover" />
-        </div>
-      )}
+      <div className="hidden h-32 max-h-32 w-full max-w-[148px] overflow-hidden bg-[#E7EBF0] md:block">
+        {course.miniatura && <img src={course.miniatura} alt="" className="h-full max-h-32 w-full max-w-[148px] object-cover" />}
+      </div>
       <div className="p-6">
-        {course.miniatura && <img src={course.miniatura} alt="" className="mb-4 h-36 w-full object-cover md:hidden" />}
+        <a href={`/formacao/${course.id}`} className="mb-4 block h-36 max-h-36 w-full max-w-full overflow-hidden bg-[#E7EBF0] md:hidden">
+          {course.miniatura && <img src={course.miniatura} alt="" className="h-full max-h-36 w-full object-cover" />}
+        </a>
         <div className="flex flex-wrap items-center gap-3">
           <span className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${course.funding === "Gold" ? "bg-[#FFF1D1] text-[#1C3350]" : "bg-[#F1E5E5] text-[#A60000]"}`}>{course.funding === "Gold" ? "ENA Gold" : "Financiada"}</span>
           <span className="text-[10px] font-bold uppercase tracking-wider text-[#1C3350]/50">{course.enrollment}</span>
@@ -221,7 +221,7 @@ function LinhaCurso({
           <span className="text-xs font-bold text-[#1C3350]/55">{course.format}</span>
           <button type="button" onClick={onSave} className={`ml-auto text-xs font-bold ${saved ? "text-[#A60000]" : "text-[#1C3350]/45"}`}>{saved ? "Guardado" : "Guardar"}</button>
         </div>
-        <h2 className="mt-3 font-serif text-2xl font-bold text-[#1C3350]">{course.title}</h2>
+        <h2 className="mt-3 font-serif text-2xl font-bold text-[#1C3350]"><a href={`/formacao/${course.id}`} className="hover:text-[#A60000]">{course.title}</a></h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-[#1C3350]/60">{course.description}</p>
         <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-xs font-bold text-[#1C3350]/60">
           <span className="flex items-center gap-2"><Icon name="clock" className="h-4 w-4" />{course.duration}</span>

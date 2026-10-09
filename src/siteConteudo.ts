@@ -11,6 +11,22 @@ export const SITE_OMISSAO = {
   heroBotao: "Explorar todos os cursos",
   heroImagem: "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=1400&q=80",
   heroImagemAlt: "Sessão de formação em sala",
+  hero1Tipo: "",
+  hero1Curso: "",
+  hero1Regime: "",
+  hero1Titulo: "",
+  hero1Descricao: "",
+  hero1Imagem: "",
+  hero1Botao: "",
+  hero1Destino: "",
+  hero2Tipo: "",
+  hero2Curso: "",
+  hero2Regime: "",
+  hero2Titulo: "",
+  hero2Descricao: "",
+  hero2Imagem: "",
+  hero2Botao: "",
+  hero2Destino: "",
   ofertaKicker: "Oferta formativa",
   ofertaTitulo: "Encontre a formação certa para o seu momento.",
   ofertaPesquisa: "Pesquisar curso ou área...",
@@ -73,7 +89,7 @@ export const SITE_GRUPOS: { titulo: string; nota?: string; campos: CampoSite[] }
   },
   {
     titulo: "Destaque",
-    nota: "Os dois cartões (curso e preço) continuam a sair da oferta. Aqui edita-se o texto e a fotografia de fundo.",
+    nota: "O texto e a fotografia de fundo. Os dois cartões editam-se na secção seguinte.",
     campos: [
       { chave: "heroTitulo", etiqueta: "Título", tipo: "texto" },
       { chave: "heroTexto", etiqueta: "Texto", tipo: "texto" },
@@ -164,4 +180,61 @@ export function moradaSegura(valor: string) {
     return "";
   }
   return "";
+}
+
+export type HeroSlot = 1 | 2;
+
+export type HeroPedido =
+  | { modo: "automatico" }
+  | { modo: "curso"; cursoId: string; botao: string; destino: string }
+  | { modo: "regime"; regime: "gold" | "fin"; titulo: string; descricao: string; imagem: string; botao: string; destino: string };
+
+export function heroPedido(ler: (chave: SiteChave) => string, slot: HeroSlot): HeroPedido {
+  const prefixo = slot === 1 ? "hero1" : "hero2";
+  const campo = (nome: string) => ler(`${prefixo}${nome}` as SiteChave).trim();
+  const botao = campo("Botao");
+  const destino = moradaSegura(campo("Destino"));
+  const tipo = campo("Tipo");
+  if (tipo === "curso") {
+    const cursoId = campo("Curso");
+    if (!cursoId) return { modo: "automatico" };
+    return { modo: "curso", cursoId, botao, destino };
+  }
+  if (tipo === "regime") {
+    const regime = campo("Regime");
+    if (regime !== "gold" && regime !== "fin") return { modo: "automatico" };
+    return {
+      modo: "regime",
+      regime,
+      titulo: campo("Titulo"),
+      descricao: campo("Descricao"),
+      imagem: moradaSegura(campo("Imagem")),
+      botao,
+      destino,
+    };
+  }
+  return { modo: "automatico" };
+}
+
+export function tituloRegime(regime: "gold" | "fin", titulo: string) {
+  const limpo = titulo.trim();
+  if (limpo) return limpo;
+  return regime === "gold" ? "ENA Gold" : "Formação financiada";
+}
+
+export function botaoHero(pedido: Exclude<HeroPedido, { modo: "automatico" }>, inscricao?: "Acesso direto" | "Pré-inscrição") {
+  if (pedido.botao) return pedido.botao;
+  if (pedido.modo === "curso") return inscricao === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever";
+  return "Ver cursos";
+}
+
+export function destinoDoHero(pedido: Exclude<HeroPedido, { modo: "automatico" }>, cursoId?: string) {
+  if (pedido.destino) return pedido.destino;
+  if (pedido.modo === "curso" && cursoId) return `/formacao/${cursoId}`;
+  if (pedido.modo === "regime") return pedido.regime === "gold" ? "/formacao?linha=gold" : "/formacao?linha=financiada";
+  return "/formacao";
+}
+
+export function ligacaoExterna(href: string) {
+  return /^https?:\/\//i.test(href);
 }

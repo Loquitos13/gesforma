@@ -36,7 +36,7 @@ No CRM, o concelho do lead usa a mesma lista de concelhos.
 O ecrã está dividido em:
 
 - Cabeçalho. Título do separador, as duas linhas da marca e os textos de Formação, Empresas, área de formando e iniciar sessão.
-- Destaque. Título, texto, botão e fotografia de fundo. Os dois cartões (curso e preço) continuam a sair da oferta.
+- Destaque. Título, texto, botão e fotografia de fundo. Os dois cartões editam-se na mesma secção.
 - Oferta formativa. Antetítulo, título e texto da pesquisa. A grelha de cursos vem das fichas.
 - Apresentação. Fotografia, nota em destaque (por omissão `4,8/5`), texto e os quatro pilares.
 - Empresas. Antetítulo, título, texto e botão.
@@ -46,13 +46,25 @@ Uma fotografia é um endereço `https://…` ou um caminho do próprio site, por
 
 Apagar o texto de um campo e gravar esconde esse texto. Se o administrador ainda não gravou o ecrã, mantém-se o texto de omissão.
 
+## Cartões do destaque
+
+O hero tem dois cartões, o da esquerda e o da direita. Em **Sistema → Site**, cada um pode ficar em automático, apontar a um curso publicado ou representar um regime (Gold ou Financiada).
+
+Em automático, a esquerda é a formação de formadores com CCP e a direita é a primeira formação financiada que tenha miniatura. O botão abre o modal de inscrição.
+
+Num curso, o título, o preço, a área e a miniatura continuam a sair da ficha. Dá para mudar o texto do botão e o destino.
+
+Num regime, dá para editar o título, a descrição e a miniatura. A miniatura carrega-se como ficheiro (JPG, PNG, WebP ou GIF, até 8 MB) ou cola-se um endereço. O ficheiro fica em `curso_imagens`, com um identificador reservado, e o site lê-o em `/api/v1/public/imagens/:token`. Também dá para mudar o texto do botão e o destino.
+
+O destino aceita as duas formas. Um caminho do próprio site, por exemplo `/formacao/excel-do-basico-ao-avancado` ou `/formacao?linha=gold`, sobrevive a uma mudança de domínio. Um endereço externo escreve-se completo, `https://…`. Vazio abre a ficha do curso ou o catálogo dessa linha. Um valor que não seja caminho nem http(s) é ignorado.
+
 ## TO DO
 
 Isto ainda não está ligado ao que o administrador insere. Fica de fora do ecrã Site até ser feito.
 
 - Assistente Eva. O nome, as frases e os objectivos («Competências digitais», «Gestão e liderança», «Saúde e segurança») estão escritos no código, em `src/SiteLanding.tsx`. Os cursos que a Eva mostra já vêm da oferta.
 - Blog. O backoffice já tem Posts e Temáticas, em Gestão. O site público não os lista nem abre um artigo.
-- Fotografias de apresentação. No ecrã Site cola-se um endereço. Não há carregamento de ficheiro, ao contrário da imagem da ficha de curso.
+- Fotografias de fundo. No destaque e na apresentação cola-se um endereço. Não há carregamento de ficheiro, ao contrário da miniatura de um regime no hero e da imagem da ficha de curso.
 - Nota de satisfação. O `4,8/5` é um texto editável. Não é a média dos inquéritos gravados.
 - Menu. Dá para mudar o texto de Formação e de Empresas. Não dá para acrescentar outra ligação.
 - Contactos do rodapé. O email e o telefone que aparecem no site não alteram o SMTP Brevo nem os emails automáticos. Esses continuam em Configurações.

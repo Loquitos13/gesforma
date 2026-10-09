@@ -67,6 +67,38 @@ export async function guardarImagemCurso(
   return { nome, url };
 }
 
+const HERO_CURSO_ID: Record<"1" | "2", number> = { "1": -91001, "2": -91002 };
+
+export async function guardarImagemHero(
+  db: Db,
+  slot: "1" | "2",
+  file: { nome: string; mime: string; bytes: Buffer },
+) {
+  if (file.bytes.length > MAX_BYTES) throw new Error("A imagem passa de 8 MB.");
+  const mime = mimeImagem(file.mime);
+  if (!mime) throw new Error("Use JPG, PNG, WebP ou GIF.");
+  const nome = file.nome.replace(/[^\w.\- ()]/g, "").slice(0, 180) || "hero.jpg";
+  const token = randomBytes(18).toString("base64url");
+  const cursoId = HERO_CURSO_ID[slot];
+  await db.query(
+    `INSERT INTO curso_imagens (regime, curso_id, slot, nome, mime, bytes, token, updated_at)
+     VALUES ('gold', $1, 'thumb', $2, $3, $4, $5, now())
+     ON CONFLICT (regime, curso_id, slot) DO UPDATE SET
+       nome = EXCLUDED.nome,
+       mime = EXCLUDED.mime,
+       bytes = EXCLUDED.bytes,
+       token = COALESCE(NULLIF(curso_imagens.token, ''), EXCLUDED.token),
+       updated_at = now()`,
+    [cursoId, nome, mime, file.bytes, token],
+  );
+  const row = await db.query<{ token: string; updated_at: string | Date }>(
+    "SELECT token, updated_at FROM curso_imagens WHERE regime = 'gold' AND curso_id = $1 AND slot = 'thumb'",
+    [cursoId],
+  );
+  const gravado = row.rows[0];
+  return { nome, url: urlImagemPublica(gravado?.token || token, gravado?.updated_at ?? new Date()) };
+}
+
 export async function lerImagemPorToken(db: Db, token: string) {
   const row = await db.query<{ mime: string; bytes: unknown }>(
     "SELECT mime, bytes FROM curso_imagens WHERE token = $1",
@@ -85,6 +117,7 @@ export async function mapaImagensPublicas(db: Db) {
   );
   const mapa = new Map<string, string>();
   for (const row of rows.rows) {
+    if (Number(row.curso_id) <= 0) continue;
     if (row.regime !== "gold" && row.regime !== "fin") continue;
     if (row.slot !== "banner" && row.slot !== "thumb") continue;
     if (!tokenImagem(row.token)) continue;

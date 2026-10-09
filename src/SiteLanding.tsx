@@ -1,6 +1,6 @@
 import { createContext, FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { InscricaoSite, useInscricao } from "./SiteInscricao";
-import { moradaSegura, textoSite, type SiteChave } from "./siteConteudo";
+import { botaoHero, destinoDoHero, heroPedido, ligacaoExterna, moradaSegura, textoSite, tituloRegime, type HeroPedido, type SiteChave } from "./siteConteudo";
 
 export type Course = {
   id: string;
@@ -214,13 +214,104 @@ function Moldura({ src, alt }: { src: string | null | undefined; alt: string }) 
   );
 }
 
+type CartaoVista = {
+  posicao: 1 | 2;
+  imagem: string | null;
+  alt: string;
+  selo: string;
+  seloClasse: string;
+  titulo: string;
+  linha: string;
+  botao: string;
+  acao: { tipo: "modal"; curso: Course } | { tipo: "ligacao"; href: string };
+};
+
+function vistaCurso(posicao: 1 | 2, curso: Course, pedido?: Extract<HeroPedido, { modo: "curso" }>): CartaoVista {
+  const ouro = posicao === 1;
+  return {
+    posicao,
+    imagem: curso.miniatura,
+    alt: curso.title,
+    selo: curso.price,
+    seloClasse: ouro ? "bg-[#FFA900] text-[#14263D]" : "bg-[#A60000] text-white",
+    titulo: curso.title,
+    linha: curso.area,
+    botao: pedido ? botaoHero(pedido, curso.enrollment) : (curso.enrollment === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever"),
+    acao: pedido
+      ? { tipo: "ligacao", href: destinoDoHero(pedido, curso.id) }
+      : { tipo: "modal", curso },
+  };
+}
+
+function vistaDePedido(posicao: 1 | 2, pedido: HeroPedido, cursos: Course[]): CartaoVista | "automatico" | null {
+  if (pedido.modo === "automatico") return "automatico";
+  if (pedido.modo === "curso") {
+    const curso = cursos.find(item => item.id === pedido.cursoId);
+    return curso ? vistaCurso(posicao, curso, pedido) : null;
+  }
+  const ouro = pedido.regime === "gold";
+  const titulo = tituloRegime(pedido.regime, pedido.titulo);
+  return {
+    posicao,
+    imagem: pedido.imagem || null,
+    alt: titulo,
+    selo: ouro ? "Gold" : "Financiada",
+    seloClasse: ouro ? "bg-[#FFA900] text-[#14263D]" : "bg-[#A60000] text-white",
+    titulo,
+    linha: pedido.descricao,
+    botao: botaoHero(pedido),
+    acao: { tipo: "ligacao", href: destinoDoHero(pedido) },
+  };
+}
+
+function LigacaoHero({ href, className, children }: { href: string; className: string; children: ReactNode }) {
+  const externa = ligacaoExterna(href);
+  return (
+    <a href={href} className={className} {...(externa ? { target: "_blank", rel: "noreferrer" } : {})}>
+      {children}
+    </a>
+  );
+}
+
+function CartaoFlutuante({ vista, abrir }: { vista: CartaoVista; abrir: (curso: Course) => void }) {
+  const esquerda = vista.posicao === 1;
+  const artigo = esquerda
+    ? "ena-flutuar w-full overflow-hidden rounded-2xl border-t-4 border-[#FFA900] bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] lg:absolute lg:left-0 lg:top-[8%] lg:w-[360px]"
+    : "ena-flutuar-b w-full overflow-hidden rounded-2xl border-t-4 border-[#A60000] bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] lg:absolute lg:right-3 lg:top-[46%] lg:w-[360px]";
+  const botaoCls = esquerda
+    ? "mt-4 flex w-full items-center justify-center rounded-full bg-[#A60000] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#14263D]"
+    : "mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#FFA900] hover:text-[#14263D]";
+  const acao = vista.acao;
+  return (
+    <article className={artigo}>
+      <Moldura src={vista.imagem} alt={vista.alt} />
+      <div className="p-5">
+        {vista.selo && <span className={`inline-flex rounded-md px-2.5 py-1 text-[11px] font-extrabold ${vista.seloClasse}`}>{vista.selo}</span>}
+        <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">{vista.titulo}</h2>
+        {vista.linha && <p className="mt-2 line-clamp-3 text-sm text-[#1C3350]/55">{vista.linha}</p>}
+        {acao.tipo === "modal" ? (
+          <button type="button" onClick={() => abrir(acao.curso)} className={botaoCls}>{vista.botao}</button>
+        ) : (
+          <LigacaoHero href={acao.href} className={botaoCls}>{vista.botao}</LigacaoHero>
+        )}
+      </div>
+    </article>
+  );
+}
+
 function SplitHero() {
   const { ccp, cursos } = useOferta();
   const { abrir } = useInscricao();
   const t = useSiteTexto();
   const heroImagem = moradaSegura(t("heroImagem"));
   const financiada = cursos.find(curso => curso.regime === "fin" && curso.miniatura) ?? cursos.find(curso => curso.regime === "fin");
-  const preco = ccp?.price ?? "";
+  const cartoes = ([1, 2] as const).flatMap(posicao => {
+    const pedido = vistaDePedido(posicao, heroPedido(t, posicao), cursos);
+    if (pedido && pedido !== "automatico") return [pedido];
+    if (pedido === null) return [];
+    const curso = posicao === 1 ? ccp : financiada;
+    return curso ? [vistaCurso(posicao, curso)] : [];
+  });
   return (
     <section className="px-4 pb-2 pt-4 sm:px-6 lg:px-8" aria-label="Destaques">
       <div className="relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[32px] bg-[#1C3350] shadow-[0_28px_80px_rgba(20,38,61,.28)] lg:min-h-[860px] lg:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)]">
@@ -246,32 +337,7 @@ function SplitHero() {
             )}
           </div>
           <div className="relative z-20 flex flex-col gap-6 lg:absolute lg:inset-0 lg:block">
-            {ccp && (
-              <article className="ena-flutuar w-full overflow-hidden rounded-2xl border-t-4 border-[#FFA900] bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] lg:absolute lg:left-0 lg:top-[8%] lg:w-[360px]">
-                <Moldura src={ccp.miniatura} alt={ccp.title} />
-                <div className="p-5">
-                  {preco && <span className="inline-flex rounded-md bg-[#FFA900] px-2.5 py-1 text-[11px] font-extrabold text-[#14263D]">{preco}</span>}
-                  <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">{ccp.title}</h2>
-                  <p className="mt-2 text-sm text-[#1C3350]/55">{ccp.area}</p>
-                  <button type="button" onClick={() => abrir(ccp)} className="mt-4 flex w-full items-center justify-center rounded-full bg-[#A60000] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#14263D]">
-                    {ccp.enrollment === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever"}
-                  </button>
-                </div>
-              </article>
-            )}
-            {financiada && (
-              <article className="ena-flutuar-b w-full overflow-hidden rounded-2xl border-t-4 border-[#A60000] bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] lg:absolute lg:right-3 lg:top-[46%] lg:w-[360px]">
-                <Moldura src={financiada.miniatura} alt={financiada.title} />
-                <div className="p-5">
-                  {financiada.price && <span className="inline-flex rounded-md bg-[#A60000] px-2.5 py-1 text-[11px] font-extrabold text-white">{financiada.price}</span>}
-                  <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">{financiada.title}</h2>
-                  <p className="mt-2 text-sm text-[#1C3350]/55">{financiada.area}</p>
-                  <button type="button" onClick={() => abrir(financiada)} className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#FFA900] hover:text-[#14263D]">
-                    {financiada.enrollment === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever"}
-                  </button>
-                </div>
-              </article>
-            )}
+            {cartoes.map(vista => <CartaoFlutuante key={vista.posicao} vista={vista} abrir={abrir} />)}
           </div>
         </div>
         <svg aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 z-10 h-24 w-full sm:h-28" viewBox="0 0 1200 140" preserveAspectRatio="none">

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { isCatalogKind } from "./db/catalogSeed.js";
 import type { Db } from "./db/pool.js";
+import { guardarImagemHero } from "./cursoImagens.js";
 import { nextOpsId } from "./ops.js";
 
 const itemSchema = z.object({
@@ -131,5 +132,33 @@ export function registerCatalogRoutes(
       [id, values],
     );
     return { ok: true, id, values };
+  });
+
+  app.post("/v1/site/hero/:slot/imagem", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (req.actor?.role !== "admin") return reply.code(403).send({ error: "só o administrador edita o site" });
+    const slot = String((req.params as { slot?: string }).slot ?? "");
+    if (slot !== "1" && slot !== "2") return reply.code(400).send({ error: "pedido inválido" });
+    let nome = "hero.jpg";
+    let mime = "";
+    let bytes: Buffer | null = null;
+    try {
+      const parts = req.parts();
+      for await (const part of parts) {
+        if (part.type === "file") {
+          nome = part.filename || nome;
+          mime = part.mimetype || mime;
+          bytes = await part.toBuffer();
+        }
+      }
+    } catch {
+      return reply.code(400).send({ error: "upload inválido" });
+    }
+    if (!bytes?.length) return reply.code(400).send({ error: "ficheiro em falta" });
+    try {
+      return await guardarImagemHero(db, slot, { nome, mime, bytes });
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : "upload recusado" });
+    }
   });
 }

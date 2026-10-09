@@ -183,8 +183,8 @@ function Header() {
           <span className="hidden text-left text-[10px] font-bold uppercase leading-tight tracking-[0.12em] text-[#FFA900] sm:block">{t("marcaLinha1")}<br />{t("marcaLinha2")}</span>
         </a>
         <nav className="hidden items-center gap-8 text-sm font-semibold lg:flex" aria-label="Navegação principal">
-          <a href="/formacao" className="text-white/85 hover:text-[#FFA900]">{t("navFormacao")}</a>
-          <a href="/#empresas" className="text-white/85 hover:text-[#FFA900]">{t("navEmpresas")}</a>
+          <a href="/formacao" className="text-white hover:text-[#FFA900]">{t("navFormacao")}</a>
+          <a href="/#empresas" className="text-white hover:text-[#FFA900]">{t("navEmpresas")}</a>
         </nav>
         <div className="hidden items-center gap-4 lg:flex">
           <a href="/entrar" className="text-sm font-semibold text-[#FFA900] underline decoration-[#A60000] decoration-2 underline-offset-4">{t("navFormando")}</a>
@@ -275,9 +275,7 @@ function LigacaoHero({ href, className, children }: { href: string; className: s
 
 function CartaoFlutuante({ vista, abrir }: { vista: CartaoVista; abrir: (curso: Course) => void }) {
   const esquerda = vista.posicao === 1;
-  const artigo = esquerda
-    ? "ena-flutuar w-full overflow-hidden rounded-2xl border-t-4 border-[#FFA900] bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] lg:absolute lg:left-0 lg:top-[8%] lg:w-[360px]"
-    : "ena-flutuar-b w-full overflow-hidden rounded-2xl border-t-4 border-[#A60000] bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] lg:absolute lg:right-3 lg:top-[46%] lg:w-[360px]";
+  const artigo = `flex h-full w-full flex-col overflow-hidden rounded-2xl border-t-4 bg-white shadow-[0_16px_40px_rgba(8,18,32,.28)] ${esquerda ? "border-[#FFA900]" : "border-[#A60000]"}`;
   const botaoCls = esquerda
     ? "mt-4 flex w-full items-center justify-center rounded-full bg-[#A60000] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#14263D]"
     : "mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#FFA900] hover:text-[#14263D]";
@@ -288,7 +286,7 @@ function CartaoFlutuante({ vista, abrir }: { vista: CartaoVista; abrir: (curso: 
       <div className="p-5">
         {vista.selo && <span className={`inline-flex rounded-md px-2.5 py-1 text-[11px] font-extrabold ${vista.seloClasse}`}>{vista.selo}</span>}
         <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">{vista.titulo}</h2>
-        {vista.linha && <p className="mt-2 line-clamp-3 text-sm text-[#1C3350]/55">{vista.linha}</p>}
+        {vista.linha && <p className="mt-2 line-clamp-3 text-sm leading-6 text-[#3E5168]">{vista.linha}</p>}
         {acao.tipo === "modal" ? (
           <button type="button" onClick={() => abrir(acao.curso)} className={botaoCls}>{vista.botao}</button>
         ) : (
@@ -313,21 +311,21 @@ function SplitHero() {
     return curso ? [vistaCurso(posicao, curso)] : [];
   });
   return (
-    <section className="px-4 pb-2 pt-4 sm:px-6 lg:px-8" aria-label="Destaques">
-      <div className="relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[32px] bg-[#1C3350] shadow-[0_28px_80px_rgba(20,38,61,.28)] lg:min-h-[860px] lg:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)]">
-        <div className="relative z-20 flex flex-col justify-center px-6 pb-4 pt-10 sm:px-8 lg:px-10 lg:py-12">
-          <h1 className="max-w-[18ch] font-serif text-[2rem] font-bold leading-[1.08] tracking-[-0.03em] text-white sm:text-4xl">
+    <section className="bg-[#14263D] px-4 pb-2 pt-4 sm:px-6 lg:px-8" aria-label="Destaques">
+      <div className="relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[28px] bg-[#1C3350] shadow-[0_28px_80px_rgba(20,38,61,.28)] lg:grid-cols-[minmax(0,.92fr)_minmax(0,1.08fr)] lg:items-center">
+        <div className="relative z-20 flex flex-col justify-center px-6 pb-2 pt-10 sm:px-10 lg:py-16 lg:pl-12 lg:pr-6">
+          <h1 className="max-w-[16ch] font-serif text-[2.15rem] font-bold leading-[1.12] tracking-[-0.03em] text-white sm:text-5xl">
             {t("heroTitulo")}
           </h1>
-          <p className="mt-4 max-w-xs text-sm leading-6 text-white/70">
+          <p className="mt-5 max-w-md text-base leading-7 text-[#E6EDF5]">
             {t("heroTexto")}
           </p>
-          <a href="/formacao" className="mt-5 inline-flex w-fit items-center rounded-full bg-[#FFA900] px-5 py-2.5 text-sm font-bold text-[#14263D] transition-colors hover:bg-[#A60000] hover:text-white">
+          <a href="/formacao" className="mt-7 inline-flex w-fit items-center rounded-full bg-[#FFA900] px-5 py-3 text-sm font-bold text-[#14263D] transition-colors hover:bg-[#A60000] hover:text-white">
             {t("heroBotao")}
           </a>
         </div>
-        <div className="relative z-20 flex flex-col gap-6 px-4 pb-32 pt-2 lg:block lg:h-auto lg:min-h-full lg:px-0 lg:pb-0 lg:pt-0">
-          <div className="relative mx-auto h-[180px] w-[180px] shrink-0 overflow-hidden rounded-full bg-[#FFA900] shadow-[0_0_0_10px_#FFA900] sm:h-[220px] sm:w-[220px] lg:absolute lg:right-[-4rem] lg:top-1/2 lg:mx-0 lg:h-[620px] lg:w-[620px] lg:-translate-y-1/2 lg:shadow-[0_0_0_14px_#A60000]">
+        <div className="relative z-20 flex flex-col gap-4 px-4 pb-16 pt-6 sm:px-8 lg:py-10 lg:pr-10 lg:pb-20">
+          <div className="relative h-44 overflow-hidden rounded-2xl bg-[#14263D] ring-4 ring-[#FFA900] sm:h-56">
             {heroImagem && (
               <img
                 src={heroImagem}
@@ -336,11 +334,11 @@ function SplitHero() {
               />
             )}
           </div>
-          <div className="relative z-20 flex flex-col gap-6 lg:absolute lg:inset-0 lg:block">
+          <div className="grid gap-4 sm:grid-cols-2">
             {cartoes.map(vista => <CartaoFlutuante key={vista.posicao} vista={vista} abrir={abrir} />)}
           </div>
         </div>
-        <svg aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 z-10 h-24 w-full sm:h-28" viewBox="0 0 1200 140" preserveAspectRatio="none">
+        <svg aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 z-10 h-14 w-full sm:h-16" viewBox="0 0 1200 140" preserveAspectRatio="none">
           <path d="M0 140V72C90 36 180 108 320 78C460 48 540 18 700 42C860 66 940 112 1080 82C1140 68 1170 88 1200 74V140H0Z" fill="#A60000" />
           <path d="M0 140V104C140 78 240 124 420 106C600 88 700 126 900 108C1040 96 1120 122 1200 104V140H0Z" fill="#FFA900" />
         </svg>
@@ -375,63 +373,64 @@ function Home() {
     <main>
       <SplitHero />
 
-      <section id="formacao" className="scroll-mt-24 bg-[#16324F] px-5 py-20 text-white lg:px-8 lg:py-28">
+      <section id="formacao" className="scroll-mt-24 bg-[#F6F3EE] px-5 py-20 text-[#14263D] lg:px-8 lg:py-28">
         <div className="mx-auto max-w-[1240px]">
           <div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end">
             <div>
-              <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-[#FFA900]">{t("ofertaKicker")}</p>
-              <h2 className="font-serif text-4xl leading-tight tracking-[-0.03em] text-white sm:text-5xl">{t("ofertaTitulo")}</h2>
+              <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-[#A60000]">{t("ofertaKicker")}</p>
+              <h2 className="font-serif text-4xl leading-tight tracking-[-0.03em] text-[#14263D] sm:text-5xl">{t("ofertaTitulo")}</h2>
             </div>
-            <label className="flex w-full items-center gap-3 border-b-2 border-[#FFA900] pb-3 text-white lg:max-w-sm">
+            <label className="flex w-full items-center gap-3 rounded-full border border-[#14263D]/20 bg-white px-4 py-3 text-[#14263D] lg:max-w-sm">
               <Icon name="search" />
               <span className="sr-only">Pesquisar formação</span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("ofertaPesquisa")} className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/45" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("ofertaPesquisa")} className="w-full bg-transparent text-sm text-[#14263D] outline-none placeholder:text-[#4A6078]" />
             </label>
           </div>
-          <div className="mt-10 flex flex-wrap gap-2 border-b border-white/15 pb-5">
+          <div className="mt-10 flex flex-wrap items-center gap-2 border-b border-[#14263D]/10 pb-5">
             {filtros.map((item) => (
-              <button key={item} type="button" onClick={() => setFilter(item)} className={`px-5 py-2.5 text-sm font-bold transition-colors ${filter === item ? "bg-[#FFA900] text-[#14263D]" : "bg-white/10 text-white hover:bg-[#A60000]"}`}>
+              <button key={item} type="button" aria-pressed={filter === item} onClick={() => setFilter(item)} className={`px-5 py-2.5 text-sm font-bold transition-colors ${filter === item ? "bg-[#FFA900] text-[#14263D]" : "bg-white text-[#14263D] ring-1 ring-[#14263D]/15 hover:ring-[#A60000]"}`}>
                 {item}
               </button>
             ))}
-            <span className="ml-auto hidden self-center text-sm text-white/60 sm:block">{filtered.length} formações disponíveis</span>
+            <span className="ml-auto hidden self-center text-sm font-semibold text-[#3E5168] sm:block">{filtered.length} formações disponíveis</span>
           </div>
           <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             {estado === "pronto" && filtered.map((course) => (
-              <article key={course.id} className="group flex min-h-[390px] max-w-full flex-col overflow-hidden border-t-4 border-[#FFA900] bg-white text-[#1C3350] transition-all hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(8,18,32,.35)]">
+              <article key={course.id} className="group flex min-h-[390px] max-w-full flex-col overflow-hidden border-x border-b border-[#14263D]/10 border-t-4 border-t-[#FFA900] bg-white text-[#14263D] shadow-[0_10px_30px_rgba(20,38,61,.06)] transition-shadow hover:shadow-[0_18px_40px_rgba(20,38,61,.14)]">
                 <a href={`/formacao/${course.id}`} className="relative block h-44 max-h-44 w-full max-w-full overflow-hidden bg-[#E7EBF0]">
                   {course.miniatura && <img src={course.miniatura} alt="" className="h-full max-h-44 w-full max-w-full object-cover" />}
-                  <span className={`absolute left-4 top-4 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.1em] ${course.format === "E-learning" ? "bg-[#FFA900] text-[#1C3350]" : "bg-[#1C3350] text-white"}`}>{course.format}</span>
+                  <span className={`absolute left-4 top-4 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.1em] ${course.format === "E-learning" ? "bg-[#FFA900] text-[#14263D]" : "bg-[#14263D] text-white"}`}>{course.format}</span>
                 </a>
                 <div className="flex flex-1 flex-col p-6">
                   <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#A60000]">{course.area}</p>
-                  <h3 className="mt-3 font-serif text-2xl leading-tight text-[#1C3350]"><a href={`/formacao/${course.id}`} className="hover:text-[#A60000]">{course.title}</a></h3>
-                  <p className="mt-4 text-sm leading-6 text-[#1C3350]/65">{course.description}</p>
-                  <div className="mt-auto flex items-end justify-between border-t border-[#1C3350]/10 pt-5">
-                    <div className="space-y-2 text-xs font-semibold text-[#1C3350]/65">
+                  <h3 className="mt-3 font-serif text-2xl leading-tight text-[#14263D]"><a href={`/formacao/${course.id}`} className="hover:text-[#A60000]">{course.title}</a></h3>
+                  <p className="mt-4 text-sm leading-6 text-[#3E5168]">{course.description}</p>
+                  <div className="mt-auto flex items-end justify-between border-t border-[#14263D]/10 pt-5">
+                    <div className="space-y-2 text-xs font-semibold text-[#3E5168]">
+                      {course.price && <span className="block text-sm font-bold text-[#14263D]">{course.price}</span>}
                       <span className="flex items-center gap-2"><Icon name="clock" className="h-4 w-4" />{course.duration}</span>
                       <span className="flex items-center gap-2"><Icon name={course.format === "E-learning" ? "screen" : "pin"} className="h-4 w-4" />{course.start}</span>
                     </div>
-                    <a href={`/formacao/${course.id}`} aria-label={`Ver ${course.title}`} className="grid h-11 w-11 place-items-center bg-[#1C3350] text-white transition-colors group-hover:bg-[#A60000]"><Icon name="arrow" /></a>
+                    <a href={`/formacao/${course.id}`} aria-label={`Ver ${course.title}`} className="grid h-11 w-11 place-items-center bg-[#14263D] text-white transition-colors group-hover:bg-[#A60000]"><Icon name="arrow" /></a>
                   </div>
                 </div>
               </article>
             ))}
           </div>
-          {estado === "a-carregar" && <p className="py-20 text-center text-white/70">A carregar a oferta formativa.</p>}
+          {estado === "a-carregar" && <p className="py-20 text-center text-[#3E5168]">A carregar a oferta formativa.</p>}
           {estado === "erro" && (
             <div className="py-16 text-center">
-              <p className="text-white/80">Não foi possível carregar os cursos.</p>
+              <p className="text-[#14263D]">Não foi possível carregar os cursos.</p>
               <button type="button" onClick={recarregar} className="mt-4 bg-[#FFA900] px-5 py-3 text-sm font-bold text-[#14263D]">Tentar de novo</button>
             </div>
           )}
-          {estado === "pronto" && filtered.length === 0 && <p className="py-20 text-center text-white/70">Não encontrámos formações para esta pesquisa.</p>}
+          {estado === "pronto" && filtered.length === 0 && <p className="py-20 text-center text-[#3E5168]">Não encontrámos formações para esta pesquisa.</p>}
         </div>
       </section>
 
-      <section id="metodo" className="bg-[#A60000] px-5 py-20 text-white lg:px-8 lg:py-28">
+      <section id="metodo" className="border-t-8 border-[#A60000] bg-white px-5 py-20 text-[#14263D] lg:px-8 lg:py-28">
         <div className="mx-auto grid max-w-[1240px] gap-14 lg:grid-cols-[.85fr_1.15fr] lg:items-center">
-          <div className="relative">
+          <div className="relative mb-12 lg:mb-0">
             <div className="aspect-[4/5] overflow-hidden bg-[#E7EBF0]">
               {metodoImagem && <img src={metodoImagem} alt={t("metodoImagemAlt")} className="h-full w-full object-cover" />}
             </div>
@@ -443,15 +442,15 @@ function Home() {
             )}
           </div>
           <div>
-            <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-[#FFA900]">{t("metodoKicker")}</p>
-            <h2 className="font-serif text-4xl leading-tight tracking-[-0.03em] text-white sm:text-5xl">{t("metodoTitulo")}</h2>
-            <p className="mt-6 max-w-xl text-lg leading-8 text-white/80">{t("metodoTexto")}</p>
+            <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-[#A60000]">{t("metodoKicker")}</p>
+            <h2 className="font-serif text-4xl leading-tight tracking-[-0.03em] text-[#14263D] sm:text-5xl">{t("metodoTitulo")}</h2>
+            <p className="mt-6 max-w-xl text-lg leading-8 text-[#3E5168]">{t("metodoTexto")}</p>
             <div className="mt-10 grid gap-x-8 gap-y-7 sm:grid-cols-2">
               {pilares.map(({ number, title, text }) => (
-                <div key={number} className="border-t border-[#FFA900]/50 pt-5">
-                  <span className="text-xs font-extrabold text-[#FFA900]">{number}</span>
-                  <h3 className="mt-2 font-bold text-white">{title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-white/75">{text}</p>
+                <div key={number} className="border-t-2 border-[#FFA900] pt-5">
+                  <span className="text-xs font-extrabold text-[#A60000]">{number}</span>
+                  <h3 className="mt-2 font-bold text-[#14263D]">{title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-[#3E5168]">{text}</p>
                 </div>
               ))}
             </div>
@@ -462,9 +461,9 @@ function Home() {
       <section id="empresas" className="scroll-mt-24 bg-[#FFA900] px-5 py-16 text-[#14263D] lg:px-8">
         <div className="mx-auto flex max-w-[1240px] flex-col justify-between gap-8 lg:flex-row lg:items-center">
           <div className="max-w-2xl">
-            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#A60000]">{t("empresasKicker")}</p>
+            <p className="inline-flex bg-[#A60000] px-2.5 py-1 text-xs font-extrabold uppercase tracking-[0.18em] text-white">{t("empresasKicker")}</p>
             <h2 className="mt-4 font-serif text-4xl text-[#14263D]">{t("empresasTitulo")}</h2>
-            <p className="mt-4 text-[#14263D]/80">{t("empresasTexto")}</p>
+            <p className="mt-4 text-base leading-7 text-[#14263D]">{t("empresasTexto")}</p>
           </div>
           <a href="#contactos" className="group flex min-w-fit items-center justify-between gap-10 bg-[#A60000] px-7 py-5 font-bold text-white hover:bg-[#14263D]">{t("empresasBotao")} <Icon name="arrow" className="transition-transform group-hover:translate-x-1" /></a>
         </div>
@@ -485,22 +484,22 @@ function Footer() {
         <div className="grid gap-10 border-b border-white/15 pb-12 md:grid-cols-4">
           <div className="md:col-span-2">
             {t("rodapeMarca") && <span className="grid h-12 w-12 place-items-center bg-[#A60000] text-sm font-extrabold">{t("rodapeMarca")}</span>}
-            {t("rodapeTexto") && <p className="mt-5 max-w-sm text-sm leading-6 text-white/55">{t("rodapeTexto")}</p>}
+            {t("rodapeTexto") && <p className="mt-5 max-w-sm text-sm leading-6 text-[#D7E0EA]">{t("rodapeTexto")}</p>}
           </div>
           <div>
-            <strong className="text-sm">{t("rodapeTituloContactos")}</strong>
-            {contactos.length > 0 && <p className="mt-4 text-sm leading-7 text-white/55">{contactos.map((linha, i) => <span key={linha}>{i > 0 && <br />}{linha}</span>)}</p>}
+            <strong className="text-sm text-white">{t("rodapeTituloContactos")}</strong>
+            {contactos.length > 0 && <p className="mt-4 text-sm leading-7 text-[#D7E0EA]">{contactos.map((linha, i) => <span key={linha}>{i > 0 && <br />}{linha}</span>)}</p>}
           </div>
           <div>
-            <strong className="text-sm">{t("rodapeTituloLigacoes")}</strong>
-            <div className="mt-4 flex flex-col gap-3 text-sm text-white/55">
-              {t("rodapeLigacaoFormacao") && <a href="/formacao">{t("rodapeLigacaoFormacao")}</a>}
-              {privacidade && t("rodapePrivacidade") && <a href={privacidade} target="_blank" rel="noreferrer">{t("rodapePrivacidade")}</a>}
-              {reclamacoes && t("rodapeReclamacoes") && <a href={reclamacoes} target="_blank" rel="noreferrer">{t("rodapeReclamacoes")}</a>}
+            <strong className="text-sm text-white">{t("rodapeTituloLigacoes")}</strong>
+            <div className="mt-4 flex flex-col gap-3 text-sm text-[#D7E0EA] underline decoration-white/30 underline-offset-4">
+              {t("rodapeLigacaoFormacao") && <a href="/formacao" className="hover:text-white">{t("rodapeLigacaoFormacao")}</a>}
+              {privacidade && t("rodapePrivacidade") && <a href={privacidade} target="_blank" rel="noreferrer" className="hover:text-white">{t("rodapePrivacidade")}</a>}
+              {reclamacoes && t("rodapeReclamacoes") && <a href={reclamacoes} target="_blank" rel="noreferrer" className="hover:text-white">{t("rodapeReclamacoes")}</a>}
             </div>
           </div>
         </div>
-        <div className="flex flex-col justify-between gap-3 pt-6 text-xs text-white/35 sm:flex-row">
+        <div className="flex flex-col justify-between gap-3 pt-6 text-xs text-[#C5D0DC] sm:flex-row">
           <span>© {ano} {t("rodapeEntidade")}. {t("rodapeDireitos")}</span>
           <span>{t("rodapeLema")}</span>
         </div>
@@ -699,9 +698,12 @@ export function SiteFrame({ children }: { children: ReactNode }) {
     <OfertaCtx.Provider value={oferta}>
       <SiteTextoCtx.Provider value={texto}>
       <InscricaoSite>
-        <div className="site-ena min-h-screen bg-[#14263D] text-[#1C3350]">
+        <div className="site-ena min-h-screen bg-[#14263D] text-[#14263D]">
+          <a href="#conteudo" className="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:left-4 focus-visible:top-4 focus-visible:z-[80] focus-visible:bg-[#FFA900] focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-bold focus-visible:text-[#14263D]">Saltar para o conteúdo</a>
           <Header />
-          {children}
+          <div id="conteudo">
+            {children}
+          </div>
           <Footer />
           <WhatsAppAssistant />
         </div>

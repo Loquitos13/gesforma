@@ -139,7 +139,13 @@ body:has(input[type="file"]:focus) [data-ficha-sticky] {
 
 .site-ena ::selection {
   background: #ffa900;
-  color: #1c3350;
+  color: #14263d;
+}
+
+.site-ena :focus-visible {
+  outline: 3px solid #14263d;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px #ffa900;
 }
 
 @media print {

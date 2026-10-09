@@ -45,6 +45,7 @@ export async function createDb(): Promise<Db> {
       async query<T extends Record<string, unknown>>(text: string, params: unknown[] = []) {
         const actor = actorAtual();
         const rows = await sql.begin(async (tx) => {
+          await tx.unsafe("SELECT set_config('gesforma.api', '1', true)");
           await tx.unsafe("SELECT set_config('app.role', $1, true)", [actor.role || "system"]);
           await tx.unsafe("SELECT set_config('app.user_id', $1, true)", [actor.id || ""]);
           return tx.unsafe(text, params as never[]);
@@ -78,6 +79,7 @@ export async function createDb(): Promise<Db> {
         ));
         try {
           await client.exec("BEGIN");
+          await client.query("SELECT set_config('gesforma.api', '1', true)");
           await client.query("SELECT set_config('app.role', $1, true)", [actor.role || "system"]);
           await client.query("SELECT set_config('app.user_id', $1, true)", [actor.id || ""]);
           const res = await client.query<T>(text, mapped);

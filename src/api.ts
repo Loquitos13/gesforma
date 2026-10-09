@@ -289,6 +289,8 @@ export type DtpItem = {
   extra?: boolean;
   ambito?: DtpAmbito;
   anexo?: { fileName: string; url: string; driveFileId: string } | null;
+  /** Ficheiros do percurso público: submetido ainda não é validado pela secretaria. */
+  percurso?: { submetidos: number; validados: number; recusados: number; total: number };
 };
 
 export type DtpSnapshot = {
@@ -298,6 +300,8 @@ export type DtpSnapshot = {
   parcial: number;
   falta: number;
   total: number;
+  /** Nome da entidade responsável cuja estrutura este dossiê usa. */
+  entidade?: string | null;
   facts: {
     sessoes: { done: number; total: number };
     planos: { done: number; total: number };
@@ -349,6 +353,8 @@ export const apiSaveTurmaDocumento = (regime: Regime, turmaId: number, body: Tur
   api<{ ok: boolean }>(`/v1/turmas/${regime}/${turmaId}/documentos`, { method: "PUT", body: JSON.stringify(body) });
 export const apiSaveDtpItem = (regime: Regime, turmaId: number, itemId: string, estado: DtpEstado | "auto") =>
   api<{ dtp: DtpSnapshot }>(`/v1/turmas/${regime}/${turmaId}/dtp/${itemId}`, { method: "PUT", body: JSON.stringify({ estado }) });
+export const apiArquivarDtpPdfs = (regime: Regime, turmaId: number) =>
+  api<{ ok: boolean; dtp: DtpSnapshot }>(`/v1/turmas/${regime}/${turmaId}/dtp/pdfs`, { method: "POST" });
 export const apiSaveDtpAnexo = (
   regime: Regime,
   turmaId: number,
@@ -393,18 +399,37 @@ export type DtpExtra = {
 };
 export type DtpModelo = {
   excluidos: string[];
+  incluidos?: string[];
   extra: { id: string; fase: DtpFase; label: string; fonte: string; hint: string; bloqueante?: boolean; ambito?: DtpAmbito }[];
 };
+export type DtpEntidadeRef = { id: number; nome: string; modelo: DtpModelo };
 export type DtpModeloResposta = {
   fases: { id: DtpFase; label: string; hint: string }[];
   base: DtpDef[];
   modelo: DtpModelo;
+  entidade: DtpEntidadeRef | null;
+  efectivo?: DtpModelo;
   estrutura: DtpDef[];
 };
+export type DtpEntidade = { id: number; nome: string; documentos: number };
+export const apiDtpEntidades = () => api<{ entidades: DtpEntidade[] }>("/v1/dtp/gold/entidades");
+export const apiCreateDtpEntidade = (nome: string) =>
+  api<{ entidade: DtpEntidade }>("/v1/dtp/gold/entidades", { method: "POST", body: JSON.stringify({ nome }) });
+export const apiRenameDtpEntidade = (id: number, nome: string) =>
+  api<{ entidade: DtpEntidade }>(`/v1/dtp/gold/entidades/${id}`, { method: "PATCH", body: JSON.stringify({ nome }) });
+export const apiDeleteDtpEntidade = (id: number) =>
+  api<{ ok: boolean }>(`/v1/dtp/gold/entidades/${id}`, { method: "DELETE" });
+export const apiDtpEntidadeModelo = (id: number) =>
+  api<DtpModeloResposta>(`/v1/dtp/gold/entidades/${id}/modelo`);
+export const apiSaveDtpEntidadeModelo = (id: number, body: { excluidos: string[]; incluidos?: string[]; extra: DtpExtra[] }) =>
+  api<DtpModeloResposta>(`/v1/dtp/gold/entidades/${id}/modelo`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
 export const apiDtpModelo = (regime: Regime, cursoId: number) =>
   api<DtpModeloResposta>(`/v1/cursos/${regime}/${cursoId}/dtp-modelo`);
-export const apiSaveDtpModelo = (regime: Regime, cursoId: number, body: { excluidos: string[]; extra: DtpExtra[] }) =>
-  api<Pick<DtpModeloResposta, "modelo" | "estrutura">>(`/v1/cursos/${regime}/${cursoId}/dtp-modelo`, {
+export const apiSaveDtpModelo = (regime: Regime, cursoId: number, body: { excluidos: string[]; incluidos?: string[]; extra: DtpExtra[] }) =>
+  api<DtpModeloResposta>(`/v1/cursos/${regime}/${cursoId}/dtp-modelo`, {
     method: "PUT",
     body: JSON.stringify(body),
   });
@@ -750,7 +775,11 @@ export const apiPatchTemplate = (id: number, body: { nome?: string; assunto?: st
 export const apiOps = () => api<OpsSnapshot>("/v1/ops");
 export const apiPublicCursos = () => api<{ cursos: { nome: string; preco: number }[] }>("/v1/public/cursos");
 export const apiPublicOferta = () =>
-  api<{ cursos: { nome: string; preco: number }[]; turmas: import("./oferta").OfertaTurma[] }>("/v1/public/oferta");
+  api<{
+    cursos: { nome: string; preco: number }[];
+    turmas: import("./oferta").OfertaTurma[];
+    edicoes?: { curso: string; local?: string; horario?: string; inicio?: string; preco: number; status?: string }[];
+  }>("/v1/public/oferta");
 export type CronogramaPublico = {
   nome: string;
   curso: string;

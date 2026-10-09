@@ -77,7 +77,7 @@ export async function ingestEvent(
   });
   let queued = 0;
   for (const rule of rules.rows) {
-    if (rule.curso && curso && rule.curso !== curso) continue;
+    if (rule.curso && curso && rule.curso.trim().toLowerCase() !== curso.trim().toLowerCase()) continue;
     const subject = fillVars(rule.assunto, vars);
     const fromXml = parseEmailXml(rule.body_xml ?? "");
     const linhas = fromXml.linhas.length ? fromXml.linhas : asLines(rule.body_lines);

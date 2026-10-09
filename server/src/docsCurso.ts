@@ -1,4 +1,5 @@
 import type { Db } from "./db/pool.js";
+import { comporModelo, DTP_MODELO_VAZIO, parseDtpModelo } from "./dtpModel.js";
 
 export type DocPedido = { id: string; label: string; required: boolean; modelo?: string };
 
@@ -23,12 +24,6 @@ export const COMPROVATIVO: DocPedido = {
   label: "Comprovativo de pagamento",
   required: false,
 };
-
-function parseExtra(raw: unknown): { id: string; label: string; ambito?: string; bloqueante?: boolean }[] {
-  if (!raw) return [];
-  const v = typeof raw === "string" ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : raw;
-  return Array.isArray(v) ? v as { id: string; label: string; ambito?: string; bloqueante?: boolean }[] : [];
-}
 
 export type DocExtraPreinscricao = { id: string; label: string; required: boolean };
 
@@ -157,11 +152,23 @@ export async function docsDoCurso(db: Db, curso: string, regime: "gold" | "fin")
     seen.add(extra.id);
     kept.push({ id: extra.id, label: extra.label, required: extra.required });
   }
-  const modelo = await db.query<{ extra: unknown }>(
-    "SELECT extra FROM curso_dtp_modelos WHERE regime = $1 AND curso_id = $2",
+  const modelo = await db.query<{ extra: unknown; excluidos: unknown; incluidos: unknown }>(
+    "SELECT extra, excluidos, incluidos FROM curso_dtp_modelos WHERE regime = $1 AND curso_id = $2",
     [regime, found.id],
   );
-  for (const extra of parseExtra(modelo.rows[0]?.extra)) {
+  const cursoModelo = parseDtpModelo(modelo.rows[0]);
+  let composto = cursoModelo;
+  if (regime === "gold") {
+    const entidade = await db.query<{ excluidos: unknown; extra: unknown }>(
+      `SELECT e.excluidos, e.extra
+         FROM cursos_gold c
+         JOIN dtp_entidades e ON e.id = c.entidade_responsavel_id
+        WHERE c.id = $1`,
+      [found.id],
+    );
+    composto = comporModelo(parseDtpModelo(entidade.rows[0] ?? DTP_MODELO_VAZIO), cursoModelo);
+  }
+  for (const extra of composto.extra) {
     if (extra.ambito !== "formando" || !extra.id || seen.has(extra.id)) continue;
     seen.add(extra.id);
     kept.push({ id: extra.id, label: extra.label || extra.id, required: Boolean(extra.bloqueante) });

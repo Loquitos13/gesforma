@@ -97,6 +97,9 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
             <p className="text-sm font-semibold text-slate-800 mt-0.5">
               Código interno <span className="font-mono text-amber-700">{codigo}</span>
               {turma?.id != null && <span className="text-slate-400 font-normal"> · #{turma.id}</span>}
+              {dtp.entidade && (
+                <span className="ml-2 align-middle text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">{dtp.entidade}</span>
+              )}
             </p>
             <p className="text-xs text-slate-500 mt-0.5">{ok} no dossiê · {parcial} parciais · {falta} em falta · {total} documentos</p>
           </div>
@@ -164,7 +167,10 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
               {categoria === "todas" ? "Documentos desta turma" : catActiva?.label}
             </p>
             <p className="text-xs text-slate-400">
-              Os itens marcados <span className="font-semibold">automático</span> saem dos dados reais da turma (sessões, presenças, documentos dos formandos). Nos restantes, clique no estado para validar. A lista vem da estrutura definida na ficha do curso.
+              Os itens marcados <span className="font-semibold">automático</span> saem dos dados reais da turma (sessões, presenças, documentos dos formandos). Nos restantes, clique no estado para validar.
+              {isGold
+                ? " O que veio do percurso de inscrição fica submetido até a secretaria validar."
+                : " A lista vem da estrutura definida na ficha do curso."}
             </p>
           </div>
           <button type="button" onClick={() => setCategoria("todas")} className="text-xs font-semibold text-slate-500 hover:text-slate-800 whitespace-nowrap">Ver tudo</button>
@@ -199,6 +205,21 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
                     )}
                     {doc.origem === "auto" && (
                       <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">automático</span>
+                    )}
+                    {isGold && (doc.percurso?.submetidos ?? 0) > 0 && (
+                      <span className="text-[10px] bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
+                        {doc.percurso?.submetidos} submetido{(doc.percurso?.submetidos ?? 0) === 1 ? "" : "s"}
+                      </span>
+                    )}
+                    {isGold && (doc.percurso?.validados ?? 0) > 0 && (
+                      <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
+                        {doc.percurso?.validados} validado{(doc.percurso?.validados ?? 0) === 1 ? "" : "s"}
+                      </span>
+                    )}
+                    {isGold && (doc.percurso?.recusados ?? 0) > 0 && (
+                      <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
+                        {doc.percurso?.recusados} recusado{(doc.percurso?.recusados ?? 0) === 1 ? "" : "s"}
+                      </span>
                     )}
                     {doc.extra && (
                       <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wide ${isGold ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>curso</span>

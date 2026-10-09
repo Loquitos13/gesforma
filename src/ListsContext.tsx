@@ -70,7 +70,7 @@ export type FormandoFin = {
 };
 export type CursoGoldRow = {
   id: number; nome: string; categoria: string; tipo: string; preco: number;
-  regime: string; horas: number; estado: string;
+  regime: string; horas: number; estado: string; entidadeResponsavelId?: number | null;
 };
 export type CursoFinRow = {
   id: number; ufcdCod: string; ufcd: string; nomeComercial: string;
@@ -310,7 +310,7 @@ export function ListsProvider({
       before = xs.find(x => x.id === id);
       return xs.map(x => x.id === id ? { ...x, ...patch } : x);
     });
-    void persist(apiPatchCursoGold(id, patch), () => {
+    return persist(apiPatchCursoGold(id, patch), () => {
       if (before) setCG(xs => xs.map(x => x.id === id ? before! : x));
     });
   }, []);

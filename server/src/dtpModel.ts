@@ -49,13 +49,82 @@ export type DtpExtraDef = {
   ambito?: DtpAmbito;
 };
 
-/** Modelo do dossiê de um curso: o que se retira da base e o que se acrescenta. */
+/** Modelo do dossiê: o que se retira da base, o que se repõe e o que se acrescenta. */
 export type DtpModelo = {
   excluidos: string[];
+  /** Itens da base que a entidade retirou e este curso voltou a ligar. */
+  incluidos?: string[];
   extra: DtpExtraDef[];
 };
 
-export const DTP_MODELO_VAZIO: DtpModelo = { excluidos: [], extra: [] };
+export const DTP_MODELO_VAZIO: DtpModelo = { excluidos: [], incluidos: [], extra: [] };
+
+function jsonArr(v: unknown): unknown[] {
+  if (Array.isArray(v)) return v;
+  if (typeof v === "string") {
+    try {
+      const p = JSON.parse(v) as unknown;
+      return Array.isArray(p) ? p : [];
+    } catch { return []; }
+  }
+  return [];
+}
+
+function jsonObj(v: unknown): Record<string, unknown> {
+  if (v && typeof v === "object" && !Array.isArray(v)) return v as Record<string, unknown>;
+  if (typeof v === "string") {
+    try {
+      const p = JSON.parse(v) as unknown;
+      return p && typeof p === "object" && !Array.isArray(p) ? p as Record<string, unknown> : {};
+    } catch { return {}; }
+  }
+  return {};
+}
+
+export function parseDtpModelo(row?: { excluidos?: unknown; extra?: unknown; incluidos?: unknown }): DtpModelo {
+  if (!row) return DTP_MODELO_VAZIO;
+  return {
+    excluidos: jsonArr(row.excluidos).map(String),
+    incluidos: jsonArr(row.incluidos).map(String),
+    extra: jsonArr(row.extra).map(raw => {
+      const x = jsonObj(raw);
+      const fase = String(x.fase ?? "antes");
+      return {
+        id: String(x.id ?? ""),
+        fase: (fase === "durante" || fase === "depois" ? fase : "antes") as DtpFase,
+        label: String(x.label ?? ""),
+        fonte: String(x.fonte ?? "ENA · exigência do curso"),
+        hint: String(x.hint ?? ""),
+        bloqueante: Boolean(x.bloqueante),
+        ambito: (x.ambito === "formando" || x.ambito === "formador" ? x.ambito : "turma") as DtpAmbito,
+      };
+    }).filter(x => x.id && x.label),
+  };
+}
+
+/**
+ * A entidade define a estrutura. O curso só guarda o que muda:
+ * exclusões a mais, itens da base que a entidade tirou e o curso repõe, e extras próprios.
+ */
+export function comporModelo(entidade: DtpModelo, curso: DtpModelo): DtpModelo {
+  const repor = new Set(curso.incluidos ?? []);
+  const excluidos = new Set<string>();
+  for (const id of entidade.excluidos) {
+    if (!repor.has(id)) excluidos.add(id);
+  }
+  for (const id of curso.excluidos) {
+    if (!repor.has(id)) excluidos.add(id);
+  }
+  const extra: DtpExtraDef[] = [];
+  const seen = new Set<string>();
+  for (const x of [...entidade.extra, ...curso.extra]) {
+    if (!x.id || seen.has(x.id)) continue;
+    if (excluidos.has(x.id) || excluidos.has(`extra:${x.id}`)) continue;
+    seen.add(x.id);
+    extra.push(x);
+  }
+  return { excluidos: [...excluidos], incluidos: [...repor], extra };
+}
 
 export const DTP_FASES: { id: DtpFase; label: string; hint: string }[] = [
   { id: "antes", label: "Antes da turma", hint: "Abre o dossiê no dia em que a turma é aprovada." },
@@ -230,7 +299,55 @@ export type DtpItem = DtpDef & {
   ambito?: DtpAmbito;
   universal?: boolean;
   anexo?: { fileName: string; url: string; driveFileId: string } | null;
+  /** Contagem do percurso público de inscrição, só em Gold. */
+  percurso?: DtpPercurso;
 };
+
+export type DtpPercurso = {
+  submetidos: number;
+  validados: number;
+  recusados: number;
+  total: number;
+};
+
+/** Tipo do documento no percurso público, quando o item do dossiê Gold corresponde a um. */
+export function tipoPercursoDoItem(item: { id: string; auto?: string; ambito?: string }): string | null {
+  if (item.auto === "contratos") return "contrato";
+  if (item.auto === "doc-regulamento") return "regulamento";
+  if (item.auto === "doc-exp") return "exp";
+  if (item.id === "recibos") return "comprovativo";
+  if (item.id.startsWith("extra:") && item.ambito === "formando") return item.id.slice("extra:".length);
+  return null;
+}
+
+function detalhePercurso(p: DtpPercurso) {
+  const partes: string[] = [];
+  if (p.submetidos) partes.push(`${p.submetidos} ${p.submetidos === 1 ? "submetido" : "submetidos"}`);
+  if (p.validados) partes.push(`${p.validados} ${p.validados === 1 ? "validado" : "validados"} pela secretaria`);
+  if (p.recusados) partes.push(`${p.recusados} ${p.recusados === 1 ? "recusado" : "recusados"}`);
+  const emFalta = p.total - p.submetidos - p.validados - p.recusados;
+  if (emFalta > 0 && (p.submetidos || p.validados || p.recusados)) partes.push(`${emFalta} em falta`);
+  return partes.join(" · ");
+}
+
+/**
+ * Em Gold, um ficheiro do percurso só conta como no dossiê depois de a secretaria validar.
+ * Submetido (pendente) fica parcial. A marcação manual da turma mantém-se.
+ */
+export function aplicarPercursoNoItem(item: DtpItem, percurso: DtpPercurso, manual: boolean): DtpItem {
+  const com = { ...item, percurso };
+  if (manual || percurso.total <= 0) return com;
+  const chegou = percurso.submetidos + percurso.validados + percurso.recusados;
+  if (chegou <= 0) return com;
+  const detalhe = detalhePercurso(percurso);
+  if (percurso.validados === percurso.total) {
+    return { ...com, estado: "ok", detalhe, origem: "auto" };
+  }
+  if (percurso.submetidos + percurso.validados > 0) {
+    return { ...com, estado: "parcial", detalhe, origem: "auto" };
+  }
+  return { ...com, estado: "falta", detalhe, origem: "auto" };
+}
 
 /** Estrutura do dossiê de um curso: base do regime menos o que foi retirado, mais os extras. */
 export function dtpEstrutura(regime: "gold" | "fin", modelo: DtpModelo = DTP_MODELO_VAZIO): DtpDef[] {
@@ -238,7 +355,7 @@ export function dtpEstrutura(regime: "gold" | "fin", modelo: DtpModelo = DTP_MOD
   const efectivo = regime === "fin" ? DTP_MODELO_VAZIO : modelo;
   const fora = new Set(efectivo.excluidos);
   const base = dtpDefs(regime).filter(def => def.obrigatorio || !fora.has(def.id));
-  const extras: DtpDef[] = efectivo.extra.map(x => ({
+  const extras: DtpDef[] = efectivo.extra.filter(x => x.id && !fora.has(x.id) && !fora.has(`extra:${x.id}`)).map(x => ({
     ...x,
     id: `extra:${x.id}`,
     auto: x.ambito === "formando" || x.ambito === "formador" ? (`doc-${x.id}` as DtpAuto) : undefined,

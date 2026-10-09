@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useCatalogList } from "./CatalogsContext";
 import { AppModal, MultiSearchSelect, SearchSelect } from "./FormKit";
 import { OptionSelect } from "./OptionSelect";
-import { apiCursoFicha, apiCursoImagem, apiSaveCursoFicha } from "./api";
+import { apiCreateDtpEntidade, apiCursoFicha, apiCursoImagem, apiDtpEntidades, apiSaveCursoFicha, type DtpEntidade } from "./api";
 import { CursoDocumentos } from "./CursoDocumentos";
 import { DtpModeloEditor } from "./DtpModeloEditor";
 import {
@@ -34,6 +34,7 @@ export type CursoFichaSeed = {
   estado: string;
   ufcdCod?: string;
   ufcd?: string;
+  entidadeResponsavelId?: number | null;
 };
 
 export type CursoGold = CursoFichaSeed;
@@ -625,12 +626,14 @@ export function CursoFichaView({
   onBack,
   onOpenModulos,
   onCommit,
+  onAssignEntidade,
   accent = "gold",
 }: {
   curso?: CursoFichaSeed;
   onBack: () => void;
   onOpenModulos?: (cursoNome: string) => void;
   onCommit?: (saved: CursoFichaSeed) => void | Promise<number | undefined>;
+  onAssignEntidade?: (id: number | null) => Promise<unknown> | void;
   accent?: CursoAccent;
 }) {
   const t = theme(accent);
@@ -652,8 +655,23 @@ export function CursoFichaView({
   const [localNome, setLocalNome] = useState("");
   const [localMorada, setLocalMorada] = useState("");
   const [falhas, setFalhas] = useState<Record<string, string>>({});
+  const [entidades, setEntidades] = useState<DtpEntidade[]>([]);
+  const [entidadeId, setEntidadeId] = useState<number | null>(curso?.entidadeResponsavelId ?? null);
   const [imagemAGravar, setImagemAGravar] = useState<"banner" | "thumb" | "">("");
   const locaisSeeded = useRef(false);
+
+  useEffect(() => {
+    setEntidadeId(curso?.entidadeResponsavelId ?? null);
+  }, [curso?.id, curso?.entidadeResponsavelId]);
+
+  useEffect(() => {
+    if (accent !== "gold") return;
+    let alive = true;
+    apiDtpEntidades()
+      .then(r => { if (alive) setEntidades(r.entidades); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, [accent]);
 
   useEffect(() => {
     const id = curso?.id;
@@ -853,6 +871,7 @@ export function CursoFichaView({
         estado: data.estado || "Ativo",
         ufcdCod: data.ufcdCod,
         ufcd: data.ufcd,
+        entidadeResponsavelId: accent === "gold" ? entidadeId : null,
       });
       if (typeof realId === "number") id = realId;
     }
@@ -1040,6 +1059,44 @@ export function CursoFichaView({
                     <Field label="Tags" required error={falhas.tags} hint="Separadas por vírgula">
                       <input className={inputCls(t.iCls, !!falhas.tags)} value={data.tags} onChange={e => patch({ tags: e.target.value })} placeholder="comunicacao, voz" />
                     </Field>
+                    <div className="sm:col-span-2 lg:col-span-3">
+                    <Field label="Entidade responsável" hint="Das entidades criadas no Dossiê TP Gold. As turmas deste curso passam a usar a estrutura dessa entidade.">
+                      <SearchSelect
+                        value={entidadeId == null ? "" : String(entidadeId)}
+                        allowEmpty
+                        emptyLabel="Sem entidade responsável"
+                        placeholder="Pesquisar entidade…"
+                        options={entidades.map(e => ({ value: String(e.id), label: e.nome }))}
+                        onChange={v => {
+                          const next = v ? Number(v) : null;
+                          setEntidadeId(next);
+                          setSaved(false);
+                          const cid = cursoPersistId ?? curso?.id;
+                          if (cid != null) void onAssignEntidade?.(next);
+                        }}
+                        onAdd={() => {
+                          const nome = window.prompt("Nome da entidade responsável");
+                          if (!nome?.trim()) return;
+                          void apiCreateDtpEntidade(nome.trim()).then(r => {
+                            setEntidades(xs => [...xs, r.entidade]);
+                            setEntidadeId(r.entidade.id);
+                            setSaved(false);
+                            const cid = cursoPersistId ?? curso?.id;
+                            if (cid != null) void onAssignEntidade?.(r.entidade.id);
+                          }).catch(e => window.alert(e instanceof Error ? e.message : "Não foi possível criar a entidade."));
+                        }}
+                        addLabel="Nova entidade responsável"
+                      />
+                      {entidadeId != null && entidades.some(e => e.id === entidadeId) && (
+                        <span className="inline-flex mt-2 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                          {entidades.find(e => e.id === entidadeId)?.nome}
+                        </span>
+                      )}
+                      {entidades.length === 0 && (
+                        <p className="text-[11px] text-slate-400 mt-1">Ainda não há entidades. Crie-as em Gold, Dossiê TP.</p>
+                      )}
+                    </Field>
+                    </div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1177,9 +1234,16 @@ export function CursoFichaView({
                           <p className="font-semibold text-slate-800">{x.local} · {x.horario}</p>
                           <p className="text-xs text-slate-500">{x.nome} · início {fmtDataPt(x.dataInicio)} · {x.vagasLivres > 0 ? `${x.vagasLivres} vagas restantes` : "sem vagas restantes"}</p>
                         </div>
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${x.libertada ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                        <div className="flex items-center gap-2">
+                          {accent === "gold" && entidadeId != null && entidades.some(e => e.id === entidadeId) && (
+                            <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                              {entidades.find(e => e.id === entidadeId)?.nome}
+                            </span>
+                          )}
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${x.libertada ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
                           {x.libertada ? "Libertada" : "Não libertada"}
-                        </span>
+                          </span>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -1546,12 +1610,7 @@ export function CursoFichaView({
           )}
 
           {tab === "dtp" && (
-            <DtpModeloEditor
-              accent={accent}
-              cursoId={curso?.id}
-              entidadeNome={data.entidadeResponsavel}
-              onEntidade={nome => patch({ entidadeResponsavel: nome })}
-            />
+            <DtpModeloEditor key={`${cursoPersistId ?? curso?.id ?? "novo"}-${entidadeId ?? "nenhuma"}`} accent={accent} cursoId={cursoPersistId ?? curso?.id} />
           )}
 
           {tab === "publicacao" && (

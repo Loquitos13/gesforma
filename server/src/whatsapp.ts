@@ -196,6 +196,7 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
     } else if (text === "3" || /curso/i.test(text)) {
       const cursos = await cursosActivos(db);
       say(listaNumerada("Cursos Gold activos:", cursos.map(c => `${c.nome} · € ${c.preco}`)));
+      say("Esse valor é o do curso. O local ou o horário podem ter outro preço, e a inscrição fica com o que escolher.");
       passo = "menu";
     } else {
       say(MENU);

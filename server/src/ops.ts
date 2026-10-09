@@ -19,6 +19,15 @@ function asObj(v: unknown) {
   return {};
 }
 
+const SLOTS_CCP = ["laboral", "pos-laboral", "sabado-manha", "sabado-tarde"];
+
+function slotsCcp(raw: unknown) {
+  if (raw == null) return [...SLOTS_CCP];
+  const arr = asArr(raw);
+  if (arr.some(item => item && typeof item === "object")) return [...SLOTS_CCP];
+  return arr.map(item => String(item));
+}
+
 function mapaValores(v: unknown) {
   const obj = asObj(v);
   const out: Record<string, number> = {};
@@ -207,7 +216,7 @@ export function mapFormador(r: Record<string, unknown>) {
     nif: String(r.nif ?? ""),
     regimes: asArr(r.regimes),
     estado: String(r.estado ?? "Ativo"),
-    disponibilidade: r.disponibilidade == null ? ["laboral", "pos-laboral", "sabado-manha", "sabado-tarde"] : asArr(r.disponibilidade).map(x => String(x)),
+    disponibilidade: slotsCcp(r.disponibilidade),
     custoHora: num(r.custo_hora),
     temAcesso: Boolean(r.user_id),
   };

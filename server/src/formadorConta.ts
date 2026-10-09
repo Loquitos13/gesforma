@@ -69,7 +69,10 @@ export async function erroDisponibilidade(db: Db, nomes: string[], horario: stri
     [limpos.map(n => n.toLowerCase())],
   );
   const fora = rows.rows.filter(r => {
-    const slots = Array.isArray(r.disponibilidade) ? r.disponibilidade.map(String) : slotsDoFormador(null);
+    const lista = Array.isArray(r.disponibilidade) ? r.disponibilidade : null;
+    const slots = !lista || lista.some(item => item && typeof item === "object")
+      ? slotsDoFormador(null)
+      : lista.map(item => String(item));
     return formadorForaDoSlot(slots, horario);
   }).map(r => String(r.nome));
   if (!fora.length) return null;

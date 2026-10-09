@@ -62,10 +62,14 @@ function refMb(seed: string) {
   return `${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6, 9)}`;
 }
 
+function textoHtml(valor: string) {
+  return valor.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] ?? c));
+}
+
 function imprimir(titulo: string, html: string) {
   const w = window.open("", "_blank", "width=820,height=900");
   if (!w) return;
-  w.document.write(`<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>${titulo}</title>
+  w.document.write(`<!doctype html><html lang="pt"><head><meta charset="utf-8"><title>${textoHtml(titulo)}</title>
     <style>
       body { font-family: -apple-system, system-ui, sans-serif; color: #0f172a; margin: 32px; }
       h1 { font-size: 18px; margin: 0 0 4px; }
@@ -234,16 +238,16 @@ export function ReciboModal({
           <button
             type="button"
             onClick={() => imprimir(`Recibo ${transacao.id}`, `
-              <h1>Recibo de pagamento ${transacao.id}</h1>
+              <h1>Recibo de pagamento ${textoHtml(transacao.id)}</h1>
               <p class="sub">ENA · Escola de Negócios e Administração</p>
               <table>
-                <tr><th>Formando</th><td>${transacao.nome}</td></tr>
-                <tr><th>Curso</th><td>${transacao.curso}</td></tr>
-                <tr><th>Método</th><td>${transacao.metodo}</td></tr>
-                <tr><th>Data</th><td>${transacao.data}</td></tr>
-                <tr><th>Estado</th><td>${transacao.estado}</td></tr>
+                <tr><th>Formando</th><td>${textoHtml(transacao.nome)}</td></tr>
+                <tr><th>Curso</th><td>${textoHtml(transacao.curso)}</td></tr>
+                <tr><th>Método</th><td>${textoHtml(transacao.metodo)}</td></tr>
+                <tr><th>Data</th><td>${textoHtml(transacao.data)}</td></tr>
+                <tr><th>Estado</th><td>${textoHtml(transacao.estado)}</td></tr>
               </table>
-              <p class="total">€ ${transacao.valor}</p>
+              <p class="total">€ ${textoHtml(String(transacao.valor))}</p>
             `)}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5"
           >
@@ -484,11 +488,11 @@ export function CertificadoVerModal({
               <h1>Certificado de conclusão</h1>
               <p class="sub">ENA · Escola de Negócios e Administração</p>
               <table>
-                <tr><th>Formando</th><td>${cert.nome}</td></tr>
-                <tr><th>Formação</th><td>${cert.curso ?? "Formação ENA"}</td></tr>
-                ${cert.turma ? `<tr><th>Turma</th><td>${cert.turma}</td></tr>` : ""}
-                ${cert.nota != null ? `<tr><th>Nota final</th><td>${cert.nota}/20</td></tr>` : ""}
-                <tr><th>Data</th><td>${cert.data ?? new Date().toISOString().slice(0, 10)}</td></tr>
+                <tr><th>Formando</th><td>${textoHtml(cert.nome)}</td></tr>
+                <tr><th>Formação</th><td>${textoHtml(cert.curso ?? "Formação ENA")}</td></tr>
+                ${cert.turma ? `<tr><th>Turma</th><td>${textoHtml(cert.turma)}</td></tr>` : ""}
+                ${cert.nota != null ? `<tr><th>Nota final</th><td>${textoHtml(String(cert.nota))}/20</td></tr>` : ""}
+                <tr><th>Data</th><td>${textoHtml(cert.data ?? new Date().toISOString().slice(0, 10))}</td></tr>
               </table>
             `)}
             className={`px-4 py-2 ${t.btn} text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5`}

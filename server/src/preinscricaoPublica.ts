@@ -4,7 +4,7 @@ import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
 import { mapPreinscricao, nextOpsId } from "./ops.js";
 import { resolverTurmaOferta } from "./ofertaGold.js";
-import { isEmail, normalizeEmail, sanitizeHeader } from "./security.js";
+import { isEmail, normalizeEmail, sanitizeHeader, textoDePessoa } from "./security.js";
 
 function nowStamp() {
   return new Date().toISOString().slice(0, 16).replace("T", " ");
@@ -79,8 +79,8 @@ export async function criarPreinscricaoPublica(
     `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, entrada, meio_contacto, horario, turma_id, pagamento_metodo)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Não contactado',$12,$13,'preinscricao',$14,$15,$16,$17)`,
     [
-      id, nowStamp(), sanitizeHeader(input.nome), sanitizeHeader(input.apelido || ""), email,
-      telf, inicio, sanitizeHeader(input.concelho || ""),
+      id, nowStamp(), textoDePessoa(input.nome), textoDePessoa(input.apelido || ""), email,
+      telf, inicio, textoDePessoa(input.concelho || ""),
       local, curso, preco ?? Number(input.preco ?? 0),
       sanitizeHeader(input.campanha || ""), origem, meio, horario, turmaId, metodo,
     ],

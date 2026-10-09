@@ -16,6 +16,7 @@ LANGUAGE sql STABLE AS $$ SELECT COALESCE(current_setting('app.user_id', true), 
 
 ALTER TABLE preinscricoes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE preinscricoes FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS gesforma_api ON preinscricoes;
 DROP POLICY IF EXISTS preinscricoes_isolamento ON preinscricoes;
 CREATE POLICY preinscricoes_isolamento ON preinscricoes
   USING (
@@ -59,6 +60,7 @@ CREATE POLICY contratos_isolamento ON contratos_comerciais
 
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS gesforma_api ON users;
 DROP POLICY IF EXISTS users_isolamento ON users;
 CREATE POLICY users_isolamento ON users
   USING (
@@ -72,6 +74,7 @@ CREATE POLICY users_isolamento ON users
 
 ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sessions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS gesforma_api ON sessions;
 DROP POLICY IF EXISTS sessions_isolamento ON sessions;
 CREATE POLICY sessions_isolamento ON sessions
   USING (
@@ -85,6 +88,7 @@ CREATE POLICY sessions_isolamento ON sessions
 
 ALTER TABLE pagamentos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pagamentos FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS gesforma_api ON pagamentos;
 DROP POLICY IF EXISTS pagamentos_isolamento ON pagamentos;
 CREATE POLICY pagamentos_isolamento ON pagamentos
   USING (app_role() IN ('admin', 'secretaria', 'financiada', 'system'))
@@ -92,6 +96,7 @@ CREATE POLICY pagamentos_isolamento ON pagamentos
 
 ALTER TABLE formandos_gold ENABLE ROW LEVEL SECURITY;
 ALTER TABLE formandos_gold FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS gesforma_api ON formandos_gold;
 DROP POLICY IF EXISTS formandos_gold_isolamento ON formandos_gold;
 CREATE POLICY formandos_gold_isolamento ON formandos_gold
   USING (app_role() IN ('admin', 'secretaria', 'formador', 'system'))
@@ -99,6 +104,7 @@ CREATE POLICY formandos_gold_isolamento ON formandos_gold
 
 ALTER TABLE formandos_fin ENABLE ROW LEVEL SECURITY;
 ALTER TABLE formandos_fin FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS gesforma_api ON formandos_fin;
 DROP POLICY IF EXISTS formandos_fin_isolamento ON formandos_fin;
 CREATE POLICY formandos_fin_isolamento ON formandos_fin
   USING (app_role() IN ('admin', 'secretaria', 'financiada', 'formador', 'system'))

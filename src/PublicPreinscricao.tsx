@@ -3,6 +3,7 @@ import { ApiError, apiPublicOferta, apiPublicOpcoes, apiPublicPreinscricao } fro
 import { CursoOfertaCampos } from "./CursoOfertaCampos";
 import { SearchSelect } from "./FormKit";
 import { LISTAS_OPCOES } from "./listaOpcoes";
+import { precoDaInscricao, type RegraPreco } from "./liveOpts";
 import { OFERTA_VAZIA, type CursoOfertaSel, type OfertaTurma } from "./oferta";
 
 export const CONCELHOS = [
@@ -36,6 +37,7 @@ export function PublicPreinscricao() {
   const [oferta, setOferta] = useState<CursoOfertaSel>({ ...OFERTA_VAZIA, curso: cursoParam });
   const [cursos, setCursos] = useState<{ nome: string; preco: number }[]>([]);
   const [turmas, setTurmas] = useState<OfertaTurma[]>([]);
+  const [edicoes, setEdicoes] = useState<RegraPreco[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
@@ -45,6 +47,7 @@ export function PublicPreinscricao() {
       .then(r => {
         setCursos(r.cursos);
         setTurmas(r.turmas);
+        setEdicoes(r.edicoes ?? []);
       })
       .catch(() => setError("Não foi possível carregar as turmas liberadas."));
     void apiPublicOpcoes("origens")
@@ -88,6 +91,12 @@ export function PublicPreinscricao() {
   }
 
   const resumo = [oferta.curso, oferta.local, oferta.horario, oferta.dataInicio].filter(Boolean).join(" · ");
+  const preco = precoDaInscricao(cursos, edicoes, {
+    curso: oferta.curso,
+    local: oferta.local,
+    horario: oferta.horario,
+    inicio: oferta.dataInicio,
+  });
 
   return (
     <div className="min-h-screen bg-white px-4 py-10 sm:px-8">
@@ -151,6 +160,7 @@ export function PublicPreinscricao() {
               value={oferta}
               onChange={setOferta}
               cursoLocked={Boolean(cursoParam)}
+              preco={preco}
             />
             <p className="text-xs text-slate-500 -mt-6">
               A turma é o conjunto local + horário + data de início. Horário e data só aparecem depois do local, e só se a secretaria tiver libertado essa turma Gold.

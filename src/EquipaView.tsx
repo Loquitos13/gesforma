@@ -7,6 +7,8 @@ import {
   type EquipaComercial, type EquipaNota, type EquipaProposta, type PropostaTemplate,
 } from "./api";
 import { AppModal, SearchSelect } from "./FormKit";
+import { precoDaInscricao, useHorariosOpts, useLocaisOpts, useRegrasPreco } from "./liveOpts";
+import { useLists } from "./ListsContext";
 import { EmptyHint, MobileCard } from "./SecretaryUX";
 
 const ESTADOS = ["Enviada", "Negociação", "Aceite", "Recusada", "Expirada"] as const;
@@ -192,6 +194,10 @@ export function EquipaView({ regime = "gold" }: { regime?: "gold" | "fin" }) {
 }
 
 function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | "fin"; onClose: () => void }) {
+  const { cursosGold } = useLists();
+  const regrasPreco = useRegrasPreco();
+  const locaisLista = useLocaisOpts("gold");
+  const horariosLista = useHorariosOpts();
   const [tab, setTab] = useState<"perfil" | "objetivos" | "propostas" | "leads" | "notas">("perfil");
   const [perfilNome, setPerfilNome] = useState("");
   const [perfilTel, setPerfilTel] = useState("");
@@ -208,7 +214,7 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
   }>>([]);
   const [notas, setNotas] = useState<EquipaNota[]>([]);
   const [nova, setNova] = useState(false);
-  const [draft, setDraft] = useState({ clienteNome: "", clienteEmail: "", curso: "", valor: "125", estado: "Enviada" as (typeof ESTADOS)[number], respostaCliente: "", notas: "", preinscricaoId: "" });
+  const [draft, setDraft] = useState({ clienteNome: "", clienteEmail: "", curso: "", local: "", horario: "", valor: "", estado: "Enviada" as (typeof ESTADOS)[number], respostaCliente: "", notas: "", preinscricaoId: "" });
   const [notaLead, setNotaLead] = useState<number | "">("");
   const [notaTxt, setNotaTxt] = useState("");
   const [busy, setBusy] = useState(false);
@@ -259,7 +265,7 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
         corpo: templates.find(t => t.id === templateId)?.corpo ?? "",
       });
       setNova(false);
-      setDraft({ clienteNome: "", clienteEmail: "", curso: "", valor: "125", estado: "Enviada", respostaCliente: "", notas: "", preinscricaoId: "" });
+      setDraft({ clienteNome: "", clienteEmail: "", curso: "", local: "", horario: "", valor: "", estado: "Enviada", respostaCliente: "", notas: "", preinscricaoId: "" });
       load();
     } finally {
       setBusy(false);
@@ -542,7 +548,21 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
           </Field>
           <Field label="Cliente"><input className={iCls} value={draft.clienteNome} onChange={e => setDraft({ ...draft, clienteNome: e.target.value })} /></Field>
           <Field label="Email"><input className={iCls} value={draft.clienteEmail} onChange={e => setDraft({ ...draft, clienteEmail: e.target.value })} /></Field>
-          <Field label="Curso"><input className={iCls} value={draft.curso} onChange={e => setDraft({ ...draft, curso: e.target.value })} /></Field>
+          <Field label="Curso"><input className={iCls} value={draft.curso} onChange={e => {
+            const curso = e.target.value;
+            const preco = precoDaInscricao(cursosGold, regrasPreco, { curso, local: draft.local, horario: draft.horario });
+            setDraft({ ...draft, curso, valor: preco > 0 ? String(preco) : draft.valor });
+          }} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Local"><SearchSelect value={draft.local} onChange={v => {
+              const preco = precoDaInscricao(cursosGold, regrasPreco, { curso: draft.curso, local: v, horario: draft.horario });
+              setDraft({ ...draft, local: v, valor: preco > 0 ? String(preco) : draft.valor });
+            }} options={locaisLista} placeholder="Pesquisar local…" /></Field>
+            <Field label="Horário"><SearchSelect value={draft.horario} onChange={v => {
+              const preco = precoDaInscricao(cursosGold, regrasPreco, { curso: draft.curso, local: draft.local, horario: v });
+              setDraft({ ...draft, horario: v, valor: preco > 0 ? String(preco) : draft.valor });
+            }} options={horariosLista} /></Field>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Valor (€)"><input type="number" className={iCls} value={draft.valor} onChange={e => setDraft({ ...draft, valor: e.target.value })} /></Field>
             <Field label="Estado">
@@ -569,7 +589,7 @@ function FichaComercial({ id, regime, onClose }: { id: string; regime: "gold" | 
                   clienteNome: lead ? `${lead.nome} ${lead.apelido}`.trim() : draft.clienteNome,
                   clienteEmail: lead?.email ?? draft.clienteEmail,
                   curso: lead?.curso ?? draft.curso,
-                  valor: lead ? String(lead.preco || 125) : draft.valor,
+                  valor: lead ? String(lead.preco || precoDaInscricao(cursosGold, regrasPreco, { curso: lead.curso, local: draft.local, horario: draft.horario }) || "") : draft.valor,
                 });
               }}
               onAdd={() => void novaPreinscricao()}

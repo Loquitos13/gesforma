@@ -4,6 +4,7 @@ export type FolhaPresencasSessao = {
   hora: string;
   modulo?: string;
   formador?: string;
+  sumario?: string;
 };
 
 function escapeHtml(s: string) {
@@ -41,6 +42,10 @@ export function htmlFolhaPresencas(opts: {
             </tr>`).join("")}
         </tbody>
       </table>
+      <div class="sumario">
+        <p class="sum-tit">Sumário da sessão</p>
+        <p>${escapeHtml(sx.sumario || "Ainda por preencher.")}</p>
+      </div>
       <div class="rodape">
         <p>Formador: ${escapeHtml(sx.formador || "") || "________________________________"}</p>
         <p>Assinatura do formador: ________________________________</p>
@@ -65,6 +70,8 @@ export function htmlFolhaPresencas(opts: {
       table.lista th { background: #f8fafc; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #475569; }
       table.lista td.n, table.lista th.n { width: 42px; text-align: center; }
       table.lista td.ass, table.lista th.ass { width: 46%; height: 28px; }
+      .sumario { margin-top: 16px; border: 1px solid #94a3b8; padding: 8px 10px; font-size: 12px; white-space: pre-wrap; }
+      .sum-tit { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #475569; margin: 0 0 4px; font-weight: 700; }
       .rodape { margin-top: 22px; font-size: 12px; display: grid; gap: 12px; }
     </style></head><body>${blocos}</body></html>`;
 }

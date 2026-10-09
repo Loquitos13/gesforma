@@ -1,4 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap");
 @import "tailwindcss";
 
 html,
@@ -104,6 +105,20 @@ body:has(input[type="file"]:focus) [data-ficha-sticky] {
   position: relative;
   top: auto;
   transform: none;
+}
+
+/* Site público. O backoffice continua em Inter. */
+.site-ena {
+  --font-sans: "Atkinson Hyperlegible", system-ui, sans-serif;
+  --font-serif: "Atkinson Hyperlegible", Georgia, serif;
+  font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
+  background: #f9f9f9;
+  color: #1c3350;
+}
+
+.site-ena ::selection {
+  background: #ffa900;
+  color: #1c3350;
 }
 
 @media print {

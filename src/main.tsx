@@ -10,11 +10,13 @@ import { PublicInquerito } from "./PublicInquerito";
 import { PublicPreinscricao } from "./PublicPreinscricao";
 import { PublicDocumentos } from "./PublicDocumentos";
 import { PublicCronograma } from "./PublicCronograma";
+import { SiteLanding } from "./SiteLanding";
 import { ToastHost } from "./ToastHost";
 import { TurmasProvider } from "./TurmasContext";
 import "./index.css";
 
 const path = window.location.pathname.replace(/\/+$/, "") || "/";
+const entrar = path === "/entrar";
 const publicForm = path === "/pre-inscricao";
 const docsToken = path.startsWith("/documentos/") ? decodeURIComponent(path.slice("/documentos/".length).split("/")[0] ?? "") : "";
 const cronogramaMatch = path.match(/^\/cronograma\/(gold|fin)\/(\d+)$/);
@@ -30,7 +32,7 @@ createRoot(document.getElementById("root")!).render(
       <PublicDocumentos token={docsToken} />
     ) : inqToken ? (
       <PublicInquerito token={inqToken} />
-    ) : (
+    ) : entrar ? (
       <AuthGate>
         <TurmasProvider>
           <FormadoresProvider>
@@ -45,6 +47,8 @@ createRoot(document.getElementById("root")!).render(
           </FormadoresProvider>
         </TurmasProvider>
       </AuthGate>
+    ) : (
+      <SiteLanding />
     )}
   </StrictMode>,
 );

@@ -196,8 +196,8 @@ function SplitHero() {
   const preco = ccp?.precoDesde != null ? `A partir de ${ccp.precoDesde.toLocaleString("pt-PT")}€` : "A partir de 100€";
   return (
     <section className="px-4 pb-2 pt-4 sm:px-6 lg:px-8" aria-label="Destaques">
-      <div className="relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[32px] bg-white shadow-[0_28px_80px_rgba(20,38,61,.08)] lg:min-h-[680px] lg:grid-cols-[minmax(0,.72fr)_minmax(0,1.28fr)]">
-        <div className="relative z-20 flex flex-col justify-center px-6 pb-4 pt-10 sm:px-8 lg:px-10 lg:py-10">
+      <div className="relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[32px] bg-white shadow-[0_28px_80px_rgba(20,38,61,.08)] lg:min-h-[860px] lg:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)]">
+        <div className="relative z-20 flex flex-col justify-center px-6 pb-4 pt-10 sm:px-8 lg:px-10 lg:py-12">
           <h1 className="max-w-[18ch] font-serif text-[2rem] font-bold leading-[1.08] tracking-[-0.03em] text-[#1C3350] sm:text-4xl">
             Certifique o seu futuro com formação de referência.
           </h1>
@@ -208,16 +208,16 @@ function SplitHero() {
             Explorar todos os cursos
           </a>
         </div>
-        <div className="relative z-20 px-4 pb-28 pt-2 lg:flex lg:items-center lg:justify-center lg:px-8 lg:pb-16 lg:pt-8">
-          <div className="pointer-events-none absolute left-1/2 top-2 h-[180px] w-[180px] -translate-x-1/2 overflow-hidden rounded-full bg-[#E7EBF0] shadow-[0_0_0_10px_#E7EBF0] sm:h-[220px] sm:w-[220px] lg:left-auto lg:right-[-3rem] lg:top-1/2 lg:h-[560px] lg:w-[560px] lg:-translate-y-1/2 lg:translate-x-0 lg:shadow-[0_0_0_14px_#E7EBF0]">
+        <div className="relative z-20 flex flex-col gap-6 px-4 pb-32 pt-2 lg:block lg:h-auto lg:min-h-full lg:px-0 lg:pb-0 lg:pt-0">
+          <div className="relative mx-auto h-[180px] w-[180px] shrink-0 overflow-hidden rounded-full bg-[#E7EBF0] shadow-[0_0_0_10px_#E7EBF0] sm:h-[220px] sm:w-[220px] lg:absolute lg:right-[-4rem] lg:top-1/2 lg:mx-0 lg:h-[620px] lg:w-[620px] lg:-translate-y-1/2 lg:shadow-[0_0_0_14px_#E7EBF0]">
             <img
               src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=1400&q=80"
               alt="Sessão de formação em sala"
               className="h-full w-full object-cover object-[center_30%]"
             />
           </div>
-          <div className="relative z-20 mx-auto mt-[196px] flex w-full max-w-[340px] flex-col gap-3 sm:mt-[236px] lg:mt-0">
-            <article className="w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.16)]">
+          <div className="relative z-20 flex flex-col gap-6 lg:absolute lg:inset-0 lg:block">
+            <article className="ena-flutuar w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:left-0 lg:top-[5%] lg:w-[280px]">
               <Moldura src={ccp?.miniatura} alt={ccp?.title ?? "Formação de Formadores"} />
               <div className="p-5">
                 <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">{preco}</span>
@@ -226,7 +226,7 @@ function SplitHero() {
                 <a href={ccp ? `/formacao/${ccp.id}` : "/formacao"} className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#A60000]">Inscrever-me agora</a>
               </div>
             </article>
-            <article className="w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.16)]">
+            <article className="ena-flutuar-b w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:right-8 lg:top-[54%] lg:w-[268px]">
               <Moldura src={financiada?.miniatura} alt="Formação financiada" />
               <div className="p-5">
                 <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">Grátis + Subsídio</span>

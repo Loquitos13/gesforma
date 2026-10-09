@@ -35,6 +35,7 @@ import { config } from "./config.js";
 import { criarPreinscricaoPublica } from "./preinscricaoPublica.js";
 import { precoParaOferta } from "./precoOferta.js";
 import { listCursosGoldActivos, listOfertaGold } from "./ofertaGold.js";
+import { listarCatalogoPublico } from "./catalogoPublico.js";
 import { generateCronograma } from "./cronograma.js";
 import {
   bloqueioCursoFin, bloqueioCursoGold, bloqueioFormador, bloqueioTurma,
@@ -505,6 +506,8 @@ export function registerOpsRoutes(
   app.get("/v1/public/cursos", async () => {
     return { cursos: await listCursosGoldActivos(db) };
   });
+
+  app.get("/v1/public/catalogo", async () => listarCatalogoPublico(db));
 
   app.get("/v1/public/oferta", async () => {
     const [cursos, turmas] = await Promise.all([listCursosGoldActivos(db), listOfertaGold(db)]);

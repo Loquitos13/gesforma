@@ -1,108 +1,115 @@
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { createContext, FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-type Course = {
-  id: number;
+export type Course = {
+  id: string;
   title: string;
   area: string;
-  format: "Presencial" | "E-learning";
+  format: string;
   duration: string;
   start: string;
-  location: string;
   price: string;
   description: string;
-  color: string;
   funding: "Financiada" | "Gold";
   enrollment: "Acesso direto" | "Pré-inscrição";
+  miniatura: string | null;
+  precoDesde: number | null;
+  vendas: number;
+  regime: "gold" | "fin";
 };
 
-const courses: Course[] = [
-  {
-    id: 1,
-    title: "Técnico/a de Apoio Familiar e à Comunidade",
-    area: "Apoio social",
-    format: "Presencial",
-    duration: "1 200 horas",
-    start: "Setembro 2025",
-    location: "Lisboa",
-    price: "Financiado",
-    funding: "Financiada",
-    enrollment: "Pré-inscrição",
-    description: "Desenvolve competências para apoiar famílias e comunidades em contextos sociais diversos.",
-    color: "bg-[#EDEEF1]",
-  },
-  {
-    id: 2,
-    title: "Gestão de Projetos: da ideia ao impacto",
-    area: "Gestão",
-    format: "E-learning",
-    duration: "24 horas",
-    start: "Acesso imediato",
-    location: "Moodle",
-    price: "79 €",
-    funding: "Gold",
-    enrollment: "Acesso direto",
-    description: "Um percurso prático para planear, executar e avaliar projetos com confiança.",
-    color: "bg-[#FFF1D1]",
-  },
-  {
-    id: 3,
-    title: "Especialização em Cuidados de Saúde",
-    area: "Saúde",
-    format: "Presencial",
-    duration: "300 horas",
-    start: "Outubro 2025",
-    location: "Porto",
-    price: "Sob consulta",
-    funding: "Financiada",
-    enrollment: "Pré-inscrição",
-    description: "Atualiza competências essenciais para uma prestação de cuidados mais humana e segura.",
-    color: "bg-[#E7EBF0]",
-  },
-  {
-    id: 4,
-    title: "Excel para Gestão e Análise de Dados",
-    area: "Digital",
-    format: "E-learning",
-    duration: "18 horas",
-    start: "Acesso imediato",
-    location: "Moodle",
-    price: "59 €",
-    funding: "Gold",
-    enrollment: "Acesso direto",
-    description: "Transforma dados em decisões com folhas de cálculo, dashboards e automatizações.",
-    color: "bg-[#FFF1D1]",
-  },
-  {
-    id: 5,
-    title: "Comunicação e Liderança de Equipas",
-    area: "Competências",
-    format: "Presencial",
-    duration: "36 horas",
-    start: "Novembro 2025",
-    location: "Lisboa",
-    price: "240 €",
-    funding: "Gold",
-    enrollment: "Pré-inscrição",
-    description: "Lidera com clareza, promove confiança e cria equipas mais autónomas e colaborativas.",
-    color: "bg-[#F1E5E5]",
-  },
-  {
-    id: 6,
-    title: "Segurança e Saúde no Trabalho",
-    area: "Segurança",
-    format: "E-learning",
-    duration: "12 horas",
-    start: "Acesso imediato",
-    location: "Moodle",
-    price: "39 €",
-    funding: "Gold",
-    enrollment: "Acesso direto",
-    description: "Reconhece riscos e aplica boas práticas para ambientes de trabalho mais seguros.",
-    color: "bg-[#E7EBF0]",
-  },
-];
+type CatalogoApi = {
+  cursos: Array<{
+    id: string;
+    regime: "gold" | "fin";
+    titulo: string;
+    area: string;
+    modalidade: string;
+    horasLabel: string;
+    inicio: string;
+    precoLabel: string;
+    precoDesde: number | null;
+    descricao: string;
+    financiamento: "Gold" | "Financiada";
+    inscricao: "Acesso direto" | "Pré-inscrição";
+    miniatura: string | null;
+    vendas: number;
+  }>;
+  destaques: CatalogoApi["cursos"];
+  ccp: CatalogoApi["cursos"][number] | null;
+};
 
-function Icon({
+function mapCurso(curso: CatalogoApi["cursos"][number]): Course {
+  return {
+    id: curso.id,
+    title: curso.titulo,
+    area: curso.area,
+    format: curso.modalidade,
+    duration: curso.horasLabel,
+    start: curso.inicio,
+    price: curso.precoLabel,
+    description: curso.descricao,
+    funding: curso.financiamento,
+    enrollment: curso.inscricao,
+    miniatura: curso.miniatura,
+    precoDesde: curso.precoDesde,
+    vendas: curso.vendas,
+    regime: curso.regime,
+  };
+}
+
+type OfertaEstado = {
+  cursos: Course[];
+  destaques: Course[];
+  ccp: Course | null;
+  estado: "a-carregar" | "pronto" | "erro";
+  recarregar: () => void;
+};
+
+const OfertaCtx = createContext<OfertaEstado | null>(null);
+
+export function useOferta() {
+  const ctx = useContext(OfertaCtx);
+  if (!ctx) throw new Error("useOferta precisa do site");
+  return ctx;
+}
+
+function useOfertaState(): OfertaEstado {
+  const [cursos, setCursos] = useState<Course[]>([]);
+  const [destaques, setDestaques] = useState<Course[]>([]);
+  const [ccp, setCcp] = useState<Course | null>(null);
+  const [estado, setEstado] = useState<OfertaEstado["estado"]>("a-carregar");
+  const [tick, setTick] = useState(0);
+  const recarregar = useCallback(() => setTick(n => n + 1), []);
+
+  useEffect(() => {
+    let vivo = true;
+    setEstado("a-carregar");
+    fetch("/api/v1/public/catalogo")
+      .then(async res => {
+        if (!res.ok) throw new Error("oferta indisponível");
+        return res.json() as Promise<CatalogoApi>;
+      })
+      .then(data => {
+        if (!vivo) return;
+        setCursos((data.cursos ?? []).map(mapCurso));
+        setDestaques((data.destaques ?? []).map(mapCurso));
+        setCcp(data.ccp ? mapCurso(data.ccp) : null);
+        setEstado("pronto");
+      })
+      .catch(() => {
+        if (!vivo) return;
+        setEstado("erro");
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [tick]);
+
+  return { cursos, destaques, ccp, estado, recarregar };
+}
+
+
+export function Icon({
   name,
   className = "h-5 w-5",
 }: {
@@ -137,8 +144,8 @@ function Header() {
           <span className="hidden text-left text-[10px] font-bold uppercase leading-tight tracking-[0.12em] text-[#1C3350]/70 sm:block">Escola de<br />Negócios e Administração</span>
         </a>
         <nav className="hidden items-center gap-8 text-sm font-semibold lg:flex" aria-label="Navegação principal">
-          <a href="#formacao" className="hover:text-[#A60000]">Formação</a>
-          <a href="#empresas" className="hover:text-[#A60000]">Empresas</a>
+          <a href="/formacao" className="hover:text-[#A60000]">Formação</a>
+          <a href="/#empresas" className="hover:text-[#A60000]">Empresas</a>
         </nav>
         <div className="hidden items-center gap-4 lg:flex">
           <a href="/entrar" className="text-sm font-semibold underline decoration-[#A60000] decoration-2 underline-offset-4">Área de formando</a>
@@ -149,8 +156,8 @@ function Header() {
       {open && (
         <nav className="border-t border-[#1C3350]/10 bg-[#F9F9F9] px-5 py-6 lg:hidden">
           <div className="flex flex-col gap-5 font-semibold">
-            <a href="#formacao" onClick={() => setOpen(false)}>Formação</a>
-            <a href="#empresas" onClick={() => setOpen(false)}>Empresas</a>
+            <a href="/formacao" onClick={() => setOpen(false)}>Formação</a>
+            <a href="/#empresas" onClick={() => setOpen(false)}>Empresas</a>
             <a href="/entrar" className="border-t border-[#1C3350]/10 pt-5 text-[#A60000]">Área de formando</a>
             <a href="/entrar" className="bg-[#1C3350] px-5 py-3 text-center text-sm font-bold text-white">Iniciar Sessão</a>
           </div>
@@ -161,58 +168,70 @@ function Header() {
 }
 
 function SplitHero() {
+  const { ccp } = useOferta();
+  const preco = ccp?.precoDesde != null ? `A partir de ${ccp.precoDesde.toLocaleString("pt-PT")}€` : "A partir de 100€";
   return (
     <section className="px-4 pb-2 pt-4 sm:px-6 lg:px-8" aria-label="Destaques">
       <div className="relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[32px] bg-white shadow-[0_28px_80px_rgba(20,38,61,.08)] lg:min-h-[660px] lg:grid-cols-[1.05fr_.95fr]">
-        <div className="relative z-10 flex flex-col justify-center px-6 pb-24 pt-14 sm:px-10 lg:px-14 lg:py-16">
+        <div className="relative z-20 flex flex-col justify-center px-6 pb-28 pt-14 sm:px-10 lg:px-14 lg:py-16">
           <h1 className="max-w-[12ch] font-serif text-[2.7rem] font-bold leading-[1.02] tracking-[-0.035em] text-[#1C3350] sm:text-6xl lg:text-[4.35rem]">
             Certifique o seu futuro com formação de referência.
           </h1>
           <p className="mt-6 max-w-md text-base leading-7 text-[#1C3350]/70 sm:text-lg">
             Formação de formadores com CCP e formação financiada com subsídio de alimentação. Horários por todo o país.
           </p>
-          <a href="#formacao" className="mt-8 inline-flex w-fit items-center rounded-full border border-[#1C3350] px-6 py-3 text-sm font-semibold text-[#1C3350] transition-colors hover:bg-[#1C3350] hover:text-white">
+          <a href="/formacao" className="mt-8 inline-flex w-fit items-center rounded-full border border-[#1C3350] px-6 py-3 text-sm font-semibold text-[#1C3350] transition-colors hover:bg-[#1C3350] hover:text-white">
             Explorar todos os cursos
           </a>
-          <svg aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 h-24 w-48 sm:h-28 sm:w-56" viewBox="0 0 220 110" fill="none">
-            <path d="M0 110V58c22-28 36 6 62-2 24-8 34-30 62-22 22 6 34 28 58 16 14-6 24 2 38 10v50H0Z" fill="#1C3350" />
-            <path d="M0 110V86c28-18 42 10 74 0 26-8 40 12 70 2 18-6 32 6 76-2v24H0Z" fill="#FFA900" />
-          </svg>
         </div>
-        <div className="relative h-[440px] sm:h-[500px] lg:h-auto lg:min-h-full">
-          <div className="absolute left-1/2 top-6 h-[340px] w-[340px] -translate-x-1/2 overflow-hidden rounded-full bg-[#E7EBF0] shadow-[0_0_0_14px_#E7EBF0] sm:h-[400px] sm:w-[400px] lg:left-auto lg:right-[-4rem] lg:top-1/2 lg:h-[640px] lg:w-[640px] lg:-translate-x-0 lg:-translate-y-1/2">
+        <div className="relative z-20 px-4 pb-28 pt-2 lg:h-auto lg:min-h-full lg:px-0 lg:pb-0 lg:pt-0">
+          <div className="relative mx-auto h-[240px] w-[240px] overflow-hidden rounded-full bg-[#E7EBF0] shadow-[0_0_0_12px_#E7EBF0] sm:h-[300px] sm:w-[300px] lg:absolute lg:left-auto lg:right-[-4rem] lg:top-1/2 lg:mx-0 lg:h-[640px] lg:w-[640px] lg:-translate-y-1/2 lg:shadow-[0_0_0_14px_#E7EBF0]">
             <img
               src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=1400&q=80"
               alt="Sessão de formação em sala"
               className="h-full w-full object-cover object-[center_30%]"
             />
           </div>
-          <article className="absolute left-4 top-10 z-20 w-[230px] rounded-2xl bg-white p-5 shadow-[0_18px_50px_rgba(28,51,80,.14)] sm:left-2 sm:top-16 sm:w-[250px] lg:left-0 lg:top-[18%]">
-            <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">A partir de 100€</span>
-            <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">Formação de Formadores (CCP)</h2>
-            <p className="mt-2 text-sm text-[#1C3350]/55">Formação de formadores</p>
-            <a href="/pre-inscricao" className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#A60000]">Pré-Inscrição</a>
-          </article>
-          <article className="absolute bottom-10 right-4 z-20 w-[214px] rounded-2xl bg-white p-5 shadow-[0_18px_50px_rgba(28,51,80,.16)] sm:bottom-14 sm:right-8 sm:w-[236px] lg:bottom-auto lg:right-8 lg:top-[48%]">
-            <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">Grátis + Subsídio</span>
-            <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">Formação Financiada</h2>
-            <p className="mt-2 text-sm text-[#1C3350]/55">Grátis + subsídio</p>
-            <a href="/pre-inscricao" className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#A60000]">Pré-Inscrição</a>
-          </article>
+          <div className="relative z-20 -mt-8 flex flex-col gap-4 lg:absolute lg:inset-0 lg:mt-0 lg:block">
+            <article className="w-full max-w-[280px] overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.14)] lg:absolute lg:left-0 lg:top-[14%] lg:w-[260px]">
+              {ccp?.miniatura && <img src={ccp.miniatura} alt="" className="h-28 w-full object-cover" />}
+              <div className="p-5">
+                <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">{preco}</span>
+                <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">{ccp?.title ?? "Formação de Formadores (CCP)"}</h2>
+                <p className="mt-2 text-sm text-[#1C3350]/55">{ccp?.area ?? "Formação de formadores"}</p>
+                <a href="/pre-inscricao" className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#A60000]">Pré-Inscrição</a>
+              </div>
+            </article>
+            <article className="ml-auto w-full max-w-[250px] rounded-2xl bg-white p-5 shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:right-8 lg:top-[46%] lg:ml-0 lg:w-[236px]">
+              <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">Grátis + Subsídio</span>
+              <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">Formação Financiada</h2>
+              <p className="mt-2 text-sm text-[#1C3350]/55">Grátis + subsídio</p>
+              <a href="/formacao?linha=financiada" className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#A60000]">Pré-Inscrição</a>
+            </article>
+          </div>
         </div>
+        <svg aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 z-10 h-24 w-full sm:h-28" viewBox="0 0 1200 140" preserveAspectRatio="none">
+          <path d="M0 140V72C90 36 180 108 320 78C460 48 540 18 700 42C860 66 940 112 1080 82C1140 68 1170 88 1200 74V140H0Z" fill="#1C3350" />
+          <path d="M0 140V104C140 78 240 124 420 106C600 88 700 126 900 108C1040 96 1120 122 1200 104V140H0Z" fill="#FFA900" />
+        </svg>
       </div>
     </section>
   );
 }
 
 function Home() {
+  const { destaques, estado, recarregar } = useOferta();
   const [filter, setFilter] = useState("Todos");
   const [query, setQuery] = useState("");
+  const filtros = useMemo(() => {
+    const modos = new Set(destaques.map(curso => curso.format));
+    return ["Todos", ...["Presencial", "B-learning", "E-learning"].filter(modo => modos.has(modo))];
+  }, [destaques]);
   const filtered = useMemo(
-    () => courses.filter((course) =>
+    () => destaques.filter((course) =>
       (filter === "Todos" || course.format === filter) &&
       `${course.title} ${course.area}`.toLowerCase().includes(query.toLowerCase())),
-    [filter, query],
+    [destaques, filter, query],
   );
 
   return (
@@ -233,7 +252,7 @@ function Home() {
             </label>
           </div>
           <div className="mt-10 flex flex-wrap gap-2 border-b border-[#1C3350]/15 pb-5">
-            {["Todos", "Presencial", "E-learning"].map((item) => (
+            {filtros.map((item) => (
               <button key={item} type="button" onClick={() => setFilter(item)} className={`px-5 py-2.5 text-sm font-bold transition-colors ${filter === item ? "bg-[#1C3350] text-white" : "bg-white text-[#1C3350] hover:bg-[#1C3350]/10"}`}>
                 {item}
               </button>
@@ -241,26 +260,43 @@ function Home() {
             <span className="ml-auto hidden self-center text-sm text-[#1C3350]/55 sm:block">{filtered.length} formações disponíveis</span>
           </div>
           <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((course, index) => (
-              <article key={course.id} className="group flex min-h-[390px] flex-col border border-[#1C3350]/12 bg-white p-6 transition-all hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(18,52,59,.12)]">
-                <div className="flex items-start justify-between">
-                  <span className={`px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.1em] ${course.format === "E-learning" ? "bg-[#FFA900] text-[#1C3350]" : "bg-[#1C3350] text-white"}`}>{course.format}</span>
-                  <span className={`grid h-12 w-12 place-items-center ${course.color} font-serif text-xl text-[#1C3350]/65`}>0{index + 1}</span>
-                </div>
-                <p className="mt-7 text-xs font-bold uppercase tracking-[0.12em] text-[#A60000]">{course.area}</p>
-                <h3 className="mt-3 font-serif text-2xl leading-tight text-[#1C3350]">{course.title}</h3>
-                <p className="mt-4 text-sm leading-6 text-[#1C3350]/65">{course.description}</p>
-                <div className="mt-auto flex items-end justify-between border-t border-[#1C3350]/10 pt-5">
-                  <div className="space-y-2 text-xs font-semibold text-[#1C3350]/65">
-                    <span className="flex items-center gap-2"><Icon name="clock" className="h-4 w-4" />{course.duration}</span>
-                    <span className="flex items-center gap-2"><Icon name={course.format === "E-learning" ? "screen" : "pin"} className="h-4 w-4" />{course.start}</span>
+            {estado === "pronto" && filtered.map((course, index) => (
+              <article key={course.id} className="group flex min-h-[390px] flex-col overflow-hidden border border-[#1C3350]/12 bg-white transition-all hover:-translate-y-1 hover:shadow-[0_20px_50px_rgba(18,52,59,.12)]">
+                {course.miniatura && (
+                  <div className="relative h-40 bg-[#E7EBF0]">
+                    <img src={course.miniatura} alt="" className="h-full w-full object-cover" />
+                    <span className={`absolute left-4 top-4 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.1em] ${course.format === "E-learning" ? "bg-[#FFA900] text-[#1C3350]" : "bg-[#1C3350] text-white"}`}>{course.format}</span>
                   </div>
-                  <a href="/pre-inscricao" aria-label={`Pré-inscrição em ${course.title}`} className="grid h-11 w-11 place-items-center bg-[#1C3350] text-white transition-colors group-hover:bg-[#A60000]"><Icon name="arrow" /></a>
+                )}
+                <div className="flex flex-1 flex-col p-6">
+                  {!course.miniatura && (
+                    <div className="flex items-start justify-between">
+                      <span className={`px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.1em] ${course.format === "E-learning" ? "bg-[#FFA900] text-[#1C3350]" : "bg-[#1C3350] text-white"}`}>{course.format}</span>
+                      <span className="grid h-12 w-12 place-items-center bg-[#EDEEF1] font-serif text-xl text-[#1C3350]/65">0{index + 1}</span>
+                    </div>
+                  )}
+                  <p className={`${course.miniatura ? "" : "mt-7 "}text-xs font-bold uppercase tracking-[0.12em] text-[#A60000]`}>{course.area}</p>
+                  <h3 className="mt-3 font-serif text-2xl leading-tight text-[#1C3350]">{course.title}</h3>
+                  <p className="mt-4 text-sm leading-6 text-[#1C3350]/65">{course.description}</p>
+                  <div className="mt-auto flex items-end justify-between border-t border-[#1C3350]/10 pt-5">
+                    <div className="space-y-2 text-xs font-semibold text-[#1C3350]/65">
+                      <span className="flex items-center gap-2"><Icon name="clock" className="h-4 w-4" />{course.duration}</span>
+                      <span className="flex items-center gap-2"><Icon name={course.format === "E-learning" ? "screen" : "pin"} className="h-4 w-4" />{course.start}</span>
+                    </div>
+                    <a href="/pre-inscricao" aria-label={`Pré-inscrição em ${course.title}`} className="grid h-11 w-11 place-items-center bg-[#1C3350] text-white transition-colors group-hover:bg-[#A60000]"><Icon name="arrow" /></a>
+                  </div>
                 </div>
               </article>
             ))}
           </div>
-          {filtered.length === 0 && <p className="py-20 text-center text-[#1C3350]/60">Não encontrámos formações para esta pesquisa.</p>}
+          {estado === "a-carregar" && <p className="py-20 text-center text-[#1C3350]/60">A carregar a oferta formativa.</p>}
+          {estado === "erro" && (
+            <div className="py-16 text-center">
+              <p className="text-[#1C3350]/70">Não foi possível carregar os cursos.</p>
+              <button type="button" onClick={recarregar} className="mt-4 bg-[#1C3350] px-5 py-3 text-sm font-bold text-white">Tentar de novo</button>
+            </div>
+          )}
+          {estado === "pronto" && filtered.length === 0 && <p className="py-20 text-center text-[#1C3350]/60">Não encontrámos formações para esta pesquisa.</p>}
         </div>
       </section>
 
@@ -318,7 +354,7 @@ function Footer() {
         <div className="grid gap-10 border-b border-white/15 pb-12 md:grid-cols-4">
           <div className="md:col-span-2"><span className="grid h-12 w-12 place-items-center bg-[#A60000] text-sm font-extrabold">ENA</span><p className="mt-5 max-w-sm text-sm leading-6 text-white/55">Capacitamos pessoas e organizações através de experiências de aprendizagem relevantes, práticas e transformadoras.</p></div>
           <div><strong className="text-sm">Contactos</strong><p className="mt-4 text-sm leading-7 text-white/55">formacao@ena.pt<br />+351 210 000 000<br />2ª a 6ª, 09h—18h</p></div>
-          <div><strong className="text-sm">Ligações úteis</strong><div className="mt-4 flex flex-col gap-3 text-sm text-white/55"><a href="#formacao">Formação</a><a href="https://ena.pt/politica-de-privacidade" target="_blank" rel="noreferrer">Política de privacidade</a><a href="https://www.livroreclamacoes.pt/Inicio/" target="_blank" rel="noreferrer">Livro de reclamações</a></div></div>
+          <div><strong className="text-sm">Ligações úteis</strong><div className="mt-4 flex flex-col gap-3 text-sm text-white/55"><a href="/formacao">Formação</a><a href="https://ena.pt/politica-de-privacidade" target="_blank" rel="noreferrer">Política de privacidade</a><a href="https://www.livroreclamacoes.pt/Inicio/" target="_blank" rel="noreferrer">Livro de reclamações</a></div></div>
         </div>
         <div className="flex flex-col justify-between gap-3 pt-6 text-xs text-white/35 sm:flex-row"><span>© 2025 ENA. Todos os direitos reservados.</span><span>Aprender. Evoluir. Transformar.</span></div>
       </div>
@@ -333,7 +369,8 @@ function WhatsAppAssistant() {
   const [name, setName] = useState("");
   const [goal, setGoal] = useState("");
   const [path, setPath] = useState<"all" | "funded" | "gold" | "direct">("all");
-  const [format, setFormat] = useState<"Todos" | "Presencial" | "E-learning">("Todos");
+  const [format, setFormat] = useState("Todos");
+  const { cursos } = useOferta();
   const [chosen, setChosen] = useState<Course | null>(null);
   const [consent, setConsent] = useState(false);
   const [summarySent, setSummarySent] = useState(false);
@@ -345,7 +382,7 @@ function WhatsAppAssistant() {
       setTyping(false);
     }, 520);
   };
-  const pathCourses = courses.filter((course) =>
+  const pathCourses = cursos.filter((course) =>
     path === "funded" ? course.funding === "Financiada" :
       path === "gold" ? course.funding === "Gold" :
         path === "direct" ? course.enrollment === "Acesso direto" : true,
@@ -501,6 +538,20 @@ function WhatsAppAssistant() {
   );
 }
 
+export function SiteFrame({ children }: { children: ReactNode }) {
+  const oferta = useOfertaState();
+  return (
+    <OfertaCtx.Provider value={oferta}>
+      <div className="site-ena min-h-screen bg-[#F9F9F9] text-[#1C3350]">
+        <Header />
+        {children}
+        <Footer />
+        <WhatsAppAssistant />
+      </div>
+    </OfertaCtx.Provider>
+  );
+}
+
 export function SiteLanding() {
   useEffect(() => {
     const prev = document.title;
@@ -511,11 +562,8 @@ export function SiteLanding() {
   }, []);
 
   return (
-    <div className="site-ena min-h-screen bg-[#F9F9F9] text-[#1C3350]">
-      <Header />
+    <SiteFrame>
       <Home />
-      <Footer />
-      <WhatsAppAssistant />
-    </div>
+    </SiteFrame>
   );
 }

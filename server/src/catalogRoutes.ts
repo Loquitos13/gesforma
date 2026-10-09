@@ -13,6 +13,18 @@ const settingsSchema = z.object({
   values: z.record(z.string().max(400)),
 });
 
+const siteSchema = z.object({
+  values: z.record(z.string().max(800)),
+});
+
+function valoresDoSite(values: Record<string, string>) {
+  const out: Record<string, string> = {};
+  for (const [chave, valor] of Object.entries(values)) {
+    if (/^[a-zA-Z][a-zA-Z0-9]{0,40}$/.test(chave)) out[chave] = valor.trim().slice(0, 800);
+  }
+  return out;
+}
+
 function kindOf(req: FastifyRequest) {
   const kind = (req.params as { kind?: string }).kind ?? "";
   return isCatalogKind(kind) ? kind : null;
@@ -85,6 +97,19 @@ export function registerCatalogRoutes(
     return { lista, opcoes: rows.rows.map(r => r.nome).filter(Boolean) };
   });
 
+  app.get("/v1/public/site", async (_req, reply) => {
+    reply.header("cache-control", "no-store");
+    const row = await db.query<{ values: unknown }>("SELECT values FROM app_settings WHERE id = 'site'");
+    const raw = row.rows[0]?.values;
+    const valores: Record<string, string> = {};
+    if (raw && typeof raw === "object") {
+      for (const [chave, valor] of Object.entries(raw as Record<string, unknown>)) {
+        if (typeof valor === "string") valores[chave] = valor;
+      }
+    }
+    return { valores };
+  });
+
   app.get("/v1/settings", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const rows = await db.query<{ id: string; values: Record<string, string> }>("SELECT id, values FROM app_settings");
@@ -94,13 +119,17 @@ export function registerCatalogRoutes(
   app.put("/v1/settings/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const id = String((req.params as { id: string }).id).slice(0, 40);
-    const parsed = settingsSchema.safeParse(req.body);
+    if (id === "site" && req.actor?.role !== "admin") {
+      return reply.code(403).send({ error: "só o administrador edita o site" });
+    }
+    const parsed = (id === "site" ? siteSchema : settingsSchema).safeParse(req.body);
     if (!id || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    const values = id === "site" ? valoresDoSite(parsed.data.values) : parsed.data.values;
     await db.query(
       `INSERT INTO app_settings (id, values) VALUES ($1, $2::jsonb)
        ON CONFLICT (id) DO UPDATE SET values = EXCLUDED.values, updated_at = now()`,
-      [id, parsed.data.values],
+      [id, values],
     );
-    return { ok: true, id, values: parsed.data.values };
+    return { ok: true, id, values };
   });
 }

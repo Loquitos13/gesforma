@@ -34,6 +34,7 @@ import { imprimirFolhasPresencas } from "./presencasPrint";
 import { refereCurso, useLocaisOptsDoCurso } from "./cursoLocais";
 import { OptionSelect } from "./OptionSelect";
 import { ListasOpcoesView } from "./ListasOpcoesView";
+import { SiteConteudoView } from "./SiteConteudoView";
 import { CronogramaEditor, FormadoresAtribuidosCard, TurmaActivaToggle, TurmaInactivaBanner, TurmaInscricaoHint } from "./TurmaCronograma";
 import { TurmaRegrasPanel } from "./TurmaRegrasPanel";
 import { InscreverFormandoPanel } from "./TurmaInscricao";
@@ -150,7 +151,7 @@ type View =
   | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-formadores" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
   | "fin-modulos" | "fin-conteudos" | "fin-datas" | "fin-locais" | "fin-areas-tematicas"
   | "formadores" | "blog-posts" | "blog-tematicas"
-  | "emails" | "pagamentos" | "configuracoes" | "utilizadores" | "equipa" | "notificacoes" | "listas-opcoes";
+  | "emails" | "pagamentos" | "configuracoes" | "utilizadores" | "equipa" | "notificacoes" | "listas-opcoes" | "site";
 
 type CockpitTab = "overview" | "cronograma" | "sessoes" | "avaliacao" | "documentos" | "dtp" | "certificados";
 const TABS_FORMADOR: CockpitTab[] = ["overview", "sessoes", "avaliacao"];
@@ -5040,6 +5041,7 @@ const sidebarConfig: NavGroup[] = [
     { label: "Gestão", icon: I.users, children: [{ label: "Utilizadores", view: "utilizadores" }] },
     { label: "Emails Automáticos", view: "emails", icon: I.mail },
     { label: "Pagamentos", view: "pagamentos", icon: I.creditcard },
+    { label: "Site", view: "site", icon: I.doc },
     { label: "Configurações", view: "configuracoes", icon: I.settings },
   ]},
 ];
@@ -5096,7 +5098,7 @@ function navParaPerfil(role: string): NavGroup[] {
     .filter(g => permitidos.includes(g.group))
     .map(g => {
       if (g.group !== "Sistema" || role === "admin") return g;
-      return { ...g, items: g.items.filter(item => item.label !== "Gestão") };
+      return { ...g, items: g.items.filter(item => item.label !== "Gestão" && item.view !== "site") };
     });
 }
 
@@ -5245,6 +5247,7 @@ const viewTitles: Partial<Record<View, string>> = {
   formadores: "Formadores Gold", "blog-posts": "Blog - Posts", "blog-tematicas": "Blog - Temáticas",
   emails: "Emails Automáticos", pagamentos: "Pagamentos", configuracoes: "Configurações", utilizadores: "Utilizadores", equipa: "Equipa",
   "listas-opcoes": "Listas de opções",
+  site: "Site",
 };
 
 export default function App() {
@@ -5301,6 +5304,10 @@ function AppShell() {
 
   const navigate = useCallback((target: View | NavTarget) => {
     const t: NavTarget = typeof target === "string" ? { view: target } : { ...target };
+    if (t.view === "site" && user.role !== "admin") {
+      go(painelDoPerfil(user.role));
+      return;
+    }
     if (user.role === "formador" && !VISTAS_FORMADOR.has(t.view)) {
       go("formador-turmas");
       return;
@@ -5395,6 +5402,7 @@ function AppShell() {
     if (view.startsWith("gold-")) return [{ label: "Gold", onClick: () => navigate("gold-painel") }, { label: viewTitles[view] ?? "Gold" }];
     if (view.startsWith("fin-")) return [{ label: "Financiada", onClick: () => navigate("fin-painel") }, { label: viewTitles[view] ?? "Financiada" }];
     if (view === "utilizadores") return [{ label: "Sistema", onClick: () => navigate("configuracoes") }, { label: "Gestão" }, { label: "Utilizadores" }];
+    if (view === "site") return [{ label: "Sistema", onClick: () => navigate("configuracoes") }, { label: "Site" }];
     return [{ label: viewTitles[view] ?? "GesForma" }];
   })();
   const headerDetail = view === "gold-cockpit-turma" && goldTurma
@@ -5462,6 +5470,7 @@ function AppShell() {
       case "emails": return <EmailsView />;
       case "pagamentos": return <PagamentosView />;
       case "configuracoes": return <ConfiguracoesView />;
+      case "site": return user.role === "admin" ? <SiteConteudoView /> : <PainelView regime={user.role === "financiada" ? "fin" : "gold"} onNavigate={v => navigate(v as View)} />;
       case "equipa":
       case "gold-equipa": return <EquipaView regime="gold" />;
       case "fin-equipa": return <EquipaView regime="fin" />;

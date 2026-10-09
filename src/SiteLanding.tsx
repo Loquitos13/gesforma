@@ -1,5 +1,6 @@
 import { createContext, FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { InscricaoSite, useInscricao } from "./SiteInscricao";
+import { moradaSegura, textoSite, type SiteChave } from "./siteConteudo";
 
 export type Course = {
   id: string;
@@ -85,6 +86,24 @@ type OfertaEstado = {
 };
 
 const OfertaCtx = createContext<OfertaEstado | null>(null);
+const SiteTextoCtx = createContext<(chave: SiteChave) => string>(chave => textoSite(undefined, chave));
+
+function useSiteTexto() {
+  return useContext(SiteTextoCtx);
+}
+
+function useSiteTextoState() {
+  const [gravado, setGravado] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let vivo = true;
+    fetch("/api/v1/public/site", { cache: "no-store" })
+      .then(async res => (res.ok ? res.json() as Promise<{ valores?: Record<string, string> }> : { valores: {} }))
+      .then(data => { if (vivo) setGravado(data.valores ?? {}); })
+      .catch(() => undefined);
+    return () => { vivo = false; };
+  }, []);
+  return useCallback((chave: SiteChave) => textoSite(gravado, chave), [gravado]);
+}
 
 export function useOferta() {
   const ctx = useContext(OfertaCtx);
@@ -155,30 +174,31 @@ export function Icon({
 
 function Header() {
   const [open, setOpen] = useState(false);
+  const t = useSiteTexto();
   return (
     <header className="sticky top-0 z-40 border-b border-[#1C3350]/10 bg-[#F9F9F9]/95 backdrop-blur-md">
       <div className="mx-auto flex h-20 max-w-[1240px] items-center justify-between px-5 lg:px-8">
         <a href="/" className="group flex items-center gap-3" aria-label="ENA, página inicial">
           <img src="/imagens/ena_logo.svg" alt="ENA" className="h-9 w-auto sm:h-10" />
-          <span className="hidden text-left text-[10px] font-bold uppercase leading-tight tracking-[0.12em] text-[#1C3350]/70 sm:block">Escola de<br />Negócios e Administração</span>
+          <span className="hidden text-left text-[10px] font-bold uppercase leading-tight tracking-[0.12em] text-[#1C3350]/70 sm:block">{t("marcaLinha1")}<br />{t("marcaLinha2")}</span>
         </a>
         <nav className="hidden items-center gap-8 text-sm font-semibold lg:flex" aria-label="Navegação principal">
-          <a href="/formacao" className="hover:text-[#A60000]">Formação</a>
-          <a href="/#empresas" className="hover:text-[#A60000]">Empresas</a>
+          <a href="/formacao" className="hover:text-[#A60000]">{t("navFormacao")}</a>
+          <a href="/#empresas" className="hover:text-[#A60000]">{t("navEmpresas")}</a>
         </nav>
         <div className="hidden items-center gap-4 lg:flex">
-          <a href="/entrar" className="text-sm font-semibold underline decoration-[#A60000] decoration-2 underline-offset-4">Área de formando</a>
-          <a href="/entrar" className="bg-[#1C3350] px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-[#A60000]">Iniciar Sessão</a>
+          <a href="/entrar" className="text-sm font-semibold underline decoration-[#A60000] decoration-2 underline-offset-4">{t("navFormando")}</a>
+          <a href="/entrar" className="bg-[#1C3350] px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-[#A60000]">{t("navEntrar")}</a>
         </div>
         <button type="button" onClick={() => setOpen(!open)} className="p-2 lg:hidden" aria-label={open ? "Fechar menu" : "Abrir menu"}><Icon name={open ? "close" : "menu"} /></button>
       </div>
       {open && (
         <nav className="border-t border-[#1C3350]/10 bg-[#F9F9F9] px-5 py-6 lg:hidden">
           <div className="flex flex-col gap-5 font-semibold">
-            <a href="/formacao" onClick={() => setOpen(false)}>Formação</a>
-            <a href="/#empresas" onClick={() => setOpen(false)}>Empresas</a>
-            <a href="/entrar" className="border-t border-[#1C3350]/10 pt-5 text-[#A60000]">Área de formando</a>
-            <a href="/entrar" className="bg-[#1C3350] px-5 py-3 text-center text-sm font-bold text-white">Iniciar Sessão</a>
+            <a href="/formacao" onClick={() => setOpen(false)}>{t("navFormacao")}</a>
+            <a href="/#empresas" onClick={() => setOpen(false)}>{t("navEmpresas")}</a>
+            <a href="/entrar" className="border-t border-[#1C3350]/10 pt-5 text-[#A60000]">{t("navFormando")}</a>
+            <a href="/entrar" className="bg-[#1C3350] px-5 py-3 text-center text-sm font-bold text-white">{t("navEntrar")}</a>
           </div>
         </nav>
       )}
@@ -197,6 +217,8 @@ function Moldura({ src, alt }: { src: string | null | undefined; alt: string }) 
 function SplitHero() {
   const { ccp, cursos } = useOferta();
   const { abrir } = useInscricao();
+  const t = useSiteTexto();
+  const heroImagem = moradaSegura(t("heroImagem"));
   const financiada = cursos.find(curso => curso.regime === "fin" && curso.miniatura) ?? cursos.find(curso => curso.regime === "fin");
   const preco = ccp?.price ?? "";
   return (
@@ -204,22 +226,24 @@ function SplitHero() {
       <div className="relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[32px] bg-white shadow-[0_28px_80px_rgba(20,38,61,.08)] lg:min-h-[860px] lg:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)]">
         <div className="relative z-20 flex flex-col justify-center px-6 pb-4 pt-10 sm:px-8 lg:px-10 lg:py-12">
           <h1 className="max-w-[18ch] font-serif text-[2rem] font-bold leading-[1.08] tracking-[-0.03em] text-[#1C3350] sm:text-4xl">
-            Certifique o seu futuro com formação de referência.
+            {t("heroTitulo")}
           </h1>
           <p className="mt-4 max-w-xs text-sm leading-6 text-[#1C3350]/60">
-            Formação de formadores com CCP e formação financiada com subsídio de alimentação.
+            {t("heroTexto")}
           </p>
           <a href="/formacao" className="mt-5 inline-flex w-fit items-center rounded-full border border-[#1C3350]/30 px-5 py-2.5 text-sm font-semibold text-[#1C3350]/80 transition-colors hover:bg-[#1C3350] hover:text-white">
-            Explorar todos os cursos
+            {t("heroBotao")}
           </a>
         </div>
         <div className="relative z-20 flex flex-col gap-6 px-4 pb-32 pt-2 lg:block lg:h-auto lg:min-h-full lg:px-0 lg:pb-0 lg:pt-0">
           <div className="relative mx-auto h-[180px] w-[180px] shrink-0 overflow-hidden rounded-full bg-[#E7EBF0] shadow-[0_0_0_10px_#E7EBF0] sm:h-[220px] sm:w-[220px] lg:absolute lg:right-[-4rem] lg:top-1/2 lg:mx-0 lg:h-[620px] lg:w-[620px] lg:-translate-y-1/2 lg:shadow-[0_0_0_14px_#E7EBF0]">
-            <img
-              src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=1400&q=80"
-              alt="Sessão de formação em sala"
-              className="h-full w-full object-cover object-[center_30%]"
-            />
+            {heroImagem && (
+              <img
+                src={heroImagem}
+                alt={t("heroImagemAlt")}
+                className="h-full w-full object-cover object-[center_30%]"
+              />
+            )}
           </div>
           <div className="relative z-20 flex flex-col gap-6 lg:absolute lg:inset-0 lg:block">
             {ccp && (
@@ -261,6 +285,13 @@ function SplitHero() {
 
 function Home() {
   const { destaques, estado, recarregar } = useOferta();
+  const t = useSiteTexto();
+  const metodoImagem = moradaSegura(t("metodoImagem"));
+  const pilares = [1, 2, 3, 4].map(n => ({
+    number: t(`pilar${n}Numero` as SiteChave),
+    title: t(`pilar${n}Titulo` as SiteChave),
+    text: t(`pilar${n}Texto` as SiteChave),
+  })).filter(item => item.number || item.title || item.text);
   const [filter, setFilter] = useState("Todos");
   const [query, setQuery] = useState("");
   const filtros = useMemo(() => {
@@ -282,13 +313,13 @@ function Home() {
         <div className="mx-auto max-w-[1240px]">
           <div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end">
             <div>
-              <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-[#A60000]">Oferta formativa</p>
-              <h2 className="font-serif text-4xl leading-tight tracking-[-0.03em] text-[#1C3350] sm:text-5xl">Encontre a formação certa<br className="hidden sm:block" /> para o seu momento.</h2>
+              <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-[#A60000]">{t("ofertaKicker")}</p>
+              <h2 className="font-serif text-4xl leading-tight tracking-[-0.03em] text-[#1C3350] sm:text-5xl">{t("ofertaTitulo")}</h2>
             </div>
             <label className="flex w-full items-center gap-3 border-b-2 border-[#1C3350] pb-3 lg:max-w-sm">
               <Icon name="search" />
               <span className="sr-only">Pesquisar formação</span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Pesquisar curso ou área..." className="w-full bg-transparent text-sm outline-none placeholder:text-[#1C3350]/45" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("ofertaPesquisa")} className="w-full bg-transparent text-sm outline-none placeholder:text-[#1C3350]/45" />
             </label>
           </div>
           <div className="mt-10 flex flex-wrap gap-2 border-b border-[#1C3350]/15 pb-5">
@@ -335,25 +366,22 @@ function Home() {
       <section id="metodo" className="bg-white px-5 py-20 lg:px-8 lg:py-28">
         <div className="mx-auto grid max-w-[1240px] gap-14 lg:grid-cols-[.85fr_1.15fr] lg:items-center">
           <div className="relative">
-            <div className="aspect-[4/5] overflow-hidden">
-              <img src="https://images.unsplash.com/photo-1570616969692-54d6ba3d0397?auto=format&fit=crop&w=1200&q=80" alt="Sessão de formação colaborativa" className="h-full w-full object-cover" />
+            <div className="aspect-[4/5] overflow-hidden bg-[#E7EBF0]">
+              {metodoImagem && <img src={metodoImagem} alt={t("metodoImagemAlt")} className="h-full w-full object-cover" />}
             </div>
-            <div className="absolute -bottom-7 -right-3 w-44 bg-[#A60000] p-5 text-white sm:right-8">
-              <strong className="block font-serif text-4xl">4,8/5</strong>
-              <span className="mt-1 block text-xs font-bold uppercase tracking-wider">Satisfação média</span>
-            </div>
+            {t("metodoNota") && (
+              <div className="absolute -bottom-7 -right-3 w-44 bg-[#A60000] p-5 text-white sm:right-8">
+                <strong className="block font-serif text-4xl">{t("metodoNota")}</strong>
+                {t("metodoNotaLegenda") && <span className="mt-1 block text-xs font-bold uppercase tracking-wider">{t("metodoNotaLegenda")}</span>}
+              </div>
+            )}
           </div>
           <div>
-            <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-[#A60000]">Mais do que aprender</p>
-            <h2 className="font-serif text-4xl leading-tight tracking-[-0.03em] text-[#1C3350] sm:text-5xl">Conhecimento que se transforma em ação.</h2>
-            <p className="mt-6 max-w-xl text-lg leading-8 text-[#1C3350]/65">Na ENA, cada percurso é desenhado para criar impacto real — no trabalho, nas equipas e na comunidade.</p>
+            <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-[#A60000]">{t("metodoKicker")}</p>
+            <h2 className="font-serif text-4xl leading-tight tracking-[-0.03em] text-[#1C3350] sm:text-5xl">{t("metodoTitulo")}</h2>
+            <p className="mt-6 max-w-xl text-lg leading-8 text-[#1C3350]/65">{t("metodoTexto")}</p>
             <div className="mt-10 grid gap-x-8 gap-y-7 sm:grid-cols-2">
-              {[
-                ["01", "Formadores no terreno", "Especialistas com experiência real e gosto por ensinar."],
-                ["02", "Aprendizagem prática", "Casos, ferramentas e desafios que fazem parte do dia a dia."],
-                ["03", "Acompanhamento próximo", "Uma equipa disponível antes, durante e depois da formação."],
-                ["04", "Formatos flexíveis", "Presencial, online ou à medida da sua organização."],
-              ].map(([number, title, text]) => (
+              {pilares.map(({ number, title, text }) => (
                 <div key={number} className="border-t border-[#1C3350]/20 pt-5">
                   <span className="text-xs font-extrabold text-[#A60000]">{number}</span>
                   <h3 className="mt-2 font-bold text-[#1C3350]">{title}</h3>
@@ -368,11 +396,11 @@ function Home() {
       <section id="empresas" className="scroll-mt-24 bg-[#EDEEF1] px-5 py-16 lg:px-8">
         <div className="mx-auto flex max-w-[1240px] flex-col justify-between gap-8 lg:flex-row lg:items-center">
           <div className="max-w-2xl">
-            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#A60000]">Formação à medida</p>
-            <h2 className="mt-4 font-serif text-4xl text-[#1C3350]">A sua organização tem desafios únicos.</h2>
-            <p className="mt-4 text-[#1C3350]/65">Desenhamos programas que respondem às necessidades da sua equipa e aos objetivos do seu negócio.</p>
+            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#A60000]">{t("empresasKicker")}</p>
+            <h2 className="mt-4 font-serif text-4xl text-[#1C3350]">{t("empresasTitulo")}</h2>
+            <p className="mt-4 text-[#1C3350]/65">{t("empresasTexto")}</p>
           </div>
-          <a href="#contactos" className="group flex min-w-fit items-center justify-between gap-10 bg-[#1C3350] px-7 py-5 font-bold text-white hover:bg-[#A60000]">Conhecer soluções <Icon name="arrow" className="transition-transform group-hover:translate-x-1" /></a>
+          <a href="#contactos" className="group flex min-w-fit items-center justify-between gap-10 bg-[#1C3350] px-7 py-5 font-bold text-white hover:bg-[#A60000]">{t("empresasBotao")} <Icon name="arrow" className="transition-transform group-hover:translate-x-1" /></a>
         </div>
       </section>
     </main>
@@ -380,15 +408,36 @@ function Home() {
 }
 
 function Footer() {
+  const t = useSiteTexto();
+  const privacidade = moradaSegura(t("rodapePrivacidadeUrl"));
+  const reclamacoes = moradaSegura(t("rodapeReclamacoesUrl"));
+  const contactos = [t("rodapeEmail"), t("rodapeTelefone"), t("rodapeHorario")].filter(Boolean);
+  const ano = new Date().getFullYear();
   return (
     <footer id="contactos" className="scroll-mt-24 bg-[#14263D] px-5 py-14 text-white lg:px-8">
       <div className="mx-auto max-w-[1240px]">
         <div className="grid gap-10 border-b border-white/15 pb-12 md:grid-cols-4">
-          <div className="md:col-span-2"><span className="grid h-12 w-12 place-items-center bg-[#A60000] text-sm font-extrabold">ENA</span><p className="mt-5 max-w-sm text-sm leading-6 text-white/55">Capacitamos pessoas e organizações através de experiências de aprendizagem relevantes, práticas e transformadoras.</p></div>
-          <div><strong className="text-sm">Contactos</strong><p className="mt-4 text-sm leading-7 text-white/55">formacao@ena.pt<br />+351 210 000 000<br />2ª a 6ª, 09h—18h</p></div>
-          <div><strong className="text-sm">Ligações úteis</strong><div className="mt-4 flex flex-col gap-3 text-sm text-white/55"><a href="/formacao">Formação</a><a href="https://ena.pt/politica-de-privacidade" target="_blank" rel="noreferrer">Política de privacidade</a><a href="https://www.livroreclamacoes.pt/Inicio/" target="_blank" rel="noreferrer">Livro de reclamações</a></div></div>
+          <div className="md:col-span-2">
+            {t("rodapeMarca") && <span className="grid h-12 w-12 place-items-center bg-[#A60000] text-sm font-extrabold">{t("rodapeMarca")}</span>}
+            {t("rodapeTexto") && <p className="mt-5 max-w-sm text-sm leading-6 text-white/55">{t("rodapeTexto")}</p>}
+          </div>
+          <div>
+            <strong className="text-sm">{t("rodapeTituloContactos")}</strong>
+            {contactos.length > 0 && <p className="mt-4 text-sm leading-7 text-white/55">{contactos.map((linha, i) => <span key={linha}>{i > 0 && <br />}{linha}</span>)}</p>}
+          </div>
+          <div>
+            <strong className="text-sm">{t("rodapeTituloLigacoes")}</strong>
+            <div className="mt-4 flex flex-col gap-3 text-sm text-white/55">
+              {t("rodapeLigacaoFormacao") && <a href="/formacao">{t("rodapeLigacaoFormacao")}</a>}
+              {privacidade && t("rodapePrivacidade") && <a href={privacidade} target="_blank" rel="noreferrer">{t("rodapePrivacidade")}</a>}
+              {reclamacoes && t("rodapeReclamacoes") && <a href={reclamacoes} target="_blank" rel="noreferrer">{t("rodapeReclamacoes")}</a>}
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col justify-between gap-3 pt-6 text-xs text-white/35 sm:flex-row"><span>© 2025 ENA. Todos os direitos reservados.</span><span>Aprender. Evoluir. Transformar.</span></div>
+        <div className="flex flex-col justify-between gap-3 pt-6 text-xs text-white/35 sm:flex-row">
+          <span>© {ano} {t("rodapeEntidade")}. {t("rodapeDireitos")}</span>
+          <span>{t("rodapeLema")}</span>
+        </div>
       </div>
     </footer>
   );
@@ -573,8 +622,16 @@ function WhatsAppAssistant() {
 
 export function SiteFrame({ children }: { children: ReactNode }) {
   const oferta = useOfertaState();
+  const texto = useSiteTextoState();
+  const titulo = texto("tituloSeparador");
+  useEffect(() => {
+    const prev = document.title;
+    document.title = titulo || "ENA";
+    return () => { document.title = prev; };
+  }, [titulo]);
   return (
     <OfertaCtx.Provider value={oferta}>
+      <SiteTextoCtx.Provider value={texto}>
       <InscricaoSite>
         <div className="site-ena min-h-screen bg-[#F9F9F9] text-[#1C3350]">
           <Header />
@@ -583,19 +640,12 @@ export function SiteFrame({ children }: { children: ReactNode }) {
           <WhatsAppAssistant />
         </div>
       </InscricaoSite>
+      </SiteTextoCtx.Provider>
     </OfertaCtx.Provider>
   );
 }
 
 export function SiteLanding() {
-  useEffect(() => {
-    const prev = document.title;
-    document.title = "ENA | Escola de Negócios e Administração";
-    return () => {
-      document.title = prev;
-    };
-  }, []);
-
   return (
     <SiteFrame>
       <Home />

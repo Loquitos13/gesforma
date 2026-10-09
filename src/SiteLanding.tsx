@@ -164,7 +164,7 @@ function SplitHero() {
   return (
     <section className="px-4 pb-2 pt-4 sm:px-6 lg:px-8" aria-label="Destaques">
       <div className="relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[32px] bg-white shadow-[0_28px_80px_rgba(20,38,61,.08)] lg:min-h-[660px] lg:grid-cols-[1.05fr_.95fr]">
-        <div className="relative z-10 flex flex-col justify-center px-6 py-14 sm:px-10 lg:px-14 lg:py-16">
+        <div className="relative z-10 flex flex-col justify-center px-6 pb-24 pt-14 sm:px-10 lg:px-14 lg:py-16">
           <h1 className="max-w-[12ch] font-serif text-[2.7rem] font-bold leading-[1.02] tracking-[-0.035em] text-[#1C3350] sm:text-6xl lg:text-[4.35rem]">
             Certifique o seu futuro com formação de referência.
           </h1>
@@ -174,13 +174,13 @@ function SplitHero() {
           <a href="#formacao" className="mt-8 inline-flex w-fit items-center rounded-full border border-[#1C3350] px-6 py-3 text-sm font-semibold text-[#1C3350] transition-colors hover:bg-[#1C3350] hover:text-white">
             Explorar todos os cursos
           </a>
-          <svg aria-hidden="true" className="pointer-events-none absolute -bottom-px -left-px h-28 w-52 sm:h-36 sm:w-64" viewBox="0 0 260 140" fill="none">
-            <path d="M0 140V72c26-34 58 10 92-6 26-12 46 16 74 4 20-8 36 8 58-4 16-6 26 6 36 14v60H0Z" fill="#1C3350" />
-            <path d="M0 140v-26c34-20 54 14 98-2 32-12 50 18 86 2 22-10 38 8 76-6v32H0Z" fill="#FFA900" />
+          <svg aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 h-24 w-48 sm:h-28 sm:w-56" viewBox="0 0 220 110" fill="none">
+            <path d="M0 110V58c22-28 36 6 62-2 24-8 34-30 62-22 22 6 34 28 58 16 14-6 24 2 38 10v50H0Z" fill="#1C3350" />
+            <path d="M0 110V86c28-18 42 10 74 0 26-8 40 12 70 2 18-6 32 6 76-2v24H0Z" fill="#FFA900" />
           </svg>
         </div>
-        <div className="relative min-h-[520px] sm:min-h-[560px]">
-          <div className="absolute -right-10 top-8 h-[430px] w-[430px] overflow-hidden rounded-full bg-[#E7EBF0] shadow-[0_0_0_16px_#E7EBF0] sm:-right-6 sm:top-10 sm:h-[500px] sm:w-[500px] lg:-right-16 lg:top-1/2 lg:h-[640px] lg:w-[640px] lg:-translate-y-1/2">
+        <div className="relative h-[440px] sm:h-[500px] lg:h-auto lg:min-h-full">
+          <div className="absolute left-1/2 top-6 h-[340px] w-[340px] -translate-x-1/2 overflow-hidden rounded-full bg-[#E7EBF0] shadow-[0_0_0_14px_#E7EBF0] sm:h-[400px] sm:w-[400px] lg:left-auto lg:right-[-4rem] lg:top-1/2 lg:h-[640px] lg:w-[640px] lg:-translate-x-0 lg:-translate-y-1/2">
             <img
               src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=1400&q=80"
               alt="Sessão de formação em sala"

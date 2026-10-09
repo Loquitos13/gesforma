@@ -161,7 +161,7 @@ export type DriveFile = {
   turma: string | null;
   formando: string | null;
   label: string | null;
-  storedIn: "google" | "local" | "db";
+  storedIn: "google" | "local";
   createdAt: string;
 };
 

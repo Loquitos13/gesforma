@@ -321,13 +321,13 @@ async function loadAccount(db: Db) {
 
 function hintDoDrive(configured: boolean, connected: boolean, email: string | null, reason: string | null) {
   if (!configured) {
-    return "Cole o cliente OAuth da Google (ID e secret) e ligue a conta da entidade. Até lá os ficheiros ficam na aplicação.";
+    return "Cole o cliente OAuth da Google (ID e secret) e ligue a conta da entidade. Na cloud os ficheiros só ficam no Drive.";
   }
   if (connected && reason) {
     if (/invalid_grant|expired|revoked|invalid_token/i.test(reason)) {
-      return "A ligação ao Google expirou. Numa aplicação OAuth em teste o acesso caduca ao fim de 7 dias. Volte a ligar a conta em Configurações. Até lá, os anexos novos ficam guardados na aplicação.";
+      return "A ligação ao Google expirou. Se o ecrã de consentimento ainda está em teste, passe-o a produção (ou a interno, no Workspace) e volte a ligar a conta. Os anexos seguem para o Drive.";
     }
-    return "Não foi possível renovar o acesso ao Google Drive. Volte a ligar a conta em Configurações. Até lá, os anexos novos ficam guardados na aplicação.";
+    return "Não foi possível renovar o acesso ao Google Drive. Volte a ligar a conta em Configurações. Os anexos seguem para o Drive.";
   }
   if (connected) return `Ficheiros da secretaria no Drive de ${email}.`;
   return "Cliente OAuth gravado. Falta ligar a conta Google da ENA.";
@@ -387,19 +387,12 @@ async function usableToken(db: Db): Promise<{ token: string | null; reason: stri
   }
 }
 
-function toBuffer(value: unknown): Buffer | null {
-  if (!value) return null;
-  if (Buffer.isBuffer(value)) return value;
-  if (value instanceof Uint8Array) return Buffer.from(value);
-  return null;
-}
-
 function driveOfflineMessage(reason: string | null) {
   if (reason && /invalid_grant|expired|revoked|invalid_token/i.test(reason)) {
-    return "A ligação ao Google expirou. Em Configurações volte a ligar a conta.";
+    return "A ligação ao Google expirou. Em Configurações volte a ligar a conta. Os ficheiros seguem para o Drive.";
   }
   if (reason) return "Não foi possível falar com o Google Drive. Em Configurações volte a ligar a conta.";
-  return "Ligue a conta Google em Configurações.";
+  return "Ligue a conta Google em Configurações. Na cloud os ficheiros só ficam no Drive.";
 }
 
 export async function disconnectGoogle(db: Db) {
@@ -567,7 +560,7 @@ function mapFile(row: DriveFileRow) {
     turma: row.turma,
     formando: row.formando,
     label: row.label,
-    storedIn: row.stored_in === "google" ? "google" as const : row.stored_in === "db" ? "db" as const : "local" as const,
+    storedIn: row.stored_in === "google" ? "google" as const : "local" as const,
     createdAt: row.created_at,
   };
 }
@@ -627,30 +620,10 @@ export async function storeDriveFile(
     );
   } else {
     console.error(JSON.stringify({
-      msg: "drive sem token; anexo guardado na base",
+      msg: "drive sem token; anexo recusado",
       reason: reason ?? "sem-ligacao",
     }));
-    await db.query(
-      `INSERT INTO drive_files
-        (id, name, mime_type, size_bytes, folder_path, kind, regime, turma, formando, label,
-         stored_in, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'db',$11)`,
-      [
-        id, name, file.mime, file.bytes.length, pathLabel,
-        ctx.kind || "documento", ctx.regime ?? null, ctx.turma ?? null,
-        ctx.formando ?? null, ctx.label ?? null, actorId ?? null,
-      ],
-    );
-    try {
-      await db.query("INSERT INTO drive_file_bytes (id, bytes) VALUES ($1, $2)", [id, file.bytes]);
-    } catch (err) {
-      await db.query("DELETE FROM drive_files WHERE id = $1", [id]).catch(() => undefined);
-      console.error(JSON.stringify({
-        msg: "falha a guardar bytes do anexo",
-        detail: err instanceof Error ? err.message : "base indisponível",
-      }));
-      throw new Error(driveOfflineMessage(reason));
-    }
+    throw new Error(driveOfflineMessage(reason));
   }
 
   const row = await db.query<DriveFileRow>("SELECT * FROM drive_files WHERE id = $1", [id]);
@@ -692,17 +665,6 @@ export async function readDriveContent(db: Db, id: string) {
       name: file.name,
       mime: file.mime_type ?? "application/octet-stream",
       bytes: readFileSync(path),
-      redirect: null as string | null,
-    };
-  }
-  if (file.stored_in === "db") {
-    const blob = await db.query<{ bytes: unknown }>("SELECT bytes FROM drive_file_bytes WHERE id = $1", [id]);
-    const bytes = toBuffer(blob.rows[0]?.bytes);
-    if (!bytes) return null;
-    return {
-      name: file.name,
-      mime: file.mime_type ?? "application/octet-stream",
-      bytes,
       redirect: null as string | null,
     };
   }

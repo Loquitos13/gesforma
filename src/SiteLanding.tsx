@@ -15,6 +15,9 @@ export type Course = {
   precoDesde: number | null;
   vendas: number;
   regime: "gold" | "fin";
+  objetivos: string[];
+  programa: string[];
+  sessoes: { data: string; local: string; horario: string }[];
 };
 
 type CatalogoApi = {
@@ -33,6 +36,9 @@ type CatalogoApi = {
     inscricao: "Acesso direto" | "Pré-inscrição";
     miniatura: string | null;
     vendas: number;
+    objetivos?: string[];
+    programa?: string[];
+    sessoes?: { data: string; local: string; horario: string }[];
   }>;
   destaques: CatalogoApi["cursos"];
   ccp: CatalogoApi["cursos"][number] | null;
@@ -54,6 +60,9 @@ function mapCurso(curso: CatalogoApi["cursos"][number]): Course {
     precoDesde: curso.precoDesde,
     vendas: curso.vendas,
     regime: curso.regime,
+    objetivos: curso.objetivos ?? [],
+    programa: curso.programa ?? [],
+    sessoes: curso.sessoes ?? [],
   };
 }
 
@@ -173,7 +182,7 @@ function SplitHero() {
   return (
     <section className="px-4 pb-2 pt-4 sm:px-6 lg:px-8" aria-label="Destaques">
       <div className="relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[32px] bg-white shadow-[0_28px_80px_rgba(20,38,61,.08)] lg:min-h-[660px] lg:grid-cols-[1.05fr_.95fr]">
-        <div className="relative z-20 flex flex-col justify-center px-6 pb-28 pt-14 sm:px-10 lg:px-14 lg:py-16">
+        <div className="relative z-20 flex flex-col justify-center px-6 pb-8 pt-14 sm:px-10 lg:px-14 lg:py-16">
           <h1 className="max-w-[12ch] font-serif text-[2.7rem] font-bold leading-[1.02] tracking-[-0.035em] text-[#1C3350] sm:text-6xl lg:text-[4.35rem]">
             Certifique o seu futuro com formação de referência.
           </h1>
@@ -184,29 +193,29 @@ function SplitHero() {
             Explorar todos os cursos
           </a>
         </div>
-        <div className="relative z-20 px-4 pb-28 pt-2 lg:h-auto lg:min-h-full lg:px-0 lg:pb-0 lg:pt-0">
-          <div className="relative mx-auto h-[240px] w-[240px] overflow-hidden rounded-full bg-[#E7EBF0] shadow-[0_0_0_12px_#E7EBF0] sm:h-[300px] sm:w-[300px] lg:absolute lg:left-auto lg:right-[-4rem] lg:top-1/2 lg:mx-0 lg:h-[640px] lg:w-[640px] lg:-translate-y-1/2 lg:shadow-[0_0_0_14px_#E7EBF0]">
+        <div className="relative z-20 flex flex-col gap-5 px-4 pb-32 pt-2 lg:block lg:h-auto lg:min-h-full lg:gap-0 lg:px-0 lg:pb-0 lg:pt-0">
+          <div className="relative mx-auto h-[200px] w-[200px] shrink-0 overflow-hidden rounded-full bg-[#E7EBF0] shadow-[0_0_0_12px_#E7EBF0] sm:h-[260px] sm:w-[260px] lg:absolute lg:left-auto lg:right-[-4rem] lg:top-1/2 lg:mx-0 lg:h-[640px] lg:w-[640px] lg:-translate-y-1/2 lg:shadow-[0_0_0_14px_#E7EBF0]">
             <img
               src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=1400&q=80"
               alt="Sessão de formação em sala"
               className="h-full w-full object-cover object-[center_30%]"
             />
           </div>
-          <div className="relative z-20 -mt-8 flex flex-col gap-4 lg:absolute lg:inset-0 lg:mt-0 lg:block">
-            <article className="w-full max-w-[280px] overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.14)] lg:absolute lg:left-0 lg:top-[14%] lg:w-[260px]">
+          <div className="relative z-20 flex flex-col gap-4 lg:absolute lg:inset-0 lg:block">
+            <article className="w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.14)] lg:absolute lg:left-0 lg:top-[12%] lg:w-[260px]">
               {ccp?.miniatura && <img src={ccp.miniatura} alt="" className="h-28 w-full object-cover" />}
               <div className="p-5">
                 <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">{preco}</span>
                 <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">{ccp?.title ?? "Formação de Formadores (CCP)"}</h2>
                 <p className="mt-2 text-sm text-[#1C3350]/55">{ccp?.area ?? "Formação de formadores"}</p>
-                <a href="/pre-inscricao" className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#A60000]">Pré-Inscrição</a>
+                <a href={ccp ? `/formacao/${ccp.id}` : "/formacao"} className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#A60000]">Inscrever-me agora</a>
               </div>
             </article>
-            <article className="ml-auto w-full max-w-[250px] rounded-2xl bg-white p-5 shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:right-8 lg:top-[46%] lg:ml-0 lg:w-[236px]">
+            <article className="w-full rounded-2xl bg-white p-5 shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:right-8 lg:top-[54%] lg:w-[236px]">
               <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">Grátis + Subsídio</span>
               <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">Formação Financiada</h2>
               <p className="mt-2 text-sm text-[#1C3350]/55">Grátis + subsídio</p>
-              <a href="/formacao?linha=financiada" className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#A60000]">Pré-Inscrição</a>
+              <a href="/formacao?linha=financiada" className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#A60000]">Explorar cursos</a>
             </article>
           </div>
         </div>

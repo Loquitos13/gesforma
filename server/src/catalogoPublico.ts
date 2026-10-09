@@ -16,6 +16,9 @@ export type CursoPublico = {
   inscricao: "Acesso direto" | "Pré-inscrição";
   miniatura: string | null;
   vendas: number;
+  objetivos: string[];
+  programa: string[];
+  sessoes: { data: string; local: string; horario: string }[];
 };
 
 type CursoBruto = {
@@ -123,6 +126,14 @@ function visivel(payload: Record<string, unknown>) {
   return payload.visivelSite !== false;
 }
 
+function linhas(value: unknown) {
+  return texto(value)
+    .split(/\n+/)
+    .map(linha => linha.replace(/^[-•*]\s*/, "").trim())
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
 export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPublico[]; destaques: CursoPublico[]; ccp: CursoPublico | null }> {
   const [gold, fin, formandosGold, pagos, formandosFin, turmasGold, turmasFin] = await Promise.all([
     db.query<{ id: number; nome: string; categoria: string; tipo: string; preco: number; regime: string; horas: number; estado: string; payload: unknown }>(
@@ -140,11 +151,11 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
     db.query<{ curso: string; n: number }>("SELECT curso, count(*)::int AS n FROM formandos_gold GROUP BY curso"),
     db.query<{ curso: string; n: number }>("SELECT curso, count(*)::int AS n FROM pagamentos WHERE lower(trim(estado)) = 'pago' GROUP BY curso"),
     db.query<{ curso: string; n: number }>("SELECT curso, count(*)::int AS n FROM formandos_fin GROUP BY curso"),
-    db.query<{ curso: string; local: string; data_inicio: string; estado: string }>(
-      "SELECT curso, local, data_inicio, estado FROM turmas_gold",
+    db.query<{ curso: string; local: string; horario: string; data_inicio: string; estado: string }>(
+      "SELECT curso, local, horario, data_inicio, estado FROM turmas_gold",
     ),
-    db.query<{ curso: string; local: string; data_inicio: string; estado: string }>(
-      "SELECT curso, local, data_inicio, estado FROM turmas_fin",
+    db.query<{ curso: string; local: string; horario: string; data_inicio: string; estado: string }>(
+      "SELECT curso, local, horario, data_inicio, estado FROM turmas_fin",
     ),
   ]);
 
@@ -155,12 +166,19 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
 
   const hoje = hojeLisboa();
   const inicios = new Map<string, { data: string; local: string }>();
+  const sessoes = new Map<string, Array<CursoPublico["sessoes"][number] & { iso: string }>>();
   for (const row of [...turmasGold.rows, ...turmasFin.rows]) {
     const data = String(row.data_inicio ?? "").slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || data < hoje) continue;
     const key = chave(row.curso);
     const actual = inicios.get(key);
     if (!actual || data < actual.data) inicios.set(key, { data, local: row.local || "" });
+    const lista = sessoes.get(key) ?? [];
+    const sessao = { iso: data, data: dataCurta(data), local: row.local || "", horario: row.horario || "" };
+    if (!lista.some(item => item.data === sessao.data && item.local === sessao.local && item.horario === sessao.horario)) {
+      lista.push(sessao);
+    }
+    sessoes.set(key, lista);
   }
 
   const brutos: CursoBruto[] = [];
@@ -178,7 +196,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       preco: Number(row.preco) || 0,
       tipo: texto(payload.tipo) || row.tipo,
       payload,
-      chaves: [chave(row.nome), chave(titulo)].filter(Boolean),
+      chaves: [...new Set([chave(row.nome), chave(titulo)].filter(Boolean))],
     });
   }
   for (const row of fin.rows) {
@@ -195,7 +213,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       preco: 0,
       tipo: "Pré-inscrição",
       payload,
-      chaves: [chave(row.nome_comercial), chave(row.ufcd), chave(titulo)].filter(Boolean),
+      chaves: [...new Set([chave(row.nome_comercial), chave(row.ufcd), chave(titulo)].filter(Boolean))],
     });
   }
 
@@ -227,6 +245,13 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       inscricao: entrada,
       miniatura,
       vendas: procura,
+      objetivos: linhas(payload.objetivos),
+      programa: linhas(payload.programa),
+      sessoes: curso.chaves
+        .flatMap(key => sessoes.get(key) ?? [])
+        .sort((a, b) => a.iso.localeCompare(b.iso))
+        .slice(0, 8)
+        .map(({ data, local, horario }) => ({ data, local, horario })),
     };
   });
 

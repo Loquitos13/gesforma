@@ -11,6 +11,7 @@ import { PublicPreinscricao } from "./PublicPreinscricao";
 import { PublicDocumentos } from "./PublicDocumentos";
 import { PublicCronograma } from "./PublicCronograma";
 import { SiteCatalog } from "./SiteCatalog";
+import { SiteCurso } from "./SiteCurso";
 import { SiteLanding } from "./SiteLanding";
 import { ToastHost } from "./ToastHost";
 import { TurmasProvider } from "./TurmasContext";
@@ -19,6 +20,7 @@ import "./index.css";
 const path = window.location.pathname.replace(/\/+$/, "") || "/";
 const entrar = path === "/entrar";
 const catalogo = path === "/formacao";
+const cursoMatch = path.match(/^\/formacao\/(gold|fin)-(\d+)$/);
 const publicForm = path === "/pre-inscricao";
 const docsToken = path.startsWith("/documentos/") ? decodeURIComponent(path.slice("/documentos/".length).split("/")[0] ?? "") : "";
 const cronogramaMatch = path.match(/^\/cronograma\/(gold|fin)\/(\d+)$/);
@@ -49,6 +51,8 @@ createRoot(document.getElementById("root")!).render(
           </FormadoresProvider>
         </TurmasProvider>
       </AuthGate>
+    ) : cursoMatch ? (
+      <SiteCurso id={`${cursoMatch[1]}-${cursoMatch[2]}`} />
     ) : catalogo ? (
       <SiteCatalog />
     ) : (

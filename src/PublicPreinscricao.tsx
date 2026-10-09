@@ -1,25 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { ApiError, apiPublicOferta, apiPublicOpcoes, apiPublicPreinscricao } from "./api";
+import { ApiError, apiPublicOferta, apiPublicPreinscricao } from "./api";
 import { CursoOfertaCampos } from "./CursoOfertaCampos";
 import { SearchSelect } from "./FormKit";
-import { LISTAS_OPCOES } from "./listaOpcoes";
 import { precoDaInscricao, type RegraPreco } from "./liveOpts";
 import { OFERTA_VAZIA, type CursoOfertaSel, type OfertaTurma } from "./oferta";
-
-export const CONCELHOS = [
-  "Águeda", "Albergaria-a-Velha", "Alcobaça", "Almada", "Amadora", "Amarante", "Aveiro",
-  "Barcelos", "Beja", "Braga", "Bragança", "Caldas da Rainha", "Cascais", "Castelo Branco",
-  "Chaves", "Coimbra", "Covilhã", "Évora", "Fafe", "Faro", "Figueira da Foz", "Funchal",
-  "Gondomar", "Guarda", "Guimarães", "Ílhavo", "Lamego", "Leiria", "Lisboa", "Loures",
-  "Maia", "Marco de Canaveses", "Matosinhos", "Odivelas", "Oeiras", "Oliveira de Azeméis",
-  "Ovar", "Paços de Ferreira", "Palmela", "Paredes", "Penafiel", "Ponta Delgada", "Portalegre",
-  "Portimão", "Porto", "Póvoa de Varzim", "Santa Maria da Feira", "Santarém", "Santo Tirso",
-  "Seixal", "Setúbal", "Sintra", "Tomar", "Torres Vedras", "Trofa", "Valongo", "Viana do Castelo",
-  "Vila do Conde", "Vila Franca de Xira", "Vila Nova de Famalicão", "Vila Nova de Gaia",
-  "Vila Real", "Viseu",
-];
-
-const ORIGENS = [...LISTAS_OPCOES.origens.fallback];
+import { textoListaVazia, useOpcoesPublicas } from "./useOpcoesPublicas";
 
 const fieldCls = "w-full bg-transparent border-0 border-b border-slate-300 px-0 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#1b2330] rounded-none";
 const labelCls = "block text-[13px] text-slate-700 mb-1";
@@ -33,7 +18,8 @@ export function PublicPreinscricao() {
   const [email, setEmail] = useState(params.get("email") ?? "");
   const [concelho, setConcelho] = useState("");
   const [origem, setOrigem] = useState("");
-  const [origens, setOrigens] = useState<string[]>(ORIGENS);
+  const concelhos = useOpcoesPublicas("concelhos");
+  const origens = useOpcoesPublicas("origens");
   const [oferta, setOferta] = useState<CursoOfertaSel>({ ...OFERTA_VAZIA, curso: cursoParam });
   const [cursos, setCursos] = useState<{ nome: string; preco: number }[]>([]);
   const [turmas, setTurmas] = useState<OfertaTurma[]>([]);
@@ -50,9 +36,6 @@ export function PublicPreinscricao() {
         setEdicoes(r.edicoes ?? []);
       })
       .catch(() => setError("Não foi possível carregar as turmas liberadas."));
-    void apiPublicOpcoes("origens")
-      .then(r => { if (r.opcoes?.length) setOrigens(r.opcoes); })
-      .catch(() => undefined);
   }, []);
 
   async function submit(e: FormEvent) {
@@ -140,16 +123,24 @@ export function PublicPreinscricao() {
               </label>
               <label>
                 <span className={labelCls}>Concelho</span>
-                <SearchSelect value={concelho} onChange={setConcelho} options={CONCELHOS.map(value => ({ value }))} allowEmpty placeholder="Seleccione um concelho" />
+                <SearchSelect
+                  value={concelho}
+                  onChange={setConcelho}
+                  options={concelhos.nomes.map(value => ({ value }))}
+                  allowEmpty
+                  placeholder="Seleccione um concelho"
+                  empty={textoListaVazia(concelhos.estado, "A secretaria ainda não definiu concelhos em Listas de opções.")}
+                />
               </label>
               <label>
                 <span className={labelCls}>Como tomou conhecimento?</span>
                 <SearchSelect
                   value={origem}
                   onChange={setOrigem}
-                  options={origens.map(o => ({ value: o }))}
+                  options={origens.nomes.map(value => ({ value }))}
                   placeholder="Pesquisar origem…"
                   allowEmpty
+                  empty={textoListaVazia(origens.estado, "A secretaria ainda não definiu origens em Listas de opções.")}
                 />
               </label>
             </div>

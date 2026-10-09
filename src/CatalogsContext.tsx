@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { apiCreateCatalog, apiDeleteCatalog, apiPatchCatalog, apiPutSettings } from "./api";
-import { LISTAS_OPCOES, type ListaOpcoesId } from "./listaOpcoes";
+import type { ListaOpcoesId } from "./listaOpcoes";
 import { loadOps } from "./opsCache";
 import { persist, toastError, toastOk } from "./toastBus";
 
@@ -207,16 +207,16 @@ export function useCatalogList<T extends { id: number }>(kind: string, regime: "
 export function useListaOpcoes(lista: ListaOpcoesId | string): {
   nomes: string[];
   rows: ListaOpcao[];
+  ready: boolean;
   add: (nome: string) => Promise<string | null>;
 } {
   const { lists, addListaOpcao, ready } = useCatalogs();
-  const fallback = lista in LISTAS_OPCOES ? [...LISTAS_OPCOES[lista as ListaOpcoesId].fallback] : [];
   const rows = ((lists[LISTA_KEY] ?? []) as ListaOpcao[]).filter(r => String(r.lista) === lista && String(r.nome ?? "").trim());
-  const nomes = (ready ? rows.map(r => String(r.nome)) : (rows.length ? rows.map(r => String(r.nome)) : fallback));
-  const unique = [...new Set(nomes.length ? nomes : fallback)];
+  const nomes = ready ? [...new Set(rows.map(r => String(r.nome).trim()).filter(Boolean))] : [];
   return {
-    nomes: unique,
+    nomes,
     rows,
+    ready,
     add: (nome: string) => addListaOpcao(lista, nome),
   };
 }

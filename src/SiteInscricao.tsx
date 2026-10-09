@@ -1,12 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { ApiError, apiPublicOferta, apiPublicOpcoes, apiPublicPreinscricao } from "./api";
+import { ApiError, apiPublicOferta, apiPublicPreinscricao } from "./api";
 import { SearchSelect } from "./FormKit";
-import { LISTAS_OPCOES } from "./listaOpcoes";
 import { fmtDataPt, ofertaFiltrada, uniqueVals, type OfertaTurma } from "./oferta";
-import { CONCELHOS } from "./PublicPreinscricao";
 import type { Course } from "./SiteLanding";
-
-const METODOS = ["MB Way", "Multibanco", "Transferência"] as const;
+import { textoListaVazia, useOpcoesPublicas } from "./useOpcoesPublicas";
 
 type Passo = "dados" | "pagamento" | "feito";
 type OfertaEstado = "a-carregar" | "pronto" | "erro";
@@ -45,14 +42,16 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
   const [email, setEmail] = useState("");
   const [concelho, setConcelho] = useState("");
   const [origem, setOrigem] = useState("");
-  const [origens, setOrigens] = useState<string[]>([...LISTAS_OPCOES.origens.fallback]);
+  const concelhos = useOpcoesPublicas("concelhos", aberto);
+  const origens = useOpcoesPublicas("origens", aberto);
+  const metodos = useOpcoesPublicas("metodos_pagamento", aberto);
   const [turmas, setTurmas] = useState<OfertaTurma[]>([]);
   const [ofertaEstado, setOfertaEstado] = useState<OfertaEstado>("a-carregar");
   const [local, setLocal] = useState("");
   const [horario, setHorario] = useState("");
   const [dataInicio, setDataInicio] = useState("");
   const [turmaId, setTurmaId] = useState(0);
-  const [metodo, setMetodo] = useState<(typeof METODOS)[number]>("MB Way");
+  const [metodo, setMetodo] = useState("");
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState("");
   const [aviso, setAviso] = useState("");
@@ -83,11 +82,13 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
     void apiPublicOferta()
       .then(r => { if (vivo) { setTurmas(r.turmas); setOfertaEstado("pronto"); } })
       .catch(() => { if (vivo) setOfertaEstado("erro"); });
-    void apiPublicOpcoes("origens")
-      .then(r => { if (vivo && r.opcoes?.length) setOrigens(r.opcoes); })
-      .catch(() => undefined);
     return () => { vivo = false; };
   }, [aberto, curso?.id]);
+
+  useEffect(() => {
+    if (metodos.estado !== "pronto") return;
+    setMetodo(atual => metodos.nomes.includes(atual) ? atual : (metodos.nomes[0] ?? ""));
+  }, [metodos.estado, metodos.nomes]);
 
   const doCurso = useMemo(() => {
     const nomes = new Set([norm(curso?.title ?? ""), norm(curso?.nomeOferta ?? "")].filter(Boolean));
@@ -137,11 +138,22 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
     else void enviar();
   }
 
+  function falhaPagamento() {
+    if (metodos.estado === "a-carregar") return "A carregar as formas de pagamento.";
+    if (metodos.estado === "erro") return "Não foi possível carregar as formas de pagamento.";
+    if (!metodo) return "A secretaria ainda não definiu formas de pagamento em Listas de opções.";
+    return "";
+  }
+
   async function enviar(e?: FormEvent) {
     e?.preventDefault();
     if (!curso) return;
     const falha = validarDados();
     if (falha) { setErro(falha); setPasso("dados"); return; }
+    if (acesso) {
+      const pagamento = falhaPagamento();
+      if (pagamento) { setErro(pagamento); return; }
+    }
     setBusy(true);
     setErro("");
     try {
@@ -176,7 +188,12 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
     ? `A referência MB Way segue para o telemóvel ${telf} e para ${email}.`
     : metodo === "Multibanco"
       ? `A entidade e a referência Multibanco seguem para ${email}.`
-      : `O IBAN da transferência segue para ${email}.`;
+      : metodo === "Transferência"
+        ? `O IBAN da transferência segue para ${email}.`
+        : metodo
+          ? `A ENA confirma consigo o pagamento por ${metodo}. Nada é cobrado neste ecrã.`
+          : "";
+  const pagamentoBloqueado = passo === "pagamento" && Boolean(falhaPagamento());
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="inscricao-titulo">
@@ -225,15 +242,23 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
               <fieldset>
                 <legend className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Forma de pagamento</legend>
                 <p className="mt-2 text-sm leading-6 text-[#1C3350]/65">A ENA envia a referência. O banco é que confirma o pagamento.</p>
-                <div className="mt-3 grid gap-2">
-                  {METODOS.map(item => (
-                    <label key={item} className={`flex cursor-pointer items-center justify-between border px-4 py-3 text-sm font-semibold ${metodo === item ? "border-[#1C3350] bg-[#1C3350] text-white" : "border-[#1C3350]/15"}`}>
-                      <span>{item}</span>
-                      <input type="radio" name="metodo" className="accent-[#FFA900]" checked={metodo === item} onChange={() => setMetodo(item)} />
-                    </label>
-                  ))}
-                </div>
-                <p className="mt-3 text-sm leading-6 text-[#1C3350]/60">{notaPagamento}</p>
+                {metodos.estado === "a-carregar" ? (
+                  <p className="mt-3 text-sm text-[#1C3350]/60">A carregar as formas de pagamento.</p>
+                ) : metodos.estado === "erro" ? (
+                  <p className="mt-3 text-sm text-[#A60000]">Não foi possível carregar as formas de pagamento.</p>
+                ) : metodos.nomes.length === 0 ? (
+                  <p className="mt-3 text-sm leading-6 text-[#1C3350]/70">A secretaria ainda não definiu formas de pagamento em Listas de opções.</p>
+                ) : (
+                  <div className="mt-3 grid gap-2">
+                    {metodos.nomes.map(item => (
+                      <label key={item} className={`flex cursor-pointer items-center justify-between border px-4 py-3 text-sm font-semibold ${metodo === item ? "border-[#1C3350] bg-[#1C3350] text-white" : "border-[#1C3350]/15"}`}>
+                        <span>{item}</span>
+                        <input type="radio" name="metodo" className="accent-[#FFA900]" checked={metodo === item} onChange={() => setMetodo(item)} />
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {notaPagamento && <p className="mt-3 text-sm leading-6 text-[#1C3350]/60">{notaPagamento}</p>}
               </fieldset>
             </form>
           ) : (
@@ -246,10 +271,26 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
                   <Campo label="Telemóvel"><input className={inputCls} value={telf} onChange={e => setTelf(e.target.value)} autoComplete="tel" inputMode="tel" required /></Campo>
                   <Campo label="Email"><input className={inputCls} type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" required /></Campo>
                   <Campo label="Concelho">
-                    <SearchSelect value={concelho} onChange={setConcelho} options={CONCELHOS.map(value => ({ value }))} allowEmpty placeholder="Pesquisar concelho" emptyLabel="Seleccione um concelho" />
+                    <SearchSelect
+                      value={concelho}
+                      onChange={setConcelho}
+                      options={concelhos.nomes.map(value => ({ value }))}
+                      allowEmpty
+                      placeholder="Pesquisar concelho"
+                      emptyLabel="Seleccione um concelho"
+                      empty={textoListaVazia(concelhos.estado, "A secretaria ainda não definiu concelhos em Listas de opções.")}
+                    />
                   </Campo>
                   <Campo label="Como tomou conhecimento?">
-                    <SearchSelect value={origem} onChange={setOrigem} options={origens.map(value => ({ value }))} allowEmpty placeholder="Pesquisar origem" emptyLabel="Seleccione a origem" />
+                    <SearchSelect
+                      value={origem}
+                      onChange={setOrigem}
+                      options={origens.nomes.map(value => ({ value }))}
+                      allowEmpty
+                      placeholder="Pesquisar origem"
+                      emptyLabel="Seleccione a origem"
+                      empty={textoListaVazia(origens.estado, "A secretaria ainda não definiu origens em Listas de opções.")}
+                    />
                   </Campo>
                 </div>
               </div>
@@ -320,7 +361,7 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
           {passo === "feito" ? (
             <button type="button" onClick={onClose} className="bg-[#1C3350] px-6 py-3 text-sm font-extrabold uppercase tracking-[0.08em] text-white">Fechar</button>
           ) : (
-            <button type="submit" form="inscricao-form" disabled={busy} className="bg-[#A60000] px-6 py-3 text-sm font-extrabold uppercase tracking-[0.08em] text-white hover:bg-[#8B0000] disabled:opacity-40">
+            <button type="submit" form="inscricao-form" disabled={busy || pagamentoBloqueado} className="bg-[#A60000] px-6 py-3 text-sm font-extrabold uppercase tracking-[0.08em] text-white hover:bg-[#8B0000] disabled:opacity-40">
               {busy ? "A enviar…" : passo === "pagamento" ? "Pedir referência" : acesso ? "Continuar para o pagamento" : "Inscrever-me"}
             </button>
           )}

@@ -6,6 +6,18 @@ import { mapPreinscricao, nextOpsId } from "./ops.js";
 import { resolverTurmaOferta } from "./ofertaGold.js";
 import { isEmail, normalizeEmail, sanitizeHeader, textoDePessoa } from "./security.js";
 
+async function metodoPagamentoConhecido(db: Db, nome: string) {
+  const row = await db.query(
+    `SELECT 1 FROM catalog_items
+      WHERE kind = 'lista_opcoes'
+        AND payload->>'lista' = 'metodos_pagamento'
+        AND payload->>'nome' = $1
+      LIMIT 1`,
+    [nome],
+  );
+  return Boolean(row.rows[0]);
+}
+
 function nowStamp() {
   return new Date().toISOString().slice(0, 16).replace("T", " ");
 }
@@ -55,6 +67,9 @@ export async function criarPreinscricaoPublica(
   const turmaId = turma?.turmaId ?? null;
   if (!turma && !acessoImediato) return { error: "escolha curso, local, horário e data de uma turma liberada" as const };
   const metodo = sanitizeHeader(input.pagamentoMetodo || "");
+  if (metodo && !(await metodoPagamentoConhecido(db, metodo))) {
+    return { error: "forma de pagamento desconhecida" as const };
+  }
 
   const dup = await db.query(
     "SELECT * FROM preinscricoes WHERE lower(email) = $1 ORDER BY id DESC LIMIT 1",

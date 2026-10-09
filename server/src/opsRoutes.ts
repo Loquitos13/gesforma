@@ -555,7 +555,7 @@ export function registerOpsRoutes(
       acessoImediato: d.acessoImediato,
     }, { ip: req.ip });
     if ("error" in created) {
-      const code = created.error === "email inválido" ? 400 : 409;
+      const code = created.error === "email inválido" || created.error === "forma de pagamento desconhecida" ? 400 : 409;
       return reply.code(code).send({ error: created.error });
     }
     await audit(db, undefined, "preinscricao.public_create", "preinscricao", String(created.preinscricao.id), req.ip, { curso: d.curso, duplicado: created.duplicado });

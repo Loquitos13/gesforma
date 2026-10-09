@@ -893,7 +893,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
             <input className={inp} value={form.telf} onChange={e => setForm(f => ({ ...f, telf: e.target.value }))} />
           </label>
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Concelho (opcional agora)
-            <input className={inp} value={form.concelho} onChange={e => setForm(f => ({ ...f, concelho: e.target.value }))} />
+            <OptionSelect lista="concelhos" value={form.concelho} onChange={v => setForm(f => ({ ...f, concelho: v }))} allowEmpty />
           </label>
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5">Como entrou em contacto
             <OptionSelect lista="origens" value={form.origem} onChange={v => setForm(f => ({ ...f, origem: v }))} />

@@ -184,6 +184,21 @@ function listaOpcoesSeed(): Array<{ id: number; lista: string; nome: string }> {
     { lista: "regimes_curso", nomes: ["b-learning", "e-learning", "presencial"] },
     { lista: "categorias_gold", nomes: ["CCP e Gestão da Formação", "Saúde e bem estar", "Desenvolvimento Pessoal"] },
     { lista: "areas_fin", nomes: ["Saúde e segurança", "Marketing digital", "TIC e cibersegurança", "Formação de formadores"] },
+    {
+      lista: "concelhos",
+      nomes: [
+        "Águeda", "Albergaria-a-Velha", "Alcobaça", "Almada", "Amadora", "Amarante", "Aveiro",
+        "Barcelos", "Beja", "Braga", "Bragança", "Caldas da Rainha", "Cascais", "Castelo Branco",
+        "Chaves", "Coimbra", "Covilhã", "Évora", "Fafe", "Faro", "Figueira da Foz", "Funchal",
+        "Gondomar", "Guarda", "Guimarães", "Ílhavo", "Lamego", "Leiria", "Lisboa", "Loures",
+        "Maia", "Marco de Canaveses", "Matosinhos", "Odivelas", "Oeiras", "Oliveira de Azeméis",
+        "Ovar", "Paços de Ferreira", "Palmela", "Paredes", "Penafiel", "Ponta Delgada", "Portalegre",
+        "Portimão", "Porto", "Póvoa de Varzim", "Santa Maria da Feira", "Santarém", "Santo Tirso",
+        "Seixal", "Setúbal", "Sintra", "Tomar", "Torres Vedras", "Trofa", "Valongo", "Viana do Castelo",
+        "Vila do Conde", "Vila Franca de Xira", "Vila Nova de Famalicão", "Vila Nova de Gaia",
+        "Vila Real", "Viseu",
+      ],
+    },
   ];
   let id = 9101;
   const out: Array<{ id: number; lista: string; nome: string }> = [];

@@ -21,7 +21,7 @@ export function OptionSelect({
   canAdd?: boolean;
 }) {
   const meta = LISTAS_OPCOES[lista];
-  const { nomes, add } = useListaOpcoes(lista);
+  const { nomes, add, ready } = useListaOpcoes(lista);
   const [open, setOpen] = useState(false);
   const [nome, setNome] = useState("");
   const [busy, setBusy] = useState(false);
@@ -46,7 +46,7 @@ export function OptionSelect({
         onChange={onChange}
         options={options}
         placeholder={placeholder ?? `Pesquisar ${meta.titulo.toLowerCase()}…`}
-        empty={empty ?? "Nenhuma opção. Use + para criar."}
+        empty={ready ? (empty ?? "Nenhuma opção. Use + para criar.") : "A carregar a lista…"}
         allowEmpty={allowEmpty}
         onAdd={canAdd ? () => { setNome(""); setOpen(true); } : undefined}
         addLabel={`Nova opção em ${meta.titulo}`}

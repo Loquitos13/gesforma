@@ -198,7 +198,7 @@ function SplitHero() {
   const { ccp, cursos } = useOferta();
   const { abrir } = useInscricao();
   const financiada = cursos.find(curso => curso.regime === "fin" && curso.miniatura) ?? cursos.find(curso => curso.regime === "fin");
-  const preco = ccp?.precoDesde != null ? `A partir de ${ccp.precoDesde.toLocaleString("pt-PT")}€` : "A partir de 100€";
+  const preco = ccp?.price ?? "";
   return (
     <section className="px-4 pb-2 pt-4 sm:px-6 lg:px-8" aria-label="Destaques">
       <div className="relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[32px] bg-white shadow-[0_28px_80px_rgba(20,38,61,.08)] lg:min-h-[860px] lg:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)]">
@@ -222,28 +222,32 @@ function SplitHero() {
             />
           </div>
           <div className="relative z-20 flex flex-col gap-6 lg:absolute lg:inset-0 lg:block">
-            <article className="ena-flutuar w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:left-0 lg:top-[8%] lg:w-[360px]">
-              <Moldura src={ccp?.miniatura} alt={ccp?.title ?? "Formação de Formadores"} />
-              <div className="p-5">
-                <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">{preco}</span>
-                <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">{ccp?.title ?? "Formação de Formadores (CCP)"}</h2>
-                <p className="mt-2 text-sm text-[#1C3350]/55">{ccp?.area ?? "Formação de formadores"}</p>
-                {ccp ? (
-                  <button type="button" onClick={() => abrir(ccp)} className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#A60000]">Inscrever-me agora</button>
-                ) : (
-                  <a href="/formacao" className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#A60000]">Explorar cursos</a>
-                )}
-              </div>
-            </article>
-            <article className="ena-flutuar-b w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:right-3 lg:top-[46%] lg:w-[360px]">
-              <Moldura src={financiada?.miniatura} alt="Formação financiada" />
-              <div className="p-5">
-                <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">Grátis + Subsídio</span>
-                <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">Formação Financiada</h2>
-                <p className="mt-2 text-sm text-[#1C3350]/55">Grátis + subsídio</p>
-                <a href="/formacao?linha=financiada" className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#A60000]">Explorar cursos</a>
-              </div>
-            </article>
+            {ccp && (
+              <article className="ena-flutuar w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:left-0 lg:top-[8%] lg:w-[360px]">
+                <Moldura src={ccp.miniatura} alt={ccp.title} />
+                <div className="p-5">
+                  {preco && <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">{preco}</span>}
+                  <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">{ccp.title}</h2>
+                  <p className="mt-2 text-sm text-[#1C3350]/55">{ccp.area}</p>
+                  <button type="button" onClick={() => abrir(ccp)} className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#A60000]">
+                    {ccp.enrollment === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever"}
+                  </button>
+                </div>
+              </article>
+            )}
+            {financiada && (
+              <article className="ena-flutuar-b w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(28,51,80,.16)] lg:absolute lg:right-3 lg:top-[46%] lg:w-[360px]">
+                <Moldura src={financiada.miniatura} alt={financiada.title} />
+                <div className="p-5">
+                  {financiada.price && <span className="inline-flex rounded-md bg-[#FFF1D1] px-2.5 py-1 text-[11px] font-extrabold text-[#C47A00]">{financiada.price}</span>}
+                  <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">{financiada.title}</h2>
+                  <p className="mt-2 text-sm text-[#1C3350]/55">{financiada.area}</p>
+                  <button type="button" onClick={() => abrir(financiada)} className="mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#A60000]">
+                    {financiada.enrollment === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever"}
+                  </button>
+                </div>
+              </article>
+            )}
           </div>
         </div>
         <svg aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 z-10 h-24 w-full sm:h-28" viewBox="0 0 1200 140" preserveAspectRatio="none">

@@ -99,7 +99,7 @@ function useOfertaState(): OfertaEstado {
   useEffect(() => {
     let vivo = true;
     setEstado("a-carregar");
-    fetch("/api/v1/public/catalogo")
+    fetch("/api/v1/public/catalogo", { cache: "no-store" })
       .then(async res => {
         if (!res.ok) throw new Error("oferta indisponível");
         return res.json() as Promise<CatalogoApi>;

@@ -508,7 +508,10 @@ export function registerOpsRoutes(
     return { cursos: await listCursosGoldActivos(db) };
   });
 
-  app.get("/v1/public/catalogo", async () => listarCatalogoPublico(db));
+  app.get("/v1/public/catalogo", async (_req, reply) => {
+    reply.header("cache-control", "no-store");
+    return listarCatalogoPublico(db);
+  });
 
   app.get("/v1/public/imagens/:token", async (req, reply) => {
     const token = tokenImagem(String((req.params as { token?: string }).token ?? ""));

@@ -2,7 +2,7 @@
 
 Backoffice de gestão de formação (Gold / autofinanciada e Financiada), com API Fastify, base migrável e formulário público de pré-inscrição.
 
-O site público está em `/`. O backoffice, com o ecrã de login e o painel conforme o perfil, está em `/entrar`.
+O site público está em `/`. O que ele mostra, o que o administrador edita em Sistema → Site, e o que ainda falta estão em `docs/site.md`. O backoffice, com o ecrã de login e o painel conforme o perfil, está em `/entrar`.
 
 A ENA trata por **turma**, não por “ação de formação”. Existe um código interno (`VNG-SM-07/09`, `UFCD 3564`), mas o objeto de gestão é a turma.
 

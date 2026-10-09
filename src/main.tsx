@@ -20,7 +20,7 @@ import "./index.css";
 const path = window.location.pathname.replace(/\/+$/, "") || "/";
 const entrar = path === "/entrar";
 const catalogo = path === "/formacao";
-const cursoMatch = path.match(/^\/formacao\/(gold|fin)-(\d+)$/);
+const slugCurso = path.startsWith("/formacao/") ? decodeURIComponent(path.slice("/formacao/".length).split("/")[0] ?? "") : "";
 const publicForm = path === "/pre-inscricao";
 const docsToken = path.startsWith("/documentos/") ? decodeURIComponent(path.slice("/documentos/".length).split("/")[0] ?? "") : "";
 const cronogramaMatch = path.match(/^\/cronograma\/(gold|fin)\/(\d+)$/);
@@ -51,8 +51,8 @@ createRoot(document.getElementById("root")!).render(
           </FormadoresProvider>
         </TurmasProvider>
       </AuthGate>
-    ) : cursoMatch ? (
-      <SiteCurso id={`${cursoMatch[1]}-${cursoMatch[2]}`} />
+    ) : slugCurso ? (
+      <SiteCurso slug={slugCurso} />
     ) : catalogo ? (
       <SiteCatalog />
     ) : (

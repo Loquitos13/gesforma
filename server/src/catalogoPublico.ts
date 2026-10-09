@@ -66,9 +66,19 @@ function texto(value: unknown) {
 
 function mediaUrl(slot: unknown) {
   const url = texto(asObj(slot).url);
-  if (!url || url.startsWith("blob:")) return null;
-  if (url.startsWith("/") || url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:image/")) return url;
+  if (!url || url.startsWith("blob:") || /\/(?:gold|fin)\/\d+(?:\/|$)/.test(url)) return null;
+  if (url.startsWith("/api/v1/public/imagens/") || url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:image/")) return url;
   return null;
+}
+
+function slugify(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
 }
 
 function numeroPreco(value: unknown) {
@@ -220,6 +230,17 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
     });
   }
 
+  const slugs = new Set<string>();
+  function reservarSlug(titulo: string, pedido: string) {
+    const base = slugify(pedido) || slugify(titulo) || "curso";
+    const limpo = /^(?:gold|fin)-\d+$/.test(base) ? slugify(titulo) || "curso" : base;
+    let slug = limpo;
+    let n = 2;
+    while (slugs.has(slug)) slug = `${limpo}-${n++}`;
+    slugs.add(slug);
+    return slug;
+  }
+
   const cursos = brutos.map((curso): CursoPublico => {
     const payload = asObj(curso.payload);
     const sintese = texto(payload.sintese);
@@ -235,7 +256,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
     const miniatura = gravadaThumb || mediaUrl(payload.thumb);
     const banner = gravadaBanner || mediaUrl(payload.banner) || miniatura;
     return {
-      id: `${curso.regime}-${curso.id}`,
+      id: reservarSlug(curso.titulo, texto(payload.slug)),
       regime: curso.regime,
       titulo: curso.titulo,
       area: curso.area,

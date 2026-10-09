@@ -1,9 +1,10 @@
 import { useEffect } from "react";
 import { Icon, SiteFrame, useOferta, type Course } from "./SiteLanding";
 
-function Pagina({ id }: { id: string }) {
+function Pagina({ slug }: { slug: string }) {
   const { cursos, estado, recarregar } = useOferta();
-  const curso = cursos.find(item => item.id === id) ?? null;
+  const pedido = slug.toLowerCase();
+  const curso = /^(?:gold|fin)-\d+$/.test(pedido) ? null : cursos.find(item => item.id === pedido) ?? null;
 
   if (estado === "a-carregar") {
     return <p className="px-5 py-24 text-center text-[#1C3350]/60">A carregar o curso.</p>;
@@ -123,10 +124,10 @@ function Curso({ curso }: { curso: Course }) {
   );
 }
 
-export function SiteCurso({ id }: { id: string }) {
+export function SiteCurso({ slug }: { slug: string }) {
   return (
     <SiteFrame>
-      <Pagina id={id} />
+      <Pagina slug={slug} />
     </SiteFrame>
   );
 }

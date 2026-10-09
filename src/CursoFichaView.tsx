@@ -523,7 +523,7 @@ function SitePreview({ data, accent, turmas }: { data: CursoSite; accent: CursoA
           <span className="w-2 h-2 rounded-full bg-slate-300" />
           <span className="w-2 h-2 rounded-full bg-slate-300" />
         </span>
-        <span className="flex-1 text-[11px] font-mono text-slate-400 truncate">ena.pt/cursos/{data.slug || "…"}</span>
+        <span className="flex-1 text-[11px] font-mono text-slate-400 truncate">ena.pt/formacao/{data.slug || "…"}</span>
         <span className={`text-[10px] font-semibold uppercase tracking-wide ${t.preview}`}>Pré-visualização</span>
       </div>
       <div className="max-h-[720px] overflow-y-auto">
@@ -887,9 +887,9 @@ export function CursoFichaView({
   }
 
   const metaLine = accent === "fin"
-    ? [data.ufcdCod ? `UFCD ${data.ufcdCod}` : "UFCD", data.horas ? `${data.horas}h` : "-", data.regime || "regime", data.slug ? `/cursos/${data.slug}` : ""]
+    ? [data.ufcdCod ? `UFCD ${data.ufcdCod}` : "UFCD", data.horas ? `${data.horas}h` : "-", data.regime || "regime", data.slug ? `/formacao/${data.slug}` : ""]
         .filter(Boolean).join(" · ")
-    : [data.tipo || "Tipo", data.horas ? `${data.horas}h` : "-", data.regime || "regime", data.slug ? `/cursos/${data.slug}` : ""]
+    : [data.tipo || "Tipo", data.horas ? `${data.horas}h` : "-", data.regime || "regime", data.slug ? `/formacao/${data.slug}` : ""]
         .filter(Boolean).join(" · ");
 
   return (

@@ -3,7 +3,7 @@ import type { Db } from "./db/pool.js";
 import { docsCompletos, docsDoCurso, faltaValidarPreinscricao } from "./docsCurso.js";
 import { documentosUrl, ensureDocsToken, listarDocsLead } from "./docsLink.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
-import { relocateDriveFile } from "./googleDrive.js";
+import { moverPastaFormando } from "./driveArvore.js";
 import { sendMail } from "./mailer.js";
 import { modulosPorOrdem, sessoesPublicas } from "./cronogramaPublico.js";
 import { precoParaOferta } from "./precoOferta.js";
@@ -343,17 +343,13 @@ export async function moverDocsDoLead(db: Db, leadId: number, turmaId: number) {
   const regime = regimeDe(row.regime);
   const turma = await turmaPorId(db, regime, turmaId);
   if (!turma) return { moved: 0 };
-  const pessoa = `${row.nome} ${row.apelido}`.trim();
-  const docs = await listarDocsLead(db, leadId);
-  let moved = 0;
-  for (const doc of docs) {
-    if (!doc.drive_file_id) continue;
-    const ok = await relocateDriveFile(db, doc.drive_file_id, {
-      regime, turmaId: turma.id, turmaNome: turma.nome, pessoa,
-    });
-    if (ok) moved += 1;
-  }
-  return { moved, turma: turma.nome };
+  const validada = await db.query<{ validada_em: string | null }>(
+    "SELECT validada_em FROM preinscricoes WHERE id = $1",
+    [leadId],
+  );
+  if (!validada.rows[0]?.validada_em) return { moved: 0, turma: turma.nome };
+  const r = await moverPastaFormando(db, leadId, regime, turma.id);
+  return { moved: r.moved ? 1 : 0, turma: r.turma || turma.nome };
 }
 
 export async function moverDocsParaTurma(db: Db, input: {
@@ -381,14 +377,24 @@ export async function moverDocsParaTurma(db: Db, input: {
   return { moved };
 }
 
-export async function validarPreinscricao(db: Db, leadId: number, actorId?: string) {
+export async function validarPreinscricao(db: Db, leadId: number, actorId?: string, turmaDestinoId?: number) {
   const lead = await db.query("SELECT * FROM preinscricoes WHERE id = $1", [leadId]);
   const row = lead.rows[0] as Record<string, unknown> | undefined;
   if (!row) throw new PercursoErro("Pré-inscrição inexistente.");
   const regime = regimeDe(row.regime);
   const pedidos = await docsDoCurso(db, String(row.curso ?? ""), regime);
   const ficheiros = await listarDocsLead(db, leadId);
-  const turmaId = Number(row.turma_escolhida_id || 0);
+  let turmaId = Number(row.turma_escolhida_id || 0);
+  const transferir = Boolean(turmaDestinoId && turmaDestinoId !== turmaId);
+  if (transferir && turmaDestinoId) {
+    const table = regime === "fin" ? "turmas_fin" : "turmas_gold";
+    const destinoCurso = await db.query<{ curso: string }>(`SELECT curso FROM ${table} WHERE id = $1`, [turmaDestinoId]);
+    const cursoDestino = String(destinoCurso.rows[0]?.curso ?? "");
+    if (!cursoDestino || norm(cursoDestino) !== norm(String(row.curso ?? ""))) {
+      throw new PercursoErro("A turma de destino é de outro curso.");
+    }
+    turmaId = turmaDestinoId;
+  }
   const turma = turmaId ? await turmaPorId(db, regime, turmaId) : null;
   const precisa = regime === "gold" && Number(row.preco) > 0;
   const falta = faltaValidarPreinscricao({
@@ -400,6 +406,19 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
     precisaPagamento: precisa,
   });
   if (falta) throw new PercursoErro(falta);
+  let moved: { moved: number; turma?: string };
+  try {
+    const pasta = await moverPastaFormando(db, leadId, regime, turmaId);
+    moved = { moved: pasta.moved ? 1 : 0, turma: pasta.turma };
+  } catch (err) {
+    throw new PercursoErro(err instanceof Error ? err.message : "Não foi possível mover a pasta na Drive.");
+  }
+  if (transferir) {
+    await db.query(
+      "UPDATE preinscricoes SET turma_escolhida_id = $2, turma_id = $2 WHERE id = $1",
+      [leadId, turmaId],
+    );
+  }
   await db.query(
     `UPDATE preinscricoes
         SET validada_em = COALESCE(validada_em, now()),
@@ -408,8 +427,7 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
       WHERE id = $1`,
     [leadId],
   );
-  const moved = await moverDocsDoLead(db, leadId, turmaId);
-  await evento(db, leadId, actorId, "Pré-inscrição validada", moved.turma ? `Documentos em ${moved.turma}` : "");
+  await evento(db, leadId, actorId, "Pré-inscrição validada", moved.turma ? `Pasta do formando em ${moved.turma}` : "");
   return { ok: true as const, moved: moved.moved };
 }
 

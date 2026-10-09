@@ -47,7 +47,8 @@ import {
   popularFichaPessoa, docsDoCurso, abrirAlerta, alertarDocumentosIncorrectos,
   definirEstadoDoc, dispensarAlerta, listarAlertasAbertas, syncLigacao,
 } from "./docsLink.js";
-import { readDriveContent, storeDriveFile } from "./googleDrive.js";
+import { apagarFicheiroSubstituido, readDriveContent, storeDriveFile } from "./googleDrive.js";
+import { garantirPastaPendente } from "./driveArvore.js";
 import { ficheiroModelo } from "./docsCurso.js";
 import { modulosDaFicha } from "./programaCurso.js";
 import {
@@ -850,13 +851,24 @@ export function registerOpsRoutes(
       return reply.code(400).send({ error: "Nesta correcção só pode enviar os documentos indicados." });
     }
     try {
+      const antigo = ja.find(d => d.tipo === tipo && d.drive_file_id);
+      const zona = await garantirPastaPendente(db, {
+        id: Number(lead.id),
+        nome: String(lead.nome ?? ""),
+        apelido: String(lead.apelido ?? ""),
+      });
       const file = await storeDriveFile(db, undefined, { name, mime, bytes }, {
         kind: tipo === "comprovativo" ? "comprovativo-pagamento" : "preinscricao-doc",
         regime,
         formando: `${lead.nome} ${lead.apelido}`.trim(),
         label: tipo,
         itemId: String(lead.id),
+        parentDriveId: zona?.pastaId,
+        folderPath: zona?.path || undefined,
       });
+      if (antigo?.drive_file_id && antigo.drive_file_id !== file.id) {
+        await apagarFicheiroSubstituido(db, antigo.drive_file_id);
+      }
       await db.query(
         "DELETE FROM preinscricao_docs WHERE preinscricao_id = $1 AND tipo = $2",
         [lead.id, tipo],
@@ -954,9 +966,11 @@ export function registerOpsRoutes(
     if (!requireAuth(req, reply)) return;
     if (!staffValida(req.actor?.role)) return reply.code(403).send({ error: "Só a secretaria valida a pré-inscrição." });
     const id = Number((req.params as { id: string }).id);
+    const body = req.body && typeof req.body === "object" ? req.body as { turmaId?: number } : {};
+    const turmaDestino = Number(body.turmaId);
     if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
     try {
-      await validarPreinscricao(db, id, req.actor!.id);
+      await validarPreinscricao(db, id, req.actor!.id, Number.isInteger(turmaDestino) && turmaDestino > 0 ? turmaDestino : undefined);
     } catch (err) {
       const msg = err instanceof PercursoErro ? err.message : "Não foi possível validar.";
       return reply.code(400).send({ error: msg });

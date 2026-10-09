@@ -1704,6 +1704,8 @@ export function registerPedagogiaRoutes(
       );
     }
     await audit(db, req.actor!.id, "formador.docs", "formador", String(id), req.ip);
+    const { sincronizarAtalhosDoFormador } = await import("./driveArvore.js");
+    await sincronizarAtalhosDoFormador(db, id).catch(() => undefined);
     return { ok: true };
   });
 

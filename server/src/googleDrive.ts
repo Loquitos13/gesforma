@@ -9,6 +9,9 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
 const DRIVE_FILES = "https://www.googleapis.com/drive/v3/files";
+export const DRIVE_FILES_URL = DRIVE_FILES;
+export const FOLDER_MIME_DRIVE = "application/vnd.google-apps.folder";
+export const SHORTCUT_MIME_DRIVE = "application/vnd.google-apps.shortcut";
 const DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const FOLDER_MIME = "application/vnd.google-apps.folder";
@@ -35,6 +38,8 @@ export type DriveContext = {
   label?: string;
   fase?: string;
   itemId?: string;
+  parentDriveId?: string;
+  folderPath?: string;
 };
 
 export type DriveFileRow = {
@@ -356,7 +361,7 @@ export async function getDriveStatus(db: Db) {
   };
 }
 
-async function accessToken(db: Db) {
+export async function tokenDrive(db: Db) {
   const account = await loadAccount(db);
   if (!account?.refresh_token) return null;
   const refresh = openSecret(account.refresh_token);
@@ -379,7 +384,7 @@ async function usableToken(db: Db): Promise<{ token: string | null; reason: stri
   const creds = await driveCreds(db);
   if (!googleConfigured(creds)) return { token: null, reason: null };
   try {
-    const token = await accessToken(db);
+    const token = await tokenDrive(db);
     return { token, reason: null };
   } catch (err) {
     const reason = err instanceof Error ? err.message : "token recusado";
@@ -406,7 +411,7 @@ export async function disconnectGoogle(db: Db) {
   await db.query("DELETE FROM oauth_accounts WHERE provider = 'google'");
 }
 
-async function driveApi<T>(token: string, url: string, init: RequestInit = {}) {
+export async function driveComToken<T>(token: string, url: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${token}`);
   return googleJson<T>(url, { ...init, headers });
@@ -454,7 +459,7 @@ export function folderCreateBody(name: string, parentId?: string) {
 
 async function findChildFolder(token: string, parentId: string, name: string) {
   try {
-    const res = await driveApi<{ files?: Array<{ id: string; name: string }> }>(
+    const res = await driveComToken<{ files?: Array<{ id: string; name: string }> }>(
       token,
       driveChildListUrl(parentId, name),
     );
@@ -466,7 +471,7 @@ async function findChildFolder(token: string, parentId: string, name: string) {
 }
 
 async function createFolder(token: string, name: string, parentId?: string) {
-  const created = await driveApi<{ id: string; name: string }>(token, `${DRIVE_FILES}?supportsAllDrives=true`, {
+  const created = await driveComToken<{ id: string; name: string }>(token, `${DRIVE_FILES}?supportsAllDrives=true`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(folderCreateBody(name, parentId)),
@@ -475,7 +480,7 @@ async function createFolder(token: string, name: string, parentId?: string) {
   return created;
 }
 
-async function ensureChild(token: string, parentId: string, name: string) {
+export async function garantirPastaFilha(token: string, parentId: string, name: string) {
   const found = await findChildFolder(token, parentId, name);
   if (found?.id) return found.id;
   const created = await createFolder(token, name, parentId);
@@ -486,7 +491,7 @@ async function nestFolders(token: string, parentId: string, names: string[]) {
   let parent = parentId;
   for (const name of names) {
     if (!name.trim()) continue;
-    parent = await ensureChild(token, parent, name);
+    parent = await garantirPastaFilha(token, parent, name);
   }
   return parent;
 }
@@ -503,7 +508,7 @@ async function ensureFolderPath(db: Db, token: string, segments: string[], folde
     );
   };
   if (!pinned) {
-    const rootId = await ensureChild(token, "root", rootName);
+    const rootId = await garantirPastaFilha(token, "root", rootName);
     await remember(rootId);
     return nestFolders(token, rootId, rest);
   }
@@ -511,7 +516,7 @@ async function ensureFolderPath(db: Db, token: string, segments: string[], folde
     return await nestFolders(token, pinned, rest);
   } catch (err) {
     if (!isNotFound(err)) throw err;
-    const rootId = await ensureChild(token, "root", rootName);
+    const rootId = await garantirPastaFilha(token, "root", rootName);
     await remember(rootId);
     return nestFolders(token, rootId, rest);
   }
@@ -526,7 +531,7 @@ async function uploadToGoogle(token: string, parentId: string, name: string, mim
   const tail = Buffer.from(`\r\n--${boundary}--`);
   const body = Buffer.concat([head, bytes, tail]);
   const url = `${DRIVE_UPLOAD}?uploadType=multipart&supportsAllDrives=true&fields=id,name,mimeType,size,webViewLink,webContentLink`;
-  return driveApi<{
+  return driveComToken<{
     id: string;
     name: string;
     mimeType?: string;
@@ -575,13 +580,14 @@ export async function storeDriveFile(
   assertUpload(name, file.mime, file.bytes.length);
   const id = newToken(16);
   const creds = await driveCreds(db);
-  const pathLabel = folderSegments(ctx, creds.folderName).join(" / ");
+  const pathLabel = ctx.folderPath?.trim() || folderSegments(ctx, creds.folderName).join(" / ");
   const { token, reason } = await usableToken(db);
 
   if (token) {
     let parent: string;
     try {
-      parent = await ensureFolderPath(db, token, folderSegments(ctx, creds.folderName), creds.folderId);
+      parent = ctx.parentDriveId?.trim()
+        || await ensureFolderPath(db, token, folderSegments(ctx, creds.folderName), creds.folderId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       if (isNotFound(err)) {
@@ -668,7 +674,7 @@ export async function readDriveContent(db: Db, id: string) {
       redirect: null as string | null,
     };
   }
-  const token = await accessToken(db);
+  const token = await tokenDrive(db);
   if (!token || !file.drive_id) {
     return { name: file.name, mime: file.mime_type ?? "application/octet-stream", bytes: null, redirect: file.web_view_link };
   }
@@ -682,12 +688,95 @@ export async function readDriveContent(db: Db, id: string) {
   return { name: file.name, mime: file.mime_type ?? "application/octet-stream", bytes: buf, redirect: null as string | null };
 }
 
+export async function apagarFicheiroSubstituido(db: Db, id: string) {
+  const row = await db.query<DriveFileRow>("SELECT * FROM drive_files WHERE id = $1", [id]);
+  const file = row.rows[0];
+  if (!file) return false;
+  if (file.stored_in === "google" && file.drive_id) {
+    const token = await tokenDrive(db).catch(() => null);
+    if (token) {
+      const res = await fetch(`${DRIVE_FILES}/${encodeURIComponent(file.drive_id)}?supportsAllDrives=true`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok && res.status !== 404) {
+        throw new Error("Não foi possível apagar o ficheiro anterior na Drive.");
+      }
+    }
+  }
+  if (file.local_path) {
+    const path = join(driveDir(), file.local_path);
+    if (existsSync(path)) unlinkSync(path);
+  }
+  await db.query("DELETE FROM drive_files WHERE id = $1", [id]);
+  return true;
+}
+
+export async function apagarItemGoogle(token: string, driveId: string) {
+  const res = await fetch(`${DRIVE_FILES}/${encodeURIComponent(driveId)}?supportsAllDrives=true`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok && res.status !== 404) throw new Error("Não foi possível apagar o item na Drive.");
+}
+
+export function urlMoverDrive(fileId: string, addParent: string, removeParents: string[]) {
+  const params = new URLSearchParams({
+    addParents: addParent,
+    supportsAllDrives: "true",
+    fields: "id,parents",
+  });
+  const remove = [...new Set(removeParents.map(id => id.trim()).filter(id => id && id !== addParent))];
+  if (remove.length) params.set("removeParents", remove.join(","));
+  return `${DRIVE_FILES}/${encodeURIComponent(fileId)}?${params.toString()}`;
+}
+
+export async function moverPastaDrive(token: string, pastaId: string, addParent: string, removeParent = "") {
+  const actual = await driveComToken<{ parents?: string[] }>(
+    token,
+    `${DRIVE_FILES}/${encodeURIComponent(pastaId)}?fields=parents&supportsAllDrives=true`,
+  );
+  const pais = actual.parents ?? [];
+  if (pais.length === 1 && pais[0] === addParent) return { id: pastaId, parents: pais };
+  await driveComToken(token, urlMoverDrive(pastaId, addParent, [...pais, removeParent]), { method: "PATCH" });
+  return { id: pastaId, parents: [addParent] };
+}
+
+export async function criarAtalhoDrive(
+  token: string,
+  input: { name: string; targetId: string; parentId: string },
+) {
+  const parent = usableFolderId(input.parentId);
+  const body: { name: string; mimeType: string; parents?: string[]; shortcutDetails: { targetId: string } } = {
+    name: sanitizeFileName(input.name),
+    mimeType: SHORTCUT_MIME_DRIVE,
+    shortcutDetails: { targetId: input.targetId },
+  };
+  if (parent) body.parents = [parent];
+  const created = await driveComToken<{ id: string }>(token, `${DRIVE_FILES}?supportsAllDrives=true&fields=id,name`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!created.id) throw new Error("O Drive não devolveu o atalho.");
+  return created;
+}
+
+export async function raizDoProjecto(db: Db, token: string) {
+  const creds = await driveCreds(db);
+  return ensureFolderPath(db, token, [creds.folderName], creds.folderId);
+}
+
+export async function partilharPasta(token: string, fileId: string, email: string) {
+  await shareFolder(token, fileId, email);
+}
+
 export async function deleteDriveFile(db: Db, id: string) {
   const row = await db.query<DriveFileRow>("SELECT * FROM drive_files WHERE id = $1", [id]);
   const file = row.rows[0];
   if (!file) return false;
   if (file.stored_in === "google" && file.drive_id) {
-    const token = await accessToken(db).catch(() => null);
+    const token = await tokenDrive(db).catch(() => null);
     if (token) {
       await fetch(`${DRIVE_FILES}/${file.drive_id}?supportsAllDrives=true`, {
         method: "DELETE",
@@ -708,14 +797,14 @@ export function purgeExpiredStates(db: Db) {
 }
 
 async function shareFolder(token: string, fileId: string, email: string) {
-  await driveApi(token, `${DRIVE_FILES}/${encodeURIComponent(fileId)}/permissions?supportsAllDrives=true&sendNotificationEmail=false`, {
+  await driveComToken(token, `${DRIVE_FILES}/${encodeURIComponent(fileId)}/permissions?supportsAllDrives=true&sendNotificationEmail=false`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ role: "writer", type: "user", emailAddress: email }),
   });
 }
 
-function nomesNoCronograma(cronograma: unknown, extra: string[]) {
+export function nomesNoCronograma(cronograma: unknown, extra: string[]) {
   const nomes = new Set(extra.map(n => n.trim()).filter(Boolean));
   const lista = Array.isArray(cronograma) ? cronograma : [];
   for (const item of lista) {
@@ -730,7 +819,7 @@ function nomesNoCronograma(cronograma: unknown, extra: string[]) {
   return [...nomes];
 }
 
-/** Pasta da turma (formandos, formadores e admins) e dossiê à parte (só secretaria e admins). */
+/** Cria o dossiê da turma, partilha a pasta e liga os atalhos dos formadores. */
 export async function syncTurmaDriveAccess(db: Db, input: {
   regime: "gold" | "fin";
   turmaId: number;
@@ -739,56 +828,8 @@ export async function syncTurmaDriveAccess(db: Db, input: {
   formadores?: string[];
   cronograma?: unknown;
 }) {
-  const token = await accessToken(db);
-  if (!token) return { ok: false as const, reason: "drive" };
-  const tag = input.regime === "fin" ? "Financiada" : "Gold";
-  const nome = input.nome.trim() || `Turma ${input.turmaId}`;
-  const pasta = await ensureFolderPath(db, token, ["Turmas", tag, nome]);
-  const dossie = await ensureFolderPath(db, token, ["Dossies", tag, nome]);
-  const table = input.regime === "gold" ? "turmas_gold" : "turmas_fin";
-  await db.query(`UPDATE ${table} SET drive_pasta_id = $2, drive_dossie_id = $3 WHERE id = $1`, [input.turmaId, pasta, dossie]);
-
-  const admins = await db.query<{ email: string }>(
-    "SELECT email FROM users WHERE role = 'admin' AND active = true AND email <> ''",
-  );
-  const secretaria = await db.query<{ email: string }>(
-    "SELECT email FROM users WHERE role IN ('admin', 'secretaria') AND active = true AND email <> ''",
-  );
-  const formandos = input.regime === "gold"
-    ? await db.query<{ email: string }>("SELECT email FROM formandos_gold WHERE turma_id = $1 AND email <> ''", [input.turmaId])
-    : await db.query<{ email: string }>(
-      `SELECT email FROM formandos_fin
-        WHERE email <> ''
-          AND (turma_id = $1 OR lower(trim(turma)) = lower(trim($2)))`,
-      [input.turmaId, nome],
-    );
-  const nomes = nomesNoCronograma(input.cronograma, [input.formador ?? "", ...(input.formadores ?? [])]);
-  const formadores = nomes.length
-    ? await db.query<{ email: string }>(
-      `SELECT email FROM formadores
-        WHERE email <> ''
-          AND lower(trim(nome)) IN (SELECT lower(trim(jsonb_array_elements_text($1::jsonb))))`,
-      [nomes],
-    )
-    : { rows: [] as { email: string }[] };
-
-  const turmaEmails = new Set<string>();
-  for (const row of [...admins.rows, ...formandos.rows, ...formadores.rows]) {
-    const email = row.email.trim().toLowerCase();
-    if (email.includes("@")) turmaEmails.add(email);
-  }
-  for (const email of turmaEmails) {
-    await shareFolder(token, pasta, email).catch(() => undefined);
-  }
-  const dossieEmails = new Set<string>();
-  for (const row of secretaria.rows) {
-    const email = row.email.trim().toLowerCase();
-    if (email.includes("@")) dossieEmails.add(email);
-  }
-  for (const email of dossieEmails) {
-    await shareFolder(token, dossie, email).catch(() => undefined);
-  }
-  return { ok: true as const, pasta, dossie };
+  const { prepararTurmaDrive } = await import("./driveArvore.js");
+  return prepararTurmaDrive(db, input);
 }
 
 /** Move um ficheiro para a pasta da turma, dentro de uma subpasta com o nome da pessoa. */
@@ -805,7 +846,7 @@ export async function relocateDriveFile(db: Db, fileId: string, dest: {
   const pessoa = sanitizeFileName(dest.pessoa.trim() || "Formando");
   const turmaNome = dest.turmaNome.trim() || `Turma ${dest.turmaId}`;
   const pathLabel = ["Turmas", tag, turmaNome, pessoa].join(" / ");
-  const token = await accessToken(db).catch(() => null);
+  const token = await tokenDrive(db).catch(() => null);
   if (token && file.stored_in === "google" && file.drive_id) {
     const table = dest.regime === "gold" ? "turmas_gold" : "turmas_fin";
     const pastaRow = await db.query<{ drive_pasta_id: string }>(
@@ -817,15 +858,15 @@ export async function relocateDriveFile(db: Db, fileId: string, dest: {
     if (pasta && pasta !== pastaRow.rows[0]?.drive_pasta_id) {
       await db.query(`UPDATE ${table} SET drive_pasta_id = $2 WHERE id = $1 AND drive_pasta_id = ''`, [dest.turmaId, pasta]);
     }
-    const child = await ensureChild(token, pasta, pessoa);
-    const current = await driveApi<{ parents?: string[] }>(
+    const child = await garantirPastaFilha(token, pasta, pessoa);
+    const current = await driveComToken<{ parents?: string[] }>(
       token,
       `${DRIVE_FILES}/${encodeURIComponent(file.drive_id)}?fields=parents&supportsAllDrives=true`,
     );
     const remove = (current.parents ?? []).filter(id => id !== child);
     const params = new URLSearchParams({ addParents: child, supportsAllDrives: "true", fields: "id,parents" });
     if (remove.length) params.set("removeParents", remove.join(","));
-    await driveApi(token, `${DRIVE_FILES}/${encodeURIComponent(file.drive_id)}?${params.toString()}`, { method: "PATCH" });
+    await driveComToken(token, `${DRIVE_FILES}/${encodeURIComponent(file.drive_id)}?${params.toString()}`, { method: "PATCH" });
   }
   await db.query(
     "UPDATE drive_files SET folder_path = $2, turma = $3, formando = $4 WHERE id = $1",

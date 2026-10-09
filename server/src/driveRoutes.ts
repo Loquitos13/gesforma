@@ -17,6 +17,7 @@ import {
   saveGoogleAccount,
   storeDriveFile,
 } from "./googleDrive.js";
+import { garantirBolsaFormador } from "./driveArvore.js";
 
 function driveCallbackUri(req: FastifyRequest) {
   return oauthRedirectUri(req.headers, "/api/v1/drive/oauth/callback", process.env.GOOGLE_REDIRECT_URI ?? "");
@@ -192,14 +193,18 @@ export function registerDriveRoutes(
     }
     if (!bytes) return reply.code(400).send({ error: "ficheiro em falta" });
     try {
+      const kind = (fields.kind || "documento").slice(0, 40);
+      const bolsa = kind === "formador-doc" ? await garantirBolsaFormador(db, fields.formando || "") : null;
       const file = await storeDriveFile(db, req.actor?.id, { name, mime, bytes }, {
-        kind: (fields.kind || "documento").slice(0, 40),
+        kind,
         regime: fields.regime === "fin" ? "fin" : fields.regime === "gold" ? "gold" : undefined,
         turma: fields.turma?.slice(0, 120),
         formando: fields.formando?.slice(0, 80),
         label: fields.label?.slice(0, 160),
         fase: fields.fase?.slice(0, 20),
         itemId: fields.itemId?.slice(0, 80),
+        parentDriveId: bolsa?.pastaId,
+        folderPath: bolsa?.path,
       });
       await audit(db, req.actor!.id, "drive.upload", "drive_file", file.id, req.ip, {
         name: file.name, kind: file.kind, storedIn: file.storedIn,

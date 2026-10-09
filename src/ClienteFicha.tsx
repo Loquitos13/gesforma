@@ -78,6 +78,7 @@ export function ClienteFicha({
   const [comerciaisExtra, setComerciaisExtra] = useState<{ id: string; name: string }[]>([]);
   const [motivo, setMotivo] = useState("");
   const [pagMetodo, setPagMetodo] = useState("");
+  const [turmaDestino, setTurmaDestino] = useState<number | "">("");
   const [entregando, setEntregando] = useState(false);
   const [escolherTurma, setEscolherTurma] = useState(false);
   const [turmaSel, setTurmaSel] = useState<TurmaGold | null>(null);
@@ -100,6 +101,7 @@ export function ClienteFicha({
         setProximo(d.lead.proximoContacto ?? "");
         setMotivo(d.lead.motivoDesistencia ?? "");
         setPagMetodo(d.lead.pagamentoMetodo ?? "");
+        setTurmaDestino(d.turmaEscolhida?.id ?? "");
         setDados({
           nome: d.lead.nome, apelido: d.lead.apelido, email: d.lead.email, telf: d.lead.telf,
           concelho: d.lead.concelho, nif: d.lead.nif ?? "", moradaFiscal: d.lead.moradaFiscal ?? "",
@@ -183,6 +185,33 @@ export function ClienteFicha({
     // onPatch muda a cada render do CRM
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item?.id, lead?.estado, lead?.secretariaEm, falta.length, entregando, dados, oferta]);
+
+  const destinosValidacao = useMemo(() => {
+    const curso = (lead?.curso ?? "").trim().toLowerCase();
+    const mesmas = turmasLista.filter(t => isTurmaActiva(t) && (!curso || t.curso.trim().toLowerCase() === curso));
+    const escolhida = dossier?.turmaEscolhida;
+    if (escolhida && !mesmas.some(t => t.id === escolhida.id)) {
+      return [{
+        id: escolhida.id,
+        nome: escolhida.nome,
+        curso: lead?.curso ?? "",
+        local: escolhida.local,
+        horario: escolhida.horario,
+        dataInicio: escolhida.dataInicio,
+        totalAlunos: 0,
+        vagas: escolhida.livres,
+        estado: "Ativa" as const,
+        formador: "",
+        horas: 0,
+        cronograma: [],
+      }, ...mesmas];
+    }
+    return mesmas;
+  }, [dossier?.turmaEscolhida, lead?.curso, turmasLista]);
+  const destinoEscolhido = destinosValidacao.find(t => t.id === turmaDestino);
+  const destinoCheio = destinoEscolhido ? lugaresLivres(destinoEscolhido) <= 0 : (dossier?.turmaEscolhida?.livres ?? 0) <= 0;
+  const soTurmaCheia = dossier?.faltaValidar === "A turma escolhida está cheia.";
+  const podeAprovar = Boolean(dossier?.podeValidar || (soTurmaCheia && destinoEscolhido && !destinoCheio)) && !destinoCheio;
 
   if (!item || !lead) return null;
   const wa = telDigits(lead.telf);
@@ -563,14 +592,45 @@ export function ClienteFicha({
                 <p className="text-xs text-slate-500">{dossier.faltaValidar}</p>
               )}
               {sec && !dossier?.docsFechado && (
+                <label className="text-xs font-semibold uppercase text-slate-500 flex flex-col gap-1">
+                  Turma de destino
+                  {destinosValidacao.length === 0 ? (
+                    <span className="font-normal normal-case text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      Não há turmas activas deste curso. Crie a turma antes de aprovar.
+                    </span>
+                  ) : (
+                    <select
+                      className={inp}
+                      aria-label="Turma de destino"
+                      value={turmaDestino}
+                      onChange={e => setTurmaDestino(e.target.value ? Number(e.target.value) : "")}
+                    >
+                      {turmaDestino === "" && <option value="">Escolha a turma</option>}
+                      {destinosValidacao.map(t => (
+                        <option key={t.id} value={t.id}>
+                          {t.nome} · {t.horario || t.local} · {Math.max(0, lugaresLivres(t))} vagas
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <span className="font-normal normal-case text-slate-500">
+                    Se a turma pedida estiver cheia, escolha outra do mesmo curso. A pasta na Drive muda de sítio, sem voltar a enviar os ficheiros.
+                  </span>
+                </label>
+              )}
+              {sec && !dossier?.docsFechado && (
                 <button
                   type="button"
-                  disabled={!dossier?.podeValidar || busy}
+                  disabled={!podeAprovar || busy}
                   onClick={() => {
-                    void persist(apiCrmValidarPreinscricao(item.id)).then(r => {
+                    const destinoId = typeof turmaDestino === "number" ? turmaDestino : undefined;
+                    const nome = destinosValidacao.find(t => t.id === destinoId)?.nome;
+                    void persist(apiCrmValidarPreinscricao(item.id, destinoId)).then(r => {
                       if (!r) return;
                       setDossier(r);
-                      toastOk("Pré-inscrição validada. A ligação pessoal foi encerrada e os documentos seguiram para a pasta da turma.");
+                      toastOk(nome
+                        ? `Pré-inscrição validada. A pasta do formando passou para ${nome}.`
+                        : "Pré-inscrição validada. A pasta do formando passou para a turma.");
                     });
                   }}
                   className="w-full py-2.5 bg-emerald-600 disabled:opacity-40 text-white text-sm font-bold rounded-lg"

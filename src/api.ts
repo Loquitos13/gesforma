@@ -947,8 +947,8 @@ export type CrmDossier = {
   faltaValidar?: string;
   turmaEscolhida?: { id: number; nome: string; local: string; horario: string; dataInicio: string; livres: number } | null;
 };
-export const apiCrmValidarPreinscricao = (id: number) =>
-  api<CrmDossier>(`/v1/crm/leads/${id}/validar-preinscricao`, { method: "POST", body: JSON.stringify({}) });
+export const apiCrmValidarPreinscricao = (id: number, turmaId?: number) =>
+  api<CrmDossier>(`/v1/crm/leads/${id}/validar-preinscricao`, { method: "POST", body: JSON.stringify(turmaId ? { turmaId } : {}) });
 export const apiCrmTurmaCheia = (id: number) =>
   api<{ ok: boolean; enviadas: number; turmas: { nome: string; horario: string; local: string; dataInicio: string; livres: number }[] }>(
     `/v1/crm/leads/${id}/turma-cheia`, { method: "POST", body: JSON.stringify({}) },

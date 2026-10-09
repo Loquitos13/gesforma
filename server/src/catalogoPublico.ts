@@ -147,15 +147,26 @@ function linhas(value: unknown) {
     .slice(0, 12);
 }
 
+function duracaoPublica(raw: string) {
+  const s = raw.trim().toLowerCase().replace(/\s+/g, "");
+  const match = /^(\d+)(?:h|:)?(\d{0,2})(?:min)?$/.exec(s);
+  if (!match) return raw.trim();
+  const horas = Number(match[1]);
+  const minutos = match[2] ? Number(match[2]) : 0;
+  if (!Number.isFinite(horas)) return raw.trim();
+  if (!minutos) return `${horas} h`;
+  return `${horas} h ${String(minutos).padStart(2, "0")} min`;
+}
+
 function itemPrograma(linha: string) {
-  const horasMatch = linha.match(/[·\-–]\s*(\d+\s*h?(?:\s*\d{1,2})?)\s*$/i);
+  const horasMatch = linha.match(/[·\-–]\s*(\d+\s*h?(?:\s*\d{1,2})?(?:\s*min)?)\s*$/i);
   const titulo = linha
     .replace(/^(?:M|C|AV|EX)\s*\d+\s*[·.\-:–]+\s*/i, "")
     .replace(/^\d+\s*[.)\-–]\s*/, "")
-    .replace(/\s*[·\-–]\s*\d+\s*h?(?:\s*\d{1,2})?\s*$/i, "")
+    .replace(/\s*[·\-–]\s*\d+\s*h?(?:\s*\d{1,2})?(?:\s*min)?\s*$/i, "")
     .trim();
   if (!titulo) return null;
-  return { titulo, horas: horasMatch?.[1]?.replace(/\s+/g, "") ?? "" };
+  return { titulo, horas: duracaoPublica(horasMatch?.[1] ?? "") };
 }
 
 function programaPublico(regime: "gold" | "fin", payload: Record<string, unknown>) {
@@ -164,7 +175,7 @@ function programaPublico(regime: "gold" | "fin", payload: Record<string, unknown
   const dosTopicos = raw.map(item => {
     const row = asObj(item);
     const titulo = texto(row.titulo) || texto(row.nome);
-    return titulo ? { titulo, horas: texto(row.horas) } : null;
+    return titulo ? { titulo, horas: duracaoPublica(texto(row.horas)) } : null;
   }).filter((item): item is { titulo: string; horas: string } => item !== null);
   if (dosTopicos.length) return { organizacao, programa: dosTopicos.slice(0, 24) };
   const programa = texto(payload.programa).split(/\n+/).map(itemPrograma).filter((item): item is { titulo: string; horas: string } => item !== null);

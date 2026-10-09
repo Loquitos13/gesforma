@@ -1,6 +1,17 @@
 import { useEffect } from "react";
 import { Icon, SiteFrame, useOferta, type Course } from "./SiteLanding";
 
+function duracaoModulo(raw: string) {
+  const s = raw.trim().toLowerCase().replace(/\s+/g, "");
+  const match = /^(\d+)(?:h|:)?(\d{0,2})(?:min)?$/.exec(s);
+  if (!match) return raw.trim();
+  const horas = Number(match[1]);
+  const minutos = match[2] ? Number(match[2]) : 0;
+  if (!Number.isFinite(horas)) return raw.trim();
+  if (!minutos) return `${horas} h`;
+  return `${horas} h ${String(minutos).padStart(2, "0")} min`;
+}
+
 function Pagina({ slug }: { slug: string }) {
   const { cursos, estado, recarregar } = useOferta();
   const pedido = slug.toLowerCase();
@@ -92,7 +103,7 @@ function Curso({ curso }: { curso: Course }) {
                         <span className="w-24 shrink-0 text-sm font-extrabold text-[#A60000]">Módulo {index + 1}</span>
                       )}
                       <strong className="text-[#1C3350]">{item.titulo}</strong>
-                      {item.horas && <span className="ml-auto shrink-0 text-sm text-[#1C3350]/45">{item.horas}</span>}
+                      {item.horas && <span className="ml-auto shrink-0 text-sm text-[#1C3350]/55">{duracaoModulo(item.horas)}</span>}
                     </div>
                   ))}
                 </div>

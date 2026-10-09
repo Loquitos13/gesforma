@@ -19,7 +19,8 @@ export type CursoPublico = {
   banner: string | null;
   vendas: number;
   objetivos: string[];
-  programa: string[];
+  organizacao: "modular" | "livre";
+  programa: { titulo: string; horas: string }[];
   sessoes: { data: string; local: string; horario: string }[];
 };
 
@@ -146,6 +147,30 @@ function linhas(value: unknown) {
     .slice(0, 12);
 }
 
+function itemPrograma(linha: string) {
+  const horasMatch = linha.match(/[·\-–]\s*(\d+\s*h?(?:\s*\d{1,2})?)\s*$/i);
+  const titulo = linha
+    .replace(/^(?:M|C|AV|EX)\s*\d+\s*[·.\-:–]+\s*/i, "")
+    .replace(/^\d+\s*[.)\-–]\s*/, "")
+    .replace(/\s*[·\-–]\s*\d+\s*h?(?:\s*\d{1,2})?\s*$/i, "")
+    .trim();
+  if (!titulo) return null;
+  return { titulo, horas: horasMatch?.[1]?.replace(/\s+/g, "") ?? "" };
+}
+
+function programaPublico(regime: "gold" | "fin", payload: Record<string, unknown>) {
+  const organizacao: CursoPublico["organizacao"] = regime === "fin" || payload.organizacaoPrograma !== "livre" ? "modular" : "livre";
+  const raw = Array.isArray(payload.topicosPrograma) ? payload.topicosPrograma : [];
+  const dosTopicos = raw.map(item => {
+    const row = asObj(item);
+    const titulo = texto(row.titulo) || texto(row.nome);
+    return titulo ? { titulo, horas: texto(row.horas) } : null;
+  }).filter((item): item is { titulo: string; horas: string } => item !== null);
+  if (dosTopicos.length) return { organizacao, programa: dosTopicos.slice(0, 24) };
+  const programa = texto(payload.programa).split(/\n+/).map(itemPrograma).filter((item): item is { titulo: string; horas: string } => item !== null);
+  return { organizacao, programa: programa.slice(0, 24) };
+}
+
 export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPublico[]; destaques: CursoPublico[]; ccp: CursoPublico | null }> {
   const [gold, fin, formandosGold, pagos, formandosFin, turmasGold, turmasFin, imagens] = await Promise.all([
     db.query<{ id: number; nome: string; categoria: string; tipo: string; preco: number; regime: string; horas: number; estado: string; payload: unknown }>(
@@ -255,6 +280,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
     const gravadaBanner = imagens.get(`${curso.regime}:${curso.id}:banner`) ?? null;
     const miniatura = gravadaThumb || mediaUrl(payload.thumb);
     const banner = gravadaBanner || mediaUrl(payload.banner) || miniatura;
+    const programa = programaPublico(curso.regime, payload);
     return {
       id: reservarSlug(curso.titulo, texto(payload.slug)),
       regime: curso.regime,
@@ -274,7 +300,8 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       banner,
       vendas: procura,
       objetivos: linhas(payload.objetivos),
-      programa: linhas(payload.programa),
+      organizacao: programa.organizacao,
+      programa: programa.programa,
       sessoes: curso.chaves
         .flatMap(key => sessoes.get(key) ?? [])
         .sort((a, b) => a.iso.localeCompare(b.iso))

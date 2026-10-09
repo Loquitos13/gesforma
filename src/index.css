@@ -37,6 +37,27 @@ body {
   border-radius: 4px;
 }
 
+@keyframes ena-flutuar {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -12px, 0); }
+}
+
+.ena-flutuar {
+  animation: ena-flutuar 18s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.ena-flutuar-b {
+  animation: ena-flutuar 22s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  animation-delay: -9s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ena-flutuar,
+  .ena-flutuar-b {
+    animation: none;
+  }
+}
+
 @keyframes view-loading-cycle {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -126,3 +147,4 @@ body:has(input[type="file"]:focus) [data-ficha-sticky] {
     display: none !important;
   }
 }
+

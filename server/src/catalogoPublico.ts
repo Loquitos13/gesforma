@@ -1,0 +1,239 @@
+import type { Db } from "./db/pool.js";
+import { hojeLisboa } from "./datas.js";
+
+export type CursoPublico = {
+  id: string;
+  regime: "gold" | "fin";
+  titulo: string;
+  area: string;
+  modalidade: "Presencial" | "E-learning" | "B-learning";
+  horasLabel: string;
+  inicio: string;
+  precoLabel: string;
+  precoDesde: number | null;
+  descricao: string;
+  financiamento: "Gold" | "Financiada";
+  inscricao: "Acesso direto" | "Pré-inscrição";
+  miniatura: string | null;
+  vendas: number;
+};
+
+type CursoBruto = {
+  id: number;
+  regime: "gold" | "fin";
+  titulo: string;
+  area: string;
+  modalidadeTexto: string;
+  horas: number;
+  preco: number;
+  tipo: string;
+  payload: unknown;
+  chaves: string[];
+};
+
+const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+function chave(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function asObj(value: unknown): Record<string, unknown> {
+  if (!value) return {};
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof value === "object" ? value as Record<string, unknown> : {};
+}
+
+function texto(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function mediaUrl(slot: unknown) {
+  const url = texto(asObj(slot).url);
+  if (!url || url.startsWith("blob:")) return null;
+  if (url.startsWith("/") || url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:image/")) return url;
+  return null;
+}
+
+function numeroPreco(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+  const match = texto(value).replace(/\s/g, "").match(/(\d+(?:[.,]\d+)?)/);
+  if (!match) return null;
+  const n = Number(match[1].replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function precosDaFicha(payload: Record<string, unknown>, base: number) {
+  const nums = new Set<number>();
+  if (base > 0) nums.add(base);
+  const directo = numeroPreco(payload.preco);
+  if (directo) nums.add(directo);
+  const lista = Array.isArray(payload.precosOferta) ? payload.precosOferta : [];
+  for (const item of lista) {
+    const n = numeroPreco(asObj(item).preco);
+    if (n) nums.add(n);
+  }
+  return [...nums];
+}
+
+function modalidade(regime: string): CursoPublico["modalidade"] {
+  const r = chave(regime);
+  if (r.includes("e-learning") || r.includes("elearning") || r === "online") return "E-learning";
+  if (r.includes("b-learning") || r.includes("blearning")) return "B-learning";
+  return "Presencial";
+}
+
+function inscricao(regime: "gold" | "fin", tipo: string): CursoPublico["inscricao"] {
+  if (regime === "fin") return "Pré-inscrição";
+  const t = chave(tipo);
+  if (t.includes("pre-insc") || t.includes("preinsc")) return "Pré-inscrição";
+  return "Acesso direto";
+}
+
+function euros(n: number) {
+  const inteiro = Math.round(n);
+  return inteiro.toLocaleString("pt-PT");
+}
+
+function dataCurta(iso: string) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return iso;
+  const mes = MESES[Number(m[2]) - 1] ?? m[2];
+  return `${Number(m[3])} ${mes} ${m[1]}`;
+}
+
+function somar(map: Map<string, number>, nome: string, n: number) {
+  const key = chave(nome);
+  if (!key) return;
+  map.set(key, (map.get(key) ?? 0) + n);
+}
+
+function visivel(payload: Record<string, unknown>) {
+  return payload.visivelSite !== false;
+}
+
+export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPublico[]; destaques: CursoPublico[]; ccp: CursoPublico | null }> {
+  const [gold, fin, formandosGold, pagos, formandosFin, turmasGold, turmasFin] = await Promise.all([
+    db.query<{ id: number; nome: string; categoria: string; tipo: string; preco: number; regime: string; horas: number; estado: string; payload: unknown }>(
+      `SELECT c.id, c.nome, c.categoria, c.tipo, c.preco, c.regime, c.horas, c.estado, f.payload
+       FROM cursos_gold c
+       LEFT JOIN curso_fichas f ON f.regime = 'gold' AND f.curso_id = c.id
+       WHERE lower(c.estado) = 'ativo'`,
+    ),
+    db.query<{ id: number; ufcd: string; nome_comercial: string; regime: string; horas: number; estado: string; payload: unknown }>(
+      `SELECT c.id, c.ufcd, c.nome_comercial, c.regime, c.horas, c.estado, f.payload
+       FROM cursos_fin c
+       LEFT JOIN curso_fichas f ON f.regime = 'fin' AND f.curso_id = c.id
+       WHERE lower(c.estado) = 'ativo'`,
+    ),
+    db.query<{ curso: string; n: number }>("SELECT curso, count(*)::int AS n FROM formandos_gold GROUP BY curso"),
+    db.query<{ curso: string; n: number }>("SELECT curso, count(*)::int AS n FROM pagamentos WHERE lower(trim(estado)) = 'pago' GROUP BY curso"),
+    db.query<{ curso: string; n: number }>("SELECT curso, count(*)::int AS n FROM formandos_fin GROUP BY curso"),
+    db.query<{ curso: string; local: string; data_inicio: string; estado: string }>(
+      "SELECT curso, local, data_inicio, estado FROM turmas_gold",
+    ),
+    db.query<{ curso: string; local: string; data_inicio: string; estado: string }>(
+      "SELECT curso, local, data_inicio, estado FROM turmas_fin",
+    ),
+  ]);
+
+  const vendas = new Map<string, number>();
+  for (const row of formandosGold.rows) somar(vendas, row.curso, Number(row.n) || 0);
+  for (const row of pagos.rows) somar(vendas, row.curso, Number(row.n) || 0);
+  for (const row of formandosFin.rows) somar(vendas, row.curso, Number(row.n) || 0);
+
+  const hoje = hojeLisboa();
+  const inicios = new Map<string, { data: string; local: string }>();
+  for (const row of [...turmasGold.rows, ...turmasFin.rows]) {
+    const data = String(row.data_inicio ?? "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || data < hoje) continue;
+    const key = chave(row.curso);
+    const actual = inicios.get(key);
+    if (!actual || data < actual.data) inicios.set(key, { data, local: row.local || "" });
+  }
+
+  const brutos: CursoBruto[] = [];
+  for (const row of gold.rows) {
+    const payload = asObj(row.payload);
+    if (!visivel(payload)) continue;
+    const titulo = texto(payload.titulo) || row.nome;
+    brutos.push({
+      id: row.id,
+      regime: "gold",
+      titulo,
+      area: texto(payload.categoria) || row.categoria || "Gold",
+      modalidadeTexto: texto(payload.regime) || row.regime,
+      horas: Number(row.horas) || 0,
+      preco: Number(row.preco) || 0,
+      tipo: texto(payload.tipo) || row.tipo,
+      payload,
+      chaves: [chave(row.nome), chave(titulo)].filter(Boolean),
+    });
+  }
+  for (const row of fin.rows) {
+    const payload = asObj(row.payload);
+    if (!visivel(payload)) continue;
+    const titulo = texto(payload.titulo) || row.nome_comercial || row.ufcd;
+    brutos.push({
+      id: row.id,
+      regime: "fin",
+      titulo,
+      area: texto(payload.categoria) || "Formação financiada",
+      modalidadeTexto: texto(payload.regime) || row.regime,
+      horas: Number(row.horas) || 0,
+      preco: 0,
+      tipo: "Pré-inscrição",
+      payload,
+      chaves: [chave(row.nome_comercial), chave(row.ufcd), chave(titulo)].filter(Boolean),
+    });
+  }
+
+  const cursos = brutos.map((curso): CursoPublico => {
+    const payload = asObj(curso.payload);
+    const sintese = texto(payload.sintese);
+    const horasLabel = curso.horas > 0 ? `${curso.horas.toLocaleString("pt-PT")} horas` : "Duração a confirmar";
+    const modo = modalidade(curso.modalidadeTexto);
+    const entrada = inscricao(curso.regime, curso.tipo);
+    const procura = curso.chaves.reduce((max, key) => Math.max(max, vendas.get(key) ?? 0), 0);
+    const inicio = curso.chaves.map(key => inicios.get(key)).find(Boolean);
+    const precos = curso.regime === "gold" ? precosDaFicha(payload, curso.preco) : [];
+    const desde = precos.length ? Math.min(...precos) : null;
+    const miniatura = mediaUrl(payload.thumb) || mediaUrl(payload.banner);
+    return {
+      id: `${curso.regime}-${curso.id}`,
+      regime: curso.regime,
+      titulo: curso.titulo,
+      area: curso.area,
+      modalidade: modo,
+      horasLabel,
+      inicio: inicio
+        ? `${dataCurta(inicio.data)}${inicio.local ? ` · ${inicio.local}` : ""}`
+        : modo === "E-learning" ? "Acesso imediato" : "Data a anunciar",
+      precoLabel: curso.regime === "fin" ? "Financiada" : desde != null ? (precos.length > 1 ? `A partir de ${euros(desde)} €` : `${euros(desde)} €`) : "Sob consulta",
+      precoDesde: desde,
+      descricao: sintese || `${curso.area}. ${horasLabel}.`,
+      financiamento: curso.regime === "fin" ? "Financiada" : "Gold",
+      inscricao: entrada,
+      miniatura,
+      vendas: procura,
+    };
+  });
+
+  cursos.sort((a, b) => b.vendas - a.vendas || a.titulo.localeCompare(b.titulo, "pt"));
+  const ccp = cursos
+    .filter(curso => curso.regime === "gold" && /formador/i.test(curso.titulo) && /ccp/i.test(curso.titulo))
+    .sort((a, b) => b.vendas - a.vendas)[0] ?? null;
+
+  return { cursos, destaques: cursos.slice(0, 6), ccp };
+}

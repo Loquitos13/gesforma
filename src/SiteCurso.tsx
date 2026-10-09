@@ -85,9 +85,14 @@ function Curso({ curso }: { curso: Course }) {
                 <h2 className="mt-12 border-b border-[#1C3350]/15 pb-4 font-serif text-3xl text-[#1C3350]">Programa</h2>
                 <div className="divide-y divide-[#1C3350]/15">
                   {curso.programa.map((item, index) => (
-                    <div key={item} className="flex items-center gap-5 py-5">
-                      <span className="text-xs font-extrabold text-[#A60000]">{String(index + 1).padStart(2, "0")}</span>
-                      <strong>{item}</strong>
+                    <div key={`${item.titulo}-${index}`} className="flex items-baseline gap-4 py-5">
+                      {curso.organizacao === "livre" ? (
+                        <span className="w-8 shrink-0 text-xs font-extrabold text-[#A60000]">{String(index + 1).padStart(2, "0")}</span>
+                      ) : (
+                        <span className="w-24 shrink-0 text-sm font-extrabold text-[#A60000]">Módulo {index + 1}</span>
+                      )}
+                      <strong className="text-[#1C3350]">{item.titulo}</strong>
+                      {item.horas && <span className="ml-auto shrink-0 text-sm text-[#1C3350]/45">{item.horas}</span>}
                     </div>
                   ))}
                 </div>

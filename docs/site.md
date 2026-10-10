@@ -33,6 +33,8 @@ No CRM, o concelho do lead usa a mesma lista de concelhos.
 
 **Sistema → Site** grava em `PUT /v1/settings/site`. Só o perfil Administração pode gravar. O site lê `GET /v1/public/site`.
 
+Cada bloco do ecrã tem uma pré-visualização do rascunho dessa secção da página inicial. O administrador vê o resultado sem sair do GesForma. O botão «Ver o site» continua a abrir a página pública, que só muda depois de gravar.
+
 O ecrã está dividido em:
 
 - Cabeçalho. Título do separador, as duas linhas da marca e os textos de Formação, Empresas, área de formando e iniciar sessão.

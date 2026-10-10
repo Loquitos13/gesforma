@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { apiSiteHeroImagem } from "./api";
 import { useCatalogs } from "./CatalogsContext";
 import { SearchSelect } from "./FormKit";
+import { SiteSeccaoPreview, type CursoPreview, type OfertaPreview } from "./SitePreview";
 import { moradaSegura, SITE_GRUPOS, SITE_OMISSAO, type HeroSlot, type SiteChave } from "./siteConteudo";
 import { toastOk } from "./toastBus";
 
@@ -21,13 +22,14 @@ const HERO: Record<HeroSlot, {
   2: { tipo: "hero2Tipo", curso: "hero2Curso", regime: "hero2Regime", titulo: "hero2Titulo", descricao: "hero2Descricao", imagem: "hero2Imagem", botao: "hero2Botao", destino: "hero2Destino" },
 };
 
-type CursoPublico = { id: string; titulo: string; financiamento: "Gold" | "Financiada" };
+type CursoPublico = CursoPreview;
 
 export function SiteConteudoView() {
   const { settings, saveSettings } = useCatalogs();
   const [draft, setDraft] = useState<Record<SiteChave, string>>({ ...SITE_OMISSAO });
   const [guardado, setGuardado] = useState(false);
   const [cursos, setCursos] = useState<CursoPublico[]>([]);
+  const [oferta, setOferta] = useState<OfertaPreview | null>(null);
   const [cursosEstado, setCursosEstado] = useState<"a-carregar" | "pronto" | "erro">("a-carregar");
   const [aEnviar, setAEnviar] = useState<HeroSlot | null>(null);
   const [erroImagem, setErroImagem] = useState<Record<HeroSlot, string>>({ 1: "", 2: "" });
@@ -49,11 +51,13 @@ export function SiteConteudoView() {
     fetch("/api/v1/public/catalogo", { cache: "no-store" })
       .then(async res => {
         if (!res.ok) throw new Error("oferta indisponível");
-        return res.json() as Promise<{ cursos?: CursoPublico[] }>;
+        return res.json() as Promise<{ cursos?: CursoPublico[]; destaques?: CursoPublico[]; ccp?: CursoPublico | null }>;
       })
       .then(data => {
         if (!vivo) return;
-        setCursos((data.cursos ?? []).map(curso => ({ id: curso.id, titulo: curso.titulo, financiamento: curso.financiamento })));
+        const lista = data.cursos ?? [];
+        setCursos(lista);
+        setOferta({ cursos: lista, destaques: data.destaques ?? [], ccp: data.ccp ?? null });
         setCursosEstado("pronto");
       })
       .catch(() => { if (vivo) setCursosEstado("erro"); });
@@ -91,7 +95,9 @@ export function SiteConteudoView() {
         <div>
           <h1 className="text-xl font-bold text-slate-800">Site</h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            {guardado ? "Alterações guardadas na base. Abra o site para as ver." : "Textos da página inicial, rodapé e os dois cartões do destaque. Os preços e as turmas continuam a sair da oferta."}
+            {guardado
+              ? "Alterações guardadas. A pré-visualização já as mostrava; o site público fica com elas agora."
+              : "Cada secção mostra o rascunho ao lado. O site público só muda depois de Guardar."}
           </p>
         </div>
         <a href="/" target="_blank" rel="noreferrer" className="inline-flex px-4 py-2 text-sm font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">Ver o site</a>
@@ -102,37 +108,44 @@ export function SiteConteudoView() {
             <h2 className="text-sm font-bold text-slate-800">{grupo.titulo}</h2>
             {grupo.nota && <p className="mt-1 text-xs text-slate-500">{grupo.nota}{grupo.titulo === "Rodapé" ? ` Este ano aparece © ${ano}.` : ""}</p>}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {grupo.campos.map(campo => (
-              <label key={campo.chave} className={`flex flex-col gap-1.5 ${campo.tipo === "texto" ? "md:col-span-2" : ""}`}>
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{campo.etiqueta}</span>
-                {campo.tipo === "texto" ? (
-                  <textarea
-                    className={`${campoCls} min-h-20 resize-y`}
-                    value={draft[campo.chave]}
-                    onChange={e => escrever(campo.chave, e.target.value)}
-                  />
-                ) : (
-                  <input
-                    className={campoCls}
-                    value={draft[campo.chave]}
-                    onChange={e => escrever(campo.chave, e.target.value)}
-                  />
-                )}
-              </label>
-            ))}
+          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,380px)]">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {grupo.campos.map(campo => (
+                  <label key={campo.chave} className={`flex flex-col gap-1.5 ${campo.tipo === "texto" ? "md:col-span-2" : ""}`}>
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{campo.etiqueta}</span>
+                    {campo.tipo === "texto" ? (
+                      <textarea
+                        className={`${campoCls} min-h-20 resize-y`}
+                        value={draft[campo.chave]}
+                        onChange={e => escrever(campo.chave, e.target.value)}
+                      />
+                    ) : (
+                      <input
+                        className={campoCls}
+                        value={draft[campo.chave]}
+                        onChange={e => escrever(campo.chave, e.target.value)}
+                      />
+                    )}
+                  </label>
+                ))}
+              </div>
+              {grupo.titulo === "Destaque" && (
+                <CartoesHero
+                  draft={draft}
+                  cursos={cursos}
+                  cursosEstado={cursosEstado}
+                  aEnviar={aEnviar}
+                  erroImagem={erroImagem}
+                  onChange={escrever}
+                  onFile={(slot, file) => void carregarMiniatura(slot, file)}
+                />
+              )}
+            </div>
+            <div className="lg:sticky lg:top-4">
+              <SiteSeccaoPreview titulo={grupo.titulo} draft={draft} oferta={oferta} ano={ano} />
+            </div>
           </div>
-          {grupo.titulo === "Destaque" && (
-            <CartoesHero
-              draft={draft}
-              cursos={cursos}
-              cursosEstado={cursosEstado}
-              aEnviar={aEnviar}
-              erroImagem={erroImagem}
-              onChange={escrever}
-              onFile={(slot, file) => void carregarMiniatura(slot, file)}
-            />
-          )}
         </section>
       ))}
       <div className="sticky bottom-3 flex justify-end">

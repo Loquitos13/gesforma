@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCatalogList } from "./CatalogsContext";
 import { AppModal, MultiSearchSelect, SearchSelect } from "./FormKit";
+import { RecorteMiniatura } from "./RecorteMiniatura";
 import { OptionSelect } from "./OptionSelect";
 import { apiCreateDtpEntidade, apiCursoFicha, apiCursoImagem, apiDtpEntidades, apiSaveCursoFicha, type DtpEntidade } from "./api";
 import { CursoDocumentos } from "./CursoDocumentos";
@@ -658,6 +659,7 @@ export function CursoFichaView({
   const [entidades, setEntidades] = useState<DtpEntidade[]>([]);
   const [entidadeId, setEntidadeId] = useState<number | null>(curso?.entidadeResponsavelId ?? null);
   const [imagemAGravar, setImagemAGravar] = useState<"banner" | "thumb" | "">("");
+  const [recorte, setRecorte] = useState<{ url: string; nome: string } | null>(null);
   const locaisSeeded = useRef(false);
 
   useEffect(() => {
@@ -795,18 +797,49 @@ export function CursoFichaView({
     const id = cursoPersistId ?? curso?.id;
     if (id == null) {
       setErro("Grave o curso antes de carregar a imagem.");
-      return;
+      return false;
     }
     setImagemAGravar(slot);
     setErro("");
     try {
       const gravada = await apiCursoImagem(accent, id, slot, file);
       patch({ [slot]: { name: gravada.nome, url: gravada.url } });
+      return true;
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Não foi possível gravar a imagem.");
+      return false;
     } finally {
       setImagemAGravar("");
     }
+  }
+
+  function abrirRecorte(file: File) {
+    const mime = file.type.toLowerCase().split(";")[0]?.trim() ?? "";
+    if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(mime)) {
+      setErro("Use JPG, PNG, WebP ou GIF.");
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setErro("A imagem passa de 8 MB.");
+      return;
+    }
+    setErro("");
+    setRecorte(actual => {
+      if (actual?.url.startsWith("blob:")) URL.revokeObjectURL(actual.url);
+      return { url: URL.createObjectURL(file), nome: file.name || "miniatura.jpg" };
+    });
+  }
+
+  function fecharRecorte() {
+    setRecorte(actual => {
+      if (actual?.url.startsWith("blob:")) URL.revokeObjectURL(actual.url);
+      return null;
+    });
+  }
+
+  async function confirmarRecorte(file: File) {
+    const ok = await carregarImagem("thumb", file);
+    if (ok) fecharRecorte();
   }
 
   function patch(p: Partial<CursoSite>) {
@@ -978,11 +1011,18 @@ export function CursoFichaView({
               <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-4">
                 <div>
                   <p className="text-sm font-semibold text-slate-800">Identidade visual</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Estas imagens ficam gravadas na base. O banner abre a página do curso e a miniatura entra no hero e nos cartões.</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Estas imagens ficam gravadas na base. O banner abre a página do curso. A miniatura, depois do recorte, entra no catálogo e no hero.</p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <MediaCard accent={accent} label="Banner" hint="Recomendado 1600×600. Aparece no topo da página do curso." value={data.banner} tall aGravar={imagemAGravar === "banner"} onFile={file => void carregarImagem("banner", file)} />
-                  <MediaCard accent={accent} label="Miniatura" hint="Recomendado 800×600. Usada nas listagens e no hero." value={data.thumb} aGravar={imagemAGravar === "thumb"} onFile={file => void carregarImagem("thumb", file)} />
+                  <div>
+                    <MediaCard accent={accent} label="Miniatura" hint="O recorte fica na proporção 2:3 do cartão de /formacao. JPG, PNG, WebP ou GIF, até 8 MB." value={data.thumb} aGravar={imagemAGravar === "thumb"} onFile={abrirRecorte} />
+                    {urlImagem(data.thumb?.url) && (
+                      <button type="button" onClick={() => setRecorte({ url: urlImagem(data.thumb?.url), nome: data.thumb?.name || "miniatura.jpg" })} className="mt-2 text-xs font-semibold text-[#1C3350] hover:text-[#A60000]">
+                        Ajustar o recorte do catálogo
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1710,6 +1750,15 @@ export function CursoFichaView({
           </Field>
         </div>
       </AppModal>
+      {recorte && (
+        <RecorteMiniatura
+          origem={recorte.url}
+          nome={recorte.nome}
+          aGravar={imagemAGravar === "thumb"}
+          onCancelar={fecharRecorte}
+          onConfirmar={file => void confirmarRecorte(file)}
+        />
+      )}
     </div>
   );
 }

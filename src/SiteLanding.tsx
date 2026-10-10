@@ -176,28 +176,28 @@ function Header() {
   const [open, setOpen] = useState(false);
   const t = useSiteTexto();
   return (
-    <header className="sticky top-0 z-40 border-b-4 border-[#FFA900] bg-[#14263D] text-white">
+    <header className="sticky top-0 z-40 border-b-4 border-[#FFA900] bg-white text-[#14263D]">
       <div className="mx-auto flex h-20 max-w-[1240px] items-center justify-between px-5 lg:px-8">
         <a href="/" className="group flex items-center gap-3" aria-label="ENA, página inicial">
           <img src="/imagens/ena_logo.svg" alt="ENA" className="h-9 w-auto sm:h-10" />
-          <span className="hidden text-left text-[10px] font-bold uppercase leading-tight tracking-[0.12em] text-[#FFA900] sm:block">{t("marcaLinha1")}<br />{t("marcaLinha2")}</span>
+          <span className="hidden text-left text-[10px] font-bold uppercase leading-tight tracking-[0.12em] text-[#14263D] sm:block">{t("marcaLinha1")}<br />{t("marcaLinha2")}</span>
         </a>
         <nav className="hidden items-center gap-8 text-sm font-semibold lg:flex" aria-label="Navegação principal">
-          <a href="/formacao" className="text-white hover:text-[#FFA900]">{t("navFormacao")}</a>
-          <a href="/#empresas" className="text-white hover:text-[#FFA900]">{t("navEmpresas")}</a>
+          <a href="/formacao" className="text-[#14263D] hover:text-[#A60000]">{t("navFormacao")}</a>
+          <a href="/#empresas" className="text-[#14263D] hover:text-[#A60000]">{t("navEmpresas")}</a>
         </nav>
         <div className="hidden items-center gap-4 lg:flex">
-          <a href="/entrar" className="text-sm font-semibold text-[#FFA900] underline decoration-[#A60000] decoration-2 underline-offset-4">{t("navFormando")}</a>
-          <a href="/entrar" className="bg-[#A60000] px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-[#FFA900] hover:text-[#14263D]">{t("navEntrar")}</a>
+          <a href="/entrar" className="text-sm font-semibold text-[#A60000] underline decoration-[#FFA900] decoration-2 underline-offset-4">{t("navFormando")}</a>
+          <a href="/entrar" className="bg-[#A60000] px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-[#14263D]">{t("navEntrar")}</a>
         </div>
         <button type="button" onClick={() => setOpen(!open)} className="p-2 lg:hidden" aria-label={open ? "Fechar menu" : "Abrir menu"}><Icon name={open ? "close" : "menu"} /></button>
       </div>
       {open && (
-        <nav className="border-t border-white/10 bg-[#14263D] px-5 py-6 text-white lg:hidden">
+        <nav className="border-t border-[#14263D]/10 bg-white px-5 py-6 text-[#14263D] lg:hidden">
           <div className="flex flex-col gap-5 font-semibold">
             <a href="/formacao" onClick={() => setOpen(false)}>{t("navFormacao")}</a>
             <a href="/#empresas" onClick={() => setOpen(false)}>{t("navEmpresas")}</a>
-            <a href="/entrar" className="border-t border-white/15 pt-5 text-[#FFA900]">{t("navFormando")}</a>
+            <a href="/entrar" className="border-t border-[#14263D]/10 pt-5 text-[#A60000]">{t("navFormando")}</a>
             <a href="/entrar" className="bg-[#A60000] px-5 py-3 text-center text-sm font-bold text-white">{t("navEntrar")}</a>
           </div>
         </nav>
@@ -275,7 +275,9 @@ function LigacaoHero({ href, className, children }: { href: string; className: s
 
 function CartaoFlutuante({ vista, abrir }: { vista: CartaoVista; abrir: (curso: Course) => void }) {
   const esquerda = vista.posicao === 1;
-  const artigo = `flex h-full w-full flex-col overflow-hidden rounded-2xl border-t-4 bg-white shadow-[0_16px_40px_rgba(8,18,32,.28)] ${esquerda ? "border-[#FFA900]" : "border-[#A60000]"}`;
+  const artigo = esquerda
+    ? "ena-flutuar w-full overflow-hidden rounded-2xl border-t-4 border-[#FFA900] bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] lg:absolute lg:left-1 lg:top-[6%] lg:w-[340px]"
+    : "ena-flutuar-b w-full overflow-hidden rounded-2xl border-t-4 border-[#A60000] bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] lg:absolute lg:right-4 lg:top-[34%] lg:w-[340px]";
   const botaoCls = esquerda
     ? "mt-4 flex w-full items-center justify-center rounded-full bg-[#A60000] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#14263D]"
     : "mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#FFA900] hover:text-[#14263D]";
@@ -311,9 +313,9 @@ function SplitHero() {
     return curso ? [vistaCurso(posicao, curso)] : [];
   });
   return (
-    <section className="bg-[#14263D] px-4 pb-2 pt-4 sm:px-6 lg:px-8" aria-label="Destaques">
-      <div className="relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[28px] bg-[#1C3350] shadow-[0_28px_80px_rgba(20,38,61,.28)] lg:grid-cols-[minmax(0,.92fr)_minmax(0,1.08fr)] lg:items-center">
-        <div className="relative z-20 flex flex-col justify-center px-6 pb-2 pt-10 sm:px-10 lg:py-16 lg:pl-12 lg:pr-6">
+    <section className="bg-[#F6F3EE] px-4 py-6 sm:px-6 lg:px-8 lg:py-8" aria-label="Destaques">
+      <div className="relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[32px] bg-[#14263D] shadow-[0_28px_80px_rgba(20,38,61,.22)] lg:min-h-[820px] lg:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)]">
+        <div className="relative z-20 flex flex-col justify-center px-6 pb-4 pt-10 sm:px-8 lg:px-10 lg:py-12">
           <h1 className="max-w-[16ch] font-serif text-[2.15rem] font-bold leading-[1.12] tracking-[-0.03em] text-white sm:text-5xl">
             {t("heroTitulo")}
           </h1>
@@ -324,8 +326,8 @@ function SplitHero() {
             {t("heroBotao")}
           </a>
         </div>
-        <div className="relative z-20 flex flex-col gap-4 px-4 pb-16 pt-6 sm:px-8 lg:py-10 lg:pr-10 lg:pb-20">
-          <div className="relative h-44 overflow-hidden rounded-2xl bg-[#14263D] ring-4 ring-[#FFA900] sm:h-56">
+        <div className="relative z-20 flex flex-col gap-6 px-4 pb-28 pt-2 lg:block lg:h-auto lg:min-h-full lg:px-0 lg:pb-0 lg:pt-0">
+          <div className="relative mx-auto h-[180px] w-[180px] shrink-0 overflow-hidden rounded-full bg-[#FFA900] shadow-[0_0_0_10px_#FFA900] sm:h-[220px] sm:w-[220px] lg:absolute lg:right-[-4rem] lg:top-1/2 lg:mx-0 lg:h-[620px] lg:w-[620px] lg:-translate-y-1/2 lg:shadow-[0_0_0_14px_#A60000]">
             {heroImagem && (
               <img
                 src={heroImagem}
@@ -334,11 +336,11 @@ function SplitHero() {
               />
             )}
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="relative z-20 flex flex-col gap-5 lg:absolute lg:inset-0 lg:block">
             {cartoes.map(vista => <CartaoFlutuante key={vista.posicao} vista={vista} abrir={abrir} />)}
           </div>
         </div>
-        <svg aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 z-10 h-14 w-full sm:h-16" viewBox="0 0 1200 140" preserveAspectRatio="none">
+        <svg aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 z-10 h-20 w-full sm:h-24" viewBox="0 0 1200 140" preserveAspectRatio="none">
           <path d="M0 140V72C90 36 180 108 320 78C460 48 540 18 700 42C860 66 940 112 1080 82C1140 68 1170 88 1200 74V140H0Z" fill="#A60000" />
           <path d="M0 140V104C140 78 240 124 420 106C600 88 700 126 900 108C1040 96 1120 122 1200 104V140H0Z" fill="#FFA900" />
         </svg>
@@ -698,7 +700,7 @@ export function SiteFrame({ children }: { children: ReactNode }) {
     <OfertaCtx.Provider value={oferta}>
       <SiteTextoCtx.Provider value={texto}>
       <InscricaoSite>
-        <div className="site-ena min-h-screen bg-[#14263D] text-[#14263D]">
+        <div className="site-ena min-h-screen bg-[#F6F3EE] text-[#14263D]">
           <a href="#conteudo" className="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:left-4 focus-visible:top-4 focus-visible:z-[80] focus-visible:bg-[#FFA900] focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-bold focus-visible:text-[#14263D]">Saltar para o conteúdo</a>
           <Header />
           <div id="conteudo">

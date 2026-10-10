@@ -195,6 +195,46 @@ export async function definirEstadoDoc(
   return upd.rows[0].id;
 }
 
+/** Avisa a pessoa dos documentos que ainda não estão na ficha, com a mesma ligação pessoal. */
+export async function avisarDocumentosEmFalta(db: Db, leadId: number, emFalta: { label: string }[]) {
+  if (!emFalta.length) return { enviado: false as const };
+  const row = await db.query<{ nome: string; apelido: string; email: string; curso: string }>(
+    "SELECT nome, apelido, email, curso FROM preinscricoes WHERE id = $1",
+    [leadId],
+  );
+  const lead = row.rows[0];
+  if (!lead) return null;
+  const email = normalizeEmail(lead.email);
+  if (!isEmail(email)) return { enviado: false as const, erro: "A ficha não tem email." };
+  const token = await ensureDocsToken(db, leadId);
+  const url = documentosUrl(token);
+  const nome = `${lead.nome} ${lead.apelido}`.trim();
+  const linhas = [
+    `A pré-inscrição em ${lead.curso} ficou registada e aguarda validação da secretaria.`,
+    "Ainda faltam estes documentos:",
+    ...emFalta.map(d => d.label),
+    "Pode enviá-los nesta ligação. A ligação fecha quando a secretaria validar todos os documentos.",
+  ];
+  const mail = renderAutomaticEmail({
+    nome,
+    xml: "",
+    linhas,
+    cta: "Enviar documentos",
+    href: url,
+    vars: { nome, curso: lead.curso, documentos_url: url },
+    origin: config.appOrigin,
+  });
+  await sendMail(db, {
+    to: email,
+    name: nome,
+    subject: `Documentos em falta · ${lead.curso}`,
+    text: mail.text,
+    html: mail.html,
+  });
+  await logLeadEvent(db, leadId, undefined, "contacto", "Documentos em falta", emFalta.map(d => d.label).join(", "));
+  return { enviado: true as const, url };
+}
+
 export async function alertarDocumentosIncorrectos(db: Db, leadId: number) {
   const row = await db.query<{ nome: string; apelido: string; email: string; curso: string; regime: string }>(
     "SELECT nome, apelido, email, curso, COALESCE(regime, 'gold') AS regime FROM preinscricoes WHERE id = $1",

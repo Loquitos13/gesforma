@@ -34,6 +34,7 @@ export function PublicDocumentos({ token }: { token: string }) {
   const [breves, setBreves] = useState<TurmaPercurso[]>([]);
   const [turmaEscolhida, setTurmaEscolhida] = useState<TurmaPercurso | null>(null);
   const [percursoConcluido, setPercursoConcluido] = useState(false);
+  const [emFalta, setEmFalta] = useState<string[]>([]);
   const [encerrada, setEncerrada] = useState(false);
   const [correcao, setCorrecao] = useState(false);
   const [foco, setFoco] = useState<string | null>(null);
@@ -59,9 +60,11 @@ export function PublicDocumentos({ token }: { token: string }) {
     setTurmaEscolhida(r.turmaEscolhida ?? null);
     setCriterios(r.criterios ?? { local: "", horario: "", inicio: "" });
     setPercursoConcluido(Boolean(r.percursoConcluido));
+    const falta = r.emFalta ?? [];
+    setEmFalta(falta);
     const seguinte: 1 | 2 = r.turmaEscolhida ? 2 : 1;
     setPassoServidor(seguinte);
-    if (!manterPasso) setPasso(seguinte);
+    if (!manterPasso) setPasso(r.percursoConcluido && falta.length > 0 && !r.encerrada ? 1 : seguinte);
     setEstado("ready");
   }
 
@@ -181,7 +184,7 @@ export function PublicDocumentos({ token }: { token: string }) {
     }
   }
 
-  const espera = estado === "ready" && percursoConcluido && !encerrada;
+  const espera = estado === "ready" && percursoConcluido && !encerrada && emFalta.length === 0;
 
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-[#1b2330]">
@@ -244,7 +247,7 @@ export function PublicDocumentos({ token }: { token: string }) {
                   const n = (i + 1) as 1 | 2;
                   const aberto = passo === n;
                   const feito = (n === 1 && docsProntos && passo > 1) || (n === 2 && Boolean(turmaEscolhida));
-                  const pode = n <= passoServidor || (n === 1 && docsProntos) || (n === 2 && docsProntos);
+                  const pode = n === 1 || n === 2;
                   return (
                     <li key={label}>
                       <button
@@ -267,6 +270,11 @@ export function PublicDocumentos({ token }: { token: string }) {
                 />
               </div>
               {correcao && <p className="mt-4 text-sm text-red-800">Há ficheiros por corrigir. Volte a enviar os que a secretaria indicou.</p>}
+              {percursoConcluido && emFalta.length > 0 && (
+                <p className="mt-4 text-sm leading-relaxed text-amber-900">
+                  A pré-inscrição ficou pendente de validação. Ainda faltam: {emFalta.join(", ")}. Recebeu um email com esta lista. Esta ligação só fecha quando a secretaria validar todos os documentos.
+                </p>
+              )}
             </div>
 
             <div className={aSair ? (direccao === "frente" ? "percurso-sair-frente" : "percurso-sair-tras") : (direccao === "frente" ? "percurso-entrar-frente" : "percurso-entrar-tras")}>
@@ -285,6 +293,9 @@ export function PublicDocumentos({ token }: { token: string }) {
                   </div>
                   {docsProntos && opcionais.some(t => !aceite(t.id)) && (
                     <p className="mt-2 text-xs leading-relaxed text-[#5c564c]">Os obrigatórios já estão na ficha. Os opcionais continuam aqui. Avance só quando quiser.</p>
+                  )}
+                  {!docsProntos && (
+                    <p className="mt-2 text-xs leading-relaxed text-[#5c564c]">Pode continuar sem todos os documentos. Ao concluir, recebe um email com o que ainda falta. A inscrição fica pendente até a secretaria validar tudo.</p>
                   )}
                 </div>
                 <ol className="divide-y divide-[#efeae1] border-t border-[#efeae1]">
@@ -331,7 +342,7 @@ export function PublicDocumentos({ token }: { token: string }) {
                 </ol>
                 <div className="border-t border-[#efeae1] px-6 py-4 sm:px-8">
                   {ok && <p className="mb-3 text-sm text-emerald-800">{ok}</p>}
-                  <button type="button" disabled={!docsProntos || aSair} onClick={() => irPara(2)} className="w-full rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white transition-opacity disabled:opacity-40">
+                  <button type="button" disabled={aSair} onClick={() => irPara(2)} className="w-full rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white transition-opacity disabled:opacity-40">
                     {aSair && direccao === "frente" ? "A avançar…" : "Continuar para o cronograma"}
                   </button>
                 </div>

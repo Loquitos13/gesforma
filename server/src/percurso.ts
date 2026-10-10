@@ -1,7 +1,7 @@
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { docsCompletos, docsDoCurso, faltaValidarPreinscricao } from "./docsCurso.js";
-import { documentosUrl, ensureDocsToken, listarDocsLead } from "./docsLink.js";
+import { avisarDocumentosEmFalta, documentosUrl, ensureDocsToken, listarDocsLead } from "./docsLink.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
 import { moverPastaFormando } from "./driveArvore.js";
 import { sendMail } from "./mailer.js";
@@ -308,11 +308,12 @@ function entregueAceite(estado: string | undefined) {
 
 export async function concluirPercurso(db: Db, leadId: number) {
   const lead = await db.query(
-    "SELECT id, curso, regime, preco, turma_escolhida_id, validada_em FROM preinscricoes WHERE id = $1",
+    "SELECT id, curso, regime, preco, turma_escolhida_id, validada_em, percurso_concluido_em FROM preinscricoes WHERE id = $1",
     [leadId],
   );
   const row = lead.rows[0] as {
-    id: number; curso: string; regime: string; preco: number; turma_escolhida_id: number | null; validada_em: string | null;
+    id: number; curso: string; regime: string; preco: number; turma_escolhida_id: number | null;
+    validada_em: string | null; percurso_concluido_em: string | null;
   } | undefined;
   if (!row) throw new PercursoErro("Pré-inscrição inexistente.");
   if (row.validada_em) throw new PercursoErro("A secretaria já validou esta pré-inscrição.");
@@ -320,17 +321,28 @@ export async function concluirPercurso(db: Db, leadId: number) {
   const pedidos = await docsDoCurso(db, row.curso, regime);
   const ficheiros = await listarDocsLead(db, leadId);
   const by = new Map(ficheiros.map(f => [f.tipo, f]));
-  const obrigatorios = pedidos.filter(d => d.required);
-  if (!obrigatorios.every(d => entregueAceite(by.get(d.id)?.estado))) {
-    throw new PercursoErro("Ainda faltam documentos obrigatórios.");
-  }
+  const emFalta = pedidos.filter(d => d.required && !entregueAceite(by.get(d.id)?.estado));
   if (!row.turma_escolhida_id) throw new PercursoErro("Escolha o cronograma antes de concluir.");
-  await db.query(
-    "UPDATE preinscricoes SET percurso_concluido_em = COALESCE(percurso_concluido_em, now()) WHERE id = $1",
-    [leadId],
-  );
-  await evento(db, leadId, undefined, "Percurso de pré-inscrição concluído", "Aguarda validação da secretaria");
-  return { ok: true as const };
+  const jaConcluido = Boolean(row.percurso_concluido_em);
+  if (!jaConcluido) {
+    await db.query(
+      "UPDATE preinscricoes SET percurso_concluido_em = now() WHERE id = $1",
+      [leadId],
+    );
+    let avisou = false;
+    if (emFalta.length) {
+      const aviso = await avisarDocumentosEmFalta(db, leadId, emFalta).catch(() => null);
+      avisou = Boolean(aviso && "enviado" in aviso && aviso.enviado);
+    }
+    await evento(
+      db,
+      leadId,
+      undefined,
+      "Percurso de pré-inscrição concluído",
+      avisou ? "Aguarda validação. Email com os documentos em falta." : "Aguarda validação da secretaria",
+    );
+  }
+  return { ok: true as const, emFalta: emFalta.map(d => d.label) };
 }
 
 export async function moverDocsDoLead(db: Db, leadId: number, turmaId: number) {
@@ -517,8 +529,6 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
       };
     }
   }
-  const by = new Map(docs.map(d => [d.tipo, d]));
-  const obrigatoriosOk = pedidos.filter(d => d.required).every(d => entregueAceite(by.get(d.id)?.estado));
   const turmaId = Number(lead.turma_escolhida_id || 0);
   const criterios = {
     local: String(lead.local ?? ""),
@@ -533,7 +543,7 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
     : null;
   const recusados = docs.filter(d => d.estado === "recusado");
   const encerrada = Boolean(lead.validada_em);
-  const percursoConcluido = Boolean(lead.percurso_concluido_em) && obrigatoriosOk && Boolean(turmaEscolhida) && recusados.length === 0;
+  const percursoConcluido = Boolean(lead.percurso_concluido_em) && Boolean(turmaEscolhida) && recusados.length === 0;
   let passo: 1 | 2 = 1;
   if (turmaEscolhida) passo = 2;
   return {

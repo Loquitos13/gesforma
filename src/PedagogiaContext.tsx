@@ -190,7 +190,14 @@ export function useTurmaPedagogia(regime: Regime, turmaId: number | undefined) {
     if (r) setSnap(prev => ({ ...prev, dtp: r.dtp }));
   }, [regime, turmaId]);
 
-  const guardarCertificado = useCallback(async (formandoId: number, patch: { emitido?: boolean; nota?: number | null; elearning?: number | null }) => {
+  const guardarCertificado = useCallback(async (formandoId: number, patch: {
+    emitido?: boolean;
+    nota?: number | null;
+    elearning?: number | null;
+    ficheiroId?: string;
+    ficheiroNome?: string;
+    ficheiroUrl?: string;
+  }) => {
     setSnap(prev => {
       const existe = prev.certificados.some(c => c.formandoId === formandoId);
       const base: TurmaCertificado = { formandoId, emitido: false, nota: null, elearning: null };

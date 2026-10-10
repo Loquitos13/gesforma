@@ -153,7 +153,7 @@ export function CursoDocumentos({ accent, cursoId, tipo = "" }: { accent: Regime
         <div>
           <p className="text-sm font-semibold text-slate-800">Documentos da pré-inscrição</p>
           <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-            O ficheiro da secretaria é opcional. Sem ficheiro, a pessoa anexa o seu na pré-inscrição. Com ficheiro, abre o documento completo e só continua depois de o ler até ao fim.
+            Esta lista é a que a ligação pessoal pede para iniciar o curso. O ficheiro da secretaria é opcional. Sem ficheiro, a pessoa anexa o seu. Com ficheiro, abre o documento completo e só continua depois de o ler até ao fim.
           </p>
         </div>
         <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">

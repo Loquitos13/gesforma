@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { apiDtpExport, apiPerguntasInqueritoTurma, apiRelatorioEstatisticoTurma, apiRelatorioFinalTurma, apiRelatorioInqueritosTurma, type DtpEstado, type DtpItem, type DtpSnapshot } from "./api";
+import { apiDossieGerado, apiDtpExport, apiPerguntasInqueritoTurma, apiRelatorioEstatisticoTurma, apiRelatorioFinalTurma, apiRelatorioInqueritosTurma, type DtpEstado, type DtpItem, type DtpSnapshot } from "./api";
 import { DTP_CATEGORIAS, dtpCategoriaDe, dtpPastaNome, dtpZipNome, type DtpCategoriaId } from "./dtpPasta";
 import { TOPICOS_FIN } from "./dtpTopicosFin";
 import { toastError, toastOk } from "./toastBus";
@@ -25,6 +25,12 @@ type Props = {
 };
 
 const BOTOES_DOSSIE: Record<string, { rotulo: string; ok: string; gerar: (turmaId: number) => Promise<void> }> = {
+  "listagem-formandos": { rotulo: "Gerar listagem", ok: "Listagem de formandos gerada.", gerar: id => apiDossieGerado(id, "listagem-formandos", "ListagemFormandos.pdf") },
+  equipa: { rotulo: "Gerar listagem", ok: "Listagem da equipa pedagógica gerada.", gerar: id => apiDossieGerado(id, "equipa", "ListagemEquipaPedagogica.pdf") },
+  programa: { rotulo: "Gerar programa", ok: "Programa da UFCD gerado.", gerar: id => apiDossieGerado(id, "programa", "ProgramaUfcd.pdf") },
+  fichas: { rotulo: "Gerar fichas", ok: "Fichas de inscrição geradas.", gerar: id => apiDossieGerado(id, "fichas", "FichasInscricao.pdf") },
+  pauta: { rotulo: "Gerar pauta", ok: "Pauta da grelha gerada.", gerar: id => apiDossieGerado(id, "pauta", "PautaAvaliacao.pdf") },
+  "entrega-certificados": { rotulo: "Gerar comprovativo", ok: "Comprovativo de entrega gerado.", gerar: id => apiDossieGerado(id, "entrega-certificados", "ComprovativoEntregaCertificados.pdf") },
   relatorio: { rotulo: "Gerar relatório final", ok: "Relatório final da ação gerado.", gerar: apiRelatorioFinalTurma },
   "relatorios-estatisticos": { rotulo: "Gerar relatório", ok: "Relatório estatístico gerado.", gerar: apiRelatorioEstatisticoTurma },
   "relatorio-pos": { rotulo: "Gerar relatório pós-formação", ok: "Relatório pós-formação gerado.", gerar: apiRelatorioInqueritosTurma },

@@ -67,6 +67,7 @@ export type DocOk = { ok: boolean; data: string };
 export type FormandoFin = {
   id: number; nome: string; apelido: string; turma: string; turmaId?: number; telf: string; email: string;
   curso: string; estado: string; cc: DocOk; ch: DocOk; cu: DocOk; ci: DocOk; ce: DocOk;
+  morada?: DocOk; contrato?: DocOk; rgpd?: DocOk;
 };
 export type CursoGoldRow = {
   id: number; nome: string; categoria: string; tipo: string; preco: number;

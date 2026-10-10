@@ -22,6 +22,7 @@ import { zipStore } from "./zipStore.js";
 import { pdfsDoDossie, type SessaoPedagogicaPdf } from "./dtpPdfs.js";
 import { pastaFinDoItem, TOPICOS_FIN } from "./dtpTopicosFin.js";
 import { minutosSessao, pdfPerguntasInqueritos, pdfRelatorioFinal, pdfRelatorioInqueritos, rotuloPublicoInquerito, type FormandoRelatorio, type InqueritoDocumento, type InqueritoRelatorio, type RelatorioFinalDados, type SessaoRelatorio } from "./relatorioFinal.js";
+import { contagemCertificadosFin, eItemDossieGerado, pdfDossieGerado } from "./dossieGerado.js";
 import {
   aplicarPercursoNoItem,
   buildDtpItems,
@@ -114,6 +115,9 @@ const certificadoSchema = z.object({
   emitido: z.boolean().optional(),
   nota: z.number().min(0).max(20).nullable().optional(),
   elearning: z.number().int().min(0).max(100).nullable().optional(),
+  ficheiroId: z.string().max(80).optional(),
+  ficheiroNome: z.string().max(240).optional(),
+  ficheiroUrl: z.string().max(500).optional(),
 });
 
 const avaliacaoNotasSchema = z.object({
@@ -348,8 +352,8 @@ async function dadosRelatorioFinal(db: Db, turmaId: number): Promise<RelatorioFi
       "SELECT formando_id, nota FROM turma_avaliacoes WHERE regime = 'fin' AND turma_id = $1 AND nota IS NOT NULL",
       [turmaId],
     ),
-    db.query<{ formando_id: number; emitido: boolean; nota: number | null }>(
-      "SELECT formando_id, emitido, nota FROM turma_certificados WHERE regime = 'fin' AND turma_id = $1",
+    db.query<{ formando_id: number; emitido: boolean; nota: number | null; ficheiro_id: string }>(
+      "SELECT formando_id, emitido, nota, COALESCE(ficheiro_id, '') AS ficheiro_id FROM turma_certificados WHERE regime = 'fin' AND turma_id = $1",
       [turmaId],
     ),
     db.query<{ payload: unknown }>(
@@ -401,7 +405,7 @@ async function dadosRelatorioFinal(db: Db, turmaId: number): Promise<RelatorioFi
       presencasHoras,
       faltasHoras,
       nota,
-      certificado: Boolean(certs.get(f.id)?.emitido),
+      certificado: Boolean(certs.get(f.id)?.ficheiro_id),
     };
   });
   const payload = asObj(ficha.rows[0]?.payload);
@@ -698,8 +702,8 @@ async function turmaFacts(db: Db, regime: Regime, turma: TurmaRow): Promise<DtpF
       "SELECT grupo_id, label, estado, detalhe, payload FROM turma_documentos WHERE regime = $1 AND turma_id = $2",
       [regime, turma.id],
     ),
-    db.query<{ formando_id: number; emitido: boolean }>(
-      "SELECT formando_id, emitido FROM turma_certificados WHERE regime = $1 AND turma_id = $2",
+    db.query<{ formando_id: number; emitido: boolean; ficheiro_id: string }>(
+      "SELECT formando_id, emitido, COALESCE(ficheiro_id, '') AS ficheiro_id FROM turma_certificados WHERE regime = $1 AND turma_id = $2",
       [regime, turma.id],
     ),
     formandosDaTurma(db, regime, turma),
@@ -718,23 +722,46 @@ async function turmaFacts(db: Db, regime: Regime, turma: TurmaRow): Promise<DtpF
   const total = formandos.length;
   if (total > 0) {
     const ids = formandos.map(f => f.id);
+    const chavesFin = ["cc", "ch", "cu", "ci", "ce", "morada", "contrato", "rgpd"];
     if (regime === "fin") {
-      for (const key of ["cc", "ch", "cu", "ci", "ce"]) {
+      for (const key of chavesFin) {
         const done = formandos.filter(f => Boolean(asObj(f.docs[key]).ok)).length;
         docs[key] = { done, total };
       }
     }
     const rows = ids.length
-      ? await db.query<{ doc_id: string; n: number }>(
-        `SELECT doc_id, count(*)::int AS n FROM formando_docs
-           WHERE regime = $1 AND ok = true AND formando_id = ANY($2::int[])
-           GROUP BY doc_id`,
+      ? await db.query<{ formando_id: number; doc_id: string }>(
+        `SELECT formando_id, doc_id FROM formando_docs
+           WHERE regime = $1 AND ok = true AND formando_id = ANY($2::int[])`,
         [regime, pgIntArray(ids)],
       )
-      : { rows: [] as { doc_id: string; n: number }[] };
-    for (const r of rows.rows) docs[r.doc_id] = { done: Number(r.n) || 0, total };
-    const bases = regime === "gold" ? ["cc", "contrato", "pip", "exp", "regulamento"] : ["cc", "ch", "cu", "ci", "ce"];
+      : { rows: [] as { formando_id: number; doc_id: string }[] };
+    const porPessoa = new Map<number, Set<string>>();
+    const contagem = new Map<string, number>();
+    for (const r of rows.rows) {
+      contagem.set(r.doc_id, (contagem.get(r.doc_id) ?? 0) + 1);
+      const set = porPessoa.get(r.formando_id) ?? new Set<string>();
+      set.add(r.doc_id);
+      porPessoa.set(r.formando_id, set);
+    }
+    for (const [docId, n] of contagem) docs[docId] = { done: n, total };
+    if (regime === "fin") {
+      for (const key of chavesFin) {
+        const done = formandos.filter(f => Boolean(asObj(f.docs[key]).ok) || porPessoa.get(f.id)?.has(key)).length;
+        docs[key] = { done, total };
+      }
+    }
+    const bases = regime === "gold" ? ["cc", "contrato", "pip", "exp", "regulamento"] : chavesFin;
     for (const key of bases) docs[key] ??= { done: 0, total };
+    if (regime === "fin") {
+      const ambos = formandos.filter(f => {
+        const set = porPessoa.get(f.id);
+        const json = f.docs;
+        const tem = (id: string) => Boolean(set?.has(id) || asObj(json[id]).ok);
+        return tem("contrato") && tem("rgpd");
+      }).length;
+      docs["rgpd-contratos"] = { done: ambos, total };
+    }
   }
 
   let inqueritosFormador: DtpCounts | null = null;
@@ -771,7 +798,9 @@ async function turmaFacts(db: Db, regime: Regime, turma: TurmaRow): Promise<DtpF
     sumarios: { done: sumarios, total: sessoesTotal },
     presencas: { done: presencas, total: sessoesTotal },
     formandos: total,
-    certificados: { done: certRows.rows.filter(r => r.emitido).length, total },
+    certificados: regime === "fin"
+      ? await contagemCertificadosFin(db, turma.id)
+      : { done: certRows.rows.filter(r => r.emitido).length, total },
     contratos: docs.contrato ?? { done: 0, total },
     pip,
     simInicial: simIni,
@@ -992,8 +1021,12 @@ export function registerPedagogiaRoutes(
         "SELECT grupo_id, label, estado, detalhe, payload FROM turma_documentos WHERE regime = $1 AND turma_id = $2",
         [regime, id],
       ),
-      db.query<{ formando_id: number; emitido: boolean; nota: unknown; elearning: unknown }>(
-        "SELECT formando_id, emitido, nota, elearning FROM turma_certificados WHERE regime = $1 AND turma_id = $2",
+      db.query<{ formando_id: number; emitido: boolean; nota: unknown; elearning: unknown; ficheiro_id: string; ficheiro_nome: string; ficheiro_url: string }>(
+        `SELECT formando_id, emitido, nota, elearning,
+                COALESCE(ficheiro_id, '') AS ficheiro_id,
+                COALESCE(ficheiro_nome, '') AS ficheiro_nome,
+                COALESCE(ficheiro_url, '') AS ficheiro_url
+           FROM turma_certificados WHERE regime = $1 AND turma_id = $2`,
         [regime, id],
       ),
       dtpForTurma(db, regime, turma),
@@ -1015,9 +1048,12 @@ export function registerPedagogiaRoutes(
       })),
       certificados: certificados.rows.map(r => ({
         formandoId: r.formando_id,
-        emitido: r.emitido,
+        emitido: r.emitido || Boolean(r.ficheiro_id),
         nota: r.nota == null ? null : Number(r.nota),
         elearning: r.elearning == null ? null : Number(r.elearning),
+        ficheiroId: r.ficheiro_id,
+        ficheiroNome: r.ficheiro_nome,
+        ficheiroUrl: r.ficheiro_url,
       })),
       dtp,
     };
@@ -1168,16 +1204,20 @@ export function registerPedagogiaRoutes(
       return reply.code(400).send({ error: "pedido inválido" });
     }
     const c = parsed.data;
+    const emitido = c.ficheiroId ? true : c.emitido;
     await db.query(
-      `INSERT INTO turma_certificados (regime, turma_id, formando_id, emitido, nota, elearning, emitido_em)
-       VALUES ($1, $2, $3, COALESCE($4, false), $5, $6, CASE WHEN $4 = true THEN now() ELSE NULL END)
+      `INSERT INTO turma_certificados (regime, turma_id, formando_id, emitido, nota, elearning, emitido_em, ficheiro_id, ficheiro_nome, ficheiro_url)
+       VALUES ($1, $2, $3, COALESCE($4, false), $5, $6, CASE WHEN $4 = true THEN now() ELSE NULL END, COALESCE($7, ''), COALESCE($8, ''), COALESCE($9, ''))
        ON CONFLICT (regime, turma_id, formando_id) DO UPDATE SET
          emitido = COALESCE($4, turma_certificados.emitido),
          nota = COALESCE($5, turma_certificados.nota),
          elearning = COALESCE($6, turma_certificados.elearning),
          emitido_em = CASE WHEN $4 = true THEN now() ELSE turma_certificados.emitido_em END,
+         ficheiro_id = CASE WHEN $7 <> '' THEN $7 ELSE turma_certificados.ficheiro_id END,
+         ficheiro_nome = CASE WHEN $8 <> '' THEN $8 ELSE turma_certificados.ficheiro_nome END,
+         ficheiro_url = CASE WHEN $9 <> '' THEN $9 ELSE turma_certificados.ficheiro_url END,
          updated_at = now()`,
-      [regime, id, formandoId, c.emitido ?? null, c.nota ?? null, c.elearning ?? null],
+      [regime, id, formandoId, emitido ?? null, c.nota ?? null, c.elearning ?? null, c.ficheiroId ?? "", c.ficheiroNome ?? "", c.ficheiroUrl ?? ""],
     );
     await audit(db, req.actor!.id, "turma.certificado", "formando", String(formandoId), req.ip, { regime, turma: id, emitido: c.emitido });
     return { ok: true };
@@ -2274,6 +2314,24 @@ export function registerPedagogiaRoutes(
       .header("Content-Disposition", `attachment; filename="${nome}"`)
       .send(bytes);
   }
+
+  app.get("/v1/turmas/:regime/:id/dossie/:itemId", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não gera o dossiê da turma." });
+    const { regime, id, itemId } = params(req);
+    if (regime !== "fin" || id == null || !eItemDossieGerado(itemId)) {
+      return reply.code(400).send({ error: "Este PDF é da turma financiada." });
+    }
+    const gerado = await pdfDossieGerado(db, id, itemId);
+    if (!gerado) return reply.code(404).send({ error: "turma não encontrada" });
+    const turma = await loadTurma(db, "fin", id);
+    if (turma) await anexarPdfDtp(db, req.actor!.id, turma, itemId, gerado.nome, gerado.bytes).catch(() => undefined);
+    await audit(db, req.actor!.id, "turma.dossie_pdf", "turma", String(id), req.ip, { item: itemId });
+    return reply
+      .header("Content-Type", "application/pdf")
+      .header("Content-Disposition", `attachment; filename="${gerado.nome}"`)
+      .send(gerado.bytes);
+  });
 
   app.get("/v1/turmas/:regime/:id/relatorio-final", async (req, reply) => pdfDaTurmaFin(req, reply, "final"));
   app.get("/v1/turmas/:regime/:id/relatorio-estatistico", async (req, reply) => pdfDaTurmaFin(req, reply, "estatisticos"));

@@ -18,6 +18,8 @@ export type DtpAuto =
   | "doc-cu"
   | "doc-ci"
   | "doc-ce"
+  | "doc-morada"
+  | "doc-rgpd-contratos"
   | "doc-exp"
   | "doc-regulamento"
   | "inqueritos-formador"
@@ -174,7 +176,7 @@ const FIN: DtpDef[] = [
   { id: "notificacao", fase: "antes", topico: 1, ordem: 1, label: "Notificação da decisão de aprovação da candidatura e respetivo termo de aceitação", fonte: "1. Enquadramento", hint: "Decisão de aprovação e termo de aceitação da candidatura.", obrigatorio: true },
   { id: "comunicacao-arranque", fase: "antes", topico: 1, ordem: 2, label: "Comunicação de arranque do projeto", fonte: "1. Enquadramento", hint: "Comunicação de arranque enviada ao financiador.", obrigatorio: true },
   { id: "cronograma", fase: "antes", topico: 1, ordem: 3, label: "Cronograma", fonte: "1. Enquadramento", hint: "Sai das sessões desta turma.", auto: "cronograma", obrigatorio: true },
-  { id: "programa", fase: "antes", topico: 1, ordem: 4, label: "Programa", fonte: "1. Enquadramento", hint: "Programa da ação formativa.", obrigatorio: true },
+  { id: "programa", fase: "antes", topico: 1, ordem: 4, label: "Programa", fonte: "1. Enquadramento", hint: "O GesForma gera o PDF do programa a partir da ficha da UFCD.", obrigatorio: true },
   { id: "regulamento", fase: "antes", topico: 1, ordem: 5, label: "Regulamento da atividade formativa", fonte: "1. Enquadramento", hint: "Regulamento da atividade.", obrigatorio: true },
   { id: "regulamento-formando", fase: "antes", topico: 1, ordem: 6, label: "Regulamento do formando", fonte: "1. Enquadramento", hint: "Regulamento entregue a cada formando.", obrigatorio: true },
   { id: "materiais", fase: "antes", topico: 2, ordem: 1, label: "Manuais e textos de apoio", fonte: "2. Recursos pedagógicos", hint: "Manuais e textos disponibilizados na ação.", obrigatorio: true },
@@ -188,18 +190,19 @@ const FIN: DtpDef[] = [
   { id: "formacao-complementar", fase: "antes", topico: 3, ordem: 7, label: "Outros certificados de formação complementar", fonte: "3. Formadores", hint: "Formação complementar do formador, quando exista.", obrigatorio: true },
   { id: "contrato-formador", fase: "antes", topico: 3, ordem: 8, label: "Contrato de prestação de serviços", fonte: "3. Formadores", hint: "Contrato do formador desta ação.", obrigatorio: true },
   { id: "honorarios", fase: "antes", topico: 3, ordem: 9, label: "Nota de honorários e respetivo recibo", fonte: "3. Formadores", hint: "Nota de honorários e recibo do formador.", obrigatorio: true },
-  { id: "equipa", fase: "antes", topico: 4, ordem: 1, label: "Listagem da equipa pedagógica", fonte: "4. Equipa técnica", hint: "Coordenador e técnicos da ação.", obrigatorio: true },
+  { id: "equipa", fase: "antes", topico: 4, ordem: 1, label: "Listagem da equipa pedagógica", fonte: "4. Equipa técnica", hint: "O GesForma gera o PDF com o formador e a equipa registados nesta turma.", obrigatorio: true },
   { id: "selecao-formandos", fase: "antes", topico: 5, ordem: 1, label: "Processo de seleção dos formandos", fonte: "5. Formandos", hint: "Critérios e resultado da seleção.", obrigatorio: true },
-  { id: "listagem-formandos", fase: "antes", topico: 5, ordem: 2, label: "Listagem de formandos", fonte: "5. Formandos", hint: "Lista nominal desta turma.", obrigatorio: true },
-  { id: "fichas", fase: "antes", topico: 5, ordem: 3, label: "Ficha de inscrição dos formandos", fonte: "5. Formandos", hint: "Uma ficha por formando.", obrigatorio: true },
-  { id: "rgpd-contratos", fase: "antes", topico: 5, ordem: 4, label: "Declaração RGPD + Contratos de formação", fonte: "5. Formandos", hint: "Declaração RGPD e contrato de formação de cada formando.", obrigatorio: true },
+  { id: "listagem-formandos", fase: "antes", topico: 5, ordem: 2, label: "Listagem de formandos", fonte: "5. Formandos", hint: "O GesForma gera o PDF com os formandos desta turma.", obrigatorio: true },
+  { id: "fichas", fase: "antes", topico: 5, ordem: 3, label: "Ficha de inscrição dos formandos", fonte: "5. Formandos", hint: "O GesForma gera o PDF com os dados de inscrição de cada formando.", obrigatorio: true },
+  { id: "rgpd-contratos", fase: "antes", topico: 5, ordem: 4, label: "Declaração RGPD + Contratos de formação", fonte: "5. Formandos", hint: "A ligação pessoal pede os dois. O visto fecha quando cada formando tem contrato e declaração.", auto: "doc-rgpd-contratos", obrigatorio: true },
   { id: "cc", fase: "antes", topico: 5, ordem: 5, label: "a) Cartão de cidadão", fonte: "5. Formandos", hint: "Um por formando da turma.", auto: "doc-cc", obrigatorio: true },
   { id: "ch", fase: "antes", topico: 5, ordem: 6, label: "b) Certificado de habilitações", fonte: "5. Formandos", hint: "Um por formando da turma.", auto: "doc-ch", obrigatorio: true },
-  { id: "entidade-patronal", fase: "antes", topico: 5, ordem: 7, label: "c) Declaração da entidade patronal", fonte: "5. Formandos", hint: "O GesForma conta o comprovativo de emprego de cada formando.", auto: "doc-ce", obrigatorio: true },
-  { id: "morada", fase: "antes", topico: 5, ordem: 8, label: "d) Comprovativo de morada", fonte: "5. Formandos", hint: "Um por formando da turma.", obrigatorio: true },
-  { id: "iban", fase: "antes", topico: 5, ordem: 9, label: "e) IBAN nominativo", fonte: "5. Formandos", hint: "Sem IBAN nominativo não há pagamento de apoios.", auto: "doc-ci", bloqueante: true, obrigatorio: true },
-  { id: "seguro-formandos", fase: "antes", topico: 5, ordem: 10, label: "Lista de formandos com seguro de acidentes pessoais (quando aplicável)", fonte: "5. Formandos", hint: "Quando o seguro não se aplica, marque o documento como no dossiê.", obrigatorio: true },
-  { id: "mapa-pagamento", fase: "antes", topico: 5, ordem: 11, label: "Mapa de ordem de pagamento aos formandos (validado)", fonte: "5. Formandos", hint: "Mapa validado dos pagamentos aos formandos.", obrigatorio: true },
+  { id: "cv-formando", fase: "antes", topico: 5, ordem: 7, label: "Curriculum vitae", fonte: "5. Formandos", hint: "Pedido na ligação pessoal. O visto fecha quando o CV está na ficha de cada formando.", auto: "doc-cu", obrigatorio: true },
+  { id: "entidade-patronal", fase: "antes", topico: 5, ordem: 8, label: "c) Declaração da entidade patronal", fonte: "5. Formandos", hint: "O GesForma conta o comprovativo de emprego de cada formando.", auto: "doc-ce", obrigatorio: true },
+  { id: "morada", fase: "antes", topico: 5, ordem: 9, label: "d) Comprovativo de morada", fonte: "5. Formandos", hint: "Pedido na ligação pessoal. Um comprovativo por formando.", auto: "doc-morada", obrigatorio: true },
+  { id: "iban", fase: "antes", topico: 5, ordem: 10, label: "e) IBAN nominativo", fonte: "5. Formandos", hint: "Sem IBAN nominativo não há pagamento de apoios.", auto: "doc-ci", bloqueante: true, obrigatorio: true },
+  { id: "seguro-formandos", fase: "antes", topico: 5, ordem: 11, label: "Lista de formandos com seguro de acidentes pessoais (quando aplicável)", fonte: "5. Formandos", hint: "Quando o seguro não se aplica, marque o documento como no dossiê.", obrigatorio: true },
+  { id: "mapa-pagamento", fase: "antes", topico: 5, ordem: 12, label: "Mapa de ordem de pagamento aos formandos (validado)", fonte: "5. Formandos", hint: "Mapa validado dos pagamentos aos formandos.", obrigatorio: true },
   { id: "presencas", fase: "durante", topico: 6, ordem: 1, label: "Folhas de presença", fonte: "6. Assiduidade", hint: "Uma folha por sessão realizada.", auto: "presencas", obrigatorio: true },
   { id: "planos", fase: "durante", topico: 6, ordem: 2, label: "Planos de sessão", fonte: "6. Assiduidade", hint: "Um plano por sessão do cronograma.", auto: "planos", obrigatorio: true },
   { id: "justificacao-faltas", fase: "durante", topico: 6, ordem: 3, label: "Folhas de justificação de faltas", fonte: "6. Assiduidade", hint: "Justificações de falta desta turma.", obrigatorio: true },
@@ -209,7 +212,7 @@ const FIN: DtpDef[] = [
   { id: "teste-final", fase: "durante", topico: 7, ordem: 2, label: "Teste de avaliação final", fonte: "7. Avaliação da aprendizagem", hint: "Enunciado da avaliação final.", obrigatorio: true },
   { id: "corrigenda", fase: "durante", topico: 7, ordem: 3, label: "Corrigenda do teste de avaliação final", fonte: "7. Avaliação da aprendizagem", hint: "Corrigenda do teste final.", obrigatorio: true },
   { id: "grelha-correcao", fase: "durante", topico: 7, ordem: 4, label: "Grelha de correção do teste de avaliação final - assinada pelo formador", fonte: "7. Avaliação da aprendizagem", hint: "Grelha assinada pelo formador.", obrigatorio: true },
-  { id: "pauta", fase: "depois", topico: 7, ordem: 5, label: "Pauta de avaliação final - assinada pelo formador", fonte: "7. Avaliação da aprendizagem", hint: "Pauta assinada pelo formador.", obrigatorio: true },
+  { id: "pauta", fase: "depois", topico: 7, ordem: 5, label: "Pauta de avaliação final - assinada pelo formador", fonte: "7. Avaliação da aprendizagem", hint: "O GesForma gera a pauta a partir da grelha desta turma. A nota do Moodle continua a lançar-se à mão.", obrigatorio: true },
   { id: "inquerito-formador", fase: "depois", topico: 8, ordem: 1, label: "Inquéritos de avaliação do formador", fonte: "8. Avaliação da ação", hint: "Perguntas dos inquéritos com público-alvo Formador enviados a esta turma.", auto: "inqueritos-formador", obrigatorio: true },
   { id: "inquerito-formandos", fase: "depois", topico: 8, ordem: 2, label: "Inquéritos de avaliação dos formandos", fonte: "8. Avaliação da ação", hint: "Perguntas dos inquéritos com público-alvo Formandos enviados a esta turma.", auto: "inqueritos-formandos", obrigatorio: true },
   { id: "diagnostico-necessidades", fase: "depois", topico: 8, ordem: 3, label: "Diagnóstico necessidades de formação", fonte: "8. Avaliação da ação", hint: "Diagnóstico de necessidades associado à ação.", obrigatorio: true },
@@ -219,8 +222,8 @@ const FIN: DtpDef[] = [
   { id: "relatorio-intermedio", fase: "durante", topico: 9, ordem: 2, label: "Relatório intermédio", fonte: "9. Supervisão", hint: "Relatório intermédio de supervisão.", obrigatorio: true },
   { id: "relatorio-supervisao", fase: "depois", topico: 9, ordem: 3, label: "Relatório final", fonte: "9. Supervisão", hint: "Relatório final de supervisão e apoio pedagógico.", obrigatorio: true },
   { id: "folheto", fase: "antes", topico: 10, ordem: 1, label: "Folheto de divulgação da ação", fonte: "10. Divulgação", hint: "Folheto usado na divulgação desta ação.", obrigatorio: true },
-  { id: "certificados", fase: "depois", topico: 11, ordem: 1, label: "Cópia dos certificados emitidos", fonte: "11. Certificados", hint: "Certificados emitidos pelo GesForma nesta turma.", auto: "certificados", obrigatorio: true },
-  { id: "entrega-certificados", fase: "depois", topico: 11, ordem: 2, label: "Comprovativo da entrega dos certificados", fonte: "11. Certificados", hint: "Comprovativo de que os certificados foram entregues.", obrigatorio: true },
+  { id: "certificados", fase: "depois", topico: 11, ordem: 1, label: "Cópia dos certificados emitidos", fonte: "11. Certificados", hint: "O certificado legal obtém-se fora do GesForma. O visto fecha quando cada formando elegível com aproveitamento tem o PDF carregado.", auto: "certificados", obrigatorio: true },
+  { id: "entrega-certificados", fase: "depois", topico: 11, ordem: 2, label: "Comprovativo da entrega dos certificados", fonte: "11. Certificados", hint: "O GesForma gera a lista de quem já tem o certificado externo no dossiê.", obrigatorio: true },
   { id: "equidade", fase: "antes", topico: 12, ordem: 1, label: "Checklist de igualdade de oportunidades", fonte: "12. Equidade", hint: "Checklist preenchida para esta ação.", obrigatorio: true },
   { id: "academia", fase: "antes", topico: 13, ordem: 1, label: "Reporte retirado do Portal Academia Portugal Digital", fonte: "13. Academia Digital", hint: "Reporte da turma no Portal Academia Portugal Digital.", obrigatorio: true },
   { id: "inqueritos-pos", fase: "depois", topico: 14, ordem: 1, label: "Inquéritos pós-formação", fonte: "14. Impacto pós-formação", hint: "Perguntas dos inquéritos com público-alvo Pós-formação enviados a esta turma.", auto: "inqueritos-pos", obrigatorio: true },
@@ -412,6 +415,15 @@ export function buildDtpItems(
     const universal = dtpUniversal(def.id);
     if (override) {
       return { ...def, estado: override, detalhe: def.hint, origem: "manual" as const, extra, ambito: def.ambito, universal };
+    }
+    if (def.auto === "certificados") {
+      const certs = factFor("certificados", facts);
+      if (!certs || certs.total <= 0) {
+        const detalhe = facts.formandos > 0
+          ? `Ainda sem formandos elegíveis com aproveitamento. ${def.hint}`
+          : `Ainda sem formandos nesta turma. ${def.hint}`;
+        return { ...def, estado: "falta" as const, detalhe, origem: "auto" as const, extra, ambito: def.ambito, universal };
+      }
     }
     const derived = def.auto ? estadoFromCounts(factFor(def.auto, facts)) : null;
     if (derived) {

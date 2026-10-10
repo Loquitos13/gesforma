@@ -72,6 +72,7 @@ export type OpsSnapshot = {
     curso: string; estado: string;
     cc: { ok: boolean; data: string }; ch: { ok: boolean; data: string };
     cu: { ok: boolean; data: string }; ci: { ok: boolean; data: string }; ce: { ok: boolean; data: string };
+    morada?: { ok: boolean; data: string }; contrato?: { ok: boolean; data: string }; rgpd?: { ok: boolean; data: string };
   }>;
   cursosGold: Array<{ id: number; nome: string; categoria: string; tipo: string; preco: number; regime: string; horas: number; estado: string }>;
   cursosFin: Array<{ id: number; ufcdCod: string; ufcd: string; nomeComercial: string; regime: string; horas: number; estado: string }>;
@@ -333,6 +334,9 @@ export type TurmaCertificado = {
   emitido: boolean;
   nota: number | null;
   elearning: number | null;
+  ficheiroId?: string;
+  ficheiroNome?: string;
+  ficheiroUrl?: string;
 };
 
 export type PedagogiaSnapshot = {
@@ -367,7 +371,14 @@ export const apiSaveCertificado = (
   regime: Regime,
   turmaId: number,
   formandoId: number,
-  body: { emitido?: boolean; nota?: number | null; elearning?: number | null },
+  body: {
+    emitido?: boolean;
+    nota?: number | null;
+    elearning?: number | null;
+    ficheiroId?: string;
+    ficheiroNome?: string;
+    ficheiroUrl?: string;
+  },
 ) => api<{ ok: boolean }>(`/v1/turmas/${regime}/${turmaId}/certificados/${formandoId}`, { method: "PUT", body: JSON.stringify(body) });
 
 export type NotaAvaliacaoApi = { formandoId: number; moduloId: string; parametroId: string; nota: number | null };
@@ -1186,6 +1197,10 @@ export function apiRelatorioInqueritosTurma(turmaId: number) {
 
 export function apiRelatorioEstatisticoTurma(turmaId: number) {
   return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/relatorio-estatistico`, "RelatorioEstatistico.pdf", "application/pdf");
+}
+
+export function apiDossieGerado(turmaId: number, itemId: string, fallback: string) {
+  return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/dossie/${encodeURIComponent(itemId)}`, fallback, "application/pdf");
 }
 
 export function apiPerguntasInqueritoTurma(turmaId: number, publico: "formador" | "formando" | "pos") {

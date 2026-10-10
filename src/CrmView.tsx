@@ -113,6 +113,7 @@ function finComoTurma(t: TurmaFin): TurmaGold {
 const docsFinVazios = () => ({
   cc: { ok: false, data: "" }, ch: { ok: false, data: "" }, cu: { ok: false, data: "" },
   ci: { ok: false, data: "" }, ce: { ok: false, data: "" },
+  morada: { ok: false, data: "" }, contrato: { ok: false, data: "" }, rgpd: { ok: false, data: "" },
 });
 
 export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }: { regime?: "gold" | "fin"; openLeadId?: number; onOpened?: () => void } = {}) {

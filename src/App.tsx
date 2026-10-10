@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { DOCS_FORMANDO_FIN, docFinDe, docsFinCompletos, docsFinOkCount } from "./dossierDocs";
 import { DtpPanel } from "./DtpView";
 import { DtpEntidadesPanel } from "./DtpEntidadesPanel";
 import {
@@ -184,6 +185,7 @@ function emptyFinDocs() {
   return {
     cc: { ok: false, data: "" }, ch: { ok: false, data: "" }, cu: { ok: false, data: "" },
     ci: { ok: false, data: "" }, ce: { ok: false, data: "" },
+    morada: { ok: false, data: "" }, contrato: { ok: false, data: "" }, rgpd: { ok: false, data: "" },
   };
 }
 
@@ -1451,9 +1453,13 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
       nota: ccp ? notaCcp : (cert?.nota ?? null),
       notaFinal: notaFinalFormando(cfg, mapa, f.id, modulos, programa.topicos),
       certificado: cert?.emitido ?? false,
+      ficheiroId: cert?.ficheiroId ?? "",
+      ficheiroUrl: cert?.ficheiroUrl ?? "",
+      ficheiroNome: cert?.ficheiroNome ?? "",
     };
   });
   const minimo = cfg.minimoAprovacao || 10;
+  const externo = regime === "fin";
   const elegivelRow = (c: typeof rows[number]) => {
     if (c.presencas == null || c.presencas < 75) return false;
     if (ccp) return c.nota != null && c.nota >= minimo;
@@ -1488,7 +1494,7 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
         {[
           { l: "Elegíveis", v: rows.filter(elegivelRow).length, color: "text-emerald-600", bg: "bg-emerald-50" },
           { l: "Sem dados suficientes", v: rows.filter(c => c.presencas == null || (ccp ? c.nota == null : c.elearning == null)).length, color: "text-amber-600", bg: "bg-amber-50" },
-          { l: "Certificados emitidos", v: rows.filter(c => c.certificado).length, color: "text-blue-600", bg: "bg-blue-50" },
+          { l: externo ? "Certificados carregados" : "Certificados emitidos", v: rows.filter(c => externo ? Boolean(c.ficheiroId) : c.certificado).length, color: "text-blue-600", bg: "bg-blue-50" },
         ].map(s => (
           <Card key={s.l} className={`p-4 ${s.bg}`}>
             <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">{s.l}</p>
@@ -1501,7 +1507,9 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
           <div>
             <p className="text-sm font-semibold text-slate-700">Elegibilidade por formando</p>
             <p className="text-xs text-slate-400 mt-0.5">
-              {ccp
+              {externo
+                ? `O certificado legal obtém-se fora do GesForma. Carregue o PDF de cada formando elegível com aproveitamento: 75% de presenças e ${ccp ? `nota ≥ ${minimo}` : "resultado de e-learning ≥ 50"}. A nota do Moodle, quando a grelha a pede, continua a lançar-se à mão.`
+                : ccp
                 ? `No CCP a nota é a média da grelha de avaliação (simulação inicial e final). Mínimo: 75% de presenças e nota ≥ ${minimo}. As presenças vêm das ${sessoesRegistadas} folhas já registadas.`
                 : `Mínimo: 75% de presenças e resultado de e-learning ≥ 50. Esse resultado é o valor a lançar no SIGO. As presenças vêm das ${sessoesRegistadas} folhas já registadas.`}
             </p>
@@ -1562,7 +1570,16 @@ function CertificadosTurmaTab({ formandos, certificados, presencas, sessoesRegis
                         : <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${elegivel ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>{elegivel ? "Elegível" : "Não elegível"}</span>}
                     </Td>
                     <Td className="text-center">
-                      {c.certificado
+                      {externo ? (
+                        c.ficheiroId
+                          ? <div className="flex items-center justify-center gap-1">
+                              {c.ficheiroUrl
+                                ? <a href={c.ficheiroUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-700 font-semibold">PDF carregado</a>
+                                : <span className="text-xs text-emerald-600 font-semibold">PDF carregado</span>}
+                              <button type="button" onClick={() => onUpload?.(c.id, ccp ? c.nota : null)} className="text-xs font-semibold px-2 py-1 bg-white border border-slate-200 text-slate-600 rounded-lg">Substituir</button>
+                            </div>
+                          : <button type="button" onClick={() => onUpload?.(c.id, ccp ? c.nota : null)} disabled={!elegivel} title={elegivel ? "Carregar o certificado obtido fora do GesForma" : ccp ? `Precisa de 75% de presenças e nota ≥ ${minimo}` : "Precisa de 75% de presenças e resultado de e-learning ≥ 50"} className="text-xs font-semibold px-2.5 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed">Carregar certificado</button>
+                      ) : c.certificado
                         ? <div className="flex items-center justify-center gap-1"><span className="text-xs text-emerald-600 font-semibold">Emitido</span><ActBtn icon={I.eye} label="Ver certificado emitido" color="gray" onClick={() => onView?.({ nome: c.nome, nota: c.nota ?? c.elearning ?? 0, curso, turma, data: new Date().toISOString().slice(0, 10) })} /></div>
                         : <button onClick={() => onUpload?.(c.id, ccp ? c.nota : null)} disabled={!elegivel} title={elegivel ? "Carregar certificado" : ccp ? `Precisa de 75% de presenças e nota ≥ ${minimo}` : "Precisa de 75% de presenças e resultado de e-learning ≥ 50"} className="text-xs font-semibold px-2.5 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed">Upload</button>}
                     </Td>
@@ -2049,7 +2066,7 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
       />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado"
         context={{ kind: "certificado", regime: "gold", turma: turma.nome, formando: uploadCert != null ? String(uploadCert) : undefined, label: "Certificado" }}
-        onConfirm={() => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true, ...(uploadNota != null ? { nota: uploadNota } : {}) }); }} />
+        onConfirm={file => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true, ficheiroId: file.id, ficheiroNome: file.name, ficheiroUrl: file.openUrl, ...(uploadNota != null ? { nota: uploadNota } : {}) }); }} />
       <CertificadoVerModal open={!!verCert} onClose={() => setVerCert(null)} cert={verCert} accent="gold" />
       <ExportTurmaModal open={!!exportTurma} onClose={() => setExportTurma(null)} turma={exportTurma} />
       <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? ""} accent="gold" turma={turma.nome} horas={formadorOpen ? horasDoFormador(turma.cronograma, formadorOpen) : undefined} />
@@ -2356,7 +2373,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
     return !noutra && (f.curso === turma.curso || refereCurso(f.curso, { nomeComercial: turma.curso, ufcd: turma.ufcdCod, ufcdCod: turma.ufcdCod }));
   });
   const listaFormandos = membros;
-  const prontos = listaFormandos.filter(f => ["cc", "ch", "cu", "ci", "ce"].every(k => f[k as DocKey].ok)).length;
+  const prontos = listaFormandos.filter(f => docsFinCompletos(f)).length;
   const nomesCockpit = listaFormandos.map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }));
 
   return (
@@ -2414,12 +2431,12 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
         </div>
       </div>
       {(() => {
-        const docsFalta = listaFormandos.filter(f => !["cc", "ch", "cu", "ci", "ce"].every(k => f[k as DocKey].ok)).length;
+        const docsFalta = listaFormandos.filter(f => !docsFinCompletos(f)).length;
         const dtp = ped.dtp.pct;
         const semPlano = sessoesTurma.filter(s => !ped.planos[s.n]).length;
         const next: NextAction[] = [];
         if (!souFormadorFin && dtp < 70) next.push({ tone: "error", title: `DTP a ${dtp}%`, detail: "Sem dossiê a turma financiada não arranca.", onClick: () => setTab("dtp") });
-        if (!souFormadorFin && docsFalta) next.push({ tone: "error", title: `${docsFalta} com documentos em falta`, detail: "CC, habilitações, CV, IBAN ou emprego.", onClick: () => setTab("overview") });
+        if (!souFormadorFin && docsFalta) next.push({ tone: "error", title: `${docsFalta} com documentos em falta`, detail: "Cartão, habilitações, CV, morada, IBAN, emprego, contrato ou RGPD.", onClick: () => setTab("overview") });
         if (semPlano) next.push({ tone: "warn", title: `${semPlano} sessões sem plano`, detail: "O formador ainda não carregou o plano de sessão.", onClick: () => setTab("sessoes") });
         return <NextActions accent="fin" actions={next.slice(0, 3)} />;
       })()}
@@ -2553,14 +2570,14 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
             )}
             <div className="md:hidden p-3 space-y-2">
               {listaFormandos.map(f => {
-                const keys: DocKey[] = ["cc", "ch", "cu", "ci", "ce"];
-                const okCount = keys.filter(k => f[k].ok).length;
+                const okCount = docsFinOkCount(f);
+                const totalDocs = DOCS_FORMANDO_FIN.length;
                 return (
                   <MobileCard
                     key={f.id}
                     title={`${f.nome} ${f.apelido}`}
                     sub={f.email}
-                    badge={souFormadorFin ? undefined : <span className={`text-[11px] font-bold ${okCount === 5 ? "text-emerald-700" : "text-red-600"}`}>{okCount}/5 docs</span>}
+                    badge={souFormadorFin ? undefined : <span className={`text-[11px] font-bold ${okCount === totalDocs ? "text-emerald-700" : "text-red-600"}`}>{okCount}/{totalDocs} docs</span>}
                     meta={[f.telf, f.turma]}
                     onOpen={() => setDocsOpen(f)}
                     actions={[
@@ -2579,9 +2596,9 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
                 <thead><tr><Th>Nome</Th><Th>Contacto</Th><Th>Turma</Th><Th>Estado</Th>{!souFormadorFin && <Th>Documentos</Th>}<Th>Ações</Th></tr></thead>
                 <tbody className="divide-y divide-slate-100">
                   {listaFormandos.map(f => {
-                    const keys: DocKey[] = ["cc", "ch", "cu", "ci", "ce"];
-                    const okCount = keys.filter(k => f[k].ok).length;
-                    const complete = okCount === 5;
+                    const okCount = docsFinOkCount(f);
+                    const totalDocs = DOCS_FORMANDO_FIN.length;
+                    const complete = okCount === totalDocs;
                     return (
                     <tr key={f.id} className="hover:bg-slate-50">
                       <Td>
@@ -2597,7 +2614,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
                         <Td>
                           <button type="button" onClick={() => setDocsOpen(f)} title="CC · CH · CU · CI · CE"
                             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${complete ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
-                            {complete ? "✓ Completos" : `${okCount}/5 · ${5 - okCount} em falta`}
+                            {complete ? "✓ Completos" : `${okCount}/${DOCS_FORMANDO_FIN.length} · ${DOCS_FORMANDO_FIN.length - okCount} em falta`}
                           </button>
                         </Td>
                       )}
@@ -2712,7 +2729,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
       <FormadorProfileSlideOver open={!!formadorOpen} onClose={() => setFormadorOpen(null)} nome={formadorOpen ?? turma.formador} accent="fin" turma={turma.nome} horas={formadorOpen ? horasDoFormador(turma.cronograma, formadorOpen) : undefined} />
       <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" accent="fin"
         context={{ kind: "certificado", regime: "fin", turma: turma.nome, formando: uploadCert != null ? String(uploadCert) : undefined, label: "Certificado" }}
-        onConfirm={() => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true, ...(uploadNota != null ? { nota: uploadNota } : {}) }); }} />
+        onConfirm={file => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true, ficheiroId: file.id, ficheiroNome: file.name, ficheiroUrl: file.openUrl, ...(uploadNota != null ? { nota: uploadNota } : {}) }); }} />
       <CertificadoVerModal open={!!verCert} onClose={() => setVerCert(null)} cert={verCert} accent="fin" />
       <ExportTurmaModal open={!!exportTurma} onClose={() => setExportTurma(null)} turma={exportTurma} />
       <SlideOver open={addFormando} onClose={() => setAddFormando(false)} title="Inscrever formando" sub={`${turma.curso} · ${turma.local} · ${turma.horario}`}>
@@ -2850,13 +2867,10 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   );
 }
 
-// ─── Documentos Financiada (CC, CH, CU, CI, CE) ───────────────────────────────
+// ─── Documentos Financiada (os mesmos da ligação pessoal) ─────────────────────
 
 type FinFormando = FormandoFin;
-type DocKey = "cc" | "ch" | "cu" | "ci" | "ce";
-const docLabels: Record<DocKey, string> = {
-  cc: "Cartão de Cidadão", ch: "Certif. Habilitações", cu: "Curriculum Vitae", ci: "IBAN / Certif. Emprego", ce: "Comp. Emprego",
-};
+const docLabels = Object.fromEntries(DOCS_FORMANDO_FIN.map(d => [d.id, d.label]));
 
 /** Sem gateway de email transacional para a Financiada, o lembrete sai do cliente de email da secretaria. */
 function lembreteDocsHref(formando: FinFormando, emFalta: string[]) {
@@ -2879,29 +2893,33 @@ function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
   const { formandosFin, patchFormandoFin } = useLists();
   const live = formandosFin.find(f => f.id === formando.id) ?? formando;
   const [docs, setDocs] = useState(live);
-  const [uploadFor, setUploadFor] = useState<DocKey | null>(null);
+  const [uploadFor, setUploadFor] = useState<string | null>(null);
   const [ficheiros, setFicheiros] = useState<Record<string, string>>({});
   useEffect(() => { setDocs(live); }, [live]);
-  const keys: DocKey[] = ["cc", "ch", "cu", "ci", "ce"];
-  const completo = keys.every(k => docs[k].ok);
-  function toggleDoc(k: DocKey) {
-    const next = { ...docs, [k]: { ok: !docs[k].ok, data: !docs[k].ok ? new Date().toISOString().slice(0, 10) : "" } };
+  const keys = DOCS_FORMANDO_FIN.map(d => d.id);
+  const estado = (k: string) => docFinDe(docs, k);
+  const completo = docsFinCompletos(docs);
+  function toggleDoc(k: string) {
+    const actual = estado(k);
+    const nextDoc = { ok: !actual.ok, data: !actual.ok ? new Date().toISOString().slice(0, 10) : "" };
+    const next = { ...docs, [k]: nextDoc } as FormandoFin;
     setDocs(next);
-    patchFormandoFin(docs.id, { [k]: next[k] });
+    patchFormandoFin(docs.id, { [k]: nextDoc } as Partial<FormandoFin>);
   }
-  function marcarFicheiro(k: DocKey, file: { name: string; openUrl: string; id: string }) {
-    const next = { ...docs, [k]: { ok: true, data: new Date().toISOString().slice(0, 10) } };
+  function marcarFicheiro(k: string, file: { name: string; openUrl: string; id: string }) {
+    const nextDoc = { ok: true, data: new Date().toISOString().slice(0, 10) };
+    const next = { ...docs, [k]: nextDoc } as FormandoFin;
     setDocs(next);
-    patchFormandoFin(docs.id, { [k]: next[k] });
+    patchFormandoFin(docs.id, { [k]: nextDoc } as Partial<FormandoFin>);
     setFicheiros(prev => ({ ...prev, [k]: file.openUrl }));
-    void persist(apiSaveFormandoDocs("fin", docs.id, keys.map(id => ({
-      id,
-      ok: id === k ? true : next[id].ok,
-      fileName: id === k ? file.name : "",
-      data: next[id].data,
-      driveFileId: id === k ? file.id : "",
-      driveUrl: id === k ? file.openUrl : "",
-    }))));
+    void persist(apiSaveFormandoDocs("fin", docs.id, [{
+      id: k,
+      ok: true,
+      fileName: file.name,
+      data: nextDoc.data,
+      driveFileId: file.id,
+      driveUrl: file.openUrl,
+    }]));
   }
 
   return (
@@ -2912,37 +2930,40 @@ function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
         </div>
         <div>
           <p className={`text-sm font-bold ${completo ? "text-emerald-700" : "text-amber-700"}`}>
-            {completo ? "Documentos completos" : `${keys.filter(k => !docs[k].ok).length} documentos em falta`}
+            {completo ? "Documentos completos" : `${keys.filter(k => !estado(k).ok).length} documentos em falta`}
           </p>
           <p className="text-xs text-slate-500 mt-0.5">{docs.nome} {docs.apelido} · {docs.curso}</p>
         </div>
       </div>
 
       <div className="space-y-2">
-        {keys.map(k => (
-          <div key={k} className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${docs[k].ok ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
+        {keys.map(k => {
+          const row = estado(k);
+          return (
+          <div key={k} className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${row.ok ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
             <button type="button" onClick={() => toggleDoc(k)}
-              className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-colors ${docs[k].ok ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-red-300"}`}>
-              {docs[k].ok && I.check}
+              className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-colors ${row.ok ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-red-300"}`}>
+              {row.ok && I.check}
             </button>
             <div className="flex-1 min-w-0">
-              <p className={`text-xs font-semibold ${docs[k].ok ? "text-emerald-700" : "text-red-600"}`}>{docLabels[k]}</p>
-              {docs[k].ok && docs[k].data && <p className="text-xs text-slate-400 mt-0.5">Validado em {docs[k].data}</p>}
-              {!docs[k].ok && <p className="text-xs text-red-400 mt-0.5">Em falta</p>}
+              <p className={`text-xs font-semibold ${row.ok ? "text-emerald-700" : "text-red-600"}`}>{docLabels[k]}</p>
+              {row.ok && row.data && <p className="text-xs text-slate-400 mt-0.5">Validado em {row.data}</p>}
+              {!row.ok && <p className="text-xs text-red-400 mt-0.5">Em falta</p>}
               {ficheiros[k] && (
                 <a href={ficheiros[k]} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-blue-600">Abrir no Drive</a>
               )}
             </div>
             <button type="button" onClick={() => setUploadFor(k)} className="text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">
-              {docs[k].ok ? "Substituir" : "Carregar"}
+              {row.ok ? "Substituir" : "Carregar"}
             </button>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {!completo && (
         <a
-          href={lembreteDocsHref(docs, keys.filter(k => !docs[k].ok).map(k => docLabels[k]))}
+          href={lembreteDocsHref(docs, keys.filter(k => !estado(k).ok).map(k => docLabels[k] ?? k))}
           className="block w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors text-center"
         >
           Enviar lembrete de documentos
@@ -3534,15 +3555,14 @@ function FinFormandosView({ openId, onOpened }: { openId?: number; onOpened?: ()
           )}
           <div className="md:hidden p-3 space-y-2">
             {rows.map(r => {
-              const keys: DocKey[] = ["cc", "ch", "cu", "ci", "ce"];
-              const okCount = keys.filter(k => r[k].ok).length;
+              const okCount = docsFinOkCount(r);
               return (
                 <MobileCard
                   key={r.id}
                   title={`${r.nome} ${r.apelido}`}
                   sub={r.curso}
                   badge={estadoBadge(r.estado)}
-                  meta={[r.turma, `${okCount}/5 docs`]}
+                  meta={[r.turma, `${okCount}/${DOCS_FORMANDO_FIN.length} docs`]}
                   onOpen={() => setDocsOpen(r)}
                   actions={[
                     { label: "Documentos", icon: I.doc, tone: "teal", onClick: () => setDocsOpen(r) },
@@ -3562,9 +3582,8 @@ function FinFormandosView({ openId, onOpened }: { openId?: number; onOpened?: ()
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {rows.map(r => {
-                  const keys: DocKey[] = ["cc", "ch", "cu", "ci", "ce"];
-                  const okCount = keys.filter(k => r[k].ok).length;
-                  const complete = okCount === 5;
+                  const okCount = docsFinOkCount(r);
+                  const complete = docsFinCompletos(r);
                   return (
                     <tr key={r.id} className="hover:bg-slate-50 transition-colors">
                       <Td>
@@ -3576,7 +3595,7 @@ function FinFormandosView({ openId, onOpened }: { openId?: number; onOpened?: ()
                       <Td>{estadoBadge(r.estado)}</Td>
                       <Td>
                         <button onClick={() => setDocsOpen(r)} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${complete ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-red-50 text-red-600 hover:bg-red-100"}`}>
-                          {complete ? "✓ Completos" : `${okCount}/5 · ${5 - okCount} em falta`}
+                          {complete ? "✓ Completos" : `${okCount}/${DOCS_FORMANDO_FIN.length} · ${DOCS_FORMANDO_FIN.length - okCount} em falta`}
                         </button>
                       </Td>
                       <Td>
@@ -4780,7 +4799,7 @@ function useAtalhosDoDia(): SearchRow[] {
     if (piorFin && (dtpFin.pct[piorFin.id] ?? 100) < 80) {
       out.push({ tipo: "Atalho", nome: `DTP de ${piorFin.nome} a ${dtpFin.pct[piorFin.id] ?? 0}%`, sub: "Financiada · dossiê da turma", view: "fin-cockpit-turma", turmaId: piorFin.id, tab: "dtp" });
     }
-    const semDocs = formandosFin.filter(f => !["cc", "ch", "cu", "ci", "ce"].every(k => f[k as DocKey].ok)).length;
+    const semDocs = formandosFin.filter(f => !docsFinCompletos(f)).length;
     if (semDocs) out.push({ tipo: "Atalho", nome: `${semDocs} formandos sem documentos`, sub: "Financiada · elegibilidade", view: "fin-formandos" });
     if (!out.length) out.push({ tipo: "Atalho", nome: "Painel", sub: "Sem pendências sinalizadas", view: user.role === "financiada" ? "fin-painel" : "gold-painel" });
     return out;

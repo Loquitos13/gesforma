@@ -130,6 +130,9 @@ export function mapFormandoFin(r: Record<string, unknown>) {
     cu: doc("cu"),
     ci: doc("ci"),
     ce: doc("ce"),
+    morada: doc("morada"),
+    contrato: doc("contrato"),
+    rgpd: doc("rgpd"),
   };
 }
 

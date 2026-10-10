@@ -1180,6 +1180,9 @@ export function registerOpsRoutes(
     cu: z.object({ ok: z.boolean(), data: z.string() }).optional(),
     ci: z.object({ ok: z.boolean(), data: z.string() }).optional(),
     ce: z.object({ ok: z.boolean(), data: z.string() }).optional(),
+    morada: z.object({ ok: z.boolean(), data: z.string() }).optional(),
+    contrato: z.object({ ok: z.boolean(), data: z.string() }).optional(),
+    rgpd: z.object({ ok: z.boolean(), data: z.string() }).optional(),
   });
 
   app.post("/v1/formandos-fin", async (req, reply) => {
@@ -1189,7 +1192,11 @@ export function registerOpsRoutes(
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
     const id = await nextOpsId(db);
-    const docs = { cc: d.cc ?? { ok: false, data: "" }, ch: d.ch ?? { ok: false, data: "" }, cu: d.cu ?? { ok: false, data: "" }, ci: d.ci ?? { ok: false, data: "" }, ce: d.ce ?? { ok: false, data: "" } };
+    const vazio = { ok: false, data: "" };
+    const docs = {
+      cc: d.cc ?? vazio, ch: d.ch ?? vazio, cu: d.cu ?? vazio, ci: d.ci ?? vazio, ce: d.ce ?? vazio,
+      morada: d.morada ?? vazio, contrato: d.contrato ?? vazio, rgpd: d.rgpd ?? vazio,
+    };
     const turmaLigada = d.turma
       ? await one(db, "SELECT id FROM turmas_fin WHERE lower(trim(nome)) = lower(trim($1)) ORDER BY id DESC LIMIT 1", [d.turma])
       : null;
@@ -1213,6 +1220,7 @@ export function registerOpsRoutes(
     const prev = mapFormandoFin(current);
     const docs = {
       cc: d.cc ?? prev.cc, ch: d.ch ?? prev.ch, cu: d.cu ?? prev.cu, ci: d.ci ?? prev.ci, ce: d.ce ?? prev.ce,
+      morada: d.morada ?? prev.morada, contrato: d.contrato ?? prev.contrato, rgpd: d.rgpd ?? prev.rgpd,
     };
     await db.query(
       `UPDATE formandos_fin SET nome = COALESCE($2, nome), apelido = COALESCE($3, apelido), turma = COALESCE($4, turma),

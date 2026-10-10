@@ -1,4 +1,5 @@
 import type { Db } from "./db/pool.js";
+import { TOPICOS_FIN } from "./dtpTopicosFin.js";
 import {
   apagarItemGoogle,
   criarAtalhoDrive,
@@ -15,22 +16,8 @@ export const ZONA_PENDENTES = "01_INSCRIÇÕES_PENDENTES";
 export const ZONA_TURMAS = "02_TURMAS_ATIVAS";
 export const ZONA_BOLSA = "00_BOLSA_FORMADORES";
 
-export const PASTAS_DTP = [
-  "1. Enquadramento da ação",
-  "2. Recursos pedagógicos e materiais didáticos",
-  "3. Formadores",
-  "4. Equipa Técnica",
-  "5. Formandos",
-  "6. Registos de assiduidade e de desenvolvimento das sessões",
-  "7. Ferramentas e critérios de avaliação da aprendizagem",
-  "8. Mecanismos de avaliação à ação formativa",
-  "9. Processos e ferramentas de supervisão e apoio pedagógico",
-  "10. Plano de informação e divulgação da oferta formativa",
-  "11. Certificados",
-  "12. Princípios de equidade e inclusão",
-  "13. Articulação com Academia Digital",
-  "14. Avaliação de impacto pós-formação - 3 meses",
-] as const;
+/** As 14 pastas da Drive são os tópicos do dossiê, pela mesma ordem e com o mesmo nome. */
+export const PASTAS_DTP = TOPICOS_FIN.map(t => t.pasta);
 
 export const PASTA_FORMADORES = PASTAS_DTP[2];
 export const PASTA_FORMANDOS = PASTAS_DTP[4];

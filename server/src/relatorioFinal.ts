@@ -168,9 +168,9 @@ export function linhasRelatorioFinal(d: RelatorioFinalDados) {
   bloco(linhas, "7. Instalações e equipamentos", [
     ...partirLinhas(d.local ? `Local registado na turma: ${d.local}` : "A turma ainda não tem local."),
   ]);
-  bloco(linhas, "8. Certificados emitidos", [
-    `N.º de certificados emitidos pelo GesForma: ${d.certificados}.`,
-    "Os certificados emitidos noutros sistemas não entram nesta contagem.",
+  bloco(linhas, "8. Certificados", [
+    `N.º de certificados externos carregados no dossiê: ${d.certificados}.`,
+    "O certificado legal obtém-se fora do GesForma. Esta contagem só inclui o PDF carregado para a turma.",
   ]);
   bloco(linhas, "9. Avaliação das aprendizagens", [
     ...(d.formandos.length

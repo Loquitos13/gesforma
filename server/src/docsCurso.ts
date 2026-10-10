@@ -15,8 +15,11 @@ const FIN: DocPedido[] = [
   { id: "cc", label: "Cartão de Cidadão", required: true },
   { id: "ch", label: "Certificado de habilitações", required: true },
   { id: "cu", label: "Curriculum vitae", required: true },
+  { id: "morada", label: "Comprovativo de morada", required: true },
   { id: "ci", label: "IBAN / comprovativo de NIB", required: true },
   { id: "ce", label: "Comprovativo de situação perante o emprego", required: true },
+  { id: "contrato", label: "Contrato de formação", required: true },
+  { id: "rgpd", label: "Declaração RGPD", required: true },
 ];
 
 export const COMPROVATIVO: DocPedido = {

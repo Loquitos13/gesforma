@@ -14,9 +14,31 @@ export const DOCS_FORMANDO_FIN: DocTipo[] = [
   { id: "cc", label: "Cartão de Cidadão", required: true },
   { id: "ch", label: "Certificado de habilitações", required: true },
   { id: "cu", label: "Curriculum vitae", required: true },
+  { id: "morada", label: "Comprovativo de morada", required: true },
   { id: "ci", label: "IBAN / comprovativo de NIB", required: true },
   { id: "ce", label: "Comprovativo de situação perante o emprego", required: true },
+  { id: "contrato", label: "Contrato de formação", required: true },
+  { id: "rgpd", label: "Declaração RGPD", required: true },
 ];
+
+export type DocOkFin = { ok: boolean; data: string };
+
+export function docFinDe(ficha: object, id: string): DocOkFin {
+  const v = (ficha as Record<string, unknown>)[id];
+  if (v && typeof v === "object" && "ok" in v) {
+    const row = v as { ok?: unknown; data?: unknown };
+    return { ok: Boolean(row.ok), data: String(row.data ?? "") };
+  }
+  return { ok: false, data: "" };
+}
+
+export function docsFinOkCount(ficha: object) {
+  return DOCS_FORMANDO_FIN.filter(d => docFinDe(ficha, d.id).ok).length;
+}
+
+export function docsFinCompletos(ficha: object) {
+  return DOCS_FORMANDO_FIN.every(d => !d.required || docFinDe(ficha, d.id).ok);
+}
 
 export const DOCS_FORMADOR: DocTipo[] = [
   { id: "cc", label: "Cartão de Cidadão", required: true },

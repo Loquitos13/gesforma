@@ -125,7 +125,7 @@ function cartaoDe(slot: HeroSlot, ler: (chave: SiteChave) => string, oferta: Ofe
 
 function MiniCartao({ cartao, classe }: { cartao: NonNullable<ReturnType<typeof cartaoDe>>; classe: string }) {
   return (
-    <article className={`overflow-hidden rounded-lg border-t-4 bg-white shadow ${classe} ${cartao.ouro ? "border-[#FFA900]" : "border-[#A60000]"}`}>
+    <article className={`overflow-hidden rounded-lg bg-white shadow ${classe}`}>
       <div className="h-8 bg-[#E7EBF0]">
         {cartao.imagem && <img src={cartao.imagem} alt="" className="h-full w-full object-cover" />}
       </div>

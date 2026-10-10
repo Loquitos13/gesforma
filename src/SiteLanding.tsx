@@ -276,8 +276,8 @@ function LigacaoHero({ href, className, children }: { href: string; className: s
 function CartaoFlutuante({ vista, abrir }: { vista: CartaoVista; abrir: (curso: Course) => void }) {
   const esquerda = vista.posicao === 1;
   const artigo = esquerda
-    ? "ena-flutuar w-full overflow-hidden rounded-2xl border-t-4 border-[#FFA900] bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] lg:absolute lg:left-1 lg:top-[6%] lg:w-[340px]"
-    : "ena-flutuar-b w-full overflow-hidden rounded-2xl border-t-4 border-[#A60000] bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] lg:absolute lg:right-4 lg:top-[34%] lg:w-[340px]";
+    ? "ena-flutuar w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] lg:absolute lg:left-1 lg:top-[6%] lg:w-[340px]"
+    : "ena-flutuar-b w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] lg:absolute lg:right-4 lg:top-[34%] lg:w-[340px]";
   const botaoCls = esquerda
     ? "mt-4 flex w-full items-center justify-center rounded-full bg-[#A60000] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#14263D]"
     : "mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#FFA900] hover:text-[#14263D]";

@@ -51,9 +51,52 @@ body {
   animation-delay: -4.5s;
 }
 
+@keyframes ena-botao-pulsar {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.045); }
+}
+
+@keyframes ena-botao-saltar {
+  0%, 72%, 100% { transform: translateY(0); }
+  82% { transform: translateY(-5px); }
+  90% { transform: translateY(0); }
+}
+
+@keyframes ena-botao-abanar {
+  0%, 78%, 100% { transform: rotate(0); }
+  82% { transform: rotate(-2deg); }
+  86% { transform: rotate(2deg); }
+  90% { transform: rotate(-1.5deg); }
+  94% { transform: rotate(1.5deg); }
+}
+
+@keyframes ena-botao-brilho {
+  0% { transform: translateX(-130%); }
+  55%, 100% { transform: translateX(130%); }
+}
+
+.ena-botao-pulsar { animation: ena-botao-pulsar 1.8s ease-in-out infinite; }
+.ena-botao-saltar { animation: ena-botao-saltar 2.2s ease-in-out infinite; }
+.ena-botao-abanar { animation: ena-botao-abanar 2.6s ease-in-out infinite; }
+
+.ena-botao-brilho { position: relative; overflow: hidden; }
+.ena-botao-brilho::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 32%, rgba(255, 255, 255, .55) 50%, transparent 68%);
+  transform: translateX(-130%);
+  animation: ena-botao-brilho 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ena-flutuar,
-  .ena-flutuar-b {
+  .ena-flutuar-b,
+  .ena-botao-pulsar,
+  .ena-botao-saltar,
+  .ena-botao-abanar,
+  .ena-botao-brilho::after {
     animation: none;
   }
 }

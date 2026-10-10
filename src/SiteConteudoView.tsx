@@ -17,9 +17,11 @@ const HERO: Record<HeroSlot, {
   imagem: SiteChave;
   botao: SiteChave;
   destino: SiteChave;
+  tamanho: SiteChave;
+  animacao: SiteChave;
 }> = {
-  1: { tipo: "hero1Tipo", curso: "hero1Curso", regime: "hero1Regime", titulo: "hero1Titulo", descricao: "hero1Descricao", imagem: "hero1Imagem", botao: "hero1Botao", destino: "hero1Destino" },
-  2: { tipo: "hero2Tipo", curso: "hero2Curso", regime: "hero2Regime", titulo: "hero2Titulo", descricao: "hero2Descricao", imagem: "hero2Imagem", botao: "hero2Botao", destino: "hero2Destino" },
+  1: { tipo: "hero1Tipo", curso: "hero1Curso", regime: "hero1Regime", titulo: "hero1Titulo", descricao: "hero1Descricao", imagem: "hero1Imagem", botao: "hero1Botao", destino: "hero1Destino", tamanho: "hero1Tamanho", animacao: "hero1Animacao" },
+  2: { tipo: "hero2Tipo", curso: "hero2Curso", regime: "hero2Regime", titulo: "hero2Titulo", descricao: "hero2Descricao", imagem: "hero2Imagem", botao: "hero2Botao", destino: "hero2Destino", tamanho: "hero2Tamanho", animacao: "hero2Animacao" },
 };
 
 type CursoPublico = CursoPreview;
@@ -173,7 +175,7 @@ function CartoesHero({
       <div>
         <h3 className="text-sm font-bold text-slate-800">Cartões do destaque</h3>
         <p className="mt-1 text-xs text-slate-500">
-          São dois cartões, o da esquerda e o da direita. Cada um pode ser um curso publicado ou um regime (Gold ou Financiada). Em automático, a esquerda mostra a formação de formadores com CCP e a direita a primeira formação financiada com miniatura. O botão desses cartões abre a inscrição.
+          São dois cartões, o da esquerda e o da direita. Cada um tem o seu tamanho e a animação do botão, também em automático. Cada um pode ser um curso publicado ou um regime (Gold ou Financiada). Em automático, a esquerda mostra a formação de formadores com CCP e a direita a primeira formação financiada com miniatura. O botão desses cartões abre a inscrição.
         </p>
         <p className="mt-1 text-xs text-slate-500">
           No destino, use um caminho do site (<span className="font-mono">/formacao/nome-do-curso</span>) ou um endereço completo (<span className="font-mono">https://…</span>). O caminho continua válido se o domínio mudar. Vazio abre a ficha do curso, ou o catálogo da linha Gold ou Financiada.
@@ -340,6 +342,25 @@ function CartaoHeroEditor({
           </label>
         </>
       )}
+      <label className="flex flex-col gap-1.5">
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Tamanho do cartão</span>
+        <select className={campoCls} value={draft[chaves.tamanho] === "pequeno" || draft[chaves.tamanho] === "grande" ? draft[chaves.tamanho] : ""} onChange={e => onChange(chaves.tamanho, e.target.value)} aria-label={slot === 1 ? "Tamanho do cartão da esquerda" : "Tamanho do cartão da direita"}>
+          <option value="pequeno">Pequeno</option>
+          <option value="">Médio</option>
+          <option value="grande">Grande</option>
+        </select>
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Animação do botão</span>
+        <select className={campoCls} value={["pulsar", "brilho", "saltar", "abanar"].includes(draft[chaves.animacao]) ? draft[chaves.animacao] : ""} onChange={e => onChange(chaves.animacao, e.target.value)} aria-label={slot === 1 ? "Animação do botão da esquerda" : "Animação do botão da direita"}>
+          <option value="">Nenhuma</option>
+          <option value="pulsar">Pulsar</option>
+          <option value="brilho">Brilho</option>
+          <option value="saltar">Saltar</option>
+          <option value="abanar">Abanar</option>
+        </select>
+        <span className="text-xs text-slate-500">A animação pára para quem pediu menos movimento no sistema.</span>
+      </label>
     </fieldset>
   );
 }

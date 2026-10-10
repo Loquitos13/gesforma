@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { botaoHero, heroPedido, moradaSegura, tituloRegime, type HeroPedido, type HeroSlot, type SiteChave } from "./siteConteudo";
+import { botaoHero, classeAnimacaoBotao, heroAnimacao, heroPedido, heroTamanho, moradaSegura, tituloRegime, type HeroPedido, type HeroSlot, type SiteChave } from "./siteConteudo";
 
 export type CursoPreview = {
   id: string;
@@ -96,6 +96,7 @@ function cartaoDe(slot: HeroSlot, ler: (chave: SiteChave) => string, oferta: Ofe
       titulo: curso.titulo,
       linha: curso.area,
       botao: botaoHero(pedido, curso.inscricao),
+      ...medidaHero(slot, ler),
     };
   }
   if (pedido.modo === "regime") {
@@ -106,6 +107,7 @@ function cartaoDe(slot: HeroSlot, ler: (chave: SiteChave) => string, oferta: Ofe
       titulo: tituloRegime(pedido.regime, pedido.titulo),
       linha: pedido.descricao,
       botao: botaoHero(pedido),
+      ...medidaHero(slot, ler),
     };
   }
   const curso = slot === 1
@@ -120,20 +122,27 @@ function cartaoDe(slot: HeroSlot, ler: (chave: SiteChave) => string, oferta: Ofe
     titulo: curso.titulo,
     linha: curso.area,
     botao: botaoHero(automatico, curso.inscricao),
+    ...medidaHero(slot, ler),
   };
 }
 
+function medidaHero(slot: HeroSlot, ler: (chave: SiteChave) => string) {
+  return { tamanho: heroTamanho(ler, slot), animacao: heroAnimacao(ler, slot) };
+}
+
 function MiniCartao({ cartao, classe }: { cartao: NonNullable<ReturnType<typeof cartaoDe>>; classe: string }) {
+  const largura = cartao.tamanho === "pequeno" ? "w-[46%]" : cartao.tamanho === "grande" ? "w-[74%]" : "w-[58%]";
+  const foto = cartao.tamanho === "pequeno" ? "h-6" : cartao.tamanho === "grande" ? "h-12" : "h-8";
   return (
-    <article className={`overflow-hidden rounded-lg bg-white shadow ${classe}`}>
-      <div className="h-8 bg-[#E7EBF0]">
+    <article className={`overflow-hidden rounded-lg bg-white shadow ${largura} ${classe}`} data-hero-tamanho={cartao.tamanho} data-hero-animacao={cartao.animacao}>
+      <div className={`${foto} bg-[#E7EBF0]`}>
         {cartao.imagem && <img src={cartao.imagem} alt="" className="h-full w-full object-cover" />}
       </div>
       <div className="p-2">
         {cartao.selo && <span className={`inline-flex rounded px-1.5 py-0.5 text-[8px] font-extrabold ${cartao.ouro ? "bg-[#FFA900] text-[#14263D]" : "bg-[#A60000] text-white"}`}>{cartao.selo}</span>}
         <p className="mt-1 line-clamp-2 text-[11px] font-bold leading-tight text-[#14263D]">{cartao.titulo}</p>
         {cartao.linha && <p className="mt-0.5 line-clamp-2 text-[9px] leading-snug text-[#3E5168]">{cartao.linha}</p>}
-        {cartao.botao && <p className={`mt-1.5 rounded-full px-2 py-1 text-center text-[8px] font-extrabold uppercase tracking-wide text-white ${cartao.ouro ? "bg-[#A60000]" : "bg-[#1C3350]"}`}>{cartao.botao}</p>}
+        {cartao.botao && <p className={`mt-1.5 rounded-full px-2 py-1 text-center text-[8px] font-extrabold uppercase tracking-wide text-white ${cartao.ouro ? "bg-[#A60000]" : "bg-[#1C3350]"} ${classeAnimacaoBotao(cartao.animacao)}`}>{cartao.botao}</p>}
       </div>
     </article>
   );
@@ -153,8 +162,8 @@ function PreviewHero({ ler, oferta }: { ler: (chave: SiteChave) => string; ofert
           <div className="absolute right-0 top-6 h-24 w-24 overflow-hidden rounded-full bg-[#FFA900] shadow-[0_0_0_4px_#A60000]">
             {imagem && <img src={imagem} alt="" className="h-full w-full object-cover object-[center_30%]" />}
           </div>
-          {esquerda && <MiniCartao cartao={esquerda} classe="absolute left-0 top-0 z-10 w-[58%]" />}
-          {direita && <MiniCartao cartao={direita} classe="absolute bottom-0 right-0 z-10 w-[58%]" />}
+          {esquerda && <MiniCartao cartao={esquerda} classe="absolute left-0 top-0 z-10" />}
+          {direita && <MiniCartao cartao={direita} classe="absolute bottom-0 right-0 z-10" />}
         </div>
         <svg aria-hidden="true" className="mt-1 h-4 w-full" viewBox="0 0 1200 140" preserveAspectRatio="none">
           <path d="M0 140V72C90 36 180 108 320 78C460 48 540 18 700 42C860 66 940 112 1080 82C1140 68 1170 88 1200 74V140H0Z" fill="#A60000" />

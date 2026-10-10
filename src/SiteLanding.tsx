@@ -1,6 +1,6 @@
 import { createContext, FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { InscricaoSite, useInscricao } from "./SiteInscricao";
-import { botaoHero, destinoDoHero, heroPedido, ligacaoExterna, moradaSegura, textoSite, tituloRegime, type HeroPedido, type SiteChave } from "./siteConteudo";
+import { botaoHero, classeAnimacaoBotao, destinoDoHero, heroAnimacao, heroPedido, heroTamanho, ligacaoExterna, moradaSegura, textoSite, tituloRegime, type HeroAnimacao, type HeroPedido, type HeroTamanho, type SiteChave } from "./siteConteudo";
 
 export type Course = {
   id: string;
@@ -206,10 +206,10 @@ function Header() {
   );
 }
 
-function Moldura({ src, alt }: { src: string | null | undefined; alt: string }) {
+function Moldura({ src, alt, altura }: { src: string | null | undefined; alt: string; altura: string }) {
   return (
-    <div className="h-24 max-h-24 w-full max-w-full overflow-hidden bg-[#E7EBF0]">
-      {src ? <img src={src} alt={alt} className="h-full max-h-24 w-full max-w-full object-cover" /> : null}
+    <div className={`${altura} w-full overflow-hidden bg-[#E7EBF0]`}>
+      {src ? <img src={src} alt={alt} className="h-full w-full object-cover" /> : null}
     </div>
   );
 }
@@ -223,6 +223,8 @@ type CartaoVista = {
   titulo: string;
   linha: string;
   botao: string;
+  tamanho: HeroTamanho;
+  animacao: HeroAnimacao | "";
   acao: { tipo: "modal"; curso: Course } | { tipo: "ligacao"; href: string };
 };
 
@@ -237,6 +239,8 @@ function vistaCurso(posicao: 1 | 2, curso: Course, pedido?: Extract<HeroPedido, 
     titulo: curso.title,
     linha: curso.area,
     botao: pedido ? botaoHero(pedido, curso.enrollment) : (curso.enrollment === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever"),
+    tamanho: "medio",
+    animacao: "",
     acao: pedido
       ? { tipo: "ligacao", href: destinoDoHero(pedido, curso.id) }
       : { tipo: "modal", curso },
@@ -260,6 +264,8 @@ function vistaDePedido(posicao: 1 | 2, pedido: HeroPedido, cursos: Course[]): Ca
     titulo,
     linha: pedido.descricao,
     botao: botaoHero(pedido),
+    tamanho: "medio",
+    animacao: "",
     acao: { tipo: "ligacao", href: destinoDoHero(pedido) },
   };
 }
@@ -273,21 +279,27 @@ function LigacaoHero({ href, className, children }: { href: string; className: s
   );
 }
 
+function medidaDoCartao(tamanho: HeroTamanho) {
+  if (tamanho === "pequeno") return { largura: "mx-auto max-w-[280px] lg:mx-0 lg:w-[280px]", imagem: "h-20", corpo: "p-4", titulo: "text-lg" };
+  if (tamanho === "grande") return { largura: "mx-auto max-w-[440px] lg:mx-0 lg:w-[420px]", imagem: "h-36", corpo: "p-6", titulo: "text-2xl" };
+  return { largura: "mx-auto max-w-[340px] lg:mx-0 lg:w-[340px]", imagem: "h-24", corpo: "p-5", titulo: "text-xl" };
+}
+
 function CartaoFlutuante({ vista, abrir }: { vista: CartaoVista; abrir: (curso: Course) => void }) {
   const esquerda = vista.posicao === 1;
-  const artigo = esquerda
-    ? "ena-flutuar w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] lg:absolute lg:left-1 lg:top-[6%] lg:w-[340px]"
-    : "ena-flutuar-b w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] lg:absolute lg:right-4 lg:top-[34%] lg:w-[340px]";
-  const botaoCls = esquerda
+  const medida = medidaDoCartao(vista.tamanho);
+  const posicao = esquerda ? "lg:absolute lg:left-1 lg:top-[6%]" : "lg:absolute lg:right-4 lg:top-[34%]";
+  const artigo = `${esquerda ? "ena-flutuar" : "ena-flutuar-b"} w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] ${medida.largura} ${posicao}`;
+  const botaoCls = `${esquerda
     ? "mt-4 flex w-full items-center justify-center rounded-full bg-[#A60000] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#14263D]"
-    : "mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#FFA900] hover:text-[#14263D]";
+    : "mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#FFA900] hover:text-[#14263D]"} ${classeAnimacaoBotao(vista.animacao)}`;
   const acao = vista.acao;
   return (
-    <article className={artigo}>
-      <Moldura src={vista.imagem} alt={vista.alt} />
-      <div className="p-5">
+    <article className={artigo} data-hero-tamanho={vista.tamanho} data-hero-animacao={vista.animacao}>
+      <Moldura src={vista.imagem} alt={vista.alt} altura={medida.imagem} />
+      <div className={medida.corpo}>
         {vista.selo && <span className={`inline-flex rounded-md px-2.5 py-1 text-[11px] font-extrabold ${vista.seloClasse}`}>{vista.selo}</span>}
-        <h2 className="mt-3 font-serif text-xl font-bold leading-tight text-[#1C3350]">{vista.titulo}</h2>
+        <h2 className={`mt-3 font-serif font-bold leading-tight text-[#1C3350] ${medida.titulo}`}>{vista.titulo}</h2>
         {vista.linha && <p className="mt-2 line-clamp-3 text-sm leading-6 text-[#3E5168]">{vista.linha}</p>}
         {acao.tipo === "modal" ? (
           <button type="button" onClick={() => abrir(acao.curso)} className={botaoCls}>{vista.botao}</button>
@@ -307,10 +319,11 @@ function SplitHero() {
   const financiada = cursos.find(curso => curso.regime === "fin" && curso.miniatura) ?? cursos.find(curso => curso.regime === "fin");
   const cartoes = ([1, 2] as const).flatMap(posicao => {
     const pedido = vistaDePedido(posicao, heroPedido(t, posicao), cursos);
-    if (pedido && pedido !== "automatico") return [pedido];
+    const medida = { tamanho: heroTamanho(t, posicao), animacao: heroAnimacao(t, posicao) };
+    if (pedido && pedido !== "automatico") return [{ ...pedido, ...medida }];
     if (pedido === null) return [];
     const curso = posicao === 1 ? ccp : financiada;
-    return curso ? [vistaCurso(posicao, curso)] : [];
+    return curso ? [{ ...vistaCurso(posicao, curso), ...medida }] : [];
   });
   return (
     <section className="bg-[#F6F3EE] px-4 py-6 sm:px-6 lg:px-8 lg:py-8" aria-label="Destaques">

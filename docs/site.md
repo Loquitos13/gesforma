@@ -54,6 +54,8 @@ O hero tem dois cartões, o da esquerda e o da direita. Em **Sistema → Site**,
 
 Em automático, a esquerda é a formação de formadores com CCP e a direita é a primeira formação financiada que tenha miniatura. O botão abre o modal de inscrição.
 
+Cada cartão escolhe o seu tamanho (pequeno, médio ou grande) e a animação do botão (nenhuma, pulsar, brilho, saltar ou abanar). Vale em automático, num curso ou num regime. Quem pediu menos movimento no sistema vê o botão parado.
+
 Num curso, o título, o preço, a área e a miniatura continuam a sair da ficha. Dá para mudar o texto do botão e o destino.
 
 Num regime, dá para editar o título, a descrição e a miniatura. A miniatura carrega-se como ficheiro (JPG, PNG, WebP ou GIF, até 8 MB) ou cola-se um endereço. O ficheiro fica em `curso_imagens`, com um identificador reservado, e o site lê-o em `/api/v1/public/imagens/:token`. Também dá para mudar o texto do botão e o destino.

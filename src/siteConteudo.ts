@@ -19,6 +19,8 @@ export const SITE_OMISSAO = {
   hero1Imagem: "",
   hero1Botao: "",
   hero1Destino: "",
+  hero1Tamanho: "",
+  hero1Animacao: "",
   hero2Tipo: "",
   hero2Curso: "",
   hero2Regime: "",
@@ -27,6 +29,8 @@ export const SITE_OMISSAO = {
   hero2Imagem: "",
   hero2Botao: "",
   hero2Destino: "",
+  hero2Tamanho: "",
+  hero2Animacao: "",
   ofertaKicker: "Oferta formativa",
   ofertaTitulo: "Encontre a formação certa para o seu momento.",
   ofertaPesquisa: "Pesquisar curso ou área...",
@@ -89,7 +93,7 @@ export const SITE_GRUPOS: { titulo: string; nota?: string; campos: CampoSite[] }
   },
   {
     titulo: "Destaque",
-    nota: "O texto e a fotografia de fundo. Os dois cartões editam-se na secção seguinte.",
+    nota: "O texto e a fotografia de fundo. Cada cartão escolhe o tamanho e a animação do botão, também em automático.",
     campos: [
       { chave: "heroTitulo", etiqueta: "Título", tipo: "texto" },
       { chave: "heroTexto", etiqueta: "Texto", tipo: "texto" },
@@ -237,4 +241,27 @@ export function destinoDoHero(pedido: Exclude<HeroPedido, { modo: "automatico" }
 
 export function ligacaoExterna(href: string) {
   return /^https?:\/\//i.test(href);
+}
+
+export type HeroTamanho = "pequeno" | "medio" | "grande";
+export type HeroAnimacao = "pulsar" | "brilho" | "saltar" | "abanar";
+
+export function heroTamanho(ler: (chave: SiteChave) => string, slot: HeroSlot): HeroTamanho {
+  const valor = ler(slot === 1 ? "hero1Tamanho" : "hero2Tamanho").trim();
+  if (valor === "pequeno" || valor === "grande") return valor;
+  return "medio";
+}
+
+export function heroAnimacao(ler: (chave: SiteChave) => string, slot: HeroSlot): HeroAnimacao | "" {
+  const valor = ler(slot === 1 ? "hero1Animacao" : "hero2Animacao").trim();
+  if (valor === "pulsar" || valor === "brilho" || valor === "saltar" || valor === "abanar") return valor;
+  return "";
+}
+
+export function classeAnimacaoBotao(animacao: HeroAnimacao | "") {
+  if (animacao === "pulsar") return "ena-botao-pulsar";
+  if (animacao === "brilho") return "ena-botao-brilho";
+  if (animacao === "saltar") return "ena-botao-saltar";
+  if (animacao === "abanar") return "ena-botao-abanar";
+  return "";
 }

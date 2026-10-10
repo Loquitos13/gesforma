@@ -1,6 +1,6 @@
 import { createContext, FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { InscricaoSite, useInscricao } from "./SiteInscricao";
-import { botaoHero, classeAnimacaoBotao, destinoDoHero, heroAnimacao, heroPedido, heroTamanho, ligacaoExterna, moradaSegura, textoSite, tituloRegime, type HeroAnimacao, type HeroPedido, type HeroTamanho, type SiteChave } from "./siteConteudo";
+import { botaoHero, classeAnimacaoBotao, classeSelo, destinoDoHero, heroAnimacao, heroBadge, heroPedido, heroTamanho, ligacaoExterna, moradaSegura, textoSite, tituloRegime, type HeroAnimacao, type HeroBadgeCor, type HeroPedido, type HeroTamanho, type SiteChave } from "./siteConteudo";
 
 export type Course = {
   id: string;
@@ -219,7 +219,9 @@ type CartaoVista = {
   imagem: string | null;
   alt: string;
   selo: string;
+  seloCor: HeroBadgeCor;
   seloClasse: string;
+  ouro: boolean;
   titulo: string;
   linha: string;
   botao: string;
@@ -235,7 +237,9 @@ function vistaCurso(posicao: 1 | 2, curso: Course, pedido?: Extract<HeroPedido, 
     imagem: curso.miniatura,
     alt: curso.title,
     selo: curso.price,
-    seloClasse: ouro ? "bg-[#FFA900] text-[#14263D]" : "bg-[#A60000] text-white",
+    seloCor: ouro ? "ouro" : "vermelho",
+    seloClasse: classeSelo(ouro ? "ouro" : "vermelho"),
+    ouro,
     titulo: curso.title,
     linha: curso.area,
     botao: pedido ? botaoHero(pedido, curso.enrollment) : (curso.enrollment === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever"),
@@ -260,7 +264,9 @@ function vistaDePedido(posicao: 1 | 2, pedido: HeroPedido, cursos: Course[]): Ca
     imagem: pedido.imagem || null,
     alt: titulo,
     selo: ouro ? "Gold" : "Financiada",
-    seloClasse: ouro ? "bg-[#FFA900] text-[#14263D]" : "bg-[#A60000] text-white",
+    seloCor: ouro ? "ouro" : "vermelho",
+    seloClasse: classeSelo(ouro ? "ouro" : "vermelho"),
+    ouro,
     titulo,
     linha: pedido.descricao,
     botao: botaoHero(pedido),
@@ -295,7 +301,7 @@ function CartaoFlutuante({ vista, abrir }: { vista: CartaoVista; abrir: (curso: 
     : "mt-4 flex w-full items-center justify-center rounded-full bg-[#1C3350] px-4 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#FFA900] hover:text-[#14263D]"} ${classeAnimacaoBotao(vista.animacao)}`;
   const acao = vista.acao;
   return (
-    <article className={artigo} data-hero-tamanho={vista.tamanho} data-hero-animacao={vista.animacao}>
+    <article className={artigo} data-hero-tamanho={vista.tamanho} data-hero-animacao={vista.animacao} data-hero-badge={vista.selo} data-hero-badge-cor={vista.seloCor}>
       <Moldura src={vista.imagem} alt={vista.alt} altura={medida.imagem} />
       <div className={medida.corpo}>
         {vista.selo && <span className={`inline-flex rounded-md px-2.5 py-1 text-[11px] font-extrabold ${vista.seloClasse}`}>{vista.selo}</span>}
@@ -318,12 +324,19 @@ function SplitHero() {
   const heroImagem = moradaSegura(t("heroImagem"));
   const financiada = cursos.find(curso => curso.regime === "fin" && curso.miniatura) ?? cursos.find(curso => curso.regime === "fin");
   const cartoes = ([1, 2] as const).flatMap(posicao => {
-    const pedido = vistaDePedido(posicao, heroPedido(t, posicao), cursos);
-    const medida = { tamanho: heroTamanho(t, posicao), animacao: heroAnimacao(t, posicao) };
-    if (pedido && pedido !== "automatico") return [{ ...pedido, ...medida }];
-    if (pedido === null) return [];
+    const pedido = heroPedido(t, posicao);
+    const vista = vistaDePedido(posicao, pedido, cursos);
     const curso = posicao === 1 ? ccp : financiada;
-    return curso ? [{ ...vistaCurso(posicao, curso), ...medida }] : [];
+    const base = vista && vista !== "automatico" ? vista : vista === null ? null : curso ? vistaCurso(posicao, curso) : null;
+    if (!base) return [];
+    const badge = heroBadge(t, posicao, base.ouro, base.selo);
+    return [{
+      ...base,
+      ...badge,
+      seloClasse: classeSelo(badge.seloCor),
+      tamanho: heroTamanho(t, posicao),
+      animacao: heroAnimacao(t, posicao),
+    }];
   });
   return (
     <section className="bg-[#F6F3EE] px-4 py-6 sm:px-6 lg:px-8 lg:py-8" aria-label="Destaques">

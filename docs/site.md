@@ -56,6 +56,8 @@ Em automático, a esquerda é a formação de formadores com CCP e a direita é 
 
 Cada cartão escolhe o seu tamanho (pequeno, médio ou grande) e a animação do botão (nenhuma, pulsar, brilho, saltar ou abanar). Vale em automático, num curso ou num regime. Quem pediu menos movimento no sistema vê o botão parado.
 
+Cada cartão escolhe também o texto e a cor do badge. Ouro leva texto azul-marinho. Vermelho e azul levam texto branco. O texto vazio mantém o preço do curso, ou Gold / Financiada num regime. A cor vazia mantém ouro à esquerda e vermelho à direita; num regime, ouro no Gold e vermelho na Financiada. A pré-visualização ao lado mostra o texto, a cor, o tamanho e a animação antes de Guardar.
+
 Num curso, o título, o preço, a área e a miniatura continuam a sair da ficha. Dá para mudar o texto do botão e o destino.
 
 Num regime, dá para editar o título, a descrição e a miniatura. A miniatura carrega-se como ficheiro (JPG, PNG, WebP ou GIF, até 8 MB) ou cola-se um endereço. O ficheiro fica em `curso_imagens`, com um identificador reservado, e o site lê-o em `/api/v1/public/imagens/:token`. Também dá para mudar o texto do botão e o destino.

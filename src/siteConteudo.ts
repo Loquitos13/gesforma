@@ -21,6 +21,8 @@ export const SITE_OMISSAO = {
   hero1Destino: "",
   hero1Tamanho: "",
   hero1Animacao: "",
+  hero1Badge: "",
+  hero1BadgeCor: "",
   hero2Tipo: "",
   hero2Curso: "",
   hero2Regime: "",
@@ -31,6 +33,8 @@ export const SITE_OMISSAO = {
   hero2Destino: "",
   hero2Tamanho: "",
   hero2Animacao: "",
+  hero2Badge: "",
+  hero2BadgeCor: "",
   ofertaKicker: "Oferta formativa",
   ofertaTitulo: "Encontre a formação certa para o seu momento.",
   ofertaPesquisa: "Pesquisar curso ou área...",
@@ -93,7 +97,7 @@ export const SITE_GRUPOS: { titulo: string; nota?: string; campos: CampoSite[] }
   },
   {
     titulo: "Destaque",
-    nota: "O texto e a fotografia de fundo. Cada cartão escolhe o tamanho e a animação do botão, também em automático.",
+    nota: "O texto e a fotografia de fundo. Cada cartão escolhe o badge, o tamanho e a animação do botão. A pré-visualização mostra o rascunho.",
     campos: [
       { chave: "heroTitulo", etiqueta: "Título", tipo: "texto" },
       { chave: "heroTexto", etiqueta: "Texto", tipo: "texto" },
@@ -264,4 +268,23 @@ export function classeAnimacaoBotao(animacao: HeroAnimacao | "") {
   if (animacao === "saltar") return "ena-botao-saltar";
   if (animacao === "abanar") return "ena-botao-abanar";
   return "";
+}
+
+export type HeroBadgeCor = "ouro" | "vermelho" | "azul";
+
+export function heroBadgeCor(ler: (chave: SiteChave) => string, slot: HeroSlot, ouro: boolean): HeroBadgeCor {
+  const valor = ler(slot === 1 ? "hero1BadgeCor" : "hero2BadgeCor").trim();
+  if (valor === "ouro" || valor === "vermelho" || valor === "azul") return valor;
+  return ouro ? "ouro" : "vermelho";
+}
+
+export function heroBadge(ler: (chave: SiteChave) => string, slot: HeroSlot, ouro: boolean, automatico: string) {
+  const escrito = ler(slot === 1 ? "hero1Badge" : "hero2Badge").trim();
+  return { selo: escrito || automatico, seloCor: heroBadgeCor(ler, slot, ouro) };
+}
+
+export function classeSelo(cor: HeroBadgeCor) {
+  if (cor === "vermelho") return "bg-[#A60000] text-white";
+  if (cor === "azul") return "bg-[#14263D] text-white";
+  return "bg-[#FFA900] text-[#14263D]";
 }

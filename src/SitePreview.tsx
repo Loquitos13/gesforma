@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { botaoHero, classeAnimacaoBotao, heroAnimacao, heroPedido, heroTamanho, moradaSegura, tituloRegime, type HeroPedido, type HeroSlot, type SiteChave } from "./siteConteudo";
+import { botaoHero, classeAnimacaoBotao, classeSelo, heroAnimacao, heroBadge, heroPedido, heroTamanho, moradaSegura, tituloRegime, type HeroPedido, type HeroSlot, type SiteChave } from "./siteConteudo";
 
 export type CursoPreview = {
   id: string;
@@ -89,24 +89,26 @@ function cartaoDe(slot: HeroSlot, ler: (chave: SiteChave) => string, oferta: Ofe
   if (pedido.modo === "curso") {
     const curso = oferta?.cursos.find(item => item.id === pedido.cursoId);
     if (!curso) return null;
+    const ouro = slot === 1;
     return {
       imagem: curso.miniatura,
-      selo: curso.precoLabel,
-      ouro: slot === 1,
+      ouro,
       titulo: curso.titulo,
       linha: curso.area,
       botao: botaoHero(pedido, curso.inscricao),
+      ...heroBadge(ler, slot, ouro, curso.precoLabel),
       ...medidaHero(slot, ler),
     };
   }
   if (pedido.modo === "regime") {
+    const ouro = pedido.regime === "gold";
     return {
       imagem: pedido.imagem || null,
-      selo: pedido.regime === "gold" ? "Gold" : "Financiada",
-      ouro: pedido.regime === "gold",
+      ouro,
       titulo: tituloRegime(pedido.regime, pedido.titulo),
       linha: pedido.descricao,
       botao: botaoHero(pedido),
+      ...heroBadge(ler, slot, ouro, ouro ? "Gold" : "Financiada"),
       ...medidaHero(slot, ler),
     };
   }
@@ -115,13 +117,14 @@ function cartaoDe(slot: HeroSlot, ler: (chave: SiteChave) => string, oferta: Ofe
     : oferta?.cursos.find(item => item.regime === "fin" && item.miniatura) ?? oferta?.cursos.find(item => item.regime === "fin") ?? null;
   if (!curso) return null;
   const automatico: Exclude<HeroPedido, { modo: "automatico" }> = { modo: "curso", cursoId: curso.id, botao: "", destino: "" };
+  const ouro = slot === 1;
   return {
     imagem: curso.miniatura,
-    selo: curso.precoLabel,
-    ouro: slot === 1,
+    ouro,
     titulo: curso.titulo,
     linha: curso.area,
     botao: botaoHero(automatico, curso.inscricao),
+    ...heroBadge(ler, slot, ouro, curso.precoLabel),
     ...medidaHero(slot, ler),
   };
 }
@@ -134,12 +137,12 @@ function MiniCartao({ cartao, classe }: { cartao: NonNullable<ReturnType<typeof 
   const largura = cartao.tamanho === "pequeno" ? "w-[46%]" : cartao.tamanho === "grande" ? "w-[74%]" : "w-[58%]";
   const foto = cartao.tamanho === "pequeno" ? "h-6" : cartao.tamanho === "grande" ? "h-12" : "h-8";
   return (
-    <article className={`overflow-hidden rounded-lg bg-white shadow ${largura} ${classe}`} data-hero-tamanho={cartao.tamanho} data-hero-animacao={cartao.animacao}>
+    <article className={`overflow-hidden rounded-lg bg-white shadow ${largura} ${classe}`} data-hero-tamanho={cartao.tamanho} data-hero-animacao={cartao.animacao} data-hero-badge={cartao.selo} data-hero-badge-cor={cartao.seloCor}>
       <div className={`${foto} bg-[#E7EBF0]`}>
         {cartao.imagem && <img src={cartao.imagem} alt="" className="h-full w-full object-cover" />}
       </div>
       <div className="p-2">
-        {cartao.selo && <span className={`inline-flex rounded px-1.5 py-0.5 text-[8px] font-extrabold ${cartao.ouro ? "bg-[#FFA900] text-[#14263D]" : "bg-[#A60000] text-white"}`}>{cartao.selo}</span>}
+        {cartao.selo && <span className={`inline-flex max-w-full rounded px-1.5 py-0.5 text-[9px] font-extrabold leading-tight ${classeSelo(cartao.seloCor)}`}>{cartao.selo}</span>}
         <p className="mt-1 line-clamp-2 text-[11px] font-bold leading-tight text-[#14263D]">{cartao.titulo}</p>
         {cartao.linha && <p className="mt-0.5 line-clamp-2 text-[9px] leading-snug text-[#3E5168]">{cartao.linha}</p>}
         {cartao.botao && <p className={`mt-1.5 rounded-full px-2 py-1 text-center text-[8px] font-extrabold uppercase tracking-wide text-white ${cartao.ouro ? "bg-[#A60000]" : "bg-[#1C3350]"} ${classeAnimacaoBotao(cartao.animacao)}`}>{cartao.botao}</p>}

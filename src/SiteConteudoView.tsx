@@ -3,7 +3,7 @@ import { apiSiteHeroImagem } from "./api";
 import { useCatalogs } from "./CatalogsContext";
 import { SearchSelect } from "./FormKit";
 import { SiteSeccaoPreview, type CursoPreview, type OfertaPreview } from "./SitePreview";
-import { moradaSegura, SITE_GRUPOS, SITE_OMISSAO, type HeroSlot, type SiteChave } from "./siteConteudo";
+import { classeSelo, heroBadgeCor, moradaSegura, SITE_GRUPOS, SITE_OMISSAO, type HeroSlot, type SiteChave } from "./siteConteudo";
 import { toastOk } from "./toastBus";
 
 const campoCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent";
@@ -19,9 +19,11 @@ const HERO: Record<HeroSlot, {
   destino: SiteChave;
   tamanho: SiteChave;
   animacao: SiteChave;
+  badge: SiteChave;
+  badgeCor: SiteChave;
 }> = {
-  1: { tipo: "hero1Tipo", curso: "hero1Curso", regime: "hero1Regime", titulo: "hero1Titulo", descricao: "hero1Descricao", imagem: "hero1Imagem", botao: "hero1Botao", destino: "hero1Destino", tamanho: "hero1Tamanho", animacao: "hero1Animacao" },
-  2: { tipo: "hero2Tipo", curso: "hero2Curso", regime: "hero2Regime", titulo: "hero2Titulo", descricao: "hero2Descricao", imagem: "hero2Imagem", botao: "hero2Botao", destino: "hero2Destino", tamanho: "hero2Tamanho", animacao: "hero2Animacao" },
+  1: { tipo: "hero1Tipo", curso: "hero1Curso", regime: "hero1Regime", titulo: "hero1Titulo", descricao: "hero1Descricao", imagem: "hero1Imagem", botao: "hero1Botao", destino: "hero1Destino", tamanho: "hero1Tamanho", animacao: "hero1Animacao", badge: "hero1Badge", badgeCor: "hero1BadgeCor" },
+  2: { tipo: "hero2Tipo", curso: "hero2Curso", regime: "hero2Regime", titulo: "hero2Titulo", descricao: "hero2Descricao", imagem: "hero2Imagem", botao: "hero2Botao", destino: "hero2Destino", tamanho: "hero2Tamanho", animacao: "hero2Animacao", badge: "hero2Badge", badgeCor: "hero2BadgeCor" },
 };
 
 type CursoPublico = CursoPreview;
@@ -175,7 +177,7 @@ function CartoesHero({
       <div>
         <h3 className="text-sm font-bold text-slate-800">Cartões do destaque</h3>
         <p className="mt-1 text-xs text-slate-500">
-          São dois cartões, o da esquerda e o da direita. Cada um tem o seu tamanho e a animação do botão, também em automático. Cada um pode ser um curso publicado ou um regime (Gold ou Financiada). Em automático, a esquerda mostra a formação de formadores com CCP e a direita a primeira formação financiada com miniatura. O botão desses cartões abre a inscrição.
+          São dois cartões, o da esquerda e o da direita. Cada um escolhe o texto e a cor do badge, o tamanho e a animação do botão. A pré-visualização ao lado mostra essas escolhas. Cada um pode ser um curso publicado ou um regime (Gold ou Financiada). Em automático, a esquerda mostra a formação de formadores com CCP e a direita a primeira formação financiada com miniatura. O botão desses cartões abre a inscrição.
         </p>
         <p className="mt-1 text-xs text-slate-500">
           No destino, use um caminho do site (<span className="font-mono">/formacao/nome-do-curso</span>) ou um endereço completo (<span className="font-mono">https://…</span>). O caminho continua válido se o domínio mudar. Vazio abre a ficha do curso, ou o catálogo da linha Gold ou Financiada.
@@ -342,6 +344,30 @@ function CartaoHeroEditor({
           </label>
         </>
       )}
+      <label className="flex flex-col gap-1.5">
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Texto do badge</span>
+        <input
+          className={campoCls}
+          value={draft[chaves.badge]}
+          placeholder={tipo === "regime" ? (regime === "fin" ? "Financiada" : "Gold") : "Preço do curso"}
+          onChange={e => onChange(chaves.badge, e.target.value)}
+          aria-label={slot === 1 ? "Texto do badge da esquerda" : "Texto do badge da direita"}
+        />
+        <span className="text-xs text-slate-500">Vazio mantém o preço do curso, ou Gold / Financiada.</span>
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Cor do badge</span>
+        <span className="flex items-center gap-2">
+          <select className={`${campoCls} min-w-0 flex-1`} value={["ouro", "vermelho", "azul"].includes(draft[chaves.badgeCor]) ? draft[chaves.badgeCor] : ""} onChange={e => onChange(chaves.badgeCor, e.target.value)} aria-label={slot === 1 ? "Cor do badge da esquerda" : "Cor do badge da direita"}>
+            <option value="">Automática</option>
+            <option value="ouro">Ouro</option>
+            <option value="vermelho">Vermelho</option>
+            <option value="azul">Azul</option>
+          </select>
+          <span className={`inline-flex h-9 shrink-0 items-center rounded-lg px-2.5 text-[11px] font-extrabold ${classeSelo(heroBadgeCor(chave => draft[chave] ?? "", slot, tipo === "regime" ? regime !== "fin" : slot === 1))}`} aria-hidden="true">Aa</span>
+        </span>
+        <span className="text-xs text-slate-500">Automática é ouro à esquerda e vermelho à direita. Num regime, ouro no Gold e vermelho na Financiada.</span>
+      </label>
       <label className="flex flex-col gap-1.5">
         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Tamanho do cartão</span>
         <select className={campoCls} value={draft[chaves.tamanho] === "pequeno" || draft[chaves.tamanho] === "grande" ? draft[chaves.tamanho] : ""} onChange={e => onChange(chaves.tamanho, e.target.value)} aria-label={slot === 1 ? "Tamanho do cartão da esquerda" : "Tamanho do cartão da direita"}>

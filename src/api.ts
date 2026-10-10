@@ -1181,7 +1181,20 @@ export function apiRelatorioFinalTurma(turmaId: number) {
 }
 
 export function apiRelatorioInqueritosTurma(turmaId: number) {
-  return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/inqueritos/relatorio`, "RelatorioInqueritosTurma.pdf", "application/pdf");
+  return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/inqueritos/relatorio`, "RelatorioPosFormacao.pdf", "application/pdf");
+}
+
+export function apiRelatorioEstatisticoTurma(turmaId: number) {
+  return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/relatorio-estatistico`, "RelatorioEstatistico.pdf", "application/pdf");
+}
+
+export function apiPerguntasInqueritoTurma(turmaId: number, publico: "formador" | "formando" | "pos") {
+  const nome = publico === "formador"
+    ? "PerguntasInqueritoFormador.pdf"
+    : publico === "pos"
+      ? "PerguntasInqueritoPos.pdf"
+      : "PerguntasInqueritoFormandos.pdf";
+  return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/inqueritos/perguntas?publico=${publico}`, nome, "application/pdf");
 }
 
 export async function apiDtpExport(regime: Regime, turmaId: number, filename?: string) {

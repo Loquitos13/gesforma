@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { apiDtpExport, apiRelatorioFinalTurma, apiRelatorioInqueritosTurma, type DtpEstado, type DtpItem, type DtpSnapshot } from "./api";
+import { apiDtpExport, apiPerguntasInqueritoTurma, apiRelatorioEstatisticoTurma, apiRelatorioFinalTurma, apiRelatorioInqueritosTurma, type DtpEstado, type DtpItem, type DtpSnapshot } from "./api";
 import { DTP_CATEGORIAS, dtpCategoriaDe, dtpPastaNome, dtpZipNome, type DtpCategoriaId } from "./dtpPasta";
 import { TOPICOS_FIN } from "./dtpTopicosFin";
 import { toastError, toastOk } from "./toastBus";
@@ -22,6 +22,15 @@ type Props = {
   onToggle?: (item: DtpItem, proximo: DtpEstado | "auto") => void;
   onAnexo?: (item: DtpItem, file: { id: string; name: string; openUrl: string }) => void;
   onActualizar?: () => void;
+};
+
+const BOTOES_DOSSIE: Record<string, { rotulo: string; ok: string; gerar: (turmaId: number) => Promise<void> }> = {
+  relatorio: { rotulo: "Gerar relatório final", ok: "Relatório final da ação gerado.", gerar: apiRelatorioFinalTurma },
+  "relatorios-estatisticos": { rotulo: "Gerar relatório", ok: "Relatório estatístico gerado.", gerar: apiRelatorioEstatisticoTurma },
+  "relatorio-pos": { rotulo: "Gerar relatório pós-formação", ok: "Relatório pós-formação gerado.", gerar: apiRelatorioInqueritosTurma },
+  "inquerito-formador": { rotulo: "PDF das perguntas", ok: "PDF das perguntas do formador gerado.", gerar: id => apiPerguntasInqueritoTurma(id, "formador") },
+  "inquerito-formandos": { rotulo: "PDF das perguntas", ok: "PDF das perguntas dos formandos gerado.", gerar: id => apiPerguntasInqueritoTurma(id, "formando") },
+  "inqueritos-pos": { rotulo: "PDF das perguntas", ok: "PDF das perguntas de pós-formação gerado.", gerar: id => apiPerguntasInqueritoTurma(id, "pos") },
 };
 
 const estadoStyle: Record<DtpEstado, { badge: string; row: string; label: string }> = {
@@ -68,16 +77,17 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
     return [...list].sort((a, b) => (faseOrdem[a.fase] - faseOrdem[b.fase]) || ((ordem[dtpCategoriaDe(a)] ?? 0) - (ordem[dtpCategoriaDe(b)] ?? 0)));
   }, [items, categoria, isGold, topico]);
 
-  async function gerar(qual: "final" | "inqueritos") {
+  async function gerar(docId: string) {
     if (turma?.id == null) return;
-    setAGerar(qual);
+    const botao = BOTOES_DOSSIE[docId];
+    if (!botao) return;
+    setAGerar(docId);
     try {
-      if (qual === "final") await apiRelatorioFinalTurma(turma.id);
-      else await apiRelatorioInqueritosTurma(turma.id);
-      toastOk(qual === "final" ? "Relatório final da ação gerado." : "Relatório pós-formação desta turma gerado.");
+      await botao.gerar(turma.id);
+      toastOk(botao.ok);
       onActualizar?.();
     } catch (err) {
-      toastError(err, "Não foi possível gerar o relatório.");
+      toastError(err, "Não foi possível gerar o documento.");
     } finally {
       setAGerar(null);
     }
@@ -273,16 +283,14 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
                   )}
                 </div>
                 <div className="flex items-center gap-2 sm:flex-col sm:items-end">
-                  {!isGold && (doc.id === "relatorio" || doc.id === "relatorio-pos") && turma?.id != null && (
+                  {!isGold && BOTOES_DOSSIE[doc.id] && turma?.id != null && (
                     <button
                       type="button"
                       disabled={aGerar != null}
-                      onClick={() => void gerar(doc.id === "relatorio" ? "final" : "inqueritos")}
+                      onClick={() => void gerar(doc.id)}
                       className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap bg-blue-600 text-white border-blue-700 hover:bg-blue-700 disabled:opacity-50"
                     >
-                      {aGerar === (doc.id === "relatorio" ? "final" : "inqueritos")
-                        ? "A gerar…"
-                        : doc.id === "relatorio" ? "Gerar relatório final" : "Gerar relatório pós-formação"}
+                      {aGerar === doc.id ? "A gerar…" : BOTOES_DOSSIE[doc.id].rotulo}
                     </button>
                   )}
                   <button

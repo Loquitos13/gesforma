@@ -28,8 +28,21 @@ export type PerguntaRelatorio = {
 
 export type InqueritoRelatorio = {
   titulo: string;
+  publico: string;
   respostas: number;
   perguntas: PerguntaRelatorio[];
+};
+
+export type PerguntaDocumento = {
+  texto: string;
+  tipo: string;
+  opcoes: string[];
+};
+
+export type InqueritoDocumento = {
+  titulo: string;
+  publico: string;
+  perguntas: PerguntaDocumento[];
 };
 
 export type RelatorioFinalDados = {
@@ -166,7 +179,7 @@ export function linhasRelatorioFinal(d: RelatorioFinalDados) {
   ]);
   bloco(linhas, "10. Resultados dos inquéritos desta turma", d.inqueritos.length
     ? d.inqueritos.flatMap(inq => [
-      ...partirLinhas(`${inq.titulo} · ${inq.respostas} ${inq.respostas === 1 ? "resposta" : "respostas"}`),
+      ...partirLinhas(`${inq.titulo} · ${rotuloPublicoInquerito(inq.publico)} · ${inq.respostas} ${inq.respostas === 1 ? "resposta" : "respostas"}`),
       ...inq.perguntas.flatMap(p => {
         const valor = p.media != null
           ? `média ${p.media} (${p.n})`
@@ -189,12 +202,29 @@ export function linhasRelatorioFinal(d: RelatorioFinalDados) {
   return linhas;
 }
 
-export function linhasRelatorioInqueritos(d: Pick<RelatorioFinalDados, "acao" | "curso" | "inqueritos">) {
+export function rotuloPublicoInquerito(publico?: string) {
+  if (publico === "formador") return "Formador";
+  if (publico === "pos") return "Pós-formação";
+  if (publico === "empresa") return "Empresa patronal";
+  return "Formandos";
+}
+
+function rotuloTipoPergunta(tipo: string) {
+  if (tipo === "escala") return "Escala 1 a 5";
+  if (tipo === "multipla") return "Escolha múltipla";
+  if (tipo === "simnao") return "Sim ou não";
+  return "Texto livre";
+}
+
+export function linhasRelatorioInqueritos(
+  d: Pick<RelatorioFinalDados, "acao" | "curso" | "inqueritos">,
+  opts?: { titulo?: string; intro?: string },
+) {
   const linhas = [
-    "Relatório de inquéritos da turma",
+    opts?.titulo ?? "Relatório de inquéritos da turma",
     ...partirLinhas(`Ação: ${d.acao || "—"}`),
     ...partirLinhas(`Curso: ${d.curso || "—"}`),
-    "Só entram respostas em que a turma indicada é esta. O inquérito geral do regime fica de fora.",
+    opts?.intro ?? "Só entram respostas em que a turma indicada é esta. O inquérito geral do regime fica de fora.",
     "",
   ];
   if (!d.inqueritos.length) {
@@ -202,7 +232,12 @@ export function linhasRelatorioInqueritos(d: Pick<RelatorioFinalDados, "acao" | 
     return linhas;
   }
   for (const inq of d.inqueritos) {
-    linhas.push(...partirLinhas(inq.titulo), `${inq.respostas} ${inq.respostas === 1 ? "resposta" : "respostas"} desta turma`, "");
+    linhas.push(
+      ...partirLinhas(inq.titulo),
+      `Público-alvo: ${rotuloPublicoInquerito(inq.publico)}`,
+      `${inq.respostas} ${inq.respostas === 1 ? "resposta" : "respostas"} desta turma`,
+      "",
+    );
     for (const p of inq.perguntas) {
       const valor = p.media != null
         ? `média ${p.media} em ${p.n}`
@@ -222,8 +257,51 @@ export function pdfRelatorioFinal(dados: RelatorioFinalDados) {
   return pdfDeLinhas(linhasRelatorioFinal(dados));
 }
 
-export function pdfRelatorioInqueritos(dados: Pick<RelatorioFinalDados, "acao" | "curso" | "inqueritos">) {
-  return pdfDeLinhas(linhasRelatorioInqueritos(dados));
+export function pdfRelatorioInqueritos(
+  dados: Pick<RelatorioFinalDados, "acao" | "curso" | "inqueritos">,
+  opts?: { titulo?: string; intro?: string },
+) {
+  return pdfDeLinhas(linhasRelatorioInqueritos(dados, opts));
+}
+
+export function linhasPerguntasInqueritos(d: {
+  acao: string;
+  curso: string;
+  publico: string;
+  inqueritos: InqueritoDocumento[];
+}) {
+  const linhas = [
+    "Inquérito · perguntas",
+    ...partirLinhas(`Ação: ${d.acao || "—"}`),
+    ...partirLinhas(`Curso: ${d.curso || "—"}`),
+    `Público-alvo: ${rotuloPublicoInquerito(d.publico)}`,
+    "Documento das perguntas enviadas a esta turma.",
+    "",
+  ];
+  if (!d.inqueritos.length) {
+    linhas.push("Ainda não foi enviado a esta turma nenhum inquérito com este público-alvo.");
+    return linhas;
+  }
+  for (const inq of d.inqueritos) {
+    linhas.push(...partirLinhas(inq.titulo), `Público-alvo: ${rotuloPublicoInquerito(inq.publico)}`, "");
+    if (!inq.perguntas.length) linhas.push("Este inquérito ainda não tem perguntas.", "");
+    inq.perguntas.forEach((p, i) => {
+      linhas.push(...partirLinhas(`${i + 1}. ${p.texto} (${rotuloTipoPergunta(p.tipo)})`));
+      for (const opcao of p.opcoes) linhas.push(...partirLinhas(`   - ${opcao}`));
+    });
+    linhas.push("");
+  }
+  linhas.push("GESFORMA · perguntas do inquérito enviado a esta turma.");
+  return linhas;
+}
+
+export function pdfPerguntasInqueritos(dados: {
+  acao: string;
+  curso: string;
+  publico: string;
+  inqueritos: InqueritoDocumento[];
+}) {
+  return pdfDeLinhas(linhasPerguntasInqueritos(dados));
 }
 
 export function minutosSessao(inicio?: string, fim?: string) {

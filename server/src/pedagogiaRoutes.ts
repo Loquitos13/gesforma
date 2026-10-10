@@ -21,7 +21,7 @@ import { DTP_CATEGORIAS, dtpCategoriaDe, dtpCategoriaPasta, dtpPastaNome, dtpZip
 import { zipStore } from "./zipStore.js";
 import { pdfsDoDossie, type SessaoPedagogicaPdf } from "./dtpPdfs.js";
 import { pastaFinDoItem, TOPICOS_FIN } from "./dtpTopicosFin.js";
-import { minutosSessao, pdfRelatorioFinal, pdfRelatorioInqueritos, type FormandoRelatorio, type InqueritoRelatorio, type RelatorioFinalDados, type SessaoRelatorio } from "./relatorioFinal.js";
+import { minutosSessao, pdfPerguntasInqueritos, pdfRelatorioFinal, pdfRelatorioInqueritos, rotuloPublicoInquerito, type FormandoRelatorio, type InqueritoDocumento, type InqueritoRelatorio, type RelatorioFinalDados, type SessaoRelatorio } from "./relatorioFinal.js";
 import {
   aplicarPercursoNoItem,
   buildDtpItems,
@@ -360,8 +360,10 @@ async function dadosRelatorioFinal(db: Db, turmaId: number): Promise<RelatorioFi
         LIMIT 1`,
       [row.curso],
     ),
-    db.query<{ titulo: string; perguntas: unknown; formando: string; respostas: unknown }>(
-      `SELECT c.payload->>'titulo' AS titulo, c.payload->'perguntas' AS perguntas, r.formando, r.respostas
+    db.query<{ id: number; titulo: string; publico: string; perguntas: unknown; formando: string; respostas: unknown }>(
+      `SELECT c.id, c.payload->>'titulo' AS titulo,
+              COALESCE(NULLIF(c.payload->>'publico', ''), 'formando') AS publico,
+              c.payload->'perguntas' AS perguntas, r.formando, r.respostas
          FROM catalog_items c
          JOIN inquerito_respostas r ON r.inquerito_id = c.id
         WHERE c.kind = 'inqueritos' AND c.regime = 'fin'
@@ -410,15 +412,21 @@ async function dadosRelatorioFinal(db: Db, turmaId: number): Promise<RelatorioFi
     return titulo ? (horas ? `${titulo} (${horas})` : titulo) : "";
   }).filter(Boolean);
   const programa = topicos.length ? topicos : linhasDe(payload.programa);
-  const porInquerito = new Map<string, { titulo: string; perguntas: ReturnType<typeof asArr>; respostas: Record<string, unknown>[] }>();
+  const porInquerito = new Map<string, { titulo: string; publico: string; perguntas: ReturnType<typeof asArr>; respostas: Record<string, unknown>[] }>();
   for (const r of respostas.rows) {
-    const chave = r.titulo || "Inquérito";
-    const actual = porInquerito.get(chave) ?? { titulo: chave, perguntas: asArr(r.perguntas), respostas: [] };
+    const chave = String(r.id);
+    const actual = porInquerito.get(chave) ?? {
+      titulo: r.titulo || "Inquérito",
+      publico: r.publico || "formando",
+      perguntas: asArr(r.perguntas),
+      respostas: [],
+    };
     actual.respostas.push(asObj(r.respostas));
     porInquerito.set(chave, actual);
   }
   const inqueritos: InqueritoRelatorio[] = [...porInquerito.values()].map(inq => ({
     titulo: inq.titulo,
+    publico: inq.publico,
     respostas: inq.respostas.length,
     perguntas: inq.perguntas.map(raw => {
       const p = asObj(raw);
@@ -468,6 +476,57 @@ async function dadosRelatorioFinal(db: Db, turmaId: number): Promise<RelatorioFi
   };
 }
 
+type PublicoInquerito = "formando" | "formador" | "empresa" | "pos";
+
+function publicoInquerito(payload: Record<string, unknown>): PublicoInquerito {
+  const p = String(payload.publico ?? "formando");
+  if (p === "formador" || p === "empresa" || p === "pos") return p;
+  return "formando";
+}
+
+const ITEM_PERGUNTAS: Partial<Record<PublicoInquerito, string>> = {
+  formador: "inquerito-formador",
+  formando: "inquerito-formandos",
+  pos: "inqueritos-pos",
+};
+
+const NOME_PERGUNTAS: Partial<Record<PublicoInquerito, string>> = {
+  formador: "PerguntasInqueritoFormador.pdf",
+  formando: "PerguntasInqueritoFormandos.pdf",
+  pos: "PerguntasInqueritoPos.pdf",
+};
+
+function perguntasDoPayload(payload: Record<string, unknown>): InqueritoDocumento["perguntas"] {
+  return asArr(payload.perguntas).map(raw => {
+    const p = asObj(raw);
+    return {
+      texto: String(p.texto ?? "Pergunta"),
+      tipo: String(p.tipo ?? "texto"),
+      opcoes: asArr(p.opcoes).map(opcao => String(opcao)),
+    };
+  });
+}
+
+async function perguntasEnviadas(db: Db, turmaId: number, publico: PublicoInquerito): Promise<InqueritoDocumento[]> {
+  const rows = await db.query<{ payload: unknown }>(
+    `SELECT c.payload
+       FROM catalog_items c
+       JOIN inquerito_envios e ON e.inquerito_id = c.id AND e.regime = 'fin' AND e.turma_id = $1
+      WHERE c.kind = 'inqueritos' AND c.regime = 'fin'
+      ORDER BY c.id`,
+    [turmaId],
+  );
+  return rows.rows.flatMap(row => {
+    const payload = asObj(row.payload);
+    if (publicoInquerito(payload) !== publico) return [];
+    return [{
+      titulo: String(payload.titulo ?? "Inquérito"),
+      publico,
+      perguntas: perguntasDoPayload(payload),
+    }];
+  });
+}
+
 async function anexarPdfDtp(
   db: Db,
   actorId: string | undefined,
@@ -487,6 +546,22 @@ async function anexarPdfDtp(
        drive_url = EXCLUDED.drive_url, updated_at = now()`,
     [turma.id, itemId, file.id, file.name, file.openUrl],
   );
+}
+
+async function anexarPerguntasDaTurma(
+  db: Db,
+  actorId: string | undefined,
+  turma: { id: number; nome: string; curso: string },
+) {
+  for (const publico of ["formador", "formando", "pos"] as const) {
+    const itemId = ITEM_PERGUNTAS[publico];
+    const nome = NOME_PERGUNTAS[publico];
+    if (!itemId || !nome) continue;
+    const inqueritos = await perguntasEnviadas(db, turma.id, publico);
+    if (!inqueritos.length) continue;
+    const bytes = pdfPerguntasInqueritos({ acao: turma.nome, curso: turma.curso, publico, inqueritos });
+    await anexarPdfDtp(db, actorId, turma, itemId, nome, bytes);
+  }
 }
 
 async function gravarPdfsDossie(db: Db, actorId: string | undefined, regime: Regime, turma: TurmaRow) {
@@ -662,26 +737,35 @@ async function turmaFacts(db: Db, regime: Regime, turma: TurmaRow): Promise<DtpF
     for (const key of bases) docs[key] ??= { done: 0, total };
   }
 
-  let inqueritos: DtpCounts | null = null;
+  let inqueritosFormador: DtpCounts | null = null;
+  let inqueritosFormandos: DtpCounts | null = null;
+  let inqueritosPos: DtpCounts | null = null;
   if (regime === "fin") {
-    const resp = await db.query<{ formando: string }>(
-      `SELECT DISTINCT lower(trim(r.formando)) AS formando
-         FROM inquerito_respostas r
-         JOIN catalog_items c ON c.id = r.inquerito_id
-        WHERE c.kind = 'inqueritos' AND c.regime = 'fin'
-          AND lower(trim(r.turma)) = lower(trim($1))`,
-      [turma.nome],
-    );
-    const nomes = new Set(resp.rows.map(r => r.formando).filter(Boolean));
-    const totalFormandos = formandos.length;
-    const done = totalFormandos
-      ? formandos.filter(f => nomes.has(f.nome.trim().toLowerCase())).length
-      : (nomes.size > 0 ? 1 : 0);
-    inqueritos = { done, total: totalFormandos || 1 };
+    const envios = await db.query<{ publico: string; enviado: boolean | string }>(
+      `SELECT COALESCE(NULLIF(c.payload->>'publico', ''), 'formando') AS publico,
+              EXISTS (
+                SELECT 1 FROM inquerito_envios e
+                 WHERE e.regime = 'fin' AND e.turma_id = $1 AND e.inquerito_id = c.id
+              ) AS enviado
+         FROM catalog_items c
+        WHERE c.kind = 'inqueritos' AND c.regime = 'fin'`,
+      [turma.id],
+    ).catch(() => ({ rows: [] as { publico: string; enviado: boolean | string }[] }));
+    const contar = (publico: string): DtpCounts => {
+      const lista = envios.rows.filter(r => r.publico === publico);
+      const enviados = lista.filter(r => r.enviado === true || r.enviado === "t" || r.enviado === "true").length;
+      if (!lista.length) return { done: 0, total: 1 };
+      return { done: enviados, total: lista.length };
+    };
+    inqueritosFormador = contar("formador");
+    inqueritosFormandos = contar("formando");
+    inqueritosPos = contar("pos");
   }
 
   return {
-    inqueritos,
+    inqueritosFormador,
+    inqueritosFormandos,
+    inqueritosPos,
     sessoes: { done: sessoesTotal, total: sessoesTotal },
     planos: { done: planos, total: sessoesTotal },
     sumarios: { done: sumarios, total: sessoesTotal },
@@ -2017,7 +2101,10 @@ export function registerPedagogiaRoutes(
     const id = Number((req.params as { id?: string }).id);
     if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
     const table = regime === "fin" ? "turmas_fin" : "turmas_gold";
-    const turma = await db.query<{ nome: string; curso: string }>(`SELECT nome, curso FROM ${table} WHERE id = $1`, [id]);
+    const turma = await db.query<{ nome: string; curso: string; formador: string; formadores: unknown }>(
+      `SELECT nome, curso, formador, formadores FROM ${table} WHERE id = $1`,
+      [id],
+    );
     const row = turma.rows[0];
     if (!row) return reply.code(404).send({ error: "turma inexistente" });
     const formandosTable = regime === "fin" ? "formandos_fin" : "formandos_gold";
@@ -2026,48 +2113,80 @@ export function registerPedagogiaRoutes(
         WHERE turma_id = $1 OR lower(trim(turma)) = lower(trim($2))`,
       [id, row.nome],
     );
+    const nomesFormador = [...new Set([
+      ...asArr(row.formadores).map(n => String(n).trim()),
+      String(row.formador ?? "").trim(),
+    ].filter(Boolean).map(n => n.toLowerCase()))];
+    const formadores = nomesFormador.length
+      ? await db.query<{ nome: string; email: string }>(
+        "SELECT nome, email FROM formadores WHERE lower(trim(nome)) = ANY($1::text[])",
+        [pgTextArray(nomesFormador)],
+      )
+      : { rows: [] as { nome: string; email: string }[] };
     const inqs = await db.query<{ id: number; payload: unknown; public_token: string | null }>(
-      "SELECT id, payload, public_token FROM catalog_items WHERE kind = 'inqueritos' AND regime = $1",
+      "SELECT id, payload, public_token FROM catalog_items WHERE kind = 'inqueritos' AND regime = $1 ORDER BY id",
       [regime],
     );
-    const alvos = inqs.rows.filter(item => {
-      const payload = asObj(item.payload);
-      const publico = String(payload.publico ?? "formando");
-      return publico === "formando";
-    });
-    if (!alvos.length) return reply.code(400).send({ error: "Não há inquérito de formandos neste regime." });
-    const links: { titulo: string; url: string }[] = [];
-    for (const item of alvos) {
+    if (!inqs.rows.length) return reply.code(400).send({ error: "Não há inquéritos neste regime. Crie um e marque o público-alvo." });
+    const porPublico = new Map<PublicoInquerito, { titulo: string; url: string }[]>();
+    for (const item of inqs.rows) {
       let token = item.public_token;
       if (!token) {
         token = randomBytes(18).toString("base64url");
         await db.query("UPDATE catalog_items SET public_token = $2, updated_at = now() WHERE id = $1", [item.id, token]);
       }
       const payload = asObj(item.payload);
-      links.push({
+      const publico = publicoInquerito(payload);
+      const lista = porPublico.get(publico) ?? [];
+      lista.push({
         titulo: String(payload.titulo ?? "Inquérito"),
         url: `${config.appOrigin}/inquerito/${token}`,
       });
+      porPublico.set(publico, lista);
+      await db.query(
+        `INSERT INTO inquerito_envios (regime, turma_id, inquerito_id, publico)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (regime, turma_id, inquerito_id) DO UPDATE SET publico = EXCLUDED.publico, enviado_em = now()`,
+        [regime, id, item.id, publico],
+      );
     }
+    const destinatarios: { nome: string; email: string; publicos: PublicoInquerito[] }[] = [
+      ...pessoas.rows.map(p => ({
+        nome: `${p.nome ?? ""} ${p.apelido ?? ""}`.trim() || "formando",
+        email: String(p.email ?? "").trim(),
+        publicos: ["formando", "pos"] as PublicoInquerito[],
+      })),
+      ...formadores.rows.map(f => ({
+        nome: f.nome || "formador",
+        email: String(f.email ?? "").trim(),
+        publicos: ["formador"] as PublicoInquerito[],
+      })),
+    ];
     let enviados = 0;
     let semEmail = 0;
-    for (const pessoa of pessoas.rows) {
-      const email = String(pessoa.email ?? "").trim();
-      if (!email || !email.includes("@")) { semEmail += 1; continue; }
-      const nome = `${pessoa.nome ?? ""} ${pessoa.apelido ?? ""}`.trim() || "formando";
+    const vistosSemEmail = new Set<string>();
+    for (const pessoa of destinatarios) {
+      const links = pessoa.publicos.flatMap(publico => porPublico.get(publico) ?? []);
+      if (!links.length) continue;
+      if (!pessoa.email.includes("@")) {
+        if (!vistosSemEmail.has(pessoa.nome)) { semEmail += 1; vistosSemEmail.add(pessoa.nome); }
+        continue;
+      }
       const linhas = links.map(l => `${l.titulo}: ${l.url}`).join("\n");
       const htmlLinks = links.map(l => `<li><a href="${escapeHtml(l.url)}">${escapeHtml(l.titulo)}</a></li>`).join("");
+      const alvos = pessoa.publicos.filter(publico => (porPublico.get(publico) ?? []).length).map(rotuloPublicoInquerito).join(" e ");
       await sendMail(db, {
-        to: email,
-        name: nome,
+        to: pessoa.email,
+        name: pessoa.nome,
         subject: `Inquérito da turma ${row.nome}`,
-        text: `Olá ${nome},\n\nPedimos a sua resposta ao inquérito da turma ${row.nome} (${row.curso}).\n\n${linhas}\n`,
-        html: `<p>Olá ${escapeHtml(nome)},</p><p>Pedimos a sua resposta ao inquérito da turma <strong>${escapeHtml(row.nome)}</strong> (${escapeHtml(row.curso)}).</p><ul>${htmlLinks}</ul>`,
+        text: `Olá ${pessoa.nome},\n\nPedimos a sua resposta ao inquérito da turma ${row.nome} (${row.curso}). Público-alvo: ${alvos}.\n\n${linhas}\n`,
+        html: `<p>Olá ${escapeHtml(pessoa.nome)},</p><p>Pedimos a sua resposta ao inquérito da turma <strong>${escapeHtml(row.nome)}</strong> (${escapeHtml(row.curso)}). Público-alvo: ${escapeHtml(alvos)}.</p><ul>${htmlLinks}</ul>`,
       });
       enviados += 1;
     }
+    if (regime === "fin") await anexarPerguntasDaTurma(db, req.actor!.id, { id, nome: row.nome, curso: row.curso }).catch(() => undefined);
     await audit(db, req.actor!.id, "inquerito.enviar_turma", "turma", String(id), req.ip, { regime, enviados, semEmail });
-    return { ok: true, enviados, semEmail, inqueritos: links.length };
+    return { ok: true, enviados, semEmail, inqueritos: inqs.rows.length };
   });
 
   app.get("/v1/public/inqueritos/:token", {
@@ -2108,18 +2227,48 @@ export function registerPedagogiaRoutes(
     return { ok: true };
   });
 
-  async function pdfDaTurmaFin(req: FastifyRequest, reply: FastifyReply, qual: "final" | "inqueritos") {
+  async function pdfDaTurmaFin(req: FastifyRequest, reply: FastifyReply, qual: "final" | "pos" | "estatisticos" | "perguntas") {
     if (!requireAuth(req, reply)) return;
     if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não gera o relatório da turma." });
     const { regime, id } = params(req);
     if (regime !== "fin" || id == null) return reply.code(400).send({ error: "O relatório é da turma financiada." });
     const dados = await dadosRelatorioFinal(db, id);
     if (!dados) return reply.code(404).send({ error: "turma não encontrada" });
-    const bytes = qual === "final" ? pdfRelatorioFinal(dados) : pdfRelatorioInqueritos(dados);
-    const nome = qual === "final" ? "RelatorioFinalAccao.pdf" : "RelatorioInqueritosTurma.pdf";
-    const itemId = qual === "final" ? "relatorio" : "relatorio-pos";
+    const publico = String((req.query as { publico?: string } | undefined)?.publico ?? "");
+    let bytes: Buffer;
+    let nome: string;
+    let itemId: string;
+    if (qual === "perguntas") {
+      if (publico !== "formador" && publico !== "formando" && publico !== "pos") {
+        return reply.code(400).send({ error: "Indique o público-alvo do inquérito." });
+      }
+      const inqueritos = await perguntasEnviadas(db, id, publico);
+      bytes = pdfPerguntasInqueritos({ acao: dados.acao, curso: dados.curso, publico, inqueritos });
+      nome = NOME_PERGUNTAS[publico] ?? "PerguntasInquerito.pdf";
+      itemId = ITEM_PERGUNTAS[publico] ?? "inquerito-formandos";
+    } else if (qual === "estatisticos") {
+      const inqueritos = dados.inqueritos.filter(i => i.publico === "formador" || i.publico === "formando");
+      bytes = pdfRelatorioInqueritos({ ...dados, inqueritos }, {
+        titulo: "Relatórios estatísticos",
+        intro: "Médias e contagens das respostas dos inquéritos de formandos e de formador enviados a esta turma.",
+      });
+      nome = "RelatorioEstatistico.pdf";
+      itemId = "relatorios-estatisticos";
+    } else if (qual === "pos") {
+      const inqueritos = dados.inqueritos.filter(i => i.publico === "pos");
+      bytes = pdfRelatorioInqueritos({ ...dados, inqueritos }, {
+        titulo: "Relatório pós-formação",
+        intro: "Só entram respostas dos inquéritos com público-alvo Pós-formação, e só desta turma.",
+      });
+      nome = "RelatorioPosFormacao.pdf";
+      itemId = "relatorio-pos";
+    } else {
+      bytes = pdfRelatorioFinal(dados);
+      nome = "RelatorioFinalAccao.pdf";
+      itemId = "relatorio";
+    }
     await anexarPdfDtp(db, req.actor!.id, { id, nome: dados.acao }, itemId, nome, bytes).catch(() => undefined);
-    await audit(db, req.actor!.id, qual === "final" ? "turma.relatorio_final" : "turma.relatorio_inqueritos", "turma", String(id), req.ip);
+    await audit(db, req.actor!.id, `turma.${qual}`, "turma", String(id), req.ip);
     return reply
       .header("Content-Type", "application/pdf")
       .header("Content-Disposition", `attachment; filename="${nome}"`)
@@ -2127,7 +2276,9 @@ export function registerPedagogiaRoutes(
   }
 
   app.get("/v1/turmas/:regime/:id/relatorio-final", async (req, reply) => pdfDaTurmaFin(req, reply, "final"));
-  app.get("/v1/turmas/:regime/:id/inqueritos/relatorio", async (req, reply) => pdfDaTurmaFin(req, reply, "inqueritos"));
+  app.get("/v1/turmas/:regime/:id/relatorio-estatistico", async (req, reply) => pdfDaTurmaFin(req, reply, "estatisticos"));
+  app.get("/v1/turmas/:regime/:id/inqueritos/relatorio", async (req, reply) => pdfDaTurmaFin(req, reply, "pos"));
+  app.get("/v1/turmas/:regime/:id/inqueritos/perguntas", async (req, reply) => pdfDaTurmaFin(req, reply, "perguntas"));
 
   app.get("/v1/dtp/:regime/:id/export", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
@@ -2267,7 +2418,29 @@ export function registerPedagogiaRoutes(
       const dados = await dadosRelatorioFinal(db, turma.id);
       if (dados) {
         add(`${root}/${pastaFinDoItem("relatorio")}/RelatorioFinalAccao.pdf`, pdfRelatorioFinal(dados));
-        add(`${root}/${pastaFinDoItem("relatorio-pos")}/RelatorioInqueritosTurma.pdf`, pdfRelatorioInqueritos(dados));
+        add(`${root}/${pastaFinDoItem("relatorios-estatisticos")}/RelatorioEstatistico.pdf`, pdfRelatorioInqueritos({
+          ...dados,
+          inqueritos: dados.inqueritos.filter(i => i.publico === "formador" || i.publico === "formando"),
+        }, {
+          titulo: "Relatórios estatísticos",
+          intro: "Médias e contagens das respostas dos inquéritos de formandos e de formador enviados a esta turma.",
+        }));
+        add(`${root}/${pastaFinDoItem("relatorio-pos")}/RelatorioPosFormacao.pdf`, pdfRelatorioInqueritos({
+          ...dados,
+          inqueritos: dados.inqueritos.filter(i => i.publico === "pos"),
+        }, {
+          titulo: "Relatório pós-formação",
+          intro: "Só entram respostas dos inquéritos com público-alvo Pós-formação, e só desta turma.",
+        }));
+        for (const publico of ["formador", "formando", "pos"] as const) {
+          const nomePdf = NOME_PERGUNTAS[publico];
+          const itemId = ITEM_PERGUNTAS[publico];
+          if (!nomePdf || !itemId) continue;
+          const perguntas = await perguntasEnviadas(db, turma.id, publico);
+          add(`${root}/${pastaFinDoItem(itemId)}/${nomePdf}`, pdfPerguntasInqueritos({
+            acao: dados.acao, curso: dados.curso, publico, inqueritos: perguntas,
+          }));
+        }
       }
     }
     await gravarPdfsDossie(db, req.actor!.id, regime, turma).catch(() => undefined);

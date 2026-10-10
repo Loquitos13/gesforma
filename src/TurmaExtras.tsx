@@ -795,18 +795,20 @@ export function SumarioSessaoModal({ open, onClose, sessao, sumario, accent = "g
 
 type PerguntaTipo = "texto" | "multipla" | "escala" | "simnao";
 type Pergunta = { id: number; tipo: PerguntaTipo; texto: string; opcoes?: string[] };
-type PublicoInquerito = "formando" | "formador" | "empresa";
-const PUBLICOS: { value: PublicoInquerito; sub: string }[] = [
-  { value: "formando", sub: "Quem frequenta a turma" },
-  { value: "formador", sub: "Quem lecciona" },
-  { value: "empresa", sub: "Empresa patronal" },
+type PublicoInquerito = "formando" | "formador" | "pos" | "empresa";
+const PUBLICOS: { value: PublicoInquerito; label: string; sub: string }[] = [
+  { value: "formando", label: "Formandos", sub: "Quem frequenta a turma" },
+  { value: "formador", label: "Formador", sub: "Quem lecciona" },
+  { value: "pos", label: "Pós-formação", sub: "Três meses depois da ação" },
+  { value: "empresa", label: "Empresa patronal", sub: "Empresa patronal" },
 ];
 type Inquerito = { id: number; titulo: string; perguntas: Pergunta[]; publico?: PublicoInquerito };
 
 function rotuloPublico(p?: string) {
   if (p === "formador") return "Formador";
+  if (p === "pos") return "Pós-formação";
   if (p === "empresa") return "Empresa patronal";
-  return "Formando";
+  return "Formandos";
 }
 
 const tipoLabels: Record<PerguntaTipo, string> = {
@@ -1050,7 +1052,7 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold text-slate-800">Inquéritos</h2>
-          <p className="text-xs text-slate-400">{isGold ? "Formação Gold · CCP" : "Formação Financiada"}</p>
+          <p className="text-xs text-slate-400">{isGold ? "Formação Gold · CCP" : "Formação Financiada"} · cada inquérito marca o público-alvo e é esse que a turma recebe</p>
         </div>
         <button onClick={() => setCreating(true)} className={`flex items-center gap-2 px-4 py-2 ${accent.bg} hover:opacity-90 text-white text-sm font-semibold rounded-lg`}>
           + Novo inquérito
@@ -1125,7 +1127,9 @@ export function InqueritosView({ acento }: { acento: "gold" | "fin" }) {
                       value={inq.publico ?? "formando"}
                       onChange={v => setInqueritos(prev => prev.map(item => item.id === inq.id ? { ...item, publico: v as PublicoInquerito } : item))}
                       options={PUBLICOS}
+                      placeholder="Público-alvo"
                     />
+                    <p className="text-[11px] text-slate-500 mt-1">Público-alvo. No envio da turma, o GesForma gera o PDF das perguntas para o dossiê.</p>
                   </div>
                 </div>
                 <div className="flex gap-2 flex-shrink-0 flex-wrap justify-end">

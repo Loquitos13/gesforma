@@ -2382,7 +2382,10 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
               <button type="button" onClick={() => {
                 setEnvioInqFin("A enviar…");
                 void apiEnviarInqueritosTurma("fin", turma.id)
-                  .then(r => setEnvioInqFin(`${r.enviados} enviados${r.semEmail ? `, ${r.semEmail} sem email` : ""}`))
+                  .then(r => {
+                    setEnvioInqFin(`${r.enviados} enviados${r.semEmail ? `, ${r.semEmail} sem email` : ""}`);
+                    void ped.recarregar();
+                  })
                   .catch(err => setEnvioInqFin(err instanceof Error ? err.message : "Não foi possível enviar."));
               }} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-lg">Enviar inquéritos</button>
             )}

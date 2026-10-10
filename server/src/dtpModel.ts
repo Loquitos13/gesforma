@@ -20,7 +20,9 @@ export type DtpAuto =
   | "doc-ce"
   | "doc-exp"
   | "doc-regulamento"
-  | "inqueritos";
+  | "inqueritos-formador"
+  | "inqueritos-formandos"
+  | "inqueritos-pos";
 
 export type DtpDef = {
   id: string;
@@ -208,10 +210,10 @@ const FIN: DtpDef[] = [
   { id: "corrigenda", fase: "durante", topico: 7, ordem: 3, label: "Corrigenda do teste de avaliação final", fonte: "7. Avaliação da aprendizagem", hint: "Corrigenda do teste final.", obrigatorio: true },
   { id: "grelha-correcao", fase: "durante", topico: 7, ordem: 4, label: "Grelha de correção do teste de avaliação final - assinada pelo formador", fonte: "7. Avaliação da aprendizagem", hint: "Grelha assinada pelo formador.", obrigatorio: true },
   { id: "pauta", fase: "depois", topico: 7, ordem: 5, label: "Pauta de avaliação final - assinada pelo formador", fonte: "7. Avaliação da aprendizagem", hint: "Pauta assinada pelo formador.", obrigatorio: true },
-  { id: "inquerito-formador", fase: "depois", topico: 8, ordem: 1, label: "Inquéritos de avaliação do formador", fonte: "8. Avaliação da ação", hint: "Questionários de avaliação do formador desta turma.", obrigatorio: true },
-  { id: "inquerito-formandos", fase: "depois", topico: 8, ordem: 2, label: "Inquéritos de avaliação dos formandos", fonte: "8. Avaliação da ação", hint: "Questionários de avaliação preenchidos pelos formandos desta turma.", obrigatorio: true },
+  { id: "inquerito-formador", fase: "depois", topico: 8, ordem: 1, label: "Inquéritos de avaliação do formador", fonte: "8. Avaliação da ação", hint: "Perguntas dos inquéritos com público-alvo Formador enviados a esta turma.", auto: "inqueritos-formador", obrigatorio: true },
+  { id: "inquerito-formandos", fase: "depois", topico: 8, ordem: 2, label: "Inquéritos de avaliação dos formandos", fonte: "8. Avaliação da ação", hint: "Perguntas dos inquéritos com público-alvo Formandos enviados a esta turma.", auto: "inqueritos-formandos", obrigatorio: true },
   { id: "diagnostico-necessidades", fase: "depois", topico: 8, ordem: 3, label: "Diagnóstico necessidades de formação", fonte: "8. Avaliação da ação", hint: "Diagnóstico de necessidades associado à ação.", obrigatorio: true },
-  { id: "relatorios-estatisticos", fase: "depois", topico: 8, ordem: 4, label: "Relatórios estatísticos", fonte: "8. Avaliação da ação", hint: "No dossiê em papel pode ficar N/A. No GesForma anexa-se o ficheiro.", obrigatorio: true },
+  { id: "relatorios-estatisticos", fase: "depois", topico: 8, ordem: 4, label: "Relatórios estatísticos", fonte: "8. Avaliação da ação", hint: "O GesForma gera as médias e as contagens das respostas de avaliação desta turma.", obrigatorio: true },
   { id: "relatorio", fase: "depois", topico: 8, ordem: 5, label: "Relatório final da ação", fonte: "8. Avaliação da ação", hint: "O GesForma gera o PDF com os dados desta turma.", bloqueante: true, obrigatorio: true },
   { id: "relatorio-inicial", fase: "durante", topico: 9, ordem: 1, label: "Relatório inicial", fonte: "9. Supervisão", hint: "Relatório inicial de supervisão.", obrigatorio: true },
   { id: "relatorio-intermedio", fase: "durante", topico: 9, ordem: 2, label: "Relatório intermédio", fonte: "9. Supervisão", hint: "Relatório intermédio de supervisão.", obrigatorio: true },
@@ -221,8 +223,8 @@ const FIN: DtpDef[] = [
   { id: "entrega-certificados", fase: "depois", topico: 11, ordem: 2, label: "Comprovativo da entrega dos certificados", fonte: "11. Certificados", hint: "Comprovativo de que os certificados foram entregues.", obrigatorio: true },
   { id: "equidade", fase: "antes", topico: 12, ordem: 1, label: "Checklist de igualdade de oportunidades", fonte: "12. Equidade", hint: "Checklist preenchida para esta ação.", obrigatorio: true },
   { id: "academia", fase: "antes", topico: 13, ordem: 1, label: "Reporte retirado do Portal Academia Portugal Digital", fonte: "13. Academia Digital", hint: "Reporte da turma no Portal Academia Portugal Digital.", obrigatorio: true },
-  { id: "inqueritos-pos", fase: "depois", topico: 14, ordem: 1, label: "Inquéritos pós-formação", fonte: "14. Impacto pós-formação", hint: "Três meses depois. Conta só as respostas em que a turma é esta.", auto: "inqueritos", obrigatorio: true },
-  { id: "relatorio-pos", fase: "depois", topico: 14, ordem: 2, label: "Relatório pós-formação", fonte: "14. Impacto pós-formação", hint: "O GesForma gera o relatório das respostas desta turma. Não mistura outras turmas.", obrigatorio: true },
+  { id: "inqueritos-pos", fase: "depois", topico: 14, ordem: 1, label: "Inquéritos pós-formação", fonte: "14. Impacto pós-formação", hint: "Perguntas dos inquéritos com público-alvo Pós-formação enviados a esta turma.", auto: "inqueritos-pos", obrigatorio: true },
+  { id: "relatorio-pos", fase: "depois", topico: 14, ordem: 2, label: "Relatório pós-formação", fonte: "14. Impacto pós-formação", hint: "O GesForma gera o relatório só com as respostas de pós-formação desta turma.", obrigatorio: true },
 ];
 
 const UNIVERSAL_IDS = new Set(GOLD.map(d => d.id).filter(id => FIN.some(f => f.id === id)));
@@ -295,7 +297,9 @@ export type DtpFacts = {
   simInicial: DtpCounts | null;
   simFinal: DtpCounts | null;
   docs: Record<string, DtpCounts>;
-  inqueritos?: DtpCounts | null;
+  inqueritosFormador?: DtpCounts | null;
+  inqueritosFormandos?: DtpCounts | null;
+  inqueritosPos?: DtpCounts | null;
 };
 
 function estadoFromCounts(c: DtpCounts | null | undefined): { estado: DtpEstado; detalhe: string } | null {
@@ -316,7 +320,9 @@ function factFor(auto: DtpAuto, facts: DtpFacts): DtpCounts | null {
     case "pip": return facts.pip;
     case "sim-ini": return facts.simInicial;
     case "sim-fim": return facts.simFinal;
-    case "inqueritos": return facts.inqueritos ?? null;
+    case "inqueritos-formador": return facts.inqueritosFormador ?? null;
+    case "inqueritos-formandos": return facts.inqueritosFormandos ?? null;
+    case "inqueritos-pos": return facts.inqueritosPos ?? null;
     default: return facts.docs[auto.replace(/^doc-/, "")] ?? null;
   }
 }

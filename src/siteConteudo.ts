@@ -194,7 +194,7 @@ export type HeroSlot = 1 | 2;
 
 export type HeroPedido =
   | { modo: "automatico" }
-  | { modo: "curso"; cursoId: string; botao: string; destino: string }
+  | { modo: "curso"; cursoId: string; descricao: string; botao: string; destino: string }
   | { modo: "regime"; regime: "gold" | "fin"; titulo: string; descricao: string; imagem: string; botao: string; destino: string };
 
 export function heroPedido(ler: (chave: SiteChave) => string, slot: HeroSlot): HeroPedido {
@@ -206,7 +206,7 @@ export function heroPedido(ler: (chave: SiteChave) => string, slot: HeroSlot): H
   if (tipo === "curso") {
     const cursoId = campo("Curso");
     if (!cursoId) return { modo: "automatico" };
-    return { modo: "curso", cursoId, botao, destino };
+    return { modo: "curso", cursoId, descricao: campo("Descricao"), botao, destino };
   }
   if (tipo === "regime") {
     const regime = campo("Regime");
@@ -222,6 +222,11 @@ export function heroPedido(ler: (chave: SiteChave) => string, slot: HeroSlot): H
     };
   }
   return { modo: "automatico" };
+}
+
+export function descricaoDoCurso(area: string, descricao: string) {
+  const limpa = descricao.trim();
+  return limpa || area;
 }
 
 export function tituloRegime(regime: "gold" | "fin", titulo: string) {

@@ -177,7 +177,7 @@ function CartoesHero({
       <div>
         <h3 className="text-sm font-bold text-slate-800">Cartões do destaque</h3>
         <p className="mt-1 text-xs text-slate-500">
-          São dois cartões, o da esquerda e o da direita. Cada um escolhe o texto e a cor do badge, o tamanho e a animação do botão. A pré-visualização ao lado mostra essas escolhas. Cada um pode ser um curso publicado ou um regime (Gold ou Financiada). Em automático, a esquerda mostra a formação de formadores com CCP e a direita a primeira formação financiada com miniatura. O botão desses cartões abre a inscrição.
+          São dois cartões, o da esquerda e o da direita. Cada um escolhe o texto e a cor do badge, o tamanho e a animação do botão. A pré-visualização ao lado mostra essas escolhas. Cada um pode ser um curso publicado ou um regime (Gold ou Financiada). No curso, a descrição substitui a área da ficha. Em automático, a esquerda mostra a formação de formadores com CCP e a direita a primeira formação financiada com miniatura. O botão desses cartões abre a inscrição.
         </p>
         <p className="mt-1 text-xs text-slate-500">
           No destino, use um caminho do site (<span className="font-mono">/formacao/nome-do-curso</span>) ou um endereço completo (<span className="font-mono">https://…</span>). O caminho continua válido se o domínio mudar. Vazio abre a ficha do curso, ou o catálogo da linha Gold ou Financiada.
@@ -257,6 +257,17 @@ function CartaoHeroEditor({
             <p className="text-xs text-amber-700">Este curso já não está na oferta publicada. O cartão fica oculto até escolher outro.</p>
           )}
           {!cursoId && <p className="text-xs text-slate-500">Sem curso, o cartão volta ao automático.</p>}
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Descrição</span>
+            <textarea
+              className={`${campoCls} min-h-20 resize-y`}
+              value={draft[chaves.descricao]}
+              placeholder={cursos.find(curso => curso.id === cursoId)?.area || "Área do curso"}
+              onChange={e => onChange(chaves.descricao, e.target.value)}
+              aria-label={slot === 1 ? "Descrição do cartão da esquerda" : "Descrição do cartão da direita"}
+            />
+            <span className="text-xs text-slate-500">Vazio mantém a área da ficha. A pré-visualização mostra o texto escrito.</span>
+          </label>
         </div>
       )}
       {tipo === "regime" && (

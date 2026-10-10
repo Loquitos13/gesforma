@@ -1,6 +1,6 @@
 import { createContext, FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { InscricaoSite, useInscricao } from "./SiteInscricao";
-import { botaoHero, classeAnimacaoBotao, classeSelo, destinoDoHero, heroAnimacao, heroBadge, heroPedido, heroTamanho, ligacaoExterna, moradaSegura, textoSite, tituloRegime, type HeroAnimacao, type HeroBadgeCor, type HeroPedido, type HeroTamanho, type SiteChave } from "./siteConteudo";
+import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, destinoDoHero, heroAnimacao, heroBadge, heroPedido, heroTamanho, ligacaoExterna, moradaSegura, textoSite, tituloRegime, type HeroAnimacao, type HeroBadgeCor, type HeroPedido, type HeroTamanho, type SiteChave } from "./siteConteudo";
 
 export type Course = {
   id: string;
@@ -241,7 +241,7 @@ function vistaCurso(posicao: 1 | 2, curso: Course, pedido?: Extract<HeroPedido, 
     seloClasse: classeSelo(ouro ? "ouro" : "vermelho"),
     ouro,
     titulo: curso.title,
-    linha: curso.area,
+    linha: descricaoDoCurso(curso.area, pedido?.descricao ?? ""),
     botao: pedido ? botaoHero(pedido, curso.enrollment) : (curso.enrollment === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever"),
     tamanho: "medio",
     animacao: "",

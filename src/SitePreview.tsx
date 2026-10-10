@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { botaoHero, classeAnimacaoBotao, classeSelo, heroAnimacao, heroBadge, heroPedido, heroTamanho, moradaSegura, tituloRegime, type HeroPedido, type HeroSlot, type SiteChave } from "./siteConteudo";
+import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, heroAnimacao, heroBadge, heroPedido, heroTamanho, moradaSegura, tituloRegime, type HeroPedido, type HeroSlot, type SiteChave } from "./siteConteudo";
 
 export type CursoPreview = {
   id: string;
@@ -94,7 +94,7 @@ function cartaoDe(slot: HeroSlot, ler: (chave: SiteChave) => string, oferta: Ofe
       imagem: curso.miniatura,
       ouro,
       titulo: curso.titulo,
-      linha: curso.area,
+      linha: descricaoDoCurso(curso.area, pedido.descricao),
       botao: botaoHero(pedido, curso.inscricao),
       ...heroBadge(ler, slot, ouro, curso.precoLabel),
       ...medidaHero(slot, ler),
@@ -116,7 +116,7 @@ function cartaoDe(slot: HeroSlot, ler: (chave: SiteChave) => string, oferta: Ofe
     ? oferta?.ccp ?? null
     : oferta?.cursos.find(item => item.regime === "fin" && item.miniatura) ?? oferta?.cursos.find(item => item.regime === "fin") ?? null;
   if (!curso) return null;
-  const automatico: Exclude<HeroPedido, { modo: "automatico" }> = { modo: "curso", cursoId: curso.id, botao: "", destino: "" };
+  const automatico: Exclude<HeroPedido, { modo: "automatico" }> = { modo: "curso", cursoId: curso.id, descricao: "", botao: "", destino: "" };
   const ouro = slot === 1;
   return {
     imagem: curso.miniatura,

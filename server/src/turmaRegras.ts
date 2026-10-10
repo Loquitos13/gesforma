@@ -1,7 +1,7 @@
 import { generateCronograma } from "./cronograma.js";
 import type { Db } from "./db/pool.js";
 import { nextOpsId } from "./ops.js";
-import { codigoInternoTurma } from "../../src/turmaCodigo.js";
+import { codigoInternoTurma } from "../../src/partilhado/turmaCodigo.js";
 
 export type TurmaRegra = {
   id: number;

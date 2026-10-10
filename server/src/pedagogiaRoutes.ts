@@ -1845,7 +1845,7 @@ export function registerPedagogiaRoutes(
     const { regime, id } = params(req);
     const slot = slotImagem(String((req.params as { slot?: string }).slot ?? ""));
     if (!regime || id == null || !slot) return reply.code(400).send({ error: "pedido inválido" });
-    let nome = slot === "banner" ? "banner.jpg" : "thumb.jpg";
+    let nome = slot === "banner" ? "banner.jpg" : slot === "capa" ? "capa.jpg" : slot === "miniatura" ? "miniatura.jpg" : "thumb.jpg";
     let mime = "";
     let bytes: Buffer | null = null;
     try {

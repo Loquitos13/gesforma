@@ -1,12 +1,12 @@
 import { randomBytes } from "node:crypto";
 import type { Db } from "./db/pool.js";
 
-const SLOTS = new Set(["banner", "thumb"]);
+const SLOTS = new Set(["banner", "thumb", "capa", "miniatura"]);
 const MIMES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const MAX_BYTES = 8 * 1024 * 1024;
 
 export function slotImagem(value: string) {
-  return SLOTS.has(value) ? value as "banner" | "thumb" : null;
+  return SLOTS.has(value) ? value as "banner" | "thumb" | "capa" | "miniatura" : null;
 }
 
 export function tokenImagem(value: string) {
@@ -31,7 +31,7 @@ export async function guardarImagemCurso(
   db: Db,
   regime: "gold" | "fin",
   cursoId: number,
-  slot: "banner" | "thumb",
+  slot: "banner" | "thumb" | "capa" | "miniatura",
   file: { nome: string; mime: string; bytes: Buffer },
 ) {
   if (file.bytes.length > MAX_BYTES) throw new Error("A imagem passa de 8 MB.");
@@ -50,6 +50,12 @@ export async function guardarImagemCurso(
        updated_at = now()`,
     [regime, cursoId, slot, nome, mime, file.bytes, token],
   );
+  if (slot === "capa") {
+    await db.query(
+      "DELETE FROM curso_imagens WHERE regime = $1 AND curso_id = $2 AND slot = 'miniatura'",
+      [regime, cursoId],
+    );
+  }
   const row = await db.query<{ token: string; updated_at: string | Date }>(
     "SELECT token, updated_at FROM curso_imagens WHERE regime = $1 AND curso_id = $2 AND slot = $3",
     [regime, cursoId, slot],
@@ -60,7 +66,10 @@ export async function guardarImagemCurso(
     `INSERT INTO curso_fichas (regime, curso_id, payload)
      VALUES ($1, $2, jsonb_build_object($3::text, jsonb_build_object('name', $4::text, 'url', $5::text)))
      ON CONFLICT (regime, curso_id) DO UPDATE SET
-       payload = COALESCE(curso_fichas.payload, '{}'::jsonb) || jsonb_build_object($3::text, jsonb_build_object('name', $4::text, 'url', $5::text)),
+       payload = CASE WHEN $3::text = 'capa'
+         THEN ((COALESCE(curso_fichas.payload, '{}'::jsonb) - 'miniatura') || jsonb_build_object($3::text, jsonb_build_object('name', $4::text, 'url', $5::text)))
+         ELSE (COALESCE(curso_fichas.payload, '{}'::jsonb) || jsonb_build_object($3::text, jsonb_build_object('name', $4::text, 'url', $5::text)))
+       END,
        updated_at = now()`,
     [regime, cursoId, slot, nome, url],
   );
@@ -119,7 +128,7 @@ export async function mapaImagensPublicas(db: Db) {
   for (const row of rows.rows) {
     if (Number(row.curso_id) <= 0) continue;
     if (row.regime !== "gold" && row.regime !== "fin") continue;
-    if (row.slot !== "banner" && row.slot !== "thumb") continue;
+    if (row.slot !== "banner" && row.slot !== "thumb" && row.slot !== "capa" && row.slot !== "miniatura") continue;
     if (!tokenImagem(row.token)) continue;
     mapa.set(`${row.regime}:${row.curso_id}:${row.slot}`, urlImagemPublica(row.token, row.updated_at));
   }
@@ -131,7 +140,7 @@ export async function urlsImagemDoCurso(db: Db, regime: "gold" | "fin", cursoId:
     "SELECT slot, token, updated_at FROM curso_imagens WHERE regime = $1 AND curso_id = $2",
     [regime, cursoId],
   );
-  const mapa = new Map<"banner" | "thumb", string>();
+  const mapa = new Map<"banner" | "thumb" | "capa" | "miniatura", string>();
   for (const row of rows.rows) {
     const slot = slotImagem(row.slot);
     if (!slot || !tokenImagem(row.token)) continue;
@@ -140,9 +149,9 @@ export async function urlsImagemDoCurso(db: Db, regime: "gold" | "fin", cursoId:
   return mapa;
 }
 
-export function semIdNaMedia(payload: Record<string, unknown>, urls: Map<"banner" | "thumb", string>) {
+export function semIdNaMedia(payload: Record<string, unknown>, urls: Map<"banner" | "thumb" | "capa" | "miniatura", string>) {
   const next = { ...payload };
-  for (const slot of ["banner", "thumb"] as const) {
+  for (const slot of ["banner", "thumb", "capa", "miniatura"] as const) {
     const media = mediaDe(next[slot]);
     const publica = urls.get(slot);
     if (publica) {

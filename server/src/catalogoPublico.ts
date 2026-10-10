@@ -16,6 +16,7 @@ export type CursoPublico = {
   financiamento: "Gold" | "Financiada";
   inscricao: "Acesso direto" | "Pré-pago" | "Pré-inscrição";
   miniatura: string | null;
+  capa: string | null;
   banner: string | null;
   vendas: number;
   objetivos: string[];
@@ -308,9 +309,12 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
     const precos = curso.regime === "gold" ? precosDaFicha(payload, curso.preco) : [];
     const desde = precos.length ? Math.min(...precos) : null;
     const gravadaThumb = imagens.get(`${curso.regime}:${curso.id}:thumb`) ?? null;
+    const gravadaCapa = imagens.get(`${curso.regime}:${curso.id}:capa`) ?? null;
+    const gravadaMiniatura = imagens.get(`${curso.regime}:${curso.id}:miniatura`) ?? null;
     const gravadaBanner = imagens.get(`${curso.regime}:${curso.id}:banner`) ?? null;
-    const miniatura = gravadaThumb || mediaUrl(payload.thumb);
-    const banner = gravadaBanner || mediaUrl(payload.banner) || miniatura;
+    const capa = gravadaCapa || mediaUrl(payload.capa) || gravadaThumb || mediaUrl(payload.thumb);
+    const miniatura = gravadaMiniatura || mediaUrl(payload.miniatura) || capa;
+    const banner = gravadaBanner || mediaUrl(payload.banner) || capa;
     const programa = programaPublico(curso.regime, payload);
     return {
       id: reservarSlug(curso.titulo, texto(payload.slug)),
@@ -328,6 +332,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       financiamento: curso.regime === "fin" ? "Financiada" : "Gold",
       inscricao: entrada,
       miniatura,
+      capa,
       banner,
       vendas: procura,
       objetivos: linhas(payload.objetivos),

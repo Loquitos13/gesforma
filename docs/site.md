@@ -1,8 +1,8 @@
 # Site público
 
-O site da ENA vive no mesmo projecto que o GesForma. A página inicial está em `/`. O backoffice está em `/entrar`. Quem edita os textos da página inicial e do rodapé é o administrador, em **Sistema → Site**.
+O site da ENA vive no mesmo projecto que o GesForma, em pastas separadas. O site público está em `src/site`. O backoffice está em `src/gesforma`. O código que os dois usam está em `src/partilhado`. A página inicial está em `/`. O login do backoffice está em `/entrar` e cada vista tem o seu endereço em `/gesforma/…`. Quem edita os textos da página inicial e do rodapé é o administrador, em **Sistema → Site**.
 
-Os cursos, os preços, as turmas e as listas da inscrição saem da base de dados. Os textos de apresentação saem de `app_settings`, com o id `site`. Enquanto o administrador não grava nada, o site usa o texto de omissão que está em `src/siteConteudo.ts`.
+Os cursos, os preços, as turmas e as listas da inscrição saem da base de dados. Os textos de apresentação saem de `app_settings`, com o id `site`. Enquanto o administrador não grava nada, o site usa o texto de omissão que está em `src/partilhado/siteConteudo.ts`.
 
 O ano do copyright é o ano corrente. Não se grava. Em 2026 o rodapé mostra © 2026.
 
@@ -15,11 +15,12 @@ O ano do copyright é o ano corrente. Não se grava. Em 2026 o rodapé mostra ©
 - `/documentos/:token` ligação pessoal para anexar documentos. O ficheiro segue para o Google Drive.
 - `/cronograma/:regime/:turmaId` cronograma publicado de uma turma.
 - `/inquerito/:token` resposta ao inquérito de satisfação.
-- `/entrar` login do GesForma.
+- `/entrar` login do GesForma. Depois de entrar, o endereço passa para a vista do perfil, por exemplo `/gesforma/gold`.
+- `/gesforma/…` uma rota por vista do backoffice: painéis, CRM, cursos, fichas (`/gesforma/gold/cursos/:id` e `/gesforma/financiada/cursos/:id`), turmas, cockpit (`/gesforma/gold/turmas/:id` e `/gesforma/financiada/turmas/:id`), dossiês, inquéritos, blog, listas, emails, pagamentos, site e configurações. O separador do cockpit vai em `?separador=`.
 
 ## O que já sai da base de dados
 
-A oferta pública vem de `GET /v1/public/catalogo`. Cada curso publicado traz título, área, modalidade, duração, preço, descrição, imagens da ficha, programa e tipo de inscrição (Pré-inscrição, Pré-pago ou Acesso direto). Os destaques da página inicial são os mais vendidos. O preço mostrado é o da ficha ou o da turma libertada. Não há preço inventado. Um curso com estado Inactivo (também Inativo, Inativa ou Inactiva) não entra nesta lista: fica fora do catálogo, dos destaques, dos cartões automáticos do hero e da ficha pública. Na ficha do curso, junto ao banner, a miniatura pede um recorte na proporção 2:3 do cartão de `/formacao`. O que fica dentro da moldura é a imagem gravada.
+A oferta pública vem de `GET /v1/public/catalogo`. Cada curso publicado traz título, área, modalidade, duração, preço, descrição, imagens da ficha, programa e tipo de inscrição (Pré-inscrição, Pré-pago ou Acesso direto). Os destaques da página inicial são os mais vendidos. O preço mostrado é o da ficha ou o da turma libertada. Não há preço inventado. Um curso com estado Inactivo (também Inativo, Inativa ou Inactiva) não entra nesta lista: fica fora do catálogo, dos destaques, dos cartões automáticos do hero e da ficha pública. Na ficha do curso há três fotografias. O banner abre a página do curso. A capa é a fotografia inteira, sem recorte, e aparece no cartão do curso (página inicial, destaque e cartão da ficha). A miniatura é o recorte 2:3 dessa capa e aparece no catálogo `/formacao`.
 
 Concelhos, origens e formas de pagamento vêm de **Gestão → Listas de opções** (`catalog_items`, `kind = lista_opcoes`). O site lê `GET /v1/public/opcoes?lista=concelhos|origens|metodos_pagamento`. Se a lista ainda estiver vazia, o formulário diz que a secretaria ainda não a definiu. Um método de pagamento que não esteja nessa lista é recusado em `POST /v1/public/preinscricoes`.
 

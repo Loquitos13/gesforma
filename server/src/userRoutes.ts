@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Db } from "./db/pool.js";
-import { mensagemPalavraPasse, palavraPasseValida } from "../../src/passwordPolicy.js";
+import { mensagemPalavraPasse, palavraPasseValida } from "../../src/partilhado/passwordPolicy.js";
 import { hashPassword, isEmail, normalizeEmail } from "./security.js";
 
 const ROLES = ["admin", "secretaria", "comercial", "financiada", "formador"] as const;

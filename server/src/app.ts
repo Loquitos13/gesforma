@@ -37,7 +37,7 @@ import { registerPedagogiaRoutes } from "./pedagogiaRoutes.js";
 import { registerEquipaRoutes } from "./equipa.js";
 import { registerCrmDiretorioRoutes } from "./crmDiretorio.js";
 import { registerUserRoutes } from "./userRoutes.js";
-import { mensagemPalavraPasse, palavraPasseValida } from "../../src/passwordPolicy.js";
+import { mensagemPalavraPasse, palavraPasseValida } from "../../src/partilhado/passwordPolicy.js";
 import { registerSmtpRoutes } from "./smtpRoutes.js";
 import {
   delayLabelFromSeconds,

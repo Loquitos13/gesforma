@@ -24,7 +24,7 @@ import { exportCrmLeads, queryCrmLeads, searchCrmLeads, type CrmDir, type CrmFil
 import { fmtDataCalendario, fmtStampLisboa, hojeLisboa } from "./datas.js";
 import { syncTurmaDriveAccess } from "./googleDrive.js";
 import { cronogramaSoMarcas, nomesDoFormador } from "./sessaoAcesso.js";
-import { textoSobreposicaoNova } from "../../src/sobreposicaoHorario.js";
+import { textoSobreposicaoNova } from "../../src/partilhado/sobreposicaoHorario.js";
 import { erroDisponibilidade, formadorEstaAlocado, garantirContaFormador } from "./formadorConta.js";
 import {
   addLeadNota, createCrmCampo, createCrmEtiqueta, deleteCrmEtiqueta, findDuplicados, fixarNota, getLeadDossier,

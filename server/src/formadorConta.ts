@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { formadorForaDoSlot, slotsDoFormador } from "../../src/disponibilidade.js";
-import { gerarPalavraPasse } from "../../src/passwordPolicy.js";
+import { formadorForaDoSlot, slotsDoFormador } from "../../src/partilhado/disponibilidade.js";
+import { gerarPalavraPasse } from "../../src/partilhado/passwordPolicy.js";
 import type { Db } from "./db/pool.js";
 import { hashPassword, isEmail, normalizeEmail } from "./security.js";
 

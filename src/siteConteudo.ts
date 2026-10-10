@@ -12,6 +12,8 @@ export const SITE_OMISSAO = {
   heroImagem: "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=1400&q=80",
   heroImagemAlt: "Sessão de formação em sala",
   heroDisposicao: "texto-esquerda",
+  heroContentorLargura: "100",
+  heroContentorAltura: "100",
   heroTituloTamanho: "100",
   heroTextoTamanho: "100",
   heroTextoX: "0",
@@ -338,6 +340,8 @@ export type HeroDisposicao = "texto-esquerda" | "texto-centro" | "texto-direita"
 
 export const HERO_TAMANHO_MIN = 60;
 export const HERO_TAMANHO_MAX = 180;
+export const HERO_CONTENTOR_MIN = 50;
+export const HERO_CONTENTOR_MAX = 160;
 export const HERO_POS_MIN = -40;
 export const HERO_POS_MAX = 40;
 export const MARGEM_MIN = -12;

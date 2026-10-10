@@ -3,7 +3,7 @@ import { apiSiteHeroImagem } from "./api";
 import { useCatalogs } from "./CatalogsContext";
 import { SearchSelect } from "./FormKit";
 import { SiteSeccaoPreview, type CursoPreview, type OfertaPreview } from "./SitePreview";
-import { classeSelo, heroBadgeCor, heroDisposicao, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, SITE_GRUPOS, SITE_OMISSAO, type HeroDisposicao, type HeroSlot, type SiteChave } from "./siteConteudo";
+import { classeSelo, heroBadgeCor, heroDisposicao, HERO_CONTENTOR_MAX, HERO_CONTENTOR_MIN, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, SITE_GRUPOS, SITE_OMISSAO, type HeroDisposicao, type HeroSlot, type SiteChave } from "./siteConteudo";
 import { toastOk } from "./toastBus";
 
 const campoCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent";
@@ -237,7 +237,7 @@ function ComposicaoHero({
     <div className="rounded-lg border border-slate-200 p-4 space-y-4">
       <div>
         <h3 className="text-sm font-bold text-slate-800">Composição do destaque</h3>
-        <p className="mt-1 text-xs text-slate-500">A disposição coloca o texto e os cartões. O tamanho e a posição mexem no texto e no botão que está por baixo dele. Zero na posição é o lugar de omissão. A pré-visualização acompanha o rascunho.</p>
+        <p className="mt-1 text-xs text-slate-500">A disposição coloca o texto e os cartões. A largura e a altura mudam o contentor do destaque: 100% é o tamanho de omissão. O tamanho e a posição mexem no texto e no botão que está por baixo dele. Zero na posição é o lugar de omissão. A pré-visualização acompanha o rascunho.</p>
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="group" aria-label="Disposição do destaque">
         {DISPOSICOES.map(opcao => {
@@ -258,6 +258,8 @@ function ComposicaoHero({
         })}
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Regua etiqueta="Largura do contentor" chave="heroContentorLargura" draft={draft} min={HERO_CONTENTOR_MIN} max={HERO_CONTENTOR_MAX} omissao={100} sufixo="%" onChange={onChange} />
+        <Regua etiqueta="Altura do contentor" chave="heroContentorAltura" draft={draft} min={HERO_CONTENTOR_MIN} max={HERO_CONTENTOR_MAX} omissao={100} sufixo="%" onChange={onChange} />
         <Regua etiqueta="Tamanho do título" chave="heroTituloTamanho" draft={draft} min={HERO_TAMANHO_MIN} max={HERO_TAMANHO_MAX} omissao={100} sufixo="%" onChange={onChange} />
         <Regua etiqueta="Tamanho do texto" chave="heroTextoTamanho" draft={draft} min={HERO_TAMANHO_MIN} max={HERO_TAMANHO_MAX} omissao={100} sufixo="%" onChange={onChange} />
         <Regua etiqueta="Posição horizontal do texto" chave="heroTextoX" draft={draft} min={HERO_POS_MIN} max={HERO_POS_MAX} omissao={0} sufixo="" onChange={onChange} />

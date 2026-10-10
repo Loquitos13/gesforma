@@ -1,7 +1,7 @@
 import { createContext, type CSSProperties, FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { ApiError, apiPublicPreinscricao } from "./api";
 import { InscricaoSite, useInscricao } from "./SiteInscricao";
-import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, destinoDoHero, ePrepago, ePreinscricao, estiloMargem, heroAnimacao, heroBadge, heroDisposicao, heroPedido, heroTamanho, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, ligacaoExterna, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, rotuloBotaoInscricao, textoSite, tituloRegime, type HeroAnimacao, type HeroBadgeCor, type HeroPedido, type HeroTamanho, type InscricaoPublica, type SiteChave } from "./siteConteudo";
+import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, destinoDoHero, ePrepago, ePreinscricao, estiloMargem, heroAnimacao, heroBadge, heroDisposicao, heroPedido, heroTamanho, HERO_CONTENTOR_MAX, HERO_CONTENTOR_MIN, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, ligacaoExterna, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, rotuloBotaoInscricao, textoSite, tituloRegime, type HeroAnimacao, type HeroBadgeCor, type HeroPedido, type HeroTamanho, type InscricaoPublica, type SiteChave } from "./siteConteudo";
 
 export type Course = {
   id: string;
@@ -175,6 +175,10 @@ export function Icon({
 
 function estiloEscala(escala: number, extra?: CSSProperties): CSSProperties {
   return { ...(extra ?? {}), ["--ena-esc" as string]: String(escala) } as CSSProperties;
+}
+
+function estiloContentor(largura: number, altura: number): CSSProperties {
+  return { ["--ena-hero-l" as string]: String(largura / 100), ["--ena-hero-a" as string]: String(altura / 100) } as CSSProperties;
 }
 
 function margemLida(t: (chave: SiteChave) => string, x: SiteChave, y: SiteChave) {
@@ -361,6 +365,8 @@ function SplitHero() {
   const t = useSiteTexto();
   const heroImagem = moradaSegura(t("heroImagem"));
   const disposicao = heroDisposicao(t("heroDisposicao"));
+  const contentorLargura = numeroSite(t("heroContentorLargura"), HERO_CONTENTOR_MIN, HERO_CONTENTOR_MAX, 100);
+  const contentorAltura = numeroSite(t("heroContentorAltura"), HERO_CONTENTOR_MIN, HERO_CONTENTOR_MAX, 100);
   const tituloEsc = numeroSite(t("heroTituloTamanho"), HERO_TAMANHO_MIN, HERO_TAMANHO_MAX, 100);
   const textoEsc = numeroSite(t("heroTextoTamanho"), HERO_TAMANHO_MIN, HERO_TAMANHO_MAX, 100);
   const textoX = numeroSite(t("heroTextoX"), HERO_POS_MIN, HERO_POS_MAX, 0);
@@ -417,10 +423,10 @@ function SplitHero() {
   );
   const ancora: "par-direita" | "par-esquerda" | "coluna" = centro ? "coluna" : disposicao === "texto-direita" ? "par-esquerda" : "par-direita";
   const grelha = centro
-    ? "pb-24 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,.95fr)_minmax(0,1fr)] lg:items-center lg:pb-28"
+    ? "pb-24 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,.95fr)_minmax(0,1fr)] lg:items-center lg:pb-28"
     : disposicao === "texto-direita"
-      ? "lg:min-h-[820px] lg:grid-cols-[minmax(0,1.22fr)_minmax(0,.78fr)]"
-      : "lg:min-h-[820px] lg:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)]";
+      ? "lg:grid-cols-[minmax(0,1.22fr)_minmax(0,.78fr)]"
+      : "lg:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)]";
   const cartao = (posicao: 1 | 2) => {
     const vista = cartoes.find(item => item.posicao === posicao);
     return vista ? <CartaoFlutuante vista={vista} abrir={abrir} ancora={ancora} /> : null;
@@ -450,7 +456,7 @@ function SplitHero() {
       aria-label="Destaques"
       data-hero-disposicao={disposicao}
     >
-      <div className={`relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[32px] bg-[#14263D] shadow-[0_28px_80px_rgba(20,38,61,.22)] ${grelha}`}>
+      <div className={`ena-hero-contentor relative mx-auto grid overflow-hidden rounded-[32px] bg-[#14263D] shadow-[0_28px_80px_rgba(20,38,61,.22)] ${grelha}`} style={estiloContentor(contentorLargura, contentorAltura)} data-hero-largura={contentorLargura} data-hero-altura={contentorAltura}>
         {palco}
         <OndaHero />
       </div>

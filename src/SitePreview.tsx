@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, heroAnimacao, heroBadge, heroDisposicao, heroPedido, heroTamanho, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, tituloRegime, type HeroPedido, type HeroSlot, type SiteChave } from "./siteConteudo";
+import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, heroAnimacao, heroBadge, heroDisposicao, heroPedido, heroTamanho, HERO_CONTENTOR_MAX, HERO_CONTENTOR_MIN, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, tituloRegime, type HeroPedido, type HeroSlot, type SiteChave } from "./siteConteudo";
 
 export type CursoPreview = {
   id: string;
@@ -194,6 +194,8 @@ function PreviewHero({ ler, oferta }: { ler: (chave: SiteChave) => string; ofert
   const esquerda = cartaoDe(1, ler, oferta);
   const direita = cartaoDe(2, ler, oferta);
   const disposicao = heroDisposicao(ler("heroDisposicao"));
+  const largura = numeroSite(ler("heroContentorLargura"), HERO_CONTENTOR_MIN, HERO_CONTENTOR_MAX, 100);
+  const altura = numeroSite(ler("heroContentorAltura"), HERO_CONTENTOR_MIN, HERO_CONTENTOR_MAX, 100);
   const margem = margemPreview(ler, "margemDestaqueX", "margemDestaqueY", 12, 12);
   const circulo = (classe: string) => (
     <div className={`overflow-hidden rounded-full bg-[#FFA900] shadow-[0_0_0_3px_#A60000] ${classe}`}>
@@ -230,7 +232,7 @@ function PreviewHero({ ler, oferta }: { ler: (chave: SiteChave) => string; ofert
   );
   return (
     <div className="bg-[#F6F3EE]" style={margem} data-hero-disposicao={disposicao}>
-      <div className="overflow-hidden rounded-2xl bg-[#14263D] px-3 pb-3 pt-4">
+      <div className="mx-auto overflow-hidden rounded-2xl bg-[#14263D] px-3 pb-3 pt-4" style={{ width: `${largura}%`, minHeight: Math.round(168 * altura / 100) }} data-hero-largura={largura} data-hero-altura={altura}>
         {palco}
         <svg aria-hidden="true" className="mt-1 h-4 w-full" viewBox="0 0 1200 140" preserveAspectRatio="none">
           <path d="M0 140V72C90 36 180 108 320 78C460 48 540 18 700 42C860 66 940 112 1080 82C1140 68 1170 88 1200 74V140H0Z" fill="#A60000" />

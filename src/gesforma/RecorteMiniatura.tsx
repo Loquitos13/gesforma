@@ -3,25 +3,85 @@ import { AppModal } from "../partilhado/FormKit";
 
 /** Largura:altura da fotografia na coluna do cartão de /formacao. */
 export const RECORTE_RAZAO = 2 / 3;
-export const RECORTE_LARGURA = 220;
-export const RECORTE_ALTURA = Math.round(RECORTE_LARGURA / RECORTE_RAZAO);
 
-const ZOOM_MIN = 1;
-const ZOOM_MAX = 4;
 const PREVIA_ALTURA = 112;
-const PREVIA_LARGURA = Math.round(PREVIA_ALTURA * (RECORTE_LARGURA / RECORTE_ALTURA));
-const PREVIA_ESCALA = PREVIA_LARGURA / RECORTE_LARGURA;
+const PREVIA_LARGURA = Math.round(PREVIA_ALTURA * RECORTE_RAZAO);
+const CAIXA_LARGURA = 520;
+const CAIXA_ALTURA = 360;
 
-export function medidaRecorte(largura: number, altura: number, zoom: number) {
-  const base = Math.max(RECORTE_LARGURA / largura, RECORTE_ALTURA / altura);
-  const escala = base * Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom));
-  const dw = largura * escala;
-  const dh = altura * escala;
-  return { escala, dw, dh, minX: RECORTE_LARGURA - dw, minY: RECORTE_ALTURA - dh };
-}
+type Canto = "nw" | "ne" | "sw" | "se";
+type Janela = { x: number; y: number; w: number };
+type Arrasto =
+  | { tipo: "mover"; x: number; y: number; janela: Janela }
+  | { tipo: "canto"; canto: Canto; janela: Janela };
+
+const CANTOS: { id: Canto; className: string }[] = [
+  { id: "nw", className: "left-1.5 top-1.5 cursor-nwse-resize" },
+  { id: "ne", className: "right-1.5 top-1.5 cursor-nesw-resize" },
+  { id: "sw", className: "bottom-1.5 left-1.5 cursor-nesw-resize" },
+  { id: "se", className: "bottom-1.5 right-1.5 cursor-nwse-resize" },
+];
 
 function limitar(valor: number, min: number, max: number) {
   return Math.min(max, Math.max(min, valor));
+}
+
+function larguraMaxima(nw: number, nh: number) {
+  return Math.min(nw, nh * RECORTE_RAZAO);
+}
+
+function larguraMinima(nw: number, nh: number) {
+  const max = larguraMaxima(nw, nh);
+  return Math.min(max, Math.max(max * 0.22, Math.min(max, 1)));
+}
+
+export function encaixarJanela(janela: Janela, nw: number, nh: number): Janela {
+  const max = larguraMaxima(nw, nh);
+  const min = larguraMinima(nw, nh);
+  const w = limitar(janela.w, min, max);
+  const h = w / RECORTE_RAZAO;
+  return {
+    w,
+    x: limitar(janela.x, 0, Math.max(0, nw - w)),
+    y: limitar(janela.y, 0, Math.max(0, nh - h)),
+  };
+}
+
+export function janelaInicial(nw: number, nh: number): Janela {
+  const w = larguraMaxima(nw, nh);
+  const h = w / RECORTE_RAZAO;
+  return { x: (nw - w) / 2, y: (nh - h) / 2, w };
+}
+
+function peloCanto(canto: Canto, px: number, py: number, inicio: Janela, nw: number, nh: number): Janela {
+  const h0 = inicio.w / RECORTE_RAZAO;
+  const direita = canto === "se" || canto === "ne";
+  const baixo = canto === "se" || canto === "sw";
+  const ax = direita ? inicio.x : inicio.x + inicio.w;
+  const ay = baixo ? inicio.y : inicio.y + h0;
+  const limite = Math.min(direita ? nw - ax : ax, (baixo ? nh - ay : ay) * RECORTE_RAZAO);
+  const min = Math.min(limite, larguraMinima(nw, nh));
+  const rawW = Math.max(0, direita ? px - ax : ax - px);
+  const rawH = Math.max(0, baixo ? py - ay : ay - py);
+  const proposta = rawH === 0 ? rawW : (rawW / rawH > RECORTE_RAZAO ? rawH * RECORTE_RAZAO : rawW);
+  const w = limitar(proposta, min, Math.max(min, limite));
+  const h = w / RECORTE_RAZAO;
+  return encaixarJanela({
+    w,
+    x: direita ? ax : ax - w,
+    y: baixo ? ay : ay - h,
+  }, nw, nh);
+}
+
+function medidaDaCaixa(nw: number, nh: number) {
+  const proporcao = nw / nh;
+  let largura = CAIXA_LARGURA;
+  let altura = largura / proporcao;
+  if (altura > CAIXA_ALTURA) {
+    altura = CAIXA_ALTURA;
+    largura = altura * proporcao;
+  }
+  return { largura, altura, escala: largura / nw };
 }
 
 export function RecorteMiniatura({
@@ -39,13 +99,19 @@ export function RecorteMiniatura({
 }) {
   const [imagem, setImagem] = useState<HTMLImageElement | null>(null);
   const [erro, setErro] = useState("");
-  const [zoom, setZoom] = useState(1);
-  const [ox, setOx] = useState(0);
-  const [oy, setOy] = useState(0);
-  const vista = useRef({ ox: 0, oy: 0, zoom: 1 });
-  const moldura = useRef<HTMLDivElement>(null);
-  const arrasto = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
-  vista.current = { ox, oy, zoom };
+  const [janela, setJanela] = useState<Janela>({ x: 0, y: 0, w: 1 });
+  const palco = useRef<HTMLDivElement>(null);
+  const arrasto = useRef<Arrasto | null>(null);
+  const vista = useRef({ janela, imagem });
+  vista.current = { janela, imagem };
+
+  function definir(seguinte: Janela) {
+    const foto = vista.current.imagem;
+    if (!foto) return;
+    const encaixada = encaixarJanela(seguinte, foto.naturalWidth, foto.naturalHeight);
+    vista.current.janela = encaixada;
+    setJanela(encaixada);
+  }
 
   useEffect(() => {
     let viva = true;
@@ -56,51 +122,38 @@ export function RecorteMiniatura({
         setErro("Não foi possível ler esta imagem.");
         return;
       }
-      const medida = medidaRecorte(img.naturalWidth, img.naturalHeight, 1);
+      const inicial = janelaInicial(img.naturalWidth, img.naturalHeight);
       setImagem(img);
       setErro("");
-      setZoom(1);
-      setOx(medida.minX / 2);
-      setOy(medida.minY / 2);
+      setJanela(inicial);
     };
     img.onerror = () => { if (viva) setErro("Não foi possível ler esta imagem."); };
     img.src = origem;
     return () => { viva = false; };
   }, [origem]);
 
-  useEffect(() => {
-    const el = moldura.current;
-    if (!el) return;
-    const aoRoda = (event: WheelEvent) => {
-      event.preventDefault();
-      if (!imagem) return;
-      const actual = vista.current;
-      const seguinte = limitar(actual.zoom * (event.deltaY > 0 ? 0.92 : 1.08), ZOOM_MIN, ZOOM_MAX);
-      aplicarZoom(imagem, actual, seguinte, setZoom, setOx, setOy);
+  const caixa = imagem ? medidaDaCaixa(imagem.naturalWidth, imagem.naturalHeight) : null;
+  const altura = janela.w / RECORTE_RAZAO;
+
+  function pontoNaFoto(clientX: number, clientY: number) {
+    const foto = vista.current.imagem;
+    const el = palco.current;
+    if (!foto || !el) return null;
+    const rect = el.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    return {
+      x: ((clientX - rect.left) / rect.width) * foto.naturalWidth,
+      y: ((clientY - rect.top) / rect.height) * foto.naturalHeight,
     };
-    el.addEventListener("wheel", aoRoda, { passive: false });
-    return () => el.removeEventListener("wheel", aoRoda);
-  }, [imagem]);
-
-  const medida = imagem ? medidaRecorte(imagem.naturalWidth, imagem.naturalHeight, zoom) : null;
-
-  function mover(dx: number, dy: number, origemX: number, origemY: number) {
-    if (!imagem) return;
-    const caixa = medidaRecorte(imagem.naturalWidth, imagem.naturalHeight, zoom);
-    setOx(limitar(origemX + dx, caixa.minX, 0));
-    setOy(limitar(origemY + dy, caixa.minY, 0));
   }
 
   function repor() {
     if (!imagem) return;
-    const caixa = medidaRecorte(imagem.naturalWidth, imagem.naturalHeight, 1);
-    setZoom(1);
-    setOx(caixa.minX / 2);
-    setOy(caixa.minY / 2);
+    definir(janelaInicial(imagem.naturalWidth, imagem.naturalHeight));
   }
 
   function guardar() {
-    if (!imagem || !medida || aGravar) return;
+    if (!imagem || aGravar) return;
     const saidaL = 800;
     const saidaA = Math.round(saidaL / RECORTE_RAZAO);
     const tela = document.createElement("canvas");
@@ -111,15 +164,10 @@ export function RecorteMiniatura({
       setErro("O browser não conseguiu preparar o recorte.");
       return;
     }
-    let sx = -ox / medida.escala;
-    let sy = -oy / medida.escala;
-    let sw = RECORTE_LARGURA / medida.escala;
-    let sh = RECORTE_ALTURA / medida.escala;
-    sx = Math.max(0, sx);
-    sy = Math.max(0, sy);
-    sw = Math.min(sw, imagem.naturalWidth - sx);
-    sh = Math.min(sh, imagem.naturalHeight - sy);
-    ctx.drawImage(imagem, sx, sy, sw, sh, 0, 0, saidaL, saidaA);
+    const actual = vista.current.janela;
+    const sw = actual.w;
+    const sh = sw / RECORTE_RAZAO;
+    ctx.drawImage(imagem, actual.x, actual.y, sw, sh, 0, 0, saidaL, saidaA);
     try {
       tela.toBlob(blob => {
         if (!blob) {
@@ -134,12 +182,14 @@ export function RecorteMiniatura({
     }
   }
 
+  const previaEscala = imagem ? PREVIA_LARGURA / janela.w : 1;
+
   return (
     <AppModal
       open
       size="xl"
       title="Recortar a miniatura"
-      sub="A moldura é a miniatura do catálogo, recortada da capa. Arraste e aproxime até ficar o enquadramento certo."
+      sub="Arraste a janela sobre a capa. Puxe um canto para a aumentar ou reduzir, sempre na proporção do catálogo."
       onClose={() => { if (!aGravar) onCancelar(); }}
       footer={
         <>
@@ -153,40 +203,79 @@ export function RecorteMiniatura({
       <div className="p-5 space-y-4">
         {erro && <p className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{erro}</p>}
         <div className="flex flex-col items-start gap-5 lg:flex-row">
-          <div
-            ref={moldura}
-            role="application"
-            aria-label="Área de recorte. Arraste a fotografia para a posicionar."
-            className="relative shrink-0 overflow-hidden bg-[#E7EBF0] touch-none cursor-grab active:cursor-grabbing select-none"
-            style={{ width: RECORTE_LARGURA, height: RECORTE_ALTURA }}
-            onPointerDown={event => {
-              if (!imagem) return;
-              event.currentTarget.setPointerCapture(event.pointerId);
-              arrasto.current = { x: event.clientX, y: event.clientY, ox, oy };
-            }}
-            onPointerMove={event => {
-              const inicio = arrasto.current;
-              if (!inicio) return;
-              mover(event.clientX - inicio.x, event.clientY - inicio.y, inicio.ox, inicio.oy);
-            }}
-            onPointerUp={() => { arrasto.current = null; }}
-            onPointerCancel={() => { arrasto.current = null; }}
-          >
-            {medida && (
-              <img
-                src={origem}
-                alt=""
-                draggable={false}
-                className="pointer-events-none absolute max-w-none"
-                style={{ width: medida.dw, height: medida.dh, left: ox, top: oy }}
-              />
-            )}
-            <div className="pointer-events-none absolute inset-0">
-              <div className="absolute inset-y-0 left-1/3 w-px bg-white/50" />
-              <div className="absolute inset-y-0 left-2/3 w-px bg-white/50" />
-              <div className="absolute inset-x-0 top-1/3 h-px bg-white/50" />
-              <div className="absolute inset-x-0 top-2/3 h-px bg-white/50" />
-              <div className="absolute inset-0 ring-2 ring-[#FFA900] ring-inset" />
+          <div className="flex w-full shrink-0 justify-center lg:w-auto">
+            <div
+              ref={palco}
+              className="relative overflow-hidden bg-[#E7EBF0] select-none"
+              style={caixa ? { width: caixa.largura, height: caixa.altura } : { width: CAIXA_LARGURA, height: 180 }}
+            >
+              {imagem && caixa && (
+                <img src={origem} alt="" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full" />
+              )}
+              {imagem && (
+                <div
+                  role="application"
+                  tabIndex={0}
+                  aria-label="Janela de recorte. Arraste para a mover sobre a capa. Puxe um canto para mudar o tamanho."
+                  className="absolute touch-none cursor-grab outline-none ring-2 ring-[#FFA900] ring-inset active:cursor-grabbing focus-visible:ring-[#A60000]"
+                  style={{
+                    left: `${(janela.x / imagem.naturalWidth) * 100}%`,
+                    top: `${(janela.y / imagem.naturalHeight) * 100}%`,
+                    width: `${(janela.w / imagem.naturalWidth) * 100}%`,
+                    height: `${(altura / imagem.naturalHeight) * 100}%`,
+                    boxShadow: "0 0 0 9999px rgba(20, 38, 61, 0.55)",
+                  }}
+                  onPointerDown={event => {
+                    if (aGravar) return;
+                    const canto = (event.target as HTMLElement).closest("[data-canto]")?.getAttribute("data-canto") as Canto | null;
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    arrasto.current = canto
+                      ? { tipo: "canto", canto, janela: vista.current.janela }
+                      : { tipo: "mover", x: event.clientX, y: event.clientY, janela: vista.current.janela };
+                  }}
+                  onPointerMove={event => {
+                    const inicio = arrasto.current;
+                    const foto = vista.current.imagem;
+                    const el = palco.current;
+                    if (!inicio || !foto || !el) return;
+                    const rect = el.getBoundingClientRect();
+                    if (inicio.tipo === "mover") {
+                      const dx = ((event.clientX - inicio.x) / rect.width) * foto.naturalWidth;
+                      const dy = ((event.clientY - inicio.y) / rect.height) * foto.naturalHeight;
+                      definir({ x: inicio.janela.x + dx, y: inicio.janela.y + dy, w: inicio.janela.w });
+                      return;
+                    }
+                    const ponto = pontoNaFoto(event.clientX, event.clientY);
+                    if (!ponto) return;
+                    definir(peloCanto(inicio.canto, ponto.x, ponto.y, inicio.janela, foto.naturalWidth, foto.naturalHeight));
+                  }}
+                  onPointerUp={() => { arrasto.current = null; }}
+                  onPointerCancel={() => { arrasto.current = null; }}
+                  onKeyDown={event => {
+                    if (!imagem || aGravar) return;
+                    const passo = event.shiftKey ? 24 : 8;
+                    const delta = { ArrowLeft: [-passo, 0], ArrowRight: [passo, 0], ArrowUp: [0, -passo], ArrowDown: [0, passo] }[event.key];
+                    if (!delta) return;
+                    event.preventDefault();
+                    definir({ x: janela.x + delta[0], y: janela.y + delta[1], w: janela.w });
+                  }}
+                >
+                  <div className="pointer-events-none absolute inset-y-0 left-1/3 w-px bg-white/70" />
+                  <div className="pointer-events-none absolute inset-y-0 left-2/3 w-px bg-white/70" />
+                  <div className="pointer-events-none absolute inset-x-0 top-1/3 h-px bg-white/70" />
+                  <div className="pointer-events-none absolute inset-x-0 top-2/3 h-px bg-white/70" />
+                  {CANTOS.map(canto => (
+                    <span
+                      key={canto.id}
+                      data-canto={canto.id}
+                      className={`absolute z-10 h-3.5 w-3.5 rounded-sm border-2 border-white bg-[#1C3350] shadow ${canto.className}`}
+                    />
+                  ))}
+                </div>
+              )}
+              {!imagem && !erro && (
+                <div className="absolute inset-0 grid place-items-center text-xs text-slate-500">A ler a capa…</div>
+              )}
             </div>
           </div>
           <div className="min-w-0 flex-1 space-y-4">
@@ -194,47 +283,30 @@ export function RecorteMiniatura({
               <div className="flex" style={{ height: PREVIA_ALTURA }}>
                 <div className="w-2 shrink-0 bg-[#FFA900]" />
                 <div className="relative shrink-0 overflow-hidden bg-[#E7EBF0]" style={{ width: PREVIA_LARGURA }}>
-                  {medida && (
+                  {imagem && (
                     <img
                       src={origem}
                       alt=""
                       draggable={false}
                       className="absolute max-w-none"
                       style={{
-                        width: medida.dw * PREVIA_ESCALA,
-                        height: medida.dh * PREVIA_ESCALA,
-                        left: ox * PREVIA_ESCALA,
-                        top: oy * PREVIA_ESCALA,
+                        width: imagem.naturalWidth * previaEscala,
+                        height: imagem.naturalHeight * previaEscala,
+                        left: -janela.x * previaEscala,
+                        top: -janela.y * previaEscala,
                       }}
                     />
                   )}
                 </div>
                 <div className="flex flex-col justify-center px-3">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#1C3350]">ENA Gold</span>
-                  <p className="mt-1 text-sm font-semibold text-slate-800">Pré-visualização do cartão</p>
-                  <p className="mt-1 text-xs text-slate-500">A imagem ocupa a altura toda.</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-800">Pré-visualização do catálogo</p>
+                  <p className="mt-1 text-xs text-slate-500">É o que a janela recorta.</p>
                 </div>
               </div>
             </div>
-            <label className="block text-xs font-semibold text-slate-600">
-              Aproximar
-              <input
-                type="range"
-                min={ZOOM_MIN}
-                max={ZOOM_MAX}
-                step={0.01}
-                value={zoom}
-                aria-valuetext={`${Math.round(zoom * 100)}%`}
-                disabled={!imagem || aGravar}
-                onChange={event => {
-                  if (!imagem) return;
-                  aplicarZoom(imagem, { ox, oy, zoom }, Number(event.target.value), setZoom, setOx, setOy);
-                }}
-                className="mt-2 w-full accent-[#A60000]"
-              />
-            </label>
             <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
-              <span>Roda do rato para aproximar. Arraste para enquadrar.</span>
+              <span>A janela fica sempre na proporção 2:3 do catálogo.</span>
               <button type="button" onClick={repor} disabled={!imagem || aGravar} className="font-semibold text-[#1C3350] hover:text-[#A60000] disabled:opacity-50">Repor</button>
             </div>
           </div>
@@ -242,27 +314,4 @@ export function RecorteMiniatura({
       </div>
     </AppModal>
   );
-}
-
-function aplicarZoom(
-  imagem: HTMLImageElement,
-  actual: { ox: number; oy: number; zoom: number },
-  seguinte: number,
-  setZoom: (valor: number) => void,
-  setOx: (valor: number) => void,
-  setOy: (valor: number) => void,
-) {
-  const zoom = limitar(seguinte, ZOOM_MIN, ZOOM_MAX);
-  const antes = medidaRecorte(imagem.naturalWidth, imagem.naturalHeight, actual.zoom);
-  const depois = medidaRecorte(imagem.naturalWidth, imagem.naturalHeight, zoom);
-  const cx = (RECORTE_LARGURA / 2 - actual.ox) / antes.escala;
-  const cy = (RECORTE_ALTURA / 2 - actual.oy) / antes.escala;
-  const ox = limitar(RECORTE_LARGURA / 2 - cx * depois.escala, depois.minX, 0);
-  const oy = limitar(RECORTE_ALTURA / 2 - cy * depois.escala, depois.minY, 0);
-  actual.ox = ox;
-  actual.oy = oy;
-  actual.zoom = zoom;
-  setZoom(zoom);
-  setOx(ox);
-  setOy(oy);
 }

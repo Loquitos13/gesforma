@@ -1081,7 +1081,7 @@ export function CursoFichaView({
                 </div>
                 {accent === "gold" ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    <Field label="Tipo comercial" required error={falhas.tipo} hint="Pré-inscrição mostra Pré-inscrever e grava o pedido. Pré-pago e Acesso direto não abrem esse formulário: a entrada é no Moodle.">
+                    <Field label="Tipo comercial" required error={falhas.tipo} hint="Pré-inscrição mostra Pré-inscrever e grava o pedido. Pré-pago abre o check-out: dados pessoais e depois o pagamento. Acesso direto não abre formulário: a entrada é no Moodle.">
                       <OptionSelect lista="tipos_curso" value={data.tipo} onChange={v => patch({ tipo: v })} />
                     </Field>
                     <Field label="Categoria" required error={falhas.categoria}>

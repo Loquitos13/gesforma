@@ -241,12 +241,19 @@ export function ePreinscricao(inscricao?: string) {
   return inscricao === "Pré-inscrição";
 }
 
+export function ePrepago(inscricao?: string) {
+  return inscricao === "Pré-pago";
+}
+
 export function rotuloBotaoInscricao(inscricao?: string) {
-  return ePreinscricao(inscricao) ? "Pré-inscrever" : "Aceder ao curso";
+  if (ePreinscricao(inscricao)) return "Pré-inscrever";
+  if (ePrepago(inscricao)) return "Inscrever-me agora";
+  return "Aceder ao curso";
 }
 
 export function botaoHero(pedido: Exclude<HeroPedido, { modo: "automatico" }>, inscricao?: InscricaoPublica) {
   if (pedido.modo === "curso") {
+    if (ePrepago(inscricao)) return "Inscrever-me agora";
     if (!ePreinscricao(inscricao)) return "Aceder ao curso";
     return pedido.botao || "Pré-inscrever";
   }

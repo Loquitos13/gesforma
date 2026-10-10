@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Icon, SiteFrame, useOferta, type Course } from "./SiteLanding";
 import { useInscricao } from "./SiteInscricao";
+import { ePrepago, ePreinscricao, rotuloBotaoInscricao } from "./siteConteudo";
 
 function duracaoModulo(raw: string) {
   const s = raw.trim().toLowerCase().replace(/\s+/g, "");
@@ -132,12 +133,14 @@ function Curso({ curso }: { curso: Course }) {
             <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-[#A60000]">{curso.enrollment}</p>
             <h2 className="mt-3 font-serif text-3xl text-[#1C3350]">{curso.price}</h2>
             <p className="mt-4 text-sm leading-6 text-[#1C3350]/65">
-              {curso.enrollment === "Pré-inscrição"
-                ? "A pré-inscrição pede os seus dados e, quando existir, a turma. O pedido fica registado e sai o email automático."
-                : "Este curso abre no Moodle. Não há formulário de pré-inscrição."}
+              {ePrepago(curso.enrollment)
+                ? "Primeiro recolhemos os seus dados. O pagamento fica no passo seguinte."
+                : ePreinscricao(curso.enrollment)
+                  ? "A pré-inscrição pede os seus dados e, quando existir, a turma. O pedido fica registado e sai o email automático."
+                  : "Este curso abre no Moodle. Não há formulário de pré-inscrição."}
             </p>
             <button type="button" onClick={() => abrir(curso)} className="mt-7 flex w-full items-center justify-between bg-[#A60000] px-5 py-4 text-xs font-extrabold uppercase tracking-[0.08em] text-white hover:bg-[#8B0000]">
-              {curso.enrollment === "Pré-inscrição" ? "Pré-inscrever" : "Aceder ao curso"} <Icon name="arrow" />
+              {rotuloBotaoInscricao(curso.enrollment)} <Icon name="arrow" />
             </button>
           </aside>
         </div>

@@ -23,7 +23,11 @@ A oferta pública vem de `GET /v1/public/catalogo`. Cada curso publicado traz t�
 
 Concelhos, origens e formas de pagamento vêm de **Gestão → Listas de opções** (`catalog_items`, `kind = lista_opcoes`). O site lê `GET /v1/public/opcoes?lista=concelhos|origens|metodos_pagamento`. Se a lista ainda estiver vazia, o formulário diz que a secretaria ainda não a definiu. Um método de pagamento que não esteja nessa lista é recusado em `POST /v1/public/preinscricoes`.
 
-O botão **Pré-inscrever** só aparece nos cursos guardados como pré-inscrição (na financiada, todos). O formulário pede nome, apelido, telemóvel, email, concelho, origem e, quando há turma libertada, local, horário e data. Se ainda não houver turma, o pedido fica na mesma na base de dados, com início «A confirmar», e o email automático de boas-vindas sai na hora. Um curso Gold pré-pago ou de acesso direto não abre este formulário.
+O botão **Pré-inscrever** só aparece nos cursos guardados como pré-inscrição (na financiada, todos). O formulário pede nome, apelido, telemóvel, email, concelho, origem e, quando há turma libertada, local, horário e data. Se ainda não houver turma, o pedido fica na mesma na base de dados, com início «A confirmar», e o email automático de boas-vindas sai na hora.
+
+Um curso **Pré-pago** abre o check-out que já existia no site. O primeiro passo pede os dados pessoais. O segundo pede a forma de pagamento da lista (MB Way, Multibanco, Transferência ou outra). O pedido fica gravado e o email de boas-vindas sai. Sem turma, o início fica «Acesso imediato» e o local «Online». Nada é cobrado neste ecrã: a ENA envia a referência e o banco é que confirma.
+
+**Acesso direto** não abre a pré-inscrição nem o check-out. O botão é «Aceder ao curso».
 
 As turmas que o visitante pode escolher são as turmas Gold com estado Ativa e as turmas financiadas com a turma activa. A API é `GET /v1/public/oferta`.
 
@@ -74,4 +78,4 @@ Isto ainda não está ligado ao que o administrador insere. Fica de fora do ecr�
 - Nota de satisfação. O `4,8/5` é um texto editável. Não é a média dos inquéritos gravados.
 - Menu. Dá para mudar o texto de Formação e de Empresas. Não dá para acrescentar outra ligação.
 - Contactos do rodapé. O email e o telefone que aparecem no site não alteram o SMTP Brevo nem os emails automáticos. Esses continuam em Configurações.
-- Moodle. Num curso guardado como Pré-pago ou Acesso direto, o botão é «Aceder ao curso» e não grava pré-inscrição. A entrada devia criar a conta no Moodle e abrir o curso logo a seguir ao pedido. Essa ligação ainda não existe: o GesForma não cria o utilizador, não o inscreve na disciplina e não devolve o endereço da sala.
+- Moodle. Num curso guardado como Acesso direto, o botão é «Aceder ao curso» e não grava pré-inscrição nem check-out. A entrada devia criar a conta no Moodle e abrir o curso logo a seguir ao pedido. Essa ligação ainda não existe: o GesForma não cria o utilizador, não o inscreve na disciplina e não devolve o endereço da sala. O Pré-pago usa o check-out do site.

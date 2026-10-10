@@ -1,0 +1,16 @@
+export const TOPICOS_FIN = [
+  { n: 1, label: "Enquadramento da ação", hint: "Identificação, UFCD, programa, regulamento e enquadramento do financiador." },
+  { n: 2, label: "Recursos pedagógicos e materiais", hint: "Manuais, textos de apoio, salas e equipamentos." },
+  { n: 3, label: "Formadores", hint: "Contrato, CV e CCP de quem lecciona." },
+  { n: 4, label: "Equipa técnica", hint: "Coordenação e técnicos da ação." },
+  { n: 5, label: "Formandos", hint: "Fichas, contratos, elegibilidade e RGPD." },
+  { n: 6, label: "Assiduidade e sessões", hint: "Cronograma, planos, sumários, presenças, horas e ocorrências." },
+  { n: 7, label: "Avaliação da aprendizagem", hint: "Instrumentos, enunciados e pauta." },
+  { n: 8, label: "Avaliação da ação", hint: "Satisfação, execução e o relatório final gerado pelo GesForma." },
+  { n: 9, label: "Supervisão pedagógica", hint: "Apoio ao formador e registos de supervisão." },
+  { n: 10, label: "Divulgação", hint: "Canais onde a turma foi divulgada." },
+  { n: 11, label: "Certificados", hint: "Certificados emitidos e registo." },
+  { n: 12, label: "Equidade e inclusão", hint: "Medidas de acesso e adaptação." },
+  { n: 13, label: "Academia Digital", hint: "Ligação da turma à Academia Digital." },
+  { n: 14, label: "Inquéritos da turma", hint: "Respostas desta turma e o relatório. Não é o inquérito geral do regime." },
+] as const;

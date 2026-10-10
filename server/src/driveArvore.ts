@@ -29,6 +29,7 @@ export const PASTAS_DTP = [
   "11. Certificados",
   "12. Princípios de equidade e inclusão",
   "13. Articulação com Academia Digital",
+  "14. Inquéritos da turma",
 ] as const;
 
 export const PASTA_FORMADORES = PASTAS_DTP[2];

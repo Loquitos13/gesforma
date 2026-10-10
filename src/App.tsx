@@ -2447,6 +2447,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           estado={ped.estado}
           onToggle={(item, proximo) => void ped.guardarDtp(item.id, proximo)}
           onAnexo={(item, file) => void ped.guardarDtpAnexo(item.id, file)}
+          onActualizar={() => void ped.recarregar()}
         />
       )}
       {tab === "sessoes" && (

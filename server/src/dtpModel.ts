@@ -19,7 +19,8 @@ export type DtpAuto =
   | "doc-ci"
   | "doc-ce"
   | "doc-exp"
-  | "doc-regulamento";
+  | "doc-regulamento"
+  | "inqueritos";
 
 export type DtpDef = {
   id: string;
@@ -27,6 +28,8 @@ export type DtpDef = {
   label: string;
   fonte: string;
   hint: string;
+  /** Tópico do dossiê da financiada, de 1 a 14. */
+  topico?: number;
   auto?: DtpAuto;
   bloqueante?: boolean;
   /** Norma legal: fica no dossiê de todos os cursos do regime e não se pode remover. */
@@ -164,37 +167,42 @@ const GOLD: DtpDef[] = [
 ];
 
 const FIN: DtpDef[] = [
-  { id: "id-turma", fase: "antes", label: "Identificação da turma", fonte: "DGERT · Portaria 851/2010", hint: "Código interno, UFCD, carga horária e regime.", obrigatorio: true },
-  { id: "ufcd", fase: "antes", label: "Referencial / código UFCD", fonte: "Financiada · Catálogo SNQ", hint: "Código e designação oficial da UFCD.", obrigatorio: true },
-  { id: "programa", fase: "antes", label: "Programa de formação", fonte: "DGERT · Portaria 851/2010 a)", hint: "Objetivos, conteúdos, metodologias, avaliação e recursos.", obrigatorio: true },
-  { id: "regulamento", fase: "antes", label: "Regulamento de formação", fonte: "DGERT · Portaria 851/2010", hint: "Regulamento ENA + regras do programa financiador.", obrigatorio: true },
-  { id: "enquadramento", fase: "antes", label: "Enquadramento / documentação do financiador", fonte: "Programa de financiamento", hint: "Candidatura, despacho ou regras da tipologia." },
-  { id: "instalacoes", fase: "antes", label: "Locais, recursos e infraestruturas", fonte: "Despacho 5756/2020 h)", hint: "Salas, plataforma e equipamentos.", obrigatorio: true },
-  { id: "divulgacao", fase: "antes", label: "Divulgação da turma", fonte: "DGERT · Portaria 851/2010 aa)", hint: "Canais onde a turma foi divulgada.", obrigatorio: true },
-  { id: "fichas", fase: "antes", label: "Fichas de inscrição e requisitos de acesso", fonte: "DGERT · f) · programa", hint: "Ficha e elegibilidade de cada candidato.", obrigatorio: true },
-  { id: "cc", fase: "antes", label: "Cartão de cidadão (documentos do formando)", fonte: "Financiada · elegibilidade", hint: "Um por formando da turma.", auto: "doc-cc" },
-  { id: "ch", fase: "antes", label: "Certificado de habilitações", fonte: "Financiada · elegibilidade", hint: "Um por formando da turma.", auto: "doc-ch" },
-  { id: "cv-formando", fase: "antes", label: "Curriculum vitae do formando", fonte: "Financiada · elegibilidade", hint: "Um por formando da turma.", auto: "doc-cu" },
-  { id: "iban", fase: "antes", label: "IBAN / comprovativo de NIB", fonte: "Financiada · processamento", hint: "Sem IBAN não há pagamento de apoios.", auto: "doc-ci", bloqueante: true },
-  { id: "emprego", fase: "antes", label: "Comprovativo de situação perante o emprego", fonte: "Financiada · IEFP / tipologia", hint: "Um por formando da turma.", auto: "doc-ce" },
-  { id: "contratos-f", fase: "antes", label: "Contratos de formação (formandos)", fonte: "DGERT · Portaria 851/2010 i)", hint: "A turma fica bloqueada até estarem completos.", obrigatorio: true },
-  { id: "contrato-formador", fase: "antes", label: "Contrato do formador", fonte: "DGERT · Portaria 851/2010 i)", hint: "Contrato do formador da UFCD.", obrigatorio: true },
-  { id: "cv-formador", fase: "antes", label: "CV do formador", fonte: "DGERT / IEFP", hint: "CV actualizado no perfil do formador.", obrigatorio: true },
-  { id: "ccp-formador", fase: "antes", label: "CCP / CCPE do formador", fonte: "DGERT · requisitos do formador", hint: "Certificado válido.", obrigatorio: true },
-  { id: "rgpd", fase: "antes", label: "Autorizações RGPD / dados digitais", fonte: "RGPD · e-learning", hint: "Aceites no momento da inscrição." },
-  { id: "cronograma", fase: "antes", label: "Cronograma / plano semanal", fonte: "Despacho 5756/2020 g)", hint: "Sessões síncronas e trabalho assíncrono.", auto: "cronograma", obrigatorio: true },
-  { id: "planos", fase: "antes", label: "Planos de sessão", fonte: "DGERT · Portaria 851/2010 j)", hint: "Um plano por sessão do cronograma.", auto: "planos", obrigatorio: true },
-  { id: "sumarios", fase: "durante", label: "Sumários (presencial, síncrona e assíncrona)", fonte: "Despacho 5756/2020 e) f)", hint: "Em e-learning o sumário assíncrono também conta.", auto: "sumarios", bloqueante: true, obrigatorio: true },
-  { id: "presencas", fase: "durante", label: "Presenças por sessão + participação online", fonte: "DGERT l) · Despacho 5756/2020 e) f)", hint: "Assiduidade em percentagem e em horas.", auto: "presencas", obrigatorio: true },
-  { id: "horas", fase: "durante", label: "Mapa de assiduidade em horas (carga UFCD)", fonte: "Financiada · execução", hint: "O financiador pede horas, não só percentagem de sessões.", bloqueante: true, obrigatorio: true },
-  { id: "instrumentos", fase: "durante", label: "Instrumentos de avaliação + enunciados", fonte: "DGERT · Portaria 851/2010 m) n)", hint: "Testes e grelhas usados na avaliação.", obrigatorio: true },
-  { id: "ocorrencias", fase: "durante", label: "Registo de ocorrências", fonte: "DGERT · Portaria 851/2010 r)", hint: "Desistências e alterações de calendário.", obrigatorio: true },
-  { id: "materiais", fase: "durante", label: "Manuais e textos de apoio", fonte: "Despacho 5756/2020 o)", hint: "Materiais disponibilizados na plataforma.", obrigatorio: true },
-  { id: "pauta", fase: "depois", label: "Pauta, classificações e ata de avaliação", fonte: "Despacho 5756/2020 k)", hint: "Classificação de cada formando.", obrigatorio: true },
-  { id: "satisfacao", fase: "depois", label: "Avaliação de reação (formandos, formador, coordenador)", fonte: "Despacho 5756/2020 l)", hint: "Questionários no fecho da turma.", obrigatorio: true },
-  { id: "certificados", fase: "depois", label: "Certificados / registo SIGO", fonte: "DGERT · s) · SNQ", hint: "UFCD certificada via SIGO após pauta e assiduidade.", auto: "certificados", obrigatorio: true },
-  { id: "execucao", fase: "depois", label: "Relatório de execução da turma", fonte: "Financiada · Despacho 5756/2020 j)", hint: "Horas, formandos, desistências e execução financeira.", obrigatorio: true },
-  { id: "relatorio", fase: "depois", label: "Relatório final da turma", fonte: "DGERT · Portaria 851/2010 t)", hint: "Fecha o DTP pedagógico.", bloqueante: true, obrigatorio: true },
+  { id: "id-turma", fase: "antes", topico: 1, label: "Identificação da turma", fonte: "1. Enquadramento", hint: "Código interno, UFCD, carga horária e regime.", obrigatorio: true },
+  { id: "ufcd", fase: "antes", topico: 1, label: "Referencial / código UFCD", fonte: "1. Enquadramento", hint: "Código e designação oficial da UFCD.", obrigatorio: true },
+  { id: "programa", fase: "antes", topico: 1, label: "Programa de formação", fonte: "1. Enquadramento", hint: "Objetivos, conteúdos, metodologias, avaliação e recursos.", obrigatorio: true },
+  { id: "regulamento", fase: "antes", topico: 1, label: "Regulamento de formação", fonte: "1. Enquadramento", hint: "Regulamento ENA e regras do programa financiador.", obrigatorio: true },
+  { id: "enquadramento", fase: "antes", topico: 1, label: "Enquadramento / documentação do financiador", fonte: "1. Enquadramento", hint: "Candidatura, despacho ou regras da tipologia." },
+  { id: "instalacoes", fase: "antes", topico: 2, label: "Locais, recursos e infraestruturas", fonte: "2. Recursos pedagógicos", hint: "Salas, plataforma e equipamentos.", obrigatorio: true },
+  { id: "materiais", fase: "durante", topico: 2, label: "Manuais e textos de apoio", fonte: "2. Recursos pedagógicos", hint: "Materiais disponibilizados na plataforma.", obrigatorio: true },
+  { id: "contrato-formador", fase: "antes", topico: 3, label: "Contrato do formador", fonte: "3. Formadores", hint: "Contrato do formador da UFCD.", obrigatorio: true },
+  { id: "cv-formador", fase: "antes", topico: 3, label: "CV do formador", fonte: "3. Formadores", hint: "CV actualizado no perfil do formador.", obrigatorio: true },
+  { id: "ccp-formador", fase: "antes", topico: 3, label: "CCP / CCPE do formador", fonte: "3. Formadores", hint: "Certificado válido.", obrigatorio: true },
+  { id: "equipa", fase: "antes", topico: 4, label: "Equipa técnica da ação", fonte: "4. Equipa técnica", hint: "Coordenador e técnicos que acompanham a turma.", obrigatorio: true },
+  { id: "fichas", fase: "antes", topico: 5, label: "Fichas de inscrição e requisitos de acesso", fonte: "5. Formandos", hint: "Ficha e elegibilidade de cada candidato.", obrigatorio: true },
+  { id: "cc", fase: "antes", topico: 5, label: "Cartão de cidadão (documentos do formando)", fonte: "5. Formandos", hint: "Um por formando da turma.", auto: "doc-cc" },
+  { id: "ch", fase: "antes", topico: 5, label: "Certificado de habilitações", fonte: "5. Formandos", hint: "Um por formando da turma.", auto: "doc-ch" },
+  { id: "cv-formando", fase: "antes", topico: 5, label: "Curriculum vitae do formando", fonte: "5. Formandos", hint: "Um por formando da turma.", auto: "doc-cu" },
+  { id: "iban", fase: "antes", topico: 5, label: "IBAN / comprovativo de NIB", fonte: "5. Formandos", hint: "Sem IBAN não há pagamento de apoios.", auto: "doc-ci", bloqueante: true },
+  { id: "emprego", fase: "antes", topico: 5, label: "Comprovativo de situação perante o emprego", fonte: "5. Formandos", hint: "Um por formando da turma.", auto: "doc-ce" },
+  { id: "contratos-f", fase: "antes", topico: 5, label: "Contratos de formação (formandos)", fonte: "5. Formandos", hint: "A turma fica bloqueada até estarem completos.", obrigatorio: true },
+  { id: "rgpd", fase: "antes", topico: 5, label: "Autorizações RGPD / dados digitais", fonte: "5. Formandos", hint: "Aceites no momento da inscrição." },
+  { id: "cronograma", fase: "antes", topico: 6, label: "Cronograma / plano semanal", fonte: "6. Assiduidade e sessões", hint: "Sessões síncronas e trabalho assíncrono.", auto: "cronograma", obrigatorio: true },
+  { id: "planos", fase: "antes", topico: 6, label: "Planos de sessão", fonte: "6. Assiduidade e sessões", hint: "Um plano por sessão do cronograma.", auto: "planos", obrigatorio: true },
+  { id: "sumarios", fase: "durante", topico: 6, label: "Sumários (presencial, síncrona e assíncrona)", fonte: "6. Assiduidade e sessões", hint: "Em e-learning o sumário assíncrono também conta.", auto: "sumarios", bloqueante: true, obrigatorio: true },
+  { id: "presencas", fase: "durante", topico: 6, label: "Presenças por sessão + participação online", fonte: "6. Assiduidade e sessões", hint: "Assiduidade em percentagem e em horas.", auto: "presencas", obrigatorio: true },
+  { id: "horas", fase: "durante", topico: 6, label: "Mapa de assiduidade em horas (carga UFCD)", fonte: "6. Assiduidade e sessões", hint: "O financiador pede horas, não só percentagem de sessões.", bloqueante: true, obrigatorio: true },
+  { id: "ocorrencias", fase: "durante", topico: 6, label: "Registo de ocorrências", fonte: "6. Assiduidade e sessões", hint: "Desistências e alterações de calendário.", obrigatorio: true },
+  { id: "instrumentos", fase: "durante", topico: 7, label: "Instrumentos de avaliação + enunciados", fonte: "7. Avaliação da aprendizagem", hint: "Testes e grelhas usados na avaliação.", obrigatorio: true },
+  { id: "pauta", fase: "depois", topico: 7, label: "Pauta, classificações e ata de avaliação", fonte: "7. Avaliação da aprendizagem", hint: "Classificação de cada formando.", obrigatorio: true },
+  { id: "satisfacao", fase: "depois", topico: 8, label: "Avaliação de reação da ação", fonte: "8. Avaliação da ação", hint: "Questionários de reação no fecho da turma.", obrigatorio: true },
+  { id: "execucao", fase: "depois", topico: 8, label: "Relatório de execução da turma", fonte: "8. Avaliação da ação", hint: "Horas, formandos, desistências e execução.", obrigatorio: true },
+  { id: "relatorio", fase: "depois", topico: 8, label: "Relatório final da ação", fonte: "8. Avaliação da ação", hint: "O GesForma gera o PDF com o enquadramento, a assiduidade, as notas e os inquéritos desta turma.", bloqueante: true, obrigatorio: true },
+  { id: "supervisao", fase: "durante", topico: 9, label: "Registos de supervisão e apoio pedagógico", fonte: "9. Supervisão", hint: "Acompanhamento do formador e das sessões.", obrigatorio: true },
+  { id: "divulgacao", fase: "antes", topico: 10, label: "Divulgação da turma", fonte: "10. Divulgação", hint: "Canais onde a turma foi divulgada.", obrigatorio: true },
+  { id: "certificados", fase: "depois", topico: 11, label: "Certificados / registo", fonte: "11. Certificados", hint: "Certificados emitidos nesta turma.", auto: "certificados", obrigatorio: true },
+  { id: "equidade", fase: "antes", topico: 12, label: "Medidas de equidade e inclusão", fonte: "12. Equidade", hint: "Adaptações de acesso e participação.", obrigatorio: true },
+  { id: "academia", fase: "antes", topico: 13, label: "Articulação com a Academia Digital", fonte: "13. Academia Digital", hint: "Ligação da turma à Academia Digital.", obrigatorio: true },
+  { id: "inqueritos-turma", fase: "depois", topico: 14, label: "Inquéritos desta turma e relatório das respostas", fonte: "14. Inquéritos da turma", hint: "Conta só as respostas em que a turma é esta. O relatório não mistura outras turmas.", auto: "inqueritos", obrigatorio: true },
 ];
 
 const UNIVERSAL_IDS = new Set(GOLD.map(d => d.id).filter(id => FIN.some(f => f.id === id)));
@@ -267,6 +275,7 @@ export type DtpFacts = {
   simInicial: DtpCounts | null;
   simFinal: DtpCounts | null;
   docs: Record<string, DtpCounts>;
+  inqueritos?: DtpCounts | null;
 };
 
 function estadoFromCounts(c: DtpCounts | null | undefined): { estado: DtpEstado; detalhe: string } | null {
@@ -287,6 +296,7 @@ function factFor(auto: DtpAuto, facts: DtpFacts): DtpCounts | null {
     case "pip": return facts.pip;
     case "sim-ini": return facts.simInicial;
     case "sim-fim": return facts.simFinal;
+    case "inqueritos": return facts.inqueritos ?? null;
     default: return facts.docs[auto.replace(/^doc-/, "")] ?? null;
   }
 }
@@ -361,7 +371,7 @@ export function dtpEstrutura(regime: "gold" | "fin", modelo: DtpModelo = DTP_MOD
     auto: x.ambito === "formando" || x.ambito === "formador" ? (`doc-${x.id}` as DtpAuto) : undefined,
   }));
   const ordem: Record<DtpFase, number> = { antes: 0, durante: 1, depois: 2 };
-  return [...base, ...extras].sort((a, b) => ordem[a.fase] - ordem[b.fase]);
+  return [...base, ...extras].sort((a, b) => (a.topico ?? 99) - (b.topico ?? 99) || ordem[a.fase] - ordem[b.fase]);
 }
 
 export function buildDtpItems(

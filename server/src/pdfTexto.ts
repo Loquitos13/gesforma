@@ -12,6 +12,9 @@ const WIN: Record<string, number> = {
   "Ú": 0xda,
   "Ç": 0xc7,
   "º": 0xba, "ª": 0xaa,
+  "·": 0xb7, "•": 0x95,
+  "–": 0x96, "—": 0x97, "…": 0x85,
+  "‘": 0x91, "’": 0x92, "“": 0x93, "”": 0x94,
 };
 
 function pdfString(value: string) {

@@ -20,6 +20,8 @@ import {
 import { DTP_CATEGORIAS, dtpCategoriaDe, dtpCategoriaPasta, dtpPastaNome, dtpZipNome, dtpZipRelPath, pastaSegura } from "./dtpPasta.js";
 import { zipStore } from "./zipStore.js";
 import { pdfsDoDossie, type SessaoPedagogicaPdf } from "./dtpPdfs.js";
+import { pastaFinDoItem, TOPICOS_FIN } from "./dtpTopicosFin.js";
+import { minutosSessao, pdfRelatorioFinal, pdfRelatorioInqueritos, type FormandoRelatorio, type InqueritoRelatorio, type RelatorioFinalDados, type SessaoRelatorio } from "./relatorioFinal.js";
 import {
   aplicarPercursoNoItem,
   buildDtpItems,
@@ -300,6 +302,193 @@ async function montarPdfsDossie(db: Db, regime: Regime, turma: TurmaRow) {
   });
 }
 
+function horasDaSessao(s: SessaoRelatorio) {
+  const minutos = minutosSessao(s.horaInicio, s.horaFim);
+  return minutos > 0 ? minutos / 60 : 0;
+}
+
+function linhasDe(valor: unknown) {
+  return String(valor ?? "").split(/\n+/).map(l => l.trim()).filter(Boolean);
+}
+
+async function dadosRelatorioFinal(db: Db, turmaId: number): Promise<RelatorioFinalDados | null> {
+  const turma = await db.query<{
+    nome: string; curso: string; local: string; horario: string; formador: string;
+    formadores: unknown; data_inicio: string; horas: number; cronograma: unknown;
+  }>(
+    `SELECT nome, curso, local, horario, formador, formadores, data_inicio, horas, cronograma
+       FROM turmas_fin WHERE id = $1`,
+    [turmaId],
+  );
+  const row = turma.rows[0];
+  if (!row) return null;
+  const sessoes = asArr(row.cronograma).map(asObj).map(s => ({
+    data: String(s.data ?? ""),
+    horaInicio: String(s.horaInicio ?? ""),
+    horaFim: String(s.horaFim ?? ""),
+    modalidade: String(s.modalidade ?? ""),
+  }));
+  const pesosBrutos = sessoes.map(horasDaSessao);
+  const somaSessoes = pesosBrutos.reduce((s, n) => s + n, 0);
+  const duracao = somaSessoes > 0 ? somaSessoes : Number(row.horas) || 0;
+  const pesos = pesosBrutos.map(h => (h > 0 ? h : somaSessoes === 0 && sessoes.length ? duracao / sessoes.length : 0));
+  const datas = sessoes.map(s => s.data).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+  const [sessoesRows, formandosRows, notasRows, certRows, ficha, respostas] = await Promise.all([
+    db.query<{ presencas: unknown; sumario: unknown }>(
+      "SELECT presencas, sumario FROM turma_sessoes WHERE regime = 'fin' AND turma_id = $1 ORDER BY sessao_n",
+      [turmaId],
+    ),
+    db.query<{ id: number; nome: string; apelido: string; estado: string }>(
+      `SELECT id, nome, apelido, estado FROM formandos_fin
+        WHERE turma_id = $1 OR (turma_id IS NULL AND turma = $2)
+        ORDER BY nome`,
+      [turmaId, row.nome],
+    ),
+    db.query<{ formando_id: number; nota: number }>(
+      "SELECT formando_id, nota FROM turma_avaliacoes WHERE regime = 'fin' AND turma_id = $1 AND nota IS NOT NULL",
+      [turmaId],
+    ),
+    db.query<{ formando_id: number; emitido: boolean; nota: number | null }>(
+      "SELECT formando_id, emitido, nota FROM turma_certificados WHERE regime = 'fin' AND turma_id = $1",
+      [turmaId],
+    ),
+    db.query<{ payload: unknown }>(
+      `SELECT f.payload FROM curso_fichas f
+         JOIN cursos_fin c ON c.id = f.curso_id AND f.regime = 'fin'
+        WHERE lower(trim(c.nome_comercial)) = lower(trim($1))
+           OR lower(trim(c.ufcd)) = lower(trim($1))
+        LIMIT 1`,
+      [row.curso],
+    ),
+    db.query<{ titulo: string; perguntas: unknown; formando: string; respostas: unknown }>(
+      `SELECT c.payload->>'titulo' AS titulo, c.payload->'perguntas' AS perguntas, r.formando, r.respostas
+         FROM catalog_items c
+         JOIN inquerito_respostas r ON r.inquerito_id = c.id
+        WHERE c.kind = 'inqueritos' AND c.regime = 'fin'
+          AND lower(trim(r.turma)) = lower(trim($1))
+        ORDER BY c.id, r.created_at`,
+      [row.nome],
+    ),
+  ]);
+  const notas = new Map<number, number[]>();
+  for (const nota of notasRows.rows) {
+    const lista = notas.get(nota.formando_id) ?? [];
+    if (Number.isFinite(Number(nota.nota))) lista.push(Number(nota.nota));
+    notas.set(nota.formando_id, lista);
+  }
+  const certs = new Map(certRows.rows.map(c => [c.formando_id, c]));
+  const formandos: FormandoRelatorio[] = formandosRows.rows.map(f => {
+    let presencasHoras = 0;
+    let faltasHoras = 0;
+    sessoesRows.rows.forEach((sessao, i) => {
+      const peso = pesos[i] ?? 0;
+      if (!peso) return;
+      const marca = asArr(sessao.presencas).map(asObj).find(p => String(p.nome ?? "").trim().toLowerCase() === `${f.nome} ${f.apelido}`.trim().toLowerCase());
+      if (!marca) return;
+      if (marca.presente === false) faltasHoras += peso;
+      else presencasHoras += peso;
+    });
+    const lista = notas.get(f.id) ?? [];
+    const notaCert = certs.get(f.id)?.nota;
+    const nota = lista.length
+      ? Math.round((lista.reduce((s, n) => s + n, 0) / lista.length) * 100) / 100
+      : notaCert == null || !Number.isFinite(Number(notaCert)) ? null : Number(notaCert);
+    return {
+      nome: `${f.nome} ${f.apelido}`.trim(),
+      estado: f.estado,
+      presencasHoras,
+      faltasHoras,
+      nota,
+      certificado: Boolean(certs.get(f.id)?.emitido),
+    };
+  });
+  const payload = asObj(ficha.rows[0]?.payload);
+  const topicos = asArr(payload.topicosPrograma).map(item => {
+    const t = asObj(item);
+    const titulo = String(t.titulo ?? t.nome ?? "").trim();
+    const horas = String(t.horas ?? "").trim();
+    return titulo ? (horas ? `${titulo} (${horas})` : titulo) : "";
+  }).filter(Boolean);
+  const programa = topicos.length ? topicos : linhasDe(payload.programa);
+  const porInquerito = new Map<string, { titulo: string; perguntas: ReturnType<typeof asArr>; respostas: Record<string, unknown>[] }>();
+  for (const r of respostas.rows) {
+    const chave = r.titulo || "Inquérito";
+    const actual = porInquerito.get(chave) ?? { titulo: chave, perguntas: asArr(r.perguntas), respostas: [] };
+    actual.respostas.push(asObj(r.respostas));
+    porInquerito.set(chave, actual);
+  }
+  const inqueritos: InqueritoRelatorio[] = [...porInquerito.values()].map(inq => ({
+    titulo: inq.titulo,
+    respostas: inq.respostas.length,
+    perguntas: inq.perguntas.map(raw => {
+      const p = asObj(raw);
+      const id = String(p.id ?? "");
+      const tipo = String(p.tipo ?? "texto");
+      const vals = inq.respostas.map(resp => resp[id]).filter(v => v != null && v !== "");
+      const contagens: Record<string, number> = {};
+      if (tipo === "multipla") {
+        for (const v of vals) contagens[String(v)] = (contagens[String(v)] ?? 0) + 1;
+      }
+      const nums = tipo === "escala" ? vals.map(Number).filter(n => Number.isFinite(n)) : [];
+      const sim = vals.filter(v => /^sim$/i.test(String(v))).length;
+      const nao = vals.filter(v => /^n[aã]o$/i.test(String(v))).length;
+      return {
+        texto: String(p.texto ?? "Pergunta"),
+        tipo,
+        media: nums.length ? Math.round((nums.reduce((s, n) => s + n, 0) / nums.length) * 10) / 10 : null,
+        n: tipo === "escala" ? nums.length : tipo === "simnao" ? sim + nao : vals.length,
+        pctSim: sim + nao ? Math.round((sim / (sim + nao)) * 100) : null,
+        contagens,
+        textos: tipo === "texto" ? vals.map(v => String(v).trim()).filter(Boolean).slice(0, 8) : [],
+      };
+    }),
+  }));
+  const formadores = asArr(row.formadores).map(String).map(s => s.trim()).filter(Boolean);
+  const ocorrencias = sessoesRows.rows
+    .map(s => String(asObj(s.sumario).observacoes ?? "").trim())
+    .filter(Boolean);
+  return {
+    curso: row.curso,
+    acao: row.nome,
+    area: String(payload.categoria ?? "").trim(),
+    local: row.local,
+    duracaoHoras: Math.round(duracao * 100) / 100,
+    inicio: datas[0] || row.data_inicio,
+    fim: datas[datas.length - 1] || row.data_inicio,
+    formador: formadores.join(", ") || row.formador,
+    horario: row.horario,
+    objetivos: linhasDe(payload.objetivos),
+    programa,
+    inscritos: formandos.length,
+    desistentes: formandos.filter(f => /desist/i.test(f.estado)),
+    formandos,
+    certificados: formandos.filter(f => f.certificado).length,
+    inqueritos,
+    ocorrencias,
+  };
+}
+
+async function anexarPdfDtp(
+  db: Db,
+  actorId: string | undefined,
+  turma: { id: number; nome: string },
+  itemId: string,
+  name: string,
+  bytes: Buffer,
+) {
+  const file = await storeDriveFile(db, actorId, { name, mime: "application/pdf", bytes }, {
+    kind: "dtp", regime: "fin", turma: turma.nome, label: itemId,
+  });
+  await db.query(
+    `INSERT INTO dtp_anexos (regime, turma_id, item_id, drive_file_id, file_name, drive_url)
+     VALUES ('fin', $1, $2, $3, $4, $5)
+     ON CONFLICT (regime, turma_id, item_id) DO UPDATE SET
+       drive_file_id = EXCLUDED.drive_file_id, file_name = EXCLUDED.file_name,
+       drive_url = EXCLUDED.drive_url, updated_at = now()`,
+    [turma.id, itemId, file.id, file.name, file.openUrl],
+  );
+}
+
 async function gravarPdfsDossie(db: Db, actorId: string | undefined, regime: Regime, turma: TurmaRow) {
   const pdfs = await montarPdfsDossie(db, regime, turma);
   const folhas = await storeDriveFile(db, actorId, {
@@ -473,7 +662,26 @@ async function turmaFacts(db: Db, regime: Regime, turma: TurmaRow): Promise<DtpF
     for (const key of bases) docs[key] ??= { done: 0, total };
   }
 
+  let inqueritos: DtpCounts | null = null;
+  if (regime === "fin") {
+    const resp = await db.query<{ formando: string }>(
+      `SELECT DISTINCT lower(trim(r.formando)) AS formando
+         FROM inquerito_respostas r
+         JOIN catalog_items c ON c.id = r.inquerito_id
+        WHERE c.kind = 'inqueritos' AND c.regime = 'fin'
+          AND lower(trim(r.turma)) = lower(trim($1))`,
+      [turma.nome],
+    );
+    const nomes = new Set(resp.rows.map(r => r.formando).filter(Boolean));
+    const totalFormandos = formandos.length;
+    const done = totalFormandos
+      ? formandos.filter(f => nomes.has(f.nome.trim().toLowerCase())).length
+      : (nomes.size > 0 ? 1 : 0);
+    inqueritos = { done, total: totalFormandos || 1 };
+  }
+
   return {
+    inqueritos,
     sessoes: { done: sessoesTotal, total: sessoesTotal },
     planos: { done: planos, total: sessoesTotal },
     sumarios: { done: sumarios, total: sessoesTotal },
@@ -1899,6 +2107,27 @@ export function registerPedagogiaRoutes(
     return { ok: true };
   });
 
+  async function pdfDaTurmaFin(req: FastifyRequest, reply: FastifyReply, qual: "final" | "inqueritos") {
+    if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não gera o relatório da turma." });
+    const { regime, id } = params(req);
+    if (regime !== "fin" || id == null) return reply.code(400).send({ error: "O relatório é da turma financiada." });
+    const dados = await dadosRelatorioFinal(db, id);
+    if (!dados) return reply.code(404).send({ error: "turma não encontrada" });
+    const bytes = qual === "final" ? pdfRelatorioFinal(dados) : pdfRelatorioInqueritos(dados);
+    const nome = qual === "final" ? "RelatorioFinalAccao.pdf" : "RelatorioInqueritosTurma.pdf";
+    const itemId = qual === "final" ? "relatorio" : "inqueritos-turma";
+    await anexarPdfDtp(db, req.actor!.id, { id, nome: dados.acao }, itemId, nome, bytes).catch(() => undefined);
+    await audit(db, req.actor!.id, qual === "final" ? "turma.relatorio_final" : "turma.relatorio_inqueritos", "turma", String(id), req.ip);
+    return reply
+      .header("Content-Type", "application/pdf")
+      .header("Content-Disposition", `attachment; filename="${nome}"`)
+      .send(bytes);
+  }
+
+  app.get("/v1/turmas/:regime/:id/relatorio-final", async (req, reply) => pdfDaTurmaFin(req, reply, "final"));
+  app.get("/v1/turmas/:regime/:id/inqueritos/relatorio", async (req, reply) => pdfDaTurmaFin(req, reply, "inqueritos"));
+
   app.get("/v1/dtp/:regime/:id/export", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não consulta o dossiê técnico-pedagógico." });
@@ -1915,16 +2144,18 @@ export function registerPedagogiaRoutes(
     };
 
     const formandos = await formandosDaTurma(db, regime, turma);
-    for (const cat of DTP_CATEGORIAS) {
-      const itens = dtp.items.filter(i => dtpCategoriaDe(i) === cat.id);
+    const grupos = regime === "fin"
+      ? TOPICOS_FIN.map(t => ({ pasta: t.pasta, label: t.label, itens: dtp.items.filter(i => i.topico === t.n), formandos: t.n === 5, formador: t.n === 3 }))
+      : DTP_CATEGORIAS.map(cat => ({ pasta: cat.pasta, label: cat.label, itens: dtp.items.filter(i => dtpCategoriaDe(i) === cat.id), formandos: cat.id === "formandos", formador: cat.id === "formador" }));
+    for (const cat of grupos) {
       const extra: string[] = [];
-      if (cat.id === "formandos") extra.push("", "Formandos da turma:", ...(formandos.length ? formandos.map(f => `  ${f.nome}`) : ["  Ainda sem formandos."]));
-      if (cat.id === "formador") extra.push("", `Formador: ${turma.formador?.trim() || "por atribuir nesta turma."}`);
+      if (cat.formandos) extra.push("", "Formandos da turma:", ...(formandos.length ? formandos.map(f => `  ${f.nome}`) : ["  Ainda sem formandos."]));
+      if (cat.formador) extra.push("", `Formador: ${turma.formador?.trim() || "por atribuir nesta turma."}`);
       const linhas = [
         `${cat.pasta} · ${turma.nome}`,
         `${turma.curso}`,
         "",
-        ...itens.map(i => {
+        ...cat.itens.map(i => {
           const marca = i.estado === "ok" ? "[x]" : i.estado === "parcial" ? "[~]" : "[ ]";
           return `${marca} ${i.label}${i.anexo?.fileName ? ` · ${i.anexo.fileName}` : ""}`;
         }),
@@ -1947,13 +2178,16 @@ export function registerPedagogiaRoutes(
 
     for (const item of dtp.items) {
       if (!item.anexo?.driveFileId) continue;
-      const rel = dtpZipRelPath({
-        root,
-        ambito: item.ambito,
-        itemId: item.id,
-        itemLabel: item.label,
-        fileName: nomeArquivoDtp(item.label, item.anexo.fileName || "anexo.pdf"),
-      });
+      const ficheiro = nomeArquivoDtp(item.label, item.anexo.fileName || "anexo.pdf");
+      const rel = regime === "fin"
+        ? [root, pastaFinDoItem(item.id), pastaSegura(ficheiro)].join("/")
+        : dtpZipRelPath({
+          root,
+          ambito: item.ambito,
+          itemId: item.id,
+          itemLabel: item.label,
+          fileName: ficheiro,
+        });
       await pushDrive(item.anexo.driveFileId, rel);
     }
 
@@ -2022,10 +2256,17 @@ export function registerPedagogiaRoutes(
     }
 
     const gerados = await montarPdfsDossie(db, regime, turma);
-    const pastaPed = DTP_CATEGORIAS.find(c => c.id === "pedagogia")?.pasta ?? "04-Pedagogia";
+    const pastaPed = regime === "fin" ? pastaFinDoItem("cronograma") : (DTP_CATEGORIAS.find(c => c.id === "pedagogia")?.pasta ?? "04-Pedagogia");
     add(`${root}/${pastaPed}/Cronograma.pdf`, gerados.cronograma);
     add(`${root}/${pastaPed}/Folhas de presenca e sumarios.pdf`, gerados.folhas);
     add(`${root}/${pastaPed}/Planos de sessao.pdf`, gerados.planos);
+    if (regime === "fin") {
+      const dados = await dadosRelatorioFinal(db, turma.id);
+      if (dados) {
+        add(`${root}/${pastaFinDoItem("relatorio")}/RelatorioFinalAccao.pdf`, pdfRelatorioFinal(dados));
+        add(`${root}/${pastaFinDoItem("inqueritos-turma")}/RelatorioInqueritosTurma.pdf`, pdfRelatorioInqueritos(dados));
+      }
+    }
     await gravarPdfsDossie(db, req.actor!.id, regime, turma).catch(() => undefined);
 
     const pdfs = files.filter(f => !f.name.endsWith("/_indice.txt") && !f.name.endsWith("/00-Indice geral.txt"));
@@ -2038,13 +2279,13 @@ export function registerPedagogiaRoutes(
       `Completude: ${dtp.pct}% · ${dtp.ok} no dossiê · ${dtp.parcial} parciais · ${dtp.falta} em falta`,
       `Ficheiros: ${pdfs.length}`,
       "",
-      "Organização da pasta (por categoria):",
+      regime === "fin" ? "Organização da pasta (pelos tópicos do dossiê):" : "Organização da pasta (por categoria):",
       `  ${root}/`,
-      ...DTP_CATEGORIAS.map(c => `    ${c.pasta}/`),
+      ...(regime === "fin" ? TOPICOS_FIN : DTP_CATEGORIAS).map(c => `    ${c.pasta}/`),
       "",
       "Documentos do dossiê:",
       ...dtp.items.map(i => {
-        const pasta = dtpCategoriaPasta(i);
+        const pasta = regime === "fin" ? pastaFinDoItem(i.id) : dtpCategoriaPasta(i);
         const marca = i.estado === "ok" ? "ok" : i.estado === "parcial" ? "parcial" : "falta";
         return `  [${marca}] ${pasta} / ${i.label}`;
       }),

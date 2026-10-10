@@ -281,6 +281,7 @@ export type DtpItem = {
   hint: string;
   estado: DtpEstado;
   detalhe: string;
+  topico?: number;
   origem: "auto" | "manual";
   universal?: boolean;
   bloqueante?: boolean;
@@ -1146,6 +1147,41 @@ export async function apiUploadDrive(file: File, ctx: DriveUploadContext = { kin
 
 export function driveOAuthStartUrl() {
   return `${BASE}/v1/drive/oauth/start`;
+}
+
+async function descarregarFicheiro(path: string, fallback: string, accept: string) {
+  const headers = new Headers();
+  headers.set("Accept", accept);
+  headers.set("X-Gesforma-Client", "web");
+  beginViewLoad();
+  try {
+    const res = await fetch(`${BASE}${path}`, { credentials: "include", headers });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, typeof data.error === "string" ? data.error : "exportação recusada");
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const cd = res.headers.get("content-disposition") ?? "";
+    const named = cd.match(/filename="([^"]+)"/)?.[1];
+    a.download = named || fallback;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } finally {
+    endViewLoad();
+  }
+}
+
+export function apiRelatorioFinalTurma(turmaId: number) {
+  return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/relatorio-final`, "RelatorioFinalAccao.pdf", "application/pdf");
+}
+
+export function apiRelatorioInqueritosTurma(turmaId: number) {
+  return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/inqueritos/relatorio`, "RelatorioInqueritosTurma.pdf", "application/pdf");
 }
 
 export async function apiDtpExport(regime: Regime, turmaId: number, filename?: string) {

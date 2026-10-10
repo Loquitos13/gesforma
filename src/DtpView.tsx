@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { apiDtpExport, type DtpEstado, type DtpItem, type DtpSnapshot } from "./api";
+import { apiDtpExport, apiRelatorioFinalTurma, apiRelatorioInqueritosTurma, type DtpEstado, type DtpItem, type DtpSnapshot } from "./api";
 import { DTP_CATEGORIAS, dtpCategoriaDe, dtpPastaNome, dtpZipNome, type DtpCategoriaId } from "./dtpPasta";
+import { TOPICOS_FIN } from "./dtpTopicosFin";
 import { toastError, toastOk } from "./toastBus";
 import { FileUploadModal } from "./TurmaExtras";
 
@@ -20,6 +21,7 @@ type Props = {
   estado?: "loading" | "ready" | "offline";
   onToggle?: (item: DtpItem, proximo: DtpEstado | "auto") => void;
   onAnexo?: (item: DtpItem, file: { id: string; name: string; openUrl: string }) => void;
+  onActualizar?: () => void;
 };
 
 const estadoStyle: Record<DtpEstado, { badge: string; row: string; label: string }> = {
@@ -44,22 +46,43 @@ async function exportarPasta(regime: DtpRegime, turma: DtpTurma | undefined) {
 }
 
 /** Dossiê da turma - vive dentro do cockpit, não como “ação de formação”. */
-export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAnexo }: Props) {
+export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAnexo, onActualizar }: Props) {
   const isGold = regime === "gold";
   const codigo = turma?.codigo ?? (isGold ? "turma" : "UFCD");
   const [categoria, setCategoria] = useState<DtpCategoriaId | "todas">("todas");
+  const [topico, setTopico] = useState<number | "todas">("todas");
   const [exportando, setExportando] = useState(false);
+  const [aGerar, setAGerar] = useState<string | null>(null);
   const [uploadFor, setUploadFor] = useState<DtpItem | null>(null);
 
-  useEffect(() => { setCategoria("todas"); }, [regime, codigo]);
+  useEffect(() => { setCategoria("todas"); setTopico("todas"); }, [regime, codigo]);
 
   const items = dtp.items;
   const visiveis = useMemo(() => {
+    if (!isGold) {
+      const list = topico === "todas" ? items : items.filter(d => d.topico === topico);
+      return [...list].sort((a, b) => (a.topico ?? 99) - (b.topico ?? 99) || a.label.localeCompare(b.label, "pt"));
+    }
     const list = categoria === "todas" ? items : items.filter(d => dtpCategoriaDe(d) === categoria);
     const faseOrdem = { antes: 0, durante: 1, depois: 2 };
     const ordem = Object.fromEntries(DTP_CATEGORIAS.map((c, i) => [c.id, i]));
     return [...list].sort((a, b) => (faseOrdem[a.fase] - faseOrdem[b.fase]) || ((ordem[dtpCategoriaDe(a)] ?? 0) - (ordem[dtpCategoriaDe(b)] ?? 0)));
-  }, [items, categoria]);
+  }, [items, categoria, isGold, topico]);
+
+  async function gerar(qual: "final" | "inqueritos") {
+    if (turma?.id == null) return;
+    setAGerar(qual);
+    try {
+      if (qual === "final") await apiRelatorioFinalTurma(turma.id);
+      else await apiRelatorioInqueritosTurma(turma.id);
+      toastOk(qual === "final" ? "Relatório final da ação gerado." : "Relatório das respostas desta turma gerado.");
+      onActualizar?.();
+    } catch (err) {
+      toastError(err, "Não foi possível gerar o relatório.");
+    } finally {
+      setAGerar(null);
+    }
+  }
 
   if (estado === "loading") {
     return (
@@ -86,7 +109,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
   const bloqueio = bloqueantes.length
     ? `Bloqueado por ${bloqueantes.length} ${bloqueantes.length === 1 ? "documento obrigatório" : "documentos obrigatórios"}: ${bloqueantes.slice(0, 3).map(i => i.label).join(", ")}.`
     : "Faltam documentos para fechar o dossiê desta turma.";
-  const catActiva = DTP_CATEGORIAS.find(c => c.id === categoria);
+  const catActiva = isGold ? DTP_CATEGORIAS.find(c => c.id === categoria) : TOPICOS_FIN.find(t => t.n === topico);
 
   return (
     <div className="space-y-4">
@@ -126,7 +149,10 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
         </div>
         <p className="text-xs text-slate-400 mt-2">
           Pasta no Drive e no ZIP: <span className="font-semibold text-slate-600">{dtpPastaNome(regime, codigo)}</span>
-          {" · "}{DTP_CATEGORIAS.map(c => c.pasta.replace(/^\d+-/, "")).join(" · ")}. Arquivar 10 anos (IEFP) ou o prazo do programa - o mais longo.
+          {isGold
+            ? ` · ${DTP_CATEGORIAS.map(c => c.pasta.replace(/^\d+-/, "")).join(" · ")}.`
+            : " · 14 tópicos, do enquadramento aos inquéritos desta turma."}
+          {" "}Arquivar 10 anos (IEFP) ou o prazo do programa - o mais longo.
         </p>
       </div>
 
@@ -137,20 +163,24 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
         <p className="text-xs text-slate-600 mt-0.5">
           {isGold
             ? "Núcleo DGERT + extras CCP (PIP, simulações, 5 anos de experiência) + recibos."
-            : "Na financiada o dossiê é o mesmo em todas as UFCD: antes, durante e fecho."}
+            : "Na financiada o dossiê segue os 14 tópicos. O relatório final gera-se no tópico 8. Os inquéritos do tópico 14 são só desta turma."}
         </p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-        {DTP_CATEGORIAS.map(c => {
-          const subset = items.filter(d => dtpCategoriaDe(d) === c.id);
+      <div className={`grid gap-3 ${isGold ? "grid-cols-2 lg:grid-cols-3" : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3"}`}>
+        {(isGold ? DTP_CATEGORIAS.map(c => ({ id: c.id, label: c.label, hint: c.hint, n: 0 })) : TOPICOS_FIN.map(t => ({ id: String(t.n), label: `${t.n}. ${t.label}`, hint: t.hint, n: t.n }))).map(c => {
+          const subset = isGold ? items.filter(d => dtpCategoriaDe(d) === c.id) : items.filter(d => d.topico === c.n);
           const done = subset.filter(d => d.estado === "ok").length;
+          const activo = isGold ? categoria === c.id : topico === c.n;
           return (
             <button
               key={c.id}
               type="button"
-              onClick={() => { setCategoria(prev => (prev === c.id ? "todas" : c.id)); }}
-              className={`text-left rounded-xl border p-3 transition-colors ${categoria === c.id ? (isGold ? "border-amber-400 bg-amber-50" : "border-blue-400 bg-blue-50") : "border-slate-200 bg-white hover:bg-slate-50"}`}
+              onClick={() => {
+                if (isGold) setCategoria(prev => (prev === c.id ? "todas" : c.id as DtpCategoriaId));
+                else setTopico(prev => (prev === c.n ? "todas" : c.n));
+              }}
+              className={`text-left rounded-xl border p-3 transition-colors ${activo ? (isGold ? "border-amber-400 bg-amber-50" : "border-blue-400 bg-blue-50") : "border-slate-200 bg-white hover:bg-slate-50"}`}
             >
               <p className="text-xs font-bold text-slate-700">{c.label}</p>
               <p className="text-lg font-bold text-slate-800 mt-1">{done}/{subset.length}</p>
@@ -164,27 +194,30 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
         <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center gap-3">
           <div>
             <p className="text-sm font-semibold text-slate-800">
-              {categoria === "todas" ? "Documentos desta turma" : catActiva?.label}
+              {(isGold ? categoria : topico) === "todas" ? "Documentos desta turma" : catActiva?.label}
             </p>
             <p className="text-xs text-slate-400">
               Os itens marcados <span className="font-semibold">automático</span> saem dos dados reais da turma (sessões, presenças, documentos dos formandos). Nos restantes, clique no estado para validar.
               {isGold
                 ? " O que veio do percurso de inscrição fica submetido até a secretaria validar."
-                : " A lista vem da estrutura definida na ficha do curso."}
+                : " Cada tópico é o da ação financiada. O relatório final e o das respostas saem só dos dados desta turma."}
             </p>
           </div>
-          <button type="button" onClick={() => setCategoria("todas")} className="text-xs font-semibold text-slate-500 hover:text-slate-800 whitespace-nowrap">Ver tudo</button>
+          <button type="button" onClick={() => { setCategoria("todas"); setTopico("todas"); }} className="text-xs font-semibold text-slate-500 hover:text-slate-800 whitespace-nowrap">Ver tudo</button>
         </div>
         <div className="divide-y divide-slate-100">
           {visiveis.map((doc, idx) => {
             const faseLabel = doc.fase === "antes" ? "Antes" : doc.fase === "durante" ? "Durante" : "Fecho";
-            const faseNova = idx === 0 || visiveis[idx - 1]?.fase !== doc.fase;
+            const topicoDoc = TOPICOS_FIN.find(t => t.n === doc.topico);
+            const faseNova = isGold
+              ? idx === 0 || visiveis[idx - 1]?.fase !== doc.fase
+              : idx === 0 || visiveis[idx - 1]?.topico !== doc.topico;
             const s = estadoStyle[doc.estado];
-            const cat = DTP_CATEGORIAS.find(c => c.id === dtpCategoriaDe(doc));
+            const cat = isGold ? DTP_CATEGORIAS.find(c => c.id === dtpCategoriaDe(doc)) : null;
             return (
               <div key={doc.id}>
               {faseNova && (
-                <p className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50 border-b border-slate-100">{faseLabel}</p>
+                <p className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50 border-b border-slate-100">{isGold ? faseLabel : `${topicoDoc?.n ?? ""}. ${topicoDoc?.label ?? "Tópico"}`}</p>
               )}
               <div className={`px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 ${s.row}`}>
                 <button
@@ -197,7 +230,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <p className="text-sm font-semibold text-slate-800">{doc.label}</p>
-                    {categoria === "todas" && cat && (
+                    {isGold && categoria === "todas" && cat && (
                       <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">{cat.label}</span>
                     )}
                     {doc.bloqueante && doc.estado !== "ok" && (
@@ -235,12 +268,24 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
                     </a>
                   )}
                   {doc.origem === "manual" && onToggle && (
-                    <button type="button" onClick={() => onToggle(doc, "auto")} className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 mt-1">
+                    <button type="button" onClick={() => onToggle(doc, "auto")} className="block text-[11px] font-semibold text-slate-400 hover:text-slate-600 mt-1">
                       Voltar ao estado automático
                     </button>
                   )}
                 </div>
                 <div className="flex items-center gap-2 sm:flex-col sm:items-end">
+                  {!isGold && (doc.id === "relatorio" || doc.id === "inqueritos-turma") && turma?.id != null && (
+                    <button
+                      type="button"
+                      disabled={aGerar != null}
+                      onClick={() => void gerar(doc.id === "relatorio" ? "final" : "inqueritos")}
+                      className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap bg-blue-600 text-white border-blue-700 hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {aGerar === (doc.id === "relatorio" ? "final" : "inqueritos")
+                        ? "A gerar…"
+                        : doc.id === "relatorio" ? "Gerar relatório final" : "Relatório das respostas"}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setUploadFor(doc)}

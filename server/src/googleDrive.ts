@@ -480,9 +480,19 @@ async function createFolder(token: string, name: string, parentId?: string) {
   return created;
 }
 
-export async function garantirPastaFilha(token: string, parentId: string, name: string) {
+export async function garantirPastaFilha(token: string, parentId: string, name: string, nomesAnteriores: string[] = []) {
   const found = await findChildFolder(token, parentId, name);
   if (found?.id) return found.id;
+  for (const antigo of nomesAnteriores) {
+    const prev = await findChildFolder(token, parentId, antigo);
+    if (!prev?.id) continue;
+    await driveComToken(token, `${DRIVE_FILES}/${encodeURIComponent(prev.id)}?supportsAllDrives=true`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    return prev.id;
+  }
   const created = await createFolder(token, name, parentId);
   return created.id;
 }

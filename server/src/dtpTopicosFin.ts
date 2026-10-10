@@ -13,8 +13,13 @@ export const TOPICOS_FIN = [
   { n: 11, pasta: "11. Certificados", label: "Certificados", hint: "Cópia do certificado obtido fora do GesForma e comprovativo de entrega gerado a partir desses PDFs." },
   { n: 12, pasta: "12. Princípios de equidade e inclusão", label: "Equidade e inclusão", hint: "Checklist de igualdade de oportunidades." },
   { n: 13, pasta: "13. Articulação com Academia Digital", label: "Academia Digital", hint: "Reporte do Portal Academia Portugal Digital." },
-  { n: 14, pasta: "14. Avaliação de impacto pós-formação - 3 meses", label: "Impacto pós-formação", hint: "Inquéritos e relatório três meses depois. Só as respostas desta turma." },
+  { n: 14, pasta: "14. Avaliação de impacto pós-formação", label: "Avaliação de impacto pós-formação", hint: "Inquéritos e relatório três meses depois. Só as respostas desta turma." },
 ] as const;
+
+/** Pastas já criadas com o nome anterior passam a este nome, sem ficar uma pasta vazia ao lado. */
+export const PASTAS_FIN_ANTERIORES: Record<string, string[]> = {
+  "14. Avaliação de impacto pós-formação": ["14. Avaliação de impacto pós-formação - 3 meses"],
+};
 
 const POR_ID: Record<string, number> = {
   notificacao: 1,

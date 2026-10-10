@@ -1,5 +1,5 @@
 import type { Db } from "./db/pool.js";
-import { TOPICOS_FIN } from "./dtpTopicosFin.js";
+import { PASTAS_FIN_ANTERIORES, TOPICOS_FIN } from "./dtpTopicosFin.js";
 import {
   apagarItemGoogle,
   criarAtalhoDrive,
@@ -50,7 +50,7 @@ export async function criarEstruturaDtp(
   const turmaNome = nomePastaPessoa(input.turmaId, input.nome.trim() || `Turma ${input.turmaId}`);
   const turmaPastaId = await garantirPastaFilha(acesso, zona, turmaNome);
   const criadas = await Promise.all(PASTAS_DTP.map(async nome => {
-    const id = await garantirPastaFilha(acesso, turmaPastaId, nome);
+    const id = await garantirPastaFilha(acesso, turmaPastaId, nome, PASTAS_FIN_ANTERIORES[nome] ?? []);
     return [nome, id] as const;
   }));
   const pastas = Object.fromEntries(criadas);

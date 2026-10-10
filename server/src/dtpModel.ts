@@ -226,8 +226,8 @@ const FIN: DtpDef[] = [
   { id: "entrega-certificados", fase: "depois", topico: 11, ordem: 2, label: "Comprovativo da entrega dos certificados", fonte: "11. Certificados", hint: "O GesForma gera a lista de quem já tem o certificado externo no dossiê.", obrigatorio: true },
   { id: "equidade", fase: "antes", topico: 12, ordem: 1, label: "Checklist de igualdade de oportunidades", fonte: "12. Equidade", hint: "Checklist preenchida para esta ação.", obrigatorio: true },
   { id: "academia", fase: "antes", topico: 13, ordem: 1, label: "Reporte retirado do Portal Academia Portugal Digital", fonte: "13. Academia Digital", hint: "Reporte da turma no Portal Academia Portugal Digital.", obrigatorio: true },
-  { id: "inqueritos-pos", fase: "depois", topico: 14, ordem: 1, label: "Inquéritos pós-formação", fonte: "14. Impacto pós-formação", hint: "Perguntas dos inquéritos com público-alvo Pós-formação enviados a esta turma.", auto: "inqueritos-pos", obrigatorio: true },
-  { id: "relatorio-pos", fase: "depois", topico: 14, ordem: 2, label: "Relatório pós-formação", fonte: "14. Impacto pós-formação", hint: "O GesForma gera o relatório só com as respostas de pós-formação desta turma.", obrigatorio: true },
+  { id: "inqueritos-pos", fase: "depois", topico: 14, ordem: 1, label: "Inquéritos pós-formação", fonte: "14. Avaliação de impacto pós-formação", hint: "Perguntas dos inquéritos com público-alvo Pós-formação enviados a esta turma.", auto: "inqueritos-pos", obrigatorio: true },
+  { id: "relatorio-pos", fase: "depois", topico: 14, ordem: 2, label: "Relatório pós-formação", fonte: "14. Avaliação de impacto pós-formação", hint: "O GesForma gera o relatório só com as respostas de pós-formação desta turma.", obrigatorio: true },
 ];
 
 const UNIVERSAL_IDS = new Set(GOLD.map(d => d.id).filter(id => FIN.some(f => f.id === id)));

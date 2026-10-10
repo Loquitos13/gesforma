@@ -166,7 +166,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
           Pasta no Drive e no ZIP: <span className="font-semibold text-slate-600">{dtpPastaNome(regime, codigo)}</span>
           {isGold
             ? ` · ${DTP_CATEGORIAS.map(c => c.pasta.replace(/^\d+-/, "")).join(" · ")}.`
-            : " · 14 tópicos, do enquadramento ao impacto pós-formação."}
+            : " · 14 tópicos, do enquadramento à avaliação de impacto pós-formação."}
           {" "}Arquivar 10 anos (IEFP) ou o prazo do programa - o mais longo.
         </p>
       </div>

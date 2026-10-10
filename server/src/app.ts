@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { ingestEvent, processDueJobs, sendRuleTest } from "./automations.js";
+import { enviarLembretesPreinscricao } from "./lembretePre.js";
 import { allowedOrigins, config, newToken, oauthRedirectUri, onVercel, siteOriginFromHeaders } from "./config.js";
 import { enterActor, type Db } from "./db/pool.js";
 import { registerCatalogRoutes } from "./catalogRoutes.js";
@@ -676,6 +677,8 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   if (opts.worker !== false && !onVercel) {
     const tick = async () => {
       try { await processDueJobs(db); }
+      catch (err) { app.log.error(err); }
+      try { await enviarLembretesPreinscricao(db); }
       catch (err) { app.log.error(err); }
     };
     const timer = setInterval(tick, 2500);

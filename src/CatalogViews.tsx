@@ -17,6 +17,8 @@ import {
   type MicrosoftStatus, type SmtpStatus, type WhatsappStatus,
 } from "./api";
 import { useCatalogList, useCatalogs } from "./CatalogsContext";
+import { useAuth } from "./AuthGate";
+import { apiPutSettings } from "./api";
 import { OptionSelect } from "./OptionSelect";
 import { useDrive } from "./DriveContext";
 import type { FormandoTurma } from "./ListsContext";
@@ -2275,7 +2277,85 @@ function SmtpSettingsCard() {
   );
 }
 
+function LembretePreCard() {
+  const { settings } = useCatalogs();
+  const gravado = settings.lembrete_pre ?? {};
+  const [activo, setActivo] = useState(gravado.activo !== "0");
+  const [quantidade, setQuantidade] = useState(gravado.quantidade || "1");
+  const [unidade, setUnidade] = useState(gravado.unidade === "minutos" || gravado.unidade === "horas" ? gravado.unidade : "dias");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!settings.lembrete_pre) return;
+    setActivo(settings.lembrete_pre.activo !== "0");
+    if (settings.lembrete_pre.quantidade) setQuantidade(settings.lembrete_pre.quantidade);
+    if (settings.lembrete_pre.unidade === "minutos" || settings.lembrete_pre.unidade === "horas" || settings.lembrete_pre.unidade === "dias") {
+      setUnidade(settings.lembrete_pre.unidade);
+    }
+  }, [settings.lembrete_pre]);
+
+  async function guardar() {
+    const n = Number(quantidade);
+    if (!Number.isInteger(n) || n < 1 || n > 999) {
+      setMsg("A frequência tem de ser um número inteiro entre 1 e 999.");
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      await apiPutSettings("lembrete_pre", { activo: activo ? "1" : "0", quantidade: String(n), unidade });
+      setMsg(activo
+        ? `Lembrete activo: a cada ${n} ${unidade}.`
+        : "Lembrete desligado. A pré-inscrição deixa de receber este aviso.");
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Não foi possível gravar a frequência.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 md:col-span-2 xl:col-span-3 space-y-4">
+      <div>
+        <p className="text-sm font-bold text-slate-800">Lembrete da pré-inscrição</p>
+        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+          Enquanto a pré-inscrição não estiver validada, a pessoa recebe um email de x em x tempo se faltarem documentos, se a secretaria tiver recusado algum, se ainda não houver turma ou se a turma tiver sido dada como cheia. O botão abre a ligação pessoal no passo que falta.
+        </p>
+        {msg && <p className="text-xs font-semibold text-amber-700 mt-2">{msg}</p>}
+      </div>
+      <label className="flex items-center gap-2 text-sm text-slate-700">
+        <input type="checkbox" className="h-4 w-4" checked={activo} onChange={e => setActivo(e.target.checked)} />
+        Enviar o lembrete
+      </label>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field label="De quanto em quanto tempo">
+          <input
+            className={iCls}
+            inputMode="numeric"
+            value={quantidade}
+            onChange={e => setQuantidade(e.target.value.replace(/[^\d]/g, "").slice(0, 3))}
+          />
+        </Field>
+        <Field label="Unidade">
+          <select className={iCls} value={unidade} onChange={e => setUnidade(e.target.value as "minutos" | "horas" | "dias")}>
+            <option value="minutos">Minutos</option>
+            <option value="horas">Horas</option>
+            <option value="dias">Dias</option>
+          </select>
+        </Field>
+      </div>
+      <div className="flex justify-end">
+        <button type="button" disabled={busy} onClick={() => void guardar()} className="px-4 py-2.5 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white">
+          {busy ? "A gravar…" : "Guardar frequência"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ConfiguracoesView() {
+  const { user } = useAuth();
   const { settings, saveSettings } = useCatalogs();
   const [openId, setOpenId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState(seedConfigDrafts);
@@ -2304,6 +2384,7 @@ export function ConfiguracoesView() {
           <MicrosoftSettingsCard />
           <WhatsappSettingsCard />
           <SmtpSettingsCard />
+          {user.role === "admin" && <LembretePreCard />}
           {configCards.map(c => (
             <button key={c.id} type="button" onClick={() => setOpenId(c.id)}
               className={`text-left bg-white rounded-xl border shadow-sm p-5 hover:border-amber-300 hover:shadow-md transition-all ${openId === c.id ? "border-amber-400 ring-1 ring-amber-200" : "border-slate-200"}`}>

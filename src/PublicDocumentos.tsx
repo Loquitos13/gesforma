@@ -16,6 +16,13 @@ function fmtData(iso: string) {
 
 const PASSOS = ["Documentos", "Cronograma"] as const;
 
+function passoPedido(): 1 | 2 | null {
+  const passo = new URLSearchParams(window.location.search).get("passo");
+  if (passo === "documentos") return 1;
+  if (passo === "cronograma") return 2;
+  return null;
+}
+
 function textoVagas(n: number) {
   if (n <= 0) return "Sem vagas restantes";
   return n === 1 ? "1 vaga restante" : `${n} vagas restantes`;
@@ -35,6 +42,7 @@ export function PublicDocumentos({ token }: { token: string }) {
   const [turmaEscolhida, setTurmaEscolhida] = useState<TurmaPercurso | null>(null);
   const [percursoConcluido, setPercursoConcluido] = useState(false);
   const [emFalta, setEmFalta] = useState<string[]>([]);
+  const [turmaCheia, setTurmaCheia] = useState(false);
   const [encerrada, setEncerrada] = useState(false);
   const [correcao, setCorrecao] = useState(false);
   const [foco, setFoco] = useState<string | null>(null);
@@ -62,9 +70,14 @@ export function PublicDocumentos({ token }: { token: string }) {
     setPercursoConcluido(Boolean(r.percursoConcluido));
     const falta = r.emFalta ?? [];
     setEmFalta(falta);
+    setTurmaCheia(Boolean(r.turmaCheia));
     const seguinte: 1 | 2 = r.turmaEscolhida ? 2 : 1;
     setPassoServidor(seguinte);
-    if (!manterPasso) setPasso(r.percursoConcluido && falta.length > 0 && !r.encerrada ? 1 : seguinte);
+    if (!manterPasso) {
+      const pedido = passoPedido();
+      if (pedido) setPasso(pedido);
+      else setPasso(r.percursoConcluido && falta.length > 0 && !r.encerrada ? 1 : seguinte);
+    }
     setEstado("ready");
   }
 
@@ -295,7 +308,7 @@ export function PublicDocumentos({ token }: { token: string }) {
                     <p className="mt-2 text-xs leading-relaxed text-[#5c564c]">Os obrigatórios já estão na ficha. Os opcionais continuam aqui. Avance só quando quiser.</p>
                   )}
                   {!docsProntos && (
-                    <p className="mt-2 text-xs leading-relaxed text-[#5c564c]">Pode continuar sem todos os documentos. Ao concluir, recebe um email com o que ainda falta. A inscrição fica pendente até a secretaria validar tudo.</p>
+                    <p className="mt-2 text-xs leading-relaxed text-[#5c564c]">Pode submeter a inscrição sem todos os documentos. Se faltar algum, recebe um email com a lista e o botão para voltar a este passo. Se estiverem todos, esse email não sai.</p>
                   )}
                 </div>
                 <ol className="divide-y divide-[#efeae1] border-t border-[#efeae1]">
@@ -352,6 +365,9 @@ export function PublicDocumentos({ token }: { token: string }) {
             {passo === 2 && (
               <section className="border-t border-[#efeae1] px-6 py-5 sm:px-8">
                 <p className="text-sm text-[#5c564c]">{textoTurmas(criterios)}</p>
+                {turmaCheia && (
+                  <p className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-950">A turma anterior foi dada como cheia pela secretaria e já não pode ser escolhida. Seleccione outra.</p>
+                )}
                 {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
                 {turmas.length === 0 && (
                   <p className="mt-4 rounded-xl bg-[#fffaf2] px-4 py-3 text-sm text-[#5c564c]">Não há turma com lugar livre para estes requisitos. Volte mais tarde ou fale com a secretaria.</p>
@@ -392,7 +408,7 @@ export function PublicDocumentos({ token }: { token: string }) {
                     {aSair && direccao === "tras" ? "A voltar…" : "Voltar"}
                   </button>
                   <button type="button" disabled={busy || !turmaEscolhida || aSair} onClick={() => void concluir()} className="rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white disabled:opacity-40 sm:flex-1">
-                    {busy ? "A concluir…" : "Concluir pré-inscrição"}
+                    {busy ? "A submeter…" : "Submeter inscrição"}
                   </button>
                 </div>
               </section>

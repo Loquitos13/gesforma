@@ -2,6 +2,7 @@ import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { docsCompletos, docsDoCurso, faltaValidarPreinscricao } from "./docsCurso.js";
 import { avisarDocumentosEmFalta, documentosUrl, ensureDocsToken, listarDocsLead } from "./docsLink.js";
+import { idsRecusados } from "./lembretePre.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
 import { moverPastaFormando } from "./driveArvore.js";
 import { sendMail } from "./mailer.js";
@@ -262,12 +263,12 @@ async function evento(db: Db, leadId: number, actorId: string | undefined, titul
 
 export async function escolherTurmaPublica(db: Db, leadId: number, turmaId: number) {
   const lead = await db.query(
-    "SELECT id, curso, regime, validada_em, local, horario, inicio_curso FROM preinscricoes WHERE id = $1",
+    "SELECT id, curso, regime, validada_em, local, horario, inicio_curso, turmas_recusadas FROM preinscricoes WHERE id = $1",
     [leadId],
   );
   const row = lead.rows[0] as {
     id: number; curso: string; regime: string; validada_em: string | null;
-    local?: string; horario?: string; inicio_curso?: string;
+    local?: string; horario?: string; inicio_curso?: string; turmas_recusadas?: unknown;
   } | undefined;
   if (!row) throw new PercursoErro("Pré-inscrição inexistente.");
   if (row.validada_em) throw new PercursoErro("A secretaria já validou esta pré-inscrição.");
@@ -282,10 +283,12 @@ export async function escolherTurmaPublica(db: Db, leadId: number, turmaId: numb
   const oferecidas = await turmasParaEscolha(db, String(row.curso), regime, pedido);
   const recomendadas = await recomendacoesOutroHorario(db, String(row.curso), regime, pedido, oferecidas.map(t => t.id));
   const breves = await turmasParaBreve(db, String(row.curso), regime, pedido, [...oferecidas, ...recomendadas].map(t => t.id));
+  const recusadas = new Set(idsRecusados(row.turmas_recusadas));
+  if (recusadas.has(turmaId)) throw new PercursoErro("Essa turma foi dada como cheia pela secretaria. Escolha outra.");
   const escolhida = oferecidas.find(t => t.id === turmaId)
     ?? recomendadas.find(t => t.id === turmaId)
     ?? breves.find(t => t.id === turmaId);
-  if (!escolhida) throw new PercursoErro("Essa turma não tem vaga ou não é deste curso.");
+  if (!escolhida || recusadas.has(escolhida.id)) throw new PercursoErro("Essa turma não tem vaga ou não é deste curso.");
   const preco = regime === "gold" ? await precoParaOferta(db, String(row.curso), escolhida.local, escolhida.horario) : null;
   await db.query(
     `UPDATE preinscricoes SET
@@ -321,7 +324,14 @@ export async function concluirPercurso(db: Db, leadId: number) {
   const pedidos = await docsDoCurso(db, row.curso, regime);
   const ficheiros = await listarDocsLead(db, leadId);
   const by = new Map(ficheiros.map(f => [f.tipo, f]));
-  const emFalta = pedidos.filter(d => d.required && !entregueAceite(by.get(d.id)?.estado));
+  const emFalta = pedidos.filter(d => d.required && !entregueAceite(by.get(d.id)?.estado)).map(d => {
+    const ficheiro = by.get(d.id);
+    return {
+      label: d.label,
+      recusado: ficheiro?.estado === "recusado",
+      observacao: ficheiro?.observacao ?? "",
+    };
+  });
   if (!row.turma_escolhida_id) throw new PercursoErro("Escolha o cronograma antes de concluir.");
   const jaConcluido = Boolean(row.percurso_concluido_em);
   if (!jaConcluido) {
@@ -342,7 +352,7 @@ export async function concluirPercurso(db: Db, leadId: number) {
       avisou ? "Aguarda validação. Email com os documentos em falta." : "Aguarda validação da secretaria",
     );
   }
-  return { ok: true as const, emFalta: emFalta.map(d => d.label) };
+  return { ok: true as const, emFalta: emFalta.filter(d => !d.recusado).map(d => d.label) };
 }
 
 export async function moverDocsDoLead(db: Db, leadId: number, turmaId: number) {
@@ -462,9 +472,11 @@ export async function enviarSugestaoTurmaCheia(db: Db, leadId: number, actorId?:
   const local = turma?.local || String(row.local ?? "");
   const horario = turma?.horario || String(row.horario ?? "");
   if (!local.trim()) throw new PercursoErro("Indique o local da pré-inscrição para sugerir outra turma.");
-  const sugestoes = await sugestoesTurmaCheia(db, curso, regime, local, horario, turmaId);
+  const jaRecusadas = new Set(idsRecusados(row.turmas_recusadas));
+  const sugestoes = (await sugestoesTurmaCheia(db, curso, regime, local, horario, turmaId))
+    .filter(t => !jaRecusadas.has(t.id));
   const token = await ensureDocsToken(db, leadId);
-  const url = documentosUrl(token);
+  const url = `${documentosUrl(token)}?passo=cronograma`;
   const nome = `${row.nome ?? ""} ${row.apelido ?? ""}`.trim();
   const linhas = [
     `A turma de ${curso} em ${local} já não tem vaga.`,
@@ -493,11 +505,18 @@ export async function enviarSugestaoTurmaCheia(db: Db, leadId: number, actorId?:
   await db.query(
     `UPDATE preinscricoes
         SET recusa_motivo = 'Turma cheia',
+            turmas_recusadas = CASE WHEN $2 > 0 THEN (
+              SELECT COALESCE(array_agg(DISTINCT n), '{}'::int[])
+                FROM unnest(COALESCE(turmas_recusadas, '{}'::int[]) || ARRAY[$2]::int[]) AS n
+               WHERE n > 0
+            ) ELSE turmas_recusadas END,
             turma_escolhida_id = NULL,
+            turma_id = CASE WHEN turma_id = $2 THEN NULL ELSE turma_id END,
             percurso_concluido_em = NULL,
-            docs_fechado_em = NULL
+            docs_fechado_em = NULL,
+            lembrete_pre_em = now()
       WHERE id = $1 AND validada_em IS NULL`,
-    [leadId],
+    [leadId, turmaId],
   );
   await evento(db, leadId, actorId, "Sugestão por turma cheia", sugestoes.map(t => t.nome).join(", ") || "Sem turmas com vaga");
   return { ok: true as const, enviadas: sugestoes.length, turmas: sugestoes };
@@ -535,12 +554,14 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
     horario: String(lead.horario ?? ""),
     inicio: String(lead.inicio_curso ?? ""),
   };
-  const turmas = await turmasParaEscolha(db, curso, regime, criterios);
-  const recomendadas = await recomendacoesOutroHorario(db, curso, regime, criterios, turmas.map(t => t.id));
-  const breves = await turmasParaBreve(db, curso, regime, criterios, [...turmas, ...recomendadas].map(t => t.id));
-  const turmaEscolhida = turmaId
+  const recusadas = new Set(idsRecusados(lead.turmas_recusadas));
+  const turmas = (await turmasParaEscolha(db, curso, regime, criterios)).filter(t => !recusadas.has(t.id));
+  const recomendadas = (await recomendacoesOutroHorario(db, curso, regime, criterios, turmas.map(t => t.id))).filter(t => !recusadas.has(t.id));
+  const breves = (await turmasParaBreve(db, curso, regime, criterios, [...turmas, ...recomendadas].map(t => t.id))).filter(t => !recusadas.has(t.id));
+  const turmaBruta = turmaId && !recusadas.has(turmaId)
     ? turmas.find(t => t.id === turmaId) ?? await turmaPorId(db, regime, turmaId)
     : null;
+  const turmaEscolhida = turmaBruta && recusadas.has(turmaBruta.id) ? null : turmaBruta;
   const recusados = docs.filter(d => d.estado === "recusado");
   const encerrada = Boolean(lead.validada_em);
   const percursoConcluido = Boolean(lead.percurso_concluido_em) && Boolean(turmaEscolhida) && recusados.length === 0;
@@ -567,6 +588,7 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
     recomendadas,
     breves,
     turmaEscolhida,
+    turmaCheia: recusadas.size > 0 && !turmaEscolhida,
     criterios: {
       local: pedidoUtil(criterios.local) ? criterios.local : "",
       horario: pedidoUtil(criterios.horario) ? criterios.horario : "",

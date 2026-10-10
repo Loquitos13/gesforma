@@ -684,6 +684,7 @@ export const apiPublicDocumentos = (token: string) =>
     recomendadas?: TurmaPercurso[];
     breves?: TurmaPercurso[];
     turmaEscolhida?: TurmaPercurso | null;
+    turmaCheia?: boolean;
     criterios?: { local: string; horario: string; inicio: string };
   }>(
     `/v1/public/documentos/${encodeURIComponent(token)}`,

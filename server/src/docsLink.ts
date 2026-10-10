@@ -195,9 +195,15 @@ export async function definirEstadoDoc(
   return upd.rows[0].id;
 }
 
-/** Avisa a pessoa dos documentos que ainda não estão na ficha, com a mesma ligação pessoal. */
-export async function avisarDocumentosEmFalta(db: Db, leadId: number, emFalta: { label: string }[]) {
-  if (!emFalta.length) return { enviado: false as const };
+/** Avisa a pessoa dos documentos que ainda não estão na ficha, com a ligação pessoal no passo dos documentos. */
+export async function avisarDocumentosEmFalta(
+  db: Db,
+  leadId: number,
+  emFalta: { label: string; recusado?: boolean; observacao?: string }[],
+) {
+  const faltam = emFalta.filter(d => !d.recusado);
+  const recusados = emFalta.filter(d => d.recusado);
+  if (!faltam.length && !recusados.length) return { enviado: false as const };
   const row = await db.query<{ nome: string; apelido: string; email: string; curso: string }>(
     "SELECT nome, apelido, email, curso FROM preinscricoes WHERE id = $1",
     [leadId],
@@ -207,14 +213,18 @@ export async function avisarDocumentosEmFalta(db: Db, leadId: number, emFalta: {
   const email = normalizeEmail(lead.email);
   if (!isEmail(email)) return { enviado: false as const, erro: "A ficha não tem email." };
   const token = await ensureDocsToken(db, leadId);
-  const url = documentosUrl(token);
+  const url = `${documentosUrl(token)}?passo=documentos`;
   const nome = `${lead.nome} ${lead.apelido}`.trim();
-  const linhas = [
-    `A pré-inscrição em ${lead.curso} ficou registada e aguarda validação da secretaria.`,
-    "Ainda faltam estes documentos:",
-    ...emFalta.map(d => d.label),
-    "Pode enviá-los nesta ligação. A ligação fecha quando a secretaria validar todos os documentos.",
-  ];
+  const linhas = [`A pré-inscrição em ${lead.curso} ficou registada e aguarda validação da secretaria.`];
+  if (faltam.length) {
+    linhas.push("Ainda faltam estes documentos:");
+    linhas.push(...faltam.map(d => d.label));
+  }
+  if (recusados.length) {
+    linhas.push("A secretaria recusou estes documentos:");
+    linhas.push(...recusados.map(d => `${d.label}: ${d.observacao?.trim() || "não está correcto. Volte a enviar o ficheiro."}`));
+  }
+  linhas.push("Use o botão para abrir a ligação pessoal no passo de enviar os documentos. A ligação fecha quando a secretaria validar todos.");
   const mail = renderAutomaticEmail({
     nome,
     xml: "",
@@ -231,7 +241,8 @@ export async function avisarDocumentosEmFalta(db: Db, leadId: number, emFalta: {
     text: mail.text,
     html: mail.html,
   });
-  await logLeadEvent(db, leadId, undefined, "contacto", "Documentos em falta", emFalta.map(d => d.label).join(", "));
+  await db.query("UPDATE preinscricoes SET lembrete_pre_em = now() WHERE id = $1", [leadId]);
+  await logLeadEvent(db, leadId, undefined, "contacto", "Documentos em falta", [...faltam, ...recusados].map(d => d.label).join(", "));
   return { enviado: true as const, url };
 }
 

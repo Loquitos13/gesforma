@@ -3,6 +3,7 @@ import { z } from "zod";
 import { isCatalogKind } from "./db/catalogSeed.js";
 import type { Db } from "./db/pool.js";
 import { guardarImagemHero } from "./cursoImagens.js";
+import { normalizarLembrete } from "./lembretePre.js";
 import { nextOpsId } from "./ops.js";
 
 const itemSchema = z.object({
@@ -120,12 +121,16 @@ export function registerCatalogRoutes(
   app.put("/v1/settings/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const id = String((req.params as { id: string }).id).slice(0, 40);
-    if (id === "site" && req.actor?.role !== "admin") {
-      return reply.code(403).send({ error: "só o administrador edita o site" });
+    if ((id === "site" || id === "lembrete_pre") && req.actor?.role !== "admin") {
+      return reply.code(403).send({ error: id === "site" ? "só o administrador edita o site" : "Só o administrador define o lembrete da pré-inscrição." });
     }
     const parsed = (id === "site" ? siteSchema : settingsSchema).safeParse(req.body);
     if (!id || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
-    const values = id === "site" ? valoresDoSite(parsed.data.values) : parsed.data.values;
+    const lembrete = id === "lembrete_pre" ? normalizarLembrete(parsed.data.values) : null;
+    if (id === "lembrete_pre" && !lembrete) {
+      return reply.code(400).send({ error: "Frequência inválida. Use minutos, horas ou dias, a partir de 1." });
+    }
+    const values = id === "site" ? valoresDoSite(parsed.data.values) : lembrete ?? parsed.data.values;
     await db.query(
       `INSERT INTO app_settings (id, values) VALUES ($1, $2::jsonb)
        ON CONFLICT (id) DO UPDATE SET values = EXCLUDED.values, updated_at = now()`,

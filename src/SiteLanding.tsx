@@ -1,7 +1,7 @@
 import { createContext, type CSSProperties, FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { ApiError, apiPublicPreinscricao } from "./api";
 import { InscricaoSite, useInscricao } from "./SiteInscricao";
-import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, destinoDoHero, ePrepago, ePreinscricao, estiloMargem, heroAnimacao, heroBadge, heroDisposicao, heroPedido, heroTamanho, HERO_CONTENTOR_MAX, HERO_CONTENTOR_MIN, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, ligacaoExterna, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, rotuloBotaoInscricao, textoSite, tituloRegime, type HeroAnimacao, type HeroBadgeCor, type HeroPedido, type HeroTamanho, type InscricaoPublica, type SiteChave } from "./siteConteudo";
+import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, destinoDoHero, ePrepago, ePreinscricao, estiloMargem, heroAnimacao, heroBadge, heroDisposicao, heroPedido, heroTamanho, HERO_CONTENTOR_MAX, HERO_CONTENTOR_MIN, HERO_FORMA_BORDA_MAX, HERO_FORMA_BORDA_MIN, HERO_FORMA_POS_MAX, HERO_FORMA_POS_MIN, HERO_FORMA_TAMANHO_MAX, HERO_FORMA_TAMANHO_MIN, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, ligacaoExterna, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, corForma, heroForma, rotuloBotaoInscricao, textoSite, tituloRegime, type HeroAnimacao, type HeroBadgeCor, type HeroPedido, type HeroTamanho, type InscricaoPublica, type SiteChave } from "./siteConteudo";
 
 export type Course = {
   id: string;
@@ -339,13 +339,30 @@ function CartaoFlutuante({ vista, abrir, ancora }: { vista: CartaoVista; abrir: 
   );
 }
 
-function CirculoHero({ src, alt, lado }: { src: string; alt: string; lado: "direita" | "esquerda" }) {
-  const lugar = lado === "esquerda"
-    ? "lg:absolute lg:left-[-4rem] lg:top-1/2 lg:mx-0 lg:h-[620px] lg:w-[620px] lg:-translate-y-1/2 lg:shadow-[0_0_0_14px_#A60000]"
-    : "lg:absolute lg:right-[-4rem] lg:top-1/2 lg:mx-0 lg:h-[620px] lg:w-[620px] lg:-translate-y-1/2 lg:shadow-[0_0_0_14px_#A60000]";
+function FormaHero({
+  src, alt, forma, cor, espessura, x, y, tamanho,
+}: {
+  src: string;
+  alt: string;
+  forma: string;
+  cor: string;
+  espessura: number;
+  x: number;
+  y: number;
+  tamanho: number;
+}) {
+  const estilo = {
+    ["--ena-forma-t" as string]: String(tamanho / 100),
+    ["--ena-forma-b" as string]: String(espessura),
+    ["--ena-forma-c" as string]: cor,
+    ["--ena-forma-x" as string]: String(x),
+    ["--ena-forma-y" as string]: String(y),
+  } as CSSProperties;
   return (
-    <div className={`relative z-0 mx-auto h-[180px] w-[180px] shrink-0 overflow-hidden rounded-full bg-[#FFA900] shadow-[0_0_0_10px_#FFA900] sm:h-[220px] sm:w-[220px] ${lugar}`}>
-      {src && <img src={src} alt={alt} className="h-full w-full object-cover object-[center_30%]" />}
+    <div className="ena-hero-forma" data-hero-forma={forma} data-hero-forma-x={x} data-hero-forma-y={y} data-hero-forma-tamanho={tamanho} data-hero-forma-borda={espessura} style={estilo}>
+      <div className="ena-hero-forma-miolo">
+        {src ? <img src={src} alt={alt} /> : null}
+      </div>
     </div>
   );
 }
@@ -367,6 +384,12 @@ function SplitHero() {
   const disposicao = heroDisposicao(t("heroDisposicao"));
   const contentorLargura = numeroSite(t("heroContentorLargura"), HERO_CONTENTOR_MIN, HERO_CONTENTOR_MAX, 100);
   const contentorAltura = numeroSite(t("heroContentorAltura"), HERO_CONTENTOR_MIN, HERO_CONTENTOR_MAX, 100);
+  const forma = heroForma(t("heroForma"));
+  const formaCor = corForma(t("heroFormaCor"));
+  const formaBorda = numeroSite(t("heroFormaEspessura"), HERO_FORMA_BORDA_MIN, HERO_FORMA_BORDA_MAX, 14);
+  const formaX = numeroSite(t("heroFormaX"), HERO_FORMA_POS_MIN, HERO_FORMA_POS_MAX, 0);
+  const formaY = numeroSite(t("heroFormaY"), HERO_FORMA_POS_MIN, HERO_FORMA_POS_MAX, 0);
+  const formaTamanho = numeroSite(t("heroFormaTamanho"), HERO_FORMA_TAMANHO_MIN, HERO_FORMA_TAMANHO_MAX, 100);
   const tituloEsc = numeroSite(t("heroTituloTamanho"), HERO_TAMANHO_MIN, HERO_TAMANHO_MAX, 100);
   const textoEsc = numeroSite(t("heroTextoTamanho"), HERO_TAMANHO_MIN, HERO_TAMANHO_MAX, 100);
   const textoX = numeroSite(t("heroTextoX"), HERO_POS_MIN, HERO_POS_MAX, 0);
@@ -411,9 +434,6 @@ function SplitHero() {
   );
   const texto = centro ? (
     <div className="relative z-30 flex flex-col items-center px-4 pb-6 pt-10 text-center sm:px-6 lg:px-6 lg:py-14">
-      <div className="mb-6 h-36 w-36 overflow-hidden rounded-full bg-[#FFA900] shadow-[0_0_0_8px_#A60000] sm:h-44 sm:w-44">
-        {heroImagem && <img src={heroImagem} alt={t("heroImagemAlt")} className="h-full w-full object-cover object-[center_30%]" />}
-      </div>
       {palavras}
     </div>
   ) : (
@@ -441,7 +461,6 @@ function SplitHero() {
     <>
       {disposicao === "texto-direita" ? null : texto}
       <div className={`relative z-20 flex flex-col gap-6 px-4 pb-28 pt-2 lg:block lg:h-auto lg:min-h-full lg:px-0 lg:pb-0 lg:pt-0 ${disposicao === "texto-direita" ? "order-2 lg:order-1" : ""}`}>
-        <CirculoHero src={heroImagem} alt={t("heroImagemAlt")} lado={disposicao === "texto-direita" ? "esquerda" : "direita"} />
         <div className="relative z-20 flex flex-col gap-5 lg:absolute lg:inset-0 lg:block">
           {cartoes.map(vista => <CartaoFlutuante key={vista.posicao} vista={vista} abrir={abrir} ancora={ancora} />)}
         </div>
@@ -457,6 +476,7 @@ function SplitHero() {
       data-hero-disposicao={disposicao}
     >
       <div className={`ena-hero-contentor relative mx-auto grid overflow-hidden rounded-[32px] bg-[#14263D] shadow-[0_28px_80px_rgba(20,38,61,.22)] ${grelha}`} style={estiloContentor(contentorLargura, contentorAltura)} data-hero-largura={contentorLargura} data-hero-altura={contentorAltura}>
+        <FormaHero src={heroImagem} alt={t("heroImagemAlt")} forma={forma} cor={formaCor} espessura={formaBorda} x={formaX} y={formaY} tamanho={formaTamanho} />
         {palco}
         <OndaHero />
       </div>

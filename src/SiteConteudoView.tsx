@@ -3,7 +3,7 @@ import { apiSiteHeroImagem } from "./api";
 import { useCatalogs } from "./CatalogsContext";
 import { SearchSelect } from "./FormKit";
 import { SiteSeccaoPreview, type CursoPreview, type OfertaPreview } from "./SitePreview";
-import { classeSelo, heroBadgeCor, heroDisposicao, HERO_CONTENTOR_MAX, HERO_CONTENTOR_MIN, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, SITE_GRUPOS, SITE_OMISSAO, type HeroDisposicao, type HeroSlot, type SiteChave } from "./siteConteudo";
+import { classeSelo, corForma, heroBadgeCor, heroDisposicao, heroForma, HERO_CONTENTOR_MAX, HERO_CONTENTOR_MIN, HERO_FORMA_BORDA_MAX, HERO_FORMA_BORDA_MIN, HERO_FORMA_POS_MAX, HERO_FORMA_POS_MIN, HERO_FORMA_TAMANHO_MAX, HERO_FORMA_TAMANHO_MIN, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, SITE_GRUPOS, SITE_OMISSAO, type HeroDisposicao, type HeroForma, type HeroSlot, type SiteChave } from "./siteConteudo";
 import { toastOk } from "./toastBus";
 
 const campoCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent";
@@ -237,7 +237,7 @@ function ComposicaoHero({
     <div className="rounded-lg border border-slate-200 p-4 space-y-4">
       <div>
         <h3 className="text-sm font-bold text-slate-800">Composição do destaque</h3>
-        <p className="mt-1 text-xs text-slate-500">A disposição coloca o texto e os cartões. A largura e a altura mudam o contentor do destaque: 100% é o tamanho de omissão. O tamanho e a posição mexem no texto e no botão que está por baixo dele. Zero na posição é o lugar de omissão. A pré-visualização acompanha o rascunho.</p>
+        <p className="mt-1 text-xs text-slate-500">A disposição coloca o texto e os cartões. A forma com a fotografia fica no fundo e não acompanha o texto. A largura e a altura mudam o contentor do destaque: 100% é o tamanho de omissão. O tamanho e a posição mexem no texto e no botão que está por baixo dele. Zero na posição é o lugar de omissão. A pré-visualização acompanha o rascunho.</p>
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="group" aria-label="Disposição do destaque">
         {DISPOSICOES.map(opcao => {
@@ -268,6 +268,58 @@ function ComposicaoHero({
         <Regua etiqueta="Posição horizontal do botão" chave="heroBotaoX" draft={draft} min={HERO_POS_MIN} max={HERO_POS_MAX} omissao={0} sufixo="" onChange={onChange} />
         <Regua etiqueta="Posição vertical do botão" chave="heroBotaoY" draft={draft} min={HERO_POS_MIN} max={HERO_POS_MAX} omissao={0} sufixo="" onChange={onChange} />
       </div>
+      <FormaFundo draft={draft} onChange={onChange} />
+    </div>
+  );
+}
+
+const FORMAS: { id: HeroForma; titulo: string }[] = [
+  { id: "circulo", titulo: "Círculo" },
+  { id: "elipse", titulo: "Elipse" },
+  { id: "quadrado", titulo: "Quadrado" },
+  { id: "retangulo", titulo: "Retângulo" },
+  { id: "losango", titulo: "Losango" },
+];
+
+function FormaFundo({
+  draft, onChange,
+}: {
+  draft: Record<SiteChave, string>;
+  onChange: (chave: SiteChave, valor: string) => void;
+}) {
+  const forma = heroForma(draft.heroForma);
+  const cor = corForma(draft.heroFormaCor);
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-4">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Forma de fundo</p>
+        <p className="mt-1 text-xs text-slate-500">A fotografia fica atrás do texto e dos cartões. Mudar a disposição ou a posição do texto não a arrasta. Zero na posição deixa o círculo à direita no ecrã grande. 100% é o tamanho de omissão e 14 px é a espessura de omissão.</p>
+      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Forma</span>
+          <select className={campoCls} value={forma} aria-label="Forma de fundo" onChange={e => onChange("heroForma", e.target.value)}>
+            {FORMAS.map(opcao => <option key={opcao.id} value={opcao.id}>{opcao.titulo}</option>)}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Cor da borda
+            <span className="font-bold normal-case tracking-normal text-slate-800">{cor}</span>
+          </span>
+          <input
+            type="color"
+            value={cor.toLowerCase()}
+            aria-label="Cor da borda"
+            onChange={e => onChange("heroFormaCor", e.target.value.toUpperCase())}
+            className="h-10 w-full cursor-pointer rounded-lg border border-slate-200 bg-white p-1"
+          />
+        </label>
+        <Regua etiqueta="Espessura da borda" chave="heroFormaEspessura" draft={draft} min={HERO_FORMA_BORDA_MIN} max={HERO_FORMA_BORDA_MAX} omissao={14} sufixo="px" onChange={onChange} />
+        <Regua etiqueta="Tamanho da forma" chave="heroFormaTamanho" draft={draft} min={HERO_FORMA_TAMANHO_MIN} max={HERO_FORMA_TAMANHO_MAX} omissao={100} sufixo="%" onChange={onChange} />
+        <Regua etiqueta="Posição horizontal da forma" chave="heroFormaX" draft={draft} min={HERO_FORMA_POS_MIN} max={HERO_FORMA_POS_MAX} omissao={0} sufixo="" passo={5} onChange={onChange} />
+        <Regua etiqueta="Posição vertical da forma" chave="heroFormaY" draft={draft} min={HERO_FORMA_POS_MIN} max={HERO_FORMA_POS_MAX} omissao={0} sufixo="" passo={5} onChange={onChange} />
+      </div>
     </div>
   );
 }
@@ -284,7 +336,7 @@ function Esquema({ disposicao }: { disposicao: HeroDisposicao }) {
 }
 
 function Regua({
-  etiqueta, chave, draft, min, max, omissao, sufixo, onChange,
+  etiqueta, chave, draft, min, max, omissao, sufixo, passo, onChange,
 }: {
   etiqueta: string;
   chave: SiteChave;
@@ -293,10 +345,11 @@ function Regua({
   max: number;
   omissao: number;
   sufixo: string;
+  passo?: number;
   onChange: (chave: SiteChave, valor: string) => void;
 }) {
   const valor = numeroSite(draft[chave], min, max, omissao);
-  const mostrado = sufixo === "%" ? `${valor}${sufixo}` : valor > 0 ? `+${valor}` : String(valor);
+  const mostrado = sufixo === "%" ? `${valor}${sufixo}` : sufixo === "px" ? `${valor} px` : valor > 0 ? `+${valor}` : String(valor);
   return (
     <label className="flex flex-col gap-1.5">
       <span className="flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -307,7 +360,7 @@ function Regua({
         type="range"
         min={min}
         max={max}
-        step={sufixo === "%" ? 5 : 2}
+        step={passo ?? (sufixo === "%" ? 5 : sufixo === "px" ? 1 : 2)}
         value={valor}
         aria-label={etiqueta}
         onChange={e => onChange(chave, e.target.value)}

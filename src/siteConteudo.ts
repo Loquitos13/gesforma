@@ -14,6 +14,12 @@ export const SITE_OMISSAO = {
   heroDisposicao: "texto-esquerda",
   heroContentorLargura: "100",
   heroContentorAltura: "100",
+  heroForma: "circulo",
+  heroFormaCor: "#A60000",
+  heroFormaEspessura: "14",
+  heroFormaX: "0",
+  heroFormaY: "0",
+  heroFormaTamanho: "100",
   heroTituloTamanho: "100",
   heroTextoTamanho: "100",
   heroTextoX: "0",
@@ -342,6 +348,29 @@ export const HERO_TAMANHO_MIN = 60;
 export const HERO_TAMANHO_MAX = 180;
 export const HERO_CONTENTOR_MIN = 50;
 export const HERO_CONTENTOR_MAX = 160;
+export const HERO_FORMA_POS_MIN = -150;
+export const HERO_FORMA_POS_MAX = 150;
+export const HERO_FORMA_TAMANHO_MIN = 40;
+export const HERO_FORMA_TAMANHO_MAX = 180;
+export const HERO_FORMA_BORDA_MIN = 0;
+export const HERO_FORMA_BORDA_MAX = 40;
+
+export type HeroForma = "circulo" | "quadrado" | "retangulo" | "losango" | "elipse";
+
+export function heroForma(valor: string): HeroForma {
+  if (valor === "quadrado" || valor === "retangulo" || valor === "losango" || valor === "elipse") return valor;
+  return "circulo";
+}
+
+export function corForma(valor: string) {
+  const limpa = valor.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(limpa)) return limpa.toUpperCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(limpa)) {
+    const [r, g, b] = limpa.slice(1).split("");
+    return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
+  }
+  return "#A60000";
+}
 export const HERO_POS_MIN = -40;
 export const HERO_POS_MAX = 40;
 export const MARGEM_MIN = -12;

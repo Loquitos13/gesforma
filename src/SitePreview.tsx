@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, heroAnimacao, heroBadge, heroDisposicao, heroPedido, heroTamanho, HERO_CONTENTOR_MAX, HERO_CONTENTOR_MIN, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, tituloRegime, type HeroPedido, type HeroSlot, type SiteChave } from "./siteConteudo";
+import { botaoHero, classeAnimacaoBotao, classeSelo, corForma, descricaoDoCurso, heroAnimacao, heroBadge, heroDisposicao, heroForma, heroPedido, heroTamanho, HERO_CONTENTOR_MAX, HERO_CONTENTOR_MIN, HERO_FORMA_BORDA_MAX, HERO_FORMA_BORDA_MIN, HERO_FORMA_POS_MAX, HERO_FORMA_POS_MIN, HERO_FORMA_TAMANHO_MAX, HERO_FORMA_TAMANHO_MIN, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, tituloRegime, type HeroPedido, type HeroSlot, type SiteChave } from "./siteConteudo";
 
 export type CursoPreview = {
   id: string;
@@ -197,34 +197,24 @@ function PreviewHero({ ler, oferta }: { ler: (chave: SiteChave) => string; ofert
   const largura = numeroSite(ler("heroContentorLargura"), HERO_CONTENTOR_MIN, HERO_CONTENTOR_MAX, 100);
   const altura = numeroSite(ler("heroContentorAltura"), HERO_CONTENTOR_MIN, HERO_CONTENTOR_MAX, 100);
   const margem = margemPreview(ler, "margemDestaqueX", "margemDestaqueY", 12, 12);
-  const circulo = (classe: string) => (
-    <div className={`overflow-hidden rounded-full bg-[#FFA900] shadow-[0_0_0_3px_#A60000] ${classe}`}>
-      {imagem && <img src={imagem} alt="" className="h-full w-full object-cover object-[center_30%]" />}
-    </div>
-  );
   const palco = disposicao === "texto-centro" ? (
-    <div className="grid grid-cols-[.8fr_1.1fr_.8fr] items-center gap-1">
+    <div className="relative z-10 grid grid-cols-[.8fr_1.1fr_.8fr] items-center gap-1">
       {esquerda && <MiniCartao cartao={esquerda} cheio classe="relative z-10" />}
-      <div>
-        {circulo("mx-auto mb-2 h-10 w-10")}
-        <BlocoHeroPreview ler={ler} />
-      </div>
+      <BlocoHeroPreview ler={ler} />
       {direita && <MiniCartao cartao={direita} cheio classe="relative z-10" />}
     </div>
   ) : disposicao === "texto-direita" ? (
-    <div className="grid grid-cols-[1.15fr_.85fr] items-center gap-2">
+    <div className="relative z-10 grid grid-cols-[1.15fr_.85fr] items-center gap-2">
       <div className="relative h-40">
-        {circulo("absolute left-0 top-6 h-20 w-20")}
         {esquerda && <MiniCartao cartao={esquerda} classe="absolute left-0 top-0 z-10" />}
         {direita && <MiniCartao cartao={direita} classe="absolute bottom-0 right-0 z-10" />}
       </div>
       <BlocoHeroPreview ler={ler} />
     </div>
   ) : (
-    <div className="grid grid-cols-[.9fr_1.1fr] items-center gap-2">
+    <div className="relative z-10 grid grid-cols-[.9fr_1.1fr] items-center gap-2">
       <BlocoHeroPreview ler={ler} />
       <div className="relative h-40">
-        {circulo("absolute right-0 top-6 h-20 w-20")}
         {esquerda && <MiniCartao cartao={esquerda} classe="absolute left-0 top-0 z-10" />}
         {direita && <MiniCartao cartao={direita} classe="absolute bottom-0 right-0 z-10" />}
       </div>
@@ -232,12 +222,50 @@ function PreviewHero({ ler, oferta }: { ler: (chave: SiteChave) => string; ofert
   );
   return (
     <div className="bg-[#F6F3EE]" style={margem} data-hero-disposicao={disposicao}>
-      <div className="mx-auto overflow-hidden rounded-2xl bg-[#14263D] px-3 pb-3 pt-4" style={{ width: `${largura}%`, minHeight: Math.round(168 * altura / 100) }} data-hero-largura={largura} data-hero-altura={altura}>
+      <div className="relative mx-auto overflow-hidden rounded-2xl bg-[#14263D] px-3 pb-3 pt-4" style={{ width: `${largura}%`, minHeight: Math.round(168 * altura / 100) }} data-hero-largura={largura} data-hero-altura={altura}>
+        <FormaPreview ler={ler} imagem={imagem} />
         {palco}
-        <svg aria-hidden="true" className="mt-1 h-4 w-full" viewBox="0 0 1200 140" preserveAspectRatio="none">
+        <svg aria-hidden="true" className="relative z-10 mt-1 h-4 w-full" viewBox="0 0 1200 140" preserveAspectRatio="none">
           <path d="M0 140V72C90 36 180 108 320 78C460 48 540 18 700 42C860 66 940 112 1080 82C1140 68 1170 88 1200 74V140H0Z" fill="#A60000" />
           <path d="M0 140V104C140 78 240 124 420 106C600 88 700 126 900 108C1040 96 1120 122 1200 104V140H0Z" fill="#FFA900" />
         </svg>
+      </div>
+    </div>
+  );
+}
+
+function FormaPreview({ ler, imagem }: { ler: (chave: SiteChave) => string; imagem: string }) {
+  const forma = heroForma(ler("heroForma"));
+  const cor = corForma(ler("heroFormaCor"));
+  const borda = numeroSite(ler("heroFormaEspessura"), HERO_FORMA_BORDA_MIN, HERO_FORMA_BORDA_MAX, 14);
+  const x = numeroSite(ler("heroFormaX"), HERO_FORMA_POS_MIN, HERO_FORMA_POS_MAX, 0);
+  const y = numeroSite(ler("heroFormaY"), HERO_FORMA_POS_MIN, HERO_FORMA_POS_MAX, 0);
+  const tamanho = numeroSite(ler("heroFormaTamanho"), HERO_FORMA_TAMANHO_MIN, HERO_FORMA_TAMANHO_MAX, 100);
+  const lado = Math.round(72 * tamanho / 100);
+  const altura = forma === "retangulo" || forma === "elipse" ? Math.round(lado * 0.68) : lado;
+  const curva = forma === "circulo" || forma === "elipse" ? "50%" : undefined;
+  const recorte = forma === "losango" ? "polygon(50% 0, 100% 50%, 50% 100%, 0 50%)" : undefined;
+  const anel = borda === 0 ? 0 : Math.max(1, Math.round(borda * 72 / 220));
+  return (
+    <div
+      data-hero-forma={forma}
+      style={{
+        position: "absolute",
+        zIndex: 0,
+        top: "46%",
+        right: -10,
+        width: lado,
+        height: altura,
+        boxSizing: "border-box",
+        padding: anel,
+        background: cor,
+        borderRadius: curva,
+        clipPath: recorte,
+        transform: `translate(${x}%, calc(-50% + ${y}%))`,
+      }}
+    >
+      <div style={{ width: "100%", height: "100%", overflow: "hidden", background: "#14263D", borderRadius: curva, clipPath: recorte }}>
+        {imagem && <img src={imagem} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 30%" }} />}
       </div>
     </div>
   );

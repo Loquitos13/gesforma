@@ -104,7 +104,7 @@ export function CursoOfertaCampos({
       </Label>
       {value.curso && !locais.length && (
         <p className={variant === "crm" ? "text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2" : "sm:col-span-2 text-sm text-amber-800"}>
-          Ainda não há turma liberada para este curso (local + horário + data de início). A secretaria tem de activar uma turma Gold.
+          Ainda não há turma com data para este curso. A inscrição fica registada na mesma e a secretaria confirma a turma.
         </p>
       )}
       {(precoOferta ?? (typeof preco === "number" && preco > 0 ? preco : null)) != null && (

@@ -9,7 +9,7 @@ export type CursoPreview = {
   miniatura: string | null;
   financiamento: "Gold" | "Financiada";
   regime: "gold" | "fin";
-  inscricao: "Acesso direto" | "Pré-inscrição";
+  inscricao: "Acesso direto" | "Pré-pago" | "Pré-inscrição";
 };
 
 export type OfertaPreview = {

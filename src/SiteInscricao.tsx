@@ -3,6 +3,7 @@ import { ApiError, apiPublicOferta, apiPublicPreinscricao } from "./api";
 import { SearchSelect } from "./FormKit";
 import { fmtDataPt, ofertaFiltrada, uniqueVals, type OfertaTurma } from "./oferta";
 import type { Course } from "./SiteLanding";
+import { ePreinscricao } from "./siteConteudo";
 import { textoListaVazia, useOpcoesPublicas } from "./useOpcoesPublicas";
 
 type Passo = "dados" | "pagamento" | "feito";
@@ -34,7 +35,7 @@ function norm(value: string) {
 
 function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () => void }) {
   const aberto = Boolean(curso);
-  const acesso = curso?.enrollment === "Acesso direto";
+  const preinscricao = ePreinscricao(curso?.enrollment);
   const [passo, setPasso] = useState<Passo>("dados");
   const [nome, setNome] = useState("");
   const [apelido, setApelido] = useState("");
@@ -92,8 +93,8 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
 
   const doCurso = useMemo(() => {
     const nomes = new Set([norm(curso?.title ?? ""), norm(curso?.nomeOferta ?? "")].filter(Boolean));
-    return turmas.filter(t => nomes.has(norm(t.curso)));
-  }, [turmas, curso?.title, curso?.nomeOferta]);
+    return turmas.filter(t => nomes.has(norm(t.curso)) && (!t.regime || t.regime === curso?.regime));
+  }, [turmas, curso?.title, curso?.nomeOferta, curso?.regime]);
   const locais = uniqueVals(doCurso, "local");
   const horarios = uniqueVals(ofertaFiltrada(doCurso, { local }), "horario");
   const datas = ofertaFiltrada(doCurso, { local, horario });
@@ -125,7 +126,6 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
     if (ofertaEstado === "a-carregar") return "A carregar as turmas libertadas.";
     if (ofertaEstado === "erro") return "Não foi possível carregar as turmas. Feche e volte a abrir o pedido.";
     if (doCurso.length && !turmaId) return "Escolha local, horário e data de início da turma.";
-    if (!doCurso.length && !acesso) return "Ainda não há turma libertada para esta formação. A secretaria tem de a activar.";
     return "";
   }
 
@@ -134,8 +134,7 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
     const falha = validarDados();
     setErro(falha);
     if (falha) return;
-    if (acesso) setPasso("pagamento");
-    else void enviar();
+    void enviar();
   }
 
   function falhaPagamento() {
@@ -150,10 +149,6 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
     if (!curso) return;
     const falha = validarDados();
     if (falha) { setErro(falha); setPasso("dados"); return; }
-    if (acesso) {
-      const pagamento = falhaPagamento();
-      if (pagamento) { setErro(pagamento); return; }
-    }
     setBusy(true);
     setErro("");
     try {
@@ -170,8 +165,7 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
         inicioCurso: turma?.dataInicio || dataInicio,
         turmaId: turmaId || undefined,
         preco: precoNumero ?? undefined,
-        pagamentoMetodo: acesso ? metodo : undefined,
-        acessoImediato: acesso && !turmaId,
+        regime: curso.regime,
       });
       setAviso(r.aviso);
       setPasso("feito");
@@ -183,6 +177,22 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
   }
 
   if (!curso) return null;
+  if (!preinscricao) {
+    return (
+      <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="inscricao-titulo">
+        <button type="button" className="absolute inset-0 bg-[#14263D]/55" aria-label="Fechar" onClick={onClose} />
+        <div className="relative w-full max-w-xl bg-white px-6 py-7 shadow-[0_28px_80px_rgba(20,38,61,.28)] sm:px-8">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#A60000]">{curso.enrollment}</p>
+          <h2 id="inscricao-titulo" className="mt-2 font-serif text-3xl text-[#1C3350]">{curso.title}</h2>
+          <p className="mt-4 text-sm leading-7 text-[#1C3350]/75">
+            Este curso não passa pelo formulário de pré-inscrição. Quem se inscreve entra no Moodle.
+            O GesForma ainda não cria essa conta nem abre o curso.
+          </p>
+          <button type="button" onClick={onClose} className="mt-6 bg-[#1C3350] px-6 py-3 text-sm font-extrabold uppercase tracking-[0.08em] text-white">Fechar</button>
+        </div>
+      </div>
+    );
+  }
   const resumoTurma = [turma?.local || local, turma?.horario || horario, dataInicio ? fmtDataPt(dataInicio) : ""].filter(Boolean).join(" · ");
   const notaPagamento = metodo === "MB Way"
     ? `A referência MB Way segue para o telemóvel ${telf} e para ${email}.`
@@ -202,7 +212,7 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
         <header className="flex items-start justify-between gap-4 border-b border-[#1C3350]/10 px-5 py-5 sm:px-8">
           <div className="min-w-0">
             <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#A60000]">
-              {acesso ? "Acesso imediato" : "Pré-inscrição"}
+              Pré-inscrição
             </p>
             <h2 id="inscricao-titulo" className="mt-1 font-serif text-2xl leading-tight text-[#1C3350] sm:text-3xl">{curso.title}</h2>
             <p className="mt-2 text-sm text-[#1C3350]/60">{curso.format} · {curso.duration} · {precoLabel}</p>
@@ -211,12 +221,6 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 6l12 12M18 6 6 18" /></svg>
           </button>
         </header>
-        {acesso && passo !== "feito" && (
-          <ol className="grid grid-cols-2 border-b border-[#1C3350]/10 text-xs font-extrabold uppercase tracking-[0.08em]">
-            <li className={`px-5 py-3 sm:px-8 ${passo === "dados" ? "bg-[#1C3350] text-white" : "text-[#1C3350]/45"}`}>1 · Os seus dados</li>
-            <li className={`px-5 py-3 sm:px-8 ${passo === "pagamento" ? "bg-[#1C3350] text-white" : "text-[#1C3350]/45"}`}>2 · Pagamento</li>
-          </ol>
-        )}
         <div className="overflow-y-auto px-5 py-6 sm:px-8">
           {passo === "feito" ? (
             <div>
@@ -224,11 +228,6 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
               <p className="mt-3 text-lg leading-8 text-[#1C3350]/75">
                 {aviso || "A secretaria da ENA entra em contacto consigo."} O pedido ficou associado a {email}.
               </p>
-              {acesso && (
-                <p className="mt-3 text-sm leading-6 text-[#1C3350]/65">
-                  Escolheu {metodo}. {notaPagamento} O valor só fica liquidado quando o banco confirma. Neste passo não há cobrança no cartão.
-                </p>
-              )}
             </div>
           ) : passo === "pagamento" ? (
             <form id="inscricao-form" onSubmit={e => void enviar(e)} className="space-y-6">
@@ -331,9 +330,7 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
                     </>
                   ) : (
                     <p className="text-sm leading-6 text-[#1C3350]/65 sm:col-span-2">
-                      {acesso
-                        ? "Não há turma com data marcada. O pedido segue em acesso imediato, online, e o pagamento fica no passo seguinte."
-                        : "Ainda não há turma libertada com local, horário e data. A secretaria activa a oferta antes de aceitar a pré-inscrição."}
+                      Ainda não há turma com data. O pedido fica registado na mesma e a secretaria confirma a turma. O email automático sai ao inscrever.
                     </p>
                   )}
                 </div>
@@ -344,10 +341,7 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
                   </p>
                 )}
                 {turma?.cronogramaPublicado && (
-                  <a className="mt-3 inline-flex text-sm font-bold text-[#A60000] underline" href={`/cronograma/gold/${turma.turmaId}`} target="_blank" rel="noreferrer">Ver o cronograma desta turma</a>
-                )}
-                {acesso && ofertaEstado === "pronto" && (
-                  <p className="mt-4 text-sm leading-6 text-[#1C3350]/60">Nada é cobrado neste passo. A forma de pagamento escolhe-se a seguir.</p>
+                  <a className="mt-3 inline-flex text-sm font-bold text-[#A60000] underline" href={`/cronograma/${turma.regime || "gold"}/${turma.turmaId}`} target="_blank" rel="noreferrer">Ver o cronograma desta turma</a>
                 )}
               </div>
             </form>
@@ -362,7 +356,7 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
             <button type="button" onClick={onClose} className="bg-[#1C3350] px-6 py-3 text-sm font-extrabold uppercase tracking-[0.08em] text-white">Fechar</button>
           ) : (
             <button type="submit" form="inscricao-form" disabled={busy || pagamentoBloqueado} className="bg-[#A60000] px-6 py-3 text-sm font-extrabold uppercase tracking-[0.08em] text-white hover:bg-[#8B0000] disabled:opacity-40">
-              {busy ? "A enviar…" : passo === "pagamento" ? "Pedir referência" : acesso ? "Continuar para o pagamento" : "Inscrever-me"}
+              {busy ? "A enviar…" : "Inscrever-me"}
             </button>
           )}
         </footer>

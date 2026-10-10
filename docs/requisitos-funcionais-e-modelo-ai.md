@@ -26,7 +26,7 @@ Cada requisito descreve comportamento que já existe.
 
 ### CRM e pré-inscrições
 
-- RF-09. O CRM de cada regime recebe pré-inscrições de três sítios: pré-inscrição pública (`/pre-inscricao`), pré-inscrição manual e bot WhatsApp. A pré-inscrição pública entra em Gold.
+- RF-09. O CRM de cada regime recebe pré-inscrições de três sítios: pré-inscrição pública (`/pre-inscricao` e o modal do site), pré-inscrição manual e o pedido de contacto do assistente. O botão Pré-inscrever só aparece quando o curso está guardado como pré-inscrição. Sem turma libertada o pedido grava-se na mesma e o email automático sai. Um curso Gold pré-pago ou de acesso direto não entra neste formulário. A pré-inscrição de um curso financiado entra na Financiada.
 - RF-10. Criar uma pré-inscrição pede nome e telemóvel ou email. NIF e morada fiscal são opcionais até à etapa Pré-inscrição. A manual pode levar uma nota comercial no mesmo passo.
 - RF-11. O funil é: Não contactado, 1.º Contacto, 2.º Contacto, Pago, Pré-inscrição, Formando, e Desistiu. O estado automático só avança. Pago, a etapa Pré-inscrição e Formando não recuam. Um formando não volta atrás: abre-se um pedido novo.
 - RF-12. Ao entrar (manual, site ou WhatsApp) a plataforma enfileira o email de boas-vindas com a ligação única `/documentos/:token`. O estado passa a **1.º Contacto** só quando esse envio fica mesmo na fila. **Contactar** à mão faz o mesmo e regista a nota. Sem pagamento há 3 dias, ou 30 dias sem compra, passa a **2.º Contacto**.
@@ -120,6 +120,7 @@ O que ainda falta ligar ou construir. O backoffice descrito na secção 1 já es
 ### Ligações externas
 
 - TO DO. Ler a nota real no Moodle da turma. O parâmetro já entra na média. Até esta ligação existir, o valor lança-se à mão.
+- TO DO. Acesso ao Moodle nos cursos Pré-pago e Acesso direto. O site já não abre a pré-inscrição nesses cursos. Falta criar a conta, inscrever a pessoa na disciplina e devolver o endereço da sala logo após o pedido.
 - TO DO. Publicar a ficha do curso e o blog em `ena.pt`. O progresso "Pronto para o site" só indica o que falta. O blog ainda não tem corpo, SEO nem revisão.
 - TO DO. Recibos certificados (Moloni) e o contrato Ifthenpay ou SIBS. O pagamento fica pendente até um webhook do banco o marcar como pago.
 - TO DO. Publicar o dossiê fora do GesForma. O ZIP segue para o Google Drive da entidade.

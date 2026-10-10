@@ -34,7 +34,7 @@ import { globalSearch } from "./globalSearch.js";
 import { config } from "./config.js";
 import { criarPreinscricaoPublica } from "./preinscricaoPublica.js";
 import { precoParaOferta } from "./precoOferta.js";
-import { listCursosGoldActivos, listOfertaGold } from "./ofertaGold.js";
+import { listCursosGoldActivos, listCursosOferta, listOfertaFin, listOfertaGold } from "./ofertaGold.js";
 import { listarCatalogoPublico } from "./catalogoPublico.js";
 import { lerImagemPorToken, tokenImagem } from "./cursoImagens.js";
 import { generateCronograma } from "./cronograma.js";
@@ -71,7 +71,10 @@ const preSchema = z.object({
   local: z.string().trim().max(120).optional().default(""),
   inicioCurso: z.string().trim().max(40).optional().default("-"),
   horario: z.string().trim().max(80).optional().default(""),
-  turmaId: z.number().int().positive().optional(),
+  turmaId: z.preprocess(
+    v => (v === 0 || v === null || v === "" ? undefined : v),
+    z.number().int().positive().optional(),
+  ),
   preco: z.number().min(0).max(20000).optional().default(0),
   campanha: z.string().trim().max(80).optional().default(""),
   estado: z.string().trim().max(40).optional(),
@@ -527,8 +530,8 @@ export function registerOpsRoutes(
   });
 
   app.get("/v1/public/oferta", async () => {
-    const [cursos, turmas] = await Promise.all([listCursosGoldActivos(db), listOfertaGold(db)]);
-    return { cursos, turmas };
+    const [cursos, gold, fin] = await Promise.all([listCursosOferta(db), listOfertaGold(db), listOfertaFin(db)]);
+    return { cursos, turmas: [...gold, ...fin] };
   });
 
   app.post("/v1/public/preinscricoes", {
@@ -554,6 +557,7 @@ export function registerOpsRoutes(
       meioContacto: "Website",
       pagamentoMetodo: d.pagamentoMetodo,
       acessoImediato: d.acessoImediato,
+      regime: d.regime,
     }, { ip: req.ip });
     if ("error" in created) {
       const code = created.error === "email inválido" || created.error === "forma de pagamento desconhecida" ? 400 : 409;

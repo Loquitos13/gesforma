@@ -8,6 +8,7 @@ export type OfertaTurma = {
   vagasLivres: number;
   preco?: number | null;
   cronogramaPublicado?: boolean;
+  regime?: "gold" | "fin";
 };
 
 export type CursoOfertaSel = {

@@ -21,7 +21,7 @@ export function PublicPreinscricao() {
   const concelhos = useOpcoesPublicas("concelhos");
   const origens = useOpcoesPublicas("origens");
   const [oferta, setOferta] = useState<CursoOfertaSel>({ ...OFERTA_VAZIA, curso: cursoParam });
-  const [cursos, setCursos] = useState<{ nome: string; preco: number }[]>([]);
+  const [cursos, setCursos] = useState<{ nome: string; preco: number; regime?: "gold" | "fin"; inscricao?: string }[]>([]);
   const [turmas, setTurmas] = useState<OfertaTurma[]>([]);
   const [edicoes, setEdicoes] = useState<RegraPreco[]>([]);
   const [busy, setBusy] = useState(false);
@@ -31,7 +31,7 @@ export function PublicPreinscricao() {
   useEffect(() => {
     void apiPublicOferta()
       .then(r => {
-        setCursos(r.cursos);
+        setCursos(r.cursos.filter(c => !c.inscricao || c.inscricao === "Pré-inscrição"));
         setTurmas(r.turmas);
         setEdicoes(r.edicoes ?? []);
       })
@@ -45,8 +45,10 @@ export function PublicPreinscricao() {
       setError("Preencha os seus dados para a secretaria o poder contactar.");
       return;
     }
-    if (!oferta.turmaId) {
-      setError("Escolha curso, local, horário e data de uma turma libertada.");
+    const cursoSel = cursos.find(c => c.nome === oferta.curso);
+    const temTurma = turmas.some(t => t.curso === oferta.curso && (!t.regime || t.regime === (cursoSel?.regime ?? "gold")));
+    if (temTurma && !oferta.turmaId) {
+      setError("Escolha local, horário e data de uma turma libertada.");
       return;
     }
     setBusy(true);
@@ -61,8 +63,9 @@ export function PublicPreinscricao() {
         curso: oferta.curso,
         local: oferta.local,
         horario: oferta.horario,
-        inicioCurso: oferta.dataInicio,
-        turmaId: oferta.turmaId,
+        inicioCurso: oferta.dataInicio || undefined,
+        turmaId: oferta.turmaId || undefined,
+        regime: cursoSel?.regime ?? "gold",
         campanha: params.get("campanha") ?? "",
       });
       setDone(true);
@@ -146,7 +149,10 @@ export function PublicPreinscricao() {
             </div>
 
             <CursoOfertaCampos
-              turmas={turmas}
+              turmas={turmas.filter(t => {
+                const cursoSel = cursos.find(c => c.nome === oferta.curso);
+                return !oferta.curso || !t.regime || t.regime === (cursoSel?.regime ?? t.regime);
+              })}
               cursos={cursos}
               value={oferta}
               onChange={setOferta}
@@ -154,15 +160,19 @@ export function PublicPreinscricao() {
               preco={preco}
             />
             <p className="text-xs text-slate-500 -mt-6">
-              A turma é o conjunto local + horário + data de início. Horário e data só aparecem depois do local, e só se a secretaria tiver libertado essa turma Gold.
+              A turma é o conjunto local + horário + data de início. Horário e data só aparecem depois do local, e só se a secretaria tiver libertado essa turma. Sem turma, o pedido fica na mesma registado.
             </p>
-            {turmas.find(t => t.turmaId === oferta.turmaId)?.cronogramaPublicado && (
-              <p className="text-sm -mt-4">
-                <a className="font-semibold text-[#1b2330] underline" href={`/cronograma/gold/${oferta.turmaId}`}>
-                  Ver o cronograma desta turma
-                </a>
-              </p>
-            )}
+            {(() => {
+              const escolhida = turmas.find(t => t.turmaId === oferta.turmaId);
+              if (!escolhida?.cronogramaPublicado) return null;
+              return (
+                <p className="text-sm -mt-4">
+                  <a className="font-semibold text-[#1b2330] underline" href={`/cronograma/${escolhida.regime || "gold"}/${oferta.turmaId}`}>
+                    Ver o cronograma desta turma
+                  </a>
+                </p>
+              );
+            })()}
 
             {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex justify-center pt-2">

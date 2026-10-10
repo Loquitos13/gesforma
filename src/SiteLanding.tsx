@@ -1,6 +1,7 @@
 import { createContext, FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { ApiError, apiPublicPreinscricao } from "./api";
 import { InscricaoSite, useInscricao } from "./SiteInscricao";
-import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, destinoDoHero, heroAnimacao, heroBadge, heroPedido, heroTamanho, ligacaoExterna, moradaSegura, textoSite, tituloRegime, type HeroAnimacao, type HeroBadgeCor, type HeroPedido, type HeroTamanho, type SiteChave } from "./siteConteudo";
+import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, destinoDoHero, ePreinscricao, heroAnimacao, heroBadge, heroPedido, heroTamanho, ligacaoExterna, moradaSegura, rotuloBotaoInscricao, textoSite, tituloRegime, type HeroAnimacao, type HeroBadgeCor, type HeroPedido, type HeroTamanho, type InscricaoPublica, type SiteChave } from "./siteConteudo";
 
 export type Course = {
   id: string;
@@ -12,7 +13,7 @@ export type Course = {
   price: string;
   description: string;
   funding: "Financiada" | "Gold";
-  enrollment: "Acesso direto" | "Pré-inscrição";
+  enrollment: InscricaoPublica;
   miniatura: string | null;
   banner: string | null;
   precoDesde: number | null;
@@ -38,7 +39,7 @@ type CatalogoApi = {
     precoDesde: number | null;
     descricao: string;
     financiamento: "Gold" | "Financiada";
-    inscricao: "Acesso direto" | "Pré-inscrição";
+    inscricao: InscricaoPublica;
     miniatura: string | null;
     banner?: string | null;
     vendas: number;
@@ -242,7 +243,7 @@ function vistaCurso(posicao: 1 | 2, curso: Course, pedido?: Extract<HeroPedido, 
     ouro,
     titulo: curso.title,
     linha: descricaoDoCurso(curso.area, pedido?.descricao ?? ""),
-    botao: pedido ? botaoHero(pedido, curso.enrollment) : (curso.enrollment === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever"),
+    botao: pedido ? botaoHero(pedido, curso.enrollment) : rotuloBotaoInscricao(curso.enrollment),
     tamanho: "medio",
     animacao: "",
     acao: pedido
@@ -550,6 +551,8 @@ function WhatsAppAssistant() {
   const [consent, setConsent] = useState(false);
   const [summarySent, setSummarySent] = useState(false);
   const [handoffSent, setHandoffSent] = useState(false);
+  const [handoffBusy, setHandoffBusy] = useState(false);
+  const [handoffErro, setHandoffErro] = useState("");
   const transition = (next: typeof step) => {
     setTyping(true);
     window.setTimeout(() => {
@@ -560,7 +563,7 @@ function WhatsAppAssistant() {
   const pathCourses = cursos.filter((course) =>
     path === "funded" ? course.funding === "Financiada" :
       path === "gold" ? course.funding === "Gold" :
-        path === "direct" ? course.enrollment === "Acesso direto" : true,
+        path === "direct" ? !ePreinscricao(course.enrollment) : true,
   );
   const availableFormats = Array.from(new Set(pathCourses.map((course) => course.format)));
   const goalAreas: Record<string, string[]> = {
@@ -582,6 +585,7 @@ function WhatsAppAssistant() {
     setConsent(false);
     setSummarySent(false);
     setHandoffSent(false);
+    setHandoffErro("");
   };
   const chooseCourse = (course: Course) => {
     setChosen(course);
@@ -601,7 +605,23 @@ function WhatsAppAssistant() {
 
   function enviar(event: FormEvent) {
     event.preventDefault();
-    setHandoffSent(true);
+    const dados = new FormData(event.currentTarget as HTMLFormElement);
+    const nome = String(dados.get("nome") ?? "").trim();
+    const email = String(dados.get("email") ?? "").trim();
+    const telf = String(dados.get("telf") ?? "").trim();
+    if (!nome || !email || !telf) return;
+    setHandoffBusy(true);
+    setHandoffErro("");
+    void apiPublicPreinscricao({
+      nome,
+      email,
+      telf,
+      origem: "WhatsApp",
+      curso: chosen?.nomeOferta || chosen?.title || "Contacto pelo site",
+      regime: chosen?.regime ?? "gold",
+    }).then(() => setHandoffSent(true))
+      .catch(err => setHandoffErro(err instanceof ApiError ? err.message : "Não foi possível registar o contacto."))
+      .finally(() => setHandoffBusy(false));
   }
 
   return (
@@ -681,11 +701,11 @@ function WhatsAppAssistant() {
                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#075E54]">A sua escolha</span><strong className="mt-1 block">{chosen.title}</strong><span className="mt-2 block text-[#1C3350]/60">{chosen.format} · {chosen.duration} · {chosen.price}</span>
                 </div>
                 <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-white p-3 text-sm leading-6 shadow-sm">
-                  {chosen.enrollment === "Acesso direto" ? `Perfeito, ${name}. Primeiro os seus dados e a turma. O pagamento fica no passo seguinte.` : `Perfeito, ${name}. A pré-inscrição pede os seus dados e a turma. A equipa da ENA confirma os próximos passos.`}
+                  {ePreinscricao(chosen.enrollment) ? `Perfeito, ${name}. A pré-inscrição pede os seus dados e, quando existir, a turma. A equipa da ENA confirma os próximos passos.` : `Perfeito, ${name}. Este curso abre no Moodle. A pré-inscrição não se aplica.`}
                 </div>
                 <div className="ml-auto grid max-w-[90%] gap-2">
                   <label className="flex items-start gap-2 rounded-xl bg-white p-3 text-xs leading-5 shadow-sm"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-1 accent-[#075E54]" />Aceito que os dados desta conversa sejam usados para tratar a inscrição.</label>
-                  <button type="button" disabled={!consent || !chosen} onClick={() => { if (chosen) abrir(chosen); }} className="flex w-full items-center justify-between rounded-xl bg-[#075E54] px-4 py-3 text-sm font-bold text-white disabled:opacity-40">Fazer pré-inscrição<Icon name="arrow" className="h-4 w-4" /></button>
+                  <button type="button" disabled={!consent || !chosen} onClick={() => { if (chosen) abrir(chosen); }} className="flex w-full items-center justify-between rounded-xl bg-[#075E54] px-4 py-3 text-sm font-bold text-white disabled:opacity-40">{chosen && ePreinscricao(chosen.enrollment) ? "Fazer pré-inscrição" : "Aceder ao curso"}<Icon name="arrow" className="h-4 w-4" /></button>
                   <button type="button" onClick={() => setSummarySent(true)} className="rounded-xl bg-[#DCF8C6] px-4 py-3 text-left text-sm font-bold">{summarySent ? "Resumo enviado para o seu email" : "Enviar-me este resumo por email"}</button>
                   <button type="button" onClick={() => transition("courses")} className="rounded-xl bg-[#DCF8C6] px-4 py-3 text-left text-sm font-bold">Ver outras recomendações</button>
                   <button type="button" onClick={restart} className="px-4 py-2 text-left text-xs font-bold text-[#075E54] underline">Recomeçar conversa</button>
@@ -693,12 +713,13 @@ function WhatsAppAssistant() {
               </>
             )}
             {!typing && step === "handoff" && (
-              handoffSent ? <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-white p-4 text-sm leading-6 shadow-sm"><strong className="text-[#075E54]">Pedido registado.</strong><p className="mt-1 text-[#1C3350]/60">Continue no formulário de pré-inscrição para a equipa ENA o contactar.</p><a href="/pre-inscricao" className="mt-3 inline-flex font-bold text-[#075E54] underline">Abrir pré-inscrição</a></div> :
+              handoffSent ? <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-white p-4 text-sm leading-6 shadow-sm"><strong className="text-[#075E54]">Pedido registado.</strong><p className="mt-1 text-[#1C3350]/60">Ficou na base de dados e o email automático segue para o endereço indicado.</p>{(!chosen || ePreinscricao(chosen.enrollment)) && <a href="/pre-inscricao" className="mt-3 inline-flex font-bold text-[#075E54] underline">Completar a pré-inscrição</a>}</div> :
                 <form onSubmit={enviar} className="ml-auto max-w-[92%] space-y-2 rounded-2xl rounded-tr-sm bg-[#DCF8C6] p-3 shadow-sm">
-                  <input required defaultValue={name} placeholder="Nome" className="w-full rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
-                  <input required type="email" placeholder="Email" className="w-full rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
-                  <input required type="tel" placeholder="Telefone" className="w-full rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
-                  <button type="submit" className="w-full rounded-lg bg-[#075E54] px-4 py-3 text-sm font-bold text-white">Pedir contacto humano</button>
+                  <input name="nome" required defaultValue={name} placeholder="Nome" className="w-full rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
+                  <input name="email" required type="email" placeholder="Email" className="w-full rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
+                  <input name="telf" required type="tel" placeholder="Telefone" className="w-full rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
+                  {handoffErro && <p className="text-xs font-semibold text-[#A60000]">{handoffErro}</p>}
+                  <button type="submit" disabled={handoffBusy} className="w-full rounded-lg bg-[#075E54] px-4 py-3 text-sm font-bold text-white disabled:opacity-40">{handoffBusy ? "A registar…" : "Pedir contacto humano"}</button>
                 </form>
             )}
           </div>

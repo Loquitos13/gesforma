@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon, SiteFrame, useOferta, type Course } from "./SiteLanding";
 import { useInscricao } from "./SiteInscricao";
+import { rotuloBotaoInscricao } from "./siteConteudo";
 
 function Catalogo() {
   const { cursos, estado, recarregar } = useOferta();
@@ -12,7 +13,7 @@ function Catalogo() {
   const [funding, setFunding] = useState<"Todas" | "Financiada" | "Gold">(
     inicial === "financiada" ? "Financiada" : inicial === "gold" ? "Gold" : "Todas",
   );
-  const [enrollment, setEnrollment] = useState<"Todas" | "Acesso direto" | "Pré-inscrição">("Todas");
+  const [enrollment, setEnrollment] = useState<"Todas" | "Acesso direto" | "Pré-pago" | "Pré-inscrição">("Todas");
   const [saved, setSaved] = useState<string[]>([]);
   const [compare, setCompare] = useState<string[]>([]);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -97,7 +98,7 @@ function Catalogo() {
               <fieldset className="mt-7 border-t border-[#1C3350]/10 pt-5">
                 <legend className="text-xs font-bold uppercase tracking-wider text-[#1C3350]/55">Acesso Gold</legend>
                 <div className="mt-3 space-y-3">
-                  {(["Todas", "Acesso direto", "Pré-inscrição"] as const).map(item => (
+                  {(["Todas", "Pré-inscrição", "Pré-pago", "Acesso direto"] as const).map(item => (
                     <label key={item} className="flex cursor-pointer items-center gap-3 text-sm">
                       <input type="radio" name="enrollment" checked={enrollment === item} onChange={() => setEnrollment(item)} className="accent-[#A60000]" />
                       {item}
@@ -184,7 +185,7 @@ function Catalogo() {
                     <p><span className="block text-xs text-[#1C3350]/40">Acesso</span>{course.enrollment}</p>
                     <p><span className="block text-xs text-[#1C3350]/40">Investimento</span><strong>{course.price}</strong></p>
                   </div>
-                  <button type="button" onClick={() => abrir(course)} className="mt-5 block w-full bg-[#1C3350] px-4 py-3 text-center text-sm font-bold text-white">{course.enrollment === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever"}</button>
+                  <button type="button" onClick={() => abrir(course)} className="mt-5 block w-full bg-[#1C3350] px-4 py-3 text-center text-sm font-bold text-white">{rotuloBotaoInscricao(course.enrollment)}</button>
                 </article>
               ))}
             </div>
@@ -233,7 +234,7 @@ function LinhaCurso({
         </div>
       </div>
       <div className="flex flex-col justify-center gap-2 border-t border-[#1C3350]/10 p-5 md:min-w-[190px] md:border-l md:border-t-0">
-        <button type="button" onClick={() => abrir(course)} className="flex w-full items-center justify-center gap-3 bg-[#A60000] px-4 py-3 text-sm font-bold text-white hover:bg-[#8B0000]">{course.enrollment === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever"} <Icon name="arrow" className="h-4 w-4" /></button>
+        <button type="button" onClick={() => abrir(course)} className="flex w-full items-center justify-center gap-3 bg-[#A60000] px-4 py-3 text-sm font-bold text-white hover:bg-[#8B0000]">{rotuloBotaoInscricao(course.enrollment)} <Icon name="arrow" className="h-4 w-4" /></button>
         <label className="flex items-center justify-center gap-2 text-xs font-bold text-[#1C3350]/50">
           <input type="checkbox" checked={compared} onChange={onCompare} className="accent-[#A60000]" />
           Comparar

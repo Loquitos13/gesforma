@@ -14,7 +14,7 @@ export type CursoPublico = {
   precoDesde: number | null;
   descricao: string;
   financiamento: "Gold" | "Financiada";
-  inscricao: "Acesso direto" | "Pré-inscrição";
+  inscricao: "Acesso direto" | "Pré-pago" | "Pré-inscrição";
   miniatura: string | null;
   banner: string | null;
   vendas: number;
@@ -120,10 +120,14 @@ function modalidade(regime: string): CursoPublico["modalidade"] {
   return "Presencial";
 }
 
-function inscricao(regime: "gold" | "fin", tipo: string): CursoPublico["inscricao"] {
+export function classificarInscricao(regime: "gold" | "fin", tipo: string, modalidade = ""): CursoPublico["inscricao"] {
   if (regime === "fin") return "Pré-inscrição";
   const t = chave(tipo);
+  const m = chave(modalidade);
   if (t.includes("pre-insc") || t.includes("preinsc")) return "Pré-inscrição";
+  if (t.includes("acesso") && t.includes("diret")) return "Acesso direto";
+  if (t.includes("pre-pago") || t.includes("prepago") || t.includes("e-learning") || t.includes("elearning")) return "Pré-pago";
+  if ((t === "gold" || t === "pago") && (m.includes("e-learning") || m.includes("elearning"))) return "Pré-pago";
   return "Acesso direto";
 }
 
@@ -298,7 +302,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
     const sintese = texto(payload.sintese);
     const horasLabel = curso.horas > 0 ? `${curso.horas.toLocaleString("pt-PT")} horas` : "Duração a confirmar";
     const modo = modalidade(curso.modalidadeTexto);
-    const entrada = inscricao(curso.regime, curso.tipo);
+    const entrada = classificarInscricao(curso.regime, curso.tipo, curso.modalidadeTexto);
     const procura = curso.chaves.reduce((max, key) => Math.max(max, vendas.get(key) ?? 0), 0);
     const inicio = curso.chaves.map(key => inicios.get(key)).find(Boolean);
     const precos = curso.regime === "gold" ? precosDaFicha(payload, curso.preco) : [];

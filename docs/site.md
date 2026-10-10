@@ -19,13 +19,13 @@ O ano do copyright é o ano corrente. Não se grava. Em 2026 o rodapé mostra ©
 
 ## O que já sai da base de dados
 
-A oferta pública vem de `GET /v1/public/catalogo`. Cada curso publicado traz título, área, modalidade, duração, preço, descrição, imagens da ficha, programa e tipo de inscrição (Acesso direto ou Pré-inscrição). Os destaques da página inicial são os mais vendidos. O preço mostrado é o da ficha ou o da turma libertada. Não há preço inventado. Um curso com estado Inactivo (também Inativo, Inativa ou Inactiva) não entra nesta lista: fica fora do catálogo, dos destaques, dos cartões automáticos do hero e da ficha pública. Na ficha do curso, junto ao banner, a miniatura pede um recorte na proporção 2:3 do cartão de `/formacao`. O que fica dentro da moldura é a imagem gravada.
-
-As turmas que o visitante pode escolher são as turmas Gold libertadas: curso, local, horário e data de início. A API é `GET /v1/public/oferta`.
+A oferta pública vem de `GET /v1/public/catalogo`. Cada curso publicado traz título, área, modalidade, duração, preço, descrição, imagens da ficha, programa e tipo de inscrição (Pré-inscrição, Pré-pago ou Acesso direto). Os destaques da página inicial são os mais vendidos. O preço mostrado é o da ficha ou o da turma libertada. Não há preço inventado. Um curso com estado Inactivo (também Inativo, Inativa ou Inactiva) não entra nesta lista: fica fora do catálogo, dos destaques, dos cartões automáticos do hero e da ficha pública. Na ficha do curso, junto ao banner, a miniatura pede um recorte na proporção 2:3 do cartão de `/formacao`. O que fica dentro da moldura é a imagem gravada.
 
 Concelhos, origens e formas de pagamento vêm de **Gestão → Listas de opções** (`catalog_items`, `kind = lista_opcoes`). O site lê `GET /v1/public/opcoes?lista=concelhos|origens|metodos_pagamento`. Se a lista ainda estiver vazia, o formulário diz que a secretaria ainda não a definiu. Um método de pagamento que não esteja nessa lista é recusado em `POST /v1/public/preinscricoes`.
 
-No modal do site, a pré-inscrição pede os mesmos dados que `/pre-inscricao`: nome, apelido, telemóvel, email, concelho, origem e, quando há turma libertada, local, horário e data. Num curso de acesso direto, a forma de pagamento é o passo seguinte. A ENA envia a referência e o banco confirma. Esse passo não cobra um cartão.
+O botão **Pré-inscrever** só aparece nos cursos guardados como pré-inscrição (na financiada, todos). O formulário pede nome, apelido, telemóvel, email, concelho, origem e, quando há turma libertada, local, horário e data. Se ainda não houver turma, o pedido fica na mesma na base de dados, com início «A confirmar», e o email automático de boas-vindas sai na hora. Um curso Gold pré-pago ou de acesso direto não abre este formulário.
+
+As turmas que o visitante pode escolher são as turmas Gold com estado Ativa e as turmas financiadas com a turma activa. A API é `GET /v1/public/oferta`.
 
 No CRM, o concelho do lead usa a mesma lista de concelhos.
 
@@ -74,3 +74,4 @@ Isto ainda não está ligado ao que o administrador insere. Fica de fora do ecr�
 - Nota de satisfação. O `4,8/5` é um texto editável. Não é a média dos inquéritos gravados.
 - Menu. Dá para mudar o texto de Formação e de Empresas. Não dá para acrescentar outra ligação.
 - Contactos do rodapé. O email e o telefone que aparecem no site não alteram o SMTP Brevo nem os emails automáticos. Esses continuam em Configurações.
+- Moodle. Num curso guardado como Pré-pago ou Acesso direto, o botão é «Aceder ao curso» e não grava pré-inscrição. A entrada devia criar a conta no Moodle e abrir o curso logo a seguir ao pedido. Essa ligação ainda não existe: o GesForma não cria o utilizador, não o inscreve na disciplina e não devolve o endereço da sala.

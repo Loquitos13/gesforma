@@ -235,9 +235,22 @@ export function tituloRegime(regime: "gold" | "fin", titulo: string) {
   return regime === "gold" ? "ENA Gold" : "Formação financiada";
 }
 
-export function botaoHero(pedido: Exclude<HeroPedido, { modo: "automatico" }>, inscricao?: "Acesso direto" | "Pré-inscrição") {
+export type InscricaoPublica = "Acesso direto" | "Pré-pago" | "Pré-inscrição";
+
+export function ePreinscricao(inscricao?: string) {
+  return inscricao === "Pré-inscrição";
+}
+
+export function rotuloBotaoInscricao(inscricao?: string) {
+  return ePreinscricao(inscricao) ? "Pré-inscrever" : "Aceder ao curso";
+}
+
+export function botaoHero(pedido: Exclude<HeroPedido, { modo: "automatico" }>, inscricao?: InscricaoPublica) {
+  if (pedido.modo === "curso") {
+    if (!ePreinscricao(inscricao)) return "Aceder ao curso";
+    return pedido.botao || "Pré-inscrever";
+  }
   if (pedido.botao) return pedido.botao;
-  if (pedido.modo === "curso") return inscricao === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever";
   return "Ver cursos";
 }
 

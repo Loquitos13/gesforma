@@ -132,12 +132,12 @@ function Curso({ curso }: { curso: Course }) {
             <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-[#A60000]">{curso.enrollment}</p>
             <h2 className="mt-3 font-serif text-3xl text-[#1C3350]">{curso.price}</h2>
             <p className="mt-4 text-sm leading-6 text-[#1C3350]/65">
-              {curso.enrollment === "Acesso direto"
-                ? "Primeiro recolhemos os seus dados. O pagamento fica no passo seguinte."
-                : "A pré-inscrição pede os seus dados e a turma. A equipa da ENA entra em contacto consigo."}
+              {curso.enrollment === "Pré-inscrição"
+                ? "A pré-inscrição pede os seus dados e, quando existir, a turma. O pedido fica registado e sai o email automático."
+                : "Este curso abre no Moodle. Não há formulário de pré-inscrição."}
             </p>
             <button type="button" onClick={() => abrir(curso)} className="mt-7 flex w-full items-center justify-between bg-[#A60000] px-5 py-4 text-xs font-extrabold uppercase tracking-[0.08em] text-white hover:bg-[#8B0000]">
-              {curso.enrollment === "Acesso direto" ? "Inscrever-me agora" : "Pré-inscrever"} <Icon name="arrow" />
+              {curso.enrollment === "Pré-inscrição" ? "Pré-inscrever" : "Aceder ao curso"} <Icon name="arrow" />
             </button>
           </aside>
         </div>

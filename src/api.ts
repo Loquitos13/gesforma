@@ -790,7 +790,7 @@ export const apiOps = () => api<OpsSnapshot>("/v1/ops");
 export const apiPublicCursos = () => api<{ cursos: { nome: string; preco: number }[] }>("/v1/public/cursos");
 export const apiPublicOferta = () =>
   api<{
-    cursos: { nome: string; preco: number }[];
+    cursos: { nome: string; preco: number; regime?: "gold" | "fin"; inscricao?: "Acesso direto" | "Pré-pago" | "Pré-inscrição" }[];
     turmas: import("./oferta").OfertaTurma[];
     edicoes?: { curso: string; local?: string; horario?: string; inicio?: string; preco: number; status?: string }[];
   }>("/v1/public/oferta");

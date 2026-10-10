@@ -39,6 +39,7 @@ export type PreinscricaoPublicaInput = {
   meioContacto?: string;
   pagamentoMetodo?: string;
   acessoImediato?: boolean;
+  regime?: "gold" | "fin";
 };
 
 export async function criarPreinscricaoPublica(
@@ -52,20 +53,22 @@ export async function criarPreinscricaoPublica(
   const origem = sanitizeHeader(input.origem || "Website") || "Website";
   const meio = sanitizeHeader(input.meioContacto || origem);
   const telf = sanitizeHeader(input.telf || "");
+  const regime = input.regime === "fin" ? "fin" : "gold";
   const turma = await resolverTurmaOferta(db, {
     turmaId: input.turmaId,
     curso,
     local: input.local,
     horario: input.horario,
     dataInicio: input.inicioCurso,
+    regime,
   });
+  if (input.turmaId && !turma) return { error: "a turma escolhida já não está libertada" as const };
   const acessoImediato = Boolean(input.acessoImediato) && !turma;
   const local = sanitizeHeader(turma?.local || input.local || (acessoImediato ? "Online" : ""));
   const horario = sanitizeHeader(turma?.horario || input.horario || "");
   const pedidoInicio = input.inicioCurso && input.inicioCurso !== "-" ? input.inicioCurso : "";
-  const inicio = turma?.dataInicio || pedidoInicio || (acessoImediato ? "Acesso imediato" : "-");
+  const inicio = turma?.dataInicio || pedidoInicio || (acessoImediato ? "Acesso imediato" : "A confirmar");
   const turmaId = turma?.turmaId ?? null;
-  if (!turma && !acessoImediato) return { error: "escolha curso, local, horário e data de uma turma liberada" as const };
   const metodo = sanitizeHeader(input.pagamentoMetodo || "");
   if (metodo && !(await metodoPagamentoConhecido(db, metodo))) {
     return { error: "forma de pagamento desconhecida" as const };
@@ -91,17 +94,17 @@ export async function criarPreinscricaoPublica(
   const preco = await precoParaOferta(db, curso, local, horario);
   const id = await nextOpsId(db);
   await db.query(
-    `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, entrada, meio_contacto, horario, turma_id, pagamento_metodo)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Não contactado',$12,$13,'preinscricao',$14,$15,$16,$17)`,
+    `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, entrada, meio_contacto, horario, turma_id, pagamento_metodo, regime)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Não contactado',$12,$13,'preinscricao',$14,$15,$16,$17,$18)`,
     [
       id, nowStamp(), textoDePessoa(input.nome), textoDePessoa(input.apelido || ""), email,
       telf, inicio, textoDePessoa(input.concelho || ""),
       local, curso, preco ?? Number(input.preco ?? 0),
-      sanitizeHeader(input.campanha || ""), origem, meio, horario, turmaId, metodo,
+      sanitizeHeader(input.campanha || ""), origem, meio, horario, turmaId, metodo, regime,
     ],
   );
   const detalhe = [origem, curso, local, horario, inicio !== "-" ? inicio : ""].filter(Boolean).join(" · ");
-  await firePreinscricaoEmail(db, { id, email, nome: input.nome, apelido: input.apelido, curso }, "preinscricao.created", `preinscricao:${id}:${email}`).catch(() => undefined);
+  await firePreinscricaoEmail(db, { id, email, nome: input.nome, apelido: input.apelido, curso, regime }, "preinscricao.created", `preinscricao:${id}:${email}`).catch(() => undefined);
   await maybeEnviarPagamentoAposDocs(db, id).catch(() => undefined);
   await logLeadEvent(db, id, undefined, "criacao", "Pré-inscrição recebida", detalhe);
   const row = await db.query("SELECT * FROM preinscricoes WHERE id = $1", [id]);

@@ -19,7 +19,7 @@ O ano do copyright é o ano corrente. Não se grava. Em 2026 o rodapé mostra ©
 
 ## O que já sai da base de dados
 
-A oferta pública vem de `GET /v1/public/catalogo`. Cada curso publicado traz título, área, modalidade, duração, preço, descrição, imagens da ficha, programa e tipo de inscrição (Acesso direto ou Pré-inscrição). Os destaques da página inicial são os mais vendidos. O preço mostrado é o da ficha ou o da turma libertada. Não há preço inventado.
+A oferta pública vem de `GET /v1/public/catalogo`. Cada curso publicado traz título, área, modalidade, duração, preço, descrição, imagens da ficha, programa e tipo de inscrição (Acesso direto ou Pré-inscrição). Os destaques da página inicial são os mais vendidos. O preço mostrado é o da ficha ou o da turma libertada. Não há preço inventado. Um curso com estado Inactivo (também Inativo, Inativa ou Inactiva) não entra nesta lista: fica fora do catálogo, dos destaques, dos cartões automáticos do hero e da ficha pública.
 
 As turmas que o visitante pode escolher são as turmas Gold libertadas: curso, local, horário e data de início. A API é `GET /v1/public/oferta`.
 

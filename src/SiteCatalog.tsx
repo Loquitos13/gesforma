@@ -206,10 +206,10 @@ function LinhaCurso({
 }) {
   const { abrir } = useInscricao();
   return (
-    <article className="group grid border border-[#1C3350]/12 bg-white transition-shadow hover:shadow-[0_14px_40px_rgba(28,51,80,.1)] md:grid-cols-[12px_148px_1fr_auto]">
+    <article className="group grid overflow-hidden border border-[#1C3350]/12 bg-white transition-shadow hover:shadow-[0_14px_40px_rgba(28,51,80,.1)] md:grid-cols-[12px_148px_minmax(0,1fr)_auto] md:items-stretch">
       <div className={course.funding === "Gold" ? "bg-[#FFA900]" : "bg-[#A60000]"} />
-      <div className="hidden h-32 max-h-32 w-full max-w-[148px] overflow-hidden bg-[#E7EBF0] md:block">
-        {course.miniatura && <img src={course.miniatura} alt="" className="h-full max-h-32 w-full max-w-[148px] object-cover" />}
+      <div className="relative hidden min-h-36 overflow-hidden bg-[#E7EBF0] md:block">
+        {course.miniatura && <img src={course.miniatura} alt="" className="absolute inset-0 h-full w-full object-cover" />}
       </div>
       <div className="p-6">
         <a href={`/formacao/${course.id}`} className="mb-4 block h-36 max-h-36 w-full max-w-full overflow-hidden bg-[#E7EBF0] md:hidden">

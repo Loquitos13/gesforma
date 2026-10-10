@@ -188,6 +188,16 @@ function programaPublico(regime: "gold" | "fin", payload: Record<string, unknown
   return { organizacao, programa: programa.slice(0, 24) };
 }
 
+/** Inactivo, Inativo, Inativa e Inactiva ficam fora do site. Estado vazio conta como visível. */
+export function cursoVisivelNoSite(estado: unknown) {
+  const e = String(estado ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+  return !/^(?:inactiv|inativ)/.test(e);
+}
+
 export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPublico[]; destaques: CursoPublico[]; ccp: CursoPublico | null }> {
   const [gold, fin, formandosGold, pagos, formandosFin, turmasGold, turmasFin, imagens] = await Promise.all([
     db.query<{ id: number; nome: string; categoria: string; tipo: string; preco: number; regime: string; horas: number; estado: string; payload: unknown }>(
@@ -236,6 +246,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
 
   const brutos: CursoBruto[] = [];
   for (const row of gold.rows) {
+    if (!cursoVisivelNoSite(row.estado)) continue;
     const payload = asObj(row.payload);
     const titulo = texto(payload.titulo) || row.nome || "Curso";
     brutos.push({
@@ -253,6 +264,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
     });
   }
   for (const row of fin.rows) {
+    if (!cursoVisivelNoSite(row.estado)) continue;
     const payload = asObj(row.payload);
     const titulo = texto(payload.titulo) || row.nome_comercial || row.ufcd || "Curso";
     brutos.push({

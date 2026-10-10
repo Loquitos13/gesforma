@@ -6,8 +6,8 @@ export const RECORTE_RAZAO = 2 / 3;
 
 const PREVIA_ALTURA = 112;
 const PREVIA_LARGURA = Math.round(PREVIA_ALTURA * RECORTE_RAZAO);
-const CAIXA_LARGURA = 520;
-const CAIXA_ALTURA = 360;
+const CAIXA_LARGURA = 460;
+const CAIXA_ALTURA = 340;
 
 type Canto = "nw" | "ne" | "sw" | "se";
 type Janela = { x: number; y: number; w: number };
@@ -187,7 +187,7 @@ export function RecorteMiniatura({
   return (
     <AppModal
       open
-      size="xl"
+      size="2xl"
       title="Recortar a miniatura"
       sub="Arraste a janela sobre a capa. Puxe um canto para a aumentar ou reduzir, sempre na proporção do catálogo."
       onClose={() => { if (!aGravar) onCancelar(); }}
@@ -278,7 +278,7 @@ export function RecorteMiniatura({
               )}
             </div>
           </div>
-          <div className="min-w-0 flex-1 space-y-4">
+          <div className="min-w-[240px] flex-1 space-y-4">
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
               <div className="flex" style={{ height: PREVIA_ALTURA }}>
                 <div className="w-2 shrink-0 bg-[#FFA900]" />

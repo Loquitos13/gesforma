@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, heroAnimacao, heroBadge, heroPedido, heroTamanho, moradaSegura, tituloRegime, type HeroPedido, type HeroSlot, type SiteChave } from "./siteConteudo";
+import type { CSSProperties, ReactNode } from "react";
+import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, heroAnimacao, heroBadge, heroDisposicao, heroPedido, heroTamanho, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, tituloRegime, type HeroPedido, type HeroSlot, type SiteChave } from "./siteConteudo";
 
 export type CursoPreview = {
   id: string;
@@ -36,6 +36,17 @@ function texto(valor: string, vazio = "") {
   return limpo || vazio;
 }
 
+function margemPreview(ler: (chave: SiteChave) => string, x: SiteChave, y: SiteChave, baseX: number, baseY: number): CSSProperties {
+  const hx = numeroSite(ler(x), MARGEM_MIN, MARGEM_MAX, 0);
+  const hy = numeroSite(ler(y), MARGEM_MIN, MARGEM_MAX, 0);
+  return {
+    paddingLeft: Math.max(0, baseX + hx * 4),
+    paddingRight: Math.max(0, baseX + hx * 4),
+    paddingTop: Math.max(0, baseY + hy * 4),
+    paddingBottom: Math.max(0, baseY + hy * 4),
+  };
+}
+
 export function SiteSeccaoPreview({
   titulo, draft, oferta, ano,
 }: {
@@ -56,13 +67,14 @@ export function SiteSeccaoPreview({
 
 function PreviewCabecalho({ ler }: { ler: (chave: SiteChave) => string }) {
   const separador = texto(ler("tituloSeparador"), "Sem título");
+  const margem = margemPreview(ler, "margemCabecalhoX", "margemCabecalhoY", 12, 10);
   return (
     <div>
       <div className="flex items-center gap-2 bg-[#E7EBF0] px-3 py-1.5">
         <span className="h-2 w-2 rounded-full bg-[#A60000]" />
         <span className="truncate text-[10px] font-semibold text-[#3E5168]">{separador}</span>
       </div>
-      <div className="border-b-4 border-[#FFA900] bg-white px-3 py-2.5 text-[#14263D]">
+      <div className="border-b-4 border-[#FFA900] bg-white text-[#14263D]" style={margem}>
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <img src="/imagens/ena_logo.svg" alt="" className="h-5 w-auto shrink-0" />
@@ -133,8 +145,8 @@ function medidaHero(slot: HeroSlot, ler: (chave: SiteChave) => string) {
   return { tamanho: heroTamanho(ler, slot), animacao: heroAnimacao(ler, slot) };
 }
 
-function MiniCartao({ cartao, classe }: { cartao: NonNullable<ReturnType<typeof cartaoDe>>; classe: string }) {
-  const largura = cartao.tamanho === "pequeno" ? "w-[46%]" : cartao.tamanho === "grande" ? "w-[74%]" : "w-[58%]";
+function MiniCartao({ cartao, classe, cheio = false }: { cartao: NonNullable<ReturnType<typeof cartaoDe>>; classe: string; cheio?: boolean }) {
+  const largura = cheio ? "w-full" : cartao.tamanho === "pequeno" ? "w-[46%]" : cartao.tamanho === "grande" ? "w-[74%]" : "w-[58%]";
   const foto = cartao.tamanho === "pequeno" ? "h-6" : cartao.tamanho === "grande" ? "h-12" : "h-8";
   return (
     <article className={`overflow-hidden rounded-lg bg-white shadow ${largura} ${classe}`} data-hero-tamanho={cartao.tamanho} data-hero-animacao={cartao.animacao} data-hero-badge={cartao.selo} data-hero-badge-cor={cartao.seloCor}>
@@ -151,23 +163,75 @@ function MiniCartao({ cartao, classe }: { cartao: NonNullable<ReturnType<typeof 
   );
 }
 
+function BlocoHeroPreview({ ler }: { ler: (chave: SiteChave) => string }) {
+  const disposicao = heroDisposicao(ler("heroDisposicao"));
+  const tituloEsc = numeroSite(ler("heroTituloTamanho"), HERO_TAMANHO_MIN, HERO_TAMANHO_MAX, 100) / 100;
+  const textoEsc = numeroSite(ler("heroTextoTamanho"), HERO_TAMANHO_MIN, HERO_TAMANHO_MAX, 100) / 100;
+  const textoX = numeroSite(ler("heroTextoX"), HERO_POS_MIN, HERO_POS_MAX, 0);
+  const textoY = numeroSite(ler("heroTextoY"), HERO_POS_MIN, HERO_POS_MAX, 0);
+  const botaoEsc = numeroSite(ler("heroBotaoTamanho"), HERO_TAMANHO_MIN, HERO_TAMANHO_MAX, 100) / 100;
+  const botaoX = numeroSite(ler("heroBotaoX"), HERO_POS_MIN, HERO_POS_MAX, 0);
+  const botaoY = numeroSite(ler("heroBotaoY"), HERO_POS_MIN, HERO_POS_MAX, 0);
+  const centro = disposicao === "texto-centro";
+  return (
+    <div className={centro ? "text-center" : ""} style={{ transform: `translate(${textoX}%, ${textoY}%)` }}>
+      <p className={`font-bold leading-tight text-white ${centro ? "mx-auto" : "max-w-[18ch]"}`} style={{ fontSize: 16 * tituloEsc }}>{texto(ler("heroTitulo"), "Sem título")}</p>
+      {ler("heroTexto").trim() && <p className={`mt-2 leading-4 text-[#E6EDF5] ${centro ? "mx-auto" : "max-w-[28ch]"}`} style={{ fontSize: 11 * textoEsc }}>{ler("heroTexto")}</p>}
+      {ler("heroBotao").trim() && (
+        <span
+          className="relative mt-3 inline-flex rounded-full bg-[#FFA900] font-bold text-[#14263D]"
+          style={{ fontSize: 10 * botaoEsc, padding: `${6 * botaoEsc}px ${12 * botaoEsc}px`, transform: `translate(${botaoX}%, ${botaoY}%)` }}
+        >
+          {ler("heroBotao")}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function PreviewHero({ ler, oferta }: { ler: (chave: SiteChave) => string; oferta: OfertaPreview | null }) {
   const imagem = moradaSegura(ler("heroImagem"));
   const esquerda = cartaoDe(1, ler, oferta);
   const direita = cartaoDe(2, ler, oferta);
+  const disposicao = heroDisposicao(ler("heroDisposicao"));
+  const margem = margemPreview(ler, "margemDestaqueX", "margemDestaqueY", 12, 12);
+  const circulo = (classe: string) => (
+    <div className={`overflow-hidden rounded-full bg-[#FFA900] shadow-[0_0_0_3px_#A60000] ${classe}`}>
+      {imagem && <img src={imagem} alt="" className="h-full w-full object-cover object-[center_30%]" />}
+    </div>
+  );
+  const palco = disposicao === "texto-centro" ? (
+    <div className="grid grid-cols-[.8fr_1.1fr_.8fr] items-center gap-1">
+      {esquerda && <MiniCartao cartao={esquerda} cheio classe="relative z-10" />}
+      <div>
+        {circulo("mx-auto mb-2 h-10 w-10")}
+        <BlocoHeroPreview ler={ler} />
+      </div>
+      {direita && <MiniCartao cartao={direita} cheio classe="relative z-10" />}
+    </div>
+  ) : disposicao === "texto-direita" ? (
+    <div className="grid grid-cols-[1.15fr_.85fr] items-center gap-2">
+      <div className="relative h-40">
+        {circulo("absolute left-0 top-6 h-20 w-20")}
+        {esquerda && <MiniCartao cartao={esquerda} classe="absolute left-0 top-0 z-10" />}
+        {direita && <MiniCartao cartao={direita} classe="absolute bottom-0 right-0 z-10" />}
+      </div>
+      <BlocoHeroPreview ler={ler} />
+    </div>
+  ) : (
+    <div className="grid grid-cols-[.9fr_1.1fr] items-center gap-2">
+      <BlocoHeroPreview ler={ler} />
+      <div className="relative h-40">
+        {circulo("absolute right-0 top-6 h-20 w-20")}
+        {esquerda && <MiniCartao cartao={esquerda} classe="absolute left-0 top-0 z-10" />}
+        {direita && <MiniCartao cartao={direita} classe="absolute bottom-0 right-0 z-10" />}
+      </div>
+    </div>
+  );
   return (
-    <div className="bg-[#F6F3EE] p-3">
+    <div className="bg-[#F6F3EE]" style={margem} data-hero-disposicao={disposicao}>
       <div className="overflow-hidden rounded-2xl bg-[#14263D] px-3 pb-3 pt-4">
-        <p className="max-w-[18ch] text-base font-bold leading-tight text-white">{texto(ler("heroTitulo"), "Sem título")}</p>
-        {ler("heroTexto").trim() && <p className="mt-2 max-w-[28ch] text-[11px] leading-4 text-[#E6EDF5]">{ler("heroTexto")}</p>}
-        {ler("heroBotao").trim() && <span className="mt-3 inline-flex rounded-full bg-[#FFA900] px-3 py-1.5 text-[10px] font-bold text-[#14263D]">{ler("heroBotao")}</span>}
-        <div className="relative mt-3 h-40">
-          <div className="absolute right-0 top-6 h-24 w-24 overflow-hidden rounded-full bg-[#FFA900] shadow-[0_0_0_4px_#A60000]">
-            {imagem && <img src={imagem} alt="" className="h-full w-full object-cover object-[center_30%]" />}
-          </div>
-          {esquerda && <MiniCartao cartao={esquerda} classe="absolute left-0 top-0 z-10" />}
-          {direita && <MiniCartao cartao={direita} classe="absolute bottom-0 right-0 z-10" />}
-        </div>
+        {palco}
         <svg aria-hidden="true" className="mt-1 h-4 w-full" viewBox="0 0 1200 140" preserveAspectRatio="none">
           <path d="M0 140V72C90 36 180 108 320 78C460 48 540 18 700 42C860 66 940 112 1080 82C1140 68 1170 88 1200 74V140H0Z" fill="#A60000" />
           <path d="M0 140V104C140 78 240 124 420 106C600 88 700 126 900 108C1040 96 1120 122 1200 104V140H0Z" fill="#FFA900" />
@@ -180,7 +244,7 @@ function PreviewHero({ ler, oferta }: { ler: (chave: SiteChave) => string; ofert
 function PreviewOferta({ ler, oferta }: { ler: (chave: SiteChave) => string; oferta: OfertaPreview | null }) {
   const cursos = (oferta?.destaques ?? []).slice(0, 2);
   return (
-    <div className="bg-[#F6F3EE] px-3 py-4">
+    <div className="bg-[#F6F3EE]" style={margemPreview(ler, "margemOfertaX", "margemOfertaY", 12, 16)}>
       {ler("ofertaKicker").trim() && <p className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-[#A60000]">{ler("ofertaKicker")}</p>}
       <p className="mt-1 text-base font-bold leading-tight text-[#14263D]">{texto(ler("ofertaTitulo"), "Sem título")}</p>
       <div className="mt-3 flex items-center rounded-full border border-[#14263D]/15 bg-white px-3 py-1.5 text-[10px] text-[#4A6078]">
@@ -212,7 +276,7 @@ function PreviewMetodo({ ler }: { ler: (chave: SiteChave) => string }) {
     texto: ler(`pilar${n}Texto` as SiteChave),
   })).filter(item => item.numero || item.titulo || item.texto);
   return (
-    <div className="border-t-4 border-[#A60000] bg-white px-3 py-4">
+    <div className="border-t-4 border-[#A60000] bg-white" style={margemPreview(ler, "margemApresentacaoX", "margemApresentacaoY", 12, 16)}>
       <div className="grid grid-cols-[88px_1fr] gap-3">
         <div className="relative">
           <div className="h-28 overflow-hidden bg-[#E7EBF0]">
@@ -248,7 +312,7 @@ function PreviewMetodo({ ler }: { ler: (chave: SiteChave) => string }) {
 
 function PreviewEmpresas({ ler }: { ler: (chave: SiteChave) => string }) {
   return (
-    <div className="bg-[#FFA900] px-3 py-4 text-[#14263D]">
+    <div className="bg-[#FFA900] text-[#14263D]" style={margemPreview(ler, "margemEmpresasX", "margemEmpresasY", 12, 16)}>
       {ler("empresasKicker").trim() && <p className="inline-flex bg-[#A60000] px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.14em] text-white">{ler("empresasKicker")}</p>}
       <p className="mt-2 text-base font-bold leading-tight">{texto(ler("empresasTitulo"), "Sem título")}</p>
       {ler("empresasTexto").trim() && <p className="mt-1 text-[11px] leading-4">{ler("empresasTexto")}</p>}
@@ -261,7 +325,7 @@ function PreviewRodape({ ler, ano }: { ler: (chave: SiteChave) => string; ano: n
   const contactos = [ler("rodapeEmail"), ler("rodapeTelefone"), ler("rodapeHorario")].map(item => item.trim()).filter(Boolean);
   const ligacoes = [ler("rodapeLigacaoFormacao"), ler("rodapePrivacidade"), ler("rodapeReclamacoes")].map(item => item.trim()).filter(Boolean);
   return (
-    <div className="border-t-4 border-[#FFA900] bg-[#0E1C2E] px-3 py-4 text-white">
+    <div className="border-t-4 border-[#FFA900] bg-[#0E1C2E] text-white" style={margemPreview(ler, "margemRodapeX", "margemRodapeY", 12, 16)}>
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           {ler("rodapeMarca").trim() && <span className="grid h-8 w-8 place-items-center bg-[#A60000] text-[10px] font-extrabold">{ler("rodapeMarca")}</span>}

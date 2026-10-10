@@ -42,11 +42,13 @@ Cada bloco do ecrã tem uma pré-visualização do rascunho dessa secção da p�
 O ecrã está dividido em:
 
 - Cabeçalho. Título do separador, as duas linhas da marca e os textos de Formação, Empresas, área de formando e iniciar sessão.
-- Destaque. Título, texto, botão e fotografia de fundo. Os dois cartões editam-se na mesma secção.
+- Destaque. Título, texto, botão e fotografia de fundo. A disposição põe o texto à esquerda com os cartões à direita, o texto ao centro com um cartão de cada lado, ou o texto à direita com os cartões à esquerda. O tamanho do título, do texto e do botão vai de 60% a 180%. A posição horizontal e vertical de cada um vai de −40 a 40, e zero é o lugar de omissão. Os dois cartões editam-se na mesma secção.
 - Oferta formativa. Antetítulo, título e texto da pesquisa. A grelha de cursos vem das fichas.
 - Apresentação. Fotografia, nota em destaque (por omissão `4,8/5`), texto e os quatro pilares.
 - Empresas. Antetítulo, título, texto e botão.
 - Rodapé. Sigla, texto, email, telefone, horário, ligações úteis e lema. O ano do © não é um campo.
+
+Cada secção tem margem vertical e horizontal. Zero mantém o espaçamento de omissão. Cada passo soma ou tira 8 pixels. A pré-visualização ao lado acompanha o rascunho. O site público só muda depois de Guardar.
 
 Uma fotografia é um endereço `https://…` ou um caminho do próprio site, por exemplo `/imagens/…`. Um endereço vazio esconde a imagem. Um endereço que não seja http, https ou um caminho interno também não é mostrado.
 

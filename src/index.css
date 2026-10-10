@@ -171,6 +171,47 @@ body:has(input[type="file"]:focus) [data-ficha-sticky] {
   transform: none;
 }
 
+/* Margem editável de cada secção. Zero mantém o espaçamento de omissão. */
+.ena-margem {
+  padding-inline: max(0px, calc(var(--ena-px, 1.25rem) + var(--ena-mx, 0) * 0.5rem));
+  padding-block: max(0px, calc(var(--ena-py, 1rem) + var(--ena-my, 0) * 0.5rem));
+}
+
+@media (min-width: 640px) {
+  .ena-margem {
+    padding-inline: max(0px, calc(var(--ena-px-sm, var(--ena-px, 1.25rem)) + var(--ena-mx, 0) * 0.5rem));
+    padding-block: max(0px, calc(var(--ena-py-sm, var(--ena-py, 1rem)) + var(--ena-my, 0) * 0.5rem));
+  }
+}
+
+@media (min-width: 1024px) {
+  .ena-margem {
+    padding-inline: max(0px, calc(var(--ena-px-lg, var(--ena-px-sm, var(--ena-px, 1.25rem))) + var(--ena-mx, 0) * 0.5rem));
+    padding-block: max(0px, calc(var(--ena-py-lg, var(--ena-py-sm, var(--ena-py, 1rem))) + var(--ena-my, 0) * 0.5rem));
+  }
+}
+
+.ena-hero-titulo {
+  font-size: calc(var(--ena-esc, 1) * 2.15rem);
+  line-height: 1.12;
+}
+
+@media (min-width: 640px) {
+  .ena-hero-titulo {
+    font-size: calc(var(--ena-esc, 1) * 3rem);
+  }
+}
+
+.ena-hero-texto {
+  font-size: calc(var(--ena-esc, 1) * 1rem);
+  line-height: calc(var(--ena-esc, 1) * 1.75rem);
+}
+
+.ena-hero-botao {
+  font-size: calc(var(--ena-esc, 1) * 0.875rem);
+  padding: calc(var(--ena-esc, 1) * 0.75rem) calc(var(--ena-esc, 1) * 1.25rem);
+}
+
 /* Site público. O backoffice continua em Inter. */
 .site-ena {
   --font-sans: "Atkinson Hyperlegible", system-ui, sans-serif;

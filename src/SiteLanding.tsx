@@ -1,7 +1,7 @@
-import { createContext, FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, type CSSProperties, FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { ApiError, apiPublicPreinscricao } from "./api";
 import { InscricaoSite, useInscricao } from "./SiteInscricao";
-import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, destinoDoHero, ePrepago, ePreinscricao, heroAnimacao, heroBadge, heroPedido, heroTamanho, ligacaoExterna, moradaSegura, rotuloBotaoInscricao, textoSite, tituloRegime, type HeroAnimacao, type HeroBadgeCor, type HeroPedido, type HeroTamanho, type InscricaoPublica, type SiteChave } from "./siteConteudo";
+import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, destinoDoHero, ePrepago, ePreinscricao, estiloMargem, heroAnimacao, heroBadge, heroDisposicao, heroPedido, heroTamanho, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, ligacaoExterna, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, rotuloBotaoInscricao, textoSite, tituloRegime, type HeroAnimacao, type HeroBadgeCor, type HeroPedido, type HeroTamanho, type InscricaoPublica, type SiteChave } from "./siteConteudo";
 
 export type Course = {
   id: string;
@@ -173,12 +173,24 @@ export function Icon({
   );
 }
 
+function estiloEscala(escala: number, extra?: CSSProperties): CSSProperties {
+  return { ...(extra ?? {}), ["--ena-esc" as string]: String(escala) } as CSSProperties;
+}
+
+function margemLida(t: (chave: SiteChave) => string, x: SiteChave, y: SiteChave) {
+  return {
+    x: numeroSite(t(x), MARGEM_MIN, MARGEM_MAX, 0),
+    y: numeroSite(t(y), MARGEM_MIN, MARGEM_MAX, 0),
+  };
+}
+
 function Header() {
   const [open, setOpen] = useState(false);
   const t = useSiteTexto();
+  const margem = margemLida(t, "margemCabecalhoX", "margemCabecalhoY");
   return (
     <header className="sticky top-0 z-40 border-b-4 border-[#FFA900] bg-white text-[#14263D]">
-      <div className="mx-auto flex h-20 max-w-[1240px] items-center justify-between px-5 lg:px-8">
+      <div className="ena-margem mx-auto flex max-w-[1240px] items-center justify-between" style={estiloMargem(margem.x, margem.y, { x: "1.25rem", y: "1.125rem", xLg: "2rem" })}>
         <a href="/" className="group flex items-center gap-3" aria-label="ENA, página inicial">
           <img src="/imagens/ena_logo.svg" alt="ENA" className="h-9 w-auto sm:h-10" />
           <span className="hidden text-left text-[10px] font-bold uppercase leading-tight tracking-[0.12em] text-[#14263D] sm:block">{t("marcaLinha1")}<br />{t("marcaLinha2")}</span>
@@ -286,16 +298,21 @@ function LigacaoHero({ href, className, children }: { href: string; className: s
   );
 }
 
-function medidaDoCartao(tamanho: HeroTamanho) {
-  if (tamanho === "pequeno") return { largura: "mx-auto max-w-[280px] lg:mx-0 lg:w-[280px]", imagem: "h-20", corpo: "p-4", titulo: "text-lg" };
-  if (tamanho === "grande") return { largura: "mx-auto max-w-[440px] lg:mx-0 lg:w-[420px]", imagem: "h-36", corpo: "p-6", titulo: "text-2xl" };
-  return { largura: "mx-auto max-w-[340px] lg:mx-0 lg:w-[340px]", imagem: "h-24", corpo: "p-5", titulo: "text-xl" };
+function medidaDoCartao(tamanho: HeroTamanho, coluna: boolean) {
+  const caixa = coluna ? "mx-auto w-full" : "mx-auto lg:mx-0";
+  if (tamanho === "pequeno") return { largura: `${caixa} ${coluna ? "max-w-[280px]" : "max-w-[280px] lg:w-[280px]"}`, imagem: "h-20", corpo: "p-4", titulo: "text-lg" };
+  if (tamanho === "grande") return { largura: `${caixa} ${coluna ? "max-w-[420px]" : "max-w-[440px] lg:w-[420px]"}`, imagem: "h-36", corpo: "p-6", titulo: "text-2xl" };
+  return { largura: `${caixa} ${coluna ? "max-w-[340px]" : "max-w-[340px] lg:w-[340px]"}`, imagem: "h-24", corpo: "p-5", titulo: "text-xl" };
 }
 
-function CartaoFlutuante({ vista, abrir }: { vista: CartaoVista; abrir: (curso: Course) => void }) {
+function CartaoFlutuante({ vista, abrir, ancora }: { vista: CartaoVista; abrir: (curso: Course) => void; ancora: "par-direita" | "par-esquerda" | "coluna" }) {
   const esquerda = vista.posicao === 1;
-  const medida = medidaDoCartao(vista.tamanho);
-  const posicao = esquerda ? "lg:absolute lg:left-1 lg:top-[6%]" : "lg:absolute lg:right-4 lg:top-[34%]";
+  const medida = medidaDoCartao(vista.tamanho, ancora === "coluna");
+  const posicao = ancora === "coluna"
+    ? "relative"
+    : ancora === "par-esquerda"
+      ? (esquerda ? "lg:absolute lg:left-4 lg:top-[8%]" : "lg:absolute lg:right-2 lg:top-[36%]")
+      : (esquerda ? "lg:absolute lg:left-1 lg:top-[6%]" : "lg:absolute lg:right-4 lg:top-[34%]");
   const artigo = `${esquerda ? "ena-flutuar" : "ena-flutuar-b"} w-full overflow-hidden rounded-2xl bg-white shadow-[0_18px_50px_rgba(8,18,32,.35)] ${medida.largura} ${posicao}`;
   const botaoCls = `${esquerda
     ? "mt-4 flex w-full items-center justify-center rounded-full bg-[#A60000] px-3 py-2.5 text-center text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:bg-[#14263D]"
@@ -318,11 +335,40 @@ function CartaoFlutuante({ vista, abrir }: { vista: CartaoVista; abrir: (curso: 
   );
 }
 
+function CirculoHero({ src, alt, lado }: { src: string; alt: string; lado: "direita" | "esquerda" }) {
+  const lugar = lado === "esquerda"
+    ? "lg:absolute lg:left-[-4rem] lg:top-1/2 lg:mx-0 lg:h-[620px] lg:w-[620px] lg:-translate-y-1/2 lg:shadow-[0_0_0_14px_#A60000]"
+    : "lg:absolute lg:right-[-4rem] lg:top-1/2 lg:mx-0 lg:h-[620px] lg:w-[620px] lg:-translate-y-1/2 lg:shadow-[0_0_0_14px_#A60000]";
+  return (
+    <div className={`relative z-0 mx-auto h-[180px] w-[180px] shrink-0 overflow-hidden rounded-full bg-[#FFA900] shadow-[0_0_0_10px_#FFA900] sm:h-[220px] sm:w-[220px] ${lugar}`}>
+      {src && <img src={src} alt={alt} className="h-full w-full object-cover object-[center_30%]" />}
+    </div>
+  );
+}
+
+function OndaHero() {
+  return (
+    <svg aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 z-10 h-20 w-full sm:h-24" viewBox="0 0 1200 140" preserveAspectRatio="none">
+      <path d="M0 140V72C90 36 180 108 320 78C460 48 540 18 700 42C860 66 940 112 1080 82C1140 68 1170 88 1200 74V140H0Z" fill="#A60000" />
+      <path d="M0 140V104C140 78 240 124 420 106C600 88 700 126 900 108C1040 96 1120 122 1200 104V140H0Z" fill="#FFA900" />
+    </svg>
+  );
+}
+
 function SplitHero() {
   const { ccp, cursos } = useOferta();
   const { abrir } = useInscricao();
   const t = useSiteTexto();
   const heroImagem = moradaSegura(t("heroImagem"));
+  const disposicao = heroDisposicao(t("heroDisposicao"));
+  const tituloEsc = numeroSite(t("heroTituloTamanho"), HERO_TAMANHO_MIN, HERO_TAMANHO_MAX, 100);
+  const textoEsc = numeroSite(t("heroTextoTamanho"), HERO_TAMANHO_MIN, HERO_TAMANHO_MAX, 100);
+  const textoX = numeroSite(t("heroTextoX"), HERO_POS_MIN, HERO_POS_MAX, 0);
+  const textoY = numeroSite(t("heroTextoY"), HERO_POS_MIN, HERO_POS_MAX, 0);
+  const botaoEsc = numeroSite(t("heroBotaoTamanho"), HERO_TAMANHO_MIN, HERO_TAMANHO_MAX, 100);
+  const botaoX = numeroSite(t("heroBotaoX"), HERO_POS_MIN, HERO_POS_MAX, 0);
+  const botaoY = numeroSite(t("heroBotaoY"), HERO_POS_MIN, HERO_POS_MAX, 0);
+  const margem = margemLida(t, "margemDestaqueX", "margemDestaqueY");
   const financiada = cursos.find(curso => curso.regime === "fin" && curso.miniatura) ?? cursos.find(curso => curso.regime === "fin");
   const cartoes = ([1, 2] as const).flatMap(posicao => {
     const pedido = heroPedido(t, posicao);
@@ -339,38 +385,74 @@ function SplitHero() {
       animacao: heroAnimacao(t, posicao),
     }];
   });
+  const centro = disposicao === "texto-centro";
+  const palavras = (
+    <div className={centro ? "text-center" : ""} style={{ transform: `translate(${textoX}%, ${textoY}%)` }}>
+      <h1 className={`ena-hero-titulo max-w-[16ch] font-serif font-bold tracking-[-0.03em] text-white ${centro ? "mx-auto" : ""}`} style={estiloEscala(tituloEsc / 100)}>
+        {t("heroTitulo")}
+      </h1>
+      <p className={`ena-hero-texto mt-5 max-w-md text-[#E6EDF5] ${centro ? "mx-auto" : ""}`} style={estiloEscala(textoEsc / 100)}>
+        {t("heroTexto")}
+      </p>
+      <a
+        href="/formacao"
+        className="ena-hero-botao relative z-30 mt-7 inline-flex w-fit items-center rounded-full bg-[#FFA900] font-bold text-[#14263D] transition-colors hover:bg-[#A60000] hover:text-white"
+        style={estiloEscala(botaoEsc / 100, { transform: `translate(${botaoX}%, ${botaoY}%)` })}
+      >
+        {t("heroBotao")}
+      </a>
+    </div>
+  );
+  const texto = centro ? (
+    <div className="relative z-30 flex flex-col items-center px-4 pb-6 pt-10 text-center sm:px-6 lg:px-6 lg:py-14">
+      <div className="mb-6 h-36 w-36 overflow-hidden rounded-full bg-[#FFA900] shadow-[0_0_0_8px_#A60000] sm:h-44 sm:w-44">
+        {heroImagem && <img src={heroImagem} alt={t("heroImagemAlt")} className="h-full w-full object-cover object-[center_30%]" />}
+      </div>
+      {palavras}
+    </div>
+  ) : (
+    <div className="relative z-30 flex flex-col justify-center px-6 pb-4 pt-10 sm:px-8 lg:px-10 lg:py-12">
+      {palavras}
+    </div>
+  );
+  const ancora: "par-direita" | "par-esquerda" | "coluna" = centro ? "coluna" : disposicao === "texto-direita" ? "par-esquerda" : "par-direita";
+  const grelha = centro
+    ? "pb-24 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,.95fr)_minmax(0,1fr)] lg:items-center lg:pb-28"
+    : disposicao === "texto-direita"
+      ? "lg:min-h-[820px] lg:grid-cols-[minmax(0,1.22fr)_minmax(0,.78fr)]"
+      : "lg:min-h-[820px] lg:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)]";
+  const cartao = (posicao: 1 | 2) => {
+    const vista = cartoes.find(item => item.posicao === posicao);
+    return vista ? <CartaoFlutuante vista={vista} abrir={abrir} ancora={ancora} /> : null;
+  };
+  const palco = centro ? (
+    <>
+      <div className="relative z-20 order-2 flex flex-col justify-center px-4 py-4 lg:order-1 lg:px-8 lg:py-10">{cartao(1)}</div>
+      <div className="order-1 lg:order-2">{texto}</div>
+      <div className="relative z-20 order-3 flex flex-col justify-center px-4 pb-4 pt-4 lg:px-8 lg:py-10">{cartao(2)}</div>
+    </>
+  ) : (
+    <>
+      {disposicao === "texto-direita" ? null : texto}
+      <div className={`relative z-20 flex flex-col gap-6 px-4 pb-28 pt-2 lg:block lg:h-auto lg:min-h-full lg:px-0 lg:pb-0 lg:pt-0 ${disposicao === "texto-direita" ? "order-2 lg:order-1" : ""}`}>
+        <CirculoHero src={heroImagem} alt={t("heroImagemAlt")} lado={disposicao === "texto-direita" ? "esquerda" : "direita"} />
+        <div className="relative z-20 flex flex-col gap-5 lg:absolute lg:inset-0 lg:block">
+          {cartoes.map(vista => <CartaoFlutuante key={vista.posicao} vista={vista} abrir={abrir} ancora={ancora} />)}
+        </div>
+      </div>
+      {disposicao === "texto-direita" ? <div className="order-1 lg:order-2">{texto}</div> : null}
+    </>
+  );
   return (
-    <section className="bg-[#F6F3EE] px-4 py-6 sm:px-6 lg:px-8 lg:py-8" aria-label="Destaques">
-      <div className="relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[32px] bg-[#14263D] shadow-[0_28px_80px_rgba(20,38,61,.22)] lg:min-h-[820px] lg:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)]">
-        <div className="relative z-20 flex flex-col justify-center px-6 pb-4 pt-10 sm:px-8 lg:px-10 lg:py-12">
-          <h1 className="max-w-[16ch] font-serif text-[2.15rem] font-bold leading-[1.12] tracking-[-0.03em] text-white sm:text-5xl">
-            {t("heroTitulo")}
-          </h1>
-          <p className="mt-5 max-w-md text-base leading-7 text-[#E6EDF5]">
-            {t("heroTexto")}
-          </p>
-          <a href="/formacao" className="mt-7 inline-flex w-fit items-center rounded-full bg-[#FFA900] px-5 py-3 text-sm font-bold text-[#14263D] transition-colors hover:bg-[#A60000] hover:text-white">
-            {t("heroBotao")}
-          </a>
-        </div>
-        <div className="relative z-20 flex flex-col gap-6 px-4 pb-28 pt-2 lg:block lg:h-auto lg:min-h-full lg:px-0 lg:pb-0 lg:pt-0">
-          <div className="relative mx-auto h-[180px] w-[180px] shrink-0 overflow-hidden rounded-full bg-[#FFA900] shadow-[0_0_0_10px_#FFA900] sm:h-[220px] sm:w-[220px] lg:absolute lg:right-[-4rem] lg:top-1/2 lg:mx-0 lg:h-[620px] lg:w-[620px] lg:-translate-y-1/2 lg:shadow-[0_0_0_14px_#A60000]">
-            {heroImagem && (
-              <img
-                src={heroImagem}
-                alt={t("heroImagemAlt")}
-                className="h-full w-full object-cover object-[center_30%]"
-              />
-            )}
-          </div>
-          <div className="relative z-20 flex flex-col gap-5 lg:absolute lg:inset-0 lg:block">
-            {cartoes.map(vista => <CartaoFlutuante key={vista.posicao} vista={vista} abrir={abrir} />)}
-          </div>
-        </div>
-        <svg aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 z-10 h-20 w-full sm:h-24" viewBox="0 0 1200 140" preserveAspectRatio="none">
-          <path d="M0 140V72C90 36 180 108 320 78C460 48 540 18 700 42C860 66 940 112 1080 82C1140 68 1170 88 1200 74V140H0Z" fill="#A60000" />
-          <path d="M0 140V104C140 78 240 124 420 106C600 88 700 126 900 108C1040 96 1120 122 1200 104V140H0Z" fill="#FFA900" />
-        </svg>
+    <section
+      className="ena-margem bg-[#F6F3EE]"
+      style={estiloMargem(margem.x, margem.y, { x: "1rem", y: "1.5rem", xSm: "1.5rem", xLg: "2rem", yLg: "2rem" })}
+      aria-label="Destaques"
+      data-hero-disposicao={disposicao}
+    >
+      <div className={`relative mx-auto grid max-w-[1240px] overflow-hidden rounded-[32px] bg-[#14263D] shadow-[0_28px_80px_rgba(20,38,61,.22)] ${grelha}`}>
+        {palco}
+        <OndaHero />
       </div>
     </section>
   );
@@ -398,11 +480,14 @@ function Home() {
     [destaques, filter, query],
   );
 
+  const margemOferta = margemLida(t, "margemOfertaX", "margemOfertaY");
+  const margemMetodo = margemLida(t, "margemApresentacaoX", "margemApresentacaoY");
+  const margemEmpresas = margemLida(t, "margemEmpresasX", "margemEmpresasY");
   return (
     <main>
       <SplitHero />
 
-      <section id="formacao" className="scroll-mt-24 bg-[#F6F3EE] px-5 py-20 text-[#14263D] lg:px-8 lg:py-28">
+      <section id="formacao" className="ena-margem scroll-mt-24 bg-[#F6F3EE] text-[#14263D]" style={estiloMargem(margemOferta.x, margemOferta.y, { x: "1.25rem", y: "5rem", xLg: "2rem", yLg: "7rem" })}>
         <div className="mx-auto max-w-[1240px]">
           <div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end">
             <div>
@@ -457,7 +542,7 @@ function Home() {
         </div>
       </section>
 
-      <section id="metodo" className="border-t-8 border-[#A60000] bg-white px-5 py-20 text-[#14263D] lg:px-8 lg:py-28">
+      <section id="metodo" className="ena-margem border-t-8 border-[#A60000] bg-white text-[#14263D]" style={estiloMargem(margemMetodo.x, margemMetodo.y, { x: "1.25rem", y: "5rem", xLg: "2rem", yLg: "7rem" })}>
         <div className="mx-auto grid max-w-[1240px] gap-14 lg:grid-cols-[.85fr_1.15fr] lg:items-center">
           <div className="relative mb-12 lg:mb-0">
             <div className="aspect-[4/5] overflow-hidden bg-[#E7EBF0]">
@@ -487,7 +572,7 @@ function Home() {
         </div>
       </section>
 
-      <section id="empresas" className="scroll-mt-24 bg-[#FFA900] px-5 py-16 text-[#14263D] lg:px-8">
+      <section id="empresas" className="ena-margem scroll-mt-24 bg-[#FFA900] text-[#14263D]" style={estiloMargem(margemEmpresas.x, margemEmpresas.y, { x: "1.25rem", y: "4rem", xLg: "2rem" })}>
         <div className="mx-auto flex max-w-[1240px] flex-col justify-between gap-8 lg:flex-row lg:items-center">
           <div className="max-w-2xl">
             <p className="inline-flex bg-[#A60000] px-2.5 py-1 text-xs font-extrabold uppercase tracking-[0.18em] text-white">{t("empresasKicker")}</p>
@@ -507,8 +592,9 @@ function Footer() {
   const reclamacoes = moradaSegura(t("rodapeReclamacoesUrl"));
   const contactos = [t("rodapeEmail"), t("rodapeTelefone"), t("rodapeHorario")].filter(Boolean);
   const ano = new Date().getFullYear();
+  const margem = margemLida(t, "margemRodapeX", "margemRodapeY");
   return (
-    <footer id="contactos" className="scroll-mt-24 border-t-4 border-[#FFA900] bg-[#0E1C2E] px-5 py-14 text-white lg:px-8">
+    <footer id="contactos" className="ena-margem scroll-mt-24 border-t-4 border-[#FFA900] bg-[#0E1C2E] text-white" style={estiloMargem(margem.x, margem.y, { x: "1.25rem", y: "3.5rem", xLg: "2rem" })}>
       <div className="mx-auto max-w-[1240px]">
         <div className="grid gap-10 border-b border-white/15 pb-12 md:grid-cols-4">
           <div className="md:col-span-2">

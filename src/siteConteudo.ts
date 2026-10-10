@@ -11,6 +11,26 @@ export const SITE_OMISSAO = {
   heroBotao: "Explorar todos os cursos",
   heroImagem: "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=1400&q=80",
   heroImagemAlt: "Sessão de formação em sala",
+  heroDisposicao: "texto-esquerda",
+  heroTituloTamanho: "100",
+  heroTextoTamanho: "100",
+  heroTextoX: "0",
+  heroTextoY: "0",
+  heroBotaoTamanho: "100",
+  heroBotaoX: "0",
+  heroBotaoY: "0",
+  margemCabecalhoX: "0",
+  margemCabecalhoY: "0",
+  margemDestaqueX: "0",
+  margemDestaqueY: "0",
+  margemOfertaX: "0",
+  margemOfertaY: "0",
+  margemApresentacaoX: "0",
+  margemApresentacaoY: "0",
+  margemEmpresasX: "0",
+  margemEmpresasY: "0",
+  margemRodapeX: "0",
+  margemRodapeY: "0",
   hero1Tipo: "",
   hero1Curso: "",
   hero1Regime: "",
@@ -97,7 +117,7 @@ export const SITE_GRUPOS: { titulo: string; nota?: string; campos: CampoSite[] }
   },
   {
     titulo: "Destaque",
-    nota: "O texto e a fotografia de fundo. Cada cartão escolhe o badge, o tamanho e a animação do botão. A pré-visualização mostra o rascunho.",
+    nota: "O texto, a fotografia e a disposição. Dá para mudar o tamanho e a posição do texto e do botão. Cada cartão escolhe o badge, o tamanho e a animação do botão. A pré-visualização mostra o rascunho.",
     campos: [
       { chave: "heroTitulo", etiqueta: "Título", tipo: "texto" },
       { chave: "heroTexto", etiqueta: "Texto", tipo: "texto" },
@@ -312,4 +332,42 @@ export function classeSelo(cor: HeroBadgeCor) {
   if (cor === "vermelho") return "bg-[#A60000] text-white";
   if (cor === "azul") return "bg-[#14263D] text-white";
   return "bg-[#FFA900] text-[#14263D]";
+}
+
+export type HeroDisposicao = "texto-esquerda" | "texto-centro" | "texto-direita";
+
+export const HERO_TAMANHO_MIN = 60;
+export const HERO_TAMANHO_MAX = 180;
+export const HERO_POS_MIN = -40;
+export const HERO_POS_MAX = 40;
+export const MARGEM_MIN = -12;
+export const MARGEM_MAX = 16;
+
+export function numeroSite(valor: string, min: number, max: number, omissao: number) {
+  const n = Number(String(valor ?? "").trim().replace(",", "."));
+  if (!Number.isFinite(n)) return omissao;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+export function heroDisposicao(valor: string): HeroDisposicao {
+  if (valor === "texto-centro" || valor === "texto-direita") return valor;
+  return "texto-esquerda";
+}
+
+export function estiloMargem(
+  x: number,
+  y: number,
+  base: { x: string; y: string; xSm?: string; ySm?: string; xLg?: string; yLg?: string },
+) {
+  const estilo: Record<string, string> = {
+    "--ena-mx": String(x),
+    "--ena-my": String(y),
+    "--ena-px": base.x,
+    "--ena-py": base.y,
+  };
+  if (base.xSm) estilo["--ena-px-sm"] = base.xSm;
+  if (base.ySm) estilo["--ena-py-sm"] = base.ySm;
+  if (base.xLg) estilo["--ena-px-lg"] = base.xLg;
+  if (base.yLg) estilo["--ena-py-lg"] = base.yLg;
+  return estilo;
 }

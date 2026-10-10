@@ -60,8 +60,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
   const items = dtp.items;
   const visiveis = useMemo(() => {
     if (!isGold) {
-      const list = topico === "todas" ? items : items.filter(d => d.topico === topico);
-      return [...list].sort((a, b) => (a.topico ?? 99) - (b.topico ?? 99) || a.label.localeCompare(b.label, "pt"));
+      return topico === "todas" ? items : items.filter(d => d.topico === topico);
     }
     const list = categoria === "todas" ? items : items.filter(d => dtpCategoriaDe(d) === categoria);
     const faseOrdem = { antes: 0, durante: 1, depois: 2 };
@@ -75,7 +74,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
     try {
       if (qual === "final") await apiRelatorioFinalTurma(turma.id);
       else await apiRelatorioInqueritosTurma(turma.id);
-      toastOk(qual === "final" ? "Relatório final da ação gerado." : "Relatório das respostas desta turma gerado.");
+      toastOk(qual === "final" ? "Relatório final da ação gerado." : "Relatório pós-formação desta turma gerado.");
       onActualizar?.();
     } catch (err) {
       toastError(err, "Não foi possível gerar o relatório.");
@@ -151,7 +150,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
           Pasta no Drive e no ZIP: <span className="font-semibold text-slate-600">{dtpPastaNome(regime, codigo)}</span>
           {isGold
             ? ` · ${DTP_CATEGORIAS.map(c => c.pasta.replace(/^\d+-/, "")).join(" · ")}.`
-            : " · 14 tópicos, do enquadramento aos inquéritos desta turma."}
+            : " · 14 tópicos, do enquadramento ao impacto pós-formação."}
           {" "}Arquivar 10 anos (IEFP) ou o prazo do programa - o mais longo.
         </p>
       </div>
@@ -163,7 +162,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
         <p className="text-xs text-slate-600 mt-0.5">
           {isGold
             ? "Núcleo DGERT + extras CCP (PIP, simulações, 5 anos de experiência) + recibos."
-            : "Na financiada o dossiê segue os 14 tópicos. O relatório final gera-se no tópico 8. Os inquéritos do tópico 14 são só desta turma."}
+            : "Na financiada cada tópico traz os documentos da ação. O relatório final gera-se no tópico 8. O relatório pós-formação do tópico 14 é só desta turma."}
         </p>
       </div>
 
@@ -274,7 +273,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
                   )}
                 </div>
                 <div className="flex items-center gap-2 sm:flex-col sm:items-end">
-                  {!isGold && (doc.id === "relatorio" || doc.id === "inqueritos-turma") && turma?.id != null && (
+                  {!isGold && (doc.id === "relatorio" || doc.id === "relatorio-pos") && turma?.id != null && (
                     <button
                       type="button"
                       disabled={aGerar != null}
@@ -283,7 +282,7 @@ export function DtpPanel({ regime, turma, dtp, estado = "ready", onToggle, onAne
                     >
                       {aGerar === (doc.id === "relatorio" ? "final" : "inqueritos")
                         ? "A gerar…"
-                        : doc.id === "relatorio" ? "Gerar relatório final" : "Relatório das respostas"}
+                        : doc.id === "relatorio" ? "Gerar relatório final" : "Gerar relatório pós-formação"}
                     </button>
                   )}
                   <button

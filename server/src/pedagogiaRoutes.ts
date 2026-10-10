@@ -777,6 +777,7 @@ async function dtpForTurma(db: Db, regime: Regime, turma: TurmaRow, modeloPre?: 
     ).catch(() => ({ rows: [] as { item_id: string; drive_file_id: string; file_name: string; drive_url: string }[] })),
   ]);
   const byItem = new Map(anexos.rows.map(r => [r.item_id, r]));
+  const anexoLegado: Record<string, string> = { "relatorio-pos": "inqueritos-turma" };
   const cursoId = await cursoIdDaTurma(db, regime, turma.curso);
   const ficheiroRows = cursoId == null
     ? []
@@ -794,7 +795,7 @@ async function dtpForTurma(db: Db, regime: Regime, turma: TurmaRow, modeloPre?: 
   }));
   const formandosCurso = refs.some(f => f.ambito === "formando") ? await formandosDaTurma(db, regime, turma) : [];
   let items: DtpItem[] = buildDtpItems(regime, facts, manual, modelo).map(item => {
-    const a = byItem.get(item.id);
+    const a = byItem.get(item.id) ?? (anexoLegado[item.id] ? byItem.get(anexoLegado[item.id]) : undefined);
     const anexo = a?.drive_file_id
       ? { fileName: a.file_name, url: a.drive_url, driveFileId: a.drive_file_id }
       : null;
@@ -2116,7 +2117,7 @@ export function registerPedagogiaRoutes(
     if (!dados) return reply.code(404).send({ error: "turma não encontrada" });
     const bytes = qual === "final" ? pdfRelatorioFinal(dados) : pdfRelatorioInqueritos(dados);
     const nome = qual === "final" ? "RelatorioFinalAccao.pdf" : "RelatorioInqueritosTurma.pdf";
-    const itemId = qual === "final" ? "relatorio" : "inqueritos-turma";
+    const itemId = qual === "final" ? "relatorio" : "relatorio-pos";
     await anexarPdfDtp(db, req.actor!.id, { id, nome: dados.acao }, itemId, nome, bytes).catch(() => undefined);
     await audit(db, req.actor!.id, qual === "final" ? "turma.relatorio_final" : "turma.relatorio_inqueritos", "turma", String(id), req.ip);
     return reply
@@ -2256,15 +2257,17 @@ export function registerPedagogiaRoutes(
     }
 
     const gerados = await montarPdfsDossie(db, regime, turma);
-    const pastaPed = regime === "fin" ? pastaFinDoItem("cronograma") : (DTP_CATEGORIAS.find(c => c.id === "pedagogia")?.pasta ?? "04-Pedagogia");
-    add(`${root}/${pastaPed}/Cronograma.pdf`, gerados.cronograma);
-    add(`${root}/${pastaPed}/Folhas de presenca e sumarios.pdf`, gerados.folhas);
-    add(`${root}/${pastaPed}/Planos de sessao.pdf`, gerados.planos);
+    const pastaPed = DTP_CATEGORIAS.find(c => c.id === "pedagogia")?.pasta ?? "04-Pedagogia";
+    const pastaCron = regime === "fin" ? pastaFinDoItem("cronograma") : pastaPed;
+    const pastaSess = regime === "fin" ? pastaFinDoItem("presencas") : pastaPed;
+    add(`${root}/${pastaCron}/Cronograma.pdf`, gerados.cronograma);
+    add(`${root}/${pastaSess}/Folhas de presenca e sumarios.pdf`, gerados.folhas);
+    add(`${root}/${pastaSess}/Planos de sessao.pdf`, gerados.planos);
     if (regime === "fin") {
       const dados = await dadosRelatorioFinal(db, turma.id);
       if (dados) {
         add(`${root}/${pastaFinDoItem("relatorio")}/RelatorioFinalAccao.pdf`, pdfRelatorioFinal(dados));
-        add(`${root}/${pastaFinDoItem("inqueritos-turma")}/RelatorioInqueritosTurma.pdf`, pdfRelatorioInqueritos(dados));
+        add(`${root}/${pastaFinDoItem("relatorio-pos")}/RelatorioInqueritosTurma.pdf`, pdfRelatorioInqueritos(dados));
       }
     }
     await gravarPdfsDossie(db, req.actor!.id, regime, turma).catch(() => undefined);

@@ -30,6 +30,8 @@ export type DtpDef = {
   hint: string;
   /** Tópico do dossiê da financiada, de 1 a 14. */
   topico?: number;
+  /** Ordem dentro do tópico, como na lista da ação financiada. */
+  ordem?: number;
   auto?: DtpAuto;
   bloqueante?: boolean;
   /** Norma legal: fica no dossiê de todos os cursos do regime e não se pode remover. */
@@ -167,42 +169,60 @@ const GOLD: DtpDef[] = [
 ];
 
 const FIN: DtpDef[] = [
-  { id: "id-turma", fase: "antes", topico: 1, label: "Identificação da turma", fonte: "1. Enquadramento", hint: "Código interno, UFCD, carga horária e regime.", obrigatorio: true },
-  { id: "ufcd", fase: "antes", topico: 1, label: "Referencial / código UFCD", fonte: "1. Enquadramento", hint: "Código e designação oficial da UFCD.", obrigatorio: true },
-  { id: "programa", fase: "antes", topico: 1, label: "Programa de formação", fonte: "1. Enquadramento", hint: "Objetivos, conteúdos, metodologias, avaliação e recursos.", obrigatorio: true },
-  { id: "regulamento", fase: "antes", topico: 1, label: "Regulamento de formação", fonte: "1. Enquadramento", hint: "Regulamento ENA e regras do programa financiador.", obrigatorio: true },
-  { id: "enquadramento", fase: "antes", topico: 1, label: "Enquadramento / documentação do financiador", fonte: "1. Enquadramento", hint: "Candidatura, despacho ou regras da tipologia." },
-  { id: "instalacoes", fase: "antes", topico: 2, label: "Locais, recursos e infraestruturas", fonte: "2. Recursos pedagógicos", hint: "Salas, plataforma e equipamentos.", obrigatorio: true },
-  { id: "materiais", fase: "durante", topico: 2, label: "Manuais e textos de apoio", fonte: "2. Recursos pedagógicos", hint: "Materiais disponibilizados na plataforma.", obrigatorio: true },
-  { id: "contrato-formador", fase: "antes", topico: 3, label: "Contrato do formador", fonte: "3. Formadores", hint: "Contrato do formador da UFCD.", obrigatorio: true },
-  { id: "cv-formador", fase: "antes", topico: 3, label: "CV do formador", fonte: "3. Formadores", hint: "CV actualizado no perfil do formador.", obrigatorio: true },
-  { id: "ccp-formador", fase: "antes", topico: 3, label: "CCP / CCPE do formador", fonte: "3. Formadores", hint: "Certificado válido.", obrigatorio: true },
-  { id: "equipa", fase: "antes", topico: 4, label: "Equipa técnica da ação", fonte: "4. Equipa técnica", hint: "Coordenador e técnicos que acompanham a turma.", obrigatorio: true },
-  { id: "fichas", fase: "antes", topico: 5, label: "Fichas de inscrição e requisitos de acesso", fonte: "5. Formandos", hint: "Ficha e elegibilidade de cada candidato.", obrigatorio: true },
-  { id: "cc", fase: "antes", topico: 5, label: "Cartão de cidadão (documentos do formando)", fonte: "5. Formandos", hint: "Um por formando da turma.", auto: "doc-cc" },
-  { id: "ch", fase: "antes", topico: 5, label: "Certificado de habilitações", fonte: "5. Formandos", hint: "Um por formando da turma.", auto: "doc-ch" },
-  { id: "cv-formando", fase: "antes", topico: 5, label: "Curriculum vitae do formando", fonte: "5. Formandos", hint: "Um por formando da turma.", auto: "doc-cu" },
-  { id: "iban", fase: "antes", topico: 5, label: "IBAN / comprovativo de NIB", fonte: "5. Formandos", hint: "Sem IBAN não há pagamento de apoios.", auto: "doc-ci", bloqueante: true },
-  { id: "emprego", fase: "antes", topico: 5, label: "Comprovativo de situação perante o emprego", fonte: "5. Formandos", hint: "Um por formando da turma.", auto: "doc-ce" },
-  { id: "contratos-f", fase: "antes", topico: 5, label: "Contratos de formação (formandos)", fonte: "5. Formandos", hint: "A turma fica bloqueada até estarem completos.", obrigatorio: true },
-  { id: "rgpd", fase: "antes", topico: 5, label: "Autorizações RGPD / dados digitais", fonte: "5. Formandos", hint: "Aceites no momento da inscrição." },
-  { id: "cronograma", fase: "antes", topico: 6, label: "Cronograma / plano semanal", fonte: "6. Assiduidade e sessões", hint: "Sessões síncronas e trabalho assíncrono.", auto: "cronograma", obrigatorio: true },
-  { id: "planos", fase: "antes", topico: 6, label: "Planos de sessão", fonte: "6. Assiduidade e sessões", hint: "Um plano por sessão do cronograma.", auto: "planos", obrigatorio: true },
-  { id: "sumarios", fase: "durante", topico: 6, label: "Sumários (presencial, síncrona e assíncrona)", fonte: "6. Assiduidade e sessões", hint: "Em e-learning o sumário assíncrono também conta.", auto: "sumarios", bloqueante: true, obrigatorio: true },
-  { id: "presencas", fase: "durante", topico: 6, label: "Presenças por sessão + participação online", fonte: "6. Assiduidade e sessões", hint: "Assiduidade em percentagem e em horas.", auto: "presencas", obrigatorio: true },
-  { id: "horas", fase: "durante", topico: 6, label: "Mapa de assiduidade em horas (carga UFCD)", fonte: "6. Assiduidade e sessões", hint: "O financiador pede horas, não só percentagem de sessões.", bloqueante: true, obrigatorio: true },
-  { id: "ocorrencias", fase: "durante", topico: 6, label: "Registo de ocorrências", fonte: "6. Assiduidade e sessões", hint: "Desistências e alterações de calendário.", obrigatorio: true },
-  { id: "instrumentos", fase: "durante", topico: 7, label: "Instrumentos de avaliação + enunciados", fonte: "7. Avaliação da aprendizagem", hint: "Testes e grelhas usados na avaliação.", obrigatorio: true },
-  { id: "pauta", fase: "depois", topico: 7, label: "Pauta, classificações e ata de avaliação", fonte: "7. Avaliação da aprendizagem", hint: "Classificação de cada formando.", obrigatorio: true },
-  { id: "satisfacao", fase: "depois", topico: 8, label: "Avaliação de reação da ação", fonte: "8. Avaliação da ação", hint: "Questionários de reação no fecho da turma.", obrigatorio: true },
-  { id: "execucao", fase: "depois", topico: 8, label: "Relatório de execução da turma", fonte: "8. Avaliação da ação", hint: "Horas, formandos, desistências e execução.", obrigatorio: true },
-  { id: "relatorio", fase: "depois", topico: 8, label: "Relatório final da ação", fonte: "8. Avaliação da ação", hint: "O GesForma gera o PDF com o enquadramento, a assiduidade, as notas e os inquéritos desta turma.", bloqueante: true, obrigatorio: true },
-  { id: "supervisao", fase: "durante", topico: 9, label: "Registos de supervisão e apoio pedagógico", fonte: "9. Supervisão", hint: "Acompanhamento do formador e das sessões.", obrigatorio: true },
-  { id: "divulgacao", fase: "antes", topico: 10, label: "Divulgação da turma", fonte: "10. Divulgação", hint: "Canais onde a turma foi divulgada.", obrigatorio: true },
-  { id: "certificados", fase: "depois", topico: 11, label: "Certificados / registo", fonte: "11. Certificados", hint: "Certificados emitidos nesta turma.", auto: "certificados", obrigatorio: true },
-  { id: "equidade", fase: "antes", topico: 12, label: "Medidas de equidade e inclusão", fonte: "12. Equidade", hint: "Adaptações de acesso e participação.", obrigatorio: true },
-  { id: "academia", fase: "antes", topico: 13, label: "Articulação com a Academia Digital", fonte: "13. Academia Digital", hint: "Ligação da turma à Academia Digital.", obrigatorio: true },
-  { id: "inqueritos-turma", fase: "depois", topico: 14, label: "Inquéritos desta turma e relatório das respostas", fonte: "14. Inquéritos da turma", hint: "Conta só as respostas em que a turma é esta. O relatório não mistura outras turmas.", auto: "inqueritos", obrigatorio: true },
+  { id: "notificacao", fase: "antes", topico: 1, ordem: 1, label: "Notificação da decisão de aprovação da candidatura e respetivo termo de aceitação", fonte: "1. Enquadramento", hint: "Decisão de aprovação e termo de aceitação da candidatura.", obrigatorio: true },
+  { id: "comunicacao-arranque", fase: "antes", topico: 1, ordem: 2, label: "Comunicação de arranque do projeto", fonte: "1. Enquadramento", hint: "Comunicação de arranque enviada ao financiador.", obrigatorio: true },
+  { id: "cronograma", fase: "antes", topico: 1, ordem: 3, label: "Cronograma", fonte: "1. Enquadramento", hint: "Sai das sessões desta turma.", auto: "cronograma", obrigatorio: true },
+  { id: "programa", fase: "antes", topico: 1, ordem: 4, label: "Programa", fonte: "1. Enquadramento", hint: "Programa da ação formativa.", obrigatorio: true },
+  { id: "regulamento", fase: "antes", topico: 1, ordem: 5, label: "Regulamento da atividade formativa", fonte: "1. Enquadramento", hint: "Regulamento da atividade.", obrigatorio: true },
+  { id: "regulamento-formando", fase: "antes", topico: 1, ordem: 6, label: "Regulamento do formando", fonte: "1. Enquadramento", hint: "Regulamento entregue a cada formando.", obrigatorio: true },
+  { id: "materiais", fase: "antes", topico: 2, ordem: 1, label: "Manuais e textos de apoio", fonte: "2. Recursos pedagógicos", hint: "Manuais e textos disponibilizados na ação.", obrigatorio: true },
+  { id: "protocolo-espacos", fase: "antes", topico: 2, ordem: 2, label: "Protocolo de cedência de espaços", fonte: "2. Recursos pedagógicos", hint: "Protocolo do espaço onde a ação decorre.", obrigatorio: true },
+  { id: "selecao-formadores", fase: "antes", topico: 3, ordem: 1, label: "Processo de seleção de formadores", fonte: "3. Formadores", hint: "Registo da seleção de quem lecciona.", obrigatorio: true },
+  { id: "id-formador", fase: "antes", topico: 3, ordem: 2, label: "Documento de identificação", fonte: "3. Formadores", hint: "Documento de identificação do formador.", obrigatorio: true },
+  { id: "habil-formador", fase: "antes", topico: 3, ordem: 3, label: "Certificado de habilitações", fonte: "3. Formadores", hint: "Certificado de habilitações do formador.", obrigatorio: true },
+  { id: "cv-formador", fase: "antes", topico: 3, ordem: 4, label: "Curriculum vitae", fonte: "3. Formadores", hint: "Curriculum vitae do formador.", obrigatorio: true },
+  { id: "ccp-formador", fase: "antes", topico: 3, ordem: 5, label: "CCP", fonte: "3. Formadores", hint: "Certificado de competências pedagógicas.", obrigatorio: true },
+  { id: "ficha-dgert", fase: "antes", topico: 3, ordem: 6, label: "Ficha Curricular DGERT", fonte: "3. Formadores", hint: "Ficha curricular do formador.", obrigatorio: true },
+  { id: "formacao-complementar", fase: "antes", topico: 3, ordem: 7, label: "Outros certificados de formação complementar", fonte: "3. Formadores", hint: "Formação complementar do formador, quando exista.", obrigatorio: true },
+  { id: "contrato-formador", fase: "antes", topico: 3, ordem: 8, label: "Contrato de prestação de serviços", fonte: "3. Formadores", hint: "Contrato do formador desta ação.", obrigatorio: true },
+  { id: "honorarios", fase: "antes", topico: 3, ordem: 9, label: "Nota de honorários e respetivo recibo", fonte: "3. Formadores", hint: "Nota de honorários e recibo do formador.", obrigatorio: true },
+  { id: "equipa", fase: "antes", topico: 4, ordem: 1, label: "Listagem da equipa pedagógica", fonte: "4. Equipa técnica", hint: "Coordenador e técnicos da ação.", obrigatorio: true },
+  { id: "selecao-formandos", fase: "antes", topico: 5, ordem: 1, label: "Processo de seleção dos formandos", fonte: "5. Formandos", hint: "Critérios e resultado da seleção.", obrigatorio: true },
+  { id: "listagem-formandos", fase: "antes", topico: 5, ordem: 2, label: "Listagem de formandos", fonte: "5. Formandos", hint: "Lista nominal desta turma.", obrigatorio: true },
+  { id: "fichas", fase: "antes", topico: 5, ordem: 3, label: "Ficha de inscrição dos formandos", fonte: "5. Formandos", hint: "Uma ficha por formando.", obrigatorio: true },
+  { id: "rgpd-contratos", fase: "antes", topico: 5, ordem: 4, label: "Declaração RGPD + Contratos de formação", fonte: "5. Formandos", hint: "Declaração RGPD e contrato de formação de cada formando.", obrigatorio: true },
+  { id: "cc", fase: "antes", topico: 5, ordem: 5, label: "a) Cartão de cidadão", fonte: "5. Formandos", hint: "Um por formando da turma.", auto: "doc-cc", obrigatorio: true },
+  { id: "ch", fase: "antes", topico: 5, ordem: 6, label: "b) Certificado de habilitações", fonte: "5. Formandos", hint: "Um por formando da turma.", auto: "doc-ch", obrigatorio: true },
+  { id: "entidade-patronal", fase: "antes", topico: 5, ordem: 7, label: "c) Declaração da entidade patronal", fonte: "5. Formandos", hint: "O GesForma conta o comprovativo de emprego de cada formando.", auto: "doc-ce", obrigatorio: true },
+  { id: "morada", fase: "antes", topico: 5, ordem: 8, label: "d) Comprovativo de morada", fonte: "5. Formandos", hint: "Um por formando da turma.", obrigatorio: true },
+  { id: "iban", fase: "antes", topico: 5, ordem: 9, label: "e) IBAN nominativo", fonte: "5. Formandos", hint: "Sem IBAN nominativo não há pagamento de apoios.", auto: "doc-ci", bloqueante: true, obrigatorio: true },
+  { id: "seguro-formandos", fase: "antes", topico: 5, ordem: 10, label: "Lista de formandos com seguro de acidentes pessoais (quando aplicável)", fonte: "5. Formandos", hint: "Quando o seguro não se aplica, marque o documento como no dossiê.", obrigatorio: true },
+  { id: "mapa-pagamento", fase: "antes", topico: 5, ordem: 11, label: "Mapa de ordem de pagamento aos formandos (validado)", fonte: "5. Formandos", hint: "Mapa validado dos pagamentos aos formandos.", obrigatorio: true },
+  { id: "presencas", fase: "durante", topico: 6, ordem: 1, label: "Folhas de presença", fonte: "6. Assiduidade", hint: "Uma folha por sessão realizada.", auto: "presencas", obrigatorio: true },
+  { id: "planos", fase: "durante", topico: 6, ordem: 2, label: "Planos de sessão", fonte: "6. Assiduidade", hint: "Um plano por sessão do cronograma.", auto: "planos", obrigatorio: true },
+  { id: "justificacao-faltas", fase: "durante", topico: 6, ordem: 3, label: "Folhas de justificação de faltas", fonte: "6. Assiduidade", hint: "Justificações de falta desta turma.", obrigatorio: true },
+  { id: "ocorrencias", fase: "durante", topico: 6, ordem: 4, label: "Folhas de ocorrências", fonte: "6. Assiduidade", hint: "Ocorrências registadas nas sessões.", obrigatorio: true },
+  { id: "reclamacao", fase: "durante", topico: 6, ordem: 5, label: "Folha de reclamação", fonte: "6. Assiduidade", hint: "Folha de reclamação da ação. Se não houve reclamação, marque como no dossiê.", obrigatorio: true },
+  { id: "teste-diagnostico", fase: "durante", topico: 7, ordem: 1, label: "Teste de diagnóstico (oral ou escrito)", fonte: "7. Avaliação da aprendizagem", hint: "Diagnóstico aplicado no início da ação.", obrigatorio: true },
+  { id: "teste-final", fase: "durante", topico: 7, ordem: 2, label: "Teste de avaliação final", fonte: "7. Avaliação da aprendizagem", hint: "Enunciado da avaliação final.", obrigatorio: true },
+  { id: "corrigenda", fase: "durante", topico: 7, ordem: 3, label: "Corrigenda do teste de avaliação final", fonte: "7. Avaliação da aprendizagem", hint: "Corrigenda do teste final.", obrigatorio: true },
+  { id: "grelha-correcao", fase: "durante", topico: 7, ordem: 4, label: "Grelha de correção do teste de avaliação final - assinada pelo formador", fonte: "7. Avaliação da aprendizagem", hint: "Grelha assinada pelo formador.", obrigatorio: true },
+  { id: "pauta", fase: "depois", topico: 7, ordem: 5, label: "Pauta de avaliação final - assinada pelo formador", fonte: "7. Avaliação da aprendizagem", hint: "Pauta assinada pelo formador.", obrigatorio: true },
+  { id: "inquerito-formador", fase: "depois", topico: 8, ordem: 1, label: "Inquéritos de avaliação do formador", fonte: "8. Avaliação da ação", hint: "Questionários de avaliação do formador desta turma.", obrigatorio: true },
+  { id: "inquerito-formandos", fase: "depois", topico: 8, ordem: 2, label: "Inquéritos de avaliação dos formandos", fonte: "8. Avaliação da ação", hint: "Questionários de avaliação preenchidos pelos formandos desta turma.", obrigatorio: true },
+  { id: "diagnostico-necessidades", fase: "depois", topico: 8, ordem: 3, label: "Diagnóstico necessidades de formação", fonte: "8. Avaliação da ação", hint: "Diagnóstico de necessidades associado à ação.", obrigatorio: true },
+  { id: "relatorios-estatisticos", fase: "depois", topico: 8, ordem: 4, label: "Relatórios estatísticos", fonte: "8. Avaliação da ação", hint: "No dossiê em papel pode ficar N/A. No GesForma anexa-se o ficheiro.", obrigatorio: true },
+  { id: "relatorio", fase: "depois", topico: 8, ordem: 5, label: "Relatório final da ação", fonte: "8. Avaliação da ação", hint: "O GesForma gera o PDF com os dados desta turma.", bloqueante: true, obrigatorio: true },
+  { id: "relatorio-inicial", fase: "durante", topico: 9, ordem: 1, label: "Relatório inicial", fonte: "9. Supervisão", hint: "Relatório inicial de supervisão.", obrigatorio: true },
+  { id: "relatorio-intermedio", fase: "durante", topico: 9, ordem: 2, label: "Relatório intermédio", fonte: "9. Supervisão", hint: "Relatório intermédio de supervisão.", obrigatorio: true },
+  { id: "relatorio-supervisao", fase: "depois", topico: 9, ordem: 3, label: "Relatório final", fonte: "9. Supervisão", hint: "Relatório final de supervisão e apoio pedagógico.", obrigatorio: true },
+  { id: "folheto", fase: "antes", topico: 10, ordem: 1, label: "Folheto de divulgação da ação", fonte: "10. Divulgação", hint: "Folheto usado na divulgação desta ação.", obrigatorio: true },
+  { id: "certificados", fase: "depois", topico: 11, ordem: 1, label: "Cópia dos certificados emitidos", fonte: "11. Certificados", hint: "Certificados emitidos pelo GesForma nesta turma.", auto: "certificados", obrigatorio: true },
+  { id: "entrega-certificados", fase: "depois", topico: 11, ordem: 2, label: "Comprovativo da entrega dos certificados", fonte: "11. Certificados", hint: "Comprovativo de que os certificados foram entregues.", obrigatorio: true },
+  { id: "equidade", fase: "antes", topico: 12, ordem: 1, label: "Checklist de igualdade de oportunidades", fonte: "12. Equidade", hint: "Checklist preenchida para esta ação.", obrigatorio: true },
+  { id: "academia", fase: "antes", topico: 13, ordem: 1, label: "Reporte retirado do Portal Academia Portugal Digital", fonte: "13. Academia Digital", hint: "Reporte da turma no Portal Academia Portugal Digital.", obrigatorio: true },
+  { id: "inqueritos-pos", fase: "depois", topico: 14, ordem: 1, label: "Inquéritos pós-formação", fonte: "14. Impacto pós-formação", hint: "Três meses depois. Conta só as respostas em que a turma é esta.", auto: "inqueritos", obrigatorio: true },
+  { id: "relatorio-pos", fase: "depois", topico: 14, ordem: 2, label: "Relatório pós-formação", fonte: "14. Impacto pós-formação", hint: "O GesForma gera o relatório das respostas desta turma. Não mistura outras turmas.", obrigatorio: true },
 ];
 
 const UNIVERSAL_IDS = new Set(GOLD.map(d => d.id).filter(id => FIN.some(f => f.id === id)));
@@ -370,8 +390,8 @@ export function dtpEstrutura(regime: "gold" | "fin", modelo: DtpModelo = DTP_MOD
     id: `extra:${x.id}`,
     auto: x.ambito === "formando" || x.ambito === "formador" ? (`doc-${x.id}` as DtpAuto) : undefined,
   }));
-  const ordem: Record<DtpFase, number> = { antes: 0, durante: 1, depois: 2 };
-  return [...base, ...extras].sort((a, b) => (a.topico ?? 99) - (b.topico ?? 99) || ordem[a.fase] - ordem[b.fase]);
+  const faseOrdem: Record<DtpFase, number> = { antes: 0, durante: 1, depois: 2 };
+  return [...base, ...extras].sort((a, b) => (a.topico ?? 99) - (b.topico ?? 99) || (a.ordem ?? 0) - (b.ordem ?? 0) || faseOrdem[a.fase] - faseOrdem[b.fase]);
 }
 
 export function buildDtpItems(

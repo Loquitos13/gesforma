@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCatalogList } from "../partilhado/CatalogsContext";
 import { AppModal, MultiSearchSelect, SearchSelect } from "../partilhado/FormKit";
-import { RecorteMiniatura } from "./RecorteMiniatura";
+import { RecorteMiniatura, type FonteRecorte } from "./RecorteMiniatura";
 import { OptionSelect } from "./OptionSelect";
 import { apiCreateDtpEntidade, apiCursoFicha, apiCursoImagem, apiDtpEntidades, apiSaveCursoFicha, type DtpEntidade } from "../partilhado/api";
 import { CursoDocumentos } from "./CursoDocumentos";
@@ -667,7 +667,8 @@ export function CursoFichaView({
   const [entidades, setEntidades] = useState<DtpEntidade[]>([]);
   const [entidadeId, setEntidadeId] = useState<number | null>(curso?.entidadeResponsavelId ?? null);
   const [imagemAGravar, setImagemAGravar] = useState<"banner" | "capa" | "miniatura" | "">("");
-  const [recorte, setRecorte] = useState<{ url: string; nome: string } | null>(null);
+  const [recorteAberto, setRecorteAberto] = useState(false);
+  const [ficheiroRecorte, setFicheiroRecorte] = useState<File | null>(null);
   const locaisSeeded = useRef(false);
 
   useEffect(() => {
@@ -824,11 +825,15 @@ export function CursoFichaView({
     }
   }
 
+  function abrirRecorte(file?: File | null) {
+    if (imagemAGravar === "miniatura") return;
+    setFicheiroRecorte(file ?? null);
+    setRecorteAberto(true);
+  }
+
   function fecharRecorte() {
-    setRecorte(actual => {
-      if (actual?.url.startsWith("blob:")) URL.revokeObjectURL(actual.url);
-      return null;
-    });
+    setRecorteAberto(false);
+    setFicheiroRecorte(null);
   }
 
   async function confirmarRecorte(file: File) {
@@ -1006,31 +1011,41 @@ export function CursoFichaView({
               <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-4">
                 <div>
                   <p className="text-sm font-semibold text-slate-800">Identidade visual</p>
-                  <p className="text-xs text-slate-500 mt-0.5">O banner abre a página do curso. A capa, sem recorte, entra no cartão do curso. A miniatura é o recorte dessa capa e entra no catálogo.</p>
+                  <p className="text-xs text-slate-500 mt-0.5">O banner abre a página do curso. A capa, sem recorte, entra no cartão do curso. A miniatura é o recorte 2:3 do banner, da capa ou de outra fotografia, e entra no catálogo.</p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <MediaCard accent={accent} label="Banner" hint="Recomendado 1600×600. Aparece no topo da página do curso." value={data.banner} tall aGravar={imagemAGravar === "banner"} onFile={file => void carregarImagem("banner", file)} />
                   <MediaCard accent={accent} label="Capa" hint="Fotografia inteira, sem recorte. JPG, PNG, WebP ou GIF, até 8 MB. É a imagem do cartão do curso." value={data.capa} tall aGravar={imagemAGravar === "capa"} onFile={file => void carregarImagem("capa", file)} />
                   <div>
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Miniatura</p>
-                    <div className="relative h-40 overflow-hidden rounded-xl border-2 border-dashed border-slate-200 bg-slate-50">
-                      {urlImagem(data.miniatura?.url) ? (
-                        <img src={urlImagem(data.miniatura?.url)} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                      ) : (
-                        <div className="absolute inset-0 grid place-items-center px-3 text-center text-xs text-slate-400">
-                          {data.capa?.url ? "Ainda sem recorte" : "Primeiro carregue a capa"}
-                        </div>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-1">Recorte da capa, na proporção 2:3. É a imagem do catálogo.</p>
                     <button
                       type="button"
-                      disabled={!urlImagem(data.capa?.url) || imagemAGravar === "miniatura"}
-                      onClick={() => setRecorte({ url: urlImagem(data.capa?.url), nome: data.capa?.name || "capa.jpg" })}
-                      className="mt-2 text-xs font-semibold text-[#1C3350] hover:text-[#A60000] disabled:opacity-40"
+                      disabled={imagemAGravar === "miniatura"}
+                      aria-label="Recortar a miniatura"
+                      onClick={() => abrirRecorte()}
+                      onDragOver={event => event.preventDefault()}
+                      onDrop={event => {
+                        event.preventDefault();
+                        const file = event.dataTransfer.files?.[0];
+                        if (file) abrirRecorte(file);
+                      }}
+                      className={`group relative block h-40 w-full overflow-hidden rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 text-left ${t.hoverMedia} disabled:opacity-60`}
                     >
-                      {imagemAGravar === "miniatura" ? "A gravar…" : data.miniatura?.url ? "Ajustar o recorte" : "Recortar a capa"}
+                      {urlImagem(data.miniatura?.url) ? (
+                        <img src={urlImagem(data.miniatura?.url)} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
+                      ) : (
+                        <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${t.hero}`}>
+                          <div className={`absolute inset-0 opacity-40 ${t.glow}`} />
+                        </div>
+                      )}
+                      <div className="pointer-events-none absolute inset-0 flex items-end justify-between bg-gradient-to-t from-black/45 to-transparent p-3">
+                        <span className="truncate pr-2 text-[11px] text-white/90">{data.miniatura?.name ?? "Clique para recortar"}</span>
+                        <span className={`rounded-md bg-white/15 px-2 py-0.5 text-[11px] font-semibold text-white ${t.mediaHover}`}>
+                          {imagemAGravar === "miniatura" ? "A gravar…" : "Recortar"}
+                        </span>
+                      </div>
                     </button>
+                    <p className="text-[11px] text-slate-400 mt-1">Recorte 2:3 do banner, da capa ou de outra fotografia. É a imagem do catálogo.</p>
                   </div>
                 </div>
               </div>
@@ -1759,10 +1774,13 @@ export function CursoFichaView({
           </Field>
         </div>
       </AppModal>
-      {recorte && (
+      {recorteAberto && (
         <RecorteMiniatura
-          origem={recorte.url}
-          nome={recorte.nome}
+          fontes={([
+            urlImagem(data.banner?.url) ? { id: "banner", rotulo: "Banner", nome: data.banner?.name || "banner.jpg", url: urlImagem(data.banner?.url) } : null,
+            urlImagem(data.capa?.url) ? { id: "capa", rotulo: "Capa", nome: data.capa?.name || "capa.jpg", url: urlImagem(data.capa?.url) } : null,
+          ] as (FonteRecorte | null)[]).filter((fonte): fonte is FonteRecorte => Boolean(fonte))}
+          ficheiroInicial={ficheiroRecorte}
           aGravar={imagemAGravar === "miniatura"}
           onCancelar={fecharRecorte}
           onConfirmar={file => void confirmarRecorte(file)}

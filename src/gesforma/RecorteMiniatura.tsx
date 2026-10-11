@@ -84,26 +84,73 @@ function medidaDaCaixa(nw: number, nh: number) {
   return { largura, altura, escala: largura / nw };
 }
 
+export type FonteRecorte = { id: "banner" | "capa"; rotulo: string; nome: string; url: string };
+
 export function RecorteMiniatura({
-  origem,
-  nome,
+  fontes,
+  ficheiroInicial = null,
   aGravar,
   onCancelar,
   onConfirmar,
 }: {
-  origem: string;
-  nome: string;
+  fontes: FonteRecorte[];
+  ficheiroInicial?: File | null;
   aGravar: boolean;
   onCancelar: () => void;
   onConfirmar: (file: File) => void;
 }) {
+  const preferida = fontes.find(fonte => fonte.id === "capa") ?? fontes[0] ?? null;
   const [imagem, setImagem] = useState<HTMLImageElement | null>(null);
   const [erro, setErro] = useState("");
   const [janela, setJanela] = useState<Janela>({ x: 0, y: 0, w: 1 });
+  const [origem, setOrigem] = useState(preferida?.url ?? "");
+  const [nome, setNome] = useState(preferida?.nome ?? "miniatura");
+  const [escolha, setEscolha] = useState<string>(preferida?.id ?? "");
+  const [ficheiroNome, setFicheiroNome] = useState("");
+  const blobRef = useRef<string | null>(null);
   const palco = useRef<HTMLDivElement>(null);
   const arrasto = useRef<Arrasto | null>(null);
   const vista = useRef({ janela, imagem });
   vista.current = { janela, imagem };
+
+  function aplicarFicheiro(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setErro("Use JPG, PNG, WebP ou GIF.");
+      return;
+    }
+    if (blobRef.current) URL.revokeObjectURL(blobRef.current);
+    const url = URL.createObjectURL(file);
+    blobRef.current = url;
+    setFicheiroNome(file.name || "fotografia");
+    setNome(file.name || "fotografia");
+    setEscolha("ficheiro");
+    setOrigem(url);
+    setErro("");
+  }
+
+  function escolherFonte(fonte: FonteRecorte) {
+    if (blobRef.current) {
+      URL.revokeObjectURL(blobRef.current);
+      blobRef.current = null;
+    }
+    setFicheiroNome("");
+    setNome(fonte.nome);
+    setEscolha(fonte.id);
+    setOrigem(fonte.url);
+    setErro("");
+  }
+
+  useEffect(() => {
+    if (ficheiroInicial) aplicarFicheiro(ficheiroInicial);
+    return () => {
+      if (blobRef.current) {
+        URL.revokeObjectURL(blobRef.current);
+        blobRef.current = null;
+      }
+    };
+    // O ficheiro chega uma vez, ao abrir o modal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function definir(seguinte: Janela) {
     const foto = vista.current.imagem;
@@ -114,6 +161,11 @@ export function RecorteMiniatura({
   }
 
   useEffect(() => {
+    if (!origem) {
+      setImagem(null);
+      return;
+    }
+    setImagem(null);
     let viva = true;
     const img = new Image();
     img.onload = () => {
@@ -189,7 +241,7 @@ export function RecorteMiniatura({
       open
       size="2xl"
       title="Recortar a miniatura"
-      sub="Arraste a janela sobre a capa. Puxe um canto para a aumentar ou reduzir, sempre na proporção do catálogo."
+      sub="Escolha o banner, a capa ou outra fotografia. Arraste a janela e puxe um canto para mudar o tamanho, sempre na proporção do catálogo."
       onClose={() => { if (!aGravar) onCancelar(); }}
       footer={
         <>
@@ -216,7 +268,7 @@ export function RecorteMiniatura({
                 <div
                   role="application"
                   tabIndex={0}
-                  aria-label="Janela de recorte. Arraste para a mover sobre a capa. Puxe um canto para mudar o tamanho."
+                  aria-label="Janela de recorte. Arraste para a mover sobre a fotografia. Puxe um canto para mudar o tamanho."
                   className="absolute touch-none cursor-grab outline-none ring-2 ring-[#FFA900] ring-inset active:cursor-grabbing focus-visible:ring-[#A60000]"
                   style={{
                     left: `${(janela.x / imagem.naturalWidth) * 100}%`,
@@ -274,7 +326,9 @@ export function RecorteMiniatura({
                 </div>
               )}
               {!imagem && !erro && (
-                <div className="absolute inset-0 grid place-items-center text-xs text-slate-500">A ler a capa…</div>
+                <div className="absolute inset-0 grid place-items-center px-4 text-center text-xs text-slate-500">
+                  {origem ? "A ler a fotografia…" : "Escolha o banner, a capa ou importe uma fotografia."}
+                </div>
               )}
             </div>
             <button
@@ -287,6 +341,44 @@ export function RecorteMiniatura({
             </button>
           </div>
           <div className="min-w-[240px] flex-1 space-y-4">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Fotografias</p>
+              {fontes.length > 0 ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {fontes.map(fonte => (
+                    <button
+                      key={fonte.id}
+                      type="button"
+                      disabled={aGravar}
+                      onClick={() => escolherFonte(fonte)}
+                      className={`overflow-hidden rounded-lg border-2 bg-white text-left disabled:opacity-50 ${escolha === fonte.id ? "border-[#1C3350]" : "border-slate-200 hover:border-slate-300"}`}
+                    >
+                      <img src={fonte.url} alt="" className="h-24 w-full object-cover" />
+                      <span className="block px-2 py-1.5 text-xs font-semibold text-slate-700">{fonte.rotulo}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">Este curso ainda não tem banner nem capa.</p>
+              )}
+              {escolha === "ficheiro" && ficheiroNome && (
+                <p className="text-xs font-semibold text-[#1C3350]">Ficheiro local: {ficheiroNome}</p>
+              )}
+              <label className="block space-y-1">
+                <span className="text-xs font-semibold text-slate-600">Outra fotografia</span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  disabled={aGravar}
+                  className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#1C3350] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+                  onChange={event => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) aplicarFicheiro(file);
+                  }}
+                />
+              </label>
+            </div>
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
               <div className="flex" style={{ height: PREVIA_ALTURA }}>
                 <div className="w-2 shrink-0 bg-[#FFA900]" />

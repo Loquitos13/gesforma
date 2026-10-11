@@ -192,9 +192,13 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     enterActor({ id: found.id, role: found.role });
   });
 
-  function requireAuth(req: FastifyRequest, reply: FastifyReply) {
+  function requireAuth(req: FastifyRequest, reply: FastifyReply, opts?: { formando?: boolean }) {
     if (!req.actor) {
       reply.code(401).send({ error: "sessão inválida" });
+      return false;
+    }
+    if (req.actor.role === "formando" && !opts?.formando) {
+      reply.code(403).send({ error: "a área do formando não abre o GesForma" });
       return false;
     }
     return true;
@@ -260,7 +264,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   app.post("/v1/auth/password", {
     config: { rateLimit: { max: 8, timeWindow: "1 minute" } },
   }, async (req, reply) => {
-    if (!requireAuth(req, reply)) return;
+    if (!requireAuth(req, reply, { formando: true })) return;
     const parsed = z.object({ password: z.string().min(1).max(200) }).safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     if (!palavraPasseValida(parsed.data.password)) {
@@ -447,7 +451,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   });
 
   app.get("/v1/me", async (req, reply) => {
-    if (!requireAuth(req, reply)) return;
+    if (!requireAuth(req, reply, { formando: true })) return;
     return { user: req.actor };
   });
 

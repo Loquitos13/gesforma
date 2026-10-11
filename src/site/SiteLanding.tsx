@@ -1,5 +1,5 @@
 import { createContext, type CSSProperties, FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { ApiError, apiPublicPreinscricao } from "../partilhado/api";
+import { ApiError, apiMe, apiPublicPreinscricao, type SessionUser } from "../partilhado/api";
 import { InscricaoSite, useInscricao } from "./SiteInscricao";
 import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, destinoDoHero, ePrepago, ePreinscricao, estiloMargem, heroAnimacao, heroBadge, heroDisposicao, heroPedido, heroTamanho, HERO_CONTENTOR_MAX, HERO_CONTENTOR_MIN, HERO_FORMA_BORDA_MAX, HERO_FORMA_BORDA_MIN, HERO_FORMA_POS_MAX, HERO_FORMA_POS_MIN, HERO_FORMA_TAMANHO_MAX, HERO_FORMA_TAMANHO_MIN, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, ligacaoExterna, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, corForma, heroForma, rotuloBotaoInscricao, textoSite, tituloRegime, type HeroAnimacao, type HeroBadgeCor, type HeroPedido, type HeroTamanho, type InscricaoPublica, type SiteChave } from "../partilhado/siteConteudo";
 
@@ -191,9 +191,21 @@ function margemLida(t: (chave: SiteChave) => string, x: SiteChave, y: SiteChave)
   };
 }
 
+function useSessaoPublica() {
+  const [user, setUser] = useState<SessionUser | null>(null);
+  useEffect(() => {
+    let viva = true;
+    apiMe().then(r => { if (viva) setUser(r.user); }).catch(() => { if (viva) setUser(null); });
+    return () => { viva = false; };
+  }, []);
+  return user;
+}
+
 function Header() {
   const [open, setOpen] = useState(false);
   const t = useSiteTexto();
+  const sessao = useSessaoPublica();
+  const formando = sessao?.role === "formando";
   const margem = margemLida(t, "margemCabecalhoX", "margemCabecalhoY");
   return (
     <header className="sticky top-0 z-40 border-b-4 border-[#FFA900] bg-white text-[#14263D]">
@@ -207,8 +219,11 @@ function Header() {
           <a href="/#empresas" className="text-[#14263D] hover:text-[#A60000]">{t("navEmpresas")}</a>
         </nav>
         <div className="hidden items-center gap-4 lg:flex">
-          <a href="/entrar" className="text-sm font-semibold text-[#A60000] underline decoration-[#FFA900] decoration-2 underline-offset-4">{t("navFormando")}</a>
-          <a href="/entrar" className="bg-[#A60000] px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-[#14263D]">{t("navEntrar")}</a>
+          {formando ? (
+            <a href="/area-formando" className="bg-[#A60000] px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-[#14263D]">{t("navFormando")}</a>
+          ) : (
+            <a href="/area-formando" className="bg-[#A60000] px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-[#14263D]">{t("navEntrar")}</a>
+          )}
         </div>
         <button type="button" onClick={() => setOpen(!open)} className="p-2 lg:hidden" aria-label={open ? "Fechar menu" : "Abrir menu"}><Icon name={open ? "close" : "menu"} /></button>
       </div>
@@ -217,8 +232,11 @@ function Header() {
           <div className="flex flex-col gap-5 font-semibold">
             <a href="/formacao" onClick={() => setOpen(false)}>{t("navFormacao")}</a>
             <a href="/#empresas" onClick={() => setOpen(false)}>{t("navEmpresas")}</a>
-            <a href="/entrar" className="border-t border-[#14263D]/10 pt-5 text-[#A60000]">{t("navFormando")}</a>
-            <a href="/entrar" className="bg-[#A60000] px-5 py-3 text-center text-sm font-bold text-white">{t("navEntrar")}</a>
+            {formando ? (
+              <a href="/area-formando" className="border-t border-[#14263D]/10 pt-5 text-[#A60000]">{t("navFormando")}</a>
+            ) : (
+              <a href="/area-formando" className="bg-[#A60000] px-5 py-3 text-center text-sm font-bold text-white">{t("navEntrar")}</a>
+            )}
           </div>
         </nav>
       )}

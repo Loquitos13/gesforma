@@ -10,7 +10,7 @@ export class ApiError extends Error {
   }
 }
 
-export type StaffRole = "admin" | "secretaria" | "comercial" | "financiada" | "formador";
+export type StaffRole = "admin" | "secretaria" | "comercial" | "financiada" | "formador" | "formando";
 export type SessionUser = { id: string; email: string; name: string; role: StaffRole | string; mustChangePassword?: boolean };
 
 export type StaffUser = {

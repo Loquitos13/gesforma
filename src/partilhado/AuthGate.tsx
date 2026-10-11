@@ -3,6 +3,7 @@ import {
   apiChangeOwnPassword, apiGoogleLoginStatus, apiLogin, apiLogout, apiMe, apiMicrosoftLoginStatus,
   googleLoginStartUrl, microsoftLoginStartUrl, type SessionUser,
 } from "./api";
+import { destinoDoPerfil } from "./destinoPerfil";
 import { mensagemPalavraPasse } from "./passwordPolicy";
 
 type AuthCtx = {
@@ -310,6 +311,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
         </form>
       </div>
     );
+  }
+
+  if (user.role === "formando") {
+    window.location.replace(destinoDoPerfil(user.role));
+    return <SessionSplash pct={100} />;
   }
 
   async function refresh() {

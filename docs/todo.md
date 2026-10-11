@@ -2,34 +2,21 @@
 
 Esta é a lista fechada do que ainda falta. Os outros documentos descrevem o que já funciona e apontam para aqui.
 
-## Entrada por perfil
+## Área do formando — dados reais
 
-O login tem de deixar a pessoa na área do perfil com que entrou. A regra vale para a palavra-passe e para o Google e a Microsoft. A sessão só muda de endereço depois de a credencial estar aceite.
+O ecrã de login e a área já existem em `/area-formando` (`src/site/AreaFormando.tsx`), a partir do Figma. A conta de demonstração é `formando@ena.pt`. O perfil `formando` está no `CHECK` de `users.role` (migração `057_users_role_formando.sql`).
 
-Hoje a conta vive em `users.role`. Os valores gravados são `admin`, `secretaria`, `comercial`, `financiada` e `formador` (`server/src/db/migrations/038_formador_crm_drive.sql`). Não existe o perfil `formando`. Quem entra em `/entrar` cai no GesForma: o formador em `/gesforma/formador/turmas`, a secretaria financiada (`financiada`) em `/gesforma/financiada`, e os restantes em `/gesforma/gold`.
+Depois de a credencial estar aceite, o destino é `destinoDoPerfil` (`src/partilhado/destinoPerfil.ts`): formando fica em `/area-formando`; formador vai para `/gesforma/formador/turmas`; secretaria financiada (`financiada`) para `/gesforma/financiada`; administrador, comercial e secretaria para `/gesforma/gold`. A palavra-passe faz isto no ecrã. O Google e a Microsoft continuam a voltar a `/entrar`; dali o formando é enviado para a área e os outros perfis entram no GesForma. Se a pessoa abriu um endereço que o perfil dela já pode ver, esse endereço mantém-se. Um endereço de outro perfil manda-a para a área dela. O formando que abre `/entrar` ou `/gesforma` volta a `/area-formando`. Quem não é formando e abre `/area-formando` vai para o GesForma. As rotas do GesForma recusam o formando com 403, excepto mudar a própria palavra-passe. Ler a sessão e terminar sessão continuam abertos.
 
-| Perfil | Role | Destino depois do login |
-| --- | --- | --- |
-| Formando | `formando` (ainda não existe) | Área do formando |
-| Formador | `formador` | Área de formador no GesForma, `/gesforma/formador/turmas` |
-| Administrador | `admin` | GesForma |
-| Comercial | `comercial` | GesForma, linha Gold |
-| Secretaria | `secretaria` | GesForma |
-| Secretaria financiada | `financiada` | GesForma, linha Financiada |
+Na página inicial, «Área de formando» só aparece quando o formando tem sessão e substitui «Iniciar Sessão». Os dois abrem `/area-formando`. O login da secretaria continua em `/entrar`.
 
-O formando não entra no GesForma. O formador não entra nos painéis de administrador, comercial ou secretaria. Administrador, comercial e secretaria não entram na área do formando.
+O que o ecrã ainda mostra de exemplo, e não da base:
 
-Se a pessoa abriu um endereço que o perfil dela já pode ver, esse endereço mantém-se. Um endereço de outro perfil manda-a para a área dela. Dentro do GesForma, o que cada perfil vê no menu fica como está: o comercial só na linha Gold, a secretaria financiada só na linha Financiada, o formador só nas vistas `formador-turmas`, `formador-calendario`, `formador-perfil` e no cockpit das turmas que lhe estão atribuídas. O administrador e a secretaria continuam a ver as duas linhas.
-
-O perfil `formando` entra no `CHECK` de `users.role` quando a área do formando existir. Até lá, uma conta com esse papel não se cria e o login não a pode deixar no GesForma.
-
-## Área do formando
-
-A área do formando ainda não está feita. O ecrã constrói-se a partir do Figma dessa área. O que a pessoa tem hoje é a ligação pessoal `/documentos/:token` e o inquérito `/inquerito/:token`. Nenhuma das duas é a área autenticada.
-
-Enquanto o ecrã do Figma não existir, o destino do login de um formando fica por ligar. Não se usa o GesForma como substituto.
-
-No cabeçalho da página inicial, `navFormando` («Área de formando») e `navEntrar` («Iniciar Sessão») estão sempre visíveis e os dois abrem `/entrar` (`src/site/SiteLanding.tsx`). «Área de formando» sai do cabeçalho para quem não está autenticado. Só aparece quando o formando tem sessão, e nesse caso substitui o botão de iniciar sessão. Quem não é formando continua a ver o botão de login.
+- Cursos, progresso, agenda, certificados, notificações e faturas são o texto do Figma. Não vêm das turmas nem dos pagamentos.
+- «Continuar no LMS» abre os módulos neste ecrã. O Moodle não está ligado.
+- «Esqueci-me da palavra-passe» não envia email. A pessoa pede uma palavra-passe nova à secretaria.
+- Guardar o perfil e as preferências de notificação só confirma neste ecrã. A ficha do GesForma não recebe a alteração.
+- Os dados fiscais não se editam.
 
 ## Backend
 

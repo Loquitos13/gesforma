@@ -15,7 +15,8 @@ O ano do copyright é o ano corrente. Não se grava. Em 2026 o rodapé mostra ©
 - `/documentos/:token` ligação pessoal para anexar documentos. O ficheiro segue para o Google Drive.
 - `/cronograma/:regime/:turmaId` cronograma publicado de uma turma.
 - `/inquerito/:token` resposta ao inquérito de satisfação.
-- `/entrar` login. Hoje quem entra cai no GesForma (`/gesforma/gold`, `/gesforma/financiada` ou `/gesforma/formador/turmas`). O destino por perfil está em `docs/todo.md`.
+- `/area-formando` login e área do formando. Quem não é formando é enviado para o GesForma. O que ainda é exemplo do Figma está em `docs/todo.md`.
+- `/entrar` login da secretaria e do GesForma. O formando com sessão é enviado para `/area-formando`. O formador entra em `/gesforma/formador/turmas`, a secretaria financiada em `/gesforma/financiada`, e administrador, comercial e secretaria em `/gesforma/gold`.
 - `/gesforma/…` uma rota por vista do backoffice: painéis, CRM, cursos, fichas (`/gesforma/gold/cursos/:id` e `/gesforma/financiada/cursos/:id`), turmas, cockpit (`/gesforma/gold/turmas/:id` e `/gesforma/financiada/turmas/:id`), dossiês, inquéritos, blog, listas, emails, pagamentos, site e configurações. O separador do cockpit vai em `?separador=`.
 
 ## O que já sai da base de dados

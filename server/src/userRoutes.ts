@@ -5,7 +5,7 @@ import type { Db } from "./db/pool.js";
 import { mensagemPalavraPasse, palavraPasseValida } from "../../src/partilhado/passwordPolicy.js";
 import { hashPassword, isEmail, normalizeEmail } from "./security.js";
 
-const ROLES = ["admin", "secretaria", "comercial", "financiada", "formador"] as const;
+const ROLES = ["admin", "secretaria", "comercial", "financiada", "formador", "formando"] as const;
 export type StaffRole = (typeof ROLES)[number];
 
 const createSchema = z.object({

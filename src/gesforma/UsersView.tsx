@@ -20,6 +20,7 @@ export const STAFF_ROLES: { value: StaffRole; label: string; hint: string }[] = 
   { value: "comercial", label: "Comercial Gold", hint: "Pré-inscrições, campanhas e turmas Gold." },
   { value: "financiada", label: "Secretaria Financiada", hint: "Inscrições, elegibilidade e UFCD." },
   { value: "formador", label: "Formador", hint: "Vê as turmas em que está atribuído, o calendário, os documentos e o perfil." },
+  { value: "formando", label: "Formando", hint: "Entra na área do formando, não no GesForma." },
 ];
 
 export function roleLabel(role: string) {

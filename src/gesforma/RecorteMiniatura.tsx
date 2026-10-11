@@ -203,7 +203,7 @@ export function RecorteMiniatura({
       <div className="p-5 space-y-4">
         {erro && <p className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{erro}</p>}
         <div className="flex flex-col items-start gap-5 lg:flex-row">
-          <div className="flex w-full shrink-0 justify-center lg:w-auto">
+          <div className="mx-auto flex w-full shrink-0 flex-col gap-3 lg:mx-0" style={{ width: caixa?.largura ?? CAIXA_LARGURA }}>
             <div
               ref={palco}
               className="relative overflow-hidden bg-[#E7EBF0] select-none"
@@ -277,6 +277,14 @@ export function RecorteMiniatura({
                 <div className="absolute inset-0 grid place-items-center text-xs text-slate-500">A ler a capa…</div>
               )}
             </div>
+            <button
+              type="button"
+              onClick={repor}
+              disabled={!imagem || aGravar}
+              className="w-full rounded-lg border-2 border-[#1C3350] bg-white px-4 py-3 text-base font-semibold text-[#1C3350] hover:bg-[#1C3350] hover:text-white disabled:opacity-50"
+            >
+              Repor
+            </button>
           </div>
           <div className="min-w-[240px] flex-1 space-y-4">
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -305,10 +313,7 @@ export function RecorteMiniatura({
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
-              <span>A janela fica sempre na proporção 2:3 do catálogo.</span>
-              <button type="button" onClick={repor} disabled={!imagem || aGravar} className="font-semibold text-[#1C3350] hover:text-[#A60000] disabled:opacity-50">Repor</button>
-            </div>
+            <p className="text-xs text-slate-500">A janela fica sempre na proporção 2:3 do catálogo.</p>
           </div>
         </div>
       </div>

@@ -13,6 +13,7 @@ import { PublicCronograma } from "./site/PublicCronograma";
 import { SiteCatalog } from "./site/SiteCatalog";
 import { SiteCurso } from "./site/SiteCurso";
 import { AreaFormando } from "./site/AreaFormando";
+import { Noticias } from "./site/Noticias";
 import { SiteLanding } from "./site/SiteLanding";
 import { ToastHost } from "./gesforma/ToastHost";
 import { TurmasProvider } from "./partilhado/TurmasContext";
@@ -21,6 +22,8 @@ import "./index.css";
 const path = window.location.pathname.replace(/\/+$/, "") || "/";
 const entrar = path === "/entrar" || path.startsWith("/gesforma");
 const areaFormando = path === "/area-formando" || path.startsWith("/area-formando/");
+const noticiaSlug = path.startsWith("/noticias/") ? decodeURIComponent(path.slice("/noticias/".length).split("/")[0] ?? "") : "";
+const noticias = path === "/noticias";
 const catalogo = path === "/formacao";
 const slugCurso = path.startsWith("/formacao/") ? decodeURIComponent(path.slice("/formacao/".length).split("/")[0] ?? "") : "";
 const publicForm = path === "/pre-inscricao";
@@ -40,6 +43,8 @@ createRoot(document.getElementById("root")!).render(
       <PublicInquerito token={inqToken} />
     ) : areaFormando ? (
       <AreaFormando />
+    ) : noticias || noticiaSlug ? (
+      <Noticias slug={noticiaSlug} />
     ) : entrar ? (
       <AuthGate>
         <TurmasProvider>

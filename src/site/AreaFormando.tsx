@@ -1,43 +1,13 @@
 import { FormEvent, ReactNode, useEffect, useState } from "react";
 import {
-  ApiError, apiChangeOwnPassword, apiGoogleLoginStatus, apiLogin, apiLogout, apiMe, apiMicrosoftLoginStatus,
-  googleLoginStartUrl, microsoftLoginStartUrl, type SessionUser,
+  ApiError, apiAreaFormando, apiChangeOwnPassword, apiGoogleLoginStatus, apiLogin, apiLogout, apiMe, apiMicrosoftLoginStatus,
+  apiPatchAreaFormando, apiRecuperarAcesso, apiReporPalavraPasse, googleLoginStartUrl, microsoftLoginStartUrl,
+  type AreaFormandoDados, type SessionUser,
 } from "../partilhado/api";
 import { destinoDoPerfil } from "../partilhado/destinoPerfil";
 import { mensagemPalavraPasse } from "../partilhado/passwordPolicy";
 
 type Separador = "courses" | "agenda" | "certificates" | "notifications" | "payments" | "profile";
-
-type CursoArea = {
-  id: string;
-  title: string;
-  format: string;
-  progress: number;
-  aulas: string;
-  ultimo: string;
-  modules: string[];
-};
-
-const CURSOS: CursoArea[] = [
-  {
-    id: "gestao-projetos",
-    title: "Gestão de Projetos: da ideia ao impacto",
-    format: "E-learning",
-    progress: 75,
-    aulas: "3 de 4 aulas",
-    ultimo: "ontem",
-    modules: ["Definição de objetivos e âmbito", "Planeamento e gestão de risco", "Ferramentas de acompanhamento", "Avaliação e comunicação de impacto"],
-  },
-  {
-    id: "excel",
-    title: "Excel para Gestão e Análise de Dados",
-    format: "E-learning",
-    progress: 50,
-    aulas: "2 de 4 aulas",
-    ultimo: "há 5 dias",
-    modules: ["Folhas e fórmulas", "Tabelas e filtros", "Gráficos", "Dashboards"],
-  },
-];
 
 function Icon({ name, className = "h-5 w-5" }: { name: "arrow" | "check" | "close" | "menu"; className?: string }) {
   const paths: Record<string, ReactNode> = {
@@ -83,6 +53,7 @@ function Cabecalho() {
         </a>
         <nav className="hidden items-center gap-8 text-sm font-semibold lg:flex" aria-label="Navegação principal">
           <a href="/formacao" className="hover:text-[#A60000]">Formação</a>
+          <a href="/noticias" className="hover:text-[#A60000]">Notícias</a>
           <a href="/#empresas" className="hover:text-[#A60000]">Empresas</a>
         </nav>
         <div className="hidden items-center gap-4 lg:flex">
@@ -97,6 +68,7 @@ function Cabecalho() {
         <nav className="border-t border-[#1C3350]/10 bg-[#F9F9F9] px-5 py-6 lg:hidden">
           <div className="flex flex-col gap-5 font-semibold">
             <a href="/formacao">Formação</a>
+            <a href="/noticias">Notícias</a>
             <a href="/#empresas">Empresas</a>
             <a href="/area-formando" className="border-t border-[#1C3350]/10 pt-5 text-[#A60000]">Área de formando</a>
           </div>
@@ -130,6 +102,7 @@ function LoginFormando({ onEntrou, trocaInicial = null }: { onEntrou: (user: Ses
     setErro("");
     try {
       if (recuperar) {
+        await apiRecuperarAcesso(email.trim());
         setEnviado(true);
         return;
       }
@@ -209,7 +182,7 @@ function LoginFormando({ onEntrou, trocaInicial = null }: { onEntrou: (user: Ses
               {enviado ? (
                 <div className="mt-8 border-l-4 border-[#FFA900] bg-white p-6">
                   <strong>Verifique o seu email</strong>
-                  <p className="mt-2 text-sm leading-6 text-[#1C3350]/60">O envio automático da recuperação ainda não está ligado. Peça uma palavra-passe nova à secretaria.</p>
+                  <p className="mt-2 text-sm leading-6 text-[#1C3350]/60">Se existir uma conta de formando com esse email, as instruções seguem para lá. Sem SMTP configurado, a mensagem fica no registo da API.</p>
                   <button type="button" onClick={() => { setEnviado(false); setRecuperar(false); }} className="mt-4 text-sm font-bold text-[#A60000] underline">Voltar ao início de sessão</button>
                 </div>
               ) : (
@@ -239,7 +212,7 @@ function LoginFormando({ onEntrou, trocaInicial = null }: { onEntrou: (user: Ses
                 <div className="mt-8 space-y-3 border-t border-[#1C3350]/10 pt-6">
                   <a href={google ? googleLoginStartUrl() : undefined} aria-disabled={!google} onClick={e => { if (!google) { e.preventDefault(); setErro("O Google ainda não está configurado. Entre com email."); } }} className={`flex w-full items-center justify-center border px-4 py-3 text-sm font-bold ${google ? "border-[#1C3350] text-[#1C3350] hover:bg-white" : "cursor-not-allowed border-[#1C3350]/20 text-[#1C3350]/40"}`}>Continuar com Google</a>
                   <a href={microsoft ? microsoftLoginStartUrl() : undefined} aria-disabled={!microsoft} onClick={e => { if (!microsoft) { e.preventDefault(); setErro("A Microsoft ainda não está configurada. Entre com email."); } }} className={`flex w-full items-center justify-center border px-4 py-3 text-sm font-bold ${microsoft ? "border-[#1C3350] text-[#1C3350] hover:bg-white" : "cursor-not-allowed border-[#1C3350]/20 text-[#1C3350]/40"}`}>Continuar com Microsoft</a>
-                  <p className="text-sm text-[#1C3350]/55">Ainda não tem acesso? Os dados são enviados após confirmação da inscrição ou pagamento online.</p>
+                  <p className="text-sm text-[#1C3350]/55">O acesso é criado pela secretaria, na ficha do formando no GesForma.</p>
                 </div>
               )}
             </>
@@ -250,27 +223,27 @@ function LoginFormando({ onEntrou, trocaInicial = null }: { onEntrou: (user: Ses
   );
 }
 
-function Sala({ curso, onVoltar }: { curso: CursoArea; onVoltar: () => void }) {
+function Sala({ curso, sessoes, onVoltar }: { curso: AreaFormandoDados["cursos"][number]; sessoes: AreaFormandoDados["agenda"]; onVoltar: () => void }) {
+  const modulos = curso.modulos.length ? curso.modulos : ["O cronograma desta turma ainda não tem módulos."];
   const [activo, setActivo] = useState(0);
-  const [feitos, setFeitos] = useState<number[]>(() => curso.modules.map((_, i) => i).filter((_, i) => i < Math.round(curso.modules.length * curso.progress / 100)));
-  const progresso = Math.round((feitos.length / curso.modules.length) * 100);
   return (
     <main className="min-h-[75vh] bg-[#F9F9F9]">
       <section className="bg-[#1C3350] px-5 py-10 text-white lg:px-8">
         <div className="mx-auto flex max-w-[1240px] flex-col justify-between gap-6 sm:flex-row sm:items-end">
           <div>
             <button type="button" onClick={onVoltar} className="text-sm font-bold text-white/70 hover:text-white">Voltar aos cursos</button>
-            <h1 className="mt-3 font-serif text-4xl font-bold">{curso.title}</h1>
+            <h1 className="mt-3 font-serif text-4xl font-bold">{curso.titulo}</h1>
+            {curso.turma && <p className="mt-2 text-sm text-white/60">{curso.turma}</p>}
           </div>
-          <p className="text-sm font-bold text-[#FFA900]">{progresso}% concluído</p>
+          <p className="text-sm font-bold text-[#FFA900]">{curso.progresso}% das sessões já decorreram</p>
         </div>
       </section>
       <section className="mx-auto grid max-w-[1240px] gap-6 px-5 py-8 lg:grid-cols-[280px_1fr] lg:px-8">
         <ol className="border border-[#1C3350]/10 bg-white">
-          {curso.modules.map((modulo, index) => (
+          {modulos.map((modulo, index) => (
             <li key={modulo}>
               <button type="button" onClick={() => setActivo(index)} className={`flex w-full items-start gap-3 border-b border-[#1C3350]/10 px-4 py-4 text-left text-sm ${activo === index ? "bg-[#FFF1D1]" : "hover:bg-[#F9F9F9]"}`}>
-                <span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center text-xs font-bold ${feitos.includes(index) ? "bg-[#A60000] text-white" : "bg-[#EDEEF1] text-[#1C3350]"}`}>{index + 1}</span>
+                <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center bg-[#EDEEF1] text-xs font-bold text-[#1C3350]">{index + 1}</span>
                 <span><span className="block text-[10px] font-bold uppercase tracking-wider text-[#1C3350]/45">Módulo {index + 1}</span>{modulo}</span>
               </button>
             </li>
@@ -278,24 +251,53 @@ function Sala({ curso, onVoltar }: { curso: CursoArea; onVoltar: () => void }) {
         </ol>
         <article className="border border-[#1C3350]/10 bg-white p-6 sm:p-8">
           <p className="text-xs font-bold uppercase tracking-wider text-[#A60000]">Módulo {activo + 1}</p>
-          <h2 className="mt-2 font-serif text-3xl font-bold text-[#1C3350]">{curso.modules[activo]}</h2>
-          <p className="mt-4 leading-7 text-[#1C3350]/60">O conteúdo deste módulo abre aqui. A ligação ao Moodle ainda não está feita, por isso a aula fica neste ecrã.</p>
-          <button type="button" onClick={() => setFeitos(lista => lista.includes(activo) ? lista.filter(n => n !== activo) : [...lista, activo])} className="mt-8 bg-[#A60000] px-6 py-3 font-bold text-white hover:bg-[#8B0000]">
-            {feitos.includes(activo) ? "Marcar como por fazer" : "Marcar como concluído"}
-          </button>
+          <h2 className="mt-2 font-serif text-3xl font-bold text-[#1C3350]">{modulos[activo]}</h2>
+          <p className="mt-4 leading-7 text-[#1C3350]/60">O Moodle ainda não está ligado. As sessões são as do cronograma da turma no GesForma.</p>
+          <ul className="mt-6 space-y-3">
+            {sessoes.length === 0 && <li className="text-sm text-[#1C3350]/50">Esta turma ainda não tem sessões datadas.</li>}
+            {sessoes.map(sessao => (
+              <li key={sessao.id} className="flex justify-between gap-4 border-b border-[#1C3350]/10 py-3 text-sm">
+                <span><strong>{sessao.dia} {sessao.mes}</strong><span className="mt-1 block text-[#1C3350]/55">{sessao.titulo}</span></span>
+                <span className="text-[#1C3350]/55">{sessao.horas}</span>
+              </li>
+            ))}
+          </ul>
         </article>
       </section>
     </main>
   );
 }
 
-function Painel({ user, onSair, avisar }: { user: SessionUser; onSair: () => void; avisar: (texto: string) => void }) {
-  const [tab, setTab] = useState<Separador>("courses");
-  const [sala, setSala] = useState<CursoArea | null>(null);
-  const [perfilGuardado, setPerfilGuardado] = useState(false);
-  const nome = user.name || "Formando";
 
-  if (sala) return <Sala curso={sala} onVoltar={() => setSala(null)} />;
+function Painel({ dados, onDados, onSair, avisar }: {
+  dados: AreaFormandoDados;
+  onDados: (dados: AreaFormandoDados) => void;
+  onSair: () => void;
+  avisar: (texto: string) => void;
+}) {
+  const [tab, setTab] = useState<Separador>("courses");
+  const [sala, setSala] = useState<string | null>(null);
+  const [perfilGuardado, setPerfilGuardado] = useState(false);
+  const nome = `${dados.pessoa.nome} ${dados.pessoa.apelido}`.trim() || "Formando";
+  const cursoSala = dados.cursos.find(curso => curso.id === sala);
+  if (cursoSala) {
+    return <Sala curso={cursoSala} sessoes={dados.agenda.filter(s => s.cursoId === cursoSala.id)} onVoltar={() => setSala(null)} />;
+  }
+
+  async function gravarPerfil(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const seguinte = await apiPatchAreaFormando({
+      nome: String(form.get("nome") ?? "").trim(),
+      apelido: String(form.get("apelido") ?? "").trim(),
+      telf: String(form.get("telf") ?? "").trim(),
+      novidades: form.get("novidades") === "on",
+    });
+    onDados(seguinte);
+    setPerfilGuardado(true);
+    window.setTimeout(() => setPerfilGuardado(false), 2500);
+    avisar("A ficha no GesForma ficou com estes dados.");
+  }
 
   return (
     <main className="min-h-[75vh] bg-[#F9F9F9]">
@@ -311,7 +313,7 @@ function Painel({ user, onSair, avisar }: { user: SessionUser; onSair: () => voi
       <section className="px-5 py-8 lg:px-8 lg:py-12">
         <div className="mx-auto max-w-[1240px]">
           <div className="grid gap-4 sm:grid-cols-3">
-            {[["2", "Cursos ativos"], ["68%", "Progresso global"], ["1", "Certificado disponível"]].map(([value, label]) => (
+            {[[String(dados.resumo.cursos), "Cursos no registo"], [`${dados.resumo.progresso}%`, "Sessões já decorridas"], [String(dados.resumo.certificados), dados.resumo.certificados === 1 ? "Certificado disponível" : "Certificados disponíveis"]].map(([value, label]) => (
               <div key={label} className="border border-[#1C3350]/10 bg-white p-5">
                 <strong className="font-serif text-3xl text-[#A60000]">{value}</strong>
                 <span className="ml-3 text-sm text-[#1C3350]/60">{label}</span>
@@ -332,18 +334,19 @@ function Painel({ user, onSair, avisar }: { user: SessionUser; onSair: () => voi
           </nav>
           {tab === "courses" && (
             <div className="mt-7 grid gap-5 lg:grid-cols-2">
-              {CURSOS.map(curso => (
+              {dados.cursos.length === 0 && <p className="text-sm leading-7 text-[#1C3350]/60">A secretaria ainda não associou formações a esta conta. O acesso cria-se na ficha do formando, no GesForma.</p>}
+              {dados.cursos.map(curso => (
                 <article key={curso.id} className="border border-[#1C3350]/10 bg-white p-6">
                   <div className="flex items-center justify-between">
-                    <span className="bg-[#FFF1D1] px-3 py-1.5 text-xs font-bold uppercase tracking-wider">{curso.format}</span>
-                    <span className="text-sm font-bold">{curso.progress}%</span>
+                    <span className="bg-[#FFF1D1] px-3 py-1.5 text-xs font-bold uppercase tracking-wider">{curso.regime === "fin" ? "Financiada" : "Gold"}</span>
+                    <span className="text-sm font-bold">{curso.progresso}%</span>
                   </div>
-                  <h2 className="mt-5 font-serif text-2xl font-bold">{curso.title}</h2>
-                  <p className="mt-2 text-sm text-[#1C3350]/55">Último acesso: {curso.ultimo}</p>
-                  <div className="mt-6 h-2 bg-[#EDEEF1]"><div className="h-full bg-[#A60000]" style={{ width: `${curso.progress}%` }} /></div>
+                  <h2 className="mt-5 font-serif text-2xl font-bold">{curso.titulo}</h2>
+                  <p className="mt-2 text-sm text-[#1C3350]/55">{curso.turma || curso.estado}{curso.ultimo ? ` · última sessão ${curso.ultimo}` : ""}</p>
+                  <div className="mt-6 h-2 bg-[#EDEEF1]"><div className="h-full bg-[#A60000]" style={{ width: `${curso.progresso}%` }} /></div>
                   <div className="mt-5 flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#1C3350]/50">{curso.aulas}</span>
-                    <button type="button" onClick={() => setSala(curso)} className="flex items-center gap-2 font-bold text-[#A60000]">Continuar no LMS <Icon name="arrow" /></button>
+                    <span className="text-xs font-bold text-[#1C3350]/50">{curso.feitas} de {curso.sessoes} sessões</span>
+                    <button type="button" onClick={() => setSala(curso.id)} className="flex items-center gap-2 font-bold text-[#A60000]">Ver sessões <Icon name="arrow" /></button>
                   </div>
                 </article>
               ))}
@@ -351,25 +354,29 @@ function Painel({ user, onSair, avisar }: { user: SessionUser; onSair: () => voi
           )}
           {tab === "agenda" && (
             <div className="mt-7 border border-[#1C3350]/10 bg-white">
-              <div className="grid gap-4 border-b border-[#1C3350]/10 p-6 sm:grid-cols-[100px_1fr_auto] sm:items-center">
-                <div><strong className="block text-3xl text-[#A60000]">24</strong><span className="text-xs font-bold uppercase">Outubro</span></div>
-                <div><strong>Sessão de acompanhamento online</strong><p className="mt-1 text-sm text-[#1C3350]/55">Gestão de Projetos · 18:30—19:30</p></div>
-                <button type="button" onClick={() => { descarregar("sessao-ena.ics", "BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:Sessão de acompanhamento ENA\nDTSTART:20251024T183000\nDTEND:20251024T193000\nEND:VEVENT\nEND:VCALENDAR"); avisar("Ficheiro de calendário descarregado."); }} className="border border-[#1C3350] px-4 py-2 text-sm font-bold">Adicionar ao calendário</button>
-              </div>
-              <p className="p-6 text-sm text-[#1C3350]/55">Não existem mais sessões agendadas.</p>
+              {dados.agenda.length === 0 && <p className="p-6 text-sm text-[#1C3350]/55">Não há sessões no cronograma das suas turmas.</p>}
+              {dados.agenda.map(sessao => (
+                <div key={sessao.id} className="grid gap-4 border-b border-[#1C3350]/10 p-6 sm:grid-cols-[100px_1fr_auto] sm:items-center">
+                  <div><strong className="block text-3xl text-[#A60000]">{sessao.dia}</strong><span className="text-xs font-bold uppercase">{sessao.mes}</span></div>
+                  <div><strong>{sessao.titulo}</strong><p className="mt-1 text-sm text-[#1C3350]/55">{sessao.curso}{sessao.horas ? ` · ${sessao.horas}` : ""}</p></div>
+                  <button type="button" onClick={() => { descarregar(`sessao-${sessao.data}.ics`, `BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:${sessao.titulo}\nDTSTART:${sessao.data.replace(/-/g, "")}T${(sessao.horas.slice(0, 5) || "09:00").replace("h", "").replace(":", "")}00\nEND:VEVENT\nEND:VCALENDAR`); avisar("Ficheiro de calendário descarregado."); }} className="border border-[#1C3350] px-4 py-2 text-sm font-bold">Adicionar ao calendário</button>
+                </div>
+              ))}
             </div>
           )}
           {tab === "certificates" && (
             <div className="mt-7 grid gap-4 md:grid-cols-2">
-              <div className="flex flex-col items-start justify-between gap-4 border border-[#1C3350]/10 bg-white p-6 sm:flex-row sm:items-center">
-                <div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#A60000]">Concluído em julho 2025</span>
-                  <h2 className="mt-2 font-serif text-xl font-bold">Comunicação em Equipas</h2>
-                  <p className="mt-1 text-sm text-[#1C3350]/50">Certificado DGERT · 24 horas</p>
+              {dados.certificados.length === 0 && <p className="text-sm text-[#1C3350]/55">Ainda não há certificados emitidos nesta ficha.</p>}
+              {dados.certificados.map(cert => (
+                <div key={cert.id} className="flex flex-col items-start justify-between gap-4 border border-[#1C3350]/10 bg-white p-6 sm:flex-row sm:items-center">
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#A60000]">{cert.data || "Emitido"}</span>
+                    <h2 className="mt-2 font-serif text-xl font-bold">{cert.curso}</h2>
+                    <p className="mt-1 text-sm text-[#1C3350]/50">{cert.nota ? `Nota ${cert.nota}` : "Certificado da turma"}</p>
+                  </div>
+                  {cert.url ? <a href={cert.url} className="bg-[#1C3350] px-4 py-3 text-sm font-bold text-white" download={cert.nome || undefined}>Descarregar</a> : <span className="text-sm text-[#1C3350]/45">A secretaria ainda não anexou o ficheiro.</span>}
                 </div>
-                <button type="button" onClick={() => { descarregar("certificado-comunicacao.txt", `Certificado ENA — Comunicação em Equipas — ${nome} — 24 horas`); avisar("Certificado descarregado."); }} className="bg-[#1C3350] px-4 py-3 text-sm font-bold text-white">Descarregar</button>
-              </div>
-              <div className="border border-dashed border-[#1C3350]/20 p-6 text-sm text-[#1C3350]/50">Os novos certificados ficam disponíveis após a conclusão e avaliação dos cursos.</div>
+              ))}
             </div>
           )}
           {tab === "notifications" && (
@@ -377,55 +384,41 @@ function Painel({ user, onSair, avisar }: { user: SessionUser; onSair: () => voi
               <div className="bg-white">
                 <div className="flex justify-between gap-4 border-b border-[#1C3350]/10 p-5">
                   <h2 className="font-serif text-2xl font-bold">Notificações</h2>
-                  <button type="button" onClick={() => avisar("Todas as notificações foram marcadas como lidas.")} className="text-xs font-bold text-[#A60000]">Marcar tudo como lido</button>
+                  <button type="button" onClick={() => { void apiPatchAreaFormando({ lidas: dados.notificacoes.map(n => n.id) }).then(onDados); avisar("Todas as notificações foram marcadas como lidas."); }} className="text-xs font-bold text-[#A60000]">Marcar tudo como lido</button>
                 </div>
-                {([
-                  ["Novo módulo disponível", "O módulo “Planeamento e gestão de risco” já está disponível.", "Agora", true],
-                  ["Sessão amanhã", "A sessão de acompanhamento começa amanhã às 18:30.", "Há 2 h", true],
-                  ["Certificado emitido", "O certificado de Comunicação em Equipas está pronto.", "Ontem", false],
-                  ["Continue o seu curso", "Faltam apenas duas aulas para concluir Gestão de Projetos.", "Há 3 dias", false],
-                ] as const).map(([titulo, texto, data, porLer]) => (
-                  <article key={titulo} className={`border-b border-[#1C3350]/10 p-5 ${porLer ? "border-l-4 border-l-[#A60000] bg-[#F9F9F9]" : ""}`}>
-                    <div className="flex justify-between gap-4"><strong>{titulo}</strong><span className="text-xs text-[#1C3350]/40">{data}</span></div>
-                    <p className="mt-2 text-sm text-[#1C3350]/55">{texto}</p>
+                {dados.notificacoes.length === 0 && <p className="p-5 text-sm text-[#1C3350]/55">Não há avisos a partir do seu registo.</p>}
+                {dados.notificacoes.map(item => (
+                  <article key={item.id} className={`border-b border-[#1C3350]/10 p-5 ${item.porLer ? "border-l-4 border-l-[#A60000] bg-[#F9F9F9]" : ""}`}>
+                    <div className="flex justify-between gap-4"><strong>{item.titulo}</strong><span className="text-xs text-[#1C3350]/40">{item.quando}</span></div>
+                    <p className="mt-2 text-sm text-[#1C3350]/55">{item.texto}</p>
                   </article>
                 ))}
               </div>
               <aside className="h-fit bg-white p-5">
                 <h3 className="font-bold">Preferências</h3>
-                <div className="mt-4 space-y-4">
-                  {["Email", "SMS", "WhatsApp", "Na plataforma"].map((canal, index) => (
-                    <label key={canal} className="flex justify-between text-sm"><span>{canal}</span><input type="checkbox" defaultChecked={index !== 1} className="accent-[#A60000]" /></label>
+                <form onSubmit={event => { event.preventDefault(); const form = new FormData(event.currentTarget); void apiPatchAreaFormando({ canais: { email: form.get("email") === "on", sms: form.get("sms") === "on", whatsapp: form.get("whatsapp") === "on", plataforma: form.get("plataforma") === "on" } }).then(seguinte => { onDados(seguinte); avisar("Preferências gravadas na conta."); }); }} className="mt-4 space-y-4">
+                  {(["email", "sms", "whatsapp", "plataforma"] as const).map(canal => (
+                    <label key={canal} className="flex justify-between text-sm capitalize"><span>{canal === "plataforma" ? "Na plataforma" : canal === "whatsapp" ? "WhatsApp" : canal === "sms" ? "SMS" : "Email"}</span><input name={canal} type="checkbox" defaultChecked={dados.pessoa.canais[canal]} className="accent-[#A60000]" /></label>
                   ))}
-                </div>
-                <button type="button" onClick={() => avisar("Preferências de notificação guardadas neste ecrã.")} className="mt-6 w-full bg-[#1C3350] px-4 py-3 text-sm font-bold text-white">Guardar preferências</button>
+                  <button type="submit" className="mt-6 w-full bg-[#1C3350] px-4 py-3 text-sm font-bold text-white">Guardar preferências</button>
+                </form>
               </aside>
             </div>
           )}
           {tab === "payments" && (
-            <div className="mt-7 grid gap-5 lg:grid-cols-[1fr_300px]">
-              <div className="bg-white p-6">
-                <h2 className="font-serif text-2xl font-bold">Faturas e pagamentos</h2>
-                <div className="mt-5 space-y-3">
-                  {([
-                    ["FT ENA/2025/0842", "Gestão de Projetos", "12 set 2025", "79 €"],
-                    ["FT ENA/2025/0518", "Comunicação em Equipas", "04 jul 2025", "240 €"],
-                  ] as const).map(([documento, cursoNome, data, valor]) => (
-                    <div key={documento} className="grid gap-3 border-b border-[#1C3350]/10 py-4 text-sm sm:grid-cols-[150px_1fr_100px_70px_auto] sm:items-center">
-                      <strong>{documento}</strong>
-                      <span>{cursoNome}</span>
-                      <span className="text-[#1C3350]/45">{data}</span>
-                      <strong>{valor}</strong>
-                      <button type="button" onClick={() => { descarregar(`${documento.replace(/\//g, "-")}.txt`, `Fatura ${documento}\n${cursoNome}\n${data}\nTotal: ${valor}`); avisar("Fatura descarregada."); }} className="text-left font-bold text-[#A60000]">Descarregar</button>
-                    </div>
-                  ))}
-                </div>
+            <div className="mt-7 bg-white p-6">
+              <h2 className="font-serif text-2xl font-bold">Faturas e pagamentos</h2>
+              {dados.pagamentos.length === 0 && <p className="mt-4 text-sm text-[#1C3350]/55">{dados.financiada ? "A formação financiada não tem fatura nesta ficha." : "Não há pagamentos associados a este registo."}</p>}
+              <div className="mt-5 space-y-3">
+                {dados.pagamentos.map(pagamento => (
+                  <div key={pagamento.id} className="grid gap-3 border-b border-[#1C3350]/10 py-4 text-sm sm:grid-cols-[1fr_120px_90px_90px] sm:items-center">
+                    <span><strong className="block">{pagamento.curso}</strong><span className="text-[#1C3350]/45">{pagamento.metodo}</span></span>
+                    <span className="text-[#1C3350]/45">{pagamento.data}</span>
+                    <strong>{pagamento.valor}</strong>
+                    <span className="font-bold text-[#A60000]">{pagamento.estado}</span>
+                  </div>
+                ))}
               </div>
-              <aside className="h-fit bg-white p-5">
-                <h3 className="font-bold">Dados fiscais</h3>
-                <p className="mt-3 text-sm leading-6 text-[#1C3350]/55">{nome}<br />NIF por indicar<br />Portugal</p>
-                <button type="button" onClick={() => avisar("A edição dos dados fiscais ainda não grava na ficha.")} className="mt-5 border border-[#1C3350] px-4 py-2 text-sm font-bold">Editar dados</button>
-              </aside>
             </div>
           )}
           {tab === "profile" && (
@@ -433,27 +426,29 @@ function Painel({ user, onSair, avisar }: { user: SessionUser; onSair: () => voi
               <aside className="h-fit border border-[#1C3350]/10 bg-white p-6 text-center">
                 <span className="mx-auto grid h-24 w-24 place-items-center rounded-full bg-[#1C3350] text-2xl font-bold text-white">{iniciais(nome)}</span>
                 <h2 className="mt-4 font-serif text-2xl font-bold">{nome}</h2>
-                <p className="mt-1 text-sm text-[#1C3350]/50">{user.email}</p>
+                <p className="mt-1 text-sm text-[#1C3350]/50">{dados.pessoa.email}</p>
                 <div className="mt-6 border-t border-[#1C3350]/10 pt-5 text-left text-sm">
-                  <p className="flex justify-between"><span className="text-[#1C3350]/50">Cursos</span><strong>2</strong></p>
-                  <p className="mt-3 flex justify-between"><span className="text-[#1C3350]/50">Concluídos</span><strong>1</strong></p>
+                  <p className="flex justify-between"><span className="text-[#1C3350]/50">Cursos</span><strong>{dados.resumo.cursos}</strong></p>
+                  <p className="mt-3 flex justify-between"><span className="text-[#1C3350]/50">Certificados</span><strong>{dados.resumo.certificados}</strong></p>
                 </div>
               </aside>
               <div className="border border-[#1C3350]/10 bg-white p-6 sm:p-8">
                 <div className="flex items-start justify-between gap-4 border-b border-[#1C3350]/10 pb-5">
                   <div>
                     <h2 className="font-serif text-2xl font-bold">Dados pessoais</h2>
-                    <p className="mt-1 text-sm text-[#1C3350]/50">Mantenha os seus dados de contacto atualizados.</p>
+                    <p className="mt-1 text-sm text-[#1C3350]/50">O que gravar aqui actualiza a ficha do GesForma. O email de acesso fica com a secretaria.</p>
                   </div>
                   {perfilGuardado && <span className="flex items-center gap-2 bg-[#EDEEF1] px-3 py-2 text-xs font-bold text-[#A60000]"><Icon name="check" className="h-4 w-4" />Guardado</span>}
                 </div>
-                <form onSubmit={event => { event.preventDefault(); setPerfilGuardado(true); window.setTimeout(() => setPerfilGuardado(false), 2500); avisar("Alterações guardadas neste ecrã. A ficha do GesForma ainda não as recebe."); }} className="mt-6 space-y-5">
+                <form onSubmit={event => { void gravarPerfil(event); }} className="mt-6 space-y-5">
                   <div className="grid gap-5 sm:grid-cols-2">
-                    <label className="text-xs font-bold uppercase tracking-wider text-[#1C3350]/60">Nome<input defaultValue={primeiroNome(nome)} className="mt-2 w-full border border-[#1C3350]/20 px-4 py-3 text-base font-normal normal-case tracking-normal outline-none focus:border-[#A60000]" /></label>
-                    <label className="text-xs font-bold uppercase tracking-wider text-[#1C3350]/60">Email<input type="email" defaultValue={user.email} className="mt-2 w-full border border-[#1C3350]/20 px-4 py-3 text-base font-normal normal-case tracking-normal outline-none focus:border-[#A60000]" /></label>
+                    <label className="text-xs font-bold uppercase tracking-wider text-[#1C3350]/60">Nome<input name="nome" defaultValue={dados.pessoa.nome} className="mt-2 w-full border border-[#1C3350]/20 px-4 py-3 text-base font-normal normal-case tracking-normal outline-none focus:border-[#A60000]" /></label>
+                    <label className="text-xs font-bold uppercase tracking-wider text-[#1C3350]/60">Apelido<input name="apelido" defaultValue={dados.pessoa.apelido} className="mt-2 w-full border border-[#1C3350]/20 px-4 py-3 text-base font-normal normal-case tracking-normal outline-none focus:border-[#A60000]" /></label>
+                    <label className="text-xs font-bold uppercase tracking-wider text-[#1C3350]/60">Telemóvel<input name="telf" defaultValue={dados.pessoa.telf} className="mt-2 w-full border border-[#1C3350]/20 px-4 py-3 text-base font-normal normal-case tracking-normal outline-none focus:border-[#A60000]" /></label>
+                    <label className="text-xs font-bold uppercase tracking-wider text-[#1C3350]/60">Email<input type="email" value={dados.pessoa.email} readOnly className="mt-2 w-full border border-[#1C3350]/10 bg-[#F9F9F9] px-4 py-3 text-base font-normal normal-case tracking-normal" /></label>
                   </div>
                   <label className="flex items-start gap-3 border-t border-[#1C3350]/10 pt-5 text-sm">
-                    <input type="checkbox" defaultChecked className="mt-1 accent-[#A60000]" />
+                    <input name="novidades" type="checkbox" defaultChecked={dados.pessoa.novidades} className="mt-1 accent-[#A60000]" />
                     <span><strong className="block">Comunicações da ENA</strong><span className="mt-1 block text-[#1C3350]/50">Quero receber novidades e novas oportunidades de formação.</span></span>
                   </label>
                   <div className="flex justify-end"><button type="submit" className="bg-[#A60000] px-6 py-3 font-bold text-white hover:bg-[#8B0000]">Guardar alterações</button></div>
@@ -467,11 +462,48 @@ function Painel({ user, onSair, avisar }: { user: SessionUser; onSair: () => voi
   );
 }
 
+function ReporLigacao({ token, onFeito }: { token: string; onFeito: () => void }) {
+  const [nova, setNova] = useState("");
+  const [erro, setErro] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  async function gravar(event: FormEvent) {
+    event.preventDefault();
+    setOcupado(true);
+    setErro("");
+    try {
+      await apiReporPalavraPasse(token, nova);
+      window.history.replaceState({}, "", "/area-formando");
+      onFeito();
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : mensagemPalavraPasse(nova));
+    } finally {
+      setOcupado(false);
+    }
+  }
+  return (
+    <main className="grid min-h-[calc(100vh-80px)] place-items-center bg-[#F9F9F9] px-5 py-16">
+      <form onSubmit={gravar} className="w-full max-w-md">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#A60000]">Recuperar acesso</p>
+        <h1 className="mt-3 font-serif text-4xl font-bold text-[#1C3350]">Defina uma palavra-passe nova.</h1>
+        {erro && <p className="mt-4 text-sm font-semibold text-[#A60000]">{erro}</p>}
+        <label className="mt-8 block text-xs font-bold uppercase tracking-wider text-[#1C3350]/65">
+          Palavra-passe nova
+          <input required type="password" value={nova} onChange={e => setNova(e.target.value)} autoComplete="new-password" className="mt-2 w-full border border-[#1C3350]/20 bg-white px-4 py-4 text-base font-normal normal-case tracking-normal outline-none focus:border-[#A60000]" />
+        </label>
+        <button disabled={ocupado} className="mt-5 flex w-full items-center justify-between bg-[#A60000] px-6 py-4 font-bold text-white disabled:opacity-50">{ocupado ? "A gravar…" : "Guardar e voltar ao login"}</button>
+      </form>
+    </main>
+  );
+}
+
 export function AreaFormando() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [troca, setTroca] = useState<SessionUser | null>(null);
+  const [dados, setDados] = useState<AreaFormandoDados | null>(null);
   const [pronto, setPronto] = useState(false);
   const [aviso, setAviso] = useState("");
+  const [token, setToken] = useState(() => new URLSearchParams(window.location.search).get("recuperar") ?? "");
+  const [reposta, setReposta] = useState(false);
 
   useEffect(() => {
     let viva = true;
@@ -493,6 +525,13 @@ export function AreaFormando() {
     return () => { viva = false; };
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+    let viva = true;
+    apiAreaFormando().then(r => { if (viva) setDados(r); }).catch(() => { if (viva) setDados(null); });
+    return () => { viva = false; };
+  }, [user]);
+
   function avisar(texto: string) {
     setAviso(texto);
     window.setTimeout(() => setAviso(""), 2800);
@@ -501,6 +540,7 @@ export function AreaFormando() {
   async function sair() {
     await apiLogout().catch(() => undefined);
     setUser(null);
+    setDados(null);
   }
 
   return (
@@ -508,10 +548,17 @@ export function AreaFormando() {
       <Cabecalho />
       {!pronto ? (
         <main className="grid min-h-[50vh] place-items-center text-sm font-semibold text-[#1C3350]/50">A verificar a sessão…</main>
-      ) : user ? (
-        <Painel user={user} onSair={() => void sair()} avisar={avisar} />
+      ) : token && !user ? (
+        <ReporLigacao token={token} onFeito={() => { setToken(""); setReposta(true); }} />
+      ) : user && !dados ? (
+        <main className="grid min-h-[50vh] place-items-center text-sm font-semibold text-[#1C3350]/50">A ler o registo…</main>
+      ) : user && dados ? (
+        <Painel dados={dados} onDados={setDados} onSair={() => void sair()} avisar={avisar} />
       ) : (
-        <LoginFormando onEntrou={setUser} trocaInicial={troca} />
+        <>
+          {reposta && <p className="bg-[#FFF1D1] px-5 py-3 text-center text-sm font-semibold">Palavra-passe actualizada. Entre com a nova.</p>}
+          <LoginFormando onEntrou={setUser} trocaInicial={troca} />
+        </>
       )}
       {aviso && <p className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 bg-[#1C3350] px-4 py-3 text-sm font-semibold text-white shadow-lg" role="status">{aviso}</p>}
     </div>

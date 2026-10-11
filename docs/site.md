@@ -15,7 +15,8 @@ O ano do copyright é o ano corrente. Não se grava. Em 2026 o rodapé mostra ©
 - `/documentos/:token` ligação pessoal para anexar documentos. O ficheiro segue para o Google Drive.
 - `/cronograma/:regime/:turmaId` cronograma publicado de uma turma.
 - `/inquerito/:token` resposta ao inquérito de satisfação.
-- `/area-formando` login e área do formando. Quem não é formando é enviado para o GesForma. O que ainda é exemplo do Figma está em `docs/todo.md`.
+- `/noticias` artigos com estado Ativo em Gestão → Blog. `/noticias/:slug` abre o texto. Um post Inactivo não entra.
+- `/area-formando` login e área do formando. Os cursos, as sessões, os certificados e os pagamentos saem da ficha. O acesso é gerado pela secretaria no GesForma. Quem não é formando é enviado para o GesForma. O que ainda falta (Moodle e dados fiscais) está em `docs/todo.md`.
 - `/entrar` login da secretaria e do GesForma. O formando com sessão é enviado para `/area-formando`. O formador entra em `/gesforma/formador/turmas`, a secretaria financiada em `/gesforma/financiada`, e administrador, comercial e secretaria em `/gesforma/gold`.
 - `/gesforma/…` uma rota por vista do backoffice: painéis, CRM, cursos, fichas (`/gesforma/gold/cursos/:id` e `/gesforma/financiada/cursos/:id`), turmas, cockpit (`/gesforma/gold/turmas/:id` e `/gesforma/financiada/turmas/:id`), dossiês, inquéritos, blog, listas, emails, pagamentos, site e configurações. O separador do cockpit vai em `?separador=`.
 
@@ -43,10 +44,10 @@ Cada bloco do ecrã tem uma pré-visualização do rascunho dessa secção da p�
 
 O ecrã está dividido em:
 
-- Cabeçalho. Título do separador, as duas linhas da marca e os textos de Formação, Empresas, área de formando e iniciar sessão.
+- Cabeçalho. Título do separador, as duas linhas da marca e os textos de Formação, Notícias, Empresas, área de formando e iniciar sessão.
 - Destaque. Título, texto, botão e fotografia de fundo. A disposição põe o texto à esquerda com os cartões à direita, o texto ao centro com um cartão de cada lado, ou o texto à direita com os cartões à esquerda. A fotografia fica numa forma atrás do texto e dos cartões: círculo, elipse, quadrado, retângulo ou losango. Essa forma não segue a disposição nem a posição do texto. A cor da borda, a espessura (0 a 40 pixels), a posição (−150 a 150) e o tamanho (40% a 180%) editam-se à parte. Zero na posição e 100% no tamanho mantêm o círculo com borda vermelha de 14 pixels, à direita no ecrã grande. A largura e a altura do contentor vão de 50% a 160%; 100% é o tamanho de omissão. O tamanho do título, do texto e do botão vai de 60% a 180%. A posição horizontal e vertical de cada um vai de −40 a 40, e zero é o lugar de omissão. Os dois cartões editam-se na mesma secção.
 - Oferta formativa. Antetítulo, título e texto da pesquisa. A grelha de cursos vem das fichas.
-- Apresentação. Fotografia, nota em destaque (por omissão `4,8/5`), texto e os quatro pilares.
+- Apresentação. Fotografia (ficheiro ou endereço), nota em destaque, texto, os quatro pilares, o nome da Eva, a frase de boas-vindas e os objectivos. A nota pública é a média das escalas dos inquéritos, no formato `4,8/5`. Sem respostas, usa-se o texto de recurso. A fotografia de fundo do destaque carrega-se do mesmo modo: o ficheiro fica no rascunho e o site muda depois de Guardar.
 - Empresas. Antetítulo, título, texto e botão.
 - Rodapé. Sigla, texto, email, telefone, horário, ligações úteis e lema. O ano do © não é um campo.
 

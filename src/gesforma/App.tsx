@@ -7,7 +7,7 @@ import {
   ModulosView, ConteudosView, FinInscricoesView, BlogTematicasView, ConfiguracoesView,
   DatasFinView, LocaisFinView, AreasTematicasFinView, ModulosFinView, ConteudosFinView,
 } from "./CatalogViews";
-import { FichaFormando } from "./FormandoFicha";
+import { AcessoFormando, FichaFormando } from "./FormandoFicha";
 import {
   PagamentoDetalheModal, ReciboModal, CertificadoVerModal, ExportTurmaModal, NotificacoesView,
   type TransacaoPreview, type CertificadoPreview, type ExportTurmaInfo, type NotifRow,
@@ -51,6 +51,7 @@ import { ValoresHoraFormador } from "./ValoresHoraFormador";
 import { apiEnviarInqueritosTurma } from "../partilhado/api";
 import { formadorIndisponivel, formadorNaSessao, horaMais, nomesDoUtilizador, podeMexerDocumento, staffPodeDossie } from "../partilhado/sessaoAcesso";
 import { sessaoCabeNoSlot } from "../partilhado/disponibilidade";
+import { DisponibilidadeEditor } from "../partilhado/DisponibilidadeEditor";
 import { CustosTurmaCard } from "./CustosTurma";
 import { CrmClientesView, CrmContratosView, CrmParceirosView } from "./CrmDiretorioView";
 import { FormadorCalendario, eventosDoFormador } from "../partilhado/FormadorCalendario";
@@ -3006,6 +3007,9 @@ function FichaFormandoFin({ formando, onClose }: { formando: FormandoFin; onClos
                 <p className="text-sm font-semibold text-slate-700 mt-0.5 break-all">{f.v}</p>
               </div>
             ))}
+            <div className="col-span-2">
+              <AcessoFormando regime="fin" id={live.id} email={live.email} jaTinha={live.temAcesso} />
+            </div>
           </div>
         )}
         {tab === "documentos" && !formador && <DocumentosFinPanel formando={live} />}
@@ -3986,11 +3990,13 @@ function BlogView() {
   const [tematica, setTematica] = useState("");
   const [titulo, setTitulo] = useState("");
   const [slug, setSlug] = useState("");
+  const [corpo, setCorpo] = useState("");
+  const [estadoPost, setEstadoPost] = useState("Ativo");
   const [apagarPost, setApagarPost] = useState<BlogPostRow | null>(null);
   const f = blogPosts.filter(x => x.titulo.toLowerCase().includes(s.toLowerCase()) && (filtro === "Todos" || x.status === filtro));
   return (
     <div className="space-y-4">
-      <PageHeader title="Blog - Posts" action={<NewBtn label="+ Novo Post" onClick={() => { setEditId(null); setTitulo(""); setSlug(""); setTematica(""); setOpen(true); }} />} />
+      <PageHeader title="Blog - Posts" sub="Um post Ativo aparece em Notícias no site. Inactivo fica só aqui." action={<NewBtn label="+ Novo Post" onClick={() => { setEditId(null); setTitulo(""); setSlug(""); setTematica(""); setCorpo(""); setEstadoPost("Ativo"); setOpen(true); }} />} />
       <ViewFilters
         chips={{ options: ["Todos", "Ativo", "Inactivo"], value: filtro, onChange: v => { setFiltro(v); setP(1); } }}
         onClear={() => setFiltro("Todos")}
@@ -4010,7 +4016,7 @@ function BlogView() {
                   <Td className="font-mono text-xs text-slate-500">{r.slug}</Td>
                   <Td className="font-mono text-xs text-slate-500">{r.data}</Td>
                   <Td>{estadoBadge(r.status)}</Td>
-                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => { setEditId(r.id); setTitulo(r.titulo); setSlug(r.slug); setTematica(r.tematica ?? ""); setOpen(true); }} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagarPost(r)} /></div></Td>
+                  <Td><div className="flex gap-1"><ActBtn icon={I.edit} label="Editar" onClick={() => { setEditId(r.id); setTitulo(r.titulo); setSlug(r.slug); setTematica(r.tematica ?? ""); setCorpo(r.corpo ?? ""); setEstadoPost(r.status || "Ativo"); setOpen(true); }} /><ActBtn icon={I.trash} label="Eliminar" color="red" onClick={() => setApagarPost(r)} /></div></Td>
                 </tr>
               ))}
             </tbody>
@@ -4018,11 +4024,19 @@ function BlogView() {
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
-      <SlideOver open={open} onClose={() => setOpen(false)} title={editId != null ? "Editar post" : "Novo post"} sub="Artigo no site da ENA">
+      <SlideOver open={open} onClose={() => setOpen(false)} title={editId != null ? "Editar post" : "Novo post"} sub="Publicado em /noticias quando o estado é Ativo">
         <div className="p-5 space-y-3">
           <Field label="Título"><input className={iCls} value={titulo} onChange={e => setTitulo(e.target.value)} /></Field>
           <Field label="Temática"><SearchSelect value={tematica} onChange={setTematica} options={blogTematicasOpts} placeholder="Pesquisar temática…" /></Field>
           <Field label="Slug"><input className={iCls} value={slug} onChange={e => setSlug(e.target.value)} placeholder="ccp-formacao-formadores" /></Field>
+          <Field label="Texto"><textarea className={`${iCls} min-h-40`} value={corpo} onChange={e => setCorpo(e.target.value)} placeholder="O texto que o site mostra no artigo. Parágrafos separados por uma linha em branco." /></Field>
+          <Field label="Estado">
+            <div className="flex gap-2">
+              {["Ativo", "Inactivo"].map(opcao => (
+                <button key={opcao} type="button" onClick={() => setEstadoPost(opcao)} className={`px-3 py-1.5 text-xs font-semibold rounded-full border ${estadoPost === opcao ? "bg-amber-500 text-white border-amber-500" : "bg-white text-slate-600 border-slate-200"}`}>{opcao === "Ativo" ? "Ativo · no site" : "Inactivo · fora do site"}</button>
+              ))}
+            </div>
+          </Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
             <button onClick={() => {
@@ -4030,12 +4044,12 @@ function BlogView() {
               const s = (slug.trim() || titulo).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
               void (async () => {
                 if (editId != null) {
-                  patchBlogPost(editId, { titulo: titulo.trim(), slug: s, tematica });
+                  patchBlogPost(editId, { titulo: titulo.trim(), slug: s, tematica, corpo, status: estadoPost });
                 } else {
-                  const id = await addBlogPost({ id: -Date.now(), titulo: titulo.trim(), slug: s, data: new Date().toISOString().slice(0, 10), status: "Ativo", tematica });
+                  const id = await addBlogPost({ id: -Date.now(), titulo: titulo.trim(), slug: s, data: new Date().toISOString().slice(0, 10), status: estadoPost, tematica, corpo });
                   if (!id) return;
                 }
-                setOpen(false); setTitulo(""); setSlug(""); setTematica(""); setEditId(null);
+                setOpen(false); setTitulo(""); setSlug(""); setTematica(""); setCorpo(""); setEstadoPost("Ativo"); setEditId(null);
               })();
             }} disabled={!titulo.trim()} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editId != null ? "Guardar" : "Criar post"}</button>
           </div>
@@ -5063,14 +5077,31 @@ function gruposDoPerfil(role: string): string[] {
 function FormadorCalendarioPagina() {
   const { user } = useAuth();
   const { gold, fin } = useTurmas();
-  const { formadores } = useFormadores();
+  const { formadores, patchFormador } = useFormadores();
   const nomes = [...nomesDoUtilizador(user, formadores)];
+  const meu = formadores.find(f => f.email.trim().toLowerCase() === user.email.trim().toLowerCase())
+    ?? formadores.find(f => f.nome.trim().toLowerCase() === user.name.trim().toLowerCase());
   const turmas = [...gold, ...fin].map(t => ({ nome: t.nome, cronograma: t.cronograma }));
   const eventos = nomes.flatMap(n => eventosDoFormador(n, turmas));
   return (
-    <div className="space-y-3">
-      <h1 className="text-lg font-bold text-slate-800">O meu calendário</h1>
-      <FormadorCalendario nome={nomes[0] ?? user.name} eventos={eventos} />
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-lg font-bold text-slate-800">O meu calendário</h1>
+        <p className="mt-1 text-sm text-slate-500">A disponibilidade que registar aqui é a que o cronograma usa. A secretaria continua a poder ajustá-la na ficha.</p>
+      </div>
+      {meu ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Disponibilidade CCP</p>
+          <DisponibilidadeEditor
+            value={meu.disponibilidade}
+            onChange={slots => patchFormador(meu.id, { disponibilidade: slots })}
+            nota="Laboral 9h a 13h, pós-laboral 16h30 a 23h, sábado de manhã 9h a 13h e sábado à tarde 14h a 19h."
+          />
+        </div>
+      ) : (
+        <p className="text-sm text-slate-500">A secretaria ainda não associou esta conta a uma ficha de formador.</p>
+      )}
+      <FormadorCalendario nome={nomes[0] ?? user.name} eventos={eventos} slots={meu?.disponibilidade} />
     </div>
   );
 }

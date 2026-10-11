@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { isCatalogKind } from "./db/catalogSeed.js";
 import type { Db } from "./db/pool.js";
+import { excerto, satisfacaoPublica } from "./areaFormando.js";
 import { guardarImagemHero } from "./cursoImagens.js";
 import { normalizarLembrete } from "./lembretePre.js";
 import { nextOpsId } from "./ops.js";
@@ -109,7 +110,40 @@ export function registerCatalogRoutes(
         if (typeof valor === "string") valores[chave] = valor;
       }
     }
-    return { valores };
+    const satisfacao = await satisfacaoPublica(db);
+    return { valores, satisfacao };
+  });
+
+  app.get("/v1/public/noticias", async (_req, reply) => {
+    reply.header("cache-control", "no-store");
+    const rows = await db.query<{ titulo: string; slug: string; data: string; tematica: string; corpo: string }>(
+      "SELECT titulo, slug, data, tematica, COALESCE(corpo, '') AS corpo FROM blog_posts WHERE status = 'Ativo' ORDER BY data DESC, id DESC",
+    );
+    return {
+      noticias: rows.rows.map(r => ({
+        titulo: r.titulo,
+        slug: r.slug,
+        data: r.data,
+        tematica: r.tematica,
+        excerto: excerto(r.corpo),
+      })),
+    };
+  });
+
+  app.get("/v1/public/noticias/:slug", async (req, reply) => {
+    reply.header("cache-control", "no-store");
+    const slug = String((req.params as { slug?: string }).slug ?? "").slice(0, 200);
+    const row = await db.query<{ titulo: string; slug: string; data: string; tematica: string; corpo: string; status: string }>(
+      "SELECT titulo, slug, data, tematica, COALESCE(corpo, '') AS corpo, status FROM blog_posts WHERE slug = $1",
+      [slug],
+    );
+    const post = row.rows[0];
+    if (!post || post.status !== "Ativo") return reply.code(404).send({ error: "notícia não encontrada" });
+    const outras = await db.query<{ titulo: string; slug: string; data: string; tematica: string }>(
+      "SELECT titulo, slug, data, tematica FROM blog_posts WHERE status = 'Ativo' AND slug <> $1 ORDER BY data DESC LIMIT 3",
+      [slug],
+    );
+    return { noticia: post, outras: outras.rows };
   });
 
   app.get("/v1/settings", async (req, reply) => {
@@ -143,7 +177,9 @@ export function registerCatalogRoutes(
     if (!requireAuth(req, reply)) return;
     if (req.actor?.role !== "admin") return reply.code(403).send({ error: "só o administrador edita o site" });
     const slot = String((req.params as { slot?: string }).slot ?? "");
-    if (slot !== "1" && slot !== "2") return reply.code(400).send({ error: "pedido inválido" });
+    if (slot !== "1" && slot !== "2" && slot !== "fundo" && slot !== "apresentacao") {
+      return reply.code(400).send({ error: "pedido inválido" });
+    }
     let nome = "hero.jpg";
     let mime = "";
     let bytes: Buffer | null = null;

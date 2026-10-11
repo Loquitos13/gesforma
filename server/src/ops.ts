@@ -106,6 +106,7 @@ export function mapFormandoGold(r: Record<string, unknown>) {
     pago: Boolean(r.pago),
     valor: num(r.valor),
     metodo: String(r.metodo ?? "-"),
+    temAcesso: Boolean(r.user_id),
   };
 }
 
@@ -133,6 +134,7 @@ export function mapFormandoFin(r: Record<string, unknown>) {
     morada: doc("morada"),
     contrato: doc("contrato"),
     rgpd: doc("rgpd"),
+    temAcesso: Boolean(r.user_id),
   };
 }
 
@@ -288,6 +290,7 @@ export function mapBlog(r: Record<string, unknown>) {
     data: String(r.data ?? ""),
     status: String(r.status ?? "Ativo"),
     tematica: String(r.tematica ?? ""),
+    corpo: String(r.corpo ?? ""),
   };
 }
 

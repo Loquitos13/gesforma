@@ -76,11 +76,11 @@ export async function guardarImagemCurso(
   return { nome, url };
 }
 
-const HERO_CURSO_ID: Record<"1" | "2", number> = { "1": -91001, "2": -91002 };
+const HERO_CURSO_ID = { "1": -91001, "2": -91002, fundo: -91003, apresentacao: -91004 } as const;
 
 export async function guardarImagemHero(
   db: Db,
-  slot: "1" | "2",
+  slot: keyof typeof HERO_CURSO_ID,
   file: { nome: string; mime: string; bytes: Buffer },
 ) {
   if (file.bytes.length > MAX_BYTES) throw new Error("A imagem passa de 8 MB.");

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { EnviarReciboModal, ReferenciaMbModal } from "./ActionSurfaces";
 import { useAuth } from "../partilhado/AuthGate";
-import { apiAddFormandoNota, apiDtpModelo, apiFormandoDossier, apiSaveFormandoDocs, type FormandoNota } from "../partilhado/api";
+import { apiAddFormandoNota, apiDtpModelo, apiFormandoDossier, apiGerarAcessoFormando, apiSaveFormandoDocs, type FormandoNota } from "../partilhado/api";
 import { idCursoPorNome } from "../partilhado/cursoLocais";
 import { docsFormandoBase, fundirDocTipos } from "../partilhado/dossierDocs";
 import { persist } from "../partilhado/toastBus";
@@ -151,6 +151,56 @@ function DocumentosGoldPanel({ formando, avulso, tipo = "gold" }: { formando: Fo
   );
 }
 
+export function AcessoFormando({
+  regime, id, email, jaTinha = false,
+}: {
+  regime: "gold" | "fin";
+  id: number;
+  email: string;
+  jaTinha?: boolean;
+}) {
+  const { user } = useAuth();
+  const [ja, setJa] = useState(jaTinha);
+  const [busy, setBusy] = useState(false);
+  const [erro, setErro] = useState("");
+  const [acesso, setAcesso] = useState<{ email: string; password?: string } | null>(null);
+  if (user.role === "formador") return null;
+  async function gerar(repor: boolean) {
+    setBusy(true);
+    setErro("");
+    try {
+      const r = await apiGerarAcessoFormando(regime, id, repor);
+      setAcesso(r.acesso);
+      setJa(true);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Não foi possível gerar o acesso.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Área do formando</p>
+      <p className="mt-1 text-xs leading-5 text-slate-600">O acesso é criado aqui, a partir desta ficha. A pessoa entra em /area-formando com o email {email || "da ficha"}.</p>
+      {acesso?.password && (
+        <p className="mt-3 text-sm font-semibold text-slate-800">Palavra-passe inicial: {acesso.password}. Guarde-a agora. A plataforma mostra-a só nesta altura.</p>
+      )}
+      {acesso && !acesso.password && (
+        <p className="mt-3 text-sm text-slate-600">Esta ficha já tinha acesso. A palavra-passe não foi alterada.</p>
+      )}
+      {erro && <p className="mt-2 text-xs font-medium text-red-600">{erro}</p>}
+      <button
+        type="button"
+        disabled={busy || !email.trim()}
+        onClick={() => void gerar(ja)}
+        className="mt-3 px-3 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-40"
+      >
+        {busy ? "A gerar…" : ja ? "Gerar nova palavra-passe" : "Gerar acesso"}
+      </button>
+    </div>
+  );
+}
+
 export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "documentos", avulso = false }: {
   formando: FormandoTurma; tipo?: "gold" | "fin"; onClose: () => void;
   initialTab?: "info" | "documentos" | "pagamentos" | "historico" | "notas";
@@ -250,6 +300,9 @@ export function FichaFormando({ formando, tipo = "gold", onClose, initialTab = "
                 </div>
               ))}
             </div>
+            {!formador && (
+              <AcessoFormando regime={tipo === "fin" ? "fin" : "gold"} id={formando.id} email={formando.email} jaTinha={formando.temAcesso} />
+            )}
             {turma && (
               <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
                 <p className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-2">Turma</p>

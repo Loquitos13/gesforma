@@ -397,9 +397,7 @@ export function FormadoresView({ regime, openId, onOpened }: { regime: FormadorR
               <DisponibilidadeEditor
                 value={draft.disponibilidade}
                 onChange={slots => setDraft({ ...draft, disponibilidade: slots })}
-                nota={draft.alocado
-                  ? "Este formador já está numa turma. A disponibilidade fica fechada para ele. A secretaria e a administração continuam a poder ajustá-la."
-                  : "Laboral 9h a 13h, pós-laboral 16h30 a 23h, sábado de manhã 9h a 13h e sábado à tarde 14h a 19h."}
+                nota="O formador regista estes horários no calendário do GesForma. A secretaria continua a poder ajustá-los aqui. Laboral 9h a 13h, pós-laboral 16h30 a 23h, sábado de manhã 9h a 13h e sábado à tarde 14h a 19h."
               />
             </Field>
             <Field label="Estado">

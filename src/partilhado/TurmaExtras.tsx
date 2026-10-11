@@ -441,11 +441,8 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Disponibilidade CCP</p>
               <DisponibilidadeEditor
                 value={formador.disponibilidade}
-                locked={Boolean(formador.alocado) && user.role === "formador"}
                 onChange={slots => patchFormador(formador.id, { disponibilidade: slots })}
-                nota={formador.alocado
-                  ? "Depois de estar numa turma, o formador deixa de alterar estes horários. A secretaria e a administração continuam a poder ajustá-los."
-                  : "Laboral 9h a 13h, pós-laboral 16h30 a 23h, sábado de manhã 9h a 13h e sábado à tarde 14h a 19h."}
+                nota="O formador regista estes horários no GesForma. A secretaria continua a poder ajustá-los. Laboral 9h a 13h, pós-laboral 16h30 a 23h, sábado de manhã 9h a 13h e sábado à tarde 14h a 19h."
               />
             </div>
           )}

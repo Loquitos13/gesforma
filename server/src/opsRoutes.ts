@@ -1605,11 +1605,15 @@ export function registerOpsRoutes(
     const antes = await one(db, "SELECT nome, email, user_id FROM formadores WHERE id = $1", [id]);
     if (!antes) return reply.code(404).send({ error: "formador não encontrado" });
     const alocado = await formadorEstaAlocado(db, String(antes.nome ?? ""));
-    if (req.actor!.role === "formador" && d.disponibilidade && alocado) {
-      return reply.code(403).send({ error: "Depois de estar numa turma, a disponibilidade só é alterada pela secretaria ou pela administração." });
-    }
-    if (req.actor!.role === "formador" && d.custoHora != null) {
-      return reply.code(403).send({ error: "O valor hora é definido pela secretaria ou pela administração." });
+    if (req.actor!.role === "formador") {
+      if (String(antes.user_id ?? "") !== req.actor!.id) {
+        return reply.code(403).send({ error: "O formador só altera a própria disponibilidade." });
+      }
+      if (!d.disponibilidade) return reply.code(400).send({ error: "Indique a disponibilidade." });
+      await db.query("UPDATE formadores SET disponibilidade = $2::jsonb WHERE id = $1", [id, JSON.stringify(d.disponibilidade)]);
+      const row = await one(db, "SELECT * FROM formadores WHERE id = $1", [id]);
+      const formador = row ? { ...mapFormador(row), alocado } : null;
+      return { formador, acesso: null };
     }
     await db.query(
       `UPDATE formadores SET nome = COALESCE($2, nome), telf = COALESCE($3, telf), email = COALESCE($4, email),
@@ -1691,6 +1695,7 @@ export function registerOpsRoutes(
     data: z.string().max(20),
     status: z.string().max(20).optional().default("Ativo"),
     tematica: z.string().max(120).optional().default(""),
+    corpo: z.string().max(20000).optional().default(""),
   });
   app.post("/v1/blog", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
@@ -1698,7 +1703,7 @@ export function registerOpsRoutes(
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
     const id = await nextOpsId(db);
-    await db.query("INSERT INTO blog_posts (id, titulo, slug, data, status, tematica) VALUES ($1,$2,$3,$4,$5,$6)", [id, d.titulo, d.slug, d.data, d.status, d.tematica]);
+    await db.query("INSERT INTO blog_posts (id, titulo, slug, data, status, tematica, corpo) VALUES ($1,$2,$3,$4,$5,$6,$7)", [id, d.titulo, d.slug, d.data, d.status, d.tematica, d.corpo]);
     const row = await one(db, "SELECT * FROM blog_posts WHERE id = $1", [id]);
     return { post: row ? mapBlog(row) : { id } };
   });
@@ -1709,8 +1714,8 @@ export function registerOpsRoutes(
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
     await db.query(
-      "UPDATE blog_posts SET titulo = COALESCE($2, titulo), slug = COALESCE($3, slug), data = COALESCE($4, data), status = COALESCE($5, status), tematica = COALESCE($6, tematica) WHERE id = $1",
-      [id, d.titulo ?? null, d.slug ?? null, d.data ?? null, d.status ?? null, d.tematica ?? null],
+      "UPDATE blog_posts SET titulo = COALESCE($2, titulo), slug = COALESCE($3, slug), data = COALESCE($4, data), status = COALESCE($5, status), tematica = COALESCE($6, tematica), corpo = COALESCE($7, corpo) WHERE id = $1",
+      [id, d.titulo ?? null, d.slug ?? null, d.data ?? null, d.status ?? null, d.tematica ?? null, d.corpo ?? null],
     );
     const row = await one(db, "SELECT * FROM blog_posts WHERE id = $1", [id]);
     return { post: row ? mapBlog(row) : null };

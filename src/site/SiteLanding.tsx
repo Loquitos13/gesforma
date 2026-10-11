@@ -1,7 +1,7 @@
 import { createContext, type CSSProperties, FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { ApiError, apiMe, apiPublicPreinscricao, type SessionUser } from "../partilhado/api";
 import { InscricaoSite, useInscricao } from "./SiteInscricao";
-import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, destinoDoHero, ePrepago, ePreinscricao, estiloMargem, heroAnimacao, heroBadge, heroDisposicao, heroPedido, heroTamanho, HERO_CONTENTOR_MAX, HERO_CONTENTOR_MIN, HERO_FORMA_BORDA_MAX, HERO_FORMA_BORDA_MIN, HERO_FORMA_POS_MAX, HERO_FORMA_POS_MIN, HERO_FORMA_TAMANHO_MAX, HERO_FORMA_TAMANHO_MIN, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, ligacaoExterna, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, corForma, heroForma, rotuloBotaoInscricao, textoSite, tituloRegime, type HeroAnimacao, type HeroBadgeCor, type HeroPedido, type HeroTamanho, type InscricaoPublica, type SiteChave } from "../partilhado/siteConteudo";
+import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, destinoDoHero, ePrepago, ePreinscricao, estiloMargem, heroAnimacao, heroBadge, heroDisposicao, heroPedido, heroTamanho, HERO_CONTENTOR_MAX, HERO_CONTENTOR_MIN, HERO_FORMA_BORDA_MAX, HERO_FORMA_BORDA_MIN, HERO_FORMA_POS_MAX, HERO_FORMA_POS_MIN, HERO_FORMA_TAMANHO_MAX, HERO_FORMA_TAMANHO_MIN, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, ligacaoExterna, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, objectivosEva, corForma, heroForma, rotuloBotaoInscricao, textoSite, tituloRegime, type HeroAnimacao, type HeroBadgeCor, type HeroPedido, type HeroTamanho, type InscricaoPublica, type SiteChave } from "../partilhado/siteConteudo";
 
 export type Course = {
   id: string;
@@ -89,24 +89,43 @@ type OfertaEstado = {
   recarregar: () => void;
 };
 
+type TextoSite = {
+  ler: (chave: SiteChave) => string;
+  nota: string | null;
+};
+
 const OfertaCtx = createContext<OfertaEstado | null>(null);
-const SiteTextoCtx = createContext<(chave: SiteChave) => string>(chave => textoSite(undefined, chave));
+const SiteTextoCtx = createContext<TextoSite>({
+  ler: chave => textoSite(undefined, chave),
+  nota: null,
+});
 
 function useSiteTexto() {
-  return useContext(SiteTextoCtx);
+  return useContext(SiteTextoCtx).ler;
 }
 
-function useSiteTextoState() {
+function useNotaInqueritos() {
+  return useContext(SiteTextoCtx).nota;
+}
+
+function useSiteTextoState(): TextoSite {
   const [gravado, setGravado] = useState<Record<string, string>>({});
+  const [nota, setNota] = useState<string | null>(null);
   useEffect(() => {
     let vivo = true;
     fetch("/api/v1/public/site", { cache: "no-store" })
-      .then(async res => (res.ok ? res.json() as Promise<{ valores?: Record<string, string> }> : { valores: {} }))
-      .then(data => { if (vivo) setGravado(data.valores ?? {}); })
+      .then(async res => (res.ok ? res.json() as Promise<{ valores?: Record<string, string>; satisfacao?: { nota?: string } | null }> : { valores: {}, satisfacao: null }))
+      .then(data => {
+        if (!vivo) return;
+        setGravado(data.valores ?? {});
+        const media = data.satisfacao?.nota?.trim();
+        setNota(media || null);
+      })
       .catch(() => undefined);
     return () => { vivo = false; };
   }, []);
-  return useCallback((chave: SiteChave) => textoSite(gravado, chave), [gravado]);
+  const ler = useCallback((chave: SiteChave) => textoSite(gravado, chave), [gravado]);
+  return { ler, nota };
 }
 
 export function useOferta() {
@@ -216,6 +235,7 @@ function Header() {
         </a>
         <nav className="hidden items-center gap-8 text-sm font-semibold lg:flex" aria-label="Navegação principal">
           <a href="/formacao" className="text-[#14263D] hover:text-[#A60000]">{t("navFormacao")}</a>
+          {t("navNoticias") && <a href="/noticias" className="text-[#14263D] hover:text-[#A60000]">{t("navNoticias")}</a>}
           <a href="/#empresas" className="text-[#14263D] hover:text-[#A60000]">{t("navEmpresas")}</a>
         </nav>
         <div className="hidden items-center gap-4 lg:flex">
@@ -231,6 +251,7 @@ function Header() {
         <nav className="border-t border-[#14263D]/10 bg-white px-5 py-6 text-[#14263D] lg:hidden">
           <div className="flex flex-col gap-5 font-semibold">
             <a href="/formacao" onClick={() => setOpen(false)}>{t("navFormacao")}</a>
+            {t("navNoticias") && <a href="/noticias" onClick={() => setOpen(false)}>{t("navNoticias")}</a>}
             <a href="/#empresas" onClick={() => setOpen(false)}>{t("navEmpresas")}</a>
             {formando ? (
               <a href="/area-formando" className="border-t border-[#14263D]/10 pt-5 text-[#A60000]">{t("navFormando")}</a>
@@ -508,6 +529,8 @@ function SplitHero() {
 function Home() {
   const { destaques, estado, recarregar } = useOferta();
   const t = useSiteTexto();
+  const notaInqueritos = useNotaInqueritos();
+  const notaApresentacao = notaInqueritos || t("metodoNota");
   const metodoImagem = moradaSegura(t("metodoImagem"));
   const pilares = [1, 2, 3, 4].map(n => ({
     number: t(`pilar${n}Numero` as SiteChave),
@@ -595,9 +618,9 @@ function Home() {
             <div className="aspect-[4/5] overflow-hidden bg-[#E7EBF0]">
               {metodoImagem && <img src={metodoImagem} alt={t("metodoImagemAlt")} className="h-full w-full object-cover" />}
             </div>
-            {t("metodoNota") && (
+            {notaApresentacao && (
               <div className="absolute -bottom-7 -right-3 w-44 bg-[#FFA900] p-5 text-[#14263D] sm:right-8">
-                <strong className="block font-serif text-4xl">{t("metodoNota")}</strong>
+                <strong className="block font-serif text-4xl">{notaApresentacao}</strong>
                 {t("metodoNotaLegenda") && <span className="mt-1 block text-xs font-bold uppercase tracking-wider">{t("metodoNotaLegenda")}</span>}
               </div>
             )}
@@ -656,6 +679,7 @@ function Footer() {
             <strong className="text-sm text-white">{t("rodapeTituloLigacoes")}</strong>
             <div className="mt-4 flex flex-col gap-3 text-sm text-[#D7E0EA] underline decoration-white/30 underline-offset-4">
               {t("rodapeLigacaoFormacao") && <a href="/formacao" className="hover:text-white">{t("rodapeLigacaoFormacao")}</a>}
+              {t("navNoticias") && <a href="/noticias" className="hover:text-white">{t("navNoticias")}</a>}
               {privacidade && t("rodapePrivacidade") && <a href={privacidade} target="_blank" rel="noreferrer" className="hover:text-white">{t("rodapePrivacidade")}</a>}
               {reclamacoes && t("rodapeReclamacoes") && <a href={reclamacoes} target="_blank" rel="noreferrer" className="hover:text-white">{t("rodapeReclamacoes")}</a>}
             </div>
@@ -671,6 +695,9 @@ function Footer() {
 }
 
 function WhatsAppAssistant() {
+  const t = useSiteTexto();
+  const nomeEva = t("evaNome").trim() || "Eva";
+  const objectivos = objectivosEva(t("evaObjetivos"));
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"welcome" | "name" | "goal" | "path" | "format" | "courses" | "confirm" | "handoff">("welcome");
   const [typing, setTyping] = useState(false);
@@ -699,11 +726,9 @@ function WhatsAppAssistant() {
         path === "direct" ? !ePreinscricao(course.enrollment) : true,
   );
   const availableFormats = Array.from(new Set(pathCourses.map((course) => course.format)));
-  const goalAreas: Record<string, string[]> = {
-    "Competências digitais": ["Digital"],
-    "Gestão e liderança": ["Gestão", "Competências"],
-    "Saúde e segurança": ["Saúde", "Segurança"],
-  };
+  const goalAreas: Record<string, string[]> = Object.fromEntries(
+    objectivos.filter(item => item.areas.length).map(item => [item.rotulo, item.areas]),
+  );
   const visibleCourses = pathCourses
     .filter((course) => format === "Todos" || course.format === format)
     .sort((a, b) => Number(goalAreas[goal]?.includes(b.area)) - Number(goalAreas[goal]?.includes(a.area)));
@@ -726,7 +751,7 @@ function WhatsAppAssistant() {
   };
   const progress = { welcome: 0, name: 1, goal: 2, path: 3, format: 4, courses: 4, confirm: 4, handoff: 4 }[step];
   const botCopy = {
-    welcome: "Olá! Sou a Eva, assistente virtual da ENA. Em menos de dois minutos ajudo a encontrar a formação certa e a tratar da inscrição.",
+    welcome: t("evaBoasVindas"),
     name: "Antes de começarmos, como gostaria que lhe chamasse?",
     goal: `Muito prazer, ${name || "por aqui"}! O que procura desenvolver neste momento?`,
     path: "Prefere formação financiada ou uma solução ENA Gold autofinanciada?",
@@ -764,7 +789,7 @@ function WhatsAppAssistant() {
           <header className="flex items-center justify-between bg-[#075E54] p-4 text-white">
             <div className="flex items-center gap-3">
               <span className="grid h-10 w-10 place-items-center rounded-full bg-white/15"><Icon name="whatsapp" className="h-6 w-6" /></span>
-              <div><strong className="block text-sm">Eva · Assistente ENA</strong><span className="flex items-center gap-1.5 text-xs text-white/70"><span className="h-2 w-2 rounded-full bg-[#25D366]" />Responde de imediato</span></div>
+              <div><strong className="block text-sm">{nomeEva} · Assistente ENA</strong><span className="flex items-center gap-1.5 text-xs text-white/70"><span className="h-2 w-2 rounded-full bg-[#25D366]" />Responde de imediato</span></div>
             </div>
             <button type="button" onClick={() => setOpen(false)} className="p-2 text-white/75 hover:text-white" aria-label="Fechar conversa"><Icon name="close" /></button>
           </header>
@@ -794,7 +819,7 @@ function WhatsAppAssistant() {
 
             {!typing && step === "goal" && (
               <div className="ml-auto grid max-w-[90%] gap-2">
-                {["Evoluir na carreira", "Competências digitais", "Gestão e liderança", "Saúde e segurança"].map((item) => <button type="button" key={item} onClick={() => { setGoal(item); transition("path"); }} className="rounded-xl bg-[#DCF8C6] px-4 py-3 text-left text-sm font-bold shadow-sm">{item}</button>)}
+                {objectivos.map((item) => <button type="button" key={item.rotulo} onClick={() => { setGoal(item.rotulo); transition("path"); }} className="rounded-xl bg-[#DCF8C6] px-4 py-3 text-left text-sm font-bold shadow-sm">{item.rotulo}</button>)}
               </div>
             )}
 
@@ -874,7 +899,7 @@ function WhatsAppAssistant() {
 export function SiteFrame({ children }: { children: ReactNode }) {
   const oferta = useOfertaState();
   const texto = useSiteTextoState();
-  const titulo = texto("tituloSeparador");
+  const titulo = texto.ler("tituloSeparador");
   useEffect(() => {
     const prev = document.title;
     document.title = titulo || "ENA";

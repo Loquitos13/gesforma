@@ -3,6 +3,7 @@ export const SITE_OMISSAO = {
   marcaLinha1: "Escola de",
   marcaLinha2: "Negócios e Administração",
   navFormacao: "Formação",
+  navNoticias: "Notícias",
   navEmpresas: "Empresas",
   navFormando: "Área de formando",
   navEntrar: "Iniciar Sessão",
@@ -70,6 +71,9 @@ export const SITE_OMISSAO = {
   metodoImagemAlt: "Sessão de formação colaborativa",
   metodoNota: "4,8/5",
   metodoNotaLegenda: "Satisfação média",
+  evaNome: "Eva",
+  evaBoasVindas: "Olá! Sou a Eva, assistente virtual da ENA. Em menos de dois minutos ajudo a encontrar a formação certa e a tratar da inscrição.",
+  evaObjetivos: "Evoluir na carreira\nCompetências digitais | Digital\nGestão e liderança | Gestão, Competências\nSaúde e segurança | Saúde, Segurança",
   metodoKicker: "Mais do que aprender",
   metodoTitulo: "Conhecimento que se transforma em ação.",
   metodoTexto: "Na ENA, cada percurso é desenhado para criar impacto real — no trabalho, nas equipas e na comunidade.",
@@ -118,6 +122,7 @@ export const SITE_GRUPOS: { titulo: string; nota?: string; campos: CampoSite[] }
       { chave: "marcaLinha1", etiqueta: "Marca, primeira linha", tipo: "linha" },
       { chave: "marcaLinha2", etiqueta: "Marca, segunda linha", tipo: "linha" },
       { chave: "navFormacao", etiqueta: "Ligação Formação", tipo: "linha" },
+      { chave: "navNoticias", etiqueta: "Ligação Notícias", tipo: "linha" },
       { chave: "navEmpresas", etiqueta: "Ligação Empresas", tipo: "linha" },
       { chave: "navFormando", etiqueta: "Ligação da área de formando", tipo: "linha" },
       { chave: "navEntrar", etiqueta: "Botão Iniciar sessão", tipo: "linha" },
@@ -130,7 +135,7 @@ export const SITE_GRUPOS: { titulo: string; nota?: string; campos: CampoSite[] }
       { chave: "heroTitulo", etiqueta: "Título", tipo: "texto" },
       { chave: "heroTexto", etiqueta: "Texto", tipo: "texto" },
       { chave: "heroBotao", etiqueta: "Botão", tipo: "linha" },
-      { chave: "heroImagem", etiqueta: "Fotografia (endereço https ou /imagens/…)", tipo: "url" },
+      { chave: "heroImagem", etiqueta: "Fotografia de fundo. Carregue um ficheiro ou cole um endereço.", tipo: "url" },
       { chave: "heroImagemAlt", etiqueta: "Descrição da fotografia", tipo: "linha" },
     ],
   },
@@ -146,9 +151,9 @@ export const SITE_GRUPOS: { titulo: string; nota?: string; campos: CampoSite[] }
   {
     titulo: "Apresentação",
     campos: [
-      { chave: "metodoImagem", etiqueta: "Fotografia (endereço https ou /imagens/…)", tipo: "url" },
+      { chave: "metodoImagem", etiqueta: "Fotografia. Carregue um ficheiro ou cole um endereço.", tipo: "url" },
       { chave: "metodoImagemAlt", etiqueta: "Descrição da fotografia", tipo: "linha" },
-      { chave: "metodoNota", etiqueta: "Nota em destaque (ex.: 4,8/5). Vazio esconde o selo.", tipo: "linha" },
+      { chave: "metodoNota", etiqueta: "Nota de recurso, quando ainda não há inquéritos. Vazio esconde o selo.", tipo: "linha" },
       { chave: "metodoNotaLegenda", etiqueta: "Legenda da nota", tipo: "linha" },
       { chave: "metodoKicker", etiqueta: "Antetítulo", tipo: "linha" },
       { chave: "metodoTitulo", etiqueta: "Título", tipo: "texto" },
@@ -165,6 +170,9 @@ export const SITE_GRUPOS: { titulo: string; nota?: string; campos: CampoSite[] }
       { chave: "pilar4Numero", etiqueta: "Pilar 4, número", tipo: "linha" },
       { chave: "pilar4Titulo", etiqueta: "Pilar 4, título", tipo: "linha" },
       { chave: "pilar4Texto", etiqueta: "Pilar 4, texto", tipo: "texto" },
+      { chave: "evaNome", etiqueta: "Nome da assistente", tipo: "linha" },
+      { chave: "evaBoasVindas", etiqueta: "Frase de boas-vindas", tipo: "texto" },
+      { chave: "evaObjetivos", etiqueta: "Objectivos, um por linha. Depois de | vêm as áreas do curso, separadas por vírgula.", tipo: "texto" },
     ],
   },
   {
@@ -198,6 +206,16 @@ export const SITE_GRUPOS: { titulo: string; nota?: string; campos: CampoSite[] }
     ],
   },
 ];
+
+export function objectivosEva(texto: string) {
+  return texto.split("\n").map(linha => {
+    const [rotulo, areas] = linha.split("|");
+    return {
+      rotulo: (rotulo ?? "").trim(),
+      areas: (areas ?? "").split(",").map(parte => parte.trim()).filter(Boolean),
+    };
+  }).filter(item => item.rotulo);
+}
 
 export function textoSite(gravado: Record<string, string> | undefined, chave: SiteChave) {
   const valor = gravado?.[chave];

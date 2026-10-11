@@ -61,13 +61,13 @@ export type Preinscricao = {
 export type FormandoTurma = {
   id: number; nome: string; apelido: string; telf: string; email: string; inscrito: string;
   local: string; curso: string; turma: string; turmaId: number; estado: string;
-  pago: boolean; valor: number; metodo: string;
+  pago: boolean; valor: number; metodo: string; temAcesso?: boolean;
 };
 export type DocOk = { ok: boolean; data: string };
 export type FormandoFin = {
   id: number; nome: string; apelido: string; turma: string; turmaId?: number; telf: string; email: string;
   curso: string; estado: string; cc: DocOk; ch: DocOk; cu: DocOk; ci: DocOk; ce: DocOk;
-  morada?: DocOk; contrato?: DocOk; rgpd?: DocOk;
+  morada?: DocOk; contrato?: DocOk; rgpd?: DocOk; temAcesso?: boolean;
 };
 export type CursoGoldRow = {
   id: number; nome: string; categoria: string; tipo: string; preco: number;
@@ -77,7 +77,7 @@ export type CursoFinRow = {
   id: number; ufcdCod: string; ufcd: string; nomeComercial: string;
   regime: string; horas: number; estado: string;
 };
-export type BlogPostRow = { id: number; titulo: string; slug: string; data: string; status: string; tematica?: string };
+export type BlogPostRow = { id: number; titulo: string; slug: string; data: string; status: string; tematica?: string; corpo?: string };
 export type CampanhaRow = {
   id: number; nome: string; data: string; encarregado: string;
   curso?: string; preinscricoes: number; pagos: number; receita: number; custo: number;

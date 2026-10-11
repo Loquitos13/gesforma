@@ -1,5 +1,7 @@
 # Disponibilidade do formador
 
-A ficha do formador mostra um calendário, mês a mês. Cada dia pode ficar disponível (com um ou mais horários) ou indisponível.
+A fonte de verdade é o formador. Em **Calendário** (`/gesforma/formador/calendario`) regista os horários CCP: laboral (9h–13h), pós-laboral (16h30–23h), sábado de manhã (9h–13h) e sábado à tarde (14h–19h). Os dias úteis partilham laboral e pós-laboral.
 
-Quem passa a preencher esse calendário está por decidir em `docs/todo.md`. Até lá, a marcação faz-se na ficha. O cronograma só avisa quando o dia da sessão já está marcado e não cobre o horário.
+Estar numa turma não impede esta alteração. O pedido do formador só grava a disponibilidade da ficha cujo `user_id` é a conta dele. A secretaria e a administração continuam a editar os mesmos horários na ficha do formador.
+
+O cronograma usa estes horários. Quando a sessão já tem dia e não cabe no horário marcado, a lista avisa. Não há calendário dia a dia nem ligação a um calendário externo.

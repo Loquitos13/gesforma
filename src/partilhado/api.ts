@@ -65,7 +65,7 @@ export type OpsSnapshot = {
   formandosTurmas: Array<{
     id: number; nome: string; apelido: string; telf: string; email: string; inscrito: string;
     local: string; curso: string; turma: string; turmaId: number; estado: string;
-    pago: boolean; valor: number; metodo: string;
+    pago: boolean; valor: number; metodo: string; temAcesso?: boolean;
   }>;
   formandosFin: Array<{
     id: number; nome: string; apelido: string; turma: string; turmaId?: number; telf: string; email: string;
@@ -73,6 +73,7 @@ export type OpsSnapshot = {
     cc: { ok: boolean; data: string }; ch: { ok: boolean; data: string };
     cu: { ok: boolean; data: string }; ci: { ok: boolean; data: string }; ce: { ok: boolean; data: string };
     morada?: { ok: boolean; data: string }; contrato?: { ok: boolean; data: string }; rgpd?: { ok: boolean; data: string };
+    temAcesso?: boolean;
   }>;
   cursosGold: Array<{ id: number; nome: string; categoria: string; tipo: string; preco: number; regime: string; horas: number; estado: string }>;
   cursosFin: Array<{ id: number; ufcdCod: string; ufcd: string; nomeComercial: string; regime: string; horas: number; estado: string }>;
@@ -94,7 +95,7 @@ export type OpsSnapshot = {
     preinscricoes: number; pagos: number; receita: number; custo: number;
     fim?: string; canal?: string; notas?: string;
   }>;
-  blogPosts: Array<{ id: number; titulo: string; slug: string; data: string; status: string }>;
+  blogPosts: Array<{ id: number; titulo: string; slug: string; data: string; status: string; tematica?: string; corpo?: string }>;
   pagamentos: Array<{ id: string; nome: string; valor: number; metodo: string; curso: string; data: string; estado: string; email?: string; referencia?: string }>;
   catalogs?: Record<string, Array<Record<string, unknown> & { id: number }>>;
   settings?: Record<string, Record<string, string>>;
@@ -178,6 +179,32 @@ export type DriveUploadContext = {
 
 export const apiHealth = () => api<{ ok: boolean; driver: string; mail: string; drive?: boolean }>("/health");
 export const apiMe = () => api<{ user: SessionUser }>("/v1/me");
+export const apiRecuperarAcesso = (email: string) =>
+  api<{ ok: boolean }>("/v1/auth/recuperar", { method: "POST", body: JSON.stringify({ email }) });
+export const apiReporPalavraPasse = (token: string, password: string) =>
+  api<{ ok: boolean }>("/v1/auth/repor", { method: "POST", body: JSON.stringify({ token, password }) });
+
+export type AreaFormandoDados = {
+  pessoa: {
+    nome: string; apelido: string; email: string; telf: string; novidades: boolean;
+    canais: { email: boolean; sms: boolean; whatsapp: boolean; plataforma: boolean };
+  };
+  cursos: { id: string; regime: "gold" | "fin"; titulo: string; turma: string; estado: string; progresso: number; sessoes: number; feitas: number; ultimo: string; modulos: string[] }[];
+  agenda: { id: string; cursoId: string; data: string; dia: string; mes: string; ano: string; titulo: string; curso: string; horas: string; futura: boolean }[];
+  certificados: { id: string; curso: string; data: string; nota: string; url: string; nome: string }[];
+  pagamentos: { id: string; curso: string; data: string; valor: string; estado: string; metodo: string }[];
+  notificacoes: { id: string; titulo: string; texto: string; quando: string; porLer: boolean }[];
+  resumo: { cursos: number; progresso: number; certificados: number };
+  financiada: boolean;
+};
+export const apiAreaFormando = () => api<AreaFormandoDados>("/v1/area-formando");
+export const apiPatchAreaFormando = (body: Partial<Pick<AreaFormandoDados, "pessoa">> & { nome?: string; apelido?: string; telf?: string; novidades?: boolean; canais?: AreaFormandoDados["pessoa"]["canais"]; lidas?: string[] }) =>
+  api<AreaFormandoDados>("/v1/area-formando", { method: "PATCH", body: JSON.stringify(body) });
+export const apiGerarAcessoFormando = (regime: "gold" | "fin", id: number, repor = false) =>
+  api<{ acesso: { email: string; password?: string; criado: boolean; reposto: boolean } }>(`/v1/formandos/${regime}/${id}/acesso`, { method: "POST", body: JSON.stringify({ repor }) });
+export const apiNoticias = () => api<{ noticias: { titulo: string; slug: string; data: string; tematica: string; excerto: string }[] }>("/v1/public/noticias");
+export const apiNoticia = (slug: string) =>
+  api<{ noticia: { titulo: string; slug: string; data: string; tematica: string; corpo: string }; outras: { titulo: string; slug: string; data: string; tematica: string }[] }>(`/v1/public/noticias/${encodeURIComponent(slug)}`);
 export const apiLogin = (email: string, password: string) =>
   api<{ user: SessionUser }>("/v1/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
 export const apiChangeOwnPassword = (password: string) =>
@@ -528,7 +555,7 @@ export const apiCursoFichas = (regime: Regime) =>
   api<{ fichas: { cursoId: number; payload: Record<string, unknown>; criterios: { id: string; label: string }[] }[] }>(`/v1/cursos/${regime}/fichas`);
 export const apiSaveCursoFicha = (regime: Regime, cursoId: number, body: Partial<CursoFicha>) =>
   api<{ ok: boolean }>(`/v1/cursos/${regime}/${cursoId}/ficha`, { method: "PUT", body: JSON.stringify(body) });
-export async function apiSiteHeroImagem(slot: 1 | 2, file: File) {
+export async function apiSiteHeroImagem(slot: 1 | 2 | "fundo" | "apresentacao", file: File) {
   const fd = new FormData();
   fd.append("file", file);
   const headers = new Headers();

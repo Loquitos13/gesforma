@@ -10,6 +10,7 @@ import { ingestEvent, processDueJobs, sendRuleTest } from "./automations.js";
 import { enviarLembretesPreinscricao } from "./lembretePre.js";
 import { allowedOrigins, config, newToken, oauthRedirectUri, onVercel, siteOriginFromHeaders } from "./config.js";
 import { enterActor, type Db } from "./db/pool.js";
+import { registerAreaFormandoRoutes } from "./areaFormando.js";
 import { registerCatalogRoutes } from "./catalogRoutes.js";
 import { registerDriveRoutes } from "./driveRoutes.js";
 import {
@@ -671,6 +672,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   registerOpsRoutes(app, db, { requireAuth, audit });
   registerWhatsappRoutes(app, db, { requireAuth });
   registerCatalogRoutes(app, db, { requireAuth });
+  registerAreaFormandoRoutes(app, db, { requireAuth });
   registerDriveRoutes(app, db, { requireAuth, audit });
   registerUserRoutes(app, db, { requireAuth, audit });
   registerEquipaRoutes(app, db, { requireAuth, audit });

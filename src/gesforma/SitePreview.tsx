@@ -89,6 +89,7 @@ function PreviewCabecalho({ ler }: { ler: (chave: SiteChave) => string }) {
         </div>
         <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-semibold">
           {ler("navFormacao") && <span>{ler("navFormacao")}</span>}
+          {ler("navNoticias") && <span>{ler("navNoticias")}</span>}
           {ler("navEmpresas") && <span>{ler("navEmpresas")}</span>}
           {ler("navFormando") && <span className="text-[#A60000] underline decoration-[#FFA900] decoration-2 underline-offset-2">{ler("navFormando")}</span>}
         </div>

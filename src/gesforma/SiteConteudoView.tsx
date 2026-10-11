@@ -37,6 +37,8 @@ export function SiteConteudoView() {
   const [cursosEstado, setCursosEstado] = useState<"a-carregar" | "pronto" | "erro">("a-carregar");
   const [aEnviar, setAEnviar] = useState<HeroSlot | null>(null);
   const [erroImagem, setErroImagem] = useState<Record<HeroSlot, string>>({ 1: "", 2: "" });
+  const [aEnviarFundo, setAEnviarFundo] = useState<"fundo" | "apresentacao" | null>(null);
+  const [erroFundo, setErroFundo] = useState({ fundo: "", apresentacao: "" });
   const ano = new Date().getFullYear();
 
   useEffect(() => {
@@ -78,6 +80,19 @@ export function SiteConteudoView() {
     saveSettings("site", values);
     setGuardado(true);
     toastOk("Site guardado.");
+  }
+
+  async function carregarFundo(slot: "fundo" | "apresentacao", chave: SiteChave, file: File) {
+    setAEnviarFundo(slot);
+    setErroFundo(atual => ({ ...atual, [slot]: "" }));
+    try {
+      const gravada = await apiSiteHeroImagem(slot, file);
+      escrever(chave, gravada.url);
+    } catch (err) {
+      setErroFundo(atual => ({ ...atual, [slot]: err instanceof Error ? err.message : "Não foi possível gravar a imagem." }));
+    } finally {
+      setAEnviarFundo(null);
+    }
   }
 
   async function carregarMiniatura(slot: HeroSlot, file: File) {
@@ -132,6 +147,14 @@ export function SiteConteudoView() {
                         onChange={e => escrever(campo.chave, e.target.value)}
                       />
                     )}
+                    {(campo.chave === "heroImagem" || campo.chave === "metodoImagem") && (
+                      <CarregarFotografia
+                        slot={campo.chave === "heroImagem" ? "fundo" : "apresentacao"}
+                        aEnviar={aEnviarFundo}
+                        erro={erroFundo[campo.chave === "heroImagem" ? "fundo" : "apresentacao"]}
+                        onFile={file => void carregarFundo(campo.chave === "heroImagem" ? "fundo" : "apresentacao", campo.chave, file)}
+                      />
+                    )}
                   </label>
                 ))}
               </div>
@@ -157,7 +180,7 @@ export function SiteConteudoView() {
         </section>
       ))}
       <div className="sticky bottom-3 flex justify-end">
-        <button type="button" onClick={guardar} disabled={aEnviar != null} className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white shadow-sm disabled:opacity-60">
+        <button type="button" onClick={guardar} disabled={aEnviar != null || aEnviarFundo != null} className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white shadow-sm disabled:opacity-60">
           Guardar site
         </button>
       </div>
@@ -179,6 +202,37 @@ const DISPOSICOES: { id: HeroDisposicao; titulo: string; nota: string }[] = [
   { id: "texto-centro", titulo: "Texto ao centro", nota: "Um cartão de cada lado" },
   { id: "texto-direita", titulo: "Texto à direita", nota: "Cartões à esquerda" },
 ];
+
+function CarregarFotografia({
+  slot, aEnviar, erro, onFile,
+}: {
+  slot: "fundo" | "apresentacao";
+  aEnviar: "fundo" | "apresentacao" | null;
+  erro: string;
+  onFile: (file: File) => void;
+}) {
+  const ocupado = aEnviar === slot;
+  return (
+    <div className="mt-1">
+      <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-600">
+        <span className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 hover:bg-slate-50">{ocupado ? "A gravar o ficheiro…" : "Carregar ficheiro"}</span>
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="sr-only"
+          disabled={aEnviar != null}
+          onChange={e => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) onFile(file);
+          }}
+        />
+      </label>
+      <p className="mt-1 text-[11px] text-slate-400">O endereço entra no rascunho. O site público só muda depois de Guardar site.</p>
+      {erro && <p className="mt-1 text-xs font-medium text-red-600">{erro}</p>}
+    </div>
+  );
+}
 
 function ControlosMargem({
   titulo, draft, onChange,

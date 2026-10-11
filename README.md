@@ -84,7 +84,7 @@ As **campanhas** mostram inscrições, pagamentos, conversão, ticket médio, po
 
 A **taxa de abertura** dos emails automáticos sai do pixel `GET /api/v1/email/open/:id.gif`. O preview usa um destinatário real da base (pré-inscrição, formando ou formador). O cron na Vercel corre **de hora a hora**; o lembrete “24 h antes” cobre turmas que começam hoje ou amanhã, para não falhar a janela se o plano só permitir um cron diário.
 
-A ficha do curso e o blog **ficam no GesForma**. Ainda não há publicação em `ena.pt` - falta o código de integração do site.
+As **notícias** do site são os posts do blog com estado Ativo, em `/noticias`. O texto escreve-se em Gestão → Blog. A ficha do curso **fica no GesForma**. Ainda não há publicação dessa ficha em `ena.pt`.
 
 Se a API falhar, as listas **não ficam com o seed de demonstração**: ficam vazias e aparece um aviso. As gravações (POST/PUT/PATCH/DELETE) mostram toast quando falham. O overlay branco com o logo ENA só aparece se um pedido à API demorar mais de cerca de 2,5 segundos - mudanças de vista com dados já carregados não o disparam.
 

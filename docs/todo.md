@@ -2,21 +2,23 @@
 
 Esta é a lista fechada do que ainda falta. Os outros documentos descrevem o que já funciona e apontam para aqui.
 
-## Área do formando — dados reais
+## Área do formando — o que ainda falta
 
-O ecrã de login e a área já existem em `/area-formando` (`src/site/AreaFormando.tsx`), a partir do Figma. A conta de demonstração é `formando@ena.pt`. O perfil `formando` está no `CHECK` de `users.role` (migração `057_users_role_formando.sql`).
+O ecrã de login e a área estão em `/area-formando` (`src/site/AreaFormando.tsx`). A conta de demonstração `formando@ena.pt` não está ligada a nenhuma ficha: a área fica vazia até a secretaria gerar o acesso. O perfil `formando` está no `CHECK` de `users.role` (migração `057_users_role_formando.sql`). A ligação à ficha está em `formandos_gold.user_id` e `formandos_fin.user_id` (migração `058_area_noticias_disponibilidade.sql`).
 
-Depois de a credencial estar aceite, o destino é `destinoDoPerfil` (`src/partilhado/destinoPerfil.ts`): formando fica em `/area-formando`; formador vai para `/gesforma/formador/turmas`; secretaria financiada (`financiada`) para `/gesforma/financiada`; administrador, comercial e secretaria para `/gesforma/gold`. A palavra-passe faz isto no ecrã. O Google e a Microsoft continuam a voltar a `/entrar`; dali o formando é enviado para a área e os outros perfis entram no GesForma. Se a pessoa abriu um endereço que o perfil dela já pode ver, esse endereço mantém-se. Um endereço de outro perfil manda-a para a área dela. O formando que abre `/entrar` ou `/gesforma` volta a `/area-formando`. Quem não é formando e abre `/area-formando` vai para o GesForma. As rotas do GesForma recusam o formando com 403, excepto mudar a própria palavra-passe. Ler a sessão e terminar sessão continuam abertos.
+O acesso nasce na ficha do formando, Gold ou financiada, com **Gerar acesso**. A palavra-passe aparece uma vez. **Gerar nova palavra-passe** troca-a e encerra as sessões. A pessoa não se regista sozinha.
+
+Cursos, sessões, progresso (sessões já realizadas sobre as sessões datadas), certificados emitidos, pagamentos e notificações saem dessa ficha. O nome, o apelido e o telemóvel gravados na área voltam à ficha. O email de acesso não se altera aqui. «Esqueci-me da palavra-passe» envia um email com uma ligação de duas horas. Sem SMTP, a mensagem fica no registo da API (`[mail:log]`) e a resposta ao visitante é sempre a mesma.
+
+Depois de a credencial estar aceite, o destino é `destinoDoPerfil` (`src/partilhado/destinoPerfil.ts`): formando fica em `/area-formando`; formador vai para `/gesforma/formador/turmas`; secretaria financiada (`financiada`) para `/gesforma/financiada`; administrador, comercial e secretaria para `/gesforma/gold`. A palavra-passe faz isto no ecrã. O Google e a Microsoft continuam a voltar a `/entrar`; dali o formando é enviado para a área e os outros perfis entram no GesForma. Se a pessoa abriu um endereço que o perfil dela já pode ver, esse endereço mantém-se. Um endereço de outro perfil manda-a para a área dela. O formando que abre `/entrar` ou `/gesforma` volta a `/area-formando`. Quem não é formando e abre `/area-formando` vai para o GesForma. As rotas do GesForma recusam o formando com 403, excepto mudar a própria palavra-passe e ler a própria área. Ler a sessão e terminar sessão continuam abertos.
 
 Na página inicial, «Área de formando» só aparece quando o formando tem sessão e substitui «Iniciar Sessão». Os dois abrem `/area-formando`. O login da secretaria continua em `/entrar`.
 
-O que o ecrã ainda mostra de exemplo, e não da base:
+Ainda por fazer nesta área:
 
-- Cursos, progresso, agenda, certificados, notificações e faturas são o texto do Figma. Não vêm das turmas nem dos pagamentos.
-- «Continuar no LMS» abre os módulos neste ecrã. O Moodle não está ligado.
-- «Esqueci-me da palavra-passe» não envia email. A pessoa pede uma palavra-passe nova à secretaria.
-- Guardar o perfil e as preferências de notificação só confirma neste ecrã. A ficha do GesForma não recebe a alteração.
+- «Continuar» abre os módulos neste ecrã. O Moodle não está ligado. O progresso não é a conclusão do Moodle.
 - Os dados fiscais não se editam.
+- Um certificado só se descarrega quando a secretaria já anexou o ficheiro. O GesForma não gera o PDF.
 
 ## Backend
 
@@ -30,14 +32,15 @@ A divisão segue as mesmas três pastas:
 
 ## Site público
 
-Isto ainda não está ligado ao que o administrador insere em Sistema → Site. Fica de fora desse ecrã até ser feito.
+O nome da Eva, a frase de boas-vindas e os objectivos editam-se em Sistema → Site. Os cursos que ela mostra continuam a vir da oferta. A nota do destaque é a média das respostas de escala (1 a 5) dos inquéritos gravados. Enquanto não houver nenhuma, usa-se o texto de recurso, por omissão `4,8/5`. As fotografias de fundo do destaque e da apresentação carregam-se como ficheiro; o endereço entra no rascunho e o site público só muda depois de Guardar site.
 
-- Assistente Eva. O nome, as frases e os objectivos («Competências digitais», «Gestão e liderança», «Saúde e segurança») estão escritos no código, em `src/site/SiteLanding.tsx`. Os cursos que a Eva mostra já vêm da oferta.
-- Blog no site. O backoffice já tem Posts e Temáticas, em Gestão. O site público não os lista nem abre um artigo. O corpo, o SEO, a revisão e a publicação em `ena.pt` também faltam.
-- Publicar a ficha do curso em `ena.pt`. O progresso «Pronto para o site» só indica o que falta. A ficha fica no GesForma.
-- Fotografias de fundo. No destaque e na apresentação cola-se um endereço. Não há carregamento de ficheiro, ao contrário da miniatura de um regime no hero e da imagem da ficha de curso.
-- Nota de satisfação. O `4,8/5` é um texto editável. Não é a média dos inquéritos gravados.
-- Menu. Dá para mudar o texto de Formação e de Empresas. Não dá para acrescentar outra ligação.
+`/noticias` lista os posts com estado Ativo. O artigo abre em `/noticias/:slug`. O texto escreve-se em Gestão → Blog. Um post Inactivo fica de fora. A ficha do curso continua no GesForma.
+
+Ainda por fazer no site:
+
+- Publicar a ficha do curso em `ena.pt`. O progresso «Pronto para o site» só indica o que falta.
+- Corpo longo com SEO e revisão editorial, e a publicação do blog em `ena.pt`. O site deste projecto já mostra o que está Ativo.
+- Menu. Dá para mudar o texto de Formação, Notícias e Empresas. Não dá para acrescentar outra ligação.
 - Contactos do rodapé. O email e o telefone que aparecem no site não alteram o SMTP Brevo nem os emails automáticos. Esses continuam em Configurações.
 
 ## Ligações externas
@@ -54,6 +57,6 @@ Isto ainda não está ligado ao que o administrador insere em Sistema → Site. 
 - Marketing: textos, anúncios, calendário editorial e ligação às plataformas. A campanha já calcula o ROI.
 - Modelo da ENA. Linguagem própria, as quatro tarefas (pré-inscrições, venda, marketing e blog) e a consulta à oferta real antes de responder. A proposta está em `docs/requisitos-funcionais-e-modelo-ai.md`. Não está ligado ao produto. Nada grava nem envia sozinho.
 
-## Decisão em aberto
+## Disponibilidade do formador
 
-Ainda não está decidido quem preenche o calendário de disponibilidade do formador: a secretaria na ficha, o próprio formador no GesForma, ou uma API de calendário partilhado, como o Google Calendar. Até essa decisão, a marcação faz-se na ficha. O cronograma só avisa quando o dia da sessão já está marcado e não cobre o horário. O ecrã actual está em `docs/formador-disponibilidade.md`.
+A fonte de verdade é o próprio formador, no calendário do GesForma (`/gesforma/formador/calendario`). Regista os horários CCP que já existiam: laboral, pós-laboral, sábado de manhã e sábado à tarde. Estar alocado a uma turma não lhe fecha o editor. A secretaria continua a poder ajustar os mesmos horários na ficha. O cronograma avisa quando a sessão não cabe nesses horários. O detalhe está em `docs/formador-disponibilidade.md`. Um calendário dia a dia, ou uma API de calendário partilhado, não faz parte disto.

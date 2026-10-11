@@ -16,7 +16,8 @@ Na página inicial, «Área de formando» só aparece quando o formando tem sess
 
 Ainda por fazer nesta área:
 
-- «Continuar» abre os módulos neste ecrã. O Moodle não está ligado. O progresso não é a conclusão do Moodle.
+- «Continuar» abre os módulos neste ecrã com a **estrutura pedagógica** da ficha (vídeos, PDF, flashcards, quizzes nativos, SCORM e H5P). Hoje só existe o desenho parcial da sala; falta o runtime completo descrito em `docs/conteudos-pedagogicos.md`.
+- Progresso, pontuação e conclusão por formando (incluindo `cmi.*` SCORM e eventos H5P) gravados no GesForma; o Moodle continua por ligar.
 - Os dados fiscais não se editam.
 - Um certificado só se descarrega quando a secretaria já anexou o ficheiro. O GesForma não gera o PDF.
 
@@ -43,9 +44,18 @@ Ainda por fazer no site:
 - Menu. Dá para mudar o texto de Formação, Notícias e Empresas. Não dá para acrescentar outra ligação.
 - Contactos do rodapé. O email e o telefone que aparecem no site não alteram o SMTP Brevo nem os emails automáticos. Esses continuam em Configurações.
 
+## Conteúdos pedagógicos — SCORM / H5P
+
+O editor na ficha (**Conteúdos Moodle**) já grava a sequência por módulo. Falta construir o **runtime** e a persistência para suportar **tudo** o que a estrutura prevê. Detalhe técnico em `docs/conteudos-pedagogicos.md`.
+
+- **SCORM.** Validar pacote (manifest 1.2 e 2004), armazenar metadados do SCO, player com API SCORM completa, `suspend_data`, conclusão, pontuação e tempo; bloquear o seguinte se o módulo tiver percurso sequencial.
+- **H5P.** Validar `.h5p`, servir bibliotecas, player com content types do pacote, capturar conclusão e nota (xAPI ou equivalente).
+- **Quizzes, flashcards, vídeo e PDF nativos.** Render na área do formando, correcção automática ou manual, tentativas, nota mínima (%), flashcards com ordem aleatória e repetição.
+- **Progresso.** Tabelas/API por formando e turma; pré-visualização «como formando» no backoffice; biblioteca multimédia alinhada com o Drive da entidade (não só `drive_files` do GesForma).
+- **Moodle.** Sincronizar ou exportar a estrutura para disciplinas Moodle — por fazer; independente do player no site.
+
 ## Ligações externas
 
-- A estrutura pedagógica de cada módulo (vídeos, SCORM, H5P, flashcards, quizzes e regras de conclusão) edita-se no separador Conteúdos Moodle da ficha do curso e fica gravada nessa ficha. A biblioteca multimédia lista o que já está no Drive da entidade. Não há sincronização com o Moodle.
 - Ler a nota real no Moodle da turma. O parâmetro já entra na média e a pauta do dossiê já sai da grelha, mas o valor do Moodle continua a ser lançado à mão. A integração com o Moodle ainda não existe.
 - Acesso ao Moodle nos cursos de Acesso direto. O site já mostra «Aceder ao curso» e não abre a pré-inscrição nem o check-out. Falta criar a conta, inscrever a pessoa na disciplina e devolver o endereço da sala logo após o pedido. O Pré-pago usa o check-out do site.
 - Recibos certificados (Moloni) e o contrato Ifthenpay ou SIBS. O pagamento fica pendente até um webhook do banco o marcar como pago.

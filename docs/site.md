@@ -15,7 +15,7 @@ O ano do copyright é o ano corrente. Não se grava. Em 2026 o rodapé mostra ©
 - `/documentos/:token` ligação pessoal para anexar documentos. O ficheiro segue para o Google Drive.
 - `/cronograma/:regime/:turmaId` cronograma publicado de uma turma.
 - `/inquerito/:token` resposta ao inquérito de satisfação.
-- `/entrar` login. O destino depende do perfil e está em `docs/rbac.md`. Hoje quem entra cai no GesForma (`/gesforma/gold`, `/gesforma/financiada` ou `/gesforma/formador/turmas`). A área do formando ainda não existe.
+- `/entrar` login. Hoje quem entra cai no GesForma (`/gesforma/gold`, `/gesforma/financiada` ou `/gesforma/formador/turmas`). O destino por perfil está em `docs/todo.md`.
 - `/gesforma/…` uma rota por vista do backoffice: painéis, CRM, cursos, fichas (`/gesforma/gold/cursos/:id` e `/gesforma/financiada/cursos/:id`), turmas, cockpit (`/gesforma/gold/turmas/:id` e `/gesforma/financiada/turmas/:id`), dossiês, inquéritos, blog, listas, emails, pagamentos, site e configurações. O separador do cockpit vai em `?separador=`.
 
 ## O que já sai da base de dados
@@ -71,15 +71,6 @@ Num regime, dá para editar o título, a descrição e a miniatura. A miniatura 
 
 O destino aceita as duas formas. Um caminho do próprio site, por exemplo `/formacao/excel-do-basico-ao-avancado` ou `/formacao?linha=gold`, sobrevive a uma mudança de domínio. Um endereço externo escreve-se completo, `https://…`. Vazio abre a ficha do curso ou o catálogo dessa linha. Um valor que não seja caminho nem http(s) é ignorado.
 
-## TO DO
+## Por fazer
 
-Isto ainda não está ligado ao que o administrador insere. Fica de fora do ecrã Site até ser feito.
-
-- Assistente Eva. O nome, as frases e os objectivos («Competências digitais», «Gestão e liderança», «Saúde e segurança») estão escritos no código, em `src/SiteLanding.tsx`. Os cursos que a Eva mostra já vêm da oferta.
-- Blog. O backoffice já tem Posts e Temáticas, em Gestão. O site público não os lista nem abre um artigo.
-- Fotografias de fundo. No destaque e na apresentação cola-se um endereço. Não há carregamento de ficheiro, ao contrário da miniatura de um regime no hero e da imagem da ficha de curso.
-- Nota de satisfação. O `4,8/5` é um texto editável. Não é a média dos inquéritos gravados.
-- Menu. Dá para mudar o texto de Formação e de Empresas. Não dá para acrescentar outra ligação.
-- Contactos do rodapé. O email e o telefone que aparecem no site não alteram o SMTP Brevo nem os emails automáticos. Esses continuam em Configurações.
-- Moodle. Num curso guardado como Acesso direto, o botão é «Aceder ao curso» e não grava pré-inscrição nem check-out. A entrada devia criar a conta no Moodle e abrir o curso logo a seguir ao pedido. Essa ligação ainda não existe: o GesForma não cria o utilizador, não o inscreve na disciplina e não devolve o endereço da sala. O Pré-pago usa o check-out do site.
-- Área de formando no cabeçalho. O texto «Área de formando» está sempre visível e abre `/entrar`, tal como «Iniciar Sessão». Só deve aparecer com o formando autenticado, e nesse caso substitui o botão de login. A área em si segue o Figma e o login por perfil está em `docs/rbac.md`.
+O que ainda falta no site, no login e no resto do produto está em `docs/todo.md`.

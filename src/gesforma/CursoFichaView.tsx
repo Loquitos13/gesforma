@@ -1439,6 +1439,8 @@ export function CursoFichaView({
               inputCls={t.iCls}
               onChange={conteudosMoodle => patch({ conteudosMoodle })}
               onIrPrograma={() => setTab("programa")}
+              cursoId={cursoPersistId ?? curso?.id}
+              cursoTitulo={data.titulo || curso?.nome || ""}
             />
           )}
 

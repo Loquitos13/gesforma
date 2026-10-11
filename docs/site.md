@@ -15,7 +15,7 @@ O ano do copyright é o ano corrente. Não se grava. Em 2026 o rodapé mostra ©
 - `/documentos/:token` ligação pessoal para anexar documentos. O ficheiro segue para o Google Drive.
 - `/cronograma/:regime/:turmaId` cronograma publicado de uma turma.
 - `/inquerito/:token` resposta ao inquérito de satisfação.
-- `/noticias` artigos com estado Ativo em Gestão → Blog. `/noticias/:slug` abre o texto. Um post Inactivo não entra.
+- `/noticias` artigos com estado Ativo em Gestão → Blog. `/noticias/:slug` abre o artigo em blocos: parágrafo, título, imagem, hero, secção, citação, lista, botão e separador. Um post Inactivo não entra.
 - `/area-formando` login e área do formando. Os cursos, as sessões, os certificados e os pagamentos saem da ficha. O acesso é gerado pela secretaria no GesForma. Quem não é formando é enviado para o GesForma. O que ainda falta (Moodle e dados fiscais) está em `docs/todo.md`.
 - `/entrar` login da secretaria e do GesForma. O formando com sessão é enviado para `/area-formando`. O formador entra em `/gesforma/formador/turmas`, a secretaria financiada em `/gesforma/financiada`, e administrador, comercial e secretaria em `/gesforma/gold`.
 - `/gesforma/…` uma rota por vista do backoffice: painéis, CRM, cursos, fichas (`/gesforma/gold/cursos/:id` e `/gesforma/financiada/cursos/:id`), turmas, cockpit (`/gesforma/gold/turmas/:id` e `/gesforma/financiada/turmas/:id`), dossiês, inquéritos, blog, listas, emails, pagamentos, site e configurações. O separador do cockpit vai em `?separador=`.

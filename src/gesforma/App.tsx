@@ -27,7 +27,7 @@ import {
 import { ResolverDocumentoModal } from "./DocResolver";
 import { CursoFichaView } from "./CursoFichaView";
 import {   AppModal, SearchSelect, MultiSearchSelect, ViewFilters, matchesFilter, uniqueOpts,
-  blogTematicasOpts, cursosFinOpts, cursosGoldOpts, optsFromCursos,
+  cursosFinOpts, cursosGoldOpts, optsFromCursos,
   horariosOpts,
 } from "../partilhado/FormKit";
 import { useProgramaDoCurso } from "./cursoPrograma";
@@ -35,6 +35,8 @@ import { imprimirFolhasPresencas } from "../partilhado/presencasPrint";
 import { refereCurso, useLocaisOptsDoCurso } from "../partilhado/cursoLocais";
 import { OptionSelect } from "./OptionSelect";
 import { ListasOpcoesView } from "./ListasOpcoesView";
+import { EditorBlog } from "./EditorBlog";
+import { LIMITE_CORPO_BLOG } from "../partilhado/blogBlocos";
 import { SiteConteudoView } from "./SiteConteudoView";
 import { CronogramaEditor, FormadoresAtribuidosCard, TurmaActivaToggle, TurmaInactivaBanner, TurmaInscricaoHint } from "./TurmaCronograma";
 import { TurmaRegrasPanel } from "./TurmaRegrasPanel";
@@ -839,11 +841,11 @@ function ConhecimentoEnaCard({ onVerMais, dados }: { onVerMais: () => void; dado
 
 // ─── Modal (substitui as antigas gavetas laterais) ────────────────────────────
 
-function SlideOver({ open, onClose, title, sub, children, size = "md" }: {
+function SlideOver({ open, onClose, title, sub, children, size = "md", footer }: {
   open: boolean; onClose: () => void; title: string; sub?: string;
-  children: React.ReactNode; size?: "sm" | "md" | "lg" | "xl";
+  children: React.ReactNode; size?: "sm" | "md" | "lg" | "xl" | "2xl"; footer?: React.ReactNode;
 }) {
-  return <AppModal open={open} onClose={onClose} title={title} sub={sub} size={size}>{children}</AppModal>;
+  return <AppModal open={open} onClose={onClose} title={title} sub={sub} size={size} footer={footer}>{children}</AppModal>;
 }
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
@@ -4024,23 +4026,18 @@ function BlogView() {
         </div>
         <TableFooter page={p} perPage={pp} total={f.length} onChange={setP} />
       </Card>
-      <SlideOver open={open} onClose={() => setOpen(false)} title={editId != null ? "Editar post" : "Novo post"} sub="Publicado em /noticias quando o estado é Ativo">
-        <div className="p-5 space-y-3">
-          <Field label="Título"><input className={iCls} value={titulo} onChange={e => setTitulo(e.target.value)} /></Field>
-          <Field label="Temática"><SearchSelect value={tematica} onChange={setTematica} options={blogTematicasOpts} placeholder="Pesquisar temática…" /></Field>
-          <Field label="Slug"><input className={iCls} value={slug} onChange={e => setSlug(e.target.value)} placeholder="ccp-formacao-formadores" /></Field>
-          <Field label="Texto"><textarea className={`${iCls} min-h-40`} value={corpo} onChange={e => setCorpo(e.target.value)} placeholder="O texto que o site mostra no artigo. Parágrafos separados por uma linha em branco." /></Field>
-          <Field label="Estado">
-            <div className="flex gap-2">
-              {["Ativo", "Inactivo"].map(opcao => (
-                <button key={opcao} type="button" onClick={() => setEstadoPost(opcao)} className={`px-3 py-1.5 text-xs font-semibold rounded-full border ${estadoPost === opcao ? "bg-amber-500 text-white border-amber-500" : "bg-white text-slate-600 border-slate-200"}`}>{opcao === "Ativo" ? "Ativo · no site" : "Inactivo · fora do site"}</button>
-              ))}
-            </div>
-          </Field>
-          <div className="flex gap-2 pt-2">
-            <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button onClick={() => {
-              if (!titulo.trim()) return;
+      <SlideOver
+        open={open}
+        onClose={() => setOpen(false)}
+        title={editId != null ? "Editar post" : "Novo post"}
+        sub="Publicado em /noticias quando o estado é Ativo"
+        size="2xl"
+        footer={
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            {corpo.length > LIMITE_CORPO_BLOG && <p className="text-xs font-medium text-red-600 sm:mr-auto">O artigo passou do tamanho que o blog guarda. Retire um bloco ou encurte o texto.</p>}
+            <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancelar</button>
+            <button type="button" onClick={() => {
+              if (!titulo.trim() || corpo.length > LIMITE_CORPO_BLOG) return;
               const s = (slug.trim() || titulo).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
               void (async () => {
                 if (editId != null) {
@@ -4051,8 +4048,26 @@ function BlogView() {
                 }
                 setOpen(false); setTitulo(""); setSlug(""); setTematica(""); setCorpo(""); setEstadoPost("Ativo"); setEditId(null);
               })();
-            }} disabled={!titulo.trim()} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editId != null ? "Guardar" : "Criar post"}</button>
+            }} disabled={!titulo.trim() || corpo.length > LIMITE_CORPO_BLOG} className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-40">{editId != null ? "Guardar" : "Criar post"}</button>
           </div>
+        }
+      >
+        <div className="p-5">
+          {open && (
+            <EditorBlog
+              chave={editId == null ? "novo" : String(editId)}
+              corpoInicial={corpo}
+              onCorpo={setCorpo}
+              titulo={titulo}
+              slug={slug}
+              tematica={tematica}
+              estado={estadoPost}
+              onTitulo={setTitulo}
+              onSlug={setSlug}
+              onTematica={setTematica}
+              onEstado={setEstadoPost}
+            />
+          )}
         </div>
       </SlideOver>
       <ConfirmDangerModal

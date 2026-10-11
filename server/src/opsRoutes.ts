@@ -36,7 +36,8 @@ import { criarPreinscricaoPublica } from "./preinscricaoPublica.js";
 import { precoParaOferta } from "./precoOferta.js";
 import { listCursosGoldActivos, listCursosOferta, listOfertaFin, listOfertaGold } from "./ofertaGold.js";
 import { listarCatalogoPublico } from "./catalogoPublico.js";
-import { lerImagemPorToken, tokenImagem } from "./cursoImagens.js";
+import { LIMITE_CORPO_BLOG } from "../../src/partilhado/blogBlocos.js";
+import { guardarImagemBlog, lerImagemPorToken, tokenImagem } from "./cursoImagens.js";
 import { generateCronograma } from "./cronograma.js";
 import {
   bloqueioCursoFin, bloqueioCursoGold, bloqueioFormador, bloqueioTurma,
@@ -1695,7 +1696,7 @@ export function registerOpsRoutes(
     data: z.string().max(20),
     status: z.string().max(20).optional().default("Ativo"),
     tematica: z.string().max(120).optional().default(""),
-    corpo: z.string().max(20000).optional().default(""),
+    corpo: z.string().max(LIMITE_CORPO_BLOG).optional().default(""),
   });
   app.post("/v1/blog", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
@@ -1724,6 +1725,31 @@ export function registerOpsRoutes(
     if (!requireAuth(req, reply)) return;
     await db.query("DELETE FROM blog_posts WHERE id = $1", [Number((req.params as { id: string }).id)]);
     return { ok: true };
+  });
+
+  app.post("/v1/blog/imagem", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    let nome = "imagem.jpg";
+    let mime = "";
+    let bytes: Buffer | null = null;
+    try {
+      const parts = req.parts();
+      for await (const part of parts) {
+        if (part.type === "file") {
+          nome = part.filename || nome;
+          mime = part.mimetype || mime;
+          bytes = await part.toBuffer();
+        }
+      }
+    } catch {
+      return reply.code(400).send({ error: "upload inválido" });
+    }
+    if (!bytes?.length) return reply.code(400).send({ error: "ficheiro em falta" });
+    try {
+      return await guardarImagemBlog(db, { nome, mime, bytes });
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : "upload recusado" });
+    }
   });
 
   const pagSchema = z.object({

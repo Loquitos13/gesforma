@@ -108,12 +108,31 @@ export async function guardarImagemHero(
   return { nome, url: urlImagemPublica(gravado?.token || token, gravado?.updated_at ?? new Date()) };
 }
 
+export async function guardarImagemBlog(
+  db: Db,
+  file: { nome: string; mime: string; bytes: Buffer },
+) {
+  if (file.bytes.length > MAX_BYTES) throw new Error("A imagem passa de 8 MB.");
+  const mime = mimeImagem(file.mime);
+  if (!mime) throw new Error("Use JPG, PNG, WebP ou GIF.");
+  const nome = file.nome.replace(/[^\w.\- ()]/g, "").slice(0, 180) || "imagem.jpg";
+  const token = randomBytes(18).toString("base64url");
+  await db.query(
+    "INSERT INTO blog_imagens (token, nome, mime, bytes) VALUES ($1, $2, $3, $4)",
+    [token, nome, mime, file.bytes],
+  );
+  return { nome, url: urlImagemPublica(token) };
+}
+
 export async function lerImagemPorToken(db: Db, token: string) {
   const row = await db.query<{ mime: string; bytes: unknown }>(
     "SELECT mime, bytes FROM curso_imagens WHERE token = $1",
     [token],
   );
-  const found = row.rows[0];
+  const found = row.rows[0] ?? (await db.query<{ mime: string; bytes: unknown }>(
+    "SELECT mime, bytes FROM blog_imagens WHERE token = $1",
+    [token],
+  )).rows[0];
   if (!found) return null;
   const bytes = bytesDe(found.bytes);
   if (!bytes?.length) return null;

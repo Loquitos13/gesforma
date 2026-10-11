@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { textoDoCorpo } from "../../src/partilhado/blogBlocos.js";
 import { gerarPalavraPasse, mensagemPalavraPasse, palavraPasseValida } from "../../src/partilhado/passwordPolicy.js";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
@@ -512,7 +513,7 @@ export function registerAreaFormandoRoutes(
 }
 
 export function excerto(corpo: string) {
-  const limpo = corpo.replace(/\s+/g, " ").trim();
+  const limpo = textoDoCorpo(corpo);
   if (limpo.length <= 180) return limpo;
   return `${limpo.slice(0, 177).trim()}…`;
 }

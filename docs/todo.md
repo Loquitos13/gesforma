@@ -34,12 +34,12 @@ A divisão segue as mesmas três pastas:
 
 O nome da Eva, a frase de boas-vindas e os objectivos editam-se em Sistema → Site. Os cursos que ela mostra continuam a vir da oferta. A nota do destaque é a média das respostas de escala (1 a 5) dos inquéritos gravados. Enquanto não houver nenhuma, usa-se o texto de recurso, por omissão `4,8/5`. As fotografias de fundo do destaque e da apresentação carregam-se como ficheiro; o endereço entra no rascunho e o site público só muda depois de Guardar site.
 
-`/noticias` lista os posts com estado Ativo. O artigo abre em `/noticias/:slug`. O texto escreve-se em Gestão → Blog. Um post Inactivo fica de fora. A ficha do curso continua no GesForma.
+`/noticias` lista os posts com estado Ativo. O artigo abre em `/noticias/:slug` e desenha os blocos do post: parágrafo, título, imagem, hero, secção, citação, lista, botão e separador. A edição é em Gestão → Blog. Um post Inactivo fica de fora. A ficha do curso continua no GesForma.
 
 Ainda por fazer no site:
 
 - Publicar a ficha do curso em `ena.pt`. O progresso «Pronto para o site» só indica o que falta.
-- Corpo longo com SEO e revisão editorial, e a publicação do blog em `ena.pt`. O site deste projecto já mostra o que está Ativo.
+- Campos de SEO e revisão editorial, e a publicação do blog em `ena.pt`. O editor de blocos e a vista pública neste projecto já estão feitos.
 - Menu. Dá para mudar o texto de Formação, Notícias e Empresas. Não dá para acrescentar outra ligação.
 - Contactos do rodapé. O email e o telefone que aparecem no site não alteram o SMTP Brevo nem os emails automáticos. Esses continuam em Configurações.
 

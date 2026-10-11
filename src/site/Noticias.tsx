@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ArtigoBlocos } from "../partilhado/ArtigoBlocos";
 import { apiNoticia, apiNoticias } from "../partilhado/api";
+import { lerDocumento } from "../partilhado/blogBlocos";
 import { SiteFrame } from "./SiteLanding";
 
 type Item = { titulo: string; slug: string; data: string; tematica: string; excerto?: string };
@@ -46,6 +48,14 @@ function Lista() {
   );
 }
 
+function CorpoArtigo({ corpo }: { corpo: string }) {
+  const doc = useMemo(() => lerDocumento(corpo), [corpo]);
+  if (!doc.blocos.length) {
+    return <p className="mx-auto mt-8 max-w-[760px] text-[#1C3350]/60">Este artigo ainda não tem texto. O corpo edita-se no post, em Gestão → Blog.</p>;
+  }
+  return <ArtigoBlocos doc={doc} />;
+}
+
 function Artigo({ slug }: { slug: string }) {
   const [estado, setEstado] = useState<"a-carregar" | "pronto" | "erro">("a-carregar");
   const [titulo, setTitulo] = useState("");
@@ -66,21 +76,17 @@ function Artigo({ slug }: { slug: string }) {
       .catch(() => setEstado("erro"));
   }, [slug]);
   return (
-    <main className="mx-auto max-w-[760px] px-5 py-12 lg:px-8">
+    <main className="mx-auto max-w-[1100px] px-5 py-12 lg:px-8">
       <a href="/noticias" className="text-sm font-bold text-[#A60000]">Todas as notícias</a>
       {estado === "a-carregar" && <p className="mt-8 text-sm text-[#1C3350]/50">A abrir o artigo…</p>}
       {estado === "erro" && <p className="mt-8 text-sm font-semibold text-[#A60000]">Este artigo não está publicado.</p>}
       {estado === "pronto" && (
         <article className="mt-6">
-          <p className="text-xs font-bold uppercase tracking-wider text-[#A60000]">{tematica || "Notícia"} · {dataPt(data)}</p>
-          <h1 className="mt-3 font-serif text-4xl font-bold text-[#1C3350]">{titulo}</h1>
-          {corpo.trim() ? (
-            <div className="mt-8 space-y-4 text-base leading-8 text-[#1C3350]/80">
-              {corpo.split(/\n{2,}/).map(parte => <p key={parte.slice(0, 40)}>{parte}</p>)}
-            </div>
-          ) : (
-            <p className="mt-8 text-[#1C3350]/60">Este artigo ainda não tem texto. O corpo edita-se no post, em Gestão → Blog.</p>
-          )}
+          <div className="mx-auto max-w-[760px]">
+            <p className="text-xs font-bold uppercase tracking-wider text-[#A60000]">{tematica || "Notícia"} · {dataPt(data)}</p>
+            <h1 className="mt-3 font-serif text-4xl font-bold text-[#1C3350]">{titulo}</h1>
+          </div>
+          <CorpoArtigo corpo={corpo} />
         </article>
       )}
       {outras.length > 0 && (

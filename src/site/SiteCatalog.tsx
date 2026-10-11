@@ -175,8 +175,8 @@ function Catalogo() {
             </div>
             <div className="mt-6 grid gap-px bg-[#1C3350]/10" style={{ gridTemplateColumns: `repeat(${comparados.length}, minmax(0, 1fr))` }}>
               {comparados.map(course => (
-                <article key={course.id} className="bg-white p-5">
-                  {course.miniatura && <img src={course.miniatura} alt="" className="mb-4 h-28 w-full object-cover" />}
+                <article key={course.id} className="ena-cartao overflow-hidden bg-white p-5 hover:shadow-[0_18px_40px_rgba(20,38,61,.12)]">
+                  {course.miniatura && <div className="mb-4 h-28 overflow-hidden"><img src={course.miniatura} alt="" className="ena-cartao-foto h-full w-full object-cover" /></div>}
                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#A60000]">{course.funding === "Gold" ? "ENA Gold" : "Financiada"}</span>
                   <h3 className="mt-2 font-bold">{course.title}</h3>
                   <div className="mt-5 space-y-3 text-sm">
@@ -207,14 +207,14 @@ function LinhaCurso({
 }) {
   const { abrir } = useInscricao();
   return (
-    <article className="group grid overflow-hidden border border-[#1C3350]/12 bg-white transition-shadow hover:shadow-[0_14px_40px_rgba(28,51,80,.1)] md:grid-cols-[12px_148px_minmax(0,1fr)_auto] md:items-stretch">
+    <article className="ena-cartao group grid overflow-hidden border border-[#1C3350]/12 bg-white hover:shadow-[0_18px_40px_rgba(28,51,80,.14)] md:grid-cols-[12px_148px_minmax(0,1fr)_auto] md:items-stretch">
       <div className={course.funding === "Gold" ? "bg-[#FFA900]" : "bg-[#A60000]"} />
       <div className="relative hidden min-h-36 overflow-hidden bg-[#E7EBF0] md:block">
-        {course.miniatura && <img src={course.miniatura} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+        {course.miniatura && <img src={course.miniatura} alt="" className="ena-cartao-foto absolute inset-0 h-full w-full object-cover" />}
       </div>
       <div className="p-6">
         <a href={`/formacao/${course.id}`} className="mb-4 block h-36 max-h-36 w-full max-w-full overflow-hidden bg-[#E7EBF0] md:hidden">
-          {course.miniatura && <img src={course.miniatura} alt="" className="h-full max-h-36 w-full object-cover" />}
+          {course.miniatura && <img src={course.miniatura} alt="" className="ena-cartao-foto h-full max-h-36 w-full object-cover" />}
         </a>
         <div className="flex flex-wrap items-center gap-3">
           <span className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${course.funding === "Gold" ? "bg-[#FFF1D1] text-[#1C3350]" : "bg-[#F1E5E5] text-[#A60000]"}`}>{course.funding === "Gold" ? "ENA Gold" : "Financiada"}</span>

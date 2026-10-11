@@ -18,6 +18,7 @@ import {
 import { AvaliacaoCcpEditor } from "./AvaliacaoCcpEditor";
 import { ImportarCsvAvaliacao } from "./ImportarCsvAvaliacao";
 import { codigoTopico, juntarHoras, linhasProgramaInicial, novoTopicoId, partirHoras, programaDePayload, textoPrograma, topicosDeTexto, type OrganizacaoPrograma, type TopicoPrograma } from "./cursoPrograma";
+import { ConteudosMoodle, parseConteudosMoodle, type ConteudoMoodle } from "./ConteudosMoodle";
 import { refereCurso } from "../partilhado/cursoLocais";
 import { fmtDataPt } from "../partilhado/oferta";
 import { getParametrosAvaliacao, type CriterioAvaliacao } from "../partilhado/TurmaExtras";
@@ -41,7 +42,7 @@ export type CursoFichaSeed = {
 export type CursoGold = CursoFichaSeed;
 export type CursoAccent = "gold" | "fin";
 
-type TabId = "identidade" | "oferta" | "conteudo" | "programa" | "planos" | "avaliacao" | "documentos" | "dtp" | "publicacao";
+type TabId = "identidade" | "oferta" | "conteudo" | "programa" | "moodle" | "planos" | "avaliacao" | "documentos" | "dtp" | "publicacao";
 type PlanoCursoLinha = { ordem: number; objetivosGerais: string; objetivosEspecificos: string; conteudo: string };
 type ValorFormadorLinha = { nome: string; valorHora: string };
 type MediaSlot = { name: string; url: string };
@@ -89,6 +90,7 @@ type CursoSite = {
   planosSessao: PlanoCursoLinha[];
   valoresFormador: ValorFormadorLinha[];
   entidadeResponsavel: string;
+  conteudosMoodle: ConteudoMoodle[];
 };
 
 function theme(accent: CursoAccent) {
@@ -327,6 +329,7 @@ function seedSite(curso?: CursoFichaSeed, accent: CursoAccent = "gold"): CursoSi
     planosSessao: [],
     valoresFormador: [],
     entidadeResponsavel: "",
+    conteudosMoodle: [],
   };
 }
 
@@ -715,6 +718,7 @@ export function CursoFichaView({
               planosSessao: Array.isArray(guardado.planosSessao) ? guardado.planosSessao : prev.planosSessao,
               valoresFormador: Array.isArray(guardado.valoresFormador) ? guardado.valoresFormador : prev.valoresFormador,
               entidadeResponsavel: String(guardado.entidadeResponsavel ?? prev.entidadeResponsavel ?? ""),
+              conteudosMoodle: parseConteudosMoodle(guardado.conteudosMoodle),
             };
           });
         }
@@ -794,6 +798,7 @@ export function CursoFichaView({
       { id: "oferta", label: "Oferta" },
       { id: "conteudo", label: "Conteúdo do site" },
       { id: "programa", label: "Programa" },
+      { id: "moodle", label: "Conteúdos Moodle" },
       { id: "planos", label: "Planos de sessão" },
       { id: "avaliacao", label: "Avaliação" },
       { id: "documentos", label: "Documentos" },
@@ -1423,6 +1428,18 @@ export function CursoFichaView({
                 </button>
               </div>
             </div>
+          )}
+
+          {tab === "moodle" && (
+            <ConteudosMoodle
+              accent={accent}
+              organizacao={accent === "fin" ? "modular" : data.organizacaoPrograma}
+              modulos={data.topicosPrograma}
+              conteudos={data.conteudosMoodle}
+              inputCls={t.iCls}
+              onChange={conteudosMoodle => patch({ conteudosMoodle })}
+              onIrPrograma={() => setTab("programa")}
+            />
           )}
 
           {tab === "planos" && (

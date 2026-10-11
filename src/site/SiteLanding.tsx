@@ -580,9 +580,9 @@ function Home() {
           </div>
           <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             {estado === "pronto" && filtered.map((course) => (
-              <article key={course.id} className="group flex min-h-[390px] max-w-full flex-col overflow-hidden border-x border-b border-[#14263D]/10 border-t-4 border-t-[#FFA900] bg-white text-[#14263D] shadow-[0_10px_30px_rgba(20,38,61,.06)] transition-shadow hover:shadow-[0_18px_40px_rgba(20,38,61,.14)]">
+              <article key={course.id} className="ena-cartao group flex min-h-[390px] max-w-full flex-col overflow-hidden border-x border-b border-[#14263D]/10 border-t-4 border-t-[#FFA900] bg-white text-[#14263D] shadow-[0_10px_30px_rgba(20,38,61,.06)] hover:shadow-[0_22px_46px_rgba(20,38,61,.16)]">
                 <a href={`/formacao/${course.id}`} className="relative block h-44 max-h-44 w-full max-w-full overflow-hidden bg-[#E7EBF0]">
-                  {(course.capa || course.miniatura) && <img src={course.capa || course.miniatura || ""} alt="" className="h-full max-h-44 w-full max-w-full object-cover" />}
+                  {(course.capa || course.miniatura) && <img src={course.capa || course.miniatura || ""} alt="" className="ena-cartao-foto h-full max-h-44 w-full max-w-full object-cover" />}
                   <span className={`absolute left-4 top-4 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.1em] ${course.format === "E-learning" ? "bg-[#FFA900] text-[#14263D]" : "bg-[#14263D] text-white"}`}>{course.format}</span>
                 </a>
                 <div className="flex flex-1 flex-col p-6">

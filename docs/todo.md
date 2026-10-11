@@ -45,6 +45,7 @@ Ainda por fazer no site:
 
 ## Ligações externas
 
+- Os textos de cada módulo (introdução, textos, recursos e atividades) editam-se no separador Conteúdos Moodle da ficha do curso e ficam gravados nessa ficha. Não são enviados para o Moodle.
 - Ler a nota real no Moodle da turma. O parâmetro já entra na média e a pauta do dossiê já sai da grelha, mas o valor do Moodle continua a ser lançado à mão. A integração com o Moodle ainda não existe.
 - Acesso ao Moodle nos cursos de Acesso direto. O site já mostra «Aceder ao curso» e não abre a pré-inscrição nem o check-out. Falta criar a conta, inscrever a pessoa na disciplina e devolver o endereço da sala logo após o pedido. O Pré-pago usa o check-out do site.
 - Recibos certificados (Moloni) e o contrato Ifthenpay ou SIBS. O pagamento fica pendente até um webhook do banco o marcar como pago.

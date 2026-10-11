@@ -316,6 +316,29 @@ body:has(input[type="file"]:focus) [data-ficha-sticky] {
   box-shadow: 0 0 0 6px #ffa900;
 }
 
+.ena-cartao {
+  transition: transform 0.35s ease, box-shadow 0.35s ease;
+}
+.ena-cartao:hover {
+  transform: translateY(-6px);
+}
+.ena-cartao-foto {
+  transition: transform 0.55s ease;
+}
+.ena-cartao:hover .ena-cartao-foto {
+  transform: scale(1.08);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ena-cartao,
+  .ena-cartao-foto {
+    transition: none;
+  }
+  .ena-cartao:hover,
+  .ena-cartao:hover .ena-cartao-foto {
+    transform: none;
+  }
+}
+
 @media print {
   aside, header, footer {
     display: none !important;

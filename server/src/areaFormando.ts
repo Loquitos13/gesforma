@@ -7,6 +7,11 @@ import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { sendMail } from "./mailer.js";
 import { hashPassword, isEmail, normalizeEmail, sha256 } from "./security.js";
+import {
+  assertFormandoDoUser,
+  uploadDocFormandoFin,
+  vistaDocumentosFormandoFin,
+} from "./formandoFinDocs.js";
 
 type Actor = { id: string; role: string; email: string; name: string };
 
@@ -355,6 +360,34 @@ export async function montarArea(db: Db, user: Actor) {
   const lidas = new Set(prefs.lidas);
   const progresso = cursos.length ? Math.round(cursos.reduce((s, c) => s + c.progresso, 0) / cursos.length) : 0;
   const pessoaNome = primeira ? `${primeira.nome} ${primeira.apelido}`.trim() : (conta?.name || user.name);
+  const documentosFin = [];
+  for (const ins of inscricoes.filter(i => i.regime === "fin")) {
+    const vista = await vistaDocumentosFormandoFin(db, ins.id);
+    if (!vista) continue;
+    documentosFin.push({
+      formandoId: ins.id,
+      curso: vista.curso,
+      url: vista.url,
+      completo: vista.completo,
+      documentos: vista.documentos,
+    });
+    const recusados = vista.documentos.filter(d => d.estado === "recusado");
+    if (recusados.length) {
+      notificacoes.push({
+        id: `doc-rec-${ins.id}`,
+        titulo: "Documentos a corrigir",
+        texto: `${recusados.length} documento(s) recusado(s) na formação financiada. Envie de novo na área Documentos.`,
+        quando: "Agora",
+      });
+    } else if (!vista.completo) {
+      notificacoes.push({
+        id: `doc-falta-${ins.id}`,
+        titulo: "Documentos em falta",
+        texto: `Complete o dossiê de elegibilidade de ${vista.curso}.`,
+        quando: "Pendente",
+      });
+    }
+  }
   return {
     pessoa: {
       nome: primeira?.nome || pessoaNome,
@@ -371,6 +404,7 @@ export async function montarArea(db: Db, user: Actor) {
     notificacoes: notificacoes.map(n => ({ ...n, porLer: !lidas.has(n.id) })),
     resumo: { cursos: cursos.length, progresso, certificados: certificados.length },
     financiada: inscricoes.some(i => i.regime === "fin"),
+    documentosFin,
   };
 }
 
@@ -457,6 +491,52 @@ export function registerAreaFormandoRoutes(
     const resultado = await gerarAcessoFormando(db, regime, id, repor);
     if ("erro" in resultado) return reply.code(resultado.estado).send({ error: resultado.erro });
     return { acesso: resultado };
+  });
+
+  app.get("/v1/area-formando/documentos/:formandoId", async (req, reply) => {
+    if (!requireAuth(req, reply, { formando: true })) return;
+    if (req.actor!.role !== "formando") return reply.code(403).send({ error: "a área do formando não abre o GesForma" });
+    const formandoId = Number((req.params as { formandoId: string }).formandoId);
+    if (!Number.isInteger(formandoId)) return reply.code(400).send({ error: "pedido inválido" });
+    if (!await assertFormandoDoUser(db, req.actor!.id, formandoId)) {
+      return reply.code(403).send({ error: "sem acesso a esta ficha" });
+    }
+    const vista = await vistaDocumentosFormandoFin(db, formandoId);
+    if (!vista) return reply.code(404).send({ error: "inexistente" });
+    return vista;
+  });
+
+  app.post("/v1/area-formando/documentos/:formandoId", async (req, reply) => {
+    if (!requireAuth(req, reply, { formando: true })) return;
+    if (req.actor!.role !== "formando") return reply.code(403).send({ error: "a área do formando não abre o GesForma" });
+    const formandoId = Number((req.params as { formandoId: string }).formandoId);
+    if (!Number.isInteger(formandoId)) return reply.code(400).send({ error: "pedido inválido" });
+    if (!await assertFormandoDoUser(db, req.actor!.id, formandoId)) {
+      return reply.code(403).send({ error: "sem acesso a esta ficha" });
+    }
+    let name = "ficheiro";
+    let mime = "application/octet-stream";
+    let bytes: Buffer | null = null;
+    let tipo = "";
+    try {
+      const parts = req.parts();
+      for await (const part of parts) {
+        if (part.type === "file") {
+          name = part.filename || name;
+          mime = part.mimetype || mime;
+          bytes = await part.toBuffer();
+        } else if (part.fieldname === "tipo") tipo = String(part.value ?? "").slice(0, 40);
+      }
+    } catch {
+      return reply.code(400).send({ error: "upload inválido" });
+    }
+    if (!bytes || !tipo) return reply.code(400).send({ error: "pedido inválido" });
+    const up = await uploadDocFormandoFin(db, formandoId, tipo, { name, mime, bytes }, {
+      actorId: req.actor!.id,
+      viaFormando: true,
+    });
+    if ("error" in up) return reply.code(400).send({ error: up.error });
+    return up;
   });
 
   app.post("/v1/auth/recuperar", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (req, reply) => {

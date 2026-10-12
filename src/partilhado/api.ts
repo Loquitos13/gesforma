@@ -84,6 +84,7 @@ export type OpsSnapshot = {
   turmasFin: Array<{
     id: number; dataInicio: string; nome: string; curso: string; ufcdCod: string; local: string; horario: string;
     alunos: number; alunosTotal: number; toleranciaVagas?: number; estado: string; horas: number; formador: string; activa: boolean; cronograma: unknown[];
+    fechadaEm?: string; fechadaPor?: string;
   }>;
   formadores: Array<{
     id: number; nome: string; telf: string; email: string; especialidade: string; ccp: string; nif: string;
@@ -199,6 +200,37 @@ export type AreaFormandoDados = {
   notificacoes: { id: string; titulo: string; texto: string; quando: string; porLer: boolean }[];
   resumo: { cursos: number; progresso: number; certificados: number };
   financiada: boolean;
+  documentosFin: FormandoFinDocsBloco[];
+};
+export type FormandoFinDocEstado = "validado" | "recusado" | "pendente" | "em_falta";
+export type FormandoFinDocLinha = {
+  id: string;
+  label: string;
+  required: boolean;
+  estado: FormandoFinDocEstado;
+  observacao: string;
+  fileName: string;
+  driveUrl: string;
+  validadoEm: string;
+  validadoPor: string;
+};
+export type FormandoFinDocsVista = {
+  formandoId: number;
+  nome: string;
+  curso: string;
+  email: string;
+  token: string;
+  url: string;
+  documentos: FormandoFinDocLinha[];
+  recusados: string[];
+  completo: boolean;
+};
+export type FormandoFinDocsBloco = {
+  formandoId: number;
+  curso: string;
+  url: string;
+  completo: boolean;
+  documentos: FormandoFinDocLinha[];
 };
 export const apiAreaFormando = () => api<AreaFormandoDados>("/v1/area-formando");
 export const apiPatchAreaFormando = (body: Partial<Pick<AreaFormandoDados, "pessoa">> & { nome?: string; apelido?: string; telf?: string; novidades?: boolean; canais?: AreaFormandoDados["pessoa"]["canais"]; lidas?: string[] }) =>
@@ -598,7 +630,10 @@ export async function apiCursoImagem(regime: Regime, cursoId: number, slot: "ban
   return data as { nome: string; url: string };
 }
 
-export type FormandoDoc = { id: string; ok: boolean; fileName: string; data: string; driveFileId?: string; driveUrl?: string };
+export type FormandoDoc = {
+  id: string; ok: boolean; fileName: string; data: string; driveFileId?: string; driveUrl?: string;
+  estado?: string; observacao?: string; validadoPor?: string; validadoEm?: string;
+};
 export type FormandoNota = { id: number; autor: string; texto: string; data: string };
 export const apiFormandoDossier = (regime: Regime, id: number) =>
   api<{ docs: FormandoDoc[]; notas: FormandoNota[] }>(`/v1/formandos/${regime}/${id}/dossier`);
@@ -1102,6 +1137,65 @@ export const apiPatchFormandoFin = (id: number, body: Record<string, unknown>) =
 export const apiDeleteFormandoFin = (id: number) => api<{ ok: boolean }>(`/v1/formandos-fin/${id}`, { method: "DELETE" });
 export const apiLembreteDocsFormandoFin = (id: number) =>
   api<{ ok: boolean }>(`/v1/formandos-fin/${id}/lembrete-documentos`, { method: "POST" });
+export const apiFormandoFinDocsVista = (id: number) =>
+  api<FormandoFinDocsVista>(`/v1/formandos/fin/${id}/documentos`);
+export const apiValidarDocFormandoFin = (formandoId: number, docId: string) =>
+  api<FormandoFinDocsVista>(`/v1/formandos/fin/${formandoId}/documentos/${encodeURIComponent(docId)}/validar`, { method: "POST" });
+export const apiRecusarDocFormandoFin = (formandoId: number, docId: string, observacao: string) =>
+  api<FormandoFinDocsVista>(`/v1/formandos/fin/${formandoId}/documentos/${encodeURIComponent(docId)}/recusar`, {
+    method: "POST",
+    body: JSON.stringify({ observacao }),
+  });
+export async function apiPublicFormandoDocumentos(token: string) {
+  const headers = new Headers();
+  headers.set("Accept", "application/json");
+  headers.set("X-Gesforma-Client", "web");
+  const res = await fetch(`${BASE}/v1/public/formando-documentos/${encodeURIComponent(token)}`, {
+    credentials: "include",
+    headers,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, typeof data.error === "string" ? data.error : "ligação inválida");
+  return data as FormandoFinDocsVista;
+}
+export async function apiPublicFormandoDocumentoUpload(token: string, tipo: string, file: File) {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("tipo", tipo);
+  const headers = new Headers();
+  headers.set("Accept", "application/json");
+  headers.set("X-Gesforma-Client", "web");
+  const res = await fetch(`${BASE}/v1/public/formando-documentos/${encodeURIComponent(token)}`, {
+    method: "POST",
+    credentials: "include",
+    headers,
+    body: fd,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, typeof data.error === "string" ? data.error : "upload recusado");
+  return data as { ok: boolean; nome: string; url: string };
+}
+export async function apiAreaFormandoDocumentoUpload(formandoId: number, tipo: string, file: File) {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("tipo", tipo);
+  const headers = new Headers();
+  headers.set("Accept", "application/json");
+  headers.set("X-Gesforma-Client", "web");
+  const res = await fetch(`${BASE}/v1/area-formando/documentos/${formandoId}`, {
+    method: "POST",
+    credentials: "include",
+    headers,
+    body: fd,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, typeof data.error === "string" ? data.error : "upload recusado");
+  return data as { ok: boolean; nome: string; url: string };
+}
+export const apiAreaFormandoDocumentos = (formandoId: number) =>
+  api<FormandoFinDocsVista>(`/v1/area-formando/documentos/${formandoId}`);
+export const apiTurmaFinFecho = (turmaId: number) =>
+  api<{ ok: boolean; resumo: Record<string, unknown>; relatorioUrl: string }>(`/v1/turmas/fin/${turmaId}/fecho`, { method: "POST" });
 
 export const apiCreateCursoGold = (body: Record<string, unknown>) =>
   api<{ curso: OpsSnapshot["cursosGold"][number] }>("/v1/cursos-gold", { method: "POST", body: JSON.stringify(body) });

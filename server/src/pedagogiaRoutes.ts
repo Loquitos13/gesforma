@@ -1940,8 +1940,13 @@ export function registerPedagogiaRoutes(
     const { regime, id } = params(req);
     if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
     const [docs, notas] = await Promise.all([
-      db.query<{ doc_id: string; ok: boolean; file_name: string; data: string; drive_file_id?: string; drive_url?: string }>(
-        "SELECT doc_id, ok, file_name, data, drive_file_id, drive_url FROM formando_docs WHERE regime = $1 AND formando_id = $2",
+      db.query<{ doc_id: string; ok: boolean; file_name: string; data: string; drive_file_id?: string; drive_url?: string; estado: string; observacao: string; validated_at: string | Date | null; validator_name: string }>(
+        `SELECT d.doc_id, d.ok, d.file_name, d.data, d.drive_file_id, d.drive_url,
+                COALESCE(d.estado, 'pendente') AS estado, COALESCE(d.observacao, '') AS observacao,
+                d.validated_at, COALESCE(u.name, '') AS validator_name
+           FROM formando_docs d
+           LEFT JOIN users u ON u.id = d.validated_by
+          WHERE d.regime = $1 AND d.formando_id = $2`,
         [regime, id],
       ),
       db.query<{ id: number; autor: string; texto: string; created_at: string | Date }>(
@@ -1953,6 +1958,11 @@ export function registerPedagogiaRoutes(
       docs: docs.rows.map(r => ({
         id: r.doc_id, ok: r.ok, fileName: r.file_name, data: r.data,
         driveFileId: r.drive_file_id ?? "", driveUrl: r.drive_url ?? "",
+        estado: r.estado, observacao: r.observacao,
+        validadoPor: r.validator_name,
+        validadoEm: r.validated_at
+          ? String(r.validated_at instanceof Date ? r.validated_at.toISOString() : r.validated_at).slice(0, 16).replace("T", " ")
+          : "",
       })),
       notas: notas.rows.map(r => ({
         id: Number(r.id),
@@ -2331,6 +2341,42 @@ export function registerPedagogiaRoutes(
       .header("Content-Type", "application/pdf")
       .header("Content-Disposition", `attachment; filename="${gerado.nome}"`)
       .send(gerado.bytes);
+  });
+
+  app.post("/v1/turmas/fin/:id/fecho", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "O formador não fecha a turma." });
+    const role = req.actor!.role;
+    if (role !== "admin" && role !== "secretaria" && role !== "financiada") {
+      return reply.code(403).send({ error: "Só a equipa pedagógica fecha a turma." });
+    }
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
+    const antes = await db.query<{ fechada_em: string | null; nome: string }>(
+      "SELECT fechada_em, nome FROM turmas_fin WHERE id = $1",
+      [id],
+    );
+    const turma = antes.rows[0];
+    if (!turma) return reply.code(404).send({ error: "turma não encontrada" });
+    if (turma.fechada_em) return reply.code(409).send({ error: "Esta turma já foi fechada formalmente." });
+    const dados = await dadosRelatorioFinal(db, id);
+    if (!dados) return reply.code(404).send({ error: "turma não encontrada" });
+    const bytes = pdfRelatorioFinal(dados);
+    const resumo = {
+      acao: dados.acao,
+      curso: dados.curso,
+      formandos: dados.formandos.length,
+      horas: dados.duracaoHoras,
+      geradoEm: new Date().toISOString(),
+    };
+    await db.query(
+      `UPDATE turmas_fin SET fechada_em = now(), fechada_por = $2, relatorio_execucao = $3::jsonb,
+         estado = 'Concluída', activa = false WHERE id = $1`,
+      [id, req.actor!.id, JSON.stringify(resumo)],
+    );
+    await anexarPdfDtp(db, req.actor!.id, { id, nome: turma.nome }, "relatorio", "RelatorioFinalAccao.pdf", bytes).catch(() => undefined);
+    await audit(db, req.actor!.id, "turma.fecho", "turma_fin", String(id), req.ip, resumo);
+    return { ok: true, resumo, relatorioUrl: `/v1/turmas/fin/${id}/relatorio-final` };
   });
 
   app.get("/v1/turmas/:regime/:id/relatorio-final", async (req, reply) => pdfDaTurmaFin(req, reply, "final"));

@@ -166,6 +166,8 @@ export async function upsertFormandoFinFromLead(db: Db, leadId: number, actorId?
       ],
     );
     await logLeadEvent(db, leadId, actorId, "estado", "Formando financiado criado", `Ficha #${id} · ${turmaNome}`);
+    const { ensureFinDocsToken } = await import("./formandoFinDocs.js");
+    await ensureFinDocsToken(db, id);
   } else {
     await db.query(
       `UPDATE formandos_fin SET
@@ -224,7 +226,7 @@ export async function upsertFormandoFinFromInscricao(db: Db, payload: Record<str
         id,
         String(payload.nome ?? ""),
         String(payload.apelido ?? ""),
-        turma?.nome ?? turmaTxt || "-",
+        (turma?.nome ?? turmaTxt) || "-",
         turma?.id ?? null,
         String(payload.telf ?? ""),
         email,
@@ -250,7 +252,7 @@ export async function upsertFormandoFinFromInscricao(db: Db, payload: Record<str
         id,
         String(payload.nome ?? ""),
         String(payload.apelido ?? ""),
-        turma?.nome ?? turmaTxt || "-",
+        (turma?.nome ?? turmaTxt) || "-",
         turma?.id ?? null,
         String(payload.telf ?? ""),
         turma?.curso ?? curso,
@@ -290,20 +292,23 @@ export async function enviarLembreteDocsFin(db: Db, formandoId: number, actorId?
   const { renderAutomaticEmail } = await import("./emailHtml.js");
   const { config } = await import("./config.js");
   const nome = `${f.nome} ${f.apelido}`.trim();
+  const { ensureFinDocsToken, formandoFinDocsUrl } = await import("./formandoFinDocs.js");
+  const token = await ensureFinDocsToken(db, formandoId);
+  const portalUrl = formandoFinDocsUrl(token);
   const linhas = [
     `Olá ${f.nome},`,
     "",
     `Para concluir a inscrição na formação ${f.curso} faltam os seguintes documentos:`,
     ...emFalta.map(d => `· ${d}`),
     "",
-    "Responda a este email com os ficheiros em anexo ou contacte a equipa pedagógica da ENA.",
+    "Use o botão para enviar um ficheiro de cada vez na área segura. Se a secretaria tiver recusado algum documento, só poderá reenviar esses.",
   ];
   const mail = renderAutomaticEmail({
     nome,
     xml: "",
     linhas,
-    cta: "Contactar a ENA",
-    href: `${config.appOrigin.replace(/\/$/, "")}/area-formando`,
+    cta: "Enviar documentos",
+    href: portalUrl,
     vars: { nome, curso: f.curso },
     origin: config.appOrigin,
   });

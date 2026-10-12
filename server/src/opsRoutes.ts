@@ -21,7 +21,7 @@ import {
   nextOpsId,
   newPublicId,
 } from "./ops.js";
-import { readFormandoPii, writeFormandoDocs, writeFormandoPiiPatch, writePreinscricaoPii } from "./pii.js";
+import { readFormandoPii, readPreinscricaoPii, writeFormandoDocs, writeFormandoPiiPatch, writePreinscricaoPii } from "./pii.js";
 import { exportCrmLeads, queryCrmLeads, searchCrmLeads, type CrmDir, type CrmFila, type CrmSort } from "./crm.js";
 import { fmtDataCalendario, fmtStampLisboa, hojeLisboa } from "./datas.js";
 import { syncTurmaDriveAccess } from "./googleDrive.js";
@@ -53,6 +53,24 @@ import {
 import { apagarFicheiroSubstituido, readDriveContent, storeDriveFile } from "./googleDrive.js";
 import { garantirPastaPendente } from "./driveArvore.js";
 import { ficheiroModelo } from "./docsCurso.js";
+import {
+  formandoFinPorToken, recusarDocFormandoFin, uploadDocFormandoFin, validarDocFormandoFin, vistaDocumentosFormandoFin,
+} from "./formandoFinDocs.js";
+
+async function auditLog(
+  db: Db,
+  actorId: string,
+  action: string,
+  entity: string,
+  entityId: string,
+  ip?: string,
+  meta: Record<string, unknown> = {},
+) {
+  await db.query(
+    "INSERT INTO audit_log (actor_id, action, entity, entity_id, ip, meta) VALUES ($1, $2, $3, $4, $5, $6::jsonb)",
+    [actorId, action, entity, entityId, ip ?? null, meta],
+  );
+}
 import { modulosDaFicha } from "./programaCurso.js";
 import {
   PercursoErro, concluirPercurso, escolherTurmaPublica, enviarSugestaoTurmaCheia,
@@ -927,6 +945,46 @@ export function registerOpsRoutes(
     }
   });
 
+  app.get("/v1/public/formando-documentos/:token", {
+    config: { rateLimit: { max: 40, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    const token = String((req.params as { token: string }).token ?? "");
+    if (token.length < 12) return reply.code(400).send({ error: "ligação inválida" });
+    const vista = await formandoFinPorToken(db, token);
+    if (!vista) return reply.code(404).send({ error: "ligação inválida ou expirada" });
+    return vista;
+  });
+
+  app.post("/v1/public/formando-documentos/:token", {
+    config: { rateLimit: { max: 16, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    const token = String((req.params as { token: string }).token ?? "");
+    if (token.length < 12) return reply.code(400).send({ error: "ligação inválida" });
+    const row = await one(db, "SELECT id FROM formandos_fin WHERE docs_token = $1", [token]);
+    if (!row) return reply.code(404).send({ error: "ligação inválida ou expirada" });
+    const formandoId = Number(row.id);
+    let name = "ficheiro";
+    let mime = "application/octet-stream";
+    let bytes: Buffer | null = null;
+    let tipo = "";
+    try {
+      const parts = req.parts();
+      for await (const part of parts) {
+        if (part.type === "file") {
+          name = part.filename || name;
+          mime = part.mimetype || mime;
+          bytes = await part.toBuffer();
+        } else if (part.fieldname === "tipo") tipo = String(part.value ?? "").slice(0, 40);
+      }
+    } catch {
+      return reply.code(400).send({ error: "upload inválido" });
+    }
+    if (!bytes || !tipo) return reply.code(400).send({ error: "pedido inválido" });
+    const up = await uploadDocFormandoFin(db, formandoId, tipo, { name, mime, bytes }, { viaFormando: true });
+    if ("error" in up) return reply.code(400).send({ error: up.error });
+    return up;
+  });
+
   app.get("/v1/alertas/documentos", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const alertas = await listarAlertasAbertas(db);
@@ -956,9 +1014,10 @@ export function registerOpsRoutes(
     const id = Number((req.params as { id: string }).id);
     const docId = Number((req.params as { docId: string }).docId);
     if (!Number.isInteger(id) || !Number.isInteger(docId)) return reply.code(400).send({ error: "pedido inválido" });
-    const ok = await definirEstadoDoc(db, id, docId, "validado");
+    const ok = await definirEstadoDoc(db, id, docId, "validado", "", req.actor!.id);
     if (!ok) return reply.code(404).send({ error: "documento inexistente" });
     await logLeadEvent(db, id, req.actor!.id, "campo", "Documento validado", String(docId));
+    await auditLog(db, req.actor!.id, "crm.doc_validado", "preinscricao", String(id), req.ip, { docId });
     return getLeadDossier(db, id);
   });
 
@@ -970,9 +1029,10 @@ export function registerOpsRoutes(
     const observacao = String(body.observacao ?? "").trim().slice(0, 500);
     if (!Number.isInteger(id) || !Number.isInteger(docId)) return reply.code(400).send({ error: "pedido inválido" });
     if (!observacao) return reply.code(400).send({ error: "Escreva o que está incorrecto." });
-    const ok = await definirEstadoDoc(db, id, docId, "recusado", observacao);
+    const ok = await definirEstadoDoc(db, id, docId, "recusado", observacao, req.actor!.id);
     if (!ok) return reply.code(404).send({ error: "documento inexistente" });
     await logLeadEvent(db, id, req.actor!.id, "campo", "Documento recusado", observacao);
+    await auditLog(db, req.actor!.id, "crm.doc_recusado", "preinscricao", String(id), req.ip, { docId });
     return getLeadDossier(db, id);
   });
 
@@ -989,6 +1049,41 @@ export function registerOpsRoutes(
   function staffValida(role: string | undefined) {
     return role === "admin" || role === "secretaria" || role === "financiada";
   }
+
+  app.get("/v1/formandos/fin/:id/documentos", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (!staffValida(req.actor?.role)) return reply.code(403).send({ error: "Sem permissão." });
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
+    const vista = await vistaDocumentosFormandoFin(db, id);
+    if (!vista) return reply.code(404).send({ error: "formando inexistente" });
+    return vista;
+  });
+
+  app.post("/v1/formandos/fin/:id/documentos/:docId/validar", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (!staffValida(req.actor?.role)) return reply.code(403).send({ error: "Sem permissão." });
+    const id = Number((req.params as { id: string }).id);
+    const docId = String((req.params as { docId: string }).docId ?? "").slice(0, 40);
+    if (!Number.isInteger(id) || !docId) return reply.code(400).send({ error: "pedido inválido" });
+    const ok = await validarDocFormandoFin(db, id, docId, req.actor!);
+    if (!ok) return reply.code(404).send({ error: "documento inexistente" });
+    await auditLog(db, req.actor!.id, "formando.doc_validado", "formando_fin", String(id), req.ip, { docId });
+    return vistaDocumentosFormandoFin(db, id);
+  });
+
+  app.post("/v1/formandos/fin/:id/documentos/:docId/recusar", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (!staffValida(req.actor?.role)) return reply.code(403).send({ error: "Sem permissão." });
+    const id = Number((req.params as { id: string }).id);
+    const docId = String((req.params as { docId: string }).docId ?? "").slice(0, 40);
+    const body = req.body && typeof req.body === "object" ? req.body as { observacao?: string } : {};
+    if (!Number.isInteger(id) || !docId) return reply.code(400).send({ error: "pedido inválido" });
+    const r = await recusarDocFormandoFin(db, id, docId, String(body.observacao ?? ""), req.actor!);
+    if (!r.ok) return reply.code(400).send({ error: r.error });
+    await auditLog(db, req.actor!.id, "formando.doc_recusado", "formando_fin", String(id), req.ip, { docId });
+    return vistaDocumentosFormandoFin(db, id);
+  });
 
   app.post("/v1/crm/leads/:id/validar-preinscricao", async (req, reply) => {
     if (!requireAuth(req, reply)) return;

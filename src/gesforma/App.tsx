@@ -58,7 +58,10 @@ import { CustosTurmaCard } from "./CustosTurma";
 import { CrmClientesView, CrmContratosView, CrmParceirosView } from "./CrmDiretorioView";
 import { FormadorCalendario, eventosDoFormador } from "../partilhado/FormadorCalendario";
 import { cronogramaToSessoes, formatSessaoLabel, generateCronograma, hojeIso, horasDoFormador, isTurmaActiva, lugaresLivres, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "../partilhado/turmaModel";
-import { apiFormandoDossier, apiGlobalSearch, apiDriveFiles, apiLembreteDocsFormandoFin, apiSaveFormandoDocs, apiTurmaAvaliacao, type GlobalSearchHit } from "../partilhado/api";
+import {
+  apiFormandoFinDocsVista, apiGlobalSearch, apiDriveFiles, apiLembreteDocsFormandoFin, apiRecusarDocFormandoFin,
+  apiSaveFormandoDocs, apiTurmaAvaliacao, apiTurmaFinFecho, apiValidarDocFormandoFin, type FormandoFinDocsVista, type GlobalSearchHit,
+} from "../partilhado/api";
 import { finGruposDocumentosTurma, labelsSessoesFin } from "../partilhado/finDossierUi";
 import { CampanhasView } from "./CampanhasView";
 import { ListsProvider, tempNumericId, useLists, type BlogPostRow, type FormandoFin, type FormandoTurma, type Preinscricao } from "../partilhado/ListsContext";
@@ -2311,6 +2314,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
   const { user } = useAuth();
   const modelosCursoFin = usePlanosCurso("fin", turma?.curso ?? "");
   const [envioInqFin, setEnvioInqFin] = useState("");
+  const [fechoBusy, setFechoBusy] = useState(false);
   const ped = useTurmaPedagogia("fin", turma?.id ?? 0);
   const criterios = useCriteriosAvaliacao("fin", turma?.curso);
   const programaCursoFin = useProgramaDoCurso("fin", turma?.curso ?? "");
@@ -2413,6 +2417,30 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
               setEditLocal(turma.local); setEditInicio(turma.dataInicio);
               setEditVagasFin(turma.alunosTotal); setEditToleranciaFin(turma.toleranciaVagas ?? 0); setEditTurma(true);
             }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors">Editar turma</button>}
+            {!souFormadorFin && !turma.fechadaEm && staffPodeDossie(user.role) && (
+              <button
+                type="button"
+                disabled={fechoBusy || ped.dtp.pct < 70}
+                title={ped.dtp.pct < 70 ? "Complete o dossiê (DTP ≥ 70%) antes do fecho formal." : "Gera o relatório de execução e marca a turma como concluída"}
+                onClick={() => {
+                  if (!window.confirm("Fechar formalmente esta turma? O estado passa a Concluída e o relatório de execução fica no dossiê.")) return;
+                  setFechoBusy(true);
+                  void persist(apiTurmaFinFecho(turma.id))
+                    .then(r => {
+                      if (!r) return;
+                      patchFin(turma.id, { fechadaEm: new Date().toISOString().slice(0, 16).replace("T", " "), estado: "Concluída", activa: false });
+                      toastOk("Turma fechada. O relatório de execução foi anexado ao dossiê.");
+                    })
+                    .finally(() => setFechoBusy(false));
+                }}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg"
+              >
+                {fechoBusy ? "A fechar…" : "Fecho formal"}
+              </button>
+            )}
+            {turma.fechadaEm && !souFormadorFin && (
+              <span className="text-xs font-semibold text-emerald-200 px-3 py-2 bg-white/10 rounded-lg">Fechada {turma.fechadaEm}</span>
+            )}
             {!souFormadorFin && <button type="button" onClick={() => setExportTurma(exportPayload(
               { nome: turma.nome, curso: turma.curso, local: turma.local, formandos: turma.alunos, accent: "fin", turmaId: turma.id },
               listaFormandos.map(f => ({ nome: `${f.nome} ${f.apelido}`, email: f.email, telf: f.telf, estado: f.estado })),
@@ -2882,50 +2910,63 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
 type FinFormando = FormandoFin;
 const docLabels = Object.fromEntries(DOCS_FORMANDO_FIN.map(d => [d.id, d.label]));
 
+function syncDocsFinFromVista(patchFormandoFin: (id: number, p: Partial<FormandoFin>) => void, id: number, vista: FormandoFinDocsVista) {
+  const patch: Partial<FormandoFin> = {};
+  for (const d of vista.documentos) {
+    (patch as Record<string, { ok: boolean; data: string }>)[d.id] = {
+      ok: d.estado === "validado",
+      data: d.validadoEm || (d.estado === "validado" ? new Date().toISOString().slice(0, 10) : ""),
+    };
+  }
+  patchFormandoFin(id, patch);
+}
+
 function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
-  const { formandosFin, patchFormandoFin } = useLists();
+  const { formandosFin, patchFormandoFin, reloadFromApi } = useLists();
   const live = formandosFin.find(f => f.id === formando.id) ?? formando;
-  const [docs, setDocs] = useState(live);
+  const [vista, setVista] = useState<FormandoFinDocsVista | null>(null);
   const [uploadFor, setUploadFor] = useState<string | null>(null);
-  const [ficheiros, setFicheiros] = useState<Record<string, string>>({});
+  const [obsDoc, setObsDoc] = useState<Record<string, string>>({});
   const [lembreteBusy, setLembreteBusy] = useState(false);
-  useEffect(() => { setDocs(live); }, [live]);
+  const [copiado, setCopiado] = useState(false);
+
+  function reloadVista() {
+    return apiFormandoFinDocsVista(live.id).then(r => {
+      setVista(r);
+      syncDocsFinFromVista(patchFormandoFin, live.id, r);
+    });
+  }
+
   useEffect(() => {
     let viva = true;
-    apiFormandoDossier("fin", live.id).then(r => {
-      if (!viva) return;
-      const urls: Record<string, string> = {};
-      for (const d of r.docs) {
-        if (d.driveUrl) urls[d.id] = d.driveUrl;
-      }
-      setFicheiros(urls);
-    }).catch(() => undefined);
+    reloadVista().catch(() => { if (viva) setVista(null); });
     return () => { viva = false; };
   }, [live.id]);
-  const keys = DOCS_FORMANDO_FIN.map(d => d.id);
-  const estado = (k: string) => docFinDe(docs, k);
-  const completo = docsFinCompletos(docs);
-  function desmarcarDoc(k: string) {
-    const nextDoc = { ok: false, data: "" };
-    const next = { ...docs, [k]: nextDoc } as FormandoFin;
-    setDocs(next);
-    patchFormandoFin(docs.id, { [k]: nextDoc } as Partial<FormandoFin>);
-    void persist(apiSaveFormandoDocs("fin", docs.id, [{ id: k, ok: false, fileName: "", data: "", driveFileId: "", driveUrl: "" }]));
-  }
+
+  const completo = vista?.completo ?? docsFinCompletos(live);
+  const linhas = vista?.documentos ?? DOCS_FORMANDO_FIN.map(def => ({
+    id: def.id,
+    label: def.label,
+    required: Boolean(def.required),
+    estado: (docFinDe(live, def.id).ok ? "validado" : "em_falta") as FormandoFinDocsVista["documentos"][number]["estado"],
+    observacao: "",
+    fileName: "",
+    driveUrl: "",
+    validadoEm: docFinDe(live, def.id).data,
+    validadoPor: "",
+  }));
+
   function marcarFicheiro(k: string, file: { name: string; openUrl: string; id: string }) {
-    const nextDoc = { ok: true, data: new Date().toISOString().slice(0, 10) };
-    const next = { ...docs, [k]: nextDoc } as FormandoFin;
-    setDocs(next);
-    patchFormandoFin(docs.id, { [k]: nextDoc } as Partial<FormandoFin>);
-    setFicheiros(prev => ({ ...prev, [k]: file.openUrl }));
-    void persist(apiSaveFormandoDocs("fin", docs.id, [{
+    const nextDoc = { ok: false, data: new Date().toISOString().slice(0, 10) };
+    patchFormandoFin(live.id, { [k]: nextDoc } as Partial<FormandoFin>);
+    void persist(apiSaveFormandoDocs("fin", live.id, [{
       id: k,
-      ok: true,
+      ok: false,
       fileName: file.name,
       data: nextDoc.data,
       driveFileId: file.id,
       driveUrl: file.openUrl,
-    }]));
+    }])).then(() => reloadVista().then(() => reloadFromApi()));
   }
 
   return (
@@ -2934,43 +2975,83 @@ function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${completo ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"}`}>
           {completo ? I.check : I.warn}
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className={`text-sm font-bold ${completo ? "text-emerald-700" : "text-amber-700"}`}>
-            {completo ? "Documentos completos" : `${keys.filter(k => !estado(k).ok).length} documentos em falta`}
+            {completo ? "Documentos completos" : `${linhas.filter(d => d.required && d.estado !== "validado").length} documentos por concluir`}
           </p>
-          <p className="text-xs text-slate-500 mt-0.5">{docs.nome} {docs.apelido} · {docs.curso}</p>
+          <p className="text-xs text-slate-500 mt-0.5">{live.nome} {live.apelido} · {live.curso}</p>
+          {vista?.url && (
+            <div className="mt-2 flex flex-wrap gap-2 items-center">
+              <a href={vista.url} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-blue-600">Abrir portal do formando</a>
+              <button type="button" className="text-[11px] font-semibold text-slate-500 underline" onClick={() => {
+                void navigator.clipboard.writeText(vista.url).then(() => {
+                  setCopiado(true);
+                  window.setTimeout(() => setCopiado(false), 2000);
+                });
+              }}>{copiado ? "Copiado" : "Copiar ligação"}</button>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="space-y-2">
-        {keys.map(k => {
-          const row = estado(k);
+        {linhas.map(doc => {
+          const ok = doc.estado === "validado";
+          const pendente = doc.estado === "pendente";
           return (
-          <div key={k} className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${row.ok ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
-            <span
-              className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 ${row.ok ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-red-300"}`}
-              title={row.ok ? "Validado com ficheiro" : "Carregue um ficheiro para validar"}
-            >
-              {row.ok && I.check}
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className={`text-xs font-semibold ${row.ok ? "text-emerald-700" : "text-red-600"}`}>{docLabels[k]}</p>
-              {row.ok && row.data && <p className="text-xs text-slate-400 mt-0.5">Validado em {row.data}</p>}
-              {!row.ok && <p className="text-xs text-red-400 mt-0.5">Em falta</p>}
-              {ficheiros[k] && (
-                <a href={ficheiros[k]} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-blue-600">Abrir no Drive</a>
-              )}
-            </div>
-            <div className="flex flex-col gap-1">
-              <button type="button" onClick={() => setUploadFor(k)} className="text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">
-                {row.ok ? "Substituir" : "Carregar"}
-              </button>
-              {row.ok && (
-                <button type="button" onClick={() => desmarcarDoc(k)} className="text-[10px] font-semibold text-slate-400 hover:text-red-600">
-                  Retirar validação
+          <div key={doc.id} className={`p-3 rounded-xl border transition-colors ${ok ? "bg-emerald-50 border-emerald-200" : doc.estado === "recusado" ? "bg-red-50 border-red-300" : pendente ? "bg-amber-50 border-amber-200" : "bg-red-50 border-red-200"}`}>
+            <div className="flex items-start gap-3">
+              <span className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${ok ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-slate-300"}`}>
+                {ok && I.check}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between gap-2">
+                  <p className={`text-xs font-semibold ${ok ? "text-emerald-700" : "text-slate-800"}`}>{doc.label}</p>
+                  <span className="text-[10px] font-bold uppercase text-slate-500">{doc.estado === "validado" ? "Validado" : doc.estado === "recusado" ? "Recusado" : doc.estado === "pendente" ? "Por validar" : "Em falta"}</span>
+                </div>
+                {doc.validadoPor && <p className="text-[11px] text-slate-500 mt-0.5">{doc.validadoPor}{doc.validadoEm ? ` · ${doc.validadoEm}` : ""}</p>}
+                {doc.observacao && <p className="text-[11px] text-red-700 mt-1">{doc.observacao}</p>}
+                {doc.driveUrl && (
+                  <a href={doc.driveUrl} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-blue-600">Abrir no Drive</a>
+                )}
+              </div>
+              <div className="flex flex-col gap-1">
+                <button type="button" onClick={() => setUploadFor(doc.id)} className="text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">
+                  {doc.fileName || pendente ? "Substituir" : "Carregar"}
                 </button>
-              )}
+              </div>
             </div>
+            {(pendente || doc.estado === "recusado" || (doc.fileName && !ok)) && (
+              <div className="mt-3 pl-9 space-y-2">
+                <textarea
+                  className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg"
+                  rows={2}
+                  placeholder="Motivo se recusar"
+                  value={obsDoc[doc.id] ?? doc.observacao ?? ""}
+                  onChange={e => setObsDoc(prev => ({ ...prev, [doc.id]: e.target.value }))}
+                />
+                <div className="flex gap-2">
+                  <button type="button" disabled={!doc.fileName && doc.estado === "em_falta"} className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white disabled:opacity-40" onClick={() => {
+                    void persist(apiValidarDocFormandoFin(live.id, doc.id)).then(r => {
+                      if (!r) return;
+                      setVista(r);
+                      syncDocsFinFromVista(patchFormandoFin, live.id, r);
+                      void reloadFromApi();
+                    });
+                  }}>Validar</button>
+                  <button type="button" className="flex-1 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-700" onClick={() => {
+                    const nota = (obsDoc[doc.id] ?? doc.observacao ?? "").trim();
+                    if (!nota) { toastError(new Error("Escreva o que está incorrecto.")); return; }
+                    void persist(apiRecusarDocFormandoFin(live.id, doc.id, nota)).then(r => {
+                      if (!r) return;
+                      setVista(r);
+                      syncDocsFinFromVista(patchFormandoFin, live.id, r);
+                      void reloadFromApi();
+                    });
+                  }}>Recusar</button>
+                </div>
+              </div>
+            )}
           </div>
           );
         })}
@@ -2982,8 +3063,8 @@ function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
           disabled={lembreteBusy}
           onClick={() => {
             setLembreteBusy(true);
-            void persist(apiLembreteDocsFormandoFin(docs.id))
-              .then(r => { if (r) toastOk("Lembrete enviado por email (ou registado na API se não houver SMTP)."); })
+            void persist(apiLembreteDocsFormandoFin(live.id))
+              .then(r => { if (r) { toastOk("Lembrete enviado por email (ou registado na API se não houver SMTP)."); void reloadVista(); } })
               .finally(() => setLembreteBusy(false));
           }}
           className="block w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-colors text-center"
@@ -2996,7 +3077,7 @@ function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
         onClose={() => setUploadFor(null)}
         title={`Carregar: ${uploadFor ? docLabels[uploadFor] : ""}`}
         accent="fin"
-        context={{ kind: "formando-doc", regime: "fin", turma: docs.turma, formando: String(docs.id), label: uploadFor ? docLabels[uploadFor] : undefined }}
+        context={{ kind: "formando-doc", regime: "fin", turma: live.turma, formando: String(live.id), label: uploadFor ? docLabels[uploadFor] : undefined }}
         onConfirm={file => { if (uploadFor) marcarFicheiro(uploadFor, file); }}
       />
     </div>

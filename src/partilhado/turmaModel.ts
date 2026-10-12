@@ -157,6 +157,8 @@ export type TurmaFin = {
   formadores?: string[];
   valoresHoraFormador?: Record<string, number>;
   activa: boolean;
+  fechadaEm?: string;
+  fechadaPor?: string;
   cronograma: SessaoCronograma[];
 };
 

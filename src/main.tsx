@@ -9,6 +9,7 @@ import { NotificacoesProvider } from "./gesforma/NotificacoesContext";
 import { PublicInquerito } from "./site/PublicInquerito";
 import { PublicPreinscricao } from "./site/PublicPreinscricao";
 import { PublicDocumentos } from "./site/PublicDocumentos";
+import { PublicFormandoDocumentos } from "./site/PublicFormandoDocumentos";
 import { PublicCronograma } from "./site/PublicCronograma";
 import { SiteCatalog } from "./site/SiteCatalog";
 import { SiteCurso } from "./site/SiteCurso";
@@ -33,7 +34,12 @@ const noticias = path === "/noticias";
 const catalogo = path === "/formacao";
 const slugCurso = path.startsWith("/formacao/") ? decodeURIComponent(path.slice("/formacao/".length).split("/")[0] ?? "") : "";
 const publicForm = path === "/pre-inscricao";
-const docsToken = path.startsWith("/documentos/") ? decodeURIComponent(path.slice("/documentos/".length).split("/")[0] ?? "") : "";
+const docsToken = path.startsWith("/documentos/") && !path.startsWith("/documentos-formando/")
+  ? decodeURIComponent(path.slice("/documentos/".length).split("/")[0] ?? "")
+  : "";
+const formandoDocsToken = path.startsWith("/documentos-formando/")
+  ? decodeURIComponent(path.slice("/documentos-formando/".length).split("/")[0] ?? "")
+  : "";
 const cronogramaMatch = path.match(/^\/cronograma\/(gold|fin)\/(\d+)$/);
 const inqToken = path.startsWith("/inquerito/") ? decodeURIComponent(path.slice("/inquerito/".length).split("/")[0] ?? "") : "";
 
@@ -43,6 +49,8 @@ createRoot(document.getElementById("root")!).render(
       <PublicPreinscricao />
     ) : cronogramaMatch ? (
       <PublicCronograma regime={cronogramaMatch[1] as "gold" | "fin"} turmaId={Number(cronogramaMatch[2])} />
+    ) : formandoDocsToken ? (
+      <PublicFormandoDocumentos token={formandoDocsToken} />
     ) : docsToken ? (
       <PublicDocumentos token={docsToken} />
     ) : inqToken ? (

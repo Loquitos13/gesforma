@@ -20,6 +20,8 @@ const PUBLIC_PREFIXES = [
   "/v1/public/",
 ];
 
+/** Rotas públicas de documentos do formando financiado (prefixo já coberto por /v1/public/). */
+
 const AUTHENTICATED_PREFIXES = [
   "/v1/me",
   "/v1/auth/password",

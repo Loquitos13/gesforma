@@ -1,13 +1,88 @@
 import { FormEvent, ReactNode, useEffect, useState } from "react";
 import {
-  ApiError, apiAreaFormando, apiChangeOwnPassword, apiGoogleLoginStatus, apiLogin, apiLogout, apiMe, apiMicrosoftLoginStatus,
+  ApiError, apiAreaFormando, apiAreaFormandoDocumentoUpload, apiChangeOwnPassword, apiGoogleLoginStatus, apiLogin, apiLogout, apiMe, apiMicrosoftLoginStatus,
   apiPatchAreaFormando, apiRecuperarAcesso, apiReporPalavraPasse, googleLoginStartUrl, microsoftLoginStartUrl,
-  type AreaFormandoDados, type SessionUser,
+  type AreaFormandoDados, type FormandoFinDocsBloco, type SessionUser,
 } from "../partilhado/api";
 import { destinoPosLogin } from "../partilhado/destinoPerfil";
 import { mensagemPalavraPasse } from "../partilhado/passwordPolicy";
 
-type Separador = "courses" | "agenda" | "certificates" | "notifications" | "payments" | "profile";
+type Separador = "courses" | "agenda" | "certificates" | "documents" | "notifications" | "payments" | "profile";
+
+function DocumentosFinArea({ blocos, onAtualizar, avisar }: {
+  blocos: FormandoFinDocsBloco[];
+  onAtualizar: () => void;
+  avisar: (texto: string) => void;
+}) {
+  const [formandoId, setFormandoId] = useState(blocos[0]?.formandoId ?? 0);
+  const [tipo, setTipo] = useState("");
+  const [ficheiro, setFicheiro] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const bloco = blocos.find(b => b.formandoId === formandoId) ?? blocos[0];
+  if (!bloco) {
+    return <p className="mt-7 text-sm text-[#1C3350]/55">Não há formação financiada associada a esta conta.</p>;
+  }
+  const permitidos = bloco.documentos.filter(d => d.estado === "recusado" || (d.required && d.estado !== "validado"));
+  async function enviar(event: FormEvent) {
+    event.preventDefault();
+    if (!ficheiro || !tipo) return;
+    setBusy(true);
+    try {
+      await apiAreaFormandoDocumentoUpload(bloco.formandoId, tipo, ficheiro);
+      avisar("Documento enviado. A secretaria irá validar.");
+      setFicheiro(null);
+      onAtualizar();
+    } catch (err) {
+      avisar(err instanceof ApiError ? err.message : "Não foi possível enviar.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="mt-7 space-y-6">
+      {blocos.length > 1 && (
+        <label className="block text-xs font-bold uppercase tracking-wider text-[#1C3350]/60">
+          Formação
+          <select value={formandoId} onChange={e => setFormandoId(Number(e.target.value))} className="mt-2 w-full max-w-md border border-[#1C3350]/20 px-4 py-3 text-base font-normal normal-case">
+            {blocos.map(b => <option key={b.formandoId} value={b.formandoId}>{b.curso}</option>)}
+          </select>
+        </label>
+      )}
+      <ul className="space-y-2 border border-[#1C3350]/10 bg-white p-5">
+        {bloco.documentos.map(doc => (
+          <li key={doc.id} className={`rounded-lg border px-4 py-3 text-sm ${doc.estado === "validado" ? "border-emerald-200 bg-emerald-50" : doc.estado === "recusado" ? "border-red-200 bg-red-50" : "border-[#1C3350]/10"}`}>
+            <div className="flex justify-between gap-3">
+              <strong>{doc.label}</strong>
+              <span className="text-xs font-bold uppercase text-[#1C3350]/45">
+                {doc.estado === "validado" ? "Validado" : doc.estado === "recusado" ? "Recusado" : doc.estado === "pendente" ? "Por validar" : "Em falta"}
+              </span>
+            </div>
+            {doc.observacao && <p className="mt-1 text-xs text-red-700">{doc.observacao}</p>}
+            {doc.validadoPor && <p className="mt-1 text-xs text-[#1C3350]/45">{doc.validadoPor}{doc.validadoEm ? ` · ${doc.validadoEm}` : ""}</p>}
+          </li>
+        ))}
+      </ul>
+      {permitidos.length > 0 && (
+        <form onSubmit={e => { void enviar(e); }} className="border border-[#1C3350]/10 bg-white p-6 space-y-4">
+          <h2 className="font-serif text-xl font-bold">Enviar documento</h2>
+          <label className="block text-xs font-bold uppercase tracking-wider text-[#1C3350]/60">
+            Tipo
+            <select required value={tipo} onChange={e => setTipo(e.target.value)} className="mt-2 w-full border border-[#1C3350]/20 px-4 py-3 text-base font-normal normal-case">
+              <option value="">Escolher…</option>
+              {permitidos.map(d => <option key={d.id} value={d.id}>{d.label}</option>)}
+            </select>
+          </label>
+          <label className="block text-xs font-bold uppercase tracking-wider text-[#1C3350]/60">
+            Ficheiro
+            <input required type="file" onChange={e => setFicheiro(e.target.files?.[0] ?? null)} className="mt-2 w-full text-sm font-normal normal-case" />
+          </label>
+          <button disabled={busy} type="submit" className="bg-[#A60000] px-6 py-3 font-bold text-white disabled:opacity-50">{busy ? "A enviar…" : "Submeter"}</button>
+        </form>
+      )}
+      {bloco.completo && <p className="text-sm font-semibold text-emerald-700">Todos os documentos obrigatórios estão validados.</p>}
+    </div>
+  );
+}
 
 function Icon({ name, className = "h-5 w-5" }: { name: "arrow" | "check" | "close" | "menu"; className?: string }) {
   const paths: Record<string, ReactNode> = {
@@ -351,6 +426,7 @@ function Painel({ dados, onDados, onSair, avisar }: {
               ["courses", "Os meus cursos"],
               ["agenda", "Agenda"],
               ["certificates", "Certificados"],
+              ...(dados.documentosFin?.length ? [["documents", "Documentos"] as const] : []),
               ["notifications", "Notificações"],
               ["payments", "Pagamentos"],
               ["profile", "O meu perfil"],
@@ -389,6 +465,13 @@ function Painel({ dados, onDados, onSair, avisar }: {
                 </div>
               ))}
             </div>
+          )}
+          {tab === "documents" && dados.documentosFin?.length > 0 && (
+            <DocumentosFinArea
+              blocos={dados.documentosFin}
+              avisar={avisar}
+              onAtualizar={() => { void apiAreaFormando().then(onDados); }}
+            />
           )}
           {tab === "certificates" && (
             <div className="mt-7 grid gap-4 md:grid-cols-2">

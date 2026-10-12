@@ -4,7 +4,9 @@ Esta é a lista fechada do que ainda falta. Os outros documentos descrevem o que
 
 ## Área do formando — o que ainda falta
 
-O ecrã de login e a área estão em `/area-formando` (`src/site/AreaFormando.tsx`). A conta de demonstração `formando@ena.pt` não está ligada a nenhuma ficha: a área fica vazia até a secretaria gerar o acesso. O perfil `formando` está no `CHECK` de `users.role` (migração `057_users_role_formando.sql`). A ligação à ficha está em `formandos_gold.user_id` e `formandos_fin.user_id` (migração `058_area_noticias_disponibilidade.sql`).
+O ecrã de login e a área estão em `/area-formando` (`src/site/AreaFormando.tsx`). No ambiente de demonstração, `formando@ena.pt` fica ligada à primeira ficha `formandos_fin` (`ligarFormandoDemo` no seed). O perfil `formando` está no `CHECK` de `users.role` (migração `057_users_role_formando.sql`). A ligação à ficha está em `formandos_gold.user_id` e `formandos_fin.user_id` (migração `058_area_noticias_disponibilidade.sql`).
+
+A secção **Documentos** na área do formando (formação financiada) mostra o estado do dossiê, observações de recusa e permite upload autenticado. O portal público por token está em `/documentos-formando/:token`.
 
 O acesso nasce na ficha do formando, Gold ou financiada, com **Gerar acesso**. A palavra-passe aparece uma vez. **Gerar nova palavra-passe** troca-a e encerra as sessões. A pessoa não se regista sozinha.
 
@@ -58,9 +60,7 @@ O editor na ficha (**Conteúdos Moodle**) já grava a sequência por módulo. Fa
 
 A Financiada é gestão do **departamento pedagógico** (coordenadores, turmas UFCD, elegibilidade, sessões, dossiê TP). O perfil `financiada` não isola esta área da pedagogia.
 
-Implementado (sem Moodle): CRM fin → `formandos_fin` ao validar; pipeline `inscricoes_fin` → ficha; documentos com upload obrigatório para validar; lembrete por API; dossiê turma dinâmico; fila pedagógica no painel.
-
-Por fazer (financiada, sem Moodle): portal de documentos para o formando; fecho formal da turma com relatório de execução; auditoria de quem validou.
+Implementado (sem Moodle): CRM fin → `formandos_fin` ao validar; pipeline `inscricoes_fin` → ficha; documentos com upload, validação/recusa e auditoria (`validated_by` / `audit_log`); portal `/documentos-formando/:token` e secção Documentos na área do formando; lembrete por API com ligação ao portal; fecho formal da turma (`POST /v1/turmas/fin/:id/fecho`) com relatório de execução no dossiê; dossiê turma dinâmico; fila pedagógica no painel.
 
 ## Integração Moodle (GesForma + área do formando)
 

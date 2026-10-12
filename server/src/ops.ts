@@ -229,6 +229,8 @@ export function mapTurmaFin(r: Record<string, unknown>) {
     cronograma: asArr(r.cronograma),
     drivePastaId: String(r.drive_pasta_id ?? ""),
     driveDossieId: String(r.drive_dossie_id ?? ""),
+    fechadaEm: r.fechada_em ? String(r.fechada_em).slice(0, 16).replace("T", " ") : "",
+    fechadaPor: String(r.fechada_por ?? ""),
   };
 }
 

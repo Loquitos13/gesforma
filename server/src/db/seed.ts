@@ -285,7 +285,30 @@ export async function seed(db: Db) {
   try {
     await seedOperational(db);
     await seedPropostasDemo(db);
+    await ligarFormandoDemo(db);
   } catch (err) {
     console.error("seed operacional falhou", err);
   }
+}
+
+/** Conta formando@ena.pt ligada à primeira ficha financiada de demo (área do formando). */
+async function ligarFormandoDemo(db: Db) {
+  const user = await db.query<{ id: string }>(
+    "SELECT id FROM users WHERE lower(email) = 'formando@ena.pt' AND role = 'formando' LIMIT 1",
+  );
+  const uid = user.rows[0]?.id;
+  if (!uid) return;
+  const fin = await db.query<{ id: number }>(
+    "SELECT id FROM formandos_fin ORDER BY id LIMIT 1",
+  );
+  const fid = fin.rows[0]?.id;
+  if (!fid) return;
+  await db.query(
+    "UPDATE formandos_fin SET user_id = $1, email = 'formando@ena.pt' WHERE id = $2",
+    [uid, fid],
+  );
+  await db.query(
+    "UPDATE formandos_gold SET user_id = NULL WHERE user_id = $1",
+    [uid],
+  );
 }

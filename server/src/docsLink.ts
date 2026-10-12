@@ -175,13 +175,16 @@ export async function definirEstadoDoc(
   docId: number,
   estado: "validado" | "recusado",
   observacao = "",
+  actorId?: string,
 ) {
   const upd = await db.query<{ id: number }>(
     `UPDATE preinscricao_docs
-        SET estado = $3, observacao = $4
+        SET estado = $3, observacao = $4,
+            validated_by = CASE WHEN $5::uuid IS NULL THEN validated_by ELSE $5::uuid END,
+            validated_at = now()
       WHERE id = $1 AND preinscricao_id = $2
       RETURNING id`,
-    [docId, leadId, estado, estado === "recusado" ? observacao.trim() : ""],
+    [docId, leadId, estado, estado === "recusado" ? observacao.trim() : "", actorId ?? null],
   );
   if (!upd.rows[0]) return null;
   if (estado === "validado") await dispensarAlertas(db, leadId);

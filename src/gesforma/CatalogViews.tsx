@@ -1359,7 +1359,7 @@ export function ConteudosView({ accent = "gold" }: { accent?: Accent }) {
 
 export function FinInscricoesView() {
   const { fin } = useTurmas();
-  const { cursosFin } = useLists();
+  const { cursosFin, reloadFromApi } = useLists();
   const cursosListaFin = useCursosOpts("fin");
   const [lista, setLista] = useCatalogList("inscricoes_fin", "fin", finInscricoesData);
   const [s, setS] = useState(""); const [p, setP] = useState(1);
@@ -1395,7 +1395,7 @@ export function FinInscricoesView() {
   return (
     <>
       <div className="space-y-4">
-        <PageHeader title="Inscrições Financiadas" sub="Pipeline de elegibilidade por turma e UFCD - não é o funil comercial Gold." action={<NewBtn label="+ Nova inscrição" onClick={() => setOpen("new")} />} />
+        <PageHeader title="Inscrições Financiadas" sub="Pipeline pedagógico de elegibilidade por UFCD e turma. Estados «Elegível» ou «Colocado na turma» criam ou actualizam a ficha em Formandos Financiados." action={<NewBtn label="+ Nova inscrição" onClick={() => setOpen("new")} />} />
         <ViewFilters
           accent="fin"
           fields={[{ label: "Curso / UFCD", value: filtroCurso, onChange: v => { setFiltroCurso(v); setP(1); }, options: uniqueOpts(lista.map(x => x.curso)) }]}
@@ -1510,6 +1510,9 @@ export function FinInscricoesView() {
             if (editing) setLista(xs => xs.map(x => x.id === editing.id ? row : x));
             else setLista(xs => [row, ...xs]);
             setOpen(null);
+            if (estadoInsc === "Colocado na turma" || estadoInsc === "Elegível") {
+              window.setTimeout(() => { void reloadFromApi().catch(() => undefined); }, 600);
+            }
           }} disabled={!nome.trim() || !curso} label={editing ? "Guardar" : "Criar inscrição"} />
         </div>
       </SlideOver>

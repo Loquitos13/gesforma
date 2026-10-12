@@ -58,7 +58,8 @@ import { CustosTurmaCard } from "./CustosTurma";
 import { CrmClientesView, CrmContratosView, CrmParceirosView } from "./CrmDiretorioView";
 import { FormadorCalendario, eventosDoFormador } from "../partilhado/FormadorCalendario";
 import { cronogramaToSessoes, formatSessaoLabel, generateCronograma, hojeIso, horasDoFormador, isTurmaActiva, lugaresLivres, sessaoFormadores, sessaoModulos, turmaGoldOpts, type SessaoCronograma, type TurmaFin, type TurmaGold } from "../partilhado/turmaModel";
-import { apiGlobalSearch, apiDriveFiles, apiSaveFormandoDocs, apiTurmaAvaliacao, type GlobalSearchHit } from "../partilhado/api";
+import { apiFormandoDossier, apiGlobalSearch, apiDriveFiles, apiLembreteDocsFormandoFin, apiSaveFormandoDocs, apiTurmaAvaliacao, type GlobalSearchHit } from "../partilhado/api";
+import { finGruposDocumentosTurma, labelsSessoesFin } from "../partilhado/finDossierUi";
 import { CampanhasView } from "./CampanhasView";
 import { ListsProvider, tempNumericId, useLists, type BlogPostRow, type FormandoFin, type FormandoTurma, type Preinscricao } from "../partilhado/ListsContext";
 import { PreInscricoesGoldView } from "./CrmView";
@@ -1260,19 +1261,44 @@ function cloneGrupos(src: typeof docsTurmaGrupos) {
   return src.map(g => ({ ...g, items: g.items.map(i => ({ ...i })) }));
 }
 
-function DocumentosTurmaTab({ regime = "gold", curso, guardados, onSaveDoc, criterios }: {
+function DocumentosTurmaTab({ regime = "gold", curso, guardados, onSaveDoc, criterios, finCtx }: {
   regime?: "gold" | "fin";
   curso?: string;
   guardados: TurmaDocumento[];
   onSaveDoc: (doc: TurmaDocumento) => void;
   criterios?: CriterioAvaliacao[];
+  finCtx?: {
+    formandos: FormandoFin[];
+    facts: { sessoes: { done: number; total: number }; planos: { done: number; total: number }; sumarios: { done: number; total: number }; presencas: { done: number; total: number } };
+    cronograma: SessaoCronograma[];
+    curso?: string;
+    ufcdCod?: string;
+    horas?: number;
+    dtpPct?: number;
+  };
 }) {
   const estadoCfg: Record<DocEstado, { dot: string; chip: string; label: string }> = {
     ok: { dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700 border-emerald-200", label: "No dossiê" },
     parcial: { dot: "bg-amber-400", chip: "bg-amber-50 text-amber-700 border-amber-200", label: "Parcial" },
     falta: { dot: "bg-red-400", chip: "bg-red-50 text-red-600 border-red-200", label: "Em falta" },
   };
-  const seed = regime === "fin" ? docsFinGrupos : docsTurmaGrupos;
+  const seed = useMemo(() => {
+    if (regime !== "fin") return docsTurmaGrupos;
+    if (!finCtx) return docsFinGrupos;
+    const built = finGruposDocumentosTurma({
+      formandos: finCtx.formandos,
+      facts: { ...finCtx.facts, formandos: finCtx.formandos.length, certificados: { done: 0, total: finCtx.formandos.length } },
+      cronograma: finCtx.cronograma,
+      curso: finCtx.curso ?? curso,
+      ufcdCod: finCtx.ufcdCod,
+      horas: finCtx.horas,
+      dtpPct: finCtx.dtpPct,
+    });
+    return built.map(g => ({
+      ...docsFinGrupos.find(x => x.id === g.id)!,
+      items: g.items.map(it => ({ ...it, bloqueante: it.bloqueante })),
+    }));
+  }, [regime, finCtx, curso]);
   const [resolver, setResolver] = useState<{ grupoId: string; label: string } | null>(null);
   const resolverRef = useRef(resolver);
   resolverRef.current = resolver;
@@ -1289,10 +1315,10 @@ function DocumentosTurmaTab({ regime = "gold", curso, guardados, onSaveDoc, crit
 
   const { formandosFin, formandosTurmas } = useLists();
   const nomesFormandos = regime === "fin"
-    ? formandosFin.map(f => `${f.nome} ${f.apelido}`)
+    ? (finCtx?.formandos ?? formandosFin).map(f => `${f.nome} ${f.apelido}`)
     : formandosTurmas.map(f => `${f.nome} ${f.apelido}`);
   const nomesSessoes = regime === "fin"
-    ? ["Sessão 1 · 27 Ago", "Sessão 2 · 03 Set", "Sessão 3 · 10 Set", "Sessão 4 · 17 Set", "Sessão 5 · 24 Set"]
+    ? labelsSessoesFin(finCtx?.cronograma ?? [])
     : Array.from({ length: 16 }, (_, i) => `Sessão ${i + 1}`);
   const cursoNome = curso ?? (regime === "gold" ? "Formação de Formadores - CCP" : undefined);
 
@@ -2487,6 +2513,15 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           criterios={criterios}
           guardados={ped.documentos}
           onSaveDoc={doc => void ped.guardarDocumento(doc)}
+          finCtx={{
+            formandos: listaFormandos,
+            facts: ped.dtp.facts,
+            cronograma: turma.cronograma,
+            curso: turma.curso,
+            ufcdCod: turma.ufcdCod,
+            horas: turma.horas,
+            dtpPct: ped.dtp.pct,
+          }}
         />
       )}
       {tab === "certificados" && !souFormadorFin && (
@@ -2847,39 +2882,35 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
 type FinFormando = FormandoFin;
 const docLabels = Object.fromEntries(DOCS_FORMANDO_FIN.map(d => [d.id, d.label]));
 
-/** Sem gateway de email transacional para a Financiada, o lembrete sai do cliente de email da secretaria. */
-function lembreteDocsHref(formando: FinFormando, emFalta: string[]) {
-  const assunto = `Documentos em falta · ${formando.curso}`;
-  const corpo = [
-    `Olá ${formando.nome},`,
-    "",
-    `Para concluir a inscrição na formação ${formando.curso} faltam os seguintes documentos:`,
-    ...emFalta.map(d => `- ${d}`),
-    "",
-    "Pode responder a este email com os ficheiros em anexo.",
-    "",
-    "Obrigado,",
-    "Secretaria ENA · formacao@ena.pt",
-  ].join("\n");
-  return `mailto:${formando.email}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
-}
-
 function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
   const { formandosFin, patchFormandoFin } = useLists();
   const live = formandosFin.find(f => f.id === formando.id) ?? formando;
   const [docs, setDocs] = useState(live);
   const [uploadFor, setUploadFor] = useState<string | null>(null);
   const [ficheiros, setFicheiros] = useState<Record<string, string>>({});
+  const [lembreteBusy, setLembreteBusy] = useState(false);
   useEffect(() => { setDocs(live); }, [live]);
+  useEffect(() => {
+    let viva = true;
+    apiFormandoDossier("fin", live.id).then(r => {
+      if (!viva) return;
+      const urls: Record<string, string> = {};
+      for (const d of r.docs) {
+        if (d.driveUrl) urls[d.id] = d.driveUrl;
+      }
+      setFicheiros(urls);
+    }).catch(() => undefined);
+    return () => { viva = false; };
+  }, [live.id]);
   const keys = DOCS_FORMANDO_FIN.map(d => d.id);
   const estado = (k: string) => docFinDe(docs, k);
   const completo = docsFinCompletos(docs);
-  function toggleDoc(k: string) {
-    const actual = estado(k);
-    const nextDoc = { ok: !actual.ok, data: !actual.ok ? new Date().toISOString().slice(0, 10) : "" };
+  function desmarcarDoc(k: string) {
+    const nextDoc = { ok: false, data: "" };
     const next = { ...docs, [k]: nextDoc } as FormandoFin;
     setDocs(next);
     patchFormandoFin(docs.id, { [k]: nextDoc } as Partial<FormandoFin>);
+    void persist(apiSaveFormandoDocs("fin", docs.id, [{ id: k, ok: false, fileName: "", data: "", driveFileId: "", driveUrl: "" }]));
   }
   function marcarFicheiro(k: string, file: { name: string; openUrl: string; id: string }) {
     const nextDoc = { ok: true, data: new Date().toISOString().slice(0, 10) };
@@ -2916,10 +2947,12 @@ function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
           const row = estado(k);
           return (
           <div key={k} className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${row.ok ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
-            <button type="button" onClick={() => toggleDoc(k)}
-              className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-colors ${row.ok ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-red-300"}`}>
+            <span
+              className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 ${row.ok ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-red-300"}`}
+              title={row.ok ? "Validado com ficheiro" : "Carregue um ficheiro para validar"}
+            >
               {row.ok && I.check}
-            </button>
+            </span>
             <div className="flex-1 min-w-0">
               <p className={`text-xs font-semibold ${row.ok ? "text-emerald-700" : "text-red-600"}`}>{docLabels[k]}</p>
               {row.ok && row.data && <p className="text-xs text-slate-400 mt-0.5">Validado em {row.data}</p>}
@@ -2928,21 +2961,35 @@ function DocumentosFinPanel({ formando }: { formando: FinFormando }) {
                 <a href={ficheiros[k]} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-blue-600">Abrir no Drive</a>
               )}
             </div>
-            <button type="button" onClick={() => setUploadFor(k)} className="text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">
-              {row.ok ? "Substituir" : "Carregar"}
-            </button>
+            <div className="flex flex-col gap-1">
+              <button type="button" onClick={() => setUploadFor(k)} className="text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">
+                {row.ok ? "Substituir" : "Carregar"}
+              </button>
+              {row.ok && (
+                <button type="button" onClick={() => desmarcarDoc(k)} className="text-[10px] font-semibold text-slate-400 hover:text-red-600">
+                  Retirar validação
+                </button>
+              )}
+            </div>
           </div>
           );
         })}
       </div>
 
       {!completo && (
-        <a
-          href={lembreteDocsHref(docs, keys.filter(k => !estado(k).ok).map(k => docLabels[k] ?? k))}
-          className="block w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors text-center"
+        <button
+          type="button"
+          disabled={lembreteBusy}
+          onClick={() => {
+            setLembreteBusy(true);
+            void persist(apiLembreteDocsFormandoFin(docs.id))
+              .then(r => { if (r) toastOk("Lembrete enviado por email (ou registado na API se não houver SMTP)."); })
+              .finally(() => setLembreteBusy(false));
+          }}
+          className="block w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-colors text-center"
         >
-          Enviar lembrete de documentos
-        </a>
+          {lembreteBusy ? "A enviar…" : "Enviar lembrete de documentos"}
+        </button>
       )}
       <FileUploadModal
         open={!!uploadFor}

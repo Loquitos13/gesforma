@@ -53,6 +53,10 @@ export function registerCatalogRoutes(
       "INSERT INTO catalog_items (id, kind, regime, payload) VALUES ($1,$2,$3,$4::jsonb)",
       [id, kind, parsed.data.regime, parsed.data.payload],
     );
+    if (kind === "inscricoes_fin") {
+      const { upsertFormandoFinFromInscricao } = await import("./finPipeline.js");
+      await upsertFormandoFinFromInscricao(db, parsed.data.payload as Record<string, unknown>).catch(() => undefined);
+    }
     return { item: { id, ...parsed.data.payload } };
   });
 
@@ -75,6 +79,10 @@ export function registerCatalogRoutes(
     );
     const row = await db.query("SELECT id, payload FROM catalog_items WHERE id = $1 AND kind = $2", [id, kind]);
     const payload = (row.rows[0]?.payload ?? {}) as Record<string, unknown>;
+    if (kind === "inscricoes_fin" && payload && typeof payload === "object") {
+      const { upsertFormandoFinFromInscricao } = await import("./finPipeline.js");
+      await upsertFormandoFinFromInscricao(db, payload).catch(() => undefined);
+    }
     return { item: row.rows[0] ? { id, ...payload } : null };
   });
 

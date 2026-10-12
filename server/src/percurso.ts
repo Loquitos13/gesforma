@@ -450,6 +450,10 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
     [leadId],
   );
   await evento(db, leadId, actorId, "Pré-inscrição validada", moved.turma ? `Pasta do formando em ${moved.turma}` : "");
+  if (regime === "fin") {
+    const { upsertFormandoFinFromLead } = await import("./finPipeline.js");
+    await upsertFormandoFinFromLead(db, leadId, actorId).catch(() => undefined);
+  }
   return { ok: true as const, moved: moved.moved };
 }
 

@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiDashboard, type Dashboard } from "../partilhado/api";
+import { docsFinCompletos } from "../partilhado/dossierDocs";
 import { SearchSelect } from "../partilhado/FormKit";
+import { useLists } from "../partilhado/ListsContext";
+import { membrosTurmaFin } from "../partilhado/cursoLocais";
+import { isTurmaActiva } from "../partilhado/turmaModel";
+import { useTurmas } from "../partilhado/TurmasContext";
+import { useDtpResumo } from "./PedagogiaContext";
 
 type MesReceita = Dashboard["financeiro"]["receitaMensal"][number];
 type CursoMes = MesReceita["cursos"][number];
@@ -441,6 +447,55 @@ function ConhecimentoEnaCard({ onVerMais, dados }: { onVerMais: () => void; dado
   );
 }
 
+function FilaPedagogicaFin({ onNavigate }: { onNavigate: (v: string) => void }) {
+  const { preinscricoes, formandosFin } = useLists();
+  const { fin } = useTurmas();
+  const dtpFin = useDtpResumo("fin");
+  const itens = useMemo(() => {
+    const out: { titulo: string; detalhe: string; view: string; tom: "red" | "amber" | "blue" }[] = [];
+    const crm = preinscricoes.filter(l => l.regime === "fin" && !l.contactadoEm).length;
+    if (crm) out.push({ titulo: `${crm} pré-inscrições por contactar`, detalhe: "CRM Financiada", view: "fin-preinscricoes", tom: "blue" });
+    const semDocs = formandosFin.filter(f => !docsFinCompletos(f)).length;
+    if (semDocs) out.push({ titulo: `${semDocs} formandos sem dossier completo`, detalhe: "8 documentos obrigatórios", view: "fin-formandos", tom: "amber" });
+    const turmasBaixoDtp = fin.filter(t => isTurmaActiva(t) && (dtpFin.pct[t.id] ?? 100) < 70);
+    if (turmasBaixoDtp.length) {
+      const pior = [...turmasBaixoDtp].sort((a, b) => (dtpFin.pct[a.id] ?? 0) - (dtpFin.pct[b.id] ?? 0))[0]!;
+      out.push({ titulo: `DTP de ${pior.nome} a ${dtpFin.pct[pior.id] ?? 0}%`, detalhe: "Dossiê TP abaixo do mínimo pedagógico", view: "fin-cockpit-turma", tom: "red" });
+    }
+    for (const t of fin.filter(x => isTurmaActiva(x)).slice(0, 8)) {
+      const membros = membrosTurmaFin(t, formandosFin, fin);
+      const prontos = membros.filter(f => docsFinCompletos(f)).length;
+      if (membros.length > 0 && prontos < membros.length) {
+        out.push({
+          titulo: `${t.nome}: ${prontos}/${membros.length} elegíveis`,
+          detalhe: t.curso,
+          view: "fin-cockpit-turma",
+          tom: prontos === 0 ? "red" : "amber",
+        });
+        break;
+      }
+    }
+    if (!out.length) out.push({ titulo: "Sem pendências sinalizadas", detalhe: "Turmas, documentos e CRM em dia neste instante.", view: "fin-turmas", tom: "blue" });
+    return out.slice(0, 5);
+  }, [dtpFin.pct, fin, formandosFin, preinscricoes]);
+  return (
+    <Card className="p-4">
+      <p className="text-sm font-semibold text-slate-800">Fila pedagógica · Financiada</p>
+      <p className="text-xs text-slate-500 mt-0.5">Prioridades para coordenadores (departamento pedagógico, não só «secretaria»).</p>
+      <ul className="mt-3 space-y-2">
+        {itens.map(item => (
+          <li key={item.titulo}>
+            <button type="button" onClick={() => onNavigate(item.view)} className="w-full text-left rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50">
+              <p className={`text-xs font-bold ${item.tom === "red" ? "text-red-700" : item.tom === "amber" ? "text-amber-800" : "text-blue-800"}`}>{item.titulo}</p>
+              <p className="text-[11px] text-slate-500">{item.detalhe}</p>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 const ic = {
   clipboard: <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5z" clipRule="evenodd"/></svg>,
   users: <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/></svg>,
@@ -580,17 +635,20 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
             ))}
           </div>
           {regime === "fin" ? (
-            <Card className="p-5 border-blue-100 bg-blue-50/40">
-              <p className="text-sm font-semibold text-slate-800">Operação financiada</p>
-              <p className="text-sm text-slate-600 mt-1 leading-relaxed">
-                Este painel centra-se em pré-inscrições, turmas UFCD, formandos e funil de elegibilidade. A tesouraria Gold (pagamentos directos) não entra aqui — use o módulo Pagamentos no perfil administrador quando precisar de receita global.
-              </p>
-              <div className="flex flex-wrap gap-2 mt-4">
-                <button type="button" onClick={() => onNavigate("fin-turmas")} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700">Turmas financiadas</button>
-                <button type="button" onClick={() => onNavigate("fin-formandos")} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-blue-200 text-blue-800 hover:bg-white">Documentos dos formandos</button>
-                <button type="button" onClick={() => onNavigate("fin-dtp")} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-blue-200 text-blue-800 hover:bg-white">Dossiês TP</button>
-              </div>
-            </Card>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card className="p-5 border-blue-100 bg-blue-50/40">
+                <p className="text-sm font-semibold text-slate-800">Operação financiada</p>
+                <p className="text-sm text-slate-600 mt-1 leading-relaxed">
+                  A formação financiada é gestão pedagógica: turmas UFCD, elegibilidade, sessões e dossiê TP. A tesouraria Gold (pagamentos directos) fica no módulo Pagamentos para perfis administrativos.
+                </p>
+                <div className="flex flex-wrap gap-2 mt-4">
+                  <button type="button" onClick={() => onNavigate("fin-turmas")} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700">Turmas financiadas</button>
+                  <button type="button" onClick={() => onNavigate("fin-formandos")} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-blue-200 text-blue-800 hover:bg-white">Documentos dos formandos</button>
+                  <button type="button" onClick={() => onNavigate("fin-dtp")} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-blue-200 text-blue-800 hover:bg-white">Dossiês TP</button>
+                </div>
+              </Card>
+              <FilaPedagogicaFin onNavigate={onNavigate} />
+            </div>
           ) : (
             <>
               <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">

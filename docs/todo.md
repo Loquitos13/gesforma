@@ -52,12 +52,28 @@ O editor na ficha (**Conteúdos Moodle**) já grava a sequência por módulo. Fa
 - **H5P.** Validar `.h5p`, servir bibliotecas, player com content types do pacote, capturar conclusão e nota (xAPI ou equivalente).
 - **Quizzes, flashcards, vídeo e PDF nativos.** Render na área do formando, correcção automática ou manual, tentativas, nota mínima (%), flashcards com ordem aleatória e repetição.
 - **Progresso.** Tabelas/API por formando e turma; pré-visualização «como formando» no backoffice; biblioteca multimédia alinhada com o Drive da entidade (não só `drive_files` do GesForma).
-- **Moodle.** Sincronizar ou exportar a estrutura para disciplinas Moodle — por fazer; independente do player no site.
+- **Moodle (GesForma + área do formando).** Ver `docs/moodle-integracao.md` e secção homónima abaixo — **por fazer**; independente do player SCORM/H5P no site.
+
+## Formação financiada (pedagógica)
+
+A Financiada é gestão do **departamento pedagógico** (coordenadores, turmas UFCD, elegibilidade, sessões, dossiê TP). O perfil `financiada` não isola esta área da pedagogia.
+
+Implementado (sem Moodle): CRM fin → `formandos_fin` ao validar; pipeline `inscricoes_fin` → ficha; documentos com upload obrigatório para validar; lembrete por API; dossiê turma dinâmico; fila pedagógica no painel.
+
+Por fazer (financiada, sem Moodle): portal de documentos para o formando; fecho formal da turma com relatório de execução; auditoria de quem validou.
+
+## Integração Moodle (GesForma + área do formando)
+
+**Não implementado.** Detalhe em `docs/moodle-integracao.md`.
+
+- Sincronizar conteúdos (criar/editar/eliminar) entre GesForma e disciplinas Moodle.
+- Importar notas, progresso e conclusão; reflectir no cockpit, certificados e dossiê.
+- Contas e inscrições Moodle (Acesso directo e pós-validação); SSO ou link na área do formando.
+- Configuração, teste de ligação e fila de sincronização.
 
 ## Ligações externas
 
-- Ler a nota real no Moodle da turma. O parâmetro já entra na média e a pauta do dossiê já sai da grelha, mas o valor do Moodle continua a ser lançado à mão. A integração com o Moodle ainda não existe.
-- Acesso ao Moodle nos cursos de Acesso direto. O site já mostra «Aceder ao curso» e não abre a pré-inscrição nem o check-out. Falta criar a conta, inscrever a pessoa na disciplina e devolver o endereço da sala logo após o pedido. O Pré-pago usa o check-out do site.
+- Notas Moodle e «Aceder ao curso» — dependem da integração Moodle (secção anterior). Até lá, notas manuais na grelha.
 - Recibos certificados (Moloni) e o contrato Ifthenpay ou SIBS. O pagamento fica pendente até um webhook do banco o marcar como pago.
 - Publicar o dossiê fora do GesForma. O ZIP segue para o Google Drive da entidade.
 

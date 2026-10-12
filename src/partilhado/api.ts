@@ -1097,6 +1097,8 @@ export const apiCreateFormandoFin = (body: Record<string, unknown>) =>
 export const apiPatchFormandoFin = (id: number, body: Record<string, unknown>) =>
   api<{ formando: OpsSnapshot["formandosFin"][number] | null }>(`/v1/formandos-fin/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 export const apiDeleteFormandoFin = (id: number) => api<{ ok: boolean }>(`/v1/formandos-fin/${id}`, { method: "DELETE" });
+export const apiLembreteDocsFormandoFin = (id: number) =>
+  api<{ ok: boolean }>(`/v1/formandos-fin/${id}/lembrete-documentos`, { method: "POST" });
 
 export const apiCreateCursoGold = (body: Record<string, unknown>) =>
   api<{ curso: OpsSnapshot["cursosGold"][number] }>("/v1/cursos-gold", { method: "POST", body: JSON.stringify(body) });

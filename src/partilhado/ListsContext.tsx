@@ -121,6 +121,7 @@ type ListsCtx = {
   addPagamento: (row: PagamentoRow, extra?: string | { email?: string; referencia?: string }) => Promise<string | undefined>;
   patchPagamento: (id: string, patch: Partial<PagamentoRow>) => void;
   removePagamento: (id: string) => void;
+  reloadFromApi: () => Promise<void>;
 };
 
 const Ctx = createContext<ListsCtx | null>(null);
@@ -437,6 +438,18 @@ export function ListsProvider({
       if (before) setPag(xs => xs.map(x => x.id === id ? before! : x));
     });
   }, []);
+  const reloadFromApi = useCallback(async () => {
+    const snap = await loadOps();
+    setPre(snap.preinscricoes);
+    setFT(snap.formandosTurmas);
+    setFF(snap.formandosFin);
+    setCG(snap.cursosGold);
+    setCF(snap.cursosFin);
+    setBlog(snap.blogPosts);
+    setCamp(snap.campanhas);
+    setPag(snap.pagamentos);
+  }, []);
+
   const removePagamento = useCallback((id: string) => {
     let before: PagamentoRow | undefined;
     setPag(xs => {
@@ -456,7 +469,7 @@ export function ListsProvider({
     cursosFin, addCursoFin, patchCursoFin, removeCursoFin,
     blogPosts, addBlogPost, patchBlogPost, removeBlogPost,
     campanhas, addCampanha, patchCampanha, removeCampanha,
-    pagamentos, addPagamento, patchPagamento, removePagamento,
+    pagamentos, addPagamento, patchPagamento, removePagamento, reloadFromApi,
   }), [
     preinscricoes, formandosTurmas, formandosFin, cursosGold, cursosFin, blogPosts, campanhas, pagamentos,
     addPreinscricao, patchPreinscricao, removePreinscricao, contactarPreinscricao,
@@ -466,7 +479,7 @@ export function ListsProvider({
     addCursoFin, patchCursoFin, removeCursoFin,
     addBlogPost, patchBlogPost, removeBlogPost,
     addCampanha, patchCampanha, removeCampanha,
-    addPagamento, patchPagamento, removePagamento,
+    addPagamento, patchPagamento, removePagamento, reloadFromApi,
   ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

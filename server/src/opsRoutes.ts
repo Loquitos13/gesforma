@@ -969,7 +969,7 @@ export function registerOpsRoutes(
 
   app.post("/v1/crm/leads/:id/validar-preinscricao", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    if (!staffValida(req.actor?.role)) return reply.code(403).send({ error: "Só a secretaria valida a pré-inscrição." });
+    if (!staffValida(req.actor?.role)) return reply.code(403).send({ error: "Só a equipa pedagógica ou administração valida a pré-inscrição." });
     const id = Number((req.params as { id: string }).id);
     const body = req.body && typeof req.body === "object" ? req.body as { turmaId?: number } : {};
     const turmaDestino = Number(body.turmaId);
@@ -985,7 +985,7 @@ export function registerOpsRoutes(
 
   app.post("/v1/crm/leads/:id/turma-cheia", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    if (!staffValida(req.actor?.role)) return reply.code(403).send({ error: "Só a secretaria envia esta sugestão." });
+    if (!staffValida(req.actor?.role)) return reply.code(403).send({ error: "Só a equipa pedagógica ou administração envia esta sugestão." });
     const id = Number((req.params as { id: string }).id);
     if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
     try {
@@ -1241,6 +1241,18 @@ export function registerOpsRoutes(
       }
     }
     return { formando: row ? mapFormandoFin(row) : null };
+  });
+
+  app.post("/v1/formandos-fin/:id/lembrete-documentos", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (req.actor!.role === "formador") return reply.code(403).send({ error: "Sem permissão." });
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
+    const { enviarLembreteDocsFin } = await import("./finPipeline.js");
+    const r = await enviarLembreteDocsFin(db, id, req.actor!.id);
+    if (!r.enviado) return reply.code(400).send({ error: r.erro ?? "Não foi possível enviar." });
+    await audit(db, req.actor!.id, "formando.lembrete_docs", "formandos_fin", String(id), req.ip);
+    return { ok: true };
   });
 
   app.delete("/v1/formandos-fin/:id", async (req, reply) => {

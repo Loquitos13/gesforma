@@ -9,3 +9,5 @@ backups/*.dump
 backups/*.tgz
 backups/*.sql
 .deploy-payload
+*.bundle
+tsconfig.tsbuildinfo

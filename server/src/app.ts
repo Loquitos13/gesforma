@@ -294,7 +294,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     const origin = siteOriginFromHeaders(req.headers);
     const creds = await driveCreds(db);
     if (!googleConfigured(creds)) {
-      return reply.redirect(`${origin}/entrar?login=sem-cliente`);
+      return reply.redirect(`${origin}/area-formando?login=sem-cliente`);
     }
     await purgeExpiredStates(db);
     const state = newToken(24);
@@ -302,14 +302,14 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     const redirectUri = oauthRedirectUri(req.headers, "/api/v1/auth/google/callback", process.env.GOOGLE_LOGIN_REDIRECT_URI ?? "");
     await db.query(
       "INSERT INTO oauth_states (state, user_id, redirect_to, expires_at, purpose, oauth_redirect_uri) VALUES ($1, NULL, $2, $3, 'login', $4)",
-      [state, `${origin}/entrar`, exp, redirectUri],
+      [state, `${origin}/area-formando`, exp, redirectUri],
     );
     return reply.redirect(googleLoginAuthUrl(state, creds, redirectUri));
   });
 
   app.get("/v1/auth/google/callback", async (req, reply) => {
     const origin = siteOriginFromHeaders(req.headers);
-    const fail = (reason: string) => reply.redirect(`${origin}/entrar?login=${encodeURIComponent(reason)}`);
+    const fail = (reason: string) => reply.redirect(`${origin}/area-formando?login=${encodeURIComponent(reason)}`);
     const q = req.query as { code?: string; state?: string; error?: string };
     if (q.error) return fail("oauth-falhou");
     if (!q.code || !q.state) return fail("pedido-invalido");
@@ -342,7 +342,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
         return fail("inactivo");
       }
       await createSession(reply, { id: found.id, email, name: found.name, role: found.role }, req, "auth.google");
-      return reply.redirect(`${origin}/entrar`);
+      return reply.redirect(`${origin}/area-formando`);
     } catch {
       return fail("oauth-falhou");
     }
@@ -392,21 +392,21 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     const origin = config.appOrigin.replace(/\/$/, "");
     const creds = await microsoftCreds(db);
     if (!microsoftConfigured(creds)) {
-      return reply.redirect(`${origin}/entrar?login=sem-cliente-microsoft`);
+      return reply.redirect(`${origin}/area-formando?login=sem-cliente-microsoft`);
     }
     await purgeExpiredStates(db);
     const state = newToken(24);
     const exp = new Date(Date.now() + 10 * 60_000).toISOString();
     await db.query(
       "INSERT INTO oauth_states (state, user_id, redirect_to, expires_at, purpose) VALUES ($1, NULL, $2, $3, 'login-microsoft')",
-      [state, `${origin}/entrar`, exp],
+      [state, `${origin}/area-formando`, exp],
     );
     return reply.redirect(microsoftLoginAuthUrl(state, creds));
   });
 
   app.get("/v1/auth/microsoft/callback", async (req, reply) => {
     const origin = config.appOrigin.replace(/\/$/, "");
-    const fail = (reason: string) => reply.redirect(`${origin}/entrar?login=${encodeURIComponent(reason)}`);
+    const fail = (reason: string) => reply.redirect(`${origin}/area-formando?login=${encodeURIComponent(reason)}`);
     const q = req.query as { code?: string; state?: string; error?: string };
     if (q.error) return fail("oauth-falhou");
     if (!q.code || !q.state) return fail("pedido-invalido");
@@ -437,7 +437,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
         return fail("inactivo");
       }
       await createSession(reply, { id: found.id, email, name: found.name, role: found.role }, req, "auth.microsoft");
-      return reply.redirect(`${origin}/entrar`);
+      return reply.redirect(`${origin}/area-formando`);
     } catch {
       return fail("oauth-falhou");
     }

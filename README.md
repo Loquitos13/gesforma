@@ -2,7 +2,7 @@
 
 Backoffice de gestão de formação (Gold / autofinanciada e Financiada), com API Fastify, base migrável e formulário público de pré-inscrição.
 
-O site público está em `src/site` e abre em `/`. O backoffice está em `src/gesforma`. O código comum aos dois está em `src/partilhado`. O que o site mostra e o que o administrador edita em Sistema → Site estão em `docs/site.md`. O que ainda falta está em `docs/todo.md`. O login da secretaria está em `/entrar`. A área do formando está em `/area-formando`. Cada vista do GesForma tem rota própria em `/gesforma/…` (por exemplo `/gesforma/gold/cursos` e `/gesforma/sistema/site`).
+O site público está em `src/site` e abre em `/`. O backoffice está em `src/gesforma`. O código comum aos dois está em `src/partilhado`. O que o site mostra e o que o administrador edita em Sistema → Site estão em `docs/site.md`. O que ainda falta está em `docs/todo.md`. O login único está em `/area-formando` (formandos e equipa GesForma). `/entrar` redirecciona para aí. Cada vista do GesForma tem rota própria em `/gesforma/…` (por exemplo `/gesforma/gold/cursos` e `/gesforma/sistema/site`).
 
 A ENA trata por **turma**, não por “ação de formação”. Existe um código interno (`VNG-SM-07/09`, `UFCD 3564`), mas o objeto de gestão é a turma.
 

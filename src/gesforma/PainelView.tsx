@@ -546,7 +546,11 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
             }}>Limpar filtros</button>
           )}
         </div>
-        <p className="text-[11px] text-slate-400">Formandos = inscritos em turma. Receita, funil e ranking seguem o mesmo filtro.</p>
+        <p className="text-[11px] text-slate-400">
+          {regime === "fin"
+            ? "Formandos = inscrições financiadas. Funil e ranking reflectem pré-inscrições e elegibilidade documental."
+            : "Formandos = inscritos em turma. Receita, funil e ranking seguem o mesmo filtro."}
+        </p>
       </Card>
 
       {estado === "loading" && !cards && (
@@ -558,7 +562,7 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
             {[
               { label: "Pré-inscritos", value: cards.preinscritos.toLocaleString("pt-PT"), sub: `${funil[1]?.v ?? 0} já contactados`, color: "text-blue-600", bg: "bg-blue-50", icon: ic.clipboard, view: crmView },
-              { label: "Formandos", value: cards.formandosAtivos.toLocaleString("pt-PT"), sub: regime === "fin" ? "Formação financiada" : "Gold", color: "text-emerald-600", bg: "bg-emerald-50", icon: ic.users, view: formandosView },
+              { label: "Formandos", value: (regime === "fin" ? cards.formandosFin : cards.formandosAtivos).toLocaleString("pt-PT"), sub: regime === "fin" ? "Com documentos ou em validação" : "Gold", color: "text-emerald-600", bg: "bg-emerald-50", icon: ic.users, view: formandosView },
               { label: "Turmas ativas", value: String(cards.turmasAtivas), sub: `${cards.turmasTotal} no total`, color: "text-violet-600", bg: "bg-violet-50", icon: ic.school, view: turmasView },
               { label: "Cursos ativos", value: String(cards.cursosAtivos), sub: regime === "fin" ? "UFCD e cursos financiados" : "Cursos Gold", color: "text-amber-600", bg: "bg-amber-50", icon: ic.book, view: cursosView },
             ].map(s => (
@@ -575,37 +579,55 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
               </Card>
             ))}
           </div>
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-            {[
-              { label: "Receita confirmada", value: eur(financeiro.receitaTotal), sub: `${financeiro.pagos} pagamentos pagos`, c: "text-slate-800" },
-              {
-                label: "Receita este mês",
-                value: eur(financeiro.receitaMes),
-                sub: financeiro.variacaoMes == null ? "Sem mês anterior para comparar" : `${financeiro.variacaoMes >= 0 ? "+" : ""}${financeiro.variacaoMes}% vs mês anterior`,
-                c: "text-emerald-600",
-              },
-              { label: "Ticket médio", value: eur(financeiro.ticketMedio), sub: "Por pagamento confirmado", c: "text-blue-600" },
-              { label: "Pagamentos pendentes", value: eur(financeiro.pendentes.valor), sub: `${financeiro.pendentes.n} transações`, c: "text-amber-600" },
-            ].map(s => (
-              <Card key={s.label} className="p-4">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{s.label}</p>
-                <p className={`text-xl font-bold ${s.c}`}>{s.value}</p>
-                <p className="text-xs text-slate-400 mt-1">{s.sub}</p>
-              </Card>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <Card clip={false} className="p-4 lg:col-span-2 relative z-20">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <p className="text-sm font-semibold text-slate-700">Receita por mês</p>
-                  <p className="text-xs text-slate-400">Cada fatia é um mês do filtro. Passe o rato para o detalhe e clique para fixar a comparação.</p>
-                </div>
-                <span className="text-sm font-bold text-emerald-600">{eur(financeiro.receita12m)}</span>
+          {regime === "fin" ? (
+            <Card className="p-5 border-blue-100 bg-blue-50/40">
+              <p className="text-sm font-semibold text-slate-800">Operação financiada</p>
+              <p className="text-sm text-slate-600 mt-1 leading-relaxed">
+                Este painel centra-se em pré-inscrições, turmas UFCD, formandos e funil de elegibilidade. A tesouraria Gold (pagamentos directos) não entra aqui — use o módulo Pagamentos no perfil administrador quando precisar de receita global.
+              </p>
+              <div className="flex flex-wrap gap-2 mt-4">
+                <button type="button" onClick={() => onNavigate("fin-turmas")} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700">Turmas financiadas</button>
+                <button type="button" onClick={() => onNavigate("fin-formandos")} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-blue-200 text-blue-800 hover:bg-white">Documentos dos formandos</button>
+                <button type="button" onClick={() => onNavigate("fin-dtp")} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-blue-200 text-blue-800 hover:bg-white">Dossiês TP</button>
               </div>
-              <ReceitaCircular meses={financeiro.receitaMensal} />
             </Card>
-            <Card className="p-4">
+          ) : (
+            <>
+              <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+                {[
+                  { label: "Receita confirmada", value: eur(financeiro.receitaTotal), sub: `${financeiro.pagos} pagamentos pagos`, c: "text-slate-800" },
+                  {
+                    label: "Receita este mês",
+                    value: eur(financeiro.receitaMes),
+                    sub: financeiro.variacaoMes == null ? "Sem mês anterior para comparar" : `${financeiro.variacaoMes >= 0 ? "+" : ""}${financeiro.variacaoMes}% vs mês anterior`,
+                    c: "text-emerald-600",
+                  },
+                  { label: "Ticket médio", value: eur(financeiro.ticketMedio), sub: "Por pagamento confirmado", c: "text-blue-600" },
+                  { label: "Pagamentos pendentes", value: eur(financeiro.pendentes.valor), sub: `${financeiro.pendentes.n} transações`, c: "text-amber-600" },
+                ].map(s => (
+                  <Card key={s.label} className="p-4">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{s.label}</p>
+                    <p className={`text-xl font-bold ${s.c}`}>{s.value}</p>
+                    <p className="text-xs text-slate-400 mt-1">{s.sub}</p>
+                  </Card>
+                ))}
+              </div>
+            </>
+          )}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {regime === "gold" && (
+              <Card clip={false} className="p-4 lg:col-span-2 relative z-20">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700">Receita por mês</p>
+                    <p className="text-xs text-slate-400">Cada fatia é um mês do filtro. Passe o rato para o detalhe e clique para fixar a comparação.</p>
+                  </div>
+                  <span className="text-sm font-bold text-emerald-600">{eur(financeiro.receita12m)}</span>
+                </div>
+                <ReceitaCircular meses={financeiro.receitaMensal} />
+              </Card>
+            )}
+            <Card className={`p-4 ${regime === "fin" ? "lg:col-span-3" : ""}`}>
               <p className="text-sm font-semibold text-slate-700">Funil de conversão</p>
               <p className="text-[11px] text-slate-400 mb-3">
                 {regime === "gold"
@@ -654,8 +676,8 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
               </div>
             </Card>
             <Card className="p-4">
-              <p className="text-sm font-semibold text-slate-700 mb-3">Ranking · receita por curso</p>
-              {topCursos.length === 0 && <p className="text-xs text-slate-400">Sem receita por curso para mostrar.</p>}
+              <p className="text-sm font-semibold text-slate-700 mb-3">{regime === "fin" ? "Ranking · inscrições por curso" : "Ranking · receita por curso"}</p>
+              {topCursos.length === 0 && <p className="text-xs text-slate-400">{regime === "fin" ? "Sem inscrições por curso para mostrar." : "Sem receita por curso para mostrar."}</p>}
               <div className="space-y-2.5">
                 {topCursos.map((c, i) => (
                   <div key={c.nome} className="flex items-center gap-3">
@@ -673,6 +695,7 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
               </div>
             </Card>
           </div>
+          {regime === "gold" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card className="p-4 lg:col-span-2">
               <p className="text-sm font-semibold text-slate-700 mb-3">Métodos de pagamento</p>
@@ -695,6 +718,7 @@ export function PainelView({ regime, onNavigate }: { regime: "gold" | "fin"; onN
               </div>
             </Card>
           </div>
+          )}
         </>
       )}
     </div>

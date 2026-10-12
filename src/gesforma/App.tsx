@@ -32,7 +32,7 @@ import {   AppModal, SearchSelect, MultiSearchSelect, ViewFilters, matchesFilter
 } from "../partilhado/FormKit";
 import { useProgramaDoCurso } from "./cursoPrograma";
 import { imprimirFolhasPresencas } from "../partilhado/presencasPrint";
-import { refereCurso, useLocaisOptsDoCurso } from "../partilhado/cursoLocais";
+import { matchCursoId, membrosTurmaFin, refereCurso, useLocaisOptsDoCurso } from "../partilhado/cursoLocais";
 import { OptionSelect } from "./OptionSelect";
 import { ListasOpcoesView } from "./ListasOpcoesView";
 import { EditorBlog } from "./EditorBlog";
@@ -2347,13 +2347,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
       </div>
     );
   }
-  const membros = formandosFin.filter(f => {
-    if (f.turmaId && f.turmaId === turma.id) return true;
-    if (f.turma === turma.nome) return true;
-    const noutra = fin.some(t => t.id !== turma.id && (t.nome === f.turma || f.turmaId === t.id));
-    return !noutra && (f.curso === turma.curso || refereCurso(f.curso, { nomeComercial: turma.curso, ufcd: turma.ufcdCod, ufcdCod: turma.ufcdCod }));
-  });
-  const listaFormandos = membros;
+  const listaFormandos = membrosTurmaFin(turma, formandosFin, fin);
   const prontos = listaFormandos.filter(f => docsFinCompletos(f)).length;
   const nomesCockpit = listaFormandos.map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }));
 
@@ -2718,7 +2712,7 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
           <InscreverFormandoPanel
             turma={turma}
             leads={preinscricoes}
-            emailsInscritos={membros.map(f => f.email)}
+            emailsInscritos={listaFormandos.map(f => f.email)}
             vagasLivres={Math.max(0, lugaresLivres(turma))}
             accent="fin"
             onCancel={() => setAddFormando(false)}
@@ -3648,7 +3642,7 @@ function FinFormandosView({ openId, onOpened }: { openId?: number; onOpened?: ()
 
 function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab) => void }) {
   const { fin, patchFin, addFin, removeFin, toggleFin, reload } = useTurmas();
-  const { cursosFin } = useLists();
+  const { cursosFin, formandosFin } = useLists();
   const formadorOpts = useFormadorOptions();
   const [s, setS] = useState(""); const [p, setP] = useState(1); const [pp, setPp] = useState(10);
   const [filtro, setFiltro] = useState("Todos");
@@ -3713,9 +3707,12 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
       setOpen(null);
       return;
     }
+    const cursoId = matchCursoId(cursosFin, curso);
+    const cursoRow = cursoId != null ? cursosFin.find(c => c.id === cursoId) : undefined;
+    const ufcdCod = cursoRow?.ufcdCod?.trim() || "0000";
     const id = await addFin({
       id: -Date.now(),
-      ufcdCod: "0000",
+      ufcdCod,
       alunos: 0,
       estado: "A montar",
       ...payload,
@@ -3750,14 +3747,16 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
         )}
         <div className="md:hidden p-3 space-y-2">
           {rows.map(t => {
-            const prontos = Math.floor(t.alunos * 0.8);
+            const inscritos = membrosTurmaFin(t, formandosFin, fin);
+            const prontos = inscritos.filter(f => docsFinCompletos(f)).length;
+            const total = Math.max(t.alunos, inscritos.length);
             return (
               <MobileCard
                 key={t.id}
                 title={t.nome}
                 sub={t.curso}
                 badge={estadoBadge(t.estado)}
-                meta={[`UFCD ${t.ufcdCod}`, `${prontos}/${t.alunos} prontos`, t.dataInicio]}
+                meta={[`UFCD ${t.ufcdCod}`, `${prontos}/${total} elegíveis`, t.dataInicio]}
                 onOpen={() => onCockpit(t.id, "overview")}
                 actions={[
                   { label: "Cockpit", icon: I.eye, tone: "teal", onClick: () => onCockpit(t.id, "overview") },
@@ -3775,7 +3774,10 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
             <thead><tr><Th>Id</Th><Th>Início</Th><Th>UFCD</Th><Th>Turma / Curso</Th><Th>Formador</Th><Th>Elegíveis</Th><Th>Estado</Th><Th>Inscrições</Th><Th>Ações</Th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map(t => {
-                const prontos = Math.floor(t.alunos * 0.8);
+                const inscritos = membrosTurmaFin(t, formandosFin, fin);
+                const prontos = inscritos.filter(f => docsFinCompletos(f)).length;
+                const total = Math.max(t.alunos, inscritos.length, 1);
+                const pct = Math.round((prontos / total) * 100);
                 return (
                   <tr key={t.id} className="hover:bg-slate-50 transition-colors">
                     <Td><IdCell id={t.id} /></Td>
@@ -3790,9 +3792,9 @@ function FinTurmasView({ onCockpit }: { onCockpit: (id: number, tab?: CockpitTab
                     <Td className="text-xs text-slate-600 whitespace-nowrap">{t.formador}</Td>
                     <Td>
                       <div>
-                        <span className={`text-xs font-bold ${prontos === t.alunos ? "text-emerald-600" : "text-amber-600"}`}>{prontos}/{t.alunos} prontos</span>
+                        <span className={`text-xs font-bold ${prontos === total && total > 0 ? "text-emerald-600" : "text-amber-600"}`} title="Formandos com os 8 documentos obrigatórios validados">{prontos}/{total} elegíveis</span>
                         <div className="w-20 bg-slate-100 rounded-full h-1.5 mt-0.5">
-                          <div className="h-1.5 rounded-full" style={{ width: `${(prontos / t.alunos) * 100}%`, backgroundColor: prontos === t.alunos ? "#10B981" : "#F59E0B" }} />
+                          <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, backgroundColor: prontos === total && total > 0 ? "#10B981" : "#F59E0B" }} />
                         </div>
                       </div>
                     </Td>
@@ -5318,7 +5320,7 @@ function arranqueDaRota(role: string) {
   const path = window.location.pathname;
   const search = window.location.search;
   const drive = new URLSearchParams(search).get("drive") ?? "";
-  if (drive && (path === "/entrar" || path.startsWith("/entrar/"))) {
+  if (drive && path.startsWith("/gesforma")) {
     return { view: "configuracoes" as View, drive, destino: null as Destino | null };
   }
   const destino = vistaDoCaminho(path, search);
@@ -5382,7 +5384,7 @@ function AppShell() {
       escritaInicial.current = false;
       return;
     }
-    const metodo = escritaInicial.current || window.location.pathname === "/entrar" ? "replaceState" : "pushState";
+    const metodo = escritaInicial.current ? "replaceState" : "pushState";
     escritaInicial.current = false;
     window.history[metodo](null, "", url);
   }, [view, cockpitId, finCockpitId, cockpitTab, cursoFichaId, moduloCurso, openFormandoId, openFormandoOrigem, openFormadorId, openLeadId, driveNota]);

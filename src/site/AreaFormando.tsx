@@ -4,7 +4,7 @@ import {
   apiPatchAreaFormando, apiRecuperarAcesso, apiReporPalavraPasse, googleLoginStartUrl, microsoftLoginStartUrl,
   type AreaFormandoDados, type SessionUser,
 } from "../partilhado/api";
-import { destinoDoPerfil } from "../partilhado/destinoPerfil";
+import { destinoPosLogin } from "../partilhado/destinoPerfil";
 import { mensagemPalavraPasse } from "../partilhado/passwordPolicy";
 
 type Separador = "courses" | "agenda" | "certificates" | "notifications" | "payments" | "profile";
@@ -78,6 +78,11 @@ function Cabecalho() {
   );
 }
 
+function irPosLogin(role: string) {
+  const params = new URLSearchParams(window.location.search);
+  window.location.assign(destinoPosLogin(role, params.get("destino")));
+}
+
 function LoginFormando({ onEntrou, trocaInicial = null }: { onEntrou: (user: SessionUser) => void; trocaInicial?: SessionUser | null }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -90,6 +95,24 @@ function LoginFormando({ onEntrou, trocaInicial = null }: { onEntrou: (user: Ses
   const [nova, setNova] = useState("");
   const [google, setGoogle] = useState(false);
   const [microsoft, setMicrosoft] = useState(false);
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("login");
+    if (!q) return;
+    const msgs: Record<string, string> = {
+      "sem-cliente": "O cliente Google ainda não está configurado. Entre com email ou peça à administração para gravar o OAuth.",
+      "sem-cliente-microsoft": "A aplicação Microsoft ainda não está configurada. Entre com email ou registe-a nas Configurações.",
+      "sem-conta": "Esta conta não tem acesso. O email tem de existir como utilizador ou formando com acesso gerado.",
+      inactivo: "Esta conta está desactivada.",
+      "oauth-falhou": "Não foi possível concluir a autenticação. Tente de novo.",
+      "pedido-invalido": "O pedido expirou. Tente de novo.",
+    };
+    setErro(msgs[q] ?? "Não foi possível entrar com a conta externa.");
+    const limpo = new URLSearchParams(window.location.search);
+    limpo.delete("login");
+    const resto = limpo.toString();
+    window.history.replaceState({}, "", resto ? `/area-formando?${resto}` : "/area-formando");
+  }, []);
 
   useEffect(() => {
     apiGoogleLoginStatus().then(r => setGoogle(r.configured)).catch(() => setGoogle(false));
@@ -112,7 +135,7 @@ function LoginFormando({ onEntrou, trocaInicial = null }: { onEntrou: (user: Ses
         return;
       }
       if (r.user.role !== "formando") {
-        window.location.assign(destinoDoPerfil(r.user.role));
+        irPosLogin(r.user.role);
         return;
       }
       onEntrou(r.user);
@@ -131,7 +154,7 @@ function LoginFormando({ onEntrou, trocaInicial = null }: { onEntrou: (user: Ses
       const r = await apiChangeOwnPassword(nova);
       const user = r.user;
       if (user.role !== "formando") {
-        window.location.assign(destinoDoPerfil(user.role));
+        irPosLogin(user.role);
         return;
       }
       onEntrou(user);
@@ -177,8 +200,8 @@ function LoginFormando({ onEntrou, trocaInicial = null }: { onEntrou: (user: Ses
           ) : (
             <>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#A60000]">{recuperar ? "Recuperar acesso" : "Bem-vindo de volta"}</p>
-              <h1 className="mt-3 font-serif text-4xl font-bold text-[#1C3350]">{recuperar ? "Redefina a sua palavra-passe." : "Entrar na área do formando."}</h1>
-              <p className="mt-4 leading-7 text-[#1C3350]/60">{recuperar ? "Indique o email associado à sua conta." : "Aceda aos seus cursos, sessões e certificados."}</p>
+              <h1 className="mt-3 font-serif text-4xl font-bold text-[#1C3350]">{recuperar ? "Redefina a sua palavra-passe." : "Entrar na ENA."}</h1>
+              <p className="mt-4 leading-7 text-[#1C3350]/60">{recuperar ? "Indique o email associado à sua conta." : "Formandos acedem à área reservada. Colaboradores da escola entram no GesForma consoante o perfil."}</p>
               {enviado ? (
                 <div className="mt-8 border-l-4 border-[#FFA900] bg-white p-6">
                   <strong>Verifique o seu email</strong>
@@ -212,7 +235,7 @@ function LoginFormando({ onEntrou, trocaInicial = null }: { onEntrou: (user: Ses
                 <div className="mt-8 space-y-3 border-t border-[#1C3350]/10 pt-6">
                   <a href={google ? googleLoginStartUrl() : undefined} aria-disabled={!google} onClick={e => { if (!google) { e.preventDefault(); setErro("O Google ainda não está configurado. Entre com email."); } }} className={`flex w-full items-center justify-center border px-4 py-3 text-sm font-bold ${google ? "border-[#1C3350] text-[#1C3350] hover:bg-white" : "cursor-not-allowed border-[#1C3350]/20 text-[#1C3350]/40"}`}>Continuar com Google</a>
                   <a href={microsoft ? microsoftLoginStartUrl() : undefined} aria-disabled={!microsoft} onClick={e => { if (!microsoft) { e.preventDefault(); setErro("A Microsoft ainda não está configurada. Entre com email."); } }} className={`flex w-full items-center justify-center border px-4 py-3 text-sm font-bold ${microsoft ? "border-[#1C3350] text-[#1C3350] hover:bg-white" : "cursor-not-allowed border-[#1C3350]/20 text-[#1C3350]/40"}`}>Continuar com Microsoft</a>
-                  <p className="text-sm text-[#1C3350]/55">O acesso é criado pela secretaria, na ficha do formando no GesForma.</p>
+                  <p className="text-sm text-[#1C3350]/55">Formandos: o acesso é criado na ficha no GesForma. Equipa: use o email registado na escola.</p>
                 </div>
               )}
             </>
@@ -511,7 +534,7 @@ export function AreaFormando() {
       .then(r => {
         if (!viva) return;
         if (r.user.role !== "formando") {
-          window.location.replace(destinoDoPerfil(r.user.role));
+          irPosLogin(r.user.role);
           return;
         }
         if (r.user.mustChangePassword) {

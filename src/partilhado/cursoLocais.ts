@@ -42,6 +42,20 @@ export function refereCurso(
   return base.length >= 8 && (semPrefixoCurso(canonical) === base || aliases.some(a => semPrefixoCurso(a) === base));
 }
 
+/** Formandos financiados ligados a uma turma (mesma regra do cockpit). */
+export function membrosTurmaFin<T extends { id: number; turmaId?: number; turma: string; curso: string }>(
+  turma: { id: number; nome: string; curso: string; ufcdCod?: string },
+  formandos: T[],
+  outrasTurmas: { id: number; nome: string }[],
+) {
+  return formandos.filter(f => {
+    if (f.turmaId != null && f.turmaId === turma.id) return true;
+    if (f.turma === turma.nome) return true;
+    const noutra = outrasTurmas.some(t => t.id !== turma.id && (t.nome === f.turma || f.turmaId === t.id));
+    return !noutra && (f.curso === turma.curso || refereCurso(f.curso, { nomeComercial: turma.curso, ufcd: turma.ufcdCod, ufcdCod: turma.ufcdCod }));
+  });
+}
+
 export function idCursoPorNome(
   regime: "gold" | "fin",
   cursoNome: string | undefined,

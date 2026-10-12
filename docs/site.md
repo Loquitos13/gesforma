@@ -17,7 +17,7 @@ O ano do copyright é o ano corrente. Não se grava. Em 2026 o rodapé mostra ©
 - `/inquerito/:token` resposta ao inquérito de satisfação.
 - `/noticias` artigos com estado Ativo em Gestão → Blog. `/noticias/:slug` abre o artigo em blocos: parágrafo, título, imagem, hero, secção, citação, lista, botão e separador. Um post Inactivo não entra.
 - `/area-formando` login e área do formando. Os cursos, as sessões, os certificados e os pagamentos saem da ficha. O acesso é gerado pela secretaria no GesForma. Quem não é formando é enviado para o GesForma. A estrutura pedagógica por módulo (SCORM, H5P, quizzes, etc.) edita-se na ficha do curso; o player e o progresso completos estão por fazer — ver `docs/conteudos-pedagogicos.md` e `docs/todo.md`. Dados fiscais na área também estão em `docs/todo.md`.
-- `/entrar` login da secretaria e do GesForma. O formando com sessão é enviado para `/area-formando`. O formador entra em `/gesforma/formador/turmas`, a secretaria financiada em `/gesforma/financiada`, e administrador, comercial e secretaria em `/gesforma/gold`.
+- `/area-formando` é o único ecrã de login (formandos e equipa). Depois de entrar, o destino segue o RBAC (`destinoDoPerfil` / parâmetro `?destino=` para voltar a uma rota GesForma). `/entrar` redirecciona para `/area-formando`.
 - `/gesforma/…` uma rota por vista do backoffice: painéis, CRM, cursos, fichas (`/gesforma/gold/cursos/:id` e `/gesforma/financiada/cursos/:id`), turmas, cockpit (`/gesforma/gold/turmas/:id` e `/gesforma/financiada/turmas/:id`), dossiês, inquéritos, blog, listas, emails, pagamentos, site e configurações. O separador do cockpit vai em `?separador=`.
 
 ## O que já sai da base de dados

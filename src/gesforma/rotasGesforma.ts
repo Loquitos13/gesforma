@@ -170,5 +170,5 @@ export function vistaDoCaminho(pathname: string, search = ""): Destino | null {
 
 export function gesformaNoEndereco(pathname: string) {
   const path = pathname.replace(/\/+$/, "") || "/";
-  return path === "/entrar" || path.startsWith("/gesforma");
+  return path.startsWith("/gesforma");
 }

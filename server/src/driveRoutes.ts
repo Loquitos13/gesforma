@@ -82,7 +82,7 @@ export function registerDriveRoutes(
     if (!requireAuth(req, reply)) return;
     const creds = await driveCreds(db);
     if (!googleConfigured(creds)) {
-      return reply.redirect(`${publicOrigin(req)}/entrar?drive=sem-cliente`);
+      return reply.redirect(`${publicOrigin(req)}/area-formando?destino=${encodeURIComponent("/gesforma/configuracoes")}&drive=sem-cliente`);
     }
     await purgeExpiredStates(db);
     const state = newToken(24);
@@ -90,7 +90,7 @@ export function registerDriveRoutes(
     const redirectUri = driveCallbackUri(req);
     await db.query(
       "INSERT INTO oauth_states (state, user_id, redirect_to, expires_at, oauth_redirect_uri) VALUES ($1, $2, $3, $4, $5)",
-      [state, req.actor!.id, `${publicOrigin(req)}/entrar?drive=ligado`, exp, redirectUri],
+      [state, req.actor!.id, `${publicOrigin(req)}/gesforma/configuracoes?drive=ligado`, exp, redirectUri],
     );
     return reply.redirect(googleAuthUrl(state, { ...creds, redirectUri }));
   });
@@ -98,7 +98,7 @@ export function registerDriveRoutes(
   app.get("/v1/drive/oauth/callback", async (req, reply) => {
     const q = req.query as { code?: string; state?: string; error?: string };
     const home = publicOrigin(req);
-    const fail = (reason: string) => reply.redirect(`${home}/entrar?drive=${encodeURIComponent(reason)}`);
+    const fail = (reason: string) => reply.redirect(`${home}/area-formando?destino=${encodeURIComponent("/gesforma/configuracoes")}&drive=${encodeURIComponent(reason)}`);
     if (q.error) return fail(q.error);
     if (!q.code || !q.state) return fail("pedido-invalido");
     const row = await db.query<{ user_id: string; redirect_to: string | null; oauth_redirect_uri: string | null }>(
@@ -114,7 +114,7 @@ export function registerDriveRoutes(
       const tokens = await exchangeCode(q.code, creds, st.oauth_redirect_uri || driveCallbackUri(req));
       const saved = await saveGoogleAccount(db, tokens);
       await audit(db, st.user_id, "drive.connect", "oauth_account", "google", req.ip, { email: saved.email });
-      return reply.redirect(st.redirect_to || `${config.appOrigin}/entrar?drive=ligado`);
+      return reply.redirect(st.redirect_to || `${config.appOrigin}/gesforma/configuracoes?drive=ligado`);
     } catch (err) {
       app.log.error(err);
       return fail("oauth-falhou");

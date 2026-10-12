@@ -20,8 +20,14 @@ import { TurmasProvider } from "./partilhado/TurmasContext";
 import "./index.css";
 
 const path = window.location.pathname.replace(/\/+$/, "") || "/";
-const entrar = path === "/entrar" || path.startsWith("/gesforma");
-const areaFormando = path === "/area-formando" || path.startsWith("/area-formando/");
+const legacyEntrar = path === "/entrar" || path.startsWith("/entrar/");
+if (legacyEntrar) {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has("destino")) params.set("destino", "/gesforma/gold");
+  window.location.replace(`/area-formando?${params.toString()}`);
+}
+const entrar = path.startsWith("/gesforma");
+const areaFormando = legacyEntrar || path === "/area-formando" || path.startsWith("/area-formando/");
 const noticiaSlug = path.startsWith("/noticias/") ? decodeURIComponent(path.slice("/noticias/".length).split("/")[0] ?? "") : "";
 const noticias = path === "/noticias";
 const catalogo = path === "/formacao";

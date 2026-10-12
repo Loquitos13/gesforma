@@ -1,6 +1,13 @@
+import { randomUUID } from "node:crypto";
 import type { Db } from "./db/pool.js";
 import { ingestEvent } from "./automations.js";
+import { opaqueRef } from "./fieldCrypto.js";
+import { readFormandoDocs, readFormandoPii, readPreinscricaoPii } from "./pii.js";
 import { isEmail, normalizeEmail } from "./security.js";
+
+export function newPublicId() {
+  return randomUUID();
+}
 
 export async function nextOpsId(db: Db) {
   const row = await db.query<{ id: number }>("SELECT nextval('ops_id_seq')::int AS id");
@@ -50,13 +57,18 @@ function asArr(v: unknown) {
 }
 
 export function mapPreinscricao(r: Record<string, unknown>) {
+  const pii = readPreinscricaoPii(r);
+  const id = num(r.id);
+  const publicId = String(r.public_id ?? "");
   return {
-    id: num(r.id),
+    id,
+    publicId,
+    ref: opaqueRef("pre", id, publicId || null),
     inscrito: String(r.inscrito ?? ""),
     nome: String(r.nome ?? ""),
     apelido: String(r.apelido ?? ""),
     email: String(r.email ?? ""),
-    telf: String(r.telf ?? ""),
+    telf: pii.telf || String(r.telf ?? ""),
     inicioCurso: String(r.inicio_curso ?? "-"),
     concelho: String(r.concelho ?? ""),
     local: String(r.local ?? ""),
@@ -77,9 +89,9 @@ export function mapPreinscricao(r: Record<string, unknown>) {
     proximoContacto: String(r.proximo_contacto ?? ""),
     comercialId: r.comercial_id ? String(r.comercial_id) : null,
     comercialNome: String(r.comercial_nome ?? ""),
-    nif: String(r.nif ?? ""),
-    moradaFiscal: String(r.morada_fiscal ?? ""),
-    codigoPostal: String(r.codigo_postal ?? ""),
+    nif: pii.nif ?? String(r.nif ?? ""),
+    moradaFiscal: pii.moradaFiscal ?? String(r.morada_fiscal ?? ""),
+    codigoPostal: pii.codigoPostal ?? String(r.codigo_postal ?? ""),
     motivoDesistencia: String(r.motivo_desistencia ?? ""),
     pagamentoMetodo: String(r.pagamento_metodo ?? ""),
     secretariaEm: r.secretaria_em ? String(r.secretaria_em) : null,
@@ -91,11 +103,16 @@ export function mapPreinscricao(r: Record<string, unknown>) {
 }
 
 export function mapFormandoGold(r: Record<string, unknown>) {
+  const pii = readFormandoPii(r);
+  const id = num(r.id);
+  const publicId = String(r.public_id ?? "");
   return {
-    id: num(r.id),
+    id,
+    publicId,
+    ref: opaqueRef("gold", id, publicId || null),
     nome: String(r.nome ?? ""),
     apelido: String(r.apelido ?? ""),
-    telf: String(r.telf ?? ""),
+    telf: pii.telf || String(r.telf ?? ""),
     email: String(r.email ?? ""),
     inscrito: String(r.inscrito ?? ""),
     local: String(r.local ?? ""),
@@ -111,18 +128,23 @@ export function mapFormandoGold(r: Record<string, unknown>) {
 }
 
 export function mapFormandoFin(r: Record<string, unknown>) {
-  const docs = asObj(r.docs);
+  const docs = readFormandoDocs(r);
+  const pii = readFormandoPii(r);
   const doc = (k: string) => {
     const d = asObj(docs[k]);
     return { ok: Boolean(d.ok), data: String(d.data ?? "") };
   };
+  const id = num(r.id);
+  const publicId = String(r.public_id ?? "");
   return {
-    id: num(r.id),
+    id,
+    publicId,
+    ref: opaqueRef("fin", id, publicId || null),
     nome: String(r.nome ?? ""),
     apelido: String(r.apelido ?? ""),
     turma: String(r.turma ?? ""),
     turmaId: r.turma_id == null || r.turma_id === "" ? 0 : num(r.turma_id),
-    telf: String(r.telf ?? ""),
+    telf: pii.telf || String(r.telf ?? ""),
     email: String(r.email ?? ""),
     curso: String(r.curso ?? ""),
     estado: String(r.estado ?? "Elegível"),

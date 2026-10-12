@@ -110,12 +110,17 @@ Não separam a base para outro servidor até haver necessidade: um contentor Pos
 
 ### Segurança
 
+Detalhe operacional em [`docs/security.md`](docs/security.md).
+
+- Sessão em cookie httpOnly; **GesForma e `/v1/*`** exigem login (excepto `/v1/public/*`, auth e webhooks). Perfil **formando** só acede à área do formando.
 - Palavras-passe com scrypt; o token de sessão só existe em hash na base.
 - CORS e `Origin` fechados a `APP_ORIGIN`. Pedidos de escrita exigem o cabeçalho `X-Gesforma-Client`.
-- Helmet, limite de corpo 32 KB (JSON), uploads multipart até 10 MB, rate limit (8 tentativas de login / minuto).
+- Helmet, limite de corpo 32 KB (JSON), uploads multipart até 10 MB. Rate limit global (120/min) e **login** (12/min por IP + bloqueio 15 min após 5 falhas por IP+email).
+- PII dos formandos e pré-inscrições (NIF, morada, telemóvel, dossier documental) em **`pii_enc` / `docs_enc`** com **`DATA_ENCRYPTION_KEY`** (32 bytes base64: `openssl rand -base64 32`). Identificadores públicos: **`public_id`** / campo API **`ref`**.
+- Postgres com **RLS** por perfil (`app.role`, `app.user_id`); a API só consulta com `gesforma.api=1` em transacções controladas.
 - Tokens OAuth do Drive guardados cifrados (AES-256-GCM) com `SESSION_SECRET`. O callback valida `state` de uso único.
 - SQL só com parâmetros. Assunto e destinatário sem quebras de linha (injecção de cabeçalhos).
-- Em produção a API recusa-se a arrancar sem `DATABASE_URL`, `SESSION_SECRET` (≥32) e `ADMIN_PASSWORD` diferente do valor de desenvolvimento.
+- Em produção a API recusa-se a arrancar sem `DATABASE_URL`, `SESSION_SECRET` (≥32), **`DATA_ENCRYPTION_KEY`** (com Postgres na Vercel) e `ADMIN_PASSWORD` diferente do valor de desenvolvimento.
 
 ### Backup completo
 

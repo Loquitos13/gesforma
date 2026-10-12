@@ -202,6 +202,9 @@ function LoginFormando({ onEntrou, trocaInicial = null }: { onEntrou: (user: Ses
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#A60000]">{recuperar ? "Recuperar acesso" : "Bem-vindo de volta"}</p>
               <h1 className="mt-3 font-serif text-4xl font-bold text-[#1C3350]">{recuperar ? "Redefina a sua palavra-passe." : "Entrar na ENA."}</h1>
               <p className="mt-4 leading-7 text-[#1C3350]/60">{recuperar ? "Indique o email associado à sua conta." : "Formandos acedem à área reservada. Colaboradores da escola entram no GesForma consoante o perfil."}</p>
+              {!recuperar && !enviado && (
+                <p className="mt-2 text-xs text-[#1C3350]/45">Ligação encriptada. Após várias tentativas falhadas, o acesso pausa alguns minutos para proteger a sua conta.</p>
+              )}
               {enviado ? (
                 <div className="mt-8 border-l-4 border-[#FFA900] bg-white p-6">
                   <strong>Verifique o seu email</strong>

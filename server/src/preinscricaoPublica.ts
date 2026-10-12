@@ -2,7 +2,8 @@ import { firePreinscricaoEmail, maybeEnviarPagamentoAposDocs } from "./docsLink.
 import { precoParaOferta } from "./precoOferta.js";
 import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
-import { mapPreinscricao, nextOpsId } from "./ops.js";
+import { mapPreinscricao, newPublicId, nextOpsId } from "./ops.js";
+import { writePreinscricaoPii } from "./pii.js";
 import { resolverTurmaOferta } from "./ofertaGold.js";
 import { isEmail, normalizeEmail, sanitizeHeader, textoDePessoa } from "./security.js";
 
@@ -93,14 +94,16 @@ export async function criarPreinscricaoPublica(
 
   const preco = await precoParaOferta(db, curso, local, horario);
   const id = await nextOpsId(db);
+  const piiPack = writePreinscricaoPii({ telf });
   await db.query(
-    `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, entrada, meio_contacto, horario, turma_id, pagamento_metodo, regime)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Não contactado',$12,$13,'preinscricao',$14,$15,$16,$17,$18)`,
+    `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, entrada, meio_contacto, horario, turma_id, pagamento_metodo, regime, pii_enc, public_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Não contactado',$12,$13,'preinscricao',$14,$15,$16,$17,$18,$19,$20)`,
     [
       id, nowStamp(), textoDePessoa(input.nome), textoDePessoa(input.apelido || ""), email,
-      telf, inicio, textoDePessoa(input.concelho || ""),
+      piiPack.telf || telf, inicio, textoDePessoa(input.concelho || ""),
       local, curso, preco ?? Number(input.preco ?? 0),
       sanitizeHeader(input.campanha || ""), origem, meio, horario, turmaId, metodo, regime,
+      piiPack.pii_enc, newPublicId(),
     ],
   );
   const detalhe = [origem, curso, local, horario, inicio !== "-" ? inicio : ""].filter(Boolean).join(" · ");

@@ -1,6 +1,7 @@
 import type { Db } from "./db/pool.js";
 import { listarDocsLead } from "./docsLink.js";
-import { nextOpsId } from "./ops.js";
+import { nextOpsId, newPublicId } from "./ops.js";
+import { writeFormandoDocs, writeFormandoPiiPatch } from "./pii.js";
 import { logLeadEvent } from "./crmDossier.js";
 import { isEmail, normalizeEmail } from "./security.js";
 
@@ -143,20 +144,25 @@ export async function upsertFormandoFinFromLead(db: Db, leadId: number, actorId?
   const docsBase = docsFromInscricaoPips({});
   if (!id) {
     id = await nextOpsId(db);
+    const docPack = writeFormandoDocs(docsBase as Record<string, unknown>);
+    const piiPack = writeFormandoPiiPatch({ telf: String(row.telf ?? "") });
     await db.query(
-      `INSERT INTO formandos_fin (id, nome, apelido, turma, turma_id, telf, email, curso, estado, docs)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)`,
+      `INSERT INTO formandos_fin (id, nome, apelido, turma, turma_id, telf, email, curso, estado, docs, docs_enc, pii_enc, public_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13)`,
       [
         id,
         String(row.nome ?? ""),
         String(row.apelido ?? ""),
         turmaNome,
         turma?.id ?? (turmaId || null),
-        String(row.telf ?? ""),
+        piiPack.telf || String(row.telf ?? ""),
         email,
         curso,
         estado,
-        docsBase,
+        docPack.docs,
+        docPack.docs_enc,
+        piiPack.pii_enc,
+        newPublicId(),
       ],
     );
     await logLeadEvent(db, leadId, actorId, "estado", "Formando financiado criado", `Ficha #${id} · ${turmaNome}`);
@@ -173,7 +179,8 @@ export async function upsertFormandoFinFromLead(db: Db, leadId: number, actorId?
 
   await syncFormandoDocsFromLead(db, id, leadId);
   const merged = await mergeDocsJson(db, id, docsBase);
-  await db.query("UPDATE formandos_fin SET docs = $2::jsonb WHERE id = $1", [id, merged]);
+  const docPack = writeFormandoDocs(merged);
+  await db.query("UPDATE formandos_fin SET docs = $2::jsonb, docs_enc = COALESCE($3, docs_enc) WHERE id = $1", [id, docPack.docs, docPack.docs_enc]);
   await db.query(
     "UPDATE preinscricoes SET estado = 'Formando', ultima_actividade_em = now() WHERE id = $1 AND estado <> 'Formando'",
     [leadId],

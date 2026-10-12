@@ -19,7 +19,9 @@ import {
   mapTurmaFin,
   mapTurmaGold,
   nextOpsId,
+  newPublicId,
 } from "./ops.js";
+import { readFormandoPii, writeFormandoDocs, writeFormandoPiiPatch, writePreinscricaoPii } from "./pii.js";
 import { exportCrmLeads, queryCrmLeads, searchCrmLeads, type CrmDir, type CrmFila, type CrmSort } from "./crm.js";
 import { fmtDataCalendario, fmtStampLisboa, hojeLisboa } from "./datas.js";
 import { syncTurmaDriveAccess } from "./googleDrive.js";
@@ -584,14 +586,20 @@ export function registerOpsRoutes(
       ? null
       : await precoParaOferta(db, d.curso, d.local || "", d.horario || "");
     const preco = precoOferta ?? d.preco ?? 0;
+    const piiPack = writePreinscricaoPii({
+      nif: d.nif,
+      moradaFiscal: d.moradaFiscal,
+      codigoPostal: d.codigoPostal,
+      telf: d.telf,
+    });
     await db.query(
-      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, comercial_id, entrada, meio_contacto, etiqueta_id, horario, turma_id, nif, morada_fiscal, codigo_postal, regime)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'manual',$16,$17,$18,$19,$20,$21,$22,$23)`,
+      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, comercial_id, entrada, meio_contacto, etiqueta_id, horario, turma_id, nif, morada_fiscal, codigo_postal, regime, pii_enc, public_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'manual',$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
       [
-        id, nowStamp(), d.nome, d.apelido, email, d.telf, d.inicioCurso || "-",
+        id, nowStamp(), d.nome, d.apelido, email, piiPack.telf || d.telf, d.inicioCurso || "-",
         d.concelho, d.local, d.curso, preco, d.estado || "Não contactado", d.campanha, d.origem || "Telefone", comercialId,
         d.meioContacto || d.origem || "Telefone", d.etiquetaId ?? null, d.horario || "", d.turmaId ?? null,
-        d.nif ?? "", d.moradaFiscal ?? "", d.codigoPostal ?? "", regime,
+        piiPack.nif, piiPack.morada_fiscal, piiPack.codigo_postal, regime, piiPack.pii_enc, newPublicId(),
       ],
     );
     await firePreinscricaoEmail(db, {
@@ -635,6 +643,15 @@ export function registerOpsRoutes(
         return reply.code(409).send({ error: "Só a secretaria inscreve na turma." });
       }
     }
+    const prevPii = readPreinscricaoPii(before);
+    const piiPack = (d.nif !== undefined || d.moradaFiscal !== undefined || d.codigoPostal !== undefined || d.telf !== undefined)
+      ? writePreinscricaoPii({
+        nif: d.nif !== undefined ? d.nif.replace(/\s/g, "") : prevPii.nif,
+        moradaFiscal: d.moradaFiscal ?? prevPii.moradaFiscal,
+        codigoPostal: d.codigoPostal ?? prevPii.codigoPostal,
+        telf: d.telf ?? prevPii.telf,
+      })
+      : null;
     await db.query(
       `UPDATE preinscricoes SET
          nome = COALESCE($2, nome), apelido = COALESCE($3, apelido), email = COALESCE($4, email),
@@ -651,19 +668,25 @@ export function registerOpsRoutes(
          morada_fiscal = COALESCE($22, morada_fiscal),
          codigo_postal = COALESCE($23, codigo_postal),
          motivo_desistencia = COALESCE($24, motivo_desistencia),
-         pagamento_metodo = COALESCE($25, pagamento_metodo)
+         pagamento_metodo = COALESCE($25, pagamento_metodo),
+         pii_enc = COALESCE($26, pii_enc),
+         public_id = CASE WHEN COALESCE(public_id, '') = '' THEN $27 ELSE public_id END
        WHERE id = $1`,
       [
-        id, d.nome ?? null, d.apelido ?? null, d.email ? normalizeEmail(d.email) : null, d.telf ?? null, d.concelho ?? null, d.origem ?? null, d.curso ?? null, d.local ?? null, d.inicioCurso ?? null, d.preco ?? null, d.campanha ?? null, d.estado ?? null, d.proximoContacto ?? null, d.notas ?? null, d.comercialId ?? null,
+        id, d.nome ?? null, d.apelido ?? null, d.email ? normalizeEmail(d.email) : null,
+        piiPack ? piiPack.telf : (d.telf ?? null),
+        d.concelho ?? null, d.origem ?? null, d.curso ?? null, d.local ?? null, d.inicioCurso ?? null, d.preco ?? null, d.campanha ?? null, d.estado ?? null, d.proximoContacto ?? null, d.notas ?? null, d.comercialId ?? null,
         d.meioContacto ?? null,
         d.etiquetaId === undefined ? -1 : (d.etiquetaId ?? 0),
         d.horario ?? null,
         d.turmaId ?? null,
-        d.nif !== undefined ? d.nif.replace(/\s/g, "") : null,
-        d.moradaFiscal ?? null,
-        d.codigoPostal ?? null,
+        piiPack ? piiPack.nif : (d.nif !== undefined ? d.nif.replace(/\s/g, "") : null),
+        piiPack ? piiPack.morada_fiscal : (d.moradaFiscal ?? null),
+        piiPack ? piiPack.codigo_postal : (d.codigoPostal ?? null),
         d.motivoDesistencia ?? null,
         d.pagamentoMetodo ?? null,
+        piiPack?.pii_enc ?? null,
+        newPublicId(),
       ],
     );
     const row = await oneLead(db, id);
@@ -1100,10 +1123,14 @@ export function registerOpsRoutes(
     const resolved = curso ? await precoParaOferta(db, curso, local, horario) : null;
     const valor = resolved ?? d.valor;
     const id = await nextOpsId(db);
+    const piiPack = writeFormandoPiiPatch({ telf: d.telf });
     await db.query(
-      `INSERT INTO formandos_gold (id, nome, apelido, telf, email, inscrito, local, curso, turma, turma_id, estado, pago, valor, metodo)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-      [id, d.nome, d.apelido, d.telf, d.email, d.inscrito || nowStamp(), local, curso, d.turma, d.turmaId ?? null, d.estado, d.pago, valor, d.metodo],
+      `INSERT INTO formandos_gold (id, nome, apelido, telf, email, inscrito, local, curso, turma, turma_id, estado, pago, valor, metodo, pii_enc, public_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+      [
+        id, d.nome, d.apelido, piiPack.telf || d.telf, d.email, d.inscrito || nowStamp(), local, curso, d.turma,
+        d.turmaId ?? null, d.estado, d.pago, valor, d.metodo, piiPack.pii_enc, newPublicId(),
+      ],
     );
     const row = await one(db, "SELECT * FROM formandos_gold WHERE id = $1", [id]);
     return { formando: row ? mapFormandoGold(row) : { id } };
@@ -1133,14 +1160,24 @@ export function registerOpsRoutes(
       const resolved = curso ? await precoParaOferta(db, curso, local, horario) : null;
       if (resolved != null) d.valor = resolved;
     }
+    const current = await one(db, "SELECT * FROM formandos_gold WHERE id = $1", [id]);
+    const piiPack = d.telf !== undefined
+      ? writeFormandoPiiPatch({ telf: d.telf }, readFormandoPii(current ?? {}))
+      : null;
     await db.query(
       `UPDATE formandos_gold SET
          nome = COALESCE($2, nome), apelido = COALESCE($3, apelido), telf = COALESCE($4, telf),
          email = COALESCE($5, email), local = COALESCE($6, local), curso = COALESCE($7, curso),
          turma = COALESCE($8, turma), turma_id = COALESCE($9, turma_id), estado = COALESCE($10, estado),
-         pago = COALESCE($11, pago), valor = COALESCE($12, valor), metodo = COALESCE($13, metodo)
+         pago = COALESCE($11, pago), valor = COALESCE($12, valor), metodo = COALESCE($13, metodo),
+         pii_enc = COALESCE($14, pii_enc),
+         public_id = CASE WHEN COALESCE(public_id, '') = '' THEN $15 ELSE public_id END
        WHERE id = $1`,
-      [id, d.nome ?? null, d.apelido ?? null, d.telf ?? null, d.email ?? null, d.local ?? null, d.curso ?? null, d.turma ?? null, d.turmaId ?? null, d.estado ?? null, d.pago ?? null, d.valor ?? null, d.metodo ?? null],
+      [
+        id, d.nome ?? null, d.apelido ?? null, piiPack?.telf ?? d.telf ?? null, d.email ?? null, d.local ?? null,
+        d.curso ?? null, d.turma ?? null, d.turmaId ?? null, d.estado ?? null, d.pago ?? null, d.valor ?? null,
+        d.metodo ?? null, piiPack?.pii_enc ?? null, newPublicId(),
+      ],
     );
     const row = await one(db, "SELECT * FROM formandos_gold WHERE id = $1", [id]);
     const mapped = row ? mapFormandoGold(row) : null;
@@ -1198,12 +1235,18 @@ export function registerOpsRoutes(
       cc: d.cc ?? vazio, ch: d.ch ?? vazio, cu: d.cu ?? vazio, ci: d.ci ?? vazio, ce: d.ce ?? vazio,
       morada: d.morada ?? vazio, contrato: d.contrato ?? vazio, rgpd: d.rgpd ?? vazio,
     };
+    const docPack = writeFormandoDocs(docs as Record<string, unknown>);
+    const piiPack = writeFormandoPiiPatch({ telf: d.telf });
     const turmaLigada = d.turma
       ? await one(db, "SELECT id FROM turmas_fin WHERE lower(trim(nome)) = lower(trim($1)) ORDER BY id DESC LIMIT 1", [d.turma])
       : null;
     await db.query(
-      "INSERT INTO formandos_fin (id, nome, apelido, turma, turma_id, telf, email, curso, estado, docs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)",
-      [id, d.nome, d.apelido, d.turma, turmaLigada ? Number(turmaLigada.id) : null, d.telf, d.email, d.curso, d.estado, docs],
+      `INSERT INTO formandos_fin (id, nome, apelido, turma, turma_id, telf, email, curso, estado, docs, docs_enc, pii_enc, public_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13)`,
+      [
+        id, d.nome, d.apelido, d.turma, turmaLigada ? Number(turmaLigada.id) : null,
+        piiPack.telf || d.telf, d.email, d.curso, d.estado, docPack.docs, docPack.docs_enc, piiPack.pii_enc, newPublicId(),
+      ],
     );
     const row = await one(db, "SELECT * FROM formandos_fin WHERE id = $1", [id]);
     return { formando: row ? mapFormandoFin(row) : { id } };
@@ -1223,11 +1266,18 @@ export function registerOpsRoutes(
       cc: d.cc ?? prev.cc, ch: d.ch ?? prev.ch, cu: d.cu ?? prev.cu, ci: d.ci ?? prev.ci, ce: d.ce ?? prev.ce,
       morada: d.morada ?? prev.morada, contrato: d.contrato ?? prev.contrato, rgpd: d.rgpd ?? prev.rgpd,
     };
+    const docPack = writeFormandoDocs(docs as Record<string, unknown>);
+    const piiPack = writeFormandoPiiPatch({ telf: d.telf ?? readFormandoPii(current).telf }, readFormandoPii(current));
     await db.query(
       `UPDATE formandos_fin SET nome = COALESCE($2, nome), apelido = COALESCE($3, apelido), turma = COALESCE($4, turma),
-         telf = COALESCE($5, telf), email = COALESCE($6, email), curso = COALESCE($7, curso), estado = COALESCE($8, estado), docs = $9::jsonb
+         telf = COALESCE($5, telf), email = COALESCE($6, email), curso = COALESCE($7, curso), estado = COALESCE($8, estado),
+         docs = $9::jsonb, docs_enc = COALESCE($10, docs_enc), pii_enc = COALESCE($11, pii_enc),
+         public_id = CASE WHEN COALESCE(public_id, '') = '' THEN $12 ELSE public_id END
        WHERE id = $1`,
-      [id, d.nome ?? null, d.apelido ?? null, d.turma ?? null, d.telf ?? null, d.email ?? null, d.curso ?? null, d.estado ?? null, docs],
+      [
+        id, d.nome ?? null, d.apelido ?? null, d.turma ?? null, piiPack.telf || (d.telf ?? null), d.email ?? null, d.curso ?? null, d.estado ?? null,
+        docPack.docs, docPack.docs_enc, piiPack.pii_enc, newPublicId(),
+      ],
     );
     const row = await one(db, "SELECT * FROM formandos_fin WHERE id = $1", [id]);
     if (row && d.turma != null) {

@@ -67,6 +67,7 @@ export const config = {
   driveDir: process.env.DRIVE_DIR
     ?? (process.env.VERCEL ? "/tmp/gesforma-drive" : new URL("../data/drive-files", import.meta.url).pathname),
   driveMaxBytes: Number(process.env.DRIVE_MAX_BYTES ?? 10 * 1024 * 1024),
+  dataEncryptionKey: process.env.DATA_ENCRYPTION_KEY ?? "",
   paymentWebhookKey: process.env.PAYMENT_WEBHOOK_KEY ?? "",
   whatsappToken: process.env.WHATSAPP_TOKEN ?? "",
   whatsappPhoneId: process.env.WHATSAPP_PHONE_ID ?? "",
@@ -139,6 +140,9 @@ export function assertSecureConfig() {
     if (!process.env.ADMIN_PASSWORD || config.adminPassword === defaultDevPassword) {
       throw new Error("Em produção defina ADMIN_PASSWORD (não use o valor de desenvolvimento).");
     }
+    if (!config.dataEncryptionKey) {
+      throw new Error("Em produção defina DATA_ENCRYPTION_KEY (32 bytes em base64).");
+    }
   }
   if (onVercel && config.databaseUrl) {
     if (!process.env.SESSION_SECRET || config.sessionSecret.length < 32) {
@@ -146,6 +150,9 @@ export function assertSecureConfig() {
     }
     if (!process.env.ADMIN_PASSWORD || config.adminPassword === defaultDevPassword) {
       throw new Error("Com Postgres na Vercel, defina ADMIN_PASSWORD (não use o valor de desenvolvimento).");
+    }
+    if (!config.dataEncryptionKey) {
+      throw new Error("Com Postgres na Vercel, defina DATA_ENCRYPTION_KEY (32 bytes em base64).");
     }
   }
   if (config.sessionSecret.length < 32) {

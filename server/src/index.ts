@@ -10,6 +10,10 @@ assertSecureConfig();
 const db = await createDb();
 await migrate(db);
 await seed(db);
+const { backfillPiiEncryption } = await import("./piiBackfill.js");
+await backfillPiiEncryption(db).catch(err => {
+  console.warn("Aviso: backfill PII não concluiu.", err);
+});
 
 const app = await buildApp(db);
 const shutdown = async (signal: string) => {

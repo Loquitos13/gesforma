@@ -50,6 +50,8 @@ import {
   TRIGGER_MAP,
   verifyPassword,
 } from "./security.js";
+import { classifyRoute } from "./routeAuth.js";
+import { checkLoginAllowed, clearLoginFailures, registerLoginFailure } from "./loginRate.js";
 
 declare module "fastify" {
   interface FastifyInstance { db: Db }
@@ -169,28 +171,43 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     }
   });
 
-  app.addHook("preHandler", async (req) => {
+  app.addHook("preHandler", async (req, reply) => {
     enterActor(null);
     const raw = req.cookies[config.cookieName];
-    if (!raw) return;
-    const hash = sha256(raw);
-    const row = await db.query<{ id: string; email: string; name: string; role: string; must_change_password?: boolean }>(
-      `SELECT u.id, u.email, u.name, u.role, u.must_change_password
-       FROM sessions s
-       JOIN users u ON u.id = s.user_id
-       WHERE s.token_hash = $1 AND s.expires_at > now() AND u.active = true`,
-      [hash],
-    );
-    const found = row.rows[0];
-    if (!found) return;
-    req.actor = {
-      id: found.id,
-      email: found.email,
-      name: found.name,
-      role: found.role,
-      mustChangePassword: Boolean(found.must_change_password),
-    };
-    enterActor({ id: found.id, role: found.role });
+    if (raw) {
+      const hash = sha256(raw);
+      const row = await db.query<{ id: string; email: string; name: string; role: string; must_change_password?: boolean }>(
+        `SELECT u.id, u.email, u.name, u.role, u.must_change_password
+         FROM sessions s
+         JOIN users u ON u.id = s.user_id
+         WHERE s.token_hash = $1 AND s.expires_at > now() AND u.active = true`,
+        [hash],
+      );
+      const found = row.rows[0];
+      if (found) {
+        req.actor = {
+          id: found.id,
+          email: found.email,
+          name: found.name,
+          role: found.role,
+          mustChangePassword: Boolean(found.must_change_password),
+        };
+        enterActor({ id: found.id, role: found.role });
+      }
+    }
+
+    const path = req.url.split("?")[0] ?? req.url;
+    const kind = classifyRoute(req.method, path);
+    if (kind === "public") return;
+    if (!req.actor) {
+      return reply.code(401).send({ error: "sessão inválida" });
+    }
+    if (kind === "formando" && req.actor.role !== "formando") {
+      return reply.code(403).send({ error: "a área do formando não abre o GesForma" });
+    }
+    if (kind === "staff" && req.actor.role === "formando") {
+      return reply.code(403).send({ error: "a área do formando não abre o GesForma" });
+    }
   });
 
   function requireAuth(req: FastifyRequest, reply: FastifyReply, opts?: { formando?: boolean }) {
@@ -240,12 +257,24 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   }));
 
   app.post("/v1/auth/login", {
-    config: { rateLimit: { max: 8, timeWindow: "1 minute" } },
+    config: {
+      rateLimit: {
+        max: 12,
+        timeWindow: "1 minute",
+        keyGenerator: req => `login:${req.ip}`,
+      },
+    },
   }, async (req, reply) => {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const email = normalizeEmail(parsed.data.email);
     if (!isEmail(email)) return reply.code(400).send({ error: "credenciais inválidas" });
+    const gate = await checkLoginAllowed(db, String(req.ip ?? "127.0.0.1"), email);
+    if (!gate.ok) {
+      return reply.code(429).send({
+        error: `Demasiadas tentativas. Aguarde ${gate.retrySec} segundos e tente de novo.`,
+      });
+    }
     const user = await db.query<{ id: string; password_hash: string; name: string; role: string; active: boolean; must_change_password?: boolean }>(
       "SELECT id, password_hash, name, role, active, must_change_password FROM users WHERE email = $1",
       [email],
@@ -254,9 +283,11 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     const dummy = "scrypt$16384$8$1$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000";
     const ok = await verifyPassword(parsed.data.password, row?.password_hash ?? dummy);
     if (!row || !row.active || !ok) {
+      await registerLoginFailure(db, String(req.ip ?? "127.0.0.1"), email);
       await audit(db, row?.id, "auth.login_failed", "user", row?.id, req.ip);
       return reply.code(401).send({ error: "credenciais inválidas" });
     }
+    await clearLoginFailures(db, String(req.ip ?? "127.0.0.1"), email);
     return createSession(reply, {
       id: row.id, email, name: row.name, role: row.role, mustChangePassword: Boolean(row.must_change_password),
     }, req);

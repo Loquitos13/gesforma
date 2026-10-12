@@ -128,6 +128,9 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     const res = await fetch(`${BASE}${path}`, { ...init, credentials: "include", headers });
     if (res.status === 204) return undefined as T;
     const data = await res.json().catch(() => ({}));
+    if (res.status === 429) {
+      throw new ApiError(429, typeof data.error === "string" ? data.error : "Demasiadas tentativas. Aguarde um minuto e tente de novo.");
+    }
     if (!res.ok) throw new ApiError(res.status, typeof data.error === "string" ? data.error : "pedido recusado");
     return data as T;
   } finally {

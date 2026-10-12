@@ -212,6 +212,8 @@ export function ClienteFicha({
   const destinoCheio = destinoEscolhido ? lugaresLivres(destinoEscolhido) <= 0 : (dossier?.turmaEscolhida?.livres ?? 0) <= 0;
   const soTurmaCheia = dossier?.faltaValidar === "A turma escolhida está cheia.";
   const podeAprovar = Boolean(dossier?.podeValidar || (soTurmaCheia && destinoEscolhido && !destinoCheio)) && !destinoCheio;
+  /** Acção manual «turma cheia» — só quando a turma escolhida ou a de destino não tem vagas. */
+  const mostrarAcaoTurmaCheia = destinoCheio || soTurmaCheia;
 
   if (!item || !lead) return null;
   const wa = telDigits(lead.telf);
@@ -638,7 +640,7 @@ export function ClienteFicha({
                   Validar pré-inscrição
                 </button>
               )}
-              {sec && !dossier?.docsFechado && (
+              {sec && !dossier?.docsFechado && mostrarAcaoTurmaCheia && (
                 <button
                   type="button"
                   disabled={busy}

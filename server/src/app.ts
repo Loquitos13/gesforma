@@ -129,7 +129,7 @@ async function audit(db: Db, actorId: string | undefined, action: string, entity
 
 export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   const app = Fastify({
-    logger: true,
+    logger: !process.env.VITEST,
     trustProxy: config.trustProxy,
     bodyLimit: 32 * 1024,
     requestTimeout: 60_000,

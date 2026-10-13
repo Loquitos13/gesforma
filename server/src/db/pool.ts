@@ -20,12 +20,22 @@ function actorAtual(): DbActor {
   return actorStore.getStore() ?? { id: "", role: "system" };
 }
 
+export type TxQuery = <T extends Record<string, unknown> = Record<string, unknown>>(
+  text: string,
+  params?: unknown[],
+) => Promise<QueryResult<T>>;
+
 export interface Db {
   driver: "postgres" | "pglite";
   query<T extends Record<string, unknown> = Record<string, unknown>>(
     text: string,
     params?: unknown[],
   ): Promise<QueryResult<T>>;
+  /**
+   * Corre várias consultas numa só transacção, com o mesmo perfil RLS.
+   * Dentro de `fn` usa-se só o `q` recebido — chamar `db.query` bloqueia em PGlite.
+   */
+  tx<R>(fn: (q: TxQuery) => Promise<R>): Promise<R>;
   close(): Promise<void>;
 }
 
@@ -52,6 +62,20 @@ export async function createDb(): Promise<Db> {
         });
         return { rows: [...rows] as unknown as T[] };
       },
+      async tx<R>(fn: (q: TxQuery) => Promise<R>) {
+        const actor = actorAtual();
+        const out = await sql.begin(async (tx) => {
+          await tx.unsafe("SELECT set_config('gesforma.api', '1', true)");
+          await tx.unsafe("SELECT set_config('app.role', $1, true)", [actor.role || "system"]);
+          await tx.unsafe("SELECT set_config('app.user_id', $1, true)", [actor.id || ""]);
+          const q: TxQuery = async <T extends Record<string, unknown>>(text: string, params: unknown[] = []) => {
+            const rows = await tx.unsafe(text, params as never[]);
+            return { rows: [...rows] as unknown as T[] };
+          };
+          return { v: await fn(q) };
+        });
+        return (out as { v: R }).v;
+      },
       async close() {
         await sql.end({ timeout: 5 });
       },
@@ -69,27 +93,38 @@ export async function createDb(): Promise<Db> {
     return run;
   }
 
+  const mapParams = (params: unknown[]) => params.map(p => (
+    p !== null && typeof p === "object" && !(p instanceof Date) && !(p instanceof Uint8Array) ? JSON.stringify(p) : p
+  ));
+
+  async function emTransaccao<R>(actor: DbActor, fn: (q: TxQuery) => Promise<R>): Promise<R> {
+    try {
+      await client.exec("BEGIN");
+      await client.query("SELECT set_config('gesforma.api', '1', true)");
+      await client.query("SELECT set_config('app.role', $1, true)", [actor.role || "system"]);
+      await client.query("SELECT set_config('app.user_id', $1, true)", [actor.id || ""]);
+      const q: TxQuery = async <T extends Record<string, unknown>>(text: string, params: unknown[] = []) => {
+        const res = await client.query<T>(text, mapParams(params));
+        return { rows: res.rows };
+      };
+      const out = await fn(q);
+      await client.exec("COMMIT");
+      return out;
+    } catch (err) {
+      await client.exec("ROLLBACK").catch(() => undefined);
+      throw err;
+    }
+  }
+
   return {
     driver: "pglite",
     async query<T extends Record<string, unknown>>(text: string, params: unknown[] = []) {
       const actor = actorAtual();
-      return exclusive(async () => {
-        const mapped = params.map(p => (
-          p !== null && typeof p === "object" && !(p instanceof Date) && !(p instanceof Uint8Array) ? JSON.stringify(p) : p
-        ));
-        try {
-          await client.exec("BEGIN");
-          await client.query("SELECT set_config('gesforma.api', '1', true)");
-          await client.query("SELECT set_config('app.role', $1, true)", [actor.role || "system"]);
-          await client.query("SELECT set_config('app.user_id', $1, true)", [actor.id || ""]);
-          const res = await client.query<T>(text, mapped);
-          await client.exec("COMMIT");
-          return { rows: res.rows };
-        } catch (err) {
-          await client.exec("ROLLBACK").catch(() => undefined);
-          throw err;
-        }
-      });
+      return exclusive(() => emTransaccao(actor, q => q<T>(text, params)));
+    },
+    async tx<R>(fn: (q: TxQuery) => Promise<R>) {
+      const actor = actorAtual();
+      return exclusive(() => emTransaccao(actor, fn));
     },
     async close() {
       await client.close();

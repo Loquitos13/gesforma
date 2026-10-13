@@ -1,0 +1,11 @@
+.git
+node_modules
+**/node_modules
+dist
+server/data
+backups
+gesforma-export-*
+*.tgz
+*.log
+.env
+.env.*

@@ -143,7 +143,8 @@ async function enqueueCrmReminders(db: Db) {
   const leadAt = leadAtSql();
   const unpaid = await db.query<{ id: number; nome: string; apelido: string; email: string; curso: string }>(
     `SELECT id, nome, apelido, email, curso FROM preinscricoes
-      WHERE estado NOT IN ('Pago', 'Formando')
+      WHERE estado NOT IN ('Pago', 'Formando', 'Desistiu')
+        AND COALESCE(regime, 'gold') <> 'fin'
         AND email <> ''
         AND (${leadAt}) <= now() - interval '3 days'`,
   );
@@ -159,7 +160,7 @@ async function enqueueCrmReminders(db: Db) {
   }
   const stale = await db.query<{ id: number; nome: string; apelido: string; email: string; curso: string }>(
     `SELECT id, nome, apelido, email, curso FROM preinscricoes
-      WHERE estado NOT IN ('Pago', 'Formando')
+      WHERE estado NOT IN ('Pago', 'Formando', 'Desistiu')
         AND email <> ''
         AND (${leadAt}) <= now() - interval '30 days'`,
   );

@@ -1,3 +1,4 @@
+import { garantirVaga, recontar, recontarTurma } from "./inscricao.js";
 import type { Db } from "./db/pool.js";
 import { listarDocsLead } from "./docsLink.js";
 import { nextOpsId, newPublicId } from "./ops.js";
@@ -146,7 +147,10 @@ export async function upsertFormandoFinFromLead(db: Db, leadId: number, actorId?
     id = await nextOpsId(db);
     const docPack = writeFormandoDocs(docsBase as Record<string, unknown>);
     const piiPack = writeFormandoPiiPatch({ telf: String(row.telf ?? "") });
-    await db.query(
+    const tid = turma?.id ?? (turmaId || null);
+    await db.tx(async q => {
+      if (tid) await garantirVaga(q, "fin", tid, { email });
+      await q(
       `INSERT INTO formandos_fin (id, nome, apelido, turma, turma_id, telf, email, curso, estado, docs, docs_enc, pii_enc, public_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13)`,
       [
@@ -161,21 +165,30 @@ export async function upsertFormandoFinFromLead(db: Db, leadId: number, actorId?
         estado,
         docPack.docs,
         docPack.docs_enc,
-        piiPack.pii_enc,
+        piiPack.pii_enc ?? "",
         newPublicId(),
       ],
-    );
+      );
+      await recontarTurma(q, "fin", tid);
+    });
     await logLeadEvent(db, leadId, actorId, "estado", "Formando financiado criado", `Ficha #${id} · ${turmaNome}`);
     const { ensureFinDocsToken } = await import("./formandoFinDocs.js");
     await ensureFinDocsToken(db, id);
   } else {
-    await db.query(
-      `UPDATE formandos_fin SET
-         nome = COALESCE(NULLIF($2,''), nome), apelido = COALESCE(NULLIF($3,''), apelido),
-         turma = $4, turma_id = $5, telf = COALESCE(NULLIF($6,''), telf), curso = $7, estado = $8
-       WHERE id = $1`,
-      [id, String(row.nome ?? ""), String(row.apelido ?? ""), turmaNome, turma?.id ?? null, String(row.telf ?? ""), curso, estado],
-    );
+    const existente = id;
+    const antes = await db.query<{ turma_id: number | null }>("SELECT turma_id FROM formandos_fin WHERE id = $1", [existente]);
+    const tid = turma?.id ?? null;
+    await db.tx(async q => {
+      if (tid && tid !== antes.rows[0]?.turma_id) await garantirVaga(q, "fin", tid, { email, excluirFormandoId: existente });
+      await q(
+        `UPDATE formandos_fin SET
+           nome = COALESCE(NULLIF($2,''), nome), apelido = COALESCE(NULLIF($3,''), apelido),
+           turma = $4, turma_id = $5, telf = COALESCE(NULLIF($6,''), telf), curso = $7, estado = $8
+         WHERE id = $1`,
+        [existente, String(row.nome ?? ""), String(row.apelido ?? ""), turmaNome, tid, String(row.telf ?? ""), curso, estado],
+      );
+    });
+    await recontar(db, "fin", antes.rows[0]?.turma_id ?? null, tid);
     await logLeadEvent(db, leadId, actorId, "estado", "Formando financiado actualizado", `Ficha #${id} · ${turmaNome}`);
   }
 
@@ -215,11 +228,14 @@ export async function upsertFormandoFinFromInscricao(db: Db, payload: Record<str
     : { rows: [] as { id: number; docs: unknown }[] };
 
   let id = found.rows[0]?.id;
-  const finEstado = estado === "Colocado na turma" ? "Colocado" : "Elegível";
+  const finEstado = estado === "Colocado na turma" ? "Colocado na turma" : "Elegível";
 
   if (!id) {
     id = await nextOpsId(db);
-    await db.query(
+    const tid = turma?.id ?? null;
+    await db.tx(async q => {
+      if (tid) await garantirVaga(q, "fin", tid, { email });
+      await q(
       `INSERT INTO formandos_fin (id, nome, apelido, turma, turma_id, telf, email, curso, estado, docs)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)`,
       [
@@ -234,7 +250,9 @@ export async function upsertFormandoFinFromInscricao(db: Db, payload: Record<str
         finEstado,
         docsBase,
       ],
-    );
+      );
+      await recontarTurma(q, "fin", tid);
+    });
   } else {
     const prev = asObj(found.rows[0]?.docs);
     const merged: Record<string, { ok: boolean; data: string }> = {};
@@ -242,6 +260,12 @@ export async function upsertFormandoFinFromInscricao(db: Db, payload: Record<str
       const fromPip = docsBase[k];
       const fromPrev = docDeJson(prev, k);
       merged[k] = fromPip.ok ? fromPip : fromPrev;
+    }
+    const existente = id;
+    const antes = await db.query<{ turma_id: number | null }>("SELECT turma_id FROM formandos_fin WHERE id = $1", [existente]);
+    const tid = turma?.id ?? null;
+    if (tid && tid !== antes.rows[0]?.turma_id) {
+      await db.tx(q => garantirVaga(q, "fin", tid, { email, excluirFormandoId: existente }));
     }
     await db.query(
       `UPDATE formandos_fin SET
@@ -260,6 +284,7 @@ export async function upsertFormandoFinFromInscricao(db: Db, payload: Record<str
         merged,
       ],
     );
+    await recontar(db, "fin", antes.rows[0]?.turma_id ?? null, tid);
   }
   return { formandoId: id };
 }

@@ -237,3 +237,30 @@ export async function assertFormandoDoUser(db: Db, userId: string, formandoId: n
 export function emailTemFormando(email: string) {
   return isEmail(normalizeEmail(email));
 }
+
+/**
+ * Marcação manual de um documento (ex.: entregue em papel). Fica no dossiê com quem validou e quando,
+ * mesmo sem ficheiro, para o rasto de auditoria ser o mesmo do portal.
+ */
+export async function registarDocManualFin(
+  db: Db,
+  formandoId: number,
+  docId: string,
+  ok: boolean,
+  actor: { id: string; name: string },
+) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  await db.query(
+    `INSERT INTO formando_docs (regime, formando_id, doc_id, ok, file_name, data, estado, observacao, validated_by, validated_at)
+     VALUES ('fin', $1, $2, $3, '', $4, $5, $6, $7, now())
+     ON CONFLICT (regime, formando_id, doc_id) DO UPDATE SET
+       ok = EXCLUDED.ok, data = EXCLUDED.data, estado = EXCLUDED.estado,
+       observacao = CASE WHEN formando_docs.file_name = '' THEN EXCLUDED.observacao ELSE formando_docs.observacao END,
+       validated_by = EXCLUDED.validated_by, validated_at = now(), updated_at = now()`,
+    [formandoId, docId, ok, ok ? hoje : "", ok ? "validado" : "pendente", ok ? "Validado manualmente (sem ficheiro no GesForma)." : "", actor.id],
+  );
+  await db.query(
+    "INSERT INTO formando_notas (regime, formando_id, autor, actor_id, texto) VALUES ('fin', $1, $2, $3, $4)",
+    [formandoId, actor.name, actor.id, `${ok ? "Documento marcado como entregue" : "Documento desmarcado"} · ${docId}`],
+  );
+}

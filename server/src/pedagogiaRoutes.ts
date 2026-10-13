@@ -9,6 +9,7 @@ import { listDriveFiles, readDriveContent, storeDriveFile } from "./googleDrive.
 import { sendMail } from "./mailer.js";
 import { fichaDoProprioFormador, formadorNaTurma, podeGravarSessao, sessaoLectivaN } from "./sessaoAcesso.js";
 import { sumarioComRegras } from "./sessaoRegras.js";
+import { erroSobreposicao } from "./conflitos.js";
 import { escapeHtml } from "./xss.js";
 import {
   cursoPedeDocsPreinscricao,
@@ -1078,6 +1079,14 @@ export function registerPedagogiaRoutes(
       presencas: patch.presencas,
     });
     if (!acesso.ok) return reply.code(403).send({ error: acesso.erro });
+    if (patch.presencas && patch.presencas.length) {
+      const turmaP = await loadTurma(db, regime, id);
+      if (!turmaP) return reply.code(404).send({ error: "turma não encontrada" });
+      const daTurma = new Set((await formandosDaTurma(db, regime, turmaP)).map(f => f.id));
+      if (patch.presencas.some(p => !daTurma.has(p.id))) {
+        return reply.code(400).send({ error: "A folha de presenças tem formandos que não pertencem a esta turma." });
+      }
+    }
     if (patch.sumario) {
       const tabela = regime === "gold" ? "turmas_gold" : "turmas_fin";
       const [turmaRow, antes] = await Promise.all([
@@ -1245,6 +1254,8 @@ export function registerPedagogiaRoutes(
     if (!regime || id == null || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const table = regime === "fin" ? "turmas_fin" : "turmas_gold";
     if (parsed.data.sessoes && parsed.data.sessoes.length > 0) {
+      const cruzamento = await erroSobreposicao(db, regime, id, parsed.data.sessoes);
+      if (cruzamento) return reply.code(400).send({ error: cruzamento });
       await db.query(`UPDATE ${table} SET cronograma = $2::jsonb WHERE id = $1`, [id, parsed.data.sessoes]);
     }
     const row = await db.query<{
@@ -2003,13 +2014,23 @@ export function registerPedagogiaRoutes(
     const parsed = formandoDocsSchema.safeParse(req.body);
     if (!regime || id == null || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     for (const doc of parsed.data.docs) {
+      // Um documento dado como certo fica com quem o validou; sem ficheiro, fica a nota de validação manual.
       await db.query(
-        `INSERT INTO formando_docs (regime, formando_id, doc_id, ok, file_name, data, drive_file_id, drive_url)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `INSERT INTO formando_docs (regime, formando_id, doc_id, ok, file_name, data, drive_file_id, drive_url, estado, observacao, validated_by, validated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+                 CASE WHEN $4 THEN 'validado' ELSE 'pendente' END,
+                 CASE WHEN $4 AND $5 = '' AND $7 = '' THEN 'Validado manualmente (sem ficheiro no GesForma).' ELSE '' END,
+                 CASE WHEN $4 THEN $9::uuid ELSE NULL END,
+                 CASE WHEN $4 THEN now() ELSE NULL END)
          ON CONFLICT (regime, formando_id, doc_id) DO UPDATE SET
            ok = EXCLUDED.ok, file_name = EXCLUDED.file_name, data = EXCLUDED.data,
-           drive_file_id = EXCLUDED.drive_file_id, drive_url = EXCLUDED.drive_url, updated_at = now()`,
-        [regime, id, doc.id, doc.ok, doc.fileName, doc.data, doc.driveFileId ?? "", doc.driveUrl ?? ""],
+           drive_file_id = EXCLUDED.drive_file_id, drive_url = EXCLUDED.drive_url,
+           estado = CASE WHEN formando_docs.ok = EXCLUDED.ok THEN formando_docs.estado ELSE EXCLUDED.estado END,
+           observacao = CASE WHEN formando_docs.ok = EXCLUDED.ok THEN formando_docs.observacao ELSE EXCLUDED.observacao END,
+           validated_by = CASE WHEN formando_docs.ok = EXCLUDED.ok THEN formando_docs.validated_by ELSE EXCLUDED.validated_by END,
+           validated_at = CASE WHEN formando_docs.ok = EXCLUDED.ok THEN formando_docs.validated_at ELSE EXCLUDED.validated_at END,
+           updated_at = now()`,
+        [regime, id, doc.id, doc.ok, doc.fileName, doc.data, doc.driveFileId ?? "", doc.driveUrl ?? "", req.actor!.id],
       );
     }
     await audit(db, req.actor!.id, "formando.docs", "formando", String(id), req.ip, { regime });

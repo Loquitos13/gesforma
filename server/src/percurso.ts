@@ -1,3 +1,4 @@
+import { InscricaoErro, garantirVaga } from "./inscricao.js";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { docsCompletos, docsDoCurso, faltaValidarPreinscricao } from "./docsCurso.js";
@@ -428,6 +429,19 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
     precisaPagamento: precisa,
   });
   if (falta) throw new PercursoErro(falta);
+  if (regime === "fin" && turmaId) {
+    // A validação cria a ficha do formando: confirma a vaga antes de mexer na pasta ou no lead.
+    const email = normalizeEmail(String(row.email ?? ""));
+    const existente = email
+      ? await db.query<{ id: number }>("SELECT id FROM formandos_fin WHERE email <> '' AND lower(trim(email)) = $1 ORDER BY id DESC LIMIT 1", [email])
+      : { rows: [] as { id: number }[] };
+    try {
+      await db.tx(q => garantirVaga(q, "fin", turmaId, { email, excluirFormandoId: existente.rows[0]?.id }));
+    } catch (err) {
+      if (err instanceof InscricaoErro) throw new PercursoErro(err.message);
+      throw err;
+    }
+  }
   let moved: { moved: number; turma?: string };
   try {
     const pasta = await moverPastaFormando(db, leadId, regime, turmaId);
@@ -452,7 +466,9 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
   await evento(db, leadId, actorId, "Pré-inscrição validada", moved.turma ? `Pasta do formando em ${moved.turma}` : "");
   if (regime === "fin") {
     const { upsertFormandoFinFromLead } = await import("./finPipeline.js");
-    await upsertFormandoFinFromLead(db, leadId, actorId).catch(() => undefined);
+    await upsertFormandoFinFromLead(db, leadId, actorId).catch(err => {
+      console.warn(`[percurso] ficha financiada do lead ${leadId} não criada:`, err instanceof Error ? err.message : err);
+    });
   }
   return { ok: true as const, moved: moved.moved };
 }

@@ -1,3 +1,4 @@
+import { erroSobreposicao } from "./conflitos.js";
 import { generateCronograma } from "./cronograma.js";
 import type { Db } from "./db/pool.js";
 import { nextOpsId } from "./ops.js";
@@ -58,6 +59,7 @@ function nextData(iso: string) {
 export async function aplicarTurmaRegras(db: Db, regime?: "gold" | "fin") {
   const regras = (await listTurmaRegras(db, regime)).filter(r => r.activa);
   const criadas: { id: number; nome: string; regime: string }[] = [];
+  const conflitos: { regra: number; erro: string }[] = [];
   for (const regra of regras) {
     const inicio = regra.proximaData || new Date().toISOString().slice(0, 10);
     const horasSessao = regra.regime === "fin" ? 3 : (regra.horasSessao || 3);
@@ -70,6 +72,12 @@ export async function aplicarTurmaRegras(db: Db, regime?: "gold" | "fin") {
       hoursPerSession: horasSessao,
     });
     const nome = codigoTurma(regra, inicio);
+    // Uma turma automática não pode pôr o formador em duas sessões ao mesmo tempo.
+    const cruzamento = await erroSobreposicao(db, regra.regime === "fin" ? "fin" : "gold", null, cronograma);
+    if (cruzamento) {
+      conflitos.push({ regra: regra.id, erro: cruzamento });
+      continue;
+    }
     if (regra.regime === "fin") {
       const exists = await db.query(
         "SELECT id FROM turmas_fin WHERE curso = $1 AND local = $2 AND horario = $3 AND data_inicio = $4 LIMIT 1",
@@ -99,5 +107,5 @@ export async function aplicarTurmaRegras(db: Db, regime?: "gold" | "fin") {
     }
     await db.query("UPDATE turma_regras SET proxima_data = $2 WHERE id = $1", [regra.id, nextData(inicio)]);
   }
-  return { criadas, n: criadas.length };
+  return { criadas, n: criadas.length, conflitos };
 }

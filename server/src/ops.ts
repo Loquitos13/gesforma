@@ -356,13 +356,19 @@ export async function confirmarPagamento(db: Db, row: Record<string, unknown>) {
       nome: mapped.nome,
       curso: mapped.curso,
     }, `payment:${mapped.id}:${email}`).catch(() => undefined);
+    // Só o formando e a pré-inscrição deste pagamento: pelo id ligado, senão pelo email E curso.
+    const formandoId = row.formando_id == null ? null : Number(row.formando_id);
     await db.query(
-      "UPDATE formandos_gold SET pago = true, metodo = CASE WHEN metodo = '-' OR metodo = '' THEN $2 ELSE metodo END WHERE lower(email) = $1",
-      [email, mapped.metodo || "Multibanco"],
+      `UPDATE formandos_gold SET pago = true, metodo = CASE WHEN metodo = '-' OR metodo = '' THEN $2 ELSE metodo END
+        WHERE ($3::int IS NOT NULL AND id = $3::int)
+           OR ($3::int IS NULL AND lower(email) = $1 AND lower(trim(curso)) = lower(trim($4)))`,
+      [email, mapped.metodo || "Multibanco", formandoId, mapped.curso],
     );
     await db.query(
-      "UPDATE preinscricoes SET estado = 'Pago' WHERE lower(email) = $1 AND estado <> 'Formando'",
-      [email],
+      `UPDATE preinscricoes SET estado = 'Pago'
+        WHERE estado NOT IN ('Formando', 'Pago')
+          AND (pagamento_id = $2 OR (lower(email) = $1 AND lower(trim(curso)) = lower(trim($3))))`,
+      [email, mapped.id, mapped.curso],
     );
   }
   const next = await db.query("SELECT * FROM pagamentos WHERE id = $1", [mapped.id]);

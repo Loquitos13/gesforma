@@ -1,3 +1,4 @@
+import { erroPayloadCatalogo } from "./catalogoSchemas.js";
 import { ehSegredo, settingsSemSegredos } from "./opsVisibilidade.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -49,6 +50,8 @@ export function registerCatalogRoutes(
     const parsed = itemSchema.safeParse(req.body);
     if (!kind || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     if (JSON.stringify(parsed.data.payload).length > 20_000) return reply.code(400).send({ error: "payload demasiado grande" });
+    const erroPayload = erroPayloadCatalogo(kind, parsed.data.payload);
+    if (erroPayload) return reply.code(400).send({ error: erroPayload });
     const id = await nextOpsId(db);
     await db.query(
       "INSERT INTO catalog_items (id, kind, regime, payload) VALUES ($1,$2,$3,$4::jsonb)",
@@ -56,7 +59,9 @@ export function registerCatalogRoutes(
     );
     if (kind === "inscricoes_fin") {
       const { upsertFormandoFinFromInscricao } = await import("./finPipeline.js");
-      await upsertFormandoFinFromInscricao(db, parsed.data.payload as Record<string, unknown>).catch(() => undefined);
+      const aviso = await upsertFormandoFinFromInscricao(db, parsed.data.payload as Record<string, unknown>)
+        .then(() => null).catch(err => (err instanceof Error ? err.message : "Ficha do formando não criada."));
+      return { item: { id, ...parsed.data.payload }, aviso };
     }
     return { item: { id, ...parsed.data.payload } };
   });
@@ -70,6 +75,10 @@ export function registerCatalogRoutes(
     if (parsed.data.payload && JSON.stringify(parsed.data.payload).length > 20_000) {
       return reply.code(400).send({ error: "payload demasiado grande" });
     }
+    if (parsed.data.payload) {
+      const erroPayload = erroPayloadCatalogo(kind, parsed.data.payload);
+      if (erroPayload) return reply.code(400).send({ error: erroPayload });
+    }
     await db.query(
       `UPDATE catalog_items SET
          payload = COALESCE($3::jsonb, payload),
@@ -82,7 +91,9 @@ export function registerCatalogRoutes(
     const payload = (row.rows[0]?.payload ?? {}) as Record<string, unknown>;
     if (kind === "inscricoes_fin" && payload && typeof payload === "object") {
       const { upsertFormandoFinFromInscricao } = await import("./finPipeline.js");
-      await upsertFormandoFinFromInscricao(db, payload).catch(() => undefined);
+      const aviso = await upsertFormandoFinFromInscricao(db, payload)
+        .then(() => null).catch(err => (err instanceof Error ? err.message : "Ficha do formando não actualizada."));
+      return { item: row.rows[0] ? { id, ...payload } : null, aviso };
     }
     return { item: row.rows[0] ? { id, ...payload } : null };
   });

@@ -1,3 +1,4 @@
+import { recontarTodas } from "../inscricao.js";
 import { generateCronograma } from "../cronograma.js";
 import { repararLigacoes } from "../ligacoes.js";
 import { seedCatalogs } from "./catalogSeed.js";
@@ -35,47 +36,6 @@ async function backfillCronogramas(db: Db) {
       await db.query(`UPDATE ${table} SET cronograma = $2::jsonb WHERE id = $1`, [t.id, sessoes]);
     }
   }
-}
-
-/**
- * O número de inscritos da turma é um contador mantido pela app. Recalcula-se no arranque
- * para o cockpit não dizer 14 formandos quando a lista só tem 10.
- */
-async function syncContagensDeTurma(db: Db) {
-  await db.query(`
-    UPDATE turmas_gold t SET total_alunos = (
-      SELECT count(*)::int FROM formandos_gold f WHERE f.turma_id = t.id OR f.turma = t.nome
-    )
-    WHERE t.total_alunos <> (
-      SELECT count(*)::int FROM formandos_gold f WHERE f.turma_id = t.id OR f.turma = t.nome
-    )
-  `);
-  await db.query(`
-    UPDATE turmas_fin t SET alunos = (
-      SELECT count(*)::int FROM formandos_fin f
-       WHERE f.turma_id = t.id
-          OR lower(trim(f.turma)) = lower(trim(t.nome))
-          OR (
-            f.turma_id IS NULL
-            AND lower(trim(f.curso)) = lower(trim(t.curso))
-            AND NOT EXISTS (
-              SELECT 1 FROM turmas_fin t2 WHERE lower(trim(t2.nome)) = lower(trim(f.turma))
-            )
-          )
-    )
-    WHERE t.alunos <> (
-      SELECT count(*)::int FROM formandos_fin f
-       WHERE f.turma_id = t.id
-          OR lower(trim(f.turma)) = lower(trim(t.nome))
-          OR (
-            f.turma_id IS NULL
-            AND lower(trim(f.curso)) = lower(trim(t.curso))
-            AND NOT EXISTS (
-              SELECT 1 FROM turmas_fin t2 WHERE lower(trim(t2.nome)) = lower(trim(f.turma))
-            )
-          )
-    )
-  `);
 }
 
 /**
@@ -317,7 +277,7 @@ export async function seedOperational(db: Db) {
   await backfillCronogramas(db);
   await seedDtpBase(db);
   await repararLigacoes(db);
-  await syncContagensDeTurma(db);
+  await recontarTodas(db);
 
   await db.query(`
     SELECT setval('ops_id_seq', GREATEST(

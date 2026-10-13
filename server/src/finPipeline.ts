@@ -1,3 +1,4 @@
+import { transferirDocsDoLead } from "./docsParaFormando.js";
 import { garantirVaga, recontar, recontarTurma } from "./inscricao.js";
 import type { Db } from "./db/pool.js";
 import { listarDocsLead } from "./docsLink.js";
@@ -56,24 +57,6 @@ async function turmaPorNomeOuId(db: Db, turma: string, curso: string) {
   );
   if (porCurso.rows.length === 1) return porCurso.rows[0]!;
   return null;
-}
-
-async function syncFormandoDocsFromLead(db: Db, formandoId: number, leadId: number) {
-  const ficheiros = await listarDocsLead(db, leadId);
-  const hoje = new Date().toISOString().slice(0, 10);
-  for (const f of ficheiros) {
-    if (f.estado !== "validado") continue;
-    const tipo = String(f.tipo ?? "").trim();
-    if (!DOC_KEYS.includes(tipo as typeof DOC_KEYS[number])) continue;
-    await db.query(
-      `INSERT INTO formando_docs (regime, formando_id, doc_id, ok, file_name, data, drive_file_id, drive_url)
-       VALUES ('fin', $1, $2, true, $3, $4, $5, $6)
-       ON CONFLICT (regime, formando_id, doc_id) DO UPDATE SET
-         ok = true, file_name = EXCLUDED.file_name, data = EXCLUDED.data,
-         drive_file_id = EXCLUDED.drive_file_id, drive_url = EXCLUDED.drive_url, updated_at = now()`,
-      [formandoId, tipo, f.nome, hoje, f.drive_file_id, f.drive_url],
-    );
-  }
 }
 
 async function mergeDocsJson(
@@ -192,7 +175,7 @@ export async function upsertFormandoFinFromLead(db: Db, leadId: number, actorId?
     await logLeadEvent(db, leadId, actorId, "estado", "Formando financiado actualizado", `Ficha #${id} · ${turmaNome}`);
   }
 
-  await syncFormandoDocsFromLead(db, id, leadId);
+  await transferirDocsDoLead(db, leadId, actorId);
   const merged = await mergeDocsJson(db, id, docsBase);
   const docPack = writeFormandoDocs(merged);
   await db.query("UPDATE formandos_fin SET docs = $2::jsonb, docs_enc = COALESCE($3, docs_enc) WHERE id = $1", [id, docPack.docs, docPack.docs_enc]);

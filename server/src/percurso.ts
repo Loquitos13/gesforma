@@ -1,5 +1,6 @@
 import { InscricaoErro, garantirVaga, sqlReservas } from "./inscricao.js";
 import { ingestEvent } from "./automations.js";
+import { transferirDocsDoLead } from "./docsParaFormando.js";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { COMPROVATIVO, docsCompletos, docsDoCurso, faltaValidarPreinscricao, ficheiroModelo } from "./docsCurso.js";
@@ -499,6 +500,18 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
       preinscricaoId: leadId,
     }, `validated:${leadId}`).catch(() => undefined);
   }
+  if (regime === "gold") {
+    // Se a secretaria já tinha criado a ficha numa turma deste curso, liga-a agora (e os documentos passam).
+    const email = normalizeEmail(String(row.email ?? ""));
+    const ficha = isEmail(email)
+      ? await db.query<{ id: number }>(
+        `SELECT f.id FROM formandos_gold f JOIN turmas_gold t ON t.id = f.turma_id
+          WHERE lower(f.email) = $1 AND lower(trim(t.curso)) = lower(trim($2)) ORDER BY f.id DESC LIMIT 1`,
+        [email, String(row.curso ?? "")],
+      )
+      : { rows: [] as { id: number }[] };
+    if (ficha.rows[0]) await ligarPreinscricaoAoFormandoGold(db, Number(ficha.rows[0].id), actorId).catch(() => undefined);
+  }
   if (regime === "fin") {
     const { upsertFormandoFinFromLead } = await import("./finPipeline.js");
     await upsertFormandoFinFromLead(db, leadId, actorId).catch(err => {
@@ -688,15 +701,18 @@ export async function registarConsentimento(db: Db, leadId: number, tipo: string
  * os documentos validados passam para o dossiê. A reserva da vaga deixa de contar.
  */
 export async function ligarPreinscricaoAoFormandoGold(db: Db, formandoId: number, actorId?: string) {
+  // Só um formando colocado numa turma conta: o curso é o da turma.
   const f = await db.query<{ email: string; curso: string; turma_id: number | null }>(
-    "SELECT email, curso, turma_id FROM formandos_gold WHERE id = $1",
+    `SELECT f.email, t.curso, f.turma_id FROM formandos_gold f
+       JOIN turmas_gold t ON t.id = f.turma_id
+      WHERE f.id = $1`,
     [formandoId],
   );
   const formando = f.rows[0];
   const email = normalizeEmail(formando?.email ?? "");
-  if (!formando || !isEmail(email)) return null;
-  const lead = await db.query<{ id: number; pagamento_id: string | null }>(
-    `SELECT id, pagamento_id FROM preinscricoes
+  if (!formando || formando.turma_id == null || !isEmail(email)) return null;
+  const lead = await db.query<{ id: number; pagamento_id: string | null; turma_escolhida_id: number | null }>(
+    `SELECT id, pagamento_id, turma_escolhida_id FROM preinscricoes
       WHERE lower(email) = $1 AND lower(trim(curso)) = lower(trim($2))
         AND COALESCE(regime, 'gold') = 'gold' AND validada_em IS NOT NULL AND estado <> 'Desistiu'
       ORDER BY validada_em DESC LIMIT 1`,
@@ -710,6 +726,10 @@ export async function ligarPreinscricaoAoFormandoGold(db: Db, formandoId: number
      WHERE id = $1`,
     [row.id, formando.turma_id],
   );
+  // Os ficheiros da ligação pessoal vivem no dossiê da turma onde a pessoa ficou mesmo inscrita.
+  if (Number(row.turma_escolhida_id) !== Number(formando.turma_id)) {
+    await moverPastaFormando(db, row.id, "gold", formando.turma_id).catch(() => undefined);
+  }
   if (row.pagamento_id) {
     const pag = await db.query<{ estado: string; metodo: string }>(
       "UPDATE pagamentos SET formando_id = $2, turma_id = $3 WHERE id = $1 RETURNING estado, metodo",
@@ -722,8 +742,7 @@ export async function ligarPreinscricaoAoFormandoGold(db: Db, formandoId: number
       );
     }
   }
-  const { propagarDocsValidadosDoLead } = await import("./docsLink.js");
-  await propagarDocsValidadosDoLead(db, row.id, actorId);
+  await transferirDocsDoLead(db, row.id, actorId);
   await evento(db, row.id, actorId, "Inscrito na turma", `Ficha de formando #${formandoId}`);
   return { leadId: row.id };
 }

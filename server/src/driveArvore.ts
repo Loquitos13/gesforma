@@ -1,4 +1,5 @@
 import type { Db } from "./db/pool.js";
+import { turmaDoFormador } from "./sessaoAcesso.js";
 import { PASTAS_FIN_ANTERIORES, TOPICOS_FIN } from "./dtpTopicosFin.js";
 import {
   apagarItemGoogle,
@@ -248,6 +249,17 @@ async function atalhosDeUmFormador(
       WHERE d.formador_id = $1 AND d.drive_file_id <> '' AND COALESCE(f.drive_id, '') <> ''`,
     [formadorId],
   );
+  // Documento apagado ou substituído sem ficheiro na Drive: o atalho sai do dossiê desta turma.
+  const actuais = docs.rows.map(d => d.doc_id);
+  const orfaos = await db.query<{ id: number; shortcut_id: string }>(
+    `SELECT id, shortcut_id FROM formador_atalhos
+      WHERE formador_id = $1 AND regime = $2 AND turma_id = $3 AND NOT (doc_id = ANY($4::text[]))`,
+    [formadorId, regime, turmaId, `{${actuais.map(x => `"${x.replace(/"/g, "")}"`).join(",")}}`],
+  );
+  for (const o of orfaos.rows) {
+    if (o.shortcut_id) await apagarItemGoogle(token, o.shortcut_id).catch(() => undefined);
+    await db.query("DELETE FROM formador_atalhos WHERE id = $1", [o.id]);
+  }
   for (const doc of docs.rows) {
     const ja = await db.query<{ id: number; drive_file_id: string; shortcut_id: string }>(
       `SELECT id, drive_file_id, shortcut_id FROM formador_atalhos
@@ -284,12 +296,18 @@ async function atalhosDosNomes(
   nomes: string[],
 ) {
   const unicos = [...new Set(nomes.map(n => n.trim()).filter(Boolean))];
-  if (!unicos.length || !pastaFormadoresId) return;
-  const rows = await db.query<{ id: number; nome: string }>(
-    `SELECT id, nome FROM formadores
-      WHERE lower(trim(nome)) IN (SELECT lower(trim(jsonb_array_elements_text($1::jsonb))))`,
-    [unicos],
-  );
+  const rows = unicos.length
+    ? await db.query<{ id: number; nome: string }>(
+      `SELECT id, nome FROM formadores
+        WHERE lower(trim(nome)) IN (SELECT lower(trim(jsonb_array_elements_text($1::jsonb))))`,
+      [unicos],
+    )
+    : { rows: [] as { id: number; nome: string }[] };
+  // Só os formadores associados a esta turma têm atalhos no dossiê dela.
+  await removerAtalhos(db, token, {
+    regime, turmaId, manterFormadores: rows.rows.map(f => Number(f.id)),
+  });
+  if (!pastaFormadoresId) return;
   for (const formador of rows.rows) {
     await atalhosDeUmFormador(db, token, formador.id, formador.nome, regime, turmaId, pastaFormadoresId);
   }
@@ -301,20 +319,60 @@ export async function sincronizarAtalhosDoFormador(db: Db, formadorId: number) {
   const formador = await db.query<{ nome: string }>("SELECT nome FROM formadores WHERE id = $1", [formadorId]);
   const nome = formador.rows[0]?.nome?.trim();
   if (!nome) return { ok: false as const };
-  const turmas = await db.query<{ regime: "gold" | "fin"; id: number; nome: string; formadores_id: string }>(
-    `SELECT 'gold' AS regime, id, nome, drive_formadores_id AS formadores_id FROM turmas_gold
-      WHERE lower(trim(formador)) = lower(trim($1))
-         OR formadores @> jsonb_build_array($1::text)
+  const todas = await db.query<{ regime: "gold" | "fin"; id: number; nome: string; formador: unknown; formadores: unknown; cronograma: unknown }>(
+    `SELECT 'gold' AS regime, id, nome, formador, formadores, cronograma FROM turmas_gold
      UNION ALL
-     SELECT 'fin', id, nome, drive_formadores_id FROM turmas_fin
-      WHERE lower(trim(formador)) = lower(trim($1))
-         OR formadores @> jsonb_build_array($1::text)`,
-    [nome],
+     SELECT 'fin', id, nome, formador, formadores, cronograma FROM turmas_fin`,
   );
-  for (const turma of turmas.rows) {
+  const meu = new Set([nome]);
+  const turmas = todas.rows.filter(t => turmaDoFormador(t, meu));
+  const associadas = new Set(turmas.map(t => `${t.regime}:${t.id}`));
+  // Turmas de onde saiu: os atalhos dele deixam de estar nesses dossiês.
+  const antigos = await db.query<{ regime: "gold" | "fin"; turma_id: number }>(
+    "SELECT DISTINCT regime, turma_id FROM formador_atalhos WHERE formador_id = $1",
+    [formadorId],
+  );
+  for (const a of antigos.rows) {
+    if (!associadas.has(`${a.regime}:${a.turma_id}`)) {
+      await removerAtalhos(db, token, { regime: a.regime, turmaId: Number(a.turma_id), soFormador: formadorId });
+    }
+  }
+  for (const turma of turmas) {
     const estrutura = await criarEstruturaDtp(db, { regime: turma.regime, turmaId: turma.id, nome: turma.nome }, token);
     if (!estrutura?.formadoresId) continue;
     await atalhosDeUmFormador(db, token, formadorId, nome, turma.regime, turma.id, estrutura.formadoresId);
   }
-  return { ok: true as const, turmas: turmas.rows.length };
+  return { ok: true as const, turmas: turmas.length };
 }
+
+/**
+ * Apaga atalhos de formadores no dossiê de uma turma (registo e atalho na Drive):
+ * - `manterFormadores`: apaga os de todos os outros formadores;
+ * - `soFormador`: apaga só os deste formador;
+ * - sem nenhum dos dois: apaga todos (turma apagada).
+ */
+export async function removerAtalhos(
+  db: Db,
+  token: string,
+  opts: { regime: "gold" | "fin"; turmaId: number; manterFormadores?: number[]; soFormador?: number },
+) {
+  const rows = await db.query<{ id: number; formador_id: number; shortcut_id: string }>(
+    "SELECT id, formador_id, shortcut_id FROM formador_atalhos WHERE regime = $1 AND turma_id = $2",
+    [opts.regime, opts.turmaId],
+  );
+  const manter = opts.manterFormadores ? new Set(opts.manterFormadores) : null;
+  for (const r of rows.rows) {
+    const fid = Number(r.formador_id);
+    const apagar = opts.soFormador != null ? fid === opts.soFormador : manter ? !manter.has(fid) : true;
+    if (!apagar) continue;
+    if (token && r.shortcut_id) await apagarItemGoogle(token, r.shortcut_id).catch(() => undefined);
+    await db.query("DELETE FROM formador_atalhos WHERE id = $1", [r.id]);
+  }
+}
+
+/** Turma apagada: os atalhos dos formadores saem com ela. */
+export async function limparAtalhosDaTurma(db: Db, regime: "gold" | "fin", turmaId: number) {
+  const token = await tokenDrive(db);
+  await removerAtalhos(db, token ?? "", { regime, turmaId });
+}
+

@@ -1,3 +1,4 @@
+import { DOCS_FORMANDO_GOLD } from "../../src/partilhado/dossierDocs.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -388,6 +389,31 @@ export async function montarArea(db: Db, user: Actor) {
       });
     }
   }
+  // Gold: os documentos chegam da ligação pessoal só depois de validada a pré-inscrição e de a pessoa
+  // estar inscrita numa turma do curso (docsParaFormando.ts). Aqui só se mostram, já validados.
+  const documentosGold = [];
+  for (const ins of inscricoes.filter(i => i.regime === "gold" && i.turmaId)) {
+    const docs = await db.query<{ doc_id: string; file_name: string; drive_url: string; estado: string; validated_at: unknown }>(
+      `SELECT doc_id, file_name, COALESCE(drive_url, '') AS drive_url, COALESCE(estado, 'pendente') AS estado, validated_at
+         FROM formando_docs WHERE regime = 'gold' AND formando_id = $1 AND estado = 'validado'
+        ORDER BY doc_id`,
+      [ins.id],
+    );
+    if (!docs.rows.length) continue;
+    const labels = new Map(DOCS_FORMANDO_GOLD.map(d => [d.id, d.label]));
+    documentosGold.push({
+      formandoId: ins.id,
+      curso: ins.curso,
+      documentos: docs.rows.map(d => ({
+        id: d.doc_id,
+        label: labels.get(d.doc_id) ?? d.doc_id,
+        estado: "validado" as const,
+        fileName: d.file_name,
+        driveUrl: d.drive_url,
+        validadoEm: d.validated_at ? String(d.validated_at instanceof Date ? d.validated_at.toISOString() : d.validated_at).slice(0, 10) : "",
+      })),
+    });
+  }
   return {
     pessoa: {
       nome: primeira?.nome || pessoaNome,
@@ -405,6 +431,7 @@ export async function montarArea(db: Db, user: Actor) {
     resumo: { cursos: cursos.length, progresso, certificados: certificados.length },
     financiada: inscricoes.some(i => i.regime === "fin"),
     documentosFin,
+    documentosGold,
   };
 }
 

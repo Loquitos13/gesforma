@@ -136,7 +136,10 @@ export function dtpZipRelPath(opts: {
     return [root, pasta, pessoa, label, file].join("/");
   }
   if (cat === "formador" || opts.kind === "formador-doc") {
-    return [root, pasta, label, file].join("/");
+    // Uma pasta por formador da turma, para os documentos de vários formadores não se misturarem.
+    return opts.pessoa
+      ? [root, pasta, pastaSegura(opts.pessoa), label, file].join("/")
+      : [root, pasta, label, file].join("/");
   }
   if (opts.kind === "certificado") {
     const pessoa = pastaSegura(opts.pessoa || "formando");

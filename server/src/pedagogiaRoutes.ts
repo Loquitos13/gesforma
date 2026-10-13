@@ -5,7 +5,7 @@ import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { htmlCronograma, sessoesPublicas } from "./cronogramaPublico.js";
 import { guardarImagemCurso, semIdNaMedia, slotImagem, urlsImagemDoCurso } from "./cursoImagens.js";
-import { listDriveFiles, readDriveContent, storeDriveFile } from "./googleDrive.js";
+import { listDriveFiles, nomesNoCronograma, readDriveContent, storeDriveFile } from "./googleDrive.js";
 import { sendMail } from "./mailer.js";
 import { fichaDoProprioFormador, formadorNaTurma, podeGravarSessao, sessaoLectivaN } from "./sessaoAcesso.js";
 import { sumarioComRegras } from "./sessaoRegras.js";
@@ -2657,14 +2657,24 @@ export function registerPedagogiaRoutes(
       }
     }
 
-    const formadorNome = (turma.formador ?? "").trim();
-    if (formadorNome) {
-      const fr = await db.query<{ id: number }>("SELECT id FROM formadores WHERE lower(trim(nome)) = lower(trim($1)) LIMIT 1", [formadorNome]);
-      const fid = fr.rows[0]?.id;
-      if (fid != null) {
+    // Todos os formadores associados à turma (responsável, equipa e cronograma) — e só esses.
+    const equipa = await db.query<{ formadores: unknown }>(
+      `SELECT formadores FROM ${regime === "gold" ? "turmas_gold" : "turmas_fin"} WHERE id = $1`, [id],
+    );
+    const nomesFormadores = nomesNoCronograma(turma.cronograma, [
+      turma.formador ?? "",
+      ...(Array.isArray(equipa.rows[0]?.formadores) ? (equipa.rows[0]!.formadores as unknown[]).map(String) : []),
+    ]);
+    if (nomesFormadores.length) {
+      const fr = await db.query<{ id: number; nome: string }>(
+        `SELECT id, nome FROM formadores
+          WHERE lower(trim(nome)) IN (SELECT lower(trim(jsonb_array_elements_text($1::jsonb))))`,
+        [nomesFormadores],
+      );
+      for (const formador of fr.rows) {
         const fdocs = await db.query<{ doc_id: string; file_name: string; drive_file_id: string }>(
           "SELECT doc_id, file_name, drive_file_id FROM formador_docs WHERE formador_id = $1 AND drive_file_id <> ''",
-          [fid],
+          [formador.id],
         ).catch(() => ({ rows: [] as { doc_id: string; file_name: string; drive_file_id: string }[] }));
         for (const row of fdocs.rows) {
           const rel = dtpZipRelPath({
@@ -2672,6 +2682,7 @@ export function registerPedagogiaRoutes(
             ambito: "formador",
             itemId: row.doc_id,
             itemLabel: row.doc_id,
+            pessoa: formador.nome,
             kind: "formador-doc",
             fileName: nomeArquivoDtp(row.doc_id, row.file_name || "documento.pdf"),
           });

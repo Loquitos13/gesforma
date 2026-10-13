@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { snapshotParaPerfil } from "./opsVisibilidade.js";
 import { marcarLeadPago } from "./pagamentoPedido.js";
+import { apagarDocsDaFicha, reavaliarDocsDoFormando } from "./docsParaFormando.js";
 import { leadPorToken, marcarUso, motivoFecho, regenerarToken, textoFecho, vistaEncerrada } from "./ligacaoPessoal.js";
 import { erroFicheiroPublico } from "./googleDrive.js";
 import { InscricaoErro, contarInscritos, garantirVaga, recontar, recontarTurma } from "./inscricao.js";
@@ -60,7 +61,7 @@ import {
   definirEstadoDoc, dispensarAlerta, listarAlertasAbertas, syncLigacao,
 } from "./docsLink.js";
 import { apagarFicheiroSubstituido, readDriveContent, storeDriveFile } from "./googleDrive.js";
-import { garantirPastaPendente } from "./driveArvore.js";
+import { garantirPastaPendente, limparAtalhosDaTurma } from "./driveArvore.js";
 import { ficheiroModelo } from "./docsCurso.js";
 import {
   formandoFinPorToken, recusarDocFormandoFin, uploadDocFormandoFin, validarDocFormandoFin, vistaDocumentosFormandoFin,
@@ -175,6 +176,13 @@ async function ligarCursoDaTurma(db: Db, regime: "gold" | "fin", turmaId: number
       [turmaId],
     );
   }
+}
+
+/** Cada turma tem o seu dossiê: o nome (código) não se repete dentro do mesmo regime. */
+async function erroNomeRepetido(db: Db, regime: "gold" | "fin", nome: string | undefined, excetoId: number | null) {
+  if (!nome?.trim()) return null;
+  const r = await one(db, `SELECT id FROM ${regime === "gold" ? "turmas_gold" : "turmas_fin"} WHERE lower(trim(nome)) = lower(trim($1)) AND ($2::int IS NULL OR id <> $2::int) LIMIT 1`, [nome, excetoId]);
+  return r ? `Já existe uma turma com o nome «${nome.trim()}». Use um código diferente.` : null;
 }
 
 /** Não se reduz a capacidade abaixo dos formandos já inscritos. */
@@ -1373,6 +1381,9 @@ export function registerOpsRoutes(
     if (d.turmaId !== undefined || d.estado !== undefined) await recontar(db, "gold", turmaAntes, mapped?.turmaId || null);
     if (d.estado !== undefined || (d.turmaId !== undefined && d.turmaId !== turmaAntes)) {
       await audit(db, req.actor!.id, "formando.alterar", "formandos_gold", String(id), req.ip, { estado: d.estado, turmaDe: turmaAntes, turmaPara: d.turmaId });
+      // Colocado numa turma: liga a pré-inscrição validada; mudou de turma/curso ou desistiu: os documentos da ligação saem.
+      if (mapped?.turmaId) await ligarPreinscricaoAoFormandoGold(db, id, req.actor!.id).catch(() => undefined);
+      await reavaliarDocsDoFormando(db, "gold", id, req.actor!.id).catch(() => undefined);
     }
     if (mapped?.email && d.turmaId && mapped.turmaId) {
       await moverDocsParaTurma(db, {
@@ -1396,6 +1407,7 @@ export function registerOpsRoutes(
     const id = Number((req.params as { id: string }).id);
     const antes = await one(db, "SELECT turma_id, nome, apelido FROM formandos_gold WHERE id = $1", [id]);
     await db.query("DELETE FROM formandos_gold WHERE id = $1", [id]);
+    await apagarDocsDaFicha(db, "gold", id);
     await recontar(db, "gold", antes?.turma_id == null ? null : Number(antes.turma_id));
     await audit(db, req.actor!.id, "formando.apagar", "formandos_gold", String(id), req.ip, { nome: `${antes?.nome ?? ""} ${antes?.apelido ?? ""}`.trim() });
     return { ok: true };
@@ -1460,6 +1472,7 @@ export function registerOpsRoutes(
       if (v.ok) await registarDocManualFin(db, id, docId, true, { id: req.actor!.id, name: req.actor!.name });
     }
     await audit(db, req.actor!.id, "formando.inscrever", "formandos_fin", String(id), req.ip, { turmaId });
+    if (turmaId) await reavaliarDocsDoFormando(db, "fin", id, req.actor!.id).catch(() => undefined);
     const row = await one(db, "SELECT * FROM formandos_fin WHERE id = $1", [id]);
     return { formando: row ? mapFormandoFin(row) : { id } };
   });
@@ -1530,6 +1543,7 @@ export function registerOpsRoutes(
     if (d.turma != null || d.estado !== undefined) {
       await recontar(db, "fin", turmaAntes, row?.turma_id == null ? null : Number(row.turma_id));
       await audit(db, req.actor!.id, "formando.alterar", "formandos_fin", String(id), req.ip, { estado: d.estado, turmaDe: turmaAntes, turma: d.turma });
+      await reavaliarDocsDoFormando(db, "fin", id, req.actor!.id).catch(() => undefined);
     }
     return { formando: row ? mapFormandoFin(row) : null };
   });
@@ -1552,6 +1566,7 @@ export function registerOpsRoutes(
     const id = Number((req.params as { id: string }).id);
     const antes = await one(db, "SELECT turma_id, nome, apelido FROM formandos_fin WHERE id = $1", [id]);
     await db.query("DELETE FROM formandos_fin WHERE id = $1", [id]);
+    await apagarDocsDaFicha(db, "fin", id);
     await recontar(db, "fin", antes?.turma_id == null ? null : Number(antes.turma_id));
     await audit(db, req.actor!.id, "formando.apagar", "formandos_fin", String(id), req.ip, { nome: `${antes?.nome ?? ""} ${antes?.apelido ?? ""}`.trim() });
     return { ok: true };
@@ -1697,6 +1712,8 @@ export function registerOpsRoutes(
       });
     const cruzamento = await erroSobreposicao(db, "gold", null, cronograma);
     if (cruzamento) return reply.code(400).send({ error: cruzamento });
+    const nomeGold = await erroNomeRepetido(db, "gold", d.nome, null);
+    if (nomeGold) return reply.code(409).send({ error: nomeGold });
     const estadoGold = normalizarEstado("turmaGold", d.estado);
     if (!estadoGold) return reply.code(400).send({ error: `Estado inválido: «${d.estado}».` });
     d.estado = estadoGold;
@@ -1724,6 +1741,8 @@ export function registerOpsRoutes(
     const antesTurma = await one(db, "SELECT nome, curso, estado, fechada_em FROM turmas_gold WHERE id = $1", [id]);
     if (!antesTurma) return reply.code(404).send({ error: "turma não encontrada" });
     if (antesTurma.fechada_em && req.actor!.role !== "admin") return reply.code(409).send({ error: ERRO_TURMA_FECHADA });
+    const nomeGoldP = await erroNomeRepetido(db, "gold", d.nome, id);
+    if (nomeGoldP) return reply.code(409).send({ error: nomeGoldP });
     // O número de inscritos conta-se no servidor; o valor enviado pelo cliente é ignorado.
     delete d.totalAlunos;
     if (d.estado !== undefined) {
@@ -1782,6 +1801,7 @@ export function registerOpsRoutes(
     const bloqueio = await bloqueioTurma(db, "gold", id);
     if (bloqueio) return reply.code(409).send({ error: bloqueio });
     await db.query("DELETE FROM turmas_gold WHERE id = $1", [id]);
+    await limparAtalhosDaTurma(db, "gold", id).catch(() => undefined);
     return { ok: true };
   });
 
@@ -1826,6 +1846,8 @@ export function registerOpsRoutes(
     if (cruzamento) return reply.code(400).send({ error: cruzamento });
     const slotErroFin = await erroDisponibilidade(db, [d.formador, ...d.formadores], d.horario);
     if (slotErroFin) return reply.code(400).send({ error: slotErroFin });
+    const nomeFin = await erroNomeRepetido(db, "fin", d.nome, null);
+    if (nomeFin) return reply.code(409).send({ error: nomeFin });
     const estadoFin = normalizarEstado("turmaFin", d.estado);
     if (!estadoFin || estadoFin === "Concluída") return reply.code(400).send({ error: `Estado inválido: «${d.estado}».` });
     d.estado = estadoFin;
@@ -1853,6 +1875,8 @@ export function registerOpsRoutes(
     const antesTurma = await one(db, "SELECT nome, curso, estado, formador, formadores, horario, fechada_em FROM turmas_fin WHERE id = $1", [id]);
     if (!antesTurma) return reply.code(404).send({ error: "turma não encontrada" });
     if (antesTurma.fechada_em && req.actor!.role !== "admin") return reply.code(409).send({ error: ERRO_TURMA_FECHADA });
+    const nomeFinP = await erroNomeRepetido(db, "fin", d.nome, id);
+    if (nomeFinP) return reply.code(409).send({ error: nomeFinP });
     delete d.alunos;
     if (d.estado !== undefined) {
       const t = validarTransicao("turmaFin", String(antesTurma.estado ?? ""), d.estado, req.actor!.role);
@@ -1909,6 +1933,7 @@ export function registerOpsRoutes(
     const bloqueio = await bloqueioTurma(db, "fin", id);
     if (bloqueio) return reply.code(409).send({ error: bloqueio });
     await db.query("DELETE FROM turmas_fin WHERE id = $1", [id]);
+    await limparAtalhosDaTurma(db, "fin", id).catch(() => undefined);
     return { ok: true };
   });
 

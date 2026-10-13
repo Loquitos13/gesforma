@@ -37,7 +37,7 @@ export function arrancar(): Promise<Ctx> {
       const id = randomUUID();
       await db.query(
         "INSERT INTO users (id, name, email, password_hash, role, active) VALUES ($1, $2, $3, 'x', $4, true)",
-        [id, `Teste ${role}`, `teste.${role}@exemplo.pt`, role],
+        [id, `Teste ${role}`, `teste.${role}.${id.slice(0, 8)}@exemplo.pt`, role],
       );
       const token = randomBytes(24).toString("hex");
       await db.query(

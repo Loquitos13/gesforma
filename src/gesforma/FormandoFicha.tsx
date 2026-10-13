@@ -163,13 +163,14 @@ export function AcessoFormando({
   const [ja, setJa] = useState(jaTinha);
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState("");
-  const [acesso, setAcesso] = useState<{ email: string; password?: string } | null>(null);
+  const [acesso, setAcesso] = useState<{ email: string; password?: string; emailEnviado?: boolean } | null>(null);
+  const [enviarEmail, setEnviarEmail] = useState(true);
   if (user.role === "formador") return null;
   async function gerar(repor: boolean) {
     setBusy(true);
     setErro("");
     try {
-      const r = await apiGerarAcessoFormando(regime, id, repor);
+      const r = await apiGerarAcessoFormando(regime, id, repor, enviarEmail);
       setAcesso(r.acesso);
       setJa(true);
     } catch (err) {
@@ -183,12 +184,20 @@ export function AcessoFormando({
       <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Área do formando</p>
       <p className="mt-1 text-xs leading-5 text-slate-600">O acesso é criado aqui, a partir desta ficha. A pessoa entra em /area-formando com o email {email || "da ficha"}.</p>
       {acesso?.password && (
-        <p className="mt-3 text-sm font-semibold text-slate-800">Palavra-passe inicial: {acesso.password}. Guarde-a agora. A plataforma mostra-a só nesta altura.</p>
+        <p className="mt-3 text-sm font-semibold text-slate-800">
+          Utilizador: {acesso.email} · Palavra-passe temporária: {acesso.password}.
+          {acesso.emailEnviado ? " Enviada por email." : " Guarde-a agora: a plataforma mostra-a só nesta altura."}
+          {" "}No primeiro acesso é pedida uma palavra-passe nova.
+        </p>
       )}
       {acesso && !acesso.password && (
         <p className="mt-3 text-sm text-slate-600">Esta ficha já tinha acesso. A palavra-passe não foi alterada.</p>
       )}
       {erro && <p className="mt-2 text-xs font-medium text-red-600">{erro}</p>}
+      <label className="mt-3 flex items-center gap-2 text-xs text-slate-600">
+        <input type="checkbox" className="h-4 w-4" checked={enviarEmail} onChange={e => setEnviarEmail(e.target.checked)} />
+        Enviar o utilizador e a palavra-passe por email
+      </label>
       <button
         type="button"
         disabled={busy || !email.trim()}

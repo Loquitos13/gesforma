@@ -1596,14 +1596,21 @@ const configCards = [
   {
     id: "entidade",
     titulo: "Entidade formadora",
-    texto: "ENA - Escola de Negócios e Administração. NIF, certificação DGERT, contacto e IBAN usado nos pagamentos.",
+    texto: "Designação, NIF, certificação DGERT, contactos e a conta (IBAN) que aparece no passo de pagamento da pré-inscrição. Só o administrador altera.",
+    soAdmin: true,
     fields: [
-      { label: "Designação", value: "ENA - Escola de Negócios e Administração" },
-      { label: "NIF", value: "510 000 000" },
-      { label: "Certificação DGERT", value: "Válida" },
-      { label: "Email", value: "formacao@ena.pt" },
-      { label: "Telefone", value: "22 374 40 50" },
-      { label: "IBAN", value: "" },
+      { key: "nome", label: "Designação", value: "" },
+      { key: "nomeCurto", label: "Nome curto", value: "" },
+      { key: "nif", label: "NIF", value: "" },
+      { key: "certificacaoDgert", label: "Certificação DGERT", value: "" },
+      { key: "morada", label: "Morada", value: "" },
+      { key: "codigoPostal", label: "Código postal", value: "" },
+      { key: "localidade", label: "Localidade", value: "" },
+      { key: "email", label: "Email", value: "" },
+      { key: "telefone", label: "Telefone", value: "" },
+      { key: "site", label: "Site", value: "" },
+      { key: "iban", label: "IBAN para transferências", value: "" },
+      { key: "titularConta", label: "Titular da conta", value: "" },
     ],
   },
   {
@@ -1651,10 +1658,15 @@ const configCards = [
   },
 ];
 
+/** A chave gravada: a do servidor quando existe (entidade), senão a etiqueta. */
+function campoChave(f: { label: string; key?: string }) {
+  return f.key ?? f.label;
+}
+
 function seedConfigDrafts() {
   const out: Record<string, Record<string, string>> = {};
   for (const c of configCards) {
-    out[c.id] = Object.fromEntries(c.fields.map(f => [f.label, f.value]));
+    out[c.id] = Object.fromEntries(c.fields.map(f => [campoChave(f), f.value]));
   }
   return out;
 }
@@ -2363,7 +2375,9 @@ export function ConfiguracoesView() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState(seedConfigDrafts);
   const [saved, setSaved] = useState(false);
-  const current = configCards.find(c => c.id === openId) ?? null;
+  const [aGravar, setAGravar] = useState(false);
+  const cartoes = configCards.filter(c => !("soAdmin" in c && c.soAdmin) || user.role === "admin");
+  const current = cartoes.find(c => c.id === openId) ?? null;
   useEffect(() => {
     setDrafts(prev => {
       const next = { ...prev };
@@ -2388,7 +2402,7 @@ export function ConfiguracoesView() {
           <WhatsappSettingsCard />
           <SmtpSettingsCard />
           {user.role === "admin" && <LembretePreCard />}
-          {configCards.map(c => (
+          {cartoes.map(c => (
             <button key={c.id} type="button" onClick={() => setOpenId(c.id)}
               className={`text-left bg-white rounded-xl border shadow-sm p-5 hover:border-amber-300 hover:shadow-md transition-all ${openId === c.id ? "border-amber-400 ring-1 ring-amber-200" : "border-slate-200"}`}>
               <p className="text-sm font-bold text-slate-800">{c.titulo}</p>
@@ -2408,11 +2422,16 @@ export function ConfiguracoesView() {
         footer={
           <>
             <button type="button" onClick={() => setOpenId(null)} className="px-4 py-2.5 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Cancelar</button>
-            <button type="button" onClick={() => {
-              if (current) saveSettings(current.id, drafts[current.id] ?? {});
-              setSaved(true);
-              setOpenId(null);
-            }} className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-white">Guardar</button>
+            <button type="button" disabled={aGravar} onClick={() => {
+              if (!current) return;
+              setAGravar(true);
+              void saveSettings(current.id, drafts[current.id] ?? {}).then(ok => {
+                setAGravar(false);
+                if (!ok) return;
+                setSaved(true);
+                setOpenId(null);
+              });
+            }} className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white">{aGravar ? "A gravar…" : "Guardar"}</button>
           </>
         }
       >
@@ -2422,8 +2441,8 @@ export function ConfiguracoesView() {
               <Field key={f.label} label={f.label}>
                 <input
                   className={iCls}
-                  value={drafts[current.id]?.[f.label] ?? f.value}
-                  onChange={e => setField(current.id, f.label, e.target.value)}
+                  value={drafts[current.id]?.[campoChave(f)] ?? f.value}
+                  onChange={e => setField(current.id, campoChave(f), e.target.value)}
                 />
               </Field>
             ))}

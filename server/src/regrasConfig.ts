@@ -45,6 +45,9 @@ export type Entidade = {
   telefone: string;
   site: string;
   certificacaoDgert: string;
+  /** Conta para transferências: aparece no passo de pagamento da ligação pessoal. */
+  iban: string;
+  titularConta: string;
 };
 
 export const ENTIDADE_OMISSAO: Entidade = {
@@ -58,6 +61,8 @@ export const ENTIDADE_OMISSAO: Entidade = {
   telefone: "",
   site: "",
   certificacaoDgert: "",
+  iban: "",
+  titularConta: "",
 };
 
 const BOOL = new Set(["1", "true", "sim", "on"]);
@@ -138,7 +143,9 @@ export function validarDefinicoes(
   if (id === "entidade") {
     const nif = (values.nif ?? "").replace(/\s/g, "");
     if (nif && !/^\d{9}$/.test(nif)) return { ok: false, erro: "NIF: 9 dígitos." };
-    const e = parseEntidade({ ...values, nif });
+    const iban = (values.iban ?? "").replace(/\s/g, "").toUpperCase();
+    if (iban && !/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(iban)) return { ok: false, erro: "IBAN inválido." };
+    const e = parseEntidade({ ...values, nif, iban });
     return { ok: true, values: { ...e } };
   }
   return { ok: true, values };

@@ -8,7 +8,6 @@ import type { Db } from "./db/pool.js";
 import { COMPROVATIVO, docsCompletos, docsDoCurso } from "./docsCurso.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
 import { sendMail } from "./mailer.js";
-import { firePagamentoRefEmail } from "./pagamentoPedido.js";
 import { isEmail, normalizeEmail } from "./security.js";
 
 export function documentosUrl(token: string) {
@@ -297,21 +296,6 @@ export async function listarAlertasAbertas(db: Db) {
       LIMIT 20`,
   );
   return rows.rows;
-}
-
-export async function maybeEnviarPagamentoAposDocs(db: Db, leadId: number) {
-  const lead = await db.query<{ curso: string; regime: string }>(
-    "SELECT curso, COALESCE(regime, 'gold') AS regime FROM preinscricoes WHERE id = $1",
-    [leadId],
-  );
-  const row = lead.rows[0];
-  if (!row) return null;
-  const regime = row.regime === "fin" ? "fin" : "gold";
-  const pedidos = await docsDoCurso(db, row.curso, regime);
-  const ficheiros = await listarDocsLead(db, leadId);
-  const { ok } = docsCompletos(pedidos, ficheiros.map(f => f.tipo));
-  if (!ok) return { enviou: false as const };
-  return { enviou: true as const, ...(await firePagamentoRefEmail(db, leadId)) };
 }
 
 export { COMPROVATIVO, docsCompletos, docsDoCurso };

@@ -1,7 +1,9 @@
 import { garantirToken } from "./ligacaoPessoal.js";
-import { ingestEvent, flushQueuedJobs } from "./automations.js";
 import { config } from "./config.js";
-import { logLeadEvent } from "./crmDossier.js";
+import { getLeadDossier, logLeadEvent } from "./crmDossier.js";
+import { renderAutomaticEmail } from "./emailHtml.js";
+import { sendMail } from "./mailer.js";
+import { lerEntidade } from "./regrasConfig.js";
 import type { Db } from "./db/pool.js";
 import { confirmarPagamento, nextOpsId } from "./ops.js";
 import { precoParaOferta } from "./precoOferta.js";
@@ -22,13 +24,6 @@ function nowStamp() {
 function refMb(leadId: number, valor: number) {
   const n = String(100000000 + ((leadId * 7919) + Math.round(valor * 100)) % 900000000).slice(0, 9);
   return `${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6, 9)}`;
-}
-
-async function entidadeMb(db: Db) {
-  const row = await db.query<{ values: unknown }>("SELECT values FROM app_settings WHERE id = 'gold'");
-  const values = row.rows[0]?.values;
-  const obj = values && typeof values === "object" ? values as Record<string, string> : {};
-  return String(obj["Entidade Multibanco"] ?? "").trim();
 }
 
 async function alinharPrecoLead(
@@ -99,54 +94,60 @@ export async function ensurePagamentoPendente(
   return (row.rows[0] ?? { id, referencia, valor, estado: "Pendente" }) as Record<string, unknown>;
 }
 
-export async function firePagamentoRefEmail(db: Db, leadId: number) {
-  const row = await db.query(
-    `SELECT id, nome, apelido, email, curso, local, preco, regime, pagamento_id, horario
-       FROM preinscricoes WHERE id = $1`,
-    [leadId],
-  );
-  const lead = row.rows[0] as {
-    id: number; nome: string; apelido: string; email: string; curso: string; local: string;
-    preco: number; regime: string; pagamento_id: string | null; horario: string;
-  } | undefined;
-  if (!lead) return null;
-  if (String(lead.regime ?? "gold") === "fin") return { skipped: "fin" as const };
-  const email = normalizeEmail(lead.email);
-  if (!isEmail(email) || Number(lead.preco) <= 0) return { skipped: "sem_pagamento" as const };
+export class PedidoPagamentoErro extends Error {}
 
-  const pag = await ensurePagamentoPendente(db, lead);
-  const token = await tokenDoLead(db, lead.id);
-  const url = documentosUrl(token);
-  const comprovativo = `${url}?fase=pagamento`;
-  const entidade = await entidadeMb(db);
-  const referenciaRaw = String(pag.referencia ?? "");
-  const referencia = referenciaRaw.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3") || referenciaRaw;
-  const valor = Number(pag.valor ?? lead.preco) || 0;
-  const nome = `${lead.nome} ${lead.apelido}`.trim();
-  const r = await ingestEvent(db, "preinscricao.docs_completos", {
-    email,
-    nome,
-    curso: lead.curso,
-    turma: lead.horario || "-",
-    preinscricaoId: lead.id,
-    documentos_url: url,
-    comprovativo_url: comprovativo,
-    referencia,
-    entidade: entidade || "a indicar pela secretaria",
-    valor: valor.toFixed(2),
-  }, `pagref:${lead.id}:${email}`).catch(() => ({ queued: 0 }));
-  const nota = `Referência Multibanco ${referencia} · € ${valor.toFixed(2)}${entidade ? ` · entidade ${entidade}` : ""}. Comprovativo: ${comprovativo}`;
-  await db.query(
-    "INSERT INTO preinscricao_contactos (preinscricao_id, actor_id, nota, meio) VALUES ($1,$2,$3,$4)",
-    [leadId, null, nota, "Email"],
-  );
-  await logLeadEvent(db, leadId, undefined, "seguimento", "Pedido de pagamento enviado", nota);
-  await flushQueuedJobs(db, 8).catch(() => undefined);
-  return { queued: r.queued ?? 0, referencia, entidade, valor, comprovativo };
+function fmtEuros(v: number) {
+  return v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function comprovativoUrl(token: string) {
-  return `${config.appOrigin.replace(/\/$/, "")}/documentos/${token}?fase=pagamento`;
+/**
+ * A secretaria pede o pagamento depois de validar os documentos (Gold com preço).
+ * Abre o passo de pagamento na ligação pessoal e envia o email com o valor, o IBAN e a ligação.
+ * Pode repetir-se (reenviar) enquanto o pagamento não estiver confirmado.
+ */
+export async function pedirPagamento(db: Db, leadId: number, actorId?: string) {
+  const dossier = await getLeadDossier(db, leadId);
+  if (!dossier) throw new PedidoPagamentoErro("Pré-inscrição inexistente.");
+  if (!dossier.podePedirPagamento) throw new PedidoPagamentoErro(dossier.faltaPedirPagamento || "Ainda não é possível pedir o pagamento.");
+  const r = await db.query(
+    "SELECT id, nome, apelido, email, curso, local, preco, horario, pagamento_id FROM preinscricoes WHERE id = $1",
+    [leadId],
+  );
+  const lead = r.rows[0] as {
+    id: number; nome: string; apelido: string; email: string; curso: string; local: string;
+    preco: number; horario: string; pagamento_id: string | null;
+  };
+  const email = normalizeEmail(lead.email);
+  if (!isEmail(email)) throw new PedidoPagamentoErro("A pré-inscrição não tem um email válido.");
+  const pag = await ensurePagamentoPendente(db, lead);
+  await db.query("UPDATE pagamentos SET metodo = 'Transferência bancária' WHERE id = $1 AND estado <> 'Pago'", [String(pag.id)]);
+  await db.query("UPDATE preinscricoes SET pagamento_pedido_em = now(), ultima_actividade_em = now() WHERE id = $1", [leadId]);
+
+  const valor = Number(pag.valor ?? lead.preco) || 0;
+  const ent = await lerEntidade(db);
+  const iban = ent.iban.replace(/(.{4})/g, "$1 ").trim();
+  const titular = ent.titularConta || ent.nome;
+  const url = `${documentosUrl(await tokenDoLead(db, leadId))}?passo=pagamento`;
+  const nome = `${lead.nome} ${lead.apelido}`.trim();
+  const linhas = [
+    `A secretaria validou os seus documentos de ${lead.curso}.`,
+    `Para concluir a inscrição, faça o pagamento de € ${fmtEuros(valor)} por transferência bancária.`,
+    iban ? `IBAN: ${iban} · Titular: ${titular}` : "A secretaria indica-lhe os dados para a transferência.",
+    "Depois anexe o comprovativo na sua ligação pessoal, no passo «Pagamento».",
+    "Assim que o pagamento for confirmado, recebe por email o acesso à área do formando.",
+  ];
+  const mail = renderAutomaticEmail({
+    nome, xml: "", linhas, cta: "Abrir o passo de pagamento", href: url,
+    vars: { nome, curso: lead.curso, documentos_url: url }, origin: config.appOrigin,
+  });
+  await sendMail(db, { to: email, name: nome, subject: `Pagamento da inscrição em ${lead.curso}`, text: mail.text, html: mail.html });
+  const nota = `Pagamento pedido · € ${fmtEuros(valor)} por transferência${iban ? ` para ${iban}` : ""}.`;
+  await db.query(
+    "INSERT INTO preinscricao_contactos (preinscricao_id, actor_id, nota, meio) VALUES ($1,$2,$3,$4)",
+    [leadId, actorId ?? null, nota, "Email"],
+  );
+  await logLeadEvent(db, leadId, actorId, "seguimento", "Pagamento pedido", nota);
+  return { ok: true as const, valor, iban, semIban: !iban };
 }
 
 /**

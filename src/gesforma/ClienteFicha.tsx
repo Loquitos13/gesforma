@@ -23,6 +23,7 @@ import { isTurmaActiva, lugaresLivres, type TurmaGold } from "../partilhado/turm
 import { CursoOfertaCampos } from "../partilhado/CursoOfertaCampos";
 import { OFERTA_VAZIA, type CursoOfertaSel } from "../partilhado/oferta";
 import { fmtDataCalendario } from "./datas";
+import { PagamentoPreinscricao } from "./PagamentoPreinscricao";
 
 const inp = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400";
 
@@ -209,11 +210,16 @@ export function ClienteFicha({
     return mesmas;
   }, [dossier?.turmaEscolhida, lead?.curso, turmasLista]);
   const destinoEscolhido = destinosValidacao.find(t => t.id === turmaDestino);
-  const destinoCheio = destinoEscolhido ? lugaresLivres(destinoEscolhido) <= 0 : (dossier?.turmaEscolhida?.livres ?? 0) <= 0;
+  /** Financiada: a pessoa não escolhe turma; a secretaria coloca-a aqui, ao validar. */
+  const turmaPelaSecretaria = Boolean(dossier?.turmaPelaSecretaria);
+  const destinoCheio = destinoEscolhido
+    ? lugaresLivres(destinoEscolhido) <= 0
+    : !turmaPelaSecretaria && (dossier?.turmaEscolhida?.livres ?? 0) <= 0;
   const soTurmaCheia = dossier?.faltaValidar === "A turma escolhida está cheia.";
-  const podeAprovar = Boolean(dossier?.podeValidar || (soTurmaCheia && destinoEscolhido && !destinoCheio)) && !destinoCheio;
-  /** Acção manual «turma cheia» — só quando a turma escolhida ou a de destino não tem vagas. */
-  const mostrarAcaoTurmaCheia = destinoCheio || soTurmaCheia;
+  const podeAprovar = Boolean(dossier?.podeValidar || (soTurmaCheia && destinoEscolhido && !destinoCheio))
+    && !destinoCheio && (!turmaPelaSecretaria || Boolean(destinoEscolhido));
+  /** Acção manual «turma cheia» — só quando a turma escolhida ou a de destino não tem vagas (não se aplica à Financiada). */
+  const mostrarAcaoTurmaCheia = !turmaPelaSecretaria && (destinoCheio || soTurmaCheia);
 
   if (!item || !lead) return null;
   const wa = telDigits(lead.telf);
@@ -489,8 +495,7 @@ export function ClienteFicha({
             {dossier?.pagamento && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Pagamento</p>
-                <p className="text-slate-800 mt-1">Entidade {dossier.pagamento.entidade || "—"} · Ref. {dossier.pagamento.referencia}</p>
-                <p className="text-slate-700">€ {dossier.pagamento.valor.toLocaleString("pt-PT")} · {dossier.pagamento.estado}</p>
+                <p className="text-slate-700 mt-1">€ {dossier.pagamento.valor.toLocaleString("pt-PT")} · {dossier.pagamento.estado}</p>
               </div>
             )}
             {!!dossier?.docsEmFalta?.length && (
@@ -585,13 +590,20 @@ export function ClienteFicha({
                   {dossier.turmaEscolhida.livres <= 0 ? " · sem vagas restantes" : ` · ${dossier.turmaEscolhida.livres} vagas restantes`}
                 </p>
               ) : (
-                <p className="text-sm text-slate-500">A pessoa ainda não escolheu o cronograma na ligação pessoal.</p>
+                <p className="text-sm text-slate-500">
+                  {turmaPelaSecretaria
+                    ? "Formação financiada: a pessoa só envia os documentos. Escolha a turma abaixo ao validar."
+                    : "A pessoa ainda não escolheu o cronograma na ligação pessoal."}
+                </p>
               )}
               {dossier?.percursoConcluido && !dossier.docsFechado && (
                 <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Processo concluído. Aguarda validação da secretaria.</p>
               )}
               {dossier?.faltaValidar && !dossier.docsFechado && (
                 <p className="text-xs text-slate-500">{dossier.faltaValidar}</p>
+              )}
+              {dossier && !dossier.docsFechado && (
+                <PagamentoPreinscricao leadId={item.id} dossier={dossier} podeAgir={sec} onDossier={setDossier} />
               )}
               {sec && !dossier?.docsFechado && (
                 <label className="text-xs font-semibold uppercase text-slate-500 flex flex-col gap-1">
@@ -616,7 +628,9 @@ export function ClienteFicha({
                     </select>
                   )}
                   <span className="font-normal normal-case text-slate-500">
-                    Se a turma pedida estiver cheia, escolha outra do mesmo curso. A pasta na Drive muda de sítio, sem voltar a enviar os ficheiros.
+                    {turmaPelaSecretaria
+                      ? "A validação cria a ficha do formando nesta turma e passa a pasta na Drive para lá."
+                      : "Se a turma pedida estiver cheia, escolha outra do mesmo curso. A pasta na Drive muda de sítio, sem voltar a enviar os ficheiros."}
                   </span>
                 </label>
               )}

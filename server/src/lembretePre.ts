@@ -104,6 +104,8 @@ async function pendenciaDe(db: Db, lead: {
       recusados.push({ label: doc.label, observacao: ficheiro.observacao.trim() });
     }
   }
+  // Financiada: a turma é atribuída pela secretaria, a pessoa só envia documentos.
+  if (regime === "fin") return { faltam, recusados, semTurma: false, turmaCheia: false, turmaCheiaNome: "" };
   const recusadas = idsRecusados(lead.turmas_recusadas);
   const escolhida = Number(lead.turma_escolhida_id || 0);
   const turmaCheia = recusadas.length > 0 && !escolhida;

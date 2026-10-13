@@ -14,7 +14,7 @@ const TEMPLATES = [
     linhas: [
       "Confirmámos o seu interesse em {{curso}}.",
       "Abra a ligação pessoal para enviar os documentos: {{documentos_lista}}.",
-      "No mesmo percurso escolhe o cronograma e, quando houver pagamento, anexa o comprovativo.",
+      "Na mesma ligação conclui a pré-inscrição.",
       "A secretaria valida a pré-inscrição. A ligação fica aberta até essa validação.",
     ],
     cta: "Abrir pré-inscrição",

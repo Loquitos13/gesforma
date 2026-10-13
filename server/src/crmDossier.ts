@@ -1,6 +1,6 @@
 import type { Db } from "./db/pool.js";
 import { documentosUrl, docsDoCurso, docsCompletos, ensureDocsToken, listarDocsLead } from "./docsLink.js";
-import { faltaValidarPreinscricao } from "./docsCurso.js";
+import { faltaPedirPagamento, faltaValidarPreinscricao, situacaoPagamento } from "./docsCurso.js";
 import { mapPagamento, mapPreinscricao } from "./ops.js";
 
 export type CrmCampoTipo = "texto" | "numero" | "data" | "lista";
@@ -291,15 +291,18 @@ async function resumoPercurso(
       };
     }
   }
-  const precisaPagamento = regime === "gold" && Number(row.preco) > 0;
-  const faltaValidar = faltaValidarPreinscricao({
+  const pagamento = (await situacaoPagamento(db, row)).estado;
+  const regras = {
     validada: Boolean(row.validada_em),
     concluido: Boolean(row.percurso_concluido_em),
     turma: turmaEscolhida,
     pedidos,
     ficheiros,
-    precisaPagamento,
-  });
+    pagamento,
+    turmaPelaSecretaria: regime === "fin",
+  };
+  const faltaValidar = faltaValidarPreinscricao(regras);
+  const faltaPedir = faltaPedirPagamento(regras);
   return {
     percursoConcluido: Boolean(row.percurso_concluido_em),
     validadaEm: row.validada_em ? String(row.validada_em) : null,
@@ -307,6 +310,12 @@ async function resumoPercurso(
     turmaEscolhida,
     podeValidar: faltaValidar === "",
     faltaValidar,
+    turmaPelaSecretaria: regime === "fin",
+    /** Gold com preço: isento | por_pedir | pedido | pago. */
+    estadoPagamento: pagamento,
+    pagamentoPedidoEm: row.pagamento_pedido_em ? String(row.pagamento_pedido_em) : null,
+    podePedirPagamento: faltaPedir === "",
+    faltaPedirPagamento: faltaPedir,
   };
 }
 

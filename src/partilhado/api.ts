@@ -235,8 +235,9 @@ export type FormandoFinDocsBloco = {
 export const apiAreaFormando = () => api<AreaFormandoDados>("/v1/area-formando");
 export const apiPatchAreaFormando = (body: Partial<Pick<AreaFormandoDados, "pessoa">> & { nome?: string; apelido?: string; telf?: string; novidades?: boolean; canais?: AreaFormandoDados["pessoa"]["canais"]; lidas?: string[] }) =>
   api<AreaFormandoDados>("/v1/area-formando", { method: "PATCH", body: JSON.stringify(body) });
-export const apiGerarAcessoFormando = (regime: "gold" | "fin", id: number, repor = false) =>
-  api<{ acesso: { email: string; password?: string; criado: boolean; reposto: boolean } }>(`/v1/formandos/${regime}/${id}/acesso`, { method: "POST", body: JSON.stringify({ repor }) });
+/** Gera (ou liga) o acesso à área do formando; com `enviarEmail` o utilizador e a palavra-passe seguem por email. */
+export const apiGerarAcessoFormando = (regime: "gold" | "fin", id: number, repor = false, enviarEmail = false) =>
+  api<{ acesso: { email: string; password?: string; criado: boolean; reposto: boolean; emailEnviado?: boolean } }>(`/v1/formandos/${regime}/${id}/acesso`, { method: "POST", body: JSON.stringify({ repor, enviarEmail }) });
 export const apiNoticias = () => api<{ noticias: { titulo: string; slug: string; data: string; tematica: string; excerto: string }[] }>("/v1/public/noticias");
 export const apiNoticia = (slug: string) =>
   api<{ noticia: { titulo: string; slug: string; data: string; tematica: string; corpo: string }; outras: { titulo: string; slug: string; data: string; tematica: string }[] }>(`/v1/public/noticias/${encodeURIComponent(slug)}`);
@@ -735,6 +736,13 @@ export const apiAplicarTurmaRegras = (regime?: "gold" | "fin") =>
     method: "POST", body: JSON.stringify({ regime }),
   });
 
+export type PagamentoPercurso = {
+  valor: number;
+  estado: string;
+  iban: string;
+  titular: string;
+  comprovativo: { id: number; tipo: string; nome: string; estado?: string; observacao?: string } | null;
+};
 export type TurmaPercurso = {
   id: number;
   nome: string;
@@ -752,12 +760,20 @@ export const apiPublicDocumentos = (token: string) =>
     ficheiros: { id: number; tipo: string; nome: string; created_at: string; estado?: string; observacao?: string }[];
     docsCompletos?: boolean;
     emFalta?: string[];
+    /** Passo de pagamento aberto: a secretaria pediu o pagamento e ainda não está confirmado. */
     precisaPagamento?: boolean;
-    pagamento?: { entidade: string; referencia: string; valor: number; estado: string } | null;
+    pago?: boolean;
+    pagamento?: PagamentoPercurso | null;
     encerrada?: boolean;
+    /** Ligação encerrada: o servidor só devolve o motivo e a mensagem. */
+    motivo?: "validada" | "desistiu" | "formando" | "expirada";
+    mensagem?: string;
+    primeiroNome?: string;
     correcao?: boolean;
     passo?: 1 | 2;
     percursoConcluido?: boolean;
+    /** Falso na Financiada: a turma é atribuída pela secretaria. */
+    escolheTurma?: boolean;
     turmas?: TurmaPercurso[];
     recomendadas?: TurmaPercurso[];
     breves?: TurmaPercurso[];
@@ -1036,8 +1052,17 @@ export type CrmDossier = {
   recusaMotivo?: string;
   podeValidar?: boolean;
   faltaValidar?: string;
+  /** Financiada: a secretaria escolhe a turma ao validar. */
+  turmaPelaSecretaria?: boolean;
+  /** Gold com preço: isento | por_pedir | pedido | pago. */
+  estadoPagamento?: "isento" | "por_pedir" | "pedido" | "pago";
+  pagamentoPedidoEm?: string | null;
+  podePedirPagamento?: boolean;
+  faltaPedirPagamento?: string;
   turmaEscolhida?: { id: number; nome: string; local: string; horario: string; dataInicio: string; livres: number } | null;
 };
+export const apiCrmPedirPagamento = (id: number) =>
+  api<CrmDossier & { pedido?: { valor: number; semIban: boolean } }>(`/v1/crm/leads/${id}/pedir-pagamento`, { method: "POST", body: "{}" });
 export const apiCrmValidarPreinscricao = (id: number, turmaId?: number) =>
   api<CrmDossier>(`/v1/crm/leads/${id}/validar-preinscricao`, { method: "POST", body: JSON.stringify(turmaId ? { turmaId } : {}) });
 export const apiCrmTurmaCheia = (id: number) =>

@@ -1,18 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ApiError, apiPublicConcluirPercurso, apiPublicConsentir, apiPublicDocumentoUpload, apiPublicDocumentos, apiPublicEscolherTurma,
-  type TurmaPercurso,
+  type PagamentoPercurso, type TurmaPercurso,
 } from "../partilhado/api";
-import { CronogramaModal } from "./CronogramaFolha";
 import { LeituraConsentimento } from "./LeituraConsentimento";
+import { PassoPagamento } from "./PassoPagamento";
+import { CampoFicheiro, CartaoTurma, fmtData, textoTurmas } from "./PercursoPartes";
 
 type TipoDoc = { id: string; label: string; required?: boolean; modelo?: string };
 type Ficheiro = { id: number; tipo: string; nome: string; estado?: string; observacao?: string };
-
-function fmtData(iso: string) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
-}
 
 const PASSOS = ["Documentos", "Cronograma"] as const;
 
@@ -23,10 +19,12 @@ function passoPedido(): 1 | 2 | null {
   return null;
 }
 
-function textoVagas(n: number) {
-  if (n <= 0) return "Sem vagas restantes";
-  return n === 1 ? "1 vaga restante" : `${n} vagas restantes`;
-}
+const TITULO_FECHO: Record<string, string> = {
+  validada: "Pré-inscrição validada",
+  formando: "Inscrição concluída",
+  desistiu: "Pré-inscrição cancelada",
+  expirada: "Ligação expirada",
+};
 
 export function PublicDocumentos({ token }: { token: string }) {
   const [nome, setNome] = useState("");
@@ -44,6 +42,10 @@ export function PublicDocumentos({ token }: { token: string }) {
   const [emFalta, setEmFalta] = useState<string[]>([]);
   const [turmaCheia, setTurmaCheia] = useState(false);
   const [encerrada, setEncerrada] = useState(false);
+  const [fecho, setFecho] = useState<{ motivo: string; mensagem: string }>({ motivo: "", mensagem: "" });
+  const [escolheTurma, setEscolheTurma] = useState(true);
+  /** Passo de pagamento: só com o pagamento pedido pela secretaria e ainda por confirmar. */
+  const [pagamento, setPagamento] = useState<PagamentoPercurso | null>(null);
   const [correcao, setCorrecao] = useState(false);
   const [foco, setFoco] = useState<string | null>(null);
   const [ficheiro, setFicheiro] = useState<File | null>(null);
@@ -56,11 +58,23 @@ export function PublicDocumentos({ token }: { token: string }) {
   const salto = useRef<number | null>(null);
 
   function aplicar(r: Awaited<ReturnType<typeof apiPublicDocumentos>>, manterPasso = false) {
+    if (r.encerrada) {
+      // Ligação encerrada: o servidor só devolve o primeiro nome, o curso e o motivo.
+      setEncerrada(true);
+      setNome(r.primeiroNome ?? "");
+      setCurso(r.curso ?? "");
+      setFecho({ motivo: r.motivo ?? "", mensagem: r.mensagem ?? "" });
+      setEstado("ready");
+      return;
+    }
     setNome(r.nome);
     setCurso(r.curso);
-    setTipos(r.tipos);
-    setFicheiros(r.ficheiros);
-    setEncerrada(Boolean(r.encerrada));
+    setTipos(r.tipos ?? []);
+    setFicheiros(r.ficheiros ?? []);
+    setEncerrada(false);
+    const comTurma = r.escolheTurma !== false;
+    setEscolheTurma(comTurma);
+    setPagamento(r.precisaPagamento && r.pagamento ? r.pagamento : null);
     setCorrecao(Boolean(r.correcao));
     setTurmas(r.turmas ?? []);
     setRecomendadas(r.recomendadas ?? []);
@@ -71,9 +85,10 @@ export function PublicDocumentos({ token }: { token: string }) {
     const falta = r.emFalta ?? [];
     setEmFalta(falta);
     setTurmaCheia(Boolean(r.turmaCheia));
-    const seguinte: 1 | 2 = r.turmaEscolhida ? 2 : 1;
+    const seguinte: 1 | 2 = comTurma && r.turmaEscolhida ? 2 : 1;
     setPassoServidor(seguinte);
-    if (!manterPasso) {
+    if (!comTurma) setPasso(1);
+    else if (!manterPasso) {
       const pedido = passoPedido();
       if (pedido) setPasso(pedido);
       else setPasso(r.percursoConcluido && falta.length > 0 && !r.encerrada ? 1 : seguinte);
@@ -107,6 +122,12 @@ export function PublicDocumentos({ token }: { token: string }) {
       setASair(false);
       salto.current = null;
     }, 240);
+  }
+
+  /** A ligação fechou entretanto (410): volta a ler para mostrar o motivo. */
+  function erroDe(err: unknown, padrao: string) {
+    if (err instanceof ApiError && err.status === 410) { void recarregar(); return ""; }
+    return err instanceof ApiError ? err.message : padrao;
   }
 
   useEffect(() => () => { if (salto.current) window.clearTimeout(salto.current); }, []);
@@ -146,7 +167,7 @@ export function PublicDocumentos({ token }: { token: string }) {
       setFoco(null);
       await recarregar(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Não foi possível enviar.");
+      setError(erroDe(err, "Não foi possível enviar."));
     } finally {
       setBusy(false);
     }
@@ -162,7 +183,7 @@ export function PublicDocumentos({ token }: { token: string }) {
       setFoco(null);
       await recarregar(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Não foi possível registar o consentimento.");
+      setError(erroDe(err, "Não foi possível registar o consentimento."));
     } finally {
       setBusy(false);
     }
@@ -178,7 +199,7 @@ export function PublicDocumentos({ token }: { token: string }) {
       setPasso(2);
       setOk("Cronograma escolhido.");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Não foi possível escolher a turma.");
+      setError(erroDe(err, "Não foi possível escolher a turma."));
     } finally {
       setBusy(false);
     }
@@ -191,13 +212,29 @@ export function PublicDocumentos({ token }: { token: string }) {
       await apiPublicConcluirPercurso(token);
       await recarregar();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Não foi possível concluir.");
+      setError(erroDe(err, "Não foi possível concluir."));
     } finally {
       setBusy(false);
     }
   }
 
-  const espera = estado === "ready" && percursoConcluido && !encerrada && emFalta.length === 0;
+  async function enviarComprovativo(f: File) {
+    setBusy(true);
+    setError("");
+    setOk("");
+    try {
+      await apiPublicDocumentoUpload(token, f, "comprovativo");
+      setOk("Comprovativo recebido.");
+      await recarregar(true);
+    } catch (err) {
+      setError(erroDe(err, "Não foi possível enviar o comprovativo."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const pagar = estado === "ready" && !encerrada && pagamento != null;
+  const espera = estado === "ready" && percursoConcluido && !encerrada && emFalta.length === 0 && !pagar;
 
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-[#1b2330]">
@@ -226,10 +263,17 @@ export function PublicDocumentos({ token }: { token: string }) {
 
         {estado === "ready" && encerrada && (
           <article className="rounded-2xl bg-white px-6 py-8 shadow-sm ring-1 ring-[#e7e1d6]">
-            <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Pré-inscrição validada</p>
-            <h1 className="mt-3 text-2xl font-semibold tracking-tight">{nome}</h1>
-            <p className="mt-3 text-sm leading-relaxed text-[#5c564c]">A secretaria validou {curso}. Esta ligação foi encerrada.</p>
+            <p className={`text-[12px] font-semibold uppercase tracking-[0.16em] ${fecho.motivo === "validada" || fecho.motivo === "formando" ? "text-emerald-700" : "text-[#c48400]"}`}>
+              {TITULO_FECHO[fecho.motivo] ?? "Ligação encerrada"}
+            </p>
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight">{nome ? `Olá, ${nome}` : curso}</h1>
+            {nome && curso && <p className="mt-2 text-sm text-[#5c564c]">{curso}</p>}
+            <p className="mt-3 text-sm leading-relaxed text-[#5c564c]">{fecho.mensagem || "Esta ligação foi encerrada."}</p>
           </article>
+        )}
+
+        {pagar && pagamento && (
+          <PassoPagamento nome={nome} curso={curso} pagamento={pagamento} busy={busy} error={error} ok={ok} onEnviar={enviarComprovativo} />
         )}
 
         {espera && (
@@ -237,7 +281,9 @@ export function PublicDocumentos({ token }: { token: string }) {
             <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#c48400]">Processo de pré-inscrição concluído</p>
             <h1 className="mt-3 text-2xl font-semibold tracking-tight">{nome}</h1>
             <p className="mt-3 text-sm leading-relaxed text-[#5c564c]">
-              Os documentos e o cronograma de {curso} já estão na ficha. A secretaria vai validar a pré-inscrição. Esta página fica aberta até essa validação.
+              {escolheTurma
+                ? <>Os documentos e o cronograma de {curso} já estão na ficha. A secretaria vai validar a pré-inscrição. Esta página fica aberta até essa validação.</>
+                : <>Os documentos de {curso} já estão na ficha. A secretaria vai validá-los e colocá-lo(a) numa turma. Esta página fica aberta até essa validação.</>}
             </p>
             {turmaEscolhida && (
               <div className="mt-5 rounded-xl bg-[#fffaf2] px-4 py-3 text-sm ring-1 ring-[#efeae1]">
@@ -249,13 +295,13 @@ export function PublicDocumentos({ token }: { token: string }) {
           </article>
         )}
 
-        {estado === "ready" && !encerrada && !espera && (
+        {estado === "ready" && !encerrada && !espera && !pagar && (
           <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[#e7e1d6]">
             <div className="px-6 pt-7 pb-5 sm:px-8">
               <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#c48400]">Percurso de pré-inscrição</p>
               <h1 className="mt-2 text-[1.65rem] font-semibold tracking-tight leading-tight">{nome}</h1>
               <p className="mt-2 text-sm leading-relaxed text-[#5c564c]">{curso}</p>
-              <ol className="mt-5 grid grid-cols-2 gap-2">
+              {escolheTurma && <ol className="mt-5 grid grid-cols-2 gap-2">
                 {PASSOS.map((label, i) => {
                   const n = (i + 1) as 1 | 2;
                   const aberto = passo === n;
@@ -275,13 +321,18 @@ export function PublicDocumentos({ token }: { token: string }) {
                     </li>
                   );
                 })}
-              </ol>
-              <div className="mt-3 h-1 overflow-hidden rounded-full bg-[#efeae1]" aria-hidden>
-                <div
-                  className="h-full rounded-full bg-[#ffa900] transition-[width] duration-500 ease-out"
-                  style={{ width: `${percentagemPasso}%` }}
-                />
-              </div>
+              </ol>}
+              {escolheTurma && (
+                <div className="mt-3 h-1 overflow-hidden rounded-full bg-[#efeae1]" aria-hidden>
+                  <div
+                    className="h-full rounded-full bg-[#ffa900] transition-[width] duration-500 ease-out"
+                    style={{ width: `${percentagemPasso}%` }}
+                  />
+                </div>
+              )}
+              {!escolheTurma && (
+                <p className="mt-3 text-sm leading-relaxed text-[#5c564c]">Envie os documentos abaixo. Depois da validação, a secretaria coloca-o(a) na turma e avisa por email.</p>
+              )}
               {correcao && <p className="mt-4 text-sm text-red-800">Há ficheiros por corrigir. Volte a enviar os que a secretaria indicou.</p>}
               {percursoConcluido && emFalta.length > 0 && (
                 <p className="mt-4 text-sm leading-relaxed text-amber-900">
@@ -296,7 +347,7 @@ export function PublicDocumentos({ token }: { token: string }) {
                 <div className="px-6 py-4 sm:px-8">
                   <div className="flex items-baseline justify-between gap-3 text-xs">
                     <span className="font-semibold">{feitosObrigatorios} de {obrigatorios.length} obrigatórios{opcionais.length > 0 ? ` · ${feitosOpcionais} de ${opcionais.length} opcionais` : ""}</span>
-                    <span className="text-[#8a8172]">Passo 1 de 2</span>
+                    {escolheTurma && <span className="text-[#8a8172]">Passo 1 de 2</span>}
                   </div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#efeae1]">
                     <div
@@ -355,14 +406,23 @@ export function PublicDocumentos({ token }: { token: string }) {
                 </ol>
                 <div className="border-t border-[#efeae1] px-6 py-4 sm:px-8">
                   {ok && <p className="mb-3 text-sm text-emerald-800">{ok}</p>}
-                  <button type="button" disabled={aSair} onClick={() => irPara(2)} className="w-full rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white transition-opacity disabled:opacity-40">
-                    {aSair && direccao === "frente" ? "A avançar…" : "Continuar para o cronograma"}
-                  </button>
+                  {escolheTurma ? (
+                    <button type="button" disabled={aSair} onClick={() => irPara(2)} className="w-full rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white transition-opacity disabled:opacity-40">
+                      {aSair && direccao === "frente" ? "A avançar…" : "Continuar para o cronograma"}
+                    </button>
+                  ) : (
+                    <>
+                      {error && !activoId && <p className="mb-3 text-sm text-red-700">{error}</p>}
+                      <button type="button" disabled={busy} onClick={() => void concluir()} className="w-full rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white transition-opacity disabled:opacity-40">
+                        {busy ? "A submeter…" : "Submeter inscrição"}
+                      </button>
+                    </>
+                  )}
                 </div>
               </section>
             )}
 
-            {passo === 2 && (
+            {passo === 2 && escolheTurma && (
               <section className="border-t border-[#efeae1] px-6 py-5 sm:px-8">
                 <p className="text-sm text-[#5c564c]">{textoTurmas(criterios)}</p>
                 {turmaCheia && (
@@ -418,86 +478,5 @@ export function PublicDocumentos({ token }: { token: string }) {
         )}
       </main>
     </div>
-  );
-}
-
-function CartaoTurma({
-  turma, curso, escolhida, busy, onEscolher,
-}: {
-  turma: TurmaPercurso;
-  curso: string;
-  escolhida: boolean;
-  busy: boolean;
-  onEscolher: () => void;
-}) {
-  const [cronograma, setCronograma] = useState(false);
-  const temPlano = (turma.plano ?? []).some(s => s.data);
-  const anel = escolhida
-    ? "bg-[#fff6e4] ring-[#ffa900] shadow-[0_0_0_3px_rgba(255,169,0,0.18)]"
-    : "bg-white ring-[#e7e1d6]";
-  return (
-    <li className={`rounded-xl ring-2 ${anel} ${busy ? "opacity-60" : ""}`}>
-      <div
-        role="button"
-        tabIndex={busy ? -1 : 0}
-        aria-pressed={escolhida}
-        aria-label={`${turma.nome}, ${turma.local}, ${turma.horario}`}
-        onClick={() => { if (!busy) onEscolher(); }}
-        onKeyDown={e => {
-          if (busy) return;
-          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onEscolher(); }
-        }}
-        className={`cursor-pointer rounded-t-xl px-4 pt-3 outline-none ${escolhida ? "" : "hover:bg-[#faf8f4]"} focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#ffa900]`}
-      >
-        <span className="flex items-start gap-3">
-          <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${escolhida ? "border-[#ffa900] bg-[#ffa900] text-[#1b2330]" : "border-[#d4cbbd] bg-white"}`} aria-hidden>
-            {escolhida && (
-              <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
-                <path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.2 7.2a1 1 0 01-1.4 0L3.3 9.1a1 1 0 011.4-1.4l3.1 3.1 6.5-6.5a1 1 0 011.4 0z" clipRule="evenodd" />
-              </svg>
-            )}
-          </span>
-          <span className="min-w-0 flex-1 pb-3">
-            <span className="flex items-start justify-between gap-3">
-              <span className="block text-sm font-semibold">{turma.nome}</span>
-              {escolhida && <span className="shrink-0 text-xs font-semibold text-[#9a6700]">Seleccionada</span>}
-            </span>
-            <span className="mt-1 block text-sm text-[#5c564c]">{turma.local} · {turma.horario}</span>
-            <span className="mt-1 block text-xs text-[#8a8172]">Início {fmtData(turma.dataInicio)} · {textoVagas(turma.livres)}</span>
-          </span>
-        </span>
-      </div>
-      <div className="border-t border-[#efeae1] px-4 py-2.5">
-        <button
-          type="button"
-          disabled={!temPlano}
-          onClick={() => setCronograma(true)}
-          className="rounded-lg border border-[#e7e1d6] bg-white px-3 py-1.5 text-xs font-semibold text-[#1b2330] hover:bg-[#fffaf2] disabled:opacity-40"
-        >
-          {temPlano ? "Ver cronograma" : "Sem cronograma"}
-        </button>
-      </div>
-      <CronogramaModal turma={turma} curso={curso} open={cronograma} onClose={() => setCronograma(false)} />
-    </li>
-  );
-}
-
-function textoTurmas(criterios: { local: string; horario: string; inicio: string }) {
-  const partes = [criterios.local, criterios.horario, criterios.inicio ? fmtData(criterios.inicio) : ""].filter(Boolean);
-  if (!partes.length) return "Escolha o cronograma. Só aparecem turmas deste curso que ainda tenham lugar, já com a tolerância de vagas.";
-  return `Só aparecem turmas de ${partes.join(" · ")} que ainda tenham lugar, já com a tolerância de vagas.`;
-}
-
-function CampoFicheiro({ onFile }: { onFile: (f: File | null) => void }) {
-  return (
-    <label className="block rounded-xl border border-dashed border-[#d9c9a3] bg-white px-4 py-4">
-      <span className="block text-xs font-semibold uppercase tracking-wide text-[#8a8172]">Ficheiro PDF, JPG ou PNG</span>
-      <input
-        className="mt-2 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-[#1b2330] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white"
-        type="file"
-        accept=".pdf,image/jpeg,image/png,application/pdf"
-        onChange={e => onFile(e.target.files?.[0] ?? null)}
-      />
-    </label>
   );
 }

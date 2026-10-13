@@ -41,6 +41,7 @@ import { SiteConteudoView } from "./SiteConteudoView";
 import { CronogramaEditor, FormadoresAtribuidosCard, TurmaActivaToggle, TurmaInactivaBanner, TurmaInscricaoHint } from "./TurmaCronograma";
 import { TurmaRegrasPanel } from "./TurmaRegrasPanel";
 import { InscreverFormandoPanel } from "./TurmaInscricao";
+import { CamposInscricaoManual, OPCOES_MANUAL, darAcessoManual, emailValido, pagamentoDaFicha, type OpcoesManual } from "./InscricaoManual";
 import { TurmaAvaliacao } from "./TurmaAvaliacao";
 import { cursoECcp, formatNota, mapaNotas, notaFinalFormando, useAvaliacaoCurso, type NotaAvaliacao } from "./avaliacaoCurso";
 import { FormadoresView } from "./FormadoresView";
@@ -2157,13 +2158,14 @@ function CockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavigate
                 id: tempNumericId(),
                 nome, apelido: apelido || "-",
                 telf: dados.telf || "-",
-                email: dados.email || `${nome.toLowerCase()}@mail.pt`,
+                email: dados.email,
                 inscrito: nowStamp(),
                 local: turma.local, curso: turma.curso, turma: turma.nome, turmaId: turma.id,
-                estado: "Formando", pago: false, valor: 0, metodo: "-",
+                estado: "Formando", ...pagamentoDaFicha(dados.opcoes),
               });
               if (!id) return;
               patchGold(turma.id, { totalAlunos: turma.totalAlunos + 1 });
+              if (dados.opcoes.criarAcesso) await darAcessoManual("gold", id);
             }}
           />
         ) : (
@@ -2800,12 +2802,13 @@ function FinCockpitTurmaView({ turmaId, onBack, initialTab = "overview", onNavig
                 id: tempNumericId(),
                 nome, apelido: apelido || "-",
                 turma: turma.nome, telf: dados.telf || "-",
-                email: dados.email || `${nome.toLowerCase()}@mail.pt`,
+                email: dados.email,
                 curso: turma.curso, estado: "Elegível",
                 ...emptyFinDocs(),
               });
               if (!id) return;
               patchFin(turma.id, { alunos: turma.alunos + 1 });
+              if (dados.opcoes.criarAcesso) await darAcessoManual("fin", id);
             }}
           />
         ) : (
@@ -3451,6 +3454,7 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
   const [nomeNovo, setNomeNovo] = useState("");
   const [emailNovo, setEmailNovo] = useState("");
   const [telfNovo, setTelfNovo] = useState("");
+  const [opcoesNovo, setOpcoesNovo] = useState<OpcoesManual>(OPCOES_MANUAL);
   const editing = edit && edit !== "new" ? edit : null;
   useEffect(() => {
     if (!openId) return;
@@ -3553,8 +3557,9 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
           {!editing && (
             <>
               <Field label="Nome"><input className={iCls} value={nomeNovo} onChange={e => setNomeNovo(e.target.value)} placeholder="Nome completo" /></Field>
-              <Field label="Email"><input className={iCls} type="email" value={emailNovo} onChange={e => setEmailNovo(e.target.value)} /></Field>
+              <Field label="Email (utilizador da área do formando)"><input className={iCls} type="email" value={emailNovo} onChange={e => setEmailNovo(e.target.value)} /></Field>
               <Field label="Telemóvel"><input className={iCls} value={telfNovo} onChange={e => setTelfNovo(e.target.value)} /></Field>
+              <CamposInscricaoManual value={opcoesNovo} onChange={setOpcoesNovo} regime="gold" />
             </>
           )}
           <Field label="Turma">
@@ -3564,7 +3569,7 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
           <Field label="Curso"><SearchSelect value={cursoEdit} onChange={v => { setCursoEdit(v); if (turma && !turmaGoldOpts(gold, { curso: v, includeNome: editing?.turma }).some(o => o.value === turma)) setTurma(""); }} options={cursosGoldOpts} placeholder="Pesquisar curso…" /></Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setEdit(null)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button disabled={!turma || (!editing && !nomeNovo.trim())} onClick={async () => {
+            <button disabled={!turma || (!editing && (!nomeNovo.trim() || !emailValido(emailNovo)))} onClick={async () => {
               const dest = gold.find(x => x.nome === turma);
               if (!dest) return;
               if (editing) {
@@ -3580,12 +3585,14 @@ function FormandosTurmasView({ openId, onOpened }: { openId?: number; onOpened?:
                   id: tempNumericId(),
                   nome, apelido: apelido || "-",
                   telf: telfNovo.trim() || "-",
-                  email: emailNovo.trim() || `${nome.toLowerCase()}@mail.pt`,
+                  email: emailNovo.trim(),
                   inscrito: nowStamp(), local: dest.local, curso: dest.curso, turma: dest.nome, turmaId: dest.id,
-                  estado: "Formando", pago: false, valor: 0, metodo: "-",
+                  estado: "Formando", ...pagamentoDaFicha(opcoesNovo),
                 });
                 if (!id) return;
                 patchGold(dest.id, { totalAlunos: dest.totalAlunos + 1 });
+                if (opcoesNovo.criarAcesso) await darAcessoManual("gold", id);
+                setOpcoesNovo(OPCOES_MANUAL);
               }
               setEdit(null);
             }} className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">{editing ? "Guardar" : "Inscrever"}</button>
@@ -3623,6 +3630,7 @@ function FinFormandosView({ openId, onOpened }: { openId?: number; onOpened?: ()
   const [nomeNovo, setNomeNovo] = useState("");
   const [emailNovo, setEmailNovo] = useState("");
   const [telfNovo, setTelfNovo] = useState("");
+  const [opcoesNovo, setOpcoesNovo] = useState<OpcoesManual>(OPCOES_MANUAL);
   const [cursoNovo, setCursoNovo] = useState("");
   const [turmaNovo, setTurmaNovo] = useState("");
   useEffect(() => {
@@ -3738,23 +3746,26 @@ function FinFormandosView({ openId, onOpened }: { openId?: number; onOpened?: ()
       <SlideOver open={novo} onClose={() => setNovo(false)} title="Novo formando financiado" sub="Candidato elegível numa turma">
         <div className="p-5 space-y-3">
           <Field label="Nome"><input className={iCls} value={nomeNovo} onChange={e => setNomeNovo(e.target.value)} placeholder="Nome completo" /></Field>
-          <Field label="Email"><input className={iCls} type="email" value={emailNovo} onChange={e => setEmailNovo(e.target.value)} /></Field>
+          <Field label="Email (utilizador da área do formando)"><input className={iCls} type="email" value={emailNovo} onChange={e => setEmailNovo(e.target.value)} /></Field>
           <Field label="Telemóvel"><input className={iCls} value={telfNovo} onChange={e => setTelfNovo(e.target.value)} /></Field>
+          <CamposInscricaoManual value={opcoesNovo} onChange={setOpcoesNovo} regime="fin" />
           <Field label="Curso / UFCD"><SearchSelect value={cursoNovo} onChange={v => { setCursoNovo(v); setTurmaNovo(""); }} options={cursosFinOpts} placeholder="Pesquisar UFCD…" /></Field>
           <Field label="Turma"><SearchSelect value={turmaNovo} onChange={setTurmaNovo} options={turmaOpts} placeholder="Turma destino…" empty="Não há turmas para esta UFCD." /></Field>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setNovo(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button disabled={!nomeNovo.trim() || !cursoNovo} onClick={async () => {
+            <button disabled={!nomeNovo.trim() || !emailValido(emailNovo) || !cursoNovo} onClick={async () => {
               const { nome, apelido } = splitNome(nomeNovo);
               const id = await addFormandoFin({
                 id: tempNumericId(),
                 nome, apelido: apelido || "-",
                 turma: turmaNovo || "-", telf: telfNovo.trim() || "-",
-                email: emailNovo.trim() || `${nome.toLowerCase()}@mail.pt`,
+                email: emailNovo.trim(),
                 curso: cursoNovo, estado: "Elegível",
                 ...emptyFinDocs(),
               });
               if (!id) return;
+              if (opcoesNovo.criarAcesso) await darAcessoManual("fin", id);
+              setOpcoesNovo(OPCOES_MANUAL);
               const dest = fin.find(t => t.nome === turmaNovo);
               if (dest) patchFin(dest.id, { alunos: dest.alunos + 1 });
               setNovo(false);
@@ -4864,8 +4875,8 @@ function PagamentosView() {
           </div>
           <div className="flex gap-2 pt-2">
             <button onClick={() => setNovo(false)} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button disabled={!nome.trim() || !curso} onClick={async () => {
-              const mail = emailPag.trim() || `${nome.trim().toLowerCase().replace(/\s+/g, ".")}@mail.pt`;
+            <button disabled={!nome.trim() || !curso || !emailValido(emailPag)} onClick={async () => {
+              const mail = emailPag.trim();
               const id = await addPagamento({
                 id: `tmp-${Date.now()}`,
                 nome: nome.trim(),

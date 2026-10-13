@@ -104,8 +104,25 @@ describe("formulário público", () => {
 });
 
 describe("ligação pessoal até à validação", () => {
-  it("percurso completo, pagamento, reserva de vaga, fecho da ligação e ligação ao formando", async () => {
+  it("sem passo de pagamento antes de a secretaria o pedir", async () => {
     const ctx = await arrancar();
+    const curso = await cursoGold(ctx, 100);
+    const id = (await publico(ctx, { nome: "Eva", email: `${unico("eva")}@exemplo.pt`, curso })).json().preinscricao.id as number;
+    const token = await tokenDe(ctx, id);
+    const vista = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${token}` })).json();
+    expect(vista.precisaPagamento).toBe(false);
+    expect(vista.pagamento).toBeNull();
+    for (const tipo of ["cc", "contrato", "regulamento"]) expect((await upload(ctx, token, tipo, `${tipo}.pdf`, PDF)).statusCode).toBe(200);
+    // Sem pedido de pagamento: nem pagamento criado, nem comprovativo aceite, nem pedido antes de validar os documentos.
+    const lead = await ctx.db.query<{ pagamento_id: string | null }>("SELECT pagamento_id FROM preinscricoes WHERE id = $1", [id]);
+    expect(lead.rows[0]!.pagamento_id).toBeFalsy();
+    expect((await upload(ctx, token, "comprovativo", "pag.pdf", PDF)).statusCode).toBe(409);
+    expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/pedir-pagamento`)).statusCode).toBe(409);
+  });
+
+  it("documentos e turma → secretaria valida e pede o pagamento → comprovativo validado → ficha, conta e acesso", async () => {
+    const ctx = await arrancar();
+    await pedido(ctx, "admin", "PUT", "/v1/settings/entidade", { values: { nome: "ENA", iban: "PT50 0002 0123 1234 5678 9015 4", titularConta: "ENA Formação" } });
     const curso = await cursoGold(ctx, 100);
     const passada = await turmaGold(ctx, curso, "2026-01-05");
     const turma = await turmaGold(ctx, curso, "2030-03-04", 1);
@@ -114,8 +131,6 @@ describe("ligação pessoal até à validação", () => {
     const token = await tokenDe(ctx, id);
 
     const vista = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${token}` })).json();
-    expect(vista.precisaPagamento).toBe(true);
-    expect(vista.tipos.map((t: { id: string }) => t.id)).toContain("comprovativo");
     expect(vista.turmas.map((t: { id: number }) => t.id)).not.toContain(passada.id);
 
     expect((await upload(ctx, token, "cc", "cc.pdf", FALSO)).statusCode).toBe(400);
@@ -123,51 +138,69 @@ describe("ligação pessoal até à validação", () => {
       const up = await upload(ctx, token, tipo, `${tipo}.pdf`, PDF);
       expect(up.statusCode, up.body).toBe(200);
     }
-    const lead = await ctx.db.query<{ pagamento_id: string }>("SELECT pagamento_id FROM preinscricoes WHERE id = $1", [id]);
-    expect(lead.rows[0]!.pagamento_id).toBeTruthy();
-
     await validarDoc(ctx, id, "cc");
     expect((await upload(ctx, token, "cc", "cc.pdf", PDF)).statusCode).toBe(409);
     await validarDoc(ctx, id, "contrato");
     await validarDoc(ctx, id, "regulamento");
 
-    expect((await upload(ctx, token, "comprovativo", "pag.pdf", PDF)).statusCode).toBe(200);
-    await validarDoc(ctx, id, "comprovativo");
-    const pag = await ctx.db.query<{ estado: string }>("SELECT estado FROM pagamentos WHERE id = $1", [lead.rows[0]!.pagamento_id]);
-    expect(pag.rows[0]!.estado).toBe("Pago");
-
     const passadaRes = await ctx.app.inject({ method: "POST", url: `/v1/public/documentos/${token}/turma`, payload: { turmaId: passada.id } });
     expect(passadaRes.statusCode).toBe(400);
     expect((await ctx.app.inject({ method: "POST", url: `/v1/public/documentos/${token}/turma`, payload: { turmaId: turma.id } })).statusCode).toBe(200);
     expect((await ctx.app.inject({ method: "POST", url: `/v1/public/documentos/${token}/concluir` })).statusCode).toBe(200);
-    const val = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/validar-preinscricao`, {});
-    expect(val.statusCode).toBe(200);
+
+    // Curso pago: a validação manual fica à espera do pagamento.
+    expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/validar-preinscricao`, {})).statusCode).toBe(400);
+    expect((await pedido(ctx, "comercial", "POST", `/v1/crm/leads/${id}/pedir-pagamento`)).statusCode).toBe(403);
+    const pedidoPag = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/pedir-pagamento`);
+    expect(pedidoPag.statusCode, pedidoPag.body).toBe(200);
+    expect(pedidoPag.json()).toMatchObject({ estadoPagamento: "pedido" });
+
+    const comPag = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${token}` })).json();
+    expect(comPag.precisaPagamento).toBe(true);
+    expect(comPag.pagamento).toMatchObject({ valor: 100, iban: "PT50 0002 0123 1234 5678 9015 4", titular: "ENA Formação" });
+    expect(JSON.stringify(comPag)).not.toContain("referencia");
+
+    expect((await upload(ctx, token, "comprovativo", "pag.pdf", PDF)).statusCode).toBe(200);
+    await validarDoc(ctx, id, "comprovativo");
+
+    // Pagamento confirmado: pré-inscrição validada, ficha de formando na turma e conta criada.
+    const lead = await ctx.db.query<{ estado: string; pagamento_id: string }>("SELECT estado, pagamento_id FROM preinscricoes WHERE id = $1", [id]);
+    expect(lead.rows[0]!.estado).toBe("Formando");
+    const pag = await ctx.db.query<{ estado: string }>("SELECT estado FROM pagamentos WHERE id = $1", [lead.rows[0]!.pagamento_id]);
+    expect(pag.rows[0]!.estado).toBe("Pago");
+    const ficha = await ctx.db.query<{ id: number; pago: boolean; turma_id: number; user_id: string | null }>(
+      "SELECT id, pago, turma_id, user_id::text AS user_id FROM formandos_gold WHERE lower(email) = $1", [email],
+    );
+    expect(ficha.rows).toHaveLength(1);
+    expect(ficha.rows[0]).toMatchObject({ pago: true, turma_id: turma.id });
+    expect(ficha.rows[0]!.user_id).toBeTruthy();
+    const conta = await ctx.db.query<{ role: string; must_change_password: boolean }>("SELECT role, must_change_password FROM users WHERE lower(email) = $1", [email]);
+    expect(conta.rows[0]).toMatchObject({ role: "formando", must_change_password: true });
+    const docs = await ctx.db.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM formando_docs WHERE regime = 'gold' AND formando_id = $1 AND estado = 'validado'", [ficha.rows[0]!.id],
+    );
+    expect(docs.rows[0]!.n).toBe(3);
 
     // Ligação fechada: sem dados pessoais nem envios.
     const fechada = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${token}` })).json();
-    expect(fechada).toMatchObject({ encerrada: true, motivo: "validada" });
+    expect(fechada).toMatchObject({ encerrada: true });
     expect(JSON.stringify(fechada)).not.toContain("Lima");
     expect((await upload(ctx, token, "cc", "cc.pdf", PDF)).statusCode).toBe(410);
     expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/nova-ligacao`)).statusCode).toBe(409);
 
-    // A vaga única fica reservada: outra pessoa já não a pode escolher.
+    // A vaga única ficou ocupada: outra pessoa já não a pode escolher.
     const outro = (await publico(ctx, { nome: "Rui", email: `${unico("rui")}@exemplo.pt`, curso })).json().preinscricao.id as number;
-    const tokenOutro = await tokenDe(ctx, outro);
-    const vistaOutro = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${tokenOutro}` })).json();
+    const vistaOutro = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${await tokenDe(ctx, outro)}` })).json();
     expect(vistaOutro.turmas.map((t: { id: number }) => t.id)).not.toContain(turma.id);
     expect((await pedido(ctx, "secretaria", "POST", "/v1/formandos-gold", { nome: "Intruso", email: `${unico("x")}@exemplo.pt`, turmaId: turma.id })).statusCode).toBe(409);
 
-    // A secretaria converte a reserva em formando: o lead passa a Formando e o pagamento fica ligado.
-    const f = await pedido(ctx, "secretaria", "POST", "/v1/formandos-gold", { nome: "Ana", apelido: "Lima", email, turmaId: turma.id });
-    expect(f.statusCode).toBe(200);
-    const depois = await ctx.db.query<{ estado: string }>("SELECT estado FROM preinscricoes WHERE id = $1", [id]);
-    expect(depois.rows[0]!.estado).toBe("Formando");
-    const ficha = await ctx.db.query<{ pago: boolean }>("SELECT pago FROM formandos_gold WHERE id = $1", [f.json().formando.id]);
-    expect(ficha.rows[0]!.pago).toBe(true);
-    const docs = await ctx.db.query<{ n: number }>(
-      "SELECT count(*)::int AS n FROM formando_docs WHERE regime = 'gold' AND formando_id = $1 AND estado = 'validado'", [f.json().formando.id],
-    );
-    expect(docs.rows[0]!.n).toBe(3);
+    // Repetir a confirmação (webhook em duplicado) não cria outra ficha.
+    const { confirmarPagamento } = await import("../src/ops.js");
+    const pagRow = (await ctx.db.query("SELECT * FROM pagamentos WHERE id = $1", [lead.rows[0]!.pagamento_id])).rows[0] as Record<string, unknown>;
+    await confirmarPagamento(ctx.db, pagRow);
+    const fichas = await ctx.db.query<{ n: number }>("SELECT count(*)::int AS n FROM formandos_gold WHERE lower(email) = $1", [email]);
+    expect(fichas.rows[0]!.n).toBe(1);
+    await pedido(ctx, "admin", "PUT", "/v1/settings/entidade", { values: { nome: "ENA" } });
   });
 
   it("nova ligação invalida a antiga; desistência fecha a ligação", async () => {
@@ -220,5 +253,89 @@ describe("lembretes", () => {
     await enviarLembretesPreinscricao(ctx.db);
     const fim = await ctx.db.query<{ lembretes_enviados: number }>("SELECT lembretes_enviados FROM preinscricoes WHERE id = $1", [aberto]);
     expect(fim.rows[0]!.lembretes_enviados).toBe(5);
+  });
+});
+
+describe("financiada: só documentos, a secretaria coloca na turma", () => {
+  it("sem escolha de turma na ligação; a validação exige a turma de destino e cria a ficha", async () => {
+    const ctx = await arrancar();
+    const curso = unico("Curso Fin");
+    expect((await pedido(ctx, "secretaria", "POST", "/v1/cursos-fin", {
+      ufcdCod: unico("U").slice(0, 18), ufcd: curso, nomeComercial: curso, regime: "Presencial", horas: 25,
+    })).statusCode).toBe(200);
+    const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", {
+      dataInicio: "2030-06-03", nome: unico("TF"), curso, local: "Porto", horario: "Laboral Manhã", alunosTotal: 5, estado: "A montar",
+      cronograma: [{ id: unico("s"), data: "2030-06-03", horaInicio: "09:00", horaFim: "13:00", modalidade: "presencial", formadores: [] }],
+    });
+    expect(t.statusCode, t.body).toBe(200);
+    const turmaId = t.json().turma.id as number;
+    const email = `${unico("fin")}@exemplo.pt`;
+    // O site manda "gold" por engano: o curso é financiado, por isso fica nas financiadas.
+    const r = await publico(ctx, { nome: "Luís", email, curso, regime: "gold", turmaId });
+    expect(r.statusCode, r.body).toBe(200);
+    const id = r.json().preinscricao.id as number;
+    const lead = await ctx.db.query<{ turma_id: number | null; regime: string }>("SELECT turma_id, regime FROM preinscricoes WHERE id = $1", [id]);
+    expect(lead.rows[0]).toMatchObject({ regime: "fin", turma_id: null });
+
+    const token = await tokenDe(ctx, id);
+    const vista = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${token}` })).json();
+    expect(vista.escolheTurma).toBe(false);
+    expect(vista.turmas).toEqual([]);
+    expect((await ctx.app.inject({ method: "POST", url: `/v1/public/documentos/${token}/turma`, payload: { turmaId } })).statusCode).toBe(400);
+
+    // Documentos entregues e validados (os modelos com consentimento entram como ficheiro já validado).
+    for (const tipo of ["cc", "ch", "cu", "morada", "ci", "ce", "contrato", "rgpd"]) {
+      await ctx.db.query("INSERT INTO preinscricao_docs (preinscricao_id, tipo, nome, estado) VALUES ($1, $2, $3, 'validado')", [id, tipo, `${tipo}.pdf`]);
+    }
+    expect((await ctx.app.inject({ method: "POST", url: `/v1/public/documentos/${token}/concluir` })).statusCode).toBe(200);
+
+    const sem = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/validar-preinscricao`, {});
+    expect(sem.statusCode).toBe(400);
+    expect(sem.json().error).toMatch(/turma/i);
+    const ok = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/validar-preinscricao`, { turmaId });
+    expect(ok.statusCode, ok.body).toBe(200);
+    const ficha = await ctx.db.query<{ turma_id: number; user_id: string | null }>("SELECT turma_id, user_id::text AS user_id FROM formandos_fin WHERE lower(email) = $1", [email]);
+    expect(Number(ficha.rows[0]?.turma_id)).toBe(turmaId);
+    expect(ficha.rows[0]?.user_id).toBeTruthy();
+  });
+});
+
+describe("ficha manual pela secretaria", () => {
+  it("oferta fica a 0 € e paga; o acesso usa o email e segue por email sem trocar contas existentes", async () => {
+    const ctx = await arrancar();
+    const curso = await cursoGold(ctx, 150);
+    const turma = await turmaGold(ctx, curso, "2030-09-02");
+    const email = `${unico("oferta")}@exemplo.pt`;
+    const f = await pedido(ctx, "secretaria", "POST", "/v1/formandos-gold", {
+      nome: "Inês", apelido: "Sá", email, turmaId: turma.id, estado: "Formando", pago: false, valor: 0, metodo: "Oferta",
+    });
+    expect(f.statusCode, f.body).toBe(200);
+    const id = f.json().formando.id as number;
+    const ficha = await ctx.db.query<{ valor: unknown; pago: boolean; metodo: string }>("SELECT valor, pago, metodo FROM formandos_gold WHERE id = $1", [id]);
+    expect(Number(ficha.rows[0]!.valor)).toBe(0);
+    expect(ficha.rows[0]).toMatchObject({ pago: true, metodo: "Oferta" });
+
+    // Por pagar: o valor vem do preço do curso.
+    const outra = await pedido(ctx, "secretaria", "POST", "/v1/formandos-gold", {
+      nome: "Rui", email: `${unico("rui")}@exemplo.pt`, turmaId: turma.id, valor: 0, metodo: "-",
+    });
+    expect(Number(outra.json().formando.valor)).toBe(150);
+
+    expect((await pedido(ctx, "formador", "POST", `/v1/formandos/gold/${id}/acesso`, { enviarEmail: true })).statusCode).toBe(403);
+    const acesso = await pedido(ctx, "secretaria", "POST", `/v1/formandos/gold/${id}/acesso`, { enviarEmail: true });
+    expect(acesso.statusCode, acesso.body).toBe(200);
+    expect(acesso.json().acesso).toMatchObject({ email, criado: true, emailEnviado: true });
+    expect(acesso.json().acesso.password).toBeTruthy();
+    const conta = await ctx.db.query<{ must_change_password: boolean }>("SELECT must_change_password FROM users WHERE lower(email) = $1", [email]);
+    expect(conta.rows[0]!.must_change_password).toBe(true);
+
+    // Segunda ficha da mesma pessoa noutra turma: liga à conta, sem trocar a palavra-passe.
+    const hash = (await ctx.db.query<{ password_hash: string }>("SELECT password_hash FROM users WHERE lower(email) = $1", [email])).rows[0]!.password_hash;
+    const t2 = await turmaGold(ctx, curso, "2030-10-07");
+    const f2 = (await pedido(ctx, "secretaria", "POST", "/v1/formandos-gold", { nome: "Inês", email, turmaId: t2.id, metodo: "Oferta" })).json().formando.id as number;
+    const ac2 = await pedido(ctx, "secretaria", "POST", `/v1/formandos/gold/${f2}/acesso`, { enviarEmail: true });
+    expect(ac2.json().acesso.password).toBeUndefined();
+    const depois = (await ctx.db.query<{ password_hash: string }>("SELECT password_hash FROM users WHERE lower(email) = $1", [email])).rows[0]!.password_hash;
+    expect(depois).toBe(hash);
   });
 });

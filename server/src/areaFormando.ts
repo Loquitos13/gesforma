@@ -98,7 +98,8 @@ export async function gerarAcessoFormando(db: Db, regime: "gold" | "fin", id: nu
   if (conta && conta.role !== "formando") {
     return { erro: "Este email já é uma conta da secretaria ou de um formador.", estado: 409 as const };
   }
-  if (conta && !repor && pessoa.user_id) {
+  // Conta de formando que já existe (outro curso): liga-se sem trocar a palavra-passe.
+  if (conta && !repor) {
     await ligarPeloEmail(db, conta.id, email);
     return { email, criado: false, reposto: false };
   }
@@ -514,10 +515,22 @@ export function registerAreaFormandoRoutes(
     if ((regime !== "gold" && regime !== "fin") || !Number.isInteger(id)) {
       return reply.code(400).send({ error: "pedido inválido" });
     }
-    const repor = Boolean((req.body as { repor?: boolean } | undefined)?.repor);
+    const body = (req.body ?? {}) as { repor?: boolean; enviarEmail?: boolean };
+    const repor = Boolean(body.repor);
     const resultado = await gerarAcessoFormando(db, regime, id, repor);
     if ("erro" in resultado) return reply.code(resultado.estado).send({ error: resultado.erro });
-    return { acesso: resultado };
+    // Opcional: o utilizador (email) e a palavra-passe temporária seguem por email para a pessoa.
+    let emailEnviado = false;
+    if (body.enviarEmail) {
+      const tabela = regime === "fin" ? "formandos_fin" : "formandos_gold";
+      const f = await db.query<{ nome: string; apelido: string; curso: string }>(`SELECT nome, apelido, curso FROM ${tabela} WHERE id = $1`, [id]);
+      const nome = `${f.rows[0]?.nome ?? ""} ${f.rows[0]?.apelido ?? ""}`.trim() || resultado.email;
+      const { enviarEmailAcesso } = await import("./inscricaoPaga.js");
+      emailEnviado = await enviarEmailAcesso(db, {
+        email: resultado.email, nome, curso: String(f.rows[0]?.curso ?? ""), password: resultado.password, pago: false,
+      }).then(() => true, () => false);
+    }
+    return { acesso: { ...resultado, emailEnviado } };
   });
 
   app.get("/v1/area-formando/documentos/:formandoId", async (req, reply) => {

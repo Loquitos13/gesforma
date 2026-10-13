@@ -1,4 +1,4 @@
-import { firePreinscricaoEmail, maybeEnviarPagamentoAposDocs } from "./docsLink.js";
+import { firePreinscricaoEmail } from "./docsLink.js";
 import { precoParaOferta } from "./precoOferta.js";
 import { findDuplicados, logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
@@ -94,14 +94,21 @@ export async function criarPreinscricaoPublica(
   if (consent.exigir && input.consentimento !== true) {
     return { error: "aceite a política de privacidade" as const };
   }
-  const regime = input.regime === "fin" ? "fin" : "gold";
+  // O regime vem do catálogo onde o curso existe, não do navegador: um curso financiado vai sempre
+  // para as pré-inscrições financiadas e um Gold para as Gold. O regime enviado só desempata nomes repetidos.
   const pedidoCurso = sanitizeHeader(input.curso || "");
-  const oferta = await cursoDaOferta(db, regime, pedidoCurso);
+  const preferido = input.regime === "fin" ? "fin" : "gold";
+  const outro = preferido === "fin" ? "gold" : "fin";
+  const noPreferido = await cursoDaOferta(db, preferido, pedidoCurso);
+  const noOutro = noPreferido ? null : await cursoDaOferta(db, outro, pedidoCurso);
+  const regime = noOutro ? outro : preferido;
+  const oferta = noPreferido ?? noOutro;
   const curso = oferta?.nome ?? (pedidoCurso || "Contacto pelo site");
   const origem = sanitizeHeader(input.origem || "Website") || "Website";
   const meio = sanitizeHeader(input.meioContacto || origem);
   const telf = sanitizeHeader(input.telf || "");
-  const turma = oferta
+  // Financiada: a turma é atribuída pela secretaria; o local e o horário ficam só como preferência.
+  const turma = oferta && regime === "gold"
     ? await resolverTurmaOferta(db, {
       turmaId: input.turmaId,
       curso,
@@ -111,7 +118,7 @@ export async function criarPreinscricaoPublica(
       regime,
     })
     : null;
-  if (input.turmaId && !turma) return { error: "a turma escolhida já não está libertada" as const };
+  if (regime === "gold" && input.turmaId && !turma) return { error: "a turma escolhida já não está libertada" as const };
   const acessoImediato = Boolean(input.acessoImediato) && !turma;
   const local = sanitizeHeader(turma?.local || input.local || (acessoImediato ? "Online" : ""));
   const horario = sanitizeHeader(turma?.horario || input.horario || "");
@@ -177,7 +184,6 @@ export async function criarPreinscricaoPublica(
     await logLeadEvent(db, id, undefined, "campo", "Possível duplicado", `Outros pedidos com o mesmo contacto: ${outros.map(o => `#${(o as { id: number }).id}`).join(", ")}`);
   }
   await firePreinscricaoEmail(db, { id, email, nome: input.nome, apelido: input.apelido, curso, regime }, "preinscricao.created", `preinscricao:${id}:${email}`).catch(() => undefined);
-  if (oferta) await maybeEnviarPagamentoAposDocs(db, id).catch(() => undefined);
   return {
     duplicado: false as const,
     preinscricao: { id, ref: opaqueRef("pre", id, publicId) },

@@ -12,7 +12,8 @@ const LISTA_KEY = "lista_opcoes:gold";
 type CatalogsCtx = {
   lists: Record<string, CatalogItem[]>;
   settings: Record<string, Record<string, string>>;
-  saveSettings: (id: string, values: Record<string, string>) => void;
+  /** Grava no servidor; só actualiza o estado local se o servidor aceitar. */
+  saveSettings: (id: string, values: Record<string, string>) => Promise<boolean>;
   ready: boolean;
   addListaOpcao: (lista: ListaOpcoesId | string, nome: string) => Promise<string | null>;
   removeListaOpcao: (id: number) => void;
@@ -74,9 +75,11 @@ export function CatalogsProvider({ children }: { children: ReactNode }) {
     return () => { alive = false; };
   }, []);
 
-  const saveSettings = useCallback((id: string, values: Record<string, string>) => {
+  const saveSettings = useCallback(async (id: string, values: Record<string, string>) => {
+    const r = await persist(apiPutSettings(id, values));
+    if (!r) return false;
     setSettings(prev => ({ ...prev, [id]: values }));
-    void persist(apiPutSettings(id, values));
+    return true;
   }, []);
 
   const addListaOpcao = useCallback(async (lista: ListaOpcoesId | string, nome: string) => {

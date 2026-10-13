@@ -3,7 +3,8 @@ import { ingestEvent } from "./automations.js";
 import { transferirDocsDoLead } from "./docsParaFormando.js";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
-import { COMPROVATIVO, docsCompletos, docsDoCurso, faltaValidarPreinscricao, ficheiroModelo } from "./docsCurso.js";
+import { COMPROVATIVO, docsCompletos, docsDoCurso, faltaValidarPreinscricao, ficheiroModelo, situacaoPagamento } from "./docsCurso.js";
+import { lerEntidade } from "./regrasConfig.js";
 import { avisarDocumentosEmFalta, documentosUrl, ensureDocsToken, listarDocsLead } from "./docsLink.js";
 import { idsRecusados } from "./lembretePre.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
@@ -286,6 +287,7 @@ export async function escolherTurmaPublica(db: Db, leadId: number, turmaId: numb
   if (!row) throw new PercursoErro("Pré-inscrição inexistente.");
   if (row.validada_em) throw new PercursoErro("A secretaria já validou esta pré-inscrição.");
   const regime = regimeDe(row.regime);
+  if (regime === "fin") throw new PercursoErro("Na formação financiada a turma é atribuída pela secretaria.");
   const turma = await turmaPorId(db, regime, turmaId);
   if (!turma) throw new PercursoErro("Turma indisponível.");
   const pedido = {
@@ -318,19 +320,6 @@ export async function escolherTurmaPublica(db: Db, leadId: number, turmaId: numb
   return escolhida;
 }
 
-/**
- * Pagamento que a pré-inscrição ainda exige: Gold com preço e pagamento por confirmar.
- * Quando já está pago (webhook ou secretaria), o comprovativo deixa de ser pedido.
- */
-async function pagamentoDoLead(db: Db, lead: { regime?: unknown; preco?: unknown; pagamento_id?: unknown }) {
-  const regime = regimeDe(lead.regime);
-  if (regime !== "gold" || !(Number(lead.preco) > 0)) return { precisa: false, pago: false };
-  if (!lead.pagamento_id) return { precisa: true, pago: false };
-  const r = await db.query<{ estado: string }>("SELECT estado FROM pagamentos WHERE id = $1", [String(lead.pagamento_id)]);
-  const pago = /^pago$/i.test(String(r.rows[0]?.estado ?? ""));
-  return { precisa: !pago, pago };
-}
-
 function entregueAceite(estado: string | undefined) {
   return Boolean(estado) && estado !== "recusado";
 }
@@ -347,8 +336,8 @@ export async function concluirPercurso(db: Db, leadId: number) {
   if (!row) throw new PercursoErro("Pré-inscrição inexistente.");
   if (row.validada_em) throw new PercursoErro("A secretaria já validou esta pré-inscrição.");
   const regime = regimeDe(row.regime);
-  const pag = await pagamentoDoLead(db, row);
-  const pedidos = [...await docsDoCurso(db, row.curso, regime), ...(pag.precisa ? [{ ...COMPROVATIVO, required: true }] : [])];
+  // Concluir o percurso é documentos + turma; o pagamento vem depois, pedido pela secretaria.
+  const pedidos = await docsDoCurso(db, row.curso, regime);
   const ficheiros = await listarDocsLead(db, leadId);
   const by = new Map(ficheiros.map(f => [f.tipo, f]));
   const emFalta = pedidos.filter(d => d.required && !entregueAceite(by.get(d.id)?.estado)).map(d => {
@@ -359,7 +348,7 @@ export async function concluirPercurso(db: Db, leadId: number) {
       observacao: ficheiro?.observacao ?? "",
     };
   });
-  if (!row.turma_escolhida_id) throw new PercursoErro("Escolha o cronograma antes de concluir.");
+  if (!row.turma_escolhida_id && regime !== "fin") throw new PercursoErro("Escolha o cronograma antes de concluir.");
   const jaConcluido = Boolean(row.percurso_concluido_em);
   if (!jaConcluido) {
     await db.query(
@@ -445,16 +434,18 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
     turmaId = turmaDestinoId;
   }
   const turma = turmaId ? await turmaPorId(db, regime, turmaId) : null;
-  const precisa = (await pagamentoDoLead(db, row)).precisa;
   const falta = faltaValidarPreinscricao({
     validada: Boolean(row.validada_em),
     concluido: Boolean(row.percurso_concluido_em),
     turma,
     pedidos,
     ficheiros,
-    precisaPagamento: precisa,
+    pagamento: (await situacaoPagamento(db, row)).estado,
+    turmaPelaSecretaria: regime === "fin",
   });
   if (falta) throw new PercursoErro(falta);
+  if (regime === "fin" && !turmaId) throw new PercursoErro("Escolha a turma onde colocar o formando.");
+  if (regime === "fin" && turma && turma.livres <= 0) throw new PercursoErro("A turma escolhida está cheia.");
   if (turmaId) {
     // Financiada: a validação cria a ficha. Gold: a validação reserva a vaga até a secretaria inscrever.
     const email = normalizeEmail(String(row.email ?? ""));
@@ -514,9 +505,17 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
   }
   if (regime === "fin") {
     const { upsertFormandoFinFromLead } = await import("./finPipeline.js");
-    await upsertFormandoFinFromLead(db, leadId, actorId).catch(err => {
+    const ficha = await upsertFormandoFinFromLead(db, leadId, actorId).catch(err => {
       console.warn(`[percurso] ficha financiada do lead ${leadId} não criada:`, err instanceof Error ? err.message : err);
+      return null;
     });
+    // Financiada (sem pagamento): a conta da área do formando e o email de acesso saem com a validação.
+    if (ficha?.formandoId) {
+      const { darAcessoAoFormando } = await import("./inscricaoPaga.js");
+      const acesso = await darAcessoAoFormando(db, "fin", Number(ficha.formandoId), String(row.curso ?? ""), false)
+        .catch(err => ({ enviado: false as const, erro: err instanceof Error ? err.message : "erro" }));
+      await evento(db, leadId, actorId, "Acesso à área do formando", acesso.enviado ? "Enviado por email." : `Não enviado: ${acesso.erro}`);
+    }
   }
   return { ok: true as const, moved: moved.moved };
 }
@@ -534,6 +533,7 @@ export async function enviarSugestaoTurmaCheia(db: Db, leadId: number, actorId?:
   const email = normalizeEmail(String(row.email ?? ""));
   if (!isEmail(email)) throw new PercursoErro("A ficha não tem email.");
   const regime = regimeDe(row.regime);
+  if (regime === "fin") throw new PercursoErro("Na formação financiada a secretaria escolhe outra turma ao validar.");
   const curso = String(row.curso ?? "");
   const turmaId = Number(row.turma_escolhida_id || row.turma_id || 0);
   const turma = turmaId ? await turmaPorId(db, regime, turmaId) : null;
@@ -596,27 +596,22 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
   const id = Number(lead.id);
   const regime = regimeDe(lead.regime);
   const curso = String(lead.curso ?? "");
-  const pag = await pagamentoDoLead(db, lead);
-  // Com pagamento por confirmar, o comprovativo entra na lista de documentos a enviar.
-  const pedidos = [...await docsDoCurso(db, curso, regime), ...(pag.precisa ? [{ ...COMPROVATIVO, required: true }] : [])];
+  const pag = await situacaoPagamento(db, lead);
+  const pedidos = await docsDoCurso(db, curso, regime);
   const docs = await listarDocsLead(db, id) as Ficheiro[];
   const { ok, emFalta } = docsCompletos(pedidos, docs.map(d => d.tipo));
-  let pagamento: { entidade: string; referencia: string; valor: number; estado: string } | null = null;
-  if (lead.pagamento_id) {
-    const pag = await db.query("SELECT * FROM pagamentos WHERE id = $1", [String(lead.pagamento_id)]);
-    const pagRow = pag.rows[0] as { referencia?: string; valor?: number; estado?: string } | undefined;
-    if (pagRow) {
-      const settings = await db.query("SELECT values FROM app_settings WHERE id = $1", ["gold"]);
-      const values = settings.rows[0]?.values && typeof settings.rows[0].values === "object"
-        ? settings.rows[0].values as Record<string, string> : {};
-      const ref = String(pagRow.referencia ?? "");
-      pagamento = {
-        entidade: String(values["Entidade Multibanco"] ?? ""),
-        referencia: ref.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3") || ref,
-        valor: Number(pagRow.valor) || 0,
-        estado: String(pagRow.estado ?? "Pendente"),
-      };
-    }
+  // O passo de pagamento só abre depois de a secretaria validar os documentos e pedir o pagamento.
+  let pagamento: { valor: number; estado: string; iban: string; titular: string; comprovativo: Ficheiro | null } | null = null;
+  if ((pag.estado === "pedido" || pag.estado === "pago") && lead.pagamento_id) {
+    const r = await db.query<{ valor: number; estado: string }>("SELECT valor, estado FROM pagamentos WHERE id = $1", [String(lead.pagamento_id)]);
+    const ent = await lerEntidade(db);
+    pagamento = {
+      valor: Number(r.rows[0]?.valor ?? lead.preco) || 0,
+      estado: String(r.rows[0]?.estado ?? "Pendente"),
+      iban: ent.iban.replace(/(.{4})/g, "$1 ").trim(),
+      titular: ent.titularConta || ent.nome,
+      comprovativo: docs.find(d => d.tipo === COMPROVATIVO.id) ?? null,
+    };
   }
   const turmaId = Number(lead.turma_escolhida_id || 0);
   const criterios = {
@@ -625,16 +620,18 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
     inicio: String(lead.inicio_curso ?? ""),
   };
   const recusadas = new Set(idsRecusados(lead.turmas_recusadas));
-  const turmas = (await turmasParaEscolha(db, curso, regime, criterios)).filter(t => !recusadas.has(t.id));
-  const recomendadas = (await recomendacoesOutroHorario(db, curso, regime, criterios, turmas.map(t => t.id))).filter(t => !recusadas.has(t.id));
-  const breves = (await turmasParaBreve(db, curso, regime, criterios, [...turmas, ...recomendadas].map(t => t.id))).filter(t => !recusadas.has(t.id));
+  // Financiada: a pessoa só envia documentos; a turma é atribuída pela secretaria.
+  const escolheTurma = regime !== "fin";
+  const turmas = escolheTurma ? (await turmasParaEscolha(db, curso, regime, criterios)).filter(t => !recusadas.has(t.id)) : [];
+  const recomendadas = escolheTurma ? (await recomendacoesOutroHorario(db, curso, regime, criterios, turmas.map(t => t.id))).filter(t => !recusadas.has(t.id)) : [];
+  const breves = escolheTurma ? (await turmasParaBreve(db, curso, regime, criterios, [...turmas, ...recomendadas].map(t => t.id))).filter(t => !recusadas.has(t.id)) : [];
   const turmaBruta = turmaId && !recusadas.has(turmaId)
     ? turmas.find(t => t.id === turmaId) ?? await turmaPorId(db, regime, turmaId)
     : null;
   const turmaEscolhida = turmaBruta && recusadas.has(turmaBruta.id) ? null : turmaBruta;
-  const recusados = docs.filter(d => d.estado === "recusado");
+  const recusados = docs.filter(d => d.estado === "recusado" && d.tipo !== COMPROVATIVO.id);
   const encerrada = Boolean(lead.validada_em);
-  const percursoConcluido = Boolean(lead.percurso_concluido_em) && Boolean(turmaEscolhida) && recusados.length === 0;
+  const percursoConcluido = Boolean(lead.percurso_concluido_em) && (Boolean(turmaEscolhida) || !escolheTurma) && recusados.length === 0;
   let passo: 1 | 2 = 1;
   if (turmaEscolhida) passo = 2;
   return {
@@ -649,12 +646,14 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
     docsCompletos: ok,
     emFalta: emFalta.map(d => d.label),
     pagamento,
-    precisaPagamento: pag.precisa,
+    /** Passo de pagamento aberto: a secretaria pediu o pagamento e ainda não está confirmado. */
+    precisaPagamento: pag.estado === "pedido",
     pago: pag.pago,
     encerrada,
     correcao: !encerrada && recusados.length > 0,
     passo,
     percursoConcluido,
+    escolheTurma,
     turmas,
     recomendadas,
     breves,

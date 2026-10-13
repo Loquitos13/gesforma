@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppModal } from "../partilhado/FormKit";
+import { CamposInscricaoManual, OPCOES_MANUAL, emailValido, type OpcoesManual } from "./InscricaoManual";
 import type { FormandoTurma, Preinscricao } from "../partilhado/ListsContext";
 import {
   formatDiaMes,
@@ -41,7 +42,7 @@ export function InscreverFormandoPanel({
   vagasLivres: number;
   accent?: "gold" | "fin";
   onInscreverLead: (lead: Preinscricao) => void | Promise<void>;
-  onInscreverManual: (dados: { nome: string; email: string; telf: string }) => void | Promise<void>;
+  onInscreverManual: (dados: { nome: string; email: string; telf: string; opcoes: OpcoesManual }) => void | Promise<void>;
   onCancel: () => void;
 }) {
   const [q, setQ] = useState("");
@@ -49,6 +50,7 @@ export function InscreverFormandoPanel({
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [telf, setTelf] = useState("");
+  const [opcoes, setOpcoes] = useState<OpcoesManual>(OPCOES_MANUAL);
   const [busy, setBusy] = useState(false);
   const btn = accent === "gold"
     ? "bg-amber-500 hover:bg-amber-600"
@@ -118,7 +120,7 @@ export function InscreverFormandoPanel({
         onClick={() => setManual(v => !v)}
         className="text-xs font-semibold text-slate-500 hover:text-slate-800"
       >
-        {manual ? "Esconder inscrição avulsa" : "Inscrever alguém sem pré-inscrição"}
+        {manual ? "Esconder inscrição manual" : "Inscrever alguém sem pré-inscrição (oferta, pagamento à parte…)"}
       </button>
 
       {manual && (
@@ -128,25 +130,26 @@ export function InscreverFormandoPanel({
             <input className={iCls} value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome completo" />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Email</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Email (é o utilizador da área do formando)</span>
             <input className={iCls} type="email" value={email} onChange={e => setEmail(e.target.value)} />
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Telemóvel</span>
             <input className={iCls} value={telf} onChange={e => setTelf(e.target.value)} />
           </label>
+          <CamposInscricaoManual value={opcoes} onChange={setOpcoes} regime={accent} />
           <button
             type="button"
-            disabled={!nome.trim() || semVagas || busy}
+            disabled={!nome.trim() || !emailValido(email) || semVagas || busy}
             onClick={() => {
               setBusy(true);
-              void Promise.resolve(onInscreverManual({ nome: nome.trim(), email: email.trim(), telf: telf.trim() }))
-                .then(() => { setNome(""); setEmail(""); setTelf(""); })
+              void Promise.resolve(onInscreverManual({ nome: nome.trim(), email: email.trim(), telf: telf.trim(), opcoes }))
+                .then(() => { setNome(""); setEmail(""); setTelf(""); setOpcoes(OPCOES_MANUAL); })
                 .finally(() => setBusy(false));
             }}
             className={`w-full py-2 text-sm font-semibold rounded-lg text-white disabled:opacity-40 ${btn}`}
           >
-            Inscrever avulso
+            Criar ficha de formando
           </button>
         </div>
       )}

@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { snapshotParaPerfil } from "./opsVisibilidade.js";
-import { marcarLeadPago } from "./pagamentoPedido.js";
+import { PedidoPagamentoErro, marcarLeadPago, pedirPagamento } from "./pagamentoPedido.js";
 import { apagarDocsDaFicha, reavaliarDocsDoFormando } from "./docsParaFormando.js";
 import { leadPorToken, marcarUso, motivoFecho, regenerarToken, textoFecho, vistaEncerrada } from "./ligacaoPessoal.js";
 import { erroFicheiroPublico } from "./googleDrive.js";
@@ -56,13 +56,13 @@ import {
   propagarCurso, propagarCursoDaTurma, propagarFormador, propagarNomeTurma,
 } from "./ligacoes.js";
 import {
-  COMPROVATIVO, firePreinscricaoEmail, listarDocsLead, maybeEnviarPagamentoAposDocs, notificarDocumentos,
+  COMPROVATIVO, firePreinscricaoEmail, listarDocsLead, notificarDocumentos,
   docsDoCurso, abrirAlerta, alertarDocumentosIncorrectos,
   definirEstadoDoc, dispensarAlerta, listarAlertasAbertas, syncLigacao,
 } from "./docsLink.js";
 import { apagarFicheiroSubstituido, readDriveContent, storeDriveFile } from "./googleDrive.js";
 import { garantirPastaPendente, limparAtalhosDaTurma } from "./driveArvore.js";
-import { ficheiroModelo } from "./docsCurso.js";
+import { ficheiroModelo, situacaoPagamento } from "./docsCurso.js";
 import {
   formandoFinPorToken, recusarDocFormandoFin, uploadDocFormandoFin, validarDocFormandoFin, vistaDocumentosFormandoFin,
 } from "./formandoFinDocs.js";
@@ -939,12 +939,17 @@ export function registerOpsRoutes(
     const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime);
     const permitido = new Set([...pedidos.map(p => p.id), DOCS_PUBLICOS.id]);
     if (!permitido.has(tipo)) return reply.code(400).send({ error: "Este tipo de documento não faz parte do curso." });
+    // O comprovativo só entra com o passo de pagamento aberto (pagamento pedido pela secretaria).
+    const comprovativo = tipo === DOCS_PUBLICOS.id;
+    if (comprovativo && (await situacaoPagamento(db, lead)).estado !== "pedido") {
+      return reply.code(409).send({ error: "O pagamento ainda não foi pedido pela secretaria." });
+    }
     if (lead.validada_em) {
       return reply.code(403).send({ error: "Esta ligação já foi encerrada. A secretaria validou a pré-inscrição." });
     }
     const ja = await listarDocsLead(db, Number(lead.id));
     const recusados = ja.filter(d => d.estado === "recusado").map(d => d.tipo);
-    if (recusados.length && !recusados.includes(tipo)) {
+    if (!comprovativo && recusados.length && !recusados.includes(tipo)) {
       return reply.code(400).send({ error: "Nesta correcção só pode enviar os documentos indicados." });
     }
     if (ja.some(d => d.tipo === tipo && d.estado === "validado")) {
@@ -982,8 +987,7 @@ export function registerOpsRoutes(
       await logLeadEvent(db, Number(lead.id), undefined, "campo", titulo, file.name);
       await syncLigacao(db, Number(lead.id));
       await abrirAlerta(db, Number(lead.id));
-      const pagMail = await maybeEnviarPagamentoAposDocs(db, Number(lead.id));
-      return { ok: true, nome: file.name, pagamentoEnviado: Boolean(pagMail && "enviou" in pagMail && pagMail.enviou) };
+      return { ok: true, nome: file.name };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : "upload recusado" });
     }
@@ -1156,6 +1160,21 @@ export function registerOpsRoutes(
     return getLeadDossier(db, id);
   });
 
+  app.post("/v1/crm/leads/:id/pedir-pagamento", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (!staffValida(req.actor?.role)) return reply.code(403).send({ error: "Só a equipa pedagógica ou administração pede o pagamento." });
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
+    try {
+      const r = await pedirPagamento(db, id, req.actor!.id);
+      await auditLog(db, req.actor!.id, "preinscricao.pagamento_pedido", "preinscricao", String(id), req.ip, { valor: r.valor });
+      return { ...(await getLeadDossier(db, id)), pedido: r };
+    } catch (err) {
+      if (err instanceof PedidoPagamentoErro) return reply.code(409).send({ error: err.message });
+      throw err;
+    }
+  });
+
   app.post("/v1/crm/leads/:id/nova-ligacao", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const id = Number((req.params as { id: string }).id);
@@ -1286,8 +1305,11 @@ export function registerOpsRoutes(
         horario = String(turma.horario ?? "");
       }
     }
-    const resolved = curso ? await precoParaOferta(db, curso, local, horario) : null;
-    const valor = resolved ?? d.valor;
+    // Inscrição oferecida pela ENA: sem valor a pagar e já regularizada.
+    const oferta = /^oferta$/i.test(d.metodo.trim());
+    const resolved = curso && !oferta ? await precoParaOferta(db, curso, local, horario) : null;
+    const valor = oferta ? 0 : resolved ?? d.valor;
+    if (oferta) { d.pago = true; d.metodo = "Oferta"; }
     const estado = normalizarEstado("formandoGold", d.estado);
     if (!estado) return reply.code(400).send({ error: `Estado inválido: «${d.estado}».` });
     const id = await nextOpsId(db);
@@ -1341,7 +1363,7 @@ export function registerOpsRoutes(
       }
     }
     if (d.turmaId !== undefined || d.local !== undefined || d.curso !== undefined) {
-      const antes = await one(db, "SELECT curso, local, turma_id FROM formandos_gold WHERE id = $1", [id]);
+      const antes = await one(db, "SELECT curso, local, turma_id, metodo FROM formandos_gold WHERE id = $1", [id]);
       const turmaId = d.turmaId ?? (antes?.turma_id == null ? undefined : Number(antes.turma_id));
       let curso = d.curso ?? String(antes?.curso ?? "");
       let local = d.local ?? String(antes?.local ?? "");
@@ -1354,7 +1376,8 @@ export function registerOpsRoutes(
           horario = String(turma.horario ?? "");
         }
       }
-      const resolved = curso ? await precoParaOferta(db, curso, local, horario) : null;
+      const oferta = /^oferta$/i.test(String(d.metodo ?? antes?.metodo ?? ""));
+      const resolved = curso && !oferta ? await precoParaOferta(db, curso, local, horario) : null;
       if (resolved != null) d.valor = resolved;
     }
     const current = await one(db, "SELECT * FROM formandos_gold WHERE id = $1", [id]);

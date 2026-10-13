@@ -396,7 +396,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
             <h1 className="text-xl font-bold text-slate-800 leading-tight">CRM</h1>
             <p className="text-sm text-slate-500 mt-0.5">
               {regime === "fin"
-                ? "Pré-inscrições da formação financiada. O formulário público continua a ser da oferta Gold."
+                ? "Pré-inscrições da formação financiada. A pessoa preenche o formulário do site e envia os documentos; a secretaria coloca-a na turma ao validar."
                 : "Pré-inscrição rápida no balcão; NIF e morada só na etapa Pré-inscrição, depois a secretaria inscreve."}
               {" "}{counts.total.toLocaleString("pt-PT")} pré-inscrições neste regime.
             </p>
@@ -418,7 +418,7 @@ export function PreInscricoesGoldView({ regime = "gold", openLeadId, onOpened }:
             <p className="text-sm font-bold text-slate-800 mt-0.5">Pré-inscrição</p>
             <p className="text-xs text-slate-500 mt-1">
               {regime === "fin"
-                ? "Pedidos deste regime entram no balcão. O site público é só Gold."
+                ? "O pedido do site entra sozinho na fila."
                 : "O pedido do site entra sozinho na fila."}
               {" "}{counts.preinscricoes.toLocaleString("pt-PT")} nesta base.
             </p>

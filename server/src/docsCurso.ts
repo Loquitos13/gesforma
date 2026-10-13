@@ -28,6 +28,34 @@ export const COMPROVATIVO: DocPedido = {
   required: false,
 };
 
+/**
+ * Estado do pagamento de uma pré-inscrição Gold com preço:
+ * `por_pedir` até a secretaria validar os documentos e pedir o pagamento; `pedido` com o passo
+ * de pagamento aberto na ligação pessoal; `pago` depois de confirmado. Sem preço ou na Financiada: `isento`.
+ */
+export type EstadoPagamentoLead = "isento" | "por_pedir" | "pedido" | "pago";
+
+export function estadoPagamentoLead(lead: { regime?: unknown; preco?: unknown; pagamento_pedido_em?: unknown }, pago: boolean): EstadoPagamentoLead {
+  if (String(lead.regime ?? "gold") === "fin" || !(Number(lead.preco) > 0)) return "isento";
+  if (pago) return "pago";
+  return lead.pagamento_pedido_em ? "pedido" : "por_pedir";
+}
+
+/** Estado do pagamento da pré-inscrição, lendo o pagamento ligado. */
+export async function situacaoPagamento(
+  db: Db,
+  lead: { regime?: unknown; preco?: unknown; pagamento_id?: unknown; pagamento_pedido_em?: unknown },
+) {
+  let pago = false;
+  if (lead.pagamento_id) {
+    const r = await db.query<{ estado: string }>("SELECT estado FROM pagamentos WHERE id = $1", [String(lead.pagamento_id)]);
+    pago = /^pago$/i.test(String(r.rows[0]?.estado ?? ""));
+  }
+  const estado = estadoPagamentoLead(lead, pago);
+  // O comprovativo só é pedido com o passo de pagamento aberto.
+  return { estado, pago: estado === "pago", pedeComprovativo: estado === "pedido" };
+}
+
 export type DocExtraPreinscricao = { id: string; label: string; required: boolean };
 
 export type DocsPreinscricaoCfg = {
@@ -197,15 +225,33 @@ export function faltaValidarPreinscricao(input: {
   turma: { livres: number } | null;
   pedidos: DocPedido[];
   ficheiros: { tipo: string; estado?: string }[];
-  precisaPagamento: boolean;
+  pagamento: EstadoPagamentoLead;
+  /** Financiada: a turma é escolhida pela secretaria no momento da validação. */
+  turmaPelaSecretaria?: boolean;
 }) {
+  const docs = faltaDocsValidados(input);
+  if (docs) return docs;
+  if (input.pagamento === "por_pedir") return "Documentos validados: falta pedir o pagamento.";
+  if (input.pagamento === "pedido") return "Aguarda o pagamento. A pré-inscrição valida-se quando o pagamento for confirmado.";
+  return "";
+}
+
+/** Texto vazio quando a secretaria já pode pedir (ou voltar a pedir) o pagamento. */
+export function faltaPedirPagamento(input: Parameters<typeof faltaValidarPreinscricao>[0]) {
+  if (input.pagamento === "isento") return "Esta pré-inscrição não tem pagamento.";
+  if (input.pagamento === "pago") return "O pagamento já está confirmado.";
+  return faltaDocsValidados(input);
+}
+
+function faltaDocsValidados(input: Parameters<typeof faltaValidarPreinscricao>[0]) {
   if (input.validada) return "A pré-inscrição já foi validada.";
-  if (!input.concluido) return "A pessoa ainda não concluiu o percurso na ligação pessoal.";
-  if (!input.turma) return "Ainda não há cronograma escolhido.";
-  if (input.turma.livres <= 0) return "A turma escolhida está cheia.";
+  if (!input.concluido) return "A pessoa ainda não concluiu o envio dos documentos na ligação pessoal.";
+  if (!input.turma && !input.turmaPelaSecretaria) return "Ainda não há cronograma escolhido.";
+  if (input.turma && input.turma.livres <= 0) return "A turma escolhida está cheia.";
   const by = new Map(input.ficheiros.map(f => [f.tipo, f.estado || "pendente"]));
-  const faltam = input.pedidos.filter(d => d.required && by.get(d.id) !== "validado").map(d => d.label);
-  if (input.precisaPagamento && by.get("comprovativo") !== "validado") faltam.push("Comprovativo de pagamento");
+  const faltam = input.pedidos
+    .filter(d => d.required && d.id !== COMPROVATIVO.id && by.get(d.id) !== "validado")
+    .map(d => d.label);
   if (faltam.length) return `Falta validar: ${faltam.join(", ")}.`;
   return "";
 }

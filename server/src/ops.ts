@@ -350,12 +350,17 @@ export async function confirmarPagamento(db: Db, row: Record<string, unknown>) {
     );
   }
   const email = mapped.email ? normalizeEmail(mapped.email) : "";
+  // Pagamento pedido na pré-inscrição: o email de sucesso (com o acesso) sai no fim da inscrição.
+  const { aposPagamentoConfirmado, leadDoPagamentoPedido } = await import("./inscricaoPaga.js");
+  const doPercurso = await leadDoPagamentoPedido(db, mapped.id);
   if (email && isEmail(email)) {
-    await ingestEvent(db, "payment.confirmed", {
-      email,
-      nome: mapped.nome,
-      curso: mapped.curso,
-    }, `payment:${mapped.id}:${email}`).catch(() => undefined);
+    if (!doPercurso) {
+      await ingestEvent(db, "payment.confirmed", {
+        email,
+        nome: mapped.nome,
+        curso: mapped.curso,
+      }, `payment:${mapped.id}:${email}`).catch(() => undefined);
+    }
     // Só o formando e a pré-inscrição deste pagamento: pelo id ligado, senão pelo email E curso.
     const formandoId = row.formando_id == null ? null : Number(row.formando_id);
     await db.query(
@@ -371,6 +376,7 @@ export async function confirmarPagamento(db: Db, row: Record<string, unknown>) {
       [email, mapped.id, mapped.curso],
     );
   }
+  if (doPercurso) await aposPagamentoConfirmado(db, mapped.id);
   const next = await db.query("SELECT * FROM pagamentos WHERE id = $1", [mapped.id]);
   return next.rows[0] ? mapPagamento(next.rows[0] as Record<string, unknown>) : mapped;
 }

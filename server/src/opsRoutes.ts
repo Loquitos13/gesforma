@@ -1,5 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { snapshotParaPerfil } from "./opsVisibilidade.js";
+import { marcarLeadPago } from "./pagamentoPedido.js";
+import { leadPorToken, marcarUso, motivoFecho, regenerarToken, textoFecho, vistaEncerrada } from "./ligacaoPessoal.js";
+import { erroFicheiroPublico } from "./googleDrive.js";
 import { InscricaoErro, contarInscritos, garantirVaga, recontar, recontarTurma } from "./inscricao.js";
 import { normalizarEstado, validarTransicao } from "./estados.js";
 import { registarDocManualFin } from "./formandoFinDocs.js";
@@ -53,7 +56,7 @@ import {
 } from "./ligacoes.js";
 import {
   COMPROVATIVO, firePreinscricaoEmail, listarDocsLead, maybeEnviarPagamentoAposDocs, notificarDocumentos,
-  popularFichaPessoa, docsDoCurso, abrirAlerta, alertarDocumentosIncorrectos,
+  docsDoCurso, abrirAlerta, alertarDocumentosIncorrectos,
   definirEstadoDoc, dispensarAlerta, listarAlertasAbertas, syncLigacao,
 } from "./docsLink.js";
 import { apagarFicheiroSubstituido, readDriveContent, storeDriveFile } from "./googleDrive.js";
@@ -80,7 +83,7 @@ async function auditLog(
 import { modulosDaFicha } from "./programaCurso.js";
 import {
   PercursoErro, concluirPercurso, escolherTurmaPublica, enviarSugestaoTurmaCheia,
-  moverDocsDoLead, moverDocsParaTurma, registarConsentimento, validarPreinscricao, vistaDocumentosPublica,
+  ligarPreinscricaoAoFormandoGold, moverDocsDoLead, moverDocsParaTurma, registarConsentimento, validarPreinscricao, vistaDocumentosPublica,
 } from "./percurso.js";
 import { aplicarTurmaRegras, listTurmaRegras } from "./turmaRegras.js";
 import { camposEmFalta, estadoPodeEntregar, podeArrastar } from "./crmRegras.js";
@@ -117,6 +120,7 @@ const preSchema = z.object({
   pagamentoMetodo: z.string().trim().max(40).optional(),
   acessoImediato: z.boolean().optional(),
   regime: z.enum(["gold", "fin"]).optional(),
+  consentimento: z.boolean().optional(),
 });
 
 function regimeDoPedido(role: string | undefined, pedido?: string): "gold" | "fin" {
@@ -350,15 +354,8 @@ export function registerOpsRoutes(
         await db.query("UPDATE preinscricoes SET estado = $2 WHERE id = $1 AND estado <> 'Formando'", [id, d.estado]);
         await logLeadEvent(db, id, req.actor!.id, "estado", `Passou a ${d.estado}`, `De ${String(current.estado)}`);
         if (d.estado === "Pago") {
-          const email = normalizeEmail(String(current.email ?? ""));
-          if (isEmail(email)) {
-            await ingestEvent(db, "payment.confirmed", {
-              email,
-              nome: `${current.nome} ${current.apelido}`.trim(),
-              curso: String(current.curso ?? ""),
-              preinscricaoId: id,
-            }, `payment:pre:${id}:${email}`).catch(() => undefined);
-          }
+          await marcarLeadPago(db, id);
+          await audit(db, req.actor!.id, "preinscricao.pago_manual", "preinscricao", String(id), req.ip, { lote: true });
         }
         updated += 1;
       } else if (d.acao === "seguimento") {
@@ -591,14 +588,14 @@ export function registerOpsRoutes(
       horario: d.horario,
       turmaId: d.turmaId,
       campanha: d.campanha,
-      preco: d.preco,
       meioContacto: "Website",
       pagamentoMetodo: d.pagamentoMetodo,
       acessoImediato: d.acessoImediato,
       regime: d.regime,
+      consentimento: d.consentimento,
     }, { ip: req.ip });
     if ("error" in created) {
-      const code = created.error === "email inválido" || created.error === "forma de pagamento desconhecida" ? 400 : 409;
+      const code = created.error === "a turma escolhida já não está libertada" ? 409 : 400;
       return reply.code(code).send({ error: created.error });
     }
     await audit(db, undefined, "preinscricao.public_create", "preinscricao", String(created.preinscricao.id), req.ip, { curso: d.curso, duplicado: created.duplicado });
@@ -656,6 +653,14 @@ export function registerOpsRoutes(
     const d = parsed.data;
     const before = await one(db, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
     if (!before) return reply.code(404).send({ error: "pré-inscrição inexistente" });
+    if (d.turmaId) {
+      const tabela = regimeDaLinha(before) === "fin" ? "turmas_fin" : "turmas_gold";
+      const t = await one(db, `SELECT curso FROM ${tabela} WHERE id = $1`, [d.turmaId]);
+      const cursoLead = String(d.curso ?? before.curso ?? "");
+      if (!t || String(t.curso ?? "").trim().toLowerCase() !== cursoLead.trim().toLowerCase()) {
+        return reply.code(400).send({ error: "A turma não existe ou é de outro curso." });
+      }
+    }
     if (regimeDaLinha(before) !== "fin" && (d.curso !== undefined || d.local !== undefined || d.horario !== undefined || d.preco !== undefined)) {
       const curso = d.curso ?? String(before.curso ?? "");
       const local = d.local ?? String(before.local ?? "");
@@ -738,16 +743,9 @@ export function registerOpsRoutes(
       const turmaId = d.turmaId || Number(row.turma_id) || Number(before.turma_escolhida_id) || 0;
       if (turmaId) await moverDocsDoLead(db, id, turmaId).catch(() => undefined);
     }
-    if (row && d.estado === "Pago") {
-      const email = normalizeEmail(String(row.email ?? ""));
-      if (isEmail(email)) {
-        await ingestEvent(db, "payment.confirmed", {
-          email,
-          nome: `${row.nome} ${row.apelido}`.trim(),
-          curso: String(row.curso ?? ""),
-          preinscricaoId: id,
-        }, `payment:pre:${id}:${email}`).catch(() => undefined);
-      }
+    if (row && d.estado === "Pago" && String(before.estado) !== "Pago") {
+      await marcarLeadPago(db, id);
+      await audit(db, req.actor!.id, "preinscricao.pago_manual", "preinscricao", String(id), req.ip);
     }
     const handed = await entregarSeCompleto(db, id, req.actor!.id);
     return { preinscricao: handed };
@@ -793,7 +791,20 @@ export function registerOpsRoutes(
     if (!requireAuth(req, reply)) return;
     const id = Number((req.params as { id: string }).id);
     if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
+    const antes = await one(db, "SELECT nome, apelido, curso, estado, validada_em FROM preinscricoes WHERE id = $1", [id]);
+    if (!antes) return reply.code(404).send({ error: "pré-inscrição inexistente" });
+    if ((antes.validada_em || antes.estado === "Formando") && req.actor!.role !== "admin") {
+      return reply.code(409).send({ error: "Uma pré-inscrição validada não se apaga. Marque-a como Desistiu." });
+    }
+    // Os ficheiros enviados pela pessoa saem da Drive com a ficha.
+    const ficheiros = await listarDocsLead(db, id);
+    for (const f of ficheiros) {
+      if (f.drive_file_id) await apagarFicheiroSubstituido(db, f.drive_file_id).catch(() => undefined);
+    }
     await db.query("DELETE FROM preinscricoes WHERE id = $1", [id]);
+    await audit(db, req.actor!.id, "preinscricao.apagar", "preinscricao", String(id), req.ip, {
+      nome: `${antes.nome ?? ""} ${antes.apelido ?? ""}`.trim(), curso: antes.curso, estado: antes.estado, ficheiros: ficheiros.length,
+    });
     return { ok: true };
   });
 
@@ -803,9 +814,11 @@ export function registerOpsRoutes(
     config: { rateLimit: { max: 40, timeWindow: "1 minute" } },
   }, async (req, reply) => {
     const token = String((req.params as { token: string }).token ?? "");
-    if (token.length < 12) return reply.code(400).send({ error: "ligação inválida" });
-    const lead = await one(db, "SELECT * FROM preinscricoes WHERE docs_token = $1", [token]);
+    const lead = await leadPorToken(db, token);
     if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
+    const fecho = motivoFecho(lead);
+    if (fecho) return vistaEncerrada(lead, fecho);
+    await marcarUso(db, Number(lead.id));
     return vistaDocumentosPublica(db, lead);
   });
 
@@ -814,9 +827,11 @@ export function registerOpsRoutes(
   }, async (req, reply) => {
     const token = String((req.params as { token?: string }).token ?? "");
     const tipo = String((req.params as { tipo?: string }).tipo ?? "").slice(0, 48);
-    if (token.length < 12 || !tipo) return reply.code(400).send({ error: "ligação inválida" });
-    const lead = await one(db, "SELECT curso, regime FROM preinscricoes WHERE docs_token = $1", [token]);
+    if (!tipo) return reply.code(400).send({ error: "ligação inválida" });
+    const lead = await leadPorToken(db, token);
     if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
+    const fechoModelo = motivoFecho(lead);
+    if (fechoModelo) return reply.code(410).send({ error: textoFecho(fechoModelo) });
     const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
     const modelo = await ficheiroModelo(db, regime, String(lead.curso ?? ""), tipo);
     if (!modelo) return reply.code(404).send({ error: "Este documento não tem ficheiro da secretaria." });
@@ -834,11 +849,14 @@ export function registerOpsRoutes(
   }, async (req, reply) => {
     const token = String((req.params as { token?: string }).token ?? "");
     const tipo = String((req.body as { tipo?: string } | undefined)?.tipo ?? "").slice(0, 48);
-    if (token.length < 12 || !tipo) return reply.code(400).send({ error: "pedido inválido" });
-    const lead = await one(db, "SELECT id FROM preinscricoes WHERE docs_token = $1", [token]);
+    if (!tipo) return reply.code(400).send({ error: "pedido inválido" });
+    const lead = await leadPorToken(db, token);
     if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
+    const fechoConsent = motivoFecho(lead);
+    if (fechoConsent) return reply.code(410).send({ error: textoFecho(fechoConsent) });
     try {
-      return await registarConsentimento(db, Number(lead.id), tipo);
+      await marcarUso(db, Number(lead.id));
+      return await registarConsentimento(db, Number(lead.id), tipo, { ip: req.ip });
     } catch (err) {
       const msg = err instanceof PercursoErro ? err.message : "Não foi possível registar o consentimento.";
       return reply.code(400).send({ error: msg });
@@ -850,9 +868,12 @@ export function registerOpsRoutes(
   }, async (req, reply) => {
     const token = String((req.params as { token: string }).token ?? "");
     const turmaId = Number((req.body as { turmaId?: number } | undefined)?.turmaId);
-    if (token.length < 12 || !Number.isInteger(turmaId)) return reply.code(400).send({ error: "pedido inválido" });
-    const lead = await one(db, "SELECT id, validada_em FROM preinscricoes WHERE docs_token = $1", [token]);
+    if (!Number.isInteger(turmaId)) return reply.code(400).send({ error: "pedido inválido" });
+    const lead = await leadPorToken(db, token);
     if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
+    const fechoTurma = motivoFecho(lead);
+    if (fechoTurma) return reply.code(410).send({ error: textoFecho(fechoTurma) });
+    await marcarUso(db, Number(lead.id));
     try {
       const turma = await escolherTurmaPublica(db, Number(lead.id), turmaId);
       return { ok: true, turma };
@@ -866,9 +887,11 @@ export function registerOpsRoutes(
     config: { rateLimit: { max: 12, timeWindow: "1 minute" } },
   }, async (req, reply) => {
     const token = String((req.params as { token: string }).token ?? "");
-    if (token.length < 12) return reply.code(400).send({ error: "ligação inválida" });
-    const lead = await one(db, "SELECT id FROM preinscricoes WHERE docs_token = $1", [token]);
+    const lead = await leadPorToken(db, token);
     if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
+    const fechoConcluir = motivoFecho(lead);
+    if (fechoConcluir) return reply.code(410).send({ error: textoFecho(fechoConcluir) });
+    await marcarUso(db, Number(lead.id));
     try {
       return await concluirPercurso(db, Number(lead.id));
     } catch (err) {
@@ -881,9 +904,10 @@ export function registerOpsRoutes(
     config: { rateLimit: { max: 12, timeWindow: "1 minute" } },
   }, async (req, reply) => {
     const token = String((req.params as { token: string }).token ?? "");
-    if (token.length < 12) return reply.code(400).send({ error: "ligação inválida" });
-    const lead = await one(db, "SELECT * FROM preinscricoes WHERE docs_token = $1", [token]);
+    const lead = await leadPorToken(db, token);
     if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
+    const fechoUpload = motivoFecho(lead);
+    if (fechoUpload) return reply.code(410).send({ error: textoFecho(fechoUpload) });
     let name = "ficheiro";
     let mime = "application/octet-stream";
     let bytes: Buffer | null = null;
@@ -901,6 +925,8 @@ export function registerOpsRoutes(
       return reply.code(400).send({ error: "upload inválido" });
     }
     if (!bytes) return reply.code(400).send({ error: "ficheiro em falta" });
+    const erroFicheiro = erroFicheiroPublico(name, bytes);
+    if (erroFicheiro) return reply.code(400).send({ error: erroFicheiro });
     const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
     const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime);
     const permitido = new Set([...pedidos.map(p => p.id), DOCS_PUBLICOS.id]);
@@ -913,6 +939,10 @@ export function registerOpsRoutes(
     if (recusados.length && !recusados.includes(tipo)) {
       return reply.code(400).send({ error: "Nesta correcção só pode enviar os documentos indicados." });
     }
+    if (ja.some(d => d.tipo === tipo && d.estado === "validado")) {
+      return reply.code(409).send({ error: "Este documento já foi validado pela secretaria. Para o substituir, contacte a secretaria." });
+    }
+    await marcarUso(db, Number(lead.id));
     try {
       const antigo = ja.find(d => d.tipo === tipo && d.drive_file_id);
       const zona = await garantirPastaPendente(db, {
@@ -940,17 +970,6 @@ export function registerOpsRoutes(
         "INSERT INTO preinscricao_docs (preinscricao_id, tipo, nome, drive_file_id, drive_url) VALUES ($1,$2,$3,$4,$5)",
         [lead.id, tipo, file.name, file.id, file.openUrl ?? ""],
       );
-      const pessoa = {
-        id: Number(lead.id),
-        email: String(lead.email ?? ""),
-        nome: String(lead.nome ?? ""),
-        apelido: String(lead.apelido ?? ""),
-        curso: String(lead.curso ?? ""),
-        regime,
-      };
-      await popularFichaPessoa(db, pessoa, {
-        tipo, nome: file.name, driveFileId: file.id, driveUrl: file.openUrl ?? "",
-      });
       const titulo = tipo === "comprovativo" ? "Comprovativo de pagamento na ficha" : `Documento na ficha · ${tipo}`;
       await logLeadEvent(db, Number(lead.id), undefined, "campo", titulo, file.name);
       await syncLigacao(db, Number(lead.id));
@@ -1034,6 +1053,17 @@ export function registerOpsRoutes(
     const ok = await definirEstadoDoc(db, id, docId, "validado", "", req.actor!.id);
     if (!ok) return reply.code(404).send({ error: "documento inexistente" });
     await logLeadEvent(db, id, req.actor!.id, "campo", "Documento validado", String(docId));
+    // Comprovativo aceite = pagamento recebido: confirma o pagamento ligado à pré-inscrição.
+    const docRow = await one(db, "SELECT tipo FROM preinscricao_docs WHERE id = $1", [docId]);
+    if (docRow?.tipo === "comprovativo") {
+      const leadPag = await one(db, "SELECT pagamento_id FROM preinscricoes WHERE id = $1", [id]);
+      const pag = leadPag?.pagamento_id ? await one(db, "SELECT * FROM pagamentos WHERE id = $1", [String(leadPag.pagamento_id)]) : null;
+      if (pag && !/^pago$/i.test(String(pag.estado ?? ""))) {
+        await confirmarPagamento(db, pag as Record<string, unknown>);
+        await auditLog(db, req.actor!.id, "pagamento.confirmado_comprovativo", "pagamento", String(pag.id), req.ip, { preinscricao: id });
+        await logLeadEvent(db, id, req.actor!.id, "seguimento", "Pagamento confirmado", "Comprovativo validado pela secretaria.");
+      }
+    }
     await auditLog(db, req.actor!.id, "crm.doc_validado", "preinscricao", String(id), req.ip, { docId });
     return getLeadDossier(db, id);
   });
@@ -1116,6 +1146,22 @@ export function registerOpsRoutes(
       return reply.code(400).send({ error: msg });
     }
     return getLeadDossier(db, id);
+  });
+
+  app.post("/v1/crm/leads/:id/nova-ligacao", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
+    const lead = await one(db, "SELECT id, validada_em, estado FROM preinscricoes WHERE id = $1", [id]);
+    if (!lead) return reply.code(404).send({ error: "pré-inscrição inexistente" });
+    if (lead.validada_em || lead.estado === "Formando") {
+      return reply.code(409).send({ error: "A pré-inscrição já foi validada: a ligação pessoal fica encerrada." });
+    }
+    await regenerarToken(db, id);
+    const mail = await notificarDocumentos(db, id, req.actor!.id).catch(() => null);
+    await logLeadEvent(db, id, req.actor!.id, "contacto", "Nova ligação pessoal", "A ligação anterior deixou de funcionar.");
+    await audit(db, req.actor!.id, "preinscricao.nova_ligacao", "preinscricao", String(id), req.ip);
+    return { ok: true, url: mail?.url ?? null };
   });
 
   app.post("/v1/crm/leads/:id/turma-cheia", async (req, reply) => {
@@ -1256,6 +1302,9 @@ export function registerOpsRoutes(
       throw err;
     }
     await audit(db, req.actor!.id, "formando.inscrever", "formandos_gold", String(id), req.ip, { turmaId: d.turmaId ?? null });
+    await ligarPreinscricaoAoFormandoGold(db, id, req.actor!.id).catch(err => {
+      req.log.warn({ err }, "pré-inscrição não ligada ao formando");
+    });
     const row = await one(db, "SELECT * FROM formandos_gold WHERE id = $1", [id]);
     return { formando: row ? mapFormandoGold(row) : { id } };
   });

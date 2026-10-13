@@ -62,6 +62,17 @@ const TEMPLATES = [
     cta: "Pedir dados de pagamento",
   },
   {
+    tipo: "validada",
+    nome: "Pré-inscrição validada",
+    assunto: "Pré-inscrição validada · {{curso}}",
+    linhas: [
+      "{{nome}}, a secretaria validou a sua pré-inscrição em {{curso}}.",
+      "Turma: {{turma}}. Antes do início recebe os detalhes da primeira sessão.",
+      "A ligação pessoal para documentos foi encerrada. Qualquer alteração, responda a este email.",
+    ],
+    cta: "Falar com a secretaria",
+  },
+  {
     tipo: "reminder_24h",
     nome: "Lembrete 24h",
     assunto: "Amanhã começa {{curso}}",
@@ -100,6 +111,7 @@ const RULES = [
   { nome: "Boas-vindas ao registo", gatilho: "Nova pré-inscrição recebida", key: "preinscricao.created", tipo: "welcome", delay: 0 },
   { nome: "Documentos na pré-inscrição", gatilho: "Pré-inscrição promovida", key: "preinscricao.promoted", tipo: "welcome", delay: 0 },
   { nome: "Referência após documentos", gatilho: "Documentos da pré-inscrição submetidos", key: "preinscricao.docs_completos", tipo: "pagamento_ref", delay: 0 },
+  { nome: "Pré-inscrição validada", gatilho: "Pré-inscrição validada pela secretaria", key: "preinscricao.validated", tipo: "validada", delay: 0 },
   { nome: "Lembrete sem pagamento (3 dias)", gatilho: "Pré-inscrição sem pagamento há 3 dias", key: "preinscricao.unpaid_3d", tipo: "unpaid_3d", delay: 0 },
   { nome: "Confirmação de pagamento", gatilho: "Pagamento confirmado", key: "payment.confirmed", tipo: "payment", delay: 0 },
   { nome: "Contacto após a venda", gatilho: "Contacto após a venda", key: "sale.followup", tipo: "sale_followup", delay: 3600 },

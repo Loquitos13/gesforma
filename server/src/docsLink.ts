@@ -1,3 +1,4 @@
+import { garantirToken } from "./ligacaoPessoal.js";
 import { randomBytes } from "node:crypto";
 import { ingestEvent, flushQueuedJobs } from "./automations.js";
 import { config } from "./config.js";
@@ -14,22 +15,7 @@ export function documentosUrl(token: string) {
 }
 
 export async function ensureDocsToken(db: Db, id: number) {
-  const row = await db.query<{ docs_token: string | null }>(
-    "SELECT docs_token FROM preinscricoes WHERE id = $1",
-    [id],
-  );
-  const current = row.rows[0]?.docs_token;
-  if (current) return current;
-  const token = randomBytes(18).toString("base64url");
-  await db.query(
-    "UPDATE preinscricoes SET docs_token = $2 WHERE id = $1 AND docs_token IS NULL",
-    [id, token],
-  );
-  const again = await db.query<{ docs_token: string | null }>(
-    "SELECT docs_token FROM preinscricoes WHERE id = $1",
-    [id],
-  );
-  return again.rows[0]?.docs_token ?? token;
+  return garantirToken(db, id);
 }
 
 export async function firePreinscricaoEmail(
@@ -187,7 +173,10 @@ export async function definirEstadoDoc(
     [docId, leadId, estado, estado === "recusado" ? observacao.trim() : "", actorId ?? null],
   );
   if (!upd.rows[0]) return null;
-  if (estado === "validado") await dispensarAlertas(db, leadId);
+  if (estado === "validado") {
+    await dispensarAlertas(db, leadId);
+    await propagarDocValidado(db, leadId, docId, actorId);
+  }
   if (estado === "recusado") {
     await db.query(
       "UPDATE preinscricoes SET percurso_concluido_em = NULL WHERE id = $1 AND validada_em IS NULL",
@@ -323,31 +312,47 @@ export async function maybeEnviarPagamentoAposDocs(db: Db, leadId: number) {
   return { enviou: true as const, ...(await firePagamentoRefEmail(db, leadId)) };
 }
 
-export async function popularFichaPessoa(
-  db: Db,
-  lead: { id: number; email: string; nome: string; apelido: string; curso: string; regime?: string },
-  doc: { tipo: string; nome: string; driveFileId: string; driveUrl: string },
-) {
-  const email = normalizeEmail(lead.email);
-  const data = new Date().toISOString().slice(0, 10);
-  const regimes: ("gold" | "fin")[] = lead.regime === "fin" ? ["fin", "gold"] : ["gold", "fin"];
-  for (const regime of regimes) {
-    const table = regime === "fin" ? "formandos_fin" : "formandos_gold";
-    const found = await db.query<{ id: number }>(
-      `SELECT id FROM ${table} WHERE email <> '' AND lower(email) = $1 ORDER BY id DESC LIMIT 1`,
-      [email],
-    );
-    const fid = found.rows[0]?.id;
-    if (!fid) continue;
-    await db.query(
-      `INSERT INTO formando_docs (regime, formando_id, doc_id, ok, file_name, data, drive_file_id, drive_url)
-       VALUES ($1, $2, $3, true, $4, $5, $6, $7)
-       ON CONFLICT (regime, formando_id, doc_id) DO UPDATE SET
-         ok = true, file_name = EXCLUDED.file_name, data = EXCLUDED.data,
-         drive_file_id = EXCLUDED.drive_file_id, drive_url = EXCLUDED.drive_url, updated_at = now()`,
-      [regime, fid, doc.tipo, doc.nome, data, doc.driveFileId, doc.driveUrl],
-    );
-  }
+/**
+ * Copia um documento VALIDADO da pré-inscrição para o dossiê do formando do mesmo regime e curso
+ * (se a ficha já existir), com quem validou. Documentos por validar nunca passam para o dossiê.
+ */
+export async function propagarDocValidado(db: Db, leadId: number, docRowId: number, actorId?: string) {
+  const r = await db.query<{ tipo: string; nome: string; drive_file_id: string; drive_url: string; email: string; curso: string; regime: string }>(
+    `SELECT d.tipo, d.nome, d.drive_file_id, d.drive_url, p.email, p.curso, COALESCE(p.regime, 'gold') AS regime
+       FROM preinscricao_docs d JOIN preinscricoes p ON p.id = d.preinscricao_id
+      WHERE d.id = $1 AND d.preinscricao_id = $2`,
+    [docRowId, leadId],
+  );
+  const doc = r.rows[0];
+  if (!doc || doc.tipo === "comprovativo") return;
+  const email = normalizeEmail(doc.email);
+  if (!isEmail(email)) return;
+  const regime = doc.regime === "fin" ? "fin" : "gold";
+  const table = regime === "fin" ? "formandos_fin" : "formandos_gold";
+  const found = await db.query<{ id: number }>(
+    `SELECT id FROM ${table} WHERE email <> '' AND lower(email) = $1 AND lower(trim(curso)) = lower(trim($2)) ORDER BY id DESC LIMIT 1`,
+    [email, doc.curso],
+  );
+  const fid = found.rows[0]?.id;
+  if (!fid) return;
+  await db.query(
+    `INSERT INTO formando_docs (regime, formando_id, doc_id, ok, file_name, data, drive_file_id, drive_url, estado, validated_by, validated_at)
+     VALUES ($1, $2, $3, true, $4, $5, $6, $7, 'validado', $8, now())
+     ON CONFLICT (regime, formando_id, doc_id) DO UPDATE SET
+       ok = true, file_name = EXCLUDED.file_name, data = EXCLUDED.data, estado = 'validado',
+       drive_file_id = EXCLUDED.drive_file_id, drive_url = EXCLUDED.drive_url,
+       validated_by = EXCLUDED.validated_by, validated_at = now(), updated_at = now()`,
+    [regime, fid, doc.tipo, doc.nome, new Date().toISOString().slice(0, 10), doc.drive_file_id, doc.drive_url, actorId ?? null],
+  );
+}
+
+/** Copia todos os documentos já validados de uma pré-inscrição (quando a ficha do formando nasce depois). */
+export async function propagarDocsValidadosDoLead(db: Db, leadId: number, actorId?: string) {
+  const docs = await db.query<{ id: number }>(
+    "SELECT id FROM preinscricao_docs WHERE preinscricao_id = $1 AND estado = 'validado'",
+    [leadId],
+  );
+  for (const d of docs.rows) await propagarDocValidado(db, leadId, d.id, actorId);
 }
 
 export { COMPROVATIVO, docsCompletos, docsDoCurso };

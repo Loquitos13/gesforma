@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { fileURLToPath } from "node:url";
 
 function req(name: string, fallback?: string) {
   const v = process.env[name] ?? fallback;
@@ -47,7 +48,7 @@ export const config = {
   mailReplyTo: (process.env.MAIL_REPLY_TO ?? "").trim(),
   databaseUrl: process.env.DATABASE_URL ?? "",
   pgliteDir: process.env.PGLITE_DIR
-    ?? (process.env.VERCEL ? "/tmp/gesforma-pglite" : new URL("../data/pglite", import.meta.url).pathname),
+    ?? (process.env.VERCEL ? "/tmp/gesforma-pglite" : fileURLToPath(new URL("../data/pglite", import.meta.url))),
   trustProxy: bool("TRUST_PROXY", Boolean(process.env.VERCEL)),
   cronSecret: process.env.CRON_SECRET ?? "",
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
@@ -65,7 +66,7 @@ export const config = {
   googleDriveFolderId: process.env.GOOGLE_DRIVE_FOLDER_ID ?? "",
   googleDriveScope: (process.env.GOOGLE_DRIVE_SCOPE ?? "drive.file") as "drive.file" | "drive",
   driveDir: process.env.DRIVE_DIR
-    ?? (process.env.VERCEL ? "/tmp/gesforma-drive" : new URL("../data/drive-files", import.meta.url).pathname),
+    ?? (process.env.VERCEL ? "/tmp/gesforma-drive" : fileURLToPath(new URL("../data/drive-files", import.meta.url))),
   driveMaxBytes: Number(process.env.DRIVE_MAX_BYTES ?? 10 * 1024 * 1024),
   dataEncryptionKey: process.env.DATA_ENCRYPTION_KEY ?? "",
   paymentWebhookKey: process.env.PAYMENT_WEBHOOK_KEY ?? "",

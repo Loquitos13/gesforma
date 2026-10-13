@@ -86,6 +86,7 @@ const eventSchema = z.object({
     "preinscricao.created",
     "preinscricao.promoted",
     "preinscricao.docs_completos",
+    "preinscricao.validated",
     "preinscricao.contacted",
     "payment.confirmed",
     "sale.followup",

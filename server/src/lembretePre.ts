@@ -1,4 +1,5 @@
 import { config } from "./config.js";
+import { motivoFecho } from "./ligacaoPessoal.js";
 import type { Db } from "./db/pool.js";
 import { docsDoCurso } from "./docsCurso.js";
 import { documentosUrl, ensureDocsToken, listarDocsLead } from "./docsLink.js";
@@ -9,6 +10,9 @@ import { isEmail, normalizeEmail } from "./security.js";
 export type UnidadeLembrete = "minutos" | "horas" | "dias";
 
 const UNIDADES = new Set<UnidadeLembrete>(["minutos", "horas", "dias"]);
+
+/** Número máximo de lembretes por pré-inscrição, quando a definição não o indica. */
+const MAXIMO_OMISSAO = 5;
 
 export function idsRecusados(raw: unknown): number[] {
   const lista = Array.isArray(raw)
@@ -25,10 +29,13 @@ export function normalizarLembrete(values: Record<string, string>): Record<strin
   if (!UNIDADES.has(unidade as UnidadeLembrete)) return null;
   const quantidade = Number(values.quantidade);
   if (!Number.isInteger(quantidade) || quantidade < 1 || quantidade > 999) return null;
+  const maximo = values.maximo == null || values.maximo === "" ? MAXIMO_OMISSAO : Number(values.maximo);
+  if (!Number.isInteger(maximo) || maximo < 1 || maximo > 50) return null;
   return {
     activo: values.activo === "0" ? "0" : "1",
     quantidade: String(quantidade),
     unidade,
+    maximo: String(maximo),
   };
 }
 
@@ -53,12 +60,14 @@ export async function lerLembretePre(db: Db) {
     activo: values.activo ?? "1",
     quantidade: values.quantidade ?? "1",
     unidade: values.unidade ?? "dias",
+    maximo: values.maximo ?? "",
   });
-  const cfg = normal ?? { activo: "1", quantidade: "1", unidade: "dias" };
+  const cfg = normal ?? { activo: "1", quantidade: "1", unidade: "dias", maximo: String(MAXIMO_OMISSAO) };
   return {
     activo: cfg.activo !== "0",
     quantidade: Number(cfg.quantidade),
     unidade: cfg.unidade as UnidadeLembrete,
+    maximo: Number(cfg.maximo) || MAXIMO_OMISSAO,
     segundos: segundosDoLembrete(Number(cfg.quantidade), cfg.unidade) ?? 86400,
   };
 }
@@ -119,30 +128,40 @@ export async function enviarLembretesPreinscricao(db: Db) {
     "UPDATE preinscricoes SET lembrete_pre_em = now() WHERE validada_em IS NULL AND lembrete_pre_em IS NULL",
   );
   const limite = new Date(Date.now() - cfg.segundos * 1000);
+  // Só pedidos abertos, com ligação pessoal enviada, e até ao máximo de lembretes.
   const devidos = await db.query<{
     id: number; nome: string; apelido: string; email: string; curso: string; regime: string;
     turma_escolhida_id: number | null; turmas_recusadas: unknown;
+    validada_em: unknown; estado: string; docs_token_usado_em: unknown; docs_token_criado_em: unknown; created_at: unknown;
   }>(
     `SELECT id, nome, apelido, email, curso, COALESCE(regime, 'gold') AS regime,
-            turma_escolhida_id, turmas_recusadas
+            turma_escolhida_id, turmas_recusadas, validada_em, estado,
+            docs_token_usado_em, docs_token_criado_em, created_at
        FROM preinscricoes
       WHERE validada_em IS NULL
+        AND estado NOT IN ('Desistiu', 'Formando')
+        AND docs_token IS NOT NULL
+        AND lembretes_enviados < $2
         AND btrim(email) <> ''
         AND lembrete_pre_em IS NOT NULL
         AND lembrete_pre_em <= $1
       ORDER BY lembrete_pre_em
       LIMIT 20`,
-    [limite],
+    [limite, cfg.maximo],
   );
   let enviados = 0;
   for (const lead of devidos.rows) {
+    if (motivoFecho(lead)) {
+      await db.query("UPDATE preinscricoes SET lembrete_pre_em = now() WHERE id = $1", [lead.id]);
+      continue;
+    }
     const pendencia = await pendenciaDe(db, lead);
     if (!temPendencia(pendencia)) {
       await db.query("UPDATE preinscricoes SET lembrete_pre_em = now() WHERE id = $1", [lead.id]);
       continue;
     }
     const reclamado = await db.query<{ id: number }>(
-      "UPDATE preinscricoes SET lembrete_pre_em = now() WHERE id = $1 AND lembrete_pre_em <= $2 RETURNING id",
+      "UPDATE preinscricoes SET lembrete_pre_em = now(), lembretes_enviados = lembretes_enviados + 1 WHERE id = $1 AND lembrete_pre_em <= $2 RETURNING id",
       [lead.id, limite],
     );
     if (!reclamado.rows[0]) continue;

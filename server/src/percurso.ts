@@ -1,7 +1,8 @@
-import { InscricaoErro, garantirVaga } from "./inscricao.js";
+import { InscricaoErro, garantirVaga, sqlReservas } from "./inscricao.js";
+import { ingestEvent } from "./automations.js";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
-import { docsCompletos, docsDoCurso, faltaValidarPreinscricao } from "./docsCurso.js";
+import { COMPROVATIVO, docsCompletos, docsDoCurso, faltaValidarPreinscricao, ficheiroModelo } from "./docsCurso.js";
 import { avisarDocumentosEmFalta, documentosUrl, ensureDocsToken, listarDocsLead } from "./docsLink.js";
 import { idsRecusados } from "./lembretePre.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
@@ -57,6 +58,7 @@ type TurmaRow = {
   tolerancia?: number;
   estado: string;
   activa?: boolean;
+  fechada_em?: unknown;
   cronograma: unknown;
 };
 
@@ -117,8 +119,15 @@ function planoDe(raw: unknown): PlanoPublico[] {
 }
 
 function turmaActiva(regime: "gold" | "fin", row: TurmaRow) {
-  if (regime === "fin") return row.activa !== false && row.estado !== "Inativa";
+  if (row.fechada_em) return false;
+  if (regime === "fin") return row.activa !== false && row.estado !== "Inativa" && row.estado !== "Cancelada" && row.estado !== "Concluída";
   return row.estado === "Ativa" || row.estado === "Ativo";
+}
+
+/** Uma turma que já começou deixa de aparecer na escolha pública. */
+function aindaNaoComecou(row: TurmaRow) {
+  const inicio = isoData(String(row.data_inicio ?? ""));
+  return !inicio || inicio >= hojeIso();
 }
 
 function mapTurma(row: TurmaRow): TurmaPublica {
@@ -142,14 +151,15 @@ async function turmasRegime(db: Db, regime: "gold" | "fin", curso: string) {
   const vagas = regime === "fin" ? "alunos_total" : "vagas";
   const extra = regime === "fin" ? ", activa" : "";
   const rows = await db.query<TurmaRow>(
-    `SELECT id, nome, curso, local, horario, data_inicio, ${ocup} AS ocupadas, ${vagas} AS vagas,
-            COALESCE(tolerancia_vagas, 0) AS tolerancia, estado, cronograma${extra}
-       FROM ${table}
-      WHERE lower(trim(curso)) = lower(trim($1))
-      ORDER BY data_inicio`,
+    `SELECT t.id, t.nome, t.curso, t.local, t.horario, t.data_inicio,
+            t.${ocup} + ${sqlReservas(regime, "t.id")} AS ocupadas, t.${vagas} AS vagas,
+            COALESCE(t.tolerancia_vagas, 0) AS tolerancia, t.estado, t.cronograma, t.fechada_em${extra ? ", t.activa" : ""}
+       FROM ${table} t
+      WHERE lower(trim(t.curso)) = lower(trim($1))
+      ORDER BY t.data_inicio`,
     [curso],
   );
-  return rows.rows.filter(r => turmaActiva(regime, r)).map(mapTurma);
+  return rows.rows.filter(r => turmaActiva(regime, r) && aindaNaoComecou(r)).map(mapTurma);
 }
 
 export async function turmasParaEscolha(db: Db, curso: string, regime: "gold" | "fin", pedido?: PedidoTurma) {
@@ -241,9 +251,10 @@ async function turmaPorId(db: Db, regime: "gold" | "fin", id: number) {
   const vagas = regime === "fin" ? "alunos_total" : "vagas";
   const extra = regime === "fin" ? ", activa" : "";
   const row = await db.query<TurmaRow>(
-    `SELECT id, nome, curso, local, horario, data_inicio, ${ocup} AS ocupadas, ${vagas} AS vagas,
-            COALESCE(tolerancia_vagas, 0) AS tolerancia, estado, cronograma${extra}
-       FROM ${table} WHERE id = $1`,
+    `SELECT t.id, t.nome, t.curso, t.local, t.horario, t.data_inicio,
+            t.${ocup} + ${sqlReservas(regime, "t.id")} AS ocupadas, t.${vagas} AS vagas,
+            COALESCE(t.tolerancia_vagas, 0) AS tolerancia, t.estado, t.cronograma, t.fechada_em${extra ? ", t.activa" : ""}
+       FROM ${table} t WHERE t.id = $1`,
     [id],
   );
   const found = row.rows[0];
@@ -306,23 +317,37 @@ export async function escolherTurmaPublica(db: Db, leadId: number, turmaId: numb
   return escolhida;
 }
 
+/**
+ * Pagamento que a pré-inscrição ainda exige: Gold com preço e pagamento por confirmar.
+ * Quando já está pago (webhook ou secretaria), o comprovativo deixa de ser pedido.
+ */
+async function pagamentoDoLead(db: Db, lead: { regime?: unknown; preco?: unknown; pagamento_id?: unknown }) {
+  const regime = regimeDe(lead.regime);
+  if (regime !== "gold" || !(Number(lead.preco) > 0)) return { precisa: false, pago: false };
+  if (!lead.pagamento_id) return { precisa: true, pago: false };
+  const r = await db.query<{ estado: string }>("SELECT estado FROM pagamentos WHERE id = $1", [String(lead.pagamento_id)]);
+  const pago = /^pago$/i.test(String(r.rows[0]?.estado ?? ""));
+  return { precisa: !pago, pago };
+}
+
 function entregueAceite(estado: string | undefined) {
   return Boolean(estado) && estado !== "recusado";
 }
 
 export async function concluirPercurso(db: Db, leadId: number) {
   const lead = await db.query(
-    "SELECT id, curso, regime, preco, turma_escolhida_id, validada_em, percurso_concluido_em FROM preinscricoes WHERE id = $1",
+    "SELECT id, curso, regime, preco, pagamento_id, turma_escolhida_id, validada_em, percurso_concluido_em FROM preinscricoes WHERE id = $1",
     [leadId],
   );
   const row = lead.rows[0] as {
-    id: number; curso: string; regime: string; preco: number; turma_escolhida_id: number | null;
+    id: number; curso: string; regime: string; preco: number; pagamento_id: string | null; turma_escolhida_id: number | null;
     validada_em: string | null; percurso_concluido_em: string | null;
   } | undefined;
   if (!row) throw new PercursoErro("Pré-inscrição inexistente.");
   if (row.validada_em) throw new PercursoErro("A secretaria já validou esta pré-inscrição.");
   const regime = regimeDe(row.regime);
-  const pedidos = await docsDoCurso(db, row.curso, regime);
+  const pag = await pagamentoDoLead(db, row);
+  const pedidos = [...await docsDoCurso(db, row.curso, regime), ...(pag.precisa ? [{ ...COMPROVATIVO, required: true }] : [])];
   const ficheiros = await listarDocsLead(db, leadId);
   const by = new Map(ficheiros.map(f => [f.tipo, f]));
   const emFalta = pedidos.filter(d => d.required && !entregueAceite(by.get(d.id)?.estado)).map(d => {
@@ -419,7 +444,7 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
     turmaId = turmaDestinoId;
   }
   const turma = turmaId ? await turmaPorId(db, regime, turmaId) : null;
-  const precisa = regime === "gold" && Number(row.preco) > 0;
+  const precisa = (await pagamentoDoLead(db, row)).precisa;
   const falta = faltaValidarPreinscricao({
     validada: Boolean(row.validada_em),
     concluido: Boolean(row.percurso_concluido_em),
@@ -429,14 +454,14 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
     precisaPagamento: precisa,
   });
   if (falta) throw new PercursoErro(falta);
-  if (regime === "fin" && turmaId) {
-    // A validação cria a ficha do formando: confirma a vaga antes de mexer na pasta ou no lead.
+  if (turmaId) {
+    // Financiada: a validação cria a ficha. Gold: a validação reserva a vaga até a secretaria inscrever.
     const email = normalizeEmail(String(row.email ?? ""));
     const existente = email
-      ? await db.query<{ id: number }>("SELECT id FROM formandos_fin WHERE email <> '' AND lower(trim(email)) = $1 ORDER BY id DESC LIMIT 1", [email])
+      ? await db.query<{ id: number }>(`SELECT id FROM ${regime === "fin" ? "formandos_fin" : "formandos_gold"} WHERE email <> '' AND lower(trim(email)) = $1 AND turma_id = $2 ORDER BY id DESC LIMIT 1`, [email, turmaId])
       : { rows: [] as { id: number }[] };
     try {
-      await db.tx(q => garantirVaga(q, "fin", turmaId, { email, excluirFormandoId: existente.rows[0]?.id }));
+      await db.tx(q => garantirVaga(q, regime, turmaId, { email, excluirFormandoId: existente.rows[0]?.id }));
     } catch (err) {
       if (err instanceof InscricaoErro) throw new PercursoErro(err.message);
       throw err;
@@ -464,6 +489,16 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
     [leadId],
   );
   await evento(db, leadId, actorId, "Pré-inscrição validada", moved.turma ? `Pasta do formando em ${moved.turma}` : "");
+  const emailValidado = normalizeEmail(String(row.email ?? ""));
+  if (isEmail(emailValidado)) {
+    await ingestEvent(db, "preinscricao.validated", {
+      email: emailValidado,
+      nome: `${row.nome ?? ""} ${row.apelido ?? ""}`.trim(),
+      curso: String(row.curso ?? ""),
+      turma: turma?.nome ?? moved.turma ?? "-",
+      preinscricaoId: leadId,
+    }, `validated:${leadId}`).catch(() => undefined);
+  }
   if (regime === "fin") {
     const { upsertFormandoFinFromLead } = await import("./finPipeline.js");
     await upsertFormandoFinFromLead(db, leadId, actorId).catch(err => {
@@ -548,7 +583,9 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
   const id = Number(lead.id);
   const regime = regimeDe(lead.regime);
   const curso = String(lead.curso ?? "");
-  const pedidos = await docsDoCurso(db, curso, regime);
+  const pag = await pagamentoDoLead(db, lead);
+  // Com pagamento por confirmar, o comprovativo entra na lista de documentos a enviar.
+  const pedidos = [...await docsDoCurso(db, curso, regime), ...(pag.precisa ? [{ ...COMPROVATIVO, required: true }] : [])];
   const docs = await listarDocsLead(db, id) as Ficheiro[];
   const { ok, emFalta } = docsCompletos(pedidos, docs.map(d => d.tipo));
   let pagamento: { entidade: string; referencia: string; valor: number; estado: string } | null = null;
@@ -599,7 +636,8 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
     docsCompletos: ok,
     emFalta: emFalta.map(d => d.label),
     pagamento,
-    precisaPagamento: false,
+    precisaPagamento: pag.precisa,
+    pago: pag.pago,
     encerrada,
     correcao: !encerrada && recusados.length > 0,
     passo,
@@ -617,7 +655,7 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
   };
 }
 
-export async function registarConsentimento(db: Db, leadId: number, tipo: string) {
+export async function registarConsentimento(db: Db, leadId: number, tipo: string, meta: { ip?: string } = {}) {
   const lead = await db.query("SELECT * FROM preinscricoes WHERE id = $1", [leadId]);
   const row = lead.rows[0] as Record<string, unknown> | undefined;
   if (!row) throw new PercursoErro("Pré-inscrição inexistente.");
@@ -626,11 +664,67 @@ export async function registarConsentimento(db: Db, leadId: number, tipo: string
   const pedidos = await docsDoCurso(db, String(row.curso ?? ""), regime);
   const pedido = pedidos.find(p => p.id === tipo && p.modelo);
   if (!pedido) throw new PercursoErro("Este documento não está preparado para consentimento.");
+  const ja = await db.query<{ estado: string }>(
+    "SELECT COALESCE(estado, 'pendente') AS estado FROM preinscricao_docs WHERE preinscricao_id = $1 AND tipo = $2",
+    [leadId, tipo],
+  );
+  if (ja.rows.some(r => r.estado === "validado")) throw new PercursoErro("Este documento já foi validado pela secretaria.");
+  // Prova do consentimento: quando, de onde e que versão do modelo (ficheiro da secretaria) foi aceite.
+  const modelo = await ficheiroModelo(db, regime, String(row.curso ?? ""), tipo);
+  const versao = modelo ? `${modelo.nome} · ${modelo.driveFileId}` : pedido.modelo ?? "";
   await db.query("DELETE FROM preinscricao_docs WHERE preinscricao_id = $1 AND tipo = $2", [leadId, tipo]);
   await db.query(
-    "INSERT INTO preinscricao_docs (preinscricao_id, tipo, nome, drive_file_id, drive_url) VALUES ($1,$2,$3,'','')",
-    [leadId, tipo, `Consentimento · ${pedido.label}`],
+    `INSERT INTO preinscricao_docs (preinscricao_id, tipo, nome, drive_file_id, drive_url, consentimento_ip, consentimento_modelo)
+     VALUES ($1,$2,$3,'','',$4,$5)`,
+    [leadId, tipo, `Consentimento · ${pedido.label}`, (meta.ip ?? "").slice(0, 64), versao.slice(0, 300)],
   );
-  await evento(db, leadId, undefined, "Consentimento", pedido.label);
+  await evento(db, leadId, undefined, "Consentimento", `${pedido.label}${versao ? ` · modelo ${versao}` : ""}${meta.ip ? ` · IP ${meta.ip}` : ""}`);
   return { ok: true as const, nome: pedido.label };
 }
+
+/**
+ * Gold (validação manual): quando a secretaria cria a ficha do formando, liga-a à pré-inscrição
+ * validada do mesmo email e curso — o lead passa a «Formando», o pagamento fica associado e
+ * os documentos validados passam para o dossiê. A reserva da vaga deixa de contar.
+ */
+export async function ligarPreinscricaoAoFormandoGold(db: Db, formandoId: number, actorId?: string) {
+  const f = await db.query<{ email: string; curso: string; turma_id: number | null }>(
+    "SELECT email, curso, turma_id FROM formandos_gold WHERE id = $1",
+    [formandoId],
+  );
+  const formando = f.rows[0];
+  const email = normalizeEmail(formando?.email ?? "");
+  if (!formando || !isEmail(email)) return null;
+  const lead = await db.query<{ id: number; pagamento_id: string | null }>(
+    `SELECT id, pagamento_id FROM preinscricoes
+      WHERE lower(email) = $1 AND lower(trim(curso)) = lower(trim($2))
+        AND COALESCE(regime, 'gold') = 'gold' AND validada_em IS NOT NULL AND estado <> 'Desistiu'
+      ORDER BY validada_em DESC LIMIT 1`,
+    [email, formando.curso],
+  );
+  const row = lead.rows[0];
+  if (!row) return null;
+  await db.query(
+    `UPDATE preinscricoes SET estado = 'Formando', ultima_actividade_em = now(),
+       turma_id = COALESCE($2, turma_id), turma_escolhida_id = COALESCE($2, turma_escolhida_id)
+     WHERE id = $1`,
+    [row.id, formando.turma_id],
+  );
+  if (row.pagamento_id) {
+    const pag = await db.query<{ estado: string; metodo: string }>(
+      "UPDATE pagamentos SET formando_id = $2, turma_id = $3 WHERE id = $1 RETURNING estado, metodo",
+      [row.pagamento_id, formandoId, formando.turma_id],
+    );
+    if (/^pago$/i.test(pag.rows[0]?.estado ?? "")) {
+      await db.query(
+        "UPDATE formandos_gold SET pago = true, metodo = CASE WHEN metodo IN ('-', '') THEN $2 ELSE metodo END WHERE id = $1",
+        [formandoId, pag.rows[0]?.metodo || "Multibanco"],
+      );
+    }
+  }
+  const { propagarDocsValidadosDoLead } = await import("./docsLink.js");
+  await propagarDocsValidadosDoLead(db, row.id, actorId);
+  await evento(db, row.id, actorId, "Inscrito na turma", `Ficha de formando #${formandoId}`);
+  return { leadId: row.id };
+}
+

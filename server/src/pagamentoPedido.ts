@@ -1,9 +1,9 @@
-import { randomBytes } from "node:crypto";
+import { garantirToken } from "./ligacaoPessoal.js";
 import { ingestEvent, flushQueuedJobs } from "./automations.js";
 import { config } from "./config.js";
 import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
-import { nextOpsId } from "./ops.js";
+import { confirmarPagamento, nextOpsId } from "./ops.js";
 import { precoParaOferta } from "./precoOferta.js";
 import { isEmail, normalizeEmail } from "./security.js";
 
@@ -12,12 +12,7 @@ function documentosUrl(token: string) {
 }
 
 async function tokenDoLead(db: Db, id: number) {
-  const row = await db.query<{ docs_token: string | null }>("SELECT docs_token FROM preinscricoes WHERE id = $1", [id]);
-  if (row.rows[0]?.docs_token) return row.rows[0].docs_token;
-  const token = randomBytes(18).toString("base64url");
-  await db.query("UPDATE preinscricoes SET docs_token = $2 WHERE id = $1 AND docs_token IS NULL", [id, token]);
-  const again = await db.query<{ docs_token: string | null }>("SELECT docs_token FROM preinscricoes WHERE id = $1", [id]);
-  return again.rows[0]?.docs_token ?? token;
+  return garantirToken(db, id);
 }
 
 function nowStamp() {
@@ -152,4 +147,32 @@ export async function firePagamentoRefEmail(db: Db, leadId: number) {
 
 export function comprovativoUrl(token: string) {
   return `${config.appOrigin.replace(/\/$/, "")}/documentos/${token}?fase=pagamento`;
+}
+
+/**
+ * A secretaria marca a pré-inscrição como paga: confirma o pagamento ligado ou, se não existir,
+ * regista-o na hora (para a tesouraria ter o movimento). O email de confirmação sai uma só vez.
+ */
+export async function marcarLeadPago(db: Db, leadId: number) {
+  const r = await db.query<{ id: number; nome: string; apelido: string; email: string; curso: string; preco: unknown; pagamento_id: string | null; pagamento_metodo: string }>(
+    "SELECT id, nome, apelido, email, curso, preco, pagamento_id, COALESCE(pagamento_metodo, '') AS pagamento_metodo FROM preinscricoes WHERE id = $1",
+    [leadId],
+  );
+  const lead = r.rows[0];
+  if (!lead) return null;
+  let pag = lead.pagamento_id
+    ? (await db.query("SELECT * FROM pagamentos WHERE id = $1", [lead.pagamento_id])).rows[0] as Record<string, unknown> | undefined
+    : undefined;
+  if (!pag) {
+    const id = `TRX-${await nextOpsId(db)}`;
+    await db.query(
+      "INSERT INTO pagamentos (id, nome, valor, metodo, curso, data, estado, email, referencia) VALUES ($1,$2,$3,$4,$5,$6,'Pendente',$7,'')",
+      [id, `${lead.nome} ${lead.apelido}`.trim(), Number(lead.preco) || 0, lead.pagamento_metodo || "Manual", lead.curso, nowStamp(), normalizeEmail(lead.email)],
+    );
+    await db.query("UPDATE preinscricoes SET pagamento_id = $2 WHERE id = $1", [leadId, id]);
+    pag = (await db.query("SELECT * FROM pagamentos WHERE id = $1", [id])).rows[0] as Record<string, unknown>;
+  }
+  if (!/^pago$/i.test(String(pag.estado ?? ""))) await confirmarPagamento(db, pag);
+  await db.query("UPDATE preinscricoes SET estado = 'Pago' WHERE id = $1 AND estado NOT IN ('Formando', 'Pago')", [leadId]);
+  return { pagamentoId: String(pag.id) };
 }

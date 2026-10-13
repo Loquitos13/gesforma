@@ -32,6 +32,27 @@ export async function contarInscritos(q: TxQuery, regime: Regime, turmaId: numbe
 }
 
 /**
+ * Reservas: pré-inscrições já validadas para esta turma que ainda não têm ficha de formando
+ * (na Gold a secretaria inscreve à mão depois de validar). Ocupam vaga até passarem a formando.
+ * SQL partilhado com a escolha pública de turma.
+ */
+export function sqlReservas(regime: Regime, turmaRef: string, emailExcluido = "NULL") {
+  const t = T[regime];
+  return `(SELECT count(*)::int FROM preinscricoes p
+            WHERE p.turma_escolhida_id = ${turmaRef}
+              AND COALESCE(p.regime, 'gold') = '${regime}'
+              AND p.validada_em IS NOT NULL AND p.estado <> 'Desistiu'
+              AND (${emailExcluido}::text IS NULL OR lower(p.email) <> ${emailExcluido}::text)
+              AND NOT EXISTS (SELECT 1 FROM ${t.formandos} f
+                               WHERE f.turma_id = ${turmaRef} AND p.email <> '' AND lower(f.email) = lower(p.email)))`;
+}
+
+export async function contarReservas(q: TxQuery, regime: Regime, turmaId: number, emailExcluido?: string) {
+  const r = await q<{ n: number }>(`SELECT ${sqlReservas(regime, "$1", "$2")} AS n`, [turmaId, emailExcluido?.trim().toLowerCase() || null]);
+  return Number(r.rows[0]?.n ?? 0);
+}
+
+/**
  * Tranca a turma e confirma que há lugar (capacidade + tolerância) e que o email ainda não está inscrito.
  * Lança `InscricaoErro` com a mensagem para o utilizador.
  */
@@ -59,7 +80,9 @@ export async function garantirVaga(
     if (dup.rows[0]) throw new InscricaoErro("Este formando já está inscrito nesta turma.");
   }
   const limite = Number(row.capacidade) + Math.max(0, Number(row.tolerancia) || 0);
-  const ocupadas = await contarInscritos(q, regime, turmaId, opts.excluirFormandoId);
+  // A reserva do próprio email não conta: é ela que se está a converter em formando.
+  const ocupadas = await contarInscritos(q, regime, turmaId, opts.excluirFormandoId)
+    + await contarReservas(q, regime, turmaId, email || undefined);
   if (limite > 0 && ocupadas >= limite) {
     throw new InscricaoErro(`A turma ${row.nome} está cheia (${ocupadas}/${limite}).`);
   }

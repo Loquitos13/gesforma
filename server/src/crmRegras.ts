@@ -91,6 +91,11 @@ export function podeArrastar(de: string, para: string, opts: { role: string; sec
   if (de === para) return { ok: true as const };
   if (de === "Formando") return { ok: false as const, erro: "Um formando não volta no funil. Crie um novo pedido se precisar." };
   if (para === "Desistiu") return { ok: true as const };
+  if (para === "Pago") {
+    // «Pago» confirma dinheiro recebido: fica com a secretaria, que regista o pagamento.
+    const tesouraria = opts.role === "admin" || opts.role === "secretaria" || opts.role === "financiada";
+    if (!tesouraria) return { ok: false as const, erro: "Só a secretaria confirma pagamentos." };
+  }
   if (para === "Formando") {
     const secretaria = opts.role === "admin" || opts.role === "secretaria" || (opts.role === "financiada" && opts.regime === "fin");
     if (!secretaria) {

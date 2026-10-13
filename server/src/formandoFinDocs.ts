@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { DOCS_FORMANDO_FIN } from "../../src/partilhado/dossierDocs.js";
-import { storeDriveFile } from "./googleDrive.js";
+import { erroFicheiroPublico, storeDriveFile } from "./googleDrive.js";
 import { isEmail, normalizeEmail } from "./security.js";
 
 export function formandoFinDocsUrl(token: string) {
@@ -123,6 +123,14 @@ export async function uploadDocFormandoFin(
 ) {
   const permitido = new Set(DOCS_FORMANDO_FIN.map(d => d.id));
   if (!permitido.has(tipo)) return { error: "Este documento não faz parte do dossiê financiado." as const };
+  if (opts.viaFormando) {
+    const erroFicheiro = erroFicheiroPublico(file.name, file.bytes);
+    if (erroFicheiro) return { error: erroFicheiro };
+  }
+  const jaValidado = await db.query("SELECT 1 FROM formando_docs WHERE regime = 'fin' AND formando_id = $1 AND doc_id = $2 AND estado = 'validado'", [formandoId, tipo]);
+  if (opts.viaFormando && jaValidado.rows[0]) {
+    return { error: "Este documento já foi validado pela secretaria. Para o substituir, contacte a secretaria." as const };
+  }
   const vista = await vistaDocumentosFormandoFin(db, formandoId);
   if (!vista) return { error: "Formando inexistente." as const };
   if (vista.recusados.length && !vista.recusados.includes(tipo)) {

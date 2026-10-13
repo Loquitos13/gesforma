@@ -184,6 +184,24 @@ export function sanitizeFileName(name: string) {
   return (base || "ficheiro").slice(0, 180);
 }
 
+/**
+ * Ficheiros enviados por pessoas de fora (ligação pessoal, portal e área do formando):
+ * só PDF, JPEG ou PNG, e o conteúdo tem de corresponder à extensão — o MIME do browser não chega.
+ */
+export function erroFicheiroPublico(name: string, bytes: Buffer): string | null {
+  const ext = (/\.([a-z0-9]+)$/i.exec(name)?.[1] ?? "").toLowerCase();
+  const b = bytes;
+  const pdf = b.length > 4 && b.subarray(0, 5).toString("latin1") === "%PDF-";
+  const jpg = b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+  const png = b.length > 8 && b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  if (!b.length) return "ficheiro vazio";
+  if (b.length > config.driveMaxBytes) return "ficheiro acima de 10 MB";
+  if (ext === "pdf" && pdf) return null;
+  if ((ext === "jpg" || ext === "jpeg") && jpg) return null;
+  if (ext === "png" && png) return null;
+  return "Envie um PDF, JPG ou PNG. O ficheiro não corresponde ao formato indicado.";
+}
+
 export function assertUpload(name: string, mime: string, size: number) {
   if (size <= 0) throw new Error("ficheiro vazio");
   if (size > config.driveMaxBytes) throw new Error("ficheiro acima de 10 MB");

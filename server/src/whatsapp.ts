@@ -325,7 +325,9 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
       if ("error" in created) {
         say(created.error === "email inválido"
           ? "O email ficou inválido. Escreva *menu* e recomece."
-          : "Essa turma já não está liberada. Escreva *menu* e escolha outra.");
+          : created.error === "aceite a política de privacidade"
+            ? "Para concluir a pré-inscrição precisa de aceitar a política de privacidade no site. Pode continuar pela ligação do site."
+            : "Essa turma já não está liberada. Escreva *menu* e escolha outra.");
         passo = "menu";
       } else {
         leadId = created.preinscricao.id;

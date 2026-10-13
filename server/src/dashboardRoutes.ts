@@ -288,6 +288,26 @@ async function buildNotificacoes(db: Db, actorId: string, role = ""): Promise<No
     });
   }
 
+  // Gold: a validação é manual — uma pré-inscrição validada sem ficha de formando ocupa vaga como reserva.
+  const semFicha = await db.query<{ n: number; id: number | null }>(
+    `SELECT count(*)::int AS n, (array_agg(p.id ORDER BY p.validada_em))[1] AS id
+       FROM preinscricoes p
+      WHERE COALESCE(p.regime, 'gold') = 'gold' AND p.validada_em IS NOT NULL AND p.estado <> 'Desistiu'
+        AND p.estado <> 'Formando' AND p.email <> ''
+        AND NOT EXISTS (SELECT 1 FROM formandos_gold f WHERE lower(f.email) = lower(p.email) AND lower(trim(f.curso)) = lower(trim(p.curso)))`,
+  );
+  const nSemFicha = Number(semFicha.rows[0]?.n ?? 0);
+  if (nSemFicha > 0) {
+    out.push({
+      chave: `gold-validadas-sem-ficha-${nSemFicha}`,
+      tipo: "warn",
+      titulo: `${nSemFicha} pré-inscrição(ões) validada(s) sem ficha de formando`,
+      texto: "A vaga está reservada. Inscreva o formando na turma escolhida.",
+      view: "gold-preinscricoes",
+      leadId: semFicha.rows[0]?.id ? Number(semFicha.rows[0].id) : undefined,
+    });
+  }
+
   const semDocs = Number(finDocs.rows[0]?.n ?? 0);
   if (semDocs > 0) {
     out.push({

@@ -126,19 +126,27 @@ const SECRETARIA_SEED = {
   password: "ena.Formacao2026#",
 };
 
-async function upsertUser(db: Db, user: { name: string; email: string; password: string; role?: string }) {
+/**
+ * Conta de demonstração: só é criada se ainda não existir. Nunca volta a escrever a palavra-passe,
+ * o perfil ou o estado — o seed corre a cada arranque (na Vercel, a cada instância nova) e antes
+ * repunha a palavra-passe do código, desfazendo a que se tinha alterado em Utilizadores.
+ */
+async function criarSeFaltar(db: Db, user: { name: string; email: string; password: string; role?: string }) {
   const email = normalizeEmail(user.email);
-  const hash = await hashPassword(user.password);
+  const existe = await db.query("SELECT 1 FROM users WHERE email = $1", [email]);
+  if (existe.rows[0]) return;
   await db.query(
     `INSERT INTO users (id, name, email, password_hash, role, active)
      VALUES ($1, $2, $3, $4, $5, true)
-     ON CONFLICT (email) DO UPDATE SET
-       password_hash = EXCLUDED.password_hash,
-       name = CASE WHEN users.name = '' THEN EXCLUDED.name ELSE users.name END,
-       role = CASE WHEN users.role IN ('admin', 'secretaria') AND EXCLUDED.role = 'comercial' THEN users.role ELSE COALESCE(EXCLUDED.role, users.role) END,
-       active = true`,
-    [randomUUID(), user.name, email, hash, user.role ?? "admin"],
+     ON CONFLICT (email) DO NOTHING`,
+    [randomUUID(), user.name, email, await hashPassword(user.password), user.role ?? "admin"],
   );
+}
+
+/** Contas de demonstração (palavra-passe conhecida no código): só fora de produção, ou com SEED_DEMO=1. */
+function criarContasDemo() {
+  if (process.env.SEED_DEMO === "1") return true;
+  return !config.isProd && !process.env.VERCEL;
 }
 
 async function seedPropostasDemo(db: Db) {
@@ -204,11 +212,13 @@ export async function seed(db: Db) {
       [randomUUID(), config.adminName, email, await hashPassword(config.adminPassword)],
     );
   }
-  await upsertUser(db, SECRETARIA_SEED);
-  await upsertUser(db, { name: "Inês Costa", email: "ines.costa@ena.pt", password: SECRETARIA_SEED.password, role: "comercial" });
-  await upsertUser(db, { name: "Tiago Melo", email: "tiago.melo@ena.pt", password: SECRETARIA_SEED.password, role: "comercial" });
-  await upsertUser(db, { name: "Marta Lopes", email: "marta.lopes@ena.pt", password: SECRETARIA_SEED.password, role: "financiada" });
-  await upsertUser(db, { name: "Mariana Costa", email: "formando@ena.pt", password: SECRETARIA_SEED.password, role: "formando" });
+  if (criarContasDemo()) {
+    await criarSeFaltar(db, { ...SECRETARIA_SEED, role: "secretaria" });
+    await criarSeFaltar(db, { name: "Inês Costa", email: "ines.costa@ena.pt", password: SECRETARIA_SEED.password, role: "comercial" });
+    await criarSeFaltar(db, { name: "Tiago Melo", email: "tiago.melo@ena.pt", password: SECRETARIA_SEED.password, role: "comercial" });
+    await criarSeFaltar(db, { name: "Marta Lopes", email: "marta.lopes@ena.pt", password: SECRETARIA_SEED.password, role: "financiada" });
+    await criarSeFaltar(db, { name: "Mariana Costa", email: "formando@ena.pt", password: SECRETARIA_SEED.password, role: "formando" });
+  }
 
   for (const t of TEMPLATES) {
     await db.query(

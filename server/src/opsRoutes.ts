@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "node:crypto";
+import { snapshotParaPerfil } from "./opsVisibilidade.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { ingestEvent } from "./automations.js";
@@ -25,7 +27,7 @@ import { readFormandoPii, readPreinscricaoPii, writeFormandoDocs, writeFormandoP
 import { exportCrmLeads, queryCrmLeads, searchCrmLeads, type CrmDir, type CrmFila, type CrmSort } from "./crm.js";
 import { fmtDataCalendario, fmtStampLisboa, hojeLisboa } from "./datas.js";
 import { syncTurmaDriveAccess } from "./googleDrive.js";
-import { cronogramaSoMarcas, nomesDoFormador } from "./sessaoAcesso.js";
+import { cronogramaSoMarcas, nomesDoFormador, turmasDoFormador } from "./sessaoAcesso.js";
 import { textoSobreposicaoNova } from "../../src/partilhado/sobreposicaoHorario.js";
 import { erroDisponibilidade, formadorEstaAlocado, garantirContaFormador } from "./formadorConta.js";
 import {
@@ -129,7 +131,7 @@ function nowStamp() {
 
 async function negarFormadorTurma(
   db: Db,
-  actor: { role: string; email: string; name: string },
+  actor: { id: string; role: string; email: string; name: string },
   regime: "gold" | "fin",
   id: number,
   body: unknown,
@@ -143,7 +145,7 @@ async function negarFormadorTurma(
   const table = regime === "gold" ? "turmas_gold" : "turmas_fin";
   const row = await one(db, `SELECT cronograma FROM ${table} WHERE id = $1`, [id]);
   if (!row) return "Turma inexistente.";
-  const nomes = await nomesDoFormador(db, actor.email, actor.name);
+  const nomes = await nomesDoFormador(db, actor.email, actor.name, actor.id);
   if (!cronogramaSoMarcas(row.cronograma, sent.cronograma, nomes)) {
     return "Só pode iniciar ou fechar sessões em que está atribuído.";
   }
@@ -214,7 +216,7 @@ export function registerOpsRoutes(
 
   app.get("/v1/ops", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    return getOpsSnapshot(db);
+    return snapshotParaPerfil(db, await getOpsSnapshot(db), req.actor!);
   });
 
   const crmFila = z.enum(["contactar", "atrasados", "hoje", "agenda", "converter", "abertos", "secretaria", "preinscricao", "minhas"]).optional();
@@ -268,7 +270,15 @@ export function registerOpsRoutes(
     if (!requireAuth(req, reply)) return;
     const q = String((req.query as { q?: string } | undefined)?.q ?? "").trim();
     if (q.length < 1) return { q: "", kind: "nome", kindLabel: "nome", groups: [], total: 0 };
-    return globalSearch(db, q);
+    const res = await globalSearch(db, q);
+    if (req.actor!.role !== "formador") return res;
+    // O formador só encontra as próprias turmas.
+    const minhas = await turmasDoFormador(db, req.actor!);
+    const groups = res.groups
+      .filter(g => g.grupo === "turmas")
+      .map(g => ({ ...g, items: g.items.filter(h => h.turmaId != null && (h.view.startsWith("fin") ? minhas.fin : minhas.gold).has(h.turmaId)) }))
+      .filter(g => g.items.length);
+    return { ...res, groups, total: groups.reduce((n, g) => n + g.items.length, 0) };
   });
 
   app.get("/v1/crm/export", async (req, reply) => {
@@ -1961,6 +1971,12 @@ export function registerOpsRoutes(
     return { ok: true };
   });
 
+  function chaveIgual(a: string, b: string) {
+    const x = Buffer.from(a);
+    const y = Buffer.from(b);
+    return x.length === y.length && timingSafeEqual(x, y);
+  }
+
   async function webhookChave(db: Db) {
     if (config.paymentWebhookKey) return config.paymentWebhookKey;
     const row = await one(db, "SELECT values FROM app_settings WHERE id = $1", ["gold"]);
@@ -1974,7 +1990,8 @@ export function registerOpsRoutes(
     const chave = String(q.chave ?? q.key ?? body.chave ?? body.key ?? req.headers["x-webhook-key"] ?? "").trim();
     const expected = await webhookChave(db);
     if (!expected) return reply.code(503).send({ error: "webhook sem chave: grave-a em Configurações → Gold ou em PAYMENT_WEBHOOK_KEY" });
-    if (chave !== expected) return reply.code(401).send({ error: "chave inválida" });
+    // O Ifthenpay envia a chave anti-phishing na query do callback; compara-se em tempo constante.
+    if (!chaveIgual(chave, expected)) return reply.code(401).send({ error: "chave inválida" });
     const referencia = String(q.referencia ?? body.referencia ?? body.ref ?? "").trim();
     const id = String(q.id ?? body.id ?? "").trim();
     const valorRaw = q.valor ?? body.valor;
@@ -1983,6 +2000,10 @@ export function registerOpsRoutes(
       ? await one(db, "SELECT * FROM pagamentos WHERE id = $1", [id])
       : await findPagamentoPorReferencia(db, referencia, valor);
     if (!found) return reply.code(404).send({ error: "referência desconhecida" });
+    if (valor != null && Number.isFinite(valor) && Math.abs(Number((found as { valor?: unknown }).valor) - valor) >= 0.02) {
+      await audit(db, undefined, "pagamento.webhook_valor", "pagamento", String((found as { id?: unknown }).id ?? ""), req.ip, { referencia, valor });
+      return reply.code(409).send({ error: "valor não corresponde ao pagamento" });
+    }
     const mapped = await confirmarPagamento(db, found as Record<string, unknown>);
     await audit(db, undefined, "pagamento.webhook", "pagamento", mapped.id, req.ip, { referencia, valor });
     return { ok: true, pagamento: mapped };

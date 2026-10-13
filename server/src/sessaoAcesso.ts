@@ -19,6 +19,11 @@ function lective(cronograma: unknown) {
   }) as { formadores?: string[]; formador?: string }[];
 }
 
+/** A sessão n (1…) conta só as sessões lectivas do cronograma (presencial e síncrona). */
+export function sessaoLectivaN(cronograma: unknown, n: number) {
+  return (lective(cronograma)[n - 1] ?? null) as null | { data?: string; horaInicio?: string; horaFim?: string; formadores?: string[]; formador?: string };
+}
+
 export function formadoresDaSessaoN(cronograma: unknown, n: number) {
   const s = lective(cronograma)[n - 1];
   if (!s) return [];
@@ -26,16 +31,50 @@ export function formadoresDaSessaoN(cronograma: unknown, n: number) {
   return s.formador?.trim() ? [s.formador.trim()] : [];
 }
 
-export async function nomesDoFormador(db: Db, email: string, name: string) {
+/**
+ * Nomes com que o formador aparece nas turmas. A ficha do formador encontra-se pela
+ * conta (`formadores.user_id`) ou pelo email — nunca só pelo nome da conta.
+ */
+export async function nomesDoFormador(db: Db, email: string, _name: string, userId = "") {
   const rows = await db.query<{ nome: string }>(
     `SELECT nome FROM formadores
-      WHERE ($1 <> '' AND lower(email) = lower($1))
-         OR ($2 <> '' AND lower(nome) = lower($2))`,
-    [email.trim(), name.trim()],
+      WHERE ($2 <> '' AND user_id::text = $2)
+         OR ($1 <> '' AND lower(email) = lower($1))`,
+    [email.trim(), userId],
   );
-  const nomes = new Set(rows.rows.map(r => r.nome.trim()).filter(Boolean));
-  if (!nomes.size && name.trim()) nomes.add(name.trim());
-  return nomes;
+  return new Set(rows.rows.map(r => r.nome.trim()).filter(Boolean));
+}
+
+/** Nomes de formador referidos por uma turma: responsável, equipa e cada sessão do cronograma. */
+export function nomesNaTurma(t: { formador?: unknown; formadores?: unknown; cronograma?: unknown }) {
+  const out = new Set<string>();
+  const add = (v: unknown) => { const n = String(v ?? "").trim().toLowerCase(); if (n) out.add(n); };
+  add(t.formador);
+  for (const n of asArr(t.formadores)) add(n);
+  for (const raw of asArr(t.cronograma)) {
+    if (!raw || typeof raw !== "object") continue;
+    const s = raw as { formador?: unknown; formadores?: unknown };
+    add(s.formador);
+    for (const n of asArr(s.formadores)) add(n);
+  }
+  return out;
+}
+
+export function turmaDoFormador(t: { formador?: unknown; formadores?: unknown; cronograma?: unknown }, nomes: Set<string>) {
+  const naTurma = nomesNaTurma(t);
+  for (const n of nomes) if (naTurma.has(n.toLowerCase())) return true;
+  return false;
+}
+
+/** O formador está atribuído a esta turma? Staff passa sempre. */
+export async function formadorNaTurma(db: Db, actor: { id: string; role: string; email: string; name: string }, regime: "gold" | "fin", turmaId: number) {
+  if (actor.role !== "formador") return true;
+  const table = regime === "gold" ? "turmas_gold" : "turmas_fin";
+  const row = await db.query<{ formador: unknown; formadores: unknown; cronograma: unknown }>(
+    `SELECT formador, formadores, cronograma FROM ${table} WHERE id = $1`, [turmaId],
+  );
+  if (!row.rows[0]) return false;
+  return turmaDoFormador(row.rows[0], await nomesDoFormador(db, actor.email, actor.name, actor.id));
 }
 
 function atribuido(nomes: Set<string>, daSessao: string[]) {
@@ -88,7 +127,7 @@ export function cronogramaSoMarcas(actual: unknown, next: unknown, nomes: Set<st
   return true;
 }
 
-export async function podeGravarSessao(db: Db, actor: { role: string; email: string; name: string }, opts: {
+export async function podeGravarSessao(db: Db, actor: { id?: string; role: string; email: string; name: string }, opts: {
   regime: "gold" | "fin";
   turmaId: number;
   n: number;
@@ -116,7 +155,7 @@ export async function podeGravarSessao(db: Db, actor: { role: string; email: str
     }
     return { ok: true as const };
   }
-  const nomes = await nomesDoFormador(db, actor.email, actor.name);
+  const nomes = await nomesDoFormador(db, actor.email, actor.name, actor.id ?? "");
   if (!atribuido(nomes, daSessao)) {
     return { ok: false as const, erro: "Só pode preencher sessões em que está atribuído." };
   }
@@ -124,4 +163,27 @@ export async function podeGravarSessao(db: Db, actor: { role: string; email: str
   if (opts.sumario && sumarioValidado) return { ok: false as const, erro: "O sumário já foi validado. A secretaria ou um administrador pode corrigi-lo." };
   if (opts.presencas && presencasValidado) return { ok: false as const, erro: "A folha de presenças já foi validada. A secretaria ou um administrador pode corrigi-la." };
   return { ok: true as const };
+}
+
+/** O formador só consulta e altera a sua própria ficha. Staff passa sempre. */
+export async function fichaDoProprioFormador(db: Db, actor: { id: string; role: string; email: string }, formadorId: number) {
+  if (actor.role !== "formador") return true;
+  const row = await db.query<{ id: number }>(
+    `SELECT id FROM formadores WHERE id = $1 AND (user_id::text = $2 OR ($3 <> '' AND lower(email) = lower($3)))`,
+    [formadorId, actor.id, actor.email.trim()],
+  );
+  return Boolean(row.rows[0]);
+}
+
+/** Ids das turmas Gold e Financiada em que o formador aparece. */
+export async function turmasDoFormador(db: Db, actor: { id: string; email: string; name: string }) {
+  const nomes = await nomesDoFormador(db, actor.email, actor.name, actor.id);
+  const [gold, fin] = await Promise.all([
+    db.query<{ id: number; formador: unknown; formadores: unknown; cronograma: unknown }>("SELECT id, formador, formadores, cronograma FROM turmas_gold"),
+    db.query<{ id: number; formador: unknown; formadores: unknown; cronograma: unknown }>("SELECT id, formador, formadores, cronograma FROM turmas_fin"),
+  ]);
+  return {
+    gold: new Set(gold.rows.filter(t => turmaDoFormador(t, nomes)).map(t => Number(t.id))),
+    fin: new Set(fin.rows.filter(t => turmaDoFormador(t, nomes)).map(t => Number(t.id))),
+  };
 }

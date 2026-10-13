@@ -51,6 +51,7 @@ import {
   verifyPassword,
 } from "./security.js";
 import { classifyRoute } from "./routeAuth.js";
+import { podeAceder } from "./permissoes.js";
 import { checkLoginAllowed, clearLoginFailures, registerLoginFailure } from "./loginRate.js";
 
 declare module "fastify" {
@@ -125,6 +126,30 @@ async function audit(db: Db, actorId: string | undefined, action: string, entity
     "INSERT INTO audit_log (actor_id, action, entity, entity_id, ip, meta) VALUES ($1, $2, $3, $4, $5, $6::jsonb)",
     [actorId ?? null, action, entity, entityId ?? null, ip ?? null, meta],
   );
+}
+
+/**
+ * Um evento manual só envia para quem existe no GesForma (lead, formando ou utilizador).
+ * O formador só dispara o aviso do próprio sumário, para o próprio email.
+ */
+async function destinoDoEventoPermitido(db: Db, actor: { role: string; email: string }, type: string, email: string) {
+  const alvo = email.trim().toLowerCase();
+  if (actor.role === "formador") {
+    if (type !== "sessao.summary_signed" || alvo !== actor.email.trim().toLowerCase()) {
+      return { ok: false as const, erro: "O formador só envia o aviso do próprio sumário." };
+    }
+    return { ok: true as const };
+  }
+  const conhecido = await db.query(
+    `SELECT 1 FROM preinscricoes WHERE lower(email) = $1
+     UNION ALL SELECT 1 FROM formandos_gold WHERE lower(email) = $1
+     UNION ALL SELECT 1 FROM formandos_fin WHERE lower(email) = $1
+     UNION ALL SELECT 1 FROM users WHERE lower(email) = $1
+     LIMIT 1`,
+    [alvo],
+  );
+  if (!conhecido.rows[0]) return { ok: false as const, erro: "Destinatário desconhecido no GesForma." };
+  return { ok: true as const };
 }
 
 export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
@@ -207,6 +232,9 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     }
     if (kind === "staff" && req.actor.role === "formando") {
       return reply.code(403).send({ error: "a área do formando não abre o GesForma" });
+    }
+    if (kind === "staff" && !podeAceder(req.actor.role, req.method, path)) {
+      return reply.code(403).send({ error: "Sem permissão para esta operação." });
     }
   });
 
@@ -654,8 +682,10 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   });
 
   app.get("/v1/cron/email", async (req, reply) => {
-    const cron = req.headers["x-vercel-cron"] === "1";
-    const bearer = config.cronSecret && req.headers.authorization === `Bearer ${config.cronSecret}`;
+    // Com CRON_SECRET definido (o Vercel envia-o como Bearer), só esse segredo abre o cron.
+    // Sem ele, aceita-se o cabeçalho do Vercel apenas quando a API corre no Vercel.
+    const bearer = Boolean(config.cronSecret) && req.headers.authorization === `Bearer ${config.cronSecret}`;
+    const cron = !config.cronSecret && onVercel && req.headers["x-vercel-cron"] === "1";
     if (!cron && !bearer) return reply.code(401).send({ error: "cron recusado" });
     return processDueJobs(db);
   });
@@ -686,6 +716,8 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     const parsed = eventSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     if (!isEmail(parsed.data.payload.email)) return reply.code(400).send({ error: "email inválido" });
+    const destino = await destinoDoEventoPermitido(db, req.actor!, parsed.data.type, parsed.data.payload.email);
+    if (!destino.ok) return reply.code(403).send({ error: destino.erro });
     try {
       const result = await ingestEvent(db, parsed.data.type, parsed.data.payload, parsed.data.idempotencyKey);
       await processDueJobs(db).catch(() => undefined);

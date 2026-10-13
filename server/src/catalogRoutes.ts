@@ -1,3 +1,4 @@
+import { ehSegredo, settingsSemSegredos } from "./opsVisibilidade.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { isCatalogKind } from "./db/catalogSeed.js";
@@ -157,7 +158,8 @@ export function registerCatalogRoutes(
   app.get("/v1/settings", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const rows = await db.query<{ id: string; values: Record<string, string> }>("SELECT id, values FROM app_settings");
-    return { settings: Object.fromEntries(rows.rows.map(r => [r.id, r.values])) };
+    const settings = Object.fromEntries(rows.rows.map(r => [r.id, r.values ?? {}]));
+    return { settings: req.actor?.role === "admin" ? settings : settingsSemSegredos(settings) };
   });
 
   app.put("/v1/settings/:id", async (req, reply) => {
@@ -172,7 +174,15 @@ export function registerCatalogRoutes(
     if (id === "lembrete_pre" && !lembrete) {
       return reply.code(400).send({ error: "Frequência inválida. Use minutos, horas ou dias, a partir de 1." });
     }
-    const values = id === "site" ? valoresDoSite(parsed.data.values) : lembrete ?? parsed.data.values;
+    let values: Record<string, unknown> = id === "site" ? valoresDoSite(parsed.data.values) : lembrete ?? parsed.data.values;
+    if (req.actor?.role !== "admin") {
+      // Quem não é admin não vê nem altera segredos (chave do webhook, tokens): mantêm-se os gravados.
+      const antes = await db.query<{ values: Record<string, unknown> }>("SELECT values FROM app_settings WHERE id = $1", [id]);
+      const guardados = antes.rows[0]?.values ?? {};
+      const semSegredos = Object.fromEntries(Object.entries(values).filter(([k]) => !ehSegredo(k)));
+      const segredos = Object.fromEntries(Object.entries(guardados).filter(([k]) => ehSegredo(k)));
+      values = { ...semSegredos, ...segredos };
+    }
     await db.query(
       `INSERT INTO app_settings (id, values) VALUES ($1, $2::jsonb)
        ON CONFLICT (id) DO UPDATE SET values = EXCLUDED.values, updated_at = now()`,

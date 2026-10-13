@@ -7,7 +7,8 @@ import { htmlCronograma, sessoesPublicas } from "./cronogramaPublico.js";
 import { guardarImagemCurso, semIdNaMedia, slotImagem, urlsImagemDoCurso } from "./cursoImagens.js";
 import { listDriveFiles, readDriveContent, storeDriveFile } from "./googleDrive.js";
 import { sendMail } from "./mailer.js";
-import { podeGravarSessao } from "./sessaoAcesso.js";
+import { fichaDoProprioFormador, formadorNaTurma, podeGravarSessao, sessaoLectivaN } from "./sessaoAcesso.js";
+import { sumarioComRegras } from "./sessaoRegras.js";
 import { escapeHtml } from "./xss.js";
 import {
   cursoPedeDocsPreinscricao,
@@ -125,7 +126,7 @@ const avaliacaoNotasSchema = z.object({
     formandoId: z.number().int(),
     moduloId: z.string().max(120).default(""),
     parametroId: z.string().min(1).max(80),
-    nota: z.number().nullable(),
+    nota: z.number().min(0).max(20).nullable(),
   })).max(4000),
 });
 
@@ -1009,6 +1010,7 @@ export function registerPedagogiaRoutes(
     if (!requireAuth(req, reply)) return;
     const { regime, id } = params(req);
     if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
+    if (!(await formadorNaTurma(db, req.actor!, regime, id))) return reply.code(403).send({ error: "Só consulta as turmas em que está atribuído." });
     const turma = await loadTurma(db, regime, id);
     if (!turma) return reply.code(404).send({ error: "turma não encontrada" });
 
@@ -1076,6 +1078,17 @@ export function registerPedagogiaRoutes(
       presencas: patch.presencas,
     });
     if (!acesso.ok) return reply.code(403).send({ error: acesso.erro });
+    if (patch.sumario) {
+      const tabela = regime === "gold" ? "turmas_gold" : "turmas_fin";
+      const [turmaRow, antes] = await Promise.all([
+        db.query<{ cronograma: unknown }>(`SELECT cronograma FROM ${tabela} WHERE id = $1`, [id]),
+        db.query<{ sumario: unknown }>("SELECT sumario FROM turma_sessoes WHERE regime = $1 AND turma_id = $2 AND sessao_n = $3", [regime, id, n]),
+      ]);
+      const dataSessao = String(sessaoLectivaN(turmaRow.rows[0]?.cronograma, n)?.data ?? "");
+      const regra = sumarioComRegras(req.actor!.role, antes.rows[0]?.sumario ? asObj(antes.rows[0].sumario) : null, patch.sumario, dataSessao);
+      if (!regra.ok) return reply.code(409).send({ error: regra.erro });
+      patch.sumario = regra.sumario;
+    }
     await db.query(
       `INSERT INTO turma_sessoes (regime, turma_id, sessao_n, plano, sumario, presencas)
        VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, COALESCE($6::jsonb, '[]'::jsonb))
@@ -1304,6 +1317,7 @@ export function registerPedagogiaRoutes(
     if (!requireAuth(req, reply)) return;
     const { regime, id } = params(req);
     if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
+    if (!(await formadorNaTurma(db, req.actor!, regime, id))) return reply.code(403).send({ error: "Só consulta as notas das turmas em que está atribuído." });
     const rows = await db.query<{ formando_id: number; modulo_id: string; parametro_id: string; nota: unknown }>(
       "SELECT formando_id, modulo_id, parametro_id, nota FROM turma_avaliacoes WHERE regime = $1 AND turma_id = $2",
       [regime, id],
@@ -1323,15 +1337,24 @@ export function registerPedagogiaRoutes(
     const { regime, id } = params(req);
     const parsed = avaliacaoNotasSchema.safeParse(req.body);
     if (!regime || id == null || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
-    await db.query("DELETE FROM turma_avaliacoes WHERE regime = $1 AND turma_id = $2", [regime, id]);
-    for (const n of parsed.data.notas) {
-      if (n.nota == null || !Number.isFinite(n.nota)) continue;
-      await db.query(
-        `INSERT INTO turma_avaliacoes (regime, turma_id, formando_id, modulo_id, parametro_id, nota)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [regime, id, n.formandoId, n.moduloId || "", n.parametroId, n.nota],
-      );
-    }
+    if (!(await formadorNaTurma(db, req.actor!, regime, id))) return reply.code(403).send({ error: "Só lança notas nas turmas em que está atribuído." });
+    const turma = await loadTurma(db, regime, id);
+    if (!turma) return reply.code(404).send({ error: "turma não encontrada" });
+    const daTurma = new Set((await formandosDaTurma(db, regime, turma)).map(f => f.id));
+    const alheios = parsed.data.notas.filter(n => n.nota != null && !daTurma.has(n.formandoId));
+    if (alheios.length) return reply.code(400).send({ error: "Há notas de formandos que não pertencem a esta turma." });
+    // A grelha chega inteira: substitui-se numa só transacção para nunca ficar a meio.
+    await db.tx(async q => {
+      await q("DELETE FROM turma_avaliacoes WHERE regime = $1 AND turma_id = $2", [regime, id]);
+      for (const n of parsed.data.notas) {
+        if (n.nota == null || !Number.isFinite(n.nota)) continue;
+        await q(
+          `INSERT INTO turma_avaliacoes (regime, turma_id, formando_id, modulo_id, parametro_id, nota)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [regime, id, n.formandoId, n.moduloId || "", n.parametroId, n.nota],
+        );
+      }
+    });
     await audit(db, req.actor!.id, "turma.avaliacao", "turma", String(id), req.ip, { regime, notas: parsed.data.notas.length });
     return { ok: true };
   });
@@ -2021,6 +2044,7 @@ export function registerPedagogiaRoutes(
     if (!requireAuth(req, reply)) return;
     const id = Number((req.params as { id: string }).id);
     if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
+    if (!(await fichaDoProprioFormador(db, req.actor!, id))) return reply.code(403).send({ error: "O formador só consulta os próprios documentos." });
     const rows = await db.query<{ doc_id: string; uploaded: boolean; file_name: string; drive_file_id?: string; drive_url?: string }>(
       "SELECT doc_id, uploaded, file_name, drive_file_id, drive_url FROM formador_docs WHERE formador_id = $1",
       [id],
@@ -2036,6 +2060,7 @@ export function registerPedagogiaRoutes(
     const id = Number((req.params as { id: string }).id);
     const parsed = formadorDocsSchema.safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    if (!(await fichaDoProprioFormador(db, req.actor!, id))) return reply.code(403).send({ error: "O formador só altera os próprios documentos." });
     for (const doc of parsed.data.docs) {
       await db.query(
         `INSERT INTO formador_docs (formador_id, doc_id, uploaded, file_name, drive_file_id, drive_url)

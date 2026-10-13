@@ -63,6 +63,8 @@ export type RelatorioFinalDados = {
   certificados: number;
   inqueritos: InqueritoRelatorio[];
   ocorrencias: string[];
+  /** Nome da entidade formadora (Sistema → Entidade). */
+  entidade?: string;
 };
 
 function horasTexto(horas: number) {
@@ -128,7 +130,7 @@ export function linhasRelatorioFinal(d: RelatorioFinalDados) {
     `Duração: ${horasTexto(d.duracaoHoras)}`,
     `Data de início: ${dataPt(d.inicio)}    Data de fim: ${dataPt(d.fim)}`,
     ...partirLinhas(`Formador: ${d.formador || "—"}`),
-    "Entidade formadora: ENA · Escola de Negócios e Administração",
+    ...partirLinhas(`Entidade formadora: ${d.entidade || "ENA · Escola de Negócios e Administração"}`),
     ...partirLinhas(`Regime horário: ${d.horario || "—"}`),
   ]);
   bloco(linhas, "1. Enquadramento e Contextualização", [

@@ -10,6 +10,9 @@ import { sendMail } from "./mailer.js";
 import { fichaDoProprioFormador, formadorNaTurma, podeGravarSessao, sessaoLectivaN } from "./sessaoAcesso.js";
 import { sumarioComRegras } from "./sessaoRegras.js";
 import { erroSobreposicao } from "./conflitos.js";
+import { ERRO_TURMA_FECHADA, pendentesDoFecho, resultadosDaTurma, turmaFechada } from "./resultados.js";
+import { horasPorFormador } from "./assiduidade.js";
+import { lerEntidade } from "./regrasConfig.js";
 import { escapeHtml } from "./xss.js";
 import {
   cursoPedeDocsPreinscricao,
@@ -95,7 +98,12 @@ const presencasSchema = z.array(z.object({
   id: z.number().int(),
   nome: z.string().max(160),
   presente: z.boolean(),
-})).max(400);
+  /** Sem estado, `presente` decide: presente ou falta injustificada. */
+  estado: z.enum(["presente", "falta_justificada", "falta_injustificada", "atraso"]).optional(),
+  /** Minutos em falta (atraso ou saída antecipada). */
+  minutos: z.number().int().min(0).max(600).optional(),
+  justificacao: z.string().max(400).optional(),
+}).transform(p => ({ ...p, presente: p.estado ? p.estado === "presente" || p.estado === "atraso" : p.presente }))).max(400);
 
 const sessaoPatchSchema = z.object({
   plano: planoSchema.optional(),
@@ -120,6 +128,8 @@ const certificadoSchema = z.object({
   ficheiroId: z.string().max(80).optional(),
   ficheiroNome: z.string().max(240).optional(),
   ficheiroUrl: z.string().max(500).optional(),
+  /** Só o administrador emite sem cumprir as regras de elegibilidade (fica auditado). */
+  forcar: z.boolean().optional(),
 });
 
 const avaliacaoNotasSchema = z.object({
@@ -298,6 +308,7 @@ async function montarPdfsDossie(db: Db, regime: Regime, turma: TurmaRow) {
     presencas: Array.isArray(r.presencas) ? r.presencas as SessaoPedagogicaPdf["presencas"] : [],
   }));
   return pdfsDoDossie({
+    entidade: (await lerEntidade(db)).nome,
     turma: turma.nome,
     curso: turma.curso,
     local: turma.local,
@@ -337,7 +348,6 @@ async function dadosRelatorioFinal(db: Db, turmaId: number): Promise<RelatorioFi
   const pesosBrutos = sessoes.map(horasDaSessao);
   const somaSessoes = pesosBrutos.reduce((s, n) => s + n, 0);
   const duracao = somaSessoes > 0 ? somaSessoes : Number(row.horas) || 0;
-  const pesos = pesosBrutos.map(h => (h > 0 ? h : somaSessoes === 0 && sessoes.length ? duracao / sessoes.length : 0));
   const datas = sessoes.map(s => s.data).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
   const [sessoesRows, formandosRows, notasRows, certRows, ficha, respostas] = await Promise.all([
     db.query<{ presencas: unknown; sumario: unknown }>(
@@ -385,22 +395,18 @@ async function dadosRelatorioFinal(db: Db, turmaId: number): Promise<RelatorioFi
     notas.set(nota.formando_id, lista);
   }
   const certs = new Map(certRows.rows.map(c => [c.formando_id, c]));
+  // Horas e nota vêm do cálculo único do servidor (sessão n ↔ sessão lectiva n do cronograma, por id do formando).
+  const resultados = await resultadosDaTurma(db, "fin", turmaId);
+  const porId = new Map((resultados?.formandos ?? []).map(r => [r.id, r]));
   const formandos: FormandoRelatorio[] = formandosRows.rows.map(f => {
-    let presencasHoras = 0;
-    let faltasHoras = 0;
-    sessoesRows.rows.forEach((sessao, i) => {
-      const peso = pesos[i] ?? 0;
-      if (!peso) return;
-      const marca = asArr(sessao.presencas).map(asObj).find(p => String(p.nome ?? "").trim().toLowerCase() === `${f.nome} ${f.apelido}`.trim().toLowerCase());
-      if (!marca) return;
-      if (marca.presente === false) faltasHoras += peso;
-      else presencasHoras += peso;
-    });
+    const r = porId.get(Number(f.id));
+    const presencasHoras = r?.assiduidade.horasPresente ?? 0;
+    const faltasHoras = r ? r.assiduidade.horasFaltaJustificada + r.assiduidade.horasFaltaInjustificada : 0;
     const lista = notas.get(f.id) ?? [];
     const notaCert = certs.get(f.id)?.nota;
-    const nota = lista.length
+    const nota = r?.nota ?? (lista.length
       ? Math.round((lista.reduce((s, n) => s + n, 0) / lista.length) * 100) / 100
-      : notaCert == null || !Number.isFinite(Number(notaCert)) ? null : Number(notaCert);
+      : notaCert == null || !Number.isFinite(Number(notaCert)) ? null : Number(notaCert));
     return {
       nome: `${f.nome} ${f.apelido}`.trim(),
       estado: f.estado,
@@ -479,6 +485,7 @@ async function dadosRelatorioFinal(db: Db, turmaId: number): Promise<RelatorioFi
     certificados: formandos.filter(f => f.certificado).length,
     inqueritos,
     ocorrencias,
+    entidade: (await lerEntidade(db)).nome,
   };
 }
 
@@ -994,6 +1001,12 @@ export function registerPedagogiaRoutes(
 ) {
   const { requireAuth, audit } = helpers;
 
+  /** Itens do dossiê técnico-pedagógico ainda em falta (usado quando as regras o exigem). */
+  async function dtpEmFalta(regime: Regime, turma: TurmaRow) {
+    const dtp = await dtpForTurma(db, regime, turma);
+    return dtp.items.filter(i => i.estado !== "ok").map(i => i.label);
+  }
+
   function params(req: FastifyRequest) {
     const p = req.params as { regime?: string; id?: string; n?: string; itemId?: string; formandoId?: string };
     const regime = regimeSchema.safeParse(p.regime);
@@ -1070,6 +1083,7 @@ export function registerPedagogiaRoutes(
       return reply.code(400).send({ error: "pedido inválido" });
     }
     const patch = parsed.data;
+    if (await turmaFechada(db, regime, id)) return reply.code(409).send({ error: ERRO_TURMA_FECHADA });
     const acesso = await podeGravarSessao(db, req.actor!, {
       regime,
       turmaId: id,
@@ -1137,6 +1151,7 @@ export function registerPedagogiaRoutes(
     const { regime, id } = params(req);
     const parsed = documentoSchema.safeParse(req.body);
     if (!regime || id == null || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
+    if (await turmaFechada(db, regime, id)) return reply.code(409).send({ error: ERRO_TURMA_FECHADA });
     const doc = parsed.data;
     await db.query(
       `INSERT INTO turma_documentos (regime, turma_id, grupo_id, label, estado, detalhe, payload)
@@ -1227,6 +1242,30 @@ export function registerPedagogiaRoutes(
     }
     const c = parsed.data;
     const emitido = c.ficheiroId ? true : c.emitido;
+    const turmaCert = await loadTurma(db, regime, id);
+    if (!turmaCert) return reply.code(404).send({ error: "turma não encontrada" });
+    const membros = new Set((await formandosDaTurma(db, regime, turmaCert)).map(f => f.id));
+    if (!membros.has(formandoId)) return reply.code(400).send({ error: "O formando não pertence a esta turma." });
+    if (emitido) {
+      // Nota e e-learning entram primeiro: a elegibilidade calcula-se com os valores que chegam agora.
+      if (c.nota !== undefined || c.elearning !== undefined) {
+        await db.query(
+          `INSERT INTO turma_certificados (regime, turma_id, formando_id, emitido, nota, elearning)
+           VALUES ($1, $2, $3, false, $4, $5)
+           ON CONFLICT (regime, turma_id, formando_id) DO UPDATE SET
+             nota = COALESCE($4, turma_certificados.nota), elearning = COALESCE($5, turma_certificados.elearning), updated_at = now()`,
+          [regime, id, formandoId, c.nota ?? null, c.elearning ?? null],
+        );
+      }
+      const res = await resultadosDaTurma(db, regime, id, { dtpEmFalta: () => dtpEmFalta(regime, turmaCert) });
+      const r = res?.formandos.find(f => f.id === formandoId);
+      if (r && !r.elegivel) {
+        if (!(c.forcar && req.actor!.role === "admin")) {
+          return reply.code(409).send({ error: `Sem condições para certificado: ${r.motivos.join(" ")}`, motivos: r.motivos });
+        }
+        await audit(db, req.actor!.id, "turma.certificado_forcado", "formando", String(formandoId), req.ip, { regime, turma: id, motivos: r.motivos });
+      }
+    }
     await db.query(
       `INSERT INTO turma_certificados (regime, turma_id, formando_id, emitido, nota, elearning, emitido_em, ficheiro_id, ficheiro_nome, ficheiro_url)
        VALUES ($1, $2, $3, COALESCE($4, false), $5, $6, CASE WHEN $4 = true THEN now() ELSE NULL END, COALESCE($7, ''), COALESCE($8, ''), COALESCE($9, ''))
@@ -1254,6 +1293,7 @@ export function registerPedagogiaRoutes(
     if (!regime || id == null || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const table = regime === "fin" ? "turmas_fin" : "turmas_gold";
     if (parsed.data.sessoes && parsed.data.sessoes.length > 0) {
+      if (await turmaFechada(db, regime, id)) return reply.code(409).send({ error: ERRO_TURMA_FECHADA });
       const cruzamento = await erroSobreposicao(db, regime, id, parsed.data.sessoes);
       if (cruzamento) return reply.code(400).send({ error: cruzamento });
       await db.query(`UPDATE ${table} SET cronograma = $2::jsonb WHERE id = $1`, [id, parsed.data.sessoes]);
@@ -1349,6 +1389,7 @@ export function registerPedagogiaRoutes(
     const parsed = avaliacaoNotasSchema.safeParse(req.body);
     if (!regime || id == null || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     if (!(await formadorNaTurma(db, req.actor!, regime, id))) return reply.code(403).send({ error: "Só lança notas nas turmas em que está atribuído." });
+    if (await turmaFechada(db, regime, id)) return reply.code(409).send({ error: ERRO_TURMA_FECHADA });
     const turma = await loadTurma(db, regime, id);
     if (!turma) return reply.code(404).send({ error: "turma não encontrada" });
     const daTurma = new Set((await formandosDaTurma(db, regime, turma)).map(f => f.id));
@@ -2405,6 +2446,9 @@ export function registerPedagogiaRoutes(
     const turma = antes.rows[0];
     if (!turma) return reply.code(404).send({ error: "turma não encontrada" });
     if (turma.fechada_em) return reply.code(409).send({ error: "Esta turma já foi fechada formalmente." });
+    const turmaRow = await loadTurma(db, "fin", id);
+    const pend = await pendentesDoFecho(db, "fin", id, { dtpEmFalta: () => dtpEmFalta("fin", turmaRow!) });
+    if (pend && pend.falta.length) return reply.code(409).send({ error: "A turma ainda não pode ser fechada.", falta: pend.falta });
     const dados = await dadosRelatorioFinal(db, id);
     if (!dados) return reply.code(404).send({ error: "turma não encontrada" });
     const bytes = pdfRelatorioFinal(dados);
@@ -2423,6 +2467,85 @@ export function registerPedagogiaRoutes(
     await anexarPdfDtp(db, req.actor!.id, { id, nome: turma.nome }, "relatorio", "RelatorioFinalAccao.pdf", bytes).catch(() => undefined);
     await audit(db, req.actor!.id, "turma.fecho", "turma_fin", String(id), req.ip, resumo);
     return { ok: true, resumo, relatorioUrl: `/v1/turmas/fin/${id}/relatorio-final` };
+  });
+
+  app.post("/v1/turmas/gold/:id/fecho", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: "pedido inválido" });
+    const turma = await loadTurma(db, "gold", id);
+    if (!turma) return reply.code(404).send({ error: "turma não encontrada" });
+    if (await turmaFechada(db, "gold", id)) return reply.code(409).send({ error: "Esta turma já foi fechada formalmente." });
+    const pend = await pendentesDoFecho(db, "gold", id, { dtpEmFalta: () => dtpEmFalta("gold", turma) });
+    if (pend && pend.falta.length) return reply.code(409).send({ error: "A turma ainda não pode ser fechada.", falta: pend.falta });
+    const resumo = {
+      acao: turma.nome,
+      curso: turma.curso,
+      formandos: pend?.resultados.resumo.total ?? 0,
+      elegiveis: pend?.resultados.resumo.elegiveis ?? 0,
+      geradoEm: new Date().toISOString(),
+    };
+    await db.query("UPDATE turmas_gold SET fechada_em = now(), fechada_por = $2, estado = 'Inativa' WHERE id = $1", [id, req.actor!.id]);
+    await audit(db, req.actor!.id, "turma.fecho", "turma_gold", String(id), req.ip, resumo);
+    return { ok: true, resumo };
+  });
+
+  app.post("/v1/turmas/:regime/:id/reabrir", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (req.actor!.role !== "admin") return reply.code(403).send({ error: "Só o administrador reabre uma turma fechada." });
+    const { regime, id } = params(req);
+    const motivo = String(((req.body ?? {}) as { motivo?: unknown }).motivo ?? "").trim().slice(0, 500);
+    if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
+    if (!motivo) return reply.code(400).send({ error: "Indique o motivo da reabertura." });
+    if (!(await turmaFechada(db, regime, id))) return reply.code(409).send({ error: "A turma não está fechada." });
+    const table = regime === "gold" ? "turmas_gold" : "turmas_fin";
+    const extra = regime === "fin" ? ", estado = 'A decorrer'" : "";
+    await db.query(`UPDATE ${table} SET fechada_em = NULL, reaberta_em = now()${extra} WHERE id = $1`, [id]);
+    await audit(db, req.actor!.id, "turma.reabrir", `turma_${regime}`, String(id), req.ip, { motivo });
+    return { ok: true };
+  });
+
+  app.get("/v1/turmas/:regime/:id/resultados", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const { regime, id } = params(req);
+    if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
+    if (!(await formadorNaTurma(db, req.actor!, regime, id))) return reply.code(403).send({ error: "Só consulta as turmas em que está atribuído." });
+    const turma = await loadTurma(db, regime, id);
+    if (!turma) return reply.code(404).send({ error: "turma não encontrada" });
+    const res = await resultadosDaTurma(db, regime, id, { dtpEmFalta: () => dtpEmFalta(regime, turma) });
+    if (!res) return reply.code(404).send({ error: "turma não encontrada" });
+    const pend = req.actor!.role === "formador" ? null : await pendentesDoFecho(db, regime, id, { dtpEmFalta: () => dtpEmFalta(regime, turma) });
+    return { ...res, fecho: pend ? { pode: pend.falta.length === 0, falta: pend.falta } : null };
+  });
+
+  app.get("/v1/turmas/:regime/:id/horas-formador", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const { regime, id } = params(req);
+    if (!regime || id == null) return reply.code(400).send({ error: "pedido inválido" });
+    const table = regime === "gold" ? "turmas_gold" : "turmas_fin";
+    const row = await db.query<{ cronograma: unknown; valores_hora_formador: unknown }>(
+      `SELECT cronograma, valores_hora_formador FROM ${table} WHERE id = $1`, [id],
+    );
+    if (!row.rows[0]) return reply.code(404).send({ error: "turma não encontrada" });
+    const gravadas = await db.query<{ sessao_n: number; sumario: unknown }>(
+      "SELECT sessao_n, sumario FROM turma_sessoes WHERE regime = $1 AND turma_id = $2", [regime, id],
+    );
+    const valores = asObj(row.rows[0].valores_hora_formador);
+    const custos = await db.query<{ nome: string; custo_hora: unknown }>("SELECT nome, custo_hora FROM formadores");
+    const custoBase = new Map(custos.rows.map(f => [f.nome.trim().toLowerCase(), Number(f.custo_hora) || 0]));
+    let formadores = horasPorFormador(row.rows[0].cronograma, gravadas.rows).map(h => {
+      const valorHora = Number(valores[h.formador]) || custoBase.get(h.formador.trim().toLowerCase()) || 0;
+      return { ...h, valorHora, aPagar: Math.round(h.dadas * valorHora * 100) / 100 };
+    });
+    if (req.actor!.role === "formador") {
+      // O formador vê só as próprias horas.
+      const { nomesDoFormador } = await import("./sessaoAcesso.js");
+      const meus = new Set([...await nomesDoFormador(db, req.actor!.email, req.actor!.name, req.actor!.id)].map(n => n.toLowerCase()));
+      formadores = formadores.filter(f => meus.has(f.formador.trim().toLowerCase()));
+    } else if (req.actor!.role === "comercial") {
+      formadores = formadores.map(f => ({ ...f, valorHora: 0, aPagar: 0 }));
+    }
+    return { formadores };
   });
 
   app.get("/v1/turmas/:regime/:id/relatorio-final", async (req, reply) => pdfDaTurmaFin(req, reply, "final"));

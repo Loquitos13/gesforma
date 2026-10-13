@@ -27,8 +27,8 @@ const TRANSICOES: Record<Maquina, Record<string, string[]>> = {
   turmaFin: {
     "A montar": ["A decorrer", "Cancelada"],
     "A decorrer": ["A montar", "Cancelada"],
-    // "Encerrada" só se atinge pelo fecho formal da turma.
-    "Encerrada": [],
+    // "Concluída" só se atinge pelo fecho formal da turma.
+    "Concluída": [],
     "Cancelada": ["A montar"],
   },
   turmaGold: {
@@ -45,7 +45,7 @@ const TRANSICOES: Record<Maquina, Record<string, string[]>> = {
 
 /** Estados a que só se chega por um fluxo próprio, nunca por PATCH. */
 const SO_POR_FLUXO: Partial<Record<Maquina, Record<string, string>>> = {
-  turmaFin: { "Encerrada": "A turma encerra-se com o fecho formal." },
+  turmaFin: { "Concluída": "A turma conclui-se com o fecho formal." },
 };
 
 const SINONIMOS: Record<string, string> = {
@@ -57,6 +57,7 @@ const SINONIMOS: Record<string, string> = {
   "elegivel": "Elegível", "em analise": "Em análise",
   "pago": "Pago", "paga": "Pago", "pendente": "Pendente", "reembolsado": "Reembolsado", "cancelado": "Cancelado",
   "a frequentar": "A frequentar", "em formacao": "A frequentar",
+  "encerrada": "Concluída", "fechada": "Concluída",
 };
 
 function chave(s: string) {
@@ -75,10 +76,7 @@ export function normalizarEstado(m: Maquina, valor: string): string | null {
   if (direto) return direto;
   const sin = SINONIMOS[k];
   if (sin && estadosDe(m).includes(sin)) return sin;
-  // "Concluído" na turma Financiada não existe; o mesmo sinónimo pode não servir a todas as máquinas.
-  if (m === "turmaGold" || m === "turmaFin") {
-    if (k === "concluida" || k === "concluido") return m === "turmaFin" ? "Encerrada" : null;
-  }
+  if (m === "turmaFin" && (k === "concluida" || k === "concluido")) return "Concluída";
   return null;
 }
 

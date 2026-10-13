@@ -1,3 +1,4 @@
+import { modulosDaFicha } from "./programaCurso.js";
 import { erroSobreposicao } from "./conflitos.js";
 import { generateCronograma } from "./cronograma.js";
 import type { Db } from "./db/pool.js";
@@ -63,7 +64,9 @@ export async function aplicarTurmaRegras(db: Db, regime?: "gold" | "fin") {
   for (const regra of regras) {
     const inicio = regra.proximaData || new Date().toISOString().slice(0, 10);
     const horasSessao = regra.regime === "fin" ? 3 : (regra.horasSessao || 3);
+    const modulos = await modulosDaFicha(db, regra.regime === "fin" ? "fin" : "gold", regra.curso);
     const cronograma = generateCronograma({
+      modulos,
       inicio,
       horario: regra.horario || "Pós Laboral",
       horas: regra.horas || (regra.regime === "fin" ? 25 : 90),

@@ -1,3 +1,5 @@
+import { lerEntidade } from "./regrasConfig.js";
+import { resultadosDaTurma } from "./resultados.js";
 import type { Db } from "./db/pool.js";
 import { pdfDeLinhas } from "./pdfTexto.js";
 import { partirLinhas } from "./relatorioFinal.js";
@@ -67,6 +69,10 @@ type Dados = {
   ccp: boolean;
   certs: Cert[];
   presencas: Map<number, number | null>;
+  /** Calculados pelo servidor (resultados.ts): mesma regra da emissão de certificados. */
+  elegiveis: Map<number, boolean>;
+  notasFinais: Map<number, number | null>;
+  entidade: string;
 };
 
 function asObj(v: unknown): Record<string, unknown> {
@@ -106,19 +112,6 @@ function mediaDe(notas: number[]) {
   return Math.round((notas.reduce((s, n) => s + n, 0) / notas.length) * 100) / 100;
 }
 
-function pctPresencas(formandoId: number, sessoes: { presencas: unknown }[]) {
-  let folhas = 0;
-  let presentes = 0;
-  for (const s of sessoes) {
-    const marca = asArr(s.presencas).map(asObj).find(p => Number(p.id) === formandoId);
-    if (!marca) continue;
-    folhas += 1;
-    if (marca.presente !== false) presentes += 1;
-  }
-  if (!folhas) return null;
-  return Math.round((presentes / folhas) * 100);
-}
-
 export function comAproveitamento(input: {
   presencas: number | null;
   elearning: number | null;
@@ -140,7 +133,7 @@ async function carregar(db: Db, turmaId: number): Promise<Dados | null> {
   );
   const row = turma.rows[0];
   if (!row) return null;
-  const [formandos, notas, certs, sessoes, ficha, curso] = await Promise.all([
+  const [formandos, notas, certs, ficha, curso] = await Promise.all([
     db.query<{
       id: number; nome: string; apelido: string; email: string; telf: string; estado: string;
       concelho: string; nif: string; morada: string; codigo_postal: string; origem: string; inscrito: string;
@@ -176,10 +169,6 @@ async function carregar(db: Db, turmaId: number): Promise<Dados | null> {
          FROM turma_certificados WHERE regime = 'fin' AND turma_id = $1`,
       [turmaId],
     ),
-    db.query<{ presencas: unknown }>(
-      "SELECT presencas FROM turma_sessoes WHERE regime = 'fin' AND turma_id = $1 ORDER BY sessao_n",
-      [turmaId],
-    ),
     db.query<{ payload: unknown }>(
       `SELECT f.payload FROM curso_fichas f
          JOIN cursos_fin c ON c.id = f.curso_id AND f.regime = 'fin'
@@ -213,8 +202,15 @@ async function carregar(db: Db, turmaId: number): Promise<Dados | null> {
   const minimoRaw = Number(avaliacao.minimoAprovacao);
   const ccp = /ccp/i.test(row.curso);
   const unidade = String(avaliacao.unidade ?? (ccp ? "pontos" : "valores")).trim() || "valores";
+  const [res, entidade] = await Promise.all([resultadosDaTurma(db, "fin", turmaId), lerEntidade(db)]);
   const presencas = new Map<number, number | null>();
-  for (const f of formandos.rows) presencas.set(f.id, pctPresencas(f.id, sessoes.rows));
+  const elegiveis = new Map<number, boolean>();
+  const notasFinais = new Map<number, number | null>();
+  for (const r of res?.formandos ?? []) {
+    presencas.set(r.id, r.assiduidade.pct);
+    elegiveis.set(r.id, r.elegivel);
+    notasFinais.set(r.id, r.nota);
+  }
   const ufcdCod = String(curso.rows[0]?.ufcd_cod ?? "").trim();
   const ufcdNome = String(curso.rows[0]?.ufcd ?? "").trim();
   return {
@@ -258,6 +254,9 @@ async function carregar(db: Db, turmaId: number): Promise<Dados | null> {
       nota: c.nota == null || !Number.isFinite(Number(c.nota)) ? null : Number(c.nota),
     })),
     presencas,
+    elegiveis,
+    notasFinais,
+    entidade: entidade.nome,
   };
 }
 
@@ -268,12 +267,14 @@ function cabecalho(d: Dados, titulo: string) {
     ...partirLinhas(`Curso: ${d.curso || "—"}`),
     ...partirLinhas(`UFCD: ${d.ufcd || "—"}`),
     ...partirLinhas(d.local ? `Local: ${d.local}` : "Local: por indicar"),
-    "Entidade formadora: ENA · Escola de Negócios e Administração",
+    ...partirLinhas(`Entidade formadora: ${d.entidade}`),
     "",
   ];
 }
 
 function notaDoFormando(d: Dados, formandoId: number) {
+  const final = d.notasFinais.get(formandoId);
+  if (final != null) return final;
   const daGrelha = d.notas.filter(n => n.formandoId === formandoId && n.nota != null).map(n => n.nota as number);
   const media = mediaDe(daGrelha);
   if (media != null) return media;
@@ -284,7 +285,7 @@ function linhasElegiveis(d: Dados) {
   return d.formandos.map(f => {
     const cert = d.certs.find(c => c.formandoId === f.id);
     const nota = notaDoFormando(d, f.id);
-    const elegivel = comAproveitamento({
+    const elegivel = d.elegiveis.get(f.id) ?? comAproveitamento({
       presencas: d.presencas.get(f.id) ?? null,
       elearning: cert?.elearning ?? null,
       nota,

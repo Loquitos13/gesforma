@@ -1,4 +1,5 @@
 import { erroPayloadCatalogo } from "./catalogoSchemas.js";
+import { DEFINICOES_SO_ADMIN, validarDefinicoes } from "./regrasConfig.js";
 import { ehSegredo, settingsSemSegredos } from "./opsVisibilidade.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -176,8 +177,8 @@ export function registerCatalogRoutes(
   app.put("/v1/settings/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const id = String((req.params as { id: string }).id).slice(0, 40);
-    if ((id === "site" || id === "lembrete_pre") && req.actor?.role !== "admin") {
-      return reply.code(403).send({ error: id === "site" ? "só o administrador edita o site" : "Só o administrador define o lembrete da pré-inscrição." });
+    if (DEFINICOES_SO_ADMIN.has(id) && req.actor?.role !== "admin") {
+      return reply.code(403).send({ error: id === "site" ? "só o administrador edita o site" : "Só o administrador altera esta definição." });
     }
     const parsed = (id === "site" ? siteSchema : settingsSchema).safeParse(req.body);
     if (!id || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
@@ -185,7 +186,9 @@ export function registerCatalogRoutes(
     if (id === "lembrete_pre" && !lembrete) {
       return reply.code(400).send({ error: "Frequência inválida. Use minutos, horas ou dias, a partir de 1." });
     }
-    let values: Record<string, unknown> = id === "site" ? valoresDoSite(parsed.data.values) : lembrete ?? parsed.data.values;
+    const validadas = validarDefinicoes(id, parsed.data.values);
+    if (!validadas.ok) return reply.code(400).send({ error: validadas.erro });
+    let values: Record<string, unknown> = id === "site" ? valoresDoSite(parsed.data.values) : lembrete ?? validadas.values;
     if (req.actor?.role !== "admin") {
       // Quem não é admin não vê nem altera segredos (chave do webhook, tokens): mantêm-se os gravados.
       const antes = await db.query<{ values: Record<string, unknown> }>("SELECT values FROM app_settings WHERE id = $1", [id]);

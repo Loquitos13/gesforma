@@ -76,11 +76,12 @@ export function pdfsDoDossie(opts: {
   cronograma: unknown;
   sessoes: SessaoPedagogicaPdf[];
   formandos: string[];
+  entidade?: string;
 }) {
   const todas = asSessoes(opts.cronograma);
   const lectivas = todas.filter(lectiva);
   const cab = [
-    "ENA · Escola de Negocios e Administracao",
+    (opts.entidade || "ENA · Escola de Negocios e Administracao").normalize("NFD").replace(/[\u0300-\u036f]/g, ""),
     opts.turma,
     opts.curso,
     [opts.local, opts.horario].filter(Boolean).join(" · "),

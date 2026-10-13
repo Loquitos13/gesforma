@@ -89,7 +89,6 @@ export const REGRAS: Regra[] = [
   ["*", "/v1/turmas/:regime/:id/dtp/*", PEDAGOGIA],
   ["POST", "/v1/turmas/:regime/:id/fecho", PEDAGOGIA],
   ["POST", "/v1/turmas/:regime/:id/reabrir", ADMIN],
-  ["POST", "/v1/turmas/:regime/:id/inscricoes", PEDAGOGIA],
   ["POST", "/v1/turmas/:regime/:id/inqueritos/enviar", PEDAGOGIA],
   ["POST", "/v1/inqueritos/:id/respostas", PEDAGOGIA],
 

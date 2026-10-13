@@ -32,6 +32,7 @@ import { fmtDataCalendario, fmtStampLisboa, hojeLisboa } from "./datas.js";
 import { syncTurmaDriveAccess } from "./googleDrive.js";
 import { cronogramaSoMarcas, nomesDoFormador, turmasDoFormador } from "./sessaoAcesso.js";
 import { erroSobreposicao } from "./conflitos.js";
+import { ERRO_TURMA_FECHADA } from "./resultados.js";
 import { erroDisponibilidade, formadorEstaAlocado, garantirContaFormador } from "./formadorConta.js";
 import {
   addLeadNota, createCrmCampo, createCrmEtiqueta, deleteCrmEtiqueta, findDuplicados, fixarNota, getLeadDossier,
@@ -1671,8 +1672,9 @@ export function registerOpsRoutes(
     const parsed = turmaGoldSchema.partial().safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
-    const antesTurma = await one(db, "SELECT nome, curso, estado FROM turmas_gold WHERE id = $1", [id]);
+    const antesTurma = await one(db, "SELECT nome, curso, estado, fechada_em FROM turmas_gold WHERE id = $1", [id]);
     if (!antesTurma) return reply.code(404).send({ error: "turma não encontrada" });
+    if (antesTurma.fechada_em && req.actor!.role !== "admin") return reply.code(409).send({ error: ERRO_TURMA_FECHADA });
     // O número de inscritos conta-se no servidor; o valor enviado pelo cliente é ignorado.
     delete d.totalAlunos;
     if (d.estado !== undefined) {
@@ -1776,7 +1778,7 @@ export function registerOpsRoutes(
     const slotErroFin = await erroDisponibilidade(db, [d.formador, ...d.formadores], d.horario);
     if (slotErroFin) return reply.code(400).send({ error: slotErroFin });
     const estadoFin = normalizarEstado("turmaFin", d.estado);
-    if (!estadoFin || estadoFin === "Encerrada") return reply.code(400).send({ error: `Estado inválido: «${d.estado}».` });
+    if (!estadoFin || estadoFin === "Concluída") return reply.code(400).send({ error: `Estado inválido: «${d.estado}».` });
     d.estado = estadoFin;
     d.alunos = 0;
     await db.query(
@@ -1799,8 +1801,9 @@ export function registerOpsRoutes(
     const parsed = turmaFinSchema.partial().safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return reply.code(400).send({ error: "pedido inválido" });
     const d = parsed.data;
-    const antesTurma = await one(db, "SELECT nome, curso, estado, formador, formadores, horario FROM turmas_fin WHERE id = $1", [id]);
+    const antesTurma = await one(db, "SELECT nome, curso, estado, formador, formadores, horario, fechada_em FROM turmas_fin WHERE id = $1", [id]);
     if (!antesTurma) return reply.code(404).send({ error: "turma não encontrada" });
+    if (antesTurma.fechada_em && req.actor!.role !== "admin") return reply.code(409).send({ error: ERRO_TURMA_FECHADA });
     delete d.alunos;
     if (d.estado !== undefined) {
       const t = validarTransicao("turmaFin", String(antesTurma.estado ?? ""), d.estado, req.actor!.role);

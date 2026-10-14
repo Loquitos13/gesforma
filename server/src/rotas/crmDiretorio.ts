@@ -6,7 +6,7 @@ import {
   existeUtilizador, listarClientes, listarParceiros, obterCliente, resumoClientes,
 } from "../repos/crmDiretorio.js";
 import { criarProposta, obterClienteBasico } from "../repos/crmDiretorioDocs.js";
-import { idParam, paginacao, textoQuery, validar } from "../validacao.js";
+import { idParam, paginacao, textoQuery, validar, BODY_LIMIT_DOC, corpoDoc } from "../validacao.js";
 import { registarDocs } from "./crmDiretorioDocs.js";
 import type { Deps } from "./tipos.js";
 
@@ -48,7 +48,7 @@ const parceiroPatch = z.object({
 const propostaClienteSchema = z.object({
   curso: z.string().trim().max(200).optional().default(""),
   valor: z.number().min(0).max(1_000_000).optional().default(0),
-  corpo: z.string().max(20000).optional().default(""),
+  corpo: corpoDoc.optional().default(""),
   comercialId: z.string().uuid().optional(),
   templateId: z.number().int().positive().nullable().optional().default(null),
   notas: z.string().max(4000).optional().default(""),
@@ -108,7 +108,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     return { ok: true };
   });
 
-  app.post("/v1/crm/clientes/:id/propostas", async (req, reply) => {
+  app.post("/v1/crm/clientes/:id/propostas", { bodyLimit: BODY_LIMIT_DOC }, async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: idParam, body: propostaClienteSchema }, req);
     if (!v) return;

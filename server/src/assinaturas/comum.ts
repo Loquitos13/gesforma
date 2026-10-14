@@ -12,6 +12,7 @@ import { sendMail } from "../mailer.js";
 import { readPreinscricaoPii } from "../pii.js";
 import { lerEntidade } from "../regrasConfig.js";
 import * as repo from "../repos/assinaturas.js";
+import { eHtml, escaparHtml } from "./pdfHtmlParse.js";
 import { fillVars, isEmail, normalizeEmail } from "../security.js";
 import type { Cabecalho } from "./pdf.js";
 
@@ -118,7 +119,11 @@ export function textoDoContrato(k: Contrato, s: Signatario) {
     valor: valor ? `€ ${valor.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "",
     data: dataLonga(new Date()),
   };
-  return k.corpo.replace(/\{\{\s*([a-z]+)\s*\}\}/g, (m, chave: string) => (chave in campos ? campos[chave] || `[${chave}]` : m));
+  // No HTML do editor os valores entram escapados (um nome com "<b>" fica texto);
+  // no texto simples antigo o escape acontece depois, ao converter para HTML.
+  const html = eHtml(k.corpo);
+  const valorFinal = (v: string) => (html ? escaparHtml(v) : v);
+  return k.corpo.replace(/\{\{\s*([a-z]+)\s*\}\}/g, (m, chave: string) => (chave in campos ? valorFinal(campos[chave] || `[${chave}]`) : m));
 }
 
 export async function cabecalhoEntidade(db: Db): Promise<Cabecalho & { email: string }> {

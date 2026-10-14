@@ -1,0 +1,73 @@
+/* Página A4 das propostas, contratos e modelos. As mesmas medidas estão no PDF do servidor
+   (server/src/assinaturas/pdfHtml.ts): página de 640 px, margens 64/68 px, Source Serif 4 a 14 px. */
+@font-face { font-family: "GF Serif"; src: url("/fontes/SourceSerif4-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "GF Serif"; src: url("/fontes/SourceSerif4-Italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "GF Serif"; src: url("/fontes/SourceSerif4-Bold.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "GF Serif"; src: url("/fontes/SourceSerif4-BoldItalic.ttf") format("truetype"); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: "GF Sans"; src: url("/fontes/PublicSans-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "GF Sans"; src: url("/fontes/PublicSans-SemiBold.ttf") format("truetype"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "GF Sans"; src: url("/fontes/PublicSans-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+
+.gf-pagina {
+  position: relative;
+  width: 640px;
+  min-height: 905px;
+  box-sizing: border-box;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(16, 27, 45, 0.12);
+  padding: 64px 68px;
+  font-family: "GF Serif", "Source Serif 4", Georgia, serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #18202c;
+  counter-reset: clausula;
+}
+.gf-cab { display: flex; align-items: flex-start; gap: 12px; font-family: "GF Sans", "Public Sans", system-ui, sans-serif; margin-bottom: 28px; line-height: 1.35; }
+.gf-cab-marca { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.gf-cab-marca img { display: block; width: auto; max-width: 220px; object-fit: contain; }
+.gf-cab-nome { font-weight: 700; font-size: 12px; }
+.gf-cab-sub { margin-top: -4px; color: #5a6474; font-size: 11px; }
+.gf-cab-meta { margin: 0 0 0 auto; text-align: right; color: #5a6474; font-size: 11px; }
+.gf-cab[data-pos="direita"] { flex-direction: row-reverse; }
+.gf-cab[data-pos="direita"] .gf-cab-marca { align-items: flex-end; text-align: right; }
+.gf-cab[data-pos="direita"] .gf-cab-meta { margin: 0 auto 0 0; text-align: left; }
+.gf-cab[data-pos="centro"] { flex-direction: column; align-items: center; text-align: center; }
+.gf-cab[data-pos="centro"] .gf-cab-marca { align-items: center; }
+.gf-cab[data-pos="centro"] .gf-cab-meta { margin: 0; text-align: center; }
+
+.gf-texto:focus { outline: none; }
+.gf-texto > :first-child { margin-top: 0; }
+.gf-texto p { margin: 0 0 10px; }
+.gf-texto h2 { font-size: 20px; font-weight: 700; line-height: 1.3; margin: 18px 0 8px; }
+.gf-texto h3 { font-size: 15px; font-weight: 700; line-height: 1.4; margin: 16px 0 6px; }
+.gf-texto h3.gf-clausula { counter-increment: clausula; }
+.gf-texto h3.gf-clausula::before { content: "Cláusula " counter(clausula) ".ª · "; }
+.gf-texto ul, .gf-texto ol { margin: 0 0 10px; padding-left: 22px; }
+.gf-texto ul { list-style: disc; }
+.gf-texto ol { list-style: decimal; }
+.gf-texto li { margin: 0; }
+.gf-texto table { width: 100%; border-collapse: collapse; font-family: "GF Sans", "Public Sans", system-ui, sans-serif; font-size: 13px; line-height: 1.4; margin: 0 0 12px; }
+.gf-texto td, .gf-texto th { padding: 6px 0; border-bottom: 1px solid #e2e5ea; vertical-align: top; text-align: left; }
+.gf-texto td + td, .gf-texto th + th { padding-left: 12px; }
+.gf-texto [data-quebra] { margin: 18px -68px; border-top: 1px dashed #a3abb8; text-align: center; font: 11px "GF Sans", "Public Sans", sans-serif; color: #5a6474; line-height: 1.8; }
+.gf-texto [data-quebra]::before { content: "quebra de página"; }
+.gf-texto [data-assinaturas] { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 24px; padding-bottom: 40px; font-family: "GF Sans", "Public Sans", sans-serif; font-size: 12px; line-height: 1.5; color: #5a6474; }
+.gf-texto [data-assinaturas] > div::before { content: ""; display: block; height: 96px; border-bottom: 1px solid #18202c; margin-bottom: 6px; }
+.gf-texto section[data-opcional] { position: relative; }
+.gf-texto section[data-opcional][data-ligada="0"] { display: none; }
+.gf-modelo .gf-texto section[data-opcional] { display: block; border-left: 3px solid #ffb020; padding-left: 10px; margin-left: -13px; }
+.gf-modelo .gf-texto section[data-opcional][data-ligada="0"] { opacity: 0.55; border-left-color: #d5dae1; }
+.gf-modelo .gf-texto section[data-opcional][data-ligada="0"] h3.gf-clausula { counter-increment: none; }
+.gf-modelo .gf-texto section[data-opcional][data-ligada="0"] h3.gf-clausula::before { content: "Cláusula · "; }
+
+.gf-texto [data-campo] { border-radius: 3px; padding: 0 2px; }
+.gf-realce .gf-texto [data-campo] { background: #fff1d6; }
+.gf-realce .gf-texto [data-campo].gf-campo-vazio { background: #fde8e7; color: #9a2a1f; }
+
+.gf-guia { position: absolute; left: 0; right: 0; border-top: 1px dashed #c3c9d2; pointer-events: none; }
+.gf-guia span { position: absolute; right: 6px; top: -9px; padding: 0 4px; background: #fff; font: 10px "GF Sans", "Public Sans", sans-serif; color: #8a93a2; }
+
+@media (max-width: 760px) {
+  .gf-pagina { width: 100%; min-height: 0; padding: 32px 22px; }
+  .gf-texto [data-quebra] { margin: 18px -22px; }
+}

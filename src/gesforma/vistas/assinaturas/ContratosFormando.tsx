@@ -31,6 +31,9 @@ export function ContratosFormando({ regime, formandoId, podeEditar }: { regime: 
                   <p className="m-0 text-xs text-tinta-suave">Criado a {data(k.criadoEm)}{k.assinadoEm ? ` · assinado a ${data(k.assinadoEm)}` : ""}</p>
                 </div>
                 {k.assinaturaEstado ? <Estado tom={TOM_ESTADO[k.assinaturaEstado]} ponto>{ROTULO_ESTADO[k.assinaturaEstado]}</Estado> : <Estado>{k.estado}</Estado>}
+                <a href={`/gesforma/${regime === "fin" ? "financiada" : "gold"}/contratos?editar=contrato:${k.id}`} className="text-[13px] font-semibold text-ligacao no-underline hover:underline">
+                  {k.estado === "Rascunho" ? "Rever no editor" : "Ver contrato"}
+                </a>
                 <Botao tamanho="sm" variante="fantasma" aria-expanded={aberto === k.id} onClick={() => setAberto(aberto === k.id ? null : k.id)}>
                   {aberto === k.id ? "Fechar" : "Assinatura"}
                 </Botao>

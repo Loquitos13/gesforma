@@ -1,16 +1,12 @@
-// Ficha de um cliente (ao lado da lista): contactos, propostas, contratos e acções.
+// Ficha de um cliente (no painel ao lado da lista): contactos, propostas, contratos e acções.
 import { useEffect, useState } from "react";
-import {
-  apiAlterarCliente, apiApagarCliente, apiCliente, apiCriarContrato, apiPropostaCliente, type DadosCliente,
-} from "../../../partilhado/api/crmDiretorio";
+import { apiAlterarCliente, apiApagarCliente, apiCliente, type DadosCliente } from "../../../partilhado/api/crmDiretorio";
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { invalidar, useRecurso } from "../../../partilhado/dados/useRecurso";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
-import {
-  AreaTexto, Botao, Campo, Cartao, ConfirmarPerigo, Detalhes, Entrada, ErroCarregar, Esqueleto, Modal, data, eur,
-} from "../../../partilhado/ui";
-import { EstadoDoc, useGestao } from "./comum";
-import { FormProposta } from "./FormProposta";
+import { AreaTexto, Botao, Campo, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Modal, data } from "../../../partilhado/ui";
+import { Dados, EstadoDoc, useGestao } from "./comum";
+import { eurosCurto } from "./documento/modelo";
 
 const VAZIO: DadosCliente = { nome: "", email: "", telf: "", nif: "", notas: "" };
 
@@ -57,88 +53,86 @@ export function FormCliente({ aberto, titulo, inicial, aCarregar, onFechar, onGr
   );
 }
 
-export function ClienteDetalhe({ id, onApagado, onContratos }: { id: number; onApagado: () => void; onContratos: () => void }) {
+export type AcoesCliente = {
+  onNovaProposta: (clienteId: number) => void;
+  onAbrirProposta: (id: number) => void;
+  onCriarContrato: (propostaId: number) => void;
+  onAbrirContrato: (id: number) => void;
+};
+
+export function ClienteDetalhe({ id, onApagado, acoes }: { id: number; onApagado: () => void; acoes: AcoesCliente }) {
   const gestao = useGestao();
   const { dados, erro, aCarregar, recarregar } = useRecurso(`crm:clientes:ficha:${id}`, signal => apiCliente(id, { signal }));
   const [editar, setEditar] = useState(false);
-  const [proposta, setProposta] = useState(false);
+  const [menu, setMenu] = useState(false);
   const [apagar, setApagar] = useState(false);
   const alterar = useAccao((d: DadosCliente) => apiAlterarCliente(id, d), { ok: "Cliente guardado.", invalidar: ["crm:clientes"] });
-  const novaProposta = useAccao(
-    (d: Parameters<typeof apiPropostaCliente>[1]) => apiPropostaCliente(id, d),
-    { ok: "Proposta registada.", invalidar: ["crm:clientes", "crm:propostas"] },
-  );
-  const contrato = useAccao(apiCriarContrato, { ok: "Contrato criado em rascunho.", invalidar: ["crm:clientes", "crm:contratos", "crm:propostas"] });
 
   if (erro) return <ErroCarregar erro={erro} onTentar={recarregar} />;
   const c = dados?.cliente;
-  if (!c || (aCarregar && !c)) return <Cartao><Esqueleto linhas={8} /></Cartao>;
+  if (!c || (aCarregar && !c)) return <Esqueleto linhas={8} />;
 
   return (
-    <Cartao
-      titulo={c.nome}
-      subtitulo={c.criadoEm ? `Cliente desde ${data(c.criadoEm)}` : undefined}
-      acoes={<Botao tamanho="sm" onClick={() => setEditar(true)}>Editar</Botao>}
-      className="xl:sticky xl:top-4"
-    >
-      <Detalhes itens={[
-        { rotulo: "Email", valor: c.email ? <a className="text-ligacao" href={`mailto:${c.email}`}>{c.email}</a> : "—" },
-        { rotulo: "Telefone", valor: c.telf ? <a className="text-ligacao" href={`tel:${c.telf.replace(/\s/g, "")}`}>{c.telf}</a> : "—" },
-        { rotulo: "NIF", valor: c.nif || "—" },
-        { rotulo: "Contratos", valor: String(c.contratos.length) },
-      ]} />
-      {c.notas && <p className="mt-4 mb-0 text-[13px] text-tinta whitespace-pre-wrap rounded-controlo bg-fundo px-3 py-2">{c.notas}</p>}
-
-      <div className="mt-5 flex items-center gap-2">
-        <h3 className="m-0 text-sm font-semibold text-tinta flex-1">Propostas</h3>
-        <Botao tamanho="sm" variante="primario" onClick={() => setProposta(true)}>Nova proposta</Botao>
-      </div>
-      {c.propostas.length === 0 ? (
-        <p className="mt-2 mb-0 text-[13px] text-tinta-suave">Ainda sem propostas para este cliente.</p>
-      ) : (
-        <ul className="mt-2 m-0 p-0 list-none divide-y divide-linha-suave">
-          {c.propostas.map(p => (
-            <li key={p.id} className="py-2.5">
-              <div className="flex items-start gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="m-0 text-sm font-medium text-tinta truncate">{p.curso || "Proposta"}</p>
-                  <p className="m-0 text-xs text-tinta-suave">{[p.valor ? eur(p.valor) : "", p.comercial, data(p.enviadaEm)].filter(Boolean).join(" · ")}</p>
-                </div>
-                <EstadoDoc estado={p.estado} />
-              </div>
-              {p.estado === "Aceite" && (
-                p.contratoId
-                  ? <Botao tamanho="sm" variante="ligacao" onClick={onContratos}>Ver contrato</Botao>
-                  : <Botao tamanho="sm" variante="ligacao" aCarregar={contrato.aCorrer}
-                      onClick={() => void contrato.correr({ clienteNome: c.nome, clienteEmail: c.email, clienteId: c.id, propostaId: p.id })}>
-                      Criar contrato a partir desta proposta
-                    </Botao>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {c.contratos.length > 0 && (
-        <>
-          <h3 className="mt-5 mb-2 text-sm font-semibold text-tinta">Contratos</h3>
-          <ul className="m-0 p-0 list-none divide-y divide-linha-suave">
-            {c.contratos.map(k => (
-              <li key={k.id} className="py-2 flex items-center gap-2">
-                <span className="flex-1 min-w-0 text-sm text-tinta truncate">{k.curso || "Contrato"} · {eur(k.valor)}</span>
-                <EstadoDoc estado={k.estado} />
-              </li>
-            ))}
-          </ul>
-          <Botao tamanho="sm" variante="ligacao" onClick={onContratos}>Abrir contratos</Botao>
-        </>
-      )}
-
-      {gestao && (
-        <div className="mt-6 pt-4 border-t border-linha">
-          <Botao tamanho="sm" variante="fantasma" className="text-perigo" onClick={() => setApagar(true)}>Apagar cliente</Botao>
+    <>
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="m-0 text-xs text-tinta-suave">Cliente{c.criadoEm ? ` desde ${data(c.criadoEm)}` : ""}</p>
+          <h2 className="m-0 mt-0.5 text-lg font-semibold text-tinta">{c.nome}</h2>
         </div>
-      )}
+        <div className="relative">
+          <button type="button" aria-label="Mais acções" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(m => !m)}
+            className="w-9 h-9 rounded-lg border border-linha bg-white text-tinta-suave cursor-pointer hover:border-linha-forte">⋯</button>
+          {menu && (
+            <div role="menu" className="absolute right-0 top-10 z-10 w-44 rounded-lg border border-linha bg-white shadow-flutuante py-1 text-[13px]">
+              <button type="button" role="menuitem" className="w-full text-left px-3 py-2 border-0 bg-transparent cursor-pointer hover:bg-fundo" onClick={() => { setMenu(false); setEditar(true); }}>Editar cliente</button>
+              {gestao && <button type="button" role="menuitem" className="w-full text-left px-3 py-2 border-0 bg-transparent cursor-pointer text-perigo hover:bg-fundo" onClick={() => { setMenu(false); setApagar(true); }}>Apagar cliente</button>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <Dados itens={[
+        { rotulo: "NIF", valor: c.nif || "—" },
+        { rotulo: "Email", valor: c.email ? <a className="text-ligacao" href={`mailto:${c.email}`}>{c.email}</a> : "—" },
+        { rotulo: "Telemóvel", valor: c.telf ? <a className="text-ligacao" href={`tel:${c.telf.replace(/\s/g, "")}`}>{c.telf}</a> : "—" },
+        { rotulo: "Notas", valor: c.notas ? <span className="whitespace-pre-wrap">{c.notas}</span> : "—" },
+      ]} />
+
+      <section className="flex flex-col gap-2">
+        <div className="flex items-center">
+          <h3 className="m-0 text-sm font-semibold text-tinta">Propostas</h3>
+          <button type="button" onClick={() => acoes.onNovaProposta(c.id)} className="ml-auto border-0 bg-transparent p-0 text-ligacao font-semibold text-[13px] cursor-pointer hover:underline">Nova proposta</button>
+        </div>
+        {c.propostas.length === 0 && <p className="m-0 text-[13px] text-tinta-suave">Ainda sem propostas para este cliente.</p>}
+        {c.propostas.map(p => (
+          <div key={p.id} className="flex items-start gap-2 py-2.5 border-t border-[#EEF0F3]">
+            <div className="min-w-0 flex-1">
+              <button type="button" onClick={() => acoes.onAbrirProposta(p.id)} className="block max-w-full text-left border-0 bg-transparent p-0 cursor-pointer text-sm font-medium text-tinta truncate hover:text-ligacao">
+                {p.curso || "Proposta"}
+              </button>
+              <span className="num block text-xs text-tinta-suave">{[p.valor ? eurosCurto(p.valor) : "", p.comercial, data(p.enviadaEm)].filter(Boolean).join(" · ")}</span>
+              {p.estado === "Aceite" && !p.contratoId && (
+                <button type="button" onClick={() => acoes.onCriarContrato(p.id)} className="mt-1 border-0 bg-transparent p-0 text-xs font-semibold text-ligacao cursor-pointer hover:underline">Criar contrato</button>
+              )}
+            </div>
+            <EstadoDoc estado={p.estado} />
+          </div>
+        ))}
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="m-0 text-sm font-semibold text-tinta">Contratos</h3>
+        {c.contratos.length === 0 && <p className="m-0 text-[13px] text-tinta-suave">Ainda sem contrato. Uma proposta aceite passa a contrato com um clique.</p>}
+        {c.contratos.map(k => (
+          <div key={k.id} className="flex items-center gap-2 py-2.5 border-t border-[#EEF0F3]">
+            <div className="min-w-0 flex-1">
+              <div className="text-sm text-tinta truncate">{k.curso || "Contrato"}</div>
+              <div className="num text-xs text-tinta-suave">{[k.valor ? eurosCurto(k.valor) : "", k.assinadoEm ? `assinado ${data(k.assinadoEm)}` : k.estado].filter(Boolean).join(" · ")}</div>
+            </div>
+            <button type="button" onClick={() => acoes.onAbrirContrato(k.id)} className="border-0 bg-transparent p-0 text-ligacao font-semibold text-[13px] cursor-pointer hover:underline">Abrir</button>
+          </div>
+        ))}
+      </section>
 
       <FormCliente
         aberto={editar}
@@ -147,13 +141,6 @@ export function ClienteDetalhe({ id, onApagado, onContratos }: { id: number; onA
         aCarregar={alterar.aCorrer}
         onFechar={() => setEditar(false)}
         onGravar={async d => { if (await alterar.correr(d)) setEditar(false); }}
-      />
-      <FormProposta
-        aberto={proposta}
-        cliente={c}
-        aCarregar={novaProposta.aCorrer}
-        onFechar={() => setProposta(false)}
-        onGravar={async d => { if (await novaProposta.correr(d)) setProposta(false); }}
       />
       <ConfirmarPerigo
         aberto={apagar}
@@ -173,6 +160,6 @@ export function ClienteDetalhe({ id, onApagado, onContratos }: { id: number; onA
           }
         }}
       />
-    </Cartao>
+    </>
   );
 }

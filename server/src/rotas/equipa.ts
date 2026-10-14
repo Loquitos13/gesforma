@@ -8,10 +8,10 @@ import { ESTADOS_PROPOSTA } from "../repos/crmDiretorio.js";
 import { criarProposta, obterModelo, obterProposta } from "../repos/crmDiretorioDocs.js";
 import {
   aSeguir, alterarProposta, atribuirLead, gravarObjetivo, gravarPerfil, indicadoresEquipa, leadDaNota, leadsDoMembro,
-  listarMembros, membroExiste, notasDoMembro, regimeDaProposta, registarNota, type Regime,
+  listarMembros, membroExiste, notasDoMembro, propostaComContratoAssinado, regimeDaProposta, registarNota, type Regime,
 } from "../repos/equipa.js";
 import { periodo } from "../repos/sql.js";
-import { idParam, periodoQuery, regime as regimeEnum, textoQuery, validar } from "../validacao.js";
+import { idParam, periodoQuery, regime as regimeEnum, textoQuery, validar, BODY_LIMIT_DOC, corpoDoc } from "../validacao.js";
 import type { Deps } from "./tipos.js";
 
 const regimeQuery = z.object({ regime: z.preprocess(v => (v === "" || v == null ? "gold" : v), regimeEnum) }).merge(periodoQuery);
@@ -26,7 +26,7 @@ const propostaSchema = z.object({
   estado: z.enum(ESTADOS_PROPOSTA).optional().default("Enviada"),
   respostaCliente: z.string().trim().max(4000).optional().default(""),
   notas: z.string().trim().max(4000).optional().default(""),
-  corpo: z.string().max(20000).optional().default(""),
+  corpo: corpoDoc.optional().default(""),
   templateId: z.number().int().positive().nullable().optional().default(null),
   clienteId: z.number().int().positive().nullable().optional().default(null),
   regime: regimeEnum.optional().default("gold"),
@@ -37,6 +37,7 @@ const propostaPatch = z.object({
   valor: z.number().min(0).max(1_000_000).optional(),
   notas: z.string().trim().max(4000).optional(),
   curso: z.string().trim().max(200).optional(),
+  corpo: corpoDoc.optional(),
 }).refine(v => Object.keys(v).length > 0, "nada para alterar");
 
 function podeVer(role: string | undefined, regime: Regime) {
@@ -104,7 +105,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     return { periodo: p, membro, leads: leads.map(r => mapPreinscricao(r as Record<string, unknown>)), notas, seguir };
   });
 
-  app.post("/v1/equipa/:id/propostas", async (req, reply) => {
+  app.post("/v1/equipa/:id/propostas", { bodyLimit: BODY_LIMIT_DOC }, async (req, reply) => {
     const v = validar(reply, { params: membroParam, body: propostaSchema }, req);
     if (!v || !exigir(req, reply, v.body.regime)) return;
     const d = v.body;
@@ -130,13 +131,17 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     return { proposta: await obterProposta(db, id) };
   });
 
-  app.patch("/v1/equipa/propostas/:id", async (req, reply) => {
+  app.patch("/v1/equipa/propostas/:id", { bodyLimit: BODY_LIMIT_DOC }, async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: idParam, body: propostaPatch }, req);
     if (!v) return;
     const regime = await regimeDaProposta(db, v.params.id);
     if (!regime) return reply.code(404).send({ error: "Proposta não encontrada." });
     if (!podeVer(req.actor?.role, regime)) return reply.code(403).send({ error: "Sem acesso a esta equipa." });
+    const mexeNoTexto = v.body.corpo !== undefined || v.body.valor !== undefined || v.body.curso !== undefined;
+    if (mexeNoTexto && (await propostaComContratoAssinado(db, v.params.id))) {
+      return reply.code(409).send({ error: "Já há um contrato assinado desta proposta: o texto, o curso e o valor não se alteram." });
+    }
     await alterarProposta(db, v.params.id, v.body);
     await audit(db, req.actor!.id, "proposta.update", "proposta", String(v.params.id), req.ip, { campos: Object.keys(v.body) });
     return { proposta: await obterProposta(db, v.params.id) };

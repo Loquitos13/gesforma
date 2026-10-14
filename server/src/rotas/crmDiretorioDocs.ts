@@ -9,7 +9,7 @@ import {
   listarContratos, listarModelos, listarPropostas, obterContrato, obterModelo, obterProposta, propostasPorEstado,
   type TipoModelo,
 } from "../repos/crmDiretorioDocs.js";
-import { idNum, idParam, paginacao, regime, textoQuery, validar } from "../validacao.js";
+import { idNum, idParam, paginacao, regime, textoQuery, validar, BODY_LIMIT_DOC, corpoDoc } from "../validacao.js";
 import { eSecretaria } from "./crmDiretorio.js";
 import type { Deps } from "./tipos.js";
 
@@ -18,13 +18,13 @@ const modeloSchema = z.object({
   nome: z.string().trim().min(1, "indique o nome").max(120),
   curso: z.string().trim().max(200).optional().default(""),
   valor: z.number().min(0).max(1_000_000).optional().default(0),
-  corpo: z.string().max(20000).optional().default(""),
+  corpo: corpoDoc.optional().default(""),
 });
 const modeloPatch = z.object({
   nome: z.string().trim().min(1).max(120).optional(),
   curso: z.string().trim().max(200).optional(),
   valor: z.number().min(0).max(1_000_000).optional(),
-  corpo: z.string().max(20000).optional(),
+  corpo: corpoDoc.optional(),
 }).refine(v => Object.keys(v).length > 0, "nada para alterar");
 
 const contratoSchema = z.object({
@@ -33,7 +33,7 @@ const contratoSchema = z.object({
   curso: z.string().trim().max(200).optional().default(""),
   valor: z.number().min(0).max(1_000_000).optional().default(0),
   notas: z.string().max(4000).optional().default(""),
-  corpo: z.string().max(20000).optional().default(""),
+  corpo: corpoDoc.optional().default(""),
   templateId: z.number().int().positive().nullable().optional().default(null),
   comercialId: z.string().uuid().optional(),
   clienteId: z.number().int().positive().nullable().optional().default(null),
@@ -46,7 +46,7 @@ const contratoPatch = z.object({
   valor: z.number().min(0).max(1_000_000).optional(),
   estado: z.enum(ESTADOS_CONTRATO).optional(),
   notas: z.string().max(4000).optional(),
-  corpo: z.string().max(20000).optional(),
+  corpo: corpoDoc.optional(),
 }).refine(v => Object.keys(v).length > 0, "nada para alterar");
 
 export async function registarDocs(app: FastifyInstance, deps: Deps) {
@@ -61,7 +61,7 @@ export async function registarDocs(app: FastifyInstance, deps: Deps) {
     return { modelos: await listarModelos(db, v.params.tipo) };
   });
 
-  app.post("/v1/crm/modelos/:tipo", async (req, reply) => {
+  app.post("/v1/crm/modelos/:tipo", { bodyLimit: BODY_LIMIT_DOC }, async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: z.object({ tipo: tipoModelo }), body: modeloSchema }, req);
     if (!v) return;
@@ -71,7 +71,7 @@ export async function registarDocs(app: FastifyInstance, deps: Deps) {
     return { modelo: { id, tipo: v.params.tipo, ...v.body, usos: 0 } };
   });
 
-  app.patch("/v1/crm/modelos/:tipo/:id", async (req, reply) => {
+  app.patch("/v1/crm/modelos/:tipo/:id", { bodyLimit: BODY_LIMIT_DOC }, async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: z.object({ tipo: tipoModelo, id: idNum }), body: modeloPatch }, req);
     if (!v) return;
@@ -98,7 +98,7 @@ export async function registarDocs(app: FastifyInstance, deps: Deps) {
       if (!requireAuth(req, reply)) return;
       return { templates: (await listarModelos(db, tipo)).map(({ id, nome, curso, valor, corpo }) => ({ id, nome, curso, valor, corpo })) };
     });
-    app.post(`/v1/crm/${caminho}`, async (req, reply) => {
+    app.post(`/v1/crm/${caminho}`, { bodyLimit: BODY_LIMIT_DOC }, async (req, reply) => {
       if (!requireAuth(req, reply)) return;
       const v = validar(reply, { body: modeloSchema }, req);
       if (!v) return;
@@ -160,7 +160,7 @@ export async function registarDocs(app: FastifyInstance, deps: Deps) {
     return { contrato };
   });
 
-  app.post("/v1/crm/contratos", async (req, reply) => {
+  app.post("/v1/crm/contratos", { bodyLimit: BODY_LIMIT_DOC }, async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { body: contratoSchema }, req);
     if (!v) return;
@@ -190,7 +190,7 @@ export async function registarDocs(app: FastifyInstance, deps: Deps) {
     return { contrato: await obterContrato(db, id) };
   });
 
-  app.patch("/v1/crm/contratos/:id", async (req, reply) => {
+  app.patch("/v1/crm/contratos/:id", { bodyLimit: BODY_LIMIT_DOC }, async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: idParam, body: contratoPatch }, req);
     if (!v) return;

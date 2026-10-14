@@ -25,6 +25,12 @@ export const textoQuery = (max = 200) => z.preprocess(
   z.string().trim().max(max).optional(),
 );
 
+/** Corpo (HTML do editor A4) de propostas, contratos e modelos. */
+export const LIMITE_CORPO_DOC = 200_000;
+/** Limite do pedido só nas rotas que gravam documentos (o global fica em 32 KB). */
+export const BODY_LIMIT_DOC = 512 * 1024;
+export const corpoDoc = z.string().max(LIMITE_CORPO_DOC, "o documento é demasiado longo");
+
 export const paginacao = z.object({
   pagina: z.coerce.number().int().min(1).max(100_000).default(1),
   porPagina: z.coerce.number().int().min(1).max(200).default(25),

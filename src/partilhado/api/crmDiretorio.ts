@@ -65,11 +65,14 @@ export const apiApagarModelo = (tipo: TipoModelo, id: number) => enviar.delete<{
 
 export const apiPropostas = (f: { q?: string; estado?: string; comercial?: string; regime?: string; cliente?: number; pagina?: number }, o: Sinal = {}) =>
   api<Pagina<Proposta> & { fases: Fase[] }>(`/v1/crm/propostas${qs(f)}`, { silencioso: true, signal: o.signal });
-export const apiAlterarProposta = (id: number, d: { estado?: string; respostaCliente?: string; valor?: number; notas?: string; curso?: string }) =>
+export const apiProposta = (id: number, o: Sinal = {}) => api<{ proposta: Proposta }>(`/v1/crm/propostas/${id}`, { silencioso: true, signal: o.signal });
+/** O texto, o curso e o valor deixam de se alterar quando já há um contrato assinado desta proposta (409). */
+export const apiAlterarProposta = (id: number, d: { estado?: string; respostaCliente?: string; valor?: number; notas?: string; curso?: string; corpo?: string }) =>
   enviar.patch<{ proposta: Proposta }>(`/v1/equipa/propostas/${id}`, d);
 
 export const apiContratos = (f: { q?: string; estado?: string; pagina?: number }, o: Sinal = {}) =>
   api<Pagina<Contrato> & { fases: Fase[] }>(`/v1/crm/contratos${qs(f)}`, { silencioso: true, signal: o.signal });
+export const apiContrato = (id: number, o: Sinal = {}) => api<{ contrato: Contrato }>(`/v1/crm/contratos/${id}`, { silencioso: true, signal: o.signal });
 export const apiCriarContrato = (d: {
   clienteNome: string; clienteEmail?: string; curso?: string; valor?: number; notas?: string; corpo?: string;
   templateId?: number | null; clienteId?: number | null; propostaId?: number | null; comercialId?: string;

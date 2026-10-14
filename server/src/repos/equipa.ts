@@ -183,15 +183,28 @@ export async function regimeDaProposta(c: Consulta, id: number) {
   return r ? (r.regime === "fin" ? "fin" : "gold") as Regime : null;
 }
 
-export async function alterarProposta(c: Consulta, id: number, d: Partial<{ estado: string; respostaCliente: string; valor: number; notas: string; curso: string }>) {
+/** Há um contrato assinado feito a partir desta proposta? Então o texto, o curso e o valor ficam fixos. */
+export async function propostaComContratoAssinado(c: Consulta, id: number) {
+  const r = await one<{ n: number }>(
+    c,
+    "SELECT count(*)::int AS n FROM contratos_comerciais WHERE proposta_id = $1 AND estado = 'Assinado'",
+    [id],
+  );
+  return (r?.n ?? 0) > 0;
+}
+
+export async function alterarProposta(
+  c: Consulta, id: number,
+  d: Partial<{ estado: string; respostaCliente: string; valor: number; notas: string; curso: string; corpo: string }>,
+) {
   await one(
     c,
     `UPDATE propostas_comerciais SET
        estado = COALESCE($2, estado), resposta_cliente = COALESCE($3, resposta_cliente), valor = COALESCE($4, valor),
-       notas = COALESCE($5, notas), curso = COALESCE($6, curso),
+       notas = COALESCE($5, notas), curso = COALESCE($6, curso), corpo = COALESCE($7, corpo),
        resposta_em = CASE WHEN $3 IS NOT NULL AND $3 <> '' THEN now() ELSE resposta_em END
      WHERE id = $1 RETURNING id`,
-    [id, d.estado ?? null, d.respostaCliente ?? null, d.valor ?? null, d.notas ?? null, d.curso ?? null],
+    [id, d.estado ?? null, d.respostaCliente ?? null, d.valor ?? null, d.notas ?? null, d.curso ?? null, d.corpo ?? null],
   );
 }
 

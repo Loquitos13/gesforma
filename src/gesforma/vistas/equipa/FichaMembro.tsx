@@ -14,11 +14,12 @@ import {
 } from "../../../partilhado/ui";
 import { EstadoDoc, numeroDe, useGestao } from "../crm/comum";
 
-type Tab = "perfil" | "objetivos" | "propostas" | "leads" | "diario";
+export type TabMembro = "perfil" | "objetivos" | "propostas" | "leads" | "diario";
+type Tab = TabMembro;
 
-export function FichaMembro({ id, regime, de, ate, onFechar }: { id: string; regime: "gold" | "fin"; de: string; ate: string; onFechar: () => void }) {
+export function FichaMembro({ id, regime, de, ate, onFechar, tabInicial = "propostas" }: { id: string; regime: "gold" | "fin"; de: string; ate: string; onFechar: () => void; tabInicial?: Tab }) {
   const gestao = useGestao();
-  const [tab, setTab] = useState<Tab>("propostas");
+  const [tab, setTab] = useState<Tab>(tabInicial);
   const { dados, erro, recarregar } = useRecurso(`equipa:${regime}:membro:${id}:${de}:${ate}`, signal => apiMembro(id, regime, { de: de || undefined, ate: ate || undefined }, { signal }));
   const m = dados?.membro;
   return (

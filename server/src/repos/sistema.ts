@@ -12,6 +12,7 @@ const COLUNAS: Coluna[] = [
   { tabela: "formandos_gold", chave: "id", coluna: "docs_enc", tipo: "campo" },
   { tabela: "formandos_fin", chave: "id", coluna: "pii_enc", tipo: "campo" },
   { tabela: "formandos_fin", chave: "id", coluna: "docs_enc", tipo: "campo" },
+  { tabela: "formando_apoio_dados", chave: "formando_id", coluna: "iban_enc", tipo: "campo" },
   { tabela: "drive_config", chave: "id", coluna: "client_secret", tipo: "segredo" },
   { tabela: "oauth_accounts", chave: "provider", coluna: "access_token", tipo: "segredo" },
   { tabela: "oauth_accounts", chave: "provider", coluna: "refresh_token", tipo: "segredo" },

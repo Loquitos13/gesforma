@@ -110,6 +110,7 @@ export const TAREFAS: Record<RegimePainel, Record<string, Tarefa>> = {
     iban: { titulo: "IBAN em falta", vista: "fin-formandos", tom: "perigo", filtros: { separador: "docs_em_falta" } },
     sumarios: { titulo: "Sumários e folhas por assinar", vista: "fin-turmas", tom: "aviso", filtros: { fase: "decorrer" } },
     dtp: { titulo: "Dossiês TP com bloqueantes", vista: "fin-dtp", tom: "perigo", filtros: { vista: "bloqueantes" } },
+    apoios: { titulo: "Apoios por aprovar ou pagar", vista: "fin-turmas", tom: "aviso", filtros: { fase: "decorrer" } },
   },
 };
 

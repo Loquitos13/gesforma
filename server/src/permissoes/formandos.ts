@@ -13,4 +13,6 @@ export const regras: Regra[] = [
   ["*", "/v1/formandos/gold/*", GOLD],
   ["*", "/v1/formandos/fin/*", FIN],
   ["*", "/v1/inscricoes-fin*", FIN],
+  // Apoios da Financiada (regras, processamento, pagamento): só a equipa da Financiada.
+  ["*", "/v1/apoios*", FIN],
 ];

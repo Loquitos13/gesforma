@@ -10,6 +10,7 @@ import {
 import {
   conheceu, desagregacao, funil, metodosPagamento, proximasTurmas, tarefasFin, tarefasGold, type Eixo, type Tarefa,
 } from "./painelBlocos.js";
+import { apoiosPendentes } from "./apoios.js";
 import { turmasFinEmCurso } from "./painelFin.js";
 import type { Regime } from "./sql.js";
 
@@ -115,7 +116,7 @@ export async function montarPainel(db: Db, f: FiltroPainel, eixo: Eixo) {
   const comum = { regime: f.regime as Regime, periodo: { de: f.de, ate: f.ate, anterior: f.anterior }, serie, funil: funis, conheceu: origens, proximasTurmas: proximas, desagregacao: { eixo, linhas: desag } };
 
   if (fin) {
-    const [validadas, filas, emCurso] = await Promise.all([contarValidadas(db, f), tarefasFin(db, f), turmasFinEmCurso(db, f)]);
+    const [validadas, filas, emCurso, apoios] = await Promise.all([contarValidadas(db, f), tarefasFin(db, f), turmasFinEmCurso(db, f), apoiosPendentes(db)]);
     const incompletos = filas.find(t => t.id === "incompletos")?.n ?? 0;
     const kpis: Indicador[] = [
       { id: "pre", rotulo: "Pré-inscrições", valor: leads.atual, anterior: leads.anterior, formato: "num" },
@@ -132,6 +133,13 @@ export async function montarPainel(db: Db, f: FiltroPainel, eixo: Eixo) {
       ...filas.filter(t => t.id !== "incompletos"),
       { id: "sumarios", n: emCurso.sessoesPorAssinar, detalhe: resumo(emCurso.turmasPorAssinar, false) },
       { id: "dtp", n: emCurso.comBloqueantes.length, detalhe: resumo([...emCurso.comBloqueantes].sort((a, b) => a.dtpPct - b.dtpPct), true) },
+      {
+        id: "apoios",
+        n: apoios.calculados + apoios.aprovados,
+        detalhe: apoios.calculados + apoios.aprovados
+          ? `${apoios.calculados} por aprovar · ${apoios.aprovados} por pagar`
+          : "Nada pendente",
+      },
     ];
     return { ...comum, kpis, aTratar, turmasEmCurso: emCurso.linhas, assiduidadeMinima: emCurso.minimo, metodos: null, porReceber: null };
   }

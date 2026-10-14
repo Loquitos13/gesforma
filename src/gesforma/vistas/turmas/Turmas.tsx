@@ -8,10 +8,12 @@ import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { invalidar, useRecurso } from "../../../partilhado/dados/useRecurso";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
 import {
-  Botao, Cartao, ConfirmarPerigo, ErroCarregar, Estado, Filtros, PageHeader, Paginacao, Separadores, Tabela, TOM_CLASSES,
+  Botao, Cartao, ConfirmarPerigo, ErroCarregar, Estado, Filtros, PageHeader, Paginacao, PainelLateral, Separadores, Tabela, TOM_CLASSES,
   cx, data, num, useFiltrosUrl, type Coluna,
 } from "../../../partilhado/ui";
 import { TurmaRegrasPanel } from "../../TurmaRegrasPanel";
+import { ProcessarApoios } from "../formandos/apoios/ProcessarApoios";
+import { RegrasApoios } from "../formandos/apoios/RegrasApoios";
 import type { Separador as SeparadorCockpit } from "../../rotasGesforma";
 import type { VistaProps } from "../../shell/tipos";
 import { MenuLinha, type AcaoMenu } from "./MenuLinha";
@@ -31,6 +33,8 @@ export default function Turmas({ view, navigate }: VistaProps) {
   const [form, setForm] = useState<{ id: number | null } | null>(null);
   const [apagar, setApagar] = useState<LinhaTurma | null>(null);
   const [regras, setRegras] = useState(false);
+  const [apoios, setApoios] = useState<LinhaTurma | null>(null);
+  const [regrasApoios, setRegrasApoios] = useState(false);
 
   const pedido = { regime, ...f, pagina: Number(f.pagina) || 1, porPagina: POR_PAGINA };
   const lista = useRecurso(`turmas:${regime}:${JSON.stringify(pedido)}`, s => apiTurmas(pedido, s));
@@ -69,6 +73,7 @@ export default function Turmas({ view, navigate }: VistaProps) {
         desativado: t.fase === "fechada" || t.fase === "cancelada",
         onClick: () => void inscricoes.correr(t).then(r => r && depoisDeGravar()),
       });
+      if (fin) out.push({ rotulo: "Processar apoios do mês", onClick: () => setApoios(t) });
       out.push({ rotulo: "Editar", onClick: () => setForm({ id: t.id }) });
       out.push({ rotulo: "Eliminar", perigo: true, onClick: () => setApagar(t) });
     }
@@ -169,6 +174,7 @@ export default function Turmas({ view, navigate }: VistaProps) {
         acoes={gerir && (
           <>
             <Botao variante="secundario" onClick={() => setRegras(v => !v)} aria-expanded={regras}>Abertura automática</Botao>
+            {fin && <Botao variante="secundario" onClick={() => setRegrasApoios(true)}>Regras dos apoios</Botao>}
             <Botao onClick={() => setForm({ id: null })}>Nova turma</Botao>
           </>
         )}
@@ -244,6 +250,12 @@ export default function Turmas({ view, navigate }: VistaProps) {
         onFechar={() => setForm(null)}
         onGuardado={() => { setForm(null); depoisDeGravar(); }}
       />
+      {fin && <ProcessarApoios turma={apoios} aberto={Boolean(apoios)} onFechar={() => setApoios(null)} />}
+      {fin && (
+        <PainelLateral aberto={regrasApoios} onFechar={() => setRegrasApoios(false)} largura={760} titulo="Regras dos apoios" subtitulo="Financiada">
+          <RegrasApoios podeEditar={gerir} />
+        </PainelLateral>
+      )}
       <ConfirmarPerigo
         aberto={Boolean(apagar)}
         onFechar={() => setApagar(null)}

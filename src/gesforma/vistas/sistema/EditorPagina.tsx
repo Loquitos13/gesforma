@@ -3,7 +3,7 @@
 // O ícone "Páginas" (por baixo de Blocos e Estrutura) escolhe a página a editar.
 import "@puckeditor/core/no-external.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Puck, type Data, type Dictionary, type Plugin, type Viewports } from "@puckeditor/core";
+import { Puck, type Config, type Data, type Dictionary, type Plugin, type PuckAction, type Viewports } from "@puckeditor/core";
 import { apiPaginaSite, apiPublicarPagina, apiRascunhoPagina, type PaginaEditor } from "../../../partilhado/api/site";
 import { PAGINAS_SITE, type PaginaSite } from "../../../partilhado/siteBlocos";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
@@ -12,6 +12,9 @@ import { molduraDaPagina } from "../../../site/PaginaSite";
 import { OfertaCtx, useOfertaState } from "../../../site/SiteLanding";
 import { nomesCursos } from "../../../site/editor/campos";
 import { configPara, MolduraCtx, type Moldura } from "../../../site/editor/config";
+import {
+  AvisoDispositivoCtx, definirDispositivoEmEdicao, NOMES_DISP, paraDispositivo, type Disp,
+} from "../../../site/editor/dispositivos";
 import { modeloPagina } from "../../../site/editor/modeloBase";
 
 const VIEWPORTS: Viewports = [
@@ -20,6 +23,9 @@ const VIEWPORTS: Viewports = [
   { width: 1440, height: "auto", label: "Computador", icon: "Monitor" },
   { width: "100%", height: "auto", label: "Largura toda" },
 ];
+
+// Constantes fora do componente: o Puck repõe o ecrã da pré-visualização se estes objectos mudarem.
+const IFRAME = { enabled: true, waitForStyles: true };
 
 const PT: Dictionary = {
   "header-publish": "Publicar", "header-undo": "anular", "header-redo": "refazer",
@@ -73,6 +79,24 @@ function pluginPaginas(atual: PaginaSite, ir: (p: PaginaSite) => void): Plugin {
 
 type Estado = "guardado" | "a-guardar" | "por-guardar" | "erro";
 
+const slotsDe = (config: Config) => (tipo: string) =>
+  Object.entries(config.components[tipo]?.fields ?? {}).filter(([, f]) => (f as { type?: string }).type === "slot").map(([k]) => k);
+
+/**
+ * Quando a pré-visualização muda de ecrã, o painel passa a mostrar (e a editar) os valores desse ecrã.
+ * Fica dentro da barra do Puck para ter os dados actuais e o dispatch.
+ */
+function SincronizarEcra({ ecra, dados, dispatch, config }: { ecra: Disp | null; dados: Data; dispatch: (a: PuckAction) => void; config: Config }) {
+  const ultimo = useRef<Disp | null>(null);
+  useEffect(() => {
+    if (!ecra || ecra === ultimo.current) return;
+    ultimo.current = ecra;
+    definirDispositivoEmEdicao(ecra);
+    dispatch({ type: "setData", data: paraDispositivo(dados, ecra, slotsDe(config)) });
+  }, [ecra]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
 /** Lê a página sempre do servidor (sem cache): o rascunho tem de ser o último gravado. */
 function usePaginaEditor(pagina: PaginaSite) {
   const [dados, setDados] = useState<PaginaEditor | null>(null);
@@ -103,6 +127,8 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
   const [estado, setEstado] = useState<Estado>("guardado");
   const [publicadoEm, setPublicadoEm] = useState<string | null>(null);
   const [aPublicar, setAPublicar] = useState(false);
+  const [ecra, setEcra] = useState<Disp | null>(null);
+  const config = configPara(pagina);
   const pendente = useRef<Data | null>(null);
   const temporizador = useRef<number | undefined>(undefined);
   /** Último conteúdo visto: o Puck chama onChange também em mudanças de interface (painel, seleção). */
@@ -183,8 +209,10 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
 
   const textoEstado = { "guardado": "Rascunho guardado", "a-guardar": "A guardar…", "por-guardar": "Alterações por guardar", "erro": "Rascunho não guardado" }[estado];
   // Estável entre renders (o Puck reage a overrides novos): só muda quando o que mostra muda.
-  const acoes = useCallback(({ state }: { state: { data: unknown } }) => (
+  const acoes = useCallback(({ state, dispatch }: { state: { data: unknown }; dispatch: (a: PuckAction) => void }) => (
     <div className="flex items-center gap-2 text-[12px]">
+      <SincronizarEcra ecra={ecra} dados={state.data as Data} dispatch={dispatch} config={config} />
+      {ecra && <span className={`rounded px-2 py-1 font-semibold ${ecra === "pc" ? "bg-[#eef1f5] text-[#3d4a5a]" : "bg-[#fff1d1] text-[#7a4b00]"}`} title="O ecrã da pré-visualização decide o que se edita">A editar: {NOMES_DISP[ecra]}</span>}
       <span className={estado === "erro" ? "text-[#a60000]" : "text-[#6b7685]"} aria-live="polite">{textoEstado}</span>
       <span className="hidden text-[#6b7685] xl:inline">{publicadoEm ? `· publicada ${new Date(publicadoEm).toLocaleString("pt-PT")}` : "· ainda não publicada"}</span>
       <button type="button" onClick={() => setRepor(true)} className="rounded border border-[#d4d8de] px-2.5 py-1.5 font-semibold text-[#3d4a5a] hover:bg-[#f2f4f7]">Repor modelo base</button>
@@ -192,7 +220,7 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
       <button type="button" disabled={aPublicar} onClick={() => void publicarRef.current(state.data as Data)}
         className="rounded bg-[#a60000] px-3.5 py-1.5 font-bold text-white hover:bg-[#14263d] disabled:opacity-60">{aPublicar ? "A publicar…" : "Publicar"}</button>
     </div>
-  ), [estado, textoEstado, publicadoEm, aPublicar, pagina]);
+  ), [estado, textoEstado, publicadoEm, aPublicar, pagina, ecra, config]);
 
   if (erro) return <ErroCarregar erro={erro} onTentar={recarregar} />;
   if (!inicial || (pagina !== "inicio" && !moldura)) return <Esqueleto linhas={10} className="m-6" />;
@@ -200,16 +228,17 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
   return (
     <OfertaCtx.Provider value={oferta}>
       <MolduraCtx.Provider value={moldura}>
+      <AvisoDispositivoCtx.Provider value={setEcra}>
         <div className="editor-site h-full">
           <Puck
             key={versao}
-            config={configPara(pagina)}
+            config={config}
             data={inicial}
             onChange={onChange}
             onPublish={onPublish}
             headerTitle={PAGINAS[pagina].titulo}
             viewports={VIEWPORTS}
-            iframe={{ enabled: true, waitForStyles: true }}
+            iframe={IFRAME}
             dictionary={PT}
             plugins={plugins}
             height="100%"
@@ -233,6 +262,7 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
             setVersao(v => v + 1);
           }}
         />
+      </AvisoDispositivoCtx.Provider>
       </MolduraCtx.Provider>
     </OfertaCtx.Provider>
   );

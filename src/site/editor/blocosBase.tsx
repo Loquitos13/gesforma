@@ -24,7 +24,7 @@ function caixa(a: Partial<Estilo> | undefined, extra?: CSSProperties) {
 type SeccaoProps = {
   conteudo: Slot;
   disposicao: "pilha" | "grelha" | "linha";
-  colunas: number; colunasTab: number; colunasTel: number;
+  colunas: number; colunasTab?: number; colunasTel?: number;
   espaco: number | null;
   alinharItens: keyof typeof ALINHAR_ITENS;
   larguraConteudo: "tema" | "total";
@@ -39,9 +39,7 @@ export const Seccao: ComponentConfig<SeccaoProps> = {
       type: "select", label: "Disposição dos blocos",
       options: [{ label: "Uns por baixo dos outros", value: "pilha" }, { label: "Grelha (colunas)", value: "grelha" }, { label: "Lado a lado", value: "linha" }],
     },
-    colunas: campoNumero("Colunas no computador", "") as never,
-    colunasTab: campoNumero("Colunas no tablet", "") as never,
-    colunasTel: campoNumero("Colunas no telemóvel", "") as never,
+    colunas: campoNumero("Colunas (na grelha)", "") as never,
     espaco: campoNumero("Espaço entre blocos"),
     alinharItens: { type: "select", label: "Alinhamento vertical", options: opcoesAlinhar },
     larguraConteudo: { type: "select", label: "Largura do conteúdo", options: [{ label: "Do tema", value: "tema" }, { label: "Ecrã inteiro", value: "total" }] },
@@ -254,9 +252,9 @@ export const Imagem: ComponentConfig<ImagemProps> = {
   },
 };
 
-export const Espaco: ComponentConfig<{ altura: number | null; alturaTel: number | null }> = {
+export const Espaco: ComponentConfig<{ altura: number | null; alturaTel?: number | null }> = {
   label: "Espaço",
-  fields: { altura: campoNumero("Altura"), alturaTel: campoNumero("Altura no telemóvel") },
+  fields: { altura: campoNumero("Altura") },
   defaultProps: { altura: 48, alturaTel: null },
   render: ({ altura, alturaTel }) => {
     const c = estiloBloco(estiloVazio({ preenchimento: lados(altura ?? 0, 0, 0, 0), preenchimentoTel: lados(alturaTel ?? altura ?? 0, 0, 0, 0) }));
@@ -283,7 +281,7 @@ export const Separador: ComponentConfig<{ espessura: number | null; cor: string;
 
 type Pilar = { numero: string; titulo: string; texto: string; imagem: string };
 type PilaresProps = {
-  itens: Pilar[]; colunas: number; colunasTel: number; espaco: number | null;
+  itens: Pilar[]; colunas: number; colunasTab?: number; colunasTel?: number; espaco: number | null;
   tipoNumero: Tipografia; tipoTitulo: Tipografia; tipoTexto: Tipografia; cartao: Estilo; aparencia: Estilo;
 };
 
@@ -297,7 +295,6 @@ export const Pilares: ComponentConfig<PilaresProps> = {
       getItemSummary: item => item.titulo || item.numero || "Cartão",
     },
     colunas: campoNumero("Colunas", "") as never,
-    colunasTel: campoNumero("Colunas no telemóvel", "") as never,
     espaco: campoNumero("Espaço entre cartões"),
     tipoNumero: campoTipografia("Tipografia do número"),
     tipoTitulo: campoTipografia("Tipografia do título"),
@@ -317,8 +314,8 @@ export const Pilares: ComponentConfig<PilaresProps> = {
     cartao: estiloVazio({ preenchimento: lados(20, 0, 0, 0), bordaTopo: 2, bordaCor: "var(--c-acento)" }),
     aparencia: estiloVazio(),
   },
-  render: ({ itens, colunas, colunasTel, espaco, tipoNumero, tipoTitulo, tipoTexto, cartao, aparencia }) => {
-    const c = caixa(aparencia, { gap: espaco != null ? `${espaco}px` : undefined, ["--cols" as string]: String(colunas || 1), ["--cols-tab" as string]: String(Math.min(colunas || 1, 2)), ["--cols-tel" as string]: String(colunasTel || 1) } as CSSProperties);
+  render: ({ itens, colunas, colunasTab, colunasTel, espaco, tipoNumero, tipoTitulo, tipoTexto, cartao, aparencia }) => {
+    const c = caixa(aparencia, { gap: espaco != null ? `${espaco}px` : undefined, ["--cols" as string]: String(colunas || 1), ["--cols-tab" as string]: String(colunasTab ?? Math.min(colunas || 1, 2)), ["--cols-tel" as string]: String(colunasTel || 1) } as CSSProperties);
     const k = estiloBloco(cartao);
     const [tn, tt, tx] = [estiloTexto(tipoNumero), estiloTexto(tipoTitulo), estiloTexto(tipoTexto)];
     return (

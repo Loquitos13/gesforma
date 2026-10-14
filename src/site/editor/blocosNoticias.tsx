@@ -17,7 +17,7 @@ let pedido: Promise<Noticia[]> | null = null;
 const lerNoticias = () => (pedido ??= apiNoticias().then(r => r.noticias).catch(e => { pedido = null; throw e; }));
 
 type Props = {
-  filtros: boolean; limite: number | null; colunas: number | null; colunasTel: number | null; espaco: number | null;
+  filtros: boolean; limite: number | null; colunas: number | null; colunasTab?: number | null; colunasTel?: number | null; espaco: number | null;
   mostrarData: boolean; mostrarTema: boolean; mostrarExcerto: boolean; textoVazio: string;
   corFiltroAtivo: string; tipoTitulo: Tipografia; cartao: Estilo; aparencia: Estilo;
 };
@@ -33,7 +33,7 @@ function ListaVista(p: Props) {
   const k = estiloBloco(p.cartao);
   const t = estiloTexto(p.tipoTitulo);
   const ativo = corSegura(p.corFiltroAtivo) ?? "var(--c-primaria)";
-  const grelha = { gap: `${p.espaco ?? 20}px`, ["--cols" as string]: String(p.colunas || 2), ["--cols-tab" as string]: String(Math.min(p.colunas || 2, 2)), ["--cols-tel" as string]: String(p.colunasTel || 1) } as CSSProperties;
+  const grelha = { gap: `${p.espaco ?? 20}px`, ["--cols" as string]: String(p.colunas || 2), ["--cols-tab" as string]: String(p.colunasTab ?? Math.min(p.colunas || 2, 2)), ["--cols-tel" as string]: String(p.colunasTel || 1) } as CSSProperties;
   return (
     <div className={c.className} style={c.style}>
       {p.filtros && temas.length > 1 && (
@@ -70,7 +70,6 @@ export const ListaNoticias: ComponentConfig<Props> = {
     filtros: simNao("Filtro por temática"),
     limite: campoNumero("Máximo de notícias (vazio = todas)", ""),
     colunas: campoNumero("Colunas", ""),
-    colunasTel: campoNumero("Colunas no telemóvel", ""),
     espaco: campoNumero("Espaço entre notícias"),
     mostrarData: simNao("Mostrar a data"),
     mostrarTema: simNao("Mostrar a temática"),

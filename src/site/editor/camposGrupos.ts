@@ -8,8 +8,6 @@ export const campoAparencia = (label = "Aparência"): Field => ({
   objectFields: {
     margem: campoLados("Margem exterior"),
     preenchimento: campoLados("Espaço interior"),
-    margemTel: campoLados("Margem exterior no telemóvel"),
-    preenchimentoTel: campoLados("Espaço interior no telemóvel"),
     largura: campoMedida("Largura"),
     larguraMax: campoMedida("Largura máxima"),
     alturaMin: campoMedida("Altura mínima"),
@@ -53,7 +51,6 @@ export const campoTipografia = (label = "Tipografia"): Field => ({
   objectFields: {
     fonte: campoFonte("Fonte"),
     tamanho: campoNumero("Tamanho"),
-    tamanhoTel: campoNumero("Tamanho no telemóvel"),
     peso: {
       type: "select", label: "Peso",
       options: [

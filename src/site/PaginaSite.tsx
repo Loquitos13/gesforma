@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import type { Data } from "@puckeditor/core";
 import type { PaginaSite as Pagina } from "../partilhado/siteBlocos";
 import { CabecalhoSite, type CabecalhoProps, RodapeSite, type RodapeProps } from "./editor/blocosMoldura";
-import { configOutraPagina, configSite, estiloTema, MolduraCtx, type Moldura, type TemaSite } from "./editor/config";
+import { configOutraPagina, configSite, estiloTema, MolduraCtx, NoEcra, type Moldura, type TemaSite } from "./editor/config";
 import { DesenharPagina } from "./editor/desenhar";
+import { efetivas, type Disp } from "./editor/dispositivos";
 import { modeloPagina } from "./editor/modeloBase";
 
 const pedidos = new Map<Pagina, Promise<Data>>();
@@ -42,7 +43,9 @@ export function molduraDaPagina(dados: Data | null): Moldura | null {
   return { cabecalho: cab ?? null, rodape: rod ?? null, tema: dados.root?.props as Partial<TemaSite> | undefined };
 }
 
-export const estiloDaMoldura = (m: Moldura | null) => (m ? estiloTema(m.tema) : undefined);
+/** Tema da página inicial com os valores do ecrã (fora das páginas do editor). */
+export const estiloDaMoldura = (m: Moldura | null, d: Disp) =>
+  (m ? estiloTema(efetivas((m.tema ?? {}) as Record<string, unknown>, d, []) as Partial<TemaSite>) : undefined);
 
 /** Desenha uma página do editor; as que não são a inicial levam o cabeçalho e o rodapé da inicial. */
 export function PaginaSite({ pagina, dados, moldura }: { pagina: Pagina; dados: Data; moldura: Moldura | null }) {
@@ -54,4 +57,4 @@ export function PaginaSite({ pagina, dados, moldura }: { pagina: Pagina; dados: 
   );
 }
 
-export { CabecalhoSite, RodapeSite };
+export { CabecalhoSite, NoEcra, RodapeSite };

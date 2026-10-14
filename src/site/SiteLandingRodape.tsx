@@ -5,7 +5,8 @@ import { InscricaoSite, useInscricao } from "./SiteInscricao";
 import { ePrepago, ePreinscricao, objectivosEva } from "../partilhado/siteConteudo";
 import { Course, OfertaCtx, SiteTextoCtx, useSiteTexto, useSiteTextoState, useOferta, useOfertaState, Icon } from "./SiteLanding";
 import type { PaginaSite as PaginaSiteNome } from "../partilhado/siteBlocos";
-import { CabecalhoSite, estiloDaMoldura, molduraDaPagina, PaginaSite, RodapeSite, usePagina } from "./PaginaSite";
+import { CabecalhoSite, estiloDaMoldura, molduraDaPagina, NoEcra, PaginaSite, RodapeSite, usePagina } from "./PaginaSite";
+import { useDispositivo } from "./editor/dispositivos";
 
 function WhatsAppAssistant() {
   const t = useSiteTexto();
@@ -222,6 +223,7 @@ export function SiteFrame({ children, pagina }: { children?: ReactNode; pagina?:
   const propria = usePagina(pagina && pagina !== "inicio" ? pagina : null);
   const moldura = molduraDaPagina(inicio);
   const dados = pagina === "inicio" ? inicio : propria;
+  const ecra = useDispositivo();
   const titulo = texto.ler("tituloSeparador");
   useEffect(() => {
     const prev = document.title;
@@ -233,15 +235,15 @@ export function SiteFrame({ children, pagina }: { children?: ReactNode; pagina?:
     <OfertaCtx.Provider value={oferta}>
       <SiteTextoCtx.Provider value={texto}>
       <InscricaoSite>
-        <div className="site-ena min-h-screen" style={estiloDaMoldura(moldura)}>
+        <div className="site-ena min-h-screen" style={estiloDaMoldura(moldura, ecra)}>
           <a href="#conteudo" className="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:left-4 focus-visible:top-4 focus-visible:z-[80] focus-visible:bg-[#FFA900] focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-bold focus-visible:text-[#14263D]">Saltar para o conteúdo</a>
           {pagina ? (
             <div id="conteudo">{dados && inicio ? <PaginaSite pagina={pagina} dados={dados} moldura={moldura} /> : <div className="min-h-screen" aria-busy="true" />}</div>
           ) : (
             <>
-              {moldura?.cabecalho ? <CabecalhoSite {...moldura.cabecalho} /> : !inicio && <div className="h-20" aria-hidden="true" />}
+              {moldura?.cabecalho ? <NoEcra props={moldura.cabecalho}>{p => <CabecalhoSite {...p} />}</NoEcra> : !inicio && <div className="h-20" aria-hidden="true" />}
               <div id="conteudo">{children}</div>
-              {moldura?.rodape && <RodapeSite {...moldura.rodape} />}
+              {moldura?.rodape && <NoEcra props={moldura.rodape}>{p => <RodapeSite {...p} />}</NoEcra>}
             </>
           )}
           {pagina !== "area" && <WhatsAppAssistant />}

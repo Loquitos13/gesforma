@@ -1,6 +1,6 @@
 // Configuração do editor visual (Puck): tema da página e blocos disponíveis.
-import { createContext, useContext, type CSSProperties, type ReactNode } from "react";
-import type { Config } from "@puckeditor/core";
+import { createContext, useContext, type CSSProperties, type ElementType, type ReactNode } from "react";
+import type { ComponentConfig, Config, Field } from "@puckeditor/core";
 import type { PaginaSite } from "../../partilhado/siteBlocos";
 import { AreaFormando } from "./blocosArea";
 import { Catalogo } from "./blocosCatalogo";
@@ -9,6 +9,10 @@ import { Botao, Coluna, Espaco, Imagem, Logotipos, Pilares, Seccao, Separador, T
 import { CursosDestaque, OfertaFormativa } from "./blocosCursos";
 import { Cabecalho, CabecalhoSite, Rodape, RodapeSite, type CabecalhoProps, type RodapeProps } from "./blocosMoldura";
 import { campoCor, campoFonte, campoNumero } from "./campos";
+import {
+  AvisoDispositivoCtx, CampoDispositivo, criarVariantes, dispositivoEmEdicao, efetivas, MedirDispositivo, registarAlteracao,
+  useDispositivo, type Variantes,
+} from "./dispositivos";
 import { corSegura, pilhaFonte } from "./estilos";
 
 export type TemaSite = {
@@ -48,8 +52,62 @@ export function estiloTema(t: Partial<TemaSite> | undefined): CSSProperties {
   } as CSSProperties;
 }
 
+/** Invólucro da página: mede o ecrã (no editor, o da pré-visualização) e aplica o tema desse ecrã. */
 export function InvolucroTema({ tema, children }: { tema: Partial<TemaSite> | undefined; children: ReactNode }) {
-  return <div className="site-ena min-h-screen" style={estiloTema(tema)}>{children}</div>;
+  const aviso = useContext(AvisoDispositivoCtx);
+  return (
+    <MedirDispositivo aoMudar={aviso ?? undefined}>
+      {ref => <TemaDoEcra refEl={ref} tema={tema}>{children}</TemaDoEcra>}
+    </MedirDispositivo>
+  );
+}
+
+function TemaDoEcra({ refEl, tema, children }: { refEl: (el: HTMLDivElement | null) => void; tema: Partial<TemaSite> | undefined; children: ReactNode }) {
+  const d = useDispositivo();
+  const t = efetivas((tema ?? {}) as Record<string, unknown>, d, []) as Partial<TemaSite>;
+  return <div ref={refEl} className="site-ena min-h-screen" style={estiloTema(t)}>{children}</div>;
+}
+
+/** Props de um bloco com os valores do ecrã onde está (cabeçalho e rodapé fora do editor). */
+export function NoEcra<P extends object>({ props, children }: { props: P; children: (p: P) => ReactNode }) {
+  const d = useDispositivo();
+  return <>{children(efetivas(props as Record<string, unknown>, d, []) as P)}</>;
+}
+
+// ─── Edição por ecrã em todos os blocos ──────────────────────────────────────
+
+function Responsivo({ Orig, props, slots }: { Orig: ElementType; props: Record<string, unknown>; slots: string[] }) {
+  const d = useDispositivo();
+  return <Orig {...efetivas(props, d, slots)} />;
+}
+
+/**
+ * Junta a um bloco (ou à raiz) a edição por ecrã: o campo "Ecrã" no topo do painel, o registo das
+ * alterações no ecrã em edição (resolveData) e o desenho com os valores do ecrã onde está.
+ */
+function responsivo<C extends Partial<ComponentConfig<any>>>(cfg: C): C {
+  const campos = (cfg.fields ?? {}) as Record<string, Field & { label?: string }>;
+  const slots = Object.entries(campos).filter(([, f]) => f.type === "slot").map(([k]) => k);
+  const rotulos = Object.fromEntries(Object.entries(campos).map(([k, f]) => [k, f.label ?? k]));
+  const Orig = cfg.render as unknown as ElementType;
+  const campoEcra: Field = { type: "custom", label: "Ecrã", render: ({ value, onChange }) => <CampoDispositivo value={value as Variantes | undefined} onChange={onChange} rotulos={rotulos} /> };
+  return {
+    ...cfg,
+    fields: { __disp: campoEcra, ...campos },
+    resolveData: async (data: { props: Record<string, unknown> }, params: { changed: Record<string, boolean>; trigger: string }) => {
+      const props = data.props;
+      const v = props.__disp as Variantes | undefined;
+      if (!v) return { ...data, props: { ...props, __disp: criarVariantes(props, slots) } };
+      if (params.trigger !== "replace") return data;
+      const d = dispositivoEmEdicao();
+      const mudou = Object.keys(params.changed).filter(k => params.changed[k] && k !== "id" && !slots.includes(k));
+      // "Voltar a herdar" no campo Ecrã: as props passam aos valores do ecrã.
+      if (mudou.includes("__disp")) return { ...data, props: efetivas(props, d, slots) };
+      if (!mudou.length) return data;
+      return { ...data, props: { ...props, __disp: registarAlteracao(v, props, mudou, d) } };
+    },
+    render: (props: Record<string, unknown>) => <Responsivo Orig={Orig} props={props} slots={slots} />,
+  } as C;
 }
 
 const camposTema = {
@@ -73,17 +131,17 @@ function RaizOutra({ children, editar }: { children: ReactNode; editar: boolean 
   const m = useContext(MolduraCtx);
   return (
     <InvolucroTema tema={m?.tema}>
-      {m?.cabecalho && <CabecalhoSite {...m.cabecalho} editar={editar} />}
+      {m?.cabecalho && <NoEcra props={m.cabecalho}>{p => <CabecalhoSite {...p} editar={editar} />}</NoEcra>}
       {children}
-      {m?.rodape && <RodapeSite {...m.rodape} />}
+      {m?.rodape && <NoEcra props={m.rodape}>{p => <RodapeSite {...p} />}</NoEcra>}
     </InvolucroTema>
   );
 }
 
-const componentes = {
+const componentes = Object.fromEntries(Object.entries({
   Seccao, Coluna, Espaco, Separador, Titulo, Texto, Botao, Imagem, Pilares, Logotipos,
   CursosDestaque, OfertaFormativa, Catalogo, ListaNoticias, AreaFormando, Cabecalho, Rodape,
-} as Config["components"];
+}).map(([k, c]) => [k, responsivo(c as ComponentConfig<any>)])) as Config["components"];
 
 const categoriasBase = {
   estrutura: { title: "Estrutura", components: ["Seccao", "Coluna", "Espaco", "Separador"] },
@@ -94,11 +152,12 @@ const categoriasBase = {
 
 /** A página inicial guarda o tema, o cabeçalho e o rodapé; as outras só o conteúdo do meio. */
 export const configSite: Config = {
+  // A raiz guarda o tema com as variantes por ecrã: o invólucro escolhe as do ecrã.
   root: {
-    fields: camposTema,
+    ...responsivo({ fields: camposTema, render: () => <></> }),
     defaultProps: temaPadrao,
     render: ({ children, puck: _p, ...tema }: { children: ReactNode; puck?: unknown } & Record<string, unknown>) => <InvolucroTema tema={tema as Partial<TemaSite>}>{children}</InvolucroTema>,
-  },
+  } as Config["root"],
   categories: { ...categoriasBase, moldura: { title: "Cabeçalho e rodapé", components: ["Cabecalho", "Rodape"] } },
   components: componentes,
 };

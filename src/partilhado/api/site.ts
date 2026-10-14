@@ -10,3 +10,13 @@ export const apiGravarDefinicao = (id: string, values: Record<string, string>) =
 
 export const apiImagemHero = (slot: "1" | "2" | "fundo" | "apresentacao", ficheiro: File) =>
   enviarFicheiro<{ nome: string; url: string }>(`/v1/site/hero/${slot}/imagem`, ficheiro);
+
+/** Páginas do editor visual (JSON dos blocos do Puck). */
+export type PaginaEditor = { rascunho: unknown; publicado: unknown; publicadoEm: string | null; atualizadoEm: string | null };
+export const apiPaginaSite = (pagina: string, signal?: AbortSignal) =>
+  api<PaginaEditor>(`/v1/site/paginas/${encodeURIComponent(pagina)}`, { signal });
+export const apiRascunhoPagina = (pagina: string, dados: unknown) =>
+  enviar.put<{ ok: boolean }>(`/v1/site/paginas/${encodeURIComponent(pagina)}/rascunho`, { dados });
+export const apiPublicarPagina = (pagina: string, dados: unknown) =>
+  enviar.put<{ ok: boolean }>(`/v1/site/paginas/${encodeURIComponent(pagina)}/publicar`, { dados });
+export const apiImagemSite = (ficheiro: File) => enviarFicheiro<{ nome: string; url: string }>("/v1/site/imagem", ficheiro);

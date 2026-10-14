@@ -1,6 +1,6 @@
 import { Component, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "../../partilhado/AuthGate";
-import { Botao, Esqueleto } from "../../partilhado/ui";
+import { Botao, cx, Esqueleto } from "../../partilhado/ui";
 import { DocAlertas } from "../DocAlertas";
 import { tabDoFormador } from "../vistas/turmas/cockpit/base";
 import { caminhoDaVista, vistaDoCaminho, type Destino, type Vista } from "../rotasGesforma";
@@ -80,6 +80,11 @@ export function AppShell() {
   const [estado, setEstado] = useState(() => arranque(user.role));
   const { view, params } = estado;
   const [menuAberto, setMenuAberto] = useState(false);
+  const [recolhida, setRecolhida] = useState(() => { try { return localStorage.getItem("gf-nav-recolhida") === "1"; } catch { return false; } });
+  const alternarNav = useCallback(() => setRecolhida(r => {
+    try { localStorage.setItem("gf-nav-recolhida", r ? "0" : "1"); } catch { /* sem armazenamento: fica só nesta sessão */ }
+    return !r;
+  }), []);
   const [pesquisaAberta, setPesquisaAberta] = useState(false);
   const primeiraEscrita = useRef(true);
 
@@ -148,8 +153,8 @@ export function AppShell() {
         Saltar para o conteúdo
       </a>
       <div className="flex h-full bg-fundo">
-        <aside className="hidden lg:flex w-60 shrink-0 h-full sticky top-0">
-          <div className="w-full"><Sidebar view={view} onNavigate={navigate} /></div>
+        <aside className={cx("hidden lg:flex shrink-0 h-full sticky top-0 transition-[width] duration-150", recolhida ? "w-14" : "w-60")}>
+          <div className="w-full"><Sidebar view={view} onNavigate={navigate} compacta={recolhida} onAlternar={alternarNav} /></div>
         </aside>
 
         {menuAberto && (

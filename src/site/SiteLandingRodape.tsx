@@ -3,8 +3,8 @@ import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { ApiError, apiPublicPreinscricao } from "../partilhado/api";
 import { InscricaoSite, useInscricao } from "./SiteInscricao";
 import { ePrepago, ePreinscricao, objectivosEva } from "../partilhado/siteConteudo";
-import { Course, OfertaCtx, SiteTextoCtx, useSiteTexto, useSiteTextoState, useOferta, useOfertaState, Icon, Header } from "./SiteLanding";
-import { Home, Footer } from "./SiteLandingSeccoes";
+import { Course, OfertaCtx, SiteTextoCtx, useSiteTexto, useSiteTextoState, useOferta, useOfertaState, Icon } from "./SiteLanding";
+import { CabecalhoSite, molduraDaPagina, PaginaSite, RodapeSite, usePagina } from "./PaginaSite";
 
 function WhatsAppAssistant() {
   const t = useSiteTexto();
@@ -210,9 +210,11 @@ function WhatsAppAssistant() {
   );
 }
 
-export function SiteFrame({ children }: { children: ReactNode }) {
+export function SiteFrame({ children, inicio = false }: { children?: ReactNode; inicio?: boolean }) {
   const oferta = useOfertaState();
   const texto = useSiteTextoState();
+  const pagina = usePagina("inicio");
+  const moldura = molduraDaPagina(pagina);
   const titulo = texto.ler("tituloSeparador");
   useEffect(() => {
     const prev = document.title;
@@ -223,13 +225,17 @@ export function SiteFrame({ children }: { children: ReactNode }) {
     <OfertaCtx.Provider value={oferta}>
       <SiteTextoCtx.Provider value={texto}>
       <InscricaoSite>
-        <div className="site-ena min-h-screen bg-[#F6F3EE] text-[#14263D]">
+        <div className="site-ena min-h-screen" style={moldura?.tema}>
           <a href="#conteudo" className="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:left-4 focus-visible:top-4 focus-visible:z-[80] focus-visible:bg-[#FFA900] focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-bold focus-visible:text-[#14263D]">Saltar para o conteúdo</a>
-          <Header />
-          <div id="conteudo">
-            {children}
-          </div>
-          <Footer />
+          {inicio ? (
+            <div id="conteudo">{pagina ? <PaginaSite dados={pagina} /> : <div className="min-h-screen" aria-busy="true" />}</div>
+          ) : (
+            <>
+              {moldura?.cabecalho ? <CabecalhoSite {...moldura.cabecalho} /> : !pagina && <div className="h-20" aria-hidden="true" />}
+              <div id="conteudo">{children}</div>
+              {moldura?.rodape && <RodapeSite {...moldura.rodape} />}
+            </>
+          )}
           <WhatsAppAssistant />
         </div>
       </InscricaoSite>
@@ -239,9 +245,5 @@ export function SiteFrame({ children }: { children: ReactNode }) {
 }
 
 export function SiteLanding() {
-  return (
-    <SiteFrame>
-      <Home />
-    </SiteFrame>
-  );
+  return <SiteFrame inicio />;
 }

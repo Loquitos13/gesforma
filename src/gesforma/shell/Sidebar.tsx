@@ -22,7 +22,11 @@ function abertosIniciais(menu: GrupoMenu[], ativo: Vista) {
   return { grupos, subs };
 }
 
-export function Sidebar({ view, onNavigate, onFechar }: { view: Vista; onNavigate: Navegar; onFechar?: () => void }) {
+export function Sidebar({ view, onNavigate, onFechar, compacta = false, onAlternar }: {
+  view: Vista; onNavigate: Navegar; onFechar?: () => void;
+  /** Só ícones (nav recolhida); `onAlternar` mostra o botão de recolher/expandir. */
+  compacta?: boolean; onAlternar?: () => void;
+}) {
   const { user, logout } = useAuth();
   const menu = useMemo(() => menuDoPerfil(user.role), [user.role]);
   const ativo = vistaDoMenu(view);
@@ -48,6 +52,42 @@ export function Sidebar({ view, onNavigate, onFechar }: { view: Vista; onNavigat
     onFechar?.();
   }
   const temAtivo = (item: ItemMenu) => item.view === ativo || Boolean(item.children?.some(c => c.view === ativo));
+  const alternarBotao = onAlternar && (
+    <button type="button" onClick={onAlternar} aria-label={compacta ? "Expandir o menu" : "Recolher o menu"} title={compacta ? "Expandir o menu" : "Recolher o menu"}
+      className="p-1.5 rounded-controlo text-nav-fraco hover:text-white hover:bg-white/10">
+      <Icone nome="seta" tamanho={16} className={compacta ? "" : "rotate-180"} />
+    </button>
+  );
+
+  if (compacta) {
+    return (
+      <div className="flex flex-col h-full bg-nav text-nav-texto text-xs items-center">
+        <div className="h-14 flex items-center justify-center border-b border-white/10 w-full shrink-0">{alternarBotao}</div>
+        <nav aria-label="Menu principal" className="flex-1 overflow-y-auto py-2 flex flex-col items-center gap-1 w-full">
+          {menu.map((g, gi) => (
+            <div key={g.group} className={cx("flex flex-col items-center gap-1 w-full", gi > 0 && "border-t border-white/10 pt-1")}>
+              {g.items.map(item => {
+                const destino = item.view ?? item.children?.[0]?.view;
+                const a = temAtivo(item);
+                return (
+                  <button key={item.label} type="button" title={`${g.group} · ${item.label}`} aria-label={item.label} aria-current={a ? "page" : undefined}
+                    onClick={() => destino && ir(destino)} onMouseEnter={() => destino && preCarregarVista(destino)}
+                    className={cx("p-2 rounded-controlo", a ? "bg-nav-ativo text-white" : "hover:text-white hover:bg-white/10")}>
+                    <Icone nome={item.icon} tamanho={17} />
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+        <div className="border-t border-white/10 py-3 w-full flex justify-center shrink-0">
+          <button type="button" aria-label="Terminar sessão" title="Terminar sessão" onClick={() => void logout()} className="p-1.5 rounded-controlo text-nav-fraco hover:text-white hover:bg-white/10">
+            <Icone nome="sair" />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full bg-nav text-nav-texto text-xs">
@@ -59,6 +99,7 @@ export function Sidebar({ view, onNavigate, onFechar }: { view: Vista; onNavigat
         >
           GESFORMA
         </button>
+        {alternarBotao}
         {onFechar && (
           <button type="button" onClick={onFechar} aria-label="Fechar menu" className="lg:hidden p-1.5 rounded-controlo text-nav-texto hover:text-white hover:bg-white/10">
             <Icone nome="fechar" />

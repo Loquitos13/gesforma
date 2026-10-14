@@ -19,6 +19,7 @@ import { registar as catalogos } from "./catalogos.js";
 import { registar as listas } from "./listas.js";
 import { registar as blog } from "./blog.js";
 import { registar as site } from "./site.js";
+import { registar as sitePaginas } from "./sitePaginas.js";
 import { registar as auth } from "./auth.js";
 import { registar as emails } from "./emails.js";
 import { registar as utilizadores } from "./utilizadores.js";
@@ -58,6 +59,7 @@ const MODULOS: Record<string, ModuloRotas> = {
   listas,
   blog,
   site,
+  sitePaginas,
   auth,
   emails,
   utilizadores,

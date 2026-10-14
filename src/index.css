@@ -393,3 +393,36 @@ body:has(input[type="file"]:focus) [data-ficha-sticky] {
   }
 }
 
+
+/* Editor visual do site: cada bloco lê o espaçamento das variáveis (sem limites) e tem versão para telemóvel. */
+.ena-b {
+  margin: var(--mt, 0) var(--mr, 0) var(--mb, 0) var(--ml, 0);
+  padding: var(--pt, 0) var(--pr, 0) var(--pb, 0) var(--pl, 0);
+}
+.ena-t { font-size: var(--fs); }
+@media (max-width: 767px) {
+  .ena-b {
+    margin: var(--mmt, var(--mt, 0)) var(--mmr, var(--mr, 0)) var(--mmb, var(--mb, 0)) var(--mml, var(--ml, 0));
+    padding: var(--pmt, var(--pt, 0)) var(--pmr, var(--pr, 0)) var(--pmb, var(--pb, 0)) var(--pml, var(--pl, 0));
+  }
+  .ena-t { font-size: var(--fsm, var(--fs)); }
+  .ena-oculto-tel { display: none !important; }
+  .ena-grelha { grid-template-columns: repeat(var(--cols-tel, 1), minmax(0, 1fr)) !important; }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .ena-oculto-tab { display: none !important; }
+  .ena-grelha { grid-template-columns: repeat(var(--cols-tab, 2), minmax(0, 1fr)) !important; }
+}
+@media (min-width: 1024px) {
+  .ena-oculto-pc { display: none !important; }
+}
+.ena-grelha { display: grid; grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); }
+.ena-linhas-1, .ena-linhas-2, .ena-linhas-3, .ena-linhas-4 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.ena-linhas-1 { -webkit-line-clamp: 1; }
+.ena-linhas-2 { -webkit-line-clamp: 2; }
+.ena-linhas-3 { -webkit-line-clamp: 3; }
+.ena-linhas-4 { -webkit-line-clamp: 4; }
+.ena-cartao-hover-subir { transition: transform .2s ease, box-shadow .2s ease; }
+.ena-cartao-hover-subir:hover { transform: translateY(-4px); box-shadow: 0 22px 46px rgba(20, 38, 61, .16); }
+.ena-cartao-hover-zoom img { transition: transform .4s ease; }
+.ena-cartao-hover-zoom:hover img { transform: scale(1.05); }

@@ -1,7 +1,9 @@
 /** Páginas do site feitas no editor visual: rascunho e versão publicada (JSON dos blocos). */
 import { many, one, type Consulta } from "./sql.js";
 
-export type PaginaSite = "inicio" | "catalogo" | "area";
+import type { PaginaSite } from "../../../src/partilhado/siteBlocos.js";
+
+export type { PaginaSite };
 
 export async function lerPagina(c: Consulta, pagina: PaginaSite) {
   return one<{ rascunho: unknown; publicado: unknown; publicado_em: unknown; atualizado_em: unknown }>(c,

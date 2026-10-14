@@ -439,3 +439,7 @@ body:has(input[type="file"]:focus) [data-ficha-sticky] {
   .ena-cartao-h { flex-direction: row; }
   .ena-cartao-h-img { width: 40%; aspect-ratio: auto !important; }
 }
+
+/* Blocos da área do formando consoante a sessão (só no site público; no editor vê-se tudo). */
+html.ena-publico.ena-com-sessao .ena-so-sem-sessao,
+html.ena-publico:not(.ena-com-sessao) .ena-so-com-sessao { display: none !important; }

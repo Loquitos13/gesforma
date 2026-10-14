@@ -73,7 +73,7 @@ export function CabecalhoSite(p: CabecalhoProps & { editar?: boolean }) {
 
 export const cabecalhoPadrao: CabecalhoProps = {
   logo: "/imagens/ena_logo.svg", alturaLogo: 40, linha1: "Escola de", linha2: "Negócios e Administração",
-  ligacoes: [{ rotulo: "Formação", ligacao: "/formacao" }, { rotulo: "Notícias", ligacao: "/noticias" }, { rotulo: "Empresas", ligacao: "/#empresas" }],
+  ligacoes: [{ rotulo: "Formação", ligacao: "/formacao" }, { rotulo: "Notícias", ligacao: "/noticias" }, { rotulo: "Empresas", ligacao: "/empresas" }],
   botao: "Área do formando", botaoSessao: "A minha área", botaoLigacao: "/area-formando",
   fixo: true, corFundo: "#ffffff", corTexto: "var(--c-primaria)", corHover: "var(--c-destaque)", corBotao: "var(--c-destaque)", corBarra: "var(--c-acento)", barra: 4,
   tipografia: tipoVazia({ tamanho: 14, peso: "600" }),

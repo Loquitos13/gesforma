@@ -113,48 +113,23 @@ export function iniciais(nome: string) {
   return ((partes[0]?.[0] ?? "") + (partes.length > 1 ? partes[partes.length - 1]?.[0] ?? "" : "")).toUpperCase() || "ENA";
 }
 
-export function Cabecalho() {
-  const [aberto, setAberto] = useState(false);
-  return (
-    <header className="sticky top-0 z-40 border-b border-[#1C3350]/10 bg-[#F9F9F9]/95 backdrop-blur-md">
-      <div className="mx-auto flex h-20 max-w-[1240px] items-center justify-between px-5 lg:px-8">
-        <a href="/" className="flex items-center gap-3" aria-label="ENA, página inicial">
-          <img src="/imagens/ena_logo.svg" alt="ENA" className="h-9 w-auto sm:h-10" />
-          <span className="hidden text-left text-[10px] font-bold uppercase leading-tight tracking-[0.12em] text-[#1C3350]/70 sm:block">Escola de<br />Negócios e Administração</span>
-        </a>
-        <nav className="hidden items-center gap-8 text-sm font-semibold lg:flex" aria-label="Navegação principal">
-          <a href="/formacao" className="hover:text-[#A60000]">Formação</a>
-          <a href="/noticias" className="hover:text-[#A60000]">Notícias</a>
-          <a href="/#empresas" className="hover:text-[#A60000]">Empresas</a>
-        </nav>
-        <div className="hidden items-center gap-4 lg:flex">
-          <a href="/area-formando" className="text-sm font-semibold underline decoration-[#A60000] decoration-2 underline-offset-4">Área de formando</a>
-          <a href="/formacao" className="bg-[#1C3350] px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-[#A60000]">Encontrar curso</a>
-        </div>
-        <button type="button" onClick={() => setAberto(v => !v)} className="p-2 lg:hidden" aria-label={aberto ? "Fechar menu" : "Abrir menu"}>
-          <Icon name={aberto ? "close" : "menu"} />
-        </button>
-      </div>
-      {aberto && (
-        <nav className="border-t border-[#1C3350]/10 bg-[#F9F9F9] px-5 py-6 lg:hidden">
-          <div className="flex flex-col gap-5 font-semibold">
-            <a href="/formacao">Formação</a>
-            <a href="/noticias">Notícias</a>
-            <a href="/#empresas">Empresas</a>
-            <a href="/area-formando" className="border-t border-[#1C3350]/10 pt-5 text-[#A60000]">Área de formando</a>
-          </div>
-        </nav>
-      )}
-    </header>
-  );
-}
-
 export function irPosLogin(role: string) {
   const params = new URLSearchParams(window.location.search);
   window.location.assign(destinoPosLogin(role, params.get("destino")));
 }
 
-export function LoginFormando({ onEntrou, trocaInicial = null }: { onEntrou: (user: SessionUser) => void; trocaInicial?: SessionUser | null }) {
+/** Textos e cores do painel ao lado do formulário de entrada (editáveis no editor do site). */
+export type PainelEntrada = { mostrar: boolean; kicker: string; titulo: string; itens: string[]; rodape: string; fundo: string; imagem: string; fundoFormulario: string };
+
+export const PAINEL_ENTRADA: PainelEntrada = {
+  mostrar: true, kicker: "Área reservada", titulo: "Toda a sua formação num só lugar.",
+  itens: ["Continue os cursos ao seu ritmo", "Consulte sessões e materiais", "Descarregue os seus certificados"],
+  rodape: "ENA — Escola de Negócios e Administração", fundo: "#1C3350", imagem: "", fundoFormulario: "#F9F9F9",
+};
+
+export function LoginFormando({ onEntrou, trocaInicial = null, painel = PAINEL_ENTRADA }: {
+  onEntrou: (user: SessionUser) => void; trocaInicial?: SessionUser | null; painel?: PainelEntrada;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [recuperar, setRecuperar] = useState(false);
@@ -237,21 +212,24 @@ export function LoginFormando({ onEntrou, trocaInicial = null }: { onEntrou: (us
   }
 
   return (
-    <main className="grid min-h-[calc(100vh-80px)] lg:grid-cols-[.9fr_1.1fr]">
-      <section className="hidden bg-[#1C3350] p-12 text-white lg:flex lg:flex-col lg:justify-between">
-        <img src="/imagens/ena_logo.svg" alt="ENA" className="w-36 brightness-0 invert" />
-        <div className="mx-auto max-w-lg">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#FFA900]">Área reservada</p>
-          <h1 className="mt-5 font-serif text-5xl font-bold leading-tight">Toda a sua formação num só lugar.</h1>
-          <ul className="mt-8 space-y-4 text-white/70">
-            {["Continue os cursos ao seu ritmo", "Consulte sessões e materiais", "Descarregue os seus certificados"].map(item => (
-              <li key={item} className="flex items-center gap-3"><Icon name="check" className="h-5 w-5 shrink-0 text-[#FFA900]" />{item}</li>
-            ))}
-          </ul>
-        </div>
-        <p className="text-xs text-white/35">ENA — Escola de Negócios e Administração</p>
-      </section>
-      <section className="flex items-center justify-center bg-[#F9F9F9] px-5 py-16">
+    <main className={`grid min-h-[calc(100vh-80px)] ${painel.mostrar ? "lg:grid-cols-[.9fr_1.1fr]" : ""}`}>
+      {painel.mostrar && (
+        <section className="relative hidden overflow-hidden p-12 text-white lg:flex lg:flex-col lg:justify-between" style={{ background: painel.fundo || "#1C3350" }}>
+          {painel.imagem && <img src={painel.imagem} alt="" className="absolute inset-0 h-full w-full object-cover opacity-25" />}
+          <img src="/imagens/ena_logo.svg" alt="ENA" className="relative w-36 brightness-0 invert" />
+          <div className="relative mx-auto max-w-lg">
+            {painel.kicker && <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#FFA900]">{painel.kicker}</p>}
+            {painel.titulo && <h1 className="mt-5 font-serif text-5xl font-bold leading-tight">{painel.titulo}</h1>}
+            <ul className="mt-8 space-y-4 text-white/70">
+              {painel.itens.filter(Boolean).map(item => (
+                <li key={item} className="flex items-center gap-3"><Icon name="check" className="h-5 w-5 shrink-0 text-[#FFA900]" />{item}</li>
+              ))}
+            </ul>
+          </div>
+          <p className="relative text-xs text-white/35">{painel.rodape}</p>
+        </section>
+      )}
+      <section className="flex items-center justify-center px-5 py-16" style={{ background: painel.fundoFormulario || "#F9F9F9" }}>
         <div className="w-full max-w-md">
           {trocar ? (
             <>

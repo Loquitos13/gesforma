@@ -4,7 +4,8 @@ import { ApiError, apiPublicPreinscricao } from "../partilhado/api";
 import { InscricaoSite, useInscricao } from "./SiteInscricao";
 import { ePrepago, ePreinscricao, objectivosEva } from "../partilhado/siteConteudo";
 import { Course, OfertaCtx, SiteTextoCtx, useSiteTexto, useSiteTextoState, useOferta, useOfertaState, Icon } from "./SiteLanding";
-import { CabecalhoSite, molduraDaPagina, PaginaSite, RodapeSite, usePagina } from "./PaginaSite";
+import type { PaginaSite as PaginaSiteNome } from "../partilhado/siteBlocos";
+import { CabecalhoSite, estiloDaMoldura, molduraDaPagina, PaginaSite, RodapeSite, usePagina } from "./PaginaSite";
 
 function WhatsAppAssistant() {
   const t = useSiteTexto();
@@ -210,33 +211,40 @@ function WhatsAppAssistant() {
   );
 }
 
-export function SiteFrame({ children, inicio = false }: { children?: ReactNode; inicio?: boolean }) {
+/**
+ * Moldura do site público. Com `pagina`, desenha essa página do editor visual (a inicial traz o cabeçalho
+ * e o rodapé; as outras recebem-nos dela). Sem `pagina` (página de curso, artigo), envolve `children`.
+ */
+export function SiteFrame({ children, pagina }: { children?: ReactNode; pagina?: PaginaSiteNome }) {
   const oferta = useOfertaState();
   const texto = useSiteTextoState();
-  const pagina = usePagina("inicio");
-  const moldura = molduraDaPagina(pagina);
+  const inicio = usePagina("inicio");
+  const propria = usePagina(pagina && pagina !== "inicio" ? pagina : null);
+  const moldura = molduraDaPagina(inicio);
+  const dados = pagina === "inicio" ? inicio : propria;
   const titulo = texto.ler("tituloSeparador");
   useEffect(() => {
     const prev = document.title;
     document.title = titulo || "ENA";
     return () => { document.title = prev; };
   }, [titulo]);
+  useEffect(() => { document.documentElement.classList.add("ena-publico"); }, []);
   return (
     <OfertaCtx.Provider value={oferta}>
       <SiteTextoCtx.Provider value={texto}>
       <InscricaoSite>
-        <div className="site-ena min-h-screen" style={moldura?.tema}>
+        <div className="site-ena min-h-screen" style={estiloDaMoldura(moldura)}>
           <a href="#conteudo" className="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:left-4 focus-visible:top-4 focus-visible:z-[80] focus-visible:bg-[#FFA900] focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-bold focus-visible:text-[#14263D]">Saltar para o conteúdo</a>
-          {inicio ? (
-            <div id="conteudo">{pagina ? <PaginaSite dados={pagina} /> : <div className="min-h-screen" aria-busy="true" />}</div>
+          {pagina ? (
+            <div id="conteudo">{dados && inicio ? <PaginaSite pagina={pagina} dados={dados} moldura={moldura} /> : <div className="min-h-screen" aria-busy="true" />}</div>
           ) : (
             <>
-              {moldura?.cabecalho ? <CabecalhoSite {...moldura.cabecalho} /> : !pagina && <div className="h-20" aria-hidden="true" />}
+              {moldura?.cabecalho ? <CabecalhoSite {...moldura.cabecalho} /> : !inicio && <div className="h-20" aria-hidden="true" />}
               <div id="conteudo">{children}</div>
               {moldura?.rodape && <RodapeSite {...moldura.rodape} />}
             </>
           )}
-          <WhatsAppAssistant />
+          {pagina !== "area" && <WhatsAppAssistant />}
         </div>
       </InscricaoSite>
       </SiteTextoCtx.Provider>
@@ -245,5 +253,10 @@ export function SiteFrame({ children, inicio = false }: { children?: ReactNode; 
 }
 
 export function SiteLanding() {
-  return <SiteFrame inicio />;
+  return <SiteFrame pagina="inicio" />;
+}
+
+/** Páginas do site feitas só de blocos (catálogo, notícias, empresas, área do formando). */
+export function PaginaDoSite({ pagina }: { pagina: PaginaSiteNome }) {
+  return <SiteFrame pagina={pagina} />;
 }

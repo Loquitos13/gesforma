@@ -15,11 +15,10 @@ const PublicFormandoDocumentos = lazy(() => import("./site/PublicFormandoDocumen
 const PublicCronograma = lazy(() => import("./site/PublicCronograma").then(m => ({ default: m.PublicCronograma })));
 const AssinarContrato = lazy(() => import("./site/AssinarContrato").then(m => ({ default: m.AssinarContrato })));
 const VerificarAssinatura = lazy(() => import("./site/VerificarAssinatura").then(m => ({ default: m.VerificarAssinatura })));
-const SiteCatalog = lazy(() => import("./site/SiteCatalog").then(m => ({ default: m.SiteCatalog })));
 const SiteCurso = lazy(() => import("./site/SiteCurso").then(m => ({ default: m.SiteCurso })));
-const AreaFormando = lazy(() => import("./site/AreaFormandoPainel").then(m => ({ default: m.AreaFormando })));
 const Noticias = lazy(() => import("./site/Noticias").then(m => ({ default: m.Noticias })));
 const SiteLanding = lazy(() => import("./site/SiteLandingRodape").then(m => ({ default: m.SiteLanding })));
+const PaginaDoSite = lazy(() => import("./site/SiteLandingRodape").then(m => ({ default: m.PaginaDoSite })));
 
 const path = window.location.pathname.replace(/\/+$/, "") || "/";
 const legacyEntrar = path === "/entrar" || path.startsWith("/entrar/");
@@ -33,6 +32,7 @@ const areaFormando = legacyEntrar || path === "/area-formando" || path.startsWit
 const noticiaSlug = path.startsWith("/noticias/") ? decodeURIComponent(path.slice("/noticias/".length).split("/")[0] ?? "") : "";
 const noticias = path === "/noticias";
 const catalogo = path === "/formacao";
+const empresas = path === "/empresas";
 const slugCurso = path.startsWith("/formacao/") ? decodeURIComponent(path.slice("/formacao/".length).split("/")[0] ?? "") : "";
 const publicForm = path === "/pre-inscricao";
 const docsToken = path.startsWith("/documentos/") && !path.startsWith("/documentos-formando/")
@@ -65,15 +65,19 @@ createRoot(document.getElementById("root")!).render(
       ) : inqToken ? (
         <PublicInquerito token={inqToken} />
       ) : areaFormando ? (
-        <AreaFormando />
-      ) : noticias || noticiaSlug ? (
+        <PaginaDoSite pagina="area" />
+      ) : noticias ? (
+        <PaginaDoSite pagina="noticias" />
+      ) : noticiaSlug ? (
         <Noticias slug={noticiaSlug} />
+      ) : empresas ? (
+        <PaginaDoSite pagina="empresas" />
       ) : entrar ? (
         <Backoffice />
       ) : slugCurso ? (
         <SiteCurso slug={slugCurso} />
       ) : catalogo ? (
-        <SiteCatalog />
+        <PaginaDoSite pagina="catalogo" />
       ) : (
         <SiteLanding />
       )}

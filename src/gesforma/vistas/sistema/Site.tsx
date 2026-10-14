@@ -4,33 +4,45 @@ import { usePode } from "../../../partilhado/AuthGate";
 import { apiDefinicoes, apiGravarDefinicao } from "../../../partilhado/api/site";
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
+import { PAGINAS_SITE, type PaginaSite } from "../../../partilhado/siteBlocos";
 import { SITE_OMISSAO } from "../../../partilhado/siteConteudo";
 import { AreaTexto, Aviso, Botao, Campo, Cartao, Entrada, ErroCarregar, Esqueleto, Interruptor, cx } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
 
 const EditorPagina = lazy(() => import("./EditorPagina").then(m => ({ default: m.EditorPagina })));
 
-type Separador = "inicio" | "definicoes";
+type Separador = "paginas" | "definicoes";
 
 export default function Site(_props: VistaProps) {
   const podeEditar = usePode()("site.editar");
-  const [sep, setSep] = useState<Separador>("inicio");
+  const [sep, setSep] = useState<Separador>("paginas");
+  // A página em edição fica no endereço (?pagina=catalogo), para voltar a ela ao recarregar.
+  const [pagina, setPagina] = useState<PaginaSite>(() => {
+    const p = new URLSearchParams(window.location.search).get("pagina");
+    return (PAGINAS_SITE as readonly string[]).includes(p ?? "") ? p as PaginaSite : "inicio";
+  });
+  const mudarPagina = (p: PaginaSite) => {
+    setPagina(p);
+    const url = new URL(window.location.href);
+    if (p === "inicio") url.searchParams.delete("pagina"); else url.searchParams.set("pagina", p);
+    window.history.replaceState(null, "", url);
+  };
   if (!podeEditar) return <Aviso tom="aviso">Só o administrador edita o site.</Aviso>;
   return (
     // O editor ocupa a área toda (sem as margens do ecrã) para a pré-visualização ser o mais larga possível.
     <div className="-mx-4 -my-5 flex h-[calc(100%+2.5rem)] flex-col sm:-mx-8 sm:-my-6 sm:h-[calc(100%+3rem)]">
       <div role="tablist" aria-label="Site" className="flex shrink-0 items-center gap-1 border-b border-linha bg-superficie px-3">
-        {([["inicio", "Página inicial"], ["definicoes", "Definições"]] as const).map(([id, rotulo]) => (
+        {([["paginas", "Páginas do site"], ["definicoes", "Definições"]] as const).map(([id, rotulo]) => (
           <button key={id} type="button" role="tab" aria-selected={sep === id} onClick={() => setSep(id)}
             className={cx("border-b-2 px-3 py-2.5 text-sm font-semibold", sep === id ? "border-acao text-tinta" : "border-transparent text-tinta-suave hover:text-tinta")}>
             {rotulo}
           </button>
         ))}
-        <span className="ml-auto hidden text-xs text-tinta-suave md:inline">Catálogo e área do formando: próximas fases do editor.</span>
+        <span className="ml-auto hidden text-xs text-tinta-suave md:inline">Escolha a página no ícone «Páginas», à esquerda, por baixo de Blocos e Estrutura.</span>
       </div>
       <div className="min-h-0 flex-1">
-        {sep === "inicio"
-          ? <Suspense fallback={<Esqueleto linhas={10} className="m-6" />}><EditorPagina pagina="inicio" /></Suspense>
+        {sep === "paginas"
+          ? <Suspense fallback={<Esqueleto linhas={10} className="m-6" />}><EditorPagina key={pagina} pagina={pagina} onMudarPagina={mudarPagina} /></Suspense>
           : <div className="h-full overflow-auto px-4 py-5 sm:px-8 sm:py-6"><DefinicoesSite /></div>}
       </div>
     </div>

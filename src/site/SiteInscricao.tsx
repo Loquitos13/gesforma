@@ -18,6 +18,12 @@ export function useInscricao() {
   return ctx;
 }
 
+/** Como `useInscricao`, mas fora do site (pré-visualização do editor) abre a página do curso. */
+export function useInscricaoOpcional() {
+  const ctx = useContext(InscricaoCtx);
+  return ctx ?? { abrir: (curso: Course) => { window.location.assign(`/formacao/${encodeURIComponent(curso.id)}`); } };
+}
+
 export function InscricaoSite({ children }: { children: ReactNode }) {
   const [curso, setCurso] = useState<Course | null>(null);
   const abrir = useCallback((seguinte: Course) => setCurso(seguinte), []);

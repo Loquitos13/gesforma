@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArtigoBlocos } from "../partilhado/ArtigoBlocos";
-import { apiNoticia, apiNoticias } from "../partilhado/api";
+import { apiNoticia } from "../partilhado/api";
 import { lerDocumento } from "../partilhado/blogBlocos";
 import { SiteFrame } from "./SiteLandingRodape";
 
@@ -10,42 +10,6 @@ function dataPt(iso: string) {
   const data = new Date(`${iso}T12:00:00`);
   if (Number.isNaN(data.getTime())) return iso;
   return data.toLocaleDateString("pt-PT", { day: "numeric", month: "long", year: "numeric" });
-}
-
-function Lista() {
-  const [itens, setItens] = useState<Item[] | null>(null);
-  const [erro, setErro] = useState(false);
-  const [tema, setTema] = useState("Todas");
-  useEffect(() => {
-    apiNoticias().then(r => setItens(r.noticias)).catch(() => setErro(true));
-  }, []);
-  const temas = ["Todas", ...new Set((itens ?? []).map(item => item.tematica).filter(Boolean))];
-  const visiveis = (itens ?? []).filter(item => tema === "Todas" || item.tematica === tema);
-  return (
-    <main className="mx-auto max-w-[1240px] px-5 py-12 lg:px-8">
-      <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#A60000]">ENA</p>
-      <h1 className="mt-3 font-serif text-4xl font-bold text-[#1C3350] sm:text-5xl">Notícias</h1>
-      <p className="mt-4 max-w-2xl leading-7 text-[#1C3350]/60">Os artigos publicados em Gestão → Blog. Um post inactivo fica de fora desta lista.</p>
-      {temas.length > 1 && (
-        <div className="mt-8 flex flex-wrap gap-2">
-          {temas.map(item => (
-            <button key={item} type="button" onClick={() => setTema(item)} className={`px-4 py-2 text-sm font-bold ${tema === item ? "bg-[#1C3350] text-white" : "bg-white text-[#1C3350]"}`}>{item}</button>
-          ))}
-        </div>
-      )}
-      {erro && <p className="mt-10 text-sm font-semibold text-[#A60000]">Não foi possível ler as notícias.</p>}
-      {itens && visiveis.length === 0 && <p className="mt-10 text-sm text-[#1C3350]/60">Ainda não há artigos publicados.</p>}
-      <div className="mt-8 grid gap-5 md:grid-cols-2">
-        {visiveis.map(item => (
-          <a key={item.slug} href={`/noticias/${encodeURIComponent(item.slug)}`} className="border border-[#1C3350]/10 bg-white p-6 hover:border-[#A60000]">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#A60000]">{item.tematica || "Notícia"} · {dataPt(item.data)}</span>
-            <h2 className="mt-3 font-serif text-2xl font-bold">{item.titulo}</h2>
-            {item.excerto && <p className="mt-3 text-sm leading-6 text-[#1C3350]/60">{item.excerto}</p>}
-          </a>
-        ))}
-      </div>
-    </main>
-  );
 }
 
 function CorpoArtigo({ corpo }: { corpo: string }) {
@@ -101,6 +65,7 @@ function Artigo({ slug }: { slug: string }) {
   );
 }
 
-export function Noticias({ slug = "" }: { slug?: string }) {
-  return <SiteFrame>{slug ? <Artigo slug={slug} /> : <Lista />}</SiteFrame>;
+/** Um artigo do blog (a lista de notícias é uma página do editor do site). */
+export function Noticias({ slug }: { slug: string }) {
+  return <SiteFrame><Artigo slug={slug} /></SiteFrame>;
 }

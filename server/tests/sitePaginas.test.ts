@@ -28,6 +28,18 @@ describe("páginas do site (editor visual)", () => {
     expect(lida.rascunho.content[0].props.conteudo[0].props.texto).toBe("Publicado");
   });
 
+  it("todas as páginas do site se publicam em separado", async () => {
+    const ctx = await arrancar();
+    for (const p of ["catalogo", "noticias", "empresas", "area"]) {
+      const r = await pedido(ctx, "admin", "PUT", `/v1/site/paginas/${p}/publicar`, { dados: pagina(`Página ${p}`) });
+      expect(r.statusCode, `${p}: ${r.body}`).toBe(200);
+    }
+    const empresas = (await ctx.app.inject({ method: "GET", url: "/v1/public/site/paginas/empresas" })).json();
+    expect(empresas.dados.content[0].props.conteudo[0].props.texto).toBe("Página empresas");
+    const blocos = { root: { props: {} }, content: [{ type: "Catalogo", props: { id: "c" } }, { type: "ListaNoticias", props: { id: "n" } }, { type: "AreaFormando", props: { id: "a" } }] };
+    expect((await pedido(ctx, "admin", "PUT", "/v1/site/paginas/area/rascunho", { dados: blocos })).statusCode).toBe(200);
+  });
+
   it("recusa blocos desconhecidos e páginas sem conteúdo", async () => {
     const ctx = await arrancar();
     const mau = { root: { props: {} }, content: [{ type: "Script", props: { id: "x" } }] };

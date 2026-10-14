@@ -39,6 +39,10 @@ export const campoAparencia = (label = "Aparência"): Field => ({
     ocultarTel: simNao("Esconder no telemóvel"),
     ocultarTab: simNao("Esconder no tablet"),
     ocultarPc: simNao("Esconder no computador"),
+    sessao: {
+      type: "select", label: "Área do formando: mostrar a",
+      options: [{ label: "Todos", value: "" }, { label: "Só quem ainda não entrou", value: "sem" }, { label: "Só quem já entrou", value: "com" }],
+    },
     ancora: { type: "text", label: "Âncora (para ligações #nome)" },
   },
 });

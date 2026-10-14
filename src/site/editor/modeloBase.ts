@@ -1,5 +1,9 @@
 // Modelo base da página inicial: o ponto de partida do editor (e o que o site mostra até haver uma versão publicada).
 import type { Data } from "@puckeditor/core";
+import type { PaginaSite } from "../../partilhado/siteBlocos";
+import { AreaFormando } from "./blocosArea";
+import { Catalogo } from "./blocosCatalogo";
+import { ListaNoticias } from "./blocosNoticias";
 import { Botao, Coluna, Imagem, Pilares, Seccao, Texto, Titulo } from "./blocosBase";
 import { cartaoPadrao, CursosDestaque, OfertaFormativa } from "./blocosCursos";
 import { cabecalhoPadrao, rodapePadrao } from "./blocosMoldura";
@@ -99,9 +103,79 @@ export function modeloInicio(): Data {
   return {
     root: { props: { ...temaPadrao } },
     content: [
-      bloco("Cabecalho", cabecalhoPadrao),
+      bloco("Cabecalho", cabecalhoPadrao, { ligacoes: [{ rotulo: "Formação", ligacao: "/formacao" }, { rotulo: "Notícias", ligacao: "/noticias" }, { rotulo: "Empresas", ligacao: "/empresas" }] }),
       hero, oferta, metodo, empresas,
       bloco("Rodape", rodapePadrao),
     ],
   } as Data;
+}
+
+// ─── Outras páginas (o cabeçalho, o rodapé e o tema vêm da página inicial) ───
+
+function modeloNoticias(): Data {
+  return {
+    root: { props: {} },
+    content: [bloco("Seccao", Seccao.defaultProps, {
+      espaco: 12,
+      aparencia: estiloVazio({ preenchimento: lados(56, 32), preenchimentoTel: lados(40, 20) }),
+      conteudo: [
+        kicker("ENA"),
+        bloco("Titulo", Titulo.defaultProps, { texto: "Notícias", nivel: "h1" }),
+        bloco("Texto", Texto.defaultProps, { texto: "Novidades, eventos e artigos da ENA." }),
+        bloco("ListaNoticias", ListaNoticias.defaultProps, { aparencia: estiloVazio({ margem: lados(24, 0, 0, 0) }) }),
+      ],
+    })],
+  } as Data;
+}
+
+function modeloEmpresas(): Data {
+  return {
+    root: { props: {} },
+    content: [
+      bloco("Seccao", Seccao.defaultProps, {
+        espaco: 20,
+        aparencia: estiloVazio({ fundoCor: "var(--c-primaria)", preenchimento: lados(96, 32), preenchimentoTel: lados(56, 20) }),
+        conteudo: [
+          kicker("Formação à medida", "var(--c-acento)"),
+          bloco("Titulo", Titulo.defaultProps, {
+            texto: "A sua organização tem desafios únicos.", nivel: "h1",
+            tipografia: tipoVazia({ fonte: "tema-titulos", tamanho: 56, tamanhoTel: 36, peso: "700", alturaLinha: 1.05, cor: "#ffffff" }),
+            aparencia: estiloVazio({ larguraMax: em(820) }),
+          }),
+          bloco("Texto", Texto.defaultProps, {
+            texto: "Desenhamos programas que respondem às necessidades da sua equipa e aos objetivos do seu negócio.",
+            tipografia: tipoVazia({ tamanho: 19, alturaLinha: 1.6, cor: "#D7E0EA" }), aparencia: estiloVazio({ larguraMax: em(680) }),
+          }),
+          bloco("Botao", Botao.defaultProps, { rotulo: "Falar connosco", ligacao: "#contactos", cor: "var(--c-acento)", corTexto: "var(--c-primaria)", corHover: "#ffffff" }),
+        ],
+      }),
+      bloco("Seccao", Seccao.defaultProps, {
+        espaco: 16,
+        aparencia: estiloVazio({ preenchimento: lados(80, 32), preenchimentoTel: lados(56, 20) }),
+        conteudo: [
+          kicker("Como trabalhamos"),
+          bloco("Titulo", Titulo.defaultProps, { texto: "Do diagnóstico ao certificado." }),
+          bloco("Pilares", Pilares.defaultProps, {
+            colunas: 4, aparencia: estiloVazio({ margem: lados(24, 0, 0, 0) }),
+            itens: [
+              { numero: "01", titulo: "Diagnóstico", texto: "Percebemos as necessidades da equipa e os objetivos do negócio.", imagem: "" },
+              { numero: "02", titulo: "Programa à medida", texto: "Conteúdos, horários e formato pensados para a sua organização.", imagem: "" },
+              { numero: "03", titulo: "Formação certificada", texto: "Formadores com experiência no terreno e certificação.", imagem: "" },
+              { numero: "04", titulo: "Acompanhamento", texto: "Avaliação de resultados e apoio depois da formação.", imagem: "" },
+            ],
+          }),
+        ],
+      }),
+    ],
+  } as Data;
+}
+
+/** Modelo base de cada página: o ponto de partida do editor e o que o site mostra sem versão publicada. */
+export function modeloPagina(pagina: PaginaSite): Data {
+  n = 0;
+  if (pagina === "inicio") return modeloInicio();
+  if (pagina === "noticias") return modeloNoticias();
+  if (pagina === "empresas") return modeloEmpresas();
+  const unico = pagina === "catalogo" ? bloco("Catalogo", Catalogo.defaultProps) : bloco("AreaFormando", AreaFormando.defaultProps);
+  return { root: { props: {} }, content: [unico] } as Data;
 }

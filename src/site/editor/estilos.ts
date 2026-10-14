@@ -32,6 +32,8 @@ export type Estilo = {
   ocultarTel: boolean;
   ocultarTab: boolean;
   ocultarPc: boolean;
+  /** Área do formando: mostrar o bloco só a quem entrou, ou só a quem ainda não entrou. */
+  sessao: "" | "sem" | "com";
   ancora: string;
 };
 
@@ -58,7 +60,7 @@ export function estiloVazio(extra: Partial<Estilo> = {}): Estilo {
     deslocX: null, deslocY: null, camada: null,
     fundoCor: "", fundoImagem: "", fundoSobreposicao: "", fundoOpacidade: null,
     bordaLargura: null, bordaCor: "", bordaEstilo: "solid", bordaTopo: null, raio: null, sombra: "", opacidade: null,
-    ocultarTel: false, ocultarTab: false, ocultarPc: false, ancora: "",
+    ocultarTel: false, ocultarTab: false, ocultarPc: false, sessao: "", ancora: "",
     ...extra,
   };
 }
@@ -220,6 +222,8 @@ export function estiloBloco(e: Partial<Estilo> | undefined, base?: CSSProperties
   if (s.ocultarTel) classes.push("ena-oculto-tel");
   if (s.ocultarTab) classes.push("ena-oculto-tab");
   if (s.ocultarPc) classes.push("ena-oculto-pc");
+  if (s.sessao === "sem") classes.push("ena-so-sem-sessao");
+  if (s.sessao === "com") classes.push("ena-so-com-sessao");
   return { className: classes.join(" "), style };
 }
 

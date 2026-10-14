@@ -126,6 +126,7 @@ export async function criarPreinscricaoPublica(
     if (Date.now() - ultimo > MINUTOS_REENVIO * 60_000) {
       await firePreinscricaoEmail(db, {
         id: existente.id, email, nome: existente.nome, apelido: existente.apelido, curso: existente.curso,
+        regime: existente.regime === "fin" ? "fin" : "gold",
       }, "preinscricao.created", `preinscricao:${existente.id}:${email}:${Date.now()}`).catch(() => undefined);
       await escrita.marcarLigacaoReenviada(db, existente.id);
       await logLeadEvent(db, existente.id, undefined, "contacto", "Novo pedido no site · ligação reenviada", origem);

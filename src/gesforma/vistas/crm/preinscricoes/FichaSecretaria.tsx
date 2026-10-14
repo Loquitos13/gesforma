@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Aviso, Botao, Campo, Entrada, Selecao, data, eur } from "../../../../partilhado/ui";
 import {
-  apiCompletar, apiInscreverGold, apiPedirPagamento, apiTurmaCheia, apiValidarPreinscricao, type DossieLead,
+  apiCompletar, apiConcluirInscricao, apiInscreverGold, apiPedirPagamento, apiTurmaCheia, apiValidarPreinscricao, type DossieLead,
 } from "../../../../partilhado/api/crm";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { eSecretaria } from "./util";
@@ -29,6 +29,7 @@ export function FichaSecretaria({ d, role, onMudou }: { d: DossieLead; role: str
   });
   const validar = useAccao(apiValidarPreinscricao, { ok: "Pré-inscrição validada.", invalidar: ["formandos:", "turmas:", "painel:"] });
   const cheia = useAccao(apiTurmaCheia, { ok: r => r.enviadas ? `Email enviado com ${r.enviadas} turma${r.enviadas === 1 ? "" : "s"} no mesmo local.` : "Email enviado. Não há outra turma com vaga nesse local." });
+  const concluir = useAccao(apiConcluirInscricao, { ok: "Inscrição concluída: ficha, conta e email de acesso.", invalidar: ["formandos:", "turmas:", "painel:"] });
   const inscrever = useAccao(apiInscreverGold, { ok: "Inscrito na turma. A ficha de formando foi criada.", invalidar: ["formandos:", "turmas:", "painel:"] });
 
   const destinoSel = d.turmasDestino.find(t => String(t.id) === destino) ?? null;
@@ -94,6 +95,13 @@ export function FichaSecretaria({ d, role, onMudou }: { d: DossieLead; role: str
           {!d.turmaPelaSecretaria && (destinoCheio || soCheia) && (
             <Botao variante="secundario" aCarregar={cheia.aCorrer} onClick={() => void cheia.correr(l.id).then(depois)}>Turma cheia: enviar outras datas</Botao>
           )}
+        </section>
+      )}
+
+      {sec && l.regime === "gold" && d.estadoPagamento === "pago" && l.estado !== "Formando" && (
+        <section aria-label="Concluir inscrição" className="flex flex-col gap-2 rounded-cartao border border-acao/40 bg-acao-suave p-3 text-[13px]">
+          <p className="m-0">Pagamento confirmado, mas a inscrição ficou por concluir. Veja o motivo na cronologia, resolva-o e tente de novo.</p>
+          <Botao variante="primario" aCarregar={concluir.aCorrer} onClick={() => void concluir.correr(l.id).then(depois)}>Concluir inscrição</Botao>
         </section>
       )}
 

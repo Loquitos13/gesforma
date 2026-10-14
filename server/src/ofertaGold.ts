@@ -111,7 +111,9 @@ export async function resolverTurmaOferta(
   sel: { turmaId?: number; curso?: string; local?: string; horario?: string; dataInicio?: string; regime?: "gold" | "fin" },
 ) {
   const oferta = sel.regime === "fin" ? await listOfertaFin(db) : await listOfertaGold(db);
-  if (sel.turmaId) return oferta.find(t => t.turmaId === sel.turmaId) ?? null;
+  // A turma tem de ser do curso pedido: um id de outro curso não traz local, horário nem vaga.
+  const mesmoCurso = (c: string) => !sel.curso || c.trim().toLowerCase() === sel.curso.trim().toLowerCase();
+  if (sel.turmaId) return oferta.find(t => t.turmaId === sel.turmaId && mesmoCurso(t.curso)) ?? null;
   const data = (sel.dataInicio ?? "").slice(0, 10);
   return oferta.find(t =>
     t.curso === sel.curso

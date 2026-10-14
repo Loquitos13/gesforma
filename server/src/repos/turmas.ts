@@ -95,7 +95,7 @@ function sqlBase(regime: Regime) {
 /** Condição "o formador X dá aulas nesta turma" (responsável, equipa ou alguma sessão). */
 function sqlTemFormador(param: string) {
   return `(lower(trim(COALESCE(x.formador, ''))) = ANY(${param})
-    OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(x.formadores, '[]'::jsonb)) e WHERE lower(trim(e)) = ANY(${param}))
+    OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(x.formadores) = 'array' THEN x.formadores ELSE '[]'::jsonb END) e WHERE lower(trim(e)) = ANY(${param}))
     OR EXISTS (
       SELECT 1 FROM ${"%TURMAS%"} tt,
              jsonb_array_elements(CASE WHEN jsonb_typeof(tt.cronograma) = 'array' THEN tt.cronograma ELSE '[]'::jsonb END) s

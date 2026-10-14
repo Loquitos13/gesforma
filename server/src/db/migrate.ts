@@ -8,7 +8,7 @@ const dir = join(dirname(fileURLToPath(import.meta.url)), "migrations");
 /**
  * Aplica as migrações em falta. Uma só consulta para saber o que já está aplicado
  * (o arranque a frio em produção não verifica ficheiro a ficheiro) e cada migração
- * corre numa transacção: ou entra toda, ou nada.
+ * corre numa transacção: ou entra toda, ou nada. Um advisory lock serializa instâncias concorrentes.
  */
 export async function migrate(db: Db) {
   await db.query(`
@@ -28,6 +28,9 @@ export async function migrate(db: Db) {
     const parts = sql.split(/;\s*\n/).map(s => s.trim()).filter(Boolean);
     try {
       await db.tx(async q => {
+        // Várias instâncias a arrancar a frio ao mesmo tempo: uma aplica, as outras esperam e saltam.
+        await q("SELECT pg_advisory_xact_lock(7241001)");
+        if ((await q("SELECT 1 FROM schema_migrations WHERE id = $1", [id])).rows.length) return;
         for (const part of parts) await q(part.endsWith(";") ? part : `${part};`);
         await q("INSERT INTO schema_migrations (id) VALUES ($1) ON CONFLICT (id) DO NOTHING", [id]);
       });

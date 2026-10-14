@@ -7,6 +7,7 @@ import { z } from "zod";
 import { getLeadDossier, logLeadEvent } from "../crmDossier.js";
 import { staffValida } from "../crmLeadsServico.js";
 import { alertarDocumentosIncorrectos, definirEstadoDoc, dispensarAlerta, listarAlertasAbertas, notificarDocumentos } from "../docsLink.js";
+import { concluirInscricaoPaga } from "../inscricaoPaga.js";
 import { regenerarToken } from "../ligacaoPessoal.js";
 import { confirmarPagamento } from "../ops.js";
 import { PedidoPagamentoErro, pedirPagamento } from "../pagamentoPedido.js";
@@ -107,6 +108,7 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     try {
       await validarPreinscricao(db, v.params.id, req.actor!.id, v.body?.turmaId);
     } catch (err) {
+      if (!(err instanceof PercursoErro)) req.log.error({ err }, "validar pré-inscrição falhou");
       return reply.code(400).send({ error: err instanceof PercursoErro ? err.message : "Não foi possível validar." });
     }
     await audit(db, req.actor!.id, "preinscricao.validar", "preinscricao", String(v.params.id), req.ip, { turmaId: v.body?.turmaId ?? null });
@@ -124,6 +126,22 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
       return { ...(await getLeadDossier(db, v.params.id)), pedido: r };
     } catch (err) {
       if (err instanceof PedidoPagamentoErro) return reply.code(409).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  /** Volta a concluir a inscrição Gold paga que ficou a meio: ficha na turma, conta e email de acesso. */
+  app.post("/v1/crm/leads/:id/concluir-inscricao", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (!staffValida(req.actor?.role)) return reply.code(403).send({ error: "Só a equipa pedagógica ou administração conclui a inscrição." });
+    const v = validar(reply, { params: idParam }, req);
+    if (!v) return;
+    try {
+      const r = await concluirInscricaoPaga(db, v.params.id, req.actor!.id);
+      await audit(db, req.actor!.id, "preinscricao.concluir_inscricao", "preinscricao", String(v.params.id), req.ip, { formandoId: r.formandoId });
+      return getLeadDossier(db, v.params.id);
+    } catch (err) {
+      if (err instanceof PercursoErro) return reply.code(409).send({ error: err.message });
       throw err;
     }
   });

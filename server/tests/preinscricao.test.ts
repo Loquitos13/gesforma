@@ -160,8 +160,15 @@ describe("ligação pessoal até à validação", () => {
     expect(comPag.pagamento).toMatchObject({ valor: 100, iban: "PT50 0002 0123 1234 5678 9015 4", titular: "ENA Formação" });
     expect(JSON.stringify(comPag)).not.toContain("referencia");
 
+    // Concluir a inscrição à mão só depois de o pagamento estar confirmado.
+    const cedo = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/concluir-inscricao`);
+    expect(cedo.statusCode, cedo.body).toBe(409);
+    expect((await pedido(ctx, "comercial", "POST", `/v1/crm/leads/${id}/concluir-inscricao`)).statusCode).toBe(403);
+
     expect((await upload(ctx, token, "comprovativo", "pag.pdf", PDF)).statusCode).toBe(200);
     await validarDoc(ctx, id, "comprovativo");
+    // Já concluída: repetir não cria nada de novo.
+    expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/concluir-inscricao`)).statusCode).toBe(409);
 
     // Pagamento confirmado: pré-inscrição validada, ficha de formando na turma e conta criada.
     const lead = await ctx.db.query<{ estado: string; pagamento_id: string }>("SELECT estado, pagamento_id FROM preinscricoes WHERE id = $1", [id]);

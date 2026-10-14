@@ -16,6 +16,13 @@ export async function leadCompleto(c: Consulta, id: number) {
   return one<Record<string, unknown>>(c, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
 }
 
+/** Pagamento pedido no percurso desta pré-inscrição Gold (id e estado). */
+export async function pagamentoDoLead(c: Consulta, leadId: number) {
+  return one<{ id: string; estado: string }>(c,
+    `SELECT p.id, p.estado FROM preinscricoes l JOIN pagamentos p ON p.id = l.pagamento_id
+      WHERE l.id = $1 AND COALESCE(l.regime, 'gold') = 'gold' AND l.pagamento_pedido_em IS NOT NULL`, [leadId]);
+}
+
 export async function pagamentoBasico(c: Consulta, id: string) {
   return one<{ valor: number; metodo: string }>(c, "SELECT valor, metodo FROM pagamentos WHERE id = $1", [id]);
 }

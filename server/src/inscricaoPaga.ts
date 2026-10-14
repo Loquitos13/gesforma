@@ -9,7 +9,7 @@ import { newPublicId, nextOpsId } from "./ops.js";
 import { PercursoErro, ligarPreinscricaoAoFormandoGold, validarPreinscricao } from "./percurso.js";
 import { readPreinscricaoPii, writeFormandoPiiPatch } from "./pii.js";
 import {
-  formandoGoldNaTurma, inserirFormandoGoldPago, leadComPagamentoPedido, leadCompleto, nomeDoFormando,
+  formandoGoldNaTurma, inserirFormandoGoldPago, leadComPagamentoPedido, leadCompleto, nomeDoFormando, pagamentoDoLead,
   pagamentoBasico, turmaGoldParaInscricao,
 } from "./repos/formandosInscricao.js";
 import { isEmail, normalizeEmail } from "./security.js";
@@ -83,7 +83,13 @@ export async function darAcessoAoFormando(db: Db, regime: "gold" | "fin", forman
   if ("erro" in acesso) return { enviado: false as const, erro: acesso.erro };
   const f = await nomeDoFormando(db, regime, formandoId);
   const nome = `${f?.nome ?? ""} ${f?.apelido ?? ""}`.trim() || acesso.email;
-  await enviarEmailAcesso(db, { email: acesso.email, nome, curso, password: acesso.password, pago });
+  try {
+    await enviarEmailAcesso(db, { email: acesso.email, nome, curso, password: acesso.password, pago });
+  } catch (err) {
+    // A ficha e a conta já existem: a falha do email não pode desfazer a inscrição nem dar 500.
+    console.error("email de acesso falhou", err);
+    return { enviado: false as const, erro: "o email de acesso falhou; gere de novo o acesso na ficha do formando." };
+  }
   return { enviado: true as const, criado: acesso.criado };
 }
 
@@ -114,4 +120,18 @@ export async function aposPagamentoConfirmado(db: Db, pagamentoId: string, actor
     if (!(err instanceof PercursoErro || err instanceof InscricaoErro)) throw err;
     return { erro: msg };
   }
+}
+
+/**
+ * A secretaria volta a concluir uma inscrição paga que ficou a meio (turma cheia, Drive em baixo...).
+ * Só com o pagamento do percurso já confirmado; o resto é o mesmo passo, seguro de repetir.
+ */
+export async function concluirInscricaoPaga(db: Db, leadId: number, actorId?: string) {
+  const pag = await pagamentoDoLead(db, leadId);
+  if (!pag) throw new PercursoErro("Esta pré-inscrição não tem pagamento pedido no percurso.");
+  if (!/^pago$/i.test(pag.estado)) throw new PercursoErro("O pagamento ainda não está confirmado.");
+  const r = await aposPagamentoConfirmado(db, pag.id, actorId);
+  if (!r) throw new PercursoErro("A inscrição já está concluída ou a pré-inscrição foi encerrada.");
+  if ("erro" in r) throw new PercursoErro(r.erro);
+  return r;
 }

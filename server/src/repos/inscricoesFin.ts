@@ -38,7 +38,7 @@ const BASE = `
          COALESCE(ci.payload->>'estado', 'Recebida') AS estado,
          $2::int AS docs_total,
          COALESCE(ci.payload->'docs', '{}'::jsonb) AS docs,
-         (SELECT count(*)::int FROM jsonb_each(COALESCE(ci.payload->'docs', '{}'::jsonb)) e
+         (SELECT count(*)::int FROM jsonb_each(CASE WHEN jsonb_typeof(ci.payload->'docs') = 'object' THEN ci.payload->'docs' ELSE '{}'::jsonb END) e
            WHERE e.key IN (SELECT jsonb_array_elements_text($1::jsonb)) AND e.value = 'true'::jsonb) AS docs_ok,
          (SELECT f.id FROM formandos_fin f
            WHERE COALESCE(ci.payload->>'email', '') <> '' AND lower(f.email) = lower(ci.payload->>'email')

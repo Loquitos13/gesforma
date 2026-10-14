@@ -111,12 +111,19 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
     const fichaId = await repo.formandoGoldDoCurso(db, emailValidado, String(row.curso ?? ""));
     if (fichaId) await ligarPreinscricaoAoFormandoGold(db, fichaId, actorId).catch(() => undefined);
   }
+  let fichaErro: string | undefined;
   if (regime === "fin") {
     const { upsertFormandoFinFromLead } = await import("./finPipeline.js");
     const ficha = await upsertFormandoFinFromLead(db, leadId, actorId).catch(err => {
       console.warn(`[percurso] ficha financiada do lead ${leadId} não criada:`, err instanceof Error ? err.message : err);
+      fichaErro = err instanceof InscricaoErro || err instanceof PercursoErro ? err.message : "erro inesperado";
       return null;
     });
+    // A validação já ficou feita: a falha tem de aparecer no dossiê e na resposta, não só no log do servidor.
+    if (!ficha?.formandoId) {
+      fichaErro ??= "a ficha não foi criada";
+      await evento(db, leadId, actorId, "Ficha de formando por criar", `${fichaErro}. Crie a ficha à mão na turma.`);
+    }
     // Financiada (sem pagamento): a conta da área do formando e o email de acesso saem com a validação.
     if (ficha?.formandoId) {
       const { darAcessoAoFormando } = await import("./inscricaoPaga.js");
@@ -125,7 +132,7 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
       await evento(db, leadId, actorId, "Acesso à área do formando", acesso.enviado ? "Enviado por email." : `Não enviado: ${acesso.erro}`);
     }
   }
-  return { ok: true as const, moved: moved.moved };
+  return { ok: true as const, moved: moved.moved, ...(fichaErro ? { aviso: `Validada, mas a ficha de formando não foi criada: ${fichaErro}.` } : {}) };
 }
 
 function fmtData(iso: string) {

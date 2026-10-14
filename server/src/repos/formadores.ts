@@ -10,7 +10,11 @@ const HORAS_SESSAO = `CASE
   THEN GREATEST(EXTRACT(EPOCH FROM ((s.val->>'horaFim')::time - (s.val->>'horaInicio')::time)) / 3600.0, 0)
   ELSE 0 END`;
 
-const CRONOGRAMA = "jsonb_array_elements(CASE WHEN jsonb_typeof(t.cronograma) = 'array' THEN t.cronograma ELSE '[]'::jsonb END) WITH ORDINALITY AS s(val, ord)";
+/** A expressão jsonb se for array (ou objecto), senão vazia: dados antigos gravaram listas como texto ou null JSON. */
+const comoArray = (e: string) => `CASE WHEN jsonb_typeof(${e}) = 'array' THEN ${e} ELSE '[]'::jsonb END`;
+const comoObjecto = (e: string) => `CASE WHEN jsonb_typeof(${e}) = 'object' THEN ${e} ELSE '{}'::jsonb END`;
+
+const CRONOGRAMA = `jsonb_array_elements(${comoArray("t.cronograma")}) WITH ORDINALITY AS s(val, ord)`;
 
 /** Uma linha por (formador, sessão lectiva) das turmas dos dois regimes. */
 const SESSOES_FORMADOR = `
@@ -44,9 +48,9 @@ const SESSOES_FORMADOR = `
   ),
   membros AS (
     SELECT 'gold'::text AS regime, t.id AS turma_id, lower(trim(t.formador)) AS nome FROM turmas_gold t WHERE trim(COALESCE(t.formador, '')) <> ''
-    UNION SELECT 'gold', t.id, lower(trim(e)) FROM turmas_gold t, jsonb_array_elements_text(COALESCE(t.formadores, '[]'::jsonb)) e
+    UNION SELECT 'gold', t.id, lower(trim(e)) FROM turmas_gold t, jsonb_array_elements_text(${comoArray("t.formadores")}) e
     UNION SELECT 'fin', t.id, lower(trim(t.formador)) FROM turmas_fin t WHERE trim(COALESCE(t.formador, '')) <> ''
-    UNION SELECT 'fin', t.id, lower(trim(e)) FROM turmas_fin t, jsonb_array_elements_text(COALESCE(t.formadores, '[]'::jsonb)) e
+    UNION SELECT 'fin', t.id, lower(trim(e)) FROM turmas_fin t, jsonb_array_elements_text(${comoArray("t.formadores")}) e
     UNION SELECT regime, turma_id, nome FROM sf
   )`;
 
@@ -229,7 +233,7 @@ export async function turmasDaFicha(c: Consulta, nome: string, hoje: string, cus
            (lower(trim(COALESCE(t.formador, ''))) = $1) AS responsavel,
            COALESCE(h.dadas, 0) AS dadas, COALESCE(h.pendentes, 0) AS pendentes, COALESCE(h.sessoes, 0) AS sessoes,
            h.inicio, h.fim,
-           (SELECT v.value FROM jsonb_each_text(COALESCE(t.valores_hora_formador, '{}'::jsonb)) v
+           (SELECT v.value FROM jsonb_each_text(${comoObjecto("t.valores_hora_formador")}) v
              WHERE lower(trim(v.key)) = $1 LIMIT 1) AS valor_hora
       FROM t
       JOIN (SELECT DISTINCT regime, turma_id FROM membros WHERE nome = $1) m ON m.regime = t.regime AND m.turma_id = t.id

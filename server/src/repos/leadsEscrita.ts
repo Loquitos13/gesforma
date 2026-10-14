@@ -30,8 +30,8 @@ export async function valoresSettings(c: Consulta, id: string) {
 
 /** Pedido aberto (não validado, nem desistência, nem formando) do mesmo email para o mesmo curso. */
 export async function pedidoAberto(c: Consulta, email: string, curso: string) {
-  return one<{ id: number; nome: string; apelido: string; curso: string; public_id: string; ligacao_reenviada_em: unknown }>(c,
-    `SELECT id, nome, apelido, curso, public_id, ligacao_reenviada_em FROM preinscricoes
+  return one<{ id: number; nome: string; apelido: string; curso: string; public_id: string; regime: string; ligacao_reenviada_em: unknown }>(c,
+    `SELECT id, nome, apelido, curso, public_id, regime, ligacao_reenviada_em FROM preinscricoes
       WHERE lower(email) = $1 AND lower(trim(curso)) = lower(trim($2))
         AND validada_em IS NULL AND estado NOT IN ('Desistiu', 'Formando')
       ORDER BY id DESC LIMIT 1`,

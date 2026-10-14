@@ -1,5 +1,6 @@
 import { Component, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "../../partilhado/AuthGate";
+import { recarregarSeVersaoNova } from "../../partilhado/versaoNova";
 import { Botao, cx, Esqueleto } from "../../partilhado/ui";
 import { DocAlertas } from "../DocAlertas";
 import { tabDoFormador } from "../vistas/turmas/cockpit/base";
@@ -60,6 +61,10 @@ function urlRepresentaEstado(url: string) {
 class LimiteErro extends Component<{ chave: string; children: ReactNode }, { erro: Error | null }> {
   state = { erro: null as Error | null };
   static getDerivedStateFromError(erro: Error) { return { erro }; }
+  componentDidCatch(erro: Error) {
+    console.error("[ecrã] erro", erro);
+    recarregarSeVersaoNova(erro);
+  }
   componentDidUpdate(prev: { chave: string }) {
     if (prev.chave !== this.props.chave && this.state.erro) this.setState({ erro: null });
   }
@@ -68,8 +73,13 @@ class LimiteErro extends Component<{ chave: string; children: ReactNode }, { err
     return (
       <div role="alert" className="max-w-xl mx-auto mt-10 bg-superficie border border-linha rounded-cartao p-6 text-center">
         <p className="m-0 font-semibold text-tinta">Este ecrã teve um problema.</p>
-        <p className="m-0 mt-1 text-sm text-tinta-suave">Os dados estão guardados. Tente abrir de novo.</p>
-        <Botao className="mt-4" variante="secundario" onClick={() => this.setState({ erro: null })}>Tentar de novo</Botao>
+        <p className="m-0 mt-1 text-sm text-tinta-suave">Os dados estão guardados. Tente abrir de novo; se voltar a acontecer, atualize a página.</p>
+        <div className="mt-4 flex justify-center gap-2">
+          <Botao variante="secundario" onClick={() => this.setState({ erro: null })}>Tentar de novo</Botao>
+          <Botao variante="secundario" onClick={() => window.location.reload()}>Atualizar a página</Botao>
+        </div>
+        {/* Detalhe técnico, para quem reporta o problema. */}
+        <p className="m-0 mt-4 break-words text-[11px] text-tinta-suave">{String(this.state.erro.message || this.state.erro).slice(0, 300)}</p>
       </div>
     );
   }

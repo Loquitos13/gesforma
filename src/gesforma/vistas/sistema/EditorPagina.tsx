@@ -1,6 +1,6 @@
 // Sistema › Site: editor visual (Puck) de uma página do site. A pré-visualização é o próprio site,
 // à largura escolhida; o rascunho grava-se sozinho e só "Publicar" o põe no site.
-import "@puckeditor/core/puck.css";
+import "@puckeditor/core/no-external.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Puck, type Data, type Dictionary, type Viewports } from "@puckeditor/core";
 import { apiPaginaSite, apiPublicarPagina, apiRascunhoPagina } from "../../../partilhado/api/site";

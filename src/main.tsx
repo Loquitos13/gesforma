@@ -1,6 +1,10 @@
 import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
+import { recarregarSeVersaoNova } from "./partilhado/versaoNova";
+
+// Depois de um deploy, um separador aberto pede ficheiros da versão anterior que já não existem.
+window.addEventListener("vite:preloadError", e => { if (recarregarSeVersaoNova(e.payload)) e.preventDefault(); });
 
 // Cada página carrega só o seu código: o site público não descarrega o backoffice e vice-versa.
 const Backoffice = lazy(() => import("./gesforma/Backoffice").then(m => ({ default: m.Backoffice })));

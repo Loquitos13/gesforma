@@ -426,3 +426,8 @@ body:has(input[type="file"]:focus) [data-ficha-sticky] {
 .ena-cartao-hover-subir:hover { transform: translateY(-4px); box-shadow: 0 22px 46px rgba(20, 38, 61, .16); }
 .ena-cartao-hover-zoom img { transition: transform .4s ease; }
 .ena-cartao-hover-zoom:hover img { transform: scale(1.05); }
+
+/* Editor do site (Puck): a CSP só permite fontes do Google, por isso usa a fonte do backoffice em vez da Inter externa. */
+.editor-site {
+  --puck-font-family: "Public Sans", system-ui, sans-serif;
+}

@@ -55,3 +55,14 @@ export async function recifrarTudo(db: Db): Promise<ResultadoRecifrar> {
     return out;
   });
 }
+
+/** Ida e volta à base, em ms (para o /health: confirma se função e base estão na mesma região). */
+export async function pingBase(db: Db): Promise<number | null> {
+  const t0 = performance.now();
+  try {
+    await db.query("SELECT 1");
+    return Math.round(performance.now() - t0);
+  } catch {
+    return null;
+  }
+}

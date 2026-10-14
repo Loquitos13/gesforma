@@ -7,7 +7,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { processDueJobs } from "./automations.js";
 import { enviarLembretesPreinscricao } from "./lembretePre.js";
 import { allowedOrigins, config, onVercel } from "./config.js";
-import { enterActor, type Db } from "./db/pool.js";
+import { enterActor, medirPedido, type Db, type Medicao } from "./db/pool.js";
 import { sha256 } from "./security.js";
 import { classifyRoute } from "./routeAuth.js";
 import { podeAceder } from "./permissoes.js";
@@ -15,9 +15,12 @@ import { invalidarDtp } from "./pedagogia/dtpCache.js";
 import { registarRotas } from "./rotas/index.js";
 import { registarAuditoria as audit } from "./repos/auditoria.js";
 import { actorDaSessao } from "./repos/sessoes.js";
+import { LogCompacto } from "./logCompacto.js";
+import { pingBase } from "./repos/sistema.js";
 
 declare module "fastify" {
   interface FastifyInstance { db: Db }
+  interface FastifyRequest { consultas?: Medicao }
   interface FastifyRequest {
     actor?: { id: string; email: string; name: string; role: string; mustChangePassword?: boolean };
   }
@@ -35,7 +38,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     trustProxy: config.trustProxy,
     bodyLimit: 32 * 1024,
     requestTimeout: 60_000,
-    disableRequestLogging: false,
+    logController: new LogCompacto(),
   });
   app.decorate("db", db);
 
@@ -89,6 +92,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   });
 
   app.addHook("preHandler", async (req, reply) => {
+    req.consultas = medirPedido();
     enterActor(null);
     const raw = req.cookies[config.cookieName];
     if (raw) {
@@ -141,11 +145,17 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     driver: db.driver,
     mail: config.mailMode,
     drive: Boolean(config.googleClientId && config.googleClientSecret),
+    // Para confirmar que a função e a base estão na mesma região (ida e volta à base em ms).
+    regiao: process.env.VERCEL_REGION ?? null,
+    baseMs: await pingBase(db),
   }));
 
-  // Escritas bem-sucedidas mudam o estado do dossiê: a vista geral volta a ser calculada.
+  // Escritas bem-sucedidas que podem mexer no dossiê obrigam a recalcular a vista geral.
+  // Áreas que não tocam no dossiê (notificações, emails, blog, comercial, sistema…) não invalidam:
+  // recalcular a matriz custa dezenas de consultas e acontecia a cada clique.
+  const SEM_DTP = /^\/v1\/(notificacoes|auth|email|blog|campanhas|equipa|utilizadores|users|configuracoes|settings|listas|catalogos|opcoes|auditoria|sistema|apoios|whatsapp|crm\/(clientes|parceiros|propostas|modelos|contratos))(\/|\?|$)/;
   app.addHook("onSend", async (req, reply, payload) => {
-    if (!["GET", "HEAD", "OPTIONS"].includes(req.method) && reply.statusCode < 400) invalidarDtp();
+    if (!["GET", "HEAD", "OPTIONS"].includes(req.method) && reply.statusCode < 400 && !SEM_DTP.test(req.url)) invalidarDtp();
     return payload;
   });
 

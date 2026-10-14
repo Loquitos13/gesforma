@@ -13,15 +13,26 @@ async function getApp() {
   if (!boot) {
     boot = (async () => {
       try {
+        const t0 = performance.now();
         assertSecureConfig();
         const db = await createDb();
-        await migrate(db);
+        const aplicadas = await migrate(db);
+        const t1 = performance.now();
         try {
           await seed(db);
         } catch (err) {
           console.error("seed falhou; a API continua a servir", err);
         }
-        return buildApp(db, { worker: false });
+        const app = await buildApp(db, { worker: false });
+        // Custo do arranque a frio (aparece uma vez por instância nos logs da Vercel).
+        console.log(JSON.stringify({
+          arranque: true,
+          migracoes: aplicadas,
+          migrarMs: Math.round(t1 - t0),
+          totalMs: Math.round(performance.now() - t0),
+          regiao: process.env.VERCEL_REGION ?? null,
+        }));
+        return app;
       } catch (err) {
         boot = undefined;
         throw err;

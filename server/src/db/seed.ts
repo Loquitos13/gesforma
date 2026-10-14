@@ -1,4 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { config } from "../config.js";
 import { ctaDestino } from "../emailCta.js";
 import { linesToXml } from "../emailXml.js";
@@ -203,7 +206,23 @@ async function seedPropostasDemo(db: Db) {
   }
 }
 
-export async function seed(db: Db) {
+/**
+ * Marca da versão do seed: hash dos ficheiros que o definem. Enquanto não mudarem, o arranque a frio
+ * não repete as ~100 consultas dos modelos, regras e catálogos (só confirma que o admin existe).
+ */
+function marcaDoSeed() {
+  const aqui = dirname(fileURLToPath(import.meta.url));
+  const h = createHash("sha256");
+  for (const nome of ["seed", "opsSeed", "catalogSeed"]) {
+    for (const ext of [".ts", ".js"]) {
+      try { h.update(readFileSync(join(aqui, nome + ext))); break; } catch { /* outra extensão */ }
+    }
+  }
+  h.update(criarContasDemo() ? "demo" : "prod");
+  return `seed-${h.digest("hex").slice(0, 16)}`;
+}
+
+export async function seed(db: Db, opts: { forcar?: boolean } = {}) {
   const email = normalizeEmail(config.adminEmail);
   const existing = await db.query<{ id: string }>("SELECT id FROM users WHERE email = $1", [email]);
   if (!existing.rows[0]) {
@@ -212,6 +231,17 @@ export async function seed(db: Db) {
       [randomUUID(), config.adminName, email, await hashPassword(config.adminPassword)],
     );
   }
+  const marca = marcaDoSeed();
+  if (!opts.forcar) {
+    const feito = await db.query("SELECT 1 FROM schema_migrations WHERE id = $1", [marca]);
+    if (feito.rows[0]) return;
+  }
+  await seedCompleto(db);
+  await db.query("DELETE FROM schema_migrations WHERE id LIKE 'seed-%' AND id <> $1", [marca]);
+  await db.query("INSERT INTO schema_migrations (id) VALUES ($1) ON CONFLICT (id) DO NOTHING", [marca]);
+}
+
+async function seedCompleto(db: Db) {
   if (criarContasDemo()) {
     await criarSeFaltar(db, { ...SECRETARIA_SEED, role: "secretaria" });
     await criarSeFaltar(db, { name: "Inês Costa", email: "ines.costa@ena.pt", password: SECRETARIA_SEED.password, role: "comercial" });

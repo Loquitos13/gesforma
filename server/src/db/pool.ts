@@ -16,6 +16,28 @@ export function enterActor(actor: DbActor | null) {
   actorStore.enterWith(actor && actor.role ? actor : { id: "", role: "system" });
 }
 
+/** Contagem de consultas por pedido (aparece na linha de log do pedido: encontra N+1). */
+export type Medicao = { n: number; ms: number };
+const medicaoStore = new AsyncLocalStorage<Medicao>();
+
+export function medirPedido(): Medicao {
+  const m = { n: 0, ms: 0 };
+  medicaoStore.enterWith(m);
+  return m;
+}
+
+async function medido<R>(fn: () => Promise<R>, conta = 1): Promise<R> {
+  const m = medicaoStore.getStore();
+  if (!m) return fn();
+  const t0 = performance.now();
+  try {
+    return await fn();
+  } finally {
+    m.n += conta;
+    m.ms += performance.now() - t0;
+  }
+}
+
 function actorAtual(): DbActor {
   return actorStore.getStore() ?? { id: "", role: "system" };
 }
@@ -39,6 +61,9 @@ export interface Db {
   close(): Promise<void>;
 }
 
+/** Contexto RLS da transacção (perfil e utilizador), numa só instrução. */
+const SET_ACTOR = "SELECT set_config('gesforma.api', '1', true), set_config('app.role', $1, true), set_config('app.user_id', $2, true)";
+
 export async function createDb(): Promise<Db> {
   if (config.databaseUrl) {
     const neon = /neon\.tech|sslmode=require/.test(config.databaseUrl);
@@ -49,27 +74,36 @@ export async function createDb(): Promise<Db> {
       prepare: !process.env.VERCEL,
       ssl: process.env.DATABASE_SSL === "require" || neon ? "require" : false,
       connection: { application_name: "gesforma-api" },
+      // Avisos do servidor (ex.: "já existe, a saltar" nas migrações) não são erros: não poluir os logs.
+      onnotice: () => undefined,
+      types: {
+        // Igual ao PGlite: um texto enviado para json/jsonb já é JSON (não se volta a codificar como string).
+        json: {
+          to: 114,
+          from: [114, 3802],
+          serialize: (x: unknown) => (typeof x === "string" ? x : JSON.stringify(x)),
+          parse: (x: string) => JSON.parse(x),
+        },
+      },
     });
     return {
       driver: "postgres",
       async query<T extends Record<string, unknown>>(text: string, params: unknown[] = []) {
         const actor = actorAtual();
-        const rows = await sql.begin(async (tx) => {
-          await tx.unsafe("SELECT set_config('gesforma.api', '1', true)");
-          await tx.unsafe("SELECT set_config('app.role', $1, true)", [actor.role || "system"]);
-          await tx.unsafe("SELECT set_config('app.user_id', $1, true)", [actor.id || ""]);
-          return tx.unsafe(text, params as never[]);
-        });
+        // Perfil RLS e consulta enviados em pipeline: uma só ida e volta à base (BEGIN … COMMIT incluídos).
+        const out = await medido(() => sql.begin((tx) => [
+          tx.unsafe(SET_ACTOR, [actor.role || "system", actor.id || ""]),
+          tx.unsafe(text, params as never[]),
+        ]));
+        const rows = (out as unknown as unknown[][])[1] ?? [];
         return { rows: [...rows] as unknown as T[] };
       },
       async tx<R>(fn: (q: TxQuery) => Promise<R>) {
         const actor = actorAtual();
         const out = await sql.begin(async (tx) => {
-          await tx.unsafe("SELECT set_config('gesforma.api', '1', true)");
-          await tx.unsafe("SELECT set_config('app.role', $1, true)", [actor.role || "system"]);
-          await tx.unsafe("SELECT set_config('app.user_id', $1, true)", [actor.id || ""]);
+          await tx.unsafe(SET_ACTOR, [actor.role || "system", actor.id || ""]);
           const q: TxQuery = async <T extends Record<string, unknown>>(text: string, params: unknown[] = []) => {
-            const rows = await tx.unsafe(text, params as never[]);
+            const rows = await medido(() => tx.unsafe(text, params as never[]));
             return { rows: [...rows] as unknown as T[] };
           };
           return { v: await fn(q) };
@@ -100,11 +134,9 @@ export async function createDb(): Promise<Db> {
   async function emTransaccao<R>(actor: DbActor, fn: (q: TxQuery) => Promise<R>): Promise<R> {
     try {
       await client.exec("BEGIN");
-      await client.query("SELECT set_config('gesforma.api', '1', true)");
-      await client.query("SELECT set_config('app.role', $1, true)", [actor.role || "system"]);
-      await client.query("SELECT set_config('app.user_id', $1, true)", [actor.id || ""]);
+      await client.query(SET_ACTOR, [actor.role || "system", actor.id || ""]);
       const q: TxQuery = async <T extends Record<string, unknown>>(text: string, params: unknown[] = []) => {
-        const res = await client.query<T>(text, mapParams(params));
+        const res = await medido(() => client.query<T>(text, mapParams(params)));
         return { rows: res.rows };
       };
       const out = await fn(q);

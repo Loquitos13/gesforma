@@ -3,13 +3,15 @@ import type { Db } from "../db/pool.js";
 import { contagemCertificadosFin } from "../dossieGerado.js";
 import {
   aplicarPercursoNoItem, buildDtpItems, comporModelo, dtpPct, estadoPorFicheirosCurso, parseDtpModelo, tipoPercursoDoItem,
-  DTP_MODELO_VAZIO, type CursoFicheiroRef, type DtpCounts, type DtpFacts, type DtpItem, type DtpModelo, type DtpPercurso,
+  DTP_MODELO_VAZIO, type CursoFicheiroRef, type DtpCounts, type DtpEstado, type DtpFacts, type DtpItem, type DtpModelo, type DtpPercurso,
 } from "../dtpModel.js";
 import { DTP_CATEGORIAS, dtpCategoriaDe } from "../dtpPasta.js";
 import { TOPICOS_FIN, topicoFinDe } from "../dtpTopicosFin.js";
 import * as repo from "../repos/dtp.js";
 import { listarDocumentos } from "../repos/pedagogiaSessoes.js";
-import { cursoIdDaTurma, formandosDaTurma, listarTurmasDtp, mapaCursos, type TurmaRow } from "../repos/pedagogiaTurma.js";
+import { cursoIdDaTurma, formandosDaTurma, listarTurmasDtp, mapaCursos, type FormandoTurma, type TurmaRow } from "../repos/pedagogiaTurma.js";
+import type { AnexoLinha } from "../repos/dtp.js";
+import { fontesEmLote } from "./dtpLote.js";
 import { asArr, asObj, pipCounts, planoPreenchido, simCounts, type Regime } from "./util.js";
 
 export type EntidadeDtp = { id: number; nome: string; modelo: DtpModelo };
@@ -42,40 +44,70 @@ async function modeloDaTurma(db: Db, regime: Regime, turma: TurmaRow) {
 
 const CHAVES_FIN = ["cc", "ch", "cu", "ci", "ce", "morada", "contrato", "rgpd"];
 
-export async function turmaFacts(db: Db, regime: Regime, turma: TurmaRow): Promise<DtpFacts> {
-  const sessoesTotal = asArr(turma.cronograma).length;
-  const [sessoesRows, docRows, certRows, formandos] = await Promise.all([
+type ContagemPercurso = Pick<DtpPercurso, "submetidos" | "validados" | "recusados">;
+
+/** Tudo o que o dossiê de uma turma lê da base. Carrega-se por turma ou em lote (ver dtpLote.ts). */
+export type FontesTurma = {
+  sessoes: { plano: unknown; sumario: unknown; presencas: unknown }[];
+  docs: { label: string; payload: unknown }[];
+  certs: { emitido: boolean }[];
+  formandos: FormandoTurma[];
+  docsValidados: { formando_id: number; doc_id: string }[];
+  inqueritos: { publico: string; enviado: unknown }[];
+  certificadosFin: DtpCounts | null;
+  manual: Record<string, DtpEstado>;
+  anexos: AnexoLinha[];
+  ficheiros: { ambito: string; requisito_id: string; pessoa_id: number | null; pessoa_nome: string }[];
+  percurso: { total: number; porTipo: Map<string, ContagemPercurso> } | null;
+};
+
+async function fontesDaTurma(db: Db, regime: Regime, turma: TurmaRow): Promise<FontesTurma> {
+  const [sessoes, docs, certs, formandos, manual, anexos, cursoId] = await Promise.all([
     repo.sessoesParaFactos(db, regime, turma.id),
     listarDocumentos(db, regime, turma.id),
     repo.certificadosEmitidos(db, regime, turma.id),
     formandosDaTurma(db, regime, turma),
+    repo.estadosManuais(db, regime, turma.id),
+    repo.anexosDaTurma(db, regime, turma.id).catch(() => []),
+    cursoIdDaTurma(db, regime, turma.curso),
   ]);
-  const planos = sessoesRows.filter(r => planoPreenchido(r.plano)).length;
-  const sumarios = sessoesRows.filter(r => Boolean(asObj(r.sumario).assinado)).length;
-  const presencas = sessoesRows.filter(r => asArr(r.presencas).length > 0).length;
+  const [docsValidados, inqueritos, certificadosFin, ficheiros, percurso] = await Promise.all([
+    formandos.length ? repo.docsValidadosDosFormandos(db, regime, formandos.map(f => f.id)) : Promise.resolve([]),
+    regime === "fin" ? repo.inqueritosEnviadosATurma(db, regime, turma.id).catch(() => []) : Promise.resolve([]),
+    regime === "fin" ? contagemCertificadosFin(db, turma.id) : Promise.resolve(null),
+    cursoId == null ? Promise.resolve([]) : repo.ficheirosDoCurso(db, regime, cursoId).catch(() => []),
+    regime === "gold" ? percursoGoldDaTurma(db, turma) : Promise.resolve(null),
+  ]);
+  return { sessoes, docs, certs, formandos, docsValidados, inqueritos, certificadosFin, manual, anexos, ficheiros, percurso };
+}
 
-  const docByLabel = (re: RegExp) => docRows.find(d => re.test(d.label));
+function factosDe(regime: Regime, turma: TurmaRow, f: FontesTurma): DtpFacts {
+  const sessoesTotal = asArr(turma.cronograma).length;
+  const planos = f.sessoes.filter(r => planoPreenchido(r.plano)).length;
+  const sumarios = f.sessoes.filter(r => Boolean(asObj(r.sumario).assinado)).length;
+  const presencas = f.sessoes.filter(r => asArr(r.presencas).length > 0).length;
+
+  const docByLabel = (re: RegExp) => f.docs.find(d => re.test(d.label));
   const pip = pipCounts(docByLabel(/^pip$/i)?.payload ?? docByLabel(/pip/i)?.payload);
-  const simIni = simCounts(docRows.find(d => /simula/i.test(d.label) && /inicial/i.test(d.label))?.payload);
-  const simFim = simCounts(docRows.find(d => /simula/i.test(d.label) && /final/i.test(d.label))?.payload);
+  const simIni = simCounts(f.docs.find(d => /simula/i.test(d.label) && /inicial/i.test(d.label))?.payload);
+  const simFim = simCounts(f.docs.find(d => /simula/i.test(d.label) && /final/i.test(d.label))?.payload);
 
   const docs: Record<string, DtpCounts> = {};
-  const total = formandos.length;
+  const total = f.formandos.length;
   if (total > 0) {
-    const rows = await repo.docsValidadosDosFormandos(db, regime, formandos.map(f => f.id));
     const porPessoa = new Map<number, Set<string>>();
     const contagem = new Map<string, number>();
-    for (const r of rows) {
+    for (const r of f.docsValidados) {
       contagem.set(r.doc_id, (contagem.get(r.doc_id) ?? 0) + 1);
       const set = porPessoa.get(r.formando_id) ?? new Set<string>();
       set.add(r.doc_id);
       porPessoa.set(r.formando_id, set);
     }
     for (const [docId, n] of contagem) docs[docId] = { done: n, total };
-    const tem = (f: { id: number; docs: Record<string, unknown> }, id: string) => Boolean(porPessoa.get(f.id)?.has(id) || asObj(f.docs[id]).ok);
+    const tem = (p: { id: number; docs: Record<string, unknown> }, id: string) => Boolean(porPessoa.get(p.id)?.has(id) || asObj(p.docs[id]).ok);
     if (regime === "fin") {
-      for (const key of CHAVES_FIN) docs[key] = { done: formandos.filter(f => tem(f, key)).length, total };
-      docs["rgpd-contratos"] = { done: formandos.filter(f => tem(f, "contrato") && tem(f, "rgpd")).length, total };
+      for (const key of CHAVES_FIN) docs[key] = { done: f.formandos.filter(p => tem(p, key)).length, total };
+      docs["rgpd-contratos"] = { done: f.formandos.filter(p => tem(p, "contrato") && tem(p, "rgpd")).length, total };
     }
     const bases = regime === "gold" ? ["cc", "contrato", "pip", "exp", "regulamento"] : CHAVES_FIN;
     for (const key of bases) docs[key] ??= { done: 0, total };
@@ -85,9 +117,8 @@ export async function turmaFacts(db: Db, regime: Regime, turma: TurmaRow): Promi
   let inqueritosFormandos: DtpCounts | null = null;
   let inqueritosPos: DtpCounts | null = null;
   if (regime === "fin") {
-    const envios = await repo.inqueritosEnviadosATurma(db, regime, turma.id).catch(() => []);
     const contar = (publico: string): DtpCounts => {
-      const lista = envios.filter(r => r.publico === publico);
+      const lista = f.inqueritos.filter(r => r.publico === publico);
       if (!lista.length) return { done: 0, total: 1 };
       return { done: lista.filter(r => r.enviado === true || String(r.enviado) === "t" || String(r.enviado) === "true").length, total: lista.length };
     };
@@ -106,8 +137,8 @@ export async function turmaFacts(db: Db, regime: Regime, turma: TurmaRow): Promi
     presencas: { done: presencas, total: sessoesTotal },
     formandos: total,
     certificados: regime === "fin"
-      ? await contagemCertificadosFin(db, turma.id)
-      : { done: certRows.filter(r => r.emitido).length, total },
+      ? f.certificadosFin ?? { done: 0, total: 0 }
+      : { done: f.certs.filter(r => r.emitido).length, total },
     contratos: docs.contrato ?? { done: 0, total },
     pip,
     simInicial: simIni,
@@ -116,16 +147,19 @@ export async function turmaFacts(db: Db, regime: Regime, turma: TurmaRow): Promi
   };
 }
 
-/** Contagem do percurso público (Gold) por tipo de documento, pelos emails dos formandos da turma. */
-async function percursoGoldDaTurma(db: Db, turma: TurmaRow) {
-  const formandos = await repo.emailsFormandosGold(db, turma.id, turma.nome);
+export async function turmaFacts(db: Db, regime: Regime, turma: TurmaRow): Promise<DtpFacts> {
+  return factosDe(regime, turma, await fontesDaTurma(db, regime, turma));
+}
+
+/** Contagem do percurso público (Gold) por tipo, a partir das pré-inscrições escolhidas e dos seus documentos. */
+export function contarPercurso(
+  formandos: { email: string }[],
+  porEmail: Map<string, number>,
+  docs: { preinscricao_id: number; tipo: string; estado: string }[],
+) {
   const total = formandos.length;
-  const porTipo = new Map<string, Pick<DtpPercurso, "submetidos" | "validados" | "recusados">>();
+  const porTipo = new Map<string, ContagemPercurso>();
   if (total === 0) return { total, porTipo };
-  const emails = [...new Set(formandos.map(r => r.email).filter(Boolean))];
-  const leads = await repo.leadsDosEmails(db, emails, turma.curso, turma.id);
-  const porEmail = new Map(leads.map(r => [r.email, r.id]));
-  const docs = await repo.docsDasPreinscricoes(db, [...new Set(leads.map(r => r.id))]);
   const rank = { validado: 3, pendente: 2, recusado: 1 } as const;
   const melhor = new Map<string, keyof typeof rank>();
   for (const doc of docs) {
@@ -148,20 +182,23 @@ async function percursoGoldDaTurma(db: Db, turma: TurmaRow) {
   return { total, porTipo };
 }
 
-export async function dtpForTurma(db: Db, regime: Regime, turma: TurmaRow, modeloPre?: DtpModelo, entidadePre?: string | null) {
-  const carregado = modeloPre ? { modelo: modeloPre, entidade: entidadePre ?? null } : await modeloDaTurma(db, regime, turma);
-  const [facts, manual, anexos, cursoId] = await Promise.all([
-    turmaFacts(db, regime, turma),
-    repo.estadosManuais(db, regime, turma.id),
-    repo.anexosDaTurma(db, regime, turma.id).catch(() => []),
-    cursoIdDaTurma(db, regime, turma.curso),
-  ]);
-  const byItem = new Map(anexos.map(r => [r.item_id, r]));
+async function percursoGoldDaTurma(db: Db, turma: TurmaRow) {
+  const formandos = await repo.emailsFormandosGold(db, turma.id, turma.nome);
+  if (!formandos.length) return { total: 0, porTipo: new Map<string, ContagemPercurso>() };
+  const emails = [...new Set(formandos.map(r => r.email).filter(Boolean))];
+  const leads = await repo.leadsDosEmails(db, emails, turma.curso, turma.id);
+  const porEmail = new Map(leads.map(r => [r.email, r.id]));
+  const docs = await repo.docsDasPreinscricoes(db, [...new Set(leads.map(r => r.id))]);
+  return contarPercurso(formandos, porEmail, docs);
+}
+
+function itensDe(regime: Regime, turma: TurmaRow, f: FontesTurma, modelo: DtpModelo) {
+  const facts = factosDe(regime, turma, f);
+  const byItem = new Map(f.anexos.map(r => [r.item_id, r]));
   const anexoLegado: Record<string, string> = { "relatorio-pos": "inqueritos-turma" };
-  const ficheiros = cursoId == null ? [] : await repo.ficheirosDoCurso(db, regime, cursoId).catch(() => []);
-  const refs: CursoFicheiroRef[] = ficheiros.map(f => ({ ambito: f.ambito, requisitoId: f.requisito_id, pessoaId: f.pessoa_id, pessoaNome: f.pessoa_nome }));
-  const formandosCurso = refs.some(f => f.ambito === "formando") ? await formandosDaTurma(db, regime, turma) : [];
-  let items: DtpItem[] = buildDtpItems(regime, facts, manual, carregado.modelo).map(item => {
+  const refs: CursoFicheiroRef[] = f.ficheiros.map(x => ({ ambito: x.ambito, requisitoId: x.requisito_id, pessoaId: x.pessoa_id, pessoaNome: x.pessoa_nome }));
+  const formandosCurso = refs.some(x => x.ambito === "formando") ? f.formandos : [];
+  let items: DtpItem[] = buildDtpItems(regime, facts, f.manual, modelo).map(item => {
     const a = byItem.get(item.id) ?? (anexoLegado[item.id] ? byItem.get(anexoLegado[item.id]!) : undefined);
     const anexo = a?.drive_file_id ? { fileName: a.file_name, url: a.drive_url, driveFileId: a.drive_file_id } : null;
     let next = item;
@@ -173,15 +210,24 @@ export async function dtpForTurma(db: Db, regime: Regime, turma: TurmaRow, model
     if (porPartes?.estado === "parcial" && next.estado !== "ok") return { ...next, anexo, estado: "parcial" as const, detalhe: porPartes.detalhe };
     return { ...next, anexo };
   });
-  if (regime === "gold") {
-    const percurso = await percursoGoldDaTurma(db, turma);
+  if (regime === "gold" && f.percurso) {
+    const percurso = f.percurso;
     items = items.map(item => {
       const tipo = tipoPercursoDoItem(item);
       if (!tipo) return item;
       const contagem = percurso.porTipo.get(tipo) ?? { submetidos: 0, validados: 0, recusados: 0 };
-      return aplicarPercursoNoItem(item, { ...contagem, total: percurso.total }, Boolean(manual[item.id]));
+      return aplicarPercursoNoItem(item, { ...contagem, total: percurso.total }, Boolean(f.manual[item.id]));
     });
   }
+  return { items, facts };
+}
+
+/** Dossiê de uma turma. Com `fontes` (carregadas em lote) não faz consultas por turma. */
+export async function dtpForTurma(
+  db: Db, regime: Regime, turma: TurmaRow, modeloPre?: DtpModelo, entidadePre?: string | null, fontes?: FontesTurma,
+) {
+  const carregado = modeloPre ? { modelo: modeloPre, entidade: entidadePre ?? null } : await modeloDaTurma(db, regime, turma);
+  const { items, facts } = itensDe(regime, turma, fontes ?? await fontesDaTurma(db, regime, turma), carregado.modelo);
   return {
     items,
     pct: dtpPct(items),
@@ -218,7 +264,7 @@ async function modelosPorTurma(db: Db, regime: Regime) {
     const curso = cursoId != null ? porCurso.get(cursoId) ?? DTP_MODELO_VAZIO : DTP_MODELO_VAZIO;
     const entidadeId = cursoId != null ? entidadePorCurso.get(cursoId) : undefined;
     const entidade = entidadeId != null ? porEntidade.get(entidadeId) ?? DTP_MODELO_VAZIO : DTP_MODELO_VAZIO;
-    return { turma, modelo: regime === "gold" ? comporModelo(entidade, curso) : curso };
+    return { turma, cursoId, modelo: regime === "gold" ? comporModelo(entidade, curso) : curso };
   });
 }
 
@@ -256,8 +302,10 @@ function estadoDaSeccao(itens: DtpItem[]): EstadoSeccao {
 /** Matriz turma × secção do dossiê, com o que falta em cada turma. */
 export async function dtpMatriz(db: Db, regime: Regime) {
   const seccoes = seccoesDtp(regime);
-  const linhas = await emLotes(await modelosPorTurma(db, regime), 6, async ({ turma, modelo }) => {
-    const dtp = await dtpForTurma(db, regime, turma, modelo, null);
+  const porTurma = await modelosPorTurma(db, regime);
+  const fontes = await fontesEmLote(db, regime, porTurma.map(p => ({ turma: p.turma, cursoId: p.cursoId })));
+  const linhas = await emLotes(porTurma, 6, async ({ turma, modelo }) => {
+    const dtp = await dtpForTurma(db, regime, turma, modelo, null, fontes.get(turma.id));
     const celulas = seccoes.map(s => {
       const itens = dtp.items.filter(i => seccaoDoItem(regime, i) === s.id);
       return { seccao: s.id, estado: estadoDaSeccao(itens), ok: itens.filter(i => i.estado === "ok").length, total: itens.length };

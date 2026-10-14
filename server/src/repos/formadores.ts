@@ -79,12 +79,15 @@ const LISTA = `
            min(data) FILTER (WHERE data ~ '^\\d{4}-\\d{2}-\\d{2}$' AND data >= $2) AS proxima
       FROM sf WHERE regime = $1 GROUP BY nome
   ),
+  ativas AS (
+    SELECT DISTINCT regime, turma_id FROM sf WHERE regime = $1 AND data >= $2
+  ),
   tur AS (
     SELECT m.nome, count(DISTINCT m.turma_id)::int AS turmas,
-           count(DISTINCT m.turma_id) FILTER (WHERE EXISTS (
-             SELECT 1 FROM sf WHERE sf.regime = m.regime AND sf.turma_id = m.turma_id AND sf.data >= $2
-           ))::int AS turmas_ativas
-      FROM membros m WHERE m.regime = $1 GROUP BY m.nome
+           count(DISTINCT m.turma_id) FILTER (WHERE a.turma_id IS NOT NULL)::int AS turmas_ativas
+      FROM membros m
+      LEFT JOIN ativas a ON a.regime = m.regime AND a.turma_id = m.turma_id
+     WHERE m.regime = $1 GROUP BY m.nome
   )
   SELECT fm.id, fm.nome, fm.telf, fm.email, fm.especialidade, fm.ccp, fm.ccp_validade, fm.nif, fm.regimes, fm.estado,
          fm.disponibilidade, fm.custo_hora, fm.user_id,

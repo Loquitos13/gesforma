@@ -14,3 +14,4 @@ export { Kpi, KpiFaixa } from "./Kpi";
 export { BarrasHorizontais, type ItemBarra } from "./BarrasHorizontais";
 export { GraficoMensal, type MesGrafico, type EstatisticaMes } from "./GraficoMensal";
 export { cx, eur, num, formatar, evolucao, data, dataHora, TOM_CLASSES, type Formato, type Tom } from "./formatos";
+export { MenuLinha, type AcaoMenu } from "./MenuLinha";

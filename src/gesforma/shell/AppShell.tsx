@@ -1,11 +1,10 @@
 import { Component, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "../../partilhado/AuthGate";
-import { armViewLoading } from "../../partilhado/viewLoadingBus";
 import { Botao, Esqueleto } from "../../partilhado/ui";
 import { DocAlertas } from "../DocAlertas";
 import { tabDoFormador } from "../vistas/turmas/cockpit/base";
 import { caminhoDaVista, vistaDoCaminho, type Destino, type Vista } from "../rotasGesforma";
-import { FileDialogPaint, ViewLoadingOverlay } from "../ViewLoading";
+import { FileDialogPaint } from "../ViewLoading";
 import { Cabecalho } from "./Cabecalho";
 import { painelDoPerfil, vistaNoMenuDoPerfil, VISTAS_FORMADOR } from "./navegacao";
 import { Pesquisa } from "./Pesquisa";
@@ -44,6 +43,19 @@ function arranque(role: string): { view: Vista; params: ParamsVista } {
   return { view: d.view, params: paramsDe(d) };
 }
 
+/** Parâmetros da query que só o estado da navegação escreve (os outros são filtros dos ecrãs). */
+const CHAVES_DO_ESTADO = ["separador", "formando", "origem", "formador", "lead", "drive"];
+
+/** O URL actual já corresponde ao estado? Mesmo caminho, mesmos parâmetros do estado; o resto da query fica. */
+function urlRepresentaEstado(url: string) {
+  const [base, query = ""] = url.split("?");
+  if (window.location.pathname !== base) return false;
+  const quer = new URLSearchParams(query);
+  const tem = new URLSearchParams(window.location.search);
+  for (const [k, v] of quer) if (tem.get(k) !== v) return false;
+  return CHAVES_DO_ESTADO.every(k => quer.has(k) || !tem.has(k));
+}
+
 /** Um erro num ecrã não deita abaixo o resto da aplicação. */
 class LimiteErro extends Component<{ chave: string; children: ReactNode }, { erro: Error | null }> {
   state = { erro: null as Error | null };
@@ -70,19 +82,14 @@ export function AppShell() {
   const [menuAberto, setMenuAberto] = useState(false);
   const [pesquisaAberta, setPesquisaAberta] = useState(false);
   const primeiraEscrita = useRef(true);
-  /** O navigate já escreveu o URL com filtros: o efeito abaixo não o reescreve. */
-  const urlComFiltros = useRef(false);
 
-  // URL ← estado
+  // URL ← estado. Idempotente: se o URL já representa o estado não se escreve nada, e os filtros e
+  // outros parâmetros da query (useFiltrosUrl, ?editar=…) mantêm-se, também quando o efeito corre duas vezes.
   useEffect(() => {
     const url = caminhoDaVista({ view, ...params }, params.drive ?? "");
     if (!url) return;
-    const atual = `${window.location.pathname}${window.location.search}`;
-    // Os filtros (useFiltrosUrl) também vivem na query: não se perdem ao reescrever.
-    const base = url.split("?")[0];
-    if (atual === url || (atual.split("?")[0] === base && (primeiraEscrita.current || urlComFiltros.current))) {
+    if (urlRepresentaEstado(url)) {
       primeiraEscrita.current = false;
-      urlComFiltros.current = false;
       return;
     }
     window.history[primeiraEscrita.current ? "replaceState" : "pushState"](null, "", url);
@@ -101,11 +108,6 @@ export function AppShell() {
     return () => window.removeEventListener("popstate", voltar);
   }, [user.role]);
 
-  useEffect(() => {
-    const depois = window.setTimeout(() => armViewLoading(), 2000);
-    return () => window.clearTimeout(depois);
-  }, []);
-
   const navigate = useCallback((alvo: Vista | Destino) => {
     const d = destinoPermitido(typeof alvo === "string" ? { view: alvo } : alvo, user.role);
     const novo = paramsDe(d);
@@ -115,7 +117,6 @@ export function AppShell() {
       if (url) {
         window.history.pushState(null, "", url);
         primeiraEscrita.current = false;
-        urlComFiltros.current = true;
         window.dispatchEvent(new PopStateEvent("popstate"));
       }
     }
@@ -168,7 +169,6 @@ export function AppShell() {
                 </Suspense>
               </LimiteErro>
             </main>
-            <ViewLoadingOverlay />
             <FileDialogPaint />
           </div>
         </div>

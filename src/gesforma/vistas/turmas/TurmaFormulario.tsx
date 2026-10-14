@@ -115,7 +115,7 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
       rodape={(
         <>
           <Botao variante="secundario" onClick={onFechar}>Cancelar</Botao>
-          <Botao onClick={() => void guardar()} aCarregar={aGravar} disabled={aCarregar}>{editar ? "Guardar alterações" : "Criar turma"}</Botao>
+          <Botao variante="primario" onClick={() => void guardar()} aCarregar={aGravar} disabled={aCarregar}>{editar ? "Guardar alterações" : "Criar turma"}</Botao>
         </>
       )}
     >

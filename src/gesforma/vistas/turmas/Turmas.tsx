@@ -137,7 +137,7 @@ export default function Turmas({ view, navigate }: VistaProps) {
       id: "fase", titulo: "Estado",
       celula: t => (
         <div className="space-y-1">
-          <Estado tom={FASE_ESTADO[t.fase].tom} ponto>{FASE_ESTADO[t.fase].rotulo}</Estado>
+          <Estado tom={FASE_ESTADO[t.fase].tom}>{FASE_ESTADO[t.fase].rotulo}</Estado>
           <p className="m-0 text-xs text-tinta-suave">{t.inscricoesAbertas ? "Inscrições abertas" : "Inscrições fechadas"}{fin && t.financiador ? ` · ${t.financiador}` : ""}</p>
         </div>
       ),
@@ -175,7 +175,7 @@ export default function Turmas({ view, navigate }: VistaProps) {
           <>
             <Botao variante="secundario" onClick={() => setRegras(v => !v)} aria-expanded={regras}>Abertura automática</Botao>
             {fin && <Botao variante="secundario" onClick={() => setRegrasApoios(true)}>Regras dos apoios</Botao>}
-            <Botao onClick={() => setForm({ id: null })}>Nova turma</Botao>
+            <Botao variante="primario" onClick={() => setForm({ id: null })}>Nova turma</Botao>
           </>
         )}
       />

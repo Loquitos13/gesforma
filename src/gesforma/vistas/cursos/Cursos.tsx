@@ -6,7 +6,7 @@ import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import {
-  Botao, Cartao, ConfirmarPerigo, ErroCarregar, Estado, Filtros, Kpi, KpiFaixa, PageHeader, Tabela, Vazio, eur, useFiltrosUrl, type Coluna,
+  Botao, Cartao, ConfirmarPerigo, ErroCarregar, Estado, Filtros, MenuLinha, PageHeader, Tabela, Vazio, eur, num, useFiltrosUrl, type Coluna,
 } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
 
@@ -42,12 +42,12 @@ export default function Cursos({ view, navigate }: VistaProps) {
       id: "nome", titulo: regime === "gold" ? "Curso" : "Nome comercial", principal: true, ordenavel: true,
       celula: c => (
         <span className="flex flex-col">
-          <span className="font-semibold text-tinta">{nomeDe(c)}</span>
-          <span className="text-xs text-tinta-suave">{"categoria" in c ? c.categoria : "ufcd" in c ? c.ufcd : ""}</span>
+          <span className="font-semibold text-ligacao">{nomeDe(c)}</span>
+          <span className="text-xs text-tinta-fraca">#{c.id} · {"categoria" in c ? c.categoria : "ufcd" in c ? c.ufcd : ""}</span>
         </span>
       ),
     },
-    ...(regime === "gold" ? [{ id: "tipo", titulo: "Tipo", esconderMovel: true, celula: (c: Linha) => ("tipo" in c ? c.tipo : "") }] : []),
+    ...(regime === "gold" ? [{ id: "tipo", titulo: "Tipo", esconderMovel: true, celula: (c: Linha) => ("tipo" in c && c.tipo ? <Estado tom={c.tipo === "Gold" ? "acao" : "info"}>{c.tipo}</Estado> : "") }] : []),
     { id: "modalidade", titulo: "Modalidade", esconderMovel: true, celula: c => c.regime },
     { id: "horas", titulo: "Horas", alinhar: "dir", ordenavel: true, celula: c => `${c.horas} h` },
     ...(regime === "gold" ? [{ id: "preco", titulo: "Preço", alinhar: "dir" as const, ordenavel: true, celula: (c: Linha) => ("preco" in c ? eur(c.preco) : "") }] : []),
@@ -67,14 +67,9 @@ export default function Cursos({ view, navigate }: VistaProps) {
       <PageHeader
         trilho={[{ rotulo: regime === "gold" ? "Gold" : "Financiada" }, { rotulo: "Edição de cursos" }, { rotulo: "Cursos" }]}
         titulo={regime === "gold" ? "Cursos Gold" : "Cursos financiados"}
-        subtitulo="Abra um curso para editar a página pública, o programa, a avaliação e os documentos pedidos."
+        subtitulo={dados ? `${num(dados.resumo.total)} cursos no catálogo · ${num(dados.resumo.ativos)} publicados no site · ${num(dados.resumo.comTurmas)} com turmas abertas` : "A carregar…"}
         acoes={podeEditar && <Botao variante="primario" onClick={() => abrir("new")}>Novo curso</Botao>}
       />
-      <KpiFaixa className="xl:grid-cols-3 md:grid-cols-3">
-        <Kpi rotulo="Cursos no catálogo" valor={dados?.resumo.total} />
-        <Kpi rotulo="Activos (no site)" valor={dados?.resumo.ativos} onClick={() => setF({ estado: "Ativo" })} />
-        <Kpi rotulo="Com turmas abertas" valor={dados?.resumo.comTurmas} />
-      </KpiFaixa>
       <Filtros
         pesquisa={{ valor: f.q, onMudar: v => setF({ q: v }), placeholder: regime === "gold" ? "Pesquisar curso ou categoria…" : "Pesquisar UFCD ou nome…" }}
         selecoes={[
@@ -100,9 +95,12 @@ export default function Cursos({ view, navigate }: VistaProps) {
             aCarregar={aCarregar}
             onLinha={c => abrir(c.id)}
             acoesLinha={c => (
-              <div className="flex justify-end gap-1">
-                <Botao tamanho="sm" variante="fantasma" onClick={e => { e.stopPropagation(); navigate({ view: regime === "gold" ? "gold-modulos" : "fin-modulos", cursoNome: nomeDe(c) }); }}>Módulos</Botao>
-                {podeApagar && <Botao tamanho="sm" variante="fantasma" onClick={e => { e.stopPropagation(); setApagar(c); }}>Eliminar</Botao>}
+              <div className="flex items-center justify-end gap-2">
+                <button type="button" className="text-[13px] font-semibold text-ligacao hover:underline" onClick={e => { e.stopPropagation(); abrir(c.id); }}>Editar</button>
+                <MenuLinha rotulo={`Acções de ${nomeDe(c)}`} acoes={[
+                  { rotulo: "Módulos do curso", onClick: () => navigate({ view: regime === "gold" ? "gold-modulos" : "fin-modulos", cursoNome: nomeDe(c) }) },
+                  ...(podeApagar ? [{ rotulo: "Eliminar curso", perigo: true, onClick: () => setApagar(c) }] : []),
+                ]} />
               </div>
             )}
             vazio={(

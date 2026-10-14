@@ -6,7 +6,8 @@ import {
 import { assiduidadeDoFormando, sessoesComHoras, type Assiduidade } from "./assiduidade.js";
 import { assiduidadeMinima, lerRegras, type RegrasPedagogicas } from "./regrasConfig.js";
 import {
-  certificadosParaResultados, fichaDoCursoDaTurma, folhasDePresenca, formandosPorTurma, turmaBase, turmaFechadaEm, type TurmaBase,
+  certificadosParaResultados, certificadosParaResultadosLote, fichaDoCursoDaTurma, fichasPorCursoIdLote, folhasDePresenca,
+  folhasDePresencaLote, formandosPorTurma, formandosPorTurmasLote, notasLote, turmaBase, turmasBaseLote, turmaFechadaEm, type TurmaBase,
 } from "./repos/resultados.js";
 import { listarNotas, sumariosDaTurma } from "./repos/pedagogiaSessoes.js";
 
@@ -99,6 +100,59 @@ export async function resultadosDaTurma(
     certificadosParaResultados(db, regime, turmaId),
     fichaDoCurso(db, regime, turma),
   ]);
+  const dtpFalta = regras.dtpBloqueiaCertificado && opts.dtpEmFalta ? await opts.dtpEmFalta() : [];
+  return calcularResultados(turma, regras, regime, { formandos, folhas, notasRows, certRows, payload }, dtpFalta);
+}
+
+/**
+ * Resultados de várias turmas de uma vez (sem a regra do Dossiê TP): uma consulta por fonte para todas,
+ * com as mesmas associações e o mesmo cálculo de `resultadosDaTurma`.
+ */
+export async function resultadosDeTurmas(db: Db, regime: Regime, ids: number[], regrasDadas?: RegrasPedagogicas) {
+  const out = new Map<number, ReturnType<typeof calcularResultados>>();
+  if (!ids.length) return out;
+  const regras = regrasDadas ?? await lerRegras(db);
+  const turmas = await turmasBaseLote(db, regime, ids);
+  if (!turmas.length) return out;
+  const idsReais = turmas.map(t => t.id);
+  const cursoIds = [...new Set(turmas.map(t => t.curso_id).filter((x): x is number => x != null))];
+  const [formandos, folhas, notas, certs, fichas] = await Promise.all([
+    formandosPorTurmasLote(db, regime, idsReais),
+    folhasDePresencaLote(db, regime, idsReais),
+    notasLote(db, regime, idsReais),
+    certificadosParaResultadosLote(db, regime, idsReais),
+    fichasPorCursoIdLote(db, regime, cursoIds),
+  ]);
+  const fichaDoId = new Map(fichas.map(f => [Number(f.curso_id), asObj(f.payload)]));
+  const daTurma = <T extends { turma_id: number }>(linhas: T[], id: number) => linhas.filter(l => Number(l.turma_id) === id);
+  for (const turma of turmas) {
+    const nomeTurma = turma.nome.trim().toLowerCase();
+    const lista = formandos
+      .filter(f => Number(f.turma_id) === turma.id || (f.turma_id == null && f.turma.trim().toLowerCase() === nomeTurma))
+      .map(f => ({ id: Number(f.id), nome: `${f.nome} ${f.apelido}`.trim(), estado: String(f.estado ?? "") }));
+    // Sem id do curso a ficha procura-se pelo nome (raro): mantém-se a consulta individual.
+    const payload = turma.curso_id != null ? (fichaDoId.get(turma.curso_id) ?? {}) : await fichaDoCurso(db, regime, turma);
+    out.set(turma.id, calcularResultados(turma, regras, regime, {
+      formandos: lista,
+      folhas: daTurma(folhas, turma.id),
+      notasRows: daTurma(notas, turma.id),
+      certRows: daTurma(certs, turma.id),
+      payload,
+    }, []));
+  }
+  return out;
+}
+
+type Entradas = {
+  formandos: { id: number; nome: string; estado: string }[];
+  folhas: { sessao_n: number; presencas: unknown }[];
+  notasRows: { formando_id: number; modulo_id: string; parametro_id: string; nota: unknown }[];
+  certRows: { formando_id: number; emitido: boolean; elearning: unknown; nota: unknown; ficheiro_id: string }[];
+  payload: Record<string, unknown>;
+};
+
+function calcularResultados(turma: TurmaBase, regras: RegrasPedagogicas, regime: Regime, e: Entradas, dtpFalta: string[]) {
+  const { formandos, folhas, notasRows, certRows, payload } = e;
   const cfg = avaliacaoDoCurso(payload, turma.curso);
   const topicos = topicosDe(payload);
   const moduloIds = moduloIdsDe(cfg, topicos);
@@ -113,7 +167,6 @@ export async function resultadosDaTurma(
   const certs = new Map(certRows.map(c => [Number(c.formando_id), c]));
   const minimo = assiduidadeMinima(regras, regime);
   const temGrelha = cfg.parametros.length > 0 || cfg.estrutura === "ccp";
-  const dtpFalta = regras.dtpBloqueiaCertificado && opts.dtpEmFalta ? await opts.dtpEmFalta() : [];
 
   const lista: ResultadoFormando[] = formandos.map(f => {
     const cert = certs.get(f.id);

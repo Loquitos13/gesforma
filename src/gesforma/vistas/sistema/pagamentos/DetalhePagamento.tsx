@@ -25,7 +25,7 @@ const SITUACAO: Record<SituacaoPagamento, { rotulo: string; tom: Tom }> = {
 
 export function EstadoPagamento({ situacao }: { situacao: SituacaoPagamento }) {
   const s = SITUACAO[situacao] ?? SITUACAO.pedido;
-  return <Estado tom={s.tom} ponto>{s.rotulo}</Estado>;
+  return <Estado tom={s.tom}>{s.rotulo}</Estado>;
 }
 
 const INVALIDAR = ["pagamentos:", "painel:", "notificacoes:", "crm:", "formandos:"];

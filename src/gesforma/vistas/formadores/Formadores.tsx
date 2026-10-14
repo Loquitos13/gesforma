@@ -77,14 +77,14 @@ export default function Formadores({ view, navigate }: VistaProps) {
       id: "turmas", titulo: "Turmas", ordenavel: true,
       celula: x => (
         <div className="num text-[13px]">
-          <p className="m-0">{x.turmasAtivas} a decorrer · {x.turmas} no total</p>
+          <p className="m-0 whitespace-nowrap">{x.turmasAtivas} a decorrer · {x.turmas} no total</p>
           <p className="m-0 text-xs text-tinta-suave">{x.proximaSessao ? `Próxima sessão ${data(x.proximaSessao)}` : "Sem sessões marcadas"}</p>
         </div>
       ),
     },
     {
       id: "horas", titulo: "Horas", ordenavel: true, alinhar: "dir",
-      celula: x => <div className="num text-[13px] text-right"><p className="m-0">{num(x.horasDadas)} h dadas</p><p className="m-0 text-xs text-tinta-suave">{num(x.horasPendentes)} h por dar</p></div>,
+      celula: x => <div className="num text-[13px] text-right whitespace-nowrap"><p className="m-0">{num(x.horasDadas)} h dadas</p><p className="m-0 text-xs text-tinta-suave">{num(x.horasPendentes)} h por dar</p></div>,
     },
     { id: "valor", titulo: "Valor/h", alinhar: "dir", esconderMovel: true, celula: x => <span className="num text-[13px]">{x.custoHora ? eur(x.custoHora, true) : "—"}</span> },
     {
@@ -102,7 +102,7 @@ export default function Formadores({ view, navigate }: VistaProps) {
         trilho={[{ rotulo: fin ? "Financiada" : "Gold", onClick: () => navigate(fin ? "fin-painel" : "gold-painel") }, { rotulo: "Formadores" }]}
         titulo={fin ? "Formadores da Financiada" : "Formadores Gold"}
         subtitulo={kpis ? `${num(kpis.ativos)} ativos · ${num(kpis.total)} neste regime` : "A carregar…"}
-        acoes={gerir && <Botao onClick={() => setForm({ formador: null })}>Novo formador</Botao>}
+        acoes={gerir && <Botao variante="primario" onClick={() => setForm({ formador: null })}>Novo formador</Botao>}
       />
       <AvisoAcesso acesso={acesso} onFechar={() => setAcesso(null)} />
 

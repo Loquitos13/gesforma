@@ -25,7 +25,11 @@ function escreverUrl(valores: Valores, padrao: Valores) {
   const s = q.toString();
   const url = `${window.location.pathname}${s ? `?${s}` : ""}${window.location.hash}`;
   window.history.replaceState(window.history.state, "", url);
+  // Outros ecrãs/hooks na mesma página que leem as mesmas chaves acompanham a mudança.
+  queueMicrotask(() => window.dispatchEvent(new Event(EVENTO_FILTROS)));
 }
+
+const EVENTO_FILTROS = "gesforma:filtros";
 
 /**
  * Estado de filtros guardado na query do URL (partilhável, sobrevive a F5).
@@ -38,9 +42,16 @@ export function useFiltrosUrl<T extends Valores>(padrao: T): [T, (patch: Partial
   const [valores, setValores] = useState<T>(() => lerUrl(padrao));
 
   useEffect(() => {
-    const voltar = () => setValores(lerUrl(padraoRef.current));
+    const voltar = () => {
+      const lido = lerUrl(padraoRef.current);
+      setValores(prev => (JSON.stringify(prev) === JSON.stringify(lido) ? prev : lido));
+    };
     window.addEventListener("popstate", voltar);
-    return () => window.removeEventListener("popstate", voltar);
+    window.addEventListener(EVENTO_FILTROS, voltar);
+    return () => {
+      window.removeEventListener("popstate", voltar);
+      window.removeEventListener(EVENTO_FILTROS, voltar);
+    };
   }, []);
 
   const set = useCallback((patch: Partial<T>) => {
@@ -76,7 +87,7 @@ export type FiltroSelecao = {
  * `ativos` conta os filtros aplicados e mostra "Limpar filtros".
  */
 export function Filtros({
-  pesquisa, selecoes = [], periodo, ativos = 0, onLimpar, extra, className,
+  pesquisa, selecoes = [], periodo, ativos = 0, onLimpar, extra, className, moldura = true,
 }: {
   pesquisa?: { valor: string; onMudar: (v: string) => void; placeholder?: string; rotulo?: string };
   selecoes?: FiltroSelecao[];
@@ -85,6 +96,8 @@ export function Filtros({
   onLimpar?: () => void;
   extra?: ReactNode;
   className?: string;
+  /** Sem moldura quando a barra vive dentro de um cartão (ex.: cabeçalho de uma tabela). */
+  moldura?: boolean;
 }) {
   const [texto, setTexto] = useState(pesquisa?.valor ?? "");
   const espera = useRef<number | null>(null);
@@ -97,9 +110,9 @@ export function Filtros({
   }
 
   return (
-    <div className={cx("flex flex-wrap items-center gap-2 bg-superficie border border-linha rounded-cartao p-2.5", className)}>
+    <div className={cx("flex flex-wrap items-center gap-2", moldura && "bg-superficie border border-linha rounded-cartao px-3 py-2.5", className)}>
       {pesquisa && (
-        <label className="flex items-center gap-2 h-10 px-3 rounded-controlo border border-linha-forte bg-superficie text-tinta-suave flex-1 min-w-[200px]">
+        <label className="flex items-center gap-2 h-9 px-2.5 rounded-controlo border border-linha-forte bg-superficie text-tinta-suave flex-[1_1_220px] min-w-[200px] max-w-[360px]">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
           <span className="sr-only">{pesquisa.rotulo ?? "Pesquisar"}</span>
           <input
@@ -112,7 +125,7 @@ export function Filtros({
         </label>
       )}
       {selecoes.map(s => (
-        <div key={s.chave} className="min-w-[150px] max-w-[260px] flex-1 sm:flex-none">
+        <div key={s.chave} className="min-w-[140px] max-w-[260px] flex-1 sm:flex-none sm:w-auto">
           <label className="sr-only" htmlFor={`filtro-${s.chave}`}>{s.rotulo}</label>
           <Selecao
             id={`filtro-${s.chave}`}
@@ -124,7 +137,7 @@ export function Filtros({
         </div>
       ))}
       {periodo && (
-        <span className="inline-flex items-center gap-1.5 h-10 px-2.5 rounded-controlo border border-linha-forte text-[13px] text-tinta-suave">
+        <span className="inline-flex items-center gap-1.5 h-9 px-2.5 rounded-controlo border border-linha-forte text-[13px] text-tinta-suave">
           <label className="inline-flex items-center gap-1.5">De
             <input type="date" value={periodo.de} onChange={e => periodo.onMudar(e.target.value, periodo.ate)} className="bg-transparent border-0 text-tinta text-[13px]" />
           </label>

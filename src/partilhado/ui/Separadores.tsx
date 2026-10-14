@@ -32,7 +32,7 @@ export function Separadores<T extends string>({
     }
   }
   return (
-    <div role="tablist" aria-label={rotulo} className={cx("flex gap-1 overflow-x-auto", estilo === "linha" && "border-b border-linha", className)}>
+    <div role="tablist" aria-label={rotulo} className={cx("flex", estilo === "linha" ? "gap-1 overflow-x-auto border-b border-linha" : "gap-2 flex-wrap", className)}>
       {itens.map((it, i) => {
         const sel = it.id === ativo;
         return (
@@ -50,7 +50,7 @@ export function Separadores<T extends string>({
               "inline-flex items-center gap-2 whitespace-nowrap text-sm disabled:opacity-40",
               estilo === "linha"
                 ? cx("h-10 px-3 -mb-px border-b-2", sel ? "border-acao text-tinta font-semibold" : "border-transparent text-tinta-suave hover:text-tinta")
-                : cx("h-9 px-3 rounded-full border", sel ? "bg-tinta text-white border-tinta font-semibold" : "bg-superficie text-tinta border-linha-forte hover:bg-fundo"),
+                : cx("h-9 px-3 rounded-controlo border font-semibold", sel ? "bg-tinta text-white border-tinta font-semibold" : "bg-superficie text-tinta border-linha-forte hover:bg-fundo"),
             )}
           >
             {it.rotulo}

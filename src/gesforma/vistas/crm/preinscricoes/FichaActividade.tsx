@@ -72,7 +72,7 @@ export function FichaActividade({ d, onMudou }: { d: DossieLead; onMudou: () => 
           <Botao variante="secundario" tamanho="sm" onClick={() => setProximo(emDias(1))}>+1 dia</Botao>
           <Botao variante="secundario" tamanho="sm" onClick={() => setProximo(emDias(3))}>+3 dias</Botao>
         </div>
-        <Botao aCarregar={gravarNota.aCorrer || gravarSeguimento.aCorrer} disabled={!nota.trim() && !resultado} onClick={() => void gravar()}>
+        <Botao variante="primario" aCarregar={gravarNota.aCorrer || gravarSeguimento.aCorrer} disabled={!nota.trim() && !resultado} onClick={() => void gravar()}>
           Gravar actividade
         </Botao>
       </section>

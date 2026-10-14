@@ -40,8 +40,8 @@ export default function Inqueritos({ view }: VistaProps) {
         acoes={<Botao variante="primario" onClick={() => setNovo(true)}>Novo inquérito</Botao>}
       />
       {lista.erro ? <ErroCarregar erro={lista.erro} onTentar={lista.recarregar} /> : null}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
-        <nav aria-label="Inquéritos" className="space-y-2">
+      <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] items-start">
+        <nav aria-label="Inquéritos" className="bg-superficie border border-linha rounded-cartao overflow-hidden">
           {lista.aCarregar && !lista.dados && <Esqueleto linhas={4} altura="h-16" />}
           {lista.dados && itens.length === 0 && (
             <Vazio compacto titulo="Ainda sem inquéritos." descricao="Crie um e escolha o público-alvo. No envio, cada pessoa da turma recebe os seus." />
@@ -55,8 +55,8 @@ export default function Inqueritos({ view }: VistaProps) {
                 aria-current={ativo ? "true" : undefined}
                 onClick={() => setF({ id: String(i.id) })}
                 className={cx(
-                  "w-full rounded-cartao border p-3 text-left transition-colors",
-                  ativo ? "border-acao bg-acao-suave" : "border-linha bg-superficie hover:border-linha-forte",
+                  "w-full border-0 border-b border-linha-suave px-4 py-3 text-left transition-colors",
+                  ativo ? "bg-acao-suave/60 shadow-[inset_3px_0_0_#FFB020]" : "bg-superficie hover:bg-fundo",
                 )}
               >
                 <span className="block text-sm font-semibold text-tinta">{i.titulo}</span>
@@ -69,19 +69,20 @@ export default function Inqueritos({ view }: VistaProps) {
             );
           })}
         </nav>
-        <section aria-label="Inquérito seleccionado" className="min-w-0 space-y-4">
+        <section aria-label="Inquérito seleccionado" className="min-w-0 bg-superficie border border-linha rounded-cartao overflow-hidden">
           {!sel ? (
             lista.dados && itens.length > 0 ? <Vazio titulo="Seleccione um inquérito." /> : null
           ) : (
             <>
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-tinta-suave">{rotuloPublico(sel.publico)}</p>
-                  <h2 className="text-lg font-semibold text-tinta">{sel.titulo}</h2>
+              <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-linha">
+                <div className="min-w-[220px] flex-1">
+                  <h2 className="m-0 text-[17px] font-semibold text-tinta">{sel.titulo}</h2>
+                  <p className="m-0 mt-0.5 text-xs text-tinta-suave">{rotuloPublico(sel.publico)} · {sel.perguntas} perguntas</p>
                 </div>
-                <Botao variante="fantasma" tamanho="sm" onClick={() => setApagar({ id: sel.id, titulo: sel.titulo, respostas: sel.respostas })}>Eliminar</Botao>
+                <Botao variante="fantasma" tamanho="sm" className="text-perigo" onClick={() => setApagar({ id: sel.id, titulo: sel.titulo, respostas: sel.respostas })}>Eliminar</Botao>
               </div>
               <Separadores<Sep>
+                className="px-5"
                 rotulo="Secções do inquérito"
                 ativo={(f.sep as Sep) || "resultados"}
                 onMudar={sep => setF({ sep })}
@@ -90,9 +91,11 @@ export default function Inqueritos({ view }: VistaProps) {
                   { id: "perguntas", rotulo: "Perguntas", contagem: sel.perguntas },
                 ]}
               />
-              {f.sep === "perguntas"
-                ? (def ? <Perguntas key={def.id} regime={regime} definicao={def} /> : <Esqueleto linhas={5} altura="h-12" />)
-                : <Resultados key={sel.id} regime={regime} inquerito={sel} definicao={def} />}
+              <div className="p-5 bg-fundo/40">
+                {f.sep === "perguntas"
+                  ? (def ? <Perguntas key={def.id} regime={regime} definicao={def} /> : <Esqueleto linhas={5} altura="h-12" />)
+                  : <Resultados key={sel.id} regime={regime} inquerito={sel} definicao={def} />}
+              </div>
             </>
           )}
         </section>

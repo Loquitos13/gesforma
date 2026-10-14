@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { apiMarcarLidas, apiNotificacoes, type Notificacao } from "../partilhado/api/notificacoes";
+import { useSondagem } from "../partilhado/dados/sondagem";
 
 type NotificacoesCtx = {
   items: Notificacao[];
@@ -13,24 +14,22 @@ type NotificacoesCtx = {
 
 const Ctx = createContext<NotificacoesCtx | null>(null);
 
-/** Refresca a cada 2 minutos: as notificações são derivadas dos dados operacionais. */
+/** Refresca a cada 2 minutos (só com o separador visível): as notificações são derivadas dos dados operacionais. */
 const INTERVALO_MS = 120_000;
 
 export function NotificacoesProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<Notificacao[]>([]);
   const [estado, setEstado] = useState<NotificacoesCtx["estado"]>("loading");
 
-  const recarregar = useCallback(() => {
-    apiNotificacoes()
+  const pedir = useCallback(
+    () => apiNotificacoes()
       .then(r => { setItems(r.notificacoes); setEstado("ready"); })
-      .catch(() => setEstado(prev => (prev === "ready" ? "ready" : "offline")));
-  }, []);
+      .catch(e => { setEstado(prev => (prev === "ready" ? "ready" : "offline")); throw e; }),
+    [],
+  );
+  const recarregar = useCallback(() => { void pedir().catch(() => undefined); }, [pedir]);
 
-  useEffect(() => {
-    recarregar();
-    const timer = window.setInterval(recarregar, INTERVALO_MS);
-    return () => window.clearInterval(timer);
-  }, [recarregar]);
+  useSondagem(pedir, INTERVALO_MS);
 
   const marcarLida = useCallback((chave: string) => {
     setItems(prev => prev.map(n => (n.chave === chave ? { ...n, lida: true } : n)));

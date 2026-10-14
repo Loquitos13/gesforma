@@ -68,7 +68,7 @@ export function FormadorFormulario({ aberto, regime, formador, especialidades, o
       rodape={(
         <>
           <Botao variante="secundario" onClick={onFechar}>Cancelar</Botao>
-          <Botao onClick={() => void guardar()} aCarregar={aGravar}>{formador ? "Guardar alterações" : "Criar formador"}</Botao>
+          <Botao variante="primario" onClick={() => void guardar()} aCarregar={aGravar}>{formador ? "Guardar alterações" : "Criar formador"}</Botao>
         </>
       )}
     >

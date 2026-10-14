@@ -74,7 +74,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     let alive = true;
     let apiDone = false;
     const started = Date.now();
-    const minMs = 1800;
+    const minMs = 0; // sem espera artificial: entra assim que a sessão é confirmada
     const tick = window.setInterval(() => {
       setPct(p => (p >= 90 ? 90 : p + (p < 40 ? 4 : p < 70 ? 2 : 1)));
     }, 80);
@@ -85,9 +85,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
         if (!alive) return;
         window.clearInterval(tick);
         setPct(100);
-        window.setTimeout(() => {
-          if (alive) setReady(true);
-        }, 400);
+        if (alive) setReady(true);
       }, wait);
     }
     apiMe()

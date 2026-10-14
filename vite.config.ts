@@ -16,4 +16,15 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // React fica num ficheiro próprio, em cache entre deploys enquanto a versão não mudar.
+        manualChunks(id) {
+          if (/node_modules[\/](react|react-dom|scheduler)[\/]/.test(id)) return "react";
+          return undefined;
+        },
+      },
+    },
+  },
 });

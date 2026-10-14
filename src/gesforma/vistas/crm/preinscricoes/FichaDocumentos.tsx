@@ -98,7 +98,7 @@ export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; o
                     />
                     <Botao tamanho="sm" variante="secundario" aCarregar={recusar.aCorrer} disabled={!(obs[doc.id] ?? "").trim()}
                       onClick={() => void recusar.correr(id, doc.id, (obs[doc.id] ?? "").trim()).then(r => r && onMudou())}>Recusar</Botao>
-                    <Botao tamanho="sm" aCarregar={validar.aCorrer} onClick={() => void validar.correr(id, doc.id).then(r => r && onMudou())}>Validar</Botao>
+                    <Botao variante="primario" tamanho="sm" aCarregar={validar.aCorrer} onClick={() => void validar.correr(id, doc.id).then(r => r && onMudou())}>Validar</Botao>
                   </div>
                 )}
               </li>

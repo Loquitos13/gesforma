@@ -171,7 +171,7 @@ export function NovoUtilizador({ aberto, onFechar, perfilInicial }: { aberto: bo
             {a => (
               <div className="flex gap-2">
                 <Entrada {...a} value={f.password} onChange={e => setF({ ...f, password: e.target.value })} autoComplete="new-password" className="font-mono" />
-                <Botao onClick={() => setF({ ...f, password: gerarPalavraPasse() })}>Gerar</Botao>
+                <Botao variante="primario" onClick={() => setF({ ...f, password: gerarPalavraPasse() })}>Gerar</Botao>
               </div>
             )}
           </Campo>

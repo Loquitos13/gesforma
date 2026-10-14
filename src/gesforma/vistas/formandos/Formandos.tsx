@@ -68,7 +68,7 @@ export default function Formandos({ view, navigate }: VistaProps) {
       celula: l => (
         <div className="min-w-0">
           <p className="m-0 font-semibold text-tinta">{`${l.nome} ${l.apelido}`.trim()}</p>
-          <p className="m-0 text-xs text-tinta-suave truncate max-w-[260px]">{l.email || "Sem email"}</p>
+          <p className="m-0 text-xs text-tinta-suave truncate max-w-[280px]">{l.email || "Sem email"}{l.inscrito ? ` · inscrito ${data(l.inscrito.slice(0, 10))}` : ""}</p>
         </div>
       ),
     },
@@ -76,7 +76,7 @@ export default function Formandos({ view, navigate }: VistaProps) {
       id: "turma", titulo: gold ? "Turma / curso" : "Turma / UFCD", ordenavel: true,
       celula: l => (
         <div className="min-w-0">
-          <p className="m-0 text-tinta">{l.turma?.nome ?? (gold ? "Sem turma" : "Por colocar")}</p>
+          <p className="m-0 font-semibold text-tinta">{l.turma?.nome ?? (gold ? "Sem turma" : "Por colocar")}</p>
           <p className="m-0 text-xs text-tinta-suave truncate max-w-[260px]">{[l.ufcd && `UFCD ${l.ufcd}`, l.curso, gold ? l.local : ""].filter(Boolean).join(" · ")}</p>
         </div>
       ),
@@ -90,17 +90,16 @@ export default function Formandos({ view, navigate }: VistaProps) {
           return (
             <div>
               <Estado tom={p.tom} ponto>{p.rotulo}</Estado>
-              {l.pagamento.valor > 0 && <p className="m-0 mt-0.5 text-xs text-tinta-suave">{eur(l.pagamento.valor)}{l.pagamento.pago && l.pagamento.metodo !== "-" ? ` · ${l.pagamento.metodo}` : ""}</p>}
+              {l.pagamento.valor > 0 && <p className="m-0 mt-0.5 text-xs text-tinta-suave whitespace-nowrap">{eur(l.pagamento.valor)}{l.pagamento.pago && l.pagamento.metodo !== "-" ? ` · ${l.pagamento.metodo}` : ""}</p>}
             </div>
           );
         },
       }
-      : { id: "estado", titulo: "Estado", ordenavel: true, celula: l => <Estado tom={/desist|indefer/i.test(l.estado) ? "perigo" : /eleg|coloc|frequent|conclu|certif/i.test(l.estado) ? "sucesso" : "neutro"}>{l.estado}</Estado> },
+      : { id: "estado", titulo: "Estado", ordenavel: true, celula: l => <Estado tom={/desist|indefer/i.test(l.estado) ? "perigo" : /eleg|coloc|frequent|conclu|certif/i.test(l.estado) ? "sucesso" : "neutro"} ponto>{l.estado}</Estado> },
     {
       id: "acesso", titulo: "Área do formando",
-      celula: l => l.acesso ? <Estado tom="sucesso">Com acesso</Estado> : <Estado tom="aviso">Sem acesso</Estado>,
+      celula: l => <span className={`text-[13px] whitespace-nowrap ${l.acesso ? "text-sucesso" : "text-aviso"}`}>{l.acesso ? "Com acesso" : "Sem acesso"}</span>,
     },
-    ...(gold ? [{ id: "inscrito", titulo: "Inscrito", ordenavel: true, esconderMovel: true, celula: (l: LinhaFormando) => <span className="text-tinta-suave">{l.inscrito ? data(l.inscrito.slice(0, 10)) : "—"}</span> }] : []),
   ];
 
   const total = dados?.total ?? 0;

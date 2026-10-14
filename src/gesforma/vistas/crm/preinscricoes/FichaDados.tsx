@@ -94,7 +94,7 @@ export function FichaDados({ d, onMudou }: { d: DossieLead; onMudou: () => void 
         <Campo rotulo="Local">{p => <Selecao {...p} value={dados.local} onChange={e => set("local", e.target.value)} opcoes={locais.selecao} vazio="—" />}</Campo>
         <Campo rotulo="Horário">{p => <Selecao {...p} value={dados.horario} onChange={e => set("horario", e.target.value)} opcoes={horarios.selecao} vazio="—" />}</Campo>
         <div className="sm:col-span-2">
-          <Botao aCarregar={editar.aCorrer} onClick={() => void gravar(dados)}>Gravar dados</Botao>
+          <Botao variante="primario" aCarregar={editar.aCorrer} onClick={() => void gravar(dados)}>Gravar dados</Botao>
         </div>
       </section>
 

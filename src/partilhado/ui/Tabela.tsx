@@ -70,11 +70,11 @@ export function Tabela<T>({
     <div className={cx("min-w-0", className)}>
       {/* Computador */}
       <div className={cx("hidden sm:block overflow-x-auto", alturaMax && "overflow-y-auto")} style={alturaMax ? { maxHeight: alturaMax } : undefined}>
-        <table className="num w-full border-collapse text-sm" aria-label={rotulo} aria-busy={aCarregar || undefined}>
+        <table className="num w-full border-collapse text-[13px]" aria-label={rotulo} aria-busy={aCarregar || undefined}>
           <thead>
             <tr>
               {selecao && (
-                <th scope="col" className="sticky top-0 z-10 bg-superficie w-10 px-4 py-2.5 border-b border-linha">
+                <th scope="col" className="sticky top-0 z-10 bg-[#F9FAFB] w-10 px-3.5 py-2.5 border-b border-linha">
                   <input type="checkbox" aria-label="Seleccionar todas" checked={Boolean(todos)} onChange={alternarTodos} className="h-4 w-4 accent-[#1D4E89]" />
                 </th>
               )}
@@ -86,7 +86,7 @@ export function Tabela<T>({
                     scope="col"
                     style={c.largura ? { width: c.largura } : undefined}
                     aria-sort={ativa ? (desc ? "descending" : "ascending") : undefined}
-                    className={cx("sticky top-0 z-10 bg-superficie px-4 py-2.5 border-b border-linha text-xs font-semibold text-tinta-suave whitespace-nowrap", alinhar(c.alinhar))}
+                    className={cx("sticky top-0 z-10 bg-[#F9FAFB] px-3.5 py-2.5 border-b border-linha text-xs font-semibold text-tinta-suave whitespace-nowrap", alinhar(c.alinhar))}
                   >
                     {c.ordenavel && onOrdenar ? (
                       <button
@@ -101,15 +101,15 @@ export function Tabela<T>({
                   </th>
                 );
               })}
-              {acoesLinha && <th scope="col" className="sticky top-0 z-10 bg-superficie px-4 py-2.5 border-b border-linha"><span className="sr-only">Acções</span></th>}
+              {acoesLinha && <th scope="col" className="sticky top-0 z-10 bg-[#F9FAFB] px-3.5 py-2.5 border-b border-linha"><span className="sr-only">Acções</span></th>}
             </tr>
           </thead>
           <tbody>
             {esqueleto && Array.from({ length: 6 }).map((_, i) => (
               <tr key={`e${i}`}>
-                {selecao && <td className="px-4 py-3 border-b border-linha-suave" />}
+                {selecao && <td className="px-3.5 py-3 border-b border-linha-suave" />}
                 {colunas.map(c => (
-                  <td key={c.id} className="px-4 py-3 border-b border-linha-suave">
+                  <td key={c.id} className="px-3.5 py-3 border-b border-linha-suave">
                     <span className="block h-3.5 rounded bg-linha-suave animate-pulse" style={{ width: `${50 + ((i * 7 + c.id.length * 13) % 45)}%` }} />
                   </td>
                 ))}
@@ -129,12 +129,12 @@ export function Tabela<T>({
                   className={cx(onLinha && "cursor-pointer hover:bg-fundo focus-visible:bg-fundo", ativa && "bg-acao-suave/60")}
                 >
                   {selecao && (
-                    <td className="px-4 py-3 border-b border-linha-suave" onClick={e => e.stopPropagation()}>
+                    <td className="px-3.5 py-3 border-b border-linha-suave" onClick={e => e.stopPropagation()}>
                       <input type="checkbox" aria-label="Seleccionar" checked={selecao.selecionados.has(k)} onChange={() => alternar(k)} className="h-4 w-4 accent-[#1D4E89]" />
                     </td>
                   )}
                   {colunas.map(c => (
-                    <td key={c.id} className={cx("px-4 py-3 border-b border-linha-suave align-middle", alinhar(c.alinhar))}>{c.celula(l)}</td>
+                    <td key={c.id} className={cx("px-3.5 py-3 border-b border-linha-suave align-middle", alinhar(c.alinhar))}>{c.celula(l)}</td>
                   ))}
                   {acoesLinha && (
                     <td className="px-4 py-2 border-b border-linha-suave text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>{acoesLinha(l)}</td>

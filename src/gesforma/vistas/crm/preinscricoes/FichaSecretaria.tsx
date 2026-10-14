@@ -49,7 +49,7 @@ export function FichaSecretaria({ d, role, onMudou }: { d: DossieLead; role: str
             <Campo rotulo="Morada fiscal" className="sm:col-span-2">{p => <Entrada {...p} value={fiscal.moradaFiscal} onChange={e => setFiscal(f => ({ ...f, moradaFiscal: e.target.value }))} />}</Campo>
             <Campo rotulo="Código postal">{p => <Entrada {...p} value={fiscal.codigoPostal} onChange={e => setFiscal(f => ({ ...f, codigoPostal: e.target.value }))} />}</Campo>
           </div>
-          <Botao aCarregar={completar.aCorrer} onClick={() => void completar.correr(l.id, fiscal).then(depois)}>Completar e entregar à secretaria</Botao>
+          <Botao variante="primario" aCarregar={completar.aCorrer} onClick={() => void completar.correr(l.id, fiscal).then(depois)}>Completar e entregar à secretaria</Botao>
         </section>
       )}
 
@@ -70,7 +70,7 @@ export function FichaSecretaria({ d, role, onMudou }: { d: DossieLead; role: str
           {d.estadoPagamento === "pedido" && <p className="m-0">Pedido{d.pagamentoPedidoEm ? ` em ${data(d.pagamentoPedidoEm)}` : ""}. Ao validar o comprovativo (separador Documentos) a inscrição conclui-se: ficha, conta e email de acesso.</p>}
           {d.estadoPagamento === "pago" && <p className="m-0 font-semibold text-sucesso">Pagamento confirmado.</p>}
           {sec && (d.estadoPagamento === "por_pedir" || d.estadoPagamento === "pedido") && (
-            <Botao aCarregar={pedir.aCorrer} disabled={!d.podePedirPagamento} onClick={() => void pedir.correr(l.id).then(depois)}>
+            <Botao variante="primario" aCarregar={pedir.aCorrer} disabled={!d.podePedirPagamento} onClick={() => void pedir.correr(l.id).then(depois)}>
               {d.estadoPagamento === "pedido" ? "Reenviar pedido de pagamento" : "Pedir pagamento"}
             </Botao>
           )}
@@ -89,7 +89,7 @@ export function FichaSecretaria({ d, role, onMudou }: { d: DossieLead; role: str
             </Campo>
           )}
           {d.faltaValidar && <p className="m-0 text-xs text-tinta-suave">{d.faltaValidar}</p>}
-          <Botao aCarregar={validar.aCorrer} disabled={!podeValidar}
+          <Botao variante="primario" aCarregar={validar.aCorrer} disabled={!podeValidar}
             onClick={() => void validar.correr(l.id, destinoSel?.id).then(depois)}>Validar pré-inscrição</Botao>
           {!d.turmaPelaSecretaria && (destinoCheio || soCheia) && (
             <Botao variante="secundario" aCarregar={cheia.aCorrer} onClick={() => void cheia.correr(l.id).then(depois)}>Turma cheia: enviar outras datas</Botao>
@@ -102,7 +102,7 @@ export function FichaSecretaria({ d, role, onMudou }: { d: DossieLead; role: str
           <Campo rotulo="Inscrever na turma" className="min-w-[220px] flex-1">
             {p => <Selecao {...p} value={destino} onChange={e => setDestino(e.target.value)} opcoes={opcoesTurma} vazio="Escolha a turma" />}
           </Campo>
-          <Botao disabled={!destinoSel || destinoSel.livres <= 0} aCarregar={inscrever.aCorrer}
+          <Botao variante="primario" disabled={!destinoSel || destinoSel.livres <= 0} aCarregar={inscrever.aCorrer}
             onClick={() => destinoSel && void inscrever.correr(l, destinoSel.id).then(depois)}>Inscrever</Botao>
         </section>
       )}

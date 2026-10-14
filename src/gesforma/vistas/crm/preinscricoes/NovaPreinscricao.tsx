@@ -93,7 +93,7 @@ export function NovaPreinscricao({ aberto, regime, lead, comerciais, onFechar, o
       titulo={lead ? `Editar ${lead.nome}` : "Nova pré-inscrição"}
       rodape={<>
         <Botao variante="secundario" onClick={onFechar}>Cancelar</Botao>
-        <Botao aCarregar={criar.aCorrer || editar.aCorrer} disabled={!valido} onClick={() => void gravar()}>{lead ? "Gravar" : "Criar pré-inscrição"}</Botao>
+        <Botao variante="primario" aCarregar={criar.aCorrer || editar.aCorrer} disabled={!valido} onClick={() => void gravar()}>{lead ? "Gravar" : "Criar pré-inscrição"}</Botao>
       </>}
     >
       <div className="flex flex-col gap-3">

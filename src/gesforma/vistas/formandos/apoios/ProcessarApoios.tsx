@@ -90,7 +90,7 @@ export function ProcessarApoios({ turma, aberto, onFechar }: {
     <>
       <Botao variante="fantasma" onClick={onFechar}>Fechar</Botao>
       <Botao disabled={!registos.length} aCarregar={aExportar} onClick={() => void exportar()}>Exportar Excel</Botao>
-      {(totais.calculado?.n ?? 0) > 0 && <Botao aCarregar={aprovar.aCorrer} onClick={() => void aprovar.correr()}>Aprovar {totais.calculado!.n}</Botao>}
+      {(totais.calculado?.n ?? 0) > 0 && <Botao variante="primario" aCarregar={aprovar.aCorrer} onClick={() => void aprovar.correr()}>Aprovar {totais.calculado!.n}</Botao>}
       {(totais.aprovado?.n ?? 0) > 0 && <Botao variante="primario" onClick={() => setPagar(true)}>Marcar {totais.aprovado!.n} como pagos</Botao>}
     </>
   );

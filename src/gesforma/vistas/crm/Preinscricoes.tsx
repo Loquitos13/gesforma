@@ -145,10 +145,10 @@ export default function Preinscricoes({ view, params, limpar }: VistaProps) {
         titulo="Pré-inscrições"
         subtitulo={subtitulo}
         acoes={<>
-          <Botao variante="secundario" onClick={() => void exportar()}>Exportar CSV</Botao>
+          <Botao variante="fantasma" onClick={() => void exportar()}>Exportar CSV</Botao>
           {regime === "gold" && <Botao variante="secundario" onClick={() => void copiarFormulario()}>Ligação do formulário</Botao>}
-          {regime === "gold" && pode("crm.escrever") && <Botao variante="secundario" onClick={() => setWhatsapp(true)}>Simular WhatsApp</Botao>}
-          {pode("crm.escrever") && <Botao onClick={() => setEditar({ aberto: true, lead: null })}>Nova pré-inscrição</Botao>}
+          {regime === "gold" && pode("crm.escrever") && <Botao variante="fantasma" onClick={() => setWhatsapp(true)}>Simular WhatsApp</Botao>}
+          {pode("crm.escrever") && <Botao variante="primario" onClick={() => setEditar({ aberto: true, lead: null })}>Nova pré-inscrição</Botao>}
         </>}
       />
 
@@ -174,10 +174,10 @@ export default function Preinscricoes({ view, params, limpar }: VistaProps) {
         ativos={ativos}
         onLimpar={limparFiltros}
         extra={(
-          <div role="group" aria-label="Vista" className="inline-flex overflow-hidden rounded-controlo border border-linha-forte">
-            {([["lista", "Lista"], ["pipeline", "Pipeline"]] as const).map(([id, rot]) => (
+          <div role="group" aria-label="Vista" className="ml-auto inline-flex overflow-hidden rounded-controlo border border-linha-forte">
+            {([["lista", "Lista"], ["pipeline", "Funil"]] as const).map(([id, rot]) => (
               <button key={id} type="button" aria-pressed={f.vista === id} onClick={() => setF({ vista: id })}
-                className={`h-10 px-3 text-[13px] font-semibold ${f.vista === id ? "bg-tinta text-white" : "bg-superficie text-tinta hover:bg-fundo"}`}>{rot}</button>
+                className={`h-[34px] px-3 text-[13px] font-semibold ${f.vista === id ? "bg-tinta text-white" : "bg-superficie text-tinta hover:bg-fundo"}`}>{rot}</button>
             ))}
           </div>
         )}

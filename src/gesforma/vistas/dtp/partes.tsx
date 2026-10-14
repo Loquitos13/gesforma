@@ -2,25 +2,22 @@
 import type { EstadoSeccao, Regime, SeccaoDtp, TurmaDtp } from "../../../partilhado/api/dtp";
 import { Botao, Cartao, Estado, PainelLateral, Vazio, cx, type Tom } from "../../../partilhado/ui";
 
+// Cores da matriz como no canvas: quadrados cheios, o número fica na dica.
 const ESTADOS: Record<EstadoSeccao, { rotulo: string; classe: string; tom: Tom }> = {
-  completo: { rotulo: "Completo", classe: "bg-sucesso-suave text-sucesso border-sucesso/30", tom: "sucesso" },
-  parcial: { rotulo: "Parcial", classe: "bg-aviso-suave text-aviso border-aviso/30", tom: "aviso" },
-  falta: { rotulo: "Em falta", classe: "bg-fundo text-tinta-suave border-linha", tom: "neutro" },
-  bloqueante: { rotulo: "Bloqueante", classe: "bg-perigo-suave text-perigo border-perigo/30", tom: "perigo" },
-  na: { rotulo: "Não se aplica", classe: "bg-transparent text-tinta-suave/60 border-dashed border-linha", tom: "neutro" },
+  completo: { rotulo: "Completo", classe: "bg-[#1F7A4D] border-[#1F7A4D]", tom: "sucesso" },
+  parcial: { rotulo: "Parcial", classe: "bg-[#F2B544] border-[#F2B544]", tom: "aviso" },
+  falta: { rotulo: "Em falta", classe: "bg-white border-[#D5DAE1]", tom: "neutro" },
+  bloqueante: { rotulo: "Bloqueante em falta", classe: "bg-[#E5574B] border-[#E5574B]", tom: "perigo" },
+  na: { rotulo: "Ainda não aplicável", classe: "bg-[#E2E5EA] border-[#E2E5EA]", tom: "neutro" },
 };
 
 export function CelulaSeccao({ celula, rotulo }: { celula?: { estado: EstadoSeccao; ok: number; total: number }; rotulo: string }) {
   if (!celula) return null;
   const e = ESTADOS[celula.estado];
-  const texto = celula.estado === "na" ? "—" : `${celula.ok}/${celula.total}`;
+  const dica = `${rotulo}: ${e.rotulo}${celula.total ? ` (${celula.ok} de ${celula.total})` : ""}`;
   return (
-    <span
-      title={`${rotulo}: ${e.rotulo}${celula.total ? ` (${celula.ok} de ${celula.total})` : ""}`}
-      className={cx("inline-flex min-w-[2.75rem] justify-center rounded-controlo border px-1.5 py-0.5 text-[11px] font-semibold tabular-nums", e.classe)}
-    >
-      {texto}
-      <span className="sr-only"> · {e.rotulo}</span>
+    <span title={dica} className={cx("inline-block h-[22px] w-[22px] rounded-[5px] border align-middle", e.classe)}>
+      <span className="sr-only">{dica}</span>
     </span>
   );
 }
@@ -43,7 +40,7 @@ export function LegendaDtp({ seccoes, regime }: { seccoes: SeccaoDtp[]; regime: 
       <div className="flex flex-wrap gap-3">
         {(Object.keys(ESTADOS) as EstadoSeccao[]).map(k => (
           <span key={k} className="inline-flex items-center gap-1.5">
-            <span className={cx("inline-block h-3 w-5 rounded border", ESTADOS[k].classe)} aria-hidden="true" />{ESTADOS[k].rotulo}
+            <span className={cx("inline-block h-2.5 w-2.5 rounded-[2px] border", ESTADOS[k].classe)} aria-hidden="true" />{ESTADOS[k].rotulo}
           </span>
         ))}
       </div>

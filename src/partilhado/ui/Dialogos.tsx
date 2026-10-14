@@ -44,7 +44,7 @@ export function Modal({ aberto, onFechar, titulo, children, rodape, largura = "m
   titulo: ReactNode;
   children: ReactNode;
   rodape?: ReactNode;
-  largura?: "sm" | "md" | "lg";
+  largura?: "sm" | "md" | "lg" | "xl";
 }) {
   const caixa = useDialogo(aberto, onFechar);
   const id = useId();
@@ -58,7 +58,7 @@ export function Modal({ aberto, onFechar, titulo, children, rodape, largura = "m
         aria-labelledby={id}
         tabIndex={-1}
         className={cx("w-full bg-superficie rounded-t-painel sm:rounded-painel shadow-flutuante max-h-[92vh] flex flex-col outline-none",
-          largura === "sm" ? "sm:max-w-md" : largura === "lg" ? "sm:max-w-3xl" : "sm:max-w-xl")}
+          largura === "sm" ? "sm:max-w-md" : largura === "lg" ? "sm:max-w-3xl" : largura === "xl" ? "sm:max-w-5xl" : "sm:max-w-xl")}
       >
         <div className="flex items-start gap-3 px-5 pt-5 pb-3">
           <h2 id={id} className="flex-1 m-0 text-base font-semibold text-tinta">{titulo}</h2>

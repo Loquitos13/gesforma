@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { erroPayloadCatalogo } from "../catalogoSchemas.js";
 import { isCatalogKind } from "../db/catalogSeed.js";
+import { podeAceder } from "../permissoes.js";
 import { KINDS_OPCOES, listarOpcoes } from "../repos/catalogos.js";
 import * as itens from "../repos/catalogoItens.js";
 import { idNum, regime, textoQuery, validar } from "../validacao.js";
@@ -12,6 +13,13 @@ const opcoesQuery = z.object({
   regime: regime.optional(),
   lista: textoQuery(40),
   todos: z.enum(["0", "1"]).optional(),
+});
+
+const opcoesLoteQuery = opcoesQuery.extend({
+  kinds: z.preprocess(
+    v => (typeof v === "string" ? [...new Set(v.split(",").map(s => s.trim()).filter(Boolean))] : v),
+    z.array(z.enum(KINDS_OPCOES)).min(1, "indique os tipos").max(20),
+  ),
 });
 
 const kindParam = z.object({ kind: z.string().max(40).refine(isCatalogKind, "tipo de catálogo inválido") });
@@ -62,6 +70,21 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       todos: v.query.todos === "1",
     });
     return { kind: v.params.kind, opcoes };
+  });
+
+  /**
+   * Várias listas num só pedido: `?kinds=cursos,turmas&regime=gold`. Cada tipo passa pela mesma regra de
+   * acesso que `/v1/opcoes/:kind`; os que o perfil não pode ler não vêm na resposta.
+   */
+  app.get("/v1/opcoes", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { query: opcoesLoteQuery }, req);
+    if (!v) return;
+    const role = req.actor!.role;
+    const permitidos = v.query.kinds.filter(k => podeAceder(role, "GET", `/v1/opcoes/${k}`));
+    const opts = { regime: v.query.regime, lista: v.query.lista, todos: v.query.todos === "1" };
+    const listas = await Promise.all(permitidos.map(k => listarOpcoes(db, k, opts)));
+    return { opcoes: Object.fromEntries(permitidos.map((k, i) => [k, listas[i]!])) };
   });
 
   /** Itens de um catálogo com o número de registos que usam cada um. */

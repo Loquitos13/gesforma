@@ -3,8 +3,11 @@ import { cx } from "./formatos";
 
 export type Migalha = { rotulo: string; onClick?: () => void };
 
-/** Topo de cada ecrã: migalhas (opcional), título, subtítulo e acções principais. */
-export function PageHeader({ trilho, titulo, subtitulo, acoes, etiqueta, className }: {
+/**
+ * Topo de cada ecrã: título, subtítulo e acções principais. As migalhas vivem só no
+ * cabeçalho global (como no canvas); `trilho` fica aceite por compatibilidade e é ignorado.
+ */
+export function PageHeader({ titulo, subtitulo, acoes, etiqueta, className }: {
   trilho?: Migalha[];
   titulo: ReactNode;
   subtitulo?: ReactNode;
@@ -16,7 +19,6 @@ export function PageHeader({ trilho, titulo, subtitulo, acoes, etiqueta, classNa
   return (
     <div className={cx("flex items-end gap-3 flex-wrap", className)}>
       <div className="min-w-0 flex-1">
-        {trilho && trilho.length > 0 && <Migalhas itens={trilho} className="mb-1" />}
         <div className="flex items-center gap-2 flex-wrap">
           <h1 className="m-0 text-[22px] font-semibold tracking-[-0.01em] text-tinta">{titulo}</h1>
           {etiqueta}

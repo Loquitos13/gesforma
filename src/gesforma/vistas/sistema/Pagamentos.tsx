@@ -48,11 +48,10 @@ export default function Pagamentos({ navigate }: VistaProps) {
       celula: p => (
         <span className="block min-w-0">
           <span className="block font-semibold text-tinta truncate">{p.nome}</span>
-          <span className="block text-xs text-tinta-suave truncate">{p.email || "sem email"}</span>
+          <span className="block text-xs text-tinta-suave truncate max-w-[340px]">#{p.id}{p.curso ? ` · ${p.curso}` : ""}</span>
         </span>
       ),
     },
-    { id: "curso", titulo: "Curso", ordenavel: true, esconderMovel: true, celula: p => <span className="block max-w-[220px] truncate" title={p.curso}>{p.curso || "—"}</span> },
     { id: "valor", titulo: "Valor", ordenavel: true, alinhar: "dir", celula: p => <strong className="font-semibold">{eur(p.valor, true)}</strong> },
     { id: "metodo", titulo: "Método", esconderMovel: true, celula: p => p.metodo || "—" },
     { id: "data", titulo: "Data", ordenavel: true, celula: p => data(p.pago_em ?? p.criado) },
@@ -97,29 +96,32 @@ export default function Pagamentos({ navigate }: VistaProps) {
         </Aviso>
       )}
 
-      <Separadores
-        rotulo="Situação dos pagamentos"
-        estilo="pilula"
-        ativo={f.situacao as "" | SituacaoPagamento}
-        onMudar={id => setF({ situacao: id, sel: "" })}
-        itens={SEPARADORES.map(s => ({ id: s.id, rotulo: s.rotulo, contagem: dados ? contagem(s.id) : undefined }))}
-      />
-
-      <Filtros
-        pesquisa={{ valor: f.q, onMudar: q => setF({ q }), placeholder: "Nome, email, curso ou n.º do pagamento" }}
-        selecoes={[
-          { chave: "curso", rotulo: "Curso", opcoes: cursos.selecao, valor: f.curso, onMudar: curso => setF({ curso }), vazio: "Curso: todos" },
-          { chave: "metodo", rotulo: "Método", opcoes: metodos, valor: f.metodo, onMudar: metodo => setF({ metodo }), vazio: "Método: todos" },
-        ]}
-        periodo={{ de: f.de, ate: f.ate, onMudar: (de, ate) => setF({ de, ate }) }}
-        ativos={ativos}
-        onLimpar={limpar}
-      />
-
       {erro ? <ErroCarregar erro={erro} onTentar={recarregar} /> : null}
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
-        <Cartao semPadding className="xl:col-span-2">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-4 items-start">
+        <Cartao semPadding>
+          <div className="flex flex-col gap-3 px-4 py-3 border-b border-linha">
+            <Separadores
+              rotulo="Situação dos pagamentos"
+              estilo="pilula"
+              className="[&>button]:h-8 [&>button]:text-[13px]"
+              ativo={f.situacao as "" | SituacaoPagamento}
+              onMudar={id => setF({ situacao: id, sel: "" })}
+              itens={SEPARADORES.map(s => ({ id: s.id, rotulo: s.rotulo, contagem: dados ? contagem(s.id) : undefined }))}
+            />
+
+            <Filtros
+              pesquisa={{ valor: f.q, onMudar: q => setF({ q }), placeholder: "Nome, email, curso ou n.º do pagamento" }}
+              selecoes={[
+                { chave: "curso", rotulo: "Curso", opcoes: cursos.selecao, valor: f.curso, onMudar: curso => setF({ curso }), vazio: "Curso: todos" },
+                { chave: "metodo", rotulo: "Método", opcoes: metodos, valor: f.metodo, onMudar: metodo => setF({ metodo }), vazio: "Método: todos" },
+              ]}
+              periodo={{ de: f.de, ate: f.ate, onMudar: (de, ate) => setF({ de, ate }) }}
+              ativos={ativos}
+              onLimpar={limpar}
+              moldura={false}
+            />
+          </div>
           <Tabela
             rotulo="Pagamentos"
             linhas={linhas}

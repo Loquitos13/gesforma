@@ -56,7 +56,7 @@ export function NovaPalavraPasse({ aberto, onFechar, utilizador, onFeito }: {
             {a => (
               <div className="flex gap-2">
                 <Entrada {...a} value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" className="font-mono" />
-                <Botao onClick={() => setPassword(gerarPalavraPasse())}>Gerar</Botao>
+                <Botao variante="primario" onClick={() => setPassword(gerarPalavraPasse())}>Gerar</Botao>
               </div>
             )}
           </Campo>

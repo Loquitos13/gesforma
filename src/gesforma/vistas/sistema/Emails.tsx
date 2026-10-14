@@ -28,7 +28,7 @@ export default function Emails({ navigate }: VistaProps) {
         onMudar={id => setF({ aba: id })}
         itens={[{ id: "regras", rotulo: "Regras" }, { id: "modelos", rotulo: "Modelos" }, { id: "historico", rotulo: "Histórico" }]}
       />
-      {aba === "regras" && <Regras opcoes={opcoes} />}
+      {aba === "regras" && <Regras opcoes={opcoes} onEditarModelo={() => setF({ aba: "modelos" })} />}
       {aba === "modelos" && <Modelos opcoes={opcoes} />}
       {aba === "historico" && <Historico />}
     </div>

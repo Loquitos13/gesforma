@@ -1,5 +1,5 @@
 // API do domínio "catalogos": opções para selects e filtros, e os itens de cada catálogo com o seu uso.
-import { api, enviar, qs } from "./cliente";
+import { api, ApiError, enviar, qs } from "./cliente";
 
 export type Regime = "gold" | "fin";
 
@@ -11,11 +11,44 @@ export type KindOpcoes =
   | "cursos" | "turmas" | "formadores" | "locais" | "datas" | "horarios" | "areas" | "modulos" | "conteudos"
   | "tematicas" | "financiadores" | "comerciais" | "campanhas" | "lista" | "modelos_conteudo";
 
-export function apiOpcoes(kind: KindOpcoes, opts: { regime?: Regime; lista?: string; todos?: boolean } = {}, signal?: AbortSignal) {
-  return api<{ kind: KindOpcoes; opcoes: Opcao[] }>(
-    `/v1/opcoes/${kind}${qs({ regime: opts.regime, lista: opts.lista, todos: opts.todos })}`,
-    { silencioso: true, signal },
-  );
+type OptsOpcoes = { regime?: Regime; lista?: string; todos?: boolean };
+type Pendente = { kind: KindOpcoes; resolver: (r: { kind: KindOpcoes; opcoes: Opcao[] }) => void; rejeitar: (e: unknown) => void };
+
+/** Pedidos de opções feitos no mesmo instante (50 ms) juntam-se num só `GET /v1/opcoes?kinds=…`. */
+const JANELA_MS = 50;
+const lotes = new Map<string, { opts: OptsOpcoes; pendentes: Pendente[] }>();
+
+function despachar(chave: string) {
+  const lote = lotes.get(chave);
+  lotes.delete(chave);
+  if (!lote) return;
+  const kinds = [...new Set(lote.pendentes.map(p => p.kind))];
+  const { regime, lista, todos } = lote.opts;
+  api<{ opcoes: Partial<Record<KindOpcoes, Opcao[]>> }>(`/v1/opcoes${qs({ kinds: kinds.join(","), regime, lista, todos })}`, { silencioso: true })
+    .then(r => {
+      for (const p of lote.pendentes) {
+        const opcoes = r.opcoes[p.kind];
+        if (opcoes) p.resolver({ kind: p.kind, opcoes });
+        else p.rejeitar(new ApiError(403, "Sem acesso a estas opções."));
+      }
+    })
+    .catch(e => lote.pendentes.forEach(p => p.rejeitar(e)));
+}
+
+export function apiOpcoes(kind: KindOpcoes, opts: OptsOpcoes = {}, signal?: AbortSignal) {
+  const chave = `${opts.regime ?? ""}|${opts.lista ?? ""}|${opts.todos ? 1 : 0}`;
+  return new Promise<{ kind: KindOpcoes; opcoes: Opcao[] }>((resolver, rejeitar) => {
+    if (signal?.aborted) return rejeitar(new DOMException("Cancelado", "AbortError"));
+    // Quem cancela deixa de esperar; o pedido partilhado continua para os outros.
+    signal?.addEventListener("abort", () => rejeitar(new DOMException("Cancelado", "AbortError")), { once: true });
+    let lote = lotes.get(chave);
+    if (!lote) {
+      lote = { opts, pendentes: [] };
+      lotes.set(chave, lote);
+      setTimeout(() => despachar(chave), JANELA_MS);
+    }
+    lote.pendentes.push({ kind, resolver, rejeitar });
+  });
 }
 
 /** Tipos de catálogo editáveis (`catalog_items.kind`). */

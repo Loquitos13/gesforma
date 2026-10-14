@@ -31,7 +31,7 @@ export function Kpi({ rotulo, valor, formato = "num", delta, onClick, titulo }: 
       {d && <p className={cx("m-0 mt-0.5 text-xs", TOM_CLASSES[d.tom].texto)}>{d.texto}</p>}
     </>
   );
-  const base = "block text-left px-4 py-4 border-linha-suave [&:not(:first-child)]:border-l min-w-0";
+  const base = "flex flex-col justify-start items-stretch h-full text-left px-[18px] py-4 border-linha-suave [&:not(:first-child)]:border-l min-w-0";
   if (onClick) {
     return <button type="button" title={titulo} onClick={onClick} className={cx(base, "hover:bg-fundo")}>{corpo}</button>;
   }

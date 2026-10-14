@@ -21,7 +21,7 @@ export function Campo({
   const descricao = [ajuda ? `${id}-ajuda` : "", erro ? `${id}-erro` : ""].filter(Boolean).join(" ") || undefined;
   return (
     <div className={cx("flex flex-col gap-1 min-w-0", className)}>
-      <label htmlFor={id} className="text-[13px] font-medium text-tinta">
+      <label htmlFor={id} className="text-xs font-semibold text-[#3A4352]">
         {rotulo}
         {obrigatorio && <span className="text-perigo" aria-hidden="true"> *</span>}
       </label>
@@ -33,7 +33,7 @@ export function Campo({
 }
 
 export const Entrada = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Entrada({ className, ...resto }, ref) {
-  return <input ref={ref} className={cx(CONTROLO, "h-10 px-3", className)} {...resto} />;
+  return <input ref={ref} className={cx(CONTROLO, "h-9 px-3", className)} {...resto} />;
 });
 
 export const AreaTexto = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function AreaTexto({ className, ...resto }, ref) {
@@ -46,7 +46,7 @@ export type OpcaoSelecao = { valor: string; rotulo: string };
 export const Selecao = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement> & { opcoes: OpcaoSelecao[]; vazio?: string }>(
   function Selecao({ opcoes, vazio, className, ...resto }, ref) {
     return (
-      <select ref={ref} className={cx(CONTROLO, "h-10 px-2.5", className)} {...resto}>
+      <select ref={ref} className={cx(CONTROLO, "h-9 px-2.5", className)} {...resto}>
         {vazio != null && <option value="">{vazio}</option>}
         {opcoes.map(o => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
       </select>

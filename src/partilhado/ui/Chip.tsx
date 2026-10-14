@@ -1,9 +1,20 @@
 import type { ReactNode } from "react";
 import { cx, TOM_CLASSES, type Tom } from "./formatos";
 
-/** Estado de um registo (pill colorida). Usar o tom para o significado, não para decorar. */
+/**
+ * Estado de um registo. Usar o tom para o significado, não para decorar.
+ * Sem `ponto`: pill colorida. Com `ponto`: ponto + texto colorido, sem fundo (como nas tabelas do canvas).
+ */
 export function Estado({ tom = "neutro", children, ponto, className, title }: { tom?: Tom; children: ReactNode; ponto?: boolean; className?: string; title?: string }) {
   const t = TOM_CLASSES[tom];
+  if (ponto) {
+    return (
+      <span title={title} className={cx("inline-flex items-center gap-1.5 text-[13px] font-semibold whitespace-nowrap", t.texto, className)}>
+        <span aria-hidden="true" className="h-[7px] w-[7px] rounded-full bg-current" />
+        {children}
+      </span>
+    );
+  }
   return (
     <span title={title} className={cx("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap", t.fundo, t.texto, className)}>
       {ponto && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />}

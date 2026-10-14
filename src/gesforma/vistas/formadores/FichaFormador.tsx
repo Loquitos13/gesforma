@@ -17,7 +17,7 @@ import { AvisoAcesso } from "./AvisoAcesso";
 import { FormadorFormulario } from "./FormadorFormulario";
 import { Iniciais, estadoCcp } from "./formadoresUi";
 
-type Aba = "turmas" | "agenda" | "documentos";
+type Aba = "turmas" | "agenda" | "disponibilidade" | "documentos";
 
 /** Ficha do formador: dados, turmas e horas, agenda e documentos. Serve a backoffice e a área do formador. */
 export function FichaFormador({ id, navigate, area = false }: { id: number; navigate: Navegar; area?: boolean }) {
@@ -57,7 +57,7 @@ export function FichaFormador({ id, navigate, area = false }: { id: number; navi
         <Kpi rotulo="Documentos em falta" valor={d.totais.docsEmFalta} delta={d.totais.docsEmFalta ? { texto: "obrigatórios por entregar", tom: "aviso" } : { texto: "obrigatórios entregues", tom: "sucesso" }} onClick={() => setAba("documentos")} />
       </KpiFaixa>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)] gap-4 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)] gap-4 items-start">
         <div className="space-y-4">
           <Cartao titulo="Dados">
             <Detalhes colunas={1} itens={[
@@ -67,14 +67,6 @@ export function FichaFormador({ id, navigate, area = false }: { id: number; navi
               { rotulo: "CCP / CCPE", valor: <span className="num">{f.ccp || "—"} <Estado tom={ccp.tom}>{ccp.texto}</Estado></span> },
               { rotulo: "Valor base por hora", valor: f.custoHora ? eur(f.custoHora, true) : "—" },
             ]} />
-          </Cartao>
-          <Cartao titulo="Disponibilidade">
-            <DisponibilidadeEditor
-              value={f.disponibilidade}
-              locked={!gerir && !proprio}
-              onChange={slots => void persist(apiAlterarFormador(id, { disponibilidade: slots }).then(() => { toastOk("Disponibilidade gravada."); recarregar(); }))}
-              nota="O cronograma só atribui sessões nestes horários."
-            />
           </Cartao>
           {!area && (
             <Cartao titulo="Área do formador">
@@ -101,6 +93,7 @@ export function FichaFormador({ id, navigate, area = false }: { id: number; navi
             itens={[
               { id: "turmas", rotulo: "Turmas e horas", contagem: d.turmas.length },
               { id: "agenda", rotulo: "Agenda", contagem: d.sessoes.filter(s => s.data >= d.hoje).length },
+              { id: "disponibilidade", rotulo: "Disponibilidade" },
               { id: "documentos", rotulo: "Documentos", contagem: d.totais.docsEmFalta || undefined },
             ]}
           />
@@ -115,6 +108,16 @@ export function FichaFormador({ id, navigate, area = false }: { id: number; navi
                   inicio: s.horaInicio, fim: s.horaFim, hora: [s.horaInicio, s.horaFim].filter(Boolean).join(" a "),
                 }))}
               />
+            )}
+            {aba === "disponibilidade" && (
+              <>
+                    <DisponibilidadeEditor
+                      value={f.disponibilidade}
+                      locked={!gerir && !proprio}
+                      onChange={slots => void persist(apiAlterarFormador(id, { disponibilidade: slots }).then(() => { toastOk("Disponibilidade gravada."); recarregar(); }))}
+                      nota="O cronograma só atribui sessões nestes horários."
+                    />
+              </>
             )}
             {aba === "documentos" && <DocumentosDoFormador ficha={d} podeAlterar={gerir || proprio} onCarregar={setUpload} />}
           </div>
@@ -164,7 +167,7 @@ function TurmasDoFormador({ ficha, navigate, area }: { ficha: Ficha; navigate: N
       celula: t => (
         <div className="min-w-0">
           <p className="m-0 font-semibold truncate">{t.nome}</p>
-          <p className="m-0 text-xs text-tinta-suave truncate">{t.regime === "gold" ? "Gold" : "Financiada"} · {t.curso}{t.responsavel ? " · responsável" : ""}</p>
+          <p className="m-0 text-xs text-tinta-suave truncate max-w-[220px]" title={t.curso}>{t.regime === "gold" ? "Gold" : "Financiada"} · {t.curso}{t.responsavel ? " · responsável" : ""}</p>
         </div>
       ),
     },
@@ -172,7 +175,7 @@ function TurmasDoFormador({ ficha, navigate, area }: { ficha: Ficha; navigate: N
     { id: "sessoes", titulo: "Sessões", alinhar: "dir", esconderMovel: true, celula: t => <span className="num">{t.sessoes}</span> },
     {
       id: "horas", titulo: "Horas", alinhar: "dir",
-      celula: t => <div className="num text-right text-[13px]"><p className="m-0">{num(t.horasDadas)} h dadas</p><p className="m-0 text-xs text-tinta-suave">{num(t.horasPendentes)} h por dar</p></div>,
+      celula: t => <div className="num text-right text-[13px] whitespace-nowrap"><p className="m-0">{num(t.horasDadas)} h dadas</p><p className="m-0 text-xs text-tinta-suave">{num(t.horasPendentes)} h por dar</p></div>,
     },
     { id: "valor", titulo: "Valor/h", alinhar: "dir", esconderMovel: true, celula: t => <span className="num">{t.valorHora ? eur(t.valorHora, true) : "—"}</span> },
     { id: "dado", titulo: "Horas dadas × valor", alinhar: "dir", celula: t => <span className="num font-semibold">{eur(t.valorDado, true)}</span> },

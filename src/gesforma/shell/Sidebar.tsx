@@ -5,6 +5,7 @@ import type { Vista } from "../rotasGesforma";
 import { roleLabel } from "../UsersView";
 import { Icone } from "./Icones";
 import { menuDoPerfil, painelDoPerfil, vistaDoMenu, type GrupoMenu, type ItemMenu } from "./navegacao";
+import { preCarregarVista } from "./rotas";
 import type { Navegar } from "./tipos";
 
 /** Grupos e submenus abertos: o da vista actual abre sempre; o resto fica como a pessoa deixou. */
@@ -92,6 +93,8 @@ export function Sidebar({ view, onNavigate, onFechar }: { view: Vista; onNavigat
                             type="button"
                             aria-current={a ? "page" : undefined}
                             onClick={() => item.view && ir(item.view)}
+                            onMouseEnter={() => item.view && preCarregarVista(item.view)}
+                            onFocus={() => item.view && preCarregarVista(item.view)}
                             className={cx("w-full flex items-center gap-2 px-2.5 py-1.5 rounded-controlo text-left",
                               a ? "bg-nav-ativo text-white font-semibold" : "hover:text-white hover:bg-white/10")}
                           >
@@ -125,6 +128,8 @@ export function Sidebar({ view, onNavigate, onFechar }: { view: Vista; onNavigat
                                     type="button"
                                     aria-current={a ? "page" : undefined}
                                     onClick={() => ir(c.view)}
+                                    onMouseEnter={() => preCarregarVista(c.view)}
+                                    onFocus={() => preCarregarVista(c.view)}
                                     className={cx("w-full text-left px-2.5 py-1.5 rounded-controlo",
                                       a ? "bg-nav-ativo text-white font-semibold" : "text-nav-fraco hover:text-white hover:bg-white/10")}
                                   >

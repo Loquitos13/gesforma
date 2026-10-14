@@ -4,7 +4,7 @@ import { apiCatalogo, type ItemCatalogo } from "../../../partilhado/api/catalogo
 import { apiCursosFin, apiCursosGold } from "../../../partilhado/api/cursos";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
-import { Aviso, PageHeader, Estado } from "../../../partilhado/ui";
+import { Aviso, PageHeader, Estado, cx, useFiltrosUrl } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
 import { CatalogoTabela, chaveCatalogo, type ConfigCatalogo } from "./CatalogoTabela";
 
@@ -60,7 +60,7 @@ export default function Modulos({ view, params }: VistaProps) {
     colunas: [
       { id: "codigo", titulo: "Código", largura: "90px", celula: i => <span className="font-semibold">{txt(i.codigo)}</span> },
       { id: "nome", titulo: "Módulo", principal: true, celula: i => txt(i.nome) },
-      { id: "curso", titulo: "Curso", esconderMovel: true, celula: i => <span className="text-tinta-suave">{txt(i.curso)}</span> },
+      { id: "curso", titulo: "Curso", esconderMovel: true, celula: i => <span className="block max-w-[180px] truncate text-tinta-suave" title={txt(i.curso)}>{txt(i.curso)}</span> },
       { id: "tipo", titulo: "Tipo", esconderMovel: true, celula: i => (i.tipo ? <Estado tom="info">{txt(i.tipo)}</Estado> : "—") },
       { id: "horas", titulo: "Horas", alinhar: "dir", celula: i => `${Number(i.horas ?? 0)} h` },
     ],
@@ -74,7 +74,10 @@ export default function Modulos({ view, params }: VistaProps) {
         titulo="Módulos"
         subtitulo="O percurso de cada curso. Os conteúdos, o cronograma e a avaliação por módulo usam estes códigos."
       />
-      <CatalogoTabela config={config} />
+      <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)] items-start">
+        <NavCursos regime={regime} cursos={cursos.selecao} />
+        <div className="min-w-0"><CatalogoTabela config={config} /></div>
+      </div>
     </div>
   );
 }
@@ -96,5 +99,34 @@ function ResumoHoras({ regime, curso }: { regime: "gold" | "fin"; curso: string 
       Os módulos activos de «{curso}» somam <strong>{soma} h</strong> de <strong>{alvo} h</strong> do curso.
       {soma < alvo ? ` Faltam ${alvo - soma} h.` : soma > alvo ? ` Passam ${soma - alvo} h.` : " Está completo."}
     </Aviso>
+  );
+}
+
+/** Lista de cursos à esquerda (como no canvas): escolhe o curso do filtro e mostra quantos módulos tem. */
+function NavCursos({ regime, cursos }: { regime: "gold" | "fin"; cursos: { valor: string; rotulo: string }[] }) {
+  const [f, setF] = useFiltrosUrl({ curso: "" });
+  const modulos = useRecurso(chaveCatalogo("modulos", regime), signal => apiCatalogo("modulos", regime, signal));
+  const contagem = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const i of modulos.dados?.itens ?? []) m.set(txt(i.curso), (m.get(txt(i.curso)) ?? 0) + 1);
+    return m;
+  }, [modulos.dados]);
+  const total = modulos.dados?.itens.length ?? 0;
+  const itens = [{ valor: "", rotulo: regime === "gold" ? "Todos os cursos" : "Todas as UFCD" }, ...cursos];
+  return (
+    <nav aria-label="Cursos" className="bg-superficie border border-linha rounded-cartao p-2 lg:sticky lg:top-4">
+      <p className="m-0 mx-2.5 mt-1.5 mb-2 text-xs font-semibold text-tinta-suave">{regime === "gold" ? "Curso" : "Curso / UFCD"}</p>
+      {itens.map(c => {
+        const ativo = f.curso === c.valor;
+        const n = c.valor ? contagem.get(c.valor) ?? 0 : total;
+        return (
+          <button key={c.valor || "todos"} type="button" aria-pressed={ativo} onClick={() => setF({ curso: c.valor })}
+            className={cx("num w-full flex items-center gap-2 px-2.5 py-2 rounded-controlo text-left text-[13px]", ativo ? "bg-acao-suave text-tinta font-semibold" : "text-tinta hover:bg-fundo")}>
+            <span className="flex-1 min-w-0 truncate">{c.rotulo}</span>
+            <span className="text-xs text-tinta-suave">{n}</span>
+          </button>
+        );
+      })}
+    </nav>
   );
 }

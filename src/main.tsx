@@ -1,23 +1,21 @@
-import { StrictMode } from "react";
+import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
-import App from "./gesforma/App";
-import { AuthGate } from "./partilhado/AuthGate";
-import { DriveProvider } from "./partilhado/DriveContext";
-import { NotificacoesProvider } from "./gesforma/NotificacoesContext";
-import { PublicInquerito } from "./site/PublicInquerito";
-import { PublicPreinscricao } from "./site/PublicPreinscricao";
-import { PublicDocumentos } from "./site/PublicDocumentos";
-import { PublicFormandoDocumentos } from "./site/PublicFormandoDocumentos";
-import { PublicCronograma } from "./site/PublicCronograma";
-import { AssinarContrato } from "./site/AssinarContrato";
-import { VerificarAssinatura } from "./site/VerificarAssinatura";
-import { SiteCatalog } from "./site/SiteCatalog";
-import { SiteCurso } from "./site/SiteCurso";
-import { AreaFormando } from "./site/AreaFormandoPainel";
-import { Noticias } from "./site/Noticias";
-import { SiteLanding } from "./site/SiteLandingRodape";
-import { ToastHost } from "./gesforma/ToastHost";
 import "./index.css";
+
+// Cada página carrega só o seu código: o site público não descarrega o backoffice e vice-versa.
+const Backoffice = lazy(() => import("./gesforma/Backoffice").then(m => ({ default: m.Backoffice })));
+const PublicInquerito = lazy(() => import("./site/PublicInquerito").then(m => ({ default: m.PublicInquerito })));
+const PublicPreinscricao = lazy(() => import("./site/PublicPreinscricao").then(m => ({ default: m.PublicPreinscricao })));
+const PublicDocumentos = lazy(() => import("./site/PublicDocumentos").then(m => ({ default: m.PublicDocumentos })));
+const PublicFormandoDocumentos = lazy(() => import("./site/PublicFormandoDocumentos").then(m => ({ default: m.PublicFormandoDocumentos })));
+const PublicCronograma = lazy(() => import("./site/PublicCronograma").then(m => ({ default: m.PublicCronograma })));
+const AssinarContrato = lazy(() => import("./site/AssinarContrato").then(m => ({ default: m.AssinarContrato })));
+const VerificarAssinatura = lazy(() => import("./site/VerificarAssinatura").then(m => ({ default: m.VerificarAssinatura })));
+const SiteCatalog = lazy(() => import("./site/SiteCatalog").then(m => ({ default: m.SiteCatalog })));
+const SiteCurso = lazy(() => import("./site/SiteCurso").then(m => ({ default: m.SiteCurso })));
+const AreaFormando = lazy(() => import("./site/AreaFormandoPainel").then(m => ({ default: m.AreaFormando })));
+const Noticias = lazy(() => import("./site/Noticias").then(m => ({ default: m.Noticias })));
+const SiteLanding = lazy(() => import("./site/SiteLandingRodape").then(m => ({ default: m.SiteLanding })));
 
 const path = window.location.pathname.replace(/\/+$/, "") || "/";
 const legacyEntrar = path === "/entrar" || path.startsWith("/entrar/");
@@ -47,39 +45,34 @@ const inqToken = path.startsWith("/inquerito/") ? decodeURIComponent(path.slice(
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {assinarToken ? (
-      <AssinarContrato token={assinarToken} />
-    ) : verificar ? (
-      <VerificarAssinatura codigo={verificarCodigo} />
-    ) : publicForm ? (
-      <PublicPreinscricao />
-    ) : cronogramaMatch ? (
-      <PublicCronograma regime={cronogramaMatch[1] as "gold" | "fin"} turmaId={Number(cronogramaMatch[2])} />
-    ) : formandoDocsToken ? (
-      <PublicFormandoDocumentos token={formandoDocsToken} />
-    ) : docsToken ? (
-      <PublicDocumentos token={docsToken} />
-    ) : inqToken ? (
-      <PublicInquerito token={inqToken} />
-    ) : areaFormando ? (
-      <AreaFormando />
-    ) : noticias || noticiaSlug ? (
-      <Noticias slug={noticiaSlug} />
-    ) : entrar ? (
-      <AuthGate>
-        <DriveProvider>
-          <NotificacoesProvider>
-            <App />
-            <ToastHost />
-          </NotificacoesProvider>
-        </DriveProvider>
-      </AuthGate>
-    ) : slugCurso ? (
-      <SiteCurso slug={slugCurso} />
-    ) : catalogo ? (
-      <SiteCatalog />
-    ) : (
-      <SiteLanding />
-    )}
+    <Suspense fallback={null}>
+      {assinarToken ? (
+        <AssinarContrato token={assinarToken} />
+      ) : verificar ? (
+        <VerificarAssinatura codigo={verificarCodigo} />
+      ) : publicForm ? (
+        <PublicPreinscricao />
+      ) : cronogramaMatch ? (
+        <PublicCronograma regime={cronogramaMatch[1] as "gold" | "fin"} turmaId={Number(cronogramaMatch[2])} />
+      ) : formandoDocsToken ? (
+        <PublicFormandoDocumentos token={formandoDocsToken} />
+      ) : docsToken ? (
+        <PublicDocumentos token={docsToken} />
+      ) : inqToken ? (
+        <PublicInquerito token={inqToken} />
+      ) : areaFormando ? (
+        <AreaFormando />
+      ) : noticias || noticiaSlug ? (
+        <Noticias slug={noticiaSlug} />
+      ) : entrar ? (
+        <Backoffice />
+      ) : slugCurso ? (
+        <SiteCurso slug={slugCurso} />
+      ) : catalogo ? (
+        <SiteCatalog />
+      ) : (
+        <SiteLanding />
+      )}
+    </Suspense>
   </StrictMode>,
 );

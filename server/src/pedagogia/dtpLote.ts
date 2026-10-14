@@ -4,7 +4,7 @@
  * As regras de associação (formando ↔ turma, pré-inscrição ↔ formando) são as mesmas do cálculo por turma.
  */
 import type { Db } from "../db/pool.js";
-import { contagemCertificadosFin } from "../dossieGerado.js";
+import { contagemCertificadosFinLote } from "../dossieGerado.js";
 import type { DtpCounts, DtpEstado } from "../dtpModel.js";
 import * as repo from "../repos/dtp.js";
 import * as lote from "../repos/dtpLote.js";
@@ -85,17 +85,10 @@ export async function fontesEmLote(db: Db, regime: Regime, alvos: Alvo[]): Promi
     docsDoLead.set(Number(d.preinscricao_id), lista);
   }
 
-  // Certificados da Financiada: cálculo próprio por turma (poucas turmas), 4 de cada vez.
-  const certsFin = new Map<number, DtpCounts>();
-  if (regime === "fin") {
-    let i = 0;
-    await Promise.all(Array.from({ length: Math.min(4, alvos.length) }, async () => {
-      while (i < alvos.length) {
-        const t = alvos[i++]!.turma;
-        certsFin.set(t.id, await contagemCertificadosFin(db, t.id));
-      }
-    }));
-  }
+  // Certificados da Financiada: os resultados de todas as turmas calculados em lote.
+  const certsFin: Map<number, DtpCounts> = regime === "fin"
+    ? await contagemCertificadosFinLote(db, alvos.map(({ turma }) => ({ id: turma.id, formandoIds: (formandosDe.get(turma.id) ?? []).map(f => f.id) })))
+    : new Map();
 
   const sessoesDe = agrupar(sessoes);
   const docsDe = agrupar(docs);

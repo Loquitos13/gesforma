@@ -1,4 +1,5 @@
 /** Leituras para o cálculo dos resultados pedagógicos (nota, assiduidade, elegibilidade) e do fecho. */
+import { pgIntArray } from "../pedagogia/util.js";
 import { many, one, tabelaRegime, type Consulta, type Regime } from "./sql.js";
 
 export type TurmaBase = { id: number; nome: string; curso: string; cronograma: unknown; fechada_em: unknown; curso_id: number | null };
@@ -55,5 +56,65 @@ export async function certificadosParaResultados(c: Consulta, regime: Regime, tu
     c,
     "SELECT formando_id, emitido, elearning, nota, COALESCE(ficheiro_id, '') AS ficheiro_id FROM turma_certificados WHERE regime = $1 AND turma_id = $2",
     [regime, turmaId],
+  );
+}
+
+// ─── Em lote (várias turmas numa consulta por fonte) ─────────────────────────
+
+export async function turmasBaseLote(c: Consulta, regime: Regime, ids: number[]) {
+  if (!ids.length) return [];
+  return many<TurmaBase>(
+    c,
+    `SELECT id, nome, curso, cronograma, fechada_em, curso_id FROM ${tabelaRegime("turmas", regime)} WHERE id = ANY($1::int[])`,
+    [pgIntArray(ids)],
+  );
+}
+
+/** Formandos candidatos às turmas: pelo id, ou sem id (fichas antigas, associadas depois pelo nome da turma). */
+export async function formandosPorTurmasLote(c: Consulta, regime: Regime, ids: number[]) {
+  if (!ids.length) return [];
+  return many<{ id: number; nome: string; apelido: string; estado: string; turma_id: number | null; turma: string }>(
+    c,
+    `SELECT id, nome, apelido, estado, turma_id, coalesce(turma, '') AS turma FROM ${tabelaRegime("formandos", regime)}
+      WHERE turma_id = ANY($1::int[]) OR turma_id IS NULL
+      ORDER BY nome, apelido`,
+    [pgIntArray(ids)],
+  );
+}
+
+export async function folhasDePresencaLote(c: Consulta, regime: Regime, ids: number[]) {
+  if (!ids.length) return [];
+  return many<{ turma_id: number; sessao_n: number; presencas: unknown }>(
+    c,
+    "SELECT turma_id, sessao_n, presencas FROM turma_sessoes WHERE regime = $1 AND turma_id = ANY($2::int[])",
+    [regime, pgIntArray(ids)],
+  );
+}
+
+export async function notasLote(c: Consulta, regime: Regime, ids: number[]) {
+  if (!ids.length) return [];
+  return many<{ turma_id: number; formando_id: number; modulo_id: string; parametro_id: string; nota: unknown }>(
+    c,
+    "SELECT turma_id, formando_id, modulo_id, parametro_id, nota FROM turma_avaliacoes WHERE regime = $1 AND turma_id = ANY($2::int[])",
+    [regime, pgIntArray(ids)],
+  );
+}
+
+export async function certificadosParaResultadosLote(c: Consulta, regime: Regime, ids: number[]) {
+  if (!ids.length) return [];
+  return many<{ turma_id: number; formando_id: number; emitido: boolean; elearning: unknown; nota: unknown; ficheiro_id: string }>(
+    c,
+    `SELECT turma_id, formando_id, emitido, elearning, nota, COALESCE(ficheiro_id, '') AS ficheiro_id
+       FROM turma_certificados WHERE regime = $1 AND turma_id = ANY($2::int[])`,
+    [regime, pgIntArray(ids)],
+  );
+}
+
+export async function fichasPorCursoIdLote(c: Consulta, regime: Regime, cursoIds: number[]) {
+  if (!cursoIds.length) return [];
+  return many<{ curso_id: number; payload: unknown }>(
+    c,
+    "SELECT curso_id, payload FROM curso_fichas WHERE regime = $1 AND curso_id = ANY($2::int[])",
+    [regime, pgIntArray(cursoIds)],
   );
 }

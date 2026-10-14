@@ -1,7 +1,7 @@
 // Blocos de cursos: destaques escolhidos à mão (e por ordem) e a oferta formativa com filtros.
 // O cartão do curso tem vários formatos e escolhe-se que informação mostra.
-import { useContext, useMemo, useState, type CSSProperties } from "react";
-import type { ComponentConfig, Field } from "@puckeditor/core";
+import { useContext, useMemo, useState, type ComponentType, type CSSProperties } from "react";
+import type { ComponentConfig, Field, Slot } from "@puckeditor/core";
 import { OfertaCtx, type Course } from "../SiteLanding";
 import { campoCor, campoCurso, campoMarcas, campoNumero, nomesCursos, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
@@ -246,6 +246,7 @@ export const CursosDestaque: ComponentConfig<DestaqueProps> = {
 // ─── Oferta formativa (todos os cursos, com pesquisa e filtros) ──────────────
 
 type OfertaProps = {
+  zonaMeio: Slot; zonaCursos: Slot;
   regime: "todos" | "gold" | "fin";
   ordem: "procura" | "titulo";
   pesquisa: boolean; textoPesquisa: string;
@@ -259,6 +260,8 @@ type OfertaProps = {
 export const OfertaFormativa: ComponentConfig<OfertaProps> = {
   label: "Oferta formativa",
   fields: {
+    zonaMeio: { type: "slot", label: "Blocos entre os filtros e a pesquisa" },
+    zonaCursos: { type: "slot", label: "Blocos antes dos cursos" },
     regime: { type: "select", label: "Cursos", options: [{ label: "Todos", value: "todos" }, { label: "Só Gold", value: "gold" }, { label: "Só Financiada", value: "fin" }] },
     ordem: { type: "select", label: "Ordem", options: [{ label: "Mais procurados primeiro", value: "procura" }, { label: "Alfabética", value: "titulo" }] },
     pesquisa: simNao("Caixa de pesquisa"),
@@ -271,10 +274,13 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
     aparencia: campoAparencia(),
   },
   defaultProps: {
+    zonaMeio: [], zonaCursos: [],
     regime: "todos", ordem: "procura", pesquisa: true, textoPesquisa: "Pesquisar formação", filtros: true, mostrarTotal: true,
     limite: null, corFiltroAtivo: "var(--c-acento)", cartao: cartaoPadrao(), aparencia: estiloVazio(),
   },
-  render: ({ regime, ordem, pesquisa, textoPesquisa, filtros, mostrarTotal, limite, corFiltroAtivo, cartao, aparencia }) => {
+  render: ({ zonaMeio, zonaCursos, regime, ordem, pesquisa, textoPesquisa, filtros, mostrarTotal, limite, corFiltroAtivo, cartao, aparencia }) => {
+    const ZonaMeio = zonaMeio as unknown as ComponentType<{ className?: string; minEmptyHeight?: number }> | undefined;
+    const ZonaCursos = zonaCursos as unknown as ComponentType<{ className?: string; minEmptyHeight?: number }> | undefined;
     const { cursos, estado, recarregar } = useCursos();
     const [filtro, setFiltro] = useState("Todos");
     const [q, setQ] = useState("");
@@ -301,6 +307,7 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
                 ))}
               </div>
             )}
+            {ZonaMeio && <ZonaMeio className="flex flex-wrap items-center gap-3 empty:hidden" minEmptyHeight={40} />}
             {mostrarTotal && estado === "pronto" && <span className="text-sm font-semibold text-[#3E5168] lg:ml-auto">{lista.length} formações disponíveis</span>}
             {pesquisa && (
               <label className="flex w-full items-center gap-3 rounded-full border border-[#14263D]/20 bg-white px-4 py-3 text-[#14263D] lg:max-w-sm">
@@ -311,6 +318,7 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
             )}
           </div>
         )}
+        {ZonaCursos && <ZonaCursos className="mb-6 flex flex-col gap-4 empty:hidden" minEmptyHeight={40} />}
         {estado === "pronto" ? <Grelha cursos={lista} e={cartao} vazio="Não encontrámos formações para esta pesquisa." /> : <Estado estado={estado} recarregar={recarregar} />}
       </div>
     );

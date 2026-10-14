@@ -1,7 +1,7 @@
 // Bloco "Catálogo": pesquisa, separadores Gold/Financiada, filtros, comparador e a lista de cursos.
 // Os textos, o que aparece e o aspecto dos cartões editam-se no painel; as cores vêm do tema.
-import { useContext, useMemo, useState } from "react";
-import type { ComponentConfig } from "@puckeditor/core";
+import { useContext, useMemo, useState, type ComponentType, type CSSProperties } from "react";
+import type { ComponentConfig, Slot } from "@puckeditor/core";
 import { rotuloBotaoInscricao } from "../../partilhado/siteConteudo";
 import { useInscricaoOpcional } from "../SiteInscricao";
 import { Icon, OfertaCtx, type Course } from "../SiteLanding";
@@ -14,6 +14,7 @@ type Linha = "Todas" | "Financiada" | "Gold";
 type Acesso = "Todas" | "Acesso direto" | "Pré-pago" | "Pré-inscrição";
 
 type CatalogoProps = {
+  zonaTopo: Slot; zonaLista: Slot;
   topo: boolean; kicker: string; titulo: string; subtitulo: string; textoPesquisa: string;
   separadores: boolean; filtros: boolean; comparador: boolean; guardar: boolean;
   vista: "linhas" | "cartoes"; cartao: EstiloCartao;
@@ -84,7 +85,13 @@ function LinhaCurso({ c, guardado, comparado, onGuardar, onComparar, guardar, co
   );
 }
 
-function CatalogoVista(p: CatalogoProps) {
+
+/** Zona onde se largam blocos dentro de um bloco fechado (no site, vazia não ocupa espaço). */
+export type Zona = ComponentType<{ className?: string; style?: CSSProperties; minEmptyHeight?: number }>;
+
+function CatalogoVista(p: Omit<CatalogoProps, "zonaTopo" | "zonaLista"> & { zonaTopo?: Zona; zonaLista?: Zona }) {
+  const ZonaTopo = p.zonaTopo;
+  const ZonaLista = p.zonaLista;
   const ctx = useContext(OfertaCtx);
   const cursos = ctx?.cursos ?? [];
   const estado = ctx?.estado ?? "a-carregar";
@@ -133,6 +140,7 @@ function CatalogoVista(p: CatalogoProps) {
           </div>
         </section>
       )}
+      {ZonaTopo && <ZonaTopo className="flex flex-col empty:hidden" minEmptyHeight={40} />}
       {p.separadores && (
         <section className="border-b-4 border-[var(--c-acento)] bg-[var(--c-primaria)] px-5 lg:px-8">
           <div className="mx-auto flex flex-col gap-px sm:flex-row" style={{ maxWidth: "var(--largura)" }}>
@@ -163,6 +171,7 @@ function CatalogoVista(p: CatalogoProps) {
           )}
           <div>
             {!p.topo && <div className="mb-6">{pesquisa}</div>}
+            {ZonaLista && <ZonaLista className="flex flex-col gap-4 empty:hidden" minEmptyHeight={40} />}
             <p className="mb-6 text-sm opacity-60"><strong>{estado === "pronto" ? lista.length : "…"}</strong> formações encontradas</p>
             {estado === "a-carregar" && <p className="py-16 text-center opacity-70">A carregar o catálogo.</p>}
             {estado === "erro" && <p className="py-16 text-center">Não foi possível carregar os cursos.</p>}
@@ -230,6 +239,8 @@ function CatalogoVista(p: CatalogoProps) {
 export const Catalogo: ComponentConfig<CatalogoProps> = {
   label: "Catálogo de cursos",
   fields: {
+    zonaTopo: { type: "slot", label: "Blocos entre a pesquisa e os separadores" },
+    zonaLista: { type: "slot", label: "Blocos antes da lista de cursos" },
     topo: simNao("Faixa do topo com pesquisa"),
     kicker: { type: "text", label: "Etiqueta do topo" },
     titulo: { type: "textarea", label: "Título do topo" },
@@ -249,10 +260,11 @@ export const Catalogo: ComponentConfig<CatalogoProps> = {
     return f;
   },
   defaultProps: {
+    zonaTopo: [], zonaLista: [],
     topo: true, kicker: "Oferta formativa ENA", titulo: "Encontre o curso certo para si.",
     subtitulo: "Pesquise por tema, modalidade ou área e descubra o próximo passo do seu percurso.",
     textoPesquisa: "Nome do curso ou área...", separadores: true, filtros: true, comparador: true, guardar: true,
     vista: "linhas", cartao: cartaoPadrao({ colunas: 2 }), aparencia: estiloVazio(),
   },
-  render: ({ puck: _p, ...p }) => <CatalogoVista {...(p as CatalogoProps)} />,
+  render: ({ puck: _p, ...p }) => <CatalogoVista {...(p as unknown as Parameters<typeof CatalogoVista>[0])} />,
 };

@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
@@ -15,12 +15,30 @@ export type Ctx = {
 
 let partilhado: Promise<Ctx> | null = null;
 
+/** Bases temporárias deste processo de testes; apagam-se quando ele termina (senão acumulam no disco). */
+const g = globalThis as { __gesformaTmp?: Set<string> };
+function apagarNoFim(dir: string) {
+  if (!g.__gesformaTmp) {
+    const dirs = (g.__gesformaTmp = new Set<string>());
+    process.once("exit", () => {
+      for (const d of dirs) {
+        try { rmSync(d, { recursive: true, force: true }); } catch { /* ficheiro ainda aberto: fica para o sistema */ }
+      }
+    });
+  }
+  g.__gesformaTmp.add(dir);
+}
+
 /** Uma API real sobre PGlite temporário, com uma sessão por perfil. Partilhada pelo ficheiro de testes. */
 export function arrancar(): Promise<Ctx> {
   partilhado ??= (async () => {
-    process.env.PGLITE_DIR = mkdtempSync(join(tmpdir(), "gesforma-test-"));
+    const dir = mkdtempSync(join(tmpdir(), "gesforma-test-"));
+    process.env.PGLITE_DIR = dir;
+    apagarNoFim(dir);
     process.env.MAIL_MODE = "log";
     const { config } = await import("../src/config.js");
+    // config.ts fixa a base no primeiro import (ver tests/ambiente.ts): nunca correr contra a de desenvolvimento.
+    if (!config.pgliteDir.includes("gesforma-test-")) throw new Error(`Testes recusados: a base não é temporária (${config.pgliteDir}).`);
     const { createDb } = await import("../src/db/pool.js");
     const { migrate } = await import("../src/db/migrate.js");
     const { seed } = await import("../src/db/seed.js");

@@ -16,16 +16,25 @@
     "@fastify/helmet": "^13.0.2",
     "@fastify/multipart": "^9.4.0",
     "@fastify/rate-limit": "^10.3.0",
+    "@signpdf/placeholder-pdf-lib": "^3.3.0",
+    "@signpdf/signpdf": "^3.3.0",
+    "@signpdf/utils": "^3.3.0",
     "fastify": "^5.3.3",
     "gesforma": "file:..",
+    "node-forge": "^1.4.0",
     "nodemailer": "^10.0.10",
+    "pdf-lib": "^1.17.1",
     "postgres": "^3.4.7",
+    "qrcode": "^1.5.4",
     "tsx": "^4.19.4",
+    "xlsx": "^0.18.5",
     "zod": "^3.24.4"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
+    "@types/node-forge": "^1.3.14",
     "@types/nodemailer": "^6.4.17",
+    "@types/qrcode": "^1.5.6",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
   }

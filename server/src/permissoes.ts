@@ -32,11 +32,13 @@ import { regras as utilizadores } from "./permissoes/utilizadores.js";
 import { regras as auditoria } from "./permissoes/auditoria.js";
 import { regras as site } from "./permissoes/site.js";
 import { regras as configuracoes } from "./permissoes/configuracoes.js";
+import { regras as assinaturas } from "./permissoes/assinaturas.js";
 
 export type { Perfil } from "./permissoes/perfis.js";
 
 /** Primeira linha que corresponde ganha. `*` no fim do padrão apanha o resto do caminho. */
 export const REGRAS: Regra[] = [
+  ...assinaturas,
   ...sistema,
   ...emails,
   ...pagamentos,
@@ -66,7 +68,7 @@ const FORMADOR_SEM_LEITURA = [
   "/v1/dtp*", "/v1/alertas*", "/v1/turma-regras*", "/v1/drive/status", "/v1/pagamentos*",
   "/v1/formandos/*", "/v1/inqueritos/*",
   "/v1/turmas/:regime/:id/dossie/*", "/v1/turmas/:regime/:id/relatorio-*", "/v1/turmas/:regime/:id/inqueritos/*",
-  "/v1/painel*", "/v1/auditoria*", "/v1/sistema*", "/v1/utilizadores*", "/v1/campanhas*", "/v1/formandos*",
+  "/v1/painel*", "/v1/auditoria*", "/v1/assinaturas*", "/v1/sistema*", "/v1/utilizadores*", "/v1/campanhas*", "/v1/formandos*",
 ];
 
 function corresponde(path: string, padrao: string): boolean {

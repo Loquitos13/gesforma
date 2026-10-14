@@ -9,6 +9,8 @@ import { PublicPreinscricao } from "./site/PublicPreinscricao";
 import { PublicDocumentos } from "./site/PublicDocumentos";
 import { PublicFormandoDocumentos } from "./site/PublicFormandoDocumentos";
 import { PublicCronograma } from "./site/PublicCronograma";
+import { AssinarContrato } from "./site/AssinarContrato";
+import { VerificarAssinatura } from "./site/VerificarAssinatura";
 import { SiteCatalog } from "./site/SiteCatalog";
 import { SiteCurso } from "./site/SiteCurso";
 import { AreaFormando } from "./site/AreaFormandoPainel";
@@ -38,11 +40,18 @@ const formandoDocsToken = path.startsWith("/documentos-formando/")
   ? decodeURIComponent(path.slice("/documentos-formando/".length).split("/")[0] ?? "")
   : "";
 const cronogramaMatch = path.match(/^\/cronograma\/(gold|fin)\/(\d+)$/);
+const assinarToken = path.startsWith("/assinar/") ? decodeURIComponent(path.slice("/assinar/".length).split("/")[0] ?? "") : "";
+const verificar = path === "/verificar" || path.startsWith("/verificar/");
+const verificarCodigo = path.startsWith("/verificar/") ? decodeURIComponent(path.slice("/verificar/".length).split("/")[0] ?? "") : "";
 const inqToken = path.startsWith("/inquerito/") ? decodeURIComponent(path.slice("/inquerito/".length).split("/")[0] ?? "") : "";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {publicForm ? (
+    {assinarToken ? (
+      <AssinarContrato token={assinarToken} />
+    ) : verificar ? (
+      <VerificarAssinatura codigo={verificarCodigo} />
+    ) : publicForm ? (
       <PublicPreinscricao />
     ) : cronogramaMatch ? (
       <PublicCronograma regime={cronogramaMatch[1] as "gold" | "fin"} turmaId={Number(cronogramaMatch[2])} />

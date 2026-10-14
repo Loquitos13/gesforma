@@ -7,6 +7,7 @@ import { toastOk } from "../../../partilhado/toastBus";
 import {
   AreaTexto, Aviso, Botao, BotaoLigacao, Campo, Cartao, Estado, Kpi, KpiFaixa, Vazio, data, dataHora, num,
 } from "../../../partilhado/ui";
+import { ContratosFormando } from "../assinaturas/ContratosFormando";
 import { RecusarDoc } from "./fichaDialogos";
 import { ESTADO_DOC } from "./partes";
 
@@ -110,16 +111,11 @@ export function SeparadorAvaliacao({ ficha }: { ficha: FichaFormando }) {
   );
 }
 
-export function SeparadorContratos({ ficha }: { ficha: FichaFormando }) {
+export function SeparadorContratos({ ficha, podeEditar = false }: { ficha: FichaFormando; podeEditar?: boolean }) {
   const c = ficha.certificado;
   return (
     <div className="flex flex-col gap-4">
-      <Cartao titulo="Contratos">
-        <Aviso tom="info" titulo="Assinatura no GesForma ainda não disponível">
-          O envio do contrato para assinatura (código por email e selo da ENA) ainda não existe. Por agora, o contrato de formação
-          assinado entra como documento «Contrato de formação» no separador Documentos.
-        </Aviso>
-      </Cartao>
+      <ContratosFormando regime={ficha.regime} formandoId={ficha.id} podeEditar={podeEditar} />
       <Cartao titulo="Certificados">
         {c?.emitido ? (
           <div className="flex items-center gap-3 flex-wrap">

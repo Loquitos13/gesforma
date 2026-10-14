@@ -9,10 +9,11 @@ import {
 import type { VistaProps } from "../../shell/tipos";
 import { EditarDados, MudarTurma } from "./fichaDialogos";
 import { CartaoAcesso, CartaoDados, CartaoElegibilidade, CartaoPagamento, CartaoTurma } from "./fichaLateral";
+import { CartaoApoios, SeparadorApoios } from "./apoios/SeparadorApoios";
 import { SeparadorAvaliacao, SeparadorContratos, SeparadorDocumentos, SeparadorHistorico } from "./fichaSeparadores";
 import { Percurso } from "./partes";
 
-type Aba = "documentos" | "avaliacao" | "contratos" | "historico";
+type Aba = "documentos" | "avaliacao" | "apoios" | "contratos" | "historico";
 
 function soDigitos(t: string) {
   const d = t.replace(/\D/g, "");
@@ -112,13 +113,15 @@ export default function FormandoFicha({ view, params, navigate }: VistaProps) {
             itens={[
               { id: "documentos", rotulo: docsAba },
               { id: "avaliacao", rotulo: gold ? "Assiduidade e avaliação" : "Assiduidade (horas) e avaliação" },
+              ...(gold ? [] : [{ id: "apoios" as const, rotulo: "Apoios" }]),
               { id: "contratos", rotulo: "Contratos e certificados" },
               { id: "historico", rotulo: "Histórico e notas" },
             ]}
           />
           {aba === "documentos" && <SeparadorDocumentos ficha={ficha} podeEditar={podeEditar} />}
           {aba === "avaliacao" && <SeparadorAvaliacao ficha={ficha} />}
-          {aba === "contratos" && <SeparadorContratos ficha={ficha} />}
+          {aba === "apoios" && !gold && <SeparadorApoios formandoId={ficha.id} podeEditar={podeEditar} />}
+          {aba === "contratos" && <SeparadorContratos ficha={ficha} podeEditar={podeEditar} />}
           {aba === "historico" && <SeparadorHistorico ficha={ficha} podeEditar={podeEditar} />}
         </div>
 
@@ -127,6 +130,7 @@ export default function FormandoFicha({ view, params, navigate }: VistaProps) {
           <CartaoAcesso ficha={ficha} podeEditar={podeEditar} />
           {gold && <CartaoPagamento ficha={ficha} podeEditar={podeEditar} />}
           {!gold && <CartaoElegibilidade ficha={ficha} />}
+          {!gold && <CartaoApoios formandoId={ficha.id} onAbrir={() => setAba("apoios")} />}
           <CartaoTurma ficha={ficha} onAbrir={t => navigate({ view: gold ? "gold-cockpit-turma" : "fin-cockpit-turma", turmaId: t })} />
         </aside>
       </div>

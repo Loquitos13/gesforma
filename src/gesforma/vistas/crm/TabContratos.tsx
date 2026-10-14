@@ -12,6 +12,7 @@ import {
   Tabela, Vazio, data, eur, useFiltrosUrl, type Coluna,
 } from "../../../partilhado/ui";
 import { EstadoDoc, numeroDe, useGestao } from "./comum";
+import { PainelAssinatura } from "../assinaturas/PainelAssinatura";
 import { EditorDocumento } from "./EditorDocumento";
 
 export function TabContratos({ novo }: { novo: number }) {
@@ -108,10 +109,10 @@ function EditorContrato({ contrato, onFechar }: { contrato: Contrato | null; onF
       )}
     >
       <div className="space-y-5">
-        <Aviso tom="info" titulo="Assinatura" acao={<Botao tamanho="sm" disabled title="Ainda não disponível">Enviar para assinatura</Botao>}>
-          A assinatura dentro do GesForma (código por email e selo da ENA) ainda não está disponível. Por agora, imprima ou guarde em PDF,
-          recolha a assinatura e marque o contrato como «Assinado».
-        </Aviso>
+        <PainelAssinatura contratoId={contrato.id} estadoContrato={contrato.estado} temTexto={Boolean(contrato.corpo.trim())} />
+        {contrato.estado === "Por assinar" && (
+          <Aviso tom="info">O contrato está à espera de assinatura: as alterações ao texto só valem se o enviar de novo.</Aviso>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
           <Campo rotulo="Nome no contrato">{p => <Entrada {...p} value={d.clienteNome} onChange={e => setD({ ...d, clienteNome: e.target.value })} />}</Campo>
           <Campo rotulo="Email">{p => <Entrada {...p} type="email" value={d.clienteEmail} onChange={e => setD({ ...d, clienteEmail: e.target.value })} />}</Campo>

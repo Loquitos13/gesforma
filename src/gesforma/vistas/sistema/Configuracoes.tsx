@@ -5,11 +5,14 @@ import { apiDefinicoes, apiEstadoConfiguracoes, type EstadoConfiguracoes } from 
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import { Aviso, Botao, Cartao, ErroCarregar, Esqueleto, Estado, PageHeader, cx, useFiltrosUrl, type Tom } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
+import { RegrasApoios } from "../formandos/apoios/RegrasApoios";
 import { SeccaoAuditoria } from "./configuracoes/Auditoria";
 import { SeccaoDrive, SeccaoSmtp } from "./configuracoes/Integracoes";
 import { SeccaoMicrosoft, SeccaoWhatsapp } from "./configuracoes/IntegracoesContas";
+import { LogoEntidade } from "./configuracoes/LogoEntidade";
 import { SeccaoDefinicoes } from "./configuracoes/SeccaoDefinicoes";
 import { CAMPOS_ENTIDADE, CAMPOS_FIN, CAMPOS_FORMACAO, CAMPOS_GOLD, CAMPOS_LEMBRETE, CAMPOS_REGRAS } from "./configuracoes/secoes";
+import { SeccaoSeloAssinatura } from "./configuracoes/SeloAssinatura";
 import { SeccaoSeguranca } from "./configuracoes/Seguranca";
 
 type Seccao = { id: string; rotulo: string; grupo: string; soAdmin?: boolean; estado?: (e: EstadoConfiguracoes) => { texto: string; tom: Tom } };
@@ -20,6 +23,7 @@ const SECCOES: Seccao[] = [
   { id: "formacao", rotulo: "Formação", grupo: "Entidade" },
   { id: "gold", rotulo: "Gold", grupo: "Entidade" },
   { id: "fin", rotulo: "Financiada", grupo: "Entidade" },
+  { id: "apoios", rotulo: "Apoios (Financiada)", grupo: "Entidade" },
   { id: "lembretes", rotulo: "Lembretes", grupo: "Comunicação", estado: e => (e.lembrete.activo ? { texto: `A cada ${e.lembrete.quantidade} ${e.lembrete.unidade}`, tom: "sucesso" } : { texto: "Desligado", tom: "neutro" }) },
   { id: "smtp", rotulo: "Email (SMTP)", grupo: "Comunicação", soAdmin: true, estado: e => (e.smtp.ligado ? { texto: "Ligado", tom: "sucesso" } : { texto: "Desligado", tom: "aviso" }) },
   { id: "whatsapp", rotulo: "WhatsApp", grupo: "Comunicação", soAdmin: true, estado: e => (e.whatsapp.ligado ? { texto: "Ligado", tom: "sucesso" } : { texto: "Desligado", tom: "neutro" }) },
@@ -27,6 +31,7 @@ const SECCOES: Seccao[] = [
   { id: "microsoft", rotulo: "Entrar com Microsoft", grupo: "Integrações", soAdmin: true, estado: e => (e.microsoft.ligado ? { texto: "Activo", tom: "sucesso" } : { texto: "Desligado", tom: "neutro" }) },
   { id: "pagamentos", rotulo: "Pagamentos", grupo: "Integrações", estado: () => ({ texto: "Gateway por escolher", tom: "neutro" }) },
   { id: "moodle", rotulo: "Moodle", grupo: "Integrações", estado: () => ({ texto: "Em pausa", tom: "neutro" }) },
+  { id: "selo", rotulo: "Assinatura e selo", grupo: "Administração", soAdmin: true },
   { id: "seguranca", rotulo: "Segurança", grupo: "Administração", soAdmin: true, estado: e => (e.avisos ? { texto: `${e.avisos} aviso(s)`, tom: "perigo" } : { texto: "Sem avisos", tom: "sucesso" }) },
   { id: "auditoria", rotulo: "Auditoria", grupo: "Administração", soAdmin: true },
 ];
@@ -57,8 +62,13 @@ export default function Configuracoes({ params, navigate }: VistaProps) {
     if (!estado) return <Cartao><Esqueleto linhas={8} /></Cartao>;
     switch (atual.id) {
       case "entidade":
-        return <SeccaoDefinicoes id="entidade" titulo="Entidade formadora" soAdmin podeEditar={admin} campos={CAMPOS_ENTIDADE} valores={settings.entidade}
-          descricao="Designação, contactos e a conta para transferências. Aparecem nos documentos e no pedido de pagamento." />;
+        return (
+          <div className="space-y-4">
+            <LogoEntidade podeEditar={admin} />
+            <SeccaoDefinicoes id="entidade" titulo="Entidade formadora" soAdmin podeEditar={admin} campos={CAMPOS_ENTIDADE} valores={settings.entidade}
+              descricao="Designação, contactos e a conta para transferências. Aparecem nos documentos e no pedido de pagamento." />
+          </div>
+        );
       case "regras":
         return <SeccaoDefinicoes id="regras_pedagogicas" titulo="Regras pedagógicas" soAdmin podeEditar={admin} campos={CAMPOS_REGRAS}
           valores={settings.regras_pedagogicas ?? comoTexto(estado.regras)} descricao="Valem para todas as turmas. Cada curso pode ter regras próprias na ficha do curso." />;
@@ -68,6 +78,7 @@ export default function Configuracoes({ params, navigate }: VistaProps) {
         return <SeccaoDefinicoes id="gold" titulo="Gold" podeEditar={editar} campos={CAMPOS_GOLD} valores={settings.gold} descricao="Notas internas da formação autofinanciada. Os preços estão em cada curso." />;
       case "fin":
         return <SeccaoDefinicoes id="fin" titulo="Financiada" podeEditar={editar} campos={CAMPOS_FIN} valores={settings.fin} descricao="Notas internas da formação financiada." />;
+      case "apoios": return <RegrasApoios podeEditar={editar} />;
       case "lembretes":
         return <SeccaoDefinicoes id="lembrete_pre" titulo="Lembrete da pré-inscrição" soAdmin podeEditar={admin} campos={CAMPOS_LEMBRETE}
           valores={settings.lembrete_pre ?? comoTexto(estado.lembrete)} descricao="Email automático enquanto a pré-inscrição não estiver validada. A ligação pessoal expira ao fim de 90 dias sem actividade." />;
@@ -91,6 +102,7 @@ export default function Configuracoes({ params, navigate }: VistaProps) {
             <p className="m-0">A integração com o Moodle está em pausa. Os conteúdos dos cursos continuam na Drive e na área do formando.</p>
           </Informativa>
         );
+      case "selo": return <SeccaoSeloAssinatura />;
       case "seguranca": return <SeccaoSeguranca />;
       case "auditoria": return <SeccaoAuditoria />;
       default: return null;

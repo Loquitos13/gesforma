@@ -117,8 +117,9 @@ export function CartaoCurso({ curso, e }: { curso: Course; e: EstiloCartao }) {
       style={forte ? { background: acento, color: "#14263D" } : { background: "#14263D", color: "#fff" }}>{texto}</span>
   );
   const img = ver.has("imagem") && (
-    <a href={href} tabIndex={-1} aria-hidden="true" className={juntar("relative block overflow-hidden bg-[#E7EBF0]", horizontal && "shrink-0", e.formato === "lista" ? "w-28 sm:w-40" : horizontal ? "w-2/5" : "w-full", sobreposto && "absolute inset-0")}
-      style={horizontal || sobreposto ? undefined : { aspectRatio: e.proporcao }}>
+    <a href={href} tabIndex={-1} aria-hidden="true"
+      className={juntar("relative block overflow-hidden bg-[#E7EBF0]", horizontal && "shrink-0", e.formato === "lista" ? "w-28 sm:w-40" : e.formato === "horizontal" ? "ena-cartao-h-img" : "w-full", sobreposto && "absolute inset-0")}
+      style={e.formato === "lista" || sobreposto ? undefined : { aspectRatio: e.proporcao }}>
       {imagem && <img src={imagem} alt="" className="h-full w-full object-cover" />}
       {!sobreposto && (ver.has("formato") || ver.has("regime")) && (
         <span className="absolute left-3 top-3 flex flex-wrap gap-1.5">
@@ -166,7 +167,7 @@ export function CartaoCurso({ curso, e }: { curso: Course; e: EstiloCartao }) {
   );
   return (
     <article
-      className={juntar(caixa.className, "flex min-w-0", horizontal ? "flex-row" : "flex-col", sobreposto && "relative", e.efeito === "subir" && "ena-cartao-hover-subir", e.efeito === "zoom" && "ena-cartao-hover-zoom")}
+      className={juntar(caixa.className, "flex min-w-0", e.formato === "lista" ? "flex-row" : e.formato === "horizontal" ? "ena-cartao-h" : "flex-col", sobreposto && "relative", e.efeito === "subir" && "ena-cartao-hover-subir", e.efeito === "zoom" && "ena-cartao-hover-zoom")}
       style={estilo}
     >
       {img}

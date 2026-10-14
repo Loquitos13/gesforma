@@ -431,3 +431,11 @@ body:has(input[type="file"]:focus) [data-ficha-sticky] {
 .editor-site {
   --puck-font-family: "Public Sans", system-ui, sans-serif;
 }
+
+/* Cartão de curso "horizontal": em ecrãs estreitos empilha (imagem em cima), senão imagem ao lado. */
+.ena-cartao-h { flex-direction: column; }
+.ena-cartao-h-img { width: 100%; }
+@media (min-width: 640px) {
+  .ena-cartao-h { flex-direction: row; }
+  .ena-cartao-h-img { width: 40%; aspect-ratio: auto !important; }
+}

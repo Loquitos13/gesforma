@@ -157,16 +157,22 @@ const SOMBRAS = {
 /**
  * Variáveis de espaçamento de um bloco. Escrevem-se sempre os quatro lados (as variáveis CSS herdam:
  * sem isto, cada bloco apanharia o espaçamento da secção onde está). No telemóvel, o que não for
- * definido repete o valor do computador.
+ * definido repete o valor do computador, mas os lados esquerdo e direito ficam limitados a 6% do ecrã
+ * (uma margem lateral de 100px no computador não pode comer metade de um telemóvel).
  */
 function varsEspaco(s: Partial<Estilo>, out: Record<string, string>) {
+  const tel = (proprio: number | null | undefined, herdado: number | null, lado: "t" | "r" | "b" | "l") => {
+    if (proprio != null) return px(proprio)!;
+    if (herdado == null) return "0px";
+    return lado === "l" || lado === "r" ? `clamp(-6vw, ${herdado}px, 6vw)` : `${herdado}px`;
+  };
   for (const k of ["t", "r", "b", "l"] as const) {
     const m = s.margem?.[k] ?? null;
     const p = s.preenchimento?.[k] ?? null;
     out[`--m${k}`] = px(m) ?? "0px";
     out[`--p${k}`] = px(p) ?? "0px";
-    out[`--mm${k}`] = px(s.margemTel?.[k] ?? m) ?? "0px";
-    out[`--pm${k}`] = px(s.preenchimentoTel?.[k] ?? p) ?? "0px";
+    out[`--mm${k}`] = tel(s.margemTel?.[k], m, k);
+    out[`--pm${k}`] = tel(s.preenchimentoTel?.[k], p, k);
   }
   if (s.alinhar === "centro") { out["--ml"] = "auto"; out["--mr"] = "auto"; out["--mml"] = "auto"; out["--mmr"] = "auto"; }
   if (s.alinhar === "fim") { out["--ml"] = "auto"; out["--mml"] = "auto"; }

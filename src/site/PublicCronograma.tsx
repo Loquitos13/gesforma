@@ -26,6 +26,10 @@ export function PublicCronograma({ regime, turmaId }: { regime: Regime; turmaId:
     return () => { vivo = false; };
   }, [regime, turmaId]);
 
+  const e = dados?.entidade;
+  const contactos = e
+    ? [e.nome, [e.morada, [e.codigoPostal, e.localidade].filter(Boolean).join(" ")].filter(Boolean).join(", "), e.telefone, e.email, e.site].filter(Boolean)
+    : [];
   const meta = dados
     ? [dados.curso, dados.local, dados.horario, dados.inicio ? `início ${dataPt(dados.inicio)}` : "", dados.formador].filter(Boolean).join(" · ")
     : "";
@@ -35,7 +39,7 @@ export function PublicCronograma({ regime, turmaId }: { regime: Regime; turmaId:
       <div className="mx-auto w-full max-w-4xl">
         <img
           src="/imagens/ena-logo-nobg.png"
-          alt="ENA"
+          alt={e?.nomeCurto || e?.nome || "Logótipo"}
           className="h-10 w-auto mb-10"
           onError={e => { (e.currentTarget as HTMLImageElement).src = "/imagens/ena_logo.svg"; }}
         />

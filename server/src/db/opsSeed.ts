@@ -1,7 +1,7 @@
 import { recontarTodas } from "../inscricao.js";
 import { generateCronograma } from "../cronograma.js";
 import { repararLigacoes } from "../ligacoes.js";
-import { seedCatalogs } from "./catalogSeed.js";
+import { comDadosDemo, seedCatalogs } from "./catalogSeed.js";
 import type { Db } from "./pool.js";
 
 type TurmaCronogramaRow = {
@@ -178,6 +178,38 @@ async function empty(db: Db, table: string) {
 }
 
 export async function seedOperational(db: Db) {
+  if (comDadosDemo()) await seedDadosDemo(db);
+  await seedCatalogs(db);
+  await backfillCronogramas(db);
+  await seedDtpBase(db);
+  await repararLigacoes(db);
+  await recontarTodas(db);
+  await ajustarSequencia(db);
+}
+
+/** A sequência comum de ids fica sempre acima dos ids existentes. */
+async function ajustarSequencia(db: Db) {
+  await db.query(`
+    SELECT setval('ops_id_seq', GREATEST(
+      20000,
+      (SELECT COALESCE(MAX(id), 0) FROM preinscricoes),
+      (SELECT COALESCE(MAX(id), 0) FROM formandos_gold),
+      (SELECT COALESCE(MAX(id), 0) FROM formandos_fin),
+      (SELECT COALESCE(MAX(id), 0) FROM cursos_gold),
+      (SELECT COALESCE(MAX(id), 0) FROM cursos_fin),
+      (SELECT COALESCE(MAX(id), 0) FROM turmas_gold),
+      (SELECT COALESCE(MAX(id), 0) FROM turmas_fin),
+      (SELECT COALESCE(MAX(id), 0) FROM formadores),
+      (SELECT COALESCE(MAX(id), 0) FROM campanhas),
+      (SELECT COALESCE(MAX(id), 0) FROM blog_posts),
+      (SELECT COALESCE(MAX(id), 0) FROM propostas_comerciais),
+      (SELECT COALESCE(MAX(id), 0) FROM contratos_comerciais)
+    ))
+  `);
+}
+
+/** Cursos, turmas, pessoas e pagamentos de exemplo: só fora de produção, ou com SEED_DEMO=1. */
+async function seedDadosDemo(db: Db) {
   if (await empty(db, "cursos_gold")) {
     for (const r of CURSOS_GOLD) {
       await db.query(
@@ -272,28 +304,4 @@ export async function seedOperational(db: Db) {
       );
     }
   }
-
-  await seedCatalogs(db);
-  await backfillCronogramas(db);
-  await seedDtpBase(db);
-  await repararLigacoes(db);
-  await recontarTodas(db);
-
-  await db.query(`
-    SELECT setval('ops_id_seq', GREATEST(
-      20000,
-      (SELECT COALESCE(MAX(id), 0) FROM preinscricoes),
-      (SELECT COALESCE(MAX(id), 0) FROM formandos_gold),
-      (SELECT COALESCE(MAX(id), 0) FROM formandos_fin),
-      (SELECT COALESCE(MAX(id), 0) FROM cursos_gold),
-      (SELECT COALESCE(MAX(id), 0) FROM cursos_fin),
-      (SELECT COALESCE(MAX(id), 0) FROM turmas_gold),
-      (SELECT COALESCE(MAX(id), 0) FROM turmas_fin),
-      (SELECT COALESCE(MAX(id), 0) FROM formadores),
-      (SELECT COALESCE(MAX(id), 0) FROM campanhas),
-      (SELECT COALESCE(MAX(id), 0) FROM blog_posts),
-      (SELECT COALESCE(MAX(id), 0) FROM propostas_comerciais),
-      (SELECT COALESCE(MAX(id), 0) FROM contratos_comerciais)
-    ))
-  `);
 }

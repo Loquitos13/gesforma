@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiCursoFicha } from "../partilhado/api";
-import { idCursoPorNome } from "../partilhado/cursoLocais";
-import { useLists } from "../partilhado/ListsContext";
+import { useOpcoes } from "../partilhado/dados/useOpcoes";
 import { emptyPlano, type PlanoSessaoData } from "../partilhado/TurmaExtras";
 
 export type PlanoCurso = {
@@ -57,11 +56,12 @@ function lerPlanos(raw: unknown): PlanoCurso[] {
 }
 
 export function usePlanosCurso(regime: "gold" | "fin", cursoNome: string) {
-  const { cursosGold, cursosFin } = useLists();
+  const cursos = useOpcoes("cursos", { regime, todos: true });
+  const alvo = cursoNome.trim().toLowerCase();
+  const id = cursos.opcoes.find(o => o.valor.toLowerCase() === alvo || String(o.extra?.ufcd ?? "").toLowerCase() === alvo)?.id ?? null;
   const [planos, setPlanos] = useState<PlanoCurso[]>([]);
   const [valores, setValores] = useState<ValorFormadorCurso[]>([]);
   useEffect(() => {
-    const id = idCursoPorNome(regime, cursoNome, cursosGold, cursosFin);
     if (id == null) { setPlanos([]); setValores([]); return; }
     let vivo = true;
     apiCursoFicha(regime, id)
@@ -80,6 +80,6 @@ export function usePlanosCurso(regime: "gold" | "fin", cursoNome: string) {
       })
       .catch(() => { if (vivo) { setPlanos([]); setValores([]); } });
     return () => { vivo = false; };
-  }, [cursoNome, cursosFin, cursosGold, regime]);
+  }, [id, regime]);
   return { planos, valores };
 }

@@ -1,4 +1,5 @@
 import type { Db } from "./db/pool.js";
+import { cronogramasDasTurmas } from "./repos/oferta.js";
 import { textoSobreposicaoNova } from "../../src/partilhado/sobreposicaoHorario.js";
 
 /**
@@ -15,11 +16,10 @@ function asSessoes(raw: unknown) {
 }
 
 export async function erroSobreposicao(db: Db, regime: "gold" | "fin", id: number | null, cronograma: unknown) {
-  const goldRows = await db.query<{ id: number; nome: string; cronograma: unknown }>("SELECT id, nome, cronograma FROM turmas_gold");
-  const finRows = await db.query<{ id: number; nome: string; cronograma: unknown }>("SELECT id, nome, cronograma FROM turmas_fin");
+  const { gold, fin } = await cronogramasDasTurmas(db);
   const blocos = [
-    ...goldRows.rows.map(r => ({ chave: `gold:${r.id}`, nome: String(r.nome ?? "turma"), cronograma: asSessoes(r.cronograma) })),
-    ...finRows.rows.map(r => ({ chave: `fin:${r.id}`, nome: String(r.nome ?? "turma"), cronograma: asSessoes(r.cronograma) })),
+    ...gold.map(r => ({ chave: `gold:${r.id}`, nome: String(r.nome ?? "turma"), cronograma: asSessoes(r.cronograma) })),
+    ...fin.map(r => ({ chave: `fin:${r.id}`, nome: String(r.nome ?? "turma"), cronograma: asSessoes(r.cronograma) })),
   ];
   const chave = `${regime}:${id ?? "nova"}`;
   const atual = blocos.find(b => b.chave === chave);

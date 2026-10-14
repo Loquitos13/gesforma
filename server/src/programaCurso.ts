@@ -1,4 +1,5 @@
 import type { Db } from "./db/pool.js";
+import { fichaDoCursoPorNome } from "./repos/oferta.js";
 
 function asObj(raw: unknown): Record<string, unknown> {
   if (raw && typeof raw === "object") return raw as Record<string, unknown>;
@@ -35,24 +36,5 @@ export function labelsDePayload(raw: unknown): string[] {
 export async function modulosDaFicha(db: Db, regime: "gold" | "fin", curso: string): Promise<string[]> {
   const nome = curso.trim();
   if (!nome) return [];
-  const row = regime === "fin"
-    ? await db.query<{ payload: unknown }>(
-      `SELECT f.payload
-         FROM curso_fichas f
-         JOIN cursos_fin c ON c.id = f.curso_id AND f.regime = 'fin'
-        WHERE lower(trim(c.nome_comercial)) = lower(trim($1))
-           OR lower(trim(c.ufcd)) = lower(trim($1))
-           OR c.ufcd_cod = $1
-        LIMIT 1`,
-      [nome],
-    )
-    : await db.query<{ payload: unknown }>(
-      `SELECT f.payload
-         FROM curso_fichas f
-         JOIN cursos_gold c ON c.id = f.curso_id AND f.regime = 'gold'
-        WHERE lower(trim(c.nome)) = lower(trim($1))
-        LIMIT 1`,
-      [nome],
-    );
-  return labelsDePayload(row.rows[0]?.payload);
+  return labelsDePayload(await fichaDoCursoPorNome(db, regime, nome));
 }

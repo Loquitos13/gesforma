@@ -5,7 +5,7 @@ import {
   type MidiaRef,
   type TipoQuiz,
 } from "../partilhado/conteudosPedagogicos";
-import type { CursoAccent } from "./CursoFichaView";
+type CursoAccent = "gold" | "fin";
 
 function idNovo(prefixo: string) {
   return `${prefixo}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;

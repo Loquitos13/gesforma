@@ -1,4 +1,5 @@
 import type { Db } from "./db/pool.js";
+import { datasGold, precosCursosGold } from "./repos/oferta.js";
 import { precoDaInscricao, type EscolhaPreco, type RegraPreco } from "./precoInscricao.js";
 
 function objecto(payload: unknown): Record<string, unknown> | null {
@@ -31,20 +32,18 @@ export function regraDePayload(payload: unknown): RegraPreco | null {
 }
 
 export async function listRegrasPrecoGold(db: Db): Promise<RegraPreco[]> {
-  const datas = await db.query<{ payload: unknown }>(
-    "SELECT payload FROM catalog_items WHERE kind = 'datas' AND regime = 'gold'",
-  );
-  return datas.rows.map(r => regraDePayload(r.payload)).filter((r): r is RegraPreco => !!r);
+  const datas = await datasGold(db);
+  return datas.map(r => regraDePayload(r.payload)).filter((r): r is RegraPreco => !!r);
 }
 
 /** Preço Gold gravado na inscrição: edição (local, horário ou ambos) e, se não houver, o da ficha do curso. */
 export async function precoInscricaoNaBase(db: Db, escolha: EscolhaPreco) {
   const [cursos, regras] = await Promise.all([
-    db.query<{ nome: string; preco: number }>("SELECT nome, preco FROM cursos_gold"),
+    precosCursosGold(db),
     listRegrasPrecoGold(db),
   ]);
   return precoDaInscricao(
-    cursos.rows.map(c => ({ nome: c.nome, preco: Number(c.preco) })),
+    cursos.map(c => ({ nome: c.nome, preco: Number(c.preco) })),
     regras,
     escolha,
   );

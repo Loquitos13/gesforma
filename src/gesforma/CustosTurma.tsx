@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { horasDoFormador, type TurmaGold } from "../partilhado/turmaModel";
-import { useFormadores } from "../partilhado/FormadoresContext";
+import { useFormadoresDoRegime } from "../partilhado/dados/comuns";
 
 function eur(v: number) {
   return `€ ${v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -15,7 +15,7 @@ export function CustosTurmaCard({
   canEdit: boolean;
   onSala: (valor: number) => void;
 }) {
-  const { formadores } = useFormadores();
+  const formadores = useFormadoresDoRegime("gold");
   const [sala, setSala] = useState(String(turma.custoHoraSala ?? 0));
   useEffect(() => { setSala(String(turma.custoHoraSala ?? 0)); }, [turma.custoHoraSala, turma.id]);
   const linhas = useMemo(() => {

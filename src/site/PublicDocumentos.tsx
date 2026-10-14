@@ -256,7 +256,7 @@ export function PublicDocumentos({ token }: { token: string }) {
           <article className="rounded-2xl bg-white px-6 py-8 shadow-sm ring-1 ring-[#e7e1d6]">
             <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#c48400]">Ligação inválida</p>
             <h1 className="mt-3 text-2xl font-semibold tracking-tight">Este convite já não está disponível.</h1>
-            <p className="mt-3 text-sm leading-relaxed text-[#5c564c]">Peça uma nova ligação à secretaria, em formacao@ena.pt.</p>
+            <p className="mt-3 text-sm leading-relaxed text-[#5c564c]">Peça uma nova ligação à secretaria da ENA.</p>
           </article>
         )}
         {estado === "error" && <p className="text-sm text-[#5c564c]">Não foi possível abrir a página. Tente dentro de momentos.</p>}

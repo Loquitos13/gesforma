@@ -1,12 +1,56 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap");
 @import "tailwindcss";
+
+/* Sistema visual do GesForma (canvas "Sistema visual"). Usar estas classes nos ecrãs novos:
+   bg-fundo, bg-superficie, text-tinta, text-tinta-suave, border-linha, bg-acao, text-ligacao,
+   text-sucesso/bg-sucesso-suave, text-aviso/bg-aviso-suave, text-perigo/bg-perigo-suave, bg-nav,
+   rounded-controlo (8px), rounded-cartao (10px), rounded-painel (12px), shadow-flutuante. */
+@theme {
+  --font-sans: "Public Sans", system-ui, sans-serif;
+
+  --color-tinta: #18202C;
+  --color-tinta-suave: #5A6474;
+  --color-tinta-fraca: #8A93A2;
+  --color-linha: #E2E5EA;
+  --color-linha-suave: #EEF0F3;
+  --color-linha-forte: #D5DAE1;
+  --color-fundo: #F5F6F8;
+  --color-superficie: #FFFFFF;
+
+  --color-acao: #FFB020;
+  --color-acao-forte: #E89A00;
+  --color-acao-suave: #FFF4DB;
+  --color-acao-texto: #7A4A00;
+
+  --color-ligacao: #1D4E89;
+  --color-ligacao-forte: #123761;
+  --color-ligacao-suave: #E8EFF8;
+
+  --color-sucesso: #1F7A4D;
+  --color-sucesso-suave: #E3F3EA;
+  --color-aviso: #9A5B00;
+  --color-aviso-suave: #FFF4DB;
+  --color-perigo: #B42318;
+  --color-perigo-suave: #FDE8E7;
+
+  --color-nav: #0F172A;
+  --color-nav-ativo: #F59E0B;
+  --color-nav-texto: #94A3B8;
+  --color-nav-fraco: #64748B;
+
+  --radius-controlo: 8px;
+  --radius-cartao: 10px;
+  --radius-painel: 12px;
+
+  --shadow-flutuante: 0 16px 40px rgba(15, 23, 42, 0.16);
+}
 
 html,
 body,
 #root {
   height: 100%;
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: "Public Sans", system-ui, sans-serif;
 }
 
 * {
@@ -14,8 +58,8 @@ body,
 }
 
 body {
-  background-color: #f1f5f9;
-  color: #1e293b;
+  background-color: #f5f6f8;
+  color: #18202c;
   color-scheme: light;
 }
 
@@ -32,7 +76,7 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid #f59e0b;
+  outline: 2px solid #1d4e89;
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -40,6 +84,10 @@ body {
 @keyframes ena-flutuar {
   0%, 100% { transform: translate3d(0, 0, 0); }
   50% { transform: translate3d(0, -16px, 0); }
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
 }
 
 .ena-flutuar {

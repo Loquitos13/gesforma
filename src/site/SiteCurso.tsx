@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { Icon, SiteFrame, useOferta, type Course } from "./SiteLanding";
+import { Icon, useOferta, type Course } from "./SiteLanding";
+import { SiteFrame } from "./SiteLandingRodape";
 import { useInscricao } from "./SiteInscricao";
 import { ePrepago, ePreinscricao, rotuloBotaoInscricao } from "../partilhado/siteConteudo";
 

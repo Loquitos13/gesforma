@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { apiMarcarLidas, apiNotificacoes, type Notificacao } from "../partilhado/api";
+import { apiMarcarLidas, apiNotificacoes, type Notificacao } from "../partilhado/api/notificacoes";
 
 type NotificacoesCtx = {
   items: Notificacao[];

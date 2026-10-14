@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { Db } from "./db/pool.js";
+import * as repo from "./repos/imagens.js";
 
 const SLOTS = new Set(["banner", "thumb", "capa", "miniatura"]);
 const MIMES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -27,6 +28,15 @@ export function mimeImagem(value: string) {
   return MIMES.has(mime) ? mime : null;
 }
 
+/** Tipo real da imagem pelos primeiros bytes (o MIME enviado pelo browser não conta). */
+export function mimeDosBytes(b: Buffer): string | null {
+  if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+  if (b.length > 8 && b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
+  if (b.length > 12 && b.subarray(0, 4).toString("latin1") === "RIFF" && b.subarray(8, 12).toString("latin1") === "WEBP") return "image/webp";
+  if (b.length > 6 && /^GIF8[79]a$/.test(b.subarray(0, 6).toString("latin1"))) return "image/gif";
+  return null;
+}
+
 export async function guardarImagemCurso(
   db: Db,
   regime: "gold" | "fin",
@@ -35,44 +45,13 @@ export async function guardarImagemCurso(
   file: { nome: string; mime: string; bytes: Buffer },
 ) {
   if (file.bytes.length > MAX_BYTES) throw new Error("A imagem passa de 8 MB.");
-  const mime = mimeImagem(file.mime);
+  const mime = mimeDosBytes(file.bytes);
   if (!mime) throw new Error("Use JPG, PNG, WebP ou GIF.");
   const nome = file.nome.replace(/[^\w.\- ()]/g, "").slice(0, 180) || `${slot}.jpg`;
-  const token = randomBytes(18).toString("base64url");
-  await db.query(
-    `INSERT INTO curso_imagens (regime, curso_id, slot, nome, mime, bytes, token, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, now())
-     ON CONFLICT (regime, curso_id, slot) DO UPDATE SET
-       nome = EXCLUDED.nome,
-       mime = EXCLUDED.mime,
-       bytes = EXCLUDED.bytes,
-       token = COALESCE(NULLIF(curso_imagens.token, ''), EXCLUDED.token),
-       updated_at = now()`,
-    [regime, cursoId, slot, nome, mime, file.bytes, token],
-  );
-  if (slot === "capa") {
-    await db.query(
-      "DELETE FROM curso_imagens WHERE regime = $1 AND curso_id = $2 AND slot = 'miniatura'",
-      [regime, cursoId],
-    );
-  }
-  const row = await db.query<{ token: string; updated_at: string | Date }>(
-    "SELECT token, updated_at FROM curso_imagens WHERE regime = $1 AND curso_id = $2 AND slot = $3",
-    [regime, cursoId, slot],
-  );
-  const gravado = row.rows[0];
-  const url = urlImagemPublica(gravado?.token || token, gravado?.updated_at ?? new Date());
-  await db.query(
-    `INSERT INTO curso_fichas (regime, curso_id, payload)
-     VALUES ($1, $2, jsonb_build_object($3::text, jsonb_build_object('name', $4::text, 'url', $5::text)))
-     ON CONFLICT (regime, curso_id) DO UPDATE SET
-       payload = CASE WHEN $3::text = 'capa'
-         THEN ((COALESCE(curso_fichas.payload, '{}'::jsonb) - 'miniatura') || jsonb_build_object($3::text, jsonb_build_object('name', $4::text, 'url', $5::text)))
-         ELSE (COALESCE(curso_fichas.payload, '{}'::jsonb) || jsonb_build_object($3::text, jsonb_build_object('name', $4::text, 'url', $5::text)))
-       END,
-       updated_at = now()`,
-    [regime, cursoId, slot, nome, url],
-  );
+  const gravado = await repo.gravarImagemCurso(db, { regime, cursoId, slot, nome, mime, bytes: file.bytes, token: randomBytes(18).toString("base64url") });
+  if (slot === "capa") await repo.apagarMiniatura(db, regime, cursoId);
+  const url = urlImagemPublica(gravado?.token ?? "", gravado?.updated_at ?? new Date());
+  await repo.ligarImagemNaFicha(db, regime, cursoId, slot, nome, url);
   return { nome, url };
 }
 
@@ -84,27 +63,12 @@ export async function guardarImagemHero(
   file: { nome: string; mime: string; bytes: Buffer },
 ) {
   if (file.bytes.length > MAX_BYTES) throw new Error("A imagem passa de 8 MB.");
-  const mime = mimeImagem(file.mime);
+  const mime = mimeDosBytes(file.bytes);
   if (!mime) throw new Error("Use JPG, PNG, WebP ou GIF.");
   const nome = file.nome.replace(/[^\w.\- ()]/g, "").slice(0, 180) || "hero.jpg";
   const token = randomBytes(18).toString("base64url");
-  const cursoId = HERO_CURSO_ID[slot];
-  await db.query(
-    `INSERT INTO curso_imagens (regime, curso_id, slot, nome, mime, bytes, token, updated_at)
-     VALUES ('gold', $1, 'thumb', $2, $3, $4, $5, now())
-     ON CONFLICT (regime, curso_id, slot) DO UPDATE SET
-       nome = EXCLUDED.nome,
-       mime = EXCLUDED.mime,
-       bytes = EXCLUDED.bytes,
-       token = COALESCE(NULLIF(curso_imagens.token, ''), EXCLUDED.token),
-       updated_at = now()`,
-    [cursoId, nome, mime, file.bytes, token],
-  );
-  const row = await db.query<{ token: string; updated_at: string | Date }>(
-    "SELECT token, updated_at FROM curso_imagens WHERE regime = 'gold' AND curso_id = $1 AND slot = 'thumb'",
-    [cursoId],
-  );
-  const gravado = row.rows[0];
+  // O topo do site guarda-se como "curso" negativo no slot thumb.
+  const gravado = await repo.gravarImagemCurso(db, { regime: "gold", cursoId: HERO_CURSO_ID[slot], slot: "thumb", nome, mime, bytes: file.bytes, token });
   return { nome, url: urlImagemPublica(gravado?.token || token, gravado?.updated_at ?? new Date()) };
 }
 
@@ -113,26 +77,16 @@ export async function guardarImagemBlog(
   file: { nome: string; mime: string; bytes: Buffer },
 ) {
   if (file.bytes.length > MAX_BYTES) throw new Error("A imagem passa de 8 MB.");
-  const mime = mimeImagem(file.mime);
+  const mime = mimeDosBytes(file.bytes);
   if (!mime) throw new Error("Use JPG, PNG, WebP ou GIF.");
   const nome = file.nome.replace(/[^\w.\- ()]/g, "").slice(0, 180) || "imagem.jpg";
   const token = randomBytes(18).toString("base64url");
-  await db.query(
-    "INSERT INTO blog_imagens (token, nome, mime, bytes) VALUES ($1, $2, $3, $4)",
-    [token, nome, mime, file.bytes],
-  );
+  await repo.gravarImagemBlog(db, { token, nome, mime, bytes: file.bytes });
   return { nome, url: urlImagemPublica(token) };
 }
 
 export async function lerImagemPorToken(db: Db, token: string) {
-  const row = await db.query<{ mime: string; bytes: unknown }>(
-    "SELECT mime, bytes FROM curso_imagens WHERE token = $1",
-    [token],
-  );
-  const found = row.rows[0] ?? (await db.query<{ mime: string; bytes: unknown }>(
-    "SELECT mime, bytes FROM blog_imagens WHERE token = $1",
-    [token],
-  )).rows[0];
+  const found = await repo.imagemPorToken(db, token);
   if (!found) return null;
   const bytes = bytesDe(found.bytes);
   if (!bytes?.length) return null;
@@ -140,11 +94,9 @@ export async function lerImagemPorToken(db: Db, token: string) {
 }
 
 export async function mapaImagensPublicas(db: Db) {
-  const rows = await db.query<{ regime: string; curso_id: number; slot: string; token: string; updated_at: string | Date }>(
-    "SELECT regime, curso_id, slot, token, updated_at FROM curso_imagens",
-  );
+  const rows = await repo.todasImagensCurso(db);
   const mapa = new Map<string, string>();
-  for (const row of rows.rows) {
+  for (const row of rows) {
     if (Number(row.curso_id) <= 0) continue;
     if (row.regime !== "gold" && row.regime !== "fin") continue;
     if (row.slot !== "banner" && row.slot !== "thumb" && row.slot !== "capa" && row.slot !== "miniatura") continue;
@@ -155,12 +107,9 @@ export async function mapaImagensPublicas(db: Db) {
 }
 
 export async function urlsImagemDoCurso(db: Db, regime: "gold" | "fin", cursoId: number) {
-  const rows = await db.query<{ slot: string; token: string; updated_at: string | Date }>(
-    "SELECT slot, token, updated_at FROM curso_imagens WHERE regime = $1 AND curso_id = $2",
-    [regime, cursoId],
-  );
+  const rows = await repo.imagensDoCurso(db, regime, cursoId);
   const mapa = new Map<"banner" | "thumb" | "capa" | "miniatura", string>();
-  for (const row of rows.rows) {
+  for (const row of rows) {
     const slot = slotImagem(row.slot);
     if (!slot || !tokenImagem(row.token)) continue;
     mapa.set(slot, urlImagemPublica(row.token, row.updated_at));

@@ -7,17 +7,12 @@ import { opaqueRef } from "./fieldCrypto.js";
 import { writePreinscricaoPii } from "./pii.js";
 import { resolverTurmaOferta } from "./ofertaGold.js";
 import { isEmail, normalizeEmail, sanitizeHeader, textoDePessoa } from "./security.js";
+import { campanhaDoPedido, origemDaLista } from "./leadOpcoes.js";
+import * as leads from "./repos/leads.js";
+import * as escrita from "./repos/leadsEscrita.js";
 
 async function metodoPagamentoConhecido(db: Db, nome: string) {
-  const row = await db.query(
-    `SELECT 1 FROM catalog_items
-      WHERE kind = 'lista_opcoes'
-        AND payload->>'lista' = 'metodos_pagamento'
-        AND payload->>'nome' = $1
-      LIMIT 1`,
-    [nome],
-  );
-  return Boolean(row.rows[0]);
+  return Boolean(await leads.opcaoDaLista(db, "metodos_pagamento", nome));
 }
 
 function nowStamp() {
@@ -37,6 +32,7 @@ export type PreinscricaoPublicaInput = {
   horario?: string;
   turmaId?: number;
   campanha?: string;
+  campanhaId?: number;
   meioContacto?: string;
   pagamentoMetodo?: string;
   acessoImediato?: boolean;
@@ -48,32 +44,24 @@ export type PreinscricaoPublicaInput = {
 /** Curso activo da oferta com este nome. Devolve o nome canónico e o preço base (Gold). */
 async function cursoDaOferta(db: Db, regime: "gold" | "fin", nome: string) {
   if (!nome.trim()) return null;
-  if (regime === "fin") {
-    const r = await db.query<{ nome: string }>(
-      `SELECT COALESCE(NULLIF(nome_comercial, ''), ufcd) AS nome FROM cursos_fin
-        WHERE (lower(trim(nome_comercial)) = lower(trim($1)) OR lower(trim(ufcd)) = lower(trim($1)))
-          AND lower(COALESCE(estado, 'Ativo')) LIKE 'ativ%'
-        LIMIT 1`,
-      [nome],
-    );
-    return r.rows[0] ? { nome: r.rows[0].nome, preco: 0 } : null;
-  }
-  const r = await db.query<{ nome: string; preco: unknown }>(
-    `SELECT nome, preco FROM cursos_gold
-      WHERE lower(trim(nome)) = lower(trim($1)) AND lower(COALESCE(estado, 'Ativo')) LIKE 'ativ%'
-      LIMIT 1`,
-    [nome],
-  );
-  return r.rows[0] ? { nome: r.rows[0].nome, preco: Number(r.rows[0].preco) || 0 } : null;
+  return escrita.cursoActivoDaOferta(db, regime, nome);
 }
 
 /** O consentimento passa a obrigatório quando o administrador o activa (Sistema → Site). */
 async function regrasConsentimento(db: Db) {
-  const r = await db.query<{ values: Record<string, unknown> }>("SELECT values FROM app_settings WHERE id = 'site'");
-  const v = r.rows[0]?.values ?? {};
+  const v = await escrita.valoresSettings(db, "site");
   return {
     exigir: ["1", "true", "sim"].includes(String(v.rgpdObrigatorio ?? "").trim().toLowerCase()),
     versao: String(v.rgpdVersao ?? "").trim().slice(0, 40) || "1",
+  };
+}
+
+/** Texto do consentimento e endereço da política de privacidade (Sistema → Site), para canais sem formulário. */
+export async function politicaPrivacidade(db: Db) {
+  const v = await escrita.valoresSettings(db, "site");
+  return {
+    texto: String(v.rgpdTexto ?? "").trim(),
+    url: String(v.rodapePrivacidadeUrl ?? "").trim(),
   };
 }
 
@@ -104,7 +92,8 @@ export async function criarPreinscricaoPublica(
   const regime = noOutro ? outro : preferido;
   const oferta = noPreferido ?? noOutro;
   const curso = oferta?.nome ?? (pedidoCurso || "Contacto pelo site");
-  const origem = sanitizeHeader(input.origem || "Website") || "Website";
+  const origem = await origemDaLista(db, sanitizeHeader(input.origem || ""), "Website");
+  const campanha = await campanhaDoPedido(db, { campanhaId: input.campanhaId, campanha: sanitizeHeader(input.campanha || "") });
   const meio = sanitizeHeader(input.meioContacto || origem);
   const telf = sanitizeHeader(input.telf || "");
   // Financiada: a turma é atribuída pela secretaria; o local e o horário ficam só como preferência.
@@ -131,21 +120,14 @@ export async function criarPreinscricaoPublica(
   }
 
   // Duplicado só quando há um pedido ABERTO do mesmo email para o MESMO curso.
-  const aberto = await db.query<{ id: number; nome: string; apelido: string; curso: string; public_id: string; ligacao_reenviada_em: unknown }>(
-    `SELECT id, nome, apelido, curso, public_id, ligacao_reenviada_em FROM preinscricoes
-      WHERE lower(email) = $1 AND lower(trim(curso)) = lower(trim($2))
-        AND validada_em IS NULL AND estado NOT IN ('Desistiu', 'Formando')
-      ORDER BY id DESC LIMIT 1`,
-    [email, curso],
-  );
-  const existente = aberto.rows[0];
+  const existente = await escrita.pedidoAberto(db, email, curso);
   if (existente) {
     const ultimo = existente.ligacao_reenviada_em ? new Date(String(existente.ligacao_reenviada_em)).getTime() : 0;
     if (Date.now() - ultimo > MINUTOS_REENVIO * 60_000) {
       await firePreinscricaoEmail(db, {
         id: existente.id, email, nome: existente.nome, apelido: existente.apelido, curso: existente.curso,
       }, "preinscricao.created", `preinscricao:${existente.id}:${email}:${Date.now()}`).catch(() => undefined);
-      await db.query("UPDATE preinscricoes SET ligacao_reenviada_em = now() WHERE id = $1", [existente.id]);
+      await escrita.marcarLigacaoReenviada(db, existente.id);
       await logLeadEvent(db, existente.id, undefined, "contacto", "Novo pedido no site · ligação reenviada", origem);
     }
     return {
@@ -161,21 +143,14 @@ export async function criarPreinscricaoPublica(
   const id = await nextOpsId(db);
   const publicId = newPublicId();
   const piiPack = writePreinscricaoPii({ telf });
-  await db.query(
-    `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado, campanha, origem, entrada, meio_contacto, horario, turma_id, pagamento_metodo, regime, pii_enc, public_id,
-                                consentimento_em, consentimento_ip, consentimento_versao)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Não contactado',$12,$13,'preinscricao',$14,$15,$16,$17,$18,$19,$20,
-             CASE WHEN $21 THEN now() ELSE NULL END, $22, $23)`,
-    [
-      id, nowStamp(), textoDePessoa(input.nome), textoDePessoa(input.apelido || ""), email,
-      piiPack.telf || telf, inicio, textoDePessoa(input.concelho || ""),
-      local, curso, preco,
-      sanitizeHeader(input.campanha || ""), origem, meio, horario, turmaId, metodo, regime,
-      piiPack.pii_enc ?? "", publicId,
-      input.consentimento === true, input.consentimento === true ? (meta.ip ?? "").slice(0, 64) : "",
-      input.consentimento === true ? consent.versao : "",
-    ],
-  );
+  await escrita.inserirLead(db, {
+    id, inscrito: nowStamp(), nome: textoDePessoa(input.nome), apelido: textoDePessoa(input.apelido || ""), email,
+    telf: piiPack.telf || telf, inicioCurso: inicio, concelho: textoDePessoa(input.concelho || ""),
+    local, curso, preco, estado: "Não contactado", campanha: campanha.campanha, campanhaId: campanha.campanhaId,
+    origem, entrada: "preinscricao", meioContacto: meio, horario, turmaId, pagamentoMetodo: metodo, regime,
+    piiEnc: piiPack.pii_enc ?? "", publicId,
+    consentimento: input.consentimento === true ? { ip: (meta.ip ?? "").slice(0, 64), versao: consent.versao } : null,
+  });
   const detalhe = [origem, curso, local, horario, inicio !== "-" ? inicio : ""].filter(Boolean).join(" · ");
   await logLeadEvent(db, id, undefined, "criacao", "Pré-inscrição recebida", detalhe);
   if (!oferta) await logLeadEvent(db, id, undefined, "campo", "Curso fora da oferta", `Pedido: ${pedidoCurso || "sem curso"}. Sem pedido de pagamento.`);

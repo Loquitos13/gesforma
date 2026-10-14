@@ -1,7 +1,7 @@
+import { config } from "../config.js";
 import type { Db } from "./pool.js";
 
 export const CATALOG_KINDS = [
-  "formandos_avulso",
   "datas",
   "locais",
   "areas",
@@ -24,13 +24,6 @@ function rows(kind: CatalogKind, regime: "gold" | "fin", items: Array<{ id: numb
 }
 
 const SEED: SeedRow[] = [
-  ...rows("formandos_avulso", "gold", [
-    { id: 4301, nome: "Rui", apelido: "Moreira", email: "rui.moreira@gmail.com", telf: "912334887", curso: "Excel do Básico ao Avançado", local: "E-learning", inscrito: "2026-08-12", pago: true, valor: 45, metodo: "MB Way", estado: "Ativo" },
-    { id: 4302, nome: "Carla", apelido: "Nogueira", email: "carla.nogueira@sapo.pt", telf: "934112009", curso: "A Arte de Comunicar: E-learning", local: "Sala Virtual", inscrito: "2026-08-28", pago: true, valor: 35, metodo: "Cartão", estado: "Ativo" },
-    { id: 4303, nome: "Pedro", apelido: "Almeida", email: "palmeida@outlook.pt", telf: "918776221", curso: "Curso de Cura Prânica", local: "E-learning", inscrito: "2026-09-01", pago: false, valor: 200, metodo: "-", estado: "Pendente" },
-    { id: 4304, nome: "Sofia", apelido: "Ramos", email: "sofia.ramos@ena.pt", telf: "926441078", curso: "Auxiliar de Medicina Dentária", local: "E-learning", inscrito: "2026-07-19", pago: true, valor: 300, metodo: "Transferência", estado: "Ativo" },
-    { id: 4305, nome: "Nuno", apelido: "Teixeira", email: "nuno.teixeira88@gmail.com", telf: "961203445", curso: "Auxiliar de Medicina Veterinária", local: "E-learning", inscrito: "2026-09-02", pago: false, valor: 400, metodo: "-", estado: "Pendente" },
-  ]),
   ...rows("datas", "gold", [
     { id: 41, inicio: "2026-09-07", fim: "2026-11-29", horario: "Sábado manhã", preco: 125, local: "V.N.Gaia", curso: "Formação de Formadores - CCP", status: "Ativo", link: "ena.pt/ccp/vng-sm-07-09" },
     { id: 42, inicio: "2026-09-04", fim: "2026-11-26", horario: "Pós Laboral", preco: 125, local: "V.N.Gaia", curso: "Formação de Formadores - CCP", status: "Ativo", link: "ena.pt/ccp/vng-pl-04-09" },
@@ -122,15 +115,6 @@ const SEED: SeedRow[] = [
     { id: 73, nome: "Pós-Laboral", descricao: "Dias úteis ao fim do dia", status: "Ativo" },
     { id: 74, nome: "Sábado manhã", descricao: "Sábados de manhã", status: "Ativo" },
   ]),
-  ...rows("inscricoes_fin", "fin", [
-    { id: 501, inscrito: "2026-09-01", nome: "Mariana", apelido: "Sousa Pereira", email: "mariana98pereira@gmail.com", telf: "932874093", ufcd: "3564", curso: "Primeiros Socorros", turma: "UFCD 3564 · T1", estado: "Em análise", docs: { cc: false, ch: false, cu: false, ci: false, ce: false } },
-    { id: 502, inscrito: "2026-08-28", nome: "Diogo Alexandre", apelido: "Soares Oliveira", email: "diogo_nik@hotmail.com", telf: "914388980", ufcd: "10785", curso: "Publicidade nas Redes Sociais", turma: "SM-T01", estado: "Elegível", docs: { cc: true, ch: false, cu: false, ci: true, ce: false } },
-    { id: 503, inscrito: "2026-08-27", nome: "Vanesa Magali", apelido: "Correa Bender", email: "valescabender@gmail.com", telf: "963130925", ufcd: "10785", curso: "Publicidade nas Redes Sociais", turma: "SM-T01", estado: "Colocado na turma", docs: { cc: true, ch: true, cu: true, ci: true, ce: true } },
-    { id: 504, inscrito: "2026-08-26", nome: "Laércio Daniel", apelido: "Ferreira da Costa", email: "71aercio7@gmail.com", telf: "933168749", ufcd: "10785", curso: "Publicidade nas Redes Sociais", turma: "SM-T01", estado: "Elegível", docs: { cc: true, ch: false, cu: false, ci: false, ce: false } },
-    { id: 505, inscrito: "2026-08-20", nome: "Tânia", apelido: "Veloso", email: "taniapatriciaveloso@gmail.com", telf: "914011998", ufcd: "10785", curso: "Publicidade nas Redes Sociais", turma: "SM-T01", estado: "Recebida", docs: { cc: true, ch: false, cu: false, ci: false, ce: false } },
-    { id: 506, inscrito: "2026-08-18", nome: "Helena", apelido: "Costa", email: "helena.costa@gmail.com", telf: "917220331", ufcd: "3564", curso: "Primeiros Socorros", turma: "-", estado: "Indeferido", docs: { cc: true, ch: false, cu: false, ci: false, ce: false } },
-    { id: 507, inscrito: "2026-09-03", nome: "Bruno", apelido: "Machado", email: "bruno.machado@ua.pt", telf: "925667109", ufcd: "10394", curso: "Métodos e Técnicas Pedagógicas", turma: "-", estado: "Em análise", docs: { cc: true, ch: true, cu: false, ci: true, ce: false } },
-  ]),
   ...rows("blog_tematicas", "gold", [
     { id: 1, nome: "Formação de Formadores", slug: "ccp", posts: 4, estado: "Ativo" },
     { id: 2, nome: "Formação Financiada", slug: "financiada", posts: 3, estado: "Ativo" },
@@ -210,8 +194,30 @@ function listaOpcoesSeed(): Array<{ id: number; lista: string; nome: string }> {
   return out;
 }
 
+/** Dados de exemplo (datas, locais, módulos, …) só fora de produção, ou com SEED_DEMO=1. */
+export function comDadosDemo() {
+  if (process.env.SEED_DEMO === "1") return true;
+  return !config.isProd && !process.env.VERCEL;
+}
+
+/**
+ * Semeia os catálogos. As listas de opções iniciais só entram numa lista ainda vazia
+ * (uma opção apagada não volta no arranque seguinte); os restantes catálogos são dados de
+ * exemplo e só entram fora de produção, num catálogo ainda vazio.
+ */
 export async function seedCatalogs(db: Db) {
+  const demo = comDadosDemo();
+  const vazio = new Map<string, boolean>();
   for (const r of SEED) {
+    const chave = r.kind === "lista_opcoes" ? `lista:${String(r.payload.lista)}` : `${r.kind}:${r.regime}`;
+    if (!vazio.has(chave)) {
+      const n = r.kind === "lista_opcoes"
+        ? await db.query<{ n: number }>("SELECT count(*)::int AS n FROM catalog_items WHERE kind = 'lista_opcoes' AND payload->>'lista' = $1", [r.payload.lista])
+        : await db.query<{ n: number }>("SELECT count(*)::int AS n FROM catalog_items WHERE kind = $1 AND regime = $2", [r.kind, r.regime]);
+      vazio.set(chave, Number(n.rows[0]?.n ?? 0) === 0);
+    }
+    if (!vazio.get(chave)) continue;
+    if (r.kind !== "lista_opcoes" && !demo) continue;
     await db.query(
       `INSERT INTO catalog_items (id, kind, regime, payload)
        VALUES ($1,$2,$3,$4::jsonb)

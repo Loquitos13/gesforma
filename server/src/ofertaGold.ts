@@ -1,6 +1,7 @@
 import { classificarInscricao, cursoVisivelNoSite } from "./catalogoPublico.js";
 import type { Db } from "./db/pool.js";
 import { mapaPrecosGold, precoNoMapa } from "./precoOferta.js";
+import { cursosFinOferta, cursosGoldActivos, cursosGoldOferta, turmasFinActivas, turmasGoldActivas } from "./repos/oferta.js";
 
 export type OfertaTurma = {
   turmaId: number;
@@ -29,18 +30,9 @@ export function fmtDataPt(iso: string) {
 }
 
 export async function listOfertaGold(db: Db): Promise<OfertaTurma[]> {
-  const rows = await db.query<{
-    id: number; nome: string; curso: string; local: string; horario: string;
-    data_inicio: string; total_alunos: number; vagas: number; tolerancia: number; cronograma_publicado_em: string | null;
-  }>(
-    `SELECT id, nome, curso, local, horario, data_inicio, total_alunos, vagas,
-            COALESCE(tolerancia_vagas, 0) AS tolerancia, cronograma_publicado_em
-     FROM turmas_gold
-     WHERE estado = 'Ativa'
-     ORDER BY curso, local, horario, data_inicio`,
-  );
+  const rows = await turmasGoldActivas(db);
   const mapa = await mapaPrecosGold(db);
-  return rows.rows.map(r => {
+  return rows.map(r => {
     const local = r.local;
     const horario = r.horario;
     const curso = r.curso;
@@ -60,17 +52,8 @@ export async function listOfertaGold(db: Db): Promise<OfertaTurma[]> {
 }
 
 export async function listOfertaFin(db: Db): Promise<OfertaTurma[]> {
-  const rows = await db.query<{
-    id: number; nome: string; curso: string; local: string; horario: string;
-    data_inicio: string; alunos: number; alunos_total: number; tolerancia: number; cronograma_publicado_em: string | null;
-  }>(
-    `SELECT id, nome, curso, local, horario, data_inicio, alunos, alunos_total,
-            COALESCE(tolerancia_vagas, 0) AS tolerancia, cronograma_publicado_em
-     FROM turmas_fin
-     WHERE activa = true
-     ORDER BY curso, local, horario, data_inicio`,
-  );
-  return rows.rows.map(r => ({
+  const rows = await turmasFinActivas(db);
+  return rows.map(r => ({
     turmaId: Number(r.id),
     nome: r.nome,
     curso: r.curso,
@@ -85,16 +68,9 @@ export async function listOfertaFin(db: Db): Promise<OfertaTurma[]> {
 }
 
 export async function listCursosOferta(db: Db): Promise<CursoOfertaPublico[]> {
-  const [gold, fin] = await Promise.all([
-    db.query<{ nome: string; preco: number; tipo: string; regime: string; estado: string }>(
-      "SELECT nome, preco, tipo, regime, estado FROM cursos_gold ORDER BY nome",
-    ),
-    db.query<{ nome: string; estado: string }>(
-      "SELECT COALESCE(NULLIF(trim(nome_comercial), ''), ufcd) AS nome, estado FROM cursos_fin ORDER BY nome",
-    ),
-  ]);
+  const [gold, fin] = await Promise.all([cursosGoldOferta(db), cursosFinOferta(db)]);
   const out: CursoOfertaPublico[] = [];
-  for (const row of gold.rows) {
+  for (const row of gold) {
     if (!cursoVisivelNoSite(row.estado) || !row.nome?.trim()) continue;
     out.push({
       nome: row.nome,
@@ -103,7 +79,7 @@ export async function listCursosOferta(db: Db): Promise<CursoOfertaPublico[]> {
       inscricao: classificarInscricao("gold", row.tipo, row.regime),
     });
   }
-  for (const row of fin.rows) {
+  for (const row of fin) {
     if (!cursoVisivelNoSite(row.estado) || !row.nome?.trim()) continue;
     out.push({ nome: row.nome, preco: 0, regime: "fin", inscricao: "Pré-inscrição" });
   }
@@ -111,10 +87,8 @@ export async function listCursosOferta(db: Db): Promise<CursoOfertaPublico[]> {
 }
 
 export async function listCursosGoldActivos(db: Db) {
-  const rows = await db.query<{ nome: string; preco: number }>(
-    "SELECT nome, preco FROM cursos_gold WHERE estado = 'Ativo' ORDER BY nome",
-  );
-  return rows.rows.map(r => ({ nome: r.nome, preco: Number(r.preco) }));
+  const rows = await cursosGoldActivos(db);
+  return rows.map(r => ({ nome: r.nome, preco: Number(r.preco) }));
 }
 
 export function uniqueOferta(turmas: OfertaTurma[], key: keyof OfertaTurma) {

@@ -1,10 +1,10 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
-import { config } from "./config.js";
+import { config, defaultDevSecret } from "./config.js";
 
 const VERSION = "v1";
 const IV_LEN = 12;
 
-function masterKey(): Buffer {
+function chaveAtual(): Buffer {
   const raw = config.dataEncryptionKey;
   if (raw) {
     const buf = Buffer.from(raw, "base64");
@@ -14,7 +14,36 @@ function masterKey(): Buffer {
   if (config.isProd && !process.env.VERCEL) {
     throw new Error("Falta DATA_ENCRYPTION_KEY em produção.");
   }
-  return createHash("sha256").update(config.sessionSecret).digest();
+  return derivar(config.sessionSecret);
+}
+
+function derivar(segredo: string) {
+  return createHash("sha256").update(segredo).digest();
+}
+
+let chaveiroCache: { id: string; chaves: Buffer[] } | null = null;
+
+/**
+ * Chaveiro: a primeira chave cifra; todas decifram. Inclui as chaves derivadas
+ * do segredo de sessão (atual, antigo e o de desenvolvimento), para que definir
+ * DATA_ENCRYPTION_KEY depois não torne ilegíveis os dados já cifrados.
+ */
+export function chaveiro(): Buffer[] {
+  const id = [config.dataEncryptionKey, config.sessionSecret, config.legacySessionSecret].join("|");
+  if (chaveiroCache?.id === id) return chaveiroCache.chaves;
+  const lista = [chaveAtual()];
+  for (const segredo of [config.sessionSecret, config.legacySessionSecret, defaultDevSecret]) {
+    if (segredo) lista.push(derivar(segredo));
+  }
+  const vistas = new Set<string>();
+  const chaves = lista.filter(k => {
+    const h = k.toString("hex");
+    if (vistas.has(h)) return false;
+    vistas.add(h);
+    return true;
+  });
+  chaveiroCache = { id, chaves };
+  return chaves;
 }
 
 /** Cifra texto UTF-8 (AES-256-GCM). Formato: v1:<iv>:<tag>:<data> (base64url). */
@@ -22,24 +51,56 @@ export function encryptField(plain: string): string {
   const text = plain ?? "";
   if (!text) return "";
   const iv = randomBytes(IV_LEN);
-  const cipher = createCipheriv("aes-256-gcm", masterKey(), iv);
+  const cipher = createCipheriv("aes-256-gcm", chaveiro()[0]!, iv);
   const enc = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
   const b64 = (b: Buffer) => b.toString("base64url");
   return `${VERSION}:${b64(iv)}:${b64(tag)}:${b64(enc)}`;
 }
 
+function partes(stored: string) {
+  const parts = stored.split(":");
+  if (parts.length !== 4) return null;
+  return {
+    iv: Buffer.from(parts[1]!, "base64url"),
+    tag: Buffer.from(parts[2]!, "base64url"),
+    data: Buffer.from(parts[3]!, "base64url"),
+  };
+}
+
+function abrirComChaveiro(iv: Buffer, tag: Buffer, data: Buffer) {
+  let ultimo: unknown;
+  const chaves = chaveiro();
+  for (let i = 0; i < chaves.length; i++) {
+    try {
+      const decipher = createDecipheriv("aes-256-gcm", chaves[i]!, iv);
+      decipher.setAuthTag(tag);
+      return { texto: Buffer.concat([decipher.update(data), decipher.final()]).toString("utf8"), atual: i === 0 };
+    } catch (err) {
+      ultimo = err;
+    }
+  }
+  throw ultimo ?? new Error("dados cifrados ilegíveis");
+}
+
 export function decryptField(stored: string): string {
   if (!stored?.trim()) return "";
   if (!stored.startsWith(`${VERSION}:`)) return stored;
-  const parts = stored.split(":");
-  if (parts.length !== 4) return "";
-  const iv = Buffer.from(parts[1]!, "base64url");
-  const tag = Buffer.from(parts[2]!, "base64url");
-  const data = Buffer.from(parts[3]!, "base64url");
-  const decipher = createDecipheriv("aes-256-gcm", masterKey(), iv);
-  decipher.setAuthTag(tag);
-  return Buffer.concat([decipher.update(data), decipher.final()]).toString("utf8");
+  const p = partes(stored);
+  if (!p) return "";
+  return abrirComChaveiro(p.iv, p.tag, p.data).texto;
+}
+
+/**
+ * Devolve o valor recifrado com a chave atual, ou null se já está na chave atual
+ * (ou não é um valor cifrado). Lança se nenhuma chave o abre.
+ */
+export function recifrarCampo(stored: string): string | null {
+  if (!stored?.startsWith(`${VERSION}:`)) return null;
+  const p = partes(stored);
+  if (!p) return null;
+  const aberto = abrirComChaveiro(p.iv, p.tag, p.data);
+  return aberto.atual ? null : encryptField(aberto.texto);
 }
 
 export function encryptJson(value: unknown): string {

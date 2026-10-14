@@ -19,14 +19,14 @@ describe("matriz de permissões", () => {
   });
 
   it("formador: só leitura, excepto o que é seu", () => {
-    expect(podeAceder("formador", "GET", "/v1/ops")).toBe(true);
+    expect(podeAceder("formador", "GET", "/v1/turmas")).toBe(true);
     expect(podeAceder("formador", "PUT", "/v1/turmas/gold/1/sessoes/2")).toBe(true);
     expect(podeAceder("formador", "PUT", "/v1/turmas/fin/1/avaliacao")).toBe(true);
     expect(podeAceder("formador", "PATCH", "/v1/turmas-gold/3")).toBe(true);
     expect(podeAceder("formador", "PUT", "/v1/turmas/gold/1/certificados/9")).toBe(false);
     expect(podeAceder("formador", "POST", "/v1/catalog/locais")).toBe(false);
     expect(podeAceder("formador", "POST", "/v1/formandos-gold")).toBe(false);
-    expect(podeAceder("formador", "GET", "/v1/dashboard")).toBe(false);
+    expect(podeAceder("formador", "GET", "/v1/painel/gold")).toBe(false);
     expect(podeAceder("formador", "GET", "/v1/crm/leads")).toBe(false);
     expect(podeAceder("formador", "GET", "/v1/turmas/fin/1/relatorio-final")).toBe(false);
   });
@@ -61,24 +61,36 @@ describe("API por perfil", () => {
     expect((await pedido(ctx, "comercial", "PUT", "/v1/drive/config", {})).statusCode).toBe(403);
   });
 
-  it("/v1/ops não devolve segredos nem dados do formador a terceiros", async () => {
+  it("definições sem segredos fora do admin; formador e comercial só vêem o que lhes cabe", async () => {
     const ctx = await arrancar();
     await ctx.db.query(
       `INSERT INTO app_settings (id, values) VALUES ('gold', $1::jsonb)
        ON CONFLICT (id) DO UPDATE SET values = EXCLUDED.values`,
-      [{ "Chave webhook pagamentos": "segredo-123", "Entidade MB": "12345" }],
+      [{ "Chave webhook pagamentos": "segredo-123", "Prazo de pagamento": "5" }],
     );
-    const sec = (await pedido(ctx, "secretaria", "GET", "/v1/ops")).json();
+    const sec = (await pedido(ctx, "secretaria", "GET", "/v1/settings")).json();
     expect(JSON.stringify(sec.settings)).not.toContain("segredo-123");
-    expect(sec.settings.gold["Entidade MB"]).toBe("12345");
-    const adm = (await pedido(ctx, "admin", "GET", "/v1/ops")).json();
+    expect(sec.settings.gold["Prazo de pagamento"]).toBe("5");
+    const adm = (await pedido(ctx, "admin", "GET", "/v1/settings")).json();
     expect(adm.settings.gold["Chave webhook pagamentos"]).toBe("segredo-123");
-    const form = (await pedido(ctx, "formador", "GET", "/v1/ops")).json();
-    expect(form.pagamentos).toEqual([]);
-    expect(form.preinscricoes).toEqual([]);
-    expect(form.turmasGold).toEqual([]);
-    const com = (await pedido(ctx, "comercial", "GET", "/v1/ops")).json();
-    expect(com.formadores.every((f: { custoHora: number; nif: string }) => f.custoHora === 0 && f.nif === "")).toBe(true);
+    expect((await pedido(ctx, "formador", "GET", "/v1/pagamentos")).statusCode).toBe(403);
+    expect((await pedido(ctx, "formador", "GET", "/v1/crm/leads")).statusCode).toBe(403);
+    const turmasForm = (await pedido(ctx, "formador", "GET", "/v1/turmas?regime=gold")).json();
+    expect(turmasForm.linhas ?? []).toEqual([]);
+    await ctx.db.query(
+      `INSERT INTO formadores (id, nome, nif, custo_hora, regimes, estado) VALUES (9101, 'Formadora Teste', '123456789', 25, '["gold"]'::jsonb, 'Ativo')`,
+    );
+    const lista = (await pedido(ctx, "comercial", "GET", "/v1/formadores?regime=gold")).json();
+    const f = lista.linhas.find((l: { id: number }) => l.id === 9101);
+    expect(f).toBeTruthy();
+    expect(f.nif).toBe("");
+    expect(f.custoHora).toBe(0);
+    const ficha = (await pedido(ctx, "comercial", "GET", "/v1/formadores/9101")).json();
+    expect(ficha.formador.nif).toBe("");
+    expect(ficha.formador.custoHora).toBe(0);
+    const fichaSec = (await pedido(ctx, "secretaria", "GET", "/v1/formadores/9101")).json();
+    expect(fichaSec.formador.nif).toBe("123456789");
+    expect(fichaSec.formador.custoHora).toBe(25);
   });
 
   it("secretaria grava a configuração Gold sem apagar a chave do webhook", async () => {

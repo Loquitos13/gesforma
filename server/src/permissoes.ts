@@ -3,99 +3,61 @@
  * Aplicada no preHandler depois de `classifyRoute`. As verificações finas
  * (o formador só mexe nas suas turmas, por exemplo) continuam no handler.
  *
- * Regras por omissão, quando nenhuma linha da tabela corresponde:
+ * As regras vivem por domínio em `permissoes/<dominio>.ts`; aqui só se juntam,
+ * por ordem. A primeira linha que corresponde ganha.
+ *
+ * Regras por omissão, quando nenhuma linha corresponde:
  * - formador: só leitura, e nunca nas áreas de `FORMADOR_SEM_LEITURA`;
  * - restantes perfis da equipa: leitura e escrita.
  */
+import { EQUIPA, type Perfil, type Regra } from "./permissoes/perfis.js";
+import { regras as sistema } from "./permissoes/sistema.js";
+import { regras as emails } from "./permissoes/emails.js";
+import { regras as pagamentos } from "./permissoes/pagamentos.js";
+import { regras as cursos } from "./permissoes/cursos.js";
+import { regras as campanhas } from "./permissoes/campanhas.js";
+import { regras as blog } from "./permissoes/blog.js";
+import { regras as formadores } from "./permissoes/formadores.js";
+import { regras as crm } from "./permissoes/crm.js";
+import { regras as turmas } from "./permissoes/turmas.js";
+import { regras as pedagogia } from "./permissoes/pedagogia.js";
+import { regras as comum } from "./permissoes/comum.js";
+import { regras as painel } from "./permissoes/painel.js";
+import { regras as formandos } from "./permissoes/formandos.js";
+import { regras as inqueritos } from "./permissoes/inqueritos.js";
+import { regras as dtp } from "./permissoes/dtp.js";
+import { regras as catalogos } from "./permissoes/catalogos.js";
+import { regras as listas } from "./permissoes/listas.js";
+import { regras as utilizadores } from "./permissoes/utilizadores.js";
+import { regras as auditoria } from "./permissoes/auditoria.js";
+import { regras as site } from "./permissoes/site.js";
+import { regras as configuracoes } from "./permissoes/configuracoes.js";
 
-export type Perfil = "admin" | "secretaria" | "comercial" | "financiada" | "formador" | "formando";
-
-const ADMIN: Perfil[] = ["admin"];
-const SECRETARIA: Perfil[] = ["admin", "secretaria"];
-/** Secretaria Gold e equipa pedagógica da Financiada. */
-const PEDAGOGIA: Perfil[] = ["admin", "secretaria", "financiada"];
-const EQUIPA: Perfil[] = ["admin", "secretaria", "financiada", "comercial"];
-const COM_FORMADOR: Perfil[] = ["admin", "secretaria", "financiada", "comercial", "formador"];
-const PEDAGOGIA_E_FORMADOR: Perfil[] = ["admin", "secretaria", "financiada", "formador"];
-const MARKETING: Perfil[] = ["admin", "secretaria", "comercial"];
-
-type Metodo = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "*";
-type Regra = [Metodo, string, Perfil[]];
+export type { Perfil } from "./permissoes/perfis.js";
 
 /** Primeira linha que corresponde ganha. `*` no fim do padrão apanha o resto do caminho. */
 export const REGRAS: Regra[] = [
-  // Integrações e configuração do sistema.
-  ["*", "/v1/drive/config", ADMIN],
-  ["*", "/v1/drive/disconnect", ADMIN],
-  ["GET", "/v1/drive/oauth/start", ADMIN],
-  ["*", "/v1/crm/whatsapp/config", ADMIN],
-  ["*", "/v1/crm/whatsapp/desligar", ADMIN],
-  ["*", "/v1/auth/microsoft/config", ADMIN],
-  ["*", "/v1/auth/microsoft/disconnect", ADMIN],
-  ["*", "/v1/settings/smtp*", ADMIN],
-  ["*", "/v1/users*", ADMIN],
-  ["PUT", "/v1/settings/:id", SECRETARIA],
-  ["GET", "/v1/settings", EQUIPA],
-  ["POST", "/v1/site/hero/:slot/imagem", ADMIN],
-
-  // Emails automáticos.
-  ["GET", "/v1/email/*", SECRETARIA],
-  ["*", "/v1/email/*", SECRETARIA],
-  ["POST", "/v1/events", COM_FORMADOR],
-
-  // Financeiro.
-  ["*", "/v1/pagamentos*", SECRETARIA],
-
-  // Oferta e regras de abertura de turmas.
-  ["POST", "/v1/cursos-gold", MARKETING],
-  ["PATCH", "/v1/cursos-gold/:id", MARKETING],
-  ["DELETE", "/v1/cursos-gold/:id", SECRETARIA],
-  ["*", "/v1/cursos-fin*", PEDAGOGIA],
-  ["*", "/v1/turma-regras*", PEDAGOGIA],
-  ["POST", "/v1/turmas/auto-regras", PEDAGOGIA],
-  ["PUT", "/v1/cursos/:regime/:id/dtp-modelo", PEDAGOGIA],
-  ["*", "/v1/dtp/gold/entidades*", PEDAGOGIA],
-
-  // Marketing.
-  ["*", "/v1/campanhas*", MARKETING],
-  ["*", "/v1/blog*", MARKETING],
-
-  // Formadores: criar e apagar cria/encerra contas de acesso.
-  ["POST", "/v1/formadores", PEDAGOGIA],
-  ["DELETE", "/v1/formadores/:id", PEDAGOGIA],
-  ["PATCH", "/v1/formadores/:id", [...PEDAGOGIA_E_FORMADOR, "comercial"]],
-  ["PUT", "/v1/formadores/:id/docs", PEDAGOGIA_E_FORMADOR],
-
-  // CRM: documentos e remoção de leads.
-  ["DELETE", "/v1/preinscricoes/:id", PEDAGOGIA],
-  ["POST", "/v1/crm/leads/:id/documentos/:docId/validar", PEDAGOGIA],
-  ["POST", "/v1/crm/leads/:id/documentos/:docId/recusar", PEDAGOGIA],
-  ["DELETE", "/v1/crm/etiquetas/:id", SECRETARIA],
-  ["DELETE", "/v1/crm/clientes/:id", SECRETARIA],
-  ["DELETE", "/v1/crm/parceiros/:id", SECRETARIA],
-
-  // Turmas: o formador só marca início/fim das suas sessões (verificado no handler).
-  ["PATCH", "/v1/turmas-gold/:id", COM_FORMADOR],
-  ["PATCH", "/v1/turmas-fin/:id", PEDAGOGIA_E_FORMADOR],
-  ["*", "/v1/turmas-fin*", PEDAGOGIA],
-  ["*", "/v1/formandos-fin*", PEDAGOGIA],
-
-  // Pedagogia da turma.
-  ["PUT", "/v1/turmas/:regime/:id/sessoes/:n", PEDAGOGIA_E_FORMADOR],
-  ["PUT", "/v1/turmas/:regime/:id/avaliacao", PEDAGOGIA_E_FORMADOR],
-  ["PUT", "/v1/turmas/:regime/:id/certificados/:formandoId", PEDAGOGIA],
-  ["PUT", "/v1/turmas/:regime/:id/documentos", PEDAGOGIA],
-  ["POST", "/v1/turmas/:regime/:id/cronograma/publicar", PEDAGOGIA],
-  ["*", "/v1/turmas/:regime/:id/dtp/*", PEDAGOGIA],
-  ["POST", "/v1/turmas/:regime/:id/fecho", PEDAGOGIA],
-  ["POST", "/v1/turmas/:regime/:id/reabrir", ADMIN],
-  ["POST", "/v1/turmas/:regime/:id/inqueritos/enviar", PEDAGOGIA],
-  ["POST", "/v1/inqueritos/:id/respostas", PEDAGOGIA],
-
-  // Leitura e escrita que o formador faz na sua área.
-  ["POST", "/v1/notificacoes/lidas", COM_FORMADOR],
-  ["POST", "/v1/drive/files", COM_FORMADOR],
-  ["GET", "/v1/dashboard", EQUIPA],
+  ...sistema,
+  ...emails,
+  ...pagamentos,
+  ...cursos,
+  ...campanhas,
+  ...blog,
+  ...formadores,
+  ...crm,
+  ...turmas,
+  ...pedagogia,
+  ...comum,
+  ...painel,
+  ...formandos,
+  ...inqueritos,
+  ...dtp,
+  ...catalogos,
+  ...listas,
+  ...utilizadores,
+  ...auditoria,
+  ...site,
+  ...configuracoes,
 ];
 
 /** Áreas que o formador nunca lê. */
@@ -104,6 +66,7 @@ const FORMADOR_SEM_LEITURA = [
   "/v1/dtp*", "/v1/alertas*", "/v1/turma-regras*", "/v1/drive/status", "/v1/pagamentos*",
   "/v1/formandos/*", "/v1/inqueritos/*",
   "/v1/turmas/:regime/:id/dossie/*", "/v1/turmas/:regime/:id/relatorio-*", "/v1/turmas/:regime/:id/inqueritos/*",
+  "/v1/painel*", "/v1/auditoria*", "/v1/sistema*", "/v1/utilizadores*", "/v1/campanhas*", "/v1/formandos*",
 ];
 
 function corresponde(path: string, padrao: string): boolean {

@@ -28,17 +28,6 @@ const CIDADE_OFICIAL: Record<string, string> = {
   "centro de emprego gaia": "Centro de Emprego de Gaia",
 };
 
-const MORADA_OFICIAL: Record<string, string> = {
-  "vila nova de gaia": "Rua Conselheiro Veloso da Cruz nº 524, 4400-092 Vila Nova de Gaia",
-  "aveiro": "Av. Dr. Lourenço Peixinho 88, 3800 Aveiro",
-  "penafiel": "Rua Direita 4, 4560 Penafiel",
-  "braga": "Av. da Liberdade 210, 4710 Braga",
-  "lisboa": "Av. da República 50, 1050 Lisboa",
-  "sala virtual": "Moodle + Zoom ENA",
-  "e-learning": "Plataforma de e-learning ENA",
-  "centro de emprego de gaia": "Polo IEFP · encaminhamento de candidatos",
-};
-
 function keyOf(value: string) {
   return value
     .normalize("NFD")
@@ -72,7 +61,8 @@ export function mapLocalTurma(codigo: string | undefined, catalogos: LocalCatalo
     return keyOf(nome) === keyOf(raw) || compact(nome) === compact(raw) || cidadeOficial(nome) === cidade;
   });
   const moradaCatalogo = String(hit?.morada ?? "").trim();
-  const morada = moradaCatalogo || MORADA_OFICIAL[keyOf(cidade)] || "";
+  // A morada vem sempre do catálogo de locais (Edição de Cursos › Locais).
+  const morada = moradaCatalogo;
   const virtual = /sala virtual|e-learning|moodle|zoom/i.test(`${cidade} ${morada}`);
   const localizacao = !raw
     ? "-"

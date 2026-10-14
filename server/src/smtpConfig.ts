@@ -2,6 +2,7 @@ import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { openSecret, sealSecret } from "./secretBox.js";
 import { isEmail, normalizeEmail, sanitizeHeader } from "./security.js";
+import { apagarSmtp, gravarSmtp, smtpGuardado } from "./repos/integracoes.js";
 
 export const BREVO_SMTP_HOST = "smtp-relay.brevo.com";
 export const BREVO_SMTP_PORT = 587;
@@ -66,10 +67,7 @@ function parseFromHeader(raw: string) {
 }
 
 export async function smtpCreds(db: Db): Promise<SmtpCreds> {
-  const row = await db.query<Row>(
-    "SELECT host, port, login, password_sealed, from_name, from_email, reply_to FROM smtp_config WHERE id = 'brevo'",
-  );
-  const stored = row.rows[0];
+  const stored = await smtpGuardado(db);
   let storedPassword = "";
   if (stored?.password_sealed) {
     try { storedPassword = openSecret(stored.password_sealed); } catch { storedPassword = ""; }
@@ -177,23 +175,10 @@ export async function saveSmtpConfig(db: Db, patch: {
   if (!isEmail(fromEmail)) throw new Error("Email dos envios automáticos inválido");
   if (!isEmail(replyTo)) throw new Error("Email para redireccionar respostas inválido");
   const fromName = sanitizeHeader(patch.fromName ?? prev.fromName) || "ENA Formação";
-  await db.query(
-    `INSERT INTO smtp_config (id, host, port, login, password_sealed, from_name, from_email, reply_to)
-     VALUES ('brevo', $1, $2, $3, $4, $5, $6, $7)
-     ON CONFLICT (id) DO UPDATE SET
-       host = EXCLUDED.host,
-       port = EXCLUDED.port,
-       login = EXCLUDED.login,
-       password_sealed = EXCLUDED.password_sealed,
-       from_name = EXCLUDED.from_name,
-       from_email = EXCLUDED.from_email,
-       reply_to = EXCLUDED.reply_to,
-       updated_at = now()`,
-    [host, port, login, sealSecret(smtpKey), fromName, fromEmail, replyTo],
-  );
+  await gravarSmtp(db, { host, port, login, passwordSealed: sealSecret(smtpKey), fromName, fromEmail, replyTo });
   return smtpCreds(db);
 }
 
 export async function disconnectSmtp(db: Db) {
-  await db.query("DELETE FROM smtp_config WHERE id = 'brevo'");
+  await apagarSmtp(db);
 }

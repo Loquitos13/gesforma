@@ -1,4 +1,3 @@
-import type { SelectOption } from "./FormKit";
 import type { SessaoMeta } from "./TurmaExtras";
 
 export type SessaoModalidade = "presencial" | "sincrona" | "auto" | "avaliacao" | "matricula";
@@ -165,26 +164,6 @@ export type TurmaFin = {
 const WEEKDAYS_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const MONTHS_PT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-const CCP_MODULOS = [
-  "M1 · Formador: sistemas, contextos e perfil",
-  "M2 · Simulação pedagógica inicial",
-  "M3 · Comunicação e dinamização de grupos",
-  "M4 · Metodologias e estratégias pedagógicas",
-  "M5 · Operacionalização da formação",
-  "M6 · Recursos didáticos e multimédia",
-  "M7 · Plataformas colaborativas e de aprendizagem",
-  "M8 · Avaliação da formação e das aprendizagens",
-  "M9 · Simulação pedagógica final",
-];
-
-const UFCD_3564_MODULOS = [
-  "UFCD 3564 · Avaliação primária e SVB",
-  "UFCD 3564 · Trauma e hemorragias",
-  "UFCD 3564 · Queimaduras e intoxicações",
-  "UFCD 3564 · Emergências médicas",
-  "UFCD 3564 · Simulação e avaliação",
-];
-
 export function isTurmaActiva(t: { estado?: string; activa?: boolean }) {
   if (typeof t.activa === "boolean") return t.activa;
   return t.estado === "Ativa" || t.estado === "Ativo";
@@ -341,19 +320,10 @@ function durationLabel(start: string, end: string) {
   return `${h}h`;
 }
 
-function modulosForIndex(i: number, n: number, curso?: string) {
-  const pool = (curso?.includes("Primeiros Socorros") || curso?.includes("3564"))
-    ? UFCD_3564_MODULOS
-    : CCP_MODULOS;
-  return [pool[Math.min(pool.length - 1, Math.floor((i * pool.length) / n))]];
-}
-
-function moduloGerado(i: number, n: number, curso: string | undefined, lista?: string[]) {
-  if (lista) {
-    if (!lista.length) return [];
-    return [lista[Math.min(lista.length - 1, Math.floor((i * lista.length) / n))]!];
-  }
-  return modulosForIndex(i, n, curso);
+/** Distribui os módulos do curso (vindos da API) pelas sessões geradas. Sem módulos, fica por definir. */
+function moduloGerado(i: number, n: number, _curso: string | undefined, lista?: string[]) {
+  if (!lista?.length) return [];
+  return [lista[Math.min(lista.length - 1, Math.floor((i * lista.length) / n))]!];
 }
 
 export function generateCronograma(opts: {
@@ -503,202 +473,3 @@ export function locaisEquivalentes(a: string, b: string) {
 }
 
 export type OfertaTurmaRef = { id: number; curso: string; local: string; horario: string; dataInicio?: string };
-
-export function preinscricaoCasaComTurma(
-  lead: { curso: string; local: string; horario?: string; turmaId?: number; estado: string; inicioCurso?: string },
-  turma: OfertaTurmaRef,
-) {
-  if (lead.estado === "Formando" || lead.estado === "Desistiu") return false;
-  if (lead.turmaId && lead.turmaId === turma.id) return true;
-  if (chaveOferta(lead.curso) !== chaveOferta(turma.curso)) return false;
-  const partido = partirLocalHorario(lead.local, lead.horario);
-  if (!locaisEquivalentes(partido.local, turma.local)) return false;
-  const hLead = chaveHorario(partido.horario);
-  const hTurma = chaveHorario(turma.horario);
-  if (hLead) return hLead === hTurma;
-  const inicio = (lead.inicioCurso ?? "").slice(0, 10);
-  const dataTurma = (turma.dataInicio ?? "").slice(0, 10);
-  return Boolean(inicio && dataTurma && inicio === dataTurma);
-}
-
-export type LeadOfertaRef = {
-  curso: string;
-  local: string;
-  horario?: string;
-  turmaId?: number;
-  inicioCurso?: string;
-};
-
-export type TurmaInscricaoLinha = {
-  turma: TurmaGold;
-  grupo: "adequada" | "outro";
-  disabled: boolean;
-  motivo: string;
-};
-
-/** Horário da pré-inscrição, ou o da turma com a mesma data de início no mesmo local. */
-export function horarioPreferidoDoLead(lead: LeadOfertaRef, turmas: TurmaGold[] = []) {
-  const partido = partirLocalHorario(lead.local, lead.horario);
-  if (chaveHorario(partido.horario)) return partido.horario;
-  if (lead.turmaId) {
-    const pin = turmas.find(t => t.id === lead.turmaId);
-    if (pin?.horario) return pin.horario;
-  }
-  const inicio = (lead.inicioCurso ?? "").slice(0, 10);
-  if (!inicio) return "";
-  const hit = turmas.find(t =>
-    chaveOferta(t.curso) === chaveOferta(lead.curso)
-    && locaisEquivalentes(t.local, partido.local)
-    && t.dataInicio.slice(0, 10) === inicio
-    && chaveHorario(t.horario));
-  return hit?.horario ?? "";
-}
-
-export function turmaAdequadaAoLead(lead: LeadOfertaRef, turma: TurmaGold, turmas: TurmaGold[] = []) {
-  if (lead.turmaId && lead.turmaId === turma.id) return true;
-  if (chaveOferta(lead.curso) !== chaveOferta(turma.curso)) return false;
-  const partido = partirLocalHorario(lead.local, lead.horario);
-  if (!locaisEquivalentes(partido.local, turma.local)) return false;
-  const hLead = chaveHorario(horarioPreferidoDoLead(lead, turmas.length ? turmas : [turma]));
-  if (hLead) return hLead === chaveHorario(turma.horario);
-  const inicio = (lead.inicioCurso ?? "").slice(0, 10);
-  return Boolean(inicio && inicio === turma.dataInicio.slice(0, 10));
-}
-
-export function linhasTurmaInscricao(turmas: TurmaGold[], lead: LeadOfertaRef, hoje = hojeIso()): TurmaInscricaoLinha[] {
-  const partido = partirLocalHorario(lead.local, lead.horario);
-  const mesmoCursoLocal = turmas.filter(t =>
-    chaveOferta(t.curso) === chaveOferta(lead.curso) && locaisEquivalentes(t.local, partido.local));
-  const adequadas = mesmoCursoLocal.filter(t => turmaAdequadaAoLead(lead, t, turmas));
-  const ids = new Set(adequadas.map(t => t.id));
-  const outros = mesmoCursoLocal.filter(t =>
-    !ids.has(t.id) && t.dataInicio.slice(0, 10) >= hoje);
-
-  const linhaAdequada = (t: TurmaGold): TurmaInscricaoLinha => {
-    const vagas = Math.max(0, lugaresLivres(t));
-    if (!isTurmaActiva(t)) return { turma: t, grupo: "adequada", disabled: true, motivo: "Não libertada" };
-    if (vagas <= 0) return { turma: t, grupo: "adequada", disabled: true, motivo: "Sem vagas" };
-    return { turma: t, grupo: "adequada", disabled: false, motivo: `${vagas} vaga${vagas === 1 ? "" : "s"}` };
-  };
-  const linhaOutro = (t: TurmaGold): TurmaInscricaoLinha => ({
-    turma: t,
-    grupo: "outro",
-    disabled: true,
-    motivo: `Outro horário · começa ${formatDiaMes(t.dataInicio)}`,
-  });
-
-  const sortData = (a: TurmaGold, b: TurmaGold) => a.dataInicio.localeCompare(b.dataInicio) || a.nome.localeCompare(b.nome, "pt");
-  return [
-    ...adequadas.slice().sort((a, b) => {
-      const pin = (t: TurmaGold) => (lead.turmaId && t.id === lead.turmaId ? 0 : 1);
-      return pin(a) - pin(b) || sortData(a, b);
-    }).map(linhaAdequada),
-    ...outros.slice().sort(sortData).map(linhaOutro),
-  ];
-}
-
-export function turmaGoldOpts(
-  turmas: TurmaGold[],
-  opts?: { curso?: string; includeNome?: string },
-): SelectOption[] {
-  return turmas
-    .filter(t => {
-      if (opts?.curso && t.curso !== opts.curso) return false;
-      if (isTurmaActiva(t)) return true;
-      return Boolean(opts?.includeNome && t.nome === opts.includeNome);
-    })
-    .map(t => ({
-      value: t.nome,
-      sub: isTurmaActiva(t)
-        ? `${t.local} · ${t.horario} · ${Math.max(0, lugaresLivres(t))} vagas restantes`
-        : `${t.local} · Inativa - não aceita novas inscrições`,
-    }));
-}
-
-export function turmaFinOpts(
-  turmas: TurmaFin[],
-  opts?: { curso?: string; includeNome?: string },
-): SelectOption[] {
-  return turmas
-    .filter(t => {
-      if (opts?.curso && t.curso !== opts.curso && !t.nome.includes(opts.curso)) return false;
-      if (isTurmaActiva(t)) return true;
-      return Boolean(opts?.includeNome && t.nome === opts.includeNome);
-    })
-    .map(t => ({
-      value: t.nome,
-      sub: isTurmaActiva(t)
-        ? `UFCD ${t.ufcdCod} · ${Math.max(0, lugaresLivres(t))} vagas restantes`
-        : `UFCD ${t.ufcdCod} · Inativa - não aceita novas inscrições`,
-    }));
-}
-
-export const GOLD_TURMAS_SEED: Omit<TurmaGold, "cronograma" | "formador" | "horas" | "estado" | "inscricoesAdicionais">[] = [
-  { id: 947, dataInicio: "2026-09-03", nome: "2176/2026", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Laboral Manhã", totalAlunos: 16, vagas: 16 },
-  { id: 946, dataInicio: "2026-07-06", nome: "IRN LSB 01/09", curso: "Formação de Formadores - CCP", local: "Lisboa", horario: "Laboral Manhã", totalAlunos: 12, vagas: 16 },
-  { id: 945, dataInicio: "2026-09-15", nome: "BRG-PL-15/09", curso: "Formação de Formadores - CCP", local: "Braga", horario: "Pós Laboral", totalAlunos: 2, vagas: 16 },
-  { id: 944, dataInicio: "2026-09-21", nome: "BRG-SM-21/09", curso: "Formação de Formadores - CCP", local: "Braga", horario: "Sábado manhã", totalAlunos: 6, vagas: 16 },
-  { id: 943, dataInicio: "2026-09-07", nome: "VNG-SM-07/09", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Sábado manhã", totalAlunos: 10, vagas: 16 },
-  { id: 940, dataInicio: "2026-09-03", nome: "2175/2026", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Laboral Manhã", totalAlunos: 14, vagas: 16 },
-  { id: 939, dataInicio: "2026-09-04", nome: "VNG-PL-04/09", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Pós Laboral", totalAlunos: 9, vagas: 16 },
-  { id: 938, dataInicio: "2026-09-02", nome: "PEN-SM-02/09", curso: "Formação de Formadores - CCP", local: "Penafiel", horario: "Sábado manhã", totalAlunos: 13, vagas: 16 },
-  { id: 937, dataInicio: "2026-08-28", nome: "VNG-SM-28/08", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Sábado manhã", totalAlunos: 12, vagas: 16 },
-  { id: 936, dataInicio: "2026-09-03", nome: "VNG-LM-03/09", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Laboral Manhã", totalAlunos: 12, vagas: 16 },
-  { id: 952, dataInicio: "2026-10-12", nome: "VNG-PL-12/10", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Pós Laboral", totalAlunos: 3, vagas: 16 },
-  { id: 951, dataInicio: "2026-10-17", nome: "VNG-SM-17/10", curso: "Formação de Formadores - CCP", local: "V.N.Gaia", horario: "Sábado manhã", totalAlunos: 4, vagas: 16 },
-  { id: 950, dataInicio: "2026-10-06", nome: "BRG-LM-06/10", curso: "Formação de Formadores - CCP", local: "Braga", horario: "Laboral Manhã", totalAlunos: 5, vagas: 16 },
-];
-
-const GOLD_INATIVAS = new Set([937, 936]);
-
-export function seedGoldTurmas(): TurmaGold[] {
-  return GOLD_TURMAS_SEED.map(t => {
-    const cronograma = generateCronograma({
-      inicio: t.dataInicio,
-      horario: t.horario,
-      horas: 90,
-      formador: "Isac Silva",
-      curso: t.curso,
-    });
-    if (t.id === 943 && cronograma[2]) {
-      cronograma[2] = { ...cronograma[2], formadores: ["Isac Silva", "Ivan Esteves"] };
-    }
-    return {
-      ...t,
-      inscricoesAdicionais: 0,
-      estado: GOLD_INATIVAS.has(t.id) ? "Inativa" : "Ativa",
-      formador: "Isac Silva",
-      horas: 90,
-      cronograma,
-    };
-  });
-}
-
-export const FIN_TURMAS_SEED: Omit<TurmaFin, "cronograma" | "activa" | "inscricoesAdicionais">[] = [
-  { id: 222, dataInicio: "2026-09-18", nome: "UFCD 9109 - Cuidados Básicos", curso: "Masterclass em Estética Facial", ufcdCod: "9109", local: "Sala Virtual / E-Learning", horario: "Online", alunos: 1, alunosTotal: 20, estado: "A montar", horas: 25, formador: "Cátia" },
-  { id: 220, dataInicio: "2026-07-31", nome: "UC02282 - Criar campanhas", curso: "Publicidade nas Redes Sociais", ufcdCod: "10785", local: "Sala Virtual / E-Learning", horario: "Online", alunos: 17, alunosTotal: 20, estado: "A montar", horas: 25, formador: "Isac" },
-  { id: 219, dataInicio: "2026-08-31", nome: "UCUC00033 - Comunicar", curso: "Comunicar e interagir em contexto profissional", ufcdCod: "3564", local: "Sala Virtual / E-Learning", horario: "Online", alunos: 17, alunosTotal: 20, estado: "A decorrer", horas: 25, formador: "António" },
-  { id: 218, dataInicio: "2026-08-27", nome: "UFCD 3564 - Primeiros So.", curso: "Primeiros Socorros", ufcdCod: "3564", local: "Sala Virtual / E-Learning", horario: "Online", alunos: 4, alunosTotal: 20, estado: "A montar", horas: 25, formador: "Vânia Fernandes" },
-  { id: 217, dataInicio: "2026-08-27", nome: "UFCD 9119 - Massagem", curso: "Técnicas de massagem", ufcdCod: "9119", local: "Sala Virtual / E-Learning", horario: "Online", alunos: 17, alunosTotal: 20, estado: "A decorrer", horas: 25, formador: "Rosana" },
-];
-
-export function seedFinTurmas(): TurmaFin[] {
-  return FIN_TURMAS_SEED.map(t => {
-    const cronograma = generateCronograma({
-      inicio: t.dataInicio,
-      horario: t.horario === "Online" ? "Pós Laboral" : t.horario,
-      horas: t.horas,
-      formador: t.formador,
-      curso: t.curso,
-    });
-    if (t.id === 218 && cronograma[2]) {
-      cronograma[2] = { ...cronograma[2], formadores: ["Vânia Fernandes", "Cátia Pinheiro"] };
-    }
-    return {
-      ...t,
-      inscricoesAdicionais: 0,
-      activa: t.id !== 222,
-      cronograma,
-    };
-  });
-}

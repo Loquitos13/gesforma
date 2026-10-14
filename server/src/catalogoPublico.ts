@@ -1,5 +1,6 @@
 import type { Db } from "./db/pool.js";
 import { mapaImagensPublicas } from "./cursoImagens.js";
+import { dadosCatalogoPublico } from "./repos/cursos.js";
 import { hojeLisboa } from "./datas.js";
 
 export type CursoPublico = {
@@ -204,38 +205,18 @@ export function cursoVisivelNoSite(estado: unknown) {
 }
 
 export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPublico[]; destaques: CursoPublico[]; ccp: CursoPublico | null }> {
-  const [gold, fin, formandosGold, pagos, formandosFin, turmasGold, turmasFin, imagens] = await Promise.all([
-    db.query<{ id: number; nome: string; categoria: string; tipo: string; preco: number; regime: string; horas: number; estado: string; payload: unknown }>(
-      `SELECT c.id, c.nome, c.categoria, c.tipo, c.preco, c.regime, c.horas, c.estado, f.payload
-       FROM cursos_gold c
-       LEFT JOIN curso_fichas f ON f.regime = 'gold' AND f.curso_id = c.id`,
-    ),
-    db.query<{ id: number; ufcd: string; nome_comercial: string; regime: string; horas: number; estado: string; payload: unknown }>(
-      `SELECT c.id, c.ufcd, c.nome_comercial, c.regime, c.horas, c.estado, f.payload
-       FROM cursos_fin c
-       LEFT JOIN curso_fichas f ON f.regime = 'fin' AND f.curso_id = c.id`,
-    ),
-    db.query<{ curso: string; n: number }>("SELECT curso, count(*)::int AS n FROM formandos_gold GROUP BY curso"),
-    db.query<{ curso: string; n: number }>("SELECT curso, count(*)::int AS n FROM pagamentos WHERE lower(trim(estado)) = 'pago' GROUP BY curso"),
-    db.query<{ curso: string; n: number }>("SELECT curso, count(*)::int AS n FROM formandos_fin GROUP BY curso"),
-    db.query<{ curso: string; local: string; horario: string; data_inicio: string; estado: string }>(
-      "SELECT curso, local, horario, data_inicio, estado FROM turmas_gold",
-    ),
-    db.query<{ curso: string; local: string; horario: string; data_inicio: string; estado: string }>(
-      "SELECT curso, local, horario, data_inicio, estado FROM turmas_fin",
-    ),
-    mapaImagensPublicas(db),
-  ]);
+  const dados = await dadosCatalogoPublico(db);
+  const imagens = await mapaImagensPublicas(db);
+  const gold = { rows: dados.gold };
+  const fin = { rows: dados.fin };
 
   const vendas = new Map<string, number>();
-  for (const row of formandosGold.rows) somar(vendas, row.curso, Number(row.n) || 0);
-  for (const row of pagos.rows) somar(vendas, row.curso, Number(row.n) || 0);
-  for (const row of formandosFin.rows) somar(vendas, row.curso, Number(row.n) || 0);
+  for (const row of dados.vendas) somar(vendas, row.curso, Number(row.n) || 0);
 
   const hoje = hojeLisboa();
   const inicios = new Map<string, { data: string; local: string }>();
   const sessoes = new Map<string, Array<CursoPublico["sessoes"][number] & { iso: string }>>();
-  for (const row of [...turmasGold.rows, ...turmasFin.rows]) {
+  for (const row of dados.turmas) {
     const data = String(row.data_inicio ?? "").slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || data < hoje) continue;
     const key = chave(row.curso);

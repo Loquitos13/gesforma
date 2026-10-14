@@ -12,8 +12,9 @@ import {
   type PrevisaoLivroCcp,
 } from "./avaliacaoCcp";
 import type { TopicoPrograma } from "./cursoPrograma";
-import { FolhasCcp } from "./FolhaCcpView";
-import { ImportarCsvAvaliacao, type AvisoImportacao } from "./ImportarCsvAvaliacao";
+import { FolhasCcp } from "./FolhaCcpFolhasView";
+import { type AvisoImportacao } from "./ImportarCsvPainel";
+import { ImportarCsvAvaliacao } from "./ImportarCsvAvaliacao";
 import type { BlocoCsv } from "./csvAvaliacao";
 import { lerLivroExcel } from "./vistaExcel";
 

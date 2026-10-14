@@ -1,15 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppModal } from "../partilhado/FormKit";
 import { CamposInscricaoManual, OPCOES_MANUAL, emailValido, type OpcoesManual } from "./InscricaoManual";
-import type { FormandoTurma, Preinscricao } from "../partilhado/ListsContext";
-import {
-  formatDiaMes,
-  linhasTurmaInscricao,
-  preinscricaoCasaComTurma,
-  type OfertaTurmaRef,
-  type TurmaGold,
-  type TurmaInscricaoLinha,
-} from "../partilhado/turmaModel";
+import type { FormandoTurma, Preinscricao } from "../partilhado/tiposFormando";
+import { formatDiaMes, type OfertaTurmaRef, type TurmaGold } from "../partilhado/turmaModel";
+import { linhasTurmaInscricao, preinscricaoCasaComTurma, type TurmaInscricaoLinha } from "../partilhado/turmaOferta";
 
 const iCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent";
 

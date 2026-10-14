@@ -1,4 +1,7 @@
 import type { Db } from "./db/pool.js";
+import { lerSessao } from "./repos/pedagogiaSessoes.js";
+import { cronogramaDaTurma } from "./repos/pedagogiaTurma.js";
+import { equipaECronograma, equipasDoRegime, fichaDaConta, nomesPorConta } from "./repos/sessaoAcesso.js";
 
 function asArr(v: unknown) {
   if (Array.isArray(v)) return v;
@@ -36,13 +39,8 @@ export function formadoresDaSessaoN(cronograma: unknown, n: number) {
  * conta (`formadores.user_id`) ou pelo email — nunca só pelo nome da conta.
  */
 export async function nomesDoFormador(db: Db, email: string, _name: string, userId = "") {
-  const rows = await db.query<{ nome: string }>(
-    `SELECT nome FROM formadores
-      WHERE ($2 <> '' AND user_id::text = $2)
-         OR ($1 <> '' AND lower(email) = lower($1))`,
-    [email.trim(), userId],
-  );
-  return new Set(rows.rows.map(r => r.nome.trim()).filter(Boolean));
+  const rows = await nomesPorConta(db, email, userId);
+  return new Set(rows.map(r => r.nome.trim()).filter(Boolean));
 }
 
 /** Nomes de formador referidos por uma turma: responsável, equipa e cada sessão do cronograma. */
@@ -69,12 +67,9 @@ export function turmaDoFormador(t: { formador?: unknown; formadores?: unknown; c
 /** O formador está atribuído a esta turma? Staff passa sempre. */
 export async function formadorNaTurma(db: Db, actor: { id: string; role: string; email: string; name: string }, regime: "gold" | "fin", turmaId: number) {
   if (actor.role !== "formador") return true;
-  const table = regime === "gold" ? "turmas_gold" : "turmas_fin";
-  const row = await db.query<{ formador: unknown; formadores: unknown; cronograma: unknown }>(
-    `SELECT formador, formadores, cronograma FROM ${table} WHERE id = $1`, [turmaId],
-  );
-  if (!row.rows[0]) return false;
-  return turmaDoFormador(row.rows[0], await nomesDoFormador(db, actor.email, actor.name, actor.id));
+  const row = await equipaECronograma(db, regime, turmaId);
+  if (!row) return false;
+  return turmaDoFormador(row, await nomesDoFormador(db, actor.email, actor.name, actor.id));
 }
 
 function atribuido(nomes: Set<string>, daSessao: string[]) {
@@ -136,14 +131,9 @@ export async function podeGravarSessao(db: Db, actor: { id?: string; role: strin
   presencas?: unknown;
 }) {
   const staff = actor.role === "admin" || actor.role === "secretaria" || actor.role === "financiada";
-  const table = opts.regime === "gold" ? "turmas_gold" : "turmas_fin";
-  const turma = await db.query<{ cronograma: unknown }>(`SELECT cronograma FROM ${table} WHERE id = $1`, [opts.turmaId]);
-  const daSessao = formadoresDaSessaoN(turma.rows[0]?.cronograma, opts.n);
-  const actual = await db.query<{ plano: unknown; sumario: unknown; presencas: unknown }>(
-    "SELECT plano, sumario, presencas FROM turma_sessoes WHERE regime = $1 AND turma_id = $2 AND sessao_n = $3",
-    [opts.regime, opts.turmaId, opts.n],
-  );
-  const row = actual.rows[0];
+  const turma = await cronogramaDaTurma(db, opts.regime, opts.turmaId);
+  const daSessao = formadoresDaSessaoN(turma?.cronograma, opts.n);
+  const row = await lerSessao(db, opts.regime, opts.turmaId, opts.n);
   const planoValidado = Boolean(row?.plano && typeof row.plano === "object" && (row.plano as { assinado?: boolean }).assinado);
   const sumarioValidado = Boolean(row?.sumario && typeof row.sumario === "object" && (row.sumario as { assinado?: boolean }).assinado);
   const presencasValidado = Boolean(row?.sumario && typeof row.sumario === "object" && (row.sumario as { presencasValidadas?: boolean }).presencasValidadas);
@@ -168,22 +158,18 @@ export async function podeGravarSessao(db: Db, actor: { id?: string; role: strin
 /** O formador só consulta e altera a sua própria ficha. Staff passa sempre. */
 export async function fichaDoProprioFormador(db: Db, actor: { id: string; role: string; email: string }, formadorId: number) {
   if (actor.role !== "formador") return true;
-  const row = await db.query<{ id: number }>(
-    `SELECT id FROM formadores WHERE id = $1 AND (user_id::text = $2 OR ($3 <> '' AND lower(email) = lower($3)))`,
-    [formadorId, actor.id, actor.email.trim()],
-  );
-  return Boolean(row.rows[0]);
+  return Boolean(await fichaDaConta(db, formadorId, actor.id, actor.email));
 }
 
 /** Ids das turmas Gold e Financiada em que o formador aparece. */
 export async function turmasDoFormador(db: Db, actor: { id: string; email: string; name: string }) {
   const nomes = await nomesDoFormador(db, actor.email, actor.name, actor.id);
   const [gold, fin] = await Promise.all([
-    db.query<{ id: number; formador: unknown; formadores: unknown; cronograma: unknown }>("SELECT id, formador, formadores, cronograma FROM turmas_gold"),
-    db.query<{ id: number; formador: unknown; formadores: unknown; cronograma: unknown }>("SELECT id, formador, formadores, cronograma FROM turmas_fin"),
+    equipasDoRegime(db, "gold"),
+    equipasDoRegime(db, "fin"),
   ]);
   return {
-    gold: new Set(gold.rows.filter(t => turmaDoFormador(t, nomes)).map(t => Number(t.id))),
-    fin: new Set(fin.rows.filter(t => turmaDoFormador(t, nomes)).map(t => Number(t.id))),
+    gold: new Set(gold.filter(t => turmaDoFormador(t, nomes)).map(t => Number(t.id))),
+    fin: new Set(fin.filter(t => turmaDoFormador(t, nomes)).map(t => Number(t.id))),
   };
 }

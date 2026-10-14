@@ -1,6 +1,7 @@
 import { config } from "./config.js";
 import { motivoFecho } from "./ligacaoPessoal.js";
 import type { Db } from "./db/pool.js";
+import * as repo from "./repos/lembretesPre.js";
 import { docsDoCurso } from "./docsCurso.js";
 import { documentosUrl, ensureDocsToken, listarDocsLead } from "./docsLink.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
@@ -48,8 +49,7 @@ export function segundosDoLembrete(quantidade: number, unidade: string) {
 }
 
 export async function lerLembretePre(db: Db) {
-  const row = await db.query<{ values: unknown }>("SELECT values FROM app_settings WHERE id = 'lembrete_pre'");
-  const raw = row.rows[0]?.values;
+  const raw = await repo.configLembrete(db);
   const values: Record<string, string> = {};
   if (raw && typeof raw === "object") {
     for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
@@ -82,9 +82,7 @@ type Pendencia = {
 
 async function nomeTurma(db: Db, regime: "gold" | "fin", id: number) {
   if (!id) return "";
-  const table = regime === "fin" ? "turmas_fin" : "turmas_gold";
-  const row = await db.query<{ nome: string }>(`SELECT nome FROM ${table} WHERE id = $1`, [id]);
-  return String(row.rows[0]?.nome ?? "");
+  return repo.nomeDaTurma(db, regime, id);
 }
 
 async function pendenciaDe(db: Db, lead: {
@@ -126,47 +124,22 @@ function temPendencia(p: Pendencia) {
 export async function enviarLembretesPreinscricao(db: Db) {
   const cfg = await lerLembretePre(db);
   if (!cfg.activo) return { enviados: 0 };
-  await db.query(
-    "UPDATE preinscricoes SET lembrete_pre_em = now() WHERE validada_em IS NULL AND lembrete_pre_em IS NULL",
-  );
+  await repo.iniciarContagem(db);
   const limite = new Date(Date.now() - cfg.segundos * 1000);
   // Só pedidos abertos, com ligação pessoal enviada, e até ao máximo de lembretes.
-  const devidos = await db.query<{
-    id: number; nome: string; apelido: string; email: string; curso: string; regime: string;
-    turma_escolhida_id: number | null; turmas_recusadas: unknown;
-    validada_em: unknown; estado: string; docs_token_usado_em: unknown; docs_token_criado_em: unknown; created_at: unknown;
-  }>(
-    `SELECT id, nome, apelido, email, curso, COALESCE(regime, 'gold') AS regime,
-            turma_escolhida_id, turmas_recusadas, validada_em, estado,
-            docs_token_usado_em, docs_token_criado_em, created_at
-       FROM preinscricoes
-      WHERE validada_em IS NULL
-        AND estado NOT IN ('Desistiu', 'Formando')
-        AND docs_token IS NOT NULL
-        AND lembretes_enviados < $2
-        AND btrim(email) <> ''
-        AND lembrete_pre_em IS NOT NULL
-        AND lembrete_pre_em <= $1
-      ORDER BY lembrete_pre_em
-      LIMIT 20`,
-    [limite, cfg.maximo],
-  );
+  const devidos = await repo.devidos(db, limite, cfg.maximo);
   let enviados = 0;
-  for (const lead of devidos.rows) {
+  for (const lead of devidos) {
     if (motivoFecho(lead)) {
-      await db.query("UPDATE preinscricoes SET lembrete_pre_em = now() WHERE id = $1", [lead.id]);
+      await repo.adiar(db, lead.id);
       continue;
     }
     const pendencia = await pendenciaDe(db, lead);
     if (!temPendencia(pendencia)) {
-      await db.query("UPDATE preinscricoes SET lembrete_pre_em = now() WHERE id = $1", [lead.id]);
+      await repo.adiar(db, lead.id);
       continue;
     }
-    const reclamado = await db.query<{ id: number }>(
-      "UPDATE preinscricoes SET lembrete_pre_em = now(), lembretes_enviados = lembretes_enviados + 1 WHERE id = $1 AND lembrete_pre_em <= $2 RETURNING id",
-      [lead.id, limite],
-    );
-    if (!reclamado.rows[0]) continue;
+    if (!(await repo.reclamarEnvio(db, lead.id, limite))) continue;
     const email = normalizeEmail(lead.email);
     if (!isEmail(email)) continue;
     const token = await ensureDocsToken(db, lead.id);

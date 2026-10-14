@@ -1,0 +1,144 @@
+/** Esquemas zod dos pedidos da pedagogia, do dossiê e dos inquéritos. */
+import { z } from "zod";
+import { idNum, regime } from "../validacao.js";
+
+export const regimeSchema = regime;
+export const estadoSchema = z.enum(["ok", "parcial", "falta"]);
+
+export const momentoSchema = z.object({
+  conteudo: z.string().max(4000).default(""),
+  atividades: z.string().max(4000).default(""),
+  metodos: z.string().max(2000).default(""),
+  avaliacao: z.string().max(2000).default(""),
+  recursos: z.string().max(2000).default(""),
+  materiais: z.string().max(2000).default(""),
+});
+
+export const planoSchema = z.object({
+  objetivosGerais: z.string().max(4000).default(""),
+  objetivosEspecificos: z.string().max(4000).default(""),
+  momentos: z.object({
+    introducao: momentoSchema,
+    desenvolvimento: momentoSchema,
+    conclusao: momentoSchema,
+  }),
+  assinado: z.boolean().optional(),
+});
+
+export const sumarioSchema = z.object({
+  conteudos: z.string().max(6000).default(""),
+  atividades: z.string().max(6000).default(""),
+  observacoes: z.string().max(4000).default(""),
+  assinado: z.boolean().default(false),
+  assinadoEm: z.string().max(40).optional(),
+  presencasValidadas: z.boolean().optional(),
+});
+
+export const presencasSchema = z.array(z.object({
+  id: z.number().int(),
+  nome: z.string().max(160),
+  presente: z.boolean(),
+  /** Sem estado, `presente` decide: presente ou falta injustificada. */
+  estado: z.enum(["presente", "falta_justificada", "falta_injustificada", "atraso"]).optional(),
+  /** Minutos em falta (atraso ou saída antecipada). */
+  minutos: z.number().int().min(0).max(600).optional(),
+  justificacao: z.string().max(400).optional(),
+}).transform(p => ({ ...p, presente: p.estado ? p.estado === "presente" || p.estado === "atraso" : p.presente }))).max(400);
+
+export const sessaoPatchSchema = z.object({
+  plano: planoSchema.optional(),
+  sumario: sumarioSchema.optional(),
+  presencas: presencasSchema.optional(),
+}).refine(v => v.plano || v.sumario || v.presencas, { message: "vazio" });
+
+export const documentoSchema = z.object({
+  grupoId: z.string().min(1).max(40),
+  label: z.string().min(1).max(160),
+  estado: estadoSchema,
+  detalhe: z.string().max(400).default(""),
+  payload: z.unknown().optional(),
+});
+
+export const dtpSchema = z.object({ estado: z.union([estadoSchema, z.literal("auto")]) });
+
+export const anexoSchema = z.object({
+  driveFileId: z.string().min(1).max(80),
+  fileName: z.string().max(240).default(""),
+  driveUrl: z.string().max(500).optional().default(""),
+});
+
+export const certificadoSchema = z.object({
+  emitido: z.boolean().optional(),
+  nota: z.number().min(0).max(20).nullable().optional(),
+  elearning: z.number().int().min(0).max(100).nullable().optional(),
+  ficheiroId: z.string().max(80).optional(),
+  ficheiroNome: z.string().max(240).optional(),
+  ficheiroUrl: z.string().max(500).optional(),
+  /** Só o administrador emite sem cumprir as regras de elegibilidade (fica auditado). */
+  forcar: z.boolean().optional(),
+});
+
+export const avaliacaoNotasSchema = z.object({
+  notas: z.array(z.object({
+    formandoId: z.number().int(),
+    moduloId: z.string().max(120).default(""),
+    parametroId: z.string().min(1).max(80),
+    nota: z.number().min(0).max(20).nullable(),
+  })).max(4000),
+});
+
+export const fichaSchema = z.object({
+  payload: z.record(z.unknown()).optional(),
+  criterios: z.array(z.object({ id: z.string().max(60), label: z.string().max(200) })).max(40).optional(),
+}).refine(v => v.payload || v.criterios, { message: "vazio" });
+
+export const formandoDocsSchema = z.object({
+  docs: z.array(z.object({
+    id: z.string().min(1).max(60),
+    ok: z.boolean(),
+    fileName: z.string().max(240).default(""),
+    data: z.string().max(40).default(""),
+    driveFileId: z.string().max(80).optional().default(""),
+    driveUrl: z.string().max(500).optional().default(""),
+  })).max(40),
+});
+
+export const notaSchema = z.object({ texto: z.string().trim().min(1).max(2000) });
+
+export const formadorDocsSchema = z.object({
+  docs: z.array(z.object({
+    id: z.string().min(1).max(60),
+    uploaded: z.boolean(),
+    fileName: z.string().max(240).default(""),
+    driveFileId: z.string().max(80).optional().default(""),
+    driveUrl: z.string().max(500).optional().default(""),
+  })).max(40),
+});
+
+export const dtpModeloSchema = z.object({
+  excluidos: z.array(z.string().max(60)).max(80).default([]),
+  incluidos: z.array(z.string().max(60)).max(80).optional().default([]),
+  extra: z.array(z.object({
+    id: z.string().max(40).optional(),
+    fase: z.enum(["antes", "durante", "depois"]),
+    label: z.string().trim().min(3).max(160),
+    fonte: z.string().trim().max(120).optional(),
+    hint: z.string().trim().max(240).optional(),
+    bloqueante: z.boolean().optional(),
+    ambito: z.enum(["turma", "formando", "formador"]).optional().default("turma"),
+  })).max(30).default([]),
+});
+
+export const respostaSchema = z.object({
+  turma: z.string().max(120).default(""),
+  formando: z.string().max(160).default(""),
+  respostas: z.record(z.unknown()),
+});
+
+export const nomeEntidadeSchema = z.object({ nome: z.string().trim().min(2).max(120) });
+
+/** Parâmetros das rotas da turma. */
+export const sessaoParam = z.object({ regime, id: idNum, n: idNum });
+export const itemParam = z.object({ regime, id: idNum, itemId: z.string().trim().min(1).max(80) });
+export const formandoParam = z.object({ regime, id: idNum, formandoId: idNum });
+export const tokenParam = z.object({ token: z.string().min(8).max(80) });

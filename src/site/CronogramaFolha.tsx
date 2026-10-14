@@ -1,16 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { TurmaPercurso } from "../partilhado/api";
+import { apiPublicEntidade, type EntidadePublica } from "../partilhado/api/publico";
+import { useRecurso } from "../partilhado/dados/useRecurso";
 import { mapLocalTurma } from "../partilhado/cronogramaLocal";
-import {
-  datesFromRange,
-  grelhaPeriodo,
-  linhasFromSessoes,
-  sessoesSemFim,
-} from "../partilhado/cronogramaGrelha";
+import { datesFromRange, grelhaPeriodo, linhasFromSessoes, sessoesSemFim } from "../partilhado/cronogramaGrelha";
 import { buildCronogramaPrintHtml, largurasColunaMm, printPageSize } from "../partilhado/cronogramaPrint";
 import { codigoInternoTurma } from "../partilhado/turmaCodigo";
-import type { SessaoCronograma, SessaoModalidade } from "../partilhado/turmaModel";
+import type { SessaoModalidade, SessaoCronograma } from "../partilhado/turmaModel";
 
 const MODALIDADES = new Set<SessaoModalidade>(["presencial", "sincrona", "auto", "avaliacao", "matricula"]);
 const NIVEIS = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
@@ -27,7 +24,7 @@ function planoParaSessoes(turma: TurmaPercurso): SessaoCronograma[] {
   })));
 }
 
-function folhaDe(turma: TurmaPercurso, curso: string) {
+function folhaDe(turma: TurmaPercurso, curso: string, entidade?: EntidadePublica) {
   const sessoes = planoParaSessoes(turma);
   if (!sessoes.length) return null;
   const periodo = grelhaPeriodo(sessoes, turma.dataInicio);
@@ -50,6 +47,7 @@ function folhaDe(turma: TurmaPercurso, curso: string) {
     linhas,
     sessoes,
     embutido: true,
+    entidade,
   };
   const page = printPageSize(largurasColunaMm(dates, linhas, sessoes), linhas.length);
   return { html: buildCronogramaPrintHtml(input), larguraMm: page.largura, alturaMm: page.altura };
@@ -74,7 +72,8 @@ export function CronogramaModal({
   open: boolean;
   onClose: () => void;
 }) {
-  const folha = useMemo(() => folhaDe(turma, curso), [turma, curso]);
+  const { dados: ent } = useRecurso(open ? "publico:entidade" : null, signal => apiPublicEntidade(signal));
+  const folha = useMemo(() => folhaDe(turma, curso, ent?.entidade), [turma, curso, ent]);
   const caixa = useRef<HTMLDivElement>(null);
   const [largura, setLargura] = useState(0);
   const [zoom, setZoom] = useState(1);

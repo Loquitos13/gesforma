@@ -5,6 +5,7 @@ import { fmtDataPt, ofertaFiltrada, uniqueVals, type OfertaTurma } from "../part
 import type { Course } from "./SiteLanding";
 import { ePreinscricao, ePrepago } from "../partilhado/siteConteudo";
 import { textoListaVazia, useOpcoesPublicas } from "./useOpcoesPublicas";
+import { ConsentimentoRgpd } from "./ConsentimentoRgpd";
 
 type Passo = "dados" | "pagamento" | "feito";
 type OfertaEstado = "a-carregar" | "pronto" | "erro";
@@ -44,6 +45,7 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
   const [email, setEmail] = useState("");
   const [concelho, setConcelho] = useState("");
   const [origem, setOrigem] = useState("");
+  const [consentimento, setConsentimento] = useState(false);
   const concelhos = useOpcoesPublicas("concelhos", aberto);
   const origens = useOpcoesPublicas("origens", aberto);
   const metodos = useOpcoesPublicas("metodos_pagamento", aberto);
@@ -124,6 +126,7 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
     if (!nome.trim() || !apelido.trim() || !telf.trim() || !email.trim() || !concelho || !origem) {
       return "Preencha nome, apelido, telemóvel, email, concelho e como tomou conhecimento.";
     }
+    if (!consentimento) return "Para enviar, aceite a política de privacidade.";
     if (ofertaEstado === "a-carregar") return "A carregar as turmas libertadas.";
     if (ofertaEstado === "erro") return "Não foi possível carregar as turmas. Feche e volte a abrir o pedido.";
     if (doCurso.length && !turmaId) return "Escolha local, horário e data de início da turma.";
@@ -174,6 +177,7 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
         regime: curso.regime,
         pagamentoMetodo: prepago ? metodo : undefined,
         acessoImediato: prepago && !turmaId,
+        consentimento,
       });
       setAviso(r.aviso);
       setPasso("feito");
@@ -202,15 +206,12 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
     );
   }
   const resumoTurma = [turma?.local || local, turma?.horario || horario, dataInicio ? fmtDataPt(dataInicio) : ""].filter(Boolean).join(" · ");
-  const notaPagamento = metodo === "MB Way"
-    ? `A referência MB Way segue para o telemóvel ${telf} e para ${email}.`
-    : metodo === "Multibanco"
-      ? `A entidade e a referência Multibanco seguem para ${email}.`
-      : metodo === "Transferência"
-        ? `O IBAN da transferência segue para ${email}.`
-        : metodo
-          ? `A ENA confirma consigo o pagamento por ${metodo}. Nada é cobrado neste ecrã.`
-          : "";
+  // Sem gateway de pagamento: o pagamento é pedido pela secretaria, por email, depois da pré-inscrição.
+  const notaPagamento = /transfer/i.test(metodo)
+    ? `O IBAN da transferência segue para ${email}.`
+    : metodo
+      ? `A ENA confirma consigo o pagamento por ${metodo}. Nada é cobrado neste ecrã.`
+      : "";
   const pagamentoBloqueado = passo === "pagamento" && Boolean(falhaPagamento());
 
   return (
@@ -364,6 +365,7 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
                 {turma?.cronogramaPublicado && (
                   <a className="mt-3 inline-flex text-sm font-bold text-[#A60000] underline" href={`/cronograma/${turma.regime || "gold"}/${turma.turmaId}`} target="_blank" rel="noreferrer">Ver o cronograma desta turma</a>
                 )}
+                <ConsentimentoRgpd aceite={consentimento} onMudar={setConsentimento} className="mt-5" />
                 {prepago && ofertaEstado === "pronto" && (
                   <p className="mt-4 text-sm leading-6 text-[#1C3350]/60">Nada é cobrado neste passo. A forma de pagamento escolhe-se a seguir.</p>
                 )}
@@ -380,7 +382,7 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
             <button type="button" onClick={onClose} className="bg-[#1C3350] px-6 py-3 text-sm font-extrabold uppercase tracking-[0.08em] text-white">Fechar</button>
           ) : (
             <button type="submit" form="inscricao-form" disabled={busy || pagamentoBloqueado} className="bg-[#A60000] px-6 py-3 text-sm font-extrabold uppercase tracking-[0.08em] text-white hover:bg-[#8B0000] disabled:opacity-40">
-              {busy ? "A enviar…" : passo === "pagamento" ? "Pedir referência" : prepago ? "Continuar para o pagamento" : "Inscrever-me"}
+              {busy ? "A enviar…" : passo === "pagamento" ? "Confirmar pedido" : prepago ? "Continuar para o pagamento" : "Inscrever-me"}
             </button>
           )}
         </footer>

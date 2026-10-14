@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArtigoBlocos } from "../partilhado/ArtigoBlocos";
 import { apiNoticia, apiNoticias } from "../partilhado/api";
 import { lerDocumento } from "../partilhado/blogBlocos";
-import { SiteFrame } from "./SiteLanding";
+import { SiteFrame } from "./SiteLandingRodape";
 
 type Item = { titulo: string; slug: string; data: string; tematica: string; excerto?: string };
 

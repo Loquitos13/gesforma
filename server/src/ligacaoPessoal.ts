@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { Db } from "./db/pool.js";
+import * as leads from "./repos/leads.js";
 
 /**
  * Ciclo de vida da ligação pessoal `/documentos/:token` da pré-inscrição.
@@ -63,33 +64,24 @@ function novoToken() {
 
 /** Devolve o token da pré-inscrição, criando-o (com data) se ainda não existe. */
 export async function garantirToken(db: Db, id: number) {
-  const row = await db.query<{ docs_token: string | null }>("SELECT docs_token FROM preinscricoes WHERE id = $1", [id]);
-  const atual = row.rows[0]?.docs_token;
+  const atual = await leads.tokenDoLead(db, id);
   if (atual) return atual;
-  await db.query(
-    "UPDATE preinscricoes SET docs_token = $2, docs_token_criado_em = now(), docs_token_usado_em = NULL WHERE id = $1 AND docs_token IS NULL",
-    [id, novoToken()],
-  );
-  const again = await db.query<{ docs_token: string | null }>("SELECT docs_token FROM preinscricoes WHERE id = $1", [id]);
-  return again.rows[0]?.docs_token ?? "";
+  await leads.gravarTokenSeVazio(db, id, novoToken());
+  return (await leads.tokenDoLead(db, id)) ?? "";
 }
 
 /** Troca o token: a ligação antiga deixa de funcionar e a nova conta os 90 dias de novo. */
 export async function regenerarToken(db: Db, id: number) {
   const token = novoToken();
-  await db.query(
-    "UPDATE preinscricoes SET docs_token = $2, docs_token_criado_em = now(), docs_token_usado_em = NULL, lembretes_enviados = 0 WHERE id = $1",
-    [id, token],
-  );
+  await leads.trocarToken(db, id, token);
   return token;
 }
 
 export async function leadPorToken(db: Db, token: string) {
   if (token.length < 12 || token.length > 80) return null;
-  const r = await db.query("SELECT * FROM preinscricoes WHERE docs_token = $1", [token]);
-  return (r.rows[0] as Record<string, unknown> | undefined) ?? null;
+  return leads.leadPorToken(db, token);
 }
 
 export async function marcarUso(db: Db, id: number) {
-  await db.query("UPDATE preinscricoes SET docs_token_usado_em = now() WHERE id = $1", [id]);
+  await leads.marcarUsoToken(db, id);
 }

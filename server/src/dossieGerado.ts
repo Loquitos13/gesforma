@@ -1,6 +1,9 @@
 import { lerEntidade } from "./regrasConfig.js";
 import { resultadosDaTurma } from "./resultados.js";
 import type { Db } from "./db/pool.js";
+import { certificadosFinComFicheiro, formandosFinComContacto, turmaFinBase, ufcdDoCurso } from "./repos/dossieGerado.js";
+import { listarNotas } from "./repos/pedagogiaSessoes.js";
+import { fichaCursoFinPorNome } from "./repos/pedagogiaRelatorio.js";
 import { pdfDeLinhas } from "./pdfTexto.js";
 import { partirLinhas } from "./relatorioFinal.js";
 
@@ -125,66 +128,16 @@ export function comAproveitamento(input: {
 }
 
 async function carregar(db: Db, turmaId: number): Promise<Dados | null> {
-  const turma = await db.query<{
-    nome: string; curso: string; local: string; formador: string; formadores: unknown;
-  }>(
-    "SELECT nome, curso, local, formador, formadores FROM turmas_fin WHERE id = $1",
-    [turmaId],
-  );
-  const row = turma.rows[0];
+  const row = await turmaFinBase(db, turmaId);
   if (!row) return null;
   const [formandos, notas, certs, ficha, curso] = await Promise.all([
-    db.query<{
-      id: number; nome: string; apelido: string; email: string; telf: string; estado: string;
-      concelho: string; nif: string; morada: string; codigo_postal: string; origem: string; inscrito: string;
-    }>(
-      `SELECT f.id, f.nome, f.apelido, f.email, f.telf, f.estado,
-              COALESCE(p.concelho, '') AS concelho,
-              COALESCE(p.nif, '') AS nif,
-              COALESCE(p.morada_fiscal, '') AS morada,
-              COALESCE(p.codigo_postal, '') AS codigo_postal,
-              COALESCE(p.origem, '') AS origem,
-              COALESCE(p.inscrito::text, '') AS inscrito
-         FROM formandos_fin f
-         LEFT JOIN LATERAL (
-           SELECT concelho, nif, morada_fiscal, codigo_postal, origem, inscrito
-             FROM preinscricoes
-            WHERE f.email <> '' AND lower(trim(email)) = lower(trim(f.email))
-            ORDER BY id DESC
-            LIMIT 1
-         ) p ON true
-        WHERE f.turma_id = $1
-           OR (f.turma_id IS NULL AND f.turma = $2)
-           OR (f.turma_id IS NULL AND f.curso = $3 AND NOT EXISTS (SELECT 1 FROM turmas_fin t WHERE t.nome = f.turma))
-        ORDER BY f.nome, f.apelido`,
-      [turmaId, row.nome, row.curso],
-    ),
-    db.query<{ formando_id: number; modulo_id: string; parametro_id: string; nota: number | null }>(
-      "SELECT formando_id, modulo_id, parametro_id, nota FROM turma_avaliacoes WHERE regime = 'fin' AND turma_id = $1",
-      [turmaId],
-    ),
-    db.query<{ formando_id: number; ficheiro_id: string; ficheiro_nome: string; emitido_em: string | null; elearning: number | null; nota: number | null }>(
-      `SELECT formando_id, COALESCE(ficheiro_id, '') AS ficheiro_id, COALESCE(ficheiro_nome, '') AS ficheiro_nome,
-              emitido_em, elearning, nota
-         FROM turma_certificados WHERE regime = 'fin' AND turma_id = $1`,
-      [turmaId],
-    ),
-    db.query<{ payload: unknown }>(
-      `SELECT f.payload FROM curso_fichas f
-         JOIN cursos_fin c ON c.id = f.curso_id AND f.regime = 'fin'
-        WHERE lower(trim(c.nome_comercial)) = lower(trim($1))
-           OR lower(trim(c.ufcd)) = lower(trim($1))
-        LIMIT 1`,
-      [row.curso],
-    ),
-    db.query<{ ufcd_cod: string; ufcd: string }>(
-      `SELECT ufcd_cod, ufcd FROM cursos_fin
-        WHERE lower(trim(nome_comercial)) = lower(trim($1)) OR lower(trim(ufcd)) = lower(trim($1))
-        LIMIT 1`,
-      [row.curso],
-    ),
+    formandosFinComContacto(db, turmaId, row.nome, row.curso),
+    listarNotas(db, "fin", turmaId),
+    certificadosFinComFicheiro(db, turmaId),
+    fichaCursoFinPorNome(db, row.curso),
+    ufcdDoCurso(db, row.curso),
   ]);
-  const payload = asObj(ficha.rows[0]?.payload);
+  const payload = asObj(ficha?.payload);
   const avaliacao = asObj(payload.avaliacaoCurso);
   const parametros = asArr(avaliacao.parametros).flatMap(item => {
     const p = asObj(item);
@@ -211,8 +164,8 @@ async function carregar(db: Db, turmaId: number): Promise<Dados | null> {
     elegiveis.set(r.id, r.elegivel);
     notasFinais.set(r.id, r.nota);
   }
-  const ufcdCod = String(curso.rows[0]?.ufcd_cod ?? "").trim();
-  const ufcdNome = String(curso.rows[0]?.ufcd ?? "").trim();
+  const ufcdCod = String(curso?.ufcd_cod ?? "").trim();
+  const ufcdNome = String(curso?.ufcd ?? "").trim();
   return {
     acao: row.nome,
     curso: row.curso,
@@ -222,7 +175,7 @@ async function carregar(db: Db, turmaId: number): Promise<Dados | null> {
     formadores: asArr(row.formadores).map(s => String(s).trim()).filter(Boolean),
     objetivos: linhasDe(payload.objetivos),
     programa: topicos.length ? topicos : linhasDe(payload.programa),
-    formandos: formandos.rows.map(f => ({
+    formandos: formandos.map(f => ({
       id: f.id,
       nome: `${f.nome} ${f.apelido}`.trim(),
       email: f.email,
@@ -235,7 +188,7 @@ async function carregar(db: Db, turmaId: number): Promise<Dados | null> {
       origem: f.origem,
       inscrito: String(f.inscrito ?? "").slice(0, 10),
     })),
-    notas: notas.rows.map(n => ({
+    notas: notas.map(n => ({
       formandoId: n.formando_id,
       moduloId: n.modulo_id,
       parametroId: n.parametro_id,
@@ -245,7 +198,7 @@ async function carregar(db: Db, turmaId: number): Promise<Dados | null> {
     unidade,
     minimo: Number.isFinite(minimoRaw) ? minimoRaw : (ccp ? 3 : 10),
     ccp,
-    certs: certs.rows.map(c => ({
+    certs: certs.map(c => ({
       formandoId: c.formando_id,
       ficheiroId: c.ficheiro_id,
       ficheiroNome: c.ficheiro_nome,

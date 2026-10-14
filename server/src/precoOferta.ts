@@ -1,4 +1,5 @@
 import type { Db } from "./db/pool.js";
+import { cursosGoldComFicha } from "./repos/oferta.js";
 
 export type RegraPreco = { local: string; horario: string; preco: number };
 
@@ -41,12 +42,8 @@ export function regrasDoPayload(raw: unknown): RegraPreco[] {
 }
 
 export async function mapaPrecosGold(db: Db): Promise<CursoPreco[]> {
-  const rows = await db.query<{ nome: string; preco: number; payload: unknown }>(
-    `SELECT cg.nome, cg.preco, cf.payload
-       FROM cursos_gold cg
-       LEFT JOIN curso_fichas cf ON cf.regime = 'gold' AND cf.curso_id = cg.id`,
-  );
-  return rows.rows.map(r => ({
+  const rows = await cursosGoldComFicha(db);
+  return rows.map(r => ({
     nome: r.nome,
     base: Number(r.preco ?? 0),
     regras: regrasDoPayload(r.payload),

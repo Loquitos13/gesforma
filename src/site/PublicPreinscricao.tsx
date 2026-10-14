@@ -5,6 +5,7 @@ import { SearchSelect } from "../partilhado/FormKit";
 import { precoDaInscricao, type RegraPreco } from "../partilhado/liveOpts";
 import { OFERTA_VAZIA, type CursoOfertaSel, type OfertaTurma } from "../partilhado/oferta";
 import { textoListaVazia, useOpcoesPublicas } from "./useOpcoesPublicas";
+import { ConsentimentoRgpd } from "./ConsentimentoRgpd";
 
 const fieldCls = "w-full bg-transparent border-0 border-b border-slate-300 px-0 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#1b2330] rounded-none";
 const labelCls = "block text-[13px] text-slate-700 mb-1";
@@ -18,6 +19,7 @@ export function PublicPreinscricao() {
   const [email, setEmail] = useState(params.get("email") ?? "");
   const [concelho, setConcelho] = useState("");
   const [origem, setOrigem] = useState("");
+  const [consentimento, setConsentimento] = useState(false);
   const concelhos = useOpcoesPublicas("concelhos");
   const origens = useOpcoesPublicas("origens");
   const [oferta, setOferta] = useState<CursoOfertaSel>({ ...OFERTA_VAZIA, curso: cursoParam });
@@ -45,6 +47,10 @@ export function PublicPreinscricao() {
       setError("Preencha os seus dados para a secretaria o poder contactar.");
       return;
     }
+    if (!consentimento) {
+      setError("Para enviar, aceite a política de privacidade.");
+      return;
+    }
     const cursoSel = cursos.find(c => c.nome === oferta.curso);
     const temTurma = turmas.some(t => t.curso === oferta.curso && (!t.regime || t.regime === (cursoSel?.regime ?? "gold")));
     if (temTurma && !oferta.turmaId) {
@@ -67,6 +73,7 @@ export function PublicPreinscricao() {
         turmaId: oferta.turmaId || undefined,
         regime: cursoSel?.regime ?? "gold",
         campanha: params.get("campanha") ?? "",
+        consentimento,
       });
       setDone(true);
     } catch (err) {
@@ -174,7 +181,8 @@ export function PublicPreinscricao() {
               );
             })()}
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            <ConsentimentoRgpd aceite={consentimento} onMudar={setConsentimento} />
+            {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
             <div className="flex justify-center pt-2">
               <button
                 type="submit"

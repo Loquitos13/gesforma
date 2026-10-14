@@ -1,49 +1,32 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { apiWhatsappConversa, apiWhatsappSimular, apiWhatsappStatus } from "../partilhado/api";
-import { AppModal } from "../partilhado/FormKit";
+import { apiWhatsapp, apiWhatsappConversa, apiWhatsappSimular } from "../partilhado/api/configuracoes";
+import { useRecurso } from "../partilhado/dados/useRecurso";
 import { toastError } from "../partilhado/toastBus";
+import { Botao, Campo, Entrada, Modal, cx } from "../partilhado/ui";
 
 type Msg = { direccao: "in" | "out"; corpo: string };
 
-export function WhatsappSimulador({
-  open,
-  onClose,
-  onLeadCreated,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onLeadCreated?: () => void;
-}) {
-  const [telefone, setTelefone] = useState("351912345678");
+/** Simulador do assistente de WhatsApp: a mesma conversa do bot, gravada no CRM. */
+export function WhatsappSimulador({ open, onClose, onLeadCreated }: { open: boolean; onClose: () => void; onLeadCreated?: () => void }) {
+  const { dados: estado } = useRecurso(open ? "configuracoes:whatsapp" : null, apiWhatsapp);
+  const [telefone, setTelefone] = useState("");
   const [texto, setTexto] = useState("");
-  const [ligado, setLigado] = useState(false);
-  const [webhook, setWebhook] = useState("");
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [busy, setBusy] = useState(false);
-  const endRef = useRef<HTMLDivElement>(null);
+  const fim = useRef<HTMLDivElement>(null);
+  const telefoneValido = telefone.replace(/\D/g, "").length >= 9;
 
-  useEffect(() => {
-    if (!open) return;
-    void apiWhatsappStatus().then(s => {
-      setLigado(s.ligado);
-      setWebhook(s.webhook);
-    }).catch(() => undefined);
-  }, [open]);
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [msgs]);
+  useEffect(() => { fim.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
   async function enviar(e?: FormEvent) {
     e?.preventDefault();
     const t = texto.trim();
-    if (!t || busy) return;
+    if (!t || busy || !telefoneValido) return;
     setBusy(true);
     setTexto("");
     try {
       const out = await apiWhatsappSimular(telefone, t);
-      const novas: Msg[] = [{ direccao: "in", corpo: t }, ...out.replies.map(corpo => ({ direccao: "out" as const, corpo }))];
-      setMsgs(m => [...m, ...novas]);
+      setMsgs(m => [...m, { direccao: "in", corpo: t }, ...out.replies.map(corpo => ({ direccao: "out" as const, corpo }))]);
       if (out.leadId) onLeadCreated?.();
     } catch (err) {
       toastError(err, "O simulador não respondeu.");
@@ -53,7 +36,7 @@ export function WhatsappSimulador({
     }
   }
 
-  async function carregar() {
+  async function historico() {
     try {
       const c = await apiWhatsappConversa(telefone);
       setMsgs(c.mensagens.map(m => ({ direccao: m.direccao, corpo: m.corpo })));
@@ -63,52 +46,36 @@ export function WhatsappSimulador({
   }
 
   return (
-    <AppModal
-      open={open}
-      onClose={onClose}
-      title="Bot WhatsApp"
-      sub={ligado ? "Cloud API ligada - as respostas também saem no telemóvel." : "Modo simulador: sem token Meta. O CRM grava na mesma."}
-      size="lg"
-    >
+    <Modal aberto={open} onFechar={onClose} titulo="Assistente de WhatsApp" largura="lg">
       <div className="space-y-3">
-        <p className="text-xs text-slate-500">
-          A pré-inscrição pede nome, apelido, telemóvel, email e concelho; depois dados do curso: curso → local → horário → data (só turmas Gold libertadas).
-          O pagamento não se confirma neste chat - só pelo webhook MB / MB Way.
+        <p className="m-0 text-[13px] text-tinta-suave">
+          {estado?.ligado ? "Cloud API ligada: as respostas também saem no telemóvel." : "Modo simulador (sem token Meta). O CRM grava na mesma."}
+          {" "}A pré-inscrição pede os dados pessoais e depois curso, local, horário e data. O pagamento não se trata no chat.
         </p>
-        {webhook ? (
-          <p className="text-[11px] font-mono text-slate-400 break-all">Webhook Meta: {webhook}</p>
-        ) : null}
-        <div className="flex gap-2">
-          <input
-            value={telefone}
-            onChange={e => setTelefone(e.target.value)}
-            className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg"
-            placeholder="3519…"
-          />
-          <button type="button" onClick={() => void carregar()} className="px-3 py-2 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50">Histórico</button>
+        <div className="flex gap-2 items-end">
+          <Campo rotulo="Telemóvel do interessado" className="flex-1">
+            {a => <Entrada {...a} inputMode="tel" value={telefone} placeholder="9 dígitos ou com 351" onChange={e => setTelefone(e.target.value)} />}
+          </Campo>
+          <Botao disabled={!telefoneValido} onClick={() => void historico()}>Histórico</Botao>
         </div>
-        <div className="h-72 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+        <div className="h-72 overflow-y-auto rounded-cartao border border-linha bg-fundo p-3 space-y-2" aria-live="polite">
           {msgs.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center mt-16">Escreva «olá» ou «1» para pré-inscrição.</p>
+            <p className="m-0 text-sm text-tinta-suave text-center mt-16">Escreva «olá» ou «1» para começar uma pré-inscrição.</p>
           ) : msgs.map((m, i) => (
-            <div key={i} className={`flex ${m.direccao === "in" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${m.direccao === "in" ? "bg-emerald-600 text-white" : "bg-white border border-slate-200 text-slate-800"}`}>
+            <div key={i} className={cx("flex", m.direccao === "in" ? "justify-end" : "justify-start")}>
+              <div className={cx("max-w-[80%] rounded-cartao px-3 py-2 text-sm whitespace-pre-wrap", m.direccao === "in" ? "bg-sucesso text-white" : "bg-superficie border border-linha text-tinta")}>
                 {m.corpo}
               </div>
             </div>
           ))}
-          <div ref={endRef} />
+          <div ref={fim} />
         </div>
         <form onSubmit={e => void enviar(e)} className="flex gap-2">
-          <input
-            value={texto}
-            onChange={e => setTexto(e.target.value)}
-            className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg"
-            placeholder="Mensagem do interessado…"
-          />
-          <button type="submit" disabled={busy} className="px-4 py-2 text-sm font-semibold rounded-lg bg-emerald-600 text-white disabled:opacity-50">Enviar</button>
+          <label className="sr-only" htmlFor="wa-msg">Mensagem</label>
+          <Entrada id="wa-msg" value={texto} onChange={e => setTexto(e.target.value)} placeholder={telefoneValido ? "Mensagem do interessado…" : "Indique primeiro o telemóvel"} disabled={!telefoneValido} />
+          <Botao type="submit" variante="primario" aCarregar={busy} disabled={!telefoneValido || !texto.trim()}>Enviar</Botao>
         </form>
       </div>
-    </AppModal>
+    </Modal>
   );
 }

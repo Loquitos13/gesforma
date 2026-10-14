@@ -5,7 +5,8 @@ import {
   blocoNovo, gravarDocumento, idBloco, lerDocumento, TIPOS_BLOCO,
   type BlocoBlog, type DocumentoBlog, type TipoBloco,
 } from "../partilhado/blogBlocos";
-import { blogTematicasOpts, SearchSelect } from "../partilhado/FormKit";
+import { useOpcoes } from "../partilhado/dados/useOpcoes";
+import { SearchSelect } from "../partilhado/FormKit";
 import { moradaSegura } from "../partilhado/siteConteudo";
 
 const campo = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-amber-400";
@@ -26,6 +27,7 @@ export function EditorBlog({
   onTematica: (valor: string) => void;
   onEstado: (valor: string) => void;
 }) {
+  const tematicas = useOpcoes("tematicas");
   const inicialRef = useRef(corpoInicial);
   const chaveRef = useRef(chave);
   const onCorpoRef = useRef(onCorpo);
@@ -131,7 +133,7 @@ export function EditorBlog({
         <label className="block">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Temática</span>
           <div className="mt-1">
-            <SearchSelect value={tematica} onChange={onTematica} options={blogTematicasOpts} placeholder="Pesquisar temática…" />
+            <SearchSelect value={tematica} onChange={onTematica} options={tematicas.opcoes.map(o => ({ value: o.valor }))} placeholder="Pesquisar temática…" />
           </div>
         </label>
         <div>

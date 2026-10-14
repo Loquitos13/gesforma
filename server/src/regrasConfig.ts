@@ -1,4 +1,5 @@
 import type { Db } from "./db/pool.js";
+import { valoresDefinicao } from "./repos/configuracoes.js";
 
 /**
  * Regras pedagógicas e dados da entidade, editáveis pelo administrador em `app_settings`
@@ -103,8 +104,7 @@ export function parseEntidade(values: Record<string, unknown> | undefined): Enti
 }
 
 async function valores(db: Db, id: string) {
-  const r = await db.query<{ values: Record<string, unknown> }>("SELECT values FROM app_settings WHERE id = $1", [id]);
-  return r.rows[0]?.values ?? {};
+  return valoresDefinicao(db, id);
 }
 
 export async function lerRegras(db: Db) {
@@ -113,6 +113,17 @@ export async function lerRegras(db: Db) {
 
 export async function lerEntidade(db: Db) {
   return parseEntidade(await valores(db, "entidade"));
+}
+
+/** Contactos da entidade que podem sair para páginas públicas (sem NIF, IBAN nem titular). */
+export type EntidadePublica = Pick<Entidade, "nome" | "nomeCurto" | "morada" | "codigoPostal" | "localidade" | "telefone" | "email" | "site">;
+
+export async function lerEntidadePublica(db: Db): Promise<EntidadePublica> {
+  const e = await lerEntidade(db);
+  return {
+    nome: e.nome, nomeCurto: e.nomeCurto, morada: e.morada, codigoPostal: e.codigoPostal,
+    localidade: e.localidade, telefone: e.telefone, email: e.email, site: e.site,
+  };
 }
 
 export function assiduidadeMinima(regras: RegrasPedagogicas, regime: "gold" | "fin") {

@@ -1,19 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { apiCursoFicha, type Regime } from "../partilhado/api";
-import { idCursoPorNome } from "../partilhado/cursoLocais";
-import { useLists } from "../partilhado/ListsContext";
+import { useCursoId } from "../partilhado/dados/comuns";
 import { avaliacaoCcp, avaliacaoPadrao, cursoECcp, parseAvaliacaoCurso, type AvaliacaoCurso } from "../partilhado/avaliacaoNota";
 
 export * from "../partilhado/avaliacaoNota";
 
 export function useAvaliacaoCurso(regime: Regime, cursoNome: string | undefined) {
-  const { cursosGold, cursosFin } = useLists();
   const [cfg, setCfg] = useState<AvaliacaoCurso>(avaliacaoPadrao);
-
-  const cursoId = useMemo(() => {
-    if (!cursoNome) return null;
-    return idCursoPorNome(regime, cursoNome, cursosGold, cursosFin);
-  }, [cursoNome, cursosFin, cursosGold, regime]);
+  const cursoId = useCursoId(regime, cursoNome);
 
   useEffect(() => {
     const ccp = cursoECcp(cursoNome);
@@ -31,4 +25,3 @@ export function useAvaliacaoCurso(regime: Regime, cursoNome: string | undefined)
 
   return cfg;
 }
-

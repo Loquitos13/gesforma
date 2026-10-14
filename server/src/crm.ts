@@ -1,260 +1,80 @@
 import type { Db } from "./db/pool.js";
 import { mapPreinscricao } from "./ops.js";
+import * as repo from "./repos/crmLeads.js";
+import type { CrmDir, CrmFila, CrmFiltros, CrmSort } from "./repos/crmLeads.js";
 
-export type CrmFila = "contactar" | "atrasados" | "hoje" | "agenda" | "converter" | "abertos" | "secretaria" | "preinscricao" | "minhas";
-export type CrmSort = "inscrito" | "proximo" | "valor" | "nome" | "actividade" | "comercial" | "origem" | "meio" | "etiqueta" | "curso" | "turma" | "estado";
-export type CrmDir = "asc" | "desc";
+export type { CrmDir, CrmFila, CrmSort } from "./repos/crmLeads.js";
 
-export type CrmListParams = {
-  q?: string;
-  estado?: string;
-  curso?: string;
-  local?: string;
-  origem?: string;
-  entrada?: "preinscricao" | "manual" | "";
-  campanha?: string;
-  comercialId?: string;
-  actorId?: string;
-  fila?: CrmFila | "";
+export type CrmListParams = CrmFiltros & {
   page?: number;
   perPage?: number;
   sort?: CrmSort;
   dir?: CrmDir;
   kanban?: boolean;
-  regime?: "gold" | "fin" | "";
-  de?: string;
-  ate?: string;
 };
 
-function like(raw: string) {
-  return `%${raw.replace(/[%_\\]/g, ch => `\\${ch}`).slice(0, 80)}%`;
-}
-
-function addWhere(params: CrmListParams, hoje: string, skipEstado = false) {
-  const vals: unknown[] = [];
-  const parts: string[] = ["TRUE"];
-  const push = (fragment: string, ...vs: unknown[]) => {
-    let sql = fragment;
-    for (const v of vs) {
-      vals.push(v);
-      sql = sql.replace("?", `$${vals.length}`);
-    }
-    parts.push(sql);
+/** Linha da lista: a ficha mais o estado dos documentos e do percurso. */
+function itemLista(r: Record<string, unknown>) {
+  return {
+    ...mapPreinscricao(r),
+    docsEnviados: Number(r.docs_enviados ?? 0),
+    docsValidados: Number(r.docs_validados ?? 0),
+    docsRecusados: Number(r.docs_recusados ?? 0),
+    percursoConcluido: Boolean(r.percurso_concluido_em),
+    validada: Boolean(r.validada_em),
+    pagamentoPedido: Boolean(r.pagamento_pedido_em),
+    consentimento: Boolean(r.consentimento_em),
   };
-  const q = (params.q ?? "").trim();
-  if (q) {
-    const needle = like(q);
-    const id = Number(q);
-    if (Number.isInteger(id) && id > 0) {
-      push("(id = ? OR nome ILIKE ? OR apelido ILIKE ? OR email ILIKE ? OR telf ILIKE ? OR curso ILIKE ? OR nif ILIKE ? OR id IN (SELECT preinscricao_id FROM preinscricao_contactos WHERE nota ILIKE ?))", id, needle, needle, needle, needle, needle, needle, needle);
-    } else {
-      push("(nome ILIKE ? OR apelido ILIKE ? OR email ILIKE ? OR telf ILIKE ? OR curso ILIKE ? OR nif ILIKE ? OR id IN (SELECT preinscricao_id FROM preinscricao_contactos WHERE nota ILIKE ?))", needle, needle, needle, needle, needle, needle, needle);
-    }
-  }
-  if (!skipEstado && params.estado && params.estado !== "Todos") push("estado = ?", params.estado);
-  if (params.curso) push("curso = ?", params.curso);
-  if (params.local) push("local = ?", params.local);
-  if (params.origem) push("origem = ?", params.origem);
-  if (params.entrada === "preinscricao" || params.entrada === "manual") push("entrada = ?", params.entrada);
-  if (params.campanha) push("campanha = ?", params.campanha);
-  if (params.comercialId === "eu" && params.actorId) {
-    push("comercial_id = ?", params.actorId);
-  } else if (params.comercialId && params.comercialId !== "eu") {
-    push("comercial_id = ?", params.comercialId);
-  }
-  if (params.fila === "minhas" && params.actorId) push("comercial_id = ?", params.actorId);
-  if (params.fila === "contactar") parts.push("estado = 'Não contactado'");
-  if (params.fila === "atrasados") {
-    push("proximo_contacto <> '' AND left(proximo_contacto,10) < ? AND estado NOT IN ('Formando','Desistiu')", hoje);
-  }
-  if (params.fila === "hoje") {
-    push(
-      `(${DIA_INSCRITO} = ?::date OR (proximo_contacto <> '' AND left(proximo_contacto, 10) = ? AND estado NOT IN ('Formando','Desistiu')))`,
-      hoje,
-      hoje,
-    );
-  }
-  if (params.fila === "agenda") {
-    push(
-      "estado NOT IN ('Formando','Desistiu') AND (estado = 'Não contactado' OR (proximo_contacto <> '' AND left(proximo_contacto,10) <= ?))",
-      hoje,
-    );
-  }
-  if (params.fila === "converter") parts.push("estado = 'Pago'");
-  if (params.fila === "preinscricao") parts.push("estado = 'Pré-inscrição' AND secretaria_em IS NULL");
-  if (params.fila === "secretaria") parts.push("estado = 'Pré-inscrição' AND secretaria_em IS NOT NULL");
-  if (params.fila === "abertos") parts.push("estado NOT IN ('Formando','Desistiu')");
-  if (params.regime === "gold" || params.regime === "fin") push("regime = ?", params.regime);
-  if (params.de && /^\d{4}-\d{2}-\d{2}$/.test(params.de)) {
-    push(`${DIA_INSCRITO} >= ?::date`, params.de);
-  }
-  if (params.ate && /^\d{4}-\d{2}-\d{2}$/.test(params.ate)) {
-    push(`${DIA_INSCRITO} <= ?::date`, params.ate);
-  }
-  return { sql: parts.join(" AND "), vals };
 }
 
-function withEtiqueta(inner: string) {
-  return `SELECT p.*, e.nome AS etiqueta_nome, e.cor AS etiqueta_cor, u.name AS comercial_nome
-            FROM (${inner}) p
-            LEFT JOIN crm_etiquetas e ON e.id = p.etiqueta_id
-            LEFT JOIN users u ON u.id = p.comercial_id`;
-}
+const ESTADOS_PIPELINE = ["Não contactado", "1º Contacto", "2º Contacto", "Pago", "Pré-inscrição", "Formando", "Desistiu"];
 
-/** Dia civil da pré-inscrição em Lisboa. O carimbo `inscrito` é UTC sem fuso. */
-const DIA_INSCRITO = `(CASE
-  WHEN inscrito ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}'
-    THEN ((substring(inscrito from 1 for 16) || ':00')::timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Lisbon')::date
-  WHEN inscrito ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
-    THEN substring(inscrito from 1 for 10)::date
-  ELSE (created_at AT TIME ZONE 'Europe/Lisbon')::date
-END)`;
-
-function orderSql(sort: CrmSort | undefined, dir: CrmDir | undefined) {
-  const d = dir === "asc" ? "ASC" : "DESC";
-  const id = `id ${d}`;
-  switch (sort) {
-    case "nome":
-      return `nome ${d}, apelido ${d}, ${id}`;
-    case "comercial":
-      return `comercial_nome ${d} NULLS LAST, ${id}`;
-    case "origem":
-      return `origem ${d}, ${id}`;
-    case "meio":
-      return `meio_contacto ${d}, ${id}`;
-    case "etiqueta":
-      return `etiqueta_nome ${d} NULLS LAST, ${id}`;
-    case "curso":
-      return `curso ${d}, ${id}`;
-    case "turma":
-      return `local ${d}, horario ${d}, ${id}`;
-    case "valor":
-      return `preco ${d}, ${id}`;
-    case "proximo":
-      return `CASE WHEN proximo_contacto = '' THEN 1 ELSE 0 END, proximo_contacto ${d}, ${id}`;
-    case "actividade":
-      return `COALESCE(ultima_actividade_em, created_at) ${d} NULLS LAST, ${id}`;
-    case "estado":
-      return `estado ${d}, ${id}`;
-    default:
-      return `inscrito ${d}, ${id}`;
-  }
-}
-
-function listaOrdenada(whereSql: string, sort: CrmSort | undefined, dir: CrmDir | undefined, limitSql: string) {
-  return `${withEtiqueta(`SELECT * FROM preinscricoes WHERE ${whereSql}`)} ORDER BY ${orderSql(sort, dir)} ${limitSql}`;
-}
-
+/** Lista paginada do CRM com contagens das filas, facetas dos filtros e (opcional) colunas do pipeline. */
 export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string) {
   const page = Math.max(1, params.page ?? 1);
   const perPage = Math.min(100, Math.max(10, params.perPage ?? 50));
-  const { sql, vals } = addWhere(params, hoje);
-  const count = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM preinscricoes WHERE ${sql}`, vals);
-  const total = count.rows[0]?.n ?? 0;
-  const offset = (page - 1) * perPage;
-  const rows = await db.query(
-    listaOrdenada(sql, params.sort, params.dir, `LIMIT ${perPage} OFFSET ${offset}`),
-    vals,
-  );
-  const items = rows.rows.map(r => mapPreinscricao(r as Record<string, unknown>));
-
-  const scoped = params.regime === "gold" || params.regime === "fin";
-  const regimeWhere = scoped ? "WHERE regime = $2" : "";
-  const countVals: unknown[] = scoped ? [hoje, params.regime] : [hoje];
-  const counts = await db.query<{
-    total: number; abertos: number; por_contactar: number; conversa: number; pagos: number;
-    formando: number; atrasados: number; hoje: number; marcados_hoje: number; valor_aberto: number;
-    preinscricoes: number; manuais: number; fila_pre: number; fila_sec: number; desistiu: number;
-  }>(
-    `SELECT
-      count(*)::int AS total,
-      count(*) FILTER (WHERE estado NOT IN ('Formando','Desistiu'))::int AS abertos,
-      count(*) FILTER (WHERE estado = 'Não contactado')::int AS por_contactar,
-      count(*) FILTER (WHERE estado IN ('1º Contacto','2º Contacto'))::int AS conversa,
-      count(*) FILTER (WHERE estado = 'Pago')::int AS pagos,
-      count(*) FILTER (WHERE estado = 'Formando')::int AS formando,
-      count(*) FILTER (WHERE proximo_contacto <> '' AND left(proximo_contacto,10) < $1 AND estado NOT IN ('Formando','Desistiu'))::int AS atrasados,
-      count(*) FILTER (WHERE left(proximo_contacto,10) = $1 AND estado NOT IN ('Formando','Desistiu'))::int AS marcados_hoje,
-      count(*) FILTER (WHERE ${DIA_INSCRITO} = $1::date OR (proximo_contacto <> '' AND left(proximo_contacto,10) = $1 AND estado NOT IN ('Formando','Desistiu')))::int AS hoje,
-      COALESCE(sum(preco) FILTER (WHERE estado NOT IN ('Formando','Desistiu')), 0)::float AS valor_aberto,
-      count(*) FILTER (WHERE entrada = 'preinscricao')::int AS preinscricoes,
-      count(*) FILTER (WHERE entrada = 'manual')::int AS manuais,
-      count(*) FILTER (WHERE estado = 'Pré-inscrição' AND secretaria_em IS NULL)::int AS fila_pre,
-      count(*) FILTER (WHERE estado = 'Pré-inscrição' AND secretaria_em IS NOT NULL)::int AS fila_sec,
-      count(*) FILTER (WHERE estado = 'Desistiu')::int AS desistiu
-     FROM preinscricoes ${regimeWhere}`,
-    countVals,
-  );
-  const c = counts.rows[0];
-
-  const porEstadoRows = await db.query<{ estado: string; n: number }>(
-    scoped
-      ? "SELECT estado, count(*)::int AS n FROM preinscricoes WHERE regime = $1 GROUP BY estado"
-      : "SELECT estado, count(*)::int AS n FROM preinscricoes GROUP BY estado",
-    scoped ? [params.regime] : [],
-  );
+  const regime = params.regime === "gold" || params.regime === "fin" ? params.regime : "";
+  const { total, linhas } = await repo.pagina(db, params, hoje, { pagina: page, porPagina: perPage, sort: params.sort, dir: params.dir });
+  const c = await repo.contagens(db, hoje, regime);
   const porEstado: Record<string, number> = {};
-  for (const r of porEstadoRows.rows) porEstado[r.estado] = r.n;
-
-  const facet = async (col: string) => {
-    const r = await db.query<{ v: string }>(
-      scoped
-        ? `SELECT ${col} AS v FROM preinscricoes WHERE ${col} <> '' AND regime = $1 GROUP BY ${col} ORDER BY count(*) DESC, ${col} LIMIT 80`
-        : `SELECT ${col} AS v FROM preinscricoes WHERE ${col} <> '' GROUP BY ${col} ORDER BY count(*) DESC, ${col} LIMIT 80`,
-      scoped ? [params.regime] : [],
-    );
-    return r.rows.map(x => x.v);
-  };
+  for (const r of await repo.porEstado(db, regime)) porEstado[r.estado] = r.n;
   const [cursos, locais, origens, campanhas] = await Promise.all([
-    facet("curso"), facet("local"), facet("origem"), facet("campanha"),
+    repo.faceta(db, "curso", regime), repo.faceta(db, "local", regime), repo.faceta(db, "origem", regime), repo.faceta(db, "campanha", regime),
   ]);
 
-  let columns: { estado: string; total: number; valor?: number; items: ReturnType<typeof mapPreinscricao>[] }[] | undefined;
+  let columns: { estado: string; total: number; valor?: number; items: ReturnType<typeof itemLista>[] }[] | undefined;
   if (params.kanban) {
-    const estados = ["Não contactado", "1º Contacto", "2º Contacto", "Pago", "Pré-inscrição", "Formando", "Desistiu"];
-    const { sql: sqlK, vals: valsK } = addWhere({ ...params, estado: undefined, fila: params.fila }, hoje, true);
     columns = [];
-    for (const estado of estados) {
-      const colVals = [...valsK, estado];
-      const n = await db.query<{ n: number; valor: number }>(
-        `SELECT count(*)::int AS n, COALESCE(sum(preco),0)::float AS valor FROM preinscricoes WHERE ${sqlK} AND estado = $${colVals.length}`,
-        colVals,
-      );
-      const list = await db.query(
-        listaOrdenada(`${sqlK} AND estado = $${colVals.length}`, params.sort, params.dir, "LIMIT 80"),
-        colVals,
-      );
-      columns.push({
-        estado,
-        total: n.rows[0]?.n ?? 0,
-        valor: Number(n.rows[0]?.valor ?? 0),
-        items: list.rows.map(r => mapPreinscricao(r as Record<string, unknown>)),
-      });
+    for (const estado of ESTADOS_PIPELINE) {
+      const col = await repo.colunaPipeline(db, { ...params, estado: undefined }, hoje, estado, params.sort, params.dir);
+      columns.push({ estado, total: col.total, valor: col.valor, items: col.linhas.map(r => itemLista(r)) });
     }
   }
 
+  const n = (k: string) => Number(c[k] ?? 0);
   return {
-    items,
+    items: linhas.map(r => itemLista(r)),
     total,
     page,
     perPage,
     counts: {
-      total: c?.total ?? 0,
-      abertos: c?.abertos ?? 0,
-      porContactar: c?.por_contactar ?? 0,
-      conversa: c?.conversa ?? 0,
-      pagos: c?.pagos ?? 0,
-      formando: c?.formando ?? 0,
-      atrasados: c?.atrasados ?? 0,
-      hoje: c?.hoje ?? 0,
-      marcadosHoje: c?.marcados_hoje ?? 0,
-      converter: c?.pagos ?? 0,
-      valorAberto: Number(c?.valor_aberto ?? 0),
-      preinscricoes: c?.preinscricoes ?? 0,
-      manuais: c?.manuais ?? 0,
-      filaPre: c?.fila_pre ?? 0,
-      filaSec: c?.fila_sec ?? 0,
-      desistiu: c?.desistiu ?? 0,
+      total: n("total"),
+      abertos: n("abertos"),
+      porContactar: n("por_contactar"),
+      conversa: n("conversa"),
+      pagos: n("pagos"),
+      formando: n("formando"),
+      atrasados: n("atrasados"),
+      hoje: n("hoje"),
+      marcadosHoje: n("marcados_hoje"),
+      converter: n("pagos"),
+      valorAberto: n("valor_aberto"),
+      preinscricoes: n("preinscricoes"),
+      manuais: n("manuais"),
+      filaPre: n("fila_pre"),
+      filaSec: n("fila_sec"),
+      desistiu: n("desistiu"),
+      semContacto2d: n("sem_contacto_2d"),
     },
     porEstado,
     facets: { cursos, locais, origens, campanhas },
@@ -263,25 +83,9 @@ export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string)
 }
 
 export async function searchCrmLeads(db: Db, q: string, limit = 12) {
-  const needle = like(q.trim());
-  if (needle === "%%") return [];
-  const rows = await db.query(
-    withEtiqueta(`SELECT * FROM preinscricoes
-      WHERE nome ILIKE $1 OR apelido ILIKE $1 OR email ILIKE $1 OR telf ILIKE $1 OR curso ILIKE $1 OR nif ILIKE $1
-         OR CAST(id AS text) = $2
-         OR id IN (SELECT preinscricao_id FROM preinscricao_contactos WHERE nota ILIKE $1)
-      ORDER BY inscrito DESC
-      LIMIT $3`),
-    [needle, q.trim().slice(0, 12), Math.min(30, Math.max(1, limit))],
-  );
-  return rows.rows.map(r => mapPreinscricao(r as Record<string, unknown>));
+  return (await repo.pesquisar(db, q.trim(), limit)).map(r => itemLista(r));
 }
 
 export async function exportCrmLeads(db: Db, params: CrmListParams, hoje: string) {
-  const { sql, vals } = addWhere(params, hoje);
-  const rows = await db.query(
-    listaOrdenada(sql, params.sort, params.dir, "LIMIT 2000"),
-    vals,
-  );
-  return rows.rows.map(r => mapPreinscricao(r as Record<string, unknown>));
+  return (await repo.todas(db, params, hoje, params.sort, params.dir)).map(r => itemLista(r));
 }

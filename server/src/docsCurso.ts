@@ -1,5 +1,6 @@
 import type { Db } from "./db/pool.js";
 import { comporModelo, DTP_MODELO_VAZIO, parseDtpModelo } from "./dtpModel.js";
+import * as repo from "./repos/leadDocs.js";
 
 export type DocPedido = { id: string; label: string; required: boolean; modelo?: string };
 
@@ -48,8 +49,7 @@ export async function situacaoPagamento(
 ) {
   let pago = false;
   if (lead.pagamento_id) {
-    const r = await db.query<{ estado: string }>("SELECT estado FROM pagamentos WHERE id = $1", [String(lead.pagamento_id)]);
-    pago = /^pago$/i.test(String(r.rows[0]?.estado ?? ""));
+    pago = /^pago$/i.test(String((await repo.estadoDoPagamento(db, String(lead.pagamento_id))) ?? ""));
   }
   const estado = estadoPagamentoLead(lead, pago);
   // O comprovativo só é pedido com o passo de pagamento aberto.
@@ -95,53 +95,23 @@ function parseCfg(raw: unknown): DocsPreinscricaoCfg {
 }
 
 export async function lerDocsPreinscricao(db: Db, regime: "gold" | "fin", cursoId: number): Promise<DocsPreinscricaoCfg> {
-  const table = regime === "fin" ? "cursos_fin" : "cursos_gold";
-  const row = await db.query<{ docs_preinscricao: unknown }>(
-    `SELECT docs_preinscricao FROM ${table} WHERE id = $1`,
-    [cursoId],
-  );
-  return parseCfg(row.rows[0]?.docs_preinscricao);
+  return parseCfg(await repo.configDocsDoCurso(db, regime, cursoId));
 }
 
 export async function gravarDocsPreinscricao(db: Db, regime: "gold" | "fin", cursoId: number, cfg: DocsPreinscricaoCfg) {
-  const table = regime === "fin" ? "cursos_fin" : "cursos_gold";
-  await db.query(
-    `UPDATE ${table} SET docs_preinscricao = $2::jsonb WHERE id = $1`,
-    [cursoId, cfg],
-  );
+  await repo.gravarConfigDocs(db, regime, cursoId, cfg);
 }
 
 export async function listarModelosConsentimento(db: Db, regime: "gold" | "fin", cursoId: number) {
-  const rows = await db.query<{ requisito_id: string; nome: string; drive_file_id: string }>(
-    `SELECT requisito_id, nome, drive_file_id
-       FROM curso_ficheiros
-      WHERE regime = $1 AND curso_id = $2 AND ambito = 'consentimento' AND drive_file_id <> ''
-      ORDER BY created_at`,
-    [regime, cursoId],
-  );
-  return rows.rows;
+  return repo.modelosConsentimento(db, regime, cursoId);
 }
 
 export async function limparModelosFora(db: Db, regime: "gold" | "fin", cursoId: number, activos: string[]) {
-  await db.query(
-    `DELETE FROM curso_ficheiros
-      WHERE regime = $1 AND curso_id = $2 AND ambito = 'consentimento'
-        AND NOT (requisito_id = ANY($3::text[]))`,
-    [regime, cursoId, activos],
-  );
+  await repo.apagarModelosFora(db, regime, cursoId, activos);
 }
 
 async function idCursoPorNome(db: Db, regime: "gold" | "fin", curso: string) {
-  const cursoRow = regime === "fin"
-    ? await db.query<{ id: number }>(
-      "SELECT id FROM cursos_fin WHERE lower(trim(nome_comercial)) = lower(trim($1)) OR lower(trim(ufcd)) = lower(trim($1)) OR ufcd_cod = $1 LIMIT 1",
-      [curso],
-    )
-    : await db.query<{ id: number }>(
-      "SELECT id FROM cursos_gold WHERE lower(trim(nome)) = lower(trim($1)) LIMIT 1",
-      [curso],
-    );
-  return cursoRow.rows[0]?.id ?? null;
+  return (await repo.cursoPorNome(db, regime, curso, true))?.id ?? null;
 }
 
 export async function ficheiroModelo(db: Db, regime: "gold" | "fin", curso: string, docId: string) {
@@ -149,29 +119,14 @@ export async function ficheiroModelo(db: Db, regime: "gold" | "fin", curso: stri
   if (cursoId == null) return null;
   const pedidos = await docsDoCurso(db, curso, regime);
   if (!pedidos.some(p => p.id === docId && p.modelo)) return null;
-  const row = await db.query<{ nome: string; drive_file_id: string }>(
-    `SELECT nome, drive_file_id FROM curso_ficheiros
-      WHERE regime = $1 AND curso_id = $2 AND ambito = 'consentimento' AND requisito_id = $3
-      ORDER BY created_at DESC LIMIT 1`,
-    [regime, cursoId, docId],
-  );
-  const found = row.rows[0];
+  const found = await repo.modeloMaisRecente(db, regime, cursoId, docId);
   if (!found?.drive_file_id) return null;
   return { nome: found.nome, driveFileId: found.drive_file_id };
 }
 
 export async function docsDoCurso(db: Db, curso: string, regime: "gold" | "fin"): Promise<DocPedido[]> {
   const base = docsBase(regime);
-  const cursoRow = regime === "fin"
-    ? await db.query<{ id: number; tipo: string }>(
-      "SELECT id, ''::text AS tipo FROM cursos_fin WHERE lower(trim(nome_comercial)) = lower(trim($1)) OR lower(trim(ufcd)) = lower(trim($1)) LIMIT 1",
-      [curso],
-    )
-    : await db.query<{ id: number; tipo: string }>(
-      "SELECT id, tipo FROM cursos_gold WHERE lower(trim(nome)) = lower(trim($1)) LIMIT 1",
-      [curso],
-    );
-  const found = cursoRow.rows[0];
+  const found = await repo.cursoPorNome(db, regime, curso);
   if (!found) return regime === "fin" ? base : [];
   if (!cursoPedeDocsPreinscricao(regime, String(found.tipo ?? ""))) return [];
   const cfg = await lerDocsPreinscricao(db, regime, found.id);
@@ -183,21 +138,11 @@ export async function docsDoCurso(db: Db, curso: string, regime: "gold" | "fin")
     seen.add(extra.id);
     kept.push({ id: extra.id, label: extra.label, required: extra.required });
   }
-  const modelo = await db.query<{ extra: unknown; excluidos: unknown; incluidos: unknown }>(
-    "SELECT extra, excluidos, incluidos FROM curso_dtp_modelos WHERE regime = $1 AND curso_id = $2",
-    [regime, found.id],
-  );
-  const cursoModelo = parseDtpModelo(modelo.rows[0]);
+  const cursoModelo = parseDtpModelo(await repo.modeloDtpDoCurso(db, regime, found.id) ?? undefined);
   let composto = cursoModelo;
   if (regime === "gold") {
-    const entidade = await db.query<{ excluidos: unknown; extra: unknown }>(
-      `SELECT e.excluidos, e.extra
-         FROM cursos_gold c
-         JOIN dtp_entidades e ON e.id = c.entidade_responsavel_id
-        WHERE c.id = $1`,
-      [found.id],
-    );
-    composto = comporModelo(parseDtpModelo(entidade.rows[0] ?? DTP_MODELO_VAZIO), cursoModelo);
+    const entidade = await repo.modeloDtpDaEntidade(db, found.id);
+    composto = comporModelo(parseDtpModelo(entidade ?? DTP_MODELO_VAZIO), cursoModelo);
   }
   for (const extra of composto.extra) {
     if (extra.ambito !== "formando" || !extra.id || seen.has(extra.id)) continue;

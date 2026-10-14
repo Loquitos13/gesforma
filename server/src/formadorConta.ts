@@ -2,73 +2,42 @@ import { randomUUID } from "node:crypto";
 import { formadorForaDoSlot, slotsDoFormador } from "../../src/partilhado/disponibilidade.js";
 import { gerarPalavraPasse } from "../../src/partilhado/passwordPolicy.js";
 import type { Db } from "./db/pool.js";
+import { disponibilidades, estaAlocado, inserirUtilizadorFormador, utilizadorPorEmail } from "./repos/formadores.js";
 import { hashPassword, isEmail, normalizeEmail } from "./security.js";
 
 function uniqueViolation(err: unknown) {
   return typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23505";
 }
 
+/** Cria a conta de formador (palavra-passe temporária) ou liga-se à que já existe com o mesmo email. */
 export async function garantirContaFormador(db: Db, nome: string, emailRaw: string) {
   const email = normalizeEmail(emailRaw);
   if (!email || !isEmail(email)) return null;
-  const existing = await db.query<{ id: string }>("SELECT id FROM users WHERE lower(email) = $1", [email]);
-  if (existing.rows[0]) return { userId: existing.rows[0].id, email, criado: false as const };
+  const existente = await utilizadorPorEmail(db, email);
+  if (existente) return { userId: existente.id, email, criado: false as const };
   const password = gerarPalavraPasse();
   const id = randomUUID();
   try {
-    await db.query(
-      "INSERT INTO users (id, name, email, password_hash, role, active, must_change_password) VALUES ($1,$2,$3,$4,'formador',true,true)",
-      [id, nome.trim() || email, email, await hashPassword(password)],
-    );
+    await inserirUtilizadorFormador(db, { id, nome: nome.trim() || email, email, hash: await hashPassword(password) });
   } catch (err) {
     if (!uniqueViolation(err)) throw err;
-    const again = await db.query<{ id: string }>("SELECT id FROM users WHERE lower(email) = $1", [email]);
-    if (!again.rows[0]) throw err;
-    return { userId: again.rows[0].id, email, criado: false as const };
+    const outra = await utilizadorPorEmail(db, email);
+    if (!outra) throw err;
+    return { userId: outra.id, email, criado: false as const };
   }
   return { userId: id, email, criado: true as const, password };
 }
 
 export async function formadorEstaAlocado(db: Db, nome: string) {
-  const n = nome.trim().toLowerCase();
-  if (!n) return false;
-  const row = await db.query(
-    `SELECT 1
-       FROM (
-         SELECT formador, formadores, cronograma FROM turmas_gold
-         UNION ALL
-         SELECT formador, formadores, cronograma FROM turmas_fin
-       ) t
-      WHERE lower(trim(COALESCE(formador, ''))) = $1
-         OR EXISTS (
-           SELECT 1 FROM jsonb_array_elements_text(COALESCE(formadores, '[]'::jsonb)) e
-            WHERE lower(trim(e)) = $1
-         )
-         OR EXISTS (
-           SELECT 1
-             FROM jsonb_array_elements(CASE WHEN jsonb_typeof(cronograma) = 'array' THEN cronograma ELSE '[]'::jsonb END) s
-            WHERE lower(trim(COALESCE(s->>'formador', ''))) = $1
-               OR EXISTS (
-                 SELECT 1
-                   FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(s->'formadores') = 'array' THEN s->'formadores' ELSE '[]'::jsonb END) f
-                  WHERE lower(trim(f)) = $1
-               )
-         )
-      LIMIT 1`,
-    [n],
-  );
-  return row.rows.length > 0;
+  return estaAlocado(db, nome);
 }
 
+/** Mensagem de erro se algum dos formadores não tem este horário na disponibilidade. */
 export async function erroDisponibilidade(db: Db, nomes: string[], horario: string) {
   const limpos = [...new Set(nomes.map(n => n.trim()).filter(Boolean))];
   if (!limpos.length) return null;
-  const rows = await db.query<{ nome: string; disponibilidade: unknown }>(
-    `SELECT nome, disponibilidade FROM formadores
-      WHERE lower(nome) IN (SELECT lower(jsonb_array_elements_text($1::jsonb)))`,
-    [limpos.map(n => n.toLowerCase())],
-  );
-  const fora = rows.rows.filter(r => {
+  const rows = await disponibilidades(db, limpos);
+  const fora = rows.filter(r => {
     const lista = Array.isArray(r.disponibilidade) ? r.disponibilidade : null;
     const slots = !lista || lista.some(item => item && typeof item === "object")
       ? slotsDoFormador(null)

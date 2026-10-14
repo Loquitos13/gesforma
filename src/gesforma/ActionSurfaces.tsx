@@ -2,9 +2,7 @@ import { useRef, useState } from "react";
 import { apiDtpExport } from "../partilhado/api";
 import { dtpZipNome } from "../partilhado/dtpPasta";
 import { imprimirFolhasPresencas } from "../partilhado/presencasPrint";
-import { useCatalogs } from "../partilhado/CatalogsContext";
 import { AppModal } from "../partilhado/FormKit";
-import { useLists } from "../partilhado/ListsContext";
 import { EmptyHint, NotifKind, sortNotifs } from "../partilhado/SecretaryUX";
 import { toastError, toastOk } from "../partilhado/toastBus";
 
@@ -57,11 +55,6 @@ function toastNow() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function refMb(seed: string) {
-  const n = seed.replace(/\D/g, "").padEnd(9, "7").slice(0, 9);
-  return `${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6, 9)}`;
-}
-
 function textoHtml(valor: string) {
   return valor.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] ?? c));
 }
@@ -83,16 +76,6 @@ function imprimir(titulo: string, html: string) {
   w.focus();
   w.print();
 }
-
-export type TransacaoPreview = {
-  id: string;
-  nome: string;
-  valor: number;
-  metodo: string;
-  curso: string;
-  data: string;
-  estado: string;
-};
 
 export type ConteudoPreview = {
   id: number;
@@ -128,279 +111,6 @@ export type ExportTurmaInfo = {
   dtp?: { label: string; estado: string; detalhe: string }[];
 };
 
-function Badge({ label, ok }: { label: string; ok?: boolean }) {
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${ok ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
-      {label}
-    </span>
-  );
-}
-
-function ReciboPaper({ t }: { t: TransacaoPreview }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <div className="px-5 py-4 bg-slate-900 text-white flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] uppercase tracking-wider text-slate-400">ENA · Escola de Negócios e Administração</p>
-          <p className="text-sm font-bold mt-0.5">Recibo de pagamento</p>
-        </div>
-        <p className="text-xs font-mono text-slate-300">{t.id}</p>
-      </div>
-      <div className="p-5 space-y-3 text-sm">
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { l: "Formando", v: t.nome },
-            { l: "Curso", v: t.curso },
-            { l: "Método", v: t.metodo },
-            { l: "Data", v: t.data },
-          ].map(f => (
-            <div key={f.l}>
-              <p className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">{f.l}</p>
-              <p className="text-sm font-semibold text-slate-800 mt-0.5">{f.v}</p>
-            </div>
-          ))}
-        </div>
-        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-          <p className="text-xs text-slate-500">IVA incluído · documento de tesouraria</p>
-          <p className="text-xl font-bold text-slate-900">€ {t.valor}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function PagamentoDetalheModal({
-  open, onClose, transacao, onRecibo,
-}: {
-  open: boolean; onClose: () => void; transacao: TransacaoPreview | null; onRecibo?: () => void;
-}) {
-  if (!transacao) return null;
-  const pago = transacao.estado === "Pago";
-  return (
-    <AppModal open={open} onClose={onClose} title="Detalhe da transação" sub={transacao.id} size="lg">
-      <div className="p-5 space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-base font-bold text-slate-800">{transacao.nome}</p>
-            <p className="text-sm text-slate-500 mt-0.5">{transacao.curso}</p>
-          </div>
-          <Badge label={transacao.estado} ok={pago} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { l: "Valor", v: `€ ${transacao.valor}` },
-            { l: "Método", v: transacao.metodo },
-            { l: "Registado em", v: transacao.data },
-            { l: "Referência", v: transacao.id },
-          ].map(f => (
-            <div key={f.l} className="bg-slate-50 rounded-xl p-3">
-              <p className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">{f.l}</p>
-              <p className="text-sm font-semibold text-slate-800 mt-0.5">{f.v}</p>
-            </div>
-          ))}
-        </div>
-        <p className="text-xs text-slate-500">
-          {pago
-            ? "O pagamento está conciliado. Pode emitir ou reenviar o recibo ao formando."
-            : "Ainda pendente. Gere uma referência MB ou um pedido MB Way a partir da ficha do formando."}
-        </p>
-        <div className="flex justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-200 text-sm font-semibold text-slate-600 rounded-lg hover:bg-slate-50">Fechar</button>
-          {pago && (
-            <button type="button" onClick={onRecibo} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5">
-              {I.mail} Ver recibo
-            </button>
-          )}
-        </div>
-      </div>
-    </AppModal>
-  );
-}
-
-export function ReciboModal({
-  open, onClose, transacao,
-}: {
-  open: boolean; onClose: () => void; transacao: TransacaoPreview | null;
-}) {
-  const [enviado, setEnviado] = useState(false);
-  if (!transacao) return null;
-  return (
-    <AppModal open={open} onClose={() => { setEnviado(false); onClose(); }} title="Recibo" sub={`${transacao.id} · ${transacao.nome}`} size="lg">
-      <div className="p-5 space-y-4">
-        <ReciboPaper t={transacao} />
-        {enviado && (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-semibold text-emerald-700 flex items-center gap-2">
-            {I.check} Recibo enviado para o email do formando · {toastNow()}
-          </div>
-        )}
-        <div className="flex flex-col sm:flex-row justify-end gap-2">
-          <button type="button" onClick={() => { setEnviado(false); onClose(); }} className="px-4 py-2 border border-slate-200 text-sm font-semibold text-slate-600 rounded-lg hover:bg-slate-50">Fechar</button>
-          <button
-            type="button"
-            onClick={() => imprimir(`Recibo ${transacao.id}`, `
-              <h1>Recibo de pagamento ${textoHtml(transacao.id)}</h1>
-              <p class="sub">ENA · Escola de Negócios e Administração</p>
-              <table>
-                <tr><th>Formando</th><td>${textoHtml(transacao.nome)}</td></tr>
-                <tr><th>Curso</th><td>${textoHtml(transacao.curso)}</td></tr>
-                <tr><th>Método</th><td>${textoHtml(transacao.metodo)}</td></tr>
-                <tr><th>Data</th><td>${textoHtml(transacao.data)}</td></tr>
-                <tr><th>Estado</th><td>${textoHtml(transacao.estado)}</td></tr>
-              </table>
-              <p class="total">€ ${textoHtml(String(transacao.valor))}</p>
-            `)}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5"
-          >
-            {I.download} Imprimir / PDF
-          </button>
-          <button type="button" onClick={() => setEnviado(true)} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5">
-            {I.mail} Enviar por email
-          </button>
-        </div>
-      </div>
-    </AppModal>
-  );
-}
-
-export function ReferenciaMbModal({
-  open, onClose, nome, valor, curso, modo = "mb", email = "",
-}: {
-  open: boolean; onClose: () => void; nome: string; valor: number; curso: string; modo?: "mb" | "mbway"; email?: string;
-}) {
-  const [copied, setCopied] = useState(false);
-  const [enviado, setEnviado] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const gravado = useRef(false);
-  const { settings } = useCatalogs();
-  const { addPagamento } = useLists();
-  const entidade = (settings.gold?.["Entidade Multibanco"] ?? "").trim();
-  const referencia = refMb(nome + String(valor));
-  const isWay = modo === "mbway";
-
-  async function gravarPendente() {
-    if (gravado.current) return;
-    gravado.current = true;
-    setBusy(true);
-    try {
-      const id = await addPagamento({
-        id: `tmp-${Date.now()}`,
-        nome,
-        valor,
-        metodo: isWay ? "MB Way" : "Multibanco",
-        curso,
-        data: toastNow(),
-        estado: "Pendente",
-      }, { email, referencia: referencia.replace(/\s/g, "") });
-      if (!id) {
-        gravado.current = false;
-        return;
-      }
-      toastOk(isWay ? "Pedido MB Way registado como pendente." : "Referência Multibanco gravada. O webhook do banco confirma o pagamento.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <AppModal
-      open={open}
-      onClose={() => { setCopied(false); setEnviado(false); gravado.current = false; onClose(); }}
-      title={isWay ? "Pedido MB Way" : "Referência Multibanco"}
-      sub={`${nome} · ${curso}`}
-    >
-      <div className="p-5 space-y-4">
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-          {isWay ? (
-            <>
-              <p className="text-xs font-bold text-amber-800 uppercase tracking-wider">Link MB Way</p>
-              <p className="text-sm text-amber-800 mt-1">O formando recebe um pedido no telemóvel associado. Valor € {valor}.</p>
-            </>
-          ) : (
-            <div className="space-y-2 font-mono">
-              <div className="flex justify-between text-sm">
-                <span className="text-amber-700">Entidade</span>
-                <span className="font-bold text-slate-900">{entidade || "por definir"}</span>
-              </div>
-              <div className="flex justify-between text-sm"><span className="text-amber-700">Referência</span><span className="font-bold text-slate-900">{referencia}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-amber-700">Valor</span><span className="font-bold text-slate-900">€ {valor.toFixed(2)}</span></div>
-              <p className="text-[11px] text-amber-700 font-sans pt-1">
-                {entidade
-                  ? "Válida 72 horas. A cobrança só entra quando o banco confirmar."
-                  : "Grave a entidade Multibanco em Configurações → Gold para a referência ser aceite no banco."}
-              </p>
-            </div>
-          )}
-        </div>
-        {(copied || enviado) && (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-semibold text-emerald-700 flex items-center gap-2">
-            {I.check} {enviado ? (isWay ? "Pedido MB Way enviado." : "Referência enviada por email e SMS.") : "Copiado para a área de transferência."}
-          </div>
-        )}
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={() => { setCopied(false); setEnviado(false); gravado.current = false; onClose(); }} className="px-4 py-2 border border-slate-200 text-sm font-semibold text-slate-600 rounded-lg hover:bg-slate-50">Fechar</button>
-          {!isWay && (
-            <button type="button" disabled={busy} onClick={() => { void navigator.clipboard?.writeText(`${entidade} ${referencia} €${valor}`); setCopied(true); void gravarPendente(); }} className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5">
-              {I.copy} Copiar
-            </button>
-          )}
-          <button type="button" disabled={busy} onClick={() => { setEnviado(true); void gravarPendente(); }} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-semibold rounded-lg">
-            {isWay ? "Enviar pedido" : "Enviar ao formando"}
-          </button>
-        </div>
-      </div>
-    </AppModal>
-  );
-}
-
-export function EnviarReciboModal({
-  open, onClose, nome, valor, curso, metodo, email = "",
-}: {
-  open: boolean; onClose: () => void; nome: string; valor: number; curso: string; metodo: string; email?: string;
-}) {
-  const [ok, setOk] = useState(false);
-  const { pagamentos, addPagamento, patchPagamento } = useLists();
-  const t: TransacaoPreview = {
-    id: `REC-${String(valor).padStart(4, "0")}`,
-    nome, valor, metodo, curso, data: toastNow(), estado: "Pago",
-  };
-
-  async function enviar() {
-    const existente = pagamentos.find(p =>
-      p.nome === nome && p.curso === curso && Math.abs(p.valor - valor) < 0.02,
-    );
-    if (existente && existente.estado !== "Pago") {
-      patchPagamento(existente.id, { estado: "Pago" });
-    } else if (!existente) {
-      const id = await addPagamento({
-        id: `tmp-${Date.now()}`,
-        nome, valor, metodo: metodo || "Multibanco", curso, data: toastNow(), estado: "Pago",
-      }, email);
-      if (!id) return;
-    }
-    setOk(true);
-    toastOk("Recibo na fila de email (pagamento.confirmed), se o formando tiver email.");
-  }
-
-  return (
-    <AppModal open={open} onClose={() => { setOk(false); onClose(); }} title="Enviar recibo" sub={nome} size="lg">
-      <div className="p-5 space-y-4">
-        <ReciboPaper t={t} />
-        {ok && (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-semibold text-emerald-700 flex items-center gap-2">
-            {I.check} Recibo enviado · {toastNow()}
-          </div>
-        )}
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={() => { setOk(false); onClose(); }} className="px-4 py-2 border border-slate-200 text-sm font-semibold text-slate-600 rounded-lg hover:bg-slate-50">Fechar</button>
-          <button type="button" onClick={() => void enviar()} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5">
-            {I.mail} Enviar recibo
-          </button>
-        </div>
-      </div>
-    </AppModal>
-  );
-}
-
 export function ConteudoAbrirModal({
   open, onClose, item, accent = "gold",
 }: {
@@ -434,7 +144,7 @@ export function ConteudoAbrirModal({
         {item.tipo === "Link" && (
           <div className="rounded-xl border border-slate-200 p-4">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">URL</p>
-            <p className="text-sm font-mono text-blue-700 mt-1 break-all">{item.origem || item.driveUrl || `https://moodle.ena.pt/${item.curso.toLowerCase().replace(/[^a-z0-9]+/g, "-")}/${item.modulo.toLowerCase()}`}</p>
+            <p className="text-sm font-mono text-blue-700 mt-1 break-all">{item.origem || item.driveUrl || "Sem ligação registada."}</p>
           </div>
         )}
         <div className="flex justify-end gap-2">

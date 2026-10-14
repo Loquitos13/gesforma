@@ -1,7 +1,10 @@
 import { useState } from "react";
-import { useListaOpcoes } from "../partilhado/CatalogsContext";
+import { apiCriarOpcao } from "../partilhado/api/listas";
+import { useOpcoes } from "../partilhado/dados/useOpcoes";
+import { invalidar } from "../partilhado/dados/useRecurso";
 import { AppModal, SearchSelect } from "../partilhado/FormKit";
 import { LISTAS_OPCOES, type ListaOpcoesId } from "../partilhado/listaOpcoes";
+import { toastError } from "../partilhado/toastBus";
 
 export function OptionSelect({
   lista,
@@ -21,7 +24,20 @@ export function OptionSelect({
   canAdd?: boolean;
 }) {
   const meta = LISTAS_OPCOES[lista];
-  const { nomes, add, ready } = useListaOpcoes(lista);
+  const { opcoes, aCarregar } = useOpcoes("lista", { lista });
+  const nomes = opcoes.map(o => o.valor);
+  const ready = !aCarregar;
+  async function add(novo: string): Promise<string | null> {
+    try {
+      const r = await apiCriarOpcao(lista, novo.trim());
+      invalidar("opcoes:lista");
+      invalidar("listas:");
+      return r.opcao.nome;
+    } catch (e) {
+      toastError(e, "Não foi possível acrescentar a opção.");
+      return null;
+    }
+  }
   const [open, setOpen] = useState(false);
   const [nome, setNome] = useState("");
   const [busy, setBusy] = useState(false);

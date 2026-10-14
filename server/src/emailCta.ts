@@ -8,7 +8,14 @@ export type CtaDestino = {
   funcao: string;
 };
 
-export const SECRETARIA_MAIL = "formacao@ena.pt";
+/** Email de contacto da secretaria: o de resposta (MAIL_REPLY_TO) ou o remetente (MAIL_FROM). */
+function emailContacto() {
+  const bruto = (config.mailReplyTo || config.mailFrom || "").trim();
+  const m = bruto.match(/<([^>]+)>/);
+  return (m ? m[1]! : bruto).trim().toLowerCase();
+}
+
+export const SECRETARIA_MAIL = emailContacto();
 export const SECRETARIA_HREF = `mailto:${SECRETARIA_MAIL}`;
 
 export const CTA_BY_TIPO: Record<string, CtaDestino> = {
@@ -98,7 +105,7 @@ export function buildCtaVars(p: {
     turma: p.turma,
     preinscricao_url: `${origin}/pre-inscricao?${q.toString()}`,
     documentos_url: docs,
-    comprovativo_url: p.comprovativoUrl || `${docs}?fase=pagamento`,
+    comprovativo_url: p.comprovativoUrl || `${docs}?passo=pagamento`,
     secretaria_url: SECRETARIA_HREF,
     referencia: p.referencia ?? "",
     entidade: p.entidade ?? "",

@@ -1,15 +1,4 @@
-import {
-  cellLabelPrint,
-  cellTone,
-  charsDaCelula,
-  formatDataOficial,
-  formatHoraFaixa,
-  grupoLinha,
-  larguraDiasEmChars,
-  monthSpans,
-  weekdayCode,
-  type GrelhaLinha,
-} from "./cronogramaGrelha";
+import { type GrelhaLinha, cellLabelPrint, cellTone, charsDaCelula, formatDataOficial, formatHoraFaixa, grupoLinha, larguraDiasEmChars, monthSpans, weekdayCode } from "./cronogramaGrelha";
 import type { LocalMapeado } from "./cronogramaLocal";
 import { codigoModulo, type SessaoCronograma } from "./turmaModel";
 
@@ -27,7 +16,21 @@ export type CronogramaPrintInput = {
   sessoes: SessaoCronograma[];
   /** Folha para mostrar dentro de outra página, sem abrir a impressão. */
   embutido?: boolean;
+  /** Dados da entidade (Configurações › Entidade) para o cabeçalho. */
+  entidade?: Partial<Record<"nome" | "morada" | "codigoPostal" | "localidade" | "telefone" | "email" | "site", string>>;
 };
+
+function cabecalhoEntidade(e: CronogramaPrintInput["entidade"]) {
+  const v = (k: keyof NonNullable<CronogramaPrintInput["entidade"]>) => (e?.[k] ?? "").trim();
+  const morada = [v("morada"), [v("codigoPostal"), v("localidade")].filter(Boolean).join(" ")].filter(Boolean).join(" - ");
+  const contactos = [
+    morada,
+    v("telefone") ? `Telf: ${v("telefone")}` : "",
+    v("email") ? `E-mail: ${v("email")}` : "",
+    v("site") ? `Site: ${v("site")}` : "",
+  ].filter(Boolean).join(" :: ");
+  return { nome: v("nome") || "ENA", contactos };
+}
 
 function esc(value: string) {
   return value
@@ -266,8 +269,8 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
     <div class="head">
       <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 93.847 24.161" aria-label="ENA"><g transform="translate(-2081 -901)"><g transform="translate(-2)"><rect width="9" height="24" rx="4.5" transform="translate(2125 901)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(2125.853 907.433) rotate(-90)" fill="#a60000"/><rect width="7" height="24" rx="3.5" transform="translate(2142 901)" fill="#a60000"/></g><g transform="translate(2095.462 901.355)"><rect width="6.179" height="23.603" rx="3.09" transform="translate(0 6.179) rotate(-90)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(6.179 23.603) rotate(180)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(24.211 17.525) rotate(90)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(24.211 8.611) rotate(90)" fill="#a60000"/><rect width="6.179" height="14.79" rx="3.09" transform="translate(18.032 0)" fill="#a60000"/></g><rect width="10" height="24" rx="2" transform="translate(2081 901)" fill="#ffa900"/><g transform="translate(2150.635 901.456)"><rect width="6.179" height="23.603" rx="3.09" transform="translate(24.211 17.525) rotate(90)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(18.032 0.101)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(0 6.179) rotate(-90)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(0 15.094) rotate(-90)" fill="#a60000"/><rect width="6.179" height="14.79" rx="3.09" transform="translate(0 8.915)" fill="#a60000"/></g></g></svg>
       <div class="brand">
-        <h1>VIVER APRENDER - Escola de Negócios e Administração, lda.</h1>
-        <p>Rua Conselheiro Veloso da Cruz nº 524 - 4400-092 Vila Nova de Gaia :: Telf: 22 378 11 00 :: Fax: 22 378 11 09 :: E-mail: geral@ena.pt :: Site: www.ena.pt</p>
+        <h1>${esc(cabecalhoEntidade(input.entidade).nome)}</h1>
+        ${cabecalhoEntidade(input.entidade).contactos ? `<p>${esc(cabecalhoEntidade(input.entidade).contactos)}</p>` : ""}
       </div>
     </div>
     <h2 class="title">${esc(tituloCronograma(input.horario))}</h2>
@@ -302,15 +305,10 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
       </table>
     </div>
     ${input.embutido ? "" : `<div class="actions">
-      <button type="button" onclick="window.print()">Imprimir / Guardar PDF</button>
-      <button type="button" class="ghost" onclick="window.close()">Fechar</button>
+      <button type="button" data-acao="imprimir">Imprimir / Guardar PDF</button>
+      <button type="button" class="ghost" data-acao="fechar">Fechar</button>
     </div>`}
   </div>
-  ${input.embutido ? "" : `<script>
-    window.addEventListener("load", function () {
-      setTimeout(function () { window.print(); }, 400);
-    });
-  </script>`}
 </body>
 </html>`;
 }
@@ -321,6 +319,12 @@ export function imprimirCronogramaEna(input: CronogramaPrintInput) {
   const url = URL.createObjectURL(blob);
   const w = window.open(url, "_blank");
   if (w) {
+    // Sem scripts dentro da página (a CSP não os deixa correr): a janela que abre liga os botões e imprime.
+    w.addEventListener("load", () => {
+      w.document.querySelector("[data-acao=imprimir]")?.addEventListener("click", () => w.print());
+      w.document.querySelector("[data-acao=fechar]")?.addEventListener("click", () => w.close());
+      setTimeout(() => w.print(), 400);
+    });
     w.focus();
     setTimeout(() => URL.revokeObjectURL(url), 120_000);
     return;

@@ -8,11 +8,22 @@ import {
 } from "../partilhado/api";
 import { DtpModeloEditor } from "./DtpModeloEditor";
 import { AppModal } from "../partilhado/FormKit";
-import { useLists } from "../partilhado/ListsContext";
+import { apiCursosGold, apiEditarCursoGold } from "../partilhado/api/cursos";
+import { invalidar, useRecurso } from "../partilhado/dados/useRecurso";
+import { toastError } from "../partilhado/toastBus";
 
 /** Entidades responsáveis e a estrutura de dossiê de cada uma, na vista Gold. */
 export function DtpEntidadesPanel({ onEntidades }: { onEntidades?: (lista: DtpEntidade[]) => void }) {
-  const { cursosGold, patchCursoGold } = useLists();
+  const { dados: dadosCursos } = useRecurso("cursos:gold:entidades", signal => apiCursosGold({}, signal));
+  const cursosGold = dadosCursos?.cursos ?? [];
+  async function patchCursoGold(id: number, patch: { entidadeResponsavelId: number | null }) {
+    try {
+      await apiEditarCursoGold(id, patch);
+      invalidar("cursos:");
+    } catch (err) {
+      toastError(err, "Não foi possível ligar o curso à entidade.");
+    }
+  }
   const [lista, setLista] = useState<DtpEntidade[]>([]);
   const [estado, setEstado] = useState<"loading" | "ready" | "offline">("loading");
   const [aberta, setAberta] = useState<number | null>(null);
@@ -89,7 +100,7 @@ export function DtpEntidadesPanel({ onEntidades }: { onEntidades?: (lista: DtpEn
     try {
       await apiDeleteDtpEntidade(id);
       publicar(lista.filter(e => e.id !== id));
-      for (const curso of ligados) patchCursoGold(curso.id, { entidadeResponsavelId: null });
+      for (const curso of ligados) await patchCursoGold(curso.id, { entidadeResponsavelId: null });
       fechar();
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Não foi possível apagar a entidade.");

@@ -1,18 +1,21 @@
 import { DOCS_FORMANDO_GOLD } from "../../src/partilhado/dossierDocs.js";
 import { randomBytes, randomUUID } from "node:crypto";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { textoDoCorpo } from "../../src/partilhado/blogBlocos.js";
 import { gerarPalavraPasse, mensagemPalavraPasse, palavraPasseValida } from "../../src/partilhado/passwordPolicy.js";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { sendMail } from "./mailer.js";
-import { hashPassword, isEmail, normalizeEmail, sha256 } from "./security.js";
+import { readFormandoPii } from "./pii.js";
 import {
-  assertFormandoDoUser,
-  uploadDocFormandoFin,
-  vistaDocumentosFormandoFin,
-} from "./formandoFinDocs.js";
+  atualizarDadosDoUtilizador, certificadosDe, contaPorEmail, criarContaFormando, cronogramaDaTurma, definirPalavraPasseFormando,
+  docsGoldValidados, formandoParaAcesso, gravarPrefs, guardarPedidoReposicao, inscricoesFinDoUtilizador, inscricoesGoldDoUtilizador,
+  ligarFichasPeloEmail, pagamentosDoUtilizador, pedidoReposicaoValido, prefsDoUtilizador, reporContaFormando, respostasDeInqueritos,
+} from "./repos/areaFormando.js";
+import { hashPassword, isEmail, normalizeEmail, sha256 } from "./security.js";
+import { vistaDocumentosFormandoFin } from "./formandoFinDocs.js";
+
+/** Área do formando: conta, inscrições, agenda, certificados, pagamentos e documentos. */
 
 type Actor = { id: string; role: string; email: string; name: string };
 
@@ -79,28 +82,25 @@ function prefsDe(raw: unknown) {
   };
 }
 
+/**
+ * Cria a conta da área do formando (utilizador = email, palavra-passe temporária) ou, com `repor`,
+ * gera uma palavra-passe nova. Uma conta de formando que já existe (outro curso) só se liga.
+ */
 export async function gerarAcessoFormando(db: Db, regime: "gold" | "fin", id: number, repor: boolean): Promise<
   | { email: string; password?: string; criado: boolean; reposto: boolean }
   | { erro: string; estado: 400 | 404 | 409 }
 > {
-  const tabela = regime === "fin" ? "formandos_fin" : "formandos_gold";
-  const row = await db.query<{ nome: string; apelido: string; email: string; user_id: string | null }>(
-    `SELECT nome, apelido, email, user_id::text AS user_id FROM ${tabela} WHERE id = $1`,
-    [id],
-  );
-  const pessoa = row.rows[0];
+  const pessoa = await formandoParaAcesso(db, regime, id);
   if (!pessoa) return { erro: "formando não encontrado", estado: 404 as const };
   const email = normalizeEmail(pessoa.email);
   if (!email || !isEmail(email)) return { erro: "O formando precisa de um email válido para ter acesso.", estado: 400 as const };
   const nome = `${pessoa.nome} ${pessoa.apelido}`.trim() || email;
-  const existente = await db.query<{ id: string; role: string }>("SELECT id, role FROM users WHERE lower(email) = $1", [email]);
-  const conta = existente.rows[0];
+  const conta = await contaPorEmail(db, email);
   if (conta && conta.role !== "formando") {
     return { erro: "Este email já é uma conta da secretaria ou de um formador.", estado: 409 as const };
   }
-  // Conta de formando que já existe (outro curso): liga-se sem trocar a palavra-passe.
   if (conta && !repor) {
-    await ligarPeloEmail(db, conta.id, email);
+    await ligarFichasPeloEmail(db, conta.id, email);
     return { email, criado: false, reposto: false };
   }
   const password = gerarPalavraPasse();
@@ -109,43 +109,27 @@ export async function gerarAcessoFormando(db: Db, regime: "gold" | "fin", id: nu
   if (!conta) {
     userId = randomUUID();
     try {
-      await db.query(
-        "INSERT INTO users (id, name, email, password_hash, role, active, must_change_password) VALUES ($1,$2,$3,$4,'formando',true,true)",
-        [userId, nome, email, hash],
-      );
+      await criarContaFormando(db, { id: userId, nome, email, hash });
     } catch (err) {
       if (!uniqueViolation(err)) throw err;
-      const outra = await db.query<{ id: string; role: string }>("SELECT id, role FROM users WHERE lower(email) = $1", [email]);
-      if (!outra.rows[0] || outra.rows[0].role !== "formando") {
+      const outra = await contaPorEmail(db, email);
+      if (!outra || outra.role !== "formando") {
         return { erro: "Este email já é uma conta da secretaria ou de um formador.", estado: 409 as const };
       }
-      userId = outra.rows[0].id;
+      userId = outra.id;
     }
   } else {
-    await db.query(
-      "UPDATE users SET password_hash = $2, must_change_password = true, active = true, name = CASE WHEN name = '' THEN $3 ELSE name END WHERE id = $1",
-      [conta.id, hash, nome],
-    );
-    await db.query("DELETE FROM sessions WHERE user_id = $1", [conta.id]);
+    await reporContaFormando(db, { id: conta.id, nome, hash });
     userId = conta.id;
   }
-  await ligarPeloEmail(db, userId, email);
+  await ligarFichasPeloEmail(db, userId, email);
   return { email, password, criado: !conta, reposto: Boolean(conta) };
 }
 
-async function ligarPeloEmail(db: Db, userId: string, email: string) {
-  await db.query("UPDATE formandos_gold SET user_id = $1 WHERE lower(trim(email)) = $2 AND (user_id IS NULL OR user_id = $1)", [userId, email]);
-  await db.query("UPDATE formandos_fin SET user_id = $1 WHERE lower(trim(email)) = $2 AND (user_id IS NULL OR user_id = $1)", [userId, email]);
-}
-
 async function mediaInqueritos(db: Db) {
-  const rows = await db.query<{ payload: unknown; respostas: unknown }>(
-    `SELECT c.payload, r.respostas
-       FROM inquerito_respostas r
-       JOIN catalog_items c ON c.id = r.inquerito_id AND c.kind = 'inqueritos'`,
-  );
+  const rows = await respostasDeInqueritos(db);
   const nums: number[] = [];
-  for (const row of rows.rows) {
+  for (const row of rows) {
     const payload = row.payload && typeof row.payload === "object" ? row.payload as Record<string, unknown> : {};
     const perguntas = Array.isArray(payload.perguntas) ? payload.perguntas : [];
     const respostas = row.respostas && typeof row.respostas === "object" ? row.respostas as Record<string, unknown> : {};
@@ -171,7 +155,6 @@ type Inscricao = {
   id: number;
   nome: string;
   apelido: string;
-  email: string;
   telf: string;
   curso: string;
   turma: string;
@@ -183,61 +166,31 @@ type Inscricao = {
   inscrito: string;
 };
 
+function inscricaoDe(regime: "gold" | "fin", r: Record<string, unknown>): Inscricao {
+  return {
+    regime,
+    id: Number(r.id),
+    nome: String(r.nome ?? ""),
+    apelido: String(r.apelido ?? ""),
+    telf: readFormandoPii(r).telf || String(r.telf ?? ""),
+    curso: String(r.curso ?? ""),
+    turma: String(r.turma ?? ""),
+    turmaId: Number(r.turma_id ?? 0),
+    estado: String(r.estado ?? ""),
+    pago: regime === "fin" ? true : Boolean(r.pago),
+    valor: regime === "fin" ? 0 : Number(r.valor ?? 0),
+    metodo: regime === "fin" ? "Financiada" : String(r.metodo ?? ""),
+    inscrito: regime === "fin" ? "" : String(r.inscrito ?? ""),
+  };
+}
+
 async function inscricoesDo(db: Db, userId: string): Promise<Inscricao[]> {
-  const gold = await db.query<Record<string, unknown>>(
-    "SELECT id, nome, apelido, email, telf, curso, turma, turma_id, estado, pago, valor, metodo, inscrito FROM formandos_gold WHERE user_id = $1 ORDER BY id",
-    [userId],
-  );
-  const fin = await db.query<Record<string, unknown>>(
-    "SELECT id, nome, apelido, email, telf, curso, turma, turma_id, estado FROM formandos_fin WHERE user_id = $1 ORDER BY id",
-    [userId],
-  );
-  const lista: Inscricao[] = [];
-  for (const r of gold.rows) {
-    lista.push({
-      regime: "gold",
-      id: Number(r.id),
-      nome: String(r.nome ?? ""),
-      apelido: String(r.apelido ?? ""),
-      email: String(r.email ?? ""),
-      telf: String(r.telf ?? ""),
-      curso: String(r.curso ?? ""),
-      turma: String(r.turma ?? ""),
-      turmaId: Number(r.turma_id ?? 0),
-      estado: String(r.estado ?? ""),
-      pago: Boolean(r.pago),
-      valor: Number(r.valor ?? 0),
-      metodo: String(r.metodo ?? ""),
-      inscrito: String(r.inscrito ?? ""),
-    });
-  }
-  for (const r of fin.rows) {
-    lista.push({
-      regime: "fin",
-      id: Number(r.id),
-      nome: String(r.nome ?? ""),
-      apelido: String(r.apelido ?? ""),
-      email: String(r.email ?? ""),
-      telf: String(r.telf ?? ""),
-      curso: String(r.curso ?? ""),
-      turma: String(r.turma ?? ""),
-      turmaId: Number(r.turma_id ?? 0),
-      estado: String(r.estado ?? ""),
-      pago: true,
-      valor: 0,
-      metodo: "Financiada",
-      inscrito: "",
-    });
-  }
-  return lista;
+  const [gold, fin] = [await inscricoesGoldDoUtilizador(db, userId), await inscricoesFinDoUtilizador(db, userId)];
+  return [...gold.map(r => inscricaoDe("gold", r)), ...fin.map(r => inscricaoDe("fin", r))];
 }
 
 export async function montarArea(db: Db, user: Actor) {
-  const prefsRow = await db.query<{ area_prefs: unknown; name: string; email: string }>(
-    "SELECT area_prefs, name, email FROM users WHERE id = $1",
-    [user.id],
-  );
-  const conta = prefsRow.rows[0];
+  const conta = await prefsDoUtilizador(db, user.id);
   const prefs = prefsDe(conta?.area_prefs);
   const inscricoes = await inscricoesDo(db, user.id);
   const primeira = inscricoes[0];
@@ -249,21 +202,18 @@ export async function montarArea(db: Db, user: Actor) {
   const notificacoes = [];
 
   for (const ins of inscricoes) {
-    const tabela = ins.regime === "fin" ? "turmas_fin" : "turmas_gold";
-    const turma = ins.turmaId
-      ? await db.query<{ nome: string; cronograma: unknown }>(`SELECT nome, cronograma FROM ${tabela} WHERE id = $1`, [ins.turmaId])
-      : { rows: [] as { nome: string; cronograma: unknown }[] };
-    const sessoes = sessoesDe(turma.rows[0]?.cronograma);
+    const turma = ins.turmaId ? await cronogramaDaTurma(db, ins.regime, ins.turmaId) : null;
+    const sessoes = sessoesDe(turma?.cronograma);
     const feitas = sessoes.filter(s => s.data <= hoje).length;
     const progresso = sessoes.length ? Math.round((feitas / sessoes.length) * 100) : 0;
     const passadas = sessoes.filter(s => s.data <= hoje);
-    const ultimo = passadas.length ? dataPt(passadas[passadas.length - 1].data) : "";
+    const ultimo = passadas.length ? dataPt(passadas[passadas.length - 1]!.data) : "";
     const cursoId = `${ins.regime}-${ins.id}`;
     cursos.push({
       id: cursoId,
       regime: ins.regime,
-      titulo: ins.curso || turma.rows[0]?.nome || "Formação",
-      turma: ins.turma || turma.rows[0]?.nome || "",
+      titulo: ins.curso || turma?.nome || "Formação",
+      turma: ins.turma || turma?.nome || "",
       estado: ins.estado,
       progresso,
       sessoes: sessoes.length,
@@ -287,12 +237,7 @@ export async function montarArea(db: Db, user: Actor) {
       });
     }
     if (ins.turmaId) {
-      const certs = await db.query<{ emitido: boolean; nota: unknown; ficheiro_url: string; ficheiro_nome: string; emitido_em: string | Date | null }>(
-        `SELECT emitido, nota, COALESCE(ficheiro_url, '') AS ficheiro_url, COALESCE(ficheiro_nome, '') AS ficheiro_nome, emitido_em
-           FROM turma_certificados WHERE regime = $1 AND turma_id = $2 AND formando_id = $3`,
-        [ins.regime, ins.turmaId, ins.id],
-      );
-      for (const cert of certs.rows) {
+      for (const cert of await certificadosDe(db, ins.regime, ins.turmaId, ins.id)) {
         if (!cert.emitido) continue;
         const quando = cert.emitido_em ? dataPt(new Date(cert.emitido_em).toISOString().slice(0, 10)) : "";
         certificados.push({
@@ -311,40 +256,27 @@ export async function montarArea(db: Db, user: Actor) {
         });
       }
     }
-    if (ins.regime === "gold" && ins.valor > 0) {
-      pagamentos.push({
-        id: `fg-${ins.id}`,
-        curso: ins.curso || "Formação",
-        data: ins.inscrito,
-        valor: eur(ins.valor),
-        estado: ins.pago ? "Pago" : "Pendente",
-        metodo: ins.metodo,
+    if (ins.regime === "gold" && ins.valor > 0 && !ins.pago) {
+      notificacoes.push({
+        id: `pag-${ins.id}`,
+        titulo: "Pagamento pendente",
+        texto: `${ins.curso || "A formação"} tem ${eur(ins.valor)} por confirmar.`,
+        quando: ins.inscrito || "Em aberto",
       });
-      if (!ins.pago) {
-        notificacoes.push({
-          id: `pag-${ins.id}`,
-          titulo: "Pagamento pendente",
-          texto: `${ins.curso || "A formação"} tem ${eur(ins.valor)} por confirmar.`,
-          quando: ins.inscrito || "Em aberto",
-        });
-      }
     }
   }
 
-  const nomes = [...new Set(inscricoes.map(i => `${i.nome} ${i.apelido}`.trim().toLowerCase()).filter(Boolean))];
-  if (nomes.length) {
-    const extra = await db.query<{ id: string; nome: string; valor: unknown; metodo: string; curso: string; data: string; estado: string }>(
-      "SELECT id, nome, valor, metodo, curso, data, estado FROM pagamentos WHERE lower(nome) IN (SELECT lower(x) FROM jsonb_array_elements_text($1::jsonb) x)",
-      [JSON.stringify(nomes)],
-    );
-    for (const p of extra.rows) {
+  // Movimentos de pagamento da própria pessoa (fichas Gold ou email da conta); sem movimento, mostra a ficha.
+  const idsGold = inscricoes.filter(i => i.regime === "gold").map(i => i.id);
+  const movimentos = await pagamentosDoUtilizador(db, idsGold, normalizeEmail(conta?.email || user.email));
+  for (const p of movimentos) {
+    pagamentos.push({ id: String(p.id), curso: p.curso, data: p.data, valor: eur(Number(p.valor) || 0), estado: p.estado, metodo: p.metodo });
+  }
+  if (!movimentos.length) {
+    for (const ins of inscricoes.filter(i => i.regime === "gold" && i.valor > 0)) {
       pagamentos.push({
-        id: String(p.id),
-        curso: p.curso,
-        data: p.data,
-        valor: eur(Number(p.valor) || 0),
-        estado: p.estado,
-        metodo: p.metodo,
+        id: `fg-${ins.id}`, curso: ins.curso || "Formação", data: ins.inscrito, valor: eur(ins.valor),
+        estado: ins.pago ? "Pago" : "Pendente", metodo: ins.metodo,
       });
     }
   }
@@ -366,13 +298,7 @@ export async function montarArea(db: Db, user: Actor) {
   for (const ins of inscricoes.filter(i => i.regime === "fin")) {
     const vista = await vistaDocumentosFormandoFin(db, ins.id);
     if (!vista) continue;
-    documentosFin.push({
-      formandoId: ins.id,
-      curso: vista.curso,
-      url: vista.url,
-      completo: vista.completo,
-      documentos: vista.documentos,
-    });
+    documentosFin.push({ formandoId: ins.id, curso: vista.curso, url: vista.url, completo: vista.completo, documentos: vista.documentos });
     const recusados = vista.documentos.filter(d => d.estado === "recusado");
     if (recusados.length) {
       notificacoes.push({
@@ -393,19 +319,14 @@ export async function montarArea(db: Db, user: Actor) {
   // Gold: os documentos chegam da ligação pessoal só depois de validada a pré-inscrição e de a pessoa
   // estar inscrita numa turma do curso (docsParaFormando.ts). Aqui só se mostram, já validados.
   const documentosGold = [];
+  const labels = new Map(DOCS_FORMANDO_GOLD.map(d => [d.id, d.label]));
   for (const ins of inscricoes.filter(i => i.regime === "gold" && i.turmaId)) {
-    const docs = await db.query<{ doc_id: string; file_name: string; drive_url: string; estado: string; validated_at: unknown }>(
-      `SELECT doc_id, file_name, COALESCE(drive_url, '') AS drive_url, COALESCE(estado, 'pendente') AS estado, validated_at
-         FROM formando_docs WHERE regime = 'gold' AND formando_id = $1 AND estado = 'validado'
-        ORDER BY doc_id`,
-      [ins.id],
-    );
-    if (!docs.rows.length) continue;
-    const labels = new Map(DOCS_FORMANDO_GOLD.map(d => [d.id, d.label]));
+    const docs = await docsGoldValidados(db, ins.id);
+    if (!docs.length) continue;
     documentosGold.push({
       formandoId: ins.id,
       curso: ins.curso,
-      documentos: docs.rows.map(d => ({
+      documentos: docs.map(d => ({
         id: d.doc_id,
         label: labels.get(d.doc_id) ?? d.doc_id,
         estado: "validado" as const,
@@ -436,7 +357,7 @@ export async function montarArea(db: Db, user: Actor) {
   };
 }
 
-const perfilSchema = z.object({
+export const perfilSchema = z.object({
   nome: z.string().trim().min(1).max(80).optional(),
   apelido: z.string().trim().max(80).optional(),
   telf: z.string().trim().max(40).optional(),
@@ -450,186 +371,45 @@ const perfilSchema = z.object({
   lidas: z.array(z.string().max(80)).max(80).optional(),
 });
 
-export function registerAreaFormandoRoutes(
-  app: FastifyInstance,
-  db: Db,
-  helpers: {
-    requireAuth: (req: FastifyRequest, reply: FastifyReply, opts?: { formando?: boolean }) => boolean;
-  },
-) {
-  const { requireAuth } = helpers;
+/** O formando altera os seus dados e preferências na área. */
+export async function atualizarPerfil(db: Db, user: Actor, d: z.infer<typeof perfilSchema>) {
+  const atual = await prefsDoUtilizador(db, user.id);
+  const prefs = prefsDe(atual?.area_prefs);
+  const seguinte = { novidades: d.novidades ?? prefs.novidades, canais: d.canais ?? prefs.canais, lidas: d.lidas ?? prefs.lidas };
+  const nomeConta = [d.nome, d.apelido].filter(parte => parte != null).join(" ").trim();
+  await gravarPrefs(db, user.id, seguinte, nomeConta);
+  if (d.nome != null || d.apelido != null || d.telf != null) {
+    await atualizarDadosDoUtilizador(db, user.id, { nome: d.nome, apelido: d.apelido, telf: d.telf });
+  }
+  return montarArea(db, user);
+}
 
-  app.get("/v1/area-formando", async (req, reply) => {
-    if (!requireAuth(req, reply, { formando: true })) return;
-    if (req.actor!.role !== "formando") return reply.code(403).send({ error: "a área do formando não abre o GesForma" });
-    return montarArea(db, req.actor!);
-  });
+/** Pede a ligação de recuperação. Responde sempre igual, para não revelar que emails existem. */
+export async function pedirRecuperacao(db: Db, emailBruto: string) {
+  const email = normalizeEmail(emailBruto);
+  if (!isEmail(email)) return;
+  const conta = await contaPorEmail(db, email);
+  if (!conta?.active || conta.role !== "formando") return;
+  const token = randomBytes(24).toString("base64url");
+  const exp = new Date(Date.now() + 2 * 3600_000).toISOString();
+  await guardarPedidoReposicao(db, conta.id, sha256(token), exp);
+  const origem = config.appOrigin.replace(/\/$/, "");
+  const ligacao = `${origem}/area-formando?recuperar=${encodeURIComponent(token)}`;
+  await sendMail(db, {
+    to: email,
+    name: conta.name || email,
+    subject: "Redefinir a palavra-passe da área do formando",
+    text: `Para definir uma palavra-passe nova, abra esta ligação nas próximas duas horas:\n${ligacao}\n\nSe não pediu esta mensagem, pode ignorá-la.`,
+  }).catch(() => undefined);
+}
 
-  app.patch("/v1/area-formando", async (req, reply) => {
-    if (!requireAuth(req, reply, { formando: true })) return;
-    if (req.actor!.role !== "formando") return reply.code(403).send({ error: "a área do formando não abre o GesForma" });
-    const parsed = perfilSchema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
-    const d = parsed.data;
-    const actual = await db.query<{ area_prefs: unknown }>("SELECT area_prefs FROM users WHERE id = $1", [req.actor!.id]);
-    const prefs = prefsDe(actual.rows[0]?.area_prefs);
-    const seguinte = {
-      novidades: d.novidades ?? prefs.novidades,
-      canais: d.canais ?? prefs.canais,
-      lidas: d.lidas ?? prefs.lidas,
-    };
-    const nomeConta = [d.nome, d.apelido].filter(parte => parte != null).join(" ").trim();
-    await db.query(
-      "UPDATE users SET area_prefs = $2::jsonb, name = CASE WHEN $3 = '' THEN name ELSE $3 END WHERE id = $1",
-      [req.actor!.id, JSON.stringify(seguinte), nomeConta],
-    );
-    if (d.nome != null || d.apelido != null || d.telf != null) {
-      await db.query(
-        `UPDATE formandos_gold SET
-           nome = COALESCE($2, nome),
-           apelido = COALESCE($3, apelido),
-           telf = COALESCE($4, telf)
-         WHERE user_id = $1`,
-        [req.actor!.id, d.nome ?? null, d.apelido ?? null, d.telf ?? null],
-      );
-      await db.query(
-        `UPDATE formandos_fin SET
-           nome = COALESCE($2, nome),
-           apelido = COALESCE($3, apelido),
-           telf = COALESCE($4, telf)
-         WHERE user_id = $1`,
-        [req.actor!.id, d.nome ?? null, d.apelido ?? null, d.telf ?? null],
-      );
-    }
-    return montarArea(db, req.actor!);
-  });
-
-  app.post("/v1/formandos/:regime/:id/acesso", async (req, reply) => {
-    if (!requireAuth(req, reply)) return;
-    const role = req.actor!.role;
-    if (role === "formador" || role === "formando") {
-      return reply.code(403).send({ error: "Só a secretaria gera o acesso do formando." });
-    }
-    const regime = String((req.params as { regime?: string }).regime ?? "");
-    const id = Number((req.params as { id?: string }).id);
-    if ((regime !== "gold" && regime !== "fin") || !Number.isInteger(id)) {
-      return reply.code(400).send({ error: "pedido inválido" });
-    }
-    const body = (req.body ?? {}) as { repor?: boolean; enviarEmail?: boolean };
-    const repor = Boolean(body.repor);
-    const resultado = await gerarAcessoFormando(db, regime, id, repor);
-    if ("erro" in resultado) return reply.code(resultado.estado).send({ error: resultado.erro });
-    // Opcional: o utilizador (email) e a palavra-passe temporária seguem por email para a pessoa.
-    let emailEnviado = false;
-    if (body.enviarEmail) {
-      const tabela = regime === "fin" ? "formandos_fin" : "formandos_gold";
-      const f = await db.query<{ nome: string; apelido: string; curso: string }>(`SELECT nome, apelido, curso FROM ${tabela} WHERE id = $1`, [id]);
-      const nome = `${f.rows[0]?.nome ?? ""} ${f.rows[0]?.apelido ?? ""}`.trim() || resultado.email;
-      const { enviarEmailAcesso } = await import("./inscricaoPaga.js");
-      emailEnviado = await enviarEmailAcesso(db, {
-        email: resultado.email, nome, curso: String(f.rows[0]?.curso ?? ""), password: resultado.password, pago: false,
-      }).then(() => true, () => false);
-    }
-    return { acesso: { ...resultado, emailEnviado } };
-  });
-
-  app.get("/v1/area-formando/documentos/:formandoId", async (req, reply) => {
-    if (!requireAuth(req, reply, { formando: true })) return;
-    if (req.actor!.role !== "formando") return reply.code(403).send({ error: "a área do formando não abre o GesForma" });
-    const formandoId = Number((req.params as { formandoId: string }).formandoId);
-    if (!Number.isInteger(formandoId)) return reply.code(400).send({ error: "pedido inválido" });
-    if (!await assertFormandoDoUser(db, req.actor!.id, formandoId)) {
-      return reply.code(403).send({ error: "sem acesso a esta ficha" });
-    }
-    const vista = await vistaDocumentosFormandoFin(db, formandoId);
-    if (!vista) return reply.code(404).send({ error: "inexistente" });
-    return vista;
-  });
-
-  app.post("/v1/area-formando/documentos/:formandoId", async (req, reply) => {
-    if (!requireAuth(req, reply, { formando: true })) return;
-    if (req.actor!.role !== "formando") return reply.code(403).send({ error: "a área do formando não abre o GesForma" });
-    const formandoId = Number((req.params as { formandoId: string }).formandoId);
-    if (!Number.isInteger(formandoId)) return reply.code(400).send({ error: "pedido inválido" });
-    if (!await assertFormandoDoUser(db, req.actor!.id, formandoId)) {
-      return reply.code(403).send({ error: "sem acesso a esta ficha" });
-    }
-    let name = "ficheiro";
-    let mime = "application/octet-stream";
-    let bytes: Buffer | null = null;
-    let tipo = "";
-    try {
-      const parts = req.parts();
-      for await (const part of parts) {
-        if (part.type === "file") {
-          name = part.filename || name;
-          mime = part.mimetype || mime;
-          bytes = await part.toBuffer();
-        } else if (part.fieldname === "tipo") tipo = String(part.value ?? "").slice(0, 40);
-      }
-    } catch {
-      return reply.code(400).send({ error: "upload inválido" });
-    }
-    if (!bytes || !tipo) return reply.code(400).send({ error: "pedido inválido" });
-    const up = await uploadDocFormandoFin(db, formandoId, tipo, { name, mime, bytes }, {
-      actorId: req.actor!.id,
-      viaFormando: true,
-    });
-    if ("error" in up) return reply.code(400).send({ error: up.error });
-    return up;
-  });
-
-  app.post("/v1/auth/recuperar", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (req, reply) => {
-    const parsed = z.object({ email: z.string().max(254) }).safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
-    const email = normalizeEmail(parsed.data.email);
-    if (isEmail(email)) {
-      const user = await db.query<{ id: string; name: string; role: string; active: boolean }>(
-        "SELECT id, name, role, active FROM users WHERE lower(email) = $1",
-        [email],
-      );
-      const row = user.rows[0];
-      if (row?.active && row.role === "formando") {
-        const token = randomBytes(24).toString("base64url");
-        const exp = new Date(Date.now() + 2 * 3600_000).toISOString();
-        await db.query("DELETE FROM password_resets WHERE user_id = $1", [row.id]);
-        await db.query(
-          "INSERT INTO password_resets (token_hash, user_id, expires_at) VALUES ($1,$2,$3)",
-          [sha256(token), row.id, exp],
-        );
-        const origem = config.appOrigin.replace(/\/$/, "");
-        const ligacao = `${origem}/area-formando?recuperar=${encodeURIComponent(token)}`;
-        await sendMail(db, {
-          to: email,
-          name: row.name || email,
-          subject: "Redefinir a palavra-passe da área do formando",
-          text: `Para definir uma palavra-passe nova, abra esta ligação nas próximas duas horas:\n${ligacao}\n\nSe não pediu esta mensagem, pode ignorá-la.`,
-        }).catch(() => undefined);
-      }
-    }
-    return reply.send({ ok: true });
-  });
-
-  app.post("/v1/auth/repor", { config: { rateLimit: { max: 8, timeWindow: "1 minute" } } }, async (req, reply) => {
-    const parsed = z.object({ token: z.string().min(10).max(200), password: z.string().min(1).max(200) }).safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
-    if (!palavraPasseValida(parsed.data.password)) {
-      return reply.code(400).send({ error: mensagemPalavraPasse(parsed.data.password) });
-    }
-    const row = await db.query<{ user_id: string }>(
-      "SELECT user_id::text AS user_id FROM password_resets WHERE token_hash = $1 AND expires_at > now()",
-      [sha256(parsed.data.token)],
-    );
-    const found = row.rows[0];
-    if (!found) return reply.code(400).send({ error: "A ligação expirou. Peça outra à área do formando." });
-    await db.query(
-      "UPDATE users SET password_hash = $2, must_change_password = false WHERE id = $1 AND role = 'formando'",
-      [found.user_id, await hashPassword(parsed.data.password)],
-    );
-    await db.query("DELETE FROM password_resets WHERE user_id = $1", [found.user_id]);
-    await db.query("DELETE FROM sessions WHERE user_id = $1", [found.user_id]);
-    return { ok: true };
-  });
+/** Define a palavra-passe nova a partir da ligação de recuperação. */
+export async function reporPalavraPasse(db: Db, token: string, password: string): Promise<{ ok: true } | { erro: string }> {
+  if (!palavraPasseValida(password)) return { erro: mensagemPalavraPasse(password) };
+  const pedido = await pedidoReposicaoValido(db, sha256(token));
+  if (!pedido) return { erro: "A ligação expirou. Peça outra à área do formando." };
+  await definirPalavraPasseFormando(db, pedido.user_id, await hashPassword(password));
+  return { ok: true };
 }
 
 export function excerto(corpo: string) {

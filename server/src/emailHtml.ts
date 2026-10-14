@@ -1,5 +1,8 @@
+import { SECRETARIA_MAIL } from "./emailCta.js";
 import { fillVars } from "./security.js";
 import { escapeHtml } from "./xss.js";
+
+const ASSINATURA = SECRETARIA_MAIL ? `Equipa ENA · ${SECRETARIA_MAIL}` : "Equipa ENA";
 
 function esc(s: string) {
   return escapeHtml(s);
@@ -75,7 +78,7 @@ export function renderAutomaticEmail(input: {
 <p style="margin:0 0 14px;font-size:15px;line-height:1.5;color:#0f172a;">Olá ${first},</p>
 ${paraHtml}
 ${button}
-<p style="margin:8px 0 0;padding-top:14px;border-top:1px solid #e2e8f0;font-size:12px;line-height:1.4;color:#94a3b8;">Equipa ENA · formacao@ena.pt</p>
+<p style="margin:8px 0 0;padding-top:14px;border-top:1px solid #e2e8f0;font-size:12px;line-height:1.4;color:#94a3b8;">${esc(ASSINATURA)}</p>
 ${note}
 </td></tr></table>
 ${pixel}
@@ -90,7 +93,7 @@ ${pixel}
     cta,
     href,
     "",
-    "Equipa ENA · formacao@ena.pt",
+    ASSINATURA,
     input.note ?? "",
   ].filter((l, i, arr) => l !== "" || arr[i - 1] !== "").join("\n");
 

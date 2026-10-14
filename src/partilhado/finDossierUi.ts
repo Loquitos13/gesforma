@@ -1,5 +1,5 @@
 import { docsFinCompletos } from "./dossierDocs";
-import type { FormandoFin } from "./ListsContext";
+import type { FormandoFin } from "./tiposFormando";
 import type { PedagogiaSnapshot } from "./api";
 import { formatSessaoLabel, type SessaoCronograma } from "./turmaModel";
 
@@ -68,13 +68,13 @@ export function finGruposDocumentosTurma(input: {
           detalhe: ufcdCod ? `UFCD ${ufcdCod} · ${curso ?? "—"} · ${horas ?? "—"}h` : (curso ?? "Curso"),
           estado: curso ? "ok" : "falta",
         },
-        { label: "Regulamento de formação", detalhe: "Regulamento ENA e regras do financiador.", estado: "parcial" },
+        { label: "Regulamento de formação", detalhe: "Regulamento ENA e regras do financiador. Ainda não registado nesta turma.", estado: "falta" },
         {
           label: "Cronograma da turma",
           detalhe: `${sessoes} sessões planeadas${sessoes ? "" : " · falta cronograma"}`,
           estado: st(facts.sessoes.total > 0 ? facts.sessoes.total : sessoes, Math.max(sessoes, 1)),
         },
-        { label: "Enquadramento do financiador", detalhe: "Candidatura e tipologia.", estado: "parcial" },
+        { label: "Enquadramento do financiador", detalhe: "Candidatura e tipologia. Ainda não registado nesta turma.", estado: "falta" },
         {
           label: "Relatório de execução",
           detalhe: relatorioOk ? "DTP pronto para fecho." : `DTP a ${dtpPct ?? 0}% · falta concluir dossiê`,
@@ -131,9 +131,9 @@ export function finGruposDocumentosTurma(input: {
       label: "Documentos dos formadores",
       color: "bg-violet-50 border-violet-200 text-violet-800",
       items: [
-        { label: "CCP / CCPE do formador", detalhe: "Validar na ficha do formador.", estado: "parcial" },
-        { label: "CV do formador", detalhe: "Validar na ficha do formador.", estado: "parcial" },
-        { label: "Contrato do formador", detalhe: "Validar na ficha do formador.", estado: "parcial" },
+        { label: "CCP / CCPE do formador", detalhe: "Validar na ficha do formador e marcar aqui.", estado: "falta" },
+        { label: "CV do formador", detalhe: "Validar na ficha do formador e marcar aqui.", estado: "falta" },
+        { label: "Contrato do formador", detalhe: "Validar na ficha do formador e marcar aqui.", estado: "falta" },
       ],
     },
   ];

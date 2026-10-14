@@ -2,7 +2,7 @@ export type Vista =
   | "painel" | "gold-painel" | "fin-painel" | "gold-preinscricoes" | "fin-preinscricoes" | "gold-equipa" | "fin-equipa"
   | "gold-crm-clientes" | "gold-crm-parceiros" | "gold-crm-contratos" | "fin-crm-clientes" | "fin-crm-parceiros" | "fin-crm-contratos"
   | "formador-turmas" | "formador-calendario" | "formador-perfil"
-  | "gold-formandos-turmas" | "gold-formandos-gold"
+  | "gold-formandos-turmas" | "gold-formandos-gold" | "gold-formando-ficha" | "fin-formando-ficha" | "formador-ficha"
   | "gold-campanhas" | "gold-cursos" | "gold-datas" | "gold-horarios" | "gold-locais" | "gold-areas-tematicas"
   | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-formadores" | "gold-cockpit-turma" | "gold-curso-ficha" | "gold-dtp" | "gold-inqueritos"
   | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-formadores" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
@@ -22,7 +22,13 @@ export type Destino = {
   formandoOrigem?: "gold-turma" | "gold-avulso" | "fin";
   formadorId?: number;
   leadId?: number;
+  /**
+   * Filtros a aplicar na vista de destino (ex.: `{ fila: "contactar" }` no CRM). Vão para a query
+   * do URL, onde a vista os lê com `useFiltrosUrl`.
+   */
+  filtros?: Record<string, string>;
 };
+
 
 const CAMINHOS: Record<Vista, string> = {
   painel: "/gesforma",
@@ -44,6 +50,9 @@ const CAMINHOS: Record<Vista, string> = {
   "formador-perfil": "/gesforma/formador/perfil",
   "gold-formandos-turmas": "/gesforma/gold/formandos",
   "gold-formandos-gold": "/gesforma/gold/formandos/avulsos",
+  "gold-formando-ficha": "/gesforma/gold/formandos",
+  "fin-formando-ficha": "/gesforma/financiada/formandos",
+  "formador-ficha": "/gesforma/formadores",
   "gold-campanhas": "/gesforma/gold/campanhas",
   "gold-cursos": "/gesforma/gold/cursos",
   "gold-curso-ficha": "/gesforma/gold/cursos/novo",
@@ -85,9 +94,12 @@ const CAMINHOS: Record<Vista, string> = {
   notificacoes: "/gesforma/notificacoes",
 };
 
+/** Fichas com o id no caminho: não entram no mapa caminho → vista. */
+const FICHAS = new Set<Vista>(["gold-formando-ficha", "fin-formando-ficha", "formador-ficha"]);
+
 const POR_CAMINHO = new Map<string, Vista>(
   (Object.entries(CAMINHOS) as [Vista, string][])
-    .filter(([vista]) => vista !== "gold-curso-ficha" && vista !== "fin-curso-ficha" && vista !== "gold-cockpit-turma" && vista !== "fin-cockpit-turma" && vista !== "fin-presencas")
+    .filter(([vista]) => !FICHAS.has(vista) && vista !== "gold-curso-ficha" && vista !== "fin-curso-ficha" && vista !== "gold-cockpit-turma" && vista !== "fin-cockpit-turma" && vista !== "fin-presencas")
     .map(([vista, caminho]) => [caminho, vista]),
 );
 
@@ -112,12 +124,17 @@ export function caminhoDaVista(destino: Destino, drive = ""): string | null {
   const vista = destino.view;
   if ((vista === "gold-cockpit-turma" || vista === "fin-cockpit-turma" || vista === "fin-presencas") && !destino.turmaId) return null;
   if ((vista === "gold-curso-ficha" || vista === "fin-curso-ficha") && destino.cursoId == null) return null;
+  if ((vista === "gold-formando-ficha" || vista === "fin-formando-ficha") && !destino.formandoId) return null;
+  if (vista === "formador-ficha" && !destino.formadorId) return null;
   let path = CAMINHOS[vista];
   if (vista === "gold-curso-ficha") path = `/gesforma/gold/cursos/${destino.cursoId === "new" ? "novo" : destino.cursoId}`;
   if (vista === "fin-curso-ficha") path = `/gesforma/financiada/cursos/${destino.cursoId === "new" ? "novo" : destino.cursoId}`;
   if (vista === "gold-cockpit-turma") path = `/gesforma/gold/turmas/${destino.turmaId}`;
   if (vista === "fin-cockpit-turma") path = `/gesforma/financiada/turmas/${destino.turmaId}`;
   if (vista === "fin-presencas") path = `/gesforma/financiada/turmas/${destino.turmaId}/sessoes`;
+  if (vista === "gold-formando-ficha") path = `/gesforma/gold/formandos/${destino.formandoId}`;
+  if (vista === "fin-formando-ficha") path = `/gesforma/financiada/formandos/${destino.formandoId}`;
+  if (vista === "formador-ficha") path = `/gesforma/formadores/${destino.formadorId}`;
   const q = new URLSearchParams();
   if (destino.tab && destino.tab !== "overview" && (vista === "gold-cockpit-turma" || vista === "fin-cockpit-turma")) q.set("separador", destino.tab);
   if (destino.cursoNome && (vista === "gold-modulos" || vista === "fin-modulos")) q.set("curso", destino.cursoNome);
@@ -128,6 +145,10 @@ export function caminhoDaVista(destino: Destino, drive = ""): string | null {
   if (destino.formadorId && (vista === "gold-formadores" || vista === "fin-formadores" || vista === "formadores")) q.set("formador", String(destino.formadorId));
   if (destino.leadId && (vista === "gold-preinscricoes" || vista === "fin-preinscricoes")) q.set("lead", String(destino.leadId));
   if (drive && vista === "configuracoes") q.set("drive", drive);
+  // Os parâmetros do router ganham a um filtro com o mesmo nome.
+  for (const [chave, valor] of Object.entries(destino.filtros ?? {})) {
+    if (!q.has(chave) && valor !== "") q.set(chave, valor);
+  }
   const extra = q.toString();
   return extra ? `${path}?${extra}` : path;
 }
@@ -156,6 +177,12 @@ export function vistaDoCaminho(pathname: string, search = ""): Destino | null {
     if (cursoId == null) return null;
     return { view: "fin-curso-ficha", cursoId, ...comum };
   }
+  const fichaFormandoGold = /^\/gesforma\/gold\/formandos\/(\d+)$/.exec(path);
+  if (fichaFormandoGold) return { ...comum, view: "gold-formando-ficha", formandoId: Number(fichaFormandoGold[1]) };
+  const fichaFormandoFin = /^\/gesforma\/financiada\/formandos\/(\d+)$/.exec(path);
+  if (fichaFormandoFin) return { ...comum, view: "fin-formando-ficha", formandoId: Number(fichaFormandoFin[1]) };
+  const fichaFormador = /^\/gesforma\/formadores\/(\d+)$/.exec(path);
+  if (fichaFormador) return { ...comum, view: "formador-ficha", formadorId: Number(fichaFormador[1]) };
   const sessoes = /^\/gesforma\/financiada\/turmas\/(\d+)\/sessoes$/.exec(path);
   if (sessoes) return { view: "fin-presencas", turmaId: Number(sessoes[1]), ...comum };
   const turmaGold = /^\/gesforma\/gold\/turmas\/(\d+)$/.exec(path);

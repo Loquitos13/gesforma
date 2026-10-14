@@ -146,50 +146,6 @@ function rotuloOpcao(o: SelectOption) {
   return o.label || o.value;
 }
 
-export const cursosGoldOpts: SelectOption[] = [
-  { value: "Formação de Formadores - CCP", sub: "Gold · 90h · b-learning" },
-  { value: "CCP - Formação de Formadores para Empresas", sub: "Pré-inscrição · 90h" },
-  { value: "Excel do Básico ao Avançado", sub: "Gold · 12h · e-learning" },
-  { value: "A Arte de Comunicar e Falar em Público: B-learning", sub: "16h" },
-  { value: "A Arte de Comunicar e Falar em Público: E-learning", sub: "8h" },
-  { value: "Curso de Auxiliar de Medicina Dentária", sub: "99h · e-learning" },
-  { value: "Curso de Auxiliar de Medicina Veterinária", sub: "120h · e-learning" },
-  { value: "Curso de Cura Prânica", sub: "20h" },
-];
-
-export const cursosFinOpts: SelectOption[] = [
-  { value: "Primeiros Socorros", sub: "UFCD 3564 · 25h" },
-  { value: "Publicidade nas Redes Sociais", sub: "UFCD 10785 · 25h" },
-  { value: "Fundamentos de cibersegurança", sub: "UFCD 9188 · 25h" },
-  { value: "Métodos e Técnicas Pedagógicas Ativos", sub: "UFCD 10394 · 25h" },
-];
-
-export const turmasGoldOpts: SelectOption[] = [
-  { value: "VNG-SM-07/09", sub: "V.N.Gaia · Sábado manhã · CCP" },
-  { value: "VNG-PL-04/09", sub: "V.N.Gaia · Pós Laboral · CCP" },
-  { value: "PEN-SM-02/09", sub: "Penafiel · Sábado manhã · CCP" },
-  { value: "BRG-PL-15/09", sub: "Braga · Pós Laboral · CCP" },
-  { value: "BRG-SM-21/09", sub: "Braga · Sábado manhã · CCP" },
-  { value: "IRN LSB 01/09", sub: "Lisboa · Laboral Manhã · CCP" },
-  { value: "2176/2026", sub: "V.N.Gaia · Laboral Manhã · CCP" },
-];
-
-export const turmasFinOpts: SelectOption[] = [
-  { value: "UFCD 3564 · T1", sub: "Primeiros Socorros · 4 formandos" },
-  { value: "SM-T01", sub: "Publicidade nas Redes Sociais · 17 formandos" },
-  { value: "UFCD 9109 - Cuidados Básicos", sub: "Estética Facial" },
-  { value: "UC02282 - Criar campanhas", sub: "UFCD 10785" },
-];
-
-export const locaisOpts: SelectOption[] = [
-  { value: "V.N.Gaia", sub: "3 salas" },
-  { value: "Braga", sub: "2 salas" },
-  { value: "Lisboa", sub: "2 salas" },
-  { value: "Penafiel", sub: "1 sala" },
-  { value: "Aveiro", sub: "1 sala" },
-  { value: "Sala Virtual", sub: "Moodle + Zoom" },
-  { value: "E-learning", sub: "Assíncrono" },
-];
 
 export function formadoresToOpts(list: { nome: string; telf?: string; especialidade?: string; ccp?: string }[]): SelectOption[] {
   return list
@@ -208,87 +164,6 @@ export function formadoresOptsWithFrom(base: SelectOption[], current?: string | 
   if (!extras.length) return base;
   return [...extras.map(value => ({ value, sub: "Atribuído nesta turma" })), ...base];
 }
-
-export const formadoresOpts: SelectOption[] = [
-  { value: "Isac Silva", sub: "914 547 554 · CCP e pedagogia" },
-  { value: "Ivan Esteves", sub: "912 370 557 · Comunicação" },
-  { value: "António Cardeal", sub: "915 258 691 · Comunicar em contexto profissional" },
-  { value: "Cátia Pinheiro", sub: "912 919 291 · Estética facial" },
-  { value: "Vânia Fernandes", sub: "967 432 879 · Primeiros socorros" },
-  { value: "Rosana Suarez", sub: "938 039 001 · Massagem" },
-];
-
-export function formadoresOptsWith(current?: string | string[]): SelectOption[] {
-  return formadoresOptsWithFrom(formadoresOpts, current);
-}
-
-export const horariosOpts: SelectOption[] = [
-  { value: "Laboral manhã" },
-  { value: "Laboral Manhã" },
-  { value: "Laboral tarde" },
-  { value: "Laboral Tarde" },
-  { value: "Pós-Laboral" },
-  { value: "Pós Laboral" },
-  { value: "Sábado manhã" },
-];
-
-export const categoriasGoldOpts: SelectOption[] = [
-  { value: "CCP e Gestão da Formação" },
-  { value: "Saúde e bem estar" },
-  { value: "Desenvolvimento Pessoal" },
-];
-
-export type ModuloCatalog = SelectOption & { curso?: string };
-
-export const catalogoModulos: ModuloCatalog[] = [
-  { value: "M1 · Formador: sistemas, contextos e perfil", sub: "CCP · 10h", curso: "Formação de Formadores - CCP" },
-  { value: "M2 · Simulação pedagógica inicial", sub: "CCP · 10h", curso: "Formação de Formadores - CCP" },
-  { value: "M3 · Comunicação e dinamização de grupos", sub: "CCP · 10h", curso: "Formação de Formadores - CCP" },
-  { value: "M4 · Metodologias e estratégias pedagógicas", sub: "CCP · 12h", curso: "Formação de Formadores - CCP" },
-  { value: "M5 · Operacionalização da formação", sub: "CCP · 8h", curso: "Formação de Formadores - CCP" },
-  { value: "M6 · Recursos didáticos e multimédia", sub: "CCP · 8h", curso: "Formação de Formadores - CCP" },
-  { value: "M7 · Plataformas colaborativas e de aprendizagem", sub: "CCP · 8h", curso: "Formação de Formadores - CCP" },
-  { value: "M8 · Avaliação da formação e das aprendizagens", sub: "CCP · 12h", curso: "Formação de Formadores - CCP" },
-  { value: "M9 · Simulação pedagógica final", sub: "CCP · 12h", curso: "Formação de Formadores - CCP" },
-  { value: "EX1 · Tabelas dinâmicas e dashboards", sub: "Excel · 4h", curso: "Excel do Básico ao Avançado" },
-  { value: "AV1 · Voz e respiração", sub: "6h", curso: "A Arte de Comunicar e Falar em Público: B-learning" },
-  { value: "AV2 · Estrutura do discurso", sub: "5h", curso: "A Arte de Comunicar e Falar em Público: B-learning" },
-  { value: "AV3 · Ensaio e feedback", sub: "5h", curso: "A Arte de Comunicar e Falar em Público: B-learning" },
-  { value: "UFCD 3564 · Avaliação primária e SVB", sub: "Primeiros Socorros · 5h", curso: "Primeiros Socorros" },
-  { value: "UFCD 3564 · Trauma e hemorragias", sub: "Primeiros Socorros · 5h", curso: "Primeiros Socorros" },
-  { value: "UFCD 3564 · Queimaduras e intoxicações", sub: "Primeiros Socorros · 5h", curso: "Primeiros Socorros" },
-  { value: "UFCD 3564 · Emergências médicas", sub: "Primeiros Socorros · 5h", curso: "Primeiros Socorros" },
-  { value: "UFCD 3564 · Simulação e avaliação", sub: "Primeiros Socorros · 5h", curso: "Primeiros Socorros" },
-  { value: "UFCD 10785 · Criar campanhas", sub: "Publicidade nas Redes Sociais", curso: "Publicidade nas Redes Sociais" },
-  { value: "UFCD 10785 · Segmentação e métricas", sub: "Publicidade nas Redes Sociais", curso: "Publicidade nas Redes Sociais" },
-  { value: "UFCD 9109 · Cuidados básicos", sub: "Estética Facial", curso: "Masterclass em Estética Facial" },
-];
-
-export const modulosOpts: SelectOption[] = catalogoModulos.map(({ value, sub }) => ({ value, sub }));
-
-export function modulosOptsForCurso(curso?: string): SelectOption[] {
-  if (!curso) return modulosOpts;
-  const exact = catalogoModulos.filter(m => m.curso === curso);
-  if (exact.length) return exact.map(({ value, sub }) => ({ value, sub }));
-  if (/ccp/i.test(curso)) return catalogoModulos.filter(m => m.curso?.includes("CCP")).map(({ value, sub }) => ({ value, sub }));
-  if (/3564|primeiros socorros/i.test(curso)) return catalogoModulos.filter(m => m.curso === "Primeiros Socorros").map(({ value, sub }) => ({ value, sub }));
-  return modulosOpts;
-}
-
-export const areasOpts: SelectOption[] = [
-  { value: "CCP e Gestão da Formação" },
-  { value: "Saúde e bem estar" },
-  { value: "Desenvolvimento Pessoal" },
-  { value: "Boas práticas pedagógicas" },
-];
-
-export const blogTematicasOpts: SelectOption[] = [
-  { value: "Formação de Formadores", sub: "ccp" },
-  { value: "Formação Financiada", sub: "financiada" },
-  { value: "Dicas de e-learning", sub: "e-learning" },
-  { value: "Carreiras na saúde", sub: "saude" },
-  { value: "Notícias ENA", sub: "noticias" },
-];
 
 export function optsFromCursos(
   cursos: { nome?: string; ufcd?: string; nomeComercial?: string; tipo?: string; horas?: number; regime?: string; estado?: string }[],

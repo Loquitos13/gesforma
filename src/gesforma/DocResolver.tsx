@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  getParametrosAvaliacao, grelhaCompleta, pipEstado, simAlunoEstado, simEstado,
+  grelhaCompleta, pipEstado, simAlunoEstado, simEstado,
   type PipItem, type ResolveDocEstado, type ResolveDocTarget,
   type ResolveListaItem, type SimItem,
 } from "../partilhado/TurmaExtras";
@@ -57,9 +57,8 @@ export function ResolverDocumentoModal({
   if (!open || !target) return null;
   const doc = target;
 
-  const params = getParametrosAvaliacao(doc.curso);
-  const criterios = doc.criterios ?? params.criterios;
-  const curso = doc.curso ?? params.curso;
+  const criterios = doc.criterios ?? [];
+  const curso = doc.curso ?? "";
   const doneLista = items.filter(i => i.ok).length;
   const listaEstado: ResolveDocEstado = items.length === 0 ? "ok" : doneLista === items.length ? "ok" : doneLista === 0 ? "falta" : "parcial";
   const pip = pipEstado(pipItems);

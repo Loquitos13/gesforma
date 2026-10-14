@@ -1,8 +1,11 @@
-import { mkdirSync, writeFileSync, readFileSync, unlinkSync, existsSync } from "node:fs";
-import { join } from "node:path";
-import { config, newToken, onVercel } from "./config.js";
+import { config } from "./config.js";
 import { dtpDriveSegments } from "./dtpPasta.js";
 import type { Db } from "./db/pool.js";
+import { sanitizeFileName } from "./ficheirosValidacao.js";
+import {
+  apagarContaGoogle, apagarEstadosOauthExpirados, contaGoogle, gravarConfigDrive, gravarContaGoogle, lembrarPastaRaiz,
+  lerConfigDrive, renovarTokenGoogle,
+} from "./repos/drive.js";
 import { openSecret, sealSecret } from "./secretBox.js";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -12,23 +15,8 @@ const DRIVE_FILES = "https://www.googleapis.com/drive/v3/files";
 export const DRIVE_FILES_URL = DRIVE_FILES;
 export const FOLDER_MIME_DRIVE = "application/vnd.google-apps.folder";
 export const SHORTCUT_MIME_DRIVE = "application/vnd.google-apps.shortcut";
-const DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const FOLDER_MIME = "application/vnd.google-apps.folder";
-
-const ALLOWED_MIME = new Set([
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "image/jpeg",
-  "image/png",
-  "video/mp4",
-  "video/webm",
-  "application/octet-stream",
-  "text/html",
-]);
-
-const ALLOWED_EXT = /\.(pdf|doc|docx|jpe?g|png|mp4|webm|html)$/i;
 
 export type DriveContext = {
   kind: string;
@@ -42,35 +30,6 @@ export type DriveContext = {
   folderPath?: string;
 };
 
-export type DriveFileRow = {
-  id: string;
-  drive_id: string | null;
-  name: string;
-  mime_type: string | null;
-  size_bytes: number | null;
-  web_view_link: string | null;
-  web_content_link: string | null;
-  folder_path: string | null;
-  kind: string;
-  regime: string | null;
-  turma: string | null;
-  formando: string | null;
-  label: string | null;
-  stored_in: string;
-  local_path: string | null;
-  created_at: string;
-};
-
-type AccountRow = {
-  email: string | null;
-  access_token: string;
-  refresh_token: string | null;
-  expiry: string | null;
-  scope: string | null;
-  folder_id: string | null;
-  folder_name: string | null;
-};
-
 export type DriveCreds = {
   clientId: string;
   clientSecret: string;
@@ -81,19 +40,8 @@ export type DriveCreds = {
   fromEnv: boolean;
 };
 
-type ConfigRow = {
-  client_id: string | null;
-  client_secret: string | null;
-  folder_id: string | null;
-  folder_name: string | null;
-  scope: string | null;
-};
-
 export async function driveCreds(db: Db): Promise<DriveCreds> {
-  const row = await db.query<ConfigRow>(
-    "SELECT client_id, client_secret, folder_id, folder_name, scope FROM drive_config WHERE id = 'google'",
-  );
-  const stored = row.rows[0];
+  const stored = await lerConfigDrive(db);
   let storedSecret = "";
   if (stored?.client_secret) {
     try { storedSecret = openSecret(stored.client_secret); } catch { storedSecret = ""; }
@@ -129,18 +77,7 @@ export async function saveDriveConfig(db: Db, patch: {
   const scope = patch.scope ?? prev.scope;
   if (!clientId || clientId.length < 12) throw new Error("Client ID inválido");
   if (!clientSecret || clientSecret.length < 12) throw new Error("Client secret em falta");
-  await db.query(
-    `INSERT INTO drive_config (id, client_id, client_secret, folder_id, folder_name, scope)
-     VALUES ('google', $1, $2, $3, $4, $5)
-     ON CONFLICT (id) DO UPDATE SET
-       client_id = EXCLUDED.client_id,
-       client_secret = EXCLUDED.client_secret,
-       folder_id = EXCLUDED.folder_id,
-       folder_name = EXCLUDED.folder_name,
-       scope = EXCLUDED.scope,
-       updated_at = now()`,
-    [clientId, sealSecret(clientSecret), folderId || null, folderName, scope],
-  );
+  await gravarConfigDrive(db, { clientId, clientSecretSelado: sealSecret(clientSecret), folderId: folderId || null, folderName, scope });
   return driveCreds(db);
 }
 
@@ -179,37 +116,6 @@ export function googleLoginAuthUrl(state: string, creds: DriveCreds, redirectUri
   return `${AUTH_URL}?${q.toString()}`;
 }
 
-export function sanitizeFileName(name: string) {
-  const base = name.replace(/[/\\]/g, "").replace(/[^\w.\- ()áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]+/g, "_").trim();
-  return (base || "ficheiro").slice(0, 180);
-}
-
-/**
- * Ficheiros enviados por pessoas de fora (ligação pessoal, portal e área do formando):
- * só PDF, JPEG ou PNG, e o conteúdo tem de corresponder à extensão — o MIME do browser não chega.
- */
-export function erroFicheiroPublico(name: string, bytes: Buffer): string | null {
-  const ext = (/\.([a-z0-9]+)$/i.exec(name)?.[1] ?? "").toLowerCase();
-  const b = bytes;
-  const pdf = b.length > 4 && b.subarray(0, 5).toString("latin1") === "%PDF-";
-  const jpg = b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
-  const png = b.length > 8 && b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-  if (!b.length) return "ficheiro vazio";
-  if (b.length > config.driveMaxBytes) return "ficheiro acima de 10 MB";
-  if (ext === "pdf" && pdf) return null;
-  if ((ext === "jpg" || ext === "jpeg") && jpg) return null;
-  if (ext === "png" && png) return null;
-  return "Envie um PDF, JPG ou PNG. O ficheiro não corresponde ao formato indicado.";
-}
-
-export function assertUpload(name: string, mime: string, size: number) {
-  if (size <= 0) throw new Error("ficheiro vazio");
-  if (size > config.driveMaxBytes) throw new Error("ficheiro acima de 10 MB");
-  const okMime = ALLOWED_MIME.has(mime);
-  const okExt = ALLOWED_EXT.test(name);
-  if (!okMime && !okExt) throw new Error("tipo de ficheiro recusado");
-}
-
 function kindFolder(kind: string) {
   const map: Record<string, string> = {
     certificado: "Certificados",
@@ -232,11 +138,6 @@ export function folderSegments(ctx: DriveContext, rootName = config.googleDriveF
   if (ctx.turma) segs.push(sanitizeFileName(ctx.turma));
   segs.push(kindFolder(ctx.kind));
   return segs;
-}
-
-function driveDir() {
-  mkdirSync(config.driveDir, { recursive: true });
-  return config.driveDir;
 }
 
 async function googleJson<T>(url: string, init: RequestInit = {}): Promise<T> {
@@ -294,52 +195,32 @@ export async function googleUserEmail(accessToken: string) {
   return info.email ?? null;
 }
 
-async function userEmail(accessToken: string) {
-  return googleUserEmail(accessToken);
-}
-
 export async function saveGoogleAccount(db: Db, tokens: {
   access_token: string;
   refresh_token?: string;
   expires_in: number;
   scope?: string;
 }) {
-  const email = await userEmail(tokens.access_token);
-  const prev = await db.query<AccountRow>(
-    "SELECT email, access_token, refresh_token, expiry, scope, folder_id, folder_name FROM oauth_accounts WHERE provider = 'google'",
-  );
+  const email = await googleUserEmail(tokens.access_token);
+  const prev = await contaGoogle(db);
   const refresh = tokens.refresh_token
-    ?? (prev.rows[0]?.refresh_token ? openSecret(prev.rows[0].refresh_token) : "");
+    ?? (prev?.refresh_token ? openSecret(prev.refresh_token) : "");
   if (!refresh) throw new Error("Google não devolveu refresh token. Volte a ligar a conta.");
   const expiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
-  await db.query(
-    `INSERT INTO oauth_accounts (provider, email, access_token, refresh_token, expiry, scope, folder_id, folder_name)
-     VALUES ('google', $1, $2, $3, $4, $5, $6, $7)
-     ON CONFLICT (provider) DO UPDATE SET
-       email = EXCLUDED.email,
-       access_token = EXCLUDED.access_token,
-       refresh_token = EXCLUDED.refresh_token,
-       expiry = EXCLUDED.expiry,
-       scope = EXCLUDED.scope,
-       updated_at = now()`,
-    [
-      email,
-      sealSecret(tokens.access_token),
-      sealSecret(refresh),
-      expiry,
-      tokens.scope ?? googleScopes().join(" "),
-      prev.rows[0]?.folder_id ?? null,
-      prev.rows[0]?.folder_name ?? null,
-    ],
-  );
+  await gravarContaGoogle(db, {
+    email,
+    accessSelado: sealSecret(tokens.access_token),
+    refreshSelado: sealSecret(refresh),
+    expiry,
+    scope: tokens.scope ?? googleScopes().join(" "),
+    folderId: prev?.folder_id ?? null,
+    folderName: prev?.folder_name ?? null,
+  });
   return { email };
 }
 
 async function loadAccount(db: Db) {
-  const row = await db.query<AccountRow>(
-    "SELECT email, access_token, refresh_token, expiry, scope, folder_id, folder_name FROM oauth_accounts WHERE provider = 'google'",
-  );
-  return row.rows[0] ?? null;
+  return contaGoogle(db);
 }
 
 function hintDoDrive(configured: boolean, connected: boolean, email: string | null, reason: string | null) {
@@ -391,14 +272,11 @@ export async function tokenDrive(db: Db) {
   if (!googleConfigured(creds)) return null;
   const next = await refreshAccess(refresh, creds);
   const expiry = new Date(Date.now() + next.expires_in * 1000).toISOString();
-  await db.query(
-    "UPDATE oauth_accounts SET access_token = $1, expiry = $2, updated_at = now() WHERE provider = 'google'",
-    [sealSecret(next.access_token), expiry],
-  );
+  await renovarTokenGoogle(db, sealSecret(next.access_token), expiry);
   return next.access_token;
 }
 
-async function usableToken(db: Db): Promise<{ token: string | null; reason: string | null }> {
+export async function usableToken(db: Db): Promise<{ token: string | null; reason: string | null }> {
   const creds = await driveCreds(db);
   if (!googleConfigured(creds)) return { token: null, reason: null };
   try {
@@ -410,7 +288,7 @@ async function usableToken(db: Db): Promise<{ token: string | null; reason: stri
   }
 }
 
-function driveOfflineMessage(reason: string | null) {
+export function driveOfflineMessage(reason: string | null) {
   if (reason && /invalid_grant|expired|revoked|invalid_token/i.test(reason)) {
     return "A ligação ao Google expirou. Em Configurações volte a ligar a conta. Os ficheiros seguem para o Drive.";
   }
@@ -426,7 +304,7 @@ export async function disconnectGoogle(db: Db) {
       await fetch(`${REVOKE_URL}?token=${encodeURIComponent(token)}`, { method: "POST" });
     } catch { /* ignore revoke errors */ }
   }
-  await db.query("DELETE FROM oauth_accounts WHERE provider = 'google'");
+  await apagarContaGoogle(db);
 }
 
 export async function driveComToken<T>(token: string, url: string, init: RequestInit = {}) {
@@ -441,7 +319,7 @@ function usableFolderId(id: string | null | undefined) {
   return value;
 }
 
-function isNotFound(err: unknown) {
+export function isNotFound(err: unknown) {
   const msg = err instanceof Error ? err.message : String(err);
   return /not found/i.test(msg);
 }
@@ -524,16 +402,13 @@ async function nestFolders(token: string, parentId: string, names: string[]) {
   return parent;
 }
 
-async function ensureFolderPath(db: Db, token: string, segments: string[], folderId?: string) {
+export async function ensureFolderPath(db: Db, token: string, segments: string[], folderId?: string) {
   const account = await loadAccount(db);
   const pinned = usableFolderId(folderId) || usableFolderId(account?.folder_id);
   const rootName = segments[0] ?? config.googleDriveFolder;
   const rest = segments.slice(1).filter(name => name.trim());
   const remember = async (id: string) => {
-    await db.query(
-      "UPDATE oauth_accounts SET folder_id = $1, folder_name = $2, updated_at = now() WHERE provider = 'google'",
-      [id, rootName],
-    );
+    await lembrarPastaRaiz(db, id, rootName);
   };
   if (!pinned) {
     const rootId = await garantirPastaFilha(token, "root", rootName);
@@ -548,196 +423,6 @@ async function ensureFolderPath(db: Db, token: string, segments: string[], folde
     await remember(rootId);
     return nestFolders(token, rootId, rest);
   }
-}
-
-async function uploadToGoogle(token: string, parentId: string, name: string, mime: string, bytes: Buffer) {
-  const boundary = `gesforma_${newToken(8)}`;
-  const meta = JSON.stringify({ name, parents: [parentId] });
-  const head = Buffer.from(
-    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`,
-  );
-  const tail = Buffer.from(`\r\n--${boundary}--`);
-  const body = Buffer.concat([head, bytes, tail]);
-  const url = `${DRIVE_UPLOAD}?uploadType=multipart&supportsAllDrives=true&fields=id,name,mimeType,size,webViewLink,webContentLink`;
-  return driveComToken<{
-    id: string;
-    name: string;
-    mimeType?: string;
-    size?: string;
-    webViewLink?: string;
-    webContentLink?: string;
-  }>(token, url, {
-    method: "POST",
-    headers: {
-      "Content-Type": `multipart/related; boundary=${boundary}`,
-      "Content-Length": String(body.length),
-    },
-    body,
-  });
-}
-
-function mapFile(row: DriveFileRow) {
-  const openUrl = row.stored_in === "google" && row.web_view_link
-    ? row.web_view_link
-    : `/api/v1/drive/files/${row.id}/content`;
-  return {
-    id: row.id,
-    name: row.name,
-    mimeType: row.mime_type ?? "application/octet-stream",
-    sizeBytes: row.size_bytes ?? 0,
-    webViewLink: row.web_view_link,
-    openUrl,
-    folderPath: row.folder_path ?? "",
-    kind: row.kind,
-    regime: row.regime,
-    turma: row.turma,
-    formando: row.formando,
-    label: row.label,
-    storedIn: row.stored_in === "google" ? "google" as const : "local" as const,
-    createdAt: row.created_at,
-  };
-}
-
-export async function storeDriveFile(
-  db: Db,
-  actorId: string | undefined,
-  file: { name: string; mime: string; bytes: Buffer },
-  ctx: DriveContext,
-) {
-  const name = sanitizeFileName(file.name);
-  assertUpload(name, file.mime, file.bytes.length);
-  const id = newToken(16);
-  const creds = await driveCreds(db);
-  const pathLabel = ctx.folderPath?.trim() || folderSegments(ctx, creds.folderName).join(" / ");
-  const { token, reason } = await usableToken(db);
-
-  if (token) {
-    let parent: string;
-    try {
-      parent = ctx.parentDriveId?.trim()
-        || await ensureFolderPath(db, token, folderSegments(ctx, creds.folderName), creds.folderId);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "";
-      if (isNotFound(err)) {
-        throw new Error("A conta Google não consegue usar essa pasta. Em Configurações apague o ID da pasta, desligue a conta e volte a ligar.");
-      }
-      throw err instanceof Error ? err : new Error(msg || "upload recusado");
-    }
-    const uploaded = await uploadToGoogle(token, parent, name, file.mime, file.bytes);
-    await db.query(
-      `INSERT INTO drive_files
-        (id, drive_id, name, mime_type, size_bytes, web_view_link, web_content_link, folder_path,
-         kind, regime, turma, formando, label, stored_in, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'google',$14)`,
-      [
-        id, uploaded.id, uploaded.name ?? name, uploaded.mimeType ?? file.mime,
-        Number(uploaded.size ?? file.bytes.length), uploaded.webViewLink ?? null,
-        uploaded.webContentLink ?? null, pathLabel,
-        ctx.kind || "documento", ctx.regime ?? null, ctx.turma ?? null,
-        ctx.formando ?? null, ctx.label ?? null, actorId ?? null,
-      ],
-    );
-  } else if (!onVercel) {
-    const localName = `${id}-${name}`;
-    const localPath = join(driveDir(), localName);
-    writeFileSync(localPath, file.bytes);
-    await db.query(
-      `INSERT INTO drive_files
-        (id, name, mime_type, size_bytes, folder_path, kind, regime, turma, formando, label,
-         stored_in, local_path, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'local',$11,$12)`,
-      [
-        id, name, file.mime, file.bytes.length, pathLabel,
-        ctx.kind || "documento", ctx.regime ?? null, ctx.turma ?? null,
-        ctx.formando ?? null, ctx.label ?? null, localName, actorId ?? null,
-      ],
-    );
-  } else {
-    console.error(JSON.stringify({
-      msg: "drive sem token; anexo recusado",
-      reason: reason ?? "sem-ligacao",
-    }));
-    throw new Error(driveOfflineMessage(reason));
-  }
-
-  const row = await db.query<DriveFileRow>("SELECT * FROM drive_files WHERE id = $1", [id]);
-  return mapFile(row.rows[0]!);
-}
-
-export async function listDriveFiles(db: Db, q: DriveContext & { limit?: number }) {
-  const clauses: string[] = ["1=1"];
-  const params: unknown[] = [];
-  const add = (sql: string, value: string) => {
-    params.push(value);
-    clauses.push(`${sql} = $${params.length}`);
-  };
-  if (q.kind) add("kind", q.kind);
-  if (q.regime) add("regime", q.regime);
-  if (q.turma) add("turma", q.turma);
-  if (q.formando) add("formando", q.formando);
-  params.push(Math.min(q.limit ?? 80, 200));
-  const rows = await db.query<DriveFileRow>(
-    `SELECT * FROM drive_files WHERE ${clauses.join(" AND ")} ORDER BY created_at DESC LIMIT $${params.length}`,
-    params,
-  );
-  return rows.rows.map(mapFile);
-}
-
-export async function getDriveFile(db: Db, id: string) {
-  const row = await db.query<DriveFileRow>("SELECT * FROM drive_files WHERE id = $1", [id]);
-  return row.rows[0] ? mapFile(row.rows[0]) : null;
-}
-
-export async function readDriveContent(db: Db, id: string) {
-  const row = await db.query<DriveFileRow>("SELECT * FROM drive_files WHERE id = $1", [id]);
-  const file = row.rows[0];
-  if (!file) return null;
-  if (file.stored_in === "local" && file.local_path) {
-    const path = join(driveDir(), file.local_path);
-    if (!existsSync(path)) return null;
-    return {
-      name: file.name,
-      mime: file.mime_type ?? "application/octet-stream",
-      bytes: readFileSync(path),
-      redirect: null as string | null,
-    };
-  }
-  const token = await tokenDrive(db);
-  if (!token || !file.drive_id) {
-    return { name: file.name, mime: file.mime_type ?? "application/octet-stream", bytes: null, redirect: file.web_view_link };
-  }
-  const res = await fetch(`${DRIVE_FILES}/${file.drive_id}?alt=media&supportsAllDrives=true`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    return { name: file.name, mime: file.mime_type ?? "application/octet-stream", bytes: null, redirect: file.web_view_link };
-  }
-  const buf = Buffer.from(await res.arrayBuffer());
-  return { name: file.name, mime: file.mime_type ?? "application/octet-stream", bytes: buf, redirect: null as string | null };
-}
-
-export async function apagarFicheiroSubstituido(db: Db, id: string) {
-  const row = await db.query<DriveFileRow>("SELECT * FROM drive_files WHERE id = $1", [id]);
-  const file = row.rows[0];
-  if (!file) return false;
-  if (file.stored_in === "google" && file.drive_id) {
-    const token = await tokenDrive(db).catch(() => null);
-    if (token) {
-      const res = await fetch(`${DRIVE_FILES}/${encodeURIComponent(file.drive_id)}?supportsAllDrives=true`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok && res.status !== 404) {
-        throw new Error("Não foi possível apagar o ficheiro anterior na Drive.");
-      }
-    }
-  }
-  if (file.local_path) {
-    const path = join(driveDir(), file.local_path);
-    if (existsSync(path)) unlinkSync(path);
-  }
-  await db.query("DELETE FROM drive_files WHERE id = $1", [id]);
-  return true;
 }
 
 export async function apagarItemGoogle(token: string, driveId: string) {
@@ -799,29 +484,8 @@ export async function partilharPasta(token: string, fileId: string, email: strin
   await shareFolder(token, fileId, email);
 }
 
-export async function deleteDriveFile(db: Db, id: string) {
-  const row = await db.query<DriveFileRow>("SELECT * FROM drive_files WHERE id = $1", [id]);
-  const file = row.rows[0];
-  if (!file) return false;
-  if (file.stored_in === "google" && file.drive_id) {
-    const token = await tokenDrive(db).catch(() => null);
-    if (token) {
-      await fetch(`${DRIVE_FILES}/${file.drive_id}?supportsAllDrives=true`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => undefined);
-    }
-  }
-  if (file.local_path) {
-    const path = join(driveDir(), file.local_path);
-    if (existsSync(path)) unlinkSync(path);
-  }
-  await db.query("DELETE FROM drive_files WHERE id = $1", [id]);
-  return true;
-}
-
 export function purgeExpiredStates(db: Db) {
-  return db.query("DELETE FROM oauth_states WHERE expires_at < now()");
+  return apagarEstadosOauthExpirados(db);
 }
 
 async function shareFolder(token: string, fileId: string, email: string) {
@@ -830,75 +494,4 @@ async function shareFolder(token: string, fileId: string, email: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ role: "writer", type: "user", emailAddress: email }),
   });
-}
-
-export function nomesNoCronograma(cronograma: unknown, extra: string[]) {
-  const nomes = new Set(extra.map(n => n.trim()).filter(Boolean));
-  const lista = Array.isArray(cronograma) ? cronograma : [];
-  for (const item of lista) {
-    if (!item || typeof item !== "object") continue;
-    const row = item as { formadores?: unknown; formador?: unknown };
-    if (Array.isArray(row.formadores)) {
-      for (const n of row.formadores) if (typeof n === "string" && n.trim()) nomes.add(n.trim());
-    } else if (typeof row.formador === "string" && row.formador.trim()) {
-      nomes.add(row.formador.trim());
-    }
-  }
-  return [...nomes];
-}
-
-/** Cria o dossiê da turma, partilha a pasta e liga os atalhos dos formadores. */
-export async function syncTurmaDriveAccess(db: Db, input: {
-  regime: "gold" | "fin";
-  turmaId: number;
-  nome: string;
-  formador?: string;
-  formadores?: string[];
-  cronograma?: unknown;
-}) {
-  const { prepararTurmaDrive } = await import("./driveArvore.js");
-  return prepararTurmaDrive(db, input);
-}
-
-/** Move um ficheiro para a pasta da turma, dentro de uma subpasta com o nome da pessoa. */
-export async function relocateDriveFile(db: Db, fileId: string, dest: {
-  regime: "gold" | "fin";
-  turmaId: number;
-  turmaNome: string;
-  pessoa: string;
-}) {
-  const found = await db.query<DriveFileRow>("SELECT * FROM drive_files WHERE id = $1", [fileId]);
-  const file = found.rows[0];
-  if (!file) return false;
-  const tag = dest.regime === "fin" ? "Financiada" : "Gold";
-  const pessoa = sanitizeFileName(dest.pessoa.trim() || "Formando");
-  const turmaNome = dest.turmaNome.trim() || `Turma ${dest.turmaId}`;
-  const pathLabel = ["Turmas", tag, turmaNome, pessoa].join(" / ");
-  const token = await tokenDrive(db).catch(() => null);
-  if (token && file.stored_in === "google" && file.drive_id) {
-    const table = dest.regime === "gold" ? "turmas_gold" : "turmas_fin";
-    const pastaRow = await db.query<{ drive_pasta_id: string }>(
-      `SELECT drive_pasta_id FROM ${table} WHERE id = $1`,
-      [dest.turmaId],
-    );
-    let pasta = pastaRow.rows[0]?.drive_pasta_id?.trim() ?? "";
-    if (!pasta) pasta = await ensureFolderPath(db, token, ["Turmas", tag, turmaNome]);
-    if (pasta && pasta !== pastaRow.rows[0]?.drive_pasta_id) {
-      await db.query(`UPDATE ${table} SET drive_pasta_id = $2 WHERE id = $1 AND drive_pasta_id = ''`, [dest.turmaId, pasta]);
-    }
-    const child = await garantirPastaFilha(token, pasta, pessoa);
-    const current = await driveComToken<{ parents?: string[] }>(
-      token,
-      `${DRIVE_FILES}/${encodeURIComponent(file.drive_id)}?fields=parents&supportsAllDrives=true`,
-    );
-    const remove = (current.parents ?? []).filter(id => id !== child);
-    const params = new URLSearchParams({ addParents: child, supportsAllDrives: "true", fields: "id,parents" });
-    if (remove.length) params.set("removeParents", remove.join(","));
-    await driveComToken(token, `${DRIVE_FILES}/${encodeURIComponent(file.drive_id)}?${params.toString()}`, { method: "PATCH" });
-  }
-  await db.query(
-    "UPDATE drive_files SET folder_path = $2, turma = $3, formando = $4 WHERE id = $1",
-    [fileId, pathLabel, turmaNome, pessoa],
-  );
-  return true;
 }

@@ -2,9 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./gesforma/App";
 import { AuthGate } from "./partilhado/AuthGate";
-import { CatalogsProvider } from "./partilhado/CatalogsContext";
 import { DriveProvider } from "./partilhado/DriveContext";
-import { FormadoresProvider } from "./partilhado/FormadoresContext";
 import { NotificacoesProvider } from "./gesforma/NotificacoesContext";
 import { PublicInquerito } from "./site/PublicInquerito";
 import { PublicPreinscricao } from "./site/PublicPreinscricao";
@@ -13,11 +11,10 @@ import { PublicFormandoDocumentos } from "./site/PublicFormandoDocumentos";
 import { PublicCronograma } from "./site/PublicCronograma";
 import { SiteCatalog } from "./site/SiteCatalog";
 import { SiteCurso } from "./site/SiteCurso";
-import { AreaFormando } from "./site/AreaFormando";
+import { AreaFormando } from "./site/AreaFormandoPainel";
 import { Noticias } from "./site/Noticias";
-import { SiteLanding } from "./site/SiteLanding";
+import { SiteLanding } from "./site/SiteLandingRodape";
 import { ToastHost } from "./gesforma/ToastHost";
-import { TurmasProvider } from "./partilhado/TurmasContext";
 import "./index.css";
 
 const path = window.location.pathname.replace(/\/+$/, "") || "/";
@@ -61,18 +58,12 @@ createRoot(document.getElementById("root")!).render(
       <Noticias slug={noticiaSlug} />
     ) : entrar ? (
       <AuthGate>
-        <TurmasProvider>
-          <FormadoresProvider>
-            <CatalogsProvider>
-              <DriveProvider>
-                <NotificacoesProvider>
-                  <App />
-                  <ToastHost />
-                </NotificacoesProvider>
-              </DriveProvider>
-            </CatalogsProvider>
-          </FormadoresProvider>
-        </TurmasProvider>
+        <DriveProvider>
+          <NotificacoesProvider>
+            <App />
+            <ToastHost />
+          </NotificacoesProvider>
+        </DriveProvider>
       </AuthGate>
     ) : slugCurso ? (
       <SiteCurso slug={slugCurso} />

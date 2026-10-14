@@ -8,11 +8,18 @@ import { mensagemPalavraPasse } from "./passwordPolicy";
 
 type AuthCtx = {
   user: SessionUser;
+  /** Capacidades do perfil (só para a interface; o servidor decide sempre). */
+  pode: (capacidade: string) => boolean;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 };
 
 const Ctx = createContext<AuthCtx | null>(null);
+
+/** Atalho: `const pode = usePode(); pode("pagamentos.confirmar")`. */
+export function usePode() {
+  return useAuth().pode;
+}
 
 export function useAuth() {
   const ctx = useContext(Ctx);
@@ -55,6 +62,7 @@ function SessionSplash({ pct }: { pct: number }) {
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [capacidades, setCapacidades] = useState<string[]>([]);
   const [ready, setReady] = useState(false);
   const [pct, setPct] = useState(8);
   const [busy, setBusy] = useState(false);
@@ -84,7 +92,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     }
     apiMe()
       .then(r => {
-        if (alive) setUser(r.user);
+        if (alive) {
+          setUser(r.user);
+          setCapacidades(r.pode ?? []);
+        }
       })
       .catch(() => {
         if (alive) setUser(null);
@@ -164,7 +175,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
   async function refresh() {
     const r = await apiMe();
     setUser(r.user);
+    setCapacidades(r.pode ?? []);
   }
 
-  return <Ctx.Provider value={{ user, logout, refresh }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, logout, refresh, pode: (c: string) => capacidades.includes(c) }}>{children}</Ctx.Provider>;
 }

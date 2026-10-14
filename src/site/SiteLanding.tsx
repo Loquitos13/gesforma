@@ -1,7 +1,7 @@
-import { createContext, type CSSProperties, FormEvent, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { ApiError, apiMe, apiPublicPreinscricao, type SessionUser } from "../partilhado/api";
-import { InscricaoSite, useInscricao } from "./SiteInscricao";
-import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, destinoDoHero, ePrepago, ePreinscricao, estiloMargem, heroAnimacao, heroBadge, heroDisposicao, heroPedido, heroTamanho, HERO_CONTENTOR_MAX, HERO_CONTENTOR_MIN, HERO_FORMA_BORDA_MAX, HERO_FORMA_BORDA_MIN, HERO_FORMA_POS_MAX, HERO_FORMA_POS_MIN, HERO_FORMA_TAMANHO_MAX, HERO_FORMA_TAMANHO_MIN, HERO_POS_MAX, HERO_POS_MIN, HERO_TAMANHO_MAX, HERO_TAMANHO_MIN, ligacaoExterna, MARGEM_MAX, MARGEM_MIN, moradaSegura, numeroSite, objectivosEva, corForma, heroForma, rotuloBotaoInscricao, textoSite, tituloRegime, type HeroAnimacao, type HeroBadgeCor, type HeroPedido, type HeroTamanho, type InscricaoPublica, type SiteChave } from "../partilhado/siteConteudo";
+import { createContext, type CSSProperties, ReactNode, useCallback, useContext, useEffect, useState } from "react";
+import { apiMe, type SessionUser } from "../partilhado/api";
+
+import { botaoHero, classeAnimacaoBotao, classeSelo, descricaoDoCurso, destinoDoHero, estiloMargem, ligacaoExterna, MARGEM_MAX, MARGEM_MIN, numeroSite, rotuloBotaoInscricao, textoSite, tituloRegime, type HeroAnimacao, type HeroBadgeCor, type HeroPedido, type HeroTamanho, type InscricaoPublica, type SiteChave } from "../partilhado/siteConteudo";
 
 export type Course = {
   id: string;
@@ -94,21 +94,21 @@ type TextoSite = {
   nota: string | null;
 };
 
-const OfertaCtx = createContext<OfertaEstado | null>(null);
-const SiteTextoCtx = createContext<TextoSite>({
+export const OfertaCtx = createContext<OfertaEstado | null>(null);
+export const SiteTextoCtx = createContext<TextoSite>({
   ler: chave => textoSite(undefined, chave),
   nota: null,
 });
 
-function useSiteTexto() {
+export function useSiteTexto() {
   return useContext(SiteTextoCtx).ler;
 }
 
-function useNotaInqueritos() {
+export function useNotaInqueritos() {
   return useContext(SiteTextoCtx).nota;
 }
 
-function useSiteTextoState(): TextoSite {
+export function useSiteTextoState(): TextoSite {
   const [gravado, setGravado] = useState<Record<string, string>>({});
   const [nota, setNota] = useState<string | null>(null);
   useEffect(() => {
@@ -134,7 +134,7 @@ export function useOferta() {
   return ctx;
 }
 
-function useOfertaState(): OfertaEstado {
+export function useOfertaState(): OfertaEstado {
   const [cursos, setCursos] = useState<Course[]>([]);
   const [destaques, setDestaques] = useState<Course[]>([]);
   const [ccp, setCcp] = useState<Course | null>(null);
@@ -169,7 +169,6 @@ function useOfertaState(): OfertaEstado {
   return { cursos, destaques, ccp, estado, recarregar };
 }
 
-
 export function Icon({
   name,
   className = "h-5 w-5",
@@ -195,15 +194,15 @@ export function Icon({
   );
 }
 
-function estiloEscala(escala: number, extra?: CSSProperties): CSSProperties {
+export function estiloEscala(escala: number, extra?: CSSProperties): CSSProperties {
   return { ...(extra ?? {}), ["--ena-esc" as string]: String(escala) } as CSSProperties;
 }
 
-function estiloContentor(largura: number, altura: number): CSSProperties {
+export function estiloContentor(largura: number, altura: number): CSSProperties {
   return { ["--ena-hero-l" as string]: String(largura / 100), ["--ena-hero-a" as string]: String(altura / 100) } as CSSProperties;
 }
 
-function margemLida(t: (chave: SiteChave) => string, x: SiteChave, y: SiteChave) {
+export function margemLida(t: (chave: SiteChave) => string, x: SiteChave, y: SiteChave) {
   return {
     x: numeroSite(t(x), MARGEM_MIN, MARGEM_MAX, 0),
     y: numeroSite(t(y), MARGEM_MIN, MARGEM_MAX, 0),
@@ -220,7 +219,7 @@ function useSessaoPublica() {
   return user;
 }
 
-function Header() {
+export function Header() {
   const [open, setOpen] = useState(false);
   const t = useSiteTexto();
   const sessao = useSessaoPublica();
@@ -289,7 +288,7 @@ type CartaoVista = {
   acao: { tipo: "modal"; curso: Course } | { tipo: "ligacao"; href: string };
 };
 
-function vistaCurso(posicao: 1 | 2, curso: Course, pedido?: Extract<HeroPedido, { modo: "curso" }>): CartaoVista {
+export function vistaCurso(posicao: 1 | 2, curso: Course, pedido?: Extract<HeroPedido, { modo: "curso" }>): CartaoVista {
   const ouro = posicao === 1;
   return {
     posicao,
@@ -310,7 +309,7 @@ function vistaCurso(posicao: 1 | 2, curso: Course, pedido?: Extract<HeroPedido, 
   };
 }
 
-function vistaDePedido(posicao: 1 | 2, pedido: HeroPedido, cursos: Course[]): CartaoVista | "automatico" | null {
+export function vistaDePedido(posicao: 1 | 2, pedido: HeroPedido, cursos: Course[]): CartaoVista | "automatico" | null {
   if (pedido.modo === "automatico") return "automatico";
   if (pedido.modo === "curso") {
     const curso = cursos.find(item => item.id === pedido.cursoId);
@@ -351,7 +350,7 @@ function medidaDoCartao(tamanho: HeroTamanho, coluna: boolean) {
   return { largura: `${caixa} ${coluna ? "max-w-[340px]" : "max-w-[340px] lg:w-[340px]"}`, imagem: "h-24", corpo: "p-5", titulo: "text-xl" };
 }
 
-function CartaoFlutuante({ vista, abrir, ancora }: { vista: CartaoVista; abrir: (curso: Course) => void; ancora: "par-direita" | "par-esquerda" | "coluna" }) {
+export function CartaoFlutuante({ vista, abrir, ancora }: { vista: CartaoVista; abrir: (curso: Course) => void; ancora: "par-direita" | "par-esquerda" | "coluna" }) {
   const esquerda = vista.posicao === 1;
   const medida = medidaDoCartao(vista.tamanho, ancora === "coluna");
   const posicao = ancora === "coluna"
@@ -381,7 +380,7 @@ function CartaoFlutuante({ vista, abrir, ancora }: { vista: CartaoVista; abrir: 
   );
 }
 
-function FormaHero({
+export function FormaHero({
   src, alt, forma, cor, espessura, x, y, tamanho,
 }: {
   src: string;
@@ -409,525 +408,11 @@ function FormaHero({
   );
 }
 
-function OndaHero() {
+export function OndaHero() {
   return (
     <svg aria-hidden="true" className="pointer-events-none absolute bottom-0 left-0 z-10 h-20 w-full sm:h-24" viewBox="0 0 1200 140" preserveAspectRatio="none">
       <path d="M0 140V72C90 36 180 108 320 78C460 48 540 18 700 42C860 66 940 112 1080 82C1140 68 1170 88 1200 74V140H0Z" fill="#A60000" />
       <path d="M0 140V104C140 78 240 124 420 106C600 88 700 126 900 108C1040 96 1120 122 1200 104V140H0Z" fill="#FFA900" />
     </svg>
-  );
-}
-
-function SplitHero() {
-  const { ccp, cursos } = useOferta();
-  const { abrir } = useInscricao();
-  const t = useSiteTexto();
-  const heroImagem = moradaSegura(t("heroImagem"));
-  const disposicao = heroDisposicao(t("heroDisposicao"));
-  const contentorLargura = numeroSite(t("heroContentorLargura"), HERO_CONTENTOR_MIN, HERO_CONTENTOR_MAX, 100);
-  const contentorAltura = numeroSite(t("heroContentorAltura"), HERO_CONTENTOR_MIN, HERO_CONTENTOR_MAX, 100);
-  const forma = heroForma(t("heroForma"));
-  const formaCor = corForma(t("heroFormaCor"));
-  const formaBorda = numeroSite(t("heroFormaEspessura"), HERO_FORMA_BORDA_MIN, HERO_FORMA_BORDA_MAX, 14);
-  const formaX = numeroSite(t("heroFormaX"), HERO_FORMA_POS_MIN, HERO_FORMA_POS_MAX, 0);
-  const formaY = numeroSite(t("heroFormaY"), HERO_FORMA_POS_MIN, HERO_FORMA_POS_MAX, 0);
-  const formaTamanho = numeroSite(t("heroFormaTamanho"), HERO_FORMA_TAMANHO_MIN, HERO_FORMA_TAMANHO_MAX, 100);
-  const tituloEsc = numeroSite(t("heroTituloTamanho"), HERO_TAMANHO_MIN, HERO_TAMANHO_MAX, 100);
-  const textoEsc = numeroSite(t("heroTextoTamanho"), HERO_TAMANHO_MIN, HERO_TAMANHO_MAX, 100);
-  const textoX = numeroSite(t("heroTextoX"), HERO_POS_MIN, HERO_POS_MAX, 0);
-  const textoY = numeroSite(t("heroTextoY"), HERO_POS_MIN, HERO_POS_MAX, 0);
-  const botaoEsc = numeroSite(t("heroBotaoTamanho"), HERO_TAMANHO_MIN, HERO_TAMANHO_MAX, 100);
-  const botaoX = numeroSite(t("heroBotaoX"), HERO_POS_MIN, HERO_POS_MAX, 0);
-  const botaoY = numeroSite(t("heroBotaoY"), HERO_POS_MIN, HERO_POS_MAX, 0);
-  const margem = margemLida(t, "margemDestaqueX", "margemDestaqueY");
-  const financiada = cursos.find(curso => curso.regime === "fin" && (curso.capa || curso.miniatura)) ?? cursos.find(curso => curso.regime === "fin");
-  const cartoes = ([1, 2] as const).flatMap(posicao => {
-    const pedido = heroPedido(t, posicao);
-    const vista = vistaDePedido(posicao, pedido, cursos);
-    const curso = posicao === 1 ? ccp : financiada;
-    const base = vista && vista !== "automatico" ? vista : vista === null ? null : curso ? vistaCurso(posicao, curso) : null;
-    if (!base) return [];
-    const badge = heroBadge(t, posicao, base.ouro, base.selo);
-    return [{
-      ...base,
-      ...badge,
-      seloClasse: classeSelo(badge.seloCor),
-      tamanho: heroTamanho(t, posicao),
-      animacao: heroAnimacao(t, posicao),
-    }];
-  });
-  const centro = disposicao === "texto-centro";
-  const palavras = (
-    <div className={centro ? "text-center" : ""} style={{ transform: `translate(${textoX}%, ${textoY}%)` }}>
-      <h1 className={`ena-hero-titulo max-w-[16ch] font-serif font-bold tracking-[-0.03em] text-white ${centro ? "mx-auto" : ""}`} style={estiloEscala(tituloEsc / 100)}>
-        {t("heroTitulo")}
-      </h1>
-      <p className={`ena-hero-texto mt-5 max-w-md text-[#E6EDF5] ${centro ? "mx-auto" : ""}`} style={estiloEscala(textoEsc / 100)}>
-        {t("heroTexto")}
-      </p>
-      <a
-        href="/formacao"
-        className="ena-hero-botao relative z-30 mt-7 inline-flex w-fit items-center rounded-full bg-[#FFA900] font-bold text-[#14263D] transition-colors hover:bg-[#A60000] hover:text-white"
-        style={estiloEscala(botaoEsc / 100, { transform: `translate(${botaoX}%, ${botaoY}%)` })}
-      >
-        {t("heroBotao")}
-      </a>
-    </div>
-  );
-  const texto = centro ? (
-    <div className="relative z-30 flex flex-col items-center px-4 pb-6 pt-10 text-center sm:px-6 lg:px-6 lg:py-14">
-      {palavras}
-    </div>
-  ) : (
-    <div className="relative z-30 flex flex-col justify-center px-6 pb-4 pt-10 sm:px-8 lg:px-10 lg:py-12">
-      {palavras}
-    </div>
-  );
-  const ancora: "par-direita" | "par-esquerda" | "coluna" = centro ? "coluna" : disposicao === "texto-direita" ? "par-esquerda" : "par-direita";
-  const grelha = centro
-    ? "pb-24 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,.95fr)_minmax(0,1fr)] lg:items-center lg:pb-28"
-    : disposicao === "texto-direita"
-      ? "lg:grid-cols-[minmax(0,1.22fr)_minmax(0,.78fr)]"
-      : "lg:grid-cols-[minmax(0,.78fr)_minmax(0,1.22fr)]";
-  const cartao = (posicao: 1 | 2) => {
-    const vista = cartoes.find(item => item.posicao === posicao);
-    return vista ? <CartaoFlutuante vista={vista} abrir={abrir} ancora={ancora} /> : null;
-  };
-  const palco = centro ? (
-    <>
-      <div className="relative z-20 order-2 flex flex-col justify-center px-4 py-4 lg:order-1 lg:px-8 lg:py-10">{cartao(1)}</div>
-      <div className="order-1 lg:order-2">{texto}</div>
-      <div className="relative z-20 order-3 flex flex-col justify-center px-4 pb-4 pt-4 lg:px-8 lg:py-10">{cartao(2)}</div>
-    </>
-  ) : (
-    <>
-      {disposicao === "texto-direita" ? null : texto}
-      <div className={`relative z-20 flex flex-col gap-6 px-4 pb-28 pt-2 lg:block lg:h-auto lg:min-h-full lg:px-0 lg:pb-0 lg:pt-0 ${disposicao === "texto-direita" ? "order-2 lg:order-1" : ""}`}>
-        <div className="relative z-20 flex flex-col gap-5 lg:absolute lg:inset-0 lg:block">
-          {cartoes.map(vista => <CartaoFlutuante key={vista.posicao} vista={vista} abrir={abrir} ancora={ancora} />)}
-        </div>
-      </div>
-      {disposicao === "texto-direita" ? <div className="order-1 lg:order-2">{texto}</div> : null}
-    </>
-  );
-  return (
-    <section
-      className="ena-margem bg-[#F6F3EE]"
-      style={estiloMargem(margem.x, margem.y, { x: "1rem", y: "1.5rem", xSm: "1.5rem", xLg: "2rem", yLg: "2rem" })}
-      aria-label="Destaques"
-      data-hero-disposicao={disposicao}
-    >
-      <div className={`ena-hero-contentor relative mx-auto grid overflow-hidden rounded-[32px] bg-[#14263D] shadow-[0_28px_80px_rgba(20,38,61,.22)] ${grelha}`} style={estiloContentor(contentorLargura, contentorAltura)} data-hero-largura={contentorLargura} data-hero-altura={contentorAltura}>
-        <FormaHero src={heroImagem} alt={t("heroImagemAlt")} forma={forma} cor={formaCor} espessura={formaBorda} x={formaX} y={formaY} tamanho={formaTamanho} />
-        {palco}
-        <OndaHero />
-      </div>
-    </section>
-  );
-}
-
-function Home() {
-  const { destaques, estado, recarregar } = useOferta();
-  const t = useSiteTexto();
-  const notaInqueritos = useNotaInqueritos();
-  const notaApresentacao = notaInqueritos || t("metodoNota");
-  const metodoImagem = moradaSegura(t("metodoImagem"));
-  const pilares = [1, 2, 3, 4].map(n => ({
-    number: t(`pilar${n}Numero` as SiteChave),
-    title: t(`pilar${n}Titulo` as SiteChave),
-    text: t(`pilar${n}Texto` as SiteChave),
-  })).filter(item => item.number || item.title || item.text);
-  const [filter, setFilter] = useState("Todos");
-  const [query, setQuery] = useState("");
-  const filtros = useMemo(() => {
-    const modos = new Set(destaques.map(curso => curso.format));
-    return ["Todos", ...["Presencial", "B-learning", "E-learning"].filter(modo => modos.has(modo))];
-  }, [destaques]);
-  const filtered = useMemo(
-    () => destaques.filter((course) =>
-      (filter === "Todos" || course.format === filter) &&
-      `${course.title} ${course.area}`.toLowerCase().includes(query.toLowerCase())),
-    [destaques, filter, query],
-  );
-
-  const margemOferta = margemLida(t, "margemOfertaX", "margemOfertaY");
-  const margemMetodo = margemLida(t, "margemApresentacaoX", "margemApresentacaoY");
-  const margemEmpresas = margemLida(t, "margemEmpresasX", "margemEmpresasY");
-  return (
-    <main>
-      <SplitHero />
-
-      <section id="formacao" className="ena-margem scroll-mt-24 bg-[#F6F3EE] text-[#14263D]" style={estiloMargem(margemOferta.x, margemOferta.y, { x: "1.25rem", y: "5rem", xLg: "2rem", yLg: "7rem" })}>
-        <div className="mx-auto max-w-[1240px]">
-          <div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end">
-            <div>
-              <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-[#A60000]">{t("ofertaKicker")}</p>
-              <h2 className="font-serif text-4xl leading-tight tracking-[-0.03em] text-[#14263D] sm:text-5xl">{t("ofertaTitulo")}</h2>
-            </div>
-            <label className="flex w-full items-center gap-3 rounded-full border border-[#14263D]/20 bg-white px-4 py-3 text-[#14263D] lg:max-w-sm">
-              <Icon name="search" />
-              <span className="sr-only">Pesquisar formação</span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("ofertaPesquisa")} className="w-full bg-transparent text-sm text-[#14263D] outline-none placeholder:text-[#4A6078]" />
-            </label>
-          </div>
-          <div className="mt-10 flex flex-wrap items-center gap-2 border-b border-[#14263D]/10 pb-5">
-            {filtros.map((item) => (
-              <button key={item} type="button" aria-pressed={filter === item} onClick={() => setFilter(item)} className={`px-5 py-2.5 text-sm font-bold transition-colors ${filter === item ? "bg-[#FFA900] text-[#14263D]" : "bg-white text-[#14263D] ring-1 ring-[#14263D]/15 hover:ring-[#A60000]"}`}>
-                {item}
-              </button>
-            ))}
-            <span className="ml-auto hidden self-center text-sm font-semibold text-[#3E5168] sm:block">{filtered.length} formações disponíveis</span>
-          </div>
-          <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {estado === "pronto" && filtered.map((course) => (
-              <article key={course.id} className="ena-cartao group flex min-h-[390px] max-w-full flex-col overflow-hidden border-x border-b border-[#14263D]/10 border-t-4 border-t-[#FFA900] bg-white text-[#14263D] shadow-[0_10px_30px_rgba(20,38,61,.06)] hover:shadow-[0_22px_46px_rgba(20,38,61,.16)]">
-                <a href={`/formacao/${course.id}`} className="relative block h-44 max-h-44 w-full max-w-full overflow-hidden bg-[#E7EBF0]">
-                  {(course.capa || course.miniatura) && <img src={course.capa || course.miniatura || ""} alt="" className="ena-cartao-foto h-full max-h-44 w-full max-w-full object-cover" />}
-                  <span className={`absolute left-4 top-4 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.1em] ${course.format === "E-learning" ? "bg-[#FFA900] text-[#14263D]" : "bg-[#14263D] text-white"}`}>{course.format}</span>
-                </a>
-                <div className="flex flex-1 flex-col p-6">
-                  <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#A60000]">{course.area}</p>
-                  <h3 className="mt-3 font-serif text-2xl leading-tight text-[#14263D]"><a href={`/formacao/${course.id}`} className="hover:text-[#A60000]">{course.title}</a></h3>
-                  <p className="mt-4 text-sm leading-6 text-[#3E5168]">{course.description}</p>
-                  <div className="mt-auto flex items-end justify-between border-t border-[#14263D]/10 pt-5">
-                    <div className="space-y-2 text-xs font-semibold text-[#3E5168]">
-                      {course.price && <span className="block text-sm font-bold text-[#14263D]">{course.price}</span>}
-                      <span className="flex items-center gap-2"><Icon name="clock" className="h-4 w-4" />{course.duration}</span>
-                      <span className="flex items-center gap-2"><Icon name={course.format === "E-learning" ? "screen" : "pin"} className="h-4 w-4" />{course.start}</span>
-                    </div>
-                    <a href={`/formacao/${course.id}`} aria-label={`Ver ${course.title}`} className="grid h-11 w-11 place-items-center bg-[#14263D] text-white transition-colors group-hover:bg-[#A60000]"><Icon name="arrow" /></a>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-          {estado === "a-carregar" && <p className="py-20 text-center text-[#3E5168]">A carregar a oferta formativa.</p>}
-          {estado === "erro" && (
-            <div className="py-16 text-center">
-              <p className="text-[#14263D]">Não foi possível carregar os cursos.</p>
-              <button type="button" onClick={recarregar} className="mt-4 bg-[#FFA900] px-5 py-3 text-sm font-bold text-[#14263D]">Tentar de novo</button>
-            </div>
-          )}
-          {estado === "pronto" && filtered.length === 0 && <p className="py-20 text-center text-[#3E5168]">Não encontrámos formações para esta pesquisa.</p>}
-        </div>
-      </section>
-
-      <section id="metodo" className="ena-margem border-t-8 border-[#A60000] bg-white text-[#14263D]" style={estiloMargem(margemMetodo.x, margemMetodo.y, { x: "1.25rem", y: "5rem", xLg: "2rem", yLg: "7rem" })}>
-        <div className="mx-auto grid max-w-[1240px] gap-14 lg:grid-cols-[.85fr_1.15fr] lg:items-center">
-          <div className="relative mb-12 lg:mb-0">
-            <div className="aspect-[4/5] overflow-hidden bg-[#E7EBF0]">
-              {metodoImagem && <img src={metodoImagem} alt={t("metodoImagemAlt")} className="h-full w-full object-cover" />}
-            </div>
-            {notaApresentacao && (
-              <div className="absolute -bottom-7 -right-3 w-44 bg-[#FFA900] p-5 text-[#14263D] sm:right-8">
-                <strong className="block font-serif text-4xl">{notaApresentacao}</strong>
-                {t("metodoNotaLegenda") && <span className="mt-1 block text-xs font-bold uppercase tracking-wider">{t("metodoNotaLegenda")}</span>}
-              </div>
-            )}
-          </div>
-          <div>
-            <p className="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-[#A60000]">{t("metodoKicker")}</p>
-            <h2 className="font-serif text-4xl leading-tight tracking-[-0.03em] text-[#14263D] sm:text-5xl">{t("metodoTitulo")}</h2>
-            <p className="mt-6 max-w-xl text-lg leading-8 text-[#3E5168]">{t("metodoTexto")}</p>
-            <div className="mt-10 grid gap-x-8 gap-y-7 sm:grid-cols-2">
-              {pilares.map(({ number, title, text }) => (
-                <div key={number} className="border-t-2 border-[#FFA900] pt-5">
-                  <span className="text-xs font-extrabold text-[#A60000]">{number}</span>
-                  <h3 className="mt-2 font-bold text-[#14263D]">{title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-[#3E5168]">{text}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="empresas" className="ena-margem scroll-mt-24 bg-[#FFA900] text-[#14263D]" style={estiloMargem(margemEmpresas.x, margemEmpresas.y, { x: "1.25rem", y: "4rem", xLg: "2rem" })}>
-        <div className="mx-auto flex max-w-[1240px] flex-col justify-between gap-8 lg:flex-row lg:items-center">
-          <div className="max-w-2xl">
-            <p className="inline-flex bg-[#A60000] px-2.5 py-1 text-xs font-extrabold uppercase tracking-[0.18em] text-white">{t("empresasKicker")}</p>
-            <h2 className="mt-4 font-serif text-4xl text-[#14263D]">{t("empresasTitulo")}</h2>
-            <p className="mt-4 text-base leading-7 text-[#14263D]">{t("empresasTexto")}</p>
-          </div>
-          <a href="#contactos" className="group flex min-w-fit items-center justify-between gap-10 bg-[#A60000] px-7 py-5 font-bold text-white hover:bg-[#14263D]">{t("empresasBotao")} <Icon name="arrow" className="transition-transform group-hover:translate-x-1" /></a>
-        </div>
-      </section>
-    </main>
-  );
-}
-
-function Footer() {
-  const t = useSiteTexto();
-  const privacidade = moradaSegura(t("rodapePrivacidadeUrl"));
-  const reclamacoes = moradaSegura(t("rodapeReclamacoesUrl"));
-  const contactos = [t("rodapeEmail"), t("rodapeTelefone"), t("rodapeHorario")].filter(Boolean);
-  const ano = new Date().getFullYear();
-  const margem = margemLida(t, "margemRodapeX", "margemRodapeY");
-  return (
-    <footer id="contactos" className="ena-margem scroll-mt-24 border-t-4 border-[#FFA900] bg-[#0E1C2E] text-white" style={estiloMargem(margem.x, margem.y, { x: "1.25rem", y: "3.5rem", xLg: "2rem" })}>
-      <div className="mx-auto max-w-[1240px]">
-        <div className="grid gap-10 border-b border-white/15 pb-12 md:grid-cols-4">
-          <div className="md:col-span-2">
-            {t("rodapeMarca") && <span className="grid h-12 w-12 place-items-center bg-[#A60000] text-sm font-extrabold">{t("rodapeMarca")}</span>}
-            {t("rodapeTexto") && <p className="mt-5 max-w-sm text-sm leading-6 text-[#D7E0EA]">{t("rodapeTexto")}</p>}
-          </div>
-          <div>
-            <strong className="text-sm text-white">{t("rodapeTituloContactos")}</strong>
-            {contactos.length > 0 && <p className="mt-4 text-sm leading-7 text-[#D7E0EA]">{contactos.map((linha, i) => <span key={linha}>{i > 0 && <br />}{linha}</span>)}</p>}
-          </div>
-          <div>
-            <strong className="text-sm text-white">{t("rodapeTituloLigacoes")}</strong>
-            <div className="mt-4 flex flex-col gap-3 text-sm text-[#D7E0EA] underline decoration-white/30 underline-offset-4">
-              {t("rodapeLigacaoFormacao") && <a href="/formacao" className="hover:text-white">{t("rodapeLigacaoFormacao")}</a>}
-              {t("navNoticias") && <a href="/noticias" className="hover:text-white">{t("navNoticias")}</a>}
-              {privacidade && t("rodapePrivacidade") && <a href={privacidade} target="_blank" rel="noreferrer" className="hover:text-white">{t("rodapePrivacidade")}</a>}
-              {reclamacoes && t("rodapeReclamacoes") && <a href={reclamacoes} target="_blank" rel="noreferrer" className="hover:text-white">{t("rodapeReclamacoes")}</a>}
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-col justify-between gap-3 pt-6 text-xs text-[#C5D0DC] sm:flex-row">
-          <span>© {ano} {t("rodapeEntidade")}. {t("rodapeDireitos")}</span>
-          <span>{t("rodapeLema")}</span>
-        </div>
-      </div>
-    </footer>
-  );
-}
-
-function WhatsAppAssistant() {
-  const t = useSiteTexto();
-  const nomeEva = t("evaNome").trim() || "Eva";
-  const objectivos = objectivosEva(t("evaObjetivos"));
-  const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<"welcome" | "name" | "goal" | "path" | "format" | "courses" | "confirm" | "handoff">("welcome");
-  const [typing, setTyping] = useState(false);
-  const [name, setName] = useState("");
-  const [goal, setGoal] = useState("");
-  const [path, setPath] = useState<"all" | "funded" | "gold" | "direct">("all");
-  const [format, setFormat] = useState("Todos");
-  const { cursos } = useOferta();
-  const { abrir } = useInscricao();
-  const [chosen, setChosen] = useState<Course | null>(null);
-  const [consent, setConsent] = useState(false);
-  const [summarySent, setSummarySent] = useState(false);
-  const [handoffSent, setHandoffSent] = useState(false);
-  const [handoffBusy, setHandoffBusy] = useState(false);
-  const [handoffErro, setHandoffErro] = useState("");
-  const transition = (next: typeof step) => {
-    setTyping(true);
-    window.setTimeout(() => {
-      setStep(next);
-      setTyping(false);
-    }, 520);
-  };
-  const pathCourses = cursos.filter((course) =>
-    path === "funded" ? course.funding === "Financiada" :
-      path === "gold" ? course.funding === "Gold" :
-        path === "direct" ? !ePreinscricao(course.enrollment) : true,
-  );
-  const availableFormats = Array.from(new Set(pathCourses.map((course) => course.format)));
-  const goalAreas: Record<string, string[]> = Object.fromEntries(
-    objectivos.filter(item => item.areas.length).map(item => [item.rotulo, item.areas]),
-  );
-  const visibleCourses = pathCourses
-    .filter((course) => format === "Todos" || course.format === format)
-    .sort((a, b) => Number(goalAreas[goal]?.includes(b.area)) - Number(goalAreas[goal]?.includes(a.area)));
-  const restart = () => {
-    setStep("welcome");
-    setFormat("Todos");
-    setPath("all");
-    setGoal("");
-    setName("");
-    setChosen(null);
-    setTyping(false);
-    setConsent(false);
-    setSummarySent(false);
-    setHandoffSent(false);
-    setHandoffErro("");
-  };
-  const chooseCourse = (course: Course) => {
-    setChosen(course);
-    transition("confirm");
-  };
-  const progress = { welcome: 0, name: 1, goal: 2, path: 3, format: 4, courses: 4, confirm: 4, handoff: 4 }[step];
-  const botCopy = {
-    welcome: t("evaBoasVindas"),
-    name: "Antes de começarmos, como gostaria que lhe chamasse?",
-    goal: `Muito prazer, ${name || "por aqui"}! O que procura desenvolver neste momento?`,
-    path: "Prefere formação financiada ou uma solução ENA Gold autofinanciada?",
-    format: "E em que formato gostaria de aprender?",
-    courses: `${name}, selecionei ${visibleCourses.length} ${visibleCourses.length === 1 ? "opção" : "opções"} com base nas suas respostas.`,
-    confirm: chosen ? `Esta é uma boa opção para ${goal.toLowerCase() || "o seu objetivo"}. Quer avançar?` : "",
-    handoff: "Claro. Deixe um contacto e um consultor ENA continuará esta conversa consigo.",
-  }[step];
-
-  function enviar(event: FormEvent) {
-    event.preventDefault();
-    const dados = new FormData(event.currentTarget as HTMLFormElement);
-    const nome = String(dados.get("nome") ?? "").trim();
-    const email = String(dados.get("email") ?? "").trim();
-    const telf = String(dados.get("telf") ?? "").trim();
-    if (!nome || !email || !telf) return;
-    setHandoffBusy(true);
-    setHandoffErro("");
-    void apiPublicPreinscricao({
-      nome,
-      email,
-      telf,
-      origem: "WhatsApp",
-      curso: chosen?.nomeOferta || chosen?.title || "Contacto pelo site",
-      regime: chosen?.regime ?? "gold",
-    }).then(() => setHandoffSent(true))
-      .catch(err => setHandoffErro(err instanceof ApiError ? err.message : "Não foi possível registar o contacto."))
-      .finally(() => setHandoffBusy(false));
-  }
-
-  return (
-    <>
-      {open && (
-        <aside className="fixed bottom-24 right-4 z-50 flex max-h-[min(680px,calc(100vh-120px))] w-[calc(100vw-32px)] max-w-[390px] flex-col overflow-hidden rounded-2xl bg-[#F4F6F4] shadow-[0_24px_80px_rgba(20,38,61,.3)] sm:right-6" aria-label="Assistente de pré-inscrição">
-          <header className="flex items-center justify-between bg-[#075E54] p-4 text-white">
-            <div className="flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-full bg-white/15"><Icon name="whatsapp" className="h-6 w-6" /></span>
-              <div><strong className="block text-sm">{nomeEva} · Assistente ENA</strong><span className="flex items-center gap-1.5 text-xs text-white/70"><span className="h-2 w-2 rounded-full bg-[#25D366]" />Responde de imediato</span></div>
-            </div>
-            <button type="button" onClick={() => setOpen(false)} className="p-2 text-white/75 hover:text-white" aria-label="Fechar conversa"><Icon name="close" /></button>
-          </header>
-          {step !== "welcome" && <div className="bg-white px-4 py-2"><div className="flex items-center gap-2">{[1, 2, 3, 4].map((item) => <span key={item} className={`h-1.5 flex-1 rounded-full ${progress >= item ? "bg-[#25D366]" : "bg-[#EDEEF1]"}`} />)}</div><p className="mt-1.5 text-right text-[9px] font-bold uppercase tracking-wider text-[#1C3350]/35">Passo {Math.min(progress, 4)} de 4</p></div>}
-          <div className="flex-1 space-y-3 overflow-y-auto p-4">
-            {name && step !== "name" && <div className="ml-auto max-w-[82%] rounded-2xl rounded-tr-sm bg-[#DCF8C6] px-3 py-2 text-sm shadow-sm">Pode chamar-me {name}.</div>}
-            {goal && !["goal", "name"].includes(step) && <div className="ml-auto max-w-[82%] rounded-2xl rounded-tr-sm bg-[#DCF8C6] px-3 py-2 text-sm shadow-sm">{goal}</div>}
-            {typing ? (
-              <div className="flex w-fit items-center gap-1 rounded-2xl rounded-tl-sm bg-white px-4 py-4 shadow-sm" aria-label="Eva está a escrever">
-                {[0, 1, 2].map((item) => <span key={item} className="h-2 w-2 animate-bounce rounded-full bg-[#1C3350]/35" style={{ animationDelay: `${item * 120}ms` }} />)}
-              </div>
-            ) : <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-white p-3 text-sm leading-6 shadow-sm">{botCopy}<span className="mt-1 block text-right text-[10px] text-[#1C3350]/35">agora</span></div>}
-
-            {!typing && step === "welcome" && (
-              <div className="ml-auto max-w-[88%]">
-                <button type="button" onClick={() => transition("name")} className="flex w-full items-center justify-between rounded-xl bg-[#075E54] px-4 py-3 text-left text-sm font-bold text-white shadow-sm">Começar recomendação <Icon name="arrow" className="h-4 w-4" /></button>
-                <button type="button" onClick={() => { setName("Visitante"); setPath("direct"); setFormat("E-learning"); transition("courses"); }} className="mt-2 w-full rounded-xl bg-[#DCF8C6] px-4 py-3 text-left text-sm font-bold text-[#1C3350] shadow-sm">Ir diretamente para cursos online</button>
-              </div>
-            )}
-
-            {!typing && step === "name" && (
-              <form onSubmit={(event) => { event.preventDefault(); if (name.trim()) transition("goal"); }} className="ml-auto flex max-w-[90%] gap-2 rounded-2xl rounded-tr-sm bg-[#DCF8C6] p-2 shadow-sm">
-                <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="O seu primeiro nome" className="min-w-0 flex-1 rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
-                <button type="submit" disabled={!name.trim()} className="grid h-10 w-10 place-items-center rounded-lg bg-[#075E54] text-white disabled:opacity-40" aria-label="Continuar"><Icon name="arrow" className="h-4 w-4" /></button>
-              </form>
-            )}
-
-            {!typing && step === "goal" && (
-              <div className="ml-auto grid max-w-[90%] gap-2">
-                {objectivos.map((item) => <button type="button" key={item.rotulo} onClick={() => { setGoal(item.rotulo); transition("path"); }} className="rounded-xl bg-[#DCF8C6] px-4 py-3 text-left text-sm font-bold shadow-sm">{item.rotulo}</button>)}
-              </div>
-            )}
-
-            {!typing && step === "path" && (
-              <div className="ml-auto grid max-w-[90%] gap-2">
-                {[
-                  ["funded", "Formação financiada", "Sem pagamento, sujeita a elegibilidade"],
-                  ["direct", "Gold · acesso direto", "Pagamento e entrada imediata no Moodle"],
-                  ["gold", "Gold · todas as opções", "Acesso direto ou pré-inscrição"],
-                  ["all", "Quero comparar tudo", "Mostrar toda a oferta"],
-                ].map(([value, label, description]) => <button type="button" key={value} onClick={() => { setPath(value as typeof path); transition("format"); }} className="rounded-xl bg-[#DCF8C6] px-4 py-3 text-left shadow-sm"><strong className="block text-sm">{label}</strong><span className="mt-1 block text-xs font-normal text-[#1C3350]/55">{description}</span></button>)}
-              </div>
-            )}
-
-            {!typing && step === "format" && (
-              <div className="ml-auto grid max-w-[88%] gap-2">
-                {[...availableFormats, "Todos"].map((item) => <button type="button" key={item} onClick={() => { setFormat(item as typeof format); transition("courses"); }} className="rounded-xl bg-[#DCF8C6] px-4 py-3 text-left text-sm font-bold shadow-sm">{item === "Todos" ? "Sem preferência" : item}</button>)}
-              </div>
-            )}
-
-            {!typing && step === "courses" && (
-              <div className="ml-auto max-w-[94%] space-y-2">
-                {visibleCourses.slice(0, 4).map((course, index) => (
-                  <button type="button" key={course.id} onClick={() => chooseCourse(course)} className="w-full rounded-xl bg-white p-3 text-left shadow-sm ring-1 ring-[#1C3350]/8 hover:ring-[#25D366]">
-                    <div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-wider text-[#075E54]">{course.funding === "Gold" ? "ENA Gold" : "Financiada"} · {course.enrollment}</span>{index === 0 && goal && <span className="rounded-full bg-[#DCF8C6] px-2 py-0.5 text-[9px] font-bold text-[#075E54]">Recomendada</span>}</div>
-                    <strong className="mt-1 block text-sm leading-5">{course.title}</strong>
-                    <span className="mt-2 flex justify-between text-xs text-[#1C3350]/50"><span>{course.format} · {course.duration}</span><b className="text-[#1C3350]">{course.price}</b></span>
-                  </button>
-                ))}
-                <div className="flex justify-between px-2 pt-1"><button type="button" onClick={() => transition("path")} className="text-xs font-bold text-[#075E54] underline">Alterar respostas</button><button type="button" onClick={restart} className="text-xs text-[#1C3350]/45 underline">Recomeçar</button></div>
-              </div>
-            )}
-
-            {!typing && step === "confirm" && chosen && (
-              <>
-                <div className="ml-auto max-w-[90%] rounded-2xl rounded-tr-sm bg-[#DCF8C6] p-3 text-sm shadow-sm">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#075E54]">A sua escolha</span><strong className="mt-1 block">{chosen.title}</strong><span className="mt-2 block text-[#1C3350]/60">{chosen.format} · {chosen.duration} · {chosen.price}</span>
-                </div>
-                <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-white p-3 text-sm leading-6 shadow-sm">
-                  {ePreinscricao(chosen.enrollment)
-                    ? `Perfeito, ${name}. A pré-inscrição pede os seus dados e, quando existir, a turma. A equipa da ENA confirma os próximos passos.`
-                    : ePrepago(chosen.enrollment)
-                      ? `Perfeito, ${name}. Primeiro os seus dados. O pagamento fica no passo seguinte.`
-                      : `Perfeito, ${name}. Este curso abre no Moodle. A pré-inscrição não se aplica.`}
-                </div>
-                <div className="ml-auto grid max-w-[90%] gap-2">
-                  <label className="flex items-start gap-2 rounded-xl bg-white p-3 text-xs leading-5 shadow-sm"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-1 accent-[#075E54]" />Aceito que os dados desta conversa sejam usados para tratar a inscrição.</label>
-                  <button type="button" disabled={!consent || !chosen} onClick={() => { if (chosen) abrir(chosen); }} className="flex w-full items-center justify-between rounded-xl bg-[#075E54] px-4 py-3 text-sm font-bold text-white disabled:opacity-40">{chosen && ePreinscricao(chosen.enrollment) ? "Fazer pré-inscrição" : chosen && ePrepago(chosen.enrollment) ? "Inscrever-me agora" : "Aceder ao curso"}<Icon name="arrow" className="h-4 w-4" /></button>
-                  <button type="button" onClick={() => setSummarySent(true)} className="rounded-xl bg-[#DCF8C6] px-4 py-3 text-left text-sm font-bold">{summarySent ? "Resumo enviado para o seu email" : "Enviar-me este resumo por email"}</button>
-                  <button type="button" onClick={() => transition("courses")} className="rounded-xl bg-[#DCF8C6] px-4 py-3 text-left text-sm font-bold">Ver outras recomendações</button>
-                  <button type="button" onClick={restart} className="px-4 py-2 text-left text-xs font-bold text-[#075E54] underline">Recomeçar conversa</button>
-                </div>
-              </>
-            )}
-            {!typing && step === "handoff" && (
-              handoffSent ? <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-white p-4 text-sm leading-6 shadow-sm"><strong className="text-[#075E54]">Pedido registado.</strong><p className="mt-1 text-[#1C3350]/60">Ficou na base de dados e o email automático segue para o endereço indicado.</p>{(!chosen || ePreinscricao(chosen.enrollment)) && <a href="/pre-inscricao" className="mt-3 inline-flex font-bold text-[#075E54] underline">Completar a pré-inscrição</a>}</div> :
-                <form onSubmit={enviar} className="ml-auto max-w-[92%] space-y-2 rounded-2xl rounded-tr-sm bg-[#DCF8C6] p-3 shadow-sm">
-                  <input name="nome" required defaultValue={name} placeholder="Nome" className="w-full rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
-                  <input name="email" required type="email" placeholder="Email" className="w-full rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
-                  <input name="telf" required type="tel" placeholder="Telefone" className="w-full rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
-                  {handoffErro && <p className="text-xs font-semibold text-[#A60000]">{handoffErro}</p>}
-                  <button type="submit" disabled={handoffBusy} className="w-full rounded-lg bg-[#075E54] px-4 py-3 text-sm font-bold text-white disabled:opacity-40">{handoffBusy ? "A registar…" : "Pedir contacto humano"}</button>
-                </form>
-            )}
-          </div>
-          <footer className="flex items-center justify-between border-t border-[#1C3350]/8 bg-white px-4 py-3 text-[10px] text-[#1C3350]/40"><button type="button" onClick={() => transition("handoff")} className="font-bold text-[#075E54]">Falar com uma pessoa</button><button type="button" onClick={restart} className="font-bold text-[#075E54]">Limpar conversa</button></footer>
-        </aside>
-      )}
-      <button type="button" onClick={() => setOpen(!open)} className="fixed bottom-5 right-4 z-50 grid h-16 w-16 place-items-center rounded-full bg-[#25D366] text-white shadow-[0_12px_35px_rgba(7,94,84,.35)] transition-transform hover:scale-105 sm:right-6" aria-label={open ? "Fechar assistente" : "Abrir assistente de pré-inscrição"}>
-        <Icon name={open ? "close" : "whatsapp"} className="h-8 w-8" />
-        {!open && <span className="absolute -right-0.5 -top-0.5 grid h-6 w-6 place-items-center rounded-full border-2 border-white bg-[#A60000] text-[10px] font-bold">1</span>}
-      </button>
-    </>
-  );
-}
-
-export function SiteFrame({ children }: { children: ReactNode }) {
-  const oferta = useOfertaState();
-  const texto = useSiteTextoState();
-  const titulo = texto.ler("tituloSeparador");
-  useEffect(() => {
-    const prev = document.title;
-    document.title = titulo || "ENA";
-    return () => { document.title = prev; };
-  }, [titulo]);
-  return (
-    <OfertaCtx.Provider value={oferta}>
-      <SiteTextoCtx.Provider value={texto}>
-      <InscricaoSite>
-        <div className="site-ena min-h-screen bg-[#F6F3EE] text-[#14263D]">
-          <a href="#conteudo" className="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:left-4 focus-visible:top-4 focus-visible:z-[80] focus-visible:bg-[#FFA900] focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-bold focus-visible:text-[#14263D]">Saltar para o conteúdo</a>
-          <Header />
-          <div id="conteudo">
-            {children}
-          </div>
-          <Footer />
-          <WhatsAppAssistant />
-        </div>
-      </InscricaoSite>
-      </SiteTextoCtx.Provider>
-    </OfertaCtx.Provider>
-  );
-}
-
-export function SiteLanding() {
-  return (
-    <SiteFrame>
-      <Home />
-    </SiteFrame>
   );
 }

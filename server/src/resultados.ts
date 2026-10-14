@@ -5,6 +5,10 @@ import {
 } from "../../src/partilhado/avaliacaoNota.js";
 import { assiduidadeDoFormando, sessoesComHoras, type Assiduidade } from "./assiduidade.js";
 import { assiduidadeMinima, lerRegras, type RegrasPedagogicas } from "./regrasConfig.js";
+import {
+  certificadosParaResultados, fichaDoCursoDaTurma, folhasDePresenca, formandosPorTurma, turmaBase, turmaFechadaEm, type TurmaBase,
+} from "./repos/resultados.js";
+import { listarNotas, sumariosDaTurma } from "./repos/pedagogiaSessoes.js";
 
 /**
  * Resultado pedagógico de cada formando da turma, calculado no servidor:
@@ -14,7 +18,6 @@ import { assiduidadeMinima, lerRegras, type RegrasPedagogicas } from "./regrasCo
 
 export type Regime = "gold" | "fin";
 
-type TurmaBase = { id: number; nome: string; curso: string; cronograma: unknown; fechada_em: unknown; curso_id: number | null };
 
 export type ResultadoFormando = {
   id: number;
@@ -42,37 +45,17 @@ function asObj(v: unknown): Record<string, unknown> {
 }
 
 export async function carregarTurma(db: Db, regime: Regime, id: number): Promise<TurmaBase | null> {
-  const table = regime === "gold" ? "turmas_gold" : "turmas_fin";
-  const r = await db.query<TurmaBase>(
-    `SELECT id, nome, curso, cronograma, fechada_em, curso_id FROM ${table} WHERE id = $1`,
-    [id],
-  );
-  return r.rows[0] ?? null;
+  return turmaBase(db, regime, id);
 }
 
 /** Formandos da turma (pelo id; as fichas antigas sem id contam pelo nome da turma). */
 export async function formandosDaTurmaId(db: Db, regime: Regime, turma: { id: number; nome: string }) {
-  const table = regime === "gold" ? "formandos_gold" : "formandos_fin";
-  const r = await db.query<{ id: number; nome: string; apelido: string; estado: string }>(
-    `SELECT id, nome, apelido, estado FROM ${table}
-      WHERE turma_id = $1 OR (turma_id IS NULL AND lower(trim(turma)) = lower(trim($2)))
-      ORDER BY nome, apelido`,
-    [turma.id, turma.nome],
-  );
-  return r.rows.map(f => ({ id: Number(f.id), nome: `${f.nome} ${f.apelido}`.trim(), estado: String(f.estado ?? "") }));
+  const r = await formandosPorTurma(db, regime, turma);
+  return r.map(f => ({ id: Number(f.id), nome: `${f.nome} ${f.apelido}`.trim(), estado: String(f.estado ?? "") }));
 }
 
 async function fichaDoCurso(db: Db, regime: Regime, turma: TurmaBase) {
-  const r = turma.curso_id != null
-    ? await db.query<{ payload: unknown }>("SELECT payload FROM curso_fichas WHERE regime = $1 AND curso_id = $2", [regime, turma.curso_id])
-    : regime === "gold"
-      ? await db.query<{ payload: unknown }>(
-        `SELECT f.payload FROM curso_fichas f JOIN cursos_gold c ON c.id = f.curso_id AND f.regime = 'gold'
-          WHERE lower(trim(c.nome)) = lower(trim($1)) LIMIT 1`, [turma.curso])
-      : await db.query<{ payload: unknown }>(
-        `SELECT f.payload FROM curso_fichas f JOIN cursos_fin c ON c.id = f.curso_id AND f.regime = 'fin'
-          WHERE lower(trim(c.nome_comercial)) = lower(trim($1)) OR lower(trim(c.ufcd)) = lower(trim($1)) LIMIT 1`, [turma.curso]);
-  return asObj(r.rows[0]?.payload);
+  return asObj((await fichaDoCursoDaTurma(db, regime, turma))?.payload);
 }
 
 /** Configuração de avaliação do curso, com a regra do CCP igual à do ecrã. */
@@ -111,30 +94,23 @@ export async function resultadosDaTurma(
   const regras = opts.regras ?? await lerRegras(db);
   const [formandos, folhas, notasRows, certRows, payload] = await Promise.all([
     formandosDaTurmaId(db, regime, turma),
-    db.query<{ sessao_n: number; presencas: unknown }>(
-      "SELECT sessao_n, presencas FROM turma_sessoes WHERE regime = $1 AND turma_id = $2", [regime, turmaId],
-    ),
-    db.query<{ formando_id: number; modulo_id: string; parametro_id: string; nota: unknown }>(
-      "SELECT formando_id, modulo_id, parametro_id, nota FROM turma_avaliacoes WHERE regime = $1 AND turma_id = $2", [regime, turmaId],
-    ),
-    db.query<{ formando_id: number; emitido: boolean; elearning: unknown; nota: unknown; ficheiro_id: string }>(
-      "SELECT formando_id, emitido, elearning, nota, COALESCE(ficheiro_id, '') AS ficheiro_id FROM turma_certificados WHERE regime = $1 AND turma_id = $2",
-      [regime, turmaId],
-    ),
+    folhasDePresenca(db, regime, turmaId),
+    listarNotas(db, regime, turmaId),
+    certificadosParaResultados(db, regime, turmaId),
     fichaDoCurso(db, regime, turma),
   ]);
   const cfg = avaliacaoDoCurso(payload, turma.curso);
   const topicos = topicosDe(payload);
   const moduloIds = moduloIdsDe(cfg, topicos);
-  const notas: NotaAvaliacao[] = notasRows.rows.map(n => ({
+  const notas: NotaAvaliacao[] = notasRows.map(n => ({
     formandoId: Number(n.formando_id),
     moduloId: n.modulo_id ?? "",
     parametroId: n.parametro_id,
     nota: n.nota == null || !Number.isFinite(Number(n.nota)) ? null : Number(n.nota),
   }));
   const mapa = mapaNotas(notas);
-  const sessoes = sessoesComHoras(turma.cronograma, folhas.rows);
-  const certs = new Map(certRows.rows.map(c => [Number(c.formando_id), c]));
+  const sessoes = sessoesComHoras(turma.cronograma, folhas);
+  const certs = new Map(certRows.map(c => [Number(c.formando_id), c]));
   const minimo = assiduidadeMinima(regras, regime);
   const temGrelha = cfg.parametros.length > 0 || cfg.estrutura === "ccp";
   const dtpFalta = regras.dtpBloqueiaCertificado && opts.dtpEmFalta ? await opts.dtpEmFalta() : [];
@@ -203,10 +179,8 @@ export async function pendentesDoFecho(
   const hoje = opts.hoje ?? new Date().toISOString().slice(0, 10);
   const falta: string[] = [];
   if (regras.fechoExigeSessoes) {
-    const gravadas = await db.query<{ sessao_n: number; sumario: unknown }>(
-      "SELECT sessao_n, sumario FROM turma_sessoes WHERE regime = $1 AND turma_id = $2", [regime, turmaId],
-    );
-    const porN = new Map(gravadas.rows.map(r => [Number(r.sessao_n), asObj(r.sumario)]));
+    const gravadas = await sumariosDaTurma(db, regime, turmaId);
+    const porN = new Map(gravadas.map(r => [Number(r.sessao_n), asObj(r.sumario)]));
     const sessoes = sessoesComHoras(turma.cronograma, []);
     const futuras = sessoes.filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s.data) && s.data > hoje);
     if (futuras.length) falta.push(`${futuras.length} sessão(ões) ainda por realizar (a última a ${futuras[futuras.length - 1]!.data}).`);
@@ -231,9 +205,7 @@ export async function pendentesDoFecho(
 
 /** Uma turma fechada não aceita alterações pedagógicas nem inscrições. */
 export async function turmaFechada(db: Db, regime: Regime, turmaId: number) {
-  const table = regime === "gold" ? "turmas_gold" : "turmas_fin";
-  const r = await db.query<{ fechada_em: unknown }>(`SELECT fechada_em FROM ${table} WHERE id = $1`, [turmaId]);
-  return Boolean(r.rows[0]?.fechada_em);
+  return Boolean((await turmaFechadaEm(db, regime, turmaId))?.fechada_em);
 }
 
 export const ERRO_TURMA_FECHADA = "A turma está fechada. Só o administrador a pode reabrir para corrigir.";

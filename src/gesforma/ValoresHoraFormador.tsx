@@ -11,7 +11,7 @@ export function ValoresHoraFormador({
 }) {
   const nomes = [...new Set(formadores.map(n => n.trim()).filter(Boolean))];
   if (!nomes.length) {
-    return <p className="text-xs text-slate-400">Escolha os formadores para indicar o valor por hora desta turma.</p>;
+    return <p className="text-xs text-tinta-suave">Escolha os formadores para indicar o valor por hora desta turma.</p>;
   }
   return (
     <div className="space-y-2">
@@ -19,13 +19,13 @@ export function ValoresHoraFormador({
         const sugerido = base?.find(b => b.nome.toLowerCase() === nome.toLowerCase())?.valorHora;
         return (
           <label key={nome} className="grid grid-cols-[1fr_7rem] gap-2 items-center">
-            <span className="text-sm text-slate-700 truncate">{nome}</span>
+            <span className="text-sm text-tinta truncate">{nome}</span>
             <input
               type="number"
               min={0}
               step="0.5"
               placeholder={sugerido ? String(sugerido) : "€/h"}
-              className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-lg"
+              className="num w-full h-9 px-2 text-sm border border-linha-forte rounded-controlo bg-superficie text-tinta"
               value={value[nome] ?? ""}
               onChange={e => {
                 const n = e.target.value === "" ? undefined : Number(e.target.value);
@@ -42,7 +42,7 @@ export function ValoresHoraFormador({
           </label>
         );
       })}
-      <p className="text-[11px] text-slate-400">Valor interno desta turma. Se ficar vazio, usa-se o valor base do curso, quando existir.</p>
+      <p className="text-[11px] text-tinta-suave">Valor interno desta turma. Se ficar vazio, usa-se o valor base do curso, quando existir.</p>
     </div>
   );
 }

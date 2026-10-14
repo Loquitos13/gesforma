@@ -21,12 +21,12 @@ const TEMPLATES = [
   },
   {
     tipo: "pagamento_ref",
-    nome: "Referência de pagamento",
-    assunto: "Pagamento de {{curso}} · referência {{referencia}}",
+    nome: "Documentos recebidos",
+    assunto: "Documentos recebidos · {{curso}}",
     linhas: [
       "Recebemos os documentos de {{curso}}.",
-      "Pague por Multibanco: entidade {{entidade}}, referência {{referencia}}, valor € {{valor}}.",
-      "Em seguida anexe o comprovativo na mesma ligação pessoal.",
+      "A secretaria valida-os e, depois, envia-lhe os dados para pagamento por transferência bancária.",
+      "Quando pagar, anexe o comprovativo na mesma ligação pessoal.",
     ],
     cta: "Anexar comprovativo",
   },
@@ -57,7 +57,7 @@ const TEMPLATES = [
     assunto: "{{nome}}, o pagamento de {{curso}} ainda não chegou",
     linhas: [
       "Há três dias que a pré-inscrição em {{curso}} está sem pagamento.",
-      "Se ainda quiser a vaga, responda a este email ou ligue para a secretaria. Enviamos a referência Multibanco.",
+      "Se ainda quiser a vaga, responda a este email ou ligue para a secretaria. Reenviamos os dados para transferência.",
     ],
     cta: "Pedir dados de pagamento",
   },
@@ -110,7 +110,7 @@ const TEMPLATES = [
 const RULES = [
   { nome: "Boas-vindas ao registo", gatilho: "Nova pré-inscrição recebida", key: "preinscricao.created", tipo: "welcome", delay: 0 },
   { nome: "Documentos na pré-inscrição", gatilho: "Pré-inscrição promovida", key: "preinscricao.promoted", tipo: "welcome", delay: 0 },
-  { nome: "Referência após documentos", gatilho: "Documentos da pré-inscrição submetidos", key: "preinscricao.docs_completos", tipo: "pagamento_ref", delay: 0 },
+  { nome: "Documentos recebidos", gatilho: "Documentos da pré-inscrição submetidos", key: "preinscricao.docs_completos", tipo: "pagamento_ref", delay: 0 },
   { nome: "Pré-inscrição validada", gatilho: "Pré-inscrição validada pela secretaria", key: "preinscricao.validated", tipo: "validada", delay: 0 },
   { nome: "Lembrete sem pagamento (3 dias)", gatilho: "Pré-inscrição sem pagamento há 3 dias", key: "preinscricao.unpaid_3d", tipo: "unpaid_3d", delay: 0 },
   { nome: "Confirmação de pagamento", gatilho: "Pagamento confirmado", key: "payment.confirmed", tipo: "payment", delay: 0 },

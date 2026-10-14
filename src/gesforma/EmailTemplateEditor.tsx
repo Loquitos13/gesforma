@@ -1,110 +1,83 @@
 import { useRef, useState } from "react";
+import { Botao, Separadores, cx } from "../partilhado/ui";
 import { linesToXml, parseEmailXml } from "./emailXml";
 
-const VARS = [
-  { k: "{{nome}}", l: "Nome" },
-  { k: "{{email}}", l: "Email" },
-  { k: "{{curso}}", l: "Curso" },
-  { k: "{{turma}}", l: "Turma" },
-];
+const CONTROLO = "w-full min-h-[240px] px-3 py-2.5 rounded-controlo border border-linha-forte bg-superficie text-sm leading-relaxed text-tinta";
 
-export function EmailXmlEditor({
-  xml,
-  onChange,
-}: {
-  xml: string;
-  onChange: (xml: string) => void;
-}) {
-  const [mode, setMode] = useState<"texto" | "xml">("texto");
+/**
+ * Corpo de um email automático: modo texto (parágrafos) ou XML (<p>, <strong>, <em>, <cta>).
+ * `variaveis` vem do servidor (`/v1/email/opcoes`).
+ */
+export function EmailXmlEditor({ xml, onChange, variaveis }: { xml: string; onChange: (xml: string) => void; variaveis: string[] }) {
+  const [modo, setModo] = useState<"texto" | "xml">("texto");
   const textRef = useRef<HTMLTextAreaElement>(null);
   const xmlRef = useRef<HTMLTextAreaElement>(null);
   const doc = parseEmailXml(xml);
   const texto = doc.paragraphs.join("\n\n");
 
-  function applyTexto(next: string) {
+  function aplicarTexto(next: string) {
     onChange(linesToXml(next.split(/\n\n+/), doc.cta, doc.href, doc.ambito));
   }
 
-  function insertAt(el: HTMLTextAreaElement | null, snippet: string, wrap?: { before: string; after: string }) {
+  function inserir(el: HTMLTextAreaElement | null, trecho: string, envolver?: { antes: string; depois: string }) {
     if (!el) return;
     const s = el.selectionStart;
     const e = el.selectionEnd;
-    const value = el.value;
-    const selected = value.slice(s, e);
-    const piece = wrap ? `${wrap.before}${selected || "texto"}${wrap.after}` : snippet;
-    const next = value.slice(0, s) + piece + value.slice(e);
-    if (mode === "xml") onChange(next);
-    else applyTexto(next);
+    const valor = el.value;
+    const pedaco = envolver ? `${envolver.antes}${valor.slice(s, e) || "texto"}${envolver.depois}` : trecho;
+    const next = valor.slice(0, s) + pedaco + valor.slice(e);
+    if (modo === "xml") onChange(next);
+    else aplicarTexto(next);
     requestAnimationFrame(() => {
       el.focus();
-      const pos = s + piece.length;
+      const pos = s + pedaco.length;
       el.setSelectionRange(pos, pos);
     });
   }
 
+  const alvo = () => (modo === "xml" ? xmlRef.current : textRef.current);
+
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
-          {(["texto", "xml"] as const).map(m => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              className={`px-2.5 py-1 text-xs font-semibold rounded-md ${mode === m ? "bg-white text-slate-800 shadow-sm" : "text-slate-500"}`}
-            >
-              {m === "texto" ? "Texto" : "XML"}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-1">
-          {mode === "xml" && (
+      <div className="flex items-center gap-2 flex-wrap">
+        <Separadores rotulo="Modo do editor" estilo="pilula" ativo={modo} onMudar={setModo} itens={[{ id: "texto", rotulo: "Texto" }, { id: "xml", rotulo: "XML" }]} />
+        <div className="flex flex-wrap gap-1 ml-auto" role="toolbar" aria-label="Inserir">
+          {modo === "xml" && (
             <>
-              <ToolBtn label="P" title="Parágrafo" onClick={() => insertAt(xmlRef.current, "", { before: "<p>", after: "</p>" })} />
-              <ToolBtn label="N" title="Negrito" onClick={() => insertAt(xmlRef.current, "", { before: "<strong>", after: "</strong>" })} />
-              <ToolBtn label="I" title="Itálico" onClick={() => insertAt(xmlRef.current, "", { before: "<em>", after: "</em>" })} />
+              <Botao tamanho="sm" variante="secundario" title="Parágrafo" onClick={() => inserir(xmlRef.current, "", { antes: "<p>", depois: "</p>" })}>P</Botao>
+              <Botao tamanho="sm" variante="secundario" title="Negrito" className="font-bold" onClick={() => inserir(xmlRef.current, "", { antes: "<strong>", depois: "</strong>" })}>N</Botao>
+              <Botao tamanho="sm" variante="secundario" title="Itálico" className="italic" onClick={() => inserir(xmlRef.current, "", { antes: "<em>", depois: "</em>" })}>I</Botao>
             </>
           )}
-          {VARS.map(v => (
-            <ToolBtn key={v.k} label={v.l} title={v.k} onClick={() => insertAt(mode === "xml" ? xmlRef.current : textRef.current, v.k)} />
+          {variaveis.map(v => (
+            <Botao key={v} tamanho="sm" variante="secundario" title={`Inserir {{${v}}}`} onClick={() => inserir(alvo(), `{{${v}}}`)}>{`{{${v}}}`}</Botao>
           ))}
         </div>
       </div>
-      {mode === "texto" ? (
+      {modo === "texto" ? (
         <textarea
           ref={textRef}
-          className="w-full min-h-[240px] px-3 py-2.5 text-sm leading-relaxed border border-slate-200 rounded-lg bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          aria-label="Corpo do email"
+          className={CONTROLO}
           value={texto}
-          onChange={e => applyTexto(e.target.value)}
-          placeholder="Escreva o corpo do email. Parágrafos separados por uma linha em branco. Use {{nome}}, {{email}}, {{curso}} e {{turma}}."
+          onChange={e => aplicarTexto(e.target.value)}
+          placeholder="Escreva o corpo do email. Uma linha em branco começa um parágrafo novo."
         />
       ) : (
         <textarea
           ref={xmlRef}
+          aria-label="Corpo do email em XML"
           spellCheck={false}
-          className="w-full min-h-[240px] px-3 py-2.5 text-[13px] leading-relaxed font-mono border border-slate-200 rounded-lg bg-slate-50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          className={cx(CONTROLO, "font-mono text-[13px] bg-fundo")}
           value={xml}
           onChange={e => onChange(e.target.value)}
         />
       )}
-      <p className="text-[11px] text-slate-400">
-        {mode === "xml"
-          ? "Tags: <email>, <p>, <strong>, <em>, <cta href ambito>. Variáveis: {{nome}}, {{email}}, {{curso}}, {{turma}}."
-          : "Uma linha em branco começa um parágrafo novo. O botão CTA leva à pré-inscrição ou ao email da secretaria."}
+      <p className="m-0 text-xs text-tinta-suave">
+        {modo === "xml"
+          ? "Tags: <email>, <p>, <strong>, <em>, <cta ambito>. No modo texto perde-se o negrito e o itálico."
+          : "O botão do email edita-se em baixo. A pré-visualização mostra o email tal como sai."}
       </p>
     </div>
-  );
-}
-
-function ToolBtn({ label, title, onClick }: { label: string; title: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      className="px-2 py-1 text-[11px] font-semibold rounded-md border border-slate-200 text-slate-600 hover:bg-amber-50 hover:border-amber-200"
-    >
-      {label}
-    </button>
   );
 }

@@ -4,6 +4,7 @@ import { generateCronograma } from "./cronograma.js";
 import type { Db } from "./db/pool.js";
 import { nextOpsId } from "./ops.js";
 import { codigoInternoTurma } from "../../src/partilhado/turmaCodigo.js";
+import { atualizarRegra, existeTurmaIgual, inserirTurmaFin, inserirTurmaGold, listarRegras } from "./repos/turmas.js";
 
 export type TurmaRegra = {
   id: number;
@@ -37,11 +38,8 @@ function mapRegra(r: Record<string, unknown>): TurmaRegra {
   };
 }
 
-export async function listTurmaRegras(db: Db, regime?: string) {
-  const q = regime
-    ? await db.query("SELECT * FROM turma_regras WHERE regime = $1 ORDER BY id", [regime])
-    : await db.query("SELECT * FROM turma_regras ORDER BY regime, id");
-  return q.rows.map(r => mapRegra(r as Record<string, unknown>));
+export async function listTurmaRegras(db: Db, regime?: "gold" | "fin") {
+  return (await listarRegras(db, regime)).map(r => mapRegra(r));
 }
 
 function codigoTurma(regra: TurmaRegra, data: string) {
@@ -63,52 +61,44 @@ export async function aplicarTurmaRegras(db: Db, regime?: "gold" | "fin") {
   const conflitos: { regra: number; erro: string }[] = [];
   for (const regra of regras) {
     const inicio = regra.proximaData || new Date().toISOString().slice(0, 10);
-    const horasSessao = regra.regime === "fin" ? 3 : (regra.horasSessao || 3);
-    const modulos = await modulosDaFicha(db, regra.regime === "fin" ? "fin" : "gold", regra.curso);
+    const fin = regra.regime === "fin";
+    const horasSessao = fin ? 3 : (regra.horasSessao || 3);
+    const modulos = await modulosDaFicha(db, regra.regime, regra.curso);
+    const horario = regra.horario || (fin ? "Pós Laboral" : "");
+    const horas = regra.horas || (fin ? 25 : 90);
     const cronograma = generateCronograma({
       modulos,
       inicio,
-      horario: regra.horario || "Pós Laboral",
-      horas: regra.horas || (regra.regime === "fin" ? 25 : 90),
+      horario: horario || "Pós Laboral",
+      horas,
       formador: regra.formador,
       curso: regra.curso,
       hoursPerSession: horasSessao,
     });
     const nome = codigoTurma(regra, inicio);
     // Uma turma automática não pode pôr o formador em duas sessões ao mesmo tempo.
-    const cruzamento = await erroSobreposicao(db, regra.regime === "fin" ? "fin" : "gold", null, cronograma);
+    const cruzamento = await erroSobreposicao(db, regra.regime, null, cronograma);
     if (cruzamento) {
       conflitos.push({ regra: regra.id, erro: cruzamento });
       continue;
     }
-    if (regra.regime === "fin") {
-      const exists = await db.query(
-        "SELECT id FROM turmas_fin WHERE curso = $1 AND local = $2 AND horario = $3 AND data_inicio = $4 LIMIT 1",
-        [regra.curso, regra.local, regra.horario, inicio],
-      );
-      if (exists.rows[0]) continue;
-      const id = await nextOpsId(db);
-      await db.query(
-        `INSERT INTO turmas_fin (id, data_inicio, nome, curso, ufcd_cod, local, horario, alunos, alunos_total, estado, horas, formador, activa, cronograma)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,0,$8,'A montar',$9,$10,true,$11::jsonb)`,
-        [id, inicio, nome, regra.curso, "", regra.local, regra.horario || "Pós Laboral", regra.vagas || 20, regra.horas || 25, regra.formador, cronograma],
-      );
-      criadas.push({ id, nome, regime: "fin" });
+    if (await existeTurmaIgual(db, regra.regime, { curso: regra.curso, local: regra.local, horario: regra.horario, dataInicio: inicio })) continue;
+    const id = await nextOpsId(db);
+    if (fin) {
+      await inserirTurmaFin(db, id, {
+        dataInicio: inicio, nome, curso: regra.curso, ufcdCod: "", local: regra.local, horario, alunosTotal: regra.vagas || 20,
+        tolerancia: 0, estado: "A montar", horas, formador: regra.formador, formadores: [], activa: true, cronograma,
+        valoresHoraFormador: {}, financiador: "",
+      });
     } else {
-      const exists = await db.query(
-        "SELECT id FROM turmas_gold WHERE curso = $1 AND local = $2 AND horario = $3 AND data_inicio = $4 LIMIT 1",
-        [regra.curso, regra.local, regra.horario, inicio],
-      );
-      if (exists.rows[0]) continue;
-      const id = await nextOpsId(db);
-      await db.query(
-        `INSERT INTO turmas_gold (id, data_inicio, nome, curso, local, horario, total_alunos, vagas, estado, formador, horas, cronograma)
-         VALUES ($1,$2,$3,$4,$5,$6,0,$7,'Ativa',$8,$9,$10::jsonb)`,
-        [id, inicio, nome, regra.curso, regra.local, regra.horario, regra.vagas || 16, regra.formador, regra.horas || 90, cronograma],
-      );
-      criadas.push({ id, nome, regime: "gold" });
+      await inserirTurmaGold(db, id, {
+        dataInicio: inicio, nome, curso: regra.curso, local: regra.local, horario: regra.horario, vagas: regra.vagas || 16,
+        tolerancia: 0, estado: "Ativa", formador: regra.formador, formadores: [], horas, cronograma, custoHoraSala: 0,
+        valoresHoraFormador: {},
+      });
     }
-    await db.query("UPDATE turma_regras SET proxima_data = $2 WHERE id = $1", [regra.id, nextData(inicio)]);
+    criadas.push({ id, nome, regime: regra.regime });
+    await atualizarRegra(db, regra.id, { proximaData: nextData(inicio) });
   }
   return { criadas, n: criadas.length, conflitos };
 }

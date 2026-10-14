@@ -17,7 +17,8 @@ const nodeEnv = process.env.NODE_ENV ?? "development";
 export const isProd = nodeEnv === "production";
 export const onVercel = Boolean(process.env.VERCEL);
 
-const defaultDevSecret = "dev-only-not-for-production-gesforma-session-key-32";
+/** Segredo de desenvolvimento. Exportado só para o chaveiro conseguir ler dados antigos cifrados com ele. */
+export const defaultDevSecret = "dev-only-not-for-production-gesforma-session-key-32";
 const defaultDevPassword = "altere-me-no-primeiro-arranque";
 
 function inferredOrigin() {
@@ -69,6 +70,8 @@ export const config = {
     ?? (process.env.VERCEL ? "/tmp/gesforma-drive" : fileURLToPath(new URL("../data/drive-files", import.meta.url))),
   driveMaxBytes: Number(process.env.DRIVE_MAX_BYTES ?? 10 * 1024 * 1024),
   dataEncryptionKey: process.env.DATA_ENCRYPTION_KEY ?? "",
+  /** Segredo de sessão anterior, se foi trocado: o chaveiro ainda decifra o que foi cifrado com ele. */
+  legacySessionSecret: process.env.LEGACY_SESSION_SECRET ?? "",
   paymentWebhookKey: process.env.PAYMENT_WEBHOOK_KEY ?? "",
   whatsappToken: process.env.WHATSAPP_TOKEN ?? "",
   whatsappPhoneId: process.env.WHATSAPP_PHONE_ID ?? "",
@@ -159,6 +162,39 @@ export function assertSecureConfig() {
   if (config.sessionSecret.length < 32) {
     throw new Error("SESSION_SECRET demasiado curto.");
   }
+  if (isProd || onVercel) {
+    for (const a of avisosConfiguracao()) console.warn(`Aviso de configuração (${a.variavel}): ${a.mensagem}`);
+  }
+}
+
+export type AvisoConfiguracao = { variavel: string; nivel: "alto" | "medio"; mensagem: string };
+
+/**
+ * Variáveis de ambiente em falta ou fracas. Só avisa (no arranque e ao admin nas
+ * Configurações); nunca impede o arranque.
+ */
+export function avisosConfiguracao(): AvisoConfiguracao[] {
+  const out: AvisoConfiguracao[] = [];
+  if (!process.env.SESSION_SECRET || config.sessionSecret === defaultDevSecret) {
+    out.push({ variavel: "SESSION_SECRET", nivel: "alto", mensagem: "Usa o segredo de desenvolvimento. Defina um valor aleatório com pelo menos 32 caracteres." });
+  } else if (config.sessionSecret.length < 32) {
+    out.push({ variavel: "SESSION_SECRET", nivel: "alto", mensagem: "Tem menos de 32 caracteres." });
+  }
+  if (!config.dataEncryptionKey) {
+    out.push({ variavel: "DATA_ENCRYPTION_KEY", nivel: "alto", mensagem: "Sem chave própria: os dados pessoais são cifrados com uma chave derivada do segredo de sessão." });
+  } else if (Buffer.from(config.dataEncryptionKey, "base64").length !== 32) {
+    out.push({ variavel: "DATA_ENCRYPTION_KEY", nivel: "alto", mensagem: "Tem de ter 32 bytes em base64." });
+  }
+  if (!process.env.APP_ORIGIN) {
+    out.push({ variavel: "APP_ORIGIN", nivel: "medio", mensagem: `Não definida: a origem é deduzida (${config.appOrigin}). Defina o endereço público do GesForma.` });
+  }
+  if (!config.cronSecret) {
+    out.push({ variavel: "CRON_SECRET", nivel: "medio", mensagem: "Não definida: as tarefas agendadas só correm pelo cron da Vercel." });
+  }
+  if (process.env.SEED_DEMO === "1" && (isProd || onVercel)) {
+    out.push({ variavel: "SEED_DEMO", nivel: "alto", mensagem: "Activa em produção: cria contas de demonstração com palavra-passe conhecida." });
+  }
+  return out;
 }
 
 export function newToken(bytes = 32) {

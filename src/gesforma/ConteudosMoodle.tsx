@@ -17,7 +17,7 @@ import {
 import { useDrive } from "../partilhado/DriveContext";
 import { AppModal } from "../partilhado/FormKit";
 import { codigoTopico, type OrganizacaoPrograma, type TopicoPrograma } from "./cursoPrograma";
-import type { CursoAccent } from "./CursoFichaView";
+type CursoAccent = "gold" | "fin";
 import { EditorElementoPedagogico } from "./ConteudosMoodleElemento";
 
 export { parseConteudosMoodle, type ConteudoMoodle, type ElementoPedagogico } from "../partilhado/conteudosPedagogicos";

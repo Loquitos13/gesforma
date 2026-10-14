@@ -1,6 +1,7 @@
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { openSecret, sealSecret } from "./secretBox.js";
+import { apagarMicrosoft, gravarMicrosoft, microsoftGuardado } from "./repos/integracoes.js";
 
 const GRAPH_ME = "https://graph.microsoft.com/v1.0/me";
 const LOGIN_SCOPES = "openid profile email User.Read";
@@ -27,10 +28,7 @@ function authBase(tenantId: string) {
 }
 
 export async function microsoftCreds(db: Db): Promise<MicrosoftCreds> {
-  const row = await db.query<ConfigRow>(
-    "SELECT client_id, client_secret, tenant_id FROM microsoft_config WHERE id = 'microsoft'",
-  );
-  const stored = row.rows[0];
+  const stored = await microsoftGuardado(db);
   let storedSecret = "";
   if (stored?.client_secret) {
     try { storedSecret = openSecret(stored.client_secret); } catch { storedSecret = ""; }
@@ -60,21 +58,12 @@ export async function saveMicrosoftConfig(db: Db, patch: {
   if (clientId.length < 12) throw new Error("Application (client) ID inválido");
   if (clientSecret.length < 12) throw new Error("Client secret em falta");
   if (!/^[\w.-]+$/.test(tenantId)) throw new Error("Directory (tenant) ID inválido");
-  await db.query(
-    `INSERT INTO microsoft_config (id, client_id, client_secret, tenant_id)
-     VALUES ('microsoft', $1, $2, $3)
-     ON CONFLICT (id) DO UPDATE SET
-       client_id = EXCLUDED.client_id,
-       client_secret = EXCLUDED.client_secret,
-       tenant_id = EXCLUDED.tenant_id,
-       updated_at = now()`,
-    [clientId, sealSecret(clientSecret), tenantId],
-  );
+  await gravarMicrosoft(db, { clientId, secretSealed: sealSecret(clientSecret), tenantId });
   return microsoftCreds(db);
 }
 
 export async function disconnectMicrosoft(db: Db) {
-  await db.query("DELETE FROM microsoft_config WHERE id = 'microsoft'");
+  await apagarMicrosoft(db);
 }
 
 export async function getMicrosoftStatus(db: Db) {

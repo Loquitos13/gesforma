@@ -1,4 +1,5 @@
 import { SECRETARIA_MAIL } from "./emailCta.js";
+import { urlLogoPublico } from "./entidadeLogo.js";
 import { fillVars } from "./security.js";
 import { escapeHtml } from "./xss.js";
 
@@ -69,7 +70,8 @@ export function renderAutomaticEmail(input: {
   const pixel = input.pixelUrl
     ? `<img src="${esc(input.pixelUrl)}" width="1" height="1" alt="" style="display:block;border:0;" />`
     : "";
-  const logo = `${input.origin.replace(/\/$/, "")}/imagens/ena-logo-nobg.png`;
+  // Logótipo carregado em Configurações › Entidade (sem ele, o endereço redirige para o logótipo ENA do site).
+  const logo = urlLogoPublico(input.origin);
   const html = `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#f1f5f9;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;">

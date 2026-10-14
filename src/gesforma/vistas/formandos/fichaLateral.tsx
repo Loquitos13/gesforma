@@ -6,6 +6,7 @@ import {
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { Aviso, Botao, Caixa, Cartao, Detalhes, Estado, data, dataHora, eur } from "../../../partilhado/ui";
 import { RegistarPagamento } from "./fichaDialogos";
+import { ReciboPagamento } from "../sistema/pagamentos/ReciboPagamento";
 import { PAGAMENTO } from "./partes";
 
 const INVALIDAR = ["formandos:"];
@@ -82,6 +83,7 @@ export function CartaoPagamento({ ficha, podeEditar }: { ficha: FichaFormando; p
   if (!p) return null;
   const s = PAGAMENTO[p.situacao];
   const porPagar = p.situacao === "por_pagar";
+  const pagoMov = p.movimentos.find(m => /^pago$/i.test(m.estado));
   return (
     <Cartao titulo="Pagamento" acoes={<Estado tom={s.tom} ponto>{s.rotulo}</Estado>}>
       <p className="num m-0 text-2xl font-semibold text-tinta">{eur(p.valor, true)}</p>
@@ -111,6 +113,9 @@ export function CartaoPagamento({ ficha, podeEditar }: { ficha: FichaFormando; p
             {p.temIban ? "Envia um email com o valor e o IBAN da ENA; a pessoa responde com o comprovativo." : "Falta o IBAN da entidade em Configurações › Entidade."}
           </p>
         </div>
+      )}
+      {pagoMov && pode("pagamentos.ver") && (
+        <div className="mt-3"><ReciboPagamento pagamentoId={pagoMov.id} email={ficha.email} podeEmitir={pode("pagamentos.confirmar")} /></div>
       )}
       <RegistarPagamento aberto={registar} onFechar={() => setRegistar(false)} ficha={ficha} />
     </Cartao>

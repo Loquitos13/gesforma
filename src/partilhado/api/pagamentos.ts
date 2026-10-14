@@ -1,5 +1,6 @@
 // API do domínio "pagamentos": lista com indicadores, confirmar/recusar comprovativo, registo manual.
 import { api, enviar, qs, type Pagina } from "./cliente";
+import { abrirPdf, descarregar } from "./ficheiros";
 
 export type SituacaoPagamento = "a_confirmar" | "pedido" | "recusado" | "pago" | "cancelado" | "reembolsado";
 
@@ -88,4 +89,34 @@ export function apiReenviarPedidoPagamento(leadId: number) {
 /** Endereço do ficheiro na Drive do GesForma (abre no browser). */
 export function urlFicheiro(id: string) {
   return `${(import.meta.env.VITE_API_URL as string | undefined) || "/api"}/v1/drive/files/${encodeURIComponent(id)}/content`;
+}
+
+// ─── Exportação e recibos ────────────────────────────────────────────────────
+
+/** Descarrega o Excel com os mesmos filtros da lista (sem paginação). */
+export function apiExportarPagamentos(f: FiltrosPagamentos) {
+  const { pagina: _p, porPagina: _pp, ordem: _o, ...filtros } = f;
+  return descarregar(`/v1/pagamentos/exportar${qs(filtros)}`, "pagamentos.xlsx");
+}
+
+export type Recibo = {
+  numero: string; emitidoEm: string; actualizadoEm: string; noDrive: boolean; driveFileId: string | null;
+  enviadoEm: string | null; enviadoPara: string | null;
+};
+
+export function apiEstadoRecibo(id: string, signal?: AbortSignal) {
+  return api<{ recibo: Recibo | null }>(`/v1/pagamentos/${encodeURIComponent(id)}/recibo/estado`, { signal, silencioso: true });
+}
+
+/** Emite o recibo (ou volta a gerá-lo com o mesmo número). */
+export function apiEmitirRecibo(id: string) {
+  return enviar.post<{ recibo: Recibo; novo: boolean; avisoDrive: string | null }>(`/v1/pagamentos/${encodeURIComponent(id)}/recibo`);
+}
+
+export function apiAbrirRecibo(id: string) {
+  return abrirPdf(`/v1/pagamentos/${encodeURIComponent(id)}/recibo`, "recibo.pdf");
+}
+
+export function apiEnviarRecibo(id: string, para?: string) {
+  return enviar.post<{ recibo: Recibo }>(`/v1/pagamentos/${encodeURIComponent(id)}/recibo/enviar`, para ? { para } : {});
 }

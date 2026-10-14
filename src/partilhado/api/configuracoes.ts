@@ -1,5 +1,5 @@
 // API do domínio "configuracoes": estado das secções, definições, SMTP, Drive, Microsoft e WhatsApp.
-import { BASE, api, enviar } from "./cliente";
+import { BASE, api, enviar, enviarFicheiro } from "./cliente";
 
 export type EstadoConfiguracoes = {
   entidade: { completa: boolean; emFalta: string[]; iban: boolean };
@@ -81,3 +81,11 @@ export const apiWhatsappSimular = (telefone: string, texto: string) =>
   enviar.post<{ replies: string[]; telefone: string; passo?: string; leadId?: number | null; ligado: boolean }>(
     "/v1/crm/whatsapp/simular", { telefone, texto },
   );
+
+// ─── Logótipo da entidade ────────────────────────────────────────────────────
+
+export type LogoEntidade = { nome: string; mime: string; versao: string; actualizado: string; tamanho: number };
+
+export const apiLogo = (signal?: AbortSignal) => api<{ logo: LogoEntidade | null }>("/v1/configuracoes/logo", { signal, silencioso: true });
+export const apiCarregarLogo = (ficheiro: File) => enviarFicheiro<{ logo: LogoEntidade }>("/v1/configuracoes/logo", ficheiro);
+export const apiApagarLogo = () => enviar.delete<{ ok: true }>("/v1/configuracoes/logo");

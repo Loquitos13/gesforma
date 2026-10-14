@@ -1,5 +1,6 @@
 import { type GrelhaLinha, cellLabelPrint, cellTone, charsDaCelula, formatDataOficial, formatHoraFaixa, grupoLinha, larguraDiasEmChars, monthSpans, weekdayCode } from "./cronogramaGrelha";
 import type { LocalMapeado } from "./cronogramaLocal";
+import { urlLogoEntidade } from "./logoEntidade";
 import { codigoModulo, type SessaoCronograma } from "./turmaModel";
 
 export type CronogramaPrintInput = {
@@ -267,7 +268,7 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
 <body>
   <div class="sheet">
     <div class="head">
-      <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 93.847 24.161" aria-label="ENA"><g transform="translate(-2081 -901)"><g transform="translate(-2)"><rect width="9" height="24" rx="4.5" transform="translate(2125 901)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(2125.853 907.433) rotate(-90)" fill="#a60000"/><rect width="7" height="24" rx="3.5" transform="translate(2142 901)" fill="#a60000"/></g><g transform="translate(2095.462 901.355)"><rect width="6.179" height="23.603" rx="3.09" transform="translate(0 6.179) rotate(-90)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(6.179 23.603) rotate(180)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(24.211 17.525) rotate(90)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(24.211 8.611) rotate(90)" fill="#a60000"/><rect width="6.179" height="14.79" rx="3.09" transform="translate(18.032 0)" fill="#a60000"/></g><rect width="10" height="24" rx="2" transform="translate(2081 901)" fill="#ffa900"/><g transform="translate(2150.635 901.456)"><rect width="6.179" height="23.603" rx="3.09" transform="translate(24.211 17.525) rotate(90)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(18.032 0.101)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(0 6.179) rotate(-90)" fill="#a60000"/><rect width="6.179" height="23.603" rx="3.09" transform="translate(0 15.094) rotate(-90)" fill="#a60000"/><rect width="6.179" height="14.79" rx="3.09" transform="translate(0 8.915)" fill="#a60000"/></g></g></svg>
+      <img class="logo" src="${esc(urlLogoEntidade())}" alt="${esc(cabecalhoEntidade(input.entidade).nome)}" />
       <div class="brand">
         <h1>${esc(cabecalhoEntidade(input.entidade).nome)}</h1>
         ${cabecalhoEntidade(input.entidade).contactos ? `<p>${esc(cabecalhoEntidade(input.entidade).contactos)}</p>` : ""}

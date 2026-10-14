@@ -2,7 +2,8 @@
 // confirmar/recusar o comprovativo no painel lateral e registo manual.
 import { useState } from "react";
 import { usePode } from "../../../partilhado/AuthGate";
-import { apiPagamentos, type LinhaPagamento, type SituacaoPagamento } from "../../../partilhado/api/pagamentos";
+import { apiExportarPagamentos, apiPagamentos, type LinhaPagamento, type SituacaoPagamento } from "../../../partilhado/api/pagamentos";
+import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import {
@@ -33,6 +34,7 @@ export default function Pagamentos({ navigate }: VistaProps) {
     apiPagamentos({ situacao: f.situacao, curso: f.curso, metodo: f.metodo, de: f.de, ate: f.ate, q: f.q, ordem: f.ordem, pagina, porPagina: 25 }, signal));
   const cursos = useOpcoes("cursos", { regime: "gold" });
   const [registar, setRegistar] = useState(false);
+  const exportar = useAccao(() => apiExportarPagamentos({ situacao: f.situacao, curso: f.curso, metodo: f.metodo, de: f.de, ate: f.ate, q: f.q }), { erro: "A exportação falhou." });
 
   const ind = dados?.indicadores;
   const contagem = (s: string) => (s ? dados?.contagens.find(c => c.situacao === s)?.total ?? 0 : dados?.contagens.reduce((t, c) => t + c.total, 0));
@@ -65,7 +67,14 @@ export default function Pagamentos({ navigate }: VistaProps) {
         trilho={[{ rotulo: "Sistema", onClick: () => navigate("configuracoes") }, { rotulo: "Pagamentos" }]}
         titulo="Pagamentos"
         subtitulo="Transferência bancária com comprovativo. Pagamento automático (gateway): por escolher."
-        acoes={confirmar ? <Botao variante="primario" onClick={() => setRegistar(true)}>Registar pagamento</Botao> : undefined}
+        acoes={(
+          <div className="flex gap-2 flex-wrap">
+            <Botao onClick={() => void exportar.correr()} aCarregar={exportar.aCorrer} disabled={!dados?.total} title="Exporta para Excel os pagamentos com os filtros actuais">
+              Exportar Excel
+            </Botao>
+            {confirmar && <Botao variante="primario" onClick={() => setRegistar(true)}>Registar pagamento</Botao>}
+          </div>
+        )}
       />
 
       <KpiFaixa rotulo="Indicadores de pagamentos" className="xl:grid-cols-5">

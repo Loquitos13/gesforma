@@ -12,6 +12,7 @@ import {
   data, dataHora, eur, type Tom,
 } from "../../../../partilhado/ui";
 import type { Navegar } from "../../../shell/tipos";
+import { ReciboPagamento } from "./ReciboPagamento";
 
 const SITUACAO: Record<SituacaoPagamento, { rotulo: string; tom: Tom }> = {
   a_confirmar: { rotulo: "A confirmar", tom: "aviso" },
@@ -113,6 +114,8 @@ export function DetalhePagamento({ id, onFechar, podeConfirmar, navigate }: {
               </p>
             )}
           </section>
+
+          {p.situacao === "pago" && <ReciboPagamento pagamentoId={p.id} email={p.email} podeEmitir={podeConfirmar} />}
 
           {(p.lead_id || p.formando_id) && (
             <div className="flex gap-2 flex-wrap">

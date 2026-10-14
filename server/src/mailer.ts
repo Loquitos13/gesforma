@@ -3,7 +3,8 @@ import type { Db } from "./db/pool.js";
 import { resolveSmtpTransport, smtpConfigured } from "./smtpConfig.js";
 import { sanitizeHeader } from "./security.js";
 
-type SendInput = { to: string; name: string; subject: string; text: string; html?: string };
+type Anexo = { nome: string; tipo: string; conteudo: Buffer };
+type SendInput = { to: string; name: string; subject: string; text: string; html?: string; anexos?: Anexo[] };
 
 export async function sendMail(db: Db, input: SendInput) {
   const to = sanitizeHeader(input.to);
@@ -29,6 +30,7 @@ export async function sendMail(db: Db, input: SendInput) {
     subject,
     text,
     html: input.html,
+    attachments: input.anexos?.map(a => ({ filename: sanitizeHeader(a.nome), contentType: a.tipo, content: a.conteudo })),
   });
   return info.messageId ?? "smtp";
 }

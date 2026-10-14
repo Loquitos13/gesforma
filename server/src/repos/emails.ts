@@ -18,6 +18,14 @@ export function obterModelo(c: Consulta, id: number) {
   return one<ModeloEmail>(c, `${SELECT_MODELO} WHERE id = $1`, [id]);
 }
 
+/** Modelo pelo tipo, com as linhas do corpo já como lista de texto. */
+export async function modeloEmail(c: Consulta, tipo: string) {
+  const m = await one<ModeloEmail>(c, `${SELECT_MODELO} WHERE tipo = $1`, [tipo]);
+  if (!m) return null;
+  const linhas = Array.isArray(m.body_lines) ? m.body_lines.map(String).filter(Boolean) : [];
+  return { ...m, linhas };
+}
+
 export async function existeModeloTipo(c: Consulta, tipo: string) {
   return Boolean(await one(c, "SELECT 1 FROM email_templates WHERE tipo = $1", [tipo]));
 }

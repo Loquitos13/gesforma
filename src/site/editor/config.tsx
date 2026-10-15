@@ -5,6 +5,9 @@ import type { PaginaSite } from "../../partilhado/siteBlocos";
 import { AreaFormando } from "./blocosArea";
 import { Catalogo } from "./blocosCatalogo";
 import { DetalheCurso } from "./blocosCursoPagina";
+import {
+  CursoBanner, CursoDados, CursoInscricao, CursoObjetivos, CursoPrograma, CursoSintese, CursoTurmas, RaizCurso, campoPrevisualizar,
+} from "./blocosCurso";
 import { ListaNoticias } from "./blocosNoticias";
 import { Botao, Coluna, Espaco, Imagem, Logotipos, Pilares, Seccao, Separador, Texto, Titulo } from "./blocosBase";
 import { CursosDestaque, OfertaFormativa } from "./blocosCursos";
@@ -135,13 +138,20 @@ function RaizOutra({ children, editar }: { children: ReactNode; editar: boolean 
 const componentes = Object.fromEntries(Object.entries({
   Seccao, Coluna, Espaco, Separador, Titulo, Texto, Botao, Imagem, Pilares, Logotipos,
   CursosDestaque, OfertaFormativa, Catalogo, DetalheCurso, ListaNoticias, AreaFormando, Cabecalho, Rodape,
+  CursoBanner, CursoSintese, CursoDados, CursoObjetivos, CursoPrograma, CursoTurmas, CursoInscricao,
 }).map(([k, c]) => [k, responsivo(c as ComponentConfig<any>)])) as Config["components"];
 
 const categoriasBase = {
   estrutura: { title: "Estrutura", components: ["Seccao", "Coluna", "Espaco", "Separador"] },
   conteudo: { title: "Conteúdo", components: ["Titulo", "Texto", "Botao", "Imagem", "Pilares", "Logotipos"] },
-  cursos: { title: "Cursos", components: ["CursosDestaque", "OfertaFormativa", "Catalogo", "DetalheCurso"] },
+  cursos: { title: "Cursos", components: ["CursosDestaque", "OfertaFormativa", "Catalogo"] },
   especiais: { title: "Notícias e área do formando", components: ["ListaNoticias", "AreaFormando"] },
+  // Blocos que só fazem sentido na página do curso (lêem o curso da página).
+  paginaCurso: {
+    title: "Página do curso",
+    components: ["CursoBanner", "CursoSintese", "CursoDados", "CursoObjetivos", "CursoPrograma", "CursoTurmas", "CursoInscricao", "DetalheCurso"],
+    visible: false,
+  },
 };
 
 /** A página inicial guarda o tema, o cabeçalho e o rodapé; as outras só o conteúdo do meio. */
@@ -165,4 +175,24 @@ export const configOutraPagina: Config = {
   components: componentes,
 };
 
-export const configPara = (pagina: PaginaSite) => (pagina === "inicio" ? configSite : configOutraPagina);
+/** Página do curso: a raiz escolhe o curso (no editor, o da pré-visualização) e os blocos «Curso · …» lêem-no. */
+export const configPaginaCurso: Config = {
+  root: {
+    fields: { previsualizar: campoPrevisualizar },
+    defaultProps: { previsualizar: "" },
+    render: ({ children, puck, previsualizar }: { children: ReactNode; puck?: { isEditing?: boolean }; previsualizar?: string }) => (
+      <RaizOutra editar={Boolean(puck?.isEditing)}>
+        <RaizCurso previsualizar={previsualizar ?? ""} editar={Boolean(puck?.isEditing)}>{children}</RaizCurso>
+      </RaizOutra>
+    ),
+  } as Config["root"],
+  categories: {
+    paginaCurso: { ...categoriasBase.paginaCurso, components: categoriasBase.paginaCurso.components.filter(c => c !== "DetalheCurso"), visible: true },
+    ...Object.fromEntries(Object.entries(categoriasBase).filter(([k]) => k !== "paginaCurso")),
+    moldura: { title: "Cabeçalho e rodapé (só na página inicial)", components: [], visible: false },
+    antigos: { title: "Antigos", components: ["DetalheCurso"], visible: false },
+  },
+  components: componentes,
+};
+
+export const configPara = (pagina: PaginaSite) => (pagina === "inicio" ? configSite : pagina === "curso" ? configPaginaCurso : configOutraPagina);

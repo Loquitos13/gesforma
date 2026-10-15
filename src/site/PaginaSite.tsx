@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { Data } from "@puckeditor/core";
 import type { PaginaSite as Pagina } from "../partilhado/siteBlocos";
 import { CabecalhoSite, type CabecalhoProps, RodapeSite, type RodapeProps } from "./editor/blocosMoldura";
-import { configOutraPagina, configSite, estiloTema, MolduraCtx, NoEcra, type Moldura, type TemaSite } from "./editor/config";
+import { configOutraPagina, configPaginaCurso, configSite, estiloTema, MolduraCtx, NoEcra, type Moldura, type TemaSite } from "./editor/config";
 import { DesenharPagina } from "./editor/desenhar";
 import { efetivas, type Disp } from "./editor/dispositivos";
 import { modeloPagina } from "./editor/modeloBase";
@@ -52,7 +52,7 @@ export function PaginaSite({ pagina, dados, moldura }: { pagina: Pagina; dados: 
   if (pagina === "inicio") return <DesenharPagina config={configSite} dados={dados} />;
   return (
     <MolduraCtx.Provider value={moldura}>
-      <DesenharPagina config={configOutraPagina} dados={dados} />
+      <DesenharPagina config={pagina === "curso" ? configPaginaCurso : configOutraPagina} dados={dados} />
     </MolduraCtx.Provider>
   );
 }

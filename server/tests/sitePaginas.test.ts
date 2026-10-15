@@ -38,6 +38,14 @@ describe("páginas do site (editor visual)", () => {
     expect(empresas.dados.content[0].props.conteudo[0].props.texto).toBe("Página empresas");
     const blocos = { root: { props: {} }, content: [{ type: "Catalogo", props: { id: "c" } }, { type: "ListaNoticias", props: { id: "n" } }, { type: "AreaFormando", props: { id: "a" } }] };
     expect((await pedido(ctx, "admin", "PUT", "/v1/site/paginas/area/rascunho", { dados: blocos })).statusCode).toBe(200);
+    // Página do curso em blocos soltos.
+    const curso = {
+      root: { props: { previsualizar: "" } },
+      content: ["CursoBanner", "CursoSintese", "CursoDados", "CursoObjetivos", "CursoPrograma", "CursoTurmas", "CursoInscricao"]
+        .map((type, i) => ({ type, props: { id: `c${i}` } })),
+    };
+    const r = await pedido(ctx, "admin", "PUT", "/v1/site/paginas/curso/rascunho", { dados: curso });
+    expect(r.statusCode, r.body).toBe(200);
   });
 
   it("recusa blocos desconhecidos e páginas sem conteúdo", async () => {

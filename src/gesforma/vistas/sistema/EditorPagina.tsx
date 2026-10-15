@@ -15,7 +15,7 @@ import { configPara, MolduraCtx, type Moldura } from "../../../site/editor/confi
 import {
   AvisoDispositivoCtx, definirDispositivoEmEdicao, dispositivoEmEdicao, NOMES_DISP, paraDispositivo, registarNoEcra, type Disp,
 } from "../../../site/editor/dispositivos";
-import { modeloPagina } from "../../../site/editor/modeloBase";
+import { converterPaginaCurso, modeloPagina } from "../../../site/editor/modeloBase";
 
 const VIEWPORTS: Viewports = [
   { width: 390, height: "auto", label: "Telemóvel", icon: "Smartphone" },
@@ -153,7 +153,8 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
     if (!dados || inicial) return;
     setPublicadoEm(dados.publicadoEm);
     const d = (dados.rascunho ?? dados.publicado) as Data | null;
-    const base = d && Array.isArray(d.content) ? d : modeloPagina(pagina);
+    // A página do curso antiga (um só bloco) abre já partida em blocos que se editam um a um.
+    const base = d && Array.isArray(d.content) ? (pagina === "curso" ? converterPaginaCurso(d) : d) : modeloPagina(pagina);
     ultimo.current = JSON.stringify(base);
     anterior.current = base;
     setInicial(base);

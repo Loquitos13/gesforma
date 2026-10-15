@@ -3,7 +3,7 @@ import type { Data } from "@puckeditor/core";
 import type { PaginaSite } from "../../partilhado/siteBlocos";
 import { AreaFormando } from "./blocosArea";
 import { Catalogo } from "./blocosCatalogo";
-import { DetalheCurso } from "./blocosCursoPagina";
+import { CursoBanner, CursoDados, CursoInscricao, CursoObjetivos, CursoPrograma, CursoSintese, CursoTurmas } from "./blocosCurso";
 import { ListaNoticias } from "./blocosNoticias";
 import { Botao, Coluna, Imagem, Pilares, Seccao, Texto, Titulo } from "./blocosBase";
 import { cartaoPadrao, CursosDestaque, OfertaFormativa } from "./blocosCursos";
@@ -171,14 +171,68 @@ function modeloEmpresas(): Data {
   } as Data;
 }
 
+type Legado = Record<string, unknown> & { zonaTopo?: unknown[]; zonaConteudo?: unknown[]; zonaCartao?: unknown[] };
+
+/**
+ * Página do curso em blocos soltos: banner, depois uma grelha com o conteúdo (2 colunas) e o cartão (1 coluna).
+ * Com `antigo` (o bloco único «Página do curso»), mantém os textos, as opções e os blocos que lá estavam.
+ */
+export function modeloCurso(antigo?: Legado): Data {
+  n = 0;
+  const a = antigo ?? {};
+  const sim = (k: string) => a[k] !== false;
+  const txt = (k: string, padrao: string) => (typeof a[k] === "string" ? String(a[k]) : padrao);
+  const extra = (k: "zonaTopo" | "zonaConteudo" | "zonaCartao") => (Array.isArray(a[k]) ? a[k] as never[] : []);
+  const principal = [
+    bloco("CursoSintese", CursoSintese.defaultProps, { etiqueta: txt("tituloSintese", "Síntese") }),
+    ...(sim("mostrarDados") ? [bloco("CursoDados", CursoDados.defaultProps, { aparencia: estiloVazio({ margem: lados(32, 0, 0, 0) }) })] : []),
+    ...extra("zonaConteudo"),
+    ...(sim("mostrarObjetivos") ? [bloco("CursoObjetivos", CursoObjetivos.defaultProps, { titulo: txt("tituloObjetivos", "Objetivos"), aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) })] : []),
+    ...(sim("mostrarPrograma") ? [bloco("CursoPrograma", CursoPrograma.defaultProps, { titulo: txt("tituloPrograma", "Programa"), aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) })] : []),
+    ...(sim("mostrarTurmas") ? [bloco("CursoTurmas", CursoTurmas.defaultProps, { titulo: txt("tituloTurmas", "Próximas turmas"), aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) })] : []),
+  ];
+  const cartao = sim("mostrarCartao");
+  const grelha = bloco("Seccao", Seccao.defaultProps, {
+    disposicao: cartao ? "grelha" : "pilha", colunas: 3, colunasTab: 1, colunasTel: 1, espaco: 48, alinharItens: "inicio",
+    aparencia: estiloVazio({ preenchimento: lados(64, 32), preenchimentoTel: lados(48, 20) }),
+    conteudo: [
+      bloco("Coluna", Coluna.defaultProps, { ocupar: cartao ? 2 : null, espaco: 0, conteudo: principal }),
+      ...(cartao ? [bloco("CursoInscricao", CursoInscricao.defaultProps, {
+        mostrarImagem: sim("mostrarImagemCartao"),
+        textoPrepago: txt("textoPrepago", CursoInscricao.defaultProps!.textoPrepago),
+        textoPreinscricao: txt("textoPreinscricao", CursoInscricao.defaultProps!.textoPreinscricao),
+        textoDireto: txt("textoDireto", CursoInscricao.defaultProps!.textoDireto),
+        conteudo: extra("zonaCartao"),
+      })] : []),
+    ],
+  });
+  return {
+    root: { props: { previsualizar: txt("previsualizar", "") } },
+    content: [
+      ...(sim("mostrarBanner") ? [bloco("CursoBanner", CursoBanner.defaultProps, { voltar: txt("voltar", "Voltar à formação") })] : []),
+      ...extra("zonaTopo"),
+      grelha,
+    ],
+  } as Data;
+}
+
+/** Uma página do curso guardada com o bloco único antigo passa a blocos soltos (o resto da página fica igual). */
+export function converterPaginaCurso(d: Data): Data {
+  const lista = (d.content ?? []) as { type: string; props: Legado }[];
+  const i = lista.findIndex(b => b.type === "DetalheCurso");
+  if (i < 0) return d;
+  const novo = modeloCurso(lista[i]!.props);
+  return { ...d, root: { ...(d.root ?? {}), props: { ...((d.root as { props?: object })?.props ?? {}), ...(novo.root as { props: object }).props } }, content: [...lista.slice(0, i), ...novo.content, ...lista.slice(i + 1)] } as Data;
+}
+
 /** Modelo base de cada página: o ponto de partida do editor e o que o site mostra sem versão publicada. */
 export function modeloPagina(pagina: PaginaSite): Data {
   n = 0;
   if (pagina === "inicio") return modeloInicio();
   if (pagina === "noticias") return modeloNoticias();
   if (pagina === "empresas") return modeloEmpresas();
+  if (pagina === "curso") return modeloCurso();
   const unico = pagina === "catalogo" ? bloco("Catalogo", Catalogo.defaultProps)
-    : pagina === "curso" ? bloco("DetalheCurso", DetalheCurso.defaultProps)
     : bloco("AreaFormando", AreaFormando.defaultProps);
   return { root: { props: {} }, content: [unico] } as Data;
 }

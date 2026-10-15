@@ -14,6 +14,7 @@ import { globalSearch } from "../globalSearch.js";
 import { registerWhatsappRoutes } from "../whatsapp.js";
 import { idParam, textoQuery, validar } from "../validacao.js";
 import { registarDocumentosCrm } from "./crmDocumentos.js";
+import { registarFaturacao } from "./faturacao.js";
 import { turmasDoFormador } from "../sessaoAcesso.js";
 import * as leads from "../repos/leads.js";
 import type { Deps } from "./tipos.js";
@@ -103,6 +104,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
   const { db, requireAuth, audit } = deps;
   registerWhatsappRoutes(app, db, { requireAuth });
   await registarDocumentosCrm(app, deps);
+  await registarFaturacao(app, deps);
 
   app.get("/v1/crm/leads", async (req, reply) => {
     if (!requireAuth(req, reply)) return;

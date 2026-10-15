@@ -218,3 +218,14 @@ export const apiComerciais = (regime: RegimeCrm, signal?: AbortSignal) =>
 export const apiDuplicados = (email: string, telf: string, exceptId = 0, signal?: AbortSignal) =>
   api<{ duplicados: { id: number; nome: string; apelido: string; estado: string; curso: string }[] }>(
     `/v1/crm/duplicados${qs({ email, telf, exceptId })}`, { signal, silencioso: true });
+
+/** Dados de faturação da inscrição (botão «Contabilidade» da ficha). */
+export type FaturacaoLead =
+  | { pedido: false }
+  | {
+      pedido: true; pedidoEm: string; preenchidoEm: string | null; url: string;
+      dados: { nome: string; nif: string; moradaFiscal: string; codigoPostal: string; email: string } | null;
+    };
+
+export const apiFaturacaoLead = (id: number, signal?: AbortSignal) => api<FaturacaoLead>(`/v1/crm/leads/${id}/faturacao`, { signal });
+export const apiPedirFaturacao = (id: number) => enviar.post<FaturacaoLead>(`/v1/crm/leads/${id}/faturacao/pedir`, {});

@@ -195,6 +195,24 @@ describe("ligação pessoal até à validação", () => {
     expect((await upload(ctx, token, "cc", "cc.pdf", PDF)).statusCode).toBe(410);
     expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/nova-ligacao`)).statusCode).toBe(409);
 
+    // Inscrição concluída: segue o pedido dos dados de faturação (ligação própria, dados cifrados).
+    const fat = await ctx.db.query<{ token: string; dados_enc: string | null }>("SELECT token, dados_enc FROM preinscricao_faturacao WHERE preinscricao_id = $1", [id]);
+    expect(fat.rows).toHaveLength(1);
+    const fatToken = fat.rows[0]!.token;
+    const vistaFat = (await ctx.app.inject({ method: "GET", url: `/v1/public/faturacao/${fatToken}` })).json();
+    expect(vistaFat).toMatchObject({ curso, preenchido: false });
+    const mau = await ctx.app.inject({ method: "POST", url: `/v1/public/faturacao/${fatToken}`, payload: { nome: "Empresa X", nif: "12", moradaFiscal: "Rua A, 1", codigoPostal: "4000-001", email: "fat@exemplo.pt" } });
+    expect(mau.statusCode).toBe(400);
+    const dadosFat = { nome: "Empresa X, Lda", nif: "509 999 999", moradaFiscal: "Rua das Flores, 10, Porto", codigoPostal: "4000-001", email: "Faturas@Exemplo.pt" };
+    expect((await ctx.app.inject({ method: "POST", url: `/v1/public/faturacao/${fatToken}`, payload: dadosFat })).statusCode).toBe(200);
+    const cifrado = await ctx.db.query<{ dados_enc: string }>("SELECT dados_enc FROM preinscricao_faturacao WHERE preinscricao_id = $1", [id]);
+    expect(cifrado.rows[0]!.dados_enc).not.toContain("509999999");
+    expect((await pedido(ctx, "comercial", "GET", `/v1/crm/leads/${id}/faturacao`)).statusCode).toBe(403);
+    const contab = await pedido(ctx, "secretaria", "GET", `/v1/crm/leads/${id}/faturacao`);
+    expect(contab.statusCode, contab.body).toBe(200);
+    expect(contab.json()).toMatchObject({ pedido: true, dados: { nome: "Empresa X, Lda", nif: "509999999", email: "faturas@exemplo.pt" } });
+    expect((await ctx.app.inject({ method: "GET", url: "/v1/public/faturacao/naoexistemesmonaoexiste123" })).statusCode).toBe(404);
+
     // A vaga única ficou ocupada: outra pessoa já não a pode escolher.
     const outro = (await publico(ctx, { nome: "Rui", email: `${unico("rui")}@exemplo.pt`, curso })).json().preinscricao.id as number;
     const vistaOutro = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${await tokenDe(ctx, outro)}` })).json();

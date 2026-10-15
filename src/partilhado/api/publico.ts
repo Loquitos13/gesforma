@@ -247,3 +247,11 @@ export async function apiAreaFormandoDocumentoUpload(formandoId: number, tipo: s
   if (!res.ok) throw new ApiError(res.status, typeof data.error === "string" ? data.error : "upload recusado");
   return data as { ok: boolean; nome: string; url: string };
 }
+
+export type DadosFaturacao = { nome: string; nif: string; moradaFiscal: string; codigoPostal: string; email: string };
+
+export const apiPublicFaturacao = (token: string) =>
+  api<{ curso: string; preenchido: boolean; dados: DadosFaturacao }>(`/v1/public/faturacao/${encodeURIComponent(token)}`);
+
+export const apiPublicFaturacaoGravar = (token: string, dados: DadosFaturacao) =>
+  api<{ ok: boolean }>(`/v1/public/faturacao/${encodeURIComponent(token)}`, { method: "POST", body: JSON.stringify(dados) });

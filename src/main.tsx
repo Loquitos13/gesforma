@@ -8,6 +8,7 @@ window.addEventListener("vite:preloadError", e => { if (recarregarSeVersaoNova(e
 
 // Cada página carrega só o seu código: o site público não descarrega o backoffice e vice-versa.
 const Backoffice = lazy(() => import("./gesforma/Backoffice").then(m => ({ default: m.Backoffice })));
+const PublicFaturacao = lazy(() => import("./site/PublicFaturacao").then(m => ({ default: m.PublicFaturacao })));
 const PublicInquerito = lazy(() => import("./site/PublicInquerito").then(m => ({ default: m.PublicInquerito })));
 const PublicPreinscricao = lazy(() => import("./site/PublicPreinscricao").then(m => ({ default: m.PublicPreinscricao })));
 const PublicDocumentos = lazy(() => import("./site/PublicDocumentos").then(m => ({ default: m.PublicDocumentos })));
@@ -44,6 +45,7 @@ const cronogramaMatch = path.match(/^\/cronograma\/(gold|fin)\/(\d+)$/);
 const assinarToken = path.startsWith("/assinar/") ? decodeURIComponent(path.slice("/assinar/".length).split("/")[0] ?? "") : "";
 const verificar = path === "/verificar" || path.startsWith("/verificar/");
 const verificarCodigo = path.startsWith("/verificar/") ? decodeURIComponent(path.slice("/verificar/".length).split("/")[0] ?? "") : "";
+const faturacaoToken = path.startsWith("/faturacao/") ? decodeURIComponent(path.slice("/faturacao/".length).split("/")[0] ?? "") : "";
 const inqToken = path.startsWith("/inquerito/") ? decodeURIComponent(path.slice("/inquerito/".length).split("/")[0] ?? "") : "";
 
 createRoot(document.getElementById("root")!).render(
@@ -61,6 +63,8 @@ createRoot(document.getElementById("root")!).render(
         <PublicFormandoDocumentos token={formandoDocsToken} />
       ) : docsToken ? (
         <PublicDocumentos token={docsToken} />
+      ) : faturacaoToken ? (
+        <PublicFaturacao token={faturacaoToken} />
       ) : inqToken ? (
         <PublicInquerito token={inqToken} />
       ) : areaFormando ? (

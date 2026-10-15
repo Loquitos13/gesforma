@@ -5,6 +5,7 @@ import { invalidar, useRecurso } from "../../../../partilhado/dados/useRecurso";
 import { useAuth } from "../../../../partilhado/AuthGate";
 import { toastError } from "../../../../partilhado/toastBus";
 import { FichaActividade } from "./FichaActividade";
+import { FichaContabilidade } from "./FichaContabilidade";
 import { FichaDados } from "./FichaDados";
 import { FichaDocumentos } from "./FichaDocumentos";
 import { FichaSecretaria } from "./FichaSecretaria";
@@ -116,6 +117,7 @@ export function FichaLead({ id, lista, onFechar, onMudar }: {
               : <span className="inline-flex h-9 items-center rounded-controlo bg-linha-suave px-3 text-tinta-fraca">Sem telemóvel</span>}
             {wa && <a className="inline-flex h-9 items-center rounded-controlo bg-sucesso px-3 font-semibold text-white" href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" onClick={() => void registarContacto("WhatsApp")}>WhatsApp</a>}
             {lead.email && <a className="inline-flex h-9 items-center rounded-controlo border border-linha-forte px-3 font-semibold text-tinta" href={`mailto:${lead.email}`} onClick={() => void registarContacto("Email")}>Email</a>}
+            {lead.regime === "gold" && (user.role === "admin" || user.role === "secretaria") && <FichaContabilidade leadId={lead.id} />}
           </div>
 
           {d.outrosPedidos.length > 0 && (

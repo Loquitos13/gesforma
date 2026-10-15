@@ -34,6 +34,11 @@ export const CTA_BY_TIPO: Record<string, CtaDestino> = {
     href: "{{documentos_url}}",
     funcao: "Enviar os documentos em falta (último lembrete)",
   },
+  faturacao: {
+    ambito: "contacto",
+    href: "{{faturacao_url}}",
+    funcao: "Preencher os dados de faturação",
+  },
   payment: {
     ambito: "contacto",
     href: SECRETARIA_HREF,
@@ -131,7 +136,7 @@ export function buildCtaVars(p: {
 
 export function fillCtaHref(href: string, vars: Record<string, string>) {
   return href.replace(/\{\{(\w+)\}\}/g, (_, k: string) => {
-    if (k === "preinscricao_url" || k === "secretaria_url" || k === "documentos_url" || k === "comprovativo_url") {
+    if (k === "preinscricao_url" || k === "secretaria_url" || k === "documentos_url" || k === "comprovativo_url" || k === "faturacao_url") {
       return vars[k] ?? "";
     }
     return encodeURIComponent(vars[k] ?? "");

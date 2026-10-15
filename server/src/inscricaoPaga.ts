@@ -3,6 +3,7 @@ import { config } from "./config.js";
 import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
+import { pedirFaturacaoSeFalta } from "./faturacao.js";
 import { InscricaoErro, garantirVaga, recontarTurma } from "./inscricao.js";
 import { sendMail } from "./mailer.js";
 import { newPublicId, nextOpsId } from "./ops.js";
@@ -113,6 +114,8 @@ export async function aposPagamentoConfirmado(db: Db, pagamentoId: string, actor
     const acesso = await darAcessoAoFormando(db, "gold", formandoId, String(lead.curso ?? ""), true);
     await logLeadEvent(db, leadId, actorId, "seguimento", "Inscrição concluída",
       acesso.enviado ? "Ficha de formando e acesso à área do formando enviados por email." : `Ficha criada. Acesso não enviado: ${acesso.erro}`);
+    // Inscrição concluída: segue o pedido dos dados de faturação (uma vez; a falha não desfaz a inscrição).
+    await pedirFaturacaoSeFalta(db, leadId, actorId).catch(() => undefined);
     return { formandoId, acesso };
   } catch (err) {
     const msg = err instanceof PercursoErro || err instanceof InscricaoErro ? err.message : "erro inesperado";

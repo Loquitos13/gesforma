@@ -3,9 +3,9 @@
 import { useContext, useMemo, useState, type ComponentType, type CSSProperties } from "react";
 import type { ComponentConfig, Field, Slot } from "@puckeditor/core";
 import { OfertaCtx, type Course } from "../SiteLanding";
-import { campoCor, campoCurso, campoMarcas, campoNumero, nomesCursos, simNao } from "./campos";
+import { campoCor, campoCurso, campoImagem, campoMarcas, campoNumero, nomesCursos, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
-import { corSegura, estiloBloco, estiloTexto, estiloVazio, juntar, tipoVazia, type Estilo, type Tipografia } from "./estilos";
+import { corSegura, estiloBloco, estiloTexto, estiloVazio, juntar, ligacaoSegura, tipoVazia, type Estilo, type Tipografia } from "./estilos";
 
 export const INFO_CARTAO = [
   { valor: "imagem", rotulo: "Imagem" },
@@ -91,9 +91,12 @@ const Ico = ({ n, cls = "h-4 w-4" }: { n: keyof typeof ICONES; cls?: string }) =
 );
 
 /** Um cartão de curso com o estilo escolhido no editor (landing e catálogo). */
-export function CartaoCurso({ curso, e }: { curso: Course; e: EstiloCartao }) {
+/** O que um cartão em destaque pode mudar em relação ao curso (vazio = dados do curso). */
+export type ExtraCartao = { etiqueta?: string; botao?: string; ligacao?: string };
+
+export function CartaoCurso({ curso, e, extra }: { curso: Course; e: EstiloCartao; extra?: ExtraCartao }) {
   const ver = new Set(e.mostrar ?? []);
-  const href = `/formacao/${encodeURIComponent(curso.id)}`;
+  const href = (extra?.ligacao && ligacaoSegura(extra.ligacao)) || (curso.id ? `/formacao/${encodeURIComponent(curso.id)}` : "#");
   const acento = corSegura(e.corAcento) ?? "var(--c-acento)";
   const caixa = estiloBloco(estiloVazio({ raio: e.raio, sombra: e.sombra }));
   const tt = estiloTexto({ ...e.tipoTitulo, cor: e.tipoTitulo?.cor || e.corTitulo });
@@ -122,7 +125,7 @@ export function CartaoCurso({ curso, e }: { curso: Course; e: EstiloCartao }) {
       {!sobreposto && (ver.has("formato") || ver.has("regime")) && (
         <span className="absolute left-3 top-3 flex flex-wrap gap-1.5">
           {ver.has("formato") && curso.format && etiqueta(curso.format, curso.format === "E-learning")}
-          {ver.has("regime") && etiqueta(curso.funding, curso.funding === "Gold")}
+          {ver.has("regime") && etiqueta(extra?.etiqueta || curso.funding, curso.funding === "Gold")}
         </span>
       )}
     </a>
@@ -132,11 +135,11 @@ export function CartaoCurso({ curso, e }: { curso: Course; e: EstiloCartao }) {
       {sobreposto && (ver.has("formato") || ver.has("regime")) && (
         <span className="mb-3 flex flex-wrap gap-1.5" style={e.centrar ? { justifyContent: "center" } : undefined}>
           {ver.has("formato") && curso.format && etiqueta(curso.format, true)}
-          {ver.has("regime") && etiqueta(curso.funding, curso.funding === "Gold")}
+          {ver.has("regime") && etiqueta(extra?.etiqueta || curso.funding, curso.funding === "Gold")}
         </span>
       )}
       {!ver.has("imagem") && !sobreposto && (ver.has("formato") || ver.has("regime")) && (
-        <span className="mb-3 flex flex-wrap gap-1.5">{ver.has("formato") && curso.format && etiqueta(curso.format, curso.format === "E-learning")}{ver.has("regime") && etiqueta(curso.funding, curso.funding === "Gold")}</span>
+        <span className="mb-3 flex flex-wrap gap-1.5">{ver.has("formato") && curso.format && etiqueta(curso.format, curso.format === "E-learning")}{ver.has("regime") && etiqueta(extra?.etiqueta || curso.funding, curso.funding === "Gold")}</span>
       )}
       {ver.has("area") && curso.area && <p className="text-xs font-bold uppercase tracking-[0.12em]" style={{ color: sobreposto ? acento : "var(--c-destaque)" }}>{curso.area}</p>}
       {ver.has("titulo") && (
@@ -156,7 +159,7 @@ export function CartaoCurso({ curso, e }: { curso: Course; e: EstiloCartao }) {
           {ver.has("botao") && (
             <a href={href} className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:brightness-110"
               style={{ background: "var(--c-primaria)", borderRadius: e.raio ? Math.min(e.raio, 999) : 0, ...(e.centrar ? { margin: "0 auto" } : {}) }}>
-              {e.textoBotao || "Ver curso"} <Ico n="seta" />
+              {extra?.botao || e.textoBotao || "Ver curso"} <Ico n="seta" />
             </a>
           )}
         </div>
@@ -174,7 +177,7 @@ export function CartaoCurso({ curso, e }: { curso: Course; e: EstiloCartao }) {
   );
 }
 
-function Grelha({ cursos, e, vazio }: { cursos: Course[]; e: EstiloCartao; vazio: string }) {
+function Grelha({ cursos, e, vazio, extras }: { cursos: Course[]; e: EstiloCartao; vazio: string; extras?: (ExtraCartao | undefined)[] }) {
   const lista = e.formato === "lista";
   const style = {
     gap: `${e.espaco ?? 20}px`,
@@ -183,7 +186,7 @@ function Grelha({ cursos, e, vazio }: { cursos: Course[]; e: EstiloCartao; vazio
     ["--cols-tel" as string]: String(e.colunasTel || 1),
   } as CSSProperties;
   if (!cursos.length) return <p className="py-12 text-center text-[#3E5168]">{vazio}</p>;
-  return <div className="ena-grelha" style={style}>{cursos.map(c => <CartaoCurso key={c.id} curso={c} e={e} />)}</div>;
+  return <div className="ena-grelha" style={style}>{cursos.map((c, i) => <CartaoCurso key={`${c.id}-${i}`} curso={c} e={e} extra={extras?.[i]} />)}</div>;
 }
 
 function useCursos() {
@@ -203,7 +206,29 @@ function Estado({ estado, recarregar }: { estado: string; recarregar?: () => voi
 
 // ─── Cursos em destaque ──────────────────────────────────────────────────────
 
-type DestaqueProps = { modo: "escolhidos" | "automatico"; cursos: { cursoId: string }[]; limite: number | null; cartao: EstiloCartao; aparencia: Estilo };
+/** Um cartão em destaque: um curso, com imagem e textos que podem substituir os do curso (ou um cartão livre). */
+type ItemDestaque = { cursoId: string; imagem?: string; titulo?: string; texto?: string; etiqueta?: string; botao?: string; ligacao?: string };
+type DestaqueProps = { modo: "escolhidos" | "automatico"; cursos: ItemDestaque[]; limite: number | null; cartao: EstiloCartao; aparencia: Estilo };
+
+/** Curso vazio, para cartões livres (sem curso): só mostram o que se escreve no cartão. */
+const CURSO_LIVRE: Course = {
+  id: "", title: "", area: "", format: "", duration: "", start: "", price: "", description: "", funding: "Gold",
+  enrollment: "Pré-inscrição", miniatura: null, capa: null, banner: null, precoDesde: null, vendas: 0, regime: "gold",
+  objetivos: [], organizacao: "modular", programa: [], sessoes: [], nomeOferta: "",
+};
+
+function cartaoDe(x: ItemDestaque, curso: Course | undefined): Course | null {
+  if (!curso && !x.titulo?.trim()) return null;
+  const c = curso ?? CURSO_LIVRE;
+  const imagem = x.imagem?.trim() || null;
+  return {
+    ...c,
+    title: x.titulo?.trim() || c.title,
+    description: x.texto?.trim() || c.description,
+    capa: imagem ?? c.capa,
+    miniatura: imagem ?? c.miniatura,
+  };
+}
 
 export const CursosDestaque: ComponentConfig<DestaqueProps> = {
   label: "Cursos em destaque",
@@ -211,9 +236,17 @@ export const CursosDestaque: ComponentConfig<DestaqueProps> = {
     modo: { type: "radio", label: "Que cursos", options: [{ label: "Escolhidos por mim", value: "escolhidos" }, { label: "Os mais procurados", value: "automatico" }] },
     cursos: {
       type: "array", label: "Cursos (arraste para mudar a ordem)",
-      arrayFields: { cursoId: campoCurso("Curso") },
-      defaultItemProps: { cursoId: "" },
-      getItemSummary: (item, i) => item.cursoId ? `${(i ?? 0) + 1}. ${nomesCursos.get(item.cursoId) ?? "Curso fora da oferta"}` : "Escolha o curso",
+      arrayFields: {
+        cursoId: campoCurso("Curso (vazio = cartão livre)"),
+        imagem: campoImagem("Imagem (vazio = a do curso)") as never,
+        titulo: { type: "text", label: "Título (vazio = o do curso)" },
+        texto: { type: "textarea", label: "Texto (vazio = a descrição do curso)" },
+        etiqueta: { type: "text", label: "Etiqueta (vazio = Gold / Financiada)" },
+        botao: { type: "text", label: "Texto do botão (vazio = o do cartão)" },
+        ligacao: { type: "text", label: "Ligação (vazio = página do curso)" },
+      },
+      defaultItemProps: { cursoId: "", imagem: "", titulo: "", texto: "", etiqueta: "", botao: "", ligacao: "" },
+      getItemSummary: (item, i) => `${(i ?? 0) + 1}. ${item.titulo?.trim() || (item.cursoId ? nomesCursos.get(item.cursoId) ?? "Curso fora da oferta" : "Escolha o curso")}`,
     },
     limite: campoNumero("Quantos (nos mais procurados)", ""),
     cartao: campoCartao(),
@@ -227,16 +260,17 @@ export const CursosDestaque: ComponentConfig<DestaqueProps> = {
   defaultProps: { modo: "escolhidos", cursos: [], limite: 6, cartao: cartaoPadrao(), aparencia: estiloVazio() },
   render: ({ puck, modo, cursos: escolhidos, limite, cartao, aparencia }) => {
     const { cursos, destaques, estado, recarregar } = useCursos();
-    const lista = useMemo(() => {
-      if (modo === "automatico") return destaques.slice(0, Math.max(1, limite ?? 6));
+    const { lista, extras } = useMemo(() => {
+      if (modo === "automatico") return { lista: destaques.slice(0, Math.max(1, limite ?? 6)), extras: [] as ExtraCartao[] };
       const porId = new Map(cursos.map(c => [c.id, c]));
-      return (escolhidos ?? []).map(x => porId.get(x.cursoId)).filter((c): c is Course => Boolean(c));
+      const itens = (escolhidos ?? []).map(x => ({ x, c: cartaoDe(x, porId.get(x.cursoId)) })).filter(i => i.c);
+      return { lista: itens.map(i => i.c!), extras: itens.map(i => ({ etiqueta: i.x.etiqueta, botao: i.x.botao, ligacao: i.x.ligacao })) };
     }, [modo, escolhidos, limite, cursos, destaques]);
     const c = estiloBloco(aparencia);
     return (
       <div ref={puck?.dragRef ?? undefined} className={c.className} style={c.style}>
         {estado === "pronto"
-          ? <Grelha cursos={lista} e={cartao} vazio={modo === "escolhidos" ? "Escolha os cursos em destaque no painel." : "Ainda não há cursos publicados."} />
+          ? <Grelha cursos={lista} extras={extras} e={cartao} vazio={modo === "escolhidos" ? "Escolha os cursos em destaque no painel." : "Ainda não há cursos publicados."} />
           : <Estado estado={estado} recarregar={recarregar} />}
       </div>
     );
@@ -253,6 +287,8 @@ type OfertaProps = {
   filtros: boolean; mostrarTotal: boolean;
   limite: number | null;
   corFiltroAtivo: string;
+  tipoFiltros: Tipografia; tipoTotal: Tipografia; tipoPesquisa: Tipografia;
+  larguraPesquisa: number | null; raioPesquisa: number | null; fundoPesquisa: string;
   cartao: EstiloCartao;
   aparencia: Estilo;
 };
@@ -270,15 +306,27 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
     mostrarTotal: simNao("Mostrar o número de formações"),
     limite: campoNumero("Máximo de cursos (vazio = todos)", ""),
     corFiltroAtivo: campoCor("Cor do filtro ativo"),
+    tipoFiltros: campoTipografia("Tipografia dos botões de filtro"),
+    tipoTotal: campoTipografia("Tipografia do número de formações"),
+    tipoPesquisa: campoTipografia("Tipografia da pesquisa"),
+    larguraPesquisa: campoNumero("Largura máxima da pesquisa"),
+    raioPesquisa: campoNumero("Cantos da pesquisa"),
+    fundoPesquisa: campoCor("Fundo da pesquisa"),
     cartao: campoCartao(),
     aparencia: campoAparencia(),
   },
   defaultProps: {
     zonaMeio: [], zonaCursos: [],
     regime: "todos", ordem: "procura", pesquisa: true, textoPesquisa: "Pesquisar formação", filtros: true, mostrarTotal: true,
-    limite: null, corFiltroAtivo: "var(--c-acento)", cartao: cartaoPadrao(), aparencia: estiloVazio(),
+    limite: null, corFiltroAtivo: "var(--c-acento)",
+    tipoFiltros: tipoVazia({ tamanho: 14, peso: "700" }), tipoTotal: tipoVazia({ tamanho: 14, peso: "600" }), tipoPesquisa: tipoVazia({ tamanho: 14 }),
+    larguraPesquisa: 384, raioPesquisa: 999, fundoPesquisa: "#ffffff",
+    cartao: cartaoPadrao(), aparencia: estiloVazio(),
   },
-  render: ({ puck, zonaMeio, zonaCursos, regime, ordem, pesquisa, textoPesquisa, filtros, mostrarTotal, limite, corFiltroAtivo, cartao, aparencia }) => {
+  render: ({ puck, zonaMeio, zonaCursos, regime, ordem, pesquisa, textoPesquisa, filtros, mostrarTotal, limite, corFiltroAtivo, tipoFiltros, tipoTotal, tipoPesquisa, larguraPesquisa, raioPesquisa, fundoPesquisa, cartao, aparencia }) => {
+    const tf = estiloTexto(tipoFiltros);
+    const tt = estiloTexto(tipoTotal);
+    const tp = estiloTexto(tipoPesquisa);
     const ZonaMeio = zonaMeio as unknown as ComponentType<{ className?: string; minEmptyHeight?: number }> | undefined;
     const ZonaCursos = zonaCursos as unknown as ComponentType<{ className?: string; minEmptyHeight?: number }> | undefined;
     const { cursos, estado, recarregar } = useCursos();
@@ -302,18 +350,19 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
               <div className="flex flex-wrap items-center gap-2">
                 {modos.map(m => (
                   <button key={m} type="button" aria-pressed={filtro === m} onClick={() => setFiltro(m)}
-                    className="px-5 py-2.5 text-sm font-bold text-[#14263D] ring-1 ring-[#14263D]/15 transition-colors"
-                    style={filtro === m ? { background: ativo } : { background: "#fff" }}>{m}</button>
+                    className={juntar("px-5 py-2.5 text-sm font-bold text-[#14263D] ring-1 ring-[#14263D]/15 transition-colors", tf.className)}
+                    style={{ ...tf.style, background: filtro === m ? ativo : "#fff" }}>{m}</button>
                 ))}
               </div>
             )}
             {ZonaMeio && <ZonaMeio className="flex min-w-0 flex-1 flex-wrap items-center gap-3 empty:hidden" minEmptyHeight={40} />}
-            {mostrarTotal && estado === "pronto" && <span className="text-sm font-semibold text-[#3E5168] lg:ml-auto">{lista.length} formações disponíveis</span>}
+            {mostrarTotal && estado === "pronto" && <span className={juntar("text-sm font-semibold text-[#3E5168] lg:ml-auto", tt.className)} style={tt.style}>{lista.length} formações disponíveis</span>}
             {pesquisa && (
-              <label className="flex w-full items-center gap-3 rounded-full border border-[#14263D]/20 bg-white px-4 py-3 text-[#14263D] lg:max-w-sm">
+              <label className="flex w-full items-center gap-3 border border-[#14263D]/20 px-4 py-3 text-[#14263D]"
+                style={{ maxWidth: larguraPesquisa === undefined ? 384 : larguraPesquisa ? `${larguraPesquisa}px` : undefined, borderRadius: `${raioPesquisa ?? 999}px`, background: corSegura(fundoPesquisa) ?? "#fff" }}>
                 <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
                 <span className="sr-only">Pesquisar formação</span>
-                <input value={q} onChange={ev => setQ(ev.target.value)} placeholder={textoPesquisa} className="w-full bg-transparent text-sm outline-none placeholder:text-[#4A6078]" />
+                <input value={q} onChange={ev => setQ(ev.target.value)} placeholder={textoPesquisa} className={juntar("w-full bg-transparent text-sm outline-none placeholder:text-[#4A6078] placeholder:opacity-80", tp.className)} style={tp.style} />
               </label>
             )}
           </div>

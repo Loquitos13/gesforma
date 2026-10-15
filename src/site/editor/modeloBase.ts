@@ -3,6 +3,7 @@ import type { Data } from "@puckeditor/core";
 import type { PaginaSite } from "../../partilhado/siteBlocos";
 import { AreaFormando } from "./blocosArea";
 import { Catalogo } from "./blocosCatalogo";
+import { DetalheCurso } from "./blocosCursoPagina";
 import { ListaNoticias } from "./blocosNoticias";
 import { Botao, Coluna, Imagem, Pilares, Seccao, Texto, Titulo } from "./blocosBase";
 import { cartaoPadrao, CursosDestaque, OfertaFormativa } from "./blocosCursos";
@@ -176,6 +177,8 @@ export function modeloPagina(pagina: PaginaSite): Data {
   if (pagina === "inicio") return modeloInicio();
   if (pagina === "noticias") return modeloNoticias();
   if (pagina === "empresas") return modeloEmpresas();
-  const unico = pagina === "catalogo" ? bloco("Catalogo", Catalogo.defaultProps) : bloco("AreaFormando", AreaFormando.defaultProps);
+  const unico = pagina === "catalogo" ? bloco("Catalogo", Catalogo.defaultProps)
+    : pagina === "curso" ? bloco("DetalheCurso", DetalheCurso.defaultProps)
+    : bloco("AreaFormando", AreaFormando.defaultProps);
   return { root: { props: {} }, content: [unico] } as Data;
 }

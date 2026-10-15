@@ -15,7 +15,6 @@ const PublicFormandoDocumentos = lazy(() => import("./site/PublicFormandoDocumen
 const PublicCronograma = lazy(() => import("./site/PublicCronograma").then(m => ({ default: m.PublicCronograma })));
 const AssinarContrato = lazy(() => import("./site/AssinarContrato").then(m => ({ default: m.AssinarContrato })));
 const VerificarAssinatura = lazy(() => import("./site/VerificarAssinatura").then(m => ({ default: m.VerificarAssinatura })));
-const SiteCurso = lazy(() => import("./site/SiteCurso").then(m => ({ default: m.SiteCurso })));
 const Noticias = lazy(() => import("./site/Noticias").then(m => ({ default: m.Noticias })));
 const SiteLanding = lazy(() => import("./site/SiteLandingRodape").then(m => ({ default: m.SiteLanding })));
 const PaginaDoSite = lazy(() => import("./site/SiteLandingRodape").then(m => ({ default: m.PaginaDoSite })));
@@ -75,7 +74,7 @@ createRoot(document.getElementById("root")!).render(
       ) : entrar ? (
         <Backoffice />
       ) : slugCurso ? (
-        <SiteCurso slug={slugCurso} />
+        <PaginaDoSite pagina="curso" slug={slugCurso} />
       ) : catalogo ? (
         <PaginaDoSite pagina="catalogo" />
       ) : (

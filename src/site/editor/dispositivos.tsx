@@ -109,6 +109,21 @@ export function efetivas(props: Obj, d: Disp, slots: string[]): Obj {
   return ef;
 }
 
+/**
+ * Props para desenhar no editor: são já os valores do ecrã em edição (o painel escreve-os aí);
+ * só se acertam os campos de canalização para o CSS.
+ */
+export function paraDesenhoEdicao(props: Obj, d: Disp): Obj {
+  const v = props.__disp as Variantes | undefined;
+  const ef: Obj = { ...props };
+  // Só se copiam (e acertam) os valores do bloco: `puck`, id e variantes ficam como estão (o `puck` tem ciclos).
+  const valores: Obj = {};
+  // Os textos editáveis na página chegam como elementos React: não são dados, ficam de fora.
+  for (const [k, val] of Object.entries(ef)) if (!RESERVADOS.has(k) && eObj(val) && !("$$typeof" in val)) valores[k] = clonar(val);
+  acertarLegado(valores, d, v?.tel);
+  return { ...ef, ...valores };
+}
+
 /** Regista uma alteração feita no ecrã `d` (a partir das props já alteradas). */
 export function registarAlteracao(v: Variantes, props: Obj, chaves: string[], d: Disp): Variantes {
   const novo = clonar(v);
@@ -240,4 +255,43 @@ export function paraDispositivo<D extends Dados>(dados: D, d: Disp, slotsDe: (ti
     root: { ...(dados.root ?? {}), props: efetivas({ ...raiz, __disp: vRaiz }, d, []) },
     content: (dados.content ?? []).map(bloco),
   };
+}
+
+// ─── Registo das alterações (editor) ─────────────────────────────────────────
+
+/**
+ * Compara os dados novos do editor com os anteriores e regista, nas variantes de cada bloco, o que mudou
+ * no ecrã em edição. Blocos novos ganham variantes; "voltar a herdar" (variantes mudadas no campo Ecrã)
+ * repõe as props com os valores do ecrã. Devolve null se nada precisa de ser reescrito.
+ */
+export function registarNoEcra<D extends Dados>(novo: D, anterior: D | null, d: Disp, slotsDe: (tipo: string) => string[]): D | null {
+  const antes = new Map<string, Obj>();
+  const indexar = (itens: Item[] | undefined) => {
+    for (const it of itens ?? []) {
+      if (typeof it.props?.id === "string") antes.set(it.props.id, it.props);
+      for (const s of slotsDe(it.type)) if (Array.isArray(it.props?.[s])) indexar(it.props[s] as Item[]);
+    }
+  };
+  indexar(anterior?.content);
+  let mudou = false;
+  const tratar = (props: Obj, slots: string[], ant: Obj | undefined): Obj => {
+    const v = props.__disp as Variantes | undefined;
+    if (!v) { mudou = true; return { ...props, __disp: criarVariantes(props, slots) }; }
+    if (!ant) return props;
+    if (!igual(v, ant.__disp)) { mudou = true; return efetivas(props, d, slots); }
+    const chaves = Object.keys(props).filter(k => !RESERVADOS.has(k) && !slots.includes(k) && !igual(props[k], ant[k]));
+    if (!chaves.length) return props;
+    mudou = true;
+    return { ...props, __disp: registarAlteracao(v, props, chaves, d) };
+  };
+  const bloco = (it: Item): Item => {
+    const slots = slotsDe(it.type);
+    let props = { ...it.props };
+    for (const s of slots) if (Array.isArray(props[s])) props[s] = (props[s] as Item[]).map(bloco);
+    props = tratar(props, slots, typeof props.id === "string" ? antes.get(props.id) : undefined);
+    return { ...it, props };
+  };
+  const conteudo = (novo.content ?? []).map(bloco);
+  const raiz = tratar({ ...(novo.root?.props ?? {}) }, [], anterior ? (anterior.root?.props ?? {}) : undefined);
+  return mudou ? { ...novo, root: { ...(novo.root ?? {}), props: raiz }, content: conteudo } : null;
 }

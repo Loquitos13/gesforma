@@ -4,14 +4,14 @@ import type { ComponentConfig, Config, Field } from "@puckeditor/core";
 import type { PaginaSite } from "../../partilhado/siteBlocos";
 import { AreaFormando } from "./blocosArea";
 import { Catalogo } from "./blocosCatalogo";
+import { DetalheCurso } from "./blocosCursoPagina";
 import { ListaNoticias } from "./blocosNoticias";
 import { Botao, Coluna, Espaco, Imagem, Logotipos, Pilares, Seccao, Separador, Texto, Titulo } from "./blocosBase";
 import { CursosDestaque, OfertaFormativa } from "./blocosCursos";
 import { Cabecalho, CabecalhoSite, Rodape, RodapeSite, type CabecalhoProps, type RodapeProps } from "./blocosMoldura";
 import { campoCor, campoFonte, campoNumero } from "./campos";
 import {
-  AvisoDispositivoCtx, CampoDispositivo, criarVariantes, dispositivoEmEdicao, efetivas, MedirDispositivo, registarAlteracao,
-  useDispositivo, type Variantes,
+  AvisoDispositivoCtx, CampoDispositivo, efetivas, MedirDispositivo, paraDesenhoEdicao, useDispositivo, type Variantes,
 } from "./dispositivos";
 import { corSegura, pilhaFonte } from "./estilos";
 
@@ -78,12 +78,15 @@ export function NoEcra<P extends object>({ props, children }: { props: P; childr
 
 function Responsivo({ Orig, props, slots }: { Orig: ElementType; props: Record<string, unknown>; slots: string[] }) {
   const d = useDispositivo();
-  return <Orig {...efetivas(props, d, slots)} />;
+  // No editor, as props já são as do ecrã em edição (o painel escreve-as); no site, vêm das variantes.
+  const editar = (props.puck as { isEditing?: boolean } | undefined)?.isEditing;
+  return <Orig {...(editar ? paraDesenhoEdicao(props, d) : efetivas(props, d, slots))} />;
 }
 
 /**
- * Junta a um bloco (ou à raiz) a edição por ecrã: o campo "Ecrã" no topo do painel, o registo das
- * alterações no ecrã em edição (resolveData) e o desenho com os valores do ecrã onde está.
+ * Junta a um bloco (ou à raiz) a edição por ecrã: o campo "Ecrã" no topo do painel e o desenho com os
+ * valores do ecrã onde está. O registo das alterações faz-se no editor (registarNoEcra), não num
+ * resolveData: esse passo assíncrono deixava as caixas de selecção a mostrar o valor antigo.
  */
 function responsivo<C extends Partial<ComponentConfig<any>>>(cfg: C): C {
   const campos = (cfg.fields ?? {}) as Record<string, Field & { label?: string }>;
@@ -97,18 +100,6 @@ function responsivo<C extends Partial<ComponentConfig<any>>>(cfg: C): C {
     // para o editor ter a mesma estrutura do site (alinhamentos e margens iguais).
     inline: true,
     fields: { __disp: campoEcra, ...campos },
-    resolveData: async (data: { props: Record<string, unknown> }, params: { changed: Record<string, boolean>; trigger: string }) => {
-      const props = data.props;
-      const v = props.__disp as Variantes | undefined;
-      if (!v) return { ...data, props: { ...props, __disp: criarVariantes(props, slots) } };
-      if (params.trigger !== "replace") return data;
-      const d = dispositivoEmEdicao();
-      const mudou = Object.keys(params.changed).filter(k => params.changed[k] && k !== "id" && !slots.includes(k));
-      // "Voltar a herdar" no campo Ecrã: as props passam aos valores do ecrã.
-      if (mudou.includes("__disp")) return { ...data, props: efetivas(props, d, slots) };
-      if (!mudou.length) return data;
-      return { ...data, props: { ...props, __disp: registarAlteracao(v, props, mudou, d) } };
-    },
     render: (props: Record<string, unknown>) => <Responsivo Orig={Orig} props={props} slots={slots} />,
   } as C;
 }
@@ -143,13 +134,13 @@ function RaizOutra({ children, editar }: { children: ReactNode; editar: boolean 
 
 const componentes = Object.fromEntries(Object.entries({
   Seccao, Coluna, Espaco, Separador, Titulo, Texto, Botao, Imagem, Pilares, Logotipos,
-  CursosDestaque, OfertaFormativa, Catalogo, ListaNoticias, AreaFormando, Cabecalho, Rodape,
+  CursosDestaque, OfertaFormativa, Catalogo, DetalheCurso, ListaNoticias, AreaFormando, Cabecalho, Rodape,
 }).map(([k, c]) => [k, responsivo(c as ComponentConfig<any>)])) as Config["components"];
 
 const categoriasBase = {
   estrutura: { title: "Estrutura", components: ["Seccao", "Coluna", "Espaco", "Separador"] },
   conteudo: { title: "Conteúdo", components: ["Titulo", "Texto", "Botao", "Imagem", "Pilares", "Logotipos"] },
-  cursos: { title: "Cursos", components: ["CursosDestaque", "OfertaFormativa", "Catalogo"] },
+  cursos: { title: "Cursos", components: ["CursosDestaque", "OfertaFormativa", "Catalogo", "DetalheCurso"] },
   especiais: { title: "Notícias e área do formando", components: ["ListaNoticias", "AreaFormando"] },
 };
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { criarVariantes, efetivas, paraDispositivo, registarAlteracao, valoresDe } from "../../src/site/editor/dispositivos.js";
+import { criarVariantes, efetivas, paraDispositivo, registarAlteracao, registarNoEcra, valoresDe } from "../../src/site/editor/dispositivos.js";
 
 const base = {
   id: "Titulo-1",
@@ -65,5 +65,27 @@ describe("edição do site por ecrã", () => {
     expect(seccao.conteudo[0]!.props.tipografia.tamanho).toBe(30);
     const pc = paraDispositivo(tel, "pc", slots);
     expect((pc.content[0]!.props as typeof seccao).conteudo[0]!.props.tipografia.tamanho).toBe(44);
+  });
+
+  it("o editor regista o que mudou no ecrã em edição, cria variantes nos blocos novos e repõe ao voltar a herdar", () => {
+    const slots = (t: string) => (t === "Seccao" ? ["conteudo"] : []);
+    const titulo = { type: "Titulo", props: { id: "t1", texto: "A", tipografia: { tamanho: 40 } } };
+    const inicial = paraDispositivo({ root: { props: {} }, content: [{ type: "Seccao", props: { id: "s1", conteudo: [titulo] } }] }, "tel", slots);
+    // No telemóvel, o título passa a 24 e junta-se um bloco novo à secção.
+    const editado = JSON.parse(JSON.stringify(inicial));
+    editado.content[0].props.conteudo[0].props.tipografia.tamanho = 24;
+    editado.content[0].props.conteudo.push({ type: "Texto", props: { id: "x1", texto: "novo" } });
+    const tratado = registarNoEcra(editado, inicial, "tel", slots)!;
+    const [t, x] = tratado.content[0]!.props.conteudo as { props: { __disp: { base: Record<string, unknown>; tel?: unknown } } }[];
+    expect(t!.props.__disp.tel).toEqual({ tipografia: { tamanho: 24 } });
+    expect(t!.props.__disp.base.tipografia).toEqual({ tamanho: 40 });
+    expect(x!.props.__disp.base.texto).toBe("novo");
+    // Sem alterações, não há nada a reescrever.
+    expect(registarNoEcra(tratado, tratado, "tel", slots)).toBeNull();
+    // "Voltar a herdar": tira-se a variante do telemóvel e as props voltam a 40.
+    const reposto = JSON.parse(JSON.stringify(tratado));
+    delete reposto.content[0].props.conteudo[0].props.__disp.tel;
+    const final = registarNoEcra(reposto, tratado, "tel", slots)!;
+    expect((final.content[0]!.props.conteudo as { props: { tipografia: { tamanho: number } } }[])[0]!.props.tipografia.tamanho).toBe(40);
   });
 });

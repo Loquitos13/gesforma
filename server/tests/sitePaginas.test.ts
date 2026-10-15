@@ -30,7 +30,7 @@ describe("páginas do site (editor visual)", () => {
 
   it("todas as páginas do site se publicam em separado", async () => {
     const ctx = await arrancar();
-    for (const p of ["catalogo", "noticias", "empresas", "area"]) {
+    for (const p of ["catalogo", "curso", "noticias", "empresas", "area"]) {
       const r = await pedido(ctx, "admin", "PUT", `/v1/site/paginas/${p}/publicar`, { dados: pagina(`Página ${p}`) });
       expect(r.statusCode, `${p}: ${r.body}`).toBe(200);
     }

@@ -7,6 +7,7 @@ import { Course, OfertaCtx, SiteTextoCtx, useSiteTexto, useSiteTextoState, useOf
 import type { PaginaSite as PaginaSiteNome } from "../partilhado/siteBlocos";
 import { CabecalhoSite, estiloDaMoldura, molduraDaPagina, NoEcra, PaginaSite, RodapeSite, usePagina } from "./PaginaSite";
 import { useDispositivo } from "./editor/dispositivos";
+import { CursoDaRotaCtx } from "./editor/blocosCursoPagina";
 
 function WhatsAppAssistant() {
   const t = useSiteTexto();
@@ -216,7 +217,7 @@ function WhatsAppAssistant() {
  * Moldura do site público. Com `pagina`, desenha essa página do editor visual (a inicial traz o cabeçalho
  * e o rodapé; as outras recebem-nos dela). Sem `pagina` (página de curso, artigo), envolve `children`.
  */
-export function SiteFrame({ children, pagina }: { children?: ReactNode; pagina?: PaginaSiteNome }) {
+export function SiteFrame({ children, pagina, slug = null }: { children?: ReactNode; pagina?: PaginaSiteNome; slug?: string | null }) {
   const oferta = useOfertaState();
   const texto = useSiteTextoState();
   const inicio = usePagina("inicio");
@@ -238,7 +239,11 @@ export function SiteFrame({ children, pagina }: { children?: ReactNode; pagina?:
         <div className="site-ena min-h-screen" style={estiloDaMoldura(moldura, ecra)}>
           <a href="#conteudo" className="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:left-4 focus-visible:top-4 focus-visible:z-[80] focus-visible:bg-[#FFA900] focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-bold focus-visible:text-[#14263D]">Saltar para o conteúdo</a>
           {pagina ? (
-            <div id="conteudo">{dados && inicio ? <PaginaSite pagina={pagina} dados={dados} moldura={moldura} /> : <div className="min-h-screen" aria-busy="true" />}</div>
+            <div id="conteudo">
+              <CursoDaRotaCtx.Provider value={slug}>
+                {dados && inicio ? <PaginaSite pagina={pagina} dados={dados} moldura={moldura} /> : <div className="min-h-screen" aria-busy="true" />}
+              </CursoDaRotaCtx.Provider>
+            </div>
           ) : (
             <>
               {moldura?.cabecalho ? <NoEcra props={moldura.cabecalho}>{p => <CabecalhoSite {...p} />}</NoEcra> : !inicio && <div className="h-20" aria-hidden="true" />}
@@ -259,6 +264,6 @@ export function SiteLanding() {
 }
 
 /** Páginas do site feitas só de blocos (catálogo, notícias, empresas, área do formando). */
-export function PaginaDoSite({ pagina }: { pagina: PaginaSiteNome }) {
-  return <SiteFrame pagina={pagina} />;
+export function PaginaDoSite({ pagina, slug = null }: { pagina: PaginaSiteNome; slug?: string | null }) {
+  return <SiteFrame pagina={pagina} slug={slug} />;
 }

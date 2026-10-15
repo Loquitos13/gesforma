@@ -13,7 +13,7 @@ import { OfertaCtx, useOfertaState } from "../../../site/SiteLanding";
 import { nomesCursos } from "../../../site/editor/campos";
 import { configPara, MolduraCtx, type Moldura } from "../../../site/editor/config";
 import {
-  AvisoDispositivoCtx, definirDispositivoEmEdicao, NOMES_DISP, paraDispositivo, type Disp,
+  AvisoDispositivoCtx, definirDispositivoEmEdicao, dispositivoEmEdicao, NOMES_DISP, paraDispositivo, registarNoEcra, type Disp,
 } from "../../../site/editor/dispositivos";
 import { modeloPagina } from "../../../site/editor/modeloBase";
 
@@ -46,6 +46,7 @@ const PT: Dictionary = {
 export const PAGINAS: Record<PaginaSite, { titulo: string; endereco: string; nota: string }> = {
   inicio: { titulo: "Página inicial", endereco: "/", nota: "Também guarda o cabeçalho, o rodapé e o tema de todo o site." },
   catalogo: { titulo: "Catálogo", endereco: "/formacao", nota: "Lista de cursos com pesquisa e filtros." },
+  curso: { titulo: "Página de curso", endereco: "/formacao", nota: "A página de cada curso (a mesma para todos)." },
   noticias: { titulo: "Notícias", endereco: "/noticias", nota: "Os artigos vêm de Gestão › Blog." },
   empresas: { titulo: "Empresas", endereco: "/empresas", nota: "Formação à medida para organizações." },
   area: { titulo: "Área do formando", endereco: "/area-formando", nota: "Painel do formando (cursos, agenda, certificados) e entrada." },
@@ -86,14 +87,20 @@ const slotsDe = (config: Config) => (tipo: string) =>
  * Quando a pré-visualização muda de ecrã, o painel passa a mostrar (e a editar) os valores desse ecrã.
  * Fica dentro da barra do Puck para ter os dados actuais e o dispatch.
  */
-function SincronizarEcra({ ecra, dados, dispatch, config }: { ecra: Disp | null; dados: Data; dispatch: (a: PuckAction) => void; config: Config }) {
+function SincronizarEcra({ ecra, dados, escrever, config }: { ecra: Disp | null; dados: Data; escrever: (d: Data) => void; config: Config }) {
   const ultimo = useRef<Disp | null>(null);
   useEffect(() => {
     if (!ecra || ecra === ultimo.current) return;
     ultimo.current = ecra;
     definirDispositivoEmEdicao(ecra);
-    dispatch({ type: "setData", data: paraDispositivo(dados, ecra, slotsDe(config)) });
+    escrever(paraDispositivo(dados, ecra, slotsDe(config)));
   }, [ecra]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
+/** Guarda o dispatch do Puck (só existe dentro da barra) para o editor lhe devolver dados tratados. */
+function GuardarDispatch({ dispatch, destino }: { dispatch: (a: PuckAction) => void; destino: { current: ((a: PuckAction) => void) | null } }) {
+  destino.current = dispatch;
   return null;
 }
 
@@ -133,6 +140,9 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
   const temporizador = useRef<number | undefined>(undefined);
   /** Último conteúdo visto: o Puck chama onChange também em mudanças de interface (painel, seleção). */
   const ultimo = useRef("");
+  /** Dados já com as variantes por ecrã registadas, e o dispatch do Puck para lhe devolver as variantes. */
+  const anterior = useRef<Data | null>(null);
+  const dispatchRef = useRef<((a: PuckAction) => void) | null>(null);
   // O Puck reinicia-se quando a lista de plugins muda: tem de ser a mesma em todos os renders.
   const irParaRef = useRef<(p: PaginaSite) => void>(() => undefined);
   const plugins = useMemo(() => [pluginPaginas(pagina, p => irParaRef.current(p))], [pagina]);
@@ -145,6 +155,7 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
     const d = (dados.rascunho ?? dados.publicado) as Data | null;
     const base = d && Array.isArray(d.content) ? d : modeloPagina(pagina);
     ultimo.current = JSON.stringify(base);
+    anterior.current = base;
     setInicial(base);
   }, [dados, inicial, pagina]);
 
@@ -162,7 +173,18 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
     }
   }
 
-  function aoMudar(d: Data) {
+  /** Escreve no Puck dados já tratados (variantes por ecrã) sem os voltar a tratar. */
+  function escrever(d: Data) {
+    anterior.current = d;
+    dispatchRef.current?.({ type: "setData", data: d });
+  }
+
+  function aoMudar(recebido: Data) {
+    // Regista no ecrã em edição o que mudou; se as variantes mudaram, devolve-as ao Puck.
+    const tratado = registarNoEcra(recebido, anterior.current, dispositivoEmEdicao(), slotsDe(config));
+    const d = tratado ?? recebido;
+    anterior.current = d;
+    if (tratado) dispatchRef.current?.({ type: "setData", data: tratado });
     const j = JSON.stringify(d);
     if (j === ultimo.current) return;
     ultimo.current = j;
@@ -199,6 +221,8 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
   irParaRef.current = p => void irPara(p);
   const publicarRef = useRef(publicar);
   publicarRef.current = publicar;
+  const escreverRef = useRef(escrever);
+  escreverRef.current = escrever;
   const aoMudarRef = useRef(aoMudar);
   aoMudarRef.current = aoMudar;
   const onChange = useCallback((d: Data) => aoMudarRef.current(d), []);
@@ -211,7 +235,8 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
   // Estável entre renders (o Puck reage a overrides novos): só muda quando o que mostra muda.
   const acoes = useCallback(({ state, dispatch }: { state: { data: unknown }; dispatch: (a: PuckAction) => void }) => (
     <div className="flex items-center gap-2 text-[12px]">
-      <SincronizarEcra ecra={ecra} dados={state.data as Data} dispatch={dispatch} config={config} />
+      <GuardarDispatch dispatch={dispatch} destino={dispatchRef} />
+      <SincronizarEcra ecra={ecra} dados={state.data as Data} escrever={d => escreverRef.current(d)} config={config} />
       {ecra && <span className={`rounded px-2 py-1 font-semibold ${ecra === "pc" ? "bg-[#eef1f5] text-[#3d4a5a]" : "bg-[#fff1d1] text-[#7a4b00]"}`} title="O ecrã da pré-visualização decide o que se edita">A editar: {NOMES_DISP[ecra]}</span>}
       <span className={estado === "erro" ? "text-[#a60000]" : "text-[#6b7685]"} aria-live="polite">{textoEstado}</span>
       <span className="hidden text-[#6b7685] xl:inline">{publicadoEm ? `· publicada ${new Date(publicadoEm).toLocaleString("pt-PT")}` : "· ainda não publicada"}</span>

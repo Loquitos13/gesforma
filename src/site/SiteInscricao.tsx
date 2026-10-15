@@ -65,6 +65,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
   const [horario, setHorario] = useState("");
   const [dataInicio, setDataInicio] = useState("");
   const [turmaId, setTurmaId] = useState(0);
+  const [trocarLocal, setTrocarLocal] = useState(false);
   const [metodo, setMetodo] = useState("");
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState("");
@@ -76,6 +77,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
     setErro("");
     setAviso("");
     setLocal(localInicial);
+    setTrocarLocal(false);
     setHorario("");
     setDataInicio("");
     setTurmaId(0);
@@ -128,7 +130,14 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
   }, [ofertaEstado, locais, local]);
   const turma = doCurso.find(t => t.turmaId === turmaId) ?? null;
   const precoNumero = turma?.preco ?? curso?.precoDesde ?? null;
-  const precoLabel = precoNumero != null ? `${precoNumero.toLocaleString("pt-PT")} €` : curso?.price || "Sob consulta";
+  // Sem turma escolhida, o preço do cabeçalho é o das datas do local (o mais baixo, se variam).
+  const precosLocal = datas.map(t => t.preco).filter((n): n is number => n != null);
+  const minLocal = precosLocal.length ? Math.min(...precosLocal) : null;
+  const precoLabel = turma?.preco != null
+    ? `${turma.preco.toLocaleString("pt-PT")} €`
+    : minLocal != null
+      ? `${precosLocal.every(p => p === minLocal) ? "" : "A partir de "}${minLocal.toLocaleString("pt-PT")} €`
+      : precoNumero != null ? `${precoNumero.toLocaleString("pt-PT")} €` : curso?.price || "Sob consulta";
 
   function escolherLocal(valor: string) {
     setLocal(valor);
@@ -241,7 +250,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
       : "";
   const pagamentoBloqueado = passo === "pagamento" && Boolean(falhaPagamento());
   const passos: [Passo, string][] = [
-    ...(doCurso.length > 0 || ofertaEstado === "a-carregar" ? [["turma", "Data de início"] as [Passo, string]] : []),
+    ...(doCurso.length > 0 || ofertaEstado === "a-carregar" ? [["turma", "Data e horário"] as [Passo, string]] : []),
     ["dados", "Os seus dados"],
     ...(prepago ? [["pagamento", "Pagamento"] as [Passo, string]] : []),
   ];
@@ -290,19 +299,28 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                 <p className="text-sm text-[#A60000]">Não foi possível carregar as turmas. Feche e volte a abrir o pedido.</p>
               ) : (
                 <>
+                  {/* O local escolhe-se na página do curso; aqui só aparece em resumo (com «Alterar»). */}
+                  {local && !trocarLocal ? (
+                    <p className="flex flex-wrap items-center gap-3 text-sm text-[#1C3350]">
+                      <span className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Local</span>
+                      <strong>{local}</strong>
+                      {locais.length > 1 && <button type="button" onClick={() => setTrocarLocal(true)} className="font-bold text-[#A60000] underline">Alterar</button>}
+                    </p>
+                  ) : (
+                    <fieldset>
+                      <legend className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Local</legend>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {locais.map(l => (
+                          <button key={l} type="button" onClick={() => { escolherLocal(l); setTrocarLocal(false); }} aria-pressed={local === l}
+                            className={`border px-4 py-2 text-sm font-bold ${local === l ? "border-[#1C3350] bg-[#1C3350] text-white" : "border-[#1C3350]/20 text-[#1C3350] hover:border-[#1C3350]"}`}>
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                    </fieldset>
+                  )}
                   <fieldset>
-                    <legend className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Local</legend>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {locais.map(l => (
-                        <button key={l} type="button" onClick={() => escolherLocal(l)} aria-pressed={local === l}
-                          className={`border px-4 py-2 text-sm font-bold ${local === l ? "border-[#1C3350] bg-[#1C3350] text-white" : "border-[#1C3350]/20 text-[#1C3350] hover:border-[#1C3350]"}`}>
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </fieldset>
-                  <fieldset>
-                    <legend className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Data de início</legend>
+                    <legend className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Data de início e horário</legend>
                     {!local ? (
                       <p className="mt-3 text-sm text-[#1C3350]/60">Escolha o local para ver as datas de início.</p>
                     ) : (

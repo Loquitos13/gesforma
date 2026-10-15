@@ -14,17 +14,27 @@ import { corSegura, estiloTexto, estiloVazio, juntar, tipoVazia, type Tipografia
 
 // ─── Escolha do local ────────────────────────────────────────────────────────
 
-type LocalProps = Base & { titulo: string; tTitulo: Tipografia; mostrarPreco: boolean };
+type LocalProps = Base & {
+  titulo: string; tTitulo: Tipografia; mostrarPreco: boolean; mostrarMorada: boolean;
+  colunas: number | null; colunasTab: number | null; colunasTel: number | null;
+};
 
 export const CursoEscolhaLocal: ComponentConfig<LocalProps> = {
   label: "Curso · Escolha do local",
   fields: {
     titulo: { type: "text", label: "Título (vazio = esconder)" },
     tTitulo: campoTipografia("Tipografia do título"),
+    mostrarMorada: simNao("Morada de cada local (Edição de cursos › Locais)"),
     mostrarPreco: simNao("Preço em cada local"),
+    colunas: campoNumero("Colunas (computador)", ""),
+    colunasTab: campoNumero("Colunas (tablet)", ""),
+    colunasTel: campoNumero("Colunas (telemóvel)", ""),
     aparencia: campoAparencia(),
   },
-  defaultProps: { titulo: "Onde quer fazer o curso?", tTitulo: tipoVazia(), mostrarPreco: true, aparencia: estiloVazio() },
+  defaultProps: {
+    titulo: "Onde quer fazer o curso?", tTitulo: tipoVazia(), mostrarMorada: true, mostrarPreco: true,
+    colunas: 3, colunasTab: 2, colunasTel: 1, aparencia: estiloVazio(),
+  },
   render: p => <EscolhaLocal {...p} />,
 };
 
@@ -37,15 +47,26 @@ function EscolhaLocal(p: LocalProps) {
         if (!locais.length) return null;
         return (
           <fieldset>
-            {p.titulo && <legend className="mb-3"><Titulo texto={p.titulo} t={p.tTitulo} className="font-serif text-2xl" /></legend>}
-            <div className="flex flex-wrap gap-2">
-              {locais.map(l => (
-                <button key={l} type="button" aria-pressed={local === l} onClick={() => setLocal(local === l && locais.length > 1 ? "" : l)}
-                  className={`border px-4 py-2.5 text-left text-sm font-bold ${local === l ? "border-[var(--c-primaria)] bg-[var(--c-primaria)] text-white" : "border-black/15 bg-white hover:border-[var(--c-primaria)]"}`}>
-                  {l}
-                  {p.mostrarPreco && <span className="block text-xs font-normal opacity-70">{precoNoLocal(curso, l)}</span>}
-                </button>
-              ))}
+            {p.titulo && <legend className="mb-4"><Titulo texto={p.titulo} t={p.tTitulo} className="font-serif text-2xl" /></legend>}
+            {/* Cartões grandes (nome, morada e preço), em grelha, como no site da ENA. */}
+            <div className="ena-grelha gap-4" style={{
+              ["--cols" as string]: String(p.colunas || 3), ["--cols-tab" as string]: String(p.colunasTab || 2), ["--cols-tel" as string]: String(p.colunasTel || 1),
+            }}>
+              {locais.map(l => {
+                const ativo = local === l;
+                const morada = curso.sessoes.find(s => s.local === l && s.morada)?.morada;
+                return (
+                  <button key={l} type="button" aria-pressed={ativo} onClick={() => setLocal(ativo && locais.length > 1 ? "" : l)}
+                    className={`flex min-h-[96px] flex-col items-start gap-2 border-2 bg-white px-5 py-5 text-left shadow-[0_8px_24px_rgba(18,52,59,.08)] transition ${ativo ? "border-[var(--c-destaque)]" : "border-transparent hover:border-black/15"}`}>
+                    <span className="flex w-full items-start justify-between gap-3">
+                      <strong className="text-sm font-extrabold uppercase tracking-[0.04em] text-[var(--c-primaria)]">{l}</strong>
+                      {ativo && <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[var(--c-destaque)] text-white"><Icon name="check" className="h-3 w-3" /></span>}
+                    </span>
+                    {p.mostrarMorada && morada && <span className="text-xs leading-5 opacity-65">{morada}</span>}
+                    {p.mostrarPreco && <span className="mt-auto text-sm font-bold text-[var(--c-destaque)]">{precoNoLocal(curso, l)}</span>}
+                  </button>
+                );
+              })}
             </div>
           </fieldset>
         );

@@ -296,5 +296,9 @@ export async function dadosCatalogoPublico(c: Consulta) {
   const turmas = await many<{ curso: string; local: string; horario: string; data_inicio: string; estado: string }>(c,
     `SELECT curso, local, horario, data_inicio, estado FROM turmas_gold
      UNION ALL SELECT curso, local, horario, data_inicio, estado FROM turmas_fin`);
-  return { gold, fin, vendas, turmas };
+  // Morada de cada local (Edição de cursos › Locais): aparece na escolha do local da página do curso.
+  const locais = await many<{ regime: string; nome: string; morada: string }>(c,
+    `SELECT regime, COALESCE(payload->>'nome', '') AS nome, COALESCE(payload->>'morada', '') AS morada
+       FROM catalog_items WHERE kind = 'locais'`);
+  return { gold, fin, vendas, turmas, locais };
 }

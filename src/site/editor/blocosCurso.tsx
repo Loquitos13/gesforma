@@ -115,7 +115,7 @@ export function useCurso() {
 /** Local escolhido na página (e como o mudar). */
 export function useLocalCurso() {
   const ctx = useContext(CursoAtualCtx);
-  return { local: ctx?.local ?? "", setLocal: ctx?.setLocal ?? (() => undefined) };
+  return { local: ctx?.local ?? "", setLocal: ctx?.setLocal ?? (() => undefined), editar: ctx?.editar ?? false };
 }
 
 export type Base = { aparencia: Estilo; puck?: { dragRef?: ((el: Element | null) => void) | null } };

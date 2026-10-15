@@ -15,7 +15,7 @@ import { corSegura, estiloTexto, estiloVazio, juntar, tipoVazia, type Tipografia
 // ─── Escolha do local ────────────────────────────────────────────────────────
 
 type LocalProps = Base & {
-  titulo: string; tTitulo: Tipografia; mostrarPreco: boolean; mostrarMorada: boolean;
+  titulo: string; tTitulo: Tipografia; mostrarPreco: boolean; mostrarMorada: boolean; abrirPedido: boolean;
   colunas: number | null; colunasTab: number | null; colunasTel: number | null;
 };
 
@@ -26,6 +26,7 @@ export const CursoEscolhaLocal: ComponentConfig<LocalProps> = {
     tTitulo: campoTipografia("Tipografia do título"),
     mostrarMorada: simNao("Morada de cada local (Edição de cursos › Locais)"),
     mostrarPreco: simNao("Preço em cada local"),
+    abrirPedido: simNao("Ao clicar num local, abre logo a pré-inscrição"),
     colunas: campoNumero("Colunas (computador)", ""),
     colunasTab: campoNumero("Colunas (tablet)", ""),
     colunasTel: campoNumero("Colunas (telemóvel)", ""),
@@ -33,13 +34,14 @@ export const CursoEscolhaLocal: ComponentConfig<LocalProps> = {
   },
   defaultProps: {
     titulo: "Onde quer fazer o curso?", tTitulo: tipoVazia(), mostrarMorada: true, mostrarPreco: true,
-    colunas: 3, colunasTab: 2, colunasTel: 1, aparencia: estiloVazio(),
+    abrirPedido: true, colunas: 3, colunasTab: 2, colunasTel: 1, aparencia: estiloVazio(),
   },
   render: p => <EscolhaLocal {...p} />,
 };
 
 function EscolhaLocal(p: LocalProps) {
-  const { local, setLocal } = useLocalCurso();
+  const { local, setLocal, editar } = useLocalCurso();
+  const { abrir } = useInscricaoOpcional();
   return (
     <Caixa p={p}>
       {curso => {
@@ -56,7 +58,11 @@ function EscolhaLocal(p: LocalProps) {
                 const ativo = local === l;
                 const morada = curso.sessoes.find(s => s.local === l && s.morada)?.morada;
                 return (
-                  <button key={l} type="button" aria-pressed={ativo} onClick={() => setLocal(ativo && locais.length > 1 ? "" : l)}
+                  <button key={l} type="button" aria-pressed={ativo} onClick={() => {
+                      // No site, o clique escolhe o local e abre o pedido já nele (datas de início e horário).
+                      if (p.abrirPedido !== false && !editar) { setLocal(l); abrir(curso, { local: l }); return; }
+                      setLocal(ativo && locais.length > 1 ? "" : l);
+                    }}
                     className={`flex min-h-[96px] flex-col items-start gap-2 border-2 bg-white px-5 py-5 text-left shadow-[0_8px_24px_rgba(18,52,59,.08)] transition ${ativo ? "border-[var(--c-destaque)]" : "border-transparent hover:border-black/15"}`}>
                     <span className="flex w-full items-start justify-between gap-3">
                       <strong className="text-sm font-extrabold uppercase tracking-[0.04em] text-[var(--c-primaria)]">{l}</strong>

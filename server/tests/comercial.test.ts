@@ -99,6 +99,33 @@ describe("Clientes, propostas e contratos", () => {
     const ficha = await pedido(ctx, "comercial", "GET", `/v1/crm/clientes/${id}`);
     expect(ficha.json().cliente.propostas[0].contratoId).toBe(contrato.id);
     expect(ficha.json().cliente.contratos).toHaveLength(1);
+    expect(ficha.json().cliente.tipo).toBe("Empresa");
+    expect(ficha.json().cliente.historico).toEqual([
+      expect.objectContaining({ origem: "Contrato", descricao: "Excel", valor: 1200, estado: "Assinado" }),
+    ]);
+  });
+
+  it("cliente particular: histórico com os cursos inscritos no mesmo email", async () => {
+    const mail = `particular-${Date.now()}@exemplo.pt`;
+    const c = await pedido(ctx, "comercial", "POST", "/v1/crm/clientes", { nome: "Ana Particular", tipo: "Particular", email: mail });
+    expect(c.statusCode, c.body).toBe(200);
+    const id = c.json().cliente.id as number;
+    expect((await pedido(ctx, "comercial", "POST", "/v1/crm/clientes", { nome: "Z", tipo: "Outro" })).statusCode).toBe(400);
+    const fid = Number((await ctx.db.query<{ n: number }>("SELECT COALESCE(max(id), 0) + 1 AS n FROM formandos_gold")).rows[0]!.n);
+    await ctx.db.query(
+      "INSERT INTO formandos_gold (id, nome, email, inscrito, curso, turma, pago, valor) VALUES ($1, 'Ana', $2, '2026-03-04 10:00:00', 'CCP', 'T1', true, 450), ($3, 'Ana', $2, '04/03/2020', 'Excel', '', false, 90)",
+      [fid, mail.toUpperCase(), fid + 1],
+    );
+    const ficha = (await pedido(ctx, "comercial", "GET", `/v1/crm/clientes/${id}`)).json().cliente;
+    expect(ficha.tipo).toBe("Particular");
+    expect(ficha.historico).toEqual([
+      expect.objectContaining({ origem: "Curso Gold", descricao: "CCP · T1", valor: 450, estado: "Pago" }),
+      expect.objectContaining({ origem: "Curso Gold", descricao: "Excel", valor: 90, data: null }),
+    ]);
+    const lista = (await pedido(ctx, "comercial", "GET", "/v1/crm/clientes?tipo=Particular")).json().linhas as { id: number; tipo: string }[];
+    expect(lista.every(l => l.tipo === "Particular")).toBe(true);
+    expect(lista.map(l => l.id)).toContain(id);
+    expect((await pedido(ctx, "comercial", "PATCH", `/v1/crm/clientes/${id}`, { tipo: "Empresa" })).statusCode).toBe(200);
   });
 
   it("modelos: só a secretaria edita, e conta os usos", async () => {

@@ -11,8 +11,10 @@ import { registarDocs } from "./crmDiretorioDocs.js";
 import type { Deps } from "./tipos.js";
 
 const email = z.string().trim().max(160).refine(v => v === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), "email inválido");
+const tipoCliente = z.enum(["Empresa", "Particular"]);
 const clienteSchema = z.object({
   nome: z.string().trim().min(1, "indique o nome").max(160),
+  tipo: tipoCliente.optional().default("Empresa"),
   email: email.optional().default(""),
   telf: z.string().trim().max(40).optional().default(""),
   nif: z.string().trim().max(20).optional().default(""),
@@ -20,6 +22,7 @@ const clienteSchema = z.object({
 });
 const clientePatch = z.object({
   nome: z.string().trim().min(1).max(160).optional(),
+  tipo: tipoCliente.optional(),
   email: email.optional(),
   telf: z.string().trim().max(40).optional(),
   nif: z.string().trim().max(20).optional(),
@@ -63,7 +66,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
 
   app.get("/v1/crm/clientes", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    const v = validar(reply, { query: paginacao.extend({ estado: textoQuery(40) }) }, req);
+    const v = validar(reply, { query: paginacao.extend({ estado: textoQuery(40), tipo: tipoCliente.optional() }) }, req);
     if (!v) return;
     const [pagina, resumo] = await Promise.all([listarClientes(db, v.query), resumoClientes(db)]);
     return { ...pagina, resumo };

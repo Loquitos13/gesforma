@@ -6,16 +6,19 @@ export type EstadoContrato = "Rascunho" | "Por assinar" | "Assinado" | "Cancelad
 export const ESTADOS_PROPOSTA: EstadoProposta[] = ["Enviada", "Negociação", "Aceite", "Recusada", "Expirada"];
 export const ESTADOS_CONTRATO: EstadoContrato[] = ["Rascunho", "Por assinar", "Assinado", "Cancelado"];
 
+export type TipoCliente = "Empresa" | "Particular";
 export type ClienteResumo = {
-  id: number; nome: string; email: string; telf: string; nif: string; notas: string;
+  id: number; nome: string; tipo: TipoCliente; email: string; telf: string; nif: string; notas: string;
   propostas: number; emAberto: number; contratos: number; ultimoEstado: string; ultimoCurso: string;
 };
 export type ClienteFicha = {
-  id: number; nome: string; email: string; telf: string; nif: string; notas: string; criadoEm: string | null;
+  id: number; nome: string; tipo: TipoCliente; email: string; telf: string; nif: string; notas: string; criadoEm: string | null;
   propostas: { id: number; curso: string; valor: number; estado: string; corpo: string; enviadaEm: string | null; respostaCliente: string; comercial: string; contratoId: number | null }[];
   contratos: { id: number; curso: string; valor: number; estado: string; criadoEm: string | null; assinadoEm: string | null; propostaId: number | null }[];
+  /** Produtos e serviços vendidos: contratos assinados, propostas aceites e cursos inscritos com o mesmo email. */
+  historico: { origem: string; ref: string; descricao: string; valor: number; estado: string; data: string | null }[];
 };
-export type DadosCliente = { nome: string; email: string; telf: string; nif: string; notas: string };
+export type DadosCliente = { nome: string; tipo: TipoCliente; email: string; telf: string; nif: string; notas: string };
 
 export type Parceiro = {
   id: number; nome: string; email: string; telf: string; tipo: string; notas: string;
@@ -41,7 +44,7 @@ export type Fase = { estado: string; n: number; valor: number };
 
 type Sinal = { signal?: AbortSignal };
 
-export const apiClientes = (f: { q?: string; estado?: string; pagina?: number; porPagina?: number; ordem?: string }, o: Sinal = {}) =>
+export const apiClientes = (f: { q?: string; estado?: string; tipo?: string; pagina?: number; porPagina?: number; ordem?: string }, o: Sinal = {}) =>
   api<Pagina<ClienteResumo> & { resumo: { clientes: number; emAberto: number; comContrato: number } }>(
     `/v1/crm/clientes${qs(f)}`, { silencioso: true, signal: o.signal },
   );

@@ -4,11 +4,11 @@ import { apiAlterarCliente, apiApagarCliente, apiCliente, type DadosCliente } fr
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { invalidar, useRecurso } from "../../../partilhado/dados/useRecurso";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
-import { AreaTexto, Botao, Campo, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Modal, data } from "../../../partilhado/ui";
+import { AreaTexto, Botao, Campo, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Modal, Selecao, data } from "../../../partilhado/ui";
 import { Dados, EstadoDoc, useGestao } from "./comum";
 import { eurosCurto } from "./documento/modelo";
 
-const VAZIO: DadosCliente = { nome: "", email: "", telf: "", nif: "", notas: "" };
+const VAZIO: DadosCliente = { nome: "", tipo: "Empresa", email: "", telf: "", nif: "", notas: "" };
 
 export function FormCliente({ aberto, titulo, inicial, aCarregar, onFechar, onGravar }: {
   aberto: boolean;
@@ -29,7 +29,7 @@ export function FormCliente({ aberto, titulo, inicial, aCarregar, onFechar, onGr
   function gravar() {
     if (!d.nome.trim()) return setErro("Indique o nome.");
     if (d.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email.trim())) return setErro("O email não parece válido.");
-    onGravar({ nome: d.nome.trim(), email: d.email.trim(), telf: d.telf.trim(), nif: d.nif.trim(), notas: d.notas });
+    onGravar({ nome: d.nome.trim(), tipo: d.tipo, email: d.email.trim(), telf: d.telf.trim(), nif: d.nif.trim(), notas: d.notas });
   }
   return (
     <Modal
@@ -40,7 +40,11 @@ export function FormCliente({ aberto, titulo, inicial, aCarregar, onFechar, onGr
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <Campo rotulo="Nome" obrigatorio erro={erro} className="sm:col-span-2">
-          {p => <Entrada {...p} value={d.nome} onChange={e => setD({ ...d, nome: e.target.value })} placeholder="Empresa, Lda." data-autofocus />}
+          {p => <Entrada {...p} value={d.nome} onChange={e => setD({ ...d, nome: e.target.value })} placeholder={d.tipo === "Particular" ? "Nome e apelido" : "Empresa, Lda."} data-autofocus />}
+        </Campo>
+        <Campo rotulo="Tipo">
+          {p => <Selecao {...p} value={d.tipo} onChange={e => setD({ ...d, tipo: e.target.value === "Particular" ? "Particular" : "Empresa" })}
+            opcoes={[{ valor: "Empresa", rotulo: "Empresa" }, { valor: "Particular", rotulo: "Particular" }]} />}
         </Campo>
         <Campo rotulo="Email">{p => <Entrada {...p} type="email" value={d.email} onChange={e => setD({ ...d, email: e.target.value })} />}</Campo>
         <Campo rotulo="Telefone">{p => <Entrada {...p} type="tel" value={d.telf} onChange={e => setD({ ...d, telf: e.target.value })} />}</Campo>
@@ -76,7 +80,7 @@ export function ClienteDetalhe({ id, onApagado, acoes }: { id: number; onApagado
     <>
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <p className="m-0 text-xs text-tinta-suave">Cliente{c.criadoEm ? ` desde ${data(c.criadoEm)}` : ""}</p>
+          <p className="m-0 text-xs text-tinta-suave">{c.tipo === "Particular" ? "Particular" : "Empresa"}{c.criadoEm ? ` desde ${data(c.criadoEm)}` : ""}</p>
           <h2 className="m-0 mt-0.5 text-lg font-semibold text-tinta">{c.nome}</h2>
         </div>
         <div className="relative">
@@ -134,10 +138,26 @@ export function ClienteDetalhe({ id, onApagado, acoes }: { id: number; onApagado
         ))}
       </section>
 
+      <section className="flex flex-col gap-2">
+        <h3 className="m-0 text-sm font-semibold text-tinta">Histórico de vendas</h3>
+        {c.historico.length === 0 && (
+          <p className="m-0 text-[13px] text-tinta-suave">Ainda sem vendas. Entram aqui os contratos assinados, as propostas aceites e os cursos inscritos com o email do cliente.</p>
+        )}
+        {c.historico.map(h => (
+          <div key={`${h.origem}:${h.ref}`} className="flex items-center gap-2 py-2.5 border-t border-[#EEF0F3]">
+            <div className="min-w-0 flex-1">
+              <div className="text-sm text-tinta truncate">{h.descricao || h.origem}</div>
+              <div className="num text-xs text-tinta-suave">{[h.origem, h.valor ? eurosCurto(h.valor) : "", h.data ? data(h.data) : ""].filter(Boolean).join(" · ")}</div>
+            </div>
+            <EstadoDoc estado={h.estado} />
+          </div>
+        ))}
+      </section>
+
       <FormCliente
         aberto={editar}
         titulo="Editar cliente"
-        inicial={{ nome: c.nome, email: c.email, telf: c.telf, nif: c.nif, notas: c.notas }}
+        inicial={{ nome: c.nome, tipo: c.tipo, email: c.email, telf: c.telf, nif: c.nif, notas: c.notas }}
         aCarregar={alterar.aCorrer}
         onFechar={() => setEditar(false)}
         onGravar={async d => { if (await alterar.correr(d)) setEditar(false); }}

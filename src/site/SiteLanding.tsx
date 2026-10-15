@@ -21,7 +21,7 @@ export type Course = {
   objetivos: string[];
   organizacao: "modular" | "livre";
   programa: { titulo: string; horas: string }[];
-  sessoes: { data: string; local: string; horario: string }[];
+  sessoes: { data: string; local: string; horario: string; preco?: number | null }[];
   nomeOferta: string;
 };
 
@@ -46,7 +46,7 @@ type CatalogoApi = {
     objetivos?: string[];
     organizacao?: "modular" | "livre";
     programa?: { titulo: string; horas: string }[];
-    sessoes?: { data: string; local: string; horario: string }[];
+    sessoes?: { data: string; local: string; horario: string; preco?: number | null }[];
     nomeOferta?: string;
   }>;
   destaques: CatalogoApi["cursos"];

@@ -7,6 +7,7 @@ export const BLOCOS_SITE = [
   "Cabecalho", "Rodape", "Seccao", "Coluna", "Titulo", "Texto", "Botao", "Imagem", "Espaco", "Separador",
   "Pilares", "Logotipos", "CursosDestaque", "OfertaFormativa", "Catalogo", "DetalheCurso", "ListaNoticias", "AreaFormando",
   "CursoBanner", "CursoSintese", "CursoDados", "CursoObjetivos", "CursoPrograma", "CursoTurmas", "CursoInscricao",
+  "CursoEscolhaLocal", "CursoTexto", "CursoImagem", "CursoBotaoInscricao",
 ] as const;
 
 const NOMES = new Set<string>(BLOCOS_SITE);

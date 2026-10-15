@@ -2,6 +2,7 @@ import type { Db } from "./db/pool.js";
 import { mapaImagensPublicas } from "./cursoImagens.js";
 import { dadosCatalogoPublico } from "./repos/cursos.js";
 import { hojeLisboa } from "./datas.js";
+import { escolherPreco, regrasDoPayload } from "./precoOferta.js";
 
 export type CursoPublico = {
   id: string;
@@ -23,7 +24,8 @@ export type CursoPublico = {
   objetivos: string[];
   organizacao: "modular" | "livre";
   programa: { titulo: string; horas: string }[];
-  sessoes: { data: string; local: string; horario: string }[];
+  /** Próximas datas; o preço segue as regras da ficha (local, horário ou os dois), como na pré-inscrição. */
+  sessoes: { data: string; local: string; horario: string; preco: number | null }[];
   nomeOferta: string;
 };
 
@@ -215,7 +217,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
 
   const hoje = hojeLisboa();
   const inicios = new Map<string, { data: string; local: string }>();
-  const sessoes = new Map<string, Array<CursoPublico["sessoes"][number] & { iso: string }>>();
+  const sessoes = new Map<string, Array<{ iso: string; data: string; local: string; horario: string }>>();
   for (const row of dados.turmas) {
     const data = String(row.data_inicio ?? "").slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || data < hoje) continue;
@@ -322,8 +324,11 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       sessoes: curso.chaves
         .flatMap(key => sessoes.get(key) ?? [])
         .sort((a, b) => a.iso.localeCompare(b.iso))
-        .slice(0, 8)
-        .map(({ data, local, horario }) => ({ data, local, horario })),
+        .slice(0, 24)
+        .map(({ data, local, horario }) => {
+          const preco = curso.regime === "gold" ? escolherPreco(curso.preco, local, horario, regrasDoPayload(payload)) : 0;
+          return { data, local, horario, preco: preco > 0 ? preco : null };
+        }),
       nomeOferta: curso.nomeOferta || curso.titulo,
     };
   });

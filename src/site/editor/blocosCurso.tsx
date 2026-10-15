@@ -1,9 +1,7 @@
 // Página do curso em blocos soltos: banner, síntese, dados, objetivos, programa, turmas e cartão de inscrição.
 // Cada bloco lê o curso da página (CursoAtualCtx), por isso pode ir para qualquer secção ou coluna.
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import type { ComponentConfig, Slot } from "@puckeditor/core";
-import { ePrepago, ePreinscricao, rotuloBotaoInscricao } from "../../partilhado/siteConteudo";
-import { useInscricaoOpcional } from "../SiteInscricao";
+import type { ComponentConfig } from "@puckeditor/core";
 import { Icon, OfertaCtx, type Course } from "../SiteLanding";
 import { CursoDaRotaCtx } from "./blocosCursoPagina";
 import { campoCurso, simNao } from "./campos";
@@ -11,7 +9,8 @@ import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { estiloBloco, estiloTexto, estiloVazio, juntar, tipoVazia, type Estilo, type Tipografia } from "./estilos";
 
 type Estado = "a-carregar" | "erro" | "pronto";
-type CursoAtual = { estado: Estado; curso: Course | null; editar: boolean };
+/** O curso da página e o local escolhido (partilhado: escolha do local, dados, turmas e cartão seguem-no). */
+type CursoAtual = { estado: Estado; curso: Course | null; editar: boolean; local: string; setLocal: (l: string) => void };
 
 /** O curso que a página mostra (dado pela raiz da página do curso). */
 export const CursoAtualCtx = createContext<CursoAtual | null>(null);
@@ -31,6 +30,12 @@ export function useCursoAtual(previsualizar: string, editar: boolean) {
 /** Raiz da página do curso: escolhe o curso e trata dos estados (a carregar, erro, curso que não existe). */
 export function RaizCurso({ previsualizar, editar, children }: { previsualizar: string; editar: boolean; children: ReactNode }) {
   const { estado, curso, recarregar } = useCursoAtual(previsualizar, editar);
+  const [local, setLocal] = useState("");
+  // Outro curso: o local volta ao único que houver (ou a nenhum).
+  useEffect(() => {
+    const ls = curso ? locaisDo(curso) : [];
+    setLocal(ls.length === 1 ? ls[0]! : "");
+  }, [curso]);
   useEffect(() => { if (!editar && curso) document.title = `${curso.title} | ENA`; }, [curso, editar]);
   if (!editar) {
     if (estado === "a-carregar") return <p className="px-5 py-24 text-center opacity-60">A carregar o curso.</p>;
@@ -51,20 +56,72 @@ export function RaizCurso({ previsualizar, editar, children }: { previsualizar: 
       );
     }
   }
-  return <CursoAtualCtx.Provider value={{ estado, curso, editar }}>{children}</CursoAtualCtx.Provider>;
+  return <CursoAtualCtx.Provider value={{ estado, curso, editar, local, setLocal }}>{children}</CursoAtualCtx.Provider>;
 }
+
+// ─── Local, preço e variáveis ────────────────────────────────────────────────
+
+export const locaisDo = (c: Course) => [...new Set(c.sessoes.map(s => s.local.trim()).filter(Boolean))];
+
+const euros = (n: number) => `${n.toLocaleString("pt-PT", { maximumFractionDigits: 2 })} €`;
+
+/**
+ * Preço a mostrar: o das datas desse local (o preço de cada data já segue as regras da ficha por local,
+ * por horário ou pelos dois). Preços diferentes no local → «A partir de»; sem datas → o preço do curso.
+ */
+export function precoNoLocal(c: Course, local: string) {
+  const precos = c.sessoes.filter(s => !local || s.local === local).map(s => s.preco).filter((n): n is number => n != null);
+  if (!precos.length) return c.price;
+  const min = Math.min(...precos);
+  return precos.every(p => p === min) ? euros(min) : `A partir de ${euros(min)}`;
+}
+
+/** Variáveis que os textos do curso podem usar: {{curso}}, {{preco}}, … */
+export const VARIAVEIS_CURSO: [string, string][] = [
+  ["curso", "Nome do curso"], ["area", "Área"], ["formato", "Formato (presencial, b-learning…)"], ["duracao", "Duração"],
+  ["descricao", "Síntese"], ["inscricao", "Tipo de inscrição"], ["regime", "ENA Gold ou Financiada"],
+  ["local", "Local escolhido"], ["locais", "Todos os locais"], ["horarios", "Horários (do local escolhido)"],
+  ["inicio", "Próximo início (data · local)"], ["proxima_data", "Próxima data de início"],
+  ["preco", "Preço (segue o local escolhido)"], ["preco_desde", "Preço mais baixo"], ["datas", "Número de datas"],
+];
+
+export function variaveisCurso(c: Course, local: string): Record<string, string> {
+  const doLocal = c.sessoes.filter(s => !local || s.local === local);
+  const prox = doLocal[0];
+  return {
+    curso: c.title, area: c.area, formato: c.format, duracao: c.duration, descricao: c.description,
+    inscricao: c.enrollment, regime: c.funding === "Gold" ? "ENA Gold" : "Financiada",
+    local, locais: locaisDo(c).join(", "),
+    horarios: [...new Set(doLocal.map(s => s.horario).filter(Boolean))].join(", "),
+    inicio: prox ? [prox.data, prox.local].filter(Boolean).join(" · ") : c.start,
+    proxima_data: prox?.data ?? c.start,
+    preco: precoNoLocal(c, local), preco_desde: c.precoDesde != null ? euros(c.precoDesde) : c.price,
+    datas: String(doLocal.length),
+  };
+}
+
+export const preencherVariaveis = (texto: string, vars: Record<string, string>) =>
+  texto.replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k: string) => (k in vars ? vars[k]! : m));
+
+export const ajudaVariaveis = `Variáveis: ${VARIAVEIS_CURSO.map(([k]) => `{{${k}}}`).join(" ")}`;
 
 /** Campo da raiz: o curso que o editor mostra (no site é sempre o da rota). */
 export const campoPrevisualizar = campoCurso("No editor, ver com o curso");
 
-function useCurso() {
+export function useCurso() {
   return useContext(CursoAtualCtx)?.curso ?? null;
 }
 
-type Base = { aparencia: Estilo; puck?: { dragRef?: ((el: Element | null) => void) | null } };
+/** Local escolhido na página (e como o mudar). */
+export function useLocalCurso() {
+  const ctx = useContext(CursoAtualCtx);
+  return { local: ctx?.local ?? "", setLocal: ctx?.setLocal ?? (() => undefined) };
+}
+
+export type Base = { aparencia: Estilo; puck?: { dragRef?: ((el: Element | null) => void) | null } };
 
 /** Invólucro comum: aparência do bloco, pega de arrastar e aviso quando ainda não há curso. */
-function Caixa({ p, className, children, as: Tag = "div" }: { p: Base; className?: string; children: (c: Course) => ReactNode; as?: "div" | "section" | "aside" }) {
+export function Caixa({ p, className, children, as: Tag = "div" }: { p: Base; className?: string; children: (c: Course) => ReactNode; as?: "div" | "section" | "aside" }) {
   const curso = useCurso();
   const c = estiloBloco(p.aparencia);
   return (
@@ -74,7 +131,7 @@ function Caixa({ p, className, children, as: Tag = "div" }: { p: Base; className
   );
 }
 
-function Titulo({ texto, t, className }: { texto: string; t: Tipografia; className: string }) {
+export function Titulo({ texto, t, className }: { texto: string; t: Tipografia; className: string }) {
   if (!texto) return null;
   const e = estiloTexto(t);
   return <h2 className={juntar(className, e.className)} style={e.style}>{texto}</h2>;
@@ -183,13 +240,20 @@ export const CursoDados: ComponentConfig<DadosProps> = {
     aparencia: campoAparencia(),
   },
   defaultProps: { duracao: true, inicio: true, local: true, investimento: true, aparencia: estiloVazio() },
-  render: p => (
+  render: p => <DadosCurso {...p} />,
+};
+
+/** Com um local escolhido, o início, o local e o investimento são os desse local. */
+function DadosCurso(p: DadosProps) {
+  const { local } = useLocalCurso();
+  return (
     <Caixa p={p}>
       {curso => {
+        const v = variaveisCurso(curso, local);
         const itens = ([
-          [p.duracao, curso.duration, "Duração"], [p.inicio, curso.start, "Início"],
-          [p.local, localDo(curso), "Local"], [p.investimento, curso.price, "Investimento"],
-        ] as const).filter(([v]) => v);
+          [p.duracao, curso.duration, "Duração"], [p.inicio, local ? v.inicio : curso.start, "Início"],
+          [p.local, local || localDo(curso), "Local"], [p.investimento, precoNoLocal(curso, local), "Investimento"],
+        ] as const).filter(([x]) => x);
         return (
           <div className="grid grid-cols-2 gap-px bg-black/10 sm:grid-cols-4">
             {itens.map(([, valor, rotulo]) => (
@@ -202,8 +266,8 @@ export const CursoDados: ComponentConfig<DadosProps> = {
         );
       }}
     </Caixa>
-  ),
-};
+  );
+}
 
 // ─── Objetivos, programa e turmas ────────────────────────────────────────────
 
@@ -253,106 +317,43 @@ export const CursoPrograma: ComponentConfig<ListaProps> = {
   ),
 };
 
-export const CursoTurmas: ComponentConfig<ListaProps> = {
+type TurmasProps = ListaProps & { soLocal: boolean; mostrarPreco: boolean };
+
+export const CursoTurmas: ComponentConfig<TurmasProps> = {
   label: "Curso · Próximas turmas",
-  ...camposLista("Próximas turmas"),
-  render: p => (
-    <Caixa p={p}>
-      {curso => curso.sessoes.length === 0 ? null : (
-        <>
-          <Titulo texto={p.titulo} t={p.tTitulo} className="border-b border-black/15 pb-4 font-serif text-3xl" />
-          <div className="divide-y divide-black/15">
-            {curso.sessoes.map(s => (
-              <div key={`${s.data}-${s.local}-${s.horario}`} className="flex flex-wrap items-center justify-between gap-3 py-5">
-                <strong>{s.data}</strong>
-                <span className="text-sm opacity-65">{[s.local, s.horario].filter(Boolean).join(" · ")}</span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-    </Caixa>
-  ),
+  fields: {
+    ...camposLista("Próximas turmas").fields,
+    soLocal: simNao("Só as do local escolhido"),
+    mostrarPreco: simNao("Preço de cada turma"),
+  },
+  defaultProps: { ...camposLista("Próximas turmas").defaultProps, soLocal: true, mostrarPreco: true },
+  render: p => <TurmasCurso {...p} />,
 };
 
-// ─── Cartão de inscrição ─────────────────────────────────────────────────────
-
-type CartaoProps = Base & {
-  conteudo: Slot; mostrarImagem: boolean; fixo: boolean; rotuloLocal: string;
-  textoPrepago: string; textoPreinscricao: string; textoDireto: string;
-};
-
-/**
- * Escolha do local e botão de inscrição: o pedido abre já nesse local, com as datas de início
- * (e o cronograma de cada turma); os dados pessoais vêm a seguir.
- */
-function BotaoInscricao({ curso, rotuloLocal }: { curso: Course; rotuloLocal: string }) {
-  const { abrir } = useInscricaoOpcional();
-  const locais = [...new Set(curso.sessoes.map(s => s.local.trim()).filter(Boolean))];
-  const [local, setLocal] = useState(locais.length === 1 ? locais[0]! : "");
-  const falta = locais.length > 1 && !local;
+function TurmasCurso(p: TurmasProps) {
+  const { local } = useLocalCurso();
   return (
-    <>
-      {locais.length > 1 && (
-        <fieldset className="mt-6">
-          <legend className="text-xs font-extrabold uppercase tracking-[0.14em] opacity-60">{rotuloLocal}</legend>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {locais.map(l => (
-              <button key={l} type="button" aria-pressed={local === l} onClick={() => setLocal(l)}
-                className={`border px-3 py-2 text-sm font-bold ${local === l ? "border-[var(--c-primaria)] bg-[var(--c-primaria)] text-white" : "border-black/15 hover:border-[var(--c-primaria)]"}`}>
-                {l}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-      )}
-      <button type="button" disabled={falta} onClick={() => abrir(curso, local ? { local } : undefined)}
-        className="mt-7 flex w-full items-center justify-between bg-[var(--c-destaque)] px-5 py-4 text-xs font-extrabold uppercase tracking-[0.08em] text-white hover:brightness-90 disabled:cursor-not-allowed disabled:opacity-50">
-        {falta ? "Escolha o local" : rotuloBotaoInscricao(curso.enrollment)} <Icon name="arrow" />
-      </button>
-    </>
+    <Caixa p={p}>
+      {curso => {
+        const lista = curso.sessoes.filter(s => !p.soLocal || !local || s.local === local);
+        return lista.length === 0 ? null : (
+          <>
+            <Titulo texto={p.titulo} t={p.tTitulo} className="border-b border-black/15 pb-4 font-serif text-3xl" />
+            <div className="divide-y divide-black/15">
+              {lista.map(s => (
+                <div key={`${s.data}-${s.local}-${s.horario}`} className="flex flex-wrap items-center justify-between gap-3 py-5">
+                  <strong>{s.data}</strong>
+                  <span className="text-sm opacity-65">
+                    {[s.local, s.horario, p.mostrarPreco && s.preco != null ? euros(s.preco) : ""].filter(Boolean).join(" · ")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        );
+      }}
+    </Caixa>
   );
 }
 
-export const CursoInscricao: ComponentConfig<CartaoProps> = {
-  label: "Curso · Cartão de inscrição",
-  fields: {
-    conteudo: { type: "slot", label: "Blocos no cartão" },
-    mostrarImagem: simNao("Imagem no cartão"),
-    fixo: simNao("Acompanha o scroll (computador)"),
-    rotuloLocal: { type: "text", label: "Título da escolha do local" },
-    textoPrepago: { type: "textarea", label: "Texto (pré-pago)" },
-    textoPreinscricao: { type: "textarea", label: "Texto (pré-inscrição)" },
-    textoDireto: { type: "textarea", label: "Texto (acesso direto)" },
-    aparencia: campoAparencia(),
-  },
-  defaultProps: {
-    conteudo: [], mostrarImagem: true, fixo: true, rotuloLocal: "Onde quer fazer o curso?",
-    textoPrepago: "Primeiro recolhemos os seus dados. O pagamento fica no passo seguinte.",
-    textoPreinscricao: "Escolha o local e a data de início (com o cronograma de cada turma). A seguir pedimos os seus dados.",
-    textoDireto: "Este curso abre no Moodle. Não há formulário de pré-inscrição.",
-    aparencia: estiloVazio(),
-  },
-  render: ({ conteudo: Conteudo, ...p }) => (
-    <Caixa p={p} as="aside" className={juntar("h-fit border-t-4 border-[var(--c-destaque)] bg-white p-7 shadow-[0_18px_50px_rgba(18,52,59,.18)]", p.fixo && "lg:sticky lg:top-28")}>
-      {curso => (
-        <>
-          {p.mostrarImagem && (
-            <div className="mb-5 h-36 w-full overflow-hidden bg-[#E7EBF0]">
-              {(curso.capa || curso.miniatura) && <img src={curso.capa || curso.miniatura || ""} alt="" className="h-full w-full object-cover" />}
-            </div>
-          )}
-          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-[var(--c-destaque)]">{curso.enrollment}</p>
-          <h2 className="mt-3 font-serif text-3xl">{curso.price}</h2>
-          <p className="mt-4 text-sm leading-6 opacity-65">
-            {ePrepago(curso.enrollment) ? p.textoPrepago : ePreinscricao(curso.enrollment) ? p.textoPreinscricao : p.textoDireto}
-          </p>
-          <BotaoInscricao curso={curso} rotuloLocal={p.rotuloLocal} />
-          <Conteudo className="mt-5 flex flex-col gap-3 empty:hidden" minEmptyHeight={30} />
-        </>
-      )}
-    </Caixa>
-  ),
-};
 
-export const BLOCOS_CURSO = ["CursoBanner", "CursoSintese", "CursoDados", "CursoObjetivos", "CursoPrograma", "CursoTurmas", "CursoInscricao"] as const;

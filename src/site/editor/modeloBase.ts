@@ -3,7 +3,8 @@ import type { Data } from "@puckeditor/core";
 import type { PaginaSite } from "../../partilhado/siteBlocos";
 import { AreaFormando } from "./blocosArea";
 import { Catalogo } from "./blocosCatalogo";
-import { CursoBanner, CursoDados, CursoInscricao, CursoObjetivos, CursoPrograma, CursoSintese, CursoTurmas } from "./blocosCurso";
+import { CursoBanner, CursoDados, CursoObjetivos, CursoPrograma, CursoSintese, CursoTurmas } from "./blocosCurso";
+import { blocosCartaoPadrao, CursoEscolhaLocal, CursoInscricao } from "./blocosCursoCartao";
 import { ListaNoticias } from "./blocosNoticias";
 import { Botao, Coluna, Imagem, Pilares, Seccao, Texto, Titulo } from "./blocosBase";
 import { cartaoPadrao, CursosDestaque, OfertaFormativa } from "./blocosCursos";
@@ -173,6 +174,26 @@ function modeloEmpresas(): Data {
 
 type Legado = Record<string, unknown> & { zonaTopo?: unknown[]; zonaConteudo?: unknown[]; zonaCartao?: unknown[] };
 
+/** Texto antigo por omissão (o pedido de dados vinha antes da turma): passa ao texto novo. */
+const TEXTO_PRE_ANTIGO = "A pré-inscrição pede os seus dados e, quando existir, a turma. O pedido fica registado e sai o email automático.";
+
+/** Cartão de inscrição feito de blocos; `antigo` traz os textos e os blocos do cartão gravado antes. */
+function cartaoEmBlocos(antigo: Record<string, unknown> = {}, extra: unknown[] = [], id?: string) {
+  const textos: Record<string, string> = {};
+  for (const k of ["textoPrepago", "textoPreinscricao", "textoDireto"]) {
+    const v = antigo[k];
+    if (typeof v === "string" && v.trim() && v !== TEXTO_PRE_ANTIGO) textos[k] = v;
+  }
+  const filhos = blocosCartaoPadrao(textos)
+    .filter(b => b.type !== "CursoImagem" || antigo.mostrarImagem !== false)
+    .map(b => bloco(b.type, b.props as object));
+  const novo = bloco("CursoInscricao", CursoInscricao.defaultProps, { conteudo: [...filhos, ...extra] as never });
+  if (id) (novo.props as { id: string }).id = id;
+  return novo;
+}
+
+const escolhaLocal = () => bloco("CursoEscolhaLocal", CursoEscolhaLocal.defaultProps, { aparencia: estiloVazio({ margem: lados(32, 0, 0, 0) }) });
+
 /**
  * Página do curso em blocos soltos: banner, depois uma grelha com o conteúdo (2 colunas) e o cartão (1 coluna).
  * Com `antigo` (o bloco único «Página do curso»), mantém os textos, as opções e os blocos que lá estavam.
@@ -186,6 +207,7 @@ export function modeloCurso(antigo?: Legado): Data {
   const principal = [
     bloco("CursoSintese", CursoSintese.defaultProps, { etiqueta: txt("tituloSintese", "Síntese") }),
     ...(sim("mostrarDados") ? [bloco("CursoDados", CursoDados.defaultProps, { aparencia: estiloVazio({ margem: lados(32, 0, 0, 0) }) })] : []),
+    escolhaLocal(),
     ...extra("zonaConteudo"),
     ...(sim("mostrarObjetivos") ? [bloco("CursoObjetivos", CursoObjetivos.defaultProps, { titulo: txt("tituloObjetivos", "Objetivos"), aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) })] : []),
     ...(sim("mostrarPrograma") ? [bloco("CursoPrograma", CursoPrograma.defaultProps, { titulo: txt("tituloPrograma", "Programa"), aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) })] : []),
@@ -197,13 +219,7 @@ export function modeloCurso(antigo?: Legado): Data {
     aparencia: estiloVazio({ preenchimento: lados(64, 32), preenchimentoTel: lados(48, 20) }),
     conteudo: [
       bloco("Coluna", Coluna.defaultProps, { ocupar: cartao ? 2 : null, espaco: 0, conteudo: principal }),
-      ...(cartao ? [bloco("CursoInscricao", CursoInscricao.defaultProps, {
-        mostrarImagem: sim("mostrarImagemCartao"),
-        textoPrepago: txt("textoPrepago", CursoInscricao.defaultProps!.textoPrepago),
-        textoPreinscricao: txt("textoPreinscricao", CursoInscricao.defaultProps!.textoPreinscricao),
-        textoDireto: txt("textoDireto", CursoInscricao.defaultProps!.textoDireto),
-        conteudo: extra("zonaCartao"),
-      })] : []),
+      ...(cartao ? [cartaoEmBlocos({ ...a, mostrarImagem: sim("mostrarImagemCartao") }, extra("zonaCartao"))] : []),
     ],
   });
   return {
@@ -216,13 +232,45 @@ export function modeloCurso(antigo?: Legado): Data {
   } as Data;
 }
 
-/** Uma página do curso guardada com o bloco único antigo passa a blocos soltos (o resto da página fica igual). */
+type No = { type: string; props: Record<string, unknown> };
+const ehNo = (v: unknown): v is No => Boolean(v && typeof v === "object" && typeof (v as No).type === "string" && (v as No).props);
+
+/**
+ * Cartão gravado antes de ser feito de blocos (com os textos no próprio cartão) passa a blocos, e a
+ * página ganha a escolha do local a seguir aos dados, se ainda não a tiver. Percorre todos os espaços de blocos.
+ */
+function atualizarBlocosCurso(lista: No[], temLocal: { v: boolean }): No[] {
+  const out: No[] = [];
+  for (const b of lista) {
+    let atual = b;
+    if (b.type === "CursoInscricao" && typeof b.props.textoPrepago === "string") {
+      atual = cartaoEmBlocos(b.props, Array.isArray(b.props.conteudo) ? b.props.conteudo : [], String(b.props.id ?? "")) as No;
+    } else {
+      const props = { ...b.props };
+      for (const [k, v] of Object.entries(props)) {
+        if (Array.isArray(v) && v.every(ehNo)) props[k] = atualizarBlocosCurso(v, temLocal);
+      }
+      atual = { ...b, props };
+    }
+    out.push(atual);
+    if (b.type === "CursoDados" && !temLocal.v) { out.push(escolhaLocal() as No); temLocal.v = true; }
+  }
+  return out;
+}
+
+/** Página do curso gravada em versões anteriores: passa à estrutura actual (o resto da página fica igual). */
 export function converterPaginaCurso(d: Data): Data {
+  let dados = d;
   const lista = (d.content ?? []) as { type: string; props: Legado }[];
   const i = lista.findIndex(b => b.type === "DetalheCurso");
-  if (i < 0) return d;
-  const novo = modeloCurso(lista[i]!.props);
-  return { ...d, root: { ...(d.root ?? {}), props: { ...((d.root as { props?: object })?.props ?? {}), ...(novo.root as { props: object }).props } }, content: [...lista.slice(0, i), ...novo.content, ...lista.slice(i + 1)] } as Data;
+  if (i >= 0) {
+    const novo = modeloCurso(lista[i]!.props);
+    dados = { ...d, root: { ...(d.root ?? {}), props: { ...((d.root as { props?: object })?.props ?? {}), ...(novo.root as { props: object }).props } }, content: [...lista.slice(0, i), ...novo.content, ...lista.slice(i + 1)] } as Data;
+  }
+  const texto = JSON.stringify(dados.content ?? []);
+  const temLocal = { v: texto.includes('"CursoEscolhaLocal"') };
+  if (temLocal.v && !texto.includes('"textoPrepago"')) return dados;
+  return { ...dados, content: atualizarBlocosCurso((dados.content ?? []) as No[], temLocal) } as Data;
 }
 
 /** Modelo base de cada página: o ponto de partida do editor e o que o site mostra sem versão publicada. */

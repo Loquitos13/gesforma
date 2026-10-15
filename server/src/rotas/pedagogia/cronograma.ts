@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { erroSobreposicao } from "../../conflitos.js";
 import { htmlCronograma, sessoesPublicas } from "../../cronogramaPublico.js";
+import { importarPlanosCurso } from "../../planosCurso.js";
 import { storeDriveFile } from "../../driveFicheiros.js";
 import { definirEstadoManual, gravarAnexo } from "../../repos/dtp.js";
 import { gravarCronograma, marcarCronogramaPublicado, turmaParaCronograma } from "../../repos/pedagogiaTurma.js";
@@ -25,6 +26,7 @@ export function registarCronograma(app: FastifyInstance, { db, requireAuth, audi
       const cruzamento = await erroSobreposicao(db, regime, id, novas);
       if (cruzamento) return reply.code(400).send({ error: cruzamento });
       await gravarCronograma(db, regime, id, novas);
+      await importarPlanosCurso(db, regime, id).catch(() => undefined);
     }
     const turma = await turmaParaCronograma(db, regime, id);
     if (!turma) return reply.code(404).send({ error: "turma não encontrada" });

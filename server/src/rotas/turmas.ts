@@ -5,6 +5,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { generateCronograma } from "../cronograma.js";
+import { importarPlanosCurso } from "../planosCurso.js";
 import { erroSobreposicao } from "../conflitos.js";
 import { docsBase } from "../docsCurso.js";
 import { limparAtalhosDaTurma } from "../driveArvore.js";
@@ -220,6 +221,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     });
     await repo.ligarCurso(db, "gold", id);
     if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "gold", id, d.vagasAnunciadas);
+    await importarPlanosCurso(db, "gold", id).catch(() => undefined);
     await audit(db, req.actor!.id, "turma.criar", "turma_gold", String(id), req.ip, { nome: d.nome });
     const row = await repo.obterTurma(db, "gold", id);
     if (row) sincronizarDrive(deps, "gold", id, row);
@@ -268,6 +270,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       await propagarCursoDaTurma(db, "gold", id, String(d.nome ?? antes.nome ?? ""), String(antes.curso ?? ""), d.curso);
       await repo.ligarCurso(db, "gold", id);
     }
+    if ((d.cronograma || d.curso) && req.actor!.role !== "formador") await importarPlanosCurso(db, "gold", id).catch(() => undefined);
     if (req.actor!.role !== "formador") {
       await audit(db, req.actor!.id, "turma.alterar", "turma_gold", String(id), req.ip, { campos: Object.keys(d) });
     }
@@ -311,6 +314,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     });
     await repo.ligarCurso(db, "fin", id);
     if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "fin", id, d.vagasAnunciadas);
+    await importarPlanosCurso(db, "fin", id).catch(() => undefined);
     await audit(db, req.actor!.id, "turma.criar", "turma_fin", String(id), req.ip, { nome: d.nome });
     const row = await repo.obterTurma(db, "fin", id);
     if (row) sincronizarDrive(deps, "fin", id, row);
@@ -360,6 +364,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       await propagarCursoDaTurma(db, "fin", id, String(d.nome ?? antes.nome ?? ""), String(antes.curso ?? ""), d.curso);
       await repo.ligarCurso(db, "fin", id);
     }
+    if ((d.cronograma || d.curso) && req.actor!.role !== "formador") await importarPlanosCurso(db, "fin", id).catch(() => undefined);
     if (req.actor!.role !== "formador") {
       await audit(db, req.actor!.id, "turma.alterar", "turma_fin", String(id), req.ip, { campos: Object.keys(d) });
     }

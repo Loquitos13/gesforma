@@ -1,6 +1,10 @@
 // Separadores de texto da ficha: conteúdo do site, programa e planos de sessão.
 import { AreaTexto, Aviso, Botao, Campo, Cartao, Entrada, Estado, Selecao, Vazio } from "../../../../partilhado/ui";
 import { codigoTopico, juntarHoras, novoTopicoId, partirHoras, textoPrograma } from "../../../cursoPrograma";
+import type { ReactNode } from "react";
+import type { MomentoField, MomentoKey } from "../../../../partilhado/TurmaExtras";
+import { novoPlanoCurso } from "../../../planosCurso";
+import type { PlanoLinha } from "./modelo";
 import type { FichaCurso } from "./useFichaCurso";
 
 function BlocoTexto({ rotulo, ajuda, valor, onMudar, linhas = 7 }: { rotulo: string; ajuda: string; valor: string; onMudar: (v: string) => void; linhas?: number }) {
@@ -95,28 +99,82 @@ export function TabPrograma({ f }: { f: FichaCurso }) {
   );
 }
 
+const MOMENTOS: { id: MomentoKey; rotulo: string }[] = [
+  { id: "introducao", rotulo: "Introdução" },
+  { id: "desenvolvimento", rotulo: "Desenvolvimento" },
+  { id: "conclusao", rotulo: "Conclusão" },
+];
+const CAMPOS_MOMENTO: { id: keyof MomentoField; rotulo: string }[] = [
+  { id: "conteudo", rotulo: "Conteúdo programático" },
+  { id: "atividades", rotulo: "Atividades" },
+  { id: "metodos", rotulo: "Métodos / técnicas pedagógicas" },
+  { id: "avaliacao", rotulo: "Avaliação" },
+  { id: "recursos", rotulo: "Recursos didáticos" },
+  { id: "materiais", rotulo: "Materiais e equipamentos" },
+];
+
+const preenchidos = (o: Record<string, string>) => Object.values(o).filter(v => v.trim()).length;
+
+function Recolhivel({ titulo, resumo, children }: { titulo: string; resumo: string; children: ReactNode }) {
+  return (
+    <details className="group rounded-controlo border border-linha-suave bg-fundo/40">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-[13px] font-semibold text-tinta">
+        <span aria-hidden="true" className="text-tinta-suave transition-transform group-open:rotate-90">›</span>
+        {titulo}
+        <span className="ml-auto text-xs font-normal text-tinta-suave">{resumo}</span>
+      </summary>
+      <div className="grid gap-2 px-3 pb-3 sm:grid-cols-2">{children}</div>
+    </details>
+  );
+}
+
 export function TabPlanos({ f }: { f: FichaCurso }) {
   const { data, patch } = f;
-  const mudar = (i: number, p: Partial<(typeof data.planosSessao)[number]>) => patch({ planosSessao: data.planosSessao.map((x, j) => (j === i ? { ...x, ...p } : x)) });
+  const mudar = (i: number, p: Partial<PlanoLinha>) => patch({ planosSessao: data.planosSessao.map((x, j) => (j === i ? { ...x, ...p } : x)) });
+  const mudarMomento = (i: number, m: MomentoKey, campo: keyof MomentoField, valor: string) => {
+    const linha = data.planosSessao[i]!;
+    mudar(i, { momentos: { ...linha.momentos, [m]: { ...linha.momentos[m], [campo]: valor } } });
+  };
+  const renumerar = (lista: PlanoLinha[]) => lista.map((p, j) => ({ ...p, ordem: j + 1 }));
   return (
-    <Cartao titulo="Plano de cada sessão" subtitulo="A turma herda este plano pela ordem da sessão, enquanto a sessão não tiver plano próprio.">
+    <Cartao titulo="Plano de cada sessão" subtitulo="O plano n vai para a sessão n de cada turma do curso (só sessões presenciais e síncronas, pela ordem do cronograma). Ao gravar a ficha, as turmas abertas recebem os planos nas sessões ainda sem plano; no separador Sessões da turma pode importá-los de novo.">
       <div className="space-y-3">
         {data.planosSessao.length === 0 && <Vazio compacto titulo="Ainda sem planos." descricao="Acrescente a primeira sessão." />}
         {data.planosSessao.map((linha, i) => (
           <div key={linha.ordem} className="space-y-2 rounded-controlo border border-linha p-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <p className="m-0 text-[13px] font-semibold">Sessão {linha.ordem}</p>
-              <Botao tamanho="sm" variante="fantasma" onClick={() => patch({ planosSessao: data.planosSessao.filter((_, j) => j !== i).map((p, j) => ({ ...p, ordem: j + 1 })) })}>Remover</Botao>
+              <span className="flex gap-1">
+                <Botao tamanho="sm" variante="fantasma" onClick={() => patch({ planosSessao: renumerar([...data.planosSessao.slice(0, i + 1), { ...linha }, ...data.planosSessao.slice(i + 1)]) })}>Duplicar</Botao>
+                <Botao tamanho="sm" variante="fantasma" onClick={() => patch({ planosSessao: renumerar(data.planosSessao.filter((_, j) => j !== i)) })}>Remover</Botao>
+              </span>
             </div>
-            <AreaTexto aria-label="Objetivos gerais" rows={2} placeholder="Objetivos gerais" value={linha.objetivosGerais} onChange={e => mudar(i, { objetivosGerais: e.target.value })} />
-            <AreaTexto aria-label="Objetivos específicos" rows={2} placeholder="Objetivos específicos" value={linha.objetivosEspecificos} onChange={e => mudar(i, { objetivosEspecificos: e.target.value })} />
-            <AreaTexto aria-label="Conteúdo do desenvolvimento" rows={3} placeholder="Conteúdo do desenvolvimento" value={linha.conteudo} onChange={e => mudar(i, { conteudo: e.target.value })} />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <AreaTexto aria-label={`Sessão ${linha.ordem}: objetivos gerais`} rows={2} placeholder="Objetivos gerais" value={linha.objetivosGerais} onChange={e => mudar(i, { objetivosGerais: e.target.value })} />
+              <AreaTexto aria-label={`Sessão ${linha.ordem}: objetivos específicos`} rows={2} placeholder="Objetivos específicos" value={linha.objetivosEspecificos} onChange={e => mudar(i, { objetivosEspecificos: e.target.value })} />
+            </div>
+            {MOMENTOS.map(m => (
+              <Recolhivel key={m.id} titulo={m.rotulo} resumo={`${preenchidos(linha.momentos[m.id])} de ${CAMPOS_MOMENTO.length} campos`}>
+                {CAMPOS_MOMENTO.map(c => (
+                  <AreaTexto key={c.id} aria-label={`Sessão ${linha.ordem}, ${m.rotulo}: ${c.rotulo}`} rows={2} placeholder={c.rotulo}
+                    value={linha.momentos[m.id][c.id]} onChange={e => mudarMomento(i, m.id, c.id, e.target.value)} />
+                ))}
+              </Recolhivel>
+            ))}
+            <Recolhivel titulo="Sumário padrão" resumo={linha.sumario.conteudos.trim() || linha.sumario.atividades.trim() ? "Preenchido" : "Opcional"}>
+              <AreaTexto aria-label={`Sessão ${linha.ordem}: sumário, conteúdos`} rows={3} placeholder="Conteúdos abordados" value={linha.sumario.conteudos}
+                onChange={e => mudar(i, { sumario: { ...linha.sumario, conteudos: e.target.value } })} />
+              <AreaTexto aria-label={`Sessão ${linha.ordem}: sumário, atividades`} rows={3} placeholder="Atividades realizadas" value={linha.sumario.atividades}
+                onChange={e => mudar(i, { sumario: { ...linha.sumario, atividades: e.target.value } })} />
+              <p className="m-0 text-xs text-tinta-suave sm:col-span-2">O formador encontra este texto no sumário da sessão enquanto estiver vazio; o sumário só conta depois de ele o gravar e assinar.</p>
+            </Recolhivel>
           </div>
         ))}
-        <Botao variante="secundario" tamanho="sm" onClick={() => patch({ planosSessao: [...data.planosSessao, { ordem: data.planosSessao.length + 1, objetivosGerais: "", objetivosEspecificos: "", conteudo: "" }] })}>
+        <Botao variante="secundario" tamanho="sm" onClick={() => patch({ planosSessao: [...data.planosSessao, novoPlanoCurso(data.planosSessao.length + 1)] })}>
           Acrescentar sessão
         </Botao>
       </div>
     </Cartao>
   );
 }
+

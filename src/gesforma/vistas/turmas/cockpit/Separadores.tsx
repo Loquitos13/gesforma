@@ -6,6 +6,7 @@ import { sessaoFormadores, sessaoModulos } from "../../../../partilhado/turmaMod
 import { type PresencaRow } from "../../../PedagogiaContext";
 import { type Separador as CockpitTab } from "../../../rotasGesforma";
 import { estadoBadge, Card, NewBtn, Th, Td, I } from "./base";
+import { ImportarPlanosCurso } from "./ImportarPlanos";
 export { type DocEstado, type DocItem } from "./documentosDados";
 export { DocumentosTurmaTab, cloneGrupos } from "./Documentos";
 export { CertificadosTurmaTab } from "./Certificados";
@@ -55,10 +56,14 @@ export function sumarioBtnCls(s: SumarioSessaoData | undefined, gold: boolean) {
 }
 
 export function SessoesTurmaTab({
-  accent, turmaNome, cursoNome, sessoes, planos, presencas, sumarios, formandos, onNovaSessao, onPlano, onSumario, onPresencas, onOpenFormador,
+  accent, regime, turmaId, onPlanosImportados, turmaNome, cursoNome, sessoes, planos, presencas, sumarios, formandos, onNovaSessao, onPlano, onSumario, onPresencas, onOpenFormador,
   podeEditar, podeCriar = true, formadorOpcoes, onFormador,
 }: {
   accent: "gold" | "fin";
+  regime?: "gold" | "fin";
+  turmaId?: number;
+  /** Depois de importar os planos da ficha do curso (recarregar a pedagogia da turma). */
+  onPlanosImportados?: () => void;
   turmaNome: string;
   cursoNome: string;
   sessoes: SessaoMeta[];
@@ -104,6 +109,9 @@ export function SessoesTurmaTab({
           >
             Imprimir folhas
           </button>
+          {podeCriar && regime && turmaId != null && onPlanosImportados && (
+            <ImportarPlanosCurso regime={regime} turmaId={turmaId} onImportados={onPlanosImportados} />
+          )}
           {podeCriar && <NewBtn accent={accent} label="+ Nova Sessão" onClick={onNovaSessao} />}
         </div>
       </div>

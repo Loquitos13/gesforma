@@ -312,3 +312,9 @@ export type ResultadosTurma = { formandos: { id: number; nome: string; estado: s
 
 export const apiResultadosTurma = (regime: Regime, turmaId: number, signal?: AbortSignal) =>
   api<ResultadosTurma>(`/v1/turmas/${regime}/${turmaId}/resultados`, { signal, silencioso: true });
+
+/** Copia para a turma os planos de sessão da ficha do curso (com `substituir`, também os já preenchidos e por assinar). */
+export const apiImportarPlanosCurso = (regime: Regime, turmaId: number, substituir: boolean) =>
+  api<{ importados: number; mantidos: number; semModelo: number }>(`/v1/turmas/${regime}/${turmaId}/planos/importar`, {
+    method: "POST", body: JSON.stringify({ substituir }),
+  });

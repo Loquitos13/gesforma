@@ -18,7 +18,7 @@ import { DtpPanel } from "../../../DtpView";
 import { I, TABS_FORMADOR, estadoBadge, tabDoFormador } from "./base";
 import { CertificadosTurmaTab, DocumentosTurmaTab, SessoesTurmaTab, TurmaTabBar, exportPayload } from "./Separadores";
 import { presencasDaSessao, useCriteriosAvaliacao, useTurmaPedagogia } from "../../../PedagogiaContext";
-import { herdarPlanoCurso, usePlanosCurso } from "../../../planosCurso";
+import { herdarPlanoCurso, herdarSumarioCurso, usePlanosCurso } from "../../../planosCurso";
 import type { Separador } from "../../../rotasGesforma";
 import type { Navegar } from "../../../shell/tipos";
 import { TurmaActivaToggle, TurmaInactivaBanner } from "../../../TurmaCronograma";
@@ -150,7 +150,7 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
                   onActualizar={() => void ped.recarregar()} />
               )}
               {tab === "sessoes" && (
-                <SessoesTurmaTab accent="fin" turmaNome={t.nome} cursoNome={t.curso} sessoes={sessoes} planos={ped.planos} presencas={ped.presencas}
+                <SessoesTurmaTab accent="fin" regime="fin" turmaId={t.id} onPlanosImportados={() => void ped.recarregar()} turmaNome={t.nome} cursoNome={t.curso} sessoes={sessoes} planos={ped.planos} presencas={ped.presencas}
                   sumarios={sumarios} formandos={nomesCockpit} onNovaSessao={() => setNovaSessao(true)} onPlano={setPlanoSessao}
                   onSumario={setSumarioSessao} onPresencas={setPresencasSessao} onOpenFormador={setFormadorAberto} podeEditar={podeDoc} podeCriar={!souFormador}
                   formadorOpcoes={souFormador ? undefined : opcoesFormador}
@@ -183,7 +183,7 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
               plano={planoSessao ? herdarPlanoCurso(modelosCurso.planos, planoSessao.n, ped.plano(planoSessao.n)) : emptyPlano()}
               onSave={data => { if (planoSessao) void ped.guardarPlano(planoSessao.n, data); }} />
             <SumarioSessaoModal open={!!sumarioSessao} onClose={() => setSumarioSessao(null)} accent="fin" sessao={sumarioSessao ?? undefined}
-              sumario={sumarioSessao ? ped.sumario(sumarioSessao.n) : emptySumario()}
+              sumario={sumarioSessao ? herdarSumarioCurso(modelosCurso.planos, sumarioSessao.n, ped.sumario(sumarioSessao.n)) : emptySumario()}
               onSave={data => {
                 if (!sumarioSessao) return;
                 void ped.guardarSumario(sumarioSessao.n, data);

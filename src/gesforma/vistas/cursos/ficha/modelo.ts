@@ -3,12 +3,14 @@ import type { Opcao } from "../../../../partilhado/api/catalogos";
 import { avaliacaoCcp, avaliacaoPadrao, cursoECcp, parseAvaliacaoCurso, type AvaliacaoCurso } from "../../../avaliacaoCurso";
 import { linhasPrincipais, modeloAplica, programaDePayload, topicosDeTexto, type OrganizacaoPrograma, type TopicoPrograma } from "../../../cursoPrograma";
 import { parseConteudosMoodle, type ConteudoMoodle } from "../../../ConteudosMoodle";
+import { normalizarPlanoCurso, type PlanoCurso } from "../../../planosCurso";
 
 export type Regime = "gold" | "fin";
 export type TabId = "identidade" | "oferta" | "conteudo" | "programa" | "moodle" | "planos" | "avaliacao" | "documentos" | "dtp" | "publicacao";
 export type MediaSlot = { name: string; url: string };
 export type PrecoOferta = { id: string; local: string; horario: string; preco: string };
-export type PlanoLinha = { ordem: number; objetivosGerais: string; objetivosEspecificos: string; conteudo: string };
+/** Plano de sessão do curso (plano completo e sumário padrão); a turma recebe-o pela ordem da sessão. */
+export type PlanoLinha = PlanoCurso;
 export type ValorFormador = { nome: string; valorHora: string };
 
 /** Dados base do curso (tabela cursos_gold / cursos_fin). */
@@ -141,7 +143,7 @@ export function fundirGuardado(base: CursoSite, guardado: Record<string, unknown
     capa: mediaComUrl(guardado.capa) ?? mediaComUrl(guardado.thumb) ?? base.capa,
     miniatura: mediaComUrl(guardado.miniatura) ?? base.miniatura,
     precosOferta: precosOferta(guardado.precosOferta),
-    planosSessao: Array.isArray(guardado.planosSessao) ? guardado.planosSessao as PlanoLinha[] : base.planosSessao,
+    planosSessao: Array.isArray(guardado.planosSessao) ? guardado.planosSessao.map((p, i) => normalizarPlanoCurso(p, i + 1)) : base.planosSessao,
     valoresFormador: Array.isArray(guardado.valoresFormador) ? guardado.valoresFormador as ValorFormador[] : base.valoresFormador,
     entidadeResponsavel: String(guardado.entidadeResponsavel ?? base.entidadeResponsavel ?? ""),
     conteudosMoodle: parseConteudosMoodle(guardado.conteudosMoodle),

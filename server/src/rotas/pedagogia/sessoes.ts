@@ -1,6 +1,8 @@
 /** Pedagogia da turma: leitura geral, sessões (plano, sumário, presenças) e documentos. */
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { dtpForTurma } from "../../pedagogia/dtp.js";
+import { importarPlanosCurso } from "../../planosCurso.js";
 import { documentoSchema, sessaoParam, sessaoPatchSchema } from "../../pedagogia/esquemas.js";
 import { asArr, asObj } from "../../pedagogia/util.js";
 import {
@@ -13,6 +15,8 @@ import { sumarioComRegras } from "../../sessaoRegras.js";
 import { regimeIdParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
 import { formadorPodeVer, turmaOu404 } from "./comum.js";
+
+const importarPlanosSchema = z.object({ substituir: z.boolean().optional().default(false) });
 
 function sessaoDTO(n: number, r: { plano: unknown; sumario: unknown; presencas: unknown } | null | undefined) {
   return {
@@ -82,6 +86,20 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
     const acao = patch.plano ? "turma.plano" : patch.sumario ? "turma.sumario" : "turma.presencas";
     await audit(db, req.actor!.id, acao, "turma", String(id), req.ip, { regime, sessao: n });
     return { sessao: sessaoDTO(n, await lerSessao(db, regime, id, n)) };
+  });
+
+  /** Copia os planos de sessão da ficha do curso para as sessões da turma (com `substituir`, também as não assinadas). */
+  app.post("/v1/turmas/:regime/:id/planos/importar", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: regimeIdParam, body: importarPlanosSchema }, req);
+    if (!v) return;
+    const { regime, id } = v.params;
+    const turma = await turmaOu404(db, reply, regime, id);
+    if (!turma) return;
+    if (await turmaFechada(db, regime, id)) return reply.code(409).send({ error: ERRO_TURMA_FECHADA });
+    const r = await importarPlanosCurso(db, regime, id, { substituir: v.body.substituir });
+    await audit(db, req.actor!.id, "turma.planos_importar", "turma", String(id), req.ip, { regime, ...r });
+    return r;
   });
 
   app.put("/v1/turmas/:regime/:id/documentos", async (req, reply) => {

@@ -420,3 +420,36 @@ describe("ficha manual pela secretaria", () => {
     expect(depois).toBe(hash);
   });
 });
+
+describe("turma escolhida no site", () => {
+  it("fica como turma do percurso: a ligação pessoal não volta a pedir o cronograma, salvo turma cheia", async () => {
+    const ctx = await arrancar();
+    const curso = await cursoGold(ctx);
+    const turma = await turmaGold(ctx, curso, "2031-02-03");
+    const r = await publico(ctx, { nome: "Sofia", email: `${unico("sofia")}@exemplo.pt`, curso, turmaId: turma.id });
+    expect(r.statusCode, r.body).toBe(200);
+    const id = r.json().preinscricao.id as number;
+    const token = await tokenDe(ctx, id);
+    const vista = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${token}` })).json();
+    expect(vista.turmaEscolhida?.id).toBe(turma.id);
+    expect(vista.turmaCheia).toBe(false);
+
+    // A secretaria dá a turma como cheia: volta a escolha, com as outras turmas.
+    const cheia = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/turma-cheia`, {});
+    expect(cheia.statusCode, cheia.body).toBe(200);
+    const depois = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${token}` })).json();
+    expect(depois.turmaEscolhida).toBeNull();
+    expect(depois.turmaCheia).toBe(true);
+  });
+
+  it("recusa uma turma sem vagas", async () => {
+    const ctx = await arrancar();
+    const curso = await cursoGold(ctx);
+    const turma = await turmaGold(ctx, curso, "2031-03-03", 1);
+    await ctx.db.query("UPDATE turmas_gold SET vagas_anunciadas = 0 WHERE id = $1", [turma.id]);
+    await ctx.db.query("UPDATE turmas_gold SET vagas = 0 WHERE id = $1", [turma.id]);
+    const r = await publico(ctx, { nome: "Rita", email: `${unico("rita")}@exemplo.pt`, curso, turmaId: turma.id });
+    expect(r.statusCode).toBe(400);
+    expect(r.json().error).toMatch(/vagas/);
+  });
+});

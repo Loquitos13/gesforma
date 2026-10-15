@@ -7,10 +7,12 @@ import { ePreinscricao, ePrepago } from "../partilhado/siteConteudo";
 import { textoListaVazia, useOpcoesPublicas } from "./useOpcoesPublicas";
 import { ConsentimentoRgpd } from "./ConsentimentoRgpd";
 
-type Passo = "dados" | "pagamento" | "feito";
+type Passo = "turma" | "dados" | "pagamento" | "feito";
+/** Como se abre o pedido: o curso e, quando a página do curso o deu, o local já escolhido. */
+export type AbrirInscricao = (curso: Course, opcoes?: { local?: string }) => void;
 type OfertaEstado = "a-carregar" | "pronto" | "erro";
 
-const InscricaoCtx = createContext<{ abrir: (curso: Course) => void } | null>(null);
+const InscricaoCtx = createContext<{ abrir: AbrirInscricao } | null>(null);
 
 export function useInscricao() {
   const ctx = useContext(InscricaoCtx);
@@ -21,17 +23,19 @@ export function useInscricao() {
 /** Como `useInscricao`, mas fora do site (pré-visualização do editor) abre a página do curso. */
 export function useInscricaoOpcional() {
   const ctx = useContext(InscricaoCtx);
-  return ctx ?? { abrir: (curso: Course) => { window.location.assign(`/formacao/${encodeURIComponent(curso.id)}`); } };
+  const fora: AbrirInscricao = curso => { window.location.assign(`/formacao/${encodeURIComponent(curso.id)}`); };
+  return ctx ?? { abrir: fora };
 }
 
 export function InscricaoSite({ children }: { children: ReactNode }) {
   const [curso, setCurso] = useState<Course | null>(null);
-  const abrir = useCallback((seguinte: Course) => setCurso(seguinte), []);
+  const [localInicial, setLocalInicial] = useState("");
+  const abrir = useCallback<AbrirInscricao>((seguinte, opcoes) => { setLocalInicial(opcoes?.local ?? ""); setCurso(seguinte); }, []);
   const fechar = useCallback(() => setCurso(null), []);
   return (
     <InscricaoCtx.Provider value={{ abrir }}>
       {children}
-      <ModalInscricao curso={curso} onClose={fechar} />
+      <ModalInscricao curso={curso} localInicial={localInicial} onClose={fechar} />
     </InscricaoCtx.Provider>
   );
 }
@@ -40,7 +44,7 @@ function norm(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () => void }) {
+function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null; localInicial: string; onClose: () => void }) {
   const aberto = Boolean(curso);
   const preinscricao = ePreinscricao(curso?.enrollment);
   const prepago = ePrepago(curso?.enrollment);
@@ -68,10 +72,10 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
 
   useEffect(() => {
     if (!aberto) return;
-    setPasso("dados");
+    setPasso("turma");
     setErro("");
     setAviso("");
-    setLocal("");
+    setLocal(localInicial);
     setHorario("");
     setDataInicio("");
     setTurmaId(0);
@@ -83,7 +87,7 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
     };
-  }, [aberto, curso?.id, onClose]);
+  }, [aberto, curso?.id, localInicial, onClose]);
 
   useEffect(() => {
     if (!aberto) return;
@@ -102,11 +106,26 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
 
   const doCurso = useMemo(() => {
     const nomes = new Set([norm(curso?.title ?? ""), norm(curso?.nomeOferta ?? "")].filter(Boolean));
-    return turmas.filter(t => nomes.has(norm(t.curso)) && (!t.regime || t.regime === curso?.regime));
+    // Só as datas de início ainda por vir (as mesmas que a página do curso mostra).
+    const hoje = new Date().toISOString().slice(0, 10);
+    return turmas.filter(t => nomes.has(norm(t.curso)) && (!t.regime || t.regime === curso?.regime) && (!t.dataInicio || t.dataInicio >= hoje));
   }, [turmas, curso?.title, curso?.nomeOferta, curso?.regime]);
   const locais = uniqueVals(doCurso, "local");
-  const horarios = uniqueVals(ofertaFiltrada(doCurso, { local }), "horario");
-  const datas = ofertaFiltrada(doCurso, { local, horario });
+  // Turmas do local escolhido, pela data de início (com horário, preço, vagas e cronograma).
+  const datas = useMemo(
+    () => [...ofertaFiltrada(doCurso, { local })].sort((a, b) => a.dataInicio.localeCompare(b.dataInicio) || a.horario.localeCompare(b.horario)),
+    [doCurso, local],
+  );
+  // Sem turmas com data, o pedido começa nos dados.
+  useEffect(() => {
+    if (passo === "turma" && ofertaEstado !== "a-carregar" && doCurso.length === 0) setPasso("dados");
+  }, [passo, ofertaEstado, doCurso.length]);
+  // Um só local: fica escolhido. Um local vindo da página que não tem turmas: limpa-se.
+  useEffect(() => {
+    if (ofertaEstado !== "pronto") return;
+    if (locais.length === 1 && !local) setLocal(locais[0]!);
+    else if (local && locais.length && !locais.includes(local)) setLocal("");
+  }, [ofertaEstado, locais, local]);
   const turma = doCurso.find(t => t.turmaId === turmaId) ?? null;
   const precoNumero = turma?.preco ?? curso?.precoDesde ?? null;
   const precoLabel = precoNumero != null ? `${precoNumero.toLocaleString("pt-PT")} €` : curso?.price || "Sob consulta";
@@ -117,15 +136,17 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
     setDataInicio("");
     setTurmaId(0);
   }
-  function escolherHorario(valor: string) {
-    setHorario(valor);
-    setDataInicio("");
-    setTurmaId(0);
+  function escolherTurma(t: OfertaTurma) {
+    if (vagasNumero(t) <= 0) return;
+    setHorario(t.horario);
+    setDataInicio(t.dataInicio);
+    setTurmaId(t.turmaId);
+    setErro("");
   }
-  function escolherTurma(id: string) {
-    const hit = datas.find(t => String(t.turmaId) === id);
-    setDataInicio(hit?.dataInicio ?? "");
-    setTurmaId(hit?.turmaId ?? 0);
+  function continuarTurma() {
+    if (doCurso.length && !turmaId) { setErro("Escolha a data de início da turma."); return; }
+    setErro("");
+    setPasso("dados");
   }
 
   function validarDados() {
@@ -135,7 +156,7 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
     if (!consentimento) return "Para enviar, aceite a política de privacidade.";
     if (ofertaEstado === "a-carregar") return "A carregar as turmas libertadas.";
     if (ofertaEstado === "erro") return "Não foi possível carregar as turmas. Feche e volte a abrir o pedido.";
-    if (doCurso.length && !turmaId) return "Escolha local, horário e data de início da turma.";
+    if (doCurso.length && !turmaId) return "Escolha primeiro a data de início da turma.";
     return "";
   }
 
@@ -159,7 +180,7 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
     e?.preventDefault();
     if (!curso) return;
     const falha = validarDados();
-    if (falha) { setErro(falha); setPasso("dados"); return; }
+    if (falha) { setErro(falha); setPasso(doCurso.length && !turmaId ? "turma" : "dados"); return; }
     if (prepago) {
       const pagamento = falhaPagamento();
       if (pagamento) { setErro(pagamento); return; }
@@ -219,6 +240,11 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
       ? `A ENA confirma consigo o pagamento por ${metodo}. Nada é cobrado neste ecrã.`
       : "";
   const pagamentoBloqueado = passo === "pagamento" && Boolean(falhaPagamento());
+  const passos: [Passo, string][] = [
+    ...(doCurso.length > 0 || ofertaEstado === "a-carregar" ? [["turma", "Data de início"] as [Passo, string]] : []),
+    ["dados", "Os seus dados"],
+    ...(prepago ? [["pagamento", "Pagamento"] as [Passo, string]] : []),
+  ];
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="inscricao-titulo">
@@ -236,10 +262,11 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 6l12 12M18 6 6 18" /></svg>
           </button>
         </header>
-        {prepago && passo !== "feito" && (
-          <ol className="grid grid-cols-2 border-b border-[#1C3350]/10 text-xs font-extrabold uppercase tracking-[0.08em]">
-            <li className={`px-5 py-3 sm:px-8 ${passo === "dados" ? "bg-[#1C3350] text-white" : "text-[#1C3350]/45"}`}>1 · Os seus dados</li>
-            <li className={`px-5 py-3 sm:px-8 ${passo === "pagamento" ? "bg-[#1C3350] text-white" : "text-[#1C3350]/45"}`}>2 · Pagamento</li>
+        {passo !== "feito" && passos.length > 1 && (
+          <ol className="grid border-b border-[#1C3350]/10 text-xs font-extrabold uppercase tracking-[0.08em]" style={{ gridTemplateColumns: `repeat(${passos.length}, minmax(0, 1fr))` }}>
+            {passos.map(([id, rotulo], i) => (
+              <li key={id} className={`px-5 py-3 sm:px-8 ${passo === id ? "bg-[#1C3350] text-white" : "text-[#1C3350]/45"}`}>{i + 1} · {rotulo}</li>
+            ))}
           </ol>
         )}
         <div className="overflow-y-auto px-5 py-6 sm:px-8">
@@ -255,6 +282,56 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
                 </p>
               )}
             </div>
+          ) : passo === "turma" ? (
+            <form id="inscricao-form" onSubmit={e => { e.preventDefault(); continuarTurma(); }} className="space-y-6">
+              {ofertaEstado === "a-carregar" ? (
+                <p className="text-sm text-[#1C3350]/60">A carregar as datas das turmas.</p>
+              ) : ofertaEstado === "erro" ? (
+                <p className="text-sm text-[#A60000]">Não foi possível carregar as turmas. Feche e volte a abrir o pedido.</p>
+              ) : (
+                <>
+                  <fieldset>
+                    <legend className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Local</legend>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {locais.map(l => (
+                        <button key={l} type="button" onClick={() => escolherLocal(l)} aria-pressed={local === l}
+                          className={`border px-4 py-2 text-sm font-bold ${local === l ? "border-[#1C3350] bg-[#1C3350] text-white" : "border-[#1C3350]/20 text-[#1C3350] hover:border-[#1C3350]"}`}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <fieldset>
+                    <legend className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Data de início</legend>
+                    {!local ? (
+                      <p className="mt-3 text-sm text-[#1C3350]/60">Escolha o local para ver as datas de início.</p>
+                    ) : (
+                      <div className="mt-3 grid gap-2">
+                        {datas.map(t => {
+                          const vagas = vagasNumero(t);
+                          const ativo = t.turmaId === turmaId;
+                          return (
+                            <div key={t.turmaId} className={`flex flex-wrap items-center gap-x-4 gap-y-2 border px-4 py-3 ${ativo ? "border-[#1C3350] bg-[#1C3350] text-white" : "border-[#1C3350]/15"} ${vagas <= 0 ? "opacity-50" : ""}`}>
+                              <button type="button" disabled={vagas <= 0} onClick={() => escolherTurma(t)} aria-pressed={ativo}
+                                className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-4 gap-y-1 text-left disabled:cursor-not-allowed">
+                                <strong className="text-base">{fmtDataPt(t.dataInicio)}</strong>
+                                <span className="text-sm opacity-75">{t.horario}</span>
+                                {t.preco != null && <span className="text-sm font-bold">{t.preco.toLocaleString("pt-PT")} €</span>}
+                                <span className="text-xs opacity-65">{vagasPublicas(t)}</span>
+                              </button>
+                              {t.cronogramaPublicado && (
+                                <a href={`/cronograma/${t.regime || "gold"}/${t.turmaId}`} target="_blank" rel="noreferrer"
+                                  className={`text-sm font-bold underline ${ativo ? "text-[#FFA900]" : "text-[#A60000]"}`}>Ver cronograma</a>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </fieldset>
+                </>
+              )}
+            </form>
           ) : passo === "pagamento" ? (
             <form id="inscricao-form" onSubmit={e => void enviar(e)} className="space-y-6">
               <div className="bg-[#F4F6F8] px-4 py-4 text-sm leading-6 text-[#1C3350]/75">
@@ -320,57 +397,18 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
                 </div>
               </div>
               <div>
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Dados do curso</p>
-                {curso.description && <p className="mt-3 text-sm leading-6 text-[#1C3350]/65">{curso.description}</p>}
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <Campo label="Curso a que se quer inscrever">
-                    <input className={`${inputCls} bg-[#F4F6F8]`} value={curso.title} readOnly />
-                  </Campo>
-                  {ofertaEstado === "a-carregar" ? (
-                    <p className="self-end text-sm text-[#1C3350]/60">A carregar local, horário e data das turmas libertadas.</p>
-                  ) : ofertaEstado === "erro" ? (
-                    <p className="self-end text-sm text-[#A60000]">Não foi possível carregar as turmas.</p>
-                  ) : doCurso.length > 0 ? (
-                    <>
-                      <Campo label="Local">
-                        <SearchSelect value={local} onChange={escolherLocal} options={locais.map(value => ({ value }))} allowEmpty placeholder="Seleccione o local" emptyLabel="Seleccione o local" />
-                      </Campo>
-                      <Campo label="Horário">
-                        <SearchSelect value={horario} onChange={escolherHorario} disabled={!local} options={horarios.map(value => ({ value }))} allowEmpty placeholder="Seleccione o horário" emptyLabel={local ? "Seleccione o horário" : "Escolha primeiro o local"} />
-                      </Campo>
-                      <Campo label="Data de início">
-                        <SearchSelect
-                          value={turmaId ? String(turmaId) : ""}
-                          onChange={escolherTurma}
-                          disabled={!horario}
-                          allowEmpty
-                          placeholder="Seleccione a data"
-                          emptyLabel={horario ? "Seleccione a data" : "Escolha primeiro o horário"}
-                          options={datas.map(t => ({
-                            value: String(t.turmaId),
-                            label: fmtDataPt(t.dataInicio),
-                            // Público: sem o código interno da turma; as vagas são as anunciadas pelo comercial.
-                            sub: `${vagasPublicas(t)}${t.preco != null ? ` · ${t.preco.toLocaleString("pt-PT")} €` : ""}`,
-                          }))}
-                        />
-                      </Campo>
-                    </>
-                  ) : (
-                    <p className="text-sm leading-6 text-[#1C3350]/65 sm:col-span-2">
-                      {prepago
-                        ? "Não há turma com data marcada. O pedido segue em acesso imediato, online, e o pagamento fica no passo seguinte."
-                        : "Ainda não há turma com data. O pedido fica registado na mesma e a secretaria confirma a turma. O email automático sai ao inscrever."}
-                    </p>
-                  )}
-                </div>
-                {turma?.preco != null && (
-                  <p className="mt-4 text-sm font-semibold text-[#1C3350]">
-                    Preço desta inscrição: {turma.preco.toLocaleString("pt-PT")} €
-                    <span className="font-normal text-[#1C3350]/55"> · vale para {turma.local} e {turma.horario}</span>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Turma</p>
+                {turma ? (
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 bg-[#F4F6F8] px-4 py-3 text-sm text-[#1C3350]">
+                    <span><strong>{fmtDataPt(turma.dataInicio)}</strong> · {turma.local} · {turma.horario}{turma.preco != null ? ` · ${turma.preco.toLocaleString("pt-PT")} €` : ""}</span>
+                    <button type="button" onClick={() => setPasso("turma")} className="text-sm font-bold text-[#A60000] underline">Alterar</button>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm leading-6 text-[#1C3350]/65">
+                    {prepago
+                      ? "Não há turma com data marcada. O pedido segue em acesso imediato, online, e o pagamento fica no passo seguinte."
+                      : "Ainda não há turma com data. O pedido fica registado na mesma e a secretaria confirma a turma. O email automático sai ao inscrever."}
                   </p>
-                )}
-                {turma?.cronogramaPublicado && (
-                  <a className="mt-3 inline-flex text-sm font-bold text-[#A60000] underline" href={`/cronograma/${turma.regime || "gold"}/${turma.turmaId}`} target="_blank" rel="noreferrer">Ver o cronograma desta turma</a>
                 )}
                 <ConsentimentoRgpd aceite={consentimento} onMudar={setConsentimento} className="mt-5" />
                 {prepago && ofertaEstado === "pronto" && (
@@ -385,17 +423,25 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
           {passo === "pagamento" && (
             <button type="button" onClick={() => { setErro(""); setPasso("dados"); }} className="px-5 py-3 text-sm font-bold text-[#1C3350]/70">Voltar aos dados</button>
           )}
+          {passo === "dados" && doCurso.length > 0 && (
+            <button type="button" onClick={() => { setErro(""); setPasso("turma"); }} className="px-5 py-3 text-sm font-bold text-[#1C3350]/70">Voltar à data</button>
+          )}
           {passo === "feito" ? (
             <button type="button" onClick={onClose} className="bg-[#1C3350] px-6 py-3 text-sm font-extrabold uppercase tracking-[0.08em] text-white">Fechar</button>
           ) : (
             <button type="submit" form="inscricao-form" disabled={busy || pagamentoBloqueado} className="bg-[#A60000] px-6 py-3 text-sm font-extrabold uppercase tracking-[0.08em] text-white hover:bg-[#8B0000] disabled:opacity-40">
-              {busy ? "A enviar…" : passo === "pagamento" ? "Confirmar pedido" : prepago ? "Continuar para o pagamento" : "Inscrever-me"}
+              {busy ? "A enviar…" : passo === "turma" ? "Continuar para os dados" : passo === "pagamento" ? "Confirmar pedido" : prepago ? "Continuar para o pagamento" : "Inscrever-me"}
             </button>
           )}
         </footer>
       </div>
     </div>
   );
+}
+
+/** Vagas que o site mostra (as anunciadas pelo comercial, nunca acima das livres). */
+function vagasNumero(t: OfertaTurma) {
+  return t.vagasMostradas ?? t.vagasLivres;
 }
 
 const inputCls = "w-full border border-[#1C3350]/15 bg-white px-3 py-2.5 text-sm text-[#1C3350] outline-none focus:border-[#1C3350]";

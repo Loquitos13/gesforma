@@ -1,6 +1,6 @@
 // Página do curso em blocos soltos: banner, síntese, dados, objetivos, programa, turmas e cartão de inscrição.
 // Cada bloco lê o curso da página (CursoAtualCtx), por isso pode ir para qualquer secção ou coluna.
-import { createContext, useContext, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { ComponentConfig, Slot } from "@puckeditor/core";
 import { ePrepago, ePreinscricao, rotuloBotaoInscricao } from "../../partilhado/siteConteudo";
 import { useInscricaoOpcional } from "../SiteInscricao";
@@ -278,16 +278,39 @@ export const CursoTurmas: ComponentConfig<ListaProps> = {
 // ─── Cartão de inscrição ─────────────────────────────────────────────────────
 
 type CartaoProps = Base & {
-  conteudo: Slot; mostrarImagem: boolean; fixo: boolean;
+  conteudo: Slot; mostrarImagem: boolean; fixo: boolean; rotuloLocal: string;
   textoPrepago: string; textoPreinscricao: string; textoDireto: string;
 };
 
-function BotaoInscricao({ curso }: { curso: Course }) {
+/**
+ * Escolha do local e botão de inscrição: o pedido abre já nesse local, com as datas de início
+ * (e o cronograma de cada turma); os dados pessoais vêm a seguir.
+ */
+function BotaoInscricao({ curso, rotuloLocal }: { curso: Course; rotuloLocal: string }) {
   const { abrir } = useInscricaoOpcional();
+  const locais = [...new Set(curso.sessoes.map(s => s.local.trim()).filter(Boolean))];
+  const [local, setLocal] = useState(locais.length === 1 ? locais[0]! : "");
+  const falta = locais.length > 1 && !local;
   return (
-    <button type="button" onClick={() => abrir(curso)} className="mt-7 flex w-full items-center justify-between bg-[var(--c-destaque)] px-5 py-4 text-xs font-extrabold uppercase tracking-[0.08em] text-white hover:brightness-90">
-      {rotuloBotaoInscricao(curso.enrollment)} <Icon name="arrow" />
-    </button>
+    <>
+      {locais.length > 1 && (
+        <fieldset className="mt-6">
+          <legend className="text-xs font-extrabold uppercase tracking-[0.14em] opacity-60">{rotuloLocal}</legend>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {locais.map(l => (
+              <button key={l} type="button" aria-pressed={local === l} onClick={() => setLocal(l)}
+                className={`border px-3 py-2 text-sm font-bold ${local === l ? "border-[var(--c-primaria)] bg-[var(--c-primaria)] text-white" : "border-black/15 hover:border-[var(--c-primaria)]"}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
+      <button type="button" disabled={falta} onClick={() => abrir(curso, local ? { local } : undefined)}
+        className="mt-7 flex w-full items-center justify-between bg-[var(--c-destaque)] px-5 py-4 text-xs font-extrabold uppercase tracking-[0.08em] text-white hover:brightness-90 disabled:cursor-not-allowed disabled:opacity-50">
+        {falta ? "Escolha o local" : rotuloBotaoInscricao(curso.enrollment)} <Icon name="arrow" />
+      </button>
+    </>
   );
 }
 
@@ -297,15 +320,16 @@ export const CursoInscricao: ComponentConfig<CartaoProps> = {
     conteudo: { type: "slot", label: "Blocos no cartão" },
     mostrarImagem: simNao("Imagem no cartão"),
     fixo: simNao("Acompanha o scroll (computador)"),
+    rotuloLocal: { type: "text", label: "Título da escolha do local" },
     textoPrepago: { type: "textarea", label: "Texto (pré-pago)" },
     textoPreinscricao: { type: "textarea", label: "Texto (pré-inscrição)" },
     textoDireto: { type: "textarea", label: "Texto (acesso direto)" },
     aparencia: campoAparencia(),
   },
   defaultProps: {
-    conteudo: [], mostrarImagem: true, fixo: true,
+    conteudo: [], mostrarImagem: true, fixo: true, rotuloLocal: "Onde quer fazer o curso?",
     textoPrepago: "Primeiro recolhemos os seus dados. O pagamento fica no passo seguinte.",
-    textoPreinscricao: "A pré-inscrição pede os seus dados e, quando existir, a turma. O pedido fica registado e sai o email automático.",
+    textoPreinscricao: "Escolha o local e a data de início (com o cronograma de cada turma). A seguir pedimos os seus dados.",
     textoDireto: "Este curso abre no Moodle. Não há formulário de pré-inscrição.",
     aparencia: estiloVazio(),
   },
@@ -323,7 +347,7 @@ export const CursoInscricao: ComponentConfig<CartaoProps> = {
           <p className="mt-4 text-sm leading-6 opacity-65">
             {ePrepago(curso.enrollment) ? p.textoPrepago : ePreinscricao(curso.enrollment) ? p.textoPreinscricao : p.textoDireto}
           </p>
-          <BotaoInscricao curso={curso} />
+          <BotaoInscricao curso={curso} rotuloLocal={p.rotuloLocal} />
           <Conteudo className="mt-5 flex flex-col gap-3 empty:hidden" minEmptyHeight={30} />
         </>
       )}

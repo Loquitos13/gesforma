@@ -44,6 +44,9 @@ export function PublicDocumentos({ token }: { token: string }) {
   const [encerrada, setEncerrada] = useState(false);
   const [fecho, setFecho] = useState<{ motivo: string; mensagem: string }>({ motivo: "", mensagem: "" });
   const [escolheTurma, setEscolheTurma] = useState(true);
+  // O passo do cronograma só aparece sem turma escolhida: a turma escolhe-se no site; aqui só volta
+  // quando a secretaria a dá como cheia (fica sem turma e com as turmas recomendadas).
+  const [pedeCronograma, setPedeCronograma] = useState(true);
   /** Passo de pagamento: só com o pagamento pedido pela secretaria e ainda por confirmar. */
   const [pagamento, setPagamento] = useState<PagamentoPercurso | null>(null);
   const [correcao, setCorrecao] = useState(false);
@@ -72,8 +75,11 @@ export function PublicDocumentos({ token }: { token: string }) {
     setTipos(r.tipos ?? []);
     setFicheiros(r.ficheiros ?? []);
     setEncerrada(false);
-    const comTurma = r.escolheTurma !== false;
-    setEscolheTurma(comTurma);
+    const escolhe = r.escolheTurma !== false;
+    setEscolheTurma(escolhe);
+    // Fixo enquanto a pessoa está no percurso: escolher a turma no passo 2 não esconde o passo.
+    const comTurma = manterPasso ? pedeCronograma : escolhe && (!r.turmaEscolhida || Boolean(r.turmaCheia));
+    if (!manterPasso) setPedeCronograma(comTurma);
     setPagamento(r.precisaPagamento && r.pagamento ? r.pagamento : null);
     setCorrecao(Boolean(r.correcao));
     setTurmas(r.turmas ?? []);
@@ -301,7 +307,7 @@ export function PublicDocumentos({ token }: { token: string }) {
               <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#c48400]">Percurso de pré-inscrição</p>
               <h1 className="mt-2 text-[1.65rem] font-semibold tracking-tight leading-tight">{nome}</h1>
               <p className="mt-2 text-sm leading-relaxed text-[#5c564c]">{curso}</p>
-              {escolheTurma && <ol className="mt-5 grid grid-cols-2 gap-2">
+              {pedeCronograma && <ol className="mt-5 grid grid-cols-2 gap-2">
                 {PASSOS.map((label, i) => {
                   const n = (i + 1) as 1 | 2;
                   const aberto = passo === n;
@@ -322,7 +328,7 @@ export function PublicDocumentos({ token }: { token: string }) {
                   );
                 })}
               </ol>}
-              {escolheTurma && (
+              {pedeCronograma && (
                 <div className="mt-3 h-1 overflow-hidden rounded-full bg-[#efeae1]" aria-hidden>
                   <div
                     className="h-full rounded-full bg-[#ffa900] transition-[width] duration-500 ease-out"
@@ -332,6 +338,13 @@ export function PublicDocumentos({ token }: { token: string }) {
               )}
               {!escolheTurma && (
                 <p className="mt-3 text-sm leading-relaxed text-[#5c564c]">Envie os documentos abaixo. Depois da validação, a secretaria coloca-o(a) na turma e avisa por email.</p>
+              )}
+              {escolheTurma && !pedeCronograma && turmaEscolhida && (
+                <div className="mt-4 rounded-xl bg-[#fffaf2] px-4 py-3 text-sm ring-1 ring-[#efeae1]">
+                  <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#8a8172]">Turma escolhida</p>
+                  <p className="mt-1 font-semibold">{[turmaEscolhida.local, turmaEscolhida.horario].filter(Boolean).join(" · ")}</p>
+                  <p className="mt-1 text-[#5c564c]">Início {fmtData(turmaEscolhida.dataInicio)}. Envie os documentos abaixo e submeta a inscrição.</p>
+                </div>
               )}
               {correcao && <p className="mt-4 text-sm text-red-800">Há ficheiros por corrigir. Volte a enviar os que a secretaria indicou.</p>}
               {percursoConcluido && emFalta.length > 0 && (
@@ -347,7 +360,7 @@ export function PublicDocumentos({ token }: { token: string }) {
                 <div className="px-6 py-4 sm:px-8">
                   <div className="flex items-baseline justify-between gap-3 text-xs">
                     <span className="font-semibold">{feitosObrigatorios} de {obrigatorios.length} obrigatórios{opcionais.length > 0 ? ` · ${feitosOpcionais} de ${opcionais.length} opcionais` : ""}</span>
-                    {escolheTurma && <span className="text-[#8a8172]">Passo 1 de 2</span>}
+                    {pedeCronograma && <span className="text-[#8a8172]">Passo 1 de 2</span>}
                   </div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#efeae1]">
                     <div
@@ -406,7 +419,7 @@ export function PublicDocumentos({ token }: { token: string }) {
                 </ol>
                 <div className="border-t border-[#efeae1] px-6 py-4 sm:px-8">
                   {ok && <p className="mb-3 text-sm text-emerald-800">{ok}</p>}
-                  {escolheTurma ? (
+                  {pedeCronograma ? (
                     <button type="button" disabled={aSair} onClick={() => irPara(2)} className="w-full rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white transition-opacity disabled:opacity-40">
                       {aSair && direccao === "frente" ? "A avançar…" : "Continuar para o cronograma"}
                     </button>
@@ -422,7 +435,7 @@ export function PublicDocumentos({ token }: { token: string }) {
               </section>
             )}
 
-            {passo === 2 && escolheTurma && (
+            {passo === 2 && pedeCronograma && (
               <section className="border-t border-[#efeae1] px-6 py-5 sm:px-8">
                 <p className="text-sm text-[#5c564c]">{textoTurmas(criterios)}</p>
                 {turmaCheia && (

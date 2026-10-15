@@ -1,4 +1,5 @@
 import { firePreinscricaoEmail } from "./docsLink.js";
+import { gravarTurmaEscolhida } from "./repos/percurso.js";
 import { precoParaOferta } from "./precoOferta.js";
 import { findDuplicados, logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
@@ -108,6 +109,7 @@ export async function criarPreinscricaoPublica(
     })
     : null;
   if (regime === "gold" && input.turmaId && !turma) return { error: "a turma escolhida já não está libertada" as const };
+  if (turma && turma.vagasLivres <= 0) return { error: "a turma escolhida já não tem vagas: escolha outra data" as const };
   const acessoImediato = Boolean(input.acessoImediato) && !turma;
   const local = sanitizeHeader(turma?.local || input.local || (acessoImediato ? "Online" : ""));
   const horario = sanitizeHeader(turma?.horario || input.horario || "");
@@ -152,6 +154,11 @@ export async function criarPreinscricaoPublica(
     piiEnc: piiPack.pii_enc ?? "", publicId,
     consentimento: input.consentimento === true ? { ip: (meta.ip ?? "").slice(0, 64), versao: consent.versao } : null,
   });
+  // A turma escolhida no site (data e cronograma) fica como a turma do percurso: a ligação pessoal
+  // já não volta a pedir o cronograma, salvo se a secretaria a der como cheia.
+  if (turma) {
+    await gravarTurmaEscolhida(db, id, { id: turma.turmaId, local, horario, dataInicio: turma.dataInicio, preco });
+  }
   const detalhe = [origem, curso, local, horario, inicio !== "-" ? inicio : ""].filter(Boolean).join(" · ");
   await logLeadEvent(db, id, undefined, "criacao", "Pré-inscrição recebida", detalhe);
   if (!oferta) await logLeadEvent(db, id, undefined, "campo", "Curso fora da oferta", `Pedido: ${pedidoCurso || "sem curso"}. Sem pedido de pagamento.`);

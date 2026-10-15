@@ -34,6 +34,11 @@ export const CTA_BY_TIPO: Record<string, CtaDestino> = {
     href: "{{documentos_url}}",
     funcao: "Enviar os documentos em falta (último lembrete)",
   },
+  campanha_preinscritos: {
+    ambito: "documentos",
+    href: "{{documentos_url}}",
+    funcao: "Retomar a inscrição: enviar os documentos",
+  },
   faturacao: {
     ambito: "contacto",
     href: "{{faturacao_url}}",
@@ -110,7 +115,7 @@ export function buildCtaVars(p: {
   documentosUrl?: string; comprovativoUrl?: string;
   referencia?: string; entidade?: string; valor?: string; documentosLista?: string;
   /** Listas (um item por linha): documentos pedidos, documentos em falta, telefones por zona. */
-  documentosItens?: string[]; emFaltaItens?: string[]; telefonesItens?: string[];
+  documentosItens?: string[]; emFaltaItens?: string[]; telefonesItens?: string[]; cronogramasItens?: string[];
 }) {
   const origin = config.appOrigin.replace(/\/$/, "");
   const q = new URLSearchParams({ email: p.email, curso: p.curso, turma: p.turma });
@@ -131,6 +136,7 @@ export function buildCtaVars(p: {
     documentos_itens: (p.documentosItens ?? []).join("\n"),
     documentos_em_falta_itens: (p.emFaltaItens ?? []).join("\n"),
     telefones_itens: (p.telefonesItens ?? []).join("\n"),
+    cronogramas_itens: (p.cronogramasItens ?? []).join("\n"),
   };
 }
 

@@ -10,6 +10,7 @@ import {
   data, eur, num, useFiltrosUrl, type Coluna,
 } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
+import { CampanhasEmail } from "./CampanhasEmail";
 import { ApagarCampanha, FormCampanha } from "./FormCampanha";
 
 const ESTADOS = [["ativas", "Ativas"], ["terminadas", "Terminadas"], ["todas", "Todas"]] as const;
@@ -110,6 +111,7 @@ export default function Campanhas({ navigate }: VistaProps) {
         </Cartao>
         {sel && <Detalhe id={sel.id} gerir={gerir} onEditar={setForm} onApagar={setApagar} />}
       </div>
+      <CampanhasEmail campanhas={lista} gerir={gerir} />
       <FormCampanha campanha={form} onFechar={() => setForm(null)} onGravada={id => setF({ sel: String(id) })} />
       <ApagarCampanha campanha={apagar} onFechar={() => setApagar(null)} onApagada={() => setF({ sel: "" })} />
     </div>

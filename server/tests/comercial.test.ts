@@ -177,3 +177,59 @@ describe("Equipa: período e período anterior", () => {
     expect((await pedido(ctx, "comercial", "PUT", `/v1/equipa/${ctx.userId.comercial}/objetivo`, { metaPct: 30 })).statusCode).toBe(403);
   });
 });
+
+describe("Campanhas por email aos pré-inscritos parados", () => {
+  it("escolhe quem tem mais de um mês e 2 contactos, põe na fila com o cronograma e regista o contacto", async () => {
+    const curso = `Curso Mail ${Date.now()}`;
+    const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-gold", {
+      dataInicio: "2099-06-01", nome: `CM ${Date.now()}`, curso, local: "Porto", horario: "Laboral", vagas: 10,
+    });
+    expect(t.statusCode, t.body).toBe(200);
+    const turmaId = t.json().turma.id as number;
+    await ctx.db.query("UPDATE turmas_gold SET cronograma_publicado_em = now() WHERE id = $1", [turmaId]);
+
+    const lead = async (dias: number, contactos: number, estado = "2º Contacto") => {
+      const r = await ctx.db.query<{ id: number }>(
+        `INSERT INTO preinscricoes (id, inscrito, nome, email, curso, preco, estado, regime, created_at)
+         VALUES (nextval('ops_id_seq')::int, to_char(now(), 'YYYY-MM-DD'), 'Parado', $1, $2, 100, $3, 'gold', now() - make_interval(days => $4::int))
+         RETURNING id`,
+        [`parado.${Math.random().toString(36).slice(2)}@exemplo.pt`, curso, estado, dias],
+      );
+      const id = r.rows[0]!.id;
+      for (let i = 0; i < contactos; i++) await ctx.db.query("INSERT INTO preinscricao_contactos (preinscricao_id, nota) VALUES ($1, 'lembrete')", [id]);
+      return id;
+    };
+    const certo = await lead(40, 2);
+    const recente = await lead(10, 3);
+    const poucos = await lead(40, 1);
+    const formando = await lead(40, 2, "Formando");
+
+    const q = `dias=30&contactos=2&curso=${encodeURIComponent(curso)}`;
+    expect((await pedido(ctx, "financiada", "GET", `/v1/campanhas/email/candidatos?${q}`)).statusCode).toBe(403);
+    const cand = await pedido(ctx, "comercial", "GET", `/v1/campanhas/email/candidatos?${q}`);
+    expect(cand.statusCode, cand.body).toBe(200);
+    const ids = (cand.json().candidatos as { id: number; motivo: string }[]).map(c => c.id);
+    expect(ids).toEqual([certo]);
+
+    const env = await pedido(ctx, "comercial", "POST", "/v1/campanhas/email/enviar", {
+      criterios: { dias: 30, contactos: 2, curso }, ids: [certo, recente, poucos, formando],
+    });
+    expect(env.statusCode, env.body).toBe(200);
+    expect(env.json()).toMatchObject({ total: 1, postos: 1 });
+
+    const job = await ctx.db.query<{ body_html: string; subject: string }>(
+      `SELECT j.body_html, j.subject FROM email_jobs j JOIN automation_events e ON e.id = j.event_id
+        WHERE e.idempotency_key = $1`, [`campanha:${env.json().envioId}:${certo}`]);
+    expect(job.rows).toHaveLength(1);
+    expect(job.rows[0]!.subject).toContain(curso);
+    expect(job.rows[0]!.body_html).toContain(`/cronograma/gold/${turmaId}`);
+    expect(job.rows[0]!.body_html).toContain("Porto · Laboral · início 01/06/2099");
+
+    const contactos = await ctx.db.query<{ n: number }>("SELECT count(*)::int AS n FROM preinscricao_contactos WHERE preinscricao_id = $1", [certo]);
+    expect(contactos.rows[0]!.n).toBe(3);
+    const envios = (await pedido(ctx, "comercial", "GET", "/v1/campanhas/email/envios")).json().envios as { id: number; total: number; enviados: number }[];
+    expect(envios.find(e => e.id === env.json().envioId)).toMatchObject({ total: 1, enviados: 1 });
+    const destinos = (await pedido(ctx, "comercial", "GET", `/v1/campanhas/email/envios/${env.json().envioId}`)).json().destinos;
+    expect(destinos).toEqual([expect.objectContaining({ preinscricaoId: certo, enviado: true })]);
+  });
+});

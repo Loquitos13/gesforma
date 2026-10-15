@@ -55,7 +55,10 @@ export function renderAutomaticEmail(input: {
 }) {
   const first = esc(input.nome.split(" ")[0] || input.nome);
   const rawParas = [...(input.xml.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi) ?? [])].map(m => m[1]);
-  const paras = (rawParas.length ? rawParas : input.linhas).filter(p => p.trim());
+  // Um parágrafo com listas ({{…_itens}}) que ficaram todas vazias não sai (ex.: sem documentos em falta).
+  const comLista = (p: string) => [...p.matchAll(/\{\{(\w+_itens)\}\}/g)].map(m => m[1]!);
+  const listasVazias = (p: string) => { const ks = comLista(p); return ks.length > 0 && ks.every(k => !(input.vars[k] ?? "").trim()); };
+  const paras = (rawParas.length ? rawParas : input.linhas).filter(p => p.trim() && !listasVazias(p));
   const paraHtml = paras.map(p => `<p style="margin:0 0 14px;font-size:15px;line-height:1.5;color:#334155;">${renderInner(p, input.vars)}</p>`).join("");
   const cta = fillVars(input.cta, input.vars).trim();
   const href = safeHref(input.href);

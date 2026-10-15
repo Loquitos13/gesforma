@@ -71,6 +71,7 @@ export async function ingestEvent(db: Db, type: string, payload: Record<string, 
     documentosLista: String(payload.documentos_lista ?? ""),
     documentosItens: listaDoPayload(payload.documentos_itens),
     emFaltaItens: listaDoPayload(payload.documentos_em_falta_itens),
+    cronogramasItens: listaDoPayload(payload.cronogramas_itens),
     telefonesItens: regras.length ? await telefonesPorZona(db) : [],
   });
   let queued = 0;

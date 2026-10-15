@@ -115,6 +115,7 @@ export const EVENT_ALIASES: Record<string, string[]> = {
   "preinscricao.unpaid_3d": ["preinscricao.unpaid_3d"],
   "turma.starts_in_24h": ["turma.starts_in_24h"],
   "lead.stale_30d": ["lead.stale_30d"],
+  "campanha.preinscritos": ["campanha.preinscritos"],
 };
 
 /** Ordem do funil CRM. Só avança; Pago e Formando não recuam. */

@@ -4,6 +4,8 @@ import { z } from "zod";
 import {
   alterarCampanha, apagarCampanha, criarCampanha, listarCampanhas, obterCampanha, resumoCampanhas,
 } from "../repos/campanhas.js";
+import { CampanhaErro, candidatosCampanha, enviarCampanha } from "../campanhasEmail.js";
+import { destinosDoEnvio, listarEnvios } from "../repos/campanhasEmail.js";
 import { idParam, textoQuery, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
 
@@ -37,6 +39,19 @@ const filtrosQuery = z.object({
   q: textoQuery(120),
 });
 
+/** Quem recebe a campanha por email: há quantos dias se pré-inscreveu, contactos já feitos, curso. */
+const criteriosSchema = z.object({
+  dias: z.coerce.number().int().min(0).max(3650).default(30),
+  contactos: z.coerce.number().int().min(0).max(50).default(2),
+  curso: z.string().trim().max(200).optional().default(""),
+  soDocsEmFalta: z.preprocess(v => v === true || v === "1" || v === "true", z.boolean()).optional().default(false),
+});
+const envioSchema = z.object({
+  criterios: criteriosSchema,
+  ids: z.array(z.number().int().positive()).min(1, "escolha pelo menos uma pré-inscrição").max(150, "no máximo 150 por envio"),
+  campanhaId: z.number().int().positive().nullable().optional().default(null),
+});
+
 function fimDepoisDoInicio(d: { data?: string; fim?: string }) {
   return !d.data || !d.fim || d.fim >= d.data;
 }
@@ -50,6 +65,50 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const [campanhas, resumo] = await Promise.all([listarCampanhas(db, v.query), resumoCampanhas(db)]);
     return { campanhas, resumo };
+  });
+
+  app.get("/v1/campanhas/email/candidatos", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { query: criteriosSchema }, req);
+    if (!v) return;
+    return { candidatos: await candidatosCampanha(db, v.query) };
+  });
+
+  app.get("/v1/campanhas/email/envios", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const envios = await listarEnvios(db);
+    return {
+      envios: envios.map(e => ({
+        id: Number(e.id), campanhaId: e.campanha_id == null ? null : Number(e.campanha_id), campanha: e.campanha ?? "",
+        criterios: e.criterios, total: Number(e.total), enviados: Number(e.enviados), criadoEm: e.criado_em, autor: e.autor ?? "",
+      })),
+    };
+  });
+
+  app.get("/v1/campanhas/email/envios/:id", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: idParam }, req);
+    if (!v) return;
+    const destinos = await destinosDoEnvio(db, v.params.id);
+    return {
+      destinos: destinos.map(d => ({
+        preinscricaoId: Number(d.preinscricao_id), nome: `${d.nome} ${d.apelido}`.trim(), curso: d.curso, estado: d.estado, enviado: d.enviado, erro: d.erro,
+      })),
+    };
+  });
+
+  app.post("/v1/campanhas/email/enviar", { config: { rateLimit: { max: 6, timeWindow: "1 minute" } } }, async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { body: envioSchema }, req);
+    if (!v) return;
+    try {
+      const r = await enviarCampanha(db, req.actor!.id, v.body);
+      await audit(db, req.actor!.id, "campanha.email_enviar", "campanha_envio", String(r.envioId), req.ip, { total: r.total, postos: r.postos });
+      return r;
+    } catch (err) {
+      if (err instanceof CampanhaErro) return reply.code(409).send({ error: err.message });
+      throw err;
+    }
   });
 
   app.get("/v1/campanhas/:id", async (req, reply) => {

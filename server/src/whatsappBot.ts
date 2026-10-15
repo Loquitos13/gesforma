@@ -280,7 +280,7 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
         passo = "data";
         say(listaNumerada(
           `Data de início (${dados.local} · ${horario}):`,
-          datas.map(t => `${fmtDataPt(t.dataInicio)} · ${t.nome}${t.vagasLivres ? ` · ${t.vagasLivres} vagas` : " · lotada"}`),
+          datas.map(t => `${fmtDataPt(t.dataInicio)}${(t.vagasMostradas ?? t.vagasLivres) ? ` · ${t.vagasMostradas ?? t.vagasLivres} vagas` : " · lotada"}`),
         ));
       }
     }

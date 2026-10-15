@@ -93,6 +93,7 @@ export type TurmaPercurso = {
   horario: string;
   dataInicio: string;
   livres: number;
+  vagasMostradas?: number;
   sessoes: { data: string; inicio: string; fim: string; modalidade?: string; modulos?: string[]; formadores?: string[] }[];
   plano?: { id: string; data: string; horaInicio: string; horaFim: string; modalidade: string; modulos: string[]; formadores: string[] }[];
 };

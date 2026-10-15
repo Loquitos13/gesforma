@@ -352,3 +352,8 @@ export async function atualizarRegra(c: Consulta, id: number, d: Partial<DadosRe
 export async function apagarRegra(c: Consulta, id: number) {
   await valor(c, "DELETE FROM turma_regras WHERE id = $1 RETURNING id", [id]);
 }
+
+/** Vagas que o site anuncia (null = as reais). */
+export async function gravarVagasAnunciadas(c: Consulta, regime: Regime, id: number, n: number | null) {
+  await valor(c, `UPDATE ${tabelaRegime("turmas", regime)} SET vagas_anunciadas = $2 WHERE id = $1 RETURNING id`, [id, n]);
+}

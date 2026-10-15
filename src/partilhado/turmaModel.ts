@@ -129,6 +129,7 @@ export type TurmaGold = {
   vagas: number;
   inscricoesAdicionais?: number;
   toleranciaVagas?: number;
+  vagasAnunciadas?: number | null;
   estado: "Ativa" | "Inativa";
   formador: string;
   formadores?: string[];

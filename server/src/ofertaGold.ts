@@ -11,6 +11,8 @@ export type OfertaTurma = {
   horario: string;
   dataInicio: string;
   vagasLivres: number;
+  /** O que o site mostra: as vagas anunciadas pelo comercial, nunca acima das livres. */
+  vagasMostradas: number;
   preco: number | null;
   cronogramaPublicado: boolean;
   regime: "gold" | "fin";
@@ -29,6 +31,12 @@ export function fmtDataPt(iso: string) {
   return `${m[3]}/${m[2]}/${m[1]}`;
 }
 
+/** Vagas livres reais e as que o site mostra (anunciadas, sem passar das reais). */
+function vagas(livres: number, anunciadas: number | null | undefined) {
+  const a = anunciadas == null ? null : Number(anunciadas);
+  return { vagasLivres: livres, vagasMostradas: a == null || Number.isNaN(a) ? livres : Math.min(Math.max(0, a), livres) };
+}
+
 export async function listOfertaGold(db: Db): Promise<OfertaTurma[]> {
   const rows = await turmasGoldActivas(db);
   const mapa = await mapaPrecosGold(db);
@@ -43,7 +51,7 @@ export async function listOfertaGold(db: Db): Promise<OfertaTurma[]> {
       local,
       horario,
       dataInicio: String(r.data_inicio ?? "").slice(0, 10),
-      vagasLivres: Math.max(0, Number(r.vagas ?? 0) + Math.max(0, Number(r.tolerancia) || 0) - Number(r.total_alunos ?? 0)),
+      ...vagas(Math.max(0, Number(r.vagas ?? 0) + Math.max(0, Number(r.tolerancia) || 0) - Number(r.total_alunos ?? 0)), r.vagas_anunciadas),
       preco: precoNoMapa(mapa, curso, local, horario),
       cronogramaPublicado: Boolean(r.cronograma_publicado_em),
       regime: "gold" as const,
@@ -60,7 +68,7 @@ export async function listOfertaFin(db: Db): Promise<OfertaTurma[]> {
     local: r.local,
     horario: r.horario,
     dataInicio: String(r.data_inicio ?? "").slice(0, 10),
-    vagasLivres: Math.max(0, Number(r.alunos_total ?? 0) + Math.max(0, Number(r.tolerancia) || 0) - Number(r.alunos ?? 0)),
+    ...vagas(Math.max(0, Number(r.alunos_total ?? 0) + Math.max(0, Number(r.tolerancia) || 0) - Number(r.alunos ?? 0)), r.vagas_anunciadas),
     preco: null,
     cronogramaPublicado: Boolean(r.cronograma_publicado_em),
     regime: "fin" as const,

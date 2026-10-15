@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { ApiError, apiPublicOferta, apiPublicPreinscricao } from "../partilhado/api";
 import { SearchSelect } from "../partilhado/FormKit";
-import { fmtDataPt, ofertaFiltrada, uniqueVals, type OfertaTurma } from "../partilhado/oferta";
+import { fmtDataPt, ofertaFiltrada, uniqueVals, vagasPublicas, type OfertaTurma } from "../partilhado/oferta";
 import type { Course } from "./SiteLanding";
 import { ePreinscricao, ePrepago } from "../partilhado/siteConteudo";
 import { textoListaVazia, useOpcoesPublicas } from "./useOpcoesPublicas";
@@ -349,7 +349,8 @@ function ModalInscricao({ curso, onClose }: { curso: Course | null; onClose: () 
                           options={datas.map(t => ({
                             value: String(t.turmaId),
                             label: fmtDataPt(t.dataInicio),
-                            sub: `${t.nome}${t.vagasLivres ? ` · ${t.vagasLivres} vagas` : " · sem vagas"}${t.preco != null ? ` · ${t.preco.toLocaleString("pt-PT")} €` : ""}`,
+                            // Público: sem o código interno da turma; as vagas são as anunciadas pelo comercial.
+                            sub: `${vagasPublicas(t)}${t.preco != null ? ` · ${t.preco.toLocaleString("pt-PT")} €` : ""}`,
                           }))}
                         />
                       </Campo>

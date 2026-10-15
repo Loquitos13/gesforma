@@ -72,6 +72,7 @@ export type TurmaGravada = {
   cronograma: SessaoCronograma[];
   valoresHoraFormador: Record<string, number>;
   toleranciaVagas: number;
+  vagasAnunciadas?: number | null;
   vagas?: number;
   custoHoraSala?: number;
   alunosTotal?: number;
@@ -89,6 +90,7 @@ export type DadosTurma = {
   formador: string;
   formadores: string[];
   toleranciaVagas: number;
+  vagasAnunciadas?: number | null;
   valoresHoraFormador: Record<string, number>;
   cronograma?: SessaoCronograma[];
   horas?: number;

@@ -49,6 +49,7 @@ const turmaGoldSchema = z.object({
   totalAlunos: z.number().optional(),
   vagas: z.number().int().min(0).max(500).optional().default(16),
   toleranciaVagas: z.number().int().min(0).max(200).optional(),
+  vagasAnunciadas: z.number().int().min(0).max(500).nullable().optional(),
   estado: z.string().max(20).optional().default("Ativa"),
   formador: z.string().max(120).optional().default(""),
   formadores: z.array(z.string().max(120)).max(12).optional().default([]),
@@ -68,6 +69,7 @@ const turmaFinSchema = z.object({
   alunos: z.number().optional(),
   alunosTotal: z.number().int().min(0).max(500).optional().default(20),
   toleranciaVagas: z.number().int().min(0).max(200).optional(),
+  vagasAnunciadas: z.number().int().min(0).max(500).nullable().optional(),
   estado: z.string().max(40).optional().default("A montar"),
   horas: z.number().min(0).max(2000).optional(),
   formador: z.string().max(120).optional().default(""),
@@ -217,6 +219,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       cronograma, custoHoraSala: d.custoHoraSala ?? 0, valoresHoraFormador: d.valoresHoraFormador ?? {},
     });
     await repo.ligarCurso(db, "gold", id);
+    if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "gold", id, d.vagasAnunciadas);
     await audit(db, req.actor!.id, "turma.criar", "turma_gold", String(id), req.ip, { nome: d.nome });
     const row = await repo.obterTurma(db, "gold", id);
     if (row) sincronizarDrive(deps, "gold", id, row);
@@ -259,6 +262,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       tolerancia: d.toleranciaVagas, estado, formador: d.formador, formadores: d.formadores, horas: d.horas,
       cronograma: d.cronograma, custoHoraSala: d.custoHoraSala, valoresHoraFormador: d.valoresHoraFormador,
     });
+    if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "gold", id, d.vagasAnunciadas);
     if (d.nome && d.nome !== String(antes.nome ?? "")) await propagarNomeTurma(db, "gold", id, String(antes.nome ?? ""), d.nome);
     if (d.curso && d.curso !== String(antes.curso ?? "")) {
       await propagarCursoDaTurma(db, "gold", id, String(d.nome ?? antes.nome ?? ""), String(antes.curso ?? ""), d.curso);
@@ -306,6 +310,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       financiador: d.financiador ?? "",
     });
     await repo.ligarCurso(db, "fin", id);
+    if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "fin", id, d.vagasAnunciadas);
     await audit(db, req.actor!.id, "turma.criar", "turma_fin", String(id), req.ip, { nome: d.nome });
     const row = await repo.obterTurma(db, "fin", id);
     if (row) sincronizarDrive(deps, "fin", id, row);
@@ -349,6 +354,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       formadores: d.formadores, activa: d.activa, cronograma: d.cronograma, valoresHoraFormador: d.valoresHoraFormador,
       financiador: d.financiador,
     });
+    if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "fin", id, d.vagasAnunciadas);
     if (d.nome && d.nome !== String(antes.nome ?? "")) await propagarNomeTurma(db, "fin", id, String(antes.nome ?? ""), d.nome);
     if (d.curso && d.curso !== String(antes.curso ?? "")) {
       await propagarCursoDaTurma(db, "fin", id, String(d.nome ?? antes.nome ?? ""), String(antes.curso ?? ""), d.curso);

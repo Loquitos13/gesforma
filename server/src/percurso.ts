@@ -43,6 +43,8 @@ export type TurmaPublica = {
   horario: string;
   dataInicio: string;
   livres: number;
+  /** As vagas que a página mostra (anunciadas pelo comercial, nunca acima das livres). */
+  vagasMostradas: number;
   sessoes: SessaoPublica[];
   plano: PlanoPublico[];
 };
@@ -127,6 +129,7 @@ function mapTurma(row: TurmaPercursoRow): TurmaPublica {
     horario: row.horario,
     dataInicio: isoData(row.data_inicio) || row.data_inicio,
     livres,
+    vagasMostradas: row.vagas_anunciadas == null ? livres : Math.min(Math.max(0, Number(row.vagas_anunciadas)), livres),
     sessoes: sessoesDe(row.cronograma),
     plano: planoDe(row.cronograma),
   };

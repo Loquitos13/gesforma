@@ -12,13 +12,13 @@ import { ValoresHoraFormador } from "../../ValoresHoraFormador";
 
 type Rascunho = {
   nome: string; curso: string; local: string; horario: string; formador: string; formadores: string[];
-  dataInicio: string; vagas: number; tolerancia: number; custoHoraSala: number; abertas: boolean; financiador: string;
+  dataInicio: string; vagas: number; tolerancia: number; vagasAnunciadas: number | null; custoHoraSala: number; abertas: boolean; financiador: string;
   valoresHoraFormador: Record<string, number>; cronograma: SessaoCronograma[]; horas: number;
 };
 
 const VAZIO = (regime: Regime): Rascunho => ({
   nome: "", curso: "", local: "", horario: "", formador: "", formadores: [], dataInicio: "", vagas: regime === "fin" ? 20 : 16,
-  tolerancia: 0, custoHoraSala: 0, abertas: true, financiador: "", valoresHoraFormador: {}, cronograma: [], horas: 0,
+  tolerancia: 0, vagasAnunciadas: null, custoHoraSala: 0, abertas: true, financiador: "", valoresHoraFormador: {}, cronograma: [], horas: 0,
 });
 
 /** Painel para criar ou editar uma turma (o interior da turma continua no cockpit). */
@@ -58,7 +58,7 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
     nomeManual.current = true;
     setR({
       nome: t.nome, curso: t.curso, local: t.local, horario: t.horario, formador: t.formador, formadores: t.formadores ?? [],
-      dataInicio: t.dataInicio, vagas: (fin ? t.alunosTotal : t.vagas) ?? 0, tolerancia: t.toleranciaVagas ?? 0,
+      dataInicio: t.dataInicio, vagas: (fin ? t.alunosTotal : t.vagas) ?? 0, tolerancia: t.toleranciaVagas ?? 0, vagasAnunciadas: t.vagasAnunciadas ?? null,
       custoHoraSala: t.custoHoraSala ?? 0, abertas: fin ? Boolean(t.activa) : t.estado === "Ativa",
       financiador: t.financiador ?? "", valoresHoraFormador: t.valoresHoraFormador ?? {}, cronograma: t.cronograma ?? [], horas: t.horas,
     });
@@ -85,7 +85,7 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
     if (!nome) { setErro("Indique o código da turma."); return; }
     const comum: DadosTurma = {
       nome, curso: r.curso, local: r.local, horario: r.horario, dataInicio: r.dataInicio, formador: r.formador,
-      formadores: r.formadores, toleranciaVagas: r.tolerancia, valoresHoraFormador: r.valoresHoraFormador,
+      formadores: r.formadores, toleranciaVagas: r.tolerancia, vagasAnunciadas: r.vagasAnunciadas, valoresHoraFormador: r.valoresHoraFormador,
       ...(editar ? { cronograma: r.cronograma } : {}),
     };
     const dados: DadosTurma = fin
@@ -166,6 +166,10 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
               {p => <Entrada {...p} type="number" min={0} value={r.tolerancia} onChange={e => mudar({ tolerancia: Math.max(0, Number(e.target.value) || 0) })} />}
             </Campo>
           </div>
+          <Campo rotulo="Vagas a anunciar no site" ajuda="O número que o site mostra («X vagas restantes»). Vazio = as vagas reais. Nunca passa das vagas livres.">
+            {p => <Entrada {...p} type="number" min={0} className="max-w-[12rem]" value={r.vagasAnunciadas ?? ""} placeholder="as reais"
+              onChange={e => mudar({ vagasAnunciadas: e.target.value === "" ? null : Math.max(0, Number(e.target.value) || 0) })} />}
+          </Campo>
           {fin && (
             <Campo rotulo="Entidade financiadora">
               {p => (

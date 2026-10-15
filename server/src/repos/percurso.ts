@@ -7,6 +7,7 @@ import { many, one, type Consulta, type Regime } from "./sql.js";
 
 export type TurmaPercursoRow = {
   id: number;
+  vagas_anunciadas?: number | null;
   nome: string;
   curso: string;
   local: string;
@@ -26,11 +27,11 @@ function selectTurmas(regime: Regime) {
   return regime === "fin"
     ? `SELECT t.id, t.nome, t.curso, t.local, t.horario, t.data_inicio,
               t.alunos + ${sqlReservas("fin", "t.id")} AS ocupadas, t.alunos_total AS vagas,
-              COALESCE(t.tolerancia_vagas, 0) AS tolerancia, t.estado, t.cronograma, t.fechada_em, t.activa
+              COALESCE(t.tolerancia_vagas, 0) AS tolerancia, t.vagas_anunciadas, t.estado, t.cronograma, t.fechada_em, t.activa
          FROM turmas_fin t`
     : `SELECT t.id, t.nome, t.curso, t.local, t.horario, t.data_inicio,
               t.total_alunos + ${sqlReservas("gold", "t.id")} AS ocupadas, t.vagas AS vagas,
-              COALESCE(t.tolerancia_vagas, 0) AS tolerancia, t.estado, t.cronograma, t.fechada_em
+              COALESCE(t.tolerancia_vagas, 0) AS tolerancia, t.vagas_anunciadas, t.estado, t.cronograma, t.fechada_em
          FROM turmas_gold t`;
 }
 

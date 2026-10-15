@@ -34,7 +34,7 @@ export function CartaoTurma({
         role="button"
         tabIndex={busy ? -1 : 0}
         aria-pressed={escolhida}
-        aria-label={`${turma.nome}, ${turma.local}, ${turma.horario}`}
+        aria-label={`${turma.local}, ${turma.horario}, início ${fmtData(turma.dataInicio)}`}
         onClick={() => { if (!busy) onEscolher(); }}
         onKeyDown={e => {
           if (busy) return;
@@ -52,11 +52,11 @@ export function CartaoTurma({
           </span>
           <span className="min-w-0 flex-1 pb-3">
             <span className="flex items-start justify-between gap-3">
-              <span className="block text-sm font-semibold">{turma.nome}</span>
+              {/* O código interno da turma não aparece ao público. */}
+              <span className="block text-sm font-semibold">{[turma.local, turma.horario].filter(Boolean).join(" · ") || "Turma"}</span>
               {escolhida && <span className="shrink-0 text-xs font-semibold text-[#9a6700]">Seleccionada</span>}
             </span>
-            <span className="mt-1 block text-sm text-[#5c564c]">{turma.local} · {turma.horario}</span>
-            <span className="mt-1 block text-xs text-[#8a8172]">Início {fmtData(turma.dataInicio)} · {textoVagas(turma.livres)}</span>
+            <span className="mt-1 block text-xs text-[#8a8172]">Início {fmtData(turma.dataInicio)} · {textoVagas(turma.livres > 0 ? turma.vagasMostradas ?? turma.livres : 0)}</span>
           </span>
         </span>
       </div>

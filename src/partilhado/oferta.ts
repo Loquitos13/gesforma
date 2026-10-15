@@ -6,10 +6,19 @@ export type OfertaTurma = {
   horario: string;
   dataInicio: string;
   vagasLivres: number;
+  /** As vagas que o site mostra (anunciadas pelo comercial, nunca acima das livres). */
+  vagasMostradas?: number;
   preco?: number | null;
   cronogramaPublicado?: boolean;
   regime?: "gold" | "fin";
 };
+
+/** Texto público das vagas de uma turma (sem o código interno da turma). */
+export function vagasPublicas(t: Pick<OfertaTurma, "vagasLivres" | "vagasMostradas">) {
+  const n = t.vagasMostradas ?? t.vagasLivres;
+  if (!t.vagasLivres || !n) return "sem vagas";
+  return n === 1 ? "1 vaga restante" : `${n} vagas restantes`;
+}
 
 export type CursoOfertaSel = {
   curso: string;

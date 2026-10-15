@@ -1,6 +1,6 @@
 import { SearchSelect } from "./FormKit";
 import type { OfertaTurma, CursoOfertaSel } from "./oferta";
-import { OFERTA_VAZIA, ofertaFiltrada, uniqueVals } from "./oferta";
+import { OFERTA_VAZIA, ofertaFiltrada, uniqueVals, vagasPublicas } from "./oferta";
 
 const labelPublic = "block text-[13px] text-slate-700 mb-1";
 const labelCrm = "text-xs font-semibold text-slate-500 uppercase tracking-wide flex flex-col gap-1.5";
@@ -98,7 +98,8 @@ export function CursoOfertaCampos({
           placeholder={value.horario ? "Seleccione a data" : "Escolha primeiro o horário"}
           options={datas.map(t => ({
             value: t.dataInicio,
-            sub: `${t.nome}${t.vagasLivres ? ` · ${t.vagasLivres} vagas restantes` : " · sem vagas restantes"}`,
+            // No site não aparece o código interno da turma; no CRM, sim.
+            sub: variant === "crm" ? `${t.nome} · ${t.vagasLivres ? `${t.vagasLivres} vagas restantes` : "sem vagas restantes"}` : vagasPublicas(t),
           }))}
         />
       </Label>

@@ -287,8 +287,8 @@ export function PublicDocumentos({ token }: { token: string }) {
             </p>
             {turmaEscolhida && (
               <div className="mt-5 rounded-xl bg-[#fffaf2] px-4 py-3 text-sm ring-1 ring-[#efeae1]">
-                <p className="font-semibold">{turmaEscolhida.nome}</p>
-                <p className="mt-1 text-[#5c564c]">{turmaEscolhida.local} · {turmaEscolhida.horario} · início {fmtData(turmaEscolhida.dataInicio)}</p>
+                <p className="font-semibold">{[turmaEscolhida.local, turmaEscolhida.horario].filter(Boolean).join(" · ")}</p>
+                <p className="mt-1 text-[#5c564c]">Início {fmtData(turmaEscolhida.dataInicio)}</p>
               </div>
             )}
             <p className="mt-5 text-sm font-semibold text-amber-800">Aguarda a validação da secretaria.</p>

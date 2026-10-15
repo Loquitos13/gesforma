@@ -329,17 +329,23 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                           const vagas = vagasNumero(t);
                           const ativo = t.turmaId === turmaId;
                           return (
-                            <div key={t.turmaId} className={`flex flex-wrap items-center gap-x-4 gap-y-2 border px-4 py-3 ${ativo ? "border-[#1C3350] bg-[#1C3350] text-white" : "border-[#1C3350]/15"} ${vagas <= 0 ? "opacity-50" : ""}`}>
+                            <div key={t.turmaId} className={`flex flex-wrap items-center gap-x-5 gap-y-3 border px-5 py-5 sm:min-h-[88px] ${ativo ? "border-[#1C3350] bg-[#1C3350] text-white" : "border-[#1C3350]/15"} ${vagas <= 0 ? "opacity-50" : ""}`}>
                               <button type="button" disabled={vagas <= 0} onClick={() => escolherTurma(t)} aria-pressed={ativo}
-                                className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-4 gap-y-1 text-left disabled:cursor-not-allowed">
-                                <strong className="text-base">{fmtDataPt(t.dataInicio)}</strong>
-                                <span className="text-sm opacity-75">{t.horario}</span>
-                                {t.preco != null && <span className="text-sm font-bold">{t.preco.toLocaleString("pt-PT")} €</span>}
+                                className="flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-1.5 text-left disabled:cursor-not-allowed">
+                                <strong className="text-lg">{fmtDataPt(t.dataInicio)}</strong>
+                                <span className="text-sm opacity-80">{t.horario}</span>
+                                {t.preco != null && <span className="text-base font-bold">{t.preco.toLocaleString("pt-PT")} €</span>}
                                 <span className="text-xs opacity-65">{vagasPublicas(t)}</span>
                               </button>
-                              {t.cronogramaPublicado && (
+                              {/* O cronograma é o da turma (já traz o nome dela); só existe no site depois de publicado. */}
+                              {t.cronogramaPublicado ? (
                                 <a href={`/cronograma/${t.regime || "gold"}/${t.turmaId}`} target="_blank" rel="noreferrer"
-                                  className={`text-sm font-bold underline ${ativo ? "text-[#FFA900]" : "text-[#A60000]"}`}>Ver cronograma</a>
+                                  className={`inline-flex shrink-0 items-center gap-2 border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.08em] ${ativo ? "border-white/40 text-white hover:bg-white hover:text-[#1C3350]" : "border-[#A60000] text-[#A60000] hover:bg-[#A60000] hover:text-white"}`}>
+                                  Ver cronograma
+                                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M14 4h6v6M20 4 10 14M18 14v6H4V6h6" /></svg>
+                                </a>
+                              ) : (
+                                <span className="shrink-0 text-xs opacity-55">Cronograma em breve</span>
                               )}
                             </div>
                           );

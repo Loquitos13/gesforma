@@ -85,6 +85,6 @@ export const AreaFormando: ComponentConfig<Props> = {
     if (!puck?.isEditing) conteudo = <AreaFormandoConteudo painel={entrada} opcoes={opcoes} />;
     else if (p.previsualizar === "entrada") conteudo = <LoginFormando onEntrou={() => undefined} painel={entrada} />;
     else conteudo = <Painel dados={AREA_EXEMPLO} onDados={() => undefined} onSair={() => undefined} avisar={() => undefined} opcoes={opcoes} />;
-    return <div className={c.className} style={c.style}>{conteudo}</div>;
+    return <div ref={puck?.dragRef ?? undefined} className={c.className} style={c.style}>{conteudo}</div>;
   },
 };

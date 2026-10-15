@@ -27,7 +27,7 @@ function useFormando(ativo: boolean) {
   return formando;
 }
 
-export function CabecalhoSite(p: CabecalhoProps & { editar?: boolean }) {
+export function CabecalhoSite(p: CabecalhoProps & { editar?: boolean; refRaiz?: ((el: Element | null) => void) | null }) {
   const [aberto, setAberto] = useState(false);
   const formando = useFormando(!p.editar && Boolean(p.botaoSessao));
   const c = estiloBloco(p.aparencia, {
@@ -41,7 +41,7 @@ export function CabecalhoSite(p: CabecalhoProps & { editar?: boolean }) {
   const botao = formando && p.botaoSessao ? p.botaoSessao : p.botao;
   const botaoHref = ligacaoSegura(p.botaoLigacao) || "/area-formando";
   return (
-    <header className={juntar(p.fixo && !p.editar && "sticky top-0", "z-40")} style={vars}>
+    <header ref={p.refRaiz ?? undefined} className={juntar(p.fixo && !p.editar && "sticky top-0", "z-40")} style={vars}>
       <div className={c.className} style={c.style}>
         <div className="mx-auto flex items-center justify-between gap-6" style={{ maxWidth: "var(--largura)" }}>
           <a href="/" className="flex items-center gap-3" aria-label="Página inicial">
@@ -109,7 +109,7 @@ export const Cabecalho: ComponentConfig<CabecalhoProps> = {
     aparencia: campoAparencia(),
   },
   defaultProps: cabecalhoPadrao,
-  render: ({ puck, ...p }) => <CabecalhoSite {...p} editar={puck?.isEditing} />,
+  render: ({ puck, ...p }) => <CabecalhoSite {...p} editar={puck?.isEditing} refRaiz={puck?.dragRef} />,
 };
 
 // ─── Rodapé ──────────────────────────────────────────────────────────────────
@@ -130,7 +130,7 @@ function Linha({ linha }: { linha: string }) {
   return <span>{texto}</span>;
 }
 
-export function RodapeSite(p: RodapeProps) {
+export function RodapeSite(p: RodapeProps & { refRaiz?: ((el: Element | null) => void) | null }) {
   const c = estiloBloco(p.aparencia, {
     background: corSegura(p.corFundo) ?? "#0E1C2E",
     color: corSegura(p.corTexto) ?? "#D7E0EA",
@@ -141,7 +141,7 @@ export function RodapeSite(p: RodapeProps) {
   const titulos = corSegura(p.corTitulos) ?? "#fff";
   const colunas = (p.colunas ?? []).filter(x => x.titulo || x.linhas);
   return (
-    <footer id="contactos" className={juntar(c.className, t.className, "scroll-mt-24")} style={{ ...c.style, ...t.style }}>
+    <footer ref={p.refRaiz ?? undefined} id="contactos" className={juntar(c.className, t.className, "scroll-mt-24")} style={{ ...c.style, ...t.style }}>
       <div className="mx-auto" style={{ maxWidth: "var(--largura)" }}>
         <div className="ena-grelha gap-10 border-b border-white/15 pb-12" style={{ ["--cols" as string]: String(colunas.length + 2), ["--cols-tab" as string]: "2", ["--cols-tel" as string]: "1" } as CSSProperties}>
           <div style={{ gridColumn: "span 2 / span 2" }}>
@@ -206,5 +206,5 @@ export const Rodape: ComponentConfig<RodapeProps> = {
     aparencia: campoAparencia(),
   },
   defaultProps: rodapePadrao,
-  render: ({ puck: _p, ...p }) => <RodapeSite {...p} />,
+  render: ({ puck, ...p }) => <RodapeSite {...p} refRaiz={puck?.dragRef} />,
 };

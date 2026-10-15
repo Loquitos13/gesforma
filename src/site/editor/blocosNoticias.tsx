@@ -22,7 +22,7 @@ type Props = {
   corFiltroAtivo: string; tipoTitulo: Tipografia; cartao: Estilo; aparencia: Estilo;
 };
 
-function ListaVista(p: Props) {
+function ListaVista(p: Props & { refRaiz?: ((el: Element | null) => void) | null }) {
   const [itens, setItens] = useState<Noticia[] | null>(null);
   const [erro, setErro] = useState(false);
   const [tema, setTema] = useState("Todas");
@@ -35,7 +35,7 @@ function ListaVista(p: Props) {
   const ativo = corSegura(p.corFiltroAtivo) ?? "var(--c-primaria)";
   const grelha = { gap: `${p.espaco ?? 20}px`, ["--cols" as string]: String(p.colunas || 2), ["--cols-tab" as string]: String(p.colunasTab ?? Math.min(p.colunas || 2, 2)), ["--cols-tel" as string]: String(p.colunasTel || 1) } as CSSProperties;
   return (
-    <div className={c.className} style={c.style}>
+    <div ref={p.refRaiz ?? undefined} className={c.className} style={c.style}>
       {p.filtros && temas.length > 1 && (
         <div className="mb-8 flex flex-wrap gap-2">
           {temas.map(x => (
@@ -87,5 +87,5 @@ export const ListaNoticias: ComponentConfig<Props> = {
     cartao: estiloVazio({ fundoCor: "#ffffff", preenchimento: lados(24), bordaLargura: 1, bordaCor: "rgba(28,51,80,0.1)" }),
     aparencia: estiloVazio(),
   },
-  render: ({ puck: _p, ...p }) => <ListaVista {...(p as Props)} />,
+  render: ({ puck, ...p }) => <ListaVista {...(p as Props)} refRaiz={puck?.dragRef} />,
 };

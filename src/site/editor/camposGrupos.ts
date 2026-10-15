@@ -67,8 +67,13 @@ export const campoTipografia = (label = "Tipografia"): Field => ({
       options: [{ label: "Herdado", value: "" }, { label: "Esquerda", value: "left" }, { label: "Centro", value: "center" }, { label: "Direita", value: "right" }, { label: "Justificado", value: "justify" }],
     },
     transformacao: {
-      type: "select", label: "Maiúsculas",
-      options: [{ label: "Como escrito", value: "" }, { label: "MAIÚSCULAS", value: "uppercase" }, { label: "minúsculas", value: "lowercase" }, { label: "Iniciais", value: "capitalize" }],
+      type: "select", label: "Maiúsculas e minúsculas",
+      options: [
+        { label: "Como está escrito", value: "" },
+        { label: "TUDO EM MAIÚSCULAS", value: "uppercase" },
+        { label: "tudo em minúsculas", value: "lowercase" },
+        { label: "Primeira Letra De Cada Palavra", value: "capitalize" },
+      ],
     },
     italico: simNao("Itálico"),
   },

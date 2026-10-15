@@ -225,7 +225,7 @@ export const CursosDestaque: ComponentConfig<DestaqueProps> = {
     return f as typeof fields;
   },
   defaultProps: { modo: "escolhidos", cursos: [], limite: 6, cartao: cartaoPadrao(), aparencia: estiloVazio() },
-  render: ({ modo, cursos: escolhidos, limite, cartao, aparencia }) => {
+  render: ({ puck, modo, cursos: escolhidos, limite, cartao, aparencia }) => {
     const { cursos, destaques, estado, recarregar } = useCursos();
     const lista = useMemo(() => {
       if (modo === "automatico") return destaques.slice(0, Math.max(1, limite ?? 6));
@@ -234,7 +234,7 @@ export const CursosDestaque: ComponentConfig<DestaqueProps> = {
     }, [modo, escolhidos, limite, cursos, destaques]);
     const c = estiloBloco(aparencia);
     return (
-      <div className={c.className} style={c.style}>
+      <div ref={puck?.dragRef ?? undefined} className={c.className} style={c.style}>
         {estado === "pronto"
           ? <Grelha cursos={lista} e={cartao} vazio={modo === "escolhidos" ? "Escolha os cursos em destaque no painel." : "Ainda não há cursos publicados."} />
           : <Estado estado={estado} recarregar={recarregar} />}
@@ -278,7 +278,7 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
     regime: "todos", ordem: "procura", pesquisa: true, textoPesquisa: "Pesquisar formação", filtros: true, mostrarTotal: true,
     limite: null, corFiltroAtivo: "var(--c-acento)", cartao: cartaoPadrao(), aparencia: estiloVazio(),
   },
-  render: ({ zonaMeio, zonaCursos, regime, ordem, pesquisa, textoPesquisa, filtros, mostrarTotal, limite, corFiltroAtivo, cartao, aparencia }) => {
+  render: ({ puck, zonaMeio, zonaCursos, regime, ordem, pesquisa, textoPesquisa, filtros, mostrarTotal, limite, corFiltroAtivo, cartao, aparencia }) => {
     const ZonaMeio = zonaMeio as unknown as ComponentType<{ className?: string; minEmptyHeight?: number }> | undefined;
     const ZonaCursos = zonaCursos as unknown as ComponentType<{ className?: string; minEmptyHeight?: number }> | undefined;
     const { cursos, estado, recarregar } = useCursos();
@@ -295,7 +295,7 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
     const c = estiloBloco(aparencia);
     const ativo = corSegura(corFiltroAtivo) ?? "var(--c-acento)";
     return (
-      <div className={c.className} style={c.style}>
+      <div ref={puck?.dragRef ?? undefined} className={c.className} style={c.style}>
         {(pesquisa || filtros) && (
           <div className="mb-8 flex flex-col gap-4 border-b border-[#14263D]/10 pb-5 lg:flex-row lg:items-center">
             {filtros && (
@@ -307,7 +307,7 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
                 ))}
               </div>
             )}
-            {ZonaMeio && <ZonaMeio className="flex flex-wrap items-center gap-3 empty:hidden" minEmptyHeight={40} />}
+            {ZonaMeio && <ZonaMeio className="flex min-w-0 flex-1 flex-wrap items-center gap-3 empty:hidden" minEmptyHeight={40} />}
             {mostrarTotal && estado === "pronto" && <span className="text-sm font-semibold text-[#3E5168] lg:ml-auto">{lista.length} formações disponíveis</span>}
             {pesquisa && (
               <label className="flex w-full items-center gap-3 rounded-full border border-[#14263D]/20 bg-white px-4 py-3 text-[#14263D] lg:max-w-sm">

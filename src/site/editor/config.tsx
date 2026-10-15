@@ -93,6 +93,9 @@ function responsivo<C extends Partial<ComponentConfig<any>>>(cfg: C): C {
   const campoEcra: Field = { type: "custom", label: "Ecrã", render: ({ value, onChange }) => <CampoDispositivo value={value as Variantes | undefined} onChange={onChange} rotulos={rotulos} /> };
   return {
     ...cfg,
+    // Sem a div extra do Puck à volta: cada bloco liga a pega de arrastar ao seu elemento (puck.dragRef),
+    // para o editor ter a mesma estrutura do site (alinhamentos e margens iguais).
+    inline: true,
     fields: { __disp: campoEcra, ...campos },
     resolveData: async (data: { props: Record<string, unknown> }, params: { changed: Record<string, boolean>; trigger: string }) => {
       const props = data.props;

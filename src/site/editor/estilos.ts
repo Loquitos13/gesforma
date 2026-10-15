@@ -189,6 +189,9 @@ export function estiloBloco(e: Partial<Estilo> | undefined, base?: CSSProperties
   const style: CSSProperties = { ...(base ?? {}), ...(vars as CSSProperties) };
   const largura = medidaCss(s.largura);
   if (largura) style.width = largura;
+  // "Alinhar o bloco" encosta com margens automáticas: sem largura própria, o bloco fica com a largura
+  // do conteúdo (senão, um texto ocupa a linha toda e as margens não têm onde actuar).
+  else if (s.alinhar) { style.width = "fit-content"; style.maxWidth = "100%"; }
   const larguraMax = medidaCss(s.larguraMax);
   if (larguraMax) style.maxWidth = larguraMax;
   const alturaMin = medidaCss(s.alturaMin);

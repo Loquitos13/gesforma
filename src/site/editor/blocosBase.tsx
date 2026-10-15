@@ -49,7 +49,7 @@ export const Seccao: ComponentConfig<SeccaoProps> = {
     conteudo: [], disposicao: "pilha", colunas: 2, colunasTab: 2, colunasTel: 1, espaco: 24, alinharItens: "esticar", larguraConteudo: "tema",
     aparencia: estiloVazio({ preenchimento: lados(80, 32), preenchimentoTel: lados(48, 20) }),
   },
-  render: ({ conteudo: Conteudo, disposicao, colunas, colunasTab, colunasTel, espaco, alinharItens, larguraConteudo, aparencia }) => {
+  render: ({ puck, conteudo: Conteudo, disposicao, colunas, colunasTab, colunasTel, espaco, alinharItens, larguraConteudo, aparencia }) => {
     const c = caixa(aparencia);
     const interior: CSSProperties = {
       gap: espaco != null ? `${espaco}px` : undefined,
@@ -60,7 +60,7 @@ export const Seccao: ComponentConfig<SeccaoProps> = {
     };
     const cls = disposicao === "grelha" ? "ena-grelha" : disposicao === "linha" ? "flex flex-wrap" : "flex flex-col";
     return (
-      <section id={c.id} className={c.className} style={c.style}>
+      <section ref={puck?.dragRef ?? undefined} id={c.id} className={c.className} style={c.style}>
         <Conteudo className={cls} style={interior} minEmptyHeight={80} />
       </section>
     );
@@ -94,10 +94,10 @@ export const Coluna: ComponentConfig<ColunaProps> = {
     aparencia: campoAparencia(),
   },
   defaultProps: { conteudo: [], disposicao: "pilha", espaco: 16, alinharItens: "esticar", justificar: "inicio", ocupar: null, aparencia: estiloVazio() },
-  render: ({ conteudo: Conteudo, disposicao, espaco, alinharItens, justificar, ocupar, aparencia }) => {
+  render: ({ puck, conteudo: Conteudo, disposicao, espaco, alinharItens, justificar, ocupar, aparencia }) => {
     const c = caixa(aparencia, ocupar ? { gridColumn: `span ${ocupar} / span ${ocupar}` } : undefined);
     return (
-      <div id={c.id} className={juntar(c.className, "min-w-0")} style={c.style}>
+      <div ref={puck?.dragRef ?? undefined} id={c.id} className={juntar(c.className, "min-w-0")} style={c.style}>
         <Conteudo
           className={disposicao === "linha" ? "flex flex-wrap" : "flex flex-col"}
           style={{ gap: espaco != null ? `${espaco}px` : undefined, alignItems: ALINHAR_ITENS[alinharItens], justifyContent: JUSTIFICAR[justificar], height: "100%" }}
@@ -129,13 +129,13 @@ export const Titulo: ComponentConfig<TituloProps> = {
     tipografia: tipoVazia({ fonte: "tema-titulos", tamanho: 44, tamanhoTel: 32, peso: "700", alturaLinha: 1.1, cor: "var(--c-primaria)" }),
     aparencia: estiloVazio(),
   },
-  render: ({ texto, nivel, ligacao, tipografia, aparencia }) => {
+  render: ({ puck, texto, nivel, ligacao, tipografia, aparencia }) => {
     const c = caixa(aparencia);
     const t = estiloTexto(tipografia);
     const Tag = nivel as ElementType;
     const href = ligacaoSegura(ligacao);
     return (
-      <Tag id={c.id} className={juntar(c.className, t.className, "whitespace-pre-line")} style={{ ...c.style, ...t.style }}>
+      <Tag ref={puck?.dragRef ?? undefined} id={c.id} className={juntar(c.className, t.className, "whitespace-pre-line")} style={{ ...c.style, ...t.style }}>
         {href ? <a href={href} className="hover:opacity-80">{texto}</a> : texto}
       </Tag>
     );
@@ -157,11 +157,11 @@ export const Texto: ComponentConfig<TextoProps> = {
     tipografia: tipoVazia({ tamanho: 17, alturaLinha: 1.65, cor: "var(--c-suave)" }),
     aparencia: estiloVazio(),
   },
-  render: ({ texto, tipografia, linhas, aparencia }) => {
+  render: ({ puck, texto, tipografia, linhas, aparencia }) => {
     const c = caixa(aparencia);
     const t = estiloTexto(tipografia);
     const corte = linhas && linhas >= 1 && linhas <= 4 ? `ena-linhas-${linhas}` : "";
-    return <p id={c.id} className={juntar(c.className, t.className, corte, "whitespace-pre-line")} style={{ ...c.style, ...t.style }}>{texto}</p>;
+    return <p ref={puck?.dragRef ?? undefined} id={c.id} className={juntar(c.className, t.className, corte, "whitespace-pre-line")} style={{ ...c.style, ...t.style }}>{texto}</p>;
   },
 };
 
@@ -194,7 +194,7 @@ export const Botao: ComponentConfig<BotaoProps> = {
     tipografia: tipoVazia({ tamanho: 15, peso: "700" }),
     aparencia: estiloVazio({ preenchimento: lados(14, 26), raio: 0 }),
   },
-  render: ({ rotulo, ligacao, novaJanela, variante, cor, corTexto, corHover, seta, larguraTotal, tipografia, aparencia }) => {
+  render: ({ puck, rotulo, ligacao, novaJanela, variante, cor, corTexto, corHover, seta, larguraTotal, tipografia, aparencia }) => {
     const c = caixa(aparencia);
     const t = estiloTexto(tipografia);
     const principal = corSegura(cor) ?? "var(--c-destaque)";
@@ -211,6 +211,7 @@ export const Botao: ComponentConfig<BotaoProps> = {
     const href = ligacaoSegura(ligacao) || "#";
     return (
       <a
+        ref={puck?.dragRef ?? undefined}
         id={c.id}
         href={href}
         {...(novaJanela ? { target: "_blank", rel: "noreferrer" } : {})}
@@ -242,13 +243,13 @@ export const Imagem: ComponentConfig<ImagemProps> = {
     aparencia: campoAparencia(),
   },
   defaultProps: { src: "", alt: "", proporcao: "4/3", ajuste: "cover", ligacao: "", aparencia: estiloVazio({ largura: em(100, "%") }) },
-  render: ({ src, alt, proporcao, ajuste, ligacao, aparencia }) => {
+  render: ({ puck, src, alt, proporcao, ajuste, ligacao, aparencia }) => {
     const c = caixa(aparencia, { overflow: "hidden" });
     const img = src
       ? <img src={src} alt={alt} className="block h-full w-full" style={{ objectFit: ajuste, aspectRatio: proporcao || undefined }} />
       : <div className="grid w-full place-items-center bg-[#E7EBF0] text-sm text-[#6b7685]" style={{ aspectRatio: proporcao || "4/3" }}>Escolha uma imagem</div>;
     const href = ligacaoSegura(ligacao);
-    return <div id={c.id} className={c.className} style={c.style}>{href ? <a href={href}>{img}</a> : img}</div>;
+    return <div ref={puck?.dragRef ?? undefined} id={c.id} className={c.className} style={c.style}>{href ? <a href={href}>{img}</a> : img}</div>;
   },
 };
 
@@ -256,9 +257,9 @@ export const Espaco: ComponentConfig<{ altura: number | null; alturaTel?: number
   label: "Espaço",
   fields: { altura: campoNumero("Altura") },
   defaultProps: { altura: 48, alturaTel: null },
-  render: ({ altura, alturaTel }) => {
+  render: ({ puck, altura, alturaTel }) => {
     const c = estiloBloco(estiloVazio({ preenchimento: lados(altura ?? 0, 0, 0, 0), preenchimentoTel: lados(alturaTel ?? altura ?? 0, 0, 0, 0) }));
-    return <div aria-hidden="true" className={c.className} style={c.style} />;
+    return <div ref={puck?.dragRef ?? undefined} aria-hidden="true" className={c.className} style={c.style} />;
   },
 };
 
@@ -271,9 +272,9 @@ export const Separador: ComponentConfig<{ espessura: number | null; cor: string;
     aparencia: campoAparencia(),
   },
   defaultProps: { espessura: 1, cor: "var(--c-primaria)", estilo: "solid", aparencia: estiloVazio({ margem: lados(16, 0), opacidade: 20 }) },
-  render: ({ espessura, cor, estilo, aparencia }) => {
+  render: ({ puck, espessura, cor, estilo, aparencia }) => {
     const c = caixa(aparencia);
-    return <hr id={c.id} className={c.className} style={{ ...c.style, border: 0, borderTop: `${espessura ?? 1}px ${estilo} ${corSegura(cor) ?? "currentColor"}` }} />;
+    return <hr ref={puck?.dragRef ?? undefined} id={c.id} className={c.className} style={{ ...c.style, border: 0, borderTop: `${espessura ?? 1}px ${estilo} ${corSegura(cor) ?? "currentColor"}` }} />;
   },
 };
 
@@ -314,12 +315,12 @@ export const Pilares: ComponentConfig<PilaresProps> = {
     cartao: estiloVazio({ preenchimento: lados(20, 0, 0, 0), bordaTopo: 2, bordaCor: "var(--c-acento)" }),
     aparencia: estiloVazio(),
   },
-  render: ({ itens, colunas, colunasTab, colunasTel, espaco, tipoNumero, tipoTitulo, tipoTexto, cartao, aparencia }) => {
+  render: ({ puck, itens, colunas, colunasTab, colunasTel, espaco, tipoNumero, tipoTitulo, tipoTexto, cartao, aparencia }) => {
     const c = caixa(aparencia, { gap: espaco != null ? `${espaco}px` : undefined, ["--cols" as string]: String(colunas || 1), ["--cols-tab" as string]: String(colunasTab ?? Math.min(colunas || 1, 2)), ["--cols-tel" as string]: String(colunasTel || 1) } as CSSProperties);
     const k = estiloBloco(cartao);
     const [tn, tt, tx] = [estiloTexto(tipoNumero), estiloTexto(tipoTitulo), estiloTexto(tipoTexto)];
     return (
-      <div id={c.id} className={juntar(c.className, "ena-grelha")} style={c.style}>
+      <div ref={puck?.dragRef ?? undefined} id={c.id} className={juntar(c.className, "ena-grelha")} style={c.style}>
         {(itens ?? []).map((p, i) => (
           <div key={i} className={k.className} style={k.style}>
             {p.imagem && <img src={p.imagem} alt="" className="mb-4 h-14 w-14 object-contain" />}
@@ -351,10 +352,10 @@ export const Logotipos: ComponentConfig<{ itens: Logo[]; altura: number | null; 
     aparencia: campoAparencia(),
   },
   defaultProps: { itens: [], altura: 48, espaco: 40, cinzento: true, alinhar: "centro", aparencia: estiloVazio() },
-  render: ({ itens, altura, espaco, cinzento, alinhar, aparencia }) => {
+  render: ({ puck, itens, altura, espaco, cinzento, alinhar, aparencia }) => {
     const c = caixa(aparencia, { gap: `${espaco ?? 40}px`, justifyContent: JUSTIFICAR[alinhar] });
     return (
-      <div id={c.id} className={juntar(c.className, "flex flex-wrap items-center")} style={c.style}>
+      <div ref={puck?.dragRef ?? undefined} id={c.id} className={juntar(c.className, "flex flex-wrap items-center")} style={c.style}>
         {(itens ?? []).length === 0 && <p className="text-sm text-[#6b7685]">Junte logótipos no painel.</p>}
         {(itens ?? []).filter(l => l.imagem).map((l, i) => {
           const img = <img src={l.imagem} alt={l.alt} style={{ height: `${altura ?? 48}px` }} className={juntar("w-auto object-contain transition", cinzento && "opacity-70 grayscale hover:opacity-100 hover:grayscale-0")} />;

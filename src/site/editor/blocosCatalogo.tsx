@@ -89,7 +89,7 @@ function LinhaCurso({ c, guardado, comparado, onGuardar, onComparar, guardar, co
 /** Zona onde se largam blocos dentro de um bloco fechado (no site, vazia não ocupa espaço). */
 export type Zona = ComponentType<{ className?: string; style?: CSSProperties; minEmptyHeight?: number }>;
 
-function CatalogoVista(p: Omit<CatalogoProps, "zonaTopo" | "zonaLista"> & { zonaTopo?: Zona; zonaLista?: Zona }) {
+function CatalogoVista(p: Omit<CatalogoProps, "zonaTopo" | "zonaLista"> & { zonaTopo?: Zona; zonaLista?: Zona; refRaiz?: ((el: Element | null) => void) | null }) {
   const ZonaTopo = p.zonaTopo;
   const ZonaLista = p.zonaLista;
   const ctx = useContext(OfertaCtx);
@@ -125,7 +125,7 @@ function CatalogoVista(p: Omit<CatalogoProps, "zonaTopo" | "zonaLista"> & { zona
   );
 
   return (
-    <div className={c.className} style={c.style}>
+    <div ref={p.refRaiz ?? undefined} className={c.className} style={c.style}>
       {p.topo && (
         <section className="bg-[var(--c-primaria)] px-5 py-14 text-white lg:px-8 lg:py-20">
           <div className="mx-auto" style={{ maxWidth: "var(--largura)" }}>
@@ -266,5 +266,5 @@ export const Catalogo: ComponentConfig<CatalogoProps> = {
     textoPesquisa: "Nome do curso ou área...", separadores: true, filtros: true, comparador: true, guardar: true,
     vista: "linhas", cartao: cartaoPadrao({ colunas: 2 }), aparencia: estiloVazio(),
   },
-  render: ({ puck: _p, ...p }) => <CatalogoVista {...(p as unknown as Parameters<typeof CatalogoVista>[0])} />,
+  render: ({ puck, ...p }) => <CatalogoVista {...(p as unknown as Parameters<typeof CatalogoVista>[0])} refRaiz={puck?.dragRef} />,
 };

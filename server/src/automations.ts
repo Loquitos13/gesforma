@@ -3,6 +3,7 @@ import type { Db } from "./db/pool.js";
 import { buildCtaVars, ctaDestino, fillCtaHref, hrefDoBotao } from "./emailCta.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
 import { parseEmailXml } from "./emailXml.js";
+import { lerEntidade } from "./regrasConfig.js";
 import { config } from "./config.js";
 import { sendMail } from "./mailer.js";
 import {
@@ -27,6 +28,16 @@ function asLines(raw: unknown): string[] {
 }
 
 const origem = () => config.appOrigin.replace(/\/$/, "");
+
+function listaDoPayload(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
+  return typeof raw === "string" ? raw.split("\n").filter(Boolean) : [];
+}
+
+/** Telefones por zona (Configurações › Entidade), um por linha. */
+export async function telefonesPorZona(db: Db) {
+  return (await lerEntidade(db)).telefonesZona.split("\n").filter(Boolean);
+}
 
 /** Monta assunto, texto e HTML de um modelo com as variáveis dadas (o mesmo que sai no envio real). */
 export function renderModelo(m: Modelo, nome: string, vars: Record<string, string>, extra: { pixelUrl?: string; note?: string } = {}) {
@@ -58,6 +69,9 @@ export async function ingestEvent(db: Db, type: string, payload: Record<string, 
     entidade: String(payload.entidade ?? ""),
     valor: String(payload.valor ?? ""),
     documentosLista: String(payload.documentos_lista ?? ""),
+    documentosItens: listaDoPayload(payload.documentos_itens),
+    emFaltaItens: listaDoPayload(payload.documentos_em_falta_itens),
+    telefonesItens: regras.length ? await telefonesPorZona(db) : [],
   });
   let queued = 0;
   for (const regra of regras) {
@@ -166,6 +180,9 @@ export async function varsDeExemplo(db: Db, curso: string | null, para: { email:
     entidade: "",
     valor: "",
     documentosLista: "",
+    documentosItens: ["(documento 1)", "(documento 2)"],
+    emFaltaItens: ["(documento em falta)"],
+    telefonesItens: await telefonesPorZona(db),
   });
 }
 

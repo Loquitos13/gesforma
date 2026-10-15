@@ -32,6 +32,7 @@ export async function devidos(c: Consulta, limite: Date, maximo: number) {
         AND estado NOT IN ('Desistiu', 'Formando')
         AND docs_token IS NOT NULL
         AND lembretes_enviados < $2
+        AND ultimo_lembrete_em IS NULL
         AND btrim(email) <> ''
         AND lembrete_pre_em IS NOT NULL
         AND lembrete_pre_em <= $1
@@ -49,4 +50,14 @@ export async function reclamarEnvio(c: Consulta, id: number, limite: Date) {
   return Boolean(await one(c,
     "UPDATE preinscricoes SET lembrete_pre_em = now(), lembretes_enviados = lembretes_enviados + 1 WHERE id = $1 AND lembrete_pre_em <= $2 RETURNING id",
     [id, limite]));
+}
+
+/** Contactos registados no CRM (manuais e automáticos, lembretes incluídos). */
+export async function contarContactos(c: Consulta, id: number) {
+  return Number((await one<{ n: number }>(c, "SELECT count(*)::int AS n FROM preinscricao_contactos WHERE preinscricao_id = $1", [id]))?.n ?? 0);
+}
+
+/** Depois do último lembrete não se envia mais nenhum. */
+export async function marcarUltimoLembrete(c: Consulta, id: number) {
+  await many(c, "UPDATE preinscricoes SET ultimo_lembrete_em = now() WHERE id = $1", [id]);
 }

@@ -37,7 +37,10 @@ const AMBITOS = [
   { valor: "preinscricao", rotulo: "Formulário de pré-inscrição" },
   { valor: "contacto", rotulo: "Contactar a secretaria" },
 ];
-const VARIAVEIS = ["nome", "email", "curso", "turma", "documentos_url", "comprovativo_url", "preinscricao_url", "secretaria_url", "valor", "documentos_lista"];
+const VARIAVEIS = [
+  "nome", "email", "curso", "turma", "documentos_url", "comprovativo_url", "preinscricao_url", "secretaria_url", "valor", "documentos_lista",
+  "documentos_itens", "documentos_em_falta_itens", "telefones_itens",
+];
 
 const regraSchema = z.object({
   nome: z.string().trim().min(2).max(160),

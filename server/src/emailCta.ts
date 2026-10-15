@@ -24,6 +24,16 @@ export const CTA_BY_TIPO: Record<string, CtaDestino> = {
     href: "{{documentos_url}}",
     funcao: "Enviar os documentos da pré-inscrição",
   },
+  lembrete_docs: {
+    ambito: "documentos",
+    href: "{{documentos_url}}",
+    funcao: "Enviar os documentos em falta",
+  },
+  lembrete_docs_final: {
+    ambito: "documentos",
+    href: "{{documentos_url}}",
+    funcao: "Enviar os documentos em falta (último lembrete)",
+  },
   payment: {
     ambito: "contacto",
     href: SECRETARIA_HREF,
@@ -94,6 +104,8 @@ export function buildCtaVars(p: {
   nome: string; email: string; curso: string; turma: string;
   documentosUrl?: string; comprovativoUrl?: string;
   referencia?: string; entidade?: string; valor?: string; documentosLista?: string;
+  /** Listas (um item por linha): documentos pedidos, documentos em falta, telefones por zona. */
+  documentosItens?: string[]; emFaltaItens?: string[]; telefonesItens?: string[];
 }) {
   const origin = config.appOrigin.replace(/\/$/, "");
   const q = new URLSearchParams({ email: p.email, curso: p.curso, turma: p.turma });
@@ -111,6 +123,9 @@ export function buildCtaVars(p: {
     entidade: p.entidade ?? "",
     valor: p.valor ?? "",
     documentos_lista: p.documentosLista ?? "",
+    documentos_itens: (p.documentosItens ?? []).join("\n"),
+    documentos_em_falta_itens: (p.emFaltaItens ?? []).join("\n"),
+    telefones_itens: (p.telefonesItens ?? []).join("\n"),
   };
 }
 

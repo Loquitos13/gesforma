@@ -32,7 +32,9 @@ export function parseEmailXml(xml: string): { linhas: string[]; cta: string; hre
 }
 
 export function linesToXml(linhas: string[], cta: string, href = "", ambito?: CtaAmbito): string {
-  const ps = linhas.filter(Boolean).map(l => `  <p>${esc(l)}</p>`).join("\n");
+  // <br>, <strong> e <em> são formatação permitida no corpo: ficam como marcação, o resto escapa-se.
+  const comFormatacao = (l: string) => esc(l).replace(/&lt;(\/?(?:strong|em)|br\s*\/?)&gt;/gi, "<$1>");
+  const ps = linhas.filter(Boolean).map(l => `  <p>${comFormatacao(l)}</p>`).join("\n");
   const attrs = [ambito ? ` ambito="${ambito}"` : "", href ? ` href="${esc(href)}"` : ""].join("");
   return `<email>\n${ps}\n  <cta${attrs}>${esc(cta)}</cta>\n</email>\n`;
 }

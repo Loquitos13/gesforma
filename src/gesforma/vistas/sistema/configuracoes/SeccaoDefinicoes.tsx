@@ -2,12 +2,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { apiGravarDefinicao } from "../../../../partilhado/api/configuracoes";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
-import { Aviso, Botao, Cartao, Campo, Entrada, Interruptor, Selecao, cx } from "../../../../partilhado/ui";
+import { AreaTexto, Aviso, Botao, Cartao, Campo, Entrada, Interruptor, Selecao, cx } from "../../../../partilhado/ui";
 
 export type CampoDefinicao = {
   chave: string;
   rotulo: string;
-  tipo?: "texto" | "email" | "pct" | "bool" | "numero" | "escolha";
+  tipo?: "texto" | "email" | "pct" | "bool" | "numero" | "escolha" | "linhas";
   ajuda?: string;
   placeholder?: string;
   largo?: boolean;
@@ -62,6 +62,8 @@ export function SeccaoDefinicoes({ id, titulo, descricao, campos, valores, soAdm
           <Campo key={c.chave} rotulo={c.rotulo} ajuda={c.ajuda} className={c.largo ? "md:col-span-2" : undefined}>
             {a => c.tipo === "escolha" ? (
               <Selecao {...a} opcoes={c.opcoes ?? []} value={f[c.chave] ?? ""} onChange={e => setF({ ...f, [c.chave]: e.target.value })} />
+            ) : c.tipo === "linhas" ? (
+              <AreaTexto {...a} rows={4} maxLength={400} placeholder={c.placeholder} value={f[c.chave] ?? ""} onChange={e => setF({ ...f, [c.chave]: e.target.value })} />
             ) : (
               <div className="relative">
                 <Entrada

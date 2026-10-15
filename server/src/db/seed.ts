@@ -13,14 +13,14 @@ const TEMPLATES = [
   {
     tipo: "welcome",
     nome: "Boas-vindas",
-    assunto: "Bem-vindo(a) à ENA, {{nome}}",
+    assunto: "Inscrição no curso {{curso}} | ENA – Documentação necessária",
     linhas: [
-      "Confirmámos o seu interesse em {{curso}}.",
-      "Abra a ligação pessoal para enviar os documentos: {{documentos_lista}}.",
-      "Na mesma ligação conclui a pré-inscrição.",
-      "A secretaria valida a pré-inscrição. A ligação fica aberta até essa validação.",
+      "Confirmamos a sua pré-inscrição no curso {{curso}} da ENA.",
+      "Para darmos seguimento ao seu processo de inscrição e validação, solicitamos o envio dos seguintes documentos:<br>{{documentos_itens}}",
+      "Ficamos à disposição para qualquer esclarecimento adicional. Ligue para:<br>{{telefones_itens}}",
+      "Por favor, submeta a sua documentação através do botão abaixo:",
     ],
-    cta: "Abrir pré-inscrição",
+    cta: "Submeter Documentos",
   },
   {
     tipo: "pagamento_ref",

@@ -1,4 +1,9 @@
+import { renderModelo, telefonesPorZona } from "./automations.js";
 import { config } from "./config.js";
+import { logLeadEvent } from "./crmDossier.js";
+import { buildCtaVars } from "./emailCta.js";
+import { modeloEmail } from "./repos/emails.js";
+import * as leads from "./repos/leads.js";
 import { motivoFecho } from "./ligacaoPessoal.js";
 import type { Db } from "./db/pool.js";
 import * as repo from "./repos/lembretesPre.js";
@@ -14,6 +19,9 @@ const UNIDADES = new Set<UnidadeLembrete>(["minutos", "horas", "dias"]);
 
 /** Número máximo de lembretes por pré-inscrição, quando a definição não o indica. */
 const MAXIMO_OMISSAO = 5;
+
+/** Com este número de contactos (lembretes incluídos), segue o último lembrete e param os envios. */
+export const CONTACTOS_ULTIMO_LEMBRETE = 3;
 
 export function idsRecusados(raw: unknown): number[] {
   const lista = Array.isArray(raw)
@@ -147,6 +155,29 @@ export async function enviarLembretesPreinscricao(db: Db) {
     const docs = pendencia.faltam.length > 0 || pendencia.recusados.length > 0;
     const href = `${base}?passo=${docs ? "documentos" : "cronograma"}`;
     const nome = `${lead.nome} ${lead.apelido}`.trim();
+    if (docs) {
+      // Documentos em falta: modelos editáveis (lembrete e, a partir de 3 contactos, o último lembrete).
+      const final = (await repo.contarContactos(db, lead.id)) >= CONTACTOS_ULTIMO_LEMBRETE;
+      const modelo = await modeloEmail(db, final ? "lembrete_docs_final" : "lembrete_docs");
+      if (modelo) {
+        const emFalta = [
+          ...pendencia.faltam,
+          ...pendencia.recusados.map(d => `${d.label} (recusado: ${d.observacao || "volte a enviar o ficheiro"})`),
+        ];
+        const vars = buildCtaVars({
+          nome, email, curso: lead.curso, turma: "-", documentosUrl: href,
+          emFaltaItens: emFalta, telefonesItens: await telefonesPorZona(db),
+        });
+        const mail = renderModelo({ ...modelo, template_tipo: modelo.tipo }, nome, vars);
+        await sendMail(db, { to: email, name: nome, subject: mail.subject, text: mail.text, html: mail.html });
+        const nota = `${final ? "Último lembrete" : "Lembrete"} automático · documentação pendente: ${emFalta.join(", ")}`.slice(0, 1000);
+        await leads.inserirContacto(db, { leadId: lead.id, nota, meio: "Email" });
+        await logLeadEvent(db, lead.id, undefined, "contacto", final ? "Último lembrete · documentos" : "Lembrete · documentos", nota);
+        if (final) await repo.marcarUltimoLembrete(db, lead.id);
+        enviados += 1;
+        continue;
+      }
+    }
     const linhas = [`Lembrete da pré-inscrição em ${lead.curso}.`];
     if (pendencia.faltam.length) {
       linhas.push("Ainda faltam estes documentos:");
@@ -179,6 +210,9 @@ export async function enviarLembretesPreinscricao(db: Db) {
       text: mail.text,
       html: mail.html,
     });
+    const nota = `Lembrete automático · ${docs ? "documentação pendente" : "falta escolher a turma"}`;
+    await leads.inserirContacto(db, { leadId: lead.id, nota, meio: "Email" });
+    await logLeadEvent(db, lead.id, undefined, "contacto", "Lembrete automático", nota);
     enviados += 1;
   }
   return { enviados };

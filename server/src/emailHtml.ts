@@ -90,7 +90,7 @@ ${pixel}
   const text = [
     `Olá ${input.nome.split(" ")[0] || input.nome},`,
     "",
-    ...plainParas.flatMap(l => fillVars(l, input.vars).split("\n")),
+    ...plainParas.flatMap(l => fillVars(l, input.vars).replace(/<br\s*\/?>/gi, "\n").split("\n")),
     "",
     cta,
     href,

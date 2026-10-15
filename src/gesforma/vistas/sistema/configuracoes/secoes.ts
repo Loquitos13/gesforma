@@ -13,6 +13,7 @@ export const CAMPOS_ENTIDADE: CampoDefinicao[] = [
   { chave: "localidade", rotulo: "Localidade" },
   { chave: "email", rotulo: "Email", tipo: "email" },
   { chave: "telefone", rotulo: "Telefone" },
+  { chave: "telefonesZona", rotulo: "Telefones por zona (emails)", tipo: "linhas", largo: true, ajuda: "Um por linha, como aparece nos emails. Ex.: «223781100 se pretende realizar o curso no Porto/Gaia»." },
   { chave: "iban", rotulo: "IBAN para transferências", ajuda: "Aparece no pedido de pagamento e no passo de pagamento da ligação pessoal." },
   { chave: "titularConta", rotulo: "Titular da conta" },
 ];

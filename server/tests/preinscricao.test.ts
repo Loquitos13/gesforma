@@ -261,6 +261,62 @@ describe("lembretes", () => {
     const fim = await ctx.db.query<{ lembretes_enviados: number }>("SELECT lembretes_enviados FROM preinscricoes WHERE id = $1", [aberto]);
     expect(fim.rows[0]!.lembretes_enviados).toBe(5);
   });
+
+  it("cada lembrete conta como contacto; com 3 contactos sai o último lembrete e param", async () => {
+    const ctx = await arrancar();
+    const { enviarLembretesPreinscricao } = await import("../src/lembretePre.js");
+    const curso = await cursoGold(ctx);
+    const id = (await publico(ctx, { nome: "Rui", email: `${unico("rui")}@exemplo.pt`, curso })).json().preinscricao.id as number;
+    await ctx.db.query("UPDATE preinscricoes SET lembrete_pre_em = now() WHERE id <> $1", [id]);
+    const vencer = () => ctx.db.query("UPDATE preinscricoes SET lembrete_pre_em = now() - interval '3 days' WHERE id = $1", [id]);
+    const contactos = async () => (await ctx.db.query<{ nota: string }>(
+      "SELECT nota FROM preinscricao_contactos WHERE preinscricao_id = $1 ORDER BY id", [id])).rows.map(r => r.nota);
+
+    await vencer();
+    await enviarLembretesPreinscricao(ctx.db);
+    const depois1 = await contactos();
+    expect(depois1.at(-1)).toMatch(/^Lembrete automático · documentação pendente/);
+
+    // Mais contactos até 3: o próximo é o último lembrete e não sai mais nenhum.
+    while ((await contactos()).length < 3) {
+      await ctx.db.query("INSERT INTO preinscricao_contactos (preinscricao_id, nota) VALUES ($1, 'telefonema')", [id]);
+    }
+    await vencer();
+    await enviarLembretesPreinscricao(ctx.db);
+    expect((await contactos()).at(-1)).toMatch(/^Último lembrete automático/);
+    const n = (await contactos()).length;
+    await vencer();
+    await enviarLembretesPreinscricao(ctx.db);
+    expect((await contactos()).length).toBe(n);
+  });
+
+  it("os emails da documentação listam os documentos e os telefones por zona", async () => {
+    const ctx = await arrancar();
+    const { renderModelo, telefonesPorZona } = await import("../src/automations.js");
+    const { buildCtaVars } = await import("../src/emailCta.js");
+    const { modeloEmail } = await import("../src/repos/emails.js");
+    const linhas = "223781100 se pretende realizar o curso no Porto/Gaia\r\n\r\n223781101 se pretende realizar o curso em Braga ou Aveiro\n223781102 se pretende realizar o curso em Lisboa";
+    expect((await pedido(ctx, "admin", "PUT", "/v1/settings/entidade", { values: { nome: "ENA", telefonesZona: linhas } })).statusCode).toBe(200);
+    const telefones = await telefonesPorZona(ctx.db);
+    expect(telefones).toHaveLength(3);
+    expect(telefones[0]).toMatch(/^223781100 /);
+    for (const tipo of ["welcome", "lembrete_docs", "lembrete_docs_final"]) {
+      const m = await modeloEmail(ctx.db, tipo);
+      expect(m, tipo).toBeTruthy();
+      const vars = buildCtaVars({
+        nome: "Ana", email: "ana@exemplo.pt", curso: "Curso X", turma: "-", documentosUrl: "https://x.pt/documentos/t",
+        documentosItens: ["Cartão de Cidadão", "Certificado de habilitações"], emFaltaItens: ["Certificado de habilitações"],
+        telefonesItens: telefones,
+      });
+      const mail = renderModelo({ ...m!, template_tipo: m!.tipo }, "Ana", vars);
+      expect(mail.subject).toMatch(/ENA/);
+      expect(mail.html).toContain("• Certificado de habilitações");
+      expect(mail.html).toContain("• 223781102 se pretende realizar o curso em Lisboa");
+      expect(mail.html).not.toContain("&lt;br");
+      expect(mail.text).toContain("\n• 223781100 se pretende realizar o curso no Porto/Gaia");
+      expect(mail.html).toContain('href="https://x.pt/documentos/t"');
+    }
+  });
 });
 
 describe("financiada: só documentos, a secretaria coloca na turma", () => {

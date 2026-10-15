@@ -42,6 +42,7 @@ export async function firePreinscricaoEmail(
     preinscricaoId: lead.id,
     documentos_url: url,
     documentos_lista: lista || "os documentos do curso",
+    documentos_itens: pedidos.filter(d => d.required).map(d => d.label),
   }, key).catch(() => ({ queued: 0 }));
   await flushQueuedJobs(db, 8).catch(() => undefined);
   return { token, url, queued: r.queued ?? 0 };

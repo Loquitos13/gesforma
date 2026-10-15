@@ -49,6 +49,8 @@ export type Entidade = {
   /** Conta para transferências: aparece no passo de pagamento da ligação pessoal. */
   iban: string;
   titularConta: string;
+  /** Contactos telefónicos por zona, um por linha (ex.: «223781100 se pretende realizar o curso no Porto/Gaia»): vão nos emails. */
+  telefonesZona: string;
 };
 
 export const ENTIDADE_OMISSAO: Entidade = {
@@ -64,6 +66,7 @@ export const ENTIDADE_OMISSAO: Entidade = {
   certificacaoDgert: "",
   iban: "",
   titularConta: "",
+  telefonesZona: "",
 };
 
 const BOOL = new Set(["1", "true", "sim", "on"]);
@@ -97,9 +100,12 @@ export function parseEntidade(values: Record<string, unknown> | undefined): Enti
   const v = values ?? {};
   const out = { ...ENTIDADE_OMISSAO };
   for (const k of Object.keys(out) as (keyof Entidade)[]) {
+    if (k === "telefonesZona") continue;
     const s = String(v[k] ?? "").trim();
     if (s) out[k] = s.slice(0, 200);
   }
+  // Várias linhas (até 6), cada uma com um contacto por zona.
+  out.telefonesZona = String(v.telefonesZona ?? "").split(/\r?\n/).map(l => l.trim().slice(0, 120)).filter(Boolean).slice(0, 6).join("\n");
   return out;
 }
 

@@ -55,8 +55,18 @@ export function sanitizeText(value: string, max = 4000) {
   return value.replace(/\0/g, "").slice(0, max);
 }
 
+/**
+ * Substitui {{variáveis}}. As que acabam em `_itens` são listas (um item por linha): saem como
+ * «• item» em linhas separadas (<br>, que o email converte em quebra de linha).
+ */
 export function fillVars(text: string, vars: Record<string, string>) {
-  return text.replace(/\{\{(\w+)\}\}/g, (_, k: string) => sanitizeHeader(vars[k] ?? ""));
+  return text.replace(/\{\{(\w+)\}\}/g, (_, k: string) => {
+    if (k.endsWith("_itens")) {
+      const itens = String(vars[k] ?? "").split("\n").map(sanitizeHeader).filter(Boolean);
+      return itens.map(i => `• ${i}`).join("<br>");
+    }
+    return sanitizeHeader(vars[k] ?? "");
+  });
 }
 
 export function delaySecondsFromLabel(label: string) {

@@ -38,6 +38,7 @@ export type EstiloCartao = {
   desvio?: number | null;
   animacao?: "" | "flutuar" | "balancar";
   animacaoBotao?: "" | "pulsar" | "saltar";
+  corBotao?: string; corTextoBotao?: string;
   centrar: boolean;
   interior: number | null;
   tipoTitulo: Tipografia;
@@ -83,6 +84,8 @@ export const campoCartao = (label = "Cartão do curso"): Field => ({
     desvio: campoNumero("Desvio da diagonal (por cartão)"),
     animacao: { type: "select", label: "Animação do cartão", options: [{ label: "Nenhuma", value: "" }, { label: "Flutuar", value: "flutuar" }, { label: "Balançar", value: "balancar" }] },
     animacaoBotao: { type: "select", label: "Animação do botão", options: [{ label: "Nenhuma", value: "" }, { label: "Pulsar", value: "pulsar" }, { label: "Saltar", value: "saltar" }] },
+    corBotao: campoCor("Cor do botão"),
+    corTextoBotao: campoCor("Cor do texto do botão"),
     centrar: simNao("Texto centrado"),
     interior: campoNumero("Espaço interior"),
     tipoTitulo: campoTipografia("Tipografia do título"),
@@ -100,7 +103,10 @@ const Ico = ({ n, cls = "h-4 w-4" }: { n: keyof typeof ICONES; cls?: string }) =
 
 /** Um cartão de curso com o estilo escolhido no editor (landing e catálogo). */
 /** O que um cartão em destaque pode mudar em relação ao curso (vazio = dados do curso). */
-export type ExtraCartao = { etiqueta?: string; botao?: string; ligacao?: string };
+export type ExtraCartao = { etiqueta?: string; botao?: string; ligacao?: string; corBotao?: string; corTextoBotao?: string; animacao?: string; animacaoBotao?: string };
+
+// Por cartão: vazio = o do estilo do cartão; "nenhuma" desliga a animação só nesse cartão.
+const SOBREPOR_ANIMACAO = [{ label: "Igual aos outros cartões", value: "" }, { label: "Sem animação", value: "nenhuma" }];
 
 export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: EstiloCartao; extra?: ExtraCartao; ordem?: CSSProperties }) {
   const ver = new Set(e.mostrar ?? []);
@@ -121,6 +127,8 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
   };
   const linhas = e.linhasDescricao && e.linhasDescricao >= 1 && e.linhasDescricao <= 4 ? `ena-linhas-${e.linhasDescricao}` : "";
   const pad = `${e.interior ?? 24}px`;
+  const animacao = extra?.animacao || e.animacao;
+  const animacaoBotao = extra?.animacaoBotao || e.animacaoBotao;
   const etiqueta = (texto: string, forte = false) => (
     <span className="inline-flex px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-[0.1em]"
       style={forte ? { background: acento, color: "#14263D" } : { background: "#14263D", color: "#fff" }}>{texto}</span>
@@ -165,8 +173,8 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
             {ver.has("inicio") && curso.start && <span className="flex items-center gap-2"><Ico n="local" />{curso.start}</span>}
           </div>
           {ver.has("botao") && (
-            <a href={href} className={juntar("inline-flex items-center gap-2 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:brightness-110", e.animacaoBotao && `ena-anim-${e.animacaoBotao}`)}
-              style={{ background: "var(--c-primaria)", borderRadius: e.raio ? Math.min(e.raio, 999) : 0, ...(e.centrar ? { margin: "0 auto" } : {}) }}>
+            <a href={href} className={juntar("inline-flex items-center gap-2 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:brightness-110", animacaoBotao && `ena-anim-${animacaoBotao}`)}
+              style={{ background: corSegura(extra?.corBotao) ?? corSegura(e.corBotao) ?? "var(--c-primaria)", color: corSegura(extra?.corTextoBotao) ?? corSegura(e.corTextoBotao) ?? "#ffffff",borderRadius: e.raio ? Math.min(e.raio, 999) : 0, ...(e.centrar ? { margin: "0 auto" } : {}) }}>
               {extra?.botao || e.textoBotao || "Ver curso"} <Ico n="seta" />
             </a>
           )}
@@ -176,7 +184,7 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
   );
   return (
     <article
-      className={juntar(caixa.className, "flex min-w-0", e.formato === "lista" ? "flex-row" : e.formato === "horizontal" ? "ena-cartao-h" : "flex-col", sobreposto && "relative", e.efeito === "subir" && "ena-cartao-hover-subir", e.efeito === "zoom" && "ena-cartao-hover-zoom", e.animacao && `ena-anim-${e.animacao}`)}
+      className={juntar(caixa.className, "flex min-w-0", e.formato === "lista" ? "flex-row" : e.formato === "horizontal" ? "ena-cartao-h" : "flex-col", sobreposto && "relative", e.efeito === "subir" && "ena-cartao-hover-subir", e.efeito === "zoom" && "ena-cartao-hover-zoom", animacao && `ena-anim-${animacao}`)}
       style={{ ...estilo, ...ordem }}
     >
       {img}
@@ -232,7 +240,7 @@ function Estado({ estado, recarregar }: { estado: string; recarregar?: () => voi
 // ─── Cursos em destaque ──────────────────────────────────────────────────────
 
 /** Um cartão em destaque: um curso, com imagem e textos que podem substituir os do curso (ou um cartão livre). */
-type ItemDestaque = { cursoId: string; imagem?: string; titulo?: string; texto?: string; etiqueta?: string; botao?: string; ligacao?: string };
+type ItemDestaque = { cursoId: string; imagem?: string; titulo?: string; texto?: string; etiqueta?: string; botao?: string; ligacao?: string; corBotao?: string; corTextoBotao?: string; animacao?: string; animacaoBotao?: string };
 type DestaqueProps = { modo: "escolhidos" | "automatico"; cursos: ItemDestaque[]; limite: number | null; cartao: EstiloCartao; aparencia: Estilo };
 
 /** Curso vazio, para cartões livres (sem curso): só mostram o que se escreve no cartão. */
@@ -269,8 +277,12 @@ export const CursosDestaque: ComponentConfig<DestaqueProps> = {
         etiqueta: { type: "text", label: "Etiqueta (vazio = Gold / Financiada)" },
         botao: { type: "text", label: "Texto do botão (vazio = o do cartão)" },
         ligacao: { type: "text", label: "Ligação (vazio = página do curso)" },
+        corBotao: campoCor("Cor do botão (vazio = a do cartão)") as never,
+        corTextoBotao: campoCor("Cor do texto do botão (vazio = a do cartão)") as never,
+        animacao: { type: "select", label: "Animação deste cartão", options: [...SOBREPOR_ANIMACAO, { label: "Flutuar", value: "flutuar" }, { label: "Balançar", value: "balancar" }] },
+        animacaoBotao: { type: "select", label: "Animação do botão deste cartão", options: [...SOBREPOR_ANIMACAO, { label: "Pulsar", value: "pulsar" }, { label: "Saltar", value: "saltar" }] },
       },
-      defaultItemProps: { cursoId: "", imagem: "", titulo: "", texto: "", etiqueta: "", botao: "", ligacao: "" },
+      defaultItemProps: { cursoId: "", imagem: "", titulo: "", texto: "", etiqueta: "", botao: "", ligacao: "", corBotao: "", corTextoBotao: "", animacao: "", animacaoBotao: "" },
       getItemSummary: (item, i) => `${(i ?? 0) + 1}. ${item.titulo?.trim() || (item.cursoId ? nomesCursos.get(item.cursoId) ?? "Curso fora da oferta" : "Escolha o curso")}`,
     },
     limite: campoNumero("Quantos (nos mais procurados)", ""),
@@ -289,7 +301,7 @@ export const CursosDestaque: ComponentConfig<DestaqueProps> = {
       if (modo === "automatico") return { lista: destaques.slice(0, Math.max(1, limite ?? 6)), extras: [] as ExtraCartao[] };
       const porId = new Map(cursos.map(c => [c.id, c]));
       const itens = (escolhidos ?? []).map(x => ({ x, c: cartaoDe(x, porId.get(x.cursoId)) })).filter(i => i.c);
-      return { lista: itens.map(i => i.c!), extras: itens.map(i => ({ etiqueta: i.x.etiqueta, botao: i.x.botao, ligacao: i.x.ligacao })) };
+      return { lista: itens.map(i => i.c!), extras: itens.map(({ x }) => ({ etiqueta: x.etiqueta, botao: x.botao, ligacao: x.ligacao, corBotao: x.corBotao, corTextoBotao: x.corTextoBotao, animacao: x.animacao, animacaoBotao: x.animacaoBotao })) };
     }, [modo, escolhidos, limite, cursos, destaques]);
     const c = estiloBloco(aparencia);
     return (

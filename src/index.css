@@ -417,6 +417,8 @@ body:has(input[type="file"]:focus) [data-ficha-sticky] {
   .ena-oculto-pc { display: none !important; }
 }
 .ena-grelha { display: grid; grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); }
+/* Espaço de blocos vazio: no site não ocupa lugar; no editor (data-puck-dropzone) fica visível para se largar blocos. */
+.ena-zona:empty:not([data-puck-dropzone]) { display: none; }
 .ena-linhas-1, .ena-linhas-2, .ena-linhas-3, .ena-linhas-4 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
 .ena-linhas-1 { -webkit-line-clamp: 1; }
 .ena-linhas-2 { -webkit-line-clamp: 2; }

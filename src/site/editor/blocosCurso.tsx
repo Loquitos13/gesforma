@@ -143,7 +143,7 @@ export const campoEntreTitulo = { type: "slot" as const, label: "Blocos entre o 
 export function ZonaEntreTitulo({ zona }: { zona?: unknown }) {
   // Páginas gravadas antes deste espaço não o têm.
   const Zona = zona as ComponentType<{ className?: string; minEmptyHeight?: number }> | undefined;
-  return Zona ? <Zona className="mt-4 flex flex-col gap-3 empty:hidden" minEmptyHeight={30} /> : null;
+  return Zona ? <Zona className="ena-zona mt-4 flex flex-col gap-3" minEmptyHeight={40} /> : null;
 }
 
 function duracaoModulo(raw: string) {
@@ -230,7 +230,8 @@ export const CursoSintese: ComponentConfig<SinteseProps> = {
         return (
           <>
             {p.etiqueta && <p className={juntar("text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--c-destaque)]", e.className)} style={e.style}>{p.etiqueta}</p>}
-            <p className={juntar("mt-4 text-lg leading-8 opacity-75", t.className)} style={t.style}>{curso.description}</p>
+            {/* As mudanças de linha da ficha do curso (ex.: lista de destaques) mantêm-se. */}
+            <p className={juntar("mt-4 whitespace-pre-line text-lg leading-8 opacity-75", t.className)} style={t.style}>{curso.description}</p>
           </>
         );
       }}

@@ -27,7 +27,7 @@ type BotaoLocal = {
 };
 
 type LocalProps = Base & {
-  titulo: string; tTitulo: Tipografia; entreTitulo: Slot; texto: string; mostrarPreco: boolean; mostrarMorada: boolean; abrirPedido: boolean;
+  titulo: string; tTitulo: Tipografia; entreTitulo: Slot; texto: string; textoPreco: string; mostrarPreco: boolean; mostrarMorada: boolean; abrirPedido: boolean;
   colunas: number | null; colunasTab: number | null; colunasTel: number | null;
   cartao: CartaoLocal; botao: BotaoLocal;
 };
@@ -53,6 +53,7 @@ export const CursoEscolhaLocal: ComponentConfig<LocalProps> = {
     tTitulo: campoTipografia("Tipografia do título"),
     entreTitulo: campoEntreTitulo,
     texto: { type: "textarea", label: `Texto em cada cartão (vazio = nenhum). ${ajudaVariaveis}` },
+    textoPreco: { type: "text", label: "Texto do preço (vazio = o preço do local). Ex.: «Desde {{preco}}» ou «{{preco}} · IVA incluído»" },
     mostrarMorada: simNao("Morada de cada local (Edição de cursos › Locais)"),
     mostrarPreco: simNao("Preço em cada local"),
     abrirPedido: simNao("Ao clicar num local, abre logo a pré-inscrição"),
@@ -98,7 +99,7 @@ export const CursoEscolhaLocal: ComponentConfig<LocalProps> = {
     aparencia: campoAparencia(),
   },
   defaultProps: {
-    titulo: "Onde quer fazer o curso?", tTitulo: tipoVazia(), entreTitulo: [], texto: "", mostrarMorada: true, mostrarPreco: true,
+    titulo: "Onde quer fazer o curso?", tTitulo: tipoVazia(), entreTitulo: [], texto: "", textoPreco: "{{preco}}", mostrarMorada: true, mostrarPreco: true,
     abrirPedido: true, colunas: 3, colunasTab: 2, colunasTel: 1, cartao: cartaoLocalPadrao(), botao: botaoLocalPadrao(), aparencia: estiloVazio(),
   },
   render: p => <EscolhaLocal {...p} />,
@@ -154,7 +155,7 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
                     </span>
                     {p.mostrarMorada && morada && <span className={juntar("text-xs leading-5 opacity-65", tMorada.className)} style={tMorada.style}>{morada}</span>}
                     {texto && <span className={juntar("whitespace-pre-line text-sm leading-6 opacity-75", tTexto.className)} style={tTexto.style}>{texto}</span>}
-                    {p.mostrarPreco && <span className={juntar("mt-auto text-sm font-bold text-[var(--c-destaque)]", tPreco.className)} style={tPreco.style}>{precoNoLocal(curso, l)}</span>}
+                    {p.mostrarPreco && <span className={juntar("mt-auto text-sm font-bold text-[var(--c-destaque)]", tPreco.className)} style={tPreco.style}>{preencherVariaveis(p.textoPreco || "{{preco}}", vars)}</span>}
                     {/* Não pode haver um botão dentro de outro: o cartão inteiro faz a ação, isto é só o aspeto. */}
                     {b.mostrar && (
                       <span className={juntar("mt-2 inline-flex items-center gap-3 px-4 py-3 text-xs font-extrabold uppercase tracking-[0.08em]", POSICAO_BOTAO[b.posicao] ?? POSICAO_BOTAO.largura, !p.mostrarPreco && "mt-auto", tBotao.className)}
@@ -357,7 +358,7 @@ function CartaoAntigo({ p, curso, Conteudo }: { p: Omit<CartaoProps, "conteudo">
       <button type="button" onClick={() => abrir(curso, local ? { local } : undefined)} className="mt-7 flex w-full items-center justify-between bg-[var(--c-destaque)] px-5 py-4 text-xs font-extrabold uppercase tracking-[0.08em] text-white hover:brightness-90">
         {rotuloBotaoInscricao(curso.enrollment)} <Icon name="arrow" />
       </button>
-      <Conteudo className="mt-5 flex flex-col gap-3 empty:hidden" minEmptyHeight={30} />
+      <Conteudo className="mt-5 flex flex-col gap-3 ena-zona" minEmptyHeight={30} />
     </>
   );
 }

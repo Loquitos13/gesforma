@@ -79,7 +79,7 @@ function Detalhe({ p, curso, editar, Z }: { p: Props; curso: Course; editar: boo
           </div>
         </section>
       )}
-      {ZT && <ZT className="flex flex-col empty:hidden" minEmptyHeight={40} />}
+      {ZT && <ZT className="flex flex-col ena-zona" minEmptyHeight={40} />}
       <section className="px-5 py-12 lg:px-8 lg:py-16">
         <div className={`mx-auto grid gap-12 ${p.mostrarCartao ? "lg:grid-cols-[1fr_360px]" : ""}`} style={{ maxWidth: "var(--largura)" }}>
           <div className="max-w-3xl">
@@ -95,7 +95,7 @@ function Detalhe({ p, curso, editar, Z }: { p: Props; curso: Course; editar: boo
                 ))}
               </div>
             )}
-            {ZC && <ZC className="mt-10 flex flex-col gap-4 empty:hidden" minEmptyHeight={40} />}
+            {ZC && <ZC className="mt-10 flex flex-col gap-4 ena-zona" minEmptyHeight={40} />}
             {p.mostrarObjetivos && curso.objetivos.length > 0 && (
               <>
                 <h2 className="mt-12 font-serif text-3xl">{p.tituloObjetivos}</h2>
@@ -147,7 +147,7 @@ function Detalhe({ p, curso, editar, Z }: { p: Props; curso: Course; editar: boo
               <button type="button" onClick={() => abrir(curso)} className="mt-7 flex w-full items-center justify-between bg-[var(--c-destaque)] px-5 py-4 text-xs font-extrabold uppercase tracking-[0.08em] text-white hover:brightness-90">
                 {rotuloBotaoInscricao(curso.enrollment)} <Icon name="arrow" />
               </button>
-              {ZK && <ZK className="mt-5 flex flex-col gap-3 empty:hidden" minEmptyHeight={30} />}
+              {ZK && <ZK className="mt-5 flex flex-col gap-3 ena-zona" minEmptyHeight={30} />}
             </aside>
           )}
         </div>

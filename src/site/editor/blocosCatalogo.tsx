@@ -140,7 +140,7 @@ function CatalogoVista(p: Omit<CatalogoProps, "zonaTopo" | "zonaLista"> & { zona
           </div>
         </section>
       )}
-      {ZonaTopo && <ZonaTopo className="flex flex-col empty:hidden" minEmptyHeight={40} />}
+      {ZonaTopo && <ZonaTopo className="flex flex-col ena-zona" minEmptyHeight={40} />}
       {p.separadores && (
         <section className="border-b-4 border-[var(--c-acento)] bg-[var(--c-primaria)] px-5 lg:px-8">
           <div className="mx-auto flex flex-col gap-px sm:flex-row" style={{ maxWidth: "var(--largura)" }}>
@@ -171,7 +171,7 @@ function CatalogoVista(p: Omit<CatalogoProps, "zonaTopo" | "zonaLista"> & { zona
           )}
           <div>
             {!p.topo && <div className="mb-6">{pesquisa}</div>}
-            {ZonaLista && <ZonaLista className="flex flex-col gap-4 empty:hidden" minEmptyHeight={40} />}
+            {ZonaLista && <ZonaLista className="flex flex-col gap-4 ena-zona" minEmptyHeight={40} />}
             <p className="mb-6 text-sm opacity-60"><strong>{estado === "pronto" ? lista.length : "…"}</strong> formações encontradas</p>
             {estado === "a-carregar" && <p className="py-16 text-center opacity-70">A carregar o catálogo.</p>}
             {estado === "erro" && <p className="py-16 text-center">Não foi possível carregar os cursos.</p>}

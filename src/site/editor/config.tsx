@@ -1,6 +1,6 @@
 // Configuração do editor visual (Puck): tema da página e blocos disponíveis.
 import { createContext, useContext, type CSSProperties, type ElementType, type ReactNode } from "react";
-import type { ComponentConfig, Config, Field } from "@puckeditor/core";
+import type { ComponentConfig, Config, Data, Field } from "@puckeditor/core";
 import type { PaginaSite } from "../../partilhado/siteBlocos";
 import { AreaFormando } from "./blocosArea";
 import { Catalogo } from "./blocosCatalogo";
@@ -199,5 +199,27 @@ export const configPaginaCurso: Config = {
   },
   components: componentes,
 };
+
+type No = { type: string; props: Record<string, unknown> };
+const eObjeto = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === "object" && !Array.isArray(v);
+const eListaDeBlocos = (v: unknown): v is No[] => Array.isArray(v) && v.every(b => eObjeto(b) && typeof b.type === "string" && eObjeto(b.props));
+
+/**
+ * Blocos gravados antes de uma opção existir não a têm: o painel mostrava-a em branco (ex.: «Mostrar o botão»
+ * sem Sim nem Não). Ao abrir no editor, as opções em falta (e as de dentro dos grupos) ganham o valor por omissão.
+ */
+export function completarPadroes(d: Data): Data {
+  const completar = (lista: No[]): No[] => lista.map(b => {
+    const padrao = (componentes[b.type]?.defaultProps ?? {}) as Record<string, unknown>;
+    const props: Record<string, unknown> = { ...b.props };
+    for (const [k, v] of Object.entries(padrao)) {
+      if (props[k] === undefined) props[k] = v;
+      else if (eObjeto(v) && eObjeto(props[k])) props[k] = { ...v, ...(props[k] as object) };
+    }
+    for (const [k, v] of Object.entries(props)) if (eListaDeBlocos(v)) props[k] = completar(v);
+    return { ...b, props };
+  });
+  return { ...d, content: completar((d.content ?? []) as No[]) as Data["content"] };
+}
 
 export const configPara = (pagina: PaginaSite) => (pagina === "inicio" ? configSite : pagina === "curso" ? configPaginaCurso : configOutraPagina);

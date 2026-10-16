@@ -392,7 +392,7 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
                 ))}
               </div>
             )}
-            {ZonaMeio && <ZonaMeio className="flex min-w-0 flex-1 flex-wrap items-center gap-3 empty:hidden" minEmptyHeight={40} />}
+            {ZonaMeio && <ZonaMeio className="flex min-w-0 flex-1 flex-wrap items-center gap-3 ena-zona" minEmptyHeight={40} />}
             {mostrarTotal && estado === "pronto" && <span className={juntar("text-sm font-semibold text-[#3E5168] lg:ml-auto", tt.className)} style={tt.style}>{lista.length} formações disponíveis</span>}
             {pesquisa && (
               <label className="flex w-full items-center gap-3 border border-[#14263D]/20 px-4 py-3 text-[#14263D]"
@@ -404,7 +404,7 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
             )}
           </div>
         )}
-        {ZonaCursos && <ZonaCursos className="mb-6 flex flex-col gap-4 empty:hidden" minEmptyHeight={40} />}
+        {ZonaCursos && <ZonaCursos className="mb-6 flex flex-col gap-4 ena-zona" minEmptyHeight={40} />}
         {estado === "pronto" ? <Grelha cursos={lista} e={cartao} vazio="Não encontrámos formações para esta pesquisa." /> : <Estado estado={estado} recarregar={recarregar} />}
       </div>
     );

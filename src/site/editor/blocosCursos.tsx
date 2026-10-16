@@ -34,6 +34,10 @@ export type EstiloCartao = {
   barraTopo: number | null;
   sombra: "" | "suave" | "media" | "forte";
   efeito: "" | "subir" | "zoom";
+  disposicao?: "" | "diagonal" | "diagonal-inversa";
+  desvio?: number | null;
+  animacao?: "" | "flutuar" | "balancar";
+  animacaoBotao?: "" | "pulsar" | "saltar";
   centrar: boolean;
   interior: number | null;
   tipoTitulo: Tipografia;
@@ -75,6 +79,10 @@ export const campoCartao = (label = "Cartão do curso"): Field => ({
     barraTopo: campoNumero("Barra no topo"),
     sombra: { type: "select", label: "Sombra", options: [{ label: "Nenhuma", value: "" }, { label: "Suave", value: "suave" }, { label: "Média", value: "media" }, { label: "Forte", value: "forte" }] },
     efeito: { type: "select", label: "Ao passar o rato", options: [{ label: "Nada", value: "" }, { label: "Sobe", value: "subir" }, { label: "Zoom na imagem", value: "zoom" }] },
+    disposicao: { type: "select", label: "Disposição (computador)", options: [{ label: "Grelha", value: "" }, { label: "Diagonal (desce para a direita)", value: "diagonal" }, { label: "Diagonal (sobe para a direita)", value: "diagonal-inversa" }] },
+    desvio: campoNumero("Desvio da diagonal (por cartão)"),
+    animacao: { type: "select", label: "Animação do cartão", options: [{ label: "Nenhuma", value: "" }, { label: "Flutuar", value: "flutuar" }, { label: "Balançar", value: "balancar" }] },
+    animacaoBotao: { type: "select", label: "Animação do botão", options: [{ label: "Nenhuma", value: "" }, { label: "Pulsar", value: "pulsar" }, { label: "Saltar", value: "saltar" }] },
     centrar: simNao("Texto centrado"),
     interior: campoNumero("Espaço interior"),
     tipoTitulo: campoTipografia("Tipografia do título"),
@@ -94,7 +102,7 @@ const Ico = ({ n, cls = "h-4 w-4" }: { n: keyof typeof ICONES; cls?: string }) =
 /** O que um cartão em destaque pode mudar em relação ao curso (vazio = dados do curso). */
 export type ExtraCartao = { etiqueta?: string; botao?: string; ligacao?: string };
 
-export function CartaoCurso({ curso, e, extra }: { curso: Course; e: EstiloCartao; extra?: ExtraCartao }) {
+export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: EstiloCartao; extra?: ExtraCartao; ordem?: CSSProperties }) {
   const ver = new Set(e.mostrar ?? []);
   const href = (extra?.ligacao && ligacaoSegura(extra.ligacao)) || (curso.id ? `/formacao/${encodeURIComponent(curso.id)}` : "#");
   const acento = corSegura(e.corAcento) ?? "var(--c-acento)";
@@ -157,7 +165,7 @@ export function CartaoCurso({ curso, e, extra }: { curso: Course; e: EstiloCarta
             {ver.has("inicio") && curso.start && <span className="flex items-center gap-2"><Ico n="local" />{curso.start}</span>}
           </div>
           {ver.has("botao") && (
-            <a href={href} className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:brightness-110"
+            <a href={href} className={juntar("inline-flex items-center gap-2 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:brightness-110", e.animacaoBotao && `ena-anim-${e.animacaoBotao}`)}
               style={{ background: "var(--c-primaria)", borderRadius: e.raio ? Math.min(e.raio, 999) : 0, ...(e.centrar ? { margin: "0 auto" } : {}) }}>
               {extra?.botao || e.textoBotao || "Ver curso"} <Ico n="seta" />
             </a>
@@ -168,8 +176,8 @@ export function CartaoCurso({ curso, e, extra }: { curso: Course; e: EstiloCarta
   );
   return (
     <article
-      className={juntar(caixa.className, "flex min-w-0", e.formato === "lista" ? "flex-row" : e.formato === "horizontal" ? "ena-cartao-h" : "flex-col", sobreposto && "relative", e.efeito === "subir" && "ena-cartao-hover-subir", e.efeito === "zoom" && "ena-cartao-hover-zoom")}
-      style={estilo}
+      className={juntar(caixa.className, "flex min-w-0", e.formato === "lista" ? "flex-row" : e.formato === "horizontal" ? "ena-cartao-h" : "flex-col", sobreposto && "relative", e.efeito === "subir" && "ena-cartao-hover-subir", e.efeito === "zoom" && "ena-cartao-hover-zoom", e.animacao && `ena-anim-${e.animacao}`)}
+      style={{ ...estilo, ...ordem }}
     >
       {img}
       {corpo}
@@ -179,6 +187,19 @@ export function CartaoCurso({ curso, e, extra }: { curso: Course; e: EstiloCarta
 
 function Grelha({ cursos, e, vazio, extras }: { cursos: Course[]; e: EstiloCartao; vazio: string; extras?: (ExtraCartao | undefined)[] }) {
   const lista = e.formato === "lista";
+  const diagonal = !!e.disposicao && cursos.length > 1;
+  // Numa coluna a diagonal desloca para o lado; em várias colunas desloca para baixo.
+  const eixo = lista || (e.colunas || 3) <= 1 ? "x" : "y";
+  const d = e.desvio ?? 48;
+  const posicao = (i: number): CSSProperties => {
+    const k = e.disposicao === "diagonal-inversa" ? cursos.length - 1 - i : i;
+    return {
+      ["--i" as string]: String(i),
+      ...(diagonal && (eixo === "x"
+        ? { ["--dl" as string]: `${k * d}px`, ["--dr" as string]: `${(cursos.length - 1 - k) * d}px` }
+        : { ["--dt" as string]: `${k * d}px` })),
+    } as CSSProperties;
+  };
   const style = {
     gap: `${e.espaco ?? 20}px`,
     ["--cols" as string]: String(lista ? 1 : e.colunas || 3),
@@ -186,7 +207,11 @@ function Grelha({ cursos, e, vazio, extras }: { cursos: Course[]; e: EstiloCarta
     ["--cols-tel" as string]: String(e.colunasTel || 1),
   } as CSSProperties;
   if (!cursos.length) return <p className="py-12 text-center text-[#3E5168]">{vazio}</p>;
-  return <div className="ena-grelha" style={style}>{cursos.map((c, i) => <CartaoCurso key={`${c.id}-${i}`} curso={c} e={e} extra={extras?.[i]} />)}</div>;
+  return (
+    <div className={juntar("ena-grelha", diagonal && `ena-diagonal-${eixo}`)} style={style}>
+      {cursos.map((c, i) => <CartaoCurso key={`${c.id}-${i}`} curso={c} e={e} extra={extras?.[i]} ordem={posicao(i)} />)}
+    </div>
+  );
 }
 
 function useCursos() {

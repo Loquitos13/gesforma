@@ -163,6 +163,8 @@ describe("ligação pessoal até à validação", () => {
     // Concluir a inscrição à mão só depois de o pagamento estar confirmado.
     const cedo = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/concluir-inscricao`);
     expect(cedo.statusCode, cedo.body).toBe(409);
+    // O comercial só mexe nas suas pré-inscrições: dá-se-lhe esta para provar a regra do perfil.
+    await ctx.db.query("UPDATE preinscricoes SET comercial_id = $1 WHERE id = $2", [ctx.userId.comercial, id]);
     expect((await pedido(ctx, "comercial", "POST", `/v1/crm/leads/${id}/concluir-inscricao`)).statusCode).toBe(403);
 
     expect((await upload(ctx, token, "comprovativo", "pag.pdf", PDF)).statusCode).toBe(200);
@@ -247,6 +249,7 @@ describe("ligação pessoal até à validação", () => {
     const ctx = await arrancar();
     const curso = await cursoGold(ctx, 80);
     const id = (await publico(ctx, { nome: "Paulo", email: `${unico("paulo")}@exemplo.pt`, curso })).json().preinscricao.id as number;
+    await ctx.db.query("UPDATE preinscricoes SET comercial_id = $1 WHERE id = $2", [ctx.userId.comercial, id]);
     expect((await pedido(ctx, "comercial", "PATCH", `/v1/preinscricoes/${id}`, { estado: "Pago" })).statusCode).toBe(409);
     expect((await pedido(ctx, "secretaria", "PATCH", `/v1/preinscricoes/${id}`, { estado: "Pago" })).statusCode).toBe(200);
     const pag = await ctx.db.query<{ estado: string; valor: unknown }>(

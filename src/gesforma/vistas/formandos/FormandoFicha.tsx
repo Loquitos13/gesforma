@@ -27,6 +27,8 @@ export default function FormandoFicha({ view, params, navigate }: VistaProps) {
   const pode = usePode();
   const podeEditar = pode(gold ? "turmas.gerir" : "formandosFin.gerir");
   const podeApagar = gold ? pode("sistema.ver") : pode("formandosFin.gerir");
+  // O mesmo que o servidor exige em POST /v1/formandos/:regime/:id/acesso.
+  const podeAcesso = pode(gold ? "pagamentos.confirmar" : "formandosFin.gerir");
   const chave = id ? `formandos:ficha:${regime}:${id}` : null;
   const { dados: ficha, erro, aCarregar, recarregar } = useRecurso(chave, s => apiFichaFormando(regime, id, s));
   const [aba, setAba] = useState<Aba>("documentos");
@@ -130,7 +132,7 @@ export default function FormandoFicha({ view, params, navigate }: VistaProps) {
 
         <aside className="flex flex-col gap-4 min-w-0" aria-label="Resumo da ficha">
           <CartaoDados ficha={ficha} podeEditar={podeEditar} onEditar={() => setEditar(true)} />
-          <CartaoAcesso ficha={ficha} podeEditar={podeEditar} />
+          {podeAcesso && <CartaoAcesso ficha={ficha} podeEditar={podeAcesso} />}
           {gold && <CartaoPagamento ficha={ficha} podeEditar={podeEditar} />}
           {!gold && <CartaoElegibilidade ficha={ficha} />}
           {!gold && <CartaoApoios formandoId={ficha.id} onAbrir={() => setAba("apoios")} />}

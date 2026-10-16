@@ -18,11 +18,12 @@ describe("matriz de permissões", () => {
     expect(podeAceder("comercial", "PATCH", "/v1/email/templates/1")).toBe(false);
   });
 
-  it("formador: só leitura, excepto o que é seu", () => {
+  it("formador: só leitura, excepto sumários, presenças e planos das suas sessões", () => {
     expect(podeAceder("formador", "GET", "/v1/turmas")).toBe(true);
     expect(podeAceder("formador", "PUT", "/v1/turmas/gold/1/sessoes/2")).toBe(true);
-    expect(podeAceder("formador", "PUT", "/v1/turmas/fin/1/avaliacao")).toBe(true);
-    expect(podeAceder("formador", "PATCH", "/v1/turmas-gold/3")).toBe(true);
+    expect(podeAceder("formador", "PUT", "/v1/turmas/fin/1/avaliacao")).toBe(false);
+    expect(podeAceder("formador", "PATCH", "/v1/turmas-gold/3")).toBe(false);
+    expect(podeAceder("formador", "PATCH", "/v1/turmas-fin/3")).toBe(false);
     expect(podeAceder("formador", "PUT", "/v1/turmas/gold/1/certificados/9")).toBe(false);
     expect(podeAceder("formador", "POST", "/v1/catalog/locais")).toBe(false);
     expect(podeAceder("formador", "POST", "/v1/formandos-gold")).toBe(false);

@@ -1,4 +1,4 @@
-// Peças partilhadas pelo cockpit Gold e Financiada: estados de carregamento e o painel "Nova sessão".
+// Peças partilhadas pelo cockpit Gold e Financiada: estados de carregamento, o painel "Nova sessão" e reabrir a turma.
 import { useMemo, useState, type ReactNode } from "react";
 import { useProgramaDoCurso } from "../../../cursoPrograma";
 import { useFormadoresTodos, useOpcoesFormador, useSessoesNoutrasTurmas } from "../../../../partilhado/dados/comuns";
@@ -6,7 +6,10 @@ import { sessaoCabeNoSlot } from "../../../../partilhado/disponibilidade";
 import { MultiSearchSelect } from "../../../../partilhado/FormKit";
 import { formadorIndisponivel, horaMais } from "../../../../partilhado/sessaoAcesso";
 import type { SessaoCronograma } from "../../../../partilhado/turmaModel";
-import { Botao, Campo, Entrada, ErroCarregar, Esqueleto, PainelLateral, Vazio } from "../../../../partilhado/ui";
+import { apiReabrirTurma } from "../../../../partilhado/api/pedagogia";
+import { usePode } from "../../../../partilhado/AuthGate";
+import { persist, toastOk } from "../../../../partilhado/toastBus";
+import { AreaTexto, Botao, Campo, Entrada, ErroCarregar, Esqueleto, Modal, PainelLateral, Vazio } from "../../../../partilhado/ui";
 
 /** Esqueleto, erro ou "turma inexistente" antes de o cockpit ter dados. */
 export function EstadoCockpit({ aCarregar, erro, existe, onVoltar, children }: {
@@ -99,5 +102,41 @@ export function NovaSessaoPainel({ aberto, onFechar, regime, turma, horaPadrao, 
         <p className="m-0 text-xs text-tinta-suave">A sessão dura {duracao} h. Quem já tem sessão nesse horário noutra turma aparece indisponível.</p>
       </div>
     </PainelLateral>
+  );
+}
+
+/** Reabrir uma turma fechada (só o administrador, `turmas.reabrir`): o motivo fica na auditoria. */
+export function ReabrirTurma({ regime, turmaId, onReaberta }: { regime: "gold" | "fin"; turmaId: number; onReaberta: () => void }) {
+  const pode = usePode();
+  const [aberto, setAberto] = useState(false);
+  const [motivo, setMotivo] = useState("");
+  const [aCorrer, setACorrer] = useState(false);
+  if (!pode("turmas.reabrir")) return null;
+  async function reabrir() {
+    setACorrer(true);
+    const r = await persist(apiReabrirTurma(regime, turmaId, motivo.trim()));
+    setACorrer(false);
+    if (!r) return;
+    setAberto(false);
+    setMotivo("");
+    toastOk("Turma reaberta.");
+    onReaberta();
+  }
+  return (
+    <>
+      <Botao tamanho="sm" variante="secundario" onClick={() => setAberto(true)}>Reabrir</Botao>
+      <Modal aberto={aberto} onFechar={() => setAberto(false)} titulo="Reabrir a turma" largura="sm"
+        rodape={(
+          <>
+            <Botao variante="secundario" onClick={() => setAberto(false)}>Cancelar</Botao>
+            <Botao variante="perigo" disabled={!motivo.trim()} aCarregar={aCorrer} onClick={() => void reabrir()}>Reabrir turma</Botao>
+          </>
+        )}>
+        <div className="space-y-3 text-sm text-tinta-suave">
+          <p className="m-0">A turma volta a aceitar alterações pedagógicas e inscrições até ser fechada de novo.</p>
+          <Campo rotulo="Motivo">{p => <AreaTexto {...p} value={motivo} maxLength={500} onChange={e => setMotivo(e.target.value)} placeholder="Ex.: corrigir uma folha de presenças" />}</Campo>
+        </div>
+      </Modal>
+    </>
   );
 }

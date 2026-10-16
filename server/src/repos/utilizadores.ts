@@ -89,8 +89,18 @@ export async function definirPalavraPasse(c: Consulta, id: string, hash: string,
   );
 }
 
+/**
+ * Apaga a conta. Sessões, pedidos de reposição e objetivos do comercial saem em cascata; fichas e documentos
+ * ligados (formador, pré-inscrições, parceiros, propostas, contratos, interesses, envios de assinatura) ficam
+ * sem dono (SET NULL, migração 122); a auditoria guarda o id. Estados OAuth pendentes não têm FK: apagam-se aqui.
+ */
 export async function apagarUtilizador(c: Consulta, id: string) {
+  await one(c, "DELETE FROM oauth_states WHERE user_id = $1", [id]);
   await one(c, "DELETE FROM users WHERE id = $1", [id]);
+}
+
+export function hashDaPalavraPasse(c: Consulta, id: string) {
+  return valor<string>(c, "SELECT password_hash FROM users WHERE id = $1", [id]);
 }
 
 export async function contarAdminsAtivos(c: Consulta, excepto?: string) {

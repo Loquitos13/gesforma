@@ -46,6 +46,8 @@ export const presencasSchema = z.array(z.object({
 }).transform(p => ({ ...p, presente: p.estado ? p.estado === "presente" || p.estado === "atraso" : p.presente }))).max(400);
 
 export const sessaoPatchSchema = z.object({
+  /** Id da sessão no cronograma (a verdade); sem ele usa-se o n do caminho com o cronograma actual. */
+  sessaoId: z.string().trim().min(1).max(120).optional(),
   plano: planoSchema.optional(),
   sumario: sumarioSchema.optional(),
   presencas: presencasSchema.optional(),
@@ -69,7 +71,8 @@ export const anexoSchema = z.object({
 
 export const certificadoSchema = z.object({
   emitido: z.boolean().optional(),
-  nota: z.number().min(0).max(20).nullable().optional(),
+  /** A escala é a do curso: valida-se na rota (`escalaDaTurma`). */
+  nota: z.number().finite().nullable().optional(),
   elearning: z.number().int().min(0).max(100).nullable().optional(),
   ficheiroId: z.string().max(80).optional(),
   ficheiroNome: z.string().max(240).optional(),
@@ -83,7 +86,8 @@ export const avaliacaoNotasSchema = z.object({
     formandoId: z.number().int(),
     moduloId: z.string().max(120).default(""),
     parametroId: z.string().min(1).max(80),
-    nota: z.number().min(0).max(20).nullable(),
+    /** A escala é a do curso: valida-se na rota (`escalaDaTurma`). A null apaga a célula. */
+    nota: z.number().finite().nullable(),
   })).max(4000),
 });
 

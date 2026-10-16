@@ -1,44 +1,86 @@
-/** Sessões, documentos, certificados e notas da turma. */
-import { many, one, type Consulta, type Regime } from "./sql.js";
+/**
+ * Sessões, documentos, certificados e notas da turma.
+ * Cada linha de `turma_sessoes` liga-se ao id estável da sessão do cronograma (`sessao_id`);
+ * `sessao_n` é só a posição lectiva actual, recalculada por `renumerarSessoes` sempre que o cronograma muda.
+ */
+import { many, one, tabelaRegime, type Consulta, type Regime } from "./sql.js";
 import type { TxQuery } from "../db/pool.js";
 
-export type SessaoLinha = { sessao_n: number; plano: unknown; sumario: unknown; presencas: unknown };
+export type SessaoLinha = { sessao_id: string | null; sessao_n: number; plano: unknown; sumario: unknown; presencas: unknown };
 
+/** Só as linhas ligadas a uma sessão que ainda está no cronograma (as órfãs ficam guardadas, fora daqui). */
 export async function listarSessoes(c: Consulta, regime: Regime, turmaId: number) {
   return many<SessaoLinha>(
     c,
-    "SELECT sessao_n, plano, sumario, presencas FROM turma_sessoes WHERE regime = $1 AND turma_id = $2 ORDER BY sessao_n",
+    `SELECT sessao_id, sessao_n, plano, sumario, presencas FROM turma_sessoes
+      WHERE regime = $1 AND turma_id = $2 AND sessao_n IS NOT NULL ORDER BY sessao_n`,
     [regime, turmaId],
   );
 }
 
-export async function lerSessao(c: Consulta, regime: Regime, turmaId: number, n: number) {
-  return one<Omit<SessaoLinha, "sessao_n">>(
+export async function lerSessao(c: Consulta, regime: Regime, turmaId: number, sessaoId: string) {
+  return one<Omit<SessaoLinha, "sessao_id" | "sessao_n">>(
     c,
-    "SELECT plano, sumario, presencas FROM turma_sessoes WHERE regime = $1 AND turma_id = $2 AND sessao_n = $3",
-    [regime, turmaId, n],
+    "SELECT plano, sumario, presencas FROM turma_sessoes WHERE regime = $1 AND turma_id = $2 AND sessao_id = $3",
+    [regime, turmaId, sessaoId],
   );
 }
 
-/** Grava as partes enviadas (as que vêm a null mantêm-se). */
+/** Sessões com dados que impedem removê-las do cronograma: sumário, presenças ou plano assinado. */
+export async function sessoesComDados(c: Consulta, regime: Regime, turmaId: number) {
+  return many<{ sessao_id: string; sessao_n: number | null }>(
+    c,
+    `SELECT sessao_id, sessao_n FROM turma_sessoes
+      WHERE regime = $1 AND turma_id = $2 AND sessao_id IS NOT NULL
+        AND (sumario IS NOT NULL AND sumario <> 'null'::jsonb
+          OR jsonb_typeof(presencas) = 'array' AND jsonb_array_length(presencas) > 0
+          OR plano->>'assinado' = 'true')`,
+    [regime, turmaId],
+  );
+}
+
+/**
+ * Recalcula `sessao_n` a partir do cronograma gravado: a posição de cada `sessao_id` entre as sessões lectivas
+ * (presencial e síncrona, como `sessaoLectivaN`). Uma sessão que saiu do cronograma fica sem número.
+ */
+export async function renumerarSessoes(c: Consulta, regime: Regime, turmaId: number) {
+  await many(
+    c,
+    `WITH lect AS (
+       SELECT x.e->>'id' AS sid, row_number() OVER (ORDER BY x.o)::int AS n
+         FROM ${tabelaRegime("turmas", regime)} t
+         CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(t.cronograma) = 'array' THEN t.cronograma ELSE '[]'::jsonb END)
+              WITH ORDINALITY AS x(e, o)
+        WHERE t.id = $2 AND jsonb_typeof(x.e) = 'object'
+          AND coalesce(x.e->>'modalidade', 'presencial') IN ('presencial', 'sincrona')
+     )
+     UPDATE turma_sessoes ts SET sessao_n = (SELECT min(lect.n) FROM lect WHERE lect.sid = ts.sessao_id)
+      WHERE ts.regime = $1 AND ts.turma_id = $2 AND ts.sessao_id IS NOT NULL
+      RETURNING ts.sessao_id`,
+    [regime, turmaId],
+  );
+}
+
+/** Grava as partes enviadas na sessão com este id (as que vêm a null mantêm-se); `n` é a posição actual. */
 export async function gravarSessao(
   c: Consulta,
   regime: Regime,
   turmaId: number,
-  n: number,
+  sessao: { id: string; n: number },
   partes: { plano?: unknown; sumario?: unknown; presencas?: unknown },
 ) {
   await one(
     c,
-    `INSERT INTO turma_sessoes (regime, turma_id, sessao_n, plano, sumario, presencas)
-     VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, COALESCE($6::jsonb, '[]'::jsonb))
-     ON CONFLICT (regime, turma_id, sessao_n) DO UPDATE SET
-       plano = COALESCE($4::jsonb, turma_sessoes.plano),
-       sumario = COALESCE($5::jsonb, turma_sessoes.sumario),
-       presencas = COALESCE($6::jsonb, turma_sessoes.presencas),
+    `INSERT INTO turma_sessoes (regime, turma_id, sessao_id, sessao_n, plano, sumario, presencas)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, COALESCE($7::jsonb, '[]'::jsonb))
+     ON CONFLICT (regime, turma_id, sessao_id) DO UPDATE SET
+       sessao_n = EXCLUDED.sessao_n,
+       plano = COALESCE($5::jsonb, turma_sessoes.plano),
+       sumario = COALESCE($6::jsonb, turma_sessoes.sumario),
+       presencas = COALESCE($7::jsonb, turma_sessoes.presencas),
        updated_at = now()
-     RETURNING sessao_n`,
-    [regime, turmaId, n, partes.plano ?? null, partes.sumario ?? null, partes.presencas ?? null],
+     RETURNING sessao_id`,
+    [regime, turmaId, sessao.id, sessao.n, partes.plano ?? null, partes.sumario ?? null, partes.presencas ?? null],
   );
 }
 
@@ -135,21 +177,29 @@ export async function listarNotas(c: Consulta, regime: Regime, turmaId: number) 
   );
 }
 
-/** Substitui a grelha inteira numa só transacção. */
-export async function substituirNotas(
+/** Grava só as células enviadas: com nota insere ou actualiza; a null apaga essa célula. As outras ficam. */
+export async function gravarNotas(
   tx: (fn: (q: TxQuery) => Promise<void>) => Promise<void>,
   regime: Regime,
   turmaId: number,
   notas: { formandoId: number; moduloId: string; parametroId: string; nota: number | null }[],
 ) {
   await tx(async q => {
-    await q("DELETE FROM turma_avaliacoes WHERE regime = $1 AND turma_id = $2", [regime, turmaId]);
     for (const n of notas) {
-      if (n.nota == null || !Number.isFinite(n.nota)) continue;
+      const chave = [regime, turmaId, n.formandoId, n.moduloId || "", n.parametroId];
+      if (n.nota == null || !Number.isFinite(n.nota)) {
+        await q(
+          `DELETE FROM turma_avaliacoes
+            WHERE regime = $1 AND turma_id = $2 AND formando_id = $3 AND modulo_id = $4 AND parametro_id = $5`,
+          chave,
+        );
+        continue;
+      }
       await q(
         `INSERT INTO turma_avaliacoes (regime, turma_id, formando_id, modulo_id, parametro_id, nota)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [regime, turmaId, n.formandoId, n.moduloId || "", n.parametroId, n.nota],
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (regime, turma_id, formando_id, modulo_id, parametro_id) DO UPDATE SET nota = EXCLUDED.nota, updated_at = now()`,
+        [...chave, n.nota],
       );
     }
   });
@@ -159,7 +209,7 @@ export async function substituirNotas(
 export async function sumariosDaTurma(c: Consulta, regime: Regime, turmaId: number) {
   return many<{ sessao_n: number; sumario: unknown }>(
     c,
-    "SELECT sessao_n, sumario FROM turma_sessoes WHERE regime = $1 AND turma_id = $2",
+    "SELECT sessao_n, sumario FROM turma_sessoes WHERE regime = $1 AND turma_id = $2 AND sessao_n IS NOT NULL",
     [regime, turmaId],
   );
 }

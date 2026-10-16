@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
+import { numeroPt, validarDespesa } from "../../src/partilhado/despesas.js";
 import { arrancar, pedido } from "./helpers.js";
 
 const base = {
@@ -10,6 +11,18 @@ const base = {
 };
 
 describe("despesas da Financiada", () => {
+  it("lê números à portuguesa (milhares com ponto, decimais com vírgula)", () => {
+    expect(numeroPt("1.500")).toBe(1500);
+    expect(numeroPt("1.500,25")).toBe(1500.25);
+    expect(numeroPt("1 234 567,8")).toBe(1234567.8);
+    expect(numeroPt("12.345.678")).toBe(12345678);
+    expect(numeroPt("1.5")).toBe(1.5);
+    expect(numeroPt("0.500")).toBe(0.5);
+    expect(numeroPt("123,456")).toBe(123.456);
+    const r = validarDespesa({ descricao: "x", totalDocDespesa: "1.500" });
+    expect(r.ok && r.dados.totalDocDespesa).toBe(1500);
+  });
+
   it("valida as opções do template, numera a ordem e exporta com as colunas do template", async () => {
     const ctx = await arrancar();
     expect((await pedido(ctx, "comercial", "GET", "/v1/despesas")).statusCode).toBe(403);

@@ -177,10 +177,11 @@ export function registarAccoes(app: FastifyInstance, deps: Deps) {
     const metodo = oferta ? "Oferta" : v.body.metodo;
     const data = v.body.data ?? new Date().toISOString().slice(0, 10);
     const novoId = `TRX-${await nextOpsId(db)}`;
-    await db.tx(q => registarPagamentoRecebido(q, {
+    const registado = await db.tx(q => registarPagamentoRecebido(q, {
       novoId, formandoId: id, turmaId: f.turma_id, nome: `${f.nome} ${f.apelido}`.trim(), email: normalizeEmail(f.email),
       curso: f.curso, valor, metodo, data,
     }));
+    if (!registado) return reply.code(409).send({ error: "Esta inscrição já está paga." });
     await inserirNota(db, "gold", id, req.actor!.name, req.actor!.id, oferta ? "Inscrição oferecida pela ENA." : `Pagamento registado · € ${fmtEuros(valor)} · ${metodo}.`);
     await audit(db, req.actor!.id, "formando.pagamento_registado", "formandos_gold", String(id), req.ip, { valor, metodo });
     return { ok: true };

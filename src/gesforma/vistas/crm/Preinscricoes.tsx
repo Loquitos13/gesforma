@@ -38,6 +38,7 @@ export default function Preinscricoes({ view, params, limpar }: VistaProps) {
   const [editar, setEditar] = useState<{ aberto: boolean; lead: Lead | null }>({ aberto: false, lead: null });
   const [apagar, setApagar] = useState<Lead | null>(null);
   const [whatsapp, setWhatsapp] = useState(false);
+  const [paraPago, setParaPago] = useState<Lead | null>(null);
   const hoje = hojeLisboa();
 
   // Ficha aberta a partir da pesquisa global ou de uma notificação.
@@ -113,6 +114,8 @@ export default function Preinscricoes({ view, params, limpar }: VistaProps) {
       toastOk(estado === "Formando" ? "Escolha a turma no separador «Validação»." : "Indique o motivo da desistência em «Dados».");
       return;
     }
+    // «Pago» confirma dinheiro recebido (e o pagamento ligado): pede confirmação antes.
+    if (estado === "Pago") { setParaPago(l); return; }
     void mover.correr(l.id, { estado });
   }
 
@@ -242,6 +245,15 @@ export default function Preinscricoes({ view, params, limpar }: VistaProps) {
       />
 
       <WhatsappSimulador open={whatsapp} onClose={() => setWhatsapp(false)} onLeadCreated={() => invalidar("crm:")} />
+
+      <ConfirmarPerigo
+        aberto={paraPago != null}
+        onFechar={() => setParaPago(null)}
+        titulo="Marcar como paga"
+        acao="Confirmar pagamento"
+        descricao={paraPago ? `Confirma que o pagamento de ${nomeCompleto(paraPago)} foi recebido? O pagamento ligado fica Pago e a inscrição segue para a turma.` : ""}
+        onConfirmar={async () => { if (paraPago) await mover.correr(paraPago.id, { estado: "Pago" }); }}
+      />
 
       <ConfirmarPerigo
         aberto={apagar != null}

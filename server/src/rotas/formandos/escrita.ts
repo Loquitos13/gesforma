@@ -8,12 +8,13 @@ import { registarDocManualFin } from "../../formandoFinDocs.js";
 import { InscricaoErro, garantirVaga, recontar, recontarTurma } from "../../inscricao.js";
 import { mapFormandoFin, mapFormandoGold, newPublicId, nextOpsId } from "../../ops.js";
 import { ligarPreinscricaoAoFormandoGold, moverDocsParaTurma } from "../../percurso.js";
+import { pode } from "../../permissoes/capacidades.js";
 import { readFormandoPii, writeFormandoDocs, writeFormandoPiiPatch } from "../../pii.js";
 import { precoParaOferta } from "../../precoOferta.js";
 import { linhaFormando } from "../../repos/formandos.js";
 import {
   apagarFormando, atualizarFormandoFin, atualizarFormandoGold, definirTurmaFin, inserirFormandoFin, inserirFormandoGold,
-  turmaFinPorId, turmaFinPorNome, turmaGoldBasica,
+  registarPagamentoRecebido, temPagamentoPago, turmaFinPorId, turmaFinPorNome, turmaGoldBasica,
 } from "../../repos/formandosEscrita.js";
 import { idParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
@@ -86,15 +87,24 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
     const metodo = oferta ? "Oferta" : d.metodo;
     const estado = normalizarEstado("formandoGold", d.estado);
     if (!estado) return reply.code(400).send({ error: `Estado inválido: «${d.estado}».` });
+    if (pago && !pode(req.actor!.role, "pagamentos.confirmar")) return reply.code(403).send({ error: "Só a secretaria regista pagamentos." });
     const id = await nextOpsId(db);
+    // «Já pago»: a ficha nasce por pagar e o pagamento é registado na mesma transação (fica o movimento na tesouraria).
+    const pagamentoId = pago ? `TRX-${await nextOpsId(db)}` : null;
     const pii = writeFormandoPiiPatch({ telf: d.telf });
     try {
       await db.tx(async q => {
         if (d.turmaId) await garantirVaga(q, "gold", d.turmaId, { email: d.email });
         await inserirFormandoGold(q, {
           id, nome: d.nome, apelido: d.apelido, telf: pii.telf || d.telf, email: d.email.toLowerCase(), inscrito: d.inscrito || agora(),
-          local, curso, turma: turmaNome, turmaId: d.turmaId ?? null, estado, pago, valor, metodo, piiEnc: pii.pii_enc ?? "", publicId: newPublicId(),
+          local, curso, turma: turmaNome, turmaId: d.turmaId ?? null, estado, pago: false, valor, metodo, piiEnc: pii.pii_enc ?? "", publicId: newPublicId(),
         });
+        if (pagamentoId) {
+          await registarPagamentoRecebido(q, {
+            novoId: pagamentoId, formandoId: id, turmaId: d.turmaId ?? null, nome: `${d.nome} ${d.apelido}`.trim(), email: d.email.toLowerCase(),
+            curso, valor, metodo, data: new Date().toISOString().slice(0, 10),
+          });
+        }
         await recontarTurma(q, "gold", d.turmaId);
       });
     } catch (err) {
@@ -114,6 +124,8 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const id = v.params.id;
     const d = { ...v.body };
+    // Pagamento da ficha só pela secretaria (o preço da turma continua a ser recalculado abaixo).
+    if (!pode(req.actor!.role, "pagamentos.confirmar")) { delete d.pago; delete d.valor; delete d.metodo; }
     const atual = await linhaFormando(db, "gold", id);
     if (!atual) return reply.code(404).send({ error: "formando inexistente" });
     if (d.estado !== undefined) {
@@ -149,6 +161,22 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
       if (resolved != null) d.valor = resolved;
     }
     if (d.metodo && /^oferta$/i.test(d.metodo)) { d.metodo = "Oferta"; d.valor = 0; d.pago = true; }
+    // A ficha e os pagamentos nunca divergem: marcar pago regista o movimento; desmarcar exige reembolsar/cancelar.
+    if (d.pago === false && atual.pago && await temPagamentoPago(db, id)) {
+      return reply.code(409).send({ error: "Esta ficha tem um pagamento recebido: reembolse ou cancele-o em Pagamentos." });
+    }
+    if (d.pago === true && !atual.pago) {
+      const valor = d.valor ?? Number(atual.valor ?? 0);
+      const metodo = d.metodo ?? String(atual.metodo ?? "");
+      const novoId = `TRX-${await nextOpsId(db)}`;
+      const registado = await db.tx(q => registarPagamentoRecebido(q, {
+        novoId, formandoId: id, turmaId: atual.turma_id == null ? null : Number(atual.turma_id),
+        nome: `${d.nome ?? atual.nome ?? ""} ${d.apelido ?? atual.apelido ?? ""}`.trim(), email: String(d.email ?? atual.email ?? "").toLowerCase(),
+        curso: d.curso ?? String(atual.curso ?? ""), valor, metodo, data: new Date().toISOString().slice(0, 10),
+      }));
+      if (!registado) return reply.code(409).send({ error: "Esta inscrição já está paga." });
+      delete d.pago;
+    }
     const pii = d.telf !== undefined ? writeFormandoPiiPatch({ telf: d.telf }, readFormandoPii(atual)) : null;
     await atualizarFormandoGold(db, id, {
       ...d, email: d.email?.toLowerCase(), telf: pii ? pii.telf : undefined, piiEnc: pii?.pii_enc ?? undefined,

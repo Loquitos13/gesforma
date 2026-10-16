@@ -91,6 +91,57 @@ describe("ficha do formando", () => {
     expect((await pedido(ctx, "secretaria", "GET", "/v1/formandos/gold/999999999")).statusCode).toBe(404);
   });
 
+  it("pagamento da ficha: uma vez, com a data escolhida; «Já pago» cria o movimento; reembolso e webhook", async () => {
+    const ctx = await arrancar();
+    const movs = (formandoId: number) => ctx.db.query<{ id: string; estado: string; dia: string }>(
+      "SELECT id, estado, pago_em::date::text AS dia FROM pagamentos WHERE formando_id = $1", [formandoId]);
+    const id = await criarGold(ctx, { nome: "Paula", apelido: "Paga", email: "paula.paga@exemplo.pt", curso: "Curso de teste", valor: 90 });
+    const url = `/v1/formandos/gold/${id}/registar-pagamento`;
+    expect((await pedido(ctx, "secretaria", "POST", url, { metodo: "Numerário", valor: 90, data: "2026-01-15" })).statusCode).toBe(200);
+    expect((await pedido(ctx, "secretaria", "POST", url, { metodo: "Numerário", valor: 90 })).statusCode).toBe(409);
+    expect((await pedido(ctx, "secretaria", "POST", url, { metodo: "Oferta" })).statusCode).toBe(409);
+    expect((await movs(id)).rows).toEqual([expect.objectContaining({ estado: "Pago", dia: "2026-01-15" })]);
+
+    // «Já pago» na criação: a ficha fica paga e há movimento; o comercial não o pode fazer.
+    expect((await pedido(ctx, "comercial", "POST", "/v1/formandos-gold", { nome: "Jorge", email: "jorge.jp@exemplo.pt", pago: true, valor: 50 })).statusCode).toBe(403);
+    const jaPago = await criarGold(ctx, { nome: "Joana", apelido: "Japago", email: "joana.jp@exemplo.pt", pago: true, valor: 50, metodo: "Numerário" });
+    const mov = (await movs(jaPago)).rows;
+    expect(mov).toEqual([expect.objectContaining({ estado: "Pago" })]);
+    expect((await ctx.db.query<{ pago: boolean }>("SELECT pago FROM formandos_gold WHERE id = $1", [jaPago])).rows[0]!.pago).toBe(true);
+
+    // O comercial não marca uma ficha como paga pelo PATCH.
+    const porPagar = await criarGold(ctx, { nome: "Carla", apelido: "Porpagar", email: "carla.pp@exemplo.pt", valor: 70 });
+    expect((await pedido(ctx, "comercial", "PATCH", `/v1/formandos-gold/${porPagar}`, { pago: true, valor: 0 })).statusCode).toBe(200);
+    const pp = (await ctx.db.query<{ pago: boolean; valor: string }>("SELECT pago, valor FROM formandos_gold WHERE id = $1", [porPagar])).rows[0]!;
+    expect(pp.pago).toBe(false);
+    expect(Number(pp.valor)).toBe(70);
+    // A secretaria marca paga pelo PATCH: fica o movimento; desmarcar com pagamento recebido é recusado.
+    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/formandos-gold/${porPagar}`, { pago: true, metodo: "Numerário" })).statusCode).toBe(200);
+    expect((await movs(porPagar)).rows).toEqual([expect.objectContaining({ estado: "Pago" })]);
+    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/formandos-gold/${porPagar}`, { pago: false })).statusCode).toBe(409);
+
+    // Reembolso: a ficha volta a ficar por pagar e o webhook não repõe o Pago.
+    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/pagamentos/${mov[0]!.id}`, { estado: "Reembolsado" })).statusCode).toBe(200);
+    expect((await ctx.db.query<{ pago: boolean }>("SELECT pago FROM formandos_gold WHERE id = $1", [jaPago])).rows[0]!.pago).toBe(false);
+    await ctx.db.query(
+      `INSERT INTO app_settings (id, values) VALUES ('gold', $1::jsonb)
+       ON CONFLICT (id) DO UPDATE SET values = app_settings.values || EXCLUDED.values`,
+      [{ "Chave webhook pagamentos": "segredo-webhook" }],
+    );
+    // Reentrega de um pagamento já pago: 200 sem repetir efeitos.
+    const pagoPP = (await movs(porPagar)).rows[0]!.id;
+    expect((await ctx.app.inject({ method: "POST", url: "/v1/public/pagamentos/webhook", payload: { chave: "segredo-webhook", id: pagoPP } })).statusCode).toBe(200);
+    const wh = await ctx.app.inject({ method: "POST", url: "/v1/public/pagamentos/webhook", payload: { chave: "segredo-webhook", id: mov[0]!.id } });
+    expect(wh.statusCode).toBe(409);
+    expect((await movs(jaPago)).rows[0]!.estado).toBe("Reembolsado");
+
+    // Confirmação atómica: só a primeira passa a Pago (e dispara os efeitos).
+    const { marcarPago } = await import("../src/repos/pagamentos.js");
+    await ctx.db.query("UPDATE pagamentos SET estado = 'Pendente' WHERE id = $1", [mov[0]!.id]);
+    const [a, b] = await Promise.all([marcarPago(ctx.db, mov[0]!.id, "x"), marcarPago(ctx.db, mov[0]!.id, "x")]);
+    expect([a, b].filter(Boolean)).toHaveLength(1);
+  });
+
   it("documentos Gold validam-se e recusam-se na ficha", async () => {
     const ctx = await arrancar();
     const id = await criarGold(ctx, { nome: "Duarte", apelido: "Docs", email: "duarte.docs@exemplo.pt", curso: "Curso de teste" });

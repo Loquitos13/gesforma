@@ -77,6 +77,11 @@ export async function cancelarAbertas(c: Consulta, contratoId: number, motivo: s
   );
 }
 
+/** Há uma assinatura concluída deste contrato (o PDF assinado e as provas não se perdem). */
+export async function temAssinaturaConcluida(c: Consulta, contratoId: number) {
+  return Boolean(await one(c, "SELECT 1 FROM contrato_assinaturas WHERE contrato_id = $1 AND estado = 'assinado' LIMIT 1", [contratoId]));
+}
+
 export async function obterAssinatura(c: Consulta, id: number) {
   const r = await one(c, `SELECT ${COLUNAS} FROM contrato_assinaturas a LEFT JOIN users u ON u.id = a.enviado_por WHERE a.id = $1`, [id]);
   return r ? mapAssinatura(r) : null;
@@ -152,13 +157,15 @@ export type Conclusao = {
   metodo: MetodoAssinatura; pdf: Buffer; hashAssinatura: string; hashFinal: string; fingerprint: string; titular: string; selado: boolean;
 };
 
-/** Só conclui se o pedido ainda estiver por assinar (evita duas assinaturas em simultâneo). */
+/** Só conclui se o pedido ainda estiver por assinar (evita duas assinaturas em simultâneo) e o contrato não estiver cancelado. */
 export async function concluir(c: Consulta, id: number, d: Conclusao) {
   const r = await many(
     c,
     `UPDATE contrato_assinaturas SET estado = 'assinado', assinado_em = now(), metodo = $2, pdf_assinado = $3,
             hash_assinatura = $4, hash_final = $5, certificado_fingerprint = $6, certificado_titular = $7, selado = $8
-      WHERE id = $1 AND estado IN ('enviado', 'aberto') RETURNING id`,
+      WHERE id = $1 AND estado IN ('enviado', 'aberto')
+        AND NOT EXISTS (SELECT 1 FROM contratos_comerciais k WHERE k.id = contrato_id AND k.estado = 'Cancelado')
+      RETURNING id`,
     [id, d.metodo, d.pdf, d.hashAssinatura, d.hashFinal, d.fingerprint, d.titular, d.selado],
   );
   return r.length > 0;

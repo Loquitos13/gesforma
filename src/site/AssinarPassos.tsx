@@ -66,10 +66,11 @@ export function AssinarPassos({ token, pedido, aberto, onFechar, onAssinado }: {
 
   async function enviarExterno() {
     if (!ficheiro) return;
+    if (!/^\d{6}$/.test(codigo.trim())) return setErro("O código tem 6 algarismos.");
     setErro(null);
     setACorrer(true);
     try {
-      const r = await apiEnviarAssinadoExterno(token, ficheiro);
+      const r = await apiEnviarAssinadoExterno(token, ficheiro, codigo.trim());
       onAssinado({ ...r, metodo: "cc_cmd" });
     } catch (e) {
       setErro(msg(e, "Não foi possível receber o PDF assinado."));
@@ -150,8 +151,17 @@ export function AssinarPassos({ token, pedido, aberto, onFechar, onAssinado }: {
             <input type="file" accept="application/pdf,.pdf" className="text-sm font-normal" onChange={e => setFicheiro(e.target.files?.[0] ?? null)} />
           </label>
           <p className="m-0 text-xs text-tinta-suave">A assinatura com o Cartão de Cidadão ou a Chave Móvel Digital é qualificada: tem o mesmo valor da assinatura manuscrita.</p>
+          {enviadoPara ? (
+            <label className="flex flex-col gap-1.5 font-semibold">
+              Código enviado para {enviadoPara}
+              <input className={`${CONTROLO} num max-w-[200px] tracking-[0.35em] text-xl`} inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+                value={codigo} onChange={e => setCodigo(e.target.value.replace(/\D/g, ""))} />
+            </label>
+          ) : (
+            <Botao className="w-full" aCarregar={aCorrer} onClick={() => void pedirCodigo()}>Enviar código de confirmação para o email</Botao>
+          )}
           {erro && <Aviso tom="perigo">{erro}</Aviso>}
-          <Botao variante="primario" className="w-full" disabled={!ficheiro} aCarregar={aCorrer} onClick={() => void enviarExterno()}>Enviar PDF assinado</Botao>
+          <Botao variante="primario" className="w-full" disabled={!ficheiro || codigo.length !== 6} aCarregar={aCorrer} onClick={() => void enviarExterno()}>Enviar PDF assinado</Botao>
           <button type="button" onClick={() => { setMetodo("desenhada"); setPasso("assinar"); setErro(null); }} className="block mx-auto border-0 bg-transparent p-0 text-sm font-semibold text-ligacao cursor-pointer hover:underline">
             Assinar aqui, desenhando ou escrevendo o nome
           </button>

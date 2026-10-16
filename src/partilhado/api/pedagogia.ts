@@ -48,6 +48,7 @@ export type DtpSnapshot = {
 
 export type SessaoPedagogica = {
   n: number;
+  sessaoId?: string | null;
   plano: Record<string, unknown> | null;
   sumario: Record<string, unknown> | null;
   presencas: { id: number; nome: string; presente: boolean }[];
@@ -76,6 +77,8 @@ export type PedagogiaSnapshot = {
   documentos: TurmaDocumento[];
   certificados: TurmaCertificado[];
   dtp: DtpSnapshot;
+  /** Sessões (n) com plano definido na ficha do curso: o formador só as consulta. */
+  planosDoCurso?: number[];
 };
 
 export const apiPedagogia = (regime: Regime, turmaId: number) =>
@@ -85,7 +88,8 @@ export const apiSaveSessao = (
   regime: Regime,
   turmaId: number,
   n: number,
-  body: { plano?: unknown; sumario?: unknown; presencas?: unknown },
+  /** `sessaoId` é a verdade (os dados seguem a sessão se ela mudar de lugar); `n` só serve sem ele. */
+  body: { sessaoId?: string; plano?: unknown; sumario?: unknown; presencas?: unknown },
 ) => api<{ sessao: SessaoPedagogica }>(`/v1/turmas/${regime}/${turmaId}/sessoes/${n}`, { method: "PUT", body: JSON.stringify(body) });
 
 export const apiSaveTurmaDocumento = (regime: Regime, turmaId: number, body: TurmaDocumento) =>
@@ -175,12 +179,6 @@ export const apiDtpEntidades = () => api<{ entidades: DtpEntidade[] }>("/v1/dtp/
 export const apiCreateDtpEntidade = (nome: string) =>
   api<{ entidade: DtpEntidade }>("/v1/dtp/gold/entidades", { method: "POST", body: JSON.stringify({ nome }) });
 
-export const apiRenameDtpEntidade = (id: number, nome: string) =>
-  api<{ entidade: DtpEntidade }>(`/v1/dtp/gold/entidades/${id}`, { method: "PATCH", body: JSON.stringify({ nome }) });
-
-export const apiDeleteDtpEntidade = (id: number) =>
-  api<{ ok: boolean }>(`/v1/dtp/gold/entidades/${id}`, { method: "DELETE" });
-
 export const apiDtpEntidadeModelo = (id: number) =>
   api<DtpModeloResposta>(`/v1/dtp/gold/entidades/${id}/modelo`);
 
@@ -225,8 +223,16 @@ export const apiPublicarCronograma = (regime: Regime, turmaId: number, sessoes: 
     body: JSON.stringify({ sessoes }),
   });
 
+/** `aviso` quando a turma fechou mas o relatório não ficou anexado ao dossiê. */
 export const apiTurmaFinFecho = (turmaId: number) =>
-  api<{ ok: boolean; resumo: Record<string, unknown>; relatorioUrl: string }>(`/v1/turmas/fin/${turmaId}/fecho`, { method: "POST" });
+  api<{ ok: boolean; resumo: Record<string, unknown>; relatorioUrl: string; aviso?: string }>(`/v1/turmas/fin/${turmaId}/fecho`, { method: "POST" });
+
+export const apiTurmaGoldFecho = (turmaId: number) =>
+  api<{ ok: boolean; resumo: Record<string, unknown> }>(`/v1/turmas/gold/${turmaId}/fecho`, { method: "POST" });
+
+/** Só o administrador (`turmas.reabrir`); o motivo fica na auditoria. */
+export const apiReabrirTurma = (regime: Regime, turmaId: number, motivo: string) =>
+  api<{ ok: boolean }>(`/v1/turmas/${regime}/${turmaId}/reabrir`, { method: "POST", body: JSON.stringify({ motivo }) });
 
 export function apiRelatorioFinalTurma(turmaId: number) {
   return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/relatorio-final`, "RelatorioFinalAccao.pdf", "application/pdf");
@@ -308,7 +314,22 @@ async function descarregarFicheiro(path: string, fallback: string, accept: strin
 }
 
 /** Resultados da turma (assiduidade, notas, elegibilidade). O formador só vê as turmas onde dá aulas. */
-export type ResultadosTurma = { formandos: { id: number; nome: string; estado: string }[] };
+export type ResultadoFormandoApi = {
+  id: number; nome: string; estado: string;
+  nota: number | null; aprovado: boolean | null; elearning: number | null;
+  assiduidade: { pct: number | null }; assiduidadeMinima: number;
+  elegivel: boolean; motivos: string[];
+  certificado: { emitido: boolean; ficheiro: boolean };
+};
+
+export type ResultadosTurma = {
+  turma: { id: number; nome: string; curso: string; fechada: boolean };
+  avaliacao: { modo: string; escalaMin: number; escalaMax: number; minimoAprovacao: number; unidade: string };
+  regras: { dtpBloqueiaFecho: boolean; elearningMin: number };
+  formandos: ResultadoFormandoApi[];
+  /** Só para a equipa (o formador recebe null). */
+  fecho: { pode: boolean; falta: string[] } | null;
+};
 
 export const apiResultadosTurma = (regime: Regime, turmaId: number, signal?: AbortSignal) =>
   api<ResultadosTurma>(`/v1/turmas/${regime}/${turmaId}/resultados`, { signal, silencioso: true });

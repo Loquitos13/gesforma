@@ -133,6 +133,18 @@ describe("pagamentos: recibos", () => {
     expect(estado.json().recibo.numero).toBe(`0001/${ano}`);
   });
 
+  it("pagamento recebido não muda de valor e o recibo guarda os dados da emissão", async () => {
+    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/pagamentos/${pago1}`, { valor: 999 })).statusCode).toBe(409);
+    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/pagamentos/${pago1}`, { nome: "Outra Pessoa" })).statusCode).toBe(409);
+    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/pagamentos/${pago1}`, { valor: 125, referencia: "REF-1" })).statusCode).toBe(200);
+    // O admin corrige (fica na auditoria), mas o recibo já emitido mantém o valor recebido.
+    expect((await pedido(ctx, "admin", "PATCH", `/v1/pagamentos/${pago1}`, { valor: 999 })).statusCode).toBe(200);
+    expect((await pedido(ctx, "secretaria", "POST", `/v1/pagamentos/${pago1}/recibo`)).statusCode).toBe(200);
+    const r = await ctx.db.query<{ dados: { valor: number } }>("SELECT dados FROM recibos WHERE pagamento_id = $1", [pago1]);
+    expect(r.rows[0]!.dados.valor).toBe(125);
+    await pedido(ctx, "admin", "PATCH", `/v1/pagamentos/${pago1}`, { valor: 125 });
+  });
+
   it("o PDF abre e diz que não substitui a fatura", async () => {
     const r = await pedido(ctx, "secretaria", "GET", `/v1/pagamentos/${pago1}/recibo`);
     expect(r.statusCode).toBe(200);
@@ -155,5 +167,28 @@ describe("pagamentos: recibos", () => {
       expect((await pedido(ctx, perfil, "GET", `/v1/pagamentos/${pago2}/recibo`)).statusCode).toBe(403);
     }
     expect((await pedido(ctx, null, "GET", `/v1/pagamentos/${pago2}/recibo`)).statusCode).toBe(401);
+  });
+});
+
+describe("pagamentos: pré-inscrição confirmada", () => {
+  it("sem pré-inscrição ligada, só marca a Gold activa do mesmo email e curso (não a desistida nem a Financiada)", async () => {
+    const ctx = await arrancar();
+    const email = `lead.${Date.now()}@exemplo.pt`;
+    const curso = `Curso Pago ${Date.now()}`;
+    const criar = async (regime: "gold" | "fin") =>
+      (await pedido(ctx, "secretaria", "POST", "/v1/preinscricoes", { nome: "Lia", email, curso, regime })).json().preinscricao.id as number;
+    const desistiu = await criar("gold");
+    await ctx.db.query("UPDATE preinscricoes SET estado = 'Desistiu', motivo_desistencia = 'Preço' WHERE id = $1", [desistiu]);
+    const fin = await criar("fin");
+    const ativa = await criar("gold");
+    const outroCurso = (await pedido(ctx, "secretaria", "POST", "/v1/preinscricoes", { nome: "Lia", email, curso: `${curso} B`, regime: "gold" })).json().preinscricao.id as number;
+    await novoPagamento(ctx, { nome: "Lia", valor: 10, estado: "Pago", email, curso });
+    const r = await ctx.db.query<{ id: number; estado: string }>("SELECT id, estado FROM preinscricoes WHERE id IN ($1, $2, $3)", [desistiu, fin, ativa]);
+    const estado = Object.fromEntries(r.rows.map(x => [x.id, x.estado]));
+    expect(estado[desistiu]).toBe("Desistiu");
+    expect(estado[fin]).not.toBe("Pago");
+    expect(estado[ativa]).toBe("Pago");
+    const outro = await ctx.db.query<{ estado: string }>("SELECT estado FROM preinscricoes WHERE id = $1", [outroCurso]);
+    expect(outro.rows[0]!.estado).not.toBe("Pago");
   });
 });

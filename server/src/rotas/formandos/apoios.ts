@@ -8,7 +8,7 @@ import {
 import { encryptField } from "../../fieldCrypto.js";
 import {
   alterarApoio, apoioPorId, apoiosDaTurma, apoiosDoFormando, dadosBancarios, financiadoresEmUso, folhasFin,
-  formandoFin, formandosDaTurma, gravarCalculado, gravarDadosBancarios, listarRegras, regrasParaTurma,
+  anularCalculado, formandoFin, formandosDaTurma, gravarCalculado, gravarDadosBancarios, listarRegras, regrasParaTurma,
   substituirRegras, TIPOS_APOIO, turmaFin, turmasFinAtivas, type ApoioRow,
 } from "../../repos/apoios.js";
 import { idNum, idParam, validar } from "../../validacao.js";
@@ -244,8 +244,12 @@ export function registarApoios(app: FastifyInstance, deps: Deps) {
     await db.tx(async q => {
       for (const c of calc.calculos) {
         for (const l of c.calculo.linhas) {
-          if (l.bloqueadoIban) { contagem.semIban++; continue; }
-          if (l.valor <= 0) { contagem.semDireito++; continue; }
+          if (l.bloqueadoIban || l.valor <= 0) {
+            if (l.bloqueadoIban) contagem.semIban++; else contagem.semDireito++;
+            const chave = { formandoId: c.formandoId, periodo: v.body.mes, tipo: l.tipo, motivo: l.bloqueadoIban ? "Sem IBAN" : "Sem direito" };
+            if (await anularCalculado(q, chave, req.actor!.id)) contagem.atualizado++;
+            continue;
+          }
           const acao = await gravarCalculado(q, {
             formandoId: c.formandoId, turmaId: v.params.id, periodo: v.body.mes, tipo: l.tipo, dias: l.dias, horas: l.horas,
             valor: l.valor, detalhe: { modo: l.modo, valorBruto: l.valorBruto, aplicadoTeto: l.aplicadoTeto, ambito: l.ambito, assiduidade: c.calculo.assiduidade },

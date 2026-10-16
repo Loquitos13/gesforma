@@ -2,7 +2,7 @@
 // documentos, dossiê, certificados e visão geral). Dados em ./dados.ts.
 import { useEffect, useState } from "react";
 import { apiEnviarInqueritosTurma } from "../../../../partilhado/api/inqueritos";
-import { emitAutomation } from "../../../../partilhado/api";
+import { apiTurmaGoldFecho, emitAutomation } from "../../../../partilhado/api";
 import { useAuth } from "../../../../partilhado/AuthGate";
 import { useNomesEu, useOpcoesFormador } from "../../../../partilhado/dados/comuns";
 import { NextActions, type NextAction } from "../../../../partilhado/SecretaryUX";
@@ -10,7 +10,8 @@ import { podeMexerDocumento, staffPodeDossie } from "../../../../partilhado/sess
 import { FileUploadModal, PresencasSessaoModal, PlanoSessaoModal, SumarioSessaoModal, emptyPlano, emptySumario, sumarioPreenchido, type SessaoMeta } from "../../../../partilhado/TurmaExtras";
 import { cronogramaToSessoes, horasDoFormador, isTurmaActiva, lugaresLivres } from "../../../../partilhado/turmaModel";
 import type { FormandoTurma } from "../../../../partilhado/tiposFormando";
-import { Botao } from "../../../../partilhado/ui";
+import { persist, toastOk } from "../../../../partilhado/toastBus";
+import { Botao, ConfirmarPerigo } from "../../../../partilhado/ui";
 import { CertificadoVerModal, ExportTurmaModal, type CertificadoPreview, type ExportTurmaInfo } from "../../../ActionSurfaces";
 import { useProgramaDoCurso } from "../../../cursoPrograma";
 import { DtpPanel } from "../../../DtpView";
@@ -24,8 +25,8 @@ import { CronogramaEditor } from "../../../CronogramaEditor";
 import { TurmaAvaliacao } from "../../../TurmaAvaliacaoGrelha";
 import type { Navegar } from "../../../shell/tipos";
 import { labelsSessoesFin } from "../../../../partilhado/finDossierUi";
-import { EstadoCockpit, NovaSessaoPainel } from "./comum";
-import { useMembrosGold, useTurmaCockpit } from "./dados";
+import { EstadoCockpit, NovaSessaoPainel, ReabrirTurma } from "./comum";
+import { recarregarTurma, useMembrosGold, useResultadosTurma, useTurmaCockpit } from "./dados";
 import { EditarTurmaGold, InscreverGold, TransferirEEliminarGold } from "./GoldDialogos";
 import { GoldVisaoGeral } from "./GoldVisaoGeral";
 import { FormadorProfileSlideOver } from "./PerfilFormador";
@@ -57,6 +58,8 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
   const [transferir, setTransferir] = useState<FormandoTurma | null>(null);
   const [eliminar, setEliminar] = useState<FormandoTurma | null>(null);
   const [envioInq, setEnvioInq] = useState("");
+  const [fechar, setFechar] = useState(false);
+  const { resultados } = useResultadosTurma("gold", souFormador ? undefined : turmaId);
 
   return (
     <EstadoCockpit aCarregar={aCarregar} erro={erro} existe={Boolean(turma)} onVoltar={() => navigate("gold-turmas")}>
@@ -74,7 +77,17 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
         const porPagar = membros.filter(f => !f.pago).length;
         const semSumario = sessoes.filter(s => !sumarioPreenchido(sumarios[s.n])).length;
         const proximos: NextAction[] = [];
-        if (!souFormador && ped.dtp.pct < 70) proximos.push({ tone: "error", title: `Dossiê a ${ped.dtp.pct} %`, detail: "O dossiê bloqueia o fecho da turma.", onClick: () => setTab("dtp") });
+        const fechada = Boolean(resultados?.turma.fechada);
+        const faltaFecho = resultados?.fecho?.falta ?? [];
+        // Regra do servidor: o dossiê só bloqueia o fecho quando as regras pedagógicas o pedem, e aí qualquer item em falta conta.
+        const dossieBloqueia = Boolean(resultados?.regras.dtpBloqueiaFecho);
+        if (!souFormador && !fechada && ped.dtp.pct < 100 && (dossieBloqueia || ped.dtp.pct < 70)) {
+          proximos.push({
+            tone: dossieBloqueia ? "error" : "warn", title: `Dossiê a ${ped.dtp.pct} %`,
+            detail: dossieBloqueia ? "Cada item do dossiê em falta bloqueia o fecho da turma." : "Complete o dossiê técnico-pedagógico.",
+            onClick: () => setTab("dtp"),
+          });
+        }
         if (!souFormador && porPagar) proximos.push({ tone: "warn", title: `${porPagar} por pagar`, detail: "Pedir o pagamento na ficha do formando.", onClick: () => setTab("overview") });
         if (semSumario) proximos.push({ tone: "warn", title: `${semSumario} sessões sem sumário`, detail: "O formador ainda não fechou a sessão.", onClick: () => setTab("sessoes") });
         if (vagasLivres === 0) proximos.push({ tone: "info", title: "Turma lotada", detail: "Novas pré-inscrições não entram aqui.", onClick: () => setTab("overview") });
@@ -107,6 +120,13 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
                           .catch(err => setEnvioInq(err instanceof Error ? err.message : "Não foi possível enviar."));
                       }}>Enviar inquéritos</Botao>
                       <Botao tamanho="sm" variante="primario" onClick={() => setEditar(true)}>Editar turma</Botao>
+                      {resultados && !fechada && staffPodeDossie(user.role) && (
+                        <Botao tamanho="sm" variante="secundario" disabled={faltaFecho.length > 0}
+                          title={faltaFecho.length ? `Falta: ${faltaFecho.slice(0, 5).join(" ")}${faltaFecho.length > 5 ? "…" : ""}` : "Fecha a turma: deixa de aceitar alterações pedagógicas e inscrições"}
+                          onClick={() => setFechar(true)}>Fecho formal</Botao>
+                      )}
+                      {fechada && <span className="text-xs font-semibold text-emerald-200 px-3 py-2 bg-white/10 rounded-controlo">Fechada</span>}
+                      {fechada && <ReabrirTurma regime="gold" turmaId={t.id} onReaberta={() => recarregarTurma("gold", t.id)} />}
                       <Botao tamanho="sm" variante="fantasma" soIcone aria-label="Exportar turma" className="text-white hover:text-tinta" icone={I.download}
                         onClick={() => setExportar(exportPayload(
                           { nome: t.nome, curso: t.curso, local: t.local, formandos: t.totalAlunos, accent: "gold", turmaId: t.id },
@@ -154,15 +174,15 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
                   }} />
               )}
               {tab === "avaliacao" && (
-                <TurmaAvaliacao key={t.id} regime="gold" turmaId={t.id} cursoNome={t.curso} turmaNome={t.nome} accent="gold" formandos={nomesCockpit} />
+                <TurmaAvaliacao key={t.id} regime="gold" turmaId={t.id} cursoNome={t.curso} turmaNome={t.nome} accent="gold" formandos={nomesCockpit} soLeitura={souFormador} />
               )}
               {tab === "documentos" && !souFormador && (
                 <DocumentosTurmaTab regime="gold" curso={t.curso} criterios={criterios} guardados={ped.documentos} onSaveDoc={doc => void ped.guardarDocumento(doc)}
                   dtpItems={ped.dtp.items} formandos={nomesCockpit.map(f => f.nome)} sessoes={labelsSessoesFin(t.cronograma)} />
               )}
               {tab === "certificados" && !souFormador && (
-                <CertificadosTurmaTab formandos={nomesCockpit} certificados={ped.certificados} presencas={ped.presencas} sessoesRegistadas={ped.dtp.facts.presencas.done}
-                  onUpload={(id, nota) => { setUploadNota(nota ?? null); setUploadCert(id); }} onView={setVerCert} onNota={(id, p) => void ped.guardarCertificado(id, p)}
+                <CertificadosTurmaTab formandos={nomesCockpit} certificados={ped.certificados}
+                  onUpload={(id, nota) => { setUploadNota(nota ?? null); setUploadCert(id); }} onView={setVerCert} onNota={(id, p) => ped.guardarCertificado(id, p)}
                   curso={t.curso} turma={t.nome} regime="gold" turmaId={t.id} />
               )}
               {tab === "overview" && (
@@ -176,19 +196,20 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
 
             <PlanoSessaoModal open={!!planoSessao} onClose={() => setPlanoSessao(null)} sessao={planoSessao ?? undefined}
               plano={planoSessao ? herdarPlanoCurso(modelosCurso.planos, planoSessao.n, ped.plano(planoSessao.n)) : emptyPlano()}
-              onSave={data => { if (planoSessao) void ped.guardarPlano(planoSessao.n, data); }} />
+              soLeitura={souFormador && planoSessao && ped.planosDoCurso.includes(planoSessao.n) ? "Plano definido na ficha do curso" : undefined}
+              onSave={data => { if (planoSessao) void ped.guardarPlano(planoSessao.n, data, planoSessao.id); }} />
             <SumarioSessaoModal open={!!sumarioSessao} onClose={() => setSumarioSessao(null)} sessao={sumarioSessao ?? undefined}
               sumario={sumarioSessao ? herdarSumarioCurso(modelosCurso.planos, sumarioSessao.n, ped.sumario(sumarioSessao.n)) : emptySumario()}
               onSave={data => {
                 if (!sumarioSessao) return;
-                void ped.guardarSumario(sumarioSessao.n, data);
+                void ped.guardarSumario(sumarioSessao.n, data, sumarioSessao.id);
                 if (data.assinado) {
                   void emitAutomation("sessao.summary_signed", { email: user.email, nome: t.formador || user.name, curso: t.curso, turma: t.nome }, `sumario:gold:${t.id}:${sumarioSessao.n}`);
                 }
               }} />
             <PresencasSessaoModal open={!!presencasSessao} onClose={() => setPresencasSessao(null)} sessao={presencasSessao ?? undefined} turmaNome={t.nome} cursoNome={t.curso}
               formandos={presencasSessao ? presencasDaSessao(nomesCockpit, ped.presencas[presencasSessao.n]) : nomesCockpit}
-              onSave={rows => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows); }} />
+              onSave={rows => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id); }} />
             <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado"
               context={{ kind: "certificado", regime: "gold", turma: t.nome, formando: uploadCert != null ? String(uploadCert) : undefined, label: "Certificado" }}
               onConfirm={file => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true, ficheiroId: file.id, ficheiroNome: file.name, ficheiroUrl: file.openUrl, ...(uploadNota != null ? { nota: uploadNota } : {}) }); }} />
@@ -201,6 +222,19 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
             <InscreverGold aberto={inscrever} onFechar={() => setInscrever(false)} turma={t} activa={activa} membros={membros} onActivar={() => toggle(true)} />
             <EditarTurmaGold aberto={editar} onFechar={() => setEditar(false)} turma={t} onGravar={patch} />
             <TransferirEEliminarGold turma={t} transferir={transferir} eliminar={eliminar} onFechar={() => { setTransferir(null); setEliminar(null); }} />
+            <ConfirmarPerigo
+              aberto={fechar}
+              onFechar={() => setFechar(false)}
+              titulo="Fecho formal da turma"
+              acao="Fechar turma"
+              descricao="A turma deixa de aceitar alterações pedagógicas e inscrições. Depois disso só reabre com a administração."
+              onConfirmar={async () => {
+                const r = await persist(apiTurmaGoldFecho(t.id));
+                if (!r) return;
+                recarregarTurma("gold", t.id);
+                toastOk("Turma fechada.");
+              }}
+            />
           </>
         );
       }}

@@ -85,7 +85,7 @@ export async function indicadoresEquipa(c: Consulta, regime: Regime, p: Periodo 
             count(*) FILTER (WHERE enviada_em::date BETWEEN $4::date AND $5::date)::int AS propostas_b,
             count(*) FILTER (WHERE enviada_em::date BETWEEN $4::date AND $5::date AND estado = 'Aceite')::int AS aceites_b
        FROM propostas_comerciais
-      WHERE regime = $1 AND ($6::uuid IS NULL OR comercial_id = $6::uuid)
+      WHERE regime = $1 AND comercial_id IS NOT NULL AND ($6::uuid IS NULL OR comercial_id = $6::uuid)
       GROUP BY comercial_id`,
     params,
   );

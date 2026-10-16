@@ -188,11 +188,12 @@ async function refreshAccess(refreshToken: string, creds: DriveCreds) {
   });
 }
 
+/** Email da conta Google, só se a Google o deu como verificado (senão não prova quem entra). */
 export async function googleUserEmail(accessToken: string) {
-  const info = await googleJson<{ email?: string }>(USERINFO_URL, {
+  const info = await googleJson<{ email?: string; verified_email?: boolean }>(USERINFO_URL, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  return info.email ?? null;
+  return info.verified_email === true ? info.email ?? null : null;
 }
 
 export async function saveGoogleAccount(db: Db, tokens: {

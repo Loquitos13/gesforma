@@ -15,7 +15,7 @@ export async function turmaFinParaRelatorio(c: Consulta, turmaId: number) {
 export async function sessoesFinParaRelatorio(c: Consulta, turmaId: number) {
   return many<{ presencas: unknown; sumario: unknown }>(
     c,
-    "SELECT presencas, sumario FROM turma_sessoes WHERE regime = 'fin' AND turma_id = $1 ORDER BY sessao_n",
+    "SELECT presencas, sumario FROM turma_sessoes WHERE regime = 'fin' AND turma_id = $1 AND sessao_n IS NOT NULL ORDER BY sessao_n",
     [turmaId],
   );
 }

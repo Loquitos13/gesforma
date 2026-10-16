@@ -173,6 +173,20 @@ describe("apoios: API", () => {
     expect(turma.registos).toHaveLength(3);
     expect(turma.totais.calculado).toEqual({ n: 3, valor: 38 });
 
+    // Sem IBAN no recálculo: o registo "calculado" antigo é anulado (não segue para pagamento); com IBAN volta.
+    const deA = (turma.registos as { formandoId: number }[]).filter(r => r.formandoId === A).length;
+    expect(deA).toBeGreaterThan(0);
+    await ctx.db.query("DELETE FROM formando_apoio_dados WHERE formando_id = $1", [A]);
+    const semIbanA = (await pedido(ctx, "financiada", "POST", `${base}/processar`, { mes: MES, confirmar: true })).json();
+    expect(semIbanA.contagem).toMatchObject({ criado: 0, atualizado: 3 });
+    const anulados = (await pedido(ctx, "financiada", "GET", `${base}?mes=${MES}`)).json();
+    expect(anulados.totais.calculado.n).toBe(3 - deA);
+    expect((anulados.registos as { formandoId: number; estado: string }[]).filter(r => r.formandoId === A).every(r => r.estado === "anulado")).toBe(true);
+    await pedido(ctx, "financiada", "PUT", `/v1/formandos/fin/${A}/apoios/iban`, { iban: "PT50000201231234567890154" });
+    const reposto = (await pedido(ctx, "financiada", "POST", `${base}/processar`, { mes: MES, confirmar: true })).json();
+    expect(reposto.contagem).toMatchObject({ criado: 0, atualizado: 3 });
+    expect((await pedido(ctx, "financiada", "GET", `${base}?mes=${MES}`)).json().totais.calculado).toEqual({ n: 3, valor: 38 });
+
     // Aprovados não voltam a ser recalculados, mesmo que a regra mude.
     expect((await pedido(ctx, "financiada", "POST", `${base}/estado`, { mes: MES, de: "calculado", para: "aprovado" })).json().alterados).toBe(3);
     await pedido(ctx, "financiada", "PUT", "/v1/apoios/regras", { financiador: "", turmaId: TURMA, regras: [{ tipo: "alimentacao", modo: "dia", valor: 7, minHorasDia: 3 }] });

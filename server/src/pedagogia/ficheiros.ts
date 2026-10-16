@@ -1,10 +1,10 @@
 /** PDFs gerados do dossiê (cronograma, presenças, planos, perguntas dos inquéritos) e anexos no Drive. */
 import type { Db } from "../db/pool.js";
 import { pdfsDoDossie, type SessaoPedagogicaPdf } from "../dtpPdfs.js";
-import { storeDriveFile } from "../driveFicheiros.js";
+import { apagarFicheiroSubstituido, getDriveFile, storeDriveFile } from "../driveFicheiros.js";
 import { lerEntidade } from "../regrasConfig.js";
 import { pdfPerguntasInqueritos } from "../relatorioFinal.js";
-import { gravarAnexo } from "../repos/dtp.js";
+import { anexosDaTurma, gravarAnexo } from "../repos/dtp.js";
 import { listarSessoes } from "../repos/pedagogiaSessoes.js";
 import { formandosDaTurma, type TurmaRow } from "../repos/pedagogiaTurma.js";
 import { ITEM_PERGUNTAS, NOME_PERGUNTAS, perguntasEnviadas } from "./inqueritos.js";
@@ -33,7 +33,27 @@ export async function montarPdfsDossie(db: Db, regime: Regime, turma: TurmaRow) 
   });
 }
 
-/** Guarda um PDF gerado no Drive e liga-o ao item do dossiê. */
+/**
+ * Liga um ficheiro gerado ao item do dossiê. A cópia gerada anterior desse item (mesmo nome e item)
+ * deixa de estar ligada e apaga-se, para não acumular cópias no Drive; um anexo carregado à mão fica.
+ */
+export async function ligarAnexoGerado(
+  db: Db,
+  regime: Regime,
+  turmaId: number,
+  itemId: string,
+  file: { id: string; name: string; openUrl?: string | null },
+) {
+  const antes = (await anexosDaTurma(db, regime, turmaId)).find(a => a.item_id === itemId);
+  await gravarAnexo(db, regime, turmaId, itemId, { id: file.id, nome: file.name, url: file.openUrl ?? "" });
+  if (!antes?.drive_file_id || antes.drive_file_id === file.id) return;
+  const velho = await getDriveFile(db, antes.drive_file_id);
+  if (velho && velho.name === file.name && velho.label === itemId) {
+    await apagarFicheiroSubstituido(db, velho.id).catch(() => undefined);
+  }
+}
+
+/** Guarda um PDF gerado no Drive e liga-o ao item do dossiê (substitui a cópia gerada anterior). */
 export async function anexarPdfDtp(
   db: Db,
   actorId: string | undefined,
@@ -46,7 +66,7 @@ export async function anexarPdfDtp(
   const file = await storeDriveFile(db, actorId, { name, mime: "application/pdf", bytes }, {
     kind: "dtp", regime, turma: turma.nome, label: itemId,
   }, { gerado: true });
-  await gravarAnexo(db, regime, turma.id, itemId, { id: file.id, nome: file.name, url: file.openUrl ?? "" });
+  await ligarAnexoGerado(db, regime, turma.id, itemId, file);
 }
 
 /** PDFs das perguntas dos inquéritos enviados à turma (Financiada). */
@@ -74,7 +94,5 @@ export async function gravarPdfsDossie(db: Db, actorId: string | undefined, regi
     { itemId: "sumarios", file: folhas },
     { itemId: "planos", file: await guardar("Planos de sessao.pdf", pdfs.planos, "planos") },
   ];
-  for (const par of pares) {
-    await gravarAnexo(db, regime, turma.id, par.itemId, { id: par.file.id, nome: par.file.name, url: par.file.openUrl ?? "" });
-  }
+  for (const par of pares) await ligarAnexoGerado(db, regime, turma.id, par.itemId, par.file);
 }

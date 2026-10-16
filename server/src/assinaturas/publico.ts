@@ -10,7 +10,7 @@ import {
   novoCodigoOtp, urlAssinar, urlVerificar,
 } from "./comum.js";
 import { acrescentarCertificado, carimbarAssinatura, sha256 } from "./pdf.js";
-import { PdfExternoErro, selarPdf, validarAssinadoExterno } from "./selar.js";
+import { PdfExternoErro, ancorasDoEstado, selarPdf, validarAssinadoExterno } from "./selar.js";
 import { seloParaAssinar } from "./selo.js";
 import type { Meta } from "./servico.js";
 
@@ -169,7 +169,7 @@ async function concluirAssinatura(db: Db, token: string, a: repo.Assinatura, c: 
     await repo.registarEvento(q, a.id, "assinado", { ...meta, detalhe: { ...detalhe, hashFinal: c.hashFinal, selado: c.selado } });
     return true;
   });
-  if (!ok) throw new AssinaturaErro("Este documento já foi assinado ou o pedido mudou entretanto.", 409);
+  if (!ok) throw new AssinaturaErro("Este documento já foi assinado, o contrato foi cancelado ou o pedido mudou entretanto.", 409);
   try {
     const f = await guardarNaDrive(db, a, c.pdf);
     await repo.ligarDrive(db, a.id, f.id);
@@ -203,28 +203,27 @@ export async function recusar(db: Db, token: string, motivo: string, meta: Meta)
 
 const palavras = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().split(/[^a-z]+/).filter(p => p.length > 1);
 
-/** PDF assinado na app Autenticação.gov: tem de ser o original, com assinatura, do próprio signatário. */
-export async function receberAssinadoExterno(db: Db, token: string, ficheiro: Buffer, meta: Meta) {
+/** PDF assinado na app Autenticação.gov: tem de ser o original, com assinatura válida, do próprio signatário, e confirmado com o código. */
+export async function receberAssinadoExterno(db: Db, token: string, ficheiro: Buffer, codigo: string, meta: Meta, ancoras = ancorasDoEstado()) {
   const a = await pedido(db, token);
   exigirAberto(a);
   const original = await repo.pdfOriginal(db, a.id);
   if (!original) throw new AssinaturaErro("PDF em falta.", 500);
   let cert: { titular: string; emissor: string };
   try {
-    cert = validarAssinadoExterno(original, ficheiro);
+    cert = validarAssinadoExterno(original, ficheiro, ancoras);
   } catch (err) {
     if (err instanceof PdfExternoErro) throw new AssinaturaErro(err.message, 400);
     throw err;
   }
-  if (cert.titular) {
-    const doCert = new Set(palavras(cert.titular));
-    const nome = palavras(a.signatarioNome);
-    const comuns = nome.filter(p => doCert.has(p));
-    if (comuns.length < Math.min(2, nome.length)) {
-      await repo.registarEvento(db, a.id, "externo", { ...meta, detalhe: { recusado: true, titular: cert.titular } });
-      throw new AssinaturaErro(`O PDF foi assinado por "${cert.titular}", que não corresponde a ${a.signatarioNome}.`, 400);
-    }
+  const doCert = new Set(palavras(cert.titular));
+  const nome = palavras(a.signatarioNome);
+  const comuns = nome.filter(p => doCert.has(p));
+  if (comuns.length < Math.min(2, nome.length)) {
+    await repo.registarEvento(db, a.id, "externo", { ...meta, detalhe: { recusado: true, titular: cert.titular } });
+    throw new AssinaturaErro(`O PDF foi assinado por "${cert.titular}", que não corresponde a ${a.signatarioNome}.`, 400);
   }
+  await confirmarCodigo(db, a, codigo, meta);
   await repo.registarEvento(db, a.id, "externo", { ...meta, detalhe: { titular: cert.titular, emissor: cert.emissor } });
   const hash = sha256(ficheiro);
   return concluirAssinatura(db, token, a, {

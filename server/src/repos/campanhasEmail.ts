@@ -10,7 +10,8 @@ export type Candidato = {
 
 /**
  * Pré-inscrições abertas há mais de `dias` dias, com pelo menos `contactos` contactos (os lembretes
- * automáticos contam) e que ainda não passaram a formando nem desistiram.
+ * automáticos contam) e que ainda não pagaram, não foram validadas, não passaram a formando nem desistiram.
+ * Só Gold: as campanhas são da área comercial e a Financiada não se mistura.
  */
 export async function candidatos(c: Consulta, k: CriteriosCampanha) {
   return many<Candidato>(c,
@@ -20,7 +21,9 @@ export async function candidatos(c: Consulta, k: CriteriosCampanha) {
               WHERE d.preinscricao_id = p.id) AS ultimo_envio
        FROM preinscricoes p
        JOIN LATERAL (SELECT count(*) AS n FROM preinscricao_contactos pc WHERE pc.preinscricao_id = p.id) x ON true
-      WHERE p.estado NOT IN ('Formando', 'Desistiu')
+      WHERE p.estado NOT IN ('Formando', 'Desistiu', 'Pago')
+        AND p.validada_em IS NULL
+        AND COALESCE(p.regime, 'gold') = 'gold'
         AND p.created_at <= now() - make_interval(days => $1::int)
         AND x.n >= $2
         AND btrim(p.email) <> ''

@@ -1,4 +1,5 @@
 import type { Db } from "./db/pool.js";
+import type { AtorCrm } from "./repos/sql.js";
 import {
   pesquisarCursosFin, pesquisarCursosGold, pesquisarFormadores, pesquisarFormandosFin, pesquisarFormandosGold,
   pesquisarLeads, pesquisarTurmasFin, pesquisarTurmasGold, type SearchKind,
@@ -80,7 +81,7 @@ function payloadObj(v: unknown): Record<string, unknown> {
   return {};
 }
 
-export async function globalSearch(db: Db, qRaw: string, limitPer = 8): Promise<GlobalSearchResult> {
+export async function globalSearch(db: Db, qRaw: string, limitPer = 8, ator?: AtorCrm): Promise<GlobalSearchResult> {
   const { kind, digits, needle } = detectQueryKind(qRaw);
   if (needle.length < 2 && kind !== "id") {
     return { q: needle, kind, kindLabel: KIND_LABEL[kind], groups: [], total: 0 };
@@ -88,7 +89,7 @@ export async function globalSearch(db: Db, qRaw: string, limitPer = 8): Promise<
   const k = { kind, digits, needle, limite: Math.min(12, Math.max(4, Math.trunc(limitPer))) };
   const pessoa = (row: Record<string, unknown>) => `${row.nome ?? ""} ${row.apelido ?? ""}`.trim();
   const [gold, fin, formadores, leads, cursosG, cursosF, turmasG, turmasF] = await Promise.all([
-    pesquisarFormandosGold(db, k), pesquisarFormandosFin(db, k), pesquisarFormadores(db, k), pesquisarLeads(db, k),
+    pesquisarFormandosGold(db, k), pesquisarFormandosFin(db, k), pesquisarFormadores(db, k), pesquisarLeads(db, k, ator),
     pesquisarCursosGold(db, k), pesquisarCursosFin(db, k), pesquisarTurmasGold(db, k), pesquisarTurmasFin(db, k),
   ]);
   const hits: GlobalSearchHit[] = [];

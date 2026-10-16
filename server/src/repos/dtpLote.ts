@@ -12,7 +12,7 @@ export async function sessoesDasTurmas(c: Consulta, regime: Regime, ids: number[
   if (!ids.length) return [];
   return many<{ turma_id: number; sessao_n: number; plano: unknown; sumario: unknown; presencas: unknown }>(
     c,
-    "SELECT turma_id, sessao_n, plano, sumario, presencas FROM turma_sessoes WHERE regime = $1 AND turma_id = ANY($2::int[])",
+    "SELECT turma_id, sessao_n, plano, sumario, presencas FROM turma_sessoes WHERE regime = $1 AND turma_id = ANY($2::int[]) AND sessao_n IS NOT NULL",
     [regime, pgIntArray(ids)],
   );
 }

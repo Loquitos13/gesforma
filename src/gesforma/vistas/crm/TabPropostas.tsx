@@ -35,7 +35,7 @@ export function TabPropostas({ selecionado, onSelecionar, onPrimeiro, onAbrir, o
   const colunas: ColunaLista<Proposta>[] = [
     { titulo: "Cliente", celula: p => <><div className="font-semibold">{p.clienteNome}</div><div className="num text-xs text-tinta-suave mt-0.5">Enviada {data(p.enviadaEm)}</div></> },
     { titulo: "Curso", celula: p => p.curso || "—" },
-    { titulo: "Comercial", corrido: true, celula: p => p.comercial || "—" },
+    { titulo: "Comercial", corrido: true, celula: p => p.comercial || "sem comercial" },
     { titulo: "Estado", corrido: true, celula: p => <EstadoDoc estado={p.estado} /> },
     { titulo: "Valor", dir: true, celula: p => <span className="num">{p.valor ? eurosCurto(p.valor) : "—"}</span> },
     {
@@ -125,7 +125,7 @@ export function DetalheProposta({ id, onEditar, onContrato, onVerContrato }: {
         { rotulo: "Curso", valor: p.curso || "—" },
         { rotulo: "Formandos", valor: doc.def.dados.formandos || "—" },
         { rotulo: "Valor", valor: p.valor ? euros(p.valor) : "—", forte: true },
-        { rotulo: "Comercial", valor: p.comercial || "—" },
+        { rotulo: "Comercial", valor: p.comercial || "sem comercial" },
         { rotulo: "Modelo", valor: modelo ?? (p.templateId ? `#${p.templateId}` : "Sem modelo") },
         { rotulo: "Email", valor: p.clienteEmail || "—" },
       ]} />

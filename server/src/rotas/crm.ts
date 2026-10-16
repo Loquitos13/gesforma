@@ -11,6 +11,7 @@ import {
 } from "../crmLeadsServico.js";
 import { fmtDataCalendario, fmtStampLisboa, hojeLisboa } from "../datas.js";
 import { globalSearch } from "../globalSearch.js";
+import { pode } from "../permissoes/capacidades.js";
 import { registerWhatsappRoutes } from "../whatsapp.js";
 import { idParam, textoQuery, validar } from "../validacao.js";
 import { registarDocumentosCrm } from "./crmDocumentos.js";
@@ -91,6 +92,7 @@ const loteSchema = z.object({
   comercialId: z.string().uuid().optional(),
   etiquetaId: z.number().int().positive().nullable().optional(),
   dias: z.number().int().min(1).max(30).optional(),
+  motivoDesistencia: z.string().trim().max(80).optional(),
 });
 
 /** Responde ao erro de regra (400/404/409) e devolve true; outros erros sobem. */
@@ -110,7 +112,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { query: listaQuery }, req);
     if (!v) return;
-    return queryCrmLeads(db, { ...v.query, actorId: req.actor!.id }, hojeLisboa());
+    return queryCrmLeads(db, { ...v.query, actorId: req.actor!.id, ator: req.actor! }, hojeLisboa());
   });
 
   app.get("/v1/crm/search", async (req, reply) => {
@@ -118,7 +120,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const v = validar(reply, { query: z.object({ q: textoQuery(80) }) }, req);
     if (!v) return;
     const q = v.query.q ?? "";
-    return { leads: q.length < 2 ? [] : await searchCrmLeads(db, q, 12) };
+    return { leads: q.length < 2 ? [] : await searchCrmLeads(db, q, 12, req.actor!) };
   });
 
   app.get("/v1/search", async (req, reply) => {
@@ -127,8 +129,17 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const q = v.query.q ?? "";
     if (!q) return { q: "", kind: "nome", kindLabel: "nome", groups: [], total: 0 };
-    const res = await globalSearch(db, q);
-    if (req.actor!.role !== "formador") return res;
+    const res = await globalSearch(db, q, 8, req.actor!);
+    // Quem só trabalha num regime não encontra formandos, cursos, turmas nem leads do outro.
+    const role = req.actor!.role;
+    const outro = !pode(role, "fin.ver") ? "fin-" : !pode(role, "gold.ver") ? "gold-" : null;
+    if (outro && role !== "formador") {
+      const groups = res.groups
+        .map(g => ({ ...g, items: g.items.filter(h => !h.view.startsWith(outro)) }))
+        .filter(g => g.items.length);
+      return { ...res, groups, total: groups.reduce((n, g) => n + g.items.length, 0) };
+    }
+    if (role !== "formador") return res;
     // O formador só encontra as próprias turmas.
     const minhas = await turmasDoFormador(db, req.actor!);
     const groups = res.groups
@@ -142,7 +153,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { query: listaQuery }, req);
     if (!v) return;
-    const rows = await exportCrmLeads(db, { ...v.query, actorId: req.actor!.id }, hojeLisboa());
+    const rows = await exportCrmLeads(db, { ...v.query, actorId: req.actor!.id, ator: req.actor! }, hojeLisboa());
     const head = ["id", "inscrito", "nome", "apelido", "email", "telf", "curso", "local", "horario", "inicioCurso", "preco", "estado", "origem", "entrada", "meioContacto", "etiquetaNome", "campanha", "proximoContacto"];
     const celula = (k: string, val: unknown) => {
       const s = String(val ?? "");
@@ -166,9 +177,14 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { body: loteSchema }, req);
     if (!v) return;
-    const r = await aplicarLote(db, req.actor!, v.body);
+    let r: { updated: number };
+    try {
+      r = await aplicarLote(db, req.actor!, v.body);
+    } catch (err) {
+      if (erroCrm(reply, err)) return;
+      throw err;
+    }
     await audit(db, req.actor!.id, "crm.lote", "preinscricao", String(v.body.ids.length), req.ip, { acao: v.body.acao, n: r.updated });
-    if (r.pagos) await audit(db, req.actor!.id, "preinscricao.pago_manual", "preinscricao", String(r.pagos), req.ip, { lote: true });
     return { updated: r.updated };
   });
 
@@ -221,7 +237,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: idParam }, req);
     if (!v) return;
-    const dossier = await getLeadDossier(db, v.params.id);
+    const dossier = await getLeadDossier(db, v.params.id, req.actor!);
     if (!dossier) return reply.code(404).send({ error: "pré-inscrição inexistente" });
     return dossier;
   });
@@ -235,7 +251,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     if (!(await leads.existe(db, v.params.id))) return reply.code(404).send({ error: "pré-inscrição inexistente" });
     await setCampoValores(db, v.params.id, req.actor!.id, v.body.valores);
-    return getLeadDossier(db, v.params.id);
+    return getLeadDossier(db, v.params.id, req.actor!);
   });
 
   app.post("/v1/crm/leads/:id/notas", async (req, reply) => {
@@ -253,7 +269,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!(await leads.existe(db, v.params.id))) return reply.code(404).send({ error: "pré-inscrição inexistente" });
     await addLeadNota(db, v.params.id, req.actor!.id, v.body.nota, v.body.meio ?? "", v.body.resultado ?? "");
     await audit(db, req.actor!.id, "crm.nota", "preinscricao", String(v.params.id), req.ip);
-    return getLeadDossier(db, v.params.id);
+    return getLeadDossier(db, v.params.id, req.actor!);
   });
 
   app.post("/v1/crm/leads/:id/notas/:nid/fixar", async (req, reply) => {
@@ -264,7 +280,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     }, req);
     if (!v) return;
     await fixarNota(db, v.params.id, v.params.nid, v.body?.fixada !== false);
-    return getLeadDossier(db, v.params.id);
+    return getLeadDossier(db, v.params.id, req.actor!);
   });
 
   app.get("/v1/crm/duplicados", async (req, reply) => {
@@ -273,7 +289,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       query: z.object({ email: textoQuery(254), telf: textoQuery(30), exceptId: z.coerce.number().int().min(0).optional() }),
     }, req);
     if (!v) return;
-    return { duplicados: await findDuplicados(db, v.query.email ?? "", v.query.telf ?? "", v.query.exceptId ?? 0) };
+    return { duplicados: await findDuplicados(db, v.query.email ?? "", v.query.telf ?? "", v.query.exceptId ?? 0, req.actor!) };
   });
 
   app.get("/v1/crm/comerciais", async (req, reply) => {
@@ -295,7 +311,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       if (erroCrm(reply, err)) return;
     }
     await audit(db, req.actor!.id, "crm.completar", "preinscricao", String(v.params.id), req.ip);
-    return getLeadDossier(db, v.params.id);
+    return getLeadDossier(db, v.params.id, req.actor!);
   });
 
   app.post("/v1/preinscricoes", async (req, reply) => {

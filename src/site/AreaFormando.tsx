@@ -150,6 +150,7 @@ export function LoginFormando({ onEntrou, trocaInicial = null, painel = PAINEL_E
       "sem-cliente-microsoft": "A aplicação Microsoft ainda não está configurada. Entre com email ou registe-a nas Configurações.",
       "sem-conta": "Esta conta não tem acesso. O email tem de existir como utilizador ou formando com acesso gerado.",
       inactivo: "Esta conta está desactivada.",
+      "tenant-recusado": "Esta conta Microsoft de empresa não pode ser usada para entrar. Entre com o email e a palavra-passe.",
       "oauth-falhou": "Não foi possível concluir a autenticação. Tente de novo.",
       "pedido-invalido": "O pedido expirou. Tente de novo.",
     };

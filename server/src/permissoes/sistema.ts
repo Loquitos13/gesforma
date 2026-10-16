@@ -5,6 +5,7 @@ export const regras: Regra[] = [
   ["*", "/v1/drive/config", ADMIN],
   ["*", "/v1/drive/disconnect", ADMIN],
   ["GET", "/v1/drive/oauth/start", ADMIN],
+  ["DELETE", "/v1/drive/files/:id", SECRETARIA],
   ["*", "/v1/crm/whatsapp/config", ADMIN],
   ["*", "/v1/crm/whatsapp/desligar", ADMIN],
   ["*", "/v1/auth/microsoft/config", ADMIN],

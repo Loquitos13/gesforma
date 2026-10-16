@@ -41,9 +41,15 @@ export function registarFecho(app: FastifyInstance, { db, requireAuth, audit }: 
       geradoEm: new Date().toISOString(),
     };
     await fecharTurmaFin(db, id, req.actor!.id, resumo);
-    await anexarPdfDtp(db, req.actor!.id, "fin", { id, nome: antes.nome }, "relatorio", "RelatorioFinalAccao.pdf", bytes).catch(() => undefined);
-    await audit(db, req.actor!.id, "turma.fecho", "turma_fin", String(id), req.ip, resumo);
-    return { ok: true, resumo, relatorioUrl: `/v1/turmas/fin/${id}/relatorio-final` };
+    // A turma fica fechada mesmo sem Drive; o ecrã avisa que o relatório não ficou no dossiê.
+    const aviso = await anexarPdfDtp(db, req.actor!.id, "fin", { id, nome: antes.nome }, "relatorio", "RelatorioFinalAccao.pdf", bytes)
+      .then(() => "")
+      .catch(err => {
+        req.log.warn({ err, turma: id }, "relatório final não anexado ao dossiê");
+        return `O relatório de execução não foi anexado ao dossiê (${err instanceof Error ? err.message : "erro no Drive"}). Descarregue-o e anexe-o à mão.`;
+      });
+    await audit(db, req.actor!.id, "turma.fecho", "turma_fin", String(id), req.ip, { ...resumo, anexado: !aviso });
+    return { ok: true, resumo, relatorioUrl: `/v1/turmas/fin/${id}/relatorio-final`, ...(aviso ? { aviso } : {}) };
   });
 
   app.post("/v1/turmas/gold/:id/fecho", async (req, reply) => {

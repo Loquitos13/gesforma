@@ -8,6 +8,8 @@ const LOGIN_SCOPES = "openid profile email User.Read";
 
 /** `common` aceita qualquer tenant; a ENA usa o seu tenant id para só deixar entrar a organização. */
 const DEFAULT_TENANT = "common";
+/** Tenant das contas Microsoft pessoais (outlook.com, hotmail.com): o email é verificado pela Microsoft. */
+export const TENANT_CONTAS_PESSOAIS = "9188040d-6c67-4c5b-b112-36a304b66dad";
 
 export type MicrosoftCreds = {
   clientId: string;
@@ -119,7 +121,7 @@ export async function exchangeMicrosoftCode(code: string, creds: MicrosoftCreds)
     grant_type: "authorization_code",
     scope: LOGIN_SCOPES,
   });
-  return microsoftJson<{ access_token: string; expires_in: number; token_type: string }>(
+  return microsoftJson<{ access_token: string; expires_in: number; token_type: string; id_token?: string }>(
     `${authBase(creds.tenantId)}/token`,
     {
       method: "POST",
@@ -127,6 +129,30 @@ export async function exchangeMicrosoftCode(code: string, creds: MicrosoftCreds)
       body,
     },
   );
+}
+
+/**
+ * Tenant (`tid`) do id_token. Veio directamente do endpoint de token por TLS, por isso não se verifica a assinatura
+ * (OpenID Connect Core 3.1.3.7). Sem id_token ou ilegível: "".
+ */
+export function tenantDoIdToken(idToken: string | undefined) {
+  try {
+    const corpo = JSON.parse(Buffer.from(String(idToken ?? "").split(".")[1] ?? "", "base64url").toString("utf8")) as { tid?: unknown };
+    return typeof corpo.tid === "string" ? corpo.tid.toLowerCase() : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * O `mail` de outro tenant é escolhido pelo administrador desse tenant (nOAuth): só se confia no email
+ * quando a conta é do tenant configurado da ENA ou uma conta pessoal Microsoft.
+ */
+export function tenantConfiavel(tid: string, tenantConfigurado: string) {
+  if (!tid) return false;
+  if (tid === TENANT_CONTAS_PESSOAIS) return true;
+  const ena = tenantConfigurado.trim().toLowerCase();
+  return !["", "common", "organizations", "consumers"].includes(ena) && tid === ena;
 }
 
 /** Contas de organização trazem `mail`; as restantes só o `userPrincipalName`. */

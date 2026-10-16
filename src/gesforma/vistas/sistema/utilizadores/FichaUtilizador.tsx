@@ -41,6 +41,7 @@ export function FichaUtilizador({ id, onFechar }: { id: string | null; onFechar:
   const [f, setF] = useState({ name: "", email: "", role: "secretaria" as PerfilUtilizador });
   const [palavraPasse, setPalavraPasse] = useState(false);
   const [apagar, setApagar] = useState(false);
+  const [desactivar, setDesactivar] = useState(false);
   useEffect(() => { if (u) setF({ name: u.name, email: u.email, role: u.role }); }, [u]);
 
   const gravar = useAccao(apiAlterarUtilizador, { ok: "Dados do utilizador actualizados.", invalidar: INVALIDAR });
@@ -59,7 +60,7 @@ export function FichaUtilizador({ id, onFechar }: { id: string | null; onFechar:
       rodape={u ? (
         <>
           <Botao variante="secundario" disabled={propria} aCarregar={gravar.aCorrer}
-            onClick={() => void gravar.correr(u.id, { active: !u.active }).then(() => recarregar())}>
+            onClick={() => (u.active ? setDesactivar(true) : void gravar.correr(u.id, { active: true }).then(() => recarregar()))}>
             {u.active ? "Desactivar" : "Activar"}
           </Botao>
           <Botao variante="primario" disabled={!mudou || f.name.trim().length < 2} aCarregar={gravar.aCorrer}
@@ -118,6 +119,14 @@ export function FichaUtilizador({ id, onFechar }: { id: string | null; onFechar:
         descricao="A conta e as sessões abertas desaparecem. Se só quer impedir o acesso, desactive-a."
         confirmarTexto={u?.email}
         onConfirmar={async () => { if (u && await remover.correr(u.id)) onFechar(); }}
+      />
+      <ConfirmarPerigo
+        aberto={desactivar}
+        onFechar={() => setDesactivar(false)}
+        titulo="Desactivar este utilizador?"
+        descricao="As sessões abertas terminam e a pessoa deixa de conseguir entrar. Os dados ficam; pode voltar a activá-la."
+        acao="Desactivar"
+        onConfirmar={async () => { if (u && await gravar.correr(u.id, { active: false })) recarregar(); }}
       />
     </PainelLateral>
   );

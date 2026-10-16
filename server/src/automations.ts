@@ -100,7 +100,9 @@ export async function applyCrmEstado(db: Db, type: string, payload: Record<strin
   const pid = Number(payload.preinscricaoId ?? payload.preinscricao_id ?? 0);
   const idOk = Number.isInteger(pid) && pid > 0;
   if (!idOk && !isEmail(email)) return;
-  await avancarEstadoLead(db, target, CRM_ESTADO_RANK[target] ?? 0, idOk ? pid : 0, email);
+  await avancarEstadoLead(db, target, CRM_ESTADO_RANK[target] ?? 0, idOk ? pid : 0, email, {
+    curso: String(payload.curso ?? "").trim(), pagamentoId: String(payload.pagamentoId ?? "").trim(),
+  });
 }
 
 async function enqueueCrmReminders(db: Db) {

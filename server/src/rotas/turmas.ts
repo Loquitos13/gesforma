@@ -17,7 +17,8 @@ import { mapTurmaFin, mapTurmaGold, nextOpsId } from "../ops.js";
 import { pode } from "../permissoes/capacidades.js";
 import { modulosDaFicha } from "../programaCurso.js";
 import { ERRO_TURMA_FECHADA } from "../resultados.js";
-import { cronogramaSoMarcas, nomesDoFormador } from "../sessaoAcesso.js";
+import { comIdsUnicos, erroSessoesRemovidas, nomesDoFormador } from "../sessaoAcesso.js";
+import { renumerarSessoes, sessoesComDados } from "../repos/pedagogiaSessoes.js";
 import { aplicarTurmaRegras, listTurmaRegras } from "../turmaRegras.js";
 import * as repo from "../repos/turmas.js";
 import type { Regime } from "../repos/sql.js";
@@ -97,18 +98,12 @@ const regraSchema = z.object({
 
 type Actor = NonNullable<FastifyRequest["actor"]>;
 
-/** O formador só pode mexer no cronograma e só marcar início/fim das sessões em que está atribuído. */
-async function negarFormador(deps: Deps, actor: Actor, regime: Regime, id: number, body: unknown) {
-  if (actor.role !== "formador") return null;
-  const enviado = body && typeof body === "object" ? body as Record<string, unknown> : {};
-  const chaves = Object.keys(enviado);
-  if (chaves.length !== 1 || chaves[0] !== "cronograma" || !Array.isArray(enviado.cronograma)) {
-    return "O formador só inicia ou fecha as sessões em que está atribuído.";
-  }
-  const turma = await repo.obterTurma(deps.db, regime, id);
-  if (!turma) return "Turma inexistente.";
-  const nomes = await nomesDoFormador(deps.db, actor.email, actor.name, actor.id);
-  return cronogramaSoMarcas(turma.cronograma, enviado.cronograma, nomes) ? null : "Só pode iniciar ou fechar sessões em que está atribuído.";
+/**
+ * O formador não altera a turma nem o cronograma (datas, horas, marcas de início e fim): na turma só preenche,
+ * nas suas sessões, sumários, presenças e planos (rotas da pedagogia). As marcas não entram na folha de presenças.
+ */
+function negarFormador(actor: Actor) {
+  return actor.role === "formador" ? "O formador não altera a turma nem o cronograma: consulta-os e preenche as suas sessões." : null;
 }
 
 async function erroCapacidade(deps: Deps, regime: Regime, id: number, atual: Record<string, unknown>, vagas?: number, tolerancia?: number) {
@@ -203,9 +198,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (slotErro) return reply.code(400).send({ error: slotErro });
     d.horas ??= (await repo.dadosDoCurso(db, "gold", d.curso))?.horas || 90;
     const modulos = await modulosDaFicha(db, "gold", d.curso);
-    const cronograma = d.cronograma?.length
+    const cronograma = comIdsUnicos(d.cronograma?.length
       ? d.cronograma
-      : generateCronograma({ inicio: d.dataInicio, horario: d.horario, horas: d.horas, formador: d.formador, curso: d.curso, modulos });
+      : generateCronograma({ inicio: d.dataInicio, horario: d.horario, horas: d.horas, formador: d.formador, curso: d.curso, modulos }));
     const cruzamento = await erroSobreposicao(db, "gold", null, cronograma);
     if (cruzamento) return reply.code(400).send({ error: cruzamento });
     if (await repo.existeNome(db, "gold", d.nome, null)) {
@@ -233,7 +228,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const v = validar(reply, { params: idParam, body: turmaGoldSchema.partial() }, req);
     if (!v) return;
     const id = v.params.id;
-    const bloqueio = await negarFormador(deps, req.actor!, "gold", id, req.body);
+    const bloqueio = negarFormador(req.actor!);
     if (bloqueio) return reply.code(403).send({ error: bloqueio });
     const d = v.body;
     const antes = await repo.obterTurma(db, "gold", id);
@@ -256,13 +251,20 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       if (slotErro) return reply.code(400).send({ error: slotErro });
     }
     if (d.cronograma) {
+      d.cronograma = comIdsUnicos(d.cronograma);
       const cruzamento = await erroSobreposicao(db, "gold", id, d.cronograma);
       if (cruzamento) return reply.code(400).send({ error: cruzamento });
+      const removida = erroSessoesRemovidas(d.cronograma, await sessoesComDados(db, "gold", id), antes.cronograma);
+      if (removida) return reply.code(409).send({ error: removida });
     }
-    await repo.atualizarTurmaGold(db, id, {
-      dataInicio: d.dataInicio, nome: d.nome, curso: d.curso, local: d.local, horario: d.horario, vagas: d.vagas,
-      tolerancia: d.toleranciaVagas, estado, formador: d.formador, formadores: d.formadores, horas: d.horas,
-      cronograma: d.cronograma, custoHoraSala: d.custoHoraSala, valoresHoraFormador: d.valoresHoraFormador,
+    // Os dados das sessões seguem o id: depois de gravar o cronograma recalcula-se o número de cada uma.
+    await db.tx(async q => {
+      await repo.atualizarTurmaGold(q, id, {
+        dataInicio: d.dataInicio, nome: d.nome, curso: d.curso, local: d.local, horario: d.horario, vagas: d.vagas,
+        tolerancia: d.toleranciaVagas, estado, formador: d.formador, formadores: d.formadores, horas: d.horas,
+        cronograma: d.cronograma, custoHoraSala: d.custoHoraSala, valoresHoraFormador: d.valoresHoraFormador,
+      });
+      if (d.cronograma) await renumerarSessoes(q, "gold", id);
     });
     if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "gold", id, d.vagasAnunciadas);
     if (d.nome && d.nome !== String(antes.nome ?? "")) await propagarNomeTurma(db, "gold", id, String(antes.nome ?? ""), d.nome);
@@ -290,12 +292,12 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     d.horas ??= curso?.horas || 25;
     d.ufcdCod ||= curso?.ufcd ?? "";
     const modulos = await modulosDaFicha(db, "fin", d.curso);
-    const cronograma = d.cronograma?.length
+    const cronograma = comIdsUnicos(d.cronograma?.length
       ? d.cronograma
       : generateCronograma({
         inicio: d.dataInicio, horario: d.horario === "Online" ? "Pós Laboral" : d.horario, horas: d.horas,
         formador: d.formador, curso: d.curso, hoursPerSession: 3, modulos,
-      });
+      }));
     const cruzamento = await erroSobreposicao(db, "fin", null, cronograma);
     if (cruzamento) return reply.code(400).send({ error: cruzamento });
     const slotErro = await erroDisponibilidade(db, [d.formador, ...d.formadores], d.horario);
@@ -326,7 +328,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const v = validar(reply, { params: idParam, body: turmaFinSchema.partial() }, req);
     if (!v) return;
     const id = v.params.id;
-    const bloqueio = await negarFormador(deps, req.actor!, "fin", id, req.body);
+    const bloqueio = negarFormador(req.actor!);
     if (bloqueio) return reply.code(403).send({ error: bloqueio });
     const d = v.body;
     const antes = await repo.obterTurma(db, "fin", id);
@@ -349,14 +351,21 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       if (slotErro) return reply.code(400).send({ error: slotErro });
     }
     if (d.cronograma) {
+      d.cronograma = comIdsUnicos(d.cronograma);
       const cruzamento = await erroSobreposicao(db, "fin", id, d.cronograma);
       if (cruzamento) return reply.code(400).send({ error: cruzamento });
+      const removida = erroSessoesRemovidas(d.cronograma, await sessoesComDados(db, "fin", id), antes.cronograma);
+      if (removida) return reply.code(409).send({ error: removida });
     }
-    await repo.atualizarTurmaFin(db, id, {
-      dataInicio: d.dataInicio, nome: d.nome, curso: d.curso, ufcdCod: d.ufcdCod, local: d.local, horario: d.horario,
-      alunosTotal: d.alunosTotal, tolerancia: d.toleranciaVagas, estado, horas: d.horas, formador: d.formador,
-      formadores: d.formadores, activa: d.activa, cronograma: d.cronograma, valoresHoraFormador: d.valoresHoraFormador,
-      financiador: d.financiador,
+    // Os dados das sessões seguem o id: depois de gravar o cronograma recalcula-se o número de cada uma.
+    await db.tx(async q => {
+      await repo.atualizarTurmaFin(q, id, {
+        dataInicio: d.dataInicio, nome: d.nome, curso: d.curso, ufcdCod: d.ufcdCod, local: d.local, horario: d.horario,
+        alunosTotal: d.alunosTotal, tolerancia: d.toleranciaVagas, estado, horas: d.horas, formador: d.formador,
+        formadores: d.formadores, activa: d.activa, cronograma: d.cronograma, valoresHoraFormador: d.valoresHoraFormador,
+        financiador: d.financiador,
+      });
+      if (d.cronograma) await renumerarSessoes(q, "fin", id);
     });
     if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "fin", id, d.vagasAnunciadas);
     if (d.nome && d.nome !== String(antes.nome ?? "")) await propagarNomeTurma(db, "fin", id, String(antes.nome ?? ""), d.nome);

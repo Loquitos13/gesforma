@@ -6,7 +6,7 @@ import { normalizarEstado, validarTransicao } from "../estados.js";
 import { nextOpsId } from "../ops.js";
 import { METODOS_ACEITES, confirmarPagamento, findPagamentoPorReferencia, mapPagamento, PagamentoErro, recusarPagamento } from "../pagamentos.js";
 import {
-  SITUACOES, actualizarPagamento, apagarPagamento, chaveWebhookGuardada, contarPorSituacao, formandoGoldDoPagamento,
+  SITUACOES, actualizarPagamento, apagarPagamento, chaveWebhookGuardada, contarPorSituacao, desmarcarFormandoGoldPago, formandoGoldDoPagamento,
   indicadoresPagamentos, inserirPagamento, listarPagamentos, obterPagamento, obterPagamentoDetalhe,
 } from "../repos/pagamentos.js";
 import { normalizeEmail } from "../security.js";
@@ -130,6 +130,12 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const d = v.body;
     const antes = await obterPagamento(db, v.params.id);
     if (!antes) return reply.code(404).send({ error: "pagamento inexistente" });
+    // Pagamento recebido: valor, nome e método ficam como foram confirmados (o admin corrige, fica na auditoria).
+    const mexeNoRecebido = (d.valor !== undefined && Number(d.valor) !== Number(antes.valor))
+      || (d.nome !== undefined && d.nome !== String(antes.nome ?? "")) || (d.metodo !== undefined && d.metodo !== String(antes.metodo ?? ""));
+    if (String(antes.estado) === "Pago" && mexeNoRecebido && req.actor!.role !== "admin") {
+      return reply.code(409).send({ error: "Um pagamento recebido não muda de valor, nome nem método." });
+    }
     let estado: string | undefined;
     if (d.estado !== undefined) {
       const t = validarTransicao("pagamento", String(antes.estado ?? ""), d.estado, req.actor!.role);
@@ -141,6 +147,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       nome: d.nome, valor: d.valor, metodo: d.metodo, curso: d.curso, data: d.data,
       estado: passaAPago ? undefined : estado, email: d.email ? normalizeEmail(d.email) : undefined, referencia: d.referencia,
     });
+    if (estado === "Reembolsado" && String(antes.estado) !== "Reembolsado" && antes.formando_id != null) {
+      await desmarcarFormandoGoldPago(db, Number(antes.formando_id));
+    }
     const row = await obterPagamento(db, v.params.id);
     const pagamento = row && passaAPago ? await confirmarPagamento(db, row, req.actor!.id) : row ? mapPagamento(row) : null;
     await audit(db, req.actor!.id, "pagamento.alterar", "pagamento", v.params.id, req.ip, { ...d });
@@ -183,6 +192,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const valor = d.valor == null || d.valor === "" ? undefined : Number(String(d.valor).replace(",", "."));
     const found = id ? await obterPagamento(db, id) : await findPagamentoPorReferencia(db, referencia, valor);
     if (!found) return reply.code(404).send({ error: "referência desconhecida" });
+    // Reentrega do gateway: já pago responde ok sem repetir efeitos; reembolsado ou cancelado não volta a Pago.
+    if (String(found.estado) === "Pago") return { ok: true, pagamento: mapPagamento(found) };
+    if (String(found.estado) !== "Pendente") return reply.code(409).send({ error: `pagamento em estado ${found.estado}` });
     if (valor != null && Number.isFinite(valor) && Math.abs(Number(found.valor) - valor) >= 0.02) {
       await audit(db, undefined, "pagamento.webhook_valor", "pagamento", String(found.id), req.ip, { referencia, valor });
       return reply.code(409).send({ error: "valor não corresponde ao pagamento" });

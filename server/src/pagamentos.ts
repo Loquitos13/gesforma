@@ -28,13 +28,17 @@ function carimbo() {
  */
 export async function confirmarPagamento(db: Db, row: Record<string, unknown>, actorId?: string | null) {
   const mapped = mapPagamento(row);
-  if (!/^pago$/i.test(mapped.estado)) await marcarPago(db, mapped.id, carimbo(), actorId);
+  // Dois pedidos ao mesmo tempo: só o que muda o estado dispara os efeitos.
+  if (!(await marcarPago(db, mapped.id, carimbo(), actorId))) {
+    const atual = await obterPagamento(db, mapped.id);
+    return atual ? mapPagamento(atual) : mapped;
+  }
   const email = mapped.email ? normalizeEmail(mapped.email) : "";
   const { aposPagamentoConfirmado, leadDoPagamentoPedido } = await import("./inscricaoPaga.js");
   const doPercurso = await leadDoPagamentoPedido(db, mapped.id);
   if (email && isEmail(email)) {
     if (!doPercurso) {
-      await ingestEvent(db, "payment.confirmed", { email, nome: mapped.nome, curso: mapped.curso }, `payment:${mapped.id}:${email}`)
+      await ingestEvent(db, "payment.confirmed", { email, nome: mapped.nome, curso: mapped.curso, pagamentoId: mapped.id }, `payment:${mapped.id}:${email}`)
         .catch(() => undefined);
     }
     const formandoId = row.formando_id == null ? null : Number(row.formando_id);

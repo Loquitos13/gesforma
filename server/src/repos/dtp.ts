@@ -53,7 +53,7 @@ export async function gravarAnexo(c: Consulta, regime: Regime, turmaId: number, 
 export async function sessoesParaFactos(c: Consulta, regime: Regime, turmaId: number) {
   return many<{ sessao_n: number; plano: unknown; sumario: unknown; presencas: unknown }>(
     c,
-    "SELECT sessao_n, plano, sumario, presencas FROM turma_sessoes WHERE regime = $1 AND turma_id = $2",
+    "SELECT sessao_n, plano, sumario, presencas FROM turma_sessoes WHERE regime = $1 AND turma_id = $2 AND sessao_n IS NOT NULL",
     [regime, turmaId],
   );
 }

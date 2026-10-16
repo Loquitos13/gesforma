@@ -3,6 +3,7 @@
  * As horas contam-se a partir do cronograma das turmas: uma sessão lectiva é do formador
  * se o tiver na lista da sessão, ou, sem formadores na sessão, se ele for o responsável da turma.
  */
+import type { Db } from "../db/pool.js";
 import { many, one, ordenarPor, paginar, valor, Filtros, padraoPesquisa, type Consulta, type Regime } from "./sql.js";
 
 const HORAS_SESSAO = `CASE
@@ -377,6 +378,26 @@ export async function ligarConta(c: Consulta, id: number, userId: string) {
 
 export async function apagarFormador(c: Consulta, id: number) {
   await valor(c, "DELETE FROM formadores WHERE id = $1 RETURNING id", [id]);
+}
+
+/**
+ * Apaga a ficha e a conta de acesso ligada, se for uma conta de formador (uma conta da equipa com o mesmo
+ * email fica). As sessões e os pedidos de reposição saem em cascata; o histórico da auditoria guarda o id.
+ */
+export async function apagarFormadorEConta(db: Db, id: number) {
+  await db.tx(async q => {
+    const userId = await valor<string>(q, "SELECT user_id::text FROM formadores WHERE id = $1", [id]);
+    await apagarFormador(q, id);
+    if (userId) await many(q, "DELETE FROM users WHERE id = $1::uuid AND role = 'formador'", [userId]);
+  });
+}
+
+/** Ficha Inactiva = conta de formador desactivada e sessões terminadas; Ativa volta a abrir a conta. */
+export async function definirContaActiva(c: Consulta, id: number, activa: boolean) {
+  const userId = await valor<string>(c,
+    `UPDATE users SET active = $2 WHERE id = (SELECT user_id FROM formadores WHERE id = $1) AND role = 'formador' RETURNING id::text`,
+    [id, activa]);
+  if (userId && !activa) await many(c, "DELETE FROM sessions WHERE user_id = $1::uuid", [userId]);
 }
 
 /** O formador dá aulas em alguma turma (responsável, equipa ou sessão)? */

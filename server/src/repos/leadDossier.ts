@@ -2,7 +2,7 @@
  * Dossiê da pré-inscrição: eventos, notas, campos personalizados, etiquetas, duplicados
  * e o que está ligado (outros pedidos, propostas, pagamento, turma escolhida).
  */
-import { many, one, type Consulta, type Regime } from "./sql.js";
+import { Filtros, many, one, type AtorCrm, type Consulta, type Regime } from "./sql.js";
 
 type Linha = Record<string, unknown>;
 
@@ -100,37 +100,33 @@ export async function apagarEtiqueta(c: Consulta, id: number) {
 /* ── Duplicados e pedidos ligados ────────────────────────────────────────── */
 
 /** Pedidos com o mesmo email ou os mesmos 9 dígitos de telemóvel. */
-export async function duplicados(c: Consulta, email: string, n9: string, excetoId: number) {
-  return many<Linha>(c,
-    `SELECT id, nome, apelido, email, telf, estado, curso, inscrito
-       FROM preinscricoes
-      WHERE id <> $1
+export async function duplicados(c: Consulta, email: string, n9: string, excetoId: number, ator?: AtorCrm) {
+  const w = new Filtros([excetoId, email, n9]).sempre(`id <> $1
         AND (
           ($2 <> '' AND lower(email) = $2)
           OR ($3 <> '' AND length($3) = 9 AND (telf LIKE '%' || $3 OR telf LIKE '%' || '351' || $3))
-        )
+        )`).visivelPara(ator, "comercial_id", "regime");
+  return many<Linha>(c,
+    `SELECT id, nome, apelido, email, telf, estado, curso, inscrito
+       FROM preinscricoes ${w.where}
       ORDER BY id DESC LIMIT 8`,
-    [excetoId, email, n9]);
+    w.params);
 }
 
-export async function outrosPedidos(c: Consulta, leadId: number, email: string, n9: string) {
-  return many<Linha>(c,
-    `SELECT * FROM preinscricoes
-      WHERE id <> $2 AND (
+export async function outrosPedidos(c: Consulta, leadId: number, email: string, n9: string, ator?: AtorCrm) {
+  const w = new Filtros([email, leadId, n9]).sempre(`id <> $2 AND (
         (email <> '' AND lower(email) = lower($1))
         OR (telf <> '' AND $3 <> '' AND (telf LIKE '%' || $3))
-      )
-      ORDER BY inscrito DESC LIMIT 20`,
-    [email, leadId, n9]);
+      )`).visivelPara(ator, "comercial_id", "regime");
+  return many<Linha>(c, `SELECT * FROM preinscricoes ${w.where} ORDER BY inscrito DESC LIMIT 20`, w.params);
 }
 
-export async function propostasDoLead(c: Consulta, leadId: number, email: string) {
+export async function propostasDoLead(c: Consulta, leadId: number, email: string, ator?: AtorCrm) {
+  const w = new Filtros([leadId, email]).sempre(`preinscricao_id = $1
+         OR (cliente_email <> '' AND lower(cliente_email) = lower($2))`).visivelPara(ator, "comercial_id", "regime");
   return many<{ id: number; curso: string; estado: string; valor: number | string; enviada_em: Date | string | null }>(c,
-    `SELECT id, curso, estado, valor, enviada_em FROM propostas_comerciais
-      WHERE preinscricao_id = $1
-         OR (cliente_email <> '' AND lower(cliente_email) = lower($2))
-      ORDER BY enviada_em DESC LIMIT 20`,
-    [leadId, email]);
+    `SELECT id, curso, estado, valor, enviada_em FROM propostas_comerciais ${w.where} ORDER BY enviada_em DESC LIMIT 20`,
+    w.params);
 }
 
 export async function pagamento(c: Consulta, id: string) {

@@ -62,6 +62,14 @@ async function planosDoCurso(db: Db, regime: Regime, cursoId: number) {
   return out;
 }
 
+/** Posições (n) das sessões cujo plano vem da ficha do curso: o formador vê-o mas não o altera. */
+export async function ordensComPlanoDoCurso(db: Db, regime: Regime, turmaId: number) {
+  const turma = await turmaParaPlanos(db, regime, turmaId);
+  if (!turma) return new Set<number>();
+  const cursoId = turma.curso_id ?? (await cursoPorNome(db, regime, turma.curso))?.id ?? null;
+  return cursoId ? new Set((await planosDoCurso(db, regime, Number(cursoId))).keys()) : new Set<number>();
+}
+
 export type ResultadoImportacao = { importados: number; mantidos: number; semModelo: number; fechada?: boolean };
 
 export async function importarPlanosCurso(db: Db, regime: Regime, turmaId: number, o: { substituir?: boolean } = {}): Promise<ResultadoImportacao> {
@@ -73,15 +81,18 @@ export async function importarPlanosCurso(db: Db, regime: Regime, turmaId: numbe
   if (!cursoId) return vazio;
   const planos = await planosDoCurso(db, regime, Number(cursoId));
   if (!planos.size) return vazio;
-  const actuais = new Map((await listarSessoes(db, regime, turmaId)).map(s => [Number(s.sessao_n), asObj(s.plano)]));
+  const actuais = new Map((await listarSessoes(db, regime, turmaId)).map(s => [String(s.sessao_id ?? ""), asObj(s.plano)]));
   const r = { ...vazio };
+  // O plano n do curso vai para a sessão que hoje está na posição n; depois de gravado fica preso ao id dessa sessão.
   for (let n = 1; sessaoLectivaN(turma.cronograma, n); n++) {
+    const sessaoId = String(sessaoLectivaN(turma.cronograma, n)?.id ?? "");
     const modelo = planos.get(n);
     if (!modelo) { r.semModelo += 1; continue; }
-    const actual = actuais.get(n);
+    const actual = actuais.get(sessaoId);
     const temPlano = actual != null && planoTemTexto(actual);
     if (temPlano && (!o.substituir || actual.assinado === true)) { r.mantidos += 1; continue; }
-    await gravarSessao(db, regime, turmaId, n, { plano: modelo });
+    if (!sessaoId) { r.semModelo += 1; continue; }
+    await gravarSessao(db, regime, turmaId, { id: sessaoId, n }, { plano: modelo });
     r.importados += 1;
   }
   return r;

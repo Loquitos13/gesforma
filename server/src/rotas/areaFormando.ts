@@ -42,7 +42,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const { regime, id } = v.params;
     const role = req.actor!.role;
-    if (!pode(role, regime === "fin" ? "fin.ver" : "gold.ver") || role === "formador" || role === "formando") {
+    // A palavra-passe gerada é mostrada: só a secretaria (Gold) e a pedagogia (Financiada).
+    if (!pode(role, regime === "fin" ? "formandosFin.gerir" : "pagamentos.confirmar")) {
       return reply.code(403).send({ error: "Só a secretaria gera o acesso do formando." });
     }
     const repor = Boolean(v.body.repor);

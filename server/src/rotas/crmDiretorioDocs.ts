@@ -9,6 +9,8 @@ import {
   listarContratos, listarModelos, listarPropostas, obterContrato, obterModelo, obterProposta, propostasPorEstado,
   type TipoModelo,
 } from "../repos/crmDiretorioDocs.js";
+import { cancelarAbertas, registarEvento, temAssinaturaConcluida } from "../repos/assinaturas.js";
+import { donoDoPedido, linhaVisivel } from "../repos/crmVisivel.js";
 import { idNum, idParam, paginacao, regime, textoQuery, validar, BODY_LIMIT_DOC, corpoDoc } from "../validacao.js";
 import { eSecretaria } from "./crmDiretorio.js";
 import type { Deps } from "./tipos.js";
@@ -124,8 +126,8 @@ export async function registarDocs(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const { cliente, ...f } = v.query;
     const [pagina, fases] = await Promise.all([
-      listarPropostas(db, { ...f, clienteId: cliente }),
-      propostasPorEstado(db, f.regime),
+      listarPropostas(db, { ...f, clienteId: cliente, ator: req.actor! }),
+      propostasPorEstado(db, f.regime, req.actor!),
     ]);
     return { ...pagina, fases };
   });
@@ -147,7 +149,7 @@ export async function registarDocs(app: FastifyInstance, deps: Deps) {
       query: paginacao.extend({ estado: z.preprocess(x => (x === "" ? undefined : x), z.enum(ESTADOS_CONTRATO).optional()) }),
     }, req);
     if (!v) return;
-    const [pagina, fases] = await Promise.all([listarContratos(db, v.query), contratosPorEstado(db)]);
+    const [pagina, fases] = await Promise.all([listarContratos(db, { ...v.query, ator: req.actor! }), contratosPorEstado(db, req.actor!)]);
     return { ...pagina, fases };
   });
 
@@ -175,7 +177,7 @@ export async function registarDocs(app: FastifyInstance, deps: Deps) {
       valor = valor || t.valor;
     }
     if (d.propostaId) {
-      const p = await obterProposta(db, d.propostaId);
+      const p = await linhaVisivel(db, "propostas_comerciais", d.propostaId, req.actor!) ? await obterProposta(db, d.propostaId) : null;
       if (!p) return reply.code(400).send({ error: "Proposta inexistente." });
       clienteId = clienteId ?? p.clienteId;
       curso = curso || p.curso;
@@ -183,7 +185,7 @@ export async function registarDocs(app: FastifyInstance, deps: Deps) {
       corpo = corpo || p.corpo;
     }
     const id = await criarContrato(db, {
-      comercialId: d.comercialId ?? req.actor!.id, clienteId, propostaId: d.propostaId, clienteNome: d.clienteNome,
+      comercialId: donoDoPedido(req.actor!, d.comercialId), clienteId, propostaId: d.propostaId, clienteNome: d.clienteNome,
       clienteEmail: d.clienteEmail, curso, valor, notas: d.notas, corpo, templateId: d.templateId,
     });
     await audit(db, req.actor!.id, "contrato.create", "contrato", String(id), req.ip, { clienteId, propostaId: d.propostaId });
@@ -196,10 +198,23 @@ export async function registarDocs(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const atual = await obterContrato(db, v.params.id);
     if (!atual) return reply.code(404).send({ error: "Contrato não encontrado." });
-    if (atual.estado === "Assinado" && (v.body.corpo !== undefined || v.body.valor !== undefined || v.body.curso !== undefined)) {
-      return reply.code(409).send({ error: "O contrato já está assinado: o texto, o curso e o valor não se alteram." });
+    // Enviado ou assinado, o contrato fica fechado: só se cancela (e o pedido de assinatura aberto fecha-se com ele).
+    const b = v.body;
+    const fechado = atual.estado === "Por assinar" || atual.estado === "Assinado" || await temAssinaturaConcluida(db, atual.id);
+    const mudaTexto = (b.corpo !== undefined && b.corpo !== atual.corpo) || (b.curso !== undefined && b.curso !== atual.curso)
+      || (b.valor !== undefined && b.valor !== atual.valor);
+    const mudaEstado = b.estado !== undefined && b.estado !== atual.estado && b.estado !== "Cancelado";
+    if (fechado && (mudaTexto || mudaEstado)) {
+      return reply.code(409).send({ error: "O contrato já foi enviado para assinatura ou assinado: o texto, o curso, o valor e o estado não se alteram. Pode cancelá-lo." });
     }
-    await alterarContrato(db, v.params.id, v.body);
+    await db.tx(async q => {
+      await alterarContrato(q, v.params.id, b);
+      if (b.estado === "Cancelado" && atual.estado !== "Cancelado") {
+        for (const a of await cancelarAbertas(q, v.params.id, "Contrato cancelado.")) {
+          await registarEvento(q, a.id, "cancelado", { ip: req.ip, detalhe: { motivo: "Contrato cancelado." } });
+        }
+      }
+    });
     await audit(db, req.actor!.id, "contrato.update", "contrato", String(v.params.id), req.ip, { campos: Object.keys(v.body), estado: v.body.estado });
     return { contrato: await obterContrato(db, v.params.id) };
   });
@@ -211,7 +226,9 @@ export async function registarDocs(app: FastifyInstance, deps: Deps) {
     if (!eSecretaria(req)) return reply.code(403).send({ error: "Só a administração ou a secretaria apaga contratos." });
     const atual = await obterContrato(db, v.params.id);
     if (!atual) return reply.code(404).send({ error: "Contrato não encontrado." });
-    if (atual.estado === "Assinado") return reply.code(409).send({ error: "Um contrato assinado não se apaga. Pode marcá-lo como cancelado." });
+    if (atual.estado === "Assinado" || await temAssinaturaConcluida(db, atual.id)) {
+      return reply.code(409).send({ error: "Um contrato assinado não se apaga. Pode marcá-lo como cancelado." });
+    }
     await apagarContrato(db, v.params.id);
     await audit(db, req.actor!.id, "contrato.delete", "contrato", String(v.params.id), req.ip);
     return { ok: true };

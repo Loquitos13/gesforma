@@ -68,6 +68,8 @@ export function ProcessarApoios({ turma, aberto, onFechar }: {
   const totais = info.dados?.totais ?? {};
   const totalPrevia = previa?.formandos.reduce((s, f) => s + f.total, 0) ?? 0;
   const semIban = previa?.formandos.filter(f => f.linhas.some(l => l.bloqueadoIban)).length ?? 0;
+  // Registos "calculado" que o recálculo deixa sem direito: registar anula-os, mesmo com total 0.
+  const aAnular = previa?.formandos.some(f => f.linhas.some(l => l.estadoAtual === "calculado" && (l.bloqueadoIban || l.valor <= 0))) ?? false;
 
   async function exportar() {
     setAExportar(true);
@@ -79,7 +81,7 @@ export function ProcessarApoios({ turma, aberto, onFechar }: {
       <Botao variante="fantasma" onClick={onFechar}>Fechar</Botao>
       <Botao
         variante="primario"
-        disabled={!previa || totalPrevia <= 0}
+        disabled={!previa || (totalPrevia <= 0 && !aAnular)}
         aCarregar={registar.aCorrer}
         onClick={async () => { if (await registar.correr()) setPasso("registos"); }}
       >

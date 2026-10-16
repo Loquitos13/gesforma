@@ -1,7 +1,7 @@
 /**
  * Propostas, contratos e modelos (proposta e contrato) do diretório comercial.
  */
-import { Filtros, many, one, padraoPesquisa, paginar, valor, type Consulta } from "./sql.js";
+import { Filtros, many, one, padraoPesquisa, paginar, valor, type AtorCrm, type Consulta } from "./sql.js";
 
 const num = (v: unknown) => (typeof v === "number" ? v : Number(v ?? 0));
 const txt = (v: unknown) => String(v ?? "");
@@ -71,7 +71,7 @@ export async function apagarModelo(c: Consulta, tipo: TipoModelo, id: number) {
 
 export type FiltroPropostas = {
   q?: string; estado?: string; comercial?: string; regime?: "gold" | "fin"; clienteId?: number;
-  pagina?: number; porPagina?: number;
+  pagina?: number; porPagina?: number; ator?: AtorCrm;
 };
 
 export async function listarPropostas(c: Consulta, f: FiltroPropostas) {
@@ -82,6 +82,7 @@ export async function listarPropostas(c: Consulta, f: FiltroPropostas) {
   w.add("p.comercial_id::text = ?", f.comercial);
   w.add("p.regime = ?", f.regime);
   w.add("p.cliente_id = ?", f.clienteId);
+  w.visivelPara(f.ator, "p.comercial_id", "p.regime");
   const sql = `
     SELECT p.id, p.cliente_id, p.cliente_nome, p.cliente_email, p.curso, p.valor, p.estado, p.enviada_em,
            p.resposta_cliente, p.resposta_em, p.notas, p.corpo, p.template_id, p.preinscricao_id, p.regime,
@@ -103,12 +104,13 @@ export function mapProposta(r: Record<string, unknown>) {
 }
 
 /** Contagem das propostas por estado (as fases do separador Propostas). */
-export async function propostasPorEstado(c: Consulta, regime?: "gold" | "fin") {
+export async function propostasPorEstado(c: Consulta, regime?: "gold" | "fin", ator?: AtorCrm) {
+  const w = new Filtros([regime ?? null]).sempre("$1::text IS NULL OR regime = $1").visivelPara(ator, "comercial_id", "regime");
   const linhas = await many<{ estado: string; n: number; valor: number }>(
     c,
     `SELECT estado, count(*)::int AS n, coalesce(sum(valor), 0)::float AS valor
-       FROM propostas_comerciais WHERE $1::text IS NULL OR regime = $1 GROUP BY estado`,
-    [regime ?? null],
+       FROM propostas_comerciais ${w.where} GROUP BY estado`,
+    w.params,
   );
   return linhas.map(l => ({ estado: l.estado, n: num(l.n), valor: num(l.valor) }));
 }
@@ -146,11 +148,12 @@ export async function obterProposta(c: Consulta, id: number) {
 
 // ─── Contratos ───────────────────────────────────────────────────────────────
 
-export async function listarContratos(c: Consulta, f: { q?: string; estado?: string; pagina?: number; porPagina?: number }) {
+export async function listarContratos(c: Consulta, f: { q?: string; estado?: string; pagina?: number; porPagina?: number; ator?: AtorCrm }) {
   const w = new Filtros();
   const q = padraoPesquisa(f.q);
   w.add("(k.cliente_nome ILIKE ? OR k.cliente_email ILIKE ? OR k.curso ILIKE ?)", q, q, q);
   w.add("k.estado = ?", f.estado);
+  w.visivelPara(f.ator, "k.comercial_id", "k.formando_regime");
   const sql = `
     SELECT k.id, k.cliente_id, k.cliente_nome, k.cliente_email, k.curso, k.valor, k.estado, k.notas, k.corpo,
            k.template_id, k.proposta_id, k.assinado_em, k.created_at, k.updated_at, u.name AS comercial, t.nome AS modelo
@@ -170,10 +173,12 @@ function mapContrato(r: Record<string, unknown>) {
   };
 }
 
-export async function contratosPorEstado(c: Consulta) {
+export async function contratosPorEstado(c: Consulta, ator?: AtorCrm) {
+  const w = new Filtros().visivelPara(ator, "comercial_id", "formando_regime");
   const linhas = await many<{ estado: string; n: number; valor: number }>(
     c,
-    "SELECT estado, count(*)::int AS n, coalesce(sum(valor), 0)::float AS valor FROM contratos_comerciais GROUP BY estado",
+    `SELECT estado, count(*)::int AS n, coalesce(sum(valor), 0)::float AS valor FROM contratos_comerciais ${w.where} GROUP BY estado`,
+    w.params,
   );
   return linhas.map(l => ({ estado: l.estado, n: num(l.n), valor: num(l.valor) }));
 }
@@ -218,7 +223,7 @@ export async function alterarContrato(c: Consulta, id: number, d: AlteracaoContr
        curso = COALESCE($4, curso), valor = COALESCE($5, valor), estado = COALESCE($6, estado),
        notas = COALESCE($7, notas), corpo = COALESCE($8, corpo),
        assinado_em = CASE WHEN $6 = 'Assinado' AND assinado_em IS NULL THEN now()
-                          WHEN $6 IS NOT NULL AND $6 <> 'Assinado' THEN NULL ELSE assinado_em END,
+                          WHEN $6 IS NOT NULL AND $6 NOT IN ('Assinado', 'Cancelado') THEN NULL ELSE assinado_em END,
        updated_at = now()
      WHERE id = $1 RETURNING id`,
     [id, d.clienteNome ?? null, d.clienteEmail ?? null, d.curso ?? null, d.valor ?? null, d.estado ?? null, d.notas ?? null, d.corpo ?? null],

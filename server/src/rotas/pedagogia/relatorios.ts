@@ -62,7 +62,8 @@ export function registarRelatorios(app: FastifyInstance, { db, requireAuth, audi
       nome = "RelatorioFinalAccao.pdf";
       itemId = "relatorio";
     }
-    await anexarPdfDtp(db, req.actor!.id, "fin", { id, nome: dados.acao }, itemId, nome, bytes).catch(() => undefined);
+    await anexarPdfDtp(db, req.actor!.id, "fin", { id, nome: dados.acao }, itemId, nome, bytes)
+      .catch(err => req.log.warn({ err, turma: id, item: itemId }, "PDF não anexado ao dossiê"));
     await audit(db, req.actor!.id, `turma.${qual}`, "turma", String(id), req.ip);
     return enviarPdf(reply, nome, bytes);
   }

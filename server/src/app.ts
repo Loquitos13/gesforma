@@ -11,6 +11,8 @@ import { enterActor, medirPedido, type Db, type Medicao } from "./db/pool.js";
 import { sha256 } from "./security.js";
 import { classifyRoute } from "./routeAuth.js";
 import { podeAceder } from "./permissoes.js";
+import { linhaCrmDoCaminho } from "./permissoes/crm.js";
+import { linhaVisivel } from "./repos/crmVisivel.js";
 import { invalidarDtp } from "./pedagogia/dtpCache.js";
 import { registarRotas } from "./rotas/index.js";
 import { registarAuditoria as audit } from "./repos/auditoria.js";
@@ -110,7 +112,9 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
       }
     }
 
-    const path = req.url.split("?")[0] ?? req.url;
+    // O router descodifica `%xx` antes de escolher a rota: a matriz tem de ver o mesmo caminho (`/v1/%64rive` = `/v1/drive`).
+    let path: string;
+    try { path = decodeURI(req.url.split("?")[0] ?? req.url); } catch { return reply.code(400).send({ error: "caminho inválido" }); }
     const kind = classifyRoute(req.method, path);
     if (kind === "public") return;
     if (!req.actor) {
@@ -124,6 +128,11 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     }
     if (kind === "staff" && !podeAceder(req.actor.role, req.method, path)) {
       return reply.code(403).send({ error: "Sem permissão para esta operação." });
+    }
+    // Pré-inscrições, propostas e contratos: a regra do RLS também aqui (não depende da base a aplicar).
+    const linha = kind === "staff" && req.actor.role !== "admin" && req.actor.role !== "secretaria" ? linhaCrmDoCaminho(path) : null;
+    if (linha && !(await linhaVisivel(db, linha.tabela, linha.id, req.actor))) {
+      return reply.code(404).send({ error: "registo não encontrado" });
     }
   });
 

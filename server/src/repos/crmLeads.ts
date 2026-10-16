@@ -2,7 +2,7 @@
  * Listas do CRM de pré-inscrições: filtros, filas de trabalho, contagens, facetas, pipeline e exportação.
  * Todos os filtros entram como parâmetros `$n`; ordem e colunas de facetas vêm de listas fixas.
  */
-import { Filtros, many, padraoPesquisa, valor, type Consulta } from "./sql.js";
+import { Filtros, many, padraoPesquisa, valor, type AtorCrm, type Consulta } from "./sql.js";
 
 export type CrmFila = "contactar" | "atrasados" | "hoje" | "agenda" | "converter" | "abertos" | "secretaria" | "preinscricao" | "minhas";
 export type CrmSort = "inscrito" | "proximo" | "valor" | "nome" | "actividade" | "comercial" | "origem" | "meio" | "etiqueta" | "curso" | "turma" | "estado";
@@ -19,6 +19,8 @@ export type CrmFiltros = {
   campanhaId?: number;
   comercialId?: string;
   actorId?: string;
+  /** Quem pede: o comercial só vê as suas, a Financiada só a Financiada (`Filtros.visivelPara`). */
+  ator?: AtorCrm;
   fila?: CrmFila | "";
   regime?: "gold" | "fin" | "";
   de?: string;
@@ -71,6 +73,7 @@ function filtros(f: CrmFiltros, hoje: string, semEstado = false) {
   if (f.fila === "secretaria") w.sempre("estado = 'Pré-inscrição' AND secretaria_em IS NOT NULL");
   if (f.fila === "abertos") w.sempre(FECHADOS);
   if (f.regime === "gold" || f.regime === "fin") w.add("regime = ?", f.regime);
+  w.visivelPara(f.ator, "comercial_id", "regime");
   if (f.de && /^\d{4}-\d{2}-\d{2}$/.test(f.de)) w.add(`${DIA_INSCRITO} >= ?::date`, f.de);
   if (f.ate && /^\d{4}-\d{2}-\d{2}$/.test(f.ate)) w.add(`${DIA_INSCRITO} <= ?::date`, f.ate);
   return w;
@@ -142,8 +145,8 @@ export async function colunaPipeline(
 }
 
 /** Contagens das filas de trabalho e dos cartões (por regime). */
-export async function contagens(c: Consulta, hoje: string, regime: "gold" | "fin" | "") {
-  const w = new Filtros([hoje]);
+export async function contagens(c: Consulta, hoje: string, regime: "gold" | "fin" | "", ator?: AtorCrm) {
+  const w = new Filtros([hoje]).visivelPara(ator, "comercial_id", "regime");
   if (regime) w.add("regime = ?", regime);
   const r = await many<Record<string, number>>(c,
     `SELECT
@@ -168,8 +171,8 @@ export async function contagens(c: Consulta, hoje: string, regime: "gold" | "fin
   return r[0] ?? {};
 }
 
-export async function porEstado(c: Consulta, regime: "gold" | "fin" | "") {
-  const w = new Filtros();
+export async function porEstado(c: Consulta, regime: "gold" | "fin" | "", ator?: AtorCrm) {
+  const w = new Filtros().visivelPara(ator, "comercial_id", "regime");
   if (regime) w.add("regime = ?", regime);
   return many<{ estado: string; n: number }>(c, `SELECT estado, count(*)::int AS n FROM preinscricoes ${w.where} GROUP BY estado`, w.params);
 }
@@ -177,9 +180,9 @@ export async function porEstado(c: Consulta, regime: "gold" | "fin" | "") {
 const COLUNAS_FACETA = { curso: "curso", local: "local", origem: "origem", campanha: "campanha" } as const;
 
 /** Valores mais usados de uma coluna (para os filtros). */
-export async function faceta(c: Consulta, coluna: keyof typeof COLUNAS_FACETA, regime: "gold" | "fin" | "") {
+export async function faceta(c: Consulta, coluna: keyof typeof COLUNAS_FACETA, regime: "gold" | "fin" | "", ator?: AtorCrm) {
   const col = COLUNAS_FACETA[coluna];
-  const w = new Filtros().sempre(`${col} <> ''`);
+  const w = new Filtros().sempre(`${col} <> ''`).visivelPara(ator, "comercial_id", "regime");
   if (regime) w.add("regime = ?", regime);
   const r = await many<{ v: string }>(c,
     `SELECT ${col} AS v FROM preinscricoes ${w.where} GROUP BY ${col} ORDER BY count(*) DESC, ${col} LIMIT 80`, w.params);
@@ -187,15 +190,12 @@ export async function faceta(c: Consulta, coluna: keyof typeof COLUNAS_FACETA, r
 }
 
 /** Pesquisa rápida (nome, contacto, curso, NIF, notas ou número). */
-export async function pesquisar(c: Consulta, q: string, limite: number) {
+export async function pesquisar(c: Consulta, q: string, limite: number, ator?: AtorCrm) {
   const needle = padraoPesquisa(q.slice(0, 80));
   if (!needle) return [];
-  return many<Linha>(c,
-    comEtiqueta(`SELECT * FROM preinscricoes
-      WHERE nome ILIKE $1 OR apelido ILIKE $1 OR email ILIKE $1 OR telf ILIKE $1 OR curso ILIKE $1 OR nif ILIKE $1
+  const w = new Filtros([needle, q.trim().slice(0, 12), Math.min(30, Math.max(1, limite))])
+    .sempre(`nome ILIKE $1 OR apelido ILIKE $1 OR email ILIKE $1 OR telf ILIKE $1 OR curso ILIKE $1 OR nif ILIKE $1
          OR CAST(id AS text) = $2
-         OR id IN (SELECT preinscricao_id FROM preinscricao_contactos WHERE nota ILIKE $1)
-      ORDER BY inscrito DESC
-      LIMIT $3`),
-    [needle, q.trim().slice(0, 12), Math.min(30, Math.max(1, limite))]);
+         OR id IN (SELECT preinscricao_id FROM preinscricao_contactos WHERE nota ILIKE $1)`).visivelPara(ator, "comercial_id", "regime");
+  return many<Linha>(c, comEtiqueta(`SELECT * FROM preinscricoes ${w.where} ORDER BY inscrito DESC LIMIT $3`), w.params);
 }

@@ -5,6 +5,7 @@ import { ingestEvent, flushQueuedJobs } from "./automations.js";
 import { config } from "./config.js";
 import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
+import type { AtorCrm } from "./repos/sql.js";
 import { COMPROVATIVO, docsCompletos, docsDoCurso } from "./docsCurso.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
 import { sendMail } from "./mailer.js";
@@ -105,8 +106,8 @@ export async function dispensarAlertas(db: Db, preinscricaoId: number) {
   await docs.dispensarAlertasDoLead(db, preinscricaoId);
 }
 
-export async function dispensarAlerta(db: Db, alertaId: string) {
-  await docs.dispensarAlerta(db, alertaId);
+export async function dispensarAlerta(db: Db, alertaId: string, ator?: AtorCrm) {
+  await docs.dispensarAlerta(db, alertaId, ator);
 }
 
 /** Indica se os documentos obrigatórios estão validados. Não fecha a ligação: isso só acontece na validação da secretaria. */
@@ -230,8 +231,8 @@ export async function alertarDocumentosIncorrectos(db: Db, leadId: number) {
   return { enviado: true as const, url };
 }
 
-export async function listarAlertasAbertas(db: Db) {
-  return docs.alertasAbertos(db, 20);
+export async function listarAlertasAbertas(db: Db, ator?: AtorCrm) {
+  return docs.alertasAbertos(db, 20, ator);
 }
 
 export { COMPROVATIVO, docsCompletos, docsDoCurso };

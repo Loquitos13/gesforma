@@ -174,7 +174,7 @@ export async function gravarDadosBancarios(c: Consulta, formandoId: number, iban
 export function folhasFin(c: Consulta, turmaId: number) {
   return many<{ sessao_n: number; presencas: unknown }>(
     c,
-    "SELECT sessao_n, presencas FROM turma_sessoes WHERE regime = 'fin' AND turma_id = $1",
+    "SELECT sessao_n, presencas FROM turma_sessoes WHERE regime = 'fin' AND turma_id = $1 AND sessao_n IS NOT NULL",
     [turmaId],
   );
 }
@@ -215,7 +215,7 @@ export type ApoioCalculadoNovo = {
 
 /**
  * Grava um apoio calculado. Se já existir para o mesmo formando, mês e tipo, só é recalculado
- * enquanto estiver "calculado"; aprovados, pagos e anulados ficam como estão.
+ * enquanto estiver "calculado" (ou anulado por um recálculo anterior); aprovados, pagos e anulados à mão ficam como estão.
  * Devolve "criado", "atualizado" ou "mantido".
  */
 export async function gravarCalculado(c: Consulta, a: ApoioCalculadoNovo, actorId: string) {
@@ -228,9 +228,9 @@ export async function gravarCalculado(c: Consulta, a: ApoioCalculadoNovo, actorI
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $9)
        ON CONFLICT (formando_id, periodo, tipo) DO UPDATE
          SET turma_id = EXCLUDED.turma_id, dias = EXCLUDED.dias, horas = EXCLUDED.horas,
-             valor_calculado = EXCLUDED.valor_calculado, detalhe = EXCLUDED.detalhe,
+             valor_calculado = EXCLUDED.valor_calculado, detalhe = EXCLUDED.detalhe, estado = 'calculado',
              updated_at = now(), updated_by = EXCLUDED.updated_by
-         WHERE apoios.estado = 'calculado'
+         WHERE apoios.estado = 'calculado' OR (apoios.estado = 'anulado' AND apoios.detalhe->>'anuladoNoRecalculo' = 'true')
        RETURNING id
      )
      SELECT CASE
@@ -241,6 +241,22 @@ export async function gravarCalculado(c: Consulta, a: ApoioCalculadoNovo, actorI
     [a.formandoId, a.turmaId, a.periodo, a.tipo, a.dias, a.horas, a.valor, JSON.stringify(a.detalhe), actorId],
   );
   return (r?.acao ?? "mantido") as "criado" | "atualizado" | "mantido";
+}
+
+/**
+ * O recálculo deixou de dar direito (valor 0 ou sem IBAN): anula o registo ainda "calculado"
+ * para não seguir para pagamento. Devolve true se havia um para anular.
+ */
+export async function anularCalculado(c: Consulta, a: { formandoId: number; periodo: string; tipo: TipoApoio; motivo: string }, actorId: string) {
+  const r = await one(
+    c,
+    `UPDATE apoios SET estado = 'anulado', detalhe = detalhe || jsonb_build_object('anuladoNoRecalculo', true, 'motivo', $4::text),
+            updated_at = now(), updated_by = $5
+      WHERE formando_id = $1 AND periodo = $2 AND tipo = $3 AND estado = 'calculado'
+      RETURNING id`,
+    [a.formandoId, a.periodo, a.tipo, a.motivo, actorId],
+  );
+  return !!r;
 }
 
 export type AlteracaoApoio = {

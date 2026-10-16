@@ -130,28 +130,37 @@ export async function garantirPagamentoPendente(
   return d.novoId;
 }
 
+/** A ficha tem um pagamento recebido (para não a desmarcar sem reembolsar ou cancelar). */
+export async function temPagamentoPago(c: Consulta, formandoId: number) {
+  return Boolean(await one(c, "SELECT 1 FROM pagamentos WHERE formando_id = $1 AND estado = 'Pago' LIMIT 1", [formandoId]));
+}
+
 /**
  * Pagamento recebido e registado pela secretaria: fecha o pendente (ou cria um movimento pago)
- * e marca a ficha como paga.
+ * e marca a ficha como paga. Devolve null se a ficha já estava paga (bloqueada até ao fim da transação).
  */
 export async function registarPagamentoRecebido(
   q: TxQuery,
   d: { novoId: string; formandoId: number; turmaId: number | null; nome: string; email: string; curso: string; valor: number; metodo: string; data: string },
 ) {
+  const ficha = await q<{ pago: boolean }>("SELECT pago FROM formandos_gold WHERE id = $1 FOR UPDATE", [d.formandoId]);
+  if (ficha.rows[0]?.pago) return null;
+  // Data escolhida pela secretaria (parâmetro próprio: o da coluna «data» é texto); se for hoje, fica a hora real.
+  const pagoEm = (p: string) => `CASE WHEN ${p}::date = current_date THEN now() ELSE ${p}::date END`;
   const aberto = await q<{ id: string }>(
     "SELECT id FROM pagamentos WHERE formando_id = $1 AND estado = 'Pendente' ORDER BY id DESC LIMIT 1", [d.formandoId],
   );
   const id = aberto.rows[0]?.id;
   if (id) {
     await q(
-      "UPDATE pagamentos SET estado = 'Pago', valor = $2, metodo = $3, data = $4, pago_em = now() WHERE id = $1",
-      [id, d.valor, d.metodo, d.data],
+      `UPDATE pagamentos SET estado = 'Pago', valor = $2, metodo = $3, data = $4, pago_em = ${pagoEm("$5")} WHERE id = $1`,
+      [id, d.valor, d.metodo, d.data, d.data],
     );
   } else {
     await q(
       `INSERT INTO pagamentos (id, nome, valor, metodo, curso, data, estado, email, referencia, formando_id, turma_id, pago_em)
-       VALUES ($1,$2,$3,$4,$5,$6,'Pago',$7,'',$8,$9, now())`,
-      [d.novoId, d.nome, d.valor, d.metodo, d.curso, d.data, d.email, d.formandoId, d.turmaId],
+       VALUES ($1,$2,$3,$4,$5,$6,'Pago',$7,'',$8,$9, ${pagoEm("$10")})`,
+      [d.novoId, d.nome, d.valor, d.metodo, d.curso, d.data, d.email, d.formandoId, d.turmaId, d.data],
     );
   }
   await q("UPDATE formandos_gold SET pago = true, valor = $2, metodo = $3 WHERE id = $1", [d.formandoId, d.valor, d.metodo]);

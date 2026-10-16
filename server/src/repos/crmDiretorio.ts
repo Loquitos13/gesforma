@@ -2,7 +2,7 @@
  * Diretório comercial: clientes (empresas), parceiros, propostas, contratos e modelos.
  * Todo o SQL deste domínio vive aqui.
  */
-import { Filtros, many, one, ordenarPor, padraoPesquisa, paginar, valor, type Consulta } from "./sql.js";
+import { Filtros, many, one, ordenarPor, padraoPesquisa, paginar, valor, type AtorCrm, type Consulta } from "./sql.js";
 
 export const ESTADOS_PROPOSTA = ["Enviada", "Negociação", "Aceite", "Recusada", "Expirada"] as const;
 export const ESTADOS_CONTRATO = ["Rascunho", "Por assinar", "Assinado", "Cancelado"] as const;
@@ -66,22 +66,24 @@ export async function resumoClientes(c: Consulta) {
   return { clientes: num(r?.clientes), emAberto: num(r?.em_aberto), comContrato: num(r?.com_contrato) };
 }
 
-export async function obterCliente(c: Consulta, id: number) {
+export async function obterCliente(c: Consulta, id: number, ator?: AtorCrm) {
   const cli = await one(c, "SELECT id, nome, tipo, email, telf, nif, notas, created_at FROM crm_clientes WHERE id = $1", [id]);
   if (!cli) return null;
+  const wp = new Filtros([id]).sempre("p.cliente_id = $1").visivelPara(ator, "p.comercial_id", "p.regime");
   const propostas = await many(
     c,
     `SELECT p.id, p.curso, p.valor, p.estado, p.corpo, p.enviada_em, p.resposta_cliente, u.name AS comercial,
             (SELECT k.id FROM contratos_comerciais k WHERE k.proposta_id = p.id ORDER BY k.id LIMIT 1) AS contrato_id
        FROM propostas_comerciais p LEFT JOIN users u ON u.id = p.comercial_id
-      WHERE p.cliente_id = $1 ORDER BY p.enviada_em DESC, p.id DESC`,
-    [id],
+      ${wp.where} ORDER BY p.enviada_em DESC, p.id DESC`,
+    wp.params,
   );
+  const wk = new Filtros([id]).sempre("k.cliente_id = $1").visivelPara(ator, "k.comercial_id", "k.formando_regime");
   const contratos = await many(
     c,
     `SELECT k.id, k.curso, k.valor, k.estado, k.created_at, k.assinado_em, k.proposta_id
-       FROM contratos_comerciais k WHERE k.cliente_id = $1 ORDER BY k.created_at DESC`,
-    [id],
+       FROM contratos_comerciais k ${wk.where} ORDER BY k.created_at DESC`,
+    wk.params,
   );
   const historico = await historicoCliente(c, num(cli.id), txt(cli.email));
   return {

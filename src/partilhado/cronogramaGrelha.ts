@@ -174,14 +174,16 @@ export function aplicarEvento(
   next: { modulos: string[]; formadores?: string[]; modalidade?: SessaoModalidade } | null,
   previous?: GrelhaLinha | null,
 ): SessaoCronograma[] {
-  let out = sessoes;
-  if (previous && previous.id !== linha.id) {
-    out = upsertCell(out, date, previous, null);
-  }
-  return upsertCell(out, date, linha, next);
+  if (!previous || previous.id === linha.id) return upsertCell(sessoes, date, linha, next);
+  const anterior = sessoes.find(s => s.data === date && matchLinha(s, previous));
+  const out = upsertCell(sessoes, date, previous, null);
+  if (!anterior || !next || out.some(s => s.data === date && matchLinha(s, linha))) return upsertCell(out, date, linha, next);
+  // Muda de linha mantendo o id: os sumários e presenças da sessão ligam-se ao id.
+  const i = sessoes.indexOf(anterior);
+  return upsertCell([...out.slice(0, i), naLinha(anterior, date, linha), ...out.slice(i)], date, linha, next);
 }
 
-/** Move um evento para outro dia/hora/metodologia, sem alterar os módulos. */
+/** Move um evento para outro dia/hora/metodologia, sem alterar os módulos nem a posição na lista. */
 export function moverEvento(
   sessoes: SessaoCronograma[],
   fromDate: string,
@@ -193,19 +195,12 @@ export function moverEvento(
   const origem = cellSessoes(sessoes, fromDate, fromLinha);
   if (!origem.length) return sessoes;
   const destino = cellSessoes(sessoes, toDate, toLinha);
-  const pack = (hits: SessaoCronograma[], linha: GrelhaLinha) => {
+  const mover = (s: SessaoCronograma, date: string, linha: GrelhaLinha) => {
     const lectiva = linha.modalidade === "presencial" || linha.modalidade === "sincrona";
-    return {
-      modulos: [...new Set(hits.flatMap(s => s.modulos ?? []))],
-      formadores: lectiva ? [...new Set(hits.flatMap(s => s.formadores ?? []))] : [],
-      modalidade: linha.modalidade,
-    };
+    return { ...naLinha(s, date, linha), formadores: lectiva ? (s.formadores ?? []) : [] };
   };
-  let out = upsertCell(sessoes, fromDate, fromLinha, null);
-  out = upsertCell(out, toDate, toLinha, null);
-  out = upsertCell(out, toDate, toLinha, pack(origem, toLinha));
-  if (destino.length) out = upsertCell(out, fromDate, fromLinha, pack(destino, fromLinha));
-  return out;
+  // Troca mantendo os ids: os sumários e presenças acompanham cada sessão.
+  return sessoes.map(s => origem.includes(s) ? mover(s, toDate, toLinha) : destino.includes(s) ? mover(s, fromDate, fromLinha) : s);
 }
 
 export function cellLabelPrint(sessoes: SessaoCronograma[], date: string, l: GrelhaLinha) {
@@ -412,26 +407,26 @@ export function sid(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
+/** A sessão passada para a célula (dia e linha) da grelha. */
+function naLinha(s: SessaoCronograma, date: string, linha: GrelhaLinha, modalidade: SessaoModalidade = linha.modalidade): SessaoCronograma {
+  const semHora = linha.modalidade === "auto" || linha.modalidade === "avaliacao";
+  return { ...s, data: date, horaInicio: semHora ? "" : normHora(linha.horaInicio), horaFim: semHora ? "" : normHora(linha.horaFim), modalidade };
+}
+
+/** Grava a célula. Uma sessão que já lá está é substituída no mesmo lugar (mantém id e posição); uma nova vai para o fim. */
 export function upsertCell(
   sessoes: SessaoCronograma[],
   date: string,
   linha: GrelhaLinha,
   next: { modulos: string[]; formadores?: string[]; modalidade?: SessaoModalidade } | null,
 ): SessaoCronograma[] {
-  const kept = sessoes.filter(s => !(s.data === date && matchLinha(s, linha)));
+  const naCelula = (s: SessaoCronograma) => s.data === date && matchLinha(s, linha);
+  const i = sessoes.findIndex(naCelula);
+  const kept = sessoes.filter(s => !naCelula(s));
   if (!next) return kept;
-  const modalidade = next.modalidade ?? linha.modalidade;
-  const base = emptySessao();
-  return [...kept, {
-    ...base,
-    id: sid("c"),
-    data: date,
-    horaInicio: linha.modalidade === "auto" || linha.modalidade === "avaliacao" ? "" : normHora(linha.horaInicio),
-    horaFim: linha.modalidade === "auto" || linha.modalidade === "avaliacao" ? "" : normHora(linha.horaFim),
-    modulos: next.modulos,
-    formadores: next.formadores ?? [],
-    modalidade,
-  }];
+  const atual = i >= 0 ? sessoes[i]! : { ...emptySessao(), id: sid("c") };
+  const nova = { ...naLinha(atual, date, linha, next.modalidade ?? linha.modalidade), modulos: next.modulos, formadores: next.formadores ?? [] };
+  return i < 0 ? [...kept, nova] : [...kept.slice(0, i), nova, ...kept.slice(i)];
 }
 
 export function setMatricula(sessoes: SessaoCronograma[], date: string | "") {

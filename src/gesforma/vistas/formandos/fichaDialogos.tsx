@@ -110,8 +110,9 @@ export function RegistarPagamento({ aberto, onFechar, ficha }: { aberto: boolean
     if (!aberto) return;
     setMetodo(""); setValor(String(ficha.pagamento?.valor ?? "")); setDataPag(new Date().toISOString().slice(0, 10));
   }, [aberto, ficha.pagamento?.valor]);
-  const v = Number(valor.replace(",", "."));
-  const valido = metodo && Number.isFinite(v) && v >= 0;
+  // Valor vazio é valor em falta (não 0 €); a oferta usa o seu próprio botão.
+  const v = valor.trim() ? Number(valor.replace(",", ".")) : NaN;
+  const valido = metodo && Number.isFinite(v) && v >= 0 && Boolean(dataPag);
 
   async function confirmar(oferta = false) {
     const r = oferta
@@ -137,7 +138,7 @@ export function RegistarPagamento({ aberto, onFechar, ficha }: { aberto: boolean
         <Campo rotulo="Método" obrigatorio className="sm:col-span-3">
           {p => <Selecao {...p} opcoes={metodos.selecao} vazio="Escolher…" value={metodo} onChange={e => setMetodo(e.target.value)} data-autofocus />}
         </Campo>
-        <Campo rotulo="Valor (€)" erro={valor && !(v >= 0) ? "Valor inválido." : null}>
+        <Campo rotulo="Valor (€)" obrigatorio erro={valor && !(v >= 0) ? "Valor inválido." : null}>
           {p => <Entrada {...p} inputMode="decimal" value={valor} onChange={e => setValor(e.target.value)} />}
         </Campo>
         <Campo rotulo="Data" className="sm:col-span-2">{p => <Entrada {...p} type="date" value={dataPag} onChange={e => setDataPag(e.target.value)} />}</Campo>

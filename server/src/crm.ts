@@ -1,6 +1,7 @@
 import type { Db } from "./db/pool.js";
 import { mapPreinscricao } from "./ops.js";
 import * as repo from "./repos/crmLeads.js";
+import type { AtorCrm } from "./repos/sql.js";
 import type { CrmDir, CrmFila, CrmFiltros, CrmSort } from "./repos/crmLeads.js";
 
 export type { CrmDir, CrmFila, CrmSort } from "./repos/crmLeads.js";
@@ -35,11 +36,12 @@ export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string)
   const perPage = Math.min(100, Math.max(10, params.perPage ?? 50));
   const regime = params.regime === "gold" || params.regime === "fin" ? params.regime : "";
   const { total, linhas } = await repo.pagina(db, params, hoje, { pagina: page, porPagina: perPage, sort: params.sort, dir: params.dir });
-  const c = await repo.contagens(db, hoje, regime);
+  const ator = params.ator;
+  const c = await repo.contagens(db, hoje, regime, ator);
   const porEstado: Record<string, number> = {};
-  for (const r of await repo.porEstado(db, regime)) porEstado[r.estado] = r.n;
+  for (const r of await repo.porEstado(db, regime, ator)) porEstado[r.estado] = r.n;
   const [cursos, locais, origens, campanhas] = await Promise.all([
-    repo.faceta(db, "curso", regime), repo.faceta(db, "local", regime), repo.faceta(db, "origem", regime), repo.faceta(db, "campanha", regime),
+    repo.faceta(db, "curso", regime, ator), repo.faceta(db, "local", regime, ator), repo.faceta(db, "origem", regime, ator), repo.faceta(db, "campanha", regime, ator),
   ]);
 
   let columns: { estado: string; total: number; valor?: number; items: ReturnType<typeof itemLista>[] }[] | undefined;
@@ -82,8 +84,8 @@ export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string)
   };
 }
 
-export async function searchCrmLeads(db: Db, q: string, limit = 12) {
-  return (await repo.pesquisar(db, q.trim(), limit)).map(r => itemLista(r));
+export async function searchCrmLeads(db: Db, q: string, limit = 12, ator?: AtorCrm) {
+  return (await repo.pesquisar(db, q.trim(), limit, ator)).map(r => itemLista(r));
 }
 
 export async function exportCrmLeads(db: Db, params: CrmListParams, hoje: string) {

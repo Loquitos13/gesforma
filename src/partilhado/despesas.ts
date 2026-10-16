@@ -52,6 +52,17 @@ export const GRUPOS_DESPESA = ["Documento de despesa", "Fornecedor", "Valores", 
 export type DadosDespesa = Record<string, string | number | null>;
 
 /**
+ * Número escrito à portuguesa: "1.500,25" → 1500.25; sem vírgula, "1.500" (ponto seguido de grupos de 3 dígitos)
+ * são milhares → 1500; "1.5" continua a ser 1,5.
+ */
+export function numeroPt(texto: string) {
+  const s = texto.replace(/\s/g, "");
+  if (s.includes(",")) return Number(s.replace(/\./g, "").replace(",", "."));
+  if (/^-?[1-9]\d{0,2}(\.\d{3})+$/.test(s)) return Number(s.replace(/\./g, ""));
+  return Number(s);
+}
+
+/**
  * Valida e normaliza os dados de uma despesa: só os campos do template, opções das listas, datas AAAA-MM-DD
  * e números. Devolve os dados limpos ou a mensagem do primeiro erro.
  */
@@ -63,7 +74,7 @@ export function validarDespesa(entrada: unknown): { ok: true; dados: DadosDespes
     const v = e[c.chave];
     if (v == null || v === "") { dados[c.chave] = c.tipo === "numero" || c.tipo === "euros" ? null : ""; continue; }
     if (c.tipo === "numero" || c.tipo === "euros") {
-      const n = typeof v === "number" ? v : Number(String(v).replace(/\s/g, "").replace(",", "."));
+      const n = typeof v === "number" ? v : numeroPt(String(v));
       if (!Number.isFinite(n) || Math.abs(n) > 1e10) return { ok: false, erro: `${c.rotulo}: número inválido.` };
       dados[c.chave] = c.tipo === "euros" ? Math.round(n * 100) / 100 : n;
       continue;

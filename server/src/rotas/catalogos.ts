@@ -3,6 +3,7 @@ import { z } from "zod";
 import { erroPayloadCatalogo } from "../catalogoSchemas.js";
 import { isCatalogKind } from "../db/catalogSeed.js";
 import { podeAceder } from "../permissoes.js";
+import { pode } from "../permissoes/capacidades.js";
 import { KINDS_OPCOES, listarOpcoes } from "../repos/catalogos.js";
 import * as itens from "../repos/catalogoItens.js";
 import { idNum, regime, textoQuery, validar } from "../validacao.js";
@@ -51,6 +52,12 @@ function fraseUso(uso: Record<string, number>) {
   return partes.length ? partes.join(", ") : "";
 }
 
+/** Gold e Financiada separadas: cada perfil só lê e escreve itens do regime em que trabalha. */
+function veRegime(role: string, regime: string) {
+  return pode(role, regime === "fin" ? "fin.ver" : "gold.ver");
+}
+const SEM_REGIME = { error: "Sem acesso aos registos deste regime." };
+
 function tamanhoOk(payload: unknown) {
   return JSON.stringify(payload ?? {}).length <= 20_000;
 }
@@ -92,7 +99,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: kindParam, query: regimeQuery }, req);
     if (!v) return;
-    const lista = await itens.listarItens(db, v.params.kind, v.query.regime);
+    const role = req.actor!.role;
+    if (v.query.regime && !veRegime(role, v.query.regime)) return reply.code(403).send(SEM_REGIME);
+    const lista = (await itens.listarItens(db, v.params.kind, v.query.regime)).filter(i => veRegime(role, i.regime));
     return { kind: v.params.kind, itens: lista.map(i => ({ id: i.id, regime: i.regime, ...i.payload, uso: i.uso ?? {} })) };
   });
 
@@ -101,6 +110,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const v = validar(reply, { params: kindParam, body: itemSchema }, req);
     if (!v) return;
     const { kind } = v.params;
+    if (!veRegime(req.actor!.role, v.body.regime)) return reply.code(403).send(SEM_REGIME);
     if (!tamanhoOk(v.body.payload)) return reply.code(400).send({ error: "payload demasiado grande" });
     const erroPayload = erroPayloadCatalogo(kind, v.body.payload);
     if (erroPayload) return reply.code(400).send({ error: erroPayload });
@@ -128,6 +138,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     }
     const antes = await itens.obterItem(db, kind, id);
     if (!antes) return reply.code(404).send({ error: "registo não encontrado" });
+    if (!veRegime(req.actor!.role, antes.regime) || !veRegime(req.actor!.role, v.body.regime ?? antes.regime)) {
+      return reply.code(403).send(SEM_REGIME);
+    }
     await itens.actualizarItem(db, kind, id, v.body.payload ?? null, v.body.regime ?? null);
     const depois = await itens.obterItem(db, kind, id);
     const payload = depois?.payload ?? {};
@@ -152,6 +165,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const v = validar(reply, { params: kindIdParam }, req);
     if (!v) return;
     const { kind, id } = v.params;
+    const item = await itens.obterItem(db, kind, id);
+    if (item && !veRegime(req.actor!.role, item.regime)) return reply.code(403).send(SEM_REGIME);
     const emUso = fraseUso(await itens.usoDoItem(db, kind, id));
     if (emUso && (COM_NOME.has(kind) || kind === "modulos")) {
       return reply.code(409).send({ error: `Está em uso (${emUso}). Mude esses registos ou desactive-o em vez de apagar.` });

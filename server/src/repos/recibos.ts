@@ -4,11 +4,11 @@ import type { FiltrosPagamentos } from "./pagamentos.js";
 
 export type ReciboLinha = {
   id: number; pagamento_id: string; ano: number; numero: number; emitido_em: string; actualizado_em: string;
-  drive_file_id: string; enviado_em: string | null; enviado_para: string;
+  drive_file_id: string; enviado_em: string | null; enviado_para: string; dados: Record<string, unknown> | null;
 };
 
 const COLS = `id, pagamento_id, ano, numero, emitido_em::text AS emitido_em, actualizado_em::text AS actualizado_em,
-  drive_file_id, enviado_em::text AS enviado_em, enviado_para`;
+  drive_file_id, enviado_em::text AS enviado_em, enviado_para, dados`;
 
 export function reciboDoPagamento(c: Consulta, pagamentoId: string) {
   return one<ReciboLinha>(c, `SELECT ${COLS} FROM recibos WHERE pagamento_id = $1`, [pagamentoId]);
@@ -47,7 +47,7 @@ export type DadosReciboLinha = {
   id: string; nome: string; email: string; curso: string; valor: number; metodo: string; estado: string;
   pago_em: string | null; criado: string; turma: string | null; confirmado_por: string | null;
   lead_pii: string | null; lead_nif: string | null; lead_morada: string | null; lead_cp: string | null;
-  formando_nome: string | null; regime: string | null;
+  faturacao_enc: string | null; formando_nome: string | null; regime: string | null;
 };
 
 export function dadosParaRecibo(c: Consulta, pagamentoId: string) {
@@ -56,15 +56,17 @@ export function dadosParaRecibo(c: Consulta, pagamentoId: string) {
             p.pago_em::text AS pago_em, p.created_at::text AS criado,
             t.nome AS turma, u.name AS confirmado_por,
             lead.pii_enc AS lead_pii, lead.nif AS lead_nif, lead.morada_fiscal AS lead_morada, lead.codigo_postal AS lead_cp,
+            fat.dados_enc AS faturacao_enc,
             NULLIF(trim(concat_ws(' ', f.nome, f.apelido)), '') AS formando_nome, COALESCE(lead.regime, 'gold') AS regime
        FROM pagamentos p
        LEFT JOIN turmas_gold t ON t.id = p.turma_id
        LEFT JOIN users u ON u.id = p.confirmado_por
        LEFT JOIN formandos_gold f ON f.id = p.formando_id
        LEFT JOIN LATERAL (
-         SELECT l.pii_enc, l.nif, l.morada_fiscal, l.codigo_postal, l.regime FROM preinscricoes l
+         SELECT l.id, l.pii_enc, l.nif, l.morada_fiscal, l.codigo_postal, l.regime FROM preinscricoes l
           WHERE l.pagamento_id = p.id ORDER BY l.id DESC LIMIT 1
        ) lead ON true
+       LEFT JOIN preinscricao_faturacao fat ON fat.preinscricao_id = lead.id
       WHERE p.id = $1`,
     [pagamentoId]);
 }

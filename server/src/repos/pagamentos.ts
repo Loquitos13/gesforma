@@ -57,14 +57,18 @@ export function formandoGoldDoPagamento(c: Consulta, id: number) {
   return one<{ id: number; turma_id: number | null }>(c, "SELECT id, turma_id FROM formandos_gold WHERE id = $1", [id]);
 }
 
-/** Passa a Pago, regista quando e quem, e limpa uma recusa anterior. */
+/**
+ * Passa a Pago, regista quando e quem, e limpa uma recusa anterior.
+ * Atómico: devolve false se outro pedido já o confirmou (os efeitos só correm uma vez).
+ */
 export async function marcarPago(c: Consulta, id: string, carimbo: string, actorId?: string | null) {
-  await one(
+  const r = await one(
     c,
     `UPDATE pagamentos SET estado = 'Pago', data = $2, pago_em = now(), confirmado_por = $3, recusado_em = NULL, recusa_motivo = ''
-      WHERE id = $1`,
+      WHERE id = $1 AND estado <> 'Pago' RETURNING id`,
     [id, carimbo, actorId ?? null],
   );
+  return !!r;
 }
 
 /** Ficha Gold do pagamento: pelo id ligado; sem ele, pelo email e curso. */
@@ -78,12 +82,24 @@ export async function marcarFormandoGoldPago(c: Consulta, p: { email: string; me
   );
 }
 
+/**
+ * Pré-inscrição do pagamento: a ligada pelo pagamento_id; só sem nenhuma ligada, a Gold do mesmo email e curso
+ * que ainda não tem pagamento próprio nem desistiu.
+ */
+/** Pagamento reembolsado: a ficha Gold ligada volta a ficar por pagar. */
+export async function desmarcarFormandoGoldPago(c: Consulta, formandoId: number) {
+  await one(c, "UPDATE formandos_gold SET pago = false WHERE id = $1", [formandoId]);
+}
+
 export async function marcarLeadPago(c: Consulta, p: { email: string; pagamentoId: string; curso: string }) {
   await one(
     c,
     `UPDATE preinscricoes SET estado = 'Pago'
       WHERE estado NOT IN ('Formando', 'Pago')
-        AND (pagamento_id = $2 OR (lower(email) = $1 AND lower(trim(curso)) = lower(trim($3))))`,
+        AND (pagamento_id = $2
+          OR (NOT EXISTS (SELECT 1 FROM preinscricoes l WHERE l.pagamento_id = $2)
+              AND COALESCE(pagamento_id, '') = '' AND regime = 'gold' AND estado <> 'Desistiu'
+              AND lower(email) = $1 AND lower(trim(curso)) = lower(trim($3))))`,
     [p.email, p.pagamentoId, p.curso],
   );
 }

@@ -25,7 +25,7 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
 
   app.get("/v1/alertas/documentos", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    const alertas = await listarAlertasAbertas(db);
+    const alertas = await listarAlertasAbertas(db, req.actor!);
     return {
       alertas: alertas.map(a => ({
         id: a.id,
@@ -43,7 +43,7 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: z.object({ id: z.string().trim().min(1).max(64) }) }, req);
     if (!v) return;
-    await dispensarAlerta(db, v.params.id);
+    await dispensarAlerta(db, v.params.id, req.actor!);
     return { ok: true };
   });
 
@@ -66,7 +66,7 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
       }
     }
     await audit(db, req.actor!.id, "crm.doc_validado", "preinscricao", String(id), req.ip, { docId });
-    return getLeadDossier(db, id);
+    return getLeadDossier(db, id, req.actor!);
   });
 
   app.post("/v1/crm/leads/:id/documentos/:docId/recusar", async (req, reply) => {
@@ -83,7 +83,7 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     if (!ok) return reply.code(404).send({ error: "documento inexistente" });
     await logLeadEvent(db, id, req.actor!.id, "campo", "Documento recusado", observacao);
     await audit(db, req.actor!.id, "crm.doc_recusado", "preinscricao", String(id), req.ip, { docId });
-    return getLeadDossier(db, id);
+    return getLeadDossier(db, id, req.actor!);
   });
 
   app.post("/v1/crm/leads/:id/documentos/alertar", async (req, reply) => {
@@ -112,7 +112,7 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
       return reply.code(400).send({ error: err instanceof PercursoErro ? err.message : "Não foi possível validar." });
     }
     await audit(db, req.actor!.id, "preinscricao.validar", "preinscricao", String(v.params.id), req.ip, { turmaId: v.body?.turmaId ?? null });
-    return getLeadDossier(db, v.params.id);
+    return getLeadDossier(db, v.params.id, req.actor!);
   });
 
   app.post("/v1/crm/leads/:id/pedir-pagamento", async (req, reply) => {
@@ -123,7 +123,7 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     try {
       const r = await pedirPagamento(db, v.params.id, req.actor!.id);
       await audit(db, req.actor!.id, "preinscricao.pagamento_pedido", "preinscricao", String(v.params.id), req.ip, { valor: r.valor });
-      return { ...(await getLeadDossier(db, v.params.id)), pedido: r };
+      return { ...(await getLeadDossier(db, v.params.id, req.actor!)), pedido: r };
     } catch (err) {
       if (err instanceof PedidoPagamentoErro) return reply.code(409).send({ error: err.message });
       throw err;
@@ -139,7 +139,7 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     try {
       const r = await concluirInscricaoPaga(db, v.params.id, req.actor!.id);
       await audit(db, req.actor!.id, "preinscricao.concluir_inscricao", "preinscricao", String(v.params.id), req.ip, { formandoId: r.formandoId });
-      return getLeadDossier(db, v.params.id);
+      return getLeadDossier(db, v.params.id, req.actor!);
     } catch (err) {
       if (err instanceof PercursoErro) return reply.code(409).send({ error: err.message });
       throw err;

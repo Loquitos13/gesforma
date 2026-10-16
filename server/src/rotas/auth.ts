@@ -5,11 +5,11 @@ import { driveCreds, exchangeCode, googleConfigured, googleLoginAuthUrl, googleU
 import { clearLoginFailures, checkLoginAllowed, registerLoginFailure } from "../loginRate.js";
 import {
   disconnectMicrosoft, exchangeMicrosoftCode, getMicrosoftStatus, microsoftConfigured, microsoftCreds,
-  microsoftLoginAuthUrl, microsoftUserEmail, saveMicrosoftConfig,
+  microsoftLoginAuthUrl, microsoftUserEmail, saveMicrosoftConfig, tenantConfiavel, tenantDoIdToken,
 } from "../microsoftAuth.js";
 import { capacidadesDe } from "../permissoes/capacidades.js";
-import { apagarSessaoPorToken, consumirEstadoOauth, criarEstadoOauth, criarSessao } from "../repos/sessoes.js";
-import { definirPalavraPasse, utilizadorParaLogin, utilizadorPorEmail } from "../repos/utilizadores.js";
+import { apagarSessaoPorToken, consumirEstadoOauth, criarEstadoOauth, criarSessao, terminarOutrasSessoes } from "../repos/sessoes.js";
+import { definirPalavraPasse, hashDaPalavraPasse, utilizadorParaLogin, utilizadorPorEmail } from "../repos/utilizadores.js";
 import { hashPassword, isEmail, normalizeEmail, sha256, verifyPassword } from "../security.js";
 import { validar } from "../validacao.js";
 import { mensagemPalavraPasse, palavraPasseValida } from "../../../src/partilhado/passwordPolicy.js";
@@ -18,7 +18,7 @@ import type { Deps } from "./tipos.js";
 // Login, sessão, OAuth (Google/Microsoft) e /v1/me (com as capacidades `pode`).
 
 const loginSchema = z.object({ email: z.string().max(254), password: z.string().min(8).max(200) });
-const passwordSchema = z.object({ password: z.string().min(1).max(200) });
+const passwordSchema = z.object({ password: z.string().min(1).max(200), atual: z.string().max(200).optional() });
 const microsoftConfigSchema = z.object({
   clientId: z.string().trim().min(12).max(200),
   clientSecret: z.string().trim().min(12).max(400).optional(),
@@ -80,7 +80,13 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const v = validar(reply, { body: passwordSchema }, req);
     if (!v) return;
     if (!palavraPasseValida(v.body.password)) return reply.code(400).send({ error: mensagemPalavraPasse(v.body.password) });
+    // A troca obrigatória do primeiro acesso vem logo do login com a temporária; fora disso pede-se a atual.
+    if (!req.actor!.mustChangePassword) {
+      const ok = await verifyPassword(v.body.atual ?? "", (await hashDaPalavraPasse(db, req.actor!.id)) ?? HASH_FICTICIO);
+      if (!ok) return reply.code(400).send({ error: "A palavra-passe atual não está certa." });
+    }
     await definirPalavraPasse(db, req.actor!.id, await hashPassword(v.body.password), { mudarNoProximo: false });
+    await terminarOutrasSessoes(db, req.actor!.id, sha256(String(req.cookies[config.cookieName] ?? "")));
     await audit(db, req.actor!.id, "auth.password_self", "user", req.actor!.id, req.ip);
     req.actor!.mustChangePassword = false;
     return { ok: true, user: { ...req.actor, mustChangePassword: false } };
@@ -211,6 +217,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       const creds = await microsoftCreds(db);
       if (!microsoftConfigured(creds)) return fail("sem-cliente-microsoft");
       const tokens = await exchangeMicrosoftCode(q.data.code, creds);
+      // Fora do tenant da ENA (e das contas pessoais) o `mail` é escolhido por quem gere esse tenant e não prova
+      // identidade de ninguém, nem de um formando: recusa (entra-se com a palavra-passe).
+      if (!tenantConfiavel(tenantDoIdToken(tokens.id_token), creds.tenantId)) return fail("tenant-recusado");
       return await entrarPorEmail(req, reply, (await microsoftUserEmail(tokens.access_token)) ?? "", "microsoft", fail, `${origin}/area-formando`);
     } catch {
       return fail("oauth-falhou");

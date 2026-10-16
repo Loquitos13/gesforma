@@ -15,6 +15,7 @@ export function TurmaAvaliacao({
   turmaNome,
   accent = "gold",
   formandos,
+  soLeitura = false,
 }: {
   regime: Regime;
   turmaId: number;
@@ -22,6 +23,8 @@ export function TurmaAvaliacao({
   turmaNome?: string;
   accent?: "gold" | "fin";
   formandos: FormandoRow[];
+  /** O formador consulta as notas mas não as lança. */
+  soLeitura?: boolean;
 }) {
   const gold = accent === "gold";
   const cfg = useAvaliacaoCurso(regime, cursoNome);
@@ -61,6 +64,10 @@ export function TurmaAvaliacao({
   const mapa = useMemo(() => mapaNotas(notas), [notas]);
   const saveTimer = useRef<number | null>(null);
   const latestNotas = useRef<NotaAvaliacao[] | null>(null);
+  // O que o servidor tem: só se envia o que mudou desde aqui (a null apaga a célula).
+  const gravadas = useRef<Map<string, number | null>>(new Map());
+  const [carga, setCarga] = useState<"aCarregar" | "ok" | "erro">("aCarregar");
+  const [tentativa, setTentativa] = useState(0);
   const saving = useRef(false);
   const vivo = useRef(true);
   const dragRef = useRef<"range" | "fill" | null>(null);
@@ -84,11 +91,18 @@ export function TurmaAvaliacao({
 
   useEffect(() => {
     let alive = true;
+    setCarga("aCarregar");
     apiTurmaAvaliacao(regime, turmaId)
-      .then(r => { if (alive) setNotas(r.notas); })
-      .catch(() => { if (alive) setNotas([]); });
+      .then(r => {
+        if (!alive) return;
+        gravadas.current = mapaNotas(r.notas);
+        setNotas(r.notas);
+        setCarga("ok");
+      })
+      // Sem as notas do servidor não se edita: gravar por cima de uma grelha vazia apagaria as notas.
+      .catch(() => { if (alive) setCarga("erro"); });
     return () => { alive = false; };
-  }, [regime, turmaId]);
+  }, [regime, turmaId, tentativa]);
 
   const flushSave = useCallback(async () => {
     if (saving.current) return;
@@ -96,7 +110,14 @@ export function TurmaAvaliacao({
     try {
       while (latestNotas.current) {
         const snapshot = latestNotas.current;
-        await apiSaveTurmaAvaliacao(regime, turmaId, snapshot.filter(n => n.nota != null));
+        const atual = mapaNotas(snapshot);
+        const mudadas = new Map<string, number | null>();
+        for (const [k, v] of atual) if ((gravadas.current.get(k) ?? null) !== (v ?? null)) mudadas.set(k, v ?? null);
+        for (const [k, v] of gravadas.current) if (v != null && !atual.has(k)) mudadas.set(k, null);
+        if (mudadas.size) {
+          await apiSaveTurmaAvaliacao(regime, turmaId, listaNotas(mudadas));
+          for (const [k, v] of mudadas) gravadas.current.set(k, v);
+        }
         if (latestNotas.current === snapshot) {
           if (vivo.current) setGravando("ok");
           break;
@@ -110,6 +131,7 @@ export function TurmaAvaliacao({
   }, [regime, turmaId]);
 
   const persist = useCallback((next: NotaAvaliacao[]) => {
+    if (carga !== "ok" || soLeitura) return;
     latestNotas.current = next;
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     setGravando("save");
@@ -117,7 +139,7 @@ export function TurmaAvaliacao({
       saveTimer.current = null;
       void flushSave();
     }, 500);
-  }, [flushSave]);
+  }, [carga, flushSave, soLeitura]);
   const persistRef = useRef(persist);
   persistRef.current = persist;
 
@@ -246,7 +268,17 @@ export function TurmaAvaliacao({
 
       <AvisoGrelhaVazia faltaParams={faltaParams} faltaModulos={faltaModulos} semFormandos={formandos.length === 0} unidade={unidadeNome} />
 
-      {!faltaParams && !faltaModulos && formandos.length > 0 && ccp && (
+      {carga === "aCarregar" && <p className="text-xs text-slate-500">A carregar as notas…</p>}
+      {carga === "erro" && (
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+          <p className="flex-1 m-0 text-sm text-red-800">Não foi possível carregar as notas. A grelha fica bloqueada até carregar, para não gravar por cima das notas existentes.</p>
+          <button type="button" onClick={() => setTentativa(t => t + 1)} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 bg-white text-red-800 hover:bg-red-100">
+            Tentar de novo
+          </button>
+        </div>
+      )}
+
+      {carga === "ok" && !faltaParams && !faltaModulos && formandos.length > 0 && ccp && (
         <FolhasCcp
           ccp={ccp}
           topicos={programa.topicos}
@@ -257,12 +289,13 @@ export function TurmaAvaliacao({
           escalaMin={cfg.escalaMin}
           escalaMax={cfg.escalaMax}
           accent={accent}
+          leitura={soLeitura}
           onNota={(formandoId, moduloId, parametroId, valor) => setNota(formandoId, parametroId, valor, moduloId)}
           onLote={setNotasEmLote}
         />
       )}
 
-      {!faltaParams && !faltaModulos && formandos.length > 0 && !ccp && (
+      {carga === "ok" && !faltaParams && !faltaModulos && formandos.length > 0 && !ccp && (
         <>
           {cfg.modo === "modulos" && (
             <div className="space-y-2">
@@ -347,15 +380,18 @@ export function TurmaAvaliacao({
                                   selected ? "border-slate-400" : "border-slate-200"
                                 } ${ring} focus:outline-none`}
                                 inputMode="decimal"
+                                readOnly={soLeitura}
                                 value={shown}
                                 placeholder={p.moodle ? "Moodle" : "-"}
                                 title={p.moodle ? "Nota do Moodle. A leitura automática ainda não está ligada, por isso lança-se à mão." : undefined}
                                 onFocus={() => setSel({ r0: r, c0: c, r1: r, c1: c })}
                                 onChange={e => {
+                                  if (soLeitura) return;
                                   drafts.current[key] = e.target.value;
                                   setDraftTick(t => t + 1);
                                 }}
                                 onBlur={e => {
+                                  if (soLeitura) return;
                                   const parsed = parseCell(e.target.value, cfg.escalaMin, cfg.escalaMax);
                                   delete drafts.current[key];
                                   setNota(f.id, p.id, parsed);
@@ -365,7 +401,7 @@ export function TurmaAvaliacao({
                                   if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                                 }}
                               />
-                              {isHandle && (
+                              {isHandle && !soLeitura && (
                                 <button
                                   type="button"
                                   data-fill-handle
@@ -395,7 +431,9 @@ export function TurmaAvaliacao({
               </table>
             </div>
             <p className="px-4 py-2 text-[11px] text-slate-400 border-t border-slate-100">
-              Clique numa célula, arraste para selecionar um retângulo e puxe o quadrado no canto para copiar o valor. Depois pode corrigir célula a célula.
+              {soLeitura
+                ? "Só leitura: as notas são lançadas pela equipa pedagógica."
+                : "Clique numa célula, arraste para selecionar um retângulo e puxe o quadrado no canto para copiar o valor. Depois pode corrigir célula a célula."}
               {cols.some(p => p.moodle) ? " A coluna Moodle entra na nota final. A leitura automática no Moodle ainda não está ligada." : ""}
             </p>
           </div>

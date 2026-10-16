@@ -10,7 +10,7 @@
  * - formador: só leitura, e nunca nas áreas de `FORMADOR_SEM_LEITURA`;
  * - restantes perfis da equipa: leitura e escrita.
  */
-import { EQUIPA, type Perfil, type Regra } from "./permissoes/perfis.js";
+import { EQUIPA, FIN, GOLD, type Perfil, type Regra } from "./permissoes/perfis.js";
 import { regras as sistema } from "./permissoes/sistema.js";
 import { regras as emails } from "./permissoes/emails.js";
 import { regras as pagamentos } from "./permissoes/pagamentos.js";
@@ -71,6 +71,7 @@ const FORMADOR_SEM_LEITURA = [
   "/v1/formandos/*", "/v1/inqueritos/*",
   "/v1/turmas/:regime/:id/dossie/*", "/v1/turmas/:regime/:id/relatorio-*", "/v1/turmas/:regime/:id/inqueritos/*",
   "/v1/painel*", "/v1/despesas*", "/v1/auditoria*", "/v1/assinaturas*", "/v1/sistema*", "/v1/utilizadores*", "/v1/campanhas*", "/v1/formandos*",
+  "/v1/catalogos*", "/v1/catalog*", "/v1/cursos*", "/v1/listas*", "/v1/site*",
 ];
 
 function corresponde(path: string, padrao: string): boolean {
@@ -105,9 +106,22 @@ export function perfisDaRegra(method: string, path: string): Perfil[] | null {
   return null;
 }
 
+/** Regime que o caminho indica: um segmento `gold`/`fin` ou terminado em `-gold`/`-fin` (`/v1/turmas-fin/3`). */
+export function regimeDoCaminho(path: string): "gold" | "fin" | null {
+  for (const s of path.split("/")) {
+    if (s === "gold" || s.endsWith("-gold")) return "gold";
+    if (s === "fin" || s.endsWith("-fin")) return "fin";
+  }
+  return null;
+}
+
 /** Decide se um perfil da equipa pode chamar uma rota staff. */
 export function podeAceder(role: string, method: string, rawPath: string): boolean {
   const path = rawPath.split("?")[0] ?? rawPath;
+  // Gold e Financiada nunca se misturam: quem só trabalha num regime não chega a rotas do outro.
+  // O formador fica de fora desta regra: trabalha nos dois e os handlers limitam-no às suas turmas.
+  const regime = regimeDoCaminho(path);
+  if (regime && role !== "formador" && !(regime === "gold" ? GOLD : FIN).includes(role as Perfil)) return false;
   const perfis = perfisDaRegra(method, path);
   if (perfis) return perfis.includes(role as Perfil);
   const leitura = method.toUpperCase() === "GET" || method.toUpperCase() === "HEAD";

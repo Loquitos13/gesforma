@@ -22,16 +22,56 @@ function lective(cronograma: unknown) {
   }) as { formadores?: string[]; formador?: string }[];
 }
 
+type SessaoLectiva = { id?: string; data?: string; horaInicio?: string; horaFim?: string; formadores?: string[]; formador?: string };
+
 /** A sessão n (1…) conta só as sessões lectivas do cronograma (presencial e síncrona). */
 export function sessaoLectivaN(cronograma: unknown, n: number) {
-  return (lective(cronograma)[n - 1] ?? null) as null | { data?: string; horaInicio?: string; horaFim?: string; formadores?: string[]; formador?: string };
+  return (lective(cronograma)[n - 1] ?? null) as null | SessaoLectiva;
 }
 
-export function formadoresDaSessaoN(cronograma: unknown, n: number) {
-  const s = lective(cronograma)[n - 1];
+/** A sessão lectiva com este id e a sua posição actual (n). Os dados da sessão ligam-se ao id, não à posição. */
+export function sessaoLectivaPorId(cronograma: unknown, id: string) {
+  if (!id) return null;
+  const lista = lective(cronograma) as SessaoLectiva[];
+  const i = lista.findIndex(s => String(s.id ?? "") === id);
+  return i < 0 ? null : { n: i + 1, sessao: lista[i]! };
+}
+
+function formadoresDe(s: SessaoLectiva | null | undefined) {
   if (!s) return [];
   if (Array.isArray(s.formadores) && s.formadores.length) return s.formadores.map(f => String(f).trim()).filter(Boolean);
   return s.formador?.trim() ? [s.formador.trim()] : [];
+}
+
+export function formadoresDaSessaoN(cronograma: unknown, n: number) {
+  return formadoresDe(sessaoLectivaN(cronograma, n));
+}
+
+/** Cada sessão do cronograma com um id único (as que não têm, ou o repetem, recebem um novo). */
+export function comIdsUnicos(cronograma: unknown[]) {
+  const vistos = new Set<string>();
+  return cronograma.map((item, i) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+    const o = item as Record<string, unknown>;
+    let id = String(o.id ?? "").trim();
+    if (!id || vistos.has(id)) id = `s-${Date.now().toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`;
+    vistos.add(id);
+    return id === o.id ? item : { ...o, id };
+  });
+}
+
+/**
+ * Os dados de uma sessão acompanham-na pelo id quando muda de dia ou de lugar. O que não pode é sair do cronograma
+ * (ou deixar de ser lectiva) uma sessão que já tem sumário, presenças ou plano assinado.
+ */
+export function erroSessoesRemovidas(next: unknown, comDados: { sessao_id: string; sessao_n: number | null }[], actual?: unknown) {
+  const ids = new Set((lective(next) as SessaoLectiva[]).map(s => String(s.id ?? "")));
+  for (const r of [...comDados].sort((x, y) => (x.sessao_n ?? 0) - (y.sessao_n ?? 0))) {
+    if (r.sessao_n == null || ids.has(r.sessao_id)) continue;
+    const data = sessaoLectivaPorId(actual, r.sessao_id)?.sessao.data;
+    return `A sessão ${r.sessao_n}${data ? ` (${data})` : ""} já tem sumário, presenças ou plano assinado: não pode ser removida nem passar a não lectiva. Pode mudá-la de dia, hora ou posição.`;
+  }
+  return null;
 }
 
 /**
@@ -82,58 +122,21 @@ function atribuido(nomes: Set<string>, daSessao: string[]) {
   return false;
 }
 
-function normSessao(item: unknown) {
-  const s = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
-  const lista = Array.isArray(s.formadores) ? s.formadores.map(x => String(x).trim()).filter(Boolean) : [];
-  const unico = typeof s.formador === "string" ? s.formador.trim() : "";
-  return {
-    id: String(s.id ?? ""),
-    data: String(s.data ?? ""),
-    horaInicio: String(s.horaInicio ?? ""),
-    horaFim: String(s.horaFim ?? ""),
-    modulos: JSON.stringify(s.modulos ?? []),
-    formadores: lista.length ? lista : (unico ? [unico] : []),
-    modalidade: String(s.modalidade ?? "presencial"),
-    iniciadaEm: s.iniciadaEm ? String(s.iniciadaEm) : "",
-    fechadaEm: s.fechadaEm ? String(s.fechadaEm) : "",
-  };
-}
-
-/** O formador só pode marcar início e fecho nas sessões em que está atribuído. */
-export function cronogramaSoMarcas(actual: unknown, next: unknown, nomes: Set<string>) {
-  const a = asArr(actual);
-  const b = asArr(next);
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    const left = normSessao(a[i]);
-    const right = normSessao(b[i]);
-    const igual = left.id === right.id
-      && left.data === right.data
-      && left.horaInicio === right.horaInicio
-      && left.horaFim === right.horaFim
-      && left.modulos === right.modulos
-      && JSON.stringify(left.formadores) === JSON.stringify(right.formadores)
-      && left.modalidade === right.modalidade;
-    if (!igual) return false;
-    if (left.iniciadaEm !== right.iniciadaEm || left.fechadaEm !== right.fechadaEm) {
-      if (!atribuido(nomes, right.formadores)) return false;
-    }
-  }
-  return true;
-}
-
 export async function podeGravarSessao(db: Db, actor: { id?: string; role: string; email: string; name: string }, opts: {
   regime: "gold" | "fin";
   turmaId: number;
-  n: number;
+  /** Id da sessão no cronograma: o formador que conta é o dessa sessão, esteja ela onde estiver. */
+  sessaoId: string;
+  /** Cronograma já lido (na transacção da gravação); sem ele lê-se agora. */
+  cronograma?: unknown;
   plano?: { assinado?: boolean };
   sumario?: { assinado?: boolean };
   presencas?: unknown;
 }) {
   const staff = actor.role === "admin" || actor.role === "secretaria" || actor.role === "financiada";
-  const turma = await cronogramaDaTurma(db, opts.regime, opts.turmaId);
-  const daSessao = formadoresDaSessaoN(turma?.cronograma, opts.n);
-  const row = await lerSessao(db, opts.regime, opts.turmaId, opts.n);
+  const cronograma = opts.cronograma !== undefined ? opts.cronograma : (await cronogramaDaTurma(db, opts.regime, opts.turmaId))?.cronograma;
+  const daSessao = formadoresDe(sessaoLectivaPorId(cronograma, opts.sessaoId)?.sessao);
+  const row = await lerSessao(db, opts.regime, opts.turmaId, opts.sessaoId);
   const planoValidado = Boolean(row?.plano && typeof row.plano === "object" && (row.plano as { assinado?: boolean }).assinado);
   const sumarioValidado = Boolean(row?.sumario && typeof row.sumario === "object" && (row.sumario as { assinado?: boolean }).assinado);
   const presencasValidado = Boolean(row?.sumario && typeof row.sumario === "object" && (row.sumario as { presencasValidadas?: boolean }).presencasValidadas);

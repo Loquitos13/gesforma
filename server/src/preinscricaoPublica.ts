@@ -121,8 +121,28 @@ export async function criarPreinscricaoPublica(
     return { error: "forma de pagamento desconhecida" as const };
   }
 
-  // Duplicado só quando há um pedido ABERTO do mesmo email para o MESMO curso.
-  const existente = await escrita.pedidoAberto(db, email, curso);
+  const preco = oferta && regime === "gold"
+    ? (await precoParaOferta(db, curso, local, horario)) ?? oferta.preco
+    : 0;
+  const id = await nextOpsId(db);
+  const publicId = newPublicId();
+  const piiPack = writePreinscricaoPii({ telf });
+  // Duplicado só quando há um pedido ABERTO do mesmo email para o MESMO curso. A verificação e a
+  // inserção correm na mesma transacção, com o par email+curso trancado: um duplo clique não cria dois.
+  const existente = await db.tx(async q => {
+    await escrita.bloquearPedido(q, email, curso);
+    const aberto = await escrita.pedidoAberto(q, email, curso);
+    if (aberto) return aberto;
+    await escrita.inserirLead(q, {
+      id, inscrito: nowStamp(), nome: textoDePessoa(input.nome), apelido: textoDePessoa(input.apelido || ""), email,
+      telf: piiPack.telf || telf, inicioCurso: inicio, concelho: textoDePessoa(input.concelho || ""),
+      local, curso, preco, estado: "Não contactado", campanha: campanha.campanha, campanhaId: campanha.campanhaId,
+      origem, entrada: "preinscricao", meioContacto: meio, horario, turmaId, pagamentoMetodo: metodo, regime,
+      piiEnc: piiPack.pii_enc ?? "", publicId,
+      consentimento: input.consentimento === true ? { ip: (meta.ip ?? "").slice(0, 64), versao: consent.versao } : null,
+    });
+    return null;
+  });
   if (existente) {
     const ultimo = existente.ligacao_reenviada_em ? new Date(String(existente.ligacao_reenviada_em)).getTime() : 0;
     if (Date.now() - ultimo > MINUTOS_REENVIO * 60_000) {
@@ -140,20 +160,6 @@ export async function criarPreinscricaoPublica(
     };
   }
 
-  const preco = oferta && regime === "gold"
-    ? (await precoParaOferta(db, curso, local, horario)) ?? oferta.preco
-    : 0;
-  const id = await nextOpsId(db);
-  const publicId = newPublicId();
-  const piiPack = writePreinscricaoPii({ telf });
-  await escrita.inserirLead(db, {
-    id, inscrito: nowStamp(), nome: textoDePessoa(input.nome), apelido: textoDePessoa(input.apelido || ""), email,
-    telf: piiPack.telf || telf, inicioCurso: inicio, concelho: textoDePessoa(input.concelho || ""),
-    local, curso, preco, estado: "Não contactado", campanha: campanha.campanha, campanhaId: campanha.campanhaId,
-    origem, entrada: "preinscricao", meioContacto: meio, horario, turmaId, pagamentoMetodo: metodo, regime,
-    piiEnc: piiPack.pii_enc ?? "", publicId,
-    consentimento: input.consentimento === true ? { ip: (meta.ip ?? "").slice(0, 64), versao: consent.versao } : null,
-  });
   // A turma escolhida no site (data e cronograma) fica como a turma do percurso: a ligação pessoal
   // já não volta a pedir o cronograma, salvo se a secretaria a der como cheia.
   if (turma) {

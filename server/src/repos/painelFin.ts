@@ -38,7 +38,7 @@ async function formandosDasTurmas(c: Consulta, ids: number[]) {
 async function folhasDasTurmas(c: Consulta, ids: number[]) {
   if (!ids.length) return [];
   return many<{ turma_id: number; sessao_n: number; sumario: unknown; presencas: unknown }>(c, `
-    SELECT turma_id, sessao_n, sumario, presencas FROM turma_sessoes WHERE regime = 'fin' AND turma_id = ANY($1::int[])`, [pgIntArray(ids)]);
+    SELECT turma_id, sessao_n, sumario, presencas FROM turma_sessoes WHERE regime = 'fin' AND turma_id = ANY($1::int[]) AND sessao_n IS NOT NULL`, [pgIntArray(ids)]);
 }
 
 export type TurmaDecorrer = {

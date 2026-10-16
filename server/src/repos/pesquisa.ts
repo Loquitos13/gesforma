@@ -1,5 +1,5 @@
 /** Pesquisa global: SQL por grupo. A interpretação da consulta e o formato das respostas ficam em globalSearch.ts. */
-import { many, type Consulta } from "./sql.js";
+import { Filtros, many, type AtorCrm, type Consulta } from "./sql.js";
 
 export type SearchKind = "email" | "telemovel" | "id" | "nome";
 type Linha = Record<string, unknown>;
@@ -81,9 +81,10 @@ export function pesquisarFormadores(c: Consulta, k: Criterio) {
   return many<Linha>(c, `SELECT id, nome, email, telf, especialidade, regimes, estado FROM formadores WHERE ${p.sql} ORDER BY nome LIMIT ${k.limite}`, p.vals);
 }
 
-export function pesquisarLeads(c: Consulta, k: Criterio) {
+export function pesquisarLeads(c: Consulta, k: Criterio, ator?: AtorCrm) {
   const p = personPred(k.kind, k.needle, k.digits, { apelido: "apelido", extra: ["curso"] });
-  return many<Linha>(c, `SELECT id, nome, apelido, email, telf, curso, estado, local, regime FROM preinscricoes WHERE ${p.sql} ORDER BY inscrito DESC LIMIT ${k.limite}`, p.vals);
+  const w = new Filtros(p.vals).sempre(p.sql).visivelPara(ator, "comercial_id", "regime");
+  return many<Linha>(c, `SELECT id, nome, apelido, email, telf, curso, estado, local, regime FROM preinscricoes ${w.where} ORDER BY inscrito DESC LIMIT ${k.limite}`, w.params);
 }
 
 export async function pesquisarCursosGold(c: Consulta, k: Criterio) {

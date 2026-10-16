@@ -16,6 +16,27 @@ import {
 const DRIVE_FILES = DRIVE_FILES_URL;
 const DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
 
+/** Tipo servido ao browser: vem da extensão (já validada no upload), nunca do MIME que o cliente enviou. */
+const MIME_POR_EXTENSAO: Record<string, string> = {
+  pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", heic: "image/heic",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  odt: "application/vnd.oasis.opendocument.text",
+  mp4: "video/mp4", webm: "video/webm",
+};
+
+export function mimeServido(name: string) {
+  const ext = (/\.([a-z0-9]+)$/i.exec(name)?.[1] ?? "").toLowerCase();
+  return MIME_POR_EXTENSAO[ext] ?? "application/octet-stream";
+}
+
+/** Só PDFs, imagens e vídeos abrem no browser; o resto descarrega-se. */
+export function abreNoBrowser(mime: string) {
+  return mime === "application/pdf" || mime.startsWith("image/") || mime.startsWith("video/");
+}
+
 function driveDir() {
   mkdirSync(config.driveDir, { recursive: true });
   return config.driveDir;
@@ -141,23 +162,23 @@ export async function readDriveContent(db: Db, id: string) {
     if (!existsSync(path)) return null;
     return {
       name: file.name,
-      mime: file.mime_type ?? "application/octet-stream",
+      mime: mimeServido(file.name),
       bytes: readFileSync(path),
       redirect: null as string | null,
     };
   }
   const token = await tokenDrive(db);
   if (!token || !file.drive_id) {
-    return { name: file.name, mime: file.mime_type ?? "application/octet-stream", bytes: null, redirect: file.web_view_link };
+    return { name: file.name, mime: mimeServido(file.name), bytes: null, redirect: file.web_view_link };
   }
   const res = await fetch(`${DRIVE_FILES}/${file.drive_id}?alt=media&supportsAllDrives=true`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) {
-    return { name: file.name, mime: file.mime_type ?? "application/octet-stream", bytes: null, redirect: file.web_view_link };
+    return { name: file.name, mime: mimeServido(file.name), bytes: null, redirect: file.web_view_link };
   }
   const buf = Buffer.from(await res.arrayBuffer());
-  return { name: file.name, mime: file.mime_type ?? "application/octet-stream", bytes: buf, redirect: null as string | null };
+  return { name: file.name, mime: mimeServido(file.name), bytes: buf, redirect: null as string | null };
 }
 
 export async function apagarFicheiroSubstituido(db: Db, id: string) {

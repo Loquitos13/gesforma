@@ -6,6 +6,7 @@ import {
   existeUtilizador, listarClientes, listarParceiros, obterCliente, resumoClientes,
 } from "../repos/crmDiretorio.js";
 import { criarProposta, obterClienteBasico } from "../repos/crmDiretorioDocs.js";
+import { donoDoPedido } from "../repos/crmVisivel.js";
 import { idParam, paginacao, textoQuery, validar, BODY_LIMIT_DOC, corpoDoc } from "../validacao.js";
 import { registarDocs } from "./crmDiretorioDocs.js";
 import type { Deps } from "./tipos.js";
@@ -76,7 +77,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: idParam }, req);
     if (!v) return;
-    const cliente = await obterCliente(db, v.params.id);
+    const cliente = await obterCliente(db, v.params.id, req.actor!);
     if (!cliente) return reply.code(404).send({ error: "Cliente não encontrado." });
     return { cliente };
   });
@@ -118,7 +119,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const cliente = await obterClienteBasico(db, v.params.id);
     if (!cliente) return reply.code(404).send({ error: "Cliente não encontrado." });
     const d = v.body;
-    const comercialId = d.comercialId ?? req.actor!.id;
+    const comercialId = donoDoPedido(req.actor!, d.comercialId);
     if (d.comercialId && !(await existeUtilizador(db, d.comercialId))) return reply.code(400).send({ error: "Comercial inexistente." });
     const id = await criarProposta(db, {
       comercialId, clienteId: v.params.id, preinscricaoId: null, clienteNome: cliente.nome, clienteEmail: cliente.email,

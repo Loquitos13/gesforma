@@ -2,7 +2,7 @@
  * Documentos da pré-inscrição (ficheiros, estados, alertas) e o que cada curso pede
  * (configuração por curso, modelos de consentimento, extras do dossiê).
  */
-import { many, one, type Consulta, type Regime } from "./sql.js";
+import { Filtros, many, one, type AtorCrm, type Consulta, type Regime } from "./sql.js";
 import { pgTextArray } from "../pedagogia/util.js";
 
 const CURSOS = { gold: "cursos_gold", fin: "cursos_fin" } as const;
@@ -86,19 +86,22 @@ export async function dispensarAlertasDoLead(c: Consulta, leadId: number) {
   await many(c, "UPDATE doc_alertas SET dispensada_em = now() WHERE preinscricao_id = $1 AND dispensada_em IS NULL", [leadId]);
 }
 
-export async function dispensarAlerta(c: Consulta, id: string) {
-  await many(c, "UPDATE doc_alertas SET dispensada_em = now() WHERE id = $1 AND dispensada_em IS NULL", [id]);
+export async function dispensarAlerta(c: Consulta, id: string, ator?: AtorCrm) {
+  const w = new Filtros([id]).sempre("p.id = doc_alertas.preinscricao_id AND doc_alertas.id = $1 AND doc_alertas.dispensada_em IS NULL")
+    .visivelPara(ator, "p.comercial_id", "p.regime");
+  await many(c, `UPDATE doc_alertas SET dispensada_em = now() FROM preinscricoes p ${w.where}`, w.params);
 }
 
-export async function alertasAbertos(c: Consulta, limite = 20) {
+export async function alertasAbertos(c: Consulta, limite = 20, ator?: AtorCrm) {
+  const w = new Filtros([limite]).sempre("a.dispensada_em IS NULL").visivelPara(ator, "p.comercial_id", "p.regime");
   return many<{ id: string; preinscricao_id: number; created_at: string; nome: string; apelido: string; curso: string; regime: string }>(c,
     `SELECT a.id, a.preinscricao_id, a.created_at, p.nome, p.apelido, p.curso, COALESCE(p.regime, 'gold') AS regime
        FROM doc_alertas a
        JOIN preinscricoes p ON p.id = a.preinscricao_id
-      WHERE a.dispensada_em IS NULL
+      ${w.where}
       ORDER BY a.created_at DESC
       LIMIT $1`,
-    [limite]);
+    w.params);
 }
 
 /* ── O que o curso pede ──────────────────────────────────────────────────── */

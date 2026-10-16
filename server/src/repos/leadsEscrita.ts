@@ -28,6 +28,11 @@ export async function valoresSettings(c: Consulta, id: string) {
   return r?.values && typeof r.values === "object" ? r.values as Record<string, unknown> : {};
 }
 
+/** Serializa, até ao fim da transacção, os pedidos do mesmo email para o mesmo curso (duplo clique no site). */
+export async function bloquearPedido(c: Consulta, email: string, curso: string) {
+  await one(c, "SELECT 1 AS ok FROM pg_advisory_xact_lock(hashtext(lower($1) || '|' || lower(trim($2))))", [email, curso]);
+}
+
 /** Pedido aberto (não validado, nem desistência, nem formando) do mesmo email para o mesmo curso. */
 export async function pedidoAberto(c: Consulta, email: string, curso: string) {
   return one<{ id: number; nome: string; apelido: string; curso: string; public_id: string; regime: string; ligacao_reenviada_em: unknown }>(c,
@@ -130,21 +135,25 @@ export async function actualizarLead(c: Consulta, id: number, d: AlteracaoLead) 
     ]);
 }
 
-/** Completar a pré-inscrição (NIF e morada) e devolvê-la à etapa «Pré-inscrição». */
+/**
+ * Completar a pré-inscrição (NIF e morada) e, se pedido, passá-la à etapa «Pré-inscrição».
+ * A PII chega já junta e cifrada (`writePreinscricaoPii`): as colunas em claro ficam como vierem.
+ */
 export async function completarLead(c: Consulta, id: number, d: {
-  nome: string; apelido: string; email: string; telf: string; concelho: string; curso: string; local: string;
-  horario: string; inicioCurso: string; nif: string; moradaFiscal: string; codigoPostal: string;
+  nome: string; apelido: string; email: string; concelho: string; curso: string; local: string;
+  horario: string; inicioCurso: string; telf: string; nif: string; moradaFiscal: string; codigoPostal: string;
+  piiEnc: string | null; preInscricao: boolean;
 }) {
   await many(c,
     `UPDATE preinscricoes SET
        nome = COALESCE(NULLIF($2,''), nome), apelido = COALESCE(NULLIF($3,''), apelido),
-       email = COALESCE(NULLIF($4,''), email), telf = COALESCE(NULLIF($5,''), telf),
+       email = COALESCE(NULLIF($4,''), email), telf = $5,
        concelho = COALESCE(NULLIF($6,''), concelho), curso = COALESCE(NULLIF($7,''), curso),
        local = COALESCE(NULLIF($8,''), local), horario = COALESCE(NULLIF($9,''), horario),
        inicio_curso = COALESCE(NULLIF($10,''), inicio_curso),
-       nif = COALESCE(NULLIF($11,''), nif), morada_fiscal = COALESCE(NULLIF($12,''), morada_fiscal),
-       codigo_postal = COALESCE(NULLIF($13,''), codigo_postal),
-       estado = 'Pré-inscrição'
+       nif = $11, morada_fiscal = $12, codigo_postal = $13, pii_enc = COALESCE($14, pii_enc),
+       estado = CASE WHEN $15::boolean THEN 'Pré-inscrição' ELSE estado END
      WHERE id = $1`,
-    [id, d.nome, d.apelido, d.email, d.telf, d.concelho, d.curso, d.local, d.horario, d.inicioCurso, d.nif, d.moradaFiscal, d.codigoPostal]);
+    [id, d.nome, d.apelido, d.email, d.telf, d.concelho, d.curso, d.local, d.horario, d.inicioCurso, d.nif, d.moradaFiscal, d.codigoPostal,
+      d.piiEnc, d.preInscricao]);
 }

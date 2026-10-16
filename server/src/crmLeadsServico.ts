@@ -14,6 +14,7 @@ import { marcarLeadPago } from "./pagamentoPedido.js";
 import { moverDocsDoLead } from "./percurso.js";
 import { readPreinscricaoPii, writePreinscricaoPii } from "./pii.js";
 import { precoParaOferta } from "./precoOferta.js";
+import { linhaVisivel } from "./repos/crmVisivel.js";
 import * as leads from "./repos/leads.js";
 import * as escrita from "./repos/leadsEscrita.js";
 import { isEmail, normalizeEmail } from "./security.js";
@@ -73,10 +74,11 @@ export async function criarLeadManual(db: Db, actor: Actor, d: DadosLead) {
   const email = (d.email ?? "").trim() ? normalizeEmail(d.email!) : "";
   if (!telf && !email) throw new CrmErro("indique telemóvel ou email");
   if (email && !isEmail(email)) throw new CrmErro("email inválido");
-  const dups = await findDuplicados(db, email, telf);
+  const dups = await findDuplicados(db, email, telf, 0, actor);
   const id = await nextOpsId(db);
   const regime = regimeDoPedido(actor.role, d.regime);
-  const comercialId = d.comercialId ?? ((actor.role === "comercial" || actor.role === "financiada") ? actor.id : null);
+  // O comercial só cria pré-inscrições suas (a mesma regra que o RLS impõe na escrita).
+  const comercialId = actor.role === "comercial" ? actor.id : d.comercialId ?? (actor.role === "financiada" ? actor.id : null);
   const curso = d.curso ?? "";
   const precoOferta = regime === "fin" || !curso ? null : await precoParaOferta(db, curso, d.local || "", d.horario || "");
   const origem = await origemDaLista(db, d.origem ?? "", "Telefone");
@@ -105,6 +107,7 @@ export async function actualizarLeadCrm(db: Db, actor: Actor, id: number, d: Dad
   const before = await leads.lead(db, id);
   if (!before) throw new CrmErro("pré-inscrição inexistente", 404);
   const regime = regimeDaLinha(before);
+  if (d.email && !isEmail(normalizeEmail(d.email))) throw new CrmErro("email inválido");
   if (d.turmaId) {
     const t = await leads.cursoDaTurma(db, regime, d.turmaId);
     const cursoLead = String(d.curso ?? before.curso ?? "");
@@ -131,6 +134,7 @@ export async function actualizarLeadCrm(db: Db, actor: Actor, id: number, d: Dad
     }
     if (d.estado === "Formando" && actor.role === "comercial") throw new CrmErro("Só a secretaria inscreve na turma.", 409);
   }
+  if (actor.role === "comercial" && d.comercialId && d.comercialId !== actor.id) throw new CrmErro("O comercial não passa pré-inscrições a outra pessoa.", 403);
   const prev = readPreinscricaoPii(before);
   const mudaPii = d.nif !== undefined || d.moradaFiscal !== undefined || d.codigoPostal !== undefined || d.telf !== undefined;
   const pii = mudaPii
@@ -192,15 +196,21 @@ export type AccaoLote = {
   ids: number[];
   acao: "contactar" | "estado" | "seguimento" | "atribuir" | "etiqueta" | "adiar";
   estado?: string; proximoContacto?: string; nota?: string; comercialId?: string; etiquetaId?: number | null; dias?: number;
+  motivoDesistencia?: string;
 };
 
-/** Acções em lote. Devolve quantas pré-inscrições mudaram e quantas passaram a pagas à mão. */
+/**
+ * Acções em lote. Devolve quantas pré-inscrições mudaram.
+ * «Pago» não se faz em lote: confirma dinheiro recebido, um a um, com o comprovativo.
+ */
 export async function aplicarLote(db: Db, actor: Actor, d: AccaoLote) {
+  if (d.acao === "estado" && d.estado === "Pago") throw new CrmErro("«Pago» não se marca em lote: confirme cada pagamento na ficha.", 409);
+  if (d.acao === "estado" && d.estado === "Desistiu" && !(d.motivoDesistencia ?? "").trim()) throw new CrmErro("indique o motivo da desistência");
+  if (d.acao === "atribuir" && actor.role === "comercial" && d.comercialId !== actor.id) throw new CrmErro("O comercial não passa pré-inscrições a outra pessoa.", 403);
   let updated = 0;
-  let pagos = 0;
   for (const id of d.ids) {
     const current = await leads.lead(db, id);
-    if (!current) continue;
+    if (!current || !(await linhaVisivel(db, "preinscricoes", id, actor))) continue;
     const nota = (d.nota ?? "").trim();
     if (d.acao === "contactar") {
       const nextEstado = String(current.estado) === "Não contactado" ? "1º Contacto" : String(current.estado);
@@ -208,13 +218,14 @@ export async function aplicarLote(db: Db, actor: Actor, d: AccaoLote) {
       await leads.inserirContacto(db, { leadId: id, actorId: actor.id, nota });
       await logLeadEvent(db, id, actor.id, "contacto", "Contacto em lote", nota || `Passou a ${nextEstado}`);
     } else if (d.acao === "estado" && d.estado) {
-      const gate = podeArrastar(String(current.estado), d.estado, {
-        role: actor.role, secretariaEm: current.secretaria_em ? String(current.secretaria_em) : null, regime: regimeDaLinha(current),
-      });
-      if (!gate.ok) continue;
-      await leads.mudarEstado(db, id, d.estado);
-      await logLeadEvent(db, id, actor.id, "estado", `Passou a ${d.estado}`, `De ${String(current.estado)}`);
-      if (d.estado === "Pago") { await marcarLeadPago(db, id); pagos += 1; }
+      // As mesmas regras da ficha (etapas, motivo, ligação pessoal ao passar a Pré-inscrição); a que não pode, fica.
+      if (d.estado === String(current.estado)) continue;
+      try {
+        await actualizarLeadCrm(db, actor, id, { estado: d.estado, motivoDesistencia: d.motivoDesistencia });
+      } catch (err) {
+        if (err instanceof CrmErro) continue;
+        throw err;
+      }
     } else if (d.acao === "seguimento") {
       await leads.agendarSeguimento(db, id, d.proximoContacto ?? null, nota);
       await logLeadEvent(db, id, actor.id, "seguimento", "Seguimento em lote", d.proximoContacto ? `Próximo contacto ${d.proximoContacto}` : nota);
@@ -234,7 +245,7 @@ export async function aplicarLote(db: Db, actor: Actor, d: AccaoLote) {
     } else continue;
     updated += 1;
   }
-  return { updated, pagos };
+  return { updated };
 }
 
 /** Apaga a pré-inscrição e os ficheiros na Drive. Validadas só o admin apaga. */
@@ -254,21 +265,39 @@ export async function apagarLead(db: Db, actor: Actor, id: number) {
   };
 }
 
+/** Etapas do funil que passam a «Pré-inscrição» ao completar (as seguintes e as fechadas ficam). */
+const ANTES_DA_PREINSCRICAO = ["Não contactado", "1º Contacto", "2º Contacto"];
+
 /** Completar a pré-inscrição (NIF e morada fiscal) e entregá-la à secretaria. */
 export async function completarLead(db: Db, actor: Actor, id: number, d: DadosLead) {
+  const before = await leads.lead(db, id);
+  if (!before) throw new CrmErro("pré-inscrição inexistente", 404);
+  const email = (d.email ?? "").trim() ? normalizeEmail(d.email!) : "";
+  if (email && !isEmail(email)) throw new CrmErro("email inválido");
+  const texto = (v: string | undefined) => (v ?? "").trim();
+  // Mesmo caminho do PATCH: junta com a PII guardada (cifrada ou legada) e cifra de novo.
+  const prev = readPreinscricaoPii(before);
+  const junta = {
+    nif: texto(d.nif).replace(/\s/g, "") || prev.nif, moradaFiscal: texto(d.moradaFiscal) || prev.moradaFiscal,
+    codigoPostal: texto(d.codigoPostal) || prev.codigoPostal, telf: texto(d.telf) || prev.telf,
+  };
+  const simples = { nome: texto(d.nome), apelido: texto(d.apelido), email, concelho: texto(d.concelho), curso: texto(d.curso),
+    local: texto(d.local), horario: texto(d.horario), inicioCurso: texto(d.inicioCurso) };
+  const atual = mapPreinscricao(before);
+  const candidato = { ...atual, ...Object.fromEntries(Object.entries(simples).filter(([, v]) => v)), ...junta };
+  const falta = camposEmFalta(candidato);
+  if (falta.length) throw new CrmErro(`Falta: ${falta.map(f => f.label).join(", ")}`, 400, { falta: falta.map(f => f.key) });
+  const pii = writePreinscricaoPii(junta);
   await escrita.completarLead(db, id, {
-    nome: d.nome ?? "", apelido: d.apelido ?? "", email: d.email ? normalizeEmail(d.email) : "", telf: d.telf ?? "",
-    concelho: d.concelho ?? "", curso: d.curso ?? "", local: d.local ?? "", horario: d.horario ?? "",
-    inicioCurso: d.inicioCurso ?? "", nif: (d.nif ?? "").replace(/\s/g, ""), moradaFiscal: d.moradaFiscal ?? "",
-    codigoPostal: d.codigoPostal ?? "",
+    ...simples, telf: pii.telf, nif: pii.nif, moradaFiscal: pii.morada_fiscal, codigoPostal: pii.codigo_postal, piiEnc: pii.pii_enc,
+    preInscricao: ANTES_DA_PREINSCRICAO.includes(String(before.estado)),
   });
   const mapped = await leadMapeado(db, id);
   if (!mapped) throw new CrmErro("pré-inscrição inexistente", 404);
-  const falta = camposEmFalta(mapped);
-  if (falta.length) throw new CrmErro(`Falta: ${falta.map(f => f.label).join(", ")}`, 400, { falta: falta.map(f => f.key) });
   if (!mapped.secretariaEm) {
     await leads.entregarASecretaria(db, id, false);
     await logLeadEvent(db, id, actor.id, "estado", "Entregue à secretaria", "Pré-inscrição completa (NIF e morada fiscal).");
   }
-  await notificarDocumentos(db, id, actor.id).catch(() => undefined);
+  // A ligação pessoal só segue na etapa «Pré-inscrição» (as automações do email fariam avançar uma inscrição já paga).
+  if (mapped.estado === "Pré-inscrição") await notificarDocumentos(db, id, actor.id).catch(() => undefined);
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Botao, Selecao, type OpcaoSelecao } from "../../../../partilhado/ui";
 import { apiLote, type AccaoLote, type Etiqueta } from "../../../../partilhado/api/crm";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
+import { useOpcoes } from "../../../../partilhado/dados/useOpcoes";
 import { ETAPAS, rotuloEtapa } from "./util";
 
 /** Acções em lote sobre as pré-inscrições seleccionadas. */
@@ -15,6 +16,8 @@ export function BarraLote({ ids, comerciais, etiquetas, onLimpar }: {
   const [data, setData] = useState("");
   const [comercial, setComercial] = useState("");
   const [etiqueta, setEtiqueta] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const motivos = useOpcoes("lista", { lista: "motivos_desistencia" });
   const lote = useAccao(apiLote, { ok: r => `${r.updated} pré-inscrições actualizadas.`, invalidar: ["crm:"] });
 
   async function correr(a: Omit<AccaoLote, "ids">) {
@@ -29,8 +32,15 @@ export function BarraLote({ ids, comerciais, etiquetas, onLimpar }: {
       <span className="inline-flex items-center gap-1">
         <label className="sr-only" htmlFor="lote-etapa">Etapa</label>
         <Selecao id="lote-etapa" className="h-8 w-40" value={etapa} onChange={e => setEtapa(e.target.value)}
-          opcoes={ETAPAS.filter(e => e !== "Formando").map(e => ({ valor: e, rotulo: rotuloEtapa(e) }))} />
-        <Botao tamanho="sm" variante="secundario" onClick={() => void correr({ acao: "estado", estado: etapa })}>Mudar etapa</Botao>
+          opcoes={ETAPAS.filter(e => e !== "Formando" && e !== "Pago").map(e => ({ valor: e, rotulo: rotuloEtapa(e) }))} />
+        {etapa === "Desistiu" && (
+          <>
+            <label className="sr-only" htmlFor="lote-motivo">Motivo da desistência</label>
+            <Selecao id="lote-motivo" className="h-8 w-40" value={motivo} onChange={e => setMotivo(e.target.value)} opcoes={motivos.selecao} vazio="Motivo…" />
+          </>
+        )}
+        <Botao tamanho="sm" variante="secundario" disabled={etapa === "Desistiu" && !motivo}
+          onClick={() => void correr({ acao: "estado", estado: etapa, ...(etapa === "Desistiu" ? { motivoDesistencia: motivo } : {}) })}>Mudar etapa</Botao>
       </span>
       <span className="inline-flex items-center gap-1">
         <label className="sr-only" htmlFor="lote-data">Próximo contacto</label>

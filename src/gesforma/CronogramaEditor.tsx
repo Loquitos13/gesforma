@@ -9,6 +9,7 @@ import { useOpcoesFormador, useSessoesNoutrasTurmas } from "../partilhado/dados/
 import { descarregarCronograma } from "./cronogramaExport";
 import { apiPublicarCronograma } from "../partilhado/api";
 import { toastError, toastOk } from "../partilhado/toastBus";
+import { ConfirmarPerigo } from "../partilhado/ui";
 import { hojeIso, emptySessao, formatDiaMes, formatHoraRange, formatMesAno, formadoresNasSessoes, groupCronogramaByMonth, horasCronograma, isSessaoLectiva, modulosLabel, periodoCronograma, proximaSessao, sessaoEstado, sessaoFormadores, sessaoModulos, type SessaoCronograma } from "../partilhado/turmaModel";
 import { IconPlus, KpiCard, SessaoRow } from "./TurmaCronograma";
 
@@ -47,6 +48,7 @@ export function CronogramaEditor({
   const lectivas = useMemo(() => plano.filter(isSessaoLectiva), [plano]);
   const [confirmRegen, setConfirmRegen] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [aRemover, setARemover] = useState<{ sessao: SessaoCronograma; n: number } | null>(null);
   const [publicando, setPublicando] = useState(false);
   const [publicadoUrl, setPublicadoUrl] = useState<string | null>(null);
   // A sessão aberta continua na lista mesmo depois de passar a assíncrona, para
@@ -240,10 +242,7 @@ export function CronogramaEditor({
                     cronogramaDesta={sessoes}
                     outras={outras}
                     onPatch={p => patch(sessao.id, p)}
-                    onRemove={() => {
-                      onChange(sessoes.filter(x => x.id !== sessao.id));
-                      if (openId === sessao.id) setOpenId(null);
-                    }}
+                    onRemove={() => setARemover({ sessao, n })}
                   />
                 ))}
               </div>
@@ -251,6 +250,19 @@ export function CronogramaEditor({
           ))}
         </div>
       )}
+
+      <ConfirmarPerigo
+        aberto={aRemover !== null}
+        onFechar={() => setARemover(null)}
+        titulo={`Remover a sessão ${aRemover?.n ?? ""}?`}
+        acao="Remover sessão"
+        descricao={`A sessão de ${aRemover?.sessao.data ? formatDiaMes(aRemover.sessao.data) : "data por definir"} sai do cronograma. Se já tiver sumário, presenças ou plano assinado, o servidor recusa a remoção.`}
+        onConfirmar={() => {
+          if (!aRemover) return;
+          onChange(sessoes.filter(x => x.id !== aRemover.sessao.id));
+          if (openId === aRemover.sessao.id) setOpenId(null);
+        }}
+      />
     </div>
   );
 }

@@ -46,7 +46,7 @@ export async function fichaDoCursoDaTurma(c: Consulta, regime: Regime, turma: { 
 export async function folhasDePresenca(c: Consulta, regime: Regime, turmaId: number) {
   return many<{ sessao_n: number; presencas: unknown }>(
     c,
-    "SELECT sessao_n, presencas FROM turma_sessoes WHERE regime = $1 AND turma_id = $2",
+    "SELECT sessao_n, presencas FROM turma_sessoes WHERE regime = $1 AND turma_id = $2 AND sessao_n IS NOT NULL",
     [regime, turmaId],
   );
 }
@@ -86,7 +86,7 @@ export async function folhasDePresencaLote(c: Consulta, regime: Regime, ids: num
   if (!ids.length) return [];
   return many<{ turma_id: number; sessao_n: number; presencas: unknown }>(
     c,
-    "SELECT turma_id, sessao_n, presencas FROM turma_sessoes WHERE regime = $1 AND turma_id = ANY($2::int[])",
+    "SELECT turma_id, sessao_n, presencas FROM turma_sessoes WHERE regime = $1 AND turma_id = ANY($2::int[]) AND sessao_n IS NOT NULL",
     [regime, pgIntArray(ids)],
   );
 }

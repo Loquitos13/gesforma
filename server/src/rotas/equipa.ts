@@ -3,9 +3,10 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { logLeadEvent } from "../crmDossier.js";
 import { mapPreinscricao } from "../ops.js";
-import { precoInscricaoNaBase } from "../precoInscricaoDb.js";
+import { precoParaOferta } from "../precoOferta.js";
 import { ESTADOS_PROPOSTA } from "../repos/crmDiretorio.js";
 import { criarProposta, obterModelo, obterProposta } from "../repos/crmDiretorioDocs.js";
+import { linhaVisivel } from "../repos/crmVisivel.js";
 import {
   aSeguir, alterarProposta, atribuirLead, gravarObjetivo, gravarPerfil, indicadoresEquipa, leadDaNota, leadsDoMembro,
   listarMembros, membroExiste, notasDoMembro, propostaComContratoAssinado, regimeDaProposta, registarNota, type Regime,
@@ -67,7 +68,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
   app.get("/v1/equipa", async (req, reply) => {
     const v = validar(reply, { query: regimeQuery }, req);
     if (!v || !exigir(req, reply, v.query.regime)) return;
-    const { periodo: p, membros: lista } = await membros(v.query.regime, v.query.de, v.query.ate);
+    // O comercial só vê os seus números (as pré-inscrições dos outros não lhe são visíveis).
+    const so = req.actor!.role === "comercial" ? req.actor!.id : undefined;
+    const { periodo: p, membros: lista } = await membros(v.query.regime, v.query.de, v.query.ate, so);
     const soma = (f: (m: (typeof lista)[number]) => number) => lista.reduce((s, m) => s + f(m), 0);
     return {
       periodo: p,
@@ -89,13 +92,15 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const v = validar(reply, { query: z.object({ curso: textoQuery(200), local: textoQuery(120), horario: textoQuery(120) }) }, req);
     if (!v) return;
     if (!v.query.curso) return { preco: 0 };
-    return { preco: await precoInscricaoNaBase(db, { curso: v.query.curso, local: v.query.local, horario: v.query.horario }) };
+    // O mesmo preço do pedido de pagamento: ficha do curso Gold e regras por local/horário (a Financiada não tem preço).
+    return { preco: (await precoParaOferta(db, v.query.curso, v.query.local ?? "", v.query.horario ?? "")) ?? 0 };
   });
 
   app.get("/v1/equipa/:id", async (req, reply) => {
     const v = validar(reply, { params: membroParam, query: regimeQuery }, req);
     if (!v || !exigir(req, reply, v.query.regime)) return;
     const { regime } = v.query;
+    if (req.actor!.role === "comercial" && v.params.id !== req.actor!.id) return reply.code(404).send({ error: "Pessoa não encontrada nesta equipa." });
     const { periodo: p, membros: lista } = await membros(regime, v.query.de, v.query.ate, v.params.id);
     const membro = lista[0];
     if (!membro) return reply.code(404).send({ error: "Pessoa não encontrada nesta equipa." });
@@ -109,7 +114,11 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const v = validar(reply, { params: membroParam, body: propostaSchema }, req);
     if (!v || !exigir(req, reply, v.body.regime)) return;
     const d = v.body;
+    if (req.actor!.role === "comercial" && v.params.id !== req.actor!.id) return reply.code(404).send({ error: "Pessoa não encontrada nesta equipa." });
     if (!(await membroExiste(db, d.regime, v.params.id))) return reply.code(404).send({ error: "Pessoa não encontrada nesta equipa." });
+    if (d.preinscricaoId && !(await linhaVisivel(db, "preinscricoes", d.preinscricaoId, req.actor!))) {
+      return reply.code(404).send({ error: "Pré-inscrição não encontrada." });
+    }
     let { curso, valor, corpo } = d;
     if (d.templateId) {
       const t = await obterModelo(db, "proposta", d.templateId);
@@ -154,7 +163,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       body: z.object({ preinscricaoId: z.number().int().positive(), nota: z.string().trim().min(1, "escreva a nota").max(4000) }),
     }, req);
     if (!v) return;
-    const lead = await leadDaNota(db, v.body.preinscricaoId);
+    const lead = await linhaVisivel(db, "preinscricoes", v.body.preinscricaoId, req.actor!) ? await leadDaNota(db, v.body.preinscricaoId) : null;
     if (!lead) return reply.code(404).send({ error: "Pré-inscrição não encontrada." });
     if (!podeVer(req.actor?.role, lead.regime === "fin" ? "fin" : "gold")) return reply.code(403).send({ error: "Sem acesso a esta equipa." });
     await db.tx(q => registarNota(q, v.body.preinscricaoId, v.params.id, req.actor!.id, v.body.nota));

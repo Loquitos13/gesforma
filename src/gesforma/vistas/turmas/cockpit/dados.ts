@@ -98,6 +98,12 @@ async function nomesDaTurma(regime: Regime, id: number, signal: AbortSignal) {
   return r.formandos.map(f => ({ id: f.id, nome: f.nome, estado: f.estado }));
 }
 
+/** Resultados calculados no servidor (assiduidade, elegibilidade e o que falta para o fecho). Recarregam com a turma. */
+export function useResultadosTurma(regime: Regime, id: number | undefined) {
+  const { dados, erro, recarregar } = useRecurso(id ? `cockpit:${regime}:${id}:resultados` : null, signal => apiResultadosTurma(regime, id!, signal));
+  return { resultados: dados, erro, recarregar };
+}
+
 /** Formandos Gold da turma. */
 export function useMembrosGold(id: number | undefined) {
   const formador = useAuth().user.role === "formador";

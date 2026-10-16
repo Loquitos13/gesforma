@@ -3,6 +3,8 @@ import type { Db } from "./db/pool.js";
 import { apagarFicheiroSubstituido, storeDriveFile } from "./driveFicheiros.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
 import { obterLogoEntidade } from "./entidadeLogo.js";
+import type { DadosFaturacao } from "./faturacao.js";
+import { decryptJson } from "./fieldCrypto.js";
 import { sendMail } from "./mailer.js";
 import { readPreinscricaoPii } from "./pii.js";
 import { gerarReciboPdf, euros, type DadosRecibo } from "./reciboPdf.js";
@@ -41,6 +43,8 @@ async function montar(db: Db, pagamentoId: string, recibo: repo.ReciboLinha) {
   if (!p) throw new ReciboErro("Pagamento inexistente.", 404);
   const e = await lerEntidade(db);
   const pii = readPreinscricaoPii({ pii_enc: p.lead_pii, nif: p.lead_nif, morada_fiscal: p.lead_morada, codigo_postal: p.lead_cp });
+  // Os dados de faturação indicados pela pessoa (nome/empresa, NIF, morada) prevalecem sobre os da pré-inscrição.
+  const fat = p.faturacao_enc ? decryptJson<DadosFaturacao>(p.faturacao_enc) : null;
   const dados: DadosRecibo = {
     numero: numeroRecibo(recibo),
     emitidoEm: fmtData(recibo.emitido_em),
@@ -48,14 +52,22 @@ async function montar(db: Db, pagamentoId: string, recibo: repo.ReciboLinha) {
       nome: e.nome, nif: e.nif, morada: e.morada, codigoPostal: e.codigoPostal, localidade: e.localidade,
       email: e.email, telefone: e.telefone, iban: e.iban, titularConta: e.titularConta,
     },
-    pagador: {
-      nome: p.formando_nome || p.nome, nif: pii.nif ?? "", email: p.email,
-      morada: [pii.moradaFiscal, pii.codigoPostal].filter(Boolean).join(", "),
-    },
+    pagador: fat
+      ? { nome: fat.nome, nif: fat.nif, email: fat.email || p.email, morada: [fat.moradaFiscal, fat.codigoPostal].filter(Boolean).join(", ") }
+      : {
+        nome: p.formando_nome || p.nome, nif: pii.nif ?? "", email: p.email,
+        morada: [pii.moradaFiscal, pii.codigoPostal].filter(Boolean).join(", "),
+      },
     curso: p.curso, turma: p.turma ?? "", valor: Number(p.valor), metodo: p.metodo,
     data: fmtData(p.pago_em ?? p.criado), confirmadoPor: p.confirmado_por ?? "", referencia: p.id,
   };
   return { p, dados };
+}
+
+/** Recibo já emitido: os dados gravados na emissão (o valor e o pagador não mudam depois). */
+function dadosGravados(recibo: repo.ReciboLinha) {
+  const d = recibo.dados as DadosRecibo | null;
+  return d?.numero ? d : null;
 }
 
 /** Estado do recibo de um pagamento (sem gerar nada). */
@@ -65,7 +77,7 @@ export async function estadoRecibo(db: Db, pagamentoId: string) {
 }
 
 /**
- * Emite o recibo (primeira vez: número novo) ou volta a gerá-lo com o mesmo número.
+ * Emite o recibo (primeira vez: número novo) ou volta a gerá-lo com o mesmo número e os dados da emissão.
  * Guarda o PDF na Drive quando possível; sem Drive o recibo continua disponível para descarregar.
  */
 export async function emitirRecibo(db: Db, pagamentoId: string, actorId: string | null) {
@@ -83,14 +95,14 @@ export async function emitirRecibo(db: Db, pagamentoId: string, actorId: string 
       return (await repo.inserirRecibo(q, { pagamentoId, ano, numero, actorId, dados: {} }))!;
     });
   }
-  const { p, dados } = await montar(db, pagamentoId, recibo);
+  const dados = dadosGravados(recibo) ?? (await montar(db, pagamentoId, recibo)).dados;
   const pdf = await gerarReciboPdf(dados, await obterLogoEntidade(db));
   let driveFileId: string | undefined;
   let avisoDrive: string | null = null;
   try {
     const ficheiro = await storeDriveFile(db, actorId ?? undefined, {
       name: `Recibo ${dados.numero.replace("/", "-")} - ${dados.pagador.nome}.pdf`, mime: "application/pdf", bytes: pdf,
-    }, { kind: "Pagamentos", regime: p.regime === "fin" ? "fin" : "gold", turma: p.turma ?? undefined, formando: dados.pagador.nome, label: `Recibo ${dados.numero}` }, { gerado: true });
+    }, { kind: "Pagamentos", regime: base.regime === "fin" ? "fin" : "gold", turma: base.turma ?? undefined, formando: dados.pagador.nome, label: `Recibo ${dados.numero}` }, { gerado: true });
     driveFileId = ficheiro.id;
     if (recibo.drive_file_id && recibo.drive_file_id !== ficheiro.id) await apagarFicheiroSubstituido(db, recibo.drive_file_id).catch(() => undefined);
   } catch (err) {
@@ -101,11 +113,11 @@ export async function emitirRecibo(db: Db, pagamentoId: string, actorId: string 
   return { recibo: mapRecibo(final), novo, avisoDrive, pdf };
 }
 
-/** PDF de um recibo já emitido (gerado de novo com o mesmo número, sem mexer na Drive). */
+/** PDF de um recibo já emitido (com os dados da emissão, sem mexer na Drive). */
 export async function pdfDoRecibo(db: Db, pagamentoId: string) {
   const recibo = await repo.reciboDoPagamento(db, pagamentoId);
   if (!recibo) throw new ReciboErro("Este pagamento ainda não tem recibo.", 404);
-  const { dados } = await montar(db, pagamentoId, recibo);
+  const dados = dadosGravados(recibo) ?? (await montar(db, pagamentoId, recibo)).dados;
   return { pdf: await gerarReciboPdf(dados, await obterLogoEntidade(db)), numero: dados.numero, nome: dados.pagador.nome };
 }
 

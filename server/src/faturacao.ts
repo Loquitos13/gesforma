@@ -40,6 +40,9 @@ function lerDados(enc: string | null | undefined): DadosFaturacao | null {
 export async function pedirFaturacao(db: Db, leadId: number, actorId?: string) {
   const lead = await leads.lead(db, leadId) as Record<string, unknown> | null;
   if (!lead) return { enviado: false, erro: "Pré-inscrição inexistente." };
+  // Faturação é só da formação Gold e depois de pago.
+  if (lead.regime !== "gold") return { enviado: false, erro: "A faturação é só para a formação Gold." };
+  if (!["Pago", "Formando"].includes(String(lead.estado))) return { enviado: false, erro: "Só se pedem os dados de faturação depois de pago." };
   const email = normalizeEmail(String(lead.email ?? ""));
   if (!isEmail(email)) return { enviado: false, erro: "A pré-inscrição não tem email válido." };
   const linha = await repo.garantirPedido(db, leadId, randomBytes(24).toString("base64url"));

@@ -83,16 +83,19 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const p = comToken(req);
     if (!p.success) return reply.code(404).send({ error: "Ligação inválida." });
     let bytes: Buffer | null = null;
+    let codigo = "";
     try {
       for await (const part of req.parts()) {
         if (part.type === "file") bytes = await part.toBuffer();
+        else if (part.fieldname === "codigo") codigo = String(part.value ?? "").trim();
       }
     } catch {
       return reply.code(400).send({ error: "Upload inválido ou demasiado grande." });
     }
     if (!bytes?.length) return reply.code(400).send({ error: "Escolha o PDF assinado." });
+    if (!/^\d{6}$/.test(codigo)) return reply.code(400).send({ error: "Introduza o código de 6 algarismos enviado por email." });
     try {
-      return await publico.receberAssinadoExterno(db, p.data.token, bytes, meta(req));
+      return await publico.receberAssinadoExterno(db, p.data.token, bytes, codigo, meta(req));
     } catch (err) {
       return falha(reply, err);
     }

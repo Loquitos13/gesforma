@@ -24,6 +24,11 @@ export async function cronogramaDaTurma(c: Consulta, regime: Regime, id: number)
   return one<{ cronograma: unknown }>(c, `SELECT cronograma FROM ${tabelaRegime("turmas", regime)} WHERE id = $1`, [id]);
 }
 
+/** O cronograma com a linha da turma bloqueada até ao fim da transacção (gravar uma sessão sem a ver mudar de lugar). */
+export async function cronogramaParaGravar(c: Consulta, regime: Regime, id: number) {
+  return one<{ cronograma: unknown }>(c, `SELECT cronograma FROM ${tabelaRegime("turmas", regime)} WHERE id = $1 FOR UPDATE`, [id]);
+}
+
 export async function gravarCronograma(c: Consulta, regime: Regime, id: number, sessoes: unknown[]) {
   await one(c, `UPDATE ${tabelaRegime("turmas", regime)} SET cronograma = $2::jsonb WHERE id = $1 RETURNING id`, [id, sessoes]);
 }

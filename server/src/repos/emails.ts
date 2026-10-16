@@ -310,15 +310,24 @@ export function formandosDaTurma(c: Consulta, regime: "gold" | "fin", turmaId: n
     );
 }
 
-/** Avança o lead no funil; nunca recua Pago/Formando. */
-export async function avancarEstadoLead(c: Consulta, alvo: string, rank: number, leadId: number, email: string) {
+/**
+ * Avança o lead no funil; nunca recua Pago/Formando nem reabre um desistido; «Pago» só na Gold.
+ * Alvo: o id; senão a pré-inscrição ligada ao pagamento; só sem nenhuma das duas, o email (e o curso, se vier).
+ */
+export async function avancarEstadoLead(
+  c: Consulta, alvo: string, rank: number, leadId: number, email: string, filtro: { curso?: string; pagamentoId?: string } = {},
+) {
   await one(
     c,
     `UPDATE preinscricoes SET estado = $1
-      WHERE ($3::int > 0 AND id = $3 OR $4 <> '' AND lower(email) = $4)
+      WHERE (CASE
+               WHEN $3::int > 0 THEN id = $3
+               WHEN $6 <> '' AND EXISTS (SELECT 1 FROM preinscricoes l WHERE l.pagamento_id = $6) THEN pagamento_id = $6
+               ELSE $4 <> '' AND lower(email) = $4 AND ($5 = '' OR lower(trim(curso)) = lower(trim($5)))
+             END)
         AND COALESCE((CASE estado WHEN 'Não contactado' THEN 0 WHEN '1º Contacto' THEN 1 WHEN '2º Contacto' THEN 2
                       WHEN 'Pago' THEN 3 WHEN 'Pré-inscrição' THEN 4 WHEN 'Formando' THEN 5 ELSE 0 END), 0) < $2
-        AND estado <> 'Formando'`,
-    [alvo, rank, leadId, email],
+        AND estado NOT IN ('Formando', 'Desistiu') AND ($1 <> 'Pago' OR regime = 'gold')`,
+    [alvo, rank, leadId, email, filtro.curso ?? "", filtro.pagamentoId ?? ""],
   );
 }

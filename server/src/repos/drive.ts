@@ -1,4 +1,5 @@
 /** Google Drive: configuração OAuth, conta ligada e registo dos ficheiros (`drive_files`). */
+import { pgIntArray } from "../pedagogia/util.js";
 import { many, one, tabelaRegime, type Consulta, type Regime } from "./sql.js";
 
 export type ConfigDriveRow = {
@@ -35,6 +36,7 @@ export type DriveFileRow = {
   label: string | null;
   stored_in: string;
   local_path: string | null;
+  created_by: string | null;
   created_at: string;
 };
 
@@ -121,6 +123,12 @@ export function listarFicheirosDrive(c: Consulta, f: { kind?: string; regime?: s
         AND ($3::text IS NULL OR turma = $3) AND ($4::text IS NULL OR formando = $4)
       ORDER BY created_at DESC LIMIT $5`,
     [f.kind || null, f.regime || null, f.turma || null, f.formando || null, f.limite]);
+}
+
+/** O nome de turma `turma` (o que os ficheiros guardam) é o de uma destas turmas? */
+export async function turmaEntre(c: Consulta, regime: Regime, turma: string, ids: number[]) {
+  if (!turma || !ids.length) return false;
+  return Boolean(await one(c, `SELECT 1 FROM ${tabelaRegime("turmas", regime)} WHERE nome = $1 AND id = ANY($2::int[])`, [turma, pgIntArray(ids)]));
 }
 
 export async function apagarRegistoFicheiro(c: Consulta, id: string) {

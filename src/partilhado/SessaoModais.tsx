@@ -54,11 +54,13 @@ export function sumarioPreenchido(s?: SumarioSessaoData) {
   return !!s && s.conteudos.trim().length > 0;
 }
 
-export function PlanoSessaoModal({ open, onClose, sessao, plano, onSave }: {
+export function PlanoSessaoModal({ open, onClose, sessao, plano, onSave, soLeitura }: {
   open: boolean; onClose: () => void;
   sessao?: SessaoMeta;
   plano: PlanoSessaoData;
   onSave: (data: PlanoSessaoData) => void;
+  /** Motivo para mostrar o plano sem o deixar editar (ex.: plano definido na ficha do curso). */
+  soLeitura?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<PlanoSessaoData>(plano);
@@ -76,7 +78,9 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano, onSave }: {
             <p className="text-xs text-slate-400 mt-0.5">{sessao.data} · {sessao.hora} · {formadoresDaSessaoLabel(sessao) || "Formador por definir"}</p>
           </div>
           <div className="flex items-center gap-2">
-            {!editing
+            {soLeitura
+              ? <span className="text-xs font-semibold px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg">{soLeitura}</span>
+              : !editing
               ? <button onClick={() => { setDraft(plano); setEditing(true); }}
                   className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100">
                   {I.edit} Editar

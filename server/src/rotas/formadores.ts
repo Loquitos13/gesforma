@@ -171,6 +171,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     });
     const conta = await garantirContaFormador(db, d.nome, d.email);
     if (conta) await repo.ligarConta(db, id, conta.userId);
+    if (conta && d.estado === "Inactivo") await repo.definirContaActiva(db, id, false);
     await audit(db, req.actor!.id, "formador.criar", "formador", String(id), req.ip, { conta: Boolean(conta) });
     const row = await repo.obterFormador(db, id);
     const acesso: Acesso = conta ? (conta.criado ? { email: conta.email, password: conta.password, criado: true } : { email: conta.email, criado: false }) : null;
@@ -185,12 +186,18 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const d = v.body;
     const antes = await repo.obterFormador(db, id);
     if (!antes) return reply.code(404).send({ error: "formador não encontrado" });
-    if (req.actor!.role === "formador") {
-      if (String(antes.user_id ?? "") !== req.actor!.id) return reply.code(403).send({ error: "O formador só altera a própria disponibilidade." });
+    // O formador (a sua ficha) e o comercial (formadores da Gold) só mexem na disponibilidade.
+    const role = req.actor!.role;
+    if (role === "formador" || role === "comercial") {
+      if (role === "formador" && String(antes.user_id ?? "") !== req.actor!.id) return reply.code(403).send({ error: "O formador só altera a própria disponibilidade." });
+      if (role === "comercial" && !repo.mapFormadorBase(antes).regimes.includes("gold")) return reply.code(403).send({ error: "Sem acesso a este formador." });
+      if (role === "comercial" && Object.keys(d).some(k => k !== "disponibilidade")) return reply.code(403).send({ error: "O comercial só altera a disponibilidade." });
       if (!d.disponibilidade) return reply.code(400).send({ error: "Indique a disponibilidade." });
       await repo.atualizarFormador(db, id, { disponibilidade: d.disponibilidade });
+      await audit(db, req.actor!.id, "formador.disponibilidade", "formador", String(id), req.ip);
       const row = await repo.obterFormador(db, id);
-      return { formador: row ? { ...repo.mapFormadorBase(row), alocado: await formadorEstaAlocado(db, String(row.nome ?? "")) } : null, acesso: null };
+      const base = row ? { ...repo.mapFormadorBase(row), alocado: await formadorEstaAlocado(db, String(row.nome ?? "")) } : null;
+      return { formador: base && !veValores(role) ? semValores(base) : base, acesso: null };
     }
     await repo.atualizarFormador(db, id, d);
     if (d.nome && d.nome !== String(antes.nome ?? "")) await propagarFormador(db, String(antes.nome ?? ""), d.nome);
@@ -203,6 +210,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
         acesso = conta.criado ? { email: conta.email, password: conta.password, criado: true } : { email: conta.email, criado: false };
       }
     }
+    // Inactivo não entra: a conta acompanha o estado da ficha.
+    const estado = d.estado ?? String(antes.estado ?? "");
+    if (d.estado || (acesso && estado === "Inactivo")) await repo.definirContaActiva(db, id, estado !== "Inactivo");
     await audit(db, req.actor!.id, "formador.alterar", "formador", String(id), req.ip, { campos: Object.keys(d), conta: Boolean(acesso) });
     const row = await repo.obterFormador(db, id);
     const formador = row ? { ...repo.mapFormadorBase(row), alocado: await formadorEstaAlocado(db, String(row.nome ?? "")) } : null;
@@ -217,7 +227,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const bloqueio = await bloqueioFormador(db, id);
     if (bloqueio) return reply.code(409).send({ error: bloqueio });
     const antes = await repo.obterFormador(db, id);
-    await repo.apagarFormador(db, id);
+    await repo.apagarFormadorEConta(db, id);
     await audit(db, req.actor!.id, "formador.apagar", "formador", String(id), req.ip, { nome: String(antes?.nome ?? "") });
     return { ok: true };
   });

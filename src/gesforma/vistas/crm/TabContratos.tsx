@@ -34,7 +34,7 @@ export function TabContratos({ selecionado, onSelecionar, onPrimeiro, onAbrir }:
   useEffect(() => { onPrimeiro(primeiro); }, [primeiro, onPrimeiro]);
 
   const colunas: ColunaLista<Contrato>[] = [
-    { titulo: "Cliente", celula: k => <><div className="font-semibold">{k.clienteNome}</div><div className="text-xs text-tinta-suave mt-0.5">{k.comercial || "—"}</div></> },
+    { titulo: "Cliente", celula: k => <><div className="font-semibold">{k.clienteNome}</div><div className="text-xs text-tinta-suave mt-0.5">{k.comercial || "sem comercial"}</div></> },
     { titulo: "Curso", celula: k => k.curso || "—" },
     { titulo: "Origem", corrido: true, celula: k => <span className="num text-tinta-suave">{origem(k)}</span> },
     { titulo: "Estado", corrido: true, celula: k => <EstadoDoc estado={k.estado} /> },
@@ -80,6 +80,7 @@ export function DetalheContrato({ id, onEditar }: { id: number; onEditar: () => 
   const entidade = useEntidade();
   const { dados, erro, recarregar } = useRecurso(`crm:contrato:${id}`, signal => apiContrato(id, { signal }));
   const [apagar, setApagar] = useState(false);
+  const [cancelar, setCancelar] = useState(false);
   const estado = useAccao(apiAlterarContrato, { ok: "Contrato actualizado.", invalidar: ["crm:contratos", "crm:contrato", "crm:clientes"] });
   if (erro) return <ErroCarregar erro={erro} onTentar={recarregar} />;
   const k = dados?.contrato;
@@ -108,7 +109,7 @@ export function DetalheContrato({ id, onEditar }: { id: number; onEditar: () => 
         { rotulo: "Curso", valor: k.curso || "—" },
         { rotulo: "Valor", valor: k.valor ? euros(k.valor) : "—", forte: true },
         { rotulo: "Origem", valor: origem(k) },
-        { rotulo: "Comercial", valor: k.comercial || "—" },
+        { rotulo: "Comercial", valor: k.comercial || "sem comercial" },
         { rotulo: "Criado", valor: data(k.criadoEm) },
         ...(k.assinadoEm ? [{ rotulo: "Assinado", valor: data(k.assinadoEm) }] : []),
       ]} />
@@ -126,11 +127,19 @@ export function DetalheContrato({ id, onEditar }: { id: number; onEditar: () => 
         </div>
         {gestao && k.estado !== "Assinado" && (
           <div className="flex gap-3 text-[13px]">
-            {k.estado !== "Cancelado" && <button type="button" className="border-0 bg-transparent p-0 text-tinta-suave cursor-pointer hover:text-tinta" onClick={() => void estado.correr(k.id, { estado: "Cancelado" })}>Cancelar contrato</button>}
+            {k.estado !== "Cancelado" && <button type="button" className="border-0 bg-transparent p-0 text-tinta-suave cursor-pointer hover:text-tinta" onClick={() => setCancelar(true)}>Cancelar contrato</button>}
             <button type="button" className="border-0 bg-transparent p-0 text-perigo cursor-pointer" onClick={() => setApagar(true)}>Apagar</button>
           </div>
         )}
       </div>
+      <ConfirmarPerigo
+        aberto={cancelar}
+        onFechar={() => setCancelar(false)}
+        titulo="Cancelar contrato"
+        descricao={k.estado === "Por assinar" ? "O contrato é cancelado e a ligação de assinatura enviada ao cliente deixa de funcionar." : "O contrato é cancelado."}
+        acao="Cancelar contrato"
+        onConfirmar={async () => { await estado.correr(k.id, { estado: "Cancelado" }); }}
+      />
       <ConfirmarPerigo
         aberto={apagar}
         onFechar={() => setApagar(false)}

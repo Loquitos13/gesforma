@@ -62,8 +62,8 @@ export const apiPedirCodigo = (token: string) =>
 export const apiAssinar = (token: string, d: { metodo: "desenhada" | "escrita"; imagem?: string; nomeEscrito?: string; codigo: string; aceito: true }) =>
   enviar.post<{ estado: "assinado"; codigoVerificacao: string; urlVerificacao: string; hashFinal: string }>(`/v1/public/assinar/${encodeURIComponent(token)}/assinar`, d);
 export const apiRecusar = (token: string, motivo: string) => enviar.post<{ estado: "recusado" }>(`/v1/public/assinar/${encodeURIComponent(token)}/recusar`, { motivo });
-export const apiEnviarAssinadoExterno = (token: string, ficheiro: File) =>
-  enviarFicheiro<{ estado: "assinado"; codigoVerificacao: string; urlVerificacao: string; hashFinal: string }>(`/v1/public/assinar/${encodeURIComponent(token)}/externo`, ficheiro);
+export const apiEnviarAssinadoExterno = (token: string, ficheiro: File, codigo: string) =>
+  enviarFicheiro<{ estado: "assinado"; codigoVerificacao: string; urlVerificacao: string; hashFinal: string }>(`/v1/public/assinar/${encodeURIComponent(token)}/externo`, ficheiro, { codigo });
 
 export type Verificacao = {
   codigo: string; estado: EstadoAssinatura; titulo: string; entidade: string; signatario: { nome: string; nif: string };

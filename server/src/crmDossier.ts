@@ -1,4 +1,5 @@
 import type { Db } from "./db/pool.js";
+import type { AtorCrm } from "./repos/sql.js";
 import { documentosUrl, docsDoCurso, docsCompletos, ensureDocsToken, listarDocsLead } from "./docsLink.js";
 import { faltaPedirPagamento, faltaValidarPreinscricao, situacaoPagamento } from "./docsCurso.js";
 import { mapPagamento, mapPreinscricao } from "./ops.js";
@@ -80,13 +81,13 @@ export async function fixarNota(db: Db, leadId: number, notaId: number, fixada: 
   await repo.fixarNota(db, leadId, notaId, fixada);
 }
 
-export async function findDuplicados(db: Db, email: string, telf: string, exceptId = 0) {
+export async function findDuplicados(db: Db, email: string, telf: string, exceptId = 0, ator?: AtorCrm) {
   const mail = email.trim().toLowerCase();
   const n9 = telf.replace(/\D/g, "").slice(-9);
-  return repo.duplicados(db, mail, n9, exceptId);
+  return repo.duplicados(db, mail, n9, exceptId, ator);
 }
 
-export async function getLeadDossier(db: Db, id: number) {
+export async function getLeadDossier(db: Db, id: number, ator?: AtorCrm) {
   const row = await leads.leadComEtiqueta(db, id);
   if (!row) return null;
   const lead = mapPreinscricao(row);
@@ -96,8 +97,8 @@ export async function getLeadDossier(db: Db, id: number) {
   const notas = await repo.notas(db, id);
   const eventos = await repo.eventos(db, id);
   const n9 = String(lead.telf ?? "").replace(/\D/g, "").slice(-9);
-  const irmaos = await repo.outrosPedidos(db, id, lead.email, n9);
-  const propostas = await repo.propostasDoLead(db, id, lead.email);
+  const irmaos = await repo.outrosPedidos(db, id, lead.email, n9, ator);
+  const propostas = await repo.propostasDoLead(db, id, lead.email, ator);
 
   const cliente = lead.estado === "Formando" || lead.estado === "Pago";
   const regime = String(row.regime ?? "gold") === "fin" ? "fin" : "gold";

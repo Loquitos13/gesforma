@@ -207,6 +207,7 @@ export type AccaoLote = {
   ids: number[];
   acao: "contactar" | "estado" | "seguimento" | "atribuir" | "etiqueta" | "adiar";
   estado?: string; proximoContacto?: string; nota?: string; comercialId?: string; etiquetaId?: number | null; dias?: number;
+  motivoDesistencia?: string;
 };
 export const apiLote = (a: AccaoLote) => enviar.post<{ updated: number }>("/v1/crm/lote", a);
 

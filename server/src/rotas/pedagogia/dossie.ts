@@ -64,7 +64,8 @@ export function registarDossieTurma(app: FastifyInstance, { db, requireAuth, aud
     const gerado = await pdfDossieGerado(db, id, itemId);
     if (!gerado) return reply.code(404).send({ error: "turma não encontrada" });
     const turma = await carregarTurma(db, "fin", id);
-    if (turma) await anexarPdfDtp(db, req.actor!.id, "fin", turma, itemId, gerado.nome, gerado.bytes).catch(() => undefined);
+    if (turma) await anexarPdfDtp(db, req.actor!.id, "fin", turma, itemId, gerado.nome, gerado.bytes)
+      .catch(err => req.log.warn({ err, turma: id, item: itemId }, "PDF não anexado ao dossiê"));
     await audit(db, req.actor!.id, "turma.dossie_pdf", "turma", String(id), req.ip, { item: itemId });
     return enviarPdf(reply, gerado.nome, gerado.bytes);
   });

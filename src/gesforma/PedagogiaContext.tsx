@@ -136,24 +136,24 @@ export function useTurmaPedagogia(regime: Regime, turmaId: number | undefined) {
     });
   }, []);
 
-  const guardarPlano = useCallback(async (n: number, plano: PlanoSessaoData) => {
+  const guardarPlano = useCallback(async (n: number, plano: PlanoSessaoData, sessaoId?: string) => {
     mergeSessao(n, { plano });
     if (turmaId == null || turmaId <= 0) return;
-    await persist(apiSaveSessao(regime, turmaId, n, { plano }));
+    await persist(apiSaveSessao(regime, turmaId, n, { sessaoId, plano }));
     void recarregar();
   }, [mergeSessao, recarregar, regime, turmaId]);
 
-  const guardarSumario = useCallback(async (n: number, sumario: SumarioSessaoData) => {
+  const guardarSumario = useCallback(async (n: number, sumario: SumarioSessaoData, sessaoId?: string) => {
     mergeSessao(n, { sumario });
     if (turmaId == null || turmaId <= 0) return;
-    await persist(apiSaveSessao(regime, turmaId, n, { sumario }));
+    await persist(apiSaveSessao(regime, turmaId, n, { sessaoId, sumario }));
     void recarregar();
   }, [mergeSessao, recarregar, regime, turmaId]);
 
-  const guardarPresencas = useCallback(async (n: number, rows: PresencaRow[]) => {
+  const guardarPresencas = useCallback(async (n: number, rows: PresencaRow[], sessaoId?: string) => {
     mergeSessao(n, { presencas: rows });
     if (turmaId == null || turmaId <= 0) return;
-    await persist(apiSaveSessao(regime, turmaId, n, { presencas: rows }));
+    await persist(apiSaveSessao(regime, turmaId, n, { sessaoId, presencas: rows }));
     void recarregar();
   }, [mergeSessao, recarregar, regime, turmaId]);
 
@@ -213,6 +213,7 @@ export function useTurmaPedagogia(regime: Regime, turmaId: number | undefined) {
     estado,
     dtp: snap.dtp,
     documentos: snap.documentos,
+    planosDoCurso: snap.planosDoCurso ?? [],
     planos,
     sumarios,
     presencas,

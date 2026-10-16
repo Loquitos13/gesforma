@@ -2,15 +2,15 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { dtpForTurma } from "../../pedagogia/dtp.js";
-import { importarPlanosCurso } from "../../planosCurso.js";
+import { importarPlanosCurso, ordensComPlanoDoCurso } from "../../planosCurso.js";
 import { documentoSchema, sessaoParam, sessaoPatchSchema } from "../../pedagogia/esquemas.js";
 import { asArr, asObj } from "../../pedagogia/util.js";
 import {
   gravarDocumento, gravarSessao, lerSessao, listarCertificados, listarDocumentos, listarSessoes,
 } from "../../repos/pedagogiaSessoes.js";
-import { cronogramaDaTurma, formandosDaTurma } from "../../repos/pedagogiaTurma.js";
+import { cronogramaDaTurma, cronogramaParaGravar, formandosDaTurma } from "../../repos/pedagogiaTurma.js";
 import { ERRO_TURMA_FECHADA, turmaFechada } from "../../resultados.js";
-import { podeGravarSessao, sessaoLectivaN } from "../../sessaoAcesso.js";
+import { podeGravarSessao, sessaoLectivaN, sessaoLectivaPorId } from "../../sessaoAcesso.js";
 import { sumarioComRegras } from "../../sessaoRegras.js";
 import { regimeIdParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
@@ -18,9 +18,10 @@ import { formadorPodeVer, turmaOu404 } from "./comum.js";
 
 const importarPlanosSchema = z.object({ substituir: z.boolean().optional().default(false) });
 
-function sessaoDTO(n: number, r: { plano: unknown; sumario: unknown; presencas: unknown } | null | undefined) {
+function sessaoDTO(n: number, r: { plano: unknown; sumario: unknown; presencas: unknown } | null | undefined, sessaoId: string | null) {
   return {
     n,
+    sessaoId,
     plano: r?.plano ? asObj(r.plano) : null,
     sumario: r?.sumario ? asObj(r.sumario) : null,
     presencas: asArr(r?.presencas),
@@ -36,14 +37,17 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
     if (!(await formadorPodeVer(db, req, reply, regime, id, "Só consulta as turmas em que está atribuído."))) return;
     const turma = await turmaOu404(db, reply, regime, id);
     if (!turma) return;
-    const [sessoes, documentos, certificados, dtp] = await Promise.all([
+    const [sessoes, documentos, certificados, dtp, planosDoCurso] = await Promise.all([
       listarSessoes(db, regime, id),
       listarDocumentos(db, regime, id),
       listarCertificados(db, regime, id),
       dtpForTurma(db, regime, turma),
+      ordensComPlanoDoCurso(db, regime, id),
     ]);
     return {
-      sessoes: sessoes.map(r => sessaoDTO(r.sessao_n, r)),
+      /** Sessões (n) com plano definido na ficha do curso: só leitura para o formador. */
+      planosDoCurso: [...planosDoCurso].sort((a, b) => a - b),
+      sessoes: sessoes.map(r => sessaoDTO(r.sessao_n, r, r.sessao_id)),
       documentos: documentos.map(r => ({ grupoId: r.grupo_id, label: r.label, estado: r.estado, detalhe: r.detalhe, payload: r.payload ?? null })),
       certificados: certificados.map(r => ({
         formandoId: r.formando_id,
@@ -63,10 +67,21 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
     const v = validar(reply, { params: sessaoParam, body: sessaoPatchSchema }, req);
     if (!v) return;
     const { regime, id, n } = v.params;
-    const patch = v.body;
+    const { sessaoId: idPedido, ...patch } = v.body;
     if (await turmaFechada(db, regime, id)) return reply.code(409).send({ error: ERRO_TURMA_FECHADA });
-    const acesso = await podeGravarSessao(db, req.actor!, { regime, turmaId: id, n, plano: patch.plano, sumario: patch.sumario, presencas: patch.presencas });
+    const turmaRow = await cronogramaDaTurma(db, regime, id);
+    if (!turmaRow) return reply.code(404).send({ error: "turma não encontrada" });
+    // A verdade é o id da sessão; o n do caminho só serve a clientes que não o enviam.
+    const sessaoId = idPedido ?? String(sessaoLectivaN(turmaRow.cronograma, n)?.id ?? "");
+    const alvo = sessaoLectivaPorId(turmaRow.cronograma, sessaoId);
+    if (!alvo) return reply.code(404).send({ error: `A sessão ${idPedido ? "" : `${n} `}não existe no cronograma da turma.` });
+    const acesso = await podeGravarSessao(db, req.actor!, {
+      regime, turmaId: id, sessaoId, cronograma: turmaRow.cronograma, plano: patch.plano, sumario: patch.sumario, presencas: patch.presencas,
+    });
     if (!acesso.ok) return reply.code(403).send({ error: acesso.erro });
+    if (patch.plano && req.actor!.role === "formador" && (await ordensComPlanoDoCurso(db, regime, id)).has(alvo.n)) {
+      return reply.code(403).send({ error: "O plano desta sessão está definido na ficha do curso: o formador consulta-o mas não o altera." });
+    }
     if (patch.presencas?.length) {
       const turma = await turmaOu404(db, reply, regime, id);
       if (!turma) return;
@@ -76,16 +91,21 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
       }
     }
     if (patch.sumario) {
-      const [turmaRow, antes] = await Promise.all([cronogramaDaTurma(db, regime, id), lerSessao(db, regime, id, n)]);
-      const dataSessao = String(sessaoLectivaN(turmaRow?.cronograma, n)?.data ?? "");
-      const regra = sumarioComRegras(req.actor!.role, antes?.sumario ? asObj(antes.sumario) : null, patch.sumario, dataSessao);
+      const antes = await lerSessao(db, regime, id, sessaoId);
+      const regra = sumarioComRegras(req.actor!.role, antes?.sumario ? asObj(antes.sumario) : null, patch.sumario, String(alvo.sessao.data ?? ""));
       if (!regra.ok) return reply.code(409).send({ error: regra.erro });
       patch.sumario = regra.sumario;
     }
-    await gravarSessao(db, regime, id, n, patch);
+    // Com o cronograma bloqueado: a sessão ainda existe e grava-se com a posição de agora.
+    const gravada = await db.tx(async q => {
+      const agora = sessaoLectivaPorId((await cronogramaParaGravar(q, regime, id))?.cronograma, sessaoId);
+      if (agora) await gravarSessao(q, regime, id, { id: sessaoId, n: agora.n }, patch);
+      return agora;
+    });
+    if (!gravada) return reply.code(409).send({ error: "A sessão saiu do cronograma entretanto. Recarregue a turma." });
     const acao = patch.plano ? "turma.plano" : patch.sumario ? "turma.sumario" : "turma.presencas";
-    await audit(db, req.actor!.id, acao, "turma", String(id), req.ip, { regime, sessao: n });
-    return { sessao: sessaoDTO(n, await lerSessao(db, regime, id, n)) };
+    await audit(db, req.actor!.id, acao, "turma", String(id), req.ip, { regime, sessao: gravada.n, sessaoId });
+    return { sessao: sessaoDTO(gravada.n, await lerSessao(db, regime, id, sessaoId), sessaoId) };
   });
 
   /** Copia os planos de sessão da ficha do curso para as sessões da turma (com `substituir`, também as não assinadas). */

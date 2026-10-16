@@ -132,6 +132,61 @@ describe("CRM: lista, filtros e filas", () => {
   });
 });
 
+describe("CRM: lote, completar e edição", () => {
+  it("lote: «Pago» recusado, «Desistiu» exige motivo, «Pré-inscrição» envia a ligação pessoal", async () => {
+    const ctx = await arrancar();
+    const curso = unico("Curso Lote2");
+    const email = `${unico("lote")}@exemplo.pt`;
+    const a = await novoLead(ctx, { telf: "914100001", email, curso, regime: "gold" });
+    const b = await novoLead(ctx, { telf: "914100002", curso, regime: "gold" });
+    expect((await pedido(ctx, "secretaria", "POST", "/v1/crm/lote", { ids: [a, b], acao: "estado", estado: "Pago" })).statusCode).toBe(409);
+    const pagos = await ctx.db.query("SELECT 1 FROM preinscricoes WHERE id IN ($1, $2) AND estado = 'Pago'", [a, b]);
+    expect(pagos.rows).toHaveLength(0);
+    expect((await pedido(ctx, "secretaria", "POST", "/v1/crm/lote", { ids: [b], acao: "estado", estado: "Desistiu" })).statusCode).toBe(400);
+    const desistiu = await pedido(ctx, "secretaria", "POST", "/v1/crm/lote", { ids: [b], acao: "estado", estado: "Desistiu", motivoDesistencia: "Preço" });
+    expect(desistiu.json().updated).toBe(1);
+    const rb = await ctx.db.query<{ estado: string; motivo_desistencia: string }>("SELECT estado, motivo_desistencia FROM preinscricoes WHERE id = $1", [b]);
+    expect(rb.rows[0]).toMatchObject({ estado: "Desistiu", motivo_desistencia: "Preço" });
+    const pre = await pedido(ctx, "secretaria", "POST", "/v1/crm/lote", { ids: [a], acao: "estado", estado: "Pré-inscrição" });
+    expect(pre.json().updated).toBe(1);
+    const ligacao = await ctx.db.query("SELECT 1 FROM preinscricao_contactos WHERE preinscricao_id = $1 AND nota LIKE 'Ligação pessoal%'", [a]);
+    expect(ligacao.rows).toHaveLength(1);
+  });
+
+  it("completar NIF e morada: cifra, valida antes de gravar e não recua etapas", async () => {
+    const ctx = await arrancar();
+    const curso = unico("Curso Completar");
+    const dados = { nome: "Rita", apelido: "Sousa", telf: "914200001", email: `${unico("comp")}@exemplo.pt`, concelho: "Porto",
+      curso, local: "Porto", horario: "Laboral", inicioCurso: "2026-11-02", regime: "gold" };
+    const id = await novoLead(ctx, dados);
+    // Já tem PII cifrada (telefone): o NIF novo junta-se à cifra em vez de ficar em claro.
+    const falta = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/completar`, { nif: "509999999" });
+    expect(falta.statusCode).toBe(400);
+    expect((await ctx.db.query<{ nif: string }>("SELECT nif FROM preinscricoes WHERE id = $1", [id])).rows[0]!.nif).toBe("");
+    const ok = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/completar`, { nif: "509 999 999", moradaFiscal: "Rua das Flores, 10" });
+    expect(ok.statusCode, ok.body).toBe(200);
+    const row = (await ctx.db.query<{ nif: string; morada_fiscal: string; pii_enc: string; estado: string }>(
+      "SELECT nif, morada_fiscal, pii_enc, estado FROM preinscricoes WHERE id = $1", [id])).rows[0]!;
+    expect(row).toMatchObject({ nif: "", morada_fiscal: "", estado: "Pré-inscrição" });
+    expect(row.pii_enc).not.toContain("509999999");
+    const { readPreinscricaoPii } = await import("../src/pii.js");
+    expect(readPreinscricaoPii(row)).toMatchObject({ nif: "509999999", moradaFiscal: "Rua das Flores, 10", telf: "914200001" });
+
+    // Uma inscrição paga não volta a «Pré-inscrição» ao completar.
+    const pago = await novoLead(ctx, { ...dados, email: `${unico("comp")}@exemplo.pt`, telf: "914200002" });
+    await ctx.db.query("UPDATE preinscricoes SET estado = 'Pago' WHERE id = $1", [pago]);
+    expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${pago}/completar`, { nif: "509999999", moradaFiscal: "Rua das Flores, 10" })).statusCode).toBe(200);
+    expect((await ctx.db.query<{ estado: string }>("SELECT estado FROM preinscricoes WHERE id = $1", [pago])).rows[0]!.estado).toBe("Pago");
+  });
+
+  it("editar recusa email inválido", async () => {
+    const ctx = await arrancar();
+    const id = await novoLead(ctx, { telf: "914300001" });
+    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/preinscricoes/${id}`, { email: "nao-e-email" })).statusCode).toBe(400);
+    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/preinscricoes/${id}`, { email: " Ok@Exemplo.pt " })).statusCode).toBe(200);
+  });
+});
+
 describe("CRM: permissões", () => {
   it("sem sessão 401; formador e formando não vêem o CRM; comercial não apaga nem valida", async () => {
     const ctx = await arrancar();

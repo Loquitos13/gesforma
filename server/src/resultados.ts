@@ -65,6 +65,14 @@ export function avaliacaoDoCurso(payload: Record<string, unknown>, cursoNome: st
   return cursoECcp(cursoNome) && parsed.estrutura !== "ccp" ? avaliacaoCcp() : parsed;
 }
 
+/** Escala de notas da turma (a do curso, igual à da grelha). */
+export async function escalaDaTurma(db: Db, regime: Regime, turmaId: number) {
+  const turma = await carregarTurma(db, regime, turmaId);
+  if (!turma) return null;
+  const cfg = avaliacaoDoCurso(await fichaDoCurso(db, regime, turma), turma.curso);
+  return { min: Math.min(cfg.escalaMin, cfg.escalaMax), max: Math.max(cfg.escalaMin, cfg.escalaMax), unidade: cfg.unidade };
+}
+
 function topicosDe(payload: Record<string, unknown>): TopicoRef[] {
   const raw = payload.topicosPrograma;
   if (!Array.isArray(raw)) return [];

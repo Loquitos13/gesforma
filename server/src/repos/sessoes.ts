@@ -36,7 +36,12 @@ export async function terminarSessoesDe(c: Consulta, userId: string) {
   return Number(n ?? 0);
 }
 
-export type SessaoAtiva = { id: string; criada: string; expira: string; ip: string | null; navegador: string | null };
+/** Termina as sessões do utilizador menos a do pedido (mudança da própria palavra-passe). */
+export async function terminarOutrasSessoes(c: Consulta, userId: string, tokenHashAtual: string) {
+  await one(c, "DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2", [userId, tokenHashAtual]);
+}
+
+export type SessaoAtiva ={ id: string; criada: string; expira: string; ip: string | null; navegador: string | null };
 
 /** Sessões ainda válidas de um utilizador (mais recentes primeiro). */
 export function sessoesAtivasDe(c: Consulta, userId: string) {

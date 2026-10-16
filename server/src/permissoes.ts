@@ -25,6 +25,7 @@ import { regras as comum } from "./permissoes/comum.js";
 import { regras as painel } from "./permissoes/painel.js";
 import { regras as formandos } from "./permissoes/formandos.js";
 import { regras as inqueritos } from "./permissoes/inqueritos.js";
+import { regras as despesas } from "./permissoes/despesas.js";
 import { regras as dtp } from "./permissoes/dtp.js";
 import { regras as catalogos } from "./permissoes/catalogos.js";
 import { regras as listas } from "./permissoes/listas.js";
@@ -53,6 +54,7 @@ export const REGRAS: Regra[] = [
   ...painel,
   ...formandos,
   ...inqueritos,
+  ...despesas,
   ...dtp,
   ...catalogos,
   ...listas,
@@ -68,7 +70,7 @@ const FORMADOR_SEM_LEITURA = [
   "/v1/dtp*", "/v1/alertas*", "/v1/turma-regras*", "/v1/drive/status", "/v1/pagamentos*",
   "/v1/formandos/*", "/v1/inqueritos/*",
   "/v1/turmas/:regime/:id/dossie/*", "/v1/turmas/:regime/:id/relatorio-*", "/v1/turmas/:regime/:id/inqueritos/*",
-  "/v1/painel*", "/v1/auditoria*", "/v1/assinaturas*", "/v1/sistema*", "/v1/utilizadores*", "/v1/campanhas*", "/v1/formandos*",
+  "/v1/painel*", "/v1/despesas*", "/v1/auditoria*", "/v1/assinaturas*", "/v1/sistema*", "/v1/utilizadores*", "/v1/campanhas*", "/v1/formandos*",
 ];
 
 function corresponde(path: string, padrao: string): boolean {

@@ -5,7 +5,7 @@ export type Vista =
   | "gold-formandos-turmas" | "gold-formandos-gold" | "gold-formando-ficha" | "fin-formando-ficha" | "formador-ficha"
   | "gold-campanhas" | "gold-cursos" | "gold-datas" | "gold-horarios" | "gold-locais" | "gold-areas-tematicas"
   | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-formadores" | "gold-cockpit-turma" | "gold-curso-ficha" | "gold-dtp" | "gold-inqueritos"
-  | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-formadores" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
+  | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-formadores" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos" | "fin-despesas"
   | "fin-modulos" | "fin-conteudos" | "fin-datas" | "fin-locais" | "fin-areas-tematicas"
   | "formadores" | "blog-posts" | "blog-tematicas"
   | "emails" | "pagamentos" | "configuracoes" | "utilizadores" | "equipa" | "notificacoes" | "listas-opcoes" | "site";
@@ -83,6 +83,7 @@ const CAMINHOS: Record<Vista, string> = {
   "fin-areas-tematicas": "/gesforma/financiada/areas-tematicas",
   "fin-dtp": "/gesforma/financiada/dossie",
   "fin-inqueritos": "/gesforma/financiada/inqueritos",
+  "fin-despesas": "/gesforma/financiada/despesas",
   "blog-posts": "/gesforma/blog/posts",
   "blog-tematicas": "/gesforma/blog/tematicas",
   "listas-opcoes": "/gesforma/listas",

@@ -8,6 +8,7 @@ import { blocosCartaoPadrao, CursoEscolhaLocal, CursoInscricao } from "./blocosC
 import { ListaNoticias } from "./blocosNoticias";
 import { Botao, Coluna, Imagem, Pilares, Seccao, Texto, Titulo } from "./blocosBase";
 import { cartaoPadrao, CursosDestaque, OfertaFormativa } from "./blocosCursos";
+import { Servicos } from "./blocosServicos";
 import { cabecalhoPadrao, rodapePadrao } from "./blocosMoldura";
 import { temaPadrao } from "./config";
 import { em, estiloVazio, lados, tipoVazia } from "./estilos";
@@ -149,6 +150,15 @@ function modeloEmpresas(): Data {
             tipografia: tipoVazia({ tamanho: 19, alturaLinha: 1.6, cor: "#D7E0EA" }), aparencia: estiloVazio({ larguraMax: em(680) }),
           }),
           bloco("Botao", Botao.defaultProps, { rotulo: "Falar connosco", ligacao: "#contactos", cor: "var(--c-acento)", corTexto: "var(--c-primaria)", corHover: "#ffffff" }),
+        ],
+      }),
+      bloco("Seccao", Seccao.defaultProps, {
+        espaco: 16,
+        aparencia: estiloVazio({ ancora: "servicos", fundoCor: "#F4F1EA", preenchimento: lados(80, 32), preenchimentoTel: lados(56, 20) }),
+        conteudo: [
+          kicker("Serviços"),
+          bloco("Titulo", Titulo.defaultProps, { texto: "O que fazemos pela sua organização." }),
+          bloco("Servicos", Servicos.defaultProps, { aparencia: estiloVazio({ margem: lados(24, 0, 0, 0) }) }),
         ],
       }),
       bloco("Seccao", Seccao.defaultProps, {

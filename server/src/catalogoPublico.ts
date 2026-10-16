@@ -22,6 +22,7 @@ export type CursoPublico = {
   banner: string | null;
   vendas: number;
   objetivos: string[];
+  funcionamento: string;
   organizacao: "modular" | "livre";
   programa: { titulo: string; horas: string }[];
   /** Próximas datas; o preço segue as regras da ficha (local, horário ou os dois), como na pré-inscrição. */
@@ -322,6 +323,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       banner,
       vendas: procura,
       objetivos: linhas(payload.objetivos),
+      funcionamento: texto(payload.funcionamento),
       organizacao: programa.organizacao,
       programa: programa.programa,
       sessoes: curso.chaves

@@ -1,7 +1,7 @@
 // Página do curso em blocos soltos: banner, síntese, dados, objetivos, programa, turmas e cartão de inscrição.
 // Cada bloco lê o curso da página (CursoAtualCtx), por isso pode ir para qualquer secção ou coluna.
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import type { ComponentConfig } from "@puckeditor/core";
+import { createContext, useContext, useEffect, useState, type ComponentType, type ReactNode } from "react";
+import type { ComponentConfig, Slot } from "@puckeditor/core";
 import { Icon, OfertaCtx, type Course } from "../SiteLanding";
 import { CursoDaRotaCtx } from "./blocosCursoPagina";
 import { campoCurso, simNao } from "./campos";
@@ -135,6 +135,15 @@ export function Titulo({ texto, t, className }: { texto: string; t: Tipografia; 
   if (!texto) return null;
   const e = estiloTexto(t);
   return <h2 className={juntar(className, e.className)} style={e.style}>{texto}</h2>;
+}
+
+/** Espaço de blocos entre o título de um bloco do curso e o seu conteúdo (ex.: um texto antes dos objetivos). */
+export const campoEntreTitulo = { type: "slot" as const, label: "Blocos entre o título e o conteúdo" };
+
+export function ZonaEntreTitulo({ zona }: { zona?: unknown }) {
+  // Páginas gravadas antes deste espaço não o têm.
+  const Zona = zona as ComponentType<{ className?: string; minEmptyHeight?: number }> | undefined;
+  return Zona ? <Zona className="mt-4 flex flex-col gap-3 empty:hidden" minEmptyHeight={30} /> : null;
 }
 
 function duracaoModulo(raw: string) {
@@ -271,10 +280,13 @@ function DadosCurso(p: DadosProps) {
 
 // ─── Objetivos, programa e turmas ────────────────────────────────────────────
 
-type ListaProps = Base & { titulo: string; tTitulo: Tipografia };
+type ListaProps = Base & { titulo: string; tTitulo: Tipografia; entreTitulo: Slot };
 const camposLista = (padrao: string) => ({
-  fields: { titulo: { type: "text" as const, label: "Título (vazio = esconder)" }, tTitulo: campoTipografia("Tipografia do título"), aparencia: campoAparencia() },
-  defaultProps: { titulo: padrao, tTitulo: tipoVazia(), aparencia: estiloVazio() },
+  fields: {
+    titulo: { type: "text" as const, label: "Título (vazio = esconder)" }, tTitulo: campoTipografia("Tipografia do título"),
+    entreTitulo: campoEntreTitulo, aparencia: campoAparencia(),
+  },
+  defaultProps: { titulo: padrao, tTitulo: tipoVazia(), entreTitulo: [], aparencia: estiloVazio() },
 });
 
 export const CursoObjetivos: ComponentConfig<ListaProps> = {
@@ -285,6 +297,7 @@ export const CursoObjetivos: ComponentConfig<ListaProps> = {
       {curso => curso.objetivos.length === 0 ? null : (
         <>
           <Titulo texto={p.titulo} t={p.tTitulo} className="font-serif text-3xl" />
+          <ZonaEntreTitulo zona={p.entreTitulo} />
           <ul className="mt-5 space-y-3 opacity-75">
             {curso.objetivos.map(o => <li key={o} className="flex gap-3"><Icon name="check" className="mt-1 h-4 w-4 shrink-0" />{o}</li>)}
           </ul>
@@ -302,6 +315,7 @@ export const CursoPrograma: ComponentConfig<ListaProps> = {
       {curso => curso.programa.length === 0 ? null : (
         <>
           <Titulo texto={p.titulo} t={p.tTitulo} className="border-b border-black/15 pb-4 font-serif text-3xl" />
+          <ZonaEntreTitulo zona={p.entreTitulo} />
           <div className="divide-y divide-black/15">
             {curso.programa.map((m, i) => (
               <div key={`${m.titulo}-${i}`} className="flex items-baseline gap-4 py-5">
@@ -313,6 +327,30 @@ export const CursoPrograma: ComponentConfig<ListaProps> = {
           </div>
         </>
       )}
+    </Caixa>
+  ),
+};
+
+type FuncionamentoProps = ListaProps & { texto: Tipografia };
+
+/** O texto «Funcionamento» da ficha do curso (sessões, plataforma, assiduidade, certificado). */
+export const CursoFuncionamento: ComponentConfig<FuncionamentoProps> = {
+  label: "Curso · Funcionamento",
+  fields: { ...camposLista("Funcionamento").fields, texto: campoTipografia("Tipografia do texto") },
+  defaultProps: { ...camposLista("Funcionamento").defaultProps, texto: tipoVazia() },
+  render: p => (
+    <Caixa p={p}>
+      {curso => {
+        if (!curso.funcionamento.trim()) return null;
+        const t = estiloTexto(p.texto);
+        return (
+          <>
+            <Titulo texto={p.titulo} t={p.tTitulo} className="font-serif text-3xl" />
+            <ZonaEntreTitulo zona={p.entreTitulo} />
+            <p className={juntar("mt-5 whitespace-pre-line leading-7 opacity-75", t.className)} style={t.style}>{curso.funcionamento}</p>
+          </>
+        );
+      }}
     </Caixa>
   ),
 };
@@ -330,7 +368,8 @@ export const CursoTurmas: ComponentConfig<TurmasProps> = {
   render: p => <TurmasCurso {...p} />,
 };
 
-function TurmasCurso(p: TurmasProps) {
+// No render, o espaço de blocos já chega como componente (não como lista).
+function TurmasCurso(p: Omit<TurmasProps, "entreTitulo"> & { entreTitulo?: unknown }) {
   const { local } = useLocalCurso();
   return (
     <Caixa p={p}>
@@ -339,6 +378,7 @@ function TurmasCurso(p: TurmasProps) {
         return lista.length === 0 ? null : (
           <>
             <Titulo texto={p.titulo} t={p.tTitulo} className="border-b border-black/15 pb-4 font-serif text-3xl" />
+            <ZonaEntreTitulo zona={p.entreTitulo} />
             <div className="divide-y divide-black/15">
               {lista.map(s => (
                 <div key={`${s.data}-${s.local}-${s.horario}`} className="flex flex-wrap items-center justify-between gap-3 py-5">

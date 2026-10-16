@@ -247,7 +247,7 @@ type DestaqueProps = { modo: "escolhidos" | "automatico"; cursos: ItemDestaque[]
 const CURSO_LIVRE: Course = {
   id: "", title: "", area: "", format: "", duration: "", start: "", price: "", description: "", funding: "Gold",
   enrollment: "Pré-inscrição", miniatura: null, capa: null, banner: null, precoDesde: null, vendas: 0, regime: "gold",
-  objetivos: [], organizacao: "modular", programa: [], sessoes: [], nomeOferta: "",
+  objetivos: [], funcionamento: "", organizacao: "modular", programa: [], sessoes: [], nomeOferta: "",
 };
 
 function cartaoDe(x: ItemDestaque, curso: Course | undefined): Course | null {

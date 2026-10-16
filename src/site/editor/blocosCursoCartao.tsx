@@ -6,7 +6,7 @@ import { ePrepago, ePreinscricao, rotuloBotaoInscricao } from "../../partilhado/
 import { useInscricaoOpcional } from "../SiteInscricao";
 import { Icon, type Course } from "../SiteLanding";
 import {
-  ajudaVariaveis, Caixa, locaisDo, precoNoLocal, preencherVariaveis, Titulo, useLocalCurso, variaveisCurso, type Base,
+  ajudaVariaveis, Caixa, campoEntreTitulo, locaisDo, precoNoLocal, preencherVariaveis, Titulo, useLocalCurso, variaveisCurso, ZonaEntreTitulo, type Base,
 } from "./blocosCurso";
 import { campoCor, campoNumero, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
@@ -14,34 +14,109 @@ import { corSegura, estiloTexto, estiloVazio, juntar, tipoVazia, type Tipografia
 
 // ─── Escolha do local ────────────────────────────────────────────────────────
 
-type LocalProps = Base & {
-  titulo: string; tTitulo: Tipografia; mostrarPreco: boolean; mostrarMorada: boolean; abrirPedido: boolean;
-  colunas: number | null; colunasTab: number | null; colunasTel: number | null;
+/** Aspeto dos cartões de local (vazio = o aspeto de sempre). */
+type CartaoLocal = {
+  alturaMin: number | null; espaco: number | null; interior: number | null; raio: number | null;
+  sombra: "" | "nenhuma" | "suave" | "media" | "forte"; corFundo: string; corAtivo: string; centrar: boolean;
+  tNome: Tipografia; tMorada: Tipografia; tPreco: Tipografia; tTexto: Tipografia;
 };
+/** Botão (CTA) dentro de cada cartão: o cartão inteiro é clicável, o botão é o convite visual. */
+type BotaoLocal = {
+  mostrar: boolean; texto: string; cor: string; corTexto: string;
+  posicao: "esquerda" | "centro" | "direita" | "largura"; raio: number | null; seta: boolean; tipografia: Tipografia;
+};
+
+type LocalProps = Base & {
+  titulo: string; tTitulo: Tipografia; entreTitulo: Slot; texto: string; mostrarPreco: boolean; mostrarMorada: boolean; abrirPedido: boolean;
+  colunas: number | null; colunasTab: number | null; colunasTel: number | null;
+  cartao: CartaoLocal; botao: BotaoLocal;
+};
+
+const cartaoLocalPadrao = (): CartaoLocal => ({
+  alturaMin: 96, espaco: 16, interior: 20, raio: 0, sombra: "", corFundo: "#ffffff", corAtivo: "var(--c-destaque)", centrar: false,
+  tNome: tipoVazia(), tMorada: tipoVazia(), tPreco: tipoVazia(), tTexto: tipoVazia(),
+});
+const botaoLocalPadrao = (): BotaoLocal => ({
+  mostrar: false, texto: "Escolher {{local}}", cor: "var(--c-destaque)", corTexto: "#ffffff", posicao: "largura", raio: 0, seta: true, tipografia: tipoVazia(),
+});
+
+const SOMBRA_LOCAL = {
+  "": "0 8px 24px rgba(18,52,59,.08)", nenhuma: "none", suave: "0 6px 18px rgba(20,38,61,.08)",
+  media: "0 14px 36px rgba(20,38,61,.16)", forte: "0 28px 70px rgba(8,18,32,.32)",
+};
+const POSICAO_BOTAO = { esquerda: "self-start", centro: "self-center", direita: "self-end", largura: "self-stretch justify-between" };
 
 export const CursoEscolhaLocal: ComponentConfig<LocalProps> = {
   label: "Curso · Escolha do local",
   fields: {
     titulo: { type: "text", label: "Título (vazio = esconder)" },
     tTitulo: campoTipografia("Tipografia do título"),
+    entreTitulo: campoEntreTitulo,
+    texto: { type: "textarea", label: `Texto em cada cartão (vazio = nenhum). ${ajudaVariaveis}` },
     mostrarMorada: simNao("Morada de cada local (Edição de cursos › Locais)"),
     mostrarPreco: simNao("Preço em cada local"),
     abrirPedido: simNao("Ao clicar num local, abre logo a pré-inscrição"),
     colunas: campoNumero("Colunas (computador)", ""),
     colunasTab: campoNumero("Colunas (tablet)", ""),
     colunasTel: campoNumero("Colunas (telemóvel)", ""),
+    cartao: {
+      type: "object", label: "Cartões",
+      objectFields: {
+        alturaMin: campoNumero("Altura mínima"),
+        espaco: campoNumero("Espaço entre cartões"),
+        interior: campoNumero("Espaço interior"),
+        raio: campoNumero("Cantos arredondados"),
+        sombra: {
+          type: "select", label: "Sombra",
+          options: [{ label: "Normal", value: "" }, { label: "Nenhuma", value: "nenhuma" }, { label: "Suave", value: "suave" }, { label: "Média", value: "media" }, { label: "Forte", value: "forte" }],
+        },
+        corFundo: campoCor("Fundo do cartão"),
+        corAtivo: campoCor("Cor do local escolhido (borda e visto)"),
+        centrar: simNao("Conteúdo centrado"),
+        tNome: campoTipografia("Tipografia do nome do local"),
+        tMorada: campoTipografia("Tipografia da morada"),
+        tPreco: campoTipografia("Tipografia do preço"),
+        tTexto: campoTipografia("Tipografia do texto"),
+      },
+    },
+    botao: {
+      type: "object", label: "Botão em cada cartão",
+      objectFields: {
+        mostrar: simNao("Mostrar o botão"),
+        texto: { type: "text", label: `Texto. ${ajudaVariaveis}` },
+        cor: campoCor("Cor do botão"),
+        corTexto: campoCor("Cor do texto"),
+        posicao: {
+          type: "select", label: "Posição",
+          options: [{ label: "Largura toda", value: "largura" }, { label: "Esquerda", value: "esquerda" }, { label: "Centro", value: "centro" }, { label: "Direita", value: "direita" }],
+        },
+        raio: campoNumero("Cantos arredondados"),
+        seta: simNao("Seta"),
+        tipografia: campoTipografia("Tipografia do botão"),
+      },
+    },
     aparencia: campoAparencia(),
   },
   defaultProps: {
-    titulo: "Onde quer fazer o curso?", tTitulo: tipoVazia(), mostrarMorada: true, mostrarPreco: true,
-    abrirPedido: true, colunas: 3, colunasTab: 2, colunasTel: 1, aparencia: estiloVazio(),
+    titulo: "Onde quer fazer o curso?", tTitulo: tipoVazia(), entreTitulo: [], texto: "", mostrarMorada: true, mostrarPreco: true,
+    abrirPedido: true, colunas: 3, colunasTab: 2, colunasTel: 1, cartao: cartaoLocalPadrao(), botao: botaoLocalPadrao(), aparencia: estiloVazio(),
   },
   render: p => <EscolhaLocal {...p} />,
 };
 
-function EscolhaLocal(p: LocalProps) {
+// No render, o espaço de blocos já chega como componente (não como lista).
+function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unknown }) {
   const { local, setLocal, editar } = useLocalCurso();
   const { abrir } = useInscricaoOpcional();
+  // Páginas gravadas antes destas opções não as têm: ficam com o aspeto de sempre.
+  const c = { ...cartaoLocalPadrao(), ...p.cartao };
+  const b = { ...botaoLocalPadrao(), ...p.botao };
+  const ativoCor = corSegura(c.corAtivo) ?? "var(--c-destaque)";
+  const tNome = estiloTexto(c.tNome);
+  const tMorada = estiloTexto(c.tMorada);
+  const tPreco = estiloTexto(c.tPreco);
+  const tTexto = estiloTexto(c.tTexto);
+  const tBotao = estiloTexto(b.tipografia);
   return (
     <Caixa p={p}>
       {curso => {
@@ -50,26 +125,43 @@ function EscolhaLocal(p: LocalProps) {
         return (
           <fieldset>
             {p.titulo && <legend className="mb-4"><Titulo texto={p.titulo} t={p.tTitulo} className="font-serif text-2xl" /></legend>}
+            <ZonaEntreTitulo zona={p.entreTitulo} />
             {/* Cartões grandes (nome, morada e preço), em grelha, como no site da ENA. */}
-            <div className="ena-grelha gap-4" style={{
+            <div className="ena-grelha mt-4" style={{
+              gap: `${c.espaco ?? 16}px`,
               ["--cols" as string]: String(p.colunas || 3), ["--cols-tab" as string]: String(p.colunasTab || 2), ["--cols-tel" as string]: String(p.colunasTel || 1),
             }}>
               {locais.map(l => {
                 const ativo = local === l;
                 const morada = curso.sessoes.find(s => s.local === l && s.morada)?.morada;
+                const vars = variaveisCurso(curso, l);
+                const texto = preencherVariaveis(p.texto ?? "", vars).trim();
                 return (
                   <button key={l} type="button" aria-pressed={ativo} onClick={() => {
                       // No site, o clique escolhe o local e abre o pedido já nele (datas de início e horário).
                       if (p.abrirPedido !== false && !editar) { setLocal(l); abrir(curso, { local: l }); return; }
                       setLocal(ativo && locais.length > 1 ? "" : l);
                     }}
-                    className={`flex min-h-[96px] flex-col items-start gap-2 border-2 bg-white px-5 py-5 text-left shadow-[0_8px_24px_rgba(18,52,59,.08)] transition ${ativo ? "border-[var(--c-destaque)]" : "border-transparent hover:border-black/15"}`}>
-                    <span className="flex w-full items-start justify-between gap-3">
-                      <strong className="text-sm font-extrabold uppercase tracking-[0.04em] text-[var(--c-primaria)]">{l}</strong>
-                      {ativo && <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[var(--c-destaque)] text-white"><Icon name="check" className="h-3 w-3" /></span>}
+                    className={juntar("flex flex-col gap-2 border-2 transition", c.centrar ? "items-center text-center" : "items-start text-left", !ativo && "hover:border-black/15")}
+                    style={{
+                      minHeight: c.alturaMin ? `${c.alturaMin}px` : undefined, padding: `${c.interior ?? 20}px`,
+                      borderRadius: c.raio ? `${c.raio}px` : undefined, boxShadow: SOMBRA_LOCAL[c.sombra] ?? SOMBRA_LOCAL[""],
+                      background: corSegura(c.corFundo) ?? "#ffffff", borderColor: ativo ? ativoCor : "transparent",
+                    }}>
+                    <span className={juntar("flex w-full items-start gap-3", c.centrar ? "justify-center" : "justify-between")}>
+                      <strong className={juntar("text-sm font-extrabold uppercase tracking-[0.04em] text-[var(--c-primaria)]", tNome.className)} style={tNome.style}>{l}</strong>
+                      {ativo && <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-white" style={{ background: ativoCor }}><Icon name="check" className="h-3 w-3" /></span>}
                     </span>
-                    {p.mostrarMorada && morada && <span className="text-xs leading-5 opacity-65">{morada}</span>}
-                    {p.mostrarPreco && <span className="mt-auto text-sm font-bold text-[var(--c-destaque)]">{precoNoLocal(curso, l)}</span>}
+                    {p.mostrarMorada && morada && <span className={juntar("text-xs leading-5 opacity-65", tMorada.className)} style={tMorada.style}>{morada}</span>}
+                    {texto && <span className={juntar("whitespace-pre-line text-sm leading-6 opacity-75", tTexto.className)} style={tTexto.style}>{texto}</span>}
+                    {p.mostrarPreco && <span className={juntar("mt-auto text-sm font-bold text-[var(--c-destaque)]", tPreco.className)} style={tPreco.style}>{precoNoLocal(curso, l)}</span>}
+                    {/* Não pode haver um botão dentro de outro: o cartão inteiro faz a ação, isto é só o aspeto. */}
+                    {b.mostrar && (
+                      <span className={juntar("mt-2 inline-flex items-center gap-3 px-4 py-3 text-xs font-extrabold uppercase tracking-[0.08em]", POSICAO_BOTAO[b.posicao] ?? POSICAO_BOTAO.largura, !p.mostrarPreco && "mt-auto", tBotao.className)}
+                        style={{ ...tBotao.style, background: corSegura(b.cor) ?? "var(--c-destaque)", color: corSegura(b.corTexto) ?? "#ffffff", borderRadius: b.raio ? `${b.raio}px` : undefined }}>
+                        {preencherVariaveis(b.texto || "Escolher", vars)} {b.seta && <Icon name="arrow" />}
+                      </span>
+                    )}
                   </button>
                 );
               })}

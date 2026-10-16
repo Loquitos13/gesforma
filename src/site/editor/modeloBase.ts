@@ -3,7 +3,7 @@ import type { Data } from "@puckeditor/core";
 import type { PaginaSite } from "../../partilhado/siteBlocos";
 import { AreaFormando } from "./blocosArea";
 import { Catalogo } from "./blocosCatalogo";
-import { CursoBanner, CursoDados, CursoObjetivos, CursoPrograma, CursoSintese, CursoTurmas } from "./blocosCurso";
+import { CursoBanner, CursoDados, CursoFuncionamento, CursoObjetivos, CursoPrograma, CursoSintese, CursoTurmas } from "./blocosCurso";
 import { blocosCartaoPadrao, CursoEscolhaLocal, CursoInscricao } from "./blocosCursoCartao";
 import { ListaNoticias } from "./blocosNoticias";
 import { Botao, Coluna, Imagem, Pilares, Seccao, Texto, Titulo } from "./blocosBase";
@@ -211,6 +211,7 @@ export function modeloCurso(antigo?: Legado): Data {
     ...extra("zonaConteudo"),
     ...(sim("mostrarObjetivos") ? [bloco("CursoObjetivos", CursoObjetivos.defaultProps, { titulo: txt("tituloObjetivos", "Objetivos"), aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) })] : []),
     ...(sim("mostrarPrograma") ? [bloco("CursoPrograma", CursoPrograma.defaultProps, { titulo: txt("tituloPrograma", "Programa"), aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) })] : []),
+    bloco("CursoFuncionamento", CursoFuncionamento.defaultProps, { aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) }),
     ...(sim("mostrarTurmas") ? [bloco("CursoTurmas", CursoTurmas.defaultProps, { titulo: txt("tituloTurmas", "Próximas turmas"), aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) })] : []),
   ];
   const cartao = sim("mostrarCartao");

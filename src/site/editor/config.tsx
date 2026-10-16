@@ -6,7 +6,7 @@ import { AreaFormando } from "./blocosArea";
 import { Catalogo } from "./blocosCatalogo";
 import { DetalheCurso } from "./blocosCursoPagina";
 import {
-  CursoBanner, CursoDados, CursoObjetivos, CursoPrograma, CursoSintese, CursoTurmas, RaizCurso, campoPrevisualizar,
+  CursoBanner, CursoDados, CursoFuncionamento, CursoObjetivos, CursoPrograma, CursoSintese, CursoTurmas, RaizCurso, campoPrevisualizar,
 } from "./blocosCurso";
 import { CursoBotaoInscricao, CursoEscolhaLocal, CursoImagem, CursoInscricao, CursoTexto } from "./blocosCursoCartao";
 import { ListaNoticias } from "./blocosNoticias";
@@ -139,7 +139,7 @@ function RaizOutra({ children, editar }: { children: ReactNode; editar: boolean 
 const componentes = Object.fromEntries(Object.entries({
   Seccao, Coluna, Espaco, Separador, Titulo, Texto, Botao, Imagem, Pilares, Logotipos,
   CursosDestaque, OfertaFormativa, Catalogo, DetalheCurso, ListaNoticias, AreaFormando, Cabecalho, Rodape,
-  CursoBanner, CursoSintese, CursoDados, CursoObjetivos, CursoPrograma, CursoTurmas, CursoInscricao,
+  CursoBanner, CursoSintese, CursoDados, CursoObjetivos, CursoPrograma, CursoFuncionamento, CursoTurmas, CursoInscricao,
   CursoEscolhaLocal, CursoTexto, CursoImagem, CursoBotaoInscricao,
 }).map(([k, c]) => [k, responsivo(c as ComponentConfig<any>)])) as Config["components"];
 
@@ -151,7 +151,7 @@ const categoriasBase = {
   // Blocos que só fazem sentido na página do curso (lêem o curso da página).
   paginaCurso: {
     title: "Página do curso",
-    components: ["CursoBanner", "CursoSintese", "CursoDados", "CursoObjetivos", "CursoPrograma", "CursoTurmas", "CursoEscolhaLocal",
+    components: ["CursoBanner", "CursoSintese", "CursoDados", "CursoObjetivos", "CursoPrograma", "CursoFuncionamento", "CursoTurmas", "CursoEscolhaLocal",
       "CursoInscricao", "CursoTexto", "CursoImagem", "CursoBotaoInscricao", "DetalheCurso",
     ],
     visible: false,

@@ -5,7 +5,7 @@ import { apiPublicEntidade, type EntidadePublica } from "../partilhado/api/publi
 import { useRecurso } from "../partilhado/dados/useRecurso";
 import { mapLocalTurma } from "../partilhado/cronogramaLocal";
 import { datesFromRange, grelhaPeriodo, linhasFromSessoes, sessoesSemFim } from "../partilhado/cronogramaGrelha";
-import { buildCronogramaPrintHtml, largurasColunaMm, printPageSize } from "../partilhado/cronogramaPrint";
+import { buildCronogramaPrintHtml, largurasColunaMm, linhasComSessoes, printPageSize } from "../partilhado/cronogramaPrint";
 import { codigoInternoTurma } from "../partilhado/turmaCodigo";
 import type { SessaoModalidade, SessaoCronograma } from "../partilhado/turmaModel";
 
@@ -49,7 +49,8 @@ function folhaDe(turma: TurmaPercurso, curso: string, entidade?: EntidadePublica
     embutido: true,
     entidade,
   };
-  const page = printPageSize(largurasColunaMm(dates, linhas, sessoes), linhas.length);
+  const impressas = linhasComSessoes(linhas, dates, sessoes, matricula);
+  const page = printPageSize(largurasColunaMm(dates, impressas, sessoes), impressas.length);
   return { html: buildCronogramaPrintHtml(input), larguraMm: page.largura, alturaMm: page.altura };
 }
 

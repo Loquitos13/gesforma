@@ -189,10 +189,20 @@ function gridHtml(
     </table>`;
 }
 
+/**
+ * Na impressão só saem as linhas de horário com alguma sessão (no editor ficam para se acrescentar sessões).
+ * A matrícula vive na 1.ª linha presencial: essa fica mesmo vazia.
+ */
+export function linhasComSessoes(linhas: GrelhaLinha[], dates: string[], sessoes: SessaoCronograma[], matricula?: string) {
+  const primeiraPresencial = matricula ? linhas.find(l => l.modalidade === "presencial") : undefined;
+  return linhas.filter(l => l === primeiraPresencial || dates.some(d => cellTone(sessoes, d, l) !== "empty"));
+}
+
 export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
-  const larguras = largurasColunaMm(input.dates, input.linhas, input.sessoes);
-  const page = printPageSize(larguras, input.linhas.length);
-  const grid = gridHtml(input.dates, input.linhas, input.sessoes, larguras, input.matricula);
+  const linhas = linhasComSessoes(input.linhas, input.dates, input.sessoes, input.matricula);
+  const larguras = largurasColunaMm(input.dates, linhas, input.sessoes);
+  const page = printPageSize(larguras, linhas.length);
+  const grid = gridHtml(input.dates, linhas, input.sessoes, larguras, input.matricula);
 
   const mods = legendModulos(input.sessoes);
   const mid = Math.ceil(mods.length / 2);

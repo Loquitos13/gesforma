@@ -23,10 +23,11 @@ export type CursoPublico = {
   vendas: number;
   objetivos: string[];
   funcionamento: string;
+  seoTitulo: string; seoDescricao: string;
   organizacao: "modular" | "livre";
   programa: { titulo: string; horas: string }[];
   /** Próximas datas; o preço segue as regras da ficha (local, horário ou os dois), como na pré-inscrição. */
-  sessoes: { data: string; local: string; horario: string; preco: number | null; morada: string }[];
+  sessoes: { data: string; iso: string; local: string; horario: string; preco: number | null; morada: string }[];
   nomeOferta: string;
 };
 
@@ -324,15 +325,16 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       vendas: procura,
       objetivos: linhas(payload.objetivos),
       funcionamento: texto(payload.funcionamento),
+      seoTitulo: texto(payload.seoTitulo), seoDescricao: texto(payload.seoDescricao),
       organizacao: programa.organizacao,
       programa: programa.programa,
       sessoes: curso.chaves
         .flatMap(key => sessoes.get(key) ?? [])
         .sort((a, b) => a.iso.localeCompare(b.iso))
         .slice(0, 24)
-        .map(({ data, local, horario }) => {
+        .map(({ data, iso, local, horario }) => {
           const preco = curso.regime === "gold" ? escolherPreco(curso.preco, local, horario, regrasDoPayload(payload)) : 0;
-          return { data, local, horario, preco: preco > 0 ? preco : null, morada: moradas.get(`${curso.regime}:${chave(local)}`) ?? "" };
+          return { data, iso, local, horario, preco: preco > 0 ? preco : null, morada: moradas.get(`${curso.regime}:${chave(local)}`) ?? "" };
         }),
       nomeOferta: curso.nomeOferta || curso.titulo,
     };

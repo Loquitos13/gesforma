@@ -32,6 +32,16 @@ export function TabConteudo({ f }: { f: FichaCurso }) {
         <BlocoTexto rotulo="Programa no site" ajuda="Ainda sem módulos. Defina o percurso no separador Programa e este texto passa a ser gerado." valor={data.programa} onMudar={v => patch({ programa: v })} linhas={10} />
       )}
       <BlocoTexto rotulo="Funcionamento" ajuda="Sessões, plataforma, assiduidade e certificado." valor={data.funcionamento} onMudar={v => patch({ funcionamento: v })} />
+      <Cartao titulo="Pesquisa na Google e partilha" subtitulo="Como o curso aparece nos resultados da Google e quando é partilhado (Facebook, LinkedIn, WhatsApp). Vazio: o título e a síntese do curso.">
+        <div className="grid gap-3">
+          <Campo rotulo="Título na pesquisa" ajuda={`${data.seoTitulo.length}/60 caracteres. A Google corta títulos mais longos.`}>
+            {p => <Entrada {...p} maxLength={70} value={data.seoTitulo} placeholder={data.titulo} onChange={e => patch({ seoTitulo: e.target.value })} />}
+          </Campo>
+          <Campo rotulo="Descrição na pesquisa" ajuda={`${data.seoDescricao.length}/160 caracteres. Diga para quem é, o que se ganha e o formato.`}>
+            {p => <AreaTexto {...p} rows={3} maxLength={200} value={data.seoDescricao} placeholder={data.sintese.slice(0, 160)} onChange={e => patch({ seoDescricao: e.target.value })} />}
+          </Campo>
+        </div>
+      </Cartao>
     </div>
   );
 }

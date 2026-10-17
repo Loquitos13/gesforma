@@ -5,7 +5,7 @@ import type { ComponentConfig } from "@puckeditor/core";
 import { OfertaCtx, type Course } from "../SiteLanding";
 import { Caixa, Titulo, type Base } from "./blocosCurso";
 import { CartaoCurso, campoCartao, cartaoPadrao, type EstiloCartao } from "./blocosCursos";
-import { Cartoes } from "./blocosTestemunhos";
+import { Cartoes } from "./carrossel";
 import { campoCurso, campoNumero, nomesCursos, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { estiloVazio, tipoVazia, type Tipografia } from "./estilos";

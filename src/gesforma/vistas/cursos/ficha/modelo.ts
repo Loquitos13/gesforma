@@ -24,6 +24,8 @@ export type CursoSite = {
   tags: string; dataInicio: string; estado: string; visivelSite: boolean;
   banner: MediaSlot | null; capa: MediaSlot | null; miniatura: MediaSlot | null;
   sintese: string; objetivos: string; programa: string; funcionamento: string;
+  /** Pesquisa (Google): título e descrição próprios; vazios = o título e a síntese. */
+  seoTitulo: string; seoDescricao: string;
   ufcdCod: string; ufcd: string; locais: string[];
   organizacaoPrograma: OrganizacaoPrograma; topicosPrograma: TopicoPrograma[];
   avaliacaoCurso: AvaliacaoCurso; precosOferta: PrecoOferta[]; planosSessao: PlanoLinha[];
@@ -102,6 +104,7 @@ export function fichaInicial(curso: CursoBase | null, regime: Regime, modelos: O
     objetivos: t?.objetivos ?? "",
     programa,
     funcionamento: t?.funcionamento ?? "",
+    seoTitulo: "", seoDescricao: "",
     ufcdCod,
     ufcd: curso?.ufcd ?? "",
     locais: [],

@@ -1,6 +1,7 @@
 // Bloco «Testemunhos»: opiniões de formandos (editáveis) e um botão que leva às avaliações da ENA no Google.
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import type { ComponentConfig } from "@puckeditor/core";
+import { Carrossel1a1, type Transicao } from "./carrossel";
 import { apiAvaliacoesGooglePublicas, apiTestemunhosPublicos, type AvaliacoesGooglePublicas, type DadosTestemunho } from "../../partilhado/api/site";
 import { Icon } from "../SiteLanding";
 import { campoCor, campoImagem, campoNumero, simNao } from "./campos";
@@ -14,7 +15,7 @@ type TestemunhosProps = {
   itens: Testemunho[]; colunas: number | null; colunasTab: number | null; colunasTel: number | null; espaco: number | null;
   corEstrelas: string; tipoTexto: Tipografia; tipoNome: Tipografia; tipoCurso: Tipografia; tipoBotao: Tipografia;
   tamanhoFoto: number | null; alinhar: "esquerda" | "centro";
-  disposicao: "grelha" | "carrossel"; segundos: number | null; setas: boolean;
+  disposicao: "grelha" | "carrossel"; segundos: number | null; setas: boolean; transicao: Transicao; larguraCarrossel: number | null;
   google: "nao" | "juntar" | "so"; googleMinimo: number | null; googleResumo: boolean; formandos: boolean;
   mostrarBotao: boolean; textoBotao: string; ligacaoBotao: string; corBotao: string; corTextoBotao: string;
   cartao: Estilo; aparencia: Estilo;
@@ -48,7 +49,12 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
     disposicao: { type: "radio", label: "Disposição", options: [{ label: "Grelha", value: "grelha" }, { label: "Carrossel", value: "carrossel" }] },
     segundos: campoNumero("Carrossel: segundos entre testemunhos (vazio ou 0 = só com as setas)", ""),
     setas: simNao("Carrossel: setas"),
-    colunas: campoNumero("Colunas (computador) · no carrossel, cartões visíveis de cada vez", "") as never,
+    transicao: {
+      type: "radio", label: "Carrossel: transição entre testemunhos (nos dois sentidos)",
+      options: [{ label: "Deslizar", value: "deslizar" }, { label: "Desvanecer", value: "desvanecer" }, { label: "Nenhuma", value: "nenhuma" }],
+    },
+    larguraCarrossel: campoNumero("Carrossel: largura máxima do testemunho"),
+    colunas: campoNumero("Colunas na grelha (computador)", "") as never,
     colunasTab: campoNumero("Colunas (tablet)", "") as never,
     colunasTel: campoNumero("Colunas (telemóvel)", "") as never,
     espaco: campoNumero("Espaço entre cartões"),
@@ -74,7 +80,7 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
     tipoTexto: tipoVazia({ tamanho: 15, alturaLinha: 1.6, cor: "var(--c-suave)" }),
     tipoNome: tipoVazia({ tamanho: 14, peso: "800", cor: "var(--c-primaria)" }),
     tipoCurso: tipoVazia({ tamanho: 12, cor: "var(--c-suave)" }), tipoBotao: tipoVazia(),
-    tamanhoFoto: 40, alinhar: "esquerda", disposicao: "grelha", segundos: 6, setas: true, google: "nao", googleMinimo: 4, googleResumo: true, formandos: true,
+    tamanhoFoto: 40, alinhar: "centro", disposicao: "grelha", segundos: 6, setas: true, transicao: "deslizar", larguraCarrossel: 720, google: "nao", googleMinimo: 4, googleResumo: true, formandos: true,
     mostrarBotao: true, textoBotao: "Veja e deixe a sua avaliação no Google",
     // shortcut: pesquisa genérica; trocar pelo link «Pedir avaliações» do Perfil da Empresa da ENA no Google.
     ligacaoBotao: "https://www.google.com/search?q=ena",
@@ -82,7 +88,7 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
     cartao: estiloVazio({ fundoCor: "#ffffff", preenchimento: lados(24, 24), bordaTopo: 3, bordaCor: "var(--c-acento)" }),
     aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }),
   },
-  render: ({ puck, titulo, tipoTitulo, itens, colunas, colunasTab, colunasTel, espaco, corEstrelas, tipoTexto, tipoNome, tipoCurso, tipoBotao, tamanhoFoto, alinhar, disposicao, segundos, setas, google, googleMinimo, googleResumo, formandos, mostrarBotao, textoBotao, ligacaoBotao, corBotao, corTextoBotao, cartao, aparencia }) => {
+  render: ({ puck, titulo, tipoTitulo, itens, colunas, colunasTab, colunasTel, espaco, corEstrelas, tipoTexto, tipoNome, tipoCurso, tipoBotao, tamanhoFoto, alinhar, disposicao, segundos, setas, transicao, larguraCarrossel, google, googleMinimo, googleResumo, formandos, mostrarBotao, textoBotao, ligacaoBotao, corBotao, corTextoBotao, cartao, aparencia }) => {
     const c = estiloBloco(aparencia);
     const k = estiloBloco(cartao);
     const [tt, tx, tn, tc, tb] = [estiloTexto(tipoTitulo), estiloTexto(tipoTexto), estiloTexto(tipoNome), estiloTexto(tipoCurso), estiloTexto(tipoBotao)];
@@ -95,7 +101,9 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
     const manuais = google === "so" ? [] : (itens ?? []).filter(t => t.texto?.trim() || t.nome?.trim());
     const deFormandos: Testemunho[] = (daArea ?? []).map(t => ({ nome: t.nome, curso: t.curso, texto: t.texto, estrelas: t.estrelas, foto: "" }));
     const lista = [...manuais, ...deFormandos, ...doGoogle];
-    const centro = alinhar === "centro";
+    const carrossel = disposicao === "carrossel";
+    // O carrossel fica sempre centrado na horizontal.
+    const centro = carrossel || alinhar === "centro";
     const foto = `${tamanhoFoto ?? 40}px`;
     return (
       <section ref={puck?.dragRef ?? undefined} className={juntar(c.className, "flex flex-col", centro ? "items-center text-center" : "items-start")} style={c.style}>
@@ -117,17 +125,12 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
             {google !== "nao" && !g && "A carregar as avaliações do Google…"}
           </p>
         )}
-        {lista.length > 0 && (
-          <Cartoes carrossel={disposicao === "carrossel"} segundos={segundos ?? 0} setas={setas !== false} style={{
-            justifyItems: centro ? "center" : undefined,
-            gap: `${espaco ?? 24}px`, ["--gap" as string]: `${espaco ?? 24}px`,
-            ["--cols" as string]: String(colunas || 3), ["--cols-tab" as string]: String(colunasTab || 2), ["--cols-tel" as string]: String(colunasTel || 1),
-          } as CSSProperties}>
-            {lista.map((t, i) => {
+        {lista.length > 0 && (() => {
+          const cartoes = lista.map((t, i) => {
               const n = Math.max(0, Math.min(5, Math.round(t.estrelas ?? 0)));
               return (
                 <figure key={i} className={juntar("flex h-full flex-col", k.className)} style={k.style}>
-                  {n > 0 && <span className="mb-3 text-lg tracking-[0.15em]" style={{ color: corSegura(corEstrelas) || "var(--c-acento)" }} aria-label={`${n} em 5 estrelas`}>{"★".repeat(n)}</span>}
+                  {n > 0 && <span role="img" className="mb-3 text-lg tracking-[0.15em]" style={{ color: corSegura(corEstrelas) || "var(--c-acento)" }} aria-label={`${n} em 5 estrelas`}>{"★".repeat(n)}</span>}
                   <blockquote className={juntar("whitespace-pre-line", tx.className)} style={tx.style}>{t.texto}</blockquote>
                   <figcaption className={juntar("mt-auto flex items-center gap-3 pt-5", centro && "justify-center")}>
                     {t.foto && <img src={t.foto} alt="" className="shrink-0 rounded-full object-cover" style={{ width: foto, height: foto }} />}
@@ -135,19 +138,27 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
                       <span className={juntar("block", tn.className)} style={tn.style}>{t.nome}</span>
                       {t.curso && <span className={juntar("block", tc.className)} style={tc.style}>{t.curso}</span>}
                       {/* A Google exige que a avaliação diga de onde vem e ligue ao autor. */}
-                      {t.google && <a href={t.google} target="_blank" rel="noreferrer" className="block text-[11px] opacity-60 hover:underline">Avaliação no Google</a>}
+                      {t.google && <a href={t.google} target="_blank" rel="noreferrer" className="block text-[11px] opacity-60 hover:underline">Avaliação no Google<span className="sr-only"> (abre noutra janela)</span></a>}
                     </span>
                   </figcaption>
                 </figure>
               );
-            })}
-          </Cartoes>
-        )}
+          });
+          return carrossel
+            ? <Carrossel1a1 itens={cartoes} rotulo={titulo || "Testemunhos"} nomeItem="testemunho" segundos={segundos ?? 0} setas={setas !== false}
+                transicao={transicao ?? "deslizar"} largura={larguraCarrossel ?? 720} />
+            : (
+              <div className="ena-grelha mt-6 w-full" style={{
+                justifyItems: centro ? "center" : undefined, gap: `${espaco ?? 24}px`,
+                ["--cols" as string]: String(colunas || 3), ["--cols-tab" as string]: String(colunasTab || 2), ["--cols-tel" as string]: String(colunasTel || 1),
+              } as CSSProperties}>{cartoes}</div>
+            );
+        })()}
         {mostrarBotao && href && (
           <a href={href} target="_blank" rel="noreferrer"
             className={juntar("mt-6 inline-flex items-center gap-3 px-5 py-3 text-xs font-extrabold uppercase tracking-[0.08em] hover:brightness-110", tb.className)}
             style={{ ...tb.style, background: corSegura(corBotao) || "var(--c-primaria)", color: corSegura(corTextoBotao) || "#ffffff" }}>
-            {textoBotao || "Avaliações no Google"} <Icon name="arrow" />
+            {textoBotao || "Avaliações no Google"} <Icon name="arrow" /><span className="sr-only"> (abre noutra janela)</span>
           </a>
         )}
       </section>
@@ -155,41 +166,6 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
   },
 };
 
-/**
- * Grelha ou carrossel. O carrossel desliza na horizontal (também com o dedo) e mostra «colunas» cartões de cada vez;
- * avança sozinho de `segundos` em `segundos`, pára com o rato por cima e não se mexe com «reduzir movimento».
- */
-export function Cartoes({ carrossel, segundos, setas, style, children }: { carrossel: boolean; segundos: number; setas: boolean; style: CSSProperties; children: ReactNode }) {
-  const caixa = useRef<HTMLDivElement>(null);
-  const [parado, setParado] = useState(false);
-  const mover = (sentido: 1 | -1) => {
-    const el = caixa.current;
-    if (!el) return;
-    const fim = el.scrollLeft + el.clientWidth >= el.scrollWidth - 4;
-    if (sentido === 1 && fim) el.scrollTo({ left: 0, behavior: "smooth" });
-    else el.scrollBy({ left: sentido * el.clientWidth, behavior: "smooth" });
-  };
-  useEffect(() => {
-    if (!carrossel || !segundos || segundos <= 0 || parado) return;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    const t = window.setInterval(() => mover(1), Math.max(2, segundos) * 1000);
-    return () => window.clearInterval(t);
-  }, [carrossel, segundos, parado]);
-  if (!carrossel) return <div className="ena-grelha mt-6 w-full" style={style}>{children}</div>;
-  const seta = (sentido: 1 | -1) => (
-    <button type="button" onClick={() => mover(sentido)} aria-label={sentido === 1 ? "Testemunhos seguintes" : "Testemunhos anteriores"}
-      className="grid h-10 w-10 place-items-center rounded-full bg-white text-[var(--c-primaria)] shadow-[0_6px_18px_rgba(20,38,61,.16)] hover:brightness-95">
-      <span className={sentido === -1 ? "rotate-180" : undefined}><Icon name="arrow" /></span>
-    </button>
-  );
-  return (
-    <div className="mt-6 w-full" onMouseEnter={() => setParado(true)} onMouseLeave={() => setParado(false)}
-      onFocus={() => setParado(true)} onBlur={() => setParado(false)}>
-      <div ref={caixa} className="ena-carrossel" style={style} role="region" aria-label="Testemunhos" tabIndex={0}>{children}</div>
-      {setas && <div className="mt-4 flex justify-center gap-3">{seta(-1)}{seta(1)}</div>}
-    </div>
-  );
-}
 
 /** Pede uma vez por página as avaliações do Google guardadas no servidor (vazio se não estiverem configuradas). */
 let pedidoGoogle: Promise<AvaliacoesGooglePublicas | null> | null = null;

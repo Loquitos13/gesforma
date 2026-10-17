@@ -169,4 +169,4 @@ export function validarDefinicoes(
 }
 
 /** Definições que só o administrador altera. */
-export const DEFINICOES_SO_ADMIN = new Set(["site", "lembrete_pre", "regras_pedagogicas", "entidade"]);
+export const DEFINICOES_SO_ADMIN = new Set(["site", "seo", "lembrete_pre", "regras_pedagogicas", "entidade"]);

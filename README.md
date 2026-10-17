@@ -166,3 +166,36 @@ A API vai no **mesmo projecto** que a app (`/api`), para o cookie de sessão ser
 3. Sem `DATABASE_URL` a função usa PGlite em `/tmp` - some entre invocações. Para produção, Neon é o par habitual da Vercel.
 
 `vercel.json` já encaminha `/api/*` para a função.
+
+### SEO (Google, Bing e partilha nas redes sociais)
+
+As páginas do site (`/`, `/formacao`, `/formacao/<curso>`, `/noticias`, `/noticias/<artigo>`, `/empresas`) são servidas pela função da API já com título, descrição, endereço canónico, dados de partilha (Open Graph/Twitter) e dados estruturados schema.org (organização, cursos com preço, datas e locais, artigos, migalhas). `/sitemap.xml` e `/robots.txt` são gerados na hora. Tudo se configura em **Sistema › Site › SEO** (só o administrador); cada curso tem título e descrição para a pesquisa na ficha do curso › Textos do site.
+
+Como funciona: o build muda `dist/index.html` para `dist/app.html` (`scripts/htmlDaApp.mjs`), para a Vercel enviar também `/` para a função; `vercel.json` reescreve as páginas para `/api?__pagina=…` e inclui `dist/app.html` na função. O HTML fica 10 min em cache na Vercel (`s-maxage=600`, `stale-while-revalidate`). Se a base de dados falhar, o site abre na mesma, sem as etiquetas. Código: `server/src/seo.ts` e `server/src/rotas/seo.ts`.
+
+**Por omissão a indexação está desligada**: o `robots.txt` fecha tudo e as páginas levam `noindex`. É o certo enquanto o site estiver num endereço de testes (ex.: `gesforma-alpha.vercel.app`): se a Google o indexasse, guardava-o como cópia do site e depois prejudicava o domínio real.
+
+#### Ao passar para o domínio real (por esta ordem)
+
+1. **Domínio na Vercel**: Project › Settings › Domains › adicionar o domínio `ena.pt` (o domínio principal) e `www.ena.pt`, e configurar o DNS como a Vercel indicar. Pôr `www.ena.pt` a redirecionar (308) para `ena.pt`, para haver um só endereço.
+   - **Antes de mudar o DNS, se o `ena.pt` já tem um site na Google**: guardar a lista dos endereços atuais (Search Console › Páginas, ou o sitemap do site antigo) e pôr cada um a redirecionar (301) para a página nova em `vercel.json › redirects` (ex.: `{ "source": "/cursos/ccp", "destination": "/formacao/formacao-de-formadores-ccp", "permanent": true }`). Sem isto, os endereços antigos passam a 404 e perde-se o lugar que já têm na pesquisa.
+2. **`APP_ORIGIN`** nas variáveis da Vercel com o domínio real (`https://ena.pt`) e fazer *redeploy*. Os URIs de retorno do Google (Drive e login) e da Microsoft passam a usar o domínio novo: atualizá-los nas consolas da Google e da Microsoft.
+3. **Sistema › Site › SEO**:
+   - *Endereço do site*: `https://ena.pt` (o mesmo de `APP_ORIGIN`).
+   - Nome do site, descrição geral (até 160 caracteres), imagem de partilha (1200 × 630 px) e perfis nas redes sociais.
+   - Título e descrição de cada página (a pré-visualização mostra como fica na Google).
+   - Ligar **Permitir que a Google e o Bing indexem o site** e gravar.
+4. **Cursos**: em cada curso, confirmar a capa, a síntese e, se quiser, o título e a descrição para a pesquisa (ficha do curso › Textos do site). São o que aparece na pesquisa e quando se partilha o curso.
+5. **Google Search Console** (search.google.com/search-console):
+   - Adicionar a propriedade como «Prefixo do URL» com o endereço do site.
+   - Verificação por «Etiqueta HTML»: colar a etiqueta em SEO › Verificação da Google, gravar, esperar 10 minutos e carregar em «Verificar».
+   - Em «Sitemaps», submeter `https://ena.pt/sitemap.xml`.
+   - Em «Inspeção de URL», pedir a indexação da página inicial e de um curso.
+6. **Bing Webmaster Tools** (bing.com/webmasters, também serve o Edge e o DuckDuckGo): importar o site da Search Console ou verificar com a etiqueta em SEO › Verificação do Bing, e submeter o mesmo sitemap.
+7. **Verificar**:
+   - `https://ena.pt/robots.txt` mostra `Allow: /` e a linha `Sitemap:`; `https://ena.pt/sitemap.xml` lista os cursos.
+   - No browser, «Ver código-fonte» de um curso mostra o título do curso em `<title>` e um bloco `application/ld+json`.
+   - Validar uma página de curso em search.google.com/test/rich-results e a partilha em developers.facebook.com/tools/debug (e no Post Inspector do LinkedIn).
+8. **Depois**: acompanhar na Search Console as páginas indexadas, os erros e as pesquisas que trazem visitas. A Google demora dias a semanas a mostrar o site.
+
+O site de testes que continuar noutro endereço deve ficar com a indexação **desligada**.

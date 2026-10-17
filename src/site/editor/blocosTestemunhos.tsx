@@ -1,18 +1,21 @@
 // Bloco «Testemunhos»: opiniões de formandos (editáveis) e um botão que leva às avaliações da ENA no Google.
-import type { CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { ComponentConfig } from "@puckeditor/core";
+import { apiAvaliacoesGooglePublicas, type AvaliacoesGooglePublicas } from "../../partilhado/api/site";
 import { Icon } from "../SiteLanding";
 import { campoCor, campoImagem, campoNumero, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { corSegura, estiloBloco, estiloTexto, estiloVazio, juntar, lados, ligacaoSegura, tipoVazia, type Estilo, type Tipografia } from "./estilos";
 
-type Testemunho = { nome: string; curso: string; texto: string; estrelas: number | null; foto: string };
+type Testemunho = { nome: string; curso: string; texto: string; estrelas: number | null; foto: string; google?: string };
 
 type TestemunhosProps = {
   titulo: string; tipoTitulo: Tipografia;
   itens: Testemunho[]; colunas: number | null; colunasTab: number | null; colunasTel: number | null; espaco: number | null;
   corEstrelas: string; tipoTexto: Tipografia; tipoNome: Tipografia; tipoCurso: Tipografia; tipoBotao: Tipografia;
   tamanhoFoto: number | null; alinhar: "esquerda" | "centro";
+  disposicao: "grelha" | "carrossel"; segundos: number | null; setas: boolean;
+  google: "nao" | "juntar" | "so"; googleMinimo: number | null; googleResumo: boolean;
   mostrarBotao: boolean; textoBotao: string; ligacaoBotao: string; corBotao: string; corTextoBotao: string;
   cartao: Estilo; aparencia: Estilo;
   puck?: { dragRef?: ((el: Element | null) => void) | null };
@@ -35,7 +38,16 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
       defaultItemProps: { nome: "", curso: "", texto: "", estrelas: 5, foto: "" },
       getItemSummary: item => item.nome || "Testemunho",
     },
-    colunas: campoNumero("Colunas (computador)", "") as never,
+    google: {
+      type: "radio", label: "Avaliações do Google (configuradas em Configurações › Avaliações Google)",
+      options: [{ label: "Não mostrar", value: "nao" }, { label: "Juntar às de cima", value: "juntar" }, { label: "Só as do Google", value: "so" }],
+    },
+    googleMinimo: campoNumero("Google: só avaliações com pelo menos N estrelas", ""),
+    googleResumo: simNao("Google: mostrar a classificação média e o número de avaliações"),
+    disposicao: { type: "radio", label: "Disposição", options: [{ label: "Grelha", value: "grelha" }, { label: "Carrossel", value: "carrossel" }] },
+    segundos: campoNumero("Carrossel: segundos entre testemunhos (vazio ou 0 = só com as setas)", ""),
+    setas: simNao("Carrossel: setas"),
+    colunas: campoNumero("Colunas (computador) · no carrossel, cartões visíveis de cada vez", "") as never,
     colunasTab: campoNumero("Colunas (tablet)", "") as never,
     colunasTel: campoNumero("Colunas (telemóvel)", "") as never,
     espaco: campoNumero("Espaço entre cartões"),
@@ -61,7 +73,7 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
     tipoTexto: tipoVazia({ tamanho: 15, alturaLinha: 1.6, cor: "var(--c-suave)" }),
     tipoNome: tipoVazia({ tamanho: 14, peso: "800", cor: "var(--c-primaria)" }),
     tipoCurso: tipoVazia({ tamanho: 12, cor: "var(--c-suave)" }), tipoBotao: tipoVazia(),
-    tamanhoFoto: 40, alinhar: "esquerda",
+    tamanhoFoto: 40, alinhar: "esquerda", disposicao: "grelha", segundos: 6, setas: true, google: "nao", googleMinimo: 4, googleResumo: true,
     mostrarBotao: true, textoBotao: "Veja e deixe a sua avaliação no Google",
     // shortcut: pesquisa genérica; trocar pelo link «Pedir avaliações» do Perfil da Empresa da ENA no Google.
     ligacaoBotao: "https://www.google.com/search?q=ena",
@@ -69,21 +81,32 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
     cartao: estiloVazio({ fundoCor: "#ffffff", preenchimento: lados(24, 24), bordaTopo: 3, bordaCor: "var(--c-acento)" }),
     aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }),
   },
-  render: ({ puck, titulo, tipoTitulo, itens, colunas, colunasTab, colunasTel, espaco, corEstrelas, tipoTexto, tipoNome, tipoCurso, tipoBotao, tamanhoFoto, alinhar, mostrarBotao, textoBotao, ligacaoBotao, corBotao, corTextoBotao, cartao, aparencia }) => {
+  render: ({ puck, titulo, tipoTitulo, itens, colunas, colunasTab, colunasTel, espaco, corEstrelas, tipoTexto, tipoNome, tipoCurso, tipoBotao, tamanhoFoto, alinhar, disposicao, segundos, setas, google, googleMinimo, googleResumo, mostrarBotao, textoBotao, ligacaoBotao, corBotao, corTextoBotao, cartao, aparencia }) => {
     const c = estiloBloco(aparencia);
     const k = estiloBloco(cartao);
     const [tt, tx, tn, tc, tb] = [estiloTexto(tipoTitulo), estiloTexto(tipoTexto), estiloTexto(tipoNome), estiloTexto(tipoCurso), estiloTexto(tipoBotao)];
     const href = ligacaoSegura(ligacaoBotao);
-    const lista = (itens ?? []).filter(t => t.texto?.trim() || t.nome?.trim());
+    const g = useAvaliacoesGoogle(google === "juntar" || google === "so");
+    const doGoogle: Testemunho[] = (g?.avaliacoes ?? [])
+      .filter(v => v.estrelas >= (googleMinimo ?? 0))
+      .map(v => ({ nome: v.autor, curso: v.quando, texto: v.texto, estrelas: v.estrelas, foto: v.foto, google: v.autorUrl || g?.url || "https://www.google.com" }));
+    const manuais = google === "so" ? [] : (itens ?? []).filter(t => t.texto?.trim() || t.nome?.trim());
+    const lista = [...manuais, ...doGoogle];
     const centro = alinhar === "centro";
     const foto = `${tamanhoFoto ?? 40}px`;
     return (
       <section ref={puck?.dragRef ?? undefined} className={juntar(c.className, "flex flex-col", centro ? "items-center text-center" : "items-start")} style={c.style}>
         {titulo && <h2 className={tt.className} style={tt.style}>{titulo}</h2>}
+        {googleResumo && google !== "nao" && g?.rating != null && (
+          <p className="mt-2 text-sm">
+            <span className="font-bold" style={{ color: corSegura(corEstrelas) || "var(--c-acento)" }}>★ {g.rating.toLocaleString("pt-PT")}</span>
+            {" "}<span className="opacity-70">· {g.total} avaliações no Google</span>
+          </p>
+        )}
         {lista.length > 0 && (
-          <div className="ena-grelha mt-6 w-full" style={{
+          <Cartoes carrossel={disposicao === "carrossel"} segundos={segundos ?? 0} setas={setas !== false} style={{
             justifyItems: centro ? "center" : undefined,
-            gap: `${espaco ?? 24}px`,
+            gap: `${espaco ?? 24}px`, ["--gap" as string]: `${espaco ?? 24}px`,
             ["--cols" as string]: String(colunas || 3), ["--cols-tab" as string]: String(colunasTab || 2), ["--cols-tel" as string]: String(colunasTel || 1),
           } as CSSProperties}>
             {lista.map((t, i) => {
@@ -97,12 +120,14 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
                     <span>
                       <span className={juntar("block", tn.className)} style={tn.style}>{t.nome}</span>
                       {t.curso && <span className={juntar("block", tc.className)} style={tc.style}>{t.curso}</span>}
+                      {/* A Google exige que a avaliação diga de onde vem e ligue ao autor. */}
+                      {t.google && <a href={t.google} target="_blank" rel="noreferrer" className="block text-[11px] opacity-60 hover:underline">Avaliação no Google</a>}
                     </span>
                   </figcaption>
                 </figure>
               );
             })}
-          </div>
+          </Cartoes>
         )}
         {mostrarBotao && href && (
           <a href={href} target="_blank" rel="noreferrer"
@@ -115,3 +140,53 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
     );
   },
 };
+
+/**
+ * Grelha ou carrossel. O carrossel desliza na horizontal (também com o dedo) e mostra «colunas» cartões de cada vez;
+ * avança sozinho de `segundos` em `segundos`, pára com o rato por cima e não se mexe com «reduzir movimento».
+ */
+function Cartoes({ carrossel, segundos, setas, style, children }: { carrossel: boolean; segundos: number; setas: boolean; style: CSSProperties; children: ReactNode }) {
+  const caixa = useRef<HTMLDivElement>(null);
+  const [parado, setParado] = useState(false);
+  const mover = (sentido: 1 | -1) => {
+    const el = caixa.current;
+    if (!el) return;
+    const fim = el.scrollLeft + el.clientWidth >= el.scrollWidth - 4;
+    if (sentido === 1 && fim) el.scrollTo({ left: 0, behavior: "smooth" });
+    else el.scrollBy({ left: sentido * el.clientWidth, behavior: "smooth" });
+  };
+  useEffect(() => {
+    if (!carrossel || !segundos || segundos <= 0 || parado) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const t = window.setInterval(() => mover(1), Math.max(2, segundos) * 1000);
+    return () => window.clearInterval(t);
+  }, [carrossel, segundos, parado]);
+  if (!carrossel) return <div className="ena-grelha mt-6 w-full" style={style}>{children}</div>;
+  const seta = (sentido: 1 | -1) => (
+    <button type="button" onClick={() => mover(sentido)} aria-label={sentido === 1 ? "Testemunhos seguintes" : "Testemunhos anteriores"}
+      className="grid h-10 w-10 place-items-center rounded-full bg-white text-[var(--c-primaria)] shadow-[0_6px_18px_rgba(20,38,61,.16)] hover:brightness-95">
+      <span className={sentido === -1 ? "rotate-180" : undefined}><Icon name="arrow" /></span>
+    </button>
+  );
+  return (
+    <div className="mt-6 w-full" onMouseEnter={() => setParado(true)} onMouseLeave={() => setParado(false)}
+      onFocus={() => setParado(true)} onBlur={() => setParado(false)}>
+      <div ref={caixa} className="ena-carrossel" style={style} role="region" aria-label="Testemunhos" tabIndex={0}>{children}</div>
+      {setas && <div className="mt-4 flex justify-center gap-3">{seta(-1)}{seta(1)}</div>}
+    </div>
+  );
+}
+
+/** Pede uma vez por página as avaliações do Google guardadas no servidor (vazio se não estiverem configuradas). */
+let pedidoGoogle: Promise<AvaliacoesGooglePublicas | null> | null = null;
+function useAvaliacoesGoogle(ativo: boolean) {
+  const [dados, setDados] = useState<AvaliacoesGooglePublicas | null>(null);
+  useEffect(() => {
+    if (!ativo) return;
+    let vivo = true;
+    pedidoGoogle ??= apiAvaliacoesGooglePublicas().catch(() => null);
+    void pedidoGoogle.then(d => { if (vivo) setDados(d); });
+    return () => { vivo = false; };
+  }, [ativo]);
+  return ativo ? dados : null;
+}

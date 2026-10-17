@@ -7,6 +7,7 @@ import { Aviso, Botao, Cartao, ErroCarregar, Esqueleto, Estado, PageHeader, cx, 
 import type { VistaProps } from "../../shell/tipos";
 import { RegrasApoios } from "../formandos/apoios/RegrasApoios";
 import { SeccaoAuditoria } from "./configuracoes/Auditoria";
+import { SeccaoAvaliacoesGoogle } from "./configuracoes/AvaliacoesGoogle";
 import { SeccaoDrive, SeccaoSmtp } from "./configuracoes/Integracoes";
 import { SeccaoMicrosoft, SeccaoWhatsapp } from "./configuracoes/IntegracoesContas";
 import { LogoEntidade } from "./configuracoes/LogoEntidade";
@@ -28,6 +29,7 @@ const SECCOES: Seccao[] = [
   { id: "smtp", rotulo: "Email (SMTP)", grupo: "Comunicação", soAdmin: true, estado: e => (e.smtp.ligado ? { texto: "Ligado", tom: "sucesso" } : { texto: "Desligado", tom: "aviso" }) },
   { id: "whatsapp", rotulo: "WhatsApp", grupo: "Comunicação", soAdmin: true, estado: e => (e.whatsapp.ligado ? { texto: "Ligado", tom: "sucesso" } : { texto: "Desligado", tom: "neutro" }) },
   { id: "drive", rotulo: "Google Drive", grupo: "Integrações", estado: e => (e.drive.ligado ? { texto: "Ligado", tom: "sucesso" } : { texto: "Por ligar", tom: "aviso" }) },
+  { id: "google-avaliacoes", rotulo: "Avaliações Google", grupo: "Integrações", soAdmin: true, estado: e => (e.googleAvaliacoes.ligado ? (e.googleAvaliacoes.erro ? { texto: "Com erro", tom: "aviso" } : { texto: "Ligado", tom: "sucesso" }) : { texto: "Desligado", tom: "neutro" }) },
   { id: "microsoft", rotulo: "Entrar com Microsoft", grupo: "Integrações", soAdmin: true, estado: e => (e.microsoft.ligado ? { texto: "Activo", tom: "sucesso" } : { texto: "Desligado", tom: "neutro" }) },
   { id: "pagamentos", rotulo: "Pagamentos", grupo: "Integrações", estado: () => ({ texto: "Gateway por escolher", tom: "neutro" }) },
   { id: "moodle", rotulo: "Moodle", grupo: "Integrações", estado: () => ({ texto: "Em pausa", tom: "neutro" }) },
@@ -86,6 +88,7 @@ export default function Configuracoes({ params, navigate }: VistaProps) {
       case "whatsapp": return <SeccaoWhatsapp />;
       case "drive": return <SeccaoDrive resultado={f.drive || undefined} onResultadoVisto={() => setF({ drive: "" })} />;
       case "microsoft": return <SeccaoMicrosoft />;
+      case "google-avaliacoes": return <SeccaoAvaliacoesGoogle />;
       case "pagamentos":
         return (
           <Informativa titulo="Pagamentos">

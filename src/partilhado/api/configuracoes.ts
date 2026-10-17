@@ -9,6 +9,7 @@ export type EstadoConfiguracoes = {
   drive: { configurado: boolean; ligado: boolean; email: string | null; modo: string };
   microsoft: { ligado: boolean };
   whatsapp: { ligado: boolean };
+  googleAvaliacoes: { ligado: boolean; erro: boolean };
   pagamentos: { gateway: string; metodos: string[] };
   moodle: { estado: string };
   avisos: number;
@@ -35,6 +36,16 @@ export type CorpoSmtp = { host?: string; port?: number; login: string; smtpKey?:
 export const apiSmtp = (signal?: AbortSignal) => api<EstadoSmtp>("/v1/settings/smtp", { signal, silencioso: true });
 export const apiGravarSmtp = (corpo: CorpoSmtp) => enviar.put<EstadoSmtp>("/v1/settings/smtp", corpo);
 export const apiDesligarSmtp = () => enviar.post<EstadoSmtp>("/v1/settings/smtp/desligar", {});
+
+/** Avaliações Google: a chave nunca volta do servidor. */
+export type EstadoAvaliacoesGoogle = {
+  configurado: boolean; placeId: string; temChave: boolean; atualizadoEm: string | null;
+  rating: number | null; total: number; quantas: number; erro: string | null;
+};
+export const apiAvaliacoesGoogle = (signal?: AbortSignal) => api<EstadoAvaliacoesGoogle>("/v1/settings/google-avaliacoes", { signal, silencioso: true });
+export const apiGravarAvaliacoesGoogle = (corpo: { placeId: string; chave?: string }) => enviar.put<EstadoAvaliacoesGoogle>("/v1/settings/google-avaliacoes", corpo);
+export const apiAtualizarAvaliacoesGoogle = () => enviar.post<EstadoAvaliacoesGoogle>("/v1/settings/google-avaliacoes/atualizar", {});
+export const apiDesligarAvaliacoesGoogle = () => enviar.post<EstadoAvaliacoesGoogle>("/v1/settings/google-avaliacoes/desligar", {});
 export const apiTestarSmtp = (to?: string) => enviar.post<{ ok: true; id: string }>("/v1/settings/smtp/teste", { to });
 
 // ─── Google Drive ────────────────────────────────────────────────────────────

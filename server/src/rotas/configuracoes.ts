@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { avisosConfiguracao, config } from "../config.js";
+import { avaliacoesGoogle, desligarAvaliacoesGoogle, estadoAvaliacoesGoogle, gravarAvaliacoesGoogle } from "../avaliacoesGoogle.js";
 import { getDriveStatus } from "../googleDrive.js";
 import { lerLembretePre } from "../lembretePre.js";
 import { sendMail } from "../mailer.js";
@@ -25,6 +26,11 @@ const smtpSchema = z.object({
   replyTo: z.string().trim().min(3).max(254),
 });
 const testeSchema = z.object({ to: z.string().trim().max(254).optional() });
+const googleSchema = z.object({
+  // Place ID da ficha da ENA no Google Maps (ex.: ChIJ…).
+  placeId: z.string().trim().min(10).max(300).regex(/^[A-Za-z0-9_-]+$/, "Place ID inválido"),
+  chave: z.string().trim().min(20).max(200).optional(),
+});
 
 export async function registar(app: FastifyInstance, deps: Deps) {
   const { db, requireAuth, audit } = deps;
@@ -42,7 +48,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
   app.get("/v1/configuracoes/estado", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const admin = req.actor!.role === "admin";
-    const [entidade, regras, lembrete, smtp, drive, microsoft, whatsapp] = await Promise.all([
+    const [entidade, regras, lembrete, smtp, drive, microsoft, whatsapp, google] = await Promise.all([
       lerEntidade(db),
       lerRegras(db),
       lerLembretePre(db),
@@ -50,6 +56,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       getDriveStatus(db).catch(() => null),
       getMicrosoftStatus(db).catch(() => null),
       whatsappLigado(db).catch(() => false),
+      estadoAvaliacoesGoogle(db).catch(() => null),
     ]);
     const faltaEntidade = (["nif", "morada", "email", "telefone", "iban", "titularConta"] as const).filter(k => !entidade[k]);
     return {
@@ -60,6 +67,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       drive: drive ? { configurado: drive.configured, ligado: drive.connected, email: drive.email, modo: drive.mode } : { configurado: false, ligado: false, email: null, modo: "local" },
       microsoft: { ligado: Boolean(microsoft?.configured) },
       whatsapp: { ligado: whatsapp },
+      googleAvaliacoes: { ligado: Boolean(google?.configurado), erro: Boolean(google?.erro) },
       pagamentos: { gateway: "por escolher", metodos: [...METODOS_ACEITES] },
       moodle: { estado: "em pausa" },
       avisos: admin ? avisosConfiguracao().length : 0,
@@ -91,6 +99,48 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     await disconnectSmtp(db);
     await audit(db, req.actor!.id, "settings.smtp_off", "smtp_config", "brevo", req.ip);
     return getSmtpStatus(db);
+  });
+
+  // ─── Avaliações Google (o site mostra-as no bloco Testemunhos) ───────────────
+  app.get("/v1/settings/google-avaliacoes", async (req, reply) => {
+    if (!soAdmin(req, reply)) return;
+    return estadoAvaliacoesGoogle(db);
+  });
+
+  app.put("/v1/settings/google-avaliacoes", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
+    if (!soAdmin(req, reply)) return;
+    const v = validar(reply, { body: googleSchema }, req);
+    if (!v) return;
+    try {
+      await gravarAvaliacoesGoogle(db, v.body);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : "A Google recusou a chave ou o Place ID." });
+    }
+    await audit(db, req.actor!.id, "settings.google_avaliacoes", "app_settings", "google_avaliacoes", req.ip);
+    return estadoAvaliacoesGoogle(db);
+  });
+
+  app.post("/v1/settings/google-avaliacoes/atualizar", { config: { rateLimit: { max: 6, timeWindow: "1 minute" } } }, async (req, reply) => {
+    if (!soAdmin(req, reply)) return;
+    try {
+      await avaliacoesGoogle(db, true);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : "Não foi possível falar com a Google." });
+    }
+    return estadoAvaliacoesGoogle(db);
+  });
+
+  app.post("/v1/settings/google-avaliacoes/desligar", async (req, reply) => {
+    if (!soAdmin(req, reply)) return;
+    await desligarAvaliacoesGoogle(db);
+    await audit(db, req.actor!.id, "settings.google_avaliacoes_off", "app_settings", "google_avaliacoes", req.ip);
+    return estadoAvaliacoesGoogle(db);
+  });
+
+  /** Para o site: a classificação e as avaliações guardadas (nunca a chave). */
+  app.get("/v1/public/avaliacoes-google", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async () => {
+    const c = await avaliacoesGoogle(db).catch(() => null);
+    return c ? { rating: c.rating, total: c.total, url: c.url, avaliacoes: c.avaliacoes } : { rating: null, total: 0, url: "", avaliacoes: [] };
   });
 
   app.post("/v1/settings/smtp/teste", { config: { rateLimit: { max: 6, timeWindow: "1 minute" } } }, async (req, reply) => {

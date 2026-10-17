@@ -419,6 +419,17 @@ body:has(input[type="file"]:focus) [data-ficha-sticky] {
   .ena-oculto-pc { display: none !important; }
 }
 .ena-grelha { display: grid; grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); }
+/* Carrossel: «--cols» cartões visíveis de cada vez (tablet e telemóvel com os seus), desliza e encaixa cartão a cartão. */
+.ena-carrossel {
+  --vis: var(--cols, 3);
+  display: grid; grid-auto-flow: column;
+  grid-auto-columns: calc((100% - (var(--vis) - 1) * var(--gap, 24px)) / var(--vis));
+  overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none;
+}
+.ena-carrossel::-webkit-scrollbar { display: none; }
+.ena-carrossel > * { scroll-snap-align: start; }
+@media (min-width: 768px) and (max-width: 1023px) { .ena-carrossel { --vis: var(--cols-tab, 2); } }
+@media (max-width: 767px) { .ena-carrossel { --vis: var(--cols-tel, 1); } }
 /* Espaço de blocos vazio: no site não ocupa lugar; no editor (data-puck-dropzone) fica visível para se largar blocos. */
 .ena-zona:empty:not([data-puck-dropzone]) { display: none; }
 .ena-linhas-1, .ena-linhas-2, .ena-linhas-3, .ena-linhas-4 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }

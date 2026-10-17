@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { satisfacaoPublica } from "../areaFormando.js";
+import { ID_AVALIACOES_GOOGLE } from "../avaliacoesGoogle.js";
 import { guardarImagemHero } from "../cursoImagens.js";
 import { normalizarLembrete } from "../lembretePre.js";
 import { ehSegredo, settingsSemSegredos } from "../opsVisibilidade.js";
@@ -28,7 +29,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
 
   app.get("/v1/settings", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    const todas = await settings.todasDefinicoes(db);
+    const { [ID_AVALIACOES_GOOGLE]: _google, ...todas } = await settings.todasDefinicoes(db);
     return { settings: req.actor?.role === "admin" ? todas : settingsSemSegredos(todas) };
   });
 
@@ -37,6 +38,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const p = validar(reply, { params: idDefinicao }, req);
     if (!p) return;
     const id = p.params.id;
+    // A chave e a cópia das avaliações Google só se mudam pela secção própria (a chave fica cifrada).
+    if (id === ID_AVALIACOES_GOOGLE) return reply.code(403).send({ error: "Use Configurações › Avaliações Google." });
     if (DEFINICOES_SO_ADMIN.has(id) && req.actor?.role !== "admin") {
       return reply.code(403).send({ error: id === "site" ? "só o administrador edita o site" : "Só o administrador altera esta definição." });
     }

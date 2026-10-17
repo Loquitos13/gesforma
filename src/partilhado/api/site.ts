@@ -1,6 +1,13 @@
 // API do domínio "site": definições (`app_settings`), conteúdo do site e imagens do topo.
 import { api, enviar, enviarFicheiro } from "./cliente";
 
+/** Avaliações da ENA no Google (cópia guardada no servidor; lista vazia se não estiver configurado). */
+export type AvaliacoesGooglePublicas = {
+  rating: number | null; total: number; url: string;
+  avaliacoes: { autor: string; autorUrl: string; foto: string; estrelas: number; texto: string; quando: string; data: string }[];
+};
+export const apiAvaliacoesGooglePublicas = () => api<AvaliacoesGooglePublicas>("/v1/public/avaliacoes-google", { silencioso: true });
+
 export type Definicoes = Record<string, Record<string, string>>;
 
 export const apiDefinicoes = (signal?: AbortSignal) => api<{ settings: Definicoes }>("/v1/settings", { signal, silencioso: true });

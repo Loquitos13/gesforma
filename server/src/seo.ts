@@ -49,6 +49,19 @@ async function lerSeo(db: Db): Promise<Seo> {
   return Object.fromEntries(CHAVES_SEO.map(k => [k, typeof (v as Record<string, unknown>)[k] === "string" ? String((v as Record<string, unknown>)[k]) : ""])) as Seo;
 }
 
+/**
+ * Só se indexa com o interruptor ligado E quando o pedido chega ao domínio configurado (ex.: ena.pt ou www.ena.pt):
+ * uma cópia de testes (gesforma-alpha.vercel.app) nunca aparece na pesquisa, mesmo com o interruptor ligado.
+ */
+export function podeIndexar(seo: { indexar: string; url: string }, host?: string) {
+  if (seo.indexar !== "1") return false;
+  if (!host) return true;
+  const alvo = (seo.url.trim() || config.appOrigin).match(/^https?:\/\/([^/:]+)/i)?.[1]?.toLowerCase();
+  if (!alvo) return false;
+  const h = host.toLowerCase().split(":")[0]!.replace(/^www\./, "");
+  return h === alvo.replace(/^www\./, "");
+}
+
 function origemDo(seo: Seo) {
   const u = seo.url.trim().replace(/\/+$/, "");
   return /^https?:\/\/[^\s/]+/.test(u) ? u : config.appOrigin;
@@ -113,12 +126,12 @@ const ligacoesCursos = (cursos: CursoPublico[]) =>
   `<ul>${cursos.slice(0, 60).map(c => `<li><a href="/formacao/${encodeURIComponent(c.id)}">${esc(c.titulo)}</a></li>`).join("")}</ul>`;
 
 /** Título, descrição e dados de um endereço do site. Endereços privados (backoffice, área do formando, ligações pessoais) não se indexam. */
-export async function metaDaPagina(db: Db, caminhoBruto: string): Promise<MetaPagina> {
+export async function metaDaPagina(db: Db, caminhoBruto: string, host?: string): Promise<MetaPagina> {
   const seo = await lerSeo(db);
   const origem = origemDo(seo);
   const caminho = (`/${caminhoBruto.split("?")[0]!.replace(/^\/+/, "")}`).replace(/\/+$/, "") || "/";
   // Desligada até se ligar em Sistema › Site › SEO: um endereço de testes nunca deve aparecer na pesquisa.
-  const indexarSite = seo.indexar === "1";
+  const indexarSite = podeIndexar(seo, host);
   const { nome, org } = await organizacao(db, seo, origem);
   const site = { "@type": "WebSite", "@id": `${origem}/#site`, name: nome, url: origem, inLanguage: "pt-PT", publisher: { "@id": `${origem}/#organizacao` } };
   const descricaoBase = limpar(seo.descricao) || "Formação certificada: formação de formadores (CCP), cursos autofinanciados e formação financiada.";
@@ -225,10 +238,10 @@ export async function indexHtml(): Promise<string | null> {
 }
 
 /** HTML final: as etiquetas no <head> e o conteúdo mínimo no #root. Sem o index.html construído, devolve null. */
-export async function htmlDaPagina(db: Db, caminho: string): Promise<{ estado: number; html: string } | null> {
+export async function htmlDaPagina(db: Db, caminho: string, host?: string): Promise<{ estado: number; html: string } | null> {
   const doc = await indexHtml();
   if (!doc) return null;
-  const m = await metaDaPagina(db, caminho);
+  const m = await metaDaPagina(db, caminho, host);
   const seo = await lerSeo(db);
   const google = codigoVerificacao(seo.googleVerificacao);
   const bing = codigoVerificacao(seo.bingVerificacao);
@@ -264,11 +277,11 @@ export async function htmlDaPagina(db: Db, caminho: string): Promise<{ estado: n
 }
 
 /** sitemap.xml: páginas, cursos publicados e notícias. Vazio quando a indexação está desligada. */
-export async function sitemapXml(db: Db) {
+export async function sitemapXml(db: Db, host?: string) {
   const seo = await lerSeo(db);
   const origem = origemDo(seo);
   const urls: { loc: string; prioridade: string; mudanca: string; data?: string }[] = [];
-  if (seo.indexar === "1") {
+  if (podeIndexar(seo, host)) {
     urls.push({ loc: `${origem}/`, prioridade: "1.0", mudanca: "weekly" }, { loc: `${origem}/formacao`, prioridade: "0.9", mudanca: "daily" });
     const { cursos } = await listarCatalogoPublico(db);
     for (const c of cursos) urls.push({ loc: `${origem}/formacao/${encodeURIComponent(c.id)}`, prioridade: "0.8", mudanca: "weekly" });
@@ -281,10 +294,10 @@ export async function sitemapXml(db: Db) {
     `  <url><loc>${esc(u.loc)}</loc>${u.data ? `<lastmod>${u.data}</lastmod>` : ""}<changefreq>${u.mudanca}</changefreq><priority>${u.prioridade}</priority></url>`).join("\n")}\n</urlset>\n`;
 }
 
-export async function robotsTxt(db: Db) {
+export async function robotsTxt(db: Db, host?: string) {
   const seo = await lerSeo(db);
   const origem = origemDo(seo);
-  if (seo.indexar !== "1") return "User-agent: *\nDisallow: /\n";
+  if (!podeIndexar(seo, host)) return "User-agent: *\nDisallow: /\n";
   return [
     "User-agent: *",
     "Allow: /",

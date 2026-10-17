@@ -175,16 +175,17 @@ Como funciona: o build muda `dist/index.html` para `dist/app.html` (`scripts/htm
 
 **Por omissão a indexação está desligada**: o `robots.txt` fecha tudo e as páginas levam `noindex`. É o certo enquanto o site estiver num endereço de testes (ex.: `gesforma-alpha.vercel.app`): se a Google o indexasse, guardava-o como cópia do site e depois prejudicava o domínio real.
 
+Liga-se com **um interruptor**: Sistema › Site › SEO › «O site já está no domínio real (ena.pt)». Ligar põe o endereço do site em `https://ena.pt` e permite a indexação. Mesmo ligado, o servidor só indexa os pedidos que chegam a `ena.pt` (ou `www.ena.pt`): qualquer outro endereço, como o de testes, continua com `noindex` e `robots.txt` fechado (`podeIndexar` em `server/src/seo.ts`).
+
 #### Ao passar para o domínio real (por esta ordem)
 
 1. **Domínio na Vercel**: Project › Settings › Domains › adicionar o domínio `ena.pt` (o domínio principal) e `www.ena.pt`, e configurar o DNS como a Vercel indicar. Pôr `www.ena.pt` a redirecionar (308) para `ena.pt`, para haver um só endereço.
    - **Antes de mudar o DNS, se o `ena.pt` já tem um site na Google**: guardar a lista dos endereços atuais (Search Console › Páginas, ou o sitemap do site antigo) e pôr cada um a redirecionar (301) para a página nova em `vercel.json › redirects` (ex.: `{ "source": "/cursos/ccp", "destination": "/formacao/formacao-de-formadores-ccp", "permanent": true }`). Sem isto, os endereços antigos passam a 404 e perde-se o lugar que já têm na pesquisa.
 2. **`APP_ORIGIN`** nas variáveis da Vercel com o domínio real (`https://ena.pt`) e fazer *redeploy*. Os URIs de retorno do Google (Drive e login) e da Microsoft passam a usar o domínio novo: atualizá-los nas consolas da Google e da Microsoft.
 3. **Sistema › Site › SEO**:
-   - *Endereço do site*: `https://ena.pt` (o mesmo de `APP_ORIGIN`).
-   - Nome do site, descrição geral (até 160 caracteres), imagem de partilha (1200 × 630 px) e perfis nas redes sociais.
+   - Ligar **O site já está no domínio real (ena.pt)** e gravar. É o interruptor que põe o site na pesquisa.
+   - Nome do site, descrição geral (até 160 caracteres), imagem de partilha (1200 × 630 px) e perfis nas redes sociais (podem ser preenchidos antes, ainda no endereço de testes).
    - Título e descrição de cada página (a pré-visualização mostra como fica na Google).
-   - Ligar **Permitir que a Google e o Bing indexem o site** e gravar.
 4. **Cursos**: em cada curso, confirmar a capa, a síntese e, se quiser, o título e a descrição para a pesquisa (ficha do curso › Textos do site). São o que aparece na pesquisa e quando se partilha o curso.
 5. **Google Search Console** (search.google.com/search-console):
    - Adicionar a propriedade como «Prefixo do URL» com o endereço do site.
@@ -198,4 +199,4 @@ Como funciona: o build muda `dist/index.html` para `dist/app.html` (`scripts/htm
    - Validar uma página de curso em search.google.com/test/rich-results e a partilha em developers.facebook.com/tools/debug (e no Post Inspector do LinkedIn).
 8. **Depois**: acompanhar na Search Console as páginas indexadas, os erros e as pesquisas que trazem visitas. A Google demora dias a semanas a mostrar o site.
 
-O site de testes que continuar noutro endereço deve ficar com a indexação **desligada**.
+Um site de testes noutro endereço fica fora da pesquisa sozinho, mesmo que partilhe a base de dados com o interruptor ligado.

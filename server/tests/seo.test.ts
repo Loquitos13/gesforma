@@ -9,21 +9,24 @@ async function preparar() {
   definirModeloHtml(MODELO);
   return ctx;
 }
-const pagina = (ctx: Awaited<ReturnType<typeof arrancar>>, caminho: string) =>
-  ctx.app.inject({ method: "GET", url: `/v1/public/pagina?caminho=${encodeURIComponent(caminho)}` });
+/** Pedido como chega da Vercel: o domínio que o visitante abriu vem em x-forwarded-host. */
+const pagina = (ctx: Awaited<ReturnType<typeof arrancar>>, caminho: string, host = "ena.pt") =>
+  ctx.app.inject({ method: "GET", url: `/v1/public/pagina?caminho=${encodeURIComponent(caminho)}`, headers: { "x-forwarded-host": host } });
+const pub = (ctx: Awaited<ReturnType<typeof arrancar>>, url: string, host = "ena.pt") =>
+  ctx.app.inject({ method: "GET", url, headers: { "x-forwarded-host": host } });
 const jsonLd = (html: string) => JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)![1]!) as { "@graph": Record<string, unknown>[] };
 
 describe("SEO do site", () => {
   it("por omissão o site fica fora da pesquisa (endereço de testes) até se ligar a indexação", async () => {
     const ctx = await preparar();
-    expect((await ctx.app.inject({ method: "GET", url: "/v1/public/robots.txt" })).body).toBe("User-agent: *\nDisallow: /\n");
+    expect((await pub(ctx, "/v1/public/robots.txt")).body).toBe("User-agent: *\nDisallow: /\n");
     expect((await pagina(ctx, "/")).body).toContain('content="noindex, nofollow"');
-    expect((await ctx.app.inject({ method: "GET", url: "/v1/public/sitemap.xml" })).body).not.toContain("<url>");
+    expect((await pub(ctx, "/v1/public/sitemap.xml")).body).not.toContain("<url>");
   });
 
   it("cada página leva título, descrição, canónico, partilha e dados estruturados; a app continua a carregar", async () => {
     const ctx = await preparar();
-    await pedido(ctx, "admin", "PUT", "/v1/settings/seo", { values: { indexar: "1" } });
+    await pedido(ctx, "admin", "PUT", "/v1/settings/seo", { values: { indexar: "1", url: "https://ena.pt" } });
     const r = await pagina(ctx, "/");
     expect(r.statusCode).toBe(200);
     expect(r.headers["content-type"]).toContain("text/html");
@@ -81,19 +84,31 @@ describe("SEO do site", () => {
 
   it("sitemap e robots; desligar a indexação fecha tudo", async () => {
     const ctx = await preparar();
-    await pedido(ctx, "admin", "PUT", "/v1/settings/seo", { values: { indexar: "1", url: "https://www.ena.pt" } });
-    const s = await ctx.app.inject({ method: "GET", url: "/v1/public/sitemap.xml" });
+    await pedido(ctx, "admin", "PUT", "/v1/settings/seo", { values: { indexar: "1", url: "https://ena.pt" } });
+    const s = await pub(ctx, "/v1/public/sitemap.xml");
     expect(s.headers["content-type"]).toContain("xml");
-    expect(s.body).toContain("<loc>https://www.ena.pt/</loc>");
-    expect(s.body).toContain("<loc>https://www.ena.pt/formacao/");
-    const robots = (await ctx.app.inject({ method: "GET", url: "/v1/public/robots.txt" })).body;
-    expect(robots).toContain("Sitemap: https://www.ena.pt/sitemap.xml");
+    expect(s.body).toContain("<loc>https://ena.pt/</loc>");
+    expect(s.body).toContain("<loc>https://ena.pt/formacao/");
+    const robots = (await pub(ctx, "/v1/public/robots.txt")).body;
+    expect(robots).toContain("Sitemap: https://ena.pt/sitemap.xml");
     expect(robots).toContain("Disallow: /gesforma");
 
-    await pedido(ctx, "admin", "PUT", "/v1/settings/seo", { values: { indexar: "0", url: "https://www.ena.pt" } });
-    expect((await ctx.app.inject({ method: "GET", url: "/v1/public/robots.txt" })).body).toContain("Disallow: /\n");
-    expect((await ctx.app.inject({ method: "GET", url: "/v1/public/sitemap.xml" })).body).not.toContain("<url>");
+    await pedido(ctx, "admin", "PUT", "/v1/settings/seo", { values: { indexar: "0", url: "https://ena.pt" } });
+    expect((await pub(ctx, "/v1/public/robots.txt")).body).toContain("Disallow: /\n");
+    expect((await pub(ctx, "/v1/public/sitemap.xml")).body).not.toContain("<url>");
     expect((await pagina(ctx, "/")).body).toContain('content="noindex, nofollow"');
+  });
+
+  it("com o interruptor ligado, só o domínio real (com ou sem www) se indexa; o endereço de testes fica fora", async () => {
+    const ctx = await preparar();
+    await pedido(ctx, "admin", "PUT", "/v1/settings/seo", { values: { indexar: "1", url: "https://ena.pt" } });
+    expect((await pagina(ctx, "/", "ena.pt")).body).toContain('content="index, follow');
+    expect((await pagina(ctx, "/", "www.ena.pt")).body).toContain('content="index, follow');
+    const teste = await pagina(ctx, "/", "gesforma-alpha.vercel.app");
+    expect(teste.body).toContain('content="noindex, nofollow"');
+    expect(teste.body).not.toContain('rel="canonical"');
+    expect((await pub(ctx, "/v1/public/robots.txt", "gesforma-alpha.vercel.app")).body).toBe("User-agent: *\nDisallow: /\n");
+    expect((await pub(ctx, "/v1/public/sitemap.xml", "gesforma-alpha.vercel.app")).body).not.toContain("<url>");
   });
 
   it("na Vercel, páginas, sitemap e robots vão para as rotas de SEO; a API fica como estava", async () => {

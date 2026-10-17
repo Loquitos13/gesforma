@@ -20,6 +20,9 @@ const PAGINAS: { id: "inicio" | "formacao" | "noticias" | "empresas"; nome: stri
   { id: "empresas", nome: "Empresas", caminho: "/empresas", titulo: "Formação para empresas", descricao: "Formação à medida para equipas…" },
 ];
 
+/** O domínio público da ENA: ligar o interruptor põe-no como endereço do site. */
+const DOMINIO_REAL = "https://ena.pt";
+
 /** Igual à de server/src/seo.ts: a que o site usa enquanto não se escreve outra. */
 const DESCRICAO_OMISSAO = "Formação certificada: formação de formadores (CCP), cursos autofinanciados e formação financiada.";
 
@@ -68,12 +71,15 @@ export function SeoSite() {
         (preço, datas, locais). Os cursos têm título e descrição próprios na ficha do curso › Textos do site.
       </Aviso>
 
-      <Cartao titulo="Indexação" subtitulo="Desligue num site de testes, para não aparecer na pesquisa.">
+      <Cartao titulo="Domínio real e indexação" subtitulo="Enquanto o site estiver num endereço de testes, fica fora da pesquisa.">
         <div className="flex flex-col gap-3">
-          <Interruptor rotulo="Permitir que a Google e o Bing indexem o site" ligado={v.indexar === "1"} onMudar={x => mudar("indexar", x ? "1" : "0")} />
-          {v.indexar !== "1" && <Aviso tom="aviso">O site está escondido da pesquisa (o robots.txt fecha tudo e as páginas levam «noindex»). Ligue só no domínio real: ver «SEO» na documentação do projeto (README).</Aviso>}
-          <Campo rotulo="Endereço do site" ajuda="O endereço público, com https: https://ena.pt. Vazio: o endereço onde o GesForma está (só para testes).">
-            {p => <Entrada {...p} type="url" value={v.url} placeholder={window.location.origin} onChange={e => mudar("url", e.target.value.trim())} />}
+          <Interruptor rotulo={`O site já está no domínio real (${DOMINIO_REAL.replace("https://", "")})`} ligado={v.indexar === "1"}
+            onMudar={x => setV({ ...v, indexar: x ? "1" : "0", url: x && !v.url.trim() ? DOMINIO_REAL : v.url })} />
+          {v.indexar === "1"
+            ? <Aviso tom="sucesso">A Google e o Bing podem indexar o site em {(v.url.trim() || DOMINIO_REAL).replace("https://", "")}. Qualquer outro endereço (como o de testes) continua fora da pesquisa. Grave para aplicar.</Aviso>
+            : <Aviso tom="aviso">O site está fora da pesquisa: o robots.txt fecha tudo e as páginas levam «noindex». Ligue quando o site estiver em {DOMINIO_REAL.replace("https://", "")} (ver «SEO» no README do projeto).</Aviso>}
+          <Campo rotulo="Endereço do site" ajuda={`Preenche-se sozinho ao ligar (${DOMINIO_REAL}). Só se indexa o site quando é visitado neste endereço.`}>
+            {p => <Entrada {...p} type="url" value={v.url} placeholder={DOMINIO_REAL} onChange={e => mudar("url", e.target.value.trim())} />}
           </Campo>
           <p className="m-0 text-sm text-tinta-suave">
             Mapa do site: <a className="underline" href={`${origem}/sitemap.xml`} target="_blank" rel="noreferrer">{origem}/sitemap.xml<span className="sr-only"> (abre noutra janela)</span></a>

@@ -14,6 +14,7 @@ import {
 } from "./repos/areaFormando.js";
 import { hashPassword, isEmail, normalizeEmail, sha256 } from "./security.js";
 import { vistaDocumentosFormandoFin } from "./formandoFinDocs.js";
+import { listarCatalogoPublico } from "./catalogoPublico.js";
 
 /** Área do formando: conta, inscrições, agenda, certificados, pagamentos e documentos. */
 
@@ -187,6 +188,27 @@ function inscricaoDe(regime: "gold" | "fin", r: Record<string, unknown>): Inscri
 async function inscricoesDo(db: Db, userId: string): Promise<Inscricao[]> {
   const [gold, fin] = [await inscricoesGoldDoUtilizador(db, userId), await inscricoesFinDoUtilizador(db, userId)];
   return [...gold.map(r => inscricaoDe("gold", r)), ...fin.map(r => inscricaoDe("fin", r))];
+}
+
+/**
+ * Cursos a sugerir ao formando (depois de deixar a opinião): da mesma área temática dos cursos que fez,
+ * no mesmo regime (Gold e Financiada não se misturam), sem os que já tem. Sem nada nessa área: os mais procurados.
+ */
+export async function sugestoesDeCursos(db: Db, userId: string) {
+  const inscricoes = await inscricoesDo(db, userId);
+  const { cursos } = await listarCatalogoPublico(db);
+  const k = (s: string) => s.trim().toLowerCase();
+  const regimes = new Set(inscricoes.map(i => i.regime));
+  const feitos = new Set(inscricoes.map(i => k(i.curso)).filter(Boolean));
+  const doRegime = cursos.filter(c => regimes.has(c.regime));
+  const meus = doRegime.filter(c => feitos.has(k(c.titulo)) || feitos.has(k(c.nomeOferta)));
+  const areas = new Set(meus.map(c => k(c.area)).filter(Boolean));
+  const outros = doRegime.filter(c => !meus.includes(c));
+  const daArea = outros.filter(c => areas.has(k(c.area)));
+  // A lista do catálogo já vem dos mais procurados para os menos.
+  return (daArea.length ? daArea : outros).slice(0, 4).map(c => ({
+    id: c.id, titulo: c.titulo, area: c.area, modalidade: c.modalidade, inicio: c.inicio, preco: c.precoLabel, imagem: c.miniatura,
+  }));
 }
 
 export async function montarArea(db: Db, user: Actor) {

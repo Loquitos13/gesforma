@@ -10,6 +10,7 @@ import { Botao, Coluna, Imagem, Pilares, Seccao, Texto, Titulo } from "./blocosB
 import { cartaoPadrao, CursosDestaque, OfertaFormativa } from "./blocosCursos";
 import { Servicos } from "./blocosServicos";
 import { Testemunhos } from "./blocosTestemunhos";
+import { CursoRelevantes } from "./blocosCursoRelevantes";
 import { cabecalhoPadrao, rodapePadrao } from "./blocosMoldura";
 import { temaPadrao } from "./config";
 import { em, estiloVazio, lados, tipoVazia } from "./estilos";
@@ -246,6 +247,7 @@ export function modeloCurso(antigo?: Legado): Data {
     bloco("CursoFuncionamento", CursoFuncionamento.defaultProps, { aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) }),
     bloco("Testemunhos", Testemunhos.defaultProps),
     ...(sim("mostrarTurmas") ? [bloco("CursoTurmas", CursoTurmas.defaultProps, { titulo: txt("tituloTurmas", "Próximas turmas"), aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) })] : []),
+    blocoRelevantes(),
   ];
   const cartao = sim("mostrarCartao");
   const grelha = bloco("Seccao", Seccao.defaultProps, {
@@ -311,9 +313,28 @@ export function converterPaginaCurso(d: Data): Data {
     !texto.includes('"CursoFuncionamento"') && bloco("CursoFuncionamento", CursoFuncionamento.defaultProps, { aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) }),
     !texto.includes('"Testemunhos"') && bloco("Testemunhos", Testemunhos.defaultProps),
   ].filter(Boolean) as No[];
-  if (novos.length) dados = { ...dados, content: inserirDepois((dados.content ?? []) as No[], "CursoPrograma", novos) } as Data;
+  // Sem Programa na página, entram a seguir ao primeiro bloco de conteúdo que houver.
+  if (novos.length) dados = inserirNaPrimeira(dados, ["CursoPrograma", "CursoObjetivos", "CursoEscolhaLocal", "CursoDados", "CursoSintese"], novos);
+  // «Outros cursos relevantes» fecha a coluna do conteúdo: a seguir às turmas (ou ao último bloco conhecido que houver).
+  if (!texto.includes('"CursoRelevantes"')) {
+    const relevantes = blocoRelevantes() as No;
+    relevantes.props.id = `CursoRelevantes-${Date.now().toString(36)}`;
+    dados = inserirNaPrimeira(dados, ["CursoTurmas", "Testemunhos", "CursoFuncionamento", "CursoPrograma", "CursoObjetivos", "CursoEscolhaLocal", "CursoDados", "CursoSintese"], [relevantes]);
+  }
   return dados;
 }
+
+/** Insere a seguir ao primeiro tipo de bloco (da lista, por ordem) que a página tiver; sem nenhum, fica como está. */
+function inserirNaPrimeira(dados: Data, ancoras: string[], novos: No[]): Data {
+  for (const ancora of ancoras) {
+    const antes = (dados.content ?? []) as No[];
+    const depois = inserirDepois(antes, ancora, novos);
+    if (depois !== antes) return { ...dados, content: depois as Data["content"] };
+  }
+  return dados;
+}
+
+const blocoRelevantes = () => bloco("CursoRelevantes", CursoRelevantes.defaultProps, { aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) });
 
 /** Põe `novos` logo a seguir ao primeiro bloco do tipo `tipo` (procura também dentro das secções e colunas). */
 function inserirDepois(lista: No[], tipo: string, novos: No[]): No[] {

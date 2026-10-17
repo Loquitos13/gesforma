@@ -33,6 +33,7 @@ import { registar as assinaturas } from "./assinaturas.js";
 import { registar as assinaturasPublicas } from "./assinaturasPublicas.js";
 import { registar as recibos } from "./recibos.js";
 import { registar as entidadeLogo } from "./entidadeLogo.js";
+import { registar as testemunhos } from "./testemunhos.js";
 import type { Deps, ModuloRotas } from "./tipos.js";
 
 /**
@@ -74,6 +75,7 @@ const MODULOS: Record<string, ModuloRotas> = {
   entidadeLogo,
   assinaturas,
   assinaturasPublicas,
+  testemunhos,
 };
 
 export async function registarRotas(app: FastifyInstance, deps: Deps) {

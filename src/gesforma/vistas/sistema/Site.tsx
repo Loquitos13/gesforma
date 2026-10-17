@@ -8,10 +8,11 @@ import { PAGINAS_SITE, type PaginaSite } from "../../../partilhado/siteBlocos";
 import { SITE_OMISSAO } from "../../../partilhado/siteConteudo";
 import { AreaTexto, Aviso, Botao, Campo, Cartao, Entrada, ErroCarregar, Esqueleto, Interruptor, cx } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
+import { TestemunhosSite } from "./TestemunhosSite";
 
 const EditorPagina = lazy(() => import("./EditorPagina").then(m => ({ default: m.EditorPagina })));
 
-type Separador = "paginas" | "definicoes";
+type Separador = "paginas" | "testemunhos" | "definicoes";
 
 export default function Site(_props: VistaProps) {
   const podeEditar = usePode()("site.editar");
@@ -32,7 +33,7 @@ export default function Site(_props: VistaProps) {
     // O editor ocupa a área toda (sem as margens do ecrã) para a pré-visualização ser o mais larga possível.
     <div className="-mx-4 -my-5 flex h-[calc(100%+2.5rem)] flex-col sm:-mx-8 sm:-my-6 sm:h-[calc(100%+3rem)]">
       <div role="tablist" aria-label="Site" className="flex shrink-0 items-center gap-1 border-b border-linha bg-superficie px-3">
-        {([["paginas", "Páginas do site"], ["definicoes", "Definições"]] as const).map(([id, rotulo]) => (
+        {([["paginas", "Páginas do site"], ["testemunhos", "Testemunhos"], ["definicoes", "Definições"]] as const).map(([id, rotulo]) => (
           <button key={id} type="button" role="tab" aria-selected={sep === id} onClick={() => setSep(id)}
             className={cx("border-b-2 px-3 py-2.5 text-sm font-semibold", sep === id ? "border-acao text-tinta" : "border-transparent text-tinta-suave hover:text-tinta")}>
             {rotulo}
@@ -43,7 +44,7 @@ export default function Site(_props: VistaProps) {
       <div className="min-h-0 flex-1">
         {sep === "paginas"
           ? <Suspense fallback={<Esqueleto linhas={10} className="m-6" />}><EditorPagina key={pagina} pagina={pagina} onMudarPagina={mudarPagina} /></Suspense>
-          : <div className="h-full overflow-auto px-4 py-5 sm:px-8 sm:py-6"><DefinicoesSite /></div>}
+          : <div className="h-full overflow-auto px-4 py-5 sm:px-8 sm:py-6">{sep === "testemunhos" ? <TestemunhosSite /> : <DefinicoesSite />}</div>}
       </div>
     </div>
   );

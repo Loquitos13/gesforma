@@ -16,7 +16,9 @@ function comValor(opcoes: OpcaoSelecao[], valor: string) {
 export function TabOferta({ f }: { f: FichaCurso }) {
   const { data, patch, falhas, regime, turmas } = f;
   const tipos = useOpcoes("lista", { lista: "tipos_curso" });
-  const categorias = useOpcoes("lista", { lista: regime === "gold" ? "categorias_gold" : "areas_fin" });
+  // A categoria do curso é uma das Áreas Temáticas do regime (Gold › Áreas Temáticas ou Financiada › Áreas Temáticas);
+  // é por ela que o site sugere cursos relacionados.
+  const categorias = useOpcoes("areas", { regime });
   const modalidades = useOpcoes("lista", { lista: "regimes_curso" });
   const locais = useOpcoes("locais", { regime });
   const horarios = useOpcoes("horarios", { regime: "gold" });
@@ -54,7 +56,8 @@ export function TabOferta({ f }: { f: FichaCurso }) {
               {p => <Selecao {...p} opcoes={comValor(tipos.selecao, data.tipo)} vazio="Escolher…" value={data.tipo} onChange={e => patch({ tipo: e.target.value })} />}
             </Campo>
           )}
-          <Campo rotulo={regime === "gold" ? "Categoria" : "Área"} obrigatorio erro={falhas.categoria}>
+          <Campo rotulo="Área temática" obrigatorio erro={falhas.categoria} ajuda="As áreas criam-se em Áreas Temáticas, no menu do regime.">
+
             {p => <Selecao {...p} opcoes={comValor(categorias.selecao, data.categoria)} vazio="Escolher…" value={data.categoria} onChange={e => patch({ categoria: e.target.value })} />}
           </Campo>
           <Campo rotulo="Modalidade" obrigatorio erro={falhas.regime}>

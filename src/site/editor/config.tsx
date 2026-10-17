@@ -7,6 +7,7 @@ import { Catalogo } from "./blocosCatalogo";
 import { DetalheCurso } from "./blocosCursoPagina";
 import { Servicos } from "./blocosServicos";
 import { Testemunhos } from "./blocosTestemunhos";
+import { CursoRelevantes } from "./blocosCursoRelevantes";
 import {
   CursoBanner, CursoDados, CursoFuncionamento, CursoObjetivos, CursoPrograma, CursoSintese, CursoTurmas, RaizCurso, campoPrevisualizar,
 } from "./blocosCurso";
@@ -141,7 +142,7 @@ function RaizOutra({ children, editar }: { children: ReactNode; editar: boolean 
 const componentes = Object.fromEntries(Object.entries({
   Seccao, Coluna, Espaco, Separador, Titulo, Texto, Botao, Imagem, Pilares, Logotipos, Servicos, Testemunhos,
   CursosDestaque, OfertaFormativa, Catalogo, DetalheCurso, ListaNoticias, AreaFormando, Cabecalho, Rodape,
-  CursoBanner, CursoSintese, CursoDados, CursoObjetivos, CursoPrograma, CursoFuncionamento, CursoTurmas, CursoInscricao,
+  CursoBanner, CursoSintese, CursoDados, CursoObjetivos, CursoPrograma, CursoFuncionamento, CursoTurmas, CursoRelevantes, CursoInscricao,
   CursoEscolhaLocal, CursoTexto, CursoImagem, CursoBotaoInscricao,
   // Cada bloco do editor tem de estar em BLOCOS_SITE (o servidor recusa publicar blocos que não conhece): falha no build.
 } satisfies Record<BlocoSite, unknown>).map(([k, c]) => [k, responsivo(c as ComponentConfig<any>)])) as Config["components"];
@@ -154,7 +155,7 @@ const categoriasBase = {
   // Blocos que só fazem sentido na página do curso (lêem o curso da página).
   paginaCurso: {
     title: "Página do curso",
-    components: ["CursoBanner", "CursoSintese", "CursoDados", "CursoObjetivos", "CursoPrograma", "CursoFuncionamento", "CursoTurmas", "CursoEscolhaLocal",
+    components: ["CursoBanner", "CursoSintese", "CursoDados", "CursoObjetivos", "CursoPrograma", "CursoFuncionamento", "CursoTurmas", "CursoRelevantes", "CursoEscolhaLocal",
       "CursoInscricao", "CursoTexto", "CursoImagem", "CursoBotaoInscricao", "DetalheCurso",
     ],
     visible: false,

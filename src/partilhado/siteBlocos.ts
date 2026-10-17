@@ -6,7 +6,7 @@ export type PaginaSite = typeof PAGINAS_SITE[number];
 export const BLOCOS_SITE = [
   "Cabecalho", "Rodape", "Seccao", "Coluna", "Titulo", "Texto", "Botao", "Imagem", "Espaco", "Separador",
   "Pilares", "Servicos", "Testemunhos", "Logotipos", "CursosDestaque", "OfertaFormativa", "Catalogo", "DetalheCurso", "ListaNoticias", "AreaFormando",
-  "CursoBanner", "CursoSintese", "CursoDados", "CursoObjetivos", "CursoPrograma", "CursoFuncionamento", "CursoTurmas", "CursoInscricao",
+  "CursoBanner", "CursoSintese", "CursoDados", "CursoObjetivos", "CursoPrograma", "CursoFuncionamento", "CursoTurmas", "CursoRelevantes", "CursoInscricao",
   "CursoEscolhaLocal", "CursoTexto", "CursoImagem", "CursoBotaoInscricao",
 ] as const;
 

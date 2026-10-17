@@ -1,7 +1,7 @@
 // Bloco «Testemunhos»: opiniões de formandos (editáveis) e um botão que leva às avaliações da ENA no Google.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { ComponentConfig } from "@puckeditor/core";
-import { apiAvaliacoesGooglePublicas, type AvaliacoesGooglePublicas } from "../../partilhado/api/site";
+import { apiAvaliacoesGooglePublicas, apiTestemunhosPublicos, type AvaliacoesGooglePublicas, type DadosTestemunho } from "../../partilhado/api/site";
 import { Icon } from "../SiteLanding";
 import { campoCor, campoImagem, campoNumero, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
@@ -15,10 +15,10 @@ type TestemunhosProps = {
   corEstrelas: string; tipoTexto: Tipografia; tipoNome: Tipografia; tipoCurso: Tipografia; tipoBotao: Tipografia;
   tamanhoFoto: number | null; alinhar: "esquerda" | "centro";
   disposicao: "grelha" | "carrossel"; segundos: number | null; setas: boolean;
-  google: "nao" | "juntar" | "so"; googleMinimo: number | null; googleResumo: boolean;
+  google: "nao" | "juntar" | "so"; googleMinimo: number | null; googleResumo: boolean; formandos: boolean;
   mostrarBotao: boolean; textoBotao: string; ligacaoBotao: string; corBotao: string; corTextoBotao: string;
   cartao: Estilo; aparencia: Estilo;
-  puck?: { dragRef?: ((el: Element | null) => void) | null };
+  puck?: { dragRef?: ((el: Element | null) => void) | null; isEditing?: boolean };
 };
 
 export const Testemunhos: ComponentConfig<TestemunhosProps> = {
@@ -38,6 +38,7 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
       defaultItemProps: { nome: "", curso: "", texto: "", estrelas: 5, foto: "" },
       getItemSummary: item => item.nome || "Testemunho",
     },
+    formandos: simNao("Juntar os testemunhos aprovados dos formandos (Sistema › Site › Testemunhos)"),
     google: {
       type: "radio", label: "Avaliações do Google (configuradas em Configurações › Avaliações Google)",
       options: [{ label: "Não mostrar", value: "nao" }, { label: "Juntar às de cima", value: "juntar" }, { label: "Só as do Google", value: "so" }],
@@ -73,7 +74,7 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
     tipoTexto: tipoVazia({ tamanho: 15, alturaLinha: 1.6, cor: "var(--c-suave)" }),
     tipoNome: tipoVazia({ tamanho: 14, peso: "800", cor: "var(--c-primaria)" }),
     tipoCurso: tipoVazia({ tamanho: 12, cor: "var(--c-suave)" }), tipoBotao: tipoVazia(),
-    tamanhoFoto: 40, alinhar: "esquerda", disposicao: "grelha", segundos: 6, setas: true, google: "nao", googleMinimo: 4, googleResumo: true,
+    tamanhoFoto: 40, alinhar: "esquerda", disposicao: "grelha", segundos: 6, setas: true, google: "nao", googleMinimo: 4, googleResumo: true, formandos: true,
     mostrarBotao: true, textoBotao: "Veja e deixe a sua avaliação no Google",
     // shortcut: pesquisa genérica; trocar pelo link «Pedir avaliações» do Perfil da Empresa da ENA no Google.
     ligacaoBotao: "https://www.google.com/search?q=ena",
@@ -81,7 +82,7 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
     cartao: estiloVazio({ fundoCor: "#ffffff", preenchimento: lados(24, 24), bordaTopo: 3, bordaCor: "var(--c-acento)" }),
     aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }),
   },
-  render: ({ puck, titulo, tipoTitulo, itens, colunas, colunasTab, colunasTel, espaco, corEstrelas, tipoTexto, tipoNome, tipoCurso, tipoBotao, tamanhoFoto, alinhar, disposicao, segundos, setas, google, googleMinimo, googleResumo, mostrarBotao, textoBotao, ligacaoBotao, corBotao, corTextoBotao, cartao, aparencia }) => {
+  render: ({ puck, titulo, tipoTitulo, itens, colunas, colunasTab, colunasTel, espaco, corEstrelas, tipoTexto, tipoNome, tipoCurso, tipoBotao, tamanhoFoto, alinhar, disposicao, segundos, setas, google, googleMinimo, googleResumo, formandos, mostrarBotao, textoBotao, ligacaoBotao, corBotao, corTextoBotao, cartao, aparencia }) => {
     const c = estiloBloco(aparencia);
     const k = estiloBloco(cartao);
     const [tt, tx, tn, tc, tb] = [estiloTexto(tipoTitulo), estiloTexto(tipoTexto), estiloTexto(tipoNome), estiloTexto(tipoCurso), estiloTexto(tipoBotao)];
@@ -90,8 +91,10 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
     const doGoogle: Testemunho[] = (g?.avaliacoes ?? [])
       .filter(v => v.estrelas >= (googleMinimo ?? 0))
       .map(v => ({ nome: v.autor, curso: v.quando, texto: v.texto, estrelas: v.estrelas, foto: v.foto, google: v.autorUrl || g?.url || "https://www.google.com" }));
+    const daArea = useTestemunhosFormandos(formandos !== false && google !== "so");
     const manuais = google === "so" ? [] : (itens ?? []).filter(t => t.texto?.trim() || t.nome?.trim());
-    const lista = [...manuais, ...doGoogle];
+    const deFormandos: Testemunho[] = (daArea ?? []).map(t => ({ nome: t.nome, curso: t.curso, texto: t.texto, estrelas: t.estrelas, foto: "" }));
+    const lista = [...manuais, ...deFormandos, ...doGoogle];
     const centro = alinhar === "centro";
     const foto = `${tamanhoFoto ?? 40}px`;
     return (
@@ -101,6 +104,17 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
           <p className="mt-2 text-sm">
             <span className="font-bold" style={{ color: corSegura(corEstrelas) || "var(--c-acento)" }}>★ {g.rating.toLocaleString("pt-PT")}</span>
             {" "}<span className="opacity-70">· {g.total} avaliações no Google</span>
+          </p>
+        )}
+        {lista.length === 0 && puck?.isEditing && (
+          // Só no editor: explica porque o bloco está vazio (no site não aparece nada).
+          <p className="mt-6 w-full border-2 border-dashed border-black/20 bg-white/60 p-4 text-left text-sm text-[#3E5168]">
+            Ainda não há testemunhos para mostrar.{" "}
+            {google === "nao" && "Acrescente-os em «Testemunhos», no painel à direita. Os que os formandos deixarem na área do formando aparecem aqui depois de aprovados em Sistema › Site › Testemunhos."}
+            {google !== "nao" && g && !g.avaliacoes.length && (g.rating == null
+              ? "As avaliações do Google ainda não estão ligadas: configure-as em Configurações › Avaliações Google (Place ID e chave), ou acrescente testemunhos no painel."
+              : `A Google não devolveu avaliações com ${googleMinimo ?? 0} ou mais estrelas e texto. Baixe o mínimo de estrelas ou acrescente testemunhos no painel.`)}
+            {google !== "nao" && !g && "A carregar as avaliações do Google…"}
           </p>
         )}
         {lista.length > 0 && (
@@ -145,7 +159,7 @@ export const Testemunhos: ComponentConfig<TestemunhosProps> = {
  * Grelha ou carrossel. O carrossel desliza na horizontal (também com o dedo) e mostra «colunas» cartões de cada vez;
  * avança sozinho de `segundos` em `segundos`, pára com o rato por cima e não se mexe com «reduzir movimento».
  */
-function Cartoes({ carrossel, segundos, setas, style, children }: { carrossel: boolean; segundos: number; setas: boolean; style: CSSProperties; children: ReactNode }) {
+export function Cartoes({ carrossel, segundos, setas, style, children }: { carrossel: boolean; segundos: number; setas: boolean; style: CSSProperties; children: ReactNode }) {
   const caixa = useRef<HTMLDivElement>(null);
   const [parado, setParado] = useState(false);
   const mover = (sentido: 1 | -1) => {
@@ -186,6 +200,20 @@ function useAvaliacoesGoogle(ativo: boolean) {
     let vivo = true;
     pedidoGoogle ??= apiAvaliacoesGooglePublicas().catch(() => null);
     void pedidoGoogle.then(d => { if (vivo) setDados(d); });
+    return () => { vivo = false; };
+  }, [ativo]);
+  return ativo ? dados : null;
+}
+
+/** Testemunhos aprovados dos formandos (uma vez por página). */
+let pedidoFormandos: Promise<DadosTestemunho[] | null> | null = null;
+function useTestemunhosFormandos(ativo: boolean) {
+  const [dados, setDados] = useState<DadosTestemunho[] | null>(null);
+  useEffect(() => {
+    if (!ativo) return;
+    let vivo = true;
+    pedidoFormandos ??= apiTestemunhosPublicos().then(r => r.testemunhos).catch(() => null);
+    void pedidoFormandos.then(d => { if (vivo) setDados(d); });
     return () => { vivo = false; };
   }, [ativo]);
   return ativo ? dados : null;

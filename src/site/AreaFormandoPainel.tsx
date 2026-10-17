@@ -2,6 +2,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { ApiError, apiAreaFormando, apiLogout, apiMe, apiPatchAreaFormando, apiReporPalavraPasse, type AreaFormandoDados, type SessionUser } from "../partilhado/api";
 import { mensagemPalavraPasse } from "../partilhado/passwordPolicy";
+import { PilulaOpiniao } from "./AreaFormandoOpiniao";
 import { type Separador, DocumentosFinArea, Icon, descarregar, primeiroNome, iniciais, irPosLogin, LoginFormando, Sala, type PainelEntrada } from "./AreaFormando";
 
 /** O que o editor do site muda no painel do formando. */
@@ -52,7 +53,10 @@ export function Painel({ dados, onDados, onSair, avisar, opcoes = OPCOES_PAINEL 
             <p className="text-sm text-white/55">{opcoes.saudacao} {primeiroNome(nome)}</p>
             {opcoes.titulo && <h1 className="mt-1 font-serif text-4xl font-bold">{opcoes.titulo}</h1>}
           </div>
-          <button type="button" onClick={onSair} className="w-fit border border-white/30 px-4 py-2 text-sm font-bold hover:bg-white hover:text-[var(--c-primaria,#1C3350)]">Terminar sessão</button>
+          <div className="flex flex-wrap items-center gap-3">
+            <PilulaOpiniao nome={dados.pessoa.nome} apelido={dados.pessoa.apelido} cursos={[...new Set(dados.cursos.map(c => c.titulo))]} />
+            <button type="button" onClick={onSair} className="w-fit border border-white/30 px-4 py-2 text-sm font-bold hover:bg-white hover:text-[var(--c-primaria,#1C3350)]">Terminar sessão</button>
+          </div>
         </div>
       </section>
       <section className="px-5 py-8 lg:px-8 lg:py-12">

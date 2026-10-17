@@ -8,6 +8,21 @@ export type AvaliacoesGooglePublicas = {
 };
 export const apiAvaliacoesGooglePublicas = () => api<AvaliacoesGooglePublicas>("/v1/public/avaliacoes-google", { silencioso: true });
 
+/** Testemunhos dos formandos: o próprio (área do formando), a revisão (backoffice) e os aprovados (site). */
+export type EstadoTestemunho = "pendente" | "aprovado" | "recusado";
+export type TestemunhoFormando = { id: number; nome: string; curso: string; texto: string; estrelas: number; autorizaPublicar: boolean; estado: EstadoTestemunho; atualizadoEm: string };
+export type DadosTestemunho = Pick<TestemunhoFormando, "nome" | "curso" | "texto" | "estrelas" | "autorizaPublicar">;
+export const apiMeuTestemunho = () => api<{ testemunho: TestemunhoFormando | null }>("/v1/area-formando/testemunho", { silencioso: true });
+export const apiGravarMeuTestemunho = (d: DadosTestemunho) => enviar.put<{ testemunho: TestemunhoFormando }>("/v1/area-formando/testemunho", d);
+export const apiApagarMeuTestemunho = () => enviar.delete<{ ok: boolean }>("/v1/area-formando/testemunho");
+export const apiTestemunhos = (estado?: EstadoTestemunho, signal?: AbortSignal) =>
+  api<{ testemunhos: (TestemunhoFormando & { email: string })[] }>(`/v1/testemunhos${estado ? `?estado=${estado}` : ""}`, { signal });
+export const apiReverTestemunho = (id: number, estado: EstadoTestemunho) => enviar.patch<{ id: number; estado: EstadoTestemunho }>(`/v1/testemunhos/${id}`, { estado });
+export const apiApagarTestemunho = (id: number) => enviar.delete<{ ok: boolean }>(`/v1/testemunhos/${id}`);
+export type CursoSugerido = { id: string; titulo: string; area: string; modalidade: string; inicio: string; preco: string; imagem: string | null };
+export const apiSugestoesCursos = () => api<{ cursos: CursoSugerido[] }>("/v1/area-formando/sugestoes", { silencioso: true });
+export const apiTestemunhosPublicos = () => api<{ testemunhos: DadosTestemunho[] }>("/v1/public/testemunhos", { silencioso: true });
+
 export type Definicoes = Record<string, Record<string, string>>;
 
 export const apiDefinicoes = (signal?: AbortSignal) => api<{ settings: Definicoes }>("/v1/settings", { signal, silencioso: true });

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { atualizarPerfil, gerarAcessoFormando, montarArea, pedirRecuperacao, perfilSchema, reporPalavraPasse } from "../areaFormando.js";
+import { atualizarPerfil, gerarAcessoFormando, montarArea, pedirRecuperacao, perfilSchema, reporPalavraPasse, sugestoesDeCursos } from "../areaFormando.js";
 import { assertFormandoDoUser, uploadDocFormandoFin, vistaDocumentosFormandoFin } from "../formandoFinDocs.js";
 import { enviarEmailAcesso } from "../inscricaoPaga.js";
 import { pode } from "../permissoes/capacidades.js";
@@ -24,6 +24,12 @@ export async function registar(app: FastifyInstance, deps: Deps) {
   app.get("/v1/area-formando", async (req, reply) => {
     if (!soFormando(req, reply)) return;
     return montarArea(db, req.actor!);
+  });
+
+  /** Cursos sugeridos ao formando (mostram-se depois de deixar a sua opinião). */
+  app.get("/v1/area-formando/sugestoes", async (req, reply) => {
+    if (!soFormando(req, reply)) return;
+    return { cursos: await sugestoesDeCursos(db, req.actor!.id) };
   });
 
   app.patch("/v1/area-formando", async (req, reply) => {

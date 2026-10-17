@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, type ComponentType, typ
 import type { ComponentConfig, Slot } from "@puckeditor/core";
 import { Icon, OfertaCtx, type Course } from "../SiteLanding";
 import { CursoDaRotaCtx } from "./blocosCursoPagina";
-import { campoCurso, simNao } from "./campos";
+import { campoCurso, campoNumero, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { estiloBloco, estiloTexto, estiloVazio, juntar, tipoVazia, type Estilo, type Tipografia } from "./estilos";
 
@@ -81,7 +81,8 @@ export const VARIAVEIS_CURSO: [string, string][] = [
   ["curso", "Nome do curso"], ["area", "Área"], ["formato", "Formato (presencial, b-learning…)"], ["duracao", "Duração"],
   ["descricao", "Síntese"], ["inscricao", "Tipo de inscrição"], ["regime", "ENA Gold ou Financiada"],
   ["local", "Local escolhido"], ["locais", "Todos os locais"], ["horarios", "Horários (do local escolhido)"],
-  ["inicio", "Próximo início (data · local)"], ["proxima_data", "Próxima data de início"],
+  ["inicio", "Próximo início (data · local)"], ["inicio_resumo", "«Vários locais e datas» quando há mais do que um (senão, o próximo início)"],
+  ["proxima_data", "Próxima data de início"],
   ["preco", "Preço (segue o local escolhido)"], ["preco_desde", "Preço mais baixo"], ["datas", "Número de datas"],
 ];
 
@@ -94,6 +95,8 @@ export function variaveisCurso(c: Course, local: string): Record<string, string>
     local, locais: locaisDo(c).join(", "),
     horarios: [...new Set(doLocal.map(s => s.horario).filter(Boolean))].join(", "),
     inicio: prox ? [prox.data, prox.local].filter(Boolean).join(" · ") : c.start,
+    inicio_resumo: new Set(doLocal.map(s => s.local)).size > 1 || new Set(doLocal.map(s => s.data)).size > 1
+      ? "Vários locais e datas" : prox ? [prox.data, prox.local].filter(Boolean).join(" · ") : c.start,
     proxima_data: prox?.data ?? c.start,
     preco: precoNoLocal(c, local), preco_desde: c.precoDesde != null ? euros(c.precoDesde) : c.price,
     datas: String(doLocal.length),
@@ -308,9 +311,10 @@ export const CursoObjetivos: ComponentConfig<ListaProps> = {
   ),
 };
 
-export const CursoPrograma: ComponentConfig<ListaProps> = {
+export const CursoPrograma: ComponentConfig<ListaProps & { espacoLinhas: number | null }> = {
   label: "Curso · Programa",
-  ...camposLista("Programa"),
+  fields: { ...camposLista("Programa").fields, espacoLinhas: campoNumero("Espaço entre as linhas dos módulos") },
+  defaultProps: { ...camposLista("Programa").defaultProps, espacoLinhas: 12 },
   render: p => (
     <Caixa p={p}>
       {curso => curso.programa.length === 0 ? null : (
@@ -319,7 +323,7 @@ export const CursoPrograma: ComponentConfig<ListaProps> = {
           <ZonaEntreTitulo zona={p.entreTitulo} />
           <div className="divide-y divide-black/15">
             {curso.programa.map((m, i) => (
-              <div key={`${m.titulo}-${i}`} className="flex items-baseline gap-4 py-5">
+              <div key={`${m.titulo}-${i}`} className="flex items-baseline gap-4" style={{ paddingBlock: `${p.espacoLinhas ?? 12}px` }}>
                 <span className="w-24 shrink-0 text-sm font-extrabold text-[var(--c-destaque)]">{curso.organizacao === "livre" ? String(i + 1).padStart(2, "0") : `Módulo ${i + 1}`}</span>
                 <strong>{m.titulo}</strong>
                 {m.horas && <span className="ml-auto shrink-0 text-sm opacity-55">{duracaoModulo(m.horas)}</span>}
@@ -336,9 +340,9 @@ type FuncionamentoProps = ListaProps & { texto: Tipografia };
 
 /** O texto «Funcionamento» da ficha do curso (sessões, plataforma, assiduidade, certificado). */
 export const CursoFuncionamento: ComponentConfig<FuncionamentoProps> = {
-  label: "Curso · Funcionamento",
+  label: "Curso · Funcionamento e organização",
   fields: { ...camposLista("Funcionamento").fields, texto: campoTipografia("Tipografia do texto") },
-  defaultProps: { ...camposLista("Funcionamento").defaultProps, texto: tipoVazia() },
+  defaultProps: { ...camposLista("Funcionamento e organização").defaultProps, texto: tipoVazia() },
   render: p => (
     <Caixa p={p}>
       {curso => {

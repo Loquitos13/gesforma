@@ -40,7 +40,18 @@ export function valoresDe(v: Variantes, d: Disp, ate = false): Obj {
   if (d === "pc") return ate ? {} : clonar(v.base);
   const tab = fundir(v.base, v.tab ?? {}) as Obj;
   if (d === "tab") return ate ? clonar(v.base) : tab;
-  return ate ? tab : fundir(tab, v.tel ?? {}) as Obj;
+  // Deslocamentos afinados num ecrã largo atiram o bloco para fora do telemóvel: lá só valem os do próprio telemóvel.
+  const herdado = semDeslocamento(tab);
+  return ate ? herdado : fundir(herdado, v.tel ?? {}) as Obj;
+}
+
+function semDeslocamento(o: Obj): Obj {
+  const out: Obj = {};
+  for (const [k, val] of Object.entries(o)) {
+    if (k === "deslocX" || k === "deslocY") continue;
+    out[k] = eObj(val) ? semDeslocamento(val) : val;
+  }
+  return out;
 }
 
 // ─── Campos antigos "no telemóvel" ───────────────────────────────────────────

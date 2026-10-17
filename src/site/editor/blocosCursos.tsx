@@ -6,6 +6,7 @@ import { OfertaCtx, type Course } from "../SiteLanding";
 import { campoCor, campoCurso, campoImagem, campoMarcas, campoNumero, nomesCursos, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { corSegura, estiloBloco, estiloTexto, estiloVazio, juntar, ligacaoSegura, tipoVazia, type Estilo, type Tipografia } from "./estilos";
+import { ajudaVariaveis, preencherVariaveis, variaveisCurso } from "./blocosCurso";
 
 export const INFO_CARTAO = [
   { valor: "imagem", rotulo: "Imagem" },
@@ -42,6 +43,9 @@ export type EstiloCartao = {
   centrar: boolean;
   interior: number | null;
   tipoTitulo: Tipografia;
+  /** Textos do preço e do início (vazio = os do curso); `porCurso` muda-os só num curso (ex.: CCP). */
+  textoPreco?: string; textoInicio?: string;
+  porCurso?: { cursoId: string; preco: string; inicio: string }[];
 };
 
 export const cartaoPadrao = (extra: Partial<EstiloCartao> = {}): EstiloCartao => ({
@@ -89,6 +93,18 @@ export const campoCartao = (label = "Cartão do curso"): Field => ({
     centrar: simNao("Texto centrado"),
     interior: campoNumero("Espaço interior"),
     tipoTitulo: campoTipografia("Tipografia do título"),
+    textoPreco: { type: "text", label: `Texto do preço (vazio = o do curso). Ex.: «A partir de {{preco_desde}}». ${ajudaVariaveis}` },
+    textoInicio: { type: "text", label: "Texto do início/local (vazio = o do curso). Ex.: «{{inicio_resumo}}» ou «Vários locais e datas»" },
+    porCurso: {
+      type: "array", label: "Textos só de um curso (preço e início)",
+      arrayFields: {
+        cursoId: campoCurso("Curso"),
+        preco: { type: "text", label: "Preço (vazio = o geral). Ex.: «A partir de 115 €»" },
+        inicio: { type: "text", label: "Início/local (vazio = o geral). Ex.: «Vários locais e datas»" },
+      },
+      defaultItemProps: { cursoId: "", preco: "", inicio: "" },
+      getItemSummary: item => (item.cursoId ? nomesCursos.get(item.cursoId) ?? "Curso fora da oferta" : "Escolha o curso"),
+    },
   },
 });
 
@@ -110,6 +126,12 @@ const SOBREPOR_ANIMACAO = [{ label: "Igual aos outros cartões", value: "" }, { 
 
 export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: EstiloCartao; extra?: ExtraCartao; ordem?: CSSProperties }) {
   const ver = new Set(e.mostrar ?? []);
+  const doCurso = curso.id ? e.porCurso?.find(x => x.cursoId === curso.id) : undefined;
+  const vars = variaveisCurso(curso, "");
+  const textoCartao = (proprio: string | undefined, geral: string | undefined, original: string) =>
+    (proprio?.trim() || geral?.trim()) ? preencherVariaveis((proprio?.trim() || geral!.trim()), vars) : original;
+  const precoTxt = textoCartao(doCurso?.preco, e.textoPreco, curso.price);
+  const inicioTxt = textoCartao(doCurso?.inicio, e.textoInicio, curso.start);
   const href = (extra?.ligacao && ligacaoSegura(extra.ligacao)) || (curso.id ? `/formacao/${encodeURIComponent(curso.id)}` : "#");
   const acento = corSegura(e.corAcento) ?? "var(--c-acento)";
   const caixa = estiloBloco(estiloVazio({ raio: e.raio, sombra: e.sombra }));
@@ -168,9 +190,9 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
         <div className={juntar("flex flex-wrap items-end justify-between gap-3", e.formato === "compacto" ? "mt-3" : "mt-auto pt-5")}
           style={e.formato === "compacto" || sobreposto ? undefined : { borderTop: "1px solid rgba(20,38,61,.1)", marginTop: "1.25rem" }}>
           <div className="space-y-1.5 text-xs font-semibold" style={e.centrar ? { margin: "0 auto" } : undefined}>
-            {ver.has("preco") && curso.price && <span className="block text-sm font-bold" style={{ color: sobreposto ? "#fff" : corSegura(e.corTitulo) }}>{curso.price}</span>}
+            {ver.has("preco") && precoTxt && <span className="block text-sm font-bold" style={{ color: sobreposto ? "#fff" : corSegura(e.corTitulo) }}>{precoTxt}</span>}
             {ver.has("duracao") && curso.duration && <span className="flex items-center gap-2"><Ico n="relogio" />{curso.duration}</span>}
-            {ver.has("inicio") && curso.start && <span className="flex items-center gap-2"><Ico n="local" />{curso.start}</span>}
+            {ver.has("inicio") && inicioTxt && <span className="flex items-center gap-2"><Ico n="local" />{inicioTxt}</span>}
           </div>
           {ver.has("botao") && (
             <a href={href} className={juntar("inline-flex items-center gap-2 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:brightness-110", animacaoBotao && `ena-anim-${animacaoBotao}`)}

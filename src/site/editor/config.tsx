@@ -1,11 +1,12 @@
 // Configuração do editor visual (Puck): tema da página e blocos disponíveis.
 import { createContext, useContext, type CSSProperties, type ElementType, type ReactNode } from "react";
 import type { ComponentConfig, Config, Data, Field } from "@puckeditor/core";
-import type { PaginaSite } from "../../partilhado/siteBlocos";
+import type { BlocoSite, PaginaSite } from "../../partilhado/siteBlocos";
 import { AreaFormando } from "./blocosArea";
 import { Catalogo } from "./blocosCatalogo";
 import { DetalheCurso } from "./blocosCursoPagina";
 import { Servicos } from "./blocosServicos";
+import { Testemunhos } from "./blocosTestemunhos";
 import {
   CursoBanner, CursoDados, CursoFuncionamento, CursoObjetivos, CursoPrograma, CursoSintese, CursoTurmas, RaizCurso, campoPrevisualizar,
 } from "./blocosCurso";
@@ -138,15 +139,16 @@ function RaizOutra({ children, editar }: { children: ReactNode; editar: boolean 
 }
 
 const componentes = Object.fromEntries(Object.entries({
-  Seccao, Coluna, Espaco, Separador, Titulo, Texto, Botao, Imagem, Pilares, Logotipos, Servicos,
+  Seccao, Coluna, Espaco, Separador, Titulo, Texto, Botao, Imagem, Pilares, Logotipos, Servicos, Testemunhos,
   CursosDestaque, OfertaFormativa, Catalogo, DetalheCurso, ListaNoticias, AreaFormando, Cabecalho, Rodape,
   CursoBanner, CursoSintese, CursoDados, CursoObjetivos, CursoPrograma, CursoFuncionamento, CursoTurmas, CursoInscricao,
   CursoEscolhaLocal, CursoTexto, CursoImagem, CursoBotaoInscricao,
-}).map(([k, c]) => [k, responsivo(c as ComponentConfig<any>)])) as Config["components"];
+  // Cada bloco do editor tem de estar em BLOCOS_SITE (o servidor recusa publicar blocos que não conhece): falha no build.
+} satisfies Record<BlocoSite, unknown>).map(([k, c]) => [k, responsivo(c as ComponentConfig<any>)])) as Config["components"];
 
 const categoriasBase = {
   estrutura: { title: "Estrutura", components: ["Seccao", "Coluna", "Espaco", "Separador"] },
-  conteudo: { title: "Conteúdo", components: ["Titulo", "Texto", "Botao", "Imagem", "Pilares", "Servicos", "Logotipos"] },
+  conteudo: { title: "Conteúdo", components: ["Titulo", "Texto", "Botao", "Imagem", "Pilares", "Servicos", "Testemunhos", "Logotipos"] },
   cursos: { title: "Cursos", components: ["CursosDestaque", "OfertaFormativa", "Catalogo"] },
   especiais: { title: "Notícias e área do formando", components: ["ListaNoticias", "AreaFormando"] },
   // Blocos que só fazem sentido na página do curso (lêem o curso da página).

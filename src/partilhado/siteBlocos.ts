@@ -5,11 +5,12 @@ export type PaginaSite = typeof PAGINAS_SITE[number];
 
 export const BLOCOS_SITE = [
   "Cabecalho", "Rodape", "Seccao", "Coluna", "Titulo", "Texto", "Botao", "Imagem", "Espaco", "Separador",
-  "Pilares", "Servicos", "Logotipos", "CursosDestaque", "OfertaFormativa", "Catalogo", "DetalheCurso", "ListaNoticias", "AreaFormando",
-  "CursoBanner", "CursoSintese", "CursoDados", "CursoObjetivos", "CursoPrograma", "CursoTurmas", "CursoInscricao",
+  "Pilares", "Servicos", "Testemunhos", "Logotipos", "CursosDestaque", "OfertaFormativa", "Catalogo", "DetalheCurso", "ListaNoticias", "AreaFormando",
+  "CursoBanner", "CursoSintese", "CursoDados", "CursoObjetivos", "CursoPrograma", "CursoFuncionamento", "CursoTurmas", "CursoInscricao",
   "CursoEscolhaLocal", "CursoTexto", "CursoImagem", "CursoBotaoInscricao",
 ] as const;
 
+export type BlocoSite = typeof BLOCOS_SITE[number];
 const NOMES = new Set<string>(BLOCOS_SITE);
 const TAMANHO_MAX = 1_500_000;
 const PROFUNDIDADE_MAX = 40;

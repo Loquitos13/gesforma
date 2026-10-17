@@ -30,7 +30,23 @@ type LocalProps = Base & {
   titulo: string; tTitulo: Tipografia; entreTitulo: Slot; texto: string; textoPreco: string; mostrarPreco: boolean; mostrarMorada: boolean; abrirPedido: boolean;
   colunas: number | null; colunasTab: number | null; colunasTel: number | null;
   cartao: CartaoLocal; botao: BotaoLocal;
+  contactosTitulo: string; contactos: ContactoLocal[]; tContactos: Tipografia;
 };
+
+/** Contactos para dúvidas de um local (aparecem no cartão desse local, em todos os cursos). */
+type ContactoLocal = { local: string; telefone: string; email: string; whatsapp: string };
+
+const chaveLocal = (s: string) => s.trim().toLowerCase();
+const contactoDo = (lista: ContactoLocal[] | undefined, local: string) => {
+  const c = (lista ?? []).find(x => chaveLocal(x.local ?? "") === chaveLocal(local));
+  return c && (c.telefone?.trim() || c.email?.trim() || c.whatsapp?.trim()) ? c : null;
+};
+
+/** wa.me só aceita algarismos com o indicativo; um número português de 9 algarismos ganha o 351. */
+function ligacaoWhatsapp(numero: string) {
+  const d = numero.replace(/\D/g, "");
+  return `https://wa.me/${d.length === 9 ? `351${d}` : d}`;
+}
 
 const cartaoLocalPadrao = (): CartaoLocal => ({
   alturaMin: 96, espaco: 16, interior: 20, raio: 0, sombra: "", corFundo: "#ffffff", corAtivo: "var(--c-destaque)", centrar: false,
@@ -96,9 +112,23 @@ export const CursoEscolhaLocal: ComponentConfig<LocalProps> = {
         tipografia: campoTipografia("Tipografia do botão"),
       },
     },
+    contactosTitulo: { type: "text", label: "Título dos contactos em cada local (vazio = sem título)" },
+    contactos: {
+      type: "array", label: "Contactos por local (telefone, email, WhatsApp para dúvidas)",
+      arrayFields: {
+        local: { type: "text", label: "Local (escrito como aparece no cartão, ex.: Lisboa)" },
+        telefone: { type: "text", label: "Telefone" },
+        email: { type: "text", label: "Email" },
+        whatsapp: { type: "text", label: "WhatsApp (número)" },
+      },
+      defaultItemProps: { local: "", telefone: "", email: "", whatsapp: "" },
+      getItemSummary: item => item.local?.trim() || "Escreva o local",
+    },
+    tContactos: campoTipografia("Tipografia dos contactos"),
     aparencia: campoAparencia(),
   },
   defaultProps: {
+    contactosTitulo: "Dúvidas? Fale connosco", contactos: [], tContactos: tipoVazia(),
     titulo: "Onde quer fazer o curso?", tTitulo: tipoVazia(), entreTitulo: [], texto: "", textoPreco: "{{preco}}", mostrarMorada: true, mostrarPreco: true,
     abrirPedido: true, colunas: 3, colunasTab: 2, colunasTel: 1, cartao: cartaoLocalPadrao(), botao: botaoLocalPadrao(), aparencia: estiloVazio(),
   },
@@ -118,6 +148,7 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
   const tPreco = estiloTexto(c.tPreco);
   const tTexto = estiloTexto(c.tTexto);
   const tBotao = estiloTexto(b.tipografia);
+  const tContactos = estiloTexto(p.tContactos);
   return (
     <Caixa p={p}>
       {curso => {
@@ -137,18 +168,22 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
                 const morada = curso.sessoes.find(s => s.local === l && s.morada)?.morada;
                 const vars = variaveisCurso(curso, l);
                 const texto = preencherVariaveis(p.texto ?? "", vars).trim();
+                const ct = contactoDo(p.contactos, l);
+                const pad = `${c.interior ?? 20}px`;
                 return (
-                  <button key={l} type="button" aria-pressed={ativo} onClick={() => {
+                  <div key={l} className={juntar("flex flex-col border-2 transition", !ativo && "hover:border-black/15")}
+                    style={{
+                      minHeight: c.alturaMin ? `${c.alturaMin}px` : undefined,
+                      borderRadius: c.raio ? `${c.raio}px` : undefined, boxShadow: SOMBRA_LOCAL[c.sombra] ?? SOMBRA_LOCAL[""],
+                      background: corSegura(c.corFundo) ?? "#ffffff", borderColor: ativo ? ativoCor : "transparent",
+                    }}>
+                  <button type="button" aria-pressed={ativo} onClick={() => {
                       // No site, o clique escolhe o local e abre o pedido já nele (datas de início e horário).
                       if (p.abrirPedido !== false && !editar) { setLocal(l); abrir(curso, { local: l }); return; }
                       setLocal(ativo && locais.length > 1 ? "" : l);
                     }}
-                    className={juntar("flex flex-col gap-2 border-2 transition", c.centrar ? "items-center text-center" : "items-start text-left", !ativo && "hover:border-black/15")}
-                    style={{
-                      minHeight: c.alturaMin ? `${c.alturaMin}px` : undefined, padding: `${c.interior ?? 20}px`,
-                      borderRadius: c.raio ? `${c.raio}px` : undefined, boxShadow: SOMBRA_LOCAL[c.sombra] ?? SOMBRA_LOCAL[""],
-                      background: corSegura(c.corFundo) ?? "#ffffff", borderColor: ativo ? ativoCor : "transparent",
-                    }}>
+                    className={juntar("flex flex-1 flex-col gap-2", c.centrar ? "items-center text-center" : "items-start text-left")}
+                    style={{ padding: pad, paddingBottom: ct ? 0 : pad }}>
                     <span className={juntar("flex w-full items-start gap-3", c.centrar ? "justify-center" : "justify-between")}>
                       <strong className={juntar("text-sm font-extrabold uppercase tracking-[0.04em] text-[var(--c-primaria)]", tNome.className)} style={tNome.style}>{l}</strong>
                       {ativo && <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-white" style={{ background: ativoCor }}><Icon name="check" className="h-3 w-3" /></span>}
@@ -164,6 +199,16 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
                       </span>
                     )}
                   </button>
+                  {ct && (
+                    <div className={juntar("mt-3 flex flex-col gap-1 border-t border-black/10 pt-3 text-xs", c.centrar ? "items-center text-center" : "items-start")}
+                      style={{ padding: `12px ${pad} ${pad}`, ...tContactos.style }}>
+                      {p.contactosTitulo && <span className="font-bold opacity-70">{p.contactosTitulo}</span>}
+                      {ct.telefone && <a href={`tel:${ct.telefone.replace(/[^\d+]/g, "")}`} className="font-semibold hover:underline">{ct.telefone}</a>}
+                      {ct.email && <a href={`mailto:${ct.email}`} className="font-semibold hover:underline">{ct.email}</a>}
+                      {ct.whatsapp && <a href={ligacaoWhatsapp(ct.whatsapp)} target="_blank" rel="noreferrer" className="font-semibold hover:underline">WhatsApp {ct.whatsapp}</a>}
+                    </div>
+                  )}
+                  </div>
                 );
               })}
             </div>

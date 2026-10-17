@@ -9,6 +9,7 @@ import { ListaNoticias } from "./blocosNoticias";
 import { Botao, Coluna, Imagem, Pilares, Seccao, Texto, Titulo } from "./blocosBase";
 import { cartaoPadrao, CursosDestaque, OfertaFormativa } from "./blocosCursos";
 import { Servicos } from "./blocosServicos";
+import { Testemunhos } from "./blocosTestemunhos";
 import { cabecalhoPadrao, rodapePadrao } from "./blocosMoldura";
 import { temaPadrao } from "./config";
 import { em, estiloVazio, lados, tipoVazia } from "./estilos";
@@ -107,10 +108,31 @@ export function modeloInicio(): Data {
     root: { props: { ...temaPadrao } },
     content: [
       bloco("Cabecalho", cabecalhoPadrao, { ligacoes: [{ rotulo: "Formação", ligacao: "/formacao" }, { rotulo: "Notícias", ligacao: "/noticias" }, { rotulo: "Empresas", ligacao: "/empresas" }] }),
-      hero, oferta, metodo, empresas,
+      hero, oferta, metodo, seccaoTestemunhos(), empresas,
       bloco("Rodape", rodapePadrao),
     ],
   } as Data;
+}
+
+/** Secção da página inicial com os testemunhos (arrasta-se para onde se quiser no editor). */
+const seccaoTestemunhos = () => bloco("Seccao", Seccao.defaultProps, {
+  espaco: 0,
+  aparencia: estiloVazio({ ancora: "testemunhos", preenchimento: lados(80, 32), preenchimentoTel: lados(56, 20) }),
+  conteudo: [bloco("Testemunhos", Testemunhos.defaultProps, { aparencia: estiloVazio() })],
+});
+
+/** Página inicial gravada antes dos testemunhos: ganha a secção antes do rodapé (uma vez; depois move-se à vontade). */
+export function converterPaginaInicio(d: Data): Data {
+  if (JSON.stringify(d.content ?? []).includes('"Testemunhos"')) return d;
+  const lista = [...(d.content ?? [])] as No[];
+  const rodape = lista.findIndex(b => b.type === "Rodape");
+  // Ids próprios: os «…-base-N» do modelo podem já existir na página gravada.
+  const seccao = seccaoTestemunhos() as No;
+  const sufixo = Date.now().toString(36);
+  seccao.props.id = `Seccao-testemunhos-${sufixo}`;
+  (seccao.props.conteudo as No[])[0]!.props.id = `Testemunhos-${sufixo}`;
+  lista.splice(rodape >= 0 ? rodape : lista.length, 0, seccao);
+  return { ...d, content: lista as Data["content"] };
 }
 
 // ─── Outras páginas (o cabeçalho, o rodapé e o tema vêm da página inicial) ───
@@ -222,6 +244,7 @@ export function modeloCurso(antigo?: Legado): Data {
     ...(sim("mostrarObjetivos") ? [bloco("CursoObjetivos", CursoObjetivos.defaultProps, { titulo: txt("tituloObjetivos", "Objetivos"), aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) })] : []),
     ...(sim("mostrarPrograma") ? [bloco("CursoPrograma", CursoPrograma.defaultProps, { titulo: txt("tituloPrograma", "Programa"), aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) })] : []),
     bloco("CursoFuncionamento", CursoFuncionamento.defaultProps, { aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) }),
+    bloco("Testemunhos", Testemunhos.defaultProps),
     ...(sim("mostrarTurmas") ? [bloco("CursoTurmas", CursoTurmas.defaultProps, { titulo: txt("tituloTurmas", "Próximas turmas"), aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) })] : []),
   ];
   const cartao = sim("mostrarCartao");
@@ -280,8 +303,30 @@ export function converterPaginaCurso(d: Data): Data {
   }
   const texto = JSON.stringify(dados.content ?? []);
   const temLocal = { v: texto.includes('"CursoEscolhaLocal"') };
-  if (temLocal.v && !texto.includes('"textoPrepago"')) return dados;
-  return { ...dados, content: atualizarBlocosCurso((dados.content ?? []) as No[], temLocal) } as Data;
+  if (!temLocal.v || texto.includes('"textoPrepago"')) {
+    dados = { ...dados, content: atualizarBlocosCurso((dados.content ?? []) as No[], temLocal) } as Data;
+  }
+  // Blocos que a página passou a ter (pedidos pela ENA): entram a seguir ao Programa, se ainda não lá estiverem.
+  const novos = [
+    !texto.includes('"CursoFuncionamento"') && bloco("CursoFuncionamento", CursoFuncionamento.defaultProps, { aparencia: estiloVazio({ margem: lados(48, 0, 0, 0) }) }),
+    !texto.includes('"Testemunhos"') && bloco("Testemunhos", Testemunhos.defaultProps),
+  ].filter(Boolean) as No[];
+  if (novos.length) dados = { ...dados, content: inserirDepois((dados.content ?? []) as No[], "CursoPrograma", novos) } as Data;
+  return dados;
+}
+
+/** Põe `novos` logo a seguir ao primeiro bloco do tipo `tipo` (procura também dentro das secções e colunas). */
+function inserirDepois(lista: No[], tipo: string, novos: No[]): No[] {
+  let feito = false;
+  const andar = (l: No[]): No[] => l.flatMap(b => {
+    if (feito) return [b];
+    if (b.type === tipo) { feito = true; return [b, ...novos]; }
+    const props = { ...b.props };
+    for (const [k, v] of Object.entries(props)) if (!feito && Array.isArray(v) && v.every(ehNo)) props[k] = andar(v);
+    return [{ ...b, props }];
+  });
+  const out = andar(lista);
+  return feito ? out : lista;
 }
 
 /** Modelo base de cada página: o ponto de partida do editor e o que o site mostra sem versão publicada. */

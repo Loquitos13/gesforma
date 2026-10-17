@@ -406,6 +406,8 @@ body:has(input[type="file"]:focus) [data-ficha-sticky] {
     padding: var(--pmt, var(--pt, 0)) var(--pmr, var(--pr, 0)) var(--pmb, var(--pb, 0)) var(--pml, var(--pl, 0));
   }
   .ena-t { font-size: var(--fsm, var(--fs)); }
+  /* Uma largura fixa pensada para o computador nunca passa do ecrã do telemóvel. */
+  .ena-b { max-width: 100% !important; }
   .ena-oculto-tel { display: none !important; }
   .ena-grelha { grid-template-columns: repeat(var(--cols-tel, 1), minmax(0, 1fr)) !important; }
 }

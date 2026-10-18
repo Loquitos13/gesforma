@@ -38,16 +38,16 @@ export const campoRedes = {
 };
 
 /** Ícones com ligação às páginas da ENA (só os que têm endereço). */
-export function LigacoesRedes({ redes, className = "" }: { redes?: LigacaoRede[]; className?: string }) {
+export function LigacoesRedes({ redes, className = "", pequeno = false }: { redes?: LigacaoRede[]; className?: string; pequeno?: boolean }) {
   const lista = (redes ?? []).map(r => ({ ...r, href: ligacaoSegura(r.ligacao) })).filter(r => REDES[r.rede] && r.href && /^https:/.test(r.href));
   if (!lista.length) return null;
   return (
-    <ul className={`flex flex-wrap items-center gap-2 ${className}`}>
+    <ul className={`flex items-center gap-2 ${pequeno ? "flex-nowrap" : "flex-wrap"} ${className}`}>
       {lista.map((r, i) => (
         <li key={i}>
           <a href={r.href} target="_blank" rel="noreferrer" aria-label={`${REDES[r.rede].nome} da ENA (abre noutra janela)`}
-            className="grid h-11 w-11 place-items-center rounded-full border border-current/30 hover:bg-white/10">
-            <IconeRede rede={r.rede} />
+            className={`grid place-items-center rounded-full border border-current/30 hover:bg-black/5 ${pequeno ? "h-9 w-9" : "h-11 w-11"}`}>
+            <IconeRede rede={r.rede} className={pequeno ? "h-4 w-4" : "h-5 w-5"} />
           </a>
         </li>
       ))}

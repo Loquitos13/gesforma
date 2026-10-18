@@ -51,12 +51,14 @@ export function CabecalhoSite(p: CabecalhoProps & { editar?: boolean; refRaiz?: 
               <span className="hidden text-left text-[10px] font-bold uppercase leading-tight tracking-[0.12em] sm:block">{p.linha1}{p.linha2 && <><br />{p.linha2}</>}</span>
             )}
           </a>
-          <nav className={juntar("hidden items-center gap-8 lg:flex", t.className)} style={t.style} aria-label="Navegação principal">
+          <nav className={juntar("hidden items-center gap-6 whitespace-nowrap lg:flex xl:gap-8", t.className)} style={t.style} aria-label="Navegação principal">
             {ligacoes.map((l, i) => <a key={i} href={ligacaoSegura(l.ligacao) || "#"} className="transition-colors hover:text-[var(--cab-hover)]">{l.rotulo}</a>)}
           </nav>
-          {/* Cabeçalhos gravados antes desta opção não a têm: mostram as páginas da ENA. */}
-          <LigacoesRedes redes={p.redes ?? REDES_ENA} className="hidden gap-1 lg:flex" />
-          {botao && <a href={botaoHref} className="hidden bg-[var(--cab-botao)] px-5 py-3 text-sm font-bold text-white transition hover:brightness-110 lg:inline-flex">{botao}</a>}
+          <div className="flex shrink-0 items-center gap-3">
+            {botao && <a href={botaoHref} className="hidden bg-[var(--cab-botao)] px-5 py-3 text-sm font-bold text-white transition hover:brightness-110 lg:inline-flex">{botao}</a>}
+            {/* À direita do botão de entrada. Cabeçalhos gravados antes desta opção não a têm: mostram as páginas da ENA. */}
+            <LigacoesRedes redes={p.redes ?? REDES_ENA} pequeno className="hidden gap-1 xl:flex" />
+          </div>
           <button type="button" onClick={() => setAberto(!aberto)} className="p-2 lg:hidden" aria-expanded={aberto} aria-label={aberto ? "Fechar menu" : "Abrir menu"}>
             <svg aria-hidden="true" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">{aberto ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}</svg>
           </button>
@@ -79,7 +81,7 @@ export const cabecalhoPadrao: CabecalhoProps = {
   logo: "/imagens/ena_logo.svg", alturaLogo: 40, linha1: "Escola de", linha2: "Negócios e Administração",
   ligacoes: [{ rotulo: "Formação", ligacao: "/formacao" }, { rotulo: "Notícias", ligacao: "/noticias" }, { rotulo: "Empresas", ligacao: "/empresas" }],
   redes: REDES_ENA, botao: "Área do formando", botaoSessao: "A minha área", botaoLigacao: "/area-formando",
-  fixo: true, corFundo: "#ffffff", corTexto: "var(--c-primaria)", corHover: "var(--c-destaque)", corBotao: "var(--c-destaque)", corBarra: "var(--c-acento)", barra: 4,
+  fixo: false, corFundo: "#ffffff", corTexto: "var(--c-primaria)", corHover: "var(--c-destaque)", corBotao: "var(--c-destaque)", corBarra: "var(--c-acento)", barra: 4,
   tipografia: tipoVazia({ tamanho: 14, peso: "600" }),
   aparencia: estiloVazio({ preenchimento: lados(18, 32), preenchimentoTel: lados(14, 20) }),
 };

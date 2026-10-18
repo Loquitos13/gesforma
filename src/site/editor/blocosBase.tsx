@@ -1,5 +1,5 @@
 // Blocos de base do editor visual: estrutura (secção, coluna) e conteúdo (título, texto, botão, imagem…).
-import type { CSSProperties, ElementType, ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ElementType, type ReactNode } from "react";
 import type { ComponentConfig, Slot } from "@puckeditor/core";
 import { campoCor, campoImagem, campoNumero, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
@@ -227,30 +227,131 @@ export const Botao: ComponentConfig<BotaoProps> = {
 
 // ─── Imagem, espaço, separador ───────────────────────────────────────────────
 
-type ImagemProps = { src: string; alt: string; proporcao: "" | "16/9" | "4/3" | "1/1" | "3/4" | "21/9"; ajuste: "cover" | "contain"; ligacao: string; aparencia: Estilo };
+type ImagemProps = {
+  src: string; alt: string; proporcao: "" | "16/9" | "4/3" | "1/1" | "3/4" | "21/9"; ajuste: "cover" | "contain"; ligacao: string;
+  /** Altura: pela proporção, fixa em píxeis, ou toda a altura da secção (de cima a baixo, por cima das margens). */
+  altura?: "proporcao" | "fixa" | "seccao"; alturaPx?: number | null;
+  /** Encostar à margem do ecrã (passa por cima das margens da página). */
+  encostar?: "" | "esquerda" | "direita" | "ambos";
+  foco?: "center" | "top" | "bottom" | "left" | "right";
+  aparencia: Estilo;
+};
+
+type Folga = { esq: number; dir: number; topo: number; fundo: number };
+
+/**
+ * Distâncias do bloco até às margens do ecrã (lados) e até ao topo e ao fundo da secção, medidas no próprio bloco,
+ * que fica no lugar normal: a imagem estica-se por cima delas sem empurrar o resto da página.
+ */
+function useFolga(ligado: { esq: boolean; dir: boolean; seccao: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [f, setF] = useState<Folga>({ esq: 0, dir: 0, topo: 0, fundo: 0 });
+  const ativo = ligado.esq || ligado.dir || ligado.seccao;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !ativo) return;
+    const doc = el.ownerDocument;
+    const medir = () => {
+      const r = el.getBoundingClientRect();
+      const seccaoEl = el.closest("section");
+      const sec = seccaoEl?.getBoundingClientRect();
+      // Só sobe (ou desce) até à beira da secção se não houver blocos entre a imagem e essa beira
+      // (no telemóvel, com tudo numa coluna, não tapa o texto de cima).
+      const interior = (seccaoEl?.firstElementChild as HTMLElement | null)?.getBoundingClientRect();
+      const livreCima = !interior || r.top - interior.top < 4;
+      const livreBaixo = !interior || interior.bottom - r.bottom < 4;
+      const largura = doc.documentElement.clientWidth;
+      const n = { esq: ligado.esq ? Math.max(0, r.left) : 0, dir: ligado.dir ? Math.max(0, largura - r.right) : 0,
+        topo: ligado.seccao && sec && livreCima ? Math.max(0, r.top - sec.top) : 0, fundo: ligado.seccao && sec && livreBaixo ? Math.max(0, sec.bottom - r.bottom) : 0 };
+      setF(v => (v.esq === n.esq && v.dir === n.dir && v.topo === n.topo && v.fundo === n.fundo ? v : n));
+    };
+    medir();
+    const obs = new ResizeObserver(medir);
+    obs.observe(el);
+    const sec = el.closest("section");
+    if (sec) obs.observe(sec);
+    doc.defaultView?.addEventListener("resize", medir);
+    return () => { obs.disconnect(); doc.defaultView?.removeEventListener("resize", medir); };
+  }, [ativo, ligado.esq, ligado.dir, ligado.seccao]);
+  return { ref, f, ativo };
+}
+
+const RAZAO: Record<string, number> = { "16/9": 16 / 9, "21/9": 21 / 9, "4/3": 4 / 3, "1/1": 1, "3/4": 3 / 4 };
+
+function DesenhoImagem({ puck, src, alt, proporcao, ajuste, ligacao, altura = "proporcao", alturaPx, encostar = "", foco = "center", aparencia }: ImagemProps & { puck?: { dragRef?: ((el: Element | null) => void) | null } }) {
+  const seccao = altura === "seccao";
+  const { ref, f, ativo } = useFolga({ esq: encostar === "esquerda" || encostar === "ambos", dir: encostar === "direita" || encostar === "ambos", seccao });
+  const [largura, setLargura] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !ativo || seccao) return;
+    const obs = new ResizeObserver(() => setLargura(el.clientWidth));
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [ativo, seccao, ref]);
+  const fixa = altura === "fixa" ? `${alturaPx || 400}px` : undefined;
+  // Encostada só nos lados, a altura segue a largura já esticada (proporção) ou a altura fixa.
+  const alturaCaixa = seccao ? undefined : fixa ?? (ativo && largura ? `${Math.round((largura + f.esq + f.dir) / (RAZAO[proporcao] ?? 16 / 9))}px` : undefined);
+  const c = caixa(aparencia, {
+    overflow: ativo ? "visible" : "hidden", position: ativo ? "relative" : undefined,
+    ...(seccao ? { alignSelf: "stretch", flex: "1 1 auto", minHeight: "240px" } : {}),
+    ...(alturaCaixa ? { height: alturaCaixa } : {}),
+  });
+  const preenche = ativo || Boolean(fixa);
+  const estiloImg: CSSProperties = { objectFit: ajuste, objectPosition: foco, aspectRatio: preenche ? undefined : proporcao || undefined };
+  const img = src
+    ? <img src={src} alt={alt} className="block h-full w-full" style={estiloImg} />
+    : <div className="grid h-full w-full place-items-center bg-[#E7EBF0] text-sm text-[#6b7685]" style={{ aspectRatio: preenche ? undefined : proporcao || "4/3" }}>Escolha uma imagem</div>;
+  const href = ligacaoSegura(ligacao);
+  const conteudo = href ? <a href={href} className="block h-full w-full">{img}</a> : img;
+  const juntarRefs = (el: HTMLDivElement | null) => { ref.current = el; puck?.dragRef?.(el); };
+  return (
+    <div ref={juntarRefs} id={c.id} className={c.className} style={c.style}>
+      {ativo
+        ? <div style={{ position: "absolute", left: -f.esq, right: -f.dir, top: -f.topo, bottom: -f.fundo }}>{conteudo}</div>
+        : conteudo}
+    </div>
+  );
+}
 
 export const Imagem: ComponentConfig<ImagemProps> = {
   label: "Imagem",
   fields: {
     src: campoImagem("Imagem"),
     alt: { type: "text", label: "Descrição (para quem não vê a imagem)" },
+    altura: {
+      type: "select", label: "Altura",
+      options: [{ label: "Pela proporção", value: "proporcao" }, { label: "Altura fixa", value: "fixa" }, { label: "Toda a altura da secção", value: "seccao" }],
+    },
+    alturaPx: campoNumero("Altura fixa (píxeis)") as never,
     proporcao: {
       type: "select", label: "Proporção",
       options: [{ label: "Original", value: "" }, { label: "16:9", value: "16/9" }, { label: "21:9", value: "21/9" }, { label: "4:3", value: "4/3" }, { label: "Quadrada", value: "1/1" }, { label: "Retrato 3:4", value: "3/4" }],
     },
+    encostar: {
+      type: "select", label: "Encostar à margem do ecrã",
+      options: [{ label: "Não", value: "" }, { label: "À direita", value: "direita" }, { label: "À esquerda", value: "esquerda" }, { label: "Dos dois lados", value: "ambos" }],
+    },
     ajuste: { type: "select", label: "Encaixe", options: [{ label: "Preencher (corta)", value: "cover" }, { label: "Inteira", value: "contain" }] },
+    foco: {
+      type: "select", label: "Parte da imagem à vista (ao cortar)",
+      options: [{ label: "Centro", value: "center" }, { label: "Cima", value: "top" }, { label: "Baixo", value: "bottom" }, { label: "Esquerda", value: "left" }, { label: "Direita", value: "right" }],
+    },
     ligacao: { type: "text", label: "Ligação (opcional)" },
     aparencia: campoAparencia(),
   },
-  defaultProps: { src: "", alt: "", proporcao: "4/3", ajuste: "cover", ligacao: "", aparencia: estiloVazio({ largura: em(100, "%") }) },
-  render: ({ puck, src, alt, proporcao, ajuste, ligacao, aparencia }) => {
-    const c = caixa(aparencia, { overflow: "hidden" });
-    const img = src
-      ? <img src={src} alt={alt} className="block h-full w-full" style={{ objectFit: ajuste, aspectRatio: proporcao || undefined }} />
-      : <div className="grid w-full place-items-center bg-[#E7EBF0] text-sm text-[#6b7685]" style={{ aspectRatio: proporcao || "4/3" }}>Escolha uma imagem</div>;
-    const href = ligacaoSegura(ligacao);
-    return <div ref={puck?.dragRef ?? undefined} id={c.id} className={c.className} style={c.style}>{href ? <a href={href}>{img}</a> : img}</div>;
+  // Largura, alinhamento e cantos: em «Aparência» (largura 100% = a coluna toda).
+  resolveFields: (data, { fields }) => {
+    const f = { ...fields } as Record<string, unknown>;
+    if (data.props.altura !== "fixa") delete f.alturaPx;
+    if (data.props.altura === "fixa" || data.props.altura === "seccao") delete f.proporcao;
+    return f as typeof fields;
   },
+  defaultProps: {
+    src: "", alt: "", proporcao: "4/3", ajuste: "cover", ligacao: "", altura: "proporcao", alturaPx: 400, encostar: "", foco: "center",
+    aparencia: estiloVazio({ largura: em(100, "%") }),
+  },
+  render: p => <DesenhoImagem {...p} />,
 };
 
 export const Espaco: ComponentConfig<{ altura: number | null; alturaTel?: number | null }> = {

@@ -70,7 +70,7 @@ function Relevantes(p: RelevantesProps) {
         return (
           <>
             <Titulo texto={p.titulo} t={p.tTitulo} className="font-serif text-3xl" />
-            <Cartoes carrossel={p.disposicao === "carrossel"} segundos={p.segundos ?? 0} setas={p.setas !== false} style={{
+            <Cartoes rotulo={p.titulo || "Outros cursos relevantes"} carrossel={p.disposicao === "carrossel"} segundos={p.segundos ?? 0} setas={p.setas !== false} style={{
               gap: `${e.espaco ?? 20}px`, ["--gap" as string]: `${e.espaco ?? 20}px`,
               ["--cols" as string]: String(e.colunas || 3), ["--cols-tab" as string]: String(e.colunasTab || 2), ["--cols-tel" as string]: String(e.colunasTel || 1),
             } as CSSProperties}>

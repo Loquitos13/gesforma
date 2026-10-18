@@ -162,7 +162,10 @@ const localDo = (c: Course) => c.sessoes.find(s => s.local)?.local || (c.format 
 
 // ─── Banner ──────────────────────────────────────────────────────────────────
 
-type BannerProps = Base & { voltar: string; mostrarImagem: boolean; mostrarEtiquetas: boolean; titulo: Tipografia };
+type BannerProps = Base & {
+  voltar: string; mostrarImagem: boolean; mostrarEtiquetas: boolean; titulo: Tipografia;
+  altura: number | null; larguraTotal: boolean; posicaoImagem: "center" | "top" | "bottom";
+};
 
 export const CursoBanner: ComponentConfig<BannerProps> = {
   label: "Curso · Banner",
@@ -170,11 +173,18 @@ export const CursoBanner: ComponentConfig<BannerProps> = {
     voltar: { type: "text", label: "Texto «voltar à formação» (vazio = esconder)" },
     mostrarImagem: simNao("Imagem do curso"),
     mostrarEtiquetas: simNao("Etiquetas (formato, área, regime)"),
+    altura: campoNumero("Altura do banner (vazio = automática; nunca passa de 70% da largura do ecrã)", ""),
+    larguraTotal: simNao("Ocupar a largura toda do ecrã"),
+    posicaoImagem: {
+      type: "select", label: "Parte da imagem que fica visível",
+      options: [{ label: "Centro", value: "center" }, { label: "Cima", value: "top" }, { label: "Baixo", value: "bottom" }],
+    },
     titulo: campoTipografia("Tipografia do título"),
     aparencia: campoAparencia(),
   },
   defaultProps: {
     voltar: "Voltar à formação", mostrarImagem: true, mostrarEtiquetas: true,
+    altura: null, larguraTotal: false, posicaoImagem: "center",
     titulo: tipoVazia(), aparencia: estiloVazio({ fundoCor: "var(--c-primaria)" }),
   },
   render: p => (
@@ -191,10 +201,14 @@ export const CursoBanner: ComponentConfig<BannerProps> = {
                 </a>
               </div>
             )}
-            <div className="relative mx-auto mt-8 min-h-[280px] max-h-[480px] w-full overflow-hidden bg-black/20" style={{ maxWidth: "var(--largura)" }}>
-              {imagem && <img src={imagem} alt="" className="max-h-[480px] w-full object-cover" />}
+            {/* Com altura escolhida: responsiva (no máximo 70% da largura do ecrã) e mínima, cresce se o título precisar
+                (nunca o corta). Sem altura: como sempre. */}
+            <div className={juntar("relative mx-auto mt-8 w-full overflow-hidden bg-black/20", p.altura ? "flex flex-col justify-end" : "min-h-[280px] max-h-[480px]")}
+              style={{ maxWidth: p.larguraTotal ? undefined : "var(--largura)", ...(p.altura ? { minHeight: `max(220px, min(${p.altura}px, 70vw))` } : {}) }}>
+              {imagem && <img src={imagem} alt="" className={juntar("w-full object-cover", p.altura ? "absolute inset-0 h-full" : "max-h-[480px]")}
+                style={{ objectPosition: p.posicaoImagem ?? "center" }} />}
               <div className="absolute inset-0 bg-gradient-to-t from-[var(--c-primaria)] via-[var(--c-primaria)]/35 to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 px-5 pb-8 lg:px-8">
+              <div className={juntar("px-5 pb-8 lg:px-8", p.altura ? "relative pt-16" : "absolute inset-x-0 bottom-0")}>
                 {p.mostrarEtiquetas && (
                   <div className="flex flex-wrap gap-3">
                     {curso.format && <span className="bg-[var(--c-destaque)] px-3 py-1.5 text-xs font-extrabold uppercase tracking-wider">{curso.format}</span>}

@@ -121,7 +121,11 @@ export function Carrossel1a1({ itens, rotulo, nomeItem, segundos, setas, transic
  * Grelha ou carrossel. O carrossel desliza na horizontal (também com o dedo) e mostra «colunas» cartões de cada vez;
  * avança sozinho de `segundos` em `segundos`, pára com o rato por cima e não se mexe com «reduzir movimento».
  */
-export function Cartoes({ carrossel, segundos, setas, style, children }: { carrossel: boolean; segundos: number; setas: boolean; style: CSSProperties; children: ReactNode }) {
+export function Cartoes({ carrossel, segundos, setas, style, children, rotulo = "Cursos" }: {
+  carrossel: boolean; segundos: number; setas: boolean; style: CSSProperties; children: ReactNode;
+  /** Nome para leitores de ecrã (região e setas: «Cursos seguintes»). */
+  rotulo?: string;
+}) {
   const caixa = useRef<HTMLDivElement>(null);
   const [parado, setParado] = useState(false);
   const mover = (sentido: 1 | -1) => {
@@ -139,16 +143,19 @@ export function Cartoes({ carrossel, segundos, setas, style, children }: { carro
   }, [carrossel, segundos, parado]);
   if (!carrossel) return <div className="ena-grelha mt-6 w-full" style={style}>{children}</div>;
   const seta = (sentido: 1 | -1) => (
-    <button type="button" onClick={() => mover(sentido)} aria-label={sentido === 1 ? "Testemunhos seguintes" : "Testemunhos anteriores"}
-      className="grid h-10 w-10 place-items-center rounded-full bg-white text-[var(--c-primaria)] shadow-[0_6px_18px_rgba(20,38,61,.16)] hover:brightness-95">
+    <button type="button" onClick={() => mover(sentido)} aria-label={`${rotulo} ${sentido === 1 ? "seguintes" : "anteriores"}`}
+      className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-[var(--c-primaria)] shadow-[0_6px_18px_rgba(20,38,61,.16)] hover:brightness-95 focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-[var(--c-destaque,#A60000)]">
       <span className={sentido === -1 ? "rotate-180" : undefined}><Icon name="arrow" /></span>
     </button>
   );
+  // Setas nas laterais, ao centro da altura dos cartões; os cartões ocupam o espaço entre elas.
   return (
-    <div className="mt-6 w-full" onMouseEnter={() => setParado(true)} onMouseLeave={() => setParado(false)}
-      onFocus={() => setParado(true)} onBlur={() => setParado(false)}>
-      <div ref={caixa} className="ena-carrossel" style={style} role="region" aria-label="Testemunhos" tabIndex={0}>{children}</div>
-      {setas && <div className="mt-4 flex justify-center gap-3">{seta(-1)}{seta(1)}</div>}
+    <div className="mt-6 flex w-full items-center gap-3" aria-roledescription="carrossel" role="region" aria-label={rotulo}
+      onMouseEnter={() => setParado(true)} onMouseLeave={() => setParado(false)}
+      onFocus={() => setParado(true)} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setParado(false); }}>
+      {setas && seta(-1)}
+      <div ref={caixa} className="ena-carrossel min-w-0 flex-1" style={style} tabIndex={0} aria-label={`${rotulo}: deslize para ver mais`}>{children}</div>
+      {setas && seta(1)}
     </div>
   );
 }

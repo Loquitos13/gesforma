@@ -1,19 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiPublicCronograma, type CronogramaPublico, type Regime } from "../partilhado/api";
+import { imprimirCronogramaEna } from "../partilhado/cronogramaPrint";
+import { FolhaAjustada, folhaDe } from "./CronogramaFolha";
 
-const MODALIDADE: Record<string, string> = {
-  presencial: "Presencial",
-  sincrona: "Síncrona",
-  auto: "Auto-aprendizagem",
-  avaliacao: "Avaliação",
-  matricula: "Matrícula",
-};
-
-function dataPt(iso: string) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
-}
-
+/** O cronograma público é a mesma folha do Imprimir / PDF da turma. */
 export function PublicCronograma({ regime, turmaId }: { regime: Regime; turmaId: number }) {
   const [dados, setDados] = useState<CronogramaPublico | null>(null);
   const [erro, setErro] = useState("");
@@ -26,60 +16,29 @@ export function PublicCronograma({ regime, turmaId }: { regime: Regime; turmaId:
     return () => { vivo = false; };
   }, [regime, turmaId]);
 
-  const e = dados?.entidade;
-  const contactos = e
-    ? [e.nome, [e.morada, [e.codigoPostal, e.localidade].filter(Boolean).join(" ")].filter(Boolean).join(", "), e.telefone, e.email, e.site].filter(Boolean)
-    : [];
-  const meta = dados
-    ? [dados.curso, dados.local, dados.horario, dados.inicio ? `início ${dataPt(dados.inicio)}` : "", dados.formador].filter(Boolean).join(" · ")
-    : "";
+  const folha = useMemo(() => dados && folhaDe({
+    nome: dados.nome, local: dados.local, horario: dados.horario, dataInicio: dados.inicio,
+    plano: dados.sessoes.map((s, i) => ({ id: `s${i}`, ...s })),
+  }, dados.curso, dados.entidade), [dados]);
+  useEffect(() => { if (dados) document.title = `Cronograma · ${dados.nome || dados.curso}`; }, [dados]);
 
   return (
-    <div className="min-h-screen bg-white px-4 py-10 sm:px-8">
-      <div className="mx-auto w-full max-w-4xl">
-        <img
-          src="/imagens/ena-logo-nobg.png"
-          alt={e?.nomeCurto || e?.nome || "Logótipo"}
-          className="h-10 w-auto mb-10"
-          onError={e => { (e.currentTarget as HTMLImageElement).src = "/imagens/ena_logo.svg"; }}
-        />
-        {erro && <p className="text-sm text-slate-600">{erro}</p>}
-        {!erro && !dados && <p className="text-sm text-slate-400">A ler o cronograma…</p>}
-        {dados && (
-          <>
-            <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[#ffa900]">Cronograma</p>
-            <h1 className="mt-3 text-2xl font-semibold text-slate-900">{dados.nome || dados.curso}</h1>
-            {meta && <p className="mt-2 text-sm text-slate-500">{meta}</p>}
-            <div className="mt-8 overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="text-left text-[11px] uppercase tracking-wide text-slate-500">
-                    <th className="border-b border-slate-200 py-2 pr-3 font-semibold">Data</th>
-                    <th className="border-b border-slate-200 py-2 pr-3 font-semibold">Horas</th>
-                    <th className="border-b border-slate-200 py-2 pr-3 font-semibold">Modalidade</th>
-                    <th className="border-b border-slate-200 py-2 pr-3 font-semibold">Módulo</th>
-                    <th className="border-b border-slate-200 py-2 font-semibold">Formador</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dados.sessoes.map((s, i) => (
-                    <tr key={`${s.data}-${s.horaInicio}-${i}`} className="align-top">
-                      <td className="border-b border-slate-100 py-2.5 pr-3 text-slate-800">{s.data ? dataPt(s.data) : "—"}</td>
-                      <td className="border-b border-slate-100 py-2.5 pr-3 whitespace-nowrap">{s.horaInicio && s.horaFim ? `${s.horaInicio}–${s.horaFim}` : "—"}</td>
-                      <td className="border-b border-slate-100 py-2.5 pr-3">{MODALIDADE[s.modalidade] ?? (s.modalidade || "—")}</td>
-                      <td className="border-b border-slate-100 py-2.5 pr-3">{s.modulos.join(", ") || "—"}</td>
-                      <td className="border-b border-slate-100 py-2.5">{s.formadores.join(", ") || dados.formador || "—"}</td>
-                    </tr>
-                  ))}
-                  {dados.sessoes.length === 0 && (
-                    <tr><td colSpan={5} className="py-6 text-slate-400">Ainda sem sessões neste cronograma.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </>
+    <div className="flex min-h-screen flex-col bg-[#f4f1ea]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e7e1d6] bg-white px-4 py-3 sm:px-6">
+        <div className="min-w-0">
+          <h1 className="text-base font-semibold text-slate-900">Cronograma{dados ? ` · ${dados.curso}` : ""}</h1>
+          {dados && <p className="mt-0.5 text-xs text-slate-500">{[dados.local, dados.horario].filter(Boolean).join(" · ")}</p>}
+        </div>
+        {folha && (
+          <button type="button" onClick={() => imprimirCronogramaEna({ ...folha.input, embutido: false })}
+            className="rounded-lg bg-[#1b2330] px-4 py-2 text-xs font-semibold text-white">
+            Imprimir / PDF
+          </button>
         )}
       </div>
+      {erro && <p className="p-6 text-sm text-slate-600">{erro}</p>}
+      {!erro && !dados && <p className="p-6 text-sm text-slate-400">A ler o cronograma…</p>}
+      {dados && <FolhaAjustada folha={folha} titulo={`Cronograma ${dados.nome}`} className="flex-1" />}
     </div>
   );
 }

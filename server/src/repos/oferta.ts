@@ -4,11 +4,15 @@ import { many, one, type Consulta, type Regime } from "./sql.js";
 export function turmasGoldActivas(c: Consulta) {
   return many<{
     id: number; nome: string; curso: string; local: string; horario: string;
-    data_inicio: string; total_alunos: number; vagas: number; tolerancia: number; cronograma_publicado_em: string | null;
+    data_inicio: string; total_alunos: number; vagas: number; tolerancia: number; tem_cronograma: boolean;
     vagas_anunciadas: number | null;
   }>(c,
     `SELECT id, nome, curso, local, horario, data_inicio, total_alunos, vagas, vagas_anunciadas,
-            COALESCE(tolerancia_vagas, 0) AS tolerancia, cronograma_publicado_em
+            COALESCE(tolerancia_vagas, 0) AS tolerancia,
+            -- Com sessões no cronograma já se mostra no site, mesmo sem «Publicar».
+            (cronograma_publicado_em IS NOT NULL OR EXISTS (
+              SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(cronograma) = 'array' THEN cronograma ELSE '[]'::jsonb END) e
+               WHERE e->>'id' IS DISTINCT FROM 'fim-cronograma')) AS tem_cronograma
        FROM turmas_gold
       WHERE estado = 'Ativa'
       ORDER BY curso, local, horario, data_inicio`);
@@ -17,11 +21,15 @@ export function turmasGoldActivas(c: Consulta) {
 export function turmasFinActivas(c: Consulta) {
   return many<{
     id: number; nome: string; curso: string; local: string; horario: string;
-    data_inicio: string; alunos: number; alunos_total: number; tolerancia: number; cronograma_publicado_em: string | null;
+    data_inicio: string; alunos: number; alunos_total: number; tolerancia: number; tem_cronograma: boolean;
     vagas_anunciadas: number | null;
   }>(c,
     `SELECT id, nome, curso, local, horario, data_inicio, alunos, alunos_total, vagas_anunciadas,
-            COALESCE(tolerancia_vagas, 0) AS tolerancia, cronograma_publicado_em
+            COALESCE(tolerancia_vagas, 0) AS tolerancia,
+            -- Com sessões no cronograma já se mostra no site, mesmo sem «Publicar».
+            (cronograma_publicado_em IS NOT NULL OR EXISTS (
+              SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(cronograma) = 'array' THEN cronograma ELSE '[]'::jsonb END) e
+               WHERE e->>'id' IS DISTINCT FROM 'fim-cronograma')) AS tem_cronograma
        FROM turmas_fin
       WHERE activa = true
       ORDER BY curso, local, horario, data_inicio`);

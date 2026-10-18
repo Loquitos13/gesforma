@@ -66,7 +66,8 @@ export function registarCronograma(app: FastifyInstance, { db, requireAuth, audi
     if (!v) return;
     const { regime, id } = v.params;
     const turma = await turmaParaCronograma(db, regime, id);
-    if (!turma?.cronograma_publicado_em) return reply.code(404).send({ error: "Este cronograma ainda não está no sítio." });
+    const sessoes = sessoesPublicas(turma?.cronograma);
+    if (!turma || (!turma.cronograma_publicado_em && !sessoes.length)) return reply.code(404).send({ error: "Este cronograma ainda não está no sítio." });
     return {
       nome: turma.nome,
       curso: turma.curso,
@@ -74,7 +75,7 @@ export function registarCronograma(app: FastifyInstance, { db, requireAuth, audi
       horario: turma.horario,
       inicio: String(turma.data_inicio ?? "").slice(0, 10),
       formador: turma.formador ?? "",
-      sessoes: sessoesPublicas(turma.cronograma),
+      sessoes,
       entidade: await lerEntidadePublica(db),
     };
   });

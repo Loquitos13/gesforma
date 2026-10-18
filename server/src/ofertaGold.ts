@@ -53,7 +53,7 @@ export async function listOfertaGold(db: Db): Promise<OfertaTurma[]> {
       dataInicio: String(r.data_inicio ?? "").slice(0, 10),
       ...vagas(Math.max(0, Number(r.vagas ?? 0) + Math.max(0, Number(r.tolerancia) || 0) - Number(r.total_alunos ?? 0)), r.vagas_anunciadas),
       preco: precoNoMapa(mapa, curso, local, horario),
-      cronogramaPublicado: Boolean(r.cronograma_publicado_em),
+      cronogramaPublicado: Boolean(r.tem_cronograma),
       regime: "gold" as const,
     };
   });
@@ -70,7 +70,7 @@ export async function listOfertaFin(db: Db): Promise<OfertaTurma[]> {
     dataInicio: String(r.data_inicio ?? "").slice(0, 10),
     ...vagas(Math.max(0, Number(r.alunos_total ?? 0) + Math.max(0, Number(r.tolerancia) || 0) - Number(r.alunos ?? 0)), r.vagas_anunciadas),
     preco: null,
-    cronogramaPublicado: Boolean(r.cronograma_publicado_em),
+    cronogramaPublicado: Boolean(r.tem_cronograma),
     regime: "fin" as const,
   }));
 }

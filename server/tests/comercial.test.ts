@@ -233,3 +233,21 @@ describe("Campanhas por email aos pré-inscritos parados", () => {
     expect(destinos).toEqual([expect.objectContaining({ preinscricaoId: certo, enviado: true })]);
   });
 });
+
+describe("Cronograma da turma no site", () => {
+  it("aparece assim que a turma tem sessões, mesmo sem «Publicar»", async () => {
+    const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-gold", {
+      dataInicio: "2099-07-01", nome: `CR ${Date.now()}`, curso: `Curso Cron ${Date.now()}`, local: "Porto", horario: "Laboral", vagas: 10,
+    });
+    const turmaId = t.json().turma.id as number;
+    const visivel = async () => ((await ctx.app.inject({ method: "GET", url: "/v1/public/oferta" })).json().turmas as { turmaId: number; cronogramaPublicado: boolean }[])
+      .find(x => x.turmaId === turmaId)?.cronogramaPublicado;
+    const publico = () => ctx.app.inject({ method: "GET", url: `/v1/public/cronograma/gold/${turmaId}` });
+    await ctx.db.query("UPDATE turmas_gold SET cronograma = '[{\"id\":\"fim-cronograma\"}]'::jsonb WHERE id = $1", [turmaId]);
+    expect(await visivel()).toBe(false);
+    expect((await publico()).statusCode).toBe(404);
+    await ctx.db.query("UPDATE turmas_gold SET cronograma = '[{\"id\":\"s1\",\"data\":\"2099-07-01\",\"modulo\":\"M1\"}]'::jsonb WHERE id = $1", [turmaId]);
+    expect(await visivel()).toBe(true);
+    expect((await publico()).json().sessoes).toHaveLength(1);
+  });
+});

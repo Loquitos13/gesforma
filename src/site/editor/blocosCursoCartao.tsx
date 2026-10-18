@@ -194,10 +194,17 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
                     <div className={juntar("mt-3 flex flex-col gap-1 border-t border-black/10 pt-3 text-xs", c.centrar ? "items-center text-center" : "items-start")}
                       style={{ padding: `12px ${pad} ${pad}`, ...tContactos.style }}>
                       {p.contactosTitulo && <span className="font-bold opacity-70">{p.contactosTitulo}</span>}
-                      {ct.telemovel && <a href={`tel:${ct.telemovel.replace(/[^\d+]/g, "")}`} className="font-semibold hover:underline"><span className="sr-only">Telemóvel: </span>{ct.telemovel}</a>}
-                      {ct.telefone && <a href={`tel:${ct.telefone.replace(/[^\d+]/g, "")}`} className="font-semibold hover:underline"><span className="sr-only">Telefone: </span>{ct.telefone}</a>}
-                      {ct.email && <a href={`mailto:${ct.email}`} className="font-semibold hover:underline">{ct.email}</a>}
-                      {ct.whatsapp && <a href={ligacaoWhatsapp(ct.whatsapp)} target="_blank" rel="noreferrer" className="font-semibold hover:underline">WhatsApp {ct.whatsapp}</a>}
+                      {([
+                        ["Telemóvel", ct.telemovel, ct.telemovel && `tel:${ct.telemovel.replace(/[^\d+]/g, "")}`],
+                        ["Telefone", ct.telefone, ct.telefone && `tel:${ct.telefone.replace(/[^\d+]/g, "")}`],
+                        ["Email", ct.email, ct.email && `mailto:${ct.email}`],
+                        ["WhatsApp", ct.whatsapp, ct.whatsapp && ligacaoWhatsapp(ct.whatsapp)],
+                      ] as const).filter(([, v]) => v?.trim()).map(([rotulo, v, href]) => (
+                        <span key={rotulo}>
+                          <span className="opacity-70">{rotulo}: </span>
+                          <a href={href || undefined} {...(rotulo === "WhatsApp" ? { target: "_blank", rel: "noreferrer" } : {})} className="font-semibold hover:underline">{v}</a>
+                        </span>
+                      ))}
                     </div>
                   )}
                   </div>

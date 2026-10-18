@@ -12,7 +12,10 @@ import type { SessaoModalidade, SessaoCronograma } from "../partilhado/turmaMode
 const MODALIDADES = new Set<SessaoModalidade>(["presencial", "sincrona", "auto", "avaliacao", "matricula"]);
 const NIVEIS = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
 
-function planoParaSessoes(turma: TurmaPercurso): SessaoCronograma[] {
+/** O que a folha precisa da turma: a área do formando e a página pública do cronograma dão o mesmo. */
+export type TurmaFolha = Pick<TurmaPercurso, "nome" | "local" | "horario" | "dataInicio" | "plano">;
+
+function planoParaSessoes(turma: TurmaFolha): SessaoCronograma[] {
   return sessoesSemFim((turma.plano ?? []).map(s => ({
     id: s.id,
     data: s.data,
@@ -24,7 +27,7 @@ function planoParaSessoes(turma: TurmaPercurso): SessaoCronograma[] {
   })));
 }
 
-function folhaDe(turma: TurmaPercurso, curso: string, entidade?: EntidadePublica) {
+export function folhaDe(turma: TurmaFolha, curso: string, entidade?: EntidadePublica) {
   const sessoes = planoParaSessoes(turma);
   if (!sessoes.length) return null;
   const periodo = grelhaPeriodo(sessoes, turma.dataInicio);
@@ -51,7 +54,7 @@ function folhaDe(turma: TurmaPercurso, curso: string, entidade?: EntidadePublica
   };
   const impressas = linhasComSessoes(linhas, dates, sessoes, matricula);
   const page = printPageSize(largurasColunaMm(dates, impressas, sessoes), impressas.length);
-  return { html: buildCronogramaPrintHtml(input), larguraMm: page.largura, alturaMm: page.altura };
+  return { html: buildCronogramaPrintHtml(input), larguraMm: page.largura, alturaMm: page.altura, input };
 }
 
 function nivelPerto(zoom: number) {
@@ -75,8 +78,6 @@ export function CronogramaModal({
 }) {
   const { dados: ent } = useRecurso(open ? "publico:entidade" : null, signal => apiPublicEntidade(signal));
   const folha = useMemo(() => folhaDe(turma, curso, ent?.entidade), [turma, curso, ent]);
-  const caixa = useRef<HTMLDivElement>(null);
-  const [largura, setLargura] = useState(0);
   const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
@@ -99,25 +100,7 @@ export function CronogramaModal({
     };
   }, [open, onClose]);
 
-  useEffect(() => {
-    if (!open) return;
-    const el = caixa.current;
-    if (!el) return;
-    const medir = () => setLargura(el.clientWidth);
-    medir();
-    const obs = new ResizeObserver(medir);
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [open, folha]);
-
   if (!open || typeof document === "undefined") return null;
-
-  const pxW = folha ? folha.larguraMm * 3.779527 : 0;
-  const pxH = folha ? folha.alturaMm * 3.779527 : 0;
-  const fit = largura > 0 && pxW > 0 ? largura / pxW : 0;
-  const escala = fit * zoom;
-  const w = Math.ceil(pxW * (escala || 1));
-  const h = Math.ceil(pxH * (escala || 1));
   const idx = nivelPerto(zoom);
 
   return createPortal(
@@ -139,22 +122,47 @@ export function CronogramaModal({
             <button type="button" onClick={onClose} className="rounded-lg bg-[#1b2330] px-3 py-2 text-xs font-semibold text-white">Fechar</button>
           </div>
         </div>
-        <div ref={caixa} className="min-h-0 flex-1 overflow-auto bg-[#f4f1ea] p-3 sm:p-5">
-          {!folha && <p className="text-sm text-[#5c564c]">Ainda sem cronograma nesta turma.</p>}
-          {folha && escala > 0 && (
-            <div className="mx-auto bg-white shadow-sm" style={{ width: w, height: h }}>
-              <iframe
-                title={`Cronograma ${turma.nome}`}
-                srcDoc={folha.html}
-                sandbox=""
-                className="pointer-events-none border-0 bg-white"
-                style={{ width: pxW, height: pxH, transform: `scale(${escala})`, transformOrigin: "top left" }}
-              />
-            </div>
-          )}
-        </div>
+        <FolhaAjustada folha={folha} zoom={zoom} titulo={`Cronograma ${turma.nome}`} className="min-h-0 flex-1" />
       </div>
     </div>,
     document.body,
+  );
+}
+
+/** A folha à largura da caixa (vezes o zoom), tal e qual sai no Imprimir / PDF. */
+export function FolhaAjustada({ folha, zoom = 1, titulo, className = "" }: {
+  folha: ReturnType<typeof folhaDe>; zoom?: number; titulo: string; className?: string;
+}) {
+  const caixa = useRef<HTMLDivElement>(null);
+  const [largura, setLargura] = useState(0);
+  useEffect(() => {
+    const el = caixa.current;
+    if (!el) return;
+    const medir = () => setLargura(el.clientWidth);
+    medir();
+    const obs = new ResizeObserver(medir);
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [folha]);
+  const pxW = folha ? folha.larguraMm * 3.779527 : 0;
+  const pxH = folha ? folha.alturaMm * 3.779527 : 0;
+  const fit = largura > 0 && pxW > 0 ? largura / pxW : 0;
+  const escala = fit * zoom;
+  return (
+    <div ref={caixa} className={`overflow-auto bg-[#f4f1ea] p-3 sm:p-5 ${className}`}>
+      {!folha && <p className="text-sm text-[#5c564c]">Ainda sem cronograma nesta turma.</p>}
+      {folha && escala > 0 && (
+        <div className="mx-auto bg-white shadow-sm" style={{ width: Math.ceil(pxW * escala), height: Math.ceil(pxH * escala) }}>
+          <iframe
+            title={titulo}
+            srcDoc={folha.html}
+            // Sem scripts; a mesma origem só deixa carregar o logótipo da entidade.
+            sandbox="allow-same-origin"
+            className="pointer-events-none border-0 bg-white"
+            style={{ width: pxW, height: pxH, transform: `scale(${escala})`, transformOrigin: "top left" }}
+          />
+        </div>
+      )}
+    </div>
   );
 }

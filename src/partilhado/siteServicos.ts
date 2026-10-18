@@ -3,6 +3,7 @@
 
 export type ImagemServico = { imagem: string; legenda: string };
 export type LogoServico = { imagem: string; alt: string; ligacao: string };
+export type CartaoServico = { titulo: string; texto: string };
 
 export type ServicoSite = {
   imagem: string; etiqueta: string; titulo: string; texto: string; pontos: string; rotulo: string; ligacao: string;
@@ -14,6 +15,15 @@ export type ServicoSite = {
   /** YouTube, Vimeo ou um ficheiro de vídeo (https). */
   video?: string;
   logos?: LogoServico[];
+  /** Imagem do topo da página do serviço (à direita). */
+  capa?: string;
+  /** Título do texto completo (vazio = o do bloco, ex.: «Sobre o serviço»). */
+  tituloDetalhe?: string;
+  /** Cartões da página (ex.: vantagens ou passos). */
+  cartoes?: CartaoServico[];
+  /** Faixa final (vazio = o texto do bloco). */
+  ctaTitulo?: string;
+  ctaTexto?: string;
 };
 
 const slugify = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");

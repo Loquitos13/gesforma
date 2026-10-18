@@ -14,7 +14,7 @@ import type { VistaProps } from "../../shell/tipos";
 
 const VAZIO: DadosServico = {
   titulo: "", etiqueta: "", texto: "", pontos: "", detalhe: "", rotulo: "Pedir proposta", ligacao: "#contactos",
-  imagem: "", imagens: [], video: "", logos: [],
+  imagem: "", imagens: [], video: "", logos: [], capa: "", tituloDetalhe: "", cartoes: [], ctaTitulo: "", ctaTexto: "",
 };
 
 type Edicao = { id: number | null; slug: string; ativo: boolean; ordem?: number; dados: DadosServico };
@@ -125,7 +125,16 @@ function FormServico({ inicial, aGravar, onFechar, onGravar }: { inicial: Edicao
           <Campo rotulo="Endereço da página" ajuda={`Vazio = feito do título. Mudar o endereço muda a ligação: quem tiver a antiga fica sem página. Agora: /empresas/${slug || "…"}`}>
             {p => <Entrada {...p} maxLength={80} value={e.slug} placeholder={slugServico({ titulo: d.titulo })} onChange={x => setE({ ...e, slug: x.target.value })} />}
           </Campo>
+          <Imagem rotulo="Imagem do topo da página (à direita)" valor={d.capa ?? ""} onMudar={capa => mudar({ capa })} />
+          <Campo rotulo="Título do texto" ajuda="Vazio = «Sobre o serviço» (ou o que estiver no modelo da página).">{p => <Entrada {...p} maxLength={160} value={d.tituloDetalhe ?? ""} onChange={x => mudar({ tituloDetalhe: x.target.value })} />}</Campo>
           <Campo rotulo="Texto completo" ajuda="Vazio = a descrição curta. As mudanças de linha mantêm-se.">{p => <AreaTexto {...p} rows={8} maxLength={12000} value={d.detalhe} onChange={x => mudar({ detalhe: x.target.value })} />}</Campo>
+          <Lista titulo="Cartões (ex.: vantagens ou passos)" itens={d.cartoes ?? []} novo={{ titulo: "", texto: "" }} onMudar={cartoes => mudar({ cartoes })} max={12}
+            render={(it, set) => (
+              <>
+                <Campo rotulo="Título do cartão">{p => <Entrada {...p} maxLength={120} value={it.titulo} onChange={x => set({ ...it, titulo: x.target.value })} />}</Campo>
+                <Campo rotulo="Texto do cartão">{p => <AreaTexto {...p} rows={3} maxLength={1200} value={it.texto} onChange={x => set({ ...it, texto: x.target.value })} />}</Campo>
+              </>
+            )} />
           <Campo rotulo="Vídeo (opcional)" erro={videoMau ? "Use um endereço do YouTube, do Vimeo ou de um ficheiro .mp4 (https)." : null} ajuda="Endereço do YouTube, do Vimeo ou de um ficheiro .mp4. Vazio = sem vídeo.">
             {p => <Entrada {...p} type="url" maxLength={500} value={d.video} placeholder="https://www.youtube.com/watch?v=…" onChange={x => mudar({ video: x.target.value.trim() })} />}
           </Campo>
@@ -146,6 +155,8 @@ function FormServico({ inicial, aGravar, onFechar, onGravar }: { inicial: Edicao
                 </div>
               </>
             )} />
+          <Campo rotulo="Faixa final: título" ajuda="Vazio = o do modelo («Fale connosco sobre a sua equipa.»).">{p => <Entrada {...p} maxLength={160} value={d.ctaTitulo ?? ""} onChange={x => mudar({ ctaTitulo: x.target.value })} />}</Campo>
+          <Campo rotulo="Faixa final: texto" ajuda="Vazio = o do modelo.">{p => <AreaTexto {...p} rows={3} maxLength={1200} value={d.ctaTexto ?? ""} onChange={x => mudar({ ctaTexto: x.target.value })} />}</Campo>
         </Grupo>
       </div>
     </PainelLateral>

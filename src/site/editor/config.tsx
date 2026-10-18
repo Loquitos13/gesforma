@@ -13,7 +13,8 @@ import {
 } from "./blocosCurso";
 import { CursoBotaoInscricao, CursoEscolhaLocal, CursoImagem, CursoInscricao, CursoTexto } from "./blocosCursoCartao";
 import { ListaNoticias } from "./blocosNoticias";
-import { campoPrevisualizarServico, RaizServico, ServicoBanner, ServicoDetalhe, ServicoGaleria, ServicoLogos, ServicoVideo } from "./blocosServico";
+import { campoPrevisualizarServico, RaizServico, ServicoBanner, ServicoCartoes, ServicoChamada, ServicoDetalhe, ServicoGaleria, ServicoLogos, ServicoVideo } from "./blocosServico";
+import { FormularioProposta } from "./blocosFormulario";
 import { Botao, Coluna, Espaco, Imagem, Logotipos, Pilares, Seccao, Separador, Texto, Titulo } from "./blocosBase";
 import { CursosDestaque, OfertaFormativa } from "./blocosCursos";
 import { Cabecalho, CabecalhoSite, Rodape, RodapeSite, type CabecalhoProps, type RodapeProps } from "./blocosMoldura";
@@ -145,13 +146,13 @@ const componentes = Object.fromEntries(Object.entries({
   CursosDestaque, OfertaFormativa, Catalogo, DetalheCurso, ListaNoticias, AreaFormando, Cabecalho, Rodape,
   CursoBanner, CursoSintese, CursoDados, CursoObjetivos, CursoPrograma, CursoFuncionamento, CursoTurmas, CursoRelevantes, CursoInscricao,
   CursoEscolhaLocal, CursoTexto, CursoImagem, CursoBotaoInscricao,
-  ServicoBanner, ServicoDetalhe, ServicoGaleria, ServicoVideo, ServicoLogos,
+  ServicoBanner, ServicoDetalhe, ServicoGaleria, ServicoVideo, ServicoLogos, ServicoCartoes, ServicoChamada, FormularioProposta,
   // Cada bloco do editor tem de estar em BLOCOS_SITE (o servidor recusa publicar blocos que não conhece): falha no build.
 } satisfies Record<BlocoSite, unknown>).map(([k, c]) => [k, responsivo(c as ComponentConfig<any>)])) as Config["components"];
 
 const categoriasBase = {
   estrutura: { title: "Estrutura", components: ["Seccao", "Coluna", "Espaco", "Separador"] },
-  conteudo: { title: "Conteúdo", components: ["Titulo", "Texto", "Botao", "Imagem", "Pilares", "Servicos", "Testemunhos", "Logotipos"] },
+  conteudo: { title: "Conteúdo", components: ["Titulo", "Texto", "Botao", "Imagem", "Pilares", "Servicos", "Testemunhos", "Logotipos", "FormularioProposta"] },
   cursos: { title: "Cursos", components: ["CursosDestaque", "OfertaFormativa", "Catalogo"] },
   especiais: { title: "Notícias e área do formando", components: ["ListaNoticias", "AreaFormando"] },
   // Blocos que só fazem sentido na página do curso (lêem o curso da página).
@@ -163,7 +164,7 @@ const categoriasBase = {
     visible: false,
   },
   // Blocos que só fazem sentido na página de serviço (lêem o serviço da página).
-  paginaServico: { title: "Página de serviço", components: ["ServicoBanner", "ServicoDetalhe", "ServicoGaleria", "ServicoVideo", "ServicoLogos"], visible: false },
+  paginaServico: { title: "Página de serviço", components: ["ServicoBanner", "ServicoDetalhe", "ServicoCartoes", "ServicoGaleria", "ServicoVideo", "ServicoLogos", "ServicoChamada"], visible: false },
 };
 
 /** A página inicial guarda o tema, o cabeçalho e o rodapé; as outras só o conteúdo do meio. */

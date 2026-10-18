@@ -6,10 +6,11 @@ import { Catalogo } from "./blocosCatalogo";
 import { CursoBanner, CursoDados, CursoFuncionamento, CursoObjetivos, CursoPrograma, CursoSintese, CursoTurmas } from "./blocosCurso";
 import { blocosCartaoPadrao, CursoEscolhaLocal, CursoInscricao } from "./blocosCursoCartao";
 import { ListaNoticias } from "./blocosNoticias";
-import { Botao, Coluna, Imagem, Pilares, Seccao, Texto, Titulo } from "./blocosBase";
+import { Botao, Coluna, Imagem, Logotipos, Pilares, Seccao, Texto, Titulo } from "./blocosBase";
 import { cartaoPadrao, CursosDestaque, OfertaFormativa } from "./blocosCursos";
 import { Servicos } from "./blocosServicos";
-import { ServicoBanner, ServicoDetalhe, ServicoGaleria, ServicoLogos, ServicoVideo } from "./blocosServico";
+import { ServicoBanner, ServicoCartoes, ServicoChamada, ServicoDetalhe, ServicoGaleria, ServicoLogos, ServicoVideo } from "./blocosServico";
+import { FormularioProposta } from "./blocosFormulario";
 import { Testemunhos } from "./blocosTestemunhos";
 import { CursoRelevantes } from "./blocosCursoRelevantes";
 import { cabecalhoPadrao, rodapePadrao } from "./blocosMoldura";
@@ -235,16 +236,23 @@ function modeloEmpresas(): Data {
               { numero: "04", titulo: "Acompanhamento", texto: "Avaliação de resultados e apoio depois da formação.", imagem: "" },
             ],
           }),
+          // Sem logótipos não aparece no site; juntam-se no editor.
+          bloco("Logotipos", Logotipos.defaultProps, { titulo: "Quem confia em nós", carrossel: true, aparencia: estiloVazio({ margem: lados(40, 0, 0, 0) }) }),
         ],
       }),
       bloco("Seccao", Seccao.defaultProps, {
-        espaco: 14,
+        disposicao: "grelha", colunas: 2, colunasTab: 1, colunasTel: 1, espaco: 40, alinharItens: "inicio",
         aparencia: estiloVazio({ ancora: "proposta", fundoCor: "var(--c-primaria)", preenchimento: lados(56, 32), preenchimentoTel: lados(40, 20) }),
         conteudo: [
-          kicker("Pedir proposta", "var(--c-acento)"),
-          bloco("Titulo", Titulo.defaultProps, { texto: "Fale connosco sobre a sua equipa.", tipografia: tipoVazia({ fonte: "tema-titulos", tamanho: 36, tamanhoTel: 28, peso: "700", cor: "#ffffff" }) }),
-          bloco("Texto", Texto.defaultProps, { texto: "Conte-nos o que precisa. Respondemos com uma proposta à medida.", tipografia: tipoVazia({ tamanho: 17, alturaLinha: 1.6, cor: "#D7E0EA" }) }),
-          bloco("Botao", Botao.defaultProps, { rotulo: "Contactos", ligacao: "#contactos", cor: "var(--c-acento)", corTexto: "var(--c-primaria)", corHover: "#ffffff" }),
+          bloco("Coluna", Coluna.defaultProps, {
+            espaco: 14,
+            conteudo: [
+              kicker("Pedir proposta", "var(--c-acento)"),
+              bloco("Titulo", Titulo.defaultProps, { texto: "Fale connosco sobre a sua equipa.", tipografia: tipoVazia({ fonte: "tema-titulos", tamanho: 36, tamanhoTel: 28, peso: "700", cor: "#ffffff" }) }),
+              bloco("Texto", Texto.defaultProps, { texto: "Conte-nos o que precisa. Respondemos com uma proposta à medida.", tipografia: tipoVazia({ tamanho: 17, alturaLinha: 1.6, cor: "#D7E0EA" }) }),
+            ],
+          }),
+          bloco("FormularioProposta", FormularioProposta.defaultProps),
         ],
       }),
     ],
@@ -259,14 +267,16 @@ function modeloServico(): Data {
     content: [
       bloco("ServicoBanner", ServicoBanner.defaultProps),
       bloco("Seccao", Seccao.defaultProps, {
-        espaco: 48, aparencia: estiloVazio({ preenchimento: lados(48, 32), preenchimentoTel: lados(36, 20) }),
+        espaco: 48, aparencia: estiloVazio({ preenchimento: lados(56, 32), preenchimentoTel: lados(40, 20) }),
         conteudo: [
           bloco("ServicoDetalhe", ServicoDetalhe.defaultProps),
-          bloco("ServicoGaleria", ServicoGaleria.defaultProps),
+          bloco("ServicoCartoes", ServicoCartoes.defaultProps),
           bloco("ServicoVideo", ServicoVideo.defaultProps),
+          bloco("ServicoGaleria", ServicoGaleria.defaultProps),
           bloco("ServicoLogos", ServicoLogos.defaultProps),
         ],
       }),
+      bloco("ServicoChamada", ServicoChamada.defaultProps),
     ],
   } as Data;
 }

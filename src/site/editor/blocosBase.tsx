@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState, type CSSProperties, type ElementType
 import type { ComponentConfig, Slot } from "@puckeditor/core";
 import { campoCor, campoImagem, campoNumero, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
+import { Cartoes } from "./carrossel";
 import { corSegura, em, estiloBloco, estiloTexto, estiloVazio, juntar, lados, ligacaoSegura, tipoVazia, type Estilo, type Tipografia } from "./estilos";
 
 type Texto = string | ReactNode;
@@ -437,9 +438,18 @@ export const Pilares: ComponentConfig<PilaresProps> = {
 
 type Logo = { imagem: string; alt: string; ligacao: string };
 
-export const Logotipos: ComponentConfig<{ itens: Logo[]; altura: number | null; espaco: number | null; cinzento: boolean; alinhar: "inicio" | "centro" | "fim"; aparencia: Estilo }> = {
+type LogotiposProps = {
+  itens: Logo[]; altura: number | null; espaco: number | null; cinzento: boolean; alinhar: "inicio" | "centro" | "fim"; aparencia: Estilo;
+  titulo?: string; carrossel?: boolean; segundos?: number | null; porVez?: number | null;
+};
+
+export const Logotipos: ComponentConfig<LogotiposProps> = {
   label: "Logótipos",
   fields: {
+    titulo: { type: "text", label: "Título por cima (vazio = sem título)" },
+    carrossel: simNao("Em carrossel (passa sozinho, com setas)") as never,
+    segundos: campoNumero("Carrossel: passar a cada (segundos, 0 = não)") as never,
+    porVez: campoNumero("Carrossel: logótipos à vista no computador") as never,
     itens: {
       type: "array", label: "Logótipos",
       arrayFields: { imagem: campoImagem("Imagem"), alt: { type: "text", label: "Nome" }, ligacao: { type: "text", label: "Ligação (opcional)" } },
@@ -452,17 +462,26 @@ export const Logotipos: ComponentConfig<{ itens: Logo[]; altura: number | null; 
     alinhar: { type: "select", label: "Alinhar", options: [{ label: "Esquerda", value: "inicio" }, { label: "Centro", value: "centro" }, { label: "Direita", value: "fim" }] },
     aparencia: campoAparencia(),
   },
-  defaultProps: { itens: [], altura: 48, espaco: 40, cinzento: true, alinhar: "centro", aparencia: estiloVazio() },
-  render: ({ puck, itens, altura, espaco, cinzento, alinhar, aparencia }) => {
-    const c = caixa(aparencia, { gap: `${espaco ?? 40}px`, justifyContent: JUSTIFICAR[alinhar] });
+  defaultProps: { titulo: "", carrossel: false, segundos: 4, porVez: 5, itens: [], altura: 48, espaco: 40, cinzento: true, alinhar: "centro", aparencia: estiloVazio() },
+  render: ({ puck, itens, altura, espaco, cinzento, alinhar, aparencia, titulo, carrossel, segundos, porVez }) => {
+    const editar = (puck as { isEditing?: boolean } | undefined)?.isEditing;
+    const logos = (itens ?? []).filter(l => l.imagem);
+    // Sem logótipos, no site o bloco (com o título) não aparece; no editor fica o aviso.
+    if (!logos.length && !editar) return <div ref={puck?.dragRef ?? undefined} hidden />;
+    const c = caixa(aparencia);
+    const desenho = logos.map((l, i) => {
+      const img = <img src={l.imagem} alt={l.alt} style={{ height: `${altura ?? 48}px` }} className={juntar("w-auto max-w-full object-contain transition", cinzento && "opacity-70 grayscale hover:opacity-100 hover:grayscale-0")} />;
+      const href = ligacaoSegura(l.ligacao);
+      return <div key={i} className="flex items-center justify-center">{href ? <a href={href} target="_blank" rel="noreferrer">{img}</a> : img}</div>;
+    });
     return (
-      <div ref={puck?.dragRef ?? undefined} id={c.id} className={juntar(c.className, "flex flex-wrap items-center")} style={c.style}>
-        {(itens ?? []).length === 0 && (puck as { isEditing?: boolean } | undefined)?.isEditing && <p className="text-sm text-[#6b7685]">Junte logótipos no painel.</p>}
-        {(itens ?? []).filter(l => l.imagem).map((l, i) => {
-          const img = <img src={l.imagem} alt={l.alt} style={{ height: `${altura ?? 48}px` }} className={juntar("w-auto object-contain transition", cinzento && "opacity-70 grayscale hover:opacity-100 hover:grayscale-0")} />;
-          const href = ligacaoSegura(l.ligacao);
-          return href ? <a key={i} href={href} target="_blank" rel="noreferrer">{img}</a> : <span key={i}>{img}</span>;
-        })}
+      <div ref={puck?.dragRef ?? undefined} id={c.id} className={c.className} style={c.style}>
+        {titulo && <p className="mb-5 text-center text-xs font-extrabold uppercase tracking-[0.18em] opacity-70">{titulo}</p>}
+        {!logos.length && <p className="text-sm text-[#6b7685]">Junte logótipos no painel.</p>}
+        {carrossel
+          ? <Cartoes carrossel segundos={segundos ?? 0} setas rotulo={titulo || "Logótipos"}
+              style={{ gap: `${espaco ?? 40}px`, ["--gap" as string]: `${espaco ?? 40}px`, ["--cols" as string]: String(porVez || 5), ["--cols-tab" as string]: "3", ["--cols-tel" as string]: "2" }}>{desenho}</Cartoes>
+          : <div className="flex flex-wrap items-center" style={{ gap: `${espaco ?? 40}px`, justifyContent: JUSTIFICAR[alinhar] }}>{desenho}</div>}
       </div>
     );
   },

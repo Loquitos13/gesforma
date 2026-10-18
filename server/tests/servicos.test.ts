@@ -43,3 +43,33 @@ describe("Modelo da página de serviço no editor", () => {
     expect((await pedido(ctx, "admin", "PUT", "/v1/site/paginas/servico/publicar", { dados })).statusCode).toBe(200);
   });
 });
+
+describe("Pedido de proposta (formulário da página Empresas)", () => {
+  it("fica nas Clientes do CRM (junta ao cliente com o mesmo email), recusa dados maus e ignora robôs", async () => {
+    const ctx = await arrancar();
+    const enviar = (corpo: Record<string, unknown>) => ctx.app.inject({ method: "POST", url: "/v1/public/pedidos-proposta", payload: corpo });
+    const email = `rh.${Date.now()}@empresa.pt`;
+    expect((await enviar({ nome: "Ana Lima", empresa: "Empresa Teste", email, telefone: "912 345 678", servico: "Formação à medida", mensagem: "Formação para 20 pessoas." })).statusCode).toBe(200);
+    expect((await enviar({ nome: "Ana Lima", empresa: "Empresa Teste", email: email.toUpperCase(), mensagem: "Segundo pedido." })).statusCode).toBe(200);
+    const linhas = (await ctx.db.query<{ nome: string; tipo: string; telf: string; notas: string }>("SELECT nome, tipo, telf, notas FROM crm_clientes WHERE lower(email) = $1", [email])).rows;
+    expect(linhas).toHaveLength(1);
+    expect(linhas[0]).toMatchObject({ nome: "Empresa Teste", tipo: "Empresa", telf: "912 345 678" });
+    expect(linhas[0]!.notas).toContain("(Formação à medida): Ana Lima — Formação para 20 pessoas.");
+    expect(linhas[0]!.notas).toContain("Segundo pedido.");
+    expect((await enviar({ nome: "Ana", email: "sem-arroba" })).statusCode).toBe(400);
+    const robo = `robo.${Date.now()}@spam.pt`;
+    expect((await enviar({ nome: "Robô", email: robo, site: "https://spam" })).statusCode).toBe(200);
+    expect((await ctx.db.query("SELECT 1 FROM crm_clientes WHERE email = $1", [robo])).rows).toHaveLength(0);
+  });
+
+  it("os serviços guardam a imagem do topo, os cartões e a faixa final", async () => {
+    const ctx = await arrancar();
+    const r = await pedido(ctx, "admin", "POST", "/v1/servicos", {
+      slug: "", ativo: true,
+      dados: { titulo: "Serviço com cartões", capa: "/api/v1/public/imagens/abc", tituloDetalhe: "O que fazemos", cartoes: [{ titulo: "Vantagem", texto: "Explicação." }], ctaTitulo: "Fale connosco", ctaTexto: "Texto final." },
+    });
+    expect(r.statusCode, r.body).toBe(200);
+    const s = ((await ctx.app.inject({ method: "GET", url: "/v1/public/servicos" })).json().servicos as Record<string, unknown>[]).find(x => x.slug === "servico-com-cartoes");
+    expect(s).toMatchObject({ capa: "/api/v1/public/imagens/abc", tituloDetalhe: "O que fazemos", cartoes: [{ titulo: "Vantagem", texto: "Explicação." }], ctaTitulo: "Fale connosco" });
+  });
+});

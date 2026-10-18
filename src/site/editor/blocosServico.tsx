@@ -94,20 +94,21 @@ const ONDE = "Escreve-se no backoffice em Gestão › Empresas / Business.";
 
 // ─── Banner ─────────────────────────────────────────────────────────────────
 
-type BannerProps = Base & { etiqueta: string; voltar: string; tTitulo: Tipografia; tTexto: Tipografia; botao: boolean };
+type BannerProps = Base & { etiqueta: string; voltar: string; tTitulo: Tipografia; tTexto: Tipografia; botao: boolean; alturaMin?: number | null };
 
 export const ServicoBanner: ComponentConfig<BannerProps> = {
   label: "Serviço · Banner",
   fields: {
-    etiqueta: { type: "text", label: "Etiqueta por cima do título (vazio = esconder)" },
+    etiqueta: { type: "text", label: "Etiqueta por cima do título (vazio = esconder; a etiqueta do serviço tem prioridade)" },
     voltar: { type: "text", label: "Ligação para voltar a Empresas (vazio = esconder)" },
-    botao: simNao("Botão do serviço (o do cartão, ex.: «Pedir proposta»)"),
+    botao: simNao("Botão do serviço (ex.: «Pedir proposta»)"),
+    alturaMin: campoNumero("Altura mínima (píxeis)") as never,
     tTitulo: campoTipografia("Tipografia do título"),
     tTexto: campoTipografia("Tipografia do texto"),
     aparencia: campoAparencia(),
   },
   defaultProps: {
-    etiqueta: "Serviços para empresas", voltar: "Voltar a Empresas", botao: true, tTitulo: tipoVazia(), tTexto: tipoVazia(),
+    etiqueta: "Serviços para empresas", voltar: "Voltar a Empresas", botao: true, alturaMin: 320, tTitulo: tipoVazia(), tTexto: tipoVazia(),
     aparencia: estiloVazio({ fundoCor: "var(--c-primaria)" }),
   },
   render: p => (
@@ -115,19 +116,24 @@ export const ServicoBanner: ComponentConfig<BannerProps> = {
       {s => {
         const [t, x] = [estiloTexto(p.tTitulo), estiloTexto(p.tTexto)];
         const href = ligacaoSegura(s.ligacao);
+        const etiqueta = s.etiqueta?.trim() || p.etiqueta;
         return (
-          <div className="px-5 py-14 text-white lg:px-8 lg:py-16">
-            <div className="mx-auto" style={{ maxWidth: "var(--largura)" }}>
-              {p.voltar && <a href="/empresas" className="mb-6 inline-flex items-center gap-2 text-sm font-bold text-white/70 hover:text-white"><span aria-hidden="true">←</span>{p.voltar}</a>}
-              {p.etiqueta && <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--c-acento)]">{p.etiqueta}</p>}
-              <h1 className={juntar("mt-3 font-serif text-4xl font-bold leading-tight sm:text-5xl", t.className)} style={t.style}>{s.titulo}</h1>
-              {s.texto && <p className={juntar("mt-4 max-w-2xl whitespace-pre-line text-lg leading-8 text-white/75", x.className)} style={x.style}>{s.texto.split("\n")[0]}</p>}
+          // A imagem do topo (capa) fica à direita, da altura toda e até à beira do ecrã; o texto alinha com o resto da página.
+          // A margem esquerda é a das secções da página (32 px + o que sobra da largura do conteúdo), para o título alinhar com o resto.
+          <div className={juntar("grid text-white", s.capa && "lg:grid-cols-2")}
+            style={{ minHeight: p.alturaMin ? `${p.alturaMin}px` : undefined, paddingLeft: "max(20px, calc(32px + max(0px, (100% - 64px - var(--largura)) / 2)))" }}>
+            <div className="flex flex-col justify-center gap-4 py-12 pr-5 lg:pr-12">
+              {p.voltar && <a href="/empresas" className="inline-flex items-center gap-2 text-sm font-bold text-white/70 hover:text-white"><span aria-hidden="true">←</span>{p.voltar}</a>}
+              {etiqueta && <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--c-acento)]">{etiqueta}</p>}
+              <h1 className={juntar("font-serif text-4xl font-bold leading-tight sm:text-5xl", t.className)} style={t.style}>{s.titulo}</h1>
+              {s.texto && <p className={juntar("max-w-2xl whitespace-pre-line text-lg leading-8 text-white/75", x.className)} style={x.style}>{s.texto.split("\n")[0]}</p>}
               {p.botao && s.rotulo && href && (
-                <a href={href} className="mt-8 inline-flex items-center gap-3 bg-[var(--c-acento)] px-6 py-3 text-sm font-bold text-[var(--c-primaria)] hover:brightness-95">
+                <a href={href} className="mt-2 inline-flex w-fit items-center gap-3 bg-[var(--c-acento)] px-6 py-3 text-sm font-bold text-[var(--c-primaria)] hover:brightness-95">
                   {s.rotulo} <Icon name="arrow" className="h-4 w-4" />
                 </a>
               )}
             </div>
+            {s.capa && <img src={s.capa} alt="" className="h-full min-h-64 w-full object-cover" />}
           </div>
         );
       }}
@@ -142,8 +148,8 @@ type DetalheProps = Base & { titulo: string; tTitulo: Tipografia; tTexto: Tipogr
 export const ServicoDetalhe: ComponentConfig<DetalheProps> = {
   label: "Serviço · Texto e pontos",
   fields: {
-    titulo: { type: "text", label: "Título (vazio = esconder)" },
-    pontos: simNao("Lista de pontos do serviço"),
+    titulo: { type: "text", label: "Título (vazio = esconder; o título do texto do serviço tem prioridade)" },
+    pontos: simNao("Caixa com os pontos do serviço, ao lado do texto"),
     tTitulo: campoTipografia("Tipografia do título"),
     tTexto: campoTipografia("Tipografia do texto"),
     aparencia: campoAparencia(),
@@ -155,15 +161,88 @@ export const ServicoDetalhe: ComponentConfig<DetalheProps> = {
         const x = estiloTexto(p.tTexto);
         const pontos = p.pontos ? (s.pontos ?? "").split("\n").map(l => l.trim()).filter(Boolean) : [];
         return (
-          <>
-            <Titulo texto={p.titulo} t={p.tTitulo} className="font-serif text-3xl font-bold" />
-            <p className={juntar("mt-4 max-w-3xl whitespace-pre-line text-lg leading-8 opacity-75", x.className)} style={x.style}>{s.detalhe?.trim() || s.texto}</p>
+          <div className={juntar("grid gap-10", pontos.length > 0 && "lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]")}>
+            <div>
+              <Titulo texto={s.tituloDetalhe?.trim() || p.titulo} t={p.tTitulo} className="font-serif text-3xl font-bold" />
+              <p className={juntar("mt-4 whitespace-pre-line text-lg leading-8 opacity-75", x.className)} style={x.style}>{s.detalhe?.trim() || s.texto}</p>
+            </div>
             {pontos.length > 0 && (
-              <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+              <ul className="flex flex-col gap-3 self-start border-t-[3px] border-[var(--c-acento)] bg-white p-6">
                 {pontos.map(l => <li key={l} className="flex gap-2"><span className="text-[var(--c-destaque)]"><Icon name="check" className="mt-1 h-4 w-4 shrink-0" /></span>{l}</li>)}
               </ul>
             )}
-          </>
+          </div>
+        );
+      }}
+    </CaixaServico>
+  ),
+};
+
+// ─── Cartões do serviço (ex.: vantagens, passos) ────────────────────────────
+
+type CartoesProps = Base & { titulo: string; tTitulo: Tipografia; colunas: number | null };
+
+export const ServicoCartoes: ComponentConfig<CartoesProps> = {
+  label: "Serviço · Cartões",
+  fields: {
+    titulo: { type: "text", label: "Título (vazio = esconder)" },
+    colunas: campoNumero("Colunas (computador)") as never,
+    tTitulo: campoTipografia("Tipografia do título"),
+    aparencia: campoAparencia(),
+  },
+  defaultProps: { titulo: "", colunas: 4, tTitulo: tipoVazia(), aparencia: estiloVazio() },
+  render: p => (
+    <CaixaServico p={p} tem={s => (s.cartoes ?? []).some(c => c.titulo?.trim())} vazio={`O serviço não tem cartões. ${ONDE}`}>
+      {s => (
+        <>
+          <Titulo texto={p.titulo} t={p.tTitulo} className="mb-6 font-serif text-3xl font-bold" />
+          <div className="ena-grelha" style={{ gap: "16px", ["--cols" as string]: String(p.colunas || 4), ["--cols-tab" as string]: "2", ["--cols-tel" as string]: "1" }}>
+            {(s.cartoes ?? []).filter(c => c.titulo?.trim()).map((c, i) => (
+              <article key={i} className="flex flex-col gap-2 border-t-[3px] border-[var(--c-acento)] bg-white p-6">
+                <h3 className="text-lg font-bold text-[var(--c-primaria)]">{c.titulo}</h3>
+                {c.texto && <p className="whitespace-pre-line text-[15px] leading-6 opacity-75">{c.texto}</p>}
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+    </CaixaServico>
+  ),
+};
+
+// ─── Faixa final (pedido de proposta) ───────────────────────────────────────
+
+type ChamadaProps = Base & { etiqueta: string; titulo: string; texto: string };
+
+export const ServicoChamada: ComponentConfig<ChamadaProps> = {
+  label: "Serviço · Faixa final",
+  fields: {
+    etiqueta: { type: "text", label: "Etiqueta (vazio = esconder)" },
+    titulo: { type: "text", label: "Título (o da faixa final do serviço tem prioridade)" },
+    texto: { type: "textarea", label: "Texto (o da faixa final do serviço tem prioridade)" },
+    aparencia: campoAparencia(),
+  },
+  defaultProps: {
+    etiqueta: "Fale connosco", titulo: "Fale connosco sobre a sua equipa.", texto: "Conte-nos o que precisa. Respondemos com uma proposta à medida.",
+    aparencia: estiloVazio({ fundoCor: "var(--c-primaria)" }),
+  },
+  render: p => (
+    <CaixaServico p={p} tem={() => true} vazio="">
+      {s => {
+        const href = ligacaoSegura(s.ligacao);
+        return (
+          <div className="px-5 py-14 text-white lg:px-8">
+          <div className="mx-auto flex flex-col items-start gap-4" style={{ maxWidth: "var(--largura)" }}>
+            {p.etiqueta && <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--c-acento)]">{p.etiqueta}</p>}
+            <h2 className="font-serif text-3xl font-bold">{s.ctaTitulo?.trim() || p.titulo}</h2>
+            <p className="max-w-2xl whitespace-pre-line text-lg leading-8 text-white/75">{s.ctaTexto?.trim() || p.texto}</p>
+            {s.rotulo && href && (
+              <a href={href} className="mt-2 inline-flex items-center gap-3 bg-[var(--c-acento)] px-6 py-3 text-sm font-bold text-[var(--c-primaria)] hover:brightness-95">
+                {s.rotulo} <Icon name="arrow" className="h-4 w-4" />
+              </a>
+            )}
+          </div>
+          </div>
         );
       }}
     </CaixaServico>

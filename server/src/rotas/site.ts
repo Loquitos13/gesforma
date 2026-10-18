@@ -90,7 +90,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const raw = await settings.lerDefinicao(db, "site");
     const valores: Record<string, string> = {};
     for (const [chave, valor] of Object.entries(raw)) if (typeof valor === "string") valores[chave] = valor;
-    return { valores, satisfacao: await satisfacaoPublica(db) };
+    // As redes sociais da ENA (Sistema › Site › SEO): um endereço por linha, só https.
+    const seo = await settings.lerDefinicao(db, "seo");
+    const redes = String(seo.redesSociais ?? "").split(/\r?\n/).map(s => s.trim()).filter(s => /^https:\/\//i.test(s)).slice(0, 12);
+    return { valores, redes, satisfacao: await satisfacaoPublica(db) };
   });
 
   /** Contactos públicos da entidade (cabeçalhos de folhas e rodapés do site). */

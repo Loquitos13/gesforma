@@ -1,5 +1,5 @@
 // Cabeçalho e rodapé do site como blocos editáveis (o resto das páginas do site usa os da página inicial).
-import { campoRedes, LigacoesRedes, REDES_ENA, type LigacaoRede } from "./redesSociais";
+import { campoRedes, LigacoesRedes, type LigacaoRede } from "./redesSociais";
 import { useEffect, useState, type CSSProperties } from "react";
 import type { ComponentConfig } from "@puckeditor/core";
 import { apiMe } from "../../partilhado/api";
@@ -56,8 +56,8 @@ export function CabecalhoSite(p: CabecalhoProps & { editar?: boolean; refRaiz?: 
           </nav>
           <div className="flex shrink-0 items-center gap-3">
             {botao && <a href={botaoHref} className="hidden bg-[var(--cab-botao)] px-5 py-3 text-sm font-bold text-white transition hover:brightness-110 lg:inline-flex">{botao}</a>}
-            {/* À direita do botão de entrada. Cabeçalhos gravados antes desta opção não a têm: mostram as páginas da ENA. */}
-            <LigacoesRedes redes={p.redes ?? REDES_ENA} pequeno className="hidden gap-1 xl:flex" />
+            {/* À direita do botão de entrada. Sem lista própria: as redes de Sistema › Site › SEO. */}
+            <LigacoesRedes redes={p.redes} pequeno className="hidden gap-1 xl:flex" />
           </div>
           <button type="button" onClick={() => setAberto(!aberto)} className="p-2 lg:hidden" aria-expanded={aberto} aria-label={aberto ? "Fechar menu" : "Abrir menu"}>
             <svg aria-hidden="true" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">{aberto ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}</svg>
@@ -69,7 +69,7 @@ export function CabecalhoSite(p: CabecalhoProps & { editar?: boolean; refRaiz?: 
           <div className="flex flex-col gap-5 font-semibold">
             {ligacoes.map((l, i) => <a key={i} href={ligacaoSegura(l.ligacao) || "#"} onClick={() => setAberto(false)}>{l.rotulo}</a>)}
             {botao && <a href={botaoHref} className="bg-[var(--cab-botao)] px-5 py-3 text-center text-sm font-bold text-white">{botao}</a>}
-            <LigacoesRedes redes={p.redes ?? REDES_ENA} />
+            <LigacoesRedes redes={p.redes} />
           </div>
         </nav>
       )}
@@ -80,7 +80,7 @@ export function CabecalhoSite(p: CabecalhoProps & { editar?: boolean; refRaiz?: 
 export const cabecalhoPadrao: CabecalhoProps = {
   logo: "/imagens/ena_logo.svg", alturaLogo: 40, linha1: "Escola de", linha2: "Negócios e Administração",
   ligacoes: [{ rotulo: "Formação", ligacao: "/formacao" }, { rotulo: "Notícias", ligacao: "/noticias" }, { rotulo: "Empresas", ligacao: "/empresas" }],
-  redes: REDES_ENA, botao: "Área do formando", botaoSessao: "A minha área", botaoLigacao: "/area-formando",
+  redes: [], botao: "Área do formando", botaoSessao: "A minha área", botaoLigacao: "/area-formando",
   fixo: false, corFundo: "#ffffff", corTexto: "var(--c-primaria)", corHover: "var(--c-destaque)", corBotao: "var(--c-destaque)", corBarra: "var(--c-acento)", barra: 4,
   tipografia: tipoVazia({ tamanho: 14, peso: "600" }),
   aparencia: estiloVazio({ preenchimento: lados(18, 32), preenchimentoTel: lados(14, 20) }),
@@ -101,7 +101,7 @@ export const Cabecalho: ComponentConfig<CabecalhoProps> = {
     linha1: { type: "text", label: "Texto ao lado do logótipo (linha 1)" },
     linha2: { type: "text", label: "Linha 2" },
     ligacoes: listaLigacoes,
-    redes: { ...campoRedes, label: "Redes sociais no topo (ícones; apague todas para esconder)" } as never,
+    redes: campoRedes as never,
     botao: { type: "text", label: "Botão (vazio = sem botão)" },
     botaoSessao: { type: "text", label: "Botão quando o formando tem sessão iniciada" },
     botaoLigacao: { type: "text", label: "Ligação do botão" },
@@ -154,8 +154,8 @@ export function RodapeSite(p: RodapeProps & { refRaiz?: ((el: Element | null) =>
           <div style={{ gridColumn: "span 2 / span 2" }}>
             {p.marca && <span className="grid h-12 w-12 place-items-center bg-[var(--c-destaque)] text-sm font-extrabold text-white">{p.marca}</span>}
             {p.texto && <p className="mt-5 max-w-sm whitespace-pre-line text-sm leading-6">{p.texto}</p>}
-            {/* Rodapés gravados antes desta opção não a têm: mostram as páginas da ENA. */}
-            <LigacoesRedes redes={p.redes ?? REDES_ENA} className="mt-6" />
+            {/* Sem lista própria: as redes de Sistema › Site › SEO. */}
+            <LigacoesRedes redes={p.redes} className="mt-6" />
           </div>
           {colunas.map((col, i) => (
             <div key={i}>
@@ -187,7 +187,7 @@ export const rodapePadrao: RodapeProps = {
       ].join("\n"),
     },
   ],
-  direitos: "© {ano} ENA. Todos os direitos reservados.", lema: "Aprender. Evoluir. Transformar.", redes: REDES_ENA,
+  direitos: "© {ano} ENA. Todos os direitos reservados.", lema: "Aprender. Evoluir. Transformar.", redes: [],
   corFundo: "#0E1C2E", corTexto: "#D7E0EA", corTitulos: "#ffffff", corBarra: "var(--c-acento)", barra: 4,
   tipografia: tipoVazia(),
   aparencia: estiloVazio({ preenchimento: lados(56, 32), preenchimentoTel: lados(40, 20) }),

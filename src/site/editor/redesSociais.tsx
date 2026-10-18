@@ -1,5 +1,6 @@
 // Redes sociais do site: ícones, ligações para as páginas da ENA (rodapé) e botões de partilha (notícias).
-import { useState } from "react";
+import { useContext, useState } from "react";
+import { SiteTextoCtx } from "../SiteLanding";
 import { ligacaoSegura } from "./estilos";
 
 export const REDES = {
@@ -23,12 +24,29 @@ export function IconeRede({ rede, className = "h-5 w-5" }: { rede: Rede; classNa
   );
 }
 
+const DOMINIOS: [RegExp, Rede][] = [
+  [/facebook\.com|fb\.com/i, "facebook"], [/instagram\.com/i, "instagram"], [/linkedin\.com/i, "linkedin"],
+  [/youtube\.com|youtu\.be/i, "youtube"], [/tiktok\.com/i, "tiktok"], [/(^|\.)x\.com|twitter\.com/i, "x"], [/wa\.me|whatsapp\.com/i, "whatsapp"],
+];
+
+/** A rede de um endereço, pelo domínio (ex.: https://www.instagram.com/… → instagram). */
+export function redeDoEndereco(url: string): Rede | null {
+  try { const host = new URL(url).hostname; return DOMINIOS.find(([re]) => re.test(host))?.[1] ?? null; } catch { return null; }
+}
+
+/** As redes da ENA escritas no backoffice (Sistema › Site › SEO); sem nenhuma, as do site antigo. */
+export function useRedesDoSite(): LigacaoRede[] {
+  const enderecos = useContext(SiteTextoCtx).redes;
+  const lista = enderecos.map(ligacao => ({ rede: redeDoEndereco(ligacao), ligacao })).filter((r): r is LigacaoRede => r.rede != null);
+  return lista.length ? lista : REDES_ENA;
+}
+
 const OPCOES = Object.entries(REDES).map(([value, r]) => ({ label: r.nome, value }));
 
 /** Campo do editor: a lista de redes da ENA (rede + endereço da página). */
 export const campoRedes = {
   type: "array" as const,
-  label: "Redes sociais (ícones com ligação)",
+  label: "Redes sociais só deste bloco (vazio = as de Sistema › Site › SEO)",
   arrayFields: {
     rede: { type: "select" as const, label: "Rede", options: OPCOES },
     ligacao: { type: "text" as const, label: "Endereço da página (https://…)" },
@@ -37,9 +55,10 @@ export const campoRedes = {
   getItemSummary: (item: LigacaoRede) => REDES[item.rede]?.nome ?? "Rede",
 };
 
-/** Ícones com ligação às páginas da ENA (só os que têm endereço). */
+/** Ícones com ligação às páginas da ENA (só os que têm endereço). Sem lista própria, as do backoffice. */
 export function LigacoesRedes({ redes, className = "", pequeno = false }: { redes?: LigacaoRede[]; className?: string; pequeno?: boolean }) {
-  const lista = (redes ?? []).map(r => ({ ...r, href: ligacaoSegura(r.ligacao) })).filter(r => REDES[r.rede] && r.href && /^https:/.test(r.href));
+  const doSite = useRedesDoSite();
+  const lista = (redes?.length ? redes : doSite).map(r => ({ ...r, href: ligacaoSegura(r.ligacao) })).filter(r => REDES[r.rede] && r.href && /^https:/.test(r.href));
   if (!lista.length) return null;
   return (
     <ul className={`flex items-center gap-2 ${pequeno ? "flex-nowrap" : "flex-wrap"} ${className}`}>

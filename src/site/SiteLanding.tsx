@@ -97,12 +97,15 @@ type OfertaEstado = {
 type TextoSite = {
   ler: (chave: SiteChave) => string;
   nota: string | null;
+  /** Endereços das redes sociais da ENA (Sistema › Site › SEO). */
+  redes: string[];
 };
 
 export const OfertaCtx = createContext<OfertaEstado | null>(null);
 export const SiteTextoCtx = createContext<TextoSite>({
   ler: chave => textoSite(undefined, chave),
   nota: null,
+  redes: [],
 });
 
 export function useSiteTexto() {
@@ -116,13 +119,15 @@ export function useNotaInqueritos() {
 export function useSiteTextoState(): TextoSite {
   const [gravado, setGravado] = useState<Record<string, string>>({});
   const [nota, setNota] = useState<string | null>(null);
+  const [redes, setRedes] = useState<string[]>([]);
   useEffect(() => {
     let vivo = true;
     fetch("/api/v1/public/site", { cache: "no-store" })
-      .then(async res => (res.ok ? res.json() as Promise<{ valores?: Record<string, string>; satisfacao?: { nota?: string } | null }> : { valores: {}, satisfacao: null }))
+      .then(async res => (res.ok ? res.json() as Promise<{ valores?: Record<string, string>; redes?: string[]; satisfacao?: { nota?: string } | null }> : { valores: {}, redes: [], satisfacao: null }))
       .then(data => {
         if (!vivo) return;
         setGravado(data.valores ?? {});
+        setRedes(data.redes ?? []);
         const media = data.satisfacao?.nota?.trim();
         setNota(media || null);
       })
@@ -130,7 +135,7 @@ export function useSiteTextoState(): TextoSite {
     return () => { vivo = false; };
   }, []);
   const ler = useCallback((chave: SiteChave) => textoSite(gravado, chave), [gravado]);
-  return { ler, nota };
+  return { ler, nota, redes };
 }
 
 export function useOferta() {

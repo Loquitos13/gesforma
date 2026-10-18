@@ -109,7 +109,7 @@ export function SeoSite() {
           <Campo rotulo="Logótipo (dados da organização)" ajuda="Vazio: o logótipo da ENA no site. Quadrado ou horizontal, fundo transparente.">
             {p => <Entrada {...p} value={v.logo} placeholder="/imagens/ena-logo-nobg.png" onChange={e => mudar("logo", e.target.value.trim())} />}
           </Campo>
-          <Campo rotulo="Perfis nas redes sociais" ajuda="Um endereço por linha (Facebook, Instagram, LinkedIn, YouTube…). Ajuda a Google a ligar o site à ENA.">
+          <Campo rotulo="Perfis nas redes sociais" ajuda="Um endereço por linha (Facebook, Instagram, LinkedIn, YouTube, TikTok, X, WhatsApp). São os ícones do topo e do rodapé do site, e ajudam a Google a ligar o site à ENA.">
             {p => <AreaTexto {...p} rows={3} maxLength={400} value={v.redesSociais} placeholder={"https://www.facebook.com/…\nhttps://www.linkedin.com/company/…"} onChange={e => mudar("redesSociais", e.target.value)} />}
           </Campo>
         </div>

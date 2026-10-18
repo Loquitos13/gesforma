@@ -77,3 +77,13 @@ describe("Cronograma público", () => {
     expect(r.sessoes).toHaveLength(1);
   });
 });
+
+describe("Redes sociais do site", () => {
+  it("vêm de Sistema › Site › SEO (um endereço por linha, só https)", async () => {
+    const ctx = await arrancar();
+    await pedido(ctx, "admin", "PUT", "/v1/settings/seo", { values: { redesSociais: "https://www.instagram.com/ena_escolaformacao/\nhttp://inseguro.pt\n\nhttps://www.linkedin.com/company/10536784" } });
+    expect((await ctx.app.inject({ method: "GET", url: "/v1/public/site" })).json().redes).toEqual([
+      "https://www.instagram.com/ena_escolaformacao/", "https://www.linkedin.com/company/10536784",
+    ]);
+  });
+});

@@ -4,6 +4,31 @@ import { dadosCatalogoPublico } from "./repos/cursos.js";
 import { hojeLisboa } from "./datas.js";
 import { escolherPreco, regrasDoPayload } from "./precoOferta.js";
 
+export type ContactoLocal = { local: string; telemovel: string; telefone: string; email: string; whatsapp: string };
+const CAMPOS_CONTACTO = ["telemovel", "telefone", "email", "whatsapp"] as const;
+
+/**
+ * Contactos dos locais deste curso. Os que se escrevem na ficha do curso só valem para os locais atribuídos ao curso
+ * (payload.locais); campo a campo, o que estiver vazio na ficha vem do local (Edição de cursos › Locais).
+ */
+function contactosDoCurso(payload: Record<string, unknown>, locaisDoCurso: string[], doCatalogo: Map<string, ContactoLocal>, regime: string): ContactoLocal[] {
+  const atribuidos = new Set((Array.isArray(payload.locais) ? payload.locais : []).map(l => chave(String(l))));
+  const proprios = (payload.contactosLocais && typeof payload.contactosLocais === "object" ? payload.contactosLocais : {}) as Record<string, Record<string, unknown>>;
+  const vistos = new Set<string>();
+  const out: ContactoLocal[] = [];
+  for (const local of locaisDoCurso) {
+    const k = chave(local);
+    if (!local.trim() || vistos.has(k)) continue;
+    vistos.add(k);
+    const base = doCatalogo.get(`${regime}:${k}`);
+    const deste = atribuidos.has(k) ? Object.entries(proprios).find(([nome]) => chave(nome) === k)?.[1] : undefined;
+    const c: ContactoLocal = { local, telemovel: "", telefone: "", email: "", whatsapp: "" };
+    for (const campo of CAMPOS_CONTACTO) c[campo] = texto(deste?.[campo]) || base?.[campo] || "";
+    if (CAMPOS_CONTACTO.some(campo => c[campo])) out.push(c);
+  }
+  return out;
+}
+
 export type CursoPublico = {
   id: string;
   regime: "gold" | "fin";
@@ -24,6 +49,8 @@ export type CursoPublico = {
   objetivos: string[];
   funcionamento: string;
   seoTitulo: string; seoDescricao: string;
+  /** Contactos de cada local do curso: os da ficha do curso (se o local lhe estiver atribuído), senão os de Locais. */
+  contactosLocais: ContactoLocal[];
   organizacao: "modular" | "livre";
   programa: { titulo: string; horas: string }[];
   /** Próximas datas; o preço segue as regras da ficha (local, horário ou os dois), como na pré-inscrição. */
@@ -219,6 +246,10 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
 
   const moradas = new Map<string, string>();
   for (const l of dados.locais) if (l.morada.trim()) moradas.set(`${l.regime}:${chave(l.nome)}`, l.morada.trim());
+  const contactosLocais = new Map<string, ContactoLocal>();
+  for (const l of dados.locais) {
+    contactosLocais.set(`${l.regime}:${chave(l.nome)}`, { local: l.nome, telemovel: l.telemovel.trim(), telefone: l.telefone.trim(), email: l.email.trim(), whatsapp: l.whatsapp.trim() });
+  }
 
   const hoje = hojeLisboa();
   const inicios = new Map<string, { data: string; local: string }>();
@@ -326,6 +357,10 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       objetivos: linhas(payload.objetivos),
       funcionamento: texto(payload.funcionamento),
       seoTitulo: texto(payload.seoTitulo), seoDescricao: texto(payload.seoDescricao),
+      contactosLocais: contactosDoCurso(payload, [
+        ...curso.chaves.flatMap(key => (sessoes.get(key) ?? []).map(s => s.local)),
+        ...(Array.isArray(payload.locais) ? payload.locais.map(String) : []),
+      ], contactosLocais, curso.regime),
       organizacao: programa.organizacao,
       programa: programa.programa,
       sessoes: curso.chaves

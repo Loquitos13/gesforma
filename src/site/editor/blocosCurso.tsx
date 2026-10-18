@@ -173,7 +173,7 @@ export const CursoBanner: ComponentConfig<BannerProps> = {
     voltar: { type: "text", label: "Texto «voltar à formação» (vazio = esconder)" },
     mostrarImagem: simNao("Imagem do curso"),
     mostrarEtiquetas: simNao("Etiquetas (formato, área, regime)"),
-    altura: campoNumero("Altura do banner (vazio = automática; nunca passa de 70% da largura do ecrã)", ""),
+    altura: campoNumero("Altura do banner em píxeis, ex.: 200 a 600 (vazio = automática). Nunca fica mais baixo do que o título precisa, nem mais alto do que 70% da largura do ecrã", ""),
     larguraTotal: simNao("Ocupar a largura toda do ecrã"),
     posicaoImagem: {
       type: "select", label: "Parte da imagem que fica visível",
@@ -204,11 +204,11 @@ export const CursoBanner: ComponentConfig<BannerProps> = {
             {/* Com altura escolhida: responsiva (no máximo 70% da largura do ecrã) e mínima, cresce se o título precisar
                 (nunca o corta). Sem altura: como sempre. */}
             <div className={juntar("relative mx-auto mt-8 w-full overflow-hidden bg-black/20", p.altura ? "flex flex-col justify-end" : "min-h-[280px] max-h-[480px]")}
-              style={{ maxWidth: p.larguraTotal ? undefined : "var(--largura)", ...(p.altura ? { minHeight: `max(220px, min(${p.altura}px, 70vw))` } : {}) }}>
+              style={{ maxWidth: p.larguraTotal ? undefined : "var(--largura)", ...(p.altura ? { minHeight: `min(${p.altura}px, 70vw)` } : {}) }}>
               {imagem && <img src={imagem} alt="" className={juntar("w-full object-cover", p.altura ? "absolute inset-0 h-full" : "max-h-[480px]")}
                 style={{ objectPosition: p.posicaoImagem ?? "center" }} />}
               <div className="absolute inset-0 bg-gradient-to-t from-[var(--c-primaria)] via-[var(--c-primaria)]/35 to-transparent" />
-              <div className={juntar("px-5 pb-8 lg:px-8", p.altura ? "relative pt-16" : "absolute inset-x-0 bottom-0")}>
+              <div className={juntar("px-5 pb-8 lg:px-8", p.altura ? "relative pt-8" : "absolute inset-x-0 bottom-0")}>
                 {p.mostrarEtiquetas && (
                   <div className="flex flex-wrap gap-3">
                     {curso.format && <span className="bg-[var(--c-destaque)] px-3 py-1.5 text-xs font-extrabold uppercase tracking-wider">{curso.format}</span>}

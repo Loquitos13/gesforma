@@ -38,10 +38,19 @@ export default function Tabelas({ view, navigate }: VistaProps) {
           { chave: "nome", rotulo: "Nome", obrigatorio: true, placeholder: "Ex.: V.N. Gaia" },
           { chave: "morada", rotulo: "Morada ou plataforma", placeholder: "Rua… ou Sala Virtual" },
           { chave: "salas", rotulo: "Salas", tipo: "numero", metade: true },
+          // Contactos para dúvidas: aparecem no cartão do local na página de cada curso (cada curso pode ter os seus).
+          { chave: "telemovel", rotulo: "Telemóvel", placeholder: "912 345 678", metade: true },
+          { chave: "telefone", rotulo: "Telefone", placeholder: "223 781 100", metade: true },
+          { chave: "email", rotulo: "Email", placeholder: "gaia@ena.pt", metade: true },
+          { chave: "whatsapp", rotulo: "WhatsApp", placeholder: "912 345 678", metade: true },
         ],
         colunas: [
           { id: "nome", titulo: "Local", principal: true, celula: i => <span className="font-semibold">{txt(i.nome)}</span> },
           { id: "morada", titulo: "Morada / plataforma", esconderMovel: true, celula: i => <span className="text-tinta-suave">{txt(i.morada) || "—"}</span> },
+          {
+            id: "contactos", titulo: "Contactos", esconderMovel: true,
+            celula: i => <span className="text-tinta-suave">{[txt(i.telemovel), txt(i.telefone), txt(i.email), txt(i.whatsapp) && `WhatsApp ${txt(i.whatsapp)}`].filter(Boolean).join(" · ") || "—"}</span>,
+          },
           { id: "salas", titulo: "Salas", alinhar: "dir", celula: i => Number(i.salas ?? 0) || "—" },
         ],
         validar: (v, itens, id) => repetido(itens, id, "nome", v.nome, "Já existe um local com esse nome."),

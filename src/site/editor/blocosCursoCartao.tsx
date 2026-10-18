@@ -30,16 +30,18 @@ type LocalProps = Base & {
   titulo: string; tTitulo: Tipografia; entreTitulo: Slot; texto: string; textoPreco: string; mostrarPreco: boolean; mostrarMorada: boolean; abrirPedido: boolean;
   colunas: number | null; colunasTab: number | null; colunasTel: number | null;
   cartao: CartaoLocal; botao: BotaoLocal;
-  contactosTitulo: string; contactos: ContactoLocal[]; tContactos: Tipografia;
+  contactosTitulo: string; tContactos: Tipografia;
 };
 
-/** Contactos para dúvidas de um local (aparecem no cartão desse local, em todos os cursos). */
-type ContactoLocal = { local: string; telefone: string; email: string; whatsapp: string };
+/** Contactos para dúvidas de um local (aparecem no cartão desse local). */
+type ContactoLocal = { local: string; telemovel?: string; telefone: string; email: string; whatsapp: string };
 
 const chaveLocal = (s: string) => s.trim().toLowerCase();
-const contactoDo = (lista: ContactoLocal[] | undefined, local: string) => {
-  const c = (lista ?? []).find(x => chaveLocal(x.local ?? "") === chaveLocal(local));
-  return c && (c.telefone?.trim() || c.email?.trim() || c.whatsapp?.trim()) ? c : null;
+const temContacto = (c: ContactoLocal | undefined) => Boolean(c && (c.telemovel?.trim() || c.telefone?.trim() || c.email?.trim() || c.whatsapp?.trim()));
+/** Os gravados no backoffice: Locais, ou a ficha do curso quando o local lhe está atribuído. */
+const contactoDo = (curso: Course, local: string) => {
+  const c = (curso.contactosLocais ?? []).find(x => chaveLocal(x.local) === chaveLocal(local));
+  return temContacto(c) ? c! : null;
 };
 
 /** wa.me só aceita algarismos com o indicativo; um número português de 9 algarismos ganha o 351. */
@@ -112,23 +114,12 @@ export const CursoEscolhaLocal: ComponentConfig<LocalProps> = {
         tipografia: campoTipografia("Tipografia do botão"),
       },
     },
-    contactosTitulo: { type: "text", label: "Título dos contactos em cada local (vazio = sem título)" },
-    contactos: {
-      type: "array", label: "Contactos por local (telefone, email, WhatsApp para dúvidas)",
-      arrayFields: {
-        local: { type: "text", label: "Local (escrito como aparece no cartão, ex.: Lisboa)" },
-        telefone: { type: "text", label: "Telefone" },
-        email: { type: "text", label: "Email" },
-        whatsapp: { type: "text", label: "WhatsApp (número)" },
-      },
-      defaultItemProps: { local: "", telefone: "", email: "", whatsapp: "" },
-      getItemSummary: item => item.local?.trim() || "Escreva o local",
-    },
+    contactosTitulo: { type: "text", label: "Título dos contactos em cada local (vazio = sem título). Os contactos vêm do backoffice: Edição de cursos › Locais, ou a ficha do curso" },
     tContactos: campoTipografia("Tipografia dos contactos"),
     aparencia: campoAparencia(),
   },
   defaultProps: {
-    contactosTitulo: "Dúvidas? Fale connosco", contactos: [], tContactos: tipoVazia(),
+    contactosTitulo: "Dúvidas? Fale connosco", tContactos: tipoVazia(),
     titulo: "Onde quer fazer o curso?", tTitulo: tipoVazia(), entreTitulo: [], texto: "", textoPreco: "{{preco}}", mostrarMorada: true, mostrarPreco: true,
     abrirPedido: true, colunas: 3, colunasTab: 2, colunasTel: 1, cartao: cartaoLocalPadrao(), botao: botaoLocalPadrao(), aparencia: estiloVazio(),
   },
@@ -168,7 +159,7 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
                 const morada = curso.sessoes.find(s => s.local === l && s.morada)?.morada;
                 const vars = variaveisCurso(curso, l);
                 const texto = preencherVariaveis(p.texto ?? "", vars).trim();
-                const ct = contactoDo(p.contactos, l);
+                const ct = contactoDo(curso, l);
                 const pad = `${c.interior ?? 20}px`;
                 return (
                   <div key={l} className={juntar("flex flex-col border-2 transition", !ativo && "hover:border-black/15")}
@@ -203,7 +194,8 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
                     <div className={juntar("mt-3 flex flex-col gap-1 border-t border-black/10 pt-3 text-xs", c.centrar ? "items-center text-center" : "items-start")}
                       style={{ padding: `12px ${pad} ${pad}`, ...tContactos.style }}>
                       {p.contactosTitulo && <span className="font-bold opacity-70">{p.contactosTitulo}</span>}
-                      {ct.telefone && <a href={`tel:${ct.telefone.replace(/[^\d+]/g, "")}`} className="font-semibold hover:underline">{ct.telefone}</a>}
+                      {ct.telemovel && <a href={`tel:${ct.telemovel.replace(/[^\d+]/g, "")}`} className="font-semibold hover:underline"><span className="sr-only">Telemóvel: </span>{ct.telemovel}</a>}
+                      {ct.telefone && <a href={`tel:${ct.telefone.replace(/[^\d+]/g, "")}`} className="font-semibold hover:underline"><span className="sr-only">Telefone: </span>{ct.telefone}</a>}
                       {ct.email && <a href={`mailto:${ct.email}`} className="font-semibold hover:underline">{ct.email}</a>}
                       {ct.whatsapp && <a href={ligacaoWhatsapp(ct.whatsapp)} target="_blank" rel="noreferrer" className="font-semibold hover:underline">WhatsApp {ct.whatsapp}</a>}
                     </div>

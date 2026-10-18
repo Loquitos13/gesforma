@@ -19,6 +19,8 @@ export type CursoBase = {
   ufcdCod?: string; ufcd?: string; entidadeResponsavelId?: number | null;
 };
 
+export type ContactosLocal = { telemovel: string; telefone: string; email: string; whatsapp: string };
+
 export type CursoSite = {
   titulo: string; slug: string; tipo: string; categoria: string; regime: string; video: string; preco: string; horas: string;
   tags: string; dataInicio: string; estado: string; visivelSite: boolean;
@@ -26,6 +28,8 @@ export type CursoSite = {
   sintese: string; objetivos: string; programa: string; funcionamento: string;
   /** Pesquisa (Google): título e descrição próprios; vazios = o título e a síntese. */
   seoTitulo: string; seoDescricao: string;
+  /** Contactos próprios deste curso por local (só valem para os locais atribuídos ao curso); vazio = os de Locais. */
+  contactosLocais: Record<string, ContactosLocal>;
   ufcdCod: string; ufcd: string; locais: string[];
   organizacaoPrograma: OrganizacaoPrograma; topicosPrograma: TopicoPrograma[];
   avaliacaoCurso: AvaliacaoCurso; precosOferta: PrecoOferta[]; planosSessao: PlanoLinha[];
@@ -104,7 +108,7 @@ export function fichaInicial(curso: CursoBase | null, regime: Regime, modelos: O
     objetivos: t?.objetivos ?? "",
     programa,
     funcionamento: t?.funcionamento ?? "",
-    seoTitulo: "", seoDescricao: "",
+    seoTitulo: "", seoDescricao: "", contactosLocais: {},
     ufcdCod,
     ufcd: curso?.ufcd ?? "",
     locais: [],

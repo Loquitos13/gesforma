@@ -6,7 +6,71 @@ import { invalidar, useRecurso } from "../../../../partilhado/dados/useRecurso";
 import { MultiSearchSelect } from "../../../../partilhado/FormKit";
 import { toastError } from "../../../../partilhado/toastBus";
 import { Botao, Campo, Cartao, Entrada, Estado, Modal, Selecao, Vazio, data as fmtData, type OpcaoSelecao } from "../../../../partilhado/ui";
+import type { Opcao } from "../../../../partilhado/api/catalogos";
+import type { ContactosLocal } from "./modelo";
 import type { FichaCurso } from "./useFichaCurso";
+
+const CAMPOS_CONTACTO = [
+  ["telemovel", "Telemóvel", "tel"], ["telefone", "Telefone", "tel"], ["email", "Email", "email"], ["whatsapp", "WhatsApp", "tel"],
+] as const;
+
+/**
+ * Contactos para dúvidas de cada local deste curso (aparecem no cartão do local na página do curso).
+ * Por omissão são os de Edição de cursos › Locais; o que se escreve aqui vale só para este curso, campo a campo,
+ * e só enquanto o local estiver atribuído ao curso.
+ */
+function ContactosDosLocais({ f, locais }: { f: FichaCurso; locais: Opcao[] }) {
+  const { data, patch } = f;
+  if (!data.locais.length) return null;
+  const doCatalogo = (local: string) => locais.find(o => o.valor.toLowerCase() === local.toLowerCase())?.extra ?? {};
+  const mudar = (local: string, campo: keyof ContactosLocal, valor: string) => {
+    const guardados = (data.contactosLocais ?? {})[local] as Partial<ContactosLocal> | undefined;
+    const atual: ContactosLocal = { telemovel: "", telefone: "", email: "", whatsapp: "", ...guardados };
+    const novo = { ...atual, [campo]: valor };
+    const resto = { ...data.contactosLocais };
+    if (Object.values(novo).some(v => v.trim())) resto[local] = novo; else delete resto[local];
+    patch({ contactosLocais: resto });
+  };
+  const repor = (local: string) => {
+    const resto = { ...data.contactosLocais };
+    delete resto[local];
+    patch({ contactosLocais: resto });
+  };
+  return (
+    <Cartao titulo="Contactos de cada local" subtitulo="Aparecem no cartão do local na página do curso. Por omissão são os de Edição de cursos › Locais; o que escrever aqui muda-os só neste curso.">
+      <div className="flex flex-col gap-5">
+        {data.locais.map(local => {
+          const base = doCatalogo(local);
+          const proprios = data.contactosLocais?.[local];
+          return (
+            <fieldset key={local} className="m-0 border-0 border-t border-linha p-0 pt-4 first:border-t-0 first:pt-0">
+              <legend className="flex w-full items-center gap-2 text-sm font-bold">
+                {local}
+                {proprios && <Estado tom="info">Contactos deste curso</Estado>}
+              </legend>
+              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {CAMPOS_CONTACTO.map(([campo, rotulo, tipo]) => (
+                  <Campo key={campo} rotulo={rotulo}>
+                    {p => (
+                      <Entrada {...p} type={tipo} value={proprios?.[campo] ?? ""} placeholder={String(base[campo] ?? "") || "—"}
+                        onChange={e => mudar(local, campo, e.target.value)} />
+                    )}
+                  </Campo>
+                ))}
+              </div>
+              {proprios && (
+                <div className="mt-2">
+                  <Botao tamanho="sm" variante="fantasma" onClick={() => repor(local)}>Usar os do local</Botao>
+                </div>
+              )}
+            </fieldset>
+          );
+        })}
+        <p className="m-0 text-[13px] text-tinta-suave">Em cinzento, os contactos do local. Um campo vazio usa o do local. Se tirar o local deste curso, os contactos daqui deixam de contar.</p>
+      </div>
+    </Cartao>
+  );
+}
 
 /** Mantém o valor actual visível mesmo que já não esteja nas opções. */
 function comValor(opcoes: OpcaoSelecao[], valor: string) {
@@ -94,6 +158,8 @@ export function TabOferta({ f }: { f: FichaCurso }) {
           </Campo>
         </div>
       </Cartao>
+
+      <ContactosDosLocais f={f} locais={locais.opcoes} />
 
       {regime === "gold" && (
         <Cartao titulo="Preço por local e horário" subtitulo="O preço acima vale para o curso inteiro. Aqui fixa outro valor para um local, um horário ou os dois; a regra mais específica ganha.">

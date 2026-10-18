@@ -29,9 +29,22 @@ const inquerito = z.object({
   perguntas: z.array(pergunta).max(60),
 }).passthrough();
 
+/** Telefone, telemóvel ou WhatsApp: algarismos, espaços, «+», «(», «)», «-» e «.». */
+const numeroOuVazio = z.string().trim().max(30).refine(v => v === "" || /^[+\d][\d\s().-]{5,}$/.test(v), "número inválido");
+
+/** Local: os contactos para dúvidas aparecem no cartão do local na página do curso. */
+const local = z.object({
+  nome: z.string().trim().min(1).max(120),
+  telemovel: numeroOuVazio.optional(),
+  telefone: numeroOuVazio.optional(),
+  email: emailOuVazio.optional(),
+  whatsapp: numeroOuVazio.optional(),
+}).passthrough();
+
 const SCHEMAS: Record<string, z.ZodTypeAny> = {
   inscricoes_fin: inscricaoFin,
   inqueritos: inquerito,
+  locais: local,
 };
 
 /** Devolve a mensagem de erro, ou null se o payload é válido para o tipo. */

@@ -297,8 +297,10 @@ export async function dadosCatalogoPublico(c: Consulta) {
     `SELECT curso, local, horario, data_inicio, estado FROM turmas_gold
      UNION ALL SELECT curso, local, horario, data_inicio, estado FROM turmas_fin`);
   // Morada de cada local (Edição de cursos › Locais): aparece na escolha do local da página do curso.
-  const locais = await many<{ regime: string; nome: string; morada: string }>(c,
-    `SELECT regime, COALESCE(payload->>'nome', '') AS nome, COALESCE(payload->>'morada', '') AS morada
+  const locais = await many<{ regime: string; nome: string; morada: string; telemovel: string; telefone: string; email: string; whatsapp: string }>(c,
+    `SELECT regime, COALESCE(payload->>'nome', '') AS nome, COALESCE(payload->>'morada', '') AS morada,
+            COALESCE(payload->>'telemovel', '') AS telemovel, COALESCE(payload->>'telefone', '') AS telefone,
+            COALESCE(payload->>'email', '') AS email, COALESCE(payload->>'whatsapp', '') AS whatsapp
        FROM catalog_items WHERE kind = 'locais'`);
   return { gold, fin, vendas, turmas, locais };
 }

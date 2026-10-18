@@ -49,7 +49,7 @@ export function ImportarPlanosCurso({ regime, turmaId, onImportados }: { regime:
           <Campo rotulo="De onde">
             {p => (
               <Selecao {...p} value={origem} onChange={e => setOrigem(e.target.value)} vazio="Ficha do curso (só planos)"
-                opcoes={turmas.map(t => ({ valor: String(t.id), rotulo: `Turma ${t.nome}${t.dataInicio ? ` · ${t.dataInicio.split("-").reverse().join("/")}` : ""} (planos e sumários)` }))} />
+                opcoes={turmas.map(t => ({ valor: String(t.id), rotulo: `${/^turma\b/i.test(t.nome) ? "" : "Turma "}${t.nome}${t.dataInicio ? ` · ${t.dataInicio.split("-").reverse().join("/")}` : ""} (planos e sumários)` }))} />
             )}
           </Campo>
           {origem

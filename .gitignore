@@ -11,3 +11,9 @@ backups/*.sql
 .deploy-payload
 *.bundle
 tsconfig.tsbuildinfo
+
+# Ferramentas locais e exportações do repositório (não são código da aplicação)
+.claude/
+.claude-flow/
+gesforma-export-*/
+gesforma-export-*.tgz

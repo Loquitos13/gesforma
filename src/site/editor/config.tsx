@@ -13,6 +13,7 @@ import {
 } from "./blocosCurso";
 import { CursoBotaoInscricao, CursoEscolhaLocal, CursoImagem, CursoInscricao, CursoTexto } from "./blocosCursoCartao";
 import { ListaNoticias } from "./blocosNoticias";
+import { campoPrevisualizarServico, RaizServico, ServicoBanner, ServicoDetalhe, ServicoGaleria, ServicoLogos, ServicoVideo } from "./blocosServico";
 import { Botao, Coluna, Espaco, Imagem, Logotipos, Pilares, Seccao, Separador, Texto, Titulo } from "./blocosBase";
 import { CursosDestaque, OfertaFormativa } from "./blocosCursos";
 import { Cabecalho, CabecalhoSite, Rodape, RodapeSite, type CabecalhoProps, type RodapeProps } from "./blocosMoldura";
@@ -144,6 +145,7 @@ const componentes = Object.fromEntries(Object.entries({
   CursosDestaque, OfertaFormativa, Catalogo, DetalheCurso, ListaNoticias, AreaFormando, Cabecalho, Rodape,
   CursoBanner, CursoSintese, CursoDados, CursoObjetivos, CursoPrograma, CursoFuncionamento, CursoTurmas, CursoRelevantes, CursoInscricao,
   CursoEscolhaLocal, CursoTexto, CursoImagem, CursoBotaoInscricao,
+  ServicoBanner, ServicoDetalhe, ServicoGaleria, ServicoVideo, ServicoLogos,
   // Cada bloco do editor tem de estar em BLOCOS_SITE (o servidor recusa publicar blocos que não conhece): falha no build.
 } satisfies Record<BlocoSite, unknown>).map(([k, c]) => [k, responsivo(c as ComponentConfig<any>)])) as Config["components"];
 
@@ -160,6 +162,8 @@ const categoriasBase = {
     ],
     visible: false,
   },
+  // Blocos que só fazem sentido na página de serviço (lêem o serviço da página).
+  paginaServico: { title: "Página de serviço", components: ["ServicoBanner", "ServicoDetalhe", "ServicoGaleria", "ServicoVideo", "ServicoLogos"], visible: false },
 };
 
 /** A página inicial guarda o tema, o cabeçalho e o rodapé; as outras só o conteúdo do meio. */
@@ -225,4 +229,24 @@ export function completarPadroes(d: Data): Data {
   return { ...d, content: completar((d.content ?? []) as No[]) as Data["content"] };
 }
 
-export const configPara = (pagina: PaginaSite) => (pagina === "inicio" ? configSite : pagina === "curso" ? configPaginaCurso : configOutraPagina);
+/** Página de cada serviço: a raiz escolhe o serviço (no editor, o da pré-visualização) e os blocos «Serviço · …» lêem-no. */
+export const configPaginaServico: Config = {
+  root: {
+    fields: { previsualizar: campoPrevisualizarServico },
+    defaultProps: { previsualizar: "" },
+    render: ({ children, puck, previsualizar }: { children: ReactNode; puck?: { isEditing?: boolean }; previsualizar?: string }) => (
+      <RaizOutra editar={Boolean(puck?.isEditing)}>
+        <RaizServico previsualizar={previsualizar ?? ""} editar={Boolean(puck?.isEditing)}>{children}</RaizServico>
+      </RaizOutra>
+    ),
+  } as Config["root"],
+  categories: {
+    paginaServico: { ...categoriasBase.paginaServico, visible: true },
+    ...Object.fromEntries(Object.entries(categoriasBase).filter(([k]) => k !== "paginaServico")),
+    moldura: { title: "Cabeçalho e rodapé (só na página inicial)", components: [], visible: false },
+  },
+  components: componentes,
+};
+
+export const configPara = (pagina: PaginaSite) =>
+  (pagina === "inicio" ? configSite : pagina === "curso" ? configPaginaCurso : pagina === "servico" ? configPaginaServico : configOutraPagina);

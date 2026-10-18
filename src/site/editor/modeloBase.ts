@@ -9,6 +9,7 @@ import { ListaNoticias } from "./blocosNoticias";
 import { Botao, Coluna, Imagem, Pilares, Seccao, Texto, Titulo } from "./blocosBase";
 import { cartaoPadrao, CursosDestaque, OfertaFormativa } from "./blocosCursos";
 import { Servicos } from "./blocosServicos";
+import { ServicoBanner, ServicoDetalhe, ServicoGaleria, ServicoLogos, ServicoVideo } from "./blocosServico";
 import { Testemunhos } from "./blocosTestemunhos";
 import { CursoRelevantes } from "./blocosCursoRelevantes";
 import { cabecalhoPadrao, rodapePadrao } from "./blocosMoldura";
@@ -159,14 +160,14 @@ function modeloEmpresas(): Data {
     root: { props: {} },
     content: [
       bloco("Seccao", Seccao.defaultProps, {
-        espaco: 20,
-        aparencia: estiloVazio({ fundoCor: "var(--c-primaria)", preenchimento: lados(96, 32), preenchimentoTel: lados(56, 20) }),
+        espaco: 14,
+        aparencia: estiloVazio({ fundoCor: "var(--c-primaria)", preenchimento: lados(56, 32), preenchimentoTel: lados(40, 20) }),
         conteudo: [
           kicker("Formação à medida", "var(--c-acento)"),
           bloco("Titulo", Titulo.defaultProps, {
             texto: "A sua organização tem desafios únicos.", nivel: "h1",
-            tipografia: tipoVazia({ fonte: "tema-titulos", tamanho: 56, tamanhoTel: 36, peso: "700", alturaLinha: 1.05, cor: "#ffffff" }),
-            aparencia: estiloVazio({ larguraMax: em(820) }),
+            // Numa linha no computador (pedido do cliente); no telemóvel parte naturalmente.
+            tipografia: tipoVazia({ fonte: "tema-titulos", tamanho: 44, tamanhoTel: 32, peso: "700", alturaLinha: 1.1, cor: "#ffffff" }),
           }),
           bloco("Texto", Texto.defaultProps, {
             texto: "Desenhamos programas que respondem às necessidades da sua equipa e aos objetivos do seu negócio.",
@@ -177,21 +178,21 @@ function modeloEmpresas(): Data {
       }),
       bloco("Seccao", Seccao.defaultProps, {
         espaco: 16,
-        aparencia: estiloVazio({ ancora: "servicos", fundoCor: "#F4F1EA", preenchimento: lados(80, 32), preenchimentoTel: lados(56, 20) }),
+        aparencia: estiloVazio({ ancora: "servicos", fundoCor: "#F4F1EA", preenchimento: lados(48, 32), preenchimentoTel: lados(40, 20) }),
         conteudo: [
           kicker("Serviços"),
           bloco("Titulo", Titulo.defaultProps, { texto: "O que fazemos pela sua organização." }),
-          bloco("Servicos", Servicos.defaultProps, { aparencia: estiloVazio({ margem: lados(24, 0, 0, 0) }) }),
+          bloco("Servicos", Servicos.defaultProps, { aparencia: estiloVazio({ margem: lados(12, 0, 0, 0) }) }),
         ],
       }),
       bloco("Seccao", Seccao.defaultProps, {
         espaco: 16,
-        aparencia: estiloVazio({ preenchimento: lados(80, 32), preenchimentoTel: lados(56, 20) }),
+        aparencia: estiloVazio({ preenchimento: lados(48, 32), preenchimentoTel: lados(40, 20) }),
         conteudo: [
           kicker("Como trabalhamos"),
           bloco("Titulo", Titulo.defaultProps, { texto: "Do diagnóstico ao certificado." }),
           bloco("Pilares", Pilares.defaultProps, {
-            colunas: 4, aparencia: estiloVazio({ margem: lados(24, 0, 0, 0) }),
+            colunas: 4, aparencia: estiloVazio({ margem: lados(12, 0, 0, 0) }),
             itens: [
               { numero: "01", titulo: "Diagnóstico", texto: "Percebemos as necessidades da equipa e os objetivos do negócio.", imagem: "" },
               { numero: "02", titulo: "Programa à medida", texto: "Conteúdos, horários e formato pensados para a sua organização.", imagem: "" },
@@ -199,6 +200,26 @@ function modeloEmpresas(): Data {
               { numero: "04", titulo: "Acompanhamento", texto: "Avaliação de resultados e apoio depois da formação.", imagem: "" },
             ],
           }),
+        ],
+      }),
+    ],
+  } as Data;
+}
+
+function modeloServico(): Data {
+  n = 0;
+  // Uma só secção: os blocos sem conteúdo no serviço (ex.: sem vídeo) não ocupam espaço.
+  return {
+    root: { props: { previsualizar: "" } },
+    content: [
+      bloco("ServicoBanner", ServicoBanner.defaultProps),
+      bloco("Seccao", Seccao.defaultProps, {
+        espaco: 48, aparencia: estiloVazio({ preenchimento: lados(48, 32), preenchimentoTel: lados(36, 20) }),
+        conteudo: [
+          bloco("ServicoDetalhe", ServicoDetalhe.defaultProps),
+          bloco("ServicoGaleria", ServicoGaleria.defaultProps),
+          bloco("ServicoVideo", ServicoVideo.defaultProps),
+          bloco("ServicoLogos", ServicoLogos.defaultProps),
         ],
       }),
     ],
@@ -357,6 +378,7 @@ export function modeloPagina(pagina: PaginaSite): Data {
   if (pagina === "noticias") return modeloNoticias();
   if (pagina === "empresas") return modeloEmpresas();
   if (pagina === "curso") return modeloCurso();
+  if (pagina === "servico") return modeloServico();
   const unico = pagina === "catalogo" ? bloco("Catalogo", Catalogo.defaultProps)
     : bloco("AreaFormando", AreaFormando.defaultProps);
   return { root: { props: {} }, content: [unico] } as Data;

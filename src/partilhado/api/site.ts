@@ -1,4 +1,5 @@
 // API do domínio "site": definições (`app_settings`), conteúdo do site e imagens do topo.
+import type { ServicoSite } from "../siteServicos";
 import { api, enviar, enviarFicheiro } from "./cliente";
 
 /** Avaliações da ENA no Google (cópia guardada no servidor; lista vazia se não estiver configurado). */
@@ -42,3 +43,12 @@ export const apiRascunhoPagina = (pagina: string, dados: unknown) =>
 export const apiPublicarPagina = (pagina: string, dados: unknown) =>
   enviar.put<{ ok: boolean }>(`/v1/site/paginas/${encodeURIComponent(pagina)}/publicar`, { dados });
 export const apiImagemSite = (ficheiro: File) => enviarFicheiro<{ nome: string; url: string }>("/v1/site/imagem", ficheiro);
+
+/** Serviços para empresas (Gestão › Empresas / Business). */
+export type DadosServico = Omit<ServicoSite, "slug">;
+export type Servico = { id: number; slug: string; ordem: number; ativo: boolean; dados: DadosServico; atualizadoEm: string };
+export type GravarServico = { slug: string; ordem?: number; ativo: boolean; dados: DadosServico };
+export const apiServicos = (signal?: AbortSignal) => api<{ servicos: Servico[] }>("/v1/servicos", { signal });
+export const apiCriarServico = (s: GravarServico) => enviar.post<{ servico: Servico }>("/v1/servicos", s);
+export const apiGravarServico = (id: number, s: GravarServico) => enviar.put<{ servico: Servico }>(`/v1/servicos/${id}`, s);
+export const apiApagarServico = (id: number) => enviar.delete<{ ok: boolean }>(`/v1/servicos/${id}`);

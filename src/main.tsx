@@ -33,6 +33,7 @@ const noticiaSlug = path.startsWith("/noticias/") ? decodeURIComponent(path.slic
 const noticias = path === "/noticias";
 const catalogo = path === "/formacao";
 const empresas = path === "/empresas";
+const slugServico = path.startsWith("/empresas/") ? decodeURIComponent(path.slice("/empresas/".length).split("/")[0] ?? "") : "";
 const slugCurso = path.startsWith("/formacao/") ? decodeURIComponent(path.slice("/formacao/".length).split("/")[0] ?? "") : "";
 const publicForm = path === "/pre-inscricao";
 const docsToken = path.startsWith("/documentos/") && !path.startsWith("/documentos-formando/")
@@ -75,6 +76,8 @@ createRoot(document.getElementById("root")!).render(
         <Noticias slug={noticiaSlug} />
       ) : empresas ? (
         <PaginaDoSite pagina="empresas" />
+      ) : slugServico ? (
+        <PaginaDoSite pagina="servico" slug={slugServico} />
       ) : entrar ? (
         <Backoffice />
       ) : slugCurso ? (

@@ -64,6 +64,24 @@ describe("SEO do site", () => {
     }
   });
 
+  it("cada serviço ativo tem página e entra no sitemap; escondido ou inexistente dá 404", async () => {
+    const ctx = await preparar();
+    await pedido(ctx, "admin", "PUT", "/v1/settings/seo", { values: { indexar: "1", url: "https://ena.pt" } });
+    // Os serviços iniciais (migração) já têm página.
+    const r = await pagina(ctx, "/empresas/conteudos-multimedia");
+    expect(r.statusCode).toBe(200);
+    expect(r.body).toContain("<title>Conteúdos multimédia");
+    expect(jsonLd(r.body)["@graph"].map(x => x["@type"])).toContain("Service");
+    expect((await pub(ctx, "/v1/public/sitemap.xml")).body).toContain("https://ena.pt/empresas/certificacao-dgert-de-entidades-formadoras");
+    const novo = await pedido(ctx, "admin", "POST", "/v1/servicos", { slug: "coaching", ativo: true, dados: { titulo: "Coaching de equipas", texto: "Curto.", detalhe: "Sessões de coaching para equipas de vendas." } });
+    expect(novo.statusCode, novo.body).toBe(200);
+    expect((await pagina(ctx, "/empresas/coaching")).body).toContain("Sessões de coaching para equipas de vendas.");
+    const id = novo.json().servico.id as number;
+    await pedido(ctx, "admin", "PUT", `/v1/servicos/${id}`, { slug: "coaching", ativo: false, dados: { titulo: "Coaching de equipas" } });
+    expect((await pagina(ctx, "/empresas/coaching")).statusCode).toBe(404);
+    expect((await pagina(ctx, "/empresas/nao-existe")).statusCode).toBe(404);
+  });
+
   it("só o admin configura; verificação da Search Console e do Bing; texto malicioso não entra como código", async () => {
     const ctx = await preparar();
     const valores = {

@@ -16,7 +16,7 @@ type Acesso = "Todas" | "Acesso direto" | "Pré-pago" | "Pré-inscrição";
 type CatalogoProps = {
   zonaTopo: Slot; zonaLista: Slot;
   topo: boolean; kicker: string; titulo: string; subtitulo: string; textoPesquisa: string;
-  separadores: boolean; filtros: boolean; comparador: boolean; guardar: boolean;
+  separadores: boolean; filtros: boolean; comparador: boolean; guardar: boolean; etiquetas: boolean;
   vista: "linhas" | "cartoes"; cartao: EstiloCartao;
   aparencia: Estilo;
 };
@@ -45,8 +45,8 @@ function Radio<T extends string>({ nome, legenda, opcoes, valor, mudar, rotulo }
   );
 }
 
-function LinhaCurso({ c, guardado, comparado, onGuardar, onComparar, guardar, comparador }: {
-  c: Course; guardado: boolean; comparado: boolean; onGuardar: () => void; onComparar: () => void; guardar: boolean; comparador: boolean;
+function LinhaCurso({ c, guardado, comparado, onGuardar, onComparar, guardar, comparador, etiquetas }: {
+  c: Course; guardado: boolean; comparado: boolean; onGuardar: () => void; onComparar: () => void; guardar: boolean; comparador: boolean; etiquetas: boolean;
 }) {
   const { abrir } = useInscricaoOpcional();
   const gold = c.funding === "Gold";
@@ -57,14 +57,16 @@ function LinhaCurso({ c, guardado, comparado, onGuardar, onComparar, guardar, co
         {c.miniatura && <img src={c.miniatura} alt="" className="absolute inset-0 h-full w-full object-cover" />}
       </div>
       <div className="p-6">
-        <div className="flex flex-wrap items-center gap-3">
+        {(etiquetas || guardar) && <div className="flex flex-wrap items-center gap-3">
+          {etiquetas && <>
           <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider" style={gold ? { background: "#FFF1D1" } : { background: "#F1E5E5", color: "var(--c-destaque)" }}>{gold ? "ENA Gold" : "Financiada"}</span>
           <span className="text-[10px] font-bold uppercase tracking-wider opacity-50">{c.enrollment}</span>
           <span className="text-xs font-bold uppercase tracking-wider text-[var(--c-destaque)]">{c.area}</span>
           <span className="text-xs font-bold opacity-55">{c.format}</span>
+          </>}
           {guardar && <button type="button" onClick={onGuardar} className={`ml-auto text-xs font-bold ${guardado ? "text-[var(--c-destaque)]" : "opacity-45"}`}>{guardado ? "Guardado" : "Guardar"}</button>}
-        </div>
-        <h2 className="mt-3 font-serif text-2xl font-bold"><a href={`/formacao/${c.id}`} className="hover:text-[var(--c-destaque)]">{c.title}</a></h2>
+        </div>}
+        <h2 className={juntar("font-serif text-2xl font-bold", (etiquetas || guardar) && "mt-3")}><a href={`/formacao/${c.id}`} className="hover:text-[var(--c-destaque)]">{c.title}</a></h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 opacity-60">{c.description}</p>
         <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-xs font-bold opacity-60">
           <span className="flex items-center gap-2"><Icon name="clock" className="h-4 w-4" />{c.duration}</span>
@@ -127,13 +129,13 @@ function CatalogoVista(p: Omit<CatalogoProps, "zonaTopo" | "zonaLista"> & { zona
   return (
     <div ref={p.refRaiz ?? undefined} className={c.className} style={c.style}>
       {p.topo && (
-        <section className="bg-[var(--c-primaria)] px-5 py-14 text-white lg:px-8 lg:py-20">
+        <section className="bg-[var(--c-primaria)] px-5 py-10 text-white lg:px-8 lg:py-12">
           <div className="mx-auto" style={{ maxWidth: "var(--largura)" }}>
             {p.kicker && <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--c-acento)]">{p.kicker}</p>}
-            <div className="mt-5 flex flex-col justify-between gap-7 lg:flex-row lg:items-end">
-              <div>
-                {p.titulo && <h1 className="max-w-3xl font-serif text-5xl font-bold leading-tight tracking-[-0.03em] sm:text-6xl">{p.titulo}</h1>}
-                {p.subtitulo && <p className="mt-4 max-w-xl text-lg text-white/65">{p.subtitulo}</p>}
+            <div className="mt-3 flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+              <div className="min-w-0">
+                {p.titulo && <h1 className="font-serif text-4xl font-bold leading-tight tracking-[-0.03em] sm:text-5xl">{p.titulo}</h1>}
+                {p.subtitulo && <p className="mt-3 max-w-xl text-lg text-white/65">{p.subtitulo}</p>}
               </div>
               {pesquisa}
             </div>
@@ -143,11 +145,13 @@ function CatalogoVista(p: Omit<CatalogoProps, "zonaTopo" | "zonaLista"> & { zona
       {ZonaTopo && <ZonaTopo className="flex flex-col ena-zona" minEmptyHeight={40} />}
       {p.separadores && (
         <section className="border-b-4 border-[var(--c-acento)] bg-[var(--c-primaria)] px-5 lg:px-8">
-          <div className="mx-auto flex flex-col gap-px sm:flex-row" style={{ maxWidth: "var(--largura)" }}>
+          <div className="mx-auto flex flex-col gap-2 py-3 sm:flex-row" style={{ maxWidth: "var(--largura)" }}>
             {LINHAS.map(([v, t, d]) => (
               <button key={v} type="button" onClick={() => mudarLinha(v)}
-                className="flex-1 px-6 py-5 text-left transition-colors"
-                style={linha === v ? { background: "var(--c-acento)", color: "var(--c-primaria)" } : { color: "#fff" }}>
+                aria-pressed={linha === v}
+                // A borda mostra que os outros separadores também se podem escolher.
+                className="flex-1 border px-6 py-4 text-left transition-colors hover:bg-white/10"
+                style={linha === v ? { background: "var(--c-acento)", color: "var(--c-primaria)", borderColor: "var(--c-acento)" } : { color: "#fff", borderColor: "rgba(255,255,255,.35)" }}>
                 <strong className="block text-sm">{t}</strong>
                 <span className="mt-1 block text-xs opacity-60">{d}</span>
               </button>
@@ -184,7 +188,7 @@ function CatalogoVista(p: Omit<CatalogoProps, "zonaTopo" | "zonaLista"> & { zona
             {estado === "pronto" && p.vista === "linhas" && (
               <div className="space-y-4">
                 {lista.map(x => (
-                  <LinhaCurso key={x.id} c={x} guardar={p.guardar} comparador={p.comparador}
+                  <LinhaCurso key={x.id} c={x} guardar={p.guardar} comparador={p.comparador} etiquetas={Boolean(p.etiquetas)}
                     guardado={guardados.includes(x.id)} comparado={comparar.includes(x.id)}
                     onGuardar={() => setGuardados(g => g.includes(x.id) ? g.filter(i => i !== x.id) : [...g, x.id])}
                     onComparar={() => setComparar(g => g.includes(x.id) ? g.filter(i => i !== x.id) : g.length < 3 ? [...g, x.id] : g)} />
@@ -250,6 +254,7 @@ export const Catalogo: ComponentConfig<CatalogoProps> = {
     filtros: simNao("Filtros ao lado"),
     comparador: simNao("Comparador de cursos"),
     guardar: simNao("Botão «Guardar»"),
+    etiquetas: simNao("Etiquetas em cada curso (linha, acesso, área, modalidade)"),
     vista: { type: "radio", label: "Lista", options: [{ label: "Em linhas", value: "linhas" }, { label: "Em cartões", value: "cartoes" }] },
     cartao: campoCartao("Cartão (vista em cartões)"),
     aparencia: campoAparencia(),
@@ -263,7 +268,7 @@ export const Catalogo: ComponentConfig<CatalogoProps> = {
     zonaTopo: [], zonaLista: [],
     topo: true, kicker: "Oferta formativa ENA", titulo: "Encontre o curso certo para si.",
     subtitulo: "Pesquise por tema, modalidade ou área e descubra o próximo passo do seu percurso.",
-    textoPesquisa: "Nome do curso ou área...", separadores: true, filtros: true, comparador: true, guardar: true,
+    textoPesquisa: "Nome do curso ou área...", separadores: true, filtros: true, comparador: false, guardar: false, etiquetas: false,
     vista: "linhas", cartao: cartaoPadrao({ colunas: 2 }), aparencia: estiloVazio(),
   },
   render: ({ puck, ...p }) => <CatalogoVista {...(p as unknown as Parameters<typeof CatalogoVista>[0])} refRaiz={puck?.dragRef} />,

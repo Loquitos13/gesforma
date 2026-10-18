@@ -13,6 +13,7 @@ import type { Db } from "./db/pool.js";
 import { listarCatalogoPublico, type CursoPublico } from "./catalogoPublico.js";
 import { lerEntidadePublica } from "./regrasConfig.js";
 import { noticiaPublica, noticiasPublicas } from "./repos/blog.js";
+import { ativos as servicosAtivos } from "./repos/servicos.js";
 import { lerDefinicao } from "./repos/settings.js";
 
 export const ID_SEO = "seo";
@@ -209,6 +210,23 @@ export async function metaDaPagina(db: Db, caminhoBruto: string, host?: string):
     const descricao = limpar(seo.empresasDescricao) || `Formação à medida para equipas: diagnóstico, programa, formação certificada e acompanhamento, pela ${nome}.`;
     return base({ titulo, descricao, jsonLd: [migalhas(origem, [["Início", "/"], ["Empresas", "/empresas"]])], corpo: `<h1>${esc(titulo)}</h1><p>${esc(descricao)}</p>` });
   }
+  if (caminho.startsWith("/empresas/")) {
+    const slug = decodeURIComponent(caminho.slice("/empresas/".length).split("/")[0] ?? "").toLowerCase();
+    const linha = (await servicosAtivos(db)).find(x => x.slug === slug);
+    const s = linha ? { ...(linha.dados as { titulo: string; texto?: string; detalhe?: string; imagens?: { imagem: string }[] }) } : null;
+    if (!s) return base({ estado: 404, titulo: comNome("Serviço não encontrado"), indexar: false, corpo: "<h1>Este serviço não existe.</h1><p><a href=\"/empresas\">Ver os serviços para empresas</a></p>" });
+    const texto = limpar(s.detalhe || s.texto || "");
+    const descricao = cortar(texto, 160);
+    const imagem = s.imagens?.find(i => i.imagem)?.imagem;
+    return base({
+      titulo: comNome(s.titulo), descricao, imagem: imagem ? absoluto(origem, imagem) : imagemBase,
+      jsonLd: [
+        migalhas(origem, [["Início", "/"], ["Empresas", "/empresas"], [s.titulo, `/empresas/${slug}`]]),
+        { "@type": "Service", name: s.titulo, description: descricao, provider: { "@id": `${origem}/#organizacao` }, url: `${origem}/empresas/${slug}` },
+      ],
+      corpo: `<h1>${esc(s.titulo)}</h1><p>${esc(cortar(texto, 600))}</p>`,
+    });
+  }
   if (caminho === "/area-formando" || caminho.startsWith("/area-formando/")) return privada("Área do formando");
   // Backoffice, ligações pessoais, assinaturas, verificação de documentos, pré-inscrição: não se indexam.
   return privada(nome);
@@ -286,6 +304,9 @@ export async function sitemapXml(db: Db, host?: string) {
     const { cursos } = await listarCatalogoPublico(db);
     for (const c of cursos) urls.push({ loc: `${origem}/formacao/${encodeURIComponent(c.id)}`, prioridade: "0.8", mudanca: "weekly" });
     urls.push({ loc: `${origem}/empresas`, prioridade: "0.6", mudanca: "monthly" }, { loc: `${origem}/noticias`, prioridade: "0.6", mudanca: "weekly" });
+    for (const s of await servicosAtivos(db)) {
+      urls.push({ loc: `${origem}/empresas/${encodeURIComponent(s.slug)}`, prioridade: "0.5", mudanca: "monthly" });
+    }
     for (const n of await noticiasPublicas(db).catch(() => [])) {
       urls.push({ loc: `${origem}/noticias/${encodeURIComponent(n.slug)}`, prioridade: "0.5", mudanca: "monthly", data: /^\d{4}-\d{2}-\d{2}/.test(n.data) ? n.data.slice(0, 10) : undefined });
     }

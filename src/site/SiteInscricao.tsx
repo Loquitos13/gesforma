@@ -250,7 +250,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
       : "";
   const pagamentoBloqueado = passo === "pagamento" && Boolean(falhaPagamento());
   const passos: [Passo, string][] = [
-    ...(doCurso.length > 0 || ofertaEstado === "a-carregar" ? [["turma", "Data e horário"] as [Passo, string]] : []),
+    ...(doCurso.length > 0 || ofertaEstado === "a-carregar" ? [["turma", "Local, data de início e horário"] as [Passo, string]] : []),
     ["dados", "Os seus dados"],
     ...(prepago ? [["pagamento", "Pagamento"] as [Passo, string]] : []),
   ];
@@ -309,6 +309,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                   ) : (
                     <fieldset>
                       <legend className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Local</legend>
+                      <p className="mt-1 text-xs text-[#1C3350]/60">Selecione o local para ver as datas de início e os cronogramas.</p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {locais.map(l => (
                           <button key={l} type="button" onClick={() => { escolherLocal(l); setTrocarLocal(false); }} aria-pressed={local === l}
@@ -321,6 +322,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                   )}
                   <fieldset>
                     <legend className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Data de início e horário</legend>
+                    {local && <p className="mt-1 text-xs text-[#1C3350]/60">Veja o cronograma, selecione a data pretendida e clique em Continuar.</p>}
                     {!local ? (
                       <p className="mt-3 text-sm text-[#1C3350]/60">Escolha o local para ver as datas de início.</p>
                     ) : (

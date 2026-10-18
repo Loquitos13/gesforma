@@ -7,7 +7,7 @@ export type Vista =
   | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-formadores" | "gold-cockpit-turma" | "gold-curso-ficha" | "gold-dtp" | "gold-inqueritos"
   | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-formadores" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos" | "fin-despesas"
   | "fin-modulos" | "fin-conteudos" | "fin-datas" | "fin-locais" | "fin-areas-tematicas"
-  | "formadores" | "blog-posts" | "blog-tematicas"
+  | "formadores" | "blog-posts" | "blog-tematicas" | "empresas-servicos"
   | "emails" | "pagamentos" | "configuracoes" | "utilizadores" | "equipa" | "notificacoes" | "listas-opcoes" | "site";
 
 export type Separador = "overview" | "cronograma" | "sessoes" | "avaliacao" | "documentos" | "dtp" | "certificados";
@@ -86,6 +86,7 @@ const CAMINHOS: Record<Vista, string> = {
   "fin-despesas": "/gesforma/financiada/despesas",
   "blog-posts": "/gesforma/blog/posts",
   "blog-tematicas": "/gesforma/blog/tematicas",
+  "empresas-servicos": "/gesforma/empresas",
   "listas-opcoes": "/gesforma/listas",
   utilizadores: "/gesforma/sistema/utilizadores",
   emails: "/gesforma/sistema/emails",

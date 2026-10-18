@@ -49,6 +49,7 @@ export const PAGINAS: Record<PaginaSite, { titulo: string; endereco: string; not
   curso: { titulo: "Página de curso", endereco: "/formacao", nota: "A página de cada curso (a mesma para todos)." },
   noticias: { titulo: "Notícias", endereco: "/noticias", nota: "Os artigos vêm de Gestão › Blog." },
   empresas: { titulo: "Empresas", endereco: "/empresas", nota: "Formação à medida para organizações." },
+  servico: { titulo: "Página de serviço", endereco: "/empresas/…", nota: "A página de cada serviço (a mesma para todos; o conteúdo escreve-se em Gestão › Empresas / Business)." },
   area: { titulo: "Área do formando", endereco: "/area-formando", nota: "Painel do formando (cursos, agenda, certificados) e entrada." },
 };
 

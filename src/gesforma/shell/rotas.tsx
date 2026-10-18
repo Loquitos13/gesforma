@@ -45,6 +45,7 @@ const Utilizadores = carregavel(() => import("../vistas/sistema/Utilizadores"));
 const Emails = carregavel(() => import("../vistas/sistema/Emails"));
 const Pagamentos = carregavel(() => import("../vistas/sistema/Pagamentos"));
 const Site = carregavel(() => import("../vistas/sistema/Site"));
+const ServicosEmpresas = carregavel(() => import("../vistas/empresas/Servicos"));
 const Configuracoes = carregavel(() => import("../vistas/sistema/Configuracoes"));
 const Notificacoes = carregavel(() => import("./Notificacoes"));
 
@@ -105,6 +106,7 @@ export const ROTAS: Record<Vista, Ecra> = {
   "fin-despesas": Despesas,
   "blog-posts": Blog,
   "blog-tematicas": Blog,
+  "empresas-servicos": ServicosEmpresas,
   "listas-opcoes": ListasOpcoes,
   utilizadores: Utilizadores,
   emails: Emails,

@@ -52,6 +52,7 @@ export const MENU: GrupoMenu[] = [
   ] },
   { group: "Gestão", items: [
     { label: "Blog", icon: "blog", children: [{ label: "Posts", view: "blog-posts" }, { label: "Temáticas", view: "blog-tematicas" }] },
+    { label: "Empresas / Business", view: "empresas-servicos", icon: "site" },
     { label: "Listas de opções", view: "listas-opcoes", icon: "lista" },
   ] },
   { group: "Sistema", items: [
@@ -96,6 +97,8 @@ export function menuDoPerfil(role: string): GrupoMenu[] {
     .map(g => (g.group !== "Sistema" || role === "admin")
       ? g
       : { ...g, items: g.items.filter(item => item.label !== "Gestão" && item.view !== "site") })
+    // Os serviços para empresas são conteúdo do site: só a administração os edita (o servidor também o impõe).
+    .map(g => (g.group === "Gestão" && role !== "admin") ? { ...g, items: g.items.filter(item => item.view !== "empresas-servicos") } : g)
     // O blog é da equipa comercial e da secretaria: a Financiada vê só as listas de opções em Gestão.
     .map(g => (g.group === "Gestão" && role === "financiada") ? { ...g, items: g.items.filter(item => item.label !== "Blog") } : g);
 }

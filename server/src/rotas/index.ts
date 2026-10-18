@@ -34,6 +34,7 @@ import { registar as assinaturasPublicas } from "./assinaturasPublicas.js";
 import { registar as recibos } from "./recibos.js";
 import { registar as entidadeLogo } from "./entidadeLogo.js";
 import { registar as testemunhos } from "./testemunhos.js";
+import { registar as servicos } from "./servicos.js";
 import { registar as seo } from "./seo.js";
 import type { Deps, ModuloRotas } from "./tipos.js";
 
@@ -77,6 +78,7 @@ const MODULOS: Record<string, ModuloRotas> = {
   assinaturas,
   assinaturasPublicas,
   testemunhos,
+  servicos,
   seo,
 };
 

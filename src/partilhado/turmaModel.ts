@@ -247,6 +247,22 @@ export function horasDoFormador(sessoes: SessaoCronograma[], nome: string) {
   }, 0) * 10) / 10;
 }
 
+/** Mapa formador × módulo: os módulos que o formador dá na turma, com as horas de cada um. */
+export function modulosDoFormador(sessoes: SessaoCronograma[], nome: string) {
+  const alvo = nome.trim().toLowerCase();
+  const horas = new Map<string, number>();
+  for (const s of sessoes) {
+    if (!isSessaoLectiva(s) || !sessaoFormadores(s).some(f => f.toLowerCase() === alvo)) continue;
+    for (const m of sessaoModulos(s)) {
+      const cod = codigoModulo(m);
+      if (cod) horas.set(cod, (horas.get(cod) ?? 0) + sessaoDuracaoHoras(s));
+    }
+  }
+  return [...horas.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0], "pt", { numeric: true }))
+    .map(([modulo, h]) => ({ modulo, horas: Math.round(h * 10) / 10 }));
+}
+
 export function proximaSessao(sessoes: SessaoCronograma[], today = hojeIso()) {
   return [...sessoes]
     .filter(s => isSessaoLectiva(s) && s.data && s.data >= today)

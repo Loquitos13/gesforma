@@ -12,3 +12,12 @@ export async function turmasAbertasDoCurso(c: Consulta, regime: Regime, cursoId:
     `SELECT id FROM ${tabelaRegime("turmas", regime)} WHERE curso_id = $1 AND fechada_em IS NULL ORDER BY id`, [cursoId]))
     .map(r => Number(r.id));
 }
+
+/** Outras turmas do mesmo curso e do mesmo regime (de onde se podem copiar planos e sumários). */
+export async function turmasDoMesmoCurso(c: Consulta, regime: Regime, id: number) {
+  const t = tabelaRegime("turmas", regime);
+  return many<{ id: number; nome: string; data_inicio: string }>(c,
+    `SELECT o.id, o.nome, o.data_inicio::text AS data_inicio FROM ${t} o, ${t} a
+      WHERE a.id = $1 AND o.id <> a.id AND lower(trim(o.curso)) = lower(trim(a.curso))
+      ORDER BY o.data_inicio DESC NULLS LAST, o.id DESC LIMIT 100`, [id]);
+}

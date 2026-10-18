@@ -52,3 +52,10 @@ export const apiServicos = (signal?: AbortSignal) => api<{ servicos: Servico[] }
 export const apiCriarServico = (s: GravarServico) => enviar.post<{ servico: Servico }>("/v1/servicos", s);
 export const apiGravarServico = (id: number, s: GravarServico) => enviar.put<{ servico: Servico }>(`/v1/servicos/${id}`, s);
 export const apiApagarServico = (id: number) => enviar.delete<{ ok: boolean }>(`/v1/servicos/${id}`);
+
+/** Pedidos de proposta do site (formulários das páginas Empresas e de serviço). */
+export type EstadoPedido = "novo" | "contactado" | "proposta" | "arquivado";
+export type PedidoProposta = { id: number; nome: string; empresa: string; email: string; telefone: string; servico: string; mensagem: string; estado: EstadoPedido; clienteId: number | null; criadoEm: string };
+export const apiPedidosProposta = (estado?: EstadoPedido, signal?: AbortSignal) =>
+  api<{ pedidos: PedidoProposta[] }>(`/v1/pedidos-proposta${estado ? `?estado=${estado}` : ""}`, { signal });
+export const apiEstadoPedido = (id: number, estado: EstadoPedido) => enviar.patch<{ id: number; estado: EstadoPedido }>(`/v1/pedidos-proposta/${id}`, { estado });

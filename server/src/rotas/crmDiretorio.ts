@@ -58,6 +58,8 @@ const propostaClienteSchema = z.object({
   notas: z.string().max(4000).optional().default(""),
 });
 
+const dataQuery = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("").transform(() => undefined));
+
 export function eSecretaria(req: FastifyRequest) {
   return req.actor?.role === "admin" || req.actor?.role === "secretaria";
 }
@@ -67,7 +69,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
 
   app.get("/v1/crm/clientes", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    const v = validar(reply, { query: paginacao.extend({ estado: textoQuery(40), tipo: tipoCliente.optional() }) }, req);
+    const v = validar(reply, { query: paginacao.extend({ estado: textoQuery(40), tipo: tipoCliente.optional(), de: dataQuery, ate: dataQuery }) }, req);
     if (!v) return;
     const [pagina, resumo] = await Promise.all([listarClientes(db, v.query), resumoClientes(db)]);
     return { ...pagina, resumo };

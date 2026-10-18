@@ -4,4 +4,5 @@ import { ADMIN, type Regra } from "./perfis.js";
 export const regras: Regra[] = [
   ["*", "/v1/testemunhos*", ADMIN],
   ["*", "/v1/servicos*", ADMIN],
+  ["*", "/v1/pedidos-proposta*", ADMIN],
 ];

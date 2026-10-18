@@ -106,3 +106,40 @@ export async function importarParaTurmasDoCurso(db: Db, regime: Regime, cursoId:
   }
   return importados;
 }
+
+const SUMARIO_COPIA = ["conteudos", "atividades"] as const;
+const sumarioTemTexto = (raw: unknown) => SUMARIO_COPIA.some(k => String(asObj(raw)[k] ?? "").trim());
+
+/**
+ * Turma padrão: copia de outra turma do mesmo curso o plano e o sumário (conteúdos e atividades) de cada sessão,
+ * pela ordem das sessões lectivas. As observações e as assinaturas nunca se copiam; o que está assinado nunca muda.
+ */
+export async function importarDeTurma(db: Db, regime: Regime, turmaId: number, origemId: number, o: { substituir?: boolean } = {}) {
+  const r = { importados: 0, sumarios: 0, mantidos: 0, semModelo: 0, fechada: false };
+  const [turma, origem] = await Promise.all([turmaParaPlanos(db, regime, turmaId), turmaParaPlanos(db, regime, origemId)]);
+  if (!turma || !origem) return r;
+  if (turma.fechada_em) return { ...r, fechada: true };
+  const daOrigem = new Map((await listarSessoes(db, regime, origemId)).map(s => [String(s.sessao_id ?? ""), s]));
+  const actuais = new Map((await listarSessoes(db, regime, turmaId)).map(s => [String(s.sessao_id ?? ""), s]));
+  for (let n = 1; sessaoLectivaN(turma.cronograma, n); n++) {
+    const sessaoId = String(sessaoLectivaN(turma.cronograma, n)?.id ?? "");
+    const fonte = daOrigem.get(String(sessaoLectivaN(origem.cronograma, n)?.id ?? ""));
+    if (!sessaoId || !fonte) { r.semModelo += 1; continue; }
+    const actual = actuais.get(sessaoId);
+    const partes: { plano?: unknown; sumario?: unknown } = {};
+    const planoActual = asObj(actual?.plano);
+    if (planoTemTexto(fonte.plano) && planoActual.assinado !== true && (o.substituir || !planoTemTexto(planoActual))) {
+      partes.plano = { ...asObj(fonte.plano), assinado: false, assinadoEm: undefined };
+    }
+    const sumarioActual = asObj(actual?.sumario);
+    if (sumarioTemTexto(fonte.sumario) && sumarioActual.assinado !== true && (o.substituir || !sumarioTemTexto(sumarioActual))) {
+      const s = asObj(fonte.sumario);
+      partes.sumario = { ...sumarioActual, conteudos: txt(s.conteudos), atividades: txt(s.atividades), assinado: false, assinadoEm: undefined };
+    }
+    if (!partes.plano && !partes.sumario) { r.mantidos += 1; continue; }
+    await gravarSessao(db, regime, turmaId, { id: sessaoId, n }, partes);
+    if (partes.plano) r.importados += 1;
+    if (partes.sumario) r.sumarios += 1;
+  }
+  return r;
+}

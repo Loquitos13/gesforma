@@ -8,9 +8,10 @@ import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import { slugServico, videoServico } from "../../../partilhado/siteServicos";
 import {
-  AreaTexto, Aviso, Botao, Campo, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Estado, Interruptor, PageHeader, PainelLateral,
+  AreaTexto, Aviso, Botao, Campo, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Estado, Interruptor, PageHeader, PainelLateral, Separadores,
 } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
+import { PedidosProposta } from "./PedidosProposta";
 
 const VAZIO: DadosServico = {
   titulo: "", etiqueta: "", texto: "", pontos: "", detalhe: "", rotulo: "Pedir proposta", ligacao: "#contactos",
@@ -21,6 +22,7 @@ type Edicao = { id: number | null; slug: string; ativo: boolean; ordem?: number;
 
 export default function ServicosEmpresas(_props: VistaProps) {
   const { dados, erro, recarregar } = useRecurso("servicos", s => apiServicos(s));
+  const [separador, setSeparador] = useState<"pedidos" | "servicos">("pedidos");
   const [edicao, setEdicao] = useState<Edicao | null>(null);
   const [apagar, setApagar] = useState<Servico | null>(null);
   const gravar = useAccao((e: Edicao) => {
@@ -42,7 +44,10 @@ export default function ServicosEmpresas(_props: VistaProps) {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader titulo="Empresas / Business" subtitulo="Serviços para empresas: cartões na página Empresas e uma página para cada um no site."
-        acoes={<Botao variante="primario" onClick={() => setEdicao({ id: null, slug: "", ativo: true, dados: { ...VAZIO } })}>Novo serviço</Botao>} />
+        acoes={separador === "servicos" ? <Botao variante="primario" onClick={() => setEdicao({ id: null, slug: "", ativo: true, dados: { ...VAZIO } })}>Novo serviço</Botao> : undefined} />
+      <Separadores<"pedidos" | "servicos"> rotulo="Empresas / Business" ativo={separador} onMudar={setSeparador}
+        itens={[{ id: "pedidos", rotulo: "Pedidos de proposta" }, { id: "servicos", rotulo: "Serviços" }]} />
+      {separador === "pedidos" ? <PedidosProposta /> : (<>
       <Aviso tom="info">
         O aspeto dos cartões e da página de cada serviço (ordem dos blocos, cores, espaços) muda-se em Sistema › Site:
         página «Empresas» (bloco «Serviços») e «Página de serviço». Aqui escreve-se o conteúdo.
@@ -86,6 +91,7 @@ export default function ServicosEmpresas(_props: VistaProps) {
       <ConfirmarPerigo aberto={apagar != null} onFechar={() => setApagar(null)} titulo={`Apagar «${apagar?.dados.titulo ?? ""}»?`} acao="Apagar"
         descricao="Sai da página Empresas e a página do serviço deixa de existir. Para o tirar só por uns tempos, use «Mostrar no site» (desligado)."
         onConfirmar={async () => { if (apagar) await tirar.correr(apagar.id); setApagar(null); }} />
+      </>)}
     </div>
   );
 }

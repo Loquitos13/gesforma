@@ -4,7 +4,7 @@ import type { TurmaPercurso } from "../partilhado/api";
 import { apiPublicEntidade, type EntidadePublica } from "../partilhado/api/publico";
 import { useRecurso } from "../partilhado/dados/useRecurso";
 import { mapLocalTurma } from "../partilhado/cronogramaLocal";
-import { datesFromRange, grelhaPeriodo, linhasFromSessoes, sessoesSemFim } from "../partilhado/cronogramaGrelha";
+import { comFimCronograma, datesFromRange, FIM_CRONOGRAMA_ID, grelhaPeriodo, linhasFromSessoes, sessoesSemFim } from "../partilhado/cronogramaGrelha";
 import { buildCronogramaPrintHtml, largurasColunaMm, linhasComSessoes, printPageSize } from "../partilhado/cronogramaPrint";
 import { codigoInternoTurma } from "../partilhado/turmaCodigo";
 import type { SessaoModalidade, SessaoCronograma } from "../partilhado/turmaModel";
@@ -13,7 +13,7 @@ const MODALIDADES = new Set<SessaoModalidade>(["presencial", "sincrona", "auto",
 const NIVEIS = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
 
 /** O que a folha precisa da turma: a área do formando e a página pública do cronograma dão o mesmo. */
-export type TurmaFolha = Pick<TurmaPercurso, "nome" | "local" | "horario" | "dataInicio" | "plano">;
+export type TurmaFolha = Pick<TurmaPercurso, "nome" | "local" | "horario" | "dataInicio" | "plano"> & { dataFim?: string };
 
 function planoParaSessoes(turma: TurmaFolha): SessaoCronograma[] {
   return sessoesSemFim((turma.plano ?? []).map(s => ({
@@ -30,7 +30,9 @@ function planoParaSessoes(turma: TurmaFolha): SessaoCronograma[] {
 export function folhaDe(turma: TurmaFolha, curso: string, entidade?: EntidadePublica) {
   const sessoes = planoParaSessoes(turma);
   if (!sessoes.length) return null;
-  const periodo = grelhaPeriodo(sessoes, turma.dataInicio);
+  // A «Data de fim» da turma conta mesmo que seja depois da última sessão.
+  const fimGuardado = turma.dataFim || (turma.plano ?? []).find(s => s.id === FIM_CRONOGRAMA_ID)?.data || "";
+  const periodo = grelhaPeriodo(comFimCronograma(sessoes, fimGuardado), turma.dataInicio);
   const matricula = periodo.matricula ?? "";
   const inicio = turma.dataInicio;
   const fim = periodo.fim || inicio;

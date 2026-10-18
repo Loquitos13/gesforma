@@ -187,6 +187,7 @@ export type CronogramaPublico = {
   inicio: string;
   formador: string;
   sessoes: { data: string; horaInicio: string; horaFim: string; modalidade: string; modulos: string[]; formadores: string[] }[];
+  fim?: string;
   entidade: EntidadePublica;
 };
 

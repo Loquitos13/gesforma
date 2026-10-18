@@ -143,7 +143,10 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
   return (
     <Caixa p={p}>
       {curso => {
-        const locais = locaisDo(curso);
+        const comTurmas = locaisDo(curso);
+        // Locais atribuídos ao curso ainda sem turmas também aparecem (com os contactos), sem abrir a pré-inscrição.
+        const semTurmas = (curso.contactosLocais ?? []).map(x => x.local).filter(l => !comTurmas.some(t => chaveLocal(t) === chaveLocal(l)));
+        const locais = [...comTurmas, ...semTurmas];
         if (!locais.length) return null;
         return (
           <fieldset>
@@ -156,6 +159,7 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
             }}>
               {locais.map(l => {
                 const ativo = local === l;
+                const semDatas = semTurmas.includes(l);
                 const morada = curso.sessoes.find(s => s.local === l && s.morada)?.morada;
                 const vars = variaveisCurso(curso, l);
                 const texto = preencherVariaveis(p.texto ?? "", vars).trim();
@@ -168,7 +172,8 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
                       borderRadius: c.raio ? `${c.raio}px` : undefined, boxShadow: SOMBRA_LOCAL[c.sombra] ?? SOMBRA_LOCAL[""],
                       background: corSegura(c.corFundo) ?? "#ffffff", borderColor: ativo ? ativoCor : "transparent",
                     }}>
-                  <button type="button" aria-pressed={ativo} onClick={() => {
+                  <button type="button" aria-pressed={ativo} aria-disabled={semDatas || undefined} onClick={() => {
+                      if (semDatas) return;
                       // No site, o clique escolhe o local e abre o pedido já nele (datas de início e horário).
                       if (p.abrirPedido !== false && !editar) { setLocal(l); abrir(curso, { local: l }); return; }
                       setLocal(ativo && locais.length > 1 ? "" : l);
@@ -181,9 +186,11 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
                     </span>
                     {p.mostrarMorada && morada && <span className={juntar("text-xs leading-5 opacity-65", tMorada.className)} style={tMorada.style}>{morada}</span>}
                     {texto && <span className={juntar("whitespace-pre-line text-sm leading-6 opacity-75", tTexto.className)} style={tTexto.style}>{texto}</span>}
-                    {p.mostrarPreco && <span className={juntar("mt-auto text-sm font-bold text-[var(--c-destaque)]", tPreco.className)} style={tPreco.style}>{preencherVariaveis(p.textoPreco || "{{preco}}", vars)}</span>}
+                    {semDatas
+                      ? <span className="mt-auto text-sm font-bold opacity-60">Próximas datas em breve</span>
+                      : p.mostrarPreco && <span className={juntar("mt-auto text-sm font-bold text-[var(--c-destaque)]", tPreco.className)} style={tPreco.style}>{preencherVariaveis(p.textoPreco || "{{preco}}", vars)}</span>}
                     {/* Não pode haver um botão dentro de outro: o cartão inteiro faz a ação, isto é só o aspeto. */}
-                    {b.mostrar && (
+                    {b.mostrar && !semDatas && (
                       <span className={juntar("mt-2 inline-flex items-center gap-3 px-4 py-3 text-xs font-extrabold uppercase tracking-[0.08em]", POSICAO_BOTAO[b.posicao] ?? POSICAO_BOTAO.largura, !p.mostrarPreco && "mt-auto", tBotao.className)}
                         style={{ ...tBotao.style, background: corSegura(b.cor) ?? "var(--c-destaque)", color: corSegura(b.corTexto) ?? "#ffffff", borderRadius: b.raio ? `${b.raio}px` : undefined }}>
                         {preencherVariaveis(b.texto || "Escolher", vars)} {b.seta && <Icon name="arrow" />}

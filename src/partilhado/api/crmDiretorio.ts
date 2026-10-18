@@ -44,7 +44,7 @@ export type Fase = { estado: string; n: number; valor: number };
 
 type Sinal = { signal?: AbortSignal };
 
-export const apiClientes = (f: { q?: string; estado?: string; tipo?: string; pagina?: number; porPagina?: number; ordem?: string }, o: Sinal = {}) =>
+export const apiClientes = (f: { q?: string; estado?: string; tipo?: string; de?: string; ate?: string; pagina?: number; porPagina?: number; ordem?: string }, o: Sinal = {}) =>
   api<Pagina<ClienteResumo> & { resumo: { clientes: number; emAberto: number; comContrato: number } }>(
     `/v1/crm/clientes${qs(f)}`, { silencioso: true, signal: o.signal },
   );

@@ -2,7 +2,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { dtpForTurma } from "../../pedagogia/dtp.js";
-import { importarPlanosCurso, ordensComPlanoDoCurso } from "../../planosCurso.js";
+import { importarDeTurma, importarPlanosCurso, ordensComPlanoDoCurso } from "../../planosCurso.js";
+import { turmasDoMesmoCurso } from "../../repos/planosCurso.js";
 import { documentoSchema, sessaoParam, sessaoPatchSchema } from "../../pedagogia/esquemas.js";
 import { asArr, asObj } from "../../pedagogia/util.js";
 import {
@@ -16,7 +17,8 @@ import { regimeIdParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
 import { formadorPodeVer, turmaOu404 } from "./comum.js";
 
-const importarPlanosSchema = z.object({ substituir: z.boolean().optional().default(false) });
+// Sem origem: da ficha do curso. Com origem: de outra turma do mesmo curso (turma padrão), planos e sumários.
+const importarPlanosSchema = z.object({ substituir: z.boolean().optional().default(false), origemTurmaId: z.number().int().positive().optional() });
 
 function sessaoDTO(n: number, r: { plano: unknown; sumario: unknown; presencas: unknown } | null | undefined, sessaoId: string | null) {
   return {
@@ -117,9 +119,23 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
     const turma = await turmaOu404(db, reply, regime, id);
     if (!turma) return;
     if (await turmaFechada(db, regime, id)) return reply.code(409).send({ error: ERRO_TURMA_FECHADA });
-    const r = await importarPlanosCurso(db, regime, id, { substituir: v.body.substituir });
+    const origem = v.body.origemTurmaId;
+    if (origem && !(await turmasDoMesmoCurso(db, regime, id)).some(t => Number(t.id) === origem)) {
+      return reply.code(400).send({ error: "Só se copia de outra turma do mesmo curso." });
+    }
+    const r = origem
+      ? await importarDeTurma(db, regime, id, origem, { substituir: v.body.substituir })
+      : await importarPlanosCurso(db, regime, id, { substituir: v.body.substituir });
     await audit(db, req.actor!.id, "turma.planos_importar", "turma", String(id), req.ip, { regime, ...r });
     return r;
+  });
+
+  /** Turmas do mesmo curso de onde se podem copiar planos e sumários. */
+  app.get("/v1/turmas/:regime/:id/planos/origens", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: regimeIdParam }, req);
+    if (!v) return;
+    return { turmas: (await turmasDoMesmoCurso(db, v.params.regime, v.params.id)).map(t => ({ id: Number(t.id), nome: t.nome, dataInicio: String(t.data_inicio ?? "").slice(0, 10) })) };
   });
 
   app.put("/v1/turmas/:regime/:id/documentos", async (req, reply) => {

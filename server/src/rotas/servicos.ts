@@ -4,7 +4,7 @@ import { slugServico, videoServico } from "../../../src/partilhado/siteServicos.
 import { sendMail } from "../mailer.js";
 import { lerEntidadePublica } from "../regrasConfig.js";
 import * as repo from "../repos/servicos.js";
-import { one } from "../repos/sql.js";
+import { many, one } from "../repos/sql.js";
 import { idNum, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
 
@@ -39,6 +39,8 @@ const servicoSchema = z.object({
   ativo: z.boolean().default(true),
   dados: dadosSchema,
 });
+
+const ESTADOS_PEDIDO = ["novo", "contactado", "proposta", "arquivado"] as const;
 
 const ehDuplicado = (e: unknown) => (e as { code?: string })?.code === "23505";
 
@@ -129,7 +131,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const p = v.body;
     if (p.site) return { ok: true }; // campo escondido: só os robôs o preenchem
     const nota = `[${new Date().toISOString().slice(0, 10)}] Pedido de proposta no site${p.servico ? ` (${p.servico})` : ""}: ${p.nome}${p.mensagem ? ` — ${p.mensagem}` : ""}`;
-    await registarPedido(db, { nome: p.empresa || p.nome, email: p.email, telefone: p.telefone, nota });
+    const clienteId = await registarPedido(db, { nome: p.empresa || p.nome, email: p.email, telefone: p.telefone, nota });
+    await one(db, `INSERT INTO pedidos_proposta (nome, empresa, email, telefone, servico, mensagem, cliente_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`, [p.nome, p.empresa, p.email, p.telefone, p.servico, p.mensagem, clienteId ?? null]);
     const ena = await lerEntidadePublica(db);
     if (ena.email) {
       const texto = [`Novo pedido de proposta no site.`, "", `Nome: ${p.nome}`, `Empresa: ${p.empresa || "—"}`, `Email: ${p.email}`, `Telefone: ${p.telefone || "—"}`,
@@ -137,6 +141,26 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       await sendMail(db, { to: ena.email, name: ena.nomeCurto || ena.nome, subject: `Pedido de proposta: ${p.empresa || p.nome}`, text: texto }).catch(() => undefined);
     }
     return { ok: true };
+  });
+
+  // Pedidos de proposta no backoffice (Gestão › Empresas / Business).
+  app.get("/v1/pedidos-proposta", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { query: z.object({ estado: z.enum(ESTADOS_PEDIDO).optional() }) }, req);
+    if (!v) return;
+    const pedidos = await many(db, `SELECT id, nome, empresa, email, telefone, servico, mensagem, estado, cliente_id AS "clienteId", criado_em AS "criadoEm"
+      FROM pedidos_proposta WHERE ($1::text IS NULL OR estado = $1) ORDER BY (estado = 'novo') DESC, criado_em DESC LIMIT 500`, [v.query.estado ?? null]);
+    return { pedidos };
+  });
+
+  app.patch("/v1/pedidos-proposta/:id", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: z.object({ id: idNum }), body: z.object({ estado: z.enum(ESTADOS_PEDIDO) }) }, req);
+    if (!v) return;
+    const r = await one(db, "UPDATE pedidos_proposta SET estado = $2, atualizado_em = now() WHERE id = $1 RETURNING id, estado", [v.params.id, v.body.estado]);
+    if (!r) return reply.code(404).send({ error: "pedido inexistente" });
+    await audit(db, req.actor!.id, `pedido-proposta.${v.body.estado}`, "pedido_proposta", String(v.params.id), req.ip);
+    return r;
   });
 
   app.get("/v1/public/servicos", { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } }, async (_req, reply) => {

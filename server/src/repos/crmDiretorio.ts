@@ -16,7 +16,7 @@ const idOuNull = (v: unknown) => (v == null ? null : num(v));
 
 // ─── Clientes ────────────────────────────────────────────────────────────────
 
-export type FiltroClientes = { q?: string; estado?: string; tipo?: string; pagina?: number; porPagina?: number; ordem?: string };
+export type FiltroClientes = { q?: string; estado?: string; tipo?: string; de?: string; ate?: string; pagina?: number; porPagina?: number; ordem?: string };
 
 /** Clientes com o resumo comercial: propostas, valor em aberto, contratos e o estado da última proposta. */
 export async function listarClientes(c: Consulta, f: FiltroClientes) {
@@ -36,6 +36,9 @@ export async function listarClientes(c: Consulta, f: FiltroClientes) {
   w.add("(t.nome ILIKE ? OR t.email ILIKE ? OR t.nif ILIKE ?)", q, q, q);
   w.add("t.ultimo_estado = ?", f.estado);
   w.add("t.tipo = ?", f.tipo);
+  // Período: data em que o cliente entrou (criado à mão ou por um pedido de proposta do site).
+  w.add("t.created_at >= ?::date", f.de);
+  w.add("t.created_at < ?::date + 1", f.ate);
   const sql = `SELECT * FROM (${base}) t ${w.where}`;
   const ordem = ordenarPor(
     { nome: "t.nome", emAberto: "t.em_aberto", contratos: "t.contratos", recente: "t.created_at" },

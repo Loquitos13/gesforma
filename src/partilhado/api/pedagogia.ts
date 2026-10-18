@@ -335,7 +335,11 @@ export const apiResultadosTurma = (regime: Regime, turmaId: number, signal?: Abo
   api<ResultadosTurma>(`/v1/turmas/${regime}/${turmaId}/resultados`, { signal, silencioso: true });
 
 /** Copia para a turma os planos de sessão da ficha do curso (com `substituir`, também os já preenchidos e por assinar). */
-export const apiImportarPlanosCurso = (regime: Regime, turmaId: number, substituir: boolean) =>
-  api<{ importados: number; mantidos: number; semModelo: number }>(`/v1/turmas/${regime}/${turmaId}/planos/importar`, {
-    method: "POST", body: JSON.stringify({ substituir }),
+export const apiImportarPlanosCurso = (regime: Regime, turmaId: number, substituir: boolean, origemTurmaId?: number) =>
+  api<{ importados: number; mantidos: number; semModelo: number; sumarios?: number }>(`/v1/turmas/${regime}/${turmaId}/planos/importar`, {
+    method: "POST", body: JSON.stringify({ substituir, ...(origemTurmaId ? { origemTurmaId } : {}) }),
   });
+
+/** Outras turmas do mesmo curso (turma padrão de onde copiar planos e sumários). */
+export const apiOrigensPlanos = (regime: Regime, turmaId: number) =>
+  api<{ turmas: { id: number; nome: string; dataInicio: string }[] }>(`/v1/turmas/${regime}/${turmaId}/planos/origens`, { silencioso: true });

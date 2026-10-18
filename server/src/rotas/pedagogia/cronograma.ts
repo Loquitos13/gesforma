@@ -76,6 +76,8 @@ export function registarCronograma(app: FastifyInstance, { db, requireAuth, audi
       inicio: String(turma.data_inicio ?? "").slice(0, 10),
       formador: turma.formador ?? "",
       sessoes,
+      // A «Data de fim» da turma (marcador do cronograma), que pode ir além da última sessão.
+      fim: String((Array.isArray(turma.cronograma) ? turma.cronograma : []).find((s: { id?: unknown }) => s?.id === "fim-cronograma")?.data ?? "").slice(0, 10),
       entidade: await lerEntidadePublica(db),
     };
   });

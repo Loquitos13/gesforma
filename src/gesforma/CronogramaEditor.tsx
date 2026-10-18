@@ -10,7 +10,7 @@ import { descarregarCronograma } from "./cronogramaExport";
 import { apiPublicarCronograma } from "../partilhado/api";
 import { toastError, toastOk } from "../partilhado/toastBus";
 import { ConfirmarPerigo } from "../partilhado/ui";
-import { hojeIso, emptySessao, formatDiaMes, formatHoraRange, formatMesAno, formadoresNasSessoes, groupCronogramaByMonth, horasCronograma, isSessaoLectiva, modulosLabel, periodoCronograma, proximaSessao, sessaoEstado, sessaoFormadores, sessaoModulos, type SessaoCronograma } from "../partilhado/turmaModel";
+import { hojeIso, emptySessao, formatDiaMes, formatHoraRange, formatMesAno, formadoresNasSessoes, groupCronogramaByMonth, horasCronograma, isSessaoLectiva, modulosDoFormador, modulosLabel, periodoCronograma, proximaSessao, sessaoEstado, sessaoFormadores, sessaoModulos, type SessaoCronograma } from "../partilhado/turmaModel";
 import { IconPlus, KpiCard, SessaoRow } from "./TurmaCronograma";
 
 export function CronogramaEditor({
@@ -321,6 +321,10 @@ export function FormadoresAtribuidosCard({
                     {f.sessoes === 0 ? "Formador da turma" : f.sessoes === 1 ? "1 sessão" : `${f.sessoes} sessões`}
                     {opt?.sub ? ` · ${opt.sub}` : ""}
                   </p>
+                  {/* Mapa formador × módulo desta turma (das sessões do cronograma). */}
+                  {modulosDoFormador(sessoes, f.nome).length > 0 && (
+                    <p className="mt-0.5 text-xs text-slate-600">{modulosDoFormador(sessoes, f.nome).map(m => `${m.modulo} · ${m.horas} h`).join("  ·  ")}</p>
+                  )}
                 </div>
                 {onOpen && (
                   <button type="button" onClick={() => onOpen(f.nome)} className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 whitespace-nowrap">

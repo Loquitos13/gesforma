@@ -113,6 +113,11 @@ export async function construirNotificacoes(db: Db, actorId: string, role = ""):
       out.push({ chave: `turma-vazia-${t.regime}-${t.id}`, tipo: "info", titulo: fin ? `${nome} sem formandos` : `${nome} com poucas inscrições`, texto: `${t.ocupadas} de ${t.capacidade} vagas preenchidas e início a ${t.inicio}.`, view: fin ? "fin-turmas" : "gold-turmas" });
     }
   }
+  // Pedidos de proposta do site por tratar (o ecrã é da administração).
+  if (role === "admin") {
+    const novos = Number((await one<{ n: number }>(db, "SELECT count(*)::int AS n FROM pedidos_proposta WHERE estado = 'novo'"))?.n ?? 0);
+    if (novos > 0) out.push({ chave: `pedidos-proposta-${novos}`, tipo: "warn", titulo: `${novos} pedido(s) de proposta por tratar`, texto: "Chegaram pelo formulário do site (Empresas e serviços).", view: "empresas-servicos" });
+  }
   const dtp: Nova[] = [];
   for (const t of turmas) {
     const fin = t.regime === "fin";

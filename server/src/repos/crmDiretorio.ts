@@ -37,8 +37,9 @@ export async function listarClientes(c: Consulta, f: FiltroClientes) {
   w.add("t.ultimo_estado = ?", f.estado);
   w.add("t.tipo = ?", f.tipo);
   // Período: data em que o cliente entrou (criado à mão ou por um pedido de proposta do site).
-  w.add("t.created_at >= ?::date", f.de);
-  w.add("t.created_at < ?::date + 1", f.ate);
+  // O dia conta em hora de Lisboa (um cliente das 00:30 é desse dia, não do anterior em UTC).
+  w.add("(t.created_at AT TIME ZONE 'Europe/Lisbon')::date >= ?::date", f.de);
+  w.add("(t.created_at AT TIME ZONE 'Europe/Lisbon')::date <= ?::date", f.ate);
   const sql = `SELECT * FROM (${base}) t ${w.where}`;
   const ordem = ordenarPor(
     { nome: "t.nome", emAberto: "t.em_aberto", contratos: "t.contratos", recente: "t.created_at" },

@@ -37,6 +37,10 @@ describe("CRM › Clientes por período", () => {
     expect(await ver("&ate=2020-01-15")).toBe(1);
     expect(await ver("&de=2021-01-01")).toBe(0);
     expect((await pedido(ctx, "admin", "GET", "/v1/crm/clientes?de=ontem")).statusCode).toBe(400);
+    // 00:30 em Lisboa (23:30 UTC do dia anterior) conta como o próprio dia.
+    const tarde = unico("Cliente Meia-noite");
+    await ctx.db.query("INSERT INTO crm_clientes (nome, created_at) VALUES ($1, '2020-06-14T23:30:00Z')", [tarde]);
+    expect(((await pedido(ctx, "admin", "GET", `/v1/crm/clientes?q=${encodeURIComponent(tarde)}&de=2020-06-15&ate=2020-06-15`)).json().linhas as unknown[]).length).toBe(1);
   });
 });
 

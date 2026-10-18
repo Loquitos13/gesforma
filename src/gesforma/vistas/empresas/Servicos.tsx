@@ -115,13 +115,13 @@ function FormServico({ inicial, aGravar, onFechar, onGravar }: { inicial: Edicao
           <Campo rotulo="Descrição curta" ajuda="No cartão e no topo da página do serviço.">{p => <AreaTexto {...p} rows={3} maxLength={1200} value={d.texto} onChange={x => mudar({ texto: x.target.value })} />}</Campo>
           <Campo rotulo="Pontos" ajuda="Um por linha (lista com visto).">{p => <AreaTexto {...p} rows={3} maxLength={1200} value={d.pontos} onChange={x => mudar({ pontos: x.target.value })} />}</Campo>
           <Imagem rotulo="Ícone ou imagem do cartão (opcional)" valor={d.imagem} onMudar={imagem => mudar({ imagem })} />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Campo rotulo="Texto do botão" ajuda="Vazio = sem botão.">{p => <Entrada {...p} maxLength={40} value={d.rotulo} onChange={x => mudar({ rotulo: x.target.value })} />}</Campo>
-            <Campo rotulo="Ligação do botão" ajuda="#contactos (rodapé), uma página, mailto: ou tel:">{p => <Entrada {...p} maxLength={300} value={d.ligacao} onChange={x => mudar({ ligacao: x.target.value })} />}</Campo>
-          </div>
         </Grupo>
 
         <Grupo titulo="Página do serviço">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Campo rotulo="Botão no topo da página do serviço" ajuda="Ex.: «Pedir proposta». Vazio = sem botão.">{p => <Entrada {...p} maxLength={40} value={d.rotulo} onChange={x => mudar({ rotulo: x.target.value })} />}</Campo>
+            <Campo rotulo="Ligação do botão" ajuda="#contactos (rodapé), uma página, mailto: ou tel:">{p => <Entrada {...p} maxLength={300} value={d.ligacao} onChange={x => mudar({ ligacao: x.target.value })} />}</Campo>
+          </div>
           <Campo rotulo="Endereço da página" ajuda={`Vazio = feito do título. Mudar o endereço muda a ligação: quem tiver a antiga fica sem página. Agora: /empresas/${slug || "…"}`}>
             {p => <Entrada {...p} maxLength={80} value={e.slug} placeholder={slugServico({ titulo: d.titulo })} onChange={x => setE({ ...e, slug: x.target.value })} />}
           </Campo>

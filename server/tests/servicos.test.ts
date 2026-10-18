@@ -34,3 +34,12 @@ describe("Serviços para empresas (Gestão › Empresas / Business)", () => {
     expect(((await pedido(ctx, "admin", "GET", "/v1/servicos")).json().servicos as { id: number }[]).some(s => s.id === id)).toBe(false);
   });
 });
+
+describe("Modelo da página de serviço no editor", () => {
+  it("grava rascunho e publica", async () => {
+    const ctx = await arrancar();
+    const dados = { root: { props: {} }, content: [{ type: "ServicoBanner", props: { id: "b1" } }] };
+    expect((await pedido(ctx, "admin", "PUT", "/v1/site/paginas/servico/rascunho", { dados })).statusCode).toBe(200);
+    expect((await pedido(ctx, "admin", "PUT", "/v1/site/paginas/servico/publicar", { dados })).statusCode).toBe(200);
+  });
+});

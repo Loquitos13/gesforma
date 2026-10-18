@@ -57,14 +57,21 @@ export function RaizServico({ previsualizar, editar, children }: { previsualizar
 export const campoPrevisualizarServico = {
   type: "custom" as const,
   label: "No editor, ver com o serviço",
-  render: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => <EscolherServico value={value} onChange={onChange} />,
+  render: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => <EscolherServico value={value} onChange={onChange} vazio="O primeiro serviço" />,
 };
 
-function EscolherServico({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+/** Escolher um dos serviços registados (ex.: os textos de um cartão no bloco «Serviços»). */
+export const campoServico = (label: string) => ({
+  type: "custom" as const,
+  label,
+  render: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => <EscolherServico value={value} onChange={onChange} vazio="Escolha o serviço" />,
+});
+
+function EscolherServico({ value, onChange, vazio }: { value: string; onChange: (v: string) => void; vazio: string }) {
   const servicos = useServicos() ?? [];
   return (
     <select value={value ?? ""} onChange={e => onChange(e.target.value)} className="w-full rounded border border-[#d5dbe3] bg-white px-2 py-1.5 text-sm">
-      <option value="">O primeiro serviço</option>
+      <option value="">{vazio}</option>
       {servicos.map(s => <option key={slugServico(s)} value={slugServico(s)}>{s.titulo}</option>)}
     </select>
   );

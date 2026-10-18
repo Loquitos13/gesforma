@@ -356,7 +356,7 @@ export const Logotipos: ComponentConfig<{ itens: Logo[]; altura: number | null; 
     const c = caixa(aparencia, { gap: `${espaco ?? 40}px`, justifyContent: JUSTIFICAR[alinhar] });
     return (
       <div ref={puck?.dragRef ?? undefined} id={c.id} className={juntar(c.className, "flex flex-wrap items-center")} style={c.style}>
-        {(itens ?? []).length === 0 && <p className="text-sm text-[#6b7685]">Junte logótipos no painel.</p>}
+        {(itens ?? []).length === 0 && (puck as { isEditing?: boolean } | undefined)?.isEditing && <p className="text-sm text-[#6b7685]">Junte logótipos no painel.</p>}
         {(itens ?? []).filter(l => l.imagem).map((l, i) => {
           const img = <img src={l.imagem} alt={l.alt} style={{ height: `${altura ?? 48}px` }} className={juntar("w-auto object-contain transition", cinzento && "opacity-70 grayscale hover:opacity-100 hover:grayscale-0")} />;
           const href = ligacaoSegura(l.ligacao);

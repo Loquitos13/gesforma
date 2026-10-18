@@ -156,24 +156,59 @@ function modeloNoticias(): Data {
 }
 
 function modeloEmpresas(): Data {
+  const tipo = (tamanho: number, peso: "400" | "700") => tipoVazia({ tamanho, peso, alturaLinha: 1.4, cor: "var(--c-primaria)" });
+  // Dois destaques ao lado da imagem do topo (cada um é uma caixa com título e texto, editáveis).
+  const destaque = (titulo: string, texto: string, fundo: string) => bloco("Coluna", Coluna.defaultProps, {
+    espaco: 2, aparencia: estiloVazio({ fundoCor: fundo, preenchimento: lados(16, 16) }),
+    conteudo: [
+      bloco("Texto", Texto.defaultProps, { texto: titulo, tipografia: tipo(18, "700") }),
+      bloco("Texto", Texto.defaultProps, { texto, tipografia: tipo(14, "400") }),
+    ],
+  });
   return {
     root: { props: {} },
     content: [
       bloco("Seccao", Seccao.defaultProps, {
-        espaco: 14,
+        disposicao: "grelha", colunas: 2, colunasTab: 1, colunasTel: 1, espaco: 48, alinharItens: "centro",
         aparencia: estiloVazio({ fundoCor: "var(--c-primaria)", preenchimento: lados(56, 32), preenchimentoTel: lados(40, 20) }),
         conteudo: [
-          kicker("Formação à medida", "var(--c-acento)"),
-          bloco("Titulo", Titulo.defaultProps, {
-            texto: "A sua organização tem desafios únicos.", nivel: "h1",
-            // Numa linha no computador (pedido do cliente); no telemóvel parte naturalmente.
-            tipografia: tipoVazia({ fonte: "tema-titulos", tamanho: 44, tamanhoTel: 32, peso: "700", alturaLinha: 1.1, cor: "#ffffff" }),
+          bloco("Coluna", Coluna.defaultProps, {
+            espaco: 16,
+            conteudo: [
+              kicker("Formação à medida", "var(--c-acento)"),
+              bloco("Titulo", Titulo.defaultProps, {
+                texto: "A sua organização tem desafios únicos.", nivel: "h1",
+                tipografia: tipoVazia({ fonte: "tema-titulos", tamanho: 44, tamanhoTel: 32, peso: "700", alturaLinha: 1.1, cor: "#ffffff" }),
+              }),
+              bloco("Texto", Texto.defaultProps, {
+                texto: "Desenhamos programas que respondem às necessidades da sua equipa e aos objetivos do seu negócio.",
+                tipografia: tipoVazia({ tamanho: 19, alturaLinha: 1.6, cor: "#D7E0EA" }), aparencia: estiloVazio({ larguraMax: em(560) }),
+              }),
+              bloco("Coluna", Coluna.defaultProps, {
+                disposicao: "linha", espaco: 12, aparencia: estiloVazio({ margem: lados(8, 0, 0, 0) }),
+                conteudo: [
+                  bloco("Botao", Botao.defaultProps, { rotulo: "Pedir proposta", ligacao: "#proposta", cor: "var(--c-acento)", corTexto: "var(--c-primaria)", corHover: "#ffffff" }),
+                  bloco("Botao", Botao.defaultProps, { rotulo: "Ver serviços", ligacao: "#servicos", variante: "contorno", cor: "#ffffff", corTexto: "#ffffff", corHover: "var(--c-acento)", seta: false }),
+                ],
+              }),
+            ],
           }),
-          bloco("Texto", Texto.defaultProps, {
-            texto: "Desenhamos programas que respondem às necessidades da sua equipa e aos objetivos do seu negócio.",
-            tipografia: tipoVazia({ tamanho: 19, alturaLinha: 1.6, cor: "#D7E0EA" }), aparencia: estiloVazio({ larguraMax: em(680) }),
+          bloco("Coluna", Coluna.defaultProps, {
+            espaco: 12,
+            conteudo: [
+              bloco("Imagem", Imagem.defaultProps, {
+                src: "https://images.unsplash.com/photo-1570616969692-54d6ba3d0397?auto=format&fit=crop&w=1200&q=80",
+                alt: "Equipa numa sessão de formação", proporcao: "16/9",
+              }),
+              bloco("Coluna", Coluna.defaultProps, {
+                disposicao: "linha", espaco: 12, alinharItens: "esticar",
+                conteudo: [
+                  destaque("Entidade certificada", "pela DGERT", "var(--c-acento)"),
+                  destaque("Presencial, online ou misto", "no horário da sua equipa", "#ffffff"),
+                ],
+              }),
+            ],
           }),
-          bloco("Botao", Botao.defaultProps, { rotulo: "Falar connosco", ligacao: "#contactos", cor: "var(--c-acento)", corTexto: "var(--c-primaria)", corHover: "#ffffff" }),
         ],
       }),
       bloco("Seccao", Seccao.defaultProps, {
@@ -187,7 +222,7 @@ function modeloEmpresas(): Data {
       }),
       bloco("Seccao", Seccao.defaultProps, {
         espaco: 16,
-        aparencia: estiloVazio({ preenchimento: lados(48, 32), preenchimentoTel: lados(40, 20) }),
+        aparencia: estiloVazio({ fundoCor: "#ffffff", preenchimento: lados(48, 32), preenchimentoTel: lados(40, 20) }),
         conteudo: [
           kicker("Como trabalhamos"),
           bloco("Titulo", Titulo.defaultProps, { texto: "Do diagnóstico ao certificado." }),
@@ -200,6 +235,16 @@ function modeloEmpresas(): Data {
               { numero: "04", titulo: "Acompanhamento", texto: "Avaliação de resultados e apoio depois da formação.", imagem: "" },
             ],
           }),
+        ],
+      }),
+      bloco("Seccao", Seccao.defaultProps, {
+        espaco: 14,
+        aparencia: estiloVazio({ ancora: "proposta", fundoCor: "var(--c-primaria)", preenchimento: lados(56, 32), preenchimentoTel: lados(40, 20) }),
+        conteudo: [
+          kicker("Pedir proposta", "var(--c-acento)"),
+          bloco("Titulo", Titulo.defaultProps, { texto: "Fale connosco sobre a sua equipa.", tipografia: tipoVazia({ fonte: "tema-titulos", tamanho: 36, tamanhoTel: 28, peso: "700", cor: "#ffffff" }) }),
+          bloco("Texto", Texto.defaultProps, { texto: "Conte-nos o que precisa. Respondemos com uma proposta à medida.", tipografia: tipoVazia({ tamanho: 17, alturaLinha: 1.6, cor: "#D7E0EA" }) }),
+          bloco("Botao", Botao.defaultProps, { rotulo: "Contactos", ligacao: "#contactos", cor: "var(--c-acento)", corTexto: "var(--c-primaria)", corHover: "#ffffff" }),
         ],
       }),
     ],

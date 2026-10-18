@@ -134,6 +134,8 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
   const [repor, setRepor] = useState(false);
   const [estado, setEstado] = useState<Estado>("guardado");
   const [publicadoEm, setPublicadoEm] = useState<string | null>(null);
+  /** Página nunca publicada aberta num rascunho: o site mostra o modelo base, não este rascunho. */
+  const [rascunhoSoltoEm, setRascunhoSoltoEm] = useState<string | null>(null);
   const [aPublicar, setAPublicar] = useState(false);
   const [ecra, setEcra] = useState<Disp | null>(null);
   const config = configPara(pagina);
@@ -153,6 +155,7 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
   useEffect(() => {
     if (!dados || inicial) return;
     setPublicadoEm(dados.publicadoEm);
+    setRascunhoSoltoEm(!dados.publicado && dados.rascunho ? dados.atualizadoEm ?? "" : null);
     const d = (dados.rascunho ?? dados.publicado) as Data | null;
     // A página do curso antiga (um só bloco) abre já partida em blocos que se editam um a um.
     const base = completarPadroes(d && Array.isArray(d.content) ? (pagina === "curso" ? converterPaginaCurso(d) : pagina === "inicio" ? converterPaginaInicio(d) : d) : modeloPagina(pagina));
@@ -230,6 +233,18 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
   const onChange = useCallback((d: Data) => aoMudarRef.current(d), []);
   const onPublish = useCallback((d: Data) => void publicarRef.current(d), []);
 
+  /** O rascunho passa a ser o modelo base (o que o site mostra enquanto a página não for publicada). */
+  async function reporModelo() {
+    window.clearTimeout(temporizador.current);
+    const base = completarPadroes(modeloPagina(pagina));
+    pendente.current = base;
+    await gravarRascunho();
+    ultimo.current = JSON.stringify(base);
+    setRascunhoSoltoEm(null);
+    setInicial(base);
+    setVersao(v => v + 1);
+  }
+
   // Grava o que faltar ao sair do ecrã.
   useEffect(() => () => { window.clearTimeout(temporizador.current); void gravarRascunho(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -256,7 +271,18 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
     <OfertaCtx.Provider value={oferta}>
       <MolduraCtx.Provider value={moldura}>
       <AvisoDispositivoCtx.Provider value={setEcra}>
-        <div className="editor-site h-full">
+        <div className="editor-site flex h-full flex-col">
+          {rascunhoSoltoEm != null && (
+            <div role="status" className="flex flex-wrap items-center gap-3 border-b border-[#f0d58a] bg-[#fff8e1] px-4 py-2 text-[13px] text-[#5c4300]">
+              <span>
+                Esta página nunca foi publicada: o site mostra o modelo base. Está a ver um rascunho
+                {rascunhoSoltoEm ? ` guardado a ${new Date(rascunhoSoltoEm).toLocaleString("pt-PT")}` : ""}, que pode ser diferente.
+              </span>
+              <button type="button" onClick={() => void reporModelo()} className="rounded border border-[#d9b75a] bg-white px-2.5 py-1 font-semibold hover:bg-[#fff1c2]">Abrir o que o site mostra</button>
+              <button type="button" onClick={() => setRascunhoSoltoEm(null)} className="font-semibold underline">Continuar no rascunho</button>
+            </div>
+          )}
+          <div className="min-h-0 flex-1">
           <Puck
             key={versao}
             config={config}
@@ -271,6 +297,7 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
             height="100%"
             renderHeaderActions={acoes}
           />
+          </div>
         </div>
         <ConfirmarPerigo
           aberto={repor}
@@ -278,16 +305,7 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
           descricao="O rascunho desta página volta ao modelo base. O site só muda quando publicar."
           acao="Repor"
           onFechar={() => setRepor(false)}
-          onConfirmar={async () => {
-            window.clearTimeout(temporizador.current);
-            const base = modeloPagina(pagina);
-            pendente.current = base;
-            await gravarRascunho();
-            setRepor(false);
-            ultimo.current = JSON.stringify(base);
-            setInicial(base);
-            setVersao(v => v + 1);
-          }}
+          onConfirmar={async () => { await reporModelo(); setRepor(false); }}
         />
       </AvisoDispositivoCtx.Provider>
       </MolduraCtx.Provider>

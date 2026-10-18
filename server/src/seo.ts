@@ -7,7 +7,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { textoDoCorpo } from "../../src/partilhado/blogBlocos.js";
+import { lerDocumento, textoDoCorpo } from "../../src/partilhado/blogBlocos.js";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { listarCatalogoPublico, type CursoPublico } from "./catalogoPublico.js";
@@ -191,15 +191,18 @@ export async function metaDaPagina(db: Db, caminhoBruto: string, host?: string):
     const n = /^[a-z0-9-]{1,160}$/.test(slug) ? await noticiaPublica(db, slug).catch(() => null) : null;
     if (!n || n.status !== "Ativo") return base({ estado: 404, titulo: comNome("Notícia não encontrada"), indexar: false, corpo: "<h1>Notícia não encontrada</h1><p><a href=\"/noticias\">Ver as notícias</a></p>" });
     const texto = limpar(textoDoCorpo(n.corpo));
-    const descricao = cortar(texto, 160);
+    const meta = lerDocumento(n.corpo).meta;
+    // O excerto e a imagem de destaque do artigo (Gestão › Blog), quando existem.
+    const descricao = cortar(limpar(meta?.excerto ?? "") || texto, 160);
+    const imagemArtigo = meta?.capa ? absoluto(origem, meta.capa) : imagemBase;
     return base({
-      titulo: comNome(n.titulo), descricao, tipo: "article",
+      titulo: comNome(n.titulo), descricao, tipo: "article", imagem: imagemArtigo,
       jsonLd: [
         migalhas(origem, [["Início", "/"], ["Notícias", "/noticias"], [n.titulo, `/noticias/${n.slug}`]]),
         {
           "@type": "BlogPosting", headline: cortar(n.titulo, 110), description: descricao, datePublished: n.data || undefined,
           articleSection: n.tematica || undefined, inLanguage: "pt-PT", mainEntityOfPage: `${origem}/noticias/${n.slug}`,
-          author: { "@id": `${origem}/#organizacao` }, publisher: { "@id": `${origem}/#organizacao` }, image: imagemBase,
+          author: { "@id": `${origem}/#organizacao` }, publisher: { "@id": `${origem}/#organizacao` }, image: imagemArtigo,
         },
       ],
       corpo: `<article><h1>${esc(n.titulo)}</h1><p>${esc(cortar(texto, 600))}</p></article>`,

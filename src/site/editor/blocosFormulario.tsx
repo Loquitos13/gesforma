@@ -8,12 +8,14 @@ import { corSegura, estiloBloco, estiloVazio, juntar, lados, type Estilo } from 
 
 type FormularioProps = {
   textoBotao: string; mensagemOk: string; corBotao: string; corTextoBotao: string; servicos: boolean; aparencia: Estilo;
+  /** Serviço já escolhido (na página de um serviço). */
+  servicoInicial?: string;
   puck?: { dragRef?: ((el: Element | null) => void) | null; isEditing?: boolean };
 };
 
 const CONTROLO = "h-11 w-full border border-[#9AA7B6] bg-white px-3 text-base font-normal text-[#1C3350] focus:outline focus:outline-2 focus:outline-[var(--c-destaque)]";
 
-function Formulario(p: FormularioProps) {
+export function Formulario(p: FormularioProps) {
   const servicos = useServicos() ?? [];
   const id = useId();
   const [estado, setEstado] = useState<"" | "a-enviar" | "ok" | "erro">("");
@@ -56,7 +58,7 @@ function Formulario(p: FormularioProps) {
           {p.servicos && servicos.length > 0 && (
             <label className="flex flex-col gap-1.5 text-sm font-bold sm:col-span-2" htmlFor={`${id}-servico`}>
               Serviço
-              <select id={`${id}-servico`} name="servico" className={CONTROLO} defaultValue="">
+              <select id={`${id}-servico`} name="servico" className={CONTROLO} defaultValue={p.servicoInicial ?? ""}>
                 <option value="">Escolha (opcional)</option>
                 {servicos.map(s => <option key={s.slug} value={s.titulo}>{s.titulo}</option>)}
               </select>

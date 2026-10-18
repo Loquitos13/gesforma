@@ -6,10 +6,11 @@ import { slugServico, videoServico, type ServicoSite } from "../../partilhado/si
 import { Icon } from "../SiteLanding";
 import { Carrossel1a1, Cartoes } from "./carrossel";
 import { CursoDaRotaCtx } from "./blocosCursoPagina";
+import { Formulario } from "./blocosFormulario";
 import { campoNumero, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { Titulo, type Base } from "./blocosCurso";
-import { estiloBloco, estiloTexto, estiloVazio, juntar, ligacaoSegura, tipoVazia, type Tipografia } from "./estilos";
+import { estiloBloco, estiloTexto, estiloVazio, juntar, lados, ligacaoSegura, tipoVazia, type Tipografia } from "./estilos";
 
 type Estado = "a-carregar" | "pronto";
 type ServicoAtual = { estado: Estado; servico: ServicoSite | null; servicos: ServicoSite[] };
@@ -212,7 +213,7 @@ export const ServicoCartoes: ComponentConfig<CartoesProps> = {
 
 // ─── Faixa final (pedido de proposta) ───────────────────────────────────────
 
-type ChamadaProps = Base & { etiqueta: string; titulo: string; texto: string };
+type ChamadaProps = Base & { etiqueta: string; titulo: string; texto: string; formulario?: boolean; textoBotao?: string; mensagemOk?: string };
 
 export const ServicoChamada: ComponentConfig<ChamadaProps> = {
   label: "Serviço · Faixa final",
@@ -220,26 +221,41 @@ export const ServicoChamada: ComponentConfig<ChamadaProps> = {
     etiqueta: { type: "text", label: "Etiqueta (vazio = esconder)" },
     titulo: { type: "text", label: "Título (o da faixa final do serviço tem prioridade)" },
     texto: { type: "textarea", label: "Texto (o da faixa final do serviço tem prioridade)" },
+    formulario: simNao("Formulário de pedido de proposta (com este serviço já escolhido)") as never,
+    textoBotao: { type: "text", label: "Formulário: texto do botão" },
+    mensagemOk: { type: "textarea", label: "Formulário: mensagem depois de enviar" },
     aparencia: campoAparencia(),
   },
   defaultProps: {
     etiqueta: "Fale connosco", titulo: "Fale connosco sobre a sua equipa.", texto: "Conte-nos o que precisa. Respondemos com uma proposta à medida.",
+    formulario: true, textoBotao: "Enviar pedido", mensagemOk: "Obrigado! Recebemos o seu pedido e vamos responder com uma proposta.",
     aparencia: estiloVazio({ fundoCor: "var(--c-primaria)" }),
   },
   render: p => (
     <CaixaServico p={p} tem={() => true} vazio="">
       {s => {
         const href = ligacaoSegura(s.ligacao);
+        // Páginas gravadas antes desta opção não a têm: o formulário aparece.
+        const comFormulario = p.formulario !== false;
         return (
-          <div className="px-5 py-14 text-white lg:px-8">
-          <div className="mx-auto flex flex-col items-start gap-4" style={{ maxWidth: "var(--largura)" }}>
-            {p.etiqueta && <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--c-acento)]">{p.etiqueta}</p>}
-            <h2 className="font-serif text-3xl font-bold">{s.ctaTitulo?.trim() || p.titulo}</h2>
-            <p className="max-w-2xl whitespace-pre-line text-lg leading-8 text-white/75">{s.ctaTexto?.trim() || p.texto}</p>
-            {s.rotulo && href && (
-              <a href={href} className="mt-2 inline-flex items-center gap-3 bg-[var(--c-acento)] px-6 py-3 text-sm font-bold text-[var(--c-primaria)] hover:brightness-95">
-                {s.rotulo} <Icon name="arrow" className="h-4 w-4" />
-              </a>
+          // «#proposta»: o botão do topo pode levar aqui.
+          <div id="proposta" className="scroll-mt-24 px-5 py-14 text-white lg:px-8">
+          <div className={juntar("mx-auto grid items-start gap-10", comFormulario && "lg:grid-cols-2")} style={{ maxWidth: "var(--largura)" }}>
+            <div className="flex flex-col items-start gap-4">
+              {p.etiqueta && <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--c-acento)]">{p.etiqueta}</p>}
+              <h2 className="font-serif text-3xl font-bold">{s.ctaTitulo?.trim() || p.titulo}</h2>
+              <p className="max-w-2xl whitespace-pre-line text-lg leading-8 text-white/75">{s.ctaTexto?.trim() || p.texto}</p>
+              {!comFormulario && s.rotulo && href && (
+                <a href={href} className="mt-2 inline-flex items-center gap-3 bg-[var(--c-acento)] px-6 py-3 text-sm font-bold text-[var(--c-primaria)] hover:brightness-95">
+                  {s.rotulo} <Icon name="arrow" className="h-4 w-4" />
+                </a>
+              )}
+            </div>
+            {comFormulario && (
+              <Formulario servicoInicial={s.titulo} servicos textoBotao={p.textoBotao || "Enviar pedido"}
+                mensagemOk={p.mensagemOk || "Obrigado! Recebemos o seu pedido e vamos responder com uma proposta."}
+                corBotao="var(--c-destaque)" corTextoBotao="#ffffff" puck={p.puck as never}
+                aparencia={estiloVazio({ fundoCor: "#ffffff", preenchimento: lados(24) })} />
             )}
           </div>
           </div>

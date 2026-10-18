@@ -11,6 +11,7 @@ import { cartaoPadrao, CursosDestaque, OfertaFormativa } from "./blocosCursos";
 import { Servicos } from "./blocosServicos";
 import { ServicoBanner, ServicoCartoes, ServicoChamada, ServicoDetalhe, ServicoGaleria, ServicoLogos, ServicoVideo } from "./blocosServico";
 import { FormularioProposta } from "./blocosFormulario";
+import { NoticiaCabecalho, NoticiaCorpo, NoticiaCurso, NoticiaImagem, NoticiaOutras } from "./blocosNoticia";
 import { Testemunhos } from "./blocosTestemunhos";
 import { CursoRelevantes } from "./blocosCursoRelevantes";
 import { cabecalhoPadrao, rodapePadrao } from "./blocosMoldura";
@@ -259,6 +260,26 @@ function modeloEmpresas(): Data {
   } as Data;
 }
 
+function modeloNoticia(): Data {
+  n = 0;
+  return {
+    root: { props: { previsualizar: "" } },
+    content: [
+      bloco("Seccao", Seccao.defaultProps, {
+        espaco: 32, aparencia: estiloVazio({ preenchimento: lados(48, 32), preenchimentoTel: lados(36, 20) }),
+        conteudo: [
+          bloco("NoticiaCabecalho", NoticiaCabecalho.defaultProps), bloco("NoticiaImagem", NoticiaImagem.defaultProps),
+          bloco("NoticiaCorpo", NoticiaCorpo.defaultProps), bloco("NoticiaCurso", NoticiaCurso.defaultProps),
+        ],
+      }),
+      bloco("Seccao", Seccao.defaultProps, {
+        aparencia: estiloVazio({ fundoCor: "#ffffff", preenchimento: lados(48, 32), preenchimentoTel: lados(36, 20) }),
+        conteudo: [bloco("NoticiaOutras", NoticiaOutras.defaultProps)],
+      }),
+    ],
+  } as Data;
+}
+
 function modeloServico(): Data {
   n = 0;
   // Uma só secção: os blocos sem conteúdo no serviço (ex.: sem vídeo) não ocupam espaço.
@@ -434,6 +455,7 @@ export function modeloPagina(pagina: PaginaSite): Data {
   if (pagina === "empresas") return modeloEmpresas();
   if (pagina === "curso") return modeloCurso();
   if (pagina === "servico") return modeloServico();
+  if (pagina === "noticia") return modeloNoticia();
   const unico = pagina === "catalogo" ? bloco("Catalogo", Catalogo.defaultProps)
     : bloco("AreaFormando", AreaFormando.defaultProps);
   return { root: { props: {} }, content: [unico] } as Data;

@@ -1,9 +1,9 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { apiBlogImagem } from "../partilhado/api";
 import { ArtigoBlocos } from "../partilhado/ArtigoBlocos";
 import {
-  blocoNovo, gravarDocumento, idBloco, lerDocumento, TIPOS_BLOCO,
-  type BlocoBlog, type DocumentoBlog, type TipoBloco,
+  blocoNovo, gravarDocumento, idBloco, lerDocumento, metaVazia, TIPOS_BLOCO,
+  type BlocoBlog, type DocumentoBlog, type MetaArtigo, type TipoBloco,
 } from "../partilhado/blogBlocos";
 import { useOpcoes } from "../partilhado/dados/useOpcoes";
 import { SearchSelect } from "../partilhado/FormKit";
@@ -53,10 +53,28 @@ export function EditorBlog({
     onCorpoRef.current(gravarDocumento(lido));
   }, [chave]);
 
-  function aplicar(next: DocumentoBlog) {
+  function aplicar(proximo: DocumentoBlog) {
+    // As mudanças nos blocos não tocam nos dados da página do artigo (imagem de destaque, excerto, curso).
+    const next = { ...proximo, meta: proximo.meta ?? docRef.current.meta };
     docRef.current = next;
     setDoc(next);
     onCorpoRef.current(gravarDocumento(next));
+  }
+
+  function mudarMeta(patch: Partial<MetaArtigo>) {
+    aplicar({ ...docRef.current, meta: { ...(docRef.current.meta ?? metaVazia()), ...patch } });
+  }
+
+  async function carregarCapa(file: File) {
+    setAEnviar("capa");
+    setErro("");
+    try {
+      mudarMeta({ capa: (await apiBlogImagem(file)).url });
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Não foi possível carregar a imagem.");
+    } finally {
+      setAEnviar(null);
+    }
   }
 
   function mudar(id: string, patch: Record<string, string>) {
@@ -147,6 +165,8 @@ export function EditorBlog({
           </div>
         </div>
       </div>
+
+      <PaginaDoArtigo meta={doc.meta ?? metaVazia()} aEnviar={aEnviar === "capa"} onMudar={mudarMeta} onFile={file => void carregarCapa(file)} />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-slate-500">Blocos do artigo. A imagem entra no post; o site mostra-a quando o estado é Ativo.</p>
@@ -354,5 +374,42 @@ function CampoImagem({
       {comLegenda && <input className={campo} value={legenda ?? ""} onChange={e => onLegenda?.(e.target.value)} placeholder="Legenda" />}
       <p className="text-[11px] text-slate-400">JPG, PNG, WebP ou GIF, até 8 MB.</p>
     </div>
+  );
+}
+
+/** O que a página do artigo mostra à volta do texto (blocos «Notícia · …» do editor do site). */
+function PaginaDoArtigo({ meta, aEnviar, onMudar, onFile }: {
+  meta: MetaArtigo; aEnviar: boolean; onMudar: (patch: Partial<MetaArtigo>) => void; onFile: (file: File) => void;
+}) {
+  const [cursos, setCursos] = useState<{ id: string; titulo: string }[]>([]);
+  useEffect(() => {
+    fetch("/api/v1/public/catalogo").then(r => r.json()).then((r: { cursos?: { id: string; titulo: string }[] }) => setCursos(r.cursos ?? [])).catch(() => undefined);
+  }, []);
+  return (
+    <details className="rounded-xl border border-slate-200 bg-white" open={Boolean(meta.capa || meta.excerto || meta.curso)}>
+      <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-700">Página do artigo no site: imagem de destaque, excerto e curso relacionado</summary>
+      <div className="grid gap-4 border-t border-slate-100 p-4 lg:grid-cols-2">
+        <div>
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Imagem de destaque</span>
+          <div className="mt-1">
+            <CampoImagem url={meta.capa} alt={meta.capaAlt} legenda={meta.capaLegenda} aEnviar={aEnviar} comLegenda
+              onUrl={capa => onMudar({ capa })} onAlt={capaAlt => onMudar({ capaAlt })} onLegenda={capaLegenda => onMudar({ capaLegenda })} onFile={onFile} />
+          </div>
+        </div>
+        <div className="space-y-4">
+          <label className="block">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Excerto (resumo por baixo do título; também vai para a Google)</span>
+            <textarea className={`${campo} mt-1`} rows={4} maxLength={600} value={meta.excerto} onChange={e => onMudar({ excerto: e.target.value })} placeholder="Uma ou duas frases que resumem o artigo." />
+          </label>
+          <label className="block">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Curso relacionado</span>
+            <select className={`${campo} mt-1`} value={meta.curso} onChange={e => onMudar({ curso: e.target.value })}>
+              <option value="">Nenhum</option>
+              {cursos.map(c => <option key={c.id} value={c.id}>{c.titulo}</option>)}
+            </select>
+          </label>
+        </div>
+      </div>
+    </details>
   );
 }

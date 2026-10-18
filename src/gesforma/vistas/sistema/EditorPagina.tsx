@@ -48,6 +48,7 @@ export const PAGINAS: Record<PaginaSite, { titulo: string; endereco: string; not
   catalogo: { titulo: "Catálogo", endereco: "/formacao", nota: "Lista de cursos com pesquisa e filtros." },
   curso: { titulo: "Página de curso", endereco: "/formacao", nota: "A página de cada curso (a mesma para todos)." },
   noticias: { titulo: "Notícias", endereco: "/noticias", nota: "Os artigos vêm de Gestão › Blog." },
+  noticia: { titulo: "Página de notícia", endereco: "/noticias/…", nota: "A página de cada artigo (a mesma para todos; o texto escreve-se em Gestão › Blog)." },
   empresas: { titulo: "Empresas", endereco: "/empresas", nota: "Formação à medida para organizações." },
   servico: { titulo: "Página de serviço", endereco: "/empresas/…", nota: "A página de cada serviço (a mesma para todos; o conteúdo escreve-se em Gestão › Empresas / Business)." },
   area: { titulo: "Área do formando", endereco: "/area-formando", nota: "Painel do formando (cursos, agenda, certificados) e entrada." },

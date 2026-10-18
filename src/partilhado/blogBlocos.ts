@@ -12,7 +12,23 @@ export type BlocoBlog =
   | { id: string; tipo: "botao"; rotulo: string; destino: string }
   | { id: string; tipo: "separador" };
 
-export type DocumentoBlog = { v: 1; blocos: BlocoBlog[] };
+/** O que a página do artigo mostra à volta do texto: imagem de destaque, excerto e curso relacionado (id do curso no site). */
+export type MetaArtigo = { capa: string; capaAlt: string; capaLegenda: string; excerto: string; curso: string };
+export const metaVazia = (): MetaArtigo => ({ capa: "", capaAlt: "", capaLegenda: "", excerto: "", curso: "" });
+
+export type DocumentoBlog = { v: 1; blocos: BlocoBlog[]; meta?: MetaArtigo };
+
+// Imagens do próprio site ou https (nunca javascript: ou data:).
+const imagemSegura = (v: unknown) => { const u = texto(v, 500).trim(); return /^(\/(?!\/)|https:\/\/)/i.test(u) ? u : ""; };
+
+function metaDe(v: unknown): MetaArtigo | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const m = v as Record<string, unknown>;
+  return {
+    capa: imagemSegura(m.capa), capaAlt: texto(m.capaAlt, 200), capaLegenda: texto(m.capaLegenda, 300),
+    excerto: texto(m.excerto, 600), curso: texto(m.curso, 200).replace(/[^a-z0-9-]/g, ""),
+  };
+}
 
 export const LIMITE_CORPO_BLOG = 80_000;
 
@@ -78,9 +94,9 @@ export function lerDocumento(corpo: string): DocumentoBlog {
   const bruto = corpo.trim();
   if (bruto.startsWith("{")) {
     try {
-      const json = JSON.parse(bruto) as { v?: unknown; blocos?: unknown };
+      const json = JSON.parse(bruto) as { v?: unknown; blocos?: unknown; meta?: unknown };
       if (json && json.v === 1 && Array.isArray(json.blocos)) {
-        return { v: 1, blocos: json.blocos.slice(0, 80).map(blocoDe).filter((b): b is BlocoBlog => Boolean(b)) };
+        return { v: 1, blocos: json.blocos.slice(0, 80).map(blocoDe).filter((b): b is BlocoBlog => Boolean(b)), meta: metaDe(json.meta) };
       }
     } catch {
       /* texto simples gravado antes do editor de blocos */
@@ -98,7 +114,8 @@ export function lerDocumento(corpo: string): DocumentoBlog {
 }
 
 export function gravarDocumento(doc: DocumentoBlog) {
-  return JSON.stringify({ v: 1, blocos: doc.blocos });
+  const meta = doc.meta && Object.values(doc.meta).some(v => v.trim()) ? doc.meta : undefined;
+  return JSON.stringify({ v: 1, blocos: doc.blocos, ...(meta ? { meta } : {}) });
 }
 
 export function textoDoCorpo(corpo: string) {

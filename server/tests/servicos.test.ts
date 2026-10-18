@@ -41,6 +41,8 @@ describe("Modelo da página de serviço no editor", () => {
     const dados = { root: { props: {} }, content: [{ type: "ServicoBanner", props: { id: "b1" } }] };
     expect((await pedido(ctx, "admin", "PUT", "/v1/site/paginas/servico/rascunho", { dados })).statusCode).toBe(200);
     expect((await pedido(ctx, "admin", "PUT", "/v1/site/paginas/servico/publicar", { dados })).statusCode).toBe(200);
+    const noticia = { root: { props: {} }, content: [{ type: "NoticiaCabecalho", props: { id: "n1" } }, { type: "NoticiaCorpo", props: { id: "n2" } }] };
+    expect((await pedido(ctx, "admin", "PUT", "/v1/site/paginas/noticia/publicar", { dados: noticia })).statusCode).toBe(200);
   });
 });
 

@@ -15,6 +15,8 @@ import { CursoBotaoInscricao, CursoEscolhaLocal, CursoImagem, CursoInscricao, Cu
 import { ListaNoticias } from "./blocosNoticias";
 import { campoPrevisualizarServico, RaizServico, ServicoBanner, ServicoCartoes, ServicoChamada, ServicoDetalhe, ServicoGaleria, ServicoLogos, ServicoVideo } from "./blocosServico";
 import { FormularioProposta } from "./blocosFormulario";
+import { campoPrevisualizarNoticia, NoticiaCabecalho, NoticiaCorpo, NoticiaCurso, NoticiaImagem, NoticiaOutras, RaizNoticia } from "./blocosNoticia";
+import { RedesSociais } from "./blocosRedes";
 import { Botao, Coluna, Espaco, Imagem, Logotipos, Pilares, Seccao, Separador, Texto, Titulo } from "./blocosBase";
 import { CursosDestaque, OfertaFormativa } from "./blocosCursos";
 import { Cabecalho, CabecalhoSite, Rodape, RodapeSite, type CabecalhoProps, type RodapeProps } from "./blocosMoldura";
@@ -147,12 +149,13 @@ const componentes = Object.fromEntries(Object.entries({
   CursoBanner, CursoSintese, CursoDados, CursoObjetivos, CursoPrograma, CursoFuncionamento, CursoTurmas, CursoRelevantes, CursoInscricao,
   CursoEscolhaLocal, CursoTexto, CursoImagem, CursoBotaoInscricao,
   ServicoBanner, ServicoDetalhe, ServicoGaleria, ServicoVideo, ServicoLogos, ServicoCartoes, ServicoChamada, FormularioProposta,
+  NoticiaCabecalho, NoticiaCorpo, NoticiaOutras, NoticiaImagem, NoticiaCurso, RedesSociais,
   // Cada bloco do editor tem de estar em BLOCOS_SITE (o servidor recusa publicar blocos que não conhece): falha no build.
 } satisfies Record<BlocoSite, unknown>).map(([k, c]) => [k, responsivo(c as ComponentConfig<any>)])) as Config["components"];
 
 const categoriasBase = {
   estrutura: { title: "Estrutura", components: ["Seccao", "Coluna", "Espaco", "Separador"] },
-  conteudo: { title: "Conteúdo", components: ["Titulo", "Texto", "Botao", "Imagem", "Pilares", "Servicos", "Testemunhos", "Logotipos", "FormularioProposta"] },
+  conteudo: { title: "Conteúdo", components: ["Titulo", "Texto", "Botao", "Imagem", "Pilares", "Servicos", "Testemunhos", "Logotipos", "RedesSociais", "FormularioProposta"] },
   cursos: { title: "Cursos", components: ["CursosDestaque", "OfertaFormativa", "Catalogo"] },
   especiais: { title: "Notícias e área do formando", components: ["ListaNoticias", "AreaFormando"] },
   // Blocos que só fazem sentido na página do curso (lêem o curso da página).
@@ -165,6 +168,7 @@ const categoriasBase = {
   },
   // Blocos que só fazem sentido na página de serviço (lêem o serviço da página).
   paginaServico: { title: "Página de serviço", components: ["ServicoBanner", "ServicoDetalhe", "ServicoCartoes", "ServicoGaleria", "ServicoVideo", "ServicoLogos", "ServicoChamada"], visible: false },
+  paginaNoticia: { title: "Página de notícia", components: ["NoticiaCabecalho", "NoticiaImagem", "NoticiaCorpo", "NoticiaCurso", "NoticiaOutras"], visible: false },
 };
 
 /** A página inicial guarda o tema, o cabeçalho e o rodapé; as outras só o conteúdo do meio. */
@@ -249,5 +253,25 @@ export const configPaginaServico: Config = {
   components: componentes,
 };
 
+/** Página de cada notícia: a raiz escolhe a notícia (no editor, a da pré-visualização) e os blocos «Notícia · …» lêem-na. */
+export const configPaginaNoticia: Config = {
+  root: {
+    fields: { previsualizar: campoPrevisualizarNoticia },
+    defaultProps: { previsualizar: "" },
+    render: ({ children, puck, previsualizar }: { children: ReactNode; puck?: { isEditing?: boolean }; previsualizar?: string }) => (
+      <RaizOutra editar={Boolean(puck?.isEditing)}>
+        <RaizNoticia previsualizar={previsualizar ?? ""} editar={Boolean(puck?.isEditing)}>{children}</RaizNoticia>
+      </RaizOutra>
+    ),
+  } as Config["root"],
+  categories: {
+    paginaNoticia: { ...categoriasBase.paginaNoticia, visible: true },
+    ...Object.fromEntries(Object.entries(categoriasBase).filter(([k]) => k !== "paginaNoticia")),
+    moldura: { title: "Cabeçalho e rodapé (só na página inicial)", components: [], visible: false },
+  },
+  components: componentes,
+};
+
 export const configPara = (pagina: PaginaSite) =>
-  (pagina === "inicio" ? configSite : pagina === "curso" ? configPaginaCurso : pagina === "servico" ? configPaginaServico : configOutraPagina);
+  (pagina === "inicio" ? configSite : pagina === "curso" ? configPaginaCurso : pagina === "servico" ? configPaginaServico
+    : pagina === "noticia" ? configPaginaNoticia : configOutraPagina);

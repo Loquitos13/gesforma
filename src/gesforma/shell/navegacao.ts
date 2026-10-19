@@ -48,7 +48,6 @@ export const MENU: GrupoMenu[] = [
     ] },
     { label: "Dossiê TP", view: "fin-dtp", icon: "pasta" },
     { label: "Inquéritos", view: "fin-inqueritos", icon: "doc" },
-    { label: "Despesas", view: "fin-despesas", icon: "cartao" },
   ] },
   { group: "Gestão", items: [
     { label: "Blog", icon: "blog", children: [{ label: "Posts", view: "blog-posts" }, { label: "Temáticas", view: "blog-tematicas" }] },
@@ -152,7 +151,7 @@ export const TITULOS: Partial<Record<Vista, string>> = {
   "gold-turmas": "Turmas", "gold-formadores": "Formadores", formadores: "Formadores", "formador-ficha": "Ficha do formador",
   "gold-cockpit-turma": "Turma", "gold-dtp": "Dossiê TP", "gold-inqueritos": "Inquéritos",
   "fin-cursos": "Cursos", "fin-curso-ficha": "Ficha do curso", "fin-turmas": "Turmas", "fin-formadores": "Formadores",
-  "fin-presencas": "Sessões da turma", "fin-dtp": "Dossiê TP", "fin-cockpit-turma": "Turma", "fin-inqueritos": "Inquéritos", "fin-despesas": "Despesas",
+  "fin-presencas": "Sessões da turma", "fin-dtp": "Dossiê TP", "fin-cockpit-turma": "Turma", "fin-inqueritos": "Inquéritos",
   "fin-modulos": "Módulos", "fin-conteudos": "Conteúdos", "fin-datas": "Datas", "fin-locais": "Locais", "fin-areas-tematicas": "Áreas Temáticas",
   notificacoes: "Notificações",
   "blog-posts": "Posts", "blog-tematicas": "Temáticas", "listas-opcoes": "Listas de opções",

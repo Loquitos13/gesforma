@@ -15,6 +15,7 @@ import { Botao, ConfirmarPerigo } from "../../../../partilhado/ui";
 import { CertificadoVerModal, ExportTurmaModal, type CertificadoPreview, type ExportTurmaInfo } from "../../../ActionSurfaces";
 import { useProgramaDoCurso } from "../../../cursoPrograma";
 import { DtpPanel } from "../../../DtpView";
+import { DespesasTurma } from "./DespesasTurma";
 import { I, TABS_FORMADOR, estadoBadge, tabDoFormador } from "./base";
 import { CertificadosTurmaTab, DocumentosTurmaTab, SessoesTurmaTab, TurmaTabBar, exportPayload } from "./Separadores";
 import { presencasDaSessao, useCriteriosAvaliacao, useTurmaPedagogia } from "../../../PedagogiaContext";
@@ -148,7 +149,7 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
               </section>
 
               <NextActions accent="fin" actions={proximos.slice(0, 3)} />
-              <TurmaTabBar tab={tab} onChange={setTab} accent="fin" dtpPct={ped.dtp.pct} dossie={staffPodeDossie(user.role)} so={souFormador ? TABS_FORMADOR : undefined} />
+              <TurmaTabBar tab={tab} onChange={setTab} accent="fin" dtpPct={ped.dtp.pct} dossie={staffPodeDossie(user.role)} despesas={!souFormador} so={souFormador ? TABS_FORMADOR : undefined} />
               {!activa && <TurmaInactivaBanner nome={t.nome} onActivate={() => toggle(true)} />}
 
               {tab === "cronograma" && !souFormador && (
@@ -182,6 +183,7 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
                   onUpload={(id, nota) => { setUploadNota(nota ?? null); setUploadCert(id); }} onView={setVerCert} onNota={(id, p) => ped.guardarCertificado(id, p)}
                   curso={t.curso} turma={t.nome} regime="fin" turmaId={t.id} />
               )}
+              {tab === "despesas" && !souFormador && <DespesasTurma turmaId={t.id} />}
               {tab === "overview" && (
                 <FinVisaoGeral turma={t} membros={membros} prontos={prontos} souFormador={souFormador} activa={activa} programa={programa.labels}
                   onFicha={souFormador ? undefined : f => navigate({ view: "fin-formando-ficha", formandoId: f.id })}

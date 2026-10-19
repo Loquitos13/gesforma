@@ -38,7 +38,6 @@ const AreaCalendario = carregavel(() => import("../vistas/formadores/AreaCalenda
 const AreaPerfil = carregavel(() => import("../vistas/formadores/AreaPerfil"));
 const Dossie = carregavel(() => import("../vistas/dtp/Dossie"));
 const Inqueritos = carregavel(() => import("../vistas/inqueritos/Inqueritos"));
-const Despesas = carregavel(() => import("../vistas/despesas/Despesas"));
 const Blog = carregavel(() => import("../vistas/gestao/Blog"));
 const ListasOpcoes = carregavel(() => import("../vistas/gestao/ListasOpcoes"));
 const Utilizadores = carregavel(() => import("../vistas/sistema/Utilizadores"));
@@ -103,7 +102,6 @@ export const ROTAS: Record<Vista, Ecra> = {
   "fin-dtp": Dossie,
   "gold-inqueritos": Inqueritos,
   "fin-inqueritos": Inqueritos,
-  "fin-despesas": Despesas,
   "blog-posts": Blog,
   "blog-tematicas": Blog,
   "empresas-servicos": ServicosEmpresas,

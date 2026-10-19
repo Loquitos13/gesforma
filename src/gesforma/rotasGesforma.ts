@@ -5,12 +5,12 @@ export type Vista =
   | "gold-formandos-turmas" | "gold-formandos-gold" | "gold-formando-ficha" | "fin-formando-ficha" | "formador-ficha"
   | "gold-campanhas" | "gold-cursos" | "gold-datas" | "gold-horarios" | "gold-locais" | "gold-areas-tematicas"
   | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-formadores" | "gold-cockpit-turma" | "gold-curso-ficha" | "gold-dtp" | "gold-inqueritos"
-  | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-formadores" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos" | "fin-despesas"
+  | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-formadores" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
   | "fin-modulos" | "fin-conteudos" | "fin-datas" | "fin-locais" | "fin-areas-tematicas"
   | "formadores" | "blog-posts" | "blog-tematicas" | "empresas-servicos"
   | "emails" | "pagamentos" | "configuracoes" | "utilizadores" | "equipa" | "notificacoes" | "listas-opcoes" | "site";
 
-export type Separador = "overview" | "cronograma" | "sessoes" | "avaliacao" | "documentos" | "dtp" | "certificados";
+export type Separador = "overview" | "cronograma" | "sessoes" | "avaliacao" | "documentos" | "dtp" | "certificados" | "despesas";
 
 export type Destino = {
   view: Vista;
@@ -83,7 +83,6 @@ const CAMINHOS: Record<Vista, string> = {
   "fin-areas-tematicas": "/gesforma/financiada/areas-tematicas",
   "fin-dtp": "/gesforma/financiada/dossie",
   "fin-inqueritos": "/gesforma/financiada/inqueritos",
-  "fin-despesas": "/gesforma/financiada/despesas",
   "blog-posts": "/gesforma/blog/posts",
   "blog-tematicas": "/gesforma/blog/tematicas",
   "empresas-servicos": "/gesforma/empresas",
@@ -105,7 +104,7 @@ const POR_CAMINHO = new Map<string, Vista>(
     .map(([vista, caminho]) => [caminho, vista]),
 );
 
-const SEPARADORES = new Set<Separador>(["overview", "cronograma", "sessoes", "avaliacao", "documentos", "dtp", "certificados"]);
+const SEPARADORES = new Set<Separador>(["overview", "cronograma", "sessoes", "avaliacao", "documentos", "dtp", "certificados", "despesas"]);
 
 function separadorDe(valor: string | null): Separador | undefined {
   return valor && SEPARADORES.has(valor as Separador) ? valor as Separador : undefined;

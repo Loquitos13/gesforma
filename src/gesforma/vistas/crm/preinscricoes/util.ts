@@ -1,7 +1,7 @@
 // Regras de apresentação das pré-inscrições (etapa, próximo passo, documentos, contactos).
 import type { Tom } from "../../../../partilhado/ui";
 import type { Lead } from "../../../../partilhado/api/crm";
-import { fmtDataLisboa, hojeLisboa } from "../../../../partilhado/horaLisboa";
+import { fmtDataCalendario, fmtDataLisboa, hojeLisboa } from "../../../../partilhado/horaLisboa";
 
 /** Etapas do funil comercial, pela ordem do pipeline. São estados do processo, não dados. */
 export const ETAPAS = ["Não contactado", "1º Contacto", "2º Contacto", "Pago", "Pré-inscrição", "Formando", "Desistiu"] as const;
@@ -64,7 +64,7 @@ export function seguimento(l: Pick<Lead, "proximoContacto" | "estado">, hoje: st
   const p = l.proximoContacto;
   if (!p || ["Formando", "Desistiu"].includes(l.estado)) return { texto: "", atrasado: false };
   const dia = p.slice(0, 10);
-  const data = dia.split("-").reverse().join("/");
+  const data = fmtDataCalendario(dia);
   if (dia < hoje) return { texto: `Atrasado · ${data}`, atrasado: true };
   if (dia === hoje) return { texto: `Hoje${p.length > 10 ? ` · ${p.slice(11, 16)}` : ""}`, atrasado: false };
   return { texto: data, atrasado: false };

@@ -5,7 +5,8 @@ import {
 } from "../partilhado/api";
 import { LeituraConsentimento } from "./LeituraConsentimento";
 import { PassoPagamento } from "./PassoPagamento";
-import { CampoFicheiro, CartaoTurma, fmtData, textoTurmas } from "./PercursoPartes";
+import { CampoFicheiro, CartaoTurma, textoTurmas } from "./PercursoPartes";
+import { fmtDataCalendario as fmtData } from "../partilhado/horaLisboa";
 
 type TipoDoc = { id: string; label: string; required?: boolean; modelo?: string };
 type Ficheiro = { id: number; tipo: string; nome: string; estado?: string; observacao?: string };

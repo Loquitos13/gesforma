@@ -1,12 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { ApiError, apiPublicOferta, apiPublicPreinscricao } from "../partilhado/api";
 import { SearchSelect } from "../partilhado/FormKit";
-import { fmtDataPt, ofertaFiltrada, uniqueVals, vagasPublicas, type OfertaTurma } from "../partilhado/oferta";
+import { ofertaFiltrada, uniqueVals, vagasPublicas, type OfertaTurma } from "../partilhado/oferta";
 import type { Course } from "./SiteLanding";
 import { ePreinscricao, ePrepago } from "../partilhado/siteConteudo";
 import { textoListaVazia, useOpcoesPublicas } from "./useOpcoesPublicas";
 import { ConsentimentoRgpd } from "./ConsentimentoRgpd";
-import { hojeLisboa } from "../partilhado/horaLisboa";
+import { fmtDataCalendario as fmtDataPt, hojeLisboa } from "../partilhado/horaLisboa";
 import { eur } from "../partilhado/ui/formatos";
 
 type Passo = "turma" | "dados" | "pagamento" | "feito";

@@ -1,5 +1,6 @@
-import { type GrelhaLinha, cellLabelPrint, cellTone, charsDaCelula, formatDataOficial, formatHoraFaixa, grupoLinha, larguraDiasEmChars, monthSpans, weekdayCode } from "./cronogramaGrelha";
+import { type GrelhaLinha, cellLabelPrint, cellTone, charsDaCelula, formatHoraFaixa, grupoLinha, larguraDiasEmChars, monthSpans, weekdayCode } from "./cronogramaGrelha";
 import type { LocalMapeado } from "./cronogramaLocal";
+import { fmtDataCalendario } from "./horaLisboa";
 import { urlLogoEntidade } from "./logoEntidade";
 import { codigoModulo, type SessaoCronograma } from "./turmaModel";
 
@@ -295,12 +296,12 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
         <td colspan="2">Código interno: <b>${esc(input.codigo || "-")}</b></td>
       </tr>
       <tr>
-        <td>Data limite para realizar a matrícula : <b>${esc(input.matricula ? formatDataOficial(input.matricula) : "-")}</b></td>
-        <td>Data de início: <b>${esc(input.inicio ? formatDataOficial(input.inicio) : "-")}</b></td>
+        <td>Data limite para realizar a matrícula : <b>${esc(input.matricula ? fmtDataCalendario(input.matricula) : "-")}</b></td>
+        <td>Data de início: <b>${esc(input.inicio ? fmtDataCalendario(input.inicio) : "-")}</b></td>
       </tr>
       <tr>
         <td>Local de Realização: <b>${esc(localLinha)}</b>${moradaExtra ? ` &nbsp; ${esc(moradaExtra)}` : ""}</td>
-        <td>Data de fim: <b>${esc(input.fim ? formatDataOficial(input.fim) : "-")}</b></td>
+        <td>Data de fim: <b>${esc(input.fim ? fmtDataCalendario(input.fim) : "-")}</b></td>
       </tr>
     </table>
     ${grid}

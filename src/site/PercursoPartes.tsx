@@ -1,13 +1,9 @@
 import { useState } from "react";
 import type { TurmaPercurso } from "../partilhado/api";
 import { CronogramaModal } from "./CronogramaFolha";
+import { fmtDataCalendario as fmtData } from "../partilhado/horaLisboa";
 
 /** Peças do percurso da ligação pessoal (cartão de turma, campo de ficheiro, textos). */
-
-export function fmtData(iso: string) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
-}
 
 function textoVagas(n: number) {
   if (n <= 0) return "Sem vagas restantes";

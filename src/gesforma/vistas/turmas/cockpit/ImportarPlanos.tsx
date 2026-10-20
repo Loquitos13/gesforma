@@ -1,6 +1,7 @@
 // Botão do separador Sessões: copia para a turma os planos de sessão da ficha do curso, ou planos e sumários de outra turma (turma padrão).
 import { useEffect, useState } from "react";
 import { apiImportarPlanosCurso, apiOrigensPlanos } from "../../../../partilhado/api/pedagogia";
+import { fmtDataCalendario } from "../../../../partilhado/horaLisboa";
 import { toastError, toastOk } from "../../../../partilhado/toastBus";
 import { Botao, Caixa, Campo, Modal, Selecao } from "../../../../partilhado/ui";
 
@@ -49,7 +50,7 @@ export function ImportarPlanosCurso({ regime, turmaId, onImportados }: { regime:
           <Campo rotulo="De onde">
             {p => (
               <Selecao {...p} value={origem} onChange={e => setOrigem(e.target.value)} vazio="Ficha do curso (só planos)"
-                opcoes={turmas.map(t => ({ valor: String(t.id), rotulo: `${/^turma\b/i.test(t.nome) ? "" : "Turma "}${t.nome}${t.dataInicio ? ` · ${t.dataInicio.split("-").reverse().join("/")}` : ""} (planos e sumários)` }))} />
+                opcoes={turmas.map(t => ({ valor: String(t.id), rotulo: `${/^turma\b/i.test(t.nome) ? "" : "Turma "}${t.nome}${t.dataInicio ? ` · ${fmtDataCalendario(t.dataInicio)}` : ""} (planos e sumários)` }))} />
             )}
           </Campo>
           {origem

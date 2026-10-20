@@ -209,12 +209,6 @@ export function cellLabelPrint(sessoes: SessaoCronograma[], date: string, l: Gre
   return label;
 }
 
-export function formatDataOficial(iso: string) {
-  const [y, m, d] = (iso || "").split("-");
-  if (!y || !m || !d) return "-";
-  return `${d}/${m}/${y}`;
-}
-
 export function matchLinha(s: SessaoCronograma, l: GrelhaLinha) {
   const m = sessaoModalidade(s);
   if (m === "matricula") return false;

@@ -109,9 +109,9 @@ describe("ficha do formando", () => {
     expect(mov).toEqual([expect.objectContaining({ estado: "Pago" })]);
     expect((await ctx.db.query<{ pago: boolean }>("SELECT pago FROM formandos_gold WHERE id = $1", [jaPago])).rows[0]!.pago).toBe(true);
 
-    // O comercial não marca uma ficha como paga pelo PATCH.
+    // O comercial não marca uma ficha como paga pelo PATCH (nem chega às fichas dos formandos).
     const porPagar = await criarGold(ctx, { nome: "Carla", apelido: "Porpagar", email: "carla.pp@exemplo.pt", valor: 70 });
-    expect((await pedido(ctx, "comercial", "PATCH", `/v1/formandos-gold/${porPagar}`, { pago: true, valor: 0 })).statusCode).toBe(200);
+    expect((await pedido(ctx, "comercial", "PATCH", `/v1/formandos-gold/${porPagar}`, { pago: true, valor: 0 })).statusCode).toBe(403);
     const pp = (await ctx.db.query<{ pago: boolean; valor: string }>("SELECT pago, valor FROM formandos_gold WHERE id = $1", [porPagar])).rows[0]!;
     expect(pp.pago).toBe(false);
     expect(Number(pp.valor)).toBe(70);

@@ -11,17 +11,19 @@ describe("cursos, catálogos, listas e blog", () => {
     });
     expect(criado.statusCode).toBe(200);
     const id = (criado.json() as { curso: Curso }).curso.id;
-    const lista = await pedido(ctx, "comercial", "GET", "/v1/cursos/gold?q=Teste%20Cat%C3%A1logo");
+    // O comercial só vende: não abre a gestão dos cursos.
+    expect((await pedido(ctx, "comercial", "GET", "/v1/cursos/gold?q=Teste%20Cat%C3%A1logo")).statusCode).toBe(403);
+    const lista = await pedido(ctx, "secretaria", "GET", "/v1/cursos/gold?q=Teste%20Cat%C3%A1logo");
     expect(lista.statusCode).toBe(200);
     const corpo = lista.json() as { cursos: Curso[]; resumo: { total: number } };
     expect(corpo.cursos.map(c => c.id)).toContain(id);
     expect(corpo.cursos.find(c => c.id === id)?.uso.turmasAbertas).toBe(0);
     expect(corpo.resumo.total).toBeGreaterThan(0);
-    const ficha = await pedido(ctx, "comercial", "GET", `/v1/cursos/gold/${id}`);
+    const ficha = await pedido(ctx, "secretaria", "GET", `/v1/cursos/gold/${id}`);
     expect(ficha.statusCode).toBe(200);
     expect(Array.isArray((ficha.json() as { turmas: unknown[] }).turmas)).toBe(true);
-    expect((await pedido(ctx, "comercial", "GET", "/v1/cursos/gold/abc")).statusCode).toBe(400);
-    expect((await pedido(ctx, "comercial", "GET", "/v1/cursos/gold/999999")).statusCode).toBe(404);
+    expect((await pedido(ctx, "secretaria", "GET", "/v1/cursos/gold/abc")).statusCode).toBe(400);
+    expect((await pedido(ctx, "secretaria", "GET", "/v1/cursos/gold/999999")).statusCode).toBe(404);
   });
 
   it("renomear uma área propaga aos cursos; apagar com uso é recusado", async () => {

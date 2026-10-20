@@ -317,8 +317,10 @@ describe("#17 exportação do dossiê", () => {
         ('exp-3', 'g-exp-3', 'c.pdf', 'documento', 'gold', $1, 'google')`,
       [nome],
     );
+    // O comercial só vende: não exporta dossiês (permissoes/comercial.ts).
+    expect((await pedido(ctx, "comercial", "GET", `/v1/dtp/gold/${id}/export?destino=drive`)).statusCode).toBe(403);
     const chamadas = driveFalsa();
-    const r = await pedido(ctx, "comercial", "GET", `/v1/dtp/gold/${id}/export?destino=drive`);
+    const r = await pedido(ctx, "secretaria", "GET", `/v1/dtp/gold/${id}/export?destino=drive`);
     expect(r.statusCode, r.body).toBe(200);
     const corpo = r.json<{ drive: { url: string; nome: string; ficheiros: number } }>();
     expect(corpo.drive.url).toMatch(/^https:\/\/drive\.google\.com\/file\/d\/up-\d+\/view$/);
@@ -327,9 +329,9 @@ describe("#17 exportação do dossiê", () => {
     expect(descargas).toHaveLength(3);
     const zipUp = chamadas.filter(c => c.url.includes("/upload/drive/v3/files") && c.metodo === "POST");
     expect(zipUp.length).toBeGreaterThanOrEqual(1);
-    // Quem exporta sem ser da secretaria recebe o ZIP para leitura.
-    const comercial = await emailDe(ctx, "comercial");
-    expect(chamadas.some(c => c.metodo === "POST" && c.url.includes("/permissions?") && c.corpo.includes(comercial) && c.corpo.includes("\"reader\""))).toBe(true);
+    // A secretaria já edita a pasta da turma: não recebe uma partilha de leitura do ZIP.
+    const secretaria = await emailDe(ctx, "secretaria");
+    expect(chamadas.some(c => c.metodo === "POST" && c.url.includes("/permissions?") && c.corpo.includes(secretaria) && c.corpo.includes("\"reader\""))).toBe(false);
 
     const z = await pedido(ctx, "secretaria", "GET", `/v1/dtp/gold/${id}/export?destino=zip`);
     expect(z.statusCode).toBe(200);

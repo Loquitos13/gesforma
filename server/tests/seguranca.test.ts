@@ -110,7 +110,8 @@ describe("catálogos e cursos separados por regime", () => {
     expect(podeAceder("formador", "GET", "/v1/catalogos/inscricoes_fin")).toBe(false);
     expect(podeAceder("financiada", "PUT", "/v1/cursos/gold/1/ficha")).toBe(false);
     expect(podeAceder("financiada", "POST", "/v1/cursos/gold/1/imagem/capa")).toBe(false);
-    expect(podeAceder("comercial", "PUT", "/v1/cursos/gold/1/ficha")).toBe(true);
+    expect(podeAceder("comercial", "PUT", "/v1/cursos/gold/1/ficha")).toBe(false);
+    expect(podeAceder("secretaria", "PUT", "/v1/cursos/gold/1/ficha")).toBe(true);
     expect(podeAceder("comercial", "DELETE", "/v1/cursos/fin/1/documentos/abc")).toBe(false);
     expect(podeAceder("comercial", "GET", "/v1/cursos/fin/1/documentos")).toBe(false);
     expect(podeAceder("financiada", "DELETE", "/v1/cursos/fin/1/documentos/abc")).toBe(true);
@@ -132,7 +133,9 @@ describe("catálogos e cursos separados por regime", () => {
     expect((await pedido(ctx, "financiada", "GET", "/v1/catalogos/datas?regime=gold")).statusCode).toBe(403);
     const todos = await pedido(ctx, "financiada", "GET", "/v1/catalogos/datas");
     expect(todos.json<{ itens: { regime: string }[] }>().itens.every(i => i.regime === "fin")).toBe(true);
-    expect((await pedido(ctx, "comercial", "PATCH", `/v1/catalog/datas/${id}`, { payload: { data: "2030-03-03" } })).statusCode).toBe(200);
+    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/catalog/datas/${id}`, { payload: { data: "2030-03-03" } })).statusCode).toBe(200);
+    // O comercial só vende: as datas são da gestão dos cursos.
+    expect((await pedido(ctx, "comercial", "PATCH", `/v1/catalog/datas/${id}`, { payload: { data: "2030-04-04" } })).statusCode).toBe(403);
   });
 });
 
@@ -178,14 +181,15 @@ describe("Gold e Financiada nunca se misturam", () => {
       const r = await pedido(ctx, perfil, "GET", `/v1/search?q=${marca}`);
       return r.json<{ groups: { items: { view: string }[] }[] }>().groups.flatMap(g => g.items.map(i => i.view)).sort();
     };
-    expect(await vistas("comercial")).toEqual(["gold-cockpit-turma"]);
+    // O comercial só encontra pré-inscrições (não abre turmas).
+    expect(await vistas("comercial")).toEqual([]);
     expect(await vistas("financiada")).toEqual(["fin-cockpit-turma"]);
     expect(await vistas("secretaria")).toEqual(["fin-cockpit-turma", "gold-cockpit-turma"]);
   });
 });
 
-describe("formadores: o comercial só mexe na disponibilidade", () => {
-  it("grava só a disponibilidade de formadores da Gold e não vê NIF nem custo por hora", async () => {
+describe("formadores: o comercial já não lhes mexe", () => {
+  it("o comercial só vende: não altera a disponibilidade nem nada dos formadores", async () => {
     const ctx = await arrancar();
     const criar = async (regimes: string[]) => {
       const r = await pedido(ctx, "secretaria", "POST", "/v1/formadores", { nome: `Disp ${Date.now()} ${regimes}`, regimes, nif: "123456789", custoHora: 30 });
@@ -195,8 +199,8 @@ describe("formadores: o comercial só mexe na disponibilidade", () => {
     const gold = await criar(["gold"]);
     const fin = await criar(["fin"]);
     const r = await pedido(ctx, "comercial", "PATCH", `/v1/formadores/${gold}`, { disponibilidade: ["laboral"] });
-    expect(r.statusCode, r.body).toBe(200);
-    expect(r.json().formador).toMatchObject({ disponibilidade: ["laboral"], nif: "", custoHora: 0 });
+    expect(r.statusCode, r.body).toBe(403);
+    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/formadores/${gold}`, { disponibilidade: ["laboral"] })).statusCode).toBe(200);
     expect((await pedido(ctx, "comercial", "PATCH", `/v1/formadores/${gold}`, { nome: "Outro nome" })).statusCode).toBe(403);
     expect((await pedido(ctx, "comercial", "PATCH", `/v1/formadores/${gold}`, { disponibilidade: ["laboral"], custoHora: 1 })).statusCode).toBe(403);
     expect((await pedido(ctx, "comercial", "PATCH", `/v1/formadores/${fin}`, { disponibilidade: ["laboral"] })).statusCode).toBe(403);

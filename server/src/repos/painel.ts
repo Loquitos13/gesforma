@@ -100,7 +100,31 @@ async function serieFin(db: Db, f: FiltroPainel): Promise<MesSerie[]> {
   });
 }
 
-export async function montarPainel(db: Db, f: FiltroPainel, eixo: Eixo) {
+/** Indicadores e filas Gold que o comercial vê (vendas): fora ficam turmas, pagamentos e o trabalho da secretaria. */
+const KPIS_VENDAS = new Set(["pre", "contactar", "formandos", "conversao", "receita"]);
+const TAREFAS_VENDAS = new Set(["contactar", "documentos", "secretaria"]);
+
+/**
+ * Painel do regime. Com `soVendas` (o comercial) o Gold fica só com o que é de vendas: pré-inscrições, contacto,
+ * conversão, receita, funil, origens, desagregação e as próximas turmas com vagas; sem turmas a decorrer,
+ * métodos de pagamento nem filas da secretaria.
+ */
+export async function montarPainel(db: Db, f: FiltroPainel, eixo: Eixo, opts: { soVendas?: boolean } = {}) {
+  const p = await painelCompleto(db, f, eixo);
+  if (opts.soVendas && f.regime === "gold") {
+    return {
+      ...p,
+      kpis: p.kpis.filter(k => KPIS_VENDAS.has(k.id)),
+      aTratar: p.aTratar.filter(t => TAREFAS_VENDAS.has(t.id)),
+      metodos: null,
+      porReceber: null,
+      ticketMedio: undefined,
+    };
+  }
+  return p;
+}
+
+async function painelCompleto(db: Db, f: FiltroPainel, eixo: Eixo) {
   const fin = f.regime === "fin";
   const [leads, contactar, turmas, serie, funis, origens, proximas, desag] = await Promise.all([
     contarLeads(db, f), porContactar(db, f), turmasADecorrer(db, f),

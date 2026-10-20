@@ -249,12 +249,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const d = v.body;
     const antes = await repo.obterFormador(db, id);
     if (!antes) return reply.code(404).send({ error: "formador não encontrado" });
-    // O formador (a sua ficha) e o comercial (formadores da Gold) só mexem na disponibilidade.
+    // O formador (a sua ficha) só mexe na disponibilidade. O comercial não chega aqui (permissoes/comercial.ts).
     const role = req.actor!.role;
-    if (role === "formador" || role === "comercial") {
-      if (role === "formador" && String(antes.user_id ?? "") !== req.actor!.id) return reply.code(403).send({ error: "O formador só altera a própria disponibilidade." });
-      if (role === "comercial" && !repo.mapFormadorBase(antes).regimes.includes("gold")) return reply.code(403).send({ error: "Sem acesso a este formador." });
-      if (role === "comercial" && Object.keys(d).some(k => k !== "disponibilidade")) return reply.code(403).send({ error: "O comercial só altera a disponibilidade." });
+    if (role === "formador") {
+      if (String(antes.user_id ?? "") !== req.actor!.id) return reply.code(403).send({ error: "O formador só altera a própria disponibilidade." });
       if (!d.disponibilidade) return reply.code(400).send({ error: "Indique a disponibilidade." });
       await repo.atualizarFormador(db, id, { disponibilidade: d.disponibilidade });
       await audit(db, req.actor!.id, "formador.disponibilidade", "formador", String(id), req.ip);

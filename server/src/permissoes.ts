@@ -6,6 +6,8 @@
  * As regras vivem por domínio em `permissoes/<dominio>.ts`; aqui só se juntam,
  * por ordem. A primeira linha que corresponde ganha.
  *
+ * O comercial só chega ao que está em `permissoes/comercial.ts` (vendas); a matriz aplica-se por cima.
+ *
  * Regras por omissão, quando nenhuma linha corresponde:
  * - formador: só leitura, e nunca nas áreas de `FORMADOR_SEM_LEITURA`;
  * - restantes perfis da equipa: leitura e escrita.
@@ -34,6 +36,7 @@ import { regras as auditoria } from "./permissoes/auditoria.js";
 import { regras as site } from "./permissoes/site.js";
 import { regras as configuracoes } from "./permissoes/configuracoes.js";
 import { regras as assinaturas } from "./permissoes/assinaturas.js";
+import { COMERCIAL_PERMITIDO } from "./permissoes/comercial.js";
 
 export type { Perfil } from "./permissoes/perfis.js";
 
@@ -98,12 +101,22 @@ function corresponde(path: string, padrao: string): boolean {
   return true;
 }
 
+function metodoCorresponde(rm: string, m: string) {
+  return rm === "*" || rm === m || (rm === "GET" && m === "HEAD");
+}
+
 export function perfisDaRegra(method: string, path: string): Perfil[] | null {
   const m = method.toUpperCase();
   for (const [rm, padrao, perfis] of REGRAS) {
-    if ((rm === "*" || rm === m || (rm === "GET" && m === "HEAD")) && corresponde(path, padrao)) return perfis;
+    if (metodoCorresponde(rm, m) && corresponde(path, padrao)) return perfis;
   }
   return null;
+}
+
+/** O comercial só vende: fora da lista de `permissoes/comercial.ts` não entra. */
+function comercialPermitido(method: string, path: string) {
+  const m = method.toUpperCase();
+  return COMERCIAL_PERMITIDO.some(([rm, padrao]) => metodoCorresponde(rm, m) && corresponde(path, padrao));
 }
 
 /** Regime que o caminho indica: um segmento `gold`/`fin` ou terminado em `-gold`/`-fin` (`/v1/turmas-fin/3`). */
@@ -122,6 +135,7 @@ export function podeAceder(role: string, method: string, rawPath: string): boole
   // O formador fica de fora desta regra: trabalha nos dois e os handlers limitam-no às suas turmas.
   const regime = regimeDoCaminho(path);
   if (regime && role !== "formador" && !(regime === "gold" ? GOLD : FIN).includes(role as Perfil)) return false;
+  if (role === "comercial" && !comercialPermitido(method, path)) return false;
   const perfis = perfisDaRegra(method, path);
   if (perfis) return perfis.includes(role as Perfil);
   const leitura = method.toUpperCase() === "GET" || method.toUpperCase() === "HEAD";

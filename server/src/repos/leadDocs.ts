@@ -27,6 +27,12 @@ export async function docsDoLead(c: Consulta, leadId: number) {
     [leadId]);
 }
 
+/** Pré-inscrição a que pertence um ficheiro da Drive (documento da ligação pessoal ou comprovativo). */
+export async function leadDoFicheiro(c: Consulta, driveFileId: string): Promise<number | null> {
+  const r = await one<{ id: number }>(c, "SELECT preinscricao_id AS id FROM preinscricao_docs WHERE drive_file_id = $1 LIMIT 1", [driveFileId]);
+  return r ? Number(r.id) : null;
+}
+
 export async function tipoDoDoc(c: Consulta, docId: number) {
   return (await one<{ tipo: string }>(c, "SELECT tipo FROM preinscricao_docs WHERE id = $1", [docId]))?.tipo ?? null;
 }

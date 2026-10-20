@@ -17,6 +17,7 @@ import { idParam, textoQuery, validar } from "../validacao.js";
 import { registarDocumentosCrm } from "./crmDocumentos.js";
 import { registarFaturacao } from "./faturacao.js";
 import { turmasDoFormador } from "../sessaoAcesso.js";
+import { comercialAbre } from "../../../src/partilhado/vistasComercial.js";
 import * as leads from "../repos/leads.js";
 import type { Deps } from "./tipos.js";
 
@@ -130,8 +131,15 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const q = v.query.q ?? "";
     if (!q) return { q: "", kind: "nome", kindLabel: "nome", groups: [], total: 0 };
     const res = await globalSearch(db, q, 8, req.actor!);
-    // Quem só trabalha num regime não encontra formandos, cursos, turmas nem leads do outro.
     const role = req.actor!.role;
+    // O comercial só vende: encontra pré-inscrições, nunca formandos, formadores, cursos ou turmas.
+    if (role === "comercial") {
+      const groups = res.groups
+        .map(g => ({ ...g, items: g.items.filter(h => comercialAbre(h.view)) }))
+        .filter(g => g.items.length);
+      return { ...res, groups, total: groups.reduce((n, g) => n + g.items.length, 0) };
+    }
+    // Quem só trabalha num regime não encontra formandos, cursos, turmas nem leads do outro.
     const outro = !pode(role, "fin.ver") ? "fin-" : !pode(role, "gold.ver") ? "gold-" : null;
     if (outro && role !== "formador") {
       const groups = res.groups

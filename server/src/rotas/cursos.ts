@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
+import { areaCnaefValida } from "../../../src/partilhado/execucaoFisica.js";
 import { storeDriveFile } from "../driveFicheiros.js";
 import { bloqueioCursoFin, bloqueioCursoGold, propagarCursoNoRegime } from "../ligacoes.js";
 import { dtpEstrutura, DTP_FASES } from "../dtpModel.js";
@@ -32,6 +33,8 @@ const cursoFinSchema = z.object({
   regime: z.string().trim().min(1).max(40),
   horas: z.number().int().min(1).max(5000),
   estado: z.string().trim().max(40).optional().default("Ativo"),
+  /** Área de formação CNAEF (lista do template de execução física); vazia enquanto não se sabe. */
+  areaCnaef: z.union([z.literal(""), z.string().refine(areaCnaefValida, "Área CNAEF fora da lista.")]).optional().default(""),
 });
 
 const listaQuery = z.object({

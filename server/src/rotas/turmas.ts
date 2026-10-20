@@ -79,6 +79,8 @@ const turmaFinSchema = z.object({
   formadores: z.array(z.string().max(120)).max(12).optional().default([]),
   activa: z.boolean().optional().default(true),
   financiador: z.string().trim().max(120).optional(),
+  /** Número da ação (execução física: «UFCD … / Ação n»). */
+  numeroAcao: z.number().int().min(1).max(9999).optional(),
   valoresHoraFormador: valoresHora.optional(),
   cronograma: z.array(z.unknown()).max(2000).optional(),
 });
@@ -327,6 +329,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     });
     await repo.ligarCurso(db, "fin", id);
     if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "fin", id, d.vagasAnunciadas);
+    if (d.numeroAcao !== undefined) await repo.gravarNumeroAcao(db, id, d.numeroAcao);
     await importarPlanosCurso(db, "fin", id).catch(() => undefined);
     await audit(db, req.actor!.id, "turma.criar", "turma_fin", String(id), req.ip, { nome: d.nome });
     const row = await repo.obterTurma(db, "fin", id);
@@ -379,6 +382,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       if (d.cronograma) await renumerarSessoes(q, "fin", id);
     });
     if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "fin", id, d.vagasAnunciadas);
+    if (d.numeroAcao !== undefined) await repo.gravarNumeroAcao(db, id, d.numeroAcao);
     if (d.nome && d.nome !== String(antes.nome ?? "")) await propagarNomeTurma(db, "fin", id, String(antes.nome ?? ""), d.nome);
     if (d.curso && d.curso !== String(antes.curso ?? "")) {
       await propagarCursoDaTurma(db, "fin", id, String(d.nome ?? antes.nome ?? ""), String(antes.curso ?? ""), d.curso);

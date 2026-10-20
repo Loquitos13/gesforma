@@ -30,6 +30,7 @@ const ACCOES: Record<string, string> = {
   "formando.lembrete_docs": "Lembrete de documentos enviado",
   "formando.pagamento_pedido": "Pagamento pedido por email",
   "formando.pagamento_registado": "Pagamento registado",
+  "formando.financiamento": "Dados para o financiamento alterados",
 };
 
 function situacaoPagamento(metodo: string, pago: boolean, valor: number) {

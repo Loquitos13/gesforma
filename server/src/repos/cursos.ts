@@ -12,7 +12,7 @@ export function textoArray(valores: string[]) {
 }
 
 export type CursoGold = { id: number; nome: string; categoria: string; tipo: string; preco: number; regime: string; horas: number; estado: string; entidadeResponsavelId: number | null };
-export type CursoFin = { id: number; ufcdCod: string; ufcd: string; nomeComercial: string; regime: string; horas: number; estado: string };
+export type CursoFin = { id: number; ufcdCod: string; ufcd: string; nomeComercial: string; regime: string; horas: number; estado: string; areaCnaef: string };
 
 export function mapCursoGold(r: Record<string, unknown>): CursoGold {
   return {
@@ -25,7 +25,7 @@ export function mapCursoGold(r: Record<string, unknown>): CursoGold {
 export function mapCursoFin(r: Record<string, unknown>): CursoFin {
   return {
     id: num(r.id), ufcdCod: String(r.ufcd_cod ?? ""), ufcd: String(r.ufcd ?? ""), nomeComercial: String(r.nome_comercial ?? ""),
-    regime: String(r.regime ?? ""), horas: num(r.horas), estado: String(r.estado ?? "Ativo"),
+    regime: String(r.regime ?? ""), horas: num(r.horas), estado: String(r.estado ?? "Ativo"), areaCnaef: String(r.area_cnaef ?? ""),
   };
 }
 
@@ -131,14 +131,14 @@ export async function actualizarCursoGold(c: Consulta, id: number, d: Partial<Om
 }
 
 export async function criarCursoFin(c: Consulta, id: number, d: Omit<CursoFin, "id">) {
-  await exec(c, "INSERT INTO cursos_fin (id, ufcd_cod, ufcd, nome_comercial, regime, horas, estado) VALUES ($1,$2,$3,$4,$5,$6,$7)",
-    [id, d.ufcdCod, d.ufcd, d.nomeComercial, d.regime, d.horas, d.estado]);
+  await exec(c, "INSERT INTO cursos_fin (id, ufcd_cod, ufcd, nome_comercial, regime, horas, estado, area_cnaef) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+    [id, d.ufcdCod, d.ufcd, d.nomeComercial, d.regime, d.horas, d.estado, d.areaCnaef]);
 }
 
 export async function actualizarCursoFin(c: Consulta, id: number, d: Partial<Omit<CursoFin, "id">>) {
   await exec(c, `UPDATE cursos_fin SET ufcd_cod = COALESCE($2, ufcd_cod), ufcd = COALESCE($3, ufcd), nome_comercial = COALESCE($4, nome_comercial),
-      regime = COALESCE($5, regime), horas = COALESCE($6, horas), estado = COALESCE($7, estado) WHERE id = $1`,
-  [id, d.ufcdCod ?? null, d.ufcd ?? null, d.nomeComercial ?? null, d.regime ?? null, d.horas ?? null, d.estado ?? null]);
+      regime = COALESCE($5, regime), horas = COALESCE($6, horas), estado = COALESCE($7, estado), area_cnaef = COALESCE($8, area_cnaef) WHERE id = $1`,
+  [id, d.ufcdCod ?? null, d.ufcd ?? null, d.nomeComercial ?? null, d.regime ?? null, d.horas ?? null, d.estado ?? null, d.areaCnaef ?? null]);
 }
 
 /**

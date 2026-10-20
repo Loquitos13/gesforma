@@ -366,6 +366,10 @@ export async function apagarRegra(c: Consulta, id: number) {
 }
 
 /** Vagas que o site anuncia (null = as reais). */
+export async function gravarNumeroAcao(c: Consulta, id: number, n: number) {
+  await valor(c, "UPDATE turmas_fin SET numero_acao = $2 WHERE id = $1 RETURNING id", [id, n]);
+}
+
 export async function gravarVagasAnunciadas(c: Consulta, regime: Regime, id: number, n: number | null) {
   await valor(c, `UPDATE ${tabelaRegime("turmas", regime)} SET vagas_anunciadas = $2 WHERE id = $1 RETURNING id`, [id, n]);
 }

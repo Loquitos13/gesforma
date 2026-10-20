@@ -82,7 +82,7 @@ Os **ficheiros** (DTP, documentos de formandos e de formadores, conteúdos) vão
 
 As **campanhas** mostram inscrições, pagamentos, conversão, ticket médio, por contactar, desistências, origens e ROI **calculados** a partir das pré-inscrições (campo campanha / curso) e dos pagamentos. O custo, o canal, as datas e as notas são da campanha.
 
-A **taxa de abertura** dos emails automáticos sai do pixel `GET /api/v1/email/open/:id.gif`. O preview usa um destinatário real da base (pré-inscrição, formando ou formador). O cron na Vercel corre **de hora a hora**; o lembrete “24 h antes” cobre turmas que começam hoje ou amanhã, para não falhar a janela se o plano só permitir um cron diário.
+A **taxa de abertura** dos emails automáticos sai do pixel `GET /api/v1/email/open/:id.gif`. O preview usa um destinatário real da base (pré-inscrição, formando ou formador). O cron na Vercel corre **uma vez por dia (07:00 UTC)**, por o plano Hobby só permitir crons diários; em cada execução esvazia a fila; o lembrete “24 h antes” cobre turmas que começam hoje ou amanhã, para não falhar a janela se o plano só permitir um cron diário.
 
 As **notícias** do site são os posts do blog com estado Ativo, em `/noticias`. O texto escreve-se em Gestão → Blog. A ficha do curso **fica no GesForma**. Ainda não há publicação dessa ficha em `ena.pt`.
 

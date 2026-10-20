@@ -32,7 +32,7 @@ export async function fontesEmLote(db: Db, regime: Regime, alvos: Alvo[]): Promi
   const ids = alvos.map(a => a.turma.id);
   const cursoIds = [...new Set(alvos.map(a => a.cursoId).filter((x): x is number => x != null))];
 
-  const [sessoes, docs, certs, manuais, anexos, ficheiros, inqueritos, formandosGold, formandosFin, nomesFin] = await Promise.all([
+  const [sessoes, docs, certs, manuais, anexos, ficheiros, inqueritos, formandosGold, formandosFin] = await Promise.all([
     lote.sessoesDasTurmas(db, regime, ids),
     lote.documentosDasTurmas(db, regime, ids),
     lote.certificadosDasTurmas(db, regime, ids),
@@ -41,12 +41,10 @@ export async function fontesEmLote(db: Db, regime: Regime, alvos: Alvo[]): Promi
     lote.ficheirosDosCursos(db, regime, cursoIds).catch(() => []),
     regime === "fin" ? lote.inqueritosEnviadosAsTurmas(db, regime, ids).catch(() => []) : Promise.resolve([]),
     regime === "gold" ? lote.formandosGoldDasTurmas(db, ids, alvos.map(a => a.turma.nome)) : Promise.resolve([]),
-    regime === "fin" ? lote.formandosFinDasTurmas(db, ids) : Promise.resolve([]),
-    regime === "fin" ? lote.nomesTurmasFin(db) : Promise.resolve([] as string[]),
+    regime === "fin" ? lote.formandosFinDasTurmas(db, ids, alvos.map(a => a.turma.nome)) : Promise.resolve([]),
   ]);
 
-  // Formandos de cada turma, com as mesmas regras de formandosDaTurma.
-  const nomesTurmaFin = new Set(nomesFin);
+  // Formandos de cada turma, com as mesmas regras de formandosDaTurma (sem turma não entram em nenhuma).
   const formandosDe = new Map<number, (FormandoTurma & { email?: string })[]>();
   for (const { turma } of alvos) {
     const lista = regime === "gold"
@@ -55,8 +53,7 @@ export async function fontesEmLote(db: Db, regime: Regime, alvos: Alvo[]): Promi
         .map(f => ({ id: Number(f.id), nome: `${f.nome} ${f.apelido}`.trim(), docs: {}, email: f.email }))
       : formandosFin
         .filter(f => Number(f.turma_id) === turma.id
-          || (f.turma_id == null && f.turma === turma.nome)
-          || (f.turma_id == null && f.curso === turma.curso && !nomesTurmaFin.has(f.turma)))
+          || (f.turma_id == null && f.turma === turma.nome))
         .map(f => ({ id: Number(f.id), nome: `${f.nome} ${f.apelido}`.trim(), docs: asObj(f.docs) }));
     formandosDe.set(turma.id, lista.sort(porNome));
   }

@@ -62,7 +62,10 @@ export async function equipaDaTurma(c: Consulta, regime: Regime, id: number) {
 
 export type FormandoTurma = { id: number; nome: string; docs: Record<string, unknown> };
 
-/** Formandos da turma. Na Financiada o campo turma é texto livre: quem não aponta para uma turma existente conta pelo curso. */
+/**
+ * Formandos da turma: os ligados pelo id ou, sem id, pelo nome da turma. Quem não tem turma não entra no
+ * dossiê de nenhuma (antes contava em todas as turmas do mesmo curso): fica por atribuir na lista de formandos.
+ */
 export async function formandosDaTurma(c: Consulta, regime: Regime, turma: TurmaRow): Promise<FormandoTurma[]> {
   if (regime === "gold") {
     const rows = await many<{ id: number; nome: string; apelido: string }>(
@@ -77,9 +80,8 @@ export async function formandosDaTurma(c: Consulta, regime: Regime, turma: Turma
     `SELECT id, nome, apelido, docs FROM formandos_fin f
       WHERE f.turma_id = $1
          OR (f.turma_id IS NULL AND f.turma = $2)
-         OR (f.turma_id IS NULL AND f.curso = $3 AND NOT EXISTS (SELECT 1 FROM turmas_fin t WHERE t.nome = f.turma))
       ORDER BY nome`,
-    [turma.id, turma.nome, turma.curso],
+    [turma.id, turma.nome],
   );
   return rows.map(r => ({ id: r.id, nome: `${r.nome} ${r.apelido}`.trim(), docs: asObj(r.docs) }));
 }

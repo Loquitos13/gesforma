@@ -1,5 +1,6 @@
 // Separador Despesas da turma (Financiada): os campos do template de despesas (TemplateDespesas.xlsx), com as listas
-// do template em seletores com pesquisa, e exportação para Excel com as mesmas colunas.
+// do template em seletores com pesquisa, e exportação para Excel com as mesmas colunas. No topo, os ficheiros do
+// reembolso da turma (execução física e despesas), um de cada, guardados na Drive.
 import { useMemo, useState } from "react";
 import {
   apiAlterarDespesa, apiApagarDespesa, apiAssociarDespesa, apiCriarDespesa, apiDespesas, apiExportarDespesas, type Despesa,
@@ -12,6 +13,7 @@ import { toastError } from "../../../../partilhado/toastBus";
 import {
   AreaTexto, Aviso, Botao, Campo, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Modal, Tabela, Vazio, data, eur, num, type Coluna,
 } from "../../../../partilhado/ui";
+import { ReembolsoTurma } from "./ReembolsoTurma";
 
 type Form = Record<string, string>;
 
@@ -66,6 +68,7 @@ export function DespesasTurma({ turmaId }: { turmaId: number }) {
 
   return (
     <div className="space-y-4">
+      <ReembolsoTurma turmaId={turmaId} />
       <SemTurma turmaId={turmaId} />
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex h-9 min-w-0 max-w-[420px] flex-1 items-center gap-2 rounded-lg border border-linha-forte bg-white px-3 text-tinta-suave">

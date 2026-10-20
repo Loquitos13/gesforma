@@ -15,6 +15,8 @@ const sessao = (id: string, data: string, formadores: string[]) => ({
 /** Ficha de formador (nos dois regimes) ligada à conta de teste "formador" pelo email. */
 async function fichaDoFormador(ctx: Ctx) {
   const conta = await ctx.db.query<{ email: string }>("SELECT email FROM users WHERE id = $1", [ctx.userId.formador]);
+  // Uma conta liga-se a uma só ficha: a ficha do teste anterior deixa de ser desta conta.
+  await ctx.db.query("UPDATE formadores SET user_id = NULL, email = '' WHERE user_id = $1", [ctx.userId.formador]);
   const nome = unico("Formador Eu");
   const r = await pedido(ctx, "secretaria", "POST", "/v1/formadores", { nome, email: conta.rows[0]!.email, regimes: ["gold", "fin"] });
   expect(r.statusCode, r.body).toBe(200);

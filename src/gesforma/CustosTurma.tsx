@@ -3,10 +3,9 @@ import { custosFormadores } from "../partilhado/custoFormadores";
 import type { SessaoCronograma } from "../partilhado/turmaModel";
 import { useFormadoresDoRegime } from "../partilhado/dados/comuns";
 import { Cartao } from "../partilhado/ui";
+import { eur as eurInteiro } from "../partilhado/ui/formatos";
 
-function eur(v: number) {
-  return `€ ${v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
+const eur = (v: number) => eurInteiro(v, true);
 
 const arred = (v: number) => Math.round(v * 100) / 100;
 

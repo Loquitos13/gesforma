@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { apiEstadoConfiguracoes } from "../../../../partilhado/api/configuracoes";
 import { apiRegistarPagamento } from "../../../../partilhado/api/pagamentos";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
-import { numeroPt } from "../../../../partilhado/despesas";
+import { numeroPt } from "../../../../partilhado/ui/formatos";
 import { useOpcoes } from "../../../../partilhado/dados/useOpcoes";
 import { useRecurso } from "../../../../partilhado/dados/useRecurso";
 import { Botao, Caixa, Campo, Entrada, Modal, Selecao } from "../../../../partilhado/ui";

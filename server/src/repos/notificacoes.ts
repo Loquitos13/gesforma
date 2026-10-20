@@ -10,6 +10,7 @@ import type { Db } from "../db/pool.js";
 import { hojeLisboa, somarDias } from "../datas.js";
 import { rotuloCodigoCurso } from "../../../src/partilhado/codigoCurso.js";
 import { comercialAbre } from "../../../src/partilhado/vistasComercial.js";
+import { eur as eurPt } from "../../../src/partilhado/ui/formatos.js";
 
 export type Notificacao = {
   chave: string;
@@ -93,7 +94,7 @@ function paraComercial(avisos: Nova[]): Nova[] {
   return out;
 }
 
-const eur = (v: number) => `€${Math.round(v).toLocaleString("pt-PT")}`;
+const eur = (v: number) => eurPt(v, true);
 
 export async function construirNotificacoes(db: Db, actorId: string, role = ""): Promise<Notificacao[]> {
   const hoje = hojeLisboa();

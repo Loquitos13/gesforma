@@ -3,6 +3,7 @@ import { mapaImagensPublicas } from "./cursoImagens.js";
 import { dadosCatalogoPublico } from "./repos/cursos.js";
 import { hojeLisboa } from "./datas.js";
 import { escolherPreco, regrasDoPayload } from "./precoOferta.js";
+import { eur } from "../../src/partilhado/ui/formatos.js";
 
 export type ContactoLocal = { local: string; telemovel: string; telefone: string; email: string; whatsapp: string };
 const CAMPOS_CONTACTO = ["telemovel", "telefone", "email", "whatsapp"] as const;
@@ -162,11 +163,6 @@ export function classificarInscricao(regime: "gold" | "fin", tipo: string, modal
   if (t.includes("pre-pago") || t.includes("prepago") || t.includes("e-learning") || t.includes("elearning")) return "Pré-pago";
   if ((t === "gold" || t === "pago") && (m.includes("e-learning") || m.includes("elearning"))) return "Pré-pago";
   return "Acesso direto";
-}
-
-function euros(n: number) {
-  const inteiro = Math.round(n);
-  return inteiro.toLocaleString("pt-PT");
 }
 
 function dataCurta(iso: string) {
@@ -345,7 +341,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       inicio: inicio
         ? `${dataCurta(inicio.data)}${inicio.local ? ` · ${inicio.local}` : ""}`
         : modo === "E-learning" ? "Acesso imediato" : "Data a anunciar",
-      precoLabel: curso.regime === "fin" ? "Financiada" : desde != null ? (precos.length > 1 ? `A partir de ${euros(desde)} €` : `${euros(desde)} €`) : "Sob consulta",
+      precoLabel: curso.regime === "fin" ? "Financiada" : desde != null ? (precos.length > 1 ? `A partir de ${eur(desde, true)}` : eur(desde, true)) : "Sob consulta",
       precoDesde: desde,
       descricao: sintese || `${curso.area}. ${horasLabel}.`,
       financiamento: curso.regime === "fin" ? "Financiada" : "Gold",

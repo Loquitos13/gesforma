@@ -2,6 +2,7 @@
 import type { ReactNode } from "react";
 import { useAuth } from "../../../partilhado/AuthGate";
 import { type Migalha, type Tom } from "../../../partilhado/ui";
+import { numeroPt } from "../../../partilhado/ui/formatos";
 import type { Vista } from "../../rotasGesforma";
 import type { Navegar } from "../../shell/tipos";
 
@@ -155,9 +156,9 @@ export function useEu() {
   return useAuth().user;
 }
 
-/** Converte "1 250,50" ou "1250.5" em número; vazio dá 0. */
+/** Converte "1.250,50", "1 250,50" ou "1250.5" em número; vazio ou inválido dá 0. */
 export function numeroDe(texto: string) {
-  const n = Number(texto.replace(/\s/g, "").replace(",", "."));
+  const n = numeroPt(texto);
   return Number.isFinite(n) ? n : 0;
 }
 

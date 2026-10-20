@@ -1,4 +1,5 @@
 import { DOCS_FORMANDO_GOLD } from "../../src/partilhado/dossierDocs.js";
+import { eur as eurPt } from "../../src/partilhado/ui/formatos.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { textoDoCorpo } from "../../src/partilhado/blogBlocos.js";
@@ -70,9 +71,7 @@ function horas(inicio: string, fim: string) {
   return a || b;
 }
 
-function eur(valor: number) {
-  return `${valor.toLocaleString("pt-PT", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
-}
+const eur = (valor: number) => eurPt(valor, true);
 
 function prefsDe(raw: unknown) {
   const o = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};

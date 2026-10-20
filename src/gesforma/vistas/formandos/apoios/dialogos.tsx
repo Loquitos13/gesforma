@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ApiError } from "../../../../partilhado/api/cliente";
 import { apiAlterarApoio, apiIbanFormando, type Apoio } from "../../../../partilhado/api/apoios";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
-import { numeroPt } from "../../../../partilhado/despesas";
+import { numeroPt } from "../../../../partilhado/ui/formatos";
 import { invalidar } from "../../../../partilhado/dados/useRecurso";
 import { toastError, toastOk } from "../../../../partilhado/toastBus";
 import { AreaTexto, Botao, Campo, Entrada, Modal, eur } from "../../../../partilhado/ui";

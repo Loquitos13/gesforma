@@ -6,6 +6,7 @@ import { Icon, OfertaCtx, type Course } from "../SiteLanding";
 import { CursoDaRotaCtx } from "./blocosCursoPagina";
 import { campoCurso, campoNumero, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
+import { eur } from "../../partilhado/ui/formatos";
 import { estiloBloco, estiloTexto, estiloVazio, juntar, tipoVazia, type Estilo, type Tipografia } from "./estilos";
 
 type Estado = "a-carregar" | "erro" | "pronto";
@@ -63,7 +64,7 @@ export function RaizCurso({ previsualizar, editar, children }: { previsualizar: 
 
 export const locaisDo = (c: Course) => [...new Set(c.sessoes.map(s => s.local.trim()).filter(Boolean))];
 
-const euros = (n: number) => `${n.toLocaleString("pt-PT", { maximumFractionDigits: 2 })} €`;
+const euros = (n: number) => eur(n, true);
 
 /**
  * Preço a mostrar: o das datas desse local (o preço de cada data já segue as regras da ficha por local,

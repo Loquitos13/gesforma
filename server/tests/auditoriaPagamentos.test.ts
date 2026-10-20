@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { numeroPt } from "../../src/partilhado/despesas.js";
+import { numeroPt } from "../../src/partilhado/ui/formatos.js";
 import { arrancar, pedido, type Ctx } from "./helpers.js";
 
 // Auditoria do dinheiro: pagamentos sem duplicados, apoios só a quem tem direito, recibos imutáveis,

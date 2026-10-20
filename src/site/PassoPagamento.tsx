@@ -1,10 +1,8 @@
 import { useState, type FormEvent } from "react";
 import type { PagamentoPercurso } from "../partilhado/api";
 import { CampoFicheiro } from "./PercursoPartes";
+import { eur } from "../partilhado/ui/formatos";
 
-function euros(v: number) {
-  return v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
 /**
  * Passo de pagamento da ligação pessoal. Só aparece depois de a secretaria validar os documentos
@@ -45,7 +43,7 @@ export function PassoPagamento({ nome, curso, pagamento, busy, error, ok, onEnvi
       <dl className="grid gap-3 border-t border-[#efeae1] px-6 py-5 text-sm sm:grid-cols-3 sm:px-8">
         <div>
           <dt className="text-[11px] font-semibold uppercase tracking-wide text-[#8a8172]">Valor</dt>
-          <dd className="mt-1 text-lg font-semibold">€ {euros(pagamento.valor)}</dd>
+          <dd className="mt-1 text-lg font-semibold">{eur(pagamento.valor, true)}</dd>
         </div>
         <div className="sm:col-span-2">
           <dt className="text-[11px] font-semibold uppercase tracking-wide text-[#8a8172]">IBAN</dt>

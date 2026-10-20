@@ -169,6 +169,11 @@ export function ProcessarApoios({ turma, aberto, onFechar }: {
           try {
             const r = await apiEstadoApoiosTurma(turmaId, { mes, de: "aprovado", para: "pago", pagoEm, referencia });
             for (const p of INVALIDAR_APOIOS) invalidar(p);
+            // O servidor volta a verificar o direito: quem o perdeu desde a aprovação fica por pagar.
+            if (r.semDireito?.length) {
+              const lista = r.semDireito.map(x => `${x.formando || `#${x.formandoId}`}: ${x.motivo}`).join(" · ");
+              toastError(null, `${r.semDireito.length} apoio(s) ficaram por pagar (perderam o direito). ${lista}`);
+            }
             info.recarregar();
             return r;
           } catch (e) {

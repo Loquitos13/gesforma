@@ -136,7 +136,9 @@ export const apiProcessarApoios =(turmaId: number, mes: string, confirmar: boole
 export const apiEstadoApoiosTurma = (
   turmaId: number,
   corpo: { mes: string; de: EstadoApoio; para: EstadoApoio; pagoEm?: string; referencia?: string; ids?: number[] },
-) => enviar.post<{ ok: true; alterados: number }>(`/v1/apoios/turmas/${turmaId}/estado`, corpo);
+) => enviar.post<{ ok: true; alterados: number; semDireito?: { id: number; formandoId: number; formando: string; tipo: string; motivo: string }[] }>(
+  `/v1/apoios/turmas/${turmaId}/estado`, corpo,
+);
 
 export const apiAlterarApoio = (
   id: number,

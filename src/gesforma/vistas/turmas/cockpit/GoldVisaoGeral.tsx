@@ -8,7 +8,7 @@ import { I, Th, Td, formatSessaoLine } from "./base";
 import { FormadoresAtribuidosCard } from "../../../CronogramaEditor";
 import { diaDeCarimbo } from "../../../../partilhado/horaLisboa";
 
-export function GoldVisaoGeral({ turma, membros, souFormador, activa, programa, onFicha, onTransferir, onEliminar, onAdicionar, onEditarPrograma, onFormadores, onFormador, onSala }: {
+export function GoldVisaoGeral({ turma, membros, souFormador, verCustos, activa, programa, onFicha, onTransferir, onEliminar, onAdicionar, onEditarPrograma, onFormadores, onFormador, onSala, onValoresHora }: {
   turma: TurmaGold;
   membros: FormandoTurma[];
   souFormador: boolean;
@@ -22,6 +22,9 @@ export function GoldVisaoGeral({ turma, membros, souFormador, activa, programa, 
   onFormadores: (nomes: string[]) => void;
   onFormador: (nome: string) => void;
   onSala: (valor: number) => void;
+  /** Custos e valor por hora: só a gestão (nunca o formador nem a comercial). */
+  verCustos: boolean;
+  onValoresHora: (valores: Record<string, number>) => void;
 }) {
   const pagos = membros.filter(f => f.pago);
   const receita = pagos.reduce((s, f) => s + (Number(f.valor) || 0), 0);
@@ -134,7 +137,7 @@ export function GoldVisaoGeral({ turma, membros, souFormador, activa, programa, 
             )}
         </Cartao>
       </div>
-      {!souFormador && <CustosTurmaCard turma={turma} canEdit onSala={onSala} />}
+      {verCustos && <CustosTurmaCard turma={turma} regime="gold" canEdit onSala={onSala} onValores={onValoresHora} />}
     </>
   );
 }

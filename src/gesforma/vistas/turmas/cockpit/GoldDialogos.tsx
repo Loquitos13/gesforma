@@ -16,12 +16,14 @@ import { usePlanosCurso } from "../../../planosCurso";
 import { InscreverFormandoPanel } from "../../../TurmaInscricao";
 import { TurmaInactivaBanner } from "../../../TurmaCronograma";
 import { ValoresHoraFormador } from "../../../ValoresHoraFormador";
+import { useAuth } from "../../../../partilhado/AuthGate";
 import { inscreverNaTurma, recarregarTurma, retirarDaTurma, useLeadsDoCurso, useOutrasTurmas } from "./dados";
 
 export function EditarTurmaGold({ aberto, onFechar, turma, onGravar }: {
   aberto: boolean; onFechar: () => void; turma: TurmaGold; onGravar: (p: Partial<DadosTurma>) => void;
 }) {
   const [f, setF] = useState({ nome: "", local: "", horario: "", formador: "", inicio: "", vagas: 16, tolerancia: 0, valores: {} as Record<string, number> });
+  const verCustos = useAuth().user.role !== "comercial";
   useEffect(() => {
     if (!aberto) return;
     setF({
@@ -72,10 +74,12 @@ export function EditarTurmaGold({ aberto, onFechar, turma, onGravar }: {
             {p => <Entrada {...p} type="number" min={0} value={f.tolerancia} onChange={e => setF({ ...f, tolerancia: Math.max(0, Number(e.target.value) || 0) })} />}
           </Campo>
         </div>
-        <div>
-          <p className="m-0 mb-1.5 text-[13px] font-semibold text-tinta">Valor por hora do formador</p>
-          <ValoresHoraFormador formadores={[f.formador, ...(turma.formadores ?? [])]} value={f.valores} onChange={v => setF({ ...f, valores: v })} base={modelos.valores} />
-        </div>
+        {verCustos && (
+          <div>
+            <p className="m-0 mb-1.5 text-[13px] font-semibold text-tinta">Valor por hora do formador</p>
+            <ValoresHoraFormador formadores={[f.formador, ...(turma.formadores ?? [])]} value={f.valores} onChange={v => setF({ ...f, valores: v })} base={modelos.valores} />
+          </div>
+        )}
       </div>
     </PainelLateral>
   );

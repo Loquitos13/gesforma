@@ -190,7 +190,8 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
                   onFicha={souFormador ? undefined : f => navigate({ view: "gold-formando-ficha", formandoId: f.id })}
                   onTransferir={setTransferir} onEliminar={setEliminar} onAdicionar={() => setInscrever(true)}
                   onEditarPrograma={() => navigate("gold-cursos")} onFormadores={nomes => patch({ formadores: nomes })}
-                  onFormador={setFormadorAberto} onSala={valor => patch({ custoHoraSala: valor })} />
+                  onFormador={setFormadorAberto} onSala={valor => patch({ custoHoraSala: valor })}
+                  verCustos={!souFormador && user.role !== "comercial"} onValoresHora={valores => patch({ valoresHoraFormador: valores })} />
               )}
             </div>
 

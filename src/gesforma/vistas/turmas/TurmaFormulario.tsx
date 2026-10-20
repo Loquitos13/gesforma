@@ -9,6 +9,7 @@ import { toastError } from "../../../partilhado/toastBus";
 import { Aviso, Botao, Campo, Chip, Entrada, ErroCarregar, Esqueleto, Interruptor, PainelLateral, Selecao } from "../../../partilhado/ui";
 import { CronogramaEditor } from "../../CronogramaEditor";
 import { ValoresHoraFormador } from "../../ValoresHoraFormador";
+import { useAuth } from "../../../partilhado/AuthGate";
 
 type Rascunho = {
   nome: string; curso: string; local: string; horario: string; formador: string; formadores: string[];
@@ -41,6 +42,7 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
   const nomesUsados = useOpcoes("turmas", { regime, todos: true });
   const { byCursoId, loaded: locaisProntos } = useCursoFichaLocais(regime);
   const [r, setR] = useState<Rascunho>(() => VAZIO(regime));
+  const verCustos = useAuth().user.role !== "comercial";
   const [erro, setErro] = useState("");
   const [aGravar, setAGravar] = useState(false);
   const nomeManual = useRef(false);
@@ -185,9 +187,11 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
               </Campo>
             </div>
           )}
-          <Campo rotulo="Valor por hora do formador">
-            {() => <ValoresHoraFormador formadores={[r.formador, ...r.formadores]} value={r.valoresHoraFormador} onChange={v => mudar({ valoresHoraFormador: v })} />}
-          </Campo>
+          {verCustos && (
+            <Campo rotulo="Valor por hora do formador">
+              {() => <ValoresHoraFormador formadores={[r.formador, ...r.formadores]} value={r.valoresHoraFormador} onChange={v => mudar({ valoresHoraFormador: v })} />}
+            </Campo>
+          )}
           {!fin && (
             <Campo rotulo="Custo hora da sala (€)">
               {p => <Entrada {...p} type="number" min={0} step="0.5" value={r.custoHoraSala} onChange={e => mudar({ custoHoraSala: Math.max(0, Number(e.target.value) || 0) })} />}

@@ -191,7 +191,8 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
                 <FinVisaoGeral turma={t} membros={membros} prontos={prontos} souFormador={souFormador} activa={activa} programa={programa.labels}
                   onFicha={souFormador ? undefined : f => navigate({ view: "fin-formando-ficha", formandoId: f.id })}
                   onTransferir={setTransferir} onEliminar={setEliminar} onAdicionar={() => setInscrever(true)}
-                  onEditarPrograma={() => navigate("fin-cursos")} onFormadores={nomes => patch({ formadores: nomes })} onFormador={setFormadorAberto} />
+                  onEditarPrograma={() => navigate("fin-cursos")} onFormadores={nomes => patch({ formadores: nomes })} onFormador={setFormadorAberto}
+                  verCustos={!souFormador} onValoresHora={valores => patch({ valoresHoraFormador: valores })} />
               )}
             </div>
 

@@ -6,9 +6,10 @@ import { hojeIso, type TurmaFin } from "../../../../partilhado/turmaModel";
 import { Botao, Cartao } from "../../../../partilhado/ui";
 import { I, Th, Td, estadoBadge, formatSessaoLine } from "./base";
 import { FormadoresAtribuidosCard } from "../../../CronogramaEditor";
+import { CustosTurmaCard } from "../../../CustosTurma";
 import { rotuloCodigoCurso } from "../../../../partilhado/codigoCurso";
 
-export function FinVisaoGeral({ turma, membros, prontos, souFormador, activa, programa, onFicha, onTransferir, onEliminar, onAdicionar, onEditarPrograma, onFormadores, onFormador }: {
+export function FinVisaoGeral({ turma, membros, prontos, souFormador, verCustos, activa, programa, onFicha, onTransferir, onEliminar, onAdicionar, onEditarPrograma, onFormadores, onFormador, onValoresHora }: {
   turma: TurmaFin;
   membros: FormandoFin[];
   prontos: number;
@@ -22,6 +23,9 @@ export function FinVisaoGeral({ turma, membros, prontos, souFormador, activa, pr
   onEditarPrograma: () => void;
   onFormadores: (nomes: string[]) => void;
   onFormador: (nome: string) => void;
+  /** Custos e valor por hora: só a gestão (nunca o formador). */
+  verCustos: boolean;
+  onValoresHora: (valores: Record<string, number>) => void;
 }) {
   const total = DOCS_FORMANDO_FIN.length;
   const numeros = [
@@ -130,6 +134,7 @@ export function FinVisaoGeral({ turma, membros, prontos, souFormador, activa, pr
             )}
         </Cartao>
       </div>
+      {verCustos && <CustosTurmaCard turma={turma} regime="fin" canEdit={!turma.fechadaEm} onValores={onValoresHora} />}
     </>
   );
 }

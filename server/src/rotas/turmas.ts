@@ -244,6 +244,12 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const bloqueio = negarFormador(req.actor!);
     if (bloqueio) return reply.code(403).send({ error: bloqueio });
     const d = v.body;
+    // Valores por hora dos formadores e custo da sala são da gestão (a comercial não os vê nem os muda).
+    // Os formulários reenviam-nos sempre: para a comercial ficam como estavam.
+    if (req.actor!.role === "comercial") {
+      delete d.valoresHoraFormador;
+      delete d.custoHoraSala;
+    }
     const antes = await repo.obterTurma(db, "gold", id);
     if (!antes) return reply.code(404).send({ error: "turma não encontrada" });
     if (antes.fechada_em && req.actor!.role !== "admin") return reply.code(409).send({ error: ERRO_TURMA_FECHADA });

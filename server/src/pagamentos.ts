@@ -26,24 +26,33 @@ function carimbo() {
  * Marca o pagamento como Pago, dispara o email e actualiza a ficha Gold e a pré-inscrição ligadas.
  * Se o pagamento foi pedido no percurso da pré-inscrição, conclui a inscrição (ficha, conta e acesso).
  */
-export async function confirmarPagamento(db: Db, row: Record<string, unknown>, actorId?: string | null) {
+export async function confirmarPagamento(db: Db, row: Record<string, unknown>, actorId?: string | null, opts: { soPendente?: boolean } = {}) {
   const mapped = mapPagamento(row);
+  const email = mapped.email ? normalizeEmail(mapped.email) : "";
+  const comEmail = Boolean(email && isEmail(email));
+  const formandoId = row.formando_id == null ? null : Number(row.formando_id);
+  // Estado, ficha Gold e pré-inscrição mudam juntos ou não mudam: uma falha a meio não deixa o pagamento Pago
+  // com a ficha por pagar (e a reentrega do webhook, que vê Pago, já não os repetia).
   // Dois pedidos ao mesmo tempo: só o que muda o estado dispara os efeitos.
-  if (!(await marcarPago(db, mapped.id, carimbo(), actorId))) {
+  const mudou = await db.tx(async q => {
+    if (!(await marcarPago(q, mapped.id, carimbo(), actorId, opts.soPendente))) return false;
+    // A ficha ligada fica paga mesmo sem email; sem ficha ligada, procura-se pelo email e curso.
+    if (formandoId != null || comEmail) {
+      await marcarFormandoGoldPago(q, { email, metodo: mapped.metodo || METODOS_ACEITES[0], formandoId, curso: mapped.curso });
+    }
+    if (comEmail) await marcarLeadPago(q, { email, pagamentoId: mapped.id, curso: mapped.curso });
+    return true;
+  });
+  if (!mudou) {
     const atual = await obterPagamento(db, mapped.id);
     return atual ? mapPagamento(atual) : mapped;
   }
-  const email = mapped.email ? normalizeEmail(mapped.email) : "";
+  // Depois de gravado: emails e conclusão da inscrição (ambos seguros de repetir).
   const { aposPagamentoConfirmado, leadDoPagamentoPedido } = await import("./inscricaoPaga.js");
   const doPercurso = await leadDoPagamentoPedido(db, mapped.id);
-  if (email && isEmail(email)) {
-    if (!doPercurso) {
-      await ingestEvent(db, "payment.confirmed", { email, nome: mapped.nome, curso: mapped.curso, pagamentoId: mapped.id }, `payment:${mapped.id}:${email}`)
-        .catch(() => undefined);
-    }
-    const formandoId = row.formando_id == null ? null : Number(row.formando_id);
-    await marcarFormandoGoldPago(db, { email, metodo: mapped.metodo || METODOS_ACEITES[0], formandoId, curso: mapped.curso });
-    await marcarLeadPago(db, { email, pagamentoId: mapped.id, curso: mapped.curso });
+  if (comEmail && !doPercurso) {
+    await ingestEvent(db, "payment.confirmed", { email, nome: mapped.nome, curso: mapped.curso, pagamentoId: mapped.id }, `payment:${mapped.id}:${email}`)
+      .catch(() => undefined);
   }
   if (doPercurso) await aposPagamentoConfirmado(db, mapped.id);
   const depois = await obterPagamento(db, mapped.id);

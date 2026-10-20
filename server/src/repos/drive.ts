@@ -151,6 +151,28 @@ export async function pastaDaTurma(c: Consulta, regime: Regime, turmaId: number)
   return r?.drive_pasta_id?.trim() ?? "";
 }
 
+export async function marcarPartilhasSincronizadas(c: Consulta, regime: Regime, turmaId: number) {
+  await many(c, `UPDATE ${tabelaRegime("turmas", regime)} SET drive_partilhas_em = now() WHERE id = $1`, [turmaId]);
+}
+
+/** Uma turma com pasta na Drive cujas partilhas ainda não foram acertadas (Gold primeiro, depois Financiada). */
+export async function turmaComPartilhasPorAcertar(c: Consulta) {
+  for (const regime of ["gold", "fin"] as const) {
+    const t = await one<{ id: number; nome: string; formador: string; formadores: unknown; cronograma: unknown }>(c,
+      `SELECT id, nome, formador, formadores, cronograma FROM ${tabelaRegime("turmas", regime)}
+        WHERE drive_pasta_id <> '' AND drive_partilhas_em IS NULL ORDER BY id LIMIT 1`);
+    if (t) return { ...t, regime };
+  }
+  return null;
+}
+
+export async function contarPartilhasPorAcertar(c: Consulta) {
+  const r = await one<{ n: number }>(c,
+    `SELECT ((SELECT count(*) FROM turmas_gold WHERE drive_pasta_id <> '' AND drive_partilhas_em IS NULL)
+           + (SELECT count(*) FROM turmas_fin WHERE drive_pasta_id <> '' AND drive_partilhas_em IS NULL))::int AS n`);
+  return r?.n ?? 0;
+}
+
 export async function gravarPastaDaTurmaSeVazia(c: Consulta, regime: Regime, turmaId: number, pasta: string) {
   await many(c, `UPDATE ${tabelaRegime("turmas", regime)} SET drive_pasta_id = $2 WHERE id = $1 AND drive_pasta_id = ''`, [turmaId, pasta]);
 }

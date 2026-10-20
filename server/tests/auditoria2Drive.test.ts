@@ -397,3 +397,54 @@ describe("#28 sem órfãos na Drive", () => {
     await desligarDrive(ctx);
   });
 });
+
+describe("acerto das partilhas antigas pelo cron e dossiê fora do regime", () => {
+  it("o cron /v1/cron/drive acerta as turmas por sincronizar, uma vez cada, e pede o CRON_SECRET", async () => {
+    const ctx = await arrancar();
+    const { config } = await import("../src/config.js");
+    const antes = config.cronSecret;
+    try {
+      const cron = (authorization?: string) =>
+        ctx.app.inject({ method: "GET", url: "/v1/cron/drive", headers: authorization ? { authorization } : {} });
+      config.cronSecret = "";
+      expect((await cron()).statusCode).toBe(503);
+      config.cronSecret = "segredo-drive";
+      expect((await cron("Bearer outro")).statusCode).toBe(401);
+
+      await ctx.db.query("UPDATE turmas_gold SET drive_partilhas_em = now()");
+      await ctx.db.query("UPDATE turmas_fin SET drive_partilhas_em = now()");
+      const turmaId = 990701;
+      await ctx.db.query(
+        `INSERT INTO turmas_gold (id, data_inicio, nome, curso, formador, cronograma, drive_pasta_id)
+         VALUES ($1, '2099-08-01', $2, 'Curso', '', '[]'::jsonb, 'pasta-antiga')`,
+        [turmaId, unico("TCron")],
+      );
+      // Sem Drive ligada não acerta nada e a turma continua por acertar.
+      await desligarDrive(ctx);
+      const sem = await cron("Bearer segredo-drive");
+      expect(sem.statusCode, sem.body).toBe(200);
+      expect(sem.json()).toMatchObject({ acertadas: 0, porAcertar: 1 });
+
+      driveFalsa();
+      await ligarDrive(ctx);
+      const com = await cron("Bearer segredo-drive");
+      expect(com.json()).toMatchObject({ acertadas: 1, porAcertar: 0 });
+      const marca = await ctx.db.query<{ em: string | null }>("SELECT drive_partilhas_em::text AS em FROM turmas_gold WHERE id = $1", [turmaId]);
+      expect(marca.rows[0]!.em).not.toBeNull();
+      expect((await cron("Bearer segredo-drive")).json()).toMatchObject({ acertadas: 0, porAcertar: 0 });
+    } finally {
+      config.cronSecret = antes;
+    }
+  });
+
+  it("o comercial não exporta o dossiê da Financiada", async () => {
+    const ctx = await arrancar();
+    const turmaId = 990702;
+    await ctx.db.query(
+      `INSERT INTO turmas_fin (id, data_inicio, nome, curso, financiador, cronograma) VALUES ($1, '2099-08-01', $2, 'UFCD', 'IEFP', '[]'::jsonb)`,
+      [turmaId, unico("TFinExp")],
+    );
+    const r = await pedido(ctx, "comercial", "GET", `/v1/dtp/fin/${turmaId}/export?destino=zip`);
+    expect(r.statusCode).toBe(403);
+  });
+});

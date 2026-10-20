@@ -11,6 +11,7 @@ import {
 import { delayLabelFromSeconds, delaySecondsFromLabel, isEmail, TRIGGER_MAP } from "../security.js";
 import { getSmtpStatus } from "../smtpConfig.js";
 import { enviarLembretesPreinscricao } from "../lembretePre.js";
+import { sincronizarPartilhasPendentes } from "../driveArvore.js";
 import { linhaVisivel } from "../repos/crmVisivel.js";
 import { idParam, paginacao, periodoQuery, textoQuery, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
@@ -338,6 +339,16 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     });
     const fila = await processDueJobs(db, CRON_ORCAMENTO_MS);
     return { ...fila, lembretesPreinscricao: lembretes };
+  });
+
+  // Partilhas das pastas das turmas na Drive (as antigas davam aos formandos a pasta inteira): aos poucos.
+  app.get("/v1/cron/drive", async (req, reply) => {
+    if (!config.cronSecret) {
+      req.log.error("cron /v1/cron/drive recusado: CRON_SECRET não está definida.");
+      return reply.code(503).send({ error: "cron desligado: falta CRON_SECRET" });
+    }
+    if (!cronAutorizado(req.headers.authorization)) return reply.code(401).send({ error: "cron recusado" });
+    return sincronizarPartilhasPendentes(db, CRON_ORCAMENTO_MS);
   });
 
   app.post("/v1/events", async (req, reply) => {

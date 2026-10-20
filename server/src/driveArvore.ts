@@ -6,7 +6,7 @@ import {
   gravarPastaNaTurma, gravarPastaPendente, gravarPastasTurma, nomeDaTurma, nomeDoFormador, pastaDaPreinscricao,
   turmasComAtalhosDoFormador, turmasComEquipa,
 } from "./repos/driveArvore.js";
-import { contaGoogle } from "./repos/drive.js";
+import { contaGoogle, contarPartilhasPorAcertar, marcarPartilhasSincronizadas, turmaComPartilhasPorAcertar } from "./repos/drive.js";
 import { PASTAS_FIN_ANTERIORES, TOPICOS_FIN } from "./dtpTopicosFin.js";
 import { sanitizeFileName } from "./ficheirosValidacao.js";
 import {
@@ -134,7 +134,29 @@ export async function prepararTurmaDrive(db: Db, input: {
     await acertarPartilhas(token, materiaisId, new Map(pessoas.formadores.map(e => [e, "reader" as const])), pessoas.protegidos);
   }
   await atalhosDosNomes(db, token, input.regime, input.turmaId, estrutura.formadoresId, pessoas.nomes);
+  await marcarPartilhasSincronizadas(db, input.regime, input.turmaId);
   return { ok: true as const, ...estrutura };
+}
+
+/**
+ * Acerta as partilhas das turmas que ainda não foram sincronizadas desde a mudança das regras (os formandos
+ * deixaram de ser editores da pasta inteira). Uma turma de cada vez, até ao prazo: o cron diário continua
+ * onde parou. Devolve quantas acertou e quantas faltam.
+ */
+export async function sincronizarPartilhasPendentes(db: Db, prazoMs: number) {
+  const fim = Date.now() + prazoMs;
+  let acertadas = 0;
+  while (Date.now() < fim) {
+    const t = await turmaComPartilhasPorAcertar(db);
+    if (!t) break;
+    const r = await prepararTurmaDrive(db, {
+      regime: t.regime, turmaId: t.id, nome: t.nome, formador: t.formador,
+      formadores: Array.isArray(t.formadores) ? t.formadores.map(String) : [], cronograma: t.cronograma,
+    });
+    if (!r.ok) break;
+    acertadas++;
+  }
+  return { acertadas, porAcertar: await contarPartilhasPorAcertar(db) };
 }
 
 export async function garantirPastaPendente(db: Db, lead: { id: number; nome: string; apelido: string }) {

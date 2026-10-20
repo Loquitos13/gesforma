@@ -14,6 +14,7 @@ const PUBLIC: Array<[string, string]> = [
   ["GET", "/v1/auth/microsoft/callback"],
   ["GET", "/v1/email/open"],
   ["GET", "/v1/cron/email"],
+  ["GET", "/v1/cron/drive"],
 ];
 
 const PUBLIC_PREFIXES = [

@@ -106,6 +106,11 @@ export async function atribuirComercial(c: Consulta, id: number, comercialId: st
   await many(c, "UPDATE preinscricoes SET comercial_id = $2 WHERE id = $1", [id, comercialId]);
 }
 
+/** Este utilizador é um comercial (só vende Gold). */
+export async function eComercial(c: Consulta, id: string) {
+  return Boolean(await valor(c, "SELECT 1 FROM users WHERE id::text = $1 AND role = 'comercial'", [id]));
+}
+
 export async function marcarEtiqueta(c: Consulta, id: number, etiquetaId: number | null) {
   await many(c, "UPDATE preinscricoes SET etiqueta_id = $2 WHERE id = $1", [id, etiquetaId]);
 }

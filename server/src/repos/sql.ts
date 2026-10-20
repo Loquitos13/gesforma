@@ -156,12 +156,13 @@ export class Filtros {
 
   /**
    * A regra do RLS das tabelas comerciais (migrações 048 e 105) também no código, para não depender da base:
-   * o comercial só vê as linhas de que é dono (as sem dono não), a Financiada só as da Financiada,
+   * o comercial só vê as linhas de que é dono (as sem dono não) e que não são da Financiada, a Financiada só as da Financiada,
    * admin e secretaria tudo. Sem ator (trabalhos do sistema) não filtra.
    */
   visivelPara(ator: AtorCrm | undefined, dono: string, regime: string): this {
     if (!ator || ator.role === "admin" || ator.role === "secretaria") return this;
-    if (ator.role === "comercial") return this.add(`${dono}::text = ?`, ator.id || "-");
+    // O comercial só vende Gold: nem as suas da Financiada (IS DISTINCT FROM porque o regime pode ser nulo).
+    if (ator.role === "comercial") return this.add(`${dono}::text = ? AND ${regime} IS DISTINCT FROM 'fin'`, ator.id || "-");
     if (ator.role === "financiada") return this.sempre(`${regime} = 'fin'`);
     return this.sempre("false");
   }

@@ -103,6 +103,8 @@ function enviar(ctx: Ctx, perfil: keyof Ctx["cookie"], campos: Record<string, st
 async function formadorComTurmas(ctx: Ctx) {
   const eu = unico("Formador Aud");
   const email = await emailDe(ctx, "formador");
+  // Uma conta liga-se a uma só ficha: a ficha do teste anterior deixa de ser desta conta.
+  await ctx.db.query("UPDATE formadores SET user_id = NULL, email = '' WHERE user_id = $1", [ctx.userId.formador]);
   const r = await pedido(ctx, "secretaria", "POST", "/v1/formadores", { nome: eu, email, regimes: ["gold"] });
   expect(r.statusCode, r.body).toBe(200);
   const turma = async (formadores: string[]) => {

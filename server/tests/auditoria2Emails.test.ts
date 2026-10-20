@@ -108,14 +108,14 @@ describe("Fila de emails reservada (achado 10)", () => {
     const curso = `Curso Dup ${Date.now()}`;
     const email = `dup.${randomUUID().slice(0, 8)}@exemplo.pt`;
     const r = await ctx.db.query<{ id: number }>(
-      `INSERT INTO preinscricoes (id, inscrito, nome, email, curso, preco, estado, regime, created_at)
-       VALUES (nextval('ops_id_seq')::int, to_char(now(), 'YYYY-MM-DD'), 'Dup', $1, $2, 100, '2º Contacto', 'gold', now() - interval '40 days')
-       RETURNING id`, [email, curso]);
+      `INSERT INTO preinscricoes (id, inscrito, nome, email, curso, preco, estado, regime, created_at, comercial_id)
+       VALUES (nextval('ops_id_seq')::int, to_char(now(), 'YYYY-MM-DD'), 'Dup', $1, $2, 100, '2º Contacto', 'gold', now() - interval '40 days', $3)
+       RETURNING id`, [email, curso, ctx.userId.comercial]);
     const lead = r.rows[0]!.id;
     for (let i = 0; i < 2; i++) await ctx.db.query("INSERT INTO preinscricao_contactos (preinscricao_id, nota) VALUES ($1, 'x')", [lead]);
     const p = { ids: [lead], campanhaId: null, criterios: { dias: 30, contactos: 2, curso } };
-    const a = await enviarCampanha(ctx.db, ctx.userId.comercial, p);
-    const b = await enviarCampanha(ctx.db, ctx.userId.comercial, p);
+    const a = await enviarCampanha(ctx.db, { id: ctx.userId.comercial, role: "comercial" }, p);
+    const b = await enviarCampanha(ctx.db, { id: ctx.userId.comercial, role: "comercial" }, p);
     expect(a.postos).toBe(1);
     expect(b.postos).toBe(0);
     const jobs = await ctx.db.query("SELECT 1 FROM email_jobs WHERE to_email = $1", [email]);

@@ -13,6 +13,7 @@ import { nextOpsId } from "../ops.js";
 import { pode } from "../permissoes/capacidades.js";
 import { fichaDoProprioFormador } from "../sessaoAcesso.js";
 import * as repo from "../repos/formadores.js";
+import { normalizeEmail } from "../security.js";
 import { idParam, paginacao, regime as regimeSchema, textoQuery, validar } from "../validacao.js";
 import { hojeIso } from "./turmas.js";
 import type { Deps } from "./tipos.js";
@@ -69,9 +70,25 @@ function semValores<T extends { nif?: string; custoHora?: number }>(f: T): T {
   return { ...f, nif: "", custoHora: 0 };
 }
 
-/** Criar, alterar e apagar exigem ver todos os regimes da ficha, como a lista (a Financiada não mexe na Gold). */
+const veRegime = (role: string, r: string) => pode(role, r === "gold" ? "gold.ver" : "fin.ver");
+
+/**
+ * Criar e apagar exigem ver todos os regimes da ficha, como a lista (a Financiada não apaga um formador da Gold).
+ * Alterar exige ver pelo menos um regime da ficha e cada regime que se junta ou retira (`podeAlterarRegimes`).
+ */
 function veRegimes(role: string, regimes: readonly string[]) {
-  return regimes.every(r => pode(role, r === "gold" ? "gold.ver" : "fin.ver"));
+  return regimes.every(r => veRegime(role, r));
+}
+
+function veAlgumRegime(role: string, regimes: readonly string[]) {
+  return regimes.some(r => veRegime(role, r));
+}
+
+/** Quem altera a ficha só junta ou retira os regimes que vê: a Financiada não tira um formador da Gold. */
+function podeAlterarRegimes(role: string, antes: readonly string[], depois: readonly string[] | undefined) {
+  if (!depois) return true;
+  const mudados = [...depois.filter(r => !antes.includes(r)), ...antes.filter(r => !depois.includes(r))];
+  return veRegimes(role, mudados);
 }
 
 const SEM_REGIME = "Sem acesso a formadores deste regime.";
@@ -209,6 +226,13 @@ export async function registar(app: FastifyInstance, deps: Deps) {
         return c;
       });
     } catch (err) {
+      if (err instanceof ContaFormadorEmUso && err.fichaId != null) {
+        // A mesma pessoa noutro regime: não se cria outra ficha, junta-se o regime à que existe.
+        return reply.code(409).send({
+          error: `Já existe a ficha de um formador com o email ${normalizeEmail(d.email)}. Se é a mesma pessoa, junte o regime a essa ficha em vez de criar outra.`,
+          fichaExistente: err.fichaId,
+        });
+      }
       if (err instanceof ContaFormadorEmUso) return reply.code(409).send({ error: err.message });
       throw err;
     }
@@ -239,14 +263,20 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       const base = row ? { ...repo.mapFormadorBase(row), alocado: await formadorEstaAlocado(db, String(row.nome ?? "")) } : null;
       return { formador: base && !veValores(role) ? semValores(base) : base, acesso: null };
     }
-    if (!veRegimes(role, [...repo.mapFormadorBase(antes).regimes, ...(d.regimes ?? [])])) return reply.code(403).send({ error: SEM_REGIME });
+    const regimesAntes = repo.mapFormadorBase(antes).regimes;
+    if (!veAlgumRegime(role, regimesAntes) || !podeAlterarRegimes(role, regimesAntes, d.regimes)) {
+      return reply.code(403).send({ error: SEM_REGIME });
+    }
     let acesso: Acesso = null;
     try {
       acesso = await db.tx(async q => {
         await repo.atualizarFormador(q, id, d);
         let a: Acesso = null;
-        const email = d.email ?? String(antes.email ?? "");
-        if (!antes.user_id && email) {
+        // A conta só se cria ou liga quando o email muda (ou passa a existir): uma ficha antiga sem conta, cujo
+        // email é de outra conta, continua a gravar o resto dos campos.
+        const email = d.email ?? "";
+        const emailNovo = Boolean(email) && normalizeEmail(email) !== normalizeEmail(String(antes.email ?? ""));
+        if (!antes.user_id && emailNovo) {
           const conta = await garantirContaFormador(q, d.nome ?? String(antes.nome ?? ""), email, id);
           if (conta) {
             await repo.ligarConta(q, id, conta.userId);
@@ -276,12 +306,42 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const id = v.params.id;
     const antes = await repo.obterFormador(db, id);
     if (!antes) return reply.code(404).send({ error: "formador não encontrado" });
-    if (!veRegimes(req.actor!.role, repo.mapFormadorBase(antes).regimes)) return reply.code(403).send({ error: SEM_REGIME });
+    // Apagar tira a ficha (e a conta) de todos os regimes: com um regime que não vê, retira-se só o seu na ficha.
+    const regimes = repo.mapFormadorBase(antes).regimes;
+    if (!veRegimes(req.actor!.role, regimes)) {
+      if (!veAlgumRegime(req.actor!.role, regimes)) return reply.code(403).send({ error: SEM_REGIME });
+      return reply.code(403).send({ error: "Este formador também trabalha noutro regime: em vez de apagar, retire o seu regime na ficha." });
+    }
     const bloqueio = await bloqueioFormador(db, id);
     if (bloqueio) return reply.code(409).send({ error: bloqueio });
     await repo.apagarFormadorEConta(db, id);
     await audit(db, req.actor!.id, "formador.apagar", "formador", String(id), req.ip, { nome: String(antes?.nome ?? "") });
     return { ok: true };
+  });
+
+  /**
+   * Junta um regime à ficha de um formador que já existe (ex.: a Financiada junta «fin» a um formador da Gold
+   * cujo email deu 409 ao criar). Só o regime de quem pede, e só com o email da ficha: não basta adivinhar o id.
+   */
+  app.post("/v1/formadores/:id/regimes", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: idParam, body: z.object({ regime: regimeSchema, email: z.string().trim().max(254) }) }, req);
+    if (!v) return;
+    const role = req.actor!.role;
+    if (role === "formador" || role === "comercial" || !veRegime(role, v.body.regime)) return reply.code(403).send({ error: SEM_REGIME });
+    const antes = await repo.obterFormador(db, v.params.id);
+    const email = normalizeEmail(v.body.email);
+    if (!antes || !email || normalizeEmail(String(antes.email ?? "")) !== email) {
+      return reply.code(404).send({ error: "Não há formador com esse email nesta ficha." });
+    }
+    const regimes = repo.mapFormadorBase(antes).regimes;
+    if (!regimes.includes(v.body.regime)) {
+      await repo.atualizarFormador(db, v.params.id, { regimes: [...regimes, v.body.regime] });
+      await audit(db, req.actor!.id, "formador.regime", "formador", String(v.params.id), req.ip, { regime: v.body.regime });
+    }
+    const row = await repo.obterFormador(db, v.params.id);
+    const base = row ? { ...repo.mapFormadorBase(row), alocado: await formadorEstaAlocado(db, String(row.nome ?? "")) } : null;
+    return { formador: base && !veValores(role) ? semValores(base) : base, acesso: null };
   });
 
   // ─── Documentos ───────────────────────────────────────────────────────────

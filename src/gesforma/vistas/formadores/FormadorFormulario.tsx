@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { apiAlterarFormador, apiCriarFormador, type AcessoCriado, type DadosFormador, type FormadorBase, type Regime } from "../../../partilhado/api/formadores";
+import { ApiError } from "../../../partilhado/api/cliente";
+import { apiAlterarFormador, apiCriarFormador, apiJuntarRegimeFormador, type AcessoCriado, type DadosFormador, type FormadorBase, type Regime } from "../../../partilhado/api/formadores";
 import { DisponibilidadeEditor } from "../../../partilhado/DisponibilidadeEditor";
 import { SLOTS_TODOS } from "../../../partilhado/disponibilidade";
 import { toastError } from "../../../partilhado/toastBus";
@@ -30,10 +31,13 @@ export function FormadorFormulario({ aberto, regime, formador, especialidades, o
   const [d, setD] = useState<DadosFormador>(() => novo(regime));
   const [erro, setErro] = useState("");
   const [aGravar, setAGravar] = useState(false);
+  /** Ficha que já existe com este email (409 ao criar): junta-se o regime em vez de criar outra. */
+  const [existente, setExistente] = useState<number | null>(null);
 
   useEffect(() => {
     if (!aberto) return;
     setErro("");
+    setExistente(null);
     setD(formador ? deFormador(formador) : novo(regime));
   }, [aberto, formador, regime]);
 
@@ -51,8 +55,24 @@ export function FormadorFormulario({ aberto, regime, formador, especialidades, o
       const r = formador ? await apiAlterarFormador(formador.id, corpo) : await apiCriarFormador(corpo);
       onGuardado(r.formador, r.acesso);
     } catch (e) {
+      const ficha = e instanceof ApiError && typeof e.dados?.fichaExistente === "number" ? e.dados.fichaExistente : null;
+      setExistente(formador ? null : ficha);
       setErro(e instanceof Error ? e.message : "Não foi possível gravar.");
-      toastError(e, "Não foi possível gravar o formador.");
+      if (ficha == null) toastError(e, "Não foi possível gravar o formador.");
+    } finally {
+      setAGravar(false);
+    }
+  }
+
+  async function juntarRegime() {
+    if (existente == null) return;
+    setAGravar(true);
+    try {
+      const r = await apiJuntarRegimeFormador(existente, regime, d.email.trim());
+      onGuardado(r.formador, null);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível juntar o regime.");
+      toastError(e, "Não foi possível juntar o regime à ficha.");
     } finally {
       setAGravar(false);
     }
@@ -74,6 +94,11 @@ export function FormadorFormulario({ aberto, regime, formador, especialidades, o
     >
       <div className="space-y-4">
         {erro && <Aviso tom="perigo">{erro}</Aviso>}
+        {existente != null && (
+          <Botao variante="secundario" onClick={() => void juntarRegime()} aCarregar={aGravar}>
+            Juntar {regime === "gold" ? "Gold" : "Financiada"} à ficha que já existe
+          </Botao>
+        )}
         <Campo rotulo="Nome completo" obrigatorio>
           {p => <Entrada {...p} value={d.nome} onChange={e => mudar({ nome: e.target.value })} autoComplete="off" />}
         </Campo>

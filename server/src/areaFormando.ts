@@ -117,7 +117,9 @@ export async function gerarAcessoFormando(db: Db, regime: "gold" | "fin", id: nu
       if (!outra || outra.role !== "formando") {
         return { erro: "Este email já é uma conta da secretaria ou de um formador.", estado: 409 as const };
       }
-      userId = outra.id;
+      // Outro pedido criou a conta ao mesmo tempo: a palavra-passe gerada aqui não ficou gravada e não se envia.
+      await ligarFichasPeloEmail(db, outra.id, email);
+      return { email, criado: false, reposto: false };
     }
   } else {
     await reporContaFormando(db, { id: conta.id, nome, hash });

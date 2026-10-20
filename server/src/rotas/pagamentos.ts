@@ -217,8 +217,15 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const q = webhookSchema.safeParse(req.query ?? {});
     const b = webhookSchema.safeParse(req.body ?? {});
     if (!q.success || !b.success) return reply.code(400).send({ error: "pedido inválido" });
+    // A chave no endereço (?chave= / ?key=) fica nos registos de acesso de quem estiver pelo caminho. Só o GET a
+    // aceita assim, porque é como os gateways (Ifthenpay, EuPago) chamam o callback: a chave anti-phishing vai na
+    // query. Num POST vem no cabeçalho X-Webhook-Key (ou no corpo), nunca no endereço. O nosso registo esconde-a.
+    if (req.method === "POST" && (q.data.chave || q.data.key)) {
+      return reply.code(400).send({ error: "Num POST a chave vai no cabeçalho X-Webhook-Key ou no corpo, não no endereço." });
+    }
     const d = { ...b.data, ...q.data };
-    const chave = String(d.chave ?? d.key ?? req.headers["x-webhook-key"] ?? "").trim();
+    const cabecalho = req.headers["x-webhook-key"];
+    const chave = String((typeof cabecalho === "string" && cabecalho) || d.chave || d.key || "").trim();
     const esperada = config.paymentWebhookKey || await chaveWebhookGuardada(db);
     if (!esperada) return reply.code(503).send({ error: "webhook sem chave: defina PAYMENT_WEBHOOK_KEY ou a chave em Configurações → Pagamentos" });
     if (!chaveIgual(chave, esperada)) return reply.code(401).send({ error: "chave inválida" });

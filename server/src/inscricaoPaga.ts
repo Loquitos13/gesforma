@@ -10,8 +10,8 @@ import { newPublicId, nextOpsId } from "./ops.js";
 import { PercursoErro, ligarPreinscricaoAoFormandoGold, validarPreinscricao } from "./percurso.js";
 import { readPreinscricaoPii, writeFormandoPiiPatch } from "./pii.js";
 import {
-  formandoGoldNaTurma, inserirFormandoGoldPago, leadComPagamentoPedido, leadCompleto, nomeDoFormando, pagamentoDoLead,
-  pagamentoBasico, turmaGoldParaInscricao,
+  formandoGoldNaTurma, inserirFormandoGoldPago, leadComPagamentoPedido, leadCompleto, libertarConclusao, nomeDoFormando,
+  pagamentoDoLead, pagamentoBasico, reservarConclusao, turmaGoldParaInscricao,
 } from "./repos/formandosInscricao.js";
 import { isEmail, normalizeEmail } from "./security.js";
 
@@ -94,9 +94,23 @@ export async function darAcessoAoFormando(db: Db, regime: "gold" | "fin", forman
   return { enviado: true as const, criado: acesso.criado };
 }
 
+/**
+ * Conclui a inscrição paga, uma vez de cada vez por pré-inscrição: com dois pedidos ao mesmo tempo (a reentrega
+ * do webhook e a confirmação, ou duas reentregas), o segundo não repete nada; com a inscrição já concluída também não.
+ */
 export async function aposPagamentoConfirmado(db: Db, pagamentoId: string, actorId?: string) {
   const leadId = await leadDoPagamentoPedido(db, pagamentoId);
   if (!leadId) return null;
+  if (!(await reservarConclusao(db, leadId))) return { erro: "A inscrição está a ser concluída neste momento." };
+  try {
+    return await concluirComReserva(db, leadId, pagamentoId, actorId);
+  } finally {
+    await libertarConclusao(db, leadId).catch(() => undefined);
+  }
+}
+
+async function concluirComReserva(db: Db, leadId: number, pagamentoId: string, actorId?: string) {
+  // Lido depois da reserva: o que outro pedido acabou de concluir já se vê aqui.
   const lead = await leadCompleto(db, leadId);
   if (!lead || lead.estado === "Formando" || lead.estado === "Desistiu") return null;
   const email = normalizeEmail(String(lead.email ?? ""));

@@ -427,7 +427,8 @@ export async function inserirUtilizadorFormador(c: Consulta, d: { id: string; no
   return id != null;
 }
 
-/** A conta já é a de outra ficha de formador? */
+/** A outra ficha de formador a que a conta já está ligada (o id), ou null. */
 export async function contaLigadaAOutraFicha(c: Consulta, userId: string, fichaId: number) {
-  return (await valor(c, "SELECT 1 FROM formadores WHERE user_id = $1::uuid AND id <> $2 LIMIT 1", [userId, fichaId])) != null;
+  const id = await valor<number>(c, "SELECT id FROM formadores WHERE user_id = $1::uuid AND id <> $2 ORDER BY id LIMIT 1", [userId, fichaId]);
+  return id == null ? null : Number(id);
 }

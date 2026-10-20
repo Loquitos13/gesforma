@@ -1,5 +1,10 @@
 import { LogController } from "fastify";
 
+/** Esconde as chaves que os gateways põem no endereço (`?chave=`, `?key=` do webhook de pagamentos). */
+export function urlSemSegredos(url: string | undefined) {
+  return url?.replace(/([?&](?:chave|key)=)[^&#]*/gi, "$1***");
+}
+
 type Pedido = { method?: string; url?: string; consultas?: { n: number; ms: number } };
 type Resposta = { statusCode: number; elapsedTime: number; log: { info: (o: object, m: string) => void; warn: (o: object, m: string) => void; error: (o: object, m: string) => void } };
 
@@ -15,7 +20,7 @@ export class LogCompacto extends LogController {
   requestCompleted(error: unknown, request: Pedido, reply: Resposta) {
     const linha = {
       m: request.method,
-      u: request.url,
+      u: urlSemSegredos(request.url),
       s: reply.statusCode,
       ms: Math.round(reply.elapsedTime),
       // Consultas à base neste pedido e tempo gasto nelas.

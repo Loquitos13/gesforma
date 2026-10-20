@@ -12,6 +12,21 @@ export async function leadComPagamentoPedido(c: Consulta, pagamentoId: string) {
   );
 }
 
+/**
+ * Reserva a conclusão da inscrição desta pré-inscrição (uma de cada vez). O UPDATE condicional é atómico:
+ * de dois pedidos ao mesmo tempo, só um a obtém. Uma reserva com mais de 10 minutos já não conta.
+ */
+export async function reservarConclusao(c: Consulta, leadId: number) {
+  return (await one<{ id: number }>(c,
+    `UPDATE preinscricoes SET conclusao_reservada_em = now()
+      WHERE id = $1 AND (conclusao_reservada_em IS NULL OR conclusao_reservada_em < now() - interval '10 minutes')
+      RETURNING id`, [leadId])) != null;
+}
+
+export async function libertarConclusao(c: Consulta, leadId: number) {
+  await one(c, "UPDATE preinscricoes SET conclusao_reservada_em = NULL WHERE id = $1 RETURNING id", [leadId]);
+}
+
 export async function leadCompleto(c: Consulta, id: number) {
   return one<Record<string, unknown>>(c, "SELECT * FROM preinscricoes WHERE id = $1", [id]);
 }

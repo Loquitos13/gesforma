@@ -16,22 +16,36 @@ const idOuNull = (v: unknown) => (v == null ? null : num(v));
 
 // ─── Clientes ────────────────────────────────────────────────────────────────
 
-export type FiltroClientes = { q?: string; estado?: string; tipo?: string; de?: string; ate?: string; pagina?: number; porPagina?: number; ordem?: string };
+export type FiltroClientes = {
+  q?: string; estado?: string; tipo?: string; de?: string; ate?: string; pagina?: number; porPagina?: number; ordem?: string; ator?: AtorCrm;
+};
 
-/** Clientes com o resumo comercial: propostas, valor em aberto, contratos e o estado da última proposta. */
+/**
+ * Condições de visibilidade (`Filtros.visivelPara`) das propostas (p.) e dos contratos (k.) deste ator, para usar
+ * dentro de subconsultas. As duas usam os mesmos parâmetros (o id do comercial em $1, ou nenhum): `params` serve a ambas
+ * e os filtros seguintes começam a seguir.
+ */
+function visibilidadeDocs(ator?: AtorCrm) {
+  const p = new Filtros().visivelPara(ator, "p.comercial_id", "p.regime");
+  const k = new Filtros().visivelPara(ator, "k.comercial_id", "k.formando_regime");
+  return { p: p.and, k: k.and, params: p.params };
+}
+
+/** Clientes com o resumo comercial: propostas, valor em aberto, contratos e o estado da última proposta (só os que o ator vê). */
 export async function listarClientes(c: Consulta, f: FiltroClientes) {
+  const vis = visibilidadeDocs(f.ator);
   const base = `
     SELECT c.id, c.nome, c.tipo, c.email, c.telf, c.nif, c.notas, c.created_at,
-           (SELECT count(*)::int FROM propostas_comerciais p WHERE p.cliente_id = c.id) AS propostas,
+           (SELECT count(*)::int FROM propostas_comerciais p WHERE p.cliente_id = c.id ${vis.p}) AS propostas,
            (SELECT coalesce(sum(p.valor), 0)::float FROM propostas_comerciais p
-             WHERE p.cliente_id = c.id AND p.estado IN ${ABERTAS}) AS em_aberto,
-           (SELECT count(*)::int FROM contratos_comerciais k WHERE k.cliente_id = c.id) AS contratos,
-           coalesce((SELECT p.estado FROM propostas_comerciais p WHERE p.cliente_id = c.id
+             WHERE p.cliente_id = c.id AND p.estado IN ${ABERTAS} ${vis.p}) AS em_aberto,
+           (SELECT count(*)::int FROM contratos_comerciais k WHERE k.cliente_id = c.id ${vis.k}) AS contratos,
+           coalesce((SELECT p.estado FROM propostas_comerciais p WHERE p.cliente_id = c.id ${vis.p}
                       ORDER BY p.enviada_em DESC, p.id DESC LIMIT 1), 'Sem propostas') AS ultimo_estado,
-           (SELECT p.curso FROM propostas_comerciais p WHERE p.cliente_id = c.id
+           (SELECT p.curso FROM propostas_comerciais p WHERE p.cliente_id = c.id ${vis.p}
              ORDER BY p.enviada_em DESC, p.id DESC LIMIT 1) AS ultimo_curso
       FROM crm_clientes c`;
-  const w = new Filtros();
+  const w = new Filtros(vis.params);
   const q = padraoPesquisa(f.q);
   w.add("(t.nome ILIKE ? OR t.email ILIKE ? OR t.nif ILIKE ?)", q, q, q);
   w.add("t.ultimo_estado = ?", f.estado);
@@ -58,14 +72,16 @@ function mapClienteResumo(r: Record<string, unknown>) {
   };
 }
 
-/** Totais do diretório de clientes (cabeçalho do ecrã). */
-export async function resumoClientes(c: Consulta) {
+/** Totais do diretório de clientes (cabeçalho do ecrã), com as propostas e os contratos que o ator vê. */
+export async function resumoClientes(c: Consulta, ator?: AtorCrm) {
+  const vis = visibilidadeDocs(ator);
   const r = await one<{ clientes: number; em_aberto: number; com_contrato: number }>(
     c,
     `SELECT (SELECT count(*)::int FROM crm_clientes) AS clientes,
-            (SELECT coalesce(sum(valor), 0)::float FROM propostas_comerciais
-              WHERE cliente_id IS NOT NULL AND estado IN ${ABERTAS}) AS em_aberto,
-            (SELECT count(DISTINCT cliente_id)::int FROM contratos_comerciais WHERE cliente_id IS NOT NULL) AS com_contrato`,
+            (SELECT coalesce(sum(p.valor), 0)::float FROM propostas_comerciais p
+              WHERE p.cliente_id IS NOT NULL AND p.estado IN ${ABERTAS} ${vis.p}) AS em_aberto,
+            (SELECT count(DISTINCT k.cliente_id)::int FROM contratos_comerciais k WHERE k.cliente_id IS NOT NULL ${vis.k}) AS com_contrato`,
+    vis.params,
   );
   return { clientes: num(r?.clientes), emAberto: num(r?.em_aberto), comContrato: num(r?.com_contrato) };
 }
@@ -89,7 +105,7 @@ export async function obterCliente(c: Consulta, id: number, ator?: AtorCrm) {
        FROM contratos_comerciais k ${wk.where} ORDER BY k.created_at DESC`,
     wk.params,
   );
-  const historico = await historicoCliente(c, num(cli.id), txt(cli.email));
+  const historico = await historicoCliente(c, num(cli.id), txt(cli.email), ator);
   return {
     id: num(cli.id), nome: txt(cli.nome), tipo: txt(cli.tipo) || "Empresa", email: txt(cli.email), telf: txt(cli.telf), nif: txt(cli.nif), notas: txt(cli.notas),
     criadoEm: iso(cli.created_at),
@@ -109,32 +125,38 @@ export async function obterCliente(c: Consulta, id: number, ator?: AtorCrm) {
 /**
  * Produtos e serviços vendidos ao cliente: contratos assinados e propostas aceites (ligados ao cliente)
  * e inscrições em cursos (Gold e Financiada) com o mesmo email. Do mais recente para o mais antigo.
+ * Com ator, só os documentos que ele vê e os cursos do regime em que trabalha (comercial → Gold, Financiada → Fin).
  */
-export async function historicoCliente(c: Consulta, id: number, email: string) {
+export async function historicoCliente(c: Consulta, id: number, email: string, ator?: AtorCrm) {
   const mail = email.trim().toLowerCase();
+  // p e k partilham os parâmetros ($1 cliente, $2 email e, para o comercial, $3 o seu id).
+  const p = new Filtros([id, mail]).visivelPara(ator, "p.comercial_id", "p.regime");
+  const k = new Filtros([id, mail]).visivelPara(ator, "k.comercial_id", "k.formando_regime");
+  const verGold = !ator || ator.role !== "financiada";
+  const verFin = !ator || ator.role !== "comercial";
   const rows = await many(
     c,
     `SELECT 'Contrato' AS origem, k.id::text AS ref, k.curso AS descricao, k.valor::float AS valor, k.estado,
             COALESCE(k.assinado_em, k.created_at) AS data
-       FROM contratos_comerciais k WHERE k.cliente_id = $1 AND k.estado = 'Assinado'
+       FROM contratos_comerciais k WHERE k.cliente_id = $1 AND k.estado = 'Assinado' ${k.and}
      UNION ALL
      SELECT 'Proposta aceite', p.id::text, p.curso, p.valor::float, p.estado, p.enviada_em
        FROM propostas_comerciais p
-      WHERE p.cliente_id = $1 AND p.estado = 'Aceite'
+      WHERE p.cliente_id = $1 AND p.estado = 'Aceite' ${p.and}
         AND NOT EXISTS (SELECT 1 FROM contratos_comerciais k WHERE k.proposta_id = p.id AND k.estado = 'Assinado')
      UNION ALL
      SELECT 'Curso Gold', g.id::text, g.curso || CASE WHEN g.turma <> '' THEN ' · ' || g.turma ELSE '' END, g.valor::float,
             CASE WHEN g.pago THEN 'Pago' ELSE g.estado END,
             -- O carimbo antigo nem sempre é ISO: só se lê a data quando começa por AAAA-MM-DD.
             CASE WHEN g.inscrito ~ '^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])' THEN substr(g.inscrito, 1, 10)::date::timestamptz END
-       FROM formandos_gold g WHERE $2 <> '' AND lower(g.email) = $2
+       FROM formandos_gold g WHERE ${verGold} AND $2 <> '' AND lower(g.email) = $2
      UNION ALL
      SELECT 'Curso Financiado', f.id::text, f.curso || CASE WHEN f.turma <> '' THEN ' · ' || f.turma ELSE '' END, 0::float,
             f.estado, NULL::timestamptz
-       FROM formandos_fin f WHERE $2 <> '' AND lower(f.email) = $2
+       FROM formandos_fin f WHERE ${verFin} AND $2 <> '' AND lower(f.email) = $2
      ORDER BY data DESC NULLS LAST
      LIMIT 200`,
-    [id, mail],
+    p.params,
   );
   return rows.map(r => ({
     origem: txt(r.origem), ref: txt(r.ref), descricao: txt(r.descricao), valor: num(r.valor), estado: txt(r.estado), data: iso(r.data),
@@ -160,6 +182,11 @@ export async function alterarCliente(c: Consulta, id: number, d: Partial<DadosCl
     [id, d.nome ?? null, d.email ?? null, d.telf ?? null, d.nif ?? null, d.notas ?? null, d.tipo ?? null],
   );
   return Boolean(r);
+}
+
+/** Bloqueia o cliente até ao fim da transacção (para verificar e apagar sem corrida); false se não existe. */
+export async function clienteParaApagar(c: Consulta, id: number) {
+  return Boolean(await one(c, "SELECT id FROM crm_clientes WHERE id = $1 FOR UPDATE", [id]));
 }
 
 /** Frase a explicar porque não se pode apagar (propostas ou contratos ligados), ou null. */

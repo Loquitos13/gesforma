@@ -91,7 +91,11 @@ describe("Clientes, propostas e contratos", () => {
     const contrato = k.json().contrato;
     expect(contrato).toMatchObject({ clienteId: id, curso: "Excel", valor: 1200, estado: "Rascunho" });
 
-    const ass = await pedido(ctx, "comercial", "PATCH", `/v1/crm/contratos/${contrato.id}`, { estado: "Assinado" });
+    // Assinatura em papel: só a gestão a marca (a digital fica assinada quando o cliente assina).
+    expect((await pedido(ctx, "comercial", "PATCH", `/v1/crm/contratos/${contrato.id}`, { estado: "Assinado" })).statusCode).toBe(403);
+    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/crm/contratos/${contrato.id}`, { estado: "Assinado" })).statusCode).toBe(409);
+    await pedido(ctx, "comercial", "PATCH", `/v1/crm/contratos/${contrato.id}`, { corpo: '<div data-gf="doc" data-assinatura="papel" hidden></div><p>Contrato</p>' });
+    const ass = await pedido(ctx, "secretaria", "PATCH", `/v1/crm/contratos/${contrato.id}`, { estado: "Assinado" });
     expect(ass.json().contrato.assinadoEm).toBeTruthy();
     expect((await pedido(ctx, "comercial", "PATCH", `/v1/crm/contratos/${contrato.id}`, { valor: 1 })).statusCode).toBe(409);
     expect((await pedido(ctx, "secretaria", "DELETE", `/v1/crm/contratos/${contrato.id}`)).statusCode).toBe(409);
@@ -188,12 +192,13 @@ describe("Campanhas por email aos pré-inscritos parados", () => {
     const turmaId = t.json().turma.id as number;
     await ctx.db.query("UPDATE turmas_gold SET cronograma_publicado_em = now() WHERE id = $1", [turmaId]);
 
+    // Do comercial que envia: o comercial só vê (e escreve a) as suas pré-inscrições, não as sem dono.
     const lead = async (dias: number, contactos: number, estado = "2º Contacto") => {
       const r = await ctx.db.query<{ id: number }>(
-        `INSERT INTO preinscricoes (id, inscrito, nome, email, curso, preco, estado, regime, created_at)
-         VALUES (nextval('ops_id_seq')::int, to_char(now(), 'YYYY-MM-DD'), 'Parado', $1, $2, 100, $3, 'gold', now() - make_interval(days => $4::int))
+        `INSERT INTO preinscricoes (id, inscrito, nome, email, curso, preco, estado, regime, comercial_id, created_at)
+         VALUES (nextval('ops_id_seq')::int, to_char(now(), 'YYYY-MM-DD'), 'Parado', $1, $2, 100, $3, 'gold', $5, now() - make_interval(days => $4::int))
          RETURNING id`,
-        [`parado.${Math.random().toString(36).slice(2)}@exemplo.pt`, curso, estado, dias],
+        [`parado.${Math.random().toString(36).slice(2)}@exemplo.pt`, curso, estado, dias, ctx.userId.comercial],
       );
       const id = r.rows[0]!.id;
       for (let i = 0; i < contactos; i++) await ctx.db.query("INSERT INTO preinscricao_contactos (preinscricao_id, nota) VALUES ($1, 'lembrete')", [id]);

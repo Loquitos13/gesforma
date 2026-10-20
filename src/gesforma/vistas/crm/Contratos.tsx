@@ -23,21 +23,21 @@ export default function Contratos({ view }: VistaProps) {
   const abrir = (editar: string) => setF({ editar });
   const fechar = () => setF({ editar: "" });
 
-  if (f.editar) return <Editor editar={f.editar} trilho={trilho} onFechar={fechar} />;
+  if (f.editar) return <Editor editar={f.editar} regime={regimeDaVista(view)} trilho={trilho} onFechar={fechar} />;
   return <Lista tab={tab} sel={f.sel} setF={setF} abrir={abrir} />;
 }
 
-function Editor({ editar, trilho, onFechar }: { editar: string; trilho: string; onFechar: () => void }) {
+function Editor({ editar, regime, trilho, onFechar }: { editar: string; regime: "gold" | "fin"; trilho: string; onFechar: () => void }) {
   const [tipo, a, b] = editar.split(":");
   if (tipo === "proposta") {
     const id = a && a !== "novo" ? Number(a) : null;
     const cliente = b?.startsWith("c") ? Number(b.slice(1)) : null;
-    return <EditorProposta propostaId={id} clienteInicial={cliente} onFechar={onFechar} trilho={trilho} />;
+    return <EditorProposta propostaId={id} clienteInicial={cliente} regime={regime} onFechar={onFechar} trilho={trilho} />;
   }
   if (tipo === "contrato") {
     const id = a && a !== "novo" ? Number(a) : null;
     const proposta = b?.startsWith("p") ? Number(b.slice(1)) : null;
-    return <EditorContrato contratoId={id} propostaId={proposta} onFechar={onFechar} trilho={trilho} />;
+    return <EditorContrato contratoId={id} propostaId={proposta} regime={regime} onFechar={onFechar} trilho={trilho} />;
   }
   if (tipo === "modelo" && (a === "proposta" || a === "contrato")) return <EditorModeloPorId tipo={a} id={b && b !== "novo" ? Number(b) : null} trilho={trilho} onFechar={onFechar} />;
   return null;

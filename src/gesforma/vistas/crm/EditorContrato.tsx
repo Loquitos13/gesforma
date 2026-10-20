@@ -2,7 +2,7 @@
 // a página A4 à direita. O PDF para assinatura sai desta página.
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  apiAlterarContrato, apiCliente, apiClientes, apiContrato, apiCriarContrato, apiModelos, apiProposta, type Contrato,
+  apiAlterarContrato, apiCliente, apiContrato, apiCriarContrato, apiModelos, apiProposta, type Contrato,
 } from "../../../partilhado/api/crmDiretorio";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { invalidar, useRecurso } from "../../../partilhado/dados/useRecurso";
@@ -10,6 +10,7 @@ import { toastError, toastOk } from "../../../partilhado/toastBus";
 import { Aviso, Botao, ErroCarregar, Esqueleto, data } from "../../../partilhado/ui";
 import { EnviarAssinatura } from "../assinaturas/EnviarAssinatura";
 import { numeroDe, useEu } from "./comum";
+import { EscolherCliente } from "./EscolherCliente";
 import { BarraFormatacao, BotaoTexto, CLAUSULA, clausulaOpcional } from "./documento/BarraFormatacao";
 import { useEntidade } from "./documento/comum";
 import { CampoLateral, CartaoLateral, CONTROLO, EcraDocumento, RodapePagina } from "./documento/EcraDocumento";
@@ -32,9 +33,11 @@ function intervalo(de: string, ate: string) {
   return `${a} e ${b}`;
 }
 
-export function EditorContrato({ contratoId, propostaId, onFechar, trilho }: {
+export function EditorContrato({ contratoId, propostaId, regime, onFechar, trilho }: {
   contratoId: number | null;
   propostaId?: number | null;
+  /** Regime do ecrã (Gold ou Financiada): o contrato novo fica nele. */
+  regime: "gold" | "fin";
   onFechar: () => void;
   trilho: string;
 }) {
@@ -43,12 +46,13 @@ export function EditorContrato({ contratoId, propostaId, onFechar, trilho }: {
   const erro = k.erro ?? p.erro;
   if (erro) return <ErroCarregar erro={erro} onTentar={() => { k.recarregar(); p.recarregar(); }} />;
   if ((contratoId && !k.dados) || (!contratoId && propostaId && !p.dados)) return <Esqueleto linhas={8} />;
-  return <Editor contrato={k.dados?.contrato ?? null} proposta={p.dados?.proposta ?? null} onFechar={onFechar} trilho={trilho} />;
+  return <Editor contrato={k.dados?.contrato ?? null} proposta={p.dados?.proposta ?? null} regime={regime} onFechar={onFechar} trilho={trilho} />;
 }
 
-function Editor({ contrato, proposta, onFechar, trilho }: {
+function Editor({ contrato, proposta, regime, onFechar, trilho }: {
   contrato: Contrato | null;
   proposta: Awaited<ReturnType<typeof apiProposta>>["proposta"] | null;
+  regime: "gold" | "fin";
   onFechar: () => void;
   trilho: string;
 }) {
@@ -83,14 +87,15 @@ function Editor({ contrato, proposta, onFechar, trilho }: {
   const [chave, setChave] = useState(`k:${contrato?.id ?? "novo"}`);
   const [htmlInicial, setHtmlInicial] = useState(inicial.html);
 
-  const clientes = useRecurso(!contrato && !proposta ? "crm:clientes:todos" : null, signal => apiClientes({ porPagina: 200, ordem: "nome" }, { signal }));
   const ficha = useRecurso(clienteId ? `crm:cliente:${clienteId}` : null, signal => apiCliente(Number(clienteId), { signal }));
   const modelos = useRecurso("crm:modelos:contrato", signal => apiModelos("contrato", { signal }));
-  const cursos = useOpcoes("cursos", { regime: "gold" });
-  const turmas = useOpcoes("turmas", { regime: "gold" });
+  const regimeDoc = proposta ? (proposta.regime === "fin" ? "fin" : "gold") : regime;
+  const cursos = useOpcoes("cursos", { regime: regimeDoc });
+  const turmas = useOpcoes("turmas", { regime: regimeDoc });
   const horas = Number(cursos.opcoes.find(o => o.valor === curso)?.extra?.horas) || 0;
   const estado = atual?.estado ?? "Rascunho";
-  const bloqueado = estado === "Assinado" || estado === "Por assinar";
+  // Assinado uma vez, fica fechado mesmo depois de cancelado (o servidor recusa alterações).
+  const bloqueado = estado === "Assinado" || estado === "Por assinar" || Boolean(atual?.assinadoEm);
 
   const arrancou = useRef(Boolean(contrato));
   useEffect(() => {
@@ -174,7 +179,7 @@ function Editor({ contrato, proposta, onFechar, trilho }: {
         k = (await apiCriarContrato({
           clienteNome: clienteNome.trim(), clienteEmail: clienteEmail.trim(), curso: curso.trim(), valor: total, corpo: corpo(),
           templateId: templateId && templateId !== "branco" ? Number(templateId) : null, clienteId: clienteId ? Number(clienteId) : null,
-          propostaId: proposta?.id ?? null, comercialId: eu.id,
+          propostaId: proposta?.id ?? null, comercialId: eu.id, regime,
         })).contrato;
       }
       for (const x of ["crm:contratos", "crm:contrato", "crm:clientes", "crm:propostas", "crm:modelos"]) invalidar(x);
@@ -236,10 +241,7 @@ function Editor({ contrato, proposta, onFechar, trilho }: {
             <CartaoLateral titulo="Cliente">
               {!contrato && !proposta && (
                 <CampoLateral rotulo="Cliente registado">
-                  <select className={CONTROLO} value={clienteId} onChange={e => { const c = clientes.dados?.linhas.find(x => String(x.id) === e.target.value); setClienteId(e.target.value); if (c) { setClienteNome(c.nome); setClienteEmail(c.email); } setSujo(true); }}>
-                    <option value="">Sem cliente registado</option>
-                    {(clientes.dados?.linhas ?? []).map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                  </select>
+                  <EscolherCliente valor={clienteId} nomeAtual={ficha.dados?.cliente.nome ?? ""} onEscolher={c => { setClienteId(c ? String(c.id) : ""); if (c) { setClienteNome(c.nome); setClienteEmail(c.email); } setSujo(true); }} />
                 </CampoLateral>
               )}
               <CampoLateral rotulo="Nome no contrato">

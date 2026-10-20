@@ -1,7 +1,7 @@
 // Nova proposta / editar proposta: dados à esquerda, a página A4 à direita (o PDF sai desta página).
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  apiAlterarProposta, apiCliente, apiClientes, apiModelos, apiProposta, apiPropostaCliente,
+  apiAlterarProposta, apiCliente, apiModelos, apiProposta, apiPropostaCliente,
 } from "../../../partilhado/api/crmDiretorio";
 import { apiPrecoInscricao } from "../../../partilhado/api/equipa";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
@@ -9,6 +9,7 @@ import { invalidar, useRecurso } from "../../../partilhado/dados/useRecurso";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
 import { Botao, ErroCarregar, Esqueleto } from "../../../partilhado/ui";
 import { numeroDe, useEu } from "./comum";
+import { EscolherCliente } from "./EscolherCliente";
 import { BarraFormatacao, BotaoTexto } from "./documento/BarraFormatacao";
 import { tabelaInvestimento, useEntidade } from "./documento/comum";
 import { CampoLateral, CartaoLateral, CONTROLO, EcraDocumento, RodapePagina } from "./documento/EcraDocumento";
@@ -22,21 +23,24 @@ import { PaginaA4, type PaginaRef } from "./documento/PaginaA4";
 const CAMPOS_PROPOSTA = CAMPOS.filter(c => !["sede", "representante", "turma", "plano", "datas", "local"].includes(c.chave));
 const DESCONTOS = [0, 5, 10, 15, 20];
 
-export function EditorProposta({ propostaId, clienteInicial, onFechar, trilho }: {
+export function EditorProposta({ propostaId, clienteInicial, regime, onFechar, trilho }: {
   propostaId: number | null;
   clienteInicial?: number | null;
+  /** Regime do ecrã (Gold ou Financiada): a proposta nova fica nele. */
+  regime: "gold" | "fin";
   onFechar: () => void;
   trilho: string;
 }) {
   const proposta = useRecurso(propostaId ? `crm:proposta:${propostaId}` : null, signal => apiProposta(propostaId!, { signal }));
   if (propostaId && proposta.erro) return <ErroCarregar erro={proposta.erro} onTentar={proposta.recarregar} />;
   if (propostaId && !proposta.dados) return <Esqueleto linhas={8} />;
-  return <Editor proposta={proposta.dados?.proposta ?? null} clienteInicial={clienteInicial ?? null} onFechar={onFechar} trilho={trilho} />;
+  return <Editor proposta={proposta.dados?.proposta ?? null} clienteInicial={clienteInicial ?? null} regime={regime} onFechar={onFechar} trilho={trilho} />;
 }
 
-function Editor({ proposta, clienteInicial, onFechar, trilho }: {
+function Editor({ proposta, clienteInicial, regime, onFechar, trilho }: {
   proposta: Awaited<ReturnType<typeof apiProposta>>["proposta"] | null;
   clienteInicial: number | null;
+  regime: "gold" | "fin";
   onFechar: () => void;
   trilho: string;
 }) {
@@ -63,10 +67,10 @@ function Editor({ proposta, clienteInicial, onFechar, trilho }: {
   const [chave, setChave] = useState(`p:${proposta?.id ?? "nova"}`);
   const [htmlInicial, setHtmlInicial] = useState(inicial.html);
 
-  const clientes = useRecurso("crm:clientes:todos", signal => apiClientes({ porPagina: 200, ordem: "nome" }, { signal }));
   const ficha = useRecurso(clienteId ? `crm:cliente:${clienteId}` : null, signal => apiCliente(Number(clienteId), { signal }));
   const modelos = useRecurso("crm:modelos:proposta", signal => apiModelos("proposta", { signal }));
-  const cursos = useOpcoes("cursos", { regime: "gold" });
+  const regimeDoc = proposta ? (proposta.regime === "fin" ? "fin" : "gold") : regime;
+  const cursos = useOpcoes("cursos", { regime: regimeDoc });
   const cliente = ficha.dados?.cliente;
   const horas = Number(cursos.opcoes.find(o => o.valor === curso)?.extra?.horas) || 0;
 
@@ -137,7 +141,7 @@ function Editor({ proposta, clienteInicial, onFechar, trilho }: {
         toastOk("Proposta guardada.");
       } else {
         await apiPropostaCliente(Number(clienteId), {
-          curso: curso.trim(), valor: inv.total, corpo: corpo(), templateId: templateId && templateId !== "branco" ? Number(templateId) : null, comercialId: eu.id, notas: "",
+          curso: curso.trim(), valor: inv.total, corpo: corpo(), templateId: templateId && templateId !== "branco" ? Number(templateId) : null, comercialId: eu.id, notas: "", regime,
         });
         toastOk("Proposta registada como enviada.");
       }
@@ -176,13 +180,10 @@ function Editor({ proposta, clienteInicial, onFechar, trilho }: {
         <>
           <CartaoLateral titulo="Para quem">
             <CampoLateral rotulo="Cliente">
-              {proposta && !proposta.clienteId ? (
-                <input className={CONTROLO} value={proposta.clienteNome} readOnly />
+              {proposta ? (
+                <input className={CONTROLO} value={cliente?.nome ?? proposta.clienteNome} readOnly />
               ) : (
-                <select className={CONTROLO} value={clienteId} onChange={e => { setClienteId(e.target.value); setEmail(""); setSujo(true); }} disabled={Boolean(proposta)}>
-                  <option value="">Escolher cliente</option>
-                  {(clientes.dados?.linhas ?? []).map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                </select>
+                <EscolherCliente valor={clienteId} nomeAtual={cliente?.nome ?? ""} onEscolher={c => { setClienteId(c ? String(c.id) : ""); setEmail(""); setSujo(true); }} />
               )}
             </CampoLateral>
             <CampoLateral rotulo="A/C">

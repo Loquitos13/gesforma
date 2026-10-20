@@ -52,7 +52,7 @@ export const apiCliente = (id: number, o: Sinal = {}) => api<{ cliente: ClienteF
 export const apiCriarCliente = (d: DadosCliente) => enviar.post<{ cliente: DadosCliente & { id: number } }>("/v1/crm/clientes", d);
 export const apiAlterarCliente = (id: number, d: Partial<DadosCliente>) => enviar.patch<{ ok: true }>(`/v1/crm/clientes/${id}`, d);
 export const apiApagarCliente = (id: number) => enviar.delete<{ ok: true }>(`/v1/crm/clientes/${id}`);
-export const apiPropostaCliente = (id: number, d: { curso: string; valor: number; corpo: string; templateId?: number | null; comercialId?: string; notas?: string }) =>
+export const apiPropostaCliente = (id: number, d: { curso: string; valor: number; corpo: string; templateId?: number | null; comercialId?: string; notas?: string; regime?: "gold" | "fin" }) =>
   enviar.post<{ proposta: { id: number } }>(`/v1/crm/clientes/${id}/propostas`, d);
 
 export const apiParceiros = (f: { q?: string; tipo?: string; comercial?: string }, o: Sinal = {}) =>
@@ -78,7 +78,7 @@ export const apiContratos = (f: { q?: string; estado?: string; pagina?: number }
 export const apiContrato = (id: number, o: Sinal = {}) => api<{ contrato: Contrato }>(`/v1/crm/contratos/${id}`, { silencioso: true, signal: o.signal });
 export const apiCriarContrato = (d: {
   clienteNome: string; clienteEmail?: string; curso?: string; valor?: number; notas?: string; corpo?: string;
-  templateId?: number | null; clienteId?: number | null; propostaId?: number | null; comercialId?: string;
+  templateId?: number | null; clienteId?: number | null; propostaId?: number | null; comercialId?: string; regime?: "gold" | "fin";
 }) => enviar.post<{ contrato: Contrato }>("/v1/crm/contratos", d);
 export const apiAlterarContrato = (id: number, d: Partial<Pick<Contrato, "clienteNome" | "clienteEmail" | "curso" | "valor" | "estado" | "notas" | "corpo">>) =>
   enviar.patch<{ contrato: Contrato }>(`/v1/crm/contratos/${id}`, d);

@@ -115,20 +115,20 @@ export function DetalheContrato({ id, onEditar }: { id: number; onEditar: () => 
       ]} />
       {!papel && <PainelAssinatura contratoId={k.id} estadoContrato={k.estado} temTexto={Boolean(k.corpo.trim())} contrato={k} />}
       {papel && k.estado !== "Assinado" && (
-        <p className="m-0 text-[13px] text-tinta-suave">Assinatura em papel: imprima o PDF, recolha as assinaturas e marque o contrato como assinado.</p>
+        <p className="m-0 text-[13px] text-tinta-suave">Assinatura em papel: imprima o PDF, recolha as assinaturas e {gestao ? "marque o contrato como assinado" : "peça à secretaria que marque o contrato como assinado"}.</p>
       )}
       <div className="mt-auto flex flex-col gap-2 border-t border-[#EEF0F3] pt-4">
         <Botao variante="primario" onClick={onEditar}>{k.estado === "Rascunho" ? "Abrir no editor" : "Ver o contrato"}</Botao>
         <div className="flex gap-2 flex-wrap">
           <Botao className="flex-1" onClick={pdf}>Descarregar PDF</Botao>
-          {papel && k.estado !== "Assinado" && k.estado !== "Cancelado" && (
+          {gestao && papel && k.estado !== "Assinado" && k.estado !== "Cancelado" && (
             <Botao className="flex-1" aCarregar={estado.aCorrer} onClick={() => void estado.correr(k.id, { estado: "Assinado" })}>Marcar como assinado</Botao>
           )}
         </div>
-        {gestao && k.estado !== "Assinado" && (
+        {gestao && k.estado !== "Assinado" && !(k.estado === "Cancelado" && k.assinadoEm) && (
           <div className="flex gap-3 text-[13px]">
             {k.estado !== "Cancelado" && <button type="button" className="border-0 bg-transparent p-0 text-tinta-suave cursor-pointer hover:text-tinta" onClick={() => setCancelar(true)}>Cancelar contrato</button>}
-            <button type="button" className="border-0 bg-transparent p-0 text-perigo cursor-pointer" onClick={() => setApagar(true)}>Apagar</button>
+            {!k.assinadoEm && <button type="button" className="border-0 bg-transparent p-0 text-perigo cursor-pointer" onClick={() => setApagar(true)}>Apagar</button>}
           </div>
         )}
       </div>

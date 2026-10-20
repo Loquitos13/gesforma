@@ -7,8 +7,8 @@ import {
 import {
   alterarContrato, alterarModelo, apagarContrato, apagarModelo, contratosPorEstado, criarContrato, criarModelo,
   listarContratos, listarModelos, listarPropostas, obterContrato, obterModelo, obterProposta, propostasPorEstado,
-  type TipoModelo,
 } from "../repos/crmDiretorioDocs.js";
+import { regimeDoPedido } from "../crmLeadsServico.js";
 import { cancelarAbertas, registarEvento, temAssinaturaConcluida } from "../repos/assinaturas.js";
 import { donoDoPedido, linhaVisivel } from "../repos/crmVisivel.js";
 import { idNum, idParam, paginacao, regime, textoQuery, validar, BODY_LIMIT_DOC, corpoDoc } from "../validacao.js";
@@ -40,6 +40,7 @@ const contratoSchema = z.object({
   comercialId: z.string().uuid().optional(),
   clienteId: z.number().int().positive().nullable().optional().default(null),
   propostaId: z.number().int().positive().nullable().optional().default(null),
+  regime: regime.optional(),
 });
 const contratoPatch = z.object({
   clienteNome: z.string().trim().min(1).max(160).optional(),
@@ -50,6 +51,11 @@ const contratoPatch = z.object({
   notas: z.string().max(4000).optional(),
   corpo: corpoDoc.optional(),
 }).refine(v => Object.keys(v).length > 0, "nada para alterar");
+
+/** O contrato assina-se em papel (definição guardada no corpo pelo editor); sem ela, a assinatura é digital. */
+function assinaturaEmPapel(corpo: string) {
+  return /data-assinatura=["']?papel\b/.test(corpo);
+}
 
 export async function registarDocs(app: FastifyInstance, deps: Deps) {
   const { db, requireAuth, audit } = deps;
@@ -93,23 +99,6 @@ export async function registarDocs(app: FastifyInstance, deps: Deps) {
     await audit(db, req.actor!.id, "modelo.delete", `modelo_${v.params.tipo}`, String(v.params.id), req.ip);
     return { ok: true };
   });
-
-  // Caminhos antigos dos modelos (mesma resposta de antes).
-  for (const [caminho, tipo] of [["proposta-templates", "proposta"], ["contrato-templates", "contrato"]] as [string, TipoModelo][]) {
-    app.get(`/v1/crm/${caminho}`, async (req, reply) => {
-      if (!requireAuth(req, reply)) return;
-      return { templates: (await listarModelos(db, tipo)).map(({ id, nome, curso, valor, corpo }) => ({ id, nome, curso, valor, corpo })) };
-    });
-    app.post(`/v1/crm/${caminho}`, { bodyLimit: BODY_LIMIT_DOC }, async (req, reply) => {
-      if (!requireAuth(req, reply)) return;
-      const v = validar(reply, { body: modeloSchema }, req);
-      if (!v) return;
-      if (!eSecretaria(req)) return reply.code(403).send({ error: "Só a administração ou a secretaria cria templates." });
-      const id = await criarModelo(db, tipo, v.body);
-      await audit(db, req.actor!.id, "modelo.create", `modelo_${tipo}`, String(id), req.ip);
-      return { template: { id, ...v.body } };
-    });
-  }
 
   // ─── Propostas ─────────────────────────────────────────────────────────────
 
@@ -169,6 +158,8 @@ export async function registarDocs(app: FastifyInstance, deps: Deps) {
     const d = v.body;
     let { corpo, curso, valor } = d;
     let clienteId = d.clienteId;
+    // O regime fica no contrato (formando_regime): é por ele que a Financiada o vê.
+    let regimeContrato = regimeDoPedido(req.actor!.role, d.regime);
     if (d.templateId) {
       const t = await obterModelo(db, "contrato", d.templateId);
       if (!t) return reply.code(400).send({ error: "Modelo de contrato inexistente." });
@@ -183,10 +174,11 @@ export async function registarDocs(app: FastifyInstance, deps: Deps) {
       curso = curso || p.curso;
       valor = valor || p.valor;
       corpo = corpo || p.corpo;
+      regimeContrato = p.regime === "fin" ? "fin" : "gold";
     }
     const id = await criarContrato(db, {
       comercialId: donoDoPedido(req.actor!, d.comercialId), clienteId, propostaId: d.propostaId, clienteNome: d.clienteNome,
-      clienteEmail: d.clienteEmail, curso, valor, notas: d.notas, corpo, templateId: d.templateId,
+      clienteEmail: d.clienteEmail, curso, valor, notas: d.notas, corpo, templateId: d.templateId, regime: regimeContrato,
     });
     await audit(db, req.actor!.id, "contrato.create", "contrato", String(id), req.ip, { clienteId, propostaId: d.propostaId });
     return { contrato: await obterContrato(db, id) };
@@ -199,11 +191,20 @@ export async function registarDocs(app: FastifyInstance, deps: Deps) {
     const atual = await obterContrato(db, v.params.id);
     if (!atual) return reply.code(404).send({ error: "Contrato não encontrado." });
     // Enviado ou assinado, o contrato fica fechado: só se cancela (e o pedido de assinatura aberto fecha-se com ele).
+    // Assinado uma vez (assinado_em), fica assim mesmo depois de cancelado: não volta a rascunho nem se apaga.
     const b = v.body;
-    const fechado = atual.estado === "Por assinar" || atual.estado === "Assinado" || await temAssinaturaConcluida(db, atual.id);
+    const novoEstado = b.estado !== undefined && b.estado !== atual.estado ? b.estado : null;
+    if ((novoEstado === "Cancelado" || novoEstado === "Assinado") && !eSecretaria(req)) {
+      return reply.code(403).send({ error: "Só a administração ou a secretaria cancela ou marca um contrato como assinado." });
+    }
+    if (novoEstado === "Assinado" && !assinaturaEmPapel(b.corpo ?? atual.corpo)) {
+      return reply.code(409).send({ error: "Este contrato assina-se digitalmente: fica assinado quando o cliente assinar." });
+    }
+    const fechado = atual.estado === "Por assinar" || atual.estado === "Assinado" || atual.assinadoEm != null
+      || await temAssinaturaConcluida(db, atual.id);
     const mudaTexto = (b.corpo !== undefined && b.corpo !== atual.corpo) || (b.curso !== undefined && b.curso !== atual.curso)
       || (b.valor !== undefined && b.valor !== atual.valor);
-    const mudaEstado = b.estado !== undefined && b.estado !== atual.estado && b.estado !== "Cancelado";
+    const mudaEstado = novoEstado != null && novoEstado !== "Cancelado";
     if (fechado && (mudaTexto || mudaEstado)) {
       return reply.code(409).send({ error: "O contrato já foi enviado para assinatura ou assinado: o texto, o curso, o valor e o estado não se alteram. Pode cancelá-lo." });
     }
@@ -226,7 +227,7 @@ export async function registarDocs(app: FastifyInstance, deps: Deps) {
     if (!eSecretaria(req)) return reply.code(403).send({ error: "Só a administração ou a secretaria apaga contratos." });
     const atual = await obterContrato(db, v.params.id);
     if (!atual) return reply.code(404).send({ error: "Contrato não encontrado." });
-    if (atual.estado === "Assinado" || await temAssinaturaConcluida(db, atual.id)) {
+    if (atual.estado === "Assinado" || atual.assinadoEm != null || await temAssinaturaConcluida(db, atual.id)) {
       return reply.code(409).send({ error: "Um contrato assinado não se apaga. Pode marcá-lo como cancelado." });
     }
     await apagarContrato(db, v.params.id);

@@ -2,12 +2,13 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
-  alterarCliente, alterarParceiro, apagarCliente, apagarParceiro, bloqueioApagarCliente, criarCliente, criarParceiro,
+  alterarCliente, alterarParceiro, apagarCliente, apagarParceiro, bloqueioApagarCliente, clienteParaApagar, criarCliente, criarParceiro,
   existeUtilizador, listarClientes, listarParceiros, obterCliente, resumoClientes,
 } from "../repos/crmDiretorio.js";
 import { criarProposta, obterClienteBasico } from "../repos/crmDiretorioDocs.js";
 import { donoDoPedido } from "../repos/crmVisivel.js";
-import { idParam, paginacao, textoQuery, validar, BODY_LIMIT_DOC, corpoDoc } from "../validacao.js";
+import { regimeDoPedido } from "../crmLeadsServico.js";
+import { idParam, paginacao, regime, textoQuery, validar, BODY_LIMIT_DOC, corpoDoc } from "../validacao.js";
 import { registarDocs } from "./crmDiretorioDocs.js";
 import type { Deps } from "./tipos.js";
 
@@ -56,6 +57,7 @@ const propostaClienteSchema = z.object({
   comercialId: z.string().uuid().optional(),
   templateId: z.number().int().positive().nullable().optional().default(null),
   notas: z.string().max(4000).optional().default(""),
+  regime: regime.optional(),
 });
 
 const dataQuery = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("").transform(() => undefined));
@@ -71,7 +73,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { query: paginacao.extend({ estado: textoQuery(40), tipo: tipoCliente.optional(), de: dataQuery, ate: dataQuery }) }, req);
     if (!v) return;
-    const [pagina, resumo] = await Promise.all([listarClientes(db, v.query), resumoClientes(db)]);
+    const [pagina, resumo] = await Promise.all([listarClientes(db, { ...v.query, ator: req.actor! }), resumoClientes(db, req.actor!)]);
     return { ...pagina, resumo };
   });
 
@@ -107,9 +109,15 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const v = validar(reply, { params: idParam }, req);
     if (!v) return;
     if (!eSecretaria(req)) return reply.code(403).send({ error: "Só a administração ou a secretaria apaga clientes." });
-    const bloqueio = await bloqueioApagarCliente(db, v.params.id);
-    if (bloqueio) return reply.code(409).send({ error: bloqueio });
-    if (!(await apagarCliente(db, v.params.id))) return reply.code(404).send({ error: "Cliente não encontrado." });
+    // Verifica e apaga na mesma transacção, com o cliente bloqueado: uma proposta criada entretanto não fica sem cliente.
+    const r = await db.tx(async q => {
+      if (!(await clienteParaApagar(q, v.params.id))) return { erro: 404, texto: "Cliente não encontrado." } as const;
+      const bloqueio = await bloqueioApagarCliente(q, v.params.id);
+      if (bloqueio) return { erro: 409, texto: bloqueio } as const;
+      await apagarCliente(q, v.params.id);
+      return null;
+    });
+    if (r) return reply.code(r.erro).send({ error: r.texto });
     await audit(db, req.actor!.id, "cliente.delete", "crm_cliente", String(v.params.id), req.ip);
     return { ok: true };
   });
@@ -126,7 +134,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const id = await criarProposta(db, {
       comercialId, clienteId: v.params.id, preinscricaoId: null, clienteNome: cliente.nome, clienteEmail: cliente.email,
       curso: d.curso, valor: d.valor, estado: "Enviada", respostaCliente: "", notas: d.notas, corpo: d.corpo,
-      templateId: d.templateId, regime: "gold",
+      // O perfil decide (comercial → Gold, Financiada → Fin); a gestão indica o regime do ecrã de onde cria.
+      templateId: d.templateId, regime: regimeDoPedido(req.actor!.role, d.regime),
     });
     await audit(db, req.actor!.id, "proposta.create", "proposta", String(id), req.ip, { clienteId: v.params.id });
     return { proposta: { id, curso: d.curso, estado: "Enviada", valor: d.valor, corpo: d.corpo } };

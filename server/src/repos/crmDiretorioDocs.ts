@@ -185,7 +185,7 @@ export async function contratosPorEstado(c: Consulta, ator?: AtorCrm) {
 
 export type NovoContrato = {
   comercialId: string; clienteId: number | null; propostaId: number | null; clienteNome: string; clienteEmail: string;
-  curso: string; valor: number; notas: string; corpo: string; templateId: number | null;
+  curso: string; valor: number; notas: string; corpo: string; templateId: number | null; regime: "gold" | "fin";
 };
 
 export async function criarContrato(c: Consulta, d: NovoContrato) {
@@ -193,9 +193,10 @@ export async function criarContrato(c: Consulta, d: NovoContrato) {
   await one(
     c,
     `INSERT INTO contratos_comerciais
-       (id, comercial_id, cliente_id, proposta_id, cliente_nome, cliente_email, curso, valor, estado, notas, corpo, template_id, assinado_em)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Rascunho',$9,$10,$11,NULL) RETURNING id`,
-    [id, d.comercialId, d.clienteId, d.propostaId, d.clienteNome, d.clienteEmail, d.curso, d.valor, d.notas, d.corpo, d.templateId],
+       (id, comercial_id, cliente_id, proposta_id, cliente_nome, cliente_email, curso, valor, estado, notas, corpo, template_id,
+        assinado_em, formando_regime)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Rascunho',$9,$10,$11,NULL,$12) RETURNING id`,
+    [id, d.comercialId, d.clienteId, d.propostaId, d.clienteNome, d.clienteEmail, d.curso, d.valor, d.notas, d.corpo, d.templateId, d.regime],
   );
   return id;
 }
@@ -222,8 +223,8 @@ export async function alterarContrato(c: Consulta, id: number, d: AlteracaoContr
        cliente_nome = COALESCE($2, cliente_nome), cliente_email = COALESCE($3, cliente_email),
        curso = COALESCE($4, curso), valor = COALESCE($5, valor), estado = COALESCE($6, estado),
        notas = COALESCE($7, notas), corpo = COALESCE($8, corpo),
-       assinado_em = CASE WHEN $6 = 'Assinado' AND assinado_em IS NULL THEN now()
-                          WHEN $6 IS NOT NULL AND $6 NOT IN ('Assinado', 'Cancelado') THEN NULL ELSE assinado_em END,
+       -- A data da assinatura nunca se apaga: um contrato assinado e depois cancelado continua a ter sido assinado.
+       assinado_em = CASE WHEN $6 = 'Assinado' AND assinado_em IS NULL THEN now() ELSE assinado_em END,
        updated_at = now()
      WHERE id = $1 RETURNING id`,
     [id, d.clienteNome ?? null, d.clienteEmail ?? null, d.curso ?? null, d.valor ?? null, d.estado ?? null, d.notas ?? null, d.corpo ?? null],

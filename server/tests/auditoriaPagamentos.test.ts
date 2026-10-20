@@ -198,7 +198,7 @@ describe("apoios só a quem ainda tem direito", () => {
   const B = 993102;
   const MES = "2026-03";
 
-  it("quem desistiu ou ficou sem IBAN depois da aprovação não é pago", async () => {
+  it("quem perdeu o direito ao mês (presenças corrigidas) ou ficou sem IBAN depois da aprovação não é pago", async () => {
     const ctx = await arrancar();
     const cron = [
       { id: "s1", data: "2026-03-02", horaInicio: "09:00", horaFim: "13:00", modalidade: "presencial", formadores: [] },
@@ -229,11 +229,13 @@ describe("apoios só a quem ainda tem direito", () => {
     const registos = (await pedido(ctx, "financiada", "GET", `${base}?mes=${MES}`)).json().registos as { id: number; formandoId: number }[];
     const deA = registos.find(r => r.formandoId === A)!;
 
-    // Depois da aprovação: A desiste, B fica sem IBAN.
-    await ctx.db.query("UPDATE formandos_fin SET estado = 'Desistiu' WHERE id = $1", [A]);
+    // Depois da aprovação: as folhas de março passam A a faltas (perdeu o direito ao mês), B fica sem IBAN.
+    // (Desistir depois do mês não tira o direito: ver auditoria2Regressoes.test.ts.)
+    await ctx.db.query("UPDATE turma_sessoes SET presencas = $2::jsonb WHERE regime = 'fin' AND turma_id = $1",
+      [TURMA, JSON.stringify([{ id: A, estado: "falta_injustificada" }, { id: B, estado: "presente" }])]);
     const um = await pedido(ctx, "financiada", "PATCH", `/v1/apoios/${deA.id}`, { estado: "pago", pagoEm: "2026-04-05" });
     expect(um.statusCode).toBe(409);
-    expect(um.json().error).toMatch(/já não frequenta/);
+    expect(um.json().error).toMatch(/Sem sessões|Nenhum dia|Sem direito/);
     await ctx.db.query("DELETE FROM formando_apoio_dados WHERE formando_id = $1", [B]);
     const lote = await pedido(ctx, "financiada", "POST", `${base}/estado`, { mes: MES, de: "aprovado", para: "pago", pagoEm: "2026-04-05" });
     expect(lote.statusCode).toBe(200);

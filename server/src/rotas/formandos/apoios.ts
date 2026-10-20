@@ -8,7 +8,7 @@ import {
 import { encryptField } from "../../fieldCrypto.js";
 import {
   alterarApoio, apoioPorId, apoiosDaTurma, apoiosDoFormando, dadosBancarios, financiadoresEmUso, folhasFin,
-  anularCalculado, formandoFin, formandosDaTurma, gravarCalculado, gravarDadosBancarios, listarRegras, regrasParaTurma,
+  anularCalculado, formandoFin, formandosDaTurma, formandosFinPorIds, gravarCalculado, gravarDadosBancarios, listarRegras, regrasParaTurma,
   substituirRegras, TIPOS_APOIO, turmaFin, turmasFinAtivas, type ApoioRow,
 } from "../../repos/apoios.js";
 import { idNum, idParam, validar } from "../../validacao.js";
@@ -75,16 +75,21 @@ function hojeIso() {
 export function registarApoios(app: FastifyInstance, deps: Deps) {
   const { db, requireAuth, audit } = deps;
 
-  /** Cálculo de um mês para os formandos indicados de uma turma. */
-  async function calcularTurma(turmaId: number, mes: string, so?: number) {
+  /**
+   * Cálculo de um mês para os formandos indicados de uma turma. Com `historico`, calcula para os formandos
+   * pedidos estejam ou não hoje na turma (as presenças do mês são as das folhas desta turma) e conta também
+   * as regras entretanto desativadas: é o direito daquele mês, não o estado de hoje.
+   */
+  async function calcularTurma(turmaId: number, mes: string, so?: number, historico?: { ids: number[] }) {
     const turma = await turmaFin(db, turmaId);
     if (!turma) return null;
     const [linhasRegras, folhas, formandos] = await Promise.all([
       regrasParaTurma(db, turmaId, turma.financiador),
       folhasFin(db, turmaId),
-      formandosDaTurma(db, turmaId),
+      historico ? formandosFinPorIds(db, historico.ids) : formandosDaTurma(db, turmaId),
     ]);
-    const regras = regrasEfetivas(linhasRegras, turmaId, turma.financiador);
+    const efetivas = regrasEfetivas(linhasRegras, turmaId, turma.financiador);
+    const regras = historico ? efetivas.map(r => ({ ...r, ativo: true })) : efetivas;
     const sessoes = sessoesDaTurma(turma.cronograma, folhas);
     const alvo = so ? formandos.filter(f => Number(f.id) === so) : formandos;
     const bancos = new Map((await dadosBancarios(db, alvo.map(f => Number(f.id)))).map(b => [Number(b.formando_id), b]));
@@ -98,8 +103,10 @@ export function registarApoios(app: FastifyInstance, deps: Deps) {
   }
 
   /**
-   * No momento de pagar, o direito volta a ser verificado com os dados de hoje: o formando continua na turma
-   * (não desistiu nem foi indeferido), a regra continua ativa, o IBAN exigido existe e a assiduidade do mês dá direito.
+   * No momento de pagar, o direito volta a ser verificado para o mês do apoio: as presenças desse mês nas folhas
+   * da turma (corrigidas depois da aprovação, contam as de agora), a assiduidade mínima e o IBAN exigido.
+   * Quem desistiu ou mudou de turma depois desse mês continua a ser pago pelo que frequentou; uma regra
+   * desativada depois da aprovação não bloqueia o apoio já aprovado. Indeferido nunca teve direito.
    * Devolve, por id de apoio, o motivo de quem perdeu o direito.
    */
   async function semDireitoAPagar(apoios: ApoioRow[]) {
@@ -111,16 +118,25 @@ export function registarApoios(app: FastifyInstance, deps: Deps) {
     }
     for (const lista of porMes.values()) {
       const { turma_id: turmaId, periodo: mes } = lista[0]!;
-      const calc = await calcularTurma(Number(turmaId), mes);
+      const ids = [...new Set(lista.map(a => Number(a.formando_id)))];
+      const [calc, fichas] = await Promise.all([
+        calcularTurma(Number(turmaId), mes, undefined, { ids }),
+        formandosFinPorIds(db, ids),
+      ]);
       for (const a of lista) {
+        const ficha = fichas.find(f => Number(f.id) === Number(a.formando_id));
         const c = calc?.calculos.find(x => x.formandoId === Number(a.formando_id));
         const l = c?.calculo.linhas.find(x => x.tipo === a.tipo);
+        // Regra apagada depois da aprovação: sem regra para recalcular, exige-se ao menos presença no mês.
+        const semPresenca = c && !l && c.calculo.diasComPresenca === 0;
         const motivo = !calc ? "A turma já não existe."
-          : !c ? "O formando já não frequenta esta turma (desistiu, foi indeferido ou mudou de turma)."
-            : !l ? "A regra deste apoio já não está ativa para a turma."
-              : l.bloqueadoIban ? "O formando não tem IBAN e este apoio exige-o."
-                : l.valor <= 0 ? (l.exclusao || "Sem direito neste mês.")
-                  : "";
+          : !ficha || !c ? "O formando já não existe."
+            : ficha.estado === "Indeferido" ? "O formando foi indeferido."
+              : semPresenca ? "Sem presenças neste mês."
+                : !l ? ""
+                  : l.bloqueadoIban ? "O formando não tem IBAN e este apoio exige-o."
+                    : l.valor <= 0 ? (l.exclusao || "Sem direito neste mês.")
+                      : "";
         if (motivo) motivos.set(Number(a.id), motivo);
       }
     }

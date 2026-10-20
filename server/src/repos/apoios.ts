@@ -148,6 +148,18 @@ export function formandosDaTurma(c: Consulta, turmaId: number) {
   );
 }
 
+/** Fichas da Financiada pelos ids, em qualquer turma e estado (para o direito de um mês já passado). */
+export function formandosFinPorIds(c: Consulta, ids: number[]) {
+  if (!ids.length) return Promise.resolve([] as { id: number; nome: string; apelido: string; estado: string }[]);
+  return many<{ id: number; nome: string; apelido: string; estado: string }>(
+    c,
+    `SELECT id, nome, apelido, estado FROM formandos_fin
+      WHERE id IN (SELECT (jsonb_array_elements_text($1::jsonb))::int)
+      ORDER BY nome, apelido`,
+    [JSON.stringify(ids)],
+  );
+}
+
 /** IBAN cifrado e titular de vários formandos. */
 export function dadosBancarios(c: Consulta, formandoIds: number[]) {
   if (!formandoIds.length) return Promise.resolve([] as { formando_id: number; iban_enc: string; titular: string }[]);

@@ -19,8 +19,8 @@ import { mapTurmaFin, mapTurmaGold, nextOpsId } from "../ops.js";
 import { pode } from "../permissoes/capacidades.js";
 import { modulosDaFicha } from "../programaCurso.js";
 import { ERRO_TURMA_FECHADA } from "../resultados.js";
-import { comIdsUnicos, erroSessoesRemovidas, nomesDoFormador } from "../sessaoAcesso.js";
-import { renumerarSessoes, sessoesComDados } from "../repos/pedagogiaSessoes.js";
+import { comIdsUnicos, erroGravarCronograma, nomesDoFormador } from "../sessaoAcesso.js";
+import { renumerarSessoes } from "../repos/pedagogiaSessoes.js";
 import { aplicarTurmaRegras, listTurmaRegras } from "../turmaRegras.js";
 import * as repo from "../repos/turmas.js";
 import type { Regime } from "../repos/sql.js";
@@ -62,6 +62,8 @@ const turmaGoldSchema = z.object({
   custoHoraSala: z.number().min(0).max(10000).optional(),
   valoresHoraFormador: valoresHora.optional(),
   cronograma: z.array(z.unknown()).max(2000).optional(),
+  /** Versão do cronograma lida no GET da turma: com ela, uma gravação sobre o cronograma de outra pessoa dá 409. */
+  versao: z.string().max(64).optional(),
 });
 
 const turmaFinSchema = z.object({
@@ -85,6 +87,8 @@ const turmaFinSchema = z.object({
   numeroAcao: z.number().int().min(1).max(9999).optional(),
   valoresHoraFormador: valoresHora.optional(),
   cronograma: z.array(z.unknown()).max(2000).optional(),
+  /** Versão do cronograma lida no GET da turma: com ela, uma gravação sobre o cronograma de outra pessoa dá 409. */
+  versao: z.string().max(64).optional(),
 });
 
 const regraSchema = z.object({
@@ -275,18 +279,21 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       d.cronograma = comIdsUnicos(d.cronograma);
       const cruzamento = await erroSobreposicao(db, "gold", id, d.cronograma);
       if (cruzamento) return reply.code(400).send({ error: cruzamento });
-      const removida = erroSessoesRemovidas(d.cronograma, await sessoesComDados(db, "gold", id), antes.cronograma);
-      if (removida) return reply.code(409).send({ error: removida });
     }
     // Os dados das sessões seguem o id: depois de gravar o cronograma recalcula-se o número de cada uma.
-    await db.tx(async q => {
+    // O cronograma confere-se com a turma bloqueada: versão lida pelo cliente e sessões com dados.
+    const recusa = await db.tx(async q => {
+      const erro = d.cronograma ? await erroGravarCronograma(q, "gold", id, d.cronograma, d.versao) : null;
+      if (erro) return erro;
       await repo.atualizarTurmaGold(q, id, {
         dataInicio: d.dataInicio, nome: d.nome, curso: d.curso, local: d.local, horario: d.horario, vagas: d.vagas,
         tolerancia: d.toleranciaVagas, estado, formador: d.formador, formadores: d.formadores, horas: d.horas,
         cronograma: d.cronograma, custoHoraSala: d.custoHoraSala, valoresHoraFormador: d.valoresHoraFormador,
       });
       if (d.cronograma) await renumerarSessoes(q, "gold", id);
+      return null;
     });
+    if (recusa) return reply.code(409).send({ error: recusa });
     if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "gold", id, d.vagasAnunciadas);
     if (d.nome && d.nome !== String(antes.nome ?? "")) await propagarNomeTurma(db, "gold", id, String(antes.nome ?? ""), d.nome);
     if (d.curso && d.curso !== String(antes.curso ?? "")) {
@@ -378,12 +385,13 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       d.cronograma = comIdsUnicos(d.cronograma);
       const cruzamento = await erroSobreposicao(db, "fin", id, d.cronograma);
       if (cruzamento) return reply.code(400).send({ error: cruzamento });
-      const removida = erroSessoesRemovidas(d.cronograma, await sessoesComDados(db, "fin", id), antes.cronograma);
-      if (removida) return reply.code(409).send({ error: removida });
     }
     // Os dados das sessões seguem o id: depois de gravar o cronograma recalcula-se o número de cada uma.
     // As despesas automáticas dos formadores (horas × valor por hora) acompanham na mesma transacção.
-    const despesasMudaram = await db.tx(async q => {
+    // O cronograma confere-se com a turma bloqueada: versão lida pelo cliente e sessões com dados.
+    const gravou = await db.tx(async q => {
+      const erro = d.cronograma ? await erroGravarCronograma(q, "fin", id, d.cronograma, d.versao) : null;
+      if (erro) return { erro };
       await repo.atualizarTurmaFin(q, id, {
         dataInicio: d.dataInicio, nome: d.nome, curso: d.curso, ufcdCod: d.ufcdCod, local: d.local, horario: d.horario,
         alunosTotal: d.alunosTotal, tolerancia: d.toleranciaVagas, estado, horas: d.horas, formador: d.formador,
@@ -391,8 +399,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
         financiador: d.financiador,
       });
       if (d.cronograma) await renumerarSessoes(q, "fin", id);
-      return sincronizarDespesasFormador(q, id);
+      return { despesasMudaram: await sincronizarDespesasFormador(q, id) };
     });
+    if ("erro" in gravou) return reply.code(409).send({ error: gravou.erro });
     if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "fin", id, d.vagasAnunciadas);
     if (d.numeroAcao !== undefined) await repo.gravarNumeroAcao(db, id, d.numeroAcao);
     if (d.nome && d.nome !== String(antes.nome ?? "")) await propagarNomeTurma(db, "fin", id, String(antes.nome ?? ""), d.nome);
@@ -404,7 +413,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (req.actor!.role !== "formador") {
       await audit(db, req.actor!.id, "turma.alterar", "turma_fin", String(id), req.ip, { campos: Object.keys(d) });
     }
-    if (despesasMudaram) {
+    if (gravou.despesasMudaram) {
       const erro = await sincronizarSemFalhar(db, req.actor!.id, id, "despesas");
       if (erro) req.log.warn({ turma: id, erro }, "ficheiro de despesas da turma não actualizado na Drive");
     }

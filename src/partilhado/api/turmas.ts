@@ -81,6 +81,8 @@ export type TurmaGravada = {
   financiador?: string;
   /** Financiada: número da ação («… / Ação n» na execução física). */
   numeroAcao?: number;
+  /** Versão do cronograma: volta com cada gravação do cronograma (409 se outra pessoa o mudou entretanto). */
+  versao?: string;
 };
 
 export type DadosTurma = {
@@ -95,6 +97,8 @@ export type DadosTurma = {
   vagasAnunciadas?: number | null;
   valoresHoraFormador: Record<string, number>;
   cronograma?: SessaoCronograma[];
+  /** Obrigatória com o cronograma: a versão lida da turma. */
+  versao?: string;
   horas?: number;
   // Gold
   vagas?: number;

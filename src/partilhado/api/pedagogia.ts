@@ -208,10 +208,10 @@ export const apiAplicarTurmaRegras = (regime?: "gold" | "fin") =>
     method: "POST", body: JSON.stringify({ regime }),
   });
 
-export const apiPublicarCronograma = (regime: Regime, turmaId: number, sessoes: unknown[]) =>
-  api<{ ok: boolean; url: string; publicadoEm: string; ficheiro: string }>(`/v1/turmas/${regime}/${turmaId}/cronograma/publicar`, {
+export const apiPublicarCronograma = (regime: Regime, turmaId: number, sessoes: unknown[], versao?: string) =>
+  api<{ ok: boolean; url: string; publicadoEm: string; ficheiro: string; versao: string }>(`/v1/turmas/${regime}/${turmaId}/cronograma/publicar`, {
     method: "POST",
-    body: JSON.stringify({ sessoes }),
+    body: JSON.stringify({ sessoes, versao }),
   });
 
 /** `aviso` quando a turma fechou mas o relatório não ficou anexado ao dossiê. */

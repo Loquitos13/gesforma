@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import type { Db } from "./db/pool.js";
-import { lerSessao } from "./repos/pedagogiaSessoes.js";
-import { cronogramaDaTurma } from "./repos/pedagogiaTurma.js";
+import { lerSessao, sessoesComDados } from "./repos/pedagogiaSessoes.js";
+import { cronogramaDaTurma, cronogramaParaGravar } from "./repos/pedagogiaTurma.js";
+import type { Consulta, Regime } from "./repos/sql.js";
 import { equipaECronograma, equipasDoRegime, fichaDaConta, nomesPorConta } from "./repos/sessaoAcesso.js";
 
 function asArr(v: unknown) {
@@ -72,6 +74,23 @@ export function erroSessoesRemovidas(next: unknown, comDados: { sessao_id: strin
     return `A sessão ${r.sessao_n}${data ? ` (${data})` : ""} já tem sumário, presenças ou plano assinado: não pode ser removida nem passar a não lectiva. Pode mudá-la de dia, hora ou posição.`;
   }
   return null;
+}
+
+export const ERRO_TURMA_ALTERADA = "A turma foi alterada por outra pessoa. Recarregue e volte a gravar.";
+
+/** Versão do cronograma que o cliente leu (vai no GET da turma e volta com cada gravação do cronograma). */
+export function versaoCronograma(cronograma: unknown) {
+  return createHash("md5").update(JSON.stringify(asArr(cronograma))).digest("hex");
+}
+
+/**
+ * Dentro da transacção, antes de gravar um cronograma: bloqueia a turma, recusa se outra pessoa o mudou desde que
+ * o cliente o leu (`versao`) e não deixa sair sessões com dados. Devolve o erro (409) ou null.
+ */
+export async function erroGravarCronograma(q: Consulta, regime: Regime, id: number, novo: unknown[], versao?: string) {
+  const actual = (await cronogramaParaGravar(q, regime, id))?.cronograma;
+  if (versao !== undefined && versao !== versaoCronograma(actual)) return ERRO_TURMA_ALTERADA;
+  return erroSessoesRemovidas(novo, await sessoesComDados(q, regime, id), actual);
 }
 
 /**

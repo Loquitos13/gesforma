@@ -8,15 +8,15 @@ import { importarPlanosCurso } from "../../planosCurso.js";
 import { storeDriveFile } from "../../driveFicheiros.js";
 import { ligarAnexoGerado } from "../../pedagogia/ficheiros.js";
 import { definirEstadoManual } from "../../repos/dtp.js";
-import { renumerarSessoes, sessoesComDados } from "../../repos/pedagogiaSessoes.js";
-import { cronogramaDaTurma, gravarCronograma, marcarCronogramaPublicado, turmaParaCronograma } from "../../repos/pedagogiaTurma.js";
+import { renumerarSessoes } from "../../repos/pedagogiaSessoes.js";
+import { gravarCronograma, marcarCronogramaPublicado, turmaParaCronograma } from "../../repos/pedagogiaTurma.js";
 import { lerEntidadePublica } from "../../regrasConfig.js";
 import { ERRO_TURMA_FECHADA, turmaFechada } from "../../resultados.js";
-import { comIdsUnicos, erroSessoesRemovidas } from "../../sessaoAcesso.js";
+import { comIdsUnicos, erroGravarCronograma, versaoCronograma } from "../../sessaoAcesso.js";
 import { regimeIdParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
 
-const publicarSchema = z.object({ sessoes: z.array(z.unknown()).max(500).optional() });
+const publicarSchema = z.object({ sessoes: z.array(z.unknown()).max(500).optional(), versao: z.string().max(64).optional() });
 
 export function registarCronograma(app: FastifyInstance, { db, requireAuth, audit }: Deps) {
   app.post("/v1/turmas/:regime/:id/cronograma/publicar", async (req, reply) => {
@@ -29,14 +29,16 @@ export function registarCronograma(app: FastifyInstance, { db, requireAuth, audi
       if (await turmaFechada(db, regime, id)) return reply.code(409).send({ error: ERRO_TURMA_FECHADA });
       const cruzamento = await erroSobreposicao(db, regime, id, novas);
       if (cruzamento) return reply.code(400).send({ error: cruzamento });
-      const removida = erroSessoesRemovidas(novas, await sessoesComDados(db, regime, id), (await cronogramaDaTurma(db, regime, id))?.cronograma);
-      if (removida) return reply.code(409).send({ error: removida });
-      await db.tx(async q => {
+      const recusa = await db.tx(async q => {
+        const erro = await erroGravarCronograma(q, regime, id, novas, v.body.versao);
+        if (erro) return erro;
         await gravarCronograma(q, regime, id, novas);
         await renumerarSessoes(q, regime, id);
         // Financiada: as horas de cada formador mudam a sua despesa automática.
         if (regime === "fin") await sincronizarDespesasFormador(q, id);
+        return null;
       });
+      if (recusa) return reply.code(409).send({ error: recusa });
       await importarPlanosCurso(db, regime, id).catch(() => undefined);
     }
     const turma = await turmaParaCronograma(db, regime, id);
@@ -61,7 +63,10 @@ export function registarCronograma(app: FastifyInstance, { db, requireAuth, audi
     await ligarAnexoGerado(db, regime, id, "cronograma", file);
     await definirEstadoManual(db, regime, id, "cronograma", "ok");
     await audit(db, req.actor!.id, "turma.cronograma_publico", "turma", String(id), req.ip, { regime });
-    return { ok: true, url: `/cronograma/${regime}/${id}`, publicadoEm: new Date().toISOString(), ficheiro: file.name };
+    return {
+      ok: true, url: `/cronograma/${regime}/${id}`, publicadoEm: new Date().toISOString(), ficheiro: file.name,
+      versao: versaoCronograma(turma.cronograma),
+    };
   });
 
   app.get("/v1/public/cronograma/:regime/:id", async (req, reply) => {

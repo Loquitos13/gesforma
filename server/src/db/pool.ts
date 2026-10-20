@@ -61,8 +61,14 @@ export interface Db {
   close(): Promise<void>;
 }
 
-/** Contexto RLS da transacção (perfil e utilizador), numa só instrução. */
-const SET_ACTOR = "SELECT set_config('gesforma.api', '1', true), set_config('app.role', $1, true), set_config('app.user_id', $2, true)";
+/**
+ * Contexto da transacção numa só instrução: perfil e utilizador (RLS) e o fuso de Lisboa.
+ * Com o fuso da sessão em Lisboa, current_date, now()::date, date_trunc e as conversões
+ * date ↔ timestamptz contam dias de Lisboa mesmo onde o SQL não diz AT TIME ZONE (a Vercel e a
+ * base correm em UTC). Os instantes não mudam; só o texto de um timestamptz (::text) passa a vir
+ * com o desvio de Lisboa (+00/+01), que continua a ser um instante válido para new Date().
+ */
+const SET_ACTOR = "SELECT set_config('gesforma.api', '1', true), set_config('app.role', $1, true), set_config('app.user_id', $2, true), set_config('TimeZone', 'Europe/Lisbon', true)";
 
 export async function createDb(): Promise<Db> {
   if (config.databaseUrl) {

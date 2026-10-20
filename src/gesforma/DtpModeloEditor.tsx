@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  apiDtpEntidadeModelo,
   apiDtpModelo,
-  apiSaveDtpEntidadeModelo,
   apiSaveDtpModelo,
   type DtpDef,
   type DtpFase,
@@ -16,14 +14,12 @@ type ExtraDraft = { key: string; id: string; fase: DtpFase; label: string; fonte
 const iCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent";
 
 /**
- * Estrutura do dossiê. No curso Gold importa a entidade responsável e só grava
- * a personalização desse curso. Na entidade grava a estrutura que os cursos herdam.
+ * Estrutura do dossiê do curso. No curso Gold importa a entidade responsável e só grava
+ * a personalização desse curso.
  */
-export function DtpModeloEditor({ accent, cursoId, entidadeId, onSaved }: {
+export function DtpModeloEditor({ accent, cursoId }: {
   accent: Regime;
   cursoId?: number;
-  entidadeId?: number;
-  onSaved?: (info: { documentos: number }) => void;
 }) {
   const [dados, setDados] = useState<DtpModeloResposta | null>(null);
   const [estado, setEstado] = useState<"loading" | "ready" | "offline">("loading");
@@ -34,16 +30,14 @@ export function DtpModeloEditor({ accent, cursoId, entidadeId, onSaved }: {
   const [msg, setMsg] = useState("");
 
   const gold = accent === "gold";
-  const modoEntidade = entidadeId != null;
   const acento = gold
     ? { btn: "bg-amber-500 hover:bg-amber-600", chip: "bg-amber-50 text-amber-700 border-amber-200", chk: "accent-amber-500" }
     : { btn: "bg-blue-600 hover:bg-blue-700", chip: "bg-blue-50 text-blue-700 border-blue-200", chk: "accent-blue-600" };
 
   useEffect(() => {
-    if (!modoEntidade && cursoId == null) { setEstado("ready"); return; }
+    if (cursoId == null) { setEstado("ready"); return; }
     let alive = true;
-    const pedido = modoEntidade ? apiDtpEntidadeModelo(entidadeId) : apiDtpModelo(accent, cursoId!);
-    pedido
+    apiDtpModelo(accent, cursoId)
       .then(r => {
         if (!alive) return;
         setDados(r);
@@ -54,7 +48,7 @@ export function DtpModeloEditor({ accent, cursoId, entidadeId, onSaved }: {
       })
       .catch(() => { if (alive) setEstado("offline"); });
     return () => { alive = false; };
-  }, [accent, cursoId, entidadeId, modoEntidade]);
+  }, [accent, cursoId]);
 
   const entidadeExcluidos = useMemo(
     () => new Set(dados?.entidade?.modelo.excluidos ?? []),
@@ -86,7 +80,7 @@ export function DtpModeloEditor({ accent, cursoId, entidadeId, onSaved }: {
   const normas = (dados?.base ?? []).filter(d => d.obrigatorio).length;
 
   async function guardar() {
-    if (!modoEntidade && cursoId == null) return;
+    if (cursoId == null) return;
     const curtos = extra.filter(x => x.label.trim() && x.label.trim().length < 3);
     if (curtos.length) {
       setMsg("Cada documento extra precisa de um nome com pelo menos 3 letras.");
@@ -111,19 +105,12 @@ export function DtpModeloEditor({ accent, cursoId, entidadeId, onSaved }: {
         setIncluidos(new Set(modelo.incluidos ?? []));
         setExtra(modelo.extra.map(x => ({ key: x.id || x.label, ...x, bloqueante: Boolean(x.bloqueante), ambito: x.ambito ?? "turma" })));
       };
-      if (modoEntidade) {
-        const r = await apiSaveDtpEntidadeModelo(entidadeId, { excluidos: [...excluidos], extra: extraBody });
-        aplicar(r.modelo);
-        onSaved?.({ documentos: r.estrutura.length });
-        setMsg(`Estrutura gravada: ${r.estrutura.length} documentos para os cursos desta entidade.`);
-      } else {
-        const r = await apiSaveDtpModelo(accent, cursoId!, { excluidos: [...excluidos], incluidos: [...incluidos], extra: extraBody });
-        aplicar(r.modelo);
-        if (r.entidade) setDados(prev => prev ? { ...prev, entidade: r.entidade } : prev);
-        setMsg(dados?.entidade
-          ? `Personalização gravada: ${r.estrutura.length} documentos nas turmas deste curso. A entidade ${dados.entidade.nome} mantém a estrutura dela.`
-          : `Estrutura gravada: ${r.estrutura.length} documentos no dossiê das turmas deste curso.`);
-      }
+      const r = await apiSaveDtpModelo(accent, cursoId, { excluidos: [...excluidos], incluidos: [...incluidos], extra: extraBody });
+      aplicar(r.modelo);
+      if (r.entidade) setDados(prev => prev ? { ...prev, entidade: r.entidade } : prev);
+      setMsg(dados?.entidade
+        ? `Personalização gravada: ${r.estrutura.length} documentos nas turmas deste curso. A entidade ${dados.entidade.nome} mantém a estrutura dela.`
+        : `Estrutura gravada: ${r.estrutura.length} documentos no dossiê das turmas deste curso.`);
     } catch (err) {
       setMsg(err instanceof Error ? err.message : "Não foi possível gravar a estrutura.");
     } finally {
@@ -131,7 +118,7 @@ export function DtpModeloEditor({ accent, cursoId, entidadeId, onSaved }: {
     }
   }
 
-  if (!modoEntidade && cursoId == null) {
+  if (cursoId == null) {
     return (
       <div className="rounded-xl border border-dashed border-slate-200 bg-white p-6 text-center">
         <p className="text-sm font-semibold text-slate-700">Grave o curso primeiro</p>
@@ -187,13 +174,11 @@ export function DtpModeloEditor({ accent, cursoId, entidadeId, onSaved }: {
     setMsg("");
   }
 
-  const lead = modoEntidade
-    ? "Esta estrutura vale para todos os cursos Gold a que atribuir esta entidade. Cada curso pode personalizar por cima, sem alterar a entidade."
-    : dados.entidade
-      ? `Importada de ${dados.entidade.nome}. O que ligar ou desligar aqui fica só neste curso. As turmas usam a entidade e, por cima, esta personalização.`
-      : gold
-        ? "Antes, durante e fecho. Atribua uma entidade responsável na oferta para importar uma estrutura comum. Sem entidade, o dossiê é só deste curso."
-        : "Na formação financiada o dossiê é o mesmo para todas as UFCD: antes, durante e fecho, com os requisitos universais e os da execução do financiador.";
+  const lead = dados.entidade
+    ? `Importada de ${dados.entidade.nome}. O que ligar ou desligar aqui fica só neste curso. As turmas usam a entidade e, por cima, esta personalização.`
+    : gold
+      ? "Antes, durante e fecho. Atribua uma entidade responsável na oferta para importar uma estrutura comum. Sem entidade, o dossiê é só deste curso."
+      : "Na formação financiada o dossiê é o mesmo para todas as UFCD: antes, durante e fecho, com os requisitos universais e os da execução do financiador.";
 
   return (
     <div className="space-y-4">
@@ -202,7 +187,7 @@ export function DtpModeloEditor({ accent, cursoId, entidadeId, onSaved }: {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-sm font-semibold text-slate-800">
-                {modoEntidade ? "Estrutura desta entidade" : "Estrutura do dossiê técnico-pedagógico"}
+                Estrutura do dossiê técnico-pedagógico
               </p>
               {dados.entidade && (
                 <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">{dados.entidade.nome}</span>
@@ -217,7 +202,7 @@ export function DtpModeloEditor({ accent, cursoId, entidadeId, onSaved }: {
             </div>
             {gold && (
               <button type="button" disabled={busy} onClick={() => void guardar()} className={`px-4 py-2.5 text-sm font-semibold rounded-lg ${acento.btn} disabled:opacity-40 text-white`}>
-                {busy ? "A gravar…" : modoEntidade ? "Gravar entidade" : "Gravar estrutura"}
+                {busy ? "A gravar…" : "Gravar estrutura"}
               </button>
             )}
           </div>
@@ -225,9 +210,7 @@ export function DtpModeloEditor({ accent, cursoId, entidadeId, onSaved }: {
         <p className="text-xs text-slate-500">
           <span className="font-semibold text-slate-700">{normas} documentos são norma</span> e não se removem
           {gold ? " (Portaria 851/2010 da DGERT)." : " (Portaria 851/2010 da DGERT e Despacho 5756/2020 do financiador)."}
-          {" "}{modoEntidade
-            ? "Os cursos que usam esta entidade herdam a lista. O estado de cada documento continua a ser por turma."
-            : "Aplica-se a todas as turmas deste curso. O estado de cada documento continua a ser por turma."}
+          {" "}Aplica-se a todas as turmas deste curso. O estado de cada documento continua a ser por turma.
         </p>
         {msg && <p className="text-xs font-semibold text-emerald-700">{msg}</p>}
       </div>
@@ -308,7 +291,7 @@ export function DtpModeloEditor({ accent, cursoId, entidadeId, onSaved }: {
             })}
             {gold && f.extras.map(x => (
               <div key={x.key} className="flex items-start gap-3 px-4 py-3 bg-white">
-                <span className={`mt-1 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${acento.chip}`}>{modoEntidade ? "entidade" : "curso"}</span>
+                <span className={`mt-1 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${acento.chip}`}>curso</span>
                 <div className="flex-1 min-w-0 space-y-1.5">
                   <input
                     className={iCls}

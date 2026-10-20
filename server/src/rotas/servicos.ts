@@ -4,7 +4,7 @@ import { slugServico, videoServico } from "../../../src/partilhado/siteServicos.
 import { sendMail } from "../mailer.js";
 import { lerEntidadePublica } from "../regrasConfig.js";
 import * as repo from "../repos/servicos.js";
-import { many, one } from "../repos/sql.js";
+import { many, one, type Consulta } from "../repos/sql.js";
 import { idNum, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
 
@@ -54,15 +54,20 @@ const pedidoSchema = z.object({
   site: texto(200),
 });
 
-/** O pedido junta-se ao cliente com o mesmo email (ou cria-o, como Empresa), nas notas. */
-async function registarPedido(db: Deps["db"], p: { nome: string; email: string; telefone: string; nota: string }) {
-  const atual = await one<{ id: number }>(db, "SELECT id FROM crm_clientes WHERE lower(email) = $1 ORDER BY id LIMIT 1", [p.email]);
+/**
+ * O pedido junta-se ao cliente com o mesmo email (ou cria-o, como Empresa). A mensagem fica só no pedido
+ * (pedidos_proposta): as notas do cliente têm limite e cresciam a cada pedido até o cliente deixar de se poder gravar.
+ * O cliente novo leva uma linha curta a dizer de onde veio. Corre na transacção do pedido, com o email bloqueado:
+ * dois pedidos ao mesmo tempo não criam dois clientes.
+ */
+async function registarPedido(q: Consulta, p: { nome: string; email: string; telefone: string; nota: string }) {
+  await one(q, "SELECT 1 AS ok FROM pg_advisory_xact_lock(hashtext('pedido-proposta|' || $1))", [p.email]);
+  const atual = await one<{ id: number }>(q, "SELECT id FROM crm_clientes WHERE lower(email) = $1 ORDER BY id LIMIT 1", [p.email]);
   if (atual) {
-    await one(db, `UPDATE crm_clientes SET notas = CASE WHEN notas = '' THEN $2 ELSE notas || E'\\n' || $2 END,
-      telf = CASE WHEN telf = '' THEN $3 ELSE telf END WHERE id = $1 RETURNING id`, [atual.id, p.nota, p.telefone]);
+    await one(q, "UPDATE crm_clientes SET telf = CASE WHEN telf = '' THEN $2 ELSE telf END WHERE id = $1 RETURNING id", [atual.id, p.telefone]);
     return atual.id;
   }
-  const novo = await one<{ id: number }>(db,
+  const novo = await one<{ id: number }>(q,
     "INSERT INTO crm_clientes (nome, tipo, email, telf, notas) VALUES ($1, 'Empresa', $2, $3, $4) RETURNING id", [p.nome, p.email, p.telefone, p.nota]);
   return novo?.id;
 }
@@ -124,16 +129,19 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     return { ok: true };
   });
 
-  // Formulário «Pedir proposta» da página Empresas: o pedido fica no cliente (CRM › Clientes, tipo Empresa) e a ENA recebe um email.
+  // Formulário «Pedir proposta» da página Empresas: o pedido fica nos pedidos de proposta, ligado ao cliente (CRM › Clientes, tipo Empresa), e a ENA recebe um email.
   app.post("/v1/public/pedidos-proposta", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (req, reply) => {
     const v = validar(reply, { body: pedidoSchema }, req);
     if (!v) return;
     const p = v.body;
     if (p.site) return { ok: true }; // campo escondido: só os robôs o preenchem
-    const nota = `[${new Date().toISOString().slice(0, 10)}] Pedido de proposta no site${p.servico ? ` (${p.servico})` : ""}: ${p.nome}${p.mensagem ? ` — ${p.mensagem}` : ""}`;
-    const clienteId = await registarPedido(db, { nome: p.empresa || p.nome, email: p.email, telefone: p.telefone, nota });
-    await one(db, `INSERT INTO pedidos_proposta (nome, empresa, email, telefone, servico, mensagem, cliente_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`, [p.nome, p.empresa, p.email, p.telefone, p.servico, p.mensagem, clienteId ?? null]);
+    // Cabe sempre nas notas do cliente (até 2000): o serviço tem no máximo 160 e o nome 120.
+    const nota = `[${new Date().toISOString().slice(0, 10)}] Pedido de proposta no site${p.servico ? ` (${p.servico})` : ""}: ${p.nome}`;
+    await db.tx(async q => {
+      const clienteId = await registarPedido(q, { nome: p.empresa || p.nome, email: p.email, telefone: p.telefone, nota });
+      await one(q, `INSERT INTO pedidos_proposta (nome, empresa, email, telefone, servico, mensagem, cliente_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`, [p.nome, p.empresa, p.email, p.telefone, p.servico, p.mensagem, clienteId ?? null]);
+    });
     const ena = await lerEntidadePublica(db);
     if (ena.email) {
       const texto = [`Novo pedido de proposta no site.`, "", `Nome: ${p.nome}`, `Empresa: ${p.empresa || "—"}`, `Email: ${p.email}`, `Telefone: ${p.telefone || "—"}`,

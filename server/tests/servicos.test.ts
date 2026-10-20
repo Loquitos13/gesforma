@@ -56,8 +56,11 @@ describe("Pedido de proposta (formulário da página Empresas)", () => {
     const linhas = (await ctx.db.query<{ nome: string; tipo: string; telf: string; notas: string }>("SELECT nome, tipo, telf, notas FROM crm_clientes WHERE lower(email) = $1", [email])).rows;
     expect(linhas).toHaveLength(1);
     expect(linhas[0]).toMatchObject({ nome: "Empresa Teste", tipo: "Empresa", telf: "912 345 678" });
-    expect(linhas[0]!.notas).toContain("(Formação à medida): Ana Lima — Formação para 20 pessoas.");
-    expect(linhas[0]!.notas).toContain("Segundo pedido.");
+    // A mensagem fica só no pedido; as notas do cliente levam uma linha curta de quando foi criado.
+    expect(linhas[0]!.notas).toContain("Pedido de proposta no site (Formação à medida): Ana Lima");
+    expect(linhas[0]!.notas).not.toContain("Formação para 20 pessoas.");
+    const pedidos = (await ctx.db.query<{ mensagem: string }>("SELECT mensagem FROM pedidos_proposta WHERE lower(email) = $1 ORDER BY id", [email])).rows;
+    expect(pedidos.map(x => x.mensagem)).toEqual(["Formação para 20 pessoas.", "Segundo pedido."]);
     expect((await enviar({ nome: "Ana", email: "sem-arroba" })).statusCode).toBe(400);
     const robo = `robo.${Date.now()}@spam.pt`;
     expect((await enviar({ nome: "Robô", email: robo, site: "https://spam" })).statusCode).toBe(200);

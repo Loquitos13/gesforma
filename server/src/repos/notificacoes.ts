@@ -7,6 +7,7 @@ import { OCUPA } from "./estatisticas.js";
 import { DOCS_FIN_COMPLETOS, DOCS_FIN_OBRIGATORIOS } from "./painelBlocos.js";
 import { many, one, type Consulta } from "./sql.js";
 import type { Db } from "../db/pool.js";
+import { hojeLisboa, somarDias } from "../datas.js";
 
 export type Notificacao = {
   chave: string;
@@ -75,8 +76,8 @@ async function turmasEmAlerta(c: Consulta) {
 const eur = (v: number) => `€${Math.round(v).toLocaleString("pt-PT")}`;
 
 export async function construirNotificacoes(db: Db, actorId: string, role = ""): Promise<Notificacao[]> {
-  const hoje = new Date().toISOString().slice(0, 10);
-  const em14 = new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10);
+  const hoje = hojeLisboa();
+  const em14 = somarDias(hoje, 14);
   const [lidas, n, filas, turmas, pctGold, pctFin] = await Promise.all([
     chavesLidas(db, actorId), contagens(db), filasLeads(db), turmasEmAlerta(db), resumoDtp(db, "gold"), resumoDtp(db, "fin"),
   ]);

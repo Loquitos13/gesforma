@@ -18,6 +18,7 @@ import {
 } from "../../repos/formandosEscrita.js";
 import { idParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
+import { hojeLisboa } from "../../datas.js";
 
 const docOk = z.object({ ok: z.boolean(), data: z.string().max(40) });
 const DOCS_FIN = ["cc", "ch", "cu", "ci", "ce", "morada", "contrato", "rgpd"] as const;
@@ -102,7 +103,7 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
         if (pagamentoId) {
           await registarPagamentoRecebido(q, {
             novoId: pagamentoId, formandoId: id, turmaId: d.turmaId ?? null, nome: `${d.nome} ${d.apelido}`.trim(), email: d.email.toLowerCase(),
-            curso, valor, metodo, data: new Date().toISOString().slice(0, 10),
+            curso, valor, metodo, data: hojeLisboa(),
           });
         }
         await recontarTurma(q, "gold", d.turmaId);
@@ -172,7 +173,7 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
       const registado = await db.tx(q => registarPagamentoRecebido(q, {
         novoId, formandoId: id, turmaId: atual.turma_id == null ? null : Number(atual.turma_id),
         nome: `${d.nome ?? atual.nome ?? ""} ${d.apelido ?? atual.apelido ?? ""}`.trim(), email: String(d.email ?? atual.email ?? "").toLowerCase(),
-        curso: d.curso ?? String(atual.curso ?? ""), valor, metodo, data: new Date().toISOString().slice(0, 10),
+        curso: d.curso ?? String(atual.curso ?? ""), valor, metodo, data: hojeLisboa(),
       }));
       if (!registado) return reply.code(409).send({ error: "Esta inscrição já está paga." });
       delete d.pago;

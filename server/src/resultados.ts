@@ -10,6 +10,7 @@ import {
   folhasDePresencaLote, formandosPorTurma, formandosPorTurmasLote, notasLote, turmaBase, turmasBaseLote, turmaFechadaEm, type TurmaBase,
 } from "./repos/resultados.js";
 import { listarNotas, sumariosDaTurma } from "./repos/pedagogiaSessoes.js";
+import { hojeLisboa } from "./datas.js";
 
 /**
  * Resultado pedagógico de cada formando da turma, calculado no servidor:
@@ -237,7 +238,7 @@ export async function pendentesDoFecho(
   const res = await resultadosDaTurma(db, regime, turmaId, { regras });
   if (!res) return null;
   const turma = (await carregarTurma(db, regime, turmaId))!;
-  const hoje = opts.hoje ?? new Date().toISOString().slice(0, 10);
+  const hoje = opts.hoje ?? hojeLisboa();
   const falta: string[] = [];
   if (regras.fechoExigeSessoes) {
     const gravadas = await sumariosDaTurma(db, regime, turmaId);

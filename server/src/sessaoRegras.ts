@@ -2,6 +2,7 @@
  * Regras do sumário e da folha de presenças que o servidor impõe,
  * independentemente do que o cliente envia.
  */
+import { hojeLisboa } from "./datas.js";
 
 export type SumarioIn = {
   conteudos: string;
@@ -30,7 +31,7 @@ export function sumarioComRegras(
   dataSessao: string,
   agora = new Date(),
 ): { ok: true; sumario: SumarioIn } | { ok: false; erro: string } {
-  const hoje = agora.toISOString().slice(0, 10);
+  const hoje = hojeLisboa(agora);
   const jaAssinado = Boolean(anterior?.assinado);
   if (novo.assinado && !jaAssinado && role === "formador" && /^\d{4}-\d{2}-\d{2}$/.test(dataSessao) && dataSessao > hoje) {
     return { ok: false, erro: "Não pode assinar o sumário de uma sessão que ainda não aconteceu." };

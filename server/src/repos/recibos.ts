@@ -105,8 +105,8 @@ export function linhasExportacao(c: Consulta, f: FiltrosPagamentos) {
   w.add(`(${SITUACAO}) = ?`, f.situacao);
   w.add("p.curso = ?", f.curso);
   w.add("p.metodo = ?", f.metodo);
-  w.add("COALESCE(p.pago_em, p.created_at) >= ?::date", f.de);
-  w.add("COALESCE(p.pago_em, p.created_at) < (?::date + 1)", f.ate);
+  w.add("COALESCE(p.pago_em, p.created_at) >= (?::date::timestamp AT TIME ZONE 'Europe/Lisbon')", f.de);
+  w.add("COALESCE(p.pago_em, p.created_at) < ((?::date + 1)::timestamp AT TIME ZONE 'Europe/Lisbon')", f.ate);
   const q = padraoPesquisa(f.q);
   w.add("(p.nome ILIKE ? OR p.email ILIKE ? OR p.curso ILIKE ? OR p.id ILIKE ?)", q, q, q, q);
   return many<LinhaExportacao>(c,

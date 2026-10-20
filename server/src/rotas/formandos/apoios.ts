@@ -13,6 +13,7 @@ import {
 } from "../../repos/apoios.js";
 import { idNum, idParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
+import { diaLisboa, hojeLisboa } from "../../datas.js";
 
 const tipo = z.enum(TIPOS_APOIO);
 const estado = z.enum(["calculado", "aprovado", "pago", "anulado"]);
@@ -40,7 +41,7 @@ const regrasBody = z.object({
 });
 
 const n = (v: unknown) => Number(v ?? 0);
-const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : String(v ?? "")).slice(0, 10);
+const iso = (v: unknown) => (v instanceof Date ? diaLisboa(v) : String(v ?? "").slice(0, 10));
 
 function apoioJson(a: ApoioRow) {
   const calculado = n(a.valor_calculado);
@@ -69,7 +70,7 @@ function apoioJson(a: ApoioRow) {
 }
 
 function hojeIso() {
-  return new Date().toISOString().slice(0, 10);
+  return hojeLisboa();
 }
 
 export function registarApoios(app: FastifyInstance, deps: Deps) {

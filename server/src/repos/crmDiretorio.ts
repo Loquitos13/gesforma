@@ -148,7 +148,13 @@ export async function historicoCliente(c: Consulta, id: number, email: string, a
      SELECT 'Curso Gold', g.id::text, g.curso || CASE WHEN g.turma <> '' THEN ' · ' || g.turma ELSE '' END, g.valor::float,
             CASE WHEN g.pago THEN 'Pago' ELSE g.estado END,
             -- O carimbo antigo nem sempre é ISO: só se lê a data quando começa por AAAA-MM-DD.
-            CASE WHEN g.inscrito ~ '^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])' THEN substr(g.inscrito, 1, 10)::date::timestamptz END
+            -- Com hora é um carimbo UTC (ver DIA_FORMANDO); só com a data, é o dia de Lisboa.
+            CASE
+              WHEN g.inscrito ~ '^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])[ T]([01]\\d|2[0-3]):[0-5]\\d'
+                THEN (substr(g.inscrito, 1, 10) || ' ' || substr(g.inscrito, 12, 5) || ':00')::timestamp AT TIME ZONE 'UTC'
+              WHEN g.inscrito ~ '^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])'
+                THEN substr(g.inscrito, 1, 10)::date::timestamp AT TIME ZONE 'Europe/Lisbon'
+            END
        FROM formandos_gold g WHERE ${verGold} AND $2 <> '' AND lower(g.email) = $2
      UNION ALL
      SELECT 'Curso Financiado', f.id::text, f.curso || CASE WHEN f.turma <> '' THEN ' · ' || f.turma ELSE '' END, 0::float,

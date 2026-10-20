@@ -17,6 +17,7 @@ import { normalizeEmail } from "../security.js";
 import { idParam, paginacao, regime as regimeSchema, textoQuery, validar } from "../validacao.js";
 import { hojeIso } from "./turmas.js";
 import type { Deps } from "./tipos.js";
+import { somarDias } from "../datas.js";
 
 const SLOTS = ["laboral", "pos-laboral", "sabado-manha", "sabado-tarde"] as const;
 const OBRIGATORIOS = DOCS_FORMADOR.filter(d => d.required).map(d => d.id);
@@ -94,9 +95,7 @@ function podeAlterarRegimes(role: string, antes: readonly string[], depois: read
 const SEM_REGIME = "Sem acesso a formadores deste regime.";
 
 function limiteCcp(hoje: string) {
-  const d = new Date(`${hoje}T12:00:00`);
-  d.setDate(d.getDate() + 90);
-  return d.toISOString().slice(0, 10);
+  return somarDias(hoje, 90);
 }
 
 type Acesso = { email: string; password?: string; criado: boolean } | null;

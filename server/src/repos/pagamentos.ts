@@ -203,8 +203,8 @@ function filtros(f: FiltrosPagamentos, comSituacao = true) {
   if (comSituacao) w.add(`(${SITUACAO}) = ?`, f.situacao);
   w.add("p.curso = ?", f.curso);
   w.add("p.metodo = ?", f.metodo);
-  w.add("COALESCE(p.pago_em, p.created_at) >= ?::date", f.de);
-  w.add("COALESCE(p.pago_em, p.created_at) < (?::date + 1)", f.ate);
+  w.add("COALESCE(p.pago_em, p.created_at) >= (?::date::timestamp AT TIME ZONE 'Europe/Lisbon')", f.de);
+  w.add("COALESCE(p.pago_em, p.created_at) < ((?::date + 1)::timestamp AT TIME ZONE 'Europe/Lisbon')", f.ate);
   const q = padraoPesquisa(f.q);
   w.add("(p.nome ILIKE ? OR p.email ILIKE ? OR p.curso ILIKE ? OR p.id ILIKE ?)", q, q, q, q);
   return w;
@@ -267,20 +267,20 @@ export async function indicadoresPagamentos(c: Consulta, f: FiltrosPagamentos) {
   const w = new Filtros();
   w.sempre("p.estado = 'Pago'");
   w.add("p.curso = ?", f.curso);
-  w.add("COALESCE(p.pago_em, p.created_at) >= ?::date", f.de);
-  w.add("COALESCE(p.pago_em, p.created_at) < (?::date + 1)", f.ate);
+  w.add("COALESCE(p.pago_em, p.created_at) >= (?::date::timestamp AT TIME ZONE 'Europe/Lisbon')", f.de);
+  w.add("COALESCE(p.pago_em, p.created_at) < ((?::date + 1)::timestamp AT TIME ZONE 'Europe/Lisbon')", f.ate);
   const periodo = await one<{ receita: number; n: number }>(
     c, `SELECT COALESCE(sum(p.valor), 0)::float AS receita, count(*)::int AS n FROM pagamentos p ${w.where}`, w.params,
   );
   const mes = await valor<number>(
     c,
     `SELECT COALESCE(sum(valor), 0)::float FROM pagamentos
-      WHERE estado = 'Pago' AND COALESCE(pago_em, created_at) >= date_trunc('month', now())`,
+      WHERE estado = 'Pago' AND COALESCE(pago_em, created_at) >= (date_trunc('month', now() AT TIME ZONE 'Europe/Lisbon') AT TIME ZONE 'Europe/Lisbon')`,
   );
   const mesAnterior = await valor<number>(
     c,
     `SELECT COALESCE(sum(valor), 0)::float FROM pagamentos
-      WHERE estado = 'Pago' AND COALESCE(pago_em, created_at) >= date_trunc('month', now()) - interval '1 month'
+      WHERE estado = 'Pago' AND COALESCE(pago_em, created_at) >= ((date_trunc('month', now() AT TIME ZONE 'Europe/Lisbon') - interval '1 month') AT TIME ZONE 'Europe/Lisbon')
         AND COALESCE(pago_em, created_at) < now() - interval '1 month'`,
   );
   const porReceber = await one<{ valor: number; n: number }>(

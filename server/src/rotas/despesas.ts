@@ -7,6 +7,7 @@ import { textoSeguro } from "../pagamentosExportar.js";
 import { alterarDespesa, apagarDespesa, associarDespesa, criarDespesa, listarDespesas, turmaDaDespesa, type LinhaDespesa } from "../repos/despesas.js";
 import { idNum, idParam, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
+import { hojeLisboa } from "../datas.js";
 
 const dto = (r: LinhaDespesa) => ({ id: Number(r.id), ordem: Number(r.ordem), turmaId: r.turma_id == null ? null : Number(r.turma_id), dados: r.dados, atualizadoEm: r.atualizado_em });
 /** `?turma=<id>`, ou `?turma=sem` para as antigas ainda sem turma. */
@@ -89,7 +90,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const nome = turma.nome.normalize("NFD").replace(/[^\w-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || String(turma.id);
     reply
       .header("content-type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-      .header("content-disposition", `attachment; filename="despesas-${nome}-${new Date().toISOString().slice(0, 10)}.xlsx"`)
+      .header("content-disposition", `attachment; filename="despesas-${nome}-${hojeLisboa()}.xlsx"`)
       .header("cache-control", "no-store");
     return reply.send(bytes);
   });

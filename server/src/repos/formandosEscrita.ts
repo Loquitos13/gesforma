@@ -146,7 +146,7 @@ export async function registarPagamentoRecebido(
   const ficha = await q<{ pago: boolean }>("SELECT pago FROM formandos_gold WHERE id = $1 FOR UPDATE", [d.formandoId]);
   if (ficha.rows[0]?.pago) return null;
   // Data escolhida pela secretaria (parâmetro próprio: o da coluna «data» é texto); se for hoje, fica a hora real.
-  const pagoEm = (p: string) => `CASE WHEN ${p}::date = current_date THEN now() ELSE ${p}::date END`;
+  const pagoEm = (p: string) => `CASE WHEN ${p}::date = (now() AT TIME ZONE 'Europe/Lisbon')::date THEN now() ELSE ${p}::date::timestamp AT TIME ZONE 'Europe/Lisbon' END`;
   const aberto = await q<{ id: string }>(
     "SELECT id FROM pagamentos WHERE formando_id = $1 AND estado = 'Pendente' ORDER BY id DESC LIMIT 1", [d.formandoId],
   );

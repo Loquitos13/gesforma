@@ -12,6 +12,7 @@ import {
   type EnvioReservado, type RegraComModelo,
 } from "./repos/emails.js";
 import { CRM_ESTADO_RANK, crmEstadoFromEvent, EVENT_ALIASES, fillVars, isEmail, normalizeEmail, sanitizeHeader, sanitizeText } from "./security.js";
+import { hojeLisboa, somarDias } from "./datas.js";
 
 type Modelo = Pick<RegraComModelo, "template_tipo" | "assunto" | "body_lines" | "body_xml" | "cta" | "cta_href" | "cta_ambito">;
 
@@ -122,8 +123,8 @@ async function enqueueCrmReminders(db: Db) {
 }
 
 async function enqueueTurmaReminders(db: Db) {
-  const today = new Date().toISOString().slice(0, 10);
-  const tomorrow = new Date(Date.now() + 24 * 3600_000).toISOString().slice(0, 10);
+  const today = hojeLisboa();
+  const tomorrow = somarDias(today, 1);
   for (const turma of await turmasQueComecam(db, [today, tomorrow])) {
     for (const a of await formandosDaTurma(db, turma.regime, turma.id, turma.nome)) {
       const email = normalizeEmail(a.email);

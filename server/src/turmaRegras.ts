@@ -5,6 +5,7 @@ import type { Db } from "./db/pool.js";
 import { nextOpsId } from "./ops.js";
 import { codigoInternoTurma } from "../../src/partilhado/turmaCodigo.js";
 import { atualizarRegra, existeTurmaIgual, inserirTurmaFin, inserirTurmaGold, listarRegras } from "./repos/turmas.js";
+import { hojeLisboa } from "./datas.js";
 
 export type TurmaRegra = {
   id: number;
@@ -60,7 +61,7 @@ export async function aplicarTurmaRegras(db: Db, regime?: "gold" | "fin") {
   const criadas: { id: number; nome: string; regime: string }[] = [];
   const conflitos: { regra: number; erro: string }[] = [];
   for (const regra of regras) {
-    const inicio = regra.proximaData || new Date().toISOString().slice(0, 10);
+    const inicio = regra.proximaData || hojeLisboa();
     const fin = regra.regime === "fin";
     const horasSessao = fin ? 3 : (regra.horasSessao || 3);
     const modulos = await modulosDaFicha(db, regra.regime, regra.curso);

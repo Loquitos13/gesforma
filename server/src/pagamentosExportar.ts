@@ -3,6 +3,7 @@ import type { Db } from "./db/pool.js";
 import { readPreinscricaoPii } from "./pii.js";
 import type { FiltrosPagamentos } from "./repos/pagamentos.js";
 import { linhasExportacao } from "./repos/recibos.js";
+import { stampLisboa } from "./datas.js";
 
 /** Exportação da lista de pagamentos para Excel, com os mesmos filtros do ecrã. */
 
@@ -12,7 +13,8 @@ export function textoSeguro(v: unknown) {
   return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
 }
 
-const dataCurta = (iso: string | null) => (iso ? iso.slice(0, 16).replace("T", " ") : "");
+/** Instante (texto de um timestamptz) → "aaaa-mm-dd hh:mm" na hora de Lisboa. */
+const dataCurta = (iso: string | null) => (iso ? stampLisboa(iso) || iso.slice(0, 16).replace("T", " ") : "");
 
 const ESTADOS: Record<string, string> = { Pago: "Pago", Pendente: "Por receber", Cancelado: "Cancelado", Reembolsado: "Reembolsado" };
 

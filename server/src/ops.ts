@@ -3,6 +3,7 @@ import type { Db } from "./db/pool.js";
 import { opaqueRef } from "./fieldCrypto.js";
 import { readFormandoDocs, readFormandoPii, readPreinscricaoPii } from "./pii.js";
 import { proximoIdOps } from "./repos/ops.js";
+import { stampLisboa } from "./datas.js";
 
 export function newPublicId() {
   return randomUUID();
@@ -229,7 +230,7 @@ export function mapTurmaFin(r: Record<string, unknown>) {
     cronograma: asArr(r.cronograma),
     drivePastaId: String(r.drive_pasta_id ?? ""),
     driveDossieId: String(r.drive_dossie_id ?? ""),
-    fechadaEm: r.fechada_em ? String(r.fechada_em).slice(0, 16).replace("T", " ") : "",
+    fechadaEm: r.fechada_em ? stampLisboa(r.fechada_em as Date | string) || String(r.fechada_em) : "",
     fechadaPor: String(r.fechada_por ?? ""),
   };
 }

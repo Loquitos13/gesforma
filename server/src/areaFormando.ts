@@ -16,6 +16,7 @@ import {
 import { hashPassword, isEmail, normalizeEmail, sha256 } from "./security.js";
 import { vistaDocumentosFormandoFin } from "./formandoFinDocs.js";
 import { listarCatalogoPublico } from "./catalogoPublico.js";
+import { diaLisboa, hojeLisboa, lerInstante, stampLisboa } from "./datas.js";
 
 /** Área do formando: conta, inscrições, agenda, certificados, pagamentos e documentos. */
 
@@ -48,7 +49,12 @@ function sessoesDe(raw: unknown): Sessao[] {
 }
 
 function hojeIso() {
-  return new Date().toISOString().slice(0, 10);
+  return hojeLisboa();
+}
+
+/** Carimbo UTC sem fuso ("aaaa-mm-dd hh:mm") → o mesmo formato na hora de Lisboa; outro texto fica como está. */
+function carimboVisivel(raw: string) {
+  return /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}$/.test(raw.trim()) ? stampLisboa(lerInstante(raw)) || raw : raw;
 }
 
 function dataPt(iso: string) {
@@ -274,7 +280,7 @@ export async function montarArea(db: Db, user: Actor) {
     if (ins.turmaId) {
       for (const cert of await certificadosDe(db, ins.regime, ins.turmaId, ins.id)) {
         if (!cert.emitido) continue;
-        const quando = cert.emitido_em ? dataPt(new Date(cert.emitido_em).toISOString().slice(0, 10)) : "";
+        const quando = cert.emitido_em ? dataPt(diaLisboa(cert.emitido_em)) : "";
         certificados.push({
           id: `cert-${ins.regime}-${ins.id}`,
           curso: ins.curso || "Formação",
@@ -296,7 +302,7 @@ export async function montarArea(db: Db, user: Actor) {
         id: `pag-${ins.id}`,
         titulo: "Pagamento pendente",
         texto: `${ins.curso || "A formação"} tem ${eur(ins.valor)} por confirmar.`,
-        quando: ins.inscrito || "Em aberto",
+        quando: carimboVisivel(ins.inscrito) || "Em aberto",
       });
     }
   }
@@ -305,12 +311,12 @@ export async function montarArea(db: Db, user: Actor) {
   const idsGold = inscricoes.filter(i => i.regime === "gold").map(i => i.id);
   const movimentos = await pagamentosDoUtilizador(db, idsGold, normalizeEmail(conta?.email || user.email));
   for (const p of movimentos) {
-    pagamentos.push({ id: String(p.id), curso: p.curso, data: p.data, valor: eur(Number(p.valor) || 0), estado: p.estado, metodo: p.metodo });
+    pagamentos.push({ id: String(p.id), curso: p.curso, data: carimboVisivel(String(p.data ?? "")), valor: eur(Number(p.valor) || 0), estado: p.estado, metodo: p.metodo });
   }
   if (!movimentos.length) {
     for (const ins of inscricoes.filter(i => i.regime === "gold" && i.valor > 0)) {
       pagamentos.push({
-        id: `fg-${ins.id}`, curso: ins.curso || "Formação", data: ins.inscrito, valor: eur(ins.valor),
+        id: `fg-${ins.id}`, curso: ins.curso || "Formação", data: carimboVisivel(ins.inscrito), valor: eur(ins.valor),
         estado: ins.pago ? "Pago" : "Pendente", metodo: ins.metodo,
       });
     }
@@ -367,7 +373,7 @@ export async function montarArea(db: Db, user: Actor) {
         estado: "validado" as const,
         fileName: d.file_name,
         driveUrl: d.drive_url,
-        validadoEm: d.validated_at ? String(d.validated_at instanceof Date ? d.validated_at.toISOString() : d.validated_at).slice(0, 10) : "",
+        validadoEm: d.validated_at ? diaLisboa(d.validated_at as Date | string) || String(d.validated_at).slice(0, 10) : "",
       })),
     });
   }

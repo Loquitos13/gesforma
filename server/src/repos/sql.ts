@@ -5,6 +5,7 @@
  * Forma de uma função de repositório: `async function listarX(db: Db | TxQuery, params) { … }`.
  */
 import type { Db, TxQuery } from "../db/pool.js";
+import { hojeLisboa } from "../datas.js";
 
 export type Regime = "gold" | "fin";
 
@@ -98,9 +99,10 @@ export type Periodo = { de: string; ate: string };
  */
 export function periodo(de?: string | null, ate?: string | null, hoje = new Date()): Periodo & { anterior: Periodo; dias: number } {
   const iso = (d: Date) => d.toISOString().slice(0, 10);
-  const inicioMes = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), 1));
-  const d0 = de ? new Date(`${de}T00:00:00Z`) : inicioMes;
-  const d1 = ate ? new Date(`${ate}T00:00:00Z`) : new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate()));
+  // "Hoje" e "este mês" são os de Lisboa; daqui para baixo as contas são em dias de calendário (UTC).
+  const diaHoje = hojeLisboa(hoje);
+  const d0 = new Date(`${de || `${diaHoje.slice(0, 7)}-01`}T00:00:00Z`);
+  const d1 = new Date(`${ate || diaHoje}T00:00:00Z`);
   const [a, b] = d0 <= d1 ? [d0, d1] : [d1, d0];
   const dias = Math.round((b.getTime() - a.getTime()) / 86400_000) + 1;
   const doMes = a.getUTCDate() === 1 && a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth();

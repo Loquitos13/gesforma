@@ -26,7 +26,7 @@ export type LinhaInscricaoFin = {
 
 const BASE = `
   SELECT ci.id,
-         COALESCE(ci.payload->>'inscrito', to_char(ci.updated_at, 'YYYY-MM-DD')) AS inscrito,
+         COALESCE(ci.payload->>'inscrito', to_char(ci.updated_at AT TIME ZONE 'Europe/Lisbon', 'YYYY-MM-DD')) AS inscrito,
          COALESCE(ci.payload->>'nome', '') AS nome,
          COALESCE(ci.payload->>'apelido', '') AS apelido,
          COALESCE(ci.payload->>'email', '') AS email,

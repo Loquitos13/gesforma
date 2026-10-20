@@ -4,6 +4,7 @@
  */
 import type { Periodo } from "./sql.js";
 import { many, one, type Consulta } from "./sql.js";
+import { agoraLisboa } from "../datas.js";
 
 export type Regime = "gold" | "fin";
 
@@ -61,12 +62,12 @@ export async function indicadoresEquipa(c: Consulta, regime: Regime, p: Periodo 
             count(*) FILTER (WHERE estado = 'Formando')::int AS formandos,
             coalesce(sum(preco) FILTER (WHERE estado IN ('Pago', 'Formando')), 0)::float AS receita,
             min(created_at) FILTER (WHERE estado = 'Não contactado') AS mais_antigo,
-            count(*) FILTER (WHERE created_at::date BETWEEN $2::date AND $3::date)::int AS leads_a,
-            count(*) FILTER (WHERE created_at::date BETWEEN $2::date AND $3::date AND estado IN ('Pago', 'Formando'))::int AS pagos_a,
-            coalesce(sum(preco) FILTER (WHERE created_at::date BETWEEN $2::date AND $3::date AND estado IN ('Pago', 'Formando')), 0)::float AS receita_a,
-            count(*) FILTER (WHERE created_at::date BETWEEN $4::date AND $5::date)::int AS leads_b,
-            count(*) FILTER (WHERE created_at::date BETWEEN $4::date AND $5::date AND estado IN ('Pago', 'Formando'))::int AS pagos_b,
-            coalesce(sum(preco) FILTER (WHERE created_at::date BETWEEN $4::date AND $5::date AND estado IN ('Pago', 'Formando')), 0)::float AS receita_b
+            count(*) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $2::date AND $3::date)::int AS leads_a,
+            count(*) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $2::date AND $3::date AND estado IN ('Pago', 'Formando'))::int AS pagos_a,
+            coalesce(sum(preco) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $2::date AND $3::date AND estado IN ('Pago', 'Formando')), 0)::float AS receita_a,
+            count(*) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $4::date AND $5::date)::int AS leads_b,
+            count(*) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $4::date AND $5::date AND estado IN ('Pago', 'Formando'))::int AS pagos_b,
+            coalesce(sum(preco) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $4::date AND $5::date AND estado IN ('Pago', 'Formando')), 0)::float AS receita_b
        FROM preinscricoes
       WHERE regime = $1 AND comercial_id IS NOT NULL AND ($6::uuid IS NULL OR comercial_id = $6::uuid)
       GROUP BY comercial_id`,
@@ -80,10 +81,10 @@ export async function indicadoresEquipa(c: Consulta, regime: Regime, p: Periodo 
             count(*) FILTER (WHERE estado = 'Aceite')::int AS aceites,
             count(*) FILTER (WHERE estado = 'Recusada')::int AS recusadas,
             coalesce(sum(valor) FILTER (WHERE estado IN ('Enviada', 'Negociação')), 0)::float AS pipeline,
-            count(*) FILTER (WHERE enviada_em::date BETWEEN $2::date AND $3::date)::int AS propostas_a,
-            count(*) FILTER (WHERE enviada_em::date BETWEEN $2::date AND $3::date AND estado = 'Aceite')::int AS aceites_a,
-            count(*) FILTER (WHERE enviada_em::date BETWEEN $4::date AND $5::date)::int AS propostas_b,
-            count(*) FILTER (WHERE enviada_em::date BETWEEN $4::date AND $5::date AND estado = 'Aceite')::int AS aceites_b
+            count(*) FILTER (WHERE (enviada_em AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $2::date AND $3::date)::int AS propostas_a,
+            count(*) FILTER (WHERE (enviada_em AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $2::date AND $3::date AND estado = 'Aceite')::int AS aceites_a,
+            count(*) FILTER (WHERE (enviada_em AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $4::date AND $5::date)::int AS propostas_b,
+            count(*) FILTER (WHERE (enviada_em AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $4::date AND $5::date AND estado = 'Aceite')::int AS aceites_b
        FROM propostas_comerciais
       WHERE regime = $1 AND comercial_id IS NOT NULL AND ($6::uuid IS NULL OR comercial_id = $6::uuid)
       GROUP BY comercial_id`,
@@ -128,7 +129,7 @@ export async function indicadoresEquipa(c: Consulta, regime: Regime, p: Periodo 
 export async function aSeguir(c: Consulta, regime: Regime, id: string) {
   const propostas = await many(
     c,
-    `SELECT id, cliente_nome, curso, enviada_em, (now()::date - enviada_em::date) AS dias
+    `SELECT id, cliente_nome, curso, enviada_em, ((now() AT TIME ZONE 'Europe/Lisbon')::date - (enviada_em AT TIME ZONE 'Europe/Lisbon')::date) AS dias
        FROM propostas_comerciais
       WHERE regime = $1 AND comercial_id = $2 AND estado IN ('Enviada', 'Negociação')
         AND coalesce(resposta_cliente, '') = '' AND enviada_em < now() - interval '5 days'
@@ -216,7 +217,7 @@ export async function leadDaNota(c: Consulta, id: number) {
 export async function registarNota(c: Consulta, leadId: number, comercialId: string, actorId: string, nota: string) {
   await one(c, "UPDATE preinscricoes SET comercial_id = COALESCE(comercial_id, $2::uuid) WHERE id = $1 RETURNING id", [leadId, comercialId]);
   await one(c, "INSERT INTO preinscricao_contactos (preinscricao_id, actor_id, nota) VALUES ($1,$2,$3) RETURNING id", [leadId, actorId, nota]);
-  const linha = `[${new Date().toISOString().slice(0, 16).replace("T", " ")}] ${nota}`;
+  const linha = `[${agoraLisboa()}] ${nota}`;
   await one(
     c,
     "UPDATE preinscricoes SET notas = CASE WHEN notas = '' THEN $2 ELSE trim(both from notas || E'\\n' || $2) END WHERE id = $1 RETURNING id",

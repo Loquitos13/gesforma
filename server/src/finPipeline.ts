@@ -10,6 +10,7 @@ import {
 } from "./repos/finPipeline.js";
 import { logLeadEvent } from "./crmDossier.js";
 import { isEmail, normalizeEmail } from "./security.js";
+import { hojeLisboa } from "./datas.js";
 
 const DOC_KEYS = ["cc", "ch", "cu", "morada", "ci", "ce", "contrato", "rgpd"] as const;
 
@@ -35,7 +36,7 @@ function docsFromInscricaoPips(pips: Record<string, boolean | undefined>) {
     ci: Boolean(pips.ci),
     ce: Boolean(pips.ce),
   };
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLisboa();
   const out: Record<string, { ok: boolean; data: string }> = {};
   for (const k of DOC_KEYS) {
     const pip = map[k];
@@ -63,7 +64,7 @@ async function mergeDocsJson(
 ) {
   const out = { ...base };
   for (const r of await docsValidosFin(db, formandoId)) {
-    if (r.ok) out[r.doc_id] = { ok: true, data: String(r.data ?? "").slice(0, 10) || new Date().toISOString().slice(0, 10) };
+    if (r.ok) out[r.doc_id] = { ok: true, data: String(r.data ?? "").slice(0, 10) || hojeLisboa() };
   }
   return out;
 }

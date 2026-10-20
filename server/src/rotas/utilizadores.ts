@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { ressincronizarPartilhas } from "../repos/drive.js";
 import { sessoesAtivasDe, terminarSessoesDe } from "../repos/sessoes.js";
 import {
   PERFIS, actualizarUtilizador, apagarUtilizador, criarUtilizador, definirPalavraPasse, eUltimoAdmin,
@@ -12,6 +13,9 @@ import { mensagemPalavraPasse, palavraPasseValida } from "../../../src/partilhad
 import type { Deps } from "./tipos.js";
 
 // Gestão de utilizadores (só administração), em `/v1/utilizadores`.
+
+/** Contas com acesso à Drive das turmas ou protegidas na sincronização (ver emailsEquipaActiva). */
+const equipaDaDrive = (u: { role: string; active: boolean }) => u.active && !["formando", "formador", "comercial"].includes(u.role);
 
 const uuidParam = z.object({ id: z.string().uuid() });
 const criarSchema = z.object({
@@ -133,6 +137,11 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       throw err;
     }
     if (active === false) await terminarSessoesDe(db, id);
+    // Conta da equipa desactivada, com outro perfil ou outro email: as turmas voltam a ficar por sincronizar na Drive
+    // e o cron diário tira as partilhas das pastas a quem já não é da secretaria.
+    if (equipaDaDrive(atual) && (!active || role !== atual.role || (email !== undefined && email !== atual.email))) {
+      await ressincronizarPartilhas(db);
+    }
     await audit(db, req.actor!.id, "user.update", "user", id, req.ip, { role, active, antes: { role: atual.role, active: atual.active } });
     const u = await obterUtilizador(db, id);
     return { user: u ? mapear(u) : null };
@@ -174,6 +183,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       return true;
     });
     if (!apagado) return reply.code(409).send({ error: "tem de ficar pelo menos um administrador activo" });
+    if (equipaDaDrive(atual)) await ressincronizarPartilhas(db);
     await audit(db, req.actor!.id, "user.delete", "user", id, req.ip, { email: atual.email, role: atual.role });
     return { ok: true };
   });

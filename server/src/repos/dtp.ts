@@ -184,7 +184,7 @@ export async function entidadesDosCursosGold(c: Consulta) {
 export async function emailsFormandosGold(c: Consulta, turmaId: number, turmaNome: string) {
   return many<{ id: number; email: string }>(
     c,
-    "SELECT id, lower(trim(email)) AS email FROM formandos_gold WHERE turma_id = $1 OR turma = $2",
+    "SELECT id, lower(trim(email)) AS email FROM formandos_gold WHERE turma_id = $1 OR (trim(turma) <> '' AND turma = $2)",
     [turmaId, turmaNome],
   );
 }

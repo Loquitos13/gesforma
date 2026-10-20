@@ -16,6 +16,8 @@ import { asArr, nomeArquivoDtp, uniqueZipPath, type Regime } from "./util.js";
 
 /** Descargas da Drive em paralelo, poucas de cada vez (a API da Google limita pedidos por utilizador). */
 const DESCARGAS_EM_PARALELO = 4;
+/** Uma descarga presa não segura a exportação (na Vercel a função tem 30 s). */
+const LIMITE_DESCARGA_MS = 8_000;
 
 export type OpcoesExport = {
   /** Até quando (Date.now()) se começam descargas; as que ficam de fora são listadas no índice. */
@@ -114,7 +116,7 @@ export async function exportarDossie(db: Db, actorId: string | undefined, regime
         foraDoPrazo.push(pedidos[i]!.rel);
         continue;
       }
-      const content = await readDriveContent(db, pedidos[i]!.fileId).catch(() => null);
+      const content = await readDriveContent(db, pedidos[i]!.fileId, { timeoutMs: LIMITE_DESCARGA_MS }).catch(() => null);
       descarregados[i] = content?.bytes ?? null;
     }
   };
@@ -147,7 +149,7 @@ export async function exportarDossie(db: Db, actorId: string | undefined, regime
       }
     }
   }
-  await gravarPdfsDossie(db, actorId, regime, turma).catch(() => undefined);
+  await gravarPdfsDossie(db, actorId, regime, turma, gerados).catch(() => undefined);
 
   const pdfs = files.filter(f => !f.name.endsWith("/_indice.txt") && !f.name.endsWith("/00-Indice geral.txt"));
   const indice = [

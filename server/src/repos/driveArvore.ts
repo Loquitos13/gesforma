@@ -15,10 +15,13 @@ export async function emailsSecretaria(c: Consulta) {
   return emails(await many<{ email: string }>(c, "SELECT email FROM users WHERE role IN ('admin', 'secretaria') AND active = true AND email <> ''"));
 }
 
-/** Contas activas da equipa (nem formadores nem formandos): a sincronização da Drive nunca lhes tira a partilha. */
+/**
+ * Contas activas da equipa (nem formadores, nem formandos, nem a comercial, que não vê turmas nem o dossiê):
+ * a sincronização da Drive nunca lhes tira a partilha.
+ */
 export async function emailsEquipaActiva(c: Consulta) {
   return emails(await many<{ email: string }>(c,
-    "SELECT email FROM users WHERE role NOT IN ('formando', 'formador') AND active = true AND email <> ''"));
+    "SELECT email FROM users WHERE role NOT IN ('formando', 'formador', 'comercial') AND active = true AND email <> ''"));
 }
 
 /** Formadores cujo nome está na lista (comparação sem maiúsculas nem espaços nas pontas). */

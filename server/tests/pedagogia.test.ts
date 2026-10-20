@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assiduidadeDoFormando, horasPorFormador, sessoesComHoras } from "../src/assiduidade.js";
+import { assiduidadeDoFormando, sessoesComHoras } from "../src/assiduidade.js";
 import { feriadosNacionais, generateCronograma } from "../src/cronograma.js";
 import { parseRegras, validarDefinicoes } from "../src/regrasConfig.js";
 import { arrancar, pedido, type Ctx } from "./helpers.js";
@@ -30,11 +30,6 @@ describe("assiduidade em horas", () => {
     const a = assiduidadeDoFormando({ id: 1 }, sessoes, { justificadasContam: false });
     expect(a.horasPresente).toBe(3);
     expect(a.horasFaltaInjustificada).toBe(7);
-  });
-
-  it("horas do formador só contam com sumário assinado", () => {
-    const h = horasPorFormador(cron, [{ sessao_n: 2, sumario: { assinado: true } }]);
-    expect(h).toEqual([{ formador: "Rui", previstas: 7, dadas: 3 }, { formador: "Ana", previstas: 3, dadas: 3 }]);
   });
 });
 

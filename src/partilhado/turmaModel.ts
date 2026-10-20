@@ -288,82 +288,12 @@ export function periodoCronograma(sessoes: SessaoCronograma[]) {
   return { inicio: datas[0], fim: datas[datas.length - 1] };
 }
 
-function parseIso(iso: string) {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y || 2026, (m || 1) - 1, d || 1);
-}
-
-function toIso(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function addHours(start: string, hours: number) {
-  const [h, m] = start.split(":").map(Number);
-  const total = (h || 0) * 60 + (m || 0) + Math.round(hours * 60);
-  const eh = Math.floor(total / 60) % 24;
-  const em = total % 60;
-  return `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
-}
-
-function horarioSlots(horario: string) {
-  if (horario === "Sábado manhã") return { start: "09:00", end: "13:00", hours: 4, weekdays: [6] };
-  if (horario === "Pós Laboral" || horario === "Pós-Laboral") return { start: "19:00", end: "22:00", hours: 3, weekdays: [1, 2, 3, 4] };
-  if (horario === "Laboral Manhã" || horario === "Laboral manhã") return { start: "09:00", end: "13:00", hours: 4, weekdays: [1, 2, 3, 4, 5] };
-  if (horario === "Laboral Tarde" || horario === "Laboral tarde") return { start: "14:00", end: "18:00", hours: 4, weekdays: [1, 2, 3, 4, 5] };
-  return { start: "19:00", end: "22:00", hours: 3, weekdays: [] as number[] };
-}
-
 function durationLabel(start: string, end: string) {
   const [sh, sm] = start.split(":").map(Number);
   const [eh, em] = end.split(":").map(Number);
   const mins = (eh * 60 + em) - (sh * 60 + sm);
   const h = Math.max(1, Math.round(mins / 60));
   return `${h}h`;
-}
-
-/** Distribui os módulos do curso (vindos da API) pelas sessões geradas. Sem módulos, fica por definir. */
-function moduloGerado(i: number, n: number, _curso: string | undefined, lista?: string[]) {
-  if (!lista?.length) return [];
-  return [lista[Math.min(lista.length - 1, Math.floor((i * lista.length) / n))]!];
-}
-
-export function generateCronograma(opts: {
-  inicio: string;
-  horario: string;
-  horas: number;
-  formador: string;
-  curso?: string;
-  hoursPerSession?: number;
-  modulos?: string[];
-}): SessaoCronograma[] {
-  const slot = horarioSlots(opts.horario);
-  const hours = opts.hoursPerSession && opts.hoursPerSession > 0 ? opts.hoursPerSession : slot.hours;
-  const end = opts.hoursPerSession && opts.hoursPerSession > 0 ? addHours(slot.start, hours) : slot.end;
-  const n = Math.min(24, Math.max(4, Math.ceil((opts.horas || 25) / hours)));
-  const cursor = parseIso(opts.inicio || hojeIso());
-  const weekdays = slot.weekdays.length ? slot.weekdays : [cursor.getDay() || 3];
-  for (let i = 0; i < 7; i++) {
-    if (weekdays.includes(cursor.getDay())) break;
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  const sessions: SessaoCronograma[] = [];
-  for (let i = 0; i < n; i++) {
-    sessions.push({
-      id: `s-${opts.inicio || "new"}-${i + 1}`,
-      data: toIso(cursor),
-      horaInicio: slot.start,
-      horaFim: end,
-      modulos: moduloGerado(i, n, opts.curso, opts.modulos),
-      formadores: opts.formador && opts.formador !== "A definir" ? [opts.formador] : [],
-      modalidade: "presencial",
-    });
-    cursor.setDate(cursor.getDate() + 1);
-    for (let j = 0; j < 14; j++) {
-      if (weekdays.includes(cursor.getDay())) break;
-      cursor.setDate(cursor.getDate() + 1);
-    }
-  }
-  return sessions;
 }
 
 export function emptySessao(formador = "A definir"): SessaoCronograma {
@@ -376,21 +306,6 @@ export function emptySessao(formador = "A definir"): SessaoCronograma {
     formadores: formador && formador !== "A definir" ? [formador] : [],
     modalidade: "presencial",
   };
-}
-
-export function horasPorFormador(sessoes: SessaoCronograma[]) {
-  const map = new Map<string, number>();
-  for (const s of sessoes) {
-    if (!isSessaoLectiva(s)) continue;
-    const h = sessaoDuracaoHoras(s);
-    for (const nome of sessaoFormadores(s)) {
-      if (!nome || nome === "A definir") continue;
-      map.set(nome, (map.get(nome) ?? 0) + h);
-    }
-  }
-  return [...map.entries()]
-    .map(([nome, horas]) => ({ nome, horas: Math.round(horas * 10) / 10 }))
-    .sort((a, b) => b.horas - a.horas || a.nome.localeCompare(b.nome, "pt"));
 }
 
 export function horasCronograma(sessoes: SessaoCronograma[]) {

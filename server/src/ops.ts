@@ -4,6 +4,7 @@ import { opaqueRef } from "./fieldCrypto.js";
 import { readFormandoDocs, readFormandoPii, readPreinscricaoPii } from "./pii.js";
 import { proximoIdOps } from "./repos/ops.js";
 import { stampLisboa } from "./datas.js";
+import { versaoCronograma } from "./sessaoAcesso.js";
 
 export function newPublicId() {
   return randomUUID();
@@ -203,6 +204,7 @@ export function mapTurmaGold(r: Record<string, unknown>) {
     custoHoraSala: num(r.custo_hora_sala),
     valoresHoraFormador: mapaValores(r.valores_hora_formador),
     cronograma: asArr(r.cronograma),
+    versao: versaoCronograma(r.cronograma),
     drivePastaId: String(r.drive_pasta_id ?? ""),
     driveDossieId: String(r.drive_dossie_id ?? ""),
   };
@@ -229,6 +231,7 @@ export function mapTurmaFin(r: Record<string, unknown>) {
     activa: Boolean(r.activa),
     valoresHoraFormador: mapaValores(r.valores_hora_formador),
     cronograma: asArr(r.cronograma),
+    versao: versaoCronograma(r.cronograma),
     drivePastaId: String(r.drive_pasta_id ?? ""),
     driveDossieId: String(r.drive_dossie_id ?? ""),
     fechadaEm: r.fechada_em ? stampLisboa(r.fechada_em as Date | string) || String(r.fechada_em) : "",

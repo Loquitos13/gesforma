@@ -68,7 +68,7 @@ describe("o formador não vê as turmas nem os dados de outro formador", () => {
       expect(daEquipa.map(l => l.id)).toEqual(expect.arrayContaining([minha, alheia]));
 
       const base = `/v1/turmas/${regime}/${alheia}`;
-      for (const url of [base, `${base}/pedagogia`, `${base}/avaliacao`, `${base}/resultados`, `${base}/horas-formador`]) {
+      for (const url of [base, `${base}/pedagogia`, `${base}/avaliacao`, `${base}/resultados`]) {
         expect((await pedido(ctx, "formador", "GET", url)).statusCode, url).toBe(403);
       }
       for (const url of [`/v1/turmas/${regime}/${minha}`, `/v1/turmas/${regime}/${minha}/pedagogia`, `/v1/turmas/${regime}/${minha}/resultados`]) {
@@ -77,12 +77,6 @@ describe("o formador não vê as turmas nem os dados de outro formador", () => {
       // Nem a lista de turmas de onde copiar planos.
       expect((await pedido(ctx, "formador", "GET", `/v1/turmas/${regime}/${minha}/planos/origens`)).statusCode).toBe(403);
     }
-
-    // Na sua turma vê só as próprias horas, não as do colega com quem a partilha.
-    const horas = await pedido(ctx, "formador", "GET", `/v1/turmas/gold/${ids.gold.minha}/horas-formador`);
-    expect(horas.statusCode, horas.body).toBe(200);
-    const nomes = (horas.json().formadores as { formador: string }[]).map(h => h.formador.toLowerCase());
-    expect(nomes).not.toContain(outro.nome.toLowerCase());
 
     // Relatórios e PDFs do dossiê da Financiada: nem da sua turma, muito menos da alheia.
     for (const url of [`/v1/turmas/fin/${ids.fin.alheia}/relatorio-final`, `/v1/turmas/fin/${ids.fin.alheia}/dossie/listagem-formandos`]) {

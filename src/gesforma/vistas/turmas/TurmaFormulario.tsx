@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ApiError } from "../../../partilhado/api/cliente";
 import { apiAlterarTurma, apiCriarTurma, apiTurmaGravada, type DadosTurma, type Regime } from "../../../partilhado/api/turmas";
+import { invalidar, useRecurso } from "../../../partilhado/dados/useRecurso";
 import { useCursoFichaLocais } from "../../../partilhado/cursoLocais";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
-import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import { codigoInternoTurma, proximoNomeTurma } from "../../../partilhado/turmaCodigo";
 import type { SessaoCronograma } from "../../../partilhado/turmaModel";
 import { toastError } from "../../../partilhado/toastBus";
@@ -46,24 +47,28 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
   const [erro, setErro] = useState("");
   const [aGravar, setAGravar] = useState(false);
   const nomeManual = useRef(false);
+  /** O rascunho tal como veio do servidor: ao gravar só se enviam os campos que mudaram. */
+  const inicial = useRef<Rascunho | null>(null);
 
   useEffect(() => {
     if (!aberto) return;
     setErro("");
     if (!editar) {
       nomeManual.current = false;
+      inicial.current = null;
       setR(VAZIO(regime));
       return;
     }
     const t = gravada.dados?.turma;
     if (!t) return;
     nomeManual.current = true;
-    setR({
+    inicial.current = {
       nome: t.nome, curso: t.curso, local: t.local, horario: t.horario, formador: t.formador, formadores: t.formadores ?? [],
       dataInicio: t.dataInicio, vagas: (fin ? t.alunosTotal : t.vagas) ?? 0, tolerancia: t.toleranciaVagas ?? 0, vagasAnunciadas: t.vagasAnunciadas ?? null,
       custoHoraSala: t.custoHoraSala ?? 0, abertas: fin ? Boolean(t.activa) : t.estado === "Ativa",
       financiador: t.financiador ?? "", numeroAcao: t.numeroAcao ?? 1, valoresHoraFormador: t.valoresHoraFormador ?? {}, cronograma: t.cronograma ?? [], horas: t.horas,
-    });
+    };
+    setR(inicial.current);
   }, [aberto, editar, gravada.dados, regime, fin]);
 
   const cursoId = cursos.opcoes.find(o => o.valor === r.curso)?.id;
@@ -85,21 +90,34 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
     setErro("");
     const nome = r.nome.trim() || codigo;
     if (!nome) { setErro("Indique o código da turma."); return; }
-    const comum: DadosTurma = {
-      nome, curso: r.curso, local: r.local, horario: r.horario, dataInicio: r.dataInicio, formador: r.formador,
-      formadores: r.formadores, toleranciaVagas: r.tolerancia, vagasAnunciadas: r.vagasAnunciadas, valoresHoraFormador: r.valoresHoraFormador,
-      ...(editar ? { cronograma: r.cronograma } : {}),
+    const paraEnviar = (x: Rascunho): DadosTurma => {
+      const comum: DadosTurma = {
+        nome: x.nome.trim() || codigo, curso: x.curso, local: x.local, horario: x.horario, dataInicio: x.dataInicio, formador: x.formador,
+        formadores: x.formadores, toleranciaVagas: x.tolerancia, vagasAnunciadas: x.vagasAnunciadas, valoresHoraFormador: x.valoresHoraFormador,
+        ...(editar ? { cronograma: x.cronograma } : {}),
+      };
+      return fin
+        ? { ...comum, alunosTotal: x.vagas, activa: x.abertas, financiador: x.financiador.trim(), numeroAcao: Math.max(1, Math.round(x.numeroAcao) || 1) }
+        : { ...comum, vagas: x.vagas, custoHoraSala: x.custoHoraSala, estado: x.abertas ? "Ativa" : "Inativa" };
     };
-    const dados: DadosTurma = fin
-      ? { ...comum, alunosTotal: r.vagas, activa: r.abertas, financiador: r.financiador.trim(), numeroAcao: Math.max(1, Math.round(r.numeroAcao) || 1) }
-      : { ...comum, vagas: r.vagas, custoHoraSala: r.custoHoraSala, estado: r.abertas ? "Ativa" : "Inativa" };
+    const dados = paraEnviar(r);
+    // A editar, só o que mudou (o resto pode ter sido mudado por outra pessoa entretanto); o cronograma leva a versão lida.
+    let alterado: Partial<DadosTurma> = dados;
+    if (editar && inicial.current) {
+      const antes = paraEnviar(inicial.current) as Record<string, unknown>;
+      alterado = Object.fromEntries(Object.entries(dados).filter(([k, val]) => JSON.stringify(val) !== JSON.stringify(antes[k])));
+      if (alterado.cronograma) alterado.versao = gravada.dados?.turma.versao;
+    }
+    if (editar && !Object.keys(alterado).length) { onGuardado(turmaId!); return; }
     setAGravar(true);
     try {
-      const res = editar ? await apiAlterarTurma(regime, turmaId!, dados) : await apiCriarTurma(regime, dados);
+      const res = editar ? await apiAlterarTurma(regime, turmaId!, alterado) : await apiCriarTurma(regime, dados);
       onGuardado(res.turma.id);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível gravar a turma.");
       toastError(e, "Não foi possível gravar a turma.");
+      // Outra pessoa mudou a turma: recarrega-se o que está gravado.
+      if (editar && e instanceof ApiError && e.status === 409) invalidar(`turma:${regime}:${turmaId}`);
     } finally {
       setAGravar(false);
     }

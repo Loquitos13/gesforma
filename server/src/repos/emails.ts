@@ -352,7 +352,7 @@ export function formandosDaTurma(c: Consulta, regime: "gold" | "fin", turmaId: n
     : many<{ nome: string; apelido: string; email: string; curso: string }>(
       c,
       `SELECT nome, apelido, email, curso FROM formandos_fin
-        WHERE email <> '' AND (turma_id = $1 OR lower(trim(turma)) = lower(trim($2)))`,
+        WHERE email <> '' AND (turma_id = $1 OR (trim(turma) <> '' AND lower(trim(turma)) = lower(trim($2))))`,
       [turmaId, turmaNome],
     );
 }

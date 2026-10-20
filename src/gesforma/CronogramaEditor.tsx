@@ -15,7 +15,7 @@ import { IconPlus, KpiCard, SessaoRow } from "./TurmaCronograma";
 
 export function CronogramaEditor({
   sessoes, onChange, inicio, horario, horas, formador, formadoresTurma, curso, nome, local, accent = "gold",
-  layout = "compact", turmaId, identidade,
+  layout = "compact", turmaId, identidade, publicar,
 }: {
   sessoes: SessaoCronograma[];
   onChange: (next: SessaoCronograma[]) => void;
@@ -31,6 +31,8 @@ export function CronogramaEditor({
   layout?: "page" | "compact";
   turmaId?: number;
   identidade?: string;
+  /** Publicar com a versão do cronograma (o cockpit grava em fila); sem ele publica-se directamente. */
+  publicar?: (sessoes: SessaoCronograma[]) => Promise<{ url: string }>;
 }) {
   const gold = accent === "gold";
   const page = layout === "page";
@@ -130,7 +132,7 @@ export function CronogramaEditor({
         onClick={() => {
           if (turmaId == null) return;
           setPublicando(true);
-          void apiPublicarCronograma(accent, turmaId, sessoes)
+          void (publicar ? publicar(sessoes) : apiPublicarCronograma(accent, turmaId, sessoes))
             .then(r => {
               setPublicadoUrl(r.url);
               toastOk("Cronograma publicado no sítio e arquivado no dossiê.");

@@ -2,7 +2,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { onVercel } from "../config.js";
-import { criarEstruturaDtp } from "../driveArvore.js";
+import { criarEstruturaDtp, limparPartilhasDoItem } from "../driveArvore.js";
 import { substituirNaPasta } from "../driveFicheiros.js";
 import { comporModelo, dtpDefs, dtpEstrutura, DTP_FASES, DTP_MODELO_VAZIO, type DtpModelo } from "../dtpModel.js";
 import { entidadeDoCurso, mapModelo, packDoCurso, type EntidadeDtp } from "../pedagogia/dtp.js";
@@ -10,7 +10,7 @@ import { matrizDtp, resumoDtp } from "../pedagogia/dtpCache.js";
 import { exportarDossie } from "../pedagogia/dtpExport.js";
 import { dtpModeloSchema, nomeEntidadeSchema } from "../pedagogia/esquemas.js";
 import { idsBase, normalizarExtras, type Regime } from "../pedagogia/util.js";
-import { partilharPasta, usableToken } from "../googleDrive.js";
+import { usableToken } from "../googleDrive.js";
 import { pastaDaTurma } from "../repos/drive.js";
 import * as repo from "../repos/dtp.js";
 import { idParam, regimeIdParam, regimeParam, validar } from "../validacao.js";
@@ -21,8 +21,11 @@ const SEM_LEITURA = "O formador não consulta o dossiê técnico-pedagógico.";
 
 const exportQuery = z.object({ destino: z.enum(["zip", "drive"]).optional().catch(undefined) });
 
-/** Na Vercel (30 s por pedido) as descargas da Drive param aqui; o resto do tempo é para gerar e gravar o ZIP. */
-const PRAZO_DESCARGAS_VERCEL_MS = 15_000;
+/**
+ * Na Vercel (30 s por pedido) não começam descargas da Drive depois deste prazo; cada uma leva no máximo 8 s
+ * e o resto do tempo é para gravar os PDFs gerados e o ZIP na Drive.
+ */
+const PRAZO_DESCARGAS_VERCEL_MS = 10_000;
 
 function respostaModelo(regime: Regime, modelo: DtpModelo, entidade: EntidadeDtp | null) {
   const efectivo = regime === "gold" ? comporModelo(entidade?.modelo ?? DTP_MODELO_VAZIO, modelo) : modelo;
@@ -162,7 +165,10 @@ export async function registar(app: FastifyInstance, { db, requireAuth, audit }:
     const turma = await turmaOu404(db, reply, regime, id);
     if (!turma) return;
     const destino = v.query.destino ?? (onVercel ? "drive" : "zip");
-    const { token } = destino === "drive" ? await usableToken(db) : { token: null };
+    // Na Drive só para a secretaria (admin e secretaria), que já edita a pasta da turma: o ZIP não se partilha com mais
+    // ninguém (uma partilha do ficheiro ficava depois de a pessoa sair da equipa). Os outros perfis descarregam-no.
+    const secretaria = req.actor!.role === "admin" || req.actor!.role === "secretaria";
+    const { token } = destino === "drive" && secretaria ? await usableToken(db) : { token: null };
     const out = await exportarDossie(db, req.actor!.id, regime, turma, onVercel ? { prazo: Date.now() + PRAZO_DESCARGAS_VERCEL_MS } : {});
     await audit(db, req.actor!.id, "dtp.export", "turma", String(id), req.ip, {
       ficheiros: out.ficheiros, pasta: out.pasta, destino: token ? "drive" : "zip", foraDoPrazo: out.foraDoPrazo,
@@ -173,11 +179,8 @@ export async function registar(app: FastifyInstance, { db, requireAuth, audit }:
         || "";
       if (pasta) {
         const zip = await substituirNaPasta(token, pasta, out.nome, "application/zip", out.zip);
-        // A secretaria já edita a pasta da turma; quem mais exporta (equipa) recebe só este ficheiro, para leitura.
-        const actor = req.actor!;
-        if (actor.role !== "admin" && actor.role !== "secretaria" && actor.email) {
-          await partilharPasta(token, zip.id, actor.email, "reader").catch(() => undefined);
-        }
+        // ZIPs de exportações antigas podiam estar partilhados com quem exportou: fica só quem é da equipa activa.
+        await limparPartilhasDoItem(db, token, zip.id).catch(() => undefined);
         return {
           drive: {
             id: zip.id, url: zip.webViewLink ?? `https://drive.google.com/file/d/${zip.id}/view`,

@@ -1,4 +1,6 @@
-import { pdfDeLinhas } from "./pdfTexto.js";
+import { partirLinhas, pdfDeLinhas } from "./pdfTexto.js";
+
+export { partirLinhas };
 
 export type SessaoRelatorio = {
   data?: string;
@@ -79,24 +81,6 @@ function dataPt(iso?: string) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   if (!m) return iso;
   return `${m[3]}-${m[2]}-${m[1]}`;
-}
-
-export function partirLinhas(texto: string, largura = 92) {
-  const palavras = texto.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
-  if (!palavras.length) return [];
-  const linhas: string[] = [];
-  let atual = "";
-  for (const palavra of palavras) {
-    const seguinte = atual ? `${atual} ${palavra}` : palavra;
-    if (seguinte.length > largura && atual) {
-      linhas.push(atual);
-      atual = palavra;
-    } else {
-      atual = seguinte;
-    }
-  }
-  if (atual) linhas.push(atual);
-  return linhas;
 }
 
 function bloco(linhas: string[], titulo: string, corpo: string[]) {

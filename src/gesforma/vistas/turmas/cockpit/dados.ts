@@ -1,13 +1,14 @@
 // Dados do cockpit de uma turma: a turma, os formandos, as outras turmas (para transferir) e as
 // pré-inscrições candidatas. Tudo lido da API; as escritas gravam no servidor e recarregam.
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { ApiError } from "../../../../partilhado/api/cliente";
 import { apiLeads, type Lead } from "../../../../partilhado/api/crm";
 import {
   apiApagarFormando, apiCriarFormandoFin, apiCriarFormandoGold, apiDocumentosFormandoFin, apiListarFormandos,
   type LinhaFormando,
 } from "../../../../partilhado/api/formandos";
 import { apiAlterarTurma, apiTurmaGravada, apiTurmas, type DadosTurma, type Regime, type TurmaGravada } from "../../../../partilhado/api/turmas";
-import { apiResultadosTurma } from "../../../../partilhado/api/pedagogia";
+import { apiPublicarCronograma, apiResultadosTurma } from "../../../../partilhado/api/pedagogia";
 import { useAuth } from "../../../../partilhado/AuthGate";
 import { invalidar, useRecurso } from "../../../../partilhado/dados/useRecurso";
 import { toastError } from "../../../../partilhado/toastBus";
@@ -57,11 +58,41 @@ export function useTurmaCockpit<R extends Regime>(regime: R, id: number | undefi
   }, [dados, regime]);
   const turma = (base ? { ...base, ...(local ?? {}) } : undefined) as (R extends "gold" ? TurmaGold : TurmaFin) | undefined;
 
+  // Versão do cronograma a enviar: a da turma lida, ou a da última gravação deste ecrã enquanto a leitura mostra uma
+  // versão que ele próprio escreveu (a recarga pode chegar atrasada). As gravações vão em fila, cada uma com a versão
+  // deixada pela anterior: o mesmo utilizador nunca recebe um 409 de si próprio.
+  const versaoLida = useRef<string | undefined>(undefined);
+  versaoLida.current = dados?.turma.versao;
+  const proprias = useRef({ ultima: "", vistas: new Set<string>() });
+  const fila = useRef<Promise<unknown>>(Promise.resolve());
+  const emFila = useCallback(<T,>(fazer: (versao: string | undefined) => Promise<T & { versao?: string }>) => {
+    const vez = fila.current.then(async () => {
+      const lida = versaoLida.current;
+      const versao = lida && proprias.current.vistas.has(lida) ? proprias.current.ultima : lida;
+      try {
+        const r = await fazer(versao);
+        if (versao && r.versao) {
+          proprias.current.vistas.add(versao).add(r.versao);
+          proprias.current.ultima = r.versao;
+        }
+        return r;
+      } catch (err) {
+        // Outra pessoa mudou a turma: mostra-se o que está gravado.
+        if (id && err instanceof ApiError && err.status === 409) recarregarTurma(regime, id);
+        throw err;
+      }
+    });
+    fila.current = vez.catch(() => undefined);
+    return vez;
+  }, [id, regime]);
+
   const gravar = useCallback(async (patch: Partial<DadosTurma>, otimista: Partial<TurmaGold & TurmaFin>) => {
     if (!id) return false;
     setLocal(prev => ({ ...(prev ?? {}), ...otimista }));
     try {
-      await apiAlterarTurma(regime, id, patch);
+      await emFila(versao => patch.cronograma
+        ? apiAlterarTurma(regime, id, { ...patch, versao }).then(r => ({ versao: r.turma.versao }))
+        : apiAlterarTurma(regime, id, patch).then(() => ({})));
       recarregarTurma(regime, id);
       setLocal(null);
       return true;
@@ -70,7 +101,7 @@ export function useTurmaCockpit<R extends Regime>(regime: R, id: number | undefi
       toastError(err, "Não foi possível gravar a turma.");
       return false;
     }
-  }, [id, regime]);
+  }, [id, regime, emFila]);
 
   const patch = useCallback((p: Partial<DadosTurma>) => { void gravar(p, p as Partial<TurmaGold & TurmaFin>); }, [gravar]);
   /** O servidor recusa cronogramas que cruzam sessões do mesmo formador noutra turma. */
@@ -78,12 +109,18 @@ export function useTurmaCockpit<R extends Regime>(regime: R, id: number | undefi
     void gravar({ cronograma }, { cronograma });
     return true;
   }, [gravar]);
+  /** Publica no sítio e no dossiê (grava o cronograma com a mesma versão e na mesma fila das outras gravações). */
+  const publicarCronograma = useCallback(async (sessoes: SessaoCronograma[]) => {
+    const r = await emFila(versao => apiPublicarCronograma(regime, id!, sessoes, versao));
+    recarregarTurma(regime, id!);
+    return r;
+  }, [id, regime, emFila]);
   const toggle = useCallback((activa: boolean) => {
     if (regime === "gold") void gravar({ estado: activa ? "Ativa" : "Inativa" }, { estado: activa ? "Ativa" : "Inativa" } as Partial<TurmaGold>);
     else void gravar({ activa }, { activa });
   }, [gravar, regime]);
 
-  return { turma, erro, aCarregar: aCarregar && !turma, patch, setCronograma, toggle };
+  return { turma, erro, aCarregar: aCarregar && !turma, patch, setCronograma, publicarCronograma, toggle };
 }
 
 function linhaParaGold(l: LinhaFormando): FormandoTurma {

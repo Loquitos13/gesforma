@@ -57,7 +57,7 @@ export function formandosExecucao(c: Consulta, turma: { id: number; nome: string
           ORDER BY (regime = 'fin') DESC, id DESC
           LIMIT 1
        ) p ON true
-      WHERE f.turma_id = $1 OR (f.turma_id IS NULL AND lower(trim(f.turma)) = lower(trim($2)))
+      WHERE f.turma_id = $1 OR (f.turma_id IS NULL AND trim(f.turma) <> '' AND lower(trim(f.turma)) = lower(trim($2)))
       ORDER BY f.nome, f.apelido, f.id`,
     [turma.id, turma.nome],
   );

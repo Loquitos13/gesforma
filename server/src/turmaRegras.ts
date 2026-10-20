@@ -4,7 +4,7 @@ import { generateCronograma } from "./cronograma.js";
 import type { Db } from "./db/pool.js";
 import { nextOpsId } from "./ops.js";
 import { codigoInternoTurma } from "../../src/partilhado/turmaCodigo.js";
-import { atualizarRegra, existeTurmaIgual, inserirTurmaFin, inserirTurmaGold, listarRegras } from "./repos/turmas.js";
+import { atualizarRegra, existeNome, existeTurmaIgual, inserirTurmaFin, inserirTurmaGold, listarRegras } from "./repos/turmas.js";
 import { hojeLisboa } from "./datas.js";
 
 export type TurmaRegra = {
@@ -84,6 +84,15 @@ export async function aplicarTurmaRegras(db: Db, regime?: "gold" | "fin") {
       continue;
     }
     if (await existeTurmaIgual(db, regra.regime, { curso: regra.curso, local: regra.local, horario: regra.horario, dataInicio: inicio })) continue;
+    // Sem nome (regra sem local ou horário) ou com o de outra turma, os formandos ligados pelo nome iam parar a ela.
+    if (!nome) {
+      conflitos.push({ regra: regra.id, erro: "Sem código para a turma: indique o local e o horário da regra, ou um prefixo." });
+      continue;
+    }
+    if (await existeNome(db, regra.regime, nome, null)) {
+      conflitos.push({ regra: regra.id, erro: `Já existe uma turma com o nome «${nome}».` });
+      continue;
+    }
     const id = await nextOpsId(db);
     if (fin) {
       await inserirTurmaFin(db, id, {

@@ -161,7 +161,8 @@ describe("#6 partilhas da pasta da turma na Drive", () => {
 
     const revogadas = chamadas.filter(c => c.metodo === "DELETE" && c.url.includes("/permissions/"))
       .map(c => `${decodeURIComponent(/files\/([^/]+)\/permissions/.exec(c.url)![1]!)}#${/permissions\/([^?]+)/.exec(c.url)![1]}`);
-    expect(revogadas.sort()).toEqual([`${pastaMateriais}#exf2`, `${pastaTurma}#exf`, `${pastaTurma}#fdo`, `${pastaTurma}#fdr`].sort());
+    // A comercial não vê turmas nem o dossiê: não fica protegida e sai como os outros.
+    expect(revogadas.sort()).toEqual([`${pastaMateriais}#exf2`, `${pastaTurma}#com`, `${pastaTurma}#exf`, `${pastaTurma}#fdo`, `${pastaTurma}#fdr`].sort());
     const dadas = chamadas.filter(c => c.metodo === "POST" && /\/permissions\?/.test(c.url))
       .map(c => ({ item: decodeURIComponent(/files\/([^/]+)\/permissions/.exec(c.url)![1]!), ...JSON.parse(c.corpo) as { role: string; emailAddress: string } }));
     expect(dadas).toContainEqual({ item: pastaMateriais, role: "reader", type: "user", emailAddress: formador });

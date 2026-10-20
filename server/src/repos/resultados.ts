@@ -17,7 +17,7 @@ export async function formandosPorTurma(c: Consulta, regime: Regime, turma: { id
   return many<{ id: number; nome: string; apelido: string; estado: string }>(
     c,
     `SELECT id, nome, apelido, estado FROM ${tabelaRegime("formandos", regime)}
-      WHERE turma_id = $1 OR (turma_id IS NULL AND lower(trim(turma)) = lower(trim($2)))
+      WHERE turma_id = $1 OR (turma_id IS NULL AND trim(turma) <> '' AND lower(trim(turma)) = lower(trim($2)))
       ORDER BY nome, apelido`,
     [turma.id, turma.nome],
   );

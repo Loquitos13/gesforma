@@ -193,7 +193,8 @@ export async function getDriveFile(db: Db, id: string) {
   return row ? mapFile(row) : null;
 }
 
-export async function readDriveContent(db: Db, id: string) {
+/** `timeoutMs`: limite da descarga na Google (a exportação do dossiê não pode ficar presa num ficheiro). */
+export async function readDriveContent(db: Db, id: string, opts: { timeoutMs?: number } = {}) {
   const file = await ficheiroDrive(db, id);
   if (!file) return null;
   if (file.stored_in === "local" && file.local_path) {
@@ -212,6 +213,7 @@ export async function readDriveContent(db: Db, id: string) {
   }
   const res = await fetch(`${DRIVE_FILES}/${file.drive_id}?alt=media&supportsAllDrives=true`, {
     headers: { Authorization: `Bearer ${token}` },
+    ...(opts.timeoutMs ? { signal: AbortSignal.timeout(opts.timeoutMs) } : {}),
   });
   if (!res.ok) {
     return { name: file.name, mime: mimeServido(file.name), bytes: null, redirect: file.web_view_link };

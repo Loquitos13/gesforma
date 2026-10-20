@@ -1,13 +1,10 @@
-/** Avaliação da turma: grelha de notas, certificados, resultados e horas dos formadores. */
+/** Avaliação da turma: grelha de notas, certificados e resultados. */
 import type { FastifyInstance } from "fastify";
-import { horasPorFormador } from "../../assiduidade.js";
 import { dtpEmFalta } from "../../pedagogia/dtp.js";
 import { avaliacaoNotasSchema, certificadoSchema, formandoParam } from "../../pedagogia/esquemas.js";
-import { asObj } from "../../pedagogia/util.js";
-import { gravarCertificado, gravarNotaCertificado, gravarNotas, listarNotas, sumariosDaTurma } from "../../repos/pedagogiaSessoes.js";
-import { custoHoraFormadores, custosDaTurma, formandosDaTurma } from "../../repos/pedagogiaTurma.js";
+import { gravarCertificado, gravarNotaCertificado, gravarNotas, listarNotas } from "../../repos/pedagogiaSessoes.js";
+import { formandosDaTurma } from "../../repos/pedagogiaTurma.js";
 import { ERRO_TURMA_FECHADA, escalaDaTurma, pendentesDoFecho, resultadosDaTurma, turmaFechada } from "../../resultados.js";
-import { nomesDoFormador } from "../../sessaoAcesso.js";
 import { regimeIdParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
 import { formadorPodeVer, semFormador, turmaOu404 } from "./comum.js";
@@ -108,30 +105,5 @@ export function registarAvaliacao(app: FastifyInstance, { db, requireAuth, audit
     if (!res) return reply.code(404).send({ error: "turma não encontrada" });
     const pend = req.actor!.role === "formador" ? null : await pendentesDoFecho(db, regime, id, { dtpEmFalta: emFalta });
     return { ...res, fecho: pend ? { pode: pend.falta.length === 0, falta: pend.falta } : null };
-  });
-
-  app.get("/v1/turmas/:regime/:id/horas-formador", async (req, reply) => {
-    if (!requireAuth(req, reply)) return;
-    const v = validar(reply, { params: regimeIdParam }, req);
-    if (!v) return;
-    const { regime, id } = v.params;
-    if (!(await formadorPodeVer(db, req, reply, regime, id, "Só consulta as turmas em que está atribuído."))) return;
-    const turma = await custosDaTurma(db, regime, id);
-    if (!turma) return reply.code(404).send({ error: "turma não encontrada" });
-    const [gravadas, custos] = await Promise.all([sumariosDaTurma(db, regime, id), custoHoraFormadores(db)]);
-    const valores = asObj(turma.valores_hora_formador);
-    const custoBase = new Map(custos.map(f => [f.nome.trim().toLowerCase(), Number(f.custo_hora) || 0]));
-    let formadores = horasPorFormador(turma.cronograma, gravadas).map(h => {
-      const valorHora = Number(valores[h.formador]) || custoBase.get(h.formador.trim().toLowerCase()) || 0;
-      return { ...h, valorHora, aPagar: Math.round(h.dadas * valorHora * 100) / 100 };
-    });
-    if (req.actor!.role === "formador") {
-      // O formador vê só as próprias horas.
-      const meus = new Set([...await nomesDoFormador(db, req.actor!.email, req.actor!.name, req.actor!.id)].map(n => n.toLowerCase()));
-      formadores = formadores.filter(f => meus.has(f.formador.trim().toLowerCase()));
-    } else if (req.actor!.role === "comercial") {
-      formadores = formadores.map(f => ({ ...f, valorHora: 0, aPagar: 0 }));
-    }
-    return { formadores };
   });
 }

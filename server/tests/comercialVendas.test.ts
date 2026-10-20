@@ -101,7 +101,7 @@ describe("servidor: o comercial não chega à gestão", () => {
     const bloqueadas: [string, string][] = [
       ["GET", "/v1/turmas?regime=gold"], ["GET", "/v1/turmas/gold/1"], ["POST", "/v1/turmas-gold"], ["PATCH", "/v1/turmas-gold/1"],
       ["DELETE", "/v1/turmas-gold/1"], ["GET", "/v1/turmas/gold/1/pedagogia"], ["GET", "/v1/turmas/gold/1/avaliacao"],
-      ["GET", "/v1/turmas/gold/1/horas-formador"], ["PUT", "/v1/turmas/gold/1/sessoes/1"], ["POST", "/v1/turmas/gold/1/fecho"],
+      ["PUT", "/v1/turmas/gold/1/sessoes/1"], ["POST", "/v1/turmas/gold/1/fecho"],
       ["GET", "/v1/turmas/gold/1/dossie/x"], ["POST", "/v1/turmas/gold/1/cronograma/publicar"],
       ["GET", "/v1/cursos/gold"], ["GET", "/v1/cursos/gold/1"], ["POST", "/v1/cursos-gold"], ["PATCH", "/v1/cursos-gold/1"],
       ["PUT", "/v1/cursos/gold/1/ficha"], ["POST", "/v1/cursos/gold/1/imagem/capa"], ["PUT", "/v1/cursos/gold/1/docs-preinscricao"],
@@ -130,7 +130,6 @@ describe("servidor: o comercial não chega à gestão", () => {
       ["PATCH", `/v1/turmas-gold/${TURMA}`, { vagasAnunciadas: 2 }],
       ["POST", "/v1/turmas-gold", { dataInicio: "2099-06-01", nome: "CV nova", curso: "Curso Vendas CV", vagas: 10 }],
       ["GET", `/v1/turmas/gold/${TURMA}/pedagogia`],
-      ["GET", `/v1/turmas/gold/${TURMA}/horas-formador`],
       ["GET", "/v1/cursos/gold"],
       ["POST", "/v1/cursos-gold", { nome: "Curso CV novo" }],
       ["GET", "/v1/formadores?regime=gold"],

@@ -9,14 +9,15 @@ import { CabecalhoLista, iniciais, ListaComDetalhe, regimeDaVista } from "../crm
 import { eurosCurto } from "../crm/documento/modelo";
 import { TabelaLista, type ColunaLista } from "../crm/TabelaLista";
 import { FichaMembro, type TabMembro } from "./FichaMembro";
+import { hojeLisboa, inicioMes, somarDias } from "../../../partilhado/horaLisboa";
 
-const hoje = () => new Date();
-const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+// Períodos contados no calendário de Lisboa.
+const hoje = () => hojeLisboa();
 const PERIODOS: { id: string; rotulo: string; de: () => string; ate: () => string }[] = [
-  { id: "mes", rotulo: "Este mês", de: () => iso(new Date(hoje().getFullYear(), hoje().getMonth(), 1)), ate: () => iso(hoje()) },
-  { id: "30", rotulo: "Últimos 30 dias", de: () => iso(new Date(Date.now() - 29 * 864e5)), ate: () => iso(hoje()) },
-  { id: "trim", rotulo: "Este trimestre", de: () => iso(new Date(hoje().getFullYear(), Math.floor(hoje().getMonth() / 3) * 3, 1)), ate: () => iso(hoje()) },
-  { id: "ano", rotulo: "Este ano", de: () => iso(new Date(hoje().getFullYear(), 0, 1)), ate: () => iso(hoje()) },
+  { id: "mes", rotulo: "Este mês", de: () => inicioMes(hoje()), ate: hoje },
+  { id: "30", rotulo: "Últimos 30 dias", de: () => somarDias(hoje(), -29), ate: hoje },
+  { id: "trim", rotulo: "Este trimestre", de: () => inicioMes(hoje(), -((Number(hoje().slice(5, 7)) - 1) % 3)), ate: hoje },
+  { id: "ano", rotulo: "Este ano", de: () => `${hoje().slice(0, 4)}-01-01`, ate: hoje },
 ];
 
 export default function Equipa({ view }: VistaProps) {

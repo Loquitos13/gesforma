@@ -10,6 +10,7 @@ import {
   finPorSincronizar, formandoFinPorTokenId, gravarDocsJsonFin, inserirNota, pessoaFin, sincronizarDocsFin,
 } from "./repos/formandosDocs.js";
 import { isEmail, normalizeEmail } from "./security.js";
+import { hojeLisboa } from "./datas.js";
 
 /** Documentos de elegibilidade da Financiada: ligação pessoal, envio, validação e recusa. */
 
@@ -18,7 +19,7 @@ export function formandoFinDocsUrl(token: string) {
 }
 
 function hoje() {
-  return new Date().toISOString().slice(0, 10);
+  return hojeLisboa();
 }
 
 export async function ensureFinDocsToken(db: Db, formandoId: number) {

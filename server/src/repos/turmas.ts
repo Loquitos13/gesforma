@@ -4,6 +4,7 @@
  */
 import { many, one, ordenarPor, paginar, tabelaRegime, valor, Filtros, padraoPesquisa, type Consulta, type Regime } from "./sql.js";
 import { sqlOcupa, sqlReservas } from "./inscricao.js";
+import { stampLisboa } from "../datas.js";
 
 export type FaseTurma = "abrir" | "decorrer" | "por_fechar" | "fechada" | "cancelada";
 
@@ -228,7 +229,7 @@ function mapLinha(r: Record<string, unknown>) {
     docsCompletos: Number(r.docs_completos ?? 0),
     ufcd: String(r.ufcd ?? ""),
     financiador: String(r.financiador ?? ""),
-    fechadaEm: r.fechada_em ? String(r.fechada_em) : "",
+    fechadaEm: r.fechada_em ? stampLisboa(r.fechada_em as Date | string) || String(r.fechada_em) : "",
   };
 }
 

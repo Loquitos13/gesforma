@@ -4,6 +4,7 @@ import {
   formandoNaTurmaDoCurso, gravarDocDoLead, idsLeadsValidados, leadParaDocs, origensDosDocs,
 } from "./repos/docsLigacao.js";
 import { isEmail, normalizeEmail } from "./security.js";
+import { hojeLisboa } from "./datas.js";
 
 /**
  * Regra única para os documentos da ligação pessoal chegarem ao dossiê / área do formando:
@@ -35,7 +36,7 @@ export async function transferirDocsDoLead(db: Db, leadId: number, actorId?: str
   const formando = await formandoNaTurmaDoCurso(db, lead.regime, lead.email, lead.curso);
   if (!formando) return { copiados: 0, motivo: "sem turma deste curso" as const };
   const docs = await docsValidadosDoLead(db, lead.id);
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLisboa();
   for (const d of docs) {
     await gravarDocDoLead(db, {
       regime: lead.regime, formandoId: formando.id, tipo: d.tipo, nome: d.nome, data: hoje,

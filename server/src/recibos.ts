@@ -12,6 +12,7 @@ import { lerEntidade } from "./regrasConfig.js";
 import * as repo from "./repos/recibos.js";
 import { modeloEmail } from "./repos/emails.js";
 import { isEmail, normalizeEmail } from "./security.js";
+import { anoLisboa, lerInstante } from "./datas.js";
 
 /**
  * Recibos internos: só para pagamentos confirmados (estado Pago). O número é atribuído
@@ -24,7 +25,7 @@ export class ReciboErro extends Error {
 
 const fmtData = (iso: string | null | undefined) => {
   if (!iso) return "";
-  const d = new Date(iso.replace(" ", "T"));
+  const d = lerInstante(iso);
   return Number.isNaN(d.getTime()) ? iso.slice(0, 10) : d.toLocaleDateString("pt-PT", { timeZone: "Europe/Lisbon" });
 };
 
@@ -93,7 +94,7 @@ export async function emitirRecibo(db: Db, pagamentoId: string, actorId: string 
   if (!recibo) {
     // Os dados (valor, pagador, linhas) ficam gravados na mesma instrução que atribui o número:
     // a partir daí o recibo não muda (a base recusa qualquer alteração, migração 131).
-    const ano = Number(new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Lisbon" }).slice(0, 4));
+    const ano = anoLisboa();
     const { dados: base } = await montar(db, pagamentoId, { numero: 0, ano, emitido_em: new Date().toISOString() });
     recibo = await db.tx(async q => {
       const existente = await repo.reciboDoPagamento(q, pagamentoId);

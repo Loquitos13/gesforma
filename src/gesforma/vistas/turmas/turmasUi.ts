@@ -1,5 +1,6 @@
 import type { FaseTurma, LinhaTurma } from "../../../partilhado/api/turmas";
 import type { Tom } from "../../../partilhado/ui";
+import { hojeLisboa } from "../../../partilhado/horaLisboa";
 
 export const FASES: { id: FaseTurma | ""; rotulo: string; so?: "fin" }[] = [
   { id: "", rotulo: "Todas" },
@@ -22,9 +23,9 @@ const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um :
 
 function diasAte(iso: string, hoje = new Date()) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
-  const d = new Date(`${iso}T00:00:00`);
-  const h = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-  return Math.round((d.getTime() - h.getTime()) / 86_400_000);
+  const d = Date.parse(`${iso}T00:00:00Z`);
+  const h = Date.parse(`${hojeLisboa(hoje)}T00:00:00Z`);
+  return Math.round((d - h) / 86_400_000);
 }
 
 export type Alerta = { texto: string; tom: Tom };

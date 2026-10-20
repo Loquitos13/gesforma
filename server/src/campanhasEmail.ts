@@ -56,7 +56,7 @@ const mesmoCurso = (a: string, b: string) => a.trim().toLowerCase() === b.trim()
 
 /** Próximas turmas do curso com o cronograma publicado (até 3), como linhas para o email. */
 function cronogramasDe(oferta: OfertaTurma[], curso: string) {
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLisboa();
   const origem = config.appOrigin.replace(/\/$/, "");
   return oferta
     .filter(t => mesmoCurso(t.curso, curso) && t.cronogramaPublicado && t.dataInicio >= hoje)

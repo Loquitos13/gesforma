@@ -6,6 +6,7 @@ import { listarNotas } from "./repos/pedagogiaSessoes.js";
 import { fichaCursoFinPorNome } from "./repos/pedagogiaRelatorio.js";
 import { pdfDeLinhas } from "./pdfTexto.js";
 import { partirLinhas } from "./relatorioFinal.js";
+import { diaLisboa } from "./datas.js";
 
 export const ITENS_DOSSIE_GERADO = [
   "listagem-formandos",
@@ -202,7 +203,7 @@ async function carregar(db: Db, turmaId: number): Promise<Dados | null> {
       formandoId: c.formando_id,
       ficheiroId: c.ficheiro_id,
       ficheiroNome: c.ficheiro_nome,
-      emitidoEm: c.emitido_em ? String(c.emitido_em).slice(0, 10) : "",
+      emitidoEm: diaLisboa(c.emitido_em),
       elearning: c.elearning == null ? null : Number(c.elearning),
       nota: c.nota == null || !Number.isFinite(Number(c.nota)) ? null : Number(c.nota),
     })),

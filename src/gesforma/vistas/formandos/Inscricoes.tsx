@@ -43,7 +43,7 @@ export default function Inscricoes({ navigate }: VistaProps) {
   const abrirFicha = (formandoId: number) => navigate({ view: "fin-formando-ficha", formandoId });
 
   const colunas: Coluna<LinhaInscricaoFin>[] = [
-    { id: "inscrito", titulo: "Data", ordenavel: true, largura: "110px", esconderMovel: true, celula: l => <span className="text-tinta-suave">{l.inscrito ? data(l.inscrito.slice(0, 10)) : "—"}</span> },
+    { id: "inscrito", titulo: "Data", ordenavel: true, largura: "110px", esconderMovel: true, celula: l => <span className="text-tinta-suave">{l.inscrito ? data(l.inscrito) : "—"}</span> },
     {
       id: "nome", titulo: "Candidato", ordenavel: true, principal: true,
       celula: l => (

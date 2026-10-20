@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Cartao, Estado, Interruptor, Selecao, data as fmtData, eur } from "../../../../partilhado/ui";
 import { textoPrograma } from "../../../cursoPrograma";
 import type { FichaCurso } from "./useFichaCurso";
+import { hojeLisboa } from "../../../../partilhado/horaLisboa";
 
 const marcadores = (txt: string) => txt.split("\n").map(l => l.replace(/^[•\-]\s*/, "").trim()).filter(Boolean).slice(0, 5);
 
@@ -80,7 +81,7 @@ function Seccao({ titulo, children }: { titulo: string; children: React.ReactNod
 
 export function TabPublicacao({ f }: { f: FichaCurso }) {
   const { data, patch, turmas, pronto } = f;
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLisboa();
   const proxima = [...turmas].filter(t => !t.fechada && t.inicio >= hoje).sort((a, b) => a.inicio.localeCompare(b.inicio))[0];
   return (
     <div className="space-y-4">

@@ -1,5 +1,6 @@
 // API do domínio "formandos": listas, ficha e acções (server/src/rotas/formandos.ts).
 import { api, enviar, qs, type Pagina } from "./cliente";
+import { hojeLisboa } from "../horaLisboa";
 
 export type Regime = "gold" | "fin";
 export type SituacaoPagamento = "pago" | "por_pagar" | "oferta" | "isento";
@@ -138,7 +139,7 @@ export function apiRecusarDocFormando(regime: Regime, id: number, docId: string,
 /** Marca um documento como entregue (sem ficheiro no GesForma, ex.: em papel) ou retira a marca. */
 export function apiMarcarDocFormando(regime: Regime, id: number, docId: string, ok: boolean) {
   return enviar.put<{ ok: boolean }>(`/v1/formandos/${regime}/${id}/docs`, {
-    docs: [{ id: docId, ok, fileName: "", data: ok ? new Date().toISOString().slice(0, 10) : "" }],
+    docs: [{ id: docId, ok, fileName: "", data: ok ? hojeLisboa() : "" }],
   });
 }
 

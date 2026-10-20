@@ -7,6 +7,7 @@ import * as repo from "../repos/servicos.js";
 import { many, one, type Consulta } from "../repos/sql.js";
 import { idNum, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
+import { hojeLisboa } from "../datas.js";
 
 // Serviços para empresas: a administração escreve-os em Gestão › Empresas / Business (matriz: só admin, em permissoes/site.ts);
 // o site mostra os ativos nos cartões da página Empresas e cada um na sua página (/empresas/<slug>).
@@ -136,7 +137,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const p = v.body;
     if (p.site) return { ok: true }; // campo escondido: só os robôs o preenchem
     // Cabe sempre nas notas do cliente (até 2000): o serviço tem no máximo 160 e o nome 120.
-    const nota = `[${new Date().toISOString().slice(0, 10)}] Pedido de proposta no site${p.servico ? ` (${p.servico})` : ""}: ${p.nome}`;
+    const nota = `[${hojeLisboa()}] Pedido de proposta no site${p.servico ? ` (${p.servico})` : ""}: ${p.nome}`;
     await db.tx(async q => {
       const clienteId = await registarPedido(q, { nome: p.empresa || p.nome, email: p.email, telefone: p.telefone, nota });
       await one(q, `INSERT INTO pedidos_proposta (nome, empresa, email, telefone, servico, mensagem, cliente_id)

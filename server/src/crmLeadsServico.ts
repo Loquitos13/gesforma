@@ -18,6 +18,7 @@ import { linhaVisivel } from "./repos/crmVisivel.js";
 import * as leads from "./repos/leads.js";
 import * as escrita from "./repos/leadsEscrita.js";
 import { isEmail, normalizeEmail } from "./security.js";
+import { hojeLisboa, somarDias } from "./datas.js";
 
 export class CrmErro extends Error {
   constructor(message: string, readonly codigo = 400, readonly extra: Record<string, unknown> = {}) {
@@ -237,9 +238,8 @@ export async function aplicarLote(db: Db, actor: Actor, d: AccaoLote) {
     } else if (d.acao === "adiar") {
       const dias = d.dias ?? 2;
       const base = String(current.proximo_contacto || "").slice(0, 10);
-      const start = /^\d{4}-\d{2}-\d{2}$/.test(base) && base >= new Date().toISOString().slice(0, 10) ? new Date(`${base}T12:00:00`) : new Date();
-      start.setDate(start.getDate() + dias);
-      const next = start.toISOString().slice(0, 10);
+      const hoje = hojeLisboa();
+      const next = somarDias(/^\d{4}-\d{2}-\d{2}$/.test(base) && base >= hoje ? base : hoje, dias);
       await leads.definirProximoContacto(db, id, next);
       await logLeadEvent(db, id, actor.id, "seguimento", `Adiado ${dias} dias`, next);
     } else continue;

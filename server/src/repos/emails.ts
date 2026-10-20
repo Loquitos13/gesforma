@@ -255,8 +255,8 @@ export function listarEnvios(c: Consulta, f: { regra?: number; estado?: string; 
   w.add("j.status = ?", f.estado);
   const p = padraoPesquisa(f.q);
   w.add("(j.to_email ILIKE ? OR j.to_name ILIKE ? OR j.subject ILIKE ?)", p, p, p);
-  w.add("coalesce(j.sent_at, j.scheduled_at) >= ?::date", f.de);
-  w.add("coalesce(j.sent_at, j.scheduled_at) < (?::date + 1)", f.ate);
+  w.add("coalesce(j.sent_at, j.scheduled_at) >= (?::date::timestamp AT TIME ZONE 'Europe/Lisbon')", f.de);
+  w.add("coalesce(j.sent_at, j.scheduled_at) < ((?::date + 1)::timestamp AT TIME ZONE 'Europe/Lisbon')", f.ate);
   return paginar<EnvioLinha>(
     c,
     `SELECT j.id, j.to_email AS para, j.to_name AS nome, j.subject AS assunto, j.status AS estado,

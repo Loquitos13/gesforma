@@ -6,6 +6,7 @@ import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { numeroPt } from "../../../partilhado/despesas";
 import { AreaTexto, Botao, Campo, Entrada, Modal, Selecao } from "../../../partilhado/ui";
+import { hojeLisboa } from "../../../partilhado/horaLisboa";
 
 const INVALIDAR = ["formandos:"];
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -109,7 +110,7 @@ export function RegistarPagamento({ aberto, onFechar, ficha }: { aberto: boolean
   const registar = useAccao(apiRegistarPagamentoFormando, { invalidar: [...INVALIDAR, "pagamentos:", "painel:"], ok: "Pagamento registado." });
   useEffect(() => {
     if (!aberto) return;
-    setMetodo(""); setValor(String(ficha.pagamento?.valor ?? "")); setDataPag(new Date().toISOString().slice(0, 10));
+    setMetodo(""); setValor(String(ficha.pagamento?.valor ?? "")); setDataPag(hojeLisboa());
   }, [aberto, ficha.pagamento?.valor]);
   // Valor vazio é valor em falta (não 0 €); a oferta usa o seu próprio botão.
   // "1.250" são mil duzentos e cinquenta euros (como se escreve em português), não 1,25 €.

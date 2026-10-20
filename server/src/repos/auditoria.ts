@@ -32,8 +32,8 @@ export function listarAuditoria(c: Consulta, f: {
   w.add("a.action LIKE ?", f.accao ? `${f.accao.replace(/[\%_]/g, m => `\${m}`)}%` : undefined);
   w.add("a.actor_id = ?::uuid", f.utilizador);
   w.add("a.entity_id = ?", f.entidadeId);
-  w.add("a.created_at >= ?::date", f.de);
-  w.add("a.created_at < (?::date + 1)", f.ate);
+  w.add("a.created_at >= (?::date::timestamp AT TIME ZONE 'Europe/Lisbon')", f.de);
+  w.add("a.created_at < ((?::date + 1)::timestamp AT TIME ZONE 'Europe/Lisbon')", f.ate);
   const q = padraoPesquisa(f.q);
   w.add("(a.action ILIKE ? OR a.entity_id ILIKE ? OR u.name ILIKE ? OR u.email ILIKE ?)", q, q, q, q);
   return paginar<LinhaAuditoria>(

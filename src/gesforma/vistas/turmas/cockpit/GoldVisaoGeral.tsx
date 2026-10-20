@@ -6,6 +6,7 @@ import { Botao, Cartao, eur } from "../../../../partilhado/ui";
 import { CustosTurmaCard } from "../../../CustosTurma";
 import { I, Th, Td, formatSessaoLine } from "./base";
 import { FormadoresAtribuidosCard } from "../../../CronogramaEditor";
+import { diaDeCarimbo } from "../../../../partilhado/horaLisboa";
 
 export function GoldVisaoGeral({ turma, membros, souFormador, activa, programa, onFicha, onTransferir, onEliminar, onAdicionar, onEditarPrograma, onFormadores, onFormador, onSala }: {
   turma: TurmaGold;
@@ -81,7 +82,7 @@ export function GoldVisaoGeral({ turma, membros, souFormador, activa, programa, 
               title={`${f.nome} ${f.apelido}`}
               sub={f.email}
               badge={souFormador ? undefined : <span className={`text-[11px] font-bold ${f.pago ? "text-sucesso" : "text-aviso"}`}>{f.pago ? "Pago" : "Por pagar"}</span>}
-              meta={[f.telf, f.inscrito.slice(0, 10)].filter(Boolean)}
+              meta={[f.telf, diaDeCarimbo(f.inscrito) || f.inscrito.slice(0, 10)].filter(Boolean)}
               onOpen={onFicha ? () => onFicha(f) : undefined}
               actions={accoes(f)}
             />
@@ -101,7 +102,7 @@ export function GoldVisaoGeral({ turma, membros, souFormador, activa, programa, 
                       <p className="m-0 text-xs text-tinta-suave truncate max-w-[180px]">{f.email}</p>
                     </Td>
                     <Td className="font-mono text-xs text-tinta-suave">{f.telf || "—"}</Td>
-                    <Td className="font-mono text-xs text-tinta-suave whitespace-nowrap">{f.inscrito.slice(0, 10)}</Td>
+                    <Td className="font-mono text-xs text-tinta-suave whitespace-nowrap">{diaDeCarimbo(f.inscrito) || f.inscrito.slice(0, 10)}</Td>
                     {!souFormador && (
                       <Td className="text-center">
                         <span className={`w-5 h-5 inline-flex items-center justify-center rounded-full text-white ${f.pago ? "bg-sucesso" : "bg-linha"}`} aria-label={f.pago ? "Pago" : "Por pagar"}>{f.pago ? I.check : ""}</span>

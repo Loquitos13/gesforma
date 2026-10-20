@@ -5,6 +5,7 @@ import { emitirRecibo, enviarRecibo, estadoRecibo, pdfDoRecibo, ReciboErro } fro
 import { SITUACOES } from "../repos/pagamentos.js";
 import { periodoQuery, textoQuery, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
+import { hojeLisboa } from "../datas.js";
 
 // Pagamentos: exportação para Excel e recibos internos (PDF, numeração anual, Drive e email).
 
@@ -33,7 +34,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const { bytes, total } = await exportarPagamentos(db, v.query, { comNif: VEEM_NIF.has(req.actor!.role) });
     await audit(db, req.actor!.id, "pagamento.exportar", "pagamento", undefined, req.ip, { ...v.query, total });
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLisboa();
     reply
       .header("content-type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
       .header("content-disposition", `attachment; filename="pagamentos-${hoje}.xlsx"`)

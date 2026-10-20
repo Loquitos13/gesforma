@@ -1,4 +1,5 @@
 /** Formatação pt-PT partilhada pelos ecrãs e gráficos. */
+import { fmtDataCalendario, fmtDataHoraLisboa, fmtDataLisboa, lerInstante } from "../horaLisboa";
 
 const nf = new Intl.NumberFormat("pt-PT");
 const ef = new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -50,20 +51,24 @@ export const TOM_CLASSES: Record<Tom, { texto: string; fundo: string; borda: str
   acao: { texto: "text-acao-texto", fundo: "bg-acao-suave", borda: "border-acao/40" },
 };
 
-/** Data ISO (aaaa-mm-dd ou timestamp) → "13/10/2026". */
+/** Instante de um texto: com fuso tal como vem; sem fuso (carimbo do GesForma), lido como UTC. */
+const instante = lerInstante;
+
+/** Data ISO (aaaa-mm-dd ou timestamp) → "13/10/2026", no dia de Lisboa. */
 export function data(iso: string | null | undefined) {
   if (!iso) return "—";
-  const d = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return fmtDataCalendario(iso);
+  const d = instante(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return fmtDataLisboa(d);
 }
 
-/** Data e hora curtas: "13/10/2026, 14:05". */
+/** Data e hora curtas na hora de Lisboa: "13/10/2026, 14:05". */
 export function dataHora(iso: string | null | undefined) {
   if (!iso) return "—";
-  const d = new Date(iso);
+  const d = instante(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return fmtDataHoraLisboa(d).replace(" ", ", ");
 }
 
 export function cx(...classes: Array<string | false | null | undefined>) {

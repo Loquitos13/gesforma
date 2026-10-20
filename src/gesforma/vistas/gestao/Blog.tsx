@@ -12,6 +12,7 @@ import {
 import { EditorBlog } from "../../EditorBlog";
 import type { VistaProps } from "../../shell/tipos";
 import { CatalogoTabela, type ConfigCatalogo } from "../cursos/CatalogoTabela";
+import { hojeLisboa } from "../../../partilhado/horaLisboa";
 
 const slugDe = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const ativo = (s: string) => !/^(inactiv|inativ)/i.test(s);
@@ -122,7 +123,7 @@ function EditorPublicacao({ post, onFechar }: { post: Post | null; onFechar: () 
     if (!titulo.trim()) { setErro("Escreva o título."); return; }
     if (!slugFinal) { setErro("O endereço tem de ter letras ou números."); return; }
     if (corpo.length > LIMITE_CORPO_BLOG) { setErro("O artigo é demasiado longo."); return; }
-    const r = await gravar.correr({ titulo: titulo.trim(), slug: slugFinal, tematica, status: estado, corpo, data: post?.data || new Date().toISOString().slice(0, 10) });
+    const r = await gravar.correr({ titulo: titulo.trim(), slug: slugFinal, tematica, status: estado, corpo, data: post?.data || hojeLisboa() });
     if (r) onFechar();
   }
 

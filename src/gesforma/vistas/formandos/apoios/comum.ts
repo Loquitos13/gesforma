@@ -1,5 +1,6 @@
 import { apiLoteApoios, type EstadoApoio, type ModoApoio } from "../../../../partilhado/api/apoios";
 import type { Tom } from "../../../../partilhado/ui";
+import { mesLisboa } from "../../../../partilhado/horaLisboa";
 
 export const ESTADO_APOIO: Record<EstadoApoio, { rotulo: string; tom: Tom }> = {
   calculado: { rotulo: "Calculado", tom: "info" },
@@ -24,7 +25,7 @@ export function nomeMes(periodo: string) {
 }
 
 export function mesAtual() {
-  return new Date().toISOString().slice(0, 7);
+  return mesLisboa();
 }
 
 /** Células que o Excel poderia correr como fórmula ficam como texto. */

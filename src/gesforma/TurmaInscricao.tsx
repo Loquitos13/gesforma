@@ -4,6 +4,7 @@ import { CamposInscricaoManual, OPCOES_MANUAL, emailValido, type OpcoesManual } 
 import type { FormandoTurma, Preinscricao } from "../partilhado/tiposFormando";
 import { formatDiaMes, type OfertaTurmaRef, type TurmaGold } from "../partilhado/turmaModel";
 import { linhasTurmaInscricao, preinscricaoCasaComTurma, type TurmaInscricaoLinha } from "../partilhado/turmaOferta";
+import { dataHora } from "../partilhado/ui";
 
 const iCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent";
 
@@ -91,7 +92,7 @@ export function InscreverFormandoPanel({
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-slate-800 truncate">{l.nome} {l.apelido}</p>
                 <p className="text-xs text-slate-500 truncate">{l.email} · {l.telf}</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">{l.estado} · {l.inscrito}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">{l.estado} · {dataHora(l.inscrito)}</p>
               </div>
               <button
                 type="button"

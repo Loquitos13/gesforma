@@ -7,6 +7,7 @@ import { apiResultadosTurma, type ResultadoFormandoApi, type TurmaCertificado } 
 import { toastError } from "../../../../partilhado/toastBus";
 import { Card, Th, Td, I, ActBtn } from "./base";
 import { useResultadosTurma } from "./dados";
+import { hojeLisboa } from "../../../../partilhado/horaLisboa";
 
 export function CertificadosTurmaTab({ formandos, certificados, onUpload, onView, onNota, curso, turma, regime, turmaId }: {
   formandos: { id: number; nome: string }[];
@@ -181,7 +182,7 @@ export function CertificadosTurmaTab({ formandos, certificados, onUpload, onView
                             </div>
                           : <button type="button" onClick={() => void pedirUpload(c)} disabled={!elegivel} title={elegivel ? "Carregar o certificado obtido fora do GesForma" : motivos || `Precisa de ${regra}`} className="text-xs font-semibold px-2.5 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed">Carregar certificado</button>
                       ) : c.certificado
-                        ? <div className="flex items-center justify-center gap-1"><span className="text-xs text-emerald-600 font-semibold">Emitido</span><ActBtn icon={I.eye} label="Ver certificado emitido" color="gray" onClick={() => onView?.({ nome: c.nome, nota: c.nota ?? c.elearning ?? 0, curso, turma, data: new Date().toISOString().slice(0, 10) })} /></div>
+                        ? <div className="flex items-center justify-center gap-1"><span className="text-xs text-emerald-600 font-semibold">Emitido</span><ActBtn icon={I.eye} label="Ver certificado emitido" color="gray" onClick={() => onView?.({ nome: c.nome, nota: c.nota ?? c.elearning ?? 0, curso, turma, data: hojeLisboa() })} /></div>
                         : <button onClick={() => void pedirUpload(c)} disabled={!elegivel} title={elegivel ? "Carregar certificado" : motivos || `Precisa de ${regra}`} className="text-xs font-semibold px-2.5 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed">Upload</button>}
                     </Td>
                   </tr>

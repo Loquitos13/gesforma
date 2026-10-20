@@ -6,6 +6,7 @@ import { apiMe } from "../../partilhado/api";
 import { campoCor, campoImagem, campoNumero, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { corSegura, estiloBloco, estiloTexto, estiloVazio, juntar, lados, ligacaoSegura, tipoVazia, type Estilo, type Tipografia } from "./estilos";
+import { anoLisboa } from "../../partilhado/horaLisboa";
 
 type Ligacao = { rotulo: string; ligacao: string };
 
@@ -144,7 +145,7 @@ export function RodapeSite(p: RodapeProps & { refRaiz?: ((el: Element | null) =>
     borderTop: p.barra ? `${p.barra}px solid ${corSegura(p.corBarra) ?? "var(--c-acento)"}` : undefined,
   });
   const t = estiloTexto(p.tipografia);
-  const ano = String(new Date().getFullYear());
+  const ano = String(anoLisboa());
   const titulos = corSegura(p.corTitulos) ?? "#fff";
   const colunas = (p.colunas ?? []).filter(x => x.titulo || x.linhas);
   return (

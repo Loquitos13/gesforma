@@ -14,6 +14,7 @@ import type { Regime } from "../../repos/sql.js";
 import { isEmail, normalizeEmail } from "../../security.js";
 import { idNum, regime as regimeEnum, regimeIdParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
+import { carimboUtc, hojeLisboa } from "../../datas.js";
 
 const docParam = z.object({ regime: regimeEnum, id: idNum, docId: z.string().trim().min(1).max(40) });
 
@@ -100,7 +101,7 @@ export function registarAccoes(app: FastifyInstance, deps: Deps) {
       if (!ok) return reply.code(404).send({ error: "documento inexistente" });
     } else {
       if (!await docDoFormando(db, "gold", id, docId)) return reply.code(404).send({ error: "documento inexistente" });
-      await decidirDoc(db, "gold", id, docId, { validado: true, data: new Date().toISOString().slice(0, 10) }, req.actor!.id);
+      await decidirDoc(db, "gold", id, docId, { validado: true, data: hojeLisboa() }, req.actor!.id);
       await inserirNota(db, "gold", id, req.actor!.name, req.actor!.id, `Documento validado · ${docId}`);
     }
     await audit(db, req.actor!.id, "formando.doc_validado", `formandos_${regime}`, String(id), req.ip, { docId });
@@ -137,7 +138,7 @@ export function registarAccoes(app: FastifyInstance, deps: Deps) {
     const ent = await lerEntidade(db);
     if (!ent.iban) return reply.code(409).send({ error: "Falta o IBAN da entidade em Configurações › Entidade." });
     const nome = `${f.nome} ${f.apelido}`.trim();
-    const hoje = new Date().toISOString().slice(0, 16).replace("T", " ");
+    const hoje = carimboUtc();
     await garantirPagamentoPendente(db, {
       novoId: `TRX-${await nextOpsId(db)}`, formandoId: id, turmaId: f.turma_id, nome, email, curso: f.curso, valor, data: hoje,
     });
@@ -175,7 +176,7 @@ export function registarAccoes(app: FastifyInstance, deps: Deps) {
     const oferta = /^oferta$/i.test(v.body.metodo);
     const valor = oferta ? 0 : v.body.valor ?? Number(f.valor ?? 0);
     const metodo = oferta ? "Oferta" : v.body.metodo;
-    const data = v.body.data ?? new Date().toISOString().slice(0, 10);
+    const data = v.body.data ?? hojeLisboa();
     const novoId = `TRX-${await nextOpsId(db)}`;
     const registado = await db.tx(q => registarPagamentoRecebido(q, {
       novoId, formandoId: id, turmaId: f.turma_id, nome: `${f.nome} ${f.apelido}`.trim(), email: normalizeEmail(f.email),

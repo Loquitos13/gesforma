@@ -10,6 +10,7 @@ import * as docsRepo from "./repos/leadDocs.js";
 import * as leads from "./repos/leads.js";
 import * as repo from "./repos/percurso.js";
 import type { TurmaPercursoRow } from "./repos/percurso.js";
+import { hojeLisboa } from "./datas.js";
 
 export {
   enviarSugestaoTurmaCheia, ligarPreinscricaoAoFormandoGold, moverDocsDoLead, moverDocsParaTurma, validarPreinscricao,
@@ -70,7 +71,7 @@ function servePedido(t: TurmaPublica, pedido?: PedidoTurma) {
 }
 
 function hojeIso() {
-  return new Date().toISOString().slice(0, 10);
+  return hojeLisboa();
 }
 
 function isoData(raw: string) {

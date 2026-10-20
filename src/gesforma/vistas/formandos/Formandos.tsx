@@ -68,7 +68,7 @@ export default function Formandos({ view, navigate }: VistaProps) {
       celula: l => (
         <div className="min-w-0">
           <p className="m-0 font-semibold text-tinta">{`${l.nome} ${l.apelido}`.trim()}</p>
-          <p className="m-0 text-xs text-tinta-suave truncate max-w-[280px]">{l.email || "Sem email"}{l.inscrito ? ` · inscrito ${data(l.inscrito.slice(0, 10))}` : ""}</p>
+          <p className="m-0 text-xs text-tinta-suave truncate max-w-[280px]">{l.email || "Sem email"}{l.inscrito ? ` · inscrito ${data(l.inscrito)}` : ""}</p>
         </div>
       ),
     },

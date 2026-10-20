@@ -88,11 +88,14 @@ export async function ingestEvent(db: Db, type: string, payload: Record<string, 
     });
     if (posto) queued += 1;
   }
-  if (type !== "preinscricao.created" || queued > 0) {
+  // Sem email (regra desligada ou já enviado) a etapa do lead não muda: senão o funil mostrava um contacto que não houve.
+  if (!SO_COM_ENVIO.includes(type) || queued > 0) {
     await applyCrmEstado(db, type, payload).catch(() => undefined);
   }
   return { eventId: id, queued, duplicate: false };
 }
+
+const SO_COM_ENVIO = ["preinscricao.created", "preinscricao.unpaid_3d", "lead.stale_30d"];
 
 /** Avança o lead no funil quando a automatização dispara. Nunca recua Pago/Formando. */
 export async function applyCrmEstado(db: Db, type: string, payload: Record<string, unknown>) {
@@ -107,13 +110,14 @@ export async function applyCrmEstado(db: Db, type: string, payload: Record<strin
   });
 }
 
-async function enqueueCrmReminders(db: Db) {
+async function enqueueCrmReminders(db: Db, fim = 0) {
   const lembretes: [string, number, boolean, string][] = [
     ["preinscricao.unpaid_3d", 3, true, "unpaid3d"],
     ["lead.stale_30d", 30, false, "stale30d"],
   ];
   for (const [tipo, dias, soGold, prefixo] of lembretes) {
-    for (const row of await leadsParados(db, dias, soGold)) {
+    for (const row of await leadsParados(db, dias, soGold, prefixo)) {
+      if (fim && Date.now() >= fim) return;
       const email = normalizeEmail(row.email);
       if (!isEmail(email)) continue;
       await ingestEvent(db, tipo, { email, nome: `${row.nome} ${row.apelido}`.trim(), curso: row.curso, preinscricaoId: row.id }, `${prefixo}:${row.id}:${email}`)
@@ -163,13 +167,13 @@ async function enviarReservado(db: Db, job: EnvioReservado) {
  * Sem `orcamentoMs`, um lote de `limit`; com ele, lotes de `limit` até a fila esvaziar ou o tempo acabar
  * (o que ficou reservado e não saiu volta à fila).
  */
-export async function flushQueuedJobs(db: Db, limit = 20, orcamentoMs = 0) {
+export async function flushQueuedJobs(db: Db, limit = 20, orcamentoMs = 0, eventoId: string | null = null) {
   const fim = orcamentoMs > 0 ? Date.now() + orcamentoMs : 0;
   let picked = 0;
   let sent = 0;
   let failed = 0;
   for (;;) {
-    const lote = await reservarPendentes(db, limit);
+    const lote = await reservarPendentes(db, limit, eventoId);
     picked += lote.length;
     for (let i = 0; i < lote.length; i++) {
       if (fim && Date.now() >= fim) {
@@ -186,14 +190,17 @@ export async function flushQueuedJobs(db: Db, limit = 20, orcamentoMs = 0) {
 }
 
 /**
- * Lembretes (turma a começar, leads parados) e depois a fila. `orcamentoMs` limita o tempo de envio
- * (o cron da Vercel usa ~20 s); sem ele, um lote de 20 como antes.
+ * Lembretes (turma a começar, leads parados) e depois a fila. `fim` (Date.now() + ms) é o prazo de tudo:
+ * os lembretes param nele e a fila fica com o tempo que sobra (o cron da Vercel); sem ele, um lote de 20 como antes.
  */
-export async function processDueJobs(db: Db, orcamentoMs = 0) {
+export async function processDueJobs(db: Db, fim = 0) {
   await enqueueTurmaReminders(db).catch(() => undefined);
-  await enqueueCrmReminders(db).catch(() => undefined);
+  await enqueueCrmReminders(db, fim).catch(() => undefined);
   const interrompidos = await libertarReservasPresas(db, RESERVA_PRESA_MIN).catch(() => []);
-  const r = orcamentoMs > 0 ? await flushQueuedJobs(db, 10, orcamentoMs) : await flushQueuedJobs(db, 20);
+  const resta = fim - Date.now();
+  const r = !fim ? await flushQueuedJobs(db, 20)
+    : resta > 0 ? await flushQueuedJobs(db, 10, resta)
+    : { picked: 0, sent: 0, failed: 0 };
   return { ...r, interrompidos: interrompidos.length };
 }
 

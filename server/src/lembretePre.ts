@@ -129,7 +129,8 @@ function temPendencia(p: Pendencia) {
   return p.faltam.length > 0 || p.recusados.length > 0 || p.semTurma || p.turmaCheia;
 }
 
-export async function enviarLembretesPreinscricao(db: Db) {
+/** `fim` (Date.now() + ms): o cron pára de enviar nesse instante; o que ficou sai na volta seguinte. */
+export async function enviarLembretesPreinscricao(db: Db, fim = 0) {
   const cfg = await lerLembretePre(db);
   if (!cfg.activo) return { enviados: 0 };
   await repo.iniciarContagem(db);
@@ -138,6 +139,7 @@ export async function enviarLembretesPreinscricao(db: Db) {
   const devidos = await repo.devidos(db, limite, cfg.maximo);
   let enviados = 0;
   for (const lead of devidos) {
+    if (fim && Date.now() >= fim) break;
     if (motivoFecho(lead)) {
       await repo.adiar(db, lead.id);
       continue;

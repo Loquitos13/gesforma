@@ -44,8 +44,8 @@ export async function firePreinscricaoEmail(
     documentos_url: url,
     documentos_lista: lista || "os documentos do curso",
     documentos_itens: pedidos.filter(d => d.required).map(d => d.label),
-  }, key).catch(() => ({ queued: 0 }));
-  await flushQueuedJobs(db, 8).catch(() => undefined);
+  }, key).catch(() => ({ queued: 0, eventId: null }));
+  await flushQueuedJobs(db, 8, 0, r.eventId).catch(() => undefined);
   return { token, url, queued: r.queued ?? 0 };
 }
 
@@ -55,6 +55,8 @@ export async function notificarDocumentos(db: Db, id: number, actorId?: string) 
   const lead = row as { id: number; nome: string; apelido: string; email: string; curso: string; regime?: string } | null;
   if (!lead) return null;
   const mail = await firePreinscricaoEmail(db, lead, "preinscricao.promoted", `promoted:${id}:${normalizeEmail(lead.email)}`);
+  // Já enviado antes (a chave repete-se) ou regra desligada: nada saiu, por isso não fica contacto.
+  if (!mail.queued) return mail;
   const nota = `Ligação pessoal para submeter ficheiros: ${mail.url}`;
   await leads.inserirContacto(db, { leadId: id, actorId, nota, meio: "Email" });
   await logLeadEvent(db, id, actorId, "contacto", "Contacto automático · documentos", nota);

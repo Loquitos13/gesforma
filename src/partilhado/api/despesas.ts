@@ -3,7 +3,14 @@ import type { DadosDespesa } from "../despesas";
 import { api, enviar } from "./cliente";
 import { descarregar } from "./ficheiros";
 
-export type Despesa = { id: number; ordem: number; turmaId: number | null; dados: DadosDespesa; atualizadoEm: string };
+export type Despesa = {
+  id: number; ordem: number; turmaId: number | null; dados: DadosDespesa; atualizadoEm: string;
+  /** «formador»: despesa automática do formador (horas × valor por hora na visão geral da turma). */
+  origem: "manual" | "formador";
+  formador: string | null;
+  /** Na automática: porque já não acompanha a turma (o formador saiu, ficou sem horas ou sem valor). */
+  aviso: string;
+};
 
 /** `turma` = id da turma, ou "sem" para as antigas ainda sem turma. */
 export const apiDespesas = (turma: number | "sem", o: { signal?: AbortSignal } = {}) => api<{ despesas: Despesa[] }>(`/v1/despesas?turma=${turma}`, { signal: o.signal });

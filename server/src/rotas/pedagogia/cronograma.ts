@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { erroSobreposicao } from "../../conflitos.js";
 import { htmlCronograma, sessoesPublicas } from "../../cronogramaPublico.js";
+import { sincronizarDespesasFormador } from "../../despesasFormador.js";
 import { importarPlanosCurso } from "../../planosCurso.js";
 import { storeDriveFile } from "../../driveFicheiros.js";
 import { ligarAnexoGerado } from "../../pedagogia/ficheiros.js";
@@ -33,6 +34,8 @@ export function registarCronograma(app: FastifyInstance, { db, requireAuth, audi
       await db.tx(async q => {
         await gravarCronograma(q, regime, id, novas);
         await renumerarSessoes(q, regime, id);
+        // Financiada: as horas de cada formador mudam a sua despesa automática.
+        if (regime === "fin") await sincronizarDespesasFormador(q, id);
       });
       await importarPlanosCurso(db, regime, id).catch(() => undefined);
     }

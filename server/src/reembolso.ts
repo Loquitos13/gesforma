@@ -11,6 +11,7 @@ import * as XLSX from "xlsx";
 import { CAMPOS_DESPESA } from "../../src/partilhado/despesas.js";
 import type { Db } from "./db/pool.js";
 import { apagarFicheiroSubstituido, getDriveFile, storeDriveFile } from "./driveFicheiros.js";
+import { sincronizarDespesasDaTurma } from "./despesasFormador.js";
 import { dadosExecucaoFisica, emFaltaExecucao, xlsxExecucaoFisica } from "./execucaoFisica.js";
 import { textoSeguro } from "./pagamentosExportar.js";
 import { listarDespesas } from "./repos/despesas.js";
@@ -28,8 +29,12 @@ export function nomeFicheiroReembolso(tipo: TipoReembolso, turma: { id: number; 
   return `${tipo === "despesas" ? "Despesas" : "ExecucaoFisica"}-${nomeSeguro(turma.nome, turma.id)}.xlsx`;
 }
 
-/** As despesas da turma, com as mesmas colunas, pela mesma ordem, do template de despesas. */
+/**
+ * As despesas da turma, com as mesmas colunas, pela mesma ordem, do template de despesas. As automáticas dos
+ * formadores (horas × valor por hora) põem-se primeiro em dia: o ficheiro e o seu estado reflectem-nas sempre.
+ */
 export async function dadosDespesasTurma(db: Db, turmaId: number) {
+  await sincronizarDespesasDaTurma(db, turmaId, { soAberta: true });
   const linhas = await listarDespesas(db, turmaId);
   const dados = linhas.map(l => [
     Number(l.ordem),

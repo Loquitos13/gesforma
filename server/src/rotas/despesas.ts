@@ -1,13 +1,21 @@
 /** Despesas da Financiada, dentro de cada turma: lista, criar, editar, apagar e exportar no formato do template (Excel). */
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { validarDespesa } from "../../../src/partilhado/despesas.js";
+import { CAMPOS_DESPESA_FORMADOR, validarDespesa } from "../../../src/partilhado/despesas.js";
+import { sincronizarDespesasDaTurma } from "../despesasFormador.js";
 import { gerarFicheiroReembolso, MIME_XLSX, sincronizarReembolso, sincronizarSemFalhar } from "../reembolso.js";
-import { alterarDespesa, apagarDespesa, associarDespesa, criarDespesa, listarDespesas, turmaDaDespesa, type LinhaDespesa } from "../repos/despesas.js";
+import { alterarDespesa, apagarDespesa, associarDespesa, criarDespesa, listarDespesas, obterDespesa, turmaDaDespesa, type LinhaDespesa } from "../repos/despesas.js";
 import { idNum, idParam, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
 
-const dto = (r: LinhaDespesa) => ({ id: Number(r.id), ordem: Number(r.ordem), turmaId: r.turma_id == null ? null : Number(r.turma_id), dados: r.dados, atualizadoEm: r.atualizado_em });
+const dto = (r: LinhaDespesa) => ({
+  id: Number(r.id), ordem: Number(r.ordem), turmaId: r.turma_id == null ? null : Number(r.turma_id), dados: r.dados, atualizadoEm: r.atualizado_em,
+  /** «formador»: despesa automática do formador (horas × valor por hora da visão geral da turma). */
+  origem: r.origem ?? "manual", formador: r.formador ?? null, aviso: r.aviso ?? "",
+});
+
+const ERRO_APAGAR_AUTOMATICA = "Esta despesa vem do valor por hora do formador na visão geral da turma: para a mudar, altere aí o valor por hora "
+  + "(ou as horas no cronograma). Sai sozinha quando o formador deixa a turma.";
 /** `?turma=<id>`, ou `?turma=sem` para as antigas ainda sem turma. */
 const turmaQuery = z.object({ turma: z.union([z.literal("sem"), idNum]) });
 const corpoDespesa = z.object({ turmaId: idNum.optional(), dados: z.unknown().optional() });
@@ -26,6 +34,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const q = validar(reply, { query: turmaQuery }, req);
     if (!q) return;
+    // Rede de segurança: as despesas automáticas dos formadores ficam em dia antes de se mostrarem.
+    if (q.query.turma !== "sem") await sincronizarDespesasDaTurma(db, q.query.turma, { soAberta: true });
     return { despesas: (await listarDespesas(db, q.query.turma === "sem" ? null : q.query.turma)).map(dto) };
   });
 
@@ -55,7 +65,14 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       await actualizarFicheiro(req, p.body.turmaId);
       return { despesa: dto(r) };
     }
-    const v = validarDespesa(p.body.dados);
+    const antes = await obterDespesa(db, p.params.id);
+    if (!antes) return reply.code(404).send({ error: "Despesa não encontrada." });
+    // Na despesa automática do formador, os campos que vêm da turma e da ficha não se alteram aqui.
+    let entrada = p.body.dados;
+    if (antes.origem === "formador" && entrada && typeof entrada === "object" && !Array.isArray(entrada)) {
+      entrada = { ...entrada, ...Object.fromEntries(CAMPOS_DESPESA_FORMADOR.map(k => [k, antes.dados[k] ?? null])) };
+    }
+    const v = validarDespesa(entrada);
     if (!v.ok) return reply.code(400).send({ error: v.erro });
     const r = await alterarDespesa(db, p.params.id, v.dados);
     if (!r) return reply.code(404).send({ error: "Despesa não encontrada." });
@@ -68,6 +85,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const p = validar(reply, { params: idParam }, req);
     if (!p) return;
+    const antes = await obterDespesa(db, p.params.id);
+    if (!antes) return reply.code(404).send({ error: "Despesa não encontrada." });
+    // A automática só se apaga quando já não acompanha a turma (tem aviso); senão voltava na sincronização seguinte.
+    if (antes.origem === "formador" && !antes.aviso) return reply.code(409).send({ error: ERRO_APAGAR_AUTOMATICA });
     const apagada = await apagarDespesa(db, p.params.id);
     if (!apagada) return reply.code(404).send({ error: "Despesa não encontrada." });
     await audit(db, req.actor!.id, "despesa.apagar", "despesa", String(p.params.id), req.ip);

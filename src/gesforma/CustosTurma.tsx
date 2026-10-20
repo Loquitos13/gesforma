@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { horasDoFormador, type SessaoCronograma } from "../partilhado/turmaModel";
+import { custosFormadores } from "../partilhado/custoFormadores";
+import type { SessaoCronograma } from "../partilhado/turmaModel";
 import { useFormadoresDoRegime } from "../partilhado/dados/comuns";
 import { Cartao } from "../partilhado/ui";
 
@@ -43,19 +44,11 @@ export function CustosTurmaCard({
   const [rascunho, setRascunho] = useState<Record<string, string>>({});
   useEffect(() => { setRascunho({}); }, [turma.id, valores]);
 
-  const linhas = useMemo(() => {
-    const nomes = new Set<string>();
-    if (turma.formador.trim()) nomes.add(turma.formador.trim());
-    for (const n of turma.formadores ?? []) if (n.trim()) nomes.add(n.trim());
-    for (const s of turma.cronograma) for (const n of s.formadores ?? []) if (n.trim()) nomes.add(n.trim());
-    return [...nomes].map(nome => {
-      const horas = horasDoFormador(turma.cronograma, nome);
-      const daFicha = formadores.find(f => f.nome.toLowerCase() === nome.toLowerCase())?.custoHora ?? 0;
-      const proprio = typeof valores[nome] === "number" ? valores[nome] : null;
-      const valorHora = proprio ?? daFicha;
-      return { nome, horas, daFicha, proprio, valorHora, total: arred(horas * valorHora) };
-    });
-  }, [formadores, turma, valores]);
+  // A mesma conta das despesas automáticas dos formadores (Financiada): src/partilhado/custoFormadores.ts.
+  const linhas = useMemo(() => custosFormadores(
+    { formador: turma.formador, formadores: turma.formadores, cronograma: turma.cronograma, valoresHoraFormador: valores },
+    nome => formadores.find(f => f.nome.trim().toLowerCase() === nome.toLowerCase())?.custoHora ?? 0,
+  ), [formadores, turma, valores]);
 
   const gravarValor = (nome: string) => {
     const texto = rascunho[nome];
@@ -76,6 +69,7 @@ export function CustosTurmaCard({
     <Cartao titulo="Custos da turma">
       <p className="m-0 mb-3 text-xs text-tinta-suave">
         Valor por hora de cada formador nesta turma × as horas dele no cronograma. Vazio, vale o custo por hora da ficha do formador.
+        {regime === "fin" && " Cada formador com horas e valor aparece nas despesas da turma, como despesa automática."}
       </p>
       {linhas.length === 0 && <p className="m-0 text-xs text-tinta-suave">Ainda sem formador nesta turma.</p>}
       {linhas.length > 0 && (

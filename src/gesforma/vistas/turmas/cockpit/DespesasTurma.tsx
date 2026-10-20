@@ -1,17 +1,21 @@
 // Separador Despesas da turma (Financiada): os campos do template de despesas (TemplateDespesas.xlsx), com as listas
 // do template em seletores com pesquisa, e exportação para Excel com as mesmas colunas. No topo, os ficheiros do
 // reembolso da turma (execução física e despesas), um de cada, guardados na Drive.
+// Na Financiada, cada formador da turma tem uma despesa automática (horas × valor por hora da visão geral): os campos
+// que vêm daí e da ficha do formador ficam só de leitura; os da equipa editam-se como nas outras.
 import { useMemo, useState } from "react";
 import {
   apiAlterarDespesa, apiApagarDespesa, apiAssociarDespesa, apiCriarDespesa, apiDespesas, apiExportarDespesas, type Despesa,
 } from "../../../../partilhado/api/despesas";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { useRecurso } from "../../../../partilhado/dados/useRecurso";
-import { CAMPOS_DESPESA, GRUPOS_DESPESA, OPCOES_DESPESA, type CampoDespesa, type DadosDespesa } from "../../../../partilhado/despesas";
+import {
+  CAMPOS_DESPESA, CAMPOS_DESPESA_FORMADOR, GRUPOS_DESPESA, OPCOES_DESPESA, type CampoDespesa, type DadosDespesa,
+} from "../../../../partilhado/despesas";
 import { SearchSelect } from "../../../../partilhado/FormKit";
 import { toastError } from "../../../../partilhado/toastBus";
 import {
-  AreaTexto, Aviso, Botao, Campo, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Modal, Tabela, Vazio, data, eur, num, type Coluna,
+  AreaTexto, Aviso, Botao, Campo, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Estado, Modal, Tabela, Vazio, data, eur, num, type Coluna,
 } from "../../../../partilhado/ui";
 import { ReembolsoTurma } from "./ReembolsoTurma";
 
@@ -29,11 +33,17 @@ const paraForm = (d: DadosDespesa): Form =>
 const texto = (d: DadosDespesa, k: string) => String(d[k] ?? "");
 const valor = (d: DadosDespesa, k: string) => (typeof d[k] === "number" ? eur(d[k] as number, true) : "—");
 const titulo = (d: Despesa) => [texto(d.dados, "docDespesa"), texto(d.dados, "nDocDespesa")].filter(Boolean).join(" · ") || "Sem documento";
+const automatica = (d: Despesa) => d.origem === "formador";
+/** Só se apaga a automática que já não acompanha a turma (com aviso); as outras voltavam na sincronização. */
+const podeApagar = (d: Despesa) => !automatica(d) || Boolean(d.aviso);
+const SINCRONIZADOS = new Set<string>(CAMPOS_DESPESA_FORMADOR);
+
+type FormAberto = { id: number | null; valores: Form; automatica?: { formador: string; aviso: string } };
 
 export function DespesasTurma({ turmaId, onFicha }: { turmaId: number; onFicha?: (formandoId: number) => void }) {
   const { dados, erro, aCarregar, recarregar } = useRecurso(`despesas:turma:${turmaId}`, signal => apiDespesas(turmaId, { signal }));
   const [q, setQ] = useState("");
-  const [form, setForm] = useState<{ id: number | null; valores: Form } | null>(null);
+  const [form, setForm] = useState<FormAberto | null>(null);
   const [apagar, setApagar] = useState<Despesa | null>(null);
   const [aExportar, setAExportar] = useState(false);
   const lista = useMemo(() => {
@@ -48,8 +58,13 @@ export function DespesasTurma({ turmaId, onFicha }: { turmaId: number; onFicha?:
       id: "doc", titulo: "Documento", principal: true,
       celula: d => (
         <span className="block min-w-0">
-          <span className="block font-semibold text-tinta truncate">{titulo(d)}</span>
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-semibold text-tinta truncate">{titulo(d)}</span>
+            {automatica(d) && <Estado tom="info" title="Vem do valor por hora do formador na visão geral da turma">Formador · automática</Estado>}
+            {automatica(d) && d.aviso && <Estado tom="aviso" title={d.aviso}>Já não acompanha a turma</Estado>}
+          </span>
           <span className="block text-xs text-tinta-suave truncate">{texto(d.dados, "descricao")}</span>
+          {automatica(d) && d.aviso && <span className="block text-xs text-aviso">{d.aviso}</span>}
         </span>
       ),
     },
@@ -93,9 +108,14 @@ export function DespesasTurma({ turmaId, onFicha }: { turmaId: number; onFicha?:
           linhas={lista}
           colunas={colunas}
           chave={d => d.id}
-          onLinha={d => setForm({ id: d.id, valores: paraForm(d.dados) })}
+          onLinha={d => setForm({
+            id: d.id, valores: paraForm(d.dados),
+            automatica: automatica(d) ? { formador: d.formador ?? texto(d.dados, "nomeFornecedor"), aviso: d.aviso } : undefined,
+          })}
           aCarregar={aCarregar && !dados}
-          acoesLinha={d => <Botao tamanho="sm" variante="fantasma" className="text-perigo" onClick={() => setApagar(d)}>Apagar</Botao>}
+          acoesLinha={d => (podeApagar(d)
+            ? <Botao tamanho="sm" variante="fantasma" className="text-perigo" onClick={() => setApagar(d)}>Apagar</Botao>
+            : null)}
           vazio={<Vazio titulo={q ? "Nenhuma despesa com esta pesquisa." : "Esta turma ainda não tem despesas."} descricao="Registe cada documento de despesa com os campos do template." />}
         />
       </Cartao>
@@ -135,7 +155,7 @@ function SemTurma({ turmaId }: { turmaId: number }) {
   );
 }
 
-function FormDespesa({ turmaId, inicial, onFechar }: { turmaId: number; inicial: { id: number | null; valores: Form }; onFechar: () => void }) {
+function FormDespesa({ turmaId, inicial, onFechar }: { turmaId: number; inicial: FormAberto; onFechar: () => void }) {
   const [v, setV] = useState<Form>(inicial.valores);
   const gravar = useAccao(
     (d: Form) => (inicial.id ? apiAlterarDespesa(inicial.id, d) : apiCriarDespesa(turmaId, d)),
@@ -150,11 +170,27 @@ function FormDespesa({ turmaId, inicial, onFechar }: { turmaId: number; inicial:
       </>
     )}>
       <div className="flex flex-col gap-6">
+        {inicial.automatica && (
+          <Aviso tom={inicial.automatica.aviso ? "aviso" : "info"} titulo={`Despesa automática de ${inicial.automatica.formador}`}>
+            {inicial.automatica.aviso && <p className="m-0 mb-1 font-semibold">{inicial.automatica.aviso}</p>}
+            <p className="m-0">
+              Fornecedor, descrição, quantidade (horas), custo unitário (€/h) e total vêm do valor por hora na visão geral da turma
+              e da ficha do formador, e acompanham-nos. Para os mudar, altere aí o valor por hora ou as horas no cronograma.
+              Os restantes campos são da equipa e nunca se sobrepõem.
+            </p>
+            {!inicial.automatica.aviso && <p className="m-0 mt-1">Não se apaga aqui: sai sozinha quando o formador deixa a turma, se ainda não tiver campos preenchidos pela equipa.</p>}
+          </Aviso>
+        )}
         {GRUPOS_DESPESA.map(g => (
           <section key={g} aria-label={g}>
             <h3 className="m-0 mb-3 text-xs font-semibold uppercase tracking-wide text-tinta-suave">{g}</h3>
             <div className="grid gap-3 sm:grid-cols-2">
-              {CAMPOS_DESPESA.filter(c => c.grupo === g).map(c => <CampoForm key={c.chave} c={c} valor={v[c.chave] ?? ""} onMudar={x => mudar(c.chave, x)} />)}
+              {CAMPOS_DESPESA.filter(c => c.grupo === g).map(c => (
+                <CampoForm key={c.chave} c={c} valor={v[c.chave] ?? ""} onMudar={x => mudar(c.chave, x)}
+                  bloqueado={inicial.automatica && SINCRONIZADOS.has(c.chave)
+                    ? (c.chave === "nifFornecedor" || c.chave === "nomeFornecedor" ? "Vem da ficha do formador." : "Vem do valor por hora na visão geral da turma.")
+                    : undefined} />
+              ))}
             </div>
           </section>
         ))}
@@ -163,23 +199,27 @@ function FormDespesa({ turmaId, inicial, onFechar }: { turmaId: number; inicial:
   );
 }
 
-function CampoForm({ c, valor, onMudar }: { c: CampoDespesa; valor: string; onMudar: (v: string) => void }) {
+/** `bloqueado`: campo da despesa automática que vem da turma ou da ficha (só de leitura, com esta explicação). */
+function CampoForm({ c, valor, onMudar, bloqueado }: { c: CampoDespesa; valor: string; onMudar: (v: string) => void; bloqueado?: string }) {
+  const ajuda = bloqueado ?? c.ajuda;
   if (c.tipo === "opcao" && c.lista) {
     // O seletor com pesquisa não é um input: o rótulo vai à parte.
     return (
       <div className={c.lista === "rubrica" || c.lista === "categoriaCusto" ? "sm:col-span-2" : undefined}>
         <span className="mb-1 block text-[13px] font-medium text-tinta">{c.rotulo}</span>
-        <SearchSelect value={valor} onChange={onMudar} allowEmpty emptyLabel="Selecionar…" placeholder="Pesquisar…"
+        <SearchSelect value={valor} onChange={onMudar} allowEmpty emptyLabel="Selecionar…" placeholder="Pesquisar…" disabled={Boolean(bloqueado)}
           options={(OPCOES_DESPESA[c.lista] as string[]).map(value => ({ value }))} />
-        {c.ajuda && <span className="mt-1 block text-xs text-tinta-suave">{c.ajuda}</span>}
+        {ajuda && <span className="mt-1 block text-xs text-tinta-suave">{ajuda}</span>}
       </div>
     );
   }
   return (
-    <Campo rotulo={c.rotulo} ajuda={c.ajuda} className={c.tipo === "textoLongo" ? "sm:col-span-2" : undefined}>
+    <Campo rotulo={c.rotulo} ajuda={ajuda} className={c.tipo === "textoLongo" ? "sm:col-span-2" : undefined}>
       {p => c.tipo === "textoLongo"
-        ? <AreaTexto {...p} rows={2} value={valor} onChange={e => onMudar(e.target.value)} />
-        : <Entrada {...p} value={valor} onChange={e => onMudar(e.target.value)}
+        ? <AreaTexto {...p} rows={2} value={valor} readOnly={Boolean(bloqueado)} className={bloqueado ? "bg-fundo text-tinta-suave" : undefined}
+            onChange={e => onMudar(e.target.value)} />
+        : <Entrada {...p} value={valor} readOnly={Boolean(bloqueado)} className={bloqueado ? "bg-fundo text-tinta-suave" : undefined}
+            onChange={e => onMudar(e.target.value)}
             type={c.tipo === "data" ? "date" : "text"}
             inputMode={c.tipo === "euros" || c.tipo === "numero" ? "decimal" : undefined}
             placeholder={c.tipo === "euros" ? "0,00 €" : undefined} />}

@@ -52,6 +52,21 @@ export const GRUPOS_DESPESA = ["Documento de despesa", "Fornecedor", "Valores", 
 export type DadosDespesa = Record<string, string | number | null>;
 
 /**
+ * Despesa automática de um formador (Financiada): estes campos vêm do valor por hora na visão geral da turma
+ * (horas × €/h) e da ficha do formador (nome e NIF), e acompanham-nos. Os outros são da equipa e nunca se sobrepõem.
+ */
+export const CAMPOS_DESPESA_FORMADOR = [
+  "nomeFornecedor", "nifFornecedor", "nifFornecedorEstrangeiro", "paisFornecedor", "descricao", "quantidade", "custoUnitario", "totalDocDespesa",
+] as const;
+
+const SINCRONIZADO = new Set<string>(CAMPOS_DESPESA_FORMADOR);
+
+/** A equipa já preencheu algum campo seu (categoria, documento, pagamento, …) nesta despesa automática? */
+export function temCamposDaEquipa(dados: Record<string, unknown>) {
+  return CAMPOS_DESPESA.some(c => !SINCRONIZADO.has(c.chave) && dados[c.chave] != null && String(dados[c.chave]).trim() !== "");
+}
+
+/**
  * Número escrito à portuguesa: "1.500,25" → 1500.25; sem vírgula, "1.500" (ponto seguido de grupos de 3 dígitos)
  * são milhares → 1500; "1.5" continua a ser 1,5. O símbolo do euro e os espaços (também os não separáveis) ignoram-se.
  */

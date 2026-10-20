@@ -8,6 +8,8 @@ import { generateCronograma } from "../cronograma.js";
 import { importarPlanosCurso } from "../planosCurso.js";
 import { erroSobreposicao } from "../conflitos.js";
 import { docsBase } from "../docsCurso.js";
+import { largarDespesasFormadorDaTurma, sincronizarDespesasDaTurma, sincronizarDespesasFormador } from "../despesasFormador.js";
+import { sincronizarSemFalhar } from "../reembolso.js";
 import { limparAtalhosDaTurma } from "../driveArvore.js";
 import { normalizarEstado, validarTransicao } from "../estados.js";
 import { erroDisponibilidade } from "../formadorConta.js";
@@ -336,6 +338,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     await repo.ligarCurso(db, "fin", id);
     if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "fin", id, d.vagasAnunciadas);
     if (d.numeroAcao !== undefined) await repo.gravarNumeroAcao(db, id, d.numeroAcao);
+    // Cada formador com horas e valor por hora passa a ter a sua despesa automática na turma.
+    await sincronizarDespesasDaTurma(db, id);
     await importarPlanosCurso(db, "fin", id).catch(() => undefined);
     await audit(db, req.actor!.id, "turma.criar", "turma_fin", String(id), req.ip, { nome: d.nome });
     const row = await repo.obterTurma(db, "fin", id);
@@ -378,7 +382,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       if (removida) return reply.code(409).send({ error: removida });
     }
     // Os dados das sessões seguem o id: depois de gravar o cronograma recalcula-se o número de cada uma.
-    await db.tx(async q => {
+    // As despesas automáticas dos formadores (horas × valor por hora) acompanham na mesma transacção.
+    const despesasMudaram = await db.tx(async q => {
       await repo.atualizarTurmaFin(q, id, {
         dataInicio: d.dataInicio, nome: d.nome, curso: d.curso, ufcdCod: d.ufcdCod, local: d.local, horario: d.horario,
         alunosTotal: d.alunosTotal, tolerancia: d.toleranciaVagas, estado, horas: d.horas, formador: d.formador,
@@ -386,6 +391,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
         financiador: d.financiador,
       });
       if (d.cronograma) await renumerarSessoes(q, "fin", id);
+      return sincronizarDespesasFormador(q, id);
     });
     if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "fin", id, d.vagasAnunciadas);
     if (d.numeroAcao !== undefined) await repo.gravarNumeroAcao(db, id, d.numeroAcao);
@@ -397,6 +403,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if ((d.cronograma || d.curso) && req.actor!.role !== "formador") await importarPlanosCurso(db, "fin", id).catch(() => undefined);
     if (req.actor!.role !== "formador") {
       await audit(db, req.actor!.id, "turma.alterar", "turma_fin", String(id), req.ip, { campos: Object.keys(d) });
+    }
+    if (despesasMudaram) {
+      const erro = await sincronizarSemFalhar(db, req.actor!.id, id, "despesas");
+      if (erro) req.log.warn({ turma: id, erro }, "ficheiro de despesas da turma não actualizado na Drive");
     }
     const row = await repo.obterTurma(db, "fin", id);
     if (row) await sincronizarDrive(deps, "fin", id, row);
@@ -414,7 +424,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       const bloqueio = await bloqueioTurma(db, regime, id);
       if (bloqueio) return reply.code(409).send({ error: bloqueio });
       const antes = await repo.obterTurma(db, regime, id);
-      await repo.apagarTurma(db, regime, id);
+      await db.tx(async q => {
+        if (regime === "fin") await largarDespesasFormadorDaTurma(q, id);
+        await repo.apagarTurma(q, regime, id);
+      });
       await limparAtalhosDaTurma(db, regime, id).catch(() => undefined);
       await audit(db, req.actor!.id, "turma.apagar", `turma_${regime}`, String(id), req.ip, { nome: String(antes?.nome ?? "") });
       return { ok: true };

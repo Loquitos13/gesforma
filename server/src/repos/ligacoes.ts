@@ -80,6 +80,15 @@ export async function renomearCursoNoRegime(c: Consulta, regime: Regime, antigo:
 export async function renomearFormadorNasTurmas(c: Consulta, antigo: string, novo: string) {
   for (const table of [TURMAS.gold, TURMAS.fin]) {
     await many(c, `UPDATE ${table} SET formador = $2 WHERE lower(trim(formador)) = lower(trim($1))`, [antigo, novo]);
+    // O valor por hora do formador na turma (chave = nome) segue o nome novo.
+    await many(c,
+      `UPDATE ${table} SET valores_hora_formador = (
+         SELECT COALESCE(jsonb_object_agg(CASE WHEN lower(trim(v.key)) = lower(trim($1)) THEN $2::text ELSE v.key END, v.value), '{}'::jsonb)
+           FROM jsonb_each(valores_hora_formador) v
+       )
+       WHERE jsonb_typeof(valores_hora_formador) = 'object'
+         AND EXISTS (SELECT 1 FROM jsonb_object_keys(valores_hora_formador) k WHERE lower(trim(k)) = lower(trim($1)))`,
+      [antigo, novo]);
     await many(c,
       `UPDATE ${table} SET formadores = (
          SELECT COALESCE(jsonb_agg(

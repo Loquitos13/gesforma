@@ -1,6 +1,7 @@
 /** Fecho formal da turma (Gold e Financiada) e reabertura pelo administrador. */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { sincronizarDespesasDaTurma } from "../../despesasFormador.js";
 import { dtpEmFalta } from "../../pedagogia/dtp.js";
 import { anexarPdfDtp } from "../../pedagogia/ficheiros.js";
 import { dadosRelatorioFinal } from "../../pedagogia/relatorio.js";
@@ -41,6 +42,8 @@ export function registarFecho(app: FastifyInstance, { db, requireAuth, audit }: 
       horas: dados.duracaoHoras,
       geradoEm: new Date().toISOString(),
     };
+    // As despesas automáticas dos formadores ficam com as horas e valores finais (fechada, já não se sincronizam sozinhas).
+    await sincronizarDespesasDaTurma(db, id);
     await fecharTurmaFin(db, id, req.actor!.id, resumo);
     // A turma fica fechada mesmo sem Drive; o ecrã avisa que o relatório não ficou no dossiê.
     const aviso = await anexarPdfDtp(db, req.actor!.id, "fin", { id, nome: antes.nome }, "relatorio", "RelatorioFinalAccao.pdf", bytes)

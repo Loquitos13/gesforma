@@ -1,5 +1,6 @@
 import type { SessaoMeta } from "./TurmaExtras";
 import { hojeLisboa, horaLisboa } from "./horaLisboa";
+import { horasDoFormadorNoCronograma } from "./custoFormadores";
 
 export type SessaoModalidade = "presencial" | "sincrona" | "auto" | "avaliacao" | "matricula";
 
@@ -225,13 +226,9 @@ export function sessaoDuracaoHoras(s: Pick<SessaoCronograma, "horaInicio" | "hor
   return Math.max(0, ((eh * 60 + em) - (sh * 60 + sm)) / 60);
 }
 
+/** Horas lectivas do formador no cronograma (a mesma conta das despesas automáticas dos formadores). */
 export function horasDoFormador(sessoes: SessaoCronograma[], nome: string) {
-  const alvo = nome.trim().toLowerCase();
-  return Math.round(sessoes.reduce((acc, s) => {
-    if (!isSessaoLectiva(s)) return acc;
-    if (!sessaoFormadores(s).some(f => f.toLowerCase() === alvo)) return acc;
-    return acc + sessaoDuracaoHoras(s);
-  }, 0) * 10) / 10;
+  return horasDoFormadorNoCronograma(sessoes, nome);
 }
 
 /** Mapa formador × módulo: os módulos que o formador dá na turma, com as horas de cada um. */

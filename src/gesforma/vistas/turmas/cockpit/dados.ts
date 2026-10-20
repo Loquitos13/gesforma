@@ -43,6 +43,8 @@ export function recarregarTurma(regime: Regime, id: number) {
   invalidar("turmas:");
   invalidar("formandos:");
   invalidar("painel:");
+  // Financiada: valores por hora, formadores e cronograma mudam as despesas automáticas dos formadores.
+  if (regime === "fin") invalidar("despesas:");
 }
 
 /** A turma (formato completo, com cronograma) e as alterações a ela. */

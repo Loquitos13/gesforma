@@ -8,6 +8,8 @@ import { DOCS_FORMADOR } from "../../../src/partilhado/dossierDocs.js";
 import { ContaFormadorEmUso, formadorEstaAlocado, garantirContaFormador } from "../formadorConta.js";
 import { mapFile } from "../driveFicheiros.js";
 import { bloqueioFormador, propagarFormador } from "../ligacoes.js";
+import { sincronizarTurmasDoFormador } from "../despesasFormador.js";
+import { sincronizarSemFalhar } from "../reembolso.js";
 import { ficheiroDrive } from "../repos/drive.js";
 import { nextOpsId } from "../ops.js";
 import { pode } from "../permissoes/capacidades.js";
@@ -236,6 +238,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       throw err;
     }
     await audit(db, req.actor!.id, "formador.criar", "formador", String(id), req.ip, { conta: Boolean(conta) });
+    // Uma turma da Financiada que já tinha este nome passa a ter o custo por hora e o NIF da ficha nas despesas.
+    if (d.custoHora || d.nif) await sincronizarTurmasDoFormador(db, d.nome);
     const row = await repo.obterFormador(db, id);
     const acesso: Acesso = conta ? (conta.criado ? { email: conta.email, password: conta.password, criado: true } : { email: conta.email, criado: false }) : null;
     return { formador: row ? { ...repo.mapFormadorBase(row), alocado: false } : { id }, acesso };
@@ -292,6 +296,15 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       throw err;
     }
     if (d.nome && d.nome !== String(antes.nome ?? "")) await propagarFormador(db, String(antes.nome ?? ""), d.nome);
+    // Financiada: as despesas automáticas do formador (NIF, nome e custo por hora da ficha) acompanham a ficha.
+    const mudouCusto = d.custoHora !== undefined && Number(d.custoHora) !== Number(antes.custo_hora ?? 0);
+    const mudouNif = d.nif !== undefined && d.nif !== String(antes.nif ?? "");
+    if (mudouCusto || mudouNif || (d.nome && d.nome !== String(antes.nome ?? ""))) {
+      for (const turmaId of await sincronizarTurmasDoFormador(db, d.nome ?? String(antes.nome ?? ""))) {
+        const erro = await sincronizarSemFalhar(db, req.actor!.id, turmaId, "despesas");
+        if (erro) req.log.warn({ turma: turmaId, erro }, "ficheiro de despesas da turma não actualizado na Drive");
+      }
+    }
     await audit(db, req.actor!.id, "formador.alterar", "formador", String(id), req.ip, { campos: Object.keys(d), conta: Boolean(acesso) });
     const row = await repo.obterFormador(db, id);
     const formador = row ? { ...repo.mapFormadorBase(row), alocado: await formadorEstaAlocado(db, String(row.nome ?? "")) } : null;

@@ -1,4 +1,5 @@
 import type { Db } from "./db/pool.js";
+import { renomearFormadorNasDespesas } from "./repos/despesas.js";
 import * as repo from "./repos/ligacoes.js";
 import type { Consulta, Regime } from "./repos/sql.js";
 
@@ -103,6 +104,7 @@ export async function propagarFormador(db: Db, from: string, to: string) {
   const novo = to.trim();
   if (!antigo || !novo || antigo === novo) return;
   await repo.renomearFormadorNasTurmas(db, antigo, novo);
+  await renomearFormadorNasDespesas(db, antigo, novo);
   for (const row of await repo.cronogramasDeTodasAsTurmas(db)) {
     const { next, changed } = renomearNoCronograma(row.cronograma, antigo, novo);
     if (changed) await repo.gravarCronograma(db, row.regime === "fin" ? "fin" : "gold", row.id, next);

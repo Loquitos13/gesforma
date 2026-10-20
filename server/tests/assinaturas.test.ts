@@ -69,17 +69,25 @@ function pki() {
   return pkiTeste;
 }
 
-/** Acrescenta ao original uma actualização incremental com /Sig e um CMS destacado sobre o ByteRange (o que a app faz). */
+/**
+ * Acrescenta ao original uma actualização incremental (objecto /Sig, tabela de referências e trailer com /Prev)
+ * e um CMS destacado sobre o ByteRange (o que a app faz).
+ */
 async function assinarIncremental(original: Buffer, nome: string, autoAssinado = false) {
   const { ec } = await pki();
   const { forge, chave, cert } = await certificado(nome, false, autoAssinado ? undefined : ec);
   const n = (x: number) => String(x).padStart(10, "0");
+  const ultimo = (re: RegExp) => [...original.toString("latin1").matchAll(re)].at(-1)![1]!;
+  const num = Number(ultimo(/\/Size\s+(\d+)/g));
   const HEX = 16384;
-  const cabeca = "\n99 0 obj\n<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /adbe.pkcs7.detached /ByteRange [";
+  const cabeca = `\n${num} 0 obj\n<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /adbe.pkcs7.detached /ByteRange [`;
   const meio = "] /Contents ";
-  const cauda = " >>\nendobj\n%%EOF\n";
   const b = original.length + cabeca.length + `0 ${n(0)} ${n(0)} ${n(0)}`.length + meio.length;
   const c = b + HEX + 2;
+  const fecho = " >>\nendobj\n";
+  const cauda = `${fecho}xref\n0 1\n0000000000 65535 f \n${num} 1\n${n(original.length + 1)} 00000 n \n`
+    + `trailer\n<< /Size ${num + 1} /Root ${ultimo(/\/Root\s+(\d+\s+\d+\s+R)/g)} /Prev ${ultimo(/startxref\s+(\d+)/g)} >>\n`
+    + `startxref\n${c + fecho.length}\n%%EOF\n`;
   const intervalo = `0 ${n(b)} ${n(c)} ${n(cauda.length)}`;
   const antes = Buffer.concat([original, Buffer.from(cabeca + intervalo + meio, "latin1")]);
   const depois = Buffer.from(cauda, "latin1");

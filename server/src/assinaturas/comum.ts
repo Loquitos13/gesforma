@@ -221,4 +221,5 @@ export const ROTULO_EVENTO: Record<string, string> = {
   drive: "PDF assinado guardado na Drive",
   drive_erro: "Não foi possível guardar na Drive",
   externo: "PDF assinado com CC/CMD recebido",
+  signatario_alterado: "Email ou NIF do signatário diferente do pedido anterior",
 };

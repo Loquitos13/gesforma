@@ -169,7 +169,11 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const lead = await linhaVisivel(db, "preinscricoes", v.body.preinscricaoId, req.actor!) ? await leadDaNota(db, v.body.preinscricaoId) : null;
     if (!lead) return reply.code(404).send({ error: "Pré-inscrição não encontrada." });
-    if (!podeVer(req.actor?.role, lead.regime === "fin" ? "fin" : "gold")) return reply.code(403).send({ error: "Sem acesso a esta equipa." });
+    const regimeLead: Regime = lead.regime === "fin" ? "fin" : "gold";
+    if (!podeVer(req.actor?.role, regimeLead)) return reply.code(403).send({ error: "Sem acesso a esta equipa." });
+    // A nota atribui o lead a :id: tem de ser alguém da equipa do regime do lead (o comercial, só a si).
+    if (req.actor!.role === "comercial" && v.params.id !== req.actor!.id) return reply.code(404).send({ error: "Pessoa não encontrada nesta equipa." });
+    if (!(await membroExiste(db, regimeLead, v.params.id))) return reply.code(404).send({ error: "Pessoa não encontrada nesta equipa." });
     await db.tx(q => registarNota(q, v.body.preinscricaoId, v.params.id, req.actor!.id, v.body.nota));
     await audit(db, req.actor!.id, "equipa.nota", "preinscricao", String(v.body.preinscricaoId), req.ip);
     await logLeadEvent(db, v.body.preinscricaoId, req.actor!.id, "nota", "Nota comercial", v.body.nota);
@@ -188,6 +192,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       }),
     }, req);
     if (!v) return;
+    const existe = (await membroExiste(db, "gold", v.params.id)) || (await membroExiste(db, "fin", v.params.id));
+    if (!existe) return reply.code(404).send({ error: "Pessoa não encontrada na equipa." });
     await gravarObjetivo(db, v.params.id, v.body);
     await audit(db, req.actor!.id, "equipa.objetivo", "user", v.params.id, req.ip, v.body);
     return { ok: true, ...v.body };

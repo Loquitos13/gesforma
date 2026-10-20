@@ -25,12 +25,12 @@ const SELECT = `
     FROM users u`;
 
 /** Lista com filtros de perfil, estado e pesquisa (nome/email) e contagens por perfil. */
-export async function listarUtilizadores(c: Consulta, f: { perfil?: string; estado?: "ativos" | "inativos"; q?: string; incluirFormandos?: boolean }) {
+export async function listarUtilizadores(c: Consulta, f: { perfil?: string; estado?: "ativos" | "inativos"; q?: string }) {
   const w = new Filtros();
   w.add("u.role = ?", f.perfil);
   if (f.estado === "ativos") w.sempre("u.active = true");
   if (f.estado === "inativos") w.sempre("u.active = false");
-  if (!f.incluirFormandos && f.perfil !== "formando") w.sempre("u.role <> 'formando'");
+  if (f.perfil !== "formando") w.sempre("u.role <> 'formando'");
   const p = padraoPesquisa(f.q);
   w.add("(u.name ILIKE ? OR u.email ILIKE ?)", p, p);
   const linhas = await many<LinhaUtilizador>(c, `${SELECT} ${w.where} ORDER BY u.active DESC, u.name ASC LIMIT 500`, w.params);
@@ -103,13 +103,20 @@ export function hashDaPalavraPasse(c: Consulta, id: string) {
   return valor<string>(c, "SELECT password_hash FROM users WHERE id = $1", [id]);
 }
 
-export async function contarAdminsAtivos(c: Consulta, excepto?: string) {
-  const n = await valor<number>(
-    c,
-    "SELECT count(*)::int FROM users WHERE role = 'admin' AND active = true AND ($1::uuid IS NULL OR id <> $1::uuid)",
-    [excepto ?? null],
-  );
-  return Number(n ?? 0);
+/**
+ * Ids dos admins activos, com as linhas bloqueadas até ao fim da transacção: duas alterações em simultâneo
+ * (cada uma a tirar um admin diferente) esperam uma pela outra e a segunda já conta sem o primeiro.
+ * Chamar dentro de `db.tx`, antes da escrita.
+ */
+export async function adminsAtivosBloqueados(c: Consulta) {
+  const admins = await many<{ id: string }>(c, "SELECT id::text AS id FROM users WHERE role = 'admin' AND active = true FOR UPDATE");
+  return admins.map(a => a.id);
+}
+
+/** Tirar `id` de admin activo deixaria a base sem nenhum? (dentro de `db.tx`) */
+export async function eUltimoAdmin(c: Consulta, id: string) {
+  const admins = await adminsAtivosBloqueados(c);
+  return admins.includes(id) && admins.length === 1;
 }
 
 export function eViolacaoUnica(err: unknown) {

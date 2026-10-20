@@ -11,7 +11,6 @@ export const regras: Regra[] = [
   ["*", "/v1/auth/microsoft/config", ADMIN],
   ["*", "/v1/auth/microsoft/disconnect", ADMIN],
   ["*", "/v1/settings/smtp*", ADMIN],
-  ["*", "/v1/users*", ADMIN],
   ["PUT", "/v1/settings/:id", SECRETARIA],
   ["GET", "/v1/settings", EQUIPA],
   ["POST", "/v1/site/hero/:slot/imagem", ADMIN],

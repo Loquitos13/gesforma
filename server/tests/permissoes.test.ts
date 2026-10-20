@@ -5,7 +5,7 @@ import { arrancar, pedido } from "./helpers.js";
 
 describe("matriz de permissões", () => {
   it("integrações e utilizadores só para admin", () => {
-    for (const [m, p] of [["PUT", "/v1/drive/config"], ["PUT", "/v1/crm/whatsapp/config"], ["POST", "/v1/users"], ["PUT", "/v1/settings/smtp"]] as const) {
+    for (const [m, p] of [["PUT", "/v1/drive/config"], ["PUT", "/v1/crm/whatsapp/config"], ["POST", "/v1/utilizadores"], ["PUT", "/v1/settings/smtp"]] as const) {
       expect(podeAceder("admin", m, p)).toBe(true);
       for (const r of ["secretaria", "comercial", "financiada", "formador"]) expect(podeAceder(r, m, p)).toBe(false);
     }

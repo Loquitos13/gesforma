@@ -5,13 +5,15 @@ import { ID_AVALIACOES_GOOGLE } from "../avaliacoesGoogle.js";
 import { guardarImagemHero } from "../cursoImagens.js";
 import { normalizarLembrete } from "../lembretePre.js";
 import { ehSegredo, settingsSemSegredos } from "../opsVisibilidade.js";
-import { DEFINICOES_SO_ADMIN, lerEntidadePublica, validarDefinicoes } from "../regrasConfig.js";
+import { DEFINICOES_SO_ADMIN, MAX_TELEFONES_ZONA, lerEntidadePublica, validarDefinicoes } from "../regrasConfig.js";
 import * as settings from "../repos/settings.js";
 import { validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
 
 const idDefinicao = z.object({ id: z.string().trim().min(1).max(40).regex(/^[a-z][a-z0-9_]*$/, "definição inválida") });
-const settingsSchema = z.object({ values: z.record(z.string().max(400)) });
+/** Cada valor até 400 caracteres; os telefones por zona são várias linhas (limites em regrasConfig.ts). */
+const settingsSchema = z.object({ values: z.record(z.string().max(MAX_TELEFONES_ZONA)) })
+  .refine(b => Object.entries(b.values).every(([k, v]) => k === "telefonesZona" || v.length <= 400));
 const siteSchema = z.object({ values: z.record(z.string().max(800)) });
 const slotParam = z.object({ slot: z.enum(["1", "2", "fundo", "apresentacao"]) });
 

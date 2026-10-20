@@ -66,7 +66,7 @@ export const REGRAS: Regra[] = [
 
 /** Áreas que o formador nunca lê. */
 const FORMADOR_SEM_LEITURA = [
-  "/v1/crm*", "/v1/dashboard*", "/v1/settings*", "/v1/users*", "/v1/email*", "/v1/equipa*",
+  "/v1/crm*", "/v1/dashboard*", "/v1/settings*", "/v1/email*", "/v1/equipa*",
   "/v1/dtp*", "/v1/alertas*", "/v1/turma-regras*", "/v1/drive/status", "/v1/pagamentos*",
   "/v1/formandos/*", "/v1/inqueritos/*",
   "/v1/turmas/:regime/:id/dossie/*", "/v1/turmas/:regime/:id/relatorio-*", "/v1/turmas/:regime/:id/inqueritos/*",

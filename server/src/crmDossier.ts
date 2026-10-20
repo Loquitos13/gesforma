@@ -1,5 +1,5 @@
 import type { Db } from "./db/pool.js";
-import type { AtorCrm } from "./repos/sql.js";
+import type { AtorCrm, Consulta } from "./repos/sql.js";
 import { documentosUrl, docsDoCurso, docsCompletos, ensureDocsToken, listarDocsLead } from "./docsLink.js";
 import { faltaPedirPagamento, faltaValidarPreinscricao, situacaoPagamento } from "./docsCurso.js";
 import { mapPagamento, mapPreinscricao } from "./ops.js";
@@ -39,7 +39,7 @@ function iso(v: string | Date | null | undefined) {
 }
 
 export async function logLeadEvent(
-  db: Db,
+  db: Consulta,
   leadId: number,
   actorId: string | undefined,
   tipo: string,

@@ -127,15 +127,19 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       valor = valor || t.valor;
       corpo = corpo || t.corpo;
     }
-    const id = await criarProposta(db, {
-      comercialId: v.params.id, clienteId: d.clienteId, preinscricaoId: d.preinscricaoId, clienteNome: d.clienteNome,
-      clienteEmail: d.clienteEmail, curso, valor, estado: d.estado, respostaCliente: d.respostaCliente, notas: d.notas,
-      corpo, templateId: d.templateId, regime: d.regime,
+    // Proposta, dono da pré-inscrição e evento no dossiê: tudo ou nada.
+    const id = await db.tx(async q => {
+      const nova = await criarProposta(q, {
+        comercialId: v.params.id, clienteId: d.clienteId, preinscricaoId: d.preinscricaoId, clienteNome: d.clienteNome,
+        clienteEmail: d.clienteEmail, curso, valor, estado: d.estado, respostaCliente: d.respostaCliente, notas: d.notas,
+        corpo, templateId: d.templateId, regime: d.regime,
+      });
+      if (d.preinscricaoId) {
+        await atribuirLead(q, d.preinscricaoId, v.params.id);
+        await logLeadEvent(q, d.preinscricaoId, req.actor!.id, "proposta", `Proposta ${d.estado}`, `${curso} · € ${valor}`);
+      }
+      return nova;
     });
-    if (d.preinscricaoId) {
-      await atribuirLead(db, d.preinscricaoId, v.params.id);
-      await logLeadEvent(db, d.preinscricaoId, req.actor!.id, "proposta", `Proposta ${d.estado}`, `${curso} · € ${valor}`);
-    }
     await audit(db, req.actor!.id, "proposta.create", "proposta", String(id), req.ip, { comercialId: v.params.id });
     return { proposta: await obterProposta(db, id) };
   });

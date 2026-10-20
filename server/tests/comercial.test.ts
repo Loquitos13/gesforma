@@ -219,7 +219,7 @@ describe("Campanhas por email aos pré-inscritos parados", () => {
 
     const job = await ctx.db.query<{ body_html: string; subject: string }>(
       `SELECT j.body_html, j.subject FROM email_jobs j JOIN automation_events e ON e.id = j.event_id
-        WHERE e.idempotency_key = $1`, [`campanha:${env.json().envioId}:${certo}`]);
+        WHERE e.payload->>'preinscricaoId' = $1 AND e.type = 'campanha.preinscritos'`, [String(certo)]);
     expect(job.rows).toHaveLength(1);
     expect(job.rows[0]!.subject).toContain(curso);
     expect(job.rows[0]!.body_html).toContain(`/cronograma/gold/${turmaId}`);

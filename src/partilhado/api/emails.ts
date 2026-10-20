@@ -46,7 +46,7 @@ export type ModeloEmail = {
 };
 
 export type EnvioEmail = {
-  id: string; para: string; nome: string; assunto: string; estado: "queued" | "sent" | "failed" | "cancelled";
+  id: string; para: string; nome: string; assunto: string; estado: "queued" | "sending" | "sent" | "failed" | "cancelled";
   agendado: string; enviado: string | null; aberto: string | null; erro: string | null; regra: string; regra_id: number;
   tentativas: number; teste: boolean;
 };

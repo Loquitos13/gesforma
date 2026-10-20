@@ -65,7 +65,7 @@ export function listarRegras(c: Consulta) {
                 count(*) FILTER (WHERE status = 'sent') AS envios,
                 count(*) FILTER (WHERE status = 'sent' AND opened_at IS NOT NULL) AS abertos,
                 count(*) FILTER (WHERE status = 'failed') AS falhados,
-                count(*) FILTER (WHERE status = 'queued') AS em_fila,
+                count(*) FILTER (WHERE status IN ('queued', 'sending')) AS em_fila,
                 max(sent_at)::text AS ultimo_envio
            FROM email_jobs
           WHERE COALESCE(payload->>'teste', '') <> 'true'
@@ -143,35 +143,71 @@ export async function registarEvento(c: Consulta, id: string, tipo: string, chav
 
 export async function porNaFila(c: Consulta, j: {
   id: string; regraId: number; eventoId: string; para: string; nome: string; assunto: string; texto: string; html: string;
-  quando: string; payload: unknown; estado?: "queued";
+  quando: string; payload: unknown; estado?: "queued" | "sending";
 }) {
+  // «sending»: quem põe na fila envia já (o teste da regra); a fila não lhe toca.
   const r = await one<{ id: string }>(
     c,
-    `INSERT INTO email_jobs (id, rule_id, event_id, to_email, to_name, subject, body_text, body_html, scheduled_at, payload)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
+    `INSERT INTO email_jobs (id, rule_id, event_id, to_email, to_name, subject, body_text, body_html, scheduled_at, payload, status, claimed_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, CASE WHEN $11 = 'sending' THEN now() END)
      ON CONFLICT (rule_id, event_id) DO NOTHING RETURNING id`,
-    [j.id, j.regraId, j.eventoId, j.para, j.nome, j.assunto, j.texto, j.html, j.quando, JSON.stringify(j.payload)],
+    [j.id, j.regraId, j.eventoId, j.para, j.nome, j.assunto, j.texto, j.html, j.quando, JSON.stringify(j.payload), j.estado ?? "queued"],
   );
   return Boolean(r);
 }
 
-export function envioPendentes(c: Consulta, limite: number) {
-  return many<{ id: string; to_email: string; to_name: string; subject: string; body_text: string; body_html: string; attempts: number }>(
+export type EnvioReservado = { id: string; to_email: string; to_name: string; subject: string; body_text: string; body_html: string; attempts: number };
+
+/**
+ * Reserva até `limite` envios vencidos numa só instrução (passam a «sending»). Dois processos a correr
+ * ao mesmo tempo nunca ficam com o mesmo envio: as linhas já trancadas por outro são saltadas.
+ */
+export function reservarPendentes(c: Consulta, limite: number) {
+  return many<EnvioReservado>(
     c,
-    `SELECT id, to_email, to_name, subject, body_text, body_html, attempts FROM email_jobs
-      WHERE status = 'queued' AND scheduled_at <= now() ORDER BY scheduled_at LIMIT $1`,
+    `UPDATE email_jobs SET status = 'sending', claimed_at = now()
+      WHERE id IN (SELECT id FROM email_jobs WHERE status = 'queued' AND scheduled_at <= now()
+                    ORDER BY scheduled_at LIMIT $1 FOR UPDATE SKIP LOCKED)
+        AND status = 'queued'
+      RETURNING id, to_email, to_name, subject, body_text, body_html, attempts`,
     [limite],
   );
 }
 
+/** Reservas que não chegaram a sair (o tempo do cron acabou): voltam à fila tal como estavam. */
+export async function devolverReservas(c: Consulta, ids: string[]) {
+  if (!ids.length) return;
+  await many(c, "UPDATE email_jobs SET status = 'queued', claimed_at = NULL WHERE id = ANY($1::uuid[]) AND status = 'sending'", [pgTextArray(ids)]);
+}
+
+/**
+ * Envios presos em «sending» há mais de `minutos` (a função morreu a meio, p.ex. no limite de tempo da Vercel).
+ * Não se sabe se o email saiu, por isso não voltam sozinhos à fila: ficam falhados, para a secretaria rever e reenviar.
+ */
+export function libertarReservasPresas(c: Consulta, minutos: number) {
+  return many<{ id: string }>(
+    c,
+    `UPDATE email_jobs SET status = 'failed', attempts = attempts + 1,
+            last_error = 'Envio interrompido a meio: confirme se o email chegou antes de reenviar.'
+      WHERE status = 'sending' AND claimed_at < now() - make_interval(mins => $1::int)
+      RETURNING id`,
+    [minutos],
+  );
+}
+
 export async function marcarEnviado(c: Consulta, id: string, nota: string | null = null) {
-  await one(c, "UPDATE email_jobs SET status = 'sent', sent_at = now(), attempts = attempts + 1, last_error = $2 WHERE id = $1", [id, nota]);
+  await one(
+    c,
+    "UPDATE email_jobs SET status = 'sent', sent_at = now(), claimed_at = NULL, attempts = attempts + 1, last_error = $2 WHERE id = $1",
+    [id, nota],
+  );
 }
 
 export async function marcarFalha(c: Consulta, id: string, definitivo: boolean, erro: string) {
   await one(
     c,
-    "UPDATE email_jobs SET status = $2, attempts = attempts + 1, last_error = $3, scheduled_at = now() + interval '2 minutes' WHERE id = $1",
+    `UPDATE email_jobs SET status = $2, claimed_at = NULL, attempts = attempts + 1, last_error = $3,
+            scheduled_at = now() + interval '2 minutes' WHERE id = $1`,
     [id, definitivo ? "failed" : "queued", erro],
   );
 }
@@ -199,7 +235,7 @@ export function estatisticasEnvios30Dias(c: Consulta) {
   return one<{ sent: number; queued: number; failed: number; abertos: number }>(
     c,
     `SELECT count(*) FILTER (WHERE status = 'sent')::int AS sent,
-            count(*) FILTER (WHERE status = 'queued')::int AS queued,
+            count(*) FILTER (WHERE status IN ('queued', 'sending'))::int AS queued,
             count(*) FILTER (WHERE status = 'failed')::int AS failed,
             count(*) FILTER (WHERE status = 'sent' AND opened_at IS NOT NULL)::int AS abertos
        FROM email_jobs
@@ -252,6 +288,11 @@ export async function destinatarioConhecido(c: Consulta, email: string) {
      UNION ALL SELECT 1 FROM users WHERE lower(email) = $1 LIMIT 1`,
     [email],
   ));
+}
+
+/** Email da pré-inscrição (null se não existe). */
+export async function emailDaPreinscricao(c: Consulta, id: number) {
+  return (await one<{ email: string }>(c, "SELECT email FROM preinscricoes WHERE id = $1", [id]))?.email ?? null;
 }
 
 /** Dados reais para pré-visualizar e testar: a pré-inscrição e a turma activa mais recentes. */

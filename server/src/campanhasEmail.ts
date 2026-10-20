@@ -7,6 +7,7 @@ import { flushQueuedJobs, ingestEvent } from "./automations.js";
 import { config } from "./config.js";
 import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
+import { hojeLisboa } from "./datas.js";
 import { docsDoCurso } from "./docsCurso.js";
 import { documentosUrl, ensureDocsToken, listarDocsLead } from "./docsLink.js";
 import { fmtDataPt, listOfertaFin, listOfertaGold, type OfertaTurma } from "./ofertaGold.js";
@@ -65,6 +66,11 @@ function cronogramasDe(oferta: OfertaTurma[], curso: string) {
 
 export class CampanhaErro extends Error {}
 
+/** Chave de idempotência do email de campanha: estável para a mesma pré-inscrição, email e dia. */
+export function chaveCampanha(leadId: number, email: string, dia: string) {
+  return `campanha:${leadId}:${email}:${dia}`;
+}
+
 /** Põe os emails na fila (o cron envia-os) e regista o envio e um contacto em cada pré-inscrição. */
 export async function enviarCampanha(db: Db, actorId: string, p: { ids: number[]; campanhaId: number | null; criterios: Criterios }) {
   if (p.campanhaId && !(await repo.existeCampanha(db, p.campanhaId))) throw new CampanhaErro("Campanha não encontrada.");
@@ -76,6 +82,9 @@ export async function enviarCampanha(db: Db, actorId: string, p: { ids: number[]
     campanhaId: p.campanhaId, assunto: "Campanha aos pré-inscritos", criterios: p.criterios, total: alvo.length, actorId,
   });
   let postos = 0;
+  // Uma campanha por pré-inscrição e email em cada dia (de Lisboa): um duplo clique ou uma repetição do pedido
+  // cria outro registo de envio, mas não volta a pôr o email na fila nem a registar o contacto.
+  const dia = hojeLisboa();
   for (const c of alvo) {
     const email = normalizeEmail(c.email);
     if (!isEmail(email)) { await repo.registarDestino(db, envioId, c.id, false, "email inválido"); continue; }
@@ -84,7 +93,8 @@ export async function enviarCampanha(db: Db, actorId: string, p: { ids: number[]
       const r = await ingestEvent(db, "campanha.preinscritos", {
         email, nome: c.nome, curso: c.curso, preinscricaoId: c.id, documentos_url: url,
         documentos_em_falta_itens: c.docsEmFalta, cronogramas_itens: cronogramasDe(c.regime === "fin" ? fin : gold, c.curso),
-      }, `campanha:${envioId}:${c.id}`);
+      }, chaveCampanha(c.id, email, dia));
+      if (r.duplicate) { await repo.registarDestino(db, envioId, c.id, false, "já recebeu esta campanha hoje"); continue; }
       if (!r.queued) { await repo.registarDestino(db, envioId, c.id, false, "regra «Campanha aos pré-inscritos» desligada"); continue; }
       await repo.registarDestino(db, envioId, c.id, true);
       const nota = `Campanha por email${p.campanhaId ? ` (campanha #${p.campanhaId})` : ""} · ${c.motivo}`.slice(0, 1000);

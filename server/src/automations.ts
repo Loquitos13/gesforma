@@ -7,8 +7,9 @@ import { lerEntidade } from "./regrasConfig.js";
 import { config } from "./config.js";
 import { sendMail } from "./mailer.js";
 import {
-  avancarEstadoLead, envioPendentes, exemploReal, formandosDaTurma, leadsParados, marcarEnviado, marcarFalha,
-  porNaFila, regraComModelo, regrasActivasPara, registarEvento, turmasQueComecam, type RegraComModelo,
+  avancarEstadoLead, devolverReservas, exemploReal, formandosDaTurma, leadsParados, libertarReservasPresas, marcarEnviado,
+  marcarFalha, porNaFila, regraComModelo, regrasActivasPara, registarEvento, reservarPendentes, turmasQueComecam,
+  type EnvioReservado, type RegraComModelo,
 } from "./repos/emails.js";
 import { CRM_ESTADO_RANK, crmEstadoFromEvent, EVENT_ALIASES, fillVars, isEmail, normalizeEmail, sanitizeHeader, sanitizeText } from "./security.js";
 
@@ -136,32 +137,63 @@ async function enqueueTurmaReminders(db: Db) {
   }
 }
 
-export async function flushQueuedJobs(db: Db, limit = 20) {
-  const due = await envioPendentes(db, limit);
-  let sent = 0;
-  let failed = 0;
-  for (const job of due) {
-    try {
-      const pixel = `${origem()}/api/v1/email/open/${job.id}.gif`;
-      const html = job.body_html?.includes("<a ")
-        ? job.body_html
-        : job.body_text.split("\n").map(l => (l ? `<p>${l.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>` : "<br>")).join("")
-          + `<img src="${pixel}" width="1" height="1" alt="" />`;
-      await sendMail(db, { to: job.to_email, name: job.to_name, subject: job.subject, text: job.body_text, html });
-      await marcarEnviado(db, job.id);
-      sent += 1;
-    } catch (err) {
-      await marcarFalha(db, job.id, job.attempts + 1 >= 5, err instanceof Error ? err.message.slice(0, 400) : "falha no envio");
-      failed += 1;
-    }
+/** Minutos em «sending» a partir dos quais um envio se dá por interrompido (a função da Vercel dura no máximo 30 s). */
+const RESERVA_PRESA_MIN = 10;
+
+async function enviarReservado(db: Db, job: EnvioReservado) {
+  try {
+    const pixel = `${origem()}/api/v1/email/open/${job.id}.gif`;
+    const html = job.body_html?.includes("<a ")
+      ? job.body_html
+      : job.body_text.split("\n").map(l => (l ? `<p>${l.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>` : "<br>")).join("")
+        + `<img src="${pixel}" width="1" height="1" alt="" />`;
+    await sendMail(db, { to: job.to_email, name: job.to_name, subject: job.subject, text: job.body_text, html });
+    await marcarEnviado(db, job.id);
+    return true;
+  } catch (err) {
+    await marcarFalha(db, job.id, job.attempts + 1 >= 5, err instanceof Error ? err.message.slice(0, 400) : "falha no envio");
+    return false;
   }
-  return { picked: due.length, sent, failed };
 }
 
-export async function processDueJobs(db: Db, limit = 20) {
+/**
+ * Envia a fila vencida. Cada envio é reservado antes de sair (ver `reservarPendentes`), por isso o cron,
+ * o fim de um evento e uma pré-inscrição pública podem correr ao mesmo tempo sem duplicar emails.
+ * Sem `orcamentoMs`, um lote de `limit`; com ele, lotes de `limit` até a fila esvaziar ou o tempo acabar
+ * (o que ficou reservado e não saiu volta à fila).
+ */
+export async function flushQueuedJobs(db: Db, limit = 20, orcamentoMs = 0) {
+  const fim = orcamentoMs > 0 ? Date.now() + orcamentoMs : 0;
+  let picked = 0;
+  let sent = 0;
+  let failed = 0;
+  for (;;) {
+    const lote = await reservarPendentes(db, limit);
+    picked += lote.length;
+    for (let i = 0; i < lote.length; i++) {
+      if (fim && Date.now() >= fim) {
+        await devolverReservas(db, lote.slice(i).map(j => j.id));
+        picked -= lote.length - i;
+        return { picked, sent, failed };
+      }
+      if (await enviarReservado(db, lote[i]!)) sent += 1;
+      else failed += 1;
+    }
+    if (!fim || lote.length < limit || Date.now() >= fim) break;
+  }
+  return { picked, sent, failed };
+}
+
+/**
+ * Lembretes (turma a começar, leads parados) e depois a fila. `orcamentoMs` limita o tempo de envio
+ * (o cron da Vercel usa ~20 s); sem ele, um lote de 20 como antes.
+ */
+export async function processDueJobs(db: Db, orcamentoMs = 0) {
   await enqueueTurmaReminders(db).catch(() => undefined);
   await enqueueCrmReminders(db).catch(() => undefined);
-  return flushQueuedJobs(db, limit);
+  const interrompidos = await libertarReservasPresas(db, RESERVA_PRESA_MIN).catch(() => []);
+  const r = orcamentoMs > 0 ? await flushQueuedJobs(db, 10, orcamentoMs) : await flushQueuedJobs(db, 20);
+  return { ...r, interrompidos: interrompidos.length };
 }
 
 /**
@@ -209,6 +241,7 @@ export async function sendRuleTest(db: Db, ruleId: number, to: { email: string; 
   await porNaFila(db, {
     id: jobId, regraId: regra.id, eventoId: eventId, para: email, nome, assunto: subject, texto: body,
     html: mail.html.slice(0, 20000), quando: new Date().toISOString(), payload: { teste: true, ruleId: regra.id },
+    estado: "sending",
   });
   try {
     const mailId = await sendMail(db, { to: email, name: nome, subject, text: body, html: mail.html });

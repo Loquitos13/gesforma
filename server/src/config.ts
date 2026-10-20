@@ -189,7 +189,11 @@ export function avisosConfiguracao(): AvisoConfiguracao[] {
     out.push({ variavel: "APP_ORIGIN", nivel: "medio", mensagem: `Não definida: a origem é deduzida (${config.appOrigin}). Defina o endereço público do GesForma.` });
   }
   if (!config.cronSecret) {
-    out.push({ variavel: "CRON_SECRET", nivel: "medio", mensagem: "Não definida: as tarefas agendadas só correm pelo cron da Vercel." });
+    out.push({
+      variavel: "CRON_SECRET",
+      nivel: onVercel ? "alto" : "medio",
+      mensagem: "Não definida: o cron /api/v1/cron/email é recusado (503) e na Vercel a fila de emails e os lembretes não correm.",
+    });
   }
   if (process.env.SEED_DEMO === "1" && (isProd || onVercel)) {
     out.push({ variavel: "SEED_DEMO", nivel: "alto", mensagem: "Activa em produção: cria contas de demonstração com palavra-passe conhecida." });

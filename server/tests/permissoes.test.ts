@@ -120,9 +120,9 @@ describe("API por perfil", () => {
     expect(f.statusCode).toBe(403);
   });
 
-  it("cron sem segredo é recusado fora do Vercel", async () => {
+  it("cron sem CRON_SECRET é recusado, mesmo com o cabeçalho do Vercel", async () => {
     const ctx = await arrancar();
     const res = await ctx.app.inject({ method: "GET", url: "/v1/cron/email", headers: { "x-vercel-cron": "1" } });
-    expect(res.statusCode).toBe(401);
+    expect(res.statusCode).toBe(503);
   });
 });

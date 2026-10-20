@@ -7,7 +7,7 @@ import { z } from "zod";
 import { listarCatalogoPublico } from "../catalogoPublico.js";
 import { lerImagemPorToken, tokenImagem } from "../cursoImagens.js";
 import { listCursosGoldActivos, listCursosOferta, listOfertaFin, listOfertaGold } from "../ofertaGold.js";
-import { criarPreinscricaoPublica } from "../preinscricaoPublica.js";
+import { criarPreinscricaoPublica, precoDaPreinscricaoPublica } from "../preinscricaoPublica.js";
 import { validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
 
@@ -54,6 +54,21 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     return { cursos, turmas: [...gold, ...fin] };
   });
 
+  // O preço calcula-se no servidor, com a mesma regra que a pré-inscrição grava (o site não o recalcula).
+  app.get("/v1/public/oferta/preco", async (req, reply) => {
+    const v = validar(reply, {
+      query: z.object({
+        curso: z.string().trim().max(200).optional().default(""),
+        local: z.string().trim().max(120).optional().default(""),
+        horario: z.string().trim().max(80).optional().default(""),
+        regime: z.enum(["gold", "fin"]).optional(),
+      }),
+    }, req);
+    if (!v) return;
+    if (v.query.regime === "fin" || !v.query.curso) return { preco: null };
+    return { preco: await precoDaPreinscricaoPublica(db, v.query.curso, v.query.local, v.query.horario) };
+  });
+
   app.post("/v1/public/preinscricoes", {
     config: { rateLimit: { max: 8, timeWindow: "1 minute" } },
   }, async (req, reply) => {
@@ -81,10 +96,12 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       consentimento: d.consentimento,
     }, { ip: req.ip });
     if ("error" in created) {
-      const code = created.error === "a turma escolhida já não está libertada" ? 409 : 400;
+      const code = created.error === "a turma escolhida já não está libertada" ? 409
+        : created.error === "demasiados pedidos: tente mais tarde" ? 429 : 400;
       return reply.code(code).send({ error: created.error });
     }
     await audit(db, undefined, "preinscricao.public_create", "preinscricao", String(created.preinscricao.id), req.ip, { curso: d.curso, duplicado: created.duplicado });
-    return { preinscricao: created.preinscricao, aviso: created.aviso, duplicado: created.duplicado };
+    // Sem id, referência nem «duplicado»: a resposta é a mesma quer o email já tivesse pedido, quer não.
+    return { ok: true, aviso: created.aviso };
   });
 }

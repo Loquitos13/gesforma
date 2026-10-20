@@ -116,7 +116,8 @@ describe("pré-inscrição pública", () => {
     });
     const rs = await Promise.all([enviar(1), enviar(2), enviar(3)]);
     for (const r of rs) expect(r.statusCode, r.body).toBe(200);
-    expect(rs.filter(r => r.json().duplicado === false)).toHaveLength(1);
+    // As três respostas são iguais (o formulário não revela qual criou o pedido).
+    expect(new Set(rs.map(r => r.body)).size).toBe(1);
     const n = await ctx.db.query<{ n: number }>("SELECT count(*)::int AS n FROM preinscricoes WHERE lower(email) = $1 AND curso = $2", [email, curso]);
     expect(n.rows[0]!.n).toBe(1);
   });

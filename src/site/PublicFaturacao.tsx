@@ -79,7 +79,7 @@ export function PublicFaturacao({ token }: { token: string }) {
             <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[#ffa900]">Dados recebidos</p>
             <h1 className="mt-4 text-2xl font-semibold text-slate-900">Obrigado.</h1>
             <p className="mt-3 text-sm text-slate-600 leading-relaxed">
-              A fatura vai ser emitida com estes dados e enviada para {dados.email}. Se precisar de corrigir alguma coisa, volte a abrir esta ligação.
+              A fatura vai ser emitida com estes dados e enviada para {dados.email}. Se precisar de corrigir alguma coisa, peça uma nova ligação à secretaria.
             </p>
           </div>
         ) : (

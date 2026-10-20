@@ -43,7 +43,7 @@ async function criarFormandoGoldDoLead(db: Db, lead: Record<string, unknown>, tu
   await db.tx(async q => {
     await garantirVaga(q, "gold", turmaId, { email });
     await inserirFormandoGoldPago(q, {
-      id, nome: String(lead.nome ?? ""), apelido: String(lead.apelido ?? ""), telf: pii.telf || telf, email, inscrito: nowStamp(),
+      id, nome: String(lead.nome ?? ""), apelido: String(lead.apelido ?? ""), telf: pii.telf, email, inscrito: nowStamp(),
       local: t.local, curso: t.curso, turma: t.nome, turmaId, valor: pagamento.valor,
       metodo: pagamento.metodo || "Transferência bancária", piiEnc: pii.pii_enc ?? "", publicId: newPublicId(),
     });
@@ -102,6 +102,11 @@ export async function aposPagamentoConfirmado(db: Db, pagamentoId: string, actor
   const email = normalizeEmail(String(lead.email ?? ""));
   if (!isEmail(email)) return null;
   try {
+    // A ficha nasce na turma cujo preço foi pedido; outra turma só a secretaria a escolhe (e aí a turma paga acompanha).
+    const turmaPaga = Number(lead.pagamento_turma_id || 0);
+    if (turmaPaga && turmaPaga !== Number(lead.turma_escolhida_id || 0)) {
+      throw new PercursoErro("A turma mudou depois de o pagamento ser pedido: a secretaria tem de confirmar a turma e o valor antes de concluir.");
+    }
     if (!lead.validada_em) await validarPreinscricao(db, leadId, actorId);
     const turmaId = Number(lead.turma_escolhida_id || 0);
     if (!turmaId) throw new PercursoErro("A pré-inscrição não tem turma escolhida.");

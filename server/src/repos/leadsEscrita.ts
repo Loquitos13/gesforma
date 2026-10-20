@@ -35,8 +35,12 @@ export async function bloquearPedido(c: Consulta, email: string, curso: string) 
 
 /** Pedido aberto (não validado, nem desistência, nem formando) do mesmo email para o mesmo curso. */
 export async function pedidoAberto(c: Consulta, email: string, curso: string) {
-  return one<{ id: number; nome: string; apelido: string; curso: string; public_id: string; regime: string; ligacao_reenviada_em: unknown }>(c,
-    `SELECT id, nome, apelido, curso, public_id, regime, ligacao_reenviada_em FROM preinscricoes
+  return one<{
+    id: number; nome: string; apelido: string; curso: string; public_id: string; regime: string; ligacao_reenviada_em: unknown;
+    estado: string; validada_em: unknown; docs_token_usado_em: unknown; docs_token_criado_em: unknown; created_at: unknown;
+  }>(c,
+    `SELECT id, nome, apelido, curso, public_id, regime, ligacao_reenviada_em,
+            estado, validada_em, docs_token_usado_em, docs_token_criado_em, created_at FROM preinscricoes
       WHERE lower(email) = $1 AND lower(trim(curso)) = lower(trim($2))
         AND validada_em IS NULL AND estado NOT IN ('Desistiu', 'Formando')
       ORDER BY id DESC LIMIT 1`,
@@ -77,6 +81,8 @@ export type NovoLead = {
   moradaFiscal?: string;
   codigoPostal?: string;
   consentimento?: { ip: string; versao: string } | null;
+  /** Notas para a equipa (ex.: o texto livre de um pedido fora da oferta). */
+  notas?: string;
 };
 
 export async function inserirLead(c: Consulta, l: NovoLead) {
@@ -84,14 +90,14 @@ export async function inserirLead(c: Consulta, l: NovoLead) {
     `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado,
                                 campanha, campanha_id, origem, entrada, meio_contacto, horario, turma_id, pagamento_metodo, regime,
                                 pii_enc, public_id, comercial_id, etiqueta_id, nif, morada_fiscal, codigo_postal,
-                                consentimento_em, consentimento_ip, consentimento_versao)
+                                consentimento_em, consentimento_ip, consentimento_versao, notas)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,
-             CASE WHEN $29 THEN now() ELSE NULL END, $30, $31)`,
+             CASE WHEN $29 THEN now() ELSE NULL END, $30, $31, $32)`,
     [
       l.id, l.inscrito, l.nome, l.apelido, l.email, l.telf, l.inicioCurso, l.concelho, l.local, l.curso, l.preco, l.estado,
       l.campanha, l.campanhaId, l.origem, l.entrada, l.meioContacto, l.horario, l.turmaId, l.pagamentoMetodo, l.regime,
       l.piiEnc, l.publicId, l.comercialId ?? null, l.etiquetaId ?? null, l.nif ?? "", l.moradaFiscal ?? "", l.codigoPostal ?? "",
-      Boolean(l.consentimento), l.consentimento?.ip ?? "", l.consentimento?.versao ?? "",
+      Boolean(l.consentimento), l.consentimento?.ip ?? "", l.consentimento?.versao ?? "", l.notas ?? "",
     ]);
 }
 

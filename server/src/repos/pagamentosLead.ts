@@ -49,8 +49,12 @@ export async function alinharPreco(c: Consulta, leadId: number, preco: number) {
   await many(c, "UPDATE preinscricoes SET preco = $2 WHERE id = $1", [leadId, preco]);
 }
 
+/** Marca o pedido e fixa a turma cujo preço foi pedido (a inscrição paga conclui nessa turma). */
 export async function marcarPagamentoPedido(c: Consulta, leadId: number) {
-  await many(c, "UPDATE preinscricoes SET pagamento_pedido_em = now(), ultima_actividade_em = now() WHERE id = $1", [leadId]);
+  await many(c,
+    `UPDATE preinscricoes SET pagamento_pedido_em = now(), ultima_actividade_em = now(),
+       pagamento_turma_id = COALESCE(turma_escolhida_id, pagamento_turma_id)
+     WHERE id = $1`, [leadId]);
 }
 
 export async function marcarLeadPago(c: Consulta, leadId: number) {

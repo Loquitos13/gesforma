@@ -5,12 +5,13 @@ import { textoDoCorpo } from "../../src/partilhado/blogBlocos.js";
 import { gerarPalavraPasse, mensagemPalavraPasse, palavraPasseValida } from "../../src/partilhado/passwordPolicy.js";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
+import { dentroDoLimite } from "./limitePedidos.js";
 import { sendMail } from "./mailer.js";
-import { readFormandoPii } from "./pii.js";
+import { readFormandoPii, writeFormandoPiiPatch } from "./pii.js";
 import {
   atualizarDadosDoUtilizador, certificadosDe, contaPorEmail, criarContaFormando, cronogramaDaTurma, definirPalavraPasseFormando,
   docsGoldValidados, formandoParaAcesso, gravarPrefs, guardarPedidoReposicao, inscricoesFinDoUtilizador, inscricoesGoldDoUtilizador,
-  ligarFichasPeloEmail, pagamentosDoUtilizador, pedidoReposicaoValido, prefsDoUtilizador, reporContaFormando, respostasDeInqueritos,
+  gravarTelefoneDaFicha, ligarFichasPeloEmail, pagamentosDoUtilizador, pedidoReposicaoValido, prefsDoUtilizador, reporContaFormando, respostasDeInqueritos,
 } from "./repos/areaFormando.js";
 import { hashPassword, isEmail, normalizeEmail, sha256 } from "./security.js";
 import { vistaDocumentosFormandoFin } from "./formandoFinDocs.js";
@@ -147,8 +148,18 @@ async function mediaInqueritos(db: Db) {
   return { nota: `${media.toFixed(1).replace(".", ",")}/5`, n: nums.length };
 }
 
+/** A média lê todas as respostas: o site pede-a em cada visita, por isso calcula-se no máximo a cada 10 minutos por instância. */
+const SATISFACAO_TTL_MS = 10 * 60_000;
+let satisfacaoCache: { em: number; valor: Promise<Awaited<ReturnType<typeof mediaInqueritos>>> } | null = null;
+
 export async function satisfacaoPublica(db: Db) {
-  return mediaInqueritos(db);
+  const agora = Date.now();
+  if (!satisfacaoCache || agora - satisfacaoCache.em > SATISFACAO_TTL_MS) {
+    const valor = mediaInqueritos(db);
+    satisfacaoCache = { em: agora, valor };
+    valor.catch(() => { satisfacaoCache = null; });
+  }
+  return satisfacaoCache.valor;
 }
 
 type Inscricao = {
@@ -400,16 +411,35 @@ export async function atualizarPerfil(db: Db, user: Actor, d: z.infer<typeof per
   const seguinte = { novidades: d.novidades ?? prefs.novidades, canais: d.canais ?? prefs.canais, lidas: d.lidas ?? prefs.lidas };
   const nomeConta = [d.nome, d.apelido].filter(parte => parte != null).join(" ").trim();
   await gravarPrefs(db, user.id, seguinte, nomeConta);
-  if (d.nome != null || d.apelido != null || d.telf != null) {
-    await atualizarDadosDoUtilizador(db, user.id, { nome: d.nome, apelido: d.apelido, telf: d.telf });
+  if (d.nome != null || d.apelido != null) {
+    await atualizarDadosDoUtilizador(db, user.id, { nome: d.nome, apelido: d.apelido });
+  }
+  if (d.telf != null) {
+    // A leitura prefere o pacote cifrado: o telefone novo tem de entrar lá (e não só na coluna em claro).
+    const fichas = [
+      ...(await inscricoesGoldDoUtilizador(db, user.id)).map(r => ({ regime: "gold" as const, r })),
+      ...(await inscricoesFinDoUtilizador(db, user.id)).map(r => ({ regime: "fin" as const, r })),
+    ];
+    for (const { regime, r } of fichas) {
+      await gravarTelefoneDaFicha(db, regime, user.id, Number(r.id), writeFormandoPiiPatch({ telf: d.telf }, readFormandoPii(r)));
+    }
   }
   return montarArea(db, user);
 }
 
-/** Pede a ligação de recuperação. Responde sempre igual, para não revelar que emails existem. */
-export async function pedirRecuperacao(db: Db, emailBruto: string) {
+/** Pedidos de recuperação por email (por hora) e por IP (por hora), contados na base de dados. */
+export const RECUPERACAO_POR_EMAIL = 3;
+export const RECUPERACAO_POR_IP = 20;
+
+/**
+ * Pede a ligação de recuperação. Responde sempre igual, para não revelar que emails existem.
+ * O limite conta-se antes de procurar a conta: existir ou não a conta não muda nada para quem pede.
+ */
+export async function pedirRecuperacao(db: Db, emailBruto: string, ip = "") {
   const email = normalizeEmail(emailBruto);
   if (!isEmail(email)) return;
+  if (ip && !(await dentroDoLimite(db, "recuperar-ip", ip, RECUPERACAO_POR_IP, 3600))) return;
+  if (!(await dentroDoLimite(db, "recuperar-email", email, RECUPERACAO_POR_EMAIL, 3600))) return;
   const conta = await contaPorEmail(db, email);
   if (!conta?.active || conta.role !== "formando") return;
   const token = randomBytes(24).toString("base64url");

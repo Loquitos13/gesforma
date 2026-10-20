@@ -7,9 +7,23 @@ export type PreinscricaoPii = {
   telf?: string;
 };
 
+/** Identificadores pessoais do formando da Financiada para o financiamento (ver src/partilhado/execucaoFisica.ts). */
+export type IdentificacaoFin = {
+  nif?: string;
+  niss?: string;
+  dataNascimento?: string;
+  codigoPostal?: string;
+  protecaoInternacional?: string;
+  autorizacaoResidencia?: string;
+  tipoAutorizacaoResidencia?: string;
+  passaporte?: string;
+};
+
 export type FormandoPii = {
   telf?: string;
   docs?: Record<string, unknown>;
+  /** Só a Financiada: NIF, NISS, data de nascimento, código postal e documentos de estrangeiro. */
+  ident?: IdentificacaoFin;
 };
 
 function rowStr(v: unknown) {
@@ -60,11 +74,14 @@ export function readFormandoPii(row: Record<string, unknown>): FormandoPii {
 }
 
 export function writeFormandoPiiPatch(input: Partial<FormandoPii>, prev?: FormandoPii) {
+  const ident = input.ident !== undefined ? input.ident : prev?.ident;
+  const identLimpo = ident ? Object.fromEntries(Object.entries(ident).map(([k, v]) => [k, rowStr(v)]).filter(([, v]) => v)) as IdentificacaoFin : undefined;
   const merged: FormandoPii = {
     telf: input.telf !== undefined ? rowStr(input.telf) : rowStr(prev?.telf),
     docs: input.docs !== undefined ? input.docs : prev?.docs,
+    ...(identLimpo && Object.keys(identLimpo).length ? { ident: identLimpo } : {}),
   };
-  const has = merged.telf || merged.docs;
+  const has = merged.telf || merged.docs || merged.ident;
   if (!has) return { telf: "", pii_enc: null as string | null };
   return { telf: "", pii_enc: encryptJson(merged) };
 }

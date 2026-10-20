@@ -79,6 +79,8 @@ export type TurmaGravada = {
   activa?: boolean;
   ufcdCod?: string;
   financiador?: string;
+  /** Financiada: número da ação («… / Ação n» na execução física). */
+  numeroAcao?: number;
 };
 
 export type DadosTurma = {
@@ -102,6 +104,7 @@ export type DadosTurma = {
   alunosTotal?: number;
   activa?: boolean;
   financiador?: string;
+  numeroAcao?: number;
 };
 
 const base = (regime: Regime) => `/v1/turmas-${regime}`;

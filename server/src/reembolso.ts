@@ -125,5 +125,5 @@ export async function estadoReembolso(db: Db, turmaId: number) {
       drive: drive ? { id: drive.id, nome: drive.name, url: drive.openUrl, pasta: drive.folderPath, guardadoEm: drive.storedIn } : null,
     };
   }));
-  return { ficheiros, execucaoFisica: { ...emFaltaExecucao(exec.linhas), semCodigoPostalLocal: exec.semLocal } };
+  return { ficheiros, execucaoFisica: { ...emFaltaExecucao(exec.linhas, exec.faltaTurma), semCodigoPostalLocal: exec.semLocal } };
 }

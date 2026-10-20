@@ -16,7 +16,7 @@ export type ValorFormador = { nome: string; valorHora: string };
 /** Dados base do curso (tabela cursos_gold / cursos_fin). */
 export type CursoBase = {
   id?: number; nome: string; categoria?: string; tipo?: string; preco?: number; regime: string; horas: number; estado: string;
-  ufcdCod?: string; ufcd?: string; entidadeResponsavelId?: number | null;
+  ufcdCod?: string; ufcd?: string; areaCnaef?: string; entidadeResponsavelId?: number | null;
 };
 
 export type ContactosLocal = { telemovel: string; telefone: string; email: string; whatsapp: string };
@@ -31,6 +31,8 @@ export type CursoSite = {
   /** Contactos próprios deste curso por local (só valem para os locais atribuídos ao curso); vazio = os de Locais. */
   contactosLocais: Record<string, ContactosLocal>;
   ufcdCod: string; ufcd: string; locais: string[];
+  /** Financiada: área de formação CNAEF (guardada no curso, não na ficha do site). */
+  areaCnaef: string;
   organizacaoPrograma: OrganizacaoPrograma; topicosPrograma: TopicoPrograma[];
   avaliacaoCurso: AvaliacaoCurso; precosOferta: PrecoOferta[]; planosSessao: PlanoLinha[];
   valoresFormador: ValorFormador[]; entidadeResponsavel: string; conteudosMoodle: ConteudoMoodle[];
@@ -111,6 +113,7 @@ export function fichaInicial(curso: CursoBase | null, regime: Regime, modelos: O
     seoTitulo: "", seoDescricao: "", contactosLocais: {},
     ufcdCod,
     ufcd: curso?.ufcd ?? "",
+    areaCnaef: curso?.areaCnaef ?? "",
     locais: [],
     organizacaoPrograma: "modular",
     topicosPrograma: topicosDeTexto(linhasPrincipais(programa)),
@@ -154,6 +157,8 @@ export function fundirGuardado(base: CursoSite, guardado: Record<string, unknown
     valoresFormador: Array.isArray(guardado.valoresFormador) ? guardado.valoresFormador as ValorFormador[] : base.valoresFormador,
     entidadeResponsavel: String(guardado.entidadeResponsavel ?? base.entidadeResponsavel ?? ""),
     conteudosMoodle: parseConteudosMoodle(guardado.conteudosMoodle),
+    // A área CNAEF é do curso (tabela), não do conteúdo do site gravado.
+    areaCnaef: base.areaCnaef,
   };
 }
 

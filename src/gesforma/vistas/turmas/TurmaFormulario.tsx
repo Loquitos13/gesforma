@@ -13,12 +13,12 @@ import { ValoresHoraFormador } from "../../ValoresHoraFormador";
 type Rascunho = {
   nome: string; curso: string; local: string; horario: string; formador: string; formadores: string[];
   dataInicio: string; vagas: number; tolerancia: number; vagasAnunciadas: number | null; custoHoraSala: number; abertas: boolean; financiador: string;
-  valoresHoraFormador: Record<string, number>; cronograma: SessaoCronograma[]; horas: number;
+  numeroAcao: number; valoresHoraFormador: Record<string, number>; cronograma: SessaoCronograma[]; horas: number;
 };
 
 const VAZIO = (regime: Regime): Rascunho => ({
   nome: "", curso: "", local: "", horario: "", formador: "", formadores: [], dataInicio: "", vagas: regime === "fin" ? 20 : 16,
-  tolerancia: 0, vagasAnunciadas: null, custoHoraSala: 0, abertas: true, financiador: "", valoresHoraFormador: {}, cronograma: [], horas: 0,
+  tolerancia: 0, vagasAnunciadas: null, custoHoraSala: 0, abertas: true, financiador: "", numeroAcao: 1, valoresHoraFormador: {}, cronograma: [], horas: 0,
 });
 
 /** Painel para criar ou editar uma turma (o interior da turma continua no cockpit). */
@@ -60,7 +60,7 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
       nome: t.nome, curso: t.curso, local: t.local, horario: t.horario, formador: t.formador, formadores: t.formadores ?? [],
       dataInicio: t.dataInicio, vagas: (fin ? t.alunosTotal : t.vagas) ?? 0, tolerancia: t.toleranciaVagas ?? 0, vagasAnunciadas: t.vagasAnunciadas ?? null,
       custoHoraSala: t.custoHoraSala ?? 0, abertas: fin ? Boolean(t.activa) : t.estado === "Ativa",
-      financiador: t.financiador ?? "", valoresHoraFormador: t.valoresHoraFormador ?? {}, cronograma: t.cronograma ?? [], horas: t.horas,
+      financiador: t.financiador ?? "", numeroAcao: t.numeroAcao ?? 1, valoresHoraFormador: t.valoresHoraFormador ?? {}, cronograma: t.cronograma ?? [], horas: t.horas,
     });
   }, [aberto, editar, gravada.dados, regime, fin]);
 
@@ -89,7 +89,7 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
       ...(editar ? { cronograma: r.cronograma } : {}),
     };
     const dados: DadosTurma = fin
-      ? { ...comum, alunosTotal: r.vagas, activa: r.abertas, financiador: r.financiador.trim() }
+      ? { ...comum, alunosTotal: r.vagas, activa: r.abertas, financiador: r.financiador.trim(), numeroAcao: Math.max(1, Math.round(r.numeroAcao) || 1) }
       : { ...comum, vagas: r.vagas, custoHoraSala: r.custoHoraSala, estado: r.abertas ? "Ativa" : "Inativa" };
     setAGravar(true);
     try {
@@ -171,14 +171,19 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
               onChange={e => mudar({ vagasAnunciadas: e.target.value === "" ? null : Math.max(0, Number(e.target.value) || 0) })} />}
           </Campo>
           {fin && (
-            <Campo rotulo="Entidade financiadora">
-              {p => (
-                <>
-                  <Entrada {...p} list="financiadores-turma" value={r.financiador} onChange={e => mudar({ financiador: e.target.value })} />
-                  <datalist id="financiadores-turma">{financiadores.opcoes.map(o => <option key={o.valor} value={o.valor} />)}</datalist>
-                </>
-              )}
-            </Campo>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Campo rotulo="Entidade financiadora" className="sm:col-span-2">
+                {p => (
+                  <>
+                    <Entrada {...p} list="financiadores-turma" value={r.financiador} onChange={e => mudar({ financiador: e.target.value })} />
+                    <datalist id="financiadores-turma">{financiadores.opcoes.map(o => <option key={o.valor} value={o.valor} />)}</datalist>
+                  </>
+                )}
+              </Campo>
+              <Campo rotulo="Número da ação" ajuda="«… / Ação n» na execução física.">
+                {p => <Entrada {...p} type="number" min={1} step={1} value={r.numeroAcao} onChange={e => mudar({ numeroAcao: Math.max(1, Math.round(Number(e.target.value)) || 1) })} />}
+              </Campo>
+            </div>
           )}
           <Campo rotulo="Valor por hora do formador">
             {() => <ValoresHoraFormador formadores={[r.formador, ...r.formadores]} value={r.valoresHoraFormador} onChange={v => mudar({ valoresHoraFormador: v })} />}

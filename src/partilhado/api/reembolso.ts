@@ -19,7 +19,8 @@ export type EstadoReembolso = {
     formandos: number;
     porCampo: { campo: string; formandos: number }[];
     porFormando: { id: number; nome: string; falta: string[] }[];
-    naoRecolhidos: string[];
+    /** O que falta à turma (área CNAEF e código UFCD do curso). */
+    turma: string[];
     semCodigoPostalLocal: boolean;
   };
 };

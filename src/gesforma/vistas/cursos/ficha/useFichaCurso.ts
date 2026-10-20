@@ -107,7 +107,9 @@ export function useFichaCurso(regime: Regime, cursoIdParam: number | "new" | und
       const r = cursoId != null ? await apiEditarCursoGold(cursoId, corpo) : await apiCriarCursoGold(corpo);
       return r.curso.id;
     }
-    const corpo = { ...comum, nomeComercial: data.titulo.trim(), ufcdCod: data.ufcdCod.trim(), ufcd: data.ufcd.trim() || data.titulo.trim() };
+    const corpo = {
+      ...comum, nomeComercial: data.titulo.trim(), ufcdCod: data.ufcdCod.trim(), ufcd: data.ufcd.trim() || data.titulo.trim(), areaCnaef: data.areaCnaef,
+    };
     const r = cursoId != null ? await apiEditarCursoFin(cursoId, corpo) : await apiCriarCursoFin(corpo);
     return r.curso.id;
   }

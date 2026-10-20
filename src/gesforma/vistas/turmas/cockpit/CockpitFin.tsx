@@ -183,7 +183,9 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
                   onUpload={(id, nota) => { setUploadNota(nota ?? null); setUploadCert(id); }} onView={setVerCert} onNota={(id, p) => ped.guardarCertificado(id, p)}
                   curso={t.curso} turma={t.nome} regime="fin" turmaId={t.id} />
               )}
-              {tab === "despesas" && !souFormador && <DespesasTurma turmaId={t.id} />}
+              {tab === "despesas" && !souFormador && (
+                <DespesasTurma turmaId={t.id} onFicha={id => navigate({ view: "fin-formando-ficha", formandoId: id, filtros: { aba: "financiamento" } })} />
+              )}
               {tab === "overview" && (
                 <FinVisaoGeral turma={t} membros={membros} prontos={prontos} souFormador={souFormador} activa={activa} programa={programa.labels}
                   onFicha={souFormador ? undefined : f => navigate({ view: "fin-formando-ficha", formandoId: f.id })}

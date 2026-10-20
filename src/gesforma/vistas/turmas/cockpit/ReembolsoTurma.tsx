@@ -16,8 +16,8 @@ const ROTULO: Record<TipoReembolso, { titulo: string; descricao: string }> = {
 
 const formandos = (n: number) => `${num(n)} ${n === 1 ? "formando" : "formandos"}`;
 
-/** Nome do campo a meio da frase: as siglas (NIF, NISS) ficam em maiúsculas. */
-const minuscula = (c: string) => (/^[A-Z]+$/.test(c) ? c : c.charAt(0).toLowerCase() + c.slice(1));
+/** Nome do campo a meio da frase: as siglas (NIF, NISS, «NIF da entidade…») ficam em maiúsculas. */
+const minuscula = (c: string) => (/^[A-Z]{2}/.test(c) ? c : c.charAt(0).toLowerCase() + c.slice(1));
 
 /** «NIF a 2 formandos, código postal a 1 formando». */
 function frase(porCampo: { campo: string; formandos: number }[]) {
@@ -29,7 +29,7 @@ function lista(campos: string[]) {
   return baixo.length > 1 ? `${baixo.slice(0, -1).join(", ")} e ${baixo[baixo.length - 1]}` : baixo.join("");
 }
 
-export function ReembolsoTurma({ turmaId }: { turmaId: number }) {
+export function ReembolsoTurma({ turmaId, onFicha }: { turmaId: number; onFicha?: (formandoId: number) => void }) {
   const chave = `despesas:reembolso:${turmaId}`;
   const { dados, erro, aCarregar, recarregar } = useRecurso(chave, signal => apiReembolso(turmaId, { signal }));
   const [aAtualizar, setAAtualizar] = useState(false);
@@ -92,7 +92,7 @@ export function ReembolsoTurma({ turmaId }: { turmaId: number }) {
               {erroDrive} A descarga continua a sair com os dados actuais.
             </Aviso>
           )}
-          <EmFalta dados={dados.execucaoFisica} />
+          <EmFalta dados={dados.execucaoFisica} onFicha={onFicha} />
         </div>
       )}
     </Cartao>
@@ -128,30 +128,40 @@ function LinhaFicheiro({ f, aDescarregar, aAtualizar, onDescarregar }: { f: Fich
   );
 }
 
-function EmFalta({ dados }: { dados: EstadoReembolso["execucaoFisica"] }) {
+function EmFalta({ dados, onFicha }: { dados: EstadoReembolso["execucaoFisica"]; onFicha?: (formandoId: number) => void }) {
   if (!dados.formandos) {
     return <p className="m-0 text-[13px] text-tinta-suave">A execução física fica vazia até haver formandos na turma.</p>;
   }
   return (
     <div className="flex flex-col gap-2">
+      {dados.turma.length > 0 && (
+        <Aviso tom="aviso" titulo={`Execução física: falta ${lista(dados.turma)}`}>
+          Indique-o na ficha do curso (Identidade) para preencher as colunas «Área de Formação» e «Curso/Ação».
+        </Aviso>
+      )}
       {dados.porCampo.length ? (
         <Aviso tom="aviso" titulo={`Execução física: faltam ${frase(dados.porCampo)}`}>
-          <details>
+          <p className="m-0">Complete-os na ficha de cada formando, em «Dados para o financiamento».</p>
+          <details className="mt-1">
             <summary className="cursor-pointer">Ver por formando</summary>
             <ul className="m-0 mt-1.5 flex list-none flex-col gap-1 p-0">
-              {dados.porFormando.map(f => <li key={f.id}><strong>{f.nome}</strong>: {f.falta.join(", ")}</li>)}
+              {dados.porFormando.map(f => (
+                <li key={f.id}>
+                  {onFicha
+                    ? <button type="button" className="font-semibold text-ligacao hover:underline" onClick={() => onFicha(f.id)}>{f.nome}</button>
+                    : <strong>{f.nome}</strong>}
+                  : {f.falta.join(", ")}
+                </li>
+              ))}
             </ul>
           </details>
         </Aviso>
       ) : (
-        <p className="m-0 text-[13px] text-sucesso">Os {formandos(dados.formandos)} têm NIF, código postal, telefone, e-mail e data de inscrição.</p>
+        <p className="m-0 text-[13px] text-sucesso">Os {formandos(dados.formandos)} têm todos os dados que o GesForma recolhe para a execução física.</p>
       )}
       {dados.semCodigoPostalLocal && (
         <p className="m-0 text-[13px] text-tinta-suave">O local da turma não tem código postal na morada (Edição de cursos › Locais): a coluna do local de realização fica em branco.</p>
       )}
-      <p className="m-0 text-[13px] text-tinta-suave">
-        O GesForma ainda não recolhe {lista(dados.naoRecolhidos)}: complete-os no ficheiro, para cada formando, antes de submeter.
-      </p>
     </div>
   );
 }

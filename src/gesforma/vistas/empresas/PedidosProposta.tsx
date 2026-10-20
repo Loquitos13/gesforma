@@ -4,6 +4,7 @@ import { apiEstadoPedido, apiPedidosProposta, type EstadoPedido } from "../../..
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import { Botao, Cartao, ErroCarregar, Esqueleto, Estado, Separadores } from "../../../partilhado/ui";
+import { fmtDataHoraLisboa } from "../../../partilhado/horaLisboa";
 
 const ROTULO: Record<EstadoPedido, string> = { novo: "Novo", contactado: "Contactado", proposta: "Proposta enviada", arquivado: "Arquivado" };
 const TOM: Record<EstadoPedido, "aviso" | "info" | "sucesso" | "neutro"> = { novo: "aviso", contactado: "info", proposta: "sucesso", arquivado: "neutro" };
@@ -26,7 +27,7 @@ export function PedidosProposta() {
               <Estado tom={TOM[p.estado]} ponto>{ROTULO[p.estado]}</Estado>
               <strong>{p.empresa || p.nome}</strong>
               {p.empresa && <span>· {p.nome}</span>}
-              <span className="ml-auto text-tinta-suave">{new Date(p.criadoEm).toLocaleString("pt-PT")}</span>
+              <span className="ml-auto text-tinta-suave">{fmtDataHoraLisboa(p.criadoEm)}</span>
             </div>
             <p className="m-0 flex flex-wrap gap-x-4 text-sm">
               <a className="underline" href={`mailto:${p.email}`}>{p.email}</a>

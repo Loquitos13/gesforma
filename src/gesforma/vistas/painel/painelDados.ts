@@ -2,6 +2,7 @@
 import type { MesPainel, RegimePainel } from "../../../partilhado/api/painel";
 import type { EstatisticaMes, MesGrafico } from "../../../partilhado/ui";
 import type { Destino, Vista } from "../../rotasGesforma";
+import { FUSO_LISBOA, hojeLisboa, inicioMes, mesLisboa } from "../../../partilhado/horaLisboa";
 
 export type PresetPeriodo = "mes" | "trimestre" | "ano" | "livre";
 
@@ -15,14 +16,12 @@ export const PRESETS: { id: PresetPeriodo; rotulo: string }[] = [
 const MESES_LONGOS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const MESES_CURTOS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
-const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-/** Datas do período escolhido. "Personalizado" usa as datas escritas (vazias = mês corrente no servidor). */
+/** Datas do período escolhido (calendário de Lisboa). "Personalizado" usa as datas escritas (vazias = mês corrente no servidor). */
 export function datasDoPeriodo(preset: PresetPeriodo, de: string, ate: string, hoje = new Date()) {
-  const fim = iso(hoje);
-  if (preset === "mes") return { de: iso(new Date(hoje.getFullYear(), hoje.getMonth(), 1)), ate: fim };
-  if (preset === "trimestre") return { de: iso(new Date(hoje.getFullYear(), hoje.getMonth() - 2, 1)), ate: fim };
-  if (preset === "ano") return { de: iso(new Date(hoje.getFullYear(), 0, 1)), ate: fim };
+  const fim = hojeLisboa(hoje);
+  if (preset === "mes") return { de: inicioMes(fim), ate: fim };
+  if (preset === "trimestre") return { de: inicioMes(fim, -2), ate: fim };
+  if (preset === "ano") return { de: `${fim.slice(0, 4)}-01-01`, ate: fim };
   return { de, ate };
 }
 
@@ -46,7 +45,7 @@ export function rotuloComparacao(preset: PresetPeriodo, anterior: { de: string; 
 }
 
 export function hojePorExtenso(hoje = new Date()) {
-  const t = hoje.toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const t = hoje.toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: FUSO_LISBOA });
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
@@ -67,7 +66,7 @@ const STATS: Record<RegimePainel, Omit<EstatisticaMes, "valor">[]> = {
 
 /** Série do servidor (24 meses) no formato do GraficoMensal. */
 export function paraGrafico(regime: RegimePainel, serie: MesPainel[], hoje = new Date()): MesGrafico[] {
-  const atual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+  const atual = mesLisboa(hoje);
   return serie.map(m => {
     const i = Number(m.chave.slice(5, 7)) - 1;
     return {

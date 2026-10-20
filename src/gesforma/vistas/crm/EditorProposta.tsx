@@ -19,6 +19,7 @@ import {
   CAMPOS, DEFINICOES_PADRAO, corpoParaGuardar, dataLonga, escreverDocumento, euros, lerDocumento, numeroDoc, type Definicoes,
 } from "./documento/modelo";
 import { PaginaA4, type PaginaRef } from "./documento/PaginaA4";
+import { hojeLisboa, somarDias } from "../../../partilhado/horaLisboa";
 
 const CAMPOS_PROPOSTA = CAMPOS.filter(c => !["sede", "representante", "turma", "plano", "datas", "local"].includes(c.chave));
 const DESCONTOS = [0, 5, 10, 15, 20];
@@ -58,7 +59,7 @@ function Editor({ proposta, clienteInicial, regime, onFechar, trilho }: {
   const [preco, setPreco] = useState(d0.preco ?? "");
   const [desconto, setDesconto] = useState(Number(d0.desconto) || 0);
   const [inicio, setInicio] = useState(d0.inicio ?? "");
-  const [validade, setValidade] = useState(d0.validade ?? new Date(Date.now() + 20 * 864e5).toISOString().slice(0, 10));
+  const [validade, setValidade] = useState(d0.validade ?? somarDias(hojeLisboa(), 20));
   const [templateId, setTemplateId] = useState(proposta?.templateId ? String(proposta.templateId) : "");
   const [realce, setRealce] = useState(true);
   const [paginas, setPaginas] = useState(1);

@@ -6,6 +6,7 @@ import {
 import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { useRecurso } from "../../../../partilhado/dados/useRecurso";
 import { Aviso, Botao, Campo, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Estado } from "../../../../partilhado/ui";
+import { fmtDataHoraLisboa } from "../../../../partilhado/horaLisboa";
 
 export function SeccaoAvaliacoesGoogle() {
   const { dados: s, erro, recarregar } = useRecurso("configuracoes:google-avaliacoes", apiAvaliacoesGoogle);
@@ -18,7 +19,7 @@ export function SeccaoAvaliacoesGoogle() {
 
   if (erro) return <ErroCarregar erro={erro} onTentar={recarregar} />;
   if (!s) return <Cartao><Esqueleto linhas={6} /></Cartao>;
-  const quando = s.atualizadoEm ? new Date(s.atualizadoEm).toLocaleString("pt-PT") : null;
+  const quando = s.atualizadoEm ? fmtDataHoraLisboa(s.atualizadoEm) : null;
 
   return (
     <Cartao

@@ -5,6 +5,7 @@ import { apiApagarTestemunho, apiReverTestemunho, apiTestemunhos, type EstadoTes
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import { Aviso, Botao, Cartao, ConfirmarPerigo, ErroCarregar, Esqueleto, Estado, cx } from "../../../partilhado/ui";
+import { fmtDataLisboa } from "../../../partilhado/horaLisboa";
 
 const FILTROS: [EstadoTestemunho | "", string][] = [["pendente", "Por rever"], ["aprovado", "Aprovados"], ["recusado", "Recusados"], ["", "Todos"]];
 const TOM: Record<EstadoTestemunho, "aviso" | "sucesso" | "neutro"> = { pendente: "aviso", aprovado: "sucesso", recusado: "neutro" };
@@ -39,7 +40,7 @@ export function TestemunhosSite() {
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <Estado tom={TOM[t.estado]} ponto>{ROTULO[t.estado]}</Estado>
               <strong>{t.nome}</strong>
-              <span className="text-tinta-suave">{t.email} · {new Date(t.atualizadoEm).toLocaleDateString("pt-PT")}</span>
+              <span className="text-tinta-suave">{t.email} · {fmtDataLisboa(t.atualizadoEm)}</span>
               <span className="ml-auto text-[var(--c-acento,#FFA900)]" aria-label={`${t.estrelas} em 5 estrelas`}>{"★".repeat(t.estrelas)}<span className="text-black/15">{"★".repeat(5 - t.estrelas)}</span></span>
             </div>
             <p className="m-0 text-sm text-tinta-suave">{t.curso ? `Sobre: ${t.curso}` : "Sobre a ENA em geral"}</p>

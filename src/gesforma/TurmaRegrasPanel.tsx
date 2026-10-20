@@ -4,6 +4,7 @@ import {
 } from "../partilhado/api";
 import { SearchSelect } from "../partilhado/FormKit";
 import { persist, toastOk } from "../partilhado/toastBus";
+import { hojeLisboa } from "../partilhado/horaLisboa";
 
 const inp = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-700";
 
@@ -25,7 +26,7 @@ export function TurmaRegrasPanel({
   const [curso, setCurso] = useState(cursos[0] ?? "");
   const [local, setLocal] = useState(locais[0] ?? "");
   const [horario, setHorario] = useState(regime === "fin" ? "Pós Laboral" : (horarios[0] ?? "Pós Laboral"));
-  const [proxima, setProxima] = useState(new Date().toISOString().slice(0, 10));
+  const [proxima, setProxima] = useState(hojeLisboa());
   const [vagas, setVagas] = useState(regime === "fin" ? 20 : 16);
   const [horas, setHoras] = useState(regime === "fin" ? 25 : 90);
   const [busy, setBusy] = useState(false);

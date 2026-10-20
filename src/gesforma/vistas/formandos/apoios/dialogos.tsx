@@ -6,11 +6,12 @@ import { numeroPt } from "../../../../partilhado/despesas";
 import { invalidar } from "../../../../partilhado/dados/useRecurso";
 import { toastError, toastOk } from "../../../../partilhado/toastBus";
 import { AreaTexto, Botao, Campo, Entrada, Modal, eur } from "../../../../partilhado/ui";
+import { hojeLisboa } from "../../../../partilhado/horaLisboa";
 
 export const INVALIDAR_APOIOS = ["apoios:", "formandos:"];
 
 function hoje() {
-  return new Date().toISOString().slice(0, 10);
+  return hojeLisboa();
 }
 
 /** IBAN do formando para receber os apoios. Vazio remove. */

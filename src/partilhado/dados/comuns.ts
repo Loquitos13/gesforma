@@ -6,6 +6,7 @@ import { idCursoPorNome } from "../cursoLocais";
 import type { SessaoCronograma } from "../turmaModel";
 import { useOpcoes } from "./useOpcoes";
 import { useRecurso } from "./useRecurso";
+import { hojeLisboa } from "../horaLisboa";
 
 type CursoRef = { id: number; nome: string; nomeComercial?: string; ufcd?: string; ufcdCod?: string };
 
@@ -90,11 +91,10 @@ export function useOpcoesFormador(atual?: string | string[], regime?: Regime) {
 
 /** Janela de datas consultada para conflitos: do último ano aos dois anos seguintes. */
 function janelaOcupacao() {
-  const hoje = new Date();
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
-  const de = new Date(hoje); de.setFullYear(de.getFullYear() - 1);
-  const ate = new Date(hoje); ate.setFullYear(ate.getFullYear() + 2);
-  return { de: iso(de), ate: iso(ate) };
+  const hoje = hojeLisboa();
+  const ano = Number(hoje.slice(0, 4));
+  const mesDia = hoje.slice(4) === "-02-29" ? "-02-28" : hoje.slice(4);
+  return { de: `${ano - 1}${mesDia}`, ate: `${ano + 2}${mesDia}` };
 }
 
 /**

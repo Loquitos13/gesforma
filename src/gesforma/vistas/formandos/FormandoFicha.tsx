@@ -4,7 +4,7 @@ import { apiApagarFormando, apiFichaFormando, type Regime } from "../../../parti
 import { invalidar, useRecurso } from "../../../partilhado/dados/useRecurso";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
 import {
-  Botao, BotaoLigacao, ConfirmarPerigo, ErroCarregar, Esqueleto, Estado, MenuLinha, PageHeader, Separadores, Vazio,
+  Botao, BotaoLigacao, ConfirmarPerigo, ErroCarregar, Esqueleto, Estado, MenuLinha, PageHeader, Separadores, Vazio, data,
 } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
 import { EditarDados, MudarTurma } from "./fichaDialogos";
@@ -86,7 +86,7 @@ export default function FormandoFicha({ view, params, navigate }: VistaProps) {
           </span>
           <div className="flex-1 min-w-[240px]">
             <p className="num m-0 text-xs text-tinta-suave">
-              #{ficha.id} · {gold ? "Gold" : "Financiada"}{ficha.inscrito ? ` · inscrito a ${ficha.inscrito.slice(0, 10).split("-").reverse().join("/")}` : ""}
+              #{ficha.id} · {gold ? "Gold" : "Financiada"}{ficha.inscrito ? ` · inscrito a ${data(ficha.inscrito)}` : ""}
             </p>
             <h1 className="m-0 mt-0.5 text-[22px] font-semibold tracking-[-0.01em] text-tinta">{nome}</h1>
             <p className="m-0 mt-1.5 text-[13px] text-tinta-suave flex items-center gap-2 flex-wrap">

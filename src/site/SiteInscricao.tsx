@@ -6,6 +6,7 @@ import type { Course } from "./SiteLanding";
 import { ePreinscricao, ePrepago } from "../partilhado/siteConteudo";
 import { textoListaVazia, useOpcoesPublicas } from "./useOpcoesPublicas";
 import { ConsentimentoRgpd } from "./ConsentimentoRgpd";
+import { hojeLisboa } from "../partilhado/horaLisboa";
 
 type Passo = "turma" | "dados" | "pagamento" | "feito";
 /** Como se abre o pedido: o curso e, quando a página do curso o deu, o local já escolhido. */
@@ -109,7 +110,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
   const doCurso = useMemo(() => {
     const nomes = new Set([norm(curso?.title ?? ""), norm(curso?.nomeOferta ?? "")].filter(Boolean));
     // Só as datas de início ainda por vir (as mesmas que a página do curso mostra).
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLisboa();
     return turmas.filter(t => nomes.has(norm(t.curso)) && (!t.regime || t.regime === curso?.regime) && (!t.dataInicio || t.dataInicio >= hoje));
   }, [turmas, curso?.title, curso?.nomeOferta, curso?.regime]);
   const locais = uniqueVals(doCurso, "local");

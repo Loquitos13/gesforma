@@ -16,6 +16,7 @@ import {
   AvisoDispositivoCtx, definirDispositivoEmEdicao, dispositivoEmEdicao, NOMES_DISP, paraDispositivo, registarNoEcra, type Disp,
 } from "../../../site/editor/dispositivos";
 import { converterPaginaCurso, converterPaginaInicio, modeloPagina } from "../../../site/editor/modeloBase";
+import { fmtDataHoraLisboa } from "../../../partilhado/horaLisboa";
 
 const VIEWPORTS: Viewports = [
   { width: 390, height: "auto", label: "Telemóvel", icon: "Smartphone" },
@@ -257,7 +258,7 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
       <SincronizarEcra ecra={ecra} dados={state.data as Data} escrever={d => escreverRef.current(d)} config={config} />
       {ecra && <span className={`rounded px-2 py-1 font-semibold ${ecra === "pc" ? "bg-[#eef1f5] text-[#3d4a5a]" : "bg-[#fff1d1] text-[#7a4b00]"}`} title="O ecrã da pré-visualização decide o que se edita">A editar: {NOMES_DISP[ecra]}</span>}
       <span className={estado === "erro" ? "text-[#a60000]" : "text-[#6b7685]"} aria-live="polite">{textoEstado}</span>
-      <span className="hidden text-[#6b7685] xl:inline">{publicadoEm ? `· publicada ${new Date(publicadoEm).toLocaleString("pt-PT")}` : "· ainda não publicada"}</span>
+      <span className="hidden text-[#6b7685] xl:inline">{publicadoEm ? `· publicada ${fmtDataHoraLisboa(publicadoEm)}` : "· ainda não publicada"}</span>
       <button type="button" onClick={() => setRepor(true)} className="rounded border border-[#d4d8de] px-2.5 py-1.5 font-semibold text-[#3d4a5a] hover:bg-[#f2f4f7]">Repor modelo base</button>
       <a href={PAGINAS[pagina].endereco} target="_blank" rel="noreferrer" className="rounded border border-[#d4d8de] px-2.5 py-1.5 font-semibold text-[#3d4a5a] hover:bg-[#f2f4f7]">Ver no site ↗</a>
       <button type="button" disabled={aPublicar} onClick={() => void publicarRef.current(state.data as Data)}
@@ -277,7 +278,7 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
             <div role="status" className="flex flex-wrap items-center gap-3 border-b border-[#f0d58a] bg-[#fff8e1] px-4 py-2 text-[13px] text-[#5c4300]">
               <span>
                 Esta página nunca foi publicada: o site mostra o modelo base. Está a ver um rascunho
-                {rascunhoSoltoEm ? ` guardado a ${new Date(rascunhoSoltoEm).toLocaleString("pt-PT")}` : ""}, que pode ser diferente.
+                {rascunhoSoltoEm ? ` guardado a ${fmtDataHoraLisboa(rascunhoSoltoEm)}` : ""}, que pode ser diferente.
               </span>
               <button type="button" onClick={() => void reporModelo()} className="rounded border border-[#d9b75a] bg-white px-2.5 py-1 font-semibold hover:bg-[#fff1c2]">Abrir o que o site mostra</button>
               <button type="button" onClick={() => setRascunhoSoltoEm(null)} className="font-semibold underline">Continuar no rascunho</button>

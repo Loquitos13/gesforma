@@ -8,8 +8,9 @@ import { invalidar } from "../../../partilhado/dados/useRecurso";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
 import { AreaTexto, Botao, Campo, ConfirmarPerigo, Entrada, PainelLateral, Selecao, num } from "../../../partilhado/ui";
 import { numeroDe } from "../crm/comum";
+import { hojeLisboa } from "../../../partilhado/horaLisboa";
 
-const hoje = () => new Date().toISOString().slice(0, 10);
+const hoje = () => hojeLisboa();
 
 export function FormCampanha({ campanha, onFechar, onGravada }: { campanha: Campanha | "nova" | null; onFechar: () => void; onGravada: (id: number) => void }) {
   const { user } = useAuth();

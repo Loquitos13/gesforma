@@ -1,4 +1,5 @@
 import type { SessaoMeta } from "./TurmaExtras";
+import { hojeLisboa, horaLisboa } from "./horaLisboa";
 
 export type SessaoModalidade = "presencial" | "sincrona" | "auto" | "avaliacao" | "matricula";
 
@@ -172,25 +173,11 @@ export function isTurmaActiva(t: { estado?: string; activa?: boolean }) {
 
 /** Dia civil do calendário, independente do fuso do browser. */
 export function hojeIso(agora = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Lisbon",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(agora);
-  const p = (tipo: Intl.DateTimeFormatPartTypes) => parts.find(x => x.type === tipo)?.value ?? "";
-  return `${p("year")}-${p("month")}-${p("day")}`;
+  return hojeLisboa(agora);
 }
 
 export function horaAgora(agora = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Lisbon",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(agora);
-  const p = (tipo: Intl.DateTimeFormatPartTypes) => parts.find(x => x.type === tipo)?.value ?? "";
-  return `${p("hour")}:${p("minute")}`;
+  return horaLisboa(agora);
 }
 
 const MONTHS_FULL_PT = [

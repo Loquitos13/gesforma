@@ -5,6 +5,7 @@ import { imprimirFolhasPresencas } from "../partilhado/presencasPrint";
 import { AppModal } from "../partilhado/FormKit";
 import { EmptyHint, NotifKind, sortNotifs } from "../partilhado/SecretaryUX";
 import { toastError, toastOk } from "../partilhado/toastBus";
+import { agoraLisboa, hojeLisboa } from "../partilhado/horaLisboa";
 
 const I = {
   download: (
@@ -50,9 +51,7 @@ function tone(accent: Accent) {
 }
 
 function toastNow() {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return agoraLisboa();
 }
 
 function textoHtml(valor: string) {
@@ -202,7 +201,7 @@ export function CertificadoVerModal({
                 <tr><th>Formação</th><td>${textoHtml(cert.curso ?? "Formação ENA")}</td></tr>
                 ${cert.turma ? `<tr><th>Turma</th><td>${textoHtml(cert.turma)}</td></tr>` : ""}
                 ${cert.nota != null ? `<tr><th>Nota final</th><td>${textoHtml(String(cert.nota))}/20</td></tr>` : ""}
-                <tr><th>Data</th><td>${textoHtml(cert.data ?? new Date().toISOString().slice(0, 10))}</td></tr>
+                <tr><th>Data</th><td>${textoHtml(cert.data ?? hojeLisboa())}</td></tr>
               </table>
             `)}
             className={`px-4 py-2 ${t.btn} text-white text-sm font-semibold rounded-lg inline-flex items-center gap-1.5`}

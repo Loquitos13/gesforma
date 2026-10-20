@@ -8,11 +8,12 @@ import { invalidar, useRecurso } from "../../../partilhado/dados/useRecurso";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
 import { Aviso, Botao, Modal } from "../../../partilhado/ui";
 import { INVALIDAR_ASSINATURAS } from "./PainelAssinatura";
+import { hojeLisboa, instanteLisboa, somarDias } from "../../../partilhado/horaLisboa";
 
 const CONTROLO = "h-[38px] border border-linha-forte rounded-lg px-2.5 text-sm text-tinta bg-white w-full min-w-0";
 
 function diasAte(iso: string) {
-  const alvo = new Date(`${iso}T23:59:00`);
+  const alvo = instanteLisboa(iso, "23:59");
   return Math.ceil((alvo.getTime() - Date.now()) / 864e5);
 }
 
@@ -23,7 +24,7 @@ export function EnviarAssinatura({ contratoId, aberto, onFechar, contrato }: {
   /** Dados já conhecidos do contrato (para mostrar a quem vai e o resumo). */
   contrato?: { clienteNome: string; clienteEmail: string; curso: string };
 }) {
-  const padrao = useMemo(() => new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10), []);
+  const padrao = useMemo(() => somarDias(hojeLisboa(), 14), []);
   const [ate, setAte] = useState(padrao);
   const [nif, setNif] = useState("");
   const [pedeNif, setPedeNif] = useState(false);
@@ -106,7 +107,7 @@ export function EnviarAssinatura({ contratoId, aberto, onFechar, contrato }: {
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-tinta">
               Assinar até
-              <input className={CONTROLO} type="date" value={ate} min={new Date(Date.now() + 864e5).toISOString().slice(0, 10)} onChange={e => setAte(e.target.value)} />
+              <input className={CONTROLO} type="date" value={ate} min={somarDias(hojeLisboa(), 1)} onChange={e => setAte(e.target.value)} />
             </label>
             <div className="flex flex-col gap-1.5 text-[13px] font-semibold text-tinta">
               Código de confirmação

@@ -1,6 +1,7 @@
 // Regras de apresentação das pré-inscrições (etapa, próximo passo, documentos, contactos).
 import type { Tom } from "../../../../partilhado/ui";
 import type { Lead } from "../../../../partilhado/api/crm";
+import { fmtDataLisboa, hojeLisboa } from "../../../../partilhado/horaLisboa";
 
 /** Etapas do funil comercial, pela ordem do pipeline. São estados do processo, não dados. */
 export const ETAPAS = ["Não contactado", "1º Contacto", "2º Contacto", "Pago", "Pré-inscrição", "Formando", "Desistiu"] as const;
@@ -55,7 +56,7 @@ export function relativo(iso?: string | null) {
   const h = Math.round(min / 60);
   if (h < 24) return `há ${h} h`;
   const dias = Math.round(h / 24);
-  return dias < 8 ? `há ${dias} d` : d.toLocaleDateString("pt-PT");
+  return dias < 8 ? `há ${dias} d` : fmtDataLisboa(d);
 }
 
 /** Seguimento: atrasado, hoje ou data. */
@@ -117,6 +118,4 @@ export const MODELOS_NOTA = [
   { rotulo: "Aguarda empresa", texto: "Aguarda autorização da entidade empregadora.", resultado: "A pensar" },
 ];
 
-export function hojeLisboa() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-}
+export { hojeLisboa };

@@ -4,6 +4,7 @@ import { apiEditarLead, apiFixarNota, apiNota, type DossieLead } from "../../../
 import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { useOpcoes } from "../../../../partilhado/dados/useOpcoes";
 import { MODELOS_NOTA, relativo } from "./util";
+import { hojeLisboa, somarDias } from "../../../../partilhado/horaLisboa";
 
 const FILTROS = [
   { id: "todos", rotulo: "Tudo" },
@@ -20,9 +21,7 @@ const PONTO: Record<string, string> = {
 };
 
 function emDias(n: number) {
-  const d = new Date();
-  d.setDate(d.getDate() + n);
-  return `${d.toISOString().slice(0, 10)}T09:00`;
+  return `${somarDias(hojeLisboa(), n)}T09:00`;
 }
 
 /** Registar contactos e notas; histórico do pedido. */

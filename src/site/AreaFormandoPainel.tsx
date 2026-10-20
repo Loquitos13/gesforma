@@ -109,7 +109,7 @@ export function Painel({ dados, onDados, onSair, avisar, opcoes = OPCOES_PAINEL 
                 <div key={sessao.id} className="grid gap-4 border-b border-[var(--c-primaria,#1C3350)]/10 p-6 sm:grid-cols-[100px_1fr_auto] sm:items-center">
                   <div><strong className="block text-3xl text-[var(--c-destaque,#A60000)]">{sessao.dia}</strong><span className="text-xs font-bold uppercase">{sessao.mes}</span></div>
                   <div><strong>{sessao.titulo}</strong><p className="mt-1 text-sm text-[var(--c-primaria,#1C3350)]/55">{sessao.curso}{sessao.horas ? ` · ${sessao.horas}` : ""}</p></div>
-                  <button type="button" onClick={() => { descarregar(`sessao-${sessao.data}.ics`, `BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:${sessao.titulo}\nDTSTART:${sessao.data.replace(/-/g, "")}T${(sessao.horas.slice(0, 5) || "09:00").replace("h", "").replace(":", "")}00\nEND:VEVENT\nEND:VCALENDAR`); avisar("Ficheiro de calendário descarregado."); }} className="border border-[var(--c-primaria,#1C3350)] px-4 py-2 text-sm font-bold">Adicionar ao calendário</button>
+                  <button type="button" onClick={() => { descarregar(`sessao-${sessao.data}.ics`, `BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:${sessao.titulo}\nDTSTART;TZID=Europe/Lisbon:${sessao.data.replace(/-/g, "")}T${(sessao.horas.slice(0, 5) || "09:00").replace("h", "").replace(":", "")}00\nEND:VEVENT\nEND:VCALENDAR`); avisar("Ficheiro de calendário descarregado."); }} className="border border-[var(--c-primaria,#1C3350)] px-4 py-2 text-sm font-bold">Adicionar ao calendário</button>
                 </div>
               ))}
             </div>

@@ -2,8 +2,7 @@ import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { ApiError, apiAreaFormandoDocumentoUpload, apiChangeOwnPassword, apiGoogleLoginStatus, apiLogin, apiMicrosoftLoginStatus, apiRecuperarAcesso, googleLoginStartUrl, microsoftLoginStartUrl, type AreaFormandoDados, type FormandoFinDocsBloco, type SessionUser } from "../partilhado/api";
 import { destinoPosLogin } from "../partilhado/destinoPerfil";
 import { mensagemPalavraPasse } from "../partilhado/passwordPolicy";
-
-export type Separador = "courses" | "agenda" | "certificates" | "documents" | "notifications" | "payments" | "profile";
+import { PAINEL_ENTRADA, type PainelEntrada } from "./areaFormandoOpcoes";
 
 export function DocumentosFinArea({ blocos, onAtualizar, avisar }: {
   blocos: FormandoFinDocsBloco[];
@@ -117,15 +116,6 @@ export function irPosLogin(role: string) {
   const params = new URLSearchParams(window.location.search);
   window.location.assign(destinoPosLogin(role, params.get("destino")));
 }
-
-/** Textos e cores do painel ao lado do formulário de entrada (editáveis no editor do site). */
-export type PainelEntrada = { mostrar: boolean; kicker: string; titulo: string; itens: string[]; rodape: string; fundo: string; imagem: string; fundoFormulario: string };
-
-export const PAINEL_ENTRADA: PainelEntrada = {
-  mostrar: true, kicker: "Área reservada", titulo: "Toda a sua formação num só lugar.",
-  itens: ["Continue os cursos ao seu ritmo", "Consulte sessões e materiais", "Descarregue os seus certificados"],
-  rodape: "ENA — Escola de Negócios e Administração", fundo: "#1C3350", imagem: "", fundoFormulario: "#F9F9F9",
-};
 
 export function LoginFormando({ onEntrou, trocaInicial = null, painel = PAINEL_ENTRADA }: {
   onEntrou: (user: SessionUser) => void; trocaInicial?: SessionUser | null; painel?: PainelEntrada;

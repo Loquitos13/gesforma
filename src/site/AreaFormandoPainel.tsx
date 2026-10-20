@@ -3,15 +3,8 @@ import { FormEvent, useEffect, useState } from "react";
 import { ApiError, apiAreaFormando, apiLogout, apiMe, apiPatchAreaFormando, apiReporPalavraPasse, type AreaFormandoDados, type SessionUser } from "../partilhado/api";
 import { mensagemPalavraPasse } from "../partilhado/passwordPolicy";
 import { PilulaOpiniao } from "./AreaFormandoOpiniao";
-import { type Separador, DocumentosFinArea, Icon, descarregar, primeiroNome, iniciais, irPosLogin, LoginFormando, Sala, type PainelEntrada } from "./AreaFormando";
-
-/** O que o editor do site muda no painel do formando. */
-export type OpcoesPainel = { saudacao: string; titulo: string; fundoTopo: string; resumo: boolean; separadores: Separador[] };
-
-export const OPCOES_PAINEL: OpcoesPainel = {
-  saudacao: "Olá,", titulo: "Continue a aprender.", fundoTopo: "", resumo: true,
-  separadores: ["courses", "agenda", "certificates", "documents", "notifications", "payments", "profile"],
-};
+import { DocumentosFinArea, Icon, descarregar, primeiroNome, iniciais, irPosLogin, LoginFormando, Sala } from "./AreaFormando";
+import { OPCOES_PAINEL, type OpcoesPainel, type PainelEntrada, type Separador } from "./areaFormandoOpcoes";
 
 export function Painel({ dados, onDados, onSair, avisar, opcoes = OPCOES_PAINEL }: {
   dados: AreaFormandoDados;

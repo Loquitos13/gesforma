@@ -18,7 +18,7 @@ import {
 } from "../../repos/formandosEscrita.js";
 import { idParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
-import { hojeLisboa } from "../../datas.js";
+import { carimboUtc, hojeLisboa } from "../../datas.js";
 
 const docOk = z.object({ ok: z.boolean(), data: z.string().max(40) });
 const DOCS_FIN = ["cc", "ch", "cu", "ci", "ce", "morada", "contrato", "rgpd"] as const;
@@ -50,10 +50,6 @@ const formandoFin = z.object({
   estado: z.string().max(40).optional().default("Elegível"),
   ...Object.fromEntries(DOCS_FIN.map(k => [k, docOk.optional()])) as Record<(typeof DOCS_FIN)[number], z.ZodOptional<typeof docOk>>,
 });
-
-function agora() {
-  return new Date().toISOString().slice(0, 16).replace("T", " ");
-}
 
 function proibidoFormador(role: string) {
   return role === "formador" || role === "formando";
@@ -97,7 +93,7 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
       await db.tx(async q => {
         if (d.turmaId) await garantirVaga(q, "gold", d.turmaId, { email: d.email });
         await inserirFormandoGold(q, {
-          id, nome: d.nome, apelido: d.apelido, telf: pii.telf || d.telf, email: d.email.toLowerCase(), inscrito: d.inscrito || agora(),
+          id, nome: d.nome, apelido: d.apelido, telf: pii.telf || d.telf, email: d.email.toLowerCase(), inscrito: d.inscrito || carimboUtc(),
           local, curso, turma: turmaNome, turmaId: d.turmaId ?? null, estado, pago: false, valor, metodo, piiEnc: pii.pii_enc ?? "", publicId: newPublicId(),
         });
         if (pagamentoId) {

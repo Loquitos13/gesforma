@@ -1,5 +1,6 @@
 import { gerarAcessoFormando } from "./areaFormando.js";
 import { config } from "./config.js";
+import { carimboUtc } from "./datas.js";
 import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
@@ -21,10 +22,6 @@ import { isEmail, normalizeEmail } from "./security.js";
  * da área do formando, e a pessoa recebe o email com o acesso. Seguro de repetir.
  */
 
-function nowStamp() {
-  return new Date().toISOString().slice(0, 16).replace("T", " ");
-}
-
 /** Pré-inscrição Gold cujo pagamento foi pedido pela secretaria e está ligado a este pagamento. */
 export async function leadDoPagamentoPedido(db: Db, pagamentoId: string) {
   const r = await leadComPagamentoPedido(db, pagamentoId);
@@ -43,7 +40,7 @@ async function criarFormandoGoldDoLead(db: Db, lead: Record<string, unknown>, tu
   await db.tx(async q => {
     await garantirVaga(q, "gold", turmaId, { email });
     await inserirFormandoGoldPago(q, {
-      id, nome: String(lead.nome ?? ""), apelido: String(lead.apelido ?? ""), telf: pii.telf, email, inscrito: nowStamp(),
+      id, nome: String(lead.nome ?? ""), apelido: String(lead.apelido ?? ""), telf: pii.telf, email, inscrito: carimboUtc(),
       local: t.local, curso: t.curso, turma: t.nome, turmaId, valor: pagamento.valor,
       metodo: pagamento.metodo || "Transferência bancária", piiEnc: pii.pii_enc ?? "", publicId: newPublicId(),
     });

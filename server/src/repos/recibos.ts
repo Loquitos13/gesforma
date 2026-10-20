@@ -1,6 +1,6 @@
 /** Recibos internos de pagamento e exportação da lista de pagamentos. */
-import { Filtros, many, one, padraoPesquisa, type Consulta } from "./sql.js";
-import type { FiltrosPagamentos } from "./pagamentos.js";
+import { many, one, type Consulta } from "./sql.js";
+import { filtros, type FiltrosPagamentos } from "./pagamentos.js";
 
 export type ReciboLinha = {
   id: number; pagamento_id: string; ano: number; numero: number; emitido_em: string; actualizado_em: string;
@@ -91,24 +91,9 @@ export type LinhaExportacao = {
   lead_pii: string | null; lead_nif: string | null; recibo: string | null;
 };
 
-const SITUACAO = `CASE
-  WHEN p.estado = 'Pago' THEN 'pago'
-  WHEN p.estado = 'Cancelado' THEN 'cancelado'
-  WHEN p.estado = 'Reembolsado' THEN 'reembolsado'
-  WHEN comp.estado = 'pendente' AND (p.recusado_em IS NULL OR comp.created_at > p.recusado_em) THEN 'a_confirmar'
-  WHEN p.recusado_em IS NOT NULL THEN 'recusado'
-  ELSE 'pedido' END`;
-
 /** Mesmos filtros da lista de pagamentos (`repos/pagamentos.ts`), sem paginação (até 10 000 linhas). */
 export function linhasExportacao(c: Consulta, f: FiltrosPagamentos) {
-  const w = new Filtros();
-  w.add(`(${SITUACAO}) = ?`, f.situacao);
-  w.add("p.curso = ?", f.curso);
-  w.add("p.metodo = ?", f.metodo);
-  w.add("COALESCE(p.pago_em, p.created_at) >= (?::date::timestamp AT TIME ZONE 'Europe/Lisbon')", f.de);
-  w.add("COALESCE(p.pago_em, p.created_at) < ((?::date + 1)::timestamp AT TIME ZONE 'Europe/Lisbon')", f.ate);
-  const q = padraoPesquisa(f.q);
-  w.add("(p.nome ILIKE ? OR p.email ILIKE ? OR p.curso ILIKE ? OR p.id ILIKE ?)", q, q, q, q);
+  const w = filtros(f);
   return many<LinhaExportacao>(c,
     `SELECT p.id, p.created_at::text AS criado, p.pago_em::text AS pago_em, p.nome, p.email, p.curso, t.nome AS turma,
             p.valor::float AS valor, p.metodo, p.estado, (comp.id IS NOT NULL) AS comprovativo, u.name AS confirmado_por,

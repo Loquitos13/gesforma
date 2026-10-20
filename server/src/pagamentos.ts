@@ -1,5 +1,6 @@
 import { ingestEvent } from "./automations.js";
 import { config } from "./config.js";
+import { carimboUtc } from "./datas.js";
 import type { Db } from "./db/pool.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
 import { sendMail } from "./mailer.js";
@@ -18,10 +19,6 @@ export { mapPagamento };
 /** Métodos aceites hoje (sem gateway). O primeiro é o de omissão. */
 export const METODOS_ACEITES = ["Transferência bancária", "Numerário", "Oferta"] as const;
 
-function carimbo() {
-  return new Date().toISOString().slice(0, 16).replace("T", " ");
-}
-
 /**
  * Marca o pagamento como Pago, dispara o email e actualiza a ficha Gold e a pré-inscrição ligadas.
  * Se o pagamento foi pedido no percurso da pré-inscrição, conclui a inscrição (ficha, conta e acesso).
@@ -35,7 +32,7 @@ export async function confirmarPagamento(db: Db, row: Record<string, unknown>, a
   // com a ficha por pagar (e a reentrega do webhook, que vê Pago, já não os repetia).
   // Dois pedidos ao mesmo tempo: só o que muda o estado dispara os efeitos.
   const mudou = await db.tx(async q => {
-    if (!(await marcarPago(q, mapped.id, carimbo(), actorId, opts.soPendente))) return false;
+    if (!(await marcarPago(q, mapped.id, carimboUtc(), actorId, opts.soPendente))) return false;
     // A ficha ligada fica paga mesmo sem email; sem ficha ligada, procura-se pelo email e curso.
     if (formandoId != null || comEmail) {
       await marcarFormandoGoldPago(q, { email, metodo: mapped.metodo || METODOS_ACEITES[0], formandoId, curso: mapped.curso });

@@ -198,7 +198,7 @@ export type Situacao = (typeof SITUACOES)[number];
 
 export type FiltrosPagamentos = { situacao?: Situacao; curso?: string; metodo?: string; de?: string; ate?: string; q?: string };
 
-function filtros(f: FiltrosPagamentos, comSituacao = true) {
+export function filtros(f: FiltrosPagamentos, comSituacao = true) {
   const w = new Filtros();
   if (comSituacao) w.add(`(${SITUACAO}) = ?`, f.situacao);
   w.add("p.curso = ?", f.curso);

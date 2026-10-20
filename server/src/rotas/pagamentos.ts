@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { config } from "../config.js";
+import { carimboUtc } from "../datas.js";
 import { normalizarEstado, validarTransicao } from "../estados.js";
 import { aposPagamentoConfirmado } from "../inscricaoPaga.js";
 import { nextOpsId } from "../ops.js";
@@ -40,10 +41,6 @@ const listaQuery = paginacao.merge(periodoQuery).extend({
   metodo: textoQuery(60),
 });
 const recusaSchema = z.object({ motivo: z.string().trim().min(3).max(400) });
-
-function carimbo() {
-  return new Date().toISOString().slice(0, 16).replace("T", " ");
-}
 
 function chaveIgual(a: string, b: string) {
   const x = Buffer.from(a);
@@ -94,7 +91,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const id = `TRX-${await nextOpsId(db)}`;
     const email = d.email ? normalizeEmail(d.email) : "";
     const novo = {
-      id, nome: d.nome, valor: d.valor, metodo: d.metodo || METODOS_ACEITES[0], curso: d.curso, data: d.data || carimbo(), estado: estado === "Pago" ? "Pendente" : estado,
+      id, nome: d.nome, valor: d.valor, metodo: d.metodo || METODOS_ACEITES[0], curso: d.curso, data: d.data || carimboUtc(), estado: estado === "Pago" ? "Pendente" : estado,
       email, referencia: d.referencia ?? "", formandoId: formando ? Number(formando.id) : null, turmaId: formando?.turma_id ?? null, chave,
     };
     const conflito = await db.tx(async (q): Promise<{ repetido: PagamentoRow } | { erro: string } | null> => {

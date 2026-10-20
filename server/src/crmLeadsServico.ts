@@ -18,7 +18,7 @@ import { linhaVisivel } from "./repos/crmVisivel.js";
 import * as leads from "./repos/leads.js";
 import * as escrita from "./repos/leadsEscrita.js";
 import { isEmail, normalizeEmail } from "./security.js";
-import { hojeLisboa, somarDias } from "./datas.js";
+import { carimboUtc, hojeLisboa, somarDias } from "./datas.js";
 
 export class CrmErro extends Error {
   constructor(message: string, readonly codigo = 400, readonly extra: Record<string, unknown> = {}) {
@@ -35,10 +35,6 @@ export type DadosLead = Partial<{
   comercialId: string | null; meioContacto: string; etiquetaId: number | null; nif: string; moradaFiscal: string;
   codigoPostal: string; motivoDesistencia: string; pagamentoMetodo: string; regime: "gold" | "fin";
 }>;
-
-function nowStamp() {
-  return new Date().toISOString().slice(0, 16).replace("T", " ");
-}
 
 export function regimeDaLinha(row: { regime?: unknown } | null | undefined): "gold" | "fin" {
   return String(row?.regime ?? "") === "fin" ? "fin" : "gold";
@@ -86,7 +82,7 @@ export async function criarLeadManual(db: Db, actor: Actor, d: DadosLead) {
   const campanha = await campanhaDoPedido(db, { campanhaId: d.campanhaId, campanha: d.campanha });
   const pii = writePreinscricaoPii({ nif: d.nif, moradaFiscal: d.moradaFiscal, codigoPostal: d.codigoPostal, telf });
   await escrita.inserirLead(db, {
-    id, inscrito: nowStamp(), nome: d.nome ?? "", apelido: d.apelido ?? "", email, telf: pii.telf || telf,
+    id, inscrito: carimboUtc(), nome: d.nome ?? "", apelido: d.apelido ?? "", email, telf: pii.telf || telf,
     inicioCurso: d.inicioCurso || "-", concelho: d.concelho ?? "", local: d.local ?? "", curso,
     preco: precoOferta ?? d.preco ?? 0, estado: d.estado || "Não contactado",
     campanha: campanha.campanha, campanhaId: campanha.campanhaId, origem, entrada: "manual",

@@ -13,13 +13,10 @@ import { isEmail, normalizeEmail, sanitizeHeader, textoDePessoa } from "./securi
 import { campanhaDoPedido, origemDaLista } from "./leadOpcoes.js";
 import * as leads from "./repos/leads.js";
 import * as escrita from "./repos/leadsEscrita.js";
+import { carimboUtc } from "./datas.js";
 
 async function metodoPagamentoConhecido(db: Db, nome: string) {
   return Boolean(await leads.opcaoDaLista(db, "metodos_pagamento", nome));
-}
-
-function nowStamp() {
-  return new Date().toISOString().slice(0, 16).replace("T", " ");
 }
 
 export type PreinscricaoPublicaInput = {
@@ -163,7 +160,7 @@ export async function criarPreinscricaoPublica(
     const aberto = await escrita.pedidoAberto(q, email, curso);
     if (aberto) return aberto;
     await escrita.inserirLead(q, {
-      id, inscrito: nowStamp(), nome: textoDePessoa(input.nome), apelido: textoDePessoa(input.apelido || ""), email,
+      id, inscrito: carimboUtc(), nome: textoDePessoa(input.nome), apelido: textoDePessoa(input.apelido || ""), email,
       telf: piiPack.telf || telf, inicioCurso: inicio, concelho: textoDePessoa(input.concelho || ""),
       local, curso, preco, estado: "Não contactado", campanha: campanha.campanha, campanhaId: campanha.campanhaId,
       origem, entrada: "preinscricao", meioContacto: meio, horario, turmaId, pagamentoMetodo: metodo, regime,

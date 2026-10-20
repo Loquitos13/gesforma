@@ -107,8 +107,11 @@ export async function anexarPerguntasDaTurma(db: Db, actorId: string | undefined
 }
 
 /** Grava no Drive o cronograma, as folhas de presença/sumários e os planos de sessão. */
-export async function gravarPdfsDossie(db: Db, actorId: string | undefined, regime: Regime, turma: TurmaRow) {
-  const pdfs = await montarPdfsDossie(db, regime, turma);
+/** `gerados`: os PDFs já montados (a exportação do dossiê não os volta a gerar). */
+export async function gravarPdfsDossie(
+  db: Db, actorId: string | undefined, regime: Regime, turma: TurmaRow, gerados?: Awaited<ReturnType<typeof montarPdfsDossie>>,
+) {
+  const pdfs = gerados ?? await montarPdfsDossie(db, regime, turma);
   const guardar = (name: string, bytes: Buffer, itemId: string) => guardarPdfGerado(db, actorId, regime, turma, itemId, name, bytes);
   const folhas = await guardar("Folhas de presenca e sumarios.pdf", pdfs.folhas, "presencas");
   const pares = [

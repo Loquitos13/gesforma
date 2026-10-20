@@ -21,8 +21,11 @@ const SEM_LEITURA = "O formador não consulta o dossiê técnico-pedagógico.";
 
 const exportQuery = z.object({ destino: z.enum(["zip", "drive"]).optional().catch(undefined) });
 
-/** Na Vercel (30 s por pedido) as descargas da Drive param aqui; o resto do tempo é para gerar e gravar o ZIP. */
-const PRAZO_DESCARGAS_VERCEL_MS = 15_000;
+/**
+ * Na Vercel (30 s por pedido) não começam descargas da Drive depois deste prazo; cada uma leva no máximo 8 s
+ * e o resto do tempo é para gravar os PDFs gerados e o ZIP na Drive.
+ */
+const PRAZO_DESCARGAS_VERCEL_MS = 10_000;
 
 function respostaModelo(regime: Regime, modelo: DtpModelo, entidade: EntidadeDtp | null) {
   const efectivo = regime === "gold" ? comporModelo(entidade?.modelo ?? DTP_MODELO_VAZIO, modelo) : modelo;

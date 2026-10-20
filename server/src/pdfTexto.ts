@@ -36,11 +36,44 @@ function pdfString(value: string) {
   return out;
 }
 
-/** PDF de texto simples, uma coluna, várias páginas. */
+/** Parte o texto em linhas de até `largura` caracteres, pelas palavras (uma palavra maior que a largura parte-se). */
+export function partirLinhas(texto: string, largura = 92) {
+  const palavras = texto.replace(/\s+/g, " ").trim().split(" ").filter(Boolean)
+    .flatMap(p => p.match(new RegExp(`.{1,${largura}}`, "gu")) ?? []);
+  if (!palavras.length) return [];
+  const linhas: string[] = [];
+  let atual = "";
+  for (const palavra of palavras) {
+    const seguinte = atual ? `${atual} ${palavra}` : palavra;
+    if (seguinte.length > largura && atual) {
+      linhas.push(atual);
+      atual = palavra;
+    } else {
+      atual = seguinte;
+    }
+  }
+  if (atual) linhas.push(atual);
+  return linhas;
+}
+
+/** Linhas que cabem na página: cada \n começa uma linha e o que passa da largura continua na seguinte, com o mesmo recuo. */
+export function linhasDaPagina(linhas: string[], largura = 110) {
+  return linhas.flatMap(linha => {
+    const recuo = /^ */.exec(linha)![0];
+    return linha.split(/\r?\n/).flatMap((parte, i) => {
+      const texto = parte.trim();
+      if (!texto) return [""];
+      if (recuo.length + texto.length <= largura) return [i === 0 ? parte.trimEnd() : recuo + texto];
+      return partirLinhas(texto, Math.max(20, largura - recuo.length)).map(l => recuo + l);
+    });
+  });
+}
+
+/** PDF de texto simples, uma coluna, várias páginas. As linhas compridas continuam na linha seguinte. */
 export function pdfDeLinhas(linhas: string[]) {
   const porPagina = 46;
   const paginas: string[][] = [];
-  const fonte = linhas.length ? linhas : [" "];
+  const fonte = linhas.length ? linhasDaPagina(linhas) : [" "];
   for (let i = 0; i < fonte.length; i += porPagina) paginas.push(fonte.slice(i, i + porPagina));
 
   const objs: string[] = [];
@@ -53,7 +86,7 @@ export function pdfDeLinhas(linhas: string[]) {
     pageIds.push(pageId);
     const comandos = ["BT", "/F1 11 Tf", "50 800 Td", "14 TL"];
     pagina.forEach((linha, iLinha) => {
-      const texto = `(${pdfString(linha.slice(0, 110))})`;
+      const texto = `(${pdfString(linha)})`;
       comandos.push(iLinha === 0 ? `${texto} Tj` : `T* ${texto} Tj`);
     });
     comandos.push("ET");

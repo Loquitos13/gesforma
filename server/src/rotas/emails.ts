@@ -113,8 +113,9 @@ function cronAutorizado(authorization: string | undefined) {
   const dado = Buffer.from(String(authorization ?? ""));
   return esperado.length === dado.length && timingSafeEqual(esperado, dado);
 }
-/** Tempo de envio por chamada do cron (a função tem 30 s na vercel.json). */
+/** Tempo de trabalho por chamada do cron (a função tem 30 s na vercel.json): Drive e, no email, prazo de tudo. */
 const CRON_ORCAMENTO_MS = 20_000;
+const CRON_EMAIL_MS = 25_000;
 
 function mapRegra(r: Awaited<ReturnType<typeof listarRegras>>[number]) {
   return {
@@ -333,11 +334,13 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       return reply.code(503).send({ error: "cron desligado: falta CRON_SECRET" });
     }
     if (!cronAutorizado(req.headers.authorization)) return reply.code(401).send({ error: "cron recusado" });
-    const lembretes = await enviarLembretesPreinscricao(db).catch(err => {
+    // Um só prazo para tudo (a função dura no máximo 30 s): os lembretes param nele e a fila fica com o que sobra.
+    const fim = Date.now() + CRON_EMAIL_MS;
+    const lembretes = await enviarLembretesPreinscricao(db, fim).catch(err => {
       req.log.error(err);
       return null;
     });
-    const fila = await processDueJobs(db, CRON_ORCAMENTO_MS);
+    const fila = await processDueJobs(db, fim);
     return { ...fila, lembretesPreinscricao: lembretes };
   });
 
@@ -383,7 +386,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     }
     try {
       const result = await ingestEvent(db, type, payload, idempotencyKey);
-      await flushQueuedJobs(db, 5).catch(() => undefined);
+      await flushQueuedJobs(db, 5, 0, result.eventId).catch(() => undefined);
       await audit(db, a.id, "automation.event", type, result.eventId ?? undefined, req.ip, { queued: result.queued, duplicate: result.duplicate });
       return result;
     } catch (err) {

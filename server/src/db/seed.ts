@@ -117,7 +117,7 @@ const RULES = [
   { nome: "Pré-inscrição validada", gatilho: "Pré-inscrição validada pela secretaria", key: "preinscricao.validated", tipo: "validada", delay: 0 },
   { nome: "Lembrete sem pagamento (3 dias)", gatilho: "Pré-inscrição sem pagamento há 3 dias", key: "preinscricao.unpaid_3d", tipo: "unpaid_3d", delay: 0 },
   { nome: "Confirmação de pagamento", gatilho: "Pagamento confirmado", key: "payment.confirmed", tipo: "payment", delay: 0 },
-  { nome: "Contacto após a venda", gatilho: "Contacto após a venda", key: "sale.followup", tipo: "sale_followup", delay: 3600 },
+  { nome: "Contacto após a venda", gatilho: "Contacto após a venda", key: "sale.followup", tipo: "sale_followup", delay: 0 },
   { nome: "Lembrete 24h antes do curso", gatilho: "24 horas antes do início", key: "turma.starts_in_24h", tipo: "reminder_24h", delay: 0 },
   { nome: "Certificado de conclusão", gatilho: "Formando marcado como concluído", key: "formando.completed", tipo: "certificate", delay: 0 },
   { nome: "Reengajamento 30 dias", gatilho: "30 dias sem compra", key: "lead.stale_30d", tipo: "reengagement", delay: 0 },
@@ -336,12 +336,8 @@ async function seedCompleto(db: Db) {
       "SELECT id FROM email_rules WHERE trigger_key = $1 ORDER BY id LIMIT 1",
       [r.key],
     );
-    if (existing.rows[0]) {
-      if (r.key === "lead.stale_30d" || r.key === "preinscricao.unpaid_3d") {
-        await db.query("UPDATE email_rules SET ativo = true WHERE id = $1", [existing.rows[0].id]);
-      }
-      continue;
-    }
+    // Regra que já existe fica como está (a que o admin desligou não volta a ligar-se).
+    if (existing.rows[0]) continue;
     await db.query(
       `INSERT INTO email_rules (nome, trigger_key, gatilho_label, template_tipo, delay_seconds, ativo)
        VALUES ($1, $2, $3, $4, $5, true)`,

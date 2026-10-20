@@ -51,7 +51,7 @@ export function FormRegra({ regra, opcoes, onFechar }: { regra: RegraEmail | nul
           <Campo rotulo="Quando" obrigatorio ajuda={gatilho?.descricao}>
             {a => <Selecao {...a} vazio="Escolha o momento" opcoes={opcoes.gatilhos.map(g => ({ valor: g.valor, rotulo: g.valor }))} value={f.gatilho} onChange={e => setF({ ...f, gatilho: e.target.value })} />}
           </Campo>
-          <Campo rotulo="Atraso">
+          <Campo rotulo="Atraso" ajuda="Os envios com atraso saem na volta diária seguinte (07:00 UTC, ≈ 08:00 em Lisboa no verão): um atraso de horas pode chegar só no dia seguinte.">
             {a => <Selecao {...a} opcoes={opcoes.atrasos.map(v => ({ valor: v, rotulo: v }))} value={f.atraso} onChange={e => setF({ ...f, atraso: e.target.value })} />}
           </Campo>
           <Campo rotulo="Modelo" obrigatorio>

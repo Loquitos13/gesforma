@@ -6,7 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getLeadDossier, logLeadEvent } from "../crmDossier.js";
 import { staffValida } from "../crmLeadsServico.js";
-import { alertarDocumentosIncorrectos, definirEstadoDoc, dispensarAlerta, listarAlertasAbertas, notificarDocumentos } from "../docsLink.js";
+import { alertarDocumentosIncorrectos, definirEstadoDoc, dispensarAlerta, firePreinscricaoEmail, listarAlertasAbertas } from "../docsLink.js";
 import { concluirInscricaoPaga } from "../inscricaoPaga.js";
 import { regenerarToken } from "../ligacaoPessoal.js";
 import { confirmarPagamento } from "../ops.js";
@@ -158,7 +158,10 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
       return reply.code(409).send({ error: "A pré-inscrição já foi validada: a ligação pessoal fica encerrada." });
     }
     await regenerarToken(db, id);
-    const mail = await notificarDocumentos(db, id, req.actor!.id).catch(() => null);
+    // Chave nova a cada pedido (como o reenvio do site): com a chave fixa só o primeiro email saía.
+    const dados = lead as { id: number; nome: string; apelido: string; email: string; curso: string; regime?: string };
+    const mail = await firePreinscricaoEmail(db, dados, "preinscricao.created", `nova-ligacao:${id}:${Date.now()}`).catch(() => null);
+    if (mail?.queued) await leads.inserirContacto(db, { leadId: id, actorId: req.actor!.id, nota: `Nova ligação pessoal enviada: ${mail.url}`, meio: "Email" });
     await logLeadEvent(db, id, req.actor!.id, "contacto", "Nova ligação pessoal", "A ligação anterior deixou de funcionar.");
     await audit(db, req.actor!.id, "preinscricao.nova_ligacao", "preinscricao", String(id), req.ip);
     return { ok: true, url: mail?.url ?? null };

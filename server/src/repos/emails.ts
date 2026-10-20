@@ -161,16 +161,17 @@ export type EnvioReservado = { id: string; to_email: string; to_name: string; su
 /**
  * Reserva até `limite` envios vencidos numa só instrução (passam a «sending»). Dois processos a correr
  * ao mesmo tempo nunca ficam com o mesmo envio: as linhas já trancadas por outro são saltadas.
+ * Com `eventoId`, os envios desse evento vêm primeiro (a boas-vindas não espera atrás de uma campanha).
  */
-export function reservarPendentes(c: Consulta, limite: number) {
+export function reservarPendentes(c: Consulta, limite: number, eventoId: string | null = null) {
   return many<EnvioReservado>(
     c,
     `UPDATE email_jobs SET status = 'sending', claimed_at = now()
       WHERE id IN (SELECT id FROM email_jobs WHERE status = 'queued' AND scheduled_at <= now()
-                    ORDER BY scheduled_at LIMIT $1 FOR UPDATE SKIP LOCKED)
+                    ORDER BY (event_id = $2::uuid) IS TRUE DESC, scheduled_at LIMIT $1 FOR UPDATE SKIP LOCKED)
         AND status = 'queued'
       RETURNING id, to_email, to_name, subject, body_text, body_html, attempts`,
-    [limite],
+    [limite, eventoId],
   );
 }
 
@@ -317,15 +318,20 @@ export async function exemploReal(c: Consulta, curso: string | null) {
 
 const LEAD_EM = `CASE WHEN inscrito ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN to_timestamp(substring(inscrito from 1 for 16), 'YYYY-MM-DD HH24:MI') ELSE created_at END`;
 
-/** Leads em aberto há pelo menos N dias (só Gold quando `soGold`). */
-export function leadsParados(c: Consulta, dias: number, soGold: boolean) {
+/**
+ * Leads em aberto há pelo menos N dias (só Gold quando `soGold`), sem os que já tiveram este lembrete
+ * (evento com a chave `prefixo:id:email`, a mesma de enqueueCrmReminders): senão a lista crescia todos os dias.
+ */
+export function leadsParados(c: Consulta, dias: number, soGold: boolean, prefixo: string) {
   return many<{ id: number; nome: string; apelido: string; email: string; curso: string }>(
     c,
     `SELECT id, nome, apelido, email, curso FROM preinscricoes
       WHERE estado NOT IN ('Pago', 'Formando', 'Desistiu') AND email <> ''
         AND ($2::boolean = false OR COALESCE(regime, 'gold') <> 'fin')
-        AND (${LEAD_EM}) <= now() - make_interval(days => $1::int)`,
-    [dias, soGold],
+        AND (${LEAD_EM}) <= now() - make_interval(days => $1::int)
+        AND NOT EXISTS (SELECT 1 FROM automation_events e
+                         WHERE e.idempotency_key = left($3::text || ':' || preinscricoes.id || ':' || lower(trim(preinscricoes.email)), 200))`,
+    [dias, soGold, prefixo],
   );
 }
 

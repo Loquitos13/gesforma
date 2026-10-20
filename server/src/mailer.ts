@@ -1,10 +1,15 @@
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
 import type { Db } from "./db/pool.js";
 import { resolveSmtpTransport, smtpConfigured } from "./smtpConfig.js";
 import { sanitizeHeader } from "./security.js";
 
 type Anexo = { nome: string; tipo: string; conteudo: Buffer };
 type SendInput = { to: string; name: string; subject: string; text: string; html?: string; anexos?: Anexo[] };
+
+// Um transporte por configuração, reaproveitado entre envios (o cron manda vários seguidos). Com limites de tempo:
+// um SMTP que não responde não pode prender a função da Vercel (30 s) até ela morrer a meio da fila.
+const LIMITES = { connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 10_000 };
+let emCache: { chave: string; mailer: Transporter } | null = null;
 
 export async function sendMail(db: Db, input: SendInput) {
   const to = sanitizeHeader(input.to);
@@ -15,14 +20,22 @@ export async function sendMail(db: Db, input: SendInput) {
     console.info(`[mail:log] para=${to} assunto=${subject}`);
     return `log:${Date.now()}`;
   }
-  const mailer = transport.kind === "url"
-    ? nodemailer.createTransport(transport.url)
-    : nodemailer.createTransport({
-        host: transport.host,
-        port: transport.port,
-        secure: transport.port === 465,
-        auth: { user: transport.user, pass: transport.pass },
-      });
+  const chave = JSON.stringify(transport);
+  if (emCache?.chave !== chave) {
+    emCache = {
+      chave,
+      mailer: transport.kind === "url"
+        ? nodemailer.createTransport({ url: transport.url, ...LIMITES })
+        : nodemailer.createTransport({
+            host: transport.host,
+            port: transport.port,
+            secure: transport.port === 465,
+            auth: { user: transport.user, pass: transport.pass },
+            ...LIMITES,
+          }),
+    };
+  }
+  const mailer = emCache.mailer;
   const info = await mailer.sendMail({
     from: transport.from,
     replyTo: transport.replyTo || undefined,

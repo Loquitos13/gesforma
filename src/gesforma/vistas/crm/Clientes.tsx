@@ -18,7 +18,7 @@ const FILTRO = "h-9 rounded-lg border border-linha-forte bg-white px-2.5 text-[1
 export default function Clientes({ view, navigate }: VistaProps) {
   const [f, setF] = useFiltrosUrl({ q: "", estado: "", tipo: "", de: "", ate: "", ordem: "", pagina: "1", cliente: "" });
   const pagina = Number(f.pagina) || 1;
-  const { dados, erro, aCarregar, recarregar } = useRecurso(`crm:clientes:${f.q}:${f.estado}:${f.tipo}:${f.ordem}:${pagina}`, signal =>
+  const { dados, erro, aCarregar, recarregar } = useRecurso(`crm:clientes:${f.q}:${f.estado}:${f.tipo}:${f.de}:${f.ate}:${f.ordem}:${pagina}`, signal =>
     apiClientes({ q: f.q, estado: f.estado, tipo: f.tipo || undefined, de: f.de || undefined, ate: f.ate || undefined, ordem: f.ordem, pagina }, { signal }));
   const [novo, setNovo] = useState(false);
   const selecionado = f.cliente ? Number(f.cliente) : dados?.linhas[0]?.id ?? null;

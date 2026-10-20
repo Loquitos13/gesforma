@@ -73,7 +73,7 @@ export async function formandosDaTurma(c: Consulta, regime: Regime, turma: Turma
   if (regime === "gold") {
     const rows = await many<{ id: number; nome: string; apelido: string }>(
       c,
-      "SELECT id, nome, apelido FROM formandos_gold WHERE turma_id = $1 OR turma = $2 ORDER BY nome",
+      "SELECT id, nome, apelido FROM formandos_gold WHERE turma_id = $1 OR (trim(turma) <> '' AND turma = $2) ORDER BY nome",
       [turma.id, turma.nome],
     );
     return rows.map(r => ({ id: r.id, nome: `${r.nome} ${r.apelido}`.trim(), docs: {} }));
@@ -82,7 +82,7 @@ export async function formandosDaTurma(c: Consulta, regime: Regime, turma: Turma
     c,
     `SELECT id, nome, apelido, docs FROM formandos_fin f
       WHERE f.turma_id = $1
-         OR (f.turma_id IS NULL AND f.turma = $2)
+         OR (f.turma_id IS NULL AND trim(f.turma) <> '' AND f.turma = $2)
       ORDER BY nome`,
     [turma.id, turma.nome],
   );
@@ -94,7 +94,7 @@ export async function contactosFormandos(c: Consulta, regime: Regime, turmaId: n
   return many<{ nome: string; apelido: string; email: string }>(
     c,
     `SELECT nome, apelido, email FROM ${tabelaRegime("formandos", regime)}
-      WHERE turma_id = $1 OR lower(trim(turma)) = lower(trim($2))`,
+      WHERE turma_id = $1 OR (trim(turma) <> '' AND lower(trim(turma)) = lower(trim($2)))`,
     [turmaId, turmaNome],
   );
 }

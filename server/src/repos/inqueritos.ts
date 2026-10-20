@@ -101,7 +101,7 @@ export async function respostasDoInquerito(c: Consulta, inqueritoId: number, fil
       WHERE inquerito_id = $1
         AND (NOT $2::boolean
              OR turma_id = ANY($3::int[])
-             OR (turma_id IS NULL AND lower(trim(turma)) = ANY($4::text[])))
+             OR (turma_id IS NULL AND trim(turma) <> '' AND lower(trim(turma)) = ANY($4::text[])))
       ORDER BY created_at DESC
       LIMIT $5`,
     [inqueritoId, filtrado, pgIntArray(filtro.turmaIds ?? []), pgTextArray((filtro.turmas ?? []).map(t => t.trim().toLowerCase())), filtro.limite ?? 2000],
@@ -169,7 +169,7 @@ export async function respostasDaTurma(c: Consulta, regime: Regime, turmaId: num
        FROM catalog_items i
        JOIN inquerito_respostas r ON r.inquerito_id = i.id
       WHERE i.kind = 'inqueritos' AND i.regime = $1
-        AND (r.turma_id = $3 OR (r.turma_id IS NULL AND lower(trim(r.turma)) = lower(trim($2))))
+        AND (r.turma_id = $3 OR (r.turma_id IS NULL AND trim(r.turma) <> '' AND lower(trim(r.turma)) = lower(trim($2))))
       ORDER BY i.id, r.created_at`,
     [regime, turmaNome, turmaId],
   );

@@ -24,7 +24,7 @@ export async function formandosFinParaRelatorio(c: Consulta, turmaId: number, tu
   return many<{ id: number; nome: string; apelido: string; estado: string }>(
     c,
     `SELECT id, nome, apelido, estado FROM formandos_fin
-      WHERE turma_id = $1 OR (turma_id IS NULL AND turma = $2)
+      WHERE turma_id = $1 OR (turma_id IS NULL AND trim(turma) <> '' AND turma = $2)
       ORDER BY nome`,
     [turmaId, turmaNome],
   );

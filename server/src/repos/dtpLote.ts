@@ -43,7 +43,7 @@ export async function formandosGoldDasTurmas(c: Consulta, ids: number[], nomes: 
     c,
     `SELECT id, nome, coalesce(apelido, '') AS apelido, lower(trim(coalesce(email, ''))) AS email, turma_id, coalesce(turma, '') AS turma
        FROM formandos_gold
-      WHERE turma_id = ANY($1::int[]) OR turma = ANY($2::text[])`,
+      WHERE turma_id = ANY($1::int[]) OR (trim(turma) <> '' AND turma = ANY($2::text[]))`,
     [pgIntArray(ids), pgTextArray(nomes)],
   );
 }
@@ -55,7 +55,7 @@ export async function formandosFinDasTurmas(c: Consulta, ids: number[], nomes: s
     c,
     `SELECT id, nome, coalesce(apelido, '') AS apelido, docs, turma_id, coalesce(turma, '') AS turma, coalesce(curso, '') AS curso
        FROM formandos_fin
-      WHERE turma_id = ANY($1::int[]) OR (turma_id IS NULL AND turma = ANY($2::text[]))`,
+      WHERE turma_id = ANY($1::int[]) OR (turma_id IS NULL AND trim(turma) <> '' AND turma = ANY($2::text[]))`,
     [pgIntArray(ids), pgTextArray(nomes)],
   );
 }

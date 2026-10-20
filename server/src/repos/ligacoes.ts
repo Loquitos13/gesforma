@@ -131,10 +131,10 @@ export async function renomearUtilizadorDoFormador(c: Consulta, antigo: string, 
 
 export async function renomearTurmaNosFormandos(c: Consulta, regime: Regime, id: number, antigo: string, novo: string) {
   if (regime === "gold") {
-    await many(c, "UPDATE formandos_gold SET turma = $3 WHERE turma_id = $1 OR lower(trim(turma)) = lower(trim($2))", [id, antigo, novo]);
+    await many(c, "UPDATE formandos_gold SET turma = $3 WHERE turma_id = $1 OR (trim(turma) <> '' AND lower(trim(turma)) = lower(trim($2)))", [id, antigo, novo]);
   } else {
     await many(c,
-      "UPDATE formandos_fin SET turma = $3, turma_id = $1 WHERE turma_id = $1 OR lower(trim(turma)) = lower(trim($2))",
+      "UPDATE formandos_fin SET turma = $3, turma_id = $1 WHERE turma_id = $1 OR (trim(turma) <> '' AND lower(trim(turma)) = lower(trim($2)))",
       [id, antigo, novo]);
   }
   await many(c,
@@ -142,6 +142,7 @@ export async function renomearTurmaNosFormandos(c: Consulta, regime: Regime, id:
         SET payload = jsonb_set(payload, '{turma}', to_jsonb($2::text), true)
       WHERE kind = 'inscricoes_fin'
         AND jsonb_typeof(payload) = 'object'
+        AND trim($1) <> ''
         AND lower(trim(coalesce(payload->>'turma', ''))) = lower(trim($1))`,
     [antigo, novo]);
 }
@@ -151,7 +152,7 @@ export async function renomearCursoDaTurma(
 ) {
   await many(c,
     `UPDATE ${FORMANDOS[regime]} SET curso = $4
-      WHERE (turma_id = $1 OR lower(trim(turma)) = lower(trim($2)))
+      WHERE (turma_id = $1 OR (trim(turma) <> '' AND lower(trim(turma)) = lower(trim($2))))
         AND lower(trim(curso)) = lower(trim($3))`,
     [turmaId, turmaNome, antigo, novo]);
   if (regime === "gold") {
@@ -206,7 +207,7 @@ export async function usoTurma(c: Consulta, regime: Regime, id: number) {
   const nome = String(row?.nome ?? "");
   if (!nome) return null;
   const formandos = await contar(c,
-    `SELECT count(*)::int AS n FROM ${FORMANDOS[regime]} WHERE turma_id = $1 OR lower(trim(turma)) = lower(trim($2))`, [id, nome]);
+    `SELECT count(*)::int AS n FROM ${FORMANDOS[regime]} WHERE turma_id = $1 OR (trim(turma) <> '' AND lower(trim(turma)) = lower(trim($2)))`, [id, nome]);
   const preinscricoes = regime === "gold"
     ? await contar(c, "SELECT count(*)::int AS n FROM preinscricoes WHERE turma_id = $1", [id])
     : 0;

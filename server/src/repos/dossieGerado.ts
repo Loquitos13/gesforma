@@ -32,7 +32,7 @@ export async function formandosFinComContacto(c: Consulta, turmaId: number, turm
           LIMIT 1
        ) p ON true
       WHERE f.turma_id = $1
-         OR (f.turma_id IS NULL AND f.turma = $2)
+         OR (f.turma_id IS NULL AND trim(f.turma) <> '' AND f.turma = $2)
       ORDER BY f.nome, f.apelido`,
     [turmaId, turmaNome],
   );

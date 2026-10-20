@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { removerAtalhos } from "../src/driveArvore.js";
-import { arrancar, pedido, type Ctx } from "./helpers.js";
+import { arrancar, pedido, preinscricaoDoEmail, type Ctx } from "./helpers.js";
 
 const PDF = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n");
 let seq = 0;
@@ -34,7 +34,8 @@ function upload(ctx: Ctx, token: string, tipo: string) {
 }
 
 async function leadComDocsValidados(ctx: Ctx, cursoNome: string, turmaId: number, email: string) {
-  const id = (await ctx.app.inject({ method: "POST", url: "/v1/public/preinscricoes", payload: { nome: "Bia", email, curso: cursoNome } })).json().preinscricao.id as number;
+  expect((await ctx.app.inject({ method: "POST", url: "/v1/public/preinscricoes", payload: { nome: "Bia", email, curso: cursoNome } })).statusCode).toBe(200);
+  const id = await preinscricaoDoEmail(ctx, email);
   const token = (await ctx.db.query<{ docs_token: string }>("SELECT docs_token FROM preinscricoes WHERE id = $1", [id])).rows[0]!.docs_token;
   for (const tipo of ["cc", "contrato", "regulamento"]) expect((await upload(ctx, token, tipo)).statusCode).toBe(200);
   const docs = await ctx.db.query<{ id: number }>("SELECT id FROM preinscricao_docs WHERE preinscricao_id = $1", [id]);

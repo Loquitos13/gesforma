@@ -114,7 +114,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
   app.post("/v1/auth/recuperar", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (req, reply) => {
     const v = validar(reply, { body: z.object({ email: z.string().max(254) }) }, req);
     if (!v) return;
-    await pedirRecuperacao(db, v.body.email);
+    await pedirRecuperacao(db, v.body.email, req.ip);
     return reply.send({ ok: true });
   });
 

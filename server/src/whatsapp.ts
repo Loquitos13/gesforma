@@ -1,4 +1,5 @@
 /** WhatsApp (Meta Cloud API): credenciais, envio, webhook e rotas da configuração e do simulador. */
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { config, newToken } from "./config.js";
@@ -186,6 +187,17 @@ function extractIncoming(body: unknown): { from: string; text: string; wamid: st
   return out;
 }
 
+/** Mensagens tratadas por pedido do webhook: o Meta manda poucas de cada vez; mais do que isto é abuso. */
+export const WHATSAPP_MAX_MENSAGENS = 10;
+
+/** Confirma a assinatura do Meta (HMAC-SHA256 do corpo tal como chegou, com o app secret). */
+export function assinaturaWhatsappValida(corpo: string, assinatura: string | undefined, segredo: string) {
+  if (!segredo || !assinatura?.startsWith("sha256=")) return false;
+  const recebida = Buffer.from(assinatura.slice(7), "hex");
+  const esperada = createHmac("sha256", segredo).update(corpo, "utf8").digest();
+  return recebida.length === esperada.length && timingSafeEqual(recebida, esperada);
+}
+
 export function registerWhatsappRoutes(
   app: FastifyInstance,
   db: Db,
@@ -209,17 +221,36 @@ export function registerWhatsappRoutes(
     return reply.code(403).send("verify token inválido");
   });
 
-  app.post("/v1/public/whatsapp/webhook", {
-    config: { rateLimit: { max: 80, timeWindow: "1 minute" } },
-  }, async (req) => {
-    const incoming = extractIncoming(req.body);
-    for (const msg of incoming) {
-      const out = await handleWhatsappText(db, msg.from, msg.text, msg.wamid);
-      for (const line of out.replies) {
-        await enviarCloudApi(db, out.telefone, line);
+  // O corpo cru é preciso para a assinatura: o parser de JSON fica só dentro deste contexto.
+  app.register(async scope => {
+    scope.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
+      done(null, { raw: String(body) });
+    });
+    scope.post("/v1/public/whatsapp/webhook", {
+      config: { rateLimit: { max: 80, timeWindow: "1 minute" } },
+    }, async (req, reply) => {
+      const segredo = config.whatsappAppSecret;
+      if (!segredo) {
+        req.log.error("webhook WhatsApp recusado: defina WHATSAPP_APP_SECRET (app secret da aplicação Meta)");
+        return reply.code(503).send({ error: "webhook sem app secret" });
       }
-    }
-    return { ok: true };
+      const raw = (req.body as { raw?: string } | undefined)?.raw ?? "";
+      const assinatura = req.headers["x-hub-signature-256"];
+      if (!assinaturaWhatsappValida(raw, Array.isArray(assinatura) ? assinatura[0] : assinatura, segredo)) {
+        req.log.warn("webhook WhatsApp com assinatura inválida");
+        return reply.code(401).send({ error: "assinatura inválida" });
+      }
+      let body: unknown;
+      try { body = JSON.parse(raw); } catch { return reply.code(400).send({ error: "JSON inválido" }); }
+      const incoming = extractIncoming(body).slice(0, WHATSAPP_MAX_MENSAGENS);
+      for (const msg of incoming) {
+        const out = await handleWhatsappText(db, msg.from, msg.text, msg.wamid);
+        for (const line of out.replies) {
+          await enviarCloudApi(db, out.telefone, line);
+        }
+      }
+      return { ok: true };
+    });
   });
 
   app.get("/v1/crm/whatsapp", async (req, reply) => {

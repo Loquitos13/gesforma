@@ -76,14 +76,25 @@ export async function gravarPrefs(c: Consulta, userId: string, prefs: unknown, n
   );
 }
 
-export async function atualizarDadosDoUtilizador(c: Consulta, userId: string, d: { nome?: string; apelido?: string; telf?: string }) {
+export async function atualizarDadosDoUtilizador(c: Consulta, userId: string, d: { nome?: string; apelido?: string }) {
   for (const tabela of ["formandos_gold", "formandos_fin"] as const) {
     await one(
       c,
-      `UPDATE ${tabela} SET nome = COALESCE($2, nome), apelido = COALESCE($3, apelido), telf = COALESCE($4, telf) WHERE user_id = $1`,
-      [userId, d.nome ?? null, d.apelido ?? null, d.telf ?? null],
+      `UPDATE ${tabela} SET nome = COALESCE($2, nome), apelido = COALESCE($3, apelido) WHERE user_id = $1`,
+      [userId, d.nome ?? null, d.apelido ?? null],
     );
   }
+}
+
+/** Telefone de uma ficha do utilizador: o pacote cifrado (pii_enc) e a coluna em claro como `writeFormandoPiiPatch` a devolve. */
+export async function gravarTelefoneDaFicha(
+  c: Consulta, regime: Regime, userId: string, id: number, pii: { telf: string; pii_enc: string | null },
+) {
+  await one(
+    c,
+    `UPDATE ${regime === "fin" ? "formandos_fin" : "formandos_gold"} SET telf = $3, pii_enc = $4 WHERE id = $1 AND user_id = $2`,
+    [id, userId, pii.telf, pii.pii_enc ?? ""],
+  );
 }
 
 export async function cronogramaDaTurma(c: Consulta, regime: Regime, turmaId: number) {

@@ -1,4 +1,6 @@
 import { firePreinscricaoEmail } from "./docsLink.js";
+import { dentroDoLimite } from "./limitePedidos.js";
+import { motivoFecho, regenerarToken } from "./ligacaoPessoal.js";
 import { gravarTurmaEscolhida } from "./repos/percurso.js";
 import { precoParaOferta } from "./precoOferta.js";
 import { findDuplicados, logLeadEvent } from "./crmDossier.js";
@@ -48,6 +50,16 @@ async function cursoDaOferta(db: Db, regime: "gold" | "fin", nome: string) {
   return escrita.cursoActivoDaOferta(db, regime, nome);
 }
 
+/**
+ * Preço que a pré-inscrição pública grava para este curso, local e horário (o mesmo que o site mostra).
+ * Só a formação Gold da oferta tem preço; fora da oferta ou financiada, null.
+ */
+export async function precoDaPreinscricaoPublica(db: Db, cursoNome: string, local: string, horario: string) {
+  const oferta = await cursoDaOferta(db, "gold", sanitizeHeader(cursoNome));
+  if (!oferta) return null;
+  return (await precoParaOferta(db, oferta.nome, sanitizeHeader(local), sanitizeHeader(horario))) ?? oferta.preco;
+}
+
 /** O consentimento passa a obrigatório quando o administrador o activa (Sistema → Site). */
 async function regrasConsentimento(db: Db) {
   const v = await escrita.valoresSettings(db, "site");
@@ -68,6 +80,16 @@ export async function politicaPrivacidade(db: Db) {
 
 const MINUTOS_REENVIO = 10;
 
+/** Pedidos do formulário público contados na base de dados: por IP e por email, por hora. */
+export const PREINSCRICOES_POR_IP = 30;
+export const PREINSCRICOES_POR_EMAIL = 6;
+
+/** Curso dos pedidos fora da oferta: o texto livre do formulário nunca vai para os emails, só para as notas da ficha. */
+export const CURSO_CONTACTO = "Contacto pelo site";
+
+/** A mesma resposta para pedido novo e repetido: o formulário não revela quem já tem pré-inscrição. */
+export const AVISO_PREINSCRICAO = "Recebemos o seu pedido. Vai receber no seu email a ligação pessoal para continuar.";
+
 /**
  * Pré-inscrição vinda do site. A resposta nunca devolve dados da ficha: só a referência opaca e o aviso.
  * O preço vem sempre da oferta (nunca do pedido). Um curso fora da oferta fica como contacto, sem pedido de pagamento.
@@ -79,6 +101,12 @@ export async function criarPreinscricaoPublica(
 ) {
   const email = normalizeEmail(input.email);
   if (!isEmail(email)) return { error: "email inválido" as const };
+  if (meta.ip && !(await dentroDoLimite(db, "preinscricao-ip", meta.ip, PREINSCRICOES_POR_IP, 3600))) {
+    return { error: "demasiados pedidos: tente mais tarde" as const };
+  }
+  if (!(await dentroDoLimite(db, "preinscricao-email", email, PREINSCRICOES_POR_EMAIL, 3600))) {
+    return { error: "demasiados pedidos: tente mais tarde" as const };
+  }
   const consent = await regrasConsentimento(db);
   if (consent.exigir && input.consentimento !== true) {
     return { error: "aceite a política de privacidade" as const };
@@ -92,7 +120,8 @@ export async function criarPreinscricaoPublica(
   const noOutro = noPreferido ? null : await cursoDaOferta(db, outro, pedidoCurso);
   const regime = noOutro ? outro : preferido;
   const oferta = noPreferido ?? noOutro;
-  const curso = oferta?.nome ?? (pedidoCurso || "Contacto pelo site");
+  const curso = oferta?.nome ?? CURSO_CONTACTO;
+  const notas = !oferta && pedidoCurso && pedidoCurso !== CURSO_CONTACTO ? `Pedido no site: ${pedidoCurso}` : "";
   const origem = await origemDaLista(db, sanitizeHeader(input.origem || ""), "Website");
   const campanha = await campanhaDoPedido(db, { campanhaId: input.campanhaId, campanha: sanitizeHeader(input.campanha || "") });
   const meio = sanitizeHeader(input.meioContacto || origem);
@@ -140,12 +169,16 @@ export async function criarPreinscricaoPublica(
       origem, entrada: "preinscricao", meioContacto: meio, horario, turmaId, pagamentoMetodo: metodo, regime,
       piiEnc: piiPack.pii_enc ?? "", publicId,
       consentimento: input.consentimento === true ? { ip: (meta.ip ?? "").slice(0, 64), versao: consent.versao } : null,
+      notas,
     });
     return null;
   });
   if (existente) {
+    if (notas) await logLeadEvent(db, existente.id, undefined, "campo", "Novo pedido no site", notas);
     const ultimo = existente.ligacao_reenviada_em ? new Date(String(existente.ligacao_reenviada_em)).getTime() : 0;
     if (Date.now() - ultimo > MINUTOS_REENVIO * 60_000) {
+      // Ligação expirada (90 dias sem uso): reenviá-la igual mandava uma ligação que já não abre.
+      if (motivoFecho(existente) === "expirada") await regenerarToken(db, existente.id);
       await firePreinscricaoEmail(db, {
         id: existente.id, email, nome: existente.nome, apelido: existente.apelido, curso: existente.curso,
         regime: existente.regime === "fin" ? "fin" : "gold",
@@ -156,7 +189,7 @@ export async function criarPreinscricaoPublica(
     return {
       duplicado: true as const,
       preinscricao: { id: existente.id, ref: opaqueRef("pre", existente.id, existente.public_id || null) },
-      aviso: "Já temos o seu pedido para este curso. Reenviámos para o seu email a ligação pessoal para continuar.",
+      aviso: AVISO_PREINSCRICAO,
     };
   }
 
@@ -176,6 +209,6 @@ export async function criarPreinscricaoPublica(
   return {
     duplicado: false as const,
     preinscricao: { id, ref: opaqueRef("pre", id, publicId) },
-    aviso: "Enviámos um email com a ligação para submeter os documentos do curso.",
+    aviso: AVISO_PREINSCRICAO,
   };
 }

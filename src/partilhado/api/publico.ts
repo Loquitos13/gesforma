@@ -169,8 +169,14 @@ export const apiPublicOferta = () =>
   api<{
     cursos: { nome: string; preco: number; regime?: "gold" | "fin"; inscricao?: "Acesso direto" | "Pré-pago" | "Pré-inscrição" }[];
     turmas: import("../oferta").OfertaTurma[];
-    edicoes?: { curso: string; local?: string; horario?: string; inicio?: string; preco: number; status?: string }[];
   }>("/v1/public/oferta");
+
+/** Preço da pré-inscrição calculado no servidor (o mesmo que fica gravado no pedido). */
+export const apiPublicPrecoOferta = (q: { curso: string; local: string; horario: string; regime?: "gold" | "fin" }) => {
+  const p = new URLSearchParams({ curso: q.curso, local: q.local, horario: q.horario });
+  if (q.regime) p.set("regime", q.regime);
+  return api<{ preco: number | null }>(`/v1/public/oferta/preco?${p.toString()}`);
+};
 
 /** Contactos públicos da entidade (Configurações › Entidade, sem NIF nem IBAN). */
 export type EntidadePublica = {
@@ -197,7 +203,7 @@ export const apiPublicCronograma = (regime: Regime, turmaId: number) =>
   api<CronogramaPublico>(`/v1/public/cronograma/${regime}/${turmaId}`);
 
 export const apiPublicPreinscricao = (body: Record<string, unknown>) =>
-  api<{ preinscricao: { id: number }; aviso: string }>("/v1/public/preinscricoes", { method: "POST", body: JSON.stringify(body) });
+  api<{ ok: true; aviso: string }>("/v1/public/preinscricoes", { method: "POST", body: JSON.stringify(body) });
 
 export const apiPublicOpcoes = (lista: string) =>
   api<{ lista: string; opcoes: string[] }>(`/v1/public/opcoes?lista=${encodeURIComponent(lista)}`);

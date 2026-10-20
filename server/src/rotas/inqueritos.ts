@@ -7,6 +7,7 @@ import { enviarInqueritosDaTurma, tokenDoInquerito, urlInquerito } from "../peda
 import { asObj, type Regime } from "../pedagogia/util.js";
 import { pode } from "../permissoes/capacidades.js";
 import * as repo from "../repos/inqueritos.js";
+import { dentroDoLimite } from "../limitePedidos.js";
 import { idParam, regime, regimeIdParam, textoQuery, validar } from "../validacao.js";
 import { semFormador } from "./pedagogia/comum.js";
 import type { Deps } from "./tipos.js";
@@ -21,6 +22,17 @@ function veRegime(role: string, r: string) {
 }
 const SEM_REGIME = { error: "Sem acesso aos registos deste regime." };
 const TURMA_INVALIDA = { error: "Esta ligação não corresponde a uma turma a que o inquérito foi enviado." };
+const INQUERITO_FECHADO = { error: "Este inquérito já não está a receber respostas." };
+const TURMA_COMPLETA = { error: "Esta turma já enviou todas as respostas esperadas para este inquérito." };
+const DEMASIADAS = { error: "Demasiadas respostas a partir desta ligação. Tente mais tarde." };
+
+/** Respostas públicas por IP e inquérito, por hora: folga para uma turma inteira responder na mesma rede da sala. */
+export const RESPOSTAS_POR_IP = 40;
+
+/** Inquérito marcado como inactivo, encerrado ou arquivado (payload.status/estado; sem estado está activo). */
+function inqueritoFechado(payload: Record<string, unknown>) {
+  return /inativ|inactiv|encerr|fechad|arquiv/i.test(String(payload.status ?? payload.estado ?? ""));
+}
 
 const taxa = (respostas: number, destinatarios: number) => (destinatarios > 0 ? Math.round((Math.min(respostas, destinatarios) / destinatarios) * 100) : null);
 
@@ -36,7 +48,9 @@ export async function registar(app: FastifyInstance, { db, requireAuth, audit }:
   async function respostaComTurma(inq: { id: number; regime: Regime }, body: { turma: string; turmaId?: number; formando: string; respostas: Record<string, unknown> }) {
     if (!body.turmaId) return { ...body, turmaId: null };
     const turma = await repo.turmaDoEnvio(db, inq.id, inq.regime, body.turmaId);
-    return turma ? { ...body, turma: turma.nome, turmaId: Number(turma.id) } : null;
+    if (!turma) return null;
+    const completa = turma.destinatarios > 0 && turma.respostas >= turma.destinatarios;
+    return { ...body, turma: turma.nome, turmaId: Number(turma.id), completa };
   }
   app.get("/v1/inqueritos", async (req, reply) => {
     if (!requireAuth(req, reply) || !semFormador(req, reply, "O formador não consulta os inquéritos.")) return;
@@ -150,6 +164,7 @@ export async function registar(app: FastifyInstance, { db, requireAuth, audit }:
     const found = await repo.inqueritoPorToken(db, v.params.token);
     if (!found) return reply.code(404).send({ error: "inquérito inexistente ou ligação revogada" });
     const payload = asObj(found.payload);
+    if (inqueritoFechado(payload)) return reply.code(410).send(INQUERITO_FECHADO);
     // A turma da ligação só conta se o inquérito lhe foi enviado; senão o formulário pede-a por extenso.
     const turma = v.query.turma ? await repo.turmaDoEnvio(db, found.id, found.regime, v.query.turma) : null;
     return {
@@ -165,8 +180,14 @@ export async function registar(app: FastifyInstance, { db, requireAuth, audit }:
     if (!v) return;
     const found = await repo.inqueritoPorToken(db, v.params.token);
     if (!found) return reply.code(404).send({ error: "inquérito inexistente" });
+    if (inqueritoFechado(asObj(found.payload))) return reply.code(410).send(INQUERITO_FECHADO);
     const resposta = await respostaComTurma(found, v.body);
     if (!resposta) return reply.code(400).send(TURMA_INVALIDA);
+    // Com a turma da ligação, nunca mais respostas do que os destinatários do envio; sempre, um tecto por IP (na base de dados).
+    if ("completa" in resposta && resposta.completa) return reply.code(409).send(TURMA_COMPLETA);
+    if (!(await dentroDoLimite(db, "inquerito-ip", `${found.id}:${req.ip}`, RESPOSTAS_POR_IP, 3600))) {
+      return reply.code(429).send(DEMASIADAS);
+    }
     await repo.inserirResposta(db, found.id, resposta);
     return { ok: true };
   });

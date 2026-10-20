@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { arrancar, pedido, type Ctx } from "./helpers.js";
+import { arrancar, pedido, preinscricaoDoEmail, type Ctx } from "./helpers.js";
 
 const PDF = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n");
 const FALSO = Buffer.from("MZ\x90\x00 isto não é um pdf");
@@ -30,6 +30,13 @@ async function turmaGold(ctx: Ctx, curso: string, dataInicio: string, vagas = 5)
 
 function publico(ctx: Ctx, body: Record<string, unknown>) {
   return ctx.app.inject({ method: "POST", url: "/v1/public/preinscricoes", payload: body, remoteAddress: `10.0.${seq % 250}.${(seq * 7) % 250}` });
+}
+
+/** Envia o formulário público e devolve o id gravado (lido na base: a resposta não o leva). */
+async function idPublico(ctx: Ctx, body: Record<string, unknown>) {
+  const r = await publico(ctx, body);
+  expect(r.statusCode, r.body).toBe(200);
+  return preinscricaoDoEmail(ctx, String(body.email));
 }
 
 async function tokenDe(ctx: Ctx, id: number) {
@@ -64,26 +71,29 @@ describe("formulário público", () => {
     const email = `${unico("pub")}@exemplo.pt`;
     const r1 = await publico(ctx, { nome: "Ana", email, telf: "912345678", curso, preco: 1 });
     expect(r1.statusCode).toBe(200);
-    const id = r1.json().preinscricao.id as number;
+    const id = await preinscricaoDoEmail(ctx, email);
     const lead = await ctx.db.query<{ preco: unknown }>("SELECT preco FROM preinscricoes WHERE id = $1", [id]);
     expect(Number(lead.rows[0]!.preco)).toBe(100);
 
     await pedido(ctx, "secretaria", "PATCH", `/v1/preinscricoes/${id}`, { nif: "123456789", notas: "nota interna" });
     const dup = await publico(ctx, { nome: "Outra pessoa", email, curso });
-    expect(dup.json().duplicado).toBe(true);
+    // Pedido repetido: a mesma resposta de um pedido novo (sem id, referência nem «duplicado»).
+    expect(dup.json()).toEqual(r1.json());
+    expect(Object.keys(dup.json()).sort()).toEqual(["aviso", "ok"]);
     const texto = dup.body;
     expect(texto).not.toContain("912345678");
     expect(texto).not.toContain("123456789");
     expect(texto).not.toContain("nota interna");
-    expect(Object.keys(dup.json().preinscricao).sort()).toEqual(["id", "ref"]);
+    expect(await preinscricaoDoEmail(ctx, email)).toBe(id);
 
     const outroCurso = await cursoGold(ctx, 50);
     const r3 = await publico(ctx, { nome: "Ana", email, curso: outroCurso });
-    expect(r3.json().duplicado).toBe(false);
-    expect(r3.json().preinscricao.id).not.toBe(id);
+    expect(r3.json()).toEqual(r1.json());
+    expect(await preinscricaoDoEmail(ctx, email)).not.toBe(id);
 
-    const fora = await publico(ctx, { nome: "Rui", email: `${unico("fora")}@exemplo.pt`, curso: "Curso que não existe", preco: 999 });
-    const lf = await ctx.db.query<{ preco: unknown }>("SELECT preco FROM preinscricoes WHERE id = $1", [fora.json().preinscricao.id]);
+    const emailFora = `${unico("fora")}@exemplo.pt`;
+    await publico(ctx, { nome: "Rui", email: emailFora, curso: "Curso que não existe", preco: 999 });
+    const lf = await ctx.db.query<{ preco: unknown }>("SELECT preco FROM preinscricoes WHERE id = $1", [await preinscricaoDoEmail(ctx, emailFora)]);
     expect(Number(lf.rows[0]!.preco)).toBe(0);
   });
 
@@ -92,10 +102,11 @@ describe("formulário público", () => {
     const curso = await cursoGold(ctx);
     await pedido(ctx, "admin", "PUT", "/v1/settings/site", { values: { rgpdObrigatorio: "1", rgpdVersao: "v2" } });
     expect((await publico(ctx, { nome: "Sem", email: `${unico("c")}@exemplo.pt`, curso })).statusCode).toBe(400);
-    const ok = await publico(ctx, { nome: "Com", email: `${unico("c")}@exemplo.pt`, curso, consentimento: true });
+    const emailOk = `${unico("c")}@exemplo.pt`;
+    const ok = await publico(ctx, { nome: "Com", email: emailOk, curso, consentimento: true });
     expect(ok.statusCode).toBe(200);
     const row = await ctx.db.query<{ consentimento_versao: string; consentimento_em: unknown }>(
-      "SELECT consentimento_versao, consentimento_em FROM preinscricoes WHERE id = $1", [ok.json().preinscricao.id],
+      "SELECT consentimento_versao, consentimento_em FROM preinscricoes WHERE id = $1", [await preinscricaoDoEmail(ctx, emailOk)],
     );
     expect(row.rows[0]).toMatchObject({ consentimento_versao: "v2" });
     expect(row.rows[0]!.consentimento_em).toBeTruthy();
@@ -107,7 +118,7 @@ describe("ligação pessoal até à validação", () => {
   it("sem passo de pagamento antes de a secretaria o pedir", async () => {
     const ctx = await arrancar();
     const curso = await cursoGold(ctx, 100);
-    const id = (await publico(ctx, { nome: "Eva", email: `${unico("eva")}@exemplo.pt`, curso })).json().preinscricao.id as number;
+    const id = await idPublico(ctx, { nome: "Eva", email: `${unico("eva")}@exemplo.pt`, curso });
     const token = await tokenDe(ctx, id);
     const vista = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${token}` })).json();
     expect(vista.precisaPagamento).toBe(false);
@@ -127,7 +138,7 @@ describe("ligação pessoal até à validação", () => {
     const passada = await turmaGold(ctx, curso, "2026-01-05");
     const turma = await turmaGold(ctx, curso, "2030-03-04", 1);
     const email = `${unico("ana")}@exemplo.pt`;
-    const id = (await publico(ctx, { nome: "Ana", apelido: "Lima", email, curso })).json().preinscricao.id as number;
+    const id = await idPublico(ctx, { nome: "Ana", apelido: "Lima", email, curso });
     const token = await tokenDe(ctx, id);
 
     const vista = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${token}` })).json();
@@ -216,7 +227,7 @@ describe("ligação pessoal até à validação", () => {
     expect((await ctx.app.inject({ method: "GET", url: "/v1/public/faturacao/naoexistemesmonaoexiste123" })).statusCode).toBe(404);
 
     // A vaga única ficou ocupada: outra pessoa já não a pode escolher.
-    const outro = (await publico(ctx, { nome: "Rui", email: `${unico("rui")}@exemplo.pt`, curso })).json().preinscricao.id as number;
+    const outro = await idPublico(ctx, { nome: "Rui", email: `${unico("rui")}@exemplo.pt`, curso });
     const vistaOutro = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${await tokenDe(ctx, outro)}` })).json();
     expect(vistaOutro.turmas.map((t: { id: number }) => t.id)).not.toContain(turma.id);
     expect((await pedido(ctx, "secretaria", "POST", "/v1/formandos-gold", { nome: "Intruso", email: `${unico("x")}@exemplo.pt`, turmaId: turma.id })).statusCode).toBe(409);
@@ -233,7 +244,7 @@ describe("ligação pessoal até à validação", () => {
   it("nova ligação invalida a antiga; desistência fecha a ligação", async () => {
     const ctx = await arrancar();
     const curso = await cursoGold(ctx);
-    const id = (await publico(ctx, { nome: "Rita", email: `${unico("rita")}@exemplo.pt`, curso })).json().preinscricao.id as number;
+    const id = await idPublico(ctx, { nome: "Rita", email: `${unico("rita")}@exemplo.pt`, curso });
     const antigo = await tokenDe(ctx, id);
     const r = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/nova-ligacao`);
     expect(r.statusCode).toBe(200);
@@ -248,7 +259,7 @@ describe("ligação pessoal até à validação", () => {
   it("comercial não marca Pago; secretaria regista o pagamento", async () => {
     const ctx = await arrancar();
     const curso = await cursoGold(ctx, 80);
-    const id = (await publico(ctx, { nome: "Paulo", email: `${unico("paulo")}@exemplo.pt`, curso })).json().preinscricao.id as number;
+    const id = await idPublico(ctx, { nome: "Paulo", email: `${unico("paulo")}@exemplo.pt`, curso });
     await ctx.db.query("UPDATE preinscricoes SET comercial_id = $1 WHERE id = $2", [ctx.userId.comercial, id]);
     expect((await pedido(ctx, "comercial", "PATCH", `/v1/preinscricoes/${id}`, { estado: "Pago" })).statusCode).toBe(409);
     expect((await pedido(ctx, "secretaria", "PATCH", `/v1/preinscricoes/${id}`, { estado: "Pago" })).statusCode).toBe(200);
@@ -265,8 +276,8 @@ describe("lembretes", () => {
     const ctx = await arrancar();
     const { enviarLembretesPreinscricao } = await import("../src/lembretePre.js");
     const curso = await cursoGold(ctx);
-    const aberto = (await publico(ctx, { nome: "Lia", email: `${unico("lia")}@exemplo.pt`, curso })).json().preinscricao.id as number;
-    const desistiu = (await publico(ctx, { nome: "Zé", email: `${unico("ze")}@exemplo.pt`, curso })).json().preinscricao.id as number;
+    const aberto = await idPublico(ctx, { nome: "Lia", email: `${unico("lia")}@exemplo.pt`, curso });
+    const desistiu = await idPublico(ctx, { nome: "Zé", email: `${unico("ze")}@exemplo.pt`, curso });
     await ctx.db.query("UPDATE preinscricoes SET estado = 'Desistiu' WHERE id = $1", [desistiu]);
     await ctx.db.query("UPDATE preinscricoes SET lembrete_pre_em = now() - interval '3 days', lembretes_enviados = 0 WHERE id = ANY($1::int[])", [`{${aberto},${desistiu}}`]);
     await ctx.db.query("UPDATE preinscricoes SET lembrete_pre_em = now() WHERE NOT (id = ANY($1::int[]))", [`{${aberto},${desistiu}}`]);
@@ -287,7 +298,7 @@ describe("lembretes", () => {
     const ctx = await arrancar();
     const { enviarLembretesPreinscricao } = await import("../src/lembretePre.js");
     const curso = await cursoGold(ctx);
-    const id = (await publico(ctx, { nome: "Rui", email: `${unico("rui")}@exemplo.pt`, curso })).json().preinscricao.id as number;
+    const id = await idPublico(ctx, { nome: "Rui", email: `${unico("rui")}@exemplo.pt`, curso });
     await ctx.db.query("UPDATE preinscricoes SET lembrete_pre_em = now() WHERE id <> $1", [id]);
     const vencer = () => ctx.db.query("UPDATE preinscricoes SET lembrete_pre_em = now() - interval '3 days' WHERE id = $1", [id]);
     const contactos = async () => (await ctx.db.query<{ nota: string }>(
@@ -357,7 +368,7 @@ describe("financiada: só documentos, a secretaria coloca na turma", () => {
     // O site manda "gold" por engano: o curso é financiado, por isso fica nas financiadas.
     const r = await publico(ctx, { nome: "Luís", email, curso, regime: "gold", turmaId });
     expect(r.statusCode, r.body).toBe(200);
-    const id = r.json().preinscricao.id as number;
+    const id = await preinscricaoDoEmail(ctx, email);
     const lead = await ctx.db.query<{ turma_id: number | null; regime: string }>("SELECT turma_id, regime FROM preinscricoes WHERE id = $1", [id]);
     expect(lead.rows[0]).toMatchObject({ regime: "fin", turma_id: null });
 
@@ -429,9 +440,10 @@ describe("turma escolhida no site", () => {
     const ctx = await arrancar();
     const curso = await cursoGold(ctx);
     const turma = await turmaGold(ctx, curso, "2031-02-03");
-    const r = await publico(ctx, { nome: "Sofia", email: `${unico("sofia")}@exemplo.pt`, curso, turmaId: turma.id });
+    const email = `${unico("sofia")}@exemplo.pt`;
+    const r = await publico(ctx, { nome: "Sofia", email, curso, turmaId: turma.id });
     expect(r.statusCode, r.body).toBe(200);
-    const id = r.json().preinscricao.id as number;
+    const id = await preinscricaoDoEmail(ctx, email);
     const token = await tokenDe(ctx, id);
     const vista = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${token}` })).json();
     expect(vista.turmaEscolhida?.id).toBe(turma.id);

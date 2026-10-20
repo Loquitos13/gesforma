@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { ApiError, apiPublicOferta, apiPublicPreinscricao } from "../partilhado/api";
+import { ApiError, apiPublicOferta, apiPublicPrecoOferta, apiPublicPreinscricao } from "../partilhado/api";
 import { CursoOfertaCampos } from "../partilhado/CursoOfertaCampos";
 import { SearchSelect } from "../partilhado/FormKit";
-import { precoDaInscricao, type RegraPreco } from "../partilhado/liveOpts";
 import { OFERTA_VAZIA, type CursoOfertaSel, type OfertaTurma } from "../partilhado/oferta";
 import { textoListaVazia, useOpcoesPublicas } from "./useOpcoesPublicas";
 import { ConsentimentoRgpd } from "./ConsentimentoRgpd";
@@ -25,7 +24,7 @@ export function PublicPreinscricao() {
   const [oferta, setOferta] = useState<CursoOfertaSel>({ ...OFERTA_VAZIA, curso: cursoParam });
   const [cursos, setCursos] = useState<{ nome: string; preco: number; regime?: "gold" | "fin"; inscricao?: string }[]>([]);
   const [turmas, setTurmas] = useState<OfertaTurma[]>([]);
-  const [edicoes, setEdicoes] = useState<RegraPreco[]>([]);
+  const [preco, setPreco] = useState<number | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
@@ -35,10 +34,20 @@ export function PublicPreinscricao() {
       .then(r => {
         setCursos(r.cursos.filter(c => !c.inscricao || c.inscricao === "Pré-inscrição"));
         setTurmas(r.turmas);
-        setEdicoes(r.edicoes ?? []);
       })
       .catch(() => setError("Não foi possível carregar as turmas liberadas."));
   }, []);
+
+  // O preço vem do servidor: é o mesmo que a pré-inscrição grava para este curso, local e horário.
+  const regimeSel = cursos.find(c => c.nome === oferta.curso)?.regime;
+  useEffect(() => {
+    if (!oferta.curso) { setPreco(undefined); return; }
+    let vivo = true;
+    void apiPublicPrecoOferta({ curso: oferta.curso, local: oferta.local, horario: oferta.horario, regime: regimeSel })
+      .then(r => { if (vivo) setPreco(r.preco ?? undefined); })
+      .catch(() => { if (vivo) setPreco(undefined); });
+    return () => { vivo = false; };
+  }, [oferta.curso, oferta.local, oferta.horario, regimeSel]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -84,12 +93,6 @@ export function PublicPreinscricao() {
   }
 
   const resumo = [oferta.curso, oferta.local, oferta.horario, oferta.dataInicio].filter(Boolean).join(" · ");
-  const preco = precoDaInscricao(cursos, edicoes, {
-    curso: oferta.curso,
-    local: oferta.local,
-    horario: oferta.horario,
-    inicio: oferta.dataInicio,
-  });
 
   return (
     <div className="min-h-screen bg-white px-4 py-10 sm:px-8">

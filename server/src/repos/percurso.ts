@@ -43,6 +43,13 @@ export async function turmaPorId(c: Consulta, regime: Regime, id: number) {
   return one<TurmaPercursoRow>(c, `${selectTurmas(regime)} WHERE t.id = $1`, [id]);
 }
 
+/** Estado do pagamento ligado à pré-inscrição (vazio se não houver). */
+export async function estadoPagamentoLigado(c: Consulta, leadId: number) {
+  const r = await one<{ estado: string }>(c,
+    "SELECT p.estado FROM preinscricoes l JOIN pagamentos p ON p.id = l.pagamento_id WHERE l.id = $1", [leadId]);
+  return r?.estado ?? "";
+}
+
 export async function gravarTurmaEscolhida(
   c: Consulta, leadId: number, t: { id: number; local: string; horario: string; dataInicio: string; preco: number | null },
 ) {
@@ -53,8 +60,12 @@ export async function gravarTurmaEscolhida(
     [leadId, t.id, t.local, t.horario, t.dataInicio, t.preco]);
 }
 
+/** A secretaria muda a turma: se o pagamento já foi pedido, a inscrição paga passa a concluir nesta. */
 export async function mudarTurmaDoLead(c: Consulta, leadId: number, turmaId: number) {
-  await many(c, "UPDATE preinscricoes SET turma_escolhida_id = $2, turma_id = $2 WHERE id = $1", [leadId, turmaId]);
+  await many(c,
+    `UPDATE preinscricoes SET turma_escolhida_id = $2, turma_id = $2,
+       pagamento_turma_id = CASE WHEN pagamento_turma_id IS NULL THEN NULL ELSE $2::integer END
+     WHERE id = $1`, [leadId, turmaId]);
 }
 
 export async function marcarConcluido(c: Consulta, leadId: number) {

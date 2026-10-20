@@ -123,9 +123,10 @@ export async function inserirResposta(c: Consulta, inqueritoId: number, r: { tur
 /** Turma a que o inquérito foi enviado (a ligação ?turma=<id> só vale para essas). */
 export async function turmaDoEnvio(c: Consulta, inqueritoId: number, regime: Regime, turmaId: number) {
   const tabela = regime === "gold" ? "turmas_gold" : "turmas_fin";
-  return one<{ id: number; nome: string }>(
+  return one<{ id: number; nome: string; destinatarios: number; respostas: number }>(
     c,
-    `SELECT t.id, t.nome
+    `SELECT t.id, t.nome, COALESCE(e.destinatarios, 0)::int AS destinatarios,
+            (SELECT count(*)::int FROM inquerito_respostas r WHERE r.inquerito_id = e.inquerito_id AND r.turma_id = e.turma_id) AS respostas
        FROM inquerito_envios e
        JOIN ${tabela} t ON t.id = e.turma_id
       WHERE e.inquerito_id = $1 AND e.regime = $2 AND e.turma_id = $3`,

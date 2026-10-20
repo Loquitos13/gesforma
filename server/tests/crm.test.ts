@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { arrancar, pedido, type Ctx } from "./helpers.js";
+import { arrancar, pedido, preinscricaoDoEmail, type Ctx } from "./helpers.js";
 
 let seq = 0;
 function unico(prefixo: string) {
@@ -107,12 +107,13 @@ describe("CRM: lista, filtros e filas", () => {
     expect(porCampanha.json().items.map((i: { id: number }) => i.id)).toEqual([id]);
 
     // O formulário público também guarda a campanha pelo nome da ligação.
+    const emailSite = `${unico("site")}@exemplo.pt`;
     const pub = await ctx.app.inject({
       method: "POST", url: "/v1/public/preinscricoes", remoteAddress: "10.9.9.9",
-      payload: { nome: "Site", email: `${unico("site")}@exemplo.pt`, origem: "Instagram", campanha: nomeCampanha },
+      payload: { nome: "Site", email: emailSite, origem: "Instagram", campanha: nomeCampanha },
     });
     expect(pub.statusCode, pub.body).toBe(200);
-    const p = await ctx.db.query<{ campanha_id: number | null }>("SELECT campanha_id FROM preinscricoes WHERE id = $1", [pub.json().preinscricao.id]);
+    const p = await ctx.db.query<{ campanha_id: number | null }>("SELECT campanha_id FROM preinscricoes WHERE id = $1", [await preinscricaoDoEmail(ctx, emailSite)]);
     expect(p.rows[0]!.campanha_id).toBe(campanhaId);
   });
 

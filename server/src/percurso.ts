@@ -253,6 +253,10 @@ export async function escolherTurmaPublica(db: Db, leadId: number, turmaId: numb
   if (row.validada_em) throw new PercursoErro("A secretaria já validou esta pré-inscrição.");
   const regime = regimeDe(row.regime);
   if (regime === "fin") throw new PercursoErro("Na formação financiada a turma é atribuída pela secretaria.");
+  // Com o pagamento pedido (ou já pago) o valor é o desta turma: mudar daqui pagaria o preço da anterior.
+  if (row.pagamento_pedido_em || /^(pendente|pago)$/i.test(await repo.estadoPagamentoLigado(db, leadId))) {
+    throw new PercursoErro("O pagamento desta inscrição já foi pedido para a turma escolhida. Para mudar de turma, contacte a secretaria.");
+  }
   const turma = await turmaPorId(db, regime, turmaId);
   if (!turma) throw new PercursoErro("Turma indisponível.");
   const pedido = {

@@ -76,6 +76,8 @@ export const config = {
   whatsappToken: process.env.WHATSAPP_TOKEN ?? "",
   whatsappPhoneId: process.env.WHATSAPP_PHONE_ID ?? "",
   whatsappVerifyToken: process.env.WHATSAPP_VERIFY_TOKEN ?? "",
+  /** App secret da aplicação Meta: assina cada POST do webhook (X-Hub-Signature-256). Sem ele, o webhook recusa mensagens. */
+  whatsappAppSecret: process.env.WHATSAPP_APP_SECRET ?? "",
 };
 
 export function allowedOrigins() {

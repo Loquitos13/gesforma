@@ -48,7 +48,10 @@ function lerDados(enc: string | null | undefined): DadosFaturacao | null {
   return enc ? decryptJson<DadosFaturacao>(enc) : null;
 }
 
-/** Cria a ligação (ou reutiliza a existente) e envia o email com o modelo «faturacao». */
+/**
+ * Cria a ligação e envia o email com o modelo «faturacao». Pedir de novo troca a ligação e reabre-a:
+ * é assim que a pessoa corrige dados já enviados (a ligação fecha ao gravar e ao fim de 30 dias).
+ */
 export async function pedirFaturacao(db: Db, leadId: number, actorId?: string) {
   const lead = await leads.lead(db, leadId) as Record<string, unknown> | null;
   if (!lead) return { enviado: false, erro: "Pré-inscrição inexistente." };
@@ -81,7 +84,7 @@ export async function pedirFaturacaoSeFalta(db: Db, leadId: number, actorId?: st
 /** O que a página pública mostra: o curso e os dados (já gravados, ou sugeridos a partir da ficha). */
 export async function faturacaoPublica(db: Db, token: string) {
   const linha = await repo.faturacaoPorToken(db, token);
-  if (!linha) return null;
+  if (!linha?.aberta) return null;
   const lead = await leads.lead(db, linha.preinscricao_id) as Record<string, unknown> | null;
   if (!lead) return null;
   const gravados = lerDados(linha.dados_enc);
@@ -102,10 +105,11 @@ export async function faturacaoPublica(db: Db, token: string) {
 
 export async function gravarFaturacaoPublica(db: Db, token: string, dados: DadosFaturacao) {
   const linha = await repo.faturacaoPorToken(db, token);
-  if (!linha) return false;
+  if (!linha?.aberta) return false;
   await repo.gravarDados(db, linha.preinscricao_id, encryptJson(dados));
+  // O histórico não leva NIF, nome nem morada: os dados ficam só cifrados, no botão «Contabilidade».
   await logLeadEvent(db, linha.preinscricao_id, undefined, "seguimento", "Dados de faturação recebidos",
-    `${dados.nome} · NIF ${dados.nif} · fatura para ${dados.email}`);
+    "Dados guardados cifrados: veja «Contabilidade» na ficha.");
   return true;
 }
 

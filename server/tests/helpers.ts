@@ -81,3 +81,11 @@ export async function pedido(
   if (perfil) headers.cookie = ctx.cookie[perfil];
   return ctx.app.inject({ method, url, headers, payload: payload as never });
 }
+
+/** Última pré-inscrição deste email (o formulário público já não devolve o id: a resposta é igual para todos). */
+export async function preinscricaoDoEmail(ctx: Ctx, email: string) {
+  const r = await ctx.db.query<{ id: number }>(
+    "SELECT id FROM preinscricoes WHERE lower(email) = lower($1) ORDER BY id DESC LIMIT 1", [email.trim()],
+  );
+  return r.rows[0]?.id ?? 0;
+}

@@ -36,12 +36,15 @@ export async function gravarCronograma(c: Consulta, regime: Regime, id: number, 
 export type TurmaPublica = {
   nome: string; curso: string; local: string; horario: string; data_inicio: string; formador: string;
   cronograma: unknown; cronograma_publicado_em: string | null;
+  /** Turma activa: a que aparece na oferta pública do site. */
+  na_oferta: boolean;
 };
 
 export async function turmaParaCronograma(c: Consulta, regime: Regime, id: number) {
   return one<TurmaPublica>(
     c,
-    `SELECT nome, curso, local, horario, data_inicio, formador, cronograma, cronograma_publicado_em
+    `SELECT nome, curso, local, horario, data_inicio, formador, cronograma, cronograma_publicado_em,
+            ${regime === "fin" ? "COALESCE(activa, false)" : "estado = 'Ativa'"} AS na_oferta
        FROM ${tabelaRegime("turmas", regime)} WHERE id = $1`,
     [id],
   );

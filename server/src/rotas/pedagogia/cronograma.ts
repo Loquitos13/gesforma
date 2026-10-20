@@ -67,7 +67,10 @@ export function registarCronograma(app: FastifyInstance, { db, requireAuth, audi
     const { regime, id } = v.params;
     const turma = await turmaParaCronograma(db, regime, id);
     const sessoes = sessoesPublicas(turma?.cronograma);
-    if (!turma || (!turma.cronograma_publicado_em && !sessoes.length)) return reply.code(404).send({ error: "Este cronograma ainda não está no sítio." });
+    // Publicado com «Publicar», ou de uma turma activa com sessões (a mesma regra da oferta do site, que já mostra
+    // essas turmas). Turmas fechadas ou antigas nunca publicadas não se lêem por id.
+    const visivel = turma && (turma.cronograma_publicado_em || (turma.na_oferta && sessoes.length));
+    if (!turma || !visivel) return reply.code(404).send({ error: "Este cronograma ainda não está no sítio." });
     return {
       nome: turma.nome,
       curso: turma.curso,

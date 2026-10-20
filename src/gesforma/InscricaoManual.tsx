@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { usePode } from "../partilhado/AuthGate";
 import { apiGerarAcessoFormando } from "../partilhado/api";
 import { toastError, toastOk } from "../partilhado/toastBus";
 import { OptionSelect } from "./OptionSelect";
@@ -33,6 +35,12 @@ export function CamposInscricaoManual({ value, onChange, regime }: {
   regime: "gold" | "fin";
 }) {
   const lbl = "text-xs font-semibold text-slate-500 uppercase tracking-wide";
+  // Gerar o acesso mostra a palavra-passe: só a secretaria (Gold) e a pedagogia (Financiada), como no servidor.
+  const pode = usePode();
+  const podeAcesso = pode(regime === "fin" ? "formandosFin.gerir" : "pagamentos.confirmar");
+  useEffect(() => {
+    if (!podeAcesso && value.criarAcesso) onChange({ ...value, criarAcesso: false });
+  }, [podeAcesso, value, onChange]);
   return (
     <div className="space-y-3">
       {regime === "gold" && (
@@ -52,10 +60,12 @@ export function CamposInscricaoManual({ value, onChange, regime }: {
       {regime === "gold" && value.pagamento === "pago" && (
         <OptionSelect lista="metodos_pagamento" value={value.metodo} onChange={m => onChange({ ...value, metodo: m })} allowEmpty placeholder="Método de pagamento" />
       )}
-      <label className="flex items-start gap-2 text-sm text-slate-700">
-        <input type="checkbox" className="mt-0.5 h-4 w-4" checked={value.criarAcesso} onChange={e => onChange({ ...value, criarAcesso: e.target.checked })} />
-        <span>Criar o acesso à área do formando e enviar por email (utilizador: o email; palavra-passe temporária).</span>
-      </label>
+      {podeAcesso && (
+        <label className="flex items-start gap-2 text-sm text-slate-700">
+          <input type="checkbox" className="mt-0.5 h-4 w-4" checked={value.criarAcesso} onChange={e => onChange({ ...value, criarAcesso: e.target.checked })} />
+          <span>Criar o acesso à área do formando e enviar por email (utilizador: o email; palavra-passe temporária).</span>
+        </label>
+      )}
     </div>
   );
 }

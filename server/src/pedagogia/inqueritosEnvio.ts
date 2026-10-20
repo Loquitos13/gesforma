@@ -19,7 +19,9 @@ export async function tokenDoInquerito(db: Db, item: { id: number; public_token:
   return token;
 }
 
-export const urlInquerito = (token: string) => `${config.appOrigin}/inquerito/${token}`;
+/** Ligação pública; com turma, a resposta fica associada a essa turma (validada no servidor contra os envios). */
+export const urlInquerito = (token: string, turmaId?: number) =>
+  `${config.appOrigin}/inquerito/${token}${turmaId ? `?turma=${turmaId}` : ""}`;
 
 export type ResultadoEnvio = { enviados: number; semEmail: number; inqueritos: number } | { erro: string; codigo: number };
 
@@ -45,7 +47,7 @@ export async function enviarInqueritosDaTurma(db: Db, actorId: string | undefine
     const payload = asObj(item.payload);
     const publico = publicoInquerito(payload);
     const lista = porPublico.get(publico) ?? [];
-    lista.push({ titulo: String(payload.titulo ?? "Inquérito"), url: urlInquerito(token) });
+    lista.push({ titulo: String(payload.titulo ?? "Inquérito"), url: urlInquerito(token, turmaId) });
     porPublico.set(publico, lista);
     await registarEnvio(db, regime, turmaId, item.id, publico, quantos(publico));
   }

@@ -65,14 +65,16 @@ export type InqueritoPublico = {
   id: number;
   titulo: string;
   perguntas: { id: number; tipo: string; texto: string; opcoes: string[] }[];
+  /** Turma da ligação enviada (?turma=<id>), se o inquérito lhe foi enviado. */
+  turma?: { id: number; nome: string } | null;
 };
 
-export const apiPublicInquerito = (token: string) =>
-  api<InqueritoPublico>(`/v1/public/inqueritos/${encodeURIComponent(token)}`);
+export const apiPublicInquerito = (token: string, turmaId?: number) =>
+  api<InqueritoPublico>(`/v1/public/inqueritos/${encodeURIComponent(token)}${turmaId ? `?turma=${turmaId}` : ""}`);
 
 export const apiPublicInqueritoResposta = (
   token: string,
-  body: { turma?: string; formando?: string; respostas: Record<string, unknown> },
+  body: { turma?: string; turmaId?: number; formando?: string; respostas: Record<string, unknown> },
 ) => api<{ ok: boolean }>(`/v1/public/inqueritos/${encodeURIComponent(token)}/respostas`, {
   method: "POST",
   body: JSON.stringify(body),

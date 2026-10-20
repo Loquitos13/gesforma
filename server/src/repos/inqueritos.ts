@@ -1,5 +1,5 @@
 /** Inquéritos: definição (catalog_items kind='inqueritos'), envios por turma e respostas. */
-import { pgTextArray } from "../pedagogia/util.js";
+import { pgIntArray, pgTextArray } from "../pedagogia/util.js";
 import { many, one, valor, type Consulta, type Regime } from "./sql.js";
 
 export type InqueritoLinha = { id: number; regime: Regime; payload: unknown; public_token: string | null };
@@ -9,7 +9,7 @@ export async function lerInquerito(c: Consulta, id: number) {
 }
 
 export async function inqueritoPorToken(c: Consulta, token: string) {
-  return one<{ id: number; payload: unknown }>(c, "SELECT id, payload FROM catalog_items WHERE public_token = $1 AND kind = 'inqueritos'", [token]);
+  return one<{ id: number; regime: Regime; payload: unknown }>(c, "SELECT id, regime, payload FROM catalog_items WHERE public_token = $1 AND kind = 'inqueritos'", [token]);
 }
 
 export async function gravarToken(c: Consulta, id: number, token: string) {
@@ -55,7 +55,10 @@ export async function listarComContagens(c: Consulta, regime: Regime) {
   );
 }
 
-/** Taxa de resposta por turma: envios (com nº de destinatários) cruzados com as respostas da turma. */
+/**
+ * Taxa de resposta por turma: envios (com nº de destinatários) cruzados com as respostas da turma.
+ * A resposta conta pela turma_id da ligação; as antigas (sem turma_id) pelo nome escrito.
+ */
 export async function resultadosPorTurma(c: Consulta, inqueritoId: number, regime: Regime, filtro: { turma?: string; curso?: string }) {
   const tabela = regime === "gold" ? "turmas_gold" : "turmas_fin";
   return many<{ turma_id: number | null; turma: string; curso: string; destinatarios: number; respostas: number; enviado_em: string | null }>(
@@ -65,15 +68,19 @@ export async function resultadosPorTurma(c: Consulta, inqueritoId: number, regim
          FROM inquerito_envios e
          JOIN ${tabela} t ON t.id = e.turma_id
         WHERE e.inquerito_id = $1 AND e.regime = $2
+     ), resp_turma AS (
+       SELECT coalesce(r.turma_id, (SELECT e.turma_id FROM envios e WHERE lower(trim(e.turma)) = lower(trim(r.turma)) ORDER BY e.turma_id LIMIT 1)) AS tid,
+              r.turma
+         FROM inquerito_respostas r WHERE r.inquerito_id = $1
      ), resp AS (
-       SELECT lower(trim(turma)) AS chave, min(turma) AS turma, count(*) AS n
-         FROM inquerito_respostas WHERE inquerito_id = $1 GROUP BY lower(trim(turma))
+       SELECT tid, CASE WHEN tid IS NULL THEN lower(trim(turma)) END AS chave, min(turma) AS turma, count(*) AS n
+         FROM resp_turma GROUP BY 1, 2
      )
      SELECT e.turma_id, coalesce(e.turma, r.turma, '') AS turma, coalesce(e.curso, '') AS curso,
             coalesce(e.destinatarios, 0)::int AS destinatarios, coalesce(r.n, 0)::int AS respostas,
             e.enviado_em::text AS enviado_em
        FROM envios e
-       FULL JOIN resp r ON r.chave = lower(trim(e.turma))
+       FULL JOIN resp r ON r.tid = e.turma_id
       WHERE ($3::text IS NULL OR lower(trim(coalesce(e.turma, r.turma))) = lower(trim($3)))
         AND ($4::text IS NULL OR lower(trim(coalesce(e.curso, ''))) = lower(trim($4)))
       ORDER BY e.enviado_em DESC NULLS LAST, turma`,
@@ -81,17 +88,23 @@ export async function resultadosPorTurma(c: Consulta, inqueritoId: number, regim
   );
 }
 
-export async function respostasDoInquerito(c: Consulta, inqueritoId: number, filtro: { turma?: string; turmas?: string[]; limite?: number } = {}) {
-  return many<{ id: number; turma: string; formando: string; respostas: unknown; created_at: string | Date }>(
+/**
+ * Respostas do inquérito. Com filtro, contam as da turma (turma_id) e, só para as antigas sem turma_id,
+ * as que têm o nome da turma escrito.
+ */
+export async function respostasDoInquerito(c: Consulta, inqueritoId: number, filtro: { turmaIds?: number[]; turmas?: string[]; limite?: number } = {}) {
+  const filtrado = Boolean(filtro.turmaIds || filtro.turmas);
+  return many<{ id: number; turma: string; turma_id: number | null; formando: string; respostas: unknown; created_at: string | Date }>(
     c,
-    `SELECT id, turma, formando, respostas, created_at
+    `SELECT id, turma, turma_id, formando, respostas, created_at
        FROM inquerito_respostas
       WHERE inquerito_id = $1
-        AND ($2::text IS NULL OR lower(trim(turma)) = lower(trim($2)))
-        AND ($3::text[] IS NULL OR lower(trim(turma)) = ANY($3::text[]))
+        AND (NOT $2::boolean
+             OR turma_id = ANY($3::int[])
+             OR (turma_id IS NULL AND lower(trim(turma)) = ANY($4::text[])))
       ORDER BY created_at DESC
-      LIMIT $4`,
-    [inqueritoId, filtro.turma ?? null, filtro.turmas ? pgTextArray(filtro.turmas.map(t => t.trim().toLowerCase())) : null, filtro.limite ?? 2000],
+      LIMIT $5`,
+    [inqueritoId, filtrado, pgIntArray(filtro.turmaIds ?? []), pgTextArray((filtro.turmas ?? []).map(t => t.trim().toLowerCase())), filtro.limite ?? 2000],
   );
 }
 
@@ -99,11 +112,24 @@ export async function contarRespostas(c: Consulta, inqueritoId: number) {
   return Number(await valor<number>(c, "SELECT count(*)::int FROM inquerito_respostas WHERE inquerito_id = $1", [inqueritoId]) ?? 0);
 }
 
-export async function inserirResposta(c: Consulta, inqueritoId: number, r: { turma: string; formando: string; respostas: Record<string, unknown> }) {
+export async function inserirResposta(c: Consulta, inqueritoId: number, r: { turma: string; turmaId?: number | null; formando: string; respostas: Record<string, unknown> }) {
   await one(
     c,
-    "INSERT INTO inquerito_respostas (inquerito_id, turma, formando, respostas) VALUES ($1, $2, $3, $4::jsonb) RETURNING id",
-    [inqueritoId, r.turma, r.formando, r.respostas],
+    "INSERT INTO inquerito_respostas (inquerito_id, turma, turma_id, formando, respostas) VALUES ($1, $2, $3, $4, $5::jsonb) RETURNING id",
+    [inqueritoId, r.turma, r.turmaId ?? null, r.formando, r.respostas],
+  );
+}
+
+/** Turma a que o inquérito foi enviado (a ligação ?turma=<id> só vale para essas). */
+export async function turmaDoEnvio(c: Consulta, inqueritoId: number, regime: Regime, turmaId: number) {
+  const tabela = regime === "gold" ? "turmas_gold" : "turmas_fin";
+  return one<{ id: number; nome: string }>(
+    c,
+    `SELECT t.id, t.nome
+       FROM inquerito_envios e
+       JOIN ${tabela} t ON t.id = e.turma_id
+      WHERE e.inquerito_id = $1 AND e.regime = $2 AND e.turma_id = $3`,
+    [inqueritoId, regime, turmaId],
   );
 }
 
@@ -132,8 +158,8 @@ export async function inqueritosEnviados(c: Consulta, regime: Regime, turmaId: n
   );
 }
 
-/** Respostas de todos os inquéritos do regime para uma turma (relatórios). */
-export async function respostasDaTurma(c: Consulta, regime: Regime, turmaNome: string) {
+/** Respostas de todos os inquéritos do regime para uma turma (relatórios): pela turma_id; as antigas pelo nome. */
+export async function respostasDaTurma(c: Consulta, regime: Regime, turmaId: number, turmaNome: string) {
   return many<{ id: number; titulo: string; publico: string; perguntas: unknown; formando: string; respostas: unknown }>(
     c,
     `SELECT i.id, i.payload->>'titulo' AS titulo,
@@ -142,8 +168,8 @@ export async function respostasDaTurma(c: Consulta, regime: Regime, turmaNome: s
        FROM catalog_items i
        JOIN inquerito_respostas r ON r.inquerito_id = i.id
       WHERE i.kind = 'inqueritos' AND i.regime = $1
-        AND lower(trim(r.turma)) = lower(trim($2))
+        AND (r.turma_id = $3 OR (r.turma_id IS NULL AND lower(trim(r.turma)) = lower(trim($2))))
       ORDER BY i.id, r.created_at`,
-    [regime, turmaNome],
+    [regime, turmaNome, turmaId],
   );
 }

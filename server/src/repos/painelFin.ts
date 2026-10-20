@@ -4,11 +4,13 @@
  * (o cronograma é JSON e a duração de cada sessão sai das horas do plano).
  */
 import { assiduidadeDoFormando, sessoesComHoras } from "../assiduidade.js";
+import { hojeLisboa } from "../datas.js";
 import { dtpForTurma } from "../pedagogia/dtp.js";
 import { matrizDtp } from "../pedagogia/dtpCache.js";
 import { pgIntArray } from "../pedagogia/util.js";
 import { assiduidadeMinima, lerRegras } from "../regrasConfig.js";
-import { OCUPA, filtrarTurmas, type FiltroPainel } from "./estatisticas.js";
+import { HOJE_LISBOA, OCUPA, filtrarTurmas, type FiltroPainel } from "./estatisticas.js";
+import { sqlADecorrer } from "./turmas.js";
 import { DOCS_FIN_COMPLETOS, DOCS_FIN_OBRIGATORIOS } from "./painelBlocos.js";
 import { Filtros, many, type Consulta } from "./sql.js";
 import type { Db } from "../db/pool.js";
@@ -18,11 +20,9 @@ type TurmaFin = {
   financiador: string; horas: number; cronograma: unknown; formador: string;
 };
 
-/** Turmas financiadas a decorrer: activas, não fechadas e já começadas. */
+/** Turmas financiadas a decorrer: a fase «A decorrer» da lista de turmas (sem as «por fechar»). */
 async function turmasFinADecorrer(c: Consulta, f: FiltroPainel) {
-  const w = filtrarTurmas(f).sempre("t.activa = true").sempre("t.fechada_em IS NULL")
-    .sempre("t.data_inicio ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'")
-    .sempre("t.data_inicio::date <= (now() AT TIME ZONE 'Europe/Lisbon')::date");
+  const w = filtrarTurmas(f).sempre(sqlADecorrer("fin", HOJE_LISBOA));
   return many<TurmaFin>(c, `SELECT t.id, t.nome, t.curso, t.ufcd_cod, t.local, t.horario, t.financiador, t.horas, t.cronograma, t.formador
                               FROM turmas_fin t ${w.where} ORDER BY t.data_inicio, t.id`, w.params);
 }
@@ -60,7 +60,7 @@ export async function turmasFinEmCurso(db: Db, f: FiltroPainel) {
   const ids = turmas.map(t => Number(t.id));
   const [formandos, folhas] = await Promise.all([formandosDasTurmas(db, ids), folhasDasTurmas(db, ids)]);
   const minimo = assiduidadeMinima(regras, "fin");
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLisboa();
   const linhas: TurmaDecorrer[] = [];
   const pcts: number[] = [];
   const matriz = await matrizDtp(db, "fin");
@@ -111,6 +111,9 @@ export async function turmasFinEmCurso(db: Db, f: FiltroPainel) {
     abaixoMinimo: linhas.reduce((s, l) => s + l.abaixoMinimo, 0),
     sessoesPorAssinar: linhas.reduce((s, l) => s + l.sessoesPorAssinar, 0),
     turmasPorAssinar: linhas.filter(l => l.sessoesPorAssinar > 0),
-    comBloqueantes: linhas.filter(l => l.dtpBloqueantes > 0),
+    // Mesmo âmbito do destino (Dossiê TP › «Com bloqueantes»): todas as turmas abertas do regime, não só as a decorrer.
+    comBloqueantes: matriz.turmas.filter(t => !t.fechada && t.bloqueantes > 0).map(t => ({
+      id: t.id, nome: t.nome, ufcd: linhas.find(l => l.id === t.id)?.ufcd ?? "", dtpPct: t.pct,
+    })),
   };
 }

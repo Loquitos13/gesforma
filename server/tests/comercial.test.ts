@@ -163,7 +163,8 @@ describe("Equipa: período e período anterior", () => {
     expect(r.statusCode).toBe(200);
     const m = r.json().membros.find((x: { id: string }) => x.id === comercial);
     expect(m.atual).toMatchObject({ leads: 2, pagos: 1, receita: 200, conversao: 50 });
-    expect(r.json().periodo.anterior).toEqual({ de: "2026-01-29", ate: "2026-02-28" });
+    // Mês inteiro: compara com o mês anterior inteiro (cortado no dia 28).
+    expect(r.json().periodo.anterior).toEqual({ de: "2026-02-01", ate: "2026-02-28" });
     expect(m.anterior).toMatchObject({ leads: 1, pagos: 1, receita: 300 });
 
     const ficha = await pedido(ctx, "comercial", "GET", `/v1/equipa/${comercial}?regime=gold`);

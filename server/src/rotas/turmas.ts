@@ -24,10 +24,11 @@ import * as repo from "../repos/turmas.js";
 import type { Regime } from "../repos/sql.js";
 import { idParam, paginacao, periodoQuery, regime as regimeSchema, textoQuery, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
+import { hojeLisboa } from "../datas.js";
 
+/** Hoje em Lisboa (o painel usa o mesmo dia para a fase «a decorrer»), seja qual for o fuso do processo. */
 export function hojeIso(agora = new Date()) {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${agora.getFullYear()}-${p(agora.getMonth() + 1)}-${p(agora.getDate())}`;
+  return hojeLisboa(agora);
 }
 
 const listaQuery = paginacao.merge(periodoQuery).extend({

@@ -26,10 +26,21 @@ export function datasDoPeriodo(preset: PresetPeriodo, de: string, ate: string, h
   return { de, ate };
 }
 
-/** Como se chama o período de comparação ("setembro", ou as datas). */
+/**
+ * Como se chama o período de comparação: "setembro" (mês inteiro), "1 a 19 de setembro" (o mesmo
+ * intervalo de dias do mês anterior, que é o que o servidor compara em "Este mês"), ou as datas.
+ */
 export function rotuloComparacao(preset: PresetPeriodo, anterior: { de: string; ate: string } | undefined) {
   if (!anterior) return "o período anterior";
-  if (preset === "mes") return MESES_LONGOS[Number(anterior.ate.slice(5, 7)) - 1] ?? "o mês anterior";
+  if (preset === "mes") {
+    const mes = MESES_LONGOS[Number(anterior.ate.slice(5, 7)) - 1];
+    if (!mes) return "o mês anterior";
+    const [ano, m, dia] = anterior.ate.split("-").map(Number);
+    const ultimo = new Date(ano!, m!, 0).getDate();
+    const inicio = Number(anterior.de.slice(8, 10));
+    if (anterior.de.slice(0, 7) !== anterior.ate.slice(0, 7) || (inicio === 1 && dia === ultimo)) return mes;
+    return inicio === dia ? `${dia} de ${mes}` : `${inicio} a ${dia} de ${mes}`;
+  }
   const curta = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(2, 4)}`;
   return `${curta(anterior.de)} a ${curta(anterior.ate)}`;
 }

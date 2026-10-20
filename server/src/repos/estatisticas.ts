@@ -3,6 +3,10 @@
  * e as consultas de indicadores e da série mensal. Toda a agregação é feita em SQL.
  */
 import { Filtros, many, one, type Consulta, type Regime } from "./sql.js";
+import { sqlADecorrer } from "./turmas.js";
+
+/** Hoje em Lisboa (aaaa-mm-dd), para comparar com as datas em texto das turmas. */
+export const HOJE_LISBOA = "to_char((now() AT TIME ZONE 'Europe/Lisbon')::date, 'YYYY-MM-DD')";
 
 export type FiltroPainel = {
   regime: Regime;
@@ -25,8 +29,13 @@ export const DIA_LEAD = `(CASE
   ELSE (p.created_at AT TIME ZONE 'Europe/Lisbon')::date
 END)`;
 
-/** Dia de inscrição do formando Gold (campo texto `inscrito`). */
+/**
+ * Dia civil (Lisboa) da inscrição do formando Gold (campo texto `inscrito`). Com hora, é um carimbo UTC
+ * sem fuso (como o das pré-inscrições, ver DIA_LEAD); só com a data, é já o dia escrito.
+ */
 export const DIA_FORMANDO = `(CASE
+  WHEN fg.inscrito ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}'
+    THEN ((substring(fg.inscrito from 1 for 16) || ':00')::timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Lisbon')::date
   WHEN fg.inscrito ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN substring(fg.inscrito from 1 for 10)::date
   WHEN fg.inscrito ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4}' THEN to_date(substring(fg.inscrito from 1 for 10), 'DD/MM/YYYY')
   ELSE NULL
@@ -168,15 +177,14 @@ export async function porContactar(c: Consulta, f: FiltroPainel) {
 }
 
 /**
- * Turmas a decorrer (já começaram, não fechadas, activas) e as que começam no mês corrente.
- * Datas de início em texto aaaa-mm-dd.
+ * Turmas a decorrer (a mesma fase do separador «A decorrer» da lista de turmas: sem as «por fechar»)
+ * e as que começam no mês corrente. Datas de início em texto aaaa-mm-dd.
  */
 export async function turmasADecorrer(c: Consulta, f: FiltroPainel) {
   const w = filtrarTurmas(f).sempre("t.fechada_em IS NULL");
-  const activa = f.regime === "gold" ? "t.estado ILIKE 'ativ%'" : "t.activa = true";
   const tabela = f.regime === "gold" ? "turmas_gold" : "turmas_fin";
   const r = await one(c, `SELECT
-      count(*) FILTER (WHERE ${activa} AND t.data_inicio ~ '^[0-9]{4}-' AND t.data_inicio::date <= (now() AT TIME ZONE 'Europe/Lisbon')::date)::int AS decorrer,
+      count(*) FILTER (WHERE ${sqlADecorrer(f.regime, HOJE_LISBOA)})::int AS decorrer,
       count(*) FILTER (WHERE t.data_inicio ~ '^[0-9]{4}-'
         AND t.data_inicio::date > (now() AT TIME ZONE 'Europe/Lisbon')::date
         AND date_trunc('month', t.data_inicio::date) = date_trunc('month', (now() AT TIME ZONE 'Europe/Lisbon')::date))::int AS comecam

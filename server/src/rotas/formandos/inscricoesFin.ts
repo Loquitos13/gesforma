@@ -1,6 +1,7 @@
 /** Financiada › Inscrições (candidaturas por UFCD). Elegível / Colocado na turma cria a ficha do formando. */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { hojeLisboa } from "../../datas.js";
 import { nextOpsId } from "../../ops.js";
 import {
   DOCS_INSCRICAO_FIN, ESTADOS_INSCRICAO_FIN, apagarInscricaoFin, atualizarInscricaoFin, inscricaoFin, inserirInscricaoFin, listarInscricoesFin,
@@ -59,7 +60,7 @@ export function registarInscricoesFin(app: FastifyInstance, deps: Deps) {
     const v = validar(reply, { body: corpo }, req);
     if (!v) return;
     const id = await nextOpsId(db);
-    const payload = { ...v.body, email: v.body.email.toLowerCase(), inscrito: new Date().toISOString().slice(0, 10) };
+    const payload = { ...v.body, email: v.body.email.toLowerCase(), inscrito: hojeLisboa() };
     await inserirInscricaoFin(db, id, payload);
     await audit(db, req.actor!.id, "inscricao_fin.criar", "inscricoes_fin", String(id), req.ip, { estado: payload.estado });
     const aviso = await sincronizarFicha(db, payload);

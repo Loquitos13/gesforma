@@ -42,6 +42,18 @@ const SESSOES_LECTIVAS = `
 const INICIO = "CASE WHEN left(COALESCE(t.data_inicio, ''), 10) ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN left(t.data_inicio, 10) END";
 
 /**
+ * Fase «a decorrer» (a mesma do CASE de `sqlBase`), para quem conta turmas fora da lista (painéis):
+ * não fechada nem cancelada, já começou e a última sessão lectiva não passou (senão está «por fechar»).
+ * Alias `t`; `hoje` é uma expressão SQL com a data aaaa-mm-dd de Lisboa.
+ */
+export function sqlADecorrer(regime: Regime, hoje: string) {
+  const c = COL[regime];
+  return `(NOT COALESCE(${c.fechada}, false) AND NOT COALESCE(${c.cancelada}, false)
+    AND ${INICIO} IS NOT NULL AND ${INICIO} <= ${hoje}
+    AND NOT COALESCE((SELECT max(s.data) FROM (${SESSOES_LECTIVAS}) s WHERE s.data ~ '^\\d{4}-\\d{2}-\\d{2}$') < ${hoje}, false))`;
+}
+
+/**
  * SELECT de uma turma com os números da lista. Parâmetros fixos:
  * $1 regime, $2 hoje (aaaa-mm-dd), $3 documentos obrigatórios do regime (text[]).
  */

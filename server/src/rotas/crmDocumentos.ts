@@ -59,8 +59,9 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     if ((await docs.tipoDoDoc(db, docId)) === "comprovativo") {
       const lead = await leads.lead(db, id);
       const pag = lead?.pagamento_id ? await dossie.pagamento(db, String(lead.pagamento_id)) : null;
-      if (pag && !/^pago$/i.test(String(pag.estado ?? ""))) {
-        await confirmarPagamento(db, pag);
+      // Só um pagamento pendente: um cancelado ou reembolsado nunca volta a «Pago».
+      if (pag && String(pag.estado ?? "") === "Pendente") {
+        await confirmarPagamento(db, pag, null, { soPendente: true });
         await audit(db, req.actor!.id, "pagamento.confirmado_comprovativo", "pagamento", String(pag.id), req.ip, { preinscricao: id });
         await logLeadEvent(db, id, req.actor!.id, "seguimento", "Pagamento confirmado", "Comprovativo validado pela secretaria.");
       }

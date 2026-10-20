@@ -18,9 +18,9 @@ const COLUNAS = "c.id, c.nome, c.data, c.fim, c.encarregado, c.curso, c.canal, c
 /** Estatísticas por campanha, calculadas na base de dados. */
 const STATS = `
   SELECT count(*)::int AS pre,
-         count(*) FILTER (WHERE p.estado IN ('Pago', 'Formando') OR pg.estado ILIKE 'pago%')::int AS pagos,
+         count(*) FILTER (WHERE pg.estado ILIKE 'pago%' OR (pg.id IS NULL AND p.estado IN ('Pago', 'Formando')))::int AS pagos,
          coalesce(sum(CASE WHEN pg.estado ILIKE 'pago%' THEN pg.valor
-                           WHEN p.estado IN ('Pago', 'Formando') THEN p.preco ELSE 0 END), 0)::float AS receita,
+                           WHEN pg.id IS NULL AND p.estado IN ('Pago', 'Formando') THEN p.preco ELSE 0 END), 0)::float AS receita,
          count(*) FILTER (WHERE p.estado = 'Não contactado')::int AS por_contactar,
          count(*) FILTER (WHERE p.estado = 'Desistiu')::int AS desistiram,
          count(*) FILTER (WHERE p.estado = 'Formando')::int AS formandos,

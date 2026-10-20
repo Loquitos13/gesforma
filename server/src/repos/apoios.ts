@@ -241,6 +241,8 @@ export async function gravarCalculado(c: Consulta, a: ApoioCalculadoNovo, actorI
        ON CONFLICT (formando_id, periodo, tipo) DO UPDATE
          SET turma_id = EXCLUDED.turma_id, dias = EXCLUDED.dias, horas = EXCLUDED.horas,
              valor_calculado = EXCLUDED.valor_calculado, detalhe = EXCLUDED.detalhe, estado = 'calculado',
+             -- O ajuste manual mantém-se, mas o valor final (calculado + ajuste) nunca fica negativo.
+             ajuste = GREATEST(apoios.ajuste, -EXCLUDED.valor_calculado),
              updated_at = now(), updated_by = EXCLUDED.updated_by
          WHERE apoios.estado = 'calculado' OR (apoios.estado = 'anulado' AND apoios.detalhe->>'anuladoNoRecalculo' = 'true')
        RETURNING id

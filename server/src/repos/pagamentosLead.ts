@@ -11,14 +11,14 @@ export async function pagamento(c: Consulta, id: string) {
 }
 
 export async function actualizarValorPendente(c: Consulta, id: string, valor: number) {
-  await many(c, "UPDATE pagamentos SET valor = $2 WHERE id = $1 AND estado <> 'Pago'", [id, valor]);
+  await many(c, "UPDATE pagamentos SET valor = $2 WHERE id = $1 AND estado = 'Pendente'", [id, valor]);
 }
 
-/** Último pagamento ainda não pago do mesmo email e curso (evita pagamentos repetidos). */
+/** Último pagamento pendente do mesmo email e curso (evita pagamentos repetidos; cancelados e reembolsados não se reaproveitam). */
 export async function pendenteDoEmailCurso(c: Consulta, email: string, curso: string) {
   return one<Linha>(c,
     `SELECT * FROM pagamentos
-      WHERE estado <> 'Pago' AND lower(email) = $1 AND curso = $2
+      WHERE estado = 'Pendente' AND lower(email) = $1 AND curso = $2
       ORDER BY data DESC LIMIT 1`,
     [email, curso]);
 }
@@ -33,7 +33,7 @@ export async function criarPagamento(
 }
 
 export async function definirMetodoPendente(c: Consulta, id: string, metodo: string) {
-  await many(c, "UPDATE pagamentos SET metodo = $2 WHERE id = $1 AND estado <> 'Pago'", [id, metodo]);
+  await many(c, "UPDATE pagamentos SET metodo = $2 WHERE id = $1 AND estado = 'Pendente'", [id, metodo]);
 }
 
 /** Liga o pagamento à pré-inscrição (só se ainda não tiver um, quando `seVazio`). */

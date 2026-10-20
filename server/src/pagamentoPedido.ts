@@ -1,5 +1,6 @@
 import { garantirToken } from "./ligacaoPessoal.js";
 import { config } from "./config.js";
+import { carimboUtc } from "./datas.js";
 import { getLeadDossier, logLeadEvent } from "./crmDossier.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
 import { sendMail } from "./mailer.js";
@@ -18,10 +19,6 @@ function documentosUrl(token: string) {
   return `${config.appOrigin.replace(/\/$/, "")}/documentos/${token}`;
 }
 
-function nowStamp() {
-  return new Date().toISOString().slice(0, 16).replace("T", " ");
-}
-
 async function alinharPrecoLead(
   db: Db,
   lead: { id: number; curso: string; local?: string; horario?: string; preco: number },
@@ -33,6 +30,11 @@ async function alinharPrecoLead(
   return resolved;
 }
 
+/** Cancelado ou reembolsado: conta como inexistente (não volta a «Pago»; cria-se outro). */
+function anulado(row: Record<string, unknown>) {
+  return ["Cancelado", "Reembolsado"].includes(String(row.estado ?? ""));
+}
+
 /** Garante um pagamento pendente com o valor actual. Sem referências Multibanco. */
 export async function ensurePagamentoPendente(
   db: Db,
@@ -40,27 +42,29 @@ export async function ensurePagamentoPendente(
 ) {
   lead.preco = await alinharPrecoLead(db, lead);
   const alinhar = async (row: Record<string, unknown>) => {
-    if (String(row.estado ?? "") !== "Pago" && Number(row.valor) !== lead.preco) {
+    if (String(row.estado ?? "") === "Pendente" && Number(row.valor) !== lead.preco) {
       await pags.actualizarValorPendente(db, String(row.id), lead.preco);
       row.valor = lead.preco;
     }
     return row;
   };
+  let substituir = false;
   if (lead.pagamento_id) {
     const row = await pags.pagamento(db, String(lead.pagamento_id));
-    if (row) return alinhar(row);
+    if (row && !anulado(row)) return alinhar(row);
+    substituir = Boolean(row);
   }
   const email = normalizeEmail(lead.email);
   const existente = await pags.pendenteDoEmailCurso(db, email, lead.curso);
   if (existente) {
     await alinhar(existente);
-    await pags.ligarAoLead(db, lead.id, String(existente.id), true);
+    await pags.ligarAoLead(db, lead.id, String(existente.id), !substituir);
     return existente;
   }
   const id = String(await nextOpsId(db));
   const valor = Number(lead.preco) || 0;
   await pags.criarPagamento(db, {
-    id, nome: `${lead.nome} ${lead.apelido}`.trim(), valor, metodo: TRANSFERENCIA, curso: lead.curso, data: nowStamp(), email,
+    id, nome: `${lead.nome} ${lead.apelido}`.trim(), valor, metodo: TRANSFERENCIA, curso: lead.curso, data: carimboUtc(), email,
   });
   await pags.ligarAoLead(db, lead.id, id);
   return (await pags.pagamento(db, id)) ?? { id, valor, estado: "Pendente" };
@@ -124,7 +128,7 @@ export async function marcarLeadPago(db: Db, leadId: number) {
   const lead = await leads.lead(db, leadId);
   if (!lead) return null;
   let pag = lead.pagamento_id ? await pags.pagamento(db, String(lead.pagamento_id)) : null;
-  if (!pag) {
+  if (!pag || anulado(pag)) {
     const id = `TRX-${await nextOpsId(db)}`;
     await pags.criarPagamento(db, {
       id,
@@ -132,14 +136,14 @@ export async function marcarLeadPago(db: Db, leadId: number) {
       valor: Number(lead.preco) || 0,
       metodo: String(lead.pagamento_metodo ?? "") || "Manual",
       curso: String(lead.curso ?? ""),
-      data: nowStamp(),
+      data: carimboUtc(),
       email: normalizeEmail(String(lead.email ?? "")),
     });
     await pags.ligarAoLead(db, leadId, id);
     pag = await pags.pagamento(db, id);
   }
   if (!pag) return null;
-  if (!/^pago$/i.test(String(pag.estado ?? ""))) await confirmarPagamento(db, pag);
+  if (!/^pago$/i.test(String(pag.estado ?? ""))) await confirmarPagamento(db, pag, null, { soPendente: true });
   await pags.marcarLeadPago(db, leadId);
   return { pagamentoId: String(pag.id) };
 }

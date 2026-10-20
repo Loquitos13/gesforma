@@ -58,17 +58,21 @@ export async function indicadoresEquipa(c: Consulta, regime: Regime, p: Periodo 
             count(*) FILTER (WHERE estado = 'Não contactado')::int AS por_contactar,
             count(*) FILTER (WHERE estado IN ('1º Contacto', '2º Contacto'))::int AS em_conversa,
             count(*) FILTER (WHERE pagamento_pedido_em IS NOT NULL AND estado NOT IN ('Pago', 'Formando', 'Desistiu'))::int AS pagamento_pedido,
-            count(*) FILTER (WHERE estado IN ('Pago', 'Formando'))::int AS pagos,
+            count(*) FILTER (WHERE pago)::int AS pagos,
             count(*) FILTER (WHERE estado = 'Formando')::int AS formandos,
-            coalesce(sum(preco) FILTER (WHERE estado IN ('Pago', 'Formando')), 0)::float AS receita,
+            coalesce(sum(preco) FILTER (WHERE pago), 0)::float AS receita,
             min(created_at) FILTER (WHERE estado = 'Não contactado') AS mais_antigo,
             count(*) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $2::date AND $3::date)::int AS leads_a,
-            count(*) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $2::date AND $3::date AND estado IN ('Pago', 'Formando'))::int AS pagos_a,
-            coalesce(sum(preco) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $2::date AND $3::date AND estado IN ('Pago', 'Formando')), 0)::float AS receita_a,
+            count(*) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $2::date AND $3::date AND pago)::int AS pagos_a,
+            coalesce(sum(preco) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $2::date AND $3::date AND pago), 0)::float AS receita_a,
             count(*) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $4::date AND $5::date)::int AS leads_b,
-            count(*) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $4::date AND $5::date AND estado IN ('Pago', 'Formando'))::int AS pagos_b,
-            coalesce(sum(preco) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $4::date AND $5::date AND estado IN ('Pago', 'Formando')), 0)::float AS receita_b
-       FROM preinscricoes
+            count(*) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $4::date AND $5::date AND pago)::int AS pagos_b,
+            coalesce(sum(preco) FILTER (WHERE (created_at AT TIME ZONE 'Europe/Lisbon')::date BETWEEN $4::date AND $5::date AND pago), 0)::float AS receita_b
+       FROM (
+         -- Pago: pelo pagamento ligado (um reembolsado ou cancelado não conta); sem pagamento, pelo estado.
+         SELECT l.*, coalesce(pg.estado ILIKE 'pago%' OR (pg.id IS NULL AND l.estado IN ('Pago', 'Formando')), false) AS pago
+           FROM preinscricoes l LEFT JOIN pagamentos pg ON pg.id = l.pagamento_id
+       ) preinscricoes
       WHERE regime = $1 AND comercial_id IS NOT NULL AND ($6::uuid IS NULL OR comercial_id = $6::uuid)
       GROUP BY comercial_id`,
     params,

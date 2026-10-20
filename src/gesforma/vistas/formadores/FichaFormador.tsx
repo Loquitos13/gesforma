@@ -37,6 +37,8 @@ export function FichaFormador({ id, navigate, area = false }: { id: number; navi
   const f = d.formador;
   const ccp = estadoCcp(f);
   const regimeLista = f.regimes.includes("gold") ? "gold-formadores" : "fin-formadores";
+  // O comercial ajusta a disponibilidade dos formadores da Gold (o servidor só lhe deixa esse campo).
+  const alteraDisponibilidade = gerir || proprio || (!area && user.role === "comercial" && f.regimes.includes("gold"));
 
   return (
     <div className="space-y-4">
@@ -113,7 +115,7 @@ export function FichaFormador({ id, navigate, area = false }: { id: number; navi
               <>
                     <DisponibilidadeEditor
                       value={f.disponibilidade}
-                      locked={!gerir && !proprio}
+                      locked={!alteraDisponibilidade}
                       onChange={slots => void persist(apiAlterarFormador(id, { disponibilidade: slots }).then(() => { toastOk("Disponibilidade gravada."); recarregar(); }))}
                       nota="O cronograma só atribui sessões nestes horários."
                     />

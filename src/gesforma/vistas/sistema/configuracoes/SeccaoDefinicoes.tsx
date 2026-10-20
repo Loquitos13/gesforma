@@ -14,6 +14,9 @@ export type CampoDefinicao = {
   opcoes?: { valor: string; rotulo: string }[];
 };
 
+/** Campo «linhas» (telefones por zona): até 6 linhas de 120 caracteres, como o servidor guarda. */
+const MAX_LINHAS = 6 * 120 + 5;
+
 export function SeccaoDefinicoes({ id, titulo, descricao, campos, valores, soAdmin, podeEditar, extra }: {
   id: string;
   titulo: string;
@@ -63,7 +66,7 @@ export function SeccaoDefinicoes({ id, titulo, descricao, campos, valores, soAdm
             {a => c.tipo === "escolha" ? (
               <Selecao {...a} opcoes={c.opcoes ?? []} value={f[c.chave] ?? ""} onChange={e => setF({ ...f, [c.chave]: e.target.value })} />
             ) : c.tipo === "linhas" ? (
-              <AreaTexto {...a} rows={4} maxLength={400} placeholder={c.placeholder} value={f[c.chave] ?? ""} onChange={e => setF({ ...f, [c.chave]: e.target.value })} />
+              <AreaTexto {...a} rows={4} maxLength={MAX_LINHAS} placeholder={c.placeholder} value={f[c.chave] ?? ""} onChange={e => setF({ ...f, [c.chave]: e.target.value })} />
             ) : (
               <div className="relative">
                 <Entrada

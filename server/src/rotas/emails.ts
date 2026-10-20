@@ -115,7 +115,8 @@ function cronAutorizado(authorization: string | undefined) {
 }
 /** Tempo de trabalho por chamada do cron (a função tem 30 s na vercel.json): Drive e, no email, prazo de tudo. */
 const CRON_ORCAMENTO_MS = 20_000;
-const CRON_EMAIL_MS = 25_000;
+// 18 s + até 10 s de um envio SMTP já começado cabem nos 30 s da função.
+const CRON_EMAIL_MS = 18_000;
 
 function mapRegra(r: Awaited<ReturnType<typeof listarRegras>>[number]) {
   return {

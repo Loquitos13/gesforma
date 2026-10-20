@@ -7,6 +7,8 @@ export type DadosRecibo = {
   emitidoEm: string;
   entidade: { nome: string; nif: string; morada: string; codigoPostal: string; localidade: string; email: string; telefone: string; iban: string; titularConta: string };
   pagador: { nome: string; nif: string; email: string; morada: string };
+  /** Formando, quando o recibo é passado a outra pessoa ou à empresa (dados de faturação). */
+  formando?: string;
   curso: string;
   turma: string;
   valor: number;
@@ -118,6 +120,7 @@ export async function gerarReciboPdf(d: DadosRecibo, logo: { bytes: Buffer; mime
   const valorTxt = euros(d.valor);
   page.drawText(seguro(negrito, valorTxt), { x: M + W - 8 - negrito.widthOfTextAtSize(valorTxt, 11), y, size: 11, font: negrito, color: TINTA });
   if (d.turma) { y -= 13; texto(`Turma: ${d.turma}`, M + 8, y, { tam: 9, cor: SUAVE, larg: W - 120 }); }
+  if (d.formando) { y -= 13; texto(`Formando: ${d.formando}`, M + 8, y, { tam: 9, cor: SUAVE, larg: W - 120 }); }
   y -= 12;
   page.drawLine({ start: { x: M, y }, end: { x: M + W, y }, thickness: 0.8, color: LINHA });
   y -= 18;

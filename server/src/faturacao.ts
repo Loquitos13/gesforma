@@ -20,11 +20,23 @@ import { isEmail, normalizeEmail } from "./security.js";
 
 export type DadosFaturacao = { nome: string; nif: string; moradaFiscal: string; codigoPostal: string; email: string };
 
+/** NIF/NIPC português: 9 dígitos, primeiro dígito de um tipo atribuído e dígito de controlo (módulo 11). */
+export function nifValido(nif: string) {
+  if (!/^[1235689]\d{8}$/.test(nif) && !/^(45|70|71|72|74|75|77|79|90|91|98|99)\d{7}$/.test(nif)) return false;
+  const soma = [...nif.slice(0, 8)].reduce((s, d, i) => s + Number(d) * (9 - i), 0);
+  const resto = soma % 11;
+  return Number(nif[8]) === (resto < 2 ? 0 : 11 - resto);
+}
+
 export const dadosFaturacaoSchema = z.object({
   nome: z.string().trim().min(2, "Indique o nome ou a empresa.").max(200),
-  nif: z.string().transform(s => s.replace(/\s/g, "")).pipe(z.string().regex(/^\d{9}$/, "NIF: 9 dígitos.")),
+  nif: z.string().transform(s => s.replace(/\s/g, "").replace(/^PT/i, "")).pipe(z.string()
+    .regex(/^\d{9}$/, "NIF: 9 dígitos.")
+    .refine(nifValido, "NIF inválido (confira os dígitos).")),
   moradaFiscal: z.string().trim().min(5, "Indique a morada fiscal.").max(300),
-  codigoPostal: z.string().trim().min(4, "Indique o código postal.").max(20),
+  // Código postal português (0000-000); de outro país, pelo menos 4 caracteres.
+  codigoPostal: z.string().trim().min(4, "Indique o código postal.").max(20)
+    .refine(c => !/^\d{4}/.test(c) || /^\d{4}-\d{3}(\s.*)?$/.test(c), "Código postal: 0000-000."),
   email: z.string().trim().toLowerCase().max(200).refine(isEmail, "Email da fatura inválido."),
 });
 

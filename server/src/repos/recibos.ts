@@ -33,7 +33,7 @@ export async function inserirRecibo(c: Consulta, d: { pagamentoId: string; ano: 
 export async function actualizarRecibo(c: Consulta, id: number, d: { dados?: unknown; driveFileId?: string }) {
   await many(c,
     `UPDATE recibos SET actualizado_em = now(),
-       dados = COALESCE($2::jsonb, dados), drive_file_id = COALESCE($3, drive_file_id)
+       dados = CASE WHEN dados ? 'numero' THEN dados ELSE COALESCE($2::jsonb, dados) END, drive_file_id = COALESCE($3, drive_file_id)
      WHERE id = $1`,
     [id, d.dados === undefined ? null : JSON.stringify(d.dados), d.driveFileId ?? null]);
 }
@@ -55,9 +55,11 @@ export function dadosParaRecibo(c: Consulta, pagamentoId: string) {
     `SELECT p.id, p.nome, p.email, p.curso, p.valor::float AS valor, p.metodo, p.estado,
             p.pago_em::text AS pago_em, p.created_at::text AS criado,
             t.nome AS turma, u.name AS confirmado_por,
-            lead.pii_enc AS lead_pii, lead.nif AS lead_nif, lead.morada_fiscal AS lead_morada, lead.codigo_postal AS lead_cp,
+            COALESCE(ligada.pii_enc, pela_ficha.pii_enc) AS lead_pii, COALESCE(ligada.nif, pela_ficha.nif) AS lead_nif,
+            COALESCE(ligada.morada_fiscal, pela_ficha.morada_fiscal) AS lead_morada,
+            COALESCE(ligada.codigo_postal, pela_ficha.codigo_postal) AS lead_cp,
             fat.dados_enc AS faturacao_enc,
-            NULLIF(trim(concat_ws(' ', f.nome, f.apelido)), '') AS formando_nome, COALESCE(lead.regime, 'gold') AS regime
+            NULLIF(trim(concat_ws(' ', f.nome, f.apelido)), '') AS formando_nome, COALESCE(ligada.regime, pela_ficha.regime, 'gold') AS regime
        FROM pagamentos p
        LEFT JOIN turmas_gold t ON t.id = p.turma_id
        LEFT JOIN users u ON u.id = p.confirmado_por
@@ -65,8 +67,18 @@ export function dadosParaRecibo(c: Consulta, pagamentoId: string) {
        LEFT JOIN LATERAL (
          SELECT l.id, l.pii_enc, l.nif, l.morada_fiscal, l.codigo_postal, l.regime FROM preinscricoes l
           WHERE l.pagamento_id = p.id ORDER BY l.id DESC LIMIT 1
-       ) lead ON true
-       LEFT JOIN preinscricao_faturacao fat ON fat.preinscricao_id = lead.id
+       ) ligada ON true
+       -- Pagamento registado na ficha (sem pré-inscrição ligada): a pré-inscrição Gold concluída da mesma pessoa e curso,
+       -- para o recibo levar os dados de faturação (empresa, NIF) que a pessoa indicou.
+       LEFT JOIN LATERAL (
+         SELECT l.id, l.pii_enc, l.nif, l.morada_fiscal, l.codigo_postal, l.regime FROM preinscricoes l
+          WHERE ligada.id IS NULL AND l.regime = 'gold' AND l.estado IN ('Pago', 'Formando')
+            AND COALESCE(NULLIF(f.email, ''), p.email) <> ''
+            AND lower(l.email) = lower(COALESCE(NULLIF(f.email, ''), p.email))
+            AND lower(trim(l.curso)) = lower(trim(COALESCE(NULLIF(f.curso, ''), p.curso)))
+          ORDER BY l.id DESC LIMIT 1
+       ) pela_ficha ON true
+       LEFT JOIN preinscricao_faturacao fat ON fat.preinscricao_id = COALESCE(ligada.id, pela_ficha.id)
       WHERE p.id = $1`,
     [pagamentoId]);
 }

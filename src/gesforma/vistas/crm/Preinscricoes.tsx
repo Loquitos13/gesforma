@@ -150,7 +150,7 @@ export default function Preinscricoes({ view, params, limpar }: VistaProps) {
         acoes={<>
           <Botao variante="fantasma" onClick={() => void exportar()}>Exportar CSV</Botao>
           {regime === "gold" && <Botao variante="secundario" onClick={() => void copiarFormulario()}>Ligação do formulário</Botao>}
-          {regime === "gold" && pode("crm.escrever") && <Botao variante="fantasma" onClick={() => setWhatsapp(true)}>Simular WhatsApp</Botao>}
+          {regime === "gold" && pode("sistema.admin") && <Botao variante="fantasma" onClick={() => setWhatsapp(true)}>Simular WhatsApp</Botao>}
           {pode("crm.escrever") && <Botao variante="primario" onClick={() => setEditar({ aberto: true, lead: null })}>Nova pré-inscrição</Botao>}
         </>}
       />

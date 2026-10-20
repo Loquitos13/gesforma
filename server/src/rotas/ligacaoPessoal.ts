@@ -44,6 +44,8 @@ async function lerUpload(req: FastifyRequest): Promise<Ficheiro | null> {
   return out;
 }
 
+const LIGACAO_FIN_FECHADA = "Esta ligação já não está activa. Contacte a secretaria se precisar de enviar documentos.";
+
 export async function registar(app: FastifyInstance, deps: Deps) {
   const { db } = deps;
 
@@ -185,6 +187,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const vista = await formandoFinPorToken(db, v.params.token);
     if (!vista) return reply.code(404).send({ error: "ligação inválida ou expirada" });
+    if (await leads.ligacaoFinFechada(db, vista.formandoId)) return reply.code(410).send({ error: LIGACAO_FIN_FECHADA });
     return vista;
   });
 
@@ -193,6 +196,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const formandoId = await leads.formandoFinIdPorToken(db, v.params.token);
     if (!formandoId) return reply.code(404).send({ error: "ligação inválida ou expirada" });
+    if (await leads.ligacaoFinFechada(db, formandoId)) return reply.code(410).send({ error: LIGACAO_FIN_FECHADA });
     const up = await lerUpload(req);
     if (!up) return reply.code(400).send({ error: "upload inválido" });
     const tipo = up.campos.tipo ?? "";

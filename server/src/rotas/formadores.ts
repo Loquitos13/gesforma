@@ -179,13 +179,19 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const row = await repo.obterFormador(db, id);
     if (!row) return reply.code(404).send({ error: "formador não encontrado" });
     const formador = repo.mapFormadorBase(row);
+    // Gold e Financiada não se misturam: só a ficha de quem trabalha num regime que vê, e só as turmas desse regime.
+    const role = req.actor!.role;
+    if (role !== "formador" && !veAlgumRegime(role, formador.regimes)) return reply.code(403).send({ error: SEM_REGIME });
+    const doRegime = (t: { regime: string }) => role === "formador" || veRegime(role, t.regime);
     const hoje = hojeIso();
-    const [turmas, sessoes, docs, acesso] = await Promise.all([
+    const [todasTurmas, todasSessoes, docs, acesso] = await Promise.all([
       repo.turmasDaFicha(db, formador.nome, hoje, formador.custoHora),
       repo.proximasSessoes(db, formador.nome, "0000-00-00", 2000),
       repo.docsDoFormador(db, id),
       repo.acessoDoFormador(db, row.user_id ? String(row.user_id) : null),
     ]);
+    const turmas = todasTurmas.filter(doRegime);
+    const sessoes = todasSessoes.filter(doRegime);
     const totais = {
       turmas: turmas.length,
       turmasAtivas: turmas.filter(t => !t.fechada && t.horasPendentes > 0).length,

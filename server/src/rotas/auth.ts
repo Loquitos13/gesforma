@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { config, newToken, oauthRedirectUri, onVercel, siteOriginFromHeaders } from "../config.js";
 import { driveCreds, exchangeCode, googleConfigured, googleLoginAuthUrl, googleUserEmail, purgeExpiredStates } from "../googleDrive.js";
+import { dentroDoLimite } from "../limitePedidos.js";
 import { clearLoginFailures, checkLoginAllowed, registerLoginFailure } from "../loginRate.js";
 import {
   disconnectMicrosoft, exchangeMicrosoftCode, getMicrosoftStatus, microsoftConfigured, microsoftCreds,
@@ -64,6 +65,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!isEmail(email)) return reply.code(400).send({ error: "credenciais inválidas" });
     const gate = await checkLoginAllowed(db, ipDe(req), email);
     if (!gate.ok) return reply.code(429).send({ error: `Demasiadas tentativas. Aguarde ${gate.retrySec} segundos e tente de novo.` });
+    // Por email, de qualquer IP: trava quem tenta a mesma conta a partir de muitos endereços.
+    if (!(await dentroDoLimite(db, "login-email", email, 30, 3600))) {
+      return reply.code(429).send({ error: "Demasiadas tentativas. Aguarde e tente de novo mais tarde." });
+    }
     const row = await utilizadorParaLogin(db, email);
     const ok = await verifyPassword(parsed.data.password, row?.password_hash ?? HASH_FICTICIO);
     if (!row || !row.active || !ok) {

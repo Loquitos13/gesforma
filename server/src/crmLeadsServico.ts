@@ -65,6 +65,13 @@ export async function entregarSeCompleto(db: Db, id: number, actorId: string) {
   return (await leadMapeado(db, id)) ?? mapped;
 }
 
+/** Gold e Financiada não se misturam: uma pré-inscrição da Financiada não passa a um comercial. */
+async function recusarComercialNaFin(db: Db, regime: string, comercialId: string | null | undefined) {
+  if (regime === "fin" && comercialId && await leads.eComercial(db, comercialId)) {
+    throw new CrmErro("O comercial só trabalha na Gold.", 409);
+  }
+}
+
 /** Pré-inscrição registada pela equipa (telefone, balcão, email). */
 export async function criarLeadManual(db: Db, actor: Actor, d: DadosLead) {
   const telf = (d.telf ?? "").trim();
@@ -76,6 +83,7 @@ export async function criarLeadManual(db: Db, actor: Actor, d: DadosLead) {
   const regime = regimeDoPedido(actor.role, d.regime);
   // O comercial só cria pré-inscrições suas (a mesma regra que o RLS impõe na escrita).
   const comercialId = actor.role === "comercial" ? actor.id : d.comercialId ?? (actor.role === "financiada" ? actor.id : null);
+  await recusarComercialNaFin(db, regime, comercialId);
   const curso = d.curso ?? "";
   const precoOferta = regime === "fin" || !curso ? null : await precoParaOferta(db, curso, d.local || "", d.horario || "");
   const origem = await origemDaLista(db, d.origem ?? "", "Telefone");
@@ -132,6 +140,7 @@ export async function actualizarLeadCrm(db: Db, actor: Actor, id: number, d: Dad
     if (d.estado === "Formando" && actor.role === "comercial") throw new CrmErro("Só a secretaria inscreve na turma.", 409);
   }
   if (actor.role === "comercial" && d.comercialId && d.comercialId !== actor.id) throw new CrmErro("O comercial não passa pré-inscrições a outra pessoa.", 403);
+  if (d.comercialId !== String(before.comercial_id ?? "")) await recusarComercialNaFin(db, regime, d.comercialId);
   const prev = readPreinscricaoPii(before);
   const mudaPii = d.nif !== undefined || d.moradaFiscal !== undefined || d.codigoPostal !== undefined || d.telf !== undefined;
   const pii = mudaPii
@@ -227,6 +236,7 @@ export async function aplicarLote(db: Db, actor: Actor, d: AccaoLote) {
       await leads.agendarSeguimento(db, id, d.proximoContacto ?? null, nota);
       await logLeadEvent(db, id, actor.id, "seguimento", "Seguimento em lote", d.proximoContacto ? `Próximo contacto ${d.proximoContacto}` : nota);
     } else if (d.acao === "atribuir" && d.comercialId) {
+      if (regimeDaLinha(current) === "fin" && await leads.eComercial(db, d.comercialId)) continue;
       await leads.atribuirComercial(db, id, d.comercialId);
       await logLeadEvent(db, id, actor.id, "estado", "Comercial atribuído", d.comercialId);
     } else if (d.acao === "etiqueta") {

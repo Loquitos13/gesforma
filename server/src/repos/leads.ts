@@ -53,6 +53,12 @@ export async function formandoFinIdPorToken(c: Consulta, token: string) {
   return (await one<{ id: number }>(c, "SELECT id FROM formandos_fin WHERE docs_token = $1", [token]))?.id ?? null;
 }
 
+/** A ligação de documentos da Financiada fecha quando o formando desiste ou é indeferido, ou a turma fecha. */
+export async function ligacaoFinFechada(c: Consulta, formandoId: number) {
+  return Boolean(await valor(c, `SELECT 1 FROM formandos_fin f LEFT JOIN turmas_fin t ON t.id = f.turma_id
+     WHERE f.id = $1 AND (lower(COALESCE(f.estado, '')) LIKE 'desist%' OR lower(COALESCE(f.estado, '')) = 'indeferido' OR t.fechada_em IS NOT NULL)`, [formandoId]));
+}
+
 export async function marcarUsoToken(c: Consulta, id: number) {
   await many(c, "UPDATE preinscricoes SET docs_token_usado_em = now() WHERE id = $1", [id]);
 }
@@ -104,6 +110,11 @@ export async function mudarEstado(c: Consulta, id: number, estado: string) {
 
 export async function atribuirComercial(c: Consulta, id: number, comercialId: string) {
   await many(c, "UPDATE preinscricoes SET comercial_id = $2 WHERE id = $1", [id, comercialId]);
+}
+
+/** Este utilizador é um comercial (só vende Gold). */
+export async function eComercial(c: Consulta, id: string) {
+  return Boolean(await valor(c, "SELECT 1 FROM users WHERE id::text = $1 AND role = 'comercial'", [id]));
 }
 
 export async function marcarEtiqueta(c: Consulta, id: number, etiquetaId: number | null) {

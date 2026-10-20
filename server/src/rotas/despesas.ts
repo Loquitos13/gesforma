@@ -1,9 +1,8 @@
 /** Despesas da Financiada, dentro de cada turma: lista, criar, editar, apagar e exportar no formato do template (Excel). */
-import type { FastifyInstance } from "fastify";
-import * as XLSX from "xlsx";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { CAMPOS_DESPESA, validarDespesa } from "../../../src/partilhado/despesas.js";
-import { textoSeguro } from "../pagamentosExportar.js";
+import { validarDespesa } from "../../../src/partilhado/despesas.js";
+import { gerarFicheiroReembolso, MIME_XLSX, sincronizarReembolso, sincronizarSemFalhar } from "../reembolso.js";
 import { alterarDespesa, apagarDespesa, associarDespesa, criarDespesa, listarDespesas, turmaDaDespesa, type LinhaDespesa } from "../repos/despesas.js";
 import { idNum, idParam, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
@@ -15,6 +14,13 @@ const corpoDespesa = z.object({ turmaId: idNum.optional(), dados: z.unknown().op
 
 export async function registar(app: FastifyInstance, deps: Deps) {
   const { db, requireAuth, audit } = deps;
+
+  /** O ficheiro de despesas da turma na Drive acompanha cada alteração; sem Drive a despesa grava-se na mesma. */
+  async function actualizarFicheiro(req: FastifyRequest, turmaId: number | null) {
+    if (turmaId == null) return;
+    const erro = await sincronizarSemFalhar(db, req.actor!.id, turmaId, "despesas");
+    if (erro) req.log.warn({ turma: turmaId, erro }, "ficheiro de despesas da turma não actualizado na Drive");
+  }
 
   app.get("/v1/despesas", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
@@ -32,6 +38,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v.ok) return reply.code(400).send({ error: v.erro });
     const r = await criarDespesa(db, b.body.turmaId, v.dados, req.actor!.id);
     await audit(db, req.actor!.id, "despesa.criar", "despesa", String(r?.id), req.ip, { turmaId: b.body.turmaId });
+    await actualizarFicheiro(req, b.body.turmaId);
     return { despesa: r ? dto(r) : null };
   });
 
@@ -45,6 +52,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       const r = await associarDespesa(db, p.params.id, p.body.turmaId);
       if (!r) return reply.code(404).send({ error: "Despesa não encontrada ou já associada a uma turma." });
       await audit(db, req.actor!.id, "despesa.associar", "despesa", String(p.params.id), req.ip, { turmaId: p.body.turmaId });
+      await actualizarFicheiro(req, p.body.turmaId);
       return { despesa: dto(r) };
     }
     const v = validarDespesa(p.body.dados);
@@ -52,6 +60,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const r = await alterarDespesa(db, p.params.id, v.dados);
     if (!r) return reply.code(404).send({ error: "Despesa não encontrada." });
     await audit(db, req.actor!.id, "despesa.alterar", "despesa", String(p.params.id), req.ip);
+    await actualizarFicheiro(req, r.turma_id == null ? null : Number(r.turma_id));
     return { despesa: dto(r) };
   });
 
@@ -59,8 +68,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const p = validar(reply, { params: idParam }, req);
     if (!p) return;
-    if (!(await apagarDespesa(db, p.params.id))) return reply.code(404).send({ error: "Despesa não encontrada." });
+    const apagada = await apagarDespesa(db, p.params.id);
+    if (!apagada) return reply.code(404).send({ error: "Despesa não encontrada." });
     await audit(db, req.actor!.id, "despesa.apagar", "despesa", String(p.params.id), req.ip);
+    await actualizarFicheiro(req, apagada.turma_id == null ? null : Number(apagada.turma_id));
     return { ok: true };
   });
 
@@ -69,27 +80,15 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const q = validar(reply, { query: z.object({ turma: idNum }) }, req);
     if (!q) return;
-    const turma = await turmaDaDespesa(db, q.query.turma);
-    if (!turma) return reply.code(404).send({ error: "Turma não encontrada." });
-    const linhas = await listarDespesas(db, turma.id);
-    const cab = ["Ordem", ...CAMPOS_DESPESA.map(c => c.rotulo)];
-    const dados = linhas.map(l => [
-      Number(l.ordem),
-      ...CAMPOS_DESPESA.map(c => {
-        const v = l.dados[c.chave];
-        return typeof v === "number" ? v : textoSeguro(v ?? "");
-      }),
-    ]);
-    const folha = XLSX.utils.aoa_to_sheet([cab, ...dados]);
-    folha["!cols"] = cab.map(c => ({ wch: Math.max(12, Math.min(40, c.length + 4)) }));
-    const livro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(livro, folha, "Despesas");
-    const bytes = XLSX.write(livro, { type: "buffer", bookType: "xlsx" }) as Buffer;
-    await audit(db, req.actor!.id, "despesa.exportar", "despesa", undefined, req.ip, { turmaId: turma.id, total: linhas.length });
-    const nome = turma.nome.normalize("NFD").replace(/[^\w-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || String(turma.id);
+    const g = await gerarFicheiroReembolso(db, q.query.turma, "despesas");
+    if (!g) return reply.code(404).send({ error: "Turma não encontrada." });
+    const bytes = g.bytes();
+    await sincronizarReembolso(db, req.actor!.id, g.turma.id, "despesas", { gerado: { ...g, bytes: () => bytes } })
+      .catch(err => req.log.warn({ err, turma: g.turma.id }, "ficheiro de despesas da turma não actualizado na Drive"));
+    await audit(db, req.actor!.id, "despesa.exportar", "despesa", undefined, req.ip, { turmaId: g.turma.id });
     reply
-      .header("content-type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-      .header("content-disposition", `attachment; filename="despesas-${nome}-${new Date().toISOString().slice(0, 10)}.xlsx"`)
+      .header("content-type", MIME_XLSX)
+      .header("content-disposition", `attachment; filename="${g.nome}"`)
       .header("cache-control", "no-store");
     return reply.send(bytes);
   });

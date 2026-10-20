@@ -15,6 +15,7 @@ import { registar as pedagogia } from "./pedagogia/index.js";
 import { registar as dtp } from "./dtp.js";
 import { registar as inqueritos } from "./inqueritos.js";
 import { registar as despesas } from "./despesas.js";
+import { registar as reembolso } from "./reembolso.js";
 import { registar as cursos } from "./cursos.js";
 import { registar as catalogos } from "./catalogos.js";
 import { registar as listas } from "./listas.js";
@@ -59,6 +60,7 @@ const MODULOS: Record<string, ModuloRotas> = {
   dtp,
   inqueritos,
   despesas,
+  reembolso,
   cursos,
   catalogos,
   listas,

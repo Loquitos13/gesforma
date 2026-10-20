@@ -4,6 +4,7 @@ import { z } from "zod";
 import { dtpEmFalta } from "../../pedagogia/dtp.js";
 import { anexarPdfDtp } from "../../pedagogia/ficheiros.js";
 import { dadosRelatorioFinal } from "../../pedagogia/relatorio.js";
+import { sincronizarSemFalhar } from "../../reembolso.js";
 import { pdfRelatorioFinal } from "../../relatorioFinal.js";
 import { estadoFechoFin, fecharTurmaFin, fecharTurmaGold, reabrirTurma } from "../../repos/pedagogiaTurma.js";
 import { pendentesDoFecho, turmaFechada } from "../../resultados.js";
@@ -48,6 +49,9 @@ export function registarFecho(app: FastifyInstance, { db, requireAuth, audit }: 
         req.log.warn({ err, turma: id }, "relatório final não anexado ao dossiê");
         return `O relatório de execução não foi anexado ao dossiê (${err instanceof Error ? err.message : "erro no Drive"}). Descarregue-o e anexe-o à mão.`;
       });
+    // A execução física passa a ter a situação final de cada formando: actualiza-se a cópia da turma na Drive.
+    const erroExecucao = await sincronizarSemFalhar(db, req.actor!.id, id, "execucao-fisica");
+    if (erroExecucao) req.log.warn({ turma: id, erro: erroExecucao }, "execução física não actualizada na Drive");
     await audit(db, req.actor!.id, "turma.fecho", "turma_fin", String(id), req.ip, { ...resumo, anexado: !aviso });
     return { ok: true, resumo, relatorioUrl: `/v1/turmas/fin/${id}/relatorio-final`, ...(aviso ? { aviso } : {}) };
   });

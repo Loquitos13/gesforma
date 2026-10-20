@@ -6,12 +6,12 @@ import { config, newToken, onVercel } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { assertUpload, sanitizeFileName } from "./ficheirosValidacao.js";
 import {
-  DRIVE_FILES_URL, driveComToken, driveCreds, driveOfflineMessage, ensureFolderPath, folderSegments, garantirPastaFilha,
+  DRIVE_FILES_URL, driveComToken, driveCreds, driveOfflineMessage, ensureFolderPath, folderSegments,
   isNotFound, tokenDrive, usableToken, type DriveContext,
 } from "./googleDrive.js";
 import {
-  apagarRegistoFicheiro, ficheiroDrive, gravarPastaDaTurmaSeVazia, inserirFicheiroGoogle, inserirFicheiroLocal,
-  listarFicheirosDrive, pastaDaTurma, relocalizarFicheiro, type DriveFileRow,
+  apagarRegistoFicheiro, ficheiroDrive, inserirFicheiroGoogle, inserirFicheiroLocal,
+  listarFicheirosDrive, type DriveFileRow,
 } from "./repos/drive.js";
 
 const DRIVE_FILES = DRIVE_FILES_URL;
@@ -267,37 +267,5 @@ export async function deleteDriveFile(db: Db, id: string) {
     if (existsSync(path)) unlinkSync(path);
   }
   await apagarRegistoFicheiro(db, id);
-  return true;
-}
-
-/** Move um ficheiro para a pasta da turma, dentro de uma subpasta com o nome da pessoa. */
-export async function relocateDriveFile(db: Db, fileId: string, dest: {
-  regime: "gold" | "fin";
-  turmaId: number;
-  turmaNome: string;
-  pessoa: string;
-}) {
-  const file = await ficheiroDrive(db, fileId);
-  if (!file) return false;
-  const tag = dest.regime === "fin" ? "Financiada" : "Gold";
-  const pessoa = sanitizeFileName(dest.pessoa.trim() || "Formando");
-  const turmaNome = dest.turmaNome.trim() || `Turma ${dest.turmaId}`;
-  const pathLabel = ["Turmas", tag, turmaNome, pessoa].join(" / ");
-  const token = await tokenDrive(db).catch(() => null);
-  if (token && file.stored_in === "google" && file.drive_id) {
-    const gravada = await pastaDaTurma(db, dest.regime, dest.turmaId);
-    const pasta = gravada || await ensureFolderPath(db, token, ["Turmas", tag, turmaNome]);
-    if (pasta && pasta !== gravada) await gravarPastaDaTurmaSeVazia(db, dest.regime, dest.turmaId, pasta);
-    const child = await garantirPastaFilha(token, pasta, pessoa);
-    const current = await driveComToken<{ parents?: string[] }>(
-      token,
-      `${DRIVE_FILES}/${encodeURIComponent(file.drive_id)}?fields=parents&supportsAllDrives=true`,
-    );
-    const remove = (current.parents ?? []).filter(id => id !== child);
-    const params = new URLSearchParams({ addParents: child, supportsAllDrives: "true", fields: "id,parents" });
-    if (remove.length) params.set("removeParents", remove.join(","));
-    await driveComToken(token, `${DRIVE_FILES}/${encodeURIComponent(file.drive_id)}?${params.toString()}`, { method: "PATCH" });
-  }
-  await relocalizarFicheiro(db, fileId, pathLabel, turmaNome, pessoa);
   return true;
 }

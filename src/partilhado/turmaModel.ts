@@ -65,10 +65,6 @@ export function ordenarModulos(modulos: string[]) {
   return [...modulos].sort((a, b) => n(a) - n(b) || codigoModulo(a).localeCompare(codigoModulo(b), "pt"));
 }
 
-export function codigosModulos(modulos: string[] | undefined) {
-  return ordenarCodigos((modulos ?? []).map(codigoModulo).filter(Boolean)).join("/");
-}
-
 export function lugaresLivres(t: {
   vagas?: number;
   totalAlunos?: number;

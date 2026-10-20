@@ -56,7 +56,6 @@ function mapCampanha(r: Record<string, unknown>) {
   };
 }
 
-export type CampanhaComStats = ReturnType<typeof mapCampanha>;
 
 export async function listarCampanhas(c: Consulta, f: FiltroCampanhas = {}) {
   const w = filtros(f);

@@ -63,24 +63,6 @@ export async function notificarDocumentos(db: Db, id: number, actorId?: string) 
   return mail;
 }
 
-/** Passa o lead a Pré-inscrição, gera o link pessoal e dispara o email + rasto de contacto. */
-export async function promoverPreinscricao(
-  db: Db,
-  id: number,
-  actorId?: string,
-) {
-  const lead = (await leads.lead(db, id)) as { id: number; estado: string } | null;
-  if (!lead) return null;
-  if (lead.estado === "Formando") return { skipped: true as const, estado: lead.estado };
-
-  await leads.promoverAPreinscricao(db, id);
-  if (lead.estado !== "Pré-inscrição") {
-    await logLeadEvent(db, id, actorId, "estado", "Passou a Pré-inscrição", `De ${lead.estado}`);
-  }
-  const mail = await notificarDocumentos(db, id, actorId);
-  return { skipped: false as const, ...mail };
-}
-
 export type DocLead = {
   id: number;
   tipo: string;

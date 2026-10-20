@@ -142,10 +142,6 @@ export async function apagarRegistoFicheiro(c: Consulta, id: string) {
   await many(c, "DELETE FROM drive_files WHERE id = $1", [id]);
 }
 
-export async function relocalizarFicheiro(c: Consulta, id: string, folderPath: string, turma: string, formando: string) {
-  await many(c, "UPDATE drive_files SET folder_path = $2, turma = $3, formando = $4 WHERE id = $1", [id, folderPath, turma, formando]);
-}
-
 export async function pastaDaTurma(c: Consulta, regime: Regime, turmaId: number) {
   const r = await one<{ drive_pasta_id: string }>(c, `SELECT drive_pasta_id FROM ${tabelaRegime("turmas", regime)} WHERE id = $1`, [turmaId]);
   return r?.drive_pasta_id?.trim() ?? "";
@@ -180,6 +176,3 @@ export async function contarPartilhasPorAcertar(c: Consulta) {
   return r?.n ?? 0;
 }
 
-export async function gravarPastaDaTurmaSeVazia(c: Consulta, regime: Regime, turmaId: number, pasta: string) {
-  await many(c, `UPDATE ${tabelaRegime("turmas", regime)} SET drive_pasta_id = $2 WHERE id = $1 AND drive_pasta_id = ''`, [turmaId, pasta]);
-}

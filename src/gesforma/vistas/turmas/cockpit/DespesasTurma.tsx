@@ -30,7 +30,7 @@ const texto = (d: DadosDespesa, k: string) => String(d[k] ?? "");
 const valor = (d: DadosDespesa, k: string) => (typeof d[k] === "number" ? eur(d[k] as number, true) : "—");
 const titulo = (d: Despesa) => [texto(d.dados, "docDespesa"), texto(d.dados, "nDocDespesa")].filter(Boolean).join(" · ") || "Sem documento";
 
-export function DespesasTurma({ turmaId }: { turmaId: number }) {
+export function DespesasTurma({ turmaId, onFicha }: { turmaId: number; onFicha?: (formandoId: number) => void }) {
   const { dados, erro, aCarregar, recarregar } = useRecurso(`despesas:turma:${turmaId}`, signal => apiDespesas(turmaId, { signal }));
   const [q, setQ] = useState("");
   const [form, setForm] = useState<{ id: number | null; valores: Form } | null>(null);
@@ -72,7 +72,7 @@ export function DespesasTurma({ turmaId }: { turmaId: number }) {
 
   return (
     <div className="space-y-4">
-      <ReembolsoTurma turmaId={turmaId} />
+      <ReembolsoTurma turmaId={turmaId} onFicha={onFicha} />
       <SemTurma turmaId={turmaId} />
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex h-9 min-w-0 max-w-[420px] flex-1 items-center gap-2 rounded-lg border border-linha-forte bg-white px-3 text-tinta-suave">

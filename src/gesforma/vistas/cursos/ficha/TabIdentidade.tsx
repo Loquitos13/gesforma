@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { LISTA_CNAEF } from "../../../../partilhado/execucaoFisica";
+import { SearchSelect } from "../../../../partilhado/FormKit";
 import { Cartao, Campo, Entrada } from "../../../../partilhado/ui";
 import { RecorteMiniatura, type FonteRecorte } from "../../../RecorteMiniatura";
 import { slugify, urlImagem, type MediaSlot } from "./modelo";
@@ -83,6 +85,13 @@ export function TabIdentidade({ f }: { f: FichaCurso }) {
               <Campo className="sm:col-span-2" rotulo="Designação oficial" obrigatorio erro={falhas.ufcd} ajuda="Nome da UFCD no CNQ.">
                 {p => <Entrada {...p} value={data.ufcd} onChange={e => patch({ ufcd: e.target.value })} />}
               </Campo>
+              {/* O seletor com pesquisa não é um input: o rótulo vai à parte. */}
+              <div className="sm:col-span-3 min-w-0">
+                <span className="mb-1 block text-xs font-semibold text-[#3A4352]">Área de formação (CNAEF)</span>
+                <SearchSelect value={data.areaCnaef} onChange={v => patch({ areaCnaef: v })} allowEmpty emptyLabel="Escolher…"
+                  placeholder="Pesquisar área ou código…" options={LISTA_CNAEF.map(value => ({ value }))} />
+                <span className="mt-1 block text-xs text-tinta-suave">A coluna «Área de Formação» da execução física do reembolso.</span>
+              </div>
             </>
           )}
           <Campo className="sm:col-span-2" rotulo="Endereço da página" obrigatorio erro={falhas.slug} ajuda="Mudar o endereço de uma página publicada parte as ligações antigas.">

@@ -4,16 +4,19 @@ import { apiApagarFormando, apiFichaFormando, type Regime } from "../../../parti
 import { invalidar, useRecurso } from "../../../partilhado/dados/useRecurso";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
 import {
-  Botao, BotaoLigacao, ConfirmarPerigo, ErroCarregar, Esqueleto, Estado, MenuLinha, PageHeader, Separadores, Vazio,
+  Botao, BotaoLigacao, ConfirmarPerigo, ErroCarregar, Esqueleto, Estado, MenuLinha, PageHeader, Separadores, Vazio, useFiltrosUrl,
 } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
 import { EditarDados, MudarTurma } from "./fichaDialogos";
 import { CartaoAcesso, CartaoDados, CartaoElegibilidade, CartaoPagamento, CartaoTurma } from "./fichaLateral";
 import { CartaoApoios, SeparadorApoios } from "./apoios/SeparadorApoios";
 import { SeparadorAvaliacao, SeparadorContratos, SeparadorDocumentos, SeparadorHistorico } from "./fichaSeparadores";
+import { SeparadorFinanciamento } from "./SeparadorFinanciamento";
 import { Percurso } from "./partes";
 
-type Aba = "documentos" | "avaliacao" | "apoios" | "contratos" | "historico";
+type Aba = "documentos" | "avaliacao" | "financiamento" | "apoios" | "contratos" | "historico";
+const ABAS_SO_FIN: Aba[] = ["financiamento", "apoios"];
+const ABAS: Aba[] = ["documentos", "avaliacao", "financiamento", "apoios", "contratos", "historico"];
 
 function soDigitos(t: string) {
   const d = t.replace(/\D/g, "");
@@ -31,7 +34,11 @@ export default function FormandoFicha({ view, params, navigate }: VistaProps) {
   const podeAcesso = pode(gold ? "pagamentos.confirmar" : "formandosFin.gerir");
   const chave = id ? `formandos:ficha:${regime}:${id}` : null;
   const { dados: ficha, erro, aCarregar, recarregar } = useRecurso(chave, s => apiFichaFormando(regime, id, s));
-  const [aba, setAba] = useState<Aba>("documentos");
+  // O separador vai no URL (?aba=financiamento): o cockpit da turma abre a ficha directamente nos dados em falta.
+  const [filtrosAba, setFiltrosAba] = useFiltrosUrl({ aba: "documentos" });
+  const pedida = filtrosAba.aba as Aba;
+  const aba: Aba = ABAS.includes(pedida) && !(gold && ABAS_SO_FIN.includes(pedida)) ? pedida : "documentos";
+  const setAba = (a: Aba) => setFiltrosAba({ aba: a });
   const [editar, setEditar] = useState(false);
   const [mudar, setMudar] = useState(false);
   const [apagar, setApagar] = useState(false);
@@ -115,7 +122,7 @@ export default function FormandoFicha({ view, params, navigate }: VistaProps) {
             itens={[
               { id: "documentos", rotulo: docsAba },
               { id: "avaliacao", rotulo: gold ? "Assiduidade e avaliação" : "Assiduidade (horas) e avaliação" },
-              ...(gold ? [] : [{ id: "apoios" as const, rotulo: "Apoios" }]),
+              ...(gold ? [] : [{ id: "financiamento" as const, rotulo: "Dados para o financiamento" }, { id: "apoios" as const, rotulo: "Apoios" }]),
               { id: "contratos", rotulo: "Contratos e certificados" },
               { id: "historico", rotulo: "Histórico e notas" },
             ]}
@@ -124,6 +131,7 @@ export default function FormandoFicha({ view, params, navigate }: VistaProps) {
           <div className="p-5 flex flex-col gap-6 [&>section]:border-0 [&>section]:p-0 [&>section]:rounded-none [&>div>section]:border-0 [&>div>section]:p-0 [&>div>section]:rounded-none">
             {aba === "documentos" && <SeparadorDocumentos ficha={ficha} podeEditar={podeEditar} />}
             {aba === "avaliacao" && <SeparadorAvaliacao ficha={ficha} />}
+            {aba === "financiamento" && !gold && <SeparadorFinanciamento formandoId={ficha.id} podeEditar={podeEditar} />}
             {aba === "apoios" && !gold && <SeparadorApoios formandoId={ficha.id} podeEditar={podeEditar} />}
             {aba === "contratos" && <SeparadorContratos ficha={ficha} podeEditar={podeEditar} />}
             {aba === "historico" && <SeparadorHistorico ficha={ficha} podeEditar={podeEditar} />}

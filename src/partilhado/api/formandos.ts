@@ -1,4 +1,5 @@
 // API do domínio "formandos": listas, ficha e acções (server/src/rotas/formandos.ts).
+import type { DadosFinanciamento } from "../execucaoFisica";
 import { api, enviar, qs, type Pagina } from "./cliente";
 
 export type Regime = "gold" | "fin";
@@ -156,6 +157,17 @@ export function apiRegistarPagamentoFormando(id: number, corpo: { metodo: string
 
 export function apiLembreteDocsFin(id: number) {
   return enviar.post<{ ok: boolean }>(`/v1/formandos-fin/${id}/lembrete-documentos`);
+}
+
+/** Dados para o financiamento (execução física). `daInscricao`: campos que ainda vêm da pré-inscrição. */
+export type FinanciamentoFormando = { dados: DadosFinanciamento; daInscricao: (keyof DadosFinanciamento)[] };
+
+export function apiFinanciamentoFormando(id: number, signal?: AbortSignal) {
+  return api<FinanciamentoFormando>(`/v1/formandos-fin/${id}/financiamento`, { signal, silencioso: true });
+}
+
+export function apiAlterarFinanciamentoFormando(id: number, corpo: Partial<DadosFinanciamento>) {
+  return enviar.patch<FinanciamentoFormando>(`/v1/formandos-fin/${id}/financiamento`, corpo);
 }
 
 // ─── Financiada › Inscrições ─────────────────────────────────────────────────

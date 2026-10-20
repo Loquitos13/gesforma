@@ -12,7 +12,10 @@ export type CursoGold = {
 };
 
 export type CursoFin = {
-  id: number; ufcdCod: string; ufcd: string; nomeComercial: string; regime: string; horas: number; estado: string; uso: UsoCurso;
+  id: number; ufcdCod: string; ufcd: string; nomeComercial: string; regime: string; horas: number; estado: string;
+  /** Área de formação CNAEF (lista do template de execução física). */
+  areaCnaef: string;
+  uso: UsoCurso;
 };
 
 export type ResumoCursos = { total: number; ativos: number; comTurmas: number };

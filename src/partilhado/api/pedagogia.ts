@@ -179,15 +179,6 @@ export const apiDtpEntidades = () => api<{ entidades: DtpEntidade[] }>("/v1/dtp/
 export const apiCreateDtpEntidade = (nome: string) =>
   api<{ entidade: DtpEntidade }>("/v1/dtp/gold/entidades", { method: "POST", body: JSON.stringify({ nome }) });
 
-export const apiDtpEntidadeModelo = (id: number) =>
-  api<DtpModeloResposta>(`/v1/dtp/gold/entidades/${id}/modelo`);
-
-export const apiSaveDtpEntidadeModelo = (id: number, body: { excluidos: string[]; incluidos?: string[]; extra: DtpExtra[] }) =>
-  api<DtpModeloResposta>(`/v1/dtp/gold/entidades/${id}/modelo`, {
-    method: "PUT",
-    body: JSON.stringify(body),
-  });
-
 export const apiDtpModelo = (regime: Regime, cursoId: number) =>
   api<DtpModeloResposta>(`/v1/cursos/${regime}/${cursoId}/dtp-modelo`);
 

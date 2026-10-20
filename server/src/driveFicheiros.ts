@@ -1,4 +1,5 @@
 /** Ficheiros guardados pelo GesForma: na Drive da entidade ou, sem ligação e fora da Vercel, em disco local. */
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { config, newToken, onVercel } from "./config.js";
@@ -90,6 +91,11 @@ export function mapFile(row: DriveFileRow) {
   };
 }
 
+/** Resumo do conteúdo guardado com cada ficheiro (para não reenviar um PDF gerado igual ao que já lá está). */
+export function resumoConteudo(bytes: Buffer) {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
 export async function storeDriveFile(
   db: Db,
   actorId: string | undefined,
@@ -100,6 +106,7 @@ export async function storeDriveFile(
   const name = sanitizeFileName(file.name);
   assertUpload(name, file.bytes, Boolean(opts.gerado));
   const id = newToken(16);
+  const sha256 = resumoConteudo(file.bytes);
   const creds = await driveCreds(db);
   const pathLabel = ctx.folderPath?.trim() || folderSegments(ctx, creds.folderName).join(" / ");
   const { token, reason } = await usableToken(db);
@@ -122,7 +129,7 @@ export async function storeDriveFile(
       size: Number(uploaded.size ?? file.bytes.length), webViewLink: uploaded.webViewLink ?? null,
       webContentLink: uploaded.webContentLink ?? null, folderPath: pathLabel,
       kind: ctx.kind || "documento", regime: ctx.regime ?? null, turma: ctx.turma ?? null,
-      formando: ctx.formando ?? null, label: ctx.label ?? null, criadoPor: actorId ?? null,
+      formando: ctx.formando ?? null, label: ctx.label ?? null, criadoPor: actorId ?? null, sha256,
     });
   } else if (!onVercel) {
     const localName = `${id}-${name}`;
@@ -131,7 +138,7 @@ export async function storeDriveFile(
     await inserirFicheiroLocal(db, {
       id, name, mime: file.mime, size: file.bytes.length, folderPath: pathLabel,
       kind: ctx.kind || "documento", regime: ctx.regime ?? null, turma: ctx.turma ?? null,
-      formando: ctx.formando ?? null, label: ctx.label ?? null, localPath: localName, criadoPor: actorId ?? null,
+      formando: ctx.formando ?? null, label: ctx.label ?? null, localPath: localName, criadoPor: actorId ?? null, sha256,
     });
   } else {
     console.error(JSON.stringify({

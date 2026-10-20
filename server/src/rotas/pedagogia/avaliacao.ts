@@ -115,6 +115,7 @@ export function registarAvaliacao(app: FastifyInstance, { db, requireAuth, audit
     const v = validar(reply, { params: regimeIdParam }, req);
     if (!v) return;
     const { regime, id } = v.params;
+    if (!(await formadorPodeVer(db, req, reply, regime, id, "Só consulta as turmas em que está atribuído."))) return;
     const turma = await custosDaTurma(db, regime, id);
     if (!turma) return reply.code(404).send({ error: "turma não encontrada" });
     const [gravadas, custos] = await Promise.all([sumariosDaTurma(db, regime, id), custoHoraFormadores(db)]);

@@ -1,4 +1,4 @@
-import { lerEntidade } from "./regrasConfig.js";
+import { assiduidadeMinima, lerEntidade } from "./regrasConfig.js";
 import { resultadosDaTurma, resultadosDeTurmas } from "./resultados.js";
 import type { Db } from "./db/pool.js";
 import { certificadosFinComFicheiro, formandosFinComContacto, turmaFinBase, ufcdDoCurso } from "./repos/dossieGerado.js";
@@ -75,6 +75,9 @@ type Dados = {
   /** Calculados pelo servidor (resultados.ts): mesma regra da emissão de certificados. */
   elegiveis: Map<number, boolean>;
   notasFinais: Map<number, number | null>;
+  aprovados: Map<number, boolean | null>;
+  /** A regra de `resultados.ts` por extenso, com os mínimos das configurações. */
+  regraElegivel: string;
   entidade: string;
 };
 
@@ -115,18 +118,6 @@ function mediaDe(notas: number[]) {
   return Math.round((notas.reduce((s, n) => s + n, 0) / notas.length) * 100) / 100;
 }
 
-export function comAproveitamento(input: {
-  presencas: number | null;
-  elearning: number | null;
-  nota: number | null;
-  ccp: boolean;
-  minimo: number;
-}) {
-  if (input.presencas == null || input.presencas < 75) return false;
-  if (input.ccp) return input.nota != null && input.nota >= input.minimo;
-  return input.elearning != null && input.elearning >= 50;
-}
-
 async function carregar(db: Db, turmaId: number): Promise<Dados | null> {
   const row = await turmaFinBase(db, turmaId);
   if (!row) return null;
@@ -154,16 +145,25 @@ async function carregar(db: Db, turmaId: number): Promise<Dados | null> {
   }).filter(Boolean);
   const minimoRaw = Number(avaliacao.minimoAprovacao);
   const ccp = /ccp/i.test(row.curso);
-  const unidade = String(avaliacao.unidade ?? (ccp ? "pontos" : "valores")).trim() || "valores";
   const [res, entidade] = await Promise.all([resultadosDaTurma(db, "fin", turmaId), lerEntidade(db)]);
+  // Escala e mínimo: os do cálculo dos resultados (a mesma leitura da ficha que a grelha e os certificados).
+  const unidade = res?.avaliacao.unidade ?? (String(avaliacao.unidade ?? (ccp ? "pontos" : "valores")).trim() || "valores");
+  const minimo = res?.avaliacao.minimoAprovacao ?? (Number.isFinite(minimoRaw) ? minimoRaw : (ccp ? 3 : 10));
   const presencas = new Map<number, number | null>();
   const elegiveis = new Map<number, boolean>();
   const notasFinais = new Map<number, number | null>();
+  const aprovados = new Map<number, boolean | null>();
   for (const r of res?.formandos ?? []) {
     presencas.set(r.id, r.assiduidade.pct);
     elegiveis.set(r.id, r.elegivel);
     notasFinais.set(r.id, r.nota);
+    aprovados.set(r.id, r.aprovado);
   }
+  const regraElegivel = res
+    ? `Elegível: ${assiduidadeMinima(res.regras, "fin")}% de assiduidade em horas e aprovação na avaliação (nota final de pelo menos `
+      + `${minimo} ${unidade}; sem grelha de notas, resultado de e-learning de pelo menos ${res.regras.elearningMin})`
+      + `${res.regras.dtpBloqueiaCertificado ? ", com o dossiê técnico-pedagógico completo" : ""}.`
+    : "Elegível: sem resultados calculados para esta turma.";
   const ufcdCod = String(curso?.ufcd_cod ?? "").trim();
   const ufcdNome = String(curso?.ufcd ?? "").trim();
   return {
@@ -196,7 +196,7 @@ async function carregar(db: Db, turmaId: number): Promise<Dados | null> {
     })),
     parametros,
     unidade,
-    minimo: Number.isFinite(minimoRaw) ? minimoRaw : (ccp ? 3 : 10),
+    minimo,
     ccp,
     certs: certs.map(c => ({
       formandoId: c.formando_id,
@@ -209,6 +209,8 @@ async function carregar(db: Db, turmaId: number): Promise<Dados | null> {
     presencas,
     elegiveis,
     notasFinais,
+    aprovados,
+    regraElegivel,
     entidade: entidade.nome,
   };
 }
@@ -238,13 +240,8 @@ function linhasElegiveis(d: Dados) {
   return d.formandos.map(f => {
     const cert = d.certs.find(c => c.formandoId === f.id);
     const nota = notaDoFormando(d, f.id);
-    const elegivel = d.elegiveis.get(f.id) ?? comAproveitamento({
-      presencas: d.presencas.get(f.id) ?? null,
-      elearning: cert?.elearning ?? null,
-      nota,
-      ccp: d.ccp,
-      minimo: d.minimo,
-    });
+    // Sem resultado calculado não há elegibilidade: a regra é só a de `resultados.ts`.
+    const elegivel = d.elegiveis.get(f.id) ?? false;
     return { ...f, cert, nota, elegivel, presencas: d.presencas.get(f.id) ?? null };
   });
 }
@@ -339,8 +336,11 @@ function pdfPauta(d: Dados) {
       const modulo = cell.moduloId && cell.moduloId !== "_final" ? `${cell.moduloId} · ` : "";
       linhas.push(...partirLinhas(`  ${modulo}${rotuloParametro(d, cell.parametroId)}: ${cell.nota == null ? "—" : cell.nota}${moodle}`));
     }
-    const resultado = media == null ? "incompleta" : media >= d.minimo ? "aproveitamento" : "sem aproveitamento";
-    linhas.push(...partirLinhas(`  Média das notas lançadas: ${media == null ? "—" : media} · ${resultado}`));
+    // Resultado e nota final: os do servidor (mesma fórmula da grelha e dos certificados).
+    const final = d.notasFinais.get(f.id) ?? null;
+    const aprov = d.aprovados.get(f.id) ?? null;
+    const resultado = aprov == null ? "incompleta" : aprov ? "aproveitamento" : "sem aproveitamento";
+    linhas.push(...partirLinhas(`  Média das notas lançadas: ${media == null ? "—" : media} · Nota final: ${final == null ? "—" : final} · ${resultado}`));
     linhas.push("");
   }
   linhas.push(
@@ -355,9 +355,8 @@ function pdfEntrega(d: Dados) {
   const linhas = [
     ...cabecalho(d, "Comprovativo da entrega dos certificados"),
     "O certificado legal obtém-se fora do GesForma. Esta lista regista o PDF carregado para cada formando elegível com aproveitamento.",
-    d.ccp
-      ? `Elegível: 75% de presenças e média da grelha ≥ ${d.minimo}.`
-      : "Elegível: 75% de presenças e resultado de e-learning ≥ 50. Esse resultado lança-se à mão até existir leitura do Moodle.",
+    ...partirLinhas(d.regraElegivel),
+    ...(d.ccp ? [] : ["O resultado de e-learning lança-se à mão até existir leitura do Moodle."]),
     "",
   ];
   const lista = linhasElegiveis(d);
@@ -399,7 +398,7 @@ export async function pdfDossieGerado(db: Db, turmaId: number, item: ItemDossieG
 /**
  * O mesmo que `contagemCertificadosFin`, para muitas turmas de uma vez (vista geral do Dossiê TP, painel).
  * `formandoIds` são os formandos de cada turma pelas regras de `formandosFinComContacto`.
- * Só é elegível quem tem resultado na turma (sem resultado, `comAproveitamento` falha por falta de assiduidade).
+ * Só é elegível quem tem resultado na turma.
  */
 export async function contagemCertificadosFinLote(db: Db, turmas: { id: number; formandoIds: number[] }[]) {
   const out = new Map<number, { done: number; total: number }>();

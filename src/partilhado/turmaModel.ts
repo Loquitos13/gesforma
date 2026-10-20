@@ -418,6 +418,21 @@ export function horasCronograma(sessoes: SessaoCronograma[]) {
   }, 0);
 }
 
+/**
+ * Dados pedagógicos (planos, sumários, presenças) na posição actual da sua sessão: cada linha liga-se ao id da
+ * sessão, e o `n` lido do servidor é a posição de então. Linhas de sessões que já não estão no cronograma saem;
+ * as antigas, sem id, ficam com o `n` que têm.
+ */
+export function naPosicaoActual<T extends { n: number; sessaoId?: string | null }>(linhas: T[], cronograma: SessaoCronograma[]): T[] {
+  const posicao = new Map<string, number>();
+  cronograma.filter(isSessaoLectiva).forEach((s, i) => { if (s.id) posicao.set(s.id, i + 1); });
+  return linhas.flatMap(l => {
+    if (!l.sessaoId) return [l];
+    const n = posicao.get(l.sessaoId);
+    return n == null ? [] : [{ ...l, n }];
+  });
+}
+
 export function cronogramaToSessoes(c: SessaoCronograma[], today = hojeIso()): SessaoMeta[] {
   return c.filter(isSessaoLectiva).map((s, i) => {
     const formadores = sessaoFormadores(s);

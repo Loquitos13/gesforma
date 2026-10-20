@@ -35,6 +35,7 @@ export function associarDespesa(c: Consulta, id: number, turmaId: number) {
     [turmaId, id]);
 }
 
-export async function apagarDespesa(c: Consulta, id: number) {
-  return Boolean(await one(c, "DELETE FROM despesas_fin WHERE id = $1 RETURNING id", [id]));
+/** Apaga e devolve a turma a que pertencia (`null` se não existia). */
+export function apagarDespesa(c: Consulta, id: number) {
+  return one<{ id: number; turma_id: number | null }>(c, "DELETE FROM despesas_fin WHERE id = $1 RETURNING id, turma_id", [id]);
 }

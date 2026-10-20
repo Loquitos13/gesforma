@@ -21,6 +21,7 @@ export const CAPACIDADES = {
   "cursos.apagar": SECRETARIA,
   "cursosFin.editar": PEDAGOGIA,
   "campanhas.gerir": MARKETING,
+  "campanhas.apagar": SECRETARIA,
   "blog.gerir": MARKETING,
   "formadores.gerir": PEDAGOGIA,
   "turmas.gerir": EQUIPA,

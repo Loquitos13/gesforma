@@ -27,6 +27,7 @@ function periodo(c: Campanha) {
 export default function Campanhas({ navigate }: VistaProps) {
   const pode = usePode();
   const gerir = pode("campanhas.gerir");
+  const podeApagar = pode("campanhas.apagar");
   const [f, setF, limpar] = useFiltrosUrl({ estado: "ativas", canal: "", curso: "", responsavel: "", q: "", sel: "" });
   const { dados, erro, aCarregar, recarregar } = useRecurso(
     `campanhas:${f.estado}:${f.canal}:${f.curso}:${f.responsavel}:${f.q}`,
@@ -109,7 +110,7 @@ export default function Campanhas({ navigate }: VistaProps) {
             )}
           />
         </Cartao>
-        {sel && <Detalhe id={sel.id} gerir={gerir} onEditar={setForm} onApagar={setApagar} />}
+        {sel && <Detalhe id={sel.id} gerir={gerir} onEditar={setForm} onApagar={podeApagar ? setApagar : undefined} />}
       </div>
       <CampanhasEmail campanhas={lista} gerir={gerir} />
       <FormCampanha campanha={form} onFechar={() => setForm(null)} onGravada={id => setF({ sel: String(id) })} />
@@ -118,7 +119,7 @@ export default function Campanhas({ navigate }: VistaProps) {
   );
 }
 
-function Detalhe({ id, gerir, onEditar, onApagar }: { id: number; gerir: boolean; onEditar: (c: Campanha) => void; onApagar: (c: Campanha) => void }) {
+function Detalhe({ id, gerir, onEditar, onApagar }: { id: number; gerir: boolean; onEditar: (c: Campanha) => void; onApagar?: (c: Campanha) => void }) {
   const { dados, erro, recarregar } = useRecurso(`campanhas:ficha:${id}`, signal => apiCampanha(id, { signal }));
   if (erro) return <ErroCarregar erro={erro} onTentar={recarregar} />;
   const c = dados?.campanha;
@@ -163,7 +164,7 @@ function Detalhe({ id, gerir, onEditar, onApagar }: { id: number; gerir: boolean
       {gerir && (
         <div className="mt-5 flex gap-2">
           <Botao onClick={() => onEditar(c)}>Editar</Botao>
-          <Botao variante="fantasma" className="text-perigo" onClick={() => onApagar(c)}>Apagar</Botao>
+          {onApagar && <Botao variante="fantasma" className="text-perigo" onClick={() => onApagar(c)}>Apagar</Botao>}
         </div>
       )}
     </Cartao>

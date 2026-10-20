@@ -71,7 +71,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { query: criteriosSchema }, req);
     if (!v) return;
-    return { candidatos: await candidatosCampanha(db, v.query) };
+    return { candidatos: await candidatosCampanha(db, v.query, req.actor!) };
   });
 
   app.get("/v1/campanhas/email/envios", async (req, reply) => {
@@ -89,7 +89,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: idParam }, req);
     if (!v) return;
-    const destinos = await destinosDoEnvio(db, v.params.id);
+    const destinos = await destinosDoEnvio(db, v.params.id, req.actor!);
     return {
       destinos: destinos.map(d => ({
         preinscricaoId: Number(d.preinscricao_id), nome: `${d.nome} ${d.apelido}`.trim(), curso: d.curso, estado: d.estado, enviado: d.enviado, erro: d.erro,
@@ -102,7 +102,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const v = validar(reply, { body: envioSchema }, req);
     if (!v) return;
     try {
-      const r = await enviarCampanha(db, req.actor!.id, v.body);
+      const r = await enviarCampanha(db, req.actor!, v.body);
       await audit(db, req.actor!.id, "campanha.email_enviar", "campanha_envio", String(r.envioId), req.ip, { total: r.total, postos: r.postos });
       return r;
     } catch (err) {

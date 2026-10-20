@@ -1,5 +1,5 @@
 /** Campanhas por email aos pré-inscritos parados: candidatos, envios e destinatários. */
-import { many, one, valor, type Consulta } from "./sql.js";
+import { Filtros, many, one, valor, type AtorCrm, type Consulta } from "./sql.js";
 
 export type CriteriosCampanha = { dias: number; contactos: number; curso?: string };
 
@@ -12,8 +12,10 @@ export type Candidato = {
  * Pré-inscrições abertas há mais de `dias` dias, com pelo menos `contactos` contactos (os lembretes
  * automáticos contam) e que ainda não pagaram, não foram validadas, não passaram a formando nem desistiram.
  * Só Gold: as campanhas são da área comercial e a Financiada não se mistura.
+ * Com ator, só as pré-inscrições que ele vê (o comercial, só as suas: `Filtros.visivelPara`).
  */
-export async function candidatos(c: Consulta, k: CriteriosCampanha) {
+export async function candidatos(c: Consulta, k: CriteriosCampanha, ator?: AtorCrm) {
+  const w = new Filtros([k.dias, k.contactos, k.curso ?? ""]).visivelPara(ator, "p.comercial_id", "p.regime");
   return many<Candidato>(c,
     `SELECT p.id, p.nome, p.apelido, p.email, p.curso, COALESCE(p.regime, 'gold') AS regime, p.estado,
             p.created_at::text AS created_at, x.n::int AS contactos,
@@ -28,9 +30,10 @@ export async function candidatos(c: Consulta, k: CriteriosCampanha) {
         AND x.n >= $2
         AND btrim(p.email) <> ''
         AND ($3::text = '' OR lower(btrim(p.curso)) = lower(btrim($3::text)))
+        ${w.and}
       ORDER BY p.created_at
       LIMIT 500`,
-    [k.dias, k.contactos, k.curso ?? ""]);
+    w.params);
 }
 
 export async function criarEnvio(c: Consulta, e: { campanhaId: number | null; assunto: string; criterios: unknown; total: number; actorId: string }) {
@@ -62,12 +65,14 @@ export async function listarEnvios(c: Consulta) {
       ORDER BY e.criado_em DESC LIMIT 50`);
 }
 
-export async function destinosDoEnvio(c: Consulta, envioId: number) {
+/** Destinatários do envio que este ator vê (os outros ficam de fora da lista). */
+export async function destinosDoEnvio(c: Consulta, envioId: number, ator?: AtorCrm) {
+  const w = new Filtros([envioId]).sempre("d.envio_id = $1").visivelPara(ator, "p.comercial_id", "p.regime");
   return many<{ preinscricao_id: number; nome: string; apelido: string; curso: string; estado: string; enviado: boolean; erro: string }>(c,
     `SELECT d.preinscricao_id, p.nome, p.apelido, p.curso, p.estado, d.enviado, d.erro
        FROM campanha_envio_destinos d JOIN preinscricoes p ON p.id = d.preinscricao_id
-      WHERE d.envio_id = $1 ORDER BY p.nome`,
-    [envioId]);
+      ${w.where} ORDER BY p.nome`,
+    w.params);
 }
 
 export async function existeCampanha(c: Consulta, id: number) {

@@ -11,6 +11,7 @@ import { docsDoCurso } from "./docsCurso.js";
 import { documentosUrl, ensureDocsToken, listarDocsLead } from "./docsLink.js";
 import { fmtDataPt, listOfertaFin, listOfertaGold, type OfertaTurma } from "./ofertaGold.js";
 import * as repo from "./repos/campanhasEmail.js";
+import type { AtorCrm } from "./repos/sql.js";
 import * as leads from "./repos/leads.js";
 import { isEmail, normalizeEmail } from "./security.js";
 
@@ -32,8 +33,8 @@ async function docsEmFalta(db: Db, lead: { id: number; curso: string; regime: st
 }
 
 /** Quem cumpre os critérios; com `soIds`, só essas pré-inscrições (para o envio). */
-export async function candidatosCampanha(db: Db, k: Criterios, soIds?: Set<number>) {
-  const linhas = (await repo.candidatos(db, k)).filter(l => !soIds || soIds.has(Number(l.id)));
+export async function candidatosCampanha(db: Db, k: Criterios, ator?: AtorCrm, soIds?: Set<number>) {
+  const linhas = (await repo.candidatos(db, k, ator)).filter(l => !soIds || soIds.has(Number(l.id)));
   const cache: PedidosPorCurso = new Map();
   const out = [];
   for (const l of linhas) {
@@ -66,10 +67,11 @@ function cronogramasDe(oferta: OfertaTurma[], curso: string) {
 export class CampanhaErro extends Error {}
 
 /** Põe os emails na fila (o cron envia-os) e regista o envio e um contacto em cada pré-inscrição. */
-export async function enviarCampanha(db: Db, actorId: string, p: { ids: number[]; campanhaId: number | null; criterios: Criterios }) {
+export async function enviarCampanha(db: Db, ator: AtorCrm, p: { ids: number[]; campanhaId: number | null; criterios: Criterios }) {
+  const actorId = ator.id;
   if (p.campanhaId && !(await repo.existeCampanha(db, p.campanhaId))) throw new CampanhaErro("Campanha não encontrada.");
-  // Só sai para quem continua a cumprir os critérios (a lista pode ter mudado entretanto).
-  const alvo = await candidatosCampanha(db, p.criterios, new Set(p.ids));
+  // Só sai para quem continua a cumprir os critérios (a lista pode ter mudado entretanto) e o ator vê.
+  const alvo = await candidatosCampanha(db, p.criterios, ator, new Set(p.ids));
   if (!alvo.length) throw new CampanhaErro("Nenhuma das pré-inscrições escolhidas cumpre os critérios.");
   const [gold, fin] = await Promise.all([listOfertaGold(db), listOfertaFin(db)]);
   const envioId = await repo.criarEnvio(db, {

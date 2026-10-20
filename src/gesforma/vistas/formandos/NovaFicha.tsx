@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { usePode } from "../../../partilhado/AuthGate";
 import {
   apiAcessoFormando, apiCriarFormandoFin, apiCriarFormandoGold, type Regime,
 } from "../../../partilhado/api/formandos";
@@ -22,6 +23,9 @@ export function NovaFicha({ aberto, onFechar, regime, onCriada }: {
   onCriada: (id: number) => void;
 }) {
   const gold = regime === "gold";
+  // A palavra-passe gerada é mostrada: só quem o servidor deixa gerar o acesso vê esta opção (o comercial não).
+  const pode = usePode();
+  const podeAcesso = pode(gold ? "pagamentos.confirmar" : "formandosFin.gerir");
   const cursos = useOpcoes("cursos", { regime });
   const turmas = useOpcoes("turmas", { regime });
   const locais = useOpcoes("locais", { regime });
@@ -76,7 +80,7 @@ export function NovaFicha({ aberto, onFechar, regime, onCriada }: {
         : await apiCriarFormandoFin({ nome: nome.trim(), apelido: apelido.trim(), email: email.trim(), telf: telf.trim(), curso, turmaId: turma });
       const id = r.formando.id;
       invalidar("formandos:");
-      if (criarAcesso) {
+      if (criarAcesso && podeAcesso) {
         const a = await apiAcessoFormando(regime, id, { enviarEmail: true }).catch(err => { toastError(err, "Ficha criada, mas o acesso não foi gerado."); return null; });
         if (a) {
           toastOk(a.acesso.emailEnviado
@@ -149,12 +153,12 @@ export function NovaFicha({ aberto, onFechar, regime, onCriada }: {
             )}
           </div>
         )}
-        <Caixa
+        {podeAcesso && <Caixa
           rotulo="Criar o acesso à área do formando e enviar por email"
           ajuda="Utilizador: o email. Palavra-passe temporária, a mudar no primeiro acesso."
           checked={criarAcesso}
           onChange={e => setCriarAcesso(e.target.checked)}
-        />
+        />}
         {cursos.erro != null && <Aviso tom="perigo">Não foi possível carregar os cursos. Feche e abra de novo.</Aviso>}
       </div>
     </PainelLateral>

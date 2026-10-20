@@ -3,13 +3,15 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { config } from "../config.js";
 import { normalizarEstado, validarTransicao } from "../estados.js";
+import { aposPagamentoConfirmado } from "../inscricaoPaga.js";
 import { nextOpsId } from "../ops.js";
 import { METODOS_ACEITES, confirmarPagamento, findPagamentoPorReferencia, mapPagamento, PagamentoErro, recusarPagamento } from "../pagamentos.js";
 import {
-  SITUACOES, actualizarPagamento, apagarPagamento, chaveWebhookGuardada, contarPorSituacao, desmarcarFormandoGoldPago, formandoGoldDoPagamento,
-  indicadoresPagamentos, inserirPagamento, listarPagamentos, obterPagamento, obterPagamentoDetalhe,
+  SITUACOES, actualizarPagamento, apagarPagamento, bloquearRegisto, chaveWebhookGuardada, contarPorSituacao, fichaGoldJaPaga,
+  formandoGoldDoPagamento, indicadoresPagamentos, inserirPagamento, listarPagamentos, obterPagamento, obterPagamentoDetalhe,
+  pagamentoIgualRecente, pagamentoPorChave, sincronizarFormandoGoldPago, type PagamentoRow,
 } from "../repos/pagamentos.js";
-import { normalizeEmail } from "../security.js";
+import { isEmail, normalizeEmail } from "../security.js";
 import { paginacao, periodoQuery, textoQuery, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
 
@@ -18,15 +20,20 @@ import type { Deps } from "./tipos.js";
 const idTexto = z.object({ id: z.string().trim().min(1).max(40) });
 const pagSchema = z.object({
   nome: z.string().trim().min(1).max(160),
-  valor: z.number().min(0).max(100_000),
+  // Cêntimos no máximo: 12,345 € não é um valor que se receba.
+  valor: z.number().min(0).max(100_000).refine(v => Math.abs(Math.round(v * 100) - v * 100) < 1e-6, "Valor com mais de 2 casas decimais."),
   metodo: z.string().trim().min(1).max(60).optional(),
-  curso: z.string().max(200).optional().default(""),
-  data: z.string().max(40).optional(),
+  curso: z.string().trim().max(200).optional().default(""),
+  // Data do registo: "AAAA-MM-DD" ou "AAAA-MM-DD HH:MM" (a lista e os filtros leem este formato).
+  data: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?$/, "Data inválida (AAAA-MM-DD).").optional(),
   estado: z.string().max(20).optional().default("Pendente"),
-  email: z.string().max(254).optional(),
-  referencia: z.string().max(40).optional(),
+  email: z.string().trim().max(254).optional().refine(e => !e || isEmail(normalizeEmail(e)), "Email inválido."),
+  referencia: z.string().trim().max(40).optional(),
   formandoId: z.number().int().positive().optional(),
 });
+/** Chave do formulário (uma por abertura do ecrã): repetir o pedido devolve o mesmo pagamento. */
+const chaveSchema = z.string().trim().regex(/^[A-Za-z0-9_-]{8,80}$/, "Chave inválida.");
+const novoPagSchema = pagSchema.extend({ chave: chaveSchema.optional() });
 const listaQuery = paginacao.merge(periodoQuery).extend({
   situacao: z.preprocess(v => (v === "" ? undefined : v), z.enum(SITUACOES).optional()),
   curso: textoQuery(200),
@@ -71,19 +78,43 @@ export async function registar(app: FastifyInstance, deps: Deps) {
   /** Registo manual (ficha criada pela secretaria, pagamento em mão ou transferência já recebida). */
   app.post("/v1/pagamentos", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    const v = validar(reply, { body: pagSchema }, req);
+    const v = validar(reply, { body: novoPagSchema }, req);
     if (!v) return;
     const d = v.body;
     const estado = normalizarEstado("pagamento", d.estado);
     if (!estado) return reply.code(400).send({ error: `Estado inválido: «${d.estado}».` });
+    const cabecalho = req.headers["idempotency-key"];
+    const chaveH = chaveSchema.safeParse(Array.isArray(cabecalho) ? cabecalho[0] : cabecalho);
+    const chave = d.chave ?? (chaveH.success ? chaveH.data : null);
+    // Pedido repetido (duplo clique, reenvio da rede): devolve o pagamento já registado, sem criar outro.
+    const repetido = chave ? await pagamentoPorChave(db, chave) : null;
+    if (repetido) return { pagamento: mapPagamento(repetido), repetido: true };
     const formando = d.formandoId ? await formandoGoldDoPagamento(db, d.formandoId) : null;
     if (d.formandoId && !formando) return reply.code(400).send({ error: "Formando inexistente." });
     const id = `TRX-${await nextOpsId(db)}`;
     const email = d.email ? normalizeEmail(d.email) : "";
-    await inserirPagamento(db, {
+    const novo = {
       id, nome: d.nome, valor: d.valor, metodo: d.metodo || METODOS_ACEITES[0], curso: d.curso, data: d.data || carimbo(), estado: estado === "Pago" ? "Pendente" : estado,
-      email, referencia: d.referencia ?? "", formandoId: formando ? Number(formando.id) : null, turmaId: formando?.turma_id ?? null,
+      email, referencia: d.referencia ?? "", formandoId: formando ? Number(formando.id) : null, turmaId: formando?.turma_id ?? null, chave,
+    };
+    const conflito = await db.tx(async (q): Promise<{ repetido: PagamentoRow } | { erro: string } | null> => {
+      // Dois pedidos iguais ao mesmo tempo esperam um pelo outro; o segundo já vê o primeiro.
+      await bloquearRegisto(q, chave ?? JSON.stringify([novo.nome, novo.email, novo.valor, novo.curso, novo.metodo, novo.formandoId]));
+      if (chave) {
+        const outro = await pagamentoPorChave(q, chave);
+        if (outro) return { repetido: outro };
+      } else {
+        const igual = await pagamentoIgualRecente(q, novo);
+        if (igual) return { erro: `Já foi registado um pagamento igual há instantes (${igual.id}). Veja a lista antes de registar outro.` };
+      }
+      if (estado === "Pago" && novo.formandoId != null && await fichaGoldJaPaga(q, novo.formandoId)) {
+        return { erro: "Esta inscrição já está paga." };
+      }
+      await inserirPagamento(q, novo);
+      return null;
     });
+    if (conflito && "repetido" in conflito) return { pagamento: mapPagamento(conflito.repetido), repetido: true };
+    if (conflito) return reply.code(409).send({ error: conflito.erro });
     await audit(db, req.actor!.id, "pagamento.criar", "pagamento", id, req.ip, { valor: d.valor, estado });
     const row = await obterPagamento(db, id);
     const pagamento = row && estado === "Pago" ? await confirmarPagamento(db, row, req.actor!.id) : row ? mapPagamento(row) : null;
@@ -147,8 +178,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       nome: d.nome, valor: d.valor, metodo: d.metodo, curso: d.curso, data: d.data,
       estado: passaAPago ? undefined : estado, email: d.email ? normalizeEmail(d.email) : undefined, referencia: d.referencia,
     });
-    if (estado === "Reembolsado" && String(antes.estado) !== "Reembolsado" && antes.formando_id != null) {
-      await desmarcarFormandoGoldPago(db, Number(antes.formando_id));
+    // Deixou de estar recebido (reembolso, ou correção do admin): a ficha ligada acompanha.
+    if (String(antes.estado) === "Pago" && estado !== undefined && estado !== "Pago" && antes.formando_id != null) {
+      await sincronizarFormandoGoldPago(db, Number(antes.formando_id));
     }
     const row = await obterPagamento(db, v.params.id);
     const pagamento = row && passaAPago ? await confirmarPagamento(db, row, req.actor!.id) : row ? mapPagamento(row) : null;
@@ -165,7 +197,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (String(antes.estado) === "Pago" && req.actor!.role !== "admin") {
       return reply.code(409).send({ error: "Um pagamento recebido não se apaga: marque-o como Reembolsado." });
     }
-    await apagarPagamento(db, v.params.id);
+    await db.tx(async q => {
+      await apagarPagamento(q, v.params.id);
+      if (String(antes.estado) === "Pago" && antes.formando_id != null) await sincronizarFormandoGoldPago(q, Number(antes.formando_id));
+    });
     await audit(db, req.actor!.id, "pagamento.apagar", "pagamento", v.params.id, req.ip, { estado: antes.estado, valor: antes.valor });
     return { ok: true };
   });
@@ -193,13 +228,19 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const found = id ? await obterPagamento(db, id) : await findPagamentoPorReferencia(db, referencia, valor);
     if (!found) return reply.code(404).send({ error: "referência desconhecida" });
     // Reentrega do gateway: já pago responde ok sem repetir efeitos; reembolsado ou cancelado não volta a Pago.
-    if (String(found.estado) === "Pago") return { ok: true, pagamento: mapPagamento(found) };
+    // Se a entrega anterior falhou depois de gravar, conclui a inscrição que ficou a meio (seguro de repetir).
+    if (String(found.estado) === "Pago") {
+      await aposPagamentoConfirmado(db, String(found.id)).catch(err => req.log.warn({ err }, "webhook: inscrição por concluir"));
+      return { ok: true, pagamento: mapPagamento(found) };
+    }
     if (String(found.estado) !== "Pendente") return reply.code(409).send({ error: `pagamento em estado ${found.estado}` });
     if (valor != null && Number.isFinite(valor) && Math.abs(Number(found.valor) - valor) >= 0.02) {
       await audit(db, undefined, "pagamento.webhook_valor", "pagamento", String(found.id), req.ip, { referencia, valor });
       return reply.code(409).send({ error: "valor não corresponde ao pagamento" });
     }
-    const pagamento = await confirmarPagamento(db, found);
+    // Só um pendente passa a Pago (verificado na mesma instrução: um cancelamento entretanto não é desfeito).
+    const pagamento = await confirmarPagamento(db, found, null, { soPendente: true });
+    if (pagamento.estado !== "Pago") return reply.code(409).send({ error: `pagamento em estado ${pagamento.estado}` });
     await audit(db, undefined, "pagamento.webhook", "pagamento", pagamento.id, req.ip, { referencia, valor });
     return { ok: true, pagamento };
   }

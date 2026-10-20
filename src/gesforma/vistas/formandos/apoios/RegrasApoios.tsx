@@ -3,6 +3,7 @@ import {
   apiGravarRegrasApoios, apiRegrasApoios, type ModoApoio, type RegraApoio, type RegraGuardada, type TipoApoio,
 } from "../../../../partilhado/api/apoios";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
+import { numeroPt } from "../../../../partilhado/despesas";
 import { useRecurso } from "../../../../partilhado/dados/useRecurso";
 import {
   Aviso, Botao, Cartao, Caixa, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Estado, Interruptor, Selecao, eur,
@@ -35,7 +36,7 @@ function daRegra(tipo: TipoApoio, r?: RegraApoio): Linha {
   };
 }
 
-const numero = (s: string) => Number(s.replace(",", "."));
+const numero = (s: string) => numeroPt(s);
 const opcional = (s: string) => (s.trim() === "" ? null : numero(s));
 
 /**

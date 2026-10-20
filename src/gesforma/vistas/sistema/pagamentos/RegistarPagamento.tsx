@@ -3,28 +3,33 @@ import { useEffect, useState } from "react";
 import { apiEstadoConfiguracoes } from "../../../../partilhado/api/configuracoes";
 import { apiRegistarPagamento } from "../../../../partilhado/api/pagamentos";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
+import { numeroPt } from "../../../../partilhado/despesas";
 import { useOpcoes } from "../../../../partilhado/dados/useOpcoes";
 import { useRecurso } from "../../../../partilhado/dados/useRecurso";
 import { Botao, Caixa, Campo, Entrada, Modal, Selecao } from "../../../../partilhado/ui";
 
 const VAZIO = { nome: "", email: "", curso: "", valor: "", metodo: "", recebido: true };
 
+const novaChave = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`).replace(/[^\w-]/g, "");
+
 export function RegistarPagamento({ aberto, onFechar }: { aberto: boolean; onFechar: () => void }) {
   const [f, setF] = useState(VAZIO);
+  // Chave do pedido, nova a cada abertura: um duplo clique ou um reenvio não regista o pagamento duas vezes.
+  const [chave, setChave] = useState(novaChave);
   const cursos = useOpcoes("cursos", { regime: "gold" });
   const { dados: estado } = useRecurso(aberto ? "configuracoes:estado" : null, apiEstadoConfiguracoes);
   const metodos = (estado?.pagamentos.metodos ?? []).map(m => ({ valor: m, rotulo: m }));
   const registar = useAccao(apiRegistarPagamento, { ok: "Pagamento registado.", invalidar: ["pagamentos:", "painel:"] });
-  useEffect(() => { if (aberto) setF(VAZIO); }, [aberto]);
+  useEffect(() => { if (aberto) { setF(VAZIO); setChave(novaChave()); } }, [aberto]);
 
   const oferta = /oferta/i.test(f.metodo);
-  const valor = oferta ? 0 : Number(f.valor.replace(",", "."));
+  const valor = oferta ? 0 : numeroPt(f.valor);
   const valido = f.nome.trim().length > 1 && f.metodo && (oferta || (Number.isFinite(valor) && valor > 0));
 
   async function gravar() {
     const r = await registar.correr({
       nome: f.nome.trim(), email: f.email.trim() || undefined, curso: f.curso, valor, metodo: f.metodo,
-      estado: oferta || f.recebido ? "Pago" : "Pendente",
+      estado: oferta || f.recebido ? "Pago" : "Pendente", chave,
     });
     if (r) onFechar();
   }

@@ -17,8 +17,12 @@ type Form = Record<string, string>;
 
 const NOVA: Form = { nifFornecedorEstrangeiro: "Não", paisFornecedor: "Portugal" };
 
+// Números voltam ao formulário com vírgula decimal: "1.234" (quantidade 1,234) gravado de novo não pode virar 1234.
 const paraForm = (d: DadosDespesa): Form =>
-  Object.fromEntries(CAMPOS_DESPESA.map(c => [c.chave, d[c.chave] == null ? "" : String(d[c.chave])]));
+  Object.fromEntries(CAMPOS_DESPESA.map(c => {
+    const v = d[c.chave];
+    return [c.chave, v == null ? "" : typeof v === "number" ? String(v).replace(".", ",") : String(v)];
+  }));
 
 const texto = (d: DadosDespesa, k: string) => String(d[k] ?? "");
 const valor = (d: DadosDespesa, k: string) => (typeof d[k] === "number" ? eur(d[k] as number, true) : "—");

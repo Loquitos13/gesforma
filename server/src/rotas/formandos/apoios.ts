@@ -97,6 +97,36 @@ export function registarApoios(app: FastifyInstance, deps: Deps) {
     return { turma, regras, sessoes, calculos };
   }
 
+  /**
+   * No momento de pagar, o direito volta a ser verificado com os dados de hoje: o formando continua na turma
+   * (não desistiu nem foi indeferido), a regra continua ativa, o IBAN exigido existe e a assiduidade do mês dá direito.
+   * Devolve, por id de apoio, o motivo de quem perdeu o direito.
+   */
+  async function semDireitoAPagar(apoios: ApoioRow[]) {
+    const motivos = new Map<number, string>();
+    const porMes = new Map<string, ApoioRow[]>();
+    for (const a of apoios) {
+      const k = `${a.turma_id}|${a.periodo}`;
+      porMes.set(k, [...(porMes.get(k) ?? []), a]);
+    }
+    for (const lista of porMes.values()) {
+      const { turma_id: turmaId, periodo: mes } = lista[0]!;
+      const calc = await calcularTurma(Number(turmaId), mes);
+      for (const a of lista) {
+        const c = calc?.calculos.find(x => x.formandoId === Number(a.formando_id));
+        const l = c?.calculo.linhas.find(x => x.tipo === a.tipo);
+        const motivo = !calc ? "A turma já não existe."
+          : !c ? "O formando já não frequenta esta turma (desistiu, foi indeferido ou mudou de turma)."
+            : !l ? "A regra deste apoio já não está ativa para a turma."
+              : l.bloqueadoIban ? "O formando não tem IBAN e este apoio exige-o."
+                : l.valor <= 0 ? (l.exclusao || "Sem direito neste mês.")
+                  : "";
+        if (motivo) motivos.set(Number(a.id), motivo);
+      }
+    }
+    return motivos;
+  }
+
   // ── Regras ──────────────────────────────────────────────────────────────────
   app.get("/v1/apoios/regras", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
@@ -276,8 +306,13 @@ export function registarApoios(app: FastifyInstance, deps: Deps) {
     const { mes, de, para } = v.body;
     if (!TRANSICOES[de]?.includes(para)) return reply.code(409).send({ error: `Não é possível passar de "${de}" para "${para}".` });
     if (para === "pago" && !v.body.pagoEm) return reply.code(400).send({ error: "Indique a data de pagamento.", campos: { pagoEm: "Obrigatória" } });
-    const alvo = (await apoiosDaTurma(db, v.params.id, mes))
+    const candidatos = (await apoiosDaTurma(db, v.params.id, mes))
       .filter(a => a.estado === de && (!v.body.ids || v.body.ids.includes(Number(a.id))));
+    // Quem perdeu o direito desde a aprovação não é pago: fica aprovado e volta na resposta, com o motivo.
+    const motivos = para === "pago" ? await semDireitoAPagar(candidatos) : new Map<number, string>();
+    const alvo = candidatos.filter(a => !motivos.has(Number(a.id)));
+    const semDireito = candidatos.filter(a => motivos.has(Number(a.id)))
+      .map(a => ({ id: Number(a.id), formandoId: Number(a.formando_id), formando: a.formando_nome ?? "", tipo: a.tipo, motivo: motivos.get(Number(a.id))! }));
     await db.tx(async q => {
       for (const a of alvo) {
         await alterarApoio(q, Number(a.id), {
@@ -287,8 +322,8 @@ export function registarApoios(app: FastifyInstance, deps: Deps) {
         }, req.actor!.id);
       }
     });
-    await audit(db, req.actor!.id, "apoios.estado", "turma_fin", String(v.params.id), req.ip, { mes, de, para, n: alvo.length });
-    return { ok: true, alterados: alvo.length };
+    await audit(db, req.actor!.id, "apoios.estado", "turma_fin", String(v.params.id), req.ip, { mes, de, para, n: alvo.length, semDireito: semDireito.length });
+    return { ok: true, alterados: alvo.length, semDireito };
   });
 
   app.patch("/v1/apoios/:id", async (req, reply) => {
@@ -318,6 +353,10 @@ export function registarApoios(app: FastifyInstance, deps: Deps) {
     }
     if (estadoFinal === "pago" && atual.estado !== "pago" && !b.pagoEm) {
       return reply.code(400).send({ error: "Indique a data de pagamento.", campos: { pagoEm: "Obrigatória" } });
+    }
+    if (estadoFinal === "pago" && atual.estado !== "pago") {
+      const motivo = (await semDireitoAPagar([atual])).get(Number(atual.id));
+      if (motivo) return reply.code(409).send({ error: `Este apoio já não pode ser pago: ${motivo}` });
     }
     const pagoEm = b.estado && atual.estado === "pago" && b.estado !== "pago" ? null : b.pagoEm;
     const novo = await alterarApoio(db, v.params.id, { ...b, pagoEm }, req.actor!.id);

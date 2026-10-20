@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ApiError } from "../../../../partilhado/api/cliente";
 import { apiAlterarApoio, apiIbanFormando, type Apoio } from "../../../../partilhado/api/apoios";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
+import { numeroPt } from "../../../../partilhado/despesas";
 import { invalidar } from "../../../../partilhado/dados/useRecurso";
 import { toastError, toastOk } from "../../../../partilhado/toastBus";
 import { AreaTexto, Botao, Campo, Entrada, Modal, eur } from "../../../../partilhado/ui";
@@ -117,7 +118,7 @@ export function AjustarApoio({ apoio, onFechar }: { apoio: Apoio | null; onFecha
   const [ajuste, setAjuste] = useState("0");
   const [motivo, setMotivo] = useState("");
   useEffect(() => { if (apoio) { setAjuste(String(apoio.ajuste)); setMotivo(apoio.motivoAjuste); } }, [apoio]);
-  const valor = Number(ajuste.replace(",", "."));
+  const valor = numeroPt(ajuste);
   const final = apoio ? Math.round((apoio.valorCalculado + (Number.isFinite(valor) ? valor : 0)) * 100) / 100 : 0;
   const gravar = useAccao(
     () => apiAlterarApoio(apoio!.id, { ajuste: valor, motivoAjuste: motivo.trim() }),

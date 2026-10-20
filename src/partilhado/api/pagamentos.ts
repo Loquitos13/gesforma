@@ -67,6 +67,8 @@ export function apiRecusarPagamento(id: string, motivo: string) {
 
 export type NovoPagamento = {
   nome: string; valor: number; metodo: string; curso?: string; email?: string; estado: "Pendente" | "Pago"; formandoId?: number;
+  /** Uma por formulário aberto: o servidor não regista duas vezes o mesmo pedido. */
+  chave?: string;
 };
 
 export function apiRegistarPagamento(corpo: NovoPagamento) {

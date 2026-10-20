@@ -26,14 +26,45 @@ export function obterPagamento(c: Consulta, id: string) {
 
 export async function inserirPagamento(c: Consulta, p: {
   id: string; nome: string; valor: number; metodo: string; curso: string; data: string; estado: string; email: string;
-  referencia: string; formandoId: number | null; turmaId: number | null;
+  referencia: string; formandoId: number | null; turmaId: number | null; chave?: string | null;
 }) {
   await one(
     c,
-    `INSERT INTO pagamentos (id, nome, valor, metodo, curso, data, estado, email, referencia, formando_id, turma_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-    [p.id, p.nome, p.valor, p.metodo, p.curso, p.data, p.estado, p.email, p.referencia, p.formandoId, p.turmaId],
+    `INSERT INTO pagamentos (id, nome, valor, metodo, curso, data, estado, email, referencia, formando_id, turma_id, chave_idempotencia)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+    [p.id, p.nome, p.valor, p.metodo, p.curso, p.data, p.estado, p.email, p.referencia, p.formandoId, p.turmaId, p.chave ?? null],
   );
+}
+
+/** Pagamento já registado com a mesma chave do formulário (pedido repetido). */
+export function pagamentoPorChave(c: Consulta, chave: string) {
+  return one<PagamentoRow>(c, "SELECT * FROM pagamentos WHERE chave_idempotencia = $1", [chave]);
+}
+
+/**
+ * Registo manual repetido sem chave (duplo clique, separador aberto duas vezes): o mesmo pagamento
+ * criado nos últimos minutos. Corre com o bloqueio de `bloquearRegisto`, por isso dois pedidos iguais não passam os dois.
+ */
+export function pagamentoIgualRecente(c: Consulta, p: { nome: string; email: string; valor: number; curso: string; metodo: string; formandoId: number | null }) {
+  return one<{ id: string }>(
+    c,
+    `SELECT id FROM pagamentos
+      WHERE nome = $1 AND email = $2 AND valor = $3 AND curso = $4 AND metodo = $5 AND formando_id IS NOT DISTINCT FROM $6
+        AND estado IN ('Pendente', 'Pago') AND created_at > now() - interval '2 minutes'
+      ORDER BY created_at DESC LIMIT 1`,
+    [p.nome, p.email, p.valor, p.curso, p.metodo, p.formandoId],
+  );
+}
+
+/** Serializa registos manuais iguais (até ao fim da transação). */
+export async function bloquearRegisto(c: Consulta, impressao: string) {
+  await one(c, "SELECT pg_advisory_xact_lock(hashtext($1))", [`pagamento:${impressao}`]);
+}
+
+/** A ficha Gold já está paga (bloqueada até ao fim da transação). */
+export async function fichaGoldJaPaga(c: Consulta, formandoId: number) {
+  const r = await one<{ pago: boolean }>(c, "SELECT pago FROM formandos_gold WHERE id = $1 FOR UPDATE", [formandoId]);
+  return Boolean(r?.pago);
 }
 
 export async function actualizarPagamento(c: Consulta, id: string, p: {
@@ -61,12 +92,12 @@ export function formandoGoldDoPagamento(c: Consulta, id: number) {
  * Passa a Pago, regista quando e quem, e limpa uma recusa anterior.
  * Atómico: devolve false se outro pedido já o confirmou (os efeitos só correm uma vez).
  */
-export async function marcarPago(c: Consulta, id: string, carimbo: string, actorId?: string | null) {
+export async function marcarPago(c: Consulta, id: string, carimbo: string, actorId?: string | null, soPendente = false) {
   const r = await one(
     c,
     `UPDATE pagamentos SET estado = 'Pago', data = $2, pago_em = now(), confirmado_por = $3, recusado_em = NULL, recusa_motivo = ''
-      WHERE id = $1 AND estado <> 'Pago' RETURNING id`,
-    [id, carimbo, actorId ?? null],
+      WHERE id = $1 AND estado <> 'Pago' AND (NOT $4::boolean OR estado = 'Pendente') RETURNING id`,
+    [id, carimbo, actorId ?? null, soPendente],
   );
   return !!r;
 }
@@ -83,14 +114,22 @@ export async function marcarFormandoGoldPago(c: Consulta, p: { email: string; me
 }
 
 /**
+ * O pagamento ligado à ficha deixou de estar Pago (reembolsado, cancelado, voltou a pendente ou foi apagado):
+ * a ficha Gold só continua paga se tiver outro pagamento recebido.
+ */
+export async function sincronizarFormandoGoldPago(c: Consulta, formandoId: number) {
+  await one(
+    c,
+    `UPDATE formandos_gold f SET pago = EXISTS (SELECT 1 FROM pagamentos p WHERE p.formando_id = f.id AND p.estado = 'Pago')
+      WHERE f.id = $1 RETURNING f.id`,
+    [formandoId],
+  );
+}
+
+/**
  * Pré-inscrição do pagamento: a ligada pelo pagamento_id; só sem nenhuma ligada, a Gold do mesmo email e curso
  * que ainda não tem pagamento próprio nem desistiu.
  */
-/** Pagamento reembolsado: a ficha Gold ligada volta a ficar por pagar. */
-export async function desmarcarFormandoGoldPago(c: Consulta, formandoId: number) {
-  await one(c, "UPDATE formandos_gold SET pago = false WHERE id = $1", [formandoId]);
-}
-
 export async function marcarLeadPago(c: Consulta, p: { email: string; pagamentoId: string; curso: string }) {
   await one(
     c,

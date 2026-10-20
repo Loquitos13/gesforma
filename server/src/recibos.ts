@@ -38,13 +38,16 @@ export function mapRecibo(r: repo.ReciboLinha) {
   };
 }
 
-async function montar(db: Db, pagamentoId: string, recibo: repo.ReciboLinha) {
+async function montar(db: Db, pagamentoId: string, recibo: Pick<repo.ReciboLinha, "numero" | "ano" | "emitido_em">) {
   const p = await repo.dadosParaRecibo(db, pagamentoId);
   if (!p) throw new ReciboErro("Pagamento inexistente.", 404);
   const e = await lerEntidade(db);
   const pii = readPreinscricaoPii({ pii_enc: p.lead_pii, nif: p.lead_nif, morada_fiscal: p.lead_morada, codigo_postal: p.lead_cp });
   // Os dados de faturação indicados pela pessoa (nome/empresa, NIF, morada) prevalecem sobre os da pré-inscrição.
   const fat = p.faturacao_enc ? decryptJson<DadosFaturacao>(p.faturacao_enc) : null;
+  // Faturado a outra pessoa ou à empresa: o recibo diz também quem é o formando.
+  const formando = p.formando_nome || p.nome;
+  const outroPagador = fat && fat.nome.trim().toLowerCase() !== formando.trim().toLowerCase();
   const dados: DadosRecibo = {
     numero: numeroRecibo(recibo),
     emitidoEm: fmtData(recibo.emitido_em),
@@ -58,6 +61,7 @@ async function montar(db: Db, pagamentoId: string, recibo: repo.ReciboLinha) {
         nome: p.formando_nome || p.nome, nif: pii.nif ?? "", email: p.email,
         morada: [pii.moradaFiscal, pii.codigoPostal].filter(Boolean).join(", "),
       },
+    ...(outroPagador ? { formando } : {}),
     curso: p.curso, turma: p.turma ?? "", valor: Number(p.valor), metodo: p.metodo,
     data: fmtData(p.pago_em ?? p.criado), confirmadoPor: p.confirmado_por ?? "", referencia: p.id,
   };
@@ -87,15 +91,19 @@ export async function emitirRecibo(db: Db, pagamentoId: string, actorId: string 
   let recibo = await repo.reciboDoPagamento(db, pagamentoId);
   const novo = !recibo;
   if (!recibo) {
+    // Os dados (valor, pagador, linhas) ficam gravados na mesma instrução que atribui o número:
+    // a partir daí o recibo não muda (a base recusa qualquer alteração, migração 131).
+    const ano = Number(new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Lisbon" }).slice(0, 4));
+    const { dados: base } = await montar(db, pagamentoId, { numero: 0, ano, emitido_em: new Date().toISOString() });
     recibo = await db.tx(async q => {
       const existente = await repo.reciboDoPagamento(q, pagamentoId);
       if (existente) return existente;
-      const ano = Number(new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Lisbon" }).slice(0, 4));
       const numero = await repo.proximoNumero(q, ano);
-      return (await repo.inserirRecibo(q, { pagamentoId, ano, numero, actorId, dados: {} }))!;
+      return (await repo.inserirRecibo(q, { pagamentoId, ano, numero, actorId, dados: { ...base, numero: numeroRecibo({ numero, ano }) } }))!;
     });
   }
-  const dados = dadosGravados(recibo) ?? (await montar(db, pagamentoId, recibo)).dados;
+  const gravados = dadosGravados(recibo);
+  const dados = gravados ?? (await montar(db, pagamentoId, recibo)).dados;
   const pdf = await gerarReciboPdf(dados, await obterLogoEntidade(db));
   let driveFileId: string | undefined;
   let avisoDrive: string | null = null;
@@ -108,7 +116,8 @@ export async function emitirRecibo(db: Db, pagamentoId: string, actorId: string 
   } catch (err) {
     avisoDrive = err instanceof Error ? err.message : "Não foi possível guardar na Drive.";
   }
-  await repo.actualizarRecibo(db, recibo.id, { dados, driveFileId });
+  // Recibos antigos sem dados gravados: grava-os agora (uma vez); os outros só actualizam a Drive.
+  await repo.actualizarRecibo(db, recibo.id, { dados: gravados ? undefined : dados, driveFileId });
   const final = (await repo.reciboDoPagamento(db, pagamentoId))!;
   return { recibo: mapRecibo(final), novo, avisoDrive, pdf };
 }

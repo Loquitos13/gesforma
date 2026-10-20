@@ -53,10 +53,10 @@ export type DadosDespesa = Record<string, string | number | null>;
 
 /**
  * Número escrito à portuguesa: "1.500,25" → 1500.25; sem vírgula, "1.500" (ponto seguido de grupos de 3 dígitos)
- * são milhares → 1500; "1.5" continua a ser 1,5.
+ * são milhares → 1500; "1.5" continua a ser 1,5. O símbolo do euro e os espaços (também os não separáveis) ignoram-se.
  */
 export function numeroPt(texto: string) {
-  const s = texto.replace(/\s/g, "");
+  const s = texto.replace(/[\s€]/g, "");
   if (s.includes(",")) return Number(s.replace(/\./g, "").replace(",", "."));
   if (/^-?[1-9]\d{0,2}(\.\d{3})+$/.test(s)) return Number(s.replace(/\./g, ""));
   return Number(s);

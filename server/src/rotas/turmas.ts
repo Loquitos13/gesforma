@@ -199,6 +199,12 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       if (!dele.linhas.some(l => l.id === id)) return reply.code(403).send({ error: "O formador só vê as turmas onde dá aulas." });
     }
     const turma = regime === "gold" ? mapTurmaGold(row) : { ...mapTurmaFin(row), financiador: String(row.financiador ?? "") };
+    if (actor.role === "formador") {
+      // O formador só vê o seu valor por hora: nem o dos colegas nem o custo da sala.
+      const meus = new Set([...await nomesDoFormador(db, actor.email, actor.name, actor.id)].map(n => n.toLowerCase()));
+      turma.valoresHoraFormador = Object.fromEntries(Object.entries(turma.valoresHoraFormador).filter(([n]) => meus.has(n.trim().toLowerCase())));
+      if ("custoHoraSala" in turma) turma.custoHoraSala = 0;
+    }
     return { turma };
   });
 

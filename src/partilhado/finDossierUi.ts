@@ -2,6 +2,7 @@ import { docsFinCompletos } from "./dossierDocs";
 import type { FormandoFin } from "./tiposFormando";
 import type { PedagogiaSnapshot } from "./api";
 import { formatSessaoLabel, type SessaoCronograma } from "./turmaModel";
+import { rotuloCodigoCurso } from "./codigoCurso";
 
 export type DocEstado = "ok" | "parcial" | "falta";
 
@@ -65,7 +66,7 @@ export function finGruposDocumentosTurma(input: {
       items: [
         {
           label: "Programa de formação UFCD",
-          detalhe: ufcdCod ? `UFCD ${ufcdCod} · ${curso ?? "—"} · ${horas ?? "—"}h` : (curso ?? "Curso"),
+          detalhe: ufcdCod ? `${rotuloCodigoCurso(ufcdCod)} · ${curso ?? "—"} · ${horas ?? "—"}h` : (curso ?? "Curso"),
           estado: curso ? "ok" : "falta",
         },
         { label: "Regulamento de formação", detalhe: "Regulamento ENA e regras do financiador. Ainda não registado nesta turma.", estado: "falta" },

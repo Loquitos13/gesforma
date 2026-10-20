@@ -8,6 +8,7 @@ import { DOCS_FIN_COMPLETOS, DOCS_FIN_OBRIGATORIOS } from "./painelBlocos.js";
 import { many, one, type Consulta } from "./sql.js";
 import type { Db } from "../db/pool.js";
 import { hojeLisboa, somarDias } from "../datas.js";
+import { rotuloCodigoCurso } from "../../../src/partilhado/codigoCurso.js";
 
 export type Notificacao = {
   chave: string;
@@ -107,7 +108,7 @@ export async function construirNotificacoes(db: Db, actorId: string, role = ""):
   }
   for (const t of turmas) {
     const fin = t.regime === "fin";
-    const nome = fin && t.ufcd ? `UFCD ${t.ufcd} · ${t.nome}` : t.nome;
+    const nome = fin && t.ufcd ? `${rotuloCodigoCurso(t.ufcd)} · ${t.nome}` : t.nome;
     if (!fin && t.capacidade > 0 && t.ocupadas >= t.capacidade) {
       out.push({ chave: `turma-lotada-gold-${t.id}`, tipo: "warn", titulo: `${nome} sem vagas`, texto: `${t.local} atingiu a capacidade máxima - ${t.ocupadas}/${t.capacidade} formandos.`, view: "gold-cockpit-turma", turmaId: t.id, tab: "overview" });
     } else if (t.inicio >= hoje && t.inicio <= em14 && t.ocupadas <= (fin ? 0 : Math.max(2, Math.floor(t.capacidade * 0.25)))) {
@@ -127,7 +128,7 @@ export async function construirNotificacoes(db: Db, actorId: string, role = ""):
     dtp.push({
       chave: `dtp-${t.regime}-${t.id}-${p}`,
       tipo: p < 40 ? "error" : "warn",
-      titulo: `DTP da turma ${fin && t.ufcd ? `UFCD ${t.ufcd} · ` : ""}${t.nome} a ${p}%`,
+      titulo: `DTP da turma ${fin && t.ufcd ? `${rotuloCodigoCurso(t.ufcd)} · ` : ""}${t.nome} a ${p}%`,
       texto: fin ? "Faltam documentos obrigatórios do dossiê financiado." : "O dossiê bloqueia o fecho da turma e a emissão de certificados.",
       view: fin ? "fin-cockpit-turma" : "gold-cockpit-turma",
       turmaId: t.id,

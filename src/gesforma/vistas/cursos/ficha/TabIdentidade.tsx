@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { normalizarCodigoCurso } from "../../../../partilhado/codigoCurso";
 import { LISTA_CNAEF } from "../../../../partilhado/execucaoFisica";
 import { SearchSelect } from "../../../../partilhado/FormKit";
 import { Cartao, Campo, Entrada } from "../../../../partilhado/ui";
@@ -79,8 +80,8 @@ export function TabIdentidade({ f }: { f: FichaCurso }) {
           </Campo>
           {regime === "fin" && (
             <>
-              <Campo rotulo="Código UFCD" obrigatorio erro={falhas.ufcdCod} ajuda="Catálogo Nacional de Qualificações.">
-                {p => <Entrada {...p} inputMode="numeric" value={data.ufcdCod} onChange={e => patch({ ufcdCod: e.target.value.replace(/\D/g, "").slice(0, 6) })} />}
+              <Campo rotulo="Código UFCD ou UC" obrigatorio erro={falhas.ufcdCod} ajuda="Do Catálogo Nacional de Qualificações: 8995 (UFCD) ou UC00277.">
+                {p => <Entrada {...p} value={data.ufcdCod} placeholder="8995 ou UC00277" onChange={e => patch({ ufcdCod: normalizarCodigoCurso(e.target.value) })} />}
               </Campo>
               <Campo className="sm:col-span-2" rotulo="Designação oficial" obrigatorio erro={falhas.ufcd} ajuda="Nome da UFCD no CNQ.">
                 {p => <Entrada {...p} value={data.ufcd} onChange={e => patch({ ufcd: e.target.value })} />}

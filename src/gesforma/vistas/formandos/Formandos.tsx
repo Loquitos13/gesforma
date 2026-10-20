@@ -10,6 +10,7 @@ import {
 import type { VistaProps } from "../../shell/tipos";
 import { NovaFicha } from "./NovaFicha";
 import { BarraDocs, PAGAMENTO } from "./partes";
+import { rotuloCodigoCurso } from "../../../partilhado/codigoCurso";
 
 const SEPARADORES: Record<Regime, { id: SeparadorFormandos; rotulo: string }[]> = {
   gold: [
@@ -77,7 +78,7 @@ export default function Formandos({ view, navigate }: VistaProps) {
       celula: l => (
         <div className="min-w-0">
           <p className="m-0 font-semibold text-tinta">{l.turma?.nome ?? (gold ? "Sem turma" : "Por colocar")}</p>
-          <p className="m-0 text-xs text-tinta-suave truncate max-w-[260px]">{[l.ufcd && `UFCD ${l.ufcd}`, l.curso, gold ? l.local : ""].filter(Boolean).join(" · ")}</p>
+          <p className="m-0 text-xs text-tinta-suave truncate max-w-[260px]">{[l.ufcd && `${rotuloCodigoCurso(l.ufcd)}`, l.curso, gold ? l.local : ""].filter(Boolean).join(" · ")}</p>
         </div>
       ),
     },

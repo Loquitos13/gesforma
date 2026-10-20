@@ -1,6 +1,7 @@
 // Continuação de turmaModel.ts (partido para ficar abaixo das 500 linhas).
 import type { SelectOption } from "./FormKit";
 import { lugaresLivres, TurmaGold, TurmaFin, isTurmaActiva, hojeIso, formatDiaMes, chaveOferta, chaveHorario, partirLocalHorario, locaisEquivalentes, OfertaTurmaRef } from "./turmaModel";
+import { rotuloCodigoCurso } from "./codigoCurso";
 
 export function preinscricaoCasaComTurma(
   lead: { curso: string; local: string; horario?: string; turmaId?: number; estado: string; inicioCurso?: string },
@@ -126,8 +127,8 @@ export function turmaFinOpts(
     .map(t => ({
       value: t.nome,
       sub: isTurmaActiva(t)
-        ? `UFCD ${t.ufcdCod} · ${Math.max(0, lugaresLivres(t))} vagas restantes`
-        : `UFCD ${t.ufcdCod} · Inativa - não aceita novas inscrições`,
+        ? `${rotuloCodigoCurso(t.ufcdCod)} · ${Math.max(0, lugaresLivres(t))} vagas restantes`
+        : `${rotuloCodigoCurso(t.ufcdCod)} · Inativa - não aceita novas inscrições`,
     }));
 }
 

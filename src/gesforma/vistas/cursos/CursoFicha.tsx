@@ -13,6 +13,7 @@ import { TabIdentidade } from "./ficha/TabIdentidade";
 import { TabOferta } from "./ficha/TabOferta";
 import { TabConteudo, TabPlanos, TabPrograma } from "./ficha/TabTextos";
 import { useFichaCurso } from "./ficha/useFichaCurso";
+import { rotuloCodigoCurso } from "../../../partilhado/codigoCurso";
 
 const CLASSE_ENTRADA = "w-full h-10 px-3 text-sm rounded-controlo border border-linha-forte bg-superficie text-tinta focus:outline-none focus:ring-2 focus:ring-ligacao";
 
@@ -26,7 +27,7 @@ export default function CursoFicha({ view, params, navigate }: VistaProps) {
   const { data, tab, setTab, pronto } = f;
 
   const titulo = data.titulo || (params.cursoId === "new" || params.cursoId == null ? (regime === "fin" ? "Nova UFCD" : "Novo curso") : "Curso");
-  const meta = [regime === "fin" ? (data.ufcdCod ? `UFCD ${data.ufcdCod}` : "") : data.tipo, data.horas ? `${data.horas} h` : "", data.regime].filter(Boolean).join(" · ");
+  const meta = [regime === "fin" ? (data.ufcdCod ? `${rotuloCodigoCurso(data.ufcdCod)}` : "") : data.tipo, data.horas ? `${data.horas} h` : "", data.regime].filter(Boolean).join(" · ");
 
   function mudarTab(id: typeof tab) {
     const def = TABS.find(t => t.id === id);

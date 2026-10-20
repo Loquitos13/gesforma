@@ -30,6 +30,7 @@ import { recarregarTurma, useMembrosFin, useResultadosTurma, useTurmaCockpit } f
 import { EditarTurmaFin, InscreverFin, TransferirEEliminarFin } from "./FinDialogos";
 import { FinVisaoGeral } from "./FinVisaoGeral";
 import { FormadorProfileSlideOver } from "./PerfilFormador";
+import { rotuloCodigoCurso } from "../../../../partilhado/codigoCurso";
 
 export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { turmaId?: number; initialTab?: Separador; navigate: Navegar }) {
   const { turma, erro, aCarregar, patch, setCronograma, toggle } = useTurmaCockpit("fin", turmaId);
@@ -157,7 +158,7 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
                   onChange={setCronograma} inicio={t.dataInicio} horario={t.horario} horas={t.horas} formador={t.formador} curso={t.curso} local={t.local} />
               )}
               {tab === "dtp" && staffPodeDossie(user.role) && (
-                <DtpPanel regime="fin" turma={{ codigo: t.nome, id: t.id, titulo: t.curso, sub: `UFCD ${t.ufcdCod} · ${t.horas} h` }} dtp={ped.dtp} estado={ped.estado}
+                <DtpPanel regime="fin" turma={{ codigo: t.nome, id: t.id, titulo: t.curso, sub: `${rotuloCodigoCurso(t.ufcdCod)} · ${t.horas} h` }} dtp={ped.dtp} estado={ped.estado}
                   onToggle={(item, proximo) => void ped.guardarDtp(item.id, proximo)} onAnexo={(item, file) => void ped.guardarDtpAnexo(item.id, file)}
                   onActualizar={() => void ped.recarregar()} />
               )}

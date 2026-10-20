@@ -6,6 +6,7 @@ import { hojeIso, type TurmaFin } from "../../../../partilhado/turmaModel";
 import { Botao, Cartao } from "../../../../partilhado/ui";
 import { I, Th, Td, estadoBadge, formatSessaoLine } from "./base";
 import { FormadoresAtribuidosCard } from "../../../CronogramaEditor";
+import { rotuloCodigoCurso } from "../../../../partilhado/codigoCurso";
 
 export function FinVisaoGeral({ turma, membros, prontos, souFormador, activa, programa, onFicha, onTransferir, onEliminar, onAdicionar, onEditarPrograma, onFormadores, onFormador }: {
   turma: TurmaFin;
@@ -50,7 +51,7 @@ export function FinVisaoGeral({ turma, membros, prontos, souFormador, activa, pr
       </div>
       <Cartao titulo="Programa da UFCD" acoes={!souFormador ? <Botao variante="ligacao" tamanho="sm" onClick={onEditarPrograma}>Editar programa</Botao> : undefined}>
         <ul className="m-0 p-0 list-none space-y-2">
-          {(programa.length ? programa : [`UFCD ${turma.ufcdCod} · ${turma.curso} (${turma.horas} h)`]).map((linha, i) => (
+          {(programa.length ? programa : [`${rotuloCodigoCurso(turma.ufcdCod)} · ${turma.curso} (${turma.horas} h)`]).map((linha, i) => (
             <li key={i} className="flex items-start gap-2 text-sm text-tinta">
               <span className="w-1.5 h-1.5 rounded-full bg-ligacao mt-1.5 flex-shrink-0" aria-hidden="true" />{linha}
             </li>

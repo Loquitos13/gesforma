@@ -4,6 +4,7 @@ import { avaliacaoCcp, avaliacaoPadrao, cursoECcp, parseAvaliacaoCurso, type Ava
 import { linhasPrincipais, modeloAplica, programaDePayload, topicosDeTexto, type OrganizacaoPrograma, type TopicoPrograma } from "../../../cursoPrograma";
 import { parseConteudosMoodle, type ConteudoMoodle } from "../../../ConteudosMoodle";
 import { normalizarPlanoCurso, type PlanoCurso } from "../../../planosCurso";
+import { codigoCursoValido } from "../../../../partilhado/codigoCurso";
 
 export type Regime = "gold" | "fin";
 export type TabId = "identidade" | "oferta" | "conteudo" | "programa" | "moodle" | "planos" | "avaliacao" | "documentos" | "dtp" | "publicacao";
@@ -188,7 +189,7 @@ export function camposObrigatorios(d: CursoSite, regime: Regime): CampoFalta[] {
   if (!d.titulo.trim()) out.push({ chave: "titulo", rotulo: regime === "fin" ? "Nome comercial" : "Título", tab: "identidade" });
   if (!d.slug.trim()) out.push({ chave: "slug", rotulo: "Endereço (slug)", tab: "identidade" });
   if (regime === "fin") {
-    if (!d.ufcdCod.trim()) out.push({ chave: "ufcdCod", rotulo: "Código UFCD", tab: "identidade" });
+    if (!codigoCursoValido(d.ufcdCod)) out.push({ chave: "ufcdCod", rotulo: "Código UFCD ou UC", tab: "identidade" });
     if (!d.ufcd.trim()) out.push({ chave: "ufcd", rotulo: "Designação oficial", tab: "identidade" });
     if (!d.categoria.trim()) out.push({ chave: "categoria", rotulo: "Área", tab: "oferta" });
   } else {

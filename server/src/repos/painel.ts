@@ -13,6 +13,7 @@ import {
 import { apoiosPendentes } from "./apoios.js";
 import { turmasFinEmCurso } from "./painelFin.js";
 import type { Regime } from "./sql.js";
+import { rotuloCodigoCurso } from "../../../src/partilhado/codigoCurso.js";
 
 export type Indicador = {
   id: string;
@@ -127,7 +128,7 @@ export async function montarPainel(db: Db, f: FiltroPainel, eixo: Eixo) {
       { id: "turmas", rotulo: "Turmas a decorrer", valor: turmas.decorrer, anterior: null, formato: "num", nota: turmasNota },
     ];
     const resumo = (lista: { nome: string; ufcd: string; dtpPct: number }[], comPct: boolean) =>
-      lista.length ? `${lista[0]!.ufcd ? `UFCD ${lista[0]!.ufcd} · ` : ""}${lista[0]!.nome}${comPct ? ` a ${lista[0]!.dtpPct} %` : ""}${lista.length > 1 ? ` e mais ${lista.length - 1}` : ""}` : "Nada pendente";
+      lista.length ? `${lista[0]!.ufcd ? `${rotuloCodigoCurso(lista[0]!.ufcd)} · ` : ""}${lista[0]!.nome}${comPct ? ` a ${lista[0]!.dtpPct} %` : ""}${lista.length > 1 ? ` e mais ${lista.length - 1}` : ""}` : "Nada pendente";
     const aTratar: Tarefa[] = [
       tarefaContactar,
       ...filas.filter(t => t.id !== "incompletos"),

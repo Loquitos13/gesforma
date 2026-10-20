@@ -7,6 +7,7 @@ import { invalidar } from "../../../partilhado/dados/useRecurso";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
 import { Aviso, Botao, Caixa, Campo, ConfirmarPerigo, Entrada, PainelLateral, Selecao } from "../../../partilhado/ui";
+import { rotuloCodigoCurso } from "../../../partilhado/codigoCurso";
 
 /** Documentos que a candidatura acompanha (os pontinhos da lista). */
 export const DOCS_INSCRICAO: { id: string; curto: string; rotulo: string }[] = [
@@ -101,7 +102,7 @@ export function InscricaoPainel({ alvo, onFechar, podeApagar, onAbrirFicha }: {
       aberto={Boolean(alvo)}
       onFechar={onFechar}
       titulo={editar ? `${editar.nome} ${editar.apelido}`.trim() : "Nova inscrição financiada"}
-      subtitulo={editar ? [editar.ufcd && `UFCD ${editar.ufcd}`, editar.turma || "sem turma", editar.inscrito].filter(Boolean).join(" · ") : "Candidatura a uma UFCD."}
+      subtitulo={editar ? [editar.ufcd && `${rotuloCodigoCurso(editar.ufcd)}`, editar.turma || "sem turma", editar.inscrito].filter(Boolean).join(" · ") : "Candidatura a uma UFCD."}
       largura={520}
       rodape={(
         <>

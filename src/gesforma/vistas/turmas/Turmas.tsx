@@ -19,6 +19,7 @@ import type { VistaProps } from "../../shell/tipos";
 import { MenuLinha, type AcaoMenu } from "./MenuLinha";
 import { TurmaFormulario } from "./TurmaFormulario";
 import { BARRA, FASES, FASE_ESTADO, alertasDaTurma, tomOcupacao } from "./turmasUi";
+import { rotuloCodigoCurso } from "../../../partilhado/codigoCurso";
 
 const PADRAO = { fase: "", q: "", curso: "", local: "", horario: "", formador: "", financiador: "", de: "", ate: "", ordem: "", pagina: "1" };
 const POR_PAGINA = 25;
@@ -91,7 +92,7 @@ export default function Turmas({ view, navigate }: VistaProps) {
       celula: t => (
         <div className="min-w-0">
           <p className="m-0 font-semibold text-tinta truncate">{t.nome}</p>
-          <p className="m-0 text-xs text-tinta-suave truncate">{fin && t.ufcd ? `UFCD ${t.ufcd} · ` : ""}{t.curso}</p>
+          <p className="m-0 text-xs text-tinta-suave truncate">{fin && t.ufcd ? `${rotuloCodigoCurso(t.ufcd)} · ` : ""}{t.curso}</p>
         </div>
       ),
     },

@@ -4,6 +4,7 @@ import {
   pesquisarCursosFin, pesquisarCursosGold, pesquisarFormadores, pesquisarFormandosFin, pesquisarFormandosGold,
   pesquisarLeads, pesquisarTurmasFin, pesquisarTurmasGold, type SearchKind,
 } from "./repos/pesquisa.js";
+import { rotuloCodigoCurso } from "../../src/partilhado/codigoCurso.js";
 
 export type { SearchKind };
 export type SearchGrupo = "formandos" | "formadores" | "formacoes" | "turmas" | "crm";
@@ -154,7 +155,7 @@ export async function globalSearch(db: Db, qRaw: string, limitPer = 8, ator?: At
     hits.push({ grupo: "turmas", tipo: "Turma Gold", nome: String(row.nome ?? ""), sub: `${row.curso || "sem curso"} · ${row.local || "sem local"} · ${row.estado}`, view: "gold-cockpit-turma", turmaId: Number(row.id), tab: "overview" });
   }
   for (const row of turmasF) {
-    hits.push({ grupo: "turmas", tipo: "Turma Financiada", nome: String(row.nome ?? ""), sub: `UFCD ${row.ufcd_cod || "-"} · ${row.curso || "sem curso"} · ${row.local || ""}`, view: "fin-cockpit-turma", turmaId: Number(row.id), tab: "overview" });
+    hits.push({ grupo: "turmas", tipo: "Turma Financiada", nome: String(row.nome ?? ""), sub: `${rotuloCodigoCurso(String(row.ufcd_cod || "-"))} · ${row.curso || "sem curso"} · ${row.local || ""}`, view: "fin-cockpit-turma", turmaId: Number(row.id), tab: "overview" });
   }
 
   const groups = GROUPS

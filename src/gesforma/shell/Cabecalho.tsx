@@ -10,6 +10,7 @@ import { Icone } from "./Icones";
 import { caminhoNoMenu, TITULOS } from "./navegacao";
 import { PainelNotificacoes } from "./Notificacoes";
 import type { Navegar, ParamsVista } from "./tipos";
+import { rotuloCodigoCurso } from "../../partilhado/codigoCurso";
 
 function useMigalhas(view: Vista, params: ParamsVista, navigate: Navegar): { itens: Migalha[]; detalhe?: string } {
   const { user } = useAuth();
@@ -35,7 +36,7 @@ function useMigalhas(view: Vista, params: ParamsVista, navigate: Navegar): { ite
     if (!turma) return { itens: [...base, { rotulo: "Turma" }] };
     return {
       itens: [...base, { rotulo: turma.nome, onClick: () => navigate({ view: ehGold ? "gold-cockpit-turma" : "fin-cockpit-turma", turmaId: turma.id, tab: "overview" }) }, { rotulo: separador }],
-      detalhe: ehGold ? `${turma.curso} · ${turma.local}` : `UFCD ${turma.ufcdCod ?? ""} · ${turma.curso}`,
+      detalhe: ehGold ? `${turma.curso} · ${turma.local}` : `${rotuloCodigoCurso(turma.ufcdCod ?? "")} · ${turma.curso}`,
     };
   }
 

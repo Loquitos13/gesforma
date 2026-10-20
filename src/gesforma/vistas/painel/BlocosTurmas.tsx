@@ -4,6 +4,7 @@ import {
   BarrasHorizontais, Cartao, Estado, Separadores, Tabela, cx, data, eur, formatar, num, type Coluna,
 } from "../../../partilhado/ui";
 import type { Navegar } from "../../shell/tipos";
+import { rotuloCodigoCurso } from "../../../partilhado/codigoCurso";
 
 function tomOcupacao(pct: number) {
   return pct >= 75 ? "#1F7A4D" : pct >= 40 ? "#9A5B00" : "#B42318";
@@ -116,7 +117,7 @@ export function TabelaTurmasEmCurso({ turmas, minimo, navigate }: { turmas: Turm
       id: "turma", titulo: "Turma", principal: true,
       celula: t => (
         <span className="flex flex-col">
-          <span className="font-semibold">{t.ufcd ? `UFCD ${t.ufcd} · ` : ""}{t.nome}</span>
+          <span className="font-semibold">{t.ufcd ? `${rotuloCodigoCurso(t.ufcd)} · ` : ""}{t.nome}</span>
           <span className="text-xs text-tinta-suave">{t.local}</span>
         </span>
       ),

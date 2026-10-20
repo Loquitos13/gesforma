@@ -6,6 +6,7 @@ import {
   LISTA_CNAEF, LISTA_GENERO, LISTA_HABILITACOES, LISTA_PAISES, LISTA_QNQ, LISTA_SIM_NAO, LISTA_SITUACAO_EMPREGO,
   LISTA_TIPO_ENTIDADE, procuraEmpregoPorOmissao, qnqDasHabilitacoes,
 } from "../../src/partilhado/execucaoFisica.js";
+import { codigoCursoValido, normalizarCodigoCurso, rotuloCodigoCurso } from "../../src/partilhado/codigoCurso.js";
 import { cursoAcao, FALTA, formatoDaTurma, LISTAS_EXECUCAO, sessaoSincrona } from "../src/execucaoFisica.js";
 import { writePreinscricaoPii } from "../src/pii.js";
 import { conteudoZip, lerZip, serieExcel } from "../src/xlsxModelo.js";
@@ -151,6 +152,27 @@ describe("execução física da turma (Financiada)", () => {
     expect(cursoAcao({ numero_acao: 1, ufcd_cod: "UC00277", c_ufcd_cod: "", c_ufcd: "", curso: "Comunicar em contexto profissional" }))
       .toBe("UC00277 - Comunicar em contexto profissional / Ação 1");
     expect(cursoAcao({ numero_acao: 1, ufcd_cod: "", c_ufcd_cod: "", c_ufcd: "", curso: "x" })).toBe("");
+    expect(cursoAcao({ numero_acao: 3, ufcd_cod: "", c_ufcd_cod: "UC02784", c_ufcd: "Apoiar a gestão de pessoal", curso: "x" }))
+      .toBe("UC02784 - Apoiar a gestão de pessoal / Ação 3");
+  });
+
+  it("o curso aceita o código de uma UFCD ou de uma UC, normalizado", async () => {
+    expect(normalizarCodigoCurso("ufcd 8995")).toBe("8995");
+    expect(normalizarCodigoCurso(" uc 00277 ")).toBe("UC00277");
+    expect(codigoCursoValido("UC00277")).toBe(true);
+    expect(codigoCursoValido("8995")).toBe(true);
+    expect(codigoCursoValido("UC")).toBe(false);
+    expect(codigoCursoValido("")).toBe(false);
+    expect(rotuloCodigoCurso("8995")).toBe("UFCD 8995");
+    expect(rotuloCodigoCurso("UC00277")).toBe("UC00277");
+    const ctx = await arrancar();
+    const base = { ufcd: "Comunicar e interagir", regime: "Online", horas: 25 };
+    const uc = await pedido(ctx, "secretaria", "POST", "/v1/cursos-fin", { ...base, ufcdCod: "uc 00033", nomeComercial: `Comunicar ${Date.now()}` });
+    expect(uc.statusCode, uc.body).toBe(200);
+    const ruim = await pedido(ctx, "secretaria", "POST", "/v1/cursos-fin", { ...base, ufcdCod: "  ", nomeComercial: `Ruim ${Date.now()}` });
+    expect(ruim.statusCode).toBe(400);
+    const lido = await ctx.db.query<{ ufcd_cod: string }>("SELECT ufcd_cod FROM cursos_fin WHERE nome_comercial LIKE 'Comunicar %' ORDER BY id DESC LIMIT 1");
+    expect(lido.rows[0]!.ufcd_cod).toBe("UC00033");
   });
 
   it("preenche uma linha por formando com os dados da plataforma e mantém o resto do modelo", async () => {

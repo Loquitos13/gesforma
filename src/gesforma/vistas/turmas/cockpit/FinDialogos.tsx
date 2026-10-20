@@ -15,6 +15,7 @@ import { splitNome, TransferirTurmaModal } from "./base";
 import { InscreverFormandoPanel } from "../../../TurmaInscricao";
 import { TurmaInactivaBanner } from "../../../TurmaCronograma";
 import { inscreverNaTurma, recarregarTurma, retirarDaTurma, useLeadsDoCurso, useOutrasTurmas } from "./dados";
+import { rotuloCodigoCurso } from "../../../../partilhado/codigoCurso";
 
 export function EditarTurmaFin({ aberto, onFechar, turma, onGravar }: {
   aberto: boolean; onFechar: () => void; turma: TurmaFin; onGravar: (p: Partial<DadosTurma>) => void;
@@ -26,7 +27,7 @@ export function EditarTurmaFin({ aberto, onFechar, turma, onGravar }: {
   }, [aberto, turma]);
   const cursosRef = useCursosRef("fin");
   const cursos = useOpcoes("cursos", { regime: "fin" });
-  const opCursos = useMemo(() => cursos.opcoes.map(o => ({ value: o.valor, sub: o.extra?.ufcdCod ? `UFCD ${String(o.extra.ufcdCod)}` : undefined })), [cursos.opcoes]);
+  const opCursos = useMemo(() => cursos.opcoes.map(o => ({ value: o.valor, sub: o.extra?.ufcdCod ? `${rotuloCodigoCurso(String(o.extra.ufcdCod))}` : undefined })), [cursos.opcoes]);
   const locais = useLocaisOptsDoCurso("fin", cursosRef, f.curso);
   const opFormadores = useOpcoesFormador(f.formador, "fin");
 

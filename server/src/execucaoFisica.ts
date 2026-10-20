@@ -20,6 +20,7 @@ import {
   EMPREGADOS, ENTIDADE_EMPREGADORA, FINANCIAMENTO_VAZIO, NAO, PAIS_PORTUGAL, ROTULOS_FINANCIAMENTO,
   faltaDocumentoEstrangeiro, procuraEmpregoPorOmissao, qnqDasHabilitacoes, type DadosFinanciamento,
 } from "../../src/partilhado/execucaoFisica.js";
+import { rotuloCodigoCurso } from "../../src/partilhado/codigoCurso.js";
 import { estadoDaMarca, sessoesComHoras } from "./assiduidade.js";
 import { hojeLisboa } from "./datas.js";
 import type { Db } from "./db/pool.js";
@@ -138,7 +139,7 @@ export function formatoDaTurma(cronograma: unknown): "presencial" | "e-learning"
 export function cursoAcao(t: Pick<TurmaReembolso, "numero_acao" | "ufcd_cod" | "c_ufcd_cod" | "c_ufcd" | "curso">) {
   const cod = (t.c_ufcd_cod || t.ufcd_cod || "").trim().replace(/\s+/g, " ");
   if (!cod) return "";
-  const codigo = /^\d+$/.test(cod) ? `UFCD ${cod}` : cod;
+  const codigo = rotuloCodigoCurso(cod);
   const nome = (t.c_ufcd || t.curso || "").trim();
   return `${codigo}${nome ? ` - ${nome}` : ""} / Ação ${Math.max(1, Number(t.numero_acao) || 1)}`;
 }

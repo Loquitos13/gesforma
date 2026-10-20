@@ -3,6 +3,7 @@ import { Cartao, Estado, Interruptor, Selecao, data as fmtData, eur } from "../.
 import { textoPrograma } from "../../../cursoPrograma";
 import type { FichaCurso } from "./useFichaCurso";
 import { hojeLisboa } from "../../../../partilhado/horaLisboa";
+import { rotuloCodigoCurso } from "../../../../partilhado/codigoCurso";
 
 const marcadores = (txt: string) => txt.split("\n").map(l => l.replace(/^[•\-]\s*/, "").trim()).filter(Boolean).slice(0, 5);
 
@@ -29,7 +30,7 @@ export function PreviewSite({ f }: { f: FichaCurso }) {
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
           <div className="absolute bottom-3 left-4 right-4">
             <p className="m-0 mb-1 text-[10px] font-bold uppercase tracking-wide text-white/80">
-              {[data.regime, regime === "fin" && data.ufcdCod ? `UFCD ${data.ufcdCod}` : ""].filter(Boolean).join(" · ") || "modalidade"}
+              {[data.regime, regime === "fin" && data.ufcdCod ? `${rotuloCodigoCurso(data.ufcdCod)}` : ""].filter(Boolean).join(" · ") || "modalidade"}
             </p>
             <h3 className="m-0 text-base font-bold leading-snug text-white">{data.titulo || "Título do curso"}</h3>
           </div>

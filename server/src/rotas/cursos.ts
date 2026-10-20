@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
+import { codigoCursoValido, normalizarCodigoCurso } from "../../../src/partilhado/codigoCurso.js";
 import { areaCnaefValida } from "../../../src/partilhado/execucaoFisica.js";
 import { storeDriveFile } from "../driveFicheiros.js";
 import { bloqueioCursoFin, bloqueioCursoGold, propagarCursoNoRegime } from "../ligacoes.js";
@@ -27,7 +28,8 @@ const cursoGoldSchema = z.object({
 });
 
 const cursoFinSchema = z.object({
-  ufcdCod: z.string().trim().min(1).max(20),
+  ufcdCod: z.string().trim().max(20).transform(normalizarCodigoCurso)
+    .refine(codigoCursoValido, "Código UFCD (ex. 8995) ou UC (ex. UC00277)."),
   ufcd: z.string().trim().min(1).max(200),
   nomeComercial: z.string().trim().min(1).max(200),
   regime: z.string().trim().min(1).max(40),

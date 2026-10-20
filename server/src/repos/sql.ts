@@ -92,7 +92,9 @@ export type Periodo = { de: string; ate: string };
 
 /**
  * Período fechado [de, ate] em datas ISO (yyyy-mm-dd). Sem datas, usa o mês corrente.
- * `anterior` é o período imediatamente antes, com o mesmo número de dias.
+ * `anterior` é o período imediatamente antes, com o mesmo número de dias; quando o período começa
+ * no dia 1 e acaba no mesmo mês ("este mês" até hoje, ou o mês inteiro), é o mesmo intervalo de dias
+ * do mês anterior (1–19/10 compara com 1–19/09), cortado no fim desse mês (1–31/03 → 1–28/02).
  */
 export function periodo(de?: string | null, ate?: string | null, hoje = new Date()): Periodo & { anterior: Periodo; dias: number } {
   const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -101,6 +103,13 @@ export function periodo(de?: string | null, ate?: string | null, hoje = new Date
   const d1 = ate ? new Date(`${ate}T00:00:00Z`) : new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate()));
   const [a, b] = d0 <= d1 ? [d0, d1] : [d1, d0];
   const dias = Math.round((b.getTime() - a.getTime()) / 86400_000) + 1;
+  const doMes = a.getUTCDate() === 1 && a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth();
+  if (doMes) {
+    const ultimoDia = new Date(Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), 0)).getUTCDate();
+    const antIni = new Date(Date.UTC(a.getUTCFullYear(), a.getUTCMonth() - 1, 1));
+    const antFim = new Date(Date.UTC(a.getUTCFullYear(), a.getUTCMonth() - 1, Math.min(b.getUTCDate(), ultimoDia)));
+    return { de: iso(a), ate: iso(b), dias, anterior: { de: iso(antIni), ate: iso(antFim) } };
+  }
   const antFim = new Date(a.getTime() - 86400_000);
   const antIni = new Date(antFim.getTime() - (dias - 1) * 86400_000);
   return { de: iso(a), ate: iso(b), dias, anterior: { de: iso(antIni), ate: iso(antFim) } };

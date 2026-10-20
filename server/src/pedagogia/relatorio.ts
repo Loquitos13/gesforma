@@ -32,7 +32,7 @@ export async function dadosRelatorioFinal(db: Db, turmaId: number): Promise<Rela
     notasFin(db, turmaId),
     certificadosFin(db, turmaId),
     fichaCursoFinPorNome(db, row.curso),
-    respostasDaTurma(db, "fin", row.nome),
+    respostasDaTurma(db, "fin", turmaId, row.nome),
   ]);
   const notas = new Map<number, number[]>();
   for (const nota of notasRows) {

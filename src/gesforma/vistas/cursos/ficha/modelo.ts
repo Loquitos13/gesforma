@@ -161,6 +161,23 @@ export function fundirGuardado(base: CursoSite, guardado: Record<string, unknown
 
 export type CampoFalta = { chave: string; rotulo: string; tab: TabId };
 
+/** Horas do curso: número inteiro positivo (a base guarda inteiros; o servidor recusa decimais). */
+export function horasValidas(horas: string) {
+  const n = Number(horas);
+  return horas.trim() !== "" && Number.isInteger(n) && n >= 1;
+}
+
+/**
+ * O que o servidor exige para criar o curso (tabela). O rascunho automático de um curso novo
+ * só se tenta com isto preenchido; antes disso não há pedido nem aviso de erro.
+ */
+export function podeCriarRascunho(d: CursoSite, regime: Regime) {
+  if (!d.titulo.trim() || !d.regime.trim() || !horasValidas(d.horas)) return false;
+  if (regime === "fin") return Boolean(d.ufcdCod.trim());
+  const preco = Number(d.preco);
+  return Boolean(d.categoria.trim() && d.tipo.trim()) && d.preco.trim() !== "" && Number.isFinite(preco) && preco >= 0;
+}
+
 export function camposObrigatorios(d: CursoSite, regime: Regime): CampoFalta[] {
   const out: CampoFalta[] = [];
   if (!d.titulo.trim()) out.push({ chave: "titulo", rotulo: regime === "fin" ? "Nome comercial" : "Título", tab: "identidade" });
@@ -176,8 +193,7 @@ export function camposObrigatorios(d: CursoSite, regime: Regime): CampoFalta[] {
     if (!d.preco.trim() || Number.isNaN(preco) || preco < 0) out.push({ chave: "preco", rotulo: "Preço", tab: "oferta" });
   }
   if (!d.regime.trim()) out.push({ chave: "regime", rotulo: "Modalidade", tab: "oferta" });
-  const horas = Number(d.horas);
-  if (!d.horas.trim() || Number.isNaN(horas) || horas <= 0) out.push({ chave: "horas", rotulo: "Horas", tab: "oferta" });
+  if (!horasValidas(d.horas)) out.push({ chave: "horas", rotulo: "Horas (número inteiro)", tab: "oferta" });
   if (!d.tags.trim()) out.push({ chave: "tags", rotulo: "Tags", tab: "oferta" });
   if (!d.locais.length) out.push({ chave: "locais", rotulo: "Locais", tab: "oferta" });
   return out;

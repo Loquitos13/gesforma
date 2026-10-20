@@ -4,6 +4,12 @@ import { ApiError, apiPublicInquerito, apiPublicInqueritoResposta, type Inquerit
 const fieldCls = "w-full bg-transparent border-0 border-b border-slate-300 px-0 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#1b2330] rounded-none";
 const labelCls = "block text-[13px] text-slate-700 mb-1";
 
+/** Turma da ligação enviada por email (?turma=<id>); o servidor confirma que o inquérito lhe foi enviado. */
+function turmaDaLigacao() {
+  const n = Number(new URLSearchParams(window.location.search).get("turma"));
+  return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
 export function PublicInquerito({ token }: { token: string }) {
   const [inq, setInq] = useState<InqueritoPublico | null>(null);
   const [estado, setEstado] = useState<"loading" | "ready" | "missing" | "error">("loading");
@@ -16,7 +22,7 @@ export function PublicInquerito({ token }: { token: string }) {
 
   useEffect(() => {
     let alive = true;
-    apiPublicInquerito(token)
+    apiPublicInquerito(token, turmaDaLigacao())
       .then(r => {
         if (!alive) return;
         setInq(r);
@@ -49,7 +55,8 @@ export function PublicInquerito({ token }: { token: string }) {
     try {
       await apiPublicInqueritoResposta(token, {
         formando: formando.trim(),
-        turma: turma.trim(),
+        turma: inq.turma ? inq.turma.nome : turma.trim(),
+        turmaId: inq.turma?.id,
         respostas,
       });
       setDone(true);
@@ -100,10 +107,17 @@ export function PublicInquerito({ token }: { token: string }) {
                 <span className={labelCls}>O seu nome</span>
                 <input className={fieldCls} value={formando} onChange={e => setFormando(e.target.value)} autoComplete="name" />
               </label>
-              <label>
-                <span className={labelCls}>Turma (se souber)</span>
-                <input className={fieldCls} value={turma} onChange={e => setTurma(e.target.value)} />
-              </label>
+              {inq.turma ? (
+                <div>
+                  <span className={labelCls}>Turma</span>
+                  <p className="py-2 text-sm text-slate-800">{inq.turma.nome}</p>
+                </div>
+              ) : (
+                <label>
+                  <span className={labelCls}>Turma (se souber)</span>
+                  <input className={fieldCls} value={turma} onChange={e => setTurma(e.target.value)} />
+                </label>
+              )}
             </div>
             <div className="space-y-6">
               {inq.perguntas.map((p, idx) => (

@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { storeDriveFile } from "../driveFicheiros.js";
-import { bloqueioCursoFin, bloqueioCursoGold, propagarCurso } from "../ligacoes.js";
+import { bloqueioCursoFin, bloqueioCursoGold, propagarCursoNoRegime } from "../ligacoes.js";
 import { dtpEstrutura, DTP_FASES } from "../dtpModel.js";
 import { packDoCurso } from "../pedagogia/dtp.js";
 import { guardarImagemCurso, semIdNaMedia, slotImagem, urlsImagemDoCurso } from "../cursoImagens.js";
@@ -102,6 +102,8 @@ function slugDoc(label: string) {
   return `pre-${slug || "doc"}`;
 }
 
+const NOME_REPETIDO = "Já existe um curso com este nome neste regime.";
+
 export async function registar(app: FastifyInstance, deps: Deps) {
   const { db, requireAuth, audit } = deps;
 
@@ -130,8 +132,15 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!parsed.success) return reply.code(400).send({ error: "Preencha nome, categoria, tipo comercial, modalidade, preço e horas." });
     const ent = parsed.data.entidadeResponsavelId;
     if (ent != null && !(await repo.entidadeExiste(db, ent))) return reply.code(400).send({ error: "Entidade responsável inexistente." });
-    const id = await repo.proximoId(db);
-    await repo.criarCursoGold(db, id, parsed.data);
+    const nome = parsed.data.nome;
+    const id = await db.tx(async q => {
+      await repo.trancarNomesCursos(q, "gold");
+      if (await repo.nomeCursoOcupado(q, "gold", nome)) return null;
+      const novo = await repo.proximoId(q);
+      await repo.criarCursoGold(q, novo, parsed.data);
+      return novo;
+    });
+    if (id == null) return reply.code(409).send({ error: NOME_REPETIDO });
     await audit(db, req.actor?.id, "curso.criar", "curso", String(id), req.ip, { regime: "gold", nome: parsed.data.nome });
     return { curso: await repo.obterCurso(db, "gold", id) };
   });
@@ -144,9 +153,19 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!antes) return reply.code(404).send({ error: "curso não encontrado" });
     const ent = v.body.entidadeResponsavelId;
     if (ent != null && !(await repo.entidadeExiste(db, ent))) return reply.code(400).send({ error: "Entidade responsável inexistente." });
-    await repo.actualizarCursoGold(db, v.params.id, v.body);
-    if (ent !== undefined) await repo.definirEntidadeCurso(db, v.params.id, ent);
-    if (v.body.nome && v.body.nome !== antes.nome) await propagarCurso(db, antes.nome, v.body.nome);
+    const renomeia = Boolean(v.body.nome && v.body.nome !== antes.nome);
+    // Curso e nome escrito nas tabelas do regime mudam juntos (ou nada muda).
+    const ok = await db.tx(async q => {
+      if (renomeia) {
+        await repo.trancarNomesCursos(q, "gold");
+        if (await repo.nomeCursoOcupado(q, "gold", v.body.nome!, v.params.id)) return false;
+      }
+      await repo.actualizarCursoGold(q, v.params.id, v.body);
+      if (ent !== undefined) await repo.definirEntidadeCurso(q, v.params.id, ent);
+      if (renomeia) await propagarCursoNoRegime(q, "gold", antes.nome, v.body.nome!);
+      return true;
+    });
+    if (!ok) return reply.code(409).send({ error: NOME_REPETIDO });
     await audit(db, req.actor?.id, "curso.editar", "curso", String(v.params.id), req.ip, { regime: "gold", campos: Object.keys(v.body) });
     return { curso: await repo.obterCurso(db, "gold", v.params.id) };
   });
@@ -155,8 +174,15 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const parsed = cursoFinSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "Preencha código UFCD, designação, nome comercial, modalidade e horas." });
-    const id = await repo.proximoId(db);
-    await repo.criarCursoFin(db, id, parsed.data);
+    const nome = parsed.data.nomeComercial;
+    const id = await db.tx(async q => {
+      await repo.trancarNomesCursos(q, "fin");
+      if (await repo.nomeCursoOcupado(q, "fin", nome)) return null;
+      const novo = await repo.proximoId(q);
+      await repo.criarCursoFin(q, novo, parsed.data);
+      return novo;
+    });
+    if (id == null) return reply.code(409).send({ error: NOME_REPETIDO });
     await audit(db, req.actor?.id, "curso.criar", "curso", String(id), req.ip, { regime: "fin", nome: parsed.data.nomeComercial });
     return { curso: await repo.obterCurso(db, "fin", id) };
   });
@@ -167,12 +193,21 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const antes = await repo.obterCursoFin(db, v.params.id);
     if (!antes) return reply.code(404).send({ error: "curso não encontrado" });
-    await repo.actualizarCursoFin(db, v.params.id, v.body);
     const d = v.body;
-    if (d.nomeComercial && d.nomeComercial !== antes.nomeComercial) await propagarCurso(db, antes.nomeComercial, d.nomeComercial);
-    if (d.ufcd && d.ufcd !== antes.ufcd && antes.ufcd !== antes.nomeComercial && antes.ufcd !== (d.nomeComercial ?? antes.nomeComercial)) {
-      await propagarCurso(db, antes.ufcd, d.ufcd);
-    }
+    const renomeia = Boolean(d.nomeComercial && d.nomeComercial !== antes.nomeComercial);
+    const ok = await db.tx(async q => {
+      if (renomeia) {
+        await repo.trancarNomesCursos(q, "fin");
+        if (await repo.nomeCursoOcupado(q, "fin", d.nomeComercial!, v.params.id)) return false;
+      }
+      await repo.actualizarCursoFin(q, v.params.id, d);
+      if (renomeia) await propagarCursoNoRegime(q, "fin", antes.nomeComercial, d.nomeComercial!);
+      if (d.ufcd && d.ufcd !== antes.ufcd && antes.ufcd !== antes.nomeComercial && antes.ufcd !== (d.nomeComercial ?? antes.nomeComercial)) {
+        await propagarCursoNoRegime(q, "fin", antes.ufcd, d.ufcd);
+      }
+      return true;
+    });
+    if (!ok) return reply.code(409).send({ error: NOME_REPETIDO });
     await audit(db, req.actor?.id, "curso.editar", "curso", String(v.params.id), req.ip, { regime: "fin", campos: Object.keys(d) });
     return { curso: await repo.obterCurso(db, "fin", v.params.id) };
   });

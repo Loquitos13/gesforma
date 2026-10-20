@@ -24,7 +24,8 @@ export default function Dossie({ view, navigate }: VistaProps) {
   const turmas = dados?.turmas ?? [];
   const contagem = {
     abertas: turmas.filter(t => !t.fechada).length,
-    bloqueantes: turmas.filter(t => t.bloqueantes > 0).length,
+    // Turmas abertas com bloqueantes: o mesmo âmbito da tarefa «Dossiês TP com bloqueantes» do painel.
+    bloqueantes: turmas.filter(t => !t.fechada && t.bloqueantes > 0).length,
     todas: turmas.length,
   };
   const financiadores = useMemo(
@@ -34,7 +35,7 @@ export default function Dossie({ view, navigate }: VistaProps) {
   const q = f.q.trim().toLowerCase();
   const linhas = turmas.filter(t => {
     if (f.vista === "abertas" && t.fechada) return false;
-    if (f.vista === "bloqueantes" && t.bloqueantes === 0) return false;
+    if (f.vista === "bloqueantes" && (t.fechada || t.bloqueantes === 0)) return false;
     if (f.curso && t.curso !== f.curso) return false;
     if (f.financiador && t.financiador !== f.financiador) return false;
     return !q || `${t.nome} ${t.curso}`.toLowerCase().includes(q);

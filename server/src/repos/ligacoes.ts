@@ -40,6 +40,43 @@ export async function renomearCursoEmTodo(c: Consulta, antigo: string, novo: str
     [antigo, novo]);
 }
 
+/**
+ * Renomear um curso só no seu regime (Gold e Financiada nunca se misturam): tabelas do regime,
+ * linhas com coluna `regime` desse regime e itens de catálogo desse regime. As tabelas sem regime
+ * (pagamentos, campanhas, regras de email, contratos sem formando) só mudam quando o nome antigo
+ * não é também de um curso do outro regime — aí não se sabe a quem pertencem e ficam como estão.
+ */
+export async function renomearCursoNoRegime(c: Consulta, regime: Regime, antigo: string, novo: string) {
+  const onde = (col: string, extra = "") =>
+    `WHERE lower(trim(${col})) = lower(trim($1)) AND ${col} IS DISTINCT FROM $2${extra}`;
+  for (const table of [TURMAS[regime], FORMANDOS[regime]]) {
+    await many(c, `UPDATE ${table} SET curso = $2 ${onde("curso")}`, [antigo, novo]);
+  }
+  for (const table of ["preinscricoes", "propostas_comerciais"]) {
+    await many(c, `UPDATE ${table} SET curso = $2 ${onde("curso", " AND regime = $3")}`, [antigo, novo, regime]);
+  }
+  await many(c, `UPDATE contratos_comerciais SET curso = $2 ${onde("curso", " AND formando_regime = $3")}`, [antigo, novo, regime]);
+  const doOutro = await contar(c,
+    regime === "gold"
+      ? "SELECT count(*)::int FROM cursos_fin WHERE lower(trim($1)) IN (lower(trim(nome_comercial)), lower(trim(ufcd)))"
+      : "SELECT count(*)::int FROM cursos_gold WHERE lower(trim(nome)) = lower(trim($1))",
+    [antigo]);
+  if (!doOutro) {
+    for (const table of ["pagamentos", "campanhas", "email_rules"]) {
+      await many(c, `UPDATE ${table} SET curso = $2 ${onde("curso")}`, [antigo, novo]);
+    }
+    await many(c, `UPDATE contratos_comerciais SET curso = $2 ${onde("curso", " AND formando_regime IS NULL")}`, [antigo, novo]);
+  }
+  await many(c,
+    `UPDATE catalog_items
+        SET payload = jsonb_set(payload, '{curso}', to_jsonb($2::text), true)
+      WHERE regime = $3
+        AND jsonb_typeof(payload) = 'object'
+        AND lower(trim(coalesce(payload->>'curso', ''))) = lower(trim($1))
+        AND payload->>'curso' IS DISTINCT FROM $2`,
+    [antigo, novo, regime]);
+}
+
 export async function renomearFormadorNasTurmas(c: Consulta, antigo: string, novo: string) {
   for (const table of [TURMAS.gold, TURMAS.fin]) {
     await many(c, `UPDATE ${table} SET formador = $2 WHERE lower(trim(formador)) = lower(trim($1))`, [antigo, novo]);

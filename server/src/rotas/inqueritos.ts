@@ -4,7 +4,8 @@ import { z } from "zod";
 import { respostaSchema, tokenParam } from "../pedagogia/esquemas.js";
 import { metricasInquerito, perguntasDe, publicoInquerito, resumirPerguntas } from "../pedagogia/inqueritos.js";
 import { enviarInqueritosDaTurma, tokenDoInquerito, urlInquerito } from "../pedagogia/inqueritosEnvio.js";
-import { asObj } from "../pedagogia/util.js";
+import { asObj, type Regime } from "../pedagogia/util.js";
+import { pode } from "../permissoes/capacidades.js";
 import * as repo from "../repos/inqueritos.js";
 import { idParam, regime, regimeIdParam, textoQuery, validar } from "../validacao.js";
 import { semFormador } from "./pedagogia/comum.js";
@@ -12,6 +13,14 @@ import type { Deps } from "./tipos.js";
 
 const listaQuery = z.object({ regime: regime.default("gold") });
 const resultadosQuery = z.object({ turma: textoQuery(120), curso: textoQuery(200) });
+const publicoQuery = z.object({ turma: z.coerce.number().int().positive().optional().catch(undefined) });
+
+/** Gold e Financiada separadas: cada perfil só vê inquéritos (e respostas) do regime em que trabalha. */
+function veRegime(role: string, r: string) {
+  return pode(role, r === "fin" ? "fin.ver" : "gold.ver");
+}
+const SEM_REGIME = { error: "Sem acesso aos registos deste regime." };
+const TURMA_INVALIDA = { error: "Esta ligação não corresponde a uma turma a que o inquérito foi enviado." };
 
 const taxa = (respostas: number, destinatarios: number) => (destinatarios > 0 ? Math.round((Math.min(respostas, destinatarios) / destinatarios) * 100) : null);
 
@@ -20,10 +29,20 @@ function dataCurta(v: string | Date) {
 }
 
 export async function registar(app: FastifyInstance, { db, requireAuth, audit }: Deps) {
+  /**
+   * Resposta com a turma da ligação: a turmaId tem de ser uma das turmas a que o inquérito foi enviado
+   * (null = recusar) e o nome gravado passa a ser o da turma. Sem turmaId fica o texto livre (respostas antigas).
+   */
+  async function respostaComTurma(inq: { id: number; regime: Regime }, body: { turma: string; turmaId?: number; formando: string; respostas: Record<string, unknown> }) {
+    if (!body.turmaId) return { ...body, turmaId: null };
+    const turma = await repo.turmaDoEnvio(db, inq.id, inq.regime, body.turmaId);
+    return turma ? { ...body, turma: turma.nome, turmaId: Number(turma.id) } : null;
+  }
   app.get("/v1/inqueritos", async (req, reply) => {
     if (!requireAuth(req, reply) || !semFormador(req, reply, "O formador não consulta os inquéritos.")) return;
     const v = validar(reply, { query: listaQuery }, req);
     if (!v) return;
+    if (!veRegime(req.actor!.role, v.query.regime)) return reply.code(403).send(SEM_REGIME);
     const rows = await repo.listarComContagens(db, v.query.regime);
     return {
       inqueritos: rows.map(r => {
@@ -51,12 +70,14 @@ export async function registar(app: FastifyInstance, { db, requireAuth, audit }:
     if (!v) return;
     const inq = await repo.lerInquerito(db, v.params.id);
     if (!inq) return reply.code(404).send({ error: "inquérito inexistente" });
+    if (!veRegime(req.actor!.role, inq.regime)) return reply.code(403).send(SEM_REGIME);
     const porTurma = await repo.resultadosPorTurma(db, inq.id, inq.regime, v.query);
     const filtrado = Boolean(v.query.turma || v.query.curso);
-    const respostas = await repo.respostasDoInquerito(db, inq.id, {
-      turma: v.query.turma,
-      turmas: !v.query.turma && v.query.curso ? porTurma.map(t => t.turma) : undefined,
-    });
+    // Filtrado: as respostas das turmas da tabela (por turma_id; as antigas pelo nome).
+    const respostas = await repo.respostasDoInquerito(db, inq.id, filtrado ? {
+      turmaIds: porTurma.flatMap(t => (t.turma_id != null ? [Number(t.turma_id)] : [])),
+      turmas: porTurma.map(t => t.turma),
+    } : {});
     const destinatarios = porTurma.reduce((s, t) => s + t.destinatarios, 0);
     const payload = asObj(inq.payload);
     return {
@@ -79,17 +100,24 @@ export async function registar(app: FastifyInstance, { db, requireAuth, audit }:
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: idParam }, req);
     if (!v) return;
-    const [rows, inq] = await Promise.all([repo.respostasDoInquerito(db, v.params.id, { limite: 200 }), repo.lerInquerito(db, v.params.id)]);
+    const inq = await repo.lerInquerito(db, v.params.id);
+    if (!inq) return reply.code(404).send({ error: "inquérito inexistente" });
+    if (!veRegime(req.actor!.role, inq.regime)) return reply.code(403).send(SEM_REGIME);
+    const rows = await repo.respostasDoInquerito(db, v.params.id, { limite: 200 });
     const respostas = rows.map(r => ({ id: Number(r.id), turma: r.turma, formando: r.formando, respostas: asObj(r.respostas), data: dataCurta(r.created_at) }));
-    return { respostas, metricas: metricasInquerito(perguntasDe(asObj(inq?.payload)), respostas.map(r => r.respostas)) };
+    return { respostas, metricas: metricasInquerito(perguntasDe(asObj(inq.payload)), respostas.map(r => r.respostas)) };
   });
 
   app.post("/v1/inqueritos/:id/respostas", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: idParam, body: respostaSchema }, req);
     if (!v) return;
-    if (!(await repo.lerInquerito(db, v.params.id))) return reply.code(404).send({ error: "inquérito inexistente" });
-    await repo.inserirResposta(db, v.params.id, v.body);
+    const inq = await repo.lerInquerito(db, v.params.id);
+    if (!inq) return reply.code(404).send({ error: "inquérito inexistente" });
+    if (!veRegime(req.actor!.role, inq.regime)) return reply.code(403).send(SEM_REGIME);
+    const resposta = await respostaComTurma(inq, v.body);
+    if (!resposta) return reply.code(400).send(TURMA_INVALIDA);
+    await repo.inserirResposta(db, v.params.id, resposta);
     await audit(db, req.actor!.id, "inquerito.resposta", "inquerito", String(v.params.id), req.ip);
     return { ok: true };
   });
@@ -100,6 +128,7 @@ export async function registar(app: FastifyInstance, { db, requireAuth, audit }:
     if (!v) return;
     const inq = await repo.lerInquerito(db, v.params.id);
     if (!inq) return reply.code(404).send({ error: "inquérito inexistente" });
+    if (!veRegime(req.actor!.role, inq.regime)) return reply.code(403).send(SEM_REGIME);
     const token = await tokenDoInquerito(db, inq);
     return { token, url: urlInquerito(token) };
   });
@@ -116,12 +145,19 @@ export async function registar(app: FastifyInstance, { db, requireAuth, audit }:
   });
 
   app.get("/v1/public/inqueritos/:token", { config: { rateLimit: { max: 40, timeWindow: "1 minute" } } }, async (req, reply) => {
-    const v = validar(reply, { params: tokenParam }, req);
+    const v = validar(reply, { params: tokenParam, query: publicoQuery }, req);
     if (!v) return;
     const found = await repo.inqueritoPorToken(db, v.params.token);
     if (!found) return reply.code(404).send({ error: "inquérito inexistente ou ligação revogada" });
     const payload = asObj(found.payload);
-    return { id: Number(found.id), titulo: String(payload.titulo ?? "Inquérito de satisfação"), perguntas: perguntasDe(payload) };
+    // A turma da ligação só conta se o inquérito lhe foi enviado; senão o formulário pede-a por extenso.
+    const turma = v.query.turma ? await repo.turmaDoEnvio(db, found.id, found.regime, v.query.turma) : null;
+    return {
+      id: Number(found.id),
+      titulo: String(payload.titulo ?? "Inquérito de satisfação"),
+      perguntas: perguntasDe(payload),
+      turma: turma ? { id: Number(turma.id), nome: turma.nome } : null,
+    };
   });
 
   app.post("/v1/public/inqueritos/:token/respostas", { config: { rateLimit: { max: 8, timeWindow: "1 minute" } } }, async (req, reply) => {
@@ -129,7 +165,9 @@ export async function registar(app: FastifyInstance, { db, requireAuth, audit }:
     if (!v) return;
     const found = await repo.inqueritoPorToken(db, v.params.token);
     if (!found) return reply.code(404).send({ error: "inquérito inexistente" });
-    await repo.inserirResposta(db, found.id, v.body);
+    const resposta = await respostaComTurma(found, v.body);
+    if (!resposta) return reply.code(400).send(TURMA_INVALIDA);
+    await repo.inserirResposta(db, found.id, resposta);
     return { ok: true };
   });
 }

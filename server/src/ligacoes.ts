@@ -1,5 +1,6 @@
 import type { Db } from "./db/pool.js";
 import * as repo from "./repos/ligacoes.js";
+import type { Consulta, Regime } from "./repos/sql.js";
 
 type CursoAlvo = { canonical: string; aliases: string[] };
 
@@ -56,11 +57,20 @@ function fraseBloqueio(partes: { n: number; um: string; varios: string }[]) {
   return `Não é possível eliminar. Este registo ainda tem ${lista}.`;
 }
 
+/** Reparação (arranque): o alias é inequívoco entre todos os cursos, por isso corre em todas as tabelas. */
 export async function propagarCurso(db: Db, from: string, to: string) {
   const antigo = from.trim();
   const novo = to.trim();
   if (!antigo || !novo || antigo === novo) return;
   await repo.renomearCursoEmTodo(db, antigo, novo);
+}
+
+/** Curso renomeado na ficha: só no regime do curso, e dentro da transacção de quem o grava. */
+export async function propagarCursoNoRegime(q: Consulta, regime: Regime, from: string, to: string) {
+  const antigo = from.trim();
+  const novo = to.trim();
+  if (!antigo || !novo || antigo === novo) return;
+  await repo.renomearCursoNoRegime(q, regime, antigo, novo);
 }
 
 function renomearNoCronograma(raw: unknown, from: string, to: string) {

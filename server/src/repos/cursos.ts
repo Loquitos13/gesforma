@@ -141,6 +141,22 @@ export async function actualizarCursoFin(c: Consulta, id: number, d: Partial<Omi
   [id, d.ufcdCod ?? null, d.ufcd ?? null, d.nomeComercial ?? null, d.regime ?? null, d.horas ?? null, d.estado ?? null]);
 }
 
+/**
+ * Já há outro curso do regime com este nome (Gold: nome; Fin: nome comercial)? Sem índice único
+ * na base porque dados antigos podem ter repetidos; quem cria ou renomeia tranca primeiro (`trancarNomesCursos`).
+ */
+export async function nomeCursoOcupado(c: Consulta, regime: Regime, nome: string, excluirId: number | null = null) {
+  const sql = regime === "gold"
+    ? "SELECT count(*)::int FROM cursos_gold WHERE lower(trim(nome)) = lower(trim($1)) AND ($2::int IS NULL OR id <> $2)"
+    : "SELECT count(*)::int FROM cursos_fin WHERE lower(trim(nome_comercial)) = lower(trim($1)) AND ($2::int IS NULL OR id <> $2)";
+  return Number(await valor<number>(c, sql, [nome, excluirId])) > 0;
+}
+
+/** Serializa criar/renomear cursos do regime até ao fim da transacção (dois pedidos iguais ao mesmo tempo). */
+export async function trancarNomesCursos(c: Consulta, regime: Regime) {
+  await many(c, "SELECT pg_advisory_xact_lock(7241101, $1::int)", [regime === "gold" ? 1 : 2]);
+}
+
 export async function apagarCurso(c: Consulta, regime: Regime, id: number) {
   await exec(c, regime === "gold" ? "DELETE FROM cursos_gold WHERE id = $1" : "DELETE FROM cursos_fin WHERE id = $1", [id]);
 }

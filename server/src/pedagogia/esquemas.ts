@@ -135,6 +135,8 @@ export const dtpModeloSchema = z.object({
 
 export const respostaSchema = z.object({
   turma: z.string().max(120).default(""),
+  /** Turma da ligação enviada (?turma=<id>); validada contra os envios do inquérito. */
+  turmaId: z.number().int().positive().optional(),
   formando: z.string().max(160).default(""),
   respostas: z.record(z.unknown()),
 });

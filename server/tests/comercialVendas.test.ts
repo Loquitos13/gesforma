@@ -61,13 +61,13 @@ async function leadDoComercial() {
 }
 
 describe("menu do comercial", () => {
-  it("só vendas: painel, CRM, equipa, campanhas, cronogramas e o blog", () => {
+  it("só vendas: painel, CRM, equipa, campanhas e cronogramas", () => {
     const menu = menuDoPerfil("comercial");
     const vistas = menu.flatMap(g => g.items.flatMap(i => [i.view, ...(i.children ?? []).map(c => c.view)]).filter(Boolean));
-    expect(menu.map(g => g.group)).toEqual(["Gold", "Gestão"]);
+    expect(menu.map(g => g.group)).toEqual(["Gold"]);
     expect(vistas).toEqual([
       "gold-painel", "gold-preinscricoes", "gold-crm-clientes", "gold-crm-parceiros", "gold-crm-contratos",
-      "gold-equipa", "gold-campanhas", "gold-cronogramas", "blog-posts", "blog-tematicas",
+      "gold-equipa", "gold-campanhas", "gold-cronogramas",
     ]);
   });
 
@@ -75,10 +75,10 @@ describe("menu do comercial", () => {
     for (const v of ["gold-turmas", "gold-cockpit-turma", "gold-cursos", "gold-curso-ficha", "gold-modulos", "gold-datas", "gold-locais",
       "gold-horarios", "gold-areas-tematicas", "gold-conteudos", "gold-formandos-turmas", "gold-formandos-gold", "gold-formando-ficha",
       "gold-formadores", "formador-ficha", "formadores", "gold-dtp", "gold-inqueritos", "listas-opcoes", "empresas-servicos",
-      "fin-painel", "pagamentos", "configuracoes"] as const) {
+      "fin-painel", "pagamentos", "configuracoes", "blog-posts", "blog-tematicas"] as const) {
       expect(vistaNoMenuDoPerfil("comercial", v), v).toBe(false);
     }
-    for (const v of ["gold-painel", "painel", "gold-preinscricoes", "equipa", "gold-cronogramas", "blog-posts", "notificacoes"] as const) {
+    for (const v of ["gold-painel", "painel", "gold-preinscricoes", "equipa", "gold-cronogramas", "notificacoes"] as const) {
       expect(vistaNoMenuDoPerfil("comercial", v), v).toBe(true);
     }
   });
@@ -110,6 +110,7 @@ describe("servidor: o comercial não chega à gestão", () => {
       ["GET", "/v1/formandos?regime=gold"], ["GET", "/v1/formandos/gold/1"], ["POST", "/v1/formandos-gold"], ["PATCH", "/v1/formandos-gold/1"],
       ["GET", "/v1/dtp/gold"], ["GET", "/v1/dtp/gold/resumo"], ["GET", "/v1/dtp/gold/1/export"],
       ["GET", "/v1/inqueritos"], ["GET", "/v1/inqueritos/1/resultados"],
+      ["GET", "/v1/blog"], ["POST", "/v1/blog"], ["GET", "/v1/catalogos/blog_tematicas"],
       ["GET", "/v1/listas"], ["POST", "/v1/listas/origens"], ["GET", "/v1/turma-regras"],
       ["GET", "/v1/opcoes/formadores"], ["GET", "/v1/opcoes/modulos"], ["GET", "/v1/opcoes/conteudos"],
       ["GET", "/v1/settings"], ["GET", "/v1/pagamentos"],
@@ -155,7 +156,7 @@ describe("servidor: o comercial não chega à gestão", () => {
 });
 
 describe("servidor: o que o comercial usa continua a funcionar", () => {
-  it("pré-inscrições (lista, ficha, notas), clientes, contratos, propostas, campanhas, equipa, blog e opções", async () => {
+  it("pré-inscrições (lista, ficha, notas), clientes, contratos, propostas, campanhas, equipa e opções", async () => {
     const lead = await leadDoComercial();
     const ok: [Parameters<typeof pedido>[2], string, unknown?][] = [
       ["GET", "/v1/crm/leads?regime=gold"],
@@ -173,8 +174,6 @@ describe("servidor: o que o comercial usa continua a funcionar", () => {
       ["GET", "/v1/campanhas"],
       ["GET", `/v1/equipa?regime=gold`],
       ["GET", `/v1/equipa/${ctx.userId.comercial}?regime=gold`],
-      ["GET", "/v1/blog"],
-      ["GET", "/v1/catalogos/blog_tematicas"],
       ["GET", "/v1/opcoes/cursos?regime=gold"],
       ["GET", "/v1/opcoes/turmas?regime=gold"],
       ["GET", "/v1/opcoes/locais?regime=gold"],

@@ -117,7 +117,7 @@ export function menuDoPerfil(role: string): GrupoMenu[] {
       : { ...g, items: g.items.filter(item => item.label !== "Gestão" && item.view !== "site") })
     // Os serviços para empresas são conteúdo do site: só a administração os edita (o servidor também o impõe).
     .map(g => (g.group === "Gestão" && role !== "admin") ? { ...g, items: g.items.filter(item => item.view !== "empresas-servicos") } : g)
-    // O blog é da secretaria (e do comercial, ver soVendas): a Financiada vê só as listas de opções em Gestão.
+    // O blog é da secretaria: a Financiada vê só as listas de opções em Gestão (o comercial não tem Gestão, ver soVendas).
     .map(g => (g.group === "Gestão" && role === "financiada") ? { ...g, items: g.items.filter(item => item.label !== "Blog") } : g);
 }
 

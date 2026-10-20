@@ -5,9 +5,9 @@ import type { Metodo } from "./perfis.js";
  * o deixasse (as regras de `permissoes.ts` continuam a aplicar-se por cima: isto só restringe).
  *
  * Fica: CRM (pré-inscrições e os seus documentos, clientes, parceiros, propostas, contratos e assinaturas),
- * equipa (os seus objetivos e propostas), campanhas, blog, painel Gold (só vendas), pesquisa,
+ * equipa (os seus objetivos e propostas), campanhas, painel Gold (só vendas), pesquisa,
  * notificações, opções para os formulários e os cronogramas das turmas (só leitura, `/v1/cronogramas/gold`).
- * Sai: turmas, cursos (edição), formandos, formadores, dossiê, inquéritos, listas de opções e o resto da gestão.
+ * Sai: turmas, cursos (edição), formandos, formadores, dossiê, inquéritos, blog, listas de opções e o resto da gestão.
  */
 export const COMERCIAL_PERMITIDO: [Metodo, string][] = [
   ["*", "/v1/crm*"],
@@ -16,10 +16,6 @@ export const COMERCIAL_PERMITIDO: [Metodo, string][] = [
   ["*", "/v1/assinaturas*"],
   ["*", "/v1/equipa*"],
   ["*", "/v1/campanhas*"],
-  ["*", "/v1/blog*"],
-  // Temáticas do blog (catálogo): só esse tipo; datas, locais, horários, módulos… são da gestão dos cursos.
-  ["GET", "/v1/catalogos/blog_tematicas"],
-  ["*", "/v1/catalog/blog_tematicas*"],
   ["GET", "/v1/painel/gold"],
   ["GET", "/v1/cronogramas/gold"],
   ["GET", "/v1/search"],

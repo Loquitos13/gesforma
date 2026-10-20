@@ -68,11 +68,12 @@ describe("cursos, catálogos, listas e blog", () => {
   it("blog: slug único e validado; site público só mostra publicações activas", async () => {
     const ctx = await arrancar();
     const base = { titulo: "Notícia de teste", slug: "noticia-teste-unica", data: "2026-10-01", status: "Ativo", corpo: "" };
-    expect((await pedido(ctx, "comercial", "POST", "/v1/blog", base)).statusCode).toBe(200);
-    expect((await pedido(ctx, "comercial", "POST", "/v1/blog", base)).statusCode).toBe(409);
-    expect((await pedido(ctx, "comercial", "POST", "/v1/blog", { ...base, slug: "Slug Mau!" })).statusCode).toBe(400);
+    expect((await pedido(ctx, "secretaria", "POST", "/v1/blog", base)).statusCode).toBe(200);
+    expect((await pedido(ctx, "secretaria", "POST", "/v1/blog", base)).statusCode).toBe(409);
+    expect((await pedido(ctx, "secretaria", "POST", "/v1/blog", { ...base, slug: "Slug Mau!" })).statusCode).toBe(400);
     expect((await pedido(ctx, "financiada", "POST", "/v1/blog", { ...base, slug: "outra" })).statusCode).toBe(403);
-    const lista = (await pedido(ctx, "comercial", "GET", "/v1/blog?q=teste")).json() as { posts: { slug: string }[] };
+    expect((await pedido(ctx, "comercial", "POST", "/v1/blog", { ...base, slug: "do-comercial" })).statusCode).toBe(403);
+    const lista = (await pedido(ctx, "secretaria", "GET", "/v1/blog?q=teste")).json() as { posts: { slug: string }[] };
     expect(lista.posts.map(p => p.slug)).toContain("noticia-teste-unica");
     expect((await pedido(ctx, null, "GET", "/v1/public/noticias/noticia-teste-unica")).statusCode).toBe(200);
     expect((await pedido(ctx, null, "GET", "/v1/public/noticias/nao-existe")).statusCode).toBe(404);

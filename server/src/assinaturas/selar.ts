@@ -10,6 +10,7 @@ import { SignPdf } from "@signpdf/signpdf";
 import { Signer } from "@signpdf/utils";
 import forge from "node-forge";
 import { PDFDocument } from "pdf-lib";
+import { RevisaoInvalida, verificarRevisaoAssinatura } from "./revisao.js";
 
 class SeloSigner extends Signer {
   constructor(private chave: forge.pki.rsa.PrivateKey, private cert: forge.pki.Certificate, private cadeia: forge.pki.Certificate[]) {
@@ -70,6 +71,8 @@ const bytes = (n: No | undefined) => Buffer.from(typeof n?.value === "string" ? 
 const daDer = (n: No) => Buffer.from(forge.asn1.toDer(n).getBytes(), "binary");
 const semZeros = (hex: string) => hex.toUpperCase().replace(/^0+/, "");
 const cn = (nome: string) => /^CN=(.*)$/m.exec(nome)?.[1]?.trim() ?? "";
+// serialNumber do titular (OID 2.5.4.5): no CC/CMD é o número de identificação civil ("BI…"/"IDCPT-…"), não o NIF.
+const serialDoTitular = (nome: string) => /^serialNumber=(.*)$/m.exec(nome)?.[1]?.trim() ?? "";
 // Os bytes têm de se manter tal e qual: sem decompor BIT STRINGs (os tipos do forge não têm estas opções).
 const lerDer = forge.asn1.fromDer as unknown as (b: forge.util.ByteStringBuffer, o: { parseAllBytes: boolean; decodeBitStrings: boolean }) => No;
 
@@ -159,25 +162,35 @@ function verificarAssinatura(original: Buffer, pdf: Buffer, ancoras: X509Certifi
   const assinados = daDer(forge.asn1.create(forge.asn1.Class.UNIVERSAL, forge.asn1.Type.SET, true, filhos(atributos)));
   if (!cryptoVerify(algoritmo, assinados, cert.publicKey, bytes(si[5]))) throw new PdfExternoErro(INVALIDA);
   if (!cadeiaConfiavel(cert, usoDaChave(meu.no), lidos.map(c => c.x), ancoras)) throw new PdfExternoErro(NAO_CC);
-  return { titular: cn(cert.subject), emissor: cn(cert.issuer) };
+  return { titular: cn(cert.subject), emissor: cn(cert.issuer), serie: serialDoTitular(cert.subject) };
 }
+
+const ALTERADO = "O PDF foi alterado antes de ser assinado: só se aceita o documento enviado com a assinatura acrescentada. Descarregue o original de novo e assine-o sem o editar.";
+
+export type AssinaturaExterna = { titular: string; emissor: string; serie: string };
 
 /**
  * Confirma que o PDF devolvido foi assinado fora (CC/CMD) sobre o documento enviado: tem de começar
- * exactamente pelos bytes do original (assinatura incremental) e a assinatura tem de ser válida e ter titular.
+ * exactamente pelos bytes do original (assinatura incremental), a assinatura tem de ser válida e ter titular, e a
+ * revisão acrescentada só pode trazer a assinatura (revisao.ts: nada de texto ou páginas mudados antes de assinar).
  * `ancoras` só muda nos testes (uma EC de teste); em produção são as do Estado.
  */
-export function validarAssinadoExterno(original: Buffer, recebido: Buffer, ancoras = ancorasDoEstado()) {
+export async function validarAssinadoExterno(original: Buffer, recebido: Buffer, ancoras = ancorasDoEstado()): Promise<AssinaturaExterna> {
   if (recebido.subarray(0, 5).toString("latin1") !== "%PDF-") throw new PdfExternoErro("O ficheiro não é um PDF.");
   if (recebido.length <= original.length || !recebido.subarray(0, original.length).equals(original)) {
     throw new PdfExternoErro("Este PDF não é o documento enviado, ou foi alterado antes de assinar. Descarregue o original de novo e assine-o sem o editar.");
   }
-  let cert: { titular: string; emissor: string };
+  let cert: AssinaturaExterna;
   try {
     cert = verificarAssinatura(original, recebido, ancoras);
   } catch (err) {
     if (err instanceof PdfExternoErro) throw err;
     throw new PdfExternoErro(INVALIDA);
+  }
+  try {
+    await verificarRevisaoAssinatura(original, recebido);
+  } catch (err) {
+    throw new PdfExternoErro(ALTERADO, { cause: err instanceof RevisaoInvalida ? err.message : "PDF ilegível" });
   }
   if (!cert.titular) throw new PdfExternoErro("Não foi possível ler o nome do titular no certificado da assinatura.");
   return cert;

@@ -2,10 +2,11 @@
 import type { Db } from "../db/pool.js";
 import { decryptField, encryptField } from "../fieldCrypto.js";
 import * as repo from "../repos/assinaturas.js";
+import type { Consulta } from "../repos/sql.js";
 import { obterModelo } from "../repos/crmDiretorioDocs.js";
 import {
   AssinaturaErro, PRAZO_DIAS, ROTULO_EVENTO, ROTULO_METODO, cabecalhoEntidade, dataHora, enviarModelo, mascararNif,
-  novoCodigoVerificacao, novoToken, resolverSignatario, textoDoContrato, urlAssinar, urlVerificar,
+  novoCodigoVerificacao, novoToken, resolverSignatario, textoDoContrato, urlAssinar, urlVerificar, type Signatario,
 } from "./comum.js";
 import { gerarPdfContrato, sha256 } from "./pdf.js";
 
@@ -59,6 +60,7 @@ export async function enviarParaAssinatura(db: Db, quem: Quem, contratoId: numbe
   const dias = Math.min(Math.max(Math.trunc(opts.prazoDias ?? PRAZO_DIAS), 1), 60);
   const expira = new Date(Date.now() + dias * 24 * 3600_000);
   const id = await db.tx(async q => {
+    const anterior = (await repo.listarDoContrato(q, k.id))[0];
     await repo.cancelarAbertas(q, k.id, "Substituído por um novo envio.");
     const novo = await repo.criarAssinatura(q, {
       contratoId: k.id, tokenHash: hash, codigo, titulo, nome: s.nome, email: s.email, nifEnc: encryptField(s.nif),
@@ -67,10 +69,35 @@ export async function enviarParaAssinatura(db: Db, quem: Quem, contratoId: numbe
     });
     await repo.marcarContrato(q, k.id, "Por assinar");
     await repo.registarEvento(q, novo, "enviado", { ...meta, detalhe: { email: s.email, nifOrigem: s.nifOrigem, prazoDias: dias } });
+    if (anterior) await registarMudancaSignatario(q, novo, anterior, s, meta);
     return novo;
   });
   await convidar(db, { titulo, signatarioEmail: s.email, signatarioNome: s.nome }, token, expira);
   return detalhe(db, id);
+}
+
+/**
+ * Email ou NIF do signatário diferentes do pedido anterior do mesmo contrato (a ficha mudou, ou a equipa indicou
+ * outro NIF no envio): fica no registo de provas, com o email antigo e o NIF mascarado.
+ */
+async function registarMudancaSignatario(q: Consulta, novo: number, anterior: repo.Assinatura, s: Signatario, meta: Meta) {
+  let nifAnterior = "";
+  try {
+    nifAnterior = decryptField(anterior.nifEnc);
+  } catch {
+    nifAnterior = "";
+  }
+  const emailMudou = anterior.signatarioEmail !== s.email;
+  const nifMudou = nifAnterior !== s.nif;
+  if (!emailMudou && !nifMudou) return;
+  await repo.registarEvento(q, novo, "signatario_alterado", {
+    ...meta,
+    detalhe: {
+      assinaturaAnterior: anterior.id,
+      ...(emailMudou ? { emailAnterior: anterior.signatarioEmail, email: s.email } : {}),
+      ...(nifMudou ? { nifAnterior: mascararNif(nifAnterior), nif: mascararNif(s.nif), nifOrigem: s.nifOrigem } : {}),
+    },
+  });
 }
 
 export async function reenviar(db: Db, quem: Quem, id: number, prazoDias: number | undefined, meta: Meta) {

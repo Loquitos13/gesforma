@@ -10,7 +10,7 @@ import {
   novoCodigoOtp, urlAssinar, urlVerificar,
 } from "./comum.js";
 import { acrescentarCertificado, carimbarAssinatura, sha256 } from "./pdf.js";
-import { PdfExternoErro, ancorasDoEstado, selarPdf, validarAssinadoExterno } from "./selar.js";
+import { PdfExternoErro, ancorasDoEstado, selarPdf, validarAssinadoExterno, type AssinaturaExterna } from "./selar.js";
 import { seloParaAssinar } from "./selo.js";
 import type { Meta } from "./servico.js";
 
@@ -201,7 +201,31 @@ export async function recusar(db: Db, token: string, motivo: string, meta: Meta)
   return { estado: "recusado" as const };
 }
 
-const palavras = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().split(/[^a-z]+/).filter(p => p.length > 1);
+// Partículas dos nomes portugueses: não identificam ninguém («João da Silva» não é «Maria da Silva»).
+const PARTICULAS = new Set(["da", "de", "do", "das", "dos", "e"]);
+const palavras = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z]+/)
+  .filter(p => p.length > 1 && !PARTICULAS.has(p));
+
+/**
+ * O nome do certificado (o do CC, em regra completo e com mais apelidos) tem de conter o da ficha: o mesmo
+ * primeiro nome e todos os outros nomes da ficha, pela mesma ordem (o último apelido da ficha incluído).
+ * «Maria Silva» aceita «Maria João Pereira Silva»; não aceita «João Silva» nem «Maria Santos».
+ * Um nome de uma só palavra tem de ser igual. Sem partículas, acentos nem maiúsculas.
+ */
+export function nomeCorresponde(daFicha: string, doCertificado: string) {
+  const esperado = palavras(daFicha);
+  const cert = palavras(doCertificado);
+  if (!esperado.length || esperado[0] !== cert[0]) return false;
+  if (esperado.length === 1) return cert.length === 1;
+  let i = 1;
+  for (const p of cert.slice(1)) if (p === esperado[i]) i++;
+  return i === esperado.length;
+}
+
+/** NIF no serialNumber do certificado (semântica ETSI "TINPT-"/"VATPT-"); o CC e a CMD trazem o n.º de identificação civil. */
+const nifDoCertificado = (serie: string) => /^(?:TIN|VAT)PT-?(\d{9})$/i.exec(serie.replace(/\s/g, ""))?.[1] ?? "";
+/** O n.º do documento fica no registo só com os últimos 3 dígitos. */
+const serieMascarada = (serie: string) => serie.replace(/\d(?=\d{3})/g, "•");
 
 /** PDF assinado na app Autenticação.gov: tem de ser o original, com assinatura válida, do próprio signatário, e confirmado com o código. */
 export async function receberAssinadoExterno(db: Db, token: string, ficheiro: Buffer, codigo: string, meta: Meta, ancoras = ancorasDoEstado()) {
@@ -209,22 +233,25 @@ export async function receberAssinadoExterno(db: Db, token: string, ficheiro: Bu
   exigirAberto(a);
   const original = await repo.pdfOriginal(db, a.id);
   if (!original) throw new AssinaturaErro("PDF em falta.", 500);
-  let cert: { titular: string; emissor: string };
+  let cert: AssinaturaExterna;
   try {
-    cert = validarAssinadoExterno(original, ficheiro, ancoras);
+    cert = await validarAssinadoExterno(original, ficheiro, ancoras);
   } catch (err) {
-    if (err instanceof PdfExternoErro) throw new AssinaturaErro(err.message, 400);
+    if (err instanceof PdfExternoErro) {
+      if (err.cause) await repo.registarEvento(db, a.id, "externo", { ...meta, detalhe: { recusado: true, motivo: String(err.cause).slice(0, 200) } });
+      throw new AssinaturaErro(err.message, 400);
+    }
     throw err;
   }
-  const doCert = new Set(palavras(cert.titular));
-  const nome = palavras(a.signatarioNome);
-  const comuns = nome.filter(p => doCert.has(p));
-  if (comuns.length < Math.min(2, nome.length)) {
-    await repo.registarEvento(db, a.id, "externo", { ...meta, detalhe: { recusado: true, titular: cert.titular } });
+  // Se o certificado trouxer o NIF, é ele que decide; senão, o nome.
+  const nifCert = nifDoCertificado(cert.serie);
+  const corresponde = nifCert ? nifCert === nifDe(a) : nomeCorresponde(a.signatarioNome, cert.titular);
+  if (!corresponde) {
+    await repo.registarEvento(db, a.id, "externo", { ...meta, detalhe: { recusado: true, titular: cert.titular, serie: serieMascarada(cert.serie) } });
     throw new AssinaturaErro(`O PDF foi assinado por "${cert.titular}", que não corresponde a ${a.signatarioNome}.`, 400);
   }
   await confirmarCodigo(db, a, codigo, meta);
-  await repo.registarEvento(db, a.id, "externo", { ...meta, detalhe: { titular: cert.titular, emissor: cert.emissor } });
+  await repo.registarEvento(db, a.id, "externo", { ...meta, detalhe: { titular: cert.titular, emissor: cert.emissor, serie: serieMascarada(cert.serie) } });
   const hash = sha256(ficheiro);
   return concluirAssinatura(db, token, a, {
     metodo: "cc_cmd", pdf: ficheiro, hashAssinatura: hash, hashFinal: hash, fingerprint: "", titular: cert.titular, selado: false,

@@ -22,8 +22,17 @@ const payloadCampo = (kind: string, campo: string, rotulo: string, extra = ""): 
               WHERE kind = '${kind}' ${extra} AND lower(trim(payload->>'${campo}')) = lower(trim($1))`,
 });
 
+/**
+ * O mesmo valor copiado na ficha do curso (`curso_fichas.payload`): a ficha manda sobre a tabela no
+ * editor e no site, por isso muda com ela (senão a próxima gravação da ficha desfaz o renomear).
+ * Não conta como uso: é o mesmo curso já contado na tabela.
+ */
+const fichaCampo = (regime: "gold" | "fin", campo: string) =>
+  `UPDATE curso_fichas SET payload = jsonb_set(payload, '{${campo}}', to_jsonb($2::text))
+    WHERE regime = '${regime}' AND jsonb_typeof(payload) = 'object' AND lower(trim(payload->>'${campo}')) = lower(trim($1))`;
+
 /** Definição de cada lista. As expressões só usam nomes fixos deste ficheiro. */
-export const LISTAS: Record<string, { titulo: string; descricao: string; usos: Uso[] }> = {
+export const LISTAS: Record<string, { titulo: string; descricao: string; usos: Uso[]; acompanham?: string[] }> = {
   origens: { titulo: "Como conheceu a ENA", descricao: "Formulário do site, pré-inscrições e estatísticas do painel.", usos: [col("preinscricoes", "origem", "pré-inscrições")] },
   meios_contacto: {
     titulo: "Meio de contacto", descricao: "Registo de contactos no CRM.",
@@ -38,12 +47,17 @@ export const LISTAS: Record<string, { titulo: string; descricao: string; usos: U
   tipos_modulo: { titulo: "Tipo de módulo", descricao: "Módulos dos cursos.", usos: [payloadCampo("modulos", "tipo", "módulos")] },
   tipos_conteudo: { titulo: "Tipo de conteúdo", descricao: "Conteúdos dos cursos.", usos: [payloadCampo("conteudos", "tipo", "conteúdos")] },
   tipos_parceria: { titulo: "Tipo de parceria", descricao: "Parceiros do CRM.", usos: [col("crm_parceiros", "tipo", "parceiros")] },
-  tipos_curso: { titulo: "Tipo comercial", descricao: "Cursos Gold.", usos: [col("cursos_gold", "tipo", "cursos")] },
+  tipos_curso: {
+    titulo: "Tipo comercial", descricao: "Cursos Gold.", usos: [col("cursos_gold", "tipo", "cursos")], acompanham: [fichaCampo("gold", "tipo")],
+  },
   regimes_curso: {
     titulo: "Modalidade", descricao: "Cursos Gold e financiados.",
     usos: [col("cursos_gold", "regime", "cursos Gold"), col("cursos_fin", "regime", "cursos financiados")],
+    acompanham: [fichaCampo("gold", "regime"), fichaCampo("fin", "regime")],
   },
-  categorias_gold: { titulo: "Categoria Gold", descricao: "Cursos Gold.", usos: [col("cursos_gold", "categoria", "cursos")] },
+  categorias_gold: {
+    titulo: "Categoria Gold", descricao: "Cursos Gold.", usos: [col("cursos_gold", "categoria", "cursos")], acompanham: [fichaCampo("gold", "categoria")],
+  },
   areas_fin: {
     titulo: "Área financiada", descricao: "Fichas dos cursos financiados.",
     usos: [{
@@ -120,6 +134,7 @@ export async function renomearOpcao(q: TxQuery, lista: string, id: number, antig
     mudados += Number(r.rows[0]?.n ?? 0);
     await q(u.renomear, [antigo, novo]);
   }
+  for (const sql of def.acompanham ?? []) await q(sql, [antigo, novo]);
   return mudados;
 }
 

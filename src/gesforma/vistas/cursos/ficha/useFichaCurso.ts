@@ -12,7 +12,7 @@ import { criteriosDoModelo } from "../../../criteriosModelo";
 import type { AvaliacaoCurso } from "../../../avaliacaoCurso";
 import { textoPrograma } from "../../../cursoPrograma";
 import {
-  camposObrigatorios, cursoTemFolhaSimulacao, fichaInicial, fundirGuardado, mediaGuardada, prontidao,
+  camposObrigatorios, cursoTemFolhaSimulacao, fichaInicial, fundirGuardado, mediaGuardada, podeCriarRascunho, prontidao,
   type CursoBase, type CursoSite, type Regime, type TabId,
 } from "./modelo";
 
@@ -43,6 +43,10 @@ export function useFichaCurso(regime: Regime, cursoIdParam: number | "new" | und
   const [imagemAGravar, setImagemAGravar] = useState<"" | "banner" | "capa" | "miniatura">("");
   const inicializado = useRef(false);
   const comModelos = useRef(false);
+  // Id e «a gravar» também em ref: dois cliques (ou blur + mudar de separador) seguidos ainda veem o estado
+  // antigo e criariam o curso duas vezes.
+  const idRef = useRef<number | undefined>(idInicial);
+  const aGravar = useRef(false);
 
   // Montagem dos dados: espera pelo curso e pela ficha gravada. Se os modelos de conteúdo chegarem
   // depois e ainda nada foi alterado, volta a montar para os aproveitar.
@@ -94,6 +98,7 @@ export function useFichaCurso(regime: Regime, cursoIdParam: number | "new" | und
 
   /** Grava o curso (tabela) e devolve o id. Na primeira gravação cria o curso. */
   async function gravarCurso(): Promise<number> {
+    const cursoId = idRef.current;
     const comum = { regime: data.regime, horas: Number(data.horas) || 0, estado: data.estado || "Ativo" };
     if (regime === "gold") {
       const corpo = {
@@ -108,6 +113,9 @@ export function useFichaCurso(regime: Regime, cursoIdParam: number | "new" | und
   }
 
   async function guardar(opts: { rascunho?: boolean } = {}) {
+    if (aGravar.current) return false;
+    // Rascunho de um curso novo: só com o que o servidor exige para o criar (sem pedido nem erro antes disso).
+    if (opts.rascunho && idRef.current == null && !podeCriarRascunho(data, regime)) return false;
     if (opts.rascunho && !data.titulo.trim()) return false;
     const faltas = opts.rascunho ? [] : camposObrigatorios(data, regime);
     if (faltas.length) {
@@ -124,10 +132,19 @@ export function useFichaCurso(regime: Regime, cursoIdParam: number | "new" | und
     }
     if (regime === "fin" && opts.rascunho && !data.ufcdCod.trim()) return false;
     setFalhas({});
+    aGravar.current = true;
     setGravando(true);
     setErro("");
+    let criado: number | undefined;
     try {
+      const novo = idRef.current == null;
       const id = await gravarCurso();
+      if (novo) {
+        // O curso já existe: a partir daqui grava-se por id, mesmo que a ficha falhe.
+        idRef.current = id;
+        criado = id;
+        setCursoId(id);
+      }
       const organizacao = regime === "fin" ? "modular" : data.organizacaoPrograma;
       await apiGravarFichaCurso(regime, id, {
         payload: {
@@ -141,10 +158,6 @@ export function useFichaCurso(regime: Regime, cursoIdParam: number | "new" | und
       setAlterado(false);
       invalidar("cursos:");
       invalidar("opcoes:cursos");
-      if (cursoId == null) {
-        setCursoId(id);
-        aoCriar(id);
-      }
       if (!opts.rascunho) toastOk("Curso gravado.");
       return true;
     } catch (e) {
@@ -152,7 +165,12 @@ export function useFichaCurso(regime: Regime, cursoIdParam: number | "new" | und
       toastError(e, "Não foi possível gravar o curso.");
       return false;
     } finally {
+      aGravar.current = false;
       setGravando(false);
+      if (criado != null) {
+        invalidar("cursos:");
+        aoCriar(criado);
+      }
     }
   }
 

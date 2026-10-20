@@ -141,15 +141,20 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!veRegime(req.actor!.role, antes.regime) || !veRegime(req.actor!.role, v.body.regime ?? antes.regime)) {
       return reply.code(403).send(SEM_REGIME);
     }
-    await itens.actualizarItem(db, kind, id, v.body.payload ?? null, v.body.regime ?? null);
-    const depois = await itens.obterItem(db, kind, id);
+    // O item e os registos que usam o nome (turmas, cursos, fichas) mudam juntos.
+    const depois = await db.tx(async q => {
+      await itens.actualizarItem(q, kind, id, v.body.payload ?? null, v.body.regime ?? null);
+      const d = await itens.obterItem(q, kind, id);
+      const p = d?.payload ?? {};
+      if (COM_NOME.has(kind)) {
+        await itens.propagarNome(q, kind, antes.regime, String(antes.payload.nome ?? ""), String(p.nome ?? ""));
+      }
+      if (kind === "modulos") {
+        await itens.propagarCodigoModulo(q, antes.regime, String(antes.payload.curso ?? ""), String(antes.payload.codigo ?? ""), String(p.codigo ?? ""));
+      }
+      return d;
+    });
     const payload = depois?.payload ?? {};
-    if (COM_NOME.has(kind)) {
-      await itens.propagarNome(db, kind, antes.regime, String(antes.payload.nome ?? ""), String(payload.nome ?? ""));
-    }
-    if (kind === "modulos") {
-      await itens.propagarCodigoModulo(db, antes.regime, String(antes.payload.curso ?? ""), String(antes.payload.codigo ?? ""), String(payload.codigo ?? ""));
-    }
     await audit(db, req.actor?.id, "catalogo.editar", kind, String(id), req.ip, { regime: depois?.regime });
     if (kind === "inscricoes_fin") {
       const { upsertFormandoFinFromInscricao } = await import("../finPipeline.js");

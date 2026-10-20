@@ -133,7 +133,7 @@ export function TabOferta({ f }: { f: FichaCurso }) {
             </Campo>
           )}
           <Campo rotulo="Horas" obrigatorio erro={falhas.horas}>
-            {p => <Entrada {...p} type="number" min={1} value={data.horas} onChange={e => patch({ horas: e.target.value })} />}
+            {p => <Entrada {...p} type="number" min={1} step={1} value={data.horas} onChange={e => patch({ horas: e.target.value })} />}
           </Campo>
           <Campo rotulo="Tags" obrigatorio erro={falhas.tags} ajuda="Separadas por vírgulas.">
             {p => <Entrada {...p} value={data.tags} onChange={e => patch({ tags: e.target.value })} />}

@@ -128,8 +128,12 @@ export async function propagarNome(c: Consulta, kind: string, regime: Regime, an
     await many(c, `UPDATE catalog_items SET payload = jsonb_set(payload, '{horario}', to_jsonb($3::text))
                     WHERE kind = 'datas' AND regime = $1 AND lower(trim(payload->>'horario')) = lower($2)`, [regime, de, para]);
   } else if (kind === "areas") {
-    if (regime === "gold") await many(c, "UPDATE cursos_gold SET categoria = $2 WHERE lower(trim(categoria)) = lower($1)", [de, para]);
-    else {
+    if (regime === "gold") {
+      await many(c, "UPDATE cursos_gold SET categoria = $2 WHERE lower(trim(categoria)) = lower($1)", [de, para]);
+      // A ficha guarda a categoria e manda sobre a tabela: muda com ela.
+      await many(c, `UPDATE curso_fichas SET payload = jsonb_set(payload, '{categoria}', to_jsonb($2::text))
+                      WHERE regime = 'gold' AND jsonb_typeof(payload) = 'object' AND lower(trim(payload->>'categoria')) = lower($1)`, [de, para]);
+    } else {
       await many(c, `UPDATE curso_fichas SET payload = jsonb_set(payload, '{categoria}', to_jsonb($2::text))
                       WHERE regime = 'fin' AND lower(trim(payload->>'categoria')) = lower($1)`, [de, para]);
     }

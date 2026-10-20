@@ -81,14 +81,9 @@ describe("API por perfil", () => {
     await ctx.db.query(
       `INSERT INTO formadores (id, nome, nif, custo_hora, regimes, estado) VALUES (9101, 'Formadora Teste', '123456789', 25, '["gold"]'::jsonb, 'Ativo')`,
     );
-    const lista = (await pedido(ctx, "comercial", "GET", "/v1/formadores?regime=gold")).json();
-    const f = lista.linhas.find((l: { id: number }) => l.id === 9101);
-    expect(f).toBeTruthy();
-    expect(f.nif).toBe("");
-    expect(f.custoHora).toBe(0);
-    const ficha = (await pedido(ctx, "comercial", "GET", "/v1/formadores/9101")).json();
-    expect(ficha.formador.nif).toBe("");
-    expect(ficha.formador.custoHora).toBe(0);
+    // O comercial só vende: não vê formadores (nem a lista nem a ficha).
+    expect((await pedido(ctx, "comercial", "GET", "/v1/formadores?regime=gold")).statusCode).toBe(403);
+    expect((await pedido(ctx, "comercial", "GET", "/v1/formadores/9101")).statusCode).toBe(403);
     const fichaSec = (await pedido(ctx, "secretaria", "GET", "/v1/formadores/9101")).json();
     expect(fichaSec.formador.nif).toBe("123456789");
     expect(fichaSec.formador.custoHora).toBe(25);

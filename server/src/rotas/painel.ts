@@ -13,7 +13,7 @@ const painelQuery = periodoQuery.extend({
   eixo: z.enum(["curso", "local", "horario"]).default("curso"),
 });
 
-// Painéis Gold e Financiada. Quem vê cada um está em permissoes/painel.ts.
+// Painéis Gold e Financiada. Quem vê cada um está em permissoes/painel.ts; o comercial vê só os blocos de vendas.
 export async function registar(app: FastifyInstance, deps: Deps) {
   const { db, requireAuth } = deps;
 
@@ -32,6 +32,6 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       local: q.local,
       horario: q.horario,
       financiador: v.params.regime === "fin" ? q.financiador : undefined,
-    }, q.eixo);
+    }, q.eixo, { soVendas: req.actor!.role === "comercial" });
   });
 }

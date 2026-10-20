@@ -18,6 +18,12 @@ export function turmasGoldActivas(c: Consulta) {
       ORDER BY curso, local, horario, data_inicio`);
 }
 
+/** Cronograma e publicação das turmas Gold activas (vista «Cronogramas» do comercial). */
+export function cronogramasGoldActivos(c: Consulta) {
+  return many<{ id: number; cronograma: unknown; cronograma_publicado_em: string | null }>(c,
+    "SELECT id, cronograma, cronograma_publicado_em FROM turmas_gold WHERE estado = 'Ativa'");
+}
+
 export function turmasFinActivas(c: Consulta) {
   return many<{
     id: number; nome: string; curso: string; local: string; horario: string;

@@ -21,7 +21,7 @@ describe("valor por hora do formador na turma", () => {
     expect(lido.rows[0]!.v).toEqual({ "Ana Valor": 20.5 });
   });
 
-  it("a comercial não muda os custos da turma Gold (os outros campos gravam-se)", async () => {
+  it("a comercial não muda a turma Gold (nem os custos); a secretaria sim", async () => {
     const ctx = await arrancar();
     const turmaId = 990802;
     await ctx.db.query(
@@ -29,11 +29,12 @@ describe("valor por hora do formador na turma", () => {
        VALUES ($1, '2099-09-01', 'TGoldValor', 'Curso', 'Ana', '[]'::jsonb, '{"Ana": 30}'::jsonb, 5)`,
       [turmaId],
     );
+    // O comercial só vende: não altera turmas (permissoes/comercial.ts).
     const r = await pedido(ctx, "comercial", "PATCH", `/v1/turmas-gold/${turmaId}`, { valoresHoraFormador: { Ana: 1 }, custoHoraSala: 0, local: "Porto" });
-    expect(r.statusCode, r.body).toBe(200);
+    expect(r.statusCode, r.body).toBe(403);
     const t = await ctx.db.query<{ v: Record<string, number>; sala: string; local: string }>(
       "SELECT valores_hora_formador AS v, custo_hora_sala::text AS sala, local FROM turmas_gold WHERE id = $1", [turmaId]);
-    expect(t.rows[0]).toMatchObject({ v: { Ana: 30 }, sala: "5", local: "Porto" });
+    expect(t.rows[0]).toMatchObject({ v: { Ana: 30 }, sala: "5", local: "" });
     const s = await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-gold/${turmaId}`, { valoresHoraFormador: { Ana: 25 } });
     expect(s.statusCode, s.body).toBe(200);
     const depois = await ctx.db.query<{ v: Record<string, number> }>("SELECT valores_hora_formador AS v FROM turmas_gold WHERE id = $1", [turmaId]);

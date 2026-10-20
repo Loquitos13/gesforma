@@ -11,6 +11,7 @@ import { garantirBolsaFormador } from "../driveArvore.js";
 import { pode } from "../permissoes/capacidades.js";
 import { linhaVisivel } from "../repos/crmVisivel.js";
 import { ficheiroDrive, turmaEntre, type DriveFileRow } from "../repos/drive.js";
+import { leadDoFicheiro } from "../repos/leadDocs.js";
 import { consumirEstadoOauth, criarEstadoOauth } from "../repos/sessoes.js";
 import { nomesDoFormador, turmasDoFormador } from "../sessaoAcesso.js";
 import { validar } from "../validacao.js";
@@ -85,9 +86,20 @@ async function veContrato(db: Deps["db"], actor: Actor, f: Pick<DriveFileRow, "c
 
 const eContrato = (f: Pick<DriveFileRow, "kind" | "contrato_id">) => f.contrato_id != null || f.kind === "contrato";
 
+/**
+ * O comercial só vende: vê o que enviou e os documentos das pré-inscrições que lhe são visíveis (ligação pessoal,
+ * comprovativos). Nada de fichas de formandos, formadores, dossiê, cursos ou recibos.
+ */
+async function comercialVeFicheiro(db: Deps["db"], actor: Actor, f: Pick<DriveFileRow, "id" | "created_by">) {
+  if (f.created_by === actor.id) return true;
+  const leadId = await leadDoFicheiro(db, f.id);
+  return leadId != null && linhaVisivel(db, "preinscricoes", leadId, actor);
+}
+
 /** O formador só vê o que enviou, os documentos da sua ficha e os materiais das suas turmas. */
 async function podeVerFicheiro(db: Deps["db"], actor: Actor, f: DriveFileRow) {
   if (eContrato(f)) return veContrato(db, actor, f);
+  if (actor.role === "comercial") return comercialVeFicheiro(db, actor, f);
   if (actor.role !== "formador") return veRegime(actor.role, f.regime);
   if (f.created_by === actor.id) return true;
   if (KINDS_TURMA_FORMADOR.includes(f.kind)) return minhaTurma(db, actor, f.regime, f.turma);
@@ -200,7 +212,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       formando: q.formando,
     });
     const visiveis = await Promise.all(files.map(async f => (
-      eContrato({ kind: f.kind, contrato_id: f.contratoId }) ? veContrato(db, actor, { contrato_id: f.contratoId }) : veRegime(actor.role, f.regime)
+      eContrato({ kind: f.kind, contrato_id: f.contratoId }) ? veContrato(db, actor, { contrato_id: f.contratoId })
+        : actor.role === "comercial" ? comercialVeFicheiro(db, actor, { id: f.id, created_by: null })
+          : veRegime(actor.role, f.regime)
     )));
     return { files: files.filter((_, i) => visiveis[i]) };
   });

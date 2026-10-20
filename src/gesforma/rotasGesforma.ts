@@ -4,7 +4,7 @@ export type Vista =
   | "formador-turmas" | "formador-calendario" | "formador-perfil"
   | "gold-formandos-turmas" | "gold-formandos-gold" | "gold-formando-ficha" | "fin-formando-ficha" | "formador-ficha"
   | "gold-campanhas" | "gold-cursos" | "gold-datas" | "gold-horarios" | "gold-locais" | "gold-areas-tematicas"
-  | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-formadores" | "gold-cockpit-turma" | "gold-curso-ficha" | "gold-dtp" | "gold-inqueritos"
+  | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-cronogramas" | "gold-formadores" | "gold-cockpit-turma" | "gold-curso-ficha" | "gold-dtp" | "gold-inqueritos"
   | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-formadores" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
   | "fin-modulos" | "fin-conteudos" | "fin-datas" | "fin-locais" | "fin-areas-tematicas"
   | "formadores" | "blog-posts" | "blog-tematicas" | "empresas-servicos"
@@ -63,6 +63,7 @@ const CAMINHOS: Record<Vista, string> = {
   "gold-modulos": "/gesforma/gold/modulos",
   "gold-conteudos": "/gesforma/gold/conteudos",
   "gold-turmas": "/gesforma/gold/turmas",
+  "gold-cronogramas": "/gesforma/gold/cronogramas",
   "gold-cockpit-turma": "/gesforma/gold/turmas",
   "gold-formadores": "/gesforma/gold/formadores",
   formadores: "/gesforma/formadores",

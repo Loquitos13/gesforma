@@ -9,6 +9,7 @@ import { many, one, type Consulta } from "./sql.js";
 import type { Db } from "../db/pool.js";
 import { hojeLisboa, somarDias } from "../datas.js";
 import { rotuloCodigoCurso } from "../../../src/partilhado/codigoCurso.js";
+import { comercialAbre } from "../../../src/partilhado/vistasComercial.js";
 
 export type Notificacao = {
   chave: string;
@@ -72,6 +73,24 @@ async function turmasEmAlerta(c: Consulta) {
     SELECT 'fin', t.id, t.nome, t.local, t.ufcd_cod, t.data_inicio,
            (SELECT count(*)::int FROM formandos_fin f WHERE f.turma_id = t.id AND ${OCUPA("f")}), t.alunos_total
       FROM turmas_fin t WHERE t.fechada_em IS NULL AND t.activa = true`);
+}
+
+/**
+ * O comercial só vende: ficam os avisos das pré-inscrições Gold e, das turmas Gold, as cheias e as com poucas
+ * inscrições, que abrem nos Cronogramas (não no cockpit). Fora: pagamentos, dossiê, Financiada e o que é
+ * trabalho da secretaria (inscrever na turma).
+ */
+function paraComercial(avisos: Nova[]): Nova[] {
+  const out: Nova[] = [];
+  for (const x of avisos) {
+    if (/^turma-(lotada|vazia)-gold-/.test(x.chave)) {
+      out.push({ chave: x.chave, tipo: x.tipo, titulo: x.titulo, texto: x.texto, view: "gold-cronogramas" });
+      continue;
+    }
+    if (x.chave.startsWith("gold-validadas-sem-ficha-") || x.tab === "dtp" || !comercialAbre(x.view)) continue;
+    out.push(x);
+  }
+  return out;
 }
 
 const eur = (v: number) => `€${Math.round(v).toLocaleString("pt-PT")}`;
@@ -140,6 +159,6 @@ export async function construirNotificacoes(db: Db, actorId: string, role = ""):
 
   const visiveis = role === "formador"
     ? out.filter(x => x.tab !== "dtp" && x.view !== "pagamentos" && x.view !== "fin-formandos" && !/pagament|dossiê|dtp|document/i.test(`${x.titulo} ${x.texto}`))
-    : out;
+    : role === "comercial" ? paraComercial(out) : out;
   return visiveis.map(x => ({ ...x, lida: lidas.has(x.chave) }));
 }

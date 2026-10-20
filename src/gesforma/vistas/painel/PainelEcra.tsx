@@ -1,6 +1,6 @@
 // Painel Gold e Financiada: o mesmo ecrã, com blocos próprios de cada regime.
 import { useMemo } from "react";
-import { usePode } from "../../../partilhado/AuthGate";
+import { useAuth, usePode } from "../../../partilhado/AuthGate";
 import { apiPainel, type EixoPainel, type RegimePainel } from "../../../partilhado/api/painel";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import { Cartao, ErroCarregar, Esqueleto, GraficoMensal, PageHeader, eur, num, useFiltrosUrl } from "../../../partilhado/ui";
@@ -30,6 +30,7 @@ function Carregando() {
 
 export function PainelEcra({ regime, navigate }: { regime: RegimePainel; navigate: Navegar }) {
   const pode = usePode();
+  const { user } = useAuth();
   const [f, setF, limpar] = useFiltrosUrl(PADRAO);
   const preset = (["mes", "trimestre", "ano", "livre"].includes(f.periodo) ? f.periodo : "mes") as PresetPeriodo;
   const datas = datasDoPeriodo(preset, f.de, f.ate);
@@ -88,7 +89,7 @@ export function PainelEcra({ regime, navigate }: { regime: RegimePainel; navigat
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             <CartaoFunil regime={regime} funil={p.funil} />
             <CartaoConheceu regime={regime} conheceu={p.conheceu} />
-            <CartaoProximas regime={regime} turmas={p.proximasTurmas} navigate={navigate} />
+            <CartaoProximas regime={regime} turmas={p.proximasTurmas} navigate={navigate} cronogramas={user.role === "comercial"} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

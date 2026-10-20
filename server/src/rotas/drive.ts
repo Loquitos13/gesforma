@@ -9,6 +9,7 @@ import {
 } from "../googleDrive.js";
 import { garantirBolsaFormador } from "../driveArvore.js";
 import { pode } from "../permissoes/capacidades.js";
+import { linhaVisivel } from "../repos/crmVisivel.js";
 import { ficheiroDrive, turmaEntre, type DriveFileRow } from "../repos/drive.js";
 import { consumirEstadoOauth, criarEstadoOauth } from "../repos/sessoes.js";
 import { nomesDoFormador, turmasDoFormador } from "../sessaoAcesso.js";
@@ -66,8 +67,27 @@ async function minhaTurma(db: Deps["db"], actor: Actor, regime: string | null, t
   return turmaEntre(db, regime, turma, [...minhas[regime]]);
 }
 
+/**
+ * Kinds que o formador pode enviar: os documentos da própria ficha (`formador-doc`) e os materiais
+ * (`documento`, `conteudo`) das suas turmas. Nada que entre no dossiê de uma turma alheia.
+ */
+const KINDS_UPLOAD_FORMADOR = ["formador-doc", ...KINDS_TURMA_FORMADOR];
+
+/**
+ * PDF de contrato assinado: a regra dos contratos (`/v1/crm/contratos`): admin e secretaria todos, o comercial
+ * só os seus, a Financiada os dos formandos financiados. Sem contrato ligado (antigo), só admin e secretaria.
+ */
+async function veContrato(db: Deps["db"], actor: Actor, f: Pick<DriveFileRow, "contrato_id">) {
+  if (actor.role === "admin" || actor.role === "secretaria") return true;
+  if (f.contrato_id == null || actor.role === "formador") return false;
+  return linhaVisivel(db, "contratos_comerciais", Number(f.contrato_id), actor);
+}
+
+const eContrato = (f: Pick<DriveFileRow, "kind" | "contrato_id">) => f.contrato_id != null || f.kind === "contrato";
+
 /** O formador só vê o que enviou, os documentos da sua ficha e os materiais das suas turmas. */
 async function podeVerFicheiro(db: Deps["db"], actor: Actor, f: DriveFileRow) {
+  if (eContrato(f)) return veContrato(db, actor, f);
   if (actor.role !== "formador") return veRegime(actor.role, f.regime);
   if (f.created_by === actor.id) return true;
   if (KINDS_TURMA_FORMADOR.includes(f.kind)) return minhaTurma(db, actor, f.regime, f.turma);
@@ -179,7 +199,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       turma: q.turma,
       formando: q.formando,
     });
-    return { files: files.filter(f => veRegime(actor.role, f.regime)) };
+    const visiveis = await Promise.all(files.map(async f => (
+      eContrato({ kind: f.kind, contrato_id: f.contratoId }) ? veContrato(db, actor, { contrato_id: f.contratoId }) : veRegime(actor.role, f.regime)
+    )));
+    return { files: files.filter((_, i) => visiveis[i]) };
   });
 
   app.get("/v1/drive/files/:id", async (req, reply) => {
@@ -213,8 +236,13 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const id = v.params.id;
     const row = await ficheiroDrive(db, id);
-    if (!row || !veRegime(req.actor!.role, row.regime)) return reply.code(404).send({ error: "ficheiro inexistente" });
-    const ok = await deleteDriveFile(db, id);
+    if (!row || !(await podeVerFicheiro(db, req.actor!, row))) return reply.code(404).send({ error: "ficheiro inexistente" });
+    let ok: boolean;
+    try {
+      ok = await deleteDriveFile(db, id);
+    } catch (err) {
+      return reply.code(502).send({ error: err instanceof Error ? err.message : "Não foi possível apagar o ficheiro na Drive." });
+    }
     if (!ok) return reply.code(404).send({ error: "ficheiro inexistente" });
     await audit(db, req.actor!.id, "drive.delete", "drive_file", id, req.ip);
     return { ok: true };
@@ -245,10 +273,20 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!bytes) return reply.code(400).send({ error: "ficheiro em falta" });
     try {
       const kind = (fields.kind || "documento").slice(0, 40);
-      if (kind === "formador-doc" && req.actor!.role === "formador" && !(await nomesMeus(db, req.actor!)).has((fields.formando ?? "").trim().toLowerCase())) {
-        return reply.code(403).send({ error: "O formador só envia documentos da própria ficha." });
-      }
       const regimeUp = fields.regime === "fin" ? "fin" : fields.regime === "gold" ? "gold" : null;
+      if (req.actor!.role === "formador") {
+        if (!KINDS_UPLOAD_FORMADOR.includes(kind)) {
+          return reply.code(403).send({ error: "O formador só envia documentos da própria ficha e materiais das suas turmas." });
+        }
+        if (kind === "formador-doc" && !(await nomesMeus(db, req.actor!)).has((fields.formando ?? "").trim().toLowerCase())) {
+          return reply.code(403).send({ error: "O formador só envia documentos da própria ficha." });
+        }
+        // Com turma (sempre, nos materiais), só uma das suas: o ficheiro entra no dossiê dessa turma.
+        const turma = fields.turma?.slice(0, 120) ?? "";
+        if ((kind !== "formador-doc" || turma) && !(await minhaTurma(db, req.actor!, regimeUp, turma))) {
+          return reply.code(403).send({ error: "O formador só envia ficheiros para as turmas em que está atribuído." });
+        }
+      }
       if (req.actor!.role !== "formador" && !veRegime(req.actor!.role, regimeUp)) {
         return reply.code(403).send({ error: "Sem acesso aos ficheiros deste regime." });
       }

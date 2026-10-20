@@ -178,25 +178,27 @@ export async function guardarNaDrive(db: Db, a: repo.Assinatura, pdf: Buffer, ac
     const pessoa = nomePastaPessoa(a.formandoId, a.signatarioNome);
     if (turma) {
       return storeDriveFile(db, actorId, ficheiro, {
-        kind: "formando-doc", regime: a.formandoRegime, turma, formando: pessoa, label: "Contratos",
+        kind: "formando-doc", regime: a.formandoRegime, turma, formando: pessoa, label: "Contratos", contratoId: a.contratoId,
       }, { gerado: true });
     }
     const regime = a.formandoRegime === "fin" ? "Financiada" : "Gold";
-    return guardarEmCaminho(db, actorId, ficheiro, [regime, "Formandos", pessoa, "Contratos"], a.formandoRegime);
+    return guardarEmCaminho(db, actorId, ficheiro, [regime, "Formandos", pessoa, "Contratos"], a.contratoId, a.formandoRegime);
   }
   const cliente = a.clienteId ? (await repo.clienteSignatario(db, a.clienteId))?.nome ?? a.signatarioNome : a.signatarioNome;
-  return guardarEmCaminho(db, actorId, ficheiro, ["Comercial", "Clientes", cliente.replace(/[\\/:*?"<>|]/g, "-").slice(0, 120), "Contratos"]);
+  return guardarEmCaminho(db, actorId, ficheiro, ["Comercial", "Clientes", cliente.replace(/[\\/:*?"<>|]/g, "-").slice(0, 120), "Contratos"], a.contratoId);
 }
 
+/** O registo guarda o contrato: o PDF tem a visibilidade do contrato (rotas/drive.ts), não a de um ficheiro sem regime. */
 async function guardarEmCaminho(
-  db: Db, actorId: string | undefined, ficheiro: { name: string; mime: string; bytes: Buffer }, caminho: string[], regime?: string,
+  db: Db, actorId: string | undefined, ficheiro: { name: string; mime: string; bytes: Buffer }, caminho: string[],
+  contratoId: number, regime?: string,
 ) {
   const creds = await driveCreds(db);
   const segmentos = [creds.folderName, ...caminho];
   const { token } = await usableToken(db);
   const parentDriveId = token ? await ensureFolderPath(db, token, segmentos, creds.folderId) : undefined;
   return storeDriveFile(db, actorId, ficheiro, {
-    kind: "contrato", regime, label: "Contratos", parentDriveId, folderPath: segmentos.join(" / "),
+    kind: "contrato", regime, label: "Contratos", parentDriveId, folderPath: segmentos.join(" / "), contratoId,
   }, { gerado: true });
 }
 

@@ -11,21 +11,14 @@ export async function gravarPastasTurma(c: Consulta, regime: Regime, turmaId: nu
     [turmaId, p.pasta, p.formandos, p.formadores]);
 }
 
-export async function emailsAdmins(c: Consulta) {
-  return emails(await many<{ email: string }>(c, "SELECT email FROM users WHERE role = 'admin' AND active = true AND email <> ''"));
-}
-
 export async function emailsSecretaria(c: Consulta) {
   return emails(await many<{ email: string }>(c, "SELECT email FROM users WHERE role IN ('admin', 'secretaria') AND active = true AND email <> ''"));
 }
 
-export async function emailsFormandosDaTurma(c: Consulta, regime: Regime, turmaId: number, turmaNome: string) {
-  const r = regime === "gold"
-    ? await many<{ email: string }>(c, "SELECT email FROM formandos_gold WHERE turma_id = $1 AND email <> ''", [turmaId])
-    : await many<{ email: string }>(c,
-      "SELECT email FROM formandos_fin WHERE email <> '' AND (turma_id = $1 OR lower(trim(turma)) = lower(trim($2)))",
-      [turmaId, turmaNome]);
-  return emails(r);
+/** Contas activas da equipa (nem formadores nem formandos): a sincronização da Drive nunca lhes tira a partilha. */
+export async function emailsEquipaActiva(c: Consulta) {
+  return emails(await many<{ email: string }>(c,
+    "SELECT email FROM users WHERE role NOT IN ('formando', 'formador') AND active = true AND email <> ''"));
 }
 
 /** Formadores cujo nome está na lista (comparação sem maiúsculas nem espaços nas pontas). */

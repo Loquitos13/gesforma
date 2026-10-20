@@ -270,6 +270,13 @@ export async function apiDtpExport(regime: Regime, turmaId: number, filename?: s
       const data = await res.json().catch(() => ({}));
       throw new ApiError(res.status, typeof data.error === "string" ? data.error : "exportação recusada");
     }
+    // Na cloud o ZIP fica na pasta da turma na Drive (a resposta não leva ficheiros grandes): abre-se a ligação.
+    if ((res.headers.get("content-type") ?? "").includes("application/json")) {
+      const data = await res.json().catch(() => ({})) as { drive?: { url?: string } };
+      if (!data.drive?.url) throw new ApiError(502, "exportação sem ligação para o ZIP");
+      window.open(data.drive.url, "_blank", "noopener,noreferrer");
+      return;
+    }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

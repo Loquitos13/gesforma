@@ -114,8 +114,16 @@ async function erroCapacidade(deps: Deps, regime: Regime, id: number, atual: Rec
   return capacidade < inscritos ? `A turma já tem ${inscritos} formandos: a capacidade não pode ficar em ${capacidade}.` : null;
 }
 
-function sincronizarDrive(deps: Deps, regime: Regime, id: number, row: Record<string, unknown>) {
-  void syncTurmaDriveAccess(deps.db, {
+/**
+ * Pastas, partilhas e atalhos da turma na Drive, dentro do pedido: na Vercel o que corre depois da resposta
+ * fica congelado. Com limite, para a gravação nunca passar o tempo da função; o que faltar acaba na próxima
+ * gravação (a sincronização é idempotente).
+ */
+export const LIMITE_SYNC_DRIVE_MS = 15_000;
+
+async function sincronizarDrive(deps: Deps, regime: Regime, id: number, row: Record<string, unknown>) {
+  let limite: ReturnType<typeof setTimeout> | undefined;
+  const sync = syncTurmaDriveAccess(deps.db, {
     regime,
     turmaId: id,
     nome: String(row.nome ?? ""),
@@ -123,6 +131,8 @@ function sincronizarDrive(deps: Deps, regime: Regime, id: number, row: Record<st
     formadores: Array.isArray(row.formadores) ? row.formadores.map(String) : [],
     cronograma: row.cronograma,
   }).catch(() => undefined);
+  await Promise.race([sync, new Promise(res => { limite = setTimeout(res, LIMITE_SYNC_DRIVE_MS); })]);
+  clearTimeout(limite);
 }
 
 export async function registar(app: FastifyInstance, deps: Deps) {
@@ -219,7 +229,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     await importarPlanosCurso(db, "gold", id).catch(() => undefined);
     await audit(db, req.actor!.id, "turma.criar", "turma_gold", String(id), req.ip, { nome: d.nome });
     const row = await repo.obterTurma(db, "gold", id);
-    if (row) sincronizarDrive(deps, "gold", id, row);
+    if (row) await sincronizarDrive(deps, "gold", id, row);
     return { turma: row ? mapTurmaGold(row) : { id } };
   });
 
@@ -277,7 +287,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       await audit(db, req.actor!.id, "turma.alterar", "turma_gold", String(id), req.ip, { campos: Object.keys(d) });
     }
     const row = await repo.obterTurma(db, "gold", id);
-    if (row) sincronizarDrive(deps, "gold", id, row);
+    if (row) await sincronizarDrive(deps, "gold", id, row);
     return { turma: row ? mapTurmaGold(row) : null };
   });
 
@@ -319,7 +329,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     await importarPlanosCurso(db, "fin", id).catch(() => undefined);
     await audit(db, req.actor!.id, "turma.criar", "turma_fin", String(id), req.ip, { nome: d.nome });
     const row = await repo.obterTurma(db, "fin", id);
-    if (row) sincronizarDrive(deps, "fin", id, row);
+    if (row) await sincronizarDrive(deps, "fin", id, row);
     return { turma: row ? { ...mapTurmaFin(row), financiador: String(row.financiador ?? "") } : { id } };
   });
 
@@ -378,7 +388,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       await audit(db, req.actor!.id, "turma.alterar", "turma_fin", String(id), req.ip, { campos: Object.keys(d) });
     }
     const row = await repo.obterTurma(db, "fin", id);
-    if (row) sincronizarDrive(deps, "fin", id, row);
+    if (row) await sincronizarDrive(deps, "fin", id, row);
     return { turma: row ? { ...mapTurmaFin(row), financiador: String(row.financiador ?? "") } : null };
   });
 

@@ -28,6 +28,8 @@ export type DriveContext = {
   itemId?: string;
   parentDriveId?: string;
   folderPath?: string;
+  /** PDF de um contrato assinado (fica com a visibilidade do contrato). */
+  contratoId?: number;
 };
 
 export type DriveCreds = {
@@ -481,18 +483,57 @@ export async function raizDoProjecto(db: Db, token: string) {
   return ensureFolderPath(db, token, [creds.folderName], creds.folderId);
 }
 
-export async function partilharPasta(token: string, fileId: string, email: string) {
-  await shareFolder(token, fileId, email);
+export type PapelDrive = "writer" | "reader";
+
+export async function partilharPasta(token: string, fileId: string, email: string, role: PapelDrive = "writer") {
+  await shareFolder(token, fileId, email, role);
+}
+
+export type PermissaoDrive = {
+  id: string;
+  type?: string;
+  role?: string;
+  emailAddress?: string;
+  permissionDetails?: { inherited?: boolean }[];
+};
+
+/** Permissões directas e herdadas de um item (todas as páginas). */
+export async function permissoesDoItem(token: string, fileId: string) {
+  const todas: PermissaoDrive[] = [];
+  let pagina = "";
+  do {
+    const params = new URLSearchParams({
+      supportsAllDrives: "true",
+      fields: "nextPageToken,permissions(id,type,role,emailAddress,permissionDetails(inherited))",
+      pageSize: "100",
+    });
+    if (pagina) params.set("pageToken", pagina);
+    const r = await driveComToken<{ permissions?: PermissaoDrive[]; nextPageToken?: string }>(
+      token, `${DRIVE_FILES}/${encodeURIComponent(fileId)}/permissions?${params.toString()}`,
+    );
+    todas.push(...(r.permissions ?? []));
+    pagina = r.nextPageToken ?? "";
+  } while (pagina);
+  return todas;
+}
+
+/** Tira uma permissão de um item. Já não existir conta como feito. */
+export async function revogarPermissao(token: string, fileId: string, permissaoId: string) {
+  const res = await fetch(
+    `${DRIVE_FILES}/${encodeURIComponent(fileId)}/permissions/${encodeURIComponent(permissaoId)}?supportsAllDrives=true`,
+    { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok && res.status !== 404) throw new Error("Não foi possível retirar a partilha na Drive.");
 }
 
 export function purgeExpiredStates(db: Db) {
   return apagarEstadosOauthExpirados(db);
 }
 
-async function shareFolder(token: string, fileId: string, email: string) {
+async function shareFolder(token: string, fileId: string, email: string, role: PapelDrive) {
   await driveComToken(token, `${DRIVE_FILES}/${encodeURIComponent(fileId)}/permissions?supportsAllDrives=true&sendNotificationEmail=false`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ role: "writer", type: "user", emailAddress: email }),
+    body: JSON.stringify({ role, type: "user", emailAddress: email }),
   });
 }

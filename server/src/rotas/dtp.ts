@@ -1,17 +1,28 @@
 /** Dossiê técnico-pedagógico: vista geral por regime, modelos (curso e entidade) e exportação ZIP. */
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { onVercel } from "../config.js";
+import { criarEstruturaDtp } from "../driveArvore.js";
+import { substituirNaPasta } from "../driveFicheiros.js";
 import { comporModelo, dtpDefs, dtpEstrutura, DTP_FASES, DTP_MODELO_VAZIO, type DtpModelo } from "../dtpModel.js";
 import { entidadeDoCurso, mapModelo, packDoCurso, type EntidadeDtp } from "../pedagogia/dtp.js";
 import { matrizDtp, resumoDtp } from "../pedagogia/dtpCache.js";
 import { exportarDossie } from "../pedagogia/dtpExport.js";
 import { dtpModeloSchema, nomeEntidadeSchema } from "../pedagogia/esquemas.js";
 import { idsBase, normalizarExtras, type Regime } from "../pedagogia/util.js";
+import { partilharPasta, usableToken } from "../googleDrive.js";
+import { pastaDaTurma } from "../repos/drive.js";
 import * as repo from "../repos/dtp.js";
 import { idParam, regimeIdParam, regimeParam, validar } from "../validacao.js";
 import { semFormador, turmaOu404 } from "./pedagogia/comum.js";
 import type { Deps } from "./tipos.js";
 
 const SEM_LEITURA = "O formador não consulta o dossiê técnico-pedagógico.";
+
+const exportQuery = z.object({ destino: z.enum(["zip", "drive"]).optional().catch(undefined) });
+
+/** Na Vercel (30 s por pedido) as descargas da Drive param aqui; o resto do tempo é para gerar e gravar o ZIP. */
+const PRAZO_DESCARGAS_VERCEL_MS = 15_000;
 
 function respostaModelo(regime: Regime, modelo: DtpModelo, entidade: EntidadeDtp | null) {
   const efectivo = regime === "gold" ? comporModelo(entidade?.modelo ?? DTP_MODELO_VAZIO, modelo) : modelo;
@@ -137,15 +148,44 @@ export async function registar(app: FastifyInstance, { db, requireAuth, audit }:
     return respostaModelo(regime, { excluidos, incluidos, extra }, entidade);
   });
 
+  /**
+   * Exporta o dossiê da turma num ZIP. `destino=zip` devolve o ZIP na resposta (o habitual fora da Vercel);
+   * `destino=drive` grava-o na pasta da turma na Drive e devolve a ligação. Na Vercel é o destino por omissão:
+   * a resposta não passa de ~4,5 MB e a função tem 30 s, por isso as descargas têm prazo e o que não couber
+   * fica listado no índice do ZIP. Sem ligação à Drive, devolve sempre o ZIP.
+   */
   app.get("/v1/dtp/:regime/:id/export", async (req, reply) => {
     if (!requireAuth(req, reply) || !semFormador(req, reply, SEM_LEITURA)) return;
-    const v = validar(reply, { params: regimeIdParam }, req);
+    const v = validar(reply, { params: regimeIdParam, query: exportQuery }, req);
     if (!v) return;
     const { regime, id } = v.params;
     const turma = await turmaOu404(db, reply, regime, id);
     if (!turma) return;
-    const out = await exportarDossie(db, req.actor!.id, regime, turma);
-    await audit(db, req.actor!.id, "dtp.export", "turma", String(id), req.ip, { ficheiros: out.ficheiros, pasta: out.pasta });
+    const destino = v.query.destino ?? (onVercel ? "drive" : "zip");
+    const { token } = destino === "drive" ? await usableToken(db) : { token: null };
+    const out = await exportarDossie(db, req.actor!.id, regime, turma, onVercel ? { prazo: Date.now() + PRAZO_DESCARGAS_VERCEL_MS } : {});
+    await audit(db, req.actor!.id, "dtp.export", "turma", String(id), req.ip, {
+      ficheiros: out.ficheiros, pasta: out.pasta, destino: token ? "drive" : "zip", foraDoPrazo: out.foraDoPrazo,
+    });
+    if (token) {
+      const pasta = await pastaDaTurma(db, regime, id)
+        || (await criarEstruturaDtp(db, { regime, turmaId: id, nome: turma.nome }, token))?.turmaPastaId
+        || "";
+      if (pasta) {
+        const zip = await substituirNaPasta(token, pasta, out.nome, "application/zip", out.zip);
+        // A secretaria já edita a pasta da turma; quem mais exporta (equipa) recebe só este ficheiro, para leitura.
+        const actor = req.actor!;
+        if (actor.role !== "admin" && actor.role !== "secretaria" && actor.email) {
+          await partilharPasta(token, zip.id, actor.email, "reader").catch(() => undefined);
+        }
+        return {
+          drive: {
+            id: zip.id, url: zip.webViewLink ?? `https://drive.google.com/file/d/${zip.id}/view`,
+            nome: out.nome, ficheiros: out.ficheiros, foraDoPrazo: out.foraDoPrazo,
+          },
+        };
+      }
+    }
     return reply
       .header("Content-Type", "application/zip")
       .header("Content-Disposition", `attachment; filename="${out.nome}"`)

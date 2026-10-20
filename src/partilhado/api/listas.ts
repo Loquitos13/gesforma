@@ -4,10 +4,10 @@ import { api, enviar } from "./cliente";
 export type ResumoLista = { id: string; titulo: string; descricao: string; opcoes: number };
 export type OpcaoLista = { id: number; nome: string; uso: number; usoPor: Record<string, number> };
 
-export const apiListas = (signal?: AbortSignal) => api<{ listas: ResumoLista[] }>("/v1/listas", { signal, silencioso: true });
+export const apiListas = (signal?: AbortSignal) => api<{ listas: ResumoLista[] }>("/v1/listas", { signal });
 
 export const apiLista = (lista: string, signal?: AbortSignal) =>
-  api<{ lista: string; titulo: string; descricao: string; opcoes: OpcaoLista[] }>(`/v1/listas/${encodeURIComponent(lista)}`, { signal, silencioso: true });
+  api<{ lista: string; titulo: string; descricao: string; opcoes: OpcaoLista[] }>(`/v1/listas/${encodeURIComponent(lista)}`, { signal });
 
 export const apiCriarOpcao = (lista: string, nome: string) =>
   enviar.post<{ opcao: OpcaoLista }>(`/v1/listas/${encodeURIComponent(lista)}`, { nome });

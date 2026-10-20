@@ -55,21 +55,12 @@ export function cursosGoldActivos(c: Consulta) {
   return many<{ nome: string; preco: number }>(c, "SELECT nome, preco FROM cursos_gold WHERE estado = 'Ativo' ORDER BY nome");
 }
 
-export function precosCursosGold(c: Consulta) {
-  return many<{ nome: string; preco: number }>(c, "SELECT nome, preco FROM cursos_gold");
-}
-
 /** Preço base de cada curso Gold e o payload da ficha (preços por local/horário). */
 export function cursosGoldComFicha(c: Consulta) {
   return many<{ nome: string; preco: number; payload: unknown }>(c,
     `SELECT cg.nome, cg.preco, cf.payload
        FROM cursos_gold cg
        LEFT JOIN curso_fichas cf ON cf.regime = 'gold' AND cf.curso_id = cg.id`);
-}
-
-/** Edições (datas) Gold do catálogo, com as regras de preço. */
-export function datasGold(c: Consulta) {
-  return many<{ payload: unknown }>(c, "SELECT payload FROM catalog_items WHERE kind = 'datas' AND regime = 'gold'");
 }
 
 /** Payload da ficha do curso, procurado pelo nome (ou, na Financiada, pela UFCD). */

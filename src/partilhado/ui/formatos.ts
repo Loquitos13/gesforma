@@ -1,5 +1,5 @@
 /** Formatação pt-PT partilhada pelos ecrãs e gráficos. */
-import { fmtDataCalendario, fmtDataHoraLisboa, fmtDataLisboa, lerInstante } from "../horaLisboa";
+import { fmtDataCalendario, fmtDataHoraLisboa, fmtDataLisboa, lerInstante } from "../horaLisboa.js";
 
 const nf = new Intl.NumberFormat("pt-PT");
 const ef = new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -9,6 +9,17 @@ export type Formato = "eur" | "eur2" | "num" | "pct" | "horas";
 
 export function eur(v: number, casas = false) {
   return (casas ? ef2 : ef).format(Number.isFinite(v) ? v : 0);
+}
+
+/**
+ * Número escrito à portuguesa: "1.500,25" → 1500.25; sem vírgula, "1.500" (ponto seguido de grupos de 3 dígitos)
+ * são milhares → 1500; "1.5" continua a ser 1,5. O símbolo do euro e os espaços (também os não separáveis) ignoram-se.
+ */
+export function numeroPt(texto: string) {
+  const s = texto.replace(/[\s€]/g, "");
+  if (s.includes(",")) return Number(s.replace(/\./g, "").replace(",", "."));
+  if (/^-?[1-9]\d{0,2}(\.\d{3})+$/.test(s)) return Number(s.replace(/\./g, ""));
+  return Number(s);
 }
 
 export function num(v: number) {

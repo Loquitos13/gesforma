@@ -17,9 +17,3 @@ export const LISTAS_OPCOES = {
 } as const;
 
 export type ListaOpcoesId = keyof typeof LISTAS_OPCOES;
-
-export const LISTA_OPCOES_IDS = Object.keys(LISTAS_OPCOES) as ListaOpcoesId[];
-
-export function isListaOpcoesId(value: string): value is ListaOpcoesId {
-  return value in LISTAS_OPCOES;
-}

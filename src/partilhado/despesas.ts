@@ -1,6 +1,8 @@
 // Despesas da Financiada: os campos e as listas do template de despesas (TemplateDespesas.xlsx).
 // Partilhado entre o browser (formulário) e o servidor (validação e exportação no mesmo formato).
 
+import { numeroPt } from "./ui/formatos.js";
+
 export const OPCOES_DESPESA = {
   categoriaCusto: ["2.7.0 - Alimentação", "1.4.2 - Formadores externos Nível 4 e 5", "94.0.0 - OCS - Custos Unitários - Hora completa assistida por participante * 3,19€", "1.4.1 - Formadores externos Nível 1 a 3", "2.8.0 - Transportes", "2.11.0 - Seguros", "1.3.2 - Formadores internos Nível 4 e 5", "1.3.1 - Formadores internos Nível 1 a 3", "1.8.0 - Promoção e coordenação da CIF (Candidatura Integrada de Formação)", "2.9.0 - Alojamento", "2.10.0 - Acolhimento", "2.1.3 - Bolsas de formação"],
   docDespesa: ["Contribuições Segurança Social", "Escritura", "Fatura", "Fatura Recibo", "Fatura Simplifcada", "Mapa de Amortizações", "Mapa de Processamento dos apoios aos formandos", "Nota de Crédito", "Nota de Débito", "Outros Documentos", "Remunerações"],
@@ -64,17 +66,6 @@ const SINCRONIZADO = new Set<string>(CAMPOS_DESPESA_FORMADOR);
 /** A equipa já preencheu algum campo seu (categoria, documento, pagamento, …) nesta despesa automática? */
 export function temCamposDaEquipa(dados: Record<string, unknown>) {
   return CAMPOS_DESPESA.some(c => !SINCRONIZADO.has(c.chave) && dados[c.chave] != null && String(dados[c.chave]).trim() !== "");
-}
-
-/**
- * Número escrito à portuguesa: "1.500,25" → 1500.25; sem vírgula, "1.500" (ponto seguido de grupos de 3 dígitos)
- * são milhares → 1500; "1.5" continua a ser 1,5. O símbolo do euro e os espaços (também os não separáveis) ignoram-se.
- */
-export function numeroPt(texto: string) {
-  const s = texto.replace(/[\s€]/g, "");
-  if (s.includes(",")) return Number(s.replace(/\./g, "").replace(",", "."));
-  if (/^-?[1-9]\d{0,2}(\.\d{3})+$/.test(s)) return Number(s.replace(/\./g, ""));
-  return Number(s);
 }
 
 /**

@@ -135,22 +135,6 @@ export function mergeLinhas(fromSessoes: GrelhaLinha[], extra: GrelhaLinha[]) {
   return [...seen.values()].sort((a, b) => order(a).localeCompare(order(b)));
 }
 
-export function datasImpressao(opts: {
-  matricula?: string;
-  inicio?: string;
-  fim?: string;
-  sessoes: SessaoCronograma[];
-}) {
-  const lectivas = sessoesSemFim(opts.sessoes)
-    .filter(s => sessaoModalidade(s) !== "matricula")
-    .map(s => s.data)
-    .filter(Boolean)
-    .sort();
-  const start = [opts.matricula, opts.inicio, lectivas[0]].filter(Boolean).sort()[0] ?? "";
-  const end = opts.fim && start && opts.fim >= start ? opts.fim : (lectivas[lectivas.length - 1] || start);
-  return start ? datesFromRange(start, end || start) : [];
-}
-
 export function buildLinha(
   modalidade: Exclude<SessaoModalidade, "matricula">,
   horaInicio: string,
@@ -207,12 +191,6 @@ export function cellLabelPrint(sessoes: SessaoCronograma[], date: string, l: Gre
   const label = cellLabel(sessoes, date, l);
   if (label === "Síncrona") return "Sessão Síncrona";
   return label;
-}
-
-export function formatDataOficial(iso: string) {
-  const [y, m, d] = (iso || "").split("-");
-  if (!y || !m || !d) return "-";
-  return `${d}/${m}/${y}`;
 }
 
 export function matchLinha(s: SessaoCronograma, l: GrelhaLinha) {

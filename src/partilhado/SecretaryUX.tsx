@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AppModal } from "./FormKit";
 
-export type Regime = "gold" | "fin" | "sistema";
 export type ActionTone = "blue" | "red" | "gray" | "teal" | "purple" | "orange";
 
 const toneCls: Record<ActionTone, string> = {
@@ -12,35 +10,6 @@ const toneCls: Record<ActionTone, string> = {
   purple: "bg-violet-100 text-violet-700 hover:bg-violet-200",
   orange: "bg-amber-100 text-amber-700 hover:bg-amber-200",
 };
-
-export type Crumb = { label: string; onClick?: () => void };
-
-export function RegimeBadge({ regime }: { regime: Regime }) {
-  if (regime === "gold") return <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-500 text-white">Gold</span>;
-  if (regime === "fin") return <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-600 text-white">Financiada</span>;
-  return <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-600 text-white">Sistema</span>;
-}
-
-export function PageTrail({ crumbs }: { crumbs: Crumb[] }) {
-  if (crumbs.length === 0) return null;
-  return (
-    <nav aria-label="Percurso" className="flex items-center gap-1.5 min-w-0 text-xs text-slate-500">
-      {crumbs.map((c, i) => {
-        const last = i === crumbs.length - 1;
-        return (
-          <span key={`${c.label}-${i}`} className="flex items-center gap-1.5 min-w-0">
-            {i > 0 && <span className="text-slate-300 flex-shrink-0">›</span>}
-            {c.onClick && !last ? (
-              <button type="button" onClick={c.onClick} className="hover:text-slate-800 truncate">{c.label}</button>
-            ) : (
-              <span className={last ? "font-semibold text-slate-800 truncate" : "truncate"}>{c.label}</span>
-            )}
-          </span>
-        );
-      })}
-    </nav>
-  );
-}
 
 export type NextAction = {
   title: string;
@@ -194,38 +163,6 @@ export function EmptyHint({
   );
 }
 
-export function ConfirmDangerModal({
-  open, onClose, title, body, risk, confirmLabel = "Eliminar", onConfirm,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  body: string;
-  risk?: string;
-  confirmLabel?: string;
-  onConfirm: () => void;
-}) {
-  return (
-    <AppModal
-      open={open}
-      onClose={onClose}
-      title={title}
-      size="sm"
-      footer={
-        <>
-          <button type="button" onClick={onClose} className="px-4 py-2.5 text-sm font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Cancelar</button>
-          <button type="button" onClick={() => { onConfirm(); onClose(); }} className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white">{confirmLabel}</button>
-        </>
-      }
-    >
-      <div className="p-5 space-y-2">
-        <p className="text-sm text-slate-700">{body}</p>
-        {risk && <p className="text-xs text-slate-500">{risk}</p>}
-      </div>
-    </AppModal>
-  );
-}
-
 export function NotifKind({ tipo }: { tipo: string }) {
   if (tipo === "error") return <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700">Bloqueio</span>;
   if (tipo === "warn") return <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">Aviso</span>;
@@ -238,12 +175,6 @@ export function sortNotifs<T extends { tipo: string; lida: boolean }>(items: T[]
     if (a.lida !== b.lida) return a.lida ? 1 : -1;
     return rank(a.tipo) - rank(b.tipo);
   });
-}
-
-export function regimeOfView(view: string): Regime {
-  if (view === "painel" || view === "equipa" || view.startsWith("gold") || view === "formadores") return "gold";
-  if (view.startsWith("fin")) return "fin";
-  return "sistema";
 }
 
 export const cockpitTabLabel: Record<string, string> = {

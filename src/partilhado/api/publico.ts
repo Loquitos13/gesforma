@@ -185,7 +185,7 @@ export type EntidadePublica = {
 };
 
 export const apiPublicEntidade = (signal?: AbortSignal) =>
-  api<{ entidade: EntidadePublica }>("/v1/public/entidade", { signal, silencioso: true });
+  api<{ entidade: EntidadePublica }>("/v1/public/entidade", { signal });
 
 export type CronogramaPublico = {
   nome: string;

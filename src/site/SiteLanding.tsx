@@ -112,10 +112,6 @@ export function useSiteTexto() {
   return useContext(SiteTextoCtx).ler;
 }
 
-export function useNotaInqueritos() {
-  return useContext(SiteTextoCtx).nota;
-}
-
 export function useSiteTextoState(): TextoSite {
   const [gravado, setGravado] = useState<Record<string, string>>({});
   const [nota, setNota] = useState<string | null>(null);

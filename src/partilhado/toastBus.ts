@@ -31,18 +31,6 @@ export function dismissToast(id: number) {
   hit?.onDismiss?.();
 }
 
-export function dismissToastKey(key: string) {
-  const hit = toasts.filter(t => t.key === key);
-  toasts = toasts.filter(t => t.key !== key);
-  notify();
-  hit.forEach(t => t.onDismiss?.());
-}
-
-export function dismissAlertsForLead(leadId: number) {
-  toasts = toasts.filter(t => t.leadId !== leadId);
-  notify();
-}
-
 export function pruneAlertKeys(prefix: string, keys: Set<string>) {
   const next = toasts.filter(t => !t.key?.startsWith(prefix) || keys.has(t.key));
   if (next.length === toasts.length) return;

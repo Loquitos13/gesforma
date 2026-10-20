@@ -24,7 +24,7 @@ function despachar(chave: string) {
   if (!lote) return;
   const kinds = [...new Set(lote.pendentes.map(p => p.kind))];
   const { regime, lista, todos } = lote.opts;
-  api<{ opcoes: Partial<Record<KindOpcoes, Opcao[]>> }>(`/v1/opcoes${qs({ kinds: kinds.join(","), regime, lista, todos })}`, { silencioso: true })
+  api<{ opcoes: Partial<Record<KindOpcoes, Opcao[]>> }>(`/v1/opcoes${qs({ kinds: kinds.join(","), regime, lista, todos })}`)
     .then(r => {
       for (const p of lote.pendentes) {
         const opcoes = r.opcoes[p.kind];
@@ -58,7 +58,7 @@ export type KindCatalogo = "datas" | "locais" | "horarios" | "areas" | "modulos"
 export type ItemCatalogo = { id: number; regime: Regime; uso: Record<string, number> } & Record<string, unknown>;
 
 export function apiCatalogo(kind: KindCatalogo, regime: Regime | undefined, signal?: AbortSignal) {
-  return api<{ kind: KindCatalogo; itens: ItemCatalogo[] }>(`/v1/catalogos/${kind}${qs({ regime })}`, { signal, silencioso: true });
+  return api<{ kind: KindCatalogo; itens: ItemCatalogo[] }>(`/v1/catalogos/${kind}${qs({ regime })}`, { signal });
 }
 
 export const apiCriarItem = (kind: KindCatalogo, regime: Regime, payload: Record<string, unknown>) =>

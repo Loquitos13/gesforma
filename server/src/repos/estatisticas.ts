@@ -88,15 +88,6 @@ export function filtrarFormandosGold(f: FiltroPainel, w = new Filtros()) {
   return w;
 }
 
-/** Formandos financiados (alias `ff`), filtrados pela turma onde estão. */
-export function filtrarFormandosFin(f: FiltroPainel, w = new Filtros()) {
-  w.add("lower(trim(ff.curso)) = lower(trim(?))", f.curso);
-  w.add("EXISTS (SELECT 1 FROM turmas_fin t WHERE t.id = ff.turma_id AND t.local = ?)", f.local);
-  w.add("EXISTS (SELECT 1 FROM turmas_fin t WHERE t.id = ff.turma_id AND t.horario = ?)", f.horario);
-  w.add("EXISTS (SELECT 1 FROM turmas_fin t WHERE t.id = ff.turma_id AND t.financiador = ?)", f.financiador);
-  return w;
-}
-
 /** Turmas (alias `t`) do regime. */
 export function filtrarTurmas(f: FiltroPainel, w = new Filtros()) {
   w.add("lower(trim(t.curso)) = lower(trim(?))", f.curso);

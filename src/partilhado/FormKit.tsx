@@ -146,40 +146,6 @@ function rotuloOpcao(o: SelectOption) {
   return o.label || o.value;
 }
 
-
-export function formadoresToOpts(list: { nome: string; telf?: string; especialidade?: string; ccp?: string }[]): SelectOption[] {
-  return list
-    .filter(f => f.nome.trim())
-    .map(f => ({
-      value: f.nome,
-      sub: [f.telf, f.especialidade || (f.ccp ? `CCP ${f.ccp}` : "")].filter(Boolean).join(" · ") || undefined,
-    }));
-}
-
-export function formadoresOptsWithFrom(base: SelectOption[], current?: string | string[]): SelectOption[] {
-  const extras = (Array.isArray(current) ? current : current ? [current] : [])
-    .map(v => v.trim())
-    .filter(Boolean)
-    .filter(v => !base.some(o => o.value === v));
-  if (!extras.length) return base;
-  return [...extras.map(value => ({ value, sub: "Atribuído nesta turma" })), ...base];
-}
-
-export function optsFromCursos(
-  cursos: { nome?: string; ufcd?: string; nomeComercial?: string; tipo?: string; horas?: number; regime?: string; estado?: string }[],
-): SelectOption[] {
-  const out: SelectOption[] = [];
-  for (const c of cursos) {
-    const value = (c.nome || c.nomeComercial || c.ufcd || "").trim();
-    if (!value) continue;
-    const sub = [c.tipo, c.horas ? `${c.horas}h` : "", c.regime, c.estado && c.estado !== "Ativo" ? c.estado : ""]
-      .filter(Boolean)
-      .join(" · ");
-    out.push(sub ? { value, sub } : { value });
-  }
-  return out;
-}
-
 export function SearchSelect({
   value, onChange, options, placeholder = "Pesquisar…", empty = "Nenhum resultado.", allowEmpty,
   emptyLabel = "Selecionar…",
@@ -369,99 +335,8 @@ export function MultiSearchSelect({
   );
 }
 
-export function FilterChips({ options, value, onChange, accent = "gold" }: {
-  options: string[];
-  value: string;
-  onChange: (v: string) => void;
-  accent?: "gold" | "fin";
-}) {
-  const on = accent === "gold" ? "bg-amber-500 text-white border-amber-500" : "bg-blue-600 text-white border-blue-600";
-  return (
-    <div className="flex flex-wrap gap-2">
-      {options.map(o => (
-        <button key={o} type="button" onClick={() => onChange(o)}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${value === o ? on : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
-          {o}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export function uniqueOpts(values: Array<string | undefined>): SelectOption[] {
   return [...new Set(values.filter((v): v is string => Boolean(v && v.trim() && v !== "-")))]
     .sort((a, b) => a.localeCompare(b, "pt"))
     .map(value => ({ value }));
-}
-
-export function matchesFilter(row: string | undefined, filtro: string) {
-  if (!filtro) return true;
-  const r = (row ?? "").toLowerCase();
-  const f = filtro.toLowerCase();
-  return r === f || r.includes(f) || f.includes(r);
-}
-
-export type ViewFilterField = {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: SelectOption[];
-  placeholder?: string;
-};
-
-export function ViewFilters({
-  accent = "gold",
-  fields = [],
-  chips,
-  onClear,
-  action,
-}: {
-  accent?: "gold" | "fin";
-  fields?: ViewFilterField[];
-  chips?: { options: string[]; value: string; onChange: (v: string) => void };
-  onClear?: () => void;
-  action?: ReactNode;
-}) {
-  const chipsOn = Boolean(chips && chips.value && chips.value !== "Todos" && chips.value !== "Todas");
-  const active = fields.some(f => f.value) || chipsOn;
-  const cols = fields.length + (action ? 1 : 0);
-  const grid = cols <= 1
-    ? "grid-cols-1 sm:grid-cols-[1fr_auto]"
-    : cols === 2
-      ? "grid-cols-1 sm:grid-cols-2"
-      : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
-
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-      {(fields.length > 0 || action) && (
-        <div className={`grid ${grid} gap-3 items-end`}>
-          {fields.map(f => (
-            <div key={f.label}>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{f.label}</label>
-              <SearchSelect
-                value={f.value}
-                onChange={f.onChange}
-                options={f.options}
-                placeholder={f.placeholder ?? `Pesquisar ${f.label.toLowerCase()}…`}
-                allowEmpty
-              />
-            </div>
-          ))}
-          {action}
-        </div>
-      )}
-      {(chips || active) && (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          {chips
-            ? <FilterChips options={chips.options} value={chips.value} onChange={chips.onChange} accent={accent} />
-            : <span />}
-          {active && onClear && (
-            <button type="button" onClick={onClear} className="text-xs font-semibold text-slate-500 hover:text-slate-800 whitespace-nowrap">
-              Limpar filtros
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
 }

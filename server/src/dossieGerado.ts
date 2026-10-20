@@ -28,10 +28,6 @@ const NOMES: Record<ItemDossieGerado, string> = {
   "entrega-certificados": "ComprovativoEntregaCertificados.pdf",
 };
 
-export function nomePdfDossie(item: ItemDossieGerado) {
-  return NOMES[item];
-}
-
 export function eItemDossieGerado(id: string): id is ItemDossieGerado {
   return (ITENS_DOSSIE_GERADO as readonly string[]).includes(id);
 }

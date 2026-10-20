@@ -1,12 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { ApiError, apiPublicOferta, apiPublicPreinscricao } from "../partilhado/api";
 import { SearchSelect } from "../partilhado/FormKit";
-import { fmtDataPt, ofertaFiltrada, uniqueVals, vagasPublicas, type OfertaTurma } from "../partilhado/oferta";
+import { ofertaFiltrada, uniqueVals, vagasPublicas, type OfertaTurma } from "../partilhado/oferta";
 import type { Course } from "./SiteLanding";
 import { ePreinscricao, ePrepago } from "../partilhado/siteConteudo";
 import { textoListaVazia, useOpcoesPublicas } from "./useOpcoesPublicas";
 import { ConsentimentoRgpd } from "./ConsentimentoRgpd";
-import { hojeLisboa } from "../partilhado/horaLisboa";
+import { fmtDataCalendario as fmtDataPt, hojeLisboa } from "../partilhado/horaLisboa";
+import { eur } from "../partilhado/ui/formatos";
 
 type Passo = "turma" | "dados" | "pagamento" | "feito";
 /** Como se abre o pedido: o curso e, quando a página do curso o deu, o local já escolhido. */
@@ -135,10 +136,10 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
   const precosLocal = datas.map(t => t.preco).filter((n): n is number => n != null);
   const minLocal = precosLocal.length ? Math.min(...precosLocal) : null;
   const precoLabel = turma?.preco != null
-    ? `${turma.preco.toLocaleString("pt-PT")} €`
+    ? eur(turma.preco, true)
     : minLocal != null
-      ? `${precosLocal.every(p => p === minLocal) ? "" : "A partir de "}${minLocal.toLocaleString("pt-PT")} €`
-      : precoNumero != null ? `${precoNumero.toLocaleString("pt-PT")} €` : curso?.price || "Sob consulta";
+      ? `${precosLocal.every(p => p === minLocal) ? "" : "A partir de "}${eur(minLocal, true)}`
+      : precoNumero != null ? eur(precoNumero, true) : curso?.price || "Sob consulta";
 
   function escolherLocal(valor: string) {
     setLocal(valor);
@@ -337,7 +338,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                                 className="flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-1.5 text-left disabled:cursor-not-allowed">
                                 <strong className="text-lg">{fmtDataPt(t.dataInicio)}</strong>
                                 <span className="text-sm opacity-80">{t.horario}</span>
-                                {t.preco != null && <span className="text-base font-bold">{t.preco.toLocaleString("pt-PT")} €</span>}
+                                {t.preco != null && <span className="text-base font-bold">{eur(t.preco, true)}</span>}
                                 <span className="text-xs opacity-65">{vagasPublicas(t)}</span>
                               </button>
                               {/* O cronograma é o da turma (já traz o nome dela); só existe no site depois de publicado. */}
@@ -427,7 +428,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Turma</p>
                 {turma ? (
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3 bg-[#F4F6F8] px-4 py-3 text-sm text-[#1C3350]">
-                    <span><strong>{fmtDataPt(turma.dataInicio)}</strong> · {turma.local} · {turma.horario}{turma.preco != null ? ` · ${turma.preco.toLocaleString("pt-PT")} €` : ""}</span>
+                    <span><strong>{fmtDataPt(turma.dataInicio)}</strong> · {turma.local} · {turma.horario}{turma.preco != null ? ` · ${eur(turma.preco, true)}` : ""}</span>
                     <button type="button" onClick={() => setPasso("turma")} className="text-sm font-bold text-[#A60000] underline">Alterar</button>
                   </div>
                 ) : (

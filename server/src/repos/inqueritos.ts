@@ -1,6 +1,6 @@
 /** Inquéritos: definição (catalog_items kind='inqueritos'), envios por turma e respostas. */
 import { pgIntArray, pgTextArray } from "../pedagogia/util.js";
-import { many, one, valor, type Consulta, type Regime } from "./sql.js";
+import { many, one, type Consulta, type Regime } from "./sql.js";
 
 export type InqueritoLinha = { id: number; regime: Regime; payload: unknown; public_token: string | null };
 
@@ -106,10 +106,6 @@ export async function respostasDoInquerito(c: Consulta, inqueritoId: number, fil
       LIMIT $5`,
     [inqueritoId, filtrado, pgIntArray(filtro.turmaIds ?? []), pgTextArray((filtro.turmas ?? []).map(t => t.trim().toLowerCase())), filtro.limite ?? 2000],
   );
-}
-
-export async function contarRespostas(c: Consulta, inqueritoId: number) {
-  return Number(await valor<number>(c, "SELECT count(*)::int FROM inquerito_respostas WHERE inquerito_id = $1", [inqueritoId]) ?? 0);
 }
 
 export async function inserirResposta(c: Consulta, inqueritoId: number, r: { turma: string; turmaId?: number | null; formando: string; respostas: Record<string, unknown> }) {

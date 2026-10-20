@@ -96,29 +96,6 @@ export const fichaSchema = z.object({
   criterios: z.array(z.object({ id: z.string().max(60), label: z.string().max(200) })).max(40).optional(),
 }).refine(v => v.payload || v.criterios, { message: "vazio" });
 
-export const formandoDocsSchema = z.object({
-  docs: z.array(z.object({
-    id: z.string().min(1).max(60),
-    ok: z.boolean(),
-    fileName: z.string().max(240).default(""),
-    data: z.string().max(40).default(""),
-    driveFileId: z.string().max(80).optional().default(""),
-    driveUrl: z.string().max(500).optional().default(""),
-  })).max(40),
-});
-
-export const notaSchema = z.object({ texto: z.string().trim().min(1).max(2000) });
-
-export const formadorDocsSchema = z.object({
-  docs: z.array(z.object({
-    id: z.string().min(1).max(60),
-    uploaded: z.boolean(),
-    fileName: z.string().max(240).default(""),
-    driveFileId: z.string().max(80).optional().default(""),
-    driveUrl: z.string().max(500).optional().default(""),
-  })).max(40),
-});
-
 export const dtpModeloSchema = z.object({
   excluidos: z.array(z.string().max(60)).max(80).default([]),
   incluidos: z.array(z.string().max(60)).max(80).optional().default([]),

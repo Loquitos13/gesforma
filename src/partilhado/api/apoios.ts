@@ -128,7 +128,7 @@ export type LoteApoios = {
 
 /** Apoios do mês com IBAN completo, para preparar as transferências (fica auditado). */
 export const apiLoteApoios = (turmaId: number, mes: string) =>
-  api<LoteApoios>(`/v1/apoios/turmas/${turmaId}/lote${qs({ mes })}`, { silencioso: true });
+  api<LoteApoios>(`/v1/apoios/turmas/${turmaId}/lote${qs({ mes })}`);
 
 export const apiProcessarApoios =(turmaId: number, mes: string, confirmar: boolean) =>
   enviar.post<ResultadoProcessar>(`/v1/apoios/turmas/${turmaId}/processar`, { mes, confirmar });

@@ -45,10 +45,6 @@ function formadoresDe(s: SessaoLectiva | null | undefined) {
   return s.formador?.trim() ? [s.formador.trim()] : [];
 }
 
-export function formadoresDaSessaoN(cronograma: unknown, n: number) {
-  return formadoresDe(sessaoLectivaN(cronograma, n));
-}
-
 /** Cada sessão do cronograma com um id único (as que não têm, ou o repetem, recebem um novo). */
 export function comIdsUnicos(cronograma: unknown[]) {
   const vistos = new Set<string>();

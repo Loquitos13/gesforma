@@ -1,5 +1,4 @@
 import { ApiError, BASE, api } from "./api/cliente";
-import { beginViewLoad, endViewLoad } from "./viewLoadingBus";
 import type { Regime } from "./api/pedagogia";
 
 export { ApiError };
@@ -139,55 +138,6 @@ export function microsoftLoginStartUrl() {
   return `${BASE}/v1/auth/microsoft/start`;
 }
 
-export type CrmFila = "contactar" | "atrasados" | "hoje" | "agenda" | "converter" | "abertos" | "secretaria" | "preinscricao" | "minhas";
-export type CrmSort = "inscrito" | "proximo" | "valor" | "nome" | "actividade" | "comercial" | "origem" | "meio" | "etiqueta" | "curso" | "turma" | "estado";
-export type CrmDir = "asc" | "desc";
-
-export type CrmListQuery = {
-  q?: string;
-  estado?: string;
-  curso?: string;
-  local?: string;
-  origem?: string;
-  entrada?: "preinscricao" | "manual" | "";
-  campanha?: string;
-  comercialId?: string;
-  fila?: CrmFila | "";
-  page?: number;
-  perPage?: number;
-  sort?: CrmSort;
-  dir?: CrmDir;
-  kanban?: boolean;
-  hoje?: string;
-  regime?: "gold" | "fin";
-  de?: string;
-  ate?: string;
-};
-
-function crmQs(q: CrmListQuery) {
-  const p = new URLSearchParams();
-  if (q.q) p.set("q", q.q);
-  if (q.estado && q.estado !== "Todos") p.set("estado", q.estado);
-  if (q.curso) p.set("curso", q.curso);
-  if (q.local) p.set("local", q.local);
-  if (q.origem) p.set("origem", q.origem);
-  if (q.entrada) p.set("entrada", q.entrada);
-  if (q.campanha) p.set("campanha", q.campanha);
-  if (q.comercialId) p.set("comercialId", q.comercialId);
-  if (q.fila) p.set("fila", q.fila);
-  if (q.page) p.set("page", String(q.page));
-  if (q.perPage) p.set("perPage", String(q.perPage));
-  if (q.sort) p.set("sort", q.sort);
-  if (q.dir) p.set("dir", q.dir);
-  if (q.kanban) p.set("kanban", "1");
-  if (q.hoje) p.set("hoje", q.hoje);
-  if (q.regime) p.set("regime", q.regime);
-  if (q.de) p.set("de", q.de);
-  if (q.ate) p.set("ate", q.ate);
-  const s = p.toString();
-  return s ? `?${s}` : "";
-}
-
 export type GlobalSearchKind = "email" | "telemovel" | "id" | "nome";
 export type GlobalSearchGrupo = "formandos" | "formadores" | "formacoes" | "turmas" | "crm";
 export type GlobalSearchHit = {
@@ -243,15 +193,10 @@ export async function apiUploadDrive(file: File, ctx: DriveUploadContext = { kin
   const headers = new Headers();
   headers.set("Accept", "application/json");
   headers.set("X-Gesforma-Client", "web");
-  beginViewLoad();
-  try {
-    const res = await fetch(`${BASE}/v1/drive/files`, { method: "POST", credentials: "include", headers, body: fd });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new ApiError(res.status, typeof data.error === "string" ? data.error : "upload recusado");
-    return (data as { file: DriveFile }).file;
-  } finally {
-    endViewLoad();
-  }
+  const res = await fetch(`${BASE}/v1/drive/files`, { method: "POST", credentials: "include", headers, body: fd });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, typeof data.error === "string" ? data.error : "upload recusado");
+  return (data as { file: DriveFile }).file;
 }
 
 export const apiEnviarInqueritosTurma = (regime: "gold" | "fin", turmaId: number) =>

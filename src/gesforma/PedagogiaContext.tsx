@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  apiDtpResumo,
-  apiDtpModelo,
   apiCursoFicha,
   apiPedagogia,
   apiSaveCertificado,
@@ -10,7 +8,6 @@ import {
   apiSaveSessao,
   apiSaveTurmaDocumento,
   type DtpEstado,
-  type DtpSnapshot,
   type PedagogiaSnapshot,
   type Regime,
   type TurmaCertificado,
@@ -21,7 +18,6 @@ import { persist } from "../partilhado/toastBus";
 import { emptyPlano, emptySumario, type CriterioAvaliacao, type PlanoSessaoData, type SumarioSessaoData } from "../partilhado/TurmaExtras";
 import { naPosicaoActual, type SessaoCronograma } from "../partilhado/turmaModel";
 import { useCriteriosModelo } from "./criteriosModelo";
-import { useProgramaDoCurso } from "./cursoPrograma";
 
 export type PresencaRow = { id: number; nome: string; presente: boolean };
 
@@ -51,11 +47,6 @@ export function useCriteriosAvaliacao(regime: Regime, cursoNome: string | undefi
 
   if (criterios?.length) return criterios;
   return modelo;
-}
-
-/** Programa pedagógico da ficha do curso (módulos ou capítulos). */
-export function useCursoPrograma(regime: Regime, cursoNome: string | undefined) {
-  return useProgramaDoCurso(regime, cursoNome).labels;
 }
 
 const vazio: PedagogiaSnapshot = {
@@ -240,28 +231,4 @@ export function useTurmaPedagogia(regime: Regime, turmaId: number | undefined, c
     guardarCertificado,
     recarregar,
   };
-}
-
-export type DtpResumo = { pct: Record<number, number>; estado: "loading" | "ready" | "offline" };
-
-/** Percentagens do DTP por turma, para a lista de Dossiê TP e para o chip do cockpit. */
-export function useDtpResumo(regime: Regime): DtpResumo {
-  const [pct, setPct] = useState<Record<number, number>>({});
-  const [estado, setEstado] = useState<DtpResumo["estado"]>("loading");
-  useEffect(() => {
-    let alive = true;
-    apiDtpResumo(regime)
-      .then(r => {
-        if (!alive) return;
-        setPct(Object.fromEntries(Object.entries(r.pct).map(([k, v]) => [Number(k), v])));
-        setEstado("ready");
-      })
-      .catch(() => { if (alive) setEstado("offline"); });
-    return () => { alive = false; };
-  }, [regime]);
-  return { pct, estado };
-}
-
-export function dtpSnapshotPct(dtp: DtpSnapshot) {
-  return dtp.total > 0 ? dtp.pct : 0;
 }

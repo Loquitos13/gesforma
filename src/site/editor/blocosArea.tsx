@@ -1,13 +1,24 @@
 // Bloco "Área do formando": o painel de quem entrou (cursos, agenda, certificados…) e a entrada.
 // No editor mostra o painel com dados de exemplo (ou a entrada, à escolha); no site faz o percurso todo.
+import { lazy, Suspense } from "react";
 import type { ComponentConfig } from "@puckeditor/core";
 import { moradaSegura } from "../../partilhado/siteConteudo";
-import { LoginFormando, PAINEL_ENTRADA, type PainelEntrada, type Separador } from "../AreaFormando";
-import { AreaFormandoConteudo, OPCOES_PAINEL, Painel, type OpcoesPainel } from "../AreaFormandoPainel";
+import { OPCOES_PAINEL, PAINEL_ENTRADA, type OpcoesPainel, type PainelEntrada, type Separador } from "../areaFormandoOpcoes";
 import { campoCor, campoImagem, campoMarcas, simNao } from "./campos";
 import { campoAparencia } from "./camposGrupos";
 import { corSegura, estiloBloco, estiloVazio, type Estilo } from "./estilos";
 import { AREA_EXEMPLO } from "./exemploArea";
+
+// A área do formando só se descarrega nas páginas que têm este bloco.
+const LoginFormando = lazy(() => import("../AreaFormando").then(m => ({ default: m.LoginFormando })));
+const AreaFormandoConteudo = lazy(() => import("../AreaFormandoPainel").then(m => ({ default: m.AreaFormandoConteudo })));
+const Painel = lazy(() => import("../AreaFormandoPainel").then(m => ({ default: m.Painel })));
+
+const aCarregar = (
+  <div className="text-[var(--c-primaria,#1C3350)]">
+    <main className="grid min-h-[50vh] place-items-center text-sm font-semibold text-[var(--c-primaria,#1C3350)]/50">A verificar a sessão…</main>
+  </div>
+);
 
 const SEPARADORES: { valor: Separador; rotulo: string }[] = [
   { valor: "courses", rotulo: "Os meus cursos" }, { valor: "agenda", rotulo: "Agenda" },
@@ -85,6 +96,6 @@ export const AreaFormando: ComponentConfig<Props> = {
     if (!puck?.isEditing) conteudo = <AreaFormandoConteudo painel={entrada} opcoes={opcoes} />;
     else if (p.previsualizar === "entrada") conteudo = <LoginFormando onEntrou={() => undefined} painel={entrada} />;
     else conteudo = <Painel dados={AREA_EXEMPLO} onDados={() => undefined} onSair={() => undefined} avisar={() => undefined} opcoes={opcoes} />;
-    return <div ref={puck?.dragRef ?? undefined} className={c.className} style={c.style}>{conteudo}</div>;
+    return <div ref={puck?.dragRef ?? undefined} className={c.className} style={c.style}><Suspense fallback={aCarregar}>{conteudo}</Suspense></div>;
   },
 };

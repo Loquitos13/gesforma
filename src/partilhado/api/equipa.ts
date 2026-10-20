@@ -27,15 +27,15 @@ export const apiEquipa = (regime: RegimeEquipa, p: Periodo, o: Sinal = {}) =>
     periodo: PeriodoEquipa;
     totais: { membros: number; ativos: number; carteira: number; porContactar: number; pipeline: number; atual: Omit<Indicadores, "aceites" | "conversao">; anterior: Omit<Indicadores, "aceites" | "conversao"> };
     membros: Membro[];
-  }>(`/v1/equipa${qs({ regime, ...p })}`, { silencioso: true, signal: o.signal });
+  }>(`/v1/equipa${qs({ regime, ...p })}`, { signal: o.signal });
 
 export const apiMembro = (id: string, regime: RegimeEquipa, p: Periodo, o: Sinal = {}) =>
   api<{ periodo: PeriodoEquipa; membro: Membro; leads: LeadMembro[]; notas: NotaMembro[]; seguir: ASeguir[] }>(
-    `/v1/equipa/${id}${qs({ regime, ...p })}`, { silencioso: true, signal: o.signal },
+    `/v1/equipa/${id}${qs({ regime, ...p })}`, { signal: o.signal },
   );
 
 export const apiPrecoInscricao = (curso: string, local?: string, horario?: string) =>
-  api<{ preco: number }>(`/v1/equipa/preco${qs({ curso, local, horario })}`, { silencioso: true });
+  api<{ preco: number }>(`/v1/equipa/preco${qs({ curso, local, horario })}`);
 
 export const apiNovaPropostaMembro = (id: string, d: {
   clienteNome: string; clienteEmail?: string; curso?: string; valor?: number; estado?: string; respostaCliente?: string;

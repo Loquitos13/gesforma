@@ -13,6 +13,6 @@ export type Notificacao = {
   lida: boolean;
 };
 
-export const apiNotificacoes = () => api<{ notificacoes: Notificacao[]; naoLidas: number }>("/v1/notificacoes", { silencioso: true });
+export const apiNotificacoes = () => api<{ notificacoes: Notificacao[]; naoLidas: number }>("/v1/notificacoes");
 
 export const apiMarcarLidas = (chaves: string[]) => enviar.post<{ ok: boolean }>("/v1/notificacoes/lidas", { chaves });

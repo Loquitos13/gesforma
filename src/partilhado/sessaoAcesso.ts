@@ -9,20 +9,6 @@ export function staffEditaValidado(role: string) {
   return role === "admin" || role === "secretaria" || role === "financiada";
 }
 
-export function nomesDoUtilizador(
-  user: { name: string; email: string; role: string },
-  formadores: { nome: string; email: string }[],
-) {
-  const email = user.email.trim().toLowerCase();
-  const nome = user.name.trim().toLowerCase();
-  const hits = formadores.filter(f =>
-    (email && f.email.trim().toLowerCase() === email) || f.nome.trim().toLowerCase() === nome,
-  );
-  const nomes = new Set(hits.map(f => f.nome.trim()).filter(Boolean));
-  if (!nomes.size && user.role === "formador" && user.name.trim()) nomes.add(user.name.trim());
-  return nomes;
-}
-
 export function formadorNaSessao(nomes: Set<string>, sessao: { formadores?: string[]; formador?: string }) {
   const lista = sessaoFormadores(sessao);
   if (!lista.length) return false;

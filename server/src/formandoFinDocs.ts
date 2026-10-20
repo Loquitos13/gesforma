@@ -9,7 +9,7 @@ import {
   decidirDoc, definirTokenFin, docDoFormando, docEnviado, docManual, docsDoFormando, fichaFinDoUtilizador,
   finPorSincronizar, formandoFinPorTokenId, gravarDocsJsonFin, inserirNota, pessoaFin, sincronizarDocsFin,
 } from "./repos/formandosDocs.js";
-import { isEmail, normalizeEmail } from "./security.js";
+import { normalizeEmail } from "./security.js";
 import { hojeLisboa } from "./datas.js";
 
 /** Documentos de elegibilidade da Financiada: ligação pessoal, envio, validação e recusa. */
@@ -162,10 +162,6 @@ export async function recusarDocFormandoFin(
 
 export async function assertFormandoDoUser(db: Db, userId: string, formandoId: number) {
   return Boolean(await fichaFinDoUtilizador(db, userId, formandoId));
-}
-
-export function emailTemFormando(email: string) {
-  return isEmail(normalizeEmail(email));
 }
 
 /**

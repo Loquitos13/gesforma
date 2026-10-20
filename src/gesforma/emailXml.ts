@@ -7,8 +7,6 @@ export type EmailDoc = {
   ambito?: CtaAmbito;
 };
 
-const ALLOWED_INLINE = /^(strong|em|br)$/i;
-
 export function escapeXml(text: string) {
   return text
     .replace(/&/g, "&amp;")
@@ -75,32 +73,4 @@ function innerToPlain(raw: string) {
       .replace(/<(?:strong|em)>/gi, "")
       .replace(/<[^>]+>/g, ""),
   ).trim();
-}
-
-export function xmlToLines(xml: string): { linhas: string[]; cta: string; href: string; ambito?: CtaAmbito } {
-  const doc = parseEmailXml(xml);
-  return { linhas: doc.paragraphs, cta: doc.cta, href: doc.href, ambito: doc.ambito };
-}
-
-export function fillEmailVars(text: string, vars: Record<string, string>) {
-  return text.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? "");
-}
-
-export function formatXmlInner(raw: string, vars?: Record<string, string>) {
-  const filled = vars ? fillEmailVars(raw, vars) : raw;
-  const parts: { t: "text" | "strong" | "em"; v: string }[] = [];
-  const re = /<(strong|em)>([\s\S]*?)<\/\1>/gi;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(filled))) {
-    if (m.index > last) parts.push({ t: "text", v: unescapeXml(filled.slice(last, m.index)) });
-    if (ALLOWED_INLINE.test(m[1])) parts.push({ t: m[1].toLowerCase() as "strong" | "em", v: unescapeXml(m[2]) });
-    last = m.index + m[0].length;
-  }
-  if (last < filled.length) parts.push({ t: "text", v: unescapeXml(filled.slice(last)) });
-  return parts.filter(p => p.v);
-}
-
-export function xmlParagraphsRaw(xml: string): string[] {
-  return [...(xml?.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi) ?? [])].map(m => m[1]);
 }

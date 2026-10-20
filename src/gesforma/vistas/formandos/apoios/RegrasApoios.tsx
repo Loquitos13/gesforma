@@ -3,7 +3,7 @@ import {
   apiGravarRegrasApoios, apiRegrasApoios, type ModoApoio, type RegraApoio, type RegraGuardada, type TipoApoio,
 } from "../../../../partilhado/api/apoios";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
-import { numeroPt } from "../../../../partilhado/despesas";
+import { numeroPt } from "../../../../partilhado/ui/formatos";
 import { useRecurso } from "../../../../partilhado/dados/useRecurso";
 import {
   Aviso, Botao, Cartao, Caixa, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Estado, Interruptor, Selecao, eur,

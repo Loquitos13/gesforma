@@ -1,4 +1,4 @@
-import { decryptField, decryptJson, encryptField, encryptJson } from "./fieldCrypto.js";
+import { decryptJson, encryptJson } from "./fieldCrypto.js";
 
 export type PreinscricaoPii = {
   nif?: string;
@@ -103,15 +103,4 @@ export function readFormandoDocs(row: Record<string, unknown>) {
 export function writeFormandoDocs(docs: Record<string, unknown>) {
   if (!Object.keys(docs).length) return { docs: {} as Record<string, unknown>, docs_enc: null as string | null };
   return { docs: {} as Record<string, unknown>, docs_enc: encryptJson(docs) };
-}
-
-export function readDriveSecret(stored: string) {
-  if (!stored) return "";
-  if (stored.startsWith("v1:")) return decryptField(stored);
-  return stored;
-}
-
-export function writeDriveSecret(plain: string) {
-  if (!plain.trim()) return "";
-  return encryptField(plain);
 }

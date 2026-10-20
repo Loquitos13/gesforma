@@ -17,9 +17,9 @@ export type LinhaAuditoria = {
 export type FiltrosAuditoria = { entidade?: string; utilizador?: string; q?: string; de?: string; ate?: string; pagina?: number; porPagina?: number };
 
 export const apiAuditoria = (f: FiltrosAuditoria, signal?: AbortSignal) =>
-  api<Pagina<LinhaAuditoria>>(`/v1/auditoria${qs(f)}`, { signal, silencioso: true });
+  api<Pagina<LinhaAuditoria>>(`/v1/auditoria${qs(f)}`, { signal });
 
 export const apiOpcoesAuditoria = (signal?: AbortSignal) =>
   api<{ entidades: { entidade: string; total: number }[]; utilizadores: { id: string; nome: string; email: string }[] }>(
-    "/v1/auditoria/opcoes", { signal, silencioso: true },
+    "/v1/auditoria/opcoes", { signal },
   );

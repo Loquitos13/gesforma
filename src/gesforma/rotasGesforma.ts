@@ -196,8 +196,3 @@ export function vistaDoCaminho(pathname: string, search = ""): Destino | null {
   if (!vista) return null;
   return { view: vista, ...comum };
 }
-
-export function gesformaNoEndereco(pathname: string) {
-  const path = pathname.replace(/\/+$/, "") || "/";
-  return path.startsWith("/gesforma");
-}

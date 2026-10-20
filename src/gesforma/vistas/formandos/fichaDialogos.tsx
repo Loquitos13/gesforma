@@ -4,7 +4,7 @@ import {
 } from "../../../partilhado/api/formandos";
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
-import { numeroPt } from "../../../partilhado/despesas";
+import { numeroPt } from "../../../partilhado/ui/formatos";
 import { AreaTexto, Botao, Campo, Entrada, Modal, Selecao } from "../../../partilhado/ui";
 import { hojeLisboa } from "../../../partilhado/horaLisboa";
 

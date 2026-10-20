@@ -13,7 +13,6 @@ const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
 const DRIVE_FILES = "https://www.googleapis.com/drive/v3/files";
 export const DRIVE_FILES_URL = DRIVE_FILES;
-export const FOLDER_MIME_DRIVE = "application/vnd.google-apps.folder";
 export const SHORTCUT_MIME_DRIVE = "application/vnd.google-apps.shortcut";
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const FOLDER_MIME = "application/vnd.google-apps.folder";

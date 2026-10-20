@@ -4,7 +4,7 @@ import { api, enviar } from "./cliente";
 export type AvisoConfiguracao = { variavel: string; nivel: "alto" | "medio"; mensagem: string };
 
 export function apiAvisosSistema(signal?: AbortSignal) {
-  return api<{ avisos: AvisoConfiguracao[]; chavesAntigas: number }>("/v1/sistema/avisos", { silencioso: true, signal });
+  return api<{ avisos: AvisoConfiguracao[]; chavesAntigas: number }>("/v1/sistema/avisos", { signal });
 }
 
 export function apiRecifrar() {

@@ -93,9 +93,3 @@ export function validarTransicao(m: Maquina, atual: string, pedido: string, role
   if (TRANSICOES[m][de]!.includes(novo) || role === "admin") return { ok: true, estado: novo, mudou: true };
   return { ok: false, erro: `Não é possível passar de «${de}» para «${novo}».` };
 }
-
-/** Estados em que o formando não ocupa vaga. */
-export function ocupaVaga(estado: string) {
-  const k = chave(estado);
-  return !(k.startsWith("desist") || k === "indeferido");
-}

@@ -1,6 +1,5 @@
 // API do domínio "pedagogia": sessões, dossiê da turma, avaliação, certificados, regras de turma e relatórios.
 import { api, BASE, ApiError } from "./cliente";
-import { beginViewLoad, endViewLoad } from "../viewLoadingBus";
 
 export type Regime = "gold" | "fin";
 
@@ -254,61 +253,51 @@ export async function apiDtpExport(regime: Regime, turmaId: number, filename?: s
   const headers = new Headers();
   headers.set("Accept", "application/zip");
   headers.set("X-Gesforma-Client", "web");
-  beginViewLoad();
-  try {
-    const res = await fetch(`${BASE}/v1/dtp/${regime}/${turmaId}/export`, { credentials: "include", headers });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new ApiError(res.status, typeof data.error === "string" ? data.error : "exportação recusada");
-    }
-    // Na cloud o ZIP fica na pasta da turma na Drive (a resposta não leva ficheiros grandes): abre-se a ligação.
-    if ((res.headers.get("content-type") ?? "").includes("application/json")) {
-      const data = await res.json().catch(() => ({})) as { drive?: { url?: string } };
-      if (!data.drive?.url) throw new ApiError(502, "exportação sem ligação para o ZIP");
-      window.open(data.drive.url, "_blank", "noopener,noreferrer");
-      return;
-    }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const cd = res.headers.get("content-disposition") ?? "";
-    const named = cd.match(/filename="([^"]+)"/)?.[1];
-    a.download = named || filename || `dtp-${turmaId}.zip`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  } finally {
-    endViewLoad();
+  const res = await fetch(`${BASE}/v1/dtp/${regime}/${turmaId}/export`, { credentials: "include", headers });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, typeof data.error === "string" ? data.error : "exportação recusada");
   }
+  // Na cloud o ZIP fica na pasta da turma na Drive (a resposta não leva ficheiros grandes): abre-se a ligação.
+  if ((res.headers.get("content-type") ?? "").includes("application/json")) {
+    const data = await res.json().catch(() => ({})) as { drive?: { url?: string } };
+    if (!data.drive?.url) throw new ApiError(502, "exportação sem ligação para o ZIP");
+    window.open(data.drive.url, "_blank", "noopener,noreferrer");
+    return;
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const cd = res.headers.get("content-disposition") ?? "";
+  const named = cd.match(/filename="([^"]+)"/)?.[1];
+  a.download = named || filename || `dtp-${turmaId}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 async function descarregarFicheiro(path: string, fallback: string, accept: string) {
   const headers = new Headers();
   headers.set("Accept", accept);
   headers.set("X-Gesforma-Client", "web");
-  beginViewLoad();
-  try {
-    const res = await fetch(`${BASE}${path}`, { credentials: "include", headers });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new ApiError(res.status, typeof data.error === "string" ? data.error : "exportação recusada");
-    }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const cd = res.headers.get("content-disposition") ?? "";
-    const named = cd.match(/filename="([^"]+)"/)?.[1];
-    a.download = named || fallback;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  } finally {
-    endViewLoad();
+  const res = await fetch(`${BASE}${path}`, { credentials: "include", headers });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, typeof data.error === "string" ? data.error : "exportação recusada");
   }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const cd = res.headers.get("content-disposition") ?? "";
+  const named = cd.match(/filename="([^"]+)"/)?.[1];
+  a.download = named || fallback;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 /** Resultados da turma (assiduidade, notas, elegibilidade). O formador só vê as turmas onde dá aulas. */
@@ -330,7 +319,7 @@ export type ResultadosTurma = {
 };
 
 export const apiResultadosTurma = (regime: Regime, turmaId: number, signal?: AbortSignal) =>
-  api<ResultadosTurma>(`/v1/turmas/${regime}/${turmaId}/resultados`, { signal, silencioso: true });
+  api<ResultadosTurma>(`/v1/turmas/${regime}/${turmaId}/resultados`, { signal });
 
 /** Copia para a turma os planos de sessão da ficha do curso (com `substituir`, também os já preenchidos e por assinar). */
 export const apiImportarPlanosCurso = (regime: Regime, turmaId: number, substituir: boolean, origemTurmaId?: number) =>
@@ -340,4 +329,4 @@ export const apiImportarPlanosCurso = (regime: Regime, turmaId: number, substitu
 
 /** Outras turmas do mesmo curso (turma padrão de onde copiar planos e sumários). */
 export const apiOrigensPlanos = (regime: Regime, turmaId: number) =>
-  api<{ turmas: { id: number; nome: string; dataInicio: string }[] }>(`/v1/turmas/${regime}/${turmaId}/planos/origens`, { silencioso: true });
+  api<{ turmas: { id: number; nome: string; dataInicio: string }[] }>(`/v1/turmas/${regime}/${turmaId}/planos/origens`);

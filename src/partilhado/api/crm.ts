@@ -166,7 +166,6 @@ export type DadosLead = Partial<{
 export const apiCriarLead = (d: DadosLead & { nome: string }) =>
   enviar.post<{ preinscricao: Lead; duplicados: { id: number; nome: string; apelido: string; estado: string; curso: string }[] }>("/v1/preinscricoes", d);
 export const apiEditarLead = (id: number, d: DadosLead) => enviar.patch<{ preinscricao: Lead }>(`/v1/preinscricoes/${id}`, d);
-export const apiContactar = (id: number, nota = "", meio = "") => enviar.post<{ preinscricao: Lead }>(`/v1/preinscricoes/${id}/contactar`, { nota, meio });
 export const apiApagarLead = (id: number) => enviar.delete<{ ok: boolean }>(`/v1/preinscricoes/${id}`);
 export const apiCompletar = (id: number, d: DadosLead) => enviar.post<DossieLead>(`/v1/crm/leads/${id}/completar`, d);
 
@@ -212,13 +211,13 @@ export type AccaoLote = {
 export const apiLote = (a: AccaoLote) => enviar.post<{ updated: number }>("/v1/crm/lote", a);
 
 export type Etiqueta = { id: number; nome: string; cor: string };
-export const apiEtiquetas = (signal?: AbortSignal) => api<{ etiquetas: Etiqueta[] }>("/v1/crm/etiquetas", { signal, silencioso: true });
+export const apiEtiquetas = (signal?: AbortSignal) => api<{ etiquetas: Etiqueta[] }>("/v1/crm/etiquetas", { signal });
 export const apiCriarEtiqueta = (nome: string, cor: string) => enviar.post<{ etiqueta: Etiqueta }>("/v1/crm/etiquetas", { nome, cor });
 export const apiComerciais = (regime: RegimeCrm, signal?: AbortSignal) =>
-  api<{ comerciais: { id: string; name: string }[] }>(`/v1/crm/comerciais${qs({ regime })}`, { signal, silencioso: true });
+  api<{ comerciais: { id: string; name: string }[] }>(`/v1/crm/comerciais${qs({ regime })}`, { signal });
 export const apiDuplicados = (email: string, telf: string, exceptId = 0, signal?: AbortSignal) =>
   api<{ duplicados: { id: number; nome: string; apelido: string; estado: string; curso: string }[] }>(
-    `/v1/crm/duplicados${qs({ email, telf, exceptId })}`, { signal, silencioso: true });
+    `/v1/crm/duplicados${qs({ email, telf, exceptId })}`, { signal });
 
 /** Dados de faturação da inscrição (botão «Contabilidade» da ficha). */
 export type FaturacaoLead =

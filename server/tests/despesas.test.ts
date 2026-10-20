@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
-import { numeroPt, validarDespesa } from "../../src/partilhado/despesas.js";
+import { validarDespesa } from "../../src/partilhado/despesas.js";
+import { numeroPt } from "../../src/partilhado/ui/formatos.js";
 import { arrancar, pedido, type Ctx } from "./helpers.js";
 
 async function turmaFin(ctx: Ctx) {

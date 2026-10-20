@@ -18,11 +18,11 @@ export type AssinaturaResumo = {
 export type AssinaturaDetalhe = AssinaturaResumo & { nif: string; urlVerificacao: string; hashAssinatura: string; eventos: EventoAssinatura[] };
 
 export const apiAssinaturasDoContrato = (contratoId: number, o: Sinal = {}) =>
-  api<{ assinaturas: AssinaturaResumo[] }>(`/v1/crm/contratos/${contratoId}/assinaturas`, { silencioso: true, signal: o.signal });
+  api<{ assinaturas: AssinaturaResumo[] }>(`/v1/crm/contratos/${contratoId}/assinaturas`, { signal: o.signal });
 export const apiEnviarAssinatura = (contratoId: number, d: { nif?: string; prazoDias?: number }) =>
   enviar.post<{ assinatura: AssinaturaDetalhe }>(`/v1/crm/contratos/${contratoId}/assinatura`, d);
 export const apiAssinatura = (id: number, o: Sinal = {}) =>
-  api<{ assinatura: AssinaturaDetalhe }>(`/v1/assinaturas/${id}`, { silencioso: true, signal: o.signal });
+  api<{ assinatura: AssinaturaDetalhe }>(`/v1/assinaturas/${id}`, { signal: o.signal });
 export const apiReenviarAssinatura = (id: number, prazoDias?: number) =>
   enviar.post<{ assinatura: AssinaturaDetalhe }>(`/v1/assinaturas/${id}/reenviar`, { prazoDias });
 export const apiCancelarAssinatura = (id: number, motivo: string) =>
@@ -34,7 +34,7 @@ export type ContratoFormando = {
   assinaturaId: number | null; assinaturaEstado: EstadoAssinatura | null;
 };
 export const apiContratosFormando = (regime: "gold" | "fin", id: number, o: Sinal = {}) =>
-  api<{ contratos: ContratoFormando[] }>(`/v1/formandos/${regime}/${id}/contratos`, { silencioso: true, signal: o.signal });
+  api<{ contratos: ContratoFormando[] }>(`/v1/formandos/${regime}/${id}/contratos`, { signal: o.signal });
 export const apiNovoContratoFormando = (regime: "gold" | "fin", id: number, templateId: number) =>
   enviar.post<{ contratoId: number; contratos: ContratoFormando[] }>(`/v1/formandos/${regime}/${id}/contratos`, { templateId });
 
@@ -42,7 +42,7 @@ export type Selo = {
   titular: string; emissor: string; fingerprint: string; validoDe: string | null; validoAte: string | null;
   autoAssinado: boolean; actualizadoEm: string | null; expirado: boolean;
 };
-export const apiSelo = (o: Sinal = {}) => api<{ selo: Selo | null }>("/v1/assinaturas/selo", { silencioso: true, signal: o.signal });
+export const apiSelo = (o: Sinal = {}) => api<{ selo: Selo | null }>("/v1/assinaturas/selo", { signal: o.signal });
 export const apiCarregarSelo = (ficheiro: File, senha: string) => enviarFicheiro<{ selo: Selo }>("/v1/assinaturas/selo", ficheiro, { senha });
 export const apiGerarSelo = () => enviar.post<{ selo: Selo }>("/v1/assinaturas/selo/gerar");
 export const apiApagarSelo = () => enviar.delete<{ ok: true }>("/v1/assinaturas/selo");
@@ -54,7 +54,7 @@ export type PedidoPublico = {
   expiraEm: string | null; assinadoEm: string | null; metodo: string | null; codigoVerificacao: string | null;
   urlVerificacao: string | null; codigoMinutos: number;
 };
-export const apiPedidoPublico = (token: string) => api<PedidoPublico>(`/v1/public/assinar/${encodeURIComponent(token)}`, { silencioso: true });
+export const apiPedidoPublico = (token: string) => api<PedidoPublico>(`/v1/public/assinar/${encodeURIComponent(token)}`);
 export const urlPdfPublico = (token: string, versao: "original" | "assinado", ver = false) =>
   `${BASE}/v1/public/assinar/${encodeURIComponent(token)}/pdf?versao=${versao}${ver ? "&ver=1" : ""}`;
 export const apiPedirCodigo = (token: string) =>
@@ -70,7 +70,7 @@ export type Verificacao = {
   enviadoEm: string | null; assinadoEm: string | null; metodo: string | null; hashOriginal: string; hashFinal: string | null;
   selo: { titular: string; fingerprint: string } | null; assinaturaExterna: { titular: string } | null;
 };
-export const apiVerificar = (codigo: string) => api<Verificacao>(`/v1/public/verificar/${encodeURIComponent(codigo)}`, { silencioso: true });
+export const apiVerificar = (codigo: string) => api<Verificacao>(`/v1/public/verificar/${encodeURIComponent(codigo)}`);
 
 export const ROTULO_ESTADO: Record<EstadoAssinatura, string> = {
   enviado: "Enviado", aberto: "Aberto pelo signatário", assinado: "Assinado", recusado: "Recusado", expirado: "Expirado", cancelado: "Cancelado",

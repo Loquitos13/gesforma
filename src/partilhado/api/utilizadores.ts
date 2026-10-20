@@ -21,12 +21,12 @@ export type FiltrosUtilizadores = { perfil?: string; estado?: string; q?: string
 
 export function apiUtilizadores(f: FiltrosUtilizadores, signal?: AbortSignal) {
   return api<{ users: Utilizador[]; contagens: { role: PerfilUtilizador; total: number; ativos: number }[] }>(
-    `/v1/utilizadores${qs(f)}`, { signal, silencioso: true },
+    `/v1/utilizadores${qs(f)}`, { signal },
   );
 }
 
 export function apiUtilizador(id: string, signal?: AbortSignal) {
-  return api<{ user: Utilizador; sessoes: SessaoUtilizador[] }>(`/v1/utilizadores/${id}`, { signal, silencioso: true });
+  return api<{ user: Utilizador; sessoes: SessaoUtilizador[] }>(`/v1/utilizadores/${id}`, { signal });
 }
 
 export function apiCriarUtilizador(corpo: { name: string; email: string; password: string; role: PerfilUtilizador; mustChangePassword: boolean }) {

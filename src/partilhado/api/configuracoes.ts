@@ -17,10 +17,10 @@ export type EstadoConfiguracoes = {
 };
 
 export const apiEstadoConfiguracoes = (signal?: AbortSignal) =>
-  api<EstadoConfiguracoes>("/v1/configuracoes/estado", { signal, silencioso: true });
+  api<EstadoConfiguracoes>("/v1/configuracoes/estado", { signal });
 
 export const apiDefinicoes = (signal?: AbortSignal) =>
-  api<{ settings: Record<string, Record<string, string>> }>("/v1/settings", { signal, silencioso: true });
+  api<{ settings: Record<string, Record<string, string>> }>("/v1/settings", { signal });
 
 export const apiGravarDefinicao = (id: string, values: Record<string, string>) =>
   enviar.put<{ ok: true; id: string; values: Record<string, string> }>(`/v1/settings/${id}`, { values });
@@ -33,7 +33,7 @@ export type EstadoSmtp = {
 };
 export type CorpoSmtp = { host?: string; port?: number; login: string; smtpKey?: string; fromName?: string; fromEmail: string; replyTo: string };
 
-export const apiSmtp = (signal?: AbortSignal) => api<EstadoSmtp>("/v1/settings/smtp", { signal, silencioso: true });
+export const apiSmtp = (signal?: AbortSignal) => api<EstadoSmtp>("/v1/settings/smtp", { signal });
 export const apiGravarSmtp = (corpo: CorpoSmtp) => enviar.put<EstadoSmtp>("/v1/settings/smtp", corpo);
 export const apiDesligarSmtp = () => enviar.post<EstadoSmtp>("/v1/settings/smtp/desligar", {});
 
@@ -42,7 +42,7 @@ export type EstadoAvaliacoesGoogle = {
   configurado: boolean; placeId: string; temChave: boolean; atualizadoEm: string | null;
   rating: number | null; total: number; quantas: number; erro: string | null;
 };
-export const apiAvaliacoesGoogle = (signal?: AbortSignal) => api<EstadoAvaliacoesGoogle>("/v1/settings/google-avaliacoes", { signal, silencioso: true });
+export const apiAvaliacoesGoogle = (signal?: AbortSignal) => api<EstadoAvaliacoesGoogle>("/v1/settings/google-avaliacoes", { signal });
 export const apiGravarAvaliacoesGoogle = (corpo: { placeId: string; chave?: string }) => enviar.put<EstadoAvaliacoesGoogle>("/v1/settings/google-avaliacoes", corpo);
 export const apiAtualizarAvaliacoesGoogle = () => enviar.post<EstadoAvaliacoesGoogle>("/v1/settings/google-avaliacoes/atualizar", {});
 export const apiDesligarAvaliacoesGoogle = () => enviar.post<EstadoAvaliacoesGoogle>("/v1/settings/google-avaliacoes/desligar", {});
@@ -56,7 +56,7 @@ export type EstadoDrive = {
   hasSecret?: boolean; fromEnv?: boolean;
 };
 
-export const apiDrive = (signal?: AbortSignal) => api<EstadoDrive>("/v1/drive/status", { signal, silencioso: true });
+export const apiDrive = (signal?: AbortSignal) => api<EstadoDrive>("/v1/drive/status", { signal });
 export const apiGravarDrive = (corpo: { clientId: string; clientSecret?: string; folderId?: string; folderName?: string }) =>
   enviar.put<EstadoDrive>("/v1/drive/config", corpo);
 export const apiDesligarDrive = () => enviar.post<{ ok: true }>("/v1/drive/disconnect");
@@ -68,7 +68,7 @@ export type EstadoMicrosoft = {
   configured: boolean; redirectUri: string; tenantId?: string; clientId?: string; hasSecret?: boolean; fromEnv?: boolean; hint?: string;
 };
 
-export const apiMicrosoft = (signal?: AbortSignal) => api<EstadoMicrosoft>("/v1/auth/microsoft", { signal, silencioso: true });
+export const apiMicrosoft = (signal?: AbortSignal) => api<EstadoMicrosoft>("/v1/auth/microsoft", { signal });
 export const apiGravarMicrosoft = (corpo: { clientId: string; clientSecret?: string; tenantId?: string }) =>
   enviar.put<EstadoMicrosoft>("/v1/auth/microsoft/config", corpo);
 export const apiDesligarMicrosoft = () => enviar.post<EstadoMicrosoft>("/v1/auth/microsoft/disconnect");
@@ -80,13 +80,13 @@ export type EstadoWhatsapp = {
   verifyToken: string; sessoes: number; webhook: string; hint: string;
 };
 
-export const apiWhatsapp = (signal?: AbortSignal) => api<EstadoWhatsapp>("/v1/crm/whatsapp", { signal, silencioso: true });
+export const apiWhatsapp = (signal?: AbortSignal) => api<EstadoWhatsapp>("/v1/crm/whatsapp", { signal });
 export const apiGravarWhatsapp = (corpo: { token?: string; phoneId?: string }) => enviar.put<EstadoWhatsapp>("/v1/crm/whatsapp/config", corpo);
 export const apiDesligarWhatsapp = () => enviar.post<EstadoWhatsapp>("/v1/crm/whatsapp/desligar");
 
 export const apiWhatsappConversa = (telefone: string) =>
   api<{ telefone: string; mensagens: { direccao: "in" | "out"; corpo: string; createdAt: string }[] }>(
-    `/v1/crm/whatsapp/conversa?telefone=${encodeURIComponent(telefone)}`, { silencioso: true },
+    `/v1/crm/whatsapp/conversa?telefone=${encodeURIComponent(telefone)}`,
   );
 export const apiWhatsappSimular = (telefone: string, texto: string) =>
   enviar.post<{ replies: string[]; telefone: string; passo?: string; leadId?: number | null; ligado: boolean }>(
@@ -97,6 +97,6 @@ export const apiWhatsappSimular = (telefone: string, texto: string) =>
 
 export type LogoEntidade = { nome: string; mime: string; versao: string; actualizado: string; tamanho: number };
 
-export const apiLogo = (signal?: AbortSignal) => api<{ logo: LogoEntidade | null }>("/v1/configuracoes/logo", { signal, silencioso: true });
+export const apiLogo = (signal?: AbortSignal) => api<{ logo: LogoEntidade | null }>("/v1/configuracoes/logo", { signal });
 export const apiCarregarLogo = (ficheiro: File) => enviarFicheiro<{ logo: LogoEntidade }>("/v1/configuracoes/logo", ficheiro);
 export const apiApagarLogo = () => enviar.delete<{ ok: true }>("/v1/configuracoes/logo");

@@ -6,12 +6,12 @@ import {
   gravarPastaNaTurma, gravarPastaPendente, gravarPastasTurma, nomeDaTurma, nomeDoFormador, pastaDaPreinscricao,
   turmasComAtalhosDoFormador, turmasComEquipa,
 } from "./repos/driveArvore.js";
-import { contaGoogle, contarPartilhasPorAcertar, marcarPartilhasSincronizadas, turmaComPartilhasPorAcertar } from "./repos/drive.js";
+import { contaGoogle, contarPartilhasPorAcertar, marcarPartilhasSincronizadas, pastaDaTurma, turmaComPartilhasPorAcertar } from "./repos/drive.js";
 import { PASTAS_FIN_ANTERIORES, TOPICOS_FIN } from "./dtpTopicosFin.js";
 import { sanitizeFileName } from "./ficheirosValidacao.js";
 import {
-  apagarItemGoogle, criarAtalhoDrive, garantirPastaFilha, moverPastaDrive, partilharPasta, permissoesDoItem, raizDoProjecto,
-  revogarPermissao, tokenDrive, type PapelDrive,
+  apagarItemGoogle, criarAtalhoDrive, garantirPastaFilha, isNotFound, moverPastaDrive, partilharPasta, permissoesDoItem, raizDoProjecto,
+  renomearItemDrive, revogarPermissao, tokenDrive, type PapelDrive,
 } from "./googleDrive.js";
 
 export const ZONA_PENDENTES = "01_INSCRIÇÕES_PENDENTES";
@@ -45,10 +45,14 @@ export async function criarEstruturaDtp(
 ): Promise<EstruturaTurma | null> {
   const acesso = token || await tokenDrive(db);
   if (!acesso) return null;
-  const root = await raizDoProjecto(db, acesso);
-  const zona = await garantirPastaFilha(acesso, root, ZONA_TURMAS);
   const turmaNome = nomePastaPessoa(input.turmaId, input.nome.trim() || `Turma ${input.turmaId}`);
-  const turmaPastaId = await garantirPastaFilha(acesso, zona, turmaNome);
+  const novaPasta = async () => garantirPastaFilha(acesso, await garantirPastaFilha(acesso, await raizDoProjecto(db, acesso), ZONA_TURMAS), turmaNome);
+  // A turma já tem pasta: fica com o nome actual da turma (os documentos e as partilhas não mudam de sítio).
+  // Só sem pasta (ou se foi apagada na Drive) se procura ou cria pelo nome.
+  const gravada = await pastaDaTurma(db, input.regime, input.turmaId);
+  const turmaPastaId = gravada
+    ? await renomearItemDrive(acesso, gravada, turmaNome).then(() => gravada, err => { if (isNotFound(err)) return novaPasta(); throw err; })
+    : await novaPasta();
   const criadas = await Promise.all(PASTAS_DTP.map(async nome => {
     const id = await garantirPastaFilha(acesso, turmaPastaId, nome, PASTAS_FIN_ANTERIORES[nome] ?? []);
     return [nome, id] as const;
@@ -96,6 +100,8 @@ export async function acertarPartilhas(
 ) {
   const actuais = await permissoesDoItem(token, itemId);
   const ja = new Set<string>();
+  let falhou = false;
+  const falha = () => { falhou = true; };
   for (const p of actuais) {
     const email = (p.emailAddress ?? "").trim().toLowerCase();
     if (p.type !== "user" || !email || p.role === "owner") continue;
@@ -107,12 +113,19 @@ export async function acertarPartilhas(
     }
     if (!papel && protegidos.has(email)) continue;
     // Papel errado (p.ex. editor antigo que agora só lê) ou pessoa que já não pertence: sai.
-    await revogarPermissao(token, itemId, p.id).catch(() => undefined);
+    await revogarPermissao(token, itemId, p.id).catch(falha);
   }
   for (const [email, papel] of pretendidas) {
     if (ja.has(email)) continue;
-    await partilharPasta(token, itemId, email, papel).catch(() => undefined);
+    await partilharPasta(token, itemId, email, papel).catch(falha);
   }
+  /** true se alguma partilha não ficou como devia (a turma fica por sincronizar). */
+  return falhou;
+}
+
+/** Tira de um item as partilhas pessoais directas de quem não é da equipa activa (p.ex. o ZIP do dossiê exportado). */
+export async function limparPartilhasDoItem(db: Db, token: string, itemId: string) {
+  return acertarPartilhas(token, itemId, new Map(), (await acessosDaTurma(db, {})).protegidos);
 }
 
 export async function prepararTurmaDrive(db: Db, input: {
@@ -128,14 +141,15 @@ export async function prepararTurmaDrive(db: Db, input: {
   const estrutura = await criarEstruturaDtp(db, input, token);
   if (!estrutura) return { ok: false as const, reason: "drive" as const };
   const pessoas = await acessosDaTurma(db, input);
-  await acertarPartilhas(token, estrutura.turmaPastaId, new Map(pessoas.secretaria.map(e => [e, "writer" as const])), pessoas.protegidos);
+  let falhou = await acertarPartilhas(token, estrutura.turmaPastaId, new Map(pessoas.secretaria.map(e => [e, "writer" as const])), pessoas.protegidos);
   const materiaisId = estrutura.pastas[PASTA_MATERIAIS];
   if (materiaisId) {
-    await acertarPartilhas(token, materiaisId, new Map(pessoas.formadores.map(e => [e, "reader" as const])), pessoas.protegidos);
+    falhou = await acertarPartilhas(token, materiaisId, new Map(pessoas.formadores.map(e => [e, "reader" as const])), pessoas.protegidos) || falhou;
   }
   await atalhosDosNomes(db, token, input.regime, input.turmaId, estrutura.formadoresId, pessoas.nomes);
-  await marcarPartilhasSincronizadas(db, input.regime, input.turmaId);
-  return { ok: true as const, ...estrutura };
+  // Com uma partilha por acertar a turma fica por sincronizar: o cron diário volta a tentar.
+  if (!falhou) await marcarPartilhasSincronizadas(db, input.regime, input.turmaId);
+  return { ok: true as const, sincronizada: !falhou, ...estrutura };
 }
 
 /**
@@ -146,15 +160,18 @@ export async function prepararTurmaDrive(db: Db, input: {
 export async function sincronizarPartilhasPendentes(db: Db, prazoMs: number) {
   const fim = Date.now() + prazoMs;
   let acertadas = 0;
+  // As que falharam nesta passagem não se repetem até ao prazo (ficam para o próximo cron).
+  const falhadas = { gold: [] as number[], fin: [] as number[] };
   while (Date.now() < fim) {
-    const t = await turmaComPartilhasPorAcertar(db);
+    const t = await turmaComPartilhasPorAcertar(db, falhadas);
     if (!t) break;
     const r = await prepararTurmaDrive(db, {
       regime: t.regime, turmaId: t.id, nome: t.nome, formador: t.formador,
       formadores: Array.isArray(t.formadores) ? t.formadores.map(String) : [], cronograma: t.cronograma,
     });
     if (!r.ok) break;
-    acertadas++;
+    if (r.sincronizada) acertadas++;
+    else falhadas[t.regime].push(t.id);
   }
   return { acertadas, porAcertar: await contarPartilhasPorAcertar(db) };
 }

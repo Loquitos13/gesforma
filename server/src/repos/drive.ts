@@ -156,14 +156,21 @@ export async function marcarPartilhasSincronizadas(c: Consulta, regime: Regime, 
 }
 
 /** Uma turma com pasta na Drive cujas partilhas ainda não foram acertadas (Gold primeiro, depois Financiada). */
-export async function turmaComPartilhasPorAcertar(c: Consulta) {
+export async function turmaComPartilhasPorAcertar(c: Consulta, saltar: Record<Regime, number[]> = { gold: [], fin: [] }) {
   for (const regime of ["gold", "fin"] as const) {
     const t = await one<{ id: number; nome: string; formador: string; formadores: unknown; cronograma: unknown }>(c,
       `SELECT id, nome, formador, formadores, cronograma FROM ${tabelaRegime("turmas", regime)}
-        WHERE drive_pasta_id <> '' AND drive_partilhas_em IS NULL ORDER BY id LIMIT 1`);
+        WHERE drive_pasta_id <> '' AND drive_partilhas_em IS NULL AND NOT (id = ANY($1::int[])) ORDER BY id LIMIT 1`,
+      [pgIntArray(saltar[regime])]);
     if (t) return { ...t, regime };
   }
   return null;
+}
+
+/** Volta a pôr todas as turmas com pasta por sincronizar (o cron diário acerta as partilhas de cada uma). */
+export async function ressincronizarPartilhas(c: Consulta) {
+  await many(c, "UPDATE turmas_gold SET drive_partilhas_em = NULL WHERE drive_pasta_id <> ''");
+  await many(c, "UPDATE turmas_fin SET drive_partilhas_em = NULL WHERE drive_pasta_id <> ''");
 }
 
 export async function contarPartilhasPorAcertar(c: Consulta) {

@@ -68,7 +68,3 @@ export function leadsPorTelefoneWhatsapp(c: Consulta, telefone: string, ultimos9
     [`%${ultimos9}%`, `%351${ultimos9}%`, `%${telefone}%`],
   );
 }
-
-export function ultimoLeadPorEmail(c: Consulta, email: string) {
-  return one<Record<string, unknown>>(c, "SELECT * FROM preinscricoes WHERE lower(email) = $1 ORDER BY id DESC LIMIT 1", [email]);
-}

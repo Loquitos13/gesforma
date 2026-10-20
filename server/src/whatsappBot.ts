@@ -6,10 +6,10 @@ import { criarPreinscricaoPublica, politicaPrivacidade } from "./preinscricaoPub
 import { filtrarOferta, fmtDataPt, listCursosGoldActivos, listOfertaGold, uniqueOferta, type OfertaTurma } from "./ofertaGold.js";
 import { isEmail, normalizeEmail, sanitizeHeader, sanitizeText } from "./security.js";
 import {
-  gravarSessaoWhatsapp, leadsPorTelefoneWhatsapp, registarMensagemWhatsapp, sessaoWhatsapp, ultimoLeadPorEmail, wamidJaVisto,
+  gravarSessaoWhatsapp, leadsPorTelefoneWhatsapp, registarMensagemWhatsapp, sessaoWhatsapp, wamidJaVisto,
 } from "./repos/whatsapp.js";
 
-type Passo = "menu" | "nome" | "apelido" | "email" | "concelho" | "curso" | "local" | "horario" | "data" | "consentimento" | "consulta";
+type Passo = "menu" | "nome" | "apelido" | "email" | "concelho" | "curso" | "local" | "horario" | "data" | "consentimento";
 
 type Dados = {
   nome?: string;
@@ -167,7 +167,7 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
     return { replies, telefone, passo, leadId };
   }
 
-  if (passo === "menu") {
+  if (passo === "menu" || (passo as string) === "consulta") {
     if (text === "1" || /pr[eé]-?inscri/i.test(text) || /^inscrever/i.test(text)) {
       passo = "nome";
       say("Vamos à pré-inscrição. Qual é o *primeiro nome*?");
@@ -179,8 +179,8 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
         if (leads.length > 1) say(`Há mais ${leads.length - 1} pedido(s) neste número. A secretaria vê o histórico completo no CRM.`);
         passo = "menu";
       } else {
-        passo = "consulta";
-        say("Não encontro um pedido neste número. Envie o *email* da pré-inscrição, ou escreva *1* para se pré-inscrever.");
+        passo = "menu";
+        say("Não encontro um pedido neste número. Escreva *1* para se pré-inscrever ou contacte a secretaria.");
       }
     } else if (text === "3" || /curso/i.test(text)) {
       const cursos = await cursosActivos(db);
@@ -189,24 +189,6 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
       passo = "menu";
     } else {
       say(MENU);
-    }
-  } else if (passo === "consulta") {
-    if (text === "1") {
-      passo = "nome";
-      say("Qual é o *primeiro nome*?");
-    } else if (isEmail(text)) {
-      const email = normalizeEmail(text);
-      const encontrado = await ultimoLeadPorEmail(db, email);
-      if (encontrado) {
-        const lead = mapPreinscricao(encontrado);
-        leadId = lead.id;
-        say(textoEstado(lead));
-        passo = "menu";
-      } else {
-        say("Não há pré-inscrição com esse email. Escreva *1* para criar uma, ou *menu*.");
-      }
-    } else {
-      say("Envie o email, *1* para pré-inscrição, ou *menu*.");
     }
   } else if (passo === "nome") {
     dados.nome = sanitizeHeader(text).slice(0, 80);
@@ -336,14 +318,8 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
       } else {
         leadId = created.preinscricao.id;
         await logLeadEvent(db, leadId, undefined, "whatsapp", created.duplicado ? "Consulta WhatsApp" : "Pré-inscrição via WhatsApp", telefone);
-        if (created.duplicado) {
-          say(`Já tínhamos este email. ${created.aviso}`);
-          const mapped = created.preinscricao as ReturnType<typeof mapPreinscricao>;
-          if ("estado" in mapped) say(textoEstado(mapped));
-        } else {
-          const preco = "preco" in created.preinscricao ? Number(created.preinscricao.preco) : turma.preco;
-          say(`Pré-inscrição nº ${leadId} gravada.\n${turma.curso}\n${turma.local} · ${turma.horario} · ${fmtDataPt(turma.dataInicio)}\nPreço: € ${Number.isFinite(preco) ? preco : turma.preco ?? "-"}\n${created.aviso}\n\nO pagamento *não* se faz neste chat.`);
-        }
+        // A mesma resposta com email novo ou já conhecido (como o formulário do site): não confirma quem já está inscrito.
+        say(`${turma.curso}\n${turma.local} · ${turma.horario} · ${fmtDataPt(turma.dataInicio)}\nPreço: € ${turma.preco ?? "-"}\n${created.aviso}\n\nO pagamento *não* se faz neste chat.`);
         passo = "menu";
         dados = {};
       }

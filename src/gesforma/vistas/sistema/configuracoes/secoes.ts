@@ -35,6 +35,7 @@ export const CAMPOS_LEMBRETE: CampoDefinicao[] = [
   {
     chave: "unidade", rotulo: "Unidade", tipo: "escolha",
     opcoes: [{ valor: "minutos", rotulo: "Minutos" }, { valor: "horas", rotulo: "Horas" }, { valor: "dias", rotulo: "Dias" }],
+    ajuda: "Os lembretes só saem na volta diária (07:00 UTC, ≈ 08:00 em Lisboa no verão): um intervalo de minutos ou horas equivale, na prática, a um dia.",
   },
   { chave: "maximo", rotulo: "Máximo de lembretes por pré-inscrição", tipo: "numero", placeholder: "5", ajuda: "Depois deste número deixa de enviar." },
 ];

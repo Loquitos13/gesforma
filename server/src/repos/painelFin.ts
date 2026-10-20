@@ -27,6 +27,12 @@ async function turmasFinADecorrer(c: Consulta, f: FiltroPainel) {
                               FROM turmas_fin t ${w.where} ORDER BY t.data_inicio, t.id`, w.params);
 }
 
+/** Ids das turmas financiadas com os filtros do painel (curso, local, horário, financiador), em qualquer fase. */
+async function idsTurmasFinFiltradas(c: Consulta, f: FiltroPainel) {
+  const w = filtrarTurmas(f);
+  return new Set((await many<{ id: number }>(c, `SELECT t.id FROM turmas_fin t ${w.where}`, w.params)).map(t => Number(t.id)));
+}
+
 async function formandosDasTurmas(c: Consulta, ids: number[]) {
   if (!ids.length) return [];
   const w = new Filtros([pgIntArray(ids), DOCS_FIN_OBRIGATORIOS]).sempre("ff.turma_id = ANY($1::int[])").sempre(OCUPA("ff"));
@@ -63,7 +69,7 @@ export async function turmasFinEmCurso(db: Db, f: FiltroPainel) {
   const hoje = hojeLisboa();
   const linhas: TurmaDecorrer[] = [];
   const pcts: number[] = [];
-  const matriz = await matrizDtp(db, "fin");
+  const [matriz, filtradas] = await Promise.all([matrizDtp(db, "fin"), idsTurmasFinFiltradas(db, f)]);
   for (const t of turmas) {
     const id = Number(t.id);
     const membros = formandos.filter(x => Number(x.turma_id) === id);
@@ -111,8 +117,9 @@ export async function turmasFinEmCurso(db: Db, f: FiltroPainel) {
     abaixoMinimo: linhas.reduce((s, l) => s + l.abaixoMinimo, 0),
     sessoesPorAssinar: linhas.reduce((s, l) => s + l.sessoesPorAssinar, 0),
     turmasPorAssinar: linhas.filter(l => l.sessoesPorAssinar > 0),
-    // Mesmo âmbito do destino (Dossiê TP › «Com bloqueantes»): todas as turmas abertas do regime, não só as a decorrer.
-    comBloqueantes: matriz.turmas.filter(t => !t.fechada && t.bloqueantes > 0).map(t => ({
+    // Mesmo âmbito do destino (Dossiê TP › «Com bloqueantes»): todas as turmas abertas do regime, não só as a decorrer,
+    // com os filtros do painel (curso, local, horário, financiador).
+    comBloqueantes: matriz.turmas.filter(t => !t.fechada && t.bloqueantes > 0 && filtradas.has(t.id)).map(t => ({
       id: t.id, nome: t.nome, ufcd: linhas.find(l => l.id === t.id)?.ufcd ?? "", dtpPct: t.pct,
     })),
   };

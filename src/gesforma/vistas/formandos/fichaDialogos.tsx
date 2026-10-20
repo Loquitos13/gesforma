@@ -4,6 +4,7 @@ import {
 } from "../../../partilhado/api/formandos";
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
+import { numeroPt } from "../../../partilhado/despesas";
 import { AreaTexto, Botao, Campo, Entrada, Modal, Selecao } from "../../../partilhado/ui";
 
 const INVALIDAR = ["formandos:"];
@@ -111,7 +112,8 @@ export function RegistarPagamento({ aberto, onFechar, ficha }: { aberto: boolean
     setMetodo(""); setValor(String(ficha.pagamento?.valor ?? "")); setDataPag(new Date().toISOString().slice(0, 10));
   }, [aberto, ficha.pagamento?.valor]);
   // Valor vazio é valor em falta (não 0 €); a oferta usa o seu próprio botão.
-  const v = valor.trim() ? Number(valor.replace(",", ".")) : NaN;
+  // "1.250" são mil duzentos e cinquenta euros (como se escreve em português), não 1,25 €.
+  const v = valor.trim() ? numeroPt(valor) : NaN;
   const valido = metodo && Number.isFinite(v) && v >= 0 && Boolean(dataPag);
 
   async function confirmar(oferta = false) {

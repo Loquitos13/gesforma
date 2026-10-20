@@ -33,8 +33,6 @@ export type LinhaFormador = FormadorBase & {
 
 export type KpisFormadores = { ativos: number; total: number; comTurma: number; docsEmFalta: number; ccpAExpirar: number; horasDadas: number };
 
-export type AlertaFormador = "docs" | "ccp" | "com_turma" | "sem_turma";
-
 export type FiltrosFormadores = {
   regime: Regime;
   estado?: string;
@@ -48,7 +46,7 @@ export type FiltrosFormadores = {
 };
 
 export function apiFormadores(f: FiltrosFormadores, signal?: AbortSignal) {
-  return api<Pagina<LinhaFormador> & { kpis: KpisFormadores; especialidades: string[] }>(`/v1/formadores${qs(f)}`, { signal, silencioso: true });
+  return api<Pagina<LinhaFormador> & { kpis: KpisFormadores; especialidades: string[] }>(`/v1/formadores${qs(f)}`, { signal });
 }
 
 export type TurmaDoFormador = {
@@ -91,7 +89,7 @@ export type FichaFormador = {
 };
 
 export function apiFichaFormador(id: number, signal?: AbortSignal) {
-  return api<FichaFormador>(`/v1/formadores/${id}`, { signal, silencioso: true });
+  return api<FichaFormador>(`/v1/formadores/${id}`, { signal });
 }
 
 export type OcupacaoFormador = {
@@ -101,12 +99,12 @@ export type OcupacaoFormador = {
 
 /** Horários ocupados do formador entre duas datas (todas as turmas). */
 export function apiOcupacaoFormador(id: number, de: string, ate: string, signal?: AbortSignal) {
-  return api<OcupacaoFormador>(`/v1/formadores/${id}/ocupacao?de=${de}&ate=${ate}`, { signal, silencioso: true });
+  return api<OcupacaoFormador>(`/v1/formadores/${id}/ocupacao?de=${de}&ate=${ate}`, { signal });
 }
 
 /** Id da ficha de formador ligada à conta autenticada. */
 export function apiMeuFormador(signal?: AbortSignal) {
-  return api<{ id: number }>("/v1/formadores/eu", { signal, silencioso: true });
+  return api<{ id: number }>("/v1/formadores/eu", { signal });
 }
 
 export type DadosFormador = {

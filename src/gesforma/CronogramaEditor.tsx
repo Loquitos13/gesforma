@@ -339,14 +339,3 @@ export function FormadoresAtribuidosCard({
     </div>
   );
 }
-
-export function TurmaInscricaoHint({ optsLen, curso }: { optsLen: number; curso?: string }) {
-  if (optsLen > 0) return null;
-  return (
-    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-      {curso
-        ? `Não há turmas libertadas para «${curso}». Active uma turma Gold (local + horário + data) ou crie uma nova.`
-        : "Não há turmas libertadas. Só turmas activas aparecem na pré-inscrição."}
-    </p>
-  );
-}

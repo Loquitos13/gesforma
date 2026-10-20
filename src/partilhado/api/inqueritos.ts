@@ -44,16 +44,16 @@ export type ResultadosInquerito = {
 export type InqueritoDefinicao = { id: number; regime: Regime; titulo: string; publico: PublicoInquerito; perguntas: Pergunta[] } & Record<string, unknown>;
 
 export function apiInqueritos(regime: Regime, signal?: AbortSignal) {
-  return api<{ inqueritos: InqueritoResumo[] }>(`/v1/inqueritos${qs({ regime })}`, { signal, silencioso: true });
+  return api<{ inqueritos: InqueritoResumo[] }>(`/v1/inqueritos${qs({ regime })}`, { signal });
 }
 
 export function apiResultadosInquerito(id: number, filtro: { turma?: string; curso?: string }, signal?: AbortSignal) {
-  return api<ResultadosInquerito>(`/v1/inqueritos/${id}/resultados${qs(filtro)}`, { signal, silencioso: true });
+  return api<ResultadosInquerito>(`/v1/inqueritos/${id}/resultados${qs(filtro)}`, { signal });
 }
 
 /** As definições vivem no catálogo (`catalog_items`, kind=inqueritos). */
 export function apiDefinicoesInqueritos(regime: Regime, signal?: AbortSignal) {
-  return api<{ itens: InqueritoDefinicao[] }>(`/v1/catalogos/inqueritos${qs({ regime })}`, { signal, silencioso: true });
+  return api<{ itens: InqueritoDefinicao[] }>(`/v1/catalogos/inqueritos${qs({ regime })}`, { signal });
 }
 
 export const apiCriarInquerito = (regime: Regime, payload: { titulo: string; publico: PublicoInquerito; perguntas: Pergunta[] }) =>

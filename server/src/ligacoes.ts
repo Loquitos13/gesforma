@@ -169,14 +169,6 @@ export async function bloqueioTurma(db: Db, regime: "gold" | "fin", id: number) 
   ]);
 }
 
-export async function bloqueioCliente(db: Db, id: number) {
-  const uso = await repo.usoCliente(db, id);
-  return fraseBloqueio([
-    { n: uso.propostas, um: "proposta", varios: "propostas" },
-    { n: uso.contratos, um: "contrato", varios: "contratos" },
-  ]);
-}
-
 async function alvosCurso(db: Db): Promise<CursoAlvo[]> {
   const { gold, fin } = await repo.nomesDosCursos(db);
   const alvos: CursoAlvo[] = gold.map(r => ({ canonical: String(r.nome), aliases: [String(r.nome)] }));

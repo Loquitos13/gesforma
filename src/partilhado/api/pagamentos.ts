@@ -50,11 +50,11 @@ export type FiltrosPagamentos = {
 };
 
 export function apiPagamentos(f: FiltrosPagamentos, signal?: AbortSignal) {
-  return api<RespostaPagamentos>(`/v1/pagamentos${qs(f)}`, { signal, silencioso: true });
+  return api<RespostaPagamentos>(`/v1/pagamentos${qs(f)}`, { signal });
 }
 
 export function apiPagamento(id: string, signal?: AbortSignal) {
-  return api<{ pagamento: LinhaPagamento }>(`/v1/pagamentos/${encodeURIComponent(id)}`, { signal, silencioso: true });
+  return api<{ pagamento: LinhaPagamento }>(`/v1/pagamentos/${encodeURIComponent(id)}`, { signal });
 }
 
 export function apiConfirmarPagamento(id: string) {
@@ -107,7 +107,7 @@ export type Recibo = {
 };
 
 export function apiEstadoRecibo(id: string, signal?: AbortSignal) {
-  return api<{ recibo: Recibo | null }>(`/v1/pagamentos/${encodeURIComponent(id)}/recibo/estado`, { signal, silencioso: true });
+  return api<{ recibo: Recibo | null }>(`/v1/pagamentos/${encodeURIComponent(id)}/recibo/estado`, { signal });
 }
 
 /** Emite o recibo (ou volta a gerá-lo com o mesmo número). */

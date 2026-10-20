@@ -213,13 +213,6 @@ export async function usoTurma(c: Consulta, regime: Regime, id: number) {
   return { formandos, preinscricoes };
 }
 
-export async function usoCliente(c: Consulta, id: number) {
-  return {
-    propostas: await contar(c, "SELECT count(*)::int AS n FROM propostas_comerciais WHERE cliente_id = $1", [id]),
-    contratos: await contar(c, "SELECT count(*)::int AS n FROM contratos_comerciais WHERE cliente_id = $1", [id]),
-  };
-}
-
 /* ── Reparação das ligações (arranque) ─────────────────────────────────────── */
 
 export async function nomesDosCursos(c: Consulta) {

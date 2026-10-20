@@ -147,10 +147,6 @@ function factosDe(regime: Regime, turma: TurmaRow, f: FontesTurma): DtpFacts {
   };
 }
 
-export async function turmaFacts(db: Db, regime: Regime, turma: TurmaRow): Promise<DtpFacts> {
-  return factosDe(regime, turma, await fontesDaTurma(db, regime, turma));
-}
-
 /** Contagem do percurso público (Gold) por tipo, a partir das pré-inscrições escolhidas e dos seus documentos. */
 export function contarPercurso(
   formandos: { email: string }[],

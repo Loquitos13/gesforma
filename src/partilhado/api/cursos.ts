@@ -27,19 +27,19 @@ export type TurmaDoCurso = {
 };
 
 export function apiCursosGold(f: FiltroCursos, signal?: AbortSignal) {
-  return api<{ cursos: CursoGold[]; resumo: ResumoCursos }>(`/v1/cursos/gold${qs(f)}`, { signal, silencioso: true });
+  return api<{ cursos: CursoGold[]; resumo: ResumoCursos }>(`/v1/cursos/gold${qs(f)}`, { signal });
 }
 
 export function apiCursosFin(f: FiltroCursos, signal?: AbortSignal) {
-  return api<{ cursos: CursoFin[]; resumo: ResumoCursos }>(`/v1/cursos/fin${qs(f)}`, { signal, silencioso: true });
+  return api<{ cursos: CursoFin[]; resumo: ResumoCursos }>(`/v1/cursos/fin${qs(f)}`, { signal });
 }
 
 export function apiCursoGold(id: number, signal?: AbortSignal) {
-  return api<{ curso: CursoGold; turmas: TurmaDoCurso[] }>(`/v1/cursos/gold/${id}`, { signal, silencioso: true });
+  return api<{ curso: CursoGold; turmas: TurmaDoCurso[] }>(`/v1/cursos/gold/${id}`, { signal });
 }
 
 export function apiCursoFin(id: number, signal?: AbortSignal) {
-  return api<{ curso: CursoFin; turmas: TurmaDoCurso[] }>(`/v1/cursos/fin/${id}`, { signal, silencioso: true });
+  return api<{ curso: CursoFin; turmas: TurmaDoCurso[] }>(`/v1/cursos/fin/${id}`, { signal });
 }
 
 export type DadosCursoGold = Omit<CursoGold, "id" | "uso" | "entidadeResponsavelId"> & { entidadeResponsavelId?: number | null };
@@ -54,7 +54,7 @@ export const apiApagarCurso = (regime: Regime, id: number) => enviar.delete<{ ok
 export type FichaCurso = { payload: Record<string, unknown>; criterios: { id: string; label: string }[] };
 
 export function apiFichaCurso(regime: Regime, id: number, signal?: AbortSignal) {
-  return api<{ ficha: FichaCurso | null }>(`/v1/cursos/${regime}/${id}/ficha`, { signal, silencioso: true });
+  return api<{ ficha: FichaCurso | null }>(`/v1/cursos/${regime}/${id}/ficha`, { signal });
 }
 
 export const apiGravarFichaCurso = (regime: Regime, id: number, corpo: { payload?: Record<string, unknown>; criterios?: { id: string; label: string }[] }) =>

@@ -3,7 +3,6 @@ import type { Db } from "./db/pool.js";
 import * as repo from "./repos/imagens.js";
 
 const SLOTS = new Set(["banner", "thumb", "capa", "miniatura"]);
-const MIMES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const MAX_BYTES = 8 * 1024 * 1024;
 
 export function slotImagem(value: string) {
@@ -22,11 +21,6 @@ export function urlImagemPublica(token: string, versao?: string | Date | null) {
 }
 
 const URL_COM_ID = /\/(?:gold|fin)\/\d+(?:\/|$)/;
-
-export function mimeImagem(value: string) {
-  const mime = value.toLowerCase().split(";")[0]?.trim() ?? "";
-  return MIMES.has(mime) ? mime : null;
-}
 
 /** Tipo real da imagem pelos primeiros bytes (o MIME enviado pelo browser não conta). */
 export function mimeDosBytes(b: Buffer): string | null {

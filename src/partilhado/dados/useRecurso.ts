@@ -50,27 +50,6 @@ export function invalidar(prefixo: string) {
   for (const k of [...ouvintes.keys()]) if (k.startsWith(prefixo)) avisar(k);
 }
 
-/** Lê a cache sem pedir (ex.: para pré-preencher um formulário). */
-export function lerCache<T>(chave: string): T | undefined {
-  return cache.get(chave)?.dados as T | undefined;
-}
-
-/**
- * Pede uma chave sem ecrã a ouvir (ex.: ao passar o rato num item do menu), para o
- * ecrã abrir já com dados. Não pede se já houver dados recentes ou um pedido em curso.
- */
-export function preCarregar<T>(chave: string, carregar: (signal: AbortSignal) => Promise<T>, validadeMs = VALIDADE_MS) {
-  const atual = cache.get(chave);
-  if (atual && (atual.promessa || Date.now() - atual.quando < validadeMs)) return;
-  const ctrl = new AbortController();
-  const promessa = carregar(ctrl.signal)
-    .then(dados => { cache.set(chave, { dados, quando: Date.now() }); })
-    .catch(() => { const e = cache.get(chave); if (e) cache.set(chave, { ...e, promessa: undefined }); })
-    .finally(() => avisar(chave));
-  cache.set(chave, { ...(atual ?? { quando: 0 }), promessa });
-  aparar();
-}
-
 export function useRecurso<T>(
   chave: string | null,
   carregar: (signal: AbortSignal) => Promise<T>,

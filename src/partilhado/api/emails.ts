@@ -53,9 +53,9 @@ export type EnvioEmail = {
 
 export type EstatisticasEnvios = { sent: number; queued: number; failed: number; abertos: number };
 
-export const apiOpcoesEmail = (signal?: AbortSignal) => api<OpcoesEmail>("/v1/email/opcoes", { signal, silencioso: true });
-export const apiRegrasEmail = (signal?: AbortSignal) => api<{ rules: RegraEmail[] }>("/v1/email/regras", { signal, silencioso: true });
-export const apiModelosEmail = (signal?: AbortSignal) => api<{ templates: ModeloEmail[] }>("/v1/email/templates", { signal, silencioso: true });
+export const apiOpcoesEmail = (signal?: AbortSignal) => api<OpcoesEmail>("/v1/email/opcoes", { signal });
+export const apiRegrasEmail = (signal?: AbortSignal) => api<{ rules: RegraEmail[] }>("/v1/email/regras", { signal });
+export const apiModelosEmail = (signal?: AbortSignal) => api<{ templates: ModeloEmail[] }>("/v1/email/templates", { signal });
 
 export type CorpoRegra = { nome: string; gatilho: string; templateTipo: string; atraso: string; curso: string | null; ativo: boolean };
 
@@ -71,13 +71,13 @@ export const apiAlterarModelo = (id: number, corpo: CorpoModelo) => enviar.patch
 export type Previsualizacao = { assunto: string; html: string; texto: string; para: string; de: string };
 
 export const apiPrevisualizarEmail = (corpo: CorpoModelo & { tipo: string; curso?: string | null }, signal?: AbortSignal) =>
-  api<Previsualizacao>("/v1/email/previsualizar", { method: "POST", body: JSON.stringify(corpo), signal, silencioso: true });
+  api<Previsualizacao>("/v1/email/previsualizar", { method: "POST", body: JSON.stringify(corpo), signal });
 
 export type FiltrosEnvios = { regra?: string; estado?: string; q?: string; de?: string; ate?: string; pagina?: number; porPagina?: number };
 
 export const apiEnviosEmail = (f: FiltrosEnvios, signal?: AbortSignal) =>
-  api<Pagina<EnvioEmail> & { stats: EstatisticasEnvios }>(`/v1/email/envios${qs(f)}`, { signal, silencioso: true });
+  api<Pagina<EnvioEmail> & { stats: EstatisticasEnvios }>(`/v1/email/envios${qs(f)}`, { signal });
 export const apiEnvioEmail = (id: string, signal?: AbortSignal) =>
-  api<{ envio: { id: string; assunto: string; html: string; texto: string; para: string } }>(`/v1/email/envios/${id}`, { signal, silencioso: true });
+  api<{ envio: { id: string; assunto: string; html: string; texto: string; para: string } }>(`/v1/email/envios/${id}`, { signal });
 export const apiReenviarEnvio = (id: string) => enviar.post<{ ok: true }>(`/v1/email/envios/${id}/reenviar`);
 export const apiCancelarEnvio = (id: string) => enviar.post<{ ok: true }>(`/v1/email/envios/${id}/cancelar`);

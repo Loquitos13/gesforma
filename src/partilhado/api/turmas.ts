@@ -54,7 +54,7 @@ export type FiltrosTurmas = {
 };
 
 export function apiTurmas(f: FiltrosTurmas, signal?: AbortSignal) {
-  return api<Pagina<LinhaTurma> & { resumo: ResumoTurmas }>(`/v1/turmas${qs(f)}`, { signal, silencioso: true });
+  return api<Pagina<LinhaTurma> & { resumo: ResumoTurmas }>(`/v1/turmas${qs(f)}`, { signal });
 }
 
 /** Turma completa (formato antigo, usado pelo cockpit e pelo formulário). */
@@ -130,5 +130,5 @@ export function apiInscricoesTurma(regime: Regime, id: number, abertas: boolean)
 
 /** Turma completa, para o formulário de edição. */
 export function apiTurmaGravada(regime: Regime, id: number, signal?: AbortSignal) {
-  return api<{ turma: TurmaGravada }>(`/v1/turmas/${regime}/${id}`, { signal, silencioso: true });
+  return api<{ turma: TurmaGravada }>(`/v1/turmas/${regime}/${id}`, { signal });
 }

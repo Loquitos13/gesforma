@@ -164,7 +164,7 @@ export function apiLembreteDocsFin(id: number) {
 export type FinanciamentoFormando = { dados: DadosFinanciamento; daInscricao: (keyof DadosFinanciamento)[] };
 
 export function apiFinanciamentoFormando(id: number, signal?: AbortSignal) {
-  return api<FinanciamentoFormando>(`/v1/formandos-fin/${id}/financiamento`, { signal, silencioso: true });
+  return api<FinanciamentoFormando>(`/v1/formandos-fin/${id}/financiamento`, { signal });
 }
 
 export function apiAlterarFinanciamentoFormando(id: number, corpo: Partial<DadosFinanciamento>) {
@@ -209,5 +209,5 @@ export function apiApagarInscricaoFin(id: number) {
 export type DocsFormandoFin = { formandoId: number; documentos: { id: string; label: string; required: boolean; estado: string; validadoEm: string }[] };
 
 export function apiDocumentosFormandoFin(id: number, signal?: AbortSignal) {
-  return api<DocsFormandoFin>(`/v1/formandos/fin/${id}/documentos`, { signal, silencioso: true });
+  return api<DocsFormandoFin>(`/v1/formandos/fin/${id}/documentos`, { signal });
 }

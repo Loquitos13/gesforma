@@ -105,13 +105,6 @@ export function dtpCategoriaPasta(item: Parameters<typeof dtpCategoriaDe>[0] | D
   return DTP_CATEGORIAS.find(c => c.id === id)?.pasta ?? "01-Identificacao e programa";
 }
 
-/** @deprecated Use dtpCategoriaPasta. Mantido só para chamadas antigas. */
-export function dtpFasePasta(fase: DtpFasePasta | string | undefined) {
-  if (fase === "durante") return dtpCategoriaPasta("pedagogia");
-  if (fase === "depois") return dtpCategoriaPasta("certificacao");
-  return dtpCategoriaPasta("identificacao");
-}
-
 export function dtpZipRelPath(opts: {
   root: string;
   fase?: DtpFasePasta | string;

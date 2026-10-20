@@ -14,9 +14,9 @@ export type DadosCampanha = { nome: string; data: string; fim: string; encarrega
 export type FiltroCampanhas = { estado?: string; canal?: string; curso?: string; responsavel?: string; q?: string };
 
 export const apiCampanhas = (f: FiltroCampanhas, o: { signal?: AbortSignal } = {}) =>
-  api<{ campanhas: Campanha[]; resumo: ResumoCampanhas }>(`/v1/campanhas${qs(f)}`, { silencioso: true, signal: o.signal });
+  api<{ campanhas: Campanha[]; resumo: ResumoCampanhas }>(`/v1/campanhas${qs(f)}`, { signal: o.signal });
 export const apiCampanha = (id: number, o: { signal?: AbortSignal } = {}) =>
-  api<{ campanha: CampanhaFicha }>(`/v1/campanhas/${id}`, { silencioso: true, signal: o.signal });
+  api<{ campanha: CampanhaFicha }>(`/v1/campanhas/${id}`, { signal: o.signal });
 export const apiCriarCampanha = (d: DadosCampanha) => enviar.post<{ campanha: CampanhaFicha }>("/v1/campanhas", d);
 export const apiAlterarCampanha = (id: number, d: Partial<DadosCampanha>) => enviar.patch<{ campanha: CampanhaFicha }>(`/v1/campanhas/${id}`, d);
 export const apiApagarCampanha = (id: number) => enviar.delete<{ ok: true }>(`/v1/campanhas/${id}`);

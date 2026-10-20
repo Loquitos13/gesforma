@@ -30,7 +30,7 @@ export type TurmaDtp = {
 export type MatrizDtp = { seccoes: SeccaoDtp[]; turmas: TurmaDtp[] };
 
 export function apiMatrizDtp(regime: Regime, signal?: AbortSignal) {
-  return api<MatrizDtp>(`/v1/dtp/${regime}/resumo`, { signal, silencioso: true });
+  return api<MatrizDtp>(`/v1/dtp/${regime}/resumo`, { signal });
 }
 
 /** ZIP do dossiê da turma, organizado pelas pastas (Gold) ou tópicos (Financiada). */

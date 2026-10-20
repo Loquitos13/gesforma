@@ -1,25 +1,14 @@
 // Peças partilhadas pelos ecrãs do diretório comercial (clientes, parceiros, contratos) e da equipa.
 import type { ReactNode } from "react";
 import { useAuth } from "../../../partilhado/AuthGate";
-import { type Migalha, type Tom } from "../../../partilhado/ui";
+import { type Tom } from "../../../partilhado/ui";
 import { numeroPt } from "../../../partilhado/ui/formatos";
 import type { Vista } from "../../rotasGesforma";
-import type { Navegar } from "../../shell/tipos";
 
 export type Regime = "gold" | "fin";
 
 export function regimeDaVista(view: Vista): Regime {
   return view.startsWith("fin-") ? "fin" : "gold";
-}
-
-/** Migalhas "Gold / CRM / Clientes" (ou Financiada). */
-export function trilhoCrm(view: Vista, navigate: Navegar, pagina: string, secao = "CRM"): Migalha[] {
-  const fin = regimeDaVista(view) === "fin";
-  return [
-    { rotulo: fin ? "Financiada" : "Gold", onClick: () => navigate(fin ? "fin-painel" : "gold-painel") },
-    { rotulo: secao },
-    { rotulo: pagina },
-  ];
 }
 
 const TOM_ESTADO: Record<string, Tom> = {

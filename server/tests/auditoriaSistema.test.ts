@@ -84,7 +84,9 @@ describe("formadores: Gold e Financiada não se misturam", () => {
     const fin = await fichaFormador(ctx, ["fin"]);
 
     expect((await pedido(ctx, "financiada", "PATCH", `/v1/formadores/${gold.id}`, { telf: "910000000" })).statusCode).toBe(403);
-    expect((await pedido(ctx, "financiada", "PATCH", `/v1/formadores/${misto.id}`, { telf: "910000000" })).statusCode).toBe(403);
+    // A ficha partilhada (Gold e Financiada) é também da Financiada: altera-a, mas não lhe tira a Gold.
+    expect((await pedido(ctx, "financiada", "PATCH", `/v1/formadores/${misto.id}`, { telf: "910000000" })).statusCode).toBe(200);
+    expect((await pedido(ctx, "financiada", "PATCH", `/v1/formadores/${misto.id}`, { regimes: ["fin"] })).statusCode).toBe(403);
     expect((await pedido(ctx, "financiada", "DELETE", `/v1/formadores/${gold.id}`)).statusCode).toBe(403);
     expect((await pedido(ctx, "financiada", "DELETE", `/v1/formadores/${misto.id}`)).statusCode).toBe(403);
     expect((await pedido(ctx, "financiada", "POST", "/v1/formadores", { nome: unico("Fin cria Gold"), regimes: ["gold"] })).statusCode).toBe(403);

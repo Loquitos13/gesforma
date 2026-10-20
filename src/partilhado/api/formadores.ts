@@ -133,6 +133,11 @@ export function apiAlterarFormador(id: number, dados: Partial<DadosFormador>) {
   return enviar.patch<{ formador: FormadorBase; acesso: AcessoCriado }>(`/v1/formadores/${id}`, dados);
 }
 
+/** Junta um regime à ficha que já existe com este email (a mesma pessoa noutro regime). */
+export function apiJuntarRegimeFormador(id: number, regime: Regime, email: string) {
+  return enviar.post<{ formador: FormadorBase; acesso: AcessoCriado }>(`/v1/formadores/${id}/regimes`, { regime, email });
+}
+
 export function apiApagarFormador(id: number) {
   return enviar.delete<{ ok: true }>(`/v1/formadores/${id}`);
 }

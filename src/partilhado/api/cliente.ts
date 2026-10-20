@@ -7,10 +7,13 @@ export class ApiError extends Error {
   status: number;
   /** Erros por campo devolvidos pela validação do servidor (`validar` em server/src/validacao.ts). */
   campos?: { campo: string; erro: string }[];
-  constructor(status: number, message: string, campos?: { campo: string; erro: string }[]) {
+  /** O corpo da resposta de erro, para os ecrãs que usam mais do que a mensagem (ex.: `fichaExistente`). */
+  dados?: Record<string, unknown>;
+  constructor(status: number, message: string, campos?: { campo: string; erro: string }[], dados?: Record<string, unknown>) {
     super(message);
     this.status = status;
     this.campos = campos;
+    this.dados = dados;
   }
 }
 
@@ -45,7 +48,7 @@ export async function api<T>(path: string, init: Opcoes = {}): Promise<T> {
       throw new ApiError(429, typeof data.error === "string" ? data.error : "Demasiadas tentativas. Aguarde um minuto e tente de novo.");
     }
     if (!res.ok) {
-      throw new ApiError(res.status, typeof data.error === "string" ? data.error : "pedido recusado", Array.isArray(data.campos) ? data.campos : undefined);
+      throw new ApiError(res.status, typeof data.error === "string" ? data.error : "pedido recusado", Array.isArray(data.campos) ? data.campos : undefined, data);
     }
     return data as T;
   } finally {

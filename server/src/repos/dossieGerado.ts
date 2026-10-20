@@ -10,7 +10,7 @@ export async function turmaFinBase(c: Consulta, turmaId: number) {
 }
 
 /** Formandos da turma com os dados de contacto da pré-inscrição mais recente do mesmo email. */
-export async function formandosFinComContacto(c: Consulta, turmaId: number, turmaNome: string, curso: string) {
+export async function formandosFinComContacto(c: Consulta, turmaId: number, turmaNome: string) {
   return many<{
     id: number; nome: string; apelido: string; email: string; telf: string; estado: string;
     concelho: string; nif: string; morada: string; codigo_postal: string; origem: string; inscrito: string;
@@ -33,9 +33,8 @@ export async function formandosFinComContacto(c: Consulta, turmaId: number, turm
        ) p ON true
       WHERE f.turma_id = $1
          OR (f.turma_id IS NULL AND f.turma = $2)
-         OR (f.turma_id IS NULL AND f.curso = $3 AND NOT EXISTS (SELECT 1 FROM turmas_fin t WHERE t.nome = f.turma))
       ORDER BY f.nome, f.apelido`,
-    [turmaId, turmaNome, curso],
+    [turmaId, turmaNome],
   );
 }
 

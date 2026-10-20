@@ -69,6 +69,25 @@ async function uploadToGoogle(token: string, parentId: string, name: string, mim
   });
 }
 
+/**
+ * Grava (ou substitui, pelo nome) um ficheiro gerado numa pasta da Drive, sem registo em `drive_files`:
+ * serve para o ZIP do dossiê, que não deve voltar a entrar na exportação seguinte.
+ */
+export async function substituirNaPasta(token: string, parentId: string, name: string, mime: string, bytes: Buffer) {
+  const q = [`name='${name.replace(/'/g, "\\'")}'`, `'${parentId}' in parents`, "trashed=false"].join(" and ");
+  const params = new URLSearchParams({ q, fields: "files(id)", pageSize: "1", supportsAllDrives: "true", includeItemsFromAllDrives: "true" });
+  const found = await driveComToken<{ files?: { id: string }[] }>(token, `${DRIVE_FILES}?${params.toString()}`);
+  const existente = found.files?.[0]?.id;
+  if (existente) {
+    return driveComToken<{ id: string; webViewLink?: string }>(
+      token,
+      `${DRIVE_UPLOAD}/${encodeURIComponent(existente)}?uploadType=media&supportsAllDrives=true&fields=id,webViewLink`,
+      { method: "PATCH", headers: { "Content-Type": mime, "Content-Length": String(bytes.length) }, body: bytes },
+    );
+  }
+  return uploadToGoogle(token, parentId, name, mime, bytes);
+}
+
 export function mapFile(row: DriveFileRow) {
   const openUrl = row.stored_in === "google" && row.web_view_link
     ? row.web_view_link
@@ -88,6 +107,7 @@ export function mapFile(row: DriveFileRow) {
     label: row.label,
     storedIn: row.stored_in === "google" ? "google" as const : "local" as const,
     createdAt: row.created_at,
+    contratoId: row.contrato_id ?? null,
   };
 }
 
@@ -124,22 +144,34 @@ export async function storeDriveFile(
       throw err instanceof Error ? err : new Error(msg || "upload recusado");
     }
     const uploaded = await uploadToGoogle(token, parent, name, file.mime, file.bytes);
-    await inserirFicheiroGoogle(db, {
-      id, driveId: uploaded.id, name: uploaded.name ?? name, mime: uploaded.mimeType ?? file.mime,
-      size: Number(uploaded.size ?? file.bytes.length), webViewLink: uploaded.webViewLink ?? null,
-      webContentLink: uploaded.webContentLink ?? null, folderPath: pathLabel,
-      kind: ctx.kind || "documento", regime: ctx.regime ?? null, turma: ctx.turma ?? null,
-      formando: ctx.formando ?? null, label: ctx.label ?? null, criadoPor: actorId ?? null, sha256,
-    });
+    try {
+      await inserirFicheiroGoogle(db, {
+        id, driveId: uploaded.id, name: uploaded.name ?? name, mime: uploaded.mimeType ?? file.mime,
+        size: Number(uploaded.size ?? file.bytes.length), webViewLink: uploaded.webViewLink ?? null,
+        webContentLink: uploaded.webContentLink ?? null, folderPath: pathLabel,
+        kind: ctx.kind || "documento", regime: ctx.regime ?? null, turma: ctx.turma ?? null,
+        formando: ctx.formando ?? null, label: ctx.label ?? null, criadoPor: actorId ?? null, sha256, contratoId: ctx.contratoId ?? null,
+      });
+    } catch (err) {
+      // Sem registo o ficheiro ficava órfão na Drive (ninguém o via nem apagava): sai com o erro.
+      await apagarNaGoogle(token, uploaded.id).catch(() => undefined);
+      throw err;
+    }
   } else if (!onVercel) {
     const localName = `${id}-${name}`;
     const localPath = join(driveDir(), localName);
     writeFileSync(localPath, file.bytes);
-    await inserirFicheiroLocal(db, {
-      id, name, mime: file.mime, size: file.bytes.length, folderPath: pathLabel,
-      kind: ctx.kind || "documento", regime: ctx.regime ?? null, turma: ctx.turma ?? null,
-      formando: ctx.formando ?? null, label: ctx.label ?? null, localPath: localName, criadoPor: actorId ?? null, sha256,
-    });
+    try {
+      await inserirFicheiroLocal(db, {
+        id, name, mime: file.mime, size: file.bytes.length, folderPath: pathLabel,
+        kind: ctx.kind || "documento", regime: ctx.regime ?? null, turma: ctx.turma ?? null,
+        formando: ctx.formando ?? null, label: ctx.label ?? null, localPath: localName, criadoPor: actorId ?? null, sha256,
+        contratoId: ctx.contratoId ?? null,
+      });
+    } catch (err) {
+      if (existsSync(localPath)) unlinkSync(localPath);
+      throw err;
+    }
   } else {
     console.error(JSON.stringify({
       msg: "drive sem token; anexo recusado",
@@ -188,19 +220,24 @@ export async function readDriveContent(db: Db, id: string) {
   return { name: file.name, mime: mimeServido(file.name), bytes: buf, redirect: null as string | null };
 }
 
+/** Apaga um ficheiro na Drive. Já não existir (404) conta como apagado; qualquer outra falha é erro. */
+async function apagarNaGoogle(token: string, driveId: string) {
+  const res = await fetch(`${DRIVE_FILES}/${encodeURIComponent(driveId)}?supportsAllDrives=true`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok && res.status !== 404) throw new Error("Não foi possível apagar o ficheiro na Drive.");
+}
+
 export async function apagarFicheiroSubstituido(db: Db, id: string) {
   const file = await ficheiroDrive(db, id);
   if (!file) return false;
   if (file.stored_in === "google" && file.drive_id) {
     const token = await tokenDrive(db).catch(() => null);
     if (token) {
-      const res = await fetch(`${DRIVE_FILES}/${encodeURIComponent(file.drive_id)}?supportsAllDrives=true`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok && res.status !== 404) {
+      await apagarNaGoogle(token, file.drive_id).catch(() => {
         throw new Error("Não foi possível apagar o ficheiro anterior na Drive.");
-      }
+      });
     }
   }
   if (file.local_path) {
@@ -211,17 +248,17 @@ export async function apagarFicheiroSubstituido(db: Db, id: string) {
   return true;
 }
 
+/**
+ * Apaga o ficheiro e o registo. O registo só sai depois de a Google confirmar (ou responder 404):
+ * sem ligação ou com erro, fica tudo como estava e o pedido falha, para não ficar um órfão na Drive.
+ */
 export async function deleteDriveFile(db: Db, id: string) {
   const file = await ficheiroDrive(db, id);
   if (!file) return false;
   if (file.stored_in === "google" && file.drive_id) {
     const token = await tokenDrive(db).catch(() => null);
-    if (token) {
-      await fetch(`${DRIVE_FILES}/${file.drive_id}?supportsAllDrives=true`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => undefined);
-    }
+    if (!token) throw new Error("Sem ligação ao Google Drive: o ficheiro não foi apagado. Volte a ligar a conta em Configurações.");
+    await apagarNaGoogle(token, file.drive_id);
   }
   if (file.local_path) {
     const path = join(driveDir(), file.local_path);

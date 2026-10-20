@@ -122,7 +122,7 @@ async function carregar(db: Db, turmaId: number): Promise<Dados | null> {
   const row = await turmaFinBase(db, turmaId);
   if (!row) return null;
   const [formandos, notas, certs, ficha, curso] = await Promise.all([
-    formandosFinComContacto(db, turmaId, row.nome, row.curso),
+    formandosFinComContacto(db, turmaId, row.nome),
     listarNotas(db, "fin", turmaId),
     certificadosFinComFicheiro(db, turmaId),
     fichaCursoFinPorNome(db, row.curso),

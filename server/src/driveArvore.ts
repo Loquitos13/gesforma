@@ -1,15 +1,17 @@
 import type { Db } from "./db/pool.js";
 import { turmaDoFormador } from "./sessaoAcesso.js";
 import {
-  apagarAtalho, atalhoDoDoc, atalhosDaTurma, atalhosOrfaos, caminhosDosDocsDoLead, docsNaDriveDoFormador, emailsAdmins,
-  emailsFormandosDaTurma, emailsSecretaria, formadorPorNome, formadoresPorNomes, gravarAtalho, gravarPastaFormador,
+  apagarAtalho, atalhoDoDoc, atalhosDaTurma, atalhosOrfaos, caminhosDosDocsDoLead, docsNaDriveDoFormador, emailsEquipaActiva,
+  emailsSecretaria, formadorPorNome, formadoresPorNomes, gravarAtalho, gravarPastaFormador,
   gravarPastaNaTurma, gravarPastaPendente, gravarPastasTurma, nomeDaTurma, nomeDoFormador, pastaDaPreinscricao,
   turmasComAtalhosDoFormador, turmasComEquipa,
 } from "./repos/driveArvore.js";
+import { contaGoogle } from "./repos/drive.js";
 import { PASTAS_FIN_ANTERIORES, TOPICOS_FIN } from "./dtpTopicosFin.js";
 import { sanitizeFileName } from "./ficheirosValidacao.js";
 import {
-  apagarItemGoogle, criarAtalhoDrive, garantirPastaFilha, moverPastaDrive, partilharPasta, raizDoProjecto, tokenDrive,
+  apagarItemGoogle, criarAtalhoDrive, garantirPastaFilha, moverPastaDrive, partilharPasta, permissoesDoItem, raizDoProjecto,
+  revogarPermissao, tokenDrive, type PapelDrive,
 } from "./googleDrive.js";
 
 export const ZONA_PENDENTES = "01_INSCRIÇÕES_PENDENTES";
@@ -19,6 +21,8 @@ export const ZONA_BOLSA = "00_BOLSA_FORMADORES";
 /** As 14 pastas da Drive são os tópicos do dossiê, pela mesma ordem e com o mesmo nome. */
 export const PASTAS_DTP = TOPICOS_FIN.map(t => t.pasta);
 
+/** «2. Recursos pedagógicos e materiais didáticos»: a única pasta da turma que os formadores vêem na Drive. */
+export const PASTA_MATERIAIS = PASTAS_DTP[1];
 export const PASTA_FORMADORES = PASTAS_DTP[2];
 export const PASTA_FORMANDOS = PASTAS_DTP[4];
 
@@ -56,23 +60,59 @@ export async function criarEstruturaDtp(
   return { turmaPastaId, formandosId, formadoresId, pastas };
 }
 
-async function emailsDaTurma(db: Db, input: {
-  regime: "gold" | "fin";
-  turmaId: number;
-  nome: string;
+const emailsValidos = (lista: string[]) => [...new Set(lista.map(e => e.trim().toLowerCase()).filter(e => e.includes("@")))];
+
+/**
+ * Quem tem acesso na Drive à pasta da turma:
+ * - a secretaria (admin e secretaria): editor da pasta inteira (o dossiê);
+ * - os formadores associados: leitor só de «2. Recursos pedagógicos e materiais didáticos»;
+ * - os formandos: nada. A pasta tem «5. Formandos» (CC, NIF, contratos, recibos) e as evidências do dossiê;
+ *   o formando vê os seus documentos e certificados pela área do formando, nunca pela Drive.
+ */
+async function acessosDaTurma(db: Db, input: {
   formador?: string;
   formadores?: string[];
   cronograma?: unknown;
 }) {
-  const admins = await emailsAdmins(db);
-  const secretaria = await emailsSecretaria(db);
-  const formandos = await emailsFormandosDaTurma(db, input.regime, input.turmaId, input.nome);
+  const secretaria = emailsValidos(await emailsSecretaria(db));
   const nomes = nomesNoCronograma(input.cronograma, [input.formador ?? "", ...(input.formadores ?? [])]);
-  const formadores = (await formadoresPorNomes(db, nomes)).map(f => f.email).filter(Boolean);
-  const valido = (lista: string[]) => lista.map(e => e.trim().toLowerCase()).filter(e => e.includes("@"));
-  const turma = new Set(valido([...admins, ...formandos, ...formadores]));
-  const dossie = new Set(valido(secretaria));
-  return { turma: [...turma], dossie: [...dossie], nomes };
+  const formadores = emailsValidos((await formadoresPorNomes(db, nomes)).map(f => f.email ?? ""));
+  // Nunca se retira a partilha à conta dona da Drive nem a quem trabalha na equipa.
+  const conta = (await contaGoogle(db))?.email ?? "";
+  const protegidos = new Set(emailsValidos([...await emailsEquipaActiva(db), conta]));
+  return { secretaria, formadores, protegidos, nomes };
+}
+
+/**
+ * Deixa as partilhas pessoais de um item iguais às pretendidas: acrescenta as que faltam e tira as de quem
+ * já não devia lá estar (formandos, formadores que saíram da turma, contas desactivadas). Não toca no dono,
+ * nas partilhas herdadas da pasta de cima, nas de domínio/grupo/ligação nem nas contas protegidas.
+ */
+export async function acertarPartilhas(
+  token: string,
+  itemId: string,
+  pretendidas: Map<string, PapelDrive>,
+  protegidos: Set<string>,
+) {
+  const actuais = await permissoesDoItem(token, itemId);
+  const ja = new Set<string>();
+  for (const p of actuais) {
+    const email = (p.emailAddress ?? "").trim().toLowerCase();
+    if (p.type !== "user" || !email || p.role === "owner") continue;
+    if (p.permissionDetails?.length && p.permissionDetails.every(d => d.inherited)) continue;
+    const papel = pretendidas.get(email);
+    if (papel && (p.role === papel || (papel === "reader" && protegidos.has(email)))) {
+      ja.add(email);
+      continue;
+    }
+    if (!papel && protegidos.has(email)) continue;
+    // Papel errado (p.ex. editor antigo que agora só lê) ou pessoa que já não pertence: sai.
+    await revogarPermissao(token, itemId, p.id).catch(() => undefined);
+  }
+  for (const [email, papel] of pretendidas) {
+    if (ja.has(email)) continue;
+    await partilharPasta(token, itemId, email, papel).catch(() => undefined);
+  }
 }
 
 export async function prepararTurmaDrive(db: Db, input: {
@@ -87,12 +127,11 @@ export async function prepararTurmaDrive(db: Db, input: {
   if (!token) return { ok: false as const, reason: "drive" as const };
   const estrutura = await criarEstruturaDtp(db, input, token);
   if (!estrutura) return { ok: false as const, reason: "drive" as const };
-  const pessoas = await emailsDaTurma(db, input);
-  for (const email of pessoas.turma) {
-    await partilharPasta(token, estrutura.turmaPastaId, email).catch(() => undefined);
-  }
-  for (const email of pessoas.dossie) {
-    await partilharPasta(token, estrutura.turmaPastaId, email).catch(() => undefined);
+  const pessoas = await acessosDaTurma(db, input);
+  await acertarPartilhas(token, estrutura.turmaPastaId, new Map(pessoas.secretaria.map(e => [e, "writer" as const])), pessoas.protegidos);
+  const materiaisId = estrutura.pastas[PASTA_MATERIAIS];
+  if (materiaisId) {
+    await acertarPartilhas(token, materiaisId, new Map(pessoas.formadores.map(e => [e, "reader" as const])), pessoas.protegidos);
   }
   await atalhosDosNomes(db, token, input.regime, input.turmaId, estrutura.formadoresId, pessoas.nomes);
   return { ok: true as const, ...estrutura };
@@ -278,5 +317,5 @@ export function nomesNoCronograma(cronograma: unknown, extra: string[]) {
   return [...nomes];
 }
 
-/** Cria o dossiê da turma, partilha a pasta e liga os atalhos dos formadores. */
+/** Cria o dossiê da turma, acerta as partilhas (dá e retira) e liga os atalhos dos formadores. */
 export const syncTurmaDriveAccess = prepararTurmaDrive;

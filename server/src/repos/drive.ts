@@ -39,6 +39,8 @@ export type DriveFileRow = {
   created_by: string | null;
   sha256?: string | null;
   created_at: string;
+  /** PDF de um contrato assinado: vale a visibilidade desse contrato. */
+  contrato_id: number | null;
 };
 
 export function lerConfigDrive(c: Consulta) {
@@ -93,26 +95,28 @@ export async function inserirFicheiroGoogle(c: Consulta, f: {
   id: string; driveId: string; name: string; mime: string; size: number; webViewLink: string | null; webContentLink: string | null;
   folderPath: string; kind: string; regime: string | null; turma: string | null; formando: string | null; label: string | null; criadoPor: string | null;
   sha256?: string | null;
+  contratoId?: number | null;
 }) {
   await many(c,
     `INSERT INTO drive_files
       (id, drive_id, name, mime_type, size_bytes, web_view_link, web_content_link, folder_path,
-       kind, regime, turma, formando, label, stored_in, created_by, sha256)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'google',$14,$15)`,
+       kind, regime, turma, formando, label, stored_in, created_by, sha256, contrato_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'google',$14,$15,$16)`,
     [f.id, f.driveId, f.name, f.mime, f.size, f.webViewLink, f.webContentLink, f.folderPath,
-      f.kind, f.regime, f.turma, f.formando, f.label, f.criadoPor, f.sha256 ?? null]);
+      f.kind, f.regime, f.turma, f.formando, f.label, f.criadoPor, f.sha256 ?? null, f.contratoId ?? null]);
 }
 
 export async function inserirFicheiroLocal(c: Consulta, f: {
   id: string; name: string; mime: string; size: number; folderPath: string; kind: string;
   regime: string | null; turma: string | null; formando: string | null; label: string | null; localPath: string; criadoPor: string | null;
   sha256?: string | null;
+  contratoId?: number | null;
 }) {
   await many(c,
     `INSERT INTO drive_files
-      (id, name, mime_type, size_bytes, folder_path, kind, regime, turma, formando, label, stored_in, local_path, created_by, sha256)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'local',$11,$12,$13)`,
-    [f.id, f.name, f.mime, f.size, f.folderPath, f.kind, f.regime, f.turma, f.formando, f.label, f.localPath, f.criadoPor, f.sha256 ?? null]);
+      (id, name, mime_type, size_bytes, folder_path, kind, regime, turma, formando, label, stored_in, local_path, created_by, sha256, contrato_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'local',$11,$12,$13,$14)`,
+    [f.id, f.name, f.mime, f.size, f.folderPath, f.kind, f.regime, f.turma, f.formando, f.label, f.localPath, f.criadoPor, f.sha256 ?? null, f.contratoId ?? null]);
 }
 
 export function ficheiroDrive(c: Consulta, id: string) {

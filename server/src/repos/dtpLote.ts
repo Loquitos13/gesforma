@@ -48,19 +48,16 @@ export async function formandosGoldDasTurmas(c: Consulta, ids: number[], nomes: 
   );
 }
 
-/** Formandos da Financiada: os ligados às turmas e os sem turma (contam pelo nome ou pelo curso). */
-export async function formandosFinDasTurmas(c: Consulta, ids: number[]) {
+/** Formandos da Financiada: os ligados às turmas e, sem id, os que apontam para elas pelo nome. */
+export async function formandosFinDasTurmas(c: Consulta, ids: number[], nomes: string[]) {
+  if (!ids.length) return [];
   return many<{ id: number; nome: string; apelido: string; docs: unknown; turma_id: number | null; turma: string; curso: string }>(
     c,
     `SELECT id, nome, coalesce(apelido, '') AS apelido, docs, turma_id, coalesce(turma, '') AS turma, coalesce(curso, '') AS curso
        FROM formandos_fin
-      WHERE turma_id = ANY($1::int[]) OR turma_id IS NULL`,
-    [pgIntArray(ids)],
+      WHERE turma_id = ANY($1::int[]) OR (turma_id IS NULL AND turma = ANY($2::text[]))`,
+    [pgIntArray(ids), pgTextArray(nomes)],
   );
-}
-
-export async function nomesTurmasFin(c: Consulta) {
-  return (await many<{ nome: string }>(c, "SELECT nome FROM turmas_fin")).map(r => r.nome);
 }
 
 /** Para cada turma e inquérito do regime: se já foi enviado. */

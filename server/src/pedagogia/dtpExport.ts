@@ -14,7 +14,15 @@ import { ITEM_PERGUNTAS, NOME_PERGUNTAS, perguntasEnviadas } from "./inqueritos.
 import { dadosRelatorioFinal } from "./relatorio.js";
 import { asArr, nomeArquivoDtp, uniqueZipPath, type Regime } from "./util.js";
 
-export async function exportarDossie(db: Db, actorId: string | undefined, regime: Regime, turma: TurmaRow) {
+/** Descargas da Drive em paralelo, poucas de cada vez (a API da Google limita pedidos por utilizador). */
+const DESCARGAS_EM_PARALELO = 4;
+
+export type OpcoesExport = {
+  /** Até quando (Date.now()) se começam descargas; as que ficam de fora são listadas no índice. */
+  prazo?: number;
+};
+
+export async function exportarDossie(db: Db, actorId: string | undefined, regime: Regime, turma: TurmaRow, opts: OpcoesExport = {}) {
   const dtp = await dtpForTurma(db, regime, turma);
   const root = pastaSegura(dtpPastaNome(regime, turma.nome));
   const used = new Set<string>();
@@ -39,13 +47,13 @@ export async function exportarDossie(db: Db, actorId: string | undefined, regime
     add(`${root}/${cat.pasta}/_indice.txt`, Buffer.from(linhas.join("\n"), "utf8"));
   }
 
+  // Primeiro junta-se o que descarregar (cada ficheiro uma vez, no primeiro sítio), depois descarrega-se em paralelo.
   const seen = new Set<string>();
+  const pedidos: { fileId: string; rel: string }[] = [];
   const pushDrive = async (fileId: string, rel: string) => {
     if (!fileId || seen.has(fileId)) return;
-    const content = await readDriveContent(db, fileId).catch(() => null);
-    if (!content?.bytes) return;
     seen.add(fileId);
-    add(rel, content.bytes);
+    pedidos.push({ fileId, rel });
   };
 
   for (const item of dtp.items) {
@@ -95,6 +103,23 @@ export async function exportarDossie(db: Db, actorId: string | undefined, regime
       }));
     }
   }
+
+  const descarregados: (Buffer | null)[] = new Array(pedidos.length).fill(null);
+  const foraDoPrazo: string[] = [];
+  let proximo = 0;
+  const trabalhador = async () => {
+    while (proximo < pedidos.length) {
+      const i = proximo++;
+      if (opts.prazo != null && Date.now() > opts.prazo) {
+        foraDoPrazo.push(pedidos[i]!.rel);
+        continue;
+      }
+      const content = await readDriveContent(db, pedidos[i]!.fileId).catch(() => null);
+      descarregados[i] = content?.bytes ?? null;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(DESCARGAS_EM_PARALELO, pedidos.length) }, trabalhador));
+  pedidos.forEach((p, i) => { const bytes = descarregados[i]; if (bytes) add(p.rel, bytes); });
 
   const gerados = await montarPdfsDossie(db, regime, turma);
   const pastaPed = DTP_CATEGORIAS.find(c => c.id === "pedagogia")?.pasta ?? "04-Pedagogia";
@@ -147,8 +172,11 @@ export async function exportarDossie(db: Db, actorId: string | undefined, regime
     "Ficheiros neste ZIP:",
     ...files.map(f => `  ${f.name}`),
     pdfs.length ? "" : "Ainda não há PDFs no Drive desta turma. As pastas e o índice ficam no ZIP para o arquivo.",
+    ...(foraDoPrazo.length
+      ? ["", `Ficheiros que não couberam no tempo desta exportação (${foraDoPrazo.length}); estão na Drive da turma:`, ...foraDoPrazo.sort().map(f => `  ${f}`)]
+      : []),
   ].join("\n");
   add(`${root}/00-Indice geral.txt`, Buffer.from(indice, "utf8"));
 
-  return { zip: zipStore(files), nome: dtpZipNome(regime, turma.nome), ficheiros: pdfs.length, pasta: root };
+  return { zip: zipStore(files), nome: dtpZipNome(regime, turma.nome), ficheiros: pdfs.length, pasta: root, foraDoPrazo: foraDoPrazo.length };
 }

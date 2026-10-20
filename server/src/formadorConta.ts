@@ -2,30 +2,40 @@ import { randomUUID } from "node:crypto";
 import { formadorForaDoSlot, slotsDoFormador } from "../../src/partilhado/disponibilidade.js";
 import { gerarPalavraPasse } from "../../src/partilhado/passwordPolicy.js";
 import type { Db } from "./db/pool.js";
-import { disponibilidades, estaAlocado, inserirUtilizadorFormador, utilizadorPorEmail } from "./repos/formadores.js";
+import {
+  contaLigadaAOutraFicha, disponibilidades, estaAlocado, inserirUtilizadorFormador, utilizadorPorEmail,
+} from "./repos/formadores.js";
+import type { Consulta } from "./repos/sql.js";
 import { hashPassword, isEmail, normalizeEmail } from "./security.js";
 
-function uniqueViolation(err: unknown) {
-  return typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23505";
-}
+/** O email da ficha pertence a uma conta que não pode ser a deste formador (equipa, formando ou outra ficha). */
+export class ContaFormadorEmUso extends Error {}
 
-/** Cria a conta de formador (palavra-passe temporária) ou liga-se à que já existe com o mesmo email. */
-export async function garantirContaFormador(db: Db, nome: string, emailRaw: string) {
+/**
+ * Cria a conta de formador (palavra-passe temporária) ou liga-se à conta de formador que já existe com o
+ * mesmo email, se não estiver ligada a outra ficha. Uma conta da equipa ou de formando nunca se liga:
+ * a ficha passaria a abrir-se (e a ser desactivada) com essa conta.
+ */
+export async function garantirContaFormador(c: Consulta, nome: string, emailRaw: string, fichaId: number) {
   const email = normalizeEmail(emailRaw);
   if (!email || !isEmail(email)) return null;
-  const existente = await utilizadorPorEmail(db, email);
-  if (existente) return { userId: existente.id, email, criado: false as const };
-  const password = gerarPalavraPasse();
-  const id = randomUUID();
-  try {
-    await inserirUtilizadorFormador(db, { id, nome: nome.trim() || email, email, hash: await hashPassword(password) });
-  } catch (err) {
-    if (!uniqueViolation(err)) throw err;
-    const outra = await utilizadorPorEmail(db, email);
-    if (!outra) throw err;
-    return { userId: outra.id, email, criado: false as const };
+  let existente = await utilizadorPorEmail(c, email);
+  if (!existente) {
+    const password = gerarPalavraPasse();
+    const id = randomUUID();
+    if (await inserirUtilizadorFormador(c, { id, nome: nome.trim() || email, email, hash: await hashPassword(password) })) {
+      return { userId: id, email, criado: true as const, password };
+    }
+    existente = await utilizadorPorEmail(c, email);
+    if (!existente) return null;
   }
-  return { userId: id, email, criado: true as const, password };
+  if (existente.role !== "formador") {
+    throw new ContaFormadorEmUso(`O email ${email} é de uma conta que não é de formador: use outro email na ficha.`);
+  }
+  if (await contaLigadaAOutraFicha(c, existente.id, fichaId)) {
+    throw new ContaFormadorEmUso(`O email ${email} já é a conta de acesso de outro formador.`);
+  }
+  return { userId: existente.id, email, criado: false as const };
 }
 
 export async function formadorEstaAlocado(db: Db, nome: string) {

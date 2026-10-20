@@ -23,7 +23,7 @@ describe("palavra-passe alterada na Utilizadores", () => {
     const { seed } = await import("../src/db/seed.js");
     const email = config.adminEmail;
     const id = await idDe(ctx, email);
-    const r = await pedido(ctx, "admin", "POST", `/v1/users/${id}/password`, { password: NOVA, revokeSessions: true });
+    const r = await pedido(ctx, "admin", "POST", `/v1/utilizadores/${id}/password`, { password: NOVA, revokeSessions: true });
     expect(r.statusCode, r.body).toBe(200);
     expect((await login(ctx, email, NOVA)).statusCode).toBe(200);
     await seed(ctx.db);
@@ -36,7 +36,7 @@ describe("palavra-passe alterada na Utilizadores", () => {
     const { seed } = await import("../src/db/seed.js");
     const email = "aguiar@ena.pt";
     const id = await idDe(ctx, email);
-    expect((await pedido(ctx, "admin", "POST", `/v1/users/${id}/password`, { password: NOVA })).statusCode).toBe(200);
+    expect((await pedido(ctx, "admin", "POST", `/v1/utilizadores/${id}/password`, { password: NOVA })).statusCode).toBe(200);
     await seed(ctx.db);
     expect((await login(ctx, email, NOVA)).statusCode).toBe(200);
   });

@@ -417,10 +417,17 @@ export async function disponibilidades(c: Consulta, nomes: string[]) {
 // ─── Contas de acesso ───────────────────────────────────────────────────────
 
 export async function utilizadorPorEmail(c: Consulta, email: string) {
-  return one<{ id: string }>(c, "SELECT id FROM users WHERE lower(email) = $1", [email]);
+  return one<{ id: string; role: string }>(c, "SELECT id, role FROM users WHERE lower(email) = $1", [email]);
 }
 
+/** Cria a conta; `false` se o email já tem conta (sem erro, para servir dentro de uma transacção). */
 export async function inserirUtilizadorFormador(c: Consulta, d: { id: string; nome: string; email: string; hash: string }) {
-  await valor(c, `INSERT INTO users (id, name, email, password_hash, role, active, must_change_password)
-     VALUES ($1,$2,$3,$4,'formador',true,true) RETURNING id`, [d.id, d.nome, d.email, d.hash]);
+  const id = await valor(c, `INSERT INTO users (id, name, email, password_hash, role, active, must_change_password)
+     VALUES ($1,$2,$3,$4,'formador',true,true) ON CONFLICT (email) DO NOTHING RETURNING id`, [d.id, d.nome, d.email, d.hash]);
+  return id != null;
+}
+
+/** A conta já é a de outra ficha de formador? */
+export async function contaLigadaAOutraFicha(c: Consulta, userId: string, fichaId: number) {
+  return (await valor(c, "SELECT 1 FROM formadores WHERE user_id = $1::uuid AND id <> $2 LIMIT 1", [userId, fichaId])) != null;
 }

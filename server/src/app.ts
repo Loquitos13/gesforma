@@ -120,6 +120,11 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     if (!req.actor) {
       return reply.code(401).send({ error: "sessão inválida" });
     }
+    // Palavra-passe temporária: até a trocar, a sessão só lê quem é e muda a palavra-passe (sair é público).
+    // Vale para a equipa, formadores e a área do formando no site (que usa as mesmas duas rotas).
+    if (req.actor.mustChangePassword && !((req.method === "GET" && path === "/v1/me") || (req.method === "POST" && path === "/v1/auth/password"))) {
+      return reply.code(403).send({ error: "Tem de mudar a palavra-passe antes de continuar.", mudarPalavraPasse: true });
+    }
     if (kind === "formando" && req.actor.role !== "formando") {
       return reply.code(403).send({ error: "a área do formando não abre o GesForma" });
     }
@@ -162,7 +167,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   // Escritas bem-sucedidas que podem mexer no dossiê obrigam a recalcular a vista geral.
   // Áreas que não tocam no dossiê (notificações, emails, blog, comercial, sistema…) não invalidam:
   // recalcular a matriz custa dezenas de consultas e acontecia a cada clique.
-  const SEM_DTP = /^\/v1\/(notificacoes|auth|email|blog|campanhas|equipa|utilizadores|users|configuracoes|settings|listas|catalogos|opcoes|auditoria|sistema|apoios|whatsapp|crm\/(clientes|parceiros|propostas|modelos|contratos))(\/|\?|$)/;
+  const SEM_DTP = /^\/v1\/(notificacoes|auth|email|blog|campanhas|equipa|utilizadores|configuracoes|settings|listas|catalogos|opcoes|auditoria|sistema|apoios|whatsapp|crm\/(clientes|parceiros|propostas|modelos|contratos))(\/|\?|$)/;
   app.addHook("onSend", async (req, reply, payload) => {
     if (!["GET", "HEAD", "OPTIONS"].includes(req.method) && reply.statusCode < 400 && !SEM_DTP.test(req.url)) invalidarDtp();
     return payload;

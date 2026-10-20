@@ -69,6 +69,12 @@ export const ENTIDADE_OMISSAO: Entidade = {
   telefonesZona: "",
 };
 
+/** Telefones por zona: até 6 linhas de 120 caracteres. */
+const TELEFONES_ZONA_LINHAS = 6;
+const TELEFONES_ZONA_CHARS = 120;
+/** Tamanho máximo do texto enviado (cada linha com espaços e fim de linha «\r\n» à volta). */
+export const MAX_TELEFONES_ZONA = TELEFONES_ZONA_LINHAS * (TELEFONES_ZONA_CHARS + 8);
+
 const BOOL = new Set(["1", "true", "sim", "on"]);
 
 function pct(v: unknown, omissao: number) {
@@ -105,7 +111,7 @@ export function parseEntidade(values: Record<string, unknown> | undefined): Enti
     if (s) out[k] = s.slice(0, 200);
   }
   // Várias linhas (até 6), cada uma com um contacto por zona.
-  out.telefonesZona = String(v.telefonesZona ?? "").split(/\r?\n/).map(l => l.trim().slice(0, 120)).filter(Boolean).slice(0, 6).join("\n");
+  out.telefonesZona = String(v.telefonesZona ?? "").split(/\r?\n/).map(l => l.trim().slice(0, TELEFONES_ZONA_CHARS)).filter(Boolean).slice(0, TELEFONES_ZONA_LINHAS).join("\n");
   return out;
 }
 

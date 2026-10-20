@@ -222,15 +222,30 @@ function marcaDoSeed() {
   return `seed-${h.digest("hex").slice(0, 16)}`;
 }
 
-export async function seed(db: Db, opts: { forcar?: boolean } = {}) {
+/**
+ * Admin das variáveis de ambiente: só quando a base não tem nenhum administrador (primeiro arranque).
+ * Antes bastava faltar o email do ambiente para o recriar a cada arranque a frio, com a palavra-passe
+ * conhecida, mesmo que a administração o tivesse apagado ou mudado de email. Fica na auditoria.
+ */
+async function criarAdminDoAmbiente(db: Db) {
+  const admin = await db.query("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1");
+  if (admin.rows[0]) return;
   const email = normalizeEmail(config.adminEmail);
-  const existing = await db.query<{ id: string }>("SELECT id FROM users WHERE email = $1", [email]);
-  if (!existing.rows[0]) {
-    await db.query(
-      "INSERT INTO users (id, name, email, password_hash, role, active) VALUES ($1, $2, $3, $4, 'admin', true)",
-      [randomUUID(), config.adminName, email, await hashPassword(config.adminPassword)],
-    );
-  }
+  const id = randomUUID();
+  const criado = await db.query<{ id: string }>(
+    `INSERT INTO users (id, name, email, password_hash, role, active) VALUES ($1, $2, $3, $4, 'admin', true)
+     ON CONFLICT (email) DO NOTHING RETURNING id`,
+    [id, config.adminName, email, await hashPassword(config.adminPassword)],
+  );
+  if (!criado.rows[0]) return;
+  await db.query(
+    "INSERT INTO audit_log (actor_id, action, entity, entity_id, meta) VALUES (NULL, 'user.seed_admin', 'user', $1, $2::jsonb)",
+    [id, { email }],
+  );
+}
+
+export async function seed(db: Db, opts: { forcar?: boolean } = {}) {
+  await criarAdminDoAmbiente(db);
   const marca = marcaDoSeed();
   if (!opts.forcar) {
     const feito = await db.query("SELECT 1 FROM schema_migrations WHERE id = $1", [marca]);

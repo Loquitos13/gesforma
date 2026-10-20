@@ -7,7 +7,7 @@ import { cx } from "../../partilhado/ui";
 import type { Destino, Vista } from "../rotasGesforma";
 import { TAREFAS, destinoTarefa } from "../vistas/painel/painelDados";
 import { Icone } from "./Icones";
-import { VISTAS_FORMADOR } from "./navegacao";
+import { VISTAS_FORMADOR, vistaNoMenuDoPerfil } from "./navegacao";
 
 type Linha = { tipo: string; nome: string; sub: string; grupo?: string } & Destino;
 
@@ -54,7 +54,7 @@ function useAtalhosDoDia(aberta: boolean): Linha[] {
   }, [dados, user.role]);
 }
 
-/** Pesquisa global (Ctrl+K): pessoas, turmas, cursos e atalhos do dia. */
+/** Pesquisa global (Ctrl+K): pessoas, turmas, cursos e atalhos do dia (o comercial: pré-inscrições). */
 export function Pesquisa({ aberta, onFechar, onNavigate }: { aberta: boolean; onFechar: () => void; onNavigate: (d: Destino) => void }) {
   const { user } = useAuth();
   const [q, setQ] = useState("");
@@ -82,7 +82,10 @@ export function Pesquisa({ aberta, onFechar, onNavigate }: { aberta: boolean; on
         setTipoProcura(r.kindLabel);
         setGrupos(r.groups.map(g => ({
           label: g.label,
-          items: g.items.map(deResultado).filter(i => user.role !== "formador" || (VISTAS_FORMADOR.has(i.view) && i.tab !== "dtp")),
+          // Só o que o perfil abre (o servidor já filtra; o comercial, por exemplo, só encontra pré-inscrições).
+          items: g.items.map(deResultado).filter(i => user.role === "formador"
+            ? VISTAS_FORMADOR.has(i.view) && i.tab !== "dtp"
+            : vistaNoMenuDoPerfil(user.role, i.view)),
         })).filter(g => g.items.length));
       }).catch(() => { setTipoProcura(null); setGrupos([]); }).finally(() => setAProcurar(false));
     }, 180);

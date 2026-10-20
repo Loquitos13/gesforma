@@ -10,12 +10,16 @@ function tomOcupacao(pct: number) {
   return pct >= 75 ? "#1F7A4D" : pct >= 40 ? "#9A5B00" : "#B42318";
 }
 
-export function CartaoProximas({ regime, turmas, navigate }: { regime: RegimePainel; turmas: Painel["proximasTurmas"]; navigate: Navegar }) {
+/** `cronogramas`: o comercial não abre turmas; as próximas turmas levam aos Cronogramas (só leitura). */
+export function CartaoProximas({ regime, turmas, navigate, cronogramas = false }: {
+  regime: RegimePainel; turmas: Painel["proximasTurmas"]; navigate: Navegar; cronogramas?: boolean;
+}) {
   const vista = regime === "fin" ? "fin-cockpit-turma" : "gold-cockpit-turma";
+  const abrir = (id: number) => navigate(cronogramas ? "gold-cronogramas" : { view: vista, turmaId: id });
   return (
     <Cartao
       titulo="Próximas turmas"
-      acoes={<button type="button" onClick={() => navigate(regime === "fin" ? "fin-turmas" : "gold-turmas")} className="text-[13px] font-semibold text-ligacao hover:underline">Turmas</button>}
+      acoes={<button type="button" onClick={() => navigate(cronogramas ? "gold-cronogramas" : regime === "fin" ? "fin-turmas" : "gold-turmas")} className="text-[13px] font-semibold text-ligacao hover:underline">{cronogramas ? "Cronogramas" : "Turmas"}</button>}
     >
       {turmas.length === 0 && <p className="m-0 text-[13px] text-tinta-suave">Sem turmas marcadas a partir de hoje.</p>}
       <ul className="m-0 p-0 list-none flex flex-col gap-2">
@@ -24,7 +28,7 @@ export function CartaoProximas({ regime, turmas, navigate }: { regime: RegimePai
           const pct = t.capacidade ? Math.min(100, Math.round((ocupadas / t.capacidade) * 100)) : 0;
           return (
             <li key={t.id}>
-              <button type="button" onClick={() => navigate({ view: vista, turmaId: t.id })} className="num w-full text-left bg-transparent border-0 p-0 pb-2 border-b border-linha-suave rounded hover:bg-fundo">
+              <button type="button" onClick={() => abrir(t.id)} className="num w-full text-left bg-transparent border-0 p-0 pb-2 border-b border-linha-suave rounded hover:bg-fundo">
                 <span className="flex gap-2 text-[13px]">
                   <span className="font-semibold text-tinta truncate">{t.nome}</span>
                   <span className="ml-auto text-tinta-suave shrink-0">{data(t.inicio).slice(0, 5)}</span>

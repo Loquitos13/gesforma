@@ -1,12 +1,25 @@
 // Blocos do topo dos painéis: período e filtros, indicadores, "a tratar hoje", funil e "como conheceram a ENA".
 import { useState } from "react";
+import { useAuth } from "../../../partilhado/AuthGate";
 import type { EtapaFunil, IndicadorPainel, Painel, RegimePainel, TarefaPainel } from "../../../partilhado/api/painel";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import {
   BarrasHorizontais, Cartao, Filtros, Kpi, KpiFaixa, Separadores, cx, evolucao, num, TOM_CLASSES, type FiltroSelecao,
 } from "../../../partilhado/ui";
 import type { Navegar } from "../../shell/tipos";
+import { vistaNoMenuDoPerfil } from "../../shell/navegacao";
+import type { Destino } from "../../rotasGesforma";
 import { PRESETS, TAREFAS, capacidadeDaVista, destinoIndicador, destinoTarefa, type PresetPeriodo } from "./painelDados";
+
+/** O destino abre para este perfil? A capacidade e a vista no menu (o comercial só abre as de vendas). */
+function useAbre(pode: (c: string) => boolean) {
+  const { user } = useAuth();
+  return (destino: Destino | null): destino is Destino => {
+    if (!destino) return false;
+    const cap = capacidadeDaVista(destino.view);
+    return (!cap || pode(cap)) && vistaNoMenuDoPerfil(user.role, destino.view);
+  };
+}
 
 export type ValoresFiltro = {
   periodo: string; de: string; ate: string; curso: string; local: string; horario: string; financiador: string; eixo: string;
@@ -76,12 +89,12 @@ export function FaixaIndicadores({ regime, kpis, comparado, navigate, pode }: {
   navigate: Navegar;
   pode: (c: string) => boolean;
 }) {
+  const podeAbrir = useAbre(pode);
   return (
     <KpiFaixa>
       {kpis.map(k => {
         const destino = destinoIndicador(regime, k.id);
-        const cap = destino ? capacidadeDaVista(destino.view) : null;
-        const abre = destino && (!cap || pode(cap));
+        const abre = podeAbrir(destino);
         return (
           <Kpi
             key={k.id}
@@ -104,6 +117,7 @@ export function CartaoATratar({ regime, tarefas, navigate, pode }: {
   navigate: Navegar;
   pode: (c: string) => boolean;
 }) {
+  const podeAbrir = useAbre(pode);
   const conhecidas = tarefas.filter(t => TAREFAS[regime][t.id]);
   const pendentes = conhecidas.filter(t => t.n > 0);
   return (
@@ -112,8 +126,7 @@ export function CartaoATratar({ regime, tarefas, navigate, pode }: {
         {conhecidas.map(t => {
           const def = TAREFAS[regime][t.id]!;
           const destino = destinoTarefa(regime, t.id, t.leadId);
-          const cap = destino ? capacidadeDaVista(destino.view) : null;
-          const abre = destino && (!cap || pode(cap));
+          const abre = podeAbrir(destino);
           const corpo = (
             <span className="num flex items-center gap-2.5 py-2.5 border-t border-linha-suave w-full text-left">
               <span className={cx("w-8 text-right text-base font-bold", t.n > 0 ? TOM_CLASSES[def.tom].texto : "text-tinta-fraca")}>{num(t.n)}</span>

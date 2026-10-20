@@ -1,3 +1,4 @@
+import { comercialAbre } from "../../partilhado/vistasComercial";
 import type { Vista } from "../rotasGesforma";
 import type { NomeIcone } from "./Icones";
 
@@ -17,6 +18,8 @@ export const MENU: GrupoMenu[] = [
     { label: "Equipa", view: "gold-equipa", icon: "pessoas" },
     { label: "Formandos", view: "gold-formandos-turmas", icon: "pessoas" },
     { label: "Campanhas", view: "gold-campanhas", icon: "campanha" },
+    // Só no menu do comercial (as turmas, só leitura): os outros perfis Gold têm as Turmas.
+    { label: "Cronogramas", view: "gold-cronogramas", icon: "calendario" },
     { label: "Edição de Cursos", icon: "livro", children: [
       { label: "Cursos Gold", view: "gold-cursos" }, { label: "Módulos", view: "gold-modulos" },
       { label: "Conteúdos", view: "gold-conteudos" }, { label: "Datas", view: "gold-datas" },
@@ -83,22 +86,38 @@ export function painelDoPerfil(role: string): Vista {
 
 function gruposDoPerfil(role: string): string[] {
   if (role === "formador") return ["Formador"];
-  if (role === "comercial") return ["Gold", "Gestão"];
   if (role === "financiada") return ["Financiada", "Gestão"];
   return ["Gold", "Financiada", "Gestão", "Sistema"];
 }
 
+/** O comercial só vende: do menu ficam as vistas de `VISTAS_COMERCIAL` (submenus sem filhos desaparecem). */
+function soVendas(g: GrupoMenu): GrupoMenu {
+  const items: ItemMenu[] = [];
+  for (const item of g.items) {
+    if (item.view) {
+      if (comercialAbre(item.view)) items.push(item);
+      continue;
+    }
+    const children = item.children?.filter(c => comercialAbre(c.view)) ?? [];
+    if (children.length) items.push({ ...item, children });
+  }
+  return { ...g, items };
+}
+
 export function menuDoPerfil(role: string): GrupoMenu[] {
   if (role === "formador") return [MENU_FORMADOR];
+  if (role === "comercial") return MENU.map(soVendas).filter(g => g.items.length);
   const permitidos = gruposDoPerfil(role);
   return MENU
     .filter(g => permitidos.includes(g.group))
+    // «Cronogramas» é a vista de vendas das turmas: quem gere turmas usa as Turmas.
+    .map(g => ({ ...g, items: g.items.filter(item => item.view !== "gold-cronogramas") }))
     .map(g => (g.group !== "Sistema" || role === "admin")
       ? g
       : { ...g, items: g.items.filter(item => item.label !== "Gestão" && item.view !== "site") })
     // Os serviços para empresas são conteúdo do site: só a administração os edita (o servidor também o impõe).
     .map(g => (g.group === "Gestão" && role !== "admin") ? { ...g, items: g.items.filter(item => item.view !== "empresas-servicos") } : g)
-    // O blog é da equipa comercial e da secretaria: a Financiada vê só as listas de opções em Gestão.
+    // O blog é da secretaria (e do comercial, ver soVendas): a Financiada vê só as listas de opções em Gestão.
     .map(g => (g.group === "Gestão" && role === "financiada") ? { ...g, items: g.items.filter(item => item.label !== "Blog") } : g);
 }
 
@@ -111,6 +130,9 @@ const VISTAS_LIVRES = new Set<Vista>(["notificacoes"]);
  */
 export function vistaNoMenuDoPerfil(role: string, v: Vista): boolean {
   if (VISTAS_LIVRES.has(v)) return true;
+  if (role === "comercial") return comercialAbre(v);
+  // Os cronogramas (só leitura) abrem-se pelo endereço a quem vê as turmas Gold.
+  if (v === "gold-cronogramas") return vistaNoMenuDoPerfil(role, "gold-turmas");
   const alvos = v === "formador-ficha" || v === "formadores" ? ["gold-formadores", "fin-formadores"] as Vista[] : [vistaDoMenu(v)];
   return menuDoPerfil(role).some(g => g.items.some(item =>
     (item.view && alvos.includes(item.view)) || item.children?.some(c => alvos.includes(c.view))));
@@ -148,7 +170,7 @@ export const TITULOS: Partial<Record<Vista, string>> = {
   "gold-campanhas": "Campanhas", "gold-cursos": "Cursos", "gold-curso-ficha": "Ficha do curso",
   "gold-datas": "Datas", "gold-horarios": "Horários", "gold-locais": "Locais", "gold-areas-tematicas": "Áreas Temáticas",
   "gold-modulos": "Módulos", "gold-conteudos": "Conteúdos",
-  "gold-turmas": "Turmas", "gold-formadores": "Formadores", formadores: "Formadores", "formador-ficha": "Ficha do formador",
+  "gold-turmas": "Turmas", "gold-cronogramas": "Cronogramas", "gold-formadores": "Formadores", formadores: "Formadores", "formador-ficha": "Ficha do formador",
   "gold-cockpit-turma": "Turma", "gold-dtp": "Dossiê TP", "gold-inqueritos": "Inquéritos",
   "fin-cursos": "Cursos", "fin-curso-ficha": "Ficha do curso", "fin-turmas": "Turmas", "fin-formadores": "Formadores",
   "fin-presencas": "Sessões da turma", "fin-dtp": "Dossiê TP", "fin-cockpit-turma": "Turma", "fin-inqueritos": "Inquéritos",

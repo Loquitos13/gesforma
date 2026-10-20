@@ -32,6 +32,7 @@ const Conteudos = carregavel(() => import("../vistas/cursos/Conteudos"));
 const Tabelas = carregavel(() => import("../vistas/cursos/Tabelas"));
 const Turmas = carregavel(() => import("../vistas/turmas/Turmas"));
 const Cockpit = carregavel(() => import("../vistas/turmas/Cockpit"));
+const Cronogramas = carregavel(() => import("../vistas/cronogramas/Cronogramas"));
 const Formadores = carregavel(() => import("../vistas/formadores/Formadores"));
 const FormadorFicha = carregavel(() => import("../vistas/formadores/FormadorFicha"));
 const AreaCalendario = carregavel(() => import("../vistas/formadores/AreaCalendario"));
@@ -90,6 +91,7 @@ export const ROTAS: Record<Vista, Ecra> = {
   "fin-turmas": Turmas,
   "formador-turmas": Turmas,
   "gold-cockpit-turma": Cockpit,
+  "gold-cronogramas": Cronogramas,
   "fin-cockpit-turma": Cockpit,
   "fin-presencas": Cockpit,
   "gold-formadores": Formadores,

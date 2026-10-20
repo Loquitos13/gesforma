@@ -123,31 +123,3 @@ export function assiduidadeDoFormando(
     pctRegistado: registadas > 0 ? Math.round((contadas / registadas) * 1000) / 10 : null,
   };
 }
-
-/**
- * Horas de cada formador: previstas pelo cronograma e dadas (só sessões com sumário assinado).
- * Numa sessão com vários formadores, as horas repartem-se em partes iguais.
- */
-export function horasPorFormador(
-  cronograma: unknown,
-  sessoesGravadas: { sessao_n: number; sumario: unknown }[],
-) {
-  const assinadas = new Set(sessoesGravadas
-    .filter(s => s.sumario && typeof s.sumario === "object" && (s.sumario as { assinado?: boolean }).assinado)
-    .map(s => Number(s.sessao_n)));
-  const out = new Map<string, { previstas: number; dadas: number }>();
-  for (const s of sessoesLectivas(cronograma)) {
-    const raw = sessaoLectivaN(cronograma, s.n);
-    const nomes = raw?.formadores?.length ? raw.formadores : (raw?.formador ? [raw.formador] : []);
-    const lista = nomes.map(x => String(x).trim()).filter(Boolean);
-    if (!lista.length) continue;
-    const parte = s.horas / lista.length;
-    for (const nome of lista) {
-      const acc = out.get(nome) ?? { previstas: 0, dadas: 0 };
-      acc.previstas += parte;
-      if (assinadas.has(s.n)) acc.dadas += parte;
-      out.set(nome, acc);
-    }
-  }
-  return [...out.entries()].map(([formador, h]) => ({ formador, previstas: r2(h.previstas), dadas: r2(h.dadas) }));
-}

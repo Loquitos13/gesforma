@@ -158,16 +158,3 @@ export async function reabrirTurma(c: Consulta, regime: Regime, id: number) {
   const extra = regime === "fin" ? ", estado = 'A decorrer'" : "";
   await one(c, `UPDATE ${tabelaRegime("turmas", regime)} SET fechada_em = NULL, reaberta_em = now()${extra} WHERE id = $1 RETURNING id`, [id]);
 }
-
-/** Cronograma e valores por hora definidos na turma (horas do formador). */
-export async function custosDaTurma(c: Consulta, regime: Regime, id: number) {
-  return one<{ cronograma: unknown; valores_hora_formador: unknown }>(
-    c,
-    `SELECT cronograma, valores_hora_formador FROM ${tabelaRegime("turmas", regime)} WHERE id = $1`,
-    [id],
-  );
-}
-
-export async function custoHoraFormadores(c: Consulta) {
-  return many<{ nome: string; custo_hora: unknown }>(c, "SELECT nome, custo_hora FROM formadores");
-}

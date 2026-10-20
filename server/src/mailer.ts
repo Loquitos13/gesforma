@@ -26,7 +26,8 @@ export async function sendMail(db: Db, input: SendInput) {
   const info = await mailer.sendMail({
     from: transport.from,
     replyTo: transport.replyTo || undefined,
-    to: `${sanitizeHeader(input.name)} <${to}>`,
+    // Nome e endereço separados: com texto «Nome <email>», vírgulas ou endereços no nome viravam destinatários.
+    to: { name: sanitizeHeader(input.name), address: to },
     subject,
     text,
     html: input.html,

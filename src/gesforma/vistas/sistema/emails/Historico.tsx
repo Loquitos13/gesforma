@@ -14,6 +14,7 @@ import { MolduraEmail } from "./Previsualizacao";
 const ESTADO: Record<EnvioEmail["estado"], { rotulo: string; tom: Tom }> = {
   sent: { rotulo: "Enviado", tom: "sucesso" },
   queued: { rotulo: "Em fila", tom: "info" },
+  sending: { rotulo: "A enviar", tom: "info" },
   failed: { rotulo: "Falhou", tom: "perigo" },
   cancelled: { rotulo: "Cancelado", tom: "neutro" },
 };

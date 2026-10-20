@@ -28,16 +28,19 @@ export type SmtpCreds = {
   fromEnv: boolean;
 };
 
+/** Remetente: texto da configuração do servidor ou nome + endereço separados (o nome nunca é lido como lista de endereços). */
+export type Remetente = string | { name: string; address: string };
+
 export type SmtpTransport =
   | { kind: "log" }
-  | { kind: "url"; url: string; from: string; replyTo?: string }
+  | { kind: "url"; url: string; from: Remetente; replyTo?: string }
   | {
       kind: "smtp";
       host: string;
       port: number;
       user: string;
       pass: string;
-      from: string;
+      from: Remetente;
       replyTo?: string;
     };
 
@@ -110,8 +113,8 @@ export function smtpTransportFromCreds(creds: SmtpCreds): SmtpTransport {
     };
   }
   if (creds.login && creds.password && creds.fromEmail) {
-    const from = creds.fromName
-      ? `${sanitizeHeader(creds.fromName)} <${creds.fromEmail}>`
+    const from: Remetente = creds.fromName
+      ? { name: sanitizeHeader(creds.fromName), address: creds.fromEmail }
       : creds.fromEmail;
     return {
       kind: "smtp",

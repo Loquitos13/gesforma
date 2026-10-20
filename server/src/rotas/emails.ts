@@ -1,14 +1,17 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { ingestEvent, processDueJobs, renderModelo, sendRuleTest, varsDeExemplo } from "../automations.js";
-import { config, onVercel } from "../config.js";
+import { timingSafeEqual } from "node:crypto";
+import { flushQueuedJobs, ingestEvent, processDueJobs, renderModelo, sendRuleTest, varsDeExemplo } from "../automations.js";
+import { config } from "../config.js";
 import { SECRETARIA_MAIL, ctaDestino } from "../emailCta.js";
 import {
-  actualizarModelo, actualizarRegra, apagarRegra, cancelarEmFila, criarRegra, destinatarioConhecido, estatisticasEnvios30Dias,
-  existeModeloTipo, listarEnvios, listarModelos, listarRegras, marcarAberto, obterEnvio, obterModelo, reenviarFalhado,
+  actualizarModelo, actualizarRegra, apagarRegra, cancelarEmFila, criarRegra, destinatarioConhecido, emailDaPreinscricao,
+  estatisticasEnvios30Dias, existeModeloTipo, listarEnvios, listarModelos, listarRegras, marcarAberto, obterEnvio, obterModelo, reenviarFalhado,
 } from "../repos/emails.js";
 import { delayLabelFromSeconds, delaySecondsFromLabel, isEmail, TRIGGER_MAP } from "../security.js";
 import { getSmtpStatus } from "../smtpConfig.js";
+import { enviarLembretesPreinscricao } from "../lembretePre.js";
+import { linhaVisivel } from "../repos/crmVisivel.js";
 import { idParam, paginacao, periodoQuery, textoQuery, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
 
@@ -80,10 +83,37 @@ const eventSchema = z.object({
 });
 const enviosQuery = paginacao.merge(periodoQuery).extend({
   regra: z.preprocess(v => (v === "" ? undefined : v), z.coerce.number().int().positive().optional()),
-  estado: z.preprocess(v => (v === "" ? undefined : v), z.enum(["queued", "sent", "failed", "cancelled"]).optional()),
+  estado: z.preprocess(v => (v === "" ? undefined : v), z.enum(["queued", "sending", "sent", "failed", "cancelled"]).optional()),
   q: textoQuery(120),
 });
 const uuidParam = z.object({ id: z.string().uuid() });
+
+/**
+ * Eventos que a equipa pode disparar à mão em POST /v1/events, por perfil. Nunca os de pagamento
+ * (payment.confirmed e sale.followup passam o lead a «Pago»): esses só saem do servidor, quando o pagamento
+ * é confirmado. O formador só avisa do próprio sumário. Comercial e Financiada só sobre uma pré-inscrição
+ * que vêem (ver o handler).
+ */
+const EVENTOS_LEAD = [
+  "preinscricao.created", "preinscricao.promoted", "preinscricao.docs_completos", "preinscricao.validated",
+  "preinscricao.contacted", "preinscricao.unpaid_3d", "lead.stale_30d",
+];
+const EVENTOS_EQUIPA: Record<string, string[]> = {
+  admin: [...EVENTOS_LEAD, "formando.completed", "turma.starts_in_24h", "sessao.summary_signed"],
+  secretaria: [...EVENTOS_LEAD, "formando.completed", "turma.starts_in_24h", "sessao.summary_signed"],
+  comercial: [...EVENTOS_LEAD, "sessao.summary_signed"],
+  financiada: [...EVENTOS_LEAD, "sessao.summary_signed"],
+  formador: ["sessao.summary_signed"],
+};
+
+/** O cron só abre com `Authorization: Bearer <CRON_SECRET>` (é o que a Vercel envia quando a variável existe). */
+function cronAutorizado(authorization: string | undefined) {
+  const esperado = Buffer.from(`Bearer ${config.cronSecret}`);
+  const dado = Buffer.from(String(authorization ?? ""));
+  return esperado.length === dado.length && timingSafeEqual(esperado, dado);
+}
+/** Tempo de envio por chamada do cron (a função tem 30 s na vercel.json). */
+const CRON_ORCAMENTO_MS = 20_000;
 
 function mapRegra(r: Awaited<ReturnType<typeof listarRegras>>[number]) {
   return {
@@ -234,7 +264,6 @@ export async function registar(app: FastifyInstance, deps: Deps) {
 
   app.get("/v1/email/jobs", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    await processDueJobs(db).catch(() => undefined);
     const stats = await estatisticasEnvios30Dias(db);
     const pagina = await listarEnvios(db, { pagina: 1, porPagina: 80 });
     return {
@@ -269,7 +298,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     if (!(await reenviarFalhado(db, v.params.id))) return reply.code(409).send({ error: "Só se reenviam envios falhados." });
     await audit(db, actor(req).id, "email.job_retry", "email_job", v.params.id, req.ip);
-    await processDueJobs(db).catch(() => undefined);
+    await flushQueuedJobs(db, 5).catch(() => undefined);
     return { ok: true };
   });
 
@@ -296,12 +325,19 @@ export async function registar(app: FastifyInstance, deps: Deps) {
   });
 
   app.get("/v1/cron/email", async (req, reply) => {
-    // Com CRON_SECRET definido (o Vercel envia-o como Bearer), só esse segredo abre o cron.
-    // Sem ele, aceita-se o cabeçalho do Vercel apenas quando a API corre no Vercel.
-    const bearer = Boolean(config.cronSecret) && req.headers.authorization === `Bearer ${config.cronSecret}`;
-    const cron = !config.cronSecret && onVercel && req.headers["x-vercel-cron"] === "1";
-    if (!cron && !bearer) return reply.code(401).send({ error: "cron recusado" });
-    return processDueJobs(db);
+    // Só com CRON_SECRET (a Vercel envia-o como Bearer). O cabeçalho x-vercel-cron forja-se: não conta.
+    // Sem a variável, recusa-se sempre: fora da Vercel a fila corre no processo da API (app.ts).
+    if (!config.cronSecret) {
+      req.log.error("cron /v1/cron/email recusado: CRON_SECRET não está definida (defina-a na Vercel para o cron correr).");
+      return reply.code(503).send({ error: "cron desligado: falta CRON_SECRET" });
+    }
+    if (!cronAutorizado(req.headers.authorization)) return reply.code(401).send({ error: "cron recusado" });
+    const lembretes = await enviarLembretesPreinscricao(db).catch(err => {
+      req.log.error(err);
+      return null;
+    });
+    const fila = await processDueJobs(db, CRON_ORCAMENTO_MS);
+    return { ...fila, lembretesPreinscricao: lembretes };
   });
 
   app.post("/v1/events", async (req, reply) => {
@@ -312,16 +348,31 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!isEmail(payload.email)) return reply.code(400).send({ error: "email inválido" });
     const alvo = payload.email.trim().toLowerCase();
     const a = actor(req);
-    if (a.role === "formador") {
-      if (type !== "sessao.summary_signed" || alvo !== a.email.trim().toLowerCase()) {
-        return reply.code(403).send({ error: "O formador só envia o aviso do próprio sumário." });
+    if (!(EVENTOS_EQUIPA[a.role] ?? []).includes(type)) {
+      return reply.code(403).send({
+        error: a.role === "formador" ? "O formador só envia o aviso do próprio sumário." : "Este evento não se dispara à mão.",
+      });
+    }
+    const gestao = a.role === "admin" || a.role === "secretaria";
+    if (type === "sessao.summary_signed" && !gestao) {
+      // O aviso do sumário vai para quem o assinou.
+      if (alvo !== a.email.trim().toLowerCase()) {
+        return reply.code(403).send({ error: a.role === "formador" ? "O formador só envia o aviso do próprio sumário." : "O aviso do sumário só vai para o próprio." });
       }
+    } else if (payload.preinscricaoId || !gestao) {
+      // Sobre uma pré-inscrição: tem de ser visível para quem pede e o email tem de ser o dela
+      // (senão o estado de um lead mudava e o email ia para outra pessoa). Comercial e Financiada só assim.
+      const pid = payload.preinscricaoId;
+      if (!pid) return reply.code(400).send({ error: "Indique a pré-inscrição." });
+      const email = await linhaVisivel(db, "preinscricoes", pid, a) ? await emailDaPreinscricao(db, pid) : null;
+      if (email === null) return reply.code(404).send({ error: "registo não encontrado" });
+      if (email.trim().toLowerCase() !== alvo) return reply.code(403).send({ error: "O email não é o desta pré-inscrição." });
     } else if (!(await destinatarioConhecido(db, alvo))) {
       return reply.code(403).send({ error: "Destinatário desconhecido no GesForma." });
     }
     try {
       const result = await ingestEvent(db, type, payload, idempotencyKey);
-      await processDueJobs(db).catch(() => undefined);
+      await flushQueuedJobs(db, 5).catch(() => undefined);
       await audit(db, a.id, "automation.event", type, result.eventId ?? undefined, req.ip, { queued: result.queued, duplicate: result.duplicate });
       return result;
     } catch (err) {

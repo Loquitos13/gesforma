@@ -159,7 +159,7 @@ docker compose up -d db api
 
 ### Vercel
 
-A API vai no **mesmo projecto** que a app (`/api`), para o cookie de sessão ser do mesmo domínio. A Vercel é serverless: não há `setInterval`. A fila de email corre no fim de cada evento, ao abrir o histórico, e num cron horário (`/api/v1/cron/email`). No plano Hobby a Vercel pode limitar a 1×/dia - a janela do lembrete 24h cobre hoje e amanhã.
+A API vai no **mesmo projecto** que a app (`/api`), para o cookie de sessão ser do mesmo domínio. A Vercel é serverless: não há `setInterval`. A fila de email corre no fim de cada evento e num cron horário (`/api/v1/cron/email`), que também envia os lembretes das pré-inscrições e esvazia a fila até ~20 s por chamada. O cron só abre com `Authorization: Bearer $CRON_SECRET` (a Vercel envia-o quando a variável `CRON_SECRET` está definida); sem ela responde 503. No plano Hobby a Vercel só aceita crons diários - aí volte a `0 7 * * *` na `vercel.json`; a janela do lembrete 24h cobre hoje e amanhã.
 
 1. Claim ou ligue o Git à Vercel.
 2. Variáveis: `DATABASE_URL` (Neon ou Vercel Postgres), `SESSION_SECRET`, `ADMIN_PASSWORD`, `APP_ORIGIN=https://o-seu-dominio.vercel.app`. SMTP também se configura na app (Brevo). `SMTP_URL` é opcional e manda sobre a app. Drive: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (URI de callback `{APP_ORIGIN}/api/v1/drive/oauth/callback`). WhatsApp (opcional): `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_VERIFY_TOKEN` - o callback no Meta é `{APP_ORIGIN}/api/v1/public/whatsapp/webhook`.

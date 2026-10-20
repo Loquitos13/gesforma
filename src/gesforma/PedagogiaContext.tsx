@@ -19,6 +19,7 @@ import {
 import { useCursoId } from "../partilhado/dados/comuns";
 import { persist } from "../partilhado/toastBus";
 import { emptyPlano, emptySumario, type CriterioAvaliacao, type PlanoSessaoData, type SumarioSessaoData } from "../partilhado/TurmaExtras";
+import { naPosicaoActual, type SessaoCronograma } from "../partilhado/turmaModel";
 import { useCriteriosModelo } from "./criteriosModelo";
 import { useProgramaDoCurso } from "./cursoPrograma";
 
@@ -70,8 +71,12 @@ const vazio: PedagogiaSnapshot = {
   },
 };
 
-/** Dossiê pedagógico da turma: planos, sumários, presenças, documentos, DTP e certificados. */
-export function useTurmaPedagogia(regime: Regime, turmaId: number | undefined) {
+/**
+ * Dossiê pedagógico da turma: planos, sumários, presenças, documentos, DTP e certificados.
+ * Com o `cronograma` que o ecrã mostra, os dados de cada sessão seguem o id dela: o `n` do servidor é a posição
+ * de quando se leu, e depois de mexer na grelha as sessões mudam de lugar antes de a pedagogia recarregar.
+ */
+export function useTurmaPedagogia(regime: Regime, turmaId: number | undefined, cronograma?: SessaoCronograma[]) {
   const [snap, setSnap] = useState<PedagogiaSnapshot>(vazio);
   const [estado, setEstado] = useState<"loading" | "ready" | "offline">("loading");
   const pedido = useRef(0);
@@ -96,29 +101,34 @@ export function useTurmaPedagogia(regime: Regime, turmaId: number | undefined) {
     void recarregar();
   }, [recarregar]);
 
+  const sessoesActuais = useMemo(
+    () => (cronograma ? naPosicaoActual(snap.sessoes, cronograma) : snap.sessoes),
+    [snap.sessoes, cronograma],
+  );
+
   const planos = useMemo(() => {
     const out: Record<number, PlanoSessaoData> = {};
-    for (const s of snap.sessoes) {
+    for (const s of sessoesActuais) {
       if (s.plano) out[s.n] = s.plano as unknown as PlanoSessaoData;
     }
     return out;
-  }, [snap.sessoes]);
+  }, [sessoesActuais]);
 
   const sumarios = useMemo(() => {
     const out: Record<number, SumarioSessaoData> = {};
-    for (const s of snap.sessoes) {
+    for (const s of sessoesActuais) {
       if (s.sumario) out[s.n] = s.sumario as unknown as SumarioSessaoData;
     }
     return out;
-  }, [snap.sessoes]);
+  }, [sessoesActuais]);
 
   const presencas = useMemo(() => {
     const out: Record<number, PresencaRow[]> = {};
-    for (const s of snap.sessoes) {
+    for (const s of sessoesActuais) {
       if (s.presencas.length) out[s.n] = s.presencas;
     }
     return out;
-  }, [snap.sessoes]);
+  }, [sessoesActuais]);
 
   const certificados = useMemo(() => {
     const out: Record<number, TurmaCertificado> = {};
@@ -126,32 +136,33 @@ export function useTurmaPedagogia(regime: Regime, turmaId: number | undefined) {
     return out;
   }, [snap.certificados]);
 
-  const mergeSessao = useCallback((n: number, patch: Partial<{ plano: unknown; sumario: unknown; presencas: PresencaRow[] }>) => {
+  const mergeSessao = useCallback((n: number, sessaoId: string | undefined, patch: Partial<{ plano: unknown; sumario: unknown; presencas: PresencaRow[] }>) => {
     setSnap(prev => {
-      const existe = prev.sessoes.some(s => s.n === n);
+      const esta = (s: typeof prev.sessoes[number]) => (sessaoId && s.sessaoId ? s.sessaoId === sessaoId : s.n === n);
+      const existe = prev.sessoes.some(esta);
       const sessoes = existe
-        ? prev.sessoes.map(s => (s.n === n ? { ...s, ...patch } as typeof s : s))
-        : [...prev.sessoes, { n, plano: null, sumario: null, presencas: [], ...patch } as typeof prev.sessoes[number]];
+        ? prev.sessoes.map(s => (esta(s) ? { ...s, ...patch } as typeof s : s))
+        : [...prev.sessoes, { n, sessaoId, plano: null, sumario: null, presencas: [], ...patch } as typeof prev.sessoes[number]];
       return { ...prev, sessoes: sessoes.sort((a, b) => a.n - b.n) };
     });
   }, []);
 
   const guardarPlano = useCallback(async (n: number, plano: PlanoSessaoData, sessaoId?: string) => {
-    mergeSessao(n, { plano });
+    mergeSessao(n, sessaoId, { plano });
     if (turmaId == null || turmaId <= 0) return;
     await persist(apiSaveSessao(regime, turmaId, n, { sessaoId, plano }));
     void recarregar();
   }, [mergeSessao, recarregar, regime, turmaId]);
 
   const guardarSumario = useCallback(async (n: number, sumario: SumarioSessaoData, sessaoId?: string) => {
-    mergeSessao(n, { sumario });
+    mergeSessao(n, sessaoId, { sumario });
     if (turmaId == null || turmaId <= 0) return;
     await persist(apiSaveSessao(regime, turmaId, n, { sessaoId, sumario }));
     void recarregar();
   }, [mergeSessao, recarregar, regime, turmaId]);
 
   const guardarPresencas = useCallback(async (n: number, rows: PresencaRow[], sessaoId?: string) => {
-    mergeSessao(n, { presencas: rows });
+    mergeSessao(n, sessaoId, { presencas: rows });
     if (turmaId == null || turmaId <= 0) return;
     await persist(apiSaveSessao(regime, turmaId, n, { sessaoId, presencas: rows }));
     void recarregar();

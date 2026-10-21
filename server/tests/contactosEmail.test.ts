@@ -29,4 +29,12 @@ describe("contactos dos locais nos emails", () => {
     await ctx.db.query("UPDATE catalog_items SET payload = payload || '{\"telemovel\": \"933 333 333\"}'::jsonb WHERE id = 990902");
     expect((await telefonesPorZona(ctx.db, { preinscricaoId: lead }))[0]).toBe("Porto: (Telemóvel) 933 333 333");
   });
+
+  it("no email cada local fica num bloco: nome em destaque e um contacto por linha, com espaço entre locais", async () => {
+    const { renderAutomaticEmail } = await import("../src/emailHtml.js");
+    const vars = { telefones_itens: "Penafiel: (Telemóvel) 917565561 · (Telefone) 223781105 · (Email) ccppenafiel@ena.pt\nBraga: (Telemóvel) 912000001" };
+    const mail = renderAutomaticEmail({ nome: "Ana", xml: "<email><p>Ligue para:<br>{{telefones_itens}}</p></email>", linhas: [], cta: "", href: "", vars, origin: "https://exemplo.pt" });
+    expect(mail.html).toContain("<strong>Penafiel</strong><br>Telemóvel: 917565561<br>Telefone: 223781105<br>Email: ccppenafiel@ena.pt<br><br><strong>Braga</strong><br>Telemóvel: 912000001");
+    expect(mail.text).toContain("Penafiel\nTelemóvel: 917565561\nTelefone: 223781105\nEmail: ccppenafiel@ena.pt\n\nBraga\nTelemóvel: 912000001");
+  });
 });

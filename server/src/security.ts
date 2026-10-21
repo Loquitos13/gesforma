@@ -59,10 +59,22 @@ export function sanitizeText(value: string, max = 4000) {
  * Substitui {{variáveis}}. As que acabam em `_itens` são listas (um item por linha): saem como
  * «• item» em linhas separadas (<br>, que o email converte em quebra de linha).
  */
+/**
+ * Um local por bloco, para não se confundirem os contactos: o nome em destaque e um contacto por linha.
+ * «Penafiel: (Telemóvel) 917… · (Email) x@ena.pt» → «<strong>Penafiel</strong><br>Telemóvel: 917…<br>Email: x@ena.pt».
+ */
+function blocoContactos(item: string) {
+  const m = /^([^:]+):\s*(\(.+)$/.exec(item.replace(/[<>]/g, ""));
+  if (!m) return `• ${item.replace(/[<>]/g, "")}`;
+  const linhas = m[2]!.split(" · ").map(p => p.replace(/^\(([^)]+)\)\s*/, "$1: "));
+  return [`<strong>${m[1]!.trim()}</strong>`, ...linhas].join("<br>");
+}
+
 export function fillVars(text: string, vars: Record<string, string>) {
   return text.replace(/\{\{(\w+)\}\}/g, (_, k: string) => {
     if (k.endsWith("_itens")) {
       const itens = String(vars[k] ?? "").split("\n").map(sanitizeHeader).filter(Boolean);
+      if (k === "telefones_itens") return itens.map(blocoContactos).join("<br><br>");
       return itens.map(i => `• ${i}`).join("<br>");
     }
     return sanitizeHeader(vars[k] ?? "");

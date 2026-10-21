@@ -240,6 +240,18 @@ export function apiDossieGerado(turmaId: number, itemId: string, fallback: strin
   return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/dossie/${encodeURIComponent(itemId)}`, fallback, "application/pdf");
 }
 
+/** Folhas de presenças / sumário da Financiada no modelo da candidatura (todas as sessões lectivas, ou só a sessão n). */
+export function apiFolhasPresencaFin(turmaId: number, sessao?: number) {
+  return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/folhas-presenca${sessao ? `?sessao=${sessao}` : ""}`,
+    sessao ? `Folhas de presenca e sumarios - sessao ${sessao}.pdf` : "Folhas de presenca e sumarios.pdf", "application/pdf");
+}
+
+/** Plano de sessão da Financiada no modelo da candidatura (só a sessão n, ou todos). */
+export function apiPlanosSessaoFin(turmaId: number, sessao?: number) {
+  return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/planos-sessao${sessao ? `?sessao=${sessao}` : ""}`,
+    sessao ? `Planos de sessao - sessao ${sessao}.pdf` : "Planos de sessao.pdf", "application/pdf");
+}
+
 export function apiPerguntasInqueritoTurma(turmaId: number, publico: "formador" | "formando" | "pos") {
   const nome = publico === "formador"
     ? "PerguntasInqueritoFormador.pdf"

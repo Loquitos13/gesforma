@@ -35,6 +35,8 @@ export function turmaReembolso(c: Consulta, id: number) {
 export type FormandoExecucao = {
   id: number; nome: string; apelido: string; email: string; telf: string; estado: string; pii_enc: string;
   inscrito: string; p_nif: string; p_codigo_postal: string; p_telf: string; p_pii_enc: string;
+  /** Morada (coluna antiga, sem cifra) e concelho da pré-inscrição: só a ficha de inscrição os usa. */
+  p_morada: string; p_concelho: string;
 } & { [K in `d_${keyof LinhaFinanciamento}`]: string };
 
 /**
@@ -47,11 +49,12 @@ export function formandosExecucao(c: Consulta, turma: { id: number; nome: string
     c,
     `SELECT f.id, f.nome, f.apelido, f.email, f.telf, f.estado, COALESCE(f.pii_enc, '') AS pii_enc,
             COALESCE(p.inscrito, '') AS inscrito, COALESCE(p.nif, '') AS p_nif, COALESCE(p.codigo_postal, '') AS p_codigo_postal,
-            COALESCE(p.telf, '') AS p_telf, COALESCE(p.pii_enc, '') AS p_pii_enc, ${COLUNAS_D}
+            COALESCE(p.telf, '') AS p_telf, COALESCE(p.pii_enc, '') AS p_pii_enc,
+            COALESCE(p.morada_fiscal, '') AS p_morada, COALESCE(p.concelho, '') AS p_concelho, ${COLUNAS_D}
        FROM formandos_fin f
        LEFT JOIN formando_fin_financiamento d ON d.formando_id = f.id
        LEFT JOIN LATERAL (
-         SELECT inscrito, nif, codigo_postal, telf, pii_enc
+         SELECT inscrito, nif, codigo_postal, telf, pii_enc, morada_fiscal, concelho
            FROM preinscricoes
           WHERE f.email <> '' AND lower(trim(email)) = lower(trim(f.email))
           ORDER BY (regime = 'fin') DESC, id DESC

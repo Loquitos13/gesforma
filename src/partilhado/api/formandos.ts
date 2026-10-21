@@ -1,6 +1,7 @@
 // API do domínio "formandos": listas, ficha e acções (server/src/rotas/formandos.ts).
 import type { DadosFinanciamento } from "../execucaoFisica";
 import { api, enviar, qs, type Pagina } from "./cliente";
+import { descarregar } from "./ficheiros";
 import { hojeLisboa } from "../horaLisboa";
 
 export type Regime = "gold" | "fin";
@@ -165,6 +166,11 @@ export type FinanciamentoFormando = { dados: DadosFinanciamento; daInscricao: (k
 
 export function apiFinanciamentoFormando(id: number, signal?: AbortSignal) {
   return api<FinanciamentoFormando>(`/v1/formandos-fin/${id}/financiamento`, { signal });
+}
+
+/** Ficha de inscrição do formando da Financiada (PDF no modelo da candidatura). */
+export function apiFichaInscricaoFin(id: number) {
+  return descarregar(`/v1/formandos-fin/${id}/ficha-inscricao`, "FichaInscricao.pdf");
 }
 
 export function apiAlterarFinanciamentoFormando(id: number, corpo: Partial<DadosFinanciamento>) {

@@ -3,8 +3,9 @@
 // código postal, documento de identificação e documentos ficam cifrados no servidor.
 import { useEffect, useMemo, useState } from "react";
 import {
-  apiAlterarFinanciamentoFormando, apiFinanciamentoFormando,
+  apiAlterarFinanciamentoFormando, apiFichaInscricaoFin, apiFinanciamentoFormando,
 } from "../../../partilhado/api/formandos";
+import { toastError } from "../../../partilhado/toastBus";
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import {
@@ -38,6 +39,11 @@ export function SeparadorFinanciamento({ formandoId, podeEditar }: { formandoId:
   const chave = `formandos:financiamento:${formandoId}`;
   const { dados, erro, aCarregar, recarregar } = useRecurso(chave, s => apiFinanciamentoFormando(formandoId, s));
   const [form, setForm] = useState<DadosFinanciamento>(FINANCIAMENTO_VAZIO);
+  const [aDescarregar, setADescarregar] = useState(false);
+  async function fichaInscricao() {
+    setADescarregar(true);
+    try { await apiFichaInscricaoFin(formandoId); } catch (err) { toastError(err, "Não foi possível gerar a ficha de inscrição."); } finally { setADescarregar(false); }
+  }
   const gravar = useAccao(
     (corpo: Partial<DadosFinanciamento>) => apiAlterarFinanciamentoFormando(formandoId, corpo),
     { invalidar: [chave, "despesas:reembolso:", "formandos:ficha:"], ok: "Dados para o financiamento gravados." },
@@ -88,9 +94,15 @@ export function SeparadorFinanciamento({ formandoId, podeEditar }: { formandoId:
 
   return (
     <div className="flex flex-col gap-5">
-      <p className="m-0 text-[13px] text-tinta-suave">
-        O que o ficheiro de execução física do reembolso pede deste formando. Os valores são os das listas do template oficial.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="m-0 text-[13px] text-tinta-suave">
+          O que o ficheiro de execução física do reembolso pede deste formando. Os valores são os das listas do template oficial.
+        </p>
+        <Botao tamanho="sm" aCarregar={aDescarregar} onClick={() => void fichaInscricao()}
+          title="Ficha de inscrição em PDF, no modelo da candidatura, com os dados gravados (os por gravar não entram)">
+          Ficha de inscrição (PDF)
+        </Botao>
+      </div>
       {estrangeiro && faltaDocumentoEstrangeiro(form) && (
         <Aviso tom="aviso" titulo="Falta um documento de estrangeiro">Indique a autorização de residência, o passaporte ou o pedido de proteção internacional.</Aviso>
       )}

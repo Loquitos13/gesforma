@@ -145,7 +145,7 @@ export function cursoAcao(t: Pick<TurmaReembolso, "numero_acao" | "ufcd_cod" | "
 }
 
 /** NIF, código postal e telefone da pré-inscrição (cifrados, ou nas colunas antigas). */
-function piiDaInscricao(f: FormandoExecucao) {
+export function piiDaInscricao(f: FormandoExecucao) {
   return readPreinscricaoPii({ pii_enc: f.p_pii_enc, nif: f.p_nif, codigo_postal: f.p_codigo_postal, telf: f.p_telf });
 }
 
@@ -164,7 +164,7 @@ function telefone(s: string): ValorCelula {
 }
 
 /** Os dados para o financiamento da ficha: o pacote cifrado e a tabela; NIF e código postal da pré-inscrição se faltarem. */
-function dadosFinanciamento(f: FormandoExecucao): DadosFinanciamento {
+export function dadosFinanciamento(f: FormandoExecucao): DadosFinanciamento {
   const ident = readFormandoPii({ pii_enc: f.pii_enc, telf: f.telf }).ident ?? {};
   const d: DadosFinanciamento = { ...FINANCIAMENTO_VAZIO };
   for (const k of Object.keys(ident) as (keyof typeof ident)[]) d[k] = String(ident[k] ?? "").trim();

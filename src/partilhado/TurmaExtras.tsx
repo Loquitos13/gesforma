@@ -182,13 +182,15 @@ export function simEstado(items: SimItem[], criterios: CriterioAvaliacao[]): { e
   return { estado, detalhe: `${done}/${items.length} formandos com vídeo e grelha.`, done };
 }
 
-export function PresencasSessaoModal({ open, onClose, sessao, formandos, onSave, turmaNome, cursoNome }: {
+export function PresencasSessaoModal({ open, onClose, sessao, formandos, onSave, turmaNome, cursoNome, onImprimir }: {
   open: boolean; onClose: () => void;
   sessao?: { n: number; data: string; hora: string; modulo?: string; formador?: string };
   formandos?: { id: number; nome: string; presente?: boolean }[];
   onSave?: (rows: { id: number; nome: string; presente: boolean }[]) => void;
   turmaNome?: string;
   cursoNome?: string;
+  /** Folha própria do regime (Financiada: PDF do modelo da candidatura); sem ela, a folha impressa pelo browser. */
+  onImprimir?: () => void;
 }) {
   function seed() {
     return (formandos ?? []).map(f => ({ id: f.id, nome: f.nome, presente: f.presente ?? true }));
@@ -240,7 +242,7 @@ export function PresencasSessaoModal({ open, onClose, sessao, formandos, onSave,
           <button onClick={onClose} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
           <button
             type="button"
-            onClick={() => imprimirFolhasPresencas({
+            onClick={() => onImprimir ? onImprimir() : imprimirFolhasPresencas({
               turma: turmaNome || "Turma",
               curso: cursoNome || "",
               formandos: presencas,

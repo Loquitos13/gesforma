@@ -1,5 +1,6 @@
 /** PDFs gerados do dossiê (cronograma, presenças, planos, perguntas dos inquéritos) e anexos no Drive. */
 import type { Db } from "../db/pool.js";
+import { documentosSessoesDaTurma } from "../documentosFin.js";
 import { pdfsDoDossie, type SessaoPedagogicaPdf } from "../dtpPdfs.js";
 import { apagarFicheiroSubstituido, getDriveFile, mapFile, resumoConteudo, storeDriveFile } from "../driveFicheiros.js";
 import { sanitizeFileName } from "../ficheirosValidacao.js";
@@ -12,7 +13,18 @@ import { formandosDaTurma, type TurmaRow } from "../repos/pedagogiaTurma.js";
 import { ITEM_PERGUNTAS, NOME_PERGUNTAS, perguntasEnviadas } from "./inqueritos.js";
 import type { Regime } from "./util.js";
 
+/**
+ * Cronograma, folhas de presença / sumários e planos de sessão. Na Financiada, as folhas e os planos saem no modelo
+ * da candidatura (documentosFin.ts: logótipos, programa e tipologias); a Gold continua com os PDF de texto.
+ */
 export async function montarPdfsDossie(db: Db, regime: Regime, turma: TurmaRow) {
+  const base = await montarPdfsTexto(db, regime, turma);
+  if (regime !== "fin") return base;
+  const fin = await documentosSessoesDaTurma(db, turma.id);
+  return fin ? { ...base, folhas: fin.folhas, planos: fin.planos } : base;
+}
+
+async function montarPdfsTexto(db: Db, regime: Regime, turma: TurmaRow) {
   const [sessoesRows, formandos] = await Promise.all([
     listarSessoes(db, regime, turma.id),
     formandosDaTurma(db, regime, turma),
@@ -79,7 +91,10 @@ async function guardarPdfGerado(
   }, { gerado: true });
 }
 
-/** Guarda um PDF gerado no Drive e liga-o ao item do dossiê (substitui a cópia gerada anterior; igual, não reenvia). */
+/**
+ * Guarda um PDF gerado no Drive e liga-o ao item do dossiê (substitui a cópia gerada anterior; igual, não reenvia).
+ * Com `outrosItens`, o mesmo ficheiro fica também ligado a esses itens (a folha de presenças leva o sumário).
+ */
 export async function anexarPdfDtp(
   db: Db,
   actorId: string | undefined,
@@ -88,9 +103,10 @@ export async function anexarPdfDtp(
   itemId: string,
   name: string,
   bytes: Buffer,
+  outrosItens: string[] = [],
 ) {
   const file = await guardarPdfGerado(db, actorId, regime, turma, itemId, name, bytes);
-  await ligarAnexoGerado(db, regime, turma.id, itemId, file);
+  for (const id of [itemId, ...outrosItens.filter(x => x !== itemId)]) await ligarAnexoGerado(db, regime, turma.id, id, file);
 }
 
 /** PDFs das perguntas dos inquéritos enviados à turma (Financiada). */

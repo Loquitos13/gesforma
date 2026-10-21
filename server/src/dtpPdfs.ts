@@ -13,7 +13,7 @@ type Sessao = {
 type Plano = {
   objetivosGerais?: string;
   objetivosEspecificos?: string;
-  momentos?: Record<string, { conteudo?: string; atividades?: string; metodos?: string; recursos?: string }>;
+  momentos?: Record<string, { conteudo?: string; atividades?: string; metodos?: string; recursos?: string; tempo?: string }>;
 };
 
 type Sumario = {
@@ -130,7 +130,7 @@ export function pdfsDoDossie(opts: {
       if (plano.objetivosGerais?.trim()) planosLinhas.push(`  Objetivos gerais: ${plano.objetivosGerais.trim()}`);
       if (plano.objetivosEspecificos?.trim()) planosLinhas.push(`  Objetivos especificos: ${plano.objetivosEspecificos.trim()}`);
       for (const [k, m] of Object.entries(plano.momentos ?? {})) {
-        const texto = [m.conteudo, m.atividades, m.metodos, m.recursos].filter(Boolean).join(" · ");
+        const texto = [m.conteudo, m.atividades, m.metodos, m.recursos, m.tempo?.trim() ? `Tempo: ${m.tempo.trim()}` : ""].filter(Boolean).join(" · ");
         if (texto) planosLinhas.push(`  ${k}: ${texto}`);
       }
     }

@@ -3,6 +3,7 @@ import type { Db } from "../db/pool.js";
 import { listDriveFiles, readDriveContent } from "../driveFicheiros.js";
 import { nomesNoCronograma } from "../driveArvore.js";
 import { DTP_CATEGORIAS, dtpCategoriaDe, dtpCategoriaPasta, dtpPastaNome, dtpZipNome, dtpZipRelPath, pastaSegura } from "../dtpPasta.js";
+import { fichasInscricaoDaTurma } from "../documentosFin.js";
 import { pastaFinDoItem, TOPICOS_FIN } from "../dtpTopicosFin.js";
 import { pdfPerguntasInqueritos, pdfRelatorioFinal, pdfRelatorioInqueritos } from "../relatorioFinal.js";
 import { ficheirosDoFormador, ficheirosDosFormandos, formadoresPorNome } from "../repos/dtp.js";
@@ -131,6 +132,9 @@ export async function exportarDossie(db: Db, actorId: string | undefined, regime
   add(`${root}/${pastaSess}/Folhas de presenca e sumarios.pdf`, gerados.folhas);
   add(`${root}/${pastaSess}/Planos de sessao.pdf`, gerados.planos);
   if (regime === "fin") {
+    // Fichas de inscrição no modelo da candidatura (uma página por formando), geradas na hora.
+    const fichas = await fichasInscricaoDaTurma(db, turma.id);
+    if (fichas) add(`${root}/${pastaFinDoItem("fichas")}/${fichas.nome}`, fichas.bytes);
     const dados = await dadosRelatorioFinal(db, turma.id);
     if (dados) {
       add(`${root}/${pastaFinDoItem("relatorio")}/RelatorioFinalAccao.pdf`, pdfRelatorioFinal(dados));

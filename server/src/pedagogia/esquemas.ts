@@ -12,6 +12,8 @@ export const momentoSchema = z.object({
   avaliacao: z.string().max(2000).default(""),
   recursos: z.string().max(2000).default(""),
   materiais: z.string().max(2000).default(""),
+  /** Duração do momento («30 min»); os planos antigos não a têm. */
+  tempo: z.string().max(120).default(""),
 });
 
 export const planoSchema = z.object({

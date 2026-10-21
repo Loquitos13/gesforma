@@ -7,6 +7,7 @@ import { fichaCursoFinPorNome } from "./repos/pedagogiaRelatorio.js";
 import { pdfDeLinhas } from "./pdfTexto.js";
 import { partirLinhas } from "./relatorioFinal.js";
 import { diaLisboa } from "./datas.js";
+import { documentosSessoesDaTurma, fichasInscricaoDaTurma, NOMES_DOCUMENTOS_FIN } from "./documentosFin.js";
 
 export const ITENS_DOSSIE_GERADO = [
   "listagem-formandos",
@@ -15,6 +16,10 @@ export const ITENS_DOSSIE_GERADO = [
   "fichas",
   "pauta",
   "entrega-certificados",
+  // Modelo da candidatura (documentosFin.ts): a folha de presenças leva o sumário (um só PDF para os dois itens).
+  "presencas",
+  "sumarios",
+  "planos",
 ] as const;
 
 export type ItemDossieGerado = (typeof ITENS_DOSSIE_GERADO)[number];
@@ -23,10 +28,18 @@ const NOMES: Record<ItemDossieGerado, string> = {
   "listagem-formandos": "ListagemFormandos.pdf",
   equipa: "ListagemEquipaPedagogica.pdf",
   programa: "ProgramaUfcd.pdf",
-  fichas: "FichasInscricao.pdf",
+  fichas: NOMES_DOCUMENTOS_FIN.fichas,
   pauta: "PautaAvaliacao.pdf",
   "entrega-certificados": "ComprovativoEntregaCertificados.pdf",
+  presencas: NOMES_DOCUMENTOS_FIN.folhas,
+  sumarios: NOMES_DOCUMENTOS_FIN.folhas,
+  planos: NOMES_DOCUMENTOS_FIN.planos,
 };
+
+/** Itens do dossiê que recebem o mesmo PDF gerado (a folha de presenças leva o sumário da sessão). */
+export function itensDoMesmoPdf(item: ItemDossieGerado): ItemDossieGerado[] {
+  return item === "presencas" || item === "sumarios" ? ["presencas", "sumarios"] : [item];
+}
 
 export function eItemDossieGerado(id: string): id is ItemDossieGerado {
   return (ITENS_DOSSIE_GERADO as readonly string[]).includes(id);
@@ -290,26 +303,6 @@ function pdfPrograma(d: Dados) {
   return pdfDeLinhas(linhas);
 }
 
-function pdfFichas(d: Dados) {
-  const linhas = [
-    ...cabecalho(d, "Fichas de inscrição"),
-    "Uma ficha por formando, com os dados gravados na inscrição.",
-    "",
-  ];
-  if (!d.formandos.length) linhas.push("Ainda sem formandos nesta turma.");
-  for (const f of d.formandos) {
-    linhas.push(...partirLinhas(f.nome), ...partirLinhas(`  Email: ${f.email || "—"}`));
-    linhas.push(...partirLinhas(`  Telefone: ${f.telf || "—"}`));
-    linhas.push(...partirLinhas(`  NIF: ${f.nif || "—"}`));
-    linhas.push(...partirLinhas(`  Morada: ${[f.morada, f.codigoPostal, f.concelho].filter(Boolean).join(", ") || "—"}`));
-    linhas.push(...partirLinhas(`  Origem: ${f.origem || "—"}`));
-    linhas.push(...partirLinhas(`  Inscrição: ${f.inscrito ? dataPt(f.inscrito) : "—"} · ${f.estado || "—"}`));
-    linhas.push("");
-  }
-  linhas.push("GESFORMA · gerado a partir da ficha de inscrição.");
-  return pdfDeLinhas(linhas);
-}
-
 function rotuloParametro(d: Dados, id: string) {
   return d.parametros.find(p => p.id === id)?.label || id;
 }
@@ -377,16 +370,22 @@ function pdfEntrega(d: Dados) {
   return pdfDeLinhas(linhas);
 }
 
-const BUILDERS: Record<ItemDossieGerado, (d: Dados) => Buffer> = {
+const BUILDERS: Record<Exclude<ItemDossieGerado, "fichas" | "presencas" | "sumarios" | "planos">, (d: Dados) => Buffer> = {
   "listagem-formandos": pdfListagem,
   equipa: pdfEquipa,
   programa: pdfPrograma,
-  fichas: pdfFichas,
   pauta: pdfPauta,
   "entrega-certificados": pdfEntrega,
 };
 
 export async function pdfDossieGerado(db: Db, turmaId: number, item: ItemDossieGerado) {
+  // Ficha de inscrição, plano de sessão e folha de presenças / sumário: no modelo da candidatura (documentosFin.ts).
+  if (item === "fichas") return fichasInscricaoDaTurma(db, turmaId);
+  if (item === "presencas" || item === "sumarios" || item === "planos") {
+    const docs = await documentosSessoesDaTurma(db, turmaId, { so: item === "planos" ? "planos" : "folhas" });
+    if (!docs) return null;
+    return { nome: NOMES[item], bytes: item === "planos" ? docs.planos : docs.folhas };
+  }
   const dados = await carregar(db, turmaId);
   if (!dados) return null;
   return { nome: NOMES[item], bytes: BUILDERS[item](dados) };

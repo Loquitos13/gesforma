@@ -14,7 +14,7 @@ import type { Regime } from "./repos/sql.js";
 import { sessaoLectivaN } from "./sessaoAcesso.js";
 
 const MOMENTOS = ["introducao", "desenvolvimento", "conclusao"] as const;
-const CAMPOS = ["conteudo", "atividades", "metodos", "avaliacao", "recursos", "materiais"] as const;
+const CAMPOS = ["conteudo", "atividades", "metodos", "avaliacao", "recursos", "materiais", "tempo"] as const;
 
 type Momento = Record<(typeof CAMPOS)[number], string>;
 export type PlanoSessao = {

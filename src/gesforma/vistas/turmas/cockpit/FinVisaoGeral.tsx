@@ -8,6 +8,8 @@ import { I, Th, Td, estadoBadge, formatSessaoLine } from "./base";
 import { FormadoresAtribuidosCard } from "../../../CronogramaEditor";
 import { CustosTurmaCard } from "../../../CustosTurma";
 import { rotuloCodigoCurso } from "../../../../partilhado/codigoCurso";
+import { apiFichaInscricaoFin } from "../../../../partilhado/api/formandos";
+import { toastError } from "../../../../partilhado/toastBus";
 
 export function FinVisaoGeral({ turma, membros, prontos, souFormador, verCustos, activa, programa, onFicha, onTransferir, onEliminar, onAdicionar, onEditarPrograma, onFormadores, onFormador, onValoresHora }: {
   turma: TurmaFin;
@@ -40,6 +42,10 @@ export function FinVisaoGeral({ turma, membros, prontos, souFormador, verCustos,
     ...(!souFormador ? [
       { label: "Transferir", icon: I.transfer, tone: "purple" as const, onClick: () => onTransferir(f) },
       { label: "Eliminar", icon: I.trash, tone: "red" as const, onClick: () => onEliminar(f) },
+      {
+        label: "Ficha de inscrição (PDF)", icon: I.download,
+        onClick: () => { apiFichaInscricaoFin(f.id).catch(err => toastError(err, "Não foi possível gerar a ficha de inscrição.")); },
+      },
     ] : []),
   ];
 

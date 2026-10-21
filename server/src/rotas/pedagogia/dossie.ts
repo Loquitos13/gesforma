@@ -1,6 +1,6 @@
 /** Dossiê da turma: estado manual dos itens, anexos e PDFs gerados. */
 import type { FastifyInstance } from "fastify";
-import { eItemDossieGerado, pdfDossieGerado } from "../../dossieGerado.js";
+import { eItemDossieGerado, itensDoMesmoPdf, pdfDossieGerado } from "../../dossieGerado.js";
 import { dtpForTurma } from "../../pedagogia/dtp.js";
 import { anexoSchema, dtpSchema, itemParam } from "../../pedagogia/esquemas.js";
 import { anexarPdfDtp, gravarPdfsDossie } from "../../pedagogia/ficheiros.js";
@@ -64,7 +64,9 @@ export function registarDossieTurma(app: FastifyInstance, { db, requireAuth, aud
     const gerado = await pdfDossieGerado(db, id, itemId);
     if (!gerado) return reply.code(404).send({ error: "turma não encontrada" });
     const turma = await carregarTurma(db, "fin", id);
-    if (turma) await anexarPdfDtp(db, req.actor!.id, "fin", turma, itemId, gerado.nome, gerado.bytes)
+    // A folha de presenças e o sumário são o mesmo PDF: guarda-se uma vez (no item das presenças) e liga-se aos dois.
+    const [principal = itemId, ...outros] = itensDoMesmoPdf(itemId);
+    if (turma) await anexarPdfDtp(db, req.actor!.id, "fin", turma, principal, gerado.nome, gerado.bytes, outros)
       .catch(err => req.log.warn({ err, turma: id, item: itemId }, "PDF não anexado ao dossiê"));
     await audit(db, req.actor!.id, "turma.dossie_pdf", "turma", String(id), req.ip, { item: itemId });
     return enviarPdf(reply, gerado.nome, gerado.bytes);

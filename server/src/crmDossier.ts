@@ -5,6 +5,7 @@ import { faltaPedirPagamento, faltaValidarPreinscricao, situacaoPagamento } from
 import { mapPagamento, mapPreinscricao } from "./ops.js";
 import { readPreinscricaoPii } from "./pii.js";
 import { GENEROS_FIN, mascararFim, rotuloPais } from "../../src/partilhado/dadosPessoaisFin.js";
+import { resumoLembretes } from "./lembretePre.js";
 import { turmasParaValidacao } from "./percurso.js";
 import * as repo from "./repos/leadDossier.js";
 import * as leads from "./repos/leads.js";
@@ -176,7 +177,16 @@ export async function getLeadDossier(db: Db, id: number, ator?: AtorCrm) {
     turmasDestino: lead.curso ? await turmasParaValidacao(db, regime, lead.curso) : [],
     dadosFin: regime === "fin" ? dadosPessoaisFin(row, ator) : null,
     ...(await resumoPercurso(db, row, regime, pedidos, ficheiros)),
+    lembretes: await resumoLembretes(db, row, docsPendentes(pedidos, ficheiros) || (regime === "gold" && !Number(row.turma_escolhida_id || 0))),
+    /** Recusas que ainda não seguiram por email (agrupadas: saem no próximo envio ou com «Reenviar pedido agora»). */
+    recusasPorAvisar: ficheiros.filter(f => f.estado === "recusado" && !f.recusa_avisada_em).length,
   };
+}
+
+/** Documentos obrigatórios em falta ou qualquer documento recusado. */
+function docsPendentes(pedidos: { id: string; required: boolean }[], ficheiros: { tipo: string; estado?: string }[]) {
+  const tipos = new Set(ficheiros.map(f => f.tipo));
+  return pedidos.some(p => p.required && !tipos.has(p.id)) || ficheiros.some(f => f.estado === "recusado");
 }
 
 /** Funções que lêem os dados da financiada (as mesmas de /v1/formandos-fin*); o comercial e o formador ficam de fora. */

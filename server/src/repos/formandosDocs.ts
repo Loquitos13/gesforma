@@ -98,7 +98,8 @@ export async function decidirDoc(
   } else {
     await one(
       c,
-      `UPDATE formando_docs SET ok = false, estado = 'recusado', observacao = $4, validated_by = $5, validated_at = now(), updated_at = now()
+      `UPDATE formando_docs SET ok = false, estado = 'recusado', observacao = $4, validated_by = $5, validated_at = now(), updated_at = now(),
+         recusa_avisada_em = NULL
        WHERE regime = $1 AND formando_id = $2 AND doc_id = $3`,
       [regime, id, docId, decisao.observacao, actorId],
     );

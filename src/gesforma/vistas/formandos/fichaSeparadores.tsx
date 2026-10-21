@@ -19,7 +19,7 @@ export function SeparadorDocumentos({ ficha, podeEditar }: { ficha: FichaFormand
   const marcar = useAccao((docId: string, ok: boolean) => apiMarcarDocFormando(ficha.regime, ficha.id, docId, ok), {
     invalidar: INVALIDAR, ok: "Documento actualizado.",
   });
-  const lembrete = useAccao(() => apiLembreteDocsFin(ficha.id), { ok: "Lembrete enviado ao formando." });
+  const lembrete = useAccao(() => apiLembreteDocsFin(ficha.id), { ok: "Lembrete enviado ao formando. Seguem lembretes automáticos enquanto faltarem documentos." });
   const fin = ficha.regime === "fin";
   const pasta = ["GesForma", fin ? "Financiada" : "Gold", "Turmas", ficha.turma?.nome, "Formandos", `${ficha.nome} ${ficha.apelido}`.trim()].filter(Boolean).join(" › ");
 

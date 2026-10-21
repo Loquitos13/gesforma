@@ -5,7 +5,7 @@ import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { processDueJobs } from "./automations.js";
-import { enviarLembretesPreinscricao } from "./lembretePre.js";
+import { enviarAvisosDocumentos } from "./avisosDocumentos.js";
 import { allowedOrigins, config, onVercel } from "./config.js";
 import { enterActor, medirPedido, type Db, type Medicao } from "./db/pool.js";
 import { sha256 } from "./security.js";
@@ -180,7 +180,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     const tick = async () => {
       try { await processDueJobs(db); }
       catch (err) { app.log.error(err); }
-      try { await enviarLembretesPreinscricao(db); }
+      try { await enviarAvisosDocumentos(db); }
       catch (err) { app.log.error(err); }
     };
     const timer = setInterval(tick, 2500);

@@ -1,11 +1,14 @@
 import { randomBytes } from "node:crypto";
 import type { Db } from "./db/pool.js";
+import { pendenciaDocsLead } from "./pendenciaDocs.js";
 import * as leads from "./repos/leads.js";
 
 /**
  * Ciclo de vida da ligação pessoal `/documentos/:token` da pré-inscrição.
  * A ligação está aberta até a secretaria validar, a pessoa desistir/passar a formando,
- * ou ficar 90 dias sem uso. Fechada, só mostra que o percurso terminou — sem dados nem envios.
+ * ou ficar 90 dias sem uso. Enquanto faltarem documentos obrigatórios (ou houver recusados por corrigir)
+ * os 90 dias não contam: a ligação fica aberta até à regularização (ver `fechoDaLigacao`).
+ * Fechada, só mostra que o percurso terminou — sem dados nem envios.
  */
 
 export const DIAS_INACTIVIDADE = 90;
@@ -34,6 +37,21 @@ export function motivoFecho(lead: LeadLigacao, agora = new Date()): MotivoFecho 
   const base = data(lead.docs_token_usado_em) ?? data(lead.docs_token_criado_em) ?? data(lead.created_at);
   if (base && agora.getTime() - base.getTime() > DIAS_INACTIVIDADE * 86400_000) return "expirada";
   return null;
+}
+
+/**
+ * Como `motivoFecho`, mas a expiração por inactividade não se aplica enquanto a documentação obrigatória
+ * estiver pendente (em falta ou recusada): a pessoa tem de poder regularizar com a mesma ligação.
+ */
+export async function fechoDaLigacao(
+  db: Db,
+  lead: LeadLigacao & { id?: unknown; curso?: unknown; regime?: unknown },
+  agora = new Date(),
+): Promise<MotivoFecho | null> {
+  const motivo = motivoFecho(lead, agora);
+  if (motivo !== "expirada" || !lead.id) return motivo;
+  const p = await pendenciaDocsLead(db, { id: Number(lead.id), curso: lead.curso, regime: lead.regime });
+  return p.pendente ? null : motivo;
 }
 
 const TEXTO: Record<MotivoFecho, string> = {

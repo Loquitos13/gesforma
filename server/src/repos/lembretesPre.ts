@@ -22,7 +22,7 @@ export type LeadLembrete = {
 };
 
 /** Pedidos abertos, com ligação pessoal enviada, cujo lembrete já venceu e abaixo do máximo. */
-export async function devidos(c: Consulta, limite: Date, maximo: number) {
+export async function devidos(c: Consulta, limite: Date, maximo: number, lote: number) {
   return many<LeadLembrete>(c,
     `SELECT id, nome, apelido, email, curso, COALESCE(regime, 'gold') AS regime,
             turma_escolhida_id, turmas_recusadas, validada_em, estado,
@@ -36,9 +36,9 @@ export async function devidos(c: Consulta, limite: Date, maximo: number) {
         AND btrim(email) <> ''
         AND lembrete_pre_em IS NOT NULL
         AND lembrete_pre_em <= $1
-      ORDER BY lembrete_pre_em
-      LIMIT 20`,
-    [limite, maximo]);
+      ORDER BY lembrete_pre_em, id
+      LIMIT $3`,
+    [limite, maximo, lote]);
 }
 
 export async function adiar(c: Consulta, id: number) {
@@ -48,7 +48,8 @@ export async function adiar(c: Consulta, id: number) {
 /** Reserva o envio (evita dois envios em paralelo). Devolve false se outro processo já o fez. */
 export async function reclamarEnvio(c: Consulta, id: number, limite: Date) {
   return Boolean(await one(c,
-    "UPDATE preinscricoes SET lembrete_pre_em = now(), lembretes_enviados = lembretes_enviados + 1 WHERE id = $1 AND lembrete_pre_em <= $2 RETURNING id",
+    `UPDATE preinscricoes SET lembrete_pre_em = now(), lembretes_enviados = lembretes_enviados + 1, lembrete_enviado_em = now()
+      WHERE id = $1 AND lembrete_pre_em <= $2 RETURNING id`,
     [id, limite]));
 }
 

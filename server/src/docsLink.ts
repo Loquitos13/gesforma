@@ -72,6 +72,7 @@ export type DocLead = {
   created_at: string;
   estado: string;
   observacao: string;
+  recusa_avisada_em: string | Date | null;
 };
 
 export async function listarDocsLead(db: Db, leadId: number) {
@@ -172,46 +173,6 @@ export async function avisarDocumentosEmFalta(
   });
   await docs.marcarLembreteDocs(db, leadId);
   await logLeadEvent(db, leadId, undefined, "contacto", "Documentos em falta", [...faltam, ...recusados].map(d => d.label).join(", "));
-  return { enviado: true as const, url };
-}
-
-export async function alertarDocumentosIncorrectos(db: Db, leadId: number) {
-  const lead = await leads.lead(db, leadId) as { nome: string; apelido: string; email: string; curso: string; regime: string } | null;
-  if (!lead) return null;
-  const email = normalizeEmail(lead.email);
-  if (!isEmail(email)) return { enviado: false as const, erro: "A ficha não tem email." };
-  const regime = lead.regime === "fin" ? "fin" : "gold";
-  const pedidos = await docsDoCurso(db, lead.curso, regime);
-  const labels = new Map(pedidos.map(p => [p.id, p.label]));
-  labels.set("comprovativo", "Comprovativo de pagamento");
-  const ficheiros = await listarDocsLead(db, leadId);
-  const recusados = ficheiros.filter(f => f.estado === "recusado");
-  if (!recusados.length) return { enviado: false as const, erro: "Não há documentos recusados." };
-  const token = await ensureDocsToken(db, leadId);
-  const url = documentosUrl(token);
-  const nome = `${lead.nome} ${lead.apelido}`.trim();
-  const linhas = [
-    `Revimos os documentos de ${lead.curso}.`,
-    ...recusados.map(d => `${labels.get(d.tipo) ?? d.tipo}: ${d.observacao.trim() || "não está correcto. Volte a enviar o ficheiro."}`),
-    "Use o botão para enviar apenas estes documentos.",
-  ];
-  const mail = renderAutomaticEmail({
-    nome,
-    xml: "",
-    linhas,
-    cta: "Corrigir documentos",
-    href: url,
-    vars: { nome, curso: lead.curso, documentos_url: url },
-    origin: config.appOrigin,
-  });
-  await sendMail(db, {
-    to: email,
-    name: nome,
-    subject: `Documentos a corrigir · ${lead.curso}`,
-    text: mail.text,
-    html: mail.html,
-  });
-  await logLeadEvent(db, leadId, undefined, "contacto", "Documentos incorrectos", linhas.slice(1, -1).join(" · "));
   return { enviado: true as const, url };
 }
 

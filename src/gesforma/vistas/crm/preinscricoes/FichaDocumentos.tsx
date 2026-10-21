@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Aviso, Botao, ConfirmarPerigo, Entrada, Estado, Vazio, dataHora, eur } from "../../../../partilhado/ui";
-import { apiAlertarDocs, apiNovaLigacao, apiRecusarDoc, apiValidarDoc, type DossieLead } from "../../../../partilhado/api/crm";
+import { apiNovaLigacao, apiRecusarDoc, apiReenviarPedidoDocs, apiValidarDoc, type DossieLead } from "../../../../partilhado/api/crm";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { usePode } from "../../../../partilhado/AuthGate";
 import { toastError, toastOk } from "../../../../partilhado/toastBus";
@@ -19,8 +19,14 @@ export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; o
   const [obs, setObs] = useState<Record<number, string>>({});
   const [confirmarLigacao, setConfirmarLigacao] = useState(false);
   const validar = useAccao(apiValidarDoc, { ok: "Documento validado.", invalidar: ["crm:", "painel:", "pagamentos:"] });
-  const recusar = useAccao(apiRecusarDoc, { ok: "Documento recusado. A ligação pessoal pede só este ficheiro." });
-  const alertar = useAccao(apiAlertarDocs, { ok: "Email enviado com o que está incorrecto." });
+  const recusar = useAccao(apiRecusarDoc, {
+    ok: r => r.avisoRecusa?.enviado
+      ? "Documento recusado. A pessoa recebeu um email com o motivo e a ligação pessoal."
+      : r.avisoRecusa?.adiado
+        ? "Documento recusado. Segue no próximo email (acabou de sair outro); use «Reenviar pedido agora» para enviar já."
+        : "Documento recusado. A ligação pessoal pede só este ficheiro.",
+  });
+  const reenviar = useAccao(apiReenviarPedidoDocs, { ok: r => `Pedido reenviado por email: ${r.documentos.join(", ")}.` });
   const novaLigacao = useAccao(apiNovaLigacao, { ok: "Nova ligação enviada por email. A anterior deixou de funcionar." });
 
   async function copiar() {
@@ -33,6 +39,8 @@ export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; o
   }
 
   const recusados = d.documentos.some(x => x.estado === "recusado");
+  const pendente = recusados || d.docsEmFalta.length > 0;
+  const lembretes = d.lembretes;
 
   return (
     <div className="flex flex-col gap-4">
@@ -107,8 +115,29 @@ export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; o
         </ul>
       )}
 
-      {podeValidar && recusados && !d.docsFechado && (
-        <Botao variante="secundario" aCarregar={alertar.aCorrer} onClick={() => void alertar.correr(id)}>Enviar email com os documentos a corrigir</Botao>
+      {lembretes && !d.docsFechado && (
+        <section aria-label="Lembretes automáticos" className="rounded-cartao border border-linha p-3 text-[13px]">
+          <p className="m-0 text-xs font-semibold uppercase tracking-wide text-tinta-suave">Lembretes automáticos</p>
+          <dl className="m-0 mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+            <dt className="text-tinta-suave">Lembretes enviados</dt>
+            <dd className="m-0">{lembretes.enviados} de {lembretes.maximo}</dd>
+            <dt className="text-tinta-suave">Último lembrete</dt>
+            <dd className="m-0">{lembretes.ultimoEm ? dataHora(lembretes.ultimoEm) : "Nenhum"}</dd>
+            <dt className="text-tinta-suave">Próximo lembrete</dt>
+            <dd className="m-0">{lembretes.proximoEm ? dataHora(lembretes.proximoEm) : lembretes.semProximo || "—"}</dd>
+          </dl>
+          {(d.recusasPorAvisar ?? 0) > 0 && (
+            <p className="m-0 mt-1 text-xs text-tinta-suave">
+              {d.recusasPorAvisar === 1 ? "1 recusa ainda não seguiu" : `${d.recusasPorAvisar} recusas ainda não seguiram`} por email (saem no próximo envio).
+            </p>
+          )}
+          {pendente && (
+            <div className="mt-2">
+              <Botao tamanho="sm" variante="secundario" aCarregar={reenviar.aCorrer}
+                onClick={() => void reenviar.correr(id).then(r => r && onMudou())}>Reenviar pedido agora</Botao>
+            </div>
+          )}
+        </section>
       )}
 
       <ConfirmarPerigo

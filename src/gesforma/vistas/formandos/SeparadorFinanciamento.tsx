@@ -1,6 +1,6 @@
 // Ficha da Financiada › Dados para o financiamento: o que a execução física (modelo oficial do reembolso) pede de
 // cada formando. Os seletores têm exactamente os valores das listas do template; NIF, NISS, data de nascimento,
-// código postal e documentos ficam cifrados no servidor.
+// código postal, documento de identificação e documentos ficam cifrados no servidor.
 import { useEffect, useMemo, useState } from "react";
 import {
   apiAlterarFinanciamentoFormando, apiFinanciamentoFormando,
@@ -12,6 +12,7 @@ import {
   procuraEmpregoPorOmissao, qnqDasHabilitacoes, type DadosFinanciamento,
 } from "../../../partilhado/execucaoFisica";
 import { SearchSelect } from "../../../partilhado/FormKit";
+import { TIPOS_DOCUMENTO_FIN } from "../../../partilhado/dadosPessoaisFin";
 import { Aviso, Botao, Campo, Cartao, Entrada, ErroCarregar, Esqueleto, Selecao } from "../../../partilhado/ui";
 import { hojeLisboa } from "../../datas";
 
@@ -27,6 +28,8 @@ function erros(d: DadosFinanciamento): Partial<Record<Chave, string>> {
   if (d.codigoPostal && !/^\d{4}-\d{3}$/.test(d.codigoPostal)) e.codigoPostal = "Formato 0000-000.";
   if (d.dataNascimento && (d.dataNascimento < "1900-01-01" || d.dataNascimento >= hojeLisboa())) e.dataNascimento = "Data inválida.";
   if (d.numeroSigo && !/^\d{1,12}$/.test(d.numeroSigo)) e.numeroSigo = "Só dígitos.";
+  if (d.numeroDocumento && !/^[A-Z0-9]{6,12}$/.test(d.numeroDocumento)) e.numeroDocumento = "6 a 12 letras e dígitos.";
+  if (d.validadeDocumento && d.validadeDocumento < hojeLisboa()) e.validadeDocumento = "Fora da validade.";
   if (d.nifEntidadeEmpregadora && !/^\d{9}$/.test(d.nifEntidadeEmpregadora)) e.nifEntidadeEmpregadora = "O NIF tem 9 dígitos.";
   return e;
 }
@@ -66,12 +69,12 @@ export function SeparadorFinanciamento({ formandoId, podeEditar }: { formandoId:
   const qnqEntrada = qnqDasHabilitacoes(form.habilitacoesEntrada);
   const qnqSaida = qnqDasHabilitacoes(form.habilitacoesSaida || form.habilitacoesEntrada);
 
-  const texto = (k: Chave, props: { tipo?: string; ajuda?: string; normalizar?: (v: string) => string; className?: string; inputMode?: "numeric" | "text" } = {}) => (
+  const texto = (k: Chave, props: { tipo?: string; ajuda?: string; normalizar?: (v: string) => string; className?: string; inputMode?: "numeric" | "text"; semMaximo?: boolean } = {}) => (
     <Campo rotulo={ROTULOS_FINANCIAMENTO[k]} erro={errosForm[k] ?? null} className={props.className}
       ajuda={props.ajuda ?? (dados.daInscricao.includes(k) ? "Vem da pré-inscrição; ao gravar fica na ficha." : undefined)}>
       {p => (
         <Entrada {...p} type={props.tipo ?? "text"} inputMode={props.inputMode} disabled={ro} value={form[k]}
-          max={props.tipo === "date" ? hojeLisboa() : undefined}
+          max={props.tipo === "date" && !props.semMaximo ? hojeLisboa() : undefined}
           onChange={e => mudar({ [k]: props.normalizar ? props.normalizar(e.target.value) : e.target.value } as Partial<DadosFinanciamento>)} />
       )}
     </Campo>
@@ -105,6 +108,11 @@ export function SeparadorFinanciamento({ formandoId, podeEditar }: { formandoId:
           </div>
           {texto("codigoPostal", { normalizar: v => { const d = v.replace(/\D/g, "").slice(0, 7); return d.length > 4 ? `${d.slice(0, 4)}-${d.slice(4)}` : d; } })}
           {texto("numeroSigo", { inputMode: "numeric", normalizar: digitos(12), ajuda: "Número do formando na plataforma SIGO." })}
+          <Campo rotulo={ROTULOS_FINANCIAMENTO.tipoDocumento}>
+            {p => <Selecao {...p} disabled={ro} opcoes={opcoes(TIPOS_DOCUMENTO_FIN)} vazio="Escolher…" value={form.tipoDocumento} onChange={e => mudar({ tipoDocumento: e.target.value })} />}
+          </Campo>
+          {texto("numeroDocumento", { normalizar: v => v.replace(/[\s-]+/g, "").toUpperCase().slice(0, 12) })}
+          {texto("validadeDocumento", { tipo: "date", semMaximo: true })}
         </div>
       </Cartao>
 

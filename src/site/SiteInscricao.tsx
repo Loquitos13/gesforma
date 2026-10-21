@@ -8,6 +8,9 @@ import { textoListaVazia, useOpcoesPublicas } from "./useOpcoesPublicas";
 import { ConsentimentoRgpd } from "./ConsentimentoRgpd";
 import { fmtDataCalendario as fmtDataPt, hojeLisboa } from "../partilhado/horaLisboa";
 import { eur } from "../partilhado/ui/formatos";
+import { INSCRICAO_FIN_VAZIA, erroTelefoneFin, partirNomeCompleto, validarInscricaoFin, type InscricaoFin } from "../partilhado/dadosPessoaisFin";
+import { LISTA_PAISES } from "../partilhado/execucaoFisica";
+import { CampoFin, CamposInscricaoFin, INPUT_MODAL, errosDoServidor, type ErrosForm } from "./DadosPessoaisFin";
 
 type Passo = "turma" | "dados" | "pagamento" | "feito";
 /** Como se abre o pedido: o curso e, quando a página do curso o deu, o local já escolhido. */
@@ -50,6 +53,10 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
   const aberto = Boolean(curso);
   const preinscricao = ePreinscricao(curso?.enrollment);
   const prepago = ePrepago(curso?.enrollment);
+  // Financiada: nome completo, género, data de nascimento, nacionalidade, habilitações, telemóvel e email.
+  const fin = curso?.regime === "fin";
+  const [dadosFin, setDadosFin] = useState<InscricaoFin>(INSCRICAO_FIN_VAZIA);
+  const [errosFin, setErrosFin] = useState<ErrosForm>({});
   const [passo, setPasso] = useState<Passo>("dados");
   const [nome, setNome] = useState("");
   const [apelido, setApelido] = useState("");
@@ -76,6 +83,8 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
   useEffect(() => {
     if (!aberto) return;
     setPasso("turma");
+    setDadosFin(INSCRICAO_FIN_VAZIA);
+    setErrosFin({});
     setErro("");
     setAviso("");
     setLocal(localInicial);
@@ -160,8 +169,25 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
     setPasso("dados");
   }
 
+  function errosDoFin(d: InscricaoFin, telefone: string): ErrosForm {
+    const e: ErrosForm = { ...validarInscricaoFin(d, hojeLisboa(), LISTA_PAISES) };
+    const t = erroTelefoneFin(telefone);
+    if (t) e.telf = t;
+    if (!email.trim()) e.email = "Indique o email.";
+    return e;
+  }
+  function mudarFin(d: InscricaoFin) {
+    setDadosFin(d);
+    // Depois da primeira tentativa, os erros acompanham o que se escreve.
+    if (Object.keys(errosFin).length) setErrosFin(errosDoFin(d, telf));
+  }
+
   function validarDados() {
-    if (!nome.trim() || !apelido.trim() || !telf.trim() || !email.trim() || !concelho || !origem) {
+    if (fin) {
+      const e = errosDoFin(dadosFin, telf);
+      setErrosFin(e);
+      if (Object.keys(e).length) return "Corrija os campos assinalados.";
+    } else if (!nome.trim() || !apelido.trim() || !telf.trim() || !email.trim() || !concelho || !origem) {
       return "Preencha nome, apelido, telemóvel, email, concelho e como tomou conhecimento.";
     }
     if (!consentimento) return "Para enviar, aceite a política de privacidade.";
@@ -199,9 +225,10 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
     setBusy(true);
     setErro("");
     try {
+      const nomes = fin ? partirNomeCompleto(dadosFin.nomeCompleto) : { nome: nome.trim(), apelido: apelido.trim() };
       const r = await apiPublicPreinscricao({
-        nome: nome.trim(),
-        apelido: apelido.trim(),
+        nome: nomes.nome,
+        apelido: nomes.apelido,
         telf: telf.trim(),
         email: email.trim(),
         concelho,
@@ -216,10 +243,12 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
         pagamentoMetodo: prepago ? metodo : undefined,
         acessoImediato: prepago && !turmaId,
         consentimento,
+        ...(fin ? { dadosFin } : {}),
       });
       setAviso(r.aviso);
       setPasso("feito");
     } catch (err) {
+      if (fin && err instanceof ApiError && err.campos?.length) setErrosFin(errosDoServidor(err.campos));
       setErro(err instanceof ApiError ? err.message : "Não foi possível enviar. Tente de novo dentro de um minuto.");
     } finally {
       setBusy(false);
@@ -363,9 +392,9 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
           ) : passo === "pagamento" ? (
             <form id="inscricao-form" onSubmit={e => void enviar(e)} className="space-y-6">
               <div className="bg-[#F4F6F8] px-4 py-4 text-sm leading-6 text-[#1C3350]/75">
-                <p className="font-semibold text-[#1C3350]">{nome} {apelido}</p>
+                <p className="font-semibold text-[#1C3350]">{fin ? dadosFin.nomeCompleto : `${nome} ${apelido}`}</p>
                 <p>{email} · {telf}</p>
-                <p>{concelho} · soube pela via {origem}</p>
+                {!fin && <p>{concelho} · soube pela via {origem}</p>}
                 <p className="mt-2">{resumoTurma || "Acesso imediato, online"}</p>
                 <p className="mt-3 font-serif text-3xl text-[#1C3350]">{precoLabel}</p>
               </div>
@@ -395,6 +424,17 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
             <form id="inscricao-form" onSubmit={continuar} className="space-y-8">
               <div>
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Os seus dados</p>
+                {fin ? (
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <CamposInscricaoFin valor={dadosFin} onMudar={mudarFin} erros={errosFin} />
+                  <CampoFin id="fin-telf" rotulo="Número de telemóvel" erro={errosFin.telf}>
+                    {p => <input {...p} className={INPUT_MODAL} value={telf} onChange={e => setTelf(e.target.value)} autoComplete="tel" inputMode="tel" required />}
+                  </CampoFin>
+                  <CampoFin id="fin-email" rotulo="Email" erro={errosFin.email}>
+                    {p => <input {...p} className={INPUT_MODAL} type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" required />}
+                  </CampoFin>
+                </div>
+                ) : (
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <Campo label="Nome"><input className={inputCls} value={nome} onChange={e => setNome(e.target.value)} autoComplete="given-name" required /></Campo>
                   <Campo label="Apelido"><input className={inputCls} value={apelido} onChange={e => setApelido(e.target.value)} autoComplete="family-name" required /></Campo>
@@ -423,6 +463,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                     />
                   </Campo>
                 </div>
+                )}
               </div>
               <div>
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Turma</p>

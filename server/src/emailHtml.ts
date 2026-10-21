@@ -42,7 +42,7 @@ function quadroContactos(intro: string[], itens: string[]) {
     const c = partesContactos(item);
     const corpo = c
       ? `<strong style="color:#0f172a;">${esc(c.nome)}</strong><br>${c.linhas.map(esc).join("<br>")}`
-      : esc(item);
+      : `• ${esc(item)}`;
     return `<td valign="top" width="50%" style="padding:0 12px 14px 0;font-size:13px;line-height:1.5;color:#334155;">${corpo}</td>`;
   };
   const linhas: string[] = [];
@@ -118,7 +118,7 @@ ${pixel}
   const contactosTexto = contactos.length
     ? [...introContactos.map(p => fillVars(simples(p), input.vars)), ...contactos.flatMap(c => {
       const partes = partesContactos(c);
-      return partes ? ["", partes.nome, ...partes.linhas] : [c];
+      return partes ? ["", partes.nome, ...partes.linhas] : [`• ${c}`];
     })]
     : [];
   const text = [

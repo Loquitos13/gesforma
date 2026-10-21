@@ -16,13 +16,14 @@ export type DocLeadRow = {
   created_at: string;
   estado: string;
   observacao: string;
+  recusa_avisada_em: string | Date | null;
 };
 
 export async function docsDoLead(c: Consulta, leadId: number) {
   return many<DocLeadRow>(c,
     `SELECT id, tipo, nome, drive_file_id, drive_url, created_at,
             COALESCE(estado, 'pendente') AS estado,
-            COALESCE(observacao, '') AS observacao
+            COALESCE(observacao, '') AS observacao, recusa_avisada_em
        FROM preinscricao_docs WHERE preinscricao_id = $1 ORDER BY created_at`,
     [leadId]);
 }
@@ -61,6 +62,8 @@ export async function definirEstado(
   return one<{ id: number }>(c,
     `UPDATE preinscricao_docs
         SET estado = $3, observacao = $4,
+            -- Recusa (nova ou com outro motivo): fica por avisar até sair o email (avisosDocumentos.ts).
+            recusa_avisada_em = CASE WHEN $3 = 'recusado' THEN NULL ELSE recusa_avisada_em END,
             validated_by = CASE WHEN $5::uuid IS NULL THEN validated_by ELSE $5::uuid END,
             validated_at = now()
       WHERE id = $1 AND preinscricao_id = $2

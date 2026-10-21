@@ -115,10 +115,20 @@ describe("formulário público de pré-inscrição", () => {
     expect(novo.statusCode).toBe(200);
     const id = await preinscricaoDoEmail(ctx, email);
     const antigo = await token(ctx, id);
-    // 100 dias sem uso: a ligação está expirada.
-    await ctx.db.query(
+    // 100 dias sem uso, mas com documentos em falta: a ligação continua aberta e reenvia-se a mesma.
+    const envelhecer = () => ctx.db.query(
       `UPDATE preinscricoes SET docs_token_criado_em = now() - interval '100 days', docs_token_usado_em = NULL,
               ligacao_reenviada_em = now() - interval '1 day' WHERE id = $1`, [id]);
+    await envelhecer();
+    const pendente = await publico(ctx, { nome: "Rita", email, curso });
+    expect(pendente.body).toBe(novo.body);
+    expect(await token(ctx, id)).toBe(antigo);
+    // Sem nada pendente (documentos validados) e 100 dias sem uso: a ligação está expirada.
+    const { docsDoCurso } = await import("../src/docsCurso.js");
+    for (const d of (await docsDoCurso(ctx.db, curso, "gold")).filter(x => x.required)) {
+      await ctx.db.query("INSERT INTO preinscricao_docs (preinscricao_id, tipo, nome, estado) VALUES ($1, $2, 'x.pdf', 'validado')", [id, d.id]);
+    }
+    await envelhecer();
     const repetido = await publico(ctx, { nome: "Rita", email, curso });
     expect(repetido.body).toBe(novo.body);
     expect(Object.keys(repetido.json()).sort()).toEqual(["aviso", "ok"]);

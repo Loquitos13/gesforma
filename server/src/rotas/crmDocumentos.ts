@@ -1,12 +1,14 @@
 /**
- * Ficha da pré-inscrição, parte da secretaria: validar/recusar documentos, alertas de documentos novos,
+ * Ficha da pré-inscrição, parte da secretaria: validar/recusar documentos (a recusa avisa logo a pessoa),
+ * reenviar o pedido dos documentos, alertas de documentos novos,
  * validar a pré-inscrição, pedir o pagamento, nova ligação pessoal e sugestão por turma cheia.
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { getLeadDossier, logLeadEvent } from "../crmDossier.js";
 import { staffValida } from "../crmLeadsServico.js";
-import { alertarDocumentosIncorrectos, definirEstadoDoc, dispensarAlerta, firePreinscricaoEmail, listarAlertasAbertas } from "../docsLink.js";
+import { avisarRecusasLead, reenviarPedidoLead } from "../avisosDocumentos.js";
+import { definirEstadoDoc, dispensarAlerta, firePreinscricaoEmail, listarAlertasAbertas } from "../docsLink.js";
 import { concluirInscricaoPaga } from "../inscricaoPaga.js";
 import { regenerarToken } from "../ligacaoPessoal.js";
 import { confirmarPagamento } from "../ops.js";
@@ -84,19 +86,29 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     if (!ok) return reply.code(404).send({ error: "documento inexistente" });
     await logLeadEvent(db, id, req.actor!.id, "campo", "Documento recusado", observacao);
     await audit(db, req.actor!.id, "crm.doc_recusado", "preinscricao", String(id), req.ip, { docId });
-    return getLeadDossier(db, id, req.actor!);
+    // A pessoa recebe logo o pedido de reenvio (recusas seguidas agrupam-se num só email).
+    const aviso = await avisarRecusasLead(db, id, { actorId: req.actor!.id }).catch(err => {
+      req.log.error({ err }, "aviso da recusa falhou");
+      return null;
+    });
+    const dossie = await getLeadDossier(db, id, req.actor!);
+    return dossie && { ...dossie, avisoRecusa: { enviado: Boolean(aviso?.enviado), adiado: Boolean(aviso?.adiado) } };
   });
 
-  app.post("/v1/crm/leads/:id/documentos/alertar", async (req, reply) => {
+  /** «Reenviar pedido agora»: documentos recusados (com o motivo) ou em falta, com a ligação pessoal. */
+  async function reenviarPedido(req: FastifyRequest, reply: FastifyReply) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: idParam }, req);
     if (!v) return;
-    const r = await alertarDocumentosIncorrectos(db, v.params.id);
+    const r = await reenviarPedidoLead(db, v.params.id, req.actor!.id);
     if (!r) return reply.code(404).send({ error: "pré-inscrição inexistente" });
-    if (!r.enviado) return reply.code(400).send({ error: r.erro });
-    await audit(db, req.actor!.id, "crm.doc_alerta_email", "preinscricao", String(v.params.id), req.ip);
-    return { ok: true };
-  });
+    if (!r.enviado) return reply.code(r.adiado ? 409 : 400).send({ error: r.erro ?? "Não foi possível enviar." });
+    await audit(db, req.actor!.id, "crm.doc_pedido_reenviado", "preinscricao", String(v.params.id), req.ip, { documentos: r.documentos ?? [] });
+    return { ok: true, documentos: r.documentos ?? [], dossie: await getLeadDossier(db, v.params.id, req.actor!) };
+  }
+  app.post("/v1/crm/leads/:id/documentos/reenviar-pedido", reenviarPedido);
+  // Nome antigo (email dos documentos a corrigir): o mesmo pedido.
+  app.post("/v1/crm/leads/:id/documentos/alertar", reenviarPedido);
 
   app.post("/v1/crm/leads/:id/validar-preinscricao", async (req, reply) => {
     if (!requireAuth(req, reply)) return;

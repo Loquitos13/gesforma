@@ -339,5 +339,8 @@ export async function enviarLembreteDocsFin(db: Db, formandoId: number, actorId?
     html: mail.html,
   });
   await notaDoSistemaFin(db, formandoId, actorId ?? null, `Lembrete de documentos enviado (${emFalta.length} em falta).`);
+  // A partir daqui seguem lembretes automáticos (cadência das pré-inscrições) até os documentos ficarem completos.
+  const { iniciarLembretesFin } = await import("./avisosDocumentos.js");
+  await iniciarLembretesFin(db, formandoId);
   return { enviado: true as const };
 }

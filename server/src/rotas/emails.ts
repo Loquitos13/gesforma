@@ -10,7 +10,7 @@ import {
 } from "../repos/emails.js";
 import { delayLabelFromSeconds, delaySecondsFromLabel, isEmail, TRIGGER_MAP } from "../security.js";
 import { getSmtpStatus } from "../smtpConfig.js";
-import { enviarLembretesPreinscricao } from "../lembretePre.js";
+import { enviarAvisosDocumentos } from "../avisosDocumentos.js";
 import { sincronizarPartilhasPendentes } from "../driveArvore.js";
 import { linhaVisivel } from "../repos/crmVisivel.js";
 import { idParam, paginacao, periodoQuery, textoQuery, validar } from "../validacao.js";
@@ -43,7 +43,7 @@ const AMBITOS = [
 ];
 const VARIAVEIS = [
   "nome", "email", "curso", "turma", "documentos_url", "comprovativo_url", "preinscricao_url", "secretaria_url", "valor", "documentos_lista",
-  "documentos_itens", "documentos_em_falta_itens", "telefones_itens", "cronogramas_itens", "faturacao_url",
+  "documentos_itens", "documentos_em_falta_itens", "documentos_recusados_itens", "telefones_itens", "cronogramas_itens", "faturacao_url",
 ];
 
 const regraSchema = z.object({
@@ -335,14 +335,20 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       return reply.code(503).send({ error: "cron desligado: falta CRON_SECRET" });
     }
     if (!cronAutorizado(req.headers.authorization)) return reply.code(401).send({ error: "cron recusado" });
-    // Um só prazo para tudo (a função dura no máximo 30 s): os lembretes param nele e a fila fica com o que sobra.
+    // Um só prazo para tudo (a função dura no máximo 30 s): os avisos dos documentos (recusas por avisar e
+    // lembretes, em lotes) param uns segundos antes dele e a fila fica com o que sobra.
     const fim = Date.now() + CRON_EMAIL_MS;
-    const lembretes = await enviarLembretesPreinscricao(db, fim).catch(err => {
+    const avisos = await enviarAvisosDocumentos(db, fim).catch(err => {
       req.log.error(err);
       return null;
     });
     const fila = await processDueJobs(db, fim);
-    return { ...fila, lembretesPreinscricao: lembretes };
+    return {
+      ...fila,
+      lembretesPreinscricao: avisos?.lembretesPreinscricao ?? null,
+      lembretesFormandosFin: avisos?.lembretesFormandosFin ?? null,
+      recusasAvisadas: avisos?.recusas ?? null,
+    };
   });
 
   // Partilhas das pastas das turmas na Drive (as antigas davam aos formandos a pasta inteira): aos poucos.

@@ -104,6 +104,7 @@ export async function ingestEvent(db: Db, type: string, payload: Record<string, 
     documentosLista: String(payload.documentos_lista ?? ""),
     documentosItens: listaDoPayload(payload.documentos_itens),
     emFaltaItens: listaDoPayload(payload.documentos_em_falta_itens),
+    recusadosItens: listaDoPayload(payload.documentos_recusados_itens),
     cronogramasItens: listaDoPayload(payload.cronogramas_itens),
     telefonesItens: regras.length
       ? await telefonesPorZona(db, { regime: String(payload.regime ?? "") || null, local: String(payload.local ?? "") || null, preinscricaoId: Number(payload.preinscricaoId) || null })
@@ -258,6 +259,7 @@ export async function varsDeExemplo(db: Db, curso: string | null, para: { email:
     documentosLista: "",
     documentosItens: ["(documento 1)", "(documento 2)"],
     emFaltaItens: ["(documento em falta)"],
+    recusadosItens: ["(documento recusado): (motivo indicado pela secretaria)"],
     telefonesItens: await telefonesPorZona(db),
   });
 }

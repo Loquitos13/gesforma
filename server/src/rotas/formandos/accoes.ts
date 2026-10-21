@@ -1,6 +1,7 @@
 /** Acções na ficha do formando: documentos, notas e pagamento (Gold). */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { avisarRecusasFin } from "../../avisosDocumentos.js";
 import { config } from "../../config.js";
 import { renderAutomaticEmail } from "../../emailHtml.js";
 import { recusarDocFormandoFin, validarDocFormandoFin, vistaDocumentosFormandoFin } from "../../formandoFinDocs.js";
@@ -115,6 +116,8 @@ export function registarAccoes(app: FastifyInstance, deps: Deps) {
     if (regime === "fin") {
       const r = await recusarDocFormandoFin(db, id, docId, v.body.observacao, req.actor!);
       if (!r.ok) return reply.code(400).send({ error: r.error });
+      // O formando recebe logo o pedido de reenvio com o motivo (recusas seguidas agrupam-se num só email).
+      await avisarRecusasFin(db, id, { actorId: req.actor!.id }).catch(err => req.log.error({ err }, "aviso da recusa falhou"));
     } else {
       if (!await docDoFormando(db, "gold", id, docId)) return reply.code(404).send({ error: "documento inexistente" });
       await decidirDoc(db, "gold", id, docId, { validado: false, observacao: v.body.observacao }, req.actor!.id);

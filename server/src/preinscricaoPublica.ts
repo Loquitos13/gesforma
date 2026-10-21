@@ -1,6 +1,6 @@
 import { firePreinscricaoEmail } from "./docsLink.js";
 import { dentroDoLimite } from "./limitePedidos.js";
-import { motivoFecho, regenerarToken } from "./ligacaoPessoal.js";
+import { fechoDaLigacao, regenerarToken } from "./ligacaoPessoal.js";
 import { gravarTurmaEscolhida } from "./repos/percurso.js";
 import { precoParaOferta } from "./precoOferta.js";
 import { findDuplicados, logLeadEvent } from "./crmDossier.js";
@@ -220,8 +220,8 @@ export async function criarPreinscricaoPublica(
     if (existente.dadosFinJuntos) await logLeadEvent(db, existente.id, undefined, "campo", "Dados pessoais recebidos no site", CAMPOS_DADOS_FIN);
     const ultimo = existente.ligacao_reenviada_em ? new Date(String(existente.ligacao_reenviada_em)).getTime() : 0;
     if (Date.now() - ultimo > MINUTOS_REENVIO * 60_000) {
-      // Ligação expirada (90 dias sem uso): reenviá-la igual mandava uma ligação que já não abre.
-      if (motivoFecho(existente) === "expirada") await regenerarToken(db, existente.id);
+      // Ligação expirada (90 dias sem uso, sem documentos pendentes): reenviá-la igual mandava uma ligação que já não abre.
+      if (await fechoDaLigacao(db, existente) === "expirada") await regenerarToken(db, existente.id);
       await firePreinscricaoEmail(db, {
         id: existente.id, email, nome: existente.nome, apelido: existente.apelido, curso: existente.curso,
         regime: existente.regime === "fin" ? "fin" : "gold",

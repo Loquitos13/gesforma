@@ -1,6 +1,7 @@
 /**
  * Ligação pessoal `/documentos/:token`: a pessoa vê o percurso, envia documentos, escolhe a turma,
- * aceita os consentimentos e conclui. Fechada (validada, desistiu, formando ou 90 dias sem uso) não mostra dados.
+ * aceita os consentimentos e conclui. Fechada (validada, desistiu, formando ou 90 dias sem uso sem documentos
+ * pendentes) não mostra dados.
  * Inclui a ligação de documentos do formando financiado (`/formando-documentos/:token`).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -12,7 +13,7 @@ import { garantirPastaPendente } from "../driveArvore.js";
 import { formandoFinPorToken, uploadDocFormandoFin } from "../formandoFinDocs.js";
 import { apagarFicheiroSubstituido, readDriveContent, storeDriveFile } from "../driveFicheiros.js";
 import { erroFicheiroPublico } from "../ficheirosValidacao.js";
-import { leadPorToken, marcarUso, motivoFecho, textoFecho, vistaEncerrada } from "../ligacaoPessoal.js";
+import { fechoDaLigacao, leadPorToken, marcarUso, textoFecho, vistaEncerrada } from "../ligacaoPessoal.js";
 import { DadosFinErro, aceitarTermosFin, faltaDadosFin, gravarIdentificacaoFin, gravarMoradaFin } from "../percursoDadosFin.js";
 import { PercursoErro, concluirPercurso, escolherTurmaPublica, registarConsentimento, vistaDocumentosPublica } from "../percurso.js";
 import * as docsRepo from "../repos/leadDocs.js";
@@ -59,7 +60,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       reply.code(404).send({ error: "ligação inválida ou expirada" });
       return null;
     }
-    const fecho = motivoFecho(lead);
+    const fecho = await fechoDaLigacao(db, lead);
     if (fecho) {
       reply.code(410).send({ error: textoFecho(fecho) });
       return null;
@@ -72,7 +73,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const lead = await leadPorToken(db, v.params.token);
     if (!lead) return reply.code(404).send({ error: "ligação inválida ou expirada" });
-    const fecho = motivoFecho(lead);
+    const fecho = await fechoDaLigacao(db, lead);
     if (fecho) return vistaEncerrada(lead, fecho);
     await marcarUso(db, Number(lead.id));
     return vistaDocumentosPublica(db, lead);

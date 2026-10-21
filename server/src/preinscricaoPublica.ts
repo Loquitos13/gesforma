@@ -7,13 +7,17 @@ import { findDuplicados, logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
 import { newPublicId, nextOpsId } from "./ops.js";
 import { opaqueRef } from "./fieldCrypto.js";
-import { writePreinscricaoPii } from "./pii.js";
+import { readPreinscricaoPii, writePreinscricaoPii, type DadosFinPreinscricao } from "./pii.js";
+import {
+  HABILITACOES_FIN, erroTelefoneFin, partirNomeCompleto, validarInscricaoFin, type InscricaoFin,
+} from "../../src/partilhado/dadosPessoaisFin.js";
 import { resolverTurmaOferta } from "./ofertaGold.js";
 import { isEmail, normalizeEmail, sanitizeHeader, textoDePessoa } from "./security.js";
 import { campanhaDoPedido, origemDaLista } from "./leadOpcoes.js";
 import * as leads from "./repos/leads.js";
 import * as escrita from "./repos/leadsEscrita.js";
-import { carimboUtc } from "./datas.js";
+import { carimboUtc, hojeLisboa } from "./datas.js";
+import { LISTA_PAISES } from "../../src/partilhado/execucaoFisica.js";
 
 async function metodoPagamentoConhecido(db: Db, nome: string) {
   return Boolean(await leads.opcaoDaLista(db, "metodos_pagamento", nome));
@@ -39,7 +43,20 @@ export type PreinscricaoPublicaInput = {
   regime?: "gold" | "fin";
   /** Aceitação da política de privacidade no formulário (RGPD). */
   consentimento?: boolean;
+  /** Financiada: nome completo, género, data de nascimento, nacionalidade e habilitações (ignorados num curso Gold). */
+  dadosFin?: InscricaoFin;
 };
+
+/** Os dados da financiada como ficam no pacote cifrado da pré-inscrição. */
+function inscricaoParaPacote(d: InscricaoFin): DadosFinPreinscricao {
+  return {
+    genero: d.genero,
+    dataNascimento: d.dataNascimento,
+    nacionalidade: d.nacionalidade,
+    habilitacoes: d.habilitacoes,
+    habilitacoesEntrada: HABILITACOES_FIN.find(h => h.rotulo === d.habilitacoes)?.valor ?? "",
+  };
+}
 
 /** Curso activo da oferta com este nome. Devolve o nome canónico e o preço base (Gold). */
 async function cursoDaOferta(db: Db, regime: "gold" | "fin", nome: string) {
@@ -76,6 +93,9 @@ export async function politicaPrivacidade(db: Db) {
 }
 
 const MINUTOS_REENVIO = 10;
+
+/** O que o histórico da ficha diz dos dados pessoais da financiada: os nomes dos campos, nunca os valores. */
+const CAMPOS_DADOS_FIN = "Género, data de nascimento, nacionalidade e habilitações (cifrados).";
 
 /** Pedidos do formulário público contados na base de dados: por IP e por email, por hora. */
 export const PREINSCRICOES_POR_IP = 30;
@@ -136,6 +156,18 @@ export async function criarPreinscricaoPublica(
     : null;
   if (regime === "gold" && input.turmaId && !turma) return { error: "a turma escolhida já não está libertada" as const };
   if (turma && turma.vagasLivres <= 0) return { error: "a turma escolhida já não tem vagas: escolha outra data" as const };
+  // Financiada: o formulário do site manda os dados pessoais (validados aqui, com as regras do site); o nome da
+  // ficha passa a ser o nome completo e o telemóvel é obrigatório. Sem eles (contacto pela assistente), fica como antes.
+  let dadosFin: InscricaoFin | null = null;
+  if (regime === "fin" && input.dadosFin) {
+    const erros: Record<string, string> = { ...validarInscricaoFin(input.dadosFin, hojeLisboa(), LISTA_PAISES) };
+    const erroTelf = erroTelefoneFin(input.telf || "");
+    if (erroTelf) erros.telf = erroTelf;
+    const primeiro = Object.values(erros)[0];
+    if (primeiro) return { error: primeiro, campos: erros };
+    dadosFin = { ...input.dadosFin, nomeCompleto: input.dadosFin.nomeCompleto.trim().replace(/\s+/g, " ") };
+  }
+  const nomes = dadosFin ? partirNomeCompleto(dadosFin.nomeCompleto) : { nome: input.nome, apelido: input.apelido || "" };
   const acessoImediato = Boolean(input.acessoImediato) && !turma;
   const local = sanitizeHeader(turma?.local || input.local || (acessoImediato ? "Online" : ""));
   const horario = sanitizeHeader(turma?.horario || input.horario || "");
@@ -152,15 +184,27 @@ export async function criarPreinscricaoPublica(
     : 0;
   const id = await nextOpsId(db);
   const publicId = newPublicId();
-  const piiPack = writePreinscricaoPii({ telf });
+  const finPack = dadosFin ? inscricaoParaPacote(dadosFin) : undefined;
+  const piiPack = writePreinscricaoPii({ telf, fin: finPack });
   // Duplicado só quando há um pedido ABERTO do mesmo email para o MESMO curso. A verificação e a
   // inserção correm na mesma transacção, com o par email+curso trancado: um duplo clique não cria dois.
   const existente = await db.tx(async q => {
     await escrita.bloquearPedido(q, email, curso);
     const aberto = await escrita.pedidoAberto(q, email, curso);
-    if (aberto) return aberto;
+    if (aberto) {
+      // Pedido repetido com os dados pessoais: só entram se o pedido aberto ainda não os tem (nunca substituem).
+      if (finPack && aberto.regime === "fin") {
+        const linha = await escrita.piiDoPedido(q, aberto.id);
+        const prev = linha ? readPreinscricaoPii(linha) : {};
+        if (!prev.fin || !Object.keys(prev.fin).length) {
+          await escrita.gravarPiiDoPedido(q, aberto.id, writePreinscricaoPii({ ...prev, fin: finPack }));
+          return { ...aberto, dadosFinJuntos: true };
+        }
+      }
+      return { ...aberto, dadosFinJuntos: false };
+    }
     await escrita.inserirLead(q, {
-      id, inscrito: carimboUtc(), nome: textoDePessoa(input.nome), apelido: textoDePessoa(input.apelido || ""), email,
+      id, inscrito: carimboUtc(), nome: textoDePessoa(nomes.nome), apelido: textoDePessoa(nomes.apelido), email,
       telf: piiPack.telf || telf, inicioCurso: inicio, concelho: textoDePessoa(input.concelho || ""),
       local, curso, preco, estado: "Não contactado", campanha: campanha.campanha, campanhaId: campanha.campanhaId,
       origem, entrada: "preinscricao", meioContacto: meio, horario, turmaId, pagamentoMetodo: metodo, regime,
@@ -172,6 +216,8 @@ export async function criarPreinscricaoPublica(
   });
   if (existente) {
     if (notas) await logLeadEvent(db, existente.id, undefined, "campo", "Novo pedido no site", notas);
+    // Só os nomes dos campos: os valores nunca vão para o histórico.
+    if (existente.dadosFinJuntos) await logLeadEvent(db, existente.id, undefined, "campo", "Dados pessoais recebidos no site", CAMPOS_DADOS_FIN);
     const ultimo = existente.ligacao_reenviada_em ? new Date(String(existente.ligacao_reenviada_em)).getTime() : 0;
     if (Date.now() - ultimo > MINUTOS_REENVIO * 60_000) {
       // Ligação expirada (90 dias sem uso): reenviá-la igual mandava uma ligação que já não abre.
@@ -197,12 +243,13 @@ export async function criarPreinscricaoPublica(
   }
   const detalhe = [origem, curso, local, horario, inicio !== "-" ? inicio : ""].filter(Boolean).join(" · ");
   await logLeadEvent(db, id, undefined, "criacao", "Pré-inscrição recebida", detalhe);
+  if (dadosFin) await logLeadEvent(db, id, undefined, "campo", "Dados pessoais recebidos no site", CAMPOS_DADOS_FIN);
   if (!oferta) await logLeadEvent(db, id, undefined, "campo", "Curso fora da oferta", `Pedido: ${pedidoCurso || "sem curso"}. Sem pedido de pagamento.`);
   const outros = await findDuplicados(db, email, telf, id).catch(() => []);
   if (Array.isArray(outros) && outros.length) {
     await logLeadEvent(db, id, undefined, "campo", "Possível duplicado", `Outros pedidos com o mesmo contacto: ${outros.map(o => `#${(o as { id: number }).id}`).join(", ")}`);
   }
-  await firePreinscricaoEmail(db, { id, email, nome: input.nome, apelido: input.apelido, curso, regime }, "preinscricao.created", `preinscricao:${id}:${email}`).catch(() => undefined);
+  await firePreinscricaoEmail(db, { id, email, nome: nomes.nome, apelido: nomes.apelido, curso, regime }, "preinscricao.created", `preinscricao:${id}:${email}`).catch(() => undefined);
   return {
     duplicado: false as const,
     preinscricao: { id, ref: opaqueRef("pre", id, publicId) },

@@ -3,6 +3,8 @@ import type { AtorCrm, Consulta } from "./repos/sql.js";
 import { documentosUrl, docsDoCurso, docsCompletos, ensureDocsToken, listarDocsLead } from "./docsLink.js";
 import { faltaPedirPagamento, faltaValidarPreinscricao, situacaoPagamento } from "./docsCurso.js";
 import { mapPagamento, mapPreinscricao } from "./ops.js";
+import { readPreinscricaoPii } from "./pii.js";
+import { GENEROS_FIN, mascararFim, rotuloPais } from "../../src/partilhado/dadosPessoaisFin.js";
 import { turmasParaValidacao } from "./percurso.js";
 import * as repo from "./repos/leadDossier.js";
 import * as leads from "./repos/leads.js";
@@ -172,7 +174,41 @@ export async function getLeadDossier(db: Db, id: number, ator?: AtorCrm) {
     pagamento,
     /** Turmas activas do mesmo curso, com vagas (validação e inscrição). */
     turmasDestino: lead.curso ? await turmasParaValidacao(db, regime, lead.curso) : [],
+    dadosFin: regime === "fin" ? dadosPessoaisFin(row, ator) : null,
     ...(await resumoPercurso(db, row, regime, pedidos, ficheiros)),
+  };
+}
+
+/** Funções que lêem os dados da financiada (as mesmas de /v1/formandos-fin*); o comercial e o formador ficam de fora. */
+const VEEM_DADOS_FIN = new Set(["admin", "secretaria", "financiada"]);
+
+/**
+ * Dados pessoais da financiada (formulário público e ligação pessoal), para o dossiê: o n.º do documento, o NISS,
+ * o IBAN e o NIF da entidade empregadora só com os últimos 4 caracteres (os valores inteiros passam para a ficha do
+ * formando quando a pré-inscrição é validada). O NIF e a morada aparecem já na ficha (dados fiscais).
+ */
+function dadosPessoaisFin(row: Record<string, unknown>, ator?: AtorCrm) {
+  if (ator && !VEEM_DADOS_FIN.has(ator.role)) return null;
+  const pii = readPreinscricaoPii(row);
+  const f = pii.fin ?? {};
+  const termosEm = row.termos_fin_em ? iso(row.termos_fin_em as string | Date) : null;
+  if (!Object.keys(f).length && !termosEm) return null;
+  return {
+    genero: GENEROS_FIN.find(g => g.valor === f.genero)?.rotulo ?? f.genero ?? "",
+    dataNascimento: f.dataNascimento ?? "",
+    nacionalidade: f.nacionalidade ? rotuloPais(f.nacionalidade) : "",
+    habilitacoes: f.habilitacoes ?? "",
+    morada: [pii.moradaFiscal, [pii.codigoPostal, f.localidade].filter(Boolean).join(" "), String(row.concelho ?? "")].filter(Boolean).join(", "),
+    tipoDocumento: f.tipoDocumento ?? "",
+    numeroDocumento: mascararFim(f.numeroDocumento ?? ""),
+    validadeDocumento: f.validadeDocumento ?? "",
+    nif: pii.nif ?? "",
+    niss: mascararFim(f.niss ?? ""),
+    iban: mascararFim(f.iban ?? ""),
+    situacaoEmprego: f.situacaoEmprego ?? "",
+    nifEntidadeEmpregadora: mascararFim(f.nifEntidadeEmpregadora ?? ""),
+    termosAceitesEm: termosEm,
+    termosVersao: String(row.termos_fin_versao ?? ""),
   };
 }
 

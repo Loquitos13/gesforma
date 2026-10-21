@@ -11,6 +11,7 @@ import * as leads from "./repos/leads.js";
 import * as repo from "./repos/percurso.js";
 import type { TurmaPercursoRow } from "./repos/percurso.js";
 import { hojeLisboa } from "./datas.js";
+import { vistaDadosFin } from "./percursoDadosFin.js";
 
 export {
   enviarSugestaoTurmaCheia, ligarPreinscricaoAoFormandoGold, moverDocsDoLead, moverDocsParaTurma, validarPreinscricao,
@@ -379,6 +380,8 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
     breves,
     turmaEscolhida,
     turmaCheia: recusadas.size > 0 && !turmaEscolhida,
+    /** Financiada: morada, identificação (sensíveis mascarados) e termos, antes dos documentos. */
+    dadosFin: vistaDadosFin(lead),
     criterios: {
       local: pedidoUtil(criterios.local) ? criterios.local : "",
       horario: pedidoUtil(criterios.horario) ? criterios.horario : "",

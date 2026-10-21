@@ -378,6 +378,20 @@ describe("financiada: só documentos, a secretaria coloca na turma", () => {
     expect(vista.turmas).toEqual([]);
     expect((await ctx.app.inject({ method: "POST", url: `/v1/public/documentos/${token}/turma`, payload: { turmaId } })).statusCode).toBe(400);
 
+    // Antes dos documentos, a ligação da financiada pede a morada, a identificação e os termos (sem eles, recusa concluir).
+    expect((await ctx.app.inject({ method: "POST", url: `/v1/public/documentos/${token}/concluir` })).statusCode).toBe(409);
+    const validade = `${new Date().getUTCFullYear() + 5}-01-01`;
+    for (const [passo, corpo] of [
+      ["morada", { morada: "Rua das Flores, 12", localidade: "Porto", codigoPostal: "4000-123", concelho: "Porto" }],
+      ["identificacao", {
+        tipoDocumento: "Cartão de Cidadão", numeroDocumento: "12345678", validadeDocumento: validade, nif: "123456789",
+        niss: "12345678901", iban: "PT50000201231234567890154", situacaoEmprego: "Inativo(a) (estudante, reformado(a), doméstico(a)…)",
+      }],
+      ["termos", { termos: true, dados: true }],
+    ] as const) {
+      const r = await ctx.app.inject({ method: "POST", url: `/v1/public/documentos/${token}/dados/${passo}`, payload: corpo });
+      expect(r.statusCode, r.body).toBe(200);
+    }
     // Documentos entregues e validados (os modelos com consentimento entram como ficheiro já validado).
     for (const tipo of ["cc", "ch", "cu", "morada", "ci", "ce", "contrato", "rgpd"]) {
       await ctx.db.query("INSERT INTO preinscricao_docs (preinscricao_id, tipo, nome, estado) VALUES ($1, $2, $3, 'validado')", [id, tipo, `${tipo}.pdf`]);

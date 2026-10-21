@@ -171,7 +171,7 @@ export function dadosBancarios(c: Consulta, formandoIds: number[]) {
   );
 }
 
-export async function gravarDadosBancarios(c: Consulta, formandoId: number, ibanEnc: string, titular: string, actorId: string) {
+export async function gravarDadosBancarios(c: Consulta, formandoId: number, ibanEnc: string, titular: string, actorId: string | null) {
   await many(
     c,
     `INSERT INTO formando_apoio_dados (formando_id, iban_enc, titular, updated_by)

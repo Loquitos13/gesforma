@@ -3,7 +3,12 @@ import { garantirVaga, recontar, recontarTurma } from "./inscricao.js";
 import type { Db } from "./db/pool.js";
 import { listarDocsLead } from "./docsLink.js";
 import { nextOpsId, newPublicId } from "./ops.js";
-import { readFormandoDocs, writeFormandoDocs, writeFormandoPiiPatch } from "./pii.js";
+import { readFormandoDocs, readFormandoPii, readPreinscricaoPii, writeFormandoDocs, writeFormandoPiiPatch, type IdentificacaoFin } from "./pii.js";
+import { encryptField } from "./fieldCrypto.js";
+import { dadosBancarios, gravarDadosBancarios } from "./repos/apoios.js";
+import {
+  COLUNAS_FINANCIAMENTO, fichaFinParaFinanciamento, financiamentoDoFormando, gravarFinanciamento, gravarPiiFormandoFin, type CampoTabela,
+} from "./repos/formandoFinanciamento.js";
 import {
   actualizarFormandoFin, docsValidosFin, formandoFinParaLembrete, formandoFinPorEmail, gravarDocsFin, inserirFormandoFin,
   marcarLeadFormando, notaDoSistemaFin, preinscricaoCompleta, turmaDoFormandoFin, turmaFinPorId, turmaFinPorNome, turmasFinDoCurso,
@@ -67,6 +72,62 @@ async function mergeDocsJson(
     if (r.ok) out[r.doc_id] = { ok: true, data: String(r.data ?? "").slice(0, 10) || hojeLisboa() };
   }
   return out;
+}
+
+/**
+ * Os dados pessoais da financiada (pacote cifrado da pré-inscrição: formulário público e ligação pessoal) passam
+ * para a ficha do formando: NIF, NISS, data de nascimento, código postal e documento de identificação para o pacote
+ * cifrado (Dados para o financiamento); género, nacionalidade, habilitações e situação face ao emprego à entrada e
+ * NIF da entidade empregadora para a tabela do financiamento; o IBAN para os apoios (cifrado). Só preenche o que a
+ * ficha ainda não tem: o que a secretaria já gravou nunca é substituído. Devolve os nomes dos campos (nunca os valores).
+ */
+export async function levarDadosPessoaisParaFicha(db: Db, row: Record<string, unknown>, formandoId: number, actorId?: string) {
+  const pre = readPreinscricaoPii(row);
+  const fin = pre.fin ?? {};
+  const nifPre = String(pre.nif ?? "").replace(/\D/g, "");
+  const cp = /(\d{4})\s*-?\s*(\d{3})/.exec(pre.codigoPostal ?? "");
+  const ficha = await fichaFinParaFinanciamento(db, formandoId);
+  if (!ficha) return [] as string[];
+  const prev = readFormandoPii({ pii_enc: ficha.pii_enc, telf: ficha.telf });
+  const ident: IdentificacaoFin = { ...prev.ident };
+  const levados: string[] = [];
+  const cifrados: [keyof IdentificacaoFin, string][] = [
+    ["nif", nifPre.length === 9 ? nifPre : ""],
+    ["niss", fin.niss ?? ""],
+    ["dataNascimento", fin.dataNascimento ?? ""],
+    ["codigoPostal", cp ? `${cp[1]}-${cp[2]}` : ""],
+    ["tipoDocumento", fin.tipoDocumento ?? ""],
+    ["numeroDocumento", fin.numeroDocumento ?? ""],
+    ["validadeDocumento", fin.validadeDocumento ?? ""],
+    ["passaporte", fin.tipoDocumento === "Passaporte" ? fin.numeroDocumento ?? "" : ""],
+  ];
+  const identNovo = cifrados.filter(([k, v]) => v && !String(ident[k] ?? "").trim());
+  for (const [k, v] of identNovo) { ident[k] = v; levados.push(k); }
+  const linha = await financiamentoDoFormando(db, formandoId);
+  const tabela: Partial<Record<CampoTabela, string>> = {};
+  const candidatosTabela: [CampoTabela, string][] = [
+    ["genero", fin.genero ?? ""],
+    ["nacionalidade", fin.nacionalidade ?? ""],
+    ["habilitacoesEntrada", fin.habilitacoesEntrada ?? ""],
+    ["situacaoEmpregoEntrada", fin.situacaoEmpregoEntrada ?? ""],
+    ["nifEntidadeEmpregadora", fin.nifEntidadeEmpregadora ?? ""],
+  ];
+  for (const [k, v] of candidatosTabela) {
+    if (v && !String(linha?.[COLUNAS_FINANCIAMENTO[k]] ?? "").trim()) { tabela[k] = v; levados.push(k); }
+  }
+  const banco = fin.iban ? (await dadosBancarios(db, [formandoId]))[0] : undefined;
+  const iban = fin.iban && !banco?.iban_enc ? fin.iban : "";
+  if (iban) levados.push("iban");
+  if (!levados.length) return levados;
+  await db.tx(async q => {
+    if (identNovo.length) await gravarPiiFormandoFin(q, formandoId, writeFormandoPiiPatch({ ident }, prev));
+    if (Object.keys(tabela).length) await gravarFinanciamento(q, formandoId, tabela, actorId ?? null);
+    if (iban) {
+      const titular = banco?.titular || `${String(row.nome ?? "")} ${String(row.apelido ?? "")}`.trim();
+      await gravarDadosBancarios(q, formandoId, encryptField(iban), titular, actorId ?? null);
+    }
+  });
+  return levados;
 }
 
 export async function upsertFormandoFinFromLead(db: Db, leadId: number, actorId?: string) {
@@ -140,6 +201,11 @@ export async function upsertFormandoFinFromLead(db: Db, leadId: number, actorId?
     });
     await recontar(db, "fin", antes, tid);
     await logLeadEvent(db, leadId, actorId, "estado", "Formando financiado actualizado", `Ficha #${id} · ${turmaNome}`);
+  }
+
+  const levados = await levarDadosPessoaisParaFicha(db, row, id, actorId);
+  if (levados.length) {
+    await logLeadEvent(db, leadId, actorId, "campo", "Dados pessoais passados para a ficha", `Ficha #${id} · ${levados.length} campo${levados.length === 1 ? "" : "s"}: ${levados.join(", ")}`);
   }
 
   await transferirDocsDoLead(db, leadId, actorId);

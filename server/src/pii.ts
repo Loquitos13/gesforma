@@ -1,10 +1,36 @@
 import { decryptJson, encryptJson } from "./fieldCrypto.js";
 
+/**
+ * Dados pessoais da financiada (ver src/partilhado/dadosPessoaisFin.ts): os do formulário público e os da ligação
+ * pessoal (morada e identificação). O NIF, a morada (`moradaFiscal`) e o código postal vão nos campos de cima.
+ * Passam para a ficha do formando quando a pré-inscrição é validada (finPipeline.ts).
+ */
+export type DadosFinPreinscricao = {
+  /** Valores das listas da execução física. */
+  genero?: string;
+  nacionalidade?: string;
+  /** Rótulo escolhido («12.º Ano») e o valor do template correspondente. */
+  habilitacoes?: string;
+  habilitacoesEntrada?: string;
+  dataNascimento?: string;
+  localidade?: string;
+  tipoDocumento?: string;
+  numeroDocumento?: string;
+  validadeDocumento?: string;
+  niss?: string;
+  iban?: string;
+  /** Rótulo escolhido e o valor do template correspondente. */
+  situacaoEmprego?: string;
+  situacaoEmpregoEntrada?: string;
+  nifEntidadeEmpregadora?: string;
+};
+
 export type PreinscricaoPii = {
   nif?: string;
   moradaFiscal?: string;
   codigoPostal?: string;
   telf?: string;
+  fin?: DadosFinPreinscricao;
 };
 
 /** Identificadores pessoais do formando da Financiada para o financiamento (ver src/partilhado/execucaoFisica.ts). */
@@ -17,6 +43,9 @@ export type IdentificacaoFin = {
   autorizacaoResidencia?: string;
   tipoAutorizacaoResidencia?: string;
   passaporte?: string;
+  tipoDocumento?: string;
+  numeroDocumento?: string;
+  validadeDocumento?: string;
 };
 
 export type FormandoPii = {
@@ -51,7 +80,11 @@ export function writePreinscricaoPii(input: PreinscricaoPii) {
   const morada = rowStr(input.moradaFiscal);
   const cp = rowStr(input.codigoPostal);
   const telf = rowStr(input.telf);
-  const has = nif || morada || cp || telf;
+  const fin = input.fin
+    ? Object.fromEntries(Object.entries(input.fin).map(([k, v]) => [k, rowStr(v)]).filter(([, v]) => v)) as DadosFinPreinscricao
+    : {};
+  const temFin = Object.keys(fin).length > 0;
+  const has = nif || morada || cp || telf || temFin;
   if (!has) {
     return { nif: "", morada_fiscal: "", codigo_postal: "", telf: "", pii_enc: null as string | null };
   }
@@ -60,7 +93,7 @@ export function writePreinscricaoPii(input: PreinscricaoPii) {
     morada_fiscal: "",
     codigo_postal: "",
     telf: "",
-    pii_enc: encryptJson({ nif, moradaFiscal: morada, codigoPostal: cp, telf }),
+    pii_enc: encryptJson({ nif, moradaFiscal: morada, codigoPostal: cp, telf, ...(temFin ? { fin } : {}) }),
   };
 }
 

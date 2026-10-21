@@ -151,6 +151,17 @@ export type DossieLead = {
   pagamentoPedidoEm: string | null;
   podePedirPagamento: boolean;
   faltaPedirPagamento: string;
+  /**
+   * Financiada: os dados pessoais do formulário e da ligação pessoal (só para admin, secretaria e financiada).
+   * N.º do documento, NISS, IBAN e NIF da entidade empregadora vêm mascarados (últimos 4).
+   */
+  dadosFin?: DadosPessoaisFinLead | null;
+};
+
+export type DadosPessoaisFinLead = {
+  genero: string; dataNascimento: string; nacionalidade: string; habilitacoes: string; morada: string;
+  tipoDocumento: string; numeroDocumento: string; validadeDocumento: string; nif: string; niss: string; iban: string;
+  situacaoEmprego: string; nifEntidadeEmpregadora: string; termosAceitesEm: string | null; termosVersao: string;
 };
 
 export const apiDossie = (id: number, signal?: AbortSignal) => api<DossieLead>(`/v1/crm/leads/${id}`, { signal });

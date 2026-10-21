@@ -121,6 +121,8 @@ export const apiPublicDocumentos = (token: string) =>
     percursoConcluido?: boolean;
     /** Falso na Financiada: a turma é atribuída pela secretaria. */
     escolheTurma?: boolean;
+    /** Financiada: morada, identificação (sensíveis mascarados) e termos, antes dos documentos. */
+    dadosFin?: DadosFinLigacao | null;
     turmas?: TurmaPercurso[];
     recomendadas?: TurmaPercurso[];
     breves?: TurmaPercurso[];
@@ -144,6 +146,27 @@ export const apiPublicEscolherTurma = (token: string, turmaId: number) =>
   api<{ ok: boolean }>(`/v1/public/documentos/${encodeURIComponent(token)}/turma`, {
     method: "POST", body: JSON.stringify({ turmaId }),
   });
+
+/** Financiada: o que a ligação pessoal mostra dos passos antes dos documentos. */
+export type DadosFinLigacao = {
+  morada: { morada: string; localidade: string; codigoPostal: string; concelho: string };
+  moradaCompleta: boolean;
+  identificacao: {
+    tipoDocumento: string; validadeDocumento: string; situacaoEmprego: string;
+    mascarados: Record<"numeroDocumento" | "nif" | "niss" | "iban" | "nifEntidadeEmpregadora", string>;
+    guardados: ("numeroDocumento" | "nif" | "niss" | "iban" | "nifEntidadeEmpregadora")[];
+  };
+  identificacaoCompleta: boolean;
+  termos: { em: string; versao: string } | null;
+  termosVersao: string;
+  termosTexto: string[];
+  consentimentoTexto: string;
+  completo: boolean;
+};
+
+/** Financiada: grava um passo (morada, identificação ou termos); erros por campo em `ApiError.campos`. */
+export const apiPublicDadosFin = (token: string, passo: "morada" | "identificacao" | "termos", corpo: Record<string, unknown>) =>
+  api<{ ok: true }>(`/v1/public/documentos/${encodeURIComponent(token)}/dados/${passo}`, { method: "POST", body: JSON.stringify(corpo) });
 
 export const apiPublicConcluirPercurso = (token: string) =>
   api<{ ok: boolean }>(`/v1/public/documentos/${encodeURIComponent(token)}/concluir`, {

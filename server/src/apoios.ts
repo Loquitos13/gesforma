@@ -6,6 +6,7 @@
  */
 import { estadoDaMarca, sessoesComHoras, type SessaoComHoras } from "./assiduidade.js";
 import { decryptField } from "./fieldCrypto.js";
+import { validarIban } from "../../src/partilhado/dadosPessoaisFin.js";
 import {
   TIPOS_APOIO, type ModoApoio, type RegraApoioRow, type TipoApoio,
 } from "./repos/apoios.js";
@@ -211,20 +212,8 @@ export function mesesDaTurma(sessoes: SessaoComHoras[]) {
 
 // ── IBAN ──────────────────────────────────────────────────────────────────────
 
-/** Normaliza (sem espaços, maiúsculas) e valida pelo controlo mod-97 (ISO 13616). */
-export function validarIban(raw: string): { ok: true; iban: string } | { ok: false; erro: string } {
-  const iban = String(raw ?? "").replace(/\s+/g, "").toUpperCase();
-  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(iban)) return { ok: false, erro: "IBAN com formato inválido." };
-  if (iban.startsWith("PT") && iban.length !== 25) return { ok: false, erro: "Um IBAN português tem 25 caracteres." };
-  const rearranjado = iban.slice(4) + iban.slice(0, 4);
-  let resto = 0;
-  for (const ch of rearranjado) {
-    const v = ch >= "A" && ch <= "Z" ? String(ch.charCodeAt(0) - 55) : ch;
-    for (const d of v) resto = (resto * 10 + Number(d)) % 97;
-  }
-  if (resto !== 1) return { ok: false, erro: "IBAN inválido (dígitos de controlo errados)." };
-  return { ok: true, iban };
-}
+/** Validação mod-97 do IBAN: a mesma do site, em src/partilhado/dadosPessoaisFin.ts. */
+export { validarIban };
 
 /** IBAN mascarado para mostrar: "PT50 •••• •••• •••• •••• 1234 5". */
 export function mascararIban(iban: string) {

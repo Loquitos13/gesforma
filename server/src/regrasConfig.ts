@@ -1,5 +1,6 @@
 import type { Db } from "./db/pool.js";
 import { valoresDefinicao } from "./repos/configuracoes.js";
+import { CAMPOS_CANDIDATURA_FIN, lerCandidaturaFin } from "../../src/partilhado/candidaturaFin.js";
 
 /**
  * Regras pedagógicas e dados da entidade, editáveis pelo administrador em `app_settings`
@@ -127,6 +128,11 @@ export async function lerEntidade(db: Db) {
   return parseEntidade(await valores(db, "entidade"));
 }
 
+/** Candidatura da Financiada (Configurações › Financiada): programa e tipologias dos documentos da turma. */
+export async function lerCandidatura(db: Db) {
+  return lerCandidaturaFin(await valores(db, "candidatura_fin"));
+}
+
 /** Contactos da entidade que podem sair para páginas públicas (sem NIF, IBAN nem titular). */
 export type EntidadePublica = Pick<Entidade, "nome" | "nomeCurto" | "morada" | "codigoPostal" | "localidade" | "telefone" | "email" | "site">;
 
@@ -170,6 +176,11 @@ export function validarDefinicoes(
     if (iban && !/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(iban)) return { ok: false, erro: "IBAN inválido." };
     const e = parseEntidade({ ...values, nif, iban });
     return { ok: true, values: { ...e } };
+  }
+  if (id === "candidatura_fin") {
+    // Só os campos conhecidos; todos gravados (um campo em branco fica em branco, não volta à omissão).
+    const c = lerCandidaturaFin(Object.fromEntries(CAMPOS_CANDIDATURA_FIN.map(({ chave }) => [chave, values[chave] ?? ""])));
+    return { ok: true, values: { ...c } };
   }
   return { ok: true, values };
 }

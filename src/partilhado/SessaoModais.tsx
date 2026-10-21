@@ -67,11 +67,13 @@ export function sumarioPreenchido(s?: SumarioSessaoData) {
   return !!s && s.conteudos.trim().length > 0;
 }
 
-export function PlanoSessaoModal({ open, onClose, sessao, plano: planoGravado, onSave, soLeitura }: {
+export function PlanoSessaoModal({ open, onClose, sessao, plano: planoGravado, onSave, soLeitura, onPdf }: {
   open: boolean; onClose: () => void;
   sessao?: SessaoMeta;
   plano: PlanoSessaoData;
   onSave: (data: PlanoSessaoData) => void;
+  /** PDF do plano gravado (Financiada: modelo da candidatura). */
+  onPdf?: () => void;
   /** Motivo para mostrar o plano sem o deixar editar (ex.: plano definido na ficha do curso). */
   soLeitura?: string;
 }) {
@@ -92,6 +94,10 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano: planoGravado, o
             <p className="text-xs text-slate-400 mt-0.5">{sessao.data} · {sessao.hora} · {formadoresDaSessaoLabel(sessao) || "Formador por definir"}</p>
           </div>
           <div className="flex items-center gap-2">
+            {onPdf && !editing && (
+              <button onClick={onPdf} title="Plano de sessão em PDF, com o que está gravado"
+                className="text-xs font-semibold px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">PDF</button>
+            )}
             {soLeitura
               ? <span className="text-xs font-semibold px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg">{soLeitura}</span>
               : !editing

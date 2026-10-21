@@ -13,6 +13,9 @@ import {
 } from "../../../../src/partilhado/execucaoFisica.js";
 import { TIPOS_DOCUMENTO_FIN } from "../../../../src/partilhado/dadosPessoaisFin.js";
 import { hojeLisboa } from "../../datas.js";
+import { fichasInscricaoDaTurma } from "../../documentosFin.js";
+import { turmaDoFormandoFin } from "../../repos/documentosFin.js";
+import { enviarPdf } from "../pedagogia/comum.js";
 import { readFormandoPii, readPreinscricaoPii, writeFormandoPiiPatch, type IdentificacaoFin } from "../../pii.js";
 import {
   COLUNAS_FINANCIAMENTO, fichaFinParaFinanciamento, financiamentoDoFormando, gravarFinanciamento, gravarPiiFormandoFin, type CampoTabela,
@@ -86,6 +89,21 @@ export function registarFinanciamento(app: FastifyInstance, deps: Deps) {
     const r = await lerFinanciamento(db, v.params.id);
     if (!r) return reply.code(404).send({ error: "formando inexistente" });
     return r;
+  });
+
+  /** Ficha de inscrição do formando no modelo da candidatura (a mesma página do PDF de fichas da turma). */
+  app.get("/v1/formandos-fin/:id/ficha-inscricao", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: idParam }, req);
+    if (!v) return;
+    const id = v.params.id;
+    const t = await turmaDoFormandoFin(db, id);
+    if (!t) return reply.code(404).send({ error: "formando inexistente" });
+    if (t.turma_id == null) return reply.code(400).send({ error: "O formando ainda não tem turma: a ficha leva os dados da turma e do curso." });
+    const ficha = await fichasInscricaoDaTurma(db, Number(t.turma_id), id);
+    if (!ficha) return reply.code(404).send({ error: "formando inexistente" });
+    await audit(db, req.actor!.id, "formando.ficha_inscricao", "formandos_fin", String(id), req.ip);
+    return enviarPdf(reply, ficha.nome, ficha.bytes);
   });
 
   app.patch("/v1/formandos-fin/:id/financiamento", async (req, reply) => {

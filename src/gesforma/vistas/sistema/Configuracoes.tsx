@@ -12,7 +12,8 @@ import { SeccaoDrive, SeccaoSmtp } from "./configuracoes/Integracoes";
 import { SeccaoMicrosoft, SeccaoWhatsapp } from "./configuracoes/IntegracoesContas";
 import { LogoEntidade } from "./configuracoes/LogoEntidade";
 import { SeccaoDefinicoes } from "./configuracoes/SeccaoDefinicoes";
-import { CAMPOS_ENTIDADE, CAMPOS_FIN, CAMPOS_FORMACAO, CAMPOS_GOLD, CAMPOS_LEMBRETE, CAMPOS_REGRAS } from "./configuracoes/secoes";
+import { CAMPOS_CANDIDATURA, CAMPOS_ENTIDADE, CAMPOS_FIN, CAMPOS_FORMACAO, CAMPOS_GOLD, CAMPOS_LEMBRETE, CAMPOS_REGRAS } from "./configuracoes/secoes";
+import { CANDIDATURA_FIN_OMISSAO } from "../../../partilhado/candidaturaFin";
 import { SeccaoSeloAssinatura } from "./configuracoes/SeloAssinatura";
 import { SeccaoSeguranca } from "./configuracoes/Seguranca";
 
@@ -79,7 +80,14 @@ export default function Configuracoes({ params, navigate }: VistaProps) {
       case "gold":
         return <SeccaoDefinicoes id="gold" titulo="Gold" podeEditar={editar} campos={CAMPOS_GOLD} valores={settings.gold} descricao="Notas internas da formação autofinanciada. Os preços estão em cada curso." />;
       case "fin":
-        return <SeccaoDefinicoes id="fin" titulo="Financiada" podeEditar={editar} campos={CAMPOS_FIN} valores={settings.fin} descricao="Notas internas da formação financiada." />;
+        return (
+          <div className="space-y-4">
+            <SeccaoDefinicoes id="candidatura_fin" titulo="Candidatura" podeEditar={editar} campos={CAMPOS_CANDIDATURA}
+              valores={settings.candidatura_fin ?? CANDIDATURA_FIN_OMISSAO}
+              descricao="Programa e tipologias da candidatura. Saem na ficha de inscrição e na folha de presenças / sumário de todas as turmas da Financiada." />
+            <SeccaoDefinicoes id="fin" titulo="Financiada" podeEditar={editar} campos={CAMPOS_FIN} valores={settings.fin} descricao="Notas internas da formação financiada." />
+          </div>
+        );
       case "apoios": return <RegrasApoios podeEditar={editar} />;
       case "lembretes":
         return <SeccaoDefinicoes id="lembrete_pre" titulo="Lembrete da pré-inscrição" soAdmin podeEditar={admin} campos={CAMPOS_LEMBRETE}

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { apiDtpExport } from "../partilhado/api";
+import { apiDtpExport, apiFolhasPresencaFin } from "../partilhado/api";
 import { dtpZipNome } from "../partilhado/dtpPasta";
 import { imprimirFolhasPresencas } from "../partilhado/presencasPrint";
 import { AppModal } from "../partilhado/FormKit";
@@ -236,6 +236,8 @@ export function ExportTurmaModal({
   const lista = turma.lista ?? [];
   const sessoes = turma.sessoes ?? [];
   const dtp = turma.dtp ?? [];
+  // Financiada: a folha de presenças / sumário sai do servidor, no modelo da candidatura.
+  const folhaFin = (turma.regime ?? turma.accent) === "fin" && turma.turmaId != null;
 
   const packs = [
     {
@@ -261,13 +263,15 @@ export function ExportTurmaModal({
     {
       id: "presencas",
       label: "Folhas de presença",
-      detalhe: lista.length
+      detalhe: folhaFin
+        ? "Folha de presenças / sumário de cada sessão, no modelo da candidatura (PDF com logótipos, programa e sumário)"
+        : lista.length
         ? (sessoes.length
           ? `Uma folha por sessão, com ${lista.length} inscritos e coluna de assinatura, disponível antes da sessão`
           : `Folha da turma com ${lista.length} inscritos e coluna de assinatura`)
         : "Inscreva formandos para gerar a folha",
-      disabled: lista.length === 0,
-      run: () => imprimirFolhasPresencas({
+      disabled: lista.length === 0 && !folhaFin,
+      run: () => folhaFin ? apiFolhasPresencaFin(turma.turmaId!) : imprimirFolhasPresencas({
         turma: turma.nome,
         curso: turma.curso,
         formandos: lista,

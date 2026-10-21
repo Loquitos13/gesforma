@@ -1,6 +1,6 @@
 // Cockpit de uma turma da Financiada: cabeçalho com UFCD e fecho formal, próximos passos e separadores.
 import { useEffect, useState } from "react";
-import { apiTurmaFinFecho, emitAutomation } from "../../../../partilhado/api";
+import { apiFolhasPresencaFin, apiPlanosSessaoFin, apiTurmaFinFecho, emitAutomation } from "../../../../partilhado/api";
 import { apiEnviarInqueritosTurma } from "../../../../partilhado/api/inqueritos";
 import { useAuth } from "../../../../partilhado/AuthGate";
 import { useNomesEu, useOpcoesFormador } from "../../../../partilhado/dados/comuns";
@@ -199,7 +199,8 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
             <PlanoSessaoModal open={!!planoSessao} onClose={() => setPlanoSessao(null)} sessao={planoSessao ?? undefined}
               plano={planoSessao ? herdarPlanoCurso(modelosCurso.planos, planoSessao.n, ped.plano(planoSessao.n)) : emptyPlano()}
               soLeitura={souFormador && planoSessao && ped.planosDoCurso.includes(planoSessao.n) ? "Plano definido na ficha do curso" : undefined}
-              onSave={data => { if (planoSessao) void ped.guardarPlano(planoSessao.n, data, planoSessao.id); }} />
+              onSave={data => { if (planoSessao) void ped.guardarPlano(planoSessao.n, data, planoSessao.id); }}
+              onPdf={planoSessao ? () => { apiPlanosSessaoFin(t.id, planoSessao.n).catch(err => toastError(err, "Não foi possível gerar o plano de sessão.")); } : undefined} />
             <SumarioSessaoModal open={!!sumarioSessao} onClose={() => setSumarioSessao(null)} accent="fin" sessao={sumarioSessao ?? undefined}
               sumario={sumarioSessao ? herdarSumarioCurso(modelosCurso.planos, sumarioSessao.n, ped.sumario(sumarioSessao.n)) : emptySumario()}
               onSave={data => {
@@ -211,7 +212,8 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
               }} />
             <PresencasSessaoModal open={!!presencasSessao} onClose={() => setPresencasSessao(null)} sessao={presencasSessao ?? undefined} turmaNome={t.nome} cursoNome={t.curso}
               formandos={presencasSessao ? presencasDaSessao(nomesCockpit, ped.presencas[presencasSessao.n]) : nomesCockpit}
-              onSave={rows => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id); }} />
+              onSave={rows => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id); }}
+              onImprimir={presencasSessao ? () => { apiFolhasPresencaFin(t.id, presencasSessao.n).catch(err => toastError(err, "Não foi possível gerar a folha de presenças.")); } : undefined} />
             <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" accent="fin"
               context={{ kind: "certificado", regime: "fin", turma: t.nome, formando: uploadCert != null ? String(uploadCert) : undefined, label: "Certificado" }}
               onConfirm={file => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true, ficheiroId: file.id, ficheiroNome: file.name, ficheiroUrl: file.openUrl, ...(uploadNota != null ? { nota: uploadNota } : {}) }); }} />

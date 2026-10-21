@@ -13,11 +13,15 @@ import { cronogramaDaTurma, cronogramaParaGravar, formandosDaTurma } from "../..
 import { ERRO_TURMA_FECHADA, turmaFechada } from "../../resultados.js";
 import { podeGravarSessao, sessaoLectivaN, sessaoLectivaPorId } from "../../sessaoAcesso.js";
 import { sumarioComRegras } from "../../sessaoRegras.js";
+import { documentosSessoesDaTurma, NOMES_DOCUMENTOS_FIN } from "../../documentosFin.js";
 import { regimeIdParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
-import { formadorPodeVer, turmaOu404 } from "./comum.js";
+import { enviarPdf, formadorPodeVer, turmaOu404 } from "./comum.js";
 
 // Sem origem: da ficha do curso. Com origem: de outra turma do mesmo curso (turma padrão), planos e sumários.
+/** Só a sessão n (1…), ou todas as sessões lectivas. */
+const sessaoQuery = z.object({ sessao: z.coerce.number().int().positive().max(2000).optional() });
+
 const importarPlanosSchema = z.object({ substituir: z.boolean().optional().default(false), origemTurmaId: z.number().int().positive().optional() });
 
 function sessaoDTO(n: number, r: { plano: unknown; sumario: unknown; presencas: unknown } | null | undefined, sessaoId: string | null) {
@@ -63,6 +67,27 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
       dtp,
     };
   });
+
+  /**
+   * Folhas de presenças / sumário e planos de sessão da Financiada, no modelo da candidatura (para imprimir no cockpit).
+   * O formador só os tira das turmas em que está atribuído; não ficam no dossiê (isso é o «Gerar» do Dossiê TP).
+   */
+  for (const [caminho, doc] of [["folhas-presenca", "folhas"], ["planos-sessao", "planos"]] as const) {
+    app.get(`/v1/turmas/:regime/:id/${caminho}`, async (req, reply) => {
+      if (!requireAuth(req, reply)) return;
+      const v = validar(reply, { params: regimeIdParam, query: sessaoQuery }, req);
+      if (!v) return;
+      const { regime, id } = v.params;
+      if (regime !== "fin") return reply.code(400).send({ error: "Este documento é da turma financiada." });
+      if (!(await formadorPodeVer(db, req, reply, regime, id, "Só consulta as turmas em que está atribuído."))) return;
+      const docs = await documentosSessoesDaTurma(db, id, { n: v.query.sessao, so: doc });
+      if (!docs) return reply.code(404).send({ error: v.query.sessao ? "sessão não encontrada" : "turma não encontrada" });
+      const base = NOMES_DOCUMENTOS_FIN[doc].replace(/\.pdf$/, "");
+      const nome = v.query.sessao ? `${base} - sessao ${v.query.sessao}.pdf` : `${base}.pdf`;
+      await audit(db, req.actor!.id, "turma.documento_pdf", "turma", String(id), req.ip, { doc, sessao: v.query.sessao ?? null });
+      return enviarPdf(reply, nome, doc === "folhas" ? docs.folhas : docs.planos);
+    });
+  }
 
   app.put("/v1/turmas/:regime/:id/sessoes/:n", async (req, reply) => {
     if (!requireAuth(req, reply)) return;

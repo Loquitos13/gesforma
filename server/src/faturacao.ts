@@ -11,6 +11,7 @@ import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
 import { buildCtaVars } from "./emailCta.js";
 import { decryptJson, encryptJson } from "./fieldCrypto.js";
+import { nifValido } from "../../src/partilhado/dadosPessoaisFin.js";
 import { sendMail } from "./mailer.js";
 import { readPreinscricaoPii } from "./pii.js";
 import { modeloEmail } from "./repos/emails.js";
@@ -20,13 +21,8 @@ import { isEmail, normalizeEmail } from "./security.js";
 
 export type DadosFaturacao = { nome: string; nif: string; moradaFiscal: string; codigoPostal: string; email: string };
 
-/** NIF/NIPC português: 9 dígitos, primeiro dígito de um tipo atribuído e dígito de controlo (módulo 11). */
-export function nifValido(nif: string) {
-  if (!/^[1235689]\d{8}$/.test(nif) && !/^(45|70|71|72|74|75|77|79|90|91|98|99)\d{7}$/.test(nif)) return false;
-  const soma = [...nif.slice(0, 8)].reduce((s, d, i) => s + Number(d) * (9 - i), 0);
-  const resto = soma % 11;
-  return Number(nif[8]) === (resto < 2 ? 0 : 11 - resto);
-}
+/** NIF/NIPC português (módulo 11): a regra é a mesma do site, em src/partilhado/dadosPessoaisFin.ts. */
+export { nifValido };
 
 export const dadosFaturacaoSchema = z.object({
   nome: z.string().trim().min(2, "Indique o nome ou a empresa.").max(200),

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Botao, Campo, Chip, Entrada, Selecao } from "../../../../partilhado/ui";
+import { Botao, Campo, Chip, Entrada, Selecao, data, dataHora } from "../../../../partilhado/ui";
 import {
   apiComerciais, apiCriarCampo, apiCriarEtiqueta, apiEditarLead, apiEtiquetas, apiGravarCampos, type DossieLead,
 } from "../../../../partilhado/api/crm";
@@ -97,6 +97,35 @@ export function FichaDados({ d, onMudou }: { d: DossieLead; onMudou: () => void 
           <Botao variante="primario" aCarregar={editar.aCorrer} onClick={() => void gravar(dados)}>Gravar dados</Botao>
         </div>
       </section>
+
+      {d.dadosFin && (
+        <section aria-label="Dados pessoais da inscrição" className="flex flex-col gap-2 rounded-cartao border border-linha p-3">
+          <p className="m-0 text-[13px] font-medium">Dados pessoais (formação financiada)</p>
+          <dl className="m-0 grid gap-x-4 gap-y-2 text-[13px] sm:grid-cols-2">
+            {([
+              ["Género", d.dadosFin.genero],
+              ["Data de nascimento", d.dadosFin.dataNascimento ? data(d.dadosFin.dataNascimento) : ""],
+              ["Nacionalidade", d.dadosFin.nacionalidade],
+              ["Habilitações", d.dadosFin.habilitacoes],
+              ["Morada", d.dadosFin.morada],
+              ["Documento de identificação", [d.dadosFin.tipoDocumento, d.dadosFin.numeroDocumento].filter(Boolean).join(" · ")],
+              ["Validade do documento", d.dadosFin.validadeDocumento ? data(d.dadosFin.validadeDocumento) : ""],
+              ["NIF", d.dadosFin.nif],
+              ["NISS", d.dadosFin.niss],
+              ["IBAN", d.dadosFin.iban],
+              ["Situação face ao emprego", d.dadosFin.situacaoEmprego],
+              ["NIF da entidade empregadora", d.dadosFin.nifEntidadeEmpregadora],
+              ["Termos e uso dos dados", d.dadosFin.termosAceitesEm ? `Aceites em ${dataHora(d.dadosFin.termosAceitesEm)} (versão ${d.dadosFin.termosVersao})` : "Por aceitar"],
+            ] as const).map(([rotulo, valor]) => (
+              <div key={rotulo} className="min-w-0">
+                <dt className="text-xs text-tinta-suave">{rotulo}</dt>
+                <dd className="m-0 break-words">{valor || "—"}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="m-0 text-xs text-tinta-suave">Ao validar, passam para a ficha do formando (Dados para o financiamento e Apoios), sem substituir o que a ficha já tem.</p>
+        </section>
+      )}
 
       <section aria-label="Comercial e etiqueta" className="flex flex-col gap-3">
         <Campo rotulo="Comercial">

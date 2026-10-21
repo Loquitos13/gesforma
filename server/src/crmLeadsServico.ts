@@ -149,6 +149,7 @@ export async function actualizarLeadCrm(db: Db, actor: Actor, id: number, d: Dad
       moradaFiscal: d.moradaFiscal ?? prev.moradaFiscal,
       codigoPostal: d.codigoPostal ?? prev.codigoPostal,
       telf: d.telf ?? prev.telf,
+      fin: prev.fin,
     })
     : null;
   const origem = d.origem !== undefined ? await origemDaLista(db, d.origem, String(before.origem ?? "Outro")) : undefined;
@@ -285,7 +286,7 @@ export async function completarLead(db: Db, actor: Actor, id: number, d: DadosLe
   const prev = readPreinscricaoPii(before);
   const junta = {
     nif: texto(d.nif).replace(/\s/g, "") || prev.nif, moradaFiscal: texto(d.moradaFiscal) || prev.moradaFiscal,
-    codigoPostal: texto(d.codigoPostal) || prev.codigoPostal, telf: texto(d.telf) || prev.telf,
+    codigoPostal: texto(d.codigoPostal) || prev.codigoPostal, telf: texto(d.telf) || prev.telf, fin: prev.fin,
   };
   const simples = { nome: texto(d.nome), apelido: texto(d.apelido), email, concelho: texto(d.concelho), curso: texto(d.curso),
     local: texto(d.local), horario: texto(d.horario), inicioCurso: texto(d.inicioCurso) };

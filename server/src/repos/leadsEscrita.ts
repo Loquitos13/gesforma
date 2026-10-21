@@ -85,6 +85,30 @@ export type NovoLead = {
   notas?: string;
 };
 
+/** PII do pedido (cifra e colunas legadas), para juntar os dados pessoais da financiada a um pedido repetido. */
+export function piiDoPedido(c: Consulta, id: number) {
+  return one<{ pii_enc: string; nif: string; morada_fiscal: string; codigo_postal: string; telf: string }>(c,
+    `SELECT COALESCE(pii_enc, '') AS pii_enc, COALESCE(nif, '') AS nif, COALESCE(morada_fiscal, '') AS morada_fiscal,
+            COALESCE(codigo_postal, '') AS codigo_postal, COALESCE(telf, '') AS telf
+       FROM preinscricoes WHERE id = $1`, [id]);
+}
+
+export async function gravarPiiDoPedido(c: Consulta, id: number, pack: { nif: string; morada_fiscal: string; codigo_postal: string; telf: string; pii_enc: string | null }) {
+  await many(c,
+    "UPDATE preinscricoes SET nif = $2, morada_fiscal = $3, codigo_postal = $4, telf = $5, pii_enc = COALESCE($6, pii_enc) WHERE id = $1",
+    [id, pack.nif, pack.morada_fiscal, pack.codigo_postal, pack.telf, pack.pii_enc]);
+}
+
+/** Financiada (ligação pessoal): o concelho da morada fica na coluna de sempre; o resto vai no pacote cifrado. */
+export async function gravarConcelho(c: Consulta, id: number, concelho: string) {
+  await many(c, "UPDATE preinscricoes SET concelho = $2 WHERE id = $1", [id, concelho]);
+}
+
+/** Financiada: aceitação dos termos e do uso dos dados (quando, de onde e que versão). */
+export async function gravarTermosFin(c: Consulta, id: number, ip: string, versao: string) {
+  await many(c, "UPDATE preinscricoes SET termos_fin_em = now(), termos_fin_ip = $2, termos_fin_versao = $3 WHERE id = $1", [id, ip, versao]);
+}
+
 export async function inserirLead(c: Consulta, l: NovoLead) {
   await many(c,
     `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado,

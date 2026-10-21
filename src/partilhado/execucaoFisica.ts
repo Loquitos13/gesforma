@@ -480,6 +480,11 @@ export type DadosFinanciamento = {
   autorizacaoResidencia: string;
   tipoAutorizacaoResidencia: string;
   passaporte: string;
+  /** Documento de identificação (Cartão de Cidadão, Bilhete de Identidade ou Passaporte), da ligação pessoal. */
+  tipoDocumento: string;
+  numeroDocumento: string;
+  /** AAAA-MM-DD. */
+  validadeDocumento: string;
   genero: string;
   nacionalidade: string;
   situacaoEmpregoEntrada: string;
@@ -493,9 +498,10 @@ export type DadosFinanciamento = {
   nifEntidadeEmpregadora: string;
 };
 
-/** Os campos cifrados (identificadores pessoais). */
+/** Os campos cifrados (identificadores pessoais e documento de identificação). */
 export const CAMPOS_FINANCIAMENTO_CIFRADOS = [
   "nif", "niss", "dataNascimento", "codigoPostal", "protecaoInternacional", "autorizacaoResidencia", "tipoAutorizacaoResidencia", "passaporte",
+  "tipoDocumento", "numeroDocumento", "validadeDocumento",
 ] as const satisfies readonly (keyof DadosFinanciamento)[];
 
 /** Os campos com lista do template e a lista de cada um. */
@@ -513,7 +519,7 @@ export const LISTAS_FINANCIAMENTO = {
 
 export const FINANCIAMENTO_VAZIO: DadosFinanciamento = {
   nif: "", niss: "", dataNascimento: "", codigoPostal: "", protecaoInternacional: "", autorizacaoResidencia: "",
-  tipoAutorizacaoResidencia: "", passaporte: "", genero: "", nacionalidade: "", situacaoEmpregoEntrada: "",
+  tipoAutorizacaoResidencia: "", passaporte: "", tipoDocumento: "", numeroDocumento: "", validadeDocumento: "", genero: "", nacionalidade: "", situacaoEmpregoEntrada: "",
   situacaoEmpregoSaida: "", habilitacoesEntrada: "", habilitacoesSaida: "", procuraEmpregoApos: "", estudaEntrada: "",
   estudaApos: "", numeroSigo: "", nifEntidadeEmpregadora: "",
 };
@@ -528,6 +534,9 @@ export const ROTULOS_FINANCIAMENTO: Record<keyof DadosFinanciamento, string> = {
   autorizacaoResidencia: "N.º da autorização de residência",
   tipoAutorizacaoResidencia: "Tipo de autorização de residência",
   passaporte: "N.º do passaporte",
+  tipoDocumento: "Documento de identificação",
+  numeroDocumento: "N.º do documento",
+  validadeDocumento: "Validade do documento",
   genero: "Género",
   nacionalidade: "Nacionalidade",
   situacaoEmpregoEntrada: "Situação face ao emprego à entrada",

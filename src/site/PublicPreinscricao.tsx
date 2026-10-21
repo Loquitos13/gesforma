@@ -5,6 +5,10 @@ import { SearchSelect } from "../partilhado/FormKit";
 import { OFERTA_VAZIA, type CursoOfertaSel, type OfertaTurma } from "../partilhado/oferta";
 import { textoListaVazia, useOpcoesPublicas } from "./useOpcoesPublicas";
 import { ConsentimentoRgpd } from "./ConsentimentoRgpd";
+import { INSCRICAO_FIN_VAZIA, erroTelefoneFin, partirNomeCompleto, validarInscricaoFin, type InscricaoFin } from "../partilhado/dadosPessoaisFin";
+import { LISTA_PAISES } from "../partilhado/execucaoFisica";
+import { hojeLisboa } from "../partilhado/horaLisboa";
+import { CampoFin, CamposInscricaoFin, errosDoServidor, type ErrosForm } from "./DadosPessoaisFin";
 
 const fieldCls = "w-full bg-transparent border-0 border-b border-slate-300 px-0 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#1b2330] rounded-none";
 const labelCls = "block text-[13px] text-slate-700 mb-1";
@@ -28,6 +32,8 @@ export function PublicPreinscricao() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [dadosFin, setDadosFin] = useState<InscricaoFin>(INSCRICAO_FIN_VAZIA);
+  const [errosFin, setErrosFin] = useState<ErrosForm>({});
 
   useEffect(() => {
     void apiPublicOferta()
@@ -40,6 +46,8 @@ export function PublicPreinscricao() {
 
   // O preço vem do servidor: é o mesmo que a pré-inscrição grava para este curso, local e horário.
   const regimeSel = cursos.find(c => c.nome === oferta.curso)?.regime;
+  // Financiada: nome completo, género, data de nascimento, nacionalidade, habilitações, telemóvel e email.
+  const fin = regimeSel === "fin";
   useEffect(() => {
     if (!oferta.curso) { setPreco(undefined); return; }
     let vivo = true;
@@ -52,7 +60,14 @@ export function PublicPreinscricao() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError("");
-    if (!nome.trim() || !apelido.trim() || !telf.trim() || !email.trim() || !concelho || !origem) {
+    if (fin) {
+      const erros: ErrosForm = { ...validarInscricaoFin(dadosFin, hojeLisboa(), LISTA_PAISES) };
+      const t = erroTelefoneFin(telf);
+      if (t) erros.telf = t;
+      if (!email.trim()) erros.email = "Indique o email.";
+      setErrosFin(erros);
+      if (Object.keys(erros).length) { setError("Corrija os campos assinalados."); return; }
+    } else if (!nome.trim() || !apelido.trim() || !telf.trim() || !email.trim() || !concelho || !origem) {
       setError("Preencha os seus dados para a secretaria o poder contactar.");
       return;
     }
@@ -68,9 +83,10 @@ export function PublicPreinscricao() {
     }
     setBusy(true);
     try {
+      const nomes = fin ? partirNomeCompleto(dadosFin.nomeCompleto) : { nome: nome.trim(), apelido: apelido.trim() };
       await apiPublicPreinscricao({
-        nome: nome.trim(),
-        apelido: apelido.trim(),
+        nome: nomes.nome,
+        apelido: nomes.apelido,
         telf: telf.trim(),
         email: email.trim(),
         concelho,
@@ -83,9 +99,11 @@ export function PublicPreinscricao() {
         regime: cursoSel?.regime ?? "gold",
         campanha: params.get("campanha") ?? "",
         consentimento,
+        ...(fin ? { dadosFin } : {}),
       });
       setDone(true);
     } catch (err) {
+      if (fin && err instanceof ApiError && err.campos?.length) setErrosFin(errosDoServidor(err.campos));
       setError(err instanceof ApiError ? err.message : "Não foi possível enviar. Tente de novo dentro de um minuto.");
     } finally {
       setBusy(false);
@@ -117,6 +135,17 @@ export function PublicPreinscricao() {
             <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[#ffa900]">
               Os seus dados
             </p>
+            {fin ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-8">
+                <CamposInscricaoFin valor={dadosFin} onMudar={setDadosFin} erros={errosFin} inputCls={fieldCls} rotuloCls={labelCls} />
+                <CampoFin id="fin-telf" rotulo="Telemóvel" erro={errosFin.telf} rotuloCls={labelCls}>
+                  {p => <input {...p} className={fieldCls} value={telf} onChange={e => setTelf(e.target.value)} autoComplete="tel" inputMode="tel" />}
+                </CampoFin>
+                <CampoFin id="fin-email" rotulo="Email" erro={errosFin.email} rotuloCls={labelCls}>
+                  {p => <input {...p} className={fieldCls} type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />}
+                </CampoFin>
+              </div>
+            ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-8">
               <label>
                 <span className={labelCls}>Nome</span>
@@ -157,6 +186,7 @@ export function PublicPreinscricao() {
                 />
               </label>
             </div>
+            )}
 
             <CursoOfertaCampos
               turmas={turmas.filter(t => {

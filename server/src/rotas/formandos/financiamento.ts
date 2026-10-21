@@ -11,6 +11,7 @@ import { z } from "zod";
 import {
   CAMPOS_FINANCIAMENTO_CIFRADOS, FINANCIAMENTO_VAZIO, LISTAS_FINANCIAMENTO, type DadosFinanciamento,
 } from "../../../../src/partilhado/execucaoFisica.js";
+import { TIPOS_DOCUMENTO_FIN } from "../../../../src/partilhado/dadosPessoaisFin.js";
 import { hojeLisboa } from "../../datas.js";
 import { readFormandoPii, readPreinscricaoPii, writeFormandoPiiPatch, type IdentificacaoFin } from "../../pii.js";
 import {
@@ -39,6 +40,9 @@ const corpo = z.object({
   autorizacaoResidencia: documento,
   tipoAutorizacaoResidencia: z.string().trim().max(80),
   passaporte: documento,
+  tipoDocumento: vazioOu(z.enum(TIPOS_DOCUMENTO_FIN)),
+  numeroDocumento: vazioOu(z.string().regex(/^[A-Z0-9]{6,12}$/, "N.º do documento: 6 a 12 letras e dígitos, sem espaços.")),
+  validadeDocumento: vazioOu(z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida (AAAA-MM-DD).")),
   genero: lista(LISTAS_FINANCIAMENTO.genero),
   nacionalidade: lista(LISTAS_FINANCIAMENTO.nacionalidade),
   situacaoEmpregoEntrada: lista(LISTAS_FINANCIAMENTO.situacaoEmpregoEntrada),

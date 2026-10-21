@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ApiError, apiPublicConcluirPercurso, apiPublicConsentir, apiPublicDocumentoUpload, apiPublicDocumentos, apiPublicEscolherTurma,
-  type PagamentoPercurso, type TurmaPercurso,
+  type DadosFinLigacao, type PagamentoPercurso, type TurmaPercurso,
 } from "../partilhado/api";
+import { PercursoDadosFin, etapaInicial, type EtapaFin } from "./PercursoDadosFin";
 import { LeituraConsentimento } from "./LeituraConsentimento";
 import { PassoPagamento } from "./PassoPagamento";
 import { CampoFicheiro, CartaoTurma, textoTurmas } from "./PercursoPartes";
@@ -60,6 +61,9 @@ export function PublicDocumentos({ token }: { token: string }) {
   const [direccao, setDireccao] = useState<"frente" | "tras">("frente");
   const [aSair, setASair] = useState(false);
   const salto = useRef<number | null>(null);
+  /** Financiada: morada, identificação e termos antes dos documentos (null = a mostrar os documentos). */
+  const [dadosFin, setDadosFin] = useState<DadosFinLigacao | null>(null);
+  const [etapaFin, setEtapaFin] = useState<EtapaFin | null>(null);
 
   function aplicar(r: Awaited<ReturnType<typeof apiPublicDocumentos>>, manterPasso = false) {
     if (r.encerrada) {
@@ -76,6 +80,8 @@ export function PublicDocumentos({ token }: { token: string }) {
     setTipos(r.tipos ?? []);
     setFicheiros(r.ficheiros ?? []);
     setEncerrada(false);
+    setDadosFin(r.dadosFin ?? null);
+    if (!manterPasso) setEtapaFin(r.dadosFin && !r.dadosFin.completo ? etapaInicial(r.dadosFin) : null);
     const escolhe = r.escolheTurma !== false;
     setEscolheTurma(escolhe);
     // Fixo enquanto a pessoa está no percurso: escolher a turma no passo 2 não esconde o passo.
@@ -337,7 +343,7 @@ export function PublicDocumentos({ token }: { token: string }) {
                   />
                 </div>
               )}
-              {!escolheTurma && (
+              {!escolheTurma && !etapaFin && (
                 <p className="mt-3 text-sm leading-relaxed text-[#5c564c]">Envie os documentos abaixo. Depois da validação, a secretaria coloca-o(a) na turma e avisa por email.</p>
               )}
               {escolheTurma && !pedeCronograma && turmaEscolhida && (
@@ -355,6 +361,11 @@ export function PublicDocumentos({ token }: { token: string }) {
               )}
             </div>
 
+            {dadosFin && etapaFin ? (
+              <PercursoDadosFin token={token} dados={dadosFin} etapaAbrir={etapaFin}
+                onGuardado={() => recarregar(true)} onDocumentos={() => { setEtapaFin(null); window.scrollTo({ top: 0 }); }}
+                onFechada={() => void recarregar()} />
+            ) : (
             <div className={aSair ? (direccao === "frente" ? "percurso-sair-frente" : "percurso-sair-tras") : (direccao === "frente" ? "percurso-entrar-frente" : "percurso-entrar-tras")}>
             {passo === 1 && (
               <section className="border-t border-[#efeae1]">
@@ -427,6 +438,11 @@ export function PublicDocumentos({ token }: { token: string }) {
                   ) : (
                     <>
                       {error && !activoId && <p className="mb-3 text-sm text-red-700">{error}</p>}
+                      {dadosFin && (
+                        <button type="button" onClick={() => { setError(""); setOk(""); setEtapaFin("termos"); }} className="mb-2 w-full rounded-lg border border-[#e7e1d6] px-4 py-3 text-sm font-semibold sm:w-auto">
+                          ‹ Voltar aos dados pessoais
+                        </button>
+                      )}
                       <button type="button" disabled={busy} onClick={() => void concluir()} className="w-full rounded-lg bg-[#1b2330] px-4 py-3 text-sm font-semibold text-white transition-opacity disabled:opacity-40">
                         {busy ? "A submeter…" : "Submeter inscrição"}
                       </button>
@@ -488,6 +504,7 @@ export function PublicDocumentos({ token }: { token: string }) {
               </section>
             )}
             </div>
+            )}
           </article>
         )}
       </main>

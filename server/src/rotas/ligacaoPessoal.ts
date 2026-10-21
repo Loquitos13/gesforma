@@ -13,6 +13,7 @@ import { formandoFinPorToken, uploadDocFormandoFin } from "../formandoFinDocs.js
 import { apagarFicheiroSubstituido, readDriveContent, storeDriveFile } from "../driveFicheiros.js";
 import { erroFicheiroPublico } from "../ficheirosValidacao.js";
 import { leadPorToken, marcarUso, motivoFecho, textoFecho, vistaEncerrada } from "../ligacaoPessoal.js";
+import { DadosFinErro, aceitarTermosFin, faltaDadosFin, gravarIdentificacaoFin, gravarMoradaFin } from "../percursoDadosFin.js";
 import { PercursoErro, concluirPercurso, escolherTurmaPublica, registarConsentimento, vistaDocumentosPublica } from "../percurso.js";
 import * as docsRepo from "../repos/leadDocs.js";
 import * as leads from "../repos/leads.js";
@@ -99,6 +100,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const lead = await ligacaoAberta(req, reply);
     if (!lead) return;
+    const faltaFin = faltaDadosFin(lead);
+    if (faltaFin) return reply.code(409).send({ error: faltaFin });
     try {
       await marcarUso(db, Number(lead.id));
       return await registarConsentimento(db, Number(lead.id), v.body.tipo, { ip: req.ip });
@@ -120,9 +123,45 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     }
   });
 
+  // Financiada: passos antes dos documentos (morada, identificação, termos). Erros por campo, sem devolver valores.
+  const texto = (max: number) => z.string().max(max).default("");
+  const passosFin = {
+    morada: z.object({ morada: texto(200), localidade: texto(80), codigoPostal: texto(10), concelho: texto(80) }).strict(),
+    identificacao: z.object({
+      tipoDocumento: texto(40), numeroDocumento: texto(30), validadeDocumento: texto(10), nif: texto(20), niss: texto(20),
+      iban: texto(60), situacaoEmprego: texto(80), nifEntidadeEmpregadora: texto(20),
+    }).strict(),
+    termos: z.object({ termos: z.boolean().default(false), dados: z.boolean().default(false) }).strict(),
+  };
+  for (const passo of ["morada", "identificacao", "termos"] as const) {
+    app.post(`/v1/public/documentos/:token/dados/${passo}`, limite(20), async (req, reply) => {
+      const v = validar(reply, { body: passosFin[passo] }, req);
+      if (!v) return;
+      const lead = await ligacaoAberta(req, reply);
+      if (!lead) return;
+      await marcarUso(db, Number(lead.id));
+      try {
+        const id = Number(lead.id);
+        if (passo === "morada") return await gravarMoradaFin(db, id, v.body as z.infer<typeof passosFin.morada>);
+        if (passo === "identificacao") return await gravarIdentificacaoFin(db, id, v.body as z.infer<typeof passosFin.identificacao>);
+        return await aceitarTermosFin(db, id, v.body as z.infer<typeof passosFin.termos>, { ip: req.ip });
+      } catch (err) {
+        if (err instanceof DadosFinErro) {
+          return reply.code(400).send({
+            error: err.message,
+            ...(err.campos ? { campos: Object.entries(err.campos).map(([campo, erro]) => ({ campo, erro })) } : {}),
+          });
+        }
+        throw err;
+      }
+    });
+  }
+
   app.post("/v1/public/documentos/:token/concluir", limite(12), async (req, reply) => {
     const lead = await ligacaoAberta(req, reply);
     if (!lead) return;
+    const faltaFin = faltaDadosFin(lead);
+    if (faltaFin) return reply.code(409).send({ error: faltaFin });
     await marcarUso(db, Number(lead.id));
     try {
       return await concluirPercurso(db, Number(lead.id));
@@ -134,6 +173,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
   app.post("/v1/public/documentos/:token", limite(12), async (req, reply) => {
     const lead = await ligacaoAberta(req, reply);
     if (!lead) return;
+    // Financiada: os documentos só depois da morada, da identificação e dos termos aceites.
+    const faltaFin = faltaDadosFin(lead);
+    if (faltaFin) return reply.code(409).send({ error: faltaFin });
     const up = await lerUpload(req);
     if (!up) return reply.code(400).send({ error: "upload inválido" });
     if (!up.bytes) return reply.code(400).send({ error: "ficheiro em falta" });

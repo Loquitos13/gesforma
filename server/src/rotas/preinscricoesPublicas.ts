@@ -29,6 +29,14 @@ const formularioPublico = z.object({
   acessoImediato: z.boolean().optional(),
   regime: z.enum(["gold", "fin"]).optional(),
   consentimento: z.boolean().optional(),
+  // Financiada: os dados pessoais do formulário (validados em criarPreinscricaoPublica, com as regras do site).
+  dadosFin: z.object({
+    nomeCompleto: z.string().max(200).default(""),
+    genero: z.string().max(40).default(""),
+    dataNascimento: z.string().max(10).default(""),
+    nacionalidade: z.string().max(80).default(""),
+    habilitacoes: z.string().max(40).default(""),
+  }).strict().optional(),
 });
 
 export async function registar(app: FastifyInstance, deps: Deps) {
@@ -94,13 +102,20 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       acessoImediato: d.acessoImediato,
       regime: d.regime,
       consentimento: d.consentimento,
+      dadosFin: d.dadosFin,
     }, { ip: req.ip });
     if ("error" in created) {
       const code = created.error === "a turma escolhida já não está libertada" ? 409
         : created.error === "demasiados pedidos: tente mais tarde" ? 429 : 400;
-      return reply.code(code).send({ error: created.error });
+      // Erros dos dados pessoais no formato de `validar` (campo + erro), sem nunca devolver os valores.
+      const campos = "campos" in created && created.campos
+        ? Object.entries(created.campos).map(([campo, erro]) => ({ campo: campo === "telf" ? "telf" : `dadosFin.${campo}`, erro }))
+        : undefined;
+      return reply.code(code).send({ error: created.error, ...(campos ? { campos } : {}) });
     }
-    await audit(db, undefined, "preinscricao.public_create", "preinscricao", String(created.preinscricao.id), req.ip, { curso: d.curso, duplicado: created.duplicado });
+    await audit(db, undefined, "preinscricao.public_create", "preinscricao", String(created.preinscricao.id), req.ip, {
+      curso: d.curso, duplicado: created.duplicado, ...(d.dadosFin ? { dadosPessoais: true } : {}),
+    });
     // Sem id, referência nem «duplicado»: a resposta é a mesma quer o email já tivesse pedido, quer não.
     return { ok: true, aviso: created.aviso };
   });

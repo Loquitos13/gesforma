@@ -190,7 +190,7 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
         <div className={juntar("flex flex-wrap items-end justify-between gap-3", e.formato === "compacto" ? "mt-3" : "mt-auto pt-5")}
           style={e.formato === "compacto" || sobreposto ? undefined : { borderTop: "1px solid rgba(20,38,61,.1)", marginTop: "1.25rem" }}>
           <div className="space-y-1.5 text-xs font-semibold" style={e.centrar ? { margin: "0 auto" } : undefined}>
-            {ver.has("preco") && precoTxt && <span className="block text-sm font-bold" style={{ color: sobreposto ? "#fff" : corSegura(e.corTitulo) }}>{precoTxt}</span>}
+            {ver.has("preco") && curso.funding === "Gold" && precoTxt && <span className="block text-sm font-bold" style={{ color: sobreposto ? "#fff" : corSegura(e.corTitulo) }}>{precoTxt}</span>}
             {ver.has("duracao") && curso.duration && <span className="flex items-center gap-2"><Ico n="relogio" />{curso.duration}</span>}
             {ver.has("inicio") && inicioTxt && <span className="flex items-center gap-2"><Ico n="local" />{inicioTxt}</span>}
           </div>

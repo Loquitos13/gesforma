@@ -164,6 +164,8 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
                 const vars = variaveisCurso(curso, l);
                 const texto = preencherVariaveis(p.texto ?? "", vars).trim();
                 const ct = contactoDo(curso, l);
+                // Na Financiada não há preço («Desde Financiada» não diz nada): o cartão não o mostra.
+                const verPreco = p.mostrarPreco && curso.funding === "Gold";
                 const pad = `${c.interior ?? 20}px`;
                 return (
                   <div key={l} className={juntar("flex flex-col border-2 transition", !ativo && "hover:border-black/15")}
@@ -188,10 +190,10 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
                     {texto && <span className={juntar("whitespace-pre-line text-sm leading-6 opacity-75", tTexto.className)} style={tTexto.style}>{texto}</span>}
                     {semDatas
                       ? <span className="mt-auto text-sm font-bold opacity-60">Próximas datas em breve</span>
-                      : p.mostrarPreco && <span className={juntar("mt-auto text-sm font-bold text-[var(--c-destaque)]", tPreco.className)} style={tPreco.style}>{preencherVariaveis(p.textoPreco || "{{preco}}", vars)}</span>}
+                      : verPreco && <span className={juntar("mt-auto text-sm font-bold text-[var(--c-destaque)]", tPreco.className)} style={tPreco.style}>{preencherVariaveis(p.textoPreco || "{{preco}}", vars)}</span>}
                     {/* Não pode haver um botão dentro de outro: o cartão inteiro faz a ação, isto é só o aspeto. */}
                     {b.mostrar && !semDatas && (
-                      <span className={juntar("mt-2 inline-flex items-center gap-3 px-4 py-3 text-xs font-extrabold uppercase tracking-[0.08em]", POSICAO_BOTAO[b.posicao] ?? POSICAO_BOTAO.largura, !p.mostrarPreco && "mt-auto", tBotao.className)}
+                      <span className={juntar("mt-2 inline-flex items-center gap-3 px-4 py-3 text-xs font-extrabold uppercase tracking-[0.08em]", POSICAO_BOTAO[b.posicao] ?? POSICAO_BOTAO.largura, !verPreco && "mt-auto", tBotao.className)}
                         style={{ ...tBotao.style, background: corSegura(b.cor) ?? "var(--c-destaque)", color: corSegura(b.corTexto) ?? "#ffffff", borderRadius: b.raio ? `${b.raio}px` : undefined }}>
                         {preencherVariaveis(b.texto || "Escolher", vars)} {b.seta && <Icon name="arrow" />}
                       </span>

@@ -8,6 +8,7 @@ describe("Serviços para empresas (Gestão › Empresas / Business)", () => {
     // Começa com os serviços que o site já mostrava.
     expect((await publicos()).map(s => s.slug)).toEqual([
       "formacao-a-medida", "formacao-certificada", "gestao-da-formacao-obrigatoria", "conteudos-multimedia", "certificacao-dgert-de-entidades-formadoras",
+      "certificacao-inicial", "alargamento-da-certificacao",
     ]);
     expect((await pedido(ctx, "comercial", "GET", "/v1/servicos")).statusCode).toBe(403);
     expect((await pedido(ctx, "comercial", "POST", "/v1/servicos", { slug: "", ativo: true, dados: { titulo: "Intruso" } })).statusCode).toBe(403);

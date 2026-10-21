@@ -94,6 +94,13 @@ const migalhas = (origem: string, itens: [string, string][]) => ({
   itemListElement: itens.map(([nome, caminho], i) => ({ "@type": "ListItem", position: i + 1, name: nome, item: `${origem}${caminho}` })),
 });
 
+/** Serviço «dentro» de outro (ex.: Certificação Inicial na Certifica): a página-mãe entra nas migalhas, se estiver ativa. */
+function migalhaPai(ativos: { slug: string; dados: Record<string, unknown> }[], pai: string | undefined, slug: string): [string, string][] {
+  const mae = pai && pai !== slug ? ativos.find(x => x.slug === pai) : undefined;
+  const titulo = typeof mae?.dados.titulo === "string" ? mae.dados.titulo : "";
+  return mae && titulo ? [[titulo, `/empresas/${mae.slug}`]] : [];
+}
+
 const MODO: Record<string, string> = { Presencial: "Onsite", "E-learning": "Online", "B-learning": "Blended" };
 
 /** schema.org/Course: o que a Google pede para os resultados de cursos (fornecedor, oferta e edições). */
@@ -215,8 +222,9 @@ export async function metaDaPagina(db: Db, caminhoBruto: string, host?: string):
   }
   if (caminho.startsWith("/empresas/")) {
     const slug = decodeURIComponent(caminho.slice("/empresas/".length).split("/")[0] ?? "").toLowerCase();
-    const linha = (await servicosAtivos(db)).find(x => x.slug === slug);
-    const s = linha ? { ...(linha.dados as { titulo: string; texto?: string; detalhe?: string; imagens?: { imagem: string }[] }) } : null;
+    const ativos = await servicosAtivos(db);
+    const linha = ativos.find(x => x.slug === slug);
+    const s = linha ? { ...(linha.dados as { titulo: string; texto?: string; detalhe?: string; imagens?: { imagem: string }[]; pai?: string }) } : null;
     if (!s) return base({ estado: 404, titulo: comNome("Serviço não encontrado"), indexar: false, corpo: "<h1>Este serviço não existe.</h1><p><a href=\"/empresas\">Ver os serviços para empresas</a></p>" });
     const texto = limpar(s.detalhe || s.texto || "");
     const descricao = cortar(texto, 160);
@@ -224,7 +232,7 @@ export async function metaDaPagina(db: Db, caminhoBruto: string, host?: string):
     return base({
       titulo: comNome(s.titulo), descricao, imagem: imagem ? absoluto(origem, imagem) : imagemBase,
       jsonLd: [
-        migalhas(origem, [["Início", "/"], ["Empresas", "/empresas"], [s.titulo, `/empresas/${slug}`]]),
+        migalhas(origem, [["Início", "/"], ["Empresas", "/empresas"], ...migalhaPai(ativos, s.pai, slug), [s.titulo, `/empresas/${slug}`]]),
         { "@type": "Service", name: s.titulo, description: descricao, provider: { "@id": `${origem}/#organizacao` }, url: `${origem}/empresas/${slug}` },
       ],
       corpo: `<h1>${esc(s.titulo)}</h1><p>${esc(cortar(texto, 600))}</p>`,

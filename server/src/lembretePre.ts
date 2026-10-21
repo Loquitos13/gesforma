@@ -168,7 +168,7 @@ export async function enviarLembretesPreinscricao(db: Db, fim = 0) {
         ];
         const vars = buildCtaVars({
           nome, email, curso: lead.curso, turma: "-", documentosUrl: href,
-          emFaltaItens: emFalta, telefonesItens: await telefonesPorZona(db),
+          emFaltaItens: emFalta, telefonesItens: await telefonesPorZona(db, { preinscricaoId: lead.id }),
         });
         const mail = renderModelo({ ...modelo, template_tipo: modelo.tipo }, nome, vars);
         await sendMail(db, { to: email, name: nome, subject: mail.subject, text: mail.text, html: mail.html });

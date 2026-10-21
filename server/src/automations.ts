@@ -37,7 +37,40 @@ function listaDoPayload(raw: unknown): string[] {
 }
 
 /** Telefones por zona (Configurações › Entidade), um por linha. */
-export async function telefonesPorZona(db: Db) {
+/**
+ * Contactos para os emails ({{telefones_itens}}): os de cada local (Edição de Cursos › Locais), lidos no momento,
+ * por isso mudar o contacto de um local muda logo o modelo e os envios seguintes. Com o local da pessoa, só o
+ * desse local; senão, os locais activos do regime com contactos. Sem nenhum, os «Telefones por zona» da entidade.
+ */
+export async function telefonesPorZona(db: Db, alvo: { regime?: string | null; local?: string | null; preinscricaoId?: number | null } = {}) {
+  let { regime, local } = alvo;
+  if (alvo.preinscricaoId && (!regime || !local)) {
+    const r = await db.query<{ regime: string | null; local: string | null }>(
+      "SELECT regime, local FROM preinscricoes WHERE id = $1", [alvo.preinscricaoId]);
+    regime ||= r.rows[0]?.regime ?? null;
+    local ||= r.rows[0]?.local ?? null;
+  }
+  const chave = (v: unknown) => String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  const r = await db.query<{ regime: string; payload: Record<string, unknown> }>(
+    "SELECT regime, payload FROM catalog_items WHERE kind = 'locais' ORDER BY id");
+  const linhas = new Map<string, { local: string; linha: string; regime: string }>();
+  for (const { regime: reg, payload: l } of r.rows) {
+    if (String(l.status ?? "Ativo") === "Inactivo" || String(l.status ?? "") === "Inativo") continue;
+    const nome = String(l.nome ?? "").trim();
+    const numeros = [l.telemovel, l.telefone].map(v => String(v ?? "").trim()).filter(Boolean);
+    const whatsapp = String(l.whatsapp ?? "").trim();
+    if (whatsapp && !numeros.includes(whatsapp)) numeros.push(`WhatsApp ${whatsapp}`);
+    const email = String(l.email ?? "").trim();
+    if (!nome || (!numeros.length && !email)) continue;
+    const linha = `${nome}: ${[...numeros, email].filter(Boolean).join(" · ")}`;
+    const k = chave(nome);
+    // O mesmo local nos dois regimes: fica o do regime pedido.
+    if (!linhas.has(k) || reg === regime) linhas.set(k, { local: nome, linha, regime: reg });
+  }
+  const todas = [...linhas.values()];
+  const doLocal = local ? todas.filter(l => chave(l.local) === chave(local)) : [];
+  const escolhidas = doLocal.length ? doLocal : todas.filter(l => !regime || l.regime === regime);
+  if (escolhidas.length) return escolhidas.map(l => l.linha);
   return (await lerEntidade(db)).telefonesZona.split("\n").filter(Boolean);
 }
 
@@ -74,7 +107,9 @@ export async function ingestEvent(db: Db, type: string, payload: Record<string, 
     documentosItens: listaDoPayload(payload.documentos_itens),
     emFaltaItens: listaDoPayload(payload.documentos_em_falta_itens),
     cronogramasItens: listaDoPayload(payload.cronogramas_itens),
-    telefonesItens: regras.length ? await telefonesPorZona(db) : [],
+    telefonesItens: regras.length
+      ? await telefonesPorZona(db, { regime: String(payload.regime ?? "") || null, local: String(payload.local ?? "") || null, preinscricaoId: Number(payload.preinscricaoId) || null })
+      : [],
   });
   let queued = 0;
   for (const regra of regras) {

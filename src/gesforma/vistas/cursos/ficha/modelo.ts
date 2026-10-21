@@ -5,6 +5,7 @@ import { linhasPrincipais, modeloAplica, programaDePayload, topicosDeTexto, type
 import { parseConteudosMoodle, type ConteudoMoodle } from "../../../ConteudosMoodle";
 import { normalizarPlanoCurso, type PlanoCurso } from "../../../planosCurso";
 import { codigoCursoValido } from "../../../../partilhado/codigoCurso";
+import { regimeSincronia, type RegimeSincronia } from "../../../../partilhado/regimeSincronia";
 
 export type Regime = "gold" | "fin";
 export type TabId = "identidade" | "oferta" | "conteudo" | "programa" | "moodle" | "planos" | "avaliacao" | "documentos" | "dtp" | "publicacao";
@@ -34,6 +35,8 @@ export type CursoSite = {
   ufcdCod: string; ufcd: string; locais: string[];
   /** Financiada: área de formação CNAEF (guardada no curso, não na ficha do site). */
   areaCnaef: string;
+  /** Regime da oferta: síncrono ou assíncrono (não confundir com `regime`, que guarda a modalidade). */
+  regimeSincronia: RegimeSincronia;
   organizacaoPrograma: OrganizacaoPrograma; topicosPrograma: TopicoPrograma[];
   avaliacaoCurso: AvaliacaoCurso; precosOferta: PrecoOferta[]; planosSessao: PlanoLinha[];
   valoresFormador: ValorFormador[]; entidadeResponsavel: string; conteudosMoodle: ConteudoMoodle[];
@@ -116,6 +119,7 @@ export function fichaInicial(curso: CursoBase | null, regime: Regime, modelos: O
     ufcd: curso?.ufcd ?? "",
     areaCnaef: curso?.areaCnaef ?? "",
     locais: [],
+    regimeSincronia: "",
     organizacaoPrograma: "modular",
     topicosPrograma: topicosDeTexto(linhasPrincipais(programa)),
     avaliacaoCurso: ehCcp ? avaliacaoCcp() : avaliacaoPadrao(),
@@ -140,14 +144,15 @@ function precosOferta(raw: unknown): PrecoOferta[] {
 /** Junta a ficha gravada à ficha inicial. A ficha gravada manda sempre. */
 export function fundirGuardado(base: CursoSite, guardado: Record<string, unknown>, regime: Regime, nomeCurso: string): CursoSite {
   if (!Object.keys(guardado).length) return base;
-  const programa = programaDePayload(guardado, regime);
+  const programa = programaDePayload(guardado);
   const avaliacao = parseAvaliacaoCurso(guardado);
   const nome = String(guardado.titulo ?? nomeCurso ?? "");
   return {
     ...base,
     ...(guardado as Partial<CursoSite>),
     locais: Array.isArray(guardado.locais) ? guardado.locais.map(String).filter(Boolean) : base.locais,
-    organizacaoPrograma: regime === "fin" ? "modular" : programa.organizacao,
+    organizacaoPrograma: programa.organizacao,
+    regimeSincronia: regimeSincronia(guardado.regimeSincronia),
     topicosPrograma: programa.topicos.length ? programa.topicos : base.topicosPrograma,
     avaliacaoCurso: cursoECcp(nome) && avaliacao.estrutura !== "ccp" ? avaliacaoCcp() : avaliacao,
     banner: mediaComUrl(guardado.banner) ?? base.banner,

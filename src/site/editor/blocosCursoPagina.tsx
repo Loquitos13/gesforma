@@ -71,6 +71,7 @@ function Detalhe({ p, curso, editar, Z }: { p: Props; curso: Course; editar: boo
             <div className="absolute inset-x-0 bottom-0 px-5 pb-8 lg:px-8">
               <div className="flex flex-wrap gap-3">
                 {curso.format && <span className="bg-[var(--c-destaque)] px-3 py-1.5 text-xs font-extrabold uppercase tracking-wider">{curso.format}</span>}
+                {curso.sincronia && <span className="border border-white/25 px-3 py-1.5 text-xs font-bold uppercase tracking-wider">{curso.sincronia}</span>}
                 {curso.area && <span className="border border-white/25 px-3 py-1.5 text-xs font-bold uppercase tracking-wider">{curso.area}</span>}
                 <span className="bg-[var(--c-acento)] px-3 py-1.5 text-xs font-extrabold uppercase tracking-wider text-[var(--c-primaria)]">{curso.funding === "Gold" ? "ENA Gold" : "Financiada"}</span>
               </div>

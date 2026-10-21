@@ -147,7 +147,7 @@ export function useFichaCurso(regime: Regime, cursoIdParam: number | "new" | und
         criado = id;
         setCursoId(id);
       }
-      const organizacao = regime === "fin" ? "modular" : data.organizacaoPrograma;
+      const organizacao = data.organizacaoPrograma;
       await apiGravarFichaCurso(regime, id, {
         payload: {
           ...data,

@@ -20,7 +20,7 @@ export function TabAvaliacao({ f }: { f: FichaCurso }) {
   const { data, patchAv, regime, criterios, mudarCriterios } = f;
   const av = data.avaliacaoCurso;
   const ccp = av.estrutura === "ccp";
-  const unidadePrograma = data.organizacaoPrograma === "livre" && regime !== "fin" ? "capítulo" : "módulo";
+  const unidadePrograma = data.organizacaoPrograma === "livre" ? "capítulo" : "módulo";
   const [novoCriterio, setNovoCriterio] = useState("");
   const pesos = fracoesPeso(av);
 

@@ -7,6 +7,7 @@ import { MultiSearchSelect } from "../../../../partilhado/FormKit";
 import { toastError } from "../../../../partilhado/toastBus";
 import { Botao, Campo, Cartao, Entrada, Estado, Modal, Selecao, Vazio, data as fmtData, type OpcaoSelecao } from "../../../../partilhado/ui";
 import type { Opcao } from "../../../../partilhado/api/catalogos";
+import { OPCOES_SINCRONIA, regimeSincronia } from "../../../../partilhado/regimeSincronia";
 import type { ContactosLocal } from "./modelo";
 import type { FichaCurso } from "./useFichaCurso";
 
@@ -126,6 +127,9 @@ export function TabOferta({ f }: { f: FichaCurso }) {
           </Campo>
           <Campo rotulo="Modalidade" obrigatorio erro={falhas.regime}>
             {p => <Selecao {...p} opcoes={comValor(modalidades.selecao, data.regime)} vazio="Escolher…" value={data.regime} onChange={e => patch({ regime: e.target.value })} />}
+          </Campo>
+          <Campo rotulo="Regime" ajuda="Síncrono: sessões em tempo real com o formador. Assíncrono: o formando segue ao seu ritmo.">
+            {p => <Selecao {...p} opcoes={[...OPCOES_SINCRONIA]} vazio="Por definir" value={data.regimeSincronia} onChange={e => patch({ regimeSincronia: regimeSincronia(e.target.value) })} />}
           </Campo>
           {regime === "gold" && (
             <Campo rotulo="Preço (€)" obrigatorio erro={falhas.preco}>

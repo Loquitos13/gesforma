@@ -34,14 +34,15 @@ export function horasDeTexto(linha: string) {
   return juntarHoras(m[1], m[2] ?? "");
 }
 
+/** Código do tópico pela posição: M1, M2… no programa modular; o programa livre não numera os capítulos. */
 export function codigoTopico(organizacao: OrganizacaoPrograma, index: number) {
-  return `${organizacao === "livre" ? "C" : "M"}${index + 1}`;
+  return organizacao === "livre" ? "" : `M${index + 1}`;
 }
 
+/** «M1 · Título · 25h» (modular) ou «Título · 25h» (livre). */
 export function labelTopico(organizacao: OrganizacaoPrograma, index: number, topico: Pick<TopicoPrograma, "titulo" | "horas">) {
   const titulo = topico.titulo.trim() || (organizacao === "livre" ? "Capítulo" : "Módulo");
-  const horas = topico.horas.trim();
-  return horas ? `${codigoTopico(organizacao, index)} · ${titulo} · ${horas}` : `${codigoTopico(organizacao, index)} · ${titulo}`;
+  return [codigoTopico(organizacao, index), titulo, topico.horas.trim()].filter(Boolean).join(" · ");
 }
 
 export function novoTopicoId() {
@@ -65,13 +66,16 @@ export function topicosDeTexto(texto: string): TopicoPrograma[] {
   return out;
 }
 
-export function programaDePayload(payload: Record<string, unknown> | undefined, regime: Regime): {
+/** Gold e Financiada: modular ou livre; sem valor gravado é modular. */
+export function organizacaoDePayload(payload: Record<string, unknown> | undefined): OrganizacaoPrograma {
+  return payload?.organizacaoPrograma === "livre" ? "livre" : "modular";
+}
+
+export function programaDePayload(payload: Record<string, unknown> | undefined): {
   organizacao: OrganizacaoPrograma;
   topicos: TopicoPrograma[];
 } {
-  const organizacao: OrganizacaoPrograma = regime === "fin"
-    ? "modular"
-    : payload?.organizacaoPrograma === "livre" ? "livre" : "modular";
+  const organizacao = organizacaoDePayload(payload);
   const raw = payload?.topicosPrograma;
   if (Array.isArray(raw) && raw.length) {
     const topicos = raw.map((item, i) => {
@@ -159,7 +163,7 @@ export function useProgramaDoCurso(regime: Regime, cursoNome: string | undefined
           setTopicos(topicosDeTexto(linhasProgramaInicial(modelos.opcoes, cursoNome ?? "", ufcdCod)));
           return;
         }
-        const parsed = programaDePayload(r.ficha.payload, regime);
+        const parsed = programaDePayload(r.ficha.payload);
         setOrganizacao(parsed.organizacao);
         setTopicos(parsed.topicos);
       })

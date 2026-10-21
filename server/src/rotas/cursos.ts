@@ -49,7 +49,11 @@ const listaQuery = z.object({
 });
 
 const fichaSchema = z.object({
-  payload: z.record(z.unknown()).optional(),
+  // O payload é livre; só se validam os campos com valores fechados.
+  payload: z.record(z.unknown())
+    .refine(p => p.regimeSincronia === undefined || ["", "sincrono", "assincrono"].includes(String(p.regimeSincronia)), "Regime: síncrono ou assíncrono.")
+    .refine(p => p.organizacaoPrograma === undefined || p.organizacaoPrograma === "modular" || p.organizacaoPrograma === "livre", "Tipo de programa: modular ou livre.")
+    .optional(),
   criterios: z.array(z.object({ id: z.string().max(60), label: z.string().max(200) })).max(40).optional(),
 }).refine(v => v.payload || v.criterios, { message: "vazio" });
 

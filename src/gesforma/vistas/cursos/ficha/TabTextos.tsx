@@ -1,7 +1,7 @@
 // Separadores de texto da ficha: conteúdo do site, programa e planos de sessão.
 import { AreaTexto, Aviso, Botao, Campo, Cartao, Entrada, Estado, Selecao, Vazio } from "../../../../partilhado/ui";
 import { codigoTopico, juntarHoras, novoTopicoId, partirHoras, textoPrograma } from "../../../cursoPrograma";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { MomentoField, MomentoKey } from "../../../../partilhado/TurmaExtras";
 import { novoPlanoCurso } from "../../../planosCurso";
 import type { PlanoLinha } from "./modelo";
@@ -17,8 +17,8 @@ function BlocoTexto({ rotulo, ajuda, valor, onMudar, linhas = 7 }: { rotulo: str
 }
 
 export function TabConteudo({ f }: { f: FichaCurso }) {
-  const { data, patch, regime } = f;
-  const gerado = textoPrograma(regime === "fin" ? "modular" : data.organizacaoPrograma, data.topicosPrograma);
+  const { data, patch } = f;
+  const gerado = textoPrograma(data.organizacaoPrograma, data.topicosPrograma);
   return (
     <div className="space-y-4">
       <Aviso tom="info">Cada bloco é uma secção da página pública. Escreva para o formando, não para a operação interna.</Aviso>
@@ -59,27 +59,32 @@ function Duracao({ valor, onMudar }: { valor: string; onMudar: (v: string) => vo
 }
 
 export function TabPrograma({ f }: { f: FichaCurso }) {
-  const { data, patch, regime } = f;
-  const organizacao = regime === "fin" ? "modular" : data.organizacaoPrograma;
+  const { data, patch } = f;
+  const organizacao = data.organizacaoPrograma;
   const unidade = organizacao === "livre" ? "capítulo" : "módulo";
-  const mover = (i: number, d: -1 | 1) => {
+  // Arrastar pela pega (⠿) ou usar os botões ↑ ↓ (teclado). A ordem gravada é a da lista.
+  const [arrastado, setArrastado] = useState<number | null>(null);
+  const [alvo, setAlvo] = useState<number | null>(null);
+  const moverPara = (de: number, para: number) => {
+    if (de === para || para < 0 || para >= data.topicosPrograma.length) return;
     const next = [...data.topicosPrograma];
-    [next[i + d], next[i]] = [next[i]!, next[i + d]!];
+    const [item] = next.splice(de, 1);
+    next.splice(para, 0, item!);
     patch({ topicosPrograma: next });
   };
+  const mover = (i: number, d: -1 | 1) => moverPara(i, i + d);
+  const largar = () => { setArrastado(null); setAlvo(null); };
   const somaMinutos = data.topicosPrograma.reduce((a, t) => { const p = partirHoras(t.horas); return a + (Number(p.horas) || 0) * 60 + (Number(p.minutos) || 0); }, 0);
   const horasCurso = Number(data.horas) || 0;
   return (
     <Cartao titulo="Programa pedagógico" subtitulo="O percurso do curso. Entra no cronograma, na avaliação por módulo e no programa público.">
       <div className="space-y-3">
-        {regime === "gold" ? (
-          <Campo rotulo="Organização" ajuda="Modular numera M1, M2…; programa livre numera C1, C2… (capítulos).">
-            {p => (
-              <Selecao {...p} opcoes={[{ valor: "modular", rotulo: "Modular" }, { valor: "livre", rotulo: "Programa livre" }]} value={data.organizacaoPrograma}
-                onChange={e => patch({ organizacaoPrograma: e.target.value === "livre" ? "livre" : "modular" })} />
-            )}
-          </Campo>
-        ) : <Aviso tom="info">Os cursos financiados são sempre modulares (M1, M2, M3…).</Aviso>}
+        <Campo rotulo="Tipo de programa" ajuda="Modular numera os módulos M1, M2…; no programa livre os capítulos não têm código. Arraste os cartões para mudar a ordem.">
+          {p => (
+            <Selecao {...p} opcoes={[{ valor: "modular", rotulo: "Modular" }, { valor: "livre", rotulo: "Livre" }]} value={data.organizacaoPrograma}
+              onChange={e => patch({ organizacaoPrograma: e.target.value === "livre" ? "livre" : "modular" })} />
+          )}
+        </Campo>
         {horasCurso > 0 && data.topicosPrograma.length > 0 && (
           <p className="num m-0 text-[13px] text-tinta-suave">
             Os {unidade}s somam {Math.floor(somaMinutos / 60)} h{somaMinutos % 60 ? ` ${somaMinutos % 60} min` : ""} de {horasCurso} h do curso.
@@ -88,14 +93,28 @@ export function TabPrograma({ f }: { f: FichaCurso }) {
         {data.topicosPrograma.length === 0 && <Vazio compacto titulo={`Ainda não há ${unidade}s.`} descricao="Acrescente o primeiro." />}
         <ol className="m-0 list-none space-y-2 p-0">
           {data.topicosPrograma.map((t, i) => (
-            <li key={t.id} className="flex flex-wrap items-center gap-2 rounded-controlo border border-linha bg-fundo p-2.5">
-              <span className="w-10 shrink-0 text-xs font-bold text-tinta-suave">{codigoTopico(organizacao, i)}</span>
+            <li key={t.id}
+              className={`flex flex-wrap items-center gap-2 rounded-controlo border bg-fundo p-2.5 ${alvo === i && arrastado !== i ? "border-acao" : "border-linha"} ${arrastado === i ? "opacity-50" : ""}`}
+              onDragOver={e => { if (arrastado == null) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (alvo !== i) setAlvo(i); }}
+              onDrop={e => { e.preventDefault(); if (arrastado != null) moverPara(arrastado, i); largar(); }}>
+              <span draggable aria-hidden="true" title="Arrastar para mudar a ordem" className="cursor-grab select-none px-1 text-tinta-suave active:cursor-grabbing"
+                onDragStart={e => {
+                  // Sem permissão de edição (fieldset desactivado) não se arrasta.
+                  if (e.currentTarget.closest("fieldset")?.disabled) { e.preventDefault(); return; }
+                  e.dataTransfer.effectAllowed = "move";
+                  e.dataTransfer.setData("text/plain", t.id);
+                  const li = e.currentTarget.closest("li");
+                  if (li) e.dataTransfer.setDragImage(li, 16, 16);
+                  setArrastado(i);
+                }}
+                onDragEnd={largar}>⠿</span>
+              {codigoTopico(organizacao, i) && <span className="w-8 shrink-0 text-xs font-bold text-tinta-suave">{codigoTopico(organizacao, i)}</span>}
               <Entrada aria-label={`Título do ${unidade} ${i + 1}`} className="min-w-[12rem] flex-1" value={t.titulo} placeholder={`Título do ${unidade}`}
                 onChange={e => patch({ topicosPrograma: data.topicosPrograma.map(x => (x.id === t.id ? { ...x, titulo: e.target.value } : x)) })} />
               <Duracao valor={t.horas} onMudar={horas => patch({ topicosPrograma: data.topicosPrograma.map(x => (x.id === t.id ? { ...x, horas } : x)) })} />
               <span className="flex gap-1">
-                <Botao tamanho="sm" variante="fantasma" soIcone aria-label="Subir" disabled={i === 0} onClick={() => mover(i, -1)}>↑</Botao>
-                <Botao tamanho="sm" variante="fantasma" soIcone aria-label="Descer" disabled={i === data.topicosPrograma.length - 1} onClick={() => mover(i, 1)}>↓</Botao>
+                <Botao tamanho="sm" variante="fantasma" soIcone aria-label={`Subir o ${unidade} ${i + 1}`} disabled={i === 0} onClick={() => mover(i, -1)}>↑</Botao>
+                <Botao tamanho="sm" variante="fantasma" soIcone aria-label={`Descer o ${unidade} ${i + 1}`} disabled={i === data.topicosPrograma.length - 1} onClick={() => mover(i, 1)}>↓</Botao>
                 <Botao tamanho="sm" variante="fantasma" onClick={() => patch({ topicosPrograma: data.topicosPrograma.filter(x => x.id !== t.id) })}>Remover</Botao>
               </span>
             </li>

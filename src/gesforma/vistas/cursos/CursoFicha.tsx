@@ -81,7 +81,7 @@ export default function CursoFicha({ view, params, navigate }: VistaProps) {
                   <Aviso tom="info" titulo="Integração com o Moodle em pausa">Pode planear os conteúdos de cada módulo; a publicação no Moodle está suspensa.</Aviso>
                   <ConteudosMoodle
                     accent={regime}
-                    organizacao={regime === "fin" ? "modular" : data.organizacaoPrograma}
+                    organizacao={data.organizacaoPrograma}
                     modulos={data.topicosPrograma}
                     conteudos={data.conteudosMoodle}
                     inputCls={CLASSE_ENTRADA}

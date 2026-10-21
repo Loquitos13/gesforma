@@ -37,18 +37,30 @@ function chaveModulo(nome: string) {
   return nome.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+/** Título do módulo sem o código à frente (M1, C1…) nem as horas no fim: «M2 · Excel · 25h» → «excel». */
+export function tituloModulo(nome: string) {
+  return chaveModulo(nome
+    .replace(/^(?:M|C|EX|AV)\s*\d+\s*[·.\-–:]+\s*/i, "")
+    .replace(/\s*·\s*\d+\s*h(?:\s*\d{1,2})?\s*(?:min)?\s*$/i, ""));
+}
+
 /**
  * O mesmo módulo aparece escrito de maneiras diferentes conforme a origem: o
  * catálogo da base ("M1 · Aprendizagem e pedagogia"), o catálogo do formulário
  * ("M1 · Formador: sistemas, contextos e perfil") e cronogramas antigos. O
  * código é a única parte estável, mas há cursos onde vários módulos partilham
  * o mesmo código (UFCD 3564), por isso só serve quando é único na lista.
+ * Antes do código tenta-se o título: ao reordenar o programa os códigos M1, M2… mudam
+ * de módulo, e o programa livre deixou de ter códigos (C1 · …), mas o título é o mesmo.
  */
 export function casarModulo(valor: string, opcoes: string[]): string | null {
   const alvo = chaveModulo(valor);
   if (!alvo) return null;
   const exacto = opcoes.find(o => chaveModulo(o) === alvo);
   if (exacto) return exacto;
+  const titulo = tituloModulo(valor);
+  const mesmoTitulo = titulo ? opcoes.filter(o => tituloModulo(o) === titulo) : [];
+  if (mesmoTitulo.length === 1) return mesmoTitulo[0]!;
   const codigo = codigoModulo(valor).toLowerCase();
   if (!codigo) return null;
   const mesmoCodigo = opcoes.filter(o => codigoModulo(o).toLowerCase() === codigo);

@@ -24,6 +24,8 @@ export type Course = {
   contactosLocais: { local: string; telemovel: string; telefone: string; email: string; whatsapp: string }[];
   organizacao: "modular" | "livre";
   programa: { titulo: string; horas: string }[];
+  /** Regime da oferta: «Síncrono», «Assíncrono» ou vazio. */
+  sincronia: string;
   sessoes: { data: string; local: string; horario: string; preco?: number | null; morada?: string }[];
   nomeOferta: string;
 };
@@ -51,6 +53,7 @@ type CatalogoApi = {
     contactosLocais?: { local: string; telemovel: string; telefone: string; email: string; whatsapp: string }[];
     organizacao?: "modular" | "livre";
     programa?: { titulo: string; horas: string }[];
+    sincronia?: string;
     sessoes?: { data: string; local: string; horario: string; preco?: number | null; morada?: string }[];
     nomeOferta?: string;
   }>;
@@ -81,6 +84,7 @@ function mapCurso(curso: CatalogoApi["cursos"][number]): Course {
     contactosLocais: curso.contactosLocais ?? [],
     organizacao: curso.organizacao === "livre" ? "livre" : "modular",
     programa: curso.programa ?? [],
+    sincronia: curso.sincronia ?? "",
     sessoes: curso.sessoes ?? [],
     nomeOferta: curso.nomeOferta || curso.titulo,
   };

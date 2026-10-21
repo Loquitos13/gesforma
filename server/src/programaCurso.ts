@@ -14,7 +14,10 @@ function asObj(raw: unknown): Record<string, unknown> {
   return {};
 }
 
-/** Rótulos M1/C1 tal como estão gravados na ficha do curso. Sem catálogo paralelo. */
+/**
+ * Rótulos do programa tal como a ficha os mostra (Gold e Financiada): «M1 · Título · 25h» no modular,
+ * «Título · 25h» no livre (os capítulos não têm código). Sem catálogo paralelo.
+ */
 export function labelsDePayload(raw: unknown): string[] {
   const payload = asObj(raw);
   const livre = payload.organizacaoPrograma === "livre";
@@ -27,8 +30,7 @@ export function labelsDePayload(raw: unknown): string[] {
     const titulo = String(row.titulo ?? row.nome ?? "").trim();
     if (!titulo) return;
     const horas = String(row.horas ?? "").trim();
-    const codigo = `${livre ? "C" : "M"}${i + 1}`;
-    out.push(horas ? `${codigo} · ${titulo} · ${horas}` : `${codigo} · ${titulo}`);
+    out.push([livre ? "" : `M${i + 1}`, titulo, horas].filter(Boolean).join(" · "));
   });
   return out;
 }

@@ -4,6 +4,7 @@ import { dadosCatalogoPublico } from "./repos/cursos.js";
 import { hojeLisboa } from "./datas.js";
 import { escolherPreco, regrasDoPayload } from "./precoOferta.js";
 import { eur } from "../../src/partilhado/ui/formatos.js";
+import { rotuloSincronia } from "../../src/partilhado/regimeSincronia.js";
 
 export type ContactoLocal = { local: string; telemovel: string; telefone: string; email: string; whatsapp: string };
 const CAMPOS_CONTACTO = ["telemovel", "telefone", "email", "whatsapp"] as const;
@@ -54,6 +55,8 @@ export type CursoPublico = {
   contactosLocais: ContactoLocal[];
   organizacao: "modular" | "livre";
   programa: { titulo: string; horas: string }[];
+  /** Regime da oferta (ficha › Oferta): «Síncrono», «Assíncrono» ou vazio. */
+  sincronia: "" | "Síncrono" | "Assíncrono";
   /** Próximas datas; o preço segue as regras da ficha (local, horário ou os dois), como na pré-inscrição. */
   sessoes: { data: string; iso: string; local: string; horario: string; preco: number | null; morada: string }[];
   nomeOferta: string;
@@ -208,8 +211,9 @@ function itemPrograma(linha: string) {
   return { titulo, horas: duracaoPublica(horasMatch?.[1] ?? "") };
 }
 
-function programaPublico(regime: "gold" | "fin", payload: Record<string, unknown>) {
-  const organizacao: CursoPublico["organizacao"] = regime === "fin" || payload.organizacaoPrograma !== "livre" ? "modular" : "livre";
+function programaPublico(payload: Record<string, unknown>) {
+  // Gold e Financiada: modular ou livre; sem valor gravado é modular.
+  const organizacao: CursoPublico["organizacao"] = payload.organizacaoPrograma === "livre" ? "livre" : "modular";
   const raw = Array.isArray(payload.topicosPrograma) ? payload.topicosPrograma : [];
   const dosTopicos = raw.map(item => {
     const row = asObj(item);
@@ -330,7 +334,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
     const capa = gravadaCapa || mediaUrl(payload.capa) || gravadaThumb || mediaUrl(payload.thumb);
     const miniatura = gravadaMiniatura || mediaUrl(payload.miniatura) || capa;
     const banner = gravadaBanner || mediaUrl(payload.banner) || capa;
-    const programa = programaPublico(curso.regime, payload);
+    const programa = programaPublico(payload);
     return {
       id: reservarSlug(curso.titulo, texto(payload.slug)),
       regime: curso.regime,
@@ -359,6 +363,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       ], contactosLocais, curso.regime),
       organizacao: programa.organizacao,
       programa: programa.programa,
+      sincronia: rotuloSincronia(payload.regimeSincronia),
       sessoes: curso.chaves
         .flatMap(key => sessoes.get(key) ?? [])
         .sort((a, b) => a.iso.localeCompare(b.iso))

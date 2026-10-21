@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { ComponentConfig } from "@puckeditor/core";
 import { slugServico, videoServico, type ServicoSite } from "../../partilhado/siteServicos";
-import { TextoEmLinha, TextoFormatado } from "../../partilhado/TextoFormatado";
+import { TextoEmLinha, TextoFormatado } from "../../partilhado/TextoFormatadoVista";
 import { linhasPontos } from "../../partilhado/textoFormatado";
 import { Icon } from "../SiteLanding";
 import { Carrossel1a1, Cartoes } from "./carrossel";

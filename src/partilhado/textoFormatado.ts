@@ -1,5 +1,5 @@
 // Formatação leve dos textos longos do site (serviços para empresas): o que se escreve no backoffice é texto simples
-// com umas poucas marcas, e o site (e a pré-visualização do backoffice) desenha-o com o mesmo leitor (TextoFormatado.tsx).
+// com umas poucas marcas, e o site (e a pré-visualização do backoffice) desenha-o com o mesmo leitor (TextoFormatadoVista.tsx).
 //
 //   linha em branco      → novo parágrafo (mudança de linha simples = mudança de linha)
 //   «- », «* » ou «• »   → lista com marcas (também as marcas do Word: «◦», «▪», «o» ou «§» seguidos de tabulação)

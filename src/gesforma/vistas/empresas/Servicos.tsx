@@ -7,7 +7,7 @@ import {
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import { LIMITES_SERVICO as L, slugServico, textosProprios, videoServico, type TextosProprios } from "../../../partilhado/siteServicos";
-import { TextoFormatado } from "../../../partilhado/TextoFormatado";
+import { TextoFormatado } from "../../../partilhado/TextoFormatadoVista";
 import { AJUDA_FORMATACAO, htmlParaTexto, normalizarColagem } from "../../../partilhado/textoFormatado";
 import {
   AreaTexto, Aviso, Botao, Campo, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Estado, Interruptor, PageHeader, PainelLateral, Selecao, Separadores,

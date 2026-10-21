@@ -6,7 +6,7 @@ import { campoCor, campoNumero } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { corSegura, estiloBloco, estiloTexto, estiloVazio, juntar, lados, tipoVazia, type Estilo, type Tipografia } from "./estilos";
 import { servicosDeTopo, slugServico } from "../../partilhado/siteServicos";
-import { TextoEmLinha, TextoFormatado } from "../../partilhado/TextoFormatado";
+import { TextoEmLinha, TextoFormatado } from "../../partilhado/TextoFormatadoVista";
 import { linhasPontos } from "../../partilhado/textoFormatado";
 import { campoServico, useServicos } from "./blocosServico";
 

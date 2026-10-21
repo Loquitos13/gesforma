@@ -84,7 +84,7 @@ function Detalhe({ p, curso, editar, Z }: { p: Props; curso: Course; editar: boo
         <div className={`mx-auto grid gap-12 ${p.mostrarCartao ? "lg:grid-cols-[1fr_360px]" : ""}`} style={{ maxWidth: "var(--largura)" }}>
           <div className="max-w-3xl">
             {p.tituloSintese && <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--c-destaque)]">{p.tituloSintese}</p>}
-            <p className="mt-4 text-lg leading-8 opacity-75">{curso.description}</p>
+            <p className="mt-4 whitespace-pre-line text-lg leading-8 opacity-75">{curso.description}</p>
             {p.mostrarDados && (
               <div className="mt-8 grid grid-cols-2 gap-px bg-black/10 sm:grid-cols-4">
                 {[[curso.duration, "Duração"], [curso.start, "Início"], [local, "Local"], [curso.price, "Investimento"]].map(([valor, rotulo]) => (

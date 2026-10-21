@@ -80,7 +80,7 @@ export function precoNoLocal(c: Course, local: string) {
 /** Variáveis que os textos do curso podem usar: {{curso}}, {{preco}}, … */
 export const VARIAVEIS_CURSO: [string, string][] = [
   ["curso", "Nome do curso"], ["area", "Área"], ["formato", "Formato (presencial, b-learning…)"], ["duracao", "Duração"],
-  ["descricao", "Síntese"], ["inscricao", "Tipo de inscrição"], ["regime", "ENA Gold ou Financiada"],
+  ["descricao", "Texto completo (síntese)"], ["resumo", "Texto de destaque (catálogo)"], ["inscricao", "Tipo de inscrição"], ["regime", "ENA Gold ou Financiada"],
   ["local", "Local escolhido"], ["locais", "Todos os locais"], ["horarios", "Horários (do local escolhido)"],
   ["inicio", "Próximo início (data · local)"], ["inicio_resumo", "«Vários locais e datas» quando há mais do que um (senão, o próximo início)"],
   ["proxima_data", "Próxima data de início"],
@@ -91,7 +91,7 @@ export function variaveisCurso(c: Course, local: string): Record<string, string>
   const doLocal = c.sessoes.filter(s => !local || s.local === local);
   const prox = doLocal[0];
   return {
-    curso: c.title, area: c.area, formato: c.format, duracao: c.duration, descricao: c.description,
+    curso: c.title, area: c.area, formato: c.format, duracao: c.duration, descricao: c.description, resumo: c.resumo,
     inscricao: c.enrollment, regime: c.funding === "Gold" ? "ENA Gold" : "Financiada",
     local, locais: locaisDo(c).join(", "),
     horarios: [...new Set(doLocal.map(s => s.horario).filter(Boolean))].join(", "),

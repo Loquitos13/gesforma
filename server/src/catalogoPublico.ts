@@ -5,6 +5,7 @@ import { hojeLisboa } from "./datas.js";
 import { escolherPreco, regrasDoPayload } from "./precoOferta.js";
 import { eur } from "../../src/partilhado/ui/formatos.js";
 import { CONTACTOS_LOCAL } from "../../src/partilhado/contactosLocal.js";
+import { textosCurso } from "../../src/partilhado/textosCurso.js";
 
 export type ContactoLocal = { local: string; telemovel: string; telefone: string; email: string; whatsapp: string };
 
@@ -42,7 +43,12 @@ export type CursoPublico = {
   inicio: string;
   precoLabel: string;
   precoDesde: number | null;
+  /** O texto completo (igual a `descricaoCompleta`); fica pelos clientes antigos. */
   descricao: string;
+  /** Texto de destaque (catálogo): o da ficha ou, vazio, a síntese cortada numa palavra com «…». */
+  resumo: string;
+  /** Texto completo (página do curso): a síntese da ficha ou, vazia, «Área. N horas.». */
+  descricaoCompleta: string;
   financiamento: "Gold" | "Financiada";
   inscricao: "Acesso direto" | "Pré-pago" | "Pré-inscrição";
   miniatura: string | null;
@@ -319,8 +325,8 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
 
   const cursos = brutos.map((curso): CursoPublico => {
     const payload = asObj(curso.payload);
-    const sintese = texto(payload.sintese);
     const horasLabel = curso.horas > 0 ? `${curso.horas.toLocaleString("pt-PT")} horas` : "Duração a confirmar";
+    const textos = textosCurso(payload, `${curso.area}. ${horasLabel}.`);
     const modo = modalidade(curso.modalidadeTexto);
     const entrada = classificarInscricao(curso.regime, curso.tipo, curso.modalidadeTexto);
     const procura = curso.chaves.reduce((max, key) => Math.max(max, vendas.get(key) ?? 0), 0);
@@ -347,7 +353,9 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
         : modo === "E-learning" ? "Acesso imediato" : "Data a anunciar",
       precoLabel: curso.regime === "fin" ? "Financiada" : desde != null ? (precos.length > 1 ? `A partir de ${eur(desde, true)}` : eur(desde, true)) : "Sob consulta",
       precoDesde: desde,
-      descricao: sintese || `${curso.area}. ${horasLabel}.`,
+      descricao: textos.completo,
+      resumo: textos.resumo,
+      descricaoCompleta: textos.completo,
       financiamento: curso.regime === "fin" ? "Financiada" : "Gold",
       inscricao: entrada,
       miniatura,

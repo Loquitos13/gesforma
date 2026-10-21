@@ -27,8 +27,11 @@ export type CursoSite = {
   titulo: string; slug: string; tipo: string; categoria: string; regime: string; video: string; preco: string; horas: string;
   tags: string; dataInicio: string; estado: string; visivelSite: boolean;
   banner: MediaSlot | null; capa: MediaSlot | null; miniatura: MediaSlot | null;
+  /** Texto completo (página do curso). */
   sintese: string; objetivos: string; programa: string; funcionamento: string;
-  /** Pesquisa (Google): título e descrição próprios; vazios = o título e a síntese. */
+  /** Texto de destaque (catálogo, cartões e listagens); vazio = a síntese cortada numa palavra com «…». */
+  resumo: string;
+  /** Pesquisa (Google): título e descrição próprios; vazios = o título e o texto de destaque. */
   seoTitulo: string; seoDescricao: string;
   /** Contactos próprios deste curso por local (só valem para os locais atribuídos ao curso); vazio = os de Locais. */
   contactosLocais: Record<string, ContactosLocal>;
@@ -111,6 +114,7 @@ export function fichaInicial(curso: CursoBase | null, regime: Regime, modelos: O
     visivelSite: (curso?.estado ?? "Ativo") === "Ativo",
     banner: null, capa: null, miniatura: null,
     sintese: t?.sintese ?? "",
+    resumo: "",
     objetivos: t?.objetivos ?? "",
     programa,
     funcionamento: t?.funcionamento ?? "",
@@ -163,6 +167,7 @@ export function fundirGuardado(base: CursoSite, guardado: Record<string, unknown
     valoresFormador: Array.isArray(guardado.valoresFormador) ? guardado.valoresFormador as ValorFormador[] : base.valoresFormador,
     entidadeResponsavel: String(guardado.entidadeResponsavel ?? base.entidadeResponsavel ?? ""),
     conteudosMoodle: parseConteudosMoodle(guardado.conteudosMoodle),
+    resumo: typeof guardado.resumo === "string" ? guardado.resumo : "",
     // A área CNAEF é do curso (tabela), não do conteúdo do site gravado.
     areaCnaef: base.areaCnaef,
   };
@@ -220,7 +225,7 @@ export function prontidao(d: CursoSite, regime: Regime) {
     { id: "slug", rotulo: "Endereço da página", ok: preenchido(d.slug) },
     { id: "media", rotulo: "Banner e capa", ok: preenchido(d.banner) && preenchido(d.capa) },
     meta,
-    { id: "sintese", rotulo: "Síntese", ok: preenchido(d.sintese) },
+    { id: "sintese", rotulo: "Texto completo (síntese)", ok: preenchido(d.sintese) },
     { id: "objetivos", rotulo: "Objetivos", ok: preenchido(d.objetivos) },
     { id: "programa", rotulo: "Programa", ok: d.topicosPrograma.some(t => t.titulo.trim()) || preenchido(d.programa) },
     { id: "funcionamento", rotulo: "Funcionamento", ok: preenchido(d.funcionamento) },

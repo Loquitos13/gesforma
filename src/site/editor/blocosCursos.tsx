@@ -14,7 +14,7 @@ export const INFO_CARTAO = [
   { valor: "regime", rotulo: "Gold / Financiada" },
   { valor: "area", rotulo: "Área" },
   { valor: "titulo", rotulo: "Título" },
-  { valor: "descricao", rotulo: "Descrição" },
+  { valor: "descricao", rotulo: "Texto de destaque" },
   { valor: "preco", rotulo: "Preço" },
   { valor: "duracao", rotulo: "Duração" },
   { valor: "inicio", rotulo: "Início / local" },
@@ -185,7 +185,7 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
           <a href={href} className="hover:opacity-80">{curso.title}</a>
         </h3>
       )}
-      {ver.has("descricao") && curso.description && e.formato !== "compacto" && <p className={juntar("mt-3 text-sm leading-6", linhas)}>{curso.description}</p>}
+      {ver.has("descricao") && curso.resumo && e.formato !== "compacto" && <p className={juntar("mt-3 text-sm leading-6", linhas)}>{curso.resumo}</p>}
       {(ver.has("preco") || ver.has("duracao") || ver.has("inicio") || ver.has("botao")) && (
         <div className={juntar("flex flex-wrap items-end justify-between gap-3", e.formato === "compacto" ? "mt-3" : "mt-auto pt-5")}
           style={e.formato === "compacto" || sobreposto ? undefined : { borderTop: "1px solid rgba(20,38,61,.1)", marginTop: "1.25rem" }}>
@@ -267,7 +267,7 @@ type DestaqueProps = { modo: "escolhidos" | "automatico"; cursos: ItemDestaque[]
 
 /** Curso vazio, para cartões livres (sem curso): só mostram o que se escreve no cartão. */
 const CURSO_LIVRE: Course = {
-  id: "", title: "", area: "", format: "", duration: "", start: "", price: "", description: "", funding: "Gold",
+  id: "", title: "", area: "", format: "", duration: "", start: "", price: "", description: "", resumo: "", funding: "Gold",
   enrollment: "Pré-inscrição", miniatura: null, capa: null, banner: null, precoDesde: null, vendas: 0, regime: "gold",
   objetivos: [], funcionamento: "", contactosLocais: [], organizacao: "modular", programa: [], sessoes: [], nomeOferta: "",
 };
@@ -279,7 +279,7 @@ function cartaoDe(x: ItemDestaque, curso: Course | undefined): Course | null {
   return {
     ...c,
     title: x.titulo?.trim() || c.title,
-    description: x.texto?.trim() || c.description,
+    resumo: x.texto?.trim() || c.resumo,
     capa: imagem ?? c.capa,
     miniatura: imagem ?? c.miniatura,
   };
@@ -295,7 +295,7 @@ export const CursosDestaque: ComponentConfig<DestaqueProps> = {
         cursoId: campoCurso("Curso (vazio = cartão livre)"),
         imagem: campoImagem("Imagem (vazio = a do curso)") as never,
         titulo: { type: "text", label: "Título (vazio = o do curso)" },
-        texto: { type: "textarea", label: "Texto (vazio = a descrição do curso)" },
+        texto: { type: "textarea", label: "Texto (vazio = o texto de destaque do curso)" },
         etiqueta: { type: "text", label: "Etiqueta (vazio = Gold / Financiada)" },
         botao: { type: "text", label: "Texto do botão (vazio = o do cartão)" },
         ligacao: { type: "text", label: "Ligação (vazio = página do curso)" },

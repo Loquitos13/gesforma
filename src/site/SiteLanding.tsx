@@ -1,5 +1,6 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from "react";
 import { textoSite, type InscricaoPublica, type SiteChave } from "../partilhado/siteConteudo";
+import { cortarNaPalavra } from "../partilhado/textosCurso";
 
 export type Course = {
   id: string;
@@ -9,7 +10,10 @@ export type Course = {
   duration: string;
   start: string;
   price: string;
+  /** Texto completo (página do curso). */
   description: string;
+  /** Texto de destaque (cartões, catálogo e listagens). */
+  resumo: string;
   funding: "Financiada" | "Gold";
   enrollment: InscricaoPublica;
   miniatura: string | null;
@@ -41,6 +45,8 @@ type CatalogoApi = {
     precoLabel: string;
     precoDesde: number | null;
     descricao: string;
+    resumo?: string;
+    descricaoCompleta?: string;
     financiamento: "Gold" | "Financiada";
     inscricao: InscricaoPublica;
     miniatura: string | null;
@@ -68,7 +74,8 @@ function mapCurso(curso: CatalogoApi["cursos"][number]): Course {
     duration: curso.horasLabel,
     start: curso.inicio,
     price: curso.precoLabel,
-    description: curso.descricao,
+    description: curso.descricaoCompleta || curso.descricao,
+    resumo: curso.resumo || cortarNaPalavra(curso.descricao),
     funding: curso.financiamento,
     enrollment: curso.inscricao,
     miniatura: curso.miniatura,

@@ -4,6 +4,7 @@ import { textoPrograma } from "../../../cursoPrograma";
 import type { FichaCurso } from "./useFichaCurso";
 import { hojeLisboa } from "../../../../partilhado/horaLisboa";
 import { rotuloCodigoCurso } from "../../../../partilhado/codigoCurso";
+import { textosCurso } from "../../../../partilhado/textosCurso";
 
 const marcadores = (txt: string) => txt.split("\n").map(l => l.replace(/^[•\-]\s*/, "").trim()).filter(Boolean).slice(0, 5);
 
@@ -17,6 +18,7 @@ export function PreviewSite({ f }: { f: FichaCurso }) {
   const horarios = [...new Set(abertas.filter(t => !local || t.local === local).map(t => t.horario).filter(Boolean))];
   const datas = abertas.filter(t => (!local || t.local === local) && (!horario || t.horario === horario));
   const programa = textoPrograma(data.organizacaoPrograma, data.topicosPrograma) || data.programa;
+  const destaque = textosCurso(data);
 
   return (
     <div className="overflow-hidden rounded-cartao border border-linha bg-superficie shadow-sm">
@@ -25,6 +27,16 @@ export function PreviewSite({ f }: { f: FichaCurso }) {
         <Estado tom={data.visivelSite ? "sucesso" : "neutro"}>{data.visivelSite ? "Publicada" : "Rascunho"}</Estado>
       </div>
       <div className="max-h-[720px] overflow-y-auto">
+        <div className="border-b border-linha bg-fundo p-3">
+          <p className="m-0 mb-1.5 text-[10px] font-bold uppercase tracking-wide text-tinta-suave">No catálogo</p>
+          <div className="flex gap-3 rounded-controlo border border-linha bg-superficie p-2.5">
+            {(data.miniatura?.url || data.capa?.url) && <img src={data.miniatura?.url || data.capa?.url} alt="" className="h-14 w-14 shrink-0 rounded-controlo object-cover" />}
+            <div className="min-w-0">
+              <p className="m-0 text-[13px] font-bold leading-snug text-tinta">{data.titulo || "Título do curso"}</p>
+              <p className="m-0 mt-0.5 text-xs leading-snug text-tinta-suave">{destaque.resumo || "O texto de destaque aparece aqui."}</p>
+            </div>
+          </div>
+        </div>
         <div className="relative h-36 bg-nav">
           {data.banner?.url && <img src={data.banner.url} alt="" className="absolute inset-0 h-full w-full object-cover" />}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
@@ -41,7 +53,7 @@ export function PreviewSite({ f }: { f: FichaCurso }) {
             <Estado>{data.horas ? `${data.horas} horas` : "Horas por definir"}</Estado>
             {data.categoria && <Estado>{data.categoria}</Estado>}
           </div>
-          <Seccao titulo="Síntese"><p className="m-0 whitespace-pre-line text-tinta-suave">{data.sintese || "A síntese aparece aqui."}</p></Seccao>
+          <Seccao titulo="Síntese"><p className="m-0 whitespace-pre-line text-tinta-suave">{data.sintese || "O texto completo aparece aqui."}</p></Seccao>
           <Seccao titulo="Objetivos">
             <ul className="m-0 space-y-1 pl-4 text-tinta-suave">
               {(marcadores(data.objetivos).length ? marcadores(data.objetivos) : ["Os objetivos aparecem aqui, um por linha."]).map((l, i) => <li key={i}>{l}</li>)}

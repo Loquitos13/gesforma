@@ -169,12 +169,12 @@ export async function metaDaPagina(db: Db, caminhoBruto: string, host?: string):
     const { cursos } = await listarCatalogoPublico(db);
     const c = cursos.find(x => x.id === slug);
     if (!c) return base({ estado: 404, titulo: comNome("Curso não encontrado"), indexar: false, corpo: "<h1>Este curso não está na oferta.</h1><p><a href=\"/formacao\">Ver todos os cursos</a></p>" });
-    const descricao = cortar(limpar(c.seoDescricao || c.descricao), 160);
+    const descricao = cortar(limpar(c.seoDescricao || c.resumo || c.descricao), 160);
     const titulo = comNome(limpar(c.seoTitulo) || c.titulo);
     return base({
       titulo, descricao, imagem: c.capa ? absoluto(origem, c.capa) : imagemBase,
       jsonLd: [migalhas(origem, [["Início", "/"], ["Formação", "/formacao"], [c.titulo, `/formacao/${c.id}`]]), dadosCurso(c, origem, descricao)],
-      corpo: `<h1>${esc(c.titulo)}</h1><p>${esc(c.descricao)}</p><p>${esc([c.modalidade, c.horasLabel, c.precoLabel].filter(Boolean).join(" · "))}</p>`,
+      corpo: `<h1>${esc(c.titulo)}</h1><p>${esc(c.descricaoCompleta)}</p><p>${esc([c.modalidade, c.horasLabel, c.precoLabel].filter(Boolean).join(" · "))}</p>`,
     });
   }
   if (caminho === "/noticias") {

@@ -156,7 +156,13 @@ export type DossieLead = {
    * N.º do documento, NISS, IBAN e NIF da entidade empregadora vêm mascarados (últimos 4).
    */
   dadosFin?: DadosPessoaisFinLead | null;
+  /** Lembretes automáticos dos documentos: enviados, o último e o próximo (ou porque não há). */
+  lembretes?: LembretesLead;
+  /** Recusas que ainda não seguiram por email (agrupadas no próximo envio). */
+  recusasPorAvisar?: number;
 };
+
+export type LembretesLead = { enviados: number; maximo: number; ultimoEm: string | null; proximoEm: string | null; semProximo: string };
 
 export type DadosPessoaisFinLead = {
   genero: string; dataNascimento: string; nacionalidade: string; habilitacoes: string; morada: string;
@@ -191,8 +197,10 @@ export const apiCriarCampo = (label: string, tipo: CampoCrm["tipo"]) =>
 
 export const apiValidarDoc = (id: number, docId: number) => enviar.post<DossieLead>(`/v1/crm/leads/${id}/documentos/${docId}/validar`, {});
 export const apiRecusarDoc = (id: number, docId: number, observacao: string) =>
-  enviar.post<DossieLead>(`/v1/crm/leads/${id}/documentos/${docId}/recusar`, { observacao });
-export const apiAlertarDocs = (id: number) => enviar.post<{ ok: boolean }>(`/v1/crm/leads/${id}/documentos/alertar`, {});
+  enviar.post<DossieLead & { avisoRecusa?: { enviado: boolean; adiado: boolean } }>(`/v1/crm/leads/${id}/documentos/${docId}/recusar`, { observacao });
+/** «Reenviar pedido agora»: documentos recusados (com o motivo) ou em falta, com a ligação pessoal. */
+export const apiReenviarPedidoDocs = (id: number) =>
+  enviar.post<{ ok: boolean; documentos: string[]; dossie: DossieLead | null }>(`/v1/crm/leads/${id}/documentos/reenviar-pedido`, {});
 
 export const apiValidarPreinscricao = (id: number, turmaId?: number) =>
   enviar.post<DossieLead>(`/v1/crm/leads/${id}/validar-preinscricao`, turmaId ? { turmaId } : {});

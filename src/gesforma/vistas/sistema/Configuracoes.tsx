@@ -83,7 +83,7 @@ export default function Configuracoes({ params, navigate }: VistaProps) {
       case "apoios": return <RegrasApoios podeEditar={editar} />;
       case "lembretes":
         return <SeccaoDefinicoes id="lembrete_pre" titulo="Lembrete da pré-inscrição" soAdmin podeEditar={admin} campos={CAMPOS_LEMBRETE}
-          valores={settings.lembrete_pre ?? comoTexto(estado.lembrete)} descricao="Email automático enquanto a pré-inscrição não estiver validada. A ligação pessoal expira ao fim de 90 dias sem actividade." />;
+          valores={settings.lembrete_pre ?? comoTexto(estado.lembrete)} descricao="Email automático enquanto a pré-inscrição não estiver validada (e aos formandos da Financiada com documentos do dossiê em falta, depois de um lembrete manual ou de uma recusa). A ligação pessoal fica aberta enquanto faltarem documentos ou houver recusados por corrigir; sem nada pendente, expira ao fim de 90 dias sem actividade." />;
       case "smtp": return <SeccaoSmtp />;
       case "whatsapp": return <SeccaoWhatsapp />;
       case "drive": return <SeccaoDrive resultado={f.drive || undefined} onResultadoVisto={() => setF({ drive: "" })} />;

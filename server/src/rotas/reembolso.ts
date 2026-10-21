@@ -4,7 +4,7 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { estadoReembolso, gerarFicheiroReembolso, MIME_XLSX, sincronizarReembolso, TIPOS_REEMBOLSO } from "../reembolso.js";
+import { anexoXlsx, estadoReembolso, gerarFicheiroReembolso, MIME_XLSX, sincronizarReembolso, TIPOS_REEMBOLSO } from "../reembolso.js";
 import type { TipoReembolso } from "../repos/reembolso.js";
 import { idNum, idParam, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
@@ -55,7 +55,7 @@ export async function registar(app: FastifyInstance, { db, requireAuth, audit }:
     await audit(db, req.actor!.id, "turma.reembolso_descarregar", "turma_fin", String(id), req.ip, { tipo });
     reply
       .header("content-type", MIME_XLSX)
-      .header("content-disposition", `attachment; filename="${g.nome}"`)
+      .header("content-disposition", anexoXlsx(g.nome))
       .header("cache-control", "no-store");
     return reply.send(bytes);
   });

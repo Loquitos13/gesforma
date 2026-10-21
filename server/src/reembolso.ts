@@ -13,6 +13,7 @@ import type { Db } from "./db/pool.js";
 import { apagarFicheiroSubstituido, getDriveFile, storeDriveFile } from "./driveFicheiros.js";
 import { sincronizarDespesasDaTurma } from "./despesasFormador.js";
 import { dadosExecucaoFisica, emFaltaExecucao, xlsxExecucaoFisica } from "./execucaoFisica.js";
+import { sanitizeFileName } from "./ficheirosValidacao.js";
 import { textoSeguro } from "./pagamentosExportar.js";
 import { listarDespesas } from "./repos/despesas.js";
 import { ficheirosReembolso, trocarFicheiroReembolso, turmaReembolso, type TipoReembolso } from "./repos/reembolso.js";
@@ -20,13 +21,25 @@ import { ficheirosReembolso, trocarFicheiroReembolso, turmaReembolso, type TipoR
 export const TIPOS_REEMBOLSO: TipoReembolso[] = ["execucao-fisica", "despesas"];
 export const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-export function nomeSeguro(nome: string, id: number) {
-  return nome.normalize("NFD").replace(/[^\w-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || String(id);
+/**
+ * Nome do ficheiro (o mesmo na Drive e na descarga): «Despesas - <turma> - <curso> - <dd-mm-aaaa>.xlsx».
+ * O tipo à frente distingue os dois ficheiros da mesma turma, que ficam na mesma pasta.
+ */
+export function nomeFicheiroReembolso(tipo: TipoReembolso, turma: { id: number; nome: string; curso?: string; data_inicio?: string }) {
+  const inicio = /^(\d{4})-(\d{2})-(\d{2})/.exec(turma.data_inicio ?? "");
+  const partes = [
+    tipo === "despesas" ? "Despesas" : "Execução Física",
+    turma.nome.trim() || `Turma ${turma.id}`,
+    turma.curso?.trim() ?? "",
+    inicio ? `${inicio[3]}-${inicio[2]}-${inicio[1]}` : "",
+  ].filter(Boolean);
+  return `${sanitizeFileName(partes.join(" - ")).slice(0, 170)}.xlsx`;
 }
 
-/** Nome do ficheiro (o mesmo na Drive e na descarga, para se reconhecer). */
-export function nomeFicheiroReembolso(tipo: TipoReembolso, turma: { id: number; nome: string }) {
-  return `${tipo === "despesas" ? "Despesas" : "ExecucaoFisica"}-${nomeSeguro(turma.nome, turma.id)}.xlsx`;
+/** Content-Disposition com o nome com acentos (RFC 6266) e uma alternativa só em ASCII. */
+export function anexoXlsx(nome: string) {
+  const ascii = nome.normalize("NFD").replace(/[^\x20-\x7e]/g, "").replace(/["\\]/g, "");
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(nome)}`;
 }
 
 /**
@@ -89,7 +102,9 @@ export async function sincronizarReembolso(
   const g = opts.gerado ?? await gerarFicheiroReembolso(db, turmaId, tipo);
   if (!g) return null;
   const actual = (await ficheirosReembolso(db, turmaId)).find(f => f.tipo === tipo);
-  if (!opts.forcar && actual && actual.impressao === g.impressao && await getDriveFile(db, actual.drive_file_id)) {
+  const naDrive = actual ? await getDriveFile(db, actual.drive_file_id) : null;
+  // Também se substitui quando o nome mudou (turma ou curso renomeados, outra data de início).
+  if (!opts.forcar && actual && actual.impressao === g.impressao && naDrive && naDrive.name === g.nome) {
     return { atualizado: false };
   }
   const file = await storeDriveFile(db, actorId, { name: g.nome, mime: MIME_XLSX, bytes: g.bytes() }, {
@@ -126,7 +141,7 @@ export async function estadoReembolso(db: Db, turmaId: number) {
       tipo,
       nome: nomeFicheiroReembolso(tipo, exec.turma),
       atualizadoEm: drive ? g!.atualizado_em : null,
-      desatualizado: !drive || g!.impressao !== impressoes[tipo],
+      desatualizado: !drive || g!.impressao !== impressoes[tipo] || drive.name !== nomeFicheiroReembolso(tipo, exec.turma),
       drive: drive ? { id: drive.id, nome: drive.name, url: drive.openUrl, pasta: drive.folderPath, guardadoEm: drive.storedIn } : null,
     };
   }));

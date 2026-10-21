@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { CAMPOS_DESPESA_FORMADOR, validarDespesa } from "../../../src/partilhado/despesas.js";
 import { sincronizarDespesasDaTurma } from "../despesasFormador.js";
-import { gerarFicheiroReembolso, MIME_XLSX, sincronizarReembolso, sincronizarSemFalhar } from "../reembolso.js";
+import { anexoXlsx, gerarFicheiroReembolso, MIME_XLSX, sincronizarReembolso, sincronizarSemFalhar } from "../reembolso.js";
 import { alterarDespesa, apagarDespesa, associarDespesa, criarDespesa, listarDespesas, obterDespesa, turmaDaDespesa, type LinhaDespesa } from "../repos/despesas.js";
 import { idNum, idParam, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
@@ -109,7 +109,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     await audit(db, req.actor!.id, "despesa.exportar", "despesa", undefined, req.ip, { turmaId: g.turma.id });
     reply
       .header("content-type", MIME_XLSX)
-      .header("content-disposition", `attachment; filename="${g.nome}"`)
+      .header("content-disposition", anexoXlsx(g.nome))
       .header("cache-control", "no-store");
     return reply.send(bytes);
   });

@@ -431,3 +431,16 @@ describe("execução física da turma (Financiada)", () => {
     expect(XLSX.utils.sheet_to_json<unknown[]>(XLSX.read(exp.rawPayload, { type: "buffer" }).Sheets.Despesas!, { header: 1 })).toHaveLength(1);
   }, 90_000);
 });
+
+describe("nome dos ficheiros do reembolso", () => {
+  it("«<tipo> - <turma> - <curso> - <dd-mm-aaaa>.xlsx», com acentos na descarga", async () => {
+    const { nomeFicheiroReembolso, anexoXlsx } = await import("../src/reembolso.js");
+    const turma = { id: 7, nome: "EFA 12/26", curso: "Língua Inglesa: Distribuição", data_inicio: "2026-03-05" };
+    expect(nomeFicheiroReembolso("despesas", turma)).toBe("Despesas - EFA 1226 - Língua Inglesa_ Distribuição - 05-03-2026.xlsx");
+    expect(nomeFicheiroReembolso("execucao-fisica", turma)).toBe("Execução Física - EFA 1226 - Língua Inglesa_ Distribuição - 05-03-2026.xlsx");
+    expect(nomeFicheiroReembolso("despesas", { id: 8, nome: "", curso: "", data_inicio: "" })).toBe("Despesas - Turma 8.xlsx");
+    const h = anexoXlsx("Execução Física - T1 - Curso - 05-03-2026.xlsx");
+    expect(h).toContain('filename="Execucao Fisica - T1 - Curso - 05-03-2026.xlsx"');
+    expect(h).toContain("filename*=UTF-8''Execu%C3%A7%C3%A3o%20F%C3%ADsica");
+  });
+});

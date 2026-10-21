@@ -8,7 +8,7 @@ const COLUNAS_D = Object.values(COLUNAS_FINANCIAMENTO).map(c => `COALESCE(d.${c}
 export type TipoReembolso = "execucao-fisica" | "despesas";
 
 export type TurmaReembolso = {
-  id: number; nome: string; curso: string; local: string; cronograma: unknown; fechada_em: string | null;
+  id: number; nome: string; curso: string; data_inicio: string; local: string; cronograma: unknown; fechada_em: string | null;
   numero_acao: number; ufcd_cod: string; c_ufcd_cod: string; c_ufcd: string; c_area_cnaef: string;
 };
 
@@ -16,7 +16,7 @@ export type TurmaReembolso = {
 export function turmaReembolso(c: Consulta, id: number) {
   return one<TurmaReembolso>(
     c,
-    `SELECT t.id, t.nome, t.curso, t.local, t.cronograma, t.fechada_em::text AS fechada_em,
+    `SELECT t.id, t.nome, t.curso, t.data_inicio::text AS data_inicio, t.local, t.cronograma, t.fechada_em::text AS fechada_em,
             COALESCE(t.numero_acao, 1) AS numero_acao, COALESCE(t.ufcd_cod, '') AS ufcd_cod,
             COALESCE(cf.ufcd_cod, '') AS c_ufcd_cod, COALESCE(cf.ufcd, '') AS c_ufcd, COALESCE(cf.area_cnaef, '') AS c_area_cnaef
        FROM turmas_fin t

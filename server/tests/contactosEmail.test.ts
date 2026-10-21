@@ -14,7 +14,8 @@ describe("contactos dos locais nos emails", () => {
     await local(990903, "fin", { nome: "Aveiro", telemovel: "912 000 003", email: "aveiro@ena.pt", status: "Ativo" });
     await local(990904, "gold", { nome: "Lisboa", status: "Ativo" });
 
-    const braga = "Braga: 912 000 001 · 253 000 001", porto = "Porto: 912 000 002", aveiro = "Aveiro: 912 000 003 · aveiro@ena.pt";
+    const braga = "Braga: (Telemóvel) 912 000 001 · (Telefone) 253 000 001", porto = "Porto: (Telemóvel) 912 000 002";
+    const aveiro = "Aveiro: (Telemóvel) 912 000 003 · (Email) aveiro@ena.pt";
     // Todos os locais com contactos (Gold e Financiada); o da pessoa primeiro.
     expect(await telefonesPorZona(ctx.db)).toEqual([braga, porto, aveiro]);
     expect(await telefonesPorZona(ctx.db, { regime: "fin", local: "aveiro" })).toEqual([aveiro, braga, porto]);
@@ -26,6 +27,6 @@ describe("contactos dos locais nos emails", () => {
     expect(await telefonesPorZona(ctx.db, { preinscricaoId: lead })).toEqual([porto, braga, aveiro]);
 
     await ctx.db.query("UPDATE catalog_items SET payload = payload || '{\"telemovel\": \"933 333 333\"}'::jsonb WHERE id = 990902");
-    expect((await telefonesPorZona(ctx.db, { preinscricaoId: lead }))[0]).toBe("Porto: 933 333 333");
+    expect((await telefonesPorZona(ctx.db, { preinscricaoId: lead }))[0]).toBe("Porto: (Telemóvel) 933 333 333");
   });
 });

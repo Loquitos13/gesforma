@@ -4,6 +4,7 @@ import { buildCtaVars, ctaDestino, fillCtaHref, hrefDoBotao } from "./emailCta.j
 import { renderAutomaticEmail } from "./emailHtml.js";
 import { parseEmailXml } from "./emailXml.js";
 import { lerEntidade } from "./regrasConfig.js";
+import { linhaContactosLocal } from "../../src/partilhado/contactosLocal.js";
 import { config } from "./config.js";
 import { sendMail } from "./mailer.js";
 import {
@@ -57,12 +58,8 @@ export async function telefonesPorZona(db: Db, alvo: { regime?: string | null; l
   for (const { regime: reg, payload: l } of r.rows) {
     if (String(l.status ?? "Ativo") === "Inactivo" || String(l.status ?? "") === "Inativo") continue;
     const nome = String(l.nome ?? "").trim();
-    const numeros = [l.telemovel, l.telefone].map(v => String(v ?? "").trim()).filter(Boolean);
-    const whatsapp = String(l.whatsapp ?? "").trim();
-    if (whatsapp && !numeros.includes(whatsapp)) numeros.push(`WhatsApp ${whatsapp}`);
-    const email = String(l.email ?? "").trim();
-    if (!nome || (!numeros.length && !email)) continue;
-    const linha = `${nome}: ${[...numeros, email].filter(Boolean).join(" · ")}`;
+    const linha = nome ? linhaContactosLocal(nome, l) : "";
+    if (!linha) continue;
     const k = chave(nome);
     // O mesmo local nos dois regimes: fica o do regime pedido.
     if (!linhas.has(k) || reg === regime) linhas.set(k, { local: nome, linha, regime: reg });

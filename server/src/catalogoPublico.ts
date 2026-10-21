@@ -4,9 +4,11 @@ import { dadosCatalogoPublico } from "./repos/cursos.js";
 import { hojeLisboa } from "./datas.js";
 import { escolherPreco, regrasDoPayload } from "./precoOferta.js";
 import { eur } from "../../src/partilhado/ui/formatos.js";
+import { CONTACTOS_LOCAL } from "../../src/partilhado/contactosLocal.js";
 
 export type ContactoLocal = { local: string; telemovel: string; telefone: string; email: string; whatsapp: string };
-const CAMPOS_CONTACTO = ["telemovel", "telefone", "email", "whatsapp"] as const;
+
+const CAMPOS_CONTACTO = CONTACTOS_LOCAL.map(([campo]) => campo);
 
 /**
  * Contactos dos locais deste curso. Os que se escrevem na ficha do curso só valem para os locais atribuídos ao curso

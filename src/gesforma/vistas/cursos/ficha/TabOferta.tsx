@@ -10,10 +10,9 @@ import type { Opcao } from "../../../../partilhado/api/catalogos";
 import { localDoElearning, OPCOES_SINCRONIA, regimeSincronia } from "../../../../partilhado/regimeSincronia";
 import type { ContactosLocal } from "./modelo";
 import type { FichaCurso } from "./useFichaCurso";
+import { CONTACTOS_LOCAL } from "../../../../partilhado/contactosLocal";
 
-const CAMPOS_CONTACTO = [
-  ["telemovel", "Telemóvel", "tel"], ["telefone", "Telefone", "tel"], ["email", "Email", "email"], ["whatsapp", "WhatsApp", "tel"],
-] as const;
+const CAMPOS_CONTACTO = CONTACTOS_LOCAL.map(([campo, rotulo]) => [campo, rotulo, campo === "email" ? "email" : "tel"] as const);
 
 /**
  * Contactos para dúvidas de cada local deste curso (aparecem no cartão do local na página do curso).

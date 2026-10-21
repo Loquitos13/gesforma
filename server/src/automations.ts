@@ -39,8 +39,8 @@ function listaDoPayload(raw: unknown): string[] {
 /** Telefones por zona (Configurações › Entidade), um por linha. */
 /**
  * Contactos para os emails ({{telefones_itens}}): os de cada local (Edição de Cursos › Locais), lidos no momento,
- * por isso mudar o contacto de um local muda logo o modelo e os envios seguintes. Com o local da pessoa, só o
- * desse local; senão, os locais activos do regime com contactos. Sem nenhum, os «Telefones por zona» da entidade.
+ * por isso mudar o contacto de um local muda logo o modelo e os envios seguintes. Todos os locais activos com
+ * contactos, o da pessoa primeiro. Sem nenhum, os «Telefones por zona» da entidade.
  */
 export async function telefonesPorZona(db: Db, alvo: { regime?: string | null; local?: string | null; preinscricaoId?: number | null } = {}) {
   let { regime, local } = alvo;
@@ -67,9 +67,10 @@ export async function telefonesPorZona(db: Db, alvo: { regime?: string | null; l
     // O mesmo local nos dois regimes: fica o do regime pedido.
     if (!linhas.has(k) || reg === regime) linhas.set(k, { local: nome, linha, regime: reg });
   }
+  // Todos os locais (a pessoa pode ter escolhido o local errado), com o seu primeiro.
   const todas = [...linhas.values()];
-  const doLocal = local ? todas.filter(l => chave(l.local) === chave(local)) : [];
-  const escolhidas = doLocal.length ? doLocal : todas.filter(l => !regime || l.regime === regime);
+  const primeiro = local ? todas.filter(l => chave(l.local) === chave(local)) : [];
+  const escolhidas = [...primeiro, ...todas.filter(l => !primeiro.includes(l))];
   if (escolhidas.length) return escolhidas.map(l => l.linha);
   return (await lerEntidade(db)).telefonesZona.split("\n").filter(Boolean);
 }

@@ -3,7 +3,8 @@
 
 export type ImagemServico = { imagem: string; legenda: string };
 export type LogoServico = { imagem: string; alt: string; ligacao: string };
-export type CartaoServico = { titulo: string; texto: string };
+/** Cartão da página do serviço; com ligação, leva a outra página (ex.: na Certifica, um cartão por serviço «dentro» dela). */
+export type CartaoServico = { titulo: string; texto: string; rotulo?: string; ligacao?: string };
 
 export type ServicoSite = {
   imagem: string; etiqueta: string; titulo: string; texto: string; pontos: string; rotulo: string; ligacao: string;
@@ -24,6 +25,14 @@ export type ServicoSite = {
   /** Faixa final (vazio = o texto do bloco). */
   ctaTitulo?: string;
   ctaTexto?: string;
+  /** Serviço «dentro» de outro (endereço do outro): fora dos cartões da página Empresas; o «Voltar» leva à página dele. */
+  pai?: string;
+};
+
+/** Os serviços que aparecem nos cartões da página Empresas: os que não estão dentro de outro serviço ativo. */
+export const servicosDeTopo = <T extends Pick<ServicoSite, "slug" | "titulo" | "pai">>(lista: T[]) => {
+  const slugs = new Set(lista.map(s => slugServico(s)));
+  return lista.filter(s => !s.pai || !slugs.has(s.pai));
 };
 
 const slugify = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");

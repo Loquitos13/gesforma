@@ -30,9 +30,12 @@ const dadosSchema = z.object({
   logos: z.array(z.object({ imagem, alt: texto(120), ligacao: texto(300) })).max(60).default([]),
   capa: imagem,
   tituloDetalhe: texto(160),
-  cartoes: z.array(z.object({ titulo: texto(120), texto: texto(1200) })).max(12).default([]),
+  // Cada cartão pode levar a outra página (ex.: na Certifica, um cartão para cada serviço «dentro» dela).
+  cartoes: z.array(z.object({ titulo: texto(120), texto: texto(1200), rotulo: texto(40), ligacao: texto(300) })).max(12).default([]),
   ctaTitulo: texto(160),
   ctaTexto: texto(1200),
+  // Serviço «dentro» de outro (endereço do outro): sai dos cartões da página Empresas e o «Voltar» leva à página dele.
+  pai: z.string().trim().max(80).refine(v => v === "" || /^[a-z0-9]+(-[a-z0-9]+)*$/.test(v), "Página-mãe inválida.").default(""),
 });
 const servicoSchema = z.object({
   slug: texto(80),
@@ -94,6 +97,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const s = await preparar(v.body);
     if (!s.slug) return reply.code(400).send({ error: "O endereço da página ficou vazio: use letras ou números no título." });
+    if (s.dados.pai === s.slug) return reply.code(400).send({ error: "Um serviço não pode ficar dentro de si próprio." });
     try {
       const r = await repo.criar(db, s);
       await audit(db, req.actor!.id, "servico.criar", "servico", String(r?.id ?? ""), req.ip);
@@ -110,6 +114,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const s = await preparar(v.body);
     if (!s.slug) return reply.code(400).send({ error: "O endereço da página ficou vazio: use letras ou números no título." });
+    if (s.dados.pai === s.slug) return reply.code(400).send({ error: "Um serviço não pode ficar dentro de si próprio." });
     try {
       const r = await repo.atualizar(db, v.params.id, s);
       if (!r) return reply.code(404).send({ error: "serviço inexistente" });

@@ -8,14 +8,14 @@ import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import { slugServico, videoServico } from "../../../partilhado/siteServicos";
 import {
-  AreaTexto, Aviso, Botao, Campo, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Estado, Interruptor, PageHeader, PainelLateral, Separadores,
+  AreaTexto, Aviso, Botao, Campo, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Estado, Interruptor, PageHeader, PainelLateral, Selecao, Separadores,
 } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
 import { PedidosProposta } from "./PedidosProposta";
 
 const VAZIO: DadosServico = {
   titulo: "", etiqueta: "", texto: "", pontos: "", detalhe: "", rotulo: "Pedir proposta", ligacao: "#contactos",
-  imagem: "", imagens: [], video: "", logos: [], capa: "", tituloDetalhe: "", cartoes: [], ctaTitulo: "", ctaTexto: "",
+  imagem: "", imagens: [], video: "", logos: [], capa: "", tituloDetalhe: "", cartoes: [], ctaTitulo: "", ctaTexto: "", pai: "",
 };
 
 type Edicao = { id: number | null; slug: string; ativo: boolean; ordem?: number; dados: DadosServico };
@@ -67,6 +67,7 @@ export default function ServicosEmpresas(_props: VistaProps) {
                   {s.dados.imagem && <img src={s.dados.imagem} alt="" className="h-10 w-10 object-contain" />}
                   <div className="min-w-0 flex-1">
                     <p className="m-0 font-semibold">{s.dados.titulo}</p>
+                    {s.dados.pai && <p className="m-0 text-xs text-tinta-suave">Dentro de «{lista.find(x => x.slug === s.dados.pai)?.dados.titulo ?? s.dados.pai}» (não aparece nos cartões da página Empresas)</p>}
                     <p className="m-0 truncate text-sm text-tinta-suave">{s.dados.texto}</p>
                     <p className="m-0 mt-1 flex flex-wrap gap-x-3 text-xs text-tinta-suave">
                       <span>{(s.dados.imagens ?? []).length} imagens</span>
@@ -85,7 +86,7 @@ export default function ServicosEmpresas(_props: VistaProps) {
         </ol>
       )}
       {edicao && (
-        <FormServico inicial={edicao} aGravar={gravar.aCorrer} onFechar={() => setEdicao(null)}
+        <FormServico inicial={edicao} outros={lista.filter(s => s.id !== edicao.id && !s.dados.pai)} aGravar={gravar.aCorrer} onFechar={() => setEdicao(null)}
           onGravar={async e => { if (await gravar.correr(e)) setEdicao(null); }} />
       )}
       <ConfirmarPerigo aberto={apagar != null} onFechar={() => setApagar(null)} titulo={`Apagar «${apagar?.dados.titulo ?? ""}»?`} acao="Apagar"
@@ -96,7 +97,7 @@ export default function ServicosEmpresas(_props: VistaProps) {
   );
 }
 
-function FormServico({ inicial, aGravar, onFechar, onGravar }: { inicial: Edicao; aGravar: boolean; onFechar: () => void; onGravar: (e: Edicao) => void }) {
+function FormServico({ inicial, outros, aGravar, onFechar, onGravar }: { inicial: Edicao; outros: Servico[]; aGravar: boolean; onFechar: () => void; onGravar: (e: Edicao) => void }) {
   const [e, setE] = useState<Edicao>(inicial);
   const d = e.dados;
   const mudar = (p: Partial<DadosServico>) => setE({ ...e, dados: { ...d, ...p } });
@@ -114,6 +115,15 @@ function FormServico({ inicial, aGravar, onFechar, onGravar }: { inicial: Edicao
       )}>
       <div className="flex flex-col gap-5">
         <Interruptor rotulo="Mostrar no site" ligado={e.ativo} onMudar={ativo => setE({ ...e, ativo })} />
+        <Campo rotulo="Dentro de outro serviço" ajuda="Ex.: «Certificação Inicial» dentro da Certifica. Não aparece nos cartões da página Empresas e o «Voltar» da página leva à página escolhida. Para lá aparecer, acrescente nessa página um cartão com ligação a esta.">
+          {p => (
+            <Selecao {...p} value={d.pai ?? ""} onChange={x => mudar({ pai: x.target.value })} vazio="Nenhum (cartão na página Empresas)"
+              opcoes={[
+                ...(d.pai && !outros.some(o => o.slug === d.pai) ? [{ valor: d.pai, rotulo: d.pai }] : []),
+                ...outros.map(o => ({ valor: o.slug, rotulo: o.dados.titulo })),
+              ]} />
+          )}
+        </Campo>
 
         <Grupo titulo="Cartão na página Empresas">
           <Campo rotulo="Título" obrigatorio>{p => <Entrada {...p} maxLength={120} value={d.titulo} onChange={x => mudar({ titulo: x.target.value })} />}</Campo>
@@ -134,11 +144,15 @@ function FormServico({ inicial, aGravar, onFechar, onGravar }: { inicial: Edicao
           <Imagem rotulo="Imagem do topo da página (à direita)" valor={d.capa ?? ""} onMudar={capa => mudar({ capa })} />
           <Campo rotulo="Título do texto" ajuda="Vazio = «Sobre o serviço» (ou o que estiver no modelo da página).">{p => <Entrada {...p} maxLength={160} value={d.tituloDetalhe ?? ""} onChange={x => mudar({ tituloDetalhe: x.target.value })} />}</Campo>
           <Campo rotulo="Texto completo" ajuda="Vazio = a descrição curta. As mudanças de linha mantêm-se.">{p => <AreaTexto {...p} rows={8} maxLength={12000} value={d.detalhe} onChange={x => mudar({ detalhe: x.target.value })} />}</Campo>
-          <Lista titulo="Cartões (ex.: vantagens ou passos)" itens={d.cartoes ?? []} novo={{ titulo: "", texto: "" }} onMudar={cartoes => mudar({ cartoes })} max={12}
+          <Lista titulo="Cartões (ex.: vantagens, passos ou ligações a outros serviços)" itens={d.cartoes ?? []} novo={{ titulo: "", texto: "", rotulo: "", ligacao: "" }} onMudar={cartoes => mudar({ cartoes })} max={12}
             render={(it, set) => (
               <>
                 <Campo rotulo="Título do cartão">{p => <Entrada {...p} maxLength={120} value={it.titulo} onChange={x => set({ ...it, titulo: x.target.value })} />}</Campo>
                 <Campo rotulo="Texto do cartão">{p => <AreaTexto {...p} rows={3} maxLength={1200} value={it.texto} onChange={x => set({ ...it, texto: x.target.value })} />}</Campo>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Campo rotulo="Ligação (opcional)" ajuda="Ex.: /empresas/certificacao-inicial. Vazio = cartão sem ligação.">{p => <Entrada {...p} maxLength={300} value={it.ligacao ?? ""} onChange={x => set({ ...it, ligacao: x.target.value.trim() })} />}</Campo>
+                  <Campo rotulo="Texto do botão" ajuda="Vazio = «Saber mais».">{p => <Entrada {...p} maxLength={40} value={it.rotulo ?? ""} onChange={x => set({ ...it, rotulo: x.target.value })} />}</Campo>
+                </div>
               </>
             )} />
           <Campo rotulo="Vídeo (opcional)" erro={videoMau ? "Use um endereço do YouTube, do Vimeo ou de um ficheiro .mp4 (https)." : null} ajuda="Endereço do YouTube, do Vimeo ou de um ficheiro .mp4. Vazio = sem vídeo.">

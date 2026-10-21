@@ -1,9 +1,9 @@
 // Plano e sumário de sessão: tipos, valores vazios e os modais de edição/assinatura.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { I } from "./turmaIcones";
 
 export type MomentoKey = "introducao" | "desenvolvimento" | "conclusao";
-export type MomentoField = { conteudo: string; atividades: string; metodos: string; avaliacao: string; recursos: string; materiais: string };
+export type MomentoField = { conteudo: string; atividades: string; metodos: string; avaliacao: string; recursos: string; materiais: string; tempo: string };
 export type PlanoSessaoData = { objetivosGerais: string; objetivosEspecificos: string; momentos: Record<MomentoKey, MomentoField>; assinado?: boolean };
 export type SessaoMeta = { n: number; id?: string; data: string; dataIso?: string; hora: string; formador: string; formadores?: string[]; estado: string; plano: boolean; modulo: string; modulos?: string[]; duracao: string; iniciadaEm?: string; fechadaEm?: string };
 
@@ -16,14 +16,14 @@ function formadoresDaSessaoLabel(s: SessaoMeta) {
   return formadoresDaSessao(s).join(" · ");
 }
 
-export const emptyMomento: MomentoField = { conteudo: "", atividades: "", metodos: "", avaliacao: "", recursos: "", materiais: "" };
+export const emptyMomento: MomentoField = { conteudo: "", atividades: "", metodos: "", avaliacao: "", recursos: "", materiais: "", tempo: "" };
 
 const momentoLabels: Record<MomentoKey, string> = {
   introducao: "Introdução",
   desenvolvimento: "Desenvolvimento",
   conclusao: "Conclusão",
 };
-const campoLabels: (keyof MomentoField)[] = ["conteudo", "atividades", "metodos", "avaliacao", "recursos", "materiais"];
+const campoLabels: (keyof MomentoField)[] = ["conteudo", "atividades", "metodos", "avaliacao", "recursos", "materiais", "tempo"];
 const campoNames: Record<keyof MomentoField, string> = {
   conteudo: "Conteúdo Programático",
   atividades: "Atividades",
@@ -31,10 +31,23 @@ const campoNames: Record<keyof MomentoField, string> = {
   avaliacao: "Avaliação",
   recursos: "Recursos Didáticos",
   materiais: "Materiais e Equipamentos",
+  tempo: "Tempo",
 };
 
 export function emptyPlano(): PlanoSessaoData {
   return { objetivosGerais: "", objetivosEspecificos: "", momentos: { introducao: { ...emptyMomento }, desenvolvimento: { ...emptyMomento }, conclusao: { ...emptyMomento } } };
+}
+
+/** Plano gravado antes de um campo existir (ex.: «Tempo»): os campos em falta ficam vazios. */
+export function normalizarPlano(p: PlanoSessaoData): PlanoSessaoData {
+  const m = (p.momentos ?? {}) as Partial<Record<MomentoKey, Partial<MomentoField>>>;
+  const momento = (k: MomentoKey) => Object.fromEntries(campoLabels.map(c => [c, String(m[k]?.[c] ?? "")])) as MomentoField;
+  return {
+    ...p,
+    objetivosGerais: String(p.objetivosGerais ?? ""),
+    objetivosEspecificos: String(p.objetivosEspecificos ?? ""),
+    momentos: { introducao: momento("introducao"), desenvolvimento: momento("desenvolvimento"), conclusao: momento("conclusao") },
+  };
 }
 
 export type SumarioSessaoData = {
@@ -54,7 +67,7 @@ export function sumarioPreenchido(s?: SumarioSessaoData) {
   return !!s && s.conteudos.trim().length > 0;
 }
 
-export function PlanoSessaoModal({ open, onClose, sessao, plano, onSave, soLeitura }: {
+export function PlanoSessaoModal({ open, onClose, sessao, plano: planoGravado, onSave, soLeitura }: {
   open: boolean; onClose: () => void;
   sessao?: SessaoMeta;
   plano: PlanoSessaoData;
@@ -62,6 +75,7 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano, onSave, soLeitu
   /** Motivo para mostrar o plano sem o deixar editar (ex.: plano definido na ficha do curso). */
   soLeitura?: string;
 }) {
+  const plano = useMemo(() => normalizarPlano(planoGravado), [planoGravado]);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<PlanoSessaoData>(plano);
   useEffect(() => { setDraft(plano); setEditing(false); }, [open, plano]);
@@ -138,9 +152,15 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano, onSave, soLeitu
                             <p className="text-xs font-semibold text-slate-600">{campoNames[campo]}</p>
                           </div>
                           <div className="col-span-2 px-3 py-2">
-                            <textarea value={draft.momentos[momento][campo]}
-                              onChange={e => setDraft(prev => ({ ...prev, momentos: { ...prev.momentos, [momento]: { ...prev.momentos[momento], [campo]: e.target.value } } }))}
-                              rows={2} className="w-full text-xs text-slate-700 border border-slate-200 rounded-lg p-2 focus:outline-none focus:border-amber-400 resize-none" />
+                            {campo === "tempo"
+                              ? <input value={draft.momentos[momento][campo]} maxLength={120} placeholder="Ex.: 30 min"
+                                  aria-label={`${momentoLabels[momento]}: ${campoNames[campo]}`}
+                                  onChange={e => setDraft(prev => ({ ...prev, momentos: { ...prev.momentos, [momento]: { ...prev.momentos[momento], [campo]: e.target.value } } }))}
+                                  className="w-full text-xs text-slate-700 border border-slate-200 rounded-lg p-2 focus:outline-none focus:border-amber-400" />
+                              : <textarea value={draft.momentos[momento][campo]}
+                                  aria-label={`${momentoLabels[momento]}: ${campoNames[campo]}`}
+                                  onChange={e => setDraft(prev => ({ ...prev, momentos: { ...prev.momentos, [momento]: { ...prev.momentos[momento], [campo]: e.target.value } } }))}
+                                  rows={2} className="w-full text-xs text-slate-700 border border-slate-200 rounded-lg p-2 focus:outline-none focus:border-amber-400 resize-none" />}
                           </div>
                         </div>
                       ))}
@@ -150,7 +170,7 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano, onSave, soLeitu
               </div>
             ) : (
               <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto">
-                <table className="w-full text-xs min-w-[720px]">
+                <table className="w-full text-xs min-w-[820px]">
                   <thead>
                     <tr className="bg-slate-800 text-white">
                       <th className="px-3 py-2.5 text-left font-semibold uppercase tracking-wider w-[16%]">Momento</th>

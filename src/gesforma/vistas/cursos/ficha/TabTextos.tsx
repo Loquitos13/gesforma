@@ -140,6 +140,7 @@ const CAMPOS_MOMENTO: { id: keyof MomentoField; rotulo: string }[] = [
   { id: "avaliacao", rotulo: "Avaliação" },
   { id: "recursos", rotulo: "Recursos didáticos" },
   { id: "materiais", rotulo: "Materiais e equipamentos" },
+  { id: "tempo", rotulo: "Tempo (ex.: 30 min)" },
 ];
 
 const preenchidos = (o: Record<string, string>) => Object.values(o).filter(v => v.trim()).length;

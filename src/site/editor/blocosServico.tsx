@@ -3,6 +3,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { ComponentConfig } from "@puckeditor/core";
 import { slugServico, videoServico, type ServicoSite } from "../../partilhado/siteServicos";
+import { TextoEmLinha, TextoFormatado } from "../../partilhado/TextoFormatado";
+import { linhasPontos } from "../../partilhado/textoFormatado";
 import { Icon } from "../SiteLanding";
 import { Carrossel1a1, Cartoes } from "./carrossel";
 import { CursoDaRotaCtx } from "./blocosCursoPagina";
@@ -142,7 +144,8 @@ function BannerServico({ p, s }: { p: BannerProps; s: ServicoSite }) {
         {p.voltar && <a href={voltar.href} className="inline-flex items-center gap-2 text-sm font-bold text-white/70 hover:text-white"><span aria-hidden="true">←</span>{voltar.texto}</a>}
         {etiqueta && <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--c-acento)]">{etiqueta}</p>}
         <h1 className={juntar("font-serif text-4xl font-bold leading-tight sm:text-5xl", t.className)} style={t.style}>{s.titulo}</h1>
-        {s.texto && <p className={juntar("max-w-2xl whitespace-pre-line text-lg leading-8 text-white/75", x.className)} style={x.style}>{s.texto.split("\n")[0]}</p>}
+        {/* A descrição inteira (antes só a primeira linha: o resto desaparecia aqui). */}
+        <TextoFormatado texto={s.texto} className={juntar("max-w-2xl text-lg leading-8 text-white/75", x.className)} style={x.style} nivel={4} />
         {p.botao && s.rotulo && href && (
           <a href={href} className="mt-2 inline-flex w-fit items-center gap-3 bg-[var(--c-acento)] px-6 py-3 text-sm font-bold text-[var(--c-primaria)] hover:brightness-95">
             {s.rotulo} <Icon name="arrow" className="h-4 w-4" />
@@ -172,16 +175,16 @@ export const ServicoDetalhe: ComponentConfig<DetalheProps> = {
     <CaixaServico p={p} tem={s => Boolean((s.detalhe || s.texto || s.pontos)?.trim())} vazio={`O serviço não tem texto. ${ONDE}`}>
       {s => {
         const x = estiloTexto(p.tTexto);
-        const pontos = p.pontos ? (s.pontos ?? "").split("\n").map(l => l.trim()).filter(Boolean) : [];
+        const pontos = p.pontos ? linhasPontos(s.pontos) : [];
         return (
           <div className={juntar("grid gap-10", pontos.length > 0 && "lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]")}>
             <div>
               <Titulo texto={s.tituloDetalhe?.trim() || p.titulo} t={p.tTitulo} className="font-serif text-3xl font-bold" />
-              <p className={juntar("mt-4 whitespace-pre-line text-lg leading-8 opacity-75", x.className)} style={x.style}>{s.detalhe?.trim() || s.texto}</p>
+              <TextoFormatado texto={s.detalhe?.trim() || s.texto} className={juntar("mt-4 text-lg leading-8 opacity-75", x.className)} style={x.style} />
             </div>
             {pontos.length > 0 && (
               <ul className="flex flex-col gap-3 self-start border-t-[3px] border-[var(--c-acento)] bg-white p-6">
-                {pontos.map(l => <li key={l} className="flex gap-2"><span className="text-[var(--c-destaque)]"><Icon name="check" className="mt-1 h-4 w-4 shrink-0" /></span>{l}</li>)}
+                {pontos.map((l, i) => <li key={i} className="flex gap-2"><span className="text-[var(--c-destaque)]"><Icon name="check" className="mt-1 h-4 w-4 shrink-0" /></span><span><TextoEmLinha texto={l} /></span></li>)}
               </ul>
             )}
           </div>
@@ -225,7 +228,7 @@ export const ServicoCartoes: ComponentConfig<CartoesProps> = {
               return (
                 <article key={i} className="flex flex-col gap-2 border-t-[3px] border-[var(--c-acento)] bg-white p-6">
                   <h3 className="text-lg font-bold text-[var(--c-primaria)]">{href ? <a href={href} className="hover:underline">{c.titulo}</a> : c.titulo}</h3>
-                  {c.texto && <p className="whitespace-pre-line text-[15px] leading-6 opacity-75">{c.texto}</p>}
+                  <TextoFormatado texto={c.texto} className="text-[15px] leading-6 opacity-75" nivel={4} />
                   {href && (
                     <a href={href} className="mt-auto inline-flex w-fit items-center gap-2 pt-4 text-sm font-extrabold uppercase tracking-[0.06em] text-[var(--c-destaque)] hover:underline">
                       {rotulo}<span className="sr-only">: {c.titulo}</span> <Icon name="arrow" className="h-4 w-4" />
@@ -274,7 +277,7 @@ export const ServicoChamada: ComponentConfig<ChamadaProps> = {
             <div className="flex flex-col items-start gap-4">
               {p.etiqueta && <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--c-acento)]">{p.etiqueta}</p>}
               <h2 className="font-serif text-3xl font-bold">{s.ctaTitulo?.trim() || p.titulo}</h2>
-              <p className="max-w-2xl whitespace-pre-line text-lg leading-8 text-white/75">{s.ctaTexto?.trim() || p.texto}</p>
+              <TextoFormatado texto={s.ctaTexto?.trim() || p.texto} className="max-w-2xl text-lg leading-8 text-white/75" />
               {!comFormulario && s.rotulo && href && (
                 <a href={href} className="mt-2 inline-flex items-center gap-3 bg-[var(--c-acento)] px-6 py-3 text-sm font-bold text-[var(--c-primaria)] hover:brightness-95">
                   {s.rotulo} <Icon name="arrow" className="h-4 w-4" />

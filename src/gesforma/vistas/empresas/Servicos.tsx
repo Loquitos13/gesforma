@@ -1,12 +1,14 @@
 // Gestão › Empresas / Business: os serviços para empresas. Cada um aparece num cartão do bloco «Serviços» da página
 // Empresas e tem página própria no site (/empresas/<endereço>), desenhada uma vez em Sistema › Site › «Página de serviço».
-import { useState, type ReactNode } from "react";
+import { useState, type ClipboardEvent, type ReactNode } from "react";
 import {
-  apiApagarServico, apiCriarServico, apiGravarServico, apiImagemSite, apiServicos, type DadosServico, type GravarServico, type Servico,
+  apiApagarServico, apiCriarServico, apiGravarServico, apiImagemSite, apiPaginaSite, apiServicos, type DadosServico, type GravarServico, type Servico,
 } from "../../../partilhado/api/site";
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
-import { slugServico, videoServico } from "../../../partilhado/siteServicos";
+import { LIMITES_SERVICO as L, slugServico, textosProprios, videoServico, type TextosProprios } from "../../../partilhado/siteServicos";
+import { TextoFormatado } from "../../../partilhado/TextoFormatado";
+import { AJUDA_FORMATACAO, htmlParaTexto, normalizarColagem } from "../../../partilhado/textoFormatado";
 import {
   AreaTexto, Aviso, Botao, Campo, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Estado, Interruptor, PageHeader, PainelLateral, Selecao, Separadores,
 } from "../../../partilhado/ui";
@@ -102,6 +104,9 @@ function FormServico({ inicial, outros, aGravar, onFechar, onGravar }: { inicial
   const d = e.dados;
   const mudar = (p: Partial<DadosServico>) => setE({ ...e, dados: { ...d, ...p } });
   const slug = slugServico({ slug: e.slug, titulo: d.titulo });
+  // Textos deste cartão escritos na página Empresas (editor do site): passam à frente dos daqui.
+  const { dados: paginaEmpresas } = useRecurso(inicial.id != null ? "site-pagina-empresas" : null, sinal => apiPaginaSite("empresas", sinal));
+  const proprios = paginaEmpresas && slug ? { publicado: textosProprios(paginaEmpresas.publicado, slug), rascunho: textosProprios(paginaEmpresas.rascunho, slug) } : null;
   const videoMau = Boolean(d.video?.trim()) && !videoServico(d.video);
 
   return (
@@ -126,43 +131,45 @@ function FormServico({ inicial, outros, aGravar, onFechar, onGravar }: { inicial
         </Campo>
 
         <Grupo titulo="Cartão na página Empresas">
-          <Campo rotulo="Título" obrigatorio>{p => <Entrada {...p} maxLength={120} value={d.titulo} onChange={x => mudar({ titulo: x.target.value })} />}</Campo>
-          <Campo rotulo="Etiqueta" ajuda="Opcional, por cima do título (ex.: «Mais procurado»).">{p => <Entrada {...p} maxLength={40} value={d.etiqueta} onChange={x => mudar({ etiqueta: x.target.value })} />}</Campo>
-          <Campo rotulo="Descrição curta" ajuda="No cartão e no topo da página do serviço.">{p => <AreaTexto {...p} rows={3} maxLength={1200} value={d.texto} onChange={x => mudar({ texto: x.target.value })} />}</Campo>
-          <Campo rotulo="Pontos" ajuda="Um por linha (lista com visto).">{p => <AreaTexto {...p} rows={3} maxLength={1200} value={d.pontos} onChange={x => mudar({ pontos: x.target.value })} />}</Campo>
+          {(proprios?.publicado || proprios?.rascunho) && <AvisoTextosProprios publicado={proprios.publicado} rascunho={proprios.rascunho} />}
+          <Campo rotulo="Título" obrigatorio>{p => <Entrada {...p} maxLength={L.titulo} value={d.titulo} onChange={x => mudar({ titulo: x.target.value })} />}</Campo>
+          <Campo rotulo="Etiqueta" ajuda="Opcional, por cima do título (ex.: «Mais procurado»).">{p => <Entrada {...p} maxLength={L.etiqueta} value={d.etiqueta} onChange={x => mudar({ etiqueta: x.target.value })} />}</Campo>
+          <CampoTexto rotulo="Descrição curta" ajuda="No cartão e no topo da página do serviço (toda, com os parágrafos)." linhas={4} max={L.texto} valor={d.texto ?? ""} onMudar={texto => mudar({ texto })} previa />
+          <CampoTexto rotulo="Pontos" ajuda="Um por linha (lista com visto). As marcas coladas («- », «•») saem." linhas={3} max={L.pontos} valor={d.pontos ?? ""} onMudar={pontos => mudar({ pontos })} />
+          <p className="m-0 text-xs text-tinta-suave">{AJUDA_FORMATACAO} Colar do Word ou do Google Docs mantém o negrito, as listas e os títulos.</p>
           <Imagem rotulo="Ícone ou imagem do cartão (opcional)" valor={d.imagem} onMudar={imagem => mudar({ imagem })} />
         </Grupo>
 
         <Grupo titulo="Página do serviço">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Campo rotulo="Botão no topo da página do serviço" ajuda="Ex.: «Pedir proposta». Vazio = sem botão.">{p => <Entrada {...p} maxLength={40} value={d.rotulo} onChange={x => mudar({ rotulo: x.target.value })} />}</Campo>
-            <Campo rotulo="Ligação do botão" ajuda="#contactos (rodapé), uma página, mailto: ou tel:">{p => <Entrada {...p} maxLength={300} value={d.ligacao} onChange={x => mudar({ ligacao: x.target.value })} />}</Campo>
+            <Campo rotulo="Botão no topo da página do serviço" ajuda="Ex.: «Pedir proposta». Vazio = sem botão.">{p => <Entrada {...p} maxLength={L.rotulo} value={d.rotulo} onChange={x => mudar({ rotulo: x.target.value })} />}</Campo>
+            <Campo rotulo="Ligação do botão" ajuda="#contactos (rodapé), uma página, mailto: ou tel:">{p => <Entrada {...p} maxLength={L.ligacao} value={d.ligacao} onChange={x => mudar({ ligacao: x.target.value })} />}</Campo>
           </div>
           <Campo rotulo="Endereço da página" ajuda={`Vazio = feito do título. Mudar o endereço muda a ligação: quem tiver a antiga fica sem página. Agora: /empresas/${slug || "…"}`}>
-            {p => <Entrada {...p} maxLength={80} value={e.slug} placeholder={slugServico({ titulo: d.titulo })} onChange={x => setE({ ...e, slug: x.target.value })} />}
+            {p => <Entrada {...p} maxLength={L.slug} value={e.slug} placeholder={slugServico({ titulo: d.titulo })} onChange={x => setE({ ...e, slug: x.target.value })} />}
           </Campo>
           <Imagem rotulo="Imagem do topo da página (à direita)" valor={d.capa ?? ""} onMudar={capa => mudar({ capa })} />
-          <Campo rotulo="Título do texto" ajuda="Vazio = «Sobre o serviço» (ou o que estiver no modelo da página).">{p => <Entrada {...p} maxLength={160} value={d.tituloDetalhe ?? ""} onChange={x => mudar({ tituloDetalhe: x.target.value })} />}</Campo>
-          <Campo rotulo="Texto completo" ajuda="Vazio = a descrição curta. As mudanças de linha mantêm-se.">{p => <AreaTexto {...p} rows={8} maxLength={12000} value={d.detalhe} onChange={x => mudar({ detalhe: x.target.value })} />}</Campo>
+          <Campo rotulo="Título do texto" ajuda="Vazio = «Sobre o serviço» (ou o que estiver no modelo da página).">{p => <Entrada {...p} maxLength={L.tituloDetalhe} value={d.tituloDetalhe ?? ""} onChange={x => mudar({ tituloDetalhe: x.target.value })} />}</Campo>
+          <CampoTexto rotulo="Texto completo" ajuda={`Vazio = a descrição curta. ${AJUDA_FORMATACAO}`} linhas={10} max={L.detalhe} valor={d.detalhe ?? ""} onMudar={detalhe => mudar({ detalhe })} previa />
           <Lista titulo="Cartões (ex.: vantagens, passos ou ligações a outros serviços)" itens={d.cartoes ?? []} novo={{ titulo: "", texto: "", rotulo: "", ligacao: "" }} onMudar={cartoes => mudar({ cartoes })} max={12}
             render={(it, set) => (
               <>
-                <Campo rotulo="Título do cartão">{p => <Entrada {...p} maxLength={120} value={it.titulo} onChange={x => set({ ...it, titulo: x.target.value })} />}</Campo>
-                <Campo rotulo="Texto do cartão">{p => <AreaTexto {...p} rows={3} maxLength={1200} value={it.texto} onChange={x => set({ ...it, texto: x.target.value })} />}</Campo>
+                <Campo rotulo="Título do cartão">{p => <Entrada {...p} maxLength={L.cartaoTitulo} value={it.titulo} onChange={x => set({ ...it, titulo: x.target.value })} />}</Campo>
+                <CampoTexto rotulo="Texto do cartão" linhas={4} max={L.cartaoTexto} valor={it.texto ?? ""} onMudar={texto => set({ ...it, texto })} previa />
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Campo rotulo="Ligação (opcional)" ajuda="Ex.: /empresas/certificacao-inicial. Vazio = cartão sem ligação.">{p => <Entrada {...p} maxLength={300} value={it.ligacao ?? ""} onChange={x => set({ ...it, ligacao: x.target.value.trim() })} />}</Campo>
-                  <Campo rotulo="Texto do botão" ajuda="Vazio = «Saber mais».">{p => <Entrada {...p} maxLength={40} value={it.rotulo ?? ""} onChange={x => set({ ...it, rotulo: x.target.value })} />}</Campo>
+                  <Campo rotulo="Ligação (opcional)" ajuda="Ex.: /empresas/certificacao-inicial. Vazio = cartão sem ligação.">{p => <Entrada {...p} maxLength={L.ligacao} value={it.ligacao ?? ""} onChange={x => set({ ...it, ligacao: x.target.value.trim() })} />}</Campo>
+                  <Campo rotulo="Texto do botão" ajuda="Vazio = «Saber mais».">{p => <Entrada {...p} maxLength={L.cartaoRotulo} value={it.rotulo ?? ""} onChange={x => set({ ...it, rotulo: x.target.value })} />}</Campo>
                 </div>
               </>
             )} />
           <Campo rotulo="Vídeo (opcional)" erro={videoMau ? "Use um endereço do YouTube, do Vimeo ou de um ficheiro .mp4 (https)." : null} ajuda="Endereço do YouTube, do Vimeo ou de um ficheiro .mp4. Vazio = sem vídeo.">
-            {p => <Entrada {...p} type="url" maxLength={500} value={d.video} placeholder="https://www.youtube.com/watch?v=…" onChange={x => mudar({ video: x.target.value.trim() })} />}
+            {p => <Entrada {...p} type="url" maxLength={L.video} value={d.video} placeholder="https://www.youtube.com/watch?v=…" onChange={x => mudar({ video: x.target.value.trim() })} />}
           </Campo>
           <Lista titulo="Imagens (carrossel)" itens={d.imagens ?? []} novo={{ imagem: "", legenda: "" }} onMudar={imagens => mudar({ imagens })} max={30}
             render={(it, set) => (
               <>
                 <Imagem rotulo="Imagem" valor={it.imagem} onMudar={imagem => set({ ...it, imagem })} />
-                <Campo rotulo="Legenda (opcional)">{p => <Entrada {...p} maxLength={200} value={it.legenda} onChange={x => set({ ...it, legenda: x.target.value })} />}</Campo>
+                <Campo rotulo="Legenda (opcional)">{p => <Entrada {...p} maxLength={L.legenda} value={it.legenda} onChange={x => set({ ...it, legenda: x.target.value })} />}</Campo>
               </>
             )} />
           <Lista titulo="Logótipos (clientes, parceiros, certificações)" itens={d.logos ?? []} novo={{ imagem: "", alt: "", ligacao: "" }} onMudar={logos => mudar({ logos })} max={60}
@@ -170,16 +177,92 @@ function FormServico({ inicial, outros, aGravar, onFechar, onGravar }: { inicial
               <>
                 <Imagem rotulo="Logótipo" valor={it.imagem} onMudar={imagem => set({ ...it, imagem })} />
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Campo rotulo="Nome">{p => <Entrada {...p} maxLength={120} value={it.alt} onChange={x => set({ ...it, alt: x.target.value })} />}</Campo>
-                  <Campo rotulo="Ligação (opcional)">{p => <Entrada {...p} maxLength={300} value={it.ligacao} onChange={x => set({ ...it, ligacao: x.target.value })} />}</Campo>
+                  <Campo rotulo="Nome">{p => <Entrada {...p} maxLength={L.logoNome} value={it.alt} onChange={x => set({ ...it, alt: x.target.value })} />}</Campo>
+                  <Campo rotulo="Ligação (opcional)">{p => <Entrada {...p} maxLength={L.ligacao} value={it.ligacao} onChange={x => set({ ...it, ligacao: x.target.value })} />}</Campo>
                 </div>
               </>
             )} />
-          <Campo rotulo="Faixa final: título" ajuda="Vazio = o do modelo («Fale connosco sobre a sua equipa.»).">{p => <Entrada {...p} maxLength={160} value={d.ctaTitulo ?? ""} onChange={x => mudar({ ctaTitulo: x.target.value })} />}</Campo>
-          <Campo rotulo="Faixa final: texto" ajuda="Vazio = o do modelo.">{p => <AreaTexto {...p} rows={3} maxLength={1200} value={d.ctaTexto ?? ""} onChange={x => mudar({ ctaTexto: x.target.value })} />}</Campo>
+          <Campo rotulo="Faixa final: título" ajuda="Vazio = o do modelo («Fale connosco sobre a sua equipa.»).">{p => <Entrada {...p} maxLength={L.ctaTitulo} value={d.ctaTitulo ?? ""} onChange={x => mudar({ ctaTitulo: x.target.value })} />}</Campo>
+          <CampoTexto rotulo="Faixa final: texto" ajuda="Vazio = o do modelo." linhas={3} max={L.ctaTexto} valor={d.ctaTexto ?? ""} onMudar={ctaTexto => mudar({ ctaTexto })} previa />
         </Grupo>
       </div>
     </PainelLateral>
+  );
+}
+
+/**
+ * Texto longo: contador «n / máx.» e aviso no limite (nada se corta sem se dizer), colagem do Word / Google Docs
+ * passada à formatação leve e, com `previa`, o texto como o site o mostra (o mesmo componente do site).
+ */
+function CampoTexto({ rotulo, ajuda, valor, max, linhas, onMudar, previa }: {
+  rotulo: string; ajuda?: string; valor: string; max: number; linhas: number; onMudar: (v: string) => void; previa?: boolean;
+}) {
+  const [cortado, setCortado] = useState(0); // caracteres que ficaram de fora na última colagem ou escrita
+  const mudar = (v: string) => {
+    setCortado(Math.max(0, v.length - max));
+    onMudar(v.length > max ? v.slice(0, max) : v);
+  };
+  function colar(ev: ClipboardEvent<HTMLTextAreaElement>) {
+    const cd = ev.clipboardData;
+    let texto = "";
+    const html = cd.getData("text/html");
+    if (html && typeof DOMParser !== "undefined") {
+      try { texto = htmlParaTexto(new DOMParser().parseFromString(html, "text/html").body); } catch { texto = ""; }
+    }
+    texto = normalizarColagem(texto.trim() ? texto : cd.getData("text/plain"));
+    if (!texto) return;
+    ev.preventDefault();
+    const el = ev.currentTarget;
+    const [a, b] = [el.selectionStart, el.selectionEnd];
+    const entra = texto.slice(0, Math.max(0, max - (valor.length - (b - a))));
+    // insertText: a colagem entra no histórico do campo (Ctrl+Z desfaz). Se o navegador não o fizer, muda-se o valor à mão.
+    let feito = false;
+    try { feito = entra !== "" && document.execCommand("insertText", false, entra); } catch { feito = false; }
+    if (!feito && entra) {
+      onMudar(valor.slice(0, a) + entra + valor.slice(b));
+      requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = a + entra.length; });
+    }
+    setCortado(texto.length - entra.length);
+  }
+  const n = valor.length;
+  const noLimite = n >= max;
+  return (
+    <Campo rotulo={rotulo} ajuda={ajuda}>
+      {p => (
+        <>
+          <AreaTexto {...p} rows={linhas} value={valor} onChange={x => mudar(x.target.value)} onPaste={colar} />
+          <div className="flex flex-wrap items-start justify-between gap-x-3 text-xs" aria-live="polite">
+            <span className={cortado > 0 || noLimite ? "font-semibold text-perigo" : "text-tinta-suave"}>
+              {cortado > 0 ? `Não coube tudo: ficaram de fora ${cortado} caracteres (o limite é ${max}). Encurte o texto ou divida-o.`
+                : noLimite ? `Chegou ao limite de ${max} caracteres: o que escrever a mais não fica.` : ""}
+            </span>
+            <span className={noLimite ? "tabular-nums text-perigo" : "tabular-nums text-tinta-suave"}>{n} / {max}</span>
+          </div>
+          {previa && valor.trim() && (
+            <details open className="rounded-md border border-linha bg-black/[0.02] px-3 py-2">
+              <summary className="cursor-pointer text-xs font-semibold text-tinta-suave">Pré-visualização (como fica no site)</summary>
+              <TextoFormatado texto={valor} className="mt-2 text-sm leading-6 text-tinta" nivel={4} />
+            </details>
+          )}
+        </>
+      )}
+    </Campo>
+  );
+}
+
+/** O cartão deste serviço tem texto próprio na página Empresas (editor do site): o site mostra esse, não o daqui. */
+function AvisoTextosProprios({ publicado, rascunho }: { publicado: TextosProprios | null; rascunho: TextosProprios | null }) {
+  const nomes: Record<keyof TextosProprios, string> = { titulo: "título", texto: "descrição", pontos: "pontos" };
+  const lista = (t: TextosProprios) => (Object.keys(t) as (keyof TextosProprios)[]).map(k => nomes[k]).join(", ");
+  return (
+    <Aviso tom="aviso" titulo="Este cartão tem texto próprio na página Empresas (editor do site)">
+      {publicado
+        ? <>No cartão da página Empresas, o site mostra o que lá está escrito ({lista(publicado)}), não o daqui. </>
+        : <>O rascunho da página Empresas tem texto próprio para este cartão ({lista(rascunho!)}): quando for publicado, passa à frente do daqui. </>}
+      {publicado && rascunho && lista(rascunho) !== lista(publicado) && <>No rascunho: {lista(rascunho)}. </>}
+      Para o cartão usar o texto daqui, apague-o em Sistema › Site › página «Empresas» › bloco «Serviços» › «Textos só desta página» e publique.
+      A página do serviço usa sempre o texto daqui.
+    </Aviso>
   );
 }
 

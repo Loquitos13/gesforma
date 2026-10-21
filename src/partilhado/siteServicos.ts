@@ -29,13 +29,51 @@ export type ServicoSite = {
   pai?: string;
 };
 
+/**
+ * Tamanho máximo (caracteres) de cada texto: o servidor valida com estes e o backoffice conta com estes (contador
+ * «n / máx.» e aviso quando chega ao limite), para o que se escreve caber sempre no que se grava.
+ */
+export const LIMITES_SERVICO = {
+  titulo: 120, etiqueta: 40, texto: 1200, pontos: 1200, detalhe: 12000, rotulo: 40, ligacao: 300, video: 500,
+  legenda: 200, logoNome: 120, tituloDetalhe: 160, cartaoTitulo: 120, cartaoTexto: 2000, cartaoRotulo: 40,
+  ctaTitulo: 160, ctaTexto: 1200, slug: 80,
+} as const;
+
 /** Os serviços que aparecem nos cartões da página Empresas: os que não estão dentro de outro serviço ativo. */
 export const servicosDeTopo = <T extends Pick<ServicoSite, "slug" | "titulo" | "pai">>(lista: T[]) => {
   const slugs = new Set(lista.map(s => slugServico(s)));
   return lista.filter(s => !s.pai || !slugs.has(s.pai));
 };
 
-const slugify = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+/** Textos de um cartão escritos só na página Empresas (bloco «Serviços», campo «porServico» no editor do site). */
+export type TextosProprios = { titulo?: string; texto?: string; pontos?: string };
+
+/**
+ * Os textos que a página Empresas (JSON do editor do site) escreve por cima dos do backoffice para este serviço:
+ * só os não vazios, que são os que o site mostra em vez dos de Gestão › Empresas / Business. Null = nenhum.
+ */
+export function textosProprios(pagina: unknown, slug: string): TextosProprios | null {
+  let achado: TextosProprios | null = null;
+  const ver = (no: unknown, fundo: number) => {
+    if (achado || !no || typeof no !== "object" || fundo > 30) return;
+    if (Array.isArray(no)) { for (const x of no) ver(x, fundo + 1); return; }
+    const o = no as { type?: unknown; props?: { porServico?: unknown } };
+    if (o.type === "Servicos" && Array.isArray(o.props?.porServico)) {
+      // Como o bloco: conta a primeira linha deste serviço.
+      const it = (o.props.porServico as (Record<string, unknown> | null)[]).find(x => x && x.slug === slug);
+      if (it) {
+        const r: TextosProprios = {};
+        for (const k of ["titulo", "texto", "pontos"] as const) if (typeof it[k] === "string" && (it[k] as string).trim()) r[k] = it[k] as string;
+        if (Object.keys(r).length) { achado = r; return; }
+      }
+    }
+    for (const v of Object.values(no)) ver(v, fundo + 1);
+  };
+  ver(pagina, 0);
+  return achado;
+}
+
+const slugify =(s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 export const slugServico = (s: Pick<ServicoSite, "slug" | "titulo">) => slugify(s.slug?.trim() || s.titulo || "");
 

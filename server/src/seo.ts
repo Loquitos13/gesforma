@@ -14,6 +14,7 @@ import { listarCatalogoPublico, type CursoPublico } from "./catalogoPublico.js";
 import { lerEntidadePublica } from "./regrasConfig.js";
 import { noticiaPublica, noticiasPublicas } from "./repos/blog.js";
 import { ativos as servicosAtivos } from "./repos/servicos.js";
+import { textoSimples } from "../../src/partilhado/textoFormatado.js";
 import { lerDefinicao } from "./repos/settings.js";
 
 export const ID_SEO = "seo";
@@ -226,7 +227,8 @@ export async function metaDaPagina(db: Db, caminhoBruto: string, host?: string):
     const linha = ativos.find(x => x.slug === slug);
     const s = linha ? { ...(linha.dados as { titulo: string; texto?: string; detalhe?: string; imagens?: { imagem: string }[]; pai?: string }) } : null;
     if (!s) return base({ estado: 404, titulo: comNome("Serviço não encontrado"), indexar: false, corpo: "<h1>Este serviço não existe.</h1><p><a href=\"/empresas\">Ver os serviços para empresas</a></p>" });
-    const texto = limpar(s.detalhe || s.texto || "");
+    // Sem as marcas da formatação leve (listas, **negrito**, ligações).
+    const texto = limpar(textoSimples(s.detalhe || s.texto || ""));
     const descricao = cortar(texto, 160);
     const imagem = s.imagens?.find(i => i.imagem)?.imagem;
     return base({

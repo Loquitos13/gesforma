@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { slugServico, videoServico } from "../../../src/partilhado/siteServicos.js";
+import { LIMITES_SERVICO as L, slugServico, videoServico } from "../../../src/partilhado/siteServicos.js";
 import { sendMail } from "../mailer.js";
 import { lerEntidadePublica } from "../regrasConfig.js";
 import * as repo from "../repos/servicos.js";
@@ -8,6 +8,9 @@ import { many, one, type Consulta } from "../repos/sql.js";
 import { idNum, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
 import { hojeLisboa } from "../datas.js";
+
+// Os textos gravam-se como chegam (só se tiram os espaços das pontas): a formatação leve (parágrafos, listas, negrito…)
+// lê-se no site, com os limites de LIMITES_SERVICO (os mesmos do contador do backoffice).
 
 // Serviços para empresas: a administração escreve-os em Gestão › Empresas / Business (matriz: só admin, em permissoes/site.ts);
 // o site mostra os ativos nos cartões da página Empresas e cada um na sua página (/empresas/<slug>).
@@ -17,28 +20,28 @@ const texto = (max: number) => z.string().trim().max(max).default("");
 const imagem = z.string().trim().max(500).refine(v => v === "" || /^\/(api\/v1\/public\/imagens|imagens)\//.test(v) || /^https:\/\//i.test(v), "imagem inválida").default("");
 
 const dadosSchema = z.object({
-  titulo: z.string().trim().min(2, "Escreva o título.").max(120),
-  etiqueta: texto(40),
-  texto: texto(1200),
-  pontos: texto(1200),
-  detalhe: texto(12000),
-  rotulo: texto(40),
-  ligacao: texto(300),
+  titulo: z.string().trim().min(2, "Escreva o título.").max(L.titulo),
+  etiqueta: texto(L.etiqueta),
+  texto: texto(L.texto),
+  pontos: texto(L.pontos),
+  detalhe: texto(L.detalhe),
+  rotulo: texto(L.rotulo),
+  ligacao: texto(L.ligacao),
   imagem,
-  imagens: z.array(z.object({ imagem, legenda: texto(200) })).max(30).default([]),
-  video: texto(500).refine(v => v === "" || videoServico(v) != null, "Vídeo inválido: use um endereço do YouTube, do Vimeo ou de um ficheiro .mp4 (https)."),
-  logos: z.array(z.object({ imagem, alt: texto(120), ligacao: texto(300) })).max(60).default([]),
+  imagens: z.array(z.object({ imagem, legenda: texto(L.legenda) })).max(30).default([]),
+  video: texto(L.video).refine(v => v === "" || videoServico(v) != null, "Vídeo inválido: use um endereço do YouTube, do Vimeo ou de um ficheiro .mp4 (https)."),
+  logos: z.array(z.object({ imagem, alt: texto(L.logoNome), ligacao: texto(L.ligacao) })).max(60).default([]),
   capa: imagem,
-  tituloDetalhe: texto(160),
+  tituloDetalhe: texto(L.tituloDetalhe),
   // Cada cartão pode levar a outra página (ex.: na Certifica, um cartão para cada serviço «dentro» dela).
-  cartoes: z.array(z.object({ titulo: texto(120), texto: texto(1200), rotulo: texto(40), ligacao: texto(300) })).max(12).default([]),
-  ctaTitulo: texto(160),
-  ctaTexto: texto(1200),
+  cartoes: z.array(z.object({ titulo: texto(L.cartaoTitulo), texto: texto(L.cartaoTexto), rotulo: texto(L.cartaoRotulo), ligacao: texto(L.ligacao) })).max(12).default([]),
+  ctaTitulo: texto(L.ctaTitulo),
+  ctaTexto: texto(L.ctaTexto),
   // Serviço «dentro» de outro (endereço do outro): sai dos cartões da página Empresas e o «Voltar» leva à página dele.
-  pai: z.string().trim().max(80).refine(v => v === "" || /^[a-z0-9]+(-[a-z0-9]+)*$/.test(v), "Página-mãe inválida.").default(""),
+  pai: z.string().trim().max(L.slug).refine(v => v === "" || /^[a-z0-9]+(-[a-z0-9]+)*$/.test(v), "Página-mãe inválida.").default(""),
 });
 const servicoSchema = z.object({
-  slug: texto(80),
+  slug: texto(L.slug),
   ordem: z.number().int().min(0).max(100000).optional(),
   ativo: z.boolean().default(true),
   dados: dadosSchema,

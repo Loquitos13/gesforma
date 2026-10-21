@@ -6,6 +6,8 @@ import { campoCor, campoNumero } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { corSegura, estiloBloco, estiloTexto, estiloVazio, juntar, lados, tipoVazia, type Estilo, type Tipografia } from "./estilos";
 import { servicosDeTopo, slugServico } from "../../partilhado/siteServicos";
+import { TextoEmLinha, TextoFormatado } from "../../partilhado/TextoFormatado";
+import { linhasPontos } from "../../partilhado/textoFormatado";
 import { campoServico, useServicos } from "./blocosServico";
 
 /** Textos do cartão de um serviço só nesta página (vazio = os do backoffice). */
@@ -27,7 +29,8 @@ export const Servicos: ComponentConfig<ServicosProps> = {
       render: () => <p className="text-[12px] leading-5 text-[#6b7685]">Os serviços (textos, imagens, vídeo, logótipos, ordem) escrevem-se em <strong>Gestão › Empresas / Business</strong>. Aparecem aqui todos os ativos, menos os que estão dentro de outro serviço (esses aparecem na página dele).</p>,
     } as never,
     porServico: {
-      type: "array", label: "Textos dos cartões (vazio = os de Gestão › Empresas / Business)",
+      // Atenção: o que se escrever aqui passa à frente do texto do backoffice (que avisa, na ficha do serviço, quando isto acontece).
+      type: "array", label: "Textos só desta página (passam à frente dos de Gestão › Empresas / Business; vazio = os de lá)",
       arrayFields: {
         slug: campoServico("Serviço"),
         titulo: { type: "text", label: "Título no cartão" },
@@ -73,7 +76,7 @@ export const Servicos: ComponentConfig<ServicosProps> = {
           const proprio = (porServico ?? []).find(x => x.slug && x.slug === original.slug);
           // Cada texto do cartão pode mudar só nesta página; o que ficar vazio vem do backoffice.
           const s = { ...original, titulo: proprio?.titulo?.trim() || original.titulo, texto: proprio?.texto?.trim() || original.texto, pontos: proprio?.pontos?.trim() || original.pontos };
-          const pontos = (s.pontos ?? "").split("\n").map(p => p.trim()).filter(Boolean);
+          const pontos = linhasPontos(s.pontos);
           const slug = slugServico(s);
           const pagina = slug ? `/empresas/${slug}` : "";
           const cor = corSegura(corBotao) || "var(--c-destaque)";
@@ -82,12 +85,12 @@ export const Servicos: ComponentConfig<ServicosProps> = {
               {s.imagem && <img src={s.imagem} alt="" className="mb-5 h-14 w-14 object-contain" />}
               {s.etiqueta && <span className={juntar("mb-2 block", te.className)} style={te.style}>{s.etiqueta}</span>}
               {s.titulo && <h3 className={tt.className} style={tt.style}>{pagina && textoPagina ? <a href={pagina} className="hover:underline">{s.titulo}</a> : s.titulo}</h3>}
-              {s.texto && <p className={juntar("mt-3 whitespace-pre-line", tx.className)} style={tx.style}>{s.texto}</p>}
+              <TextoFormatado texto={s.texto} className={juntar("mt-3", tx.className)} style={tx.style} nivel={4} />
               {pontos.length > 0 && (
                 <ul className="mt-4 space-y-2">
-                  {pontos.map(p => (
-                    <li key={p} className={juntar("flex gap-2", tx.className)} style={tx.style}>
-                      <span style={{ color: corSegura(corBotao) || "var(--c-destaque)" }}><Icon name="check" className="mt-1 h-4 w-4 shrink-0" /></span>{p}
+                  {pontos.map((p, j) => (
+                    <li key={j} className={juntar("flex gap-2", tx.className)} style={tx.style}>
+                      <span style={{ color: corSegura(corBotao) || "var(--c-destaque)" }}><Icon name="check" className="mt-1 h-4 w-4 shrink-0" /></span><span><TextoEmLinha texto={p} /></span>
                     </li>
                   ))}
                 </ul>

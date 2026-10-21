@@ -5,7 +5,7 @@ import { Icon } from "../SiteLanding";
 import { campoCor, campoNumero } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { corSegura, estiloBloco, estiloTexto, estiloVazio, juntar, lados, tipoVazia, type Estilo, type Tipografia } from "./estilos";
-import { slugServico } from "../../partilhado/siteServicos";
+import { servicosDeTopo, slugServico } from "../../partilhado/siteServicos";
 import { campoServico, useServicos } from "./blocosServico";
 
 /** Textos do cartão de um serviço só nesta página (vazio = os do backoffice). */
@@ -24,7 +24,7 @@ export const Servicos: ComponentConfig<ServicosProps> = {
     // Os serviços em si escrevem-se no backoffice; aqui só o aspeto dos cartões.
     aviso: {
       type: "custom", label: "Serviços",
-      render: () => <p className="text-[12px] leading-5 text-[#6b7685]">Os serviços (textos, imagens, vídeo, logótipos, ordem) escrevem-se em <strong>Gestão › Empresas / Business</strong>. Aparecem aqui todos os ativos.</p>,
+      render: () => <p className="text-[12px] leading-5 text-[#6b7685]">Os serviços (textos, imagens, vídeo, logótipos, ordem) escrevem-se em <strong>Gestão › Empresas / Business</strong>. Aparecem aqui todos os ativos, menos os que estão dentro de outro serviço (esses aparecem na página dele).</p>,
     } as never,
     porServico: {
       type: "array", label: "Textos dos cartões (vazio = os de Gestão › Empresas / Business)",
@@ -68,7 +68,8 @@ export const Servicos: ComponentConfig<ServicosProps> = {
     const [te, tt, tx] = [estiloTexto(tipoEtiqueta), estiloTexto(tipoTitulo), estiloTexto(tipoTexto)];
     return (
       <div ref={puck?.dragRef ?? undefined} className={juntar(c.className, "ena-grelha")} style={c.style}>
-        {(itens ?? []).map((original, i) => {
+        {/* Os serviços «dentro» de outro (ex.: os dois da Certifica) aparecem na página dele, não aqui. */}
+        {servicosDeTopo(itens ?? []).map((original, i) => {
           const proprio = (porServico ?? []).find(x => x.slug && x.slug === original.slug);
           // Cada texto do cartão pode mudar só nesta página; o que ficar vazio vem do backoffice.
           const s = { ...original, titulo: proprio?.titulo?.trim() || original.titulo, texto: proprio?.texto?.trim() || original.texto, pontos: proprio?.pontos?.trim() || original.pontos };

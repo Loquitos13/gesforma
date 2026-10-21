@@ -79,6 +79,13 @@ function EscolherServico({ value, onChange, vazio }: { value: string; onChange: 
 }
 
 /** Invólucro dos blocos do serviço: aparência, pega de arrastar e nada quando o serviço não tem o conteúdo. */
+/** A página-mãe do serviço (ex.: a Certifica para a Certificação Inicial), se estiver ativa. */
+function useServicoPai(s: ServicoSite) {
+  const { servicos } = useContext(ServicoAtualCtx);
+  const proprio = slugServico(s);
+  return s.pai && s.pai !== proprio ? servicos.find(x => slugServico(x) === s.pai) ?? null : null;
+}
+
 function CaixaServico({ p, tem, vazio, children }: { p: Base; tem: (s: ServicoSite) => boolean; vazio: string; children: (s: ServicoSite) => ReactNode }) {
   const { servico, estado } = useContext(ServicoAtualCtx);
   const editar = Boolean((p.puck as { isEditing?: boolean } | undefined)?.isEditing);
@@ -101,7 +108,7 @@ export const ServicoBanner: ComponentConfig<BannerProps> = {
   label: "Serviço · Banner",
   fields: {
     etiqueta: { type: "text", label: "Etiqueta por cima do título (vazio = esconder; a etiqueta do serviço tem prioridade)" },
-    voltar: { type: "text", label: "Ligação para voltar a Empresas (vazio = esconder)" },
+    voltar: { type: "text", label: "Ligação para voltar a Empresas (vazio = esconder; num serviço dentro de outro leva à página dele)" },
     botao: simNao("Botão do serviço (ex.: «Pedir proposta»)"),
     alturaMin: campoNumero("Altura mínima (píxeis)") as never,
     tTitulo: campoTipografia("Tipografia do título"),
@@ -114,33 +121,38 @@ export const ServicoBanner: ComponentConfig<BannerProps> = {
   },
   render: p => (
     <CaixaServico p={p} tem={s => Boolean(s.titulo)} vazio={`O serviço não tem título. ${ONDE}`}>
-      {s => {
-        const [t, x] = [estiloTexto(p.tTitulo), estiloTexto(p.tTexto)];
-        const href = ligacaoSegura(s.ligacao);
-        const etiqueta = s.etiqueta?.trim() || p.etiqueta;
-        return (
-          // A imagem do topo (capa) fica à direita, da altura toda e até à beira do ecrã; o texto alinha com o resto da página.
-          // A margem esquerda é a das secções da página (32 px + o que sobra da largura do conteúdo), para o título alinhar com o resto.
-          <div className={juntar("grid text-white", s.capa && "lg:grid-cols-2")}
-            style={{ minHeight: p.alturaMin ? `${p.alturaMin}px` : undefined, paddingLeft: "max(20px, calc(32px + max(0px, (100% - 64px - var(--largura)) / 2)))" }}>
-            <div className="flex flex-col justify-center gap-4 py-12 pr-5 lg:pr-12">
-              {p.voltar && <a href="/empresas" className="inline-flex items-center gap-2 text-sm font-bold text-white/70 hover:text-white"><span aria-hidden="true">←</span>{p.voltar}</a>}
-              {etiqueta && <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--c-acento)]">{etiqueta}</p>}
-              <h1 className={juntar("font-serif text-4xl font-bold leading-tight sm:text-5xl", t.className)} style={t.style}>{s.titulo}</h1>
-              {s.texto && <p className={juntar("max-w-2xl whitespace-pre-line text-lg leading-8 text-white/75", x.className)} style={x.style}>{s.texto.split("\n")[0]}</p>}
-              {p.botao && s.rotulo && href && (
-                <a href={href} className="mt-2 inline-flex w-fit items-center gap-3 bg-[var(--c-acento)] px-6 py-3 text-sm font-bold text-[var(--c-primaria)] hover:brightness-95">
-                  {s.rotulo} <Icon name="arrow" className="h-4 w-4" />
-                </a>
-              )}
-            </div>
-            {s.capa && <img src={s.capa} alt="" className="h-full min-h-64 w-full object-cover" />}
-          </div>
-        );
-      }}
+      {s => <BannerServico p={p} s={s} />}
     </CaixaServico>
   ),
 };
+
+function BannerServico({ p, s }: { p: BannerProps; s: ServicoSite }) {
+  const [t, x] = [estiloTexto(p.tTitulo), estiloTexto(p.tTexto)];
+  // Serviço dentro de outro (ex.: Alargamento, dentro da Certifica): o «Voltar» leva à página-mãe.
+  const mae = useServicoPai(s);
+  const voltar = mae ? { href: `/empresas/${slugServico(mae)}`, texto: `Voltar a ${mae.titulo}` } : { href: "/empresas", texto: p.voltar };
+  const href = ligacaoSegura(s.ligacao);
+  const etiqueta = s.etiqueta?.trim() || p.etiqueta;
+  return (
+    // A imagem do topo (capa) fica à direita, da altura toda e até à beira do ecrã; o texto alinha com o resto da página.
+    // A margem esquerda é a das secções da página (32 px + o que sobra da largura do conteúdo), para o título alinhar com o resto.
+    <div className={juntar("grid text-white", s.capa && "lg:grid-cols-2")}
+      style={{ minHeight: p.alturaMin ? `${p.alturaMin}px` : undefined, paddingLeft: "max(20px, calc(32px + max(0px, (100% - 64px - var(--largura)) / 2)))" }}>
+      <div className="flex flex-col justify-center gap-4 py-12 pr-5 lg:pr-12">
+        {p.voltar && <a href={voltar.href} className="inline-flex items-center gap-2 text-sm font-bold text-white/70 hover:text-white"><span aria-hidden="true">←</span>{voltar.texto}</a>}
+        {etiqueta && <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--c-acento)]">{etiqueta}</p>}
+        <h1 className={juntar("font-serif text-4xl font-bold leading-tight sm:text-5xl", t.className)} style={t.style}>{s.titulo}</h1>
+        {s.texto && <p className={juntar("max-w-2xl whitespace-pre-line text-lg leading-8 text-white/75", x.className)} style={x.style}>{s.texto.split("\n")[0]}</p>}
+        {p.botao && s.rotulo && href && (
+          <a href={href} className="mt-2 inline-flex w-fit items-center gap-3 bg-[var(--c-acento)] px-6 py-3 text-sm font-bold text-[var(--c-primaria)] hover:brightness-95">
+            {s.rotulo} <Icon name="arrow" className="h-4 w-4" />
+          </a>
+        )}
+      </div>
+      {s.capa && <img src={s.capa} alt="" className="h-full min-h-64 w-full object-cover" />}
+    </div>
+  );
+}
 
 // ─── Texto completo e pontos ────────────────────────────────────────────────
 
@@ -181,29 +193,47 @@ export const ServicoDetalhe: ComponentConfig<DetalheProps> = {
 
 // ─── Cartões do serviço (ex.: vantagens, passos) ────────────────────────────
 
-type CartoesProps = Base & { titulo: string; tTitulo: Tipografia; colunas: number | null };
+type CartoesProps = Base & { titulo: string; tTitulo: Tipografia; colunas: number | null; textoLigacao?: string };
+
+function colunasCartoes(s: ServicoSite, colunas: number | null) {
+  const cartoes = (s.cartoes ?? []).filter(c => c.titulo?.trim());
+  const n = colunas || 4;
+  return cartoes.some(c => ligacaoSegura(c.ligacao)) ? Math.max(1, Math.min(n, cartoes.length)) : n;
+}
 
 export const ServicoCartoes: ComponentConfig<CartoesProps> = {
   label: "Serviço · Cartões",
   fields: {
     titulo: { type: "text", label: "Título (vazio = esconder)" },
     colunas: campoNumero("Colunas (computador)") as never,
+    textoLigacao: { type: "text", label: "Texto da ligação dos cartões com ligação (quando o cartão não tem o seu)" },
     tTitulo: campoTipografia("Tipografia do título"),
     aparencia: campoAparencia(),
   },
-  defaultProps: { titulo: "", colunas: 4, tTitulo: tipoVazia(), aparencia: estiloVazio() },
+  defaultProps: { titulo: "", colunas: 4, textoLigacao: "Saber mais", tTitulo: tipoVazia(), aparencia: estiloVazio() },
   render: p => (
     <CaixaServico p={p} tem={s => (s.cartoes ?? []).some(c => c.titulo?.trim())} vazio={`O serviço não tem cartões. ${ONDE}`}>
       {s => (
         <>
           <Titulo texto={p.titulo} t={p.tTitulo} className="mb-6 font-serif text-3xl font-bold" />
-          <div className="ena-grelha" style={{ gap: "16px", ["--cols" as string]: String(p.colunas || 4), ["--cols-tab" as string]: "2", ["--cols-tel" as string]: "1" }}>
-            {(s.cartoes ?? []).filter(c => c.titulo?.trim()).map((c, i) => (
-              <article key={i} className="flex flex-col gap-2 border-t-[3px] border-[var(--c-acento)] bg-white p-6">
-                <h3 className="text-lg font-bold text-[var(--c-primaria)]">{c.titulo}</h3>
-                {c.texto && <p className="whitespace-pre-line text-[15px] leading-6 opacity-75">{c.texto}</p>}
-              </article>
-            ))}
+          {/* Cartões com ligação (ex.: os dois da Certifica) ocupam a largura toda, sem colunas vazias. */}
+          <div className="ena-grelha" style={{ gap: "16px", ["--cols" as string]: String(colunasCartoes(s, p.colunas)), ["--cols-tab" as string]: "2", ["--cols-tel" as string]: "1" }}>
+            {(s.cartoes ?? []).filter(c => c.titulo?.trim()).map((c, i) => {
+              // Cartão com ligação (ex.: na Certifica, um por serviço): título e botão levam à página.
+              const href = ligacaoSegura(c.ligacao);
+              const rotulo = c.rotulo?.trim() || p.textoLigacao || "Saber mais";
+              return (
+                <article key={i} className="flex flex-col gap-2 border-t-[3px] border-[var(--c-acento)] bg-white p-6">
+                  <h3 className="text-lg font-bold text-[var(--c-primaria)]">{href ? <a href={href} className="hover:underline">{c.titulo}</a> : c.titulo}</h3>
+                  {c.texto && <p className="whitespace-pre-line text-[15px] leading-6 opacity-75">{c.texto}</p>}
+                  {href && (
+                    <a href={href} className="mt-auto inline-flex w-fit items-center gap-2 pt-4 text-sm font-extrabold uppercase tracking-[0.06em] text-[var(--c-destaque)] hover:underline">
+                      {rotulo}<span className="sr-only">: {c.titulo}</span> <Icon name="arrow" className="h-4 w-4" />
+                    </a>
+                  )}
+                </article>
+              );
+            })}
           </div>
         </>
       )}

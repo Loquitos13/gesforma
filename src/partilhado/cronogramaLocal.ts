@@ -23,6 +23,7 @@ const CIDADE_OFICIAL: Record<string, string> = {
   "braga": "Braga",
   "lisboa": "Lisboa",
   "sala virtual": "Sala Virtual",
+  "aprendizagem a distancia": "Aprendizagem à distância",
   "e-learning": "E-learning",
   "elearning": "E-learning",
   "centro de emprego gaia": "Centro de Emprego de Gaia",
@@ -63,7 +64,7 @@ export function mapLocalTurma(codigo: string | undefined, catalogos: LocalCatalo
   const moradaCatalogo = String(hit?.morada ?? "").trim();
   // A morada vem sempre do catálogo de locais (Edição de Cursos › Locais).
   const morada = moradaCatalogo;
-  const virtual = /sala virtual|e-learning|moodle|zoom/i.test(`${cidade} ${morada}`);
+  const virtual = /sala virtual|e-learning|moodle|zoom|dist[aâ]ncia/i.test(`${cidade} ${morada}`);
   const localizacao = !raw
     ? "-"
     : virtual

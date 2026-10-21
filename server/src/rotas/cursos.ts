@@ -3,6 +3,8 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { codigoCursoValido, normalizarCodigoCurso } from "../../../src/partilhado/codigoCurso.js";
 import { areaCnaefValida } from "../../../src/partilhado/execucaoFisica.js";
+import { localDoElearning, moradaDoLocalElearning } from "../../../src/partilhado/regimeSincronia.js";
+import { criarItem, listarItens, proximoIdCatalogo } from "../repos/catalogoItens.js";
 import { storeDriveFile } from "../driveFicheiros.js";
 import { bloqueioCursoFin, bloqueioCursoGold, propagarCursoNoRegime } from "../ligacoes.js";
 import { dtpEstrutura, DTP_FASES } from "../dtpModel.js";
@@ -268,6 +270,15 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       payload = { ...payload, valoresFormador: antigo.valoresFormador ?? [] };
     }
     if (payload) payload = semIdNaMedia(payload, await urlsImagemDoCurso(db, regime, id));
+    // E-learning: síncrono tem aulas online na Sala Virtual; assíncrono é só o Moodle («Aprendizagem à distância»).
+    const localFixo = payload ? localDoElearning(payload.regime, payload.regimeSincronia) : null;
+    if (payload && localFixo) {
+      payload = { ...payload, locais: [localFixo] };
+      const existe = (await listarItens(db, "locais", regime)).some(l => String(l.payload.nome ?? "").trim().toLowerCase() === localFixo.toLowerCase());
+      if (!existe) {
+        await criarItem(db, await proximoIdCatalogo(db), "locais", regime, { nome: localFixo, morada: moradaDoLocalElearning(localFixo), salas: 0, status: "Ativo" });
+      }
+    }
     await repo.gravarFicha(db, regime, id, payload, v.body.criterios ?? null);
     // Os planos de sessão da ficha passam para as turmas abertas do curso (só nas sessões ainda sem plano).
     const planosImportados = payload ? await importarParaTurmasDoCurso(db, regime, id).catch(() => 0) : 0;

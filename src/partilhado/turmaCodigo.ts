@@ -12,6 +12,7 @@ const LOCAIS: Record<string, string> = {
   "e-learning": "EL",
   "sala virtual": "SV",
   "sala virtual / e-learning": "EL",
+  "aprendizagem a distancia": "AD",
   online: "ON",
 };
 

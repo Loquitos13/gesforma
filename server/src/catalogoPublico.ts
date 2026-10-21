@@ -4,7 +4,6 @@ import { dadosCatalogoPublico } from "./repos/cursos.js";
 import { hojeLisboa } from "./datas.js";
 import { escolherPreco, regrasDoPayload } from "./precoOferta.js";
 import { eur } from "../../src/partilhado/ui/formatos.js";
-import { rotuloSincronia } from "../../src/partilhado/regimeSincronia.js";
 
 export type ContactoLocal = { local: string; telemovel: string; telefone: string; email: string; whatsapp: string };
 const CAMPOS_CONTACTO = ["telemovel", "telefone", "email", "whatsapp"] as const;
@@ -56,7 +55,6 @@ export type CursoPublico = {
   organizacao: "modular" | "livre";
   programa: { titulo: string; horas: string }[];
   /** Regime da oferta (ficha › Oferta): «Síncrono», «Assíncrono» ou vazio. */
-  sincronia: "" | "Síncrono" | "Assíncrono";
   /** Próximas datas; o preço segue as regras da ficha (local, horário ou os dois), como na pré-inscrição. */
   sessoes: { data: string; iso: string; local: string; horario: string; preco: number | null; morada: string }[];
   nomeOferta: string;
@@ -363,7 +361,6 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       ], contactosLocais, curso.regime),
       organizacao: programa.organizacao,
       programa: programa.programa,
-      sincronia: rotuloSincronia(payload.regimeSincronia),
       sessoes: curso.chaves
         .flatMap(key => sessoes.get(key) ?? [])
         .sort((a, b) => a.iso.localeCompare(b.iso))

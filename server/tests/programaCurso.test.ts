@@ -61,19 +61,41 @@ describe("programa do curso: modular ou livre", () => {
     expect(await modulosDaFicha(ctx.db, "fin", nome)).toEqual(["Atendimento · 10h", "Comunicação escrita", "Excel · 15h"]);
 
     const cat = (await ctx.app.inject({ method: "GET", url: "/v1/public/catalogo" })).json() as {
-      cursos: { titulo: string; organizacao: string; sincronia: string; programa: { titulo: string; horas: string }[] }[];
+      cursos: { titulo: string; organizacao: string; sincronia?: string; programa: { titulo: string; horas: string }[] }[];
     };
     const curso = cat.cursos.find(x => x.titulo === nome)!;
     expect(curso.organizacao).toBe("livre");
-    expect(curso.sincronia).toBe("Assíncrono");
+    // O regime não aparece como etiqueta na página pública.
+    expect(curso.sincronia).toBeUndefined();
     expect(curso.programa.map(p => p.titulo)).toEqual(["Atendimento", "Comunicação escrita", "Excel"]);
     expect(curso.programa.some(p => /^C\d/.test(p.titulo))).toBe(false);
 
     // Sem regime escolhido: vazio no site; sem tipo de programa: modular.
     await pedido(ctx, "financiada", "PUT", url, { payload: { titulo: nome, regime: "Online", topicosPrograma: topicos, regimeSincronia: "" } });
     const depois = ((await ctx.app.inject({ method: "GET", url: "/v1/public/catalogo" })).json() as typeof cat).cursos.find(x => x.titulo === nome)!;
-    expect(depois.sincronia).toBe("");
     expect(depois.organizacao).toBe("modular");
     expect(await modulosDaFicha(ctx.db, "fin", nome)).toEqual(["M1 · Atendimento · 10h", "M2 · Comunicação escrita", "M3 · Excel · 15h"]);
+  });
+
+  it("e-learning: síncrono fica na Sala Virtual e assíncrono em «Aprendizagem à distância» (criado no catálogo se faltar)", async () => {
+    const ctx = await arrancar();
+    const nome = `UFCD E-learning ${Date.now()}`;
+    const c = await pedido(ctx, "financiada", "POST", "/v1/cursos-fin", { ufcdCod: "9188", ufcd: nome, nomeComercial: nome, regime: "e-learning", horas: 25 });
+    expect(c.statusCode, c.body).toBe(200);
+    const url = `/v1/cursos/fin/${(c.json() as { curso: { id: number } }).curso.id}/ficha`;
+    const ler = async () => ((await pedido(ctx, "financiada", "GET", url)).json() as { ficha: { payload: { locais: string[] } } }).ficha.payload.locais;
+
+    await pedido(ctx, "financiada", "PUT", url, { payload: { titulo: nome, regime: "e-learning", regimeSincronia: "assincrono", locais: ["Braga"] } });
+    expect(await ler()).toEqual(["Aprendizagem à distância"]);
+    const locais = await ctx.db.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM catalog_items WHERE kind = 'locais' AND regime = 'fin' AND payload->>'nome' = 'Aprendizagem à distância'");
+    expect(locais.rows[0]!.n).toBe(1);
+
+    await pedido(ctx, "financiada", "PUT", url, { payload: { titulo: nome, regime: "e-learning", regimeSincronia: "sincrono", locais: [] } });
+    expect(await ler()).toEqual(["Sala Virtual"]);
+
+    // Presencial: os locais escolhidos ficam.
+    await pedido(ctx, "financiada", "PUT", url, { payload: { titulo: nome, regime: "presencial", regimeSincronia: "sincrono", locais: ["Braga"] } });
+    expect(await ler()).toEqual(["Braga"]);
   });
 });

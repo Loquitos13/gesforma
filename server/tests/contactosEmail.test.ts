@@ -30,11 +30,18 @@ describe("contactos dos locais nos emails", () => {
     expect((await telefonesPorZona(ctx.db, { preinscricaoId: lead }))[0]).toBe("Porto: (Telemóvel) 933 333 333");
   });
 
-  it("no email cada local fica num bloco: nome em destaque e um contacto por linha, com espaço entre locais", async () => {
+  it("no email os contactos vão para o fim, depois do botão, num quadro de 2 colunas", async () => {
     const { renderAutomaticEmail } = await import("../src/emailHtml.js");
-    const vars = { telefones_itens: "Penafiel: (Telemóvel) 917565561 · (Telefone) 223781105 · (Email) ccppenafiel@ena.pt\nBraga: (Telemóvel) 912000001" };
-    const mail = renderAutomaticEmail({ nome: "Ana", xml: "<email><p>Ligue para:<br>{{telefones_itens}}</p></email>", linhas: [], cta: "", href: "", vars, origin: "https://exemplo.pt" });
-    expect(mail.html).toContain("<strong>Penafiel</strong><br>Telemóvel: 917565561<br>Telefone: 223781105<br>Email: ccppenafiel@ena.pt<br><br><strong>Braga</strong><br>Telemóvel: 912000001");
-    expect(mail.text).toContain("Penafiel\nTelemóvel: 917565561\nTelefone: 223781105\nEmail: ccppenafiel@ena.pt\n\nBraga\nTelemóvel: 912000001");
+    const vars = { documentos_url: "https://exemplo.pt/d", telefones_itens: "Penafiel: (Telemóvel) 917565561 · (Telefone) 223781105 · (Email) ccppenafiel@ena.pt\nBraga: (Telemóvel) 912000001\nAveiro: (Telemóvel) 912000003" };
+    const xml = "<email><p>Ligue para:<br>{{telefones_itens}}</p><p>Envie os documentos.</p></email>";
+    const mail = renderAutomaticEmail({ nome: "Ana", xml, linhas: [], cta: "Submeter", href: "https://exemplo.pt/d", vars, origin: "https://exemplo.pt" });
+    const html = mail.html;
+    expect(html.indexOf("Envie os documentos.")).toBeLessThan(html.indexOf("Submeter"));
+    expect(html.indexOf("Submeter")).toBeLessThan(html.indexOf("Ligue para:"));
+    expect(html).toContain('<strong style="color:#0f172a;">Penafiel</strong><br>Telemóvel: 917565561<br>Telefone: 223781105<br>Email: ccppenafiel@ena.pt</td>');
+    // Duas colunas: Penafiel e Braga na mesma linha, Aveiro na seguinte.
+    expect(html).toMatch(/<tr><td[^>]*>.*Penafiel.*<\/td><td[^>]*>.*Braga.*<\/td><\/tr><tr><td[^>]*>.*Aveiro/);
+    expect(mail.text.indexOf("Submeter")).toBeLessThan(mail.text.indexOf("Ligue para:"));
+    expect(mail.text).toContain("Ligue para:\n\nPenafiel\nTelemóvel: 917565561\nTelefone: 223781105\nEmail: ccppenafiel@ena.pt\n\nBraga");
   });
 });

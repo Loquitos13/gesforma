@@ -64,10 +64,15 @@ export function sanitizeText(value: string, max = 4000) {
  * «Penafiel: (Telemóvel) 917… · (Email) x@ena.pt» → «<strong>Penafiel</strong><br>Telemóvel: 917…<br>Email: x@ena.pt».
  */
 function blocoContactos(item: string) {
+  const c = partesContactos(item);
+  return c ? [`<strong>${c.nome}</strong>`, ...c.linhas].join("<br>") : `• ${item.replace(/[<>]/g, "")}`;
+}
+
+/** «Penafiel: (Telemóvel) 917… · (Email) x@ena.pt» → { nome: "Penafiel", linhas: ["Telemóvel: 917…", "Email: x@ena.pt"] }. */
+export function partesContactos(item: string) {
   const m = /^([^:]+):\s*(\(.+)$/.exec(item.replace(/[<>]/g, ""));
-  if (!m) return `• ${item.replace(/[<>]/g, "")}`;
-  const linhas = m[2]!.split(" · ").map(p => p.replace(/^\(([^)]+)\)\s*/, "$1: "));
-  return [`<strong>${m[1]!.trim()}</strong>`, ...linhas].join("<br>");
+  if (!m) return null;
+  return { nome: m[1]!.trim(), linhas: m[2]!.split(" · ").map(p => p.replace(/^\(([^)]+)\)\s*/, "$1: ")) };
 }
 
 export function fillVars(text: string, vars: Record<string, string>) {

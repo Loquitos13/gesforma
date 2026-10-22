@@ -261,15 +261,23 @@ export const simNao = (label: string): Field => ({ type: "radio", label, options
  * Cursos em destaque escolhidos e ordenados numa lista de todos os cursos publicados (Gold e Financiada):
  * os escolhidos ficam em cima, por ordem, e arrastam-se (ou sobem/descem com as setas); os outros acrescentam-se.
  */
-export function campoOrdemCursos(label: string): CustomField<string[]> {
+type TextosOrdem = { topo: string; vazio: string; outros: string; acrescentar: string };
+const TEXTOS_DESTAQUE: TextosOrdem = {
+  topo: "Em destaque, por esta ordem (arraste para mudar):",
+  vazio: "Nenhum curso escolhido. Acrescente-os na lista em baixo",
+  outros: "Outros cursos",
+  acrescentar: "+ Destacar",
+};
+
+export function campoOrdemCursos(label: string, textos: TextosOrdem = TEXTOS_DESTAQUE): CustomField<string[]> {
   return {
     type: "custom",
     label,
-    render: ({ value, onChange }) => <CampoOrdemCursos label={label} value={value ?? []} onChange={onChange} />,
+    render: ({ value, onChange }) => <CampoOrdemCursos label={label} textos={textos} value={value ?? []} onChange={onChange} />,
   };
 }
 
-function CampoOrdemCursos({ label, value, onChange }: { label: string; value: string[]; onChange: (v: string[]) => void }) {
+function CampoOrdemCursos({ label, textos, value, onChange }: { label: string; textos: TextosOrdem; value: string[]; onChange: (v: string[]) => void }) {
   const oferta = useContext(OfertaCtx);
   const cursos = oferta?.cursos ?? [];
   for (const c of cursos) nomesCursos.set(c.id, c.title);
@@ -291,10 +299,10 @@ function CampoOrdemCursos({ label, value, onChange }: { label: string; value: st
   const botao = "rounded px-1 text-[12px] text-[#3d4a5a] hover:bg-[#eef1f5] disabled:opacity-30";
   return (
     <Rotulo texto={label}>
-      <p className="mb-1 text-[11px] text-[#5b6675]">Em destaque, por esta ordem (arraste para mudar):</p>
+      <p className="mb-1 text-[11px] text-[#5b6675]">{textos.topo}</p>
       {escolhidos.length === 0 && (
         <div className="mb-2 rounded border border-dashed border-[#d4d8de] px-2 py-2 text-[12px] text-[#5b6675]">
-          Nenhum curso escolhido. Acrescente-os na lista em baixo
+          {textos.vazio}
           {(oferta?.destaques?.length ?? 0) > 0 && <> ou <button type="button" className="font-semibold text-[#3b6fd8] underline" onClick={() => onChange(oferta!.destaques.map(c => c.id))}>comece pelos mais procurados</button></>}.
         </div>
       )}
@@ -319,7 +327,7 @@ function CampoOrdemCursos({ label, value, onChange }: { label: string; value: st
         })}
       </ol>
       <div className="mb-1 flex items-center gap-1">
-        <span className="mr-auto text-[11px] text-[#5b6675]">Outros cursos</span>
+        <span className="mr-auto text-[11px] text-[#5b6675]">{textos.outros}</span>
         {([["todos", "Todos"], ["gold", "Gold"], ["fin", "Financiada"]] as const).map(([v, r]) => (
           <button key={v} type="button" onClick={() => setFiltro(v)}
             className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${filtro === v ? "bg-[#1c2633] text-white" : "text-[#3d4a5a] hover:bg-[#eef1f5]"}`}>{r}</button>
@@ -330,7 +338,7 @@ function CampoOrdemCursos({ label, value, onChange }: { label: string; value: st
           <li key={c.id} className="flex items-center gap-1.5 rounded border border-[#e4e7eb] px-1.5 py-1 text-[12px]">
             <span className="min-w-0 flex-1 truncate text-[#3d4a5a]" title={c.title}>{c.title}</span>
             {etiqueta(c.regime)}
-            <button type="button" className="rounded px-1.5 text-[11px] font-semibold text-[#3b6fd8] hover:bg-[#eef1f5]" onClick={() => onChange([...escolhidos, c.id])}>+ Destacar</button>
+            <button type="button" className="rounded px-1.5 text-[11px] font-semibold text-[#3b6fd8] hover:bg-[#eef1f5]" onClick={() => onChange([...escolhidos, c.id])}>{textos.acrescentar}</button>
           </li>
         ))}
         {outros.length === 0 && <li className="text-[11px] text-[#5b6675]">{oferta?.estado === "pronto" ? "Sem mais cursos." : "A carregar os cursos…"}</li>}

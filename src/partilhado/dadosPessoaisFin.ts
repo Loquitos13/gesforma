@@ -108,7 +108,7 @@ export function validarIban(raw: string): { ok: true; iban: string } | { ok: fal
     const v = ch >= "A" && ch <= "Z" ? String(ch.charCodeAt(0) - 55) : ch;
     for (const d of v) resto = (resto * 10 + Number(d)) % 97;
   }
-  if (resto !== 1) return { ok: false, erro: "IBAN inválido (dígitos de controlo errados)." };
+  if (resto !== 1) return { ok: false, erro: "Este IBAN não existe: confirme os algarismos (há algum trocado ou em falta)." };
   return { ok: true, iban };
 }
 

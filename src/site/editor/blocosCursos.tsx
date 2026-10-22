@@ -356,7 +356,9 @@ export const CursosDestaque: ComponentConfig<DestaqueProps> = {
 type OfertaProps = {
   zonaMeio: Slot; zonaCursos: Slot;
   regime: "todos" | "gold" | "fin";
-  ordem: "procura" | "titulo";
+  ordem: "procura" | "titulo" | "manual";
+  /** Cursos em destaque: primeiro estes, pela ordem escolhida (arrastar); os restantes depois, pelos mais procurados. */
+  ordemManual: string[];
   pesquisa: boolean; textoPesquisa: string;
   filtros: boolean; mostrarTotal: boolean;
   limite: number | null;
@@ -373,7 +375,13 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
     zonaMeio: { type: "slot", label: "Blocos entre os filtros e a pesquisa" },
     zonaCursos: { type: "slot", label: "Blocos antes dos cursos" },
     regime: { type: "select", label: "Cursos", options: [{ label: "Todos", value: "todos" }, { label: "Só Gold", value: "gold" }, { label: "Só Financiada", value: "fin" }] },
-    ordem: { type: "select", label: "Ordem", options: [{ label: "Mais procurados primeiro", value: "procura" }, { label: "Alfabética", value: "titulo" }] },
+    ordem: { type: "select", label: "Ordem", options: [{ label: "Cursos em destaque primeiro (arrastar para ordenar)", value: "manual" }, { label: "Mais procurados primeiro", value: "procura" }, { label: "Alfabética", value: "titulo" }] },
+    ordemManual: campoOrdemCursos("Cursos em destaque (Gold e Financiada)", {
+      topo: "Em destaque, por esta ordem (arraste para mudar). Os restantes cursos vêm a seguir, pelos mais procurados.",
+      vazio: "Ainda sem cursos em destaque. Acrescente-os na lista em baixo",
+      outros: "Restantes cursos",
+      acrescentar: "+ Destacar",
+    }),
     pesquisa: simNao("Caixa de pesquisa"),
     textoPesquisa: { type: "text", label: "Texto da pesquisa" },
     filtros: simNao("Filtros por modalidade"),
@@ -391,13 +399,18 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
   },
   defaultProps: {
     zonaMeio: [], zonaCursos: [],
-    regime: "todos", ordem: "procura", pesquisa: true, textoPesquisa: "Pesquisar formação", filtros: true, mostrarTotal: true,
+    regime: "todos", ordem: "procura", ordemManual: [], pesquisa: true, textoPesquisa: "Pesquisar formação", filtros: true, mostrarTotal: true,
     limite: null, corFiltroAtivo: "var(--c-acento)",
     tipoFiltros: tipoVazia({ tamanho: 14, peso: "700" }), tipoTotal: tipoVazia({ tamanho: 14, peso: "600" }), tipoPesquisa: tipoVazia({ tamanho: 14 }),
     larguraPesquisa: 384, raioPesquisa: 999, fundoPesquisa: "#ffffff",
     cartao: cartaoPadrao(), aparencia: estiloVazio(),
   },
-  render: ({ puck, zonaMeio, zonaCursos, regime, ordem, pesquisa, textoPesquisa, filtros, mostrarTotal, limite, corFiltroAtivo, tipoFiltros, tipoTotal, tipoPesquisa, larguraPesquisa, raioPesquisa, fundoPesquisa, cartao, aparencia }) => {
+  resolveFields: (data, { fields }) => {
+    const f = { ...fields } as Record<string, Field>;
+    if (data.props.ordem !== "manual") delete f.ordemManual;
+    return f as typeof fields;
+  },
+  render: ({ puck, zonaMeio, zonaCursos, regime, ordem, ordemManual, pesquisa, textoPesquisa, filtros, mostrarTotal, limite, corFiltroAtivo, tipoFiltros, tipoTotal, tipoPesquisa, larguraPesquisa, raioPesquisa, fundoPesquisa, cartao, aparencia }) => {
     const tf = estiloTexto(tipoFiltros);
     const tt = estiloTexto(tipoTotal);
     const tp = estiloTexto(tipoPesquisa);
@@ -408,8 +421,13 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
     const [q, setQ] = useState("");
     const base = useMemo(() => {
       const r = cursos.filter(c => regime === "todos" || c.regime === regime);
-      return ordem === "titulo" ? [...r].sort((a, b) => a.title.localeCompare(b.title, "pt")) : [...r].sort((a, b) => b.vendas - a.vendas);
-    }, [cursos, regime, ordem]);
+      if (ordem === "titulo") return [...r].sort((a, b) => a.title.localeCompare(b.title, "pt"));
+      const porProcura = [...r].sort((a, b) => b.vendas - a.vendas);
+      if (ordem !== "manual") return porProcura;
+      const pos = new Map((ordemManual ?? []).map((id, i) => [id, i]));
+      // sort estável: os que não estão na ordem manual mantêm a ordem por procura, no fim.
+      return porProcura.sort((a, b) => (pos.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (pos.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+    }, [cursos, regime, ordem, ordemManual]);
     const modos = useMemo(() => ["Todos", ...["Presencial", "B-learning", "E-learning"].filter(m => base.some(c => c.format === m))], [base]);
     const lista = base
       .filter(c => (filtro === "Todos" || c.format === filtro) && `${c.title} ${c.area}`.toLowerCase().includes(q.trim().toLowerCase()))

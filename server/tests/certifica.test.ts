@@ -31,7 +31,10 @@ describe("Página Certifica: dois serviços com página própria", () => {
     const ctx = await arrancar();
     const lista = await publicos(ctx);
     const mae = lista.find(s => s.slug === MAE)!;
-    expect(mae).toMatchObject({ titulo: "Certificação DGERT", ctaTitulo: "Não sabe qual é o seu caso?" });
+    expect(mae).toMatchObject({ titulo: "Certificação DGERT" });
+    // A migração 196 retira os textos provisórios que a 190 tinha posto nos campos vazios (os cartões ficam).
+    expect(mae.ctaTitulo ?? "").toBe("");
+    expect(mae.detalhe ?? "").toBe("");
     expect(mae.pai ?? "").toBe("");
     expect(mae.cartoes?.map(c => [c.titulo, c.ligacao])).toEqual([
       ["Certificação Inicial", "/empresas/certificacao-inicial"],

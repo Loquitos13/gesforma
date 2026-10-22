@@ -199,9 +199,9 @@ export const ServicoDetalhe: ComponentConfig<DetalheProps> = {
 type CartoesProps = Base & { titulo: string; tTitulo: Tipografia; colunas: number | null; textoLigacao?: string };
 
 function colunasCartoes(s: ServicoSite, colunas: number | null) {
-  const cartoes = (s.cartoes ?? []).filter(c => c.titulo?.trim());
   const n = colunas || 4;
-  return cartoes.some(c => ligacaoSegura(c.ligacao)) ? Math.max(1, Math.min(n, cartoes.length)) : n;
+  const informativos = (s.cartoes ?? []).filter(c => c.titulo?.trim() && !ligacaoSegura(c.ligacao)).length;
+  return Math.max(1, Math.min(n, informativos || n));
 }
 
 export const ServicoCartoes: ComponentConfig<CartoesProps> = {
@@ -219,25 +219,46 @@ export const ServicoCartoes: ComponentConfig<CartoesProps> = {
       {s => (
         <>
           <Titulo texto={p.titulo} t={p.tTitulo} className="mb-6 font-serif text-3xl font-bold" />
-          {/* Cartões com ligação (ex.: os dois da Certifica) ocupam a largura toda, sem colunas vazias. */}
-          <div className="ena-grelha" style={{ gap: "16px", ["--cols" as string]: String(colunasCartoes(s, p.colunas)), ["--cols-tab" as string]: "2", ["--cols-tel" as string]: "1" }}>
-            {(s.cartoes ?? []).filter(c => c.titulo?.trim()).map((c, i) => {
-              // Cartão com ligação (ex.: na Certifica, um por serviço): título e botão levam à página.
-              const href = ligacaoSegura(c.ligacao);
-              const rotulo = c.rotulo?.trim() || p.textoLigacao || "Saber mais";
-              return (
-                <article key={i} className="flex flex-col gap-2 border-t-[3px] border-[var(--c-acento)] bg-white p-6">
-                  <h3 className="text-lg font-bold text-[var(--c-primaria)]">{href ? <a href={href} className="hover:underline">{c.titulo}</a> : c.titulo}</h3>
-                  <TextoFormatado texto={c.texto} className="text-[15px] leading-6 opacity-75" nivel={4} />
-                  {href && (
-                    <a href={href} className="mt-auto inline-flex w-fit items-center gap-2 pt-4 text-sm font-extrabold uppercase tracking-[0.06em] text-[var(--c-destaque)] hover:underline">
-                      {rotulo}<span className="sr-only">: {c.titulo}</span> <Icon name="arrow" className="h-4 w-4" />
-                    </a>
-                  )}
-                </article>
-              );
-            })}
-          </div>
+          {(() => {
+            const cartoes = (s.cartoes ?? []).filter(c => c.titulo?.trim());
+            const informativos = cartoes.filter(c => !ligacaoSegura(c.ligacao));
+            // Cartões com ligação (ex.: os dois da Certifica, um por serviço) vêm primeiro e em destaque: são o caminho.
+            const destaques = cartoes.filter(c => ligacaoSegura(c.ligacao));
+            return (
+              <>
+                {destaques.length > 0 && (
+                  // Ocupam a largura toda da secção (a mesma dos cartões de descrição), um ao lado do outro.
+                  <div className="ena-grelha w-full"
+                    style={{ gap: "24px", ["--cols" as string]: String(Math.min(destaques.length, 4)), ["--cols-tab" as string]: String(Math.min(destaques.length, 2)), ["--cols-tel" as string]: "1" }}>
+                    {destaques.map((c, i) => {
+                      const href = ligacaoSegura(c.ligacao)!;
+                      const rotulo = c.rotulo?.trim() || p.textoLigacao || "Saber mais";
+                      return (
+                        // O cartão inteiro leva à página (a ligação do botão estende-se por cima do cartão).
+                        <article key={i} className="group relative flex flex-col gap-3 rounded-sm bg-[var(--c-primaria)] p-8 text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl">
+                          <h3 className="text-2xl font-bold">{c.titulo}</h3>
+                          <TextoFormatado texto={c.texto} className="text-base leading-7 text-white/80" nivel={4} />
+                          <a href={href} className="mt-auto inline-flex w-fit items-center gap-2 bg-[var(--c-destaque)] px-5 py-3 text-sm font-extrabold uppercase tracking-[0.06em] text-white transition after:absolute after:inset-0 group-hover:gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+                            {rotulo}<span className="sr-only">: {c.titulo}</span> <Icon name="arrow" className="h-4 w-4" />
+                          </a>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+                {informativos.length > 0 && (
+                  <div className={juntar("ena-grelha", destaques.length > 0 && "mt-10")} style={{ gap: "16px", ["--cols" as string]: String(colunasCartoes(s, p.colunas)), ["--cols-tab" as string]: "2", ["--cols-tel" as string]: "1" }}>
+                    {informativos.map((c, i) => (
+                      <article key={i} className="flex flex-col gap-2 border-t-[3px] border-[var(--c-acento)] bg-white p-6">
+                        <h3 className="text-lg font-bold text-[var(--c-primaria)]">{c.titulo}</h3>
+                        <TextoFormatado texto={c.texto} className="text-[15px] leading-6 opacity-75" nivel={4} />
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </>
       )}
     </CaixaServico>

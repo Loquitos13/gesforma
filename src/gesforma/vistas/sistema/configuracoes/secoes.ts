@@ -1,7 +1,6 @@
 // Campos de cada definição. As chaves são as que o servidor lê (server/src/regrasConfig.ts, lembretePre.ts);
 // as secções Formação, Gold e Financiada guardam notas internas da entidade com as chaves de sempre.
 import type { CampoDefinicao } from "./SeccaoDefinicoes";
-import { CAMPOS_CANDIDATURA_FIN } from "../../../../partilhado/candidaturaFin";
 
 export const CAMPOS_ENTIDADE: CampoDefinicao[] = [
   { chave: "nome", rotulo: "Designação", largo: true },
@@ -59,6 +58,3 @@ export const CAMPOS_FIN: CampoDefinicao[] = [
   { chave: "Turma sem documentos", rotulo: "Turma sem documentos" },
   { chave: "Financiador", rotulo: "Financiador habitual" },
 ];
-
-/** Candidatura da Financiada: sai na ficha de inscrição e na folha de presenças / sumário (Configurações › Financiada). */
-export const CAMPOS_CANDIDATURA: CampoDefinicao[] = CAMPOS_CANDIDATURA_FIN.map(c => ({ chave: c.chave, rotulo: c.rotulo, largo: true }));

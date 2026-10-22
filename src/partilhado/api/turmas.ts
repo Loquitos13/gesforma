@@ -79,6 +79,8 @@ export type TurmaGravada = {
   activa?: boolean;
   ufcdCod?: string;
   financiador?: string;
+  /** Financiada: programa (Edição de cursos › Programas) dos documentos da turma. */
+  programa?: string;
   /** Financiada: número da ação («… / Ação n» na execução física). */
   numeroAcao?: number;
   /** Versão do cronograma: volta com cada gravação do cronograma (409 se outra pessoa o mudou entretanto). */
@@ -108,6 +110,7 @@ export type DadosTurma = {
   alunosTotal?: number;
   activa?: boolean;
   financiador?: string;
+  programa?: string;
   numeroAcao?: number;
 };
 

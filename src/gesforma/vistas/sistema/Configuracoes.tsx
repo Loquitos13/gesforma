@@ -12,8 +12,7 @@ import { SeccaoDrive, SeccaoSmtp } from "./configuracoes/Integracoes";
 import { SeccaoMicrosoft, SeccaoWhatsapp } from "./configuracoes/IntegracoesContas";
 import { LogoEntidade } from "./configuracoes/LogoEntidade";
 import { SeccaoDefinicoes } from "./configuracoes/SeccaoDefinicoes";
-import { CAMPOS_CANDIDATURA, CAMPOS_ENTIDADE, CAMPOS_FIN, CAMPOS_FORMACAO, CAMPOS_GOLD, CAMPOS_LEMBRETE, CAMPOS_REGRAS } from "./configuracoes/secoes";
-import { CANDIDATURA_FIN_OMISSAO } from "../../../partilhado/candidaturaFin";
+import { CAMPOS_ENTIDADE, CAMPOS_FIN, CAMPOS_FORMACAO, CAMPOS_GOLD, CAMPOS_LEMBRETE, CAMPOS_REGRAS } from "./configuracoes/secoes";
 import { SeccaoSeloAssinatura } from "./configuracoes/SeloAssinatura";
 import { SeccaoSeguranca } from "./configuracoes/Seguranca";
 
@@ -82,9 +81,9 @@ export default function Configuracoes({ params, navigate }: VistaProps) {
       case "fin":
         return (
           <div className="space-y-4">
-            <SeccaoDefinicoes id="candidatura_fin" titulo="Candidatura" podeEditar={editar} campos={CAMPOS_CANDIDATURA}
-              valores={settings.candidatura_fin ?? CANDIDATURA_FIN_OMISSAO}
-              descricao="Programa e tipologias da candidatura. Saem na ficha de inscrição e na folha de presenças / sumário de todas as turmas da Financiada." />
+            <Aviso tom="info" titulo="Programa e tipologias">
+              Cada programa (prioridade e tipologias) configura-se em Financiada › Edição de cursos › Programas, e cada turma escolhe o seu.
+            </Aviso>
             <SeccaoDefinicoes id="fin" titulo="Financiada" podeEditar={editar} campos={CAMPOS_FIN} valores={settings.fin} descricao="Notas internas da formação financiada." />
           </div>
         );

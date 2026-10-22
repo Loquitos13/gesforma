@@ -305,14 +305,24 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     expect((await pedido(ctx, "formador", "GET", `/v1/turmas/fin/${t.id}/dossie/presencas`)).statusCode).toBe(403);
   });
 
-  it("candidatura em Configurações › Financiada; logótipo configurado no topo; ZIP com as fichas; Gold com os PDF de texto", async () => {
+  it("programa da turma (Edição de cursos › Programas); logótipo configurado no topo; ZIP com as fichas; Gold com os PDF de texto", async () => {
     const ctx = await arrancar();
     const t = await turmaFin(ctx);
-    const valores = { ...CANDIDATURA_FIN_OMISSAO, tipologia: "1.09. Formação de Teste", programa: "" };
-    expect((await pedido(ctx, "formador", "PUT", "/v1/settings/candidatura_fin", { values: valores })).statusCode).toBe(403);
-    const g = await pedido(ctx, "secretaria", "PUT", "/v1/settings/candidatura_fin", { values: { ...valores, extra: "fora" } });
+    // Sem programa escolhido vale o primeiro activo (o da migração, com os valores da candidatura PESSOAS 2030).
+    const [antes] = await paginas((await pedido(ctx, "financiada", "GET", `/v1/formandos-fin/${t.ana}/ficha-inscricao`)).rawPayload);
+    expect(antes).toContain(CANDIDATURA_FIN_OMISSAO.tipologia);
+    const valores = { ...CANDIDATURA_FIN_OMISSAO, nome: "Programa Teste", tipologia: "1.09. Formação de Teste", programa: "" };
+    expect((await pedido(ctx, "formador", "POST", "/v1/catalog/programas", { regime: "fin", payload: valores })).statusCode).toBe(403);
+    expect((await pedido(ctx, "secretaria", "POST", "/v1/catalog/programas", { regime: "fin", payload: { ...valores, nome: "" } })).statusCode).toBe(400);
+    const g = await pedido(ctx, "secretaria", "POST", "/v1/catalog/programas", { regime: "fin", payload: valores });
     expect(g.statusCode, g.body).toBe(200);
-    expect(g.json().values.extra).toBeUndefined();
+    const p = await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "Programa Teste" });
+    expect(p.statusCode, p.body).toBe(200);
+    expect(p.json().turma.programa).toBe("Programa Teste");
+    // Renomear o programa leva a turma com ele; apagar um programa em uso é recusado.
+    const id = g.json().item.id as number;
+    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/catalog/programas/${id}`, { payload: { ...valores, nome: "Programa Novo" } })).statusCode).toBe(200);
+    expect((await pedido(ctx, "secretaria", "DELETE", `/v1/catalog/programas/${id}`)).statusCode).toBe(409);
     try {
       const [ficha] = await paginas((await pedido(ctx, "financiada", "GET", `/v1/formandos-fin/${t.ana}/ficha-inscricao`)).rawPayload);
       expect(ficha).toContain("1.09. Formação de Teste");
@@ -328,7 +338,7 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
       }
     } finally {
       await apagarLogoEntidade(ctx.db);
-      await pedido(ctx, "secretaria", "PUT", "/v1/settings/candidatura_fin", { values: CANDIDATURA_FIN_OMISSAO });
+      await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "" });
     }
 
     // ZIP do dossiê: as fichas no tópico 5, as folhas e os planos no 6 (modelo da candidatura).

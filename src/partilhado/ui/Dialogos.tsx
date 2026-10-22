@@ -38,10 +38,11 @@ function useDialogo(aberto: boolean, onFechar: () => void) {
 }
 
 /** Diálogo centrado. */
-export function Modal({ aberto, onFechar, titulo, children, rodape, largura = "md" }: {
+export function Modal({ aberto, onFechar, titulo, subtitulo, children, rodape, largura = "md" }: {
   aberto: boolean;
   onFechar: () => void;
   titulo: ReactNode;
+  subtitulo?: ReactNode;
   children: ReactNode;
   rodape?: ReactNode;
   largura?: "sm" | "md" | "lg" | "xl";
@@ -61,7 +62,10 @@ export function Modal({ aberto, onFechar, titulo, children, rodape, largura = "m
           largura === "sm" ? "sm:max-w-md" : largura === "lg" ? "sm:max-w-3xl" : largura === "xl" ? "sm:max-w-5xl" : "sm:max-w-xl")}
       >
         <div className="flex items-start gap-3 px-5 pt-5 pb-3">
-          <h2 id={id} className="flex-1 m-0 text-base font-semibold text-tinta">{titulo}</h2>
+          <div className="flex-1 min-w-0">
+            <h2 id={id} className="m-0 text-base font-semibold text-tinta">{titulo}</h2>
+            {subtitulo && <p className="m-0 mt-0.5 text-xs text-tinta-suave">{subtitulo}</p>}
+          </div>
           <Botao variante="fantasma" tamanho="sm" soIcone aria-label="Fechar" onClick={onFechar} icone={<span aria-hidden="true" className="text-lg leading-none">×</span>} />
         </div>
         <div className="px-5 pb-5 overflow-y-auto">{children}</div>

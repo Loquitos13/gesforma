@@ -6,7 +6,7 @@ export type Opcao = { valor: string; rotulo: string; id?: number; regime?: Regim
 /** Tipos de opções servidos por `GET /v1/opcoes/:kind`. */
 export const KINDS_OPCOES = [
   "cursos", "turmas", "formadores", "locais", "datas", "horarios", "areas", "modulos", "conteudos",
-  "tematicas", "financiadores", "comerciais", "campanhas", "lista", "modelos_conteudo",
+  "tematicas", "programas", "financiadores", "comerciais", "campanhas", "lista", "modelos_conteudo",
 ] as const;
 export type KindOpcoes = (typeof KINDS_OPCOES)[number];
 
@@ -83,6 +83,8 @@ export async function listarOpcoes(
     case "horarios":
     case "areas":
       return doCatalogo(c, kind, regime, "payload->>'nome'", todos);
+    case "programas":
+      return doCatalogo(c, "programas", "fin", "payload->>'nome'", todos);
     case "tematicas":
       return doCatalogo(c, "blog_tematicas", undefined, "payload->>'nome'", todos);
     case "modulos":

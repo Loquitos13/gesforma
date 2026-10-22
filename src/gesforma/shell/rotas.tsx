@@ -86,6 +86,7 @@ export const ROTAS: Record<Vista, Ecra> = {
   "gold-areas-tematicas": Tabelas,
   "fin-datas": Tabelas,
   "fin-locais": Tabelas,
+  "fin-programas": Tabelas,
   "fin-areas-tematicas": Tabelas,
   "gold-turmas": Turmas,
   "fin-turmas": Turmas,

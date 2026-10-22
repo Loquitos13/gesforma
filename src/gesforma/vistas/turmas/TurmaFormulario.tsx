@@ -15,12 +15,12 @@ import { useAuth } from "../../../partilhado/AuthGate";
 type Rascunho = {
   nome: string; curso: string; local: string; horario: string; formador: string; formadores: string[];
   dataInicio: string; vagas: number; tolerancia: number; vagasAnunciadas: number | null; custoHoraSala: number; abertas: boolean; financiador: string;
-  numeroAcao: number; valoresHoraFormador: Record<string, number>; cronograma: SessaoCronograma[]; horas: number;
+  programa: string; numeroAcao: number; valoresHoraFormador: Record<string, number>; cronograma: SessaoCronograma[]; horas: number;
 };
 
 const VAZIO = (regime: Regime): Rascunho => ({
   nome: "", curso: "", local: "", horario: "", formador: "", formadores: [], dataInicio: "", vagas: regime === "fin" ? 20 : 16,
-  tolerancia: 0, vagasAnunciadas: null, custoHoraSala: 0, abertas: true, financiador: "", numeroAcao: 1, valoresHoraFormador: {}, cronograma: [], horas: 0,
+  tolerancia: 0, vagasAnunciadas: null, custoHoraSala: 0, abertas: true, financiador: "", programa: "", numeroAcao: 1, valoresHoraFormador: {}, cronograma: [], horas: 0,
 });
 
 /** Painel para criar ou editar uma turma (o interior da turma continua no cockpit). */
@@ -40,6 +40,7 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
   const locais = useOpcoes("locais", { regime });
   const formadores = useOpcoes("formadores", { regime });
   const financiadores = useOpcoes("financiadores");
+  const programas = useOpcoes("programas", { regime: "fin" });
   const nomesUsados = useOpcoes("turmas", { regime, todos: true });
   const { byCursoId, loaded: locaisProntos } = useCursoFichaLocais(regime);
   const [r, setR] = useState<Rascunho>(() => VAZIO(regime));
@@ -66,7 +67,7 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
       nome: t.nome, curso: t.curso, local: t.local, horario: t.horario, formador: t.formador, formadores: t.formadores ?? [],
       dataInicio: t.dataInicio, vagas: (fin ? t.alunosTotal : t.vagas) ?? 0, tolerancia: t.toleranciaVagas ?? 0, vagasAnunciadas: t.vagasAnunciadas ?? null,
       custoHoraSala: t.custoHoraSala ?? 0, abertas: fin ? Boolean(t.activa) : t.estado === "Ativa",
-      financiador: t.financiador ?? "", numeroAcao: t.numeroAcao ?? 1, valoresHoraFormador: t.valoresHoraFormador ?? {}, cronograma: t.cronograma ?? [], horas: t.horas,
+      financiador: t.financiador ?? "", programa: t.programa ?? "", numeroAcao: t.numeroAcao ?? 1, valoresHoraFormador: t.valoresHoraFormador ?? {}, cronograma: t.cronograma ?? [], horas: t.horas,
     };
     setR(inicial.current);
   }, [aberto, editar, gravada.dados, regime, fin]);
@@ -97,7 +98,7 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
         ...(editar ? { cronograma: x.cronograma } : {}),
       };
       return fin
-        ? { ...comum, alunosTotal: x.vagas, activa: x.abertas, financiador: x.financiador.trim(), numeroAcao: Math.max(1, Math.round(x.numeroAcao) || 1) }
+        ? { ...comum, alunosTotal: x.vagas, activa: x.abertas, financiador: x.financiador.trim(), programa: x.programa, numeroAcao: Math.max(1, Math.round(x.numeroAcao) || 1) }
         : { ...comum, vagas: x.vagas, custoHoraSala: x.custoHoraSala, estado: x.abertas ? "Ativa" : "Inativa" };
     };
     const dados = paraEnviar(r);
@@ -199,6 +200,9 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
                     <datalist id="financiadores-turma">{financiadores.opcoes.map(o => <option key={o.valor} value={o.valor} />)}</datalist>
                   </>
                 )}
+              </Campo>
+              <Campo rotulo="Programa" className="sm:col-span-2" ajuda="Programa, prioridade e tipologias dos documentos da turma (Edição de cursos › Programas).">
+                {p => <Selecao {...p} opcoes={programas.selecao} vazio="O primeiro programa activo" value={r.programa} onChange={e => mudar({ programa: e.target.value })} />}
               </Campo>
               <Campo rotulo="Número da ação" ajuda="«… / Ação n» na execução física.">
                 {p => <Entrada {...p} type="number" min={1} step={1} value={r.numeroAcao} onChange={e => mudar({ numeroAcao: Math.max(1, Math.round(Number(e.target.value)) || 1) })} />}

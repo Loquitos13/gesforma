@@ -13,6 +13,7 @@ export const CATALOG_KINDS = [
   "inqueritos",
   "lista_opcoes",
   "entidades",
+  "programas",
 ] as const;
 
 export type CatalogKind = (typeof CATALOG_KINDS)[number];

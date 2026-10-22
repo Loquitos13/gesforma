@@ -22,6 +22,8 @@ function usoSql(kind: string, regime: Regime): Record<string, string> {
         turmas: `(SELECT count(*) FROM ${turmas} t WHERE lower(trim(t.local)) = ${nome})`,
         datas: `(SELECT count(*) FROM catalog_items d WHERE d.kind = 'datas' AND d.regime = ci.regime AND lower(trim(d.payload->>'local')) = ${nome})`,
       };
+    case "programas":
+      return regime === "fin" ? { turmas: `(SELECT count(*) FROM turmas_fin t WHERE lower(trim(t.programa)) = ${nome})` } : {};
     case "horarios":
       return {
         turmas: `(SELECT count(*) FROM ${turmas} t WHERE lower(trim(t.horario)) = ${nome})`,
@@ -137,6 +139,8 @@ export async function propagarNome(c: Consulta, kind: string, regime: Regime, an
       await many(c, `UPDATE curso_fichas SET payload = jsonb_set(payload, '{categoria}', to_jsonb($2::text))
                       WHERE regime = 'fin' AND lower(trim(payload->>'categoria')) = lower($1)`, [de, para]);
     }
+  } else if (kind === "programas" && regime === "fin") {
+    await many(c, "UPDATE turmas_fin SET programa = $2 WHERE lower(trim(programa)) = lower($1)", [de, para]);
   } else if (kind === "blog_tematicas") {
     await many(c, "UPDATE blog_posts SET tematica = $2 WHERE lower(trim(tematica)) = lower($1)", [de, para]);
   }

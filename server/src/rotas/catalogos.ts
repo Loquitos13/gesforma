@@ -37,7 +37,7 @@ const itemPatchSchema = z.object({
 });
 
 /** Tipos cujo nome é usado por outros registos: renomear propaga; apagar com uso é recusado. */
-const COM_NOME = new Set(["locais", "horarios", "areas", "blog_tematicas"]);
+const COM_NOME = new Set(["locais", "horarios", "areas", "blog_tematicas", "programas"]);
 
 const ROTULO_USO: Record<string, [string, string]> = {
   turmas: ["turma", "turmas"], datas: ["data", "datas"], cursos: ["curso", "cursos"], conteudos: ["conteúdo", "conteúdos"],

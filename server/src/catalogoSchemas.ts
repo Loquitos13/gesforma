@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CAMPOS_CANDIDATURA_FIN, CANDIDATURA_FIN_MAX } from "../../src/partilhado/candidaturaFin.js";
 
 /**
  * Validação por tipo de item do catálogo. Os campos conhecidos são validados;
@@ -41,10 +42,18 @@ const local = z.object({
   whatsapp: numeroOuVazio.optional(),
 }).passthrough();
 
+/** Programa da Financiada: o enquadramento que sai na ficha de inscrição e na folha de presenças das turmas dele. */
+const campoPrograma = z.string().trim().max(CANDIDATURA_FIN_MAX).optional();
+const programa = z.object({
+  nome: z.string().trim().min(1).max(120),
+  ...Object.fromEntries(CAMPOS_CANDIDATURA_FIN.map(({ chave }) => [chave, campoPrograma])),
+}).passthrough();
+
 const SCHEMAS: Record<string, z.ZodTypeAny> = {
   inscricoes_fin: inscricaoFin,
   inqueritos: inquerito,
   locais: local,
+  programas: programa,
 };
 
 /** Devolve a mensagem de erro, ou null se o payload é válido para o tipo. */

@@ -9,7 +9,7 @@ export type Opcao = { valor: string; rotulo: string; id?: number; regime?: Regim
 /** Tipos servidos por `GET /v1/opcoes/:kind` (server/src/repos/catalogos.ts). */
 export type KindOpcoes =
   | "cursos" | "turmas" | "formadores" | "locais" | "datas" | "horarios" | "areas" | "modulos" | "conteudos"
-  | "tematicas" | "financiadores" | "comerciais" | "campanhas" | "lista" | "modelos_conteudo";
+  | "tematicas" | "programas" | "financiadores" | "comerciais" | "campanhas" | "lista" | "modelos_conteudo";
 
 type OptsOpcoes = { regime?: Regime; lista?: string; todos?: boolean };
 type Pendente = { kind: KindOpcoes; resolver: (r: { kind: KindOpcoes; opcoes: Opcao[] }) => void; rejeitar: (e: unknown) => void };
@@ -52,7 +52,7 @@ export function apiOpcoes(kind: KindOpcoes, opts: OptsOpcoes = {}, signal?: Abor
 }
 
 /** Tipos de catálogo editáveis (`catalog_items.kind`). */
-export type KindCatalogo = "datas" | "locais" | "horarios" | "areas" | "modulos" | "conteudos" | "blog_tematicas";
+export type KindCatalogo = "datas" | "locais" | "horarios" | "areas" | "modulos" | "conteudos" | "blog_tematicas" | "programas";
 
 /** Um item do catálogo: os campos do payload, mais o uso contado no servidor (`turmas`, `cursos`, `posts`, …). */
 export type ItemCatalogo = { id: number; regime: Regime; uso: Record<string, number> } & Record<string, unknown>;

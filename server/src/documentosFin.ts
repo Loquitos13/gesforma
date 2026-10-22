@@ -193,7 +193,7 @@ async function logoDosDocumentos(db: Db): Promise<Imagem | null> {
 }
 
 export async function cabecalhoFin(db: Db, turma: TurmaReembolso): Promise<CabecalhoFin> {
-  const [entidade, candidatura, logo] = await Promise.all([lerEntidade(db), lerCandidatura(db), logoDosDocumentos(db)]);
+  const [entidade, candidatura, logo] = await Promise.all([lerEntidade(db), lerCandidatura(db, turma.programa), logoDosDocumentos(db)]);
   const ufcd = ufcdDaTurma(turma);
   return {
     entidade: entidade.nome,

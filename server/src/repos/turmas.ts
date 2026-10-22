@@ -371,6 +371,11 @@ export async function gravarNumeroAcao(c: Consulta, id: number, n: number) {
   await valor(c, "UPDATE turmas_fin SET numero_acao = $2 WHERE id = $1 RETURNING id", [id, n]);
 }
 
+/** Programa da Financiada (nome do item de Edição de cursos › Programas). */
+export async function gravarProgramaTurma(c: Consulta, id: number, programa: string) {
+  await valor(c, "UPDATE turmas_fin SET programa = $2 WHERE id = $1 RETURNING id", [id, programa.trim()]);
+}
+
 export async function gravarVagasAnunciadas(c: Consulta, regime: Regime, id: number, n: number | null) {
   await valor(c, `UPDATE ${tabelaRegime("turmas", regime)} SET vagas_anunciadas = $2 WHERE id = $1 RETURNING id`, [id, n]);
 }

@@ -1,5 +1,6 @@
 import type { Db } from "./db/pool.js";
 import { valoresDefinicao } from "./repos/configuracoes.js";
+import { one } from "./repos/sql.js";
 import { CAMPOS_CANDIDATURA_FIN, lerCandidaturaFin } from "../../src/partilhado/candidaturaFin.js";
 
 /**
@@ -128,9 +129,19 @@ export async function lerEntidade(db: Db) {
   return parseEntidade(await valores(db, "entidade"));
 }
 
-/** Candidatura da Financiada (Configurações › Financiada): programa e tipologias dos documentos da turma. */
-export async function lerCandidatura(db: Db) {
-  return lerCandidaturaFin(await valores(db, "candidatura_fin"));
+/**
+ * Programa e tipologias dos documentos de uma turma da Financiada: o programa escolhido na turma (Edição de cursos ›
+ * Programas); sem ele, o primeiro programa activo; sem programas, a candidatura antiga de Configurações › Financiada.
+ */
+export async function lerCandidatura(db: Db, programa = "") {
+  const p = await one<{ payload: Record<string, unknown> }>(db,
+    `SELECT payload FROM catalog_items
+      WHERE kind = 'programas' AND regime = 'fin'
+        AND (lower(trim(payload->>'nome')) = lower(trim($1))
+             OR coalesce(payload->>'status', 'Ativo') NOT IN ('Inactivo', 'Inativo', 'Arquivado'))
+      ORDER BY (lower(trim(payload->>'nome')) = lower(trim($1))) DESC, id
+      LIMIT 1`, [programa]);
+  return lerCandidaturaFin(p ? p.payload : await valores(db, "candidatura_fin"));
 }
 
 /** Contactos da entidade que podem sair para páginas públicas (sem NIF, IBAN nem titular). */

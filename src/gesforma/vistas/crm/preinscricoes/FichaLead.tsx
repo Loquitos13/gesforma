@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Aviso, Botao, ErroCarregar, Esqueleto, Estado, PainelLateral, Separadores, cx } from "../../../../partilhado/ui";
+import { Aviso, Botao, ErroCarregar, Esqueleto, Estado, Modal, Separadores, cx } from "../../../../partilhado/ui";
 import { apiDossie, apiNota, type DossieLead, type Lead } from "../../../../partilhado/api/crm";
 import { invalidar, useRecurso } from "../../../../partilhado/dados/useRecurso";
 import { useAuth } from "../../../../partilhado/AuthGate";
@@ -75,10 +75,10 @@ export function FichaLead({ id, lista, onFechar, onMudar }: {
   const passo = lead ? proximoPasso({ ...lead, validada: Boolean(d?.validadaEm), pagamentoPedido: d?.estadoPagamento === "pedido", percursoConcluido: d?.percursoConcluido }) : null;
 
   return (
-    <PainelLateral
+    <Modal
       aberto={id != null}
       onFechar={onFechar}
-      largura={600}
+      largura="lg"
       titulo={titulo}
       subtitulo={lead ? `${lead.curso || "Sem curso"} · ${lead.regime === "fin" ? "Financiada" : "Gold"} · #${lead.id}` : undefined}
       rodape={<>
@@ -147,6 +147,6 @@ export function FichaLead({ id, lista, onFechar, onMudar }: {
           {aba === "secretaria" && <FichaSecretaria d={d} role={user.role} onMudou={actualizado} />}
         </div>
       )}
-    </PainelLateral>
+    </Modal>
   );
 }

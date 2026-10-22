@@ -83,6 +83,8 @@ const turmaFinSchema = z.object({
   formadores: z.array(z.string().max(120)).max(12).optional().default([]),
   activa: z.boolean().optional().default(true),
   financiador: z.string().trim().max(120).optional(),
+  /** Programa da Financiada (Edição de cursos › Programas): o enquadramento dos documentos da turma. */
+  programa: z.string().trim().max(120).optional(),
   /** Número da ação (execução física: «UFCD … / Ação n»). */
   numeroAcao: z.number().int().min(1).max(9999).optional(),
   valoresHoraFormador: valoresHora.optional(),
@@ -351,6 +353,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     await repo.ligarCurso(db, "fin", id);
     if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "fin", id, d.vagasAnunciadas);
     if (d.numeroAcao !== undefined) await repo.gravarNumeroAcao(db, id, d.numeroAcao);
+    if (d.programa !== undefined) await repo.gravarProgramaTurma(db, id, d.programa);
     // Cada formador com horas e valor por hora passa a ter a sua despesa automática na turma.
     await sincronizarDespesasDaTurma(db, id);
     await importarPlanosCurso(db, "fin", id).catch(() => undefined);
@@ -410,6 +413,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if ("erro" in gravou) return reply.code(409).send({ error: gravou.erro });
     if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "fin", id, d.vagasAnunciadas);
     if (d.numeroAcao !== undefined) await repo.gravarNumeroAcao(db, id, d.numeroAcao);
+    if (d.programa !== undefined) await repo.gravarProgramaTurma(db, id, d.programa);
     if (d.nome && d.nome !== String(antes.nome ?? "")) await propagarNomeTurma(db, "fin", id, String(antes.nome ?? ""), d.nome);
     if (d.curso && d.curso !== String(antes.curso ?? "")) {
       await propagarCursoDaTurma(db, "fin", id, String(d.nome ?? antes.nome ?? ""), String(antes.curso ?? ""), d.curso);

@@ -224,6 +224,7 @@ export function mapTurmaFin(r: Record<string, unknown>) {
     toleranciaVagas: num(r.tolerancia_vagas),
     vagasAnunciadas: r.vagas_anunciadas == null ? null : num(r.vagas_anunciadas),
     numeroAcao: r.numero_acao == null ? 1 : num(r.numero_acao),
+    programa: String(r.programa ?? ""),
     estado: String(r.estado ?? "A montar"),
     horas: num(r.horas),
     formador: String(r.formador ?? ""),

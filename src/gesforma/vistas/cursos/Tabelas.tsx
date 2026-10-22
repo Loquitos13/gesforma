@@ -1,20 +1,22 @@
-// Datas, locais, horários e áreas temáticas: um ecrã com separadores; cada separador é uma rota do menu.
+// Datas, locais, programas (Financiada), horários e áreas temáticas: um ecrã com separadores; cada separador é uma rota do menu.
 import { useMemo } from "react";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { PageHeader, Separadores, data, eur } from "../../../partilhado/ui";
 import type { Vista } from "../../rotasGesforma";
 import type { VistaProps } from "../../shell/tipos";
 import { CatalogoTabela, type ConfigCatalogo } from "./CatalogoTabela";
+import { CAMPOS_CANDIDATURA_FIN, CANDIDATURA_FIN_OMISSAO } from "../../../partilhado/candidaturaFin";
 
-type Tabela = "datas" | "locais" | "horarios" | "areas";
+type Tabela = "datas" | "locais" | "programas" | "horarios" | "areas";
 
 const VISTAS: Record<"gold" | "fin", Partial<Record<Tabela, Vista>>> = {
   gold: { datas: "gold-datas", locais: "gold-locais", horarios: "gold-horarios", areas: "gold-areas-tematicas" },
-  fin: { datas: "fin-datas", locais: "fin-locais", areas: "fin-areas-tematicas" },
+  fin: { datas: "fin-datas", locais: "fin-locais", programas: "fin-programas", areas: "fin-areas-tematicas" },
 };
 
 function tabelaDaVista(view: Vista): Tabela {
   if (view.endsWith("locais")) return "locais";
+  if (view.endsWith("programas")) return "programas";
   if (view.endsWith("horarios")) return "horarios";
   if (view.endsWith("areas-tematicas")) return "areas";
   return "datas";
@@ -57,6 +59,23 @@ export default function Tabelas({ view, navigate }: VistaProps) {
         nota: regime === "gold"
           ? <p className="m-0 text-[13px] text-tinta-suave">Na pré-inscrição, o local só aparece se houver uma turma Gold libertada desse curso nesse polo.</p>
           : undefined,
+      };
+    }
+    if (tabela === "programas") {
+      return {
+        kind: "programas", regime: "fin", singular: "programa", plural: "programas", campoEstado: "status",
+        rotulo: i => txt(i.nome), pesquisa: i => CAMPOS_CANDIDATURA_FIN.map(c => txt(i[c.chave])).join(" ") + ` ${txt(i.nome)}`,
+        campos: [
+          { chave: "nome", rotulo: "Nome", obrigatorio: true, placeholder: "Ex.: PESSOAS 2030", ajuda: "Para escolher o programa na turma." },
+          ...CAMPOS_CANDIDATURA_FIN.map(c => ({ chave: c.chave, rotulo: c.rotulo, placeholder: CANDIDATURA_FIN_OMISSAO[c.chave] })),
+        ],
+        colunas: [
+          { id: "nome", titulo: "Programa", principal: true, celula: i => <span className="font-semibold">{txt(i.nome)}</span> },
+          { id: "prioridade", titulo: "Prioridade", esconderMovel: true, celula: i => <span className="text-tinta-suave">{txt(i.prioridade) || "—"}</span> },
+          { id: "tipologia", titulo: "Tipologia", esconderMovel: true, celula: i => <span className="text-tinta-suave">{txt(i.tipologia) || "—"}</span> },
+        ],
+        validar: (v, itens, id) => repetido(itens, id, "nome", v.nome, "Já existe um programa com esse nome."),
+        nota: <p className="m-0 text-[13px] text-tinta-suave">Programa, prioridade e tipologias saem na ficha de inscrição e na folha de presenças / sumário das turmas desse programa. Cada turma escolhe o seu programa.</p>,
       };
     }
     if (tabela === "horarios") {
@@ -122,14 +141,14 @@ export default function Tabelas({ view, navigate }: VistaProps) {
   }, [tabela, regime, cursos.selecao, locais.selecao, horarios.selecao]);
 
   const separadores = (Object.keys(VISTAS[regime]) as Tabela[]).map(id => ({
-    id, rotulo: { datas: "Datas", locais: "Locais", horarios: "Horários", areas: "Áreas temáticas" }[id],
+    id, rotulo: { datas: "Datas", locais: "Locais", programas: "Programas", horarios: "Horários", areas: "Áreas temáticas" }[id],
   }));
 
   return (
     <div className="space-y-5">
       <PageHeader
         trilho={[{ rotulo: regime === "gold" ? "Gold" : "Financiada" }, { rotulo: "Edição de cursos" }, { rotulo: separadores.find(s => s.id === tabela)?.rotulo ?? "" }]}
-        titulo="Datas, locais e áreas"
+        titulo={regime === "fin" ? "Datas, locais, programas e áreas" : "Datas, locais e áreas"}
         subtitulo="Tabelas de apoio dos cursos e das turmas. O uso de cada registo é contado nos dados reais."
       />
       <Separadores

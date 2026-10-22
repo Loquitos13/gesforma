@@ -6,7 +6,7 @@ import {
 import { invalidar } from "../../../partilhado/dados/useRecurso";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
-import { Aviso, Botao, Caixa, Campo, ConfirmarPerigo, Entrada, PainelLateral, Selecao } from "../../../partilhado/ui";
+import { Aviso, Botao, Caixa, Campo, ConfirmarPerigo, Entrada, Modal, Selecao } from "../../../partilhado/ui";
 import { rotuloCodigoCurso } from "../../../partilhado/codigoCurso";
 
 /** Documentos que a candidatura acompanha (os pontinhos da lista). */
@@ -98,12 +98,12 @@ export function InscricaoPainel({ alvo, onFechar, podeApagar, onAbrirFicha }: {
   }
 
   return (
-    <PainelLateral
+    <Modal
       aberto={Boolean(alvo)}
       onFechar={onFechar}
       titulo={editar ? `${editar.nome} ${editar.apelido}`.trim() : "Nova inscrição financiada"}
       subtitulo={editar ? [editar.ufcd && `${rotuloCodigoCurso(editar.ufcd)}`, editar.turma || "sem turma", editar.inscrito].filter(Boolean).join(" · ") : "Candidatura a uma UFCD."}
-      largura={520}
+      largura="md"
       rodape={(
         <>
           {editar && podeApagar && <Botao variante="fantasma" className="mr-auto" onClick={() => setApagar(true)}>Eliminar</Botao>}
@@ -147,6 +147,6 @@ export function InscricaoPainel({ alvo, onFechar, podeApagar, onAbrirFicha }: {
         titulo="Eliminar inscrição"
         descricao={editar ? `A candidatura de ${editar.nome} ${editar.apelido} sai das inscrições. A ficha do formando, se existir, fica.` : ""}
       />
-    </PainelLateral>
+    </Modal>
   );
 }

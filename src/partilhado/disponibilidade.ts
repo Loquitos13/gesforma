@@ -9,7 +9,7 @@ export type SlotId = (typeof SLOTS_CCP)[number]["id"];
 
 export const SLOTS_TODOS: SlotId[] = SLOTS_CCP.map(s => s.id);
 
-const JANELAS: Record<SlotId, { dias: number[]; inicio: number; fim: number }> = {
+export const JANELAS: Record<SlotId, { dias: number[]; inicio: number; fim: number }> = {
   laboral: { dias: [1, 2, 3, 4, 5], inicio: 9 * 60, fim: 13 * 60 },
   "pos-laboral": { dias: [1, 2, 3, 4, 5], inicio: 16 * 60 + 30, fim: 23 * 60 },
   "sabado-manha": { dias: [6], inicio: 9 * 60, fim: 13 * 60 },

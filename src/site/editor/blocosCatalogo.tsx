@@ -51,18 +51,21 @@ function LinhaCurso({ c, guardado, comparado, onGuardar, onComparar, guardar, co
   const { abrir } = useInscricaoOpcional();
   const gold = c.funding === "Gold";
   return (
-    <article className="group grid overflow-hidden border border-[var(--c-primaria)]/12 bg-white transition-shadow hover:shadow-[0_18px_40px_rgba(28,51,80,.14)] md:grid-cols-[12px_148px_minmax(0,1fr)_auto] md:items-stretch">
-      <div style={{ background: gold ? "var(--c-acento)" : "var(--c-destaque)" }} />
-      <div className="relative hidden min-h-36 overflow-hidden bg-[#E7EBF0] md:block">
-        {c.miniatura && <img src={c.miniatura} alt="" className="absolute inset-0 h-full w-full object-cover" />}
-      </div>
+    <article className="group grid overflow-hidden border border-[var(--c-primaria)]/12 bg-white transition-shadow hover:shadow-[0_18px_40px_rgba(28,51,80,.14)] md:grid-cols-[12px_220px_minmax(0,1fr)_auto] lg:grid-cols-[12px_300px_minmax(0,1fr)_auto] md:items-stretch">
+      <div className="h-1.5 md:h-auto" style={{ background: gold ? "var(--c-acento)" : "var(--c-destaque)" }} />
+      {/* Fotografia larga, com a modalidade e o regime em cima (as cores já distinguem, a etiqueta diz o nome). */}
+      <a href={`/formacao/${c.id}`} tabIndex={-1} aria-hidden="true" className="relative block aspect-[16/9] overflow-hidden bg-[#E7EBF0] md:aspect-auto md:min-h-44">
+        {(c.capa || c.miniatura) && <img src={c.capa || c.miniatura || ""} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />}
+        <span className="absolute left-3 top-3 flex flex-wrap gap-1.5">
+          {c.format && <span className="bg-[#14263D] px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.1em] text-white">{c.format}</span>}
+          <span className="px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.1em]" style={gold ? { background: "var(--c-acento)", color: "#14263D" } : { background: "var(--c-destaque)", color: "#fff" }}>{gold ? "Gold" : "Financiada"}</span>
+        </span>
+      </a>
       <div className="p-6">
         {(etiquetas || guardar) && <div className="flex flex-wrap items-center gap-3">
           {etiquetas && <>
-          <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider" style={gold ? { background: "#FFF1D1" } : { background: "#F1E5E5", color: "var(--c-destaque)" }}>{gold ? "ENA Gold" : "Financiada"}</span>
           <span className="text-[10px] font-bold uppercase tracking-wider opacity-50">{c.enrollment}</span>
           <span className="text-xs font-bold uppercase tracking-wider text-[var(--c-destaque)]">{c.area}</span>
-          <span className="text-xs font-bold opacity-55">{c.format}</span>
           </>}
           {guardar && <button type="button" onClick={onGuardar} className={`ml-auto text-xs font-bold ${guardado ? "text-[var(--c-destaque)]" : "opacity-45"}`}>{guardado ? "Guardado" : "Guardar"}</button>}
         </div>}

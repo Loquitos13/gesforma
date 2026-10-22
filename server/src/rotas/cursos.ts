@@ -54,7 +54,7 @@ const listaQuery = z.object({
 const fichaSchema = z.object({
   // O payload é livre; só se validam os campos com valores fechados.
   payload: z.record(z.unknown())
-    .refine(p => p.regimeSincronia === undefined || ["", "sincrono", "assincrono"].includes(String(p.regimeSincronia)), "Regime: síncrono ou assíncrono.")
+    .refine(p => p.regimeSincronia === undefined || ["", "sincrono", "assincrono", "misto"].includes(String(p.regimeSincronia)), "Regime: síncrono, assíncrono ou misto.")
     .refine(p => p.organizacaoPrograma === undefined || p.organizacaoPrograma === "modular" || p.organizacaoPrograma === "livre", "Tipo de programa: modular ou livre.")
     .refine(p => p.resumo === undefined || (typeof p.resumo === "string" && p.resumo.trim().length <= RESUMO_MAX), `Texto de destaque (catálogo): até ${RESUMO_MAX} caracteres.`)
     .refine(p => p.sintese === undefined || (typeof p.sintese === "string" && p.sintese.length <= SINTESE_MAX), `Texto completo (ficha do curso): até ${SINTESE_MAX} caracteres.`)

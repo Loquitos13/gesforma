@@ -107,7 +107,10 @@ export function FichaLead({ id, lista, onFechar, onMudar }: {
           {passo && (
             <div className="rounded-cartao border border-linha bg-fundo px-4 py-3">
               <p className="m-0 text-xs font-semibold uppercase tracking-wide text-tinta-suave">Próximo passo</p>
-              <p className="m-0 mt-1 text-sm font-semibold">{d.faltaValidar && !d.validadaEm && lead.estado !== "Não contactado" ? d.faltaValidar : passo.texto}</p>
+              <p className="m-0 mt-1 text-sm font-semibold">{!d.validadaEm && lead.estado !== "Não contactado"
+                ? d.faltaValidar || (lead.estado === "Formando" || lead.estado === "Desistiu" ? passo.texto
+                  : lead.regime === "fin" ? "Pronta a validar: escolha a turma no separador Validação." : "Pronta a validar no separador Validação.")
+                : passo.texto}</p>
             </div>
           )}
 

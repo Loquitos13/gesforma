@@ -190,13 +190,15 @@ export function faltaPedirPagamento(input: Parameters<typeof faltaValidarPreinsc
 
 function faltaDocsValidados(input: Parameters<typeof faltaValidarPreinscricao>[0]) {
   if (input.validada) return "A pré-inscrição já foi validada.";
-  if (!input.concluido) return "A pessoa ainda não concluiu o envio dos documentos na ligação pessoal.";
-  if (!input.turma && !input.turmaPelaSecretaria) return "Ainda não há cronograma escolhido.";
-  if (input.turma && input.turma.livres <= 0) return "A turma escolhida está cheia.";
   const by = new Map(input.ficheiros.map(f => [f.tipo, f.estado || "pendente"]));
   const faltam = input.pedidos
     .filter(d => d.required && d.id !== COMPROVATIVO.id && by.get(d.id) !== "validado")
     .map(d => d.label);
+  // Com todos os documentos obrigatórios validados pela secretaria, o «Concluir» da ligação pessoal já não faz falta
+  // (ex.: a pessoa reenviou um documento recusado e não voltou a concluir).
+  if (!input.concluido && faltam.length) return "A pessoa ainda não concluiu o envio dos documentos na ligação pessoal.";
+  if (!input.turma && !input.turmaPelaSecretaria) return "Ainda não há cronograma escolhido.";
+  if (input.turma && input.turma.livres <= 0) return "A turma escolhida está cheia.";
   if (faltam.length) return `Falta validar: ${faltam.join(", ")}.`;
   return "";
 }

@@ -3,7 +3,7 @@
 import { useContext, useMemo, useState, type ComponentType, type CSSProperties } from "react";
 import type { ComponentConfig, Field, Slot } from "@puckeditor/core";
 import { OfertaCtx, type Course } from "../SiteLanding";
-import { campoCor, campoCurso, campoImagem, campoMarcas, campoNumero, nomesCursos, simNao } from "./campos";
+import { campoCor, campoCurso, campoImagem, campoMarcas, campoNumero, campoOrdemCursos, nomesCursos, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { corSegura, estiloBloco, estiloTexto, estiloVazio, juntar, ligacaoSegura, tipoVazia, type Estilo, type Tipografia } from "./estilos";
 import { ajudaVariaveis, preencherVariaveis, variaveisCurso } from "./blocosCurso";
@@ -21,6 +21,9 @@ export const INFO_CARTAO = [
   { valor: "botao", rotulo: "Botão" },
 ] as const;
 type Info = typeof INFO_CARTAO[number]["valor"];
+
+/** Etiquetas que todos os cartões de curso mostram: modalidade (E-learning, B-learning, Presencial) e regime. */
+const SEMPRE_VISIVEL: Info[] = ["formato", "regime"];
 
 export type EstiloCartao = {
   formato: "vertical" | "horizontal" | "sobreposto" | "compacto" | "lista";
@@ -70,7 +73,8 @@ export const campoCartao = (label = "Cartão do curso"): Field => ({
         { label: "Texto sobre a imagem", value: "sobreposto" }, { label: "Compacto", value: "compacto" }, { label: "Lista (linha)", value: "lista" },
       ],
     },
-    mostrar: campoMarcas("Informação visível", INFO_CARTAO),
+    // A modalidade e o Gold / Financiada aparecem sempre (pedido do cliente): não se desligam no painel.
+    mostrar: campoMarcas("Informação visível", INFO_CARTAO.filter(i => !SEMPRE_VISIVEL.includes(i.valor))),
     proporcao: { type: "select", label: "Proporção da imagem", options: [{ label: "16:9", value: "16/9" }, { label: "3:2", value: "3/2" }, { label: "4:3", value: "4/3" }, { label: "Quadrada", value: "1/1" }] },
     linhasDescricao: campoNumero("Linhas da descrição (1 a 4)", ""),
     textoBotao: { type: "text", label: "Texto do botão" },
@@ -125,7 +129,7 @@ export type ExtraCartao = { etiqueta?: string; botao?: string; ligacao?: string;
 const SOBREPOR_ANIMACAO = [{ label: "Igual aos outros cartões", value: "" }, { label: "Sem animação", value: "nenhuma" }];
 
 export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: EstiloCartao; extra?: ExtraCartao; ordem?: CSSProperties }) {
-  const ver = new Set(e.mostrar ?? []);
+  const ver = new Set<Info>([...(e.mostrar ?? []), ...SEMPRE_VISIVEL]);
   const doCurso = curso.id ? e.porCurso?.find(x => x.cursoId === curso.id) : undefined;
   const vars = variaveisCurso(curso, "");
   const textoCartao = (proprio: string | undefined, geral: string | undefined, original: string) =>
@@ -263,7 +267,7 @@ function Estado({ estado, recarregar }: { estado: string; recarregar?: () => voi
 
 /** Um cartão em destaque: um curso, com imagem e textos que podem substituir os do curso (ou um cartão livre). */
 type ItemDestaque = { cursoId: string; imagem?: string; titulo?: string; texto?: string; etiqueta?: string; botao?: string; ligacao?: string; corBotao?: string; corTextoBotao?: string; animacao?: string; animacaoBotao?: string };
-type DestaqueProps = { modo: "escolhidos" | "automatico"; cursos: ItemDestaque[]; limite: number | null; cartao: EstiloCartao; aparencia: Estilo };
+type DestaqueProps = { modo: "lista" | "escolhidos" | "automatico"; ordem: string[]; cursos: ItemDestaque[]; limite: number | null; cartao: EstiloCartao; aparencia: Estilo };
 
 /** Curso vazio, para cartões livres (sem curso): só mostram o que se escreve no cartão. */
 const CURSO_LIVRE: Course = {
@@ -288,7 +292,15 @@ function cartaoDe(x: ItemDestaque, curso: Course | undefined): Course | null {
 export const CursosDestaque: ComponentConfig<DestaqueProps> = {
   label: "Cursos em destaque",
   fields: {
-    modo: { type: "radio", label: "Que cursos", options: [{ label: "Escolhidos por mim", value: "escolhidos" }, { label: "Os mais procurados", value: "automatico" }] },
+    modo: {
+      type: "radio", label: "Que cursos",
+      options: [
+        { label: "Escolher e ordenar na lista de cursos", value: "lista" },
+        { label: "Cartões personalizados", value: "escolhidos" },
+        { label: "Os mais procurados", value: "automatico" },
+      ],
+    },
+    ordem: campoOrdemCursos("Cursos em destaque (Gold e Financiada)"),
     cursos: {
       type: "array", label: "Cursos (arraste para mudar a ordem)",
       arrayFields: {
@@ -313,23 +325,26 @@ export const CursosDestaque: ComponentConfig<DestaqueProps> = {
   },
   resolveFields: (data, { fields }) => {
     const f = { ...fields } as Record<string, Field>;
-    if (data.props.modo === "automatico") delete f.cursos; else delete f.limite;
+    if (data.props.modo !== "escolhidos") delete f.cursos;
+    if (data.props.modo !== "automatico") delete f.limite;
+    if (data.props.modo !== "lista") delete f.ordem;
     return f as typeof fields;
   },
-  defaultProps: { modo: "escolhidos", cursos: [], limite: 6, cartao: cartaoPadrao(), aparencia: estiloVazio() },
-  render: ({ puck, modo, cursos: escolhidos, limite, cartao, aparencia }) => {
+  defaultProps: { modo: "lista", ordem: [], cursos: [], limite: 6, cartao: cartaoPadrao(), aparencia: estiloVazio() },
+  render: ({ puck, modo, ordem, cursos: escolhidos, limite, cartao, aparencia }) => {
     const { cursos, destaques, estado, recarregar } = useCursos();
     const { lista, extras } = useMemo(() => {
       if (modo === "automatico") return { lista: destaques.slice(0, Math.max(1, limite ?? 6)), extras: [] as ExtraCartao[] };
       const porId = new Map(cursos.map(c => [c.id, c]));
+      if (modo === "lista") return { lista: (ordem ?? []).map(id => porId.get(id)).filter((c): c is Course => Boolean(c)), extras: [] as ExtraCartao[] };
       const itens = (escolhidos ?? []).map(x => ({ x, c: cartaoDe(x, porId.get(x.cursoId)) })).filter(i => i.c);
       return { lista: itens.map(i => i.c!), extras: itens.map(({ x }) => ({ etiqueta: x.etiqueta, botao: x.botao, ligacao: x.ligacao, corBotao: x.corBotao, corTextoBotao: x.corTextoBotao, animacao: x.animacao, animacaoBotao: x.animacaoBotao })) };
-    }, [modo, escolhidos, limite, cursos, destaques]);
+    }, [modo, ordem, escolhidos, limite, cursos, destaques]);
     const c = estiloBloco(aparencia);
     return (
       <div ref={puck?.dragRef ?? undefined} className={c.className} style={c.style}>
         {estado === "pronto"
-          ? <Grelha cursos={lista} extras={extras} e={cartao} vazio={modo === "escolhidos" ? "Escolha os cursos em destaque no painel." : "Ainda não há cursos publicados."} />
+          ? <Grelha cursos={lista} extras={extras} e={cartao} vazio={modo === "automatico" ? "Ainda não há cursos publicados." : "Escolha os cursos em destaque no painel."} />
           : <Estado estado={estado} recarregar={recarregar} />}
       </div>
     );

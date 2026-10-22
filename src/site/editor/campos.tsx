@@ -256,3 +256,85 @@ export function campoMarcas<K extends string>(label: string, opcoes: readonly { 
 }
 
 export const simNao = (label: string): Field => ({ type: "radio", label, options: [{ label: "Sim", value: true }, { label: "Não", value: false }] });
+
+/**
+ * Cursos em destaque escolhidos e ordenados numa lista de todos os cursos publicados (Gold e Financiada):
+ * os escolhidos ficam em cima, por ordem, e arrastam-se (ou sobem/descem com as setas); os outros acrescentam-se.
+ */
+export function campoOrdemCursos(label: string): CustomField<string[]> {
+  return {
+    type: "custom",
+    label,
+    render: ({ value, onChange }) => <CampoOrdemCursos label={label} value={value ?? []} onChange={onChange} />,
+  };
+}
+
+function CampoOrdemCursos({ label, value, onChange }: { label: string; value: string[]; onChange: (v: string[]) => void }) {
+  const oferta = useContext(OfertaCtx);
+  const cursos = oferta?.cursos ?? [];
+  for (const c of cursos) nomesCursos.set(c.id, c.title);
+  const [filtro, setFiltro] = useState<"todos" | "gold" | "fin">("todos");
+  const [arrastar, setArrastar] = useState<number | null>(null);
+  const porId = new Map(cursos.map(c => [c.id, c]));
+  const escolhidos = value.filter((id, i) => value.indexOf(id) === i);
+  const outros = cursos.filter(c => !escolhidos.includes(c.id) && (filtro === "todos" || c.regime === filtro));
+  const mover = (de: number, para: number) => {
+    if (para < 0 || para >= escolhidos.length || de === para) return;
+    const n = [...escolhidos];
+    const [x] = n.splice(de, 1);
+    n.splice(para, 0, x!);
+    onChange(n);
+  };
+  const etiqueta = (regime: string) => (
+    <span className={`shrink-0 rounded px-1 text-[10px] font-bold ${regime === "gold" ? "bg-[#fff1d1] text-[#7a5200]" : "bg-[#f1e5e5] text-[#8a1c1c]"}`}>{regime === "gold" ? "Gold" : "Fin"}</span>
+  );
+  const botao = "rounded px-1 text-[12px] text-[#3d4a5a] hover:bg-[#eef1f5] disabled:opacity-30";
+  return (
+    <Rotulo texto={label}>
+      <p className="mb-1 text-[11px] text-[#5b6675]">Em destaque, por esta ordem (arraste para mudar):</p>
+      {escolhidos.length === 0 && (
+        <div className="mb-2 rounded border border-dashed border-[#d4d8de] px-2 py-2 text-[12px] text-[#5b6675]">
+          Nenhum curso escolhido. Acrescente-os na lista em baixo
+          {(oferta?.destaques?.length ?? 0) > 0 && <> ou <button type="button" className="font-semibold text-[#3b6fd8] underline" onClick={() => onChange(oferta!.destaques.map(c => c.id))}>comece pelos mais procurados</button></>}.
+        </div>
+      )}
+      <ol className="mb-3 space-y-1">
+        {escolhidos.map((id, i) => {
+          const c = porId.get(id);
+          return (
+            <li key={id} draggable
+              onDragStart={e => { setArrastar(i); e.dataTransfer.effectAllowed = "move"; }}
+              onDragOver={e => { e.preventDefault(); if (arrastar != null && arrastar !== i) { mover(arrastar, i); setArrastar(i); } }}
+              onDragEnd={() => setArrastar(null)}
+              className={`flex items-center gap-1.5 rounded border bg-white px-1.5 py-1 text-[12px] ${arrastar === i ? "border-[#3b6fd8] opacity-60" : "border-[#d4d8de]"}`}>
+              <span aria-hidden="true" className="cursor-grab select-none text-[#8a94a3]">⋮⋮</span>
+              <span className="w-4 shrink-0 text-right tabular-nums text-[#8a94a3]">{i + 1}.</span>
+              <span className={`min-w-0 flex-1 truncate ${c ? "text-[#1c2633]" : "text-[#a60000]"}`} title={c?.title}>{c ? c.title : "Curso fora da oferta"}</span>
+              {c && etiqueta(c.regime)}
+              <button type="button" className={botao} disabled={i === 0} onClick={() => mover(i, i - 1)} aria-label="Subir">↑</button>
+              <button type="button" className={botao} disabled={i === escolhidos.length - 1} onClick={() => mover(i, i + 1)} aria-label="Descer">↓</button>
+              <button type="button" className={botao} onClick={() => onChange(escolhidos.filter(x => x !== id))} aria-label="Tirar dos destaques">✕</button>
+            </li>
+          );
+        })}
+      </ol>
+      <div className="mb-1 flex items-center gap-1">
+        <span className="mr-auto text-[11px] text-[#5b6675]">Outros cursos</span>
+        {([["todos", "Todos"], ["gold", "Gold"], ["fin", "Financiada"]] as const).map(([v, r]) => (
+          <button key={v} type="button" onClick={() => setFiltro(v)}
+            className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${filtro === v ? "bg-[#1c2633] text-white" : "text-[#3d4a5a] hover:bg-[#eef1f5]"}`}>{r}</button>
+        ))}
+      </div>
+      <ul className="max-h-56 space-y-1 overflow-y-auto">
+        {outros.map(c => (
+          <li key={c.id} className="flex items-center gap-1.5 rounded border border-[#e4e7eb] px-1.5 py-1 text-[12px]">
+            <span className="min-w-0 flex-1 truncate text-[#3d4a5a]" title={c.title}>{c.title}</span>
+            {etiqueta(c.regime)}
+            <button type="button" className="rounded px-1.5 text-[11px] font-semibold text-[#3b6fd8] hover:bg-[#eef1f5]" onClick={() => onChange([...escolhidos, c.id])}>+ Destacar</button>
+          </li>
+        ))}
+        {outros.length === 0 && <li className="text-[11px] text-[#5b6675]">{oferta?.estado === "pronto" ? "Sem mais cursos." : "A carregar os cursos…"}</li>}
+      </ul>
+    </Rotulo>
+  );
+}

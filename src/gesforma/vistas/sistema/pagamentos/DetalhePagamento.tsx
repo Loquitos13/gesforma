@@ -1,4 +1,4 @@
-// Painel lateral de um pagamento: dados, comprovativo e as acções que dependem da situação.
+// Modal de um pagamento: dados, comprovativo e as acções que dependem da situação.
 import { useState } from "react";
 import { useAuth } from "../../../../partilhado/AuthGate";
 import {
@@ -8,8 +8,7 @@ import {
 import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { useRecurso } from "../../../../partilhado/dados/useRecurso";
 import {
-  AreaTexto, Aviso, Botao, BotaoLigacao, Campo, ConfirmarPerigo, Detalhes, ErroCarregar, Esqueleto, Estado, Modal, PainelLateral,
-  data, dataHora, eur, type Tom,
+  AreaTexto, Aviso, Botao, BotaoLigacao, Campo, ConfirmarPerigo, Detalhes, ErroCarregar, Esqueleto, Estado, Modal, data, dataHora, eur, type Tom,
 } from "../../../../partilhado/ui";
 import type { Navegar } from "../../../shell/tipos";
 import { ReciboPagamento } from "./ReciboPagamento";
@@ -50,7 +49,7 @@ export function DetalhePagamento({ id, onFechar, podeConfirmar, navigate }: {
   const percurso = Boolean(p?.lead_id && p.pedido_em);
 
   return (
-    <PainelLateral
+    <Modal
       aberto={Boolean(id)}
       onFechar={onFechar}
       titulo={p ? p.nome : "Pagamento"}
@@ -181,6 +180,6 @@ export function DetalhePagamento({ id, onFechar, podeConfirmar, navigate }: {
           recarregar();
         }}
       />
-    </PainelLateral>
+    </Modal>
   );
 }

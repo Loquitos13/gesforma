@@ -4,7 +4,7 @@ import { apiApagarItem, apiCatalogo, apiCriarItem, apiEditarItem, textoUso, tota
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import {
-  AreaTexto, Aviso, Botao, Campo, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Estado, Filtros, Interruptor, PainelLateral, Selecao, Tabela, Vazio,
+  AreaTexto, Aviso, Botao, Campo, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Estado, Filtros, Interruptor, Modal, Selecao, Tabela, Vazio,
   useFiltrosUrl, type Coluna, type OpcaoSelecao,
 } from "../../../partilhado/ui";
 
@@ -215,7 +215,7 @@ function EditorItem({ config, item, itens, inicial, onFechar }: {
 
   const ativo = ATIVO(valores[config.campoEstado]);
   return (
-    <PainelLateral
+    <Modal
       aberto
       onFechar={onFechar}
       titulo={item ? config.rotulo(item) || `Editar ${config.singular}` : `Novo ${config.singular}`}
@@ -257,7 +257,7 @@ function EditorItem({ config, item, itens, inicial, onFechar }: {
           <Interruptor rotulo="Activo" ligado={ativo} onMudar={v => setValores(x => ({ ...x, [config.campoEstado]: v ? "Ativo" : "Inactivo" }))} />
         </div>
       </form>
-    </PainelLateral>
+    </Modal>
   );
 }
 

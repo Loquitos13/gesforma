@@ -1,6 +1,6 @@
 // Peças da vista geral do Dossiê TP: célula de secção, barra de %, legenda e painel da turma.
 import type { EstadoSeccao, Regime, SeccaoDtp, TurmaDtp } from "../../../partilhado/api/dtp";
-import { Botao, Cartao, Estado, PainelLateral, Vazio, cx, type Tom } from "../../../partilhado/ui";
+import { Botao, Cartao, Estado, Modal, Vazio, cx, type Tom } from "../../../partilhado/ui";
 
 // Cores da matriz como no canvas: quadrados cheios, o número fica na dica.
 const ESTADOS: Record<EstadoSeccao, { rotulo: string; classe: string; tom: Tom }> = {
@@ -65,7 +65,7 @@ export function PainelTurmaDtp({ turma, seccoes, aExportar, onFechar, onAbrir, o
     .map(s => ({ seccao: s, itens: (turma?.emFalta ?? []).filter(i => i.seccao === s.id) }))
     .filter(g => g.itens.length);
   return (
-    <PainelLateral
+    <Modal
       aberto={Boolean(turma)}
       onFechar={onFechar}
       titulo={turma?.nome ?? ""}
@@ -111,6 +111,6 @@ export function PainelTurmaDtp({ turma, seccoes, aExportar, onFechar, onAbrir, o
           </div>
         )
       )}
-    </PainelLateral>
+    </Modal>
   );
 }

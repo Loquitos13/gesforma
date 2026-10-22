@@ -7,7 +7,7 @@ export { Campo, Entrada, AreaTexto, Selecao, Caixa, Interruptor, type OpcaoSelec
 export { Filtros, useFiltrosUrl, type FiltroSelecao } from "./Filtros";
 export { Tabela, type Coluna } from "./Tabela";
 export { Paginacao } from "./Paginacao";
-export { Modal, PainelLateral, ConfirmarPerigo } from "./Dialogos";
+export { Modal, ConfirmarPerigo } from "./Dialogos";
 export { Vazio, Esqueleto, ErroCarregar, Aviso } from "./Estados";
 export { PageHeader, Migalhas, type Migalha } from "./PageHeader";
 export { Kpi, KpiFaixa } from "./Kpi";

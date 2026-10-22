@@ -6,7 +6,7 @@ import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { invalidar, useRecurso } from "../../../../partilhado/dados/useRecurso";
 import { toastError } from "../../../../partilhado/toastBus";
 import {
-  Aviso, Botao, ErroCarregar, Esqueleto, Estado, PainelLateral, Selecao, Separadores, Vazio, eur, num,
+  Aviso, Botao, ErroCarregar, Esqueleto, Estado, Modal, Selecao, Separadores, Vazio, eur, num,
 } from "../../../../partilhado/ui";
 import { ESTADO_APOIO, exportarApoios, mesAtual, nomeMes } from "./comum";
 import { INVALIDAR_APOIOS, MarcarPago } from "./dialogos";
@@ -98,10 +98,10 @@ export function ProcessarApoios({ turma, aberto, onFechar }: {
   );
 
   return (
-    <PainelLateral
+    <Modal
       aberto={aberto}
       onFechar={onFechar}
-      largura={720}
+      largura="lg"
       titulo="Apoios da turma"
       subtitulo={turma?.nome}
       rodape={rodape}
@@ -182,7 +182,7 @@ export function ProcessarApoios({ turma, aberto, onFechar }: {
           }
         }}
       />
-    </PainelLateral>
+    </Modal>
   );
 }
 

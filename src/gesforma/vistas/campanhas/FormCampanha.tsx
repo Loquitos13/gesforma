@@ -6,7 +6,7 @@ import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { invalidar } from "../../../partilhado/dados/useRecurso";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
-import { AreaTexto, Botao, Campo, ConfirmarPerigo, Entrada, PainelLateral, Selecao, num } from "../../../partilhado/ui";
+import { AreaTexto, Botao, Campo, ConfirmarPerigo, Entrada, Modal, Selecao, num } from "../../../partilhado/ui";
 import { numeroDe } from "../crm/comum";
 import { hojeLisboa } from "../../../partilhado/horaLisboa";
 
@@ -50,7 +50,7 @@ export function FormCampanha({ campanha, onFechar, onGravada }: { campanha: Camp
   const nomesResp = responsaveis.opcoes.map(o => ({ valor: o.rotulo, rotulo: o.rotulo }));
 
   return (
-    <PainelLateral
+    <Modal
       aberto={Boolean(campanha)}
       onFechar={onFechar}
       titulo={editar ? "Editar campanha" : "Nova campanha"}
@@ -77,7 +77,7 @@ export function FormCampanha({ campanha, onFechar, onGravada }: { campanha: Camp
           {p => <AreaTexto {...p} value={d.notas} onChange={e => setD({ ...d, notas: e.target.value })} placeholder="Público, criativo, orçamento diário…" />}
         </Campo>
       </div>
-    </PainelLateral>
+    </Modal>
   );
 }
 

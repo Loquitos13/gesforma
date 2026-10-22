@@ -4,7 +4,7 @@ import { apiAlterarFormador, apiCriarFormador, apiJuntarRegimeFormador, type Ace
 import { DisponibilidadeEditor } from "../../../partilhado/DisponibilidadeEditor";
 import { SLOTS_TODOS } from "../../../partilhado/disponibilidade";
 import { toastError } from "../../../partilhado/toastBus";
-import { Aviso, Botao, Caixa, Campo, Entrada, Interruptor, PainelLateral } from "../../../partilhado/ui";
+import { Aviso, Botao, Caixa, Campo, Entrada, Interruptor, Modal } from "../../../partilhado/ui";
 
 const novo = (regime: Regime): DadosFormador => ({
   nome: "", telf: "", email: "", especialidade: "", ccp: "", ccpValidade: "", nif: "", regimes: [regime],
@@ -79,12 +79,12 @@ export function FormadorFormulario({ aberto, regime, formador, especialidades, o
   }
 
   return (
-    <PainelLateral
+    <Modal
       aberto={aberto}
       onFechar={onFechar}
       titulo={formador ? `Editar ${formador.nome}` : "Novo formador"}
       subtitulo={formador ? "Dados, CCP, valor por hora e disponibilidade." : "Com email, cria-se também a conta de acesso à área do formador."}
-      largura={540}
+      largura="lg"
       rodape={(
         <>
           <Botao variante="secundario" onClick={onFechar}>Cancelar</Botao>
@@ -150,6 +150,6 @@ export function FormadorFormulario({ aberto, regime, formador, especialidades, o
         </div>
         <Interruptor ligado={d.estado === "Ativo"} onMudar={v => mudar({ estado: v ? "Ativo" : "Inactivo" })} rotulo="Formador ativo" />
       </div>
-    </PainelLateral>
+    </Modal>
   );
 }

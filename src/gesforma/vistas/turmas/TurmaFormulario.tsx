@@ -7,7 +7,7 @@ import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { codigoInternoTurma, proximoNomeTurma } from "../../../partilhado/turmaCodigo";
 import type { SessaoCronograma } from "../../../partilhado/turmaModel";
 import { toastError } from "../../../partilhado/toastBus";
-import { Aviso, Botao, Campo, Chip, Entrada, ErroCarregar, Esqueleto, Interruptor, PainelLateral, Selecao } from "../../../partilhado/ui";
+import { Aviso, Botao, Campo, Chip, Entrada, ErroCarregar, Esqueleto, Interruptor, Modal, Selecao } from "../../../partilhado/ui";
 import { CronogramaEditor } from "../../CronogramaEditor";
 import { ValoresHoraFormador } from "../../ValoresHoraFormador";
 import { useAuth } from "../../../partilhado/AuthGate";
@@ -127,12 +127,12 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
   const titulo = editar ? `Editar ${gravada.dados?.turma.nome ?? "turma"}` : fin ? "Nova turma financiada" : "Nova turma Gold";
   const aCarregar = editar && !gravada.dados && !gravada.erro;
   return (
-    <PainelLateral
+    <Modal
       aberto={aberto}
       onFechar={onFechar}
       titulo={titulo}
       subtitulo={fin ? "Curso ou UFCD, local, horário e data de início. Sessões de 3 horas." : "Curso, local, horário e data de início. Só com inscrições abertas aparece no site e no WhatsApp."}
-      largura={editar ? 720 : 520}
+      largura="lg"
       rodape={(
         <>
           <Botao variante="secundario" onClick={onFechar}>Cancelar</Botao>
@@ -239,6 +239,6 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
           )}
         </div>
       )}
-    </PainelLateral>
+    </Modal>
   );
 }

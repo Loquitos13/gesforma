@@ -76,45 +76,6 @@ export function Modal({ aberto, onFechar, titulo, subtitulo, children, rodape, l
   );
 }
 
-/** Painel que entra pela direita (detalhe, edição rápida). No telemóvel ocupa o ecrã. */
-export function PainelLateral({ aberto, onFechar, titulo, subtitulo, children, rodape, largura = 480 }: {
-  aberto: boolean;
-  onFechar: () => void;
-  titulo: ReactNode;
-  subtitulo?: ReactNode;
-  children: ReactNode;
-  rodape?: ReactNode;
-  largura?: number;
-}) {
-  const caixa = useDialogo(aberto, onFechar);
-  const id = useId();
-  if (!aberto) return null;
-  return createPortal(
-    <div className="fixed inset-0 z-[55] bg-nav/30" onMouseDown={e => { if (e.target === e.currentTarget) onFechar(); }}>
-      <aside
-        ref={caixa}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={id}
-        tabIndex={-1}
-        style={{ maxWidth: largura }}
-        className="absolute right-0 top-0 h-full w-full bg-superficie shadow-flutuante flex flex-col outline-none"
-      >
-        <div className="flex items-start gap-3 px-5 py-4 border-b border-linha">
-          <div className="flex-1 min-w-0">
-            <h2 id={id} className="m-0 text-base font-semibold text-tinta">{titulo}</h2>
-            {subtitulo && <p className="m-0 mt-0.5 text-[13px] text-tinta-suave">{subtitulo}</p>}
-          </div>
-          <Botao variante="fantasma" tamanho="sm" soIcone aria-label="Fechar" onClick={onFechar} icone={<span aria-hidden="true" className="text-lg leading-none">×</span>} />
-        </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
-        {rodape && <div className="flex flex-wrap justify-end gap-2 px-5 py-4 border-t border-linha">{rodape}</div>}
-      </aside>
-    </div>,
-    document.body,
-  );
-}
-
 /**
  * Confirmação de uma acção destrutiva. Com `confirmarTexto`, a pessoa tem de escrever
  * esse texto (ex.: o nome) antes de poder confirmar.

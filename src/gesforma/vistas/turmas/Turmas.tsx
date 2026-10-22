@@ -8,7 +8,7 @@ import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { invalidar, useRecurso } from "../../../partilhado/dados/useRecurso";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
 import {
-  Botao, Cartao, ConfirmarPerigo, ErroCarregar, Estado, Filtros, PageHeader, Paginacao, PainelLateral, Separadores, Tabela, TOM_CLASSES,
+  Botao, Cartao, ConfirmarPerigo, ErroCarregar, Estado, Filtros, PageHeader, Paginacao, Modal, Separadores, Tabela, TOM_CLASSES,
   cx, data, num, useFiltrosUrl, type Coluna,
 } from "../../../partilhado/ui";
 import { TurmaRegrasPanel } from "../../TurmaRegrasPanel";
@@ -253,9 +253,9 @@ export default function Turmas({ view, navigate }: VistaProps) {
       />
       {fin && <ProcessarApoios turma={apoios} aberto={Boolean(apoios)} onFechar={() => setApoios(null)} />}
       {fin && (
-        <PainelLateral aberto={regrasApoios} onFechar={() => setRegrasApoios(false)} largura={760} titulo="Regras dos apoios" subtitulo="Financiada">
+        <Modal aberto={regrasApoios} onFechar={() => setRegrasApoios(false)} largura="lg" titulo="Regras dos apoios" subtitulo="Financiada">
           <RegrasApoios podeEditar={gerir} />
-        </PainelLateral>
+        </Modal>
       )}
       <ConfirmarPerigo
         aberto={Boolean(apagar)}

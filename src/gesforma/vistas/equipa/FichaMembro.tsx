@@ -9,7 +9,7 @@ import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import {
-  AreaTexto, Botao, Campo, Entrada, ErroCarregar, Esqueleto, Modal, PainelLateral, Selecao, Separadores, Vazio,
+  AreaTexto, Botao, Campo, Entrada, ErroCarregar, Esqueleto, Modal, Selecao, Separadores, Vazio,
   dataHora, eur, num,
 } from "../../../partilhado/ui";
 import { EstadoDoc, numeroDe, useGestao } from "../crm/comum";
@@ -23,7 +23,7 @@ export function FichaMembro({ id, regime, de, ate, onFechar, tabInicial = "propo
   const { dados, erro, recarregar } = useRecurso(`equipa:${regime}:membro:${id}:${de}:${ate}`, signal => apiMembro(id, regime, { de: de || undefined, ate: ate || undefined }, { signal }));
   const m = dados?.membro;
   return (
-    <PainelLateral aberto onFechar={onFechar} titulo={m?.nome ?? "Equipa"} subtitulo={m?.email} largura={760}>
+    <Modal aberto onFechar={onFechar} titulo={m?.nome ?? "Equipa"} subtitulo={m?.email} largura="lg">
       {erro ? <ErroCarregar erro={erro} onTentar={recarregar} /> : null}
       {!m ? <Esqueleto linhas={6} /> : (
         <div className="space-y-4">
@@ -60,7 +60,7 @@ export function FichaMembro({ id, regime, de, ate, onFechar, tabInicial = "propo
           {tab === "perfil" && <Perfil id={id} gestao={gestao} inicial={{ name: m.nome, telefone: m.telefone, nota: m.nota }} />}
         </div>
       )}
-    </PainelLateral>
+    </Modal>
   );
 }
 

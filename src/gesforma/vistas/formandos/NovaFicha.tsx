@@ -6,7 +6,7 @@ import {
 import { invalidar } from "../../../partilhado/dados/useRecurso";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
-import { Aviso, Botao, Caixa, Campo, Entrada, PainelLateral, Selecao, Separadores } from "../../../partilhado/ui";
+import { Aviso, Botao, Caixa, Campo, Entrada, Modal, Selecao, Separadores } from "../../../partilhado/ui";
 
 type Pagamento = "por_pagar" | "pago" | "oferta";
 
@@ -99,12 +99,12 @@ export function NovaFicha({ aberto, onFechar, regime, onCriada }: {
   }
 
   return (
-    <PainelLateral
+    <Modal
       aberto={aberto}
       onFechar={onFechar}
       titulo="Nova ficha de formando"
       subtitulo={gold ? "Inscrição feita pela secretaria (oferta, pagamento combinado ou em papel)." : "Formando financiado inscrito pela equipa."}
-      largura={520}
+      largura="md"
       rodape={(
         <>
           <Botao variante="secundario" onClick={onFechar}>Cancelar</Botao>
@@ -161,6 +161,6 @@ export function NovaFicha({ aberto, onFechar, regime, onCriada }: {
         />}
         {cursos.erro != null && <Aviso tom="perigo">Não foi possível carregar os cursos. Feche e abra de novo.</Aviso>}
       </div>
-    </PainelLateral>
+    </Modal>
   );
 }

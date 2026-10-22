@@ -1,4 +1,4 @@
-// Ficha de um utilizador (painel lateral) e criação de contas novas.
+// Ficha de um utilizador (modal) e criação de contas novas.
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../../partilhado/AuthGate";
 import {
@@ -8,7 +8,7 @@ import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { useRecurso } from "../../../../partilhado/dados/useRecurso";
 import { gerarPalavraPasse, mensagemPalavraPasse, palavraPasseValida } from "../../../../partilhado/passwordPolicy";
 import {
-  Aviso, Botao, Caixa, Campo, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Modal, PainelLateral, dataHora, num,
+  Aviso, Botao, Caixa, Campo, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Modal, dataHora, num,
 } from "../../../../partilhado/ui";
 import { STAFF_ROLES } from "../../../UsersView";
 import { NovaPalavraPasse, PalavraPasseTemporaria } from "./PalavraPasse";
@@ -51,10 +51,10 @@ export function FichaUtilizador({ id, onFechar }: { id: string | null; onFechar:
   const mudou = u && (f.name !== u.name || f.email !== u.email || f.role !== u.role);
 
   return (
-    <PainelLateral
+    <Modal
       aberto={Boolean(id)}
       onFechar={onFechar}
-      largura={560}
+      largura="lg"
       titulo={u?.name ?? "Utilizador"}
       subtitulo={u ? `${u.active ? "Activo" : "Inactivo"} · criado em ${dataHora(u.created_at)}` : undefined}
       rodape={u ? (
@@ -128,7 +128,7 @@ export function FichaUtilizador({ id, onFechar }: { id: string | null; onFechar:
         acao="Desactivar"
         onConfirmar={async () => { if (u && await gravar.correr(u.id, { active: false })) recarregar(); }}
       />
-    </PainelLateral>
+    </Modal>
   );
 }
 

@@ -9,7 +9,7 @@ import { SearchSelect } from "../../../../partilhado/FormKit";
 import { toastError } from "../../../../partilhado/toastBus";
 import type { FormandoFin } from "../../../../partilhado/tiposFormando";
 import { lugaresLivres, type TurmaFin } from "../../../../partilhado/turmaModel";
-import { Botao, Campo, ConfirmarPerigo, Entrada, PainelLateral } from "../../../../partilhado/ui";
+import { Botao, Campo, ConfirmarPerigo, Entrada, Modal } from "../../../../partilhado/ui";
 import { darAcessoManual } from "../../../InscricaoManual";
 import { splitNome, TransferirTurmaModal } from "./base";
 import { InscreverFormandoPanel } from "../../../TurmaInscricao";
@@ -40,7 +40,7 @@ export function EditarTurmaFin({ aberto, onFechar, turma, onGravar }: {
   }
 
   return (
-    <PainelLateral aberto={aberto} onFechar={onFechar} titulo={`Editar ${turma.nome}`} subtitulo="Dados da turma financiada" largura={560}
+    <Modal aberto={aberto} onFechar={onFechar} titulo={`Editar ${turma.nome}`} subtitulo="Dados da turma financiada" largura="lg"
       rodape={<div className="flex gap-2 justify-end"><Botao variante="secundario" onClick={onFechar}>Cancelar</Botao><Botao variante="primario" onClick={gravar}>Guardar</Botao></div>}>
       <div className="space-y-4">
         <Campo rotulo="Código da turma">{p => <Entrada {...p} value={f.nome} onChange={e => setF({ ...f, nome: e.target.value })} />}</Campo>
@@ -66,7 +66,7 @@ export function EditarTurmaFin({ aberto, onFechar, turma, onGravar }: {
           </Campo>
         </div>
       </div>
-    </PainelLateral>
+    </Modal>
   );
 }
 
@@ -76,7 +76,7 @@ export function InscreverFin({ aberto, onFechar, turma, activa, membros, onActiv
   const { leads } = useLeadsDoCurso("fin", turma.curso, aberto);
   const vagas = Math.max(0, lugaresLivres(turma));
   return (
-    <PainelLateral aberto={aberto} onFechar={onFechar} titulo="Inscrever formando" subtitulo={`${turma.curso} · ${turma.local} · ${turma.horario}`} largura={560}>
+    <Modal aberto={aberto} onFechar={onFechar} titulo="Inscrever formando" subtitulo={`${turma.curso} · ${turma.local} · ${turma.horario}`} largura="lg">
       {activa ? (
         <InscreverFormandoPanel
           turma={turma}
@@ -99,7 +99,7 @@ export function InscreverFin({ aberto, onFechar, turma, activa, membros, onActiv
       ) : (
         <TurmaInactivaBanner nome={turma.nome} onActivate={onActivar} />
       )}
-    </PainelLateral>
+    </Modal>
   );
 }
 

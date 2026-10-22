@@ -7,7 +7,7 @@ import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import {
-  Aviso, Botao, Cartao, ConfirmarPerigo, ErroCarregar, Estado, Filtros, PageHeader, PainelLateral, Separadores, Tabela, Vazio, data, useFiltrosUrl, type Coluna,
+  Aviso, Botao, Cartao, ConfirmarPerigo, ErroCarregar, Estado, Filtros, PageHeader, Modal, Separadores, Tabela, Vazio, data, useFiltrosUrl, type Coluna,
 } from "../../../partilhado/ui";
 import { EditorBlog } from "../../EditorBlog";
 import type { VistaProps } from "../../shell/tipos";
@@ -128,10 +128,10 @@ function EditorPublicacao({ post, onFechar }: { post: Post | null; onFechar: () 
   }
 
   return (
-    <PainelLateral
+    <Modal
       aberto
       onFechar={onFechar}
-      largura={880}
+      largura="xl"
       titulo={post ? "Editar publicação" : "Nova publicação"}
       subtitulo={post ? `Publicada a ${data(post.data)}` : "Aparece no site quando estiver activa."}
       rodape={(
@@ -155,7 +155,7 @@ function EditorPublicacao({ post, onFechar }: { post: Post | null; onFechar: () 
         onTematica={setTematica}
         onEstado={setEstado}
       />
-    </PainelLateral>
+    </Modal>
   );
 }
 

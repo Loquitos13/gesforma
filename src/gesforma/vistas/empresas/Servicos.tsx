@@ -10,7 +10,7 @@ import { LIMITES_SERVICO as L, slugServico, textosProprios, videoServico, type T
 import { TextoFormatado } from "../../../partilhado/TextoFormatadoVista";
 import { AJUDA_FORMATACAO, htmlParaTexto, normalizarColagem } from "../../../partilhado/textoFormatado";
 import {
-  AreaTexto, Aviso, Botao, Campo, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Estado, Interruptor, PageHeader, PainelLateral, Selecao, Separadores,
+  AreaTexto, Aviso, Botao, Campo, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Estado, Interruptor, PageHeader, Modal, Selecao, Separadores,
 } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
 import { PedidosProposta } from "./PedidosProposta";
@@ -110,7 +110,7 @@ function FormServico({ inicial, outros, aGravar, onFechar, onGravar }: { inicial
   const videoMau = Boolean(d.video?.trim()) && !videoServico(d.video);
 
   return (
-    <PainelLateral aberto onFechar={onFechar} largura={680} titulo={inicial.id == null ? "Novo serviço" : d.titulo || "Serviço"}
+    <Modal aberto onFechar={onFechar} largura="lg" titulo={inicial.id == null ? "Novo serviço" : d.titulo || "Serviço"}
       subtitulo={slug ? `Página: /empresas/${slug}` : "Escreva o título"}
       rodape={(
         <div className="flex justify-end gap-2">
@@ -186,7 +186,7 @@ function FormServico({ inicial, outros, aGravar, onFechar, onGravar }: { inicial
           <CampoTexto rotulo="Faixa final: texto" ajuda="Vazio = o do modelo." linhas={3} max={L.ctaTexto} valor={d.ctaTexto ?? ""} onMudar={ctaTexto => mudar({ ctaTexto })} previa />
         </Grupo>
       </div>
-    </PainelLateral>
+    </Modal>
   );
 }
 

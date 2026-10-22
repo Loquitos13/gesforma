@@ -8,7 +8,7 @@ import { SearchSelect } from "../../../../partilhado/FormKit";
 import { toastError } from "../../../../partilhado/toastBus";
 import type { FormandoTurma } from "../../../../partilhado/tiposFormando";
 import { lugaresLivres, type TurmaGold } from "../../../../partilhado/turmaModel";
-import { Botao, Campo, ConfirmarPerigo, Entrada, PainelLateral } from "../../../../partilhado/ui";
+import { Botao, Campo, ConfirmarPerigo, Entrada, Modal } from "../../../../partilhado/ui";
 import type { DadosTurma } from "../../../../partilhado/api/turmas";
 import { darAcessoManual, pagamentoDaFicha } from "../../../InscricaoManual";
 import { splitNome, TransferirTurmaModal } from "./base";
@@ -47,7 +47,7 @@ export function EditarTurmaGold({ aberto, onFechar, turma, onGravar }: {
   }
 
   return (
-    <PainelLateral aberto={aberto} onFechar={onFechar} titulo={`Editar ${turma.nome}`} subtitulo="Dados da turma Gold" largura={560}
+    <Modal aberto={aberto} onFechar={onFechar} titulo={`Editar ${turma.nome}`} subtitulo="Dados da turma Gold" largura="lg"
       rodape={<div className="flex gap-2 justify-end"><Botao variante="secundario" onClick={onFechar}>Cancelar</Botao><Botao variante="primario" onClick={gravar}>Guardar</Botao></div>}>
       <div className="space-y-4">
         <Campo rotulo="Código interno">{p => <Entrada {...p} value={f.nome} onChange={e => setF({ ...f, nome: e.target.value })} />}</Campo>
@@ -81,7 +81,7 @@ export function EditarTurmaGold({ aberto, onFechar, turma, onGravar }: {
           </div>
         )}
       </div>
-    </PainelLateral>
+    </Modal>
   );
 }
 
@@ -91,7 +91,7 @@ export function InscreverGold({ aberto, onFechar, turma, activa, membros, onActi
   const { leads } = useLeadsDoCurso("gold", turma.curso, aberto);
   const vagas = lugaresLivres(turma);
   return (
-    <PainelLateral aberto={aberto} onFechar={onFechar} titulo="Inscrever formando" subtitulo={`${turma.curso} · ${turma.local} · ${turma.horario}`} largura={560}>
+    <Modal aberto={aberto} onFechar={onFechar} titulo="Inscrever formando" subtitulo={`${turma.curso} · ${turma.local} · ${turma.horario}`} largura="lg">
       {activa ? (
         <InscreverFormandoPanel
           turma={turma}
@@ -119,7 +119,7 @@ export function InscreverGold({ aberto, onFechar, turma, activa, membros, onActi
       ) : (
         <TurmaInactivaBanner nome={turma.nome} onActivate={onActivar} />
       )}
-    </PainelLateral>
+    </Modal>
   );
 }
 

@@ -1,5 +1,5 @@
 // Sistema › Pagamentos: transferência com comprovativo. Lista por situação, indicadores,
-// confirmar/recusar o comprovativo no painel lateral e registo manual.
+// confirmar/recusar o comprovativo na ficha do pagamento e registo manual.
 import { useState } from "react";
 import { usePode } from "../../../partilhado/AuthGate";
 import { apiExportarPagamentos, apiPagamentos, type LinhaPagamento, type SituacaoPagamento } from "../../../partilhado/api/pagamentos";

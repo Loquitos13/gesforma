@@ -6,7 +6,7 @@ import { useDrive } from "../../../partilhado/DriveContext";
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
-import { Aviso, Botao, Campo, Entrada, Estado, PageHeader, PainelLateral, Selecao, type OpcaoSelecao } from "../../../partilhado/ui";
+import { Aviso, Botao, Campo, Entrada, Estado, PageHeader, Modal, Selecao, type OpcaoSelecao } from "../../../partilhado/ui";
 import { ConteudoAbrirModal, type ConteudoPreview } from "../../ActionSurfaces";
 import type { VistaProps } from "../../shell/tipos";
 import { CatalogoTabela, chaveCatalogo, type ConfigCatalogo } from "./CatalogoTabela";
@@ -117,7 +117,7 @@ function EditorConteudo({ regime, item, inicial, onFechar, cursos, modulos }: {
   }
 
   return (
-    <PainelLateral
+    <Modal
       aberto
       onFechar={onFechar}
       titulo={item ? txt(item.titulo) : "Novo conteúdo"}
@@ -161,6 +161,6 @@ function EditorConteudo({ regime, item, inicial, onFechar, cursos, modulos }: {
           </Campo>
         )}
       </div>
-    </PainelLateral>
+    </Modal>
   );
 }

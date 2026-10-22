@@ -9,7 +9,7 @@ import type { SessaoCronograma } from "../../../../partilhado/turmaModel";
 import { apiReabrirTurma } from "../../../../partilhado/api/pedagogia";
 import { usePode } from "../../../../partilhado/AuthGate";
 import { persist, toastOk } from "../../../../partilhado/toastBus";
-import { AreaTexto, Botao, Campo, Entrada, ErroCarregar, Esqueleto, Modal, PainelLateral, Vazio } from "../../../../partilhado/ui";
+import { AreaTexto, Botao, Campo, Entrada, ErroCarregar, Esqueleto, Modal, Vazio } from "../../../../partilhado/ui";
 
 /** Esqueleto, erro ou "turma inexistente" antes de o cockpit ter dados. */
 export function EstadoCockpit({ aCarregar, erro, existe, onVoltar, children }: {
@@ -71,7 +71,7 @@ export function NovaSessaoPainel({ aberto, onFechar, regime, turma, horaPadrao, 
   }
 
   return (
-    <PainelLateral
+    <Modal
       aberto={aberto}
       onFechar={onFechar}
       titulo="Nova sessão"
@@ -101,7 +101,7 @@ export function NovaSessaoPainel({ aberto, onFechar, regime, turma, horaPadrao, 
         </div>
         <p className="m-0 text-xs text-tinta-suave">A sessão dura {duracao} h. Quem já tem sessão nesse horário noutra turma aparece indisponível.</p>
       </div>
-    </PainelLateral>
+    </Modal>
   );
 }
 

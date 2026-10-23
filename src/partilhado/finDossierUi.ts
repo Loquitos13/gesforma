@@ -1,7 +1,7 @@
 import { docsFinCompletos } from "./dossierDocs";
 import type { FormandoFin } from "./tiposFormando";
 import type { PedagogiaSnapshot } from "./api";
-import { formatSessaoLabel, type SessaoCronograma } from "./turmaModel";
+import { formatSessaoLabel, type ProgramaDocumentos, type SessaoCronograma } from "./turmaModel";
 import { rotuloCodigoCurso } from "./codigoCurso";
 
 export type DocEstado = "ok" | "parcial" | "falta";
@@ -45,8 +45,9 @@ export function finGruposDocumentosTurma(input: {
   ufcdCod?: string;
   horas?: number;
   dtpPct?: number;
+  programa?: ProgramaDocumentos | null;
 }): FinDocGrupo[] {
-  const { formandos, facts, cronograma, curso, ufcdCod, horas, dtpPct } = input;
+  const { formandos, facts, cronograma, curso, ufcdCod, horas, dtpPct, programa } = input;
   const totalF = formandos.length;
   const prontos = formandos.filter(f => docsFinCompletos(f)).length;
   const sessoes = cronograma.length;
@@ -75,7 +76,13 @@ export function finGruposDocumentosTurma(input: {
           detalhe: `${sessoes} sessões planeadas${sessoes ? "" : " · falta cronograma"}`,
           estado: st(facts.sessoes.total > 0 ? facts.sessoes.total : sessoes, Math.max(sessoes, 1)),
         },
-        { label: "Enquadramento do financiador", detalhe: "Candidatura e tipologia. Ainda não registado nesta turma.", estado: "falta" },
+        {
+          label: "Enquadramento do financiador",
+          detalhe: programa?.nome
+            ? `Programa «${programa.nome}» ${programa.origem === "turma" ? "(escolhido na turma)" : programa.origem === "curso" ? "(o da ficha do curso)" : "(o primeiro activo: escolha-o no curso ou na turma)"} · sai na ficha de inscrição e na folha de presenças.`
+            : "Sem programa: crie-o em Edição de cursos › Programas e escolha-o no curso ou na turma.",
+          estado: programa?.nome && programa.origem !== "primeiro" ? "ok" : "falta",
+        },
         {
           label: "Relatório de execução",
           detalhe: relatorioOk ? "DTP pronto para fecho." : `DTP a ${dtpPct ?? 0}% · falta concluir dossiê`,

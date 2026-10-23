@@ -4,7 +4,8 @@
  * lectiva, com o sumário dessa sessão). Todos levam no topo o logótipo da entidade (Configurações › Entidade; sem
  * logótipo, o da ENA) e no rodapé os logótipos do financiamento (modelos/rodape-financiamento.png).
  *
- * O enquadramento do programa (programa, prioridade e tipologias) vem de Configurações › Financiada (candidaturaFin.ts);
+ * O enquadramento do programa (programa, prioridade e tipologias) vem de Edição de cursos › Programas: o da turma, senão
+ * o da ficha do curso, senão o primeiro activo (regrasConfig.ts › programaDaTurma);
  * os dados pessoais, da ficha › Dados para o financiamento e da pré-inscrição (os mesmos da execução física).
  * A Gold continua com os PDF de texto de dtpPdfs.ts.
  */
@@ -20,7 +21,7 @@ import type { Db } from "./db/pool.js";
 import { obterLogoEntidade } from "./entidadeLogo.js";
 import { dadosFinanciamento, piiDaInscricao } from "./execucaoFisica.js";
 import { readFormandoPii } from "./pii.js";
-import { lerCandidatura, lerEntidade } from "./regrasConfig.js";
+import { lerEntidade, programaDaTurma } from "./regrasConfig.js";
 import { listarSessoes } from "./repos/pedagogiaSessoes.js";
 import { formandosExecucao, turmaReembolso, type FormandoExecucao, type TurmaReembolso } from "./repos/reembolso.js";
 import { sessaoLectivaN } from "./sessaoAcesso.js";
@@ -193,7 +194,7 @@ async function logoDosDocumentos(db: Db): Promise<Imagem | null> {
 }
 
 export async function cabecalhoFin(db: Db, turma: TurmaReembolso): Promise<CabecalhoFin> {
-  const [entidade, candidatura, logo] = await Promise.all([lerEntidade(db), lerCandidatura(db, turma.programa || turma.curso_programa), logoDosDocumentos(db)]);
+  const [entidade, { candidatura }, logo] = await Promise.all([lerEntidade(db), programaDaTurma(db, turma), logoDosDocumentos(db)]);
   const ufcd = ufcdDaTurma(turma);
   return {
     entidade: entidade.nome,

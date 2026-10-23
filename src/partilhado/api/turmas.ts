@@ -1,6 +1,6 @@
 // API do domínio "turmas": lista com ocupação e alertas, criar/alterar/apagar e regras de abertura automática.
 import { api, enviar, qs, type Pagina } from "./cliente";
-import type { SessaoCronograma } from "../turmaModel";
+import type { ProgramaDocumentos, SessaoCronograma } from "../turmaModel";
 
 export type Regime = "gold" | "fin";
 export type FaseTurma = "abrir" | "decorrer" | "por_fechar" | "fechada" | "cancelada";
@@ -81,6 +81,8 @@ export type TurmaGravada = {
   financiador?: string;
   /** Financiada: programa (Edição de cursos › Programas) dos documentos da turma. */
   programa?: string;
+  /** Financiada: o programa que os documentos usam de facto (turma, curso ou o primeiro activo). */
+  programaDocumentos?: ProgramaDocumentos | null;
   /** Financiada: número da ação («… / Ação n» na execução física). */
   numeroAcao?: number;
   /** Versão do cronograma: volta com cada gravação do cronograma (409 se outra pessoa o mudou entretanto). */

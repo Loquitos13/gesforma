@@ -32,6 +32,7 @@ function asFin(t: TurmaGravada & { alunos?: number; estado?: string; fechadaEm?:
     estado: t.estado ?? "", horas: t.horas, formador: t.formador, formadores: t.formadores ?? [],
     valoresHoraFormador: t.valoresHoraFormador ?? {}, activa: Boolean(t.activa), fechadaEm: t.fechadaEm ?? "",
     fechadaPor: t.fechadaPor ?? "", cronograma: Array.isArray(t.cronograma) ? t.cronograma : [],
+    programaDocumentos: t.programaDocumentos ?? null,
   };
 }
 

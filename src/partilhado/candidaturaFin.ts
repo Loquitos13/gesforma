@@ -33,10 +33,19 @@ export const CAMPOS_CANDIDATURA_FIN: { chave: keyof CandidaturaFin; rotulo: stri
 
 export const CANDIDATURA_FIN_MAX = 200;
 
-/** Valores gravados (definição `candidatura_fin`) completados com os da omissão: só o campo que nunca foi gravado a usa. */
-export function lerCandidaturaFin(values: Record<string, unknown> | undefined | null): CandidaturaFin {
+/** Um programa sem nenhum campo preenchido. */
+export const CANDIDATURA_FIN_VAZIA: CandidaturaFin = {
+  programa: "", prioridade: "", tipologiaAcao: "", tipologiaIntervencao: "", tipologiaOperacao: "", tipologia: "",
+};
+
+/**
+ * Valores gravados completados com `base`: só o campo que nunca foi gravado a usa. A definição antiga
+ * (`candidatura_fin`) completa-se com a omissão PESSOAS 2030; um programa de Edição de cursos › Programas não
+ * (o que ficou em branco sai em branco, nunca com os valores de outro programa).
+ */
+export function lerCandidaturaFin(values: Record<string, unknown> | undefined | null, base: CandidaturaFin = CANDIDATURA_FIN_OMISSAO): CandidaturaFin {
   const v = values ?? {};
-  const out = { ...CANDIDATURA_FIN_OMISSAO };
+  const out = { ...base };
   for (const { chave } of CAMPOS_CANDIDATURA_FIN) {
     const raw = v[chave];
     if (raw == null) continue;

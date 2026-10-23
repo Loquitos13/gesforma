@@ -170,7 +170,11 @@ export type TurmaFin = {
   fechadaEm?: string;
   fechadaPor?: string;
   cronograma: SessaoCronograma[];
+  /** O programa que os documentos da turma usam e de onde vem (da turma, do curso ou o primeiro activo). */
+  programaDocumentos?: ProgramaDocumentos | null;
 };
+
+export type ProgramaDocumentos = { nome: string; origem: "turma" | "curso" | "primeiro" | "nenhum" };
 
 const WEEKDAYS_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const MONTHS_PT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];

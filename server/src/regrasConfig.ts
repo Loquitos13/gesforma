@@ -1,7 +1,7 @@
 import type { Db } from "./db/pool.js";
 import { valoresDefinicao } from "./repos/configuracoes.js";
 import { one } from "./repos/sql.js";
-import { CAMPOS_CANDIDATURA_FIN, lerCandidaturaFin } from "../../src/partilhado/candidaturaFin.js";
+import { CAMPOS_CANDIDATURA_FIN, CANDIDATURA_FIN_VAZIA, lerCandidaturaFin } from "../../src/partilhado/candidaturaFin.js";
 
 /**
  * Regras pedagógicas e dados da entidade, editáveis pelo administrador em `app_settings`
@@ -134,14 +134,40 @@ export async function lerEntidade(db: Db) {
  * Programas) ou, sem ele, o do curso (ficha › Oferta); sem nenhum, o primeiro programa activo; sem programas, a candidatura antiga de Configurações › Financiada.
  */
 export async function lerCandidatura(db: Db, programa = "") {
-  const p = await one<{ payload: Record<string, unknown> }>(db,
-    `SELECT payload FROM catalog_items
+  const p = await programaDosDocumentos(db, programa);
+  return p ? lerCandidaturaFin(p.payload, CANDIDATURA_FIN_VAZIA) : lerCandidaturaFin(await valores(db, "candidatura_fin"));
+}
+
+export type OrigemPrograma = "turma" | "curso" | "primeiro" | "nenhum";
+
+/**
+ * O programa dos documentos de uma turma, por esta ordem: o da turma, o da ficha do curso, o primeiro activo
+ * (um nome que já não existe em Programas passa ao seguinte, nunca a outro programa por engano).
+ */
+export async function programaDaTurma(db: Db, t: { programa?: string; curso_programa?: string }) {
+  for (const [nome, origem] of [[t.programa ?? "", "turma"], [t.curso_programa ?? "", "curso"]] as const) {
+    if (!nome.trim()) continue;
+    const p = await programaDosDocumentos(db, nome);
+    if (p?.pedidoEncontrado) return { nome: p.nome, origem: origem as OrigemPrograma, candidatura: lerCandidaturaFin(p.payload, CANDIDATURA_FIN_VAZIA) };
+  }
+  const p = await programaDosDocumentos(db, "");
+  if (p) return { nome: p.nome, origem: "primeiro" as OrigemPrograma, candidatura: lerCandidaturaFin(p.payload, CANDIDATURA_FIN_VAZIA) };
+  return { nome: "", origem: "nenhum" as OrigemPrograma, candidatura: lerCandidaturaFin(await valores(db, "candidatura_fin")) };
+}
+
+/**
+ * O programa que os documentos usam: o pedido (turma ou curso), mesmo inactivo; sem pedido (ou se já não existe),
+ * o primeiro activo. `pedidoEncontrado` diz se o pedido existe (para avisar quando o nome já não corresponde).
+ */
+export async function programaDosDocumentos(db: Db, programa = "") {
+  const p = await one<{ payload: Record<string, unknown>; pedido: boolean }>(db,
+    `SELECT payload, (trim($1) <> '' AND lower(trim(payload->>'nome')) = lower(trim($1))) AS pedido FROM catalog_items
       WHERE kind = 'programas' AND regime = 'fin'
-        AND (lower(trim(payload->>'nome')) = lower(trim($1))
+        AND ((trim($1) <> '' AND lower(trim(payload->>'nome')) = lower(trim($1)))
              OR coalesce(payload->>'status', 'Ativo') NOT IN ('Inactivo', 'Inativo', 'Arquivado'))
-      ORDER BY (lower(trim(payload->>'nome')) = lower(trim($1))) DESC, id
+      ORDER BY 2 DESC, id
       LIMIT 1`, [programa]);
-  return lerCandidaturaFin(p ? p.payload : await valores(db, "candidatura_fin"));
+  return p ? { payload: p.payload ?? {}, nome: String(p.payload?.nome ?? ""), pedidoEncontrado: Boolean(p.pedido) } : null;
 }
 
 /** Contactos da entidade que podem sair para páginas públicas (sem NIF, IBAN nem titular). */

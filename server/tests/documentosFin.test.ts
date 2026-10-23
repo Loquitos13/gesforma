@@ -332,6 +332,22 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
        ON CONFLICT (regime, curso_id) DO UPDATE SET payload = curso_fichas.payload || EXCLUDED.payload`, [t.id]);
     const [doCursoFicha] = await paginas((await pedido(ctx, "financiada", "GET", `/v1/formandos-fin/${t.ana}/ficha-inscricao`)).rawPayload);
     expect(doCursoFicha).toContain("1.10. Tipologia do Curso");
+    expect((await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}`)).json().turma.programaDocumentos).toEqual({ nome: "Programa do Curso", origem: "curso" });
+    // Nome que já não existe em Programas: passa ao do curso, nunca a outro programa.
+    await ctx.db.query("UPDATE turmas_fin SET programa = 'Programa Apagado' WHERE id = $1", [t.id]);
+    expect((await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}`)).json().turma.programaDocumentos.origem).toBe("curso");
+    // Campos em branco num programa novo saem em branco (nunca com os valores do PESSOAS 2030).
+    const curto = await pedido(ctx, "secretaria", "POST", "/v1/catalog/programas", { regime: "fin", payload: { nome: "Programa Curto", tipologia: "9.99. Só Tipologia", tipologiaAcao: "AC-99 Ação Curta" } });
+    expect(curto.statusCode, curto.body).toBe(200);
+    await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "Programa Curto" });
+    const [curtoFicha] = await paginas((await pedido(ctx, "financiada", "GET", `/v1/formandos-fin/${t.ana}/ficha-inscricao`)).rawPayload);
+    expect(curtoFicha).toContain("9.99. Só Tipologia");
+    expect(curtoFicha).not.toContain(CANDIDATURA_FIN_OMISSAO.prioridade);
+    expect(curtoFicha).not.toContain(CANDIDATURA_FIN_OMISSAO.tipologiaOperacao);
+    const [curtoFolha] = await paginas((await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}/folhas-presenca?sessao=1`)).rawPayload);
+    // A folha (modelo da candidatura) não leva a linha «Tipologia»: confere-se pela Tipologia de Ação.
+    expect(curtoFolha).toContain("AC-99 Ação Curta");
+    expect(curtoFolha).not.toContain(CANDIDATURA_FIN_OMISSAO.tipologiaIntervencao);
     await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "Programa Novo" });
     try {
       const [ficha] = await paginas((await pedido(ctx, "financiada", "GET", `/v1/formandos-fin/${t.ana}/ficha-inscricao`)).rawPayload);

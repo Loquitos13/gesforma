@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { itensPip, itensSimulacao, type CriterioAvaliacao, type ResolveDocTarget, type PipItem, type SimItem } from "../../../../partilhado/TurmaExtras";
 import { ResolverDocumentoModal } from "../../../DocResolver";
-import { type SessaoCronograma } from "../../../../partilhado/turmaModel";
+import { type ProgramaDocumentos, type SessaoCronograma } from "../../../../partilhado/turmaModel";
 import { finGruposDocumentosTurma, labelsSessoesFin } from "../../../../partilhado/finDossierUi";
 import { type FormandoFin } from "../../../../partilhado/tiposFormando";
 import { type TurmaDocumento } from "../../../../partilhado/api";
@@ -33,6 +33,7 @@ export function DocumentosTurmaTab({ regime = "gold", curso, guardados, onSaveDo
     ufcdCod?: string;
     horas?: number;
     dtpPct?: number;
+    programa?: ProgramaDocumentos | null;
   };
 }) {
   const estadoCfg: Record<DocEstado, { dot: string; chip: string; label: string }> = {
@@ -51,6 +52,7 @@ export function DocumentosTurmaTab({ regime = "gold", curso, guardados, onSaveDo
       ufcdCod: finCtx.ufcdCod,
       horas: finCtx.horas,
       dtpPct: finCtx.dtpPct,
+      programa: finCtx.programa,
     });
     return built.map(g => ({ ...metaGrupo(g.id, "fin"), items: g.items.map(it => ({ ...it, bloqueante: it.bloqueante })) }));
   }, [regime, finCtx, curso, dtpItems]);

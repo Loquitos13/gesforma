@@ -27,6 +27,8 @@ import type { Regime } from "../repos/sql.js";
 import { idParam, paginacao, periodoQuery, regime as regimeSchema, textoQuery, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
 import { hojeLisboa } from "../datas.js";
+import { programaDaTurma } from "../regrasConfig.js";
+import { turmaReembolso } from "../repos/reembolso.js";
 
 /** Hoje em Lisboa (o painel usa o mesmo dia para a fase «a decorrer»), seja qual for o fuso do processo. */
 export function hojeIso(agora = new Date()) {
@@ -149,6 +151,14 @@ async function sincronizarDrive(deps: Deps, regime: Regime, id: number, row: Rec
 export async function registar(app: FastifyInstance, deps: Deps) {
   const { db, requireAuth, audit } = deps;
 
+  /** Financiada: o programa que os documentos da turma vão usar (o da turma, o do curso ou o primeiro activo). */
+  async function programaDosDocumentosDaTurma(id: number) {
+    const t = await turmaReembolso(db, id);
+    if (!t) return null;
+    const p = await programaDaTurma(db, t);
+    return { nome: p.nome, origem: p.origem };
+  }
+
   // ─── Lista ────────────────────────────────────────────────────────────────
   app.get("/v1/turmas", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
@@ -204,7 +214,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       }, { pagina: 1, porPagina: 200 });
       if (!dele.linhas.some(l => l.id === id)) return reply.code(403).send({ error: "O formador só vê as turmas onde dá aulas." });
     }
-    const turma = regime === "gold" ? mapTurmaGold(row) : { ...mapTurmaFin(row), financiador: String(row.financiador ?? "") };
+    const turma = regime === "gold" ? mapTurmaGold(row) : { ...mapTurmaFin(row), financiador: String(row.financiador ?? ""), programaDocumentos: await programaDosDocumentosDaTurma(id) };
     if (actor.role === "formador") {
       // O formador só vê o seu valor por hora: nem o dos colegas nem o custo da sala.
       const meus = new Set([...await nomesDoFormador(db, actor.email, actor.name, actor.id)].map(n => n.toLowerCase()));

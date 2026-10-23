@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Botao, Campo, Chip, Entrada, Selecao, data, dataHora } from "../../../../partilhado/ui";
 import {
-  apiComerciais, apiCriarCampo, apiCriarEtiqueta, apiEditarLead, apiEtiquetas, apiGravarCampos, type DossieLead,
+  apiComerciais, apiCriarCampo, apiCriarEtiqueta, apiEditarLead, apiEtiquetas, apiGravarCampos, apiGravarDadosFin, type DossieLead, type PerfilFinLead,
 } from "../../../../partilhado/api/crm";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { useOpcoes } from "../../../../partilhado/dados/useOpcoes";
@@ -9,13 +9,23 @@ import { invalidar, useRecurso } from "../../../../partilhado/dados/useRecurso";
 import { useAuth } from "../../../../partilhado/AuthGate";
 import { toastError } from "../../../../partilhado/toastBus";
 import { ETAPAS, podeMudarEtapa, rotuloEtapa } from "./util";
-import { PerfilFinEditor } from "./PerfilFinEditor";
+import { GENEROS_FIN, HABILITACOES_FIN, rotuloPais } from "../../../../partilhado/dadosPessoaisFin";
+import { LISTA_PAISES } from "../../../../partilhado/execucaoFisica";
+
+const PAISES = LISTA_PAISES.map(v => ({ valor: v, rotulo: rotuloPais(v) }));
+const GENEROS = GENEROS_FIN.map(g => ({ valor: g.valor, rotulo: g.rotulo }));
+const HABILITACOES = HABILITACOES_FIN.map(h => ({ valor: h.rotulo, rotulo: h.rotulo }));
+const PERFIL_VAZIO: PerfilFinLead = { genero: "", dataNascimento: "", nacionalidade: "", habilitacoes: "" };
 
 /** Dados pessoais e do pedido, comercial, etiqueta, etapa, desistência e campos extra. */
 export function FichaDados({ d, onMudou }: { d: DossieLead; onMudou: () => void }) {
   const { user } = useAuth();
   const l = d.lead;
   const [dados, setDados] = useState({ nome: "", apelido: "", email: "", telf: "", concelho: "", origem: "", curso: "", local: "", horario: "" });
+  // Financiada: género, nascimento, nacionalidade e habilitações (editáveis até a pré-inscrição ser validada).
+  const perfilGravado = d.dadosFin?.perfil;
+  const editaPerfil = Boolean(perfilGravado) && !d.validadaEm;
+  const [perfil, setPerfil] = useState<PerfilFinLead>(PERFIL_VAZIO);
   const [etapa, setEtapa] = useState(l.estado);
   const [metodo, setMetodo] = useState(l.pagamentoMetodo);
   const [motivo, setMotivo] = useState(l.motivoDesistencia);
@@ -25,6 +35,7 @@ export function FichaDados({ d, onMudou }: { d: DossieLead; onMudou: () => void 
 
   useEffect(() => {
     setDados({ nome: l.nome, apelido: l.apelido, email: l.email, telf: l.telf, concelho: l.concelho, origem: l.origem, curso: l.curso, local: l.local, horario: l.horario });
+    setPerfil(d.dadosFin?.perfil ?? PERFIL_VAZIO);
     setEtapa(l.estado);
     setMetodo(l.pagamentoMetodo);
     setMotivo(l.motivoDesistencia);
@@ -44,6 +55,17 @@ export function FichaDados({ d, onMudou }: { d: DossieLead; onMudou: () => void 
   const editar = useAccao(apiEditarLead, { ok: "Gravado." });
   const campos = useAccao(apiGravarCampos, { ok: "Campos gravados." });
   const set = (k: keyof typeof dados, v: string) => setDados(x => ({ ...x, [k]: v }));
+  const setP = (k: keyof PerfilFinLead, v: string) => setPerfil(x => ({ ...x, [k]: v }));
+  const gravarPerfil = useAccao(apiGravarDadosFin);
+
+  /** «Gravar dados»: os dados do pedido e, na Financiada, os dados pessoais que mudaram. */
+  async function gravarTudo() {
+    const r = await editar.correr(l.id, dados);
+    if (!r) return;
+    const mudou = perfilGravado ? (Object.keys(perfil) as (keyof PerfilFinLead)[]).filter(k => perfil[k] !== perfilGravado[k]) : [];
+    if (editaPerfil && mudou.length) await gravarPerfil.correr(l.id, Object.fromEntries(mudou.map(k => [k, perfil[k]])));
+    onMudou();
+  }
 
   async function gravar(patch: Parameters<typeof apiEditarLead>[1]) {
     const r = await editar.correr(l.id, patch);
@@ -89,38 +111,34 @@ export function FichaDados({ d, onMudou }: { d: DossieLead; onMudou: () => void 
         <Campo rotulo="Apelido">{p => <Entrada {...p} value={dados.apelido} onChange={e => set("apelido", e.target.value)} />}</Campo>
         <Campo rotulo="Telemóvel">{p => <Entrada {...p} type="tel" value={dados.telf} onChange={e => set("telf", e.target.value)} />}</Campo>
         <Campo rotulo="Email">{p => <Entrada {...p} type="email" value={dados.email} onChange={e => set("email", e.target.value)} />}</Campo>
+        {editaPerfil && <>
+          <Campo rotulo="Género">{p => <Selecao {...p} value={perfil.genero} onChange={e => setP("genero", e.target.value)} opcoes={GENEROS} vazio="—" />}</Campo>
+          <Campo rotulo="Data de nascimento">{p => <Entrada {...p} type="date" value={perfil.dataNascimento} onChange={e => setP("dataNascimento", e.target.value)} />}</Campo>
+          <Campo rotulo="Nacionalidade">{p => <Selecao {...p} value={perfil.nacionalidade} onChange={e => setP("nacionalidade", e.target.value)} opcoes={PAISES} vazio="—" />}</Campo>
+          <Campo rotulo="Habilitações">{p => <Selecao {...p} value={perfil.habilitacoes} onChange={e => setP("habilitacoes", e.target.value)} opcoes={HABILITACOES} vazio="—" />}</Campo>
+        </>}
         <Campo rotulo="Concelho">{p => <Selecao {...p} value={dados.concelho} onChange={e => set("concelho", e.target.value)} opcoes={concelhos.selecao} vazio="—" />}</Campo>
         <Campo rotulo="Como conheceu a ENA">{p => <Selecao {...p} value={dados.origem} onChange={e => set("origem", e.target.value)} opcoes={origens.selecao} vazio="—" />}</Campo>
         <Campo rotulo="Curso" className="sm:col-span-2">{p => <Selecao {...p} value={dados.curso} onChange={e => set("curso", e.target.value)} opcoes={cursos.selecao} vazio="Sem curso" />}</Campo>
         <Campo rotulo="Local">{p => <Selecao {...p} value={dados.local} onChange={e => set("local", e.target.value)} opcoes={locais.selecao} vazio="—" />}</Campo>
         <Campo rotulo="Horário">{p => <Selecao {...p} value={dados.horario} onChange={e => set("horario", e.target.value)} opcoes={horarios.selecao} vazio="—" />}</Campo>
         <div className="sm:col-span-2">
-          <Botao variante="primario" aCarregar={editar.aCorrer} onClick={() => void gravar(dados)}>Gravar dados</Botao>
+          <Botao variante="primario" aCarregar={editar.aCorrer || gravarPerfil.aCorrer} onClick={() => void gravarTudo()}>Gravar dados</Botao>
         </div>
       </section>
 
       {d.dadosFin && (
         <section aria-label="Dados pessoais da inscrição" className="flex flex-col gap-2 rounded-cartao border border-linha p-3">
           <p className="m-0 text-[13px] font-medium">Dados pessoais (formação financiada)</p>
-          {d.dadosFin.perfil && !d.validadaEm
-            ? <PerfilFinEditor leadId={l.id} perfil={d.dadosFin.perfil} onMudou={onMudou} />
-            : (
-              <dl className="m-0 grid gap-x-4 gap-y-2 text-[13px] sm:grid-cols-2">
-                {([
-                  ["Género", d.dadosFin.genero],
-                  ["Data de nascimento", d.dadosFin.dataNascimento ? data(d.dadosFin.dataNascimento) : ""],
-                  ["Nacionalidade", d.dadosFin.nacionalidade],
-                  ["Habilitações", d.dadosFin.habilitacoes],
-                ] as const).map(([rotulo, valor]) => (
-                  <div key={rotulo} className="min-w-0">
-                    <dt className="text-xs text-tinta-suave">{rotulo}</dt>
-                    <dd className="m-0 break-words">{valor || "—"}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
           <dl className="m-0 grid gap-x-4 gap-y-2 text-[13px] sm:grid-cols-2">
             {([
+              // Editáveis em cima (com o nome e os contactos) até a pré-inscrição ser validada; depois, só leitura aqui.
+              ...(editaPerfil ? [] : [
+                ["Género", d.dadosFin.genero],
+                ["Data de nascimento", d.dadosFin.dataNascimento ? data(d.dadosFin.dataNascimento) : ""],
+                ["Nacionalidade", d.dadosFin.nacionalidade],
+                ["Habilitações", d.dadosFin.habilitacoes],
+              ] as const),
               ["Morada", d.dadosFin.morada],
               ["Documento de identificação", [d.dadosFin.tipoDocumento, d.dadosFin.numeroDocumento].filter(Boolean).join(" · ")],
               ["Validade do documento", d.dadosFin.validadeDocumento ? data(d.dadosFin.validadeDocumento) : ""],

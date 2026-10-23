@@ -65,7 +65,7 @@ export const TOM_CLASSES: Record<Tom, { texto: string; fundo: string; borda: str
 /** Instante de um texto: com fuso tal como vem; sem fuso (carimbo do GesForma), lido como UTC. */
 const instante = lerInstante;
 
-/** Data ISO (aaaa-mm-dd ou timestamp) → "13/10/2026", no dia de Lisboa. */
+/** Data ISO (aaaa-mm-dd ou timestamp) → "13-10-2026", no dia de Lisboa. */
 export function data(iso: string | null | undefined) {
   if (!iso) return "—";
   if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return fmtDataCalendario(iso);
@@ -74,7 +74,7 @@ export function data(iso: string | null | undefined) {
   return fmtDataLisboa(d);
 }
 
-/** Data e hora curtas na hora de Lisboa: "13/10/2026, 14:05". */
+/** Data e hora curtas na hora de Lisboa: "13-10-2026, 14:05". */
 export function dataHora(iso: string | null | undefined) {
   if (!iso) return "—";
   const d = instante(iso);

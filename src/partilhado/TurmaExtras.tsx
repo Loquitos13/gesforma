@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { data as fmtDataUi } from "./ui/formatos";
 import { ApiError, apiUploadDrive, type DriveFile, type DriveUploadContext } from "./api";
 import { useDrive } from "./DriveContext";
 import { imprimirFolhasPresencas } from "./presencasPrint";
 import { dtpCategoriaPasta, dtpPastaNome } from "./dtpPasta";
+import { pastaFinDoItem } from "./dtpTopicosFin";
 import { I } from "./turmaIcones";
 
 export { type MomentoKey, type MomentoField, type PlanoSessaoData, type SessaoMeta, type SumarioSessaoData, emptyMomento, emptyPlano, emptySumario, sumarioPreenchido, PlanoSessaoModal, SumarioSessaoModal } from "./SessaoModais";
@@ -28,7 +30,9 @@ export function FileUploadModal({
     status.folderName,
     context?.regime === "fin" ? "Financiada" : context?.regime === "gold" ? "Gold" : null,
     context?.turma ? dtpPastaNome(context.regime === "fin" ? "fin" : "gold", context.turma) : null,
-    context?.turma
+    context?.turma && context.regime === "fin"
+      ? pastaFinDoItem(context.kind === "formando-doc" || context.kind === "pip" ? "cc" : context.kind === "formador-doc" ? "cv-formador" : context.itemId ?? "")
+      : context?.turma
       ? dtpCategoriaPasta({
           id: context.itemId,
           kind: context.kind,
@@ -209,7 +213,7 @@ export function PresencasSessaoModal({ open, onClose, sessao, formandos, onSave,
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
           <div>
             <p className="text-sm font-semibold text-slate-800">Folha de Presenças - Sessão {sessao?.n}</p>
-            <p className="text-xs text-slate-400">{sessao?.data} · {sessao?.hora}</p>
+            <p className="text-xs text-slate-400">{sessao?.data ? fmtDataUi(sessao.data) : ""} · {sessao?.hora}</p>
           </div>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
         </div>

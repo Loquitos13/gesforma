@@ -4,7 +4,9 @@ import { eItemDossieGerado, itensDoMesmoPdf, pdfDossieGerado } from "../../dossi
 import { dtpForTurma, estruturaDoDossie } from "../../pedagogia/dtp.js";
 import { anexoSchema, dtpSchema, itemParam } from "../../pedagogia/esquemas.js";
 import { anexarPdfDtp, gravarPdfsDossie } from "../../pedagogia/ficheiros.js";
-import { definirEstadoManual, gravarAnexo, limparEstadoManual } from "../../repos/dtp.js";
+import { anexoEmUso, anexosDaTurma, definirEstadoManual, gravarAnexo, limparEstadoManual } from "../../repos/dtp.js";
+import { ficheiroDrive } from "../../repos/drive.js";
+import { apagarFicheiroSubstituido } from "../../driveFicheiros.js";
 import { carregarTurma, type TurmaRow } from "../../repos/pedagogiaTurma.js";
 import { ERRO_TURMA_FECHADA, turmaFechada } from "../../resultados.js";
 import type { Regime } from "../../pedagogia/util.js";
@@ -51,7 +53,16 @@ export function registarDossieTurma(app: FastifyInstance, { db, requireAuth, aud
     if (!turma || await fechadaParaOActor(db, req, reply, regime, id)) return;
     const def = await itemDoDossie(db, reply, regime, turma, itemId);
     if (!def) return;
+    const anterior = (await anexosDaTurma(db, regime, id)).find(a => a.item_id === itemId)?.drive_file_id ?? "";
     await gravarAnexo(db, regime, id, itemId, { id: v.body.driveFileId, nome: v.body.fileName, url: v.body.driveUrl ?? "" });
+    // O anexo substituído (um upload do dossiê que mais nenhum item usa) sai da Drive: não fica uma versão antiga perdida.
+    if (anterior && anterior !== v.body.driveFileId) {
+      const velho = await ficheiroDrive(db, anterior);
+      const emUso = await anexoEmUso(db, anterior);
+      if (velho?.kind === "dtp" && !emUso) {
+        await apagarFicheiroSubstituido(db, anterior).catch(err => req.log.warn({ err, anterior }, "anexo antigo do dossiê não apagado"));
+      }
+    }
     // Só um item sem regra automática fica no dossiê pelo anexo; os automáticos continuam a sair dos dados.
     if (!def.auto) await definirEstadoManual(db, regime, id, itemId, "ok");
     await audit(db, req.actor!.id, "turma.dtp_anexo", "turma", String(id), req.ip, { regime, item: itemId });

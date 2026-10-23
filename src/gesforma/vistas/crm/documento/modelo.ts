@@ -1,4 +1,4 @@
-import { FUSO_LISBOA } from "../../../../partilhado/horaLisboa";
+import { FUSO_LISBOA, fmtDataDDMMAAAA } from "../../../../partilhado/horaLisboa";
 // Documento de propostas, contratos e modelos: HTML limitado, com cabeçalho, campos automáticos,
 // cláusulas numeradas e cláusulas opcionais. O mesmo HTML é desenhado no editor, na impressão e no PDF do servidor
 // (server/src/assinaturas/pdfHtml.ts), por isso só se aceitam as etiquetas e atributos que os três sabem desenhar.
@@ -222,7 +222,8 @@ export function numeroDoc(tipo: "proposta" | "contrato", id: number | null | und
 export function dataLonga(iso?: string | null) {
   const d = iso ? new Date(iso.length <= 10 ? `${iso}T12:00:00Z` : iso) : new Date();
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("pt-PT", { day: "numeric", month: "long", year: "numeric", timeZone: FUSO_LISBOA });
+  // Todas as datas dos documentos em dd-mm-aaaa.
+  return fmtDataDDMMAAAA(d);
 }
 
 /** "€ 1 600,00" (o formato das propostas e contratos). */

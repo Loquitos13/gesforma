@@ -13,8 +13,12 @@ export function textoSeguro(v: unknown) {
   return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
 }
 
-/** Instante (texto de um timestamptz) → "aaaa-mm-dd hh:mm" na hora de Lisboa. */
-const dataCurta = (iso: string | null) => (iso ? stampLisboa(iso) || iso.slice(0, 16).replace("T", " ") : "");
+/** Instante (texto de um timestamptz) → "dd-mm-aaaa hh:mm" na hora de Lisboa (as datas dos documentos são dd-mm-aaaa). */
+const dataCurta = (iso: string | null) => {
+  if (!iso) return "";
+  const s = stampLisboa(iso) || iso.slice(0, 16).replace("T", " ");
+  return s.replace(/^(\d{4})-(\d{2})-(\d{2})/, "$3-$2-$1");
+};
 
 const ESTADOS: Record<string, string> = { Pago: "Pago", Pendente: "Por receber", Cancelado: "Cancelado", Reembolsado: "Reembolsado" };
 

@@ -25,21 +25,30 @@ export const urlInquerito = (token: string, turmaId?: number) =>
 
 export type ResultadoEnvio = { enviados: number; semEmail: number; inqueritos: number } | { erro: string; codigo: number };
 
-export async function enviarInqueritosDaTurma(db: Db, actorId: string | undefined, regime: Regime, turmaId: number): Promise<ResultadoEnvio> {
+/**
+ * `fase` "fim": inquéritos de fim de curso (formandos e formadores). "pos": os de impacto pós-formação (~3 meses
+ * depois), só aos formandos; enviam-se à parte, quando chega a altura.
+ */
+export async function enviarInqueritosDaTurma(db: Db, actorId: string | undefined, regime: Regime, turmaId: number, fase: "fim" | "pos" = "fim"): Promise<ResultadoEnvio> {
   const row = await equipaDaTurma(db, regime, turmaId);
   if (!row) return { erro: "turma inexistente", codigo: 404 };
-  // Envio de fim de curso: os de pós-formação (impacto, ~3 meses depois) ficam de fora.
-  // Ainda não há rota própria para eles; quando houver, envia-os à parte com o público "pos".
-  const inqs = (await inqueritosDoRegime(db, regime)).filter(i => publicoInquerito(asObj(i.payload)) !== "pos");
-  if (!inqs.length) return { erro: "Não há inquéritos neste regime. Crie um e marque o público-alvo.", codigo: 400 };
+  const inqs = (await inqueritosDoRegime(db, regime)).filter(i => (publicoInquerito(asObj(i.payload)) === "pos") === (fase === "pos"));
+  if (!inqs.length) {
+    return {
+      erro: fase === "pos"
+        ? "Não há inquéritos de pós-formação neste regime. Crie um com o público-alvo «pós-formação»."
+        : "Não há inquéritos neste regime. Crie um e marque o público-alvo.",
+      codigo: 400,
+    };
+  }
   const pessoas = await contactosFormandos(db, regime, turmaId, row.nome);
   const nomesFormador = [...new Set([...asArr(row.formadores).map(n => String(n).trim()), String(row.formador ?? "").trim()]
     .filter(Boolean).map(n => n.toLowerCase()))];
   const formadores = await contactosFormadores(db, nomesFormador);
 
   const destinatarios: { nome: string; email: string; publicos: PublicoInquerito[] }[] = [
-    ...pessoas.map(p => ({ nome: `${p.nome ?? ""} ${p.apelido ?? ""}`.trim() || "formando", email: String(p.email ?? "").trim(), publicos: ["formando"] as PublicoInquerito[] })),
-    ...formadores.map(f => ({ nome: f.nome || "formador", email: String(f.email ?? "").trim(), publicos: ["formador"] as PublicoInquerito[] })),
+    ...pessoas.map(p => ({ nome: `${p.nome ?? ""} ${p.apelido ?? ""}`.trim() || "formando", email: String(p.email ?? "").trim(), publicos: [fase === "pos" ? "pos" : "formando"] as PublicoInquerito[] })),
+    ...(fase === "pos" ? [] : formadores.map(f => ({ nome: f.nome || "formador", email: String(f.email ?? "").trim(), publicos: ["formador"] as PublicoInquerito[] }))),
   ];
   const quantos = (publico: PublicoInquerito) => destinatarios.filter(d => d.publicos.includes(publico) && d.email.includes("@")).length;
 

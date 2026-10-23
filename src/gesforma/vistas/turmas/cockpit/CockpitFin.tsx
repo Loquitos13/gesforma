@@ -1,5 +1,6 @@
 // Cockpit de uma turma da Financiada: cabeçalho com UFCD e fecho formal, próximos passos e separadores.
 import { useEffect, useState } from "react";
+import { data as fmtDataUi } from "../../../../partilhado/ui/formatos";
 import { apiFolhasPresencaFin, apiPlanosSessaoFin, apiTurmaFinFecho, emitAutomation } from "../../../../partilhado/api";
 import { apiEnviarInqueritosTurma } from "../../../../partilhado/api/inqueritos";
 import { useAuth } from "../../../../partilhado/AuthGate";
@@ -108,7 +109,7 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
                     <h1 className="m-0 mt-2 text-lg font-semibold">{t.curso}</h1>
                     <p className="m-0 mt-2 flex flex-wrap gap-4 text-slate-300 text-xs">
                       <span className="flex items-center gap-1">{I.location} {t.local}</span>
-                      <span className="flex items-center gap-1">{I.calendar} {t.dataInicio}</span>
+                      <span className="flex items-center gap-1">{I.calendar} {fmtDataUi(t.dataInicio)}</span>
                       <span className="flex items-center gap-1">{I.school} {t.formador || "Sem formador"} · {t.horas} h</span>
                     </p>
                   </div>
@@ -120,13 +121,19 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
                           .then(r => { setEnvioInq(`${r.enviados} enviados${r.semEmail ? `, ${r.semEmail} sem email` : ""}`); void ped.recarregar(); })
                           .catch(err => setEnvioInq(err instanceof Error ? err.message : "Não foi possível enviar."));
                       }}>Enviar inquéritos</Botao>
+                      <Botao tamanho="sm" variante="fantasma" className="text-white hover:text-tinta" title="Inquéritos de impacto, cerca de 3 meses depois do fim (só aos formandos)" onClick={() => {
+                        setEnvioInq("A enviar…");
+                        void apiEnviarInqueritosTurma("fin", t.id, "pos")
+                          .then(r => { setEnvioInq(`Pós-formação: ${r.enviados} enviados${r.semEmail ? `, ${r.semEmail} sem email` : ""}`); void ped.recarregar(); })
+                          .catch(err => setEnvioInq(err instanceof Error ? err.message : "Não foi possível enviar."));
+                      }}>Enviar pós-formação</Botao>
                       <Botao tamanho="sm" variante="primario" onClick={() => setEditar(true)}>Editar turma</Botao>
                       {!t.fechadaEm && staffPodeDossie(user.role) && (
                         <Botao tamanho="sm" variante="secundario" disabled={!resultados || faltaFecho.length > 0}
                           title={faltaFecho.length ? `Falta: ${faltaFecho.slice(0, 5).join(" ")}${faltaFecho.length > 5 ? "…" : ""}` : "Gera o relatório de execução e marca a turma como concluída"}
                           onClick={() => setFechar(true)}>Fecho formal</Botao>
                       )}
-                      {t.fechadaEm && <span className="text-xs font-semibold text-emerald-200 px-3 py-2 bg-white/10 rounded-controlo">Fechada {t.fechadaEm}</span>}
+                      {t.fechadaEm && <span className="text-xs font-semibold text-emerald-200 px-3 py-2 bg-white/10 rounded-controlo">Fechada {fmtDataUi(t.fechadaEm.slice(0, 10))}</span>}
                       {t.fechadaEm && <ReabrirTurma regime="fin" turmaId={t.id} onReaberta={() => recarregarTurma("fin", t.id)} />}
                       <Botao tamanho="sm" variante="fantasma" soIcone aria-label="Exportar turma" className="text-white hover:text-tinta" icone={I.download}
                         onClick={() => setExportar(exportPayload(

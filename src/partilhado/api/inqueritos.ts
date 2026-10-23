@@ -69,5 +69,6 @@ export const apiLigacaoInquerito = (id: number) => api<{ token: string; url: str
 export const apiLancarResposta = (id: number, corpo: { turma: string; formando: string; respostas: Record<string, unknown> }) =>
   enviar.post<{ ok: boolean }>(`/v1/inqueritos/${id}/respostas`, corpo);
 
-export const apiEnviarInqueritosTurma = (regime: Regime, turmaId: number) =>
-  enviar.post<{ ok: boolean; enviados: number; semEmail: number; inqueritos: number }>(`/v1/turmas/${regime}/${turmaId}/inqueritos/enviar`);
+/** `fase` "pos": os inquéritos de impacto pós-formação (~3 meses depois), só aos formandos. */
+export const apiEnviarInqueritosTurma = (regime: Regime, turmaId: number, fase: "fim" | "pos" = "fim") =>
+  enviar.post<{ ok: boolean; enviados: number; semEmail: number; inqueritos: number }>(`/v1/turmas/${regime}/${turmaId}/inqueritos/enviar${fase === "pos" ? "?fase=pos" : ""}`);

@@ -71,6 +71,8 @@ export type FontesTurma = {
   anexos: AnexoLinha[];
   ficheiros: { ambito: string; requisito_id: string; pessoa_id: number | null; pessoa_nome: string }[];
   percurso: { total: number; porTipo: Map<string, ContagemPercurso> } | null;
+  /** Gold: pagamentos pagos da turma e quantos já têm recibo. */
+  recibos?: { pagos: number; comRecibo: number } | null;
 };
 
 async function fontesDaTurma(db: Db, regime: Regime, turma: TurmaRow): Promise<FontesTurma> {
@@ -85,14 +87,19 @@ async function fontesDaTurma(db: Db, regime: Regime, turma: TurmaRow): Promise<F
     resultadosDaTurma(db, regime, turma.id),
     repo.docsDosFormadores(db, nomesFormadoresDaTurma(turma)),
   ]);
-  const [docsValidados, inqueritos, ficheiros, percurso] = await Promise.all([
+  const [docsValidados, inqueritos, ficheiros, percurso, recibos] = await Promise.all([
     formandos.length ? repo.docsValidadosDosFormandos(db, regime, formandos.map(f => f.id)) : Promise.resolve([]),
     repo.inqueritosEnviadosATurma(db, regime, turma.id).catch(() => []),
     cursoId == null ? Promise.resolve([]) : repo.ficheirosDoCurso(db, regime, cursoId).catch(() => []),
     regime === "gold" ? percursoGoldDaTurma(db, turma) : Promise.resolve(null),
+    regime === "gold" ? repo.recibosDasTurmasGold(db, [turma.id]).catch(() => []) : Promise.resolve([]),
   ]);
   const resultados = res?.formandos ?? [];
-  return { sessoes, docs, formandos, docsValidados, inqueritos, resultados, formadores, manual, anexos, ficheiros, percurso };
+  const r = recibos[0];
+  return {
+    sessoes, docs, formandos, docsValidados, inqueritos, resultados, formadores, manual, anexos, ficheiros, percurso,
+    recibos: r ? { pagos: Number(r.pagos), comRecibo: Number(r.com_recibo) } : null,
+  };
 }
 
 /**
@@ -289,6 +296,16 @@ function itensDe(regime: Regime, turma: TurmaRow, f: FontesTurma, modelo: DtpMod
       const depois = aplicarPercursoNoItem(item, fundirPercurso(item, contagem, percurso.total, f), Boolean(f.manual[item.id]));
       // O percurso junta-se à ficha: nunca tira o visto que os dados já deram.
       return item.estado === "ok" ? { ...item, percurso: depois.percurso } : depois;
+    });
+  }
+  // Gold: cada pagamento pago com o seu recibo emitido (na Drive) também conta para os comprovativos.
+  const rec = regime === "gold" ? f.recibos : null;
+  if (rec && rec.pagos > 0) {
+    items = items.map(item => {
+      if (item.id !== "recibos" || f.manual[item.id] || item.estado === "ok") return item;
+      const detalhe = `${rec.comRecibo}/${rec.pagos} pagamentos com recibo emitido.`;
+      if (rec.comRecibo >= rec.pagos) return { ...item, estado: "ok" as const, detalhe };
+      return rec.comRecibo > 0 ? { ...item, estado: "parcial" as const, detalhe } : { ...item, detalhe: `${detalhe} ${item.detalhe ?? ""}`.trim() };
     });
   }
   return { items, facts };

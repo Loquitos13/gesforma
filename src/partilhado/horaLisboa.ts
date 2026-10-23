@@ -125,27 +125,27 @@ export function instanteLisboa(dia: string, hora = "00:00") {
   return new Date(t);
 }
 
-/** Instante → "dd/mm/aaaa" em Lisboa. Texto que não é data volta como veio. */
+/** Instante → "dd-mm-aaaa" em Lisboa (todas as datas do sistema em dd-mm-aaaa). Texto que não é data volta como veio. */
 export function fmtDataLisboa(instante: Date | string | number | null | undefined) {
   if (instante === null || instante === undefined || instante === "") return "";
   if (!valido(instante)) return String(instante);
   const p = partesLisboa(instante);
-  return `${p.dia}/${p.mes}/${p.ano}`;
+  return `${p.dia}-${p.mes}-${p.ano}`;
 }
 
-/** Instante → "dd/mm/aaaa hh:mm" em Lisboa. */
+/** Instante → "dd-mm-aaaa hh:mm" em Lisboa. */
 export function fmtDataHoraLisboa(instante: Date | string | number | null | undefined) {
   if (instante === null || instante === undefined || instante === "") return "";
   if (!valido(instante)) return String(instante);
   const p = partesLisboa(instante);
-  return `${p.dia}/${p.mes}/${p.ano} ${p.hora}:${p.minuto}`;
+  return `${p.dia}-${p.mes}-${p.ano} ${p.hora}:${p.minuto}`;
 }
 
 /** Data ou data+hora já escolhida no calendário (não é um instante UTC). */
 export function fmtDataCalendario(raw: string) {
   const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/.exec(raw.trim());
   if (!m) return raw;
-  const data = `${m[3]}/${m[2]}/${m[1]}`;
+  const data = `${m[3]}-${m[2]}-${m[1]}`;
   return m[4] ? `${data} ${m[4]}:${m[5]}` : data;
 }
 

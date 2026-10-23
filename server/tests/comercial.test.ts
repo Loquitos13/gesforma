@@ -229,7 +229,7 @@ describe("Campanhas por email aos pré-inscritos parados", () => {
     expect(job.rows).toHaveLength(1);
     expect(job.rows[0]!.subject).toContain(curso);
     expect(job.rows[0]!.body_html).toContain(`/cronograma/gold/${turmaId}`);
-    expect(job.rows[0]!.body_html).toContain("Porto · Laboral · início 01/06/2099");
+    expect(job.rows[0]!.body_html).toContain("Porto · Laboral · início 01-06-2099");
 
     const contactos = await ctx.db.query<{ n: number }>("SELECT count(*)::int AS n FROM preinscricao_contactos WHERE preinscricao_id = $1", [certo]);
     expect(contactos.rows[0]!.n).toBe(3);

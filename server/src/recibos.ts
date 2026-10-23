@@ -13,6 +13,7 @@ import * as repo from "./repos/recibos.js";
 import { modeloEmail } from "./repos/emails.js";
 import { isEmail, normalizeEmail } from "./security.js";
 import { anoLisboa, lerInstante } from "./datas.js";
+import { fmtDataDDMMAAAA } from "../../src/partilhado/horaLisboa.js";
 
 /**
  * Recibos internos: só para pagamentos confirmados (estado Pago). O número é atribuído
@@ -26,7 +27,8 @@ export class ReciboErro extends Error {
 const fmtData = (iso: string | null | undefined) => {
   if (!iso) return "";
   const d = lerInstante(iso);
-  return Number.isNaN(d.getTime()) ? iso.slice(0, 10) : d.toLocaleDateString("pt-PT", { timeZone: "Europe/Lisbon" });
+  // Todas as datas dos documentos em dd-mm-aaaa (dia civil de Lisboa).
+  return Number.isNaN(d.getTime()) ? fmtDataDDMMAAAA(iso.slice(0, 10)) : fmtDataDDMMAAAA(d);
 };
 
 export const numeroRecibo = (r: { numero: number; ano: number }) => `${String(r.numero).padStart(4, "0")}/${r.ano}`;

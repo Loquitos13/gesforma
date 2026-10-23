@@ -37,6 +37,30 @@ export async function anexosDaTurma(c: Consulta, regime: Regime, turmaId: number
   );
 }
 
+/**
+ * Gold: pagamentos «Pago» de cada turma (pela turma do pagamento ou do formando) e quantos têm recibo na Drive.
+ * O item «Comprovativos de pagamento / recibos» do dossiê conta-os.
+ */
+export async function recibosDasTurmasGold(c: Consulta, turmaIds: number[]) {
+  if (!turmaIds.length) return [];
+  return many<{ turma_id: number; pagos: number; com_recibo: number }>(
+    c,
+    `SELECT t.turma_id, count(*)::int AS pagos, count(*) FILTER (WHERE COALESCE(r.drive_file_id, '') <> '')::int AS com_recibo
+       FROM (SELECT p.id, COALESCE(p.turma_id, fg.turma_id) AS turma_id
+               FROM pagamentos p LEFT JOIN formandos_gold fg ON fg.id = p.formando_id
+              WHERE p.estado = 'Pago') t
+       LEFT JOIN recibos r ON r.pagamento_id = t.id
+      WHERE t.turma_id = ANY($1::int[])
+      GROUP BY t.turma_id`,
+    [pgIntArray(turmaIds)],
+  );
+}
+
+/** Um ficheiro ainda anexado a algum item de alguma turma (não se apaga). */
+export async function anexoEmUso(c: Consulta, driveFileId: string) {
+  return Boolean(await one(c, "SELECT 1 AS um FROM dtp_anexos WHERE drive_file_id = $1 LIMIT 1", [driveFileId]));
+}
+
 export async function gravarAnexo(c: Consulta, regime: Regime, turmaId: number, itemId: string, f: { id: string; nome: string; url: string }) {
   await one(
     c,
@@ -55,6 +79,15 @@ export async function sessoesParaFactos(c: Consulta, regime: Regime, turmaId: nu
   return many<{ sessao_n: number; plano: unknown; sumario: unknown; presencas: unknown }>(
     c,
     "SELECT sessao_n, plano, sumario, presencas FROM turma_sessoes WHERE regime = $1 AND turma_id = $2 AND sessao_n IS NOT NULL",
+    [regime, turmaId],
+  );
+}
+
+/** Certificados da turma (o ZIP do dossiê junta os ficheiros emitidos). */
+export async function certificadosEmitidos(c: Consulta, regime: Regime, turmaId: number) {
+  return many<{ formando_id: number; emitido: boolean; ficheiro_id: string }>(
+    c,
+    "SELECT formando_id, emitido, COALESCE(ficheiro_id, '') AS ficheiro_id FROM turma_certificados WHERE regime = $1 AND turma_id = $2",
     [regime, turmaId],
   );
 }

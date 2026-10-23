@@ -12,6 +12,7 @@ import { pode } from "../../permissoes/capacidades.js";
 import { readFormandoPii, writeFormandoDocs, writeFormandoPiiPatch } from "../../pii.js";
 import { precoParaOferta } from "../../precoOferta.js";
 import { linhaFormando } from "../../repos/formandos.js";
+import { piiFormandoFinParaGravar } from "../../repos/formandoFinanciamento.js";
 import {
   apagarFormando, atualizarFormandoFin, atualizarFormandoGold, definirTurmaFin, inserirFormandoFin, inserirFormandoGold,
   registarPagamentoRecebido, temPagamentoPago, turmaFinPorId, turmaFinPorNome, turmaGoldBasica,
@@ -283,13 +284,20 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
       }
     }
     if (turmaNova) d.turma = turmaNova.nome;
-    const docs = Object.fromEntries(DOCS_FIN.map(k => [k, d[k] ?? prev[k]])) as Record<(typeof DOCS_FIN)[number], { ok: boolean; data: string }>;
-    const docPack = writeFormandoDocs(docs);
-    const pii = writeFormandoPiiPatch({ telf: d.telf ?? readFormandoPii(current).telf }, readFormandoPii(current));
-    await atualizarFormandoFin(db, id, {
-      nome: d.nome, apelido: d.apelido, turma: d.turma, telf: pii.pii_enc ? "" : d.telf, email: d.email?.toLowerCase(), curso: d.curso,
-      estado: d.estado, docs: docPack.docs, docsEnc: docPack.docs_enc, piiEnc: pii.pii_enc,
-    }, newPublicId());
+    // Docs e dados cifrados: relidos com a linha trancada e reescritos na mesma transacção, para não desfazer o que
+    // outra gravação (ex.: Dados para o financiamento) mudou entretanto. Sem telemóvel novo, o pacote cifrado fica.
+    await db.tx(async q => {
+      await piiFormandoFinParaGravar(q, id);
+      const fresca = (await linhaFormando(q, "fin", id)) ?? current;
+      const antes = mapFormandoFin(fresca);
+      const docs = Object.fromEntries(DOCS_FIN.map(k => [k, d[k] ?? antes[k]])) as Record<(typeof DOCS_FIN)[number], { ok: boolean; data: string }>;
+      const docPack = writeFormandoDocs(docs);
+      const pii = d.telf !== undefined ? writeFormandoPiiPatch({ telf: d.telf }, readFormandoPii(fresca)) : null;
+      await atualizarFormandoFin(q, id, {
+        nome: d.nome, apelido: d.apelido, turma: d.turma, telf: pii?.pii_enc ? "" : d.telf, email: d.email?.toLowerCase(), curso: d.curso,
+        estado: d.estado, docs: docPack.docs, docsEnc: docPack.docs_enc, piiEnc: pii?.pii_enc ?? null,
+      }, newPublicId());
+    });
     // Documentos marcados ou desmarcados à mão ficam registados com quem validou.
     for (const doc of DOCS_FIN) {
       const novo = d[doc];

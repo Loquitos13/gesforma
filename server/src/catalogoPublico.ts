@@ -84,7 +84,6 @@ type CursoBruto = {
   nomeOferta: string;
 };
 
-const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
 function chave(value: string) {
   return value
@@ -179,8 +178,8 @@ export function classificarInscricao(regime: "gold" | "fin", tipo: string, modal
 function dataCurta(iso: string) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   if (!m) return iso;
-  const mes = MESES[Number(m[2]) - 1] ?? m[2];
-  return `${Number(m[3])} ${mes} ${m[1]}`;
+  // Todas as datas em dd-mm-aaaa (também no site).
+  return `${m[3]}-${m[2]}-${m[1]}`;
 }
 
 function somar(map: Map<string, number>, nome: string, n: number) {

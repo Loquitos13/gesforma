@@ -1,4 +1,5 @@
 import { type ExportTurmaInfo } from "../../../ActionSurfaces";
+import { data as fmtDataUi } from "../../../../partilhado/ui/formatos";
 import { sumarioPreenchido, type PlanoSessaoData, type SessaoMeta, type SumarioSessaoData } from "../../../../partilhado/TurmaExtras";
 import { SearchSelect } from "../../../../partilhado/FormKit";
 import { imprimirFolhasPresencas } from "../../../../partilhado/presencasPrint";
@@ -140,7 +141,7 @@ export function SessoesTurmaTab({
                 <tr key={s.n} className="hover:bg-slate-50">
                   <Td><span className={`w-7 h-7 rounded-full ${numCls} text-xs font-bold flex items-center justify-center`}>{s.n}</span></Td>
                   <Td>
-                    <p className="text-xs font-medium text-slate-800 whitespace-nowrap">{s.data}</p>
+                    <p className="text-xs font-medium text-slate-800 whitespace-nowrap">{fmtDataUi(s.data)}</p>
                     <p className="text-xs text-slate-400">{s.hora}</p>
                   </Td>
                   <Td><ModulosCell sessao={s} /></Td>

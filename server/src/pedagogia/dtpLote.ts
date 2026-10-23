@@ -33,7 +33,7 @@ export async function fontesEmLote(db: Db, regime: Regime, alvos: Alvo[]): Promi
   const cursoIds = [...new Set(alvos.map(a => a.cursoId).filter((x): x is number => x != null))];
 
   const nomesFormadores = [...new Set(alvos.flatMap(a => nomesFormadoresDaTurma(a.turma)))];
-  const [sessoes, docs, resultados, manuais, anexos, ficheiros, inqueritos, formadores, formandosGold, formandosFin] = await Promise.all([
+  const [sessoes, docs, resultados, manuais, anexos, ficheiros, inqueritos, formadores, formandosGold, formandosFin, recibos] = await Promise.all([
     lote.sessoesDasTurmas(db, regime, ids),
     lote.documentosDasTurmas(db, regime, ids),
     resultadosDeTurmas(db, regime, ids),
@@ -44,7 +44,9 @@ export async function fontesEmLote(db: Db, regime: Regime, alvos: Alvo[]): Promi
     repo.docsDosFormadores(db, nomesFormadores),
     regime === "gold" ? lote.formandosGoldDasTurmas(db, ids, alvos.map(a => a.turma.nome)) : Promise.resolve([]),
     regime === "fin" ? lote.formandosFinDasTurmas(db, ids, alvos.map(a => a.turma.nome)) : Promise.resolve([]),
+    regime === "gold" ? repo.recibosDasTurmasGold(db, ids).catch(() => []) : Promise.resolve([]),
   ]);
+  const recibosDe = new Map(recibos.map(r => [Number(r.turma_id), { pagos: Number(r.pagos), comRecibo: Number(r.com_recibo) }]));
 
   // Formandos de cada turma, com as mesmas regras de formandosDaTurma (sem turma não entram em nenhuma).
   const formandosDe = new Map<number, (FormandoTurma & { email?: string })[]>();
@@ -129,6 +131,7 @@ export async function fontesEmLote(db: Db, regime: Regime, alvos: Alvo[]): Promi
       anexos: anexosDe.get(turma.id) ?? [],
       ficheiros: cursoId == null ? [] : ficheirosDe.get(cursoId) ?? [],
       percurso,
+      recibos: recibosDe.get(turma.id) ?? null,
     });
   }
   return out;

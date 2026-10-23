@@ -1,6 +1,7 @@
 // Cockpit de uma turma Gold: cabeçalho, próximos passos e separadores (cronograma, sessões, avaliação,
 // documentos, dossiê, certificados e visão geral). Dados em ./dados.ts.
 import { useEffect, useState } from "react";
+import { data as fmtDataUi } from "../../../../partilhado/ui/formatos";
 import { apiEnviarInqueritosTurma } from "../../../../partilhado/api/inqueritos";
 import { apiTurmaGoldFecho, emitAutomation } from "../../../../partilhado/api";
 import { useAuth } from "../../../../partilhado/AuthGate";
@@ -107,7 +108,7 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
                     <h1 className="m-0 mt-2 text-lg font-semibold">{t.curso}</h1>
                     <p className="m-0 mt-2 flex flex-wrap gap-4 text-slate-300 text-xs">
                       <span className="flex items-center gap-1">{I.location} {t.local}</span>
-                      <span className="flex items-center gap-1">{I.calendar} {t.dataInicio}</span>
+                      <span className="flex items-center gap-1">{I.calendar} {fmtDataUi(t.dataInicio)}</span>
                       <span className="flex items-center gap-1">{I.school} {t.horario}</span>
                     </p>
                   </div>
@@ -119,6 +120,12 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
                           .then(r => setEnvioInq(`${r.enviados} enviados${r.semEmail ? `, ${r.semEmail} sem email` : ""}`))
                           .catch(err => setEnvioInq(err instanceof Error ? err.message : "Não foi possível enviar."));
                       }}>Enviar inquéritos</Botao>
+                      <Botao tamanho="sm" variante="fantasma" className="text-white hover:text-tinta" title="Inquéritos de impacto, cerca de 3 meses depois do fim (só aos formandos)" onClick={() => {
+                        setEnvioInq("A enviar…");
+                        void apiEnviarInqueritosTurma("gold", t.id, "pos")
+                          .then(r => { setEnvioInq(`Pós-formação: ${r.enviados} enviados${r.semEmail ? `, ${r.semEmail} sem email` : ""}`); void ped.recarregar(); })
+                          .catch(err => setEnvioInq(err instanceof Error ? err.message : "Não foi possível enviar."));
+                      }}>Enviar pós-formação</Botao>
                       <Botao tamanho="sm" variante="primario" onClick={() => setEditar(true)}>Editar turma</Botao>
                       {resultados && !fechada && staffPodeDossie(user.role) && (
                         <Botao tamanho="sm" variante="secundario" disabled={faltaFecho.length > 0}

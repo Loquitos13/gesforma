@@ -1,5 +1,6 @@
 // Continuação de AreaFormando.tsx (partido para ficar abaixo das 500 linhas).
 import { FormEvent, useEffect, useState } from "react";
+import { fmtDataDDMMAAAA } from "../partilhado/horaLisboa";
 import { ApiError, apiAreaFormando, apiLogout, apiMe, apiPatchAreaFormando, apiReporPalavraPasse, type AreaFormandoDados, type SessionUser } from "../partilhado/api";
 import { mensagemPalavraPasse } from "../partilhado/passwordPolicy";
 import { PilulaOpiniao } from "./AreaFormandoOpiniao";
@@ -163,7 +164,7 @@ export function Painel({ dados, onDados, onSair, avisar, opcoes = OPCOES_PAINEL 
                 {dados.pagamentos.map(pagamento => (
                   <div key={pagamento.id} className="grid gap-3 border-b border-[var(--c-primaria,#1C3350)]/10 py-4 text-sm sm:grid-cols-[1fr_120px_90px_90px] sm:items-center">
                     <span><strong className="block">{pagamento.curso}</strong><span className="text-[var(--c-primaria,#1C3350)]/45">{pagamento.metodo}</span></span>
-                    <span className="text-[var(--c-primaria,#1C3350)]/45">{pagamento.data}</span>
+                    <span className="text-[var(--c-primaria,#1C3350)]/45">{fmtDataDDMMAAAA(pagamento.data)}</span>
                     <strong>{pagamento.valor}</strong>
                     <span className="font-bold text-[var(--c-destaque,#A60000)]">{pagamento.estado}</span>
                   </div>

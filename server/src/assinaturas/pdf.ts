@@ -3,6 +3,7 @@
  * a assinatura no espaço "Pela … / Pelo …" do documento, a página "Certificado de assinatura" e o selo da entidade.
  */
 import { createHash } from "node:crypto";
+import { fmtDataDDMMAAAA } from "../../../src/partilhado/horaLisboa.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
@@ -39,8 +40,9 @@ function textoParaHtml(t: string) {
   return t.replace(/\r/g, "").split(/\n{2,}/).map(p => p.trim()).filter(Boolean).map(p => `<p>${escapar(p).replace(/\n/g, "<br>")}</p>`).join("");
 }
 
+/** Data do documento em dd-mm-aaaa (hora de Lisboa). */
 function dataLonga(d = new Date()) {
-  return d.toLocaleDateString("pt-PT", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Lisbon" });
+  return fmtDataDDMMAAAA(d);
 }
 
 /** Documento original: a página do editor (cabeçalho, texto, cláusulas) e o espaço das assinaturas. */

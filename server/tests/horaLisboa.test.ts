@@ -55,9 +55,9 @@ describe("hora de Lisboa: ajudantes", () => {
   });
 
   it("formata instantes e carimbos na hora de Lisboa", () => {
-    expect(fmtDataLisboa(VERAO)).toBe("01/08/2026");
-    expect(fmtDataHoraLisboa(VERAO)).toBe("01/08/2026 00:30");
-    expect(fmtDataLisboa(INVERNO)).toBe("31/01/2026");
+    expect(fmtDataLisboa(VERAO)).toBe("01-08-2026");
+    expect(fmtDataHoraLisboa(VERAO)).toBe("01-08-2026 00:30");
+    expect(fmtDataLisboa(INVERNO)).toBe("31-01-2026");
     // Texto de um timestamptz do Postgres, com o desvio sem minutos (nem todos os motores o lêem).
     expect(lerInstante("2026-07-31 23:30:00.123+00").toISOString()).toBe("2026-07-31T23:30:00.123Z");
     expect(lerInstante("2026-08-01 00:30:00+01").toISOString()).toBe("2026-07-31T23:30:00.000Z");
@@ -65,7 +65,7 @@ describe("hora de Lisboa: ajudantes", () => {
     expect(stampLisboa("2026-07-31T23:30:00Z")).toBe("2026-08-01 00:30");
     expect(stampLisboa("não é data")).toBe("");
     // Carimbo sem fuso: o GesForma grava-os em UTC.
-    expect(fmtStampLisboa("2026-07-31 23:30")).toBe("01/08/2026 00:30");
+    expect(fmtStampLisboa("2026-07-31 23:30")).toBe("01-08-2026 00:30");
     expect(diaDeCarimbo("2026-07-31 23:30")).toBe("2026-08-01");
     expect(diaDeCarimbo("2026-07-31")).toBe("2026-07-31");
     expect(diaDeCarimbo("31/07/2026")).toBe("");

@@ -1,5 +1,6 @@
 // Dossiê TP (vista geral): matriz turma × secção do dossiê, o que falta em cada turma e exportação ZIP.
 import { useMemo, useState } from "react";
+import { data as fmtDataUi } from "../../../partilhado/ui/formatos";
 import { apiExportarDtp, apiMatrizDtp, type Regime, type TurmaDtp } from "../../../partilhado/api/dtp";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
@@ -62,7 +63,7 @@ export default function Dossie({ view, navigate }: VistaProps) {
       celula: t => (
         <span className="block min-w-0">
           <span className="block font-semibold text-tinta truncate">{t.nome}</span>
-          <span className="block text-xs text-tinta-suave truncate">{[t.curso, t.inicio && `início ${t.inicio}`, t.financiador].filter(Boolean).join(" · ")}</span>
+          <span className="block text-xs text-tinta-suave truncate">{[t.curso, t.inicio && `início ${fmtDataUi(t.inicio)}`, t.financiador].filter(Boolean).join(" · ")}</span>
         </span>
       ),
     },

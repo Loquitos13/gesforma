@@ -149,12 +149,13 @@ export async function registar(app: FastifyInstance, { db, requireAuth, audit }:
 
   app.post("/v1/turmas/:regime/:id/inqueritos/enviar", async (req, reply) => {
     if (!requireAuth(req, reply) || !semFormador(req, reply, "O formador não envia inquéritos da turma.")) return;
-    const v = validar(reply, { params: regimeIdParam }, req);
+    const v = validar(reply, { params: regimeIdParam, query: z.object({ fase: z.enum(["fim", "pos"]).optional() }) }, req);
     if (!v) return;
     const { regime: r, id } = v.params;
-    const out = await enviarInqueritosDaTurma(db, req.actor!.id, r, id);
+    const fase = v.query.fase ?? "fim";
+    const out = await enviarInqueritosDaTurma(db, req.actor!.id, r, id, fase);
     if ("erro" in out) return reply.code(out.codigo).send({ error: out.erro });
-    await audit(db, req.actor!.id, "inquerito.enviar_turma", "turma", String(id), req.ip, { regime: r, enviados: out.enviados, semEmail: out.semEmail });
+    await audit(db, req.actor!.id, "inquerito.enviar_turma", "turma", String(id), req.ip, { regime: r, fase, enviados: out.enviados, semEmail: out.semEmail });
     return { ok: true, ...out };
   });
 

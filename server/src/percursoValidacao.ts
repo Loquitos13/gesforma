@@ -137,7 +137,7 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
 
 function fmtData(iso: string) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : iso;
 }
 
 export async function enviarSugestaoTurmaCheia(db: Db, leadId: number, actorId?: string) {

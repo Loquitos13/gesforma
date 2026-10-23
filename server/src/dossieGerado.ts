@@ -1,5 +1,5 @@
 import { assiduidadeMinima, lerEntidade } from "./regrasConfig.js";
-import { resultadosDaTurma, resultadosDeTurmas } from "./resultados.js";
+import { resultadosDaTurma } from "./resultados.js";
 import type { Db } from "./db/pool.js";
 import { certificadosFinComFicheiro, formandosFinComContacto, turmaFinBase, ufcdDoCurso } from "./repos/dossieGerado.js";
 import { listarNotas } from "./repos/pedagogiaSessoes.js";
@@ -388,32 +388,4 @@ export async function pdfDossieGerado(db: Db, turmaId: number, item: ItemDossieG
   const dados = await carregar(db, turmaId);
   if (!dados) return null;
   return { nome: NOMES[item], bytes: BUILDERS[item](dados) };
-}
-
-/**
- * O mesmo que `contagemCertificadosFin`, para muitas turmas de uma vez (vista geral do Dossiê TP, painel).
- * `formandoIds` são os formandos de cada turma pelas regras de `formandosFinComContacto`.
- * Só é elegível quem tem resultado na turma.
- */
-export async function contagemCertificadosFinLote(db: Db, turmas: { id: number; formandoIds: number[] }[]) {
-  const out = new Map<number, { done: number; total: number }>();
-  const resultados = await resultadosDeTurmas(db, "fin", turmas.map(t => t.id));
-  for (const t of turmas) {
-    const r = resultados.get(t.id);
-    const porId = new Map((r?.formandos ?? []).map(f => [f.id, f]));
-    const elegiveis = t.formandoIds.map(id => porId.get(id)).filter(f => f?.elegivel);
-    out.set(t.id, { done: elegiveis.filter(f => f!.certificado.ficheiro).length, total: elegiveis.length });
-  }
-  return out;
-}
-
-/** Cópia do tópico 11: só conta o PDF externo de quem é elegível com aproveitamento. */
-export async function contagemCertificadosFin(db: Db, turmaId: number): Promise<{ done: number; total: number }> {
-  const dados = await carregar(db, turmaId);
-  if (!dados) return { done: 0, total: 0 };
-  const elegiveis = linhasElegiveis(dados).filter(f => f.elegivel);
-  return {
-    done: elegiveis.filter(f => f.cert?.ficheiroId).length,
-    total: elegiveis.length,
-  };
 }

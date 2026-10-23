@@ -1,6 +1,7 @@
 /** Peças comuns da assinatura: ligações, signatário, texto do contrato, emails e Drive. */
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import { config } from "../config.js";
+import { fmtDataDDMMAAAA, fmtDataHoraLisboa } from "../../../src/partilhado/horaLisboa.js";
 import type { Db } from "../db/pool.js";
 import { nomePastaPessoa } from "../driveArvore.js";
 import { storeDriveFile } from "../driveFicheiros.js";
@@ -49,10 +50,9 @@ const origem = () => config.appOrigin.replace(/\/$/, "");
 export const urlAssinar = (token: string) => `${origem()}/assinar/${token}`;
 export const urlVerificar = (codigo: string) => `${origem()}/verificar/${codigo}`;
 
-const FMT = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", dateStyle: "short", timeStyle: "short" });
-const FMT_DIA = new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", dateStyle: "long" });
-export const dataHora = (d: Date | string | null) => (d ? FMT.format(new Date(d)) : "");
-export const dataLonga = (d: Date | string) => FMT_DIA.format(new Date(d));
+// Todas as datas dos documentos em dd-mm-aaaa (hora de Lisboa).
+export const dataHora = (d: Date | string | null) => (d ? fmtDataHoraLisboa(new Date(d)) : "");
+export const dataLonga = (d: Date | string) => fmtDataDDMMAAAA(new Date(d));
 
 export const NIF_RE = /^\d{9}$/;
 export function mascararNif(nif: string) {

@@ -1,5 +1,6 @@
 // Plano e sumário de sessão: tipos, valores vazios e os modais de edição/assinatura.
 import { useEffect, useMemo, useState } from "react";
+import { data as fmtDataUi } from "./ui/formatos";
 import { I } from "./turmaIcones";
 
 export type MomentoKey = "introducao" | "desenvolvimento" | "conclusao";
@@ -91,7 +92,7 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano: planoGravado, o
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
           <div>
             <p className="text-sm font-bold text-slate-800">Plano de Sessão - Sessão {sessao.n}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{sessao.data} · {sessao.hora} · {formadoresDaSessaoLabel(sessao) || "Formador por definir"}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{fmtDataUi(sessao.data)} · {sessao.hora} · {formadoresDaSessaoLabel(sessao) || "Formador por definir"}</p>
           </div>
           <div className="flex items-center gap-2">
             {onPdf && !editing && (
@@ -247,7 +248,7 @@ export function SumarioSessaoModal({ open, onClose, sessao, sumario, accent = "g
         <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
           <div>
             <p className="text-sm font-semibold text-slate-800">Sumário - Sessão {sessao.n}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{sessao.data} · {sessao.hora} · {formadoresDaSessaoLabel(sessao) || "Formador por definir"}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{fmtDataUi(sessao.data)} · {sessao.hora} · {formadoresDaSessaoLabel(sessao) || "Formador por definir"}</p>
           </div>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
         </div>

@@ -236,3 +236,53 @@ describe("estado do Dossiê TP", () => {
     expect(enviados.rows.some(r => Number(r.inquerito_id) === pos || r.publico === "pos")).toBe(false);
   });
 });
+
+describe("Dossiê TP: recibos (Gold), envio pós-formação e anexo substituído", () => {
+  it("os recibos emitidos dos pagamentos pagos contam no item «Comprovativos de pagamento / recibos»", async () => {
+    const ctx = await arrancar();
+    const t = await turmaGold(ctx, [sessao("s1")]);
+    const a = await formandoGold(ctx, t);
+    const b = await formandoGold(ctx, t);
+    for (const [id, f] of [["pg-" + unico("a"), a], ["pg-" + unico("b"), b]] as const) {
+      await ctx.db.query("INSERT INTO pagamentos (id, nome, valor, data, estado, formando_id, turma_id) VALUES ($1, 'X', 100, '2026-01-05', 'Pago', $2, $3)", [id, f, t.id]);
+      if (f === a) {
+        await ctx.db.query("INSERT INTO recibos (pagamento_id, ano, numero, drive_file_id) VALUES ($1, 2026, $2, 'drive-rec')", [id, novoId()]);
+      }
+    }
+    expect((await dtp(ctx, "gold", t.id)).item("recibos")).toMatchObject({ estado: "parcial", detalhe: "1/2 pagamentos com recibo emitido." });
+    await ctx.db.query("INSERT INTO recibos (pagamento_id, ano, numero, drive_file_id) SELECT id, 2026, $2, 'drive-rec-2' FROM pagamentos WHERE formando_id = $1", [b, novoId()]);
+    expect((await dtp(ctx, "gold", t.id)).item("recibos").estado).toBe("ok");
+  });
+
+  it("os inquéritos de pós-formação enviam-se à parte (só aos formandos) e contam no tópico 14", async () => {
+    const ctx = await arrancar();
+    const t = await turmaFin(ctx, [sessao("s1")]);
+    const f = await formandoFin(ctx, t);
+    await ctx.db.query("UPDATE formandos_fin SET email = $2 WHERE id = $1", [f, `${unico("pos")}@exemplo.pt`]);
+    for (const publico of ["formando", "pos"]) {
+      const r = await pedido(ctx, "financiada", "POST", "/v1/catalog/inqueritos", { regime: "fin", payload: { titulo: `Inq ${publico} ${unico("i")}`, perguntas: [], publico } });
+      expect(r.statusCode, r.body).toBe(200);
+    }
+    const fim = await pedido(ctx, "financiada", "POST", `/v1/turmas/fin/${t.id}/inqueritos/enviar`);
+    expect(fim.statusCode, fim.body).toBe(200);
+    const enviados = async () => (await ctx.db.query<{ publico: string }>("SELECT publico FROM inquerito_envios WHERE regime = 'fin' AND turma_id = $1", [t.id])).rows.map(r => r.publico).sort();
+    expect(await enviados()).not.toContain("pos");
+    const pos = await pedido(ctx, "financiada", "POST", `/v1/turmas/fin/${t.id}/inqueritos/enviar?fase=pos`);
+    expect(pos.statusCode, pos.body).toBe(200);
+    expect(pos.json().enviados).toBe(1);
+    expect(await enviados()).toContain("pos");
+  });
+
+  it("substituir o anexo de um item apaga o ficheiro anterior (se mais nenhum item o usa)", async () => {
+    const ctx = await arrancar();
+    const t = await turmaGold(ctx, [sessao("s1")]);
+    const id1 = `f-${unico("v1")}`;
+    await ctx.db.query("INSERT INTO drive_files (id, name, mime_type, size_bytes, kind, regime, turma, stored_in) VALUES ($1, 'v1.pdf', 'application/pdf', 10, 'dtp', 'gold', $2, 'local')", [id1, t.nome]);
+    // Um item manual qualquer da turma (sem regra automática).
+    const manual = (await dtp(ctx, "gold", t.id)).items.find(i => !i.auto && i.ambito !== "formando")!;
+    const urlItem = `/v1/turmas/gold/${t.id}/dtp/${encodeURIComponent(manual.id)}/anexo`;
+    expect((await pedido(ctx, "secretaria", "PUT", urlItem, { driveFileId: id1, fileName: "v1.pdf" })).statusCode).toBe(200);
+    expect((await pedido(ctx, "secretaria", "PUT", urlItem, { driveFileId: `f-${unico("v2")}`, fileName: "v2.pdf" })).statusCode).toBe(200);
+    expect((await ctx.db.query("SELECT 1 FROM drive_files WHERE id = $1", [id1])).rows).toHaveLength(0);
+  });
+});

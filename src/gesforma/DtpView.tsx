@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiDossieGerado, apiDtpExport, apiPerguntasInqueritoTurma, apiRelatorioEstatisticoTurma, apiRelatorioFinalTurma, apiRelatorioInqueritosTurma, type DtpEstado, type DtpItem, type DtpSnapshot } from "../partilhado/api";
 import { DTP_CATEGORIAS, dtpCategoriaDe, dtpPastaNome, dtpZipNome, type DtpCategoriaId } from "../partilhado/dtpPasta";
-import { TOPICOS_FIN } from "./dtpTopicosFin";
+import { TOPICOS_FIN } from "../partilhado/dtpTopicosFin";
 import { toastError, toastOk } from "../partilhado/toastBus";
 import { FileUploadModal } from "../partilhado/TurmaExtras";
 

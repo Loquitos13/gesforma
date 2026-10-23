@@ -7,6 +7,7 @@ import { fichaCursoFinPorNome } from "./repos/pedagogiaRelatorio.js";
 import { pdfDeLinhas } from "./pdfTexto.js";
 import { partirLinhas } from "./relatorioFinal.js";
 import { diaLisboa } from "./datas.js";
+import { fmtDataDDMMAAAA } from "../../src/partilhado/horaLisboa.js";
 import { documentosSessoesDaTurma, fichasInscricaoDaTurma, NOMES_DOCUMENTOS_FIN } from "./documentosFin.js";
 
 export const ITENS_DOSSIE_GERADO = [
@@ -118,9 +119,7 @@ function linhasDe(valor: unknown) {
 }
 
 function dataPt(iso: string) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!m) return iso || "—";
-  return `${m[3]}-${m[2]}-${m[1]}`;
+  return fmtDataDDMMAAAA(iso) || "—";
 }
 
 function mediaDe(notas: number[]) {

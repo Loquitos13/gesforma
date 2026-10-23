@@ -3,6 +3,8 @@ import type { TxQuery } from "../db/pool.js";
 import { COLUNAS_FINANCIAMENTO, type LinhaFinanciamento } from "./formandoFinanciamento.js";
 import { many, one, type Consulta } from "./sql.js";
 
+/** O formando está agora nesta turma (pelo id; as fichas antigas sem id pelo nome). */
+const DA_TURMA = "(f.turma_id = $1 OR (f.turma_id IS NULL AND trim(f.turma) <> '' AND lower(trim(f.turma)) = lower(trim($2))))";
 const COLUNAS_D = Object.values(COLUNAS_FINANCIAMENTO).map(c => `COALESCE(d.${c}, '') AS d_${c}`).join(", ");
 
 export type TipoReembolso = "execucao-fisica" | "despesas";
@@ -38,12 +40,15 @@ export type FormandoExecucao = {
   inscrito: string; p_nif: string; p_codigo_postal: string; p_telf: string; p_pii_enc: string;
   /** Morada (coluna antiga, sem cifra) e concelho da pré-inscrição: só a ficha de inscrição os usa. */
   p_morada: string; p_concelho: string;
+  /** Já não está nesta turma (mudou para outra) mas tem marcações nas sessões dela. */
+  transferido: boolean;
 } & { [K in `d_${keyof LinhaFinanciamento}`]: string };
 
 /**
  * Formandos da turma (pelo id; as fichas antigas sem id pelo nome da turma), com a pré-inscrição mais recente
  * do mesmo email (de preferência da Financiada): data de inscrição, NIF, código postal e telefone; e os dados
- * para o financiamento (formando_fin_financiamento, prefixo `d_`).
+ * para o financiamento (formando_fin_financiamento, prefixo `d_`). Entram também os que mudaram para outra turma
+ * depois de terem marcações nas sessões desta (`transferido`): a participação nesta turma conta para o reembolso.
  */
 export function formandosExecucao(c: Consulta, turma: { id: number; nome: string }) {
   return many<FormandoExecucao>(
@@ -51,7 +56,8 @@ export function formandosExecucao(c: Consulta, turma: { id: number; nome: string
     `SELECT f.id, f.nome, f.apelido, f.email, f.telf, f.estado, COALESCE(f.pii_enc, '') AS pii_enc,
             COALESCE(p.inscrito, '') AS inscrito, COALESCE(p.nif, '') AS p_nif, COALESCE(p.codigo_postal, '') AS p_codigo_postal,
             COALESCE(p.telf, '') AS p_telf, COALESCE(p.pii_enc, '') AS p_pii_enc,
-            COALESCE(p.morada_fiscal, '') AS p_morada, COALESCE(p.concelho, '') AS p_concelho, ${COLUNAS_D}
+            COALESCE(p.morada_fiscal, '') AS p_morada, COALESCE(p.concelho, '') AS p_concelho, ${COLUNAS_D},
+            NOT COALESCE(${DA_TURMA}, false) AS transferido
        FROM formandos_fin f
        LEFT JOIN formando_fin_financiamento d ON d.formando_id = f.id
        LEFT JOIN LATERAL (
@@ -61,7 +67,12 @@ export function formandosExecucao(c: Consulta, turma: { id: number; nome: string
           ORDER BY (regime = 'fin') DESC, id DESC
           LIMIT 1
        ) p ON true
-      WHERE f.turma_id = $1 OR (f.turma_id IS NULL AND trim(f.turma) <> '' AND lower(trim(f.turma)) = lower(trim($2)))
+      WHERE ${DA_TURMA}
+         OR EXISTS (
+           SELECT 1 FROM turma_sessoes ts
+            CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(ts.presencas) = 'array' THEN ts.presencas ELSE '[]'::jsonb END) m
+            WHERE ts.regime = 'fin' AND ts.turma_id = $1 AND ts.sessao_n IS NOT NULL AND m->>'id' = f.id::text
+         )
       ORDER BY f.nome, f.apelido, f.id`,
     [turma.id, turma.nome],
   );

@@ -1,3 +1,4 @@
+import { fmtDataDDMMAAAA } from "../../src/partilhado/horaLisboa.js";
 import { partirLinhas, pdfDeLinhas } from "./pdfTexto.js";
 
 export { partirLinhas };
@@ -77,10 +78,7 @@ function horasTexto(horas: number) {
 }
 
 function dataPt(iso?: string) {
-  if (!iso) return "—";
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!m) return iso;
-  return `${m[3]}-${m[2]}-${m[1]}`;
+  return fmtDataDDMMAAAA(iso) || "—";
 }
 
 function bloco(linhas: string[], titulo: string, corpo: string[]) {

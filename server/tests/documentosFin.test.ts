@@ -198,7 +198,7 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     ]) expect(ana, rotulo).toContain(rotulo);
     for (const valor of [
       "Ana Silva", "ENA · Escola de Negócios e Administração", CANDIDATURA_FIN_OMISSAO.programa, CANDIDATURA_FIN_OMISSAO.tipologia,
-      "8600", "Feminino", "1976-05-12", "10859691", "19-03-2029", "206156928", "11335247740", "Rua do Espinheiro 664, bl 5",
+      "8600", "Feminino", "12-05-1976", "10859691", "19-03-2029", "206156928", "11335247740", "Rua do Espinheiro 664, bl 5",
       "4400-450", "Vila Nova de Gaia", "914 212 368", "Portuguesa", "12.º Ano", "Trabalhador(a) por conta de outrem", "500000000",
     ]) expect(ana, valor).toContain(valor);
     // O Bruno não tem dados: os campos ficam em branco (sem valores de outro formando).
@@ -244,11 +244,11 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
       "Tipologia de Operação:", CANDIDATURA_FIN_OMISSAO.tipologiaOperacao,
       "8600 | Competências empreendedoras e técnicas de procura de emprego",
       "UFCD 8600 - Competências empreendedoras e técnicas de procura de emprego (Ação 2)",
-      "Sala:", "Local:", "Sala Virtual / E-Learning", "Data:", "2026-09-30", "Horário:", "19:00 às 22:00", "T:", "P:",
+      "Sala:", "Local:", "Sala Virtual / E-Learning", "Data:", "30-09-2026", "Horário:", "19:00 às 22:00", "T:", "P:",
       "Nome:", "Presenças:", "Ana Silva", "Presente", "Bruno Silva", "Atraso (20 min)",
       "Sumário:", "Técnicas de procura de emprego e CV.", "Simulação de entrevista.", "o Formador:", "o Coordenador:",
     ]) expect(p1, v).toContain(v);
-    expect(p2).toContain("2026-10-01");
+    expect(p2).toContain("01-10-2026");
     expect(p2).toContain("Falta");
     // Sessão sem sumário: a caixa fica vazia.
     expect(p2).not.toContain("Técnicas de procura de emprego e CV.");
@@ -291,7 +291,7 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     expect(folha.headers["content-disposition"]).toContain("sessao 2");
     const pf = await paginas(folha.rawPayload);
     expect(pf).toHaveLength(1);
-    expect(pf[0]).toContain("2026-10-01");
+    expect(pf[0]).toContain("01-10-2026");
     const plano = await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}/planos-sessao?sessao=1`);
     expect(plano.statusCode).toBe(200);
     expect(await paginas(plano.rawPayload)).toHaveLength(1);

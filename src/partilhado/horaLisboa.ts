@@ -149,7 +149,28 @@ export function fmtDataCalendario(raw: string) {
   return m[4] ? `${data} ${m[4]}:${m[5]}` : data;
 }
 
-const CARIMBO_UTC = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/;
+/**
+ * Data dos documentos gerados (PDF, folhas, exportações): sempre "dd-mm-aaaa". Aceita a data de calendário
+ * "aaaa-mm-dd" (fica o mesmo dia) ou um instante (timestamptz, carimbo UTC sem fuso, Date), que dá o dia de
+ * Lisboa. Vazio dá vazio; texto que não é data volta como veio.
+ */
+export function fmtDataDDMMAAAA(v: Date | string | number | null | undefined) {
+  if (v === null || v === undefined || v === "") return "";
+  if (typeof v === "string") {
+    const s = v.trim();
+    if (!s) return "";
+    const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (d) return `${d[3]}-${d[2]}-${d[1]}`;
+    const b = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
+    if (b) return `${b[1]}-${b[2]}-${b[3]}`;
+    if (!/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(s)) return s;
+  }
+  if (!valido(v)) return String(v);
+  const p = partesLisboa(v);
+  return `${p.dia}-${p.mes}-${p.ano}`;
+}
+
+const CARIMBO_UTC =/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/;
 
 /** Carimbo "aaaa-mm-dd hh:mm" gravado em UTC (sem fuso) → instante. */
 function instanteDeCarimbo(raw: string) {

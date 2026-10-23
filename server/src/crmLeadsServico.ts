@@ -3,10 +3,11 @@
  * acções em lote, apagar e entregar à secretaria. O SQL está em `repos/leads*.ts`.
  */
 import { ingestEvent } from "./automations.js";
+import { ficheiroEmOutroSitio } from "./repos/leadDocs.js";
 import { camposEmFalta, estadoPodeEntregar, podeArrastar } from "./crmRegras.js";
 import { addLeadNota, findDuplicados, logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
-import { firePreinscricaoEmail, listarDocsLead, notificarDocumentos } from "./docsLink.js";
+import { firePreinscricaoEmail, herdarDocsValidados, listarDocsLead, notificarDocumentos } from "./docsLink.js";
 import { apagarFicheiroSubstituido } from "./driveFicheiros.js";
 import { campanhaDoPedido, origemDaLista } from "./leadOpcoes.js";
 import { mapPreinscricao, newPublicId, nextOpsId } from "./ops.js";
@@ -102,6 +103,7 @@ export async function criarLeadManual(db: Db, actor: Actor, d: DadosLead) {
   await firePreinscricaoEmail(db, { id, email, nome: d.nome ?? "", apelido: d.apelido, curso }, "preinscricao.created", `preinscricao:${id}:${email}`)
     .catch(() => undefined);
   await logLeadEvent(db, id, actor.id, "criacao", "Pré-inscrição manual criada", `${origem} · ${curso}`);
+  await herdarDocsValidados(db, id).catch(() => 0);
   const nota = (d.nota ?? "").trim();
   if (nota) await addLeadNota(db, id, actor.id, nota, d.meioContacto || origem);
   return { preinscricao: (await leadMapeado(db, id)) ?? { id }, duplicados: dups };
@@ -264,7 +266,8 @@ export async function apagarLead(db: Db, actor: Actor, id: number) {
   }
   const ficheiros = await listarDocsLead(db, id);
   for (const f of ficheiros) {
-    if (f.drive_file_id) await apagarFicheiroSubstituido(db, f.drive_file_id).catch(() => undefined);
+    // Um documento herdado (o mesmo ficheiro noutra pré-inscrição ou na ficha de um formando) fica na Drive.
+    if (f.drive_file_id && !(await ficheiroEmOutroSitio(db, f.drive_file_id, id))) await apagarFicheiroSubstituido(db, f.drive_file_id).catch(() => undefined);
   }
   await leads.apagar(db, id);
   return {

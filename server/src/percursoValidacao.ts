@@ -3,6 +3,8 @@
  * Separado de `percurso.ts` (escolha pública e documentos).
  */
 import { InscricaoErro, garantirVaga } from "./inscricao.js";
+import * as docsRepo from "./repos/leadDocs.js";
+import { apagarFicheiroSubstituido } from "./driveFicheiros.js";
 import { ingestEvent } from "./automations.js";
 import { transferirDocsDoLead } from "./docsParaFormando.js";
 import { config } from "./config.js";
@@ -84,6 +86,13 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
     } catch (err) {
       if (err instanceof InscricaoErro) throw new PercursoErro(err.message);
       throw err;
+    }
+  }
+  // Os documentos recusados que ficaram por substituir estavam errados: saem antes de a pasta passar para a turma,
+  // para nunca chegarem à ficha do formando nem ao DTP (um ficheiro partilhado com outro registo fica na Drive).
+  for (const r of await docsRepo.apagarRecusados(db, leadId)) {
+    if (r.drive_file_id && !(await docsRepo.ficheiroEmOutroSitio(db, r.drive_file_id, leadId))) {
+      await apagarFicheiroSubstituido(db, r.drive_file_id).catch(() => undefined);
     }
   }
   let moved: { moved: number; turma?: string };

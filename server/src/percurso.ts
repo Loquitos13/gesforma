@@ -1,7 +1,7 @@
 import type { Db } from "./db/pool.js";
 import { COMPROVATIVO, docsCompletos, docsDoCurso, ficheiroModelo, situacaoPagamento } from "./docsCurso.js";
 import { lerEntidade } from "./regrasConfig.js";
-import { avisarDocumentosEmFalta, listarDocsLead } from "./docsLink.js";
+import { avisarDocumentosEmFalta, herdarDocsValidados, listarDocsLead } from "./docsLink.js";
 import { idsRecusados } from "./lembretePre.js";
 import { modulosPorOrdem, sessoesPublicas } from "./cronogramaPublico.js";
 import { precoParaOferta } from "./precoOferta.js";
@@ -321,6 +321,7 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
   const curso = String(lead.curso ?? "");
   const pag = await situacaoPagamento(db, lead);
   const pedidos = await docsDoCurso(db, curso, regime);
+  await herdarDocsValidados(db, id).catch(() => 0);
   const docs = await listarDocsLead(db, id) as Ficheiro[];
   const { ok, emFalta } = docsCompletos(pedidos, docs.map(d => d.tipo));
   // O passo de pagamento só abre depois de a secretaria validar os documentos e pedir o pagamento.

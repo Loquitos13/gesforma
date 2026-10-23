@@ -165,7 +165,9 @@ export function PublicDocumentos({ token }: { token: string }) {
   const percentagemDocs = tipos.length ? Math.round((tipos.filter(t => aceite(t.id)).length / tipos.length) * 100) : 0;
   const percentagemPasso = aSair ? (direccao === "frente" ? 100 : 50) : passo === 1 ? 50 : 100;
   const proximo = tipos.find(t => t.required && !aceite(t.id)) ?? tipos.find(t => !aceite(t.id));
-  const activoId = foco && tipos.some(t => t.id === foco) ? foco : proximo?.id ?? null;
+  // Um documento validado pela secretaria já ficou guardado: não se volta a abrir para envio.
+  const validado = (id: string) => porTipo.get(id)?.estado === "validado";
+  const activoId = foco && tipos.some(t => t.id === foco) && !validado(foco) ? foco : proximo?.id ?? null;
 
   async function enviar(tipo: string, etiqueta: string, e: FormEvent) {
     e.preventDefault();
@@ -391,17 +393,19 @@ export function PublicDocumentos({ token }: { token: string }) {
                   {tipos.map(t => {
                     const anexo = porTipo.get(t.id);
                     const recusado = anexo?.estado === "recusado";
-                    const aberto = t.id === activoId;
+                    const ok = anexo?.estado === "validado";
+                    const aberto = t.id === activoId && !ok;
                     return (
                       <li key={t.id} className={aberto ? "bg-[#fffaf2]" : "bg-white"}>
                         <div className="px-6 py-4 sm:px-8">
                           <div className="flex flex-wrap items-baseline justify-between gap-2">
                             <p className="text-sm font-semibold">{t.label}</p>
-                            <span className="text-[11px] uppercase tracking-wide text-[#8a8172]">{recusado ? "A corrigir" : t.required ? "Obrigatório" : "Opcional"}</span>
+                            <span className={`text-[11px] uppercase tracking-wide ${ok ? "font-semibold text-emerald-800" : "text-[#8a8172]"}`}>{ok ? "Validado" : recusado ? "A corrigir" : t.required ? "Obrigatório" : "Opcional"}</span>
                           </div>
                           {anexo && !recusado && <p className="mt-1 truncate text-sm text-emerald-800">{anexo.nome}</p>}
                           {recusado && anexo?.observacao && <p className="mt-1 text-sm text-red-800">{anexo.observacao}</p>}
-                          {anexo && !aberto && (
+                          {ok && <p className="mt-1 text-xs text-[#5c564c]">Já validado pela secretaria: não precisa de o enviar outra vez.</p>}
+                          {anexo && !aberto && !ok && (
                             <button type="button" className="mt-2 text-xs font-semibold underline decoration-[#ffa900] underline-offset-2" onClick={() => { setFoco(t.id); setFicheiro(null); setError(""); }}>
                               Substituir
                             </button>

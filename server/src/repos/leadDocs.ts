@@ -180,3 +180,45 @@ export async function modeloDtpDaEntidade(c: Consulta, cursoGoldId: number) {
       WHERE c.id = $1`,
     [cursoGoldId]);
 }
+
+/**
+ * Documentos já validados desta pessoa (mesmo email) noutras pré-inscrições, um por tipo (o mais recente).
+ * Só tipos com ficheiro; os consentimentos ficam de fora (são de cada curso).
+ */
+export async function validadosDaPessoa(c: Consulta, email: string, exceptoLeadId: number, tipos: string[]) {
+  if (!tipos.length) return [];
+  return many<{ tipo: string; nome: string; drive_file_id: string; drive_url: string; validated_by: string | null; preinscricao_id: number }>(c,
+    `SELECT DISTINCT ON (d.tipo) d.tipo, d.nome, d.drive_file_id, d.drive_url, d.validated_by::text AS validated_by, d.preinscricao_id
+       FROM preinscricao_docs d JOIN preinscricoes p ON p.id = d.preinscricao_id
+      WHERE lower(trim(p.email)) = $1 AND p.id <> $2 AND d.estado = 'validado' AND d.drive_file_id <> ''
+        AND d.tipo = ANY($3::text[])
+      ORDER BY d.tipo, d.validated_at DESC NULLS LAST, d.id DESC`,
+    [email, exceptoLeadId, pgTextArray(tipos)]);
+}
+
+/** Guarda nesta pré-inscrição um documento já validado (o mesmo ficheiro), no lugar do que faltava ou foi recusado. */
+export async function guardarDocValidado(c: Consulta, d: {
+  leadId: number; tipo: string; nome: string; driveFileId: string; driveUrl: string; validadoPor: string | null; observacao: string;
+}) {
+  await many(c, "DELETE FROM preinscricao_docs WHERE preinscricao_id = $1 AND tipo = $2", [d.leadId, d.tipo]);
+  await many(c,
+    `INSERT INTO preinscricao_docs (preinscricao_id, tipo, nome, drive_file_id, drive_url, estado, observacao, validated_by, validated_at)
+     VALUES ($1, $2, $3, $4, $5, 'validado', $6, $7::uuid, now())`,
+    [d.leadId, d.tipo, d.nome, d.driveFileId, d.driveUrl, d.observacao, d.validadoPor]);
+}
+
+/** O ficheiro está noutro registo (outra pré-inscrição ou a ficha de um formando): não se apaga da Drive. */
+export async function ficheiroEmOutroSitio(c: Consulta, driveFileId: string, exceptoLeadId: number) {
+  const r = await one<{ um: number }>(c,
+    `SELECT 1 AS um WHERE EXISTS (SELECT 1 FROM preinscricao_docs WHERE drive_file_id = $1 AND preinscricao_id <> $2)
+        OR EXISTS (SELECT 1 FROM formando_docs WHERE drive_file_id = $1)`,
+    [driveFileId, exceptoLeadId]);
+  return Boolean(r);
+}
+
+/** Documentos recusados que ficaram por substituir (ao validar a pré-inscrição saem: não vão para a turma nem para o DTP). */
+export async function apagarRecusados(c: Consulta, leadId: number) {
+  return many<{ drive_file_id: string }>(c,
+    "DELETE FROM preinscricao_docs WHERE preinscricao_id = $1 AND estado = 'recusado' RETURNING COALESCE(drive_file_id, '') AS drive_file_id",
+    [leadId]);
+}

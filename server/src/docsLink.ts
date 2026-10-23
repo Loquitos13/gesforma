@@ -181,3 +181,38 @@ export async function listarAlertasAbertas(db: Db, ator?: AtorCrm) {
 }
 
 export { COMPROVATIVO, docsCompletos, docsDoCurso };
+
+/**
+ * A mesma pessoa (email) já tem documentos validados noutra pré-inscrição: ficam logo guardados nesta, validados,
+ * no lugar dos que faltam ou foram recusados (a ligação pessoal não os volta a pedir). Os pendentes ficam (a pessoa
+ * acabou de os enviar) e os consentimentos não se herdam (são de cada curso).
+ */
+export async function herdarDocsValidados(db: Db, leadId: number) {
+  const lead = await leads.lead(db, leadId);
+  if (!lead || lead.validada_em) return 0;
+  const email = normalizeEmail(String(lead.email ?? ""));
+  if (!isEmail(email)) return 0;
+  const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
+  const pedidos = (await docsDoCurso(db, String(lead.curso ?? ""), regime)).filter(p => !p.modelo && p.id !== COMPROVATIVO.id);
+  if (!pedidos.length) return 0;
+  const atuais = new Map((await docs.docsDoLead(db, leadId)).map(d => [d.tipo, d]));
+  const tipos = pedidos.map(p => p.id).filter(t => {
+    const a = atuais.get(t);
+    return !a || a.estado === "recusado";
+  });
+  const herdados = await docs.validadosDaPessoa(db, email, leadId, tipos);
+  for (const h of herdados) {
+    const antes = atuais.get(h.tipo);
+    await docs.guardarDocValidado(db, {
+      leadId, tipo: h.tipo, nome: h.nome, driveFileId: h.drive_file_id, driveUrl: h.drive_url, validadoPor: h.validated_by,
+      observacao: `Já validado na pré-inscrição #${h.preinscricao_id}.`,
+    });
+    if (antes?.drive_file_id && antes.drive_file_id !== h.drive_file_id && !(await docs.ficheiroEmOutroSitio(db, antes.drive_file_id, leadId))) {
+      const { apagarFicheiroSubstituido } = await import("./driveFicheiros.js");
+      await apagarFicheiroSubstituido(db, antes.drive_file_id).catch(() => undefined);
+    }
+    const rotulo = pedidos.find(p => p.id === h.tipo)?.label ?? h.tipo;
+    await logLeadEvent(db, leadId, undefined, "campo", `Documento já validado · ${rotulo}`, `Guardado a partir da pré-inscrição #${h.preinscricao_id}.`);
+  }
+  return herdados.length;
+}

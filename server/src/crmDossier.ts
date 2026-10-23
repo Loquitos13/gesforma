@@ -1,6 +1,6 @@
 import type { Db } from "./db/pool.js";
 import type { AtorCrm, Consulta } from "./repos/sql.js";
-import { documentosUrl, docsDoCurso, docsCompletos, ensureDocsToken, listarDocsLead } from "./docsLink.js";
+import { documentosUrl, docsDoCurso, docsCompletos, ensureDocsToken, herdarDocsValidados, listarDocsLead } from "./docsLink.js";
 import { faltaPedirPagamento, faltaValidarPreinscricao, situacaoPagamento } from "./docsCurso.js";
 import { mapPagamento, mapPreinscricao } from "./ops.js";
 import { readPreinscricaoPii } from "./pii.js";
@@ -106,6 +106,7 @@ export async function getLeadDossier(db: Db, id: number, ator?: AtorCrm) {
   const cliente = lead.estado === "Formando" || lead.estado === "Pago";
   const regime = String(row.regime ?? "gold") === "fin" ? "fin" : "gold";
   const pedidos = await docsDoCurso(db, lead.curso, regime);
+  await herdarDocsValidados(db, id).catch(() => 0);
   const ficheiros = await listarDocsLead(db, id);
   const labels = new Map(pedidos.map(p => [p.id, p.label]));
   labels.set("comprovativo", "Comprovativo de pagamento");

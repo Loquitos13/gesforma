@@ -214,7 +214,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
         parentDriveId: zona?.pastaId,
         folderPath: zona?.path || undefined,
       });
-      if (antigo?.drive_file_id && antigo.drive_file_id !== file.id) await apagarFicheiroSubstituido(db, antigo.drive_file_id);
+      // Só o documento errado (recusado) ou ainda por rever é substituído; um ficheiro partilhado com outro registo fica.
+      if (antigo?.drive_file_id && antigo.drive_file_id !== file.id && !(await docsRepo.ficheiroEmOutroSitio(db, antigo.drive_file_id, leadId))) {
+        await apagarFicheiroSubstituido(db, antigo.drive_file_id);
+      }
       await docsRepo.substituirDoc(db, { leadId, tipo, nome: file.name, driveFileId: file.id, driveUrl: file.openUrl ?? "" });
       await logLeadEvent(db, leadId, undefined, "campo", comprovativo ? "Comprovativo de pagamento na ficha" : `Documento na ficha · ${tipo}`, file.name);
       await syncLigacao(db, leadId);

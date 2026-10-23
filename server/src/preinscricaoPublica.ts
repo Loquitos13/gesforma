@@ -1,4 +1,4 @@
-import { firePreinscricaoEmail } from "./docsLink.js";
+import { firePreinscricaoEmail, herdarDocsValidados } from "./docsLink.js";
 import { dentroDoLimite } from "./limitePedidos.js";
 import { fechoDaLigacao, regenerarToken } from "./ligacaoPessoal.js";
 import { gravarTurmaEscolhida } from "./repos/percurso.js";
@@ -243,6 +243,8 @@ export async function criarPreinscricaoPublica(
   }
   const detalhe = [origem, curso, local, horario, inicio !== "-" ? inicio : ""].filter(Boolean).join(" · ");
   await logLeadEvent(db, id, undefined, "criacao", "Pré-inscrição recebida", detalhe);
+  // Documentos que esta pessoa já tem validados noutra pré-inscrição ficam logo guardados (não se voltam a pedir).
+  await herdarDocsValidados(db, id).catch(() => 0);
   if (dadosFin) await logLeadEvent(db, id, undefined, "campo", "Dados pessoais recebidos no site", CAMPOS_DADOS_FIN);
   if (!oferta) await logLeadEvent(db, id, undefined, "campo", "Curso fora da oferta", `Pedido: ${pedidoCurso || "sem curso"}. Sem pedido de pagamento.`);
   const outros = await findDuplicados(db, email, telf, id).catch(() => []);

@@ -131,7 +131,7 @@ export async function lerEntidade(db: Db) {
 
 /**
  * Programa e tipologias dos documentos de uma turma da Financiada: o programa escolhido na turma (Edição de cursos ›
- * Programas); sem ele, o primeiro programa activo; sem programas, a candidatura antiga de Configurações › Financiada.
+ * Programas) ou, sem ele, o do curso (ficha › Oferta); sem nenhum, o primeiro programa activo; sem programas, a candidatura antiga de Configurações › Financiada.
  */
 export async function lerCandidatura(db: Db, programa = "") {
   const p = await one<{ payload: Record<string, unknown> }>(db,

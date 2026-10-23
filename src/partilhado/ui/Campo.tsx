@@ -1,7 +1,7 @@
 import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { cx } from "./formatos";
 
-const CONTROLO = "w-full rounded-controlo border border-linha-forte bg-superficie text-sm text-tinta placeholder:text-tinta-fraca disabled:bg-fundo disabled:text-tinta-suave";
+export const CONTROLO = "w-full rounded-controlo border border-linha-forte bg-superficie text-sm text-tinta placeholder:text-tinta-fraca disabled:bg-fundo disabled:text-tinta-suave";
 
 /**
  * Campo de formulário: rótulo, ajuda e erro ligados ao controlo por aria.

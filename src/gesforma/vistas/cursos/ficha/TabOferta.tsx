@@ -5,7 +5,7 @@ import { useOpcoes } from "../../../../partilhado/dados/useOpcoes";
 import { invalidar, useRecurso } from "../../../../partilhado/dados/useRecurso";
 import { MultiSearchSelect } from "../../../../partilhado/FormKit";
 import { toastError } from "../../../../partilhado/toastBus";
-import { Botao, Campo, Cartao, Entrada, Estado, Modal, Selecao, Vazio, data as fmtData, type OpcaoSelecao } from "../../../../partilhado/ui";
+import { Botao, Campo, Cartao, Entrada, Estado, Modal, Selecao, SelecaoPesquisa, Vazio, data as fmtData, type OpcaoSelecao } from "../../../../partilhado/ui";
 import type { Opcao } from "../../../../partilhado/api/catalogos";
 import { localDoElearning, OPCOES_SINCRONIA, regimeSincronia } from "../../../../partilhado/regimeSincronia";
 import type { ContactosLocal } from "./modelo";
@@ -86,6 +86,7 @@ export function TabOferta({ f }: { f: FichaCurso }) {
   const modalidades = useOpcoes("lista", { lista: "regimes_curso" });
   const locais = useOpcoes("locais", { regime });
   const horarios = useOpcoes("horarios", { regime: "gold" });
+  const programas = useOpcoes("programas", { regime: "fin" });
   const [novoLocal, setNovoLocal] = useState<{ nome: string; morada: string } | null>(null);
   const [aCriar, setACriar] = useState(false);
 
@@ -137,6 +138,11 @@ export function TabOferta({ f }: { f: FichaCurso }) {
           <Campo rotulo="Regime" ajuda="Síncrono: sessões em tempo real com o formador. Assíncrono: o formando segue ao seu ritmo. Misto: aulas online síncronas (Sala Virtual) e tarefas de e-learning no Moodle.">
             {p => <Selecao {...p} opcoes={[...OPCOES_SINCRONIA]} vazio="Por definir" value={data.regimeSincronia} onChange={e => patch(comLocalElearning({ regimeSincronia: regimeSincronia(e.target.value) }))} />}
           </Campo>
+          {regime === "fin" && (
+            <Campo rotulo="Programa" ajuda="Programa, prioridade e tipologias dos documentos das turmas deste curso (Edição de cursos › Programas). Cada turma pode escolher outro; sem programa, vale o primeiro activo.">
+              {p => <SelecaoPesquisa {...p} opcoes={comValor(programas.selecao, data.programaFin)} vazio="Sem programa" placeholder="Pesquisar programa…" value={data.programaFin} onChange={v => patch({ programaFin: v })} />}
+            </Campo>
+          )}
           {regime === "gold" && (
             <Campo rotulo="Preço (€)" obrigatorio erro={falhas.preco}>
               {p => <Entrada {...p} type="number" min={0} step="0.01" value={data.preco} onChange={e => patch({ preco: e.target.value })} />}

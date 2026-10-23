@@ -7,7 +7,7 @@ import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { codigoInternoTurma, proximoNomeTurma } from "../../../partilhado/turmaCodigo";
 import type { SessaoCronograma } from "../../../partilhado/turmaModel";
 import { toastError } from "../../../partilhado/toastBus";
-import { Aviso, Botao, Campo, Chip, Entrada, ErroCarregar, Esqueleto, Interruptor, Modal, Selecao } from "../../../partilhado/ui";
+import { Aviso, Botao, Campo, Chip, Entrada, ErroCarregar, Esqueleto, Interruptor, Modal, Selecao, SelecaoPesquisa } from "../../../partilhado/ui";
 import { CronogramaEditor } from "../../CronogramaEditor";
 import { ValoresHoraFormador } from "../../ValoresHoraFormador";
 import { useAuth } from "../../../partilhado/AuthGate";
@@ -201,8 +201,8 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
                   </>
                 )}
               </Campo>
-              <Campo rotulo="Programa" className="sm:col-span-2" ajuda="Programa, prioridade e tipologias dos documentos da turma (Edição de cursos › Programas).">
-                {p => <Selecao {...p} opcoes={programas.selecao} vazio="O primeiro programa activo" value={r.programa} onChange={e => mudar({ programa: e.target.value })} />}
+              <Campo rotulo="Programa" className="sm:col-span-2" ajuda="Programa, prioridade e tipologias dos documentos da turma (Edição de cursos › Programas). Vazio: o da ficha do curso.">
+                {p => <SelecaoPesquisa {...p} opcoes={programas.selecao} vazio="O do curso (ou o primeiro activo)" placeholder="Pesquisar programa…" value={r.programa} onChange={v => mudar({ programa: v })} />}
               </Campo>
               <Campo rotulo="Número da ação" ajuda="«… / Ação n» na execução física.">
                 {p => <Entrada {...p} type="number" min={1} step={1} value={r.numeroAcao} onChange={e => mudar({ numeroAcao: Math.max(1, Math.round(Number(e.target.value)) || 1) })} />}

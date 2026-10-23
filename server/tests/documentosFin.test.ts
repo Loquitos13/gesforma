@@ -323,6 +323,16 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     const id = g.json().item.id as number;
     expect((await pedido(ctx, "secretaria", "PATCH", `/v1/catalog/programas/${id}`, { payload: { ...valores, nome: "Programa Novo" } })).statusCode).toBe(200);
     expect((await pedido(ctx, "secretaria", "DELETE", `/v1/catalog/programas/${id}`)).statusCode).toBe(409);
+    // Turma sem programa: vale o da ficha do curso (Oferta › Programa).
+    const doCurso = await pedido(ctx, "secretaria", "POST", "/v1/catalog/programas", { regime: "fin", payload: { ...valores, nome: "Programa do Curso", tipologia: "1.10. Tipologia do Curso" } });
+    expect(doCurso.statusCode, doCurso.body).toBe(200);
+    await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "" });
+    await ctx.db.query(
+      `INSERT INTO curso_fichas (regime, curso_id, payload) SELECT 'fin', curso_id, '{"programaFin":"Programa do Curso"}'::jsonb FROM turmas_fin WHERE id = $1
+       ON CONFLICT (regime, curso_id) DO UPDATE SET payload = curso_fichas.payload || EXCLUDED.payload`, [t.id]);
+    const [doCursoFicha] = await paginas((await pedido(ctx, "financiada", "GET", `/v1/formandos-fin/${t.ana}/ficha-inscricao`)).rawPayload);
+    expect(doCursoFicha).toContain("1.10. Tipologia do Curso");
+    await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "Programa Novo" });
     try {
       const [ficha] = await paginas((await pedido(ctx, "financiada", "GET", `/v1/formandos-fin/${t.ana}/ficha-inscricao`)).rawPayload);
       expect(ficha).toContain("1.09. Formação de Teste");

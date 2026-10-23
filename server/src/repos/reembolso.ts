@@ -9,7 +9,7 @@ export type TipoReembolso = "execucao-fisica" | "despesas";
 
 export type TurmaReembolso = {
   id: number; nome: string; curso: string; data_inicio: string; local: string; cronograma: unknown; fechada_em: string | null;
-  numero_acao: number; programa: string; ufcd_cod: string; c_ufcd_cod: string; c_ufcd: string; c_area_cnaef: string;
+  numero_acao: number; programa: string; curso_programa: string; ufcd_cod: string; c_ufcd_cod: string; c_ufcd: string; c_area_cnaef: string;
 };
 
 /** A turma e o seu curso (pelo id, ou pelo nome nas turmas antigas): código e designação da UFCD e área CNAEF. */
@@ -18,10 +18,11 @@ export function turmaReembolso(c: Consulta, id: number) {
     c,
     `SELECT t.id, t.nome, t.curso, t.data_inicio::text AS data_inicio, t.local, t.cronograma, t.fechada_em::text AS fechada_em,
             COALESCE(t.numero_acao, 1) AS numero_acao, COALESCE(t.programa, '') AS programa, COALESCE(t.ufcd_cod, '') AS ufcd_cod,
+            COALESCE((SELECT f.payload->>'programaFin' FROM curso_fichas f WHERE f.regime = 'fin' AND f.curso_id = cf.id), '') AS curso_programa,
             COALESCE(cf.ufcd_cod, '') AS c_ufcd_cod, COALESCE(cf.ufcd, '') AS c_ufcd, COALESCE(cf.area_cnaef, '') AS c_area_cnaef
        FROM turmas_fin t
        LEFT JOIN LATERAL (
-         SELECT ufcd_cod, ufcd, area_cnaef FROM cursos_fin c
+         SELECT c.id, ufcd_cod, ufcd, area_cnaef FROM cursos_fin c
           WHERE c.id = t.curso_id
              OR (t.curso_id IS NULL AND (lower(trim(c.nome_comercial)) = lower(trim(t.curso)) OR lower(trim(c.ufcd)) = lower(trim(t.curso))))
           ORDER BY (c.id = t.curso_id) DESC NULLS LAST, c.id

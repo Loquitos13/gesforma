@@ -5,6 +5,7 @@ import { anexarPdfDtp } from "../../pedagogia/ficheiros.js";
 import { ITEM_PERGUNTAS, NOME_PERGUNTAS, perguntasEnviadas } from "../../pedagogia/inqueritos.js";
 import { dadosRelatorioFinal } from "../../pedagogia/relatorio.js";
 import { pdfPerguntasInqueritos, pdfRelatorioFinal, pdfRelatorioInqueritos, type RelatorioFinalDados } from "../../relatorioFinal.js";
+import { turmaFechada } from "../../resultados.js";
 import { regimeIdParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
 import { enviarPdf, semFormador } from "./comum.js";
@@ -62,8 +63,11 @@ export function registarRelatorios(app: FastifyInstance, { db, requireAuth, audi
       nome = "RelatorioFinalAccao.pdf";
       itemId = "relatorio";
     }
-    await anexarPdfDtp(db, req.actor!.id, "fin", { id, nome: dados.acao }, itemId, nome, bytes)
-      .catch(err => req.log.warn({ err, turma: id, item: itemId }, "PDF não anexado ao dossiê"));
+    // Turma fechada: o dossiê fica com o relatório final do fecho; o gerado agora só se descarrega.
+    if (qual !== "final" || !(await turmaFechada(db, "fin", id))) {
+      await anexarPdfDtp(db, req.actor!.id, "fin", { id, nome: dados.acao }, itemId, nome, bytes)
+        .catch(err => req.log.warn({ err, turma: id, item: itemId }, "PDF não anexado ao dossiê"));
+    }
     await audit(db, req.actor!.id, `turma.${qual}`, "turma", String(id), req.ip);
     return enviarPdf(reply, nome, bytes);
   }

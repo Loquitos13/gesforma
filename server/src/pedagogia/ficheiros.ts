@@ -1,4 +1,5 @@
 /** PDFs gerados do dossiê (cronograma, presenças, planos, perguntas dos inquéritos) e anexos no Drive. */
+import { hojeLisboa } from "../datas.js";
 import type { Db } from "../db/pool.js";
 import { documentosSessoesDaTurma } from "../documentosFin.js";
 import { pdfsDoDossie, type SessaoPedagogicaPdf } from "../dtpPdfs.js";
@@ -9,6 +10,7 @@ import { pdfPerguntasInqueritos } from "../relatorioFinal.js";
 import { ficheiroDrive } from "../repos/drive.js";
 import { anexosDaTurma, gravarAnexo } from "../repos/dtp.js";
 import { listarSessoes } from "../repos/pedagogiaSessoes.js";
+import { turmaFechadaEm } from "../repos/resultados.js";
 import { formandosDaTurma, type TurmaRow } from "../repos/pedagogiaTurma.js";
 import { ITEM_PERGUNTAS, NOME_PERGUNTAS, perguntasEnviadas } from "./inqueritos.js";
 import type { Regime } from "./util.js";
@@ -18,14 +20,14 @@ import type { Regime } from "./util.js";
  * da candidatura (documentosFin.ts: logótipos, programa e tipologias); a Gold continua com os PDF de texto.
  */
 export async function montarPdfsDossie(db: Db, regime: Regime, turma: TurmaRow) {
-  const base = await montarPdfsTexto(db, regime, turma);
-  if (regime !== "fin") return base;
-  const fin = await documentosSessoesDaTurma(db, turma.id);
-  return fin ? { ...base, folhas: fin.folhas, planos: fin.planos } : base;
+  const fin = regime === "fin" ? await documentosSessoesDaTurma(db, turma.id) : null;
+  // Financiada: do texto só se usa o cronograma (não se lêem sessões nem formandos para folhas que se deitam fora).
+  if (fin) return { cronograma: (await montarPdfsTexto(db, regime, turma, { soCronograma: true })).cronograma, folhas: fin.folhas, planos: fin.planos };
+  return montarPdfsTexto(db, regime, turma);
 }
 
-async function montarPdfsTexto(db: Db, regime: Regime, turma: TurmaRow) {
-  const [sessoesRows, formandos] = await Promise.all([
+async function montarPdfsTexto(db: Db, regime: Regime, turma: TurmaRow, opts: { soCronograma?: boolean } = {}) {
+  const [sessoesRows, formandos] = opts.soCronograma ? [[], []] : await Promise.all([
     listarSessoes(db, regime, turma.id),
     formandosDaTurma(db, regime, turma),
   ]);
@@ -50,6 +52,7 @@ async function montarPdfsTexto(db: Db, regime: Regime, turma: TurmaRow) {
 /**
  * Liga um ficheiro gerado ao item do dossiê. A cópia gerada anterior desse item (mesmo nome e item)
  * deixa de estar ligada e apaga-se, para não acumular cópias no Drive; um anexo carregado à mão fica.
+ * Turma fechada: nada se apaga (o que foi entregue no fecho fica na Drive).
  */
 export async function ligarAnexoGerado(
   db: Db,
@@ -62,7 +65,7 @@ export async function ligarAnexoGerado(
   await gravarAnexo(db, regime, turmaId, itemId, { id: file.id, nome: file.name, url: file.openUrl ?? "" });
   if (!antes?.drive_file_id || antes.drive_file_id === file.id) return;
   const velho = await getDriveFile(db, antes.drive_file_id);
-  if (velho && velho.name === file.name && velho.label === itemId) {
+  if (velho && velho.name === file.name && velho.label === itemId && !(await turmaFechadaEm(db, regime, turmaId))?.fechada_em) {
     await apagarFicheiroSubstituido(db, velho.id).catch(() => undefined);
   }
 }
@@ -109,6 +112,11 @@ export async function anexarPdfDtp(
   for (const id of [itemId, ...outrosItens.filter(x => x !== itemId)]) await ligarAnexoGerado(db, regime, turma.id, id, file);
 }
 
+/** Relatório final entregue no fecho da turma: nome com o dia (Lisboa), diferente do que se gera depois. */
+export function nomeRelatorioDoFecho(instante: Date = new Date()) {
+  return `RelatorioFinalAccao - fecho ${hojeLisboa(instante)}.pdf`;
+}
+
 /** PDFs das perguntas dos inquéritos enviados à turma (Financiada). */
 export async function anexarPerguntasDaTurma(db: Db, actorId: string | undefined, turma: { id: number; nome: string; curso: string }) {
   for (const publico of ["formador", "formando", "pos"] as const) {
@@ -133,7 +141,8 @@ export async function gravarPdfsDossie(
   const pares = [
     { itemId: "cronograma", file: await guardar("Cronograma.pdf", pdfs.cronograma, "cronograma") },
     { itemId: "presencas", file: folhas },
-    { itemId: "sumarios", file: folhas },
+    // A Financiada não tem item «sumarios» (o sumário vai na folha de presenças).
+    ...(regime === "fin" ? [] : [{ itemId: "sumarios", file: folhas }]),
     { itemId: "planos", file: await guardar("Planos de sessao.pdf", pdfs.planos, "planos") },
   ];
   for (const par of pares) await ligarAnexoGerado(db, regime, turma.id, par.itemId, par.file);

@@ -318,6 +318,12 @@ describe("#17 exportação do dossiê", () => {
         ('exp-3', 'g-exp-3', 'c.pdf', 'documento', 'gold', $1, 'google')`,
       [nome],
     );
+    // Os ficheiros «dtp» só entram no ZIP como anexo actual de um item (os substituídos ficam de fora).
+    await ctx.db.query(
+      `INSERT INTO dtp_anexos (regime, turma_id, item_id, drive_file_id, file_name, drive_url) VALUES
+        ('gold', $1, 'regulamento', 'exp-1', 'a.pdf', ''), ('gold', $1, 'divulgacao', 'exp-2', 'b.pdf', '')`,
+      [id],
+    );
     // O comercial só vende: não exporta dossiês (permissoes/comercial.ts).
     expect((await pedido(ctx, "comercial", "GET", `/v1/dtp/gold/${id}/export?destino=drive`)).statusCode).toBe(403);
     const chamadas = driveFalsa();

@@ -1,5 +1,6 @@
 /** Exportação do dossiê da turma num ZIP organizado pelas pastas (Gold) ou tópicos (Financiada). */
 import type { Db } from "../db/pool.js";
+import { NA_PASTA_DA_TURMA } from "../googleDrive.js";
 import { getDriveFile, listDriveFiles, readDriveContent } from "../driveFicheiros.js";
 import { nomesNoCronograma } from "../driveArvore.js";
 import { DTP_CATEGORIAS, dtpCategoriaDe, dtpCategoriaPasta, dtpPastaNome, dtpZipNome, dtpZipRelPath, pastaSegura } from "../dtpPasta.js";
@@ -8,7 +9,6 @@ import { pastaFinDoItem, TOPICOS_FIN } from "../dtpTopicosFin.js";
 import { pdfPerguntasInqueritos, pdfRelatorioFinal, pdfRelatorioInqueritos } from "../relatorioFinal.js";
 import { certificadosEmitidos, ficheirosDoFormador, ficheirosDosFormandos, formadoresPorNome } from "../repos/dtp.js";
 import { equipaDaTurma, formandosDaTurma, type TurmaRow } from "../repos/pedagogiaTurma.js";
-import { ficheirosReembolso } from "../repos/reembolso.js";
 import { turmaFechadaEm } from "../repos/resultados.js";
 import { zipStore } from "../zipStore.js";
 import { dtpForTurma } from "./dtp.js";
@@ -136,36 +136,23 @@ export async function exportarDossie(db: Db, actorId: string | undefined, regime
     else omitidos.push({ rel, motivo: "o registo do ficheiro já não existe" });
   }
 
-  // Financiada: execução física e despesas do reembolso (a cópia actual de cada uma).
-  if (regime === "fin") {
-    const reembolso = await ficheirosReembolso(db, turma.id).catch(err => {
-      avisos.push(`Reembolso: não foi possível ler os ficheiros (${msgErro(err)}); não estão neste ZIP. Exporte de novo.`);
-      return [];
-    });
-    for (const r of reembolso) {
-      const f = await getDriveFile(db, r.drive_file_id);
-      const rel = relPath({ itemId: "execucao", kind: "dtp", fileName: f?.name || `${r.tipo}.xlsx` });
-      if (f) pushDrive(f.id, rel);
-      else omitidos.push({ rel, motivo: "o registo do ficheiro já não existe" });
-    }
-  }
-
-  // Outros ficheiros da turma na Drive (materiais, recibos, contratos assinados, PIP, simulações). Os do dossiê
+  // Outros ficheiros da turma na Drive (materiais, contratos assinados, PIP, simulações). Os do dossiê
   // («dtp») só entram como anexo actual de um item: os substituídos ficam de fora.
   const drive = [
     ...await listDriveFiles(db, { kind: "", regime, turma: turma.nome, todos: true }),
     ...await listDriveFiles(db, { kind: "", regime, turma: String(turma.id), todos: true }),
   ];
   for (const f of drive) {
-    if (seen.has(f.id) || f.kind === "dtp") continue;
+    // Recibos e reembolso ficam na pasta da turma, não no dossiê.
+    if (seen.has(f.id) || f.kind === "dtp" || NA_PASTA_DA_TURMA.has(f.kind)) continue;
     if (f.kind === "certificado" && comCertificado.has(String(f.formando ?? ""))) continue;
     // Os documentos dos formandos vêm de formando_docs (só o actual); daqui só os contratos assinados.
     if (f.kind === "formando-doc" && f.contratoId == null) continue;
     const item = dtp.items.find(i => i.label === f.label || i.id === f.label);
-    const pessoal = f.kind === "formando-doc" || f.kind === "pip" || f.kind === "Pagamentos" || f.kind === "certificado";
+    const pessoal = f.kind === "formando-doc" || f.kind === "pip" || f.kind === "certificado";
     pushDrive(f.id, relPath({
       ambito: item?.ambito ?? (pessoal ? "formando" : f.kind === "formador-doc" ? "formador" : "turma"),
-      itemId: item?.id ?? (f.kind === "Pagamentos" ? "recibos" : undefined),
+      itemId: item?.id,
       itemLabel: item?.label || f.label || undefined,
       pessoa: f.formando ? (f.kind === "certificado" ? nomeFormando(f.formando) : f.formando) : undefined,
       kind: f.kind,

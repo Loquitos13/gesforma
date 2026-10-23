@@ -130,6 +130,9 @@ function kindFolder(kind: string) {
   return map[kind] ?? sanitizeFileName(kind || "Documentos");
 }
 
+/** Recibos e ficheiros do reembolso (execução física, despesas): directamente na pasta da turma, fora do dossiê. */
+export const NA_PASTA_DA_TURMA = new Set(["Pagamentos", "reembolso"]);
+
 export function folderSegments(ctx: DriveContext, rootName = config.googleDriveFolder) {
   const dtp = dtpDriveSegments(ctx, rootName);
   if (dtp) return dtp;
@@ -137,7 +140,7 @@ export function folderSegments(ctx: DriveContext, rootName = config.googleDriveF
   if (ctx.regime === "fin") segs.push("Financiada");
   else if (ctx.regime === "gold") segs.push("Gold");
   if (ctx.turma) segs.push(sanitizeFileName(ctx.turma));
-  segs.push(kindFolder(ctx.kind));
+  if (!(ctx.turma && NA_PASTA_DA_TURMA.has(ctx.kind))) segs.push(kindFolder(ctx.kind));
   return segs;
 }
 

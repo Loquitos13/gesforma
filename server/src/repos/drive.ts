@@ -183,3 +183,16 @@ export async function contarPartilhasPorAcertar(c: Consulta) {
   return r?.n ?? 0;
 }
 
+
+/** Recibos e ficheiros do reembolso ainda guardados dentro de um dossiê («DTP …»): para passar para a pasta da turma. */
+export function ficheirosForaDaPastaDaTurma(c: Consulta, limite: number) {
+  return many<DriveFileRow>(c,
+    `SELECT * FROM drive_files
+      WHERE kind IN ('Pagamentos', 'reembolso') AND stored_in = 'google' AND COALESCE(drive_id, '') <> ''
+        AND COALESCE(turma, '') <> '' AND regime IN ('gold', 'fin') AND folder_path LIKE '%DTP %'
+      ORDER BY created_at LIMIT $1`, [limite]);
+}
+
+export async function gravarCaminhoFicheiro(c: Consulta, id: string, folderPath: string) {
+  await many(c, "UPDATE drive_files SET folder_path = $2 WHERE id = $1", [id, folderPath]);
+}

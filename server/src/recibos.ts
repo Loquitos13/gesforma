@@ -114,7 +114,7 @@ export async function emitirRecibo(db: Db, pagamentoId: string, actorId: string 
     const ficheiro = await storeDriveFile(db, actorId ?? undefined, {
       name: `Recibo ${dados.numero.replace("/", "-")} - ${dados.pagador.nome}.pdf`, mime: "application/pdf", bytes: pdf,
     }, {
-      // No dossiê: pasta do formando (não do pagador), no item «Comprovativos de pagamento / recibos» (dtpPasta.ts).
+      // Na pasta da turma (nunca na do dossiê); o formando (não o pagador) fica no registo do ficheiro.
       kind: "Pagamentos", regime: base.regime === "fin" ? "fin" : "gold", turma: base.turma ?? undefined,
       formando: dados.formando || dados.pagador.nome, itemId: "recibos", label: "Comprovativos de pagamento / recibos",
     }, { gerado: true });

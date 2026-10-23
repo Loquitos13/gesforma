@@ -3,7 +3,7 @@
  * (participantes, modelo oficial preenchido) e as despesas (colunas do template de despesas).
  *
  * Geram-se sempre a partir dos dados actuais (a descarga está sempre em dia) e cada turma tem uma só
- * cópia de cada na sua pasta da Drive (DTP Financiada <turma> / 06-Certificacao e relatorios / Reembolso).
+ * cópia de cada, directamente na pasta da turma na Drive (fora do dossiê).
  * A cópia actualiza-se quando os dados mudam: a `impressao` guardada diz com que dados foi gerada.
  */
 import { createHash } from "node:crypto";
@@ -111,7 +111,8 @@ export async function sincronizarReembolso(
     return { atualizado: false };
   }
   const file = await storeDriveFile(db, actorId, { name: g.nome, mime: MIME_XLSX, bytes: g.bytes() }, {
-    kind: "dtp", regime: "fin", turma: g.turma.nome, itemId: "execucao", label: "Reembolso",
+    // Na pasta da turma, nunca na do dossiê (googleDrive.ts › NA_PASTA_DA_TURMA).
+    kind: "reembolso", regime: "fin", turma: g.turma.nome, label: "Reembolso",
   }, { gerado: true });
   const anterior = await db.tx(q => trocarFicheiroReembolso(q, turmaId, tipo, file.id, g.impressao, actorId ?? null));
   if (anterior) await apagarFicheiroSubstituido(db, anterior).catch(() => undefined);

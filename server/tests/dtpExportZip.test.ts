@@ -162,7 +162,7 @@ describe("ZIP do dossiê (Gold)", () => {
     expect(indice).not.toContain("NÃO estão neste ZIP");
   });
 
-  it("#16 o recibo fica na pasta do formando, no item dos comprovativos de pagamento", async () => {
+  it("o recibo fica directamente na pasta da turma, nunca no dossiê (nem no ZIP do dossiê)", async () => {
     const { id, nome } = await turmaGold(ctx);
     const fid = 995_000 + (id % 900);
     await ctx.db.query(
@@ -181,10 +181,9 @@ describe("ZIP do dossiê (Gold)", () => {
       "SELECT f.kind, f.formando, f.folder_path FROM recibos r JOIN drive_files f ON f.id = r.drive_file_id WHERE r.pagamento_id = $1", [pagamento],
     )).rows[0]!;
     expect(f.formando).toBe("Inês Recibo");
-    expect(f.folder_path).toContain("02-Formandos / Inês Recibo / Comprovativos de pagamento recibos");
+    expect(f.folder_path).toBe(`GesForma / Gold / ${nome}`);
     const { nomes } = await exportar(ctx, "gold", id);
-    expect(nomes.some(n => n.includes("/02-Formandos/Inês Recibo/Comprovativos de pagamento recibos/") && n.includes("Recibo"))).toBe(true);
-    expect(nomes.some(n => n.includes("01-Identificacao e programa/Recibo"))).toBe(false);
+    expect(nomes.some(n => /Recibo/.test(n) && !n.endsWith("_indice.txt") && !n.endsWith("00-Indice geral.txt"))).toBe(false);
   });
 });
 
@@ -202,7 +201,7 @@ describe("ZIP e Drive do dossiê (Financiada)", () => {
     return { id, nome };
   }
 
-  it("#8 formandos, formadores e reembolso nos tópicos da Financiada, nunca nas pastas da Gold", async () => {
+  it("#8 formandos e formadores nos tópicos da Financiada; o reembolso fica na pasta da turma, fora do dossiê", async () => {
     const formador = unico("Formadora Fin");
     const { id, nome } = await turmaFin(formador);
     const fid = id + 500_000;
@@ -217,19 +216,18 @@ describe("ZIP e Drive do dossiê (Financiada)", () => {
     )).rows[0]!.id;
     const cv = await guardar(ctx, "cv formadora.pdf", { kind: "formador-doc", regime: "fin", formando: formador, label: "CV" });
     await ctx.db.query("INSERT INTO formador_docs (formador_id, doc_id, uploaded, file_name, drive_file_id) VALUES ($1, 'cv', true, $2, $3)", [formadorId, cv.name, cv.id]);
-    const exec = await guardar(ctx, "Execucao Fisica.pdf", { kind: "dtp", regime: "fin", turma: nome, itemId: "execucao", label: "Reembolso" });
+    const exec = await guardar(ctx, "Execucao Fisica.pdf", { kind: "reembolso", regime: "fin", turma: nome, label: "Reembolso" });
     await ctx.db.query("INSERT INTO reembolso_ficheiros (turma_id, tipo, drive_file_id) VALUES ($1, 'execucao-fisica', $2)", [id, exec.id]);
 
     const { nomes } = await exportar(ctx, "fin", id);
     expect(nomes.some(n => n.includes("/5. Formandos/Rita Fin/") && n.endsWith("cc rita.pdf"))).toBe(true);
     expect(nomes.some(n => n.includes(`/3. Formadores/${formador}/`) && n.endsWith("cv formadora.pdf"))).toBe(true);
-    expect(nomes.some(n => n.includes("/8. Mecanismos de avaliação à ação formativa/") && n.endsWith("Execucao Fisica.pdf"))).toBe(true);
+    expect(nomes.some(n => n.endsWith("Execucao Fisica.pdf"))).toBe(false);
     expect(nomes.filter(n => /\/0[1-6]-[A-Z]/.test(n))).toEqual([]);
 
     // Na Drive (sem pasta da turma): também pelos tópicos.
     expect(cc.folderPath).toContain("5. Formandos / Rita Fin");
-    expect(exec.folderPath).toContain("8. Mecanismos de avaliação à ação formativa");
-    expect(exec.folderPath).not.toContain("01-Identificacao");
+    expect(exec.folderPath).toBe(`GesForma / Financiada / ${nome}`);
   });
 
   it("#8 com a pasta da turma na Drive, o ficheiro vai para o tópico dentro dela", async () => {

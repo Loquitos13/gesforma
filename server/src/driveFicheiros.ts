@@ -7,11 +7,12 @@ import type { Db } from "./db/pool.js";
 import { assertUpload, sanitizeFileName } from "./ficheirosValidacao.js";
 import {
   DRIVE_FILES_URL, driveComToken, driveCreds, driveOfflineMessage, ensureFolderPath, folderSegments,
-  garantirPastaFilha, isNotFound, tokenDrive, usableToken, type DriveContext,
+  garantirPastaFilha, isNotFound, moverPastaDrive, tokenDrive, usableToken, type DriveContext,
+  NA_PASTA_DA_TURMA,
 } from "./googleDrive.js";
 import {
   apagarRegistoFicheiro, ficheiroDrive, inserirFicheiroGoogle, inserirFicheiroLocal,
-  listarFicheirosDrive, pastaDaTurmaPorNome, type DriveFileRow,
+  ficheirosForaDaPastaDaTurma, gravarCaminhoFicheiro, listarFicheirosDrive, pastaDaTurmaPorNome, type DriveFileRow,
 } from "./repos/drive.js";
 import { dtpDriveSegments } from "./dtpPasta.js";
 
@@ -137,6 +138,12 @@ async function pastaFinDaTurma(db: Db, token: string, ctx: DriveContext, rootNam
   }
 }
 
+/** Recibos e reembolso: a pasta da turma criada na Drive (driveArvore.ts), quando existe; senão o caminho habitual. */
+async function pastaDaTurmaDirecta(db: Db, ctx: DriveContext) {
+  if (!ctx.turma || !NA_PASTA_DA_TURMA.has(ctx.kind) || (ctx.regime !== "gold" && ctx.regime !== "fin")) return "";
+  return pastaDaTurmaPorNome(db, ctx.regime, ctx.turma);
+}
+
 export async function storeDriveFile(
   db: Db,
   actorId: string | undefined,
@@ -156,6 +163,7 @@ export async function storeDriveFile(
     let parent: string;
     try {
       parent = ctx.parentDriveId?.trim()
+        || await pastaDaTurmaDirecta(db, ctx)
         || await pastaFinDaTurma(db, token, ctx, creds.folderName)
         || await ensureFolderPath(db, token, folderSegments(ctx, creds.folderName), creds.folderId);
     } catch (err) {
@@ -291,4 +299,30 @@ export async function deleteDriveFile(db: Db, id: string) {
   }
   await apagarRegistoFicheiro(db, id);
   return true;
+}
+
+/**
+ * Recibos e ficheiros do reembolso guardados antes dentro do dossiê passam para a pasta da turma (cron diário da
+ * Drive, alguns de cada vez). Devolve quantos mudaram.
+ */
+export async function arrumarNaPastaDaTurma(db: Db, prazoMs: number, limite = 40) {
+  const token = await tokenDrive(db).catch(() => null);
+  if (!token) return 0;
+  const creds = await driveCreds(db);
+  const fim = Date.now() + prazoMs;
+  let movidos = 0;
+  for (const f of await ficheirosForaDaPastaDaTurma(db, limite)) {
+    if (Date.now() > fim) break;
+    const ctx: DriveContext = { kind: f.kind, regime: f.regime ?? undefined, turma: f.turma ?? undefined, formando: f.formando ?? undefined, label: f.label ?? undefined };
+    try {
+      const segs = folderSegments(ctx, creds.folderName);
+      const destino = await pastaDaTurmaDirecta(db, ctx) || await ensureFolderPath(db, token, segs, creds.folderId);
+      await moverPastaDrive(token, f.drive_id!, destino);
+      await gravarCaminhoFicheiro(db, f.id, segs.join(" / "));
+      movidos++;
+    } catch {
+      // Fica para o próximo cron (ficheiro apagado na Drive ou sem acesso).
+    }
+  }
+  return movidos;
 }

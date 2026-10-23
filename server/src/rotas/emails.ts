@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { arrumarNaPastaDaTurma } from "../driveFicheiros.js";
 import { z } from "zod";
 import { timingSafeEqual } from "node:crypto";
 import { flushQueuedJobs, ingestEvent, processDueJobs, renderModelo, sendRuleTest, varsDeExemplo } from "../automations.js";
@@ -358,7 +359,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       return reply.code(503).send({ error: "cron desligado: falta CRON_SECRET" });
     }
     if (!cronAutorizado(req.headers.authorization)) return reply.code(401).send({ error: "cron recusado" });
-    return sincronizarPartilhasPendentes(db, CRON_ORCAMENTO_MS);
+    const r = await sincronizarPartilhasPendentes(db, CRON_ORCAMENTO_MS);
+    // Recibos e reembolso que ainda estão dentro de um dossiê passam para a pasta da turma.
+    const arrumados = await arrumarNaPastaDaTurma(db, 5_000).catch(() => 0);
+    return { ...r, arrumados };
   });
 
   app.post("/v1/events", async (req, reply) => {

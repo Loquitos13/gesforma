@@ -96,8 +96,6 @@ export function dtpCategoriaDe(item: {
   if (known) return known.id;
   if (item.kind === "certificado") return "certificacao";
   if (item.kind === "simulacao") return "avaliacao";
-  // Recibos (kind «Pagamentos»): no item «Comprovativos de pagamento / recibos», na pasta do formando.
-  if (item.kind === "Pagamentos") return "formandos";
   if (item.kind === "pip" || item.kind === "formando-doc" || item.ambito === "formando") return "formandos";
   if (item.kind === "formador-doc" || item.ambito === "formador") return "formador";
   const raw = (item.id ?? "").replace(/^extra:/, "");
@@ -110,7 +108,7 @@ export function dtpCategoriaPasta(item: Parameters<typeof dtpCategoriaDe>[0] | D
 }
 
 /** Kinds de ficheiros de uma pessoa (formando) no dossiê. */
-const KINDS_FORMANDO = new Set(["formando-doc", "pip", "Pagamentos"]);
+const KINDS_FORMANDO = new Set(["formando-doc", "pip"]);
 
 /**
  * Pasta (tópico) da Financiada para um ficheiro do dossiê: formandos no 5, formadores no 3, certificados no 11,
@@ -178,7 +176,8 @@ export function dtpDriveSegments(ctx: {
   if (regime === "fin") segs.push("Financiada");
   else if (regime === "gold") segs.push("Gold");
 
-  const dtpKinds = new Set(["dtp", "formando-doc", "pip", "simulacao", "certificado", "Pagamentos"]);
+  // Recibos («Pagamentos») e reembolso ficam na pasta da turma, fora do dossiê (googleDrive.ts › NA_PASTA_DA_TURMA).
+  const dtpKinds = new Set(["dtp", "formando-doc", "pip", "simulacao", "certificado"]);
   const inDtp = Boolean(ctx.turma) && (dtpKinds.has(ctx.kind) || ctx.kind === "formador-doc");
   if (!inDtp) return null;
 

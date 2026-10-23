@@ -58,6 +58,7 @@ export function registarAvaliacao(app: FastifyInstance, { db, requireAuth, audit
     const emitido = c.ficheiroId ? true : c.emitido;
     const turma = await turmaOu404(db, reply, regime, id);
     if (!turma) return;
+    if (req.actor!.role !== "admin" && await turmaFechada(db, regime, id)) return reply.code(409).send({ error: ERRO_TURMA_FECHADA });
     const membros = new Set((await formandosDaTurma(db, regime, turma)).map(f => f.id));
     if (!membros.has(formandoId)) return reply.code(400).send({ error: "O formando não pertence a esta turma." });
     if (c.nota != null) {
@@ -71,7 +72,7 @@ export function registarAvaliacao(app: FastifyInstance, { db, requireAuth, audit
       if (c.nota !== undefined || c.elearning !== undefined) {
         await gravarNotaCertificado(db, regime, id, formandoId, c.nota ?? null, c.elearning ?? null);
       }
-      const res = await resultadosDaTurma(db, regime, id, { dtpEmFalta: () => dtpEmFalta(db, regime, turma) });
+      const res = await resultadosDaTurma(db, regime, id, { dtpEmFalta: () => dtpEmFalta(db, regime, turma, "certificado") });
       const r = res?.formandos.find(f => f.id === formandoId);
       if (r && !r.elegivel) {
         if (!(c.forcar && req.actor!.role === "admin")) {
@@ -100,10 +101,9 @@ export function registarAvaliacao(app: FastifyInstance, { db, requireAuth, audit
     if (!(await formadorPodeVer(db, req, reply, regime, id, "Só consulta as turmas em que está atribuído."))) return;
     const turma = await turmaOu404(db, reply, regime, id);
     if (!turma) return;
-    const emFalta = () => dtpEmFalta(db, regime, turma);
-    const res = await resultadosDaTurma(db, regime, id, { dtpEmFalta: emFalta });
+    const res = await resultadosDaTurma(db, regime, id, { dtpEmFalta: () => dtpEmFalta(db, regime, turma, "certificado") });
     if (!res) return reply.code(404).send({ error: "turma não encontrada" });
-    const pend = req.actor!.role === "formador" ? null : await pendentesDoFecho(db, regime, id, { dtpEmFalta: emFalta });
+    const pend = req.actor!.role === "formador" ? null : await pendentesDoFecho(db, regime, id, { dtpEmFalta: () => dtpEmFalta(db, regime, turma, "fecho") });
     return { ...res, fecho: pend ? { pode: pend.falta.length === 0, falta: pend.falta } : null };
   });
 }

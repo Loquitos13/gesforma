@@ -1,7 +1,7 @@
 import { docsFinCompletos } from "./dossierDocs";
 import type { FormandoFin } from "./tiposFormando";
 import type { PedagogiaSnapshot } from "./api";
-import { formatSessaoLabel, type ProgramaDocumentos, type SessaoCronograma } from "./turmaModel";
+import { formatSessaoLabel, isSessaoLectiva, type ProgramaDocumentos, type SessaoCronograma } from "./turmaModel";
 import { rotuloCodigoCurso } from "./codigoCurso";
 
 export type DocEstado = "ok" | "parcial" | "falta";
@@ -11,6 +11,8 @@ export type FinDocItem = {
   detalhe: string;
   estado: DocEstado;
   bloqueante?: boolean;
+  /** Item do dossiê (servidor) que dá o estado deste documento. */
+  dtpId?: string;
 };
 
 export type FinDocGrupo = {
@@ -50,7 +52,8 @@ export function finGruposDocumentosTurma(input: {
   const { formandos, facts, cronograma, curso, ufcdCod, horas, dtpPct, programa } = input;
   const totalF = formandos.length;
   const prontos = formandos.filter(f => docsFinCompletos(f)).length;
-  const sessoes = cronograma.length;
+  // Planos, sumários e presenças só existem nas sessões lectivas (presencial e síncrona).
+  const sessoes = cronograma.filter(isSessaoLectiva).length;
   const cc = contarDoc(formandos, "cc");
   const ch = contarDoc(formandos, "ch");
   const cu = contarDoc(formandos, "cu");
@@ -69,12 +72,14 @@ export function finGruposDocumentosTurma(input: {
           label: "Programa de formação UFCD",
           detalhe: ufcdCod ? `${rotuloCodigoCurso(ufcdCod)} · ${curso ?? "—"} · ${horas ?? "—"}h` : (curso ?? "Curso"),
           estado: curso ? "ok" : "falta",
+          dtpId: "programa",
         },
-        { label: "Regulamento de formação", detalhe: "Regulamento ENA e regras do financiador. Ainda não registado nesta turma.", estado: "falta" },
+        { label: "Regulamento de formação", detalhe: "Regulamento ENA e regras do financiador. Ainda não registado nesta turma.", estado: "falta", dtpId: "regulamento" },
         {
           label: "Cronograma da turma",
           detalhe: `${sessoes} sessões planeadas${sessoes ? "" : " · falta cronograma"}`,
           estado: st(facts.sessoes.total > 0 ? facts.sessoes.total : sessoes, Math.max(sessoes, 1)),
+          dtpId: "cronograma",
         },
         {
           label: "Enquadramento do financiador",
@@ -88,6 +93,7 @@ export function finGruposDocumentosTurma(input: {
           detalhe: relatorioOk ? "DTP pronto para fecho." : `DTP a ${dtpPct ?? 0}% · falta concluir dossiê`,
           estado: relatorioOk ? "ok" : "falta",
           bloqueante: true,
+          dtpId: "relatorio",
         },
       ],
     },
@@ -101,6 +107,7 @@ export function finGruposDocumentosTurma(input: {
           detalhe: `${facts.planos.done}/${facts.planos.total || sessoes} planos`,
           estado: st(facts.planos.done, facts.planos.total || sessoes),
           bloqueante: true,
+          dtpId: "planos",
         },
         {
           label: "Sumários assinados",
@@ -109,8 +116,9 @@ export function finGruposDocumentosTurma(input: {
         },
         {
           label: "Folhas de presença",
-          detalhe: `${facts.presencas.done}/${facts.presencas.total || sessoes} sessões com presenças`,
+          detalhe: `${facts.presencas.done}/${facts.presencas.total || sessoes} sessões com presenças validadas`,
           estado: st(facts.presencas.done, facts.presencas.total || sessoes),
+          dtpId: "presencas",
         },
         {
           label: "Mapa de assiduidade em horas",
@@ -127,11 +135,11 @@ export function finGruposDocumentosTurma(input: {
       items: [
         { label: "Elegibilidade (8 documentos)", detalhe: `${prontos}/${totalF} com dossier completo`, estado: st(prontos, totalF), bloqueante: true },
         { label: "Contratos de formação", detalhe: `${contr.done}/${contr.total} validados`, estado: st(contr.done, contr.total) },
-        { label: "Cartão de cidadão", detalhe: `${cc.done}/${cc.total}`, estado: st(cc.done, cc.total) },
-        { label: "Certificado de habilitações", detalhe: `${ch.done}/${ch.total}`, estado: st(ch.done, ch.total) },
-        { label: "Curriculum vitae", detalhe: `${cu.done}/${cu.total}`, estado: st(cu.done, cu.total) },
-        { label: "IBAN", detalhe: `${ci.done}/${ci.total} · sem IBAN não há apoios`, estado: st(ci.done, ci.total), bloqueante: ci.total > 0 && ci.done < ci.total },
-        { label: "Comprovativo de emprego", detalhe: `${ce.done}/${ce.total}`, estado: st(ce.done, ce.total) },
+        { label: "Cartão de cidadão", detalhe: `${cc.done}/${cc.total}`, estado: st(cc.done, cc.total), dtpId: "cc" },
+        { label: "Certificado de habilitações", detalhe: `${ch.done}/${ch.total}`, estado: st(ch.done, ch.total), dtpId: "ch" },
+        { label: "Curriculum vitae", detalhe: `${cu.done}/${cu.total}`, estado: st(cu.done, cu.total), dtpId: "cv-formando" },
+        { label: "IBAN", detalhe: `${ci.done}/${ci.total} · sem IBAN não há apoios`, estado: st(ci.done, ci.total), bloqueante: ci.total > 0 && ci.done < ci.total, dtpId: "iban" },
+        { label: "Comprovativo de emprego", detalhe: `${ce.done}/${ce.total}`, estado: st(ce.done, ce.total), dtpId: "entidade-patronal" },
       ],
     },
     {
@@ -139,9 +147,10 @@ export function finGruposDocumentosTurma(input: {
       label: "Documentos dos formadores",
       color: "bg-violet-50 border-violet-200 text-violet-800",
       items: [
-        { label: "CCP / CCPE do formador", detalhe: "Validar na ficha do formador e marcar aqui.", estado: "falta" },
-        { label: "CV do formador", detalhe: "Validar na ficha do formador e marcar aqui.", estado: "falta" },
-        { label: "Contrato do formador", detalhe: "Validar na ficha do formador e marcar aqui.", estado: "falta" },
+        // O estado vem do dossiê (documentos na ficha de cada formador da turma).
+        { label: "CCP / CCPE do formador", detalhe: "Carregar na ficha do formador.", estado: "falta", dtpId: "ccp-formador" },
+        { label: "CV do formador", detalhe: "Carregar na ficha do formador.", estado: "falta", dtpId: "cv-formador" },
+        { label: "Contrato do formador", detalhe: "Contrato do formador desta ação.", estado: "falta", dtpId: "contrato-formador" },
       ],
     },
   ];

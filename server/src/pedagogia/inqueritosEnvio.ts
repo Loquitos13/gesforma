@@ -28,7 +28,9 @@ export type ResultadoEnvio = { enviados: number; semEmail: number; inqueritos: n
 export async function enviarInqueritosDaTurma(db: Db, actorId: string | undefined, regime: Regime, turmaId: number): Promise<ResultadoEnvio> {
   const row = await equipaDaTurma(db, regime, turmaId);
   if (!row) return { erro: "turma inexistente", codigo: 404 };
-  const inqs = await inqueritosDoRegime(db, regime);
+  // Envio de fim de curso: os de pós-formação (impacto, ~3 meses depois) ficam de fora.
+  // Ainda não há rota própria para eles; quando houver, envia-os à parte com o público "pos".
+  const inqs = (await inqueritosDoRegime(db, regime)).filter(i => publicoInquerito(asObj(i.payload)) !== "pos");
   if (!inqs.length) return { erro: "Não há inquéritos neste regime. Crie um e marque o público-alvo.", codigo: 400 };
   const pessoas = await contactosFormandos(db, regime, turmaId, row.nome);
   const nomesFormador = [...new Set([...asArr(row.formadores).map(n => String(n).trim()), String(row.formador ?? "").trim()]
@@ -36,7 +38,7 @@ export async function enviarInqueritosDaTurma(db: Db, actorId: string | undefine
   const formadores = await contactosFormadores(db, nomesFormador);
 
   const destinatarios: { nome: string; email: string; publicos: PublicoInquerito[] }[] = [
-    ...pessoas.map(p => ({ nome: `${p.nome ?? ""} ${p.apelido ?? ""}`.trim() || "formando", email: String(p.email ?? "").trim(), publicos: ["formando", "pos"] as PublicoInquerito[] })),
+    ...pessoas.map(p => ({ nome: `${p.nome ?? ""} ${p.apelido ?? ""}`.trim() || "formando", email: String(p.email ?? "").trim(), publicos: ["formando"] as PublicoInquerito[] })),
     ...formadores.map(f => ({ nome: f.nome || "formador", email: String(f.email ?? "").trim(), publicos: ["formador"] as PublicoInquerito[] })),
   ];
   const quantos = (publico: PublicoInquerito) => destinatarios.filter(d => d.publicos.includes(publico) && d.email.includes("@")).length;

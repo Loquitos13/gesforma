@@ -3,7 +3,8 @@ import { I } from "./base";
 
 export type DocEstado = "ok" | "parcial" | "falta";
 
-export type DocItem = { label: string; detalhe: string; estado: DocEstado; bloqueante?: boolean; payload?: unknown };
+/** `dtpId`: o item do dossiê (servidor) de onde sai o estado. */
+export type DocItem = { label: string; detalhe: string; estado: DocEstado; bloqueante?: boolean; payload?: unknown; dtpId?: string };
 
 export type GrupoDocs = { id: string; label: string; color: string; icon: React.ReactNode; items: DocItem[] };
 
@@ -42,7 +43,7 @@ const DOCS_GOLD: { grupo: string; label: string; dtpId: string }[] = [
   { grupo: "formadores", label: "Contrato do formador", dtpId: "contrato-formador" },
 ];
 
-export type ItemDtp = { id: string; estado: DocEstado; detalhe: string; hint?: string; bloqueante?: boolean };
+export type ItemDtp = { id: string; estado: DocEstado; detalhe: string; hint?: string; bloqueante?: boolean; origem?: "auto" | "manual" };
 
 /** Grupos Gold a partir do dossiê da turma. Itens que o modelo do curso excluiu não aparecem. */
 export function gruposGold(itens: ItemDtp[]): GrupoDocs[] {
@@ -51,7 +52,7 @@ export function gruposGold(itens: ItemDtp[]): GrupoDocs[] {
     ...metaGrupo(id, "gold"),
     items: DOCS_GOLD.filter(d => d.grupo === id && porId.has(d.dtpId)).map(d => {
       const it = porId.get(d.dtpId)!;
-      return { label: d.label, detalhe: it.detalhe || it.hint || "", estado: it.estado, bloqueante: it.bloqueante };
+      return { label: d.label, detalhe: it.detalhe || it.hint || "", estado: it.estado, bloqueante: it.bloqueante, dtpId: d.dtpId };
     }),
   })).filter(g => g.items.length);
 }

@@ -5,6 +5,7 @@
 import { pgIntArray, pgTextArray } from "../pedagogia/util.js";
 import type { DtpEstado } from "../dtpModel.js";
 import type { AnexoLinha } from "./dtp.js";
+import { sqlFormandoConta } from "./pedagogiaTurma.js";
 import type { DocumentoLinha } from "./pedagogiaSessoes.js";
 import { many, type Consulta, type Regime } from "./sql.js";
 
@@ -27,15 +28,6 @@ export async function documentosDasTurmas(c: Consulta, regime: Regime, ids: numb
   );
 }
 
-export async function certificadosDasTurmas(c: Consulta, regime: Regime, ids: number[]) {
-  if (!ids.length) return [];
-  return many<{ turma_id: number; formando_id: number; emitido: boolean }>(
-    c,
-    "SELECT turma_id, formando_id, emitido FROM turma_certificados WHERE regime = $1 AND turma_id = ANY($2::int[])",
-    [regime, pgIntArray(ids)],
-  );
-}
-
 /** Formandos Gold candidatos às turmas (por id ou pelo nome da turma). */
 export async function formandosGoldDasTurmas(c: Consulta, ids: number[], nomes: string[]) {
   if (!ids.length) return [];
@@ -43,7 +35,7 @@ export async function formandosGoldDasTurmas(c: Consulta, ids: number[], nomes: 
     c,
     `SELECT id, nome, coalesce(apelido, '') AS apelido, lower(trim(coalesce(email, ''))) AS email, turma_id, coalesce(turma, '') AS turma
        FROM formandos_gold
-      WHERE turma_id = ANY($1::int[]) OR (trim(turma) <> '' AND turma = ANY($2::text[]))`,
+      WHERE (turma_id = ANY($1::int[]) OR (trim(turma) <> '' AND turma = ANY($2::text[]))) AND ${sqlFormandoConta("gold")}`,
     [pgIntArray(ids), pgTextArray(nomes)],
   );
 }
@@ -55,25 +47,18 @@ export async function formandosFinDasTurmas(c: Consulta, ids: number[], nomes: s
     c,
     `SELECT id, nome, coalesce(apelido, '') AS apelido, docs, turma_id, coalesce(turma, '') AS turma, coalesce(curso, '') AS curso
        FROM formandos_fin
-      WHERE turma_id = ANY($1::int[]) OR (turma_id IS NULL AND trim(turma) <> '' AND turma = ANY($2::text[]))`,
+      WHERE (turma_id = ANY($1::int[]) OR (turma_id IS NULL AND trim(turma) <> '' AND turma = ANY($2::text[]))) AND ${sqlFormandoConta("fin")}`,
     [pgIntArray(ids), pgTextArray(nomes)],
   );
 }
 
-/** Para cada turma e inquérito do regime: se já foi enviado. */
+/** Inquéritos enviados a cada turma (o total é o que se enviou, não o catálogo do regime). */
 export async function inqueritosEnviadosAsTurmas(c: Consulta, regime: Regime, ids: number[]) {
   if (!ids.length) return [];
   return many<{ turma_id: number; publico: string; enviado: boolean }>(
     c,
-    `SELECT t.id AS turma_id,
-            COALESCE(NULLIF(i.payload->>'publico', ''), 'formando') AS publico,
-            EXISTS (
-              SELECT 1 FROM inquerito_envios e
-               WHERE e.regime = $1 AND e.turma_id = t.id AND e.inquerito_id = i.id
-            ) AS enviado
-       FROM catalog_items i
-       CROSS JOIN unnest($2::int[]) AS t(id)
-      WHERE i.kind = 'inqueritos' AND i.regime = $1`,
+    `SELECT turma_id, COALESCE(NULLIF(publico, ''), 'formando') AS publico, true AS enviado
+       FROM inquerito_envios WHERE regime = $1 AND turma_id = ANY($2::int[])`,
     [regime, pgIntArray(ids)],
   );
 }

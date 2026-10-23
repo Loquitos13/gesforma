@@ -178,7 +178,7 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
               )}
               {tab === "documentos" && !souFormador && (
                 <DocumentosTurmaTab regime="gold" curso={t.curso} criterios={criterios} guardados={ped.documentos} onSaveDoc={doc => void ped.guardarDocumento(doc)}
-                  dtpItems={ped.dtp.items} formandos={nomesCockpit.map(f => f.nome)} sessoes={labelsSessoesFin(t.cronograma)} />
+                  dtpItems={ped.dtp.items} onSaveDtp={(id, estado) => void ped.guardarDtp(id, estado)} formandos={nomesCockpit.map(f => f.nome)} sessoes={labelsSessoesFin(t.cronograma)} />
               )}
               {tab === "certificados" && !souFormador && (
                 <CertificadosTurmaTab formandos={nomesCockpit} certificados={ped.certificados}

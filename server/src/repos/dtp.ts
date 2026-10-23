@@ -1,6 +1,7 @@
 /** Dossiê técnico-pedagógico: estado manual, anexos, modelos por curso e entidade, factos da turma. */
 import { pgIntArray, pgTextArray } from "../pedagogia/util.js";
 import type { DtpEstado } from "../dtpModel.js";
+import { sqlFormandoConta } from "./pedagogiaTurma.js";
 import { many, one, type Consulta, type Regime } from "./sql.js";
 
 export async function estadosManuais(c: Consulta, regime: Regime, turmaId: number) {
@@ -58,14 +59,6 @@ export async function sessoesParaFactos(c: Consulta, regime: Regime, turmaId: nu
   );
 }
 
-export async function certificadosEmitidos(c: Consulta, regime: Regime, turmaId: number) {
-  return many<{ formando_id: number; emitido: boolean; ficheiro_id: string }>(
-    c,
-    "SELECT formando_id, emitido, COALESCE(ficheiro_id, '') AS ficheiro_id FROM turma_certificados WHERE regime = $1 AND turma_id = $2",
-    [regime, turmaId],
-  );
-}
-
 export async function docsValidadosDosFormandos(c: Consulta, regime: Regime, ids: number[]) {
   if (!ids.length) return [];
   return many<{ formando_id: number; doc_id: string }>(
@@ -75,18 +68,25 @@ export async function docsValidadosDosFormandos(c: Consulta, regime: Regime, ids
   );
 }
 
-/** Inquéritos do regime e se cada um já foi enviado a esta turma. */
+/** Inquéritos enviados a esta turma (o total é o que se enviou, não o catálogo do regime). */
 export async function inqueritosEnviadosATurma(c: Consulta, regime: Regime, turmaId: number) {
   return many<{ publico: string; enviado: boolean }>(
     c,
-    `SELECT COALESCE(NULLIF(i.payload->>'publico', ''), 'formando') AS publico,
-            EXISTS (
-              SELECT 1 FROM inquerito_envios e
-               WHERE e.regime = $1 AND e.turma_id = $2 AND e.inquerito_id = i.id
-            ) AS enviado
-       FROM catalog_items i
-      WHERE i.kind = 'inqueritos' AND i.regime = $1`,
+    "SELECT COALESCE(NULLIF(publico, ''), 'formando') AS publico, true AS enviado FROM inquerito_envios WHERE regime = $1 AND turma_id = $2",
     [regime, turmaId],
+  );
+}
+
+/** Formadores pelos nomes (minúsculas, aparados), com a validade do CCP e os documentos carregados. */
+export async function docsDosFormadores(c: Consulta, nomesMinusculos: string[]) {
+  if (!nomesMinusculos.length) return [];
+  return many<{ nome: string; ccp_validade: string | null; docs: string[] | null }>(
+    c,
+    `SELECT lower(trim(fm.nome)) AS nome, fm.ccp_validade::text AS ccp_validade,
+            (SELECT array_agg(d.doc_id) FROM formador_docs d WHERE d.formador_id = fm.id AND d.uploaded) AS docs
+       FROM formadores fm
+      WHERE lower(trim(fm.nome)) = ANY($1::text[])`,
+    [pgTextArray(nomesMinusculos)],
   );
 }
 
@@ -184,7 +184,8 @@ export async function entidadesDosCursosGold(c: Consulta) {
 export async function emailsFormandosGold(c: Consulta, turmaId: number, turmaNome: string) {
   return many<{ id: number; email: string }>(
     c,
-    "SELECT id, lower(trim(email)) AS email FROM formandos_gold WHERE turma_id = $1 OR (trim(turma) <> '' AND turma = $2)",
+    `SELECT id, lower(trim(email)) AS email FROM formandos_gold
+      WHERE (turma_id = $1 OR (trim(turma) <> '' AND turma = $2)) AND ${sqlFormandoConta("gold")}`,
     [turmaId, turmaNome],
   );
 }

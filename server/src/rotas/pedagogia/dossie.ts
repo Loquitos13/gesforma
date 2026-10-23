@@ -1,16 +1,32 @@
 /** Dossiê da turma: estado manual dos itens, anexos e PDFs gerados. */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { eItemDossieGerado, itensDoMesmoPdf, pdfDossieGerado } from "../../dossieGerado.js";
-import { dtpForTurma } from "../../pedagogia/dtp.js";
+import { dtpForTurma, estruturaDoDossie } from "../../pedagogia/dtp.js";
 import { anexoSchema, dtpSchema, itemParam } from "../../pedagogia/esquemas.js";
 import { anexarPdfDtp, gravarPdfsDossie } from "../../pedagogia/ficheiros.js";
 import { definirEstadoManual, gravarAnexo, limparEstadoManual } from "../../repos/dtp.js";
-import { carregarTurma } from "../../repos/pedagogiaTurma.js";
+import { carregarTurma, type TurmaRow } from "../../repos/pedagogiaTurma.js";
+import { ERRO_TURMA_FECHADA, turmaFechada } from "../../resultados.js";
+import type { Regime } from "../../pedagogia/util.js";
 import { regimeIdParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
 import { enviarPdf, semFormador, turmaOu404 } from "./comum.js";
 
 const SEM_FORMADOR = "O formador não altera o dossiê técnico-pedagógico.";
+
+/** Turma fechada: só o administrador mexe no dossiê. */
+async function fechadaParaOActor(db: Deps["db"], req: FastifyRequest, reply: FastifyReply, regime: Regime, id: number) {
+  if (req.actor!.role === "admin" || !(await turmaFechada(db, regime, id))) return false;
+  reply.code(409).send({ error: ERRO_TURMA_FECHADA });
+  return true;
+}
+
+/** O item tem de existir no dossiê desta turma (null já respondeu 400). */
+async function itemDoDossie(db: Deps["db"], reply: FastifyReply, regime: Regime, turma: TurmaRow, itemId: string) {
+  const def = (await estruturaDoDossie(db, regime, turma)).find(d => d.id === itemId);
+  if (!def) reply.code(400).send({ error: "Este documento não faz parte do dossiê da turma." });
+  return def ?? null;
+}
 
 export function registarDossieTurma(app: FastifyInstance, { db, requireAuth, audit }: Deps) {
   app.put("/v1/turmas/:regime/:id/dtp/:itemId", async (req, reply) => {
@@ -19,7 +35,7 @@ export function registarDossieTurma(app: FastifyInstance, { db, requireAuth, aud
     if (!v) return;
     const { regime, id, itemId } = v.params;
     const turma = await turmaOu404(db, reply, regime, id);
-    if (!turma) return;
+    if (!turma || await fechadaParaOActor(db, req, reply, regime, id) || !(await itemDoDossie(db, reply, regime, turma, itemId))) return;
     if (v.body.estado === "auto") await limparEstadoManual(db, regime, id, itemId);
     else await definirEstadoManual(db, regime, id, itemId, v.body.estado);
     await audit(db, req.actor!.id, "turma.dtp", "turma", String(id), req.ip, { regime, item: itemId, estado: v.body.estado });
@@ -32,9 +48,12 @@ export function registarDossieTurma(app: FastifyInstance, { db, requireAuth, aud
     if (!v) return;
     const { regime, id, itemId } = v.params;
     const turma = await turmaOu404(db, reply, regime, id);
-    if (!turma) return;
+    if (!turma || await fechadaParaOActor(db, req, reply, regime, id)) return;
+    const def = await itemDoDossie(db, reply, regime, turma, itemId);
+    if (!def) return;
     await gravarAnexo(db, regime, id, itemId, { id: v.body.driveFileId, nome: v.body.fileName, url: v.body.driveUrl ?? "" });
-    await definirEstadoManual(db, regime, id, itemId, "ok");
+    // Só um item sem regra automática fica no dossiê pelo anexo; os automáticos continuam a sair dos dados.
+    if (!def.auto) await definirEstadoManual(db, regime, id, itemId, "ok");
     await audit(db, req.actor!.id, "turma.dtp_anexo", "turma", String(id), req.ip, { regime, item: itemId });
     return { dtp: await dtpForTurma(db, regime, turma) };
   });
@@ -45,7 +64,7 @@ export function registarDossieTurma(app: FastifyInstance, { db, requireAuth, aud
     if (!v) return;
     const { regime, id } = v.params;
     const turma = await turmaOu404(db, reply, regime, id);
-    if (!turma) return;
+    if (!turma || await fechadaParaOActor(db, req, reply, regime, id)) return;
     try {
       await gravarPdfsDossie(db, req.actor!.id, regime, turma);
     } catch (err) {

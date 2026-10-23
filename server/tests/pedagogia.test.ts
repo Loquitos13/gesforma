@@ -108,7 +108,9 @@ describe("certificado e fecho", () => {
     expect((await pedido(ctx, "secretaria", "POST", `${base}/fecho`)).statusCode).toBe(200);
     expect((await pedido(ctx, "secretaria", "PUT", `${base}/sessoes/1`, { presencas: [] })).statusCode).toBe(409);
     expect((await pedido(ctx, "secretaria", "POST", "/v1/formandos-gold", { nome: "Novo", turmaId: turma.id })).statusCode).toBe(409);
-    expect((await pedido(ctx, "secretaria", "PUT", `${base}/certificados/${f.id}`, { emitido: true })).statusCode).toBe(200);
+    // Turma fechada: só o administrador mexe nos certificados.
+    expect((await pedido(ctx, "secretaria", "PUT", `${base}/certificados/${f.id}`, { emitido: true })).statusCode).toBe(409);
+    expect((await pedido(ctx, "admin", "PUT", `${base}/certificados/${f.id}`, { emitido: true })).statusCode).toBe(200);
 
     expect((await pedido(ctx, "secretaria", "POST", `${base}/reabrir`, { motivo: "x" })).statusCode).toBe(403);
     expect((await pedido(ctx, "admin", "POST", `${base}/reabrir`, {})).statusCode).toBe(400);

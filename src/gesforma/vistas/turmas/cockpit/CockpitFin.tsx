@@ -177,6 +177,7 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
               )}
               {tab === "documentos" && !souFormador && (
                 <DocumentosTurmaTab regime="fin" curso={t.curso} criterios={criterios} guardados={ped.documentos} onSaveDoc={doc => void ped.guardarDocumento(doc)}
+                  dtpItems={ped.dtp.items} onSaveDtp={(id, estado) => void ped.guardarDtp(id, estado)}
                   finCtx={{ formandos: membros, facts: ped.dtp.facts, cronograma: t.cronograma, curso: t.curso, ufcdCod: t.ufcdCod, horas: t.horas, dtpPct: ped.dtp.pct, programa: t.programaDocumentos }} />
               )}
               {tab === "certificados" && !souFormador && (

@@ -2,18 +2,36 @@
 import { asObj, pgTextArray } from "../pedagogia/util.js";
 import { many, one, tabelaRegime, type Consulta, type Regime } from "./sql.js";
 
-export type TurmaRow = { id: number; nome: string; curso: string; cronograma: unknown; formador?: string; local?: string; horario?: string };
+export type TurmaRow = {
+  id: number; nome: string; curso: string; cronograma: unknown; formador?: string; local?: string; horario?: string;
+  formadores?: unknown; data_inicio?: string;
+};
 
 export async function carregarTurma(c: Consulta, regime: Regime, id: number): Promise<TurmaRow | null> {
-  return one<TurmaRow>(c, `SELECT id, nome, curso, cronograma, formador, local, horario FROM ${tabelaRegime("turmas", regime)} WHERE id = $1`, [id]);
+  return one<TurmaRow>(
+    c,
+    `SELECT id, nome, curso, cronograma, formador, local, horario, formadores, coalesce(data_inicio::text, '') AS data_inicio
+       FROM ${tabelaRegime("turmas", regime)} WHERE id = $1`,
+    [id],
+  );
+}
+
+/**
+ * Formandos que contam no dossiê: na Gold saem os desistentes e indeferidos (a regra ATIVO de resultados.ts),
+ * na Financiada os indeferidos (como na execução física, documentosFin.ts).
+ */
+export function sqlFormandoConta(regime: Regime, col = "estado") {
+  return regime === "gold"
+    ? `trim(coalesce(${col}, '')) !~* '^(desist|indeferido)'`
+    : `trim(coalesce(${col}, '')) !~* '^indeferid'`;
 }
 
 /** Todas as turmas do regime, só com o necessário para o dossiê. */
 export async function listarTurmasDtp(c: Consulta, regime: Regime) {
-  const extra = regime === "fin" ? "financiador, fechada_em IS NOT NULL AS fechada" : "'' AS financiador, false AS fechada";
+  const extra = regime === "fin" ? "financiador, fechada_em IS NOT NULL AS fechada" : "'' AS financiador, fechada_em IS NOT NULL AS fechada";
   return many<TurmaRow & { estado: string; data_inicio: string; financiador: string; fechada: boolean }>(
     c,
-    `SELECT id, nome, curso, cronograma, formador, local, horario, coalesce(estado, '') AS estado,
+    `SELECT id, nome, curso, cronograma, formador, formadores, local, horario, coalesce(estado, '') AS estado,
             coalesce(data_inicio::text, '') AS data_inicio, ${extra}
        FROM ${tabelaRegime("turmas", regime)}
       ORDER BY data_inicio DESC NULLS LAST, nome`,
@@ -69,11 +87,12 @@ export type FormandoTurma = { id: number; nome: string; docs: Record<string, unk
  * Formandos da turma: os ligados pelo id ou, sem id, pelo nome da turma. Quem não tem turma não entra no
  * dossiê de nenhuma (antes contava em todas as turmas do mesmo curso): fica por atribuir na lista de formandos.
  */
-export async function formandosDaTurma(c: Consulta, regime: Regime, turma: TurmaRow): Promise<FormandoTurma[]> {
+export async function formandosDaTurma(c: Consulta, regime: Regime, turma: TurmaRow, opts: { soQueContam?: boolean } = {}): Promise<FormandoTurma[]> {
+  const conta = opts.soQueContam ? ` AND ${sqlFormandoConta(regime, regime === "gold" ? "estado" : "f.estado")}` : "";
   if (regime === "gold") {
     const rows = await many<{ id: number; nome: string; apelido: string }>(
       c,
-      "SELECT id, nome, apelido FROM formandos_gold WHERE turma_id = $1 OR (trim(turma) <> '' AND turma = $2) ORDER BY nome",
+      `SELECT id, nome, apelido FROM formandos_gold WHERE (turma_id = $1 OR (trim(turma) <> '' AND turma = $2))${conta} ORDER BY nome`,
       [turma.id, turma.nome],
     );
     return rows.map(r => ({ id: r.id, nome: `${r.nome} ${r.apelido}`.trim(), docs: {} }));
@@ -81,8 +100,8 @@ export async function formandosDaTurma(c: Consulta, regime: Regime, turma: Turma
   const rows = await many<{ id: number; nome: string; apelido: string; docs: unknown }>(
     c,
     `SELECT id, nome, apelido, docs FROM formandos_fin f
-      WHERE f.turma_id = $1
-         OR (f.turma_id IS NULL AND trim(f.turma) <> '' AND f.turma = $2)
+      WHERE (f.turma_id = $1
+         OR (f.turma_id IS NULL AND trim(f.turma) <> '' AND f.turma = $2))${conta}
       ORDER BY nome`,
     [turma.id, turma.nome],
   );

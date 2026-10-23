@@ -24,7 +24,13 @@ export type DtpAuto =
   | "doc-regulamento"
   | "inqueritos-formador"
   | "inqueritos-formandos"
-  | "inqueritos-pos";
+  | "inqueritos-pos"
+  | "pauta"
+  | "fichas"
+  | "formador-cc"
+  | "formador-cv"
+  | "formador-ccp"
+  | "formador-habilitacoes";
 
 export type DtpDef = {
   id: string;
@@ -149,9 +155,9 @@ const GOLD: DtpDef[] = [
   { id: "fichas", fase: "antes", label: "Fichas de inscrição", fonte: "DGERT · Portaria 851/2010 f)", hint: "Fichas dos formandos desta turma.", obrigatorio: true },
   { id: "contratos-f", fase: "antes", label: "Contratos de formação (formandos)", fonte: "DGERT · Portaria 851/2010 i)", hint: "Um contrato assinado por formando.", auto: "contratos", obrigatorio: true },
   { id: "contrato-formador", fase: "antes", label: "Contrato do formador", fonte: "DGERT · Portaria 851/2010 i)", hint: "Contrato do formador atribuído à turma.", obrigatorio: true },
-  { id: "cv-formador", fase: "antes", label: "CV do formador", fonte: "IEFP · Anexo 5 DTP", hint: "CV actualizado no perfil do formador." },
-  { id: "ccp-formador", fase: "antes", label: "CCP / CCPE do formador", fonte: "IEFP · Anexo 5 DTP", hint: "Certificado de competências pedagógicas válido." },
-  { id: "habil-formador", fase: "antes", label: "Qualificação de nível superior do formador", fonte: "IEFP · Anexo 5 DTP", hint: "Certificado de habilitações do formador." },
+  { id: "cv-formador", fase: "antes", label: "CV do formador", fonte: "IEFP · Anexo 5 DTP", hint: "CV actualizado no perfil do formador.", auto: "formador-cv" },
+  { id: "ccp-formador", fase: "antes", label: "CCP / CCPE do formador", fonte: "IEFP · Anexo 5 DTP", hint: "Certificado de competências pedagógicas válido.", auto: "formador-ccp" },
+  { id: "habil-formador", fase: "antes", label: "Qualificação de nível superior do formador", fonte: "IEFP · Anexo 5 DTP", hint: "Certificado de habilitações do formador.", auto: "formador-habilitacoes" },
   { id: "exp-formandos", fase: "antes", label: "Comprovativo de 5 anos de experiência (formandos)", fonte: "IEFP · Anexo 5 · acesso FPIF", hint: "Obrigatório no CCP.", auto: "doc-exp" },
   { id: "rgpd", fase: "antes", label: "Autorizações RGPD / imagem / dados digitais", fonte: "IEFP · Anexo 5 · RGPD", hint: "Necessário em b-learning (gravação de sessões)." },
   { id: "recibos", fase: "antes", label: "Comprovativos de pagamento / recibos", fonte: "Gold · autofinanciada", hint: "Específico do regime comercial." },
@@ -165,8 +171,8 @@ const GOLD: DtpDef[] = [
   { id: "instrumentos", fase: "durante", label: "Instrumentos de avaliação (enunciados / grelhas)", fonte: "DGERT · Portaria 851/2010 m) n)", hint: "Classificação sem instrumento não é verificável.", obrigatorio: true },
   { id: "ocorrencias", fase: "durante", label: "Registo de ocorrências", fonte: "DGERT · Portaria 851/2010 r)", hint: "Desistências, troca de formador, alteração de calendário.", obrigatorio: true },
   { id: "materiais", fase: "durante", label: "Materiais e textos de apoio", fonte: "DGERT · Portaria 851/2010", hint: "Manual e apresentações entregues à turma.", obrigatorio: true },
-  { id: "pauta", fase: "depois", label: "Pauta / classificação final", fonte: "DGERT · Portaria 851/2010 o)", hint: "Classificação de cada formando.", obrigatorio: true },
-  { id: "satisfacao", fase: "depois", label: "Avaliação de satisfação dos formandos", fonte: "DGERT · Portaria 851/2010 q)", hint: "Questionário de reacção no último dia.", obrigatorio: true },
+  { id: "pauta", fase: "depois", label: "Pauta / classificação final", fonte: "DGERT · Portaria 851/2010 o)", hint: "Classificação de cada formando.", auto: "pauta", obrigatorio: true },
+  { id: "satisfacao", fase: "depois", label: "Avaliação de satisfação dos formandos", fonte: "DGERT · Portaria 851/2010 q)", hint: "Questionário de reacção no último dia.", auto: "inqueritos-formandos", obrigatorio: true },
   { id: "aval-formador", fase: "depois", label: "Avaliação de desempenho do formador", fonte: "DGERT · Portaria 851/2010 p)", hint: "Preenchida pelo coordenador pedagógico.", obrigatorio: true },
   { id: "certificados", fase: "depois", label: "Comprovativo de entrega dos certificados", fonte: "DGERT · s) · NetForce / SIGO", hint: "CCP emitido no Portal NetForce após pauta.", auto: "certificados", obrigatorio: true },
   { id: "relatorio", fase: "depois", label: "Relatório final da turma", fonte: "DGERT · Portaria 851/2010 t)", hint: "Fecha o DTP. Sem relatório a turma não se arquiva.", bloqueante: true, obrigatorio: true },
@@ -182,10 +188,10 @@ const FIN: DtpDef[] = [
   { id: "materiais", fase: "antes", topico: 2, ordem: 1, label: "Manuais e textos de apoio", fonte: "2. Recursos pedagógicos", hint: "Manuais e textos disponibilizados na ação.", obrigatorio: true },
   { id: "protocolo-espacos", fase: "antes", topico: 2, ordem: 2, label: "Protocolo de cedência de espaços", fonte: "2. Recursos pedagógicos", hint: "Protocolo do espaço onde a ação decorre.", obrigatorio: true },
   { id: "selecao-formadores", fase: "antes", topico: 3, ordem: 1, label: "Processo de seleção de formadores", fonte: "3. Formadores", hint: "Registo da seleção de quem lecciona.", obrigatorio: true },
-  { id: "id-formador", fase: "antes", topico: 3, ordem: 2, label: "Documento de identificação", fonte: "3. Formadores", hint: "Documento de identificação do formador.", obrigatorio: true },
-  { id: "habil-formador", fase: "antes", topico: 3, ordem: 3, label: "Certificado de habilitações", fonte: "3. Formadores", hint: "Certificado de habilitações do formador.", obrigatorio: true },
-  { id: "cv-formador", fase: "antes", topico: 3, ordem: 4, label: "Curriculum vitae", fonte: "3. Formadores", hint: "Curriculum vitae do formador.", obrigatorio: true },
-  { id: "ccp-formador", fase: "antes", topico: 3, ordem: 5, label: "CCP", fonte: "3. Formadores", hint: "Certificado de competências pedagógicas.", obrigatorio: true },
+  { id: "id-formador", fase: "antes", topico: 3, ordem: 2, label: "Documento de identificação", fonte: "3. Formadores", hint: "Documento de identificação do formador.", auto: "formador-cc", obrigatorio: true },
+  { id: "habil-formador", fase: "antes", topico: 3, ordem: 3, label: "Certificado de habilitações", fonte: "3. Formadores", hint: "Certificado de habilitações do formador.", auto: "formador-habilitacoes", obrigatorio: true },
+  { id: "cv-formador", fase: "antes", topico: 3, ordem: 4, label: "Curriculum vitae", fonte: "3. Formadores", hint: "Curriculum vitae do formador.", auto: "formador-cv", obrigatorio: true },
+  { id: "ccp-formador", fase: "antes", topico: 3, ordem: 5, label: "CCP", fonte: "3. Formadores", hint: "Certificado de competências pedagógicas.", auto: "formador-ccp", obrigatorio: true },
   { id: "ficha-dgert", fase: "antes", topico: 3, ordem: 6, label: "Ficha Curricular DGERT", fonte: "3. Formadores", hint: "Ficha curricular do formador.", obrigatorio: true },
   { id: "formacao-complementar", fase: "antes", topico: 3, ordem: 7, label: "Outros certificados de formação complementar", fonte: "3. Formadores", hint: "Formação complementar do formador, quando exista.", obrigatorio: true },
   { id: "contrato-formador", fase: "antes", topico: 3, ordem: 8, label: "Contrato de prestação de serviços", fonte: "3. Formadores", hint: "Contrato do formador desta ação.", obrigatorio: true },
@@ -193,7 +199,7 @@ const FIN: DtpDef[] = [
   { id: "equipa", fase: "antes", topico: 4, ordem: 1, label: "Listagem da equipa pedagógica", fonte: "4. Equipa técnica", hint: "O GesForma gera o PDF com o formador e a equipa registados nesta turma.", obrigatorio: true },
   { id: "selecao-formandos", fase: "antes", topico: 5, ordem: 1, label: "Processo de seleção dos formandos", fonte: "5. Formandos", hint: "Critérios e resultado da seleção.", obrigatorio: true },
   { id: "listagem-formandos", fase: "antes", topico: 5, ordem: 2, label: "Listagem de formandos", fonte: "5. Formandos", hint: "O GesForma gera o PDF com os formandos desta turma.", obrigatorio: true },
-  { id: "fichas", fase: "antes", topico: 5, ordem: 3, label: "Ficha de inscrição dos formandos", fonte: "5. Formandos", hint: "O GesForma gera o PDF com os dados de inscrição de cada formando.", obrigatorio: true },
+  { id: "fichas", fase: "antes", topico: 5, ordem: 3, label: "Ficha de inscrição dos formandos", fonte: "5. Formandos", hint: "O GesForma gera o PDF com os dados de inscrição de cada formando.", auto: "fichas", obrigatorio: true },
   { id: "rgpd-contratos", fase: "antes", topico: 5, ordem: 4, label: "Declaração RGPD + Contratos de formação", fonte: "5. Formandos", hint: "A ligação pessoal pede os dois. O visto fecha quando cada formando tem contrato e declaração.", auto: "doc-rgpd-contratos", obrigatorio: true },
   { id: "cc", fase: "antes", topico: 5, ordem: 5, label: "a) Cartão de cidadão", fonte: "5. Formandos", hint: "Um por formando da turma.", auto: "doc-cc", obrigatorio: true },
   { id: "ch", fase: "antes", topico: 5, ordem: 6, label: "b) Certificado de habilitações", fonte: "5. Formandos", hint: "Um por formando da turma.", auto: "doc-ch", obrigatorio: true },
@@ -212,7 +218,7 @@ const FIN: DtpDef[] = [
   { id: "teste-final", fase: "durante", topico: 7, ordem: 2, label: "Teste de avaliação final", fonte: "7. Avaliação da aprendizagem", hint: "Enunciado da avaliação final.", obrigatorio: true },
   { id: "corrigenda", fase: "durante", topico: 7, ordem: 3, label: "Corrigenda do teste de avaliação final", fonte: "7. Avaliação da aprendizagem", hint: "Corrigenda do teste final.", obrigatorio: true },
   { id: "grelha-correcao", fase: "durante", topico: 7, ordem: 4, label: "Grelha de correção do teste de avaliação final - assinada pelo formador", fonte: "7. Avaliação da aprendizagem", hint: "Grelha assinada pelo formador.", obrigatorio: true },
-  { id: "pauta", fase: "depois", topico: 7, ordem: 5, label: "Pauta de avaliação final - assinada pelo formador", fonte: "7. Avaliação da aprendizagem", hint: "O GesForma gera a pauta a partir da grelha desta turma. A nota do Moodle continua a lançar-se à mão.", obrigatorio: true },
+  { id: "pauta", fase: "depois", topico: 7, ordem: 5, label: "Pauta de avaliação final - assinada pelo formador", fonte: "7. Avaliação da aprendizagem", hint: "O GesForma gera a pauta a partir da grelha desta turma. A nota do Moodle continua a lançar-se à mão.", auto: "pauta", obrigatorio: true },
   { id: "inquerito-formador", fase: "depois", topico: 8, ordem: 1, label: "Inquéritos de avaliação do formador", fonte: "8. Avaliação da ação", hint: "Perguntas dos inquéritos com público-alvo Formador enviados a esta turma.", auto: "inqueritos-formador", obrigatorio: true },
   { id: "inquerito-formandos", fase: "depois", topico: 8, ordem: 2, label: "Inquéritos de avaliação dos formandos", fonte: "8. Avaliação da ação", hint: "Perguntas dos inquéritos com público-alvo Formandos enviados a esta turma.", auto: "inqueritos-formandos", obrigatorio: true },
   { id: "diagnostico-necessidades", fase: "depois", topico: 8, ordem: 3, label: "Diagnóstico necessidades de formação", fonte: "8. Avaliação da ação", hint: "Diagnóstico de necessidades associado à ação.", obrigatorio: true },
@@ -223,7 +229,7 @@ const FIN: DtpDef[] = [
   { id: "relatorio-supervisao", fase: "depois", topico: 9, ordem: 3, label: "Relatório final", fonte: "9. Supervisão", hint: "Relatório final de supervisão e apoio pedagógico.", obrigatorio: true },
   { id: "folheto", fase: "antes", topico: 10, ordem: 1, label: "Folheto de divulgação da ação", fonte: "10. Divulgação", hint: "Folheto usado na divulgação desta ação.", obrigatorio: true },
   { id: "certificados", fase: "depois", topico: 11, ordem: 1, label: "Cópia dos certificados emitidos", fonte: "11. Certificados", hint: "O certificado legal obtém-se fora do GesForma. O visto fecha quando cada formando elegível com aproveitamento tem o PDF carregado.", auto: "certificados", obrigatorio: true },
-  { id: "entrega-certificados", fase: "depois", topico: 11, ordem: 2, label: "Comprovativo da entrega dos certificados", fonte: "11. Certificados", hint: "O GesForma gera a lista de quem já tem o certificado externo no dossiê.", obrigatorio: true },
+  { id: "entrega-certificados", fase: "depois", topico: 11, ordem: 2, label: "Comprovativo da entrega dos certificados", fonte: "11. Certificados", hint: "O GesForma gera a lista de quem já tem o certificado externo no dossiê.", auto: "certificados", obrigatorio: true },
   { id: "equidade", fase: "antes", topico: 12, ordem: 1, label: "Checklist de igualdade de oportunidades", fonte: "12. Equidade", hint: "Checklist preenchida para esta ação.", obrigatorio: true },
   { id: "academia", fase: "antes", topico: 13, ordem: 1, label: "Reporte retirado do Portal Academia Portugal Digital", fonte: "13. Academia Digital", hint: "Reporte da turma no Portal Academia Portugal Digital.", obrigatorio: true },
   { id: "inqueritos-pos", fase: "depois", topico: 14, ordem: 1, label: "Inquéritos pós-formação", fonte: "14. Avaliação de impacto pós-formação", hint: "Perguntas dos inquéritos com público-alvo Pós-formação enviados a esta turma.", auto: "inqueritos-pos", obrigatorio: true },
@@ -303,6 +309,10 @@ export type DtpFacts = {
   inqueritosFormador?: DtpCounts | null;
   inqueritosFormandos?: DtpCounts | null;
   inqueritosPos?: DtpCounts | null;
+  /** Formandos activos com a avaliação final completa. */
+  pauta?: DtpCounts | null;
+  /** Documentos dos formadores da turma (formador_docs), por id do documento. */
+  formadorDocs?: Record<string, DtpCounts>;
 };
 
 function estadoFromCounts(c: DtpCounts | null | undefined): { estado: DtpEstado; detalhe: string } | null {
@@ -326,6 +336,11 @@ function factFor(auto: DtpAuto, facts: DtpFacts): DtpCounts | null {
     case "inqueritos-formador": return facts.inqueritosFormador ?? null;
     case "inqueritos-formandos": return facts.inqueritosFormandos ?? null;
     case "inqueritos-pos": return facts.inqueritosPos ?? null;
+    case "pauta": return facts.pauta ?? null;
+    // As fichas geram-se dos dados de cada formando activo.
+    case "fichas": return facts.formandos > 0 ? { done: facts.formandos, total: facts.formandos } : null;
+    case "formador-cc": case "formador-cv": case "formador-ccp": case "formador-habilitacoes":
+      return facts.formadorDocs?.[auto.slice("formador-".length)] ?? null;
     default: return facts.docs[auto.replace(/^doc-/, "")] ?? null;
   }
 }
@@ -429,7 +444,9 @@ export function buildDtpItems(
     if (derived) {
       return { ...def, estado: derived.estado, detalhe: `${derived.detalhe} ${def.hint}`.trim(), origem: "auto" as const, extra, ambito: def.ambito, universal };
     }
-    return { ...def, estado: "falta" as DtpEstado, detalhe: def.hint, origem: "manual" as const, extra, ambito: def.ambito, universal };
+    // Com regra automática o estado sai só dos dados: sem dados é falta (um anexo não o fecha).
+    const origem = def.auto ? "auto" as const : "manual" as const;
+    return { ...def, estado: "falta" as DtpEstado, detalhe: def.hint, origem, extra, ambito: def.ambito, universal };
   });
 }
 

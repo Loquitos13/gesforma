@@ -13,11 +13,13 @@ export function cloneGrupos(src: GrupoDocs[]) {
   return src.map(g => ({ ...g, items: g.items.map(i => ({ ...i })) }));
 }
 
-export function DocumentosTurmaTab({ regime = "gold", curso, guardados, onSaveDoc, criterios, finCtx, dtpItems = [], formandos = [], sessoes = [] }: {
+export function DocumentosTurmaTab({ regime = "gold", curso, guardados, onSaveDoc, onSaveDtp, criterios, finCtx, dtpItems = [], formandos = [], sessoes = [] }: {
   regime?: "gold" | "fin";
   curso?: string;
-  /** Itens do dossiê da turma (servidor): dão o estado e o detalhe reais na Gold. */
+  /** Itens do dossiê da turma (servidor): dão o estado e o detalhe dos documentos que lá existem. */
   dtpItems?: ItemDtp[];
+  /** Marca o item no dossiê do servidor (PUT …/dtp/:itemId). */
+  onSaveDtp?: (itemId: string, estado: DocEstado) => void;
   /** Nomes dos formandos desta turma. */
   formandos?: string[];
   /** Rótulos das sessões do cronograma desta turma. */
@@ -56,6 +58,7 @@ export function DocumentosTurmaTab({ regime = "gold", curso, guardados, onSaveDo
     });
     return built.map(g => ({ ...metaGrupo(g.id, "fin"), items: g.items.map(it => ({ ...it, bloqueante: it.bloqueante })) }));
   }, [regime, finCtx, curso, dtpItems]);
+  const dtpPorId = useMemo(() => new Map(dtpItems.map(i => [i.id, i])), [dtpItems]);
   const [resolver, setResolver] = useState<{ grupoId: string; label: string } | null>(null);
   const resolverRef = useRef(resolver);
   resolverRef.current = resolver;
@@ -65,10 +68,13 @@ export function DocumentosTurmaTab({ regime = "gold", curso, guardados, onSaveDo
     ...g,
     items: g.items.map(item => {
       const saved = guardados.find(d => d.grupoId === g.id && d.label === item.label);
+      // O que existe no dossiê do servidor mostra o estado de lá; turma_documentos só guarda a lista marcada.
+      const dtp = item.dtpId ? dtpPorId.get(item.dtpId) : undefined;
+      if (dtp) return { ...item, estado: dtp.estado, detalhe: dtp.detalhe || item.detalhe, payload: saved?.payload ?? undefined };
       if (!saved) return { ...item, payload: undefined };
       return { ...item, estado: saved.estado as DocEstado, detalhe: saved.detalhe || item.detalhe, payload: saved.payload ?? undefined };
     }),
-  })), [seed, guardados]);
+  })), [seed, guardados, dtpPorId]);
 
   const nomesFormandos = regime === "fin"
     ? (finCtx?.formandos ?? []).map(f => `${f.nome} ${f.apelido}`)
@@ -158,6 +164,10 @@ export function DocumentosTurmaTab({ regime = "gold", curso, guardados, onSaveDo
         onSave={next => {
           const ref = resolverRef.current;
           if (!ref) return;
+          // Itens manuais do dossiê gravam-se lá; os automáticos continuam a sair dos dados.
+          const dtpId = grupos.find(g => g.id === ref.grupoId)?.items.find(d => d.label === ref.label)?.dtpId;
+          const dtp = dtpId ? dtpPorId.get(dtpId) : undefined;
+          if (dtpId && dtp?.origem === "manual" && onSaveDtp) onSaveDtp(dtpId, next.estado);
           onSaveDoc({
             grupoId: ref.grupoId,
             label: ref.label,

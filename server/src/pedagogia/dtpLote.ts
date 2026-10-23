@@ -4,12 +4,12 @@
  * As regras de associação (formando ↔ turma, pré-inscrição ↔ formando) são as mesmas do cálculo por turma.
  */
 import type { Db } from "../db/pool.js";
-import { contagemCertificadosFinLote } from "../dossieGerado.js";
-import type { DtpCounts, DtpEstado } from "../dtpModel.js";
+import type { DtpEstado } from "../dtpModel.js";
 import * as repo from "../repos/dtp.js";
 import * as lote from "../repos/dtpLote.js";
 import type { FormandoTurma, TurmaRow } from "../repos/pedagogiaTurma.js";
-import { contarPercurso, type FontesTurma } from "./dtp.js";
+import { resultadosDeTurmas } from "../resultados.js";
+import { contarPercurso, nomesFormadoresDaTurma, type FontesTurma } from "./dtp.js";
 import { asObj, type Regime } from "./util.js";
 
 type Alvo = { turma: TurmaRow; cursoId: number | null };
@@ -32,14 +32,16 @@ export async function fontesEmLote(db: Db, regime: Regime, alvos: Alvo[]): Promi
   const ids = alvos.map(a => a.turma.id);
   const cursoIds = [...new Set(alvos.map(a => a.cursoId).filter((x): x is number => x != null))];
 
-  const [sessoes, docs, certs, manuais, anexos, ficheiros, inqueritos, formandosGold, formandosFin] = await Promise.all([
+  const nomesFormadores = [...new Set(alvos.flatMap(a => nomesFormadoresDaTurma(a.turma)))];
+  const [sessoes, docs, resultados, manuais, anexos, ficheiros, inqueritos, formadores, formandosGold, formandosFin] = await Promise.all([
     lote.sessoesDasTurmas(db, regime, ids),
     lote.documentosDasTurmas(db, regime, ids),
-    lote.certificadosDasTurmas(db, regime, ids),
+    resultadosDeTurmas(db, regime, ids),
     lote.estadosManuaisDasTurmas(db, regime, ids),
     lote.anexosDasTurmas(db, regime, ids).catch(() => []),
     lote.ficheirosDosCursos(db, regime, cursoIds).catch(() => []),
-    regime === "fin" ? lote.inqueritosEnviadosAsTurmas(db, regime, ids).catch(() => []) : Promise.resolve([]),
+    lote.inqueritosEnviadosAsTurmas(db, regime, ids).catch(() => []),
+    repo.docsDosFormadores(db, nomesFormadores),
     regime === "gold" ? lote.formandosGoldDasTurmas(db, ids, alvos.map(a => a.turma.nome)) : Promise.resolve([]),
     regime === "fin" ? lote.formandosFinDasTurmas(db, ids, alvos.map(a => a.turma.nome)) : Promise.resolve([]),
   ]);
@@ -82,14 +84,8 @@ export async function fontesEmLote(db: Db, regime: Regime, alvos: Alvo[]): Promi
     docsDoLead.set(Number(d.preinscricao_id), lista);
   }
 
-  // Certificados da Financiada: os resultados de todas as turmas calculados em lote.
-  const certsFin: Map<number, DtpCounts> = regime === "fin"
-    ? await contagemCertificadosFinLote(db, alvos.map(({ turma }) => ({ id: turma.id, formandoIds: (formandosDe.get(turma.id) ?? []).map(f => f.id) })))
-    : new Map();
-
   const sessoesDe = agrupar(sessoes);
   const docsDe = agrupar(docs);
-  const certsDe = agrupar(certs);
   const manuaisDe = agrupar(manuais);
   const anexosDe = agrupar(anexos);
   const inqueritosDe = agrupar(inqueritos);
@@ -104,7 +100,7 @@ export async function fontesEmLote(db: Db, regime: Regime, alvos: Alvo[]): Promi
     const formandos = formandosDe.get(turma.id) ?? [];
     let percurso: FontesTurma["percurso"] = null;
     if (regime === "gold") {
-      const comEmail = formandos.map(f => ({ email: f.email ?? "" }));
+      const comEmail = formandos.map(f => ({ id: f.id, email: f.email ?? "" }));
       const emails = new Set(comEmail.map(f => f.email).filter(Boolean));
       const curso = turma.curso.trim().toLowerCase();
       // Uma pré-inscrição por email: primeiro a do percurso desta turma, depois a mais recente.
@@ -124,11 +120,11 @@ export async function fontesEmLote(db: Db, regime: Regime, alvos: Alvo[]): Promi
     out.set(turma.id, {
       sessoes: sessoesDe.get(turma.id) ?? [],
       docs: docsDe.get(turma.id) ?? [],
-      certs: certsDe.get(turma.id) ?? [],
       formandos: formandos.map(({ id, nome, docs }) => ({ id, nome, docs })),
       docsValidados: formandos.flatMap(f => validadosDe.get(f.id) ?? []),
       inqueritos: inqueritosDe.get(turma.id) ?? [],
-      certificadosFin: regime === "fin" ? certsFin.get(turma.id) ?? null : null,
+      resultados: resultados.get(turma.id)?.formandos ?? [],
+      formadores,
       manual: Object.fromEntries((manuaisDe.get(turma.id) ?? []).map(r => [r.item_id, r.estado])) as Record<string, DtpEstado>,
       anexos: anexosDe.get(turma.id) ?? [],
       ficheiros: cursoId == null ? [] : ficheirosDe.get(cursoId) ?? [],

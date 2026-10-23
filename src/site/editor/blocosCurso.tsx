@@ -159,7 +159,7 @@ function duracaoModulo(raw: string) {
   return minutos ? `${horas} h ${String(minutos).padStart(2, "0")} min` : `${horas} h`;
 }
 
-const localDo = (c: Course) => c.sessoes.find(s => s.local)?.local || (c.format === "E-learning" ? "Online" : "A anunciar");
+const localDo = (c: Course) => c.sessoes.find(s => s.local)?.local || c.locais?.[0]?.nome || (c.format === "E-learning" ? "Online" : "A anunciar");
 
 // ─── Banner ──────────────────────────────────────────────────────────────────
 

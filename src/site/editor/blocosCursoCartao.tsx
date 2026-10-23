@@ -144,8 +144,10 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
     <Caixa p={p}>
       {curso => {
         const comTurmas = locaisDo(curso);
-        // Locais atribuídos ao curso ainda sem turmas também aparecem (com os contactos), sem abrir a pré-inscrição.
-        const semTurmas = (curso.contactosLocais ?? []).map(x => x.local).filter(l => !comTurmas.some(t => chaveLocal(t) === chaveLocal(l)));
+        // Locais atribuídos ao curso ainda sem turmas também aparecem (com os contactos, se tiverem), sem abrir a pré-inscrição.
+        const semTurmas = [...(curso.locais ?? []).map(x => x.nome), ...(curso.contactosLocais ?? []).map(x => x.local)]
+          .filter((l, i, todos) => todos.findIndex(x => chaveLocal(x) === chaveLocal(l)) === i)
+          .filter(l => !comTurmas.some(t => chaveLocal(t) === chaveLocal(l)));
         const locais = [...comTurmas, ...semTurmas];
         if (!locais.length) return null;
         return (
@@ -160,7 +162,8 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
               {locais.map(l => {
                 const ativo = local === l;
                 const semDatas = semTurmas.includes(l);
-                const morada = curso.sessoes.find(s => s.local === l && s.morada)?.morada;
+                const morada = curso.sessoes.find(s => s.local === l && s.morada)?.morada
+                  || (curso.locais ?? []).find(x => chaveLocal(x.nome) === chaveLocal(l))?.morada;
                 const vars = variaveisCurso(curso, l);
                 const texto = preencherVariaveis(p.texto ?? "", vars).trim();
                 const ct = contactoDo(curso, l);

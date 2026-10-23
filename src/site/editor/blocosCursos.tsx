@@ -273,7 +273,7 @@ type DestaqueProps = { modo: "lista" | "escolhidos" | "automatico"; ordem: strin
 const CURSO_LIVRE: Course = {
   id: "", title: "", area: "", format: "", duration: "", start: "", price: "", description: "", resumo: "", funding: "Gold",
   enrollment: "Pré-inscrição", miniatura: null, capa: null, banner: null, precoDesde: null, vendas: 0, regime: "gold",
-  objetivos: [], funcionamento: "", contactosLocais: [], organizacao: "modular", programa: [], sessoes: [], nomeOferta: "",
+  objetivos: [], funcionamento: "", contactosLocais: [], locais: [], organizacao: "modular", programa: [], sessoes: [], nomeOferta: "",
 };
 
 function cartaoDe(x: ItemDestaque, curso: Course | undefined): Course | null {

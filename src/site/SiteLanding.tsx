@@ -26,6 +26,8 @@ export type Course = {
   funcionamento: string;
   /** Contactos de cada local (os do curso, se tiver, senão os de Locais). */
   contactosLocais: { local: string; telemovel: string; telefone: string; email: string; whatsapp: string }[];
+  /** Locais atribuídos na ficha do curso (aparecem mesmo sem turmas, ex.: «Sala Virtual»). */
+  locais: { nome: string; morada: string }[];
   organizacao: "modular" | "livre";
   programa: { titulo: string; horas: string }[];
   /** Regime da oferta: «Síncrono», «Assíncrono» ou vazio. */
@@ -56,6 +58,7 @@ type CatalogoApi = {
     objetivos?: string[];
     funcionamento?: string;
     contactosLocais?: { local: string; telemovel: string; telefone: string; email: string; whatsapp: string }[];
+    locais?: { nome: string; morada: string }[];
     organizacao?: "modular" | "livre";
     programa?: { titulo: string; horas: string }[];
     sessoes?: { data: string; local: string; horario: string; preco?: number | null; morada?: string }[];
@@ -87,6 +90,7 @@ function mapCurso(curso: CatalogoApi["cursos"][number]): Course {
     objetivos: curso.objetivos ?? [],
     funcionamento: curso.funcionamento ?? "",
     contactosLocais: curso.contactosLocais ?? [],
+    locais: curso.locais ?? [],
     organizacao: curso.organizacao === "livre" ? "livre" : "modular",
     programa: curso.programa ?? [],
     sessoes: curso.sessoes ?? [],

@@ -52,7 +52,7 @@ function Detalhe({ p, curso, editar, Z }: { p: Props; curso: Course; editar: boo
   const { abrir } = useInscricaoOpcional();
   useEffect(() => { if (!editar) document.title = `${curso.title} | ENA`; }, [curso.title, editar]);
   const imagem = curso.banner || curso.miniatura;
-  const local = curso.sessoes.find(s => s.local)?.local || (curso.format === "E-learning" ? "Online" : "A anunciar");
+  const local = curso.sessoes.find(s => s.local)?.local || curso.locais?.[0]?.nome || (curso.format === "E-learning" ? "Online" : "A anunciar");
   const ZT = Z.topo, ZC = Z.conteudo, ZK = Z.cartao;
   return (
     <main>

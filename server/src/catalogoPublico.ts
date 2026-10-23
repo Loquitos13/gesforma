@@ -62,7 +62,7 @@ export type CursoPublico = {
   contactosLocais: ContactoLocal[];
   organizacao: "modular" | "livre";
   programa: { titulo: string; horas: string }[];
-  /** Regime da oferta (ficha › Oferta): «Síncrono», «Assíncrono» ou vazio. */
+  /** Regime da oferta (ficha › Oferta): «Síncrono», «Assíncrono», «Misto (Síncrono + Assíncrono)» ou vazio. */
   /** Próximas datas; o preço segue as regras da ficha (local, horário ou os dois), como na pré-inscrição. */
   sessoes: { data: string; iso: string; local: string; horario: string; preco: number | null; morada: string }[];
   nomeOferta: string;

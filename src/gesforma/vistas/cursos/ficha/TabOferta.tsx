@@ -134,7 +134,7 @@ export function TabOferta({ f }: { f: FichaCurso }) {
           <Campo rotulo="Modalidade" obrigatorio erro={falhas.regime}>
             {p => <Selecao {...p} opcoes={comValor(modalidades.selecao, data.regime)} vazio="Escolher…" value={data.regime} onChange={e => patch(comLocalElearning({ regime: e.target.value }))} />}
           </Campo>
-          <Campo rotulo="Regime" ajuda="Síncrono: sessões em tempo real com o formador. Assíncrono: o formando segue ao seu ritmo.">
+          <Campo rotulo="Regime" ajuda="Síncrono: sessões em tempo real com o formador. Assíncrono: o formando segue ao seu ritmo. Misto: aulas online síncronas (Sala Virtual) e tarefas de e-learning no Moodle.">
             {p => <Selecao {...p} opcoes={[...OPCOES_SINCRONIA]} vazio="Por definir" value={data.regimeSincronia} onChange={e => patch(comLocalElearning({ regimeSincronia: regimeSincronia(e.target.value) }))} />}
           </Campo>
           {regime === "gold" && (
@@ -153,7 +153,9 @@ export function TabOferta({ f }: { f: FichaCurso }) {
         <div className="mt-4">
           <Campo rotulo="Locais deste curso" obrigatorio erro={falhas.locais}
             ajuda={localFixo
-              ? (localFixo === "Sala Virtual" ? "E-learning síncrono: as aulas são online, na Sala Virtual." : "E-learning assíncrono: só acesso ao Moodle.")
+              ? (localFixo === "Sala Virtual"
+                ? (data.regimeSincronia === "misto" ? "E-learning misto: aulas online na Sala Virtual e tarefas no Moodle." : "E-learning síncrono: as aulas são online, na Sala Virtual.")
+                : "E-learning assíncrono: só acesso ao Moodle.")
               : "Pelo menos um. Horário, datas e vagas definem-se na turma."}>
             {() => localFixo ? <p className="m-0 text-sm font-semibold text-tinta">{localFixo}</p> : (
               <MultiSearchSelect

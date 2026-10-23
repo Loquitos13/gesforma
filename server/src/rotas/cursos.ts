@@ -273,7 +273,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       payload = { ...payload, valoresFormador: antigo.valoresFormador ?? [] };
     }
     if (payload) payload = semIdNaMedia(payload, await urlsImagemDoCurso(db, regime, id));
-    // E-learning: síncrono tem aulas online na Sala Virtual; assíncrono é só o Moodle («Aprendizagem à distância»).
+    // E-learning: síncrono e misto (aulas online + tarefas no Moodle) ficam na Sala Virtual; assíncrono é só o Moodle («Aprendizagem à distância»).
     const localFixo = payload ? localDoElearning(payload.regime, payload.regimeSincronia) : null;
     if (payload && localFixo) {
       payload = { ...payload, locais: [localFixo] };

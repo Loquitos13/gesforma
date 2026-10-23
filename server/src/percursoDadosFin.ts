@@ -16,6 +16,8 @@ import {
   normalizarMoradaFin, situacaoEmpregoFin, validarIdentificacaoFin, validarMoradaFin,
   type CampoSensivelFin, type IdentificacaoFinForm, type MoradaFin,
 } from "../../src/partilhado/dadosPessoaisFin.js";
+import { HABILITACOES_FIN, validarInscricaoFin, type InscricaoFin } from "../../src/partilhado/dadosPessoaisFin.js";
+import { LISTA_PAISES } from "../../src/partilhado/execucaoFisica.js";
 
 export class DadosFinErro extends Error {
   constructor(message: string, readonly campos?: Record<string, string>) { super(message); }
@@ -169,5 +171,28 @@ export async function aceitarTermosFin(db: Db, leadId: number, d: { termos: bool
   const ip = (meta.ip ?? "").slice(0, 64);
   await escrita.gravarTermosFin(db, leadId, ip, TERMOS_FIN_VERSAO);
   await logLeadEvent(db, leadId, undefined, "campo", "Termos e uso dos dados aceites", `Versão ${TERMOS_FIN_VERSAO}${ip ? ` · IP ${ip}` : ""}`);
+  return { ok: true as const };
+}
+
+/** Os dados do formulário público que a equipa pode completar ou corrigir no backoffice (vazio = apagar). */
+export type PerfilFin = Pick<InscricaoFin, "genero" | "dataNascimento" | "nacionalidade" | "habilitacoes">;
+
+/**
+ * Backoffice (ficha da pré-inscrição › Dados): género, data de nascimento, nacionalidade e habilitações, com as
+ * regras do formulário público. Só os campos enviados mudam; depois de validada, corrige-se na ficha do formando.
+ */
+export async function gravarPerfilFin(db: Db, leadId: number, d: Partial<PerfilFin>, actorId?: string) {
+  const lead = await leadAberto(db, leadId);
+  const enviados = (Object.keys(d) as (keyof PerfilFin)[]).filter(k => d[k] !== undefined);
+  const novo = Object.fromEntries(enviados.map(k => [k, String(d[k] ?? "").trim()])) as Partial<PerfilFin>;
+  // As regras do formulário público, só nos campos preenchidos (o nome não entra aqui).
+  const erros = validarInscricaoFin({ nomeCompleto: "Nome Apelido", genero: "", dataNascimento: "", nacionalidade: "", habilitacoes: "", ...novo } as InscricaoFin, hojeLisboa(), LISTA_PAISES);
+  falhar(Object.fromEntries(enviados.filter(k => novo[k]).map(k => [k, erros[k]])));
+  const prev = readPreinscricaoPii(lead);
+  const fin: DadosFinPreinscricao = { ...prev.fin, ...novo };
+  if (novo.habilitacoes !== undefined) fin.habilitacoesEntrada = HABILITACOES_FIN.find(h => h.rotulo === novo.habilitacoes)?.valor ?? "";
+  await escrita.gravarPiiDoPedido(db, leadId, writePreinscricaoPii({ ...prev, fin }));
+  const nomes: Record<keyof PerfilFin, string> = { genero: "género", dataNascimento: "data de nascimento", nacionalidade: "nacionalidade", habilitacoes: "habilitações" };
+  await logLeadEvent(db, leadId, actorId, "campo", "Dados pessoais alterados", enviados.map(k => nomes[k]).join(", "));
   return { ok: true as const };
 }

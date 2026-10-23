@@ -164,7 +164,11 @@ export type DossieLead = {
 
 export type LembretesLead = { enviados: number; maximo: number; ultimoEm: string | null; proximoEm: string | null; semProximo: string };
 
+/** Os quatro campos do formulário público que a equipa pode corrigir (valores como se gravam). */
+export type PerfilFinLead = { genero: string; dataNascimento: string; nacionalidade: string; habilitacoes: string };
+
 export type DadosPessoaisFinLead = {
+  perfil?: PerfilFinLead;
   genero: string; dataNascimento: string; nacionalidade: string; habilitacoes: string; morada: string;
   tipoDocumento: string; numeroDocumento: string; validadeDocumento: string; nif: string; niss: string; iban: string;
   situacaoEmprego: string; nifEntidadeEmpregadora: string; termosAceitesEm: string | null; termosVersao: string;
@@ -190,6 +194,8 @@ export const apiNota = (id: number, nota: string, meio = "", resultado = "") =>
   enviar.post<DossieLead>(`/v1/crm/leads/${id}/notas`, { nota, meio, resultado });
 export const apiFixarNota = (id: number, nid: number, fixada: boolean) =>
   enviar.post<DossieLead>(`/v1/crm/leads/${id}/notas/${nid}/fixar`, { fixada });
+export const apiGravarDadosFin = (id: number, d: Partial<PerfilFinLead>) =>
+  enviar.post<DossieLead>(`/v1/crm/leads/${id}/dados-fin`, d);
 export const apiGravarCampos = (id: number, valores: { campoId: number; valor: string }[]) =>
   enviar.post<DossieLead>(`/v1/crm/leads/${id}/campos`, { valores });
 export const apiCriarCampo = (label: string, tipo: CampoCrm["tipo"]) =>

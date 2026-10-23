@@ -9,6 +9,7 @@ import { invalidar, useRecurso } from "../../../../partilhado/dados/useRecurso";
 import { useAuth } from "../../../../partilhado/AuthGate";
 import { toastError } from "../../../../partilhado/toastBus";
 import { ETAPAS, podeMudarEtapa, rotuloEtapa } from "./util";
+import { PerfilFinEditor } from "./PerfilFinEditor";
 
 /** Dados pessoais e do pedido, comercial, etiqueta, etapa, desistência e campos extra. */
 export function FichaDados({ d, onMudou }: { d: DossieLead; onMudou: () => void }) {
@@ -101,12 +102,25 @@ export function FichaDados({ d, onMudou }: { d: DossieLead; onMudou: () => void 
       {d.dadosFin && (
         <section aria-label="Dados pessoais da inscrição" className="flex flex-col gap-2 rounded-cartao border border-linha p-3">
           <p className="m-0 text-[13px] font-medium">Dados pessoais (formação financiada)</p>
+          {d.dadosFin.perfil && !d.validadaEm
+            ? <PerfilFinEditor leadId={l.id} perfil={d.dadosFin.perfil} onMudou={onMudou} />
+            : (
+              <dl className="m-0 grid gap-x-4 gap-y-2 text-[13px] sm:grid-cols-2">
+                {([
+                  ["Género", d.dadosFin.genero],
+                  ["Data de nascimento", d.dadosFin.dataNascimento ? data(d.dadosFin.dataNascimento) : ""],
+                  ["Nacionalidade", d.dadosFin.nacionalidade],
+                  ["Habilitações", d.dadosFin.habilitacoes],
+                ] as const).map(([rotulo, valor]) => (
+                  <div key={rotulo} className="min-w-0">
+                    <dt className="text-xs text-tinta-suave">{rotulo}</dt>
+                    <dd className="m-0 break-words">{valor || "—"}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
           <dl className="m-0 grid gap-x-4 gap-y-2 text-[13px] sm:grid-cols-2">
             {([
-              ["Género", d.dadosFin.genero],
-              ["Data de nascimento", d.dadosFin.dataNascimento ? data(d.dadosFin.dataNascimento) : ""],
-              ["Nacionalidade", d.dadosFin.nacionalidade],
-              ["Habilitações", d.dadosFin.habilitacoes],
               ["Morada", d.dadosFin.morada],
               ["Documento de identificação", [d.dadosFin.tipoDocumento, d.dadosFin.numeroDocumento].filter(Boolean).join(" · ")],
               ["Validade do documento", d.dadosFin.validadeDocumento ? data(d.dadosFin.validadeDocumento) : ""],

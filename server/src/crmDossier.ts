@@ -202,8 +202,9 @@ function dadosPessoaisFin(row: Record<string, unknown>, ator?: AtorCrm) {
   const pii = readPreinscricaoPii(row);
   const f = pii.fin ?? {};
   const termosEm = row.termos_fin_em ? iso(row.termos_fin_em as string | Date) : null;
-  if (!Object.keys(f).length && !termosEm) return null;
   return {
+    // Os valores tal como se gravam (para o formulário do backoffice os mostrar e corrigir).
+    perfil: { genero: f.genero ?? "", dataNascimento: f.dataNascimento ?? "", nacionalidade: f.nacionalidade ?? "", habilitacoes: f.habilitacoes ?? "" },
     genero: GENEROS_FIN.find(g => g.valor === f.genero)?.rotulo ?? f.genero ?? "",
     dataNascimento: f.dataNascimento ?? "",
     nacionalidade: f.nacionalidade ? rotuloPais(f.nacionalidade) : "",

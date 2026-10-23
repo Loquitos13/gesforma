@@ -19,6 +19,7 @@ import { registarFaturacao } from "./faturacao.js";
 import { turmasDoFormador } from "../sessaoAcesso.js";
 import { comercialAbre } from "../../../src/partilhado/vistasComercial.js";
 import * as leads from "../repos/leads.js";
+import { DadosFinErro, gravarPerfilFin } from "../percursoDadosFin.js";
 import type { Deps } from "./tipos.js";
 
 const fila = z.enum(["contactar", "atrasados", "hoje", "agenda", "converter", "abertos", "secretaria", "preinscricao", "minhas"]);
@@ -259,6 +260,30 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     if (!(await leads.existe(db, v.params.id))) return reply.code(404).send({ error: "pré-inscrição inexistente" });
     await setCampoValores(db, v.params.id, req.actor!.id, v.body.valores);
+    return getLeadDossier(db, v.params.id, req.actor!);
+  });
+
+  /** Financiada: género, data de nascimento, nacionalidade e habilitações postos à mão pela equipa da Financiada. */
+  app.post("/v1/crm/leads/:id/dados-fin", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, {
+      params: idParam,
+      body: z.object({
+        genero: z.string().max(60).optional(),
+        dataNascimento: z.string().max(10).optional(),
+        nacionalidade: z.string().max(120).optional(),
+        habilitacoes: z.string().max(80).optional(),
+      }),
+    }, req);
+    if (!v) return;
+    if (!["admin", "secretaria", "financiada"].includes(req.actor!.role)) return reply.code(403).send({ error: "Só a equipa da Financiada altera estes dados." });
+    try {
+      await gravarPerfilFin(db, v.params.id, v.body, req.actor!.id);
+    } catch (err) {
+      if (err instanceof DadosFinErro) return reply.code(400).send({ error: err.message, campos: err.campos });
+      throw err;
+    }
+    await audit(db, req.actor!.id, "preinscricao.dados_fin", "preinscricao", String(v.params.id), req.ip, { campos: Object.keys(v.body) });
     return getLeadDossier(db, v.params.id, req.actor!);
   });
 

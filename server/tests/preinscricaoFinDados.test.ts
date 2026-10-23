@@ -359,3 +359,34 @@ describe("validação: os dados passam para a ficha do formando", () => {
     expect(dados).toMatchObject({ genero: "1 - Homens", niss: "99999999999", nif: NIF });
   });
 });
+
+describe("backoffice: género, nascimento, nacionalidade e habilitações postos à mão", () => {
+  it("a equipa da Financiada completa e corrige; mesmas regras do site; o comercial não", async () => {
+    const ctx = await arrancar();
+    const { curso } = await cursoFin(ctx);
+    const email = `${unico("semdados")}@exemplo.pt`;
+    const r = await publico(ctx, { nome: "Rui", apelido: "Sem Dados", email, telf: "912345678", curso, regime: "fin", consentimento: true });
+    expect(r.statusCode, r.body).toBe(200);
+    const id = await preinscricaoDoEmail(ctx, email);
+    const url = `/v1/crm/leads/${id}/dados-fin`;
+
+    const vazio = await pedido(ctx, "secretaria", "GET", `/v1/crm/leads/${id}`);
+    expect(vazio.json().dadosFin.perfil).toEqual({ genero: "", dataNascimento: "", nacionalidade: "", habilitacoes: "" });
+
+    expect((await pedido(ctx, "comercial", "POST", url, { genero: "1 - Homens" })).statusCode).toBe(403);
+    const mau = await pedido(ctx, "secretaria", "POST", url, { dataNascimento: "2030-01-01", habilitacoes: "Doutoramento falso" });
+    expect(mau.statusCode).toBe(400);
+    expect(Object.keys(mau.json().campos).sort()).toEqual(["dataNascimento", "habilitacoes"]);
+
+    const ok = await pedido(ctx, "financiada", "POST", url, { genero: "1 - Homens", dataNascimento: "1985-03-02", nacionalidade: "191 - Portugal", habilitacoes: "12.º Ano" });
+    expect(ok.statusCode, ok.body).toBe(200);
+    expect(ok.json().dadosFin.perfil).toEqual({ genero: "1 - Homens", dataNascimento: "1985-03-02", nacionalidade: "191 - Portugal", habilitacoes: "12.º Ano" });
+    expect(ok.json().dadosFin.genero).toBe("Masculino");
+
+    // Só os campos enviados mudam; vazio apaga.
+    const parcial = await pedido(ctx, "secretaria", "POST", url, { habilitacoes: "9.º Ano", genero: "" });
+    expect(parcial.json().dadosFin.perfil).toEqual({ genero: "", dataNascimento: "1985-03-02", nacionalidade: "191 - Portugal", habilitacoes: "9.º Ano" });
+    // Nunca em claro na base de dados.
+    expect(JSON.stringify(await linha(ctx, id))).not.toContain("1985-03-02");
+  });
+});

@@ -1,3 +1,5 @@
+import { pastaFinDoItem } from "./dtpTopicosFin.js";
+
 export type DtpFasePasta = "antes" | "durante" | "depois";
 export type DtpAmbitoPasta = "turma" | "formando" | "formador";
 export type DtpCategoriaId =
@@ -94,6 +96,8 @@ export function dtpCategoriaDe(item: {
   if (known) return known.id;
   if (item.kind === "certificado") return "certificacao";
   if (item.kind === "simulacao") return "avaliacao";
+  // Recibos (kind «Pagamentos»): no item «Comprovativos de pagamento / recibos», na pasta do formando.
+  if (item.kind === "Pagamentos") return "formandos";
   if (item.kind === "pip" || item.kind === "formando-doc" || item.ambito === "formando") return "formandos";
   if (item.kind === "formador-doc" || item.ambito === "formador") return "formador";
   const raw = (item.id ?? "").replace(/^extra:/, "");
@@ -105,7 +109,25 @@ export function dtpCategoriaPasta(item: Parameters<typeof dtpCategoriaDe>[0] | D
   return DTP_CATEGORIAS.find(c => c.id === id)?.pasta ?? "01-Identificacao e programa";
 }
 
+/** Kinds de ficheiros de uma pessoa (formando) no dossiê. */
+const KINDS_FORMANDO = new Set(["formando-doc", "pip", "Pagamentos"]);
+
+/**
+ * Pasta (tópico) da Financiada para um ficheiro do dossiê: formandos no 5, formadores no 3, certificados no 11,
+ * simulações no 7, materiais no 2; o resto pelo item (`itemId`). `pessoa`: subpasta por formando/formador.
+ */
+export function dtpFinSegments(opts: { itemId?: string; kind?: string; ambito?: string; pessoa?: string }) {
+  const pessoa = opts.pessoa ? [pastaSegura(opts.pessoa)] : [];
+  if (opts.kind === "certificado") return [pastaFinDoItem("certificados"), ...pessoa];
+  if (opts.kind === "formador-doc" || opts.ambito === "formador") return [pastaFinDoItem("cv-formador"), ...pessoa];
+  if (KINDS_FORMANDO.has(opts.kind ?? "") || opts.ambito === "formando") return [pastaFinDoItem("cc"), ...pessoa];
+  if (opts.kind === "simulacao") return [pastaFinDoItem("instrumentos")];
+  if (!opts.itemId && (opts.kind === "documento" || opts.kind === "conteudo")) return [pastaFinDoItem("materiais")];
+  return [pastaFinDoItem(opts.itemId ?? "")];
+}
+
 export function dtpZipRelPath(opts: {
+  regime?: "gold" | "fin";
   root: string;
   fase?: DtpFasePasta | string;
   ambito?: DtpAmbitoPasta | string;
@@ -118,13 +140,14 @@ export function dtpZipRelPath(opts: {
   const root = pastaSegura(opts.root);
   const file = pastaSegura(opts.fileName).replace(/[/\\]/g, "_");
   const label = pastaSegura(opts.itemLabel || opts.kind || "documento");
+  if (opts.regime === "fin") return [root, ...dtpFinSegments(opts), file].join("/");
   const cat = dtpCategoriaDe({
     id: opts.itemId,
     ambito: opts.ambito,
     kind: opts.kind,
   });
   const pasta = dtpCategoriaPasta(cat);
-  if (cat === "formandos" && (opts.ambito === "formando" || opts.kind === "formando-doc" || opts.kind === "pip" || opts.pessoa)) {
+  if (cat === "formandos" && (opts.ambito === "formando" || KINDS_FORMANDO.has(opts.kind ?? "") || opts.pessoa)) {
     const pessoa = pastaSegura(opts.pessoa || "formando");
     return [root, pasta, pessoa, label, file].join("/");
   }
@@ -155,18 +178,20 @@ export function dtpDriveSegments(ctx: {
   if (regime === "fin") segs.push("Financiada");
   else if (regime === "gold") segs.push("Gold");
 
-  const dtpKinds = new Set(["dtp", "formando-doc", "pip", "simulacao", "certificado"]);
+  const dtpKinds = new Set(["dtp", "formando-doc", "pip", "simulacao", "certificado", "Pagamentos"]);
   const inDtp = Boolean(ctx.turma) && (dtpKinds.has(ctx.kind) || ctx.kind === "formador-doc");
   if (!inDtp) return null;
 
   segs.push(pastaSegura(dtpPastaNome(regime ?? "gold", ctx.turma ?? "turma")));
+  // Financiada: os 14 tópicos (as pastas que driveArvore.ts cria), nunca as pastas da Gold.
+  if (regime === "fin") return [...segs, ...dtpFinSegments({ itemId: ctx.itemId ?? ctx.label, kind: ctx.kind, pessoa: ctx.formando })];
   const cat = dtpCategoriaDe({
     id: ctx.itemId,
     kind: ctx.kind,
-    ambito: ctx.kind === "formando-doc" || ctx.kind === "pip" ? "formando" : ctx.kind === "formador-doc" ? "formador" : undefined,
+    ambito: KINDS_FORMANDO.has(ctx.kind) ? "formando" : ctx.kind === "formador-doc" ? "formador" : undefined,
   });
   segs.push(dtpCategoriaPasta(cat));
-  if (cat === "formandos" && (ctx.kind === "formando-doc" || ctx.kind === "pip")) {
+  if (cat === "formandos" && KINDS_FORMANDO.has(ctx.kind)) {
     if (ctx.formando) segs.push(pastaSegura(ctx.formando));
     if (ctx.label) segs.push(pastaSegura(ctx.label));
     return segs;

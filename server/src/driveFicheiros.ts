@@ -7,12 +7,13 @@ import type { Db } from "./db/pool.js";
 import { assertUpload, sanitizeFileName } from "./ficheirosValidacao.js";
 import {
   DRIVE_FILES_URL, driveComToken, driveCreds, driveOfflineMessage, ensureFolderPath, folderSegments,
-  isNotFound, tokenDrive, usableToken, type DriveContext,
+  garantirPastaFilha, isNotFound, tokenDrive, usableToken, type DriveContext,
 } from "./googleDrive.js";
 import {
   apagarRegistoFicheiro, ficheiroDrive, inserirFicheiroGoogle, inserirFicheiroLocal,
-  listarFicheirosDrive, type DriveFileRow,
+  listarFicheirosDrive, pastaDaTurmaPorNome, type DriveFileRow,
 } from "./repos/drive.js";
+import { dtpDriveSegments } from "./dtpPasta.js";
 
 const DRIVE_FILES = DRIVE_FILES_URL;
 const DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
@@ -116,6 +117,26 @@ export function resumoConteudo(bytes: Buffer) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+/**
+ * Financiada com pasta da turma (driveArvore.ts): o ficheiro do dossiê vai para o tópico dentro dessa pasta.
+ * Sem pasta (ou apagada na Drive) devolve "" e segue o caminho habitual.
+ */
+async function pastaFinDaTurma(db: Db, token: string, ctx: DriveContext, rootName: string) {
+  if (ctx.regime !== "fin" || !ctx.turma) return "";
+  const segs = dtpDriveSegments(ctx, rootName);
+  const turmaPasta = segs ? await pastaDaTurmaPorNome(db, "fin", ctx.turma) : "";
+  if (!segs || !turmaPasta) return "";
+  try {
+    let parent = turmaPasta;
+    // [raiz, «Financiada», «DTP Financiada …», tópico, pessoa?]: dentro da pasta da turma só o tópico e a pessoa.
+    for (const nome of segs.slice(3)) parent = await garantirPastaFilha(token, parent, nome);
+    return parent;
+  } catch (err) {
+    if (isNotFound(err)) return "";
+    throw err;
+  }
+}
+
 export async function storeDriveFile(
   db: Db,
   actorId: string | undefined,
@@ -135,6 +156,7 @@ export async function storeDriveFile(
     let parent: string;
     try {
       parent = ctx.parentDriveId?.trim()
+        || await pastaFinDaTurma(db, token, ctx, creds.folderName)
         || await ensureFolderPath(db, token, folderSegments(ctx, creds.folderName), creds.folderId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
@@ -183,8 +205,9 @@ export async function storeDriveFile(
   return mapFile((await ficheiroDrive(db, id))!);
 }
 
-export async function listDriveFiles(db: Db, q: DriveContext & { limit?: number }) {
-  const rows = await listarFicheirosDrive(db, { ...q, limite: Math.min(q.limit ?? 80, 200) });
+/** `todos`: sem limite de linhas (a exportação do dossiê precisa de todos os ficheiros da turma). */
+export async function listDriveFiles(db: Db, q: DriveContext & { limit?: number; todos?: boolean }) {
+  const rows = await listarFicheirosDrive(db, { ...q, limite: q.todos ? null : Math.min(q.limit ?? 80, 200) });
   return rows.map(mapFile);
 }
 

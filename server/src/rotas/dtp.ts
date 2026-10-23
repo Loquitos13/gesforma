@@ -21,11 +21,13 @@ const SEM_LEITURA = "O formador não consulta o dossiê técnico-pedagógico.";
 
 const exportQuery = z.object({ destino: z.enum(["zip", "drive"]).optional().catch(undefined) });
 
+/** Tempo máximo da função na Vercel (vercel.json › functions › maxDuration; um teste confere os dois). */
+export const DURACAO_MAXIMA_VERCEL_MS = 30_000;
 /**
- * Na Vercel (30 s por pedido) não começam descargas da Drive depois deste prazo; cada uma leva no máximo 8 s
- * e o resto do tempo é para gravar os PDFs gerados e o ZIP na Drive.
+ * Reserva no fim do pedido para gravar os PDFs gerados, montar o ZIP e gravá-lo na Drive. As descargas da Drive
+ * acabam (ou são cortadas) antes disso; as que ficam de fora são listadas no índice do ZIP.
  */
-const PRAZO_DESCARGAS_VERCEL_MS = 10_000;
+const RESERVA_FINAL_MS = 10_000;
 
 function respostaModelo(regime: Regime, modelo: DtpModelo, entidade: EntidadeDtp | null) {
   const efectivo = regime === "gold" ? comporModelo(entidade?.modelo ?? DTP_MODELO_VAZIO, modelo) : modelo;
@@ -158,20 +160,22 @@ export async function registar(app: FastifyInstance, { db, requireAuth, audit }:
    * fica listado no índice do ZIP. Sem ligação à Drive, devolve sempre o ZIP.
    */
   app.get("/v1/dtp/:regime/:id/export", async (req, reply) => {
+    const inicio = Date.now();
     if (!requireAuth(req, reply) || !semFormador(req, reply, SEM_LEITURA)) return;
     const v = validar(reply, { params: regimeIdParam, query: exportQuery }, req);
     if (!v) return;
     const { regime, id } = v.params;
     const turma = await turmaOu404(db, reply, regime, id);
     if (!turma) return;
+    const prazo = inicio + DURACAO_MAXIMA_VERCEL_MS - RESERVA_FINAL_MS;
     const destino = v.query.destino ?? (onVercel ? "drive" : "zip");
     // Na Drive só para a secretaria (admin e secretaria), que já edita a pasta da turma: o ZIP não se partilha com mais
     // ninguém (uma partilha do ficheiro ficava depois de a pessoa sair da equipa). Os outros perfis descarregam-no.
     const secretaria = req.actor!.role === "admin" || req.actor!.role === "secretaria";
     const { token } = destino === "drive" && secretaria ? await usableToken(db) : { token: null };
-    const out = await exportarDossie(db, req.actor!.id, regime, turma, onVercel ? { prazo: Date.now() + PRAZO_DESCARGAS_VERCEL_MS } : {});
+    const out = await exportarDossie(db, req.actor!.id, regime, turma, onVercel ? { prazo } : {});
     await audit(db, req.actor!.id, "dtp.export", "turma", String(id), req.ip, {
-      ficheiros: out.ficheiros, pasta: out.pasta, destino: token ? "drive" : "zip", foraDoPrazo: out.foraDoPrazo,
+      ficheiros: out.ficheiros, pasta: out.pasta, destino: token ? "drive" : "zip", foraDoPrazo: out.foraDoPrazo, omitidos: out.omitidos,
     });
     if (token) {
       const pasta = await pastaDaTurma(db, regime, id)
@@ -184,7 +188,7 @@ export async function registar(app: FastifyInstance, { db, requireAuth, audit }:
         return {
           drive: {
             id: zip.id, url: zip.webViewLink ?? `https://drive.google.com/file/d/${zip.id}/view`,
-            nome: out.nome, ficheiros: out.ficheiros, foraDoPrazo: out.foraDoPrazo,
+            nome: out.nome, ficheiros: out.ficheiros, foraDoPrazo: out.foraDoPrazo, omitidos: out.omitidos,
           },
         };
       }

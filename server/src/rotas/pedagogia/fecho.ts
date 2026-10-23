@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sincronizarDespesasDaTurma } from "../../despesasFormador.js";
 import { dtpEmFalta } from "../../pedagogia/dtp.js";
-import { anexarPdfDtp } from "../../pedagogia/ficheiros.js";
+import { anexarPdfDtp, nomeRelatorioDoFecho } from "../../pedagogia/ficheiros.js";
 import { dadosRelatorioFinal } from "../../pedagogia/relatorio.js";
 import { sincronizarSemFalhar } from "../../reembolso.js";
 import { pdfRelatorioFinal } from "../../relatorioFinal.js";
@@ -46,7 +46,8 @@ export function registarFecho(app: FastifyInstance, { db, requireAuth, audit }: 
     await sincronizarDespesasDaTurma(db, id);
     await fecharTurmaFin(db, id, req.actor!.id, resumo);
     // A turma fica fechada mesmo sem Drive; o ecrã avisa que o relatório não ficou no dossiê.
-    const aviso = await anexarPdfDtp(db, req.actor!.id, "fin", { id, nome: antes.nome }, "relatorio", "RelatorioFinalAccao.pdf", bytes)
+    // Nome próprio (com o dia do fecho): gerar o relatório outra vez nunca substitui nem apaga esta versão.
+    const aviso = await anexarPdfDtp(db, req.actor!.id, "fin", { id, nome: antes.nome }, "relatorio", nomeRelatorioDoFecho(), bytes)
       .then(() => "")
       .catch(err => {
         req.log.warn({ err, turma: id }, "relatório final não anexado ao dossiê");

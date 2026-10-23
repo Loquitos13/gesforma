@@ -145,6 +145,8 @@ export async function renomearTurmaNosFormandos(c: Consulta, regime: Regime, id:
         AND trim($1) <> ''
         AND lower(trim(coalesce(payload->>'turma', ''))) = lower(trim($1))`,
     [antigo, novo]);
+  // Os ficheiros guardam o nome da turma: sem isto, certificados e anexos saíam do ZIP do dossiê depois de renomear.
+  await many(c, "UPDATE drive_files SET turma = $3 WHERE regime = $1 AND trim(turma) = $2", [regime, antigo, novo]);
 }
 
 export async function renomearCursoDaTurma(

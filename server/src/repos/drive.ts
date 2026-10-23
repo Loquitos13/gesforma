@@ -123,7 +123,7 @@ export function ficheiroDrive(c: Consulta, id: string) {
   return one<DriveFileRow>(c, "SELECT * FROM drive_files WHERE id = $1", [id]);
 }
 
-export function listarFicheirosDrive(c: Consulta, f: { kind?: string; regime?: string; turma?: string; formando?: string; limite: number }) {
+export function listarFicheirosDrive(c: Consulta, f: { kind?: string; regime?: string; turma?: string; formando?: string; limite: number | null }) {
   return many<DriveFileRow>(c,
     `SELECT * FROM drive_files
       WHERE ($1::text IS NULL OR kind = $1) AND ($2::text IS NULL OR regime = $2)
@@ -144,6 +144,13 @@ export async function apagarRegistoFicheiro(c: Consulta, id: string) {
 
 export async function pastaDaTurma(c: Consulta, regime: Regime, turmaId: number) {
   const r = await one<{ drive_pasta_id: string }>(c, `SELECT drive_pasta_id FROM ${tabelaRegime("turmas", regime)} WHERE id = $1`, [turmaId]);
+  return r?.drive_pasta_id?.trim() ?? "";
+}
+
+/** Pasta da turma na Drive (a dos 14 tópicos), pelo nome que os ficheiros guardam. */
+export async function pastaDaTurmaPorNome(c: Consulta, regime: Regime, nome: string) {
+  const r = await one<{ drive_pasta_id: string }>(c,
+    `SELECT drive_pasta_id FROM ${tabelaRegime("turmas", regime)} WHERE trim(nome) = trim($1) AND drive_pasta_id <> '' ORDER BY id DESC LIMIT 1`, [nome]);
   return r?.drive_pasta_id?.trim() ?? "";
 }
 

@@ -1,13 +1,14 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { PDFDocument } from "pdf-lib";
 import * as XLSX from "xlsx";
 import {
   LISTA_CNAEF, LISTA_GENERO, LISTA_HABILITACOES, LISTA_PAISES, LISTA_QNQ, LISTA_SIM_NAO, LISTA_SITUACAO_EMPREGO,
   LISTA_TIPO_ENTIDADE, procuraEmpregoPorOmissao, qnqDasHabilitacoes,
 } from "../../src/partilhado/execucaoFisica.js";
 import { codigoCursoValido, normalizarCodigoCurso, rotuloCodigoCurso } from "../../src/partilhado/codigoCurso.js";
-import { cursoAcao, FALTA, formatoDaTurma, LISTAS_EXECUCAO, sessaoSincrona } from "../src/execucaoFisica.js";
+import { cursoAcao, estilosDatasDDMMAAAA, FALTA, formatoDaTurma, LISTAS_EXECUCAO, sessaoSincrona } from "../src/execucaoFisica.js";
 import { writePreinscricaoPii } from "../src/pii.js";
 import { conteudoZip, lerZip, serieExcel } from "../src/xlsxModelo.js";
 import { arrancar, pedido, type Ctx } from "./helpers.js";
@@ -141,7 +142,8 @@ describe("execução física da turma (Financiada)", () => {
 
     // Vídeo-conferência é síncrona; a forma da turma decide E-Learning / B-Learning.
     expect(sessaoSincrona("sincrona")).toBe(true);
-    expect(sessaoSincrona("videoconferencia")).toBe(true);
+    // Só a modalidade «sincrona» do cronograma (não há outras de vídeo-conferência).
+    expect(sessaoSincrona("videoconferencia")).toBe(false);
     expect(sessaoSincrona("presencial")).toBe(false);
     expect(sessaoSincrona(undefined)).toBe(false);
     expect(formatoDaTurma(CRONOGRAMA)).toBe("b-learning");
@@ -234,6 +236,10 @@ describe("execução física da turma (Financiada)", () => {
 
     // Fim da participação: «à saída» igual à entrada salvo indicação; procura emprego pela situação à saída.
     await financiamento(ctx, "financiada", t.ana, { situacaoEmpregoSaida: "3 - Desempregado à procura de novo emprego - Não DLD" });
+    for (const id of [t.ana, t.bruno]) {
+      const n = await pedido(ctx, "secretaria", "PUT", `/v1/turmas/fin/${t.id}/certificados/${id}`, { nota: 15 });
+      expect(n.statusCode, n.body).toBe(200);
+    }
     await ctx.db.query("UPDATE turmas_fin SET fechada_em = now() WHERE id = $1", [t.id]);
     const fim = linhasTemplate(await descarregar(ctx, t.id));
     const anaFim = fim.find(l => String(l.M).startsWith("Ana"))!;
@@ -246,13 +252,23 @@ describe("execução física da turma (Financiada)", () => {
     expect([LISTAS_EXECUCAO.situacao.aprovado, LISTAS_EXECUCAO.situacao.reprovado]).toContain(anaFim.U);
     expect(anaFim.T).toBeTruthy();
 
-    // As validações (também as x14 do extLst), as folhas escondidas e os nomes definidos ficam; o resto do zip igual.
+    // As validações (também as x14 do extLst), as folhas escondidas e os nomes definidos ficam; o resto do zip igual
+    // (os estilos só mudam o formato das datas para dd-mm-aaaa).
     const original = new Map(lerZip(MODELO).map(e => [e.nome, conteudoZip(e)]));
     const gerado = lerZip(bytes);
     expect(gerado.map(e => e.nome).sort()).toEqual([...original.keys()].sort());
     for (const e of gerado) {
-      if (e.nome !== "xl/worksheets/sheet1.xml") expect(conteudoZip(e).equals(original.get(e.nome)!), e.nome).toBe(true);
+      if (e.nome !== "xl/worksheets/sheet1.xml" && e.nome !== "xl/styles.xml") expect(conteudoZip(e).equals(original.get(e.nome)!), e.nome).toBe(true);
     }
+    const estilos = conteudoZip(gerado.find(e => e.nome === "xl/styles.xml")!).toString("utf8");
+    expect(estilos).toBe(estilosDatasDDMMAAAA(original.get("xl/styles.xml")!.toString("utf8")));
+    expect(estilos).toContain('<numFmt numFmtId="166" formatCode="dd\\-mm\\-yyyy"/>');
+    expect(estilos).not.toMatch(/<cellXfs[\s\S]*numFmtId="14"[\s\S]*<\/cellXfs>/);
+    // As datas continuam datas do Excel, mostradas dd-mm-aaaa.
+    const comFormato = XLSX.read(bytes, { type: "buffer", sheets: "Template", sheetRows: 4, cellNF: true, cellDates: false }).Sheets.Template!;
+    expect(comFormato.S3?.t).toBe("n");
+    expect(comFormato.S3?.z).toBe("dd\\-mm\\-yyyy");
+    expect(XLSX.SSF.format(comFormato.S3!.z as string, comFormato.S3!.v as number)).toBe("05-01-2026");
     const folha = conteudoZip(gerado.find(e => e.nome === "xl/worksheets/sheet1.xml")!).toString("utf8");
     const folhaOriginal = original.get("xl/worksheets/sheet1.xml")!.toString("utf8");
     const depoisDosDados = (s: string) => s.slice(s.indexOf("</sheetData>"));
@@ -430,6 +446,60 @@ describe("execução física da turma (Financiada)", () => {
     expect(exp.statusCode).toBe(200);
     expect(XLSX.utils.sheet_to_json<unknown[]>(XLSX.read(exp.rawPayload, { type: "buffer" }).Sheets.Despesas!, { header: 1 })).toHaveLength(1);
   }, 90_000);
+});
+
+describe("execução física: situação no fim e formandos que mudaram de turma", () => {
+  it("turma fechada: «Aprovado» só com nota positiva e assiduidade; sem avaliação fica «Em Execução» e falta a avaliação", async () => {
+    const ctx = await arrancar();
+    const t = await turmaComFormandos(ctx);
+    // Ana: 10 h de 11 e nota positiva; Bruno: nota positiva mas 7 h de 11; Carla: sem nota nem presenças.
+    for (const id of [t.ana, t.bruno]) {
+      expect((await pedido(ctx, "secretaria", "PUT", `/v1/turmas/fin/${t.id}/certificados/${id}`, { nota: 15 })).statusCode).toBe(200);
+    }
+    await ctx.db.query("UPDATE turmas_fin SET fechada_em = now() WHERE id = $1", [t.id]);
+    const linhas = linhasTemplate(await descarregar(ctx, t.id));
+    const porNome = (n: string) => linhas.find(l => String(l.M ?? "").startsWith(n))!;
+    expect(porNome("Ana").U).toBe(LISTAS_EXECUCAO.situacao.aprovado);
+    expect(porNome("Bruno").U).toBe(LISTAS_EXECUCAO.situacao.reprovado);
+    // O Bruno sai na última presença; a Carla não tem resultado declarado (nem fim, nem «à saída»).
+    expect(porNome("Bruno").T).toBe(serieExcel("2026-01-06"));
+    const carla = porNome("Carla");
+    expect(carla.U).toBe(LISTAS_EXECUCAO.situacao.emExecucao);
+    expect(carla.T ?? null).toBeNull();
+    const estado = (await pedido(ctx, "financiada", "GET", `/v1/turmas-fin/${t.id}/reembolso`)).json();
+    const falta = (id: number) => (estado.execucaoFisica.porFormando as { id: number; falta: string[] }[]).find(f => f.id === id)?.falta ?? [];
+    expect(falta(t.carla)).toContain(FALTA.avaliacao);
+    expect(falta(t.ana)).not.toContain(FALTA.avaliacao);
+    expect(falta(t.bruno)).not.toContain(FALTA.avaliacao);
+  }, 60_000);
+
+  it("quem mudou de turma continua na de origem como «Transferido», só com as horas dela; e entra na nova", async () => {
+    const ctx = await arrancar();
+    const t = await turmaComFormandos(ctx);
+    const outra = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", {
+      dataInicio: "2026-01-05", nome: unico("TF Destino"), curso: "UFCD Reembolso", capacidade: 10, cronograma: CRONOGRAMA,
+    });
+    expect(outra.statusCode, outra.body).toBe(200);
+    const destino = outra.json().turma.id as number;
+    // O Bruno (4 h presenciais + 3 h síncronas na origem) passa para a outra turma e tem lá uma sessão.
+    const m = await pedido(ctx, "secretaria", "PATCH", `/v1/formandos-fin/${t.bruno}`, { turmaId: destino });
+    expect(m.statusCode, m.body).toBe(200);
+    expect((await ctx.db.query<{ turma_id: number }>("SELECT turma_id FROM formandos_fin WHERE id = $1", [t.bruno])).rows[0]!.turma_id).toBe(destino);
+    await pedido(ctx, "secretaria", "PUT", `/v1/turmas/fin/${destino}/sessoes/3`, { presencas: [marca(t.bruno, "Bruno Silva", "presente")] });
+
+    const origem = linhasTemplate(await descarregar(ctx, t.id));
+    const bruno = origem.find(l => String(l.M ?? "").startsWith("Bruno"))!;
+    expect(bruno).toMatchObject({ U: LISTAS_EXECUCAO.situacao.transferido, BA: 7, BH: 4, BJ: 3, BN: 2, AH: t.bruno });
+    expect(bruno.T).toBe(serieExcel("2026-01-06"));
+    expect(origem.filter(l => l.A === "Inserir")).toHaveLength(3);
+    const novo = linhasTemplate(await descarregar(ctx, destino)).find(l => String(l.M ?? "").startsWith("Bruno"))!;
+    expect(novo).toMatchObject({ U: LISTAS_EXECUCAO.situacao.emExecucao, BA: 4, BN: 1 });
+
+    // As fichas de inscrição da origem continuam a tê-lo (uma página por formando).
+    const fichas = await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}/dossie/fichas`);
+    expect(fichas.statusCode, fichas.body.slice(0, 200)).toBe(200);
+    expect((await PDFDocument.load(fichas.rawPayload)).getPageCount()).toBe(3);
+  }, 60_000);
 });
 
 describe("nome dos ficheiros do reembolso", () => {

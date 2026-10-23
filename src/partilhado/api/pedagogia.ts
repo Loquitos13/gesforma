@@ -80,8 +80,9 @@ export type PedagogiaSnapshot = {
   planosDoCurso?: number[];
 };
 
+/** O formador não recebe o `dtp` (fica fora do dossiê). */
 export const apiPedagogia = (regime: Regime, turmaId: number) =>
-  api<PedagogiaSnapshot>(`/v1/turmas/${regime}/${turmaId}/pedagogia`);
+  api<Omit<PedagogiaSnapshot, "dtp"> & { dtp?: DtpSnapshot }>(`/v1/turmas/${regime}/${turmaId}/pedagogia`);
 
 export const apiSaveSessao = (
   regime: Regime,

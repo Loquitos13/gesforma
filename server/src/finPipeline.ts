@@ -7,7 +7,7 @@ import { readFormandoDocs, readFormandoPii, readPreinscricaoPii, writeFormandoDo
 import { encryptField } from "./fieldCrypto.js";
 import { dadosBancarios, gravarDadosBancarios } from "./repos/apoios.js";
 import {
-  COLUNAS_FINANCIAMENTO, fichaFinParaFinanciamento, financiamentoDoFormando, gravarFinanciamento, gravarPiiFormandoFin, type CampoTabela,
+  COLUNAS_FINANCIAMENTO, financiamentoDoFormando, gravarFinanciamento, gravarPiiFormandoFin, piiFormandoFinParaGravar, type CampoTabela,
 } from "./repos/formandoFinanciamento.js";
 import {
   actualizarFormandoFin, docsValidosFin, formandoFinParaLembrete, formandoFinPorEmail, gravarDocsFin, inserirFormandoFin,
@@ -86,11 +86,6 @@ export async function levarDadosPessoaisParaFicha(db: Db, row: Record<string, un
   const fin = pre.fin ?? {};
   const nifPre = String(pre.nif ?? "").replace(/\D/g, "");
   const cp = /(\d{4})\s*-?\s*(\d{3})/.exec(pre.codigoPostal ?? "");
-  const ficha = await fichaFinParaFinanciamento(db, formandoId);
-  if (!ficha) return [] as string[];
-  const prev = readFormandoPii({ pii_enc: ficha.pii_enc, telf: ficha.telf });
-  const ident: IdentificacaoFin = { ...prev.ident };
-  const levados: string[] = [];
   const cifrados: [keyof IdentificacaoFin, string][] = [
     ["nif", nifPre.length === 9 ? nifPre : ""],
     ["niss", fin.niss ?? ""],
@@ -101,10 +96,6 @@ export async function levarDadosPessoaisParaFicha(db: Db, row: Record<string, un
     ["validadeDocumento", fin.validadeDocumento ?? ""],
     ["passaporte", fin.tipoDocumento === "Passaporte" ? fin.numeroDocumento ?? "" : ""],
   ];
-  const identNovo = cifrados.filter(([k, v]) => v && !String(ident[k] ?? "").trim());
-  for (const [k, v] of identNovo) { ident[k] = v; levados.push(k); }
-  const linha = await financiamentoDoFormando(db, formandoId);
-  const tabela: Partial<Record<CampoTabela, string>> = {};
   const candidatosTabela: [CampoTabela, string][] = [
     ["genero", fin.genero ?? ""],
     ["nacionalidade", fin.nacionalidade ?? ""],
@@ -112,22 +103,33 @@ export async function levarDadosPessoaisParaFicha(db: Db, row: Record<string, un
     ["situacaoEmpregoEntrada", fin.situacaoEmpregoEntrada ?? ""],
     ["nifEntidadeEmpregadora", fin.nifEntidadeEmpregadora ?? ""],
   ];
-  for (const [k, v] of candidatosTabela) {
-    if (v && !String(linha?.[COLUNAS_FINANCIAMENTO[k]] ?? "").trim()) { tabela[k] = v; levados.push(k); }
-  }
   const banco = fin.iban ? (await dadosBancarios(db, [formandoId]))[0] : undefined;
   const iban = fin.iban && !banco?.iban_enc ? fin.iban : "";
-  if (iban) levados.push("iban");
-  if (!levados.length) return levados;
-  await db.tx(async q => {
+  if (!cifrados.some(([, v]) => v) && !candidatosTabela.some(([, v]) => v) && !iban) return [] as string[];
+  // A ficha lida e bloqueada dentro da transacção: o «só o que falta» decide-se sobre o que está gravado agora
+  // e o pacote cifrado grava-se sobre essa cópia (uma gravação da secretaria ao mesmo tempo não se perde).
+  return db.tx(async q => {
+    const ficha = await piiFormandoFinParaGravar(q, formandoId);
+    if (!ficha) return [] as string[];
+    const prev = readFormandoPii({ pii_enc: ficha.pii_enc, telf: ficha.telf });
+    const ident: IdentificacaoFin = { ...prev.ident };
+    const levados: string[] = [];
+    const identNovo = cifrados.filter(([k, v]) => v && !String(ident[k] ?? "").trim());
+    for (const [k, v] of identNovo) { ident[k] = v; levados.push(k); }
+    const linha = await financiamentoDoFormando(q, formandoId);
+    const tabela: Partial<Record<CampoTabela, string>> = {};
+    for (const [k, v] of candidatosTabela) {
+      if (v && !String(linha?.[COLUNAS_FINANCIAMENTO[k]] ?? "").trim()) { tabela[k] = v; levados.push(k); }
+    }
+    if (iban) levados.push("iban");
     if (identNovo.length) await gravarPiiFormandoFin(q, formandoId, writeFormandoPiiPatch({ ident }, prev));
     if (Object.keys(tabela).length) await gravarFinanciamento(q, formandoId, tabela, actorId ?? null);
     if (iban) {
       const titular = banco?.titular || `${String(row.nome ?? "")} ${String(row.apelido ?? "")}`.trim();
       await gravarDadosBancarios(q, formandoId, encryptField(iban), titular, actorId ?? null);
     }
+    return levados;
   });
-  return levados;
 }
 
 export async function upsertFormandoFinFromLead(db: Db, leadId: number, actorId?: string) {

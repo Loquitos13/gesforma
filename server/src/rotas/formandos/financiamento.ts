@@ -18,7 +18,8 @@ import { turmaDoFormandoFin } from "../../repos/documentosFin.js";
 import { enviarPdf } from "../pedagogia/comum.js";
 import { readFormandoPii, readPreinscricaoPii, writeFormandoPiiPatch, type IdentificacaoFin } from "../../pii.js";
 import {
-  COLUNAS_FINANCIAMENTO, fichaFinParaFinanciamento, financiamentoDoFormando, gravarFinanciamento, gravarPiiFormandoFin, type CampoTabela,
+  COLUNAS_FINANCIAMENTO, fichaFinParaFinanciamento, financiamentoDoFormando, gravarFinanciamento, gravarPiiFormandoFin, piiFormandoFinParaGravar,
+  type CampoTabela,
 } from "../../repos/formandoFinanciamento.js";
 import { idParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
@@ -111,12 +112,13 @@ export function registarFinanciamento(app: FastifyInstance, deps: Deps) {
     const v = validar(reply, { params: idParam, body: corpo }, req);
     if (!v) return;
     const id = v.params.id;
-    const ficha = await fichaFinParaFinanciamento(db, id);
-    if (!ficha) return reply.code(404).send({ error: "formando inexistente" });
     const d = v.body as Partial<DadosFinanciamento>;
     const cifrados = CAMPOS_FINANCIAMENTO_CIFRADOS.filter(k => d[k] !== undefined);
     const tabela = (Object.keys(COLUNAS_FINANCIAMENTO) as CampoTabela[]).filter(k => d[k] !== undefined);
-    await db.tx(async q => {
+    const existe = await db.tx(async q => {
+      // A ficha lida e bloqueada aqui dentro: só os campos enviados mudam, sobre o que está gravado agora.
+      const ficha = await piiFormandoFinParaGravar(q, id);
+      if (!ficha) return false;
       if (cifrados.length) {
         const prev = readFormandoPii({ pii_enc: ficha.pii_enc, telf: ficha.telf });
         const ident: IdentificacaoFin = { ...prev.ident };
@@ -126,7 +128,9 @@ export function registarFinanciamento(app: FastifyInstance, deps: Deps) {
       if (tabela.length) {
         await gravarFinanciamento(q, id, Object.fromEntries(tabela.map(k => [k, String(d[k] ?? "").trim()])), req.actor!.id ?? null);
       }
+      return true;
     });
+    if (!existe) return reply.code(404).send({ error: "formando inexistente" });
     // Só os nomes dos campos: os valores (NISS, documentos…) nunca vão para o registo.
     if (cifrados.length || tabela.length) {
       await audit(db, req.actor!.id, "formando.financiamento", "formandos_fin", String(id), req.ip, { campos: [...cifrados, ...tabela] });

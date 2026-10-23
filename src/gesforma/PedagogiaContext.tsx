@@ -78,7 +78,8 @@ export function useTurmaPedagogia(regime: Regime, turmaId: number | undefined, c
     try {
       const r = await apiPedagogia(regime, turmaId);
       if (pedido.current !== token) return;
-      setSnap(r);
+      // O formador não recebe o dossiê: fica o vazio (0 %), que o cockpit dele não mostra.
+      setSnap({ ...r, dtp: r.dtp ?? vazio.dtp });
       setEstado("ready");
     } catch {
       if (pedido.current !== token) return;

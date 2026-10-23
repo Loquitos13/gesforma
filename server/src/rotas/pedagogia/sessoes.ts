@@ -43,11 +43,13 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
     if (!(await formadorPodeVer(db, req, reply, regime, id, "Só consulta as turmas em que está atribuído."))) return;
     const turma = await turmaOu404(db, reply, regime, id);
     if (!turma) return;
+    // O formador fica fora do dossiê (FORMADOR_SEM_LEITURA): não recebe o DTP nem as ligações dos anexos.
+    const formador = req.actor!.role === "formador";
     const [sessoes, documentos, certificados, dtp, planosDoCurso] = await Promise.all([
       listarSessoes(db, regime, id),
       listarDocumentos(db, regime, id),
       listarCertificados(db, regime, id),
-      dtpForTurma(db, regime, turma),
+      formador ? null : dtpForTurma(db, regime, turma),
       ordensComPlanoDoCurso(db, regime, id),
     ]);
     return {
@@ -64,7 +66,7 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
         ficheiroNome: r.ficheiro_nome,
         ficheiroUrl: r.ficheiro_url,
       })),
-      dtp,
+      ...(dtp ? { dtp } : {}),
     };
   });
 

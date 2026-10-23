@@ -1,3 +1,4 @@
+import { fmtDataDDMMAAAA } from "../../src/partilhado/horaLisboa.js";
 import { pdfDeLinhas } from "./pdfTexto.js";
 
 type Sessao = {
@@ -51,10 +52,9 @@ function modulos(s: Sessao) {
   return (s.modulos ?? []).filter(Boolean).join(", ") || "-";
 }
 
+/** Datas dos documentos em dd-mm-aaaa. */
 function dataPt(iso?: string) {
-  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso || "-";
-  const [y, m, d] = iso.split("-");
-  return `${d}/${m}/${y}`;
+  return fmtDataDDMMAAAA(iso) || "-";
 }
 
 function linhaSumario(sumario: Sumario | null) {

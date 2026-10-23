@@ -16,6 +16,7 @@ import { PDFDocument, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf
 import type { CandidaturaFin } from "../../src/partilhado/candidaturaFin.js";
 import { GENEROS_FIN, HABILITACOES_FIN, PAIS_PORTUGAL_FIN, SITUACOES_EMPREGO_FIN, rotuloPais } from "../../src/partilhado/dadosPessoaisFin.js";
 import { rotuloCodigoCurso } from "../../src/partilhado/codigoCurso.js";
+import { fmtDataDDMMAAAA } from "../../src/partilhado/horaLisboa.js";
 import { estadoDaMarca, type MarcaPresenca } from "./assiduidade.js";
 import type { Db } from "./db/pool.js";
 import { obterLogoEntidade } from "./entidadeLogo.js";
@@ -47,9 +48,11 @@ export type FichaInscricaoFin = {
   formandoId: number;
   nome: string;
   genero: string;
+  /** DD-MM-AAAA, como todas as datas dos documentos. */
   dataNascimento: string;
   documentoRotulo: string;
   documento: string;
+  /** DD-MM-AAAA. */
   validade: string;
   nif: string;
   niss: string;
@@ -70,7 +73,7 @@ export type PlanoPdf = { objetivosGerais?: string; objetivosEspecificos?: string
 
 export type SessaoDocFin = {
   n: number;
-  /** AAAA-MM-DD. */
+  /** AAAA-MM-DD (no PDF sai DD-MM-AAAA). */
   data: string;
   horaInicio: string;
   horaFim: string;
@@ -112,12 +115,6 @@ function arr(v: unknown): unknown[] {
     } catch { return []; }
   }
   return [];
-}
-
-/** AAAA-MM-DD → DD-MM-AAAA (o resto fica como está). */
-function dataDma(iso: string) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  return m ? `${m[3]}-${m[2]}-${m[1]}` : iso;
 }
 
 const semCodigo = (v: string) => v.replace(/^\s*\d+\s*-\s*/, "").trim();
@@ -225,10 +222,10 @@ function fichaDoFormando(f: FormandoExecucao): FichaInscricaoFin {
     formandoId: f.id,
     nome: `${f.nome} ${f.apelido}`.replace(/\s+/g, " ").trim(),
     genero: rotuloGenero(d.genero || txt(fin.genero)),
-    dataNascimento: txt(d.dataNascimento || fin.dataNascimento),
+    dataNascimento: fmtDataDDMMAAAA(txt(d.dataNascimento || fin.dataNascimento)),
     documentoRotulo: !tipo || tipo === "Cartão de Cidadão" ? "Cartão Cidadão" : tipo,
     documento: numero,
-    validade: dataDma(txt(ident.validadeDocumento || fin.validadeDocumento)),
+    validade: fmtDataDDMMAAAA(txt(ident.validadeDocumento || fin.validadeDocumento)),
     nif: d.nif.replace(/\D/g, "").length === 9 ? d.nif.replace(/\D/g, "") : "",
     niss: d.niss.replace(/\D/g, ""),
     morada: txt(pre.moradaFiscal || f.p_morada),
@@ -263,8 +260,8 @@ async function sessoesDaTurma(db: Db, turma: TurmaReembolso, formandos: Formando
       const m = marcas.find(x => Number(x.id) === f.id)
         ?? marcas.find(x => !Number.isFinite(Number(x.id)) && txt(x.nome).toLowerCase() === baixo);
       if (m) usadas.add(m);
-      // Quem desistiu só aparece nas sessões em que tem marcação.
-      if (!m && /^desist/i.test(f.estado.trim())) return [];
+      // Quem desistiu ou mudou para outra turma só aparece nas sessões em que tem marcação.
+      if (!m && (/^desist/i.test(f.estado.trim()) || f.transferido)) return [];
       return [{ nome, presenca: m ? rotuloPresenca(m) : "" }];
     });
     // Marcações de quem já não está na turma (mudou de turma depois da sessão): ficam na folha dessa sessão.
@@ -531,7 +528,7 @@ export async function pdfPlanosSessaoFin(cab: CabecalhoFin, sessoes: SessaoDocFi
   const lista: (SessaoDocFin | null)[] = sessoes.length ? sessoes : [null];
   const cabecalhos = ["Momento", "Conteúdos", "Métodos / Estratégias", "Recursos didáticos", "Avaliação", "Tempo"];
   for (const s of lista) {
-    const sub = s ? [`Sessão ${s.n}`, s.data, horario(s), s.formadores.join(", ")].filter(Boolean).join(" · ") : "";
+    const sub = s ? [`Sessão ${s.n}`, fmtDataDDMMAAAA(s.data), horario(s), s.formadores.join(", ")].filter(Boolean).join(" · ") : "";
     let pg = novaPagina(d, PAISAGEM, "PLANO DE SESSÃO", sub);
     const larguras = (() => {
       const momento = 110;
@@ -625,7 +622,7 @@ export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDoc
     const terco = pg.largura / 3;
     celulaRotulo(d, pg, pg.m, terco, 18, "Sala:", "");
     celulaRotulo(d, pg, pg.m + terco, terco, 18, "Local:", cab.local);
-    celulaRotulo(d, pg, pg.m + 2 * terco, terco, 18, "Data:", s?.data ?? "");
+    celulaRotulo(d, pg, pg.m + 2 * terco, terco, 18, "Data:", fmtDataDDMMAAAA(s?.data));
     pg.y -= 18;
     celulaRotulo(d, pg, pg.m, terco, 22, "Horário:", s ? horario(s) : "");
     // Horas teóricas (T) e práticas (P): a plataforma não as distingue; preenchem-se à mão.
@@ -646,7 +643,7 @@ export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDoc
     const linhas = s?.presencas.length ? s.presencas : Array.from({ length: 12 }, () => ({ nome: "", presenca: "" }));
     for (const p of linhas) {
       if (pg.y - 15 < pg.fundo + 10) {
-        pg = novaPagina(d, RETRATO, titulo, s ? `Sessão ${s.n} · ${s.data} (continuação)` : "");
+        pg = novaPagina(d, RETRATO, titulo, s ? `Sessão ${s.n} · ${fmtDataDDMMAAAA(s.data)} (continuação)` : "");
         cabecalhoLista();
       }
       caixa(pg, pg.m, pg.y - 15, colNome, 15, 0.4);
@@ -661,13 +658,13 @@ export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDoc
     // O sumário da sessão (o modelo junta a folha de presenças e o sumário numa só folha).
     const linhasSumario = quebrar(textoSumario(s?.sumario ?? null), d.sans, TAM, pg.largura - 12);
     const altSumario = Math.max(56, linhasSumario.length * ENTRELINHA + 10);
-    if (pg.y - altSumario - 16 < pg.fundo) pg = novaPagina(d, RETRATO, titulo, s ? `Sessão ${s.n} · ${s.data} (continuação)` : "");
+    if (pg.y - altSumario - 16 < pg.fundo) pg = novaPagina(d, RETRATO, titulo, s ? `Sessão ${s.n} · ${fmtDataDDMMAAAA(s.data)} (continuação)` : "");
     escrever(pg, "Sumário:", pg.m, pg.y - TAM, d.negrito, TAM);
     pg.y -= TAM + 5;
     caixa(pg, pg.m, pg.y - altSumario, pg.largura, altSumario);
     linhasSumario.forEach((l, i) => escrever(pg, l, pg.m + 6, pg.y - 5 - TAM - i * ENTRELINHA, d.sans, TAM));
     pg.y -= altSumario + 18;
-    if (pg.y - 40 < pg.fundo) pg = novaPagina(d, RETRATO, titulo, s ? `Sessão ${s.n} · ${s.data} (continuação)` : "");
+    if (pg.y - 40 < pg.fundo) pg = novaPagina(d, RETRATO, titulo, s ? `Sessão ${s.n} · ${fmtDataDDMMAAAA(s.data)} (continuação)` : "");
     linhaAssinatura(d, pg, "o Formador:", 160);
     linhaAssinatura(d, pg, "o Coordenador:", 160);
   }

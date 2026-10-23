@@ -43,6 +43,7 @@ export const LISTAS_EXECUCAO = {
     inscrito: "1 - Inscrito",
     emExecucao: "2 - Em Execução",
     desistente: "5 - Desistente",
+    transferido: "11 - Transferido",
     reprovado: "6 - Reprovado",
     aprovado: "7 - Aprovado/Concluido",
     certificado: "13 - Certificado",
@@ -67,20 +68,36 @@ export const FALTA = {
   habilitacoes: "Habilitações",
   numeroSigo: ROTULOS_FINANCIAMENTO.numeroSigo,
   nifEntidade: ROTULOS_FINANCIAMENTO.nifEntidadeEmpregadora,
+  avaliacao: "Avaliação final (nota e assiduidade)",
 } as const;
 
 const MODELO = fileURLToPath(new URL("./modelos/execucao-fisica.xlsx", import.meta.url));
 const FOLHA = "xl/worksheets/sheet1.xml";
+const ESTILOS = "xl/styles.xml";
+/** Formato das datas: dd-mm-aaaa (o modelo usa o formato curto do Excel, 14, que muda com o idioma do Excel). */
+const FORMATO_DATA = { id: 166, codigo: "dd\\-mm\\-yyyy" };
+
+/** Os estilos do modelo com as células de data (numFmtId 14) em dd-mm-aaaa; continuam datas do Excel. */
+export function estilosDatasDDMMAAAA(xml: string) {
+  const comFormato = xml.replace(/<numFmts count="(\d+)">([\s\S]*?)<\/numFmts>/, (_, n: string, corpo: string) =>
+    `<numFmts count="${Number(n) + 1}">${corpo}<numFmt numFmtId="${FORMATO_DATA.id}" formatCode="${FORMATO_DATA.codigo}"/></numFmts>`);
+  return comFormato.replace(/<cellXfs[\s\S]*?<\/cellXfs>/, xfs => xfs.replace(/numFmtId="14"/g, `numFmtId="${FORMATO_DATA.id}"`));
+}
 /** Linhas do modelo com «Inserir» já escrito (as que não têm formando ficam limpas). */
 const ULTIMA_LINHA_MODELO = 522;
 
-let modelo: { entradas: ReturnType<typeof lerZip>; folha: string } | null = null;
+let modelo: { entradas: ReturnType<typeof lerZip>; folha: string; estilos: Buffer } | null = null;
 function lerModelo() {
   if (!modelo) {
     const entradas = lerZip(readFileSync(MODELO));
     const folha = entradas.find(e => e.nome === FOLHA);
-    if (!folha) throw new Error("O modelo de execução física não tem a folha Template.");
-    modelo = { entradas, folha: conteudoZip(folha).toString("utf8") };
+    const estilos = entradas.find(e => e.nome === ESTILOS);
+    if (!folha || !estilos) throw new Error("O modelo de execução física não tem a folha Template.");
+    modelo = {
+      entradas,
+      folha: conteudoZip(folha).toString("utf8"),
+      estilos: Buffer.from(estilosDatasDDMMAAAA(conteudoZip(estilos).toString("utf8")), "utf8"),
+    };
   }
   return modelo;
 }
@@ -105,10 +122,12 @@ const numeroOuTexto = (s: string): ValorCelula => {
   return /^\d{1,15}$/.test(t) ? Number(t) : t;
 };
 
-/** Sessão síncrona: vídeo-conferência, à distância e em tempo real (conta como «Síncrona»). */
+/**
+ * Sessão síncrona: vídeo-conferência, à distância e em tempo real (conta como «Síncrona»). O cronograma só tem
+ * as modalidades de SessaoModalidade (presencial, sincrona, auto, avaliacao, matricula).
+ */
 export function sessaoSincrona(modalidade?: string) {
-  const m = (modalidade ?? "presencial").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
-  return m === "sincrona" || m.startsWith("video") || m === "online";
+  return (modalidade ?? "presencial") === "sincrona";
 }
 
 function sessoesDoCronograma(cronograma: unknown): { modalidade?: string }[] {
@@ -233,14 +252,23 @@ export async function dadosExecucaoFisica(db: Db, turmaId: number) {
     const estado = f.estado.trim();
     const certificado = /^certificad/i.test(estado) || Boolean(cert?.emitido);
     const concluiu = /^conclu/i.test(estado) || Boolean(turma.fechada_em);
+    // Avaliação lançada: aprovado na nota e com a assiduidade mínima (resultados.ts).
+    const avaliado = r?.aprovado != null && r.assiduidade.pct != null;
+    const aprovado = r?.aprovado === true && r.assiduidade.pct != null && r.assiduidade.pct >= r.assiduidadeMinima;
     let situacao: string = comecou ? LISTAS_EXECUCAO.situacao.emExecucao : LISTAS_EXECUCAO.situacao.inscrito;
-    if (/^desist/i.test(estado)) situacao = LISTAS_EXECUCAO.situacao.desistente;
+    // Mudou de turma depois de ter presenças nesta: a participação aqui acaba como transferido.
+    if (f.transferido) situacao = LISTAS_EXECUCAO.situacao.transferido;
+    else if (/^desist/i.test(estado)) situacao = LISTAS_EXECUCAO.situacao.desistente;
     else if (certificado) situacao = LISTAS_EXECUCAO.situacao.certificado;
-    else if (concluiu) situacao = r?.aprovado === false ? LISTAS_EXECUCAO.situacao.reprovado : LISTAS_EXECUCAO.situacao.aprovado;
+    // «Aprovado» só com aprovação e assiduidade; reprovado com nota negativa ou faltas a mais. Sem avaliação
+    // lançada não se declara resultado ao financiador: fica «Em Execução» e a avaliação entra no que falta.
+    else if (concluiu && aprovado) situacao = LISTAS_EXECUCAO.situacao.aprovado;
+    else if (concluiu && avaliado) situacao = LISTAS_EXECUCAO.situacao.reprovado;
     const terminou = situacao !== LISTAS_EXECUCAO.situacao.inscrito && situacao !== LISTAS_EXECUCAO.situacao.emExecucao;
     const inicio = acc.primeira || (comecou ? datas[0]! : "");
-    // Quem sai antes do fim (desistente, reprovado) acaba na última presença; os outros no fim da acção.
-    const saiuAntes = situacao === LISTAS_EXECUCAO.situacao.desistente || situacao === LISTAS_EXECUCAO.situacao.reprovado;
+    // Quem sai antes do fim (desistente, reprovado, transferido) acaba na última presença; os outros no fim da acção.
+    const saiuAntes = situacao === LISTAS_EXECUCAO.situacao.desistente || situacao === LISTAS_EXECUCAO.situacao.reprovado
+      || situacao === LISTAS_EXECUCAO.situacao.transferido;
     const fim = !terminou ? "" : saiuAntes ? (acc.ultima || inicio) : (datas[datas.length - 1] ?? "");
 
     const d = dadosFinanciamento(f);
@@ -321,6 +349,7 @@ export async function dadosExecucaoFisica(db: Db, turmaId: number) {
     if (!d.habilitacoesEntrada) falta.push(FALTA.habilitacoes);
     if (!soDigitos(d.numeroSigo)) falta.push(FALTA.numeroSigo);
     if (d.situacaoEmpregoEntrada === EMPREGADOS && nifEntidade.length !== 9) falta.push(FALTA.nifEntidade);
+    if (concluiu && situacao === LISTAS_EXECUCAO.situacao.emExecucao) falta.push(FALTA.avaliacao);
     return { formandoId: f.id, nome, valores, falta };
   });
 
@@ -336,9 +365,9 @@ export async function dadosExecucaoFisica(db: Db, turmaId: number) {
 
 /** O modelo oficial com as linhas escritas (o resto do ficheiro fica igual). */
 export function xlsxExecucaoFisica(linhas: LinhaExecucao[]) {
-  const { entradas, folha } = lerModelo();
+  const { entradas, folha, estilos } = lerModelo();
   const nova = preencherFolha(folha, linhas.map(l => l.valores), { primeira: 3, limparAte: ULTIMA_LINHA_MODELO, limpar: ["A"] });
-  return escreverZip(entradas.map(e => (e.nome === FOLHA ? { ...e, novo: Buffer.from(nova, "utf8") } : e)));
+  return escreverZip(entradas.map(e => (e.nome === FOLHA ? { ...e, novo: Buffer.from(nova, "utf8") } : e.nome === ESTILOS ? { ...e, novo: estilos } : e)));
 }
 
 /** Resumo do que falta, para o ecrã: por campo, quantos formandos; a lista por formando; e o que falta à turma. */

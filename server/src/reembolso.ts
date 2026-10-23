@@ -9,6 +9,7 @@
 import { createHash } from "node:crypto";
 import * as XLSX from "xlsx";
 import { CAMPOS_DESPESA } from "../../src/partilhado/despesas.js";
+import { fmtDataDDMMAAAA } from "../../src/partilhado/horaLisboa.js";
 import type { Db } from "./db/pool.js";
 import { apagarFicheiroSubstituido, getDriveFile, storeDriveFile } from "./driveFicheiros.js";
 import { sincronizarDespesasDaTurma } from "./despesasFormador.js";
@@ -45,6 +46,7 @@ export function anexoXlsx(nome: string) {
 /**
  * As despesas da turma, com as mesmas colunas, pela mesma ordem, do template de despesas. As automáticas dos
  * formadores (horas × valor por hora) põem-se primeiro em dia: o ficheiro e o seu estado reflectem-nas sempre.
+ * As datas (gravadas AAAA-MM-DD) vão como texto dd-mm-aaaa, como todas as datas dos documentos.
  */
 export async function dadosDespesasTurma(db: Db, turmaId: number) {
   await sincronizarDespesasDaTurma(db, turmaId, { soAberta: true });
@@ -53,7 +55,8 @@ export async function dadosDespesasTurma(db: Db, turmaId: number) {
     Number(l.ordem),
     ...CAMPOS_DESPESA.map(c => {
       const v = l.dados[c.chave];
-      return typeof v === "number" ? v : textoSeguro(v ?? "");
+      if (typeof v === "number") return v;
+      return textoSeguro(c.tipo === "data" ? fmtDataDDMMAAAA(String(v ?? "")) : v ?? "");
     }),
   ]);
   const impressao = createHash("sha256").update(JSON.stringify({ v: 1, dados })).digest("hex");

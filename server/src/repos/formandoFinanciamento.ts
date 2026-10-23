@@ -68,3 +68,15 @@ export async function gravarFinanciamento(c: Consulta, formandoId: number, campo
 export async function gravarPiiFormandoFin(c: Consulta, formandoId: number, pack: { telf: string; pii_enc: string | null }) {
   await many(c, "UPDATE formandos_fin SET telf = $2, pii_enc = $3 WHERE id = $1", [formandoId, pack.telf, pack.pii_enc ?? ""]);
 }
+
+/**
+ * O pacote PII da ficha, bloqueado até ao fim da transacção (chamar dentro de `db.tx`): quem grava junta as suas
+ * alterações a esta cópia, e duas gravações seguidas não se apagam uma à outra.
+ */
+export function piiFormandoFinParaGravar(c: Consulta, formandoId: number) {
+  return one<{ telf: string; pii_enc: string }>(
+    c,
+    "SELECT COALESCE(telf, '') AS telf, COALESCE(pii_enc, '') AS pii_enc FROM formandos_fin WHERE id = $1 FOR UPDATE",
+    [formandoId],
+  );
+}

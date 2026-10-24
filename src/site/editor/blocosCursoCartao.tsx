@@ -102,7 +102,7 @@ export const CursoEscolhaLocal: ComponentConfig<LocalProps> = {
       type: "object", label: "Botão em cada cartão",
       objectFields: {
         mostrar: simNao("Mostrar o botão"),
-        texto: { type: "text", label: `Texto (nos cursos de pré-inscrição é sempre «Pré-inscrever»). ${ajudaVariaveis}` },
+        texto: { type: "text", label: `Texto (na pré-inscrição é sempre «Pré-inscrever» e no acesso direto «Pagamento/Inscrição», com seta). ${ajudaVariaveis}` },
         cor: campoCor("Cor do botão"),
         corTexto: campoCor("Cor do texto"),
         posicao: {
@@ -150,8 +150,11 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
           .filter(l => !comTurmas.some(t => chaveLocal(t) === chaveLocal(l)));
         const locais = [...comTurmas, ...semTurmas];
         if (!locais.length) return null;
-        // Pré-inscrição não precisa de datas: qualquer local registado (Sala Virtual incluída) abre o pedido, mesmo sem turmas.
+        // Pré-inscrição e acesso direto não precisam de datas: qualquer local registado (Sala Virtual incluída) mostra o
+        // botão, mesmo sem turmas, sempre com o mesmo texto e a seta («Pré-inscrever» / «Pagamento/Inscrição»).
         const preinscricao = ePreinscricao(curso.enrollment);
+        const acessoDireto = !preinscricao && !ePrepago(curso.enrollment);
+        const rotuloFixo = preinscricao ? rotuloBotaoInscricao(curso.enrollment) : acessoDireto ? "Pagamento/Inscrição" : "";
         return (
           <fieldset>
             {p.titulo && <legend className="mb-4"><Titulo texto={p.titulo} t={p.tTitulo} className="font-serif text-2xl" /></legend>}
@@ -163,7 +166,7 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
             }}>
               {locais.map(l => {
                 const ativo = local === l;
-                const semDatas = semTurmas.includes(l) && !preinscricao;
+                const semDatas = semTurmas.includes(l) && !rotuloFixo;
                 const morada = curso.sessoes.find(s => s.local === l && s.morada)?.morada
                   || (curso.locais ?? []).find(x => chaveLocal(x.nome) === chaveLocal(l))?.morada;
                 const vars = variaveisCurso(curso, l);
@@ -197,10 +200,10 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
                       ? <span className="mt-auto text-sm font-bold opacity-60">Próximas datas em breve</span>
                       : verPreco && <span className={juntar("mt-auto text-sm font-bold text-[var(--c-destaque)]", tPreco.className)} style={tPreco.style}>{preencherVariaveis(p.textoPreco || "{{preco}}", vars)}</span>}
                     {/* Não pode haver um botão dentro de outro: o cartão inteiro faz a ação, isto é só o aspeto. */}
-                    {b.mostrar && !semDatas && (
+                    {(b.mostrar || rotuloFixo) && !semDatas && (
                       <span className={juntar("mt-2 inline-flex items-center gap-3 px-4 py-3 text-xs font-extrabold uppercase tracking-[0.08em]", POSICAO_BOTAO[b.posicao] ?? POSICAO_BOTAO.largura, !verPreco && "mt-auto", tBotao.className)}
                         style={{ ...tBotao.style, background: corSegura(b.cor) ?? "var(--c-destaque)", color: corSegura(b.corTexto) ?? "#ffffff", borderRadius: b.raio ? `${b.raio}px` : undefined }}>
-                        {preinscricao ? rotuloBotaoInscricao(curso.enrollment) : preencherVariaveis(b.texto || "Escolher", vars)} {b.seta && <Icon name="arrow" />}
+                        {rotuloFixo || preencherVariaveis(b.texto || "Escolher", vars)} {(b.seta || rotuloFixo) && <Icon name="arrow" />}
                       </span>
                     )}
                   </button>

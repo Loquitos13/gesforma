@@ -121,6 +121,8 @@ function CatalogoVista(p: Omit<CatalogoProps, "zonaTopo" | "zonaLista"> & { zona
     && `${c.title} ${c.area}`.toLowerCase().includes(q.trim().toLowerCase()));
   const comparados = cursos.filter(c => comparar.includes(c.id));
   const mudarLinha = (l: Linha) => { setLinha(l); if (l !== "Gold") setAcesso("Todas"); };
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
+  const nAtivos = [area !== "Todas", formato !== "Todos", linha !== "Todas", linha === "Gold" && acesso !== "Todas"].filter(Boolean).length;
   const limpar = () => { setFormato("Todos"); setArea("Todas"); mudarLinha("Todas"); setQ(""); };
   const c = estiloBloco(p.aparencia);
   const pesquisa = (
@@ -167,9 +169,20 @@ function CatalogoVista(p: Omit<CatalogoProps, "zonaTopo" | "zonaLista"> & { zona
       <section className="px-5 py-10 lg:px-8 lg:py-14">
         <div className={juntar("mx-auto grid gap-8", p.filtros && "lg:grid-cols-[240px_1fr]")} style={{ maxWidth: "var(--largura)" }}>
           {p.filtros && (
-            <aside className="h-fit border-t-4 border-[var(--c-acento)] bg-white p-5 lg:sticky lg:top-28">
+            // Telemóvel: fechados por omissão, abrem no botão «Filtros». Computador: sempre à vista, com scroll próprio
+            // quando são mais altos do que o ecrã (ficavam cortados por estarem fixos ao fazer scroll).
+            <div>
+            <button type="button" aria-expanded={filtrosAbertos} aria-controls="catalogo-filtros" onClick={() => setFiltrosAbertos(a => !a)}
+              className="flex w-full items-center justify-between border-t-4 border-[var(--c-acento)] bg-white px-5 py-4 text-sm font-bold lg:hidden">
+              <span>Filtros{nAtivos ? ` · ${nAtivos} ${nAtivos === 1 ? "ativo" : "ativos"}` : ""}</span>
+              <svg aria-hidden="true" className={juntar("h-4 w-4 transition-transform", filtrosAbertos && "rotate-180")} viewBox="0 0 20 20" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4Z" /></svg>
+            </button>
+            <aside id="catalogo-filtros" className={juntar(
+              "h-fit bg-white p-5 lg:sticky lg:top-6 lg:block lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:border-t-4 lg:border-[var(--c-acento)]",
+              filtrosAbertos ? "block pt-0 lg:pt-5" : "hidden",
+            )}>
               <div className="flex items-center justify-between border-b border-[var(--c-primaria)]/10 pb-4">
-                <strong>Filtros</strong>
+                <strong className="hidden lg:inline">Filtros</strong>
                 <button type="button" onClick={limpar} className="text-xs font-bold text-[var(--c-destaque)] underline">Limpar</button>
               </div>
               {/* Ordem: área, modalidade e, por fim, a linha de formação (com o acesso Gold). */}
@@ -177,7 +190,12 @@ function CatalogoVista(p: Omit<CatalogoProps, "zonaTopo" | "zonaLista"> & { zona
               <Radio nome="formato" legenda="Modalidade" opcoes={modalidades} valor={formato} mudar={setFormato} />
               <Radio nome="linha" legenda="Linha de formação" opcoes={["Todas", "Financiada", "Gold"] as const} valor={linha} mudar={mudarLinha} rotulo={v => (v === "Gold" ? "ENA Gold" : v)} />
               {linha === "Gold" && <Radio nome="acesso" legenda="Acesso Gold" opcoes={["Todas", "Pré-inscrição", "Pré-pago", "Acesso direto"] as const} valor={acesso} mudar={setAcesso} />}
+              <button type="button" onClick={() => setFiltrosAbertos(false)}
+                className="mt-6 w-full bg-[var(--c-destaque)] px-4 py-3 text-sm font-bold text-white lg:hidden">
+                Ver {estado === "pronto" ? lista.length : ""} formações
+              </button>
             </aside>
+            </div>
           )}
           <div>
             {!p.topo && <div className="mb-6">{pesquisa}</div>}

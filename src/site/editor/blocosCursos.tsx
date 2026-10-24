@@ -493,6 +493,19 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
 function LinhaRolavel({ children }: { children: ReactNode }) {
   const caixa = useRef<HTMLDivElement>(null);
   const [lados, setLados] = useState({ esq: false, dir: false });
+  // Setas discretas: no computador só com o rato por cima (ou o teclado lá dentro); no telemóvel, enquanto a linha
+  // está à vista no ecrã.
+  const [mostrar, setMostrar] = useState(false);
+  const [rato, setRato] = useState(false);
+  const temRato = typeof window !== "undefined" && window.matchMedia?.("(hover: hover) and (pointer: fine)").matches;
+  useEffect(() => {
+    const el = caixa.current;
+    if (!el || temRato || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setMostrar(Boolean(e?.isIntersecting)), { threshold: 0.6 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [temRato]);
+  const visiveis = temRato ? rato : mostrar;
   const medir = useCallback(() => {
     const el = caixa.current;
     if (!el) return;
@@ -510,15 +523,17 @@ function LinhaRolavel({ children }: { children: ReactNode }) {
   const andar = (sentido: 1 | -1) => caixa.current?.scrollBy({ left: sentido * caixa.current.clientWidth * 0.8, behavior: "smooth" });
   const seta = (sentido: 1 | -1) => (
     <button type="button" onClick={() => andar(sentido)} aria-label={sentido > 0 ? "Ver mais áreas" : "Ver áreas anteriores"}
-      className={juntar("absolute top-1/2 z-10 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-[#14263D] text-white shadow-md hover:brightness-125",
-        sentido > 0 ? "right-0" : "left-0")}>
-      <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className={juntar("h-4 w-4", sentido < 0 && "rotate-180")}>
+      tabIndex={visiveis ? 0 : -1}
+      className={juntar("absolute top-1/2 z-10 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-[#14263D]/70 ring-1 ring-[#14263D]/15 backdrop-blur-sm transition-opacity duration-200 hover:text-[#14263D] hover:ring-[#14263D]/30",
+        sentido > 0 ? "right-1" : "left-1", visiveis ? "opacity-100" : "pointer-events-none opacity-0")}>
+      <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className={juntar("h-3.5 w-3.5", sentido < 0 && "rotate-180")}>
         <path d="M7.3 4.3a1 1 0 0 1 1.4 0l5 5a1 1 0 0 1 0 1.4l-5 5a1 1 0 1 1-1.4-1.4L11.6 10 7.3 5.7a1 1 0 0 1 0-1.4Z" />
       </svg>
     </button>
   );
   return (
-    <div className="relative">
+    <div className="relative" onMouseEnter={() => setRato(true)} onMouseLeave={() => setRato(false)}
+      onFocus={() => setRato(true)} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setRato(false); }}>
       <div ref={caixa} onScroll={medir} className="flex gap-2 overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         style={{
           // Esbate a ponta onde há mais botões, por baixo da seta.

@@ -102,7 +102,7 @@ export const CursoEscolhaLocal: ComponentConfig<LocalProps> = {
       type: "object", label: "Botão em cada cartão",
       objectFields: {
         mostrar: simNao("Mostrar o botão"),
-        texto: { type: "text", label: `Texto. ${ajudaVariaveis}` },
+        texto: { type: "text", label: `Texto (nos cursos de pré-inscrição é sempre «Pré-inscrever»). ${ajudaVariaveis}` },
         cor: campoCor("Cor do botão"),
         corTexto: campoCor("Cor do texto"),
         posicao: {
@@ -150,6 +150,8 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
           .filter(l => !comTurmas.some(t => chaveLocal(t) === chaveLocal(l)));
         const locais = [...comTurmas, ...semTurmas];
         if (!locais.length) return null;
+        // Pré-inscrição não precisa de datas: qualquer local registado (Sala Virtual incluída) abre o pedido, mesmo sem turmas.
+        const preinscricao = ePreinscricao(curso.enrollment);
         return (
           <fieldset>
             {p.titulo && <legend className="mb-4"><Titulo texto={p.titulo} t={p.tTitulo} className="font-serif text-2xl" /></legend>}
@@ -161,7 +163,7 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
             }}>
               {locais.map(l => {
                 const ativo = local === l;
-                const semDatas = semTurmas.includes(l);
+                const semDatas = semTurmas.includes(l) && !preinscricao;
                 const morada = curso.sessoes.find(s => s.local === l && s.morada)?.morada
                   || (curso.locais ?? []).find(x => chaveLocal(x.nome) === chaveLocal(l))?.morada;
                 const vars = variaveisCurso(curso, l);
@@ -198,7 +200,7 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
                     {b.mostrar && !semDatas && (
                       <span className={juntar("mt-2 inline-flex items-center gap-3 px-4 py-3 text-xs font-extrabold uppercase tracking-[0.08em]", POSICAO_BOTAO[b.posicao] ?? POSICAO_BOTAO.largura, !verPreco && "mt-auto", tBotao.className)}
                         style={{ ...tBotao.style, background: corSegura(b.cor) ?? "var(--c-destaque)", color: corSegura(b.corTexto) ?? "#ffffff", borderRadius: b.raio ? `${b.raio}px` : undefined }}>
-                        {preencherVariaveis(b.texto || "Escolher", vars)} {b.seta && <Icon name="arrow" />}
+                        {preinscricao ? rotuloBotaoInscricao(curso.enrollment) : preencherVariaveis(b.texto || "Escolher", vars)} {b.seta && <Icon name="arrow" />}
                       </span>
                     )}
                   </button>
@@ -318,7 +320,7 @@ type BotaoProps = Base & { texto: string; cor: string; corTexto: string; largura
 export const CursoBotaoInscricao: ComponentConfig<BotaoProps> = {
   label: "Curso · Botão de inscrição",
   fields: {
-    texto: { type: "text", label: `Texto (vazio = conforme a inscrição). ${ajudaVariaveis}` },
+    texto: { type: "text", label: `Texto (vazio = conforme a inscrição; na pré-inscrição é sempre «Pré-inscrever»). ${ajudaVariaveis}` },
     cor: campoCor("Cor do botão"),
     corTexto: campoCor("Cor do texto"),
     larguraTotal: simNao("Ocupa a largura toda"),
@@ -336,7 +338,9 @@ function BotaoCurso(p: BotaoProps) {
   return (
     <Caixa p={p}>
       {curso => {
-        const texto = p.texto.trim() ? preencherVariaveis(p.texto, variaveisCurso(curso, local)) : rotuloBotaoInscricao(curso.enrollment);
+        // Pré-inscrição (Oferta › tipo comercial): o botão diz sempre «Pré-inscrever», seja qual for o texto do bloco.
+        const texto = p.texto.trim() && !ePreinscricao(curso.enrollment)
+          ? preencherVariaveis(p.texto, variaveisCurso(curso, local)) : rotuloBotaoInscricao(curso.enrollment);
         return (
           <button type="button" onClick={() => abrir(curso, local ? { local } : undefined)}
             className={juntar("flex items-center justify-between gap-4 px-5 py-4 text-xs font-extrabold uppercase tracking-[0.08em] hover:brightness-90", p.larguraTotal ? "w-full" : "w-fit")}

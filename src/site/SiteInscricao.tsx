@@ -129,16 +129,19 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
     () => [...ofertaFiltrada(doCurso, { local })].sort((a, b) => a.dataInicio.localeCompare(b.dataInicio) || a.horario.localeCompare(b.horario)),
     [doCurso, local],
   );
-  // Sem turmas com data, o pedido começa nos dados.
+  // Pré-inscrição num local registado sem turmas (ex.: Sala Virtual): fica o local, sem data de início.
+  const localSemTurmas = preinscricao && ofertaEstado === "pronto" && Boolean(local) && !locais.includes(local);
+  const precisaTurma = doCurso.length > 0 && !localSemTurmas;
+  // Sem turmas com data (ou nesse local), o pedido começa nos dados.
   useEffect(() => {
-    if (passo === "turma" && ofertaEstado !== "a-carregar" && doCurso.length === 0) setPasso("dados");
-  }, [passo, ofertaEstado, doCurso.length]);
-  // Um só local: fica escolhido. Um local vindo da página que não tem turmas: limpa-se.
+    if (passo === "turma" && ofertaEstado !== "a-carregar" && !precisaTurma) setPasso("dados");
+  }, [passo, ofertaEstado, precisaTurma]);
+  // Um só local: fica escolhido. Um local vindo da página que não tem turmas: limpa-se (na pré-inscrição fica).
   useEffect(() => {
     if (ofertaEstado !== "pronto") return;
     if (locais.length === 1 && !local) setLocal(locais[0]!);
-    else if (local && locais.length && !locais.includes(local)) setLocal("");
-  }, [ofertaEstado, locais, local]);
+    else if (local && locais.length && !locais.includes(local) && !preinscricao) setLocal("");
+  }, [ofertaEstado, locais, local, preinscricao]);
   const turma = doCurso.find(t => t.turmaId === turmaId) ?? null;
   const precoNumero = turma?.preco ?? curso?.precoDesde ?? null;
   // Sem turma escolhida, o preço do cabeçalho é o das datas do local (o mais baixo, se variam).
@@ -164,7 +167,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
     setErro("");
   }
   function continuarTurma() {
-    if (doCurso.length && !turmaId) { setErro("Escolha a data de início da turma."); return; }
+    if (precisaTurma && !turmaId) { setErro("Escolha a data de início da turma."); return; }
     setErro("");
     setPasso("dados");
   }
@@ -193,7 +196,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
     if (!consentimento) return "Para enviar, aceite a política de privacidade.";
     if (ofertaEstado === "a-carregar") return "A carregar as turmas libertadas.";
     if (ofertaEstado === "erro") return "Não foi possível carregar as turmas. Feche e volte a abrir o pedido.";
-    if (doCurso.length && !turmaId) return "Escolha primeiro a data de início da turma.";
+    if (precisaTurma && !turmaId) return "Escolha primeiro a data de início da turma.";
     return "";
   }
 
@@ -217,7 +220,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
     e?.preventDefault();
     if (!curso) return;
     const falha = validarDados();
-    if (falha) { setErro(falha); setPasso(doCurso.length && !turmaId ? "turma" : "dados"); return; }
+    if (falha) { setErro(falha); setPasso(precisaTurma && !turmaId ? "turma" : "dados"); return; }
     if (prepago) {
       const pagamento = falhaPagamento();
       if (pagamento) { setErro(pagamento); return; }
@@ -281,7 +284,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
       : "";
   const pagamentoBloqueado = passo === "pagamento" && Boolean(falhaPagamento());
   const passos: [Passo, string][] = [
-    ...(doCurso.length > 0 || ofertaEstado === "a-carregar" ? [["turma", "Local, data de início e horário"] as [Passo, string]] : []),
+    ...(precisaTurma || ofertaEstado === "a-carregar" ? [["turma", "Local, data de início e horário"] as [Passo, string]] : []),
     ["dados", "Os seus dados"],
     ...(prepago ? [["pagamento", "Pagamento"] as [Passo, string]] : []),
   ];

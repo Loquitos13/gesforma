@@ -335,7 +335,7 @@ export function modeloCurso(antigo?: Legado): Data {
   const txt = (k: string, padrao: string) => (typeof a[k] === "string" ? String(a[k]) : padrao);
   const extra = (k: "zonaTopo" | "zonaConteudo" | "zonaCartao") => (Array.isArray(a[k]) ? a[k] as never[] : []);
   const principal = [
-    bloco("CursoSintese", CursoSintese.defaultProps, { etiqueta: txt("tituloSintese", "Síntese") }),
+    bloco("CursoSintese", CursoSintese.defaultProps, { etiqueta: txt("tituloSintese", "Enquadramento") }),
     ...(sim("mostrarDados") ? [bloco("CursoDados", CursoDados.defaultProps, { aparencia: estiloVazio({ margem: lados(32, 0, 0, 0) }) })] : []),
     escolhaLocal(),
     ...extra("zonaConteudo"),

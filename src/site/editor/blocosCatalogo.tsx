@@ -101,10 +101,12 @@ function CatalogoVista(p: Omit<CatalogoProps, "zonaTopo" | "zonaLista"> & { zona
   const cursos = ctx?.cursos ?? [];
   const estado = ctx?.estado ?? "a-carregar";
   const { abrir } = useInscricaoOpcional();
-  const inicial = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("linha") : null;
+  const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const inicial = params?.get("linha") ?? null;
   const [q, setQ] = useState("");
   const [formato, setFormato] = useState("Todos");
-  const [area, setArea] = useState("Todas");
+  // «?area=…» vem dos botões das áreas na página inicial (Oferta formativa).
+  const [area, setArea] = useState(params?.get("area")?.trim() || "Todas");
   const [linha, setLinha] = useState<Linha>(inicial === "financiada" ? "Financiada" : inicial === "gold" ? "Gold" : "Todas");
   const [acesso, setAcesso] = useState<Acesso>("Todas");
   const [guardados, setGuardados] = useState<string[]>([]);
@@ -170,10 +172,11 @@ function CatalogoVista(p: Omit<CatalogoProps, "zonaTopo" | "zonaLista"> & { zona
                 <strong>Filtros</strong>
                 <button type="button" onClick={limpar} className="text-xs font-bold text-[var(--c-destaque)] underline">Limpar</button>
               </div>
+              {/* Ordem: área, modalidade e, por fim, a linha de formação (com o acesso Gold). */}
+              <Radio nome="area" legenda="Área de formação" opcoes={areas} valor={area} mudar={setArea} />
+              <Radio nome="formato" legenda="Modalidade" opcoes={modalidades} valor={formato} mudar={setFormato} />
               <Radio nome="linha" legenda="Linha de formação" opcoes={["Todas", "Financiada", "Gold"] as const} valor={linha} mudar={mudarLinha} rotulo={v => (v === "Gold" ? "ENA Gold" : v)} />
               {linha === "Gold" && <Radio nome="acesso" legenda="Acesso Gold" opcoes={["Todas", "Pré-inscrição", "Pré-pago", "Acesso direto"] as const} valor={acesso} mudar={setAcesso} />}
-              <Radio nome="formato" legenda="Modalidade" opcoes={modalidades} valor={formato} mudar={setFormato} />
-              <Radio nome="area" legenda="Área de formação" opcoes={areas} valor={area} mudar={setArea} />
             </aside>
           )}
           <div>

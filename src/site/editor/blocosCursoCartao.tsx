@@ -10,6 +10,7 @@ import {
 } from "./blocosCurso";
 import { campoCor, campoNumero, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
+import { textoAutomaticoCurso } from "./textosLocais";
 import { corSegura, estiloTexto, estiloVazio, juntar, tipoVazia, type Tipografia } from "./estilos";
 
 // ─── Escolha do local ────────────────────────────────────────────────────────
@@ -67,7 +68,7 @@ const POSICAO_BOTAO = { esquerda: "self-start", centro: "self-center", direita: 
 export const CursoEscolhaLocal: ComponentConfig<LocalProps> = {
   label: "Curso · Escolha do local",
   fields: {
-    titulo: { type: "text", label: "Título (vazio = esconder)" },
+    titulo: { type: "text", label: "Título (vazio = esconder). «{{titulo_locais}}» muda com o curso: onde, quando e como" },
     tTitulo: campoTipografia("Tipografia do título"),
     entreTitulo: campoEntreTitulo,
     texto: { type: "textarea", label: `Texto em cada cartão (vazio = nenhum). ${ajudaVariaveis}` },
@@ -120,7 +121,7 @@ export const CursoEscolhaLocal: ComponentConfig<LocalProps> = {
   },
   defaultProps: {
     contactosTitulo: "Dúvidas? Fale connosco", tContactos: tipoVazia(),
-    titulo: "Onde quer fazer o curso?", tTitulo: tipoVazia(), entreTitulo: [], texto: "", textoPreco: "{{preco}}", mostrarMorada: true, mostrarPreco: true,
+    titulo: "{{titulo_locais}}", tTitulo: tipoVazia(), entreTitulo: [], texto: "", textoPreco: "{{preco}}", mostrarMorada: true, mostrarPreco: true,
     abrirPedido: true, colunas: 3, colunasTab: 2, colunasTel: 1, cartao: cartaoLocalPadrao(), botao: botaoLocalPadrao(), aparencia: estiloVazio(),
   },
   render: p => <EscolhaLocal {...p} />,
@@ -157,7 +158,7 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
         const rotuloFixo = preinscricao ? rotuloBotaoInscricao(curso.enrollment) : acessoDireto ? "Pagamento/Inscrição" : "";
         return (
           <fieldset>
-            {p.titulo && <legend className="mb-4"><Titulo texto={p.titulo} t={p.tTitulo} className="font-serif text-2xl" /></legend>}
+            {p.titulo && <legend className="mb-4"><Titulo texto={textoAutomaticoCurso(preencherVariaveis(p.titulo, variaveisCurso(curso, local)), curso)} t={p.tTitulo} className="font-serif text-2xl" /></legend>}
             <ZonaEntreTitulo zona={p.entreTitulo} />
             {/* Cartões grandes (nome, morada e preço), em grelha, como no site da ENA. */}
             <div className="ena-grelha mt-4" style={{
@@ -282,7 +283,7 @@ function TextoCurso(p: TextoProps) {
         const base = p.porInscricao
           ? (ePrepago(curso.enrollment) ? p.textoPrepago : ePreinscricao(curso.enrollment) ? p.textoPreinscricao : p.textoDireto)
           : p.texto;
-        const texto = preencherVariaveis(base ?? "", variaveisCurso(curso, local)).trim();
+        const texto = textoAutomaticoCurso(preencherVariaveis(base ?? "", variaveisCurso(curso, local)).trim(), curso);
         return texto ? <Tag className={juntar(e.cls, "whitespace-pre-line", t.className)} style={t.style}>{texto}</Tag> : null;
       }}
     </Caixa>

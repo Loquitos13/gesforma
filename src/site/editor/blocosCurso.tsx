@@ -7,6 +7,7 @@ import { CursoDaRotaCtx } from "./blocosCursoPagina";
 import { campoCurso, campoNumero, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { eur } from "../../partilhado/ui/formatos";
+import { fraseLocais, tituloLocais } from "./textosLocais";
 import { estiloBloco, estiloTexto, estiloVazio, juntar, tipoVazia, type Estilo, type Tipografia } from "./estilos";
 
 type Estado = "a-carregar" | "erro" | "pronto";
@@ -85,6 +86,7 @@ export const VARIAVEIS_CURSO: [string, string][] = [
   ["inicio", "Próximo início (data · local)"], ["inicio_resumo", "«Vários locais e datas» quando há mais do que um (senão, o próximo início)"],
   ["proxima_data", "Próxima data de início"],
   ["preco", "Preço (segue o local escolhido)"], ["preco_desde", "Preço mais baixo"], ["datas", "Número de datas"],
+  ["frase_locais", "Frase antes dos locais (muda com o tipo de curso)"], ["titulo_locais", "Título dos locais (onde, quando e como)"],
 ];
 
 export function variaveisCurso(c: Course, local: string): Record<string, string> {
@@ -101,6 +103,7 @@ export function variaveisCurso(c: Course, local: string): Record<string, string>
     proxima_data: prox?.data ?? c.start,
     preco: precoNoLocal(c, local), preco_desde: c.precoDesde != null ? euros(c.precoDesde) : c.price,
     datas: String(doLocal.length),
+    frase_locais: fraseLocais(c), titulo_locais: tituloLocais(c),
   };
 }
 
@@ -232,14 +235,14 @@ export const CursoBanner: ComponentConfig<BannerProps> = {
 type SinteseProps = Base & { etiqueta: string; tEtiqueta: Tipografia; texto: Tipografia };
 
 export const CursoSintese: ComponentConfig<SinteseProps> = {
-  label: "Curso · Síntese",
+  label: "Curso · Enquadramento",
   fields: {
     etiqueta: { type: "text", label: "Etiqueta (vazio = esconder)" },
     tEtiqueta: campoTipografia("Tipografia da etiqueta"),
     texto: campoTipografia("Tipografia do texto"),
     aparencia: campoAparencia(),
   },
-  defaultProps: { etiqueta: "Síntese", tEtiqueta: tipoVazia(), texto: tipoVazia(), aparencia: estiloVazio() },
+  defaultProps: { etiqueta: "Enquadramento", tEtiqueta: tipoVazia(), texto: tipoVazia(), aparencia: estiloVazio() },
   render: p => (
     <Caixa p={p}>
       {curso => {
@@ -247,7 +250,8 @@ export const CursoSintese: ComponentConfig<SinteseProps> = {
         const t = estiloTexto(p.texto);
         return (
           <>
-            {p.etiqueta && <p className={juntar("text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--c-destaque)]", e.className)} style={e.style}>{p.etiqueta}</p>}
+            {/* A etiqueta antiga «Síntese» (páginas gravadas antes) passa a «Enquadramento». */}
+            {p.etiqueta && <p className={juntar("text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--c-destaque)]", e.className)} style={e.style}>{/^s[ií]ntese$/i.test(p.etiqueta.trim()) ? "Enquadramento" : p.etiqueta}</p>}
             {/* As mudanças de linha da ficha do curso (ex.: lista de destaques) mantêm-se. */}
             <p className={juntar("mt-4 whitespace-pre-line text-lg leading-8 opacity-75", t.className)} style={t.style}>{curso.description}</p>
           </>

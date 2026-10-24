@@ -1,3 +1,4 @@
+import { regimeSincronia, type RegimeSincronia } from "../../src/partilhado/regimeSincronia.js";
 import type { Db } from "./db/pool.js";
 import { mapaImagensPublicas } from "./cursoImagens.js";
 import { dadosCatalogoPublico } from "./repos/cursos.js";
@@ -64,7 +65,8 @@ export type CursoPublico = {
   locais: { nome: string; morada: string }[];
   organizacao: "modular" | "livre";
   programa: { titulo: string; horas: string }[];
-  /** Regime da oferta (ficha › Oferta): «Síncrono», «Assíncrono», «Misto (Síncrono + Assíncrono)» ou vazio. */
+  /** Regime da oferta (ficha › Oferta): síncrono, assíncrono, misto ou vazio. */
+  sincronia: RegimeSincronia;
   /** Próximas datas; o preço segue as regras da ficha (local, horário ou os dois), como na pré-inscrição. */
   sessoes: { data: string; iso: string; local: string; horario: string; preco: number | null; morada: string }[];
   nomeOferta: string;
@@ -383,6 +385,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
           const preco = curso.regime === "gold" ? escolherPreco(curso.preco, local, horario, regrasDoPayload(payload)) : 0;
           return { data, iso, local, horario, preco: preco > 0 ? preco : null, morada: moradas.get(`${curso.regime}:${chave(local)}`) ?? "" };
         }),
+      sincronia: regimeSincronia(payload.regimeSincronia),
       nomeOferta: curso.nomeOferta || curso.titulo,
     };
   });

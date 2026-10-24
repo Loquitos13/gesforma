@@ -273,7 +273,7 @@ type DestaqueProps = { modo: "lista" | "escolhidos" | "automatico"; ordem: strin
 const CURSO_LIVRE: Course = {
   id: "", title: "", area: "", format: "", duration: "", start: "", price: "", description: "", resumo: "", funding: "Gold",
   enrollment: "Pré-inscrição", miniatura: null, capa: null, banner: null, precoDesde: null, vendas: 0, regime: "gold",
-  objetivos: [], funcionamento: "", contactosLocais: [], locais: [], organizacao: "modular", programa: [], sessoes: [], nomeOferta: "",
+  objetivos: [], funcionamento: "", contactosLocais: [], locais: [], organizacao: "modular", programa: [], sessoes: [], sincronia: "", nomeOferta: "",
 };
 
 function cartaoDe(x: ItemDestaque, curso: Course | undefined): Course | null {
@@ -361,6 +361,8 @@ type OfertaProps = {
   ordemManual: string[];
   pesquisa: boolean; textoPesquisa: string;
   filtros: boolean; mostrarTotal: boolean;
+  /** Botões das áreas com cursos, a seguir aos cursos: escolher uma filtra a grelha. */
+  areas: boolean; tituloAreas: string;
   limite: number | null;
   corFiltroAtivo: string;
   tipoFiltros: Tipografia; tipoTotal: Tipografia; tipoPesquisa: Tipografia;
@@ -386,6 +388,8 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
     textoPesquisa: { type: "text", label: "Texto da pesquisa" },
     filtros: simNao("Filtros por modalidade"),
     mostrarTotal: simNao("Mostrar o número de formações"),
+    areas: simNao("Botões das áreas de formação a seguir aos cursos"),
+    tituloAreas: { type: "text", label: "Título dos botões das áreas (vazio = sem título)" },
     limite: campoNumero("Máximo de cursos (vazio = todos)", ""),
     corFiltroAtivo: campoCor("Cor do filtro ativo"),
     tipoFiltros: campoTipografia("Tipografia dos botões de filtro"),
@@ -400,6 +404,7 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
   defaultProps: {
     zonaMeio: [], zonaCursos: [],
     regime: "todos", ordem: "procura", ordemManual: [], pesquisa: true, textoPesquisa: "Pesquisar formação", filtros: true, mostrarTotal: true,
+    areas: true, tituloAreas: "Explore por área de formação",
     limite: null, corFiltroAtivo: "var(--c-acento)",
     tipoFiltros: tipoVazia({ tamanho: 14, peso: "700" }), tipoTotal: tipoVazia({ tamanho: 14, peso: "600" }), tipoPesquisa: tipoVazia({ tamanho: 14 }),
     larguraPesquisa: 384, raioPesquisa: 999, fundoPesquisa: "#ffffff",
@@ -410,7 +415,7 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
     if (data.props.ordem !== "manual") delete f.ordemManual;
     return f as typeof fields;
   },
-  render: ({ puck, zonaMeio, zonaCursos, regime, ordem, ordemManual, pesquisa, textoPesquisa, filtros, mostrarTotal, limite, corFiltroAtivo, tipoFiltros, tipoTotal, tipoPesquisa, larguraPesquisa, raioPesquisa, fundoPesquisa, cartao, aparencia }) => {
+  render: ({ puck, zonaMeio, zonaCursos, regime, ordem, ordemManual, pesquisa, textoPesquisa, filtros, mostrarTotal, areas, tituloAreas, limite, corFiltroAtivo, tipoFiltros, tipoTotal, tipoPesquisa, larguraPesquisa, raioPesquisa, fundoPesquisa, cartao, aparencia }) => {
     const tf = estiloTexto(tipoFiltros);
     const tt = estiloTexto(tipoTotal);
     const tp = estiloTexto(tipoPesquisa);
@@ -419,6 +424,7 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
     const { cursos, estado, recarregar } = useCursos();
     const [filtro, setFiltro] = useState("Todos");
     const [q, setQ] = useState("");
+    const [area, setArea] = useState("");
     const base = useMemo(() => {
       const r = cursos.filter(c => regime === "todos" || c.regime === regime);
       if (ordem === "titulo") return [...r].sort((a, b) => a.title.localeCompare(b.title, "pt"));
@@ -429,8 +435,10 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
       return porProcura.sort((a, b) => (pos.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (pos.get(b.id) ?? Number.MAX_SAFE_INTEGER));
     }, [cursos, regime, ordem, ordemManual]);
     const modos = useMemo(() => ["Todos", ...["Presencial", "B-learning", "E-learning"].filter(m => base.some(c => c.format === m))], [base]);
+    const listaAreas = useMemo(() => [...new Set(base.map(c => c.area.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt")), [base]);
     const lista = base
-      .filter(c => (filtro === "Todos" || c.format === filtro) && `${c.title} ${c.area}`.toLowerCase().includes(q.trim().toLowerCase()))
+      .filter(c => (filtro === "Todos" || c.format === filtro) && (!area || c.area.trim() === area)
+        && `${c.title} ${c.area}`.toLowerCase().includes(q.trim().toLowerCase()))
       .slice(0, limite && limite > 0 ? limite : undefined);
     const c = estiloBloco(aparencia);
     const ativo = corSegura(corFiltroAtivo) ?? "var(--c-acento)";
@@ -461,6 +469,18 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
         )}
         {ZonaCursos && <ZonaCursos className="mb-6 flex flex-col gap-4 ena-zona" minEmptyHeight={40} />}
         {estado === "pronto" ? <Grelha cursos={lista} e={cartao} vazio="Não encontrámos formações para esta pesquisa." /> : <Estado estado={estado} recarregar={recarregar} />}
+        {areas !== false && estado === "pronto" && listaAreas.length > 1 && (
+          <nav aria-label="Áreas de formação" className="mt-10 border-t border-[#14263D]/10 pt-6">
+            {tituloAreas && <p className={juntar("mb-4 text-sm font-bold text-[#14263D]", tf.className)} style={tf.style}>{tituloAreas}</p>}
+            <div className="flex flex-wrap gap-2">
+              {["", ...listaAreas].map(a => (
+                <button key={a || "todas"} type="button" aria-pressed={area === a} onClick={() => setArea(a)}
+                  className={juntar("px-5 py-2.5 text-sm font-bold text-[#14263D] ring-1 ring-[#14263D]/15 transition-colors", tf.className)}
+                  style={{ ...tf.style, background: area === a ? ativo : "#fff" }}>{a || "Todas as áreas"}</button>
+              ))}
+            </div>
+          </nav>
+        )}
       </div>
     );
   },

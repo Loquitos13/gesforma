@@ -1,7 +1,9 @@
 // Blocos de base do editor visual: estrutura (secção, coluna) e conteúdo (título, texto, botão, imagem…).
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ElementType, type ReactNode } from "react";
 import type { ComponentConfig, Slot } from "@puckeditor/core";
+import { useCurso } from "./blocosCurso";
 import { campoCor, campoImagem, campoNumero, simNao } from "./campos";
+import { textoAutomaticoCurso } from "./textosLocais";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { Cartoes } from "./carrossel";
 import { corSegura, em, estiloBloco, estiloTexto, estiloVazio, juntar, lados, ligacaoSegura, tipoVazia, type Estilo, type Tipografia } from "./estilos";
@@ -137,7 +139,7 @@ export const Titulo: ComponentConfig<TituloProps> = {
     const href = ligacaoSegura(ligacao);
     return (
       <Tag ref={puck?.dragRef ?? undefined} id={c.id} className={juntar(c.className, t.className, "whitespace-pre-line")} style={{ ...c.style, ...t.style }}>
-        {href ? <a href={href} className="hover:opacity-80">{texto}</a> : texto}
+        {href ? <a href={href} className="hover:opacity-80"><TextoAuto texto={texto} /></a> : <TextoAuto texto={texto} />}
       </Tag>
     );
   },
@@ -162,9 +164,15 @@ export const Texto: ComponentConfig<TextoProps> = {
     const c = caixa(aparencia);
     const t = estiloTexto(tipografia);
     const corte = linhas && linhas >= 1 && linhas <= 4 ? `ena-linhas-${linhas}` : "";
-    return <p ref={puck?.dragRef ?? undefined} id={c.id} className={juntar(c.className, t.className, corte, "whitespace-pre-line")} style={{ ...c.style, ...t.style }}>{texto}</p>;
+    return <p ref={puck?.dragRef ?? undefined} id={c.id} className={juntar(c.className, t.className, corte, "whitespace-pre-line")} style={{ ...c.style, ...t.style }}><TextoAuto texto={texto} /></p>;
   },
 };
+
+/** Na página do curso, a frase e o título antes dos locais mudam com o curso (textosLocais.ts). */
+function TextoAuto({ texto }: { texto: Texto }) {
+  const curso = useCurso();
+  return <>{typeof texto === "string" ? textoAutomaticoCurso(texto, curso) : texto}</>;
+}
 
 // ─── Botão ───────────────────────────────────────────────────────────────────
 

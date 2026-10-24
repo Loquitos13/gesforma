@@ -83,7 +83,7 @@ function Detalhe({ p, curso, editar, Z }: { p: Props; curso: Course; editar: boo
       <section className="px-5 py-12 lg:px-8 lg:py-16">
         <div className={`mx-auto grid gap-12 ${p.mostrarCartao ? "lg:grid-cols-[1fr_360px]" : ""}`} style={{ maxWidth: "var(--largura)" }}>
           <div className="max-w-3xl">
-            {p.tituloSintese && <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--c-destaque)]">{p.tituloSintese}</p>}
+            {p.tituloSintese && <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--c-destaque)]">{/^s[ií]ntese$/i.test(p.tituloSintese.trim()) ? "Enquadramento" : p.tituloSintese}</p>}
             <p className="mt-4 whitespace-pre-line text-lg leading-8 opacity-75">{curso.description}</p>
             {p.mostrarDados && (
               <div className="mt-8 grid grid-cols-2 gap-px bg-black/10 sm:grid-cols-4">
@@ -189,7 +189,7 @@ export const DetalheCurso: ComponentConfig<Props> = {
     zonaCartao: { type: "slot", label: "Blocos no cartão de inscrição" },
     mostrarBanner: simNao("Banner com imagem e título"),
     voltar: { type: "text", label: "Texto «voltar à formação» (vazio = esconder)" },
-    tituloSintese: { type: "text", label: "Etiqueta da síntese" },
+    tituloSintese: { type: "text", label: "Etiqueta do enquadramento" },
     mostrarDados: simNao("Duração, início, local e investimento"),
     mostrarObjetivos: simNao("Objetivos"),
     tituloObjetivos: { type: "text", label: "Título dos objetivos" },
@@ -206,7 +206,7 @@ export const DetalheCurso: ComponentConfig<Props> = {
   },
   defaultProps: {
     previsualizar: "", zonaTopo: [], zonaConteudo: [], zonaCartao: [],
-    mostrarBanner: true, voltar: "Voltar à formação", tituloSintese: "Síntese", mostrarDados: true,
+    mostrarBanner: true, voltar: "Voltar à formação", tituloSintese: "Enquadramento", mostrarDados: true,
     mostrarObjetivos: true, tituloObjetivos: "Objetivos", mostrarPrograma: true, tituloPrograma: "Programa",
     mostrarTurmas: true, tituloTurmas: "Próximas turmas", mostrarCartao: true, mostrarImagemCartao: true,
     textoPrepago: "Primeiro recolhemos os seus dados. O pagamento fica no passo seguinte.",

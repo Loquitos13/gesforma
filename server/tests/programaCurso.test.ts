@@ -65,8 +65,8 @@ describe("programa do curso: modular ou livre", () => {
     };
     const curso = cat.cursos.find(x => x.titulo === nome)!;
     expect(curso.organizacao).toBe("livre");
-    // O regime não aparece como etiqueta na página pública.
-    expect(curso.sincronia).toBeUndefined();
+    // O regime vai no catálogo só para escolher a frase e o título dos locais (não aparece como etiqueta).
+    expect(curso.sincronia).toBe("assincrono");
     expect(curso.programa.map(p => p.titulo)).toEqual(["Atendimento", "Comunicação escrita", "Excel"]);
     expect(curso.programa.some(p => /^C\d/.test(p.titulo))).toBe(false);
 

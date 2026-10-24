@@ -20,7 +20,8 @@ const FRASES = {
   goldPresencial: "Veja os locais onde realizamos o curso, o investimento necessário e próximas datas do curso.",
   goldSincrono: "Veja o investimento necessário, próximas datas do curso e respetivo cronograma.",
   goldAssincrono: "Veja o investimento necessário e como pode aceder ao curso.",
-  finPresencial: "Veja os locais onde realizamos o curso, próximas datas do curso e financiamento.",
+  finPresencial: "Veja os locais onde realizamos o curso e próximas datas do curso.",
+  finPresencialAntiga: "Veja os locais onde realizamos o curso, próximas datas do curso e financiamento.",
   fin: "Veja próximas datas do curso e financiamento.",
 };
 

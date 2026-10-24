@@ -1,4 +1,5 @@
 // Separadores de texto da ficha: conteúdo do site, programa e planos de sessão.
+import { TOPICOS_CURSO } from "../../../../partilhado/topicosCurso";
 import { AreaTexto, Aviso, Botao, Campo, Cartao, Entrada, Estado, Selecao, Vazio } from "../../../../partilhado/ui";
 import { codigoTopico, juntarHoras, novoTopicoId, partirHoras, textoPrograma } from "../../../cursoPrograma";
 import { useState, type ReactNode } from "react";
@@ -53,7 +54,9 @@ export function TabConteudo({ f }: { f: FichaCurso }) {
       ) : (
         <BlocoTexto rotulo="Programa no site" ajuda="Ainda sem módulos. Defina o percurso no separador Programa e este texto passa a ser gerado." valor={data.programa} onMudar={v => patch({ programa: v })} linhas={10} />
       )}
-      <BlocoTexto rotulo="Funcionamento" ajuda="Sessões, plataforma, assiduidade e certificado." valor={data.funcionamento} onMudar={v => patch({ funcionamento: v })} />
+      {TOPICOS_CURSO.map(t => (
+        <BlocoTexto key={t.chave} rotulo={t.rotulo} ajuda={t.ajuda} valor={data[t.chave]} onMudar={v => patch({ [t.chave]: v })} />
+      ))}
       <Cartao titulo="Pesquisa na Google e partilha" subtitulo="Como o curso aparece nos resultados da Google e quando é partilhado (Facebook, LinkedIn, WhatsApp). Vazio: o título e o texto de destaque do curso.">
         <div className="grid gap-3">
           <Campo rotulo="Título na pesquisa" ajuda={`${data.seoTitulo.length}/60 caracteres. A Google corta títulos mais longos.`}>

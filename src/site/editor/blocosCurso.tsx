@@ -4,11 +4,12 @@ import { createContext, useContext, useEffect, useState, type ComponentType, typ
 import type { ComponentConfig, Slot } from "@puckeditor/core";
 import { Icon, OfertaCtx, type Course } from "../SiteLanding";
 import { CursoDaRotaCtx } from "./blocosCursoPagina";
-import { campoCurso, campoNumero, simNao } from "./campos";
+import { campoCor, campoCurso, campoNumero, simNao } from "./campos";
+import { TOPICOS_CURSO, type ChaveTopicoCurso } from "../../partilhado/topicosCurso";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { eur } from "../../partilhado/ui/formatos";
 import { fraseLocais, tituloLocais } from "./textosLocais";
-import { estiloBloco, estiloTexto, estiloVazio, juntar, tipoVazia, type Estilo, type Tipografia } from "./estilos";
+import { corSegura, estiloBloco, estiloTexto, estiloVazio, juntar, tipoVazia, type Estilo, type Tipografia } from "./estilos";
 
 type Estado = "a-carregar" | "erro" | "pronto";
 /** O curso da página e o local escolhido (partilhado: escolha do local, dados, turmas e cartão seguem-no). */
@@ -355,24 +356,65 @@ export const CursoPrograma: ComponentConfig<ListaProps & { espacoLinhas: number 
   ),
 };
 
-type FuncionamentoProps = ListaProps & { texto: Tipografia };
+type FuncionamentoProps = Base & {
+  /** Títulos dos cartões (vazio = o nome do tópico). */
+  titulos: Partial<Record<ChaveTopicoCurso, string>>;
+  tTitulo: Tipografia; texto: Tipografia; corLinha: string; colunas: number | null;
+};
 
-/** O texto «Funcionamento» da ficha do curso (sessões, plataforma, assiduidade, certificado). */
+/** Linhas começadas por «-», «•» ou «*» viram lista; as outras, parágrafos. */
+function TextoTopico({ texto, t }: { texto: string; t: ReturnType<typeof estiloTexto> }) {
+  const blocos: { lista: boolean; linhas: string[] }[] = [];
+  for (const linha of texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean)) {
+    const item = /^[-•*]\s*/.test(linha);
+    const ultimo = blocos[blocos.length - 1];
+    const limpo = item ? linha.replace(/^[-•*]\s*/, "") : linha;
+    if (ultimo && ultimo.lista === item && item) ultimo.linhas.push(limpo);
+    else blocos.push({ lista: item, linhas: [limpo] });
+  }
+  return (
+    <div className={juntar("mt-4 space-y-3 text-sm leading-7 opacity-80", t.className)} style={t.style}>
+      {blocos.map((b, i) => b.lista
+        ? <ul key={i} className="list-disc space-y-1 pl-5">{b.linhas.map((l, j) => <li key={j}>{l}</li>)}</ul>
+        : <p key={i}>{b.linhas[0]}</p>)}
+    </div>
+  );
+}
+
+/** Metodologias, certificação/avaliação, destinatários e requisitos (ficha do curso › Conteúdo do site), em cartões. */
 export const CursoFuncionamento: ComponentConfig<FuncionamentoProps> = {
-  label: "Curso · Funcionamento e organização",
-  fields: { ...camposLista("Funcionamento").fields, texto: campoTipografia("Tipografia do texto") },
-  defaultProps: { ...camposLista("Funcionamento e organização").defaultProps, texto: tipoVazia() },
+  label: "Curso · Metodologias, certificação, destinatários e requisitos",
+  fields: {
+    titulos: {
+      type: "object", label: "Títulos dos cartões (vazio = o nome do tópico)",
+      objectFields: Object.fromEntries(TOPICOS_CURSO.map(t => [t.chave, { type: "text" as const, label: t.rotulo }])) as never,
+    },
+    tTitulo: campoTipografia("Tipografia dos títulos"),
+    texto: campoTipografia("Tipografia do texto"),
+    corLinha: campoCor("Cor da linha por baixo do título"),
+    colunas: campoNumero("Colunas no computador (1 ou 2)"),
+    aparencia: campoAparencia(),
+  },
+  defaultProps: { titulos: {}, tTitulo: tipoVazia(), texto: tipoVazia(), corLinha: "var(--c-acento)", colunas: 1, aparencia: estiloVazio() },
   render: p => (
     <Caixa p={p}>
       {curso => {
-        if (!curso.funcionamento.trim()) return null;
+        const topicos = TOPICOS_CURSO.filter(t => curso.topicos?.[t.chave]?.trim());
+        if (!topicos.length) return null;
+        const tt = estiloTexto(p.tTitulo);
         const t = estiloTexto(p.texto);
         return (
-          <>
-            <Titulo texto={p.titulo} t={p.tTitulo} className="font-serif text-3xl" />
-            <ZonaEntreTitulo zona={p.entreTitulo} />
-            <p className={juntar("mt-5 whitespace-pre-line leading-7 opacity-75", t.className)} style={t.style}>{curso.funcionamento}</p>
-          </>
+          <div className={juntar("grid gap-5", p.colunas === 2 && "md:grid-cols-2")}>
+            {topicos.map(x => (
+              <section key={x.chave} className="rounded-lg bg-white p-6 shadow-[0_2px_14px_rgba(20,38,61,.08)] ring-1 ring-black/5">
+                <h3 className={juntar("inline-block border-b-2 pb-2 font-serif text-xl font-bold text-[var(--c-primaria)]", tt.className)}
+                  style={{ ...tt.style, borderColor: corSegura(p.corLinha) ?? "var(--c-acento)" }}>
+                  {p.titulos?.[x.chave]?.trim() || x.rotulo}
+                </h3>
+                <TextoTopico texto={curso.topicos[x.chave]} t={t} />
+              </section>
+            ))}
+          </div>
         );
       }}
     </Caixa>

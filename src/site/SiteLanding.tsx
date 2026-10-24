@@ -1,3 +1,4 @@
+import type { TopicosCurso } from "../partilhado/topicosCurso";
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from "react";
 import { textoSite, type InscricaoPublica, type SiteChave } from "../partilhado/siteConteudo";
 import { cortarNaPalavra } from "../partilhado/textosCurso";
@@ -24,6 +25,8 @@ export type Course = {
   regime: "gold" | "fin";
   objetivos: string[];
   funcionamento: string;
+  /** Metodologias, certificação/avaliação, destinatários e requisitos. */
+  topicos: TopicosCurso;
   /** Contactos de cada local (os do curso, se tiver, senão os de Locais). */
   contactosLocais: { local: string; telemovel: string; telefone: string; email: string; whatsapp: string }[];
   /** Locais atribuídos na ficha do curso (aparecem mesmo sem turmas, ex.: «Sala Virtual»). */
@@ -58,6 +61,7 @@ type CatalogoApi = {
     vendas: number;
     objetivos?: string[];
     funcionamento?: string;
+    topicos?: TopicosCurso;
     contactosLocais?: { local: string; telemovel: string; telefone: string; email: string; whatsapp: string }[];
     locais?: { nome: string; morada: string }[];
     organizacao?: "modular" | "livre";
@@ -91,6 +95,7 @@ function mapCurso(curso: CatalogoApi["cursos"][number]): Course {
     regime: curso.regime,
     objetivos: curso.objetivos ?? [],
     funcionamento: curso.funcionamento ?? "",
+    topicos: curso.topicos ?? { metodologias: curso.funcionamento ?? "", certificacao: "", destinatarios: "", requisitos: "" },
     contactosLocais: curso.contactosLocais ?? [],
     locais: curso.locais ?? [],
     organizacao: curso.organizacao === "livre" ? "livre" : "modular",

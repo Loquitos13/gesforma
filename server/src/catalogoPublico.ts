@@ -1,3 +1,4 @@
+import { topicosDoPayload, type TopicosCurso } from "../../src/partilhado/topicosCurso.js";
 import { regimeSincronia, type RegimeSincronia } from "../../src/partilhado/regimeSincronia.js";
 import type { Db } from "./db/pool.js";
 import { mapaImagensPublicas } from "./cursoImagens.js";
@@ -58,6 +59,8 @@ export type CursoPublico = {
   vendas: number;
   objetivos: string[];
   funcionamento: string;
+  /** Metodologias, certificação/avaliação, destinatários e requisitos (ficha › Conteúdo do site). */
+  topicos: TopicosCurso;
   seoTitulo: string; seoDescricao: string;
   /** Contactos de cada local do curso: os da ficha do curso (se o local lhe estiver atribuído), senão os de Locais. */
   contactosLocais: ContactoLocal[];
@@ -367,6 +370,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       vendas: procura,
       objetivos: linhas(payload.objetivos),
       funcionamento: texto(payload.funcionamento),
+      topicos: topicosDoPayload(payload),
       seoTitulo: texto(payload.seoTitulo), seoDescricao: texto(payload.seoDescricao),
       contactosLocais: contactosDoCurso(payload, [
         ...curso.chaves.flatMap(key => (sessoes.get(key) ?? []).map(s => s.local)),

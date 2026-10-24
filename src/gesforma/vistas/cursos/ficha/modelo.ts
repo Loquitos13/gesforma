@@ -1,4 +1,5 @@
 // Modelo da ficha do curso: tipos, valores iniciais (vindos dos modelos de conteúdo da base de dados) e validação.
+import { TOPICOS_CURSO, topicosDoPayload } from "../../../../partilhado/topicosCurso";
 import type { Opcao } from "../../../../partilhado/api/catalogos";
 import { avaliacaoCcp, avaliacaoPadrao, cursoECcp, parseAvaliacaoCurso, type AvaliacaoCurso } from "../../../avaliacaoCurso";
 import { linhasPrincipais, modeloAplica, programaDePayload, topicosDeTexto, type OrganizacaoPrograma, type TopicoPrograma } from "../../../cursoPrograma";
@@ -28,7 +29,11 @@ export type CursoSite = {
   tags: string; dataInicio: string; estado: string; visivelSite: boolean;
   banner: MediaSlot | null; capa: MediaSlot | null; miniatura: MediaSlot | null;
   /** Texto completo (página do curso). */
-  sintese: string; objetivos: string; programa: string; funcionamento: string;
+  sintese: string; objetivos: string; programa: string;
+  /** Antigo texto único; passou a «Metodologias» (um dos 4 tópicos). */
+  funcionamento: string;
+  /** Os 4 tópicos da página do curso (partilhado/topicosCurso.ts). */
+  metodologias: string; certificacao: string; destinatarios: string; requisitos: string;
   /** Texto de destaque (catálogo, cartões e listagens); vazio = a síntese cortada numa palavra com «…». */
   resumo: string;
   /** Pesquisa (Google): título e descrição próprios; vazios = o título e o texto de destaque. */
@@ -120,6 +125,7 @@ export function fichaInicial(curso: CursoBase | null, regime: Regime, modelos: O
     objetivos: t?.objetivos ?? "",
     programa,
     funcionamento: t?.funcionamento ?? "",
+    metodologias: t?.funcionamento ?? "", certificacao: "", destinatarios: "", requisitos: "",
     seoTitulo: "", seoDescricao: "", contactosLocais: {},
     ufcdCod,
     ufcd: curso?.ufcd ?? "",
@@ -172,6 +178,7 @@ export function fundirGuardado(base: CursoSite, guardado: Record<string, unknown
     entidadeResponsavel: String(guardado.entidadeResponsavel ?? base.entidadeResponsavel ?? ""),
     conteudosMoodle: parseConteudosMoodle(guardado.conteudosMoodle),
     resumo: typeof guardado.resumo === "string" ? guardado.resumo : "",
+    ...topicosDoPayload(guardado),
     // A área CNAEF é do curso (tabela), não do conteúdo do site gravado.
     areaCnaef: base.areaCnaef,
   };
@@ -232,7 +239,7 @@ export function prontidao(d: CursoSite, regime: Regime) {
     { id: "sintese", rotulo: "Texto completo (síntese)", ok: preenchido(d.sintese) },
     { id: "objetivos", rotulo: "Objetivos", ok: preenchido(d.objetivos) },
     { id: "programa", rotulo: "Programa", ok: d.topicosPrograma.some(t => t.titulo.trim()) || preenchido(d.programa) },
-    { id: "funcionamento", rotulo: "Funcionamento", ok: preenchido(d.funcionamento) },
+    { id: "topicos", rotulo: "Metodologias, certificação, destinatários e requisitos", ok: TOPICOS_CURSO.every(t => preenchido(d[t.chave])) },
   ];
   const feitos = itens.filter(i => i.ok).length;
   return { itens, feitos, pct: Math.round((feitos / itens.length) * 100) };

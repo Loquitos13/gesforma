@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { TOPICOS_CURSO } from "../../../../partilhado/topicosCurso";
 import { Cartao, Estado, Interruptor, Selecao, data as fmtData, eur } from "../../../../partilhado/ui";
 import { textoPrograma } from "../../../cursoPrograma";
 import type { FichaCurso } from "./useFichaCurso";
@@ -53,14 +54,16 @@ export function PreviewSite({ f }: { f: FichaCurso }) {
             <Estado>{data.horas ? `${data.horas} horas` : "Horas por definir"}</Estado>
             {data.categoria && <Estado>{data.categoria}</Estado>}
           </div>
-          <Seccao titulo="Síntese"><p className="m-0 whitespace-pre-line text-tinta-suave">{data.sintese || "O texto completo aparece aqui."}</p></Seccao>
+          <Seccao titulo="Enquadramento"><p className="m-0 whitespace-pre-line text-tinta-suave">{data.sintese || "O texto completo aparece aqui."}</p></Seccao>
           <Seccao titulo="Objetivos">
             <ul className="m-0 space-y-1 pl-4 text-tinta-suave">
               {(marcadores(data.objetivos).length ? marcadores(data.objetivos) : ["Os objetivos aparecem aqui, um por linha."]).map((l, i) => <li key={i}>{l}</li>)}
             </ul>
           </Seccao>
           <Seccao titulo="Programa"><p className="m-0 whitespace-pre-line rounded-controlo bg-fundo p-3 text-tinta-suave">{programa || "O percurso (módulos ou capítulos) aparece aqui."}</p></Seccao>
-          <Seccao titulo="Funcionamento"><p className="m-0 whitespace-pre-line text-tinta-suave">{data.funcionamento || "Sessões, plataforma e certificação."}</p></Seccao>
+          {TOPICOS_CURSO.filter(t => data[t.chave].trim()).map(t => (
+            <Seccao key={t.chave} titulo={t.rotulo}><p className="m-0 whitespace-pre-line text-tinta-suave">{data[t.chave]}</p></Seccao>
+          ))}
           <Seccao titulo="Turmas disponíveis">
             {abertas.length === 0 ? <p className="m-0 text-xs text-tinta-suave">Ainda não há turma aberta deste curso.</p> : (
               <div className="space-y-2">

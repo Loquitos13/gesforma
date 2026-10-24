@@ -1,8 +1,9 @@
 /**
  * Documentos da turma da Financiada, no modelo da candidatura: a ficha de inscrição (uma página por formando),
  * o plano de sessão (uma página por sessão lectiva, na horizontal) e a folha de presenças / sumário (uma folha por sessão
- * lectiva, com o sumário dessa sessão). Todos levam no topo o logótipo da entidade (Configurações › Entidade; sem
- * logótipo, o da ENA) e no rodapé os logótipos do financiamento (modelos/rodape-financiamento.png).
+ * lectiva, com o sumário dessa sessão), e os restantes PDF da turma (listagens, cronograma, relatórios). Todos levam no
+ * topo o logótipo da entidade (Configurações › Entidade; sem logótipo, o da ENA) e no rodapé os logótipos da DGERT
+ * (Configurações › Entidade), do programa da turma (Edição de cursos › Programas) e da União Europeia.
  *
  * O enquadramento do programa (programa, prioridade e tipologias) vem de Edição de cursos › Programas: o da turma, senão
  * o da ficha do curso, senão o primeiro activo (regrasConfig.ts › programaDaTurma);
@@ -13,13 +14,15 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
-import type { CandidaturaFin } from "../../src/partilhado/candidaturaFin.js";
+import { CANDIDATURA_FIN_VAZIA, type CandidaturaFin } from "../../src/partilhado/candidaturaFin.js";
 import { GENEROS_FIN, HABILITACOES_FIN, PAIS_PORTUGAL_FIN, SITUACOES_EMPREGO_FIN, rotuloPais } from "../../src/partilhado/dadosPessoaisFin.js";
 import { rotuloCodigoCurso } from "../../src/partilhado/codigoCurso.js";
 import { fmtDataDDMMAAAA } from "../../src/partilhado/horaLisboa.js";
 import { estadoDaMarca, type MarcaPresenca } from "./assiduidade.js";
 import type { Db } from "./db/pool.js";
+import { many, one } from "./repos/sql.js";
 import { obterLogoEntidade } from "./entidadeLogo.js";
+import { CHAVE_DGERT, chavePrograma, obterLogoDocumento } from "./logosDocumentos.js";
 import { dadosFinanciamento, piiDaInscricao } from "./execucaoFisica.js";
 import { readFormandoPii } from "./pii.js";
 import { lerEntidade, programaDaTurma } from "./regrasConfig.js";
@@ -42,6 +45,8 @@ export type CabecalhoFin = {
   acao: string;
   local: string;
   logo: Imagem | null;
+  /** Rodapé, da esquerda para a direita: DGERT, programa e União Europeia (os que existirem). Vazio na Gold. */
+  rodape: Imagem[];
 };
 
 export type FichaInscricaoFin = {
@@ -171,7 +176,7 @@ export function acaoDaTurma(t: TurmaReembolso) {
 }
 
 const LOGO_PREDEFINIDO = fileURLToPath(new URL("./assinaturas/fontes/logo-predefinido.png", import.meta.url));
-const RODAPE = fileURLToPath(new URL("./modelos/rodape-financiamento.png", import.meta.url));
+const LOGO_UE = fileURLToPath(new URL("./modelos/logo-uniao-europeia.png", import.meta.url));
 const FONTES = fileURLToPath(new URL("./assinaturas/fontes/", import.meta.url));
 
 const cacheFicheiros = new Map<string, Buffer | null>();
@@ -190,8 +195,20 @@ async function logoDosDocumentos(db: Db): Promise<Imagem | null> {
   return predefinido ? { bytes: predefinido, mime: "image/png" } : null;
 }
 
+/** Logótipos do rodapé: DGERT, o do programa (se tiver) e o da União Europeia. */
+async function logosDoRodape(db: Db, programaId: number | null): Promise<Imagem[]> {
+  const [dgert, programa] = await Promise.all([
+    obterLogoDocumento(db, CHAVE_DGERT).catch(() => null),
+    programaId == null ? null : obterLogoDocumento(db, chavePrograma(programaId)).catch(() => null),
+  ]);
+  const ue = ficheiro(LOGO_UE);
+  return [dgert, programa, ue ? { bytes: ue, mime: "image/png" } : null].filter((x): x is Imagem => Boolean(x));
+}
+
 export async function cabecalhoFin(db: Db, turma: TurmaReembolso): Promise<CabecalhoFin> {
-  const [entidade, { candidatura }, logo] = await Promise.all([lerEntidade(db), programaDaTurma(db, turma), logoDosDocumentos(db)]);
+  const [entidade, programa, logo] = await Promise.all([lerEntidade(db), programaDaTurma(db, turma), logoDosDocumentos(db)]);
+  const { candidatura } = programa;
+  const rodape = await logosDoRodape(db, programa.id);
   const ufcd = ufcdDaTurma(turma);
   return {
     entidade: entidade.nome,
@@ -201,6 +218,16 @@ export async function cabecalhoFin(db: Db, turma: TurmaReembolso): Promise<Cabec
     acao: acaoDaTurma(turma),
     local: turma.local ?? "",
     logo,
+    rodape,
+  };
+}
+
+/** Cabeçalho dos documentos da Gold: o logótipo da entidade, sem rodapé de financiamento. */
+export async function cabecalhoGold(db: Db, t: { nome: string; curso: string; local?: string | null }): Promise<CabecalhoFin> {
+  const [entidade, logo] = await Promise.all([lerEntidade(db), logoDosDocumentos(db)]);
+  return {
+    entidade: entidade.nome, candidatura: CANDIDATURA_FIN_VAZIA, ufcdCodigo: "", ufcdNome: t.curso,
+    acao: t.nome, local: t.local ?? "", logo, rodape: [],
   };
 }
 
@@ -293,11 +320,12 @@ const SUAVE = rgb(0.42, 0.44, 0.48);
 const BORDA = rgb(0.2, 0.2, 0.22);
 const CLARA = rgb(0.86, 0.87, 0.89);
 
-type Doc = { pdf: PDFDocument; sans: PDFFont; negrito: PDFFont; logo: PDFImage | null; rodape: PDFImage | null; entidade: string };
+type Doc = { pdf: PDFDocument; sans: PDFFont; negrito: PDFFont; logo: PDFImage | null; rodape: PDFImage[]; entidade: string };
 type Pg = { page: PDFPage; y: number; m: number; w: number; largura: number; fundo: number };
 
-async function abrirDoc(titulo: string, cab: Pick<CabecalhoFin, "entidade" | "logo">): Promise<Doc> {
-  const pdf = await PDFDocument.create();
+async function abrirDoc(titulo: string, cab: Pick<CabecalhoFin, "entidade" | "logo" | "rodape">): Promise<Doc> {
+  // Sem datas de criação: o mesmo conteúdo dá os mesmos bytes (o dossiê reutiliza o ficheiro quando nada mudou).
+  const pdf = await PDFDocument.create({ updateMetadata: false });
   pdf.setTitle(titulo);
   pdf.setAuthor(cab.entidade);
   pdf.setProducer("GesForma");
@@ -317,9 +345,8 @@ async function abrirDoc(titulo: string, cab: Pick<CabecalhoFin, "entidade" | "lo
       return null;
     }
   };
-  const rodapeBytes = ficheiro(RODAPE);
-  const [logo, rodape] = await Promise.all([imagem(cab.logo), imagem(rodapeBytes ? { bytes: rodapeBytes, mime: "image/png" } : null)]);
-  return { pdf, sans, negrito, logo, rodape, entidade: cab.entidade };
+  const [logo, ...rodape] = await Promise.all([imagem(cab.logo), ...cab.rodape.map(imagem)]);
+  return { pdf, sans, negrito, logo: logo ?? null, rodape: rodape.filter((x): x is PDFImage => Boolean(x)), entidade: cab.entidade };
 }
 
 async function fecharDoc(d: Doc) {
@@ -369,7 +396,7 @@ function caixa(pg: Pg, x: number, y: number, w: number, h: number, espessura = 0
   pg.page.drawRectangle({ x, y, width: w, height: h, borderColor: BORDA, borderWidth: espessura });
 }
 
-/** Página nova: logótipo à esquerda e título à direita no topo; logótipos do financiamento no rodapé. */
+/** Página nova: logótipo à esquerda e título à direita no topo; DGERT, programa e União Europeia no rodapé. */
 function novaPagina(d: Doc, tamanho: [number, number], titulo: string, subtitulo = ""): Pg {
   const page = d.pdf.addPage(tamanho);
   const [w, h] = tamanho;
@@ -396,11 +423,20 @@ function novaPagina(d: Doc, tamanho: [number, number], titulo: string, subtitulo
   const base = topo - Math.max(alturaLogo, subtitulo ? 38 : 26) - 8;
   page.drawLine({ start: { x: m, y: base }, end: { x: w - m, y: base }, thickness: 0.6, color: CLARA });
   pg.y = base - 12;
-  if (d.rodape) {
-    const larg = Math.min(retrato ? 330 : 300, w - 2 * m);
-    const alt = larg * d.rodape.height / d.rodape.width;
-    page.drawImage(d.rodape, { x: (w - larg) / 2, y: 12, width: larg, height: alt });
-    pg.fundo = 12 + alt + 10;
+  if (d.rodape.length) {
+    // Todos à mesma altura, centrados numa linha; se não couberem, encolhem juntos.
+    const espaco = 22;
+    let alt = 30;
+    const larguraA = (a: number) => d.rodape.reduce((t, img) => t + img.width * a / img.height, 0) + espaco * (d.rodape.length - 1);
+    const max = Math.min(retrato ? 420 : 460, w - 2 * m);
+    if (larguraA(alt) > max) alt = alt * (max - espaco * (d.rodape.length - 1)) / (larguraA(alt) - espaco * (d.rodape.length - 1));
+    let x = (w - larguraA(alt)) / 2;
+    for (const img of d.rodape) {
+      const larg = img.width * alt / img.height;
+      page.drawImage(img, { x, y: 14, width: larg, height: alt });
+      x += larg + espaco;
+    }
+    pg.fundo = 14 + alt + 12;
   }
   return pg;
 }
@@ -671,6 +707,98 @@ export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDoc
   return fecharDoc(d);
 }
 
+// ── Texto e tabelas (listagens, cronograma, relatórios) ─────────────────────
+
+/** Bloco de linhas «rótulo: valor» no topo de uma listagem (ação, curso, local…). */
+function blocoInfo(d: Doc, pg: Pg, pares: [string, string][]) {
+  for (const [r, v] of pares) if (v) linhaPar(d, pg, r, v, 110, 17);
+  pg.y -= 12;
+}
+
+/**
+ * PDF de texto com o cabeçalho e o rodapé dos documentos (os relatórios e listagens que antes eram texto simples).
+ * Cada linha é um parágrafo; o recuo inicial mantém-se nas linhas de continuação.
+ */
+export async function pdfLinhasFin(cab: CabecalhoFin, titulo: string, linhas: string[], subtitulo = "") {
+  const d = await abrirDoc(titulo, cab);
+  const tituloPg = titulo.toUpperCase();
+  let pg = novaPagina(d, RETRATO, tituloPg, subtitulo);
+  const lista = linhas.length ? linhas : [""];
+  lista.forEach((linha, i) => {
+    const recuo = /^ */.exec(linha)![0].length * 3;
+    // Título de secção: linha curta, sem «:», a abrir um bloco (depois de uma linha em branco).
+    const seccao = !recuo && (i === 0 || !lista[i - 1]!.trim()) && Boolean(lista[i + 1]?.trim()) && linha.length < 70 && !linha.includes(":");
+    const f = seccao ? d.negrito : d.sans;
+    const partes = linha.trim() ? quebrar(linha.trim(), f, TAM + 0.5, pg.largura - recuo) : [""];
+    for (const l of partes) {
+      if (pg.y - ENTRELINHA < pg.fundo) pg = novaPagina(d, RETRATO, tituloPg, subtitulo);
+      escrever(pg, l, pg.m + recuo, pg.y - TAM, f, TAM + 0.5);
+      pg.y -= ENTRELINHA + 1.5;
+    }
+  });
+  return fecharDoc(d);
+}
+
+export type ColunaTabela = { titulo: string; peso: number };
+
+/** Tabela com o cabeçalho repetido em cada página (listagem de formandos, cronograma). */
+export async function pdfTabelaFin(
+  cab: CabecalhoFin,
+  opts: { titulo: string; subtitulo?: string; pares?: [string, string][]; colunas: ColunaTabela[]; linhas: string[][]; vazio?: string; nota?: string; paisagem?: boolean },
+) {
+  const d = await abrirDoc(opts.titulo, cab);
+  const tamanho = opts.paisagem ? PAISAGEM : RETRATO;
+  const tituloPg = opts.titulo.toUpperCase();
+  let pg = novaPagina(d, tamanho, tituloPg, opts.subtitulo);
+  if (opts.pares?.length) blocoInfo(d, pg, opts.pares);
+  const total = opts.colunas.reduce((t, c) => t + c.peso, 0);
+  const larguras = opts.colunas.map(c => pg.largura * c.peso / total);
+  const cabecalho = () => {
+    let x = pg.m;
+    opts.colunas.forEach((c, i) => {
+      const w = larguras[i]!;
+      pg.page.drawRectangle({ x, y: pg.y - 18, width: w, height: 18, color: rgb(0.95, 0.95, 0.96), borderColor: BORDA, borderWidth: 0.6 });
+      const [t = ""] = quebrar(c.titulo, d.negrito, TAM, w - 8);
+      escrever(pg, t, x + 4, pg.y - 12.5, d.negrito, TAM);
+      x += w;
+    });
+    pg.y -= 18;
+  };
+  cabecalho();
+  const tam = 8.5;
+  const entre = 10.5;
+  for (const linha of opts.linhas) {
+    const celulas = larguras.map((w, i) => quebrar(linha[i] ?? "", d.sans, tam, w - 8));
+    const alt = Math.max(16, Math.max(...celulas.map(c => c.length)) * entre + 6);
+    if (pg.y - alt < pg.fundo) {
+      pg = novaPagina(d, tamanho, tituloPg, opts.subtitulo ? `${opts.subtitulo} (continuação)` : "(continuação)");
+      cabecalho();
+    }
+    let x = pg.m;
+    celulas.forEach((c, i) => {
+      const w = larguras[i]!;
+      caixa(pg, x, pg.y - alt, w, alt, 0.4);
+      c.forEach((l, j) => escrever(pg, l, x + 4, pg.y - 4 - tam - j * entre, d.sans, tam));
+      x += w;
+    });
+    pg.y -= alt;
+  }
+  if (!opts.linhas.length && opts.vazio) {
+    caixa(pg, pg.m, pg.y - 20, pg.largura, 20, 0.4);
+    escrever(pg, opts.vazio, pg.m + 6, pg.y - 13.5, d.sans, TAM, SUAVE);
+    pg.y -= 20;
+  }
+  if (opts.nota) {
+    pg.y -= 10;
+    for (const l of quebrar(opts.nota, d.sans, 8, pg.largura)) {
+      if (pg.y - 10 < pg.fundo) pg = novaPagina(d, tamanho, tituloPg, opts.subtitulo);
+      escrever(pg, l, pg.m, pg.y - 8, d.sans, 8, SUAVE);
+      pg.y -= 10;
+    }
+  }
+  return fecharDoc(d);
+}
+
 // ── Por turma ────────────────────────────────────────────────────────────────
 
 export const NOMES_DOCUMENTOS_FIN = {
@@ -709,4 +837,103 @@ export async function documentosSessoesDaTurma(db: Db, turmaId: number, opts: { 
     opts.so === "planos" ? vazio : pdfFolhasPresencaFin(cab, sessoes),
   ]);
   return { planos, folhas, sessoes: sessoes.length };
+}
+
+/** Qualquer PDF de texto da turma (relatórios, pauta, programa…) com o cabeçalho e o rodapé da Financiada. */
+export async function pdfTextoDaTurmaFin(db: Db, turmaId: number, titulo: string, linhas: string[], subtitulo = "") {
+  const turma = await turmaReembolso(db, turmaId);
+  const cab = turma ? await cabecalhoFin(db, turma) : await cabecalhoSemTurma(db);
+  return pdfLinhasFin(cab, titulo, linhas, subtitulo);
+}
+
+/** Sem turma (já apagada): cabeçalho com a entidade e o rodapé do primeiro programa activo. */
+async function cabecalhoSemTurma(db: Db): Promise<CabecalhoFin> {
+  const [entidade, programa, logo] = await Promise.all([lerEntidade(db), programaDaTurma(db, {}), logoDosDocumentos(db)]);
+  return {
+    entidade: entidade.nome, candidatura: programa.candidatura, ufcdCodigo: "", ufcdNome: "", acao: "", local: "", logo,
+    rodape: await logosDoRodape(db, programa.id),
+  };
+}
+
+/** Listagem dos formandos da turma (os indeferidos ficam de fora, como em todos os documentos da turma). */
+export async function listagemFormandosFin(db: Db, turmaId: number) {
+  const turma = await turmaReembolso(db, turmaId);
+  if (!turma) return null;
+  const [cab, formandos] = await Promise.all([cabecalhoFin(db, turma), formandosDaTurma(db, turma)]);
+  const linhas = formandos.map((f, i) => {
+    const ficha = fichaDoFormando(f);
+    return [String(i + 1), ficha.nome, ficha.email, ficha.telefone, ficha.nif, txt(f.estado)];
+  });
+  const bytes = await pdfTabelaFin(cab, {
+    titulo: "Listagem de formandos",
+    subtitulo: `${formandos.length} ${formandos.length === 1 ? "formando" : "formandos"}`,
+    pares: [["Entidade:", cab.entidade], ["Programa:", cab.candidatura.programa], ["UFCD:", [cab.ufcdCodigo, cab.ufcdNome].filter(Boolean).join(" | ")], ["Ação:", cab.acao], ["Local:", cab.local]],
+    colunas: [{ titulo: "N.º", peso: 4 }, { titulo: "Nome", peso: 30 }, { titulo: "Email", peso: 28 }, { titulo: "Telefone", peso: 13 }, { titulo: "NIF", peso: 11 }, { titulo: "Estado", peso: 14 }],
+    linhas,
+    vazio: "Ainda sem formandos nesta turma.",
+    nota: `Gerado a ${fmtDataDDMMAAAA(new Date().toISOString())}.`,
+  });
+  return { nome: "ListagemFormandos.pdf", bytes };
+}
+
+/** Os rótulos do cronograma (src/partilhado/cronogramaGrelha.ts › EVENTO_OPTS). */
+const MODALIDADES: Record<string, string> = {
+  presencial: "Presencial", sincrona: "Síncrona (vídeo-conferência)", auto: "Assíncrona / auto-aprendizagem", avaliacao: "Limite de entrega / avaliação",
+};
+
+type SessaoCron = { data?: string; horaInicio?: string; horaFim?: string; modalidade?: string; modulos?: string[]; formadores?: string[]; formador?: string };
+
+/** Cronograma da turma (todas as sessões, por ordem), em tabela. */
+export async function cronogramaFin(db: Db, turmaId: number) {
+  const turma = await turmaReembolso(db, turmaId);
+  if (!turma) return null;
+  const cab = await cabecalhoFin(db, turma);
+  const sessoes = arr(turma.cronograma).filter((s): s is SessaoCron => Boolean(s) && typeof s === "object");
+  const linhas = sessoes.map((s, i) => [
+    String(i + 1),
+    fmtDataDDMMAAAA(txt(s.data).slice(0, 10)),
+    s.horaInicio || s.horaFim ? `${txt(s.horaInicio) || "--:--"} – ${txt(s.horaFim) || "--:--"}` : "",
+    MODALIDADES[txt(s.modalidade) || "presencial"] ?? txt(s.modalidade),
+    (Array.isArray(s.modulos) ? s.modulos : []).map(txt).filter(Boolean).join(", "),
+    (Array.isArray(s.formadores) && s.formadores.length ? s.formadores : [s.formador ?? ""]).map(txt).filter(Boolean).join(", "),
+  ]);
+  return pdfTabelaFin(cab, {
+    titulo: "Cronograma",
+    subtitulo: `${sessoes.length} ${sessoes.length === 1 ? "sessão" : "sessões"}`,
+    pares: [["Entidade:", cab.entidade], ["UFCD:", [cab.ufcdCodigo, cab.ufcdNome].filter(Boolean).join(" | ")], ["Ação:", cab.acao], ["Local:", cab.local]],
+    colunas: [{ titulo: "N.º", peso: 4 }, { titulo: "Data", peso: 11 }, { titulo: "Horário", peso: 12 }, { titulo: "Modalidade", peso: 12 }, { titulo: "Módulos", peso: 34 }, { titulo: "Formador", peso: 27 }],
+    linhas,
+    vazio: "Ainda sem sessões neste cronograma.",
+  });
+}
+
+/** Listagem dos formandos de uma turma Gold: o mesmo desenho, com o logótipo da entidade e sem rodapé de financiamento. */
+export async function listagemFormandosGold(db: Db, turmaId: number) {
+  const turma = await one<{ nome: string; curso: string; local: string }>(db,
+    "SELECT nome, curso, COALESCE(local, '') AS local FROM turmas_gold WHERE id = $1", [turmaId]);
+  if (!turma) return null;
+  const formandos = await many<{ nome: string; apelido: string; email: string; telf: string; pii_enc: string; inscrito: string; pago: boolean; metodo: string; estado: string }>(db,
+    `SELECT nome, apelido, email, telf, COALESCE(pii_enc, '') AS pii_enc, COALESCE(inscrito::text, '') AS inscrito,
+            pago, COALESCE(metodo, '') AS metodo, COALESCE(estado, '') AS estado
+       FROM formandos_gold WHERE turma_id = $1 ORDER BY lower(nome), lower(apelido), id`, [turmaId]);
+  const cab = await cabecalhoGold(db, turma);
+  const linhas = formandos.map((f, i) => [
+    String(i + 1),
+    `${f.nome} ${f.apelido}`.replace(/\s+/g, " ").trim(),
+    txt(f.email),
+    txt(readFormandoPii({ pii_enc: f.pii_enc, telf: f.telf }).telf || f.telf),
+    fmtDataDDMMAAAA(f.inscrito.slice(0, 10)),
+    f.pago ? "Pago" : "Por pagar",
+    txt(f.metodo),
+  ]);
+  const bytes = await pdfTabelaFin(cab, {
+    titulo: "Listagem de formandos",
+    subtitulo: `${formandos.length} ${formandos.length === 1 ? "formando" : "formandos"}`,
+    pares: [["Entidade:", cab.entidade], ["Curso:", turma.curso], ["Turma:", turma.nome], ["Local:", turma.local]],
+    colunas: [{ titulo: "N.º", peso: 4 }, { titulo: "Nome", peso: 26 }, { titulo: "Email", peso: 26 }, { titulo: "Telefone", peso: 13 }, { titulo: "Inscrito a", peso: 11 }, { titulo: "Pago", peso: 9 }, { titulo: "Método", peso: 11 }],
+    linhas,
+    vazio: "Ainda sem formandos nesta turma.",
+    nota: `Gerado a ${fmtDataDDMMAAAA(new Date().toISOString())}.`,
+  });
+  return { nome: "ListagemFormandos.pdf", bytes };
 }

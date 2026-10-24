@@ -4,7 +4,7 @@ import { EmptyHint, MobileCard, RowActions } from "../../../../partilhado/Secret
 import type { FormandoFin } from "../../../../partilhado/tiposFormando";
 import { hojeIso, type TurmaFin } from "../../../../partilhado/turmaModel";
 import { Botao, Cartao } from "../../../../partilhado/ui";
-import { I, Th, Td, estadoBadge, formatSessaoLine } from "./base";
+import { BotaoListagem, I, Th, Td, estadoBadge, formatSessaoLine } from "./base";
 import { FormadoresAtribuidosCard } from "../../../CronogramaEditor";
 import { CustosTurmaCard } from "../../../CustosTurma";
 import { rotuloCodigoCurso } from "../../../../partilhado/codigoCurso";
@@ -72,7 +72,10 @@ export function FinVisaoGeral({ turma, membros, prontos, souFormador, verCustos,
         titulo="Formandos"
         semPadding
         acoes={!souFormador ? (
-          <Botao variante="primario" tamanho="sm" disabled={!activa} title={activa ? undefined : "Turma inativa: não aceita novas inscrições"} onClick={onAdicionar}>Adicionar</Botao>
+          <div className="flex gap-2">
+            <BotaoListagem regime="fin" turmaId={turma.id} vazia={membros.length === 0} />
+            <Botao variante="primario" tamanho="sm" disabled={!activa} title={activa ? undefined : "Turma inativa: não aceita novas inscrições"} onClick={onAdicionar}>Adicionar</Botao>
+          </div>
         ) : undefined}
       >
         {membros.length === 0 && (

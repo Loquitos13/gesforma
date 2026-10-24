@@ -1,5 +1,7 @@
 import { fmtDataDDMMAAAA } from "../../src/partilhado/horaLisboa.js";
-import { partirLinhas, pdfDeLinhas } from "./pdfTexto.js";
+import type { Db } from "./db/pool.js";
+import { pdfTextoDaTurmaFin } from "./documentosFin.js";
+import { partirLinhas } from "./pdfTexto.js";
 
 export { partirLinhas };
 
@@ -237,15 +239,23 @@ export function linhasRelatorioInqueritos(
   return linhas;
 }
 
-export function pdfRelatorioFinal(dados: RelatorioFinalDados) {
-  return pdfDeLinhas(linhasRelatorioFinal(dados));
+/** Os relatórios são da Financiada: saem com o cabeçalho e o rodapé dos documentos da turma. A 1.ª linha é o título. */
+function pdfDaTurma(db: Db, turmaId: number, linhas: string[]) {
+  const [titulo = "", ...corpo] = linhas;
+  return pdfTextoDaTurmaFin(db, turmaId, titulo, corpo);
+}
+
+export function pdfRelatorioFinal(db: Db, turmaId: number, dados: RelatorioFinalDados) {
+  return pdfDaTurma(db, turmaId, linhasRelatorioFinal(dados));
 }
 
 export function pdfRelatorioInqueritos(
+  db: Db,
+  turmaId: number,
   dados: Pick<RelatorioFinalDados, "acao" | "curso" | "inqueritos">,
   opts?: { titulo?: string; intro?: string },
 ) {
-  return pdfDeLinhas(linhasRelatorioInqueritos(dados, opts));
+  return pdfDaTurma(db, turmaId, linhasRelatorioInqueritos(dados, opts));
 }
 
 export function linhasPerguntasInqueritos(d: {
@@ -279,13 +289,13 @@ export function linhasPerguntasInqueritos(d: {
   return linhas;
 }
 
-export function pdfPerguntasInqueritos(dados: {
+export function pdfPerguntasInqueritos(db: Db, turmaId: number, dados: {
   acao: string;
   curso: string;
   publico: string;
   inqueritos: InqueritoDocumento[];
 }) {
-  return pdfDeLinhas(linhasPerguntasInqueritos(dados));
+  return pdfDaTurma(db, turmaId, linhasPerguntasInqueritos(dados));
 }
 
 export function minutosSessao(inicio?: string, fim?: string) {

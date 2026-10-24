@@ -1,7 +1,7 @@
 /** PDFs gerados do dossiê (cronograma, presenças, planos, perguntas dos inquéritos) e anexos no Drive. */
 import { hojeLisboa } from "../datas.js";
 import type { Db } from "../db/pool.js";
-import { documentosSessoesDaTurma } from "../documentosFin.js";
+import { cronogramaFin, documentosSessoesDaTurma, pdfTextoDaTurmaFin } from "../documentosFin.js";
 import { pdfsDoDossie, type SessaoPedagogicaPdf } from "../dtpPdfs.js";
 import { apagarFicheiroSubstituido, getDriveFile, mapFile, resumoConteudo, storeDriveFile } from "../driveFicheiros.js";
 import { sanitizeFileName } from "../ficheirosValidacao.js";
@@ -16,18 +16,17 @@ import { ITEM_PERGUNTAS, NOME_PERGUNTAS, perguntasEnviadas } from "./inqueritos.
 import type { Regime } from "./util.js";
 
 /**
- * Cronograma, folhas de presença / sumários e planos de sessão. Na Financiada, as folhas e os planos saem no modelo
- * da candidatura (documentosFin.ts: logótipos, programa e tipologias); a Gold continua com os PDF de texto.
+ * Cronograma, folhas de presença / sumários e planos de sessão. Na Financiada saem no modelo da candidatura
+ * (documentosFin.ts: logótipos, programa e tipologias); a Gold continua com os PDF de texto.
  */
 export async function montarPdfsDossie(db: Db, regime: Regime, turma: TurmaRow) {
   const fin = regime === "fin" ? await documentosSessoesDaTurma(db, turma.id) : null;
-  // Financiada: do texto só se usa o cronograma (não se lêem sessões nem formandos para folhas que se deitam fora).
-  if (fin) return { cronograma: (await montarPdfsTexto(db, regime, turma, { soCronograma: true })).cronograma, folhas: fin.folhas, planos: fin.planos };
+  if (fin) return { cronograma: (await cronogramaFin(db, turma.id)) ?? Buffer.alloc(0), folhas: fin.folhas, planos: fin.planos };
   return montarPdfsTexto(db, regime, turma);
 }
 
-async function montarPdfsTexto(db: Db, regime: Regime, turma: TurmaRow, opts: { soCronograma?: boolean } = {}) {
-  const [sessoesRows, formandos] = opts.soCronograma ? [[], []] : await Promise.all([
+async function montarPdfsTexto(db: Db, regime: Regime, turma: TurmaRow) {
+  const [sessoesRows, formandos] = await Promise.all([
     listarSessoes(db, regime, turma.id),
     formandosDaTurma(db, regime, turma),
   ]);
@@ -125,7 +124,7 @@ export async function anexarPerguntasDaTurma(db: Db, actorId: string | undefined
     if (!itemId || !nome) continue;
     const inqueritos = await perguntasEnviadas(db, turma.id, publico);
     if (!inqueritos.length) continue;
-    const bytes = pdfPerguntasInqueritos({ acao: turma.nome, curso: turma.curso, publico, inqueritos });
+    const bytes = await pdfPerguntasInqueritos(db, turma.id, { acao: turma.nome, curso: turma.curso, publico, inqueritos });
     await anexarPdfDtp(db, actorId, "fin", turma, itemId, nome, bytes);
   }
 }

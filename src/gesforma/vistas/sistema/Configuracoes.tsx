@@ -11,6 +11,8 @@ import { SeccaoAvaliacoesGoogle } from "./configuracoes/AvaliacoesGoogle";
 import { SeccaoDrive, SeccaoSmtp } from "./configuracoes/Integracoes";
 import { SeccaoMicrosoft, SeccaoWhatsapp } from "./configuracoes/IntegracoesContas";
 import { LogoEntidade } from "./configuracoes/LogoEntidade";
+import { LogoDocumento } from "../../LogoDocumento";
+import { LOGO_DGERT } from "../../../partilhado/api/logosDocumentos";
 import { SeccaoDefinicoes } from "./configuracoes/SeccaoDefinicoes";
 import { CAMPOS_ENTIDADE, CAMPOS_FIN, CAMPOS_FORMACAO, CAMPOS_GOLD, CAMPOS_LEMBRETE, CAMPOS_REGRAS } from "./configuracoes/secoes";
 import { SeccaoSeloAssinatura } from "./configuracoes/SeloAssinatura";
@@ -67,6 +69,11 @@ export default function Configuracoes({ params, navigate }: VistaProps) {
         return (
           <div className="space-y-4">
             <LogoEntidade podeEditar={admin} />
+            <Cartao titulo="Logótipo da DGERT"
+              subtitulo="Vai no rodapé de todos os documentos das turmas da Financiada, com o logótipo do programa e o da União Europeia. PNG ou JPG até 1 MB.">
+              <LogoDocumento destino={LOGO_DGERT} podeEditar={admin} nome="o logótipo da DGERT"
+                semLogo="Sem logótipo: os documentos da Financiada saem só com o do programa e o da União Europeia." />
+            </Cartao>
             <SeccaoDefinicoes id="entidade" titulo="Entidade formadora" soAdmin podeEditar={admin} campos={CAMPOS_ENTIDADE} valores={settings.entidade}
               descricao="Designação, contactos e a conta para transferências. Aparecem nos documentos e no pedido de pagamento." />
           </div>

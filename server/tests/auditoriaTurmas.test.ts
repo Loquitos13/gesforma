@@ -198,9 +198,14 @@ describe("elegibilidade nos PDFs do dossiê", () => {
     const { regras } = res.json() as { regras: { assiduidadeMinFin: number; elearningMin: number } };
     const pdf = await pedido(ctx, "secretaria", "GET", `/v1/turmas/fin/${id}/dossie/entrega-certificados`);
     expect(pdf.statusCode).toBe(200);
-    // As linhas do PDF ficam em "(...) Tj"; juntam-se para ler a frase mesmo quando parte em duas.
-    const texto = [...pdf.rawPayload.toString("latin1").matchAll(/\(((?:\\.|[^\\)])*)\)\s*Tj/g)].map(m => m[1]).join(" ");
-    expect(texto).toContain(`Elegível: ${regras.assiduidadeMinFin}% de assiduidade`.replace("í", "\\355"));
+    // Texto como um leitor de PDF o extrai; as linhas juntam-se para ler a frase mesmo quando parte em duas.
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(pdf.rawPayload), isEvalSupported: false, disableFontFace: true, useSystemFonts: false }).promise;
+    let texto = "";
+    for (let i = 1; i <= doc.numPages; i++) texto += " " + (await (await doc.getPage(i)).getTextContent()).items.map(it => ("str" in it ? it.str : "")).join(" ");
+    await doc.destroy();
+    texto = texto.replace(/\s+/g, " ");
+    expect(texto).toContain(`Elegível: ${regras.assiduidadeMinFin}% de assiduidade`);
     expect(texto).toContain(`e-learning de pelo menos ${regras.elearningMin}`);
   });
 });

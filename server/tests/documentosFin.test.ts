@@ -359,8 +359,8 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
       for (const url of [`/v1/formandos-fin/${t.ana}/ficha-inscricao`, `/v1/turmas/fin/${t.id}/folhas-presenca`, `/v1/turmas/fin/${t.id}/planos-sessao`]) {
         const raw = (await pedido(ctx, "financiada", "GET", url)).rawPayload.toString("latin1");
         expect(raw, url).toMatch(/\/Width 3\s*\/Height 2|\/Height 2\s*\/Width 3/);
-        // O rodapé do financiamento (1024 × 223).
-        expect(raw, url).toMatch(/\/Width 1024/);
+        // No rodapé, o logótipo da União Europeia (350 × 81); este programa não tem logótipo e a DGERT ainda não.
+        expect(raw, url).toMatch(/\/Width 350/);
       }
     } finally {
       await apagarLogoEntidade(ctx.db);
@@ -381,5 +381,83 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     expect(imagens(gold.folhas)).toBe(0);
     const fin = await montarPdfsDossie(ctx.db, "fin", turma!);
     expect(imagens(fin.folhas)).toBeGreaterThanOrEqual(2);
+  });
+
+  it("logótipos do rodapé: DGERT e o do programa (carregados no backoffice) com o da UE; listagem de formandos nas duas", async () => {
+    const ctx = await arrancar();
+    const t = await turmaFin(ctx);
+    const prog = await pedido(ctx, "secretaria", "POST", "/v1/catalog/programas", { regime: "fin", payload: { ...CANDIDATURA_FIN_OMISSAO, nome: unico("Programa Logo") } });
+    expect(prog.statusCode, prog.body).toBe(200);
+    const progId = prog.json().item.id as number;
+    await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: prog.json().item.nome });
+
+    const enviar = (perfil: "admin" | "secretaria" | "formador", url: string, bytes: Buffer, nome = "logo.png") => {
+      const b = "----gesforma";
+      const payload = Buffer.concat([
+        Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="ficheiro"; filename="${nome}"\r\nContent-Type: image/png\r\n\r\n`),
+        bytes, Buffer.from(`\r\n--${b}--\r\n`),
+      ]);
+      return ctx.app.inject({ method: "POST", url, payload, headers: { "x-gesforma-client": "web", cookie: ctx.cookie[perfil], "content-type": `multipart/form-data; boundary=${b}` } });
+    };
+    // Programa: a equipa carrega; o formador não; um ficheiro que não é imagem é recusado.
+    expect((await enviar("formador", `/v1/catalogos/programas/${progId}/logo`, png(7, 3))).statusCode).toBe(403);
+    expect((await enviar("secretaria", `/v1/catalogos/programas/${progId}/logo`, Buffer.from("%PDF-1.4"))).statusCode).toBe(400);
+    const up = await enviar("secretaria", `/v1/catalogos/programas/${progId}/logo`, png(7, 3));
+    expect(up.statusCode, up.body).toBe(200);
+    expect((await pedido(ctx, "secretaria", "GET", `/v1/catalogos/programas/${progId}/logo`)).json().logo.mime).toBe("image/png");
+    expect((await pedido(ctx, null, "GET", `/v1/public/logos/programa/${progId}`)).headers["content-type"]).toBe("image/png");
+    // DGERT: só a administração carrega.
+    expect((await enviar("secretaria", "/v1/configuracoes/logo-dgert", png(9, 4))).statusCode).toBe(403);
+    expect((await enviar("admin", "/v1/configuracoes/logo-dgert", png(9, 4))).statusCode).toBe(200);
+    try {
+      const comLogos = (raw: string) => /\/Width 7\s*\/Height 3|\/Height 3\s*\/Width 7/.test(raw)
+        && /\/Width 9\s*\/Height 4|\/Height 4\s*\/Width 9/.test(raw) && /\/Width 350/.test(raw);
+      // Todos os documentos da turma: modelo da candidatura, listagens, relatórios e o PDF do dossiê.
+      for (const url of [
+        `/v1/formandos-fin/${t.ana}/ficha-inscricao`, `/v1/turmas/fin/${t.id}/folhas-presenca`, `/v1/turmas/fin/${t.id}/planos-sessao`,
+        `/v1/turmas/fin/${t.id}/relatorio-formandos`, `/v1/turmas/fin/${t.id}/relatorio-final`, `/v1/turmas/fin/${t.id}/relatorio-estatistico`,
+        `/v1/turmas/fin/${t.id}/dossie/listagem-formandos`, `/v1/turmas/fin/${t.id}/dossie/pauta`,
+      ]) {
+        const r = await pedido(ctx, "financiada", "GET", url);
+        expect(r.statusCode, `${url} ${r.body.slice(0, 200)}`).toBe(200);
+        expect(comLogos(r.rawPayload.toString("latin1")), url).toBe(true);
+      }
+      const turma = await carregarTurma(ctx.db, "fin", t.id);
+      expect(comLogos((await montarPdfsDossie(ctx.db, "fin", turma!)).cronograma.toString("latin1"))).toBe(true);
+
+      // Listagem da Financiada: os formandos da turma, com contacto.
+      const [lista] = await paginas((await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}/relatorio-formandos`)).rawPayload);
+      expect(lista).toContain("LISTAGEM DE FORMANDOS");
+      expect(lista).toContain("Ana Silva");
+      expect(lista).toContain("Bruno Silva");
+      // O formador não tira a listagem.
+      expect((await pedido(ctx, "formador", "GET", `/v1/turmas/fin/${t.id}/relatorio-formandos`)).statusCode).toBe(403);
+
+      // Programa sem logótipo: o rodapé fica com a DGERT e a UE.
+      expect((await pedido(ctx, "secretaria", "DELETE", `/v1/catalogos/programas/${progId}/logo`)).statusCode).toBe(200);
+      const sem = (await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}/relatorio-formandos`)).rawPayload.toString("latin1");
+      expect(sem).not.toMatch(/\/Width 7\s*\/Height 3|\/Height 3\s*\/Width 7/);
+      expect(sem).toMatch(/\/Width 350/);
+    } finally {
+      await pedido(ctx, "admin", "DELETE", "/v1/configuracoes/logo-dgert");
+      await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "" });
+    }
+
+    // Gold: a mesma listagem, sem rodapé de financiamento, com o pagamento e o método.
+    const tg = await pedido(ctx, "secretaria", "POST", "/v1/turmas-gold", { dataInicio: "2099-11-02", nome: unico("TG Lista"), curso: "Curso Sem Ficha", vagas: 10 });
+    expect(tg.statusCode, tg.body).toBe(200);
+    const tgId = tg.json().turma.id as number;
+    await ctx.db.query(
+      `INSERT INTO formandos_gold (id, nome, apelido, telf, email, inscrito, local, curso, turma, turma_id, estado, pago, valor, metodo, pii_enc, public_id)
+       VALUES ($1, 'Carla', 'Gomes', '912000000', 'carla@exemplo.pt', '2026-10-20', 'Porto', 'Curso Lista', $2, $3, 'Inscrito', true, 100, 'MB Way', '', $4)`,
+      [880000 + (++seq), tg.json().turma.nome, tgId, `pub-${Date.now()}-${seq}`]);
+    const rg = await pedido(ctx, "secretaria", "GET", `/v1/turmas/gold/${tgId}/relatorio-formandos`);
+    expect(rg.statusCode, rg.body.slice(0, 200)).toBe(200);
+    const [listaGold] = await paginas(rg.rawPayload);
+    expect(listaGold).toContain("Carla Gomes");
+    expect(listaGold).toContain("20-10-2026");
+    expect(listaGold).toContain("MB Way");
+    expect(rg.rawPayload.toString("latin1")).not.toMatch(/\/Width 350/);
+    expect((await pedido(ctx, "financiada", "GET", `/v1/turmas/gold/${tgId}/relatorio-formandos`)).statusCode).toBe(403);
   });
 });

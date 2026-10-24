@@ -1,12 +1,15 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { erroPayloadCatalogo } from "../catalogoSchemas.js";
+import { LogoErro } from "../entidadeLogo.js";
+import { apagarLogoDocumento, chavePrograma, guardarLogoDocumento, infoLogoDocumento } from "../logosDocumentos.js";
 import { isCatalogKind } from "../db/catalogSeed.js";
 import { podeAceder } from "../permissoes.js";
 import { pode } from "../permissoes/capacidades.js";
 import { KINDS_OPCOES, listarOpcoes } from "../repos/catalogos.js";
 import * as itens from "../repos/catalogoItens.js";
 import { idNum, regime, textoQuery, validar } from "../validacao.js";
+import { lerFicheiroLogo } from "./logosDocumentos.js";
 import type { Deps } from "./tipos.js";
 
 const opcoesParams = z.object({ kind: z.enum(KINDS_OPCOES) });
@@ -25,6 +28,7 @@ const opcoesLoteQuery = opcoesQuery.extend({
 
 const kindParam = z.object({ kind: z.string().max(40).refine(isCatalogKind, "tipo de catálogo inválido") });
 const kindIdParam = kindParam.extend({ id: idNum });
+const idParam = z.object({ id: idNum });
 const regimeQuery = z.object({ regime: regime.optional() });
 
 const itemSchema = z.object({
@@ -177,7 +181,48 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       return reply.code(409).send({ error: `Está em uso (${emUso}). Mude esses registos ou desactive-o em vez de apagar.` });
     }
     await itens.apagarItem(db, kind, id);
+    if (kind === "programas") await apagarLogoDocumento(db, chavePrograma(id));
     await audit(db, req.actor?.id, "catalogo.apagar", kind, String(id), req.ip);
+    return { ok: true };
+  });
+
+  // Logótipo do programa (Financiada): vai no rodapé de todos os documentos das turmas desse programa.
+  async function programaOu404(req: FastifyRequest, reply: FastifyReply) {
+    if (!requireAuth(req, reply)) return null;
+    const v = validar(reply, { params: idParam }, req);
+    if (!v) return null;
+    const item = await itens.obterItem(db, "programas", v.params.id);
+    if (!item) { reply.code(404).send({ error: "programa não encontrado" }); return null; }
+    if (!veRegime(req.actor!.role, item.regime)) { reply.code(403).send(SEM_REGIME); return null; }
+    return v.params.id;
+  }
+
+  app.get("/v1/catalogos/programas/:id/logo", async (req, reply) => {
+    const id = await programaOu404(req, reply);
+    if (id == null) return;
+    return { logo: await infoLogoDocumento(db, chavePrograma(id)) };
+  });
+
+  app.post("/v1/catalogos/programas/:id/logo", async (req, reply) => {
+    const id = await programaOu404(req, reply);
+    if (id == null) return;
+    const ficheiro = await lerFicheiroLogo(req, reply);
+    if (!ficheiro) return;
+    try {
+      const logo = await guardarLogoDocumento(db, chavePrograma(id), ficheiro);
+      await audit(db, req.actor!.id, "programa.logo", "programas", String(id), req.ip, { nome: logo?.nome, tamanho: logo?.tamanho });
+      return { logo };
+    } catch (err) {
+      if (err instanceof LogoErro) return reply.code(400).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.delete("/v1/catalogos/programas/:id/logo", async (req, reply) => {
+    const id = await programaOu404(req, reply);
+    if (id == null) return;
+    await apagarLogoDocumento(db, chavePrograma(id));
+    await audit(db, req.actor!.id, "programa.logo_apagar", "programas", String(id), req.ip);
     return { ok: true };
   });
 }

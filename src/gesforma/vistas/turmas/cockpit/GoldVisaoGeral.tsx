@@ -4,7 +4,7 @@ import type { FormandoTurma } from "../../../../partilhado/tiposFormando";
 import { hojeIso, type TurmaGold } from "../../../../partilhado/turmaModel";
 import { Botao, Cartao, eur } from "../../../../partilhado/ui";
 import { CustosTurmaCard } from "../../../CustosTurma";
-import { I, Th, Td, formatSessaoLine } from "./base";
+import { BotaoListagem, I, Th, Td, formatSessaoLine } from "./base";
 import { FormadoresAtribuidosCard } from "../../../CronogramaEditor";
 import { diaDeCarimbo } from "../../../../partilhado/horaLisboa";
 
@@ -72,7 +72,10 @@ export function GoldVisaoGeral({ turma, membros, souFormador, verCustos, activa,
         titulo="Formandos"
         semPadding
         acoes={!souFormador ? (
-          <Botao variante="primario" tamanho="sm" disabled={!activa} title={activa ? undefined : "Turma inativa: não aceita novas inscrições"} onClick={onAdicionar}>Adicionar</Botao>
+          <div className="flex gap-2">
+            <BotaoListagem regime="gold" turmaId={turma.id} vazia={membros.length === 0} />
+            <Botao variante="primario" tamanho="sm" disabled={!activa} title={activa ? undefined : "Turma inativa: não aceita novas inscrições"} onClick={onAdicionar}>Adicionar</Botao>
+          </div>
         ) : undefined}
       >
         {membros.length === 0 && (

@@ -15,7 +15,7 @@ export function mimeLogo(b: Buffer): "image/png" | "image/jpeg" | null {
   return null;
 }
 
-function bytesDe(v: unknown): Buffer {
+export function bytesDe(v: unknown): Buffer {
   if (Buffer.isBuffer(v)) return v;
   if (v instanceof Uint8Array) return Buffer.from(v);
   if (typeof v === "string" && v.startsWith("\\x")) return Buffer.from(v.slice(2), "hex");

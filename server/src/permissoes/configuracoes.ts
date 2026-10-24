@@ -4,5 +4,7 @@ import { ADMIN, SECRETARIA, type Regra } from "./perfis.js";
 export const regras: Regra[] = [
   ["POST", "/v1/configuracoes/logo", ADMIN],
   ["DELETE", "/v1/configuracoes/logo", ADMIN],
+  ["POST", "/v1/configuracoes/logo-dgert", ADMIN],
+  ["DELETE", "/v1/configuracoes/logo-dgert", ADMIN],
   ["GET", "/v1/configuracoes/*", SECRETARIA],
 ];

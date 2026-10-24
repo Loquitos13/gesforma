@@ -1,7 +1,9 @@
 // Datas, locais, programas (Financiada), horários e áreas temáticas: um ecrã com separadores; cada separador é uma rota do menu.
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
-import { PageHeader, Separadores, data, eur } from "../../../partilhado/ui";
+import { Botao, Modal, PageHeader, Separadores, data, eur } from "../../../partilhado/ui";
+import { logoPrograma } from "../../../partilhado/api/logosDocumentos";
+import { LogoDocumento } from "../../LogoDocumento";
 import type { Vista } from "../../rotasGesforma";
 import type { VistaProps } from "../../shell/tipos";
 import { CatalogoTabela, type ConfigCatalogo } from "./CatalogoTabela";
@@ -30,6 +32,7 @@ export default function Tabelas({ view, navigate }: VistaProps) {
   const cursos = useOpcoes("cursos", { regime });
   const locais = useOpcoes("locais", { regime });
   const horarios = useOpcoes("horarios", { regime: "gold" });
+  const [logo, setLogo] = useState<{ id: number; nome: string } | null>(null);
 
   const config = useMemo((): ConfigCatalogo => {
     if (tabela === "locais") {
@@ -75,7 +78,10 @@ export default function Tabelas({ view, navigate }: VistaProps) {
           { id: "tipologia", titulo: "Tipologia", esconderMovel: true, celula: i => <span className="text-tinta-suave">{txt(i.tipologia) || "—"}</span> },
         ],
         validar: (v, itens, id) => repetido(itens, id, "nome", v.nome, "Já existe um programa com esse nome."),
-        nota: <p className="m-0 text-[13px] text-tinta-suave">Programa, prioridade e tipologias saem na ficha de inscrição e na folha de presenças / sumário das turmas desse programa. Cada turma escolhe o seu programa.</p>,
+        acoesExtra: i => (
+          <Botao tamanho="sm" variante="fantasma" onClick={e => { e.stopPropagation(); setLogo({ id: i.id, nome: txt(i.nome) }); }}>Logótipo</Botao>
+        ),
+        nota: <p className="m-0 text-[13px] text-tinta-suave">Programa, prioridade e tipologias saem na ficha de inscrição e na folha de presenças / sumário das turmas desse programa; o logótipo do programa vai no rodapé de todos os documentos dessas turmas, com o da DGERT e o da União Europeia. Cada turma escolhe o seu programa.</p>,
       };
     }
     if (tabela === "horarios") {
@@ -158,6 +164,11 @@ export default function Tabelas({ view, navigate }: VistaProps) {
         onMudar={id => { const v = VISTAS[regime][id]; if (v) navigate(v); }}
       />
       <CatalogoTabela key={`${regime}-${tabela}`} config={config} />
+      <Modal aberto={Boolean(logo)} onFechar={() => setLogo(null)} titulo={`Logótipo · ${logo?.nome ?? ""}`}
+        subtitulo="Vai no rodapé de todos os documentos das turmas deste programa, entre o da DGERT e o da União Europeia. PNG ou JPG até 1 MB.">
+        {logo && <LogoDocumento destino={logoPrograma(logo.id)} podeEditar nome="o logótipo deste programa"
+          semLogo="Sem logótipo: os documentos das turmas deste programa saem só com o da DGERT e o da União Europeia." />}
+      </Modal>
     </div>
   );
 }

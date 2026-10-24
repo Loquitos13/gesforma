@@ -1,12 +1,14 @@
-/** Relatórios PDF da turma financiada: final, estatístico, pós-formação e perguntas dos inquéritos. */
+/** Relatórios PDF da turma financiada (final, estatístico, pós-formação e perguntas dos inquéritos) e a listagem de formandos. */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { listagemFormandosFin, listagemFormandosGold } from "../../documentosFin.js";
 import { anexarPdfDtp } from "../../pedagogia/ficheiros.js";
 import { ITEM_PERGUNTAS, NOME_PERGUNTAS, perguntasEnviadas } from "../../pedagogia/inqueritos.js";
 import { dadosRelatorioFinal } from "../../pedagogia/relatorio.js";
 import { pdfPerguntasInqueritos, pdfRelatorioFinal, pdfRelatorioInqueritos, type RelatorioFinalDados } from "../../relatorioFinal.js";
 import { turmaFechada } from "../../resultados.js";
 import { regimeIdParam, validar } from "../../validacao.js";
+import type { Db } from "../../db/pool.js";
 import type { Deps } from "../tipos.js";
 import { enviarPdf, semFormador } from "./comum.js";
 
@@ -15,15 +17,15 @@ type Qual = "final" | "pos" | "estatisticos" | "perguntas";
 const publicoQuery = z.object({ publico: z.string().max(20).optional() });
 
 /** Relatório estatístico (formandos + formador) e pós-formação a partir dos mesmos dados. */
-export function pdfEstatistico(dados: RelatorioFinalDados) {
-  return pdfRelatorioInqueritos({ ...dados, inqueritos: dados.inqueritos.filter(i => i.publico === "formador" || i.publico === "formando") }, {
+export function pdfEstatistico(db: Db, turmaId: number, dados: RelatorioFinalDados) {
+  return pdfRelatorioInqueritos(db, turmaId, { ...dados, inqueritos: dados.inqueritos.filter(i => i.publico === "formador" || i.publico === "formando") }, {
     titulo: "Relatórios estatísticos",
     intro: "Médias e contagens das respostas dos inquéritos de formandos e de formador enviados a esta turma.",
   });
 }
 
-export function pdfPosFormacao(dados: RelatorioFinalDados) {
-  return pdfRelatorioInqueritos({ ...dados, inqueritos: dados.inqueritos.filter(i => i.publico === "pos") }, {
+export function pdfPosFormacao(db: Db, turmaId: number, dados: RelatorioFinalDados) {
+  return pdfRelatorioInqueritos(db, turmaId, { ...dados, inqueritos: dados.inqueritos.filter(i => i.publico === "pos") }, {
     titulo: "Relatório pós-formação",
     intro: "Só entram respostas dos inquéritos com público-alvo Pós-formação, e só desta turma.",
   });
@@ -47,19 +49,19 @@ export function registarRelatorios(app: FastifyInstance, { db, requireAuth, audi
         return reply.code(400).send({ error: "Indique o público-alvo do inquérito." });
       }
       const inqueritos = await perguntasEnviadas(db, id, publico);
-      bytes = pdfPerguntasInqueritos({ acao: dados.acao, curso: dados.curso, publico, inqueritos });
+      bytes = await pdfPerguntasInqueritos(db, id, { acao: dados.acao, curso: dados.curso, publico, inqueritos });
       nome = NOME_PERGUNTAS[publico] ?? "PerguntasInquerito.pdf";
       itemId = ITEM_PERGUNTAS[publico] ?? "inquerito-formandos";
     } else if (qual === "estatisticos") {
-      bytes = pdfEstatistico(dados);
+      bytes = await pdfEstatistico(db, id, dados);
       nome = "RelatorioEstatistico.pdf";
       itemId = "relatorios-estatisticos";
     } else if (qual === "pos") {
-      bytes = pdfPosFormacao(dados);
+      bytes = await pdfPosFormacao(db, id, dados);
       nome = "RelatorioPosFormacao.pdf";
       itemId = "relatorio-pos";
     } else {
-      bytes = pdfRelatorioFinal(dados);
+      bytes = await pdfRelatorioFinal(db, id, dados);
       nome = "RelatorioFinalAccao.pdf";
       itemId = "relatorio";
     }
@@ -71,6 +73,18 @@ export function registarRelatorios(app: FastifyInstance, { db, requireAuth, audi
     await audit(db, req.actor!.id, `turma.${qual}`, "turma", String(id), req.ip);
     return enviarPdf(reply, nome, bytes);
   }
+
+  // Listagem de formandos (Visão geral › Formandos), nas duas regiões: a Financiada com os logótipos do rodapé.
+  app.get("/v1/turmas/:regime/:id/relatorio-formandos", async (req, reply) => {
+    if (!requireAuth(req, reply) || !semFormador(req, reply, "O formador não tira a listagem dos formandos.")) return;
+    const v = validar(reply, { params: regimeIdParam }, req);
+    if (!v) return;
+    const { regime, id } = v.params;
+    const doc = regime === "fin" ? await listagemFormandosFin(db, id) : await listagemFormandosGold(db, id);
+    if (!doc) return reply.code(404).send({ error: "turma não encontrada" });
+    await audit(db, req.actor!.id, "turma.listagem_formandos", "turma", String(id), req.ip, { regime });
+    return enviarPdf(reply, doc.nome, doc.bytes);
+  });
 
   app.get("/v1/turmas/:regime/:id/relatorio-final", async (req, reply) => pdfDaTurmaFin(req, reply, "final"));
   app.get("/v1/turmas/:regime/:id/relatorio-estatistico", async (req, reply) => pdfDaTurmaFin(req, reply, "estatisticos"));

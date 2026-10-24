@@ -67,18 +67,18 @@ export async function exportarDossie(db: Db, actorId: string | undefined, regime
       // Turma fechada: vai o relatório final entregue no fecho (anexo do item), não um gerado agora.
       const doFecho = fechada && dtp.items.find(i => i.id === "relatorio")?.anexo?.driveFileId;
       if (!doFecho) {
-        geradosZip.push({ rel: `${root}/${pastaFinDoItem("relatorio")}/RelatorioFinalAccao.pdf`, data: pdfRelatorioFinal(dados), itens: ["relatorio"] });
+        geradosZip.push({ rel: `${root}/${pastaFinDoItem("relatorio")}/RelatorioFinalAccao.pdf`, data: await pdfRelatorioFinal(db, turma.id, dados), itens: ["relatorio"] });
       }
       geradosZip.push({
         rel: `${root}/${pastaFinDoItem("relatorios-estatisticos")}/RelatorioEstatistico.pdf`,
-        data: pdfRelatorioInqueritos({
+        data: await pdfRelatorioInqueritos(db, turma.id, {
           ...dados, inqueritos: dados.inqueritos.filter(i => i.publico === "formador" || i.publico === "formando"),
         }, { titulo: "Relatórios estatísticos", intro: "Médias e contagens das respostas dos inquéritos de formandos e de formador enviados a esta turma." }),
         itens: ["relatorios-estatisticos"],
       });
       geradosZip.push({
         rel: `${root}/${pastaFinDoItem("relatorio-pos")}/RelatorioPosFormacao.pdf`,
-        data: pdfRelatorioInqueritos({
+        data: await pdfRelatorioInqueritos(db, turma.id, {
           ...dados, inqueritos: dados.inqueritos.filter(i => i.publico === "pos"),
         }, { titulo: "Relatório pós-formação", intro: "Só entram respostas dos inquéritos com público-alvo Pós-formação, e só desta turma." }),
         itens: ["relatorio-pos"],
@@ -90,7 +90,7 @@ export async function exportarDossie(db: Db, actorId: string | undefined, regime
         const perguntas = await perguntasEnviadas(db, turma.id, publico);
         geradosZip.push({
           rel: `${root}/${pastaFinDoItem(itemId)}/${nomePdf}`,
-          data: pdfPerguntasInqueritos({ acao: dados.acao, curso: dados.curso, publico, inqueritos: perguntas }),
+          data: await pdfPerguntasInqueritos(db, turma.id, { acao: dados.acao, curso: dados.curso, publico, inqueritos: perguntas }),
           itens: [itemId],
         });
       }

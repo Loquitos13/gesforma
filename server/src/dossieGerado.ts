@@ -4,11 +4,10 @@ import type { Db } from "./db/pool.js";
 import { certificadosFinComFicheiro, formandosFinComContacto, turmaFinBase, ufcdDoCurso } from "./repos/dossieGerado.js";
 import { listarNotas } from "./repos/pedagogiaSessoes.js";
 import { fichaCursoFinPorNome } from "./repos/pedagogiaRelatorio.js";
-import { pdfDeLinhas } from "./pdfTexto.js";
 import { partirLinhas } from "./relatorioFinal.js";
 import { diaLisboa } from "./datas.js";
 import { fmtDataDDMMAAAA } from "../../src/partilhado/horaLisboa.js";
-import { documentosSessoesDaTurma, fichasInscricaoDaTurma, NOMES_DOCUMENTOS_FIN } from "./documentosFin.js";
+import { documentosSessoesDaTurma, fichasInscricaoDaTurma, listagemFormandosFin, NOMES_DOCUMENTOS_FIN, pdfTextoDaTurmaFin } from "./documentosFin.js";
 
 export const ITENS_DOSSIE_GERADO = [
   "listagem-formandos",
@@ -255,21 +254,6 @@ function linhasElegiveis(d: Dados) {
   });
 }
 
-function pdfListagem(d: Dados) {
-  const linhas = [
-    ...cabecalho(d, "Listagem de formandos"),
-    d.formandos.length ? `${d.formandos.length} formandos nesta turma.` : "Ainda sem formandos nesta turma.",
-    "",
-  ];
-  d.formandos.forEach((f, i) => {
-    linhas.push(...partirLinhas(`${String(i + 1).padStart(2, "0")}  ${f.nome}`));
-    linhas.push(...partirLinhas(`    ${f.email || "sem email"} · ${f.telf || "sem telefone"} · ${f.estado || "—"}`));
-  });
-  if (!d.formandos.length) linhas.push("A listagem fica vazia até haver formandos na turma.");
-  linhas.push("", "GESFORMA · gerado a partir dos formandos desta turma.");
-  return pdfDeLinhas(linhas);
-}
-
 function pdfEquipa(d: Dados) {
   const nomes = new Set<string>();
   if (d.formador) nomes.add(d.formador);
@@ -285,7 +269,7 @@ function pdfEquipa(d: Dados) {
     linhas.push(...partirLinhas(`${String(i + 1).padStart(2, "0")}  ${nome} · ${papel}`));
   });
   linhas.push("", "GESFORMA · gerado a partir da equipa desta turma.");
-  return pdfDeLinhas(linhas);
+  return linhas;
 }
 
 function pdfPrograma(d: Dados) {
@@ -299,7 +283,7 @@ function pdfPrograma(d: Dados) {
     "",
     "GESFORMA · gerado a partir da ficha da UFCD.",
   ];
-  return pdfDeLinhas(linhas);
+  return linhas;
 }
 
 function rotuloParametro(d: Dados, id: string) {
@@ -337,7 +321,7 @@ function pdfPauta(d: Dados) {
     "",
     "GESFORMA · pauta gerada da grelha. A grelha assinada em papel, se a ação a exigir à parte, continua a ser um upload.",
   );
-  return pdfDeLinhas(linhas);
+  return linhas;
 }
 
 function pdfEntrega(d: Dados) {
@@ -366,11 +350,11 @@ function pdfEntrega(d: Dados) {
     "",
     "GESFORMA · lista gerada a partir dos PDFs carregados.",
   );
-  return pdfDeLinhas(linhas);
+  return linhas;
 }
 
-const BUILDERS: Record<Exclude<ItemDossieGerado, "fichas" | "presencas" | "sumarios" | "planos">, (d: Dados) => Buffer> = {
-  "listagem-formandos": pdfListagem,
+/** Os restantes PDF: texto com o cabeçalho e o rodapé dos documentos da Financiada (a 1.ª linha é o título). */
+const BUILDERS: Record<Exclude<ItemDossieGerado, "listagem-formandos" | "fichas" | "presencas" | "sumarios" | "planos">, (d: Dados) => string[]> = {
   equipa: pdfEquipa,
   programa: pdfPrograma,
   pauta: pdfPauta,
@@ -380,6 +364,7 @@ const BUILDERS: Record<Exclude<ItemDossieGerado, "fichas" | "presencas" | "sumar
 export async function pdfDossieGerado(db: Db, turmaId: number, item: ItemDossieGerado) {
   // Ficha de inscrição, plano de sessão e folha de presenças / sumário: no modelo da candidatura (documentosFin.ts).
   if (item === "fichas") return fichasInscricaoDaTurma(db, turmaId);
+  if (item === "listagem-formandos") return listagemFormandosFin(db, turmaId);
   if (item === "presencas" || item === "sumarios" || item === "planos") {
     const docs = await documentosSessoesDaTurma(db, turmaId, { so: item === "planos" ? "planos" : "folhas" });
     if (!docs) return null;
@@ -387,5 +372,6 @@ export async function pdfDossieGerado(db: Db, turmaId: number, item: ItemDossieG
   }
   const dados = await carregar(db, turmaId);
   if (!dados) return null;
-  return { nome: NOMES[item], bytes: BUILDERS[item](dados) };
+  const [titulo = "", ...corpo] = BUILDERS[item](dados);
+  return { nome: NOMES[item], bytes: await pdfTextoDaTurmaFin(db, turmaId, titulo, corpo) };
 }

@@ -34,7 +34,7 @@ export function registarFecho(app: FastifyInstance, { db, requireAuth, audit }: 
     if (pend && pend.falta.length) return reply.code(409).send({ error: "A turma ainda não pode ser fechada.", falta: pend.falta });
     const dados = await dadosRelatorioFinal(db, id);
     if (!dados) return reply.code(404).send({ error: "turma não encontrada" });
-    const bytes = pdfRelatorioFinal(dados);
+    const bytes = await pdfRelatorioFinal(db, id, dados);
     const resumo = {
       acao: dados.acao,
       curso: dados.curso,

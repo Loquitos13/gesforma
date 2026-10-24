@@ -148,11 +148,11 @@ export async function programaDaTurma(db: Db, t: { programa?: string; curso_prog
   for (const [nome, origem] of [[t.programa ?? "", "turma"], [t.curso_programa ?? "", "curso"]] as const) {
     if (!nome.trim()) continue;
     const p = await programaDosDocumentos(db, nome);
-    if (p?.pedidoEncontrado) return { nome: p.nome, origem: origem as OrigemPrograma, candidatura: lerCandidaturaFin(p.payload, CANDIDATURA_FIN_VAZIA) };
+    if (p?.pedidoEncontrado) return { id: p.id, nome: p.nome, origem: origem as OrigemPrograma, candidatura: lerCandidaturaFin(p.payload, CANDIDATURA_FIN_VAZIA) };
   }
   const p = await programaDosDocumentos(db, "");
-  if (p) return { nome: p.nome, origem: "primeiro" as OrigemPrograma, candidatura: lerCandidaturaFin(p.payload, CANDIDATURA_FIN_VAZIA) };
-  return { nome: "", origem: "nenhum" as OrigemPrograma, candidatura: lerCandidaturaFin(await valores(db, "candidatura_fin")) };
+  if (p) return { id: p.id, nome: p.nome, origem: "primeiro" as OrigemPrograma, candidatura: lerCandidaturaFin(p.payload, CANDIDATURA_FIN_VAZIA) };
+  return { id: null, nome: "", origem: "nenhum" as OrigemPrograma, candidatura: lerCandidaturaFin(await valores(db, "candidatura_fin")) };
 }
 
 /**
@@ -160,14 +160,14 @@ export async function programaDaTurma(db: Db, t: { programa?: string; curso_prog
  * o primeiro activo. `pedidoEncontrado` diz se o pedido existe (para avisar quando o nome já não corresponde).
  */
 export async function programaDosDocumentos(db: Db, programa = "") {
-  const p = await one<{ payload: Record<string, unknown>; pedido: boolean }>(db,
-    `SELECT payload, (trim($1) <> '' AND lower(trim(payload->>'nome')) = lower(trim($1))) AS pedido FROM catalog_items
+  const p = await one<{ id: number; payload: Record<string, unknown>; pedido: boolean }>(db,
+    `SELECT id, payload, (trim($1) <> '' AND lower(trim(payload->>'nome')) = lower(trim($1))) AS pedido FROM catalog_items
       WHERE kind = 'programas' AND regime = 'fin'
         AND ((trim($1) <> '' AND lower(trim(payload->>'nome')) = lower(trim($1)))
              OR coalesce(payload->>'status', 'Ativo') NOT IN ('Inactivo', 'Inativo', 'Arquivado'))
-      ORDER BY 2 DESC, id
+      ORDER BY 3 DESC, id
       LIMIT 1`, [programa]);
-  return p ? { payload: p.payload ?? {}, nome: String(p.payload?.nome ?? ""), pedidoEncontrado: Boolean(p.pedido) } : null;
+  return p ? { id: Number(p.id), payload: p.payload ?? {}, nome: String(p.payload?.nome ?? ""), pedidoEncontrado: Boolean(p.pedido) } : null;
 }
 
 /** Contactos da entidade que podem sair para páginas públicas (sem NIF, IBAN nem titular). */

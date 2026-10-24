@@ -229,6 +229,11 @@ export function apiRelatorioFinalTurma(turmaId: number) {
   return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/relatorio-final`, "RelatorioFinalAccao.pdf", "application/pdf");
 }
 
+/** Listagem dos formandos da turma (PDF; na Financiada com os logótipos da DGERT, do programa e da UE). */
+export function apiListagemFormandos(regime: Regime, turmaId: number) {
+  return descarregarFicheiro(`/v1/turmas/${regime}/${turmaId}/relatorio-formandos`, "ListagemFormandos.pdf", "application/pdf");
+}
+
 export function apiRelatorioInqueritosTurma(turmaId: number) {
   return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/inqueritos/relatorio`, "RelatorioPosFormacao.pdf", "application/pdf");
 }

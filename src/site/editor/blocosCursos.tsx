@@ -1,6 +1,6 @@
 // Blocos de cursos: destaques escolhidos à mão (e por ordem) e a oferta formativa com filtros.
 // O cartão do curso tem vários formatos e escolhe-se que informação mostra.
-import { useContext, useMemo, useState, type ComponentType, type CSSProperties } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import type { ComponentConfig, Field, Slot } from "@puckeditor/core";
 import { OfertaCtx, type Course } from "../SiteLanding";
 import { campoCor, campoCurso, campoImagem, campoMarcas, campoNumero, campoOrdemCursos, nomesCursos, simNao } from "./campos";
@@ -472,16 +472,65 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
         {areas !== false && estado === "pronto" && listaAreas.length > 1 && (
           <nav aria-label="Áreas de formação" className="mt-10 border-t border-[#14263D]/10 pt-6">
             {tituloAreas && <p className={juntar("mb-4 text-sm font-bold text-[#14263D]", tf.className)} style={tf.style}>{tituloAreas}</p>}
-            <div className="flex flex-wrap gap-2">
+            <LinhaRolavel>
               {["", ...listaAreas].map(a => (
                 <button key={a || "todas"} type="button" aria-pressed={area === a} onClick={() => setArea(a)}
-                  className={juntar("px-5 py-2.5 text-sm font-bold text-[#14263D] ring-1 ring-[#14263D]/15 transition-colors", tf.className)}
+                  className={juntar("shrink-0 whitespace-nowrap px-5 py-2.5 text-sm font-bold text-[#14263D] ring-1 ring-inset ring-[#14263D]/15 transition-colors", tf.className)}
                   style={{ ...tf.style, background: area === a ? ativo : "#fff" }}>{a || "Todas as áreas"}</button>
               ))}
-            </div>
+            </LinhaRolavel>
           </nav>
         )}
       </div>
     );
   },
 };
+
+/**
+ * Uma linha que não quebra: quando os botões passam da largura da secção, faz scroll na horizontal e mostra setas
+ * (só do lado onde há mais). Usada nas áreas da oferta formativa, cujo número muda com os cursos.
+ */
+function LinhaRolavel({ children }: { children: ReactNode }) {
+  const caixa = useRef<HTMLDivElement>(null);
+  const [lados, setLados] = useState({ esq: false, dir: false });
+  const medir = useCallback(() => {
+    const el = caixa.current;
+    if (!el) return;
+    setLados({ esq: el.scrollLeft > 2, dir: el.scrollLeft + el.clientWidth < el.scrollWidth - 2 });
+  }, []);
+  useEffect(() => {
+    const el = caixa.current;
+    if (!el) return;
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    for (const filho of Array.from(el.children)) ro.observe(filho);
+    return () => ro.disconnect();
+  }, [medir, children]);
+  const andar = (sentido: 1 | -1) => caixa.current?.scrollBy({ left: sentido * caixa.current.clientWidth * 0.8, behavior: "smooth" });
+  const seta = (sentido: 1 | -1) => (
+    <button type="button" onClick={() => andar(sentido)} aria-label={sentido > 0 ? "Ver mais áreas" : "Ver áreas anteriores"}
+      className={juntar("absolute top-1/2 z-10 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-[#14263D] text-white shadow-md hover:brightness-125",
+        sentido > 0 ? "right-0" : "left-0")}>
+      <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className={juntar("h-4 w-4", sentido < 0 && "rotate-180")}>
+        <path d="M7.3 4.3a1 1 0 0 1 1.4 0l5 5a1 1 0 0 1 0 1.4l-5 5a1 1 0 1 1-1.4-1.4L11.6 10 7.3 5.7a1 1 0 0 1 0-1.4Z" />
+      </svg>
+    </button>
+  );
+  return (
+    <div className="relative">
+      <div ref={caixa} onScroll={medir} className="flex gap-2 overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{
+          // Esbate a ponta onde há mais botões, por baixo da seta.
+          maskImage: lados.esq || lados.dir
+            ? `linear-gradient(to right, ${lados.esq ? "transparent 0, #000 56px" : "#000 0"}, ${lados.dir ? "#000 calc(100% - 56px), transparent 100%" : "#000 100%"})`
+            : undefined,
+        }}>
+        {children}
+      </div>
+      {lados.esq && seta(-1)}
+      {lados.dir && seta(1)}
+    </div>
+  );
+}
+

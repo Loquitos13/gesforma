@@ -155,7 +155,9 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
         // botão, mesmo sem turmas, sempre com o mesmo texto e a seta («Pré-inscrever» / «Pagamento/Inscrição»).
         const preinscricao = ePreinscricao(curso.enrollment);
         const acessoDireto = !preinscricao && !ePrepago(curso.enrollment);
-        const rotuloFixo = preinscricao ? rotuloBotaoInscricao(curso.enrollment) : acessoDireto ? "Pagamento/Inscrição" : "";
+        // Pré-pago sem datas (acesso imediato, ex.: e-learning assíncrono): também abre o pedido («Inscrever-me agora»).
+        const rotuloFixo = preinscricao ? rotuloBotaoInscricao(curso.enrollment) : acessoDireto ? "Pagamento/Inscrição"
+          : ePrepago(curso.enrollment) && !comTurmas.length ? rotuloBotaoInscricao(curso.enrollment) : "";
         return (
           <fieldset>
             {p.titulo && <legend className="mb-4"><Titulo texto={textoAutomaticoCurso(preencherVariaveis(p.titulo, variaveisCurso(curso, local)), curso)} t={p.tTitulo} className="font-serif text-2xl" /></legend>}

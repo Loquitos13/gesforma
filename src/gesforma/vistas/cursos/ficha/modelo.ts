@@ -236,7 +236,7 @@ export function prontidao(d: CursoSite, regime: Regime) {
     { id: "slug", rotulo: "Endereço da página", ok: preenchido(d.slug) },
     { id: "media", rotulo: "Banner e capa", ok: preenchido(d.banner) && preenchido(d.capa) },
     meta,
-    { id: "sintese", rotulo: "Texto completo (síntese)", ok: preenchido(d.sintese) },
+    { id: "sintese", rotulo: "Enquadramento", ok: preenchido(d.sintese) },
     { id: "objetivos", rotulo: "Objetivos", ok: preenchido(d.objetivos) },
     { id: "programa", rotulo: "Programa", ok: d.topicosPrograma.some(t => t.titulo.trim()) || preenchido(d.programa) },
     { id: "topicos", rotulo: "Metodologias, certificação, destinatários e requisitos", ok: TOPICOS_CURSO.every(t => preenchido(d[t.chave])) },

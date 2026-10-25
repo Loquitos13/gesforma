@@ -31,25 +31,47 @@ const TITULOS = {
   assincrono: "Como posso fazer o curso?",
 };
 
+/** Pré-pago e acesso direto (Gold): a pessoa paga e acede, sem escolher datas (é o caso «assíncrono» das regras). */
+function eAcessoPago(c: Course) {
+  return c.funding === "Gold" && c.enrollment !== "Pré-inscrição";
+}
+
 export function fraseLocais(c: Course) {
   const comp = componenteCurso(c);
   if (c.funding !== "Gold") return comp === "presencial" ? FRASES.finPresencial : FRASES.fin;
+  if (eAcessoPago(c)) return FRASES.goldAssincrono;
   return comp === "presencial" ? FRASES.goldPresencial : comp === "sincrono" ? FRASES.goldSincrono : FRASES.goldAssincrono;
 }
 
 export function tituloLocais(c: Course) {
-  return TITULOS[componenteCurso(c)];
+  if (eAcessoPago(c)) return TITULOS.assincrono;
+  const comp = componenteCurso(c);
+  // Pré-inscrição sem datas nem local físico: continua a ser «quando e como» (as datas vêm com a turma).
+  return TITULOS[comp === "assincrono" ? "sincrono" : comp];
 }
 
-const norma = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-const CONHECIDAS_FRASE = new Set([...Object.values(FRASES), "Veja os locais onde realizamos o curso, o investimento necessário, e próximas datas do curso."].map(norma));
-const CONHECIDOS_TITULO = new Set([...Object.values(TITULOS), "Onde quer fazer o curso?"].map(norma));
+const norma = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
-/** Um texto da página que é uma destas frases (ou títulos) passa à do curso; os outros ficam como estão. */
+/** Uma frase do tipo «Veja os locais…/o investimento…/próximas datas…» (com pequenas variações de escrita). */
+function eFraseLocais(linha: string) {
+  const n = norma(linha);
+  return n.length < 200 && /^veja /.test(n) && /locais onde realizamos|investimento necessario|proximas datas|como pode aceder/.test(n);
+}
+
+/** «Onde / Quando e como / Como (quer|posso) fazer o curso?» */
+function eTituloLocais(linha: string) {
+  return /^(onde|quando e como|como) (quer|posso|pode) fazer o curso$/.test(norma(linha));
+}
+
+/**
+ * Num texto da página do curso, cada linha que seja a frase ou o título dos locais passa à do curso
+ * (as páginas e as fichas já gravadas mudam sozinhas); o resto fica como está.
+ */
 export function textoAutomaticoCurso(texto: string, c: Course | null) {
   if (!c || !texto) return texto;
-  const n = norma(texto);
-  if (CONHECIDAS_FRASE.has(n)) return fraseLocais(c);
-  if (CONHECIDOS_TITULO.has(n)) return tituloLocais(c);
-  return texto;
+  return texto.split("\n").map(linha => {
+    if (eFraseLocais(linha)) return fraseLocais(c);
+    if (eTituloLocais(linha)) return tituloLocais(c);
+    return linha;
+  }).join("\n");
 }

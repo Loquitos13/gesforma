@@ -1,9 +1,11 @@
 /**
  * Textos de destaque do curso (ficha › Conteúdo do site), partilhados pelo backoffice, o servidor e o site.
  * - `resumo` («Texto de destaque (catálogo)»): curto, para cartões, listagens e a descrição na pesquisa.
- * - `sintese` («Texto completo (ficha do curso)»): o texto longo da página do curso.
+ * - `sintese` («Enquadramento»): o texto longo da página do curso (com negrito, ligações e listas: textoFormatado.ts).
  * Vazios, valem os de sempre: o completo é a síntese; o destaque sai da síntese, cortado numa palavra com «…».
  */
+
+import { textoSimples } from "./textoFormatado.js";
 
 /** O destaque deve caber num cartão: o contador avisa a partir daqui. */
 export const RESUMO_IDEAL = 160;
@@ -26,5 +28,6 @@ export function cortarNaPalavra(texto: string, max = RESUMO_IDEAL) {
 export function textosCurso(payload: { resumo?: unknown; sintese?: unknown }, recurso = "") {
   const proprio = typeof payload.resumo === "string" ? payload.resumo.replace(/\s+/g, " ").trim() : "";
   const completo = (typeof payload.sintese === "string" ? payload.sintese.trim() : "") || recurso;
-  return { resumo: proprio || cortarNaPalavra(completo), completo, resumoProprio: Boolean(proprio) };
+  // O destaque é texto corrido: sem as marcas de negrito, ligações e listas do texto completo.
+  return { resumo: proprio || cortarNaPalavra(textoSimples(completo)), completo, resumoProprio: Boolean(proprio) };
 }

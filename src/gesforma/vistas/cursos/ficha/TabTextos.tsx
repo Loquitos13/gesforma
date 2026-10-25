@@ -6,13 +6,14 @@ import { useState, type ReactNode } from "react";
 import type { MomentoField, MomentoKey } from "../../../../partilhado/TurmaExtras";
 import { novoPlanoCurso } from "../../../planosCurso";
 import { RESUMO_IDEAL, RESUMO_MAX, textosCurso } from "../../../../partilhado/textosCurso";
+import { TextoComFormatacao } from "./TextoComFormatacao";
 import type { PlanoLinha } from "./modelo";
 import type { FichaCurso } from "./useFichaCurso";
 
 function BlocoTexto({ rotulo, ajuda, valor, onMudar, linhas = 7 }: { rotulo: string; ajuda: string; valor: string; onMudar: (v: string) => void; linhas?: number }) {
   return (
     <Cartao titulo={rotulo} subtitulo={ajuda} acoes={<Estado tom={valor.trim() ? "sucesso" : "aviso"}>{valor.trim() ? "Preenchido" : "Em falta"}</Estado>}>
-      <AreaTexto aria-label={rotulo} rows={linhas} value={valor} onChange={e => onMudar(e.target.value)} placeholder="Este texto aparece na página pública do curso." />
+      <TextoComFormatacao rotulo={rotulo} linhas={linhas} valor={valor} onMudar={onMudar} placeholder="Este texto aparece na página pública do curso." />
       <p className="num m-0 mt-1 text-right text-xs text-tinta-suave">{valor.trim().length} caracteres</p>
     </Cartao>
   );
@@ -26,12 +27,12 @@ function TextoDestaque({ f }: { f: FichaCurso }) {
   const tom = n === 0 ? "neutro" : n > RESUMO_IDEAL ? "aviso" : "sucesso";
   return (
     <Cartao titulo="Texto de destaque (catálogo)" subtitulo="Uma ou duas frases para os cartões do curso, o catálogo e as listagens do site. Também serve de descrição na pesquisa da Google."
-      acoes={<Estado tom={tom}>{n ? "Próprio" : derivado ? "Do texto completo" : "Em falta"}</Estado>}>
+      acoes={<Estado tom={tom}>{n ? "Próprio" : derivado ? "Do enquadramento" : "Em falta"}</Estado>}>
       <AreaTexto aria-label="Texto de destaque (catálogo)" rows={3} maxLength={RESUMO_MAX} value={data.resumo}
         placeholder={derivado || "Ex.: Formação certificada para quem quer ser formador, em b-learning, com simulação pedagógica."}
         onChange={e => patch({ resumo: e.target.value.replace(/\n+/g, " ") })} />
       <p className={`num m-0 mt-1 flex justify-between gap-2 text-xs ${n > RESUMO_IDEAL ? "text-aviso" : "text-tinta-suave"}`}>
-        <span>{n ? (n > RESUMO_IDEAL ? `Acima de ${RESUMO_IDEAL}: em alguns cartões pode ficar cortado.` : "") : "Vazio: o site usa o início do texto completo (o que se vê a cinzento)."}</span>
+        <span>{n ? (n > RESUMO_IDEAL ? `Acima de ${RESUMO_IDEAL}: em alguns cartões pode ficar cortado.` : "") : "Vazio: o site usa o início do enquadramento (o que se vê a cinzento)."}</span>
         <span aria-live="polite">{n}/{RESUMO_MAX}</span>
       </p>
     </Cartao>
@@ -45,7 +46,7 @@ export function TabConteudo({ f }: { f: FichaCurso }) {
     <div className="space-y-4">
       <Aviso tom="info">Cada bloco é uma secção da página pública. Escreva para o formando, não para a operação interna.</Aviso>
       <TextoDestaque f={f} />
-      <BlocoTexto rotulo="Texto completo (ficha do curso)" ajuda="A síntese da página do curso, abaixo do banner: para quem é, o que se leva daqui e como funciona. Pode ser longa e ter vários parágrafos." valor={data.sintese} onMudar={v => patch({ sintese: v })} linhas={9} />
+      <BlocoTexto rotulo="Enquadramento" ajuda="O primeiro texto da página do curso, abaixo do banner: para quem é, o que se leva daqui e como funciona. Pode ser longo e ter vários parágrafos." valor={data.sintese} onMudar={v => patch({ sintese: v })} linhas={9} />
       <BlocoTexto rotulo="Objetivos" ajuda="O que o formando será capaz de fazer. Uma ideia por linha." valor={data.objetivos} onMudar={v => patch({ objetivos: v })} />
       {gerado ? (
         <Cartao titulo="Programa no site" subtitulo="Gerado a partir do separador Programa, pela mesma ordem.">

@@ -58,7 +58,7 @@ const fichaSchema = z.object({
     .refine(p => p.programaFin === undefined || (typeof p.programaFin === "string" && p.programaFin.length <= 120), "Programa: até 120 caracteres.")
     .refine(p => p.organizacaoPrograma === undefined || p.organizacaoPrograma === "modular" || p.organizacaoPrograma === "livre", "Tipo de programa: modular ou livre.")
     .refine(p => p.resumo === undefined || (typeof p.resumo === "string" && p.resumo.trim().length <= RESUMO_MAX), `Texto de destaque (catálogo): até ${RESUMO_MAX} caracteres.`)
-    .refine(p => p.sintese === undefined || (typeof p.sintese === "string" && p.sintese.length <= SINTESE_MAX), `Texto completo (ficha do curso): até ${SINTESE_MAX} caracteres.`)
+    .refine(p => p.sintese === undefined || (typeof p.sintese === "string" && p.sintese.length <= SINTESE_MAX), `Enquadramento: até ${SINTESE_MAX} caracteres.`)
     .optional(),
   criterios: z.array(z.object({ id: z.string().max(60), label: z.string().max(200) })).max(40).optional(),
 }).refine(v => v.payload || v.criterios, { message: "vazio" });

@@ -8,7 +8,8 @@ import { campoCor, campoCurso, campoNumero, simNao } from "./campos";
 import { TOPICOS_CURSO, type ChaveTopicoCurso } from "../../partilhado/topicosCurso";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { eur } from "../../partilhado/ui/formatos";
-import { fraseLocais, tituloLocais } from "./textosLocais";
+import { fraseLocais, textoAutomaticoCurso, tituloLocais } from "./textosLocais";
+import { TextoEmLinha, TextoFormatado } from "../../partilhado/TextoFormatadoVista";
 import { corSegura, estiloBloco, estiloTexto, estiloVazio, juntar, tipoVazia, type Estilo, type Tipografia } from "./estilos";
 
 type Estado = "a-carregar" | "erro" | "pronto";
@@ -249,13 +250,12 @@ export const CursoSintese: ComponentConfig<SinteseProps> = {
       {curso => {
         const e = estiloTexto(p.tEtiqueta);
         const t = estiloTexto(p.texto);
+        // A etiqueta antiga «Síntese» (páginas gravadas antes) passa a «Enquadramento».
+        const titulo = /^s[ií]ntese$/i.test(p.etiqueta.trim()) ? "Enquadramento" : p.etiqueta;
         return (
-          <>
-            {/* A etiqueta antiga «Síntese» (páginas gravadas antes) passa a «Enquadramento». */}
-            {p.etiqueta && <p className={juntar("text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--c-destaque)]", e.className)} style={e.style}>{/^s[ií]ntese$/i.test(p.etiqueta.trim()) ? "Enquadramento" : p.etiqueta}</p>}
-            {/* As mudanças de linha da ficha do curso (ex.: lista de destaques) mantêm-se. */}
-            <p className={juntar("mt-4 whitespace-pre-line text-lg leading-8 opacity-75", t.className)} style={t.style}>{curso.description}</p>
-          </>
+          <CartaoCurso titulo={titulo} t={e}>
+            <TextoFormatado texto={textoAutomaticoCurso(curso.description, curso)} className={juntar(TEXTO_CARTAO, t.className)} style={t.style} nivel={4} />
+          </CartaoCurso>
         );
       }}
     </Caixa>
@@ -319,13 +319,11 @@ export const CursoObjetivos: ComponentConfig<ListaProps> = {
   render: p => (
     <Caixa p={p}>
       {curso => curso.objetivos.length === 0 ? null : (
-        <>
-          <Titulo texto={p.titulo} t={p.tTitulo} className="font-serif text-3xl" />
-          <ZonaEntreTitulo zona={p.entreTitulo} />
-          <ul className="mt-5 space-y-3 opacity-75">
-            {curso.objetivos.map(o => <li key={o} className="flex gap-3"><Icon name="check" className="mt-1 h-4 w-4 shrink-0" />{o}</li>)}
+        <CartaoCurso titulo={p.titulo} t={estiloTexto(p.tTitulo)} zona={p.entreTitulo}>
+          <ul className={juntar("mt-4 space-y-2", TEXTO_CARTAO)}>
+            {curso.objetivos.map(o => <li key={o} className="flex gap-3"><Icon name="check" className="mt-1.5 h-4 w-4 shrink-0 text-[var(--c-destaque)]" /><span><TextoEmLinha texto={o} /></span></li>)}
           </ul>
-        </>
+        </CartaoCurso>
       )}
     </Caixa>
   ),
@@ -338,10 +336,8 @@ export const CursoPrograma: ComponentConfig<ListaProps & { espacoLinhas: number 
   render: p => (
     <Caixa p={p}>
       {curso => curso.programa.length === 0 ? null : (
-        <>
-          <Titulo texto={p.titulo} t={p.tTitulo} className="border-b border-black/15 pb-4 font-serif text-3xl" />
-          <ZonaEntreTitulo zona={p.entreTitulo} />
-          <div className="divide-y divide-black/15">
+        <CartaoCurso titulo={p.titulo} t={estiloTexto(p.tTitulo)} zona={p.entreTitulo}>
+          <div className="mt-2 divide-y divide-black/10 text-sm">
             {curso.programa.map((m, i) => (
               <div key={`${m.titulo}-${i}`} className="flex items-baseline gap-4" style={{ paddingBlock: `${p.espacoLinhas ?? 12}px` }}>
                 <span className="w-24 shrink-0 text-sm font-extrabold text-[var(--c-destaque)]">{curso.organizacao === "livre" ? String(i + 1).padStart(2, "0") : `Módulo ${i + 1}`}</span>
@@ -350,7 +346,7 @@ export const CursoPrograma: ComponentConfig<ListaProps & { espacoLinhas: number 
               </div>
             ))}
           </div>
-        </>
+        </CartaoCurso>
       )}
     </Caixa>
   ),
@@ -362,22 +358,25 @@ type FuncionamentoProps = Base & {
   tTitulo: Tipografia; texto: Tipografia; corLinha: string; colunas: number | null;
 };
 
-/** Linhas começadas por «-», «•» ou «*» viram lista; as outras, parágrafos. */
-function TextoTopico({ texto, t }: { texto: string; t: ReturnType<typeof estiloTexto> }) {
-  const blocos: { lista: boolean; linhas: string[] }[] = [];
-  for (const linha of texto.split(/\r?\n/).map(l => l.trim()).filter(Boolean)) {
-    const item = /^[-•*]\s*/.test(linha);
-    const ultimo = blocos[blocos.length - 1];
-    const limpo = item ? linha.replace(/^[-•*]\s*/, "") : linha;
-    if (ultimo && ultimo.lista === item && item) ultimo.linhas.push(limpo);
-    else blocos.push({ lista: item, linhas: [limpo] });
-  }
+/** Classes do texto dentro dos cartões da página do curso (iguais em todos). */
+const TEXTO_CARTAO = "text-sm leading-7 opacity-80";
+
+/**
+ * Cartão comum da página do curso (enquadramento, objetivos, programa e os 4 tópicos): fundo branco, título com a
+ * linha de destaque por baixo e o texto com o mesmo tamanho em todos.
+ */
+function CartaoCurso({ titulo, t, corLinha, zona, children }: {
+  titulo: string; t: ReturnType<typeof estiloTexto>; corLinha?: string; zona?: unknown; children: ReactNode;
+}) {
   return (
-    <div className={juntar("mt-4 space-y-3 text-sm leading-7 opacity-80", t.className)} style={t.style}>
-      {blocos.map((b, i) => b.lista
-        ? <ul key={i} className="list-disc space-y-1 pl-5">{b.linhas.map((l, j) => <li key={j}>{l}</li>)}</ul>
-        : <p key={i}>{b.linhas[0]}</p>)}
-    </div>
+    <section className="rounded-lg bg-white p-6 shadow-[0_2px_14px_rgba(20,38,61,.08)] ring-1 ring-black/5">
+      {titulo && (
+        <h3 className={juntar("inline-block border-b-2 pb-2 font-serif text-xl font-bold text-[var(--c-primaria)]", t.className)}
+          style={{ ...t.style, borderColor: corSegura(corLinha) ?? "var(--c-acento)" }}>{titulo}</h3>
+      )}
+      {zona ? <ZonaEntreTitulo zona={zona} /> : null}
+      <div className="mt-4">{children}</div>
+    </section>
   );
 }
 
@@ -406,13 +405,9 @@ export const CursoFuncionamento: ComponentConfig<FuncionamentoProps> = {
         return (
           <div className={juntar("grid gap-5", p.colunas === 2 && "md:grid-cols-2")}>
             {topicos.map(x => (
-              <section key={x.chave} className="rounded-lg bg-white p-6 shadow-[0_2px_14px_rgba(20,38,61,.08)] ring-1 ring-black/5">
-                <h3 className={juntar("inline-block border-b-2 pb-2 font-serif text-xl font-bold text-[var(--c-primaria)]", tt.className)}
-                  style={{ ...tt.style, borderColor: corSegura(p.corLinha) ?? "var(--c-acento)" }}>
-                  {p.titulos?.[x.chave]?.trim() || x.rotulo}
-                </h3>
-                <TextoTopico texto={curso.topicos[x.chave]} t={t} />
-              </section>
+              <CartaoCurso key={x.chave} titulo={p.titulos?.[x.chave]?.trim() || x.rotulo} t={tt} corLinha={p.corLinha}>
+                <TextoFormatado texto={curso.topicos[x.chave]} className={juntar(TEXTO_CARTAO, t.className)} style={t.style} nivel={4} />
+              </CartaoCurso>
             ))}
           </div>
         );

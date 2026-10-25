@@ -4,8 +4,10 @@
 //   linha em branco      → novo parágrafo (mudança de linha simples = mudança de linha)
 //   «- », «* » ou «• »   → lista com marcas (também as marcas do Word: «◦», «▪», «o» ou «§» seguidos de tabulação)
 //   «1. » ou «1) »       → lista numerada
-//   «## »                → subtítulo
-//   **negrito**  *itálico*  [texto](https://…)  e endereços https:// soltos → ligações
+//   «# » «## » «### »    → título, subtítulo, título pequeno
+//   «> »                 → destaque (texto maior, com uma barra à esquerda)
+//   «-# »                → nota (texto pequeno)
+//   **negrito**  *itálico*  __sublinhado__  [texto](https://…)  e endereços https:// soltos → ligações
 //
 // Nada disto produz HTML: o leitor devolve uma árvore (blocos e pedaços) que o React desenha com elementos próprios.
 // Também aqui: normalizar o que se cola do Word e passar o HTML colado (Word, Google Docs) para estas marcas.
@@ -14,22 +16,28 @@ export type Pedaco =
   | { t: "texto"; v: string }
   | { t: "negrito"; f: Pedaco[] }
   | { t: "italico"; f: Pedaco[] }
+  | { t: "sublinhado"; f: Pedaco[] }
   | { t: "ligacao"; href: string; f: Pedaco[] }
   | { t: "quebra" };
 
 export type Bloco =
   | { t: "paragrafo"; f: Pedaco[] }
-  | { t: "subtitulo"; f: Pedaco[] }
+  /** Sem `nivel`, é o «## » (subtítulo); 1 = «# » título, 3 = «### » título pequeno. */
+  | { t: "subtitulo"; f: Pedaco[]; nivel?: 1 | 3 }
+  | { t: "destaque"; f: Pedaco[] }
+  | { t: "nota"; f: Pedaco[] }
   | { t: "lista"; ordenada: boolean; inicio: number; itens: Pedaco[][] };
 
 /** Ajuda curta para o backoffice. */
-export const AJUDA_FORMATACAO = "Formatação: linha em branco = novo parágrafo · «- » no início da linha = lista · «1. » = lista numerada · «## » = subtítulo · **negrito** · *itálico* · ligações https://… ou [texto](https://…).";
+export const AJUDA_FORMATACAO = "Formatação: linha em branco = novo parágrafo · «- » no início da linha = lista · «1. » = lista numerada · «# » título · «## » subtítulo · «> » destaque · «-# » nota pequena · **negrito** · *itálico* · __sublinhado__ · ligações https://… ou [texto](https://…).";
 
 // Marcas de lista: as habituais seguidas de espaço ou tabulação; «o» e «§» (Word, com a letra do tipo Symbol/Wingdings) só seguidas de tabulação.
 const MARCA = /^[ \t]*(?:[-*•◦▪▫‣●○■□·–\uF0B7\uF0A7\uF0D8\uF0FC]|\uF02D)[ \t]+(.*)$/;
 const MARCA_WORD = /^[ \t]*[o§][ \t]*\t[ \t]*(.*)$/;
 const NUMERO = /^[ \t]*(\d{1,3})[.)][ \t]+(.*)$/;
-const SUBTITULO = /^[ \t]*#{1,3}[ \t]+(.*)$/;
+const SUBTITULO = /^[ \t]*(#{1,3})[ \t]+(.*)$/;
+const DESTAQUE = /^[ \t]*>[ \t]?(.*)$/;
+const NOTA = /^[ \t]*-#[ \t]+(.*)$/;
 
 /** Item de lista (com marcas ou numerado) de uma linha, ou null. */
 function itemDeLista(linha: string): { ordenada: boolean; numero: number; texto: string } | null {
@@ -54,9 +62,26 @@ export function analisarTexto(texto: string | null | undefined): Bloco[] {
   for (const linha of linhas) {
     if (!linha.trim()) { emBranco = true; continue; }
     const sub = SUBTITULO.exec(linha);
-    if (sub && sub[1]!.trim()) {
+    if (sub && sub[2]!.trim()) {
       fechar();
-      blocos.push({ t: "subtitulo", f: emPedacos(sub[1]!.trim()) });
+      const n = sub[1]!.length;
+      blocos.push(n === 2 ? { t: "subtitulo", f: emPedacos(sub[2]!.trim()) } : { t: "subtitulo", f: emPedacos(sub[2]!.trim()), nivel: n === 1 ? 1 : 3 });
+      emBranco = false;
+      continue;
+    }
+    const nota = NOTA.exec(linha);
+    if (nota && nota[1]!.trim()) {
+      fechar();
+      blocos.push({ t: "nota", f: emPedacos(nota[1]!.trim()) });
+      emBranco = false;
+      continue;
+    }
+    const destaque = DESTAQUE.exec(linha);
+    if (destaque && destaque[1]!.trim()) {
+      // Linhas «> » seguidas ficam no mesmo destaque.
+      const ultimo = blocos[blocos.length - 1];
+      if (!atual && !emBranco && ultimo?.t === "destaque") ultimo.f.push({ t: "quebra" }, ...emPedacos(destaque[1]!.trim()));
+      else { fechar(); blocos.push({ t: "destaque", f: emPedacos(destaque[1]!.trim()) }); }
       emBranco = false;
       continue;
     }
@@ -128,6 +153,10 @@ export function emPedacos(s: string): Pedaco[] {
       const url = m ? limparUrl(m[0]) : "";
       if (url.length > "https://".length) { juntar({ t: "ligacao", href: url, f: [{ t: "texto", v: url }] }); i += url.length; continue; }
     }
+    if (resto.startsWith("__") && resto[2] && !/[\s_]/.test(resto[2]) && !/\w/.test(anterior)) {
+      const fim = procurarFecho(s, i + 2, "__");
+      if (fim > 0) { juntar({ t: "sublinhado", f: emPedacos(s.slice(i + 2, fim)) }); i = fim + 2; continue; }
+    }
     if (resto.startsWith("**") && resto[2] && !/\s/.test(resto[2])) {
       const fim = procurarFecho(s, i + 2, "**");
       if (fim > 0) { juntar({ t: "negrito", f: emPedacos(s.slice(i + 2, fim)) }); i = fim + 2; continue; }
@@ -144,13 +173,14 @@ export function emPedacos(s: string): Pedaco[] {
 }
 
 /** Posição da marca que fecha (precedida de algo que não é espaço; «*» não pode ser metade de «**»), ou -1. */
-function procurarFecho(s: string, desde: number, marca: "**" | "*") {
+function procurarFecho(s: string, desde: number, marca: "**" | "*" | "__") {
   for (let j = desde + 1; j <= s.length - marca.length; j++) {
     if (!s.startsWith(marca, j) || /\s/.test(s[j - 1]!)) continue;
     if (marca === "*") {
       if (s[j + 1] === "*" || s[j - 1] === "*") continue;
       if (/\w/.test(s[j + 1] ?? "")) continue; // «2*3*4»: não é itálico
     }
+    if (marca === "__" && /\w/.test(s[j + 2] ?? "")) continue; // «nome__do__ficheiro»: não é sublinhado
     return j;
   }
   return -1;
@@ -203,7 +233,7 @@ export type NoHtml = {
   getAttribute?: (nome: string) => string | null;
 };
 
-type LinhaHtml = { t: "p" | "h"; texto: string } | { t: "li"; ordenada: boolean; numero: number; texto: string };
+type LinhaHtml = { t: "p" | "q"; texto: string } | { t: "h"; nivel: 1 | 2 | 3; texto: string } | { t: "li"; ordenada: boolean; numero: number; texto: string };
 
 const BLOCOS_HTML = new Set(["P", "DIV", "H1", "H2", "H3", "H4", "H5", "H6", "UL", "OL", "LI", "BLOCKQUOTE", "SECTION", "ARTICLE", "HEADER", "FOOTER", "MAIN", "BODY", "HTML", "TABLE", "TBODY", "THEAD", "TR", "PRE", "DL", "DT", "DD", "FIGURE", "ADDRESS"]);
 const IGNORAR_HTML = new Set(["SCRIPT", "STYLE", "HEAD", "TITLE", "META", "LINK", "IMG", "SVG", "VIDEO", "AUDIO", "IFRAME", "OBJECT", "BUTTON", "INPUT", "SELECT", "TEXTAREA", "TEMPLATE", "XML"]);
@@ -224,6 +254,10 @@ const ehItalico = (n: NoHtml) => {
   if ((k === "I" || k === "EM") && !estilo(n, "font-style", /normal/)) return true;
   return estilo(n, "font-style", /italic|oblique/);
 };
+const ehSublinhado = (n: NoHtml) => {
+  if (nome(n) === "U" && !estilo(n, "text-decoration", /none/)) return true;
+  return estilo(n, "text-decoration(?:-line)?", /[^;]*underline/);
+};
 const ehListaWord = (n: NoHtml) => /^MsoListParagraph/i.test(atributo(n, "class")) || estilo(n, "mso-list", /l\d/);
 const ehMarcaWord = (n: NoHtml) => estilo(n, "mso-list", /ignore/);
 
@@ -235,7 +269,9 @@ function envolver(s: string, marca: string) {
   }).join("\n");
 }
 
-function emLinha(n: NoHtml, f: { negrito: boolean; italico: boolean }): string {
+type Marcas = { negrito: boolean; italico: boolean; sublinhado?: boolean };
+
+function emLinha(n: NoHtml, f: Marcas): string {
   if (n.nodeType === 3) return (n.nodeValue ?? "").replace(/[\s\u00A0]+/g, " ");
   if (n.nodeType !== 1) return "";
   const k = nome(n);
@@ -243,12 +279,14 @@ function emLinha(n: NoHtml, f: { negrito: boolean; italico: boolean }): string {
   if (k === "BR") return "\n";
   const negrito = !f.negrito && ehNegrito(n);
   const italico = !f.italico && ehItalico(n);
-  let dentro = filhos(n).map(c => emLinha(c, { negrito: f.negrito || negrito, italico: f.italico || italico })).join("");
+  const sublinhado = !f.sublinhado && k !== "A" && ehSublinhado(n);
+  let dentro = filhos(n).map(c => emLinha(c, { negrito: f.negrito || negrito, italico: f.italico || italico, sublinhado: f.sublinhado || sublinhado })).join("");
   if (k === "A") {
     const href = atributo(n, "href").trim();
     const texto = dentro.replace(/\s+/g, " ").trim();
     if (/^https:\/\/\S+$/i.test(href) || /^\/(?!\/)\S*$/.test(href)) dentro = !texto || texto === href ? href : `[${texto.replace(/[[\]]/g, "")}](${href})`;
   }
+  if (sublinhado) dentro = envolver(dentro, "__");
   if (italico) dentro = envolver(dentro, "*");
   if (negrito) dentro = envolver(dentro, "**");
   return dentro;
@@ -276,7 +314,11 @@ function recolher(n: NoHtml, saida: LinhaHtml[], lista: { ordenada: boolean; con
     despejar();
     if (/^H[1-6]$/.test(k) || (k === "P" && /^Mso(Title|Subtitle|Heading)/i.test(atributo(c, "class")))) {
       const t = limparLinha(emLinha(c, { negrito: true, italico: false })).replace(/\n+/g, " ");
-      if (t) saida.push({ t: "h", texto: t });
+      const nivel = k === "H1" || /MsoTitle/i.test(atributo(c, "class")) ? 1 : k === "H2" || k === "P" ? 2 : 3;
+      if (t) saida.push({ t: "h", nivel, texto: t });
+    } else if (k === "BLOCKQUOTE") {
+      const t = limparLinha(emLinha(c, { negrito: false, italico: false }));
+      if (t) saida.push({ t: "q", texto: t });
     } else if (k === "UL" || k === "OL") {
       const inicio = Number(atributo(c, "start")) || 1;
       recolher(c, saida, { ordenada: k === "OL", contador: inicio });
@@ -334,7 +376,9 @@ export function htmlParaTexto(raiz: NoHtml): string {
   const partes: string[] = [];
   let anterior: LinhaHtml | null = null;
   for (const l of linhas) {
-    const texto = l.t === "h" ? `## ${l.texto.replace(/\*\*/g, "")}` : l.t === "li" ? `${l.ordenada ? `${l.numero}.` : "-"} ${l.texto}` : l.texto;
+    const texto = l.t === "h" ? `${"#".repeat(l.nivel)} ${l.texto.replace(/\*\*/g, "")}`
+      : l.t === "q" ? l.texto.split("\n").map(x => `> ${x}`).join("\n")
+      : l.t === "li" ? `${l.ordenada ? `${l.numero}.` : "-"} ${l.texto}` : l.texto;
     // Itens da mesma lista ficam em linhas seguidas; o resto separa-se com uma linha em branco.
     const mesmaLista = l.t === "li" && anterior?.t === "li" && anterior.ordenada === l.ordenada;
     if (partes.length) partes.push(mesmaLista ? "\n" : "\n\n");

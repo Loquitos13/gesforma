@@ -130,6 +130,23 @@ describe("Formatação leve dos textos dos serviços", () => {
     expect(htmlParaTexto(docs)).toBe("Olá **mundo**\n\n- um\n- *dois*\n- dentro\n\n2. b\n3. c");
   });
 
+  it("títulos por nível, destaque, nota e sublinhado (textos do curso)", () => {
+    const blocos = analisarTexto("# Título\n### Pequeno\n> Linha um\n> linha dois\n\n-# Nota\n\nTexto __sublinhado__ e nome__do__ficheiro.");
+    expect(blocos.map(b => b.t)).toEqual(["subtitulo", "subtitulo", "destaque", "nota", "paragrafo"]);
+    expect(blocos[0]).toMatchObject({ nivel: 1 });
+    expect(blocos[1]).toMatchObject({ nivel: 3 });
+    expect(blocos[2]).toEqual({ t: "destaque", f: [{ t: "texto", v: "Linha um" }, { t: "quebra" }, { t: "texto", v: "linha dois" }] });
+    expect(blocos[4]).toEqual({ t: "paragrafo", f: [
+      { t: "texto", v: "Texto " }, { t: "sublinhado", f: [{ t: "texto", v: "sublinhado" }] }, { t: "texto", v: " e nome__do__ficheiro." },
+    ] });
+    // Colado: <u>, sublinhado por estilo, h1/h3 e citação.
+    const html = el("body", {},
+      el("h1", {}, "Grande"), el("h3", {}, "Pequeno"),
+      el("p", {}, "A ", el("u", {}, "sub"), " e ", el("span", { style: "text-decoration:underline" }, "linha")),
+      el("blockquote", {}, "Citação"));
+    expect(htmlParaTexto(html)).toBe("# Grande\n\n### Pequeno\n\nA __sub__ e __linha__\n\n> Citação");
+  });
+
   it("limites únicos e textos próprios da página Empresas (editor do site)", () => {
     expect(LIMITES_SERVICO).toMatchObject({ texto: 1200, detalhe: 12000, cartaoTexto: 2000, ctaTexto: 1200 });
     const pagina = { root: {}, content: [{ type: "Servicos", props: { porServico: [

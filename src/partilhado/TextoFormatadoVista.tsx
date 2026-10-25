@@ -11,6 +11,7 @@ function pedacos(f: Pedaco[]): ReactNode[] {
       case "quebra": return <br key={i} />;
       case "negrito": return <strong key={i} className="font-bold">{pedacos(p.f)}</strong>;
       case "italico": return <em key={i} className="italic">{pedacos(p.f)}</em>;
+      case "sublinhado": return <u key={i} className="underline underline-offset-2">{pedacos(p.f)}</u>;
       case "ligacao": {
         const fora = p.href.startsWith("https://");
         return <a key={i} href={p.href} className="underline underline-offset-2 hover:no-underline" {...(fora ? { target: "_blank", rel: "noopener noreferrer" } : {})}>{pedacos(p.f)}</a>;
@@ -27,12 +28,20 @@ export function TextoFormatado({ texto, className, style, nivel = 3 }: { texto: 
   const blocos = analisarTexto(texto);
   if (blocos.length === 0) return null;
   const Sub = nivel === 4 ? "h4" : "h3";
+  const Tit = nivel === 4 ? "h3" : "h2";
+  const Peq = nivel === 4 ? "h5" : "h4";
   return (
     // pre-wrap: os espaços seguidos ficam como se escreveram; as mudanças de linha são <br>.
     <div className={["whitespace-pre-wrap break-words [tab-size:4] [&>*+*]:mt-[0.8em]", className].filter(Boolean).join(" ")} style={style}>
       {blocos.map((b, i) => {
         if (b.t === "paragrafo") return <p key={i}>{pedacos(b.f)}</p>;
-        if (b.t === "subtitulo") return <Sub key={i} className="font-bold text-[1.1em] leading-snug">{pedacos(b.f)}</Sub>;
+        if (b.t === "subtitulo") {
+          if (b.nivel === 1) return <Tit key={i} className="font-bold text-[1.45em] leading-tight">{pedacos(b.f)}</Tit>;
+          if (b.nivel === 3) return <Peq key={i} className="font-bold text-[0.95em] uppercase tracking-wide leading-snug">{pedacos(b.f)}</Peq>;
+          return <Sub key={i} className="font-bold text-[1.1em] leading-snug">{pedacos(b.f)}</Sub>;
+        }
+        if (b.t === "destaque") return <p key={i} className="border-l-4 border-current/25 pl-4 text-[1.2em] font-semibold leading-snug" style={{ borderColor: "var(--c-acento, currentColor)" }}>{pedacos(b.f)}</p>;
+        if (b.t === "nota") return <p key={i} className="text-[0.85em] opacity-75">{pedacos(b.f)}</p>;
         const itens = b.itens.map((it, k) => <li key={k} className="pl-1">{pedacos(it)}</li>);
         return b.ordenada
           ? <ol key={i} start={b.inicio !== 1 ? b.inicio : undefined} className="list-decimal space-y-[0.3em] pl-[1.4em]">{itens}</ol>

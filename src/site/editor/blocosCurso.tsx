@@ -1,6 +1,6 @@
 // Página do curso em blocos soltos: banner, síntese, dados, objetivos, programa, turmas e cartão de inscrição.
 // Cada bloco lê o curso da página (CursoAtualCtx), por isso pode ir para qualquer secção ou coluna.
-import { createContext, useContext, useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import type { ComponentConfig, Slot } from "@puckeditor/core";
 import { Icon, OfertaCtx, type Course } from "../SiteLanding";
 import { CursoDaRotaCtx } from "./blocosCursoPagina";
@@ -131,11 +131,11 @@ export function useLocalCurso() {
 export type Base = { aparencia: Estilo; puck?: { dragRef?: ((el: Element | null) => void) | null } };
 
 /** Invólucro comum: aparência do bloco, pega de arrastar e aviso quando ainda não há curso. */
-export function Caixa({ p, className, children, as: Tag = "div" }: { p: Base; className?: string; children: (c: Course) => ReactNode; as?: "div" | "section" | "aside" }) {
+export function Caixa({ p, className, estilo, children, as: Tag = "div" }: { p: Base; className?: string; estilo?: CSSProperties; children: (c: Course) => ReactNode; as?: "div" | "section" | "aside" }) {
   const curso = useCurso();
   const c = estiloBloco(p.aparencia);
   return (
-    <Tag ref={p.puck?.dragRef ?? undefined} className={juntar(className, c.className)} style={c.style}>
+    <Tag ref={p.puck?.dragRef ?? undefined} className={juntar(className, c.className)} style={{ ...estilo, ...c.style }}>
       {curso ? children(curso) : <p className="px-5 py-8 text-center text-sm opacity-60">Sem curso para mostrar: escolha um em «Página» › «No editor, ver com o curso».</p>}
     </Tag>
   );

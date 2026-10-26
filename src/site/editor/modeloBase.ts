@@ -348,7 +348,7 @@ export function modeloCurso(antigo?: Legado): Data {
   ];
   const cartao = sim("mostrarCartao");
   const grelha = bloco("Seccao", Seccao.defaultProps, {
-    disposicao: cartao ? "grelha" : "pilha", colunas: 3, colunasTab: 1, colunasTel: 1, espaco: 48, alinharItens: "inicio",
+    disposicao: cartao ? "grelha" : "pilha", colunas: 3, colunasTab: 1, colunasTel: 1, espaco: 48, alinharItens: "esticar",
     aparencia: estiloVazio({ preenchimento: lados(64, 32), preenchimentoTel: lados(48, 20) }),
     conteudo: [
       bloco("Coluna", Coluna.defaultProps, { ocupar: cartao ? 2 : null, espaco: 0, conteudo: principal }),
@@ -413,6 +413,7 @@ export function converterPaginaCurso(d: Data): Data {
   // Sem Programa na página, entram a seguir ao primeiro bloco de conteúdo que houver.
   if (novos.length) dados = inserirNaPrimeira(dados, ["CursoPrograma", "CursoObjetivos", "CursoEscolhaLocal", "CursoDados", "CursoSintese"], novos);
   dados = videoNoCartao(dados);
+  dados = corredorDoCartao(dados);
   // «Outros cursos relevantes» fecha a coluna do conteúdo: a seguir às turmas (ou ao último bloco conhecido que houver).
   if (!texto.includes('"CursoRelevantes"')) {
     const relevantes = blocoRelevantes() as No;
@@ -506,5 +507,45 @@ function videoNoCartao(dados: Data): Data {
   });
   const content = porNoCartao(tirar(lista, false));
   return { ...dados, root: { ...(dados.root ?? {}), props: { ...raiz, videoNoCartao: true } }, content } as Data;
+}
+
+/**
+ * Cartão de inscrição no seu corredor (uma vez por página; depois, o que se mudar no editor fica): a secção que o tem
+ * passa a grelha de 3 colunas centrada na largura do tema, com espaço entre o conteúdo (2 colunas) e o cartão (1), e
+ * as colunas esticadas à altura da linha, para o cartão (no topo da sua coluna) acompanhar o scroll. Um cartão sozinho
+ * dentro de uma coluna sai dela (a coluna à volta prendia-o à sua própria altura).
+ */
+function corredorDoCartao(dados: Data): Data {
+  const raiz = ((dados.root as { props?: Record<string, unknown> } | undefined)?.props ?? {});
+  if (raiz.layoutCartao) return dados;
+  const temCartao = (b: No): boolean => b.type === "CursoInscricao"
+    || Object.values(b.props).some(v => Array.isArray(v) && v.every(ehNo) && (v as No[]).some(temCartao));
+  let feito = false;
+  const andar = (l: No[]): No[] => l.map(b => {
+    if (feito || !temCartao(b)) return b;
+    const filhos = Array.isArray(b.props.conteudo) && (b.props.conteudo as unknown[]).every(ehNo) ? b.props.conteudo as No[] : null;
+    const direto = filhos?.some(x => x.type === "CursoInscricao" || (x.type === "Coluna" && Array.isArray(x.props.conteudo)
+      && (x.props.conteudo as No[]).length === 1 && (x.props.conteudo as No[])[0]!.type === "CursoInscricao"));
+    if (b.type === "Seccao" && filhos && direto) {
+      feito = true;
+      const conteudo = filhos.map(x => {
+        if (x.type === "Coluna" && (x.props.conteudo as No[] | undefined)?.length === 1 && (x.props.conteudo as No[])[0]!.type === "CursoInscricao") {
+          return (x.props.conteudo as No[])[0]!;
+        }
+        if (x.type === "Coluna") return { ...x, props: { ...x.props, ocupar: 2 } };
+        return x;
+      });
+      const espaco = Number(b.props.espaco);
+      return { ...b, props: {
+        ...b.props, conteudo, disposicao: "grelha", colunas: 3, colunasTab: 1, colunasTel: 1,
+        espaco: Number.isFinite(espaco) && espaco >= 40 ? espaco : 48, alinharItens: "esticar", larguraConteudo: "tema",
+      } };
+    }
+    const props = { ...b.props };
+    for (const [k, v] of Object.entries(props)) if (!feito && Array.isArray(v) && v.every(ehNo)) props[k] = andar(v);
+    return { ...b, props };
+  });
+  const content = andar((dados.content ?? []) as No[]);
+  return feito ? { ...dados, root: { ...(dados.root ?? {}), props: { ...raiz, layoutCartao: true } }, content } as Data : dados;
 }
 

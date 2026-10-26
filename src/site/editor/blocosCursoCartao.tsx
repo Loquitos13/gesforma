@@ -373,6 +373,8 @@ function BotaoCurso(p: BotaoProps) {
 
 type CartaoProps = Base & {
   conteudo: Slot; fixo: boolean; cartao: boolean; espaco: number | null;
+  /** Posição no seu corredor (a coluna do cartão), largura máxima e, a acompanhar o scroll, a distância ao topo do ecrã. */
+  alinharH: "esticar" | "esquerda" | "centro" | "direita"; larguraMax: number | null; topo: number | null;
   /** Só nas páginas gravadas antes de o cartão ser feito de blocos. */
   mostrarImagem?: boolean; textoPrepago?: string; textoPreinscricao?: string; textoDireto?: string;
 };
@@ -404,16 +406,29 @@ export const CursoInscricao: ComponentConfig<CartaoProps> = {
     conteudo: { type: "slot", label: "Blocos no cartão" },
     cartao: simNao("Aspeto de cartão (fundo branco, barra e sombra)"),
     fixo: simNao("Acompanha o scroll (computador)"),
+    topo: campoNumero("Distância ao topo do ecrã quando acompanha o scroll (píxeis)"),
+    alinharH: {
+      type: "select", label: "Posição na coluna",
+      options: [{ label: "Largura toda", value: "esticar" }, { label: "À esquerda", value: "esquerda" }, { label: "Ao centro", value: "centro" }, { label: "À direita", value: "direita" }],
+    },
+    larguraMax: campoNumero("Largura máxima (píxeis, vazio = a da coluna)"),
     espaco: campoNumero("Espaço entre os blocos"),
     aparencia: campoAparencia(),
   },
-  defaultProps: { conteudo: blocosCartaoPadrao() as never, cartao: true, fixo: true, espaco: 16, aparencia: estiloVazio() },
+  defaultProps: { conteudo: blocosCartaoPadrao() as never, cartao: true, fixo: true, espaco: 16, alinharH: "esticar", larguraMax: null, topo: 112, aparencia: estiloVazio() },
   render: ({ conteudo: Conteudo, ...p }) => (
+    // Sempre no topo da sua coluna (self-start): esticado à altura da linha, o «sticky» não tinha por onde andar.
     <Caixa p={p} as="aside" className={juntar(
-      "h-fit",
+      "h-fit w-full self-start",
       p.cartao && "border-t-4 border-[var(--c-destaque)] bg-white p-7 shadow-[0_18px_50px_rgba(18,52,59,.18)]",
-      p.fixo && "lg:sticky lg:top-28",
-    )}>
+      p.fixo && "lg:sticky lg:top-[var(--topo-cartao)]",
+    )} estilo={{
+      ["--topo-cartao" as string]: `${p.topo ?? 112}px`,
+      justifySelf: { esquerda: "start", centro: "center", direita: "end", esticar: "stretch" }[p.alinharH ?? "esticar"],
+      maxWidth: p.larguraMax ? `${p.larguraMax}px` : undefined,
+      marginLeft: p.alinharH === "centro" || p.alinharH === "direita" ? "auto" : undefined,
+      marginRight: p.alinharH === "centro" || p.alinharH === "esquerda" ? "auto" : undefined,
+    }}>
       {curso => p.textoPrepago !== undefined
         ? <CartaoAntigo p={p} curso={curso} Conteudo={Conteudo} />
         : <Conteudo className="flex flex-col" style={{ gap: `${p.espaco ?? 16}px` }} minEmptyHeight={60} />}

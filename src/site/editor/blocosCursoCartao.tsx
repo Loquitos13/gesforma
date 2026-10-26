@@ -2,7 +2,7 @@
 // do curso e botão). O local escolhido é da página: os dados, as turmas, o preço e o botão seguem-no.
 import type { ComponentType } from "react";
 import type { ComponentConfig, Slot } from "@puckeditor/core";
-import { ePrepago, ePreinscricao, rotuloBotaoInscricao } from "../../partilhado/siteConteudo";
+import { ePrepago, ePreinscricao, rotuloBotaoInscricao, TEXTO_DIRETO, textoDiretoAtual } from "../../partilhado/siteConteudo";
 import { useInscricaoOpcional } from "../SiteInscricao";
 import { Icon, type Course } from "../SiteLanding";
 import {
@@ -156,7 +156,7 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
         const preinscricao = ePreinscricao(curso.enrollment);
         const acessoDireto = !preinscricao && !ePrepago(curso.enrollment);
         // Pré-pago sem datas (acesso imediato, ex.: e-learning assíncrono): também abre o pedido («Inscrever-me agora»).
-        const rotuloFixo = preinscricao ? rotuloBotaoInscricao(curso.enrollment) : acessoDireto ? "Pagamento/Inscrição"
+        const rotuloFixo = preinscricao || acessoDireto ? rotuloBotaoInscricao(curso.enrollment)
           : ePrepago(curso.enrollment) && !comTurmas.length ? rotuloBotaoInscricao(curso.enrollment) : "";
         return (
           <fieldset>
@@ -283,7 +283,7 @@ function TextoCurso(p: TextoProps) {
     <Caixa p={p}>
       {curso => {
         const base = p.porInscricao
-          ? (ePrepago(curso.enrollment) ? p.textoPrepago : ePreinscricao(curso.enrollment) ? p.textoPreinscricao : p.textoDireto)
+          ? (ePrepago(curso.enrollment) ? p.textoPrepago : ePreinscricao(curso.enrollment) ? p.textoPreinscricao : textoDiretoAtual(p.textoDireto))
           : p.texto;
         const texto = textoAutomaticoCurso(preencherVariaveis(base ?? "", variaveisCurso(curso, local)).trim(), curso);
         return texto ? <Tag className={juntar(e.cls, "whitespace-pre-line", t.className)} style={t.style}>{texto}</Tag> : null;
@@ -370,7 +370,7 @@ type CartaoProps = Base & {
 const TEXTO_INSCRICAO = {
   textoPrepago: "Primeiro recolhemos os seus dados. O pagamento fica no passo seguinte.",
   textoPreinscricao: "Escolha a data de início (com o cronograma de cada turma). A seguir pedimos os seus dados.",
-  textoDireto: "Este curso abre no Moodle. Não há formulário de pré-inscrição.",
+  textoDireto: TEXTO_DIRETO,
 };
 
 /** Blocos do cartão por omissão: imagem, tipo de inscrição, preço do local, texto e botão. */
@@ -419,7 +419,7 @@ function CartaoAntigo({ p, curso, Conteudo }: { p: Omit<CartaoProps, "conteudo">
       <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-[var(--c-destaque)]">{curso.enrollment}</p>
       <h2 className="mt-3 font-serif text-3xl">{precoNoLocal(curso, local)}</h2>
       <p className="mt-4 text-sm leading-6 opacity-65">
-        {ePrepago(curso.enrollment) ? p.textoPrepago : ePreinscricao(curso.enrollment) ? p.textoPreinscricao : p.textoDireto}
+        {ePrepago(curso.enrollment) ? p.textoPrepago : ePreinscricao(curso.enrollment) ? p.textoPreinscricao : textoDiretoAtual(p.textoDireto)}
       </p>
       <button type="button" onClick={() => abrir(curso, local ? { local } : undefined)} className="mt-7 flex w-full items-center justify-between bg-[var(--c-destaque)] px-5 py-4 text-xs font-extrabold uppercase tracking-[0.08em] text-white hover:brightness-90">
         {rotuloBotaoInscricao(curso.enrollment)} <Icon name="arrow" />

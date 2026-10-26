@@ -2,7 +2,7 @@
 // e cartão de inscrição). A mesma página serve todos os cursos; no editor escolhe-se o curso a ver.
 import { createContext, useContext, useEffect, type ComponentType, type CSSProperties } from "react";
 import type { ComponentConfig, Slot } from "@puckeditor/core";
-import { ePrepago, ePreinscricao, rotuloBotaoInscricao } from "../../partilhado/siteConteudo";
+import { ePrepago, ePreinscricao, rotuloBotaoInscricao, TEXTO_DIRETO, textoDiretoAtual } from "../../partilhado/siteConteudo";
 import { useInscricaoOpcional } from "../SiteInscricao";
 import { Icon, OfertaCtx, type Course } from "../SiteLanding";
 import { campoCurso, simNao } from "./campos";
@@ -142,7 +142,7 @@ function Detalhe({ p, curso, editar, Z }: { p: Props; curso: Course; editar: boo
               <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-[var(--c-destaque)]">{curso.enrollment}</p>
               <h2 className="mt-3 font-serif text-3xl">{curso.price}</h2>
               <p className="mt-4 text-sm leading-6 opacity-65">
-                {ePrepago(curso.enrollment) ? p.textoPrepago : ePreinscricao(curso.enrollment) ? p.textoPreinscricao : p.textoDireto}
+                {ePrepago(curso.enrollment) ? p.textoPrepago : ePreinscricao(curso.enrollment) ? p.textoPreinscricao : textoDiretoAtual(p.textoDireto)}
               </p>
               <button type="button" onClick={() => abrir(curso)} className="mt-7 flex w-full items-center justify-between bg-[var(--c-destaque)] px-5 py-4 text-xs font-extrabold uppercase tracking-[0.08em] text-white hover:brightness-90">
                 {rotuloBotaoInscricao(curso.enrollment)} <Icon name="arrow" />
@@ -211,7 +211,7 @@ export const DetalheCurso: ComponentConfig<Props> = {
     mostrarTurmas: true, tituloTurmas: "Próximas turmas", mostrarCartao: true, mostrarImagemCartao: true,
     textoPrepago: "Primeiro recolhemos os seus dados. O pagamento fica no passo seguinte.",
     textoPreinscricao: "A pré-inscrição pede os seus dados e, quando existir, a turma. O pedido fica registado e sai o email automático.",
-    textoDireto: "Este curso abre no Moodle. Não há formulário de pré-inscrição.",
+    textoDireto: TEXTO_DIRETO,
     aparencia: estiloVazio(),
   },
   render: ({ puck, ...p }) => <Vista {...(p as unknown as Props)} refRaiz={puck?.dragRef} editar={Boolean(puck?.isEditing)} />,

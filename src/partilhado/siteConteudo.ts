@@ -154,5 +154,11 @@ export function ePrepago(inscricao?: string) {
 export function rotuloBotaoInscricao(inscricao?: string) {
   if (ePreinscricao(inscricao)) return "Pré-inscrever";
   if (ePrepago(inscricao)) return "Inscrever-me agora";
-  return "Aceder ao curso";
+  return "Pagamento/Inscrição";
+}
+
+/** Texto do cartão de inscrição no acesso direto (o antigo dizia que não havia formulário: agora há dados e pagamento). */
+export const TEXTO_DIRETO = "Primeiro recolhemos os seus dados. O pagamento fica no passo seguinte e, depois dele, recebe o acesso ao curso.";
+export function textoDiretoAtual(texto: string | undefined) {
+  return texto && /abre no Moodle\. Não há formulário/.test(texto) ? TEXTO_DIRETO : texto ?? "";
 }

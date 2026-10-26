@@ -179,11 +179,11 @@ function WhatsAppAssistant() {
                     ? `Perfeito, ${name}. A pré-inscrição pede os seus dados e, quando existir, a turma. A equipa da ENA confirma os próximos passos.`
                     : ePrepago(chosen.enrollment)
                       ? `Perfeito, ${name}. Primeiro os seus dados. O pagamento fica no passo seguinte.`
-                      : `Perfeito, ${name}. Este curso abre no Moodle. A pré-inscrição não se aplica.`}
+                      : `Perfeito, ${name}. Primeiro recolhemos os seus dados e a seguir fica o pagamento.`}
                 </div>
                 <div className="ml-auto grid max-w-[90%] gap-2">
                   <label className="flex items-start gap-2 rounded-xl bg-white p-3 text-xs leading-5 shadow-sm"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-1 accent-[#075E54]" />Aceito que os dados desta conversa sejam usados para tratar a inscrição.</label>
-                  <button type="button" disabled={!consent || !chosen} onClick={() => { if (chosen) abrir(chosen); }} className="flex w-full items-center justify-between rounded-xl bg-[#075E54] px-4 py-3 text-sm font-bold text-white disabled:opacity-40">{chosen && ePreinscricao(chosen.enrollment) ? "Fazer pré-inscrição" : chosen && ePrepago(chosen.enrollment) ? "Inscrever-me agora" : "Aceder ao curso"}<Icon name="arrow" className="h-4 w-4" /></button>
+                  <button type="button" disabled={!consent || !chosen} onClick={() => { if (chosen) abrir(chosen); }} className="flex w-full items-center justify-between rounded-xl bg-[#075E54] px-4 py-3 text-sm font-bold text-white disabled:opacity-40">{chosen && ePreinscricao(chosen.enrollment) ? "Fazer pré-inscrição" : chosen && ePrepago(chosen.enrollment) ? "Inscrever-me agora" : "Pagamento/Inscrição"}<Icon name="arrow" className="h-4 w-4" /></button>
                   <button type="button" onClick={() => setSummarySent(true)} className="rounded-xl bg-[#DCF8C6] px-4 py-3 text-left text-sm font-bold">{summarySent ? "Resumo enviado para o seu email" : "Enviar-me este resumo por email"}</button>
                   <button type="button" onClick={() => transition("courses")} className="rounded-xl bg-[#DCF8C6] px-4 py-3 text-left text-sm font-bold">Ver outras recomendações</button>
                   <button type="button" onClick={restart} className="px-4 py-2 text-left text-xs font-bold text-[#075E54] underline">Recomeçar conversa</button>

@@ -52,7 +52,8 @@ function norm(value: string) {
 function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null; localInicial: string; onClose: () => void }) {
   const aberto = Boolean(curso);
   const preinscricao = ePreinscricao(curso?.enrollment);
-  const prepago = ePrepago(curso?.enrollment);
+  // Acesso direto segue o mesmo caminho do pré-pago: dados pessoais iniciais e, a seguir, o pagamento.
+  const prepago = Boolean(curso) && !preinscricao;
   // Financiada: nome completo, género, data de nascimento, nacionalidade, habilitações, telemóvel e email.
   const fin = curso?.regime === "fin";
   const [dadosFin, setDadosFin] = useState<InscricaoFin>(INSCRICAO_FIN_VAZIA);
@@ -259,22 +260,6 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
   }
 
   if (!curso) return null;
-  if (!preinscricao && !prepago) {
-    return (
-      <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="inscricao-titulo">
-        <button type="button" className="absolute inset-0 bg-[#14263D]/55" aria-label="Fechar" onClick={onClose} />
-        <div className="relative w-full max-w-xl bg-white px-6 py-7 shadow-[0_28px_80px_rgba(20,38,61,.28)] sm:px-8">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#A60000]">{curso.enrollment}</p>
-          <h2 id="inscricao-titulo" className="mt-2 font-serif text-3xl text-[#1C3350]">{curso.title}</h2>
-          <p className="mt-4 text-sm leading-7 text-[#1C3350]/75">
-            Este curso não passa pelo formulário de pré-inscrição. Quem se inscreve entra no Moodle.
-            O GesForma ainda não cria essa conta nem abre o curso.
-          </p>
-          <button type="button" onClick={onClose} className="mt-6 bg-[#1C3350] px-6 py-3 text-sm font-extrabold uppercase tracking-[0.08em] text-white">Fechar</button>
-        </div>
-      </div>
-    );
-  }
   const resumoTurma = [turma?.local || local, turma?.horario || horario, dataInicio ? fmtDataPt(dataInicio) : ""].filter(Boolean).join(" · ");
   // Sem gateway de pagamento: o pagamento é pedido pela secretaria, por email, depois da pré-inscrição.
   const notaPagamento = /transfer/i.test(metodo)

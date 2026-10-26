@@ -357,6 +357,10 @@ body:has(input[type="file"]:focus) [data-ficha-sticky] {
   .ena-seccao:has(> .ena-cartao-lateral) > :not(.ena-cartao-lateral) { grid-column: 1 / 2 !important; }
   .ena-seccao:has(> .ena-cartao-lateral) > .ena-cartao-lateral { grid-column: 2 / 3 !important; grid-row: 1; }
 }
+/* A secção com o cartão ocupa sempre a largura do tema, centrada (um «alinhar o bloco» na aparência encolhia-a à largura
+   do conteúdo e encostava-a à esquerda). */
+section:has(> .ena-seccao > .ena-cartao-lateral) { width: 100% !important; max-width: none !important; margin-left: 0 !important; margin-right: 0 !important; }
+.ena-seccao:has(> .ena-cartao-lateral) { width: 100% !important; max-width: var(--largura, 1240px) !important; margin-left: auto !important; margin-right: auto !important; }
 /* Tablet e telemóvel: uma só coluna (um «ocupa 2 colunas» criava uma coluna fantasma e estreitava o cartão). */
 @media (max-width: 1023px) {
   .ena-seccao:has(> .ena-cartao-lateral) { display: grid !important; grid-template-columns: minmax(0, 1fr) !important; }

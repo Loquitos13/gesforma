@@ -421,7 +421,28 @@ export function converterPaginaCurso(d: Data): Data {
     relevantes.props.id = `CursoRelevantes-${Date.now().toString(36)}`;
     dados = inserirNaPrimeira(dados, ["CursoTurmas", "Testemunhos", "CursoFuncionamento", "CursoPrograma", "CursoObjetivos", "CursoEscolhaLocal", "CursoDados", "CursoSintese"], [relevantes]);
   }
-  return dados;
+  return seccaoParaSoltos(dados);
+}
+
+/** Blocos do curso soltos na raiz (fora de uma secção) ficavam colados à borda: ganham uma secção com as margens do tema. */
+function seccaoParaSoltos(dados: Data): Data {
+  const lista = (dados.content ?? []) as No[];
+  const solto = (b: No) => b.type.startsWith("Curso") && b.type !== "CursoBanner";
+  if (!lista.some(solto)) return dados;
+  const content: No[] = [];
+  for (const b of lista) {
+    const ultima = content[content.length - 1];
+    if (!solto(b)) { content.push(b); continue; }
+    if (ultima?.props.soltos) { (ultima.props.conteudo as No[]).push(b); continue; }
+    const s = bloco("Seccao", Seccao.defaultProps, {
+      espaco: 0, aparencia: estiloVazio({ preenchimento: lados(0, 32, 64, 32), preenchimentoTel: lados(0, 20, 48, 20) }), conteudo: [b] as never,
+    }) as No;
+    s.props.id = `Seccao-${String(b.props.id)}`;
+    s.props.soltos = true;
+    content.push(s);
+  }
+  for (const b of content) delete b.props.soltos;
+  return { ...dados, content: content as Data["content"] };
 }
 
 /** Insere a seguir ao primeiro tipo de bloco (da lista, por ordem) que a página tiver; sem nenhum, fica como está. */

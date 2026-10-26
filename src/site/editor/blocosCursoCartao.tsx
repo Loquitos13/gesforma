@@ -12,7 +12,7 @@ import {
 import { campoCor, campoNumero, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { textoAutomaticoCurso } from "./textosLocais";
-import { corSegura, estiloTexto, estiloVazio, juntar, tipoVazia, type Tipografia } from "./estilos";
+import { corSegura, estiloTexto, estiloVazio, juntar, lados, tipoVazia, type Tipografia } from "./estilos";
 
 // ─── Escolha do local ────────────────────────────────────────────────────────
 
@@ -416,11 +416,18 @@ export const CursoInscricao: ComponentConfig<CartaoProps> = {
     aparencia: campoAparencia(),
   },
   defaultProps: { conteudo: blocosCartaoPadrao() as never, cartao: true, fixo: true, espaco: 16, alinharH: "esticar", larguraMax: null, topo: 112, aparencia: estiloVazio() },
-  render: ({ conteudo: Conteudo, ...p }) => (
+  render: ({ conteudo: Conteudo, ...p0 }) => {
+    // Com aspeto de cartão e sem espaço interior escolhido, 28 px (24 no telemóvel): as regras de espaço dos blocos
+    // punham-no a zero e o texto ficava encostado à borda.
+    const semInterior = !Object.values(p0.aparencia?.preenchimento ?? {}).some(v => v != null);
+    const p = p0.cartao && semInterior
+      ? { ...p0, aparencia: { ...estiloVazio(), ...p0.aparencia, preenchimento: lados(28), preenchimentoTel: lados(24) } }
+      : p0;
+    return (
     // Sempre no topo da sua coluna (self-start): esticado à altura da linha, o «sticky» não tinha por onde andar.
     <Caixa p={p} as="aside" className={juntar(
       "h-fit w-full self-start",
-      p.cartao && "border-t-4 border-[var(--c-destaque)] bg-white p-7 shadow-[0_18px_50px_rgba(18,52,59,.18)]",
+      p.cartao && "border-t-4 border-[var(--c-destaque)] bg-white shadow-[0_18px_50px_rgba(18,52,59,.18)]",
       p.fixo && "lg:sticky lg:top-[var(--topo-cartao)]",
     )} estilo={{
       ["--topo-cartao" as string]: `${p.topo ?? 112}px`,
@@ -433,7 +440,8 @@ export const CursoInscricao: ComponentConfig<CartaoProps> = {
         ? <CartaoAntigo p={p} curso={curso} Conteudo={Conteudo} />
         : <Conteudo className="flex flex-col" style={{ gap: `${p.espaco ?? 16}px` }} minEmptyHeight={60} />}
     </Caixa>
-  ),
+    );
+  },
 };
 
 /** Cartão gravado antes dos blocos (só até a página voltar a ser publicada pelo editor, que o converte). */

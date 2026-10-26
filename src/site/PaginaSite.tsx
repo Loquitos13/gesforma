@@ -1,6 +1,6 @@
 // Páginas do site feitas no editor visual: lê a versão publicada (ou o modelo base) e desenha-a.
 // O cabeçalho, o rodapé e o tema da página inicial servem todas as outras páginas.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Data } from "@puckeditor/core";
 import type { PaginaSite as Pagina } from "../partilhado/siteBlocos";
 import { CabecalhoSite, type CabecalhoProps, RodapeSite, type RodapeProps } from "./editor/blocosMoldura";
@@ -63,11 +63,13 @@ export const estiloDaMoldura = (m: Moldura | null, d: Disp) =>
 
 /** Desenha uma página do editor; as que não são a inicial levam o cabeçalho e o rodapé da inicial. */
 export function PaginaSite({ pagina, dados, moldura }: { pagina: Pagina; dados: Data; moldura: Moldura | null }) {
+  // Uma vez por versão da página (não a cada desenho: o vídeo recomeçava).
+  const convertida = useMemo(() => (pagina === "curso" ? converterPaginaCurso(dados) : dados), [pagina, dados]);
   if (pagina === "inicio") return <MolduraCtx.Provider value={moldura}><DesenharPagina config={configSite} dados={dados} /></MolduraCtx.Provider>;
   return (
     <MolduraCtx.Provider value={moldura}>
       {/* Página do curso gravada antes de blocos novos (ex.: vídeo de apresentação): mostra-os já, sem publicar de novo. */}
-      <DesenharPagina config={configPara(pagina)} dados={pagina === "curso" ? converterPaginaCurso(dados) : dados} />
+      <DesenharPagina config={configPara(pagina)} dados={convertida} />
     </MolduraCtx.Provider>
   );
 }

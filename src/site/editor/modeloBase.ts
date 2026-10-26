@@ -412,6 +412,7 @@ export function converterPaginaCurso(d: Data): Data {
   ].filter(Boolean) as No[];
   // Sem Programa na página, entram a seguir ao primeiro bloco de conteúdo que houver.
   if (novos.length) dados = inserirNaPrimeira(dados, ["CursoPrograma", "CursoObjetivos", "CursoEscolhaLocal", "CursoDados", "CursoSintese"], novos);
+  dados = garantirCartao(dados);
   dados = videoNoCartao(dados);
   dados = corredorDoCartao(dados);
   // «Outros cursos relevantes» fecha a coluna do conteúdo: a seguir às turmas (ou ao último bloco conhecido que houver).
@@ -496,7 +497,7 @@ function videoNoCartao(dados: Data): Data {
         ? { ...x, props: { ...x.props, esconderComVideo: true } } : x));
       if (!conteudo.some(x => x.type === "CursoVideo")) {
         const i = Math.max(0, conteudo.findIndex(x => x.type === "CursoImagem"));
-        const video = bloco("CursoVideo", videoDoCartao(), { titulo }) as No;
+        const video = reidentificar(bloco("CursoVideo", videoDoCartao(), { titulo }) as No, "auto-video");
         conteudo.splice(i, 0, video);
       }
       return { ...b, props: { ...b.props, conteudo } };
@@ -537,7 +538,7 @@ function corredorDoCartao(dados: Data): Data {
   const grelha = (seccao: No, filhos: No[]): No => {
     const principal = filhos.length === 1 && filhos[0]!.type === "Coluna"
       ? { ...filhos[0]!, props: { ...filhos[0]!.props, ocupar: 2 } }
-      : bloco("Coluna", Coluna.defaultProps, { ocupar: 2, espaco: 0, conteudo: filhos as never }) as No;
+      : { type: "Coluna", props: { ...Coluna.defaultProps, ocupar: 2, espaco: 0, conteudo: filhos, id: "Coluna-auto-corredor" } } as No;
     const espaco = Number(seccao.props.espaco);
     return { ...seccao, props: {
       ...seccao.props, conteudo: [principal, cartao!], disposicao: "grelha", colunas: 3, colunasTab: 1, colunasTel: 1,
@@ -564,10 +565,61 @@ function corredorDoCartao(dados: Data): Data {
     let fim = sem.length;
     while (fim > 0 && sem[fim - 1]!.type === "Rodape") fim--;
     if (inicio < 0 || !cartao) return dados;
-    const seccao = bloco("Seccao", Seccao.defaultProps, {
-      aparencia: estiloVazio({ preenchimento: lados(64, 32), preenchimentoTel: lados(48, 20) }),
-    }) as No;
+    const seccao = { type: "Seccao", props: { ...Seccao.defaultProps, id: "Seccao-auto-corredor",
+      aparencia: estiloVazio({ preenchimento: lados(64, 32), preenchimentoTel: lados(48, 20) }) } } as No;
     content = [...sem.slice(0, inicio), grelha(seccao, sem.slice(inicio, fim)), ...sem.slice(fim)];
   }
   return { ...dados, root: { ...(dados.root ?? {}), props: { ...raiz, layoutCartao: 2 } }, content } as Data;
 }
+
+/**
+ * Página do curso sem cartão de inscrição (removido, ou gravada sem ele): ganha um, com o vídeo de apresentação no
+ * topo, ao lado do conteúdo (na secção do enquadramento). Um vídeo que esteja fora do cartão passa para ele, com o
+ * título que tinha. Uma vez por página; depois, o que se mudar no editor fica.
+ */
+function garantirCartao(dados: Data): Data {
+  const raiz = ((dados.root as { props?: Record<string, unknown> } | undefined)?.props ?? {});
+  if (raiz.cartaoLateral) return dados;
+  const lista = (dados.content ?? []) as No[];
+  const marcar = (content: No[]) => ({ ...dados, root: { ...(dados.root ?? {}), props: { ...raiz, cartaoLateral: 1 } }, content }) as Data;
+  if (JSON.stringify(lista).includes('"CursoInscricao"')) return marcar(lista);
+  // Vídeos soltos saem (o cartão novo traz o seu, com o título do primeiro).
+  let titulo = "";
+  const semVideo = (l: No[]): No[] => l.flatMap(b => {
+    if (b.type === "CursoVideo") { titulo ||= String(b.props.titulo ?? ""); return []; }
+    const props = { ...b.props };
+    for (const [k, v] of Object.entries(props)) if (Array.isArray(v) && v.every(ehNo)) props[k] = semVideo(v as No[]);
+    return [{ ...b, props }];
+  });
+  const limpa = semVideo(lista);
+  const cartao = reidentificar(cartaoEmBlocos() as No, "auto-cartao");
+  if (titulo) {
+    const conteudo = (cartao.props.conteudo as No[]).map(x => (x.type === "CursoVideo" ? { ...x, props: { ...x.props, titulo } } : x));
+    cartao.props = { ...cartao.props, conteudo };
+  }
+  const tem = (b: No, tipo: string): boolean => b.type === tipo || Object.values(b.props).some(v => Array.isArray(v) && v.every(ehNo) && (v as No[]).some(x => tem(x, tipo)));
+  // A secção com o enquadramento (a do conteúdo); sem ela, a primeira secção da página; sem nenhuma, solto (o corredor arruma).
+  const alvo = limpa.findIndex(b => b.type === "Seccao" && tem(b, "CursoSintese"));
+  const i = alvo >= 0 ? alvo : limpa.findIndex(b => b.type === "Seccao");
+  if (i < 0) {
+    const depoisBanner = limpa.findIndex(b => b.type !== "Cabecalho" && b.type !== "CursoBanner");
+    const k = depoisBanner < 0 ? limpa.length : depoisBanner;
+    return marcar([...limpa.slice(0, k), cartao, ...limpa.slice(k)]);
+  }
+  const s = limpa[i]!;
+  const filhos = Array.isArray(s.props.conteudo) ? s.props.conteudo as No[] : [];
+  const nova = { ...s, props: { ...s.props, conteudo: [...filhos, cartao] } };
+  return marcar([...limpa.slice(0, i), nova, ...limpa.slice(i + 1)]);
+}
+
+/** Ids próprios (estáveis e únicos) para os blocos criados nas arrumações automáticas, e para os que eles têm dentro. */
+function reidentificar(no: No, prefixo: string): No {
+  let k = 0;
+  const andar = (b: No): No => {
+    const props: Record<string, unknown> = { ...b.props, id: `${b.type}-${prefixo}-${++k}` };
+    for (const [c, v] of Object.entries(props)) if (Array.isArray(v) && v.every(ehNo)) props[c] = (v as No[]).map(andar);
+    return { ...b, props };
+  };
+  return andar(no);
+}
+

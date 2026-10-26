@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLinha, datesFromRange, grelhaTempos, mudarHorasLinha, preencherIntervalo, saltoMatricula, setMatricula } from "../../src/partilhado/cronogramaGrelha.js";
+import { buildLinha, datesFromRange, grelhaTempos, temasDaSessao, mudarHorasLinha, preencherIntervalo, saltoMatricula, setMatricula } from "../../src/partilhado/cronogramaGrelha.js";
 import type { SessaoCronograma } from "../../src/partilhado/turmaModel.js";
 import { arrancar, pedido } from "./helpers.js";
 
@@ -46,6 +46,15 @@ describe("grelha de tempos de 45 minutos", () => {
     const b = g.blocos.find(x => x.date === "2026-11-14")!;
     expect(b.sessoes.map(x => x.colunas)).toEqual([2, 2]);
     expect(g.inicioDaLinha(1)).toBe("09:45");
+  });
+});
+
+describe("o que a aula trata", () => {
+  it("curso modular: código e nome do módulo; curso sem módulos: o tema", () => {
+    expect(temasDaSessao({ ...s("a", "2026-11-07"), modulos: ["M2 · Comunicação e dinâmica de grupos · 20h"] }))
+      .toEqual([{ codigo: "M2", titulo: "Comunicação e dinâmica de grupos" }]);
+    expect(temasDaSessao({ ...s("a", "2026-11-07"), modulos: ["Fórmulas e funções · 4h"] }))
+      .toEqual([{ codigo: "", titulo: "Fórmulas e funções" }]);
   });
 });
 

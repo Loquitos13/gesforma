@@ -569,3 +569,15 @@ export function grelhaTempos(sessoes: SessaoCronograma[], dates: string[], horar
   }
   return { base, n, tempo, blocos, inicioDaLinha: (i: number) => horaDosMinutos(base + i * tempo) };
 }
+
+/**
+ * O que a sessão trata, para o bloco da grelha: no curso modular, o código e o nome do módulo
+ * («M1» + «Aprendizagem e pedagogia»); no curso sem módulos, o tema (o título do capítulo). Sem as horas.
+ */
+export function temasDaSessao(s: SessaoCronograma) {
+  return (s.modulos ?? []).map(raw => {
+    const nome = raw.trim().replace(/\s*·\s*\d+\s*h(?:\s*\d{1,2})?\s*(?:min)?\s*$/i, "");
+    const m = /^((?:M|C|EX|AV)\s*\d+|UFCD\s*\d+)\s*[·.\-–:]?\s*(.*)$/i.exec(nome);
+    return m ? { codigo: m[1]!.replace(/\s+/g, " "), titulo: m[2]!.trim() } : { codigo: "", titulo: nome };
+  }).filter(t => t.codigo || t.titulo);
+}

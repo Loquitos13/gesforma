@@ -4,7 +4,7 @@ import { useOpcoes } from "../partilhado/dados/useOpcoes";
 import { apiPublicEntidade } from "../partilhado/api/publico";
 import { useRecurso } from "../partilhado/dados/useRecurso";
 import { useProgramaDoCurso } from "./cursoPrograma";
-import { type GrelhaLinha, addDays, cellLabel, cellTone, comFimCronograma, datesFromRange, defaultSlot, dayNum, fimEstavel, grelhaPeriodo, grupoLinha, larguraDiasEmChars, linhaLabel, linhasFromSessoes, mergeLinhas, monthSpans, moverEvento, saltoMatricula, setMatricula, sessoesSemFim, weekdayCode, grelhaTempos, type BlocoTempos, TEMPO_MIN, minutosDaHora, horaDosMinutos, horaOficial, formatHoraFaixa, linhaDaSessao, buildLinha } from "../partilhado/cronogramaGrelha";
+import { type GrelhaLinha, addDays, cellLabel, cellTone, comFimCronograma, datesFromRange, defaultSlot, dayNum, fimEstavel, grelhaPeriodo, grupoLinha, larguraDiasEmChars, linhaLabel, linhasFromSessoes, mergeLinhas, monthSpans, moverEvento, saltoMatricula, setMatricula, sessoesSemFim, weekdayCode, grelhaTempos, type BlocoTempos, TEMPO_MIN, minutosDaHora, horaDosMinutos, horaOficial, formatHoraFaixa, linhaDaSessao, buildLinha, temasDaSessao } from "../partilhado/cronogramaGrelha";
 import { generateEnaCronograma } from "../partilhado/cronogramaGrelhaGerar";
 import { mapLocalTurma, type LocalCatalogo } from "../partilhado/cronogramaLocal";
 import { imprimirCronogramaEna } from "../partilhado/cronogramaPrint";
@@ -88,7 +88,11 @@ export function CronogramaGrelha({
   const dates = useMemo(() => (salto ? todosOsDias.filter(d => d < salto.de || d > salto.ate) : todosOsDias), [todosOsDias, salto?.de, salto?.ate]);
   const months = monthSpans(dates).map(m => (salto && m.key === matricula.slice(0, 7) ? { ...m, count: m.count + 1 } : m));
   const larguras = useMemo(() => {
-    const rotulos = dates.map(d => linhas.map(l => cellLabel(sessoes, d, l)).filter(Boolean));
+    const blocosDias = new Set(sessoesSemFim(sessoes).filter(x => x.horaInicio && x.horaFim).map(x => x.data));
+    // As aulas mostram o nome do módulo ou o tema: a coluna alarga até à palavra mais comprida (com limite).
+    const temas = (d: string) => sessoesSemFim(sessoes).filter(x => x.data === d).flatMap(temasDaSessao)
+      .flatMap(t => [t.codigo, ...t.titulo.split(/\s+/).map(p => p.slice(0, 14))]);
+    const rotulos = dates.map(d => [...linhas.map(l => cellLabel(sessoes, d, l)), ...temas(d), ...(blocosDias.has(d) ? ["00:00–00:00"] : [])].filter(Boolean));
     return larguraDiasEmChars(dates, rotulos);
   }, [dates, linhas, sessoes]);
   const colunaSalto = (chave: string, conteudo?: ReactNode, rowSpan?: number) => (
@@ -262,8 +266,15 @@ export function CronogramaGrelha({
                                 className={`absolute flex flex-col items-center justify-center overflow-hidden border border-white/50 px-0.5 text-[9px] font-bold leading-tight cursor-grab active:cursor-grabbing ${TONE[sessaoModalidade(ses)] ?? TONE.presencial}`}
                                 title={`${formatDiaMes(d)} · ${formatHoraFaixa(ses.horaInicio, ses.horaFim)} · arraste para mudar de dia ou hora; clique para editar`}
                               >
-                                <span>{cellLabel(sessoes, d, linhaSes)}</span>
-                                <span className="font-medium opacity-80">{horaOficial(ses.horaInicio)}–{horaOficial(ses.horaFim)}</span>
+                                {temasDaSessao(ses).length
+                                  ? temasDaSessao(ses).map((t, ti) => (
+                                      <span key={ti} className="block w-full">
+                                        {t.codigo && <span className="block">{t.codigo}</span>}
+                                        {t.titulo && <span className={`block line-clamp-2 ${t.codigo ? "font-medium" : ""}`}>{t.titulo}</span>}
+                                      </span>
+                                    ))
+                                  : <span className="font-medium opacity-80">{sessaoModalidade(ses) === "sincrona" ? "Síncrona" : unidade === "capítulo" ? "Tema por definir" : "Módulo por definir"}</span>}
+                                <span className="block font-medium opacity-80">{horaOficial(ses.horaInicio)}–{horaOficial(ses.horaFim)}</span>
                               </button>
                             );
                           })}

@@ -428,7 +428,8 @@ export const CursoInscricao: ComponentConfig<CartaoProps> = {
     <Caixa p={p} as="aside" className={juntar(
       "h-fit w-full self-start",
       p.cartao && "border-t-4 border-[var(--c-destaque)] bg-white shadow-[0_18px_50px_rgba(18,52,59,.18)]",
-      p.fixo && "lg:sticky lg:top-[var(--topo-cartao)]",
+      // No editor não acompanha o scroll: a pré-visualização mede o scroll à sua maneira e o cartão saía da secção.
+      p.fixo && !(p0.puck as { isEditing?: boolean } | undefined)?.isEditing && "lg:sticky lg:top-[var(--topo-cartao)]",
     )} estilo={{
       ["--topo-cartao" as string]: `${p.topo ?? 112}px`,
       justifySelf: { esquerda: "start", centro: "center", direita: "end", esticar: "stretch" }[p.alinharH ?? "esticar"],

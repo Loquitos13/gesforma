@@ -91,7 +91,7 @@ export const apiSaveSessao = (
   turmaId: number,
   n: number,
   /** `sessaoId` é a verdade (os dados seguem a sessão se ela mudar de lugar); `n` só serve sem ele. */
-  body: { sessaoId?: string; plano?: unknown; sumario?: unknown; presencas?: unknown; folha?: unknown; validarPresencas?: boolean },
+  body: { sessaoId?: string; plano?: unknown; sumario?: unknown; presencas?: unknown; folha?: unknown; validarPresencas?: boolean; assinarFolha?: true },
 ) => api<{ sessao: SessaoPedagogica }>(`/v1/turmas/${regime}/${turmaId}/sessoes/${n}`, { method: "PUT", body: JSON.stringify(body) });
 
 export const apiSaveTurmaDocumento = (regime: Regime, turmaId: number, body: TurmaDocumento) =>

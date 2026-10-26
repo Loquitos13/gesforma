@@ -165,10 +165,10 @@ export function useTurmaPedagogia(regime: Regime, turmaId: number | undefined, c
     void recarregar();
   }, [mergeSessao, recarregar, regime, turmaId]);
 
-  const guardarPresencas = useCallback(async (n: number, rows: PresencaRow[], sessaoId?: string, folha?: Componente) => {
+  const guardarPresencas = useCallback(async (n: number, rows: PresencaRow[], sessaoId?: string, folha?: Componente, assinar = false) => {
     mergeSessao(n, sessaoId, { presencas: rows, ...(folha ? { folha: { ...folhas[n], ...folha } } : {}) });
     if (turmaId == null || turmaId <= 0) return;
-    await persist(apiSaveSessao(regime, turmaId, n, { sessaoId, presencas: rows, ...(folha ? { folha } : {}) }));
+    await persist(apiSaveSessao(regime, turmaId, n, { sessaoId, presencas: rows, ...(folha ? { folha } : {}), ...(assinar ? { assinarFolha: true } : {}) }));
     void recarregar();
   }, [folhas, mergeSessao, recarregar, regime, turmaId]);
 

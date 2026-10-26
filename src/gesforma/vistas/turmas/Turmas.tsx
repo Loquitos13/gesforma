@@ -21,23 +21,31 @@ import { TurmaFormulario } from "./TurmaFormulario";
 import { BARRA, FASES, FASE_ESTADO, alertasDaTurma, tomOcupacao } from "./turmasUi";
 import { rotuloCodigoCurso } from "../../../partilhado/codigoCurso";
 
-const PADRAO = { fase: "", q: "", curso: "", local: "", horario: "", formador: "", financiador: "", de: "", ate: "", ordem: "", pagina: "1" };
+const PADRAO = { fase: "", q: "", curso: "", local: "", horario: "", formador: "", financiador: "", de: "", ate: "", ordem: "", pagina: "1", regime: "" };
 const POR_PAGINA = 25;
 
 export default function Turmas({ view, navigate }: VistaProps) {
-  const regime: Regime = view === "fin-turmas" ? "fin" : "gold";
-  const fin = regime === "fin";
   const { user, pode } = useAuth();
   const formador = user.role === "formador";
-  const gerir = !formador && pode(fin ? "turmasFin.gerir" : "turmas.gerir");
   const [f, setF, limpar] = useFiltrosUrl(PADRAO);
+  // O formador vê as turmas Gold e as da Financiada em que dá aulas (escolhe o regime em cima).
+  const contagemRegime = useRecurso(formador ? "turmas:formador:regimes" : null, async s => {
+    const [g, fi] = await Promise.all([apiTurmas({ regime: "gold", pagina: 1, porPagina: 1 }, s), apiTurmas({ regime: "fin", pagina: 1, porPagina: 1 }, s)]);
+    return { gold: g.total, fin: fi.total };
+  });
+  const regimeFormador: Regime = f.regime === "fin" || f.regime === "gold" ? f.regime
+    : contagemRegime.dados && !contagemRegime.dados.gold && contagemRegime.dados.fin ? "fin" : "gold";
+  const regime: Regime = formador ? regimeFormador : view === "fin-turmas" ? "fin" : "gold";
+  const fin = regime === "fin";
+  const gerir = !formador && pode(fin ? "turmasFin.gerir" : "turmas.gerir");
   const [form, setForm] = useState<{ id: number | null } | null>(null);
   const [apagar, setApagar] = useState<LinhaTurma | null>(null);
   const [regras, setRegras] = useState(false);
   const [apoios, setApoios] = useState<LinhaTurma | null>(null);
   const [regrasApoios, setRegrasApoios] = useState(false);
 
-  const pedido = { regime, ...f, pagina: Number(f.pagina) || 1, porPagina: POR_PAGINA };
+  const { regime: _r, ...filtros } = f;
+  const pedido = { ...filtros, regime, pagina: Number(f.pagina) || 1, porPagina: POR_PAGINA };
   const lista = useRecurso(`turmas:${regime}:${JSON.stringify(pedido)}`, s => apiTurmas(pedido, s));
   const dtp = useRecurso(formador ? null : `dtp:pct:${regime}`, () => apiDtpResumo(regime));
   const cursos = useOpcoes("cursos", { regime });
@@ -167,8 +175,8 @@ export default function Turmas({ view, navigate }: VistaProps) {
   return (
     <div className="space-y-4">
       <PageHeader
-        trilho={[{ rotulo: fin ? "Financiada" : "Gold", onClick: () => navigate(fin ? "fin-painel" : "gold-painel") }, { rotulo: "Turmas" }]}
-        titulo={fin ? "Turmas financiadas" : "Turmas Gold"}
+        trilho={formador ? [{ rotulo: "Formador" }, { rotulo: "As minhas turmas" }] : [{ rotulo: fin ? "Financiada" : "Gold", onClick: () => navigate(fin ? "fin-painel" : "gold-painel") }, { rotulo: "Turmas" }]}
+        titulo={formador ? `As minhas turmas · ${fin ? "Financiada" : "Gold"}` : fin ? "Turmas financiadas" : "Turmas Gold"}
         subtitulo={resumo
           ? `${num(resumo.total)} turmas · ${num(resumo.porFase.decorrer ?? 0)} a decorrer · ${num(resumo.inscricoesAbertas)} com inscrições abertas · ${num(resumo.vagasLivres)} vagas livres`
           : "A carregar…"}
@@ -188,6 +196,19 @@ export default function Turmas({ view, navigate }: VistaProps) {
           locais={locais.opcoes.map(o => o.valor)}
           horarios={horarios.opcoes.map(o => o.valor)}
           onApplied={depoisDeGravar}
+        />
+      )}
+
+      {formador && (
+        <Separadores
+          estilo="pilula"
+          rotulo="Regime das turmas"
+          itens={[
+            { id: "gold", rotulo: "Gold", contagem: contagemRegime.dados?.gold },
+            { id: "fin", rotulo: "Financiada", contagem: contagemRegime.dados?.fin },
+          ]}
+          ativo={regime}
+          onMudar={id => setF({ ...PADRAO, regime: id })}
         />
       )}
 

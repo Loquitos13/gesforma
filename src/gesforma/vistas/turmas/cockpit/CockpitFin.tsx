@@ -41,8 +41,7 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
   const nomesEu = useNomesEu();
   const opcoesFormador = useOpcoesFormador(undefined, "fin");
   const [tab, setTab] = useState<Separador>(initialTab);
-  // A equipa tem o cronograma e as sessões num só separador (o «Sessões» abre esse); o formador fica com «Sessões».
-  const separadorDe = (t: Separador): Separador => (souFormador ? tabDoFormador(t) : t === "sessoes" ? "cronograma" : t);
+  const separadorDe = (t: Separador): Separador => (souFormador ? tabDoFormador(t) : t);
   useEffect(() => { setTab(separadorDe(initialTab)); }, [initialTab, turmaId, souFormador]); // eslint-disable-line react-hooks/exhaustive-deps
   const ped = useTurmaPedagogia("fin", turma?.id ?? 0, turma?.cronograma);
   const criterios = useCriteriosAvaliacao("fin", turma?.curso);
@@ -173,15 +172,13 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
 
               <NextActions accent="fin" actions={proximos.slice(0, 3)} />
               <TurmaTabBar tab={tab} onChange={t => setTab(separadorDe(t))} accent="fin" dtpPct={ped.dtp.pct} dossie={staffPodeDossie(user.role)} despesas={!souFormador}
-                so={souFormador ? TABS_FORMADOR : ["overview", "cronograma", "avaliacao", "documentos", "dtp", "certificados", "despesas"]}
-                rotulos={souFormador ? undefined : { cronograma: "Cronograma e sessões" }} />
+                so={souFormador ? TABS_FORMADOR : undefined} />
               {!activa && <TurmaInactivaBanner nome={t.nome} onActivate={() => toggle(true)} />}
 
               {tab === "cronograma" && !souFormador && (
                 <CronogramaEditor layout="page" accent="fin" turmaId={t.id} identidade={`fin-${t.id}`} nome={t.nome} sessoes={t.cronograma}
                   onChange={setCronograma} publicar={publicarCronograma} inicio={t.dataInicio} horario={t.horario} horas={t.horas} formador={t.formador} curso={t.curso} local={t.local} />
               )}
-              {tab === "cronograma" && !souFormador && <div id="sessoes-da-turma">{sessoesTab}</div>}
               {tab === "dtp" && staffPodeDossie(user.role) && (
                 <DtpPanel regime="fin" turma={{ codigo: t.nome, id: t.id, titulo: t.curso, sub: `${rotuloCodigoCurso(t.ufcdCod)} · ${t.horas} h` }} dtp={ped.dtp} estado={ped.estado}
                   onToggle={(item, proximo) => void ped.guardarDtp(item.id, proximo)} onAnexo={(item, file) => void ped.guardarDtpAnexo(item.id, file)}
@@ -229,6 +226,7 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
                 : undefined}
               podeValidar={staffPodeDossie(user.role)}
               onSave={(rows, folha) => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id, folha); }}
+              onAssinar={souFormador ? (rows, folha) => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id, folha, true); } : undefined}
               onValidar={(validar, rows, folha) => { if (presencasSessao) void ped.validarPresencas(presencasSessao.n, validar, rows, folha, presencasSessao.id); }}
               onImprimir={presencasSessao ? () => { apiFolhasPresencaFin(t.id, presencasSessao.n).catch(err => toastError(err, "Não foi possível gerar a folha de presenças.")); } : undefined} />
             <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" accent="fin"

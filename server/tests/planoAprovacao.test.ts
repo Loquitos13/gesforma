@@ -56,7 +56,10 @@ describe("aprovação do plano de sessão com pedidos reais", () => {
     expect((await plano()).estado).toBe("rascunho");
     expect((await pedido(ctx, "formador", "PUT", url, { plano: { ...PLANO, estado: "aprovado" } })).statusCode).toBe(403);
     expect((await pedido(ctx, "formador", "PUT", url, { plano: { ...PLANO, estado: "submetido" } })).statusCode).toBe(200);
-    expect(await plano()).toMatchObject({ estado: "submetido", assinado: false });
+    expect(await plano()).toMatchObject({ estado: "submetido", assinado: false, assinaturaFormador: { nome: expect.any(String), em: expect.any(String) } });
+    // Uma assinatura enviada pelo cliente não conta: só a do servidor ao submeter.
+    expect((await pedido(ctx, "formador", "PUT", url, { plano: { ...PLANO, estado: "submetido", assinaturaFormador: { nome: "Outro", em: "2020-01-01" } } })).statusCode).toBe(200);
+    expect((await plano()).assinaturaFormador.nome).not.toBe("Outro");
 
     // A coordenação vê o aviso no sino.
     const sino = (await pedido(ctx, "secretaria", "GET", "/v1/notificacoes")).json().notificacoes as { chave: string; tab?: string }[];
@@ -90,7 +93,13 @@ describe("aprovação do plano de sessão com pedidos reais", () => {
     const f = r.json().formando.id as number;
     const url = `/v1/turmas/gold/${turma}/sessoes/1`;
     const presencas = [{ id: f, nome: "Rita", presente: true, estado: "atraso", minutos: 30 }];
-    expect((await pedido(ctx, "formador", "PUT", url, { presencas, folha: { teoricas: 3, praticas: 1 } })).statusCode).toBe(200);
+    expect((await pedido(ctx, "formador", "PUT", url, { presencas, folha: { teoricas: 3, praticas: 1 }, assinarFolha: true })).statusCode).toBe(200);
+    const assinada = (await pedido(ctx, "secretaria", "GET", `/v1/turmas/gold/${turma}/pedagogia`)).json().sessoes[0].folha;
+    expect(assinada).toMatchObject({ assinadaPor: expect.any(String), assinadaEm: expect.any(String) });
+    // Alterar depois de assinar tira a assinatura; volta a assinar.
+    expect((await pedido(ctx, "formador", "PUT", url, { folha: { praticas: 1 } })).statusCode).toBe(200);
+    expect((await pedido(ctx, "secretaria", "GET", `/v1/turmas/gold/${turma}/pedagogia`)).json().sessoes[0].folha.assinadaPor).toBeNull();
+    expect((await pedido(ctx, "formador", "PUT", url, { assinarFolha: true })).statusCode).toBe(200);
     expect((await pedido(ctx, "formador", "PUT", url, { validarPresencas: true })).statusCode).toBe(403);
     const v = await pedido(ctx, "secretaria", "PUT", url, { validarPresencas: true, presencas: [{ id: f, nome: "Rita", presente: false, estado: "falta_justificada", justificacao: "Doença" }] });
     expect(v.statusCode, v.body).toBe(200);
@@ -102,6 +111,7 @@ describe("aprovação do plano de sessão com pedidos reais", () => {
     expect((await pedido(ctx, "formador", "PUT", url, { folha: { teoricas: 4 } })).statusCode).toBe(403);
     expect((await pedido(ctx, "formador", "PUT", url, { presencas })).statusCode).toBe(403);
     // A coordenação ainda corrige depois de validada.
+    expect((await pedido(ctx, "secretaria", "PUT", url, { assinarFolha: true })).statusCode).toBe(403);
     expect((await pedido(ctx, "secretaria", "PUT", url, { folha: { teoricas: 2, praticas: 2 } })).statusCode).toBe(200);
   });
 });

@@ -4,13 +4,18 @@ import { useEffect, useState } from "react";
 import { data as fmtDataUi } from "./ui/formatos";
 import { imprimirFolhasPresencas } from "./presencasPrint";
 import { I } from "./turmaIcones";
+import { dataHoraAssinatura } from "./SessaoModais";
 
 export type EstadoPresenca = "presente" | "falta_justificada" | "falta_injustificada" | "atraso";
 
 /** Uma marcação: `estado` manda; sem ele (folhas antigas), `presente` decide entre presente e falta injustificada. */
 export type LinhaPresenca = { id: number; nome: string; presente: boolean; estado?: EstadoPresenca; minutos?: number; justificacao?: string };
 
-export type FolhaSessao = { teoricas?: number | null; praticas?: number | null; validadaPor?: string | null; validadaEm?: string | null };
+export type FolhaSessao = {
+  teoricas?: number | null; praticas?: number | null; validadaPor?: string | null; validadaEm?: string | null;
+  /** Assinatura digital do formador (nome da conta e hora do servidor). */
+  assinadaPor?: string | null; assinadaEm?: string | null;
+};
 
 export function estadoDaLinha(l: Pick<LinhaPresenca, "presente" | "estado">): EstadoPresenca {
   return l.estado ?? (l.presente ? "presente" : "falta_injustificada");
@@ -59,7 +64,7 @@ function Segmento<T extends string>({ valor, opcoes, onChange, desactivado, rotu
 }
 
 export function PresencasSessaoModal({
-  open, onClose, sessao, formandos, folha, validada = false, onSave, onValidar, podeValidar = false, soLeitura,
+  open, onClose, sessao, formandos, folha, validada = false, onSave, onValidar, podeValidar = false, soLeitura, onAssinar,
   turmaNome, cursoNome, onImprimir,
 }: {
   open: boolean; onClose: () => void;
@@ -72,6 +77,8 @@ export function PresencasSessaoModal({
   /** Coordenação: valida (ou reabre) a folha, gravando ao mesmo tempo o que estiver alterado. */
   onValidar?: (validar: boolean, rows: LinhaPresenca[], folha: { teoricas: number | null; praticas: number | null }) => void;
   podeValidar?: boolean;
+  /** Formador: grava e assina digitalmente a folha. */
+  onAssinar?: (rows: LinhaPresenca[], folha: { teoricas: number | null; praticas: number | null }) => void;
   /** Motivo para abrir só em consulta. */
   soLeitura?: string;
   turmaNome?: string;
@@ -124,6 +131,11 @@ export function PresencasSessaoModal({
         </div>
 
         {soLeitura && <p className="m-0 px-5 py-2 text-xs bg-slate-50 border-b border-slate-100 text-slate-600">{soLeitura}</p>}
+        <p className={`m-0 px-5 py-2 text-xs border-b border-slate-100 ${folha?.assinadaPor ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
+          {folha?.assinadaPor && folha.assinadaEm
+            ? <>✍ Assinada digitalmente pelo formador <strong>{folha.assinadaPor}</strong> em {dataHoraAssinatura(folha.assinadaEm)}.</>
+            : "Por assinar pelo formador."}
+        </p>
 
         <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex-shrink-0 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -219,7 +231,11 @@ export function PresencasSessaoModal({
             Imprimir folha
           </button>
           {!bloqueada && (
-            <button onClick={() => { onSave?.(finais, componente); onClose(); }} className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">Guardar presenças</button>
+            <button onClick={() => { onSave?.(finais, componente); onClose(); }} className={`flex-1 py-2 text-sm font-semibold rounded-lg ${onAssinar ? "border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50" : "bg-emerald-600 hover:bg-emerald-700 text-white"}`}>Guardar presenças</button>
+          )}
+          {!bloqueada && onAssinar && (
+            <button onClick={() => { onAssinar(finais, componente); onClose(); }} title="Grava e assina digitalmente a folha (fica o seu nome e a hora)"
+              className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">Guardar e assinar</button>
           )}
           {podeValidar && onValidar && (
             validada

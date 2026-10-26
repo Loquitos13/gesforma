@@ -226,6 +226,7 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
                 : undefined}
               podeValidar={staffPodeDossie(user.role)}
               onSave={(rows, folha) => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id, folha); }}
+              onAssinar={souFormador ? (rows, folha) => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id, folha, true); } : undefined}
               onValidar={(validar, rows, folha) => { if (presencasSessao) void ped.validarPresencas(presencasSessao.n, validar, rows, folha, presencasSessao.id); }} />
             <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado"
               context={{ kind: "certificado", regime: "gold", turma: t.nome, formando: uploadCert != null ? String(uploadCert) : undefined, label: "Certificado" }}

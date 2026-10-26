@@ -66,7 +66,9 @@ export const sessaoPatchSchema = z.object({
   folha: folhaSchema.optional(),
   /** Coordenação: valida (true) ou reabre (false) a folha de presenças; o formador deixa de a poder alterar. */
   validarPresencas: z.boolean().optional(),
-}).refine(v => v.plano || v.sumario || v.presencas || v.folha || v.validarPresencas !== undefined, { message: "vazio" });
+  /** Formador: assina a folha de presenças (fica o nome da conta e a hora do servidor). */
+  assinarFolha: z.literal(true).optional(),
+}).refine(v => v.plano || v.sumario || v.presencas || v.folha || v.validarPresencas !== undefined || v.assinarFolha, { message: "vazio" });
 
 export const documentoSchema = z.object({
   grupoId: z.string().min(1).max(40),

@@ -90,7 +90,11 @@ export type SessaoDocFin = {
   presencas: { nome: string; presenca: string }[];
   /** Horas teóricas (T) e práticas (P) definidas na folha da sessão; null = por preencher. */
   componente?: { teoricas: number | null; praticas: number | null };
+  /** Assinaturas digitais (nome da conta e hora): plano pelo formador e aprovação; folha pelo formador e validação. */
+  assinaturas?: { planoFormador?: Assinatura; planoCoordenador?: Assinatura; folhaFormador?: Assinatura; folhaCoordenador?: Assinatura };
 };
+
+export type Assinatura = { nome: string; em: string } | null;
 
 const MOMENTOS = [
   { id: "introducao", rotulo: "Introdução" },
@@ -300,7 +304,15 @@ async function sessoesDaTurma(db: Db, turma: TurmaReembolso, formandos: Formando
     const formadores = (Array.isArray(s.formadores) && s.formadores.length ? s.formadores : [s.formador ?? ""]).map(txt).filter(Boolean);
     const folha = obj(linha?.folha);
     const horas = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+    const ass = (nome: unknown, em: unknown): Assinatura => (txt(nome) && txt(em) ? { nome: txt(nome), em: txt(em) } : null);
+    const assPlano = obj(plano.assinaturaFormador);
     out.push({
+      assinaturas: {
+        planoFormador: ass(assPlano.nome, assPlano.em),
+        planoCoordenador: plano.estado === "aprovado" || plano.assinado === true ? ass(plano.revistoPor, plano.revistoEm) : null,
+        folhaFormador: ass(folha.assinadaPor, folha.assinadaEm),
+        folhaCoordenador: obj(linha?.sumario).presencasValidadas ? ass(folha.validadaPor, folha.validadaEm) : null,
+      },
       componente: { teoricas: horas(folha.teoricas), praticas: horas(folha.praticas) },
       n,
       data: txt(s.data).slice(0, 10),
@@ -481,10 +493,23 @@ function celulaRotulo(d: Doc, pg: Pg, x: number, w: number, alt: number, rotulo:
 }
 
 /** «o Formador: ________». */
-function linhaAssinatura(d: Doc, pg: Pg, rotulo: string, comprimento = 150) {
+/** «Assinado digitalmente por Nome em dd-mm-aaaa hh:mm» (hora de Lisboa). */
+export function textoAssinatura(a: Assinatura | undefined) {
+  if (!a) return "";
+  const dt = new Date(a.em);
+  if (Number.isNaN(dt.getTime())) return `Assinado digitalmente por ${a.nome}`;
+  const p = Object.fromEntries(new Intl.DateTimeFormat("pt-PT", {
+    timeZone: "Europe/Lisbon", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(dt).map(x => [x.type, x.value]));
+  return `Assinado digitalmente por ${a.nome} em ${p.day}-${p.month}-${p.year} ${p.hour}:${p.minute}`;
+}
+
+function linhaAssinatura(d: Doc, pg: Pg, rotulo: string, comprimento = 150, assinatura?: Assinatura) {
   escrever(pg, rotulo, pg.m, pg.y - TAM, d.sans, TAM);
   const x = pg.m + d.sans.widthOfTextAtSize(rotulo, TAM) + 4;
-  pg.page.drawLine({ start: { x, y: pg.y - TAM - 1 }, end: { x: x + comprimento, y: pg.y - TAM - 1 }, thickness: 0.5, color: BORDA });
+  const texto = textoAssinatura(assinatura);
+  if (texto) escrever(pg, texto, x + 2, pg.y - TAM, d.negrito, TAM - 0.5);
+  pg.page.drawLine({ start: { x, y: pg.y - TAM - 1 }, end: { x: x + Math.max(comprimento, texto ? d.negrito.widthOfTextAtSize(texto, TAM - 0.5) + 6 : 0), y: pg.y - TAM - 1 }, thickness: 0.5, color: BORDA });
   pg.y -= TAM + 14;
 }
 
@@ -627,8 +652,8 @@ export async function pdfPlanosSessaoFin(cab: CabecalhoFin, sessoes: SessaoDocFi
     }
     pg.y -= 16;
     if (pg.y - 40 < pg.fundo) pg = novaPagina(d, PAISAGEM, "PLANO DE SESSÃO", sub);
-    linhaAssinatura(d, pg, "o Formador:", 150);
-    linhaAssinatura(d, pg, "o Coordenador:", 150);
+    linhaAssinatura(d, pg, "o Formador:", 150, s?.assinaturas?.planoFormador);
+    linhaAssinatura(d, pg, "o Coordenador:", 150, s?.assinaturas?.planoCoordenador);
   }
   return fecharDoc(d);
 }
@@ -710,8 +735,8 @@ export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDoc
       pg.y -= altSumario + 18;
     }
     if (pg.y - 40 < pg.fundo) pg = novaPagina(d, RETRATO, titulo, s ? `Sessão ${s.n} · ${fmtDataDDMMAAAA(s.data)} (continuação)` : "");
-    linhaAssinatura(d, pg, "o Formador:", 160);
-    linhaAssinatura(d, pg, "o Coordenador:", 160);
+    linhaAssinatura(d, pg, "o Formador:", 160, s?.assinaturas?.folhaFormador);
+    linhaAssinatura(d, pg, "o Coordenador:", 160, s?.assinaturas?.folhaCoordenador);
   }
   return fecharDoc(d);
 }

@@ -60,7 +60,7 @@ export function estadoDoPlano(p: Partial<PlanoIn> | null | undefined): EstadoPla
 
 /**
  * - só a coordenação (admin, secretaria, financiada) aprova ou devolve; devolver pede comentários;
- * - o formador grava em rascunho ou submete; um plano devolvido continua devolvido até ele o submeter de novo;
+ * - o formador grava em rascunho ou assina e submete; um plano devolvido continua devolvido até ele o submeter de novo;
  * - os comentários e quem reviu são da coordenação: o formador não os muda;
  * - `assinado` acompanha a aprovação (é o que o resto da plataforma lê).
  * `revisto` diz se a coordenação acabou de aprovar ou devolver (para avisar o formador).
@@ -75,19 +75,28 @@ export function planoComRegras(
   const antes = estadoDoPlano(anterior);
   const coordenacao = PEDAGOGIA.has(role);
   const pedido = novo.estado && ESTADOS_PLANO.has(novo.estado) ? novo.estado : null;
+  // Campos que só o servidor escreve: o que vem do pedido não conta.
   const base = {
     ...novo,
     submetidoEm: anterior?.submetidoEm, revistoPor: anterior?.revistoPor, revistoEm: anterior?.revistoEm,
+    assinaturaFormador: anterior?.assinaturaFormador,
   } as PlanoIn;
   if (!coordenacao) {
     if (pedido === "aprovado" || pedido === "devolvido") {
       return { ok: false, erro: "Só a coordenação pedagógica aprova ou devolve o plano de sessão.", codigo: 403 };
     }
-    const estado: EstadoPlano = pedido ?? (antes === "submetido" || antes === "devolvido" ? antes : "rascunho");
+    // Alterar um plano já submetido (assinado) volta a rascunho: tem de ser assinado e submetido outra vez.
+    const estado: EstadoPlano = pedido ?? (antes === "devolvido" ? "devolvido" : "rascunho");
     const submetido = estado === "submetido" && antes !== "submetido";
+    // Submeter é assinar: fica quem assinou (a conta com que entrou) e quando (hora do servidor).
+    // Mexer no plano depois de assinado tira a assinatura até voltar a submeter.
+    const assinatura = submetido ? { nome: quem, em: agora.toISOString() } : estado === "submetido" ? anterior?.assinaturaFormador : undefined;
     return {
       ok: true, revisto: null, submetido,
-      plano: { ...base, estado, assinado: false, comentario: anterior?.comentario, ...(submetido ? { submetidoEm: agora.toISOString() } : {}) },
+      plano: {
+        ...base, estado, assinado: false, comentario: anterior?.comentario, assinaturaFormador: assinatura,
+        ...(submetido ? { submetidoEm: agora.toISOString() } : {}),
+      },
     };
   }
   const estado: EstadoPlano = pedido ?? antes;

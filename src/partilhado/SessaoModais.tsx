@@ -12,7 +12,17 @@ export type PlanoSessaoData = {
   assinado?: boolean;
   /** Fluxo de aprovação: o formador submete; a coordenação aprova ou devolve com comentários. */
   estado?: EstadoPlano; comentario?: string; submetidoEm?: string; revistoPor?: string; revistoEm?: string;
+  /** Assinatura digital do formador ao submeter (nome da conta e hora do servidor). */
+  assinaturaFormador?: { nome: string; em: string } | null;
 };
+
+/** «dd-mm-aaaa hh:mm» de um ISO (hora local). */
+export function dataHoraAssinatura(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 
 /** Planos gravados antes da aprovação: assinado conta como aprovado. */
 export function estadoPlano(p: PlanoSessaoData | undefined): EstadoPlano {
@@ -28,7 +38,7 @@ export const ROTULO_ESTADO_PLANO: Record<EstadoPlano, { texto: string; cls: stri
 
 /** Gravar sem mudar de estado: o servidor mantém o que estava (o formador não mexe na aprovação). */
 function semEstado(p: PlanoSessaoData): PlanoSessaoData {
-  const { estado: _e, comentario: _c, revistoPor: _r, revistoEm: _re, submetidoEm: _s, ...resto } = p;
+  const { estado: _e, comentario: _c, revistoPor: _r, revistoEm: _re, submetidoEm: _s, assinaturaFormador: _a, ...resto } = p;
   return resto;
 }
 export type SessaoMeta = { n: number; id?: string; data: string; dataIso?: string; hora: string; formador: string; formadores?: string[]; estado: string; plano: boolean; modulo: string; modulos?: string[]; duracao: string; iniciadaEm?: string; fechadaEm?: string };
@@ -150,8 +160,8 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano: planoGravado, o
                   {coordenacao
                     ? <button disabled={!draft.objetivosGerais.trim()} onClick={() => gravar(draft, "aprovado")}
                         className={`${btn} bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-40`}>Guardar e aprovar</button>
-                    : <button disabled={!draft.objetivosGerais.trim()} onClick={() => gravar(draft, "submetido")} title="A coordenação pedagógica revê e aprova ou devolve"
-                        className={`${btn} bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-40`}>Guardar e submeter</button>}
+                    : <button disabled={!draft.objetivosGerais.trim()} onClick={() => gravar(draft, "submetido")} title="Assina digitalmente o plano e envia-o à coordenação pedagógica, que aprova ou devolve"
+                        className={`${btn} bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-40`}>Guardar, assinar e submeter</button>}
                 </>}
             <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
           </div>
@@ -169,6 +179,9 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano: planoGravado, o
               <p className="m-0 font-bold">Aprovado{plano.revistoPor ? ` por ${plano.revistoPor}` : ""}{plano.revistoEm ? ` em ${fmtDataUi(plano.revistoEm.slice(0, 10))}` : ""}</p>
               {plano.comentario && <p className="m-0 mt-1 whitespace-pre-line">{plano.comentario}</p>}
             </div>
+          )}
+          {plano.assinaturaFormador && (
+            <p className="m-0 text-xs text-slate-600">✍ Assinado digitalmente por <strong>{plano.assinaturaFormador.nome}</strong> em {dataHoraAssinatura(plano.assinaturaFormador.em)}.</p>
           )}
           {estado === "submetido" && (
             <p className="m-0 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
@@ -188,7 +201,10 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano: planoGravado, o
                   )}
                 </>
               ) : (
-                <button onClick={() => gravar(plano, "submetido")} className={`${btn} bg-amber-500 hover:bg-amber-600 text-white`}>Submeter para aprovação</button>
+                <span className="flex flex-wrap items-center gap-2">
+                  <button onClick={() => gravar(plano, "submetido")} className={`${btn} bg-amber-500 hover:bg-amber-600 text-white`}>Assinar e submeter para aprovação</button>
+                  <span className="text-[11px] text-slate-500">Ao assinar, fica registado o seu nome e a hora; a coordenação aprova ou devolve.</span>
+                </span>
               )}
             </div>
           )}

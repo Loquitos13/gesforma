@@ -77,7 +77,7 @@ export const MENU_FORMADOR: GrupoMenu = {
 };
 
 /** Vistas que o formador pode abrir. */
-export const VISTAS_FORMADOR = new Set<Vista>(["formador-turmas", "formador-calendario", "formador-perfil", "gold-cockpit-turma", "fin-cockpit-turma", "gold-turmas"]);
+export const VISTAS_FORMADOR = new Set<Vista>(["formador-turmas", "formador-calendario", "formador-perfil", "gold-cockpit-turma", "fin-cockpit-turma", "fin-presencas", "gold-turmas"]);
 
 /** Cada perfil começa no seu painel: a Comercial Gold não entra na Financiada e vice-versa. */
 export function painelDoPerfil(role: string): Vista {

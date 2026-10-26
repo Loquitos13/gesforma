@@ -103,11 +103,14 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
     const v = validar(reply, { params: sessaoParam, body: sessaoPatchSchema }, req);
     if (!v) return;
     const { regime, id, n } = v.params;
-    const { sessaoId: idPedido, validarPresencas, folha: folhaPedida, ...patch } = v.body;
+    const { sessaoId: idPedido, validarPresencas, assinarFolha, folha: folhaPedida, ...patch } = v.body;
     const folha: Record<string, unknown> | undefined = folhaPedida ? { ...folhaPedida } : undefined;
     const staff = podeValidarPresencas(req.actor!.role);
     if (validarPresencas !== undefined && !staff) {
       return reply.code(403).send({ error: "Só a coordenação pedagógica valida a folha de presenças." });
+    }
+    if (assinarFolha && req.actor!.role !== "formador") {
+      return reply.code(403).send({ error: "A folha de presenças é assinada pelo formador da sessão." });
     }
     if (await turmaFechada(db, regime, id)) return reply.code(409).send({ error: ERRO_TURMA_FECHADA });
     const turmaRow = await cronogramaDaTurma(db, regime, id);
@@ -119,7 +122,7 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
     const acesso = await podeGravarSessao(db, req.actor!, {
       regime, turmaId: id, sessaoId, cronograma: turmaRow.cronograma, plano: patch.plano, sumario: patch.sumario,
       // Horas T / P fazem parte da folha de presenças: depois de validada, só a coordenação as muda.
-      presencas: patch.presencas ?? (folha ? [] : undefined),
+      presencas: patch.presencas ?? (folha || assinarFolha ? [] : undefined),
     });
     if (!acesso.ok) return reply.code(403).send({ error: acesso.erro });
     if (patch.plano && req.actor!.role === "formador" && (await ordensComPlanoDoCurso(db, regime, id)).has(alvo.n)) {
@@ -154,6 +157,13 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
     } else if (folha) {
       folhaGravar = folha;
     }
+    if (req.actor!.role === "formador" && (assinarFolha || patch.presencas || folha)) {
+      // Assinar fica com o nome da conta e a hora do servidor; alterar a folha depois de assinada tira a assinatura.
+      const marca = assinarFolha
+        ? { assinadaPor: req.actor!.name, assinadaEm: new Date().toISOString() }
+        : { assinadaPor: null, assinadaEm: null };
+      folhaGravar = { ...(folhaGravar ?? {}), ...marca };
+    }
     if (patch.sumario) {
       const regra = sumarioComRegras(req.actor!.role, antes?.sumario ? asObj(antes.sumario) : null, patch.sumario!, String(alvo.sessao.data ?? ""));
       if (!regra.ok) return reply.code(409).send({ error: regra.erro });
@@ -167,6 +177,7 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
     });
     if (!gravada) return reply.code(409).send({ error: "A sessão saiu do cronograma entretanto. Recarregue a turma." });
     const acao = revisto ? `turma.plano_${revisto}` : patch.plano ? "turma.plano" : validarPresencas !== undefined ? "turma.presencas_validar"
+      : assinarFolha ? "turma.presencas_assinar"
       : patch.sumario ? "turma.sumario" : "turma.presencas";
     await audit(db, req.actor!.id, acao, "turma", String(id), req.ip, { regime, sessao: gravada.n, sessaoId });
     if (revisto) {

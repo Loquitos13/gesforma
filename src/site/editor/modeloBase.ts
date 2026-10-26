@@ -4,7 +4,7 @@ import type { PaginaSite } from "../../partilhado/siteBlocos";
 import { AreaFormando } from "./blocosArea";
 import { Catalogo } from "./blocosCatalogo";
 import { CursoBanner, CursoDados, CursoFuncionamento, CursoObjetivos, CursoPrograma, CursoSintese, CursoVideo, CursoTurmas } from "./blocosCurso";
-import { blocosCartaoPadrao, CursoEscolhaLocal, CursoInscricao } from "./blocosCursoCartao";
+import { blocosCartaoPadrao, CursoEscolhaLocal, CursoInscricao, videoDoCartao } from "./blocosCursoCartao";
 import { ListaNoticias } from "./blocosNoticias";
 import { Botao, Coluna, Imagem, Logotipos, Pilares, Seccao, Texto, Titulo } from "./blocosBase";
 import { cartaoPadrao, CursosDestaque, OfertaFormativa } from "./blocosCursos";
@@ -336,7 +336,6 @@ export function modeloCurso(antigo?: Legado): Data {
   const extra = (k: "zonaTopo" | "zonaConteudo" | "zonaCartao") => (Array.isArray(a[k]) ? a[k] as never[] : []);
   const principal = [
     bloco("CursoSintese", CursoSintese.defaultProps, { etiqueta: txt("tituloSintese", "Enquadramento") }),
-    bloco("CursoVideo", CursoVideo.defaultProps),
     ...(sim("mostrarDados") ? [bloco("CursoDados", CursoDados.defaultProps, { aparencia: estiloVazio({ margem: lados(32, 0, 0, 0) }) })] : []),
     escolhaLocal(),
     ...extra("zonaConteudo"),
@@ -413,8 +412,7 @@ export function converterPaginaCurso(d: Data): Data {
   ].filter(Boolean) as No[];
   // Sem Programa na página, entram a seguir ao primeiro bloco de conteúdo que houver.
   if (novos.length) dados = inserirNaPrimeira(dados, ["CursoPrograma", "CursoObjetivos", "CursoEscolhaLocal", "CursoDados", "CursoSintese"], novos);
-  // Vídeo de apresentação (ficha › Identidade): logo a seguir ao enquadramento; muda-se de sítio no editor.
-  if (!texto.includes('"CursoVideo"')) dados = inserirNaPrimeira(dados, ["CursoSintese", "CursoBanner"], [bloco("CursoVideo", CursoVideo.defaultProps) as No]);
+  dados = videoNoCartao(dados);
   // «Outros cursos relevantes» fecha a coluna do conteúdo: a seguir às turmas (ou ao último bloco conhecido que houver).
   if (!texto.includes('"CursoRelevantes"')) {
     const relevantes = blocoRelevantes() as No;
@@ -470,3 +468,43 @@ export function molduraDeInicio(inicio: Data | null): Data | null {
   const blocos = (inicio?.content ?? []).filter(b => b.type === "Cabecalho" || b.type === "Rodape");
   return blocos.length ? { root: { props: {} }, content: blocos } as Data : null;
 }
+
+/**
+ * Vídeo de apresentação no cartão lateral (uma vez por página: depois, muda-se de sítio no editor e fica onde ficar).
+ * Os blocos de vídeo fora do cartão passam para o topo dele (com o título que tinham); sem nenhum, entra um. A imagem
+ * do cartão fica escondida quando o curso tem vídeo.
+ */
+function videoNoCartao(dados: Data): Data {
+  const raiz = ((dados.root as { props?: Record<string, unknown> } | undefined)?.props ?? {});
+  if (raiz.videoNoCartao) return dados;
+  const lista = (dados.content ?? []) as No[];
+  if (!JSON.stringify(lista).includes('"CursoInscricao"')) return dados;
+  let titulo = "";
+  const tirar = (l: No[], dentroCartao: boolean): No[] => l.flatMap(b => {
+    if (b.type === "CursoVideo" && !dentroCartao) { titulo ||= String(b.props.titulo ?? ""); return []; }
+    const props = { ...b.props };
+    for (const [k, v] of Object.entries(props)) if (Array.isArray(v) && v.every(ehNo)) props[k] = tirar(v, dentroCartao || b.type === "CursoInscricao");
+    return [{ ...b, props }];
+  });
+  let feito = false;
+  const porNoCartao = (l: No[]): No[] => l.map(b => {
+    if (feito) return b;
+    if (b.type === "CursoInscricao" && Array.isArray(b.props.conteudo)) {
+      feito = true;
+      const conteudo = (b.props.conteudo as No[]).map(x => (x.type === "CursoImagem" && x.props.esconderComVideo === undefined
+        ? { ...x, props: { ...x.props, esconderComVideo: true } } : x));
+      if (!conteudo.some(x => x.type === "CursoVideo")) {
+        const i = Math.max(0, conteudo.findIndex(x => x.type === "CursoImagem"));
+        const video = bloco("CursoVideo", videoDoCartao(), { titulo }) as No;
+        conteudo.splice(i, 0, video);
+      }
+      return { ...b, props: { ...b.props, conteudo } };
+    }
+    const props = { ...b.props };
+    for (const [k, v] of Object.entries(props)) if (!feito && Array.isArray(v) && v.every(ehNo)) props[k] = porNoCartao(v);
+    return { ...b, props };
+  });
+  const content = porNoCartao(tirar(lista, false));
+  return { ...dados, root: { ...(dados.root ?? {}), props: { ...raiz, videoNoCartao: true } }, content } as Data;
+}
+

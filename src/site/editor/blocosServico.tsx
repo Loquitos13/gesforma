@@ -11,7 +11,7 @@ import { CursoDaRotaCtx } from "./blocosCursoPagina";
 import { Formulario } from "./blocosFormulario";
 import { campoNumero, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
-import { Titulo, type Base } from "./blocosCurso";
+import { LeitorVideo, Titulo, type Base } from "./blocosCurso";
 import { estiloBloco, estiloTexto, estiloVazio, juntar, lados, ligacaoSegura, tipoVazia, type Tipografia } from "./estilos";
 
 type Estado = "a-carregar" | "pronto";
@@ -373,9 +373,7 @@ export const ServicoVideo: ComponentConfig<VideoProps> = {
           <>
             <Titulo texto={p.titulo} t={p.tTitulo} className="mb-6 font-serif text-3xl font-bold" />
             <div className="aspect-video w-full overflow-hidden bg-black">
-              {v.tipo === "iframe"
-                ? <iframe src={v.src} title={`Vídeo: ${s.titulo}`} className="h-full w-full" allow="encrypted-media; picture-in-picture; fullscreen" loading="lazy" />
-                : <video src={v.src} controls preload="metadata" className="h-full w-full" aria-label={`Vídeo: ${s.titulo}`} />}
+              <LeitorVideo v={v} titulo={`Vídeo: ${s.titulo}`} />
             </div>
           </>
         );

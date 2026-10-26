@@ -274,6 +274,16 @@ type VideoCursoProps = Base & {
   raio: number | null; sombra: boolean;
 };
 
+/**
+ * Leitor do vídeo (YouTube, Vimeo ou .mp4). O site responde com «Referrer-Policy: no-referrer»; o YouTube recusa
+ * leitores sem a origem da página (erro 153): este pedido, e só este, leva a origem.
+ */
+export function LeitorVideo({ v, titulo }: { v: { tipo: "iframe" | "video"; src: string }; titulo: string }) {
+  return v.tipo === "iframe"
+    ? <iframe src={v.src} title={titulo} className="h-full w-full" allow="encrypted-media; picture-in-picture; fullscreen" allowFullScreen loading="lazy" referrerPolicy="strict-origin-when-cross-origin" />
+    : <video src={v.src} controls preload="metadata" className="h-full w-full" aria-label={titulo} />;
+}
+
 /** O vídeo de apresentação da ficha do curso (Identidade › Vídeo): YouTube, Vimeo ou .mp4. Sem vídeo, não aparece. */
 export const CursoVideo: ComponentConfig<VideoCursoProps> = {
   label: "Curso · Vídeo de apresentação",
@@ -321,9 +331,7 @@ function VideoCurso(p: VideoCursoProps) {
             {p.titulo && <h3 className={juntar("mb-4 font-serif text-xl font-bold text-[var(--c-primaria)]", t.className)} style={t.style}>{p.titulo}</h3>}
             <div className={juntar("w-full overflow-hidden bg-black", p.sombra !== false && "shadow-[0_8px_30px_rgba(20,38,61,.18)]")}
               style={{ aspectRatio: p.proporcao || "16/9", borderRadius: p.raio ? `${p.raio}px` : undefined }}>
-              {v.tipo === "iframe"
-                ? <iframe src={v.src} title={`Vídeo de apresentação: ${curso.title}`} className="h-full w-full" allow="encrypted-media; picture-in-picture; fullscreen" allowFullScreen loading="lazy" />
-                : <video src={v.src} controls preload="metadata" className="h-full w-full" aria-label={`Vídeo de apresentação: ${curso.title}`} />}
+              <LeitorVideo v={v} titulo={`Vídeo de apresentação: ${curso.title}`} />
             </div>
           </div>
         );

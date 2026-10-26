@@ -7,7 +7,7 @@ import { ePrepago, ePreinscricao, rotuloBotaoInscricao, TEXTO_DIRETO, textoDiret
 import { useInscricaoOpcional } from "../SiteInscricao";
 import { Icon, type Course } from "../SiteLanding";
 import {
-  ajudaVariaveis, Caixa, campoEntreTitulo, locaisDo, precoNoLocal, preencherVariaveis, Titulo, useLocalCurso, variaveisCurso, ZonaEntreTitulo, type Base,
+  ajudaVariaveis, Caixa, campoEntreTitulo, locaisDo, precoNoLocal, preencherVariaveis, Titulo, useLocalCurso, variaveisCurso, ZonaEntreTitulo, type Base, CursoVideo, LeitorVideo,
 } from "./blocosCurso";
 import { campoCor, campoNumero, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
@@ -295,7 +295,7 @@ function TextoCurso(p: TextoProps) {
 
 // ─── Imagem do curso ─────────────────────────────────────────────────────────
 
-type ImagemProps = Base & { imagem: "capa" | "miniatura" | "banner"; altura: number | null; ajuste: "cover" | "contain"; video: boolean };
+type ImagemProps = Base & { imagem: "capa" | "miniatura" | "banner"; altura: number | null; ajuste: "cover" | "contain"; video: boolean; esconderComVideo: boolean };
 
 export const CursoImagem: ComponentConfig<ImagemProps> = {
   label: "Curso · Imagem",
@@ -304,20 +304,20 @@ export const CursoImagem: ComponentConfig<ImagemProps> = {
     altura: campoNumero("Altura"),
     ajuste: { type: "select", label: "Ajuste", options: [{ label: "Preencher (corta)", value: "cover" }, { label: "Inteira", value: "contain" }] },
     video: simNao("Mostrar o vídeo de apresentação no lugar da imagem (quando o curso tiver vídeo)"),
+    esconderComVideo: simNao("Esconder a imagem quando o curso tiver vídeo (o bloco «Vídeo de apresentação» do cartão ocupa o lugar dela)"),
     aparencia: campoAparencia(),
   },
-  defaultProps: { imagem: "capa", altura: 144, ajuste: "cover", video: false, aparencia: estiloVazio() },
+  defaultProps: { imagem: "capa", altura: 144, ajuste: "cover", video: false, esconderComVideo: false, aparencia: estiloVazio() },
   render: p => (
     <Caixa p={p}>
       {curso => {
         const v = p.video ? videoDoCurso(curso.video) : null;
         if (v) return (
           <div className="aspect-video w-full overflow-hidden bg-black">
-            {v.tipo === "iframe"
-              ? <iframe src={v.src} title={`Vídeo de apresentação: ${curso.title}`} className="h-full w-full" allow="encrypted-media; picture-in-picture; fullscreen" allowFullScreen loading="lazy" />
-              : <video src={v.src} controls preload="metadata" className="h-full w-full" aria-label={`Vídeo de apresentação: ${curso.title}`} />}
+            <LeitorVideo v={v} titulo={`Vídeo de apresentação: ${curso.title}`} />
           </div>
         );
+        if (p.esconderComVideo && videoDoCurso(curso.video)) return null;
         const src = curso[p.imagem] || curso.capa || curso.miniatura;
         return (
           <div className="w-full overflow-hidden bg-[#E7EBF0]" style={{ height: p.altura ? `${p.altura}px` : undefined }}>
@@ -384,8 +384,14 @@ const TEXTO_INSCRICAO = {
 };
 
 /** Blocos do cartão por omissão: imagem, tipo de inscrição, preço do local, texto e botão. */
+/** Vídeo de apresentação no topo do cartão (com vídeo, no lugar da imagem). */
+export const videoDoCartao = () => ({
+  ...CursoVideo.defaultProps, titulo: "", largura: 100, larguraMax: null, alinhar: "centro" as const, raio: 0, sombra: false, aparencia: estiloVazio(),
+});
+
 export const blocosCartaoPadrao = (textos: Partial<typeof TEXTO_INSCRICAO> = {}) => [
-  { type: "CursoImagem", props: { ...CursoImagem.defaultProps } },
+  { type: "CursoVideo", props: videoDoCartao() },
+  { type: "CursoImagem", props: { ...CursoImagem.defaultProps, esconderComVideo: true } },
   { type: "CursoTexto", props: { ...CursoTexto.defaultProps, texto: "{{inscricao}}", estilo: "etiqueta" } },
   { type: "CursoTexto", props: { ...CursoTexto.defaultProps, texto: "{{preco}}", estilo: "destaque" } },
   { type: "CursoTexto", props: { ...CursoTexto.defaultProps, texto: "", estilo: "texto", porInscricao: true, ...TEXTO_INSCRICAO, ...textos } },

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { arrancar, pedido } from "./helpers.js";
 
+/** A Financiada só associa à acção com os documentos obrigatórios (menos o contrato, que se assina ao entrar). */
+const DOCS_TURMA_OK = Object.fromEntries(["cc", "ch", "cu", "ci", "ce", "morada", "rgpd"].map(k => [k, { ok: true, data: "" }]));
+
 let seq = 0;
 const unico = (p: string) => `${p} ${Date.now()}-${++seq}`;
 
@@ -99,7 +102,7 @@ describe("transferir formando de turma", () => {
     const rg = await ctx.db.query<{ turma_id: number }>("SELECT turma_id FROM formandos_gold WHERE id = $1", [gid]);
     expect(Number(rg.rows[0]!.turma_id)).toBe(gb);
 
-    const f = await pedido(ctx, "financiada", "POST", "/v1/formandos-fin", { nome: unico("Fin"), email: `tf${Date.now()}@exemplo.pt`, turmaId: fa });
+    const f = await pedido(ctx, "financiada", "POST", "/v1/formandos-fin", { ...DOCS_TURMA_OK, nome: unico("Fin"), email: `tf${Date.now()}@exemplo.pt`, turmaId: fa });
     expect(f.statusCode, f.body).toBe(200);
     const fid = (f.json().formando?.id ?? f.json().id) as number;
     const mf = await pedido(ctx, "financiada", "PATCH", `/v1/formandos-fin/${fid}`, { turmaId: fb });

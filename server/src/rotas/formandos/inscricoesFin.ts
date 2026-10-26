@@ -29,6 +29,14 @@ const listaQuery = paginacao.extend({
   docs: z.preprocess(v => (v === "" ? undefined : v), z.enum(["completos", "em_falta"]).optional()),
 });
 
+/** «Colocado na turma» só com os documentos da candidatura todos entregues (a Financiada não associa à acção sem eles). */
+function erroColocarSemDocs(payload: Record<string, unknown>) {
+  if (payload.estado !== "Colocado na turma" || !String(payload.turma ?? "").trim()) return null;
+  const docs = (payload.docs ?? {}) as Record<string, boolean>;
+  const falta = DOCS_INSCRICAO_FIN.filter(d => !docs[d]);
+  return falta.length ? `Não pode colocar na turma sem os documentos todos: falta ${falta.map(d => d.toUpperCase()).join(", ")}.` : null;
+}
+
 async function sincronizarFicha(db: Deps["db"], payload: Record<string, unknown>) {
   const { upsertFormandoFinFromInscricao } = await import("../../finPipeline.js");
   return upsertFormandoFinFromInscricao(db, payload)
@@ -59,6 +67,8 @@ export function registarInscricoesFin(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { body: corpo }, req);
     if (!v) return;
+    const semDocs = erroColocarSemDocs(v.body);
+    if (semDocs) return reply.code(409).send({ error: semDocs });
     const id = await nextOpsId(db);
     const payload = { ...v.body, email: v.body.email.toLowerCase(), inscrito: hojeLisboa() };
     await inserirInscricaoFin(db, id, payload);
@@ -75,6 +85,8 @@ export function registarInscricoesFin(app: FastifyInstance, deps: Deps) {
     if (!atual) return reply.code(404).send({ error: "Inscrição inexistente." });
     const d = Object.fromEntries(Object.entries(v.body).filter(([, x]) => x !== undefined));
     const payload = { ...atual.payload, ...d, ...(typeof d.email === "string" ? { email: d.email.toLowerCase() } : {}) };
+    const semDocs = erroColocarSemDocs(payload);
+    if (semDocs) return reply.code(409).send({ error: semDocs });
     await atualizarInscricaoFin(db, v.params.id, payload);
     await audit(db, req.actor!.id, "inscricao_fin.alterar", "inscricoes_fin", String(v.params.id), req.ip, { campos: Object.keys(d) });
     const aviso = await sincronizarFicha(db, payload);

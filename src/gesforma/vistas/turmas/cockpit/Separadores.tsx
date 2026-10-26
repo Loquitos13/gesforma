@@ -227,7 +227,7 @@ export function SessoesTurmaTab({
   );
 }
 
-export function TurmaTabBar({ tab, onChange, accent = "gold", dtpPct, dossie = true, despesas = false, so }: { tab: CockpitTab; onChange: (t: CockpitTab) => void; accent?: "gold" | "fin"; dtpPct: number; dossie?: boolean; despesas?: boolean; so?: CockpitTab[] }) {
+export function TurmaTabBar({ tab, onChange, accent = "gold", dtpPct, dossie = true, despesas = false, so, rotulos }: { tab: CockpitTab; onChange: (t: CockpitTab) => void; accent?: "gold" | "fin"; dtpPct: number; dossie?: boolean; despesas?: boolean; so?: CockpitTab[]; rotulos?: Partial<Record<CockpitTab, string>> }) {
   const active = accent === "gold" ? "border-amber-500 text-amber-600" : "border-blue-600 text-blue-600";
   const chip = accent === "gold" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700";
   const todas: { id: CockpitTab; label: string; icon: React.ReactNode }[] = [
@@ -246,7 +246,7 @@ export function TurmaTabBar({ tab, onChange, accent = "gold", dtpPct, dossie = t
       {tabs.map(t => (
         <button key={t.id} onClick={() => onChange(t.id)}
           className={`flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 whitespace-nowrap ${tab === t.id ? active : "border-transparent text-slate-500 hover:text-slate-700"}`}>
-          {t.icon} {t.label}
+          {t.icon} {rotulos?.[t.id] ?? t.label}
           {t.id === "dtp" && <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold ${chip}`}>{dtpPct}%</span>}
         </button>
       ))}

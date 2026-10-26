@@ -18,11 +18,23 @@ import {
   registarPagamentoRecebido, temPagamentoPago, turmaFinPorId, turmaFinPorNome, turmaGoldBasica,
 } from "../../repos/formandosEscrita.js";
 import { idParam, validar } from "../../validacao.js";
+import { many } from "../../repos/sql.js";
+import { DOCS_FORMANDO_FIN } from "../../../../src/partilhado/dossierDocs.js";
 import type { Deps } from "../tipos.js";
 import { carimboUtc, hojeLisboa } from "../../datas.js";
 
 const docOk = z.object({ ok: z.boolean(), data: z.string().max(40) });
 const DOCS_FIN = ["cc", "ch", "cu", "ci", "ce", "morada", "contrato", "rgpd"] as const;
+
+/** Documentos sem os quais a Financiada não associa ninguém a uma acção (o contrato de formação assina-se ao entrar). */
+const DOCS_PARA_TURMA_FIN = DOCS_FORMANDO_FIN.filter(d => d.required && d.id !== "contrato");
+
+function erroDocsParaTurma(ok: (id: string) => boolean) {
+  const falta = DOCS_PARA_TURMA_FIN.filter(d => !ok(d.id)).map(d => d.label);
+  return falta.length
+    ? `Não pode associar à acção sem os documentos obrigatórios. Falta: ${falta.join(", ")}. Valide-os primeiro (pré-inscrição ou ficha do formando).`
+    : null;
+}
 
 const formandoGold = z.object({
   nome: z.string().trim().min(1).max(80),
@@ -233,6 +245,10 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
     const estado = normalizarEstado("formandoFin", d.estado);
     if (!estado) return reply.code(400).send({ error: `Estado inválido: «${d.estado}».` });
     const turmaId = turma ? Number(turma.id) : null;
+    if (turmaId) {
+      const semDocs = erroDocsParaTurma(id => docs[id as (typeof DOCS_FIN)[number]]?.ok === true);
+      if (semDocs) return reply.code(409).send({ error: semDocs });
+    }
     const id = await nextOpsId(db);
     try {
       await db.tx(async q => {
@@ -275,6 +291,16 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
     const mudaTurma = d.turmaId != null || d.turma != null;
     const turmaNova = d.turmaId ? await turmaFinPorId(db, d.turmaId) : d.turma ? await turmaFinPorNome(db, d.turma) : null;
     if (d.turmaId && !turmaNova) return reply.code(400).send({ error: "Turma inexistente." });
+    // Entrar numa acção pela primeira vez exige os documentos (mudar de turma quem já está numa não).
+    if (turmaNova && turmaAntes == null) {
+      const validados = new Set((await many<{ doc_id: string }>(db, `SELECT doc_id FROM formando_docs
+        WHERE regime = 'fin' AND formando_id = $1 AND COALESCE(estado, '') <> 'recusado' AND (estado = 'validado' OR ok)`, [id])).map(r => r.doc_id));
+      const semDocs = erroDocsParaTurma(doc => {
+        const noPedido = d[doc as (typeof DOCS_FIN)[number]];
+        return noPedido ? noPedido.ok : validados.has(doc) || Boolean((prev as unknown as Record<string, { ok?: boolean }>)[doc]?.ok);
+      });
+      if (semDocs) return reply.code(409).send({ error: semDocs });
+    }
     if (turmaNova && Number(turmaNova.id) !== turmaAntes) {
       try {
         await db.tx(q => garantirVaga(q, "fin", Number(turmaNova.id), { email: d.email ?? prev.email, excluirFormandoId: id }));

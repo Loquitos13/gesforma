@@ -9,7 +9,7 @@ import { SearchSelect } from "../../../../partilhado/FormKit";
 import { toastError } from "../../../../partilhado/toastBus";
 import type { FormandoFin } from "../../../../partilhado/tiposFormando";
 import { lugaresLivres, type TurmaFin } from "../../../../partilhado/turmaModel";
-import { Botao, Campo, ConfirmarPerigo, Entrada, Modal } from "../../../../partilhado/ui";
+import { Aviso, Botao, Campo, ConfirmarPerigo, Entrada, Modal } from "../../../../partilhado/ui";
 import { darAcessoManual } from "../../../InscricaoManual";
 import { splitNome, TransferirTurmaModal } from "./base";
 import { InscreverFormandoPanel } from "../../../TurmaInscricao";
@@ -77,6 +77,9 @@ export function InscreverFin({ aberto, onFechar, turma, activa, membros, onActiv
   const vagas = Math.max(0, lugaresLivres(turma));
   return (
     <Modal aberto={aberto} onFechar={onFechar} titulo="Inscrever formando" subtitulo={`${turma.curso} · ${turma.local} · ${turma.horario}`} largura="lg">
+      {activa && (
+        <Aviso tom="info">Na Financiada só entra na acção quem tem os documentos obrigatórios validados (CC, habilitações, CV, morada, IBAN, situação de emprego e RGPD). O caminho habitual é validar a pré-inscrição no CRM, que já os verifica.</Aviso>
+      )}
       {activa ? (
         <InscreverFormandoPanel
           turma={turma}

@@ -14,6 +14,9 @@ import { anexosDaTurma } from "../src/repos/dtp.js";
 import { carregarTurma } from "../src/repos/pedagogiaTurma.js";
 import { arrancar, pedido, type Ctx } from "./helpers.js";
 
+/** A Financiada só associa à acção com os documentos obrigatórios (menos o contrato, que se assina ao entrar). */
+const DOCS_TURMA_OK = Object.fromEntries(["cc", "ch", "cu", "ci", "ce", "morada", "rgpd"].map(k => [k, { ok: true, data: "" }]));
+
 let seq = 0;
 const unico = (p: string) => `${p} ${Date.now()}-${++seq}`;
 
@@ -86,7 +89,7 @@ async function turmaFin(ctx: Ctx): Promise<Turma> {
   const turmaId = t.json().turma.id as number;
   const ids: number[] = [];
   for (const n of ["Ana", "Bruno"]) {
-    const f = await pedido(ctx, "financiada", "POST", "/v1/formandos-fin", { nome: n, apelido: "Silva", email: `${n.toLowerCase()}${Date.now()}${++seq}@exemplo.pt`, telf: "914 212 368", turmaId });
+    const f = await pedido(ctx, "financiada", "POST", "/v1/formandos-fin", { ...DOCS_TURMA_OK, nome: n, apelido: "Silva", email: `${n.toLowerCase()}${Date.now()}${++seq}@exemplo.pt`, telf: "914 212 368", turmaId });
     expect(f.statusCode, f.body).toBe(200);
     ids.push(f.json().formando.id as number);
   }

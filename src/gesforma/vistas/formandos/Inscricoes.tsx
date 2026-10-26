@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { usePode } from "../../../partilhado/AuthGate";
-import { ESTADOS_INSCRICAO_FIN, apiListarInscricoesFin, type LinhaInscricaoFin } from "../../../partilhado/api/formandos";
+import { ESTADOS_INSCRICAO_FIN, apiFichaInscricaoFin, apiListarInscricoesFin, type LinhaInscricaoFin } from "../../../partilhado/api/formandos";
+import { toastError } from "../../../partilhado/toastBus";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import {
@@ -49,7 +50,18 @@ export default function Inscricoes({ navigate }: VistaProps) {
       celula: l => (
         <div className="min-w-0">
           <p className="m-0 font-semibold text-tinta">{`${l.nome} ${l.apelido}`.trim()}</p>
-          <p className="m-0 text-xs text-tinta-suave truncate max-w-[240px]">{l.email || l.telf || "Sem contacto"}</p>
+          <p className="m-0 text-xs text-tinta-suave truncate max-w-[240px] sm:hidden">{l.telf || l.email || "Sem contacto"}</p>
+        </div>
+      ),
+    },
+    {
+      id: "contacto", titulo: "Contacto", esconderMovel: true,
+      celula: l => (
+        <div className="min-w-0 text-xs">
+          {l.telf
+            ? <a href={`tel:${l.telf.replace(/\s+/g, "")}`} onClick={e => e.stopPropagation()} className="block font-semibold text-tinta num hover:underline">{l.telf}</a>
+            : <span className="block text-tinta-suave">Sem telemóvel</span>}
+          {l.email && <a href={`mailto:${l.email}`} onClick={e => e.stopPropagation()} className="block truncate max-w-[220px] text-tinta-suave hover:underline">{l.email}</a>}
         </div>
       ),
     },
@@ -109,7 +121,13 @@ export default function Inscricoes({ navigate }: VistaProps) {
           linhaAtiva={painel && painel !== "nova" ? painel.id : null}
           aCarregar={aCarregar}
           acoesLinha={l => l.formandoId
-            ? <Botao variante="ligacao" tamanho="sm" onClick={() => abrirFicha(l.formandoId!)}>Ficha</Botao>
+            ? (
+              <span className="inline-flex gap-1">
+                <Botao variante="ligacao" tamanho="sm" title="Ficha do formando com todos os dados (Dados para o financiamento)" onClick={() => abrirFicha(l.formandoId!)}>Ficha</Botao>
+                <Botao variante="ligacao" tamanho="sm" title="Ficha de inscrição em PDF, com todos os campos preenchidos"
+                  onClick={() => { apiFichaInscricaoFin(l.formandoId!).catch(err => toastError(err, "Não foi possível gerar a ficha de inscrição.")); }}>PDF</Botao>
+              </span>
+            )
             : null}
           vazio={(
             <Vazio

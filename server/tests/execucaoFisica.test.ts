@@ -13,6 +13,9 @@ import { writePreinscricaoPii } from "../src/pii.js";
 import { conteudoZip, lerZip, serieExcel } from "../src/xlsxModelo.js";
 import { arrancar, pedido, type Ctx } from "./helpers.js";
 
+/** A Financiada só associa à acção com os documentos obrigatórios (menos o contrato, que se assina ao entrar). */
+const DOCS_TURMA_OK = Object.fromEntries(["cc", "ch", "cu", "ci", "ce", "morada", "rgpd"].map(k => [k, { ok: true, data: "" }]));
+
 const MODELO = readFileSync(fileURLToPath(new URL("../src/modelos/execucao-fisica.xlsx", import.meta.url)));
 let seq = 0;
 const unico = (p: string) => `${p} ${Date.now()}-${++seq}`;
@@ -50,7 +53,7 @@ async function cursoFin(ctx: Ctx, areaCnaef = "341 - Comércio") {
 async function inscrever(ctx: Ctx, turmaId: number, nomes: [string, string][]) {
   const ids: number[] = [];
   for (const [n, email] of nomes) {
-    const f = await pedido(ctx, "financiada", "POST", "/v1/formandos-fin", { nome: n, apelido: "Silva", email, telf: n === "Carla" ? "" : "912 345 678", turmaId });
+    const f = await pedido(ctx, "financiada", "POST", "/v1/formandos-fin", { ...DOCS_TURMA_OK, nome: n, apelido: "Silva", email, telf: n === "Carla" ? "" : "912 345 678", turmaId });
     expect(f.statusCode, f.body).toBe(200);
     ids.push(f.json().formando.id as number);
   }

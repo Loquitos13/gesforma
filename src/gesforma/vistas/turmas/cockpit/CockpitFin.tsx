@@ -41,7 +41,9 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
   const nomesEu = useNomesEu();
   const opcoesFormador = useOpcoesFormador(undefined, "fin");
   const [tab, setTab] = useState<Separador>(initialTab);
-  useEffect(() => { setTab(souFormador ? tabDoFormador(initialTab) : initialTab); }, [initialTab, turmaId, souFormador]);
+  // A equipa tem o cronograma e as sessões num só separador (o «Sessões» abre esse); o formador fica com «Sessões».
+  const separadorDe = (t: Separador): Separador => (souFormador ? tabDoFormador(t) : t === "sessoes" ? "cronograma" : t);
+  useEffect(() => { setTab(separadorDe(initialTab)); }, [initialTab, turmaId, souFormador]); // eslint-disable-line react-hooks/exhaustive-deps
   const ped = useTurmaPedagogia("fin", turma?.id ?? 0, turma?.cronograma);
   const criterios = useCriteriosAvaliacao("fin", turma?.curso);
   const programa = useProgramaDoCurso("fin", turma?.curso ?? "");
@@ -90,11 +92,21 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
           });
         }
         if (!souFormador && docsFalta) proximos.push({ tone: "error", title: `${docsFalta} com documentos em falta`, detail: "Cartão, habilitações, CV, morada, IBAN, emprego, contrato ou RGPD.", onClick: () => setTab("overview") });
-        if (semPlano) proximos.push({ tone: "warn", title: `${semPlano} sessões sem plano`, detail: "O formador ainda não carregou o plano de sessão.", onClick: () => setTab("sessoes") });
+        if (semPlano) proximos.push({ tone: "warn", title: `${semPlano} sessões sem plano`, detail: "O formador ainda não carregou o plano de sessão.", onClick: () => setTab(separadorDe("sessoes")) });
         const porAprovar = sessoes.filter(s => estadoPlano(ped.planos[s.n]) === "submetido").length;
         const devolvidos = sessoes.filter(s => estadoPlano(ped.planos[s.n]) === "devolvido").length;
-        if (!souFormador && porAprovar) proximos.unshift({ tone: "warn", title: `${porAprovar} plano(s) de sessão por aprovar`, detail: "Reveja, aprove ou devolva com comentários.", onClick: () => setTab("sessoes") });
-        if (souFormador && devolvidos) proximos.unshift({ tone: "error", title: `${devolvidos} plano(s) de sessão devolvido(s)`, detail: "A coordenação deixou comentários: corrija e volte a submeter.", onClick: () => setTab("sessoes") });
+        if (!souFormador && porAprovar) proximos.unshift({ tone: "warn", title: `${porAprovar} plano(s) de sessão por aprovar`, detail: "Reveja, aprove ou devolva com comentários.", onClick: () => setTab(separadorDe("sessoes")) });
+        if (souFormador && devolvidos) proximos.unshift({ tone: "error", title: `${devolvidos} plano(s) de sessão devolvido(s)`, detail: "A coordenação deixou comentários: corrija e volte a submeter.", onClick: () => setTab(separadorDe("sessoes")) });
+        const sessoesTab = (
+                <SessoesTurmaTab accent="fin" regime="fin" turmaId={t.id} onPlanosImportados={() => void ped.recarregar()} turmaNome={t.nome} cursoNome={t.curso} sessoes={sessoes} planos={ped.planos} presencas={ped.presencas}
+                  sumarios={sumarios} formandos={nomesCockpit} onNovaSessao={() => setNovaSessao(true)} onPlano={setPlanoSessao}
+                  semSumario onPresencas={setPresencasSessao} onOpenFormador={setFormadorAberto} podeEditar={podeDoc} podeCriar={!souFormador}
+                  formadorOpcoes={souFormador ? undefined : opcoesFormador}
+                  onFormador={souFormador ? undefined : (s, nome) => {
+                    if (!s.id) return;
+                    setCronograma(t.cronograma.map(x => x.id === s.id ? { ...x, formadores: nome ? [nome] : [] } : x));
+                  }} />
+        );
         const ocupacao = t.alunosTotal > 0 ? Math.min(100, (t.alunos / t.alunosTotal) * 100) : 0;
 
         return (
@@ -160,28 +172,22 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
               </section>
 
               <NextActions accent="fin" actions={proximos.slice(0, 3)} />
-              <TurmaTabBar tab={tab} onChange={setTab} accent="fin" dtpPct={ped.dtp.pct} dossie={staffPodeDossie(user.role)} despesas={!souFormador} so={souFormador ? TABS_FORMADOR : undefined} />
+              <TurmaTabBar tab={tab} onChange={t => setTab(separadorDe(t))} accent="fin" dtpPct={ped.dtp.pct} dossie={staffPodeDossie(user.role)} despesas={!souFormador}
+                so={souFormador ? TABS_FORMADOR : ["overview", "cronograma", "avaliacao", "documentos", "dtp", "certificados", "despesas"]}
+                rotulos={souFormador ? undefined : { cronograma: "Cronograma e sessões" }} />
               {!activa && <TurmaInactivaBanner nome={t.nome} onActivate={() => toggle(true)} />}
 
               {tab === "cronograma" && !souFormador && (
                 <CronogramaEditor layout="page" accent="fin" turmaId={t.id} identidade={`fin-${t.id}`} nome={t.nome} sessoes={t.cronograma}
                   onChange={setCronograma} publicar={publicarCronograma} inicio={t.dataInicio} horario={t.horario} horas={t.horas} formador={t.formador} curso={t.curso} local={t.local} />
               )}
+              {tab === "cronograma" && !souFormador && <div id="sessoes-da-turma">{sessoesTab}</div>}
               {tab === "dtp" && staffPodeDossie(user.role) && (
                 <DtpPanel regime="fin" turma={{ codigo: t.nome, id: t.id, titulo: t.curso, sub: `${rotuloCodigoCurso(t.ufcdCod)} · ${t.horas} h` }} dtp={ped.dtp} estado={ped.estado}
                   onToggle={(item, proximo) => void ped.guardarDtp(item.id, proximo)} onAnexo={(item, file) => void ped.guardarDtpAnexo(item.id, file)}
                   onActualizar={() => void ped.recarregar()} />
               )}
-              {tab === "sessoes" && (
-                <SessoesTurmaTab accent="fin" regime="fin" turmaId={t.id} onPlanosImportados={() => void ped.recarregar()} turmaNome={t.nome} cursoNome={t.curso} sessoes={sessoes} planos={ped.planos} presencas={ped.presencas}
-                  sumarios={sumarios} formandos={nomesCockpit} onNovaSessao={() => setNovaSessao(true)} onPlano={setPlanoSessao}
-                  semSumario onPresencas={setPresencasSessao} onOpenFormador={setFormadorAberto} podeEditar={podeDoc} podeCriar={!souFormador}
-                  formadorOpcoes={souFormador ? undefined : opcoesFormador}
-                  onFormador={souFormador ? undefined : (s, nome) => {
-                    if (!s.id) return;
-                    setCronograma(t.cronograma.map(x => x.id === s.id ? { ...x, formadores: nome ? [nome] : [] } : x));
-                  }} />
-              )}
+              {tab === "sessoes" && sessoesTab}
               {tab === "avaliacao" && (
                 <TurmaAvaliacao key={t.id} regime="fin" turmaId={t.id} cursoNome={t.curso} turmaNome={t.nome} accent="fin" formandos={nomesCockpit} soLeitura={souFormador} />
               )}

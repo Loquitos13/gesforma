@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { arrancar, pedido, type Ctx } from "./helpers.js";
 
+
 type Lista = {
   total: number;
   linhas: Array<{ id: number; nome: string; turma: { id: number } | null; pagamento: { situacao: string }; acesso: boolean; docs: { validados: number } }>;

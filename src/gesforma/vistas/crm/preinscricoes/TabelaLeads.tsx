@@ -32,6 +32,10 @@ export function TabelaLeads(p: Props) {
           <button type="button" onClick={e => { e.stopPropagation(); p.onAbrir(l); }} className="text-left font-semibold text-tinta hover:underline">
             {nomeCompleto(l) || `Pré-inscrição #${l.id}`}
           </button>
+          {l.telf && (
+            <a href={`tel:${l.telf.replace(/\s+/g, "")}`} onClick={e => { e.stopPropagation(); p.onContacto(l, "Telefone"); }}
+              className="block text-xs font-semibold text-tinta num hover:underline" title="Ligar (fica registado como contacto)">{l.telf}</a>
+          )}
           <p className="m-0 text-xs text-tinta-suave truncate max-w-[260px]">
             {l.entrada === "manual" ? "Manual" : "Site"} · {quando(l.inscrito)}{l.origem ? ` · conheceu por ${l.origem}` : ""}
           </p>

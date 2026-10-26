@@ -166,7 +166,7 @@ export function CronogramaEditor({
             {plano.length === 0
               ? "A grelha segue o modelo da ENA: aulas presenciais, sessões síncronas e auto-aprendizagem por dia."
               : page
-                ? "Arraste uma sessão na grelha para mudar dia, hora ou metodologia. Clique na célula para editar. As sessões lectivas abrem-se no separador Sessões."
+                ? `Arraste uma sessão na grelha para mudar dia, hora ou metodologia. Clique na célula para editar. ${gold ? "As sessões lectivas abrem-se no separador Sessões." : "Planos e presenças de cada sessão: na lista por baixo da grelha."}`
                 : `${lectivas.length} sessões lectivas · ${totalH}h em sala ou síncronas${horas ? ` de ${horas}h` : ""}`}
           </p>
           <div className="flex flex-wrap gap-1.5 mt-2">

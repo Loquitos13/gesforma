@@ -7,6 +7,9 @@ import {
   LISTA_GENERO, LISTA_HABILITACOES, LISTA_SITUACAO_EMPREGO,
 } from "../../src/partilhado/execucaoFisica.js";
 
+/** A Financiada só associa à acção com os documentos obrigatórios (menos o contrato, que se assina ao entrar). */
+const DOCS_TURMA_OK = Object.fromEntries(["cc", "ch", "cu", "ci", "ce", "morada", "rgpd"].map(k => [k, { ok: true, data: "" }]));
+
 const PDF = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n");
 
 let seq = 0;
@@ -338,7 +341,7 @@ describe("validação: os dados passam para a ficha do formando", () => {
     expect((await passo(ctx, token, "morada", MORADA)).statusCode).toBe(200);
     expect((await passo(ctx, token, "identificacao", IDENT)).statusCode).toBe(200);
     // Ficha já criada pela secretaria com género e NISS próprios.
-    const nova = await pedido(ctx, "secretaria", "POST", "/v1/formandos-fin", {
+    const nova = await pedido(ctx, "secretaria", "POST", "/v1/formandos-fin", { ...DOCS_TURMA_OK,
       nome: "Maria", apelido: "Santos", email, curso, turmaId, estado: "Elegível",
     });
     let formandoId = 0;

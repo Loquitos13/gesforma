@@ -8,6 +8,9 @@ import { readFormandoPii, writeFormandoPiiPatch } from "../src/pii.js";
 import { gravarPiiFormandoFin, piiFormandoFinParaGravar } from "../src/repos/formandoFinanciamento.js";
 import { arrancar, pedido, type Ctx } from "./helpers.js";
 
+/** A Financiada só associa à acção com os documentos obrigatórios (menos o contrato, que se assina ao entrar). */
+const DOCS_TURMA_OK = Object.fromEntries(["cc", "ch", "cu", "ci", "ce", "morada", "rgpd"].map(k => [k, { ok: true, data: "" }]));
+
 let seq = 0;
 const unico = (p: string) => `${p} ${Date.now()}-${++seq}`;
 
@@ -63,7 +66,7 @@ describe("datas dos documentos: dd-mm-aaaa", () => {
 async function formandoFin(ctx: Ctx) {
   const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", { dataInicio: "2099-02-02", nome: unico("TF Conc"), curso: "UFCD Conc", capacidade: 5 });
   expect(t.statusCode, t.body).toBe(200);
-  const f = await pedido(ctx, "financiada", "POST", "/v1/formandos-fin", {
+  const f = await pedido(ctx, "financiada", "POST", "/v1/formandos-fin", { ...DOCS_TURMA_OK,
     nome: "Ana", apelido: "Silva", email: `conc.${Date.now()}.${++seq}@exemplo.pt`, telf: "912 345 678", turmaId: t.json().turma.id,
   });
   expect(f.statusCode, f.body).toBe(200);

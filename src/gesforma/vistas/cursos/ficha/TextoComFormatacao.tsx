@@ -1,7 +1,7 @@
 // Caixa de texto dos textos do curso com formatação leve (partilhado/textoFormatado.ts): estilo do parágrafo (título,
 // subtítulo, destaque, nota), negrito, itálico, sublinhado, ligação e listas sobre o texto selecionado; colagem do Word /
 // Google Docs / páginas web com a formatação; e a pré-visualização como o site a mostra. Sem HTML: o site desenha as marcas.
-import { useRef, useState, type ClipboardEvent } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent } from "react";
 import { htmlParaTexto, normalizarColagem } from "../../../../partilhado/textoFormatado";
 import { TextoFormatado } from "../../../../partilhado/TextoFormatadoVista";
 import { AreaTexto, Botao } from "../../../../partilhado/ui";
@@ -37,6 +37,18 @@ export function TextoComFormatacao({ rotulo, valor, onMudar, linhas = 7, placeho
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [previa, setPrevia] = useState(false);
+  // Estilo da linha onde está o cursor (ou da primeira linha selecionada): aparece escolhido no menu «Estilo».
+  const [estiloAtual, setEstiloAtual] = useState("p");
+  const lerEstilo = () => {
+    const el = ref.current;
+    if (!el) return;
+    const ini = el.value.lastIndexOf("\n", el.selectionStart - 1) + 1;
+    const fim = el.value.indexOf("\n", ini);
+    const linha = el.value.slice(ini, fim < 0 ? el.value.length : fim);
+    const e = ESTILOS.find(x => x.valor && linha.trimStart().startsWith(x.valor));
+    setEstiloAtual(e ? e.valor : "p");
+  };
+  useEffect(() => { lerEstilo(); }, [valor]);
 
   function envolver(antes: string, depois: string, vazio: string) {
     const el = ref.current;
@@ -118,10 +130,9 @@ export function TextoComFormatacao({ rotulo, valor, onMudar, linhas = 7, placeho
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-1" role="toolbar" aria-label={`Formatação: ${rotulo}`}>
-        <select aria-label="Estilo do parágrafo" title="Estilo das linhas selecionadas" value=""
+        <select aria-label="Estilo do parágrafo" title="Estilo das linhas selecionadas" value={estiloAtual}
           className="h-8 w-40 rounded-controlo border border-linha bg-superficie px-2 text-sm text-tinta"
-          onChange={e => { const v = e.target.value; if (v !== "-") marcarLinhas(() => (v === "p" ? "" : v)); e.target.value = ""; }}>
-          <option value="" disabled>Estilo…</option>
+          onChange={e => { const v = e.target.value; setEstiloAtual(v); marcarLinhas(() => (v === "p" ? "" : v)); }}>
           {ESTILOS.map(o => <option key={o.rotulo} value={o.valor || "p"}>{o.rotulo}</option>)}
         </select>
         <span className="mx-1 h-5 w-px bg-linha" aria-hidden="true" />
@@ -145,6 +156,7 @@ export function TextoComFormatacao({ rotulo, valor, onMudar, linhas = 7, placeho
         </Botao>
       </div>
       <AreaTexto ref={ref} aria-label={rotulo} rows={linhas} value={valor} onChange={e => onMudar(e.target.value)} onPaste={colar}
+        onSelect={lerEstilo} onKeyUp={lerEstilo} onClick={lerEstilo}
         placeholder={placeholder} />
       <p className="m-0 text-xs text-tinta-suave">
         Selecione o texto e escolha o estilo ou carregue em <strong>N</strong>, <em>I</em> ou <u>S</u>. Uma linha em branco separa parágrafos.

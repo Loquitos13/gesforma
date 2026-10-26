@@ -510,42 +510,64 @@ function videoNoCartao(dados: Data): Data {
 }
 
 /**
- * Cartão de inscrição no seu corredor (uma vez por página; depois, o que se mudar no editor fica): a secção que o tem
- * passa a grelha de 3 colunas centrada na largura do tema, com espaço entre o conteúdo (2 colunas) e o cartão (1), e
- * as colunas esticadas à altura da linha, para o cartão (no topo da sua coluna) acompanhar o scroll. Um cartão sozinho
- * dentro de uma coluna sai dela (a coluna à volta prendia-o à sua própria altura).
+ * Cartão de inscrição no seu corredor, seja qual for a estrutura que a página tenha (uma vez por versão desta regra;
+ * depois, o que se mudar no editor fica): a secção que tem o cartão (ou uma nova, se o cartão estiver solto na página)
+ * passa a grelha de 3 colunas centrada na largura do tema, com o conteúdo numa coluna de 2 e o cartão na 3.ª, 48 px
+ * entre os dois, e as colunas esticadas à altura da linha para o cartão acompanhar o scroll.
  */
 function corredorDoCartao(dados: Data): Data {
   const raiz = ((dados.root as { props?: Record<string, unknown> } | undefined)?.props ?? {});
-  if (raiz.layoutCartao) return dados;
+  if (raiz.layoutCartao === 2) return dados;
+  const lista = (dados.content ?? []) as No[];
+  const filhosDe = (b: No) => (Array.isArray(b.props.conteudo) && (b.props.conteudo as unknown[]).every(ehNo) ? b.props.conteudo as No[] : null);
   const temCartao = (b: No): boolean => b.type === "CursoInscricao"
     || Object.values(b.props).some(v => Array.isArray(v) && v.every(ehNo) && (v as No[]).some(temCartao));
+  if (!lista.some(temCartao)) return dados;
+
+  // Tira o cartão de onde estiver (e as colunas que ficam vazias por isso).
+  let cartao: No | null = null;
+  const semCartao = (l: No[]): No[] => l.flatMap(b => {
+    if (b.type === "CursoInscricao" && !cartao) { cartao = b; return []; }
+    const props = { ...b.props };
+    for (const [k, v] of Object.entries(props)) if (Array.isArray(v) && v.every(ehNo)) props[k] = semCartao(v as No[]);
+    const f = Array.isArray(props.conteudo) ? props.conteudo as No[] : null;
+    if (b.type === "Coluna" && f && f.length === 0 && filhosDe(b)?.length) return [];
+    return [{ ...b, props }];
+  });
+  const grelha = (seccao: No, filhos: No[]): No => {
+    const principal = filhos.length === 1 && filhos[0]!.type === "Coluna"
+      ? { ...filhos[0]!, props: { ...filhos[0]!.props, ocupar: 2 } }
+      : bloco("Coluna", Coluna.defaultProps, { ocupar: 2, espaco: 0, conteudo: filhos as never }) as No;
+    const espaco = Number(seccao.props.espaco);
+    return { ...seccao, props: {
+      ...seccao.props, conteudo: [principal, cartao!], disposicao: "grelha", colunas: 3, colunasTab: 1, colunasTel: 1,
+      espaco: Number.isFinite(espaco) && espaco >= 40 ? espaco : 48, alinharItens: "esticar", larguraConteudo: "tema",
+    } };
+  };
+
+  // A secção mais funda que tem o cartão é a que passa a grelha.
+  const secaoDoCartao = (b: No): boolean => b.type === "Seccao" && temCartao(b) && !(filhosDe(b) ?? []).some(x => x.type === "Seccao" && temCartao(x));
   let feito = false;
   const andar = (l: No[]): No[] => l.map(b => {
     if (feito || !temCartao(b)) return b;
-    const filhos = Array.isArray(b.props.conteudo) && (b.props.conteudo as unknown[]).every(ehNo) ? b.props.conteudo as No[] : null;
-    const direto = filhos?.some(x => x.type === "CursoInscricao" || (x.type === "Coluna" && Array.isArray(x.props.conteudo)
-      && (x.props.conteudo as No[]).length === 1 && (x.props.conteudo as No[])[0]!.type === "CursoInscricao"));
-    if (b.type === "Seccao" && filhos && direto) {
-      feito = true;
-      const conteudo = filhos.map(x => {
-        if (x.type === "Coluna" && (x.props.conteudo as No[] | undefined)?.length === 1 && (x.props.conteudo as No[])[0]!.type === "CursoInscricao") {
-          return (x.props.conteudo as No[])[0]!;
-        }
-        if (x.type === "Coluna") return { ...x, props: { ...x.props, ocupar: 2 } };
-        return x;
-      });
-      const espaco = Number(b.props.espaco);
-      return { ...b, props: {
-        ...b.props, conteudo, disposicao: "grelha", colunas: 3, colunasTab: 1, colunasTel: 1,
-        espaco: Number.isFinite(espaco) && espaco >= 40 ? espaco : 48, alinharItens: "esticar", larguraConteudo: "tema",
-      } };
-    }
+    if (secaoDoCartao(b)) { feito = true; const sem = semCartao([b])[0]!; return grelha(sem, filhosDe(sem) ?? []); }
     const props = { ...b.props };
-    for (const [k, v] of Object.entries(props)) if (!feito && Array.isArray(v) && v.every(ehNo)) props[k] = andar(v);
+    for (const [k, v] of Object.entries(props)) if (!feito && Array.isArray(v) && v.every(ehNo)) props[k] = andar(v as No[]);
     return { ...b, props };
   });
-  const content = andar((dados.content ?? []) as No[]);
-  return feito ? { ...dados, root: { ...(dados.root ?? {}), props: { ...raiz, layoutCartao: true } }, content } as Data : dados;
+  let content = andar(lista);
+  if (!feito) {
+    // Cartão sem secção à volta: o que está entre o banner e o rodapé vai para uma secção nova com o cartão ao lado.
+    const sem = semCartao(lista);
+    const fora = new Set(["Cabecalho", "Rodape", "CursoBanner"]);
+    const inicio = sem.findIndex(b => !fora.has(b.type));
+    let fim = sem.length;
+    while (fim > 0 && sem[fim - 1]!.type === "Rodape") fim--;
+    if (inicio < 0 || !cartao) return dados;
+    const seccao = bloco("Seccao", Seccao.defaultProps, {
+      aparencia: estiloVazio({ preenchimento: lados(64, 32), preenchimentoTel: lados(48, 20) }),
+    }) as No;
+    content = [...sem.slice(0, inicio), grelha(seccao, sem.slice(inicio, fim)), ...sem.slice(fim)];
+  }
+  return { ...dados, root: { ...(dados.root ?? {}), props: { ...raiz, layoutCartao: 2 } }, content } as Data;
 }
-

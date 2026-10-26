@@ -1,5 +1,6 @@
 // Página do curso: escolha do local e cartão de inscrição feito de blocos (imagem, textos com variáveis
 // do curso e botão). O local escolhido é da página: os dados, as turmas, o preço e o botão seguem-no.
+import { videoDoCurso } from "../../partilhado/siteServicos";
 import type { ComponentType } from "react";
 import type { ComponentConfig, Slot } from "@puckeditor/core";
 import { ePrepago, ePreinscricao, rotuloBotaoInscricao, TEXTO_DIRETO, textoDiretoAtual } from "../../partilhado/siteConteudo";
@@ -294,7 +295,7 @@ function TextoCurso(p: TextoProps) {
 
 // ─── Imagem do curso ─────────────────────────────────────────────────────────
 
-type ImagemProps = Base & { imagem: "capa" | "miniatura" | "banner"; altura: number | null; ajuste: "cover" | "contain" };
+type ImagemProps = Base & { imagem: "capa" | "miniatura" | "banner"; altura: number | null; ajuste: "cover" | "contain"; video: boolean };
 
 export const CursoImagem: ComponentConfig<ImagemProps> = {
   label: "Curso · Imagem",
@@ -302,12 +303,21 @@ export const CursoImagem: ComponentConfig<ImagemProps> = {
     imagem: { type: "select", label: "Imagem", options: [{ label: "Capa", value: "capa" }, { label: "Miniatura", value: "miniatura" }, { label: "Banner", value: "banner" }] },
     altura: campoNumero("Altura"),
     ajuste: { type: "select", label: "Ajuste", options: [{ label: "Preencher (corta)", value: "cover" }, { label: "Inteira", value: "contain" }] },
+    video: simNao("Mostrar o vídeo de apresentação no lugar da imagem (quando o curso tiver vídeo)"),
     aparencia: campoAparencia(),
   },
-  defaultProps: { imagem: "capa", altura: 144, ajuste: "cover", aparencia: estiloVazio() },
+  defaultProps: { imagem: "capa", altura: 144, ajuste: "cover", video: false, aparencia: estiloVazio() },
   render: p => (
     <Caixa p={p}>
       {curso => {
+        const v = p.video ? videoDoCurso(curso.video) : null;
+        if (v) return (
+          <div className="aspect-video w-full overflow-hidden bg-black">
+            {v.tipo === "iframe"
+              ? <iframe src={v.src} title={`Vídeo de apresentação: ${curso.title}`} className="h-full w-full" allow="encrypted-media; picture-in-picture; fullscreen" allowFullScreen loading="lazy" />
+              : <video src={v.src} controls preload="metadata" className="h-full w-full" aria-label={`Vídeo de apresentação: ${curso.title}`} />}
+          </div>
+        );
         const src = curso[p.imagem] || curso.capa || curso.miniatura;
         return (
           <div className="w-full overflow-hidden bg-[#E7EBF0]" style={{ height: p.altura ? `${p.altura}px` : undefined }}>

@@ -15,7 +15,8 @@ import { nextOpsId } from "../ops.js";
 import { pode } from "../permissoes/capacidades.js";
 import { fichaDoProprioFormador } from "../sessaoAcesso.js";
 import * as repo from "../repos/formadores.js";
-import { normalizeEmail } from "../security.js";
+import { hashPassword, normalizeEmail } from "../security.js";
+import { gerarPalavraPasse } from "../../../src/partilhado/passwordPolicy.js";
 import { idParam, paginacao, regime as regimeSchema, textoQuery, validar } from "../validacao.js";
 import { hojeIso } from "./turmas.js";
 import type { Deps } from "./tipos.js";
@@ -313,6 +314,42 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const row = await repo.obterFormador(db, id);
     const formador = row ? { ...repo.mapFormadorBase(row), alocado: await formadorEstaAlocado(db, String(row.nome ?? "")) } : null;
     return { formador, acesso };
+  });
+
+  /** Nova palavra-passe temporária para o formador (ou a conta, se a ficha ainda não a tem); mostra-se uma vez. */
+  app.post("/v1/formadores/:id/acesso", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: idParam }, req);
+    if (!v) return;
+    const id = v.params.id;
+    const antes = await repo.obterFormador(db, id);
+    if (!antes) return reply.code(404).send({ error: "formador não encontrado" });
+    if (!veAlgumRegime(req.actor!.role, repo.mapFormadorBase(antes).regimes)) return reply.code(403).send({ error: SEM_REGIME });
+    const email = normalizeEmail(String(antes.email ?? ""));
+    if (!email) return reply.code(400).send({ error: "A ficha não tem email: indique-o para criar o acesso." });
+    let acesso: Acesso = null;
+    try {
+      acesso = await db.tx(async q => {
+        if (antes.user_id) {
+          const password = gerarPalavraPasse();
+          if (!(await repo.reporContaFormador(q, String(antes.user_id), await hashPassword(password)))) return null;
+          return { email, password, criado: false };
+        }
+        const conta = await garantirContaFormador(q, String(antes.nome ?? ""), email, id);
+        if (!conta) return null;
+        await repo.ligarConta(q, id, conta.userId);
+        if (conta.criado) return { email: conta.email, password: conta.password, criado: true };
+        const password = gerarPalavraPasse();
+        await repo.reporContaFormador(q, conta.userId, await hashPassword(password));
+        return { email: conta.email, password, criado: false };
+      });
+    } catch (err) {
+      if (err instanceof ContaFormadorEmUso) return reply.code(409).send({ error: err.message });
+      throw err;
+    }
+    if (!acesso) return reply.code(409).send({ error: "A conta ligada a esta ficha não é de formador." });
+    await audit(db, req.actor!.id, "formador.acesso_reposto", "formador", String(id), req.ip, { criado: acesso.criado });
+    return { acesso };
   });
 
   app.delete("/v1/formadores/:id", async (req, reply) => {

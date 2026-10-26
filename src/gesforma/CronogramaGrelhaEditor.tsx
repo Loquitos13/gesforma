@@ -1,10 +1,10 @@
 // Continuação de CronogramaGrelha.tsx (partido para ficar abaixo das 500 linhas).
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useOpcoes } from "../partilhado/dados/useOpcoes";
 import { apiPublicEntidade } from "../partilhado/api/publico";
 import { useRecurso } from "../partilhado/dados/useRecurso";
 import { useProgramaDoCurso } from "./cursoPrograma";
-import { type GrelhaLinha, addDays, cellLabel, cellTone, comFimCronograma, datesFromRange, defaultSlot, dayNum, fimEstavel, grelhaPeriodo, grupoLinha, larguraDiasEmChars, linhaId, linhaLabel, linhasFromSessoes, mergeLinhas, METODOLOGIA_OPTS, monthSpans, moverEvento, normHora, setMatricula, sessoesSemFim, weekdayCode } from "../partilhado/cronogramaGrelha";
+import { type GrelhaLinha, addDays, cellLabel, cellTone, comFimCronograma, datesFromRange, defaultSlot, dayNum, fimEstavel, grelhaPeriodo, grupoLinha, larguraDiasEmChars, linhaId, linhaLabel, linhasFromSessoes, mergeLinhas, METODOLOGIA_OPTS, monthSpans, moverEvento, mudarHorasLinha, normHora, saltoMatricula, setMatricula, sessoesSemFim, weekdayCode } from "../partilhado/cronogramaGrelha";
 import { generateEnaCronograma } from "../partilhado/cronogramaGrelhaGerar";
 import { mapLocalTurma, type LocalCatalogo } from "../partilhado/cronogramaLocal";
 import { imprimirCronogramaEna } from "../partilhado/cronogramaPrint";
@@ -86,12 +86,23 @@ export function CronogramaGrelha({
   }, [periodo.fim]);
 
   const start = [matricula, inicio, periodo.inicio].filter(Boolean).sort()[0] ?? inicio;
-  const dates = useMemo(() => datesFromRange(start, fim || addDays(inicio || start, 31)), [start, fim, inicio]);
-  const months = monthSpans(dates);
+  const todosOsDias = useMemo(() => datesFromRange(start, fim || addDays(inicio || start, 31)), [start, fim, inicio]);
+  // Os dias vazios entre a matrícula e o início ficam numa só coluna («…»); um clique mostra-os.
+  const [verSalto, setVerSalto] = useState(false);
+  const salto = verSalto ? null : saltoMatricula(todosOsDias, sessoes, matricula, inicio);
+  const dates = useMemo(() => (salto ? todosOsDias.filter(d => d < salto.de || d > salto.ate) : todosOsDias), [todosOsDias, salto?.de, salto?.ate]);
+  const months = monthSpans(dates).map(m => (salto && m.key === matricula.slice(0, 7) ? { ...m, count: m.count + 1 } : m));
   const larguras = useMemo(() => {
     const rotulos = dates.map(d => linhas.map(l => cellLabel(sessoes, d, l)).filter(Boolean));
     return larguraDiasEmChars(dates, rotulos);
   }, [dates, linhas, sessoes]);
+  const colunaSalto = (chave: string, conteudo?: ReactNode, rowSpan?: number) => (
+    <th key={`salto-${chave}`} rowSpan={rowSpan} className="border-b border-x border-slate-200 bg-slate-50 px-0 py-0 text-center align-middle font-medium text-slate-400 min-w-[2.4rem]">
+      {conteudo}
+    </th>
+  );
+  // Horário de uma linha inteira (clique no rótulo da linha).
+  const [linhaHoras, setLinhaHoras] = useState<{ linha: GrelhaLinha; hi: string; hf: string; erro: string } | null>(null);
   const codigo = codigoInternoTurma(curso ?? "", local ?? "", horario, inicio);
   const gold = accent === "gold";
 
@@ -172,7 +183,8 @@ export function CronogramaGrelha({
             </tr>
             <tr>
               {dates.map((d, di) => (
-                <th key={`n-${d}`} style={{ minWidth: `${Math.max(2.1, (larguras[di] ?? 2) * 0.62)}rem` }} className={`border-b border-slate-100 px-0 py-0 text-center font-bold ${d === matricula ? "bg-[#15803d]/30" : d === inicio ? "bg-emerald-50" : ""}`}>
+                <Fragment key={`n-${d}`}>
+                <th style={{ minWidth: `${Math.max(2.1, (larguras[di] ?? 2) * 0.62)}rem` }} className={`border-b border-slate-100 px-0 py-0 text-center font-bold ${d === matricula ? "bg-[#15803d]/30" : d === inicio ? "bg-emerald-50" : ""}`}>
                   <button
                     type="button"
                     onClick={() => setEvento({ date: d })}
@@ -182,6 +194,11 @@ export function CronogramaGrelha({
                     {dayNum(d)}
                   </button>
                 </th>
+                {salto && d === matricula && colunaSalto("n", (
+                  <button type="button" onClick={() => setVerSalto(true)} title={`${salto.n} dias sem eventos entre a matrícula e o início (${formatDiaMes(salto.de)} a ${formatDiaMes(salto.ate)}). Clique para os mostrar.`}
+                    className="block w-full py-1 text-slate-500 hover:bg-slate-100">…</button>
+                ), 2)}
+                </Fragment>
               ))}
             </tr>
             <tr>
@@ -208,7 +225,10 @@ export function CronogramaGrelha({
                   <th className="sticky left-0 z-10 bg-white border-r border-b border-slate-200 px-2 py-1 text-left align-middle font-semibold text-slate-700 w-44 min-w-[11rem]">
                     {i === 0 && <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{grupoLinha(grupo)}</p>}
                     <div className="flex items-center gap-1">
-                      <p className="text-[11px] font-medium text-slate-600 leading-tight flex-1">{linhaLabel(linha)}</p>
+                      {linha.modalidade === "presencial" || linha.modalidade === "sincrona"
+                        ? <button type="button" onClick={() => setLinhaHoras({ linha, hi: linha.horaInicio, hf: linha.horaFim, erro: "" })} title="Mudar o horário desta linha (todas as sessões dela)"
+                            className="text-[11px] font-medium text-slate-600 leading-tight flex-1 text-left hover:text-slate-900 hover:underline">{linhaLabel(linha)}</button>
+                        : <p className="text-[11px] font-medium text-slate-600 leading-tight flex-1">{linhaLabel(linha)}</p>}
                       {!dates.some(d => cellLabel(sessoes, d, linha)) && (
                         <button
                           type="button"
@@ -276,7 +296,9 @@ export function CronogramaGrelha({
                         </button>
                       </td>
                     );
-                  })}
+                  }).flatMap((td, di) => (salto && dates[di] === matricula
+                    ? [td, <td key={`salto-${linha.id}`} className="border border-slate-100 bg-slate-50" aria-hidden="true" />]
+                    : [td]))}
                 </tr>
               ));
             })}
@@ -388,6 +410,35 @@ export function CronogramaGrelha({
           Imprimir / PDF
         </button>
       </div>
+
+      {linhaHoras && (
+        <div className="fixed inset-0 z-[80] bg-slate-900/40 flex items-center justify-center p-4" onClick={() => setLinhaHoras(null)}>
+          <form className="w-full max-w-sm rounded-2xl bg-white shadow-2xl p-5 space-y-3" onClick={e => e.stopPropagation()}
+            onSubmit={e => {
+              e.preventDefault();
+              const r = mudarHorasLinha(sessoesSemFim(sessoes), linhaHoras.linha, linhaHoras.hi, linhaHoras.hf);
+              if (!r.ok) { setLinhaHoras({ ...linhaHoras, erro: r.erro }); return; }
+              setLinhas(xs => mergeLinhas(linhasFromSessoes(r.sessoes, horario), xs.map(x => (x.id === linhaHoras.linha.id ? r.linha : x))));
+              gravar(r.sessoes);
+              setLinhaHoras(null);
+            }}>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Horário da linha</p>
+              <p className="text-sm font-semibold text-slate-800 mt-0.5">{linhaLabel(linhaHoras.linha)}</p>
+              <p className="text-[11px] text-slate-500 mt-1">Todas as sessões desta linha passam para o novo horário.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <HoraField label="Início" value={linhaHoras.hi} onChange={v => setLinhaHoras({ ...linhaHoras, hi: v, erro: "" })} />
+              <HoraField label="Fim" value={linhaHoras.hf} onChange={v => setLinhaHoras({ ...linhaHoras, hf: v, erro: "" })} />
+            </div>
+            {linhaHoras.erro && <p className="text-[11px] text-red-600">{linhaHoras.erro}</p>}
+            <div className="flex gap-2 pt-1">
+              <button type="button" onClick={() => setLinhaHoras(null)} className="flex-1 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Cancelar</button>
+              <button type="submit" className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-[#0F172A] text-white hover:bg-slate-800">Aplicar</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {evento && (
         <EventoModal

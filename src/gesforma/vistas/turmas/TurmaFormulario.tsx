@@ -75,7 +75,12 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
 
   const cursoId = cursos.opcoes.find(o => o.valor === r.curso)?.id;
   const locaisCurso = cursoId != null ? byCursoId[cursoId] ?? [] : [];
-  const opcoesLocal = (locaisCurso.length ? locaisCurso.map(n => ({ valor: n, rotulo: n })) : locais.selecao);
+  // Os locais da ficha do curso primeiro; os outros do catálogo continuam disponíveis (a turma pode ser noutro sítio).
+  const doCurso = new Set(locaisCurso.map(n => n.toLowerCase()));
+  const opcoesLocal = [
+    ...locaisCurso.map(n => ({ valor: n, rotulo: n })),
+    ...locais.selecao.filter(o => !doCurso.has(o.valor.toLowerCase())).map(o => ({ ...o, rotulo: locaisCurso.length ? `${o.rotulo} (fora da ficha do curso)` : o.rotulo })),
+  ];
   const codigo = codigoInternoTurma(r.curso, r.local, r.horario, r.dataInicio);
 
   useEffect(() => {

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 
 import { SearchSelect } from "../partilhado/FormKit";
 
-import { type GrelhaLinha, aplicarEvento, buildLinha, defaultSlot, eventosDoDia, EVENTO_OPTS, linhaLabel, normHora, type EventoDia } from "../partilhado/cronogramaGrelha";
+import { type GrelhaLinha, aplicarEvento, buildLinha, defaultSlot, eventosDoDia, EVENTO_OPTS, linhaLabel, normHora, preencherIntervalo, type EventoDia } from "../partilhado/cronogramaGrelha";
 
 import { type SessaoModalidade, casarModulo, codigoModulo, formatDiaMes, ordenarCodigos, ordenarModulos, sessaoModulos, type SessaoCronograma } from "../partilhado/turmaModel";
 
@@ -19,7 +19,8 @@ export function HoraField({
   const n = normHora(value) || "09:00";
   const [h, m] = n.split(":");
   const hours = Array.from({ length: 17 }, (_, i) => String(i + 7).padStart(2, "0"));
-  const mins = ["00", "15", "30", "45"];
+  // De 5 em 5 minutos (ex.: 10:50); um valor já gravado fora disso continua na lista.
+  const mins = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0"));
   if (m && !mins.includes(m)) mins.push(m);
   mins.sort();
   return (
@@ -134,6 +135,9 @@ export function EventoModal({
   const [form, setForm] = useState<EventoForm>(() => formInicial(inicial, linha, horario, catalogoInicial));
   const [erro, setErro] = useState("");
   const [aRemover, setARemover] = useState(false);
+  // E-learning (e prazos): o mesmo evento até outra data, sem ter de marcar os dias um a um.
+  const [ate, setAte] = useState("");
+  const [soUteis, setSoUteis] = useState(false);
   const editing = Boolean(alvo);
   const catalogo = useMemo(() => moduloOpts.map(o => o.value), [moduloOpts]);
   const opcoes = catalogo;
@@ -179,13 +183,21 @@ export function EventoModal({
     }
     const nextLinha = buildLinha(form.mod, hi, hf);
     const lectiva = form.mod === "presencial" || form.mod === "sincrona";
-    const next = aplicarEvento(sessoes, date, nextLinha, {
+    const dados = {
       modulos: ordenarModulos(form.modulos),
       formadores: lectiva
         ? (form.formadores.length ? form.formadores : formador && formador !== "A definir" ? [formador] : [])
         : [],
       modalidade: form.mod,
-    }, alvo?.linha ?? null);
+    };
+    let next = aplicarEvento(sessoes, date, nextLinha, dados, alvo?.linha ?? null);
+    if (form.mod === "auto" && ate) {
+      if (ate <= date) {
+        setErro("A data «até» tem de ser depois deste dia.");
+        return;
+      }
+      next = preencherIntervalo(next, date, ate, nextLinha, dados, soUteis);
+    }
     onApply(next, nextLinha);
     onClose();
   }
@@ -249,7 +261,19 @@ export function EventoModal({
           </div>
         )}
         {form.mod === "auto" && (
-          <p className="text-[11px] text-slate-500">O e-learning não tem hora de sala - ocupa o dia na grelha.</p>
+          <div className="space-y-2">
+            <p className="text-[11px] text-slate-500">O e-learning não tem hora de sala - ocupa o dia na grelha.</p>
+            <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-100 bg-slate-50 p-2">
+              <label className="text-[11px] font-semibold text-slate-600">Repetir todos os dias até
+                <input type="date" value={ate} min={date} onChange={e => { setAte(e.target.value); setErro(""); }}
+                  className="mt-1 block px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white" />
+              </label>
+              <label className="flex items-center gap-1.5 pb-1.5 text-[11px] text-slate-600">
+                <input type="checkbox" checked={soUteis} onChange={e => setSoUteis(e.target.checked)} /> Só dias úteis
+              </label>
+              {ate && <button type="button" onClick={() => setAte("")} className="pb-1.5 text-[11px] text-slate-500 underline">Só este dia</button>}
+            </div>
+          </div>
         )}
         {form.mod === "avaliacao" && (
           <p className="text-[11px] text-slate-500">Marca este dia como limite de entrega de tarefas / avaliação dos módulos escolhidos.</p>

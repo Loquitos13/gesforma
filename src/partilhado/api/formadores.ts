@@ -123,6 +123,11 @@ export type DadosFormador = {
 
 export type AcessoCriado = { email: string; password?: string; criado: boolean } | null;
 
+/** Nova palavra-passe temporária da conta do formador (ou cria a conta, se a ficha ainda não a tem). */
+export function apiReporAcessoFormador(id: number) {
+  return enviar.post<{ acesso: AcessoCriado }>(`/v1/formadores/${id}/acesso`, {});
+}
+
 export function apiCriarFormador(dados: DadosFormador) {
   return enviar.post<{ formador: FormadorBase; acesso: AcessoCriado }>("/v1/formadores", dados);
 }

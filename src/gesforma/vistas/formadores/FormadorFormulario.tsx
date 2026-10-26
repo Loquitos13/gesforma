@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { ApiError } from "../../../partilhado/api/cliente";
-import { apiAlterarFormador, apiCriarFormador, apiJuntarRegimeFormador, type AcessoCriado, type DadosFormador, type FormadorBase, type Regime } from "../../../partilhado/api/formadores";
+import { apiAlterarFormador, apiCriarFormador, apiJuntarRegimeFormador, apiReporAcessoFormador, type AcessoCriado, type DadosFormador, type FormadorBase, type Regime } from "../../../partilhado/api/formadores";
 import { DisponibilidadeEditor } from "../../../partilhado/DisponibilidadeEditor";
 import { SLOTS_TODOS } from "../../../partilhado/disponibilidade";
 import { toastError } from "../../../partilhado/toastBus";
 import { Aviso, Botao, Caixa, Campo, Entrada, Interruptor, Modal } from "../../../partilhado/ui";
+import { AvisoAcesso } from "./AvisoAcesso";
 
 const novo = (regime: Regime): DadosFormador => ({
   nome: "", telf: "", email: "", especialidade: "", ccp: "", ccpValidade: "", nif: "", regimes: [regime],
@@ -33,11 +34,15 @@ export function FormadorFormulario({ aberto, regime, formador, especialidades, o
   const [aGravar, setAGravar] = useState(false);
   /** Ficha que já existe com este email (409 ao criar): junta-se o regime em vez de criar outra. */
   const [existente, setExistente] = useState<number | null>(null);
+  /** Palavra-passe temporária gerada agora (mostrada uma vez). */
+  const [novoAcesso, setNovoAcesso] = useState<AcessoCriado>(null);
+  const [aRepor, setARepor] = useState(false);
 
   useEffect(() => {
     if (!aberto) return;
     setErro("");
     setExistente(null);
+    setNovoAcesso(null);
     setD(formador ? deFormador(formador) : novo(regime));
   }, [aberto, formador, regime]);
 
@@ -61,6 +66,18 @@ export function FormadorFormulario({ aberto, regime, formador, especialidades, o
       if (ficha == null) toastError(e, "Não foi possível gravar o formador.");
     } finally {
       setAGravar(false);
+    }
+  }
+
+  async function reporAcesso() {
+    if (!formador) return;
+    setARepor(true);
+    try {
+      setNovoAcesso((await apiReporAcessoFormador(formador.id)).acesso);
+    } catch (e) {
+      toastError(e, "Não foi possível gerar a palavra-passe.");
+    } finally {
+      setARepor(false);
     }
   }
 
@@ -110,6 +127,13 @@ export function FormadorFormulario({ aberto, regime, formador, especialidades, o
             {p => <Entrada {...p} type="tel" value={d.telf} onChange={e => mudar({ telf: e.target.value })} />}
           </Campo>
         </div>
+        {formador?.email && (
+          <div className="flex flex-wrap items-center gap-2 rounded-cartao border border-linha p-3 text-[13px]">
+            <span className="flex-1 min-w-[12rem] text-tinta-suave">Acesso à área do formador: a palavra-passe é temporária e o formador muda-a no primeiro acesso.</span>
+            <Botao variante="secundario" tamanho="sm" aCarregar={aRepor} onClick={() => void reporAcesso()}>Gerar nova palavra-passe</Botao>
+          </div>
+        )}
+        {novoAcesso && <AvisoAcesso acesso={novoAcesso} onFechar={() => setNovoAcesso(null)} />}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Campo rotulo="CCP / CCPE">
             {p => <Entrada {...p} value={d.ccp} onChange={e => mudar({ ccp: e.target.value })} />}

@@ -10,7 +10,7 @@ export function AvisoAcesso({ acesso, onFechar }: { acesso: AcessoCriado; onFech
   return (
     <Aviso
       tom="sucesso"
-      titulo={acesso.criado ? "Conta de formador criada" : "Ficha ligada a uma conta que já existia"}
+      titulo={acesso.criado ? "Conta de formador criada" : acesso.password ? "Nova palavra-passe temporária" : "Ficha ligada a uma conta que já existia"}
       acao={<Botao variante="fantasma" tamanho="sm" onClick={onFechar}>Fechar</Botao>}
     >
       <p className="m-0">Utilizador: <strong>{acesso.email}</strong></p>

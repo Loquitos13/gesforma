@@ -427,6 +427,15 @@ export async function inserirUtilizadorFormador(c: Consulta, d: { id: string; no
   return id != null;
 }
 
+/** Nova palavra-passe temporária para a conta do formador (troca obrigatória no próximo acesso; as sessões abertas fecham). */
+export async function reporContaFormador(c: Consulta, userId: string, hash: string) {
+  const id = await valor(c, `UPDATE users SET password_hash = $2, must_change_password = true
+     WHERE id = $1::uuid AND role = 'formador' RETURNING id`, [userId, hash]);
+  if (id == null) return false;
+  await valor(c, "DELETE FROM sessions WHERE user_id = $1::uuid RETURNING user_id", [userId]);
+  return true;
+}
+
 /** A outra ficha de formador a que a conta já está ligada (o id), ou null. */
 export async function contaLigadaAOutraFicha(c: Consulta, userId: string, fichaId: number) {
   const id = await valor<number>(c, "SELECT id FROM formadores WHERE user_id = $1::uuid AND id <> $2 ORDER BY id LIMIT 1", [userId, fichaId]);

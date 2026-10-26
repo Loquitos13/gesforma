@@ -435,3 +435,53 @@ export function eachDay(inicio: string, fim: string) {
 export function weekdaysIn(dates: string[], allowed: number[]) {
   return dates.filter(d => allowed.includes(parseIso(d).getDay()));
 }
+
+/**
+ * Dias vazios entre a data limite de matrícula e o início (sem nenhum evento): a partir de 3 seguidos, a grelha
+ * mostra-os numa só coluna («…»), em vez de uma faixa de colunas em branco.
+ */
+export function saltoMatricula(dates: string[], sessoes: SessaoCronograma[], matricula: string, inicio: string) {
+  if (!matricula || !inicio || matricula >= inicio) return null;
+  const comEvento = new Set(sessoesSemFim(sessoes).filter(s => sessaoModalidade(s) !== "matricula").map(s => s.data));
+  const vazios = dates.filter(d => d > matricula && d < inicio);
+  if (vazios.length < 3 || vazios.some(d => comEvento.has(d))) return null;
+  return { de: vazios[0]!, ate: vazios[vazios.length - 1]!, n: vazios.length };
+}
+
+/** O mesmo evento em todos os dias de `de` a `ate` (ex.: e-learning de um módulo durante uma semana). */
+export function preencherIntervalo(
+  sessoes: SessaoCronograma[],
+  de: string,
+  ate: string,
+  linha: GrelhaLinha,
+  next: { modulos: string[]; formadores?: string[]; modalidade?: SessaoModalidade },
+  soDiasUteis = false,
+) {
+  let out = sessoes;
+  for (const d of datesFromRange(de, ate)) {
+    const dia = parseIso(d).getDay();
+    if (soDiasUteis && (dia === 0 || dia === 6)) continue;
+    out = upsertCell(out, d, linha, next);
+  }
+  return out;
+}
+
+/**
+ * Muda a hora de uma linha inteira da grelha (todas as sessões dessa linha passam ao novo horário, com os mesmos ids).
+ * Recusa quando o novo horário já tem sessões nos mesmos dias.
+ */
+export function mudarHorasLinha(sessoes: SessaoCronograma[], linha: GrelhaLinha, horaInicio: string, horaFim: string): { ok: true; sessoes: SessaoCronograma[]; linha: GrelhaLinha } | { ok: false; erro: string } {
+  if (linha.modalidade !== "presencial" && linha.modalidade !== "sincrona") return { ok: false, erro: "Esta linha não tem horário." };
+  const hi = normHora(horaInicio);
+  const hf = normHora(horaFim);
+  if (!hi || !hf) return { ok: false, erro: "Escolha a hora de início e de fim." };
+  if (hi >= hf) return { ok: false, erro: "A hora de fim tem de ser depois da de início." };
+  const nova = buildLinha(linha.modalidade, hi, hf);
+  if (nova.id === linha.id) return { ok: true, sessoes, linha: nova };
+  const daLinha = (s: SessaoCronograma) => !eMarcoFim(s) && matchLinha(s, linha);
+  const dias = new Set(sessoes.filter(daLinha).map(s => s.data));
+  if (sessoes.some(s => !eMarcoFim(s) && !daLinha(s) && dias.has(s.data) && matchLinha(s, nova))) {
+    return { ok: false, erro: "Já há sessões nesse horário em dias desta linha." };
+  }
+  return { ok: true, linha: nova, sessoes: sessoes.map(s => (daLinha(s) ? { ...s, horaInicio: hi, horaFim: hf } : s)) };
+}

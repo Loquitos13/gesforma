@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiCursoFichas, type Regime } from "./api";
 import type { SelectOption } from "./FormKit";
+import { useOpcoes } from "./dados/useOpcoes";
 
 export function locaisFromFicha(payload: Record<string, unknown> | undefined): string[] {
   const raw = payload?.locais;
@@ -111,21 +112,31 @@ export function useLocaisOptsDoCurso(
   cursoNome: string,
 ) {
   const { byCursoId, loaded } = useCursoFichaLocais(regime);
+  const catalogo = useOpcoes("locais", { regime });
   const cursoId = matchCursoId(cursos, cursoNome);
   const nomes = useMemo(
     () => (cursoId != null ? (byCursoId[cursoId] ?? []) : []),
     [byCursoId, cursoId],
   );
-  const options = useMemo(() => optsFromLocais(nomes), [nomes]);
+  // Primeiro os locais da ficha do curso; depois os outros do catálogo (uma turma pode ser noutro sítio,
+  // ex.: curso marcado como e-learning na ficha, com turmas presenciais).
+  const options = useMemo(() => {
+    const doCurso = new Set(nomes.map(n => n.toLowerCase()));
+    const outros = catalogo.opcoes.map(o => o.valor).filter(n => n && !doCurso.has(n.toLowerCase()));
+    return [
+      ...nomes.map(value => ({ value, sub: "Local do curso" })),
+      ...outros.map(value => ({ value, sub: "Outro local (não está na ficha do curso)" })),
+    ];
+  }, [nomes, catalogo.opcoes]);
   const ready = Boolean(cursoNome.trim());
   const empty = !ready
     ? "Escolha primeiro o curso."
     : !loaded
       ? "A carregar locais do curso…"
-      : nomes.length === 0
-        ? "Este curso não tem locais na ficha. Associe polos no registo do curso."
+      : options.length === 0
+        ? "Não há locais. Crie-os em Edição de cursos › Locais."
         : "Nenhum local corresponde à pesquisa.";
-  const placeholder = !ready ? "Escolha primeiro o curso…" : "Pesquisar local do curso…";
+  const placeholder = !ready ? "Escolha primeiro o curso…" : "Pesquisar local…";
   return {
     options,
     loaded,

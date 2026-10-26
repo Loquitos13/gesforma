@@ -262,6 +262,28 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     expect(anexos.find(a => a.item_id === "sumarios")?.drive_file_id).toBe(presencas);
   });
 
+  it("assinaturas digitais: o formador e o coordenador saem na folha e no plano; sem sumário o título é só «Folha de presenças»", async () => {
+    const ctx = await arrancar();
+    const t = await turmaFin(ctx);
+    // Sessão 2: folha assinada pelo formador e validada; plano assinado e aprovado (como gravam as rotas da sessão).
+    await ctx.db.query(`UPDATE turma_sessoes SET
+        folha = '{"assinadaPor":"Formador Teste","assinadaEm":"2026-10-01T21:05:00Z","validadaPor":"Coordenação Teste","validadaEm":"2026-10-02T09:30:00Z"}'::jsonb,
+        sumario = COALESCE(sumario, '{}'::jsonb) || '{"presencasValidadas":true}'::jsonb,
+        plano = COALESCE(plano, '{}'::jsonb) || '{"estado":"aprovado","assinado":true,"revistoPor":"Coordenação Teste","revistoEm":"2026-09-29T10:00:00Z","assinaturaFormador":{"nome":"Formador Teste","em":"2026-09-28T20:00:00Z"}}'::jsonb
+      WHERE regime = 'fin' AND turma_id = $1 AND sessao_n = 2`, [t.id]);
+    const folhas = await paginas((await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}/folhas-presenca?sessao=2`)).rawPayload);
+    expect(folhas[0]).toContain("FOLHA DE PRESENÇAS");
+    expect(folhas[0]).not.toContain("SUMÁRIO");
+    expect(folhas[0]).toContain("o Formador: Assinado digitalmente por Formador Teste em 01-10-2026 22:05");
+    expect(folhas[0]).toContain("o Coordenador: Assinado digitalmente por Coordenação Teste em 02-10-2026 10:30");
+    const planos = await paginas((await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}/planos-sessao?sessao=2`)).rawPayload);
+    expect(planos[0]).toContain("o Formador: Assinado digitalmente por Formador Teste em 28-09-2026 21:00");
+    expect(planos[0]).toContain("o Coordenador: Assinado digitalmente por Coordenação Teste em 29-09-2026 11:00");
+    // Sessão 1, sem assinaturas: linhas em branco.
+    const p1 = (await paginas((await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}/folhas-presenca?sessao=1`)).rawPayload))[0]!;
+    expect(p1).not.toContain("Assinado digitalmente");
+  });
+
   it("plano de sessão: uma página na horizontal por sessão lectiva, com as colunas do modelo e o Tempo", async () => {
     const ctx = await arrancar();
     const t = await turmaFin(ctx);

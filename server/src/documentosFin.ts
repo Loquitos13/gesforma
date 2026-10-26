@@ -668,11 +668,12 @@ export function textoSumario(s: SessaoDocFin["sumario"]) {
 
 /** Uma folha por sessão lectiva (sem sessões, uma folha em branco). Uma turma grande continua na página seguinte. */
 export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDocFin[]) {
-  const titulo = "FOLHA DE PRESENÇAS / SUMÁRIO";
-  const d = await abrirDoc("Folhas de presenças e sumários", cab);
+  const d = await abrirDoc("Folhas de presenças", cab);
   const c = cab.candidatura;
   const lista: (SessaoDocFin | null)[] = sessoes.length ? sessoes : [null];
   for (const s of lista) {
+    // A Financiada deixou de ter sumário: o título só o refere nas sessões que ainda o têm gravado.
+    const titulo = textoSumario(s?.sumario ?? null) ? "FOLHA DE PRESENÇAS / SUMÁRIO" : "FOLHA DE PRESENÇAS";
     let pg = novaPagina(d, RETRATO, titulo);
     const pares: [string, string][] = [
       ["Entidade:", cab.entidade],

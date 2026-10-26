@@ -61,7 +61,8 @@ export const Seccao: ComponentConfig<SeccaoProps> = {
       marginLeft: "auto", marginRight: "auto", width: "100%",
       ...(disposicao === "grelha" ? { ["--cols" as string]: String(colunas || 1), ["--cols-tab" as string]: String(colunasTab || colunas || 1), ["--cols-tel" as string]: String(colunasTel || 1) } : {}),
     };
-    const cls = disposicao === "grelha" ? "ena-grelha" : disposicao === "linha" ? "flex flex-wrap" : "flex flex-col";
+    // «ena-seccao»: com o cartão de inscrição dentro, passa a dois corredores em qualquer disposição (index.css).
+    const cls = `ena-seccao ${disposicao === "grelha" ? "ena-grelha" : disposicao === "linha" ? "flex flex-wrap" : "flex flex-col"}`;
     return (
       <section ref={puck?.dragRef ?? undefined} id={c.id} className={c.className} style={c.style}>
         <Conteudo className={cls} style={interior} minEmptyHeight={80} />

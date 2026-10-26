@@ -349,6 +349,19 @@ body:has(input[type="file"]:focus) [data-ficha-sticky] {
   .ena-oculto-pc { display: none !important; }
 }
 .ena-grelha { display: grid; grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); }
+/* Página do curso: uma secção com o cartão de inscrição tem sempre dois corredores no computador, o conteúdo (2/3) e o
+   cartão (1/3), seja qual for o número de colunas da secção ou o «ocupa N colunas» das colunas (que desencontrados
+   punham o cartão por baixo do conteúdo). */
+@media (min-width: 1024px) {
+  .ena-seccao:has(> .ena-cartao-lateral) { display: grid !important; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr) !important; align-items: start; }
+  .ena-seccao:has(> .ena-cartao-lateral) > :not(.ena-cartao-lateral) { grid-column: 1 / 2 !important; }
+  .ena-seccao:has(> .ena-cartao-lateral) > .ena-cartao-lateral { grid-column: 2 / 3 !important; grid-row: 1; }
+}
+/* Tablet e telemóvel: uma só coluna (um «ocupa 2 colunas» criava uma coluna fantasma e estreitava o cartão). */
+@media (max-width: 1023px) {
+  .ena-seccao:has(> .ena-cartao-lateral) { display: grid !important; grid-template-columns: minmax(0, 1fr) !important; }
+  .ena-seccao:has(> .ena-cartao-lateral) > * { grid-column: 1 / -1 !important; }
+}
 /* Carrossel: «--cols» cartões visíveis de cada vez (tablet e telemóvel com os seus), desliza e encaixa cartão a cartão. */
 .ena-carrossel {
   --vis: var(--cols, 3);

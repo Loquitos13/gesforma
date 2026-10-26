@@ -426,7 +426,7 @@ export const CursoInscricao: ComponentConfig<CartaoProps> = {
     return (
     // Sempre no topo da sua coluna (self-start): esticado à altura da linha, o «sticky» não tinha por onde andar.
     <Caixa p={p} as="aside" className={juntar(
-      "h-fit w-full self-start",
+      "ena-cartao-lateral h-fit w-full self-start",
       p.cartao && "border-t-4 border-[var(--c-destaque)] bg-white shadow-[0_18px_50px_rgba(18,52,59,.18)]",
       // No editor não acompanha o scroll: a pré-visualização mede o scroll à sua maneira e o cartão saía da secção.
       p.fixo && !(p0.puck as { isEditing?: boolean } | undefined)?.isEditing && "lg:sticky lg:top-[var(--topo-cartao)]",

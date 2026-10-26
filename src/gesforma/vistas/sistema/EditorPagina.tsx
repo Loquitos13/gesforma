@@ -8,14 +8,14 @@ import { apiPaginaSite, apiPublicarPagina, apiRascunhoPagina, type PaginaEditor 
 import { PAGINAS_SITE, type PaginaSite } from "../../../partilhado/siteBlocos";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
 import { ConfirmarPerigo, ErroCarregar, Esqueleto } from "../../../partilhado/ui";
-import { molduraDaPagina } from "../../../site/PaginaSite";
+import { molduraDoSite } from "../../../site/PaginaSite";
 import { OfertaCtx, useOfertaState } from "../../../site/SiteLanding";
 import { nomesCursos } from "../../../site/editor/campos";
 import { completarPadroes, configPara, MolduraCtx, type Moldura } from "../../../site/editor/config";
 import {
   AvisoDispositivoCtx, definirDispositivoEmEdicao, dispositivoEmEdicao, NOMES_DISP, paraDispositivo, registarNoEcra, type Disp,
 } from "../../../site/editor/dispositivos";
-import { converterPaginaCurso, converterPaginaInicio, modeloPagina } from "../../../site/editor/modeloBase";
+import { converterPaginaCurso, converterPaginaInicio, modeloPagina, molduraDeInicio } from "../../../site/editor/modeloBase";
 import { fmtDataHoraLisboa } from "../../../partilhado/horaLisboa";
 
 const VIEWPORTS: Viewports = [
@@ -45,7 +45,8 @@ const PT: Dictionary = {
 };
 
 export const PAGINAS: Record<PaginaSite, { titulo: string; endereco: string; nota: string }> = {
-  inicio: { titulo: "Página inicial", endereco: "/", nota: "Também guarda o cabeçalho, o rodapé e o tema de todo o site." },
+  inicio: { titulo: "Página inicial", endereco: "/", nota: "Também guarda o tema (cores e fontes) de todo o site." },
+  moldura: { titulo: "Cabeçalho e rodapé", endereco: "/", nota: "O cabeçalho (logótipo, menu, botão) e o rodapé de todas as páginas do site." },
   catalogo: { titulo: "Catálogo", endereco: "/formacao", nota: "Lista de cursos com pesquisa e filtros." },
   curso: { titulo: "Página de curso", endereco: "/formacao", nota: "A página de cada curso (a mesma para todos)." },
   noticias: { titulo: "Notícias", endereco: "/noticias", nota: "Os artigos vêm de Gestão › Blog." },
@@ -116,11 +117,21 @@ function usePaginaEditor(pagina: PaginaSite) {
   useEffect(() => {
     const ctl = new AbortController();
     setErro(null);
-    const inicio = pagina === "inicio" ? Promise.resolve(null) : apiPaginaSite("inicio", ctl.signal);
-    Promise.all([apiPaginaSite(pagina, ctl.signal), inicio])
-      .then(([d, i]) => {
+    // Todas as páginas mostram o cabeçalho e o rodapé partilhados (o rascunho, para se ver o que se está a mudar)
+    // e o tema da página inicial.
+    const inicio = pagina === "inicio" ? null : apiPaginaSite("inicio", ctl.signal);
+    const moldura = pagina === "moldura" ? null : apiPaginaSite("moldura", ctl.signal);
+    Promise.all([apiPaginaSite(pagina, ctl.signal), inicio, moldura])
+      .then(([d, i, m]) => {
+        const doInicio = ((pagina === "inicio" ? d : i)?.rascunho ?? (pagina === "inicio" ? d : i)?.publicado) as Data | null;
+        const daMoldura = (m?.rascunho ?? m?.publicado) as Data | null;
+        // «Cabeçalho e rodapé» ainda vazio: começa com os da página inicial.
+        if (pagina === "moldura" && !d.rascunho && !d.publicado) {
+          const base = molduraDeInicio(doInicio);
+          if (base) d = { ...d, rascunho: base as never };
+        }
         setDados(d);
-        if (i) setMoldura(molduraDaPagina(((i.rascunho ?? i.publicado) as Data | null) ?? modeloPagina("inicio")));
+        setMoldura(molduraDoSite(doInicio ?? modeloPagina("inicio"), pagina === "moldura" ? null : daMoldura));
       })
       .catch(e => { if (!ctl.signal.aborted) setErro(e); });
     return () => ctl.abort();
@@ -267,7 +278,7 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
   ), [estado, textoEstado, publicadoEm, aPublicar, pagina, ecra, config]);
 
   if (erro) return <ErroCarregar erro={erro} onTentar={recarregar} />;
-  if (!inicial || (pagina !== "inicio" && !moldura)) return <Esqueleto linhas={10} className="m-6" />;
+  if (!inicial || !moldura) return <Esqueleto linhas={10} className="m-6" />;
 
   return (
     <OfertaCtx.Provider value={oferta}>

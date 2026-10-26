@@ -7,9 +7,12 @@ import { CabecalhoSite, type CabecalhoProps, RodapeSite, type RodapeProps } from
 import { configPara, configSite, estiloTema, MolduraCtx, NoEcra, type Moldura, type TemaSite } from "./editor/config";
 import { DesenharPagina } from "./editor/desenhar";
 import { efetivas, type Disp } from "./editor/dispositivos";
-import { modeloPagina } from "./editor/modeloBase";
+import { converterPaginaCurso, modeloPagina } from "./editor/modeloBase";
 
 const pedidos = new Map<Pagina, Promise<Data>>();
+
+/** Sem versão publicada: o modelo base; «Cabeçalho e rodapé» fica vazio (valem os da página inicial). */
+const semPublicada = (pagina: Pagina): Data => (pagina === "moldura" ? { root: { props: {} }, content: [] } as Data : modeloPagina(pagina));
 
 /** Uma só leitura por página e carregamento; sem versão publicada usa o modelo base. */
 export function lerPagina(pagina: Pagina): Promise<Data> {
@@ -17,8 +20,8 @@ export function lerPagina(pagina: Pagina): Promise<Data> {
   if (!p) {
     p = fetch(`/api/v1/public/site/paginas/${pagina}`, { cache: "no-store" })
       .then(r => (r.ok ? r.json() as Promise<{ dados: Data | null }> : { dados: null }))
-      .then(r => (r.dados && Array.isArray(r.dados.content) ? r.dados : modeloPagina(pagina)))
-      .catch(() => modeloPagina(pagina));
+      .then(r => (r.dados && Array.isArray(r.dados.content) ? r.dados : semPublicada(pagina)))
+      .catch(() => semPublicada(pagina));
     pedidos.set(pagina, p);
   }
   return p;
@@ -35,7 +38,18 @@ export function usePagina(pagina: Pagina | null) {
   return dados;
 }
 
-/** Cabeçalho, rodapé e tema da página inicial (as outras páginas usam-nos). */
+/**
+ * Cabeçalho e rodapé de «Cabeçalho e rodapé» (os da página inicial, enquanto essa página não os tiver) e o tema da
+ * página inicial: servem todas as páginas do site.
+ */
+export function molduraDoSite(inicio: Data | null, moldura: Data | null): Moldura | null {
+  const base = molduraDaPagina(inicio);
+  const propria = molduraDaPagina(moldura);
+  if (!base && !propria) return null;
+  return { cabecalho: propria?.cabecalho ?? base?.cabecalho ?? null, rodape: propria?.rodape ?? base?.rodape ?? null, tema: base?.tema };
+}
+
+/** Cabeçalho, rodapé e tema de uma página do editor. */
 export function molduraDaPagina(dados: Data | null): Moldura | null {
   if (!dados) return null;
   const cab = dados.content.find(b => b.type === "Cabecalho")?.props as CabecalhoProps | undefined;
@@ -49,10 +63,11 @@ export const estiloDaMoldura = (m: Moldura | null, d: Disp) =>
 
 /** Desenha uma página do editor; as que não são a inicial levam o cabeçalho e o rodapé da inicial. */
 export function PaginaSite({ pagina, dados, moldura }: { pagina: Pagina; dados: Data; moldura: Moldura | null }) {
-  if (pagina === "inicio") return <DesenharPagina config={configSite} dados={dados} />;
+  if (pagina === "inicio") return <MolduraCtx.Provider value={moldura}><DesenharPagina config={configSite} dados={dados} /></MolduraCtx.Provider>;
   return (
     <MolduraCtx.Provider value={moldura}>
-      <DesenharPagina config={configPara(pagina)} dados={dados} />
+      {/* Página do curso gravada antes de blocos novos (ex.: vídeo de apresentação): mostra-os já, sem publicar de novo. */}
+      <DesenharPagina config={configPara(pagina)} dados={pagina === "curso" ? converterPaginaCurso(dados) : dados} />
     </MolduraCtx.Provider>
   );
 }

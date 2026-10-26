@@ -8,9 +8,10 @@ import { campoCor, campoCurso, campoNumero, simNao } from "./campos";
 import { TOPICOS_CURSO, type ChaveTopicoCurso } from "../../partilhado/topicosCurso";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { eur } from "../../partilhado/ui/formatos";
+import { videoDoCurso } from "../../partilhado/siteServicos";
 import { fraseLocais, textoAutomaticoCurso, tituloLocais } from "./textosLocais";
 import { TextoEmLinha, TextoFormatado } from "../../partilhado/TextoFormatadoVista";
-import { corSegura, estiloBloco, estiloTexto, estiloVazio, juntar, tipoVazia, type Estilo, type Tipografia } from "./estilos";
+import { corSegura, estiloBloco, estiloTexto, estiloVazio, juntar, lados, tipoVazia, type Estilo, type Tipografia } from "./estilos";
 
 type Estado = "a-carregar" | "erro" | "pronto";
 /** O curso da página e o local escolhido (partilhado: escolha do local, dados, turmas e cartão seguem-no). */
@@ -261,6 +262,75 @@ export const CursoSintese: ComponentConfig<SinteseProps> = {
     </Caixa>
   ),
 };
+
+// ─── Vídeo de apresentação ───────────────────────────────────────────────────
+
+type VideoCursoProps = Base & {
+  titulo: string; tTitulo: Tipografia;
+  /** Largura em % da coluna (20 a 100) e máximo em píxeis (vazio = sem máximo). */
+  largura: number | null; larguraMax: number | null;
+  alinhar: "esquerda" | "centro" | "direita";
+  proporcao: "16/9" | "4/3" | "1/1" | "9/16";
+  raio: number | null; sombra: boolean;
+};
+
+/** O vídeo de apresentação da ficha do curso (Identidade › Vídeo): YouTube, Vimeo ou .mp4. Sem vídeo, não aparece. */
+export const CursoVideo: ComponentConfig<VideoCursoProps> = {
+  label: "Curso · Vídeo de apresentação",
+  fields: {
+    titulo: { type: "text", label: "Título (vazio = sem título)" },
+    tTitulo: campoTipografia("Tipografia do título"),
+    largura: campoNumero("Largura (% da coluna, 20 a 100)"),
+    larguraMax: campoNumero("Largura máxima (píxeis, vazio = sem máximo)"),
+    alinhar: {
+      type: "select", label: "Posição",
+      options: [{ label: "À esquerda", value: "esquerda" }, { label: "Ao centro", value: "centro" }, { label: "À direita", value: "direita" }],
+    },
+    proporcao: {
+      type: "select", label: "Formato",
+      options: [{ label: "Panorâmico (16:9)", value: "16/9" }, { label: "Clássico (4:3)", value: "4/3" }, { label: "Quadrado (1:1)", value: "1/1" }, { label: "Vertical (9:16)", value: "9/16" }],
+    },
+    raio: campoNumero("Cantos arredondados"),
+    sombra: simNao("Sombra"),
+    aparencia: campoAparencia(),
+  },
+  defaultProps: {
+    titulo: "", tTitulo: tipoVazia(), largura: 100, larguraMax: null, alinhar: "centro", proporcao: "16/9", raio: 8, sombra: true,
+    aparencia: estiloVazio({ margem: lados(32, 0, 0, 0) }),
+  },
+  render: p => <VideoCurso {...p} />,
+};
+
+function VideoCurso(p: VideoCursoProps) {
+  const { editar } = useLocalCurso();
+  return (
+    <Caixa p={p}>
+      {curso => {
+        const v = videoDoCurso(curso.video);
+        // No editor fica um lugar marcado, para se poder escolher e mudar de sítio mesmo sem vídeo neste curso.
+        if (!v) return editar ? (
+          <div className="grid place-items-center border-2 border-dashed border-black/15 bg-black/[0.03] p-6 text-center text-sm opacity-70" style={{ aspectRatio: "16/9" }}>
+            Vídeo de apresentação: este curso não tem vídeo (Ficha do curso › Identidade › Vídeo). No site, sem vídeo, este bloco não aparece.
+          </div>
+        ) : null;
+        const t = estiloTexto(p.tTitulo);
+        const largura = Math.min(100, Math.max(20, p.largura ?? 100));
+        const margem = p.alinhar === "esquerda" ? "0 auto 0 0" : p.alinhar === "direita" ? "0 0 0 auto" : "0 auto";
+        return (
+          <div style={{ width: `${largura}%`, maxWidth: p.larguraMax ? `${p.larguraMax}px` : undefined, margin: margem }}>
+            {p.titulo && <h3 className={juntar("mb-4 font-serif text-xl font-bold text-[var(--c-primaria)]", t.className)} style={t.style}>{p.titulo}</h3>}
+            <div className={juntar("w-full overflow-hidden bg-black", p.sombra !== false && "shadow-[0_8px_30px_rgba(20,38,61,.18)]")}
+              style={{ aspectRatio: p.proporcao || "16/9", borderRadius: p.raio ? `${p.raio}px` : undefined }}>
+              {v.tipo === "iframe"
+                ? <iframe src={v.src} title={`Vídeo de apresentação: ${curso.title}`} className="h-full w-full" allow="encrypted-media; picture-in-picture; fullscreen" allowFullScreen loading="lazy" />
+                : <video src={v.src} controls preload="metadata" className="h-full w-full" aria-label={`Vídeo de apresentação: ${curso.title}`} />}
+            </div>
+          </div>
+        );
+      }}
+    </Caixa>
+  );
+}
 
 // ─── Dados (duração, início, local, investimento) ────────────────────────────
 

@@ -5,7 +5,7 @@ import { InscricaoSite, useInscricao } from "./SiteInscricao";
 import { ePrepago, ePreinscricao, objectivosEva } from "../partilhado/siteConteudo";
 import { Course, OfertaCtx, SiteTextoCtx, useSiteTexto, useSiteTextoState, useOferta, useOfertaState, Icon } from "./SiteLanding";
 import type { PaginaSite as PaginaSiteNome } from "../partilhado/siteBlocos";
-import { CabecalhoSite, estiloDaMoldura, molduraDaPagina, NoEcra, PaginaSite, RodapeSite, usePagina } from "./PaginaSite";
+import { CabecalhoSite, estiloDaMoldura, molduraDoSite, NoEcra, PaginaSite, RodapeSite, usePagina } from "./PaginaSite";
 import { useDispositivo } from "./editor/dispositivos";
 import { CursoDaRotaCtx } from "./editor/blocosCursoPagina";
 
@@ -221,8 +221,9 @@ export function SiteFrame({ children, pagina, slug = null }: { children?: ReactN
   const oferta = useOfertaState();
   const texto = useSiteTextoState();
   const inicio = usePagina("inicio");
+  const partilhada = usePagina("moldura");
   const propria = usePagina(pagina && pagina !== "inicio" ? pagina : null);
-  const moldura = molduraDaPagina(inicio);
+  const moldura = molduraDoSite(inicio, partilhada);
   const dados = pagina === "inicio" ? inicio : propria;
   const ecra = useDispositivo();
   const titulo = texto.ler("tituloSeparador");
@@ -241,7 +242,7 @@ export function SiteFrame({ children, pagina, slug = null }: { children?: ReactN
           {pagina ? (
             <div id="conteudo">
               <CursoDaRotaCtx.Provider value={slug}>
-                {dados && inicio ? <PaginaSite pagina={pagina} dados={dados} moldura={moldura} /> : <div className="min-h-screen" aria-busy="true" />}
+                {dados && inicio && partilhada ? <PaginaSite pagina={pagina} dados={dados} moldura={moldura} /> : <div className="min-h-screen" aria-busy="true" />}
               </CursoDaRotaCtx.Provider>
             </div>
           ) : (

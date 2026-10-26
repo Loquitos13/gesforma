@@ -3,7 +3,7 @@ import type { Data } from "@puckeditor/core";
 import type { PaginaSite } from "../../partilhado/siteBlocos";
 import { AreaFormando } from "./blocosArea";
 import { Catalogo } from "./blocosCatalogo";
-import { CursoBanner, CursoDados, CursoFuncionamento, CursoObjetivos, CursoPrograma, CursoSintese, CursoTurmas } from "./blocosCurso";
+import { CursoBanner, CursoDados, CursoFuncionamento, CursoObjetivos, CursoPrograma, CursoSintese, CursoVideo, CursoTurmas } from "./blocosCurso";
 import { blocosCartaoPadrao, CursoEscolhaLocal, CursoInscricao } from "./blocosCursoCartao";
 import { ListaNoticias } from "./blocosNoticias";
 import { Botao, Coluna, Imagem, Logotipos, Pilares, Seccao, Texto, Titulo } from "./blocosBase";
@@ -336,6 +336,7 @@ export function modeloCurso(antigo?: Legado): Data {
   const extra = (k: "zonaTopo" | "zonaConteudo" | "zonaCartao") => (Array.isArray(a[k]) ? a[k] as never[] : []);
   const principal = [
     bloco("CursoSintese", CursoSintese.defaultProps, { etiqueta: txt("tituloSintese", "Enquadramento") }),
+    bloco("CursoVideo", CursoVideo.defaultProps),
     ...(sim("mostrarDados") ? [bloco("CursoDados", CursoDados.defaultProps, { aparencia: estiloVazio({ margem: lados(32, 0, 0, 0) }) })] : []),
     escolhaLocal(),
     ...extra("zonaConteudo"),
@@ -412,6 +413,8 @@ export function converterPaginaCurso(d: Data): Data {
   ].filter(Boolean) as No[];
   // Sem Programa na página, entram a seguir ao primeiro bloco de conteúdo que houver.
   if (novos.length) dados = inserirNaPrimeira(dados, ["CursoPrograma", "CursoObjetivos", "CursoEscolhaLocal", "CursoDados", "CursoSintese"], novos);
+  // Vídeo de apresentação (ficha › Identidade): logo a seguir ao enquadramento; muda-se de sítio no editor.
+  if (!texto.includes('"CursoVideo"')) dados = inserirNaPrimeira(dados, ["CursoSintese", "CursoBanner"], [bloco("CursoVideo", CursoVideo.defaultProps) as No]);
   // «Outros cursos relevantes» fecha a coluna do conteúdo: a seguir às turmas (ou ao último bloco conhecido que houver).
   if (!texto.includes('"CursoRelevantes"')) {
     const relevantes = blocoRelevantes() as No;
@@ -451,6 +454,7 @@ function inserirDepois(lista: No[], tipo: string, novos: No[]): No[] {
 export function modeloPagina(pagina: PaginaSite): Data {
   n = 0;
   if (pagina === "inicio") return modeloInicio();
+  if (pagina === "moldura") return { root: { props: {} }, content: [bloco("Cabecalho", cabecalhoPadrao), bloco("Rodape", rodapePadrao)] } as Data;
   if (pagina === "noticias") return modeloNoticias();
   if (pagina === "empresas") return modeloEmpresas();
   if (pagina === "curso") return modeloCurso();
@@ -459,4 +463,10 @@ export function modeloPagina(pagina: PaginaSite): Data {
   const unico = pagina === "catalogo" ? bloco("Catalogo", Catalogo.defaultProps)
     : bloco("AreaFormando", AreaFormando.defaultProps);
   return { root: { props: {} }, content: [unico] } as Data;
+}
+
+/** «Cabeçalho e rodapé» a partir dos blocos que a página inicial tem (antes viviam lá). */
+export function molduraDeInicio(inicio: Data | null): Data | null {
+  const blocos = (inicio?.content ?? []).filter(b => b.type === "Cabecalho" || b.type === "Rodape");
+  return blocos.length ? { root: { props: {} }, content: blocos } as Data : null;
 }

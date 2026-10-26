@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { videoDoCurso } from "../../../../partilhado/siteServicos";
 import { normalizarCodigoCurso } from "../../../../partilhado/codigoCurso";
 import { LISTA_CNAEF } from "../../../../partilhado/execucaoFisica";
 import { SearchSelect } from "../../../../partilhado/FormKit";
@@ -104,8 +105,11 @@ export function TabIdentidade({ f }: { f: FichaCurso }) {
               </div>
             )}
           </Campo>
-          <Campo rotulo="Vídeo" ajuda="ID ou endereço do vídeo de apresentação.">
-            {p => <Entrada {...p} value={data.video} onChange={e => patch({ video: e.target.value.trim() })} />}
+          <Campo rotulo="Vídeo de apresentação"
+            ajuda={data.video && !videoDoCurso(data.video)
+              ? "Não reconhecido: use o endereço do YouTube ou do Vimeo (ou o ID do YouTube), ou um ficheiro .mp4 com https."
+              : "Endereço do YouTube ou do Vimeo (ou o ID do YouTube). Aparece na página do curso; a posição e o tamanho mudam-se no editor do site (bloco «Curso · Vídeo de apresentação»)."}>
+            {p => <Entrada {...p} value={data.video} placeholder="https://www.youtube.com/watch?v=…" onChange={e => patch({ video: e.target.value.trim() })} />}
           </Campo>
         </div>
       </Cartao>

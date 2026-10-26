@@ -77,6 +77,12 @@ const slugify =(s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLower
 
 export const slugServico = (s: Pick<ServicoSite, "slug" | "titulo">) => slugify(s.slug?.trim() || s.titulo || "");
 
+/** Vídeo de apresentação do curso: o mesmo que o dos serviços, e também só o ID do YouTube (11 caracteres). */
+export function videoDoCurso(v: string | undefined) {
+  const u = (v ?? "").trim();
+  return /^[\w-]{11}$/.test(u) ? videoServico(`https://www.youtube.com/watch?v=${u}`) : videoServico(u);
+}
+
 /** Vídeo para incorporar: YouTube e Vimeo (sem cookies de rastreio) ou um ficheiro https. */
 export function videoServico(url: string | undefined): { tipo: "iframe" | "video"; src: string } | null {
   const u = (url ?? "").trim();

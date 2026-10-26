@@ -61,6 +61,8 @@ export type CursoPublico = {
   funcionamento: string;
   /** Metodologias, certificação/avaliação, destinatários e requisitos (ficha › Conteúdo do site). */
   topicos: TopicosCurso;
+  /** Vídeo de apresentação (ficha › Identidade): endereço do YouTube / Vimeo / .mp4 ou o ID do YouTube. */
+  video: string;
   seoTitulo: string; seoDescricao: string;
   /** Contactos de cada local do curso: os da ficha do curso (se o local lhe estiver atribuído), senão os de Locais. */
   contactosLocais: ContactoLocal[];
@@ -371,6 +373,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       objetivos: linhas(payload.objetivos),
       funcionamento: texto(payload.funcionamento),
       topicos: topicosDoPayload(payload),
+      video: texto(payload.video),
       seoTitulo: texto(payload.seoTitulo), seoDescricao: texto(payload.seoDescricao),
       contactosLocais: contactosDoCurso(payload, [
         ...curso.chaves.flatMap(key => (sessoes.get(key) ?? []).map(s => s.local)),

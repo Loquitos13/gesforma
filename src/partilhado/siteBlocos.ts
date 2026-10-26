@@ -1,13 +1,13 @@
 // Páginas do site feitas no editor visual: nomes dos blocos e validação do JSON (servidor e browser).
 
-export const PAGINAS_SITE = ["inicio", "catalogo", "curso", "noticias", "noticia", "empresas", "servico", "area"] as const;
+export const PAGINAS_SITE = ["inicio", "moldura", "catalogo", "curso", "noticias", "noticia", "empresas", "servico", "area"] as const;
 export type PaginaSite = typeof PAGINAS_SITE[number];
 
 export const BLOCOS_SITE = [
   "Cabecalho", "Rodape", "Seccao", "Coluna", "Titulo", "Texto", "Botao", "Imagem", "Espaco", "Separador",
   "Pilares", "Servicos", "Testemunhos", "Logotipos", "CursosDestaque", "OfertaFormativa", "Catalogo", "DetalheCurso", "ListaNoticias", "AreaFormando",
   "CursoBanner", "CursoSintese", "CursoDados", "CursoObjetivos", "CursoPrograma", "CursoFuncionamento", "CursoTurmas", "CursoRelevantes", "CursoInscricao",
-  "CursoEscolhaLocal", "CursoTexto", "CursoImagem", "CursoBotaoInscricao",
+  "CursoEscolhaLocal", "CursoTexto", "CursoImagem", "CursoBotaoInscricao", "CursoVideo",
   "ServicoBanner", "ServicoDetalhe", "ServicoGaleria", "ServicoVideo", "ServicoLogos", "ServicoCartoes", "ServicoChamada", "FormularioProposta",
   "NoticiaCabecalho", "NoticiaCorpo", "NoticiaOutras", "NoticiaImagem", "NoticiaCurso", "RedesSociais",
 ] as const;

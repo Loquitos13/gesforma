@@ -9,7 +9,7 @@ import { Servicos } from "./blocosServicos";
 import { Testemunhos } from "./blocosTestemunhos";
 import { CursoRelevantes } from "./blocosCursoRelevantes";
 import {
-  CursoBanner, CursoDados, CursoFuncionamento, CursoObjetivos, CursoPrograma, CursoSintese, CursoTurmas, RaizCurso, campoPrevisualizar,
+  CursoBanner, CursoDados, CursoFuncionamento, CursoObjetivos, CursoPrograma, CursoSintese, CursoTurmas, RaizCurso, campoPrevisualizar, CursoVideo,
 } from "./blocosCurso";
 import { CursoBotaoInscricao, CursoEscolhaLocal, CursoImagem, CursoInscricao, CursoTexto } from "./blocosCursoCartao";
 import { ListaNoticias } from "./blocosNoticias";
@@ -147,7 +147,7 @@ const componentes = Object.fromEntries(Object.entries({
   Seccao, Coluna, Espaco, Separador, Titulo, Texto, Botao, Imagem, Pilares, Logotipos, Servicos, Testemunhos,
   CursosDestaque, OfertaFormativa, Catalogo, DetalheCurso, ListaNoticias, AreaFormando, Cabecalho, Rodape,
   CursoBanner, CursoSintese, CursoDados, CursoObjetivos, CursoPrograma, CursoFuncionamento, CursoTurmas, CursoRelevantes, CursoInscricao,
-  CursoEscolhaLocal, CursoTexto, CursoImagem, CursoBotaoInscricao,
+  CursoEscolhaLocal, CursoTexto, CursoImagem, CursoBotaoInscricao, CursoVideo,
   ServicoBanner, ServicoDetalhe, ServicoGaleria, ServicoVideo, ServicoLogos, ServicoCartoes, ServicoChamada, FormularioProposta,
   NoticiaCabecalho, NoticiaCorpo, NoticiaOutras, NoticiaImagem, NoticiaCurso, RedesSociais,
   // Cada bloco do editor tem de estar em BLOCOS_SITE (o servidor recusa publicar blocos que não conhece): falha no build.
@@ -161,7 +161,7 @@ const categoriasBase = {
   // Blocos que só fazem sentido na página do curso (lêem o curso da página).
   paginaCurso: {
     title: "Página do curso",
-    components: ["CursoBanner", "CursoSintese", "CursoDados", "CursoObjetivos", "CursoPrograma", "CursoFuncionamento", "CursoTurmas", "CursoRelevantes", "CursoEscolhaLocal",
+    components: ["CursoBanner", "CursoSintese", "CursoVideo", "CursoDados", "CursoObjetivos", "CursoPrograma", "CursoFuncionamento", "CursoTurmas", "CursoRelevantes", "CursoEscolhaLocal",
       "CursoInscricao", "CursoTexto", "CursoImagem", "CursoBotaoInscricao", "DetalheCurso",
     ],
     visible: false,
@@ -171,7 +171,39 @@ const categoriasBase = {
   paginaNoticia: { title: "Página de notícia", components: ["NoticiaCabecalho", "NoticiaImagem", "NoticiaCorpo", "NoticiaCurso", "NoticiaOutras"], visible: false },
 };
 
-/** A página inicial guarda o tema, o cabeçalho e o rodapé; as outras só o conteúdo do meio. */
+/**
+ * Na página inicial, o cabeçalho e o rodapé são os de «Cabeçalho e rodapé» (partilhados por todo o site): os blocos
+ * que lá estão só marcam o lugar e mostram os partilhados; editam-se nessa página.
+ */
+const avisoMoldura: Field = {
+  type: "custom", label: "Cabeçalho e rodapé",
+  render: () => (
+    <p className="m-0 text-[13px] leading-5 text-[#3d4a5a]">
+      O cabeçalho e o rodapé são os mesmos em todas as páginas: editam-se na página «Cabeçalho e rodapé» (lista de páginas, à esquerda).
+    </p>
+  ),
+};
+
+function CabecalhoPartilhado({ puck, ...proprio }: CabecalhoProps & { puck?: { isEditing?: boolean; dragRef?: ((el: Element | null) => void) | null } }) {
+  const m = useContext(MolduraCtx);
+  const editar = Boolean(puck?.isEditing);
+  if (m?.cabecalho) return <NoEcra props={m.cabecalho}>{p => <CabecalhoSite {...p} editar={editar} refRaiz={puck?.dragRef} />}</NoEcra>;
+  return <CabecalhoSite {...proprio} editar={editar} refRaiz={puck?.dragRef} />;
+}
+
+function RodapePartilhado({ puck, ...proprio }: RodapeProps & { puck?: { dragRef?: ((el: Element | null) => void) | null } }) {
+  const m = useContext(MolduraCtx);
+  if (m?.rodape) return <NoEcra props={m.rodape}>{p => <RodapeSite {...p} refRaiz={puck?.dragRef} />}</NoEcra>;
+  return <RodapeSite {...proprio} refRaiz={puck?.dragRef} />;
+}
+
+const componentesInicio = {
+  ...componentes,
+  Cabecalho: { ...Cabecalho, inline: true, fields: { aviso: avisoMoldura }, render: CabecalhoPartilhado as never },
+  Rodape: { ...Rodape, inline: true, fields: { aviso: avisoMoldura }, render: RodapePartilhado as never },
+} as Config["components"];
+
+/** A página inicial guarda o tema; o cabeçalho e o rodapé vêm de «Cabeçalho e rodapé»; as outras só o conteúdo do meio. */
 export const configSite: Config = {
   // A raiz guarda o tema com as variantes por ecrã: o invólucro escolhe as do ecrã.
   root: {
@@ -179,7 +211,23 @@ export const configSite: Config = {
     defaultProps: temaPadrao,
     render: ({ children, puck: _p, ...tema }: { children: ReactNode; puck?: unknown } & Record<string, unknown>) => <InvolucroTema tema={tema as Partial<TemaSite>}>{children}</InvolucroTema>,
   } as Config["root"],
-  categories: { ...categoriasBase, moldura: { title: "Cabeçalho e rodapé", components: ["Cabecalho", "Rodape"] } },
+  categories: { ...categoriasBase, moldura: { title: "Cabeçalho e rodapé (página própria)", components: [], visible: false } },
+  components: componentesInicio,
+};
+
+/** «Cabeçalho e rodapé»: os dois blocos partilhados por todas as páginas, com o tema da página inicial. */
+export const configMoldura: Config = {
+  root: {
+    fields: {},
+    render: ({ children }: { children: ReactNode }) => {
+      const m = useContext(MolduraCtx);
+      return <InvolucroTema tema={m?.tema}>{children}</InvolucroTema>;
+    },
+  },
+  categories: {
+    moldura: { title: "Cabeçalho e rodapé", components: ["Cabecalho", "Rodape"] },
+    ...Object.fromEntries(Object.entries(categoriasBase).map(([k, c]) => [k, { ...c, visible: false }])),
+  },
   components: componentes,
 };
 
@@ -188,7 +236,7 @@ export const configOutraPagina: Config = {
     fields: {},
     render: ({ children, puck }: { children: ReactNode; puck?: { isEditing?: boolean } }) => <RaizOutra editar={Boolean(puck?.isEditing)}>{children}</RaizOutra>,
   },
-  categories: { ...categoriasBase, moldura: { title: "Cabeçalho e rodapé (só na página inicial)", components: [], visible: false } },
+  categories: { ...categoriasBase, moldura: { title: "Cabeçalho e rodapé (página própria)", components: [], visible: false } },
   components: componentes,
 };
 
@@ -206,7 +254,7 @@ export const configPaginaCurso: Config = {
   categories: {
     paginaCurso: { ...categoriasBase.paginaCurso, components: categoriasBase.paginaCurso.components.filter(c => c !== "DetalheCurso"), visible: true },
     ...Object.fromEntries(Object.entries(categoriasBase).filter(([k]) => k !== "paginaCurso")),
-    moldura: { title: "Cabeçalho e rodapé (só na página inicial)", components: [], visible: false },
+    moldura: { title: "Cabeçalho e rodapé (página própria)", components: [], visible: false },
     antigos: { title: "Antigos", components: ["DetalheCurso"], visible: false },
   },
   components: componentes,
@@ -248,7 +296,7 @@ export const configPaginaServico: Config = {
   categories: {
     paginaServico: { ...categoriasBase.paginaServico, visible: true },
     ...Object.fromEntries(Object.entries(categoriasBase).filter(([k]) => k !== "paginaServico")),
-    moldura: { title: "Cabeçalho e rodapé (só na página inicial)", components: [], visible: false },
+    moldura: { title: "Cabeçalho e rodapé (página própria)", components: [], visible: false },
   },
   components: componentes,
 };
@@ -267,11 +315,11 @@ export const configPaginaNoticia: Config = {
   categories: {
     paginaNoticia: { ...categoriasBase.paginaNoticia, visible: true },
     ...Object.fromEntries(Object.entries(categoriasBase).filter(([k]) => k !== "paginaNoticia")),
-    moldura: { title: "Cabeçalho e rodapé (só na página inicial)", components: [], visible: false },
+    moldura: { title: "Cabeçalho e rodapé (página própria)", components: [], visible: false },
   },
   components: componentes,
 };
 
 export const configPara = (pagina: PaginaSite) =>
-  (pagina === "inicio" ? configSite : pagina === "curso" ? configPaginaCurso : pagina === "servico" ? configPaginaServico
+  (pagina === "inicio" ? configSite : pagina === "moldura" ? configMoldura : pagina === "curso" ? configPaginaCurso : pagina === "servico" ? configPaginaServico
     : pagina === "noticia" ? configPaginaNoticia : configOutraPagina);

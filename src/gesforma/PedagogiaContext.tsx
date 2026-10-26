@@ -15,20 +15,24 @@ import {
 } from "../partilhado/api";
 import { useCursoId } from "../partilhado/dados/comuns";
 import { persist } from "../partilhado/toastBus";
-import { emptyPlano, emptySumario, type CriterioAvaliacao, type PlanoSessaoData, type SumarioSessaoData } from "../partilhado/TurmaExtras";
+import { emptyPlano, emptySumario, type CriterioAvaliacao, type FolhaSessao, type LinhaPresenca, type PlanoSessaoData, type SumarioSessaoData } from "../partilhado/TurmaExtras";
 import { naPosicaoActual, type SessaoCronograma } from "../partilhado/turmaModel";
 import { useCriteriosModelo } from "./criteriosModelo";
 
-export type PresencaRow = { id: number; nome: string; presente: boolean };
+export type PresencaRow = LinhaPresenca;
 
 /** Junta as presenças já gravadas à lista de formandos da turma, para a folha abrir no estado real. */
 export function presencasDaSessao(
   formandos: { id: number; nome: string }[],
   guardadas: PresencaRow[] | undefined,
-) {
-  if (!guardadas?.length) return formandos.map(f => ({ ...f, presente: true }));
-  return formandos.map(f => ({ ...f, presente: guardadas.find(g => g.id === f.id)?.presente ?? true }));
+): PresencaRow[] {
+  return formandos.map(f => {
+    const g = guardadas?.find(x => x.id === f.id);
+    return g ? { ...g, id: f.id, nome: f.nome } : { ...f, presente: true };
+  });
 }
+
+type Componente = { teoricas: number | null; praticas: number | null };
 
 /** Critérios de avaliação da simulação pedagógica: os da ficha do curso, ou a grelha-tipo (API) que casa com o curso. */
 export function useCriteriosAvaliacao(regime: Regime, cursoNome: string | undefined) {
@@ -122,13 +126,21 @@ export function useTurmaPedagogia(regime: Regime, turmaId: number | undefined, c
     return out;
   }, [sessoesActuais]);
 
+  const folhas = useMemo(() => {
+    const out: Record<number, FolhaSessao> = {};
+    for (const s of sessoesActuais) {
+      if (s.folha) out[s.n] = s.folha as FolhaSessao;
+    }
+    return out;
+  }, [sessoesActuais]);
+
   const certificados = useMemo(() => {
     const out: Record<number, TurmaCertificado> = {};
     for (const c of snap.certificados) out[c.formandoId] = c;
     return out;
   }, [snap.certificados]);
 
-  const mergeSessao = useCallback((n: number, sessaoId: string | undefined, patch: Partial<{ plano: unknown; sumario: unknown; presencas: PresencaRow[] }>) => {
+  const mergeSessao = useCallback((n: number, sessaoId: string | undefined, patch: Partial<{ plano: unknown; sumario: unknown; presencas: PresencaRow[]; folha: unknown }>) => {
     setSnap(prev => {
       const esta = (s: typeof prev.sessoes[number]) => (sessaoId && s.sessaoId ? s.sessaoId === sessaoId : s.n === n);
       const existe = prev.sessoes.some(esta);
@@ -153,12 +165,19 @@ export function useTurmaPedagogia(regime: Regime, turmaId: number | undefined, c
     void recarregar();
   }, [mergeSessao, recarregar, regime, turmaId]);
 
-  const guardarPresencas = useCallback(async (n: number, rows: PresencaRow[], sessaoId?: string) => {
-    mergeSessao(n, sessaoId, { presencas: rows });
+  const guardarPresencas = useCallback(async (n: number, rows: PresencaRow[], sessaoId?: string, folha?: Componente) => {
+    mergeSessao(n, sessaoId, { presencas: rows, ...(folha ? { folha: { ...folhas[n], ...folha } } : {}) });
     if (turmaId == null || turmaId <= 0) return;
-    await persist(apiSaveSessao(regime, turmaId, n, { sessaoId, presencas: rows }));
+    await persist(apiSaveSessao(regime, turmaId, n, { sessaoId, presencas: rows, ...(folha ? { folha } : {}) }));
     void recarregar();
-  }, [mergeSessao, recarregar, regime, turmaId]);
+  }, [folhas, mergeSessao, recarregar, regime, turmaId]);
+
+  /** Coordenação: grava a folha como está e valida-a (ou reabre-a ao formador). */
+  const validarPresencas = useCallback(async (n: number, validar: boolean, rows: PresencaRow[], folha: Componente, sessaoId?: string) => {
+    if (turmaId == null || turmaId <= 0) return;
+    await persist(apiSaveSessao(regime, turmaId, n, { sessaoId, presencas: rows, folha, validarPresencas: validar }));
+    void recarregar();
+  }, [recarregar, regime, turmaId]);
 
   const guardarDocumento = useCallback(async (doc: TurmaDocumento) => {
     setSnap(prev => {
@@ -220,12 +239,14 @@ export function useTurmaPedagogia(regime: Regime, turmaId: number | undefined, c
     planos,
     sumarios,
     presencas,
+    folhas,
     certificados,
     plano: (n: number) => planos[n] ?? emptyPlano(),
     sumario: (n: number) => sumarios[n] ?? emptySumario(),
     guardarPlano,
     guardarSumario,
     guardarPresencas,
+    validarPresencas,
     guardarDocumento,
     guardarDtp,
     guardarDtpAnexo,

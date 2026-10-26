@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { data as fmtDataUi } from "./ui/formatos";
 import { ApiError, apiUploadDrive, type DriveFile, type DriveUploadContext } from "./api";
 import { useDrive } from "./DriveContext";
-import { imprimirFolhasPresencas } from "./presencasPrint";
 import { dtpCategoriaPasta, dtpPastaNome } from "./dtpPasta";
 import { pastaFinDoItem } from "./dtpTopicosFin";
 import { I } from "./turmaIcones";
 
-export { type MomentoKey, type MomentoField, type PlanoSessaoData, type SessaoMeta, type SumarioSessaoData, emptyMomento, emptyPlano, emptySumario, sumarioPreenchido, PlanoSessaoModal, SumarioSessaoModal } from "./SessaoModais";
+export { PresencasSessaoModal, estadoDaLinha, type EstadoPresenca, type FolhaSessao, type LinhaPresenca } from "./PresencasModal";
+export { type EstadoPlano, estadoPlano, ROTULO_ESTADO_PLANO, type MomentoKey, type MomentoField, type PlanoSessaoData, type SessaoMeta, type SumarioSessaoData, emptyMomento, emptyPlano, emptySumario, sumarioPreenchido, PlanoSessaoModal, SumarioSessaoModal } from "./SessaoModais";
 
 export function FileUploadModal({
   open, onClose, title, accent = "gold", onConfirm, context,
@@ -184,81 +183,4 @@ export function simEstado(items: SimItem[], criterios: CriterioAvaliacao[]): { e
   const algum = items.some(i => simAlunoEstado(i, criterios) !== "falta");
   const estado: ResolveDocEstado = done === items.length && items.length > 0 ? "ok" : done === 0 && !algum ? "falta" : "parcial";
   return { estado, detalhe: `${done}/${items.length} formandos com vídeo e grelha.`, done };
-}
-
-export function PresencasSessaoModal({ open, onClose, sessao, formandos, onSave, turmaNome, cursoNome, onImprimir }: {
-  open: boolean; onClose: () => void;
-  sessao?: { n: number; data: string; hora: string; modulo?: string; formador?: string };
-  formandos?: { id: number; nome: string; presente?: boolean }[];
-  onSave?: (rows: { id: number; nome: string; presente: boolean }[]) => void;
-  turmaNome?: string;
-  cursoNome?: string;
-  /** Folha própria do regime (Financiada: PDF do modelo da candidatura); sem ela, a folha impressa pelo browser. */
-  onImprimir?: () => void;
-}) {
-  function seed() {
-    return (formandos ?? []).map(f => ({ id: f.id, nome: f.nome, presente: f.presente ?? true }));
-  }
-  const [presencas, setPresencas] = useState(seed);
-  useEffect(() => {
-    if (open) setPresencas(seed());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, sessao?.n]);
-  const presentes = presencas.filter(p => p.presente).length;
-  const pct = presencas.length ? Math.round((presentes / presencas.length) * 100) : 0;
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
-          <div>
-            <p className="text-sm font-semibold text-slate-800">Folha de Presenças - Sessão {sessao?.n}</p>
-            <p className="text-xs text-slate-400">{sessao?.data ? fmtDataUi(sessao.data) : ""} · {sessao?.hora}</p>
-          </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
-        </div>
-        <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500">{presentes}/{presencas.length} presentes</span>
-            <div className="flex items-center gap-2">
-              <div className="w-32 bg-slate-200 rounded-full h-1.5">
-                <div className="h-1.5 rounded-full" style={{ width: `${pct}%`, backgroundColor: pct >= 90 ? "#10B981" : pct >= 75 ? "#F59E0B" : "#EF4444" }} />
-              </div>
-              <span className={`text-xs font-bold ${pct >= 90 ? "text-emerald-600" : pct >= 75 ? "text-amber-600" : "text-red-600"}`}>{pct}%</span>
-            </div>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
-          {presencas.map(p => (
-            <label key={p.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 cursor-pointer">
-              <button type="button" onClick={() => setPresencas(prev => prev.map(x => x.id === p.id ? { ...x, presente: !x.presente } : x))}
-                className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${p.presente ? "bg-emerald-500 border-emerald-500" : "border-slate-300"}`}>
-                {p.presente && <svg viewBox="0 0 12 12" fill="none" className="w-3 h-3"><path d="M2 6l3 3 5-5" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" /></svg>}
-              </button>
-              <span className="flex-1 text-sm text-slate-700">{p.nome}</span>
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${p.presente ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
-                {p.presente ? "Presente" : "Falta"}
-              </span>
-            </label>
-          ))}
-        </div>
-        <div className="flex gap-2 px-5 py-4 border-t border-slate-100 flex-shrink-0">
-          <button onClick={onClose} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-          <button
-            type="button"
-            onClick={() => onImprimir ? onImprimir() : imprimirFolhasPresencas({
-              turma: turmaNome || "Turma",
-              curso: cursoNome || "",
-              formandos: presencas,
-              sessoes: [{ n: sessao?.n ?? 0, data: sessao?.data ?? "", hora: sessao?.hora ?? "", modulo: sessao?.modulo, formador: sessao?.formador }],
-            })}
-            className="flex-1 py-2 border border-slate-200 text-sm font-semibold text-slate-700 rounded-lg hover:bg-slate-50"
-          >
-            Imprimir folha
-          </button>
-          <button onClick={() => { onSave?.(presencas); onClose(); }} className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">Guardar presenças</button>
-        </div>
-      </div>
-    </div>
-  );
 }

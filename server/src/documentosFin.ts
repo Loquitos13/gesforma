@@ -88,6 +88,8 @@ export type SessaoDocFin = {
   sumario: { conteudos?: string; atividades?: string; observacoes?: string } | null;
   /** Uma linha por formando, pela ordem da turma; `presenca` em branco quando ainda não foi marcada. */
   presencas: { nome: string; presenca: string }[];
+  /** Horas teóricas (T) e práticas (P) definidas na folha da sessão; null = por preencher. */
+  componente?: { teoricas: number | null; praticas: number | null };
 };
 
 const MOMENTOS = [
@@ -150,14 +152,14 @@ export function rotuloSituacaoEmprego(valor: string, escolhido = "") {
 
 const ROTULO_PRESENCA: Record<ReturnType<typeof estadoDaMarca>, string> = {
   presente: "Presente",
-  atraso: "Atraso",
+  atraso: "Presente",
   falta_justificada: "Falta justificada",
-  falta_injustificada: "Falta",
+  falta_injustificada: "Falta injustificada",
 };
 
 function rotuloPresenca(m: MarcaPresenca) {
   const estado = estadoDaMarca(m);
-  const min = estado === "atraso" && m.minutos ? ` (${m.minutos} min)` : "";
+  const min = estado === "atraso" && m.minutos ? ` (ausente ${m.minutos} min)` : "";
   return `${ROTULO_PRESENCA[estado]}${min}`;
 }
 
@@ -296,7 +298,10 @@ async function sessoesDaTurma(db: Db, turma: TurmaReembolso, formandos: Formando
     const plano = obj(linha?.plano);
     const sumario = obj(linha?.sumario);
     const formadores = (Array.isArray(s.formadores) && s.formadores.length ? s.formadores : [s.formador ?? ""]).map(txt).filter(Boolean);
+    const folha = obj(linha?.folha);
+    const horas = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
     out.push({
+      componente: { teoricas: horas(folha.teoricas), praticas: horas(folha.praticas) },
       n,
       data: txt(s.data).slice(0, 10),
       horaInicio: txt(s.horaInicio),
@@ -661,9 +666,10 @@ export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDoc
     celulaRotulo(d, pg, pg.m + 2 * terco, terco, 18, "Data:", fmtDataDDMMAAAA(s?.data));
     pg.y -= 18;
     celulaRotulo(d, pg, pg.m, terco, 22, "Horário:", s ? horario(s) : "");
-    // Horas teóricas (T) e práticas (P): a plataforma não as distingue; preenchem-se à mão.
-    celulaRotulo(d, pg, pg.m + terco, terco, 22, "T:", null);
-    celulaRotulo(d, pg, pg.m + 2 * terco, terco, 22, "P:", null);
+    // Horas teóricas (T) e práticas (P) da folha da sessão; sem elas, caixas em branco para preencher à mão.
+    const horasTP = (v: number | null | undefined) => (v == null ? null : `${String(v).replace(".", ",")} h`);
+    celulaRotulo(d, pg, pg.m + terco, terco, 22, "T:", horasTP(s?.componente?.teoricas));
+    celulaRotulo(d, pg, pg.m + 2 * terco, terco, 22, "P:", horasTP(s?.componente?.praticas));
     pg.y -= 22 + 12;
 
     const colNome = pg.largura / 2;
@@ -691,15 +697,18 @@ export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDoc
     }
     pg.y -= 12;
 
-    // O sumário da sessão (o modelo junta a folha de presenças e o sumário numa só folha).
-    const linhasSumario = quebrar(textoSumario(s?.sumario ?? null), d.sans, TAM, pg.largura - 12);
-    const altSumario = Math.max(56, linhasSumario.length * ENTRELINHA + 10);
-    if (pg.y - altSumario - 16 < pg.fundo) pg = novaPagina(d, RETRATO, titulo, s ? `Sessão ${s.n} · ${fmtDataDDMMAAAA(s.data)} (continuação)` : "");
-    escrever(pg, "Sumário:", pg.m, pg.y - TAM, d.negrito, TAM);
-    pg.y -= TAM + 5;
-    caixa(pg, pg.m, pg.y - altSumario, pg.largura, altSumario);
-    linhasSumario.forEach((l, i) => escrever(pg, l, pg.m + 6, pg.y - 5 - TAM - i * ENTRELINHA, d.sans, TAM));
-    pg.y -= altSumario + 18;
+    // A Financiada deixou de ter sumário: o quadro só sai nas sessões que já o tinham gravado.
+    const sumario = textoSumario(s?.sumario ?? null);
+    if (sumario) {
+      const linhasSumario = quebrar(sumario, d.sans, TAM, pg.largura - 12);
+      const altSumario = Math.max(56, linhasSumario.length * ENTRELINHA + 10);
+      if (pg.y - altSumario - 16 < pg.fundo) pg = novaPagina(d, RETRATO, titulo, s ? `Sessão ${s.n} · ${fmtDataDDMMAAAA(s.data)} (continuação)` : "");
+      escrever(pg, "Sumário:", pg.m, pg.y - TAM, d.negrito, TAM);
+      pg.y -= TAM + 5;
+      caixa(pg, pg.m, pg.y - altSumario, pg.largura, altSumario);
+      linhasSumario.forEach((l, i) => escrever(pg, l, pg.m + 6, pg.y - 5 - TAM - i * ENTRELINHA, d.sans, TAM));
+      pg.y -= altSumario + 18;
+    }
     if (pg.y - 40 < pg.fundo) pg = novaPagina(d, RETRATO, titulo, s ? `Sessão ${s.n} · ${fmtDataDDMMAAAA(s.data)} (continuação)` : "");
     linhaAssinatura(d, pg, "o Formador:", 160);
     linhaAssinatura(d, pg, "o Coordenador:", 160);

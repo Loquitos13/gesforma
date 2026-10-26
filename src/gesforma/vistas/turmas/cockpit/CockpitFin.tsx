@@ -1,7 +1,7 @@
 // Cockpit de uma turma da Financiada: cabeçalho com UFCD e fecho formal, próximos passos e separadores.
 import { useEffect, useState } from "react";
 import { data as fmtDataUi } from "../../../../partilhado/ui/formatos";
-import { apiFolhasPresencaFin, apiPlanosSessaoFin, apiTurmaFinFecho, emitAutomation } from "../../../../partilhado/api";
+import { apiFolhasPresencaFin, apiPlanosSessaoFin, apiTurmaFinFecho } from "../../../../partilhado/api";
 import { apiEnviarInqueritosTurma } from "../../../../partilhado/api/inqueritos";
 import { useAuth } from "../../../../partilhado/AuthGate";
 import { useNomesEu, useOpcoesFormador } from "../../../../partilhado/dados/comuns";
@@ -9,7 +9,7 @@ import { docsFinCompletos } from "../../../../partilhado/dossierDocs";
 import { NextActions, type NextAction } from "../../../../partilhado/SecretaryUX";
 import { podeMexerDocumento, staffPodeDossie } from "../../../../partilhado/sessaoAcesso";
 import { persist, toastError, toastOk } from "../../../../partilhado/toastBus";
-import { FileUploadModal, PresencasSessaoModal, PlanoSessaoModal, SumarioSessaoModal, emptyPlano, emptySumario, type SessaoMeta } from "../../../../partilhado/TurmaExtras";
+import { FileUploadModal, PresencasSessaoModal, PlanoSessaoModal, emptyPlano, estadoPlano, type SessaoMeta } from "../../../../partilhado/TurmaExtras";
 import { cronogramaToSessoes, horasDoFormador, isTurmaActiva, lugaresLivres } from "../../../../partilhado/turmaModel";
 import type { FormandoFin } from "../../../../partilhado/tiposFormando";
 import { Botao, ConfirmarPerigo } from "../../../../partilhado/ui";
@@ -20,7 +20,7 @@ import { DespesasTurma } from "./DespesasTurma";
 import { I, TABS_FORMADOR, estadoBadge, tabDoFormador } from "./base";
 import { CertificadosTurmaTab, DocumentosTurmaTab, SessoesTurmaTab, TurmaTabBar, exportPayload } from "./Separadores";
 import { presencasDaSessao, useCriteriosAvaliacao, useTurmaPedagogia } from "../../../PedagogiaContext";
-import { herdarPlanoCurso, herdarSumarioCurso, usePlanosCurso } from "../../../planosCurso";
+import { herdarPlanoCurso, usePlanosCurso } from "../../../planosCurso";
 import type { Separador } from "../../../rotasGesforma";
 import type { Navegar } from "../../../shell/tipos";
 import { TurmaActivaToggle, TurmaInactivaBanner } from "../../../TurmaCronograma";
@@ -47,7 +47,6 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
   const programa = useProgramaDoCurso("fin", turma?.curso ?? "");
   const modelosCurso = usePlanosCurso("fin", turma?.curso ?? "");
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
-  const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
   const [presencasSessao, setPresencasSessao] = useState<SessaoMeta | null>(null);
   const [uploadCert, setUploadCert] = useState<number | null>(null);
   const [uploadNota, setUploadNota] = useState<number | null>(null);
@@ -92,6 +91,10 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
         }
         if (!souFormador && docsFalta) proximos.push({ tone: "error", title: `${docsFalta} com documentos em falta`, detail: "Cartão, habilitações, CV, morada, IBAN, emprego, contrato ou RGPD.", onClick: () => setTab("overview") });
         if (semPlano) proximos.push({ tone: "warn", title: `${semPlano} sessões sem plano`, detail: "O formador ainda não carregou o plano de sessão.", onClick: () => setTab("sessoes") });
+        const porAprovar = sessoes.filter(s => estadoPlano(ped.planos[s.n]) === "submetido").length;
+        const devolvidos = sessoes.filter(s => estadoPlano(ped.planos[s.n]) === "devolvido").length;
+        if (!souFormador && porAprovar) proximos.unshift({ tone: "warn", title: `${porAprovar} plano(s) de sessão por aprovar`, detail: "Reveja, aprove ou devolva com comentários.", onClick: () => setTab("sessoes") });
+        if (souFormador && devolvidos) proximos.unshift({ tone: "error", title: `${devolvidos} plano(s) de sessão devolvido(s)`, detail: "A coordenação deixou comentários: corrija e volte a submeter.", onClick: () => setTab("sessoes") });
         const ocupacao = t.alunosTotal > 0 ? Math.min(100, (t.alunos / t.alunosTotal) * 100) : 0;
 
         return (
@@ -172,7 +175,7 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
               {tab === "sessoes" && (
                 <SessoesTurmaTab accent="fin" regime="fin" turmaId={t.id} onPlanosImportados={() => void ped.recarregar()} turmaNome={t.nome} cursoNome={t.curso} sessoes={sessoes} planos={ped.planos} presencas={ped.presencas}
                   sumarios={sumarios} formandos={nomesCockpit} onNovaSessao={() => setNovaSessao(true)} onPlano={setPlanoSessao}
-                  onSumario={setSumarioSessao} onPresencas={setPresencasSessao} onOpenFormador={setFormadorAberto} podeEditar={podeDoc} podeCriar={!souFormador}
+                  semSumario onPresencas={setPresencasSessao} onOpenFormador={setFormadorAberto} podeEditar={podeDoc} podeCriar={!souFormador}
                   formadorOpcoes={souFormador ? undefined : opcoesFormador}
                   onFormador={souFormador ? undefined : (s, nome) => {
                     if (!s.id) return;
@@ -206,21 +209,21 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
 
             <PlanoSessaoModal open={!!planoSessao} onClose={() => setPlanoSessao(null)} sessao={planoSessao ?? undefined}
               plano={planoSessao ? herdarPlanoCurso(modelosCurso.planos, planoSessao.n, ped.plano(planoSessao.n)) : emptyPlano()}
-              soLeitura={souFormador && planoSessao && ped.planosDoCurso.includes(planoSessao.n) ? "Plano definido na ficha do curso" : undefined}
+              soLeitura={souFormador && planoSessao && ped.planosDoCurso.includes(planoSessao.n) ? "Plano definido na ficha do curso"
+                : planoSessao && !podeDoc(planoSessao, "plano") ? (ped.planos[planoSessao.n]?.assinado ? "Aprovado: só a coordenação o altera" : "Só consulta") : undefined}
+              coordenacao={staffPodeDossie(user.role)}
               onSave={data => { if (planoSessao) void ped.guardarPlano(planoSessao.n, data, planoSessao.id); }}
               onPdf={planoSessao ? () => { apiPlanosSessaoFin(t.id, planoSessao.n).catch(err => toastError(err, "Não foi possível gerar o plano de sessão.")); } : undefined} />
-            <SumarioSessaoModal open={!!sumarioSessao} onClose={() => setSumarioSessao(null)} accent="fin" sessao={sumarioSessao ?? undefined}
-              sumario={sumarioSessao ? herdarSumarioCurso(modelosCurso.planos, sumarioSessao.n, ped.sumario(sumarioSessao.n)) : emptySumario()}
-              onSave={data => {
-                if (!sumarioSessao) return;
-                void ped.guardarSumario(sumarioSessao.n, data, sumarioSessao.id);
-                if (data.assinado) {
-                  void emitAutomation("sessao.summary_signed", { email: user.email, nome: t.formador || user.name, curso: t.curso, turma: t.nome }, `sumario:fin:${t.id}:${sumarioSessao.n}`);
-                }
-              }} />
             <PresencasSessaoModal open={!!presencasSessao} onClose={() => setPresencasSessao(null)} sessao={presencasSessao ?? undefined} turmaNome={t.nome} cursoNome={t.curso}
-              formandos={presencasSessao ? presencasDaSessao(nomesCockpit, ped.presencas[presencasSessao.n]) : nomesCockpit}
-              onSave={rows => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id); }}
+              formandos={presencasSessao ? presencasDaSessao(nomesCockpit, ped.presencas[presencasSessao.n]) : []}
+              folha={presencasSessao ? ped.folhas[presencasSessao.n] : null}
+              validada={presencasSessao ? Boolean(sumarios[presencasSessao.n]?.presencasValidadas) : false}
+              soLeitura={presencasSessao && !podeDoc(presencasSessao, "presencas")
+                ? (sumarios[presencasSessao.n]?.presencasValidadas ? "Folha validada pela coordenação pedagógica: só a coordenação a altera." : "Só consulta: não está atribuído a esta sessão.")
+                : undefined}
+              podeValidar={staffPodeDossie(user.role)}
+              onSave={(rows, folha) => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id, folha); }}
+              onValidar={(validar, rows, folha) => { if (presencasSessao) void ped.validarPresencas(presencasSessao.n, validar, rows, folha, presencasSessao.id); }}
               onImprimir={presencasSessao ? () => { apiFolhasPresencaFin(t.id, presencasSessao.n).catch(err => toastError(err, "Não foi possível gerar a folha de presenças.")); } : undefined} />
             <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado" accent="fin"
               context={{ kind: "certificado", regime: "fin", turma: t.nome, formando: uploadCert != null ? String(uploadCert) : undefined, label: "Certificado" }}

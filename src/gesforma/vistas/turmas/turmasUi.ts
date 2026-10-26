@@ -34,7 +34,11 @@ export type Alerta = { texto: string; tom: Tom };
 export function alertasDaTurma(t: LinhaTurma, regime: "gold" | "fin", dtpPct?: number): Alerta[] {
   if (t.fase === "cancelada") return [];
   const out: Alerta[] = [];
-  if (t.sumariosEmFalta > 0) out.push({ texto: `${plural(t.sumariosEmFalta, "sumário", "sumários")} por assinar`, tom: "perigo" });
+  if (t.sumariosEmFalta > 0) {
+    out.push({ texto: regime === "fin"
+      ? `${plural(t.sumariosEmFalta, "folha de presenças", "folhas de presenças")} por preencher`
+      : `${plural(t.sumariosEmFalta, "sumário", "sumários")} por assinar`, tom: "perigo" });
+  }
   if (regime === "gold" && t.reservas > 0 && t.fase !== "fechada") {
     out.push({ texto: `${plural(t.reservas, "reserva", "reservas")} por inscrever`, tom: "aviso" });
   }

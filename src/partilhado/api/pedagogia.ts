@@ -50,7 +50,9 @@ export type SessaoPedagogica = {
   sessaoId?: string | null;
   plano: Record<string, unknown> | null;
   sumario: Record<string, unknown> | null;
-  presencas: { id: number; nome: string; presente: boolean }[];
+  presencas: { id: number; nome: string; presente: boolean; estado?: "presente" | "falta_justificada" | "falta_injustificada" | "atraso"; minutos?: number; justificacao?: string }[];
+  /** Horas teóricas / práticas da sessão e quem validou as presenças. */
+  folha?: Record<string, unknown> | null;
 };
 
 export type TurmaDocumento = {
@@ -89,7 +91,7 @@ export const apiSaveSessao = (
   turmaId: number,
   n: number,
   /** `sessaoId` é a verdade (os dados seguem a sessão se ela mudar de lugar); `n` só serve sem ele. */
-  body: { sessaoId?: string; plano?: unknown; sumario?: unknown; presencas?: unknown },
+  body: { sessaoId?: string; plano?: unknown; sumario?: unknown; presencas?: unknown; folha?: unknown; validarPresencas?: boolean },
 ) => api<{ sessao: SessaoPedagogica }>(`/v1/turmas/${regime}/${turmaId}/sessoes/${n}`, { method: "PUT", body: JSON.stringify(body) });
 
 export const apiSaveTurmaDocumento = (regime: Regime, turmaId: number, body: TurmaDocumento) =>

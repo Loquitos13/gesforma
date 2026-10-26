@@ -25,6 +25,10 @@ export const planoSchema = z.object({
     conclusao: momentoSchema,
   }),
   assinado: z.boolean().optional(),
+  /** Aprovação pela coordenação pedagógica (o servidor decide quem pode pôr cada estado). */
+  estado: z.enum(["rascunho", "submetido", "aprovado", "devolvido"]).optional(),
+  /** Comentários da coordenação ao devolver (ou ao aprovar). */
+  comentario: z.string().max(4000).optional(),
 });
 
 export const sumarioSchema = z.object({
@@ -47,13 +51,22 @@ export const presencasSchema = z.array(z.object({
   justificacao: z.string().max(400).optional(),
 }).transform(p => ({ ...p, presente: p.estado ? p.estado === "presente" || p.estado === "atraso" : p.presente }))).max(400);
 
+/** Componente da sessão na folha de presenças: horas teóricas (T) e práticas (P); null limpa. */
+export const folhaSchema = z.object({
+  teoricas: z.number().min(0).max(24).nullable().optional(),
+  praticas: z.number().min(0).max(24).nullable().optional(),
+});
+
 export const sessaoPatchSchema = z.object({
   /** Id da sessão no cronograma (a verdade); sem ele usa-se o n do caminho com o cronograma actual. */
   sessaoId: z.string().trim().min(1).max(120).optional(),
   plano: planoSchema.optional(),
   sumario: sumarioSchema.optional(),
   presencas: presencasSchema.optional(),
-}).refine(v => v.plano || v.sumario || v.presencas, { message: "vazio" });
+  folha: folhaSchema.optional(),
+  /** Coordenação: valida (true) ou reabre (false) a folha de presenças; o formador deixa de a poder alterar. */
+  validarPresencas: z.boolean().optional(),
+}).refine(v => v.plano || v.sumario || v.presencas || v.folha || v.validarPresencas !== undefined, { message: "vazio" });
 
 export const documentoSchema = z.object({
   grupoId: z.string().min(1).max(40),

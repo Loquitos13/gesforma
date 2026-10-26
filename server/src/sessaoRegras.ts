@@ -44,3 +44,63 @@ export function sumarioComRegras(
     : Boolean(anterior?.presencasValidadas);
   return { ok: true, sumario: { ...novo, assinadoEm, presencasValidadas } };
 }
+
+// ── Plano de sessão: o formador preenche e submete; a coordenação revê, edita, aprova ou devolve com comentários ──
+
+export type EstadoPlano = "rascunho" | "submetido" | "aprovado" | "devolvido";
+const ESTADOS_PLANO = new Set<EstadoPlano>(["rascunho", "submetido", "aprovado", "devolvido"]);
+
+export type PlanoIn = { assinado?: boolean; estado?: EstadoPlano; comentario?: string; [k: string]: unknown };
+
+/** Planos gravados antes da aprovação: assinado conta como aprovado. */
+export function estadoDoPlano(p: Partial<PlanoIn> | null | undefined): EstadoPlano {
+  if (p?.estado && ESTADOS_PLANO.has(p.estado)) return p.estado;
+  return p?.assinado ? "aprovado" : "rascunho";
+}
+
+/**
+ * - só a coordenação (admin, secretaria, financiada) aprova ou devolve; devolver pede comentários;
+ * - o formador grava em rascunho ou submete; um plano devolvido continua devolvido até ele o submeter de novo;
+ * - os comentários e quem reviu são da coordenação: o formador não os muda;
+ * - `assinado` acompanha a aprovação (é o que o resto da plataforma lê).
+ * `revisto` diz se a coordenação acabou de aprovar ou devolver (para avisar o formador).
+ */
+export function planoComRegras(
+  role: string,
+  quem: string,
+  anterior: Partial<PlanoIn> | null,
+  novo: PlanoIn,
+  agora = new Date(),
+): { ok: true; plano: PlanoIn; revisto: "aprovado" | "devolvido" | null; submetido: boolean } | { ok: false; erro: string; codigo: 400 | 403 } {
+  const antes = estadoDoPlano(anterior);
+  const coordenacao = PEDAGOGIA.has(role);
+  const pedido = novo.estado && ESTADOS_PLANO.has(novo.estado) ? novo.estado : null;
+  const base = {
+    ...novo,
+    submetidoEm: anterior?.submetidoEm, revistoPor: anterior?.revistoPor, revistoEm: anterior?.revistoEm,
+  } as PlanoIn;
+  if (!coordenacao) {
+    if (pedido === "aprovado" || pedido === "devolvido") {
+      return { ok: false, erro: "Só a coordenação pedagógica aprova ou devolve o plano de sessão.", codigo: 403 };
+    }
+    const estado: EstadoPlano = pedido ?? (antes === "submetido" || antes === "devolvido" ? antes : "rascunho");
+    const submetido = estado === "submetido" && antes !== "submetido";
+    return {
+      ok: true, revisto: null, submetido,
+      plano: { ...base, estado, assinado: false, comentario: anterior?.comentario, ...(submetido ? { submetidoEm: agora.toISOString() } : {}) },
+    };
+  }
+  const estado: EstadoPlano = pedido ?? antes;
+  const comentario = (novo.comentario ?? anterior?.comentario ?? "").trim();
+  if (estado === "devolvido" && antes !== "devolvido" && !comentario) {
+    return { ok: false, erro: "Para devolver o plano, escreva o que o formador tem de corrigir.", codigo: 400 };
+  }
+  const revisto = (estado === "aprovado" || estado === "devolvido") && estado !== antes ? estado : null;
+  return {
+    ok: true, revisto, submetido: false,
+    plano: {
+      ...base, estado, assinado: estado === "aprovado", comentario: comentario || undefined,
+      ...(revisto ? { revistoPor: quem, revistoEm: agora.toISOString() } : {}),
+    },
+  };
+}

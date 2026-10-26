@@ -98,7 +98,9 @@ function sqlBase(regime: Regime) {
                count(*) FILTER (WHERE s.data ~ '^\\d{4}-\\d{2}-\\d{2}$' AND s.data <= $2)::int AS realizadas,
                count(*) FILTER (
                  WHERE s.data ~ '^\\d{4}-\\d{2}-\\d{2}$' AND s.data <= $2
-                   AND COALESCE(ts.sumario->>'assinado', 'false') <> 'true'
+                   -- Gold: sumário por assinar. Financiada (sem sumário): folha de presenças por preencher.
+                   AND CASE WHEN $1 = 'fin' THEN COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(ts.presencas) = 'array' THEN ts.presencas END), 0) = 0
+                            ELSE COALESCE(ts.sumario->>'assinado', 'false') <> 'true' END
                )::int AS sumarios_em_falta
           FROM (${SESSOES_LECTIVAS}) s
           LEFT JOIN turma_sessoes ts ON ts.regime = $1 AND ts.turma_id = t.id AND ts.sessao_n = s.n

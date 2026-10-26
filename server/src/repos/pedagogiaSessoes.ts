@@ -6,13 +6,13 @@
 import { many, one, tabelaRegime, type Consulta, type Regime } from "./sql.js";
 import type { TxQuery } from "../db/pool.js";
 
-export type SessaoLinha = { sessao_id: string | null; sessao_n: number; plano: unknown; sumario: unknown; presencas: unknown };
+export type SessaoLinha = { sessao_id: string | null; sessao_n: number; plano: unknown; sumario: unknown; presencas: unknown; folha?: unknown };
 
 /** Só as linhas ligadas a uma sessão que ainda está no cronograma (as órfãs ficam guardadas, fora daqui). */
 export async function listarSessoes(c: Consulta, regime: Regime, turmaId: number) {
   return many<SessaoLinha>(
     c,
-    `SELECT sessao_id, sessao_n, plano, sumario, presencas FROM turma_sessoes
+    `SELECT sessao_id, sessao_n, plano, sumario, presencas, folha FROM turma_sessoes
       WHERE regime = $1 AND turma_id = $2 AND sessao_n IS NOT NULL ORDER BY sessao_n`,
     [regime, turmaId],
   );
@@ -21,7 +21,7 @@ export async function listarSessoes(c: Consulta, regime: Regime, turmaId: number
 export async function lerSessao(c: Consulta, regime: Regime, turmaId: number, sessaoId: string) {
   return one<Omit<SessaoLinha, "sessao_id" | "sessao_n">>(
     c,
-    "SELECT plano, sumario, presencas FROM turma_sessoes WHERE regime = $1 AND turma_id = $2 AND sessao_id = $3",
+    "SELECT plano, sumario, presencas, folha FROM turma_sessoes WHERE regime = $1 AND turma_id = $2 AND sessao_id = $3",
     [regime, turmaId, sessaoId],
   );
 }
@@ -61,26 +61,31 @@ export async function renumerarSessoes(c: Consulta, regime: Regime, turmaId: num
   );
 }
 
-/** Grava as partes enviadas na sessão com este id (as que vêm a null mantêm-se); `n` é a posição actual. */
+/**
+ * Grava as partes enviadas na sessão com este id (as que vêm a null mantêm-se); `n` é a posição actual.
+ * A `folha` junta-se à gravada (só as chaves enviadas mudam).
+ */
 export async function gravarSessao(
   c: Consulta,
   regime: Regime,
   turmaId: number,
   sessao: { id: string; n: number },
-  partes: { plano?: unknown; sumario?: unknown; presencas?: unknown },
+  partes: { plano?: unknown; sumario?: unknown; presencas?: unknown; folha?: Record<string, unknown> },
 ) {
   await one(
     c,
-    `INSERT INTO turma_sessoes (regime, turma_id, sessao_id, sessao_n, plano, sumario, presencas)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, COALESCE($7::jsonb, '[]'::jsonb))
+    `INSERT INTO turma_sessoes (regime, turma_id, sessao_id, sessao_n, plano, sumario, presencas, folha)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, COALESCE($7::jsonb, '[]'::jsonb), $8::jsonb)
      ON CONFLICT (regime, turma_id, sessao_id) DO UPDATE SET
        sessao_n = EXCLUDED.sessao_n,
        plano = COALESCE($5::jsonb, turma_sessoes.plano),
        sumario = COALESCE($6::jsonb, turma_sessoes.sumario),
        presencas = COALESCE($7::jsonb, turma_sessoes.presencas),
+       folha = CASE WHEN $8::jsonb IS NULL THEN turma_sessoes.folha
+                    ELSE COALESCE(CASE WHEN jsonb_typeof(turma_sessoes.folha) = 'object' THEN turma_sessoes.folha END, '{}'::jsonb) || $8::jsonb END,
        updated_at = now()
      RETURNING sessao_id`,
-    [regime, turmaId, sessao.id, sessao.n, partes.plano ?? null, partes.sumario ?? null, partes.presencas ?? null],
+    [regime, turmaId, sessao.id, sessao.n, partes.plano ?? null, partes.sumario ?? null, partes.presencas ?? null, partes.folha ?? null],
   );
 }
 

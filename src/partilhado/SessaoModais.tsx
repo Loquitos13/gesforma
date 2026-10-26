@@ -5,7 +5,32 @@ import { I } from "./turmaIcones";
 
 export type MomentoKey = "introducao" | "desenvolvimento" | "conclusao";
 export type MomentoField = { conteudo: string; atividades: string; metodos: string; avaliacao: string; recursos: string; materiais: string; tempo: string };
-export type PlanoSessaoData = { objetivosGerais: string; objetivosEspecificos: string; momentos: Record<MomentoKey, MomentoField>; assinado?: boolean };
+export type EstadoPlano = "rascunho" | "submetido" | "aprovado" | "devolvido";
+export type PlanoSessaoData = {
+  objetivosGerais: string; objetivosEspecificos: string; momentos: Record<MomentoKey, MomentoField>;
+  /** Aprovado pela coordenação (o resto da plataforma lê este). */
+  assinado?: boolean;
+  /** Fluxo de aprovação: o formador submete; a coordenação aprova ou devolve com comentários. */
+  estado?: EstadoPlano; comentario?: string; submetidoEm?: string; revistoPor?: string; revistoEm?: string;
+};
+
+/** Planos gravados antes da aprovação: assinado conta como aprovado. */
+export function estadoPlano(p: PlanoSessaoData | undefined): EstadoPlano {
+  return p?.estado ?? (p?.assinado ? "aprovado" : "rascunho");
+}
+
+export const ROTULO_ESTADO_PLANO: Record<EstadoPlano, { texto: string; cls: string }> = {
+  rascunho: { texto: "Rascunho", cls: "bg-slate-100 text-slate-600" },
+  submetido: { texto: "Por aprovar", cls: "bg-amber-100 text-amber-800" },
+  aprovado: { texto: "Aprovado", cls: "bg-emerald-100 text-emerald-700" },
+  devolvido: { texto: "Devolvido", cls: "bg-red-100 text-red-700" },
+};
+
+/** Gravar sem mudar de estado: o servidor mantém o que estava (o formador não mexe na aprovação). */
+function semEstado(p: PlanoSessaoData): PlanoSessaoData {
+  const { estado: _e, comentario: _c, revistoPor: _r, revistoEm: _re, submetidoEm: _s, ...resto } = p;
+  return resto;
+}
 export type SessaoMeta = { n: number; id?: string; data: string; dataIso?: string; hora: string; formador: string; formadores?: string[]; estado: string; plano: boolean; modulo: string; modulos?: string[]; duracao: string; iniciadaEm?: string; fechadaEm?: string };
 
 function formadoresDaSessao(s: SessaoMeta) {
@@ -68,11 +93,13 @@ export function sumarioPreenchido(s?: SumarioSessaoData) {
   return !!s && s.conteudos.trim().length > 0;
 }
 
-export function PlanoSessaoModal({ open, onClose, sessao, plano: planoGravado, onSave, soLeitura, onPdf }: {
+export function PlanoSessaoModal({ open, onClose, sessao, plano: planoGravado, onSave, soLeitura, onPdf, coordenacao = false }: {
   open: boolean; onClose: () => void;
   sessao?: SessaoMeta;
   plano: PlanoSessaoData;
   onSave: (data: PlanoSessaoData) => void;
+  /** Coordenação pedagógica: edita, aprova ou devolve com comentários. Sem ela (formador): preenche e submete. */
+  coordenacao?: boolean;
   /** PDF do plano gravado (Financiada: modelo da candidatura). */
   onPdf?: () => void;
   /** Motivo para mostrar o plano sem o deixar editar (ex.: plano definido na ficha do curso). */
@@ -81,10 +108,19 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano: planoGravado, o
   const plano = useMemo(() => normalizarPlano(planoGravado), [planoGravado]);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<PlanoSessaoData>(plano);
-  useEffect(() => { setDraft(plano); setEditing(false); }, [open, plano]);
+  const [devolver, setDevolver] = useState<string | null>(null);
+  useEffect(() => { setDraft(plano); setEditing(false); setDevolver(null); }, [open, plano]);
 
   if (!open || !sessao) return null;
   const hasContent = plano.objetivosGerais.trim() !== "";
+  const estado = estadoPlano(plano);
+  const rotulo = ROTULO_ESTADO_PLANO[estado];
+  const gravar = (d: PlanoSessaoData, novo?: EstadoPlano, comentario?: string) => {
+    onSave({ ...semEstado(d), ...(novo ? { estado: novo } : {}), ...(comentario !== undefined ? { comentario } : {}) });
+    setEditing(false);
+    setDevolver(null);
+  };
+  const btn = "text-xs font-semibold px-3 py-1.5 rounded-lg";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -99,22 +135,77 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano: planoGravado, o
               <button onClick={onPdf} title="Plano de sessão em PDF, com o que está gravado"
                 className="text-xs font-semibold px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">PDF</button>
             )}
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${rotulo.cls}`}>{rotulo.texto}</span>
             {soLeitura
               ? <span className="text-xs font-semibold px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg">{soLeitura}</span>
               : !editing
-              ? <button onClick={() => { setDraft(plano); setEditing(true); }}
+              ? <button onClick={() => { setDraft(plano); setEditing(true); setDevolver(null); }}
                   className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100">
                   {I.edit} Editar
                 </button>
               : <>
                   <button onClick={() => setEditing(false)} className="text-xs px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
-                  <button onClick={() => { onSave(draft); setEditing(false); }}
-                    className="text-xs font-semibold px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg">Guardar</button>
+                  <button onClick={() => gravar(draft)}
+                    className={`${btn} border border-amber-300 bg-white text-amber-700 hover:bg-amber-50`}>Guardar</button>
+                  {coordenacao
+                    ? <button disabled={!draft.objetivosGerais.trim()} onClick={() => gravar(draft, "aprovado")}
+                        className={`${btn} bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-40`}>Guardar e aprovar</button>
+                    : <button disabled={!draft.objetivosGerais.trim()} onClick={() => gravar(draft, "submetido")} title="A coordenação pedagógica revê e aprova ou devolve"
+                        className={`${btn} bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-40`}>Guardar e submeter</button>}
                 </>}
             <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {estado === "devolvido" && plano.comentario && (
+            <div role="note" className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+              <p className="m-0 font-bold">Devolvido pela coordenação{plano.revistoPor ? ` (${plano.revistoPor}` : ""}{plano.revistoPor && plano.revistoEm ? `, ${fmtDataUi(plano.revistoEm.slice(0, 10))})` : plano.revistoPor ? ")" : ""}</p>
+              <p className="m-0 mt-1 whitespace-pre-line">{plano.comentario}</p>
+              {!coordenacao && <p className="m-0 mt-2 text-red-700">Corrija o plano e volte a submetê-lo.</p>}
+            </div>
+          )}
+          {estado === "aprovado" && (
+            <div role="note" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+              <p className="m-0 font-bold">Aprovado{plano.revistoPor ? ` por ${plano.revistoPor}` : ""}{plano.revistoEm ? ` em ${fmtDataUi(plano.revistoEm.slice(0, 10))}` : ""}</p>
+              {plano.comentario && <p className="m-0 mt-1 whitespace-pre-line">{plano.comentario}</p>}
+            </div>
+          )}
+          {estado === "submetido" && (
+            <p className="m-0 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              {coordenacao ? "O formador submeteu este plano: reveja-o (pode editá-lo) e aprove ou devolva com comentários." : "Submetido: aguarda a revisão da coordenação pedagógica."}
+            </p>
+          )}
+          {!editing && !soLeitura && hasContent && (coordenacao || estado === "rascunho" || estado === "devolvido") && (
+            <div className="flex flex-wrap items-start gap-2">
+              {coordenacao ? (
+                <>
+                  {estado !== "aprovado" && (
+                    <button onClick={() => gravar(plano, "aprovado")} className={`${btn} bg-emerald-600 hover:bg-emerald-700 text-white`}>Aprovar</button>
+                  )}
+                  {devolver === null && (
+                    <button onClick={() => setDevolver(estado === "devolvido" ? plano.comentario ?? "" : "")}
+                      className={`${btn} border border-red-200 bg-white text-red-700 hover:bg-red-50`}>Devolver com comentários</button>
+                  )}
+                </>
+              ) : (
+                <button onClick={() => gravar(plano, "submetido")} className={`${btn} bg-amber-500 hover:bg-amber-600 text-white`}>Submeter para aprovação</button>
+              )}
+            </div>
+          )}
+          {devolver !== null && (
+            <div className="space-y-2 rounded-xl border border-red-200 p-3">
+              <label className="block text-xs font-bold text-slate-700">O que o formador tem de corrigir
+                <textarea autoFocus value={devolver} onChange={e => setDevolver(e.target.value)} rows={3} maxLength={4000}
+                  className="mt-1 w-full text-xs text-slate-700 border border-slate-200 rounded-lg p-2 font-normal focus:outline-none focus:border-red-300" />
+              </label>
+              <div className="flex gap-2">
+                <button onClick={() => setDevolver(null)} className="text-xs px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">Cancelar</button>
+                <button disabled={!devolver.trim()} onClick={() => gravar(plano, "devolvido", devolver.trim())}
+                  className={`${btn} bg-red-600 hover:bg-red-700 text-white disabled:opacity-40`}>Devolver ao formador</button>
+              </div>
+              <p className="m-0 text-xs text-slate-500">O formador recebe um email com os comentários.</p>
+            </div>
+          )}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { l: sessao.modulos && sessao.modulos.length > 1 ? "Módulos" : "Módulo", v: sessao.modulos?.length ? sessao.modulos.join(" · ") : sessao.modulo },

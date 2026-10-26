@@ -313,6 +313,9 @@ export const CursoVideo: ComponentConfig<VideoCursoProps> = {
 
 function VideoCurso(p: VideoCursoProps) {
   const { editar } = useLocalCurso();
+  const curso = useCurso();
+  // Sem vídeo, no site não fica nada (nem as margens, o fundo ou a moldura do bloco).
+  if (curso && !editar && !videoDoCurso(curso.video)) return null;
   return (
     <Caixa p={p}>
       {curso => {

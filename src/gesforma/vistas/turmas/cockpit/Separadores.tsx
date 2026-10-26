@@ -1,6 +1,6 @@
 import { type ExportTurmaInfo } from "../../../ActionSurfaces";
 import { data as fmtDataUi } from "../../../../partilhado/ui/formatos";
-import { sumarioPreenchido, type PlanoSessaoData, type SessaoMeta, type SumarioSessaoData } from "../../../../partilhado/TurmaExtras";
+import { estadoPlano, sumarioPreenchido, type EstadoPlano, type PlanoSessaoData, type SessaoMeta, type SumarioSessaoData } from "../../../../partilhado/TurmaExtras";
 import { SearchSelect } from "../../../../partilhado/FormKit";
 import { imprimirFolhasPresencas } from "../../../../partilhado/presencasPrint";
 import { apiFolhasPresencaFin } from "../../../../partilhado/api";
@@ -53,6 +53,16 @@ export function sumarioLabel(s?: SumarioSessaoData) {
   return "+ Preencher sumário";
 }
 
+const PLANO_CLS: Record<EstadoPlano, string> = {
+  rascunho: "text-slate-700 bg-white border-slate-200 hover:bg-slate-50",
+  submetido: "text-amber-800 bg-amber-50 border-amber-200 hover:bg-amber-100",
+  aprovado: "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100",
+  devolvido: "text-red-700 bg-red-50 border-red-200 hover:bg-red-100",
+};
+const PLANO_ROTULO: Record<EstadoPlano, string> = {
+  rascunho: "Plano (rascunho)", submetido: "Plano por aprovar", aprovado: "Plano aprovado ✓", devolvido: "Plano devolvido",
+};
+
 export function sumarioBtnCls(s: SumarioSessaoData | undefined, gold: boolean) {
   if (s?.assinado && sumarioPreenchido(s)) return "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100";
   return gold ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100";
@@ -60,7 +70,7 @@ export function sumarioBtnCls(s: SumarioSessaoData | undefined, gold: boolean) {
 
 export function SessoesTurmaTab({
   accent, regime, turmaId, onPlanosImportados, turmaNome, cursoNome, sessoes, planos, presencas, sumarios, formandos, onNovaSessao, onPlano, onSumario, onPresencas, onOpenFormador,
-  podeEditar, podeCriar = true, formadorOpcoes, onFormador,
+  podeEditar, podeCriar = true, formadorOpcoes, onFormador, semSumario = false,
 }: {
   accent: "gold" | "fin";
   regime?: "gold" | "fin";
@@ -76,7 +86,9 @@ export function SessoesTurmaTab({
   formandos: { id: number; nome: string }[];
   onNovaSessao: () => void;
   onPlano: (s: SessaoMeta) => void;
-  onSumario: (s: SessaoMeta) => void;
+  onSumario?: (s: SessaoMeta) => void;
+  /** Financiada: as sessões não têm sumário (o plano de sessão e a folha de presenças chegam). */
+  semSumario?: boolean;
   onPresencas: (s: SessaoMeta) => void;
   onOpenFormador?: (nome: string) => void;
   podeEditar?: (s: SessaoMeta, doc: "plano" | "sumario" | "presencas") => boolean;
@@ -128,7 +140,7 @@ export function SessoesTurmaTab({
           <thead>
             <tr>
               <Th>Nº</Th><Th>Data / Hora</Th><Th>Módulo</Th><Th>Formadores</Th>
-              <Th>Plano de Sessão</Th><Th>Sumário</Th><Th>Presenças</Th><Th>Estado</Th>
+              <Th>Plano de Sessão</Th>{!semSumario && <Th>Sumário</Th>}<Th>Presenças</Th><Th>Estado</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -160,17 +172,19 @@ export function SessoesTurmaTab({
                     )}
                   </Td>
                   <Td>
-                    <button type="button" disabled={!edita("plano")} title={edita("plano") ? "" : "Sem permissão nesta sessão"} onClick={() => onPlano(s)}
-                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap disabled:opacity-40 ${temPlano ? "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100" : planoTodo}`}>
-                      {temPlano ? "Ver plano" : "+ Preencher plano"}
+                    <button type="button" disabled={!edita("plano") && !temPlano} title={edita("plano") ? "" : "Só consulta"} onClick={() => onPlano(s)}
+                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap disabled:opacity-40 ${temPlano ? PLANO_CLS[estadoPlano(planos[s.n])] : planoTodo}`}>
+                      {temPlano ? PLANO_ROTULO[estadoPlano(planos[s.n])] : "+ Preencher plano"}
                     </button>
                   </Td>
-                  <Td>
-                    <button type="button" disabled={!edita("sumario")} title={edita("sumario") ? "" : "Sem permissão nesta sessão"} onClick={() => onSumario(s)}
-                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap disabled:opacity-40 ${sumarioBtnCls(sum, gold)}`}>
-                      {sumarioLabel(sum)}
-                    </button>
-                  </Td>
+                  {!semSumario && (
+                    <Td>
+                      <button type="button" disabled={!edita("sumario")} title={edita("sumario") ? "" : "Sem permissão nesta sessão"} onClick={() => onSumario?.(s)}
+                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap disabled:opacity-40 ${sumarioBtnCls(sum, gold)}`}>
+                        {sumarioLabel(sum)}
+                      </button>
+                    </Td>
+                  )}
                   <Td>
                     <div className="flex flex-col gap-1 items-start">
                       <button
@@ -184,7 +198,8 @@ export function SessoesTurmaTab({
                       </button>
                       <button
                         type="button"
-                        disabled={!edita("presencas")}
+                        disabled={!edita("presencas") && !folha}
+                        title={edita("presencas") ? undefined : "Só consulta"}
                         onClick={() => onPresencas(s)}
                         className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border whitespace-nowrap disabled:opacity-40 ${
                           folha
@@ -193,7 +208,7 @@ export function SessoesTurmaTab({
                         }`}
                       >
                         {folha
-                          ? `${folha.filter(p => p.presente).length}/${folha.length} presentes`
+                          ? `${folha.filter(p => p.presente).length}/${folha.length} presentes${sum?.presencasValidadas ? " · validada" : ""}`
                           : "Marcar presenças"}
                       </button>
                     </div>

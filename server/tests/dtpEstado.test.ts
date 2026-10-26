@@ -80,16 +80,17 @@ describe("estado do Dossiê TP", () => {
     expect(grupos[0]!.items.find(i => i.dtpId === "cronograma")!.detalhe).toContain("1 sessões");
   });
 
-  it("#11 a folha de presenças conta só com as presenças validadas (Financiada: também o sumário assinado)", async () => {
+  it("#11 a folha de presenças conta só com as presenças validadas (Financiada: sem sumário)", async () => {
     const ctx = await arrancar();
     const g = await turmaGold(ctx, [sessao("g1")]);
     await gravarSessao(ctx, "gold", g.id, 1, "g1", { presencas: [{ id: 1, presente: true }], sumario: { assinado: true } });
     expect((await dtp(ctx, "gold", g.id)).item("presencas").estado).toBe("falta");
 
     const f = await turmaFin(ctx, [sessao("f1")]);
-    await gravarSessao(ctx, "fin", f.id, 1, "f1", { presencas: [{ id: 1, presente: true }], sumario: { assinado: false, presencasValidadas: true } });
+    await gravarSessao(ctx, "fin", f.id, 1, "f1", { presencas: [{ id: 1, presente: true }] });
     expect((await dtp(ctx, "fin", f.id)).item("presencas").estado).toBe("falta");
-    await ctx.db.query("UPDATE turma_sessoes SET sumario = $2::jsonb WHERE regime = 'fin' AND turma_id = $1", [f.id, JSON.stringify(FECHADA)]);
+    // A Financiada não tem sumário: as presenças validadas chegam.
+    await ctx.db.query("UPDATE turma_sessoes SET sumario = $2::jsonb WHERE regime = 'fin' AND turma_id = $1", [f.id, JSON.stringify({ assinado: false, presencasValidadas: true })]);
     expect((await dtp(ctx, "fin", f.id)).item("presencas").estado).toBe("ok");
   });
 

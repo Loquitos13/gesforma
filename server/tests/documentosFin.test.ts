@@ -245,7 +245,7 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
       "8600 | Competências empreendedoras e técnicas de procura de emprego",
       "UFCD 8600 - Competências empreendedoras e técnicas de procura de emprego (Ação 2)",
       "Sala:", "Local:", "Sala Virtual / E-Learning", "Data:", "30-09-2026", "Horário:", "19:00 às 22:00", "T:", "P:",
-      "Nome:", "Presenças:", "Ana Silva", "Presente", "Bruno Silva", "Atraso (20 min)",
+      "Nome:", "Presenças:", "Ana Silva", "Presente", "Bruno Silva", "Presente (ausente 20 min)",
       "Sumário:", "Técnicas de procura de emprego e CV.", "Simulação de entrevista.", "o Formador:", "o Coordenador:",
     ]) expect(p1, v).toContain(v);
     expect(p2).toContain("01-10-2026");

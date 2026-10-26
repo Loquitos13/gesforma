@@ -5,6 +5,7 @@ import { useOpcoes } from "../../../../partilhado/dados/useOpcoes";
 import { invalidar, useRecurso } from "../../../../partilhado/dados/useRecurso";
 import { MultiSearchSelect } from "../../../../partilhado/FormKit";
 import { toastError } from "../../../../partilhado/toastBus";
+import { lembrarPrograma, ordenarPorRecentes, programasRecentes } from "../../../programasRecentes";
 import { Botao, Campo, Cartao, Entrada, Estado, Modal, Selecao, SelecaoPesquisa, Vazio, data as fmtData, type OpcaoSelecao } from "../../../../partilhado/ui";
 import type { Opcao } from "../../../../partilhado/api/catalogos";
 import { localDoElearning, OPCOES_SINCRONIA, regimeSincronia } from "../../../../partilhado/regimeSincronia";
@@ -140,7 +141,7 @@ export function TabOferta({ f }: { f: FichaCurso }) {
           </Campo>
           {regime === "fin" && (
             <Campo rotulo="Programa" ajuda="Programa, prioridade e tipologias dos documentos das turmas deste curso (Edição de cursos › Programas). Cada turma pode escolher outro; sem programa, vale o primeiro activo.">
-              {p => <SelecaoPesquisa {...p} opcoes={comValor(programas.selecao, data.programaFin)} vazio="Sem programa" placeholder="Pesquisar programa…" value={data.programaFin} onChange={v => patch({ programaFin: v })} />}
+              {p => <SelecaoPesquisa {...p} opcoes={comValor(ordenarPorRecentes(programas.selecao, programasRecentes()), data.programaFin)} vazio="Sem programa" placeholder="Pesquisar programa…" value={data.programaFin} onChange={v => { lembrarPrograma(v); patch({ programaFin: v }); }} />}
             </Campo>
           )}
           {regime === "gold" && (

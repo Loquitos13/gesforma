@@ -249,8 +249,9 @@ export async function pendentesDoFecho(
     for (const s of sessoes) {
       if (futuras.includes(s)) continue;
       const sum = porN.get(s.n);
-      if (!sum?.assinado) falta.push(`Sessão ${s.n}${s.data ? ` (${s.data})` : ""}: sumário por assinar.`);
-      else if (!sum.presencasValidadas) falta.push(`Sessão ${s.n}${s.data ? ` (${s.data})` : ""}: presenças por validar.`);
+      // A Financiada não tem sumário: basta a folha de presenças validada.
+      if (regime !== "fin" && !sum?.assinado) falta.push(`Sessão ${s.n}${s.data ? ` (${s.data})` : ""}: sumário por assinar.`);
+      else if (!sum?.presencasValidadas) falta.push(`Sessão ${s.n}${s.data ? ` (${s.data})` : ""}: presenças por validar.`);
     }
   }
   if (regras.fechoExigeNotas) {

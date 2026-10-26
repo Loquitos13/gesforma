@@ -133,11 +133,8 @@ function factosDe(regime: Regime, turma: TurmaRow, f: FontesTurma): DtpFacts {
   const lectivas = f.sessoes.filter(r => Number(r.sessao_n) >= 1 && Number(r.sessao_n) <= sessoesTotal);
   const planos = lectivas.filter(r => planoPreenchido(r.plano)).length;
   const sumarios = lectivas.filter(r => Boolean(asObj(r.sumario).assinado)).length;
-  // Folha conta quando as presenças foram validadas (o que o fecho exige). Na Financiada a folha leva o sumário: tem de estar assinado.
-  const presencas = lectivas.filter(r => {
-    const s = asObj(r.sumario);
-    return sim(s.presencasValidadas) && (regime !== "fin" || sim(s.assinado));
-  }).length;
+  // Folha conta quando as presenças foram validadas (o que o fecho exige). A Financiada não tem sumário.
+  const presencas = lectivas.filter(r => sim(asObj(r.sumario).presencasValidadas)).length;
 
   const docByLabel = (re: RegExp) => f.docs.find(d => re.test(d.label));
   const pip = pipCounts(docByLabel(/^pip$/i)?.payload ?? docByLabel(/pip/i)?.payload);

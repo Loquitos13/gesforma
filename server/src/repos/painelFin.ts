@@ -54,7 +54,6 @@ export type TurmaDecorrer = {
   sessoesPorAssinar: number; dtpPct: number; dtpBloqueantes: number;
 };
 
-const assinado = (s: unknown) => Boolean(s && typeof s === "object" && (s as { assinado?: boolean }).assinado);
 const temFolha = (p: unknown) => Array.isArray(p) ? p.length > 0 : typeof p === "string" ? p.length > 2 : false;
 
 /**
@@ -80,8 +79,9 @@ export async function turmasFinEmCurso(db: Db, f: FiltroPainel) {
     let porAssinar = 0;
     for (const s of sessoes) {
       const folha = porN.get(s.n);
-      if (assinado(folha?.sumario)) horasDadas += s.horas;
-      if (s.data && s.data < hoje && (!assinado(folha?.sumario) || !temFolha(folha?.presencas))) porAssinar += 1;
+      // A Financiada não tem sumário: a sessão conta como dada com a folha de presenças preenchida.
+      if (temFolha(folha?.presencas)) horasDadas += s.horas;
+      else if (s.data && s.data < hoje) porAssinar += 1;
     }
     const assid = membros.map(m => assiduidadeDoFormando({ id: Number(m.id), nome: m.nome }, sessoes, { justificadasContam: regras.justificadasContam }).pctRegistado);
     const validos = assid.filter((p): p is number => p != null);

@@ -204,7 +204,9 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
 
             <PlanoSessaoModal open={!!planoSessao} onClose={() => setPlanoSessao(null)} sessao={planoSessao ?? undefined}
               plano={planoSessao ? herdarPlanoCurso(modelosCurso.planos, planoSessao.n, ped.plano(planoSessao.n)) : emptyPlano()}
-              soLeitura={souFormador && planoSessao && ped.planosDoCurso.includes(planoSessao.n) ? "Plano definido na ficha do curso" : undefined}
+              soLeitura={souFormador && planoSessao && ped.planosDoCurso.includes(planoSessao.n) ? "Plano definido na ficha do curso"
+                : planoSessao && !podeDoc(planoSessao, "plano") ? (ped.planos[planoSessao.n]?.assinado ? "Aprovado: só a coordenação o altera" : "Só consulta") : undefined}
+              coordenacao={staffPodeDossie(user.role)}
               onSave={data => { if (planoSessao) void ped.guardarPlano(planoSessao.n, data, planoSessao.id); }} />
             <SumarioSessaoModal open={!!sumarioSessao} onClose={() => setSumarioSessao(null)} sessao={sumarioSessao ?? undefined}
               sumario={sumarioSessao ? herdarSumarioCurso(modelosCurso.planos, sumarioSessao.n, ped.sumario(sumarioSessao.n)) : emptySumario()}
@@ -216,8 +218,15 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
                 }
               }} />
             <PresencasSessaoModal open={!!presencasSessao} onClose={() => setPresencasSessao(null)} sessao={presencasSessao ?? undefined} turmaNome={t.nome} cursoNome={t.curso}
-              formandos={presencasSessao ? presencasDaSessao(nomesCockpit, ped.presencas[presencasSessao.n]) : nomesCockpit}
-              onSave={rows => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id); }} />
+              formandos={presencasSessao ? presencasDaSessao(nomesCockpit, ped.presencas[presencasSessao.n]) : []}
+              folha={presencasSessao ? ped.folhas[presencasSessao.n] : null}
+              validada={presencasSessao ? Boolean(sumarios[presencasSessao.n]?.presencasValidadas) : false}
+              soLeitura={presencasSessao && !podeDoc(presencasSessao, "presencas")
+                ? (sumarios[presencasSessao.n]?.presencasValidadas ? "Folha validada pela coordenação pedagógica: só a coordenação a altera." : "Só consulta: não está atribuído a esta sessão.")
+                : undefined}
+              podeValidar={staffPodeDossie(user.role)}
+              onSave={(rows, folha) => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id, folha); }}
+              onValidar={(validar, rows, folha) => { if (presencasSessao) void ped.validarPresencas(presencasSessao.n, validar, rows, folha, presencasSessao.id); }} />
             <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado"
               context={{ kind: "certificado", regime: "gold", turma: t.nome, formando: uploadCert != null ? String(uploadCert) : undefined, label: "Certificado" }}
               onConfirm={file => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true, ficheiroId: file.id, ficheiroNome: file.name, ficheiroUrl: file.openUrl, ...(uploadNota != null ? { nota: uploadNota } : {}) }); }} />

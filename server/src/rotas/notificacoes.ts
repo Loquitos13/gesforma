@@ -12,7 +12,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
 
   app.get("/v1/notificacoes", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    const items = await construirNotificacoes(db, req.actor!.id, req.actor!.role);
+    const items = await construirNotificacoes(db, req.actor!.id, req.actor!.role, req.actor!);
     return { notificacoes: items, naoLidas: items.filter(n => !n.lida).length };
   });
 

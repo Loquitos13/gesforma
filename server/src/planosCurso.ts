@@ -129,7 +129,7 @@ export async function importarDeTurma(db: Db, regime: Regime, turmaId: number, o
     const partes: { plano?: unknown; sumario?: unknown } = {};
     const planoActual = asObj(actual?.plano);
     if (planoTemTexto(fonte.plano) && planoActual.assinado !== true && (o.substituir || !planoTemTexto(planoActual))) {
-      partes.plano = { ...asObj(fonte.plano), assinado: false, assinadoEm: undefined };
+      partes.plano = { ...asObj(fonte.plano), assinado: false, assinadoEm: undefined, estado: undefined, comentario: undefined, submetidoEm: undefined, revistoPor: undefined, revistoEm: undefined };
     }
     const sumarioActual = asObj(actual?.sumario);
     if (sumarioTemTexto(fonte.sumario) && sumarioActual.assinado !== true && (o.substituir || !sumarioTemTexto(sumarioActual))) {

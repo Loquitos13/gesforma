@@ -8,6 +8,7 @@ import { DOCS_FIN_COMPLETOS, DOCS_FIN_OBRIGATORIOS } from "./painelBlocos.js";
 import { many, one, type Consulta } from "./sql.js";
 import type { Db } from "../db/pool.js";
 import { hojeLisboa, somarDias } from "../datas.js";
+import { turmasDoFormador } from "../sessaoAcesso.js";
 import { rotuloCodigoCurso } from "../../../src/partilhado/codigoCurso.js";
 import { comercialAbre } from "../../../src/partilhado/vistasComercial.js";
 import { eur as eurPt } from "../../../src/partilhado/ui/formatos.js";
@@ -96,7 +97,36 @@ function paraComercial(avisos: Nova[]): Nova[] {
 
 const eur = (v: number) => eurPt(v, true);
 
-export async function construirNotificacoes(db: Db, actorId: string, role = ""): Promise<Notificacao[]> {
+/** Planos de sessão num estado (por turma): «submetido» para a coordenação, «devolvido» para o formador. */
+async function planosPorEstado(c: Consulta, estado: "submetido" | "devolvido") {
+  return many<{ regime: string; turma_id: number; nome: string; n: number }>(c, `
+    SELECT ts.regime, ts.turma_id, COALESCE(g.nome, f.nome, '') AS nome, count(*)::int AS n
+      FROM turma_sessoes ts
+      LEFT JOIN turmas_gold g ON ts.regime = 'gold' AND g.id = ts.turma_id
+      LEFT JOIN turmas_fin f ON ts.regime = 'fin' AND f.id = ts.turma_id
+     WHERE ts.sessao_n IS NOT NULL AND jsonb_typeof(ts.plano) = 'object' AND ts.plano->>'estado' = $1
+       AND COALESCE(g.fechada_em, f.fechada_em) IS NULL
+     GROUP BY 1, 2, 3 ORDER BY 1, 2`, [estado]);
+}
+
+function avisoPlanos(r: { regime: string; turma_id: number; nome: string; n: number }, estado: "submetido" | "devolvido"): Nova {
+  const fin = r.regime === "fin";
+  return {
+    chave: `planos-${estado}-${r.regime}-${r.turma_id}-${r.n}`,
+    tipo: estado === "devolvido" ? "error" : "warn",
+    titulo: estado === "devolvido"
+      ? `${r.n} plano(s) de sessão devolvido(s) · ${r.nome}`
+      : `${r.n} plano(s) de sessão por aprovar · ${r.nome}`,
+    texto: estado === "devolvido"
+      ? "A coordenação pedagógica deixou comentários: corrija e volte a submeter."
+      : "O formador submeteu planos para revisão: aprove ou devolva com comentários.",
+    view: fin ? "fin-cockpit-turma" : "gold-cockpit-turma",
+    turmaId: Number(r.turma_id),
+    tab: "sessoes",
+  };
+}
+
+export async function construirNotificacoes(db: Db, actorId: string, role = "", actor?: { email: string; name: string }): Promise<Notificacao[]> {
   const hoje = hojeLisboa();
   const em14 = somarDias(hoje, 14);
   const [lidas, n, filas, turmas, pctGold, pctFin] = await Promise.all([
@@ -157,6 +187,17 @@ export async function construirNotificacoes(db: Db, actorId: string, role = ""):
   }
   dtp.sort((a, b) => (a.tipo === b.tipo ? 0 : a.tipo === "error" ? -1 : 1));
   out.push(...dtp.slice(0, 4));
+
+  // Aprovação dos planos de sessão: a coordenação vê os submetidos; o formador, os seus devolvidos.
+  if (role === "admin" || role === "secretaria" || role === "financiada") {
+    for (const r of await planosPorEstado(db, "submetido")) out.push(avisoPlanos(r, "submetido"));
+  }
+  if (role === "formador" && actor) {
+    const minhas = await turmasDoFormador(db, { id: actorId, email: actor.email, name: actor.name });
+    for (const r of await planosPorEstado(db, "devolvido")) {
+      if ((r.regime === "fin" ? minhas.fin : minhas.gold).has(Number(r.turma_id))) out.push(avisoPlanos(r, "devolvido"));
+    }
+  }
 
   const visiveis = role === "formador"
     ? out.filter(x => x.tab !== "dtp" && x.view !== "pagamentos" && x.view !== "fin-formandos" && !/pagament|dossiê|dtp|document/i.test(`${x.titulo} ${x.texto}`))

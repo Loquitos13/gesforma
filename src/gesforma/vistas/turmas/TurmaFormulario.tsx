@@ -10,6 +10,7 @@ import { toastError } from "../../../partilhado/toastBus";
 import { Aviso, Botao, Campo, Chip, Entrada, ErroCarregar, Esqueleto, Interruptor, Modal, Selecao, SelecaoPesquisa } from "../../../partilhado/ui";
 import { CronogramaEditor } from "../../CronogramaEditor";
 import { ValoresHoraFormador } from "../../ValoresHoraFormador";
+import { lembrarPrograma, ordenarPorRecentes, programasRecentes } from "../../programasRecentes";
 import { useAuth } from "../../../partilhado/AuthGate";
 
 type Rascunho = {
@@ -202,7 +203,7 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
                 )}
               </Campo>
               <Campo rotulo="Programa" className="sm:col-span-2" ajuda="Programa, prioridade e tipologias dos documentos da turma (Edição de cursos › Programas). Vazio: o da ficha do curso.">
-                {p => <SelecaoPesquisa {...p} opcoes={programas.selecao} vazio="O do curso (ou o primeiro activo)" placeholder="Pesquisar programa…" value={r.programa} onChange={v => mudar({ programa: v })} />}
+                {p => <SelecaoPesquisa {...p} opcoes={ordenarPorRecentes(programas.selecao, programasRecentes())} vazio="O do curso (ou o primeiro activo)" placeholder="Pesquisar programa…" value={r.programa} onChange={v => { lembrarPrograma(v); mudar({ programa: v }); }} />}
               </Campo>
               <Campo rotulo="Número da ação" ajuda="«… / Ação n» na execução física.">
                 {p => <Entrada {...p} type="number" min={1} step={1} value={r.numeroAcao} onChange={e => mudar({ numeroAcao: Math.max(1, Math.round(Number(e.target.value)) || 1) })} />}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLinha, datesFromRange, mudarHorasLinha, preencherIntervalo, saltoMatricula, setMatricula } from "../../src/partilhado/cronogramaGrelha.js";
+import { buildLinha, datesFromRange, grelhaTempos, mudarHorasLinha, preencherIntervalo, saltoMatricula, setMatricula } from "../../src/partilhado/cronogramaGrelha.js";
 import type { SessaoCronograma } from "../../src/partilhado/turmaModel.js";
 import { arrancar, pedido } from "./helpers.js";
 
@@ -31,6 +31,21 @@ describe("atalhos do cronograma", () => {
     expect(r.ok && r.sessoes.filter(x => x.horaFim === "10:50").map(x => x.id)).toEqual(["a", "b"]);
     const choque = mudarHorasLinha([...sessoes, s("d", "2026-11-03", "09:00", "13:00")], linha, "09:00", "13:00");
     expect(choque.ok).toBe(false);
+  });
+});
+
+describe("grelha de tempos de 45 minutos", () => {
+  it("3h30 ocupa quatro tempos e 30 dos 45 minutos do quinto; sobrepostas ficam lado a lado", () => {
+    const dias = ["2026-11-07", "2026-11-14"];
+    const g = grelhaTempos([s("a", "2026-11-07", "09:00", "12:30"), s("b", "2026-11-14", "09:00", "10:45"), s("c", "2026-11-14", "10:00", "11:00", "sincrona")], dias, "Sábado manhã");
+    expect(g.base).toBe(9 * 60);
+    expect(g.n).toBe(6); // 9:00 a 13:30 (o horário habitual vai até às 13:00)
+    const a = g.blocos.find(b => b.date === "2026-11-07")!;
+    expect(a).toMatchObject({ linha: 0, linhas: 5 });
+    expect(a.sessoes[0]!.altura).toBeCloseTo((210 / 225) * 100);
+    const b = g.blocos.find(x => x.date === "2026-11-14")!;
+    expect(b.sessoes.map(x => x.colunas)).toEqual([2, 2]);
+    expect(g.inicioDaLinha(1)).toBe("09:45");
   });
 });
 

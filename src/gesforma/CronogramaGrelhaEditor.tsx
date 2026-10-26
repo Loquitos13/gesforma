@@ -4,13 +4,13 @@ import { useOpcoes } from "../partilhado/dados/useOpcoes";
 import { apiPublicEntidade } from "../partilhado/api/publico";
 import { useRecurso } from "../partilhado/dados/useRecurso";
 import { useProgramaDoCurso } from "./cursoPrograma";
-import { type GrelhaLinha, addDays, cellLabel, cellTone, comFimCronograma, datesFromRange, defaultSlot, dayNum, fimEstavel, grelhaPeriodo, grupoLinha, larguraDiasEmChars, linhaId, linhaLabel, linhasFromSessoes, mergeLinhas, METODOLOGIA_OPTS, monthSpans, moverEvento, mudarHorasLinha, normHora, saltoMatricula, setMatricula, sessoesSemFim, weekdayCode } from "../partilhado/cronogramaGrelha";
+import { type GrelhaLinha, addDays, cellLabel, cellTone, comFimCronograma, datesFromRange, defaultSlot, dayNum, fimEstavel, grelhaPeriodo, grupoLinha, larguraDiasEmChars, linhaLabel, linhasFromSessoes, mergeLinhas, monthSpans, moverEvento, saltoMatricula, setMatricula, sessoesSemFim, weekdayCode, grelhaTempos, type BlocoTempos, TEMPO_MIN, minutosDaHora, horaDosMinutos, horaOficial, formatHoraFaixa, linhaDaSessao, buildLinha } from "../partilhado/cronogramaGrelha";
 import { generateEnaCronograma } from "../partilhado/cronogramaGrelhaGerar";
 import { mapLocalTurma, type LocalCatalogo } from "../partilhado/cronogramaLocal";
 import { imprimirCronogramaEna } from "../partilhado/cronogramaPrint";
 import { codigoInternoTurma } from "../partilhado/turmaCodigo";
-import { type SessaoModalidade, formatDiaMes, type SessaoCronograma } from "../partilhado/turmaModel";
-import { HoraField, TONE, EventoModal } from "./CronogramaGrelha";
+import { formatDiaMes, sessaoModalidade, type SessaoCronograma } from "../partilhado/turmaModel";
+import { TONE, EventoModal } from "./CronogramaGrelha";
 
 export function CronogramaGrelha({
   sessoes,
@@ -56,11 +56,6 @@ export function CronogramaGrelha({
   const [arrasto, setArrasto] = useState<{ date: string; linha: GrelhaLinha } | null>(null);
   const [sobre, setSobre] = useState<string | null>(null);
   const arrastou = useRef(false);
-  const [addLinha, setAddLinha] = useState(false);
-  const [novaMod, setNovaMod] = useState<Exclude<SessaoModalidade, "matricula" | "avaliacao">>("presencial");
-  const [novaInicio, setNovaInicio] = useState(() => defaultSlot(horario, "presencial").horaInicio);
-  const [novaFim, setNovaFim] = useState(() => defaultSlot(horario, "presencial").horaFim);
-  const [addErro, setAddErro] = useState("");
   const { opcoes: locaisOpcoes } = useOpcoes("locais", { todos: true });
   const { dados: entidade } = useRecurso("publico:entidade", signal => apiPublicEntidade(signal));
   const locaisCatalogo = useMemo<LocalCatalogo[]>(
@@ -101,8 +96,15 @@ export function CronogramaGrelha({
       {conteudo}
     </th>
   );
-  // Horário de uma linha inteira (clique no rótulo da linha).
-  const [linhaHoras, setLinhaHoras] = useState<{ linha: GrelhaLinha; hi: string; hf: string; erro: string } | null>(null);
+  // Aulas presenciais e síncronas numa grelha de tempos de 45 minutos.
+  const tempos = useMemo(() => grelhaTempos(sessoes, dates, horario), [sessoes, dates, horario]);
+  const blocosPorDia = useMemo(() => {
+    const m = new Map<string, BlocoTempos[]>();
+    for (const b of tempos.blocos) m.set(b.date, [...(m.get(b.date) ?? []), b]);
+    return m;
+  }, [tempos]);
+  const slotPadrao = defaultSlot(horario, "presencial");
+  const duracaoPadrao = Math.max(TEMPO_MIN, (minutosDaHora(slotPadrao.horaFim) ?? 0) - (minutosDaHora(slotPadrao.horaInicio) ?? 0));
   const codigo = codigoInternoTurma(curso ?? "", local ?? "", horario, inicio);
   const gold = accent === "gold";
 
@@ -217,7 +219,91 @@ export function CronogramaGrelha({
             </tr>
           </thead>
           <tbody>
-            {(["presencial", "sincrona", "auto", "avaliacao"] as const).map(grupo => {
+            {Array.from({ length: tempos.n }, (_, r) => (
+              <tr key={`tempo-${r}`} style={{ height: "2.4rem" }}>
+                <th className="sticky left-0 z-10 bg-white border-r border-b border-slate-200 px-2 py-1 text-left align-middle font-semibold text-slate-700 w-44 min-w-[11rem]">
+                  {r === 0 && <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Horário das aulas · tempos de {tempos.tempo} min</p>}
+                  <p className="text-[11px] font-medium text-slate-600 leading-tight">{horaOficial(tempos.inicioDaLinha(r))} – {horaOficial(tempos.inicioDaLinha(r + 1))}</p>
+                </th>
+                {dates.flatMap(d => {
+                  const doDia = blocosPorDia.get(d) ?? [];
+                  const bloco = doDia.find(b => b.linha <= r && r < b.linha + b.linhas);
+                  const chave = `t${r}-${d}`;
+                  const cells: ReactNode[] = [];
+                  if (d === matricula && !doDia.length) {
+                    if (r === 0) {
+                      cells.push(
+                        <td key={chave} rowSpan={tempos.n} className={`border border-slate-100 px-0.5 text-center align-middle text-[9px] font-bold ${TONE.matricula}`}>Matrícula</td>,
+                      );
+                    }
+                  } else if (bloco) {
+                    if (bloco.linha === r) {
+                      cells.push(
+                        <td key={chave} rowSpan={bloco.linhas} className="relative border border-slate-100 p-0 bg-white">
+                          {bloco.sessoes.map(({ s: ses, topo, altura, coluna, colunas }) => {
+                            const linhaSes = linhaDaSessao(ses)!;
+                            return (
+                              <button
+                                key={ses.id ?? `${ses.horaInicio}-${coluna}`}
+                                type="button"
+                                draggable
+                                onDragStart={e => {
+                                  arrastou.current = false;
+                                  setArrasto({ date: d, linha: linhaSes });
+                                  e.dataTransfer.effectAllowed = "move";
+                                  e.dataTransfer.setData("text/plain", chave);
+                                }}
+                                onDragEnd={() => { setArrasto(null); setSobre(null); }}
+                                onClick={() => {
+                                  if (arrastou.current) { arrastou.current = false; return; }
+                                  setEvento({ date: d, linha: linhaSes });
+                                }}
+                                style={{ top: `${topo}%`, height: `${altura}%`, left: `${(coluna / colunas) * 100}%`, width: `${100 / colunas}%` }}
+                                className={`absolute flex flex-col items-center justify-center overflow-hidden border border-white/50 px-0.5 text-[9px] font-bold leading-tight cursor-grab active:cursor-grabbing ${TONE[sessaoModalidade(ses)] ?? TONE.presencial}`}
+                                title={`${formatDiaMes(d)} · ${formatHoraFaixa(ses.horaInicio, ses.horaFim)} · arraste para mudar de dia ou hora; clique para editar`}
+                              >
+                                <span>{cellLabel(sessoes, d, linhaSes)}</span>
+                                <span className="font-medium opacity-80">{horaOficial(ses.horaInicio)}–{horaOficial(ses.horaFim)}</span>
+                              </button>
+                            );
+                          })}
+                        </td>,
+                      );
+                    }
+                  } else {
+                    const ini = minutosDaHora(tempos.inicioDaLinha(r))!;
+                    const aSoltar = sobre === chave && arrasto;
+                    cells.push(
+                      <td
+                        key={chave}
+                        className={`border border-slate-100 p-0 ${aSoltar ? "ring-2 ring-amber-400 ring-inset" : ""} ${d === matricula ? "bg-[#15803d]/10" : ""}`}
+                        onDragOver={e => { if (!arrasto) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; setSobre(chave); }}
+                        onDragLeave={() => { if (sobre === chave) setSobre(null); }}
+                        onDrop={e => {
+                          e.preventDefault();
+                          setSobre(null);
+                          if (!arrasto) return;
+                          arrastou.current = true;
+                          // Mantém a duração (do e-learning para aula: a duração habitual do horário).
+                          const de = arrasto.linha;
+                          const mod = de.modalidade === "sincrona" ? "sincrona" : "presencial";
+                          const dur = de.horaInicio && de.horaFim ? minutosDaHora(de.horaFim)! - minutosDaHora(de.horaInicio)! : duracaoPadrao;
+                          gravar(moverEvento(sessoesSemFim(sessoes), arrasto.date, de, d, buildLinha(mod, horaDosMinutos(ini), horaDosMinutos(ini + dur))));
+                          setArrasto(null);
+                        }}
+                      >
+                        <button type="button" aria-label={`${formatDiaMes(d)} às ${horaOficial(tempos.inicioDaLinha(r))}: adicionar aula`}
+                          onClick={() => setEvento({ date: d, linha: buildLinha("presencial", horaDosMinutos(ini), horaDosMinutos(ini + duracaoPadrao)) })}
+                          className={`block h-full min-h-[2.3rem] w-full ${TONE.empty}`} />
+                      </td>,
+                    );
+                  }
+                  if (salto && d === matricula) cells.push(<td key={`salto-${chave}`} className="border border-slate-100 bg-slate-50" aria-hidden="true" />);
+                  return cells;
+                })}
+              </tr>
+            ))}
+            {(["auto", "avaliacao"] as const).map(grupo => {
               const rows = linhas.filter(l => l.modalidade === grupo);
               if (!rows.length) return null;
               return rows.map((linha, i) => (
@@ -225,10 +311,7 @@ export function CronogramaGrelha({
                   <th className="sticky left-0 z-10 bg-white border-r border-b border-slate-200 px-2 py-1 text-left align-middle font-semibold text-slate-700 w-44 min-w-[11rem]">
                     {i === 0 && <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{grupoLinha(grupo)}</p>}
                     <div className="flex items-center gap-1">
-                      {linha.modalidade === "presencial" || linha.modalidade === "sincrona"
-                        ? <button type="button" onClick={() => setLinhaHoras({ linha, hi: linha.horaInicio, hf: linha.horaFim, erro: "" })} title="Mudar o horário desta linha (todas as sessões dela)"
-                            className="text-[11px] font-medium text-slate-600 leading-tight flex-1 text-left hover:text-slate-900 hover:underline">{linhaLabel(linha)}</button>
-                        : <p className="text-[11px] font-medium text-slate-600 leading-tight flex-1">{linhaLabel(linha)}</p>}
+                      <p className="text-[11px] font-medium text-slate-600 leading-tight flex-1">{linhaLabel(linha)}</p>
                       {!dates.some(d => cellLabel(sessoes, d, linha)) && (
                         <button
                           type="button"
@@ -242,10 +325,8 @@ export function CronogramaGrelha({
                     </div>
                   </th>
                   {dates.map(d => {
-                    const tone = d === matricula && grupo === "presencial" && i === 0 && !cellLabel(sessoes, d, linha)
-                      ? "matricula"
-                      : cellTone(sessoes, d, linha);
-                    const label = d === matricula && tone === "matricula" ? "Matrícula" : cellLabel(sessoes, d, linha);
+                    const tone = cellTone(sessoes, d, linha);
+                    const label = cellLabel(sessoes, d, linha);
                     const chave = `${linha.id}-${d}`;
                     const preenchida = Boolean(label) && tone !== "empty" && tone !== "matricula";
                     const aSoltar = sobre === chave && arrasto && !(arrasto.date === d && arrasto.linha.id === linha.id);
@@ -287,7 +368,7 @@ export function CronogramaGrelha({
                             }
                             setEvento({ date: d, linha });
                           }}
-                          className={`block w-full min-h-10 px-0.5 py-1 text-[9px] font-bold leading-tight whitespace-normal ${TONE[tone] ?? TONE.empty} ${d === matricula ? "ring-1 ring-[#15803d]" : ""} ${preenchida ? "cursor-grab active:cursor-grabbing" : ""}`}
+                          className={`block w-full min-h-10 px-0.5 py-1 text-[9px] font-bold leading-tight whitespace-normal ${TONE[tone] ?? TONE.empty} ${preenchida ? "cursor-grab active:cursor-grabbing" : ""}`}
                           title={preenchida
                             ? `${formatDiaMes(d)} · ${linhaLabel(linha)} · arraste para mudar dia, hora ou metodologia; clique para editar os ${unidade === "capítulo" ? "capítulos" : "módulos"}`
                             : `${formatDiaMes(d)} · ${linhaLabel(linha)}`}
@@ -315,78 +396,13 @@ export function CronogramaGrelha({
         >
           {sessoesSemFim(sessoes).length ? "Gerar grelha ENA" : "Gerar cronograma ENA"}
         </button>
-        <div className="relative">
-          <button type="button" onClick={() => { setAddLinha(v => !v); setAddErro(""); }} className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
-            + Linha de horário
+        {!linhas.some(l => l.modalidade === "auto") && (
+          <button type="button" onClick={() => setLinhas(xs => mergeLinhas(xs, [buildLinha("auto", "", "")]))}
+            title="As aulas presenciais e síncronas marcam-se na grelha de tempos; o e-learning ocupa o dia numa linha própria."
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+            + Linha de e-learning
           </button>
-          {addLinha && (
-            <form
-              className="absolute z-30 mt-1 w-[20rem] rounded-xl border border-slate-200 bg-white shadow-lg p-3 space-y-2"
-              onSubmit={e => {
-                e.preventDefault();
-                const precisaHora = novaMod !== "auto";
-                const hi = precisaHora ? normHora(novaInicio) : "";
-                const hf = precisaHora ? normHora(novaFim) : "";
-                if (precisaHora && (!hi || !hf)) {
-                  setAddErro("Escolha a hora de início e de fim.");
-                  return;
-                }
-                if (precisaHora && hi >= hf) {
-                  setAddErro("A hora de fim tem de ser depois da de início.");
-                  return;
-                }
-                const linha: GrelhaLinha = { id: "", modalidade: novaMod, horaInicio: hi, horaFim: hf };
-                linha.id = linhaId(linha);
-                if (linhas.some(l => l.id === linha.id)) {
-                  setAddErro("Esta linha já existe na grelha. Escolha outro horário.");
-                  return;
-                }
-                setLinhas(xs => [...xs, linha]);
-                setAddLinha(false);
-                setAddErro("");
-              }}
-            >
-              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Metodologia</p>
-              <div className="space-y-1">
-                {METODOLOGIA_OPTS.map(opt => (
-                  <label key={opt.value} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="metodologia"
-                      checked={novaMod === opt.value}
-                      onChange={() => {
-                        setNovaMod(opt.value);
-                        const slot = defaultSlot(horario, opt.value);
-                        setNovaInicio(slot.horaInicio);
-                        setNovaFim(slot.horaFim);
-                        setAddErro("");
-                      }}
-                    />
-                    {opt.label}
-                  </label>
-                ))}
-              </div>
-              {novaMod !== "auto" && (
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <HoraField label="Início" value={novaInicio} onChange={setNovaInicio} />
-                  <HoraField label="Fim" value={novaFim} onChange={setNovaFim} />
-                </div>
-              )}
-              {novaMod === "auto" && (
-                <p className="text-[11px] text-slate-500">O e-learning não tem hora de sala - ocupa o dia na grelha.</p>
-              )}
-              {addErro && <p className="text-[11px] text-red-600">{addErro}</p>}
-              <div className="flex gap-2 pt-1">
-                <button type="button" onClick={() => setAddLinha(false)} className="flex-1 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
-                  Cancelar
-                </button>
-                <button type="submit" className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-[#0F172A] text-white hover:bg-slate-800">
-                  Adicionar
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
+        )}
         <button
           type="button"
           onClick={() => {
@@ -410,35 +426,6 @@ export function CronogramaGrelha({
           Imprimir / PDF
         </button>
       </div>
-
-      {linhaHoras && (
-        <div className="fixed inset-0 z-[80] bg-slate-900/40 flex items-center justify-center p-4" onClick={() => setLinhaHoras(null)}>
-          <form className="w-full max-w-sm rounded-2xl bg-white shadow-2xl p-5 space-y-3" onClick={e => e.stopPropagation()}
-            onSubmit={e => {
-              e.preventDefault();
-              const r = mudarHorasLinha(sessoesSemFim(sessoes), linhaHoras.linha, linhaHoras.hi, linhaHoras.hf);
-              if (!r.ok) { setLinhaHoras({ ...linhaHoras, erro: r.erro }); return; }
-              setLinhas(xs => mergeLinhas(linhasFromSessoes(r.sessoes, horario), xs.map(x => (x.id === linhaHoras.linha.id ? r.linha : x))));
-              gravar(r.sessoes);
-              setLinhaHoras(null);
-            }}>
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Horário da linha</p>
-              <p className="text-sm font-semibold text-slate-800 mt-0.5">{linhaLabel(linhaHoras.linha)}</p>
-              <p className="text-[11px] text-slate-500 mt-1">Todas as sessões desta linha passam para o novo horário.</p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <HoraField label="Início" value={linhaHoras.hi} onChange={v => setLinhaHoras({ ...linhaHoras, hi: v, erro: "" })} />
-              <HoraField label="Fim" value={linhaHoras.hf} onChange={v => setLinhaHoras({ ...linhaHoras, hf: v, erro: "" })} />
-            </div>
-            {linhaHoras.erro && <p className="text-[11px] text-red-600">{linhaHoras.erro}</p>}
-            <div className="flex gap-2 pt-1">
-              <button type="button" onClick={() => setLinhaHoras(null)} className="flex-1 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Cancelar</button>
-              <button type="submit" className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-[#0F172A] text-white hover:bg-slate-800">Aplicar</button>
-            </div>
-          </form>
-        </div>
-      )}
 
       {evento && (
         <EventoModal

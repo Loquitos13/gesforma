@@ -485,3 +485,87 @@ export function mudarHorasLinha(sessoes: SessaoCronograma[], linha: GrelhaLinha,
   }
   return { ok: true, linha: nova, sessoes: sessoes.map(s => (daLinha(s) ? { ...s, horaInicio: hi, horaFim: hf } : s)) };
 }
+
+// ── Grelha de tempos (aulas presenciais e síncronas) ──────────────────────────────────────────────────────────
+// As linhas são tempos lectivos de 45 minutos; cada sessão ocupa os tempos da sua duração e o último fica
+// preenchido só na parte que a sessão usa (ex.: 3h30 = quatro tempos inteiros e 30 dos 45 minutos do quinto).
+
+export const TEMPO_MIN = 45;
+
+export const minutosDaHora = (h: string) => {
+  const n = normHora(h);
+  if (!n) return null;
+  const [hh, mm] = n.split(":").map(Number);
+  return hh! * 60 + mm!;
+};
+
+export const horaDosMinutos = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+export type BlocoTempos = {
+  date: string;
+  /** Primeira linha (tempo) e quantas ocupa. */
+  linha: number; linhas: number;
+  /** Cada sessão do bloco, com a posição em percentagem dentro do bloco (sessões sobrepostas ficam lado a lado). */
+  sessoes: { s: SessaoCronograma; topo: number; altura: number; coluna: number; colunas: number }[];
+};
+
+export function grelhaTempos(sessoes: SessaoCronograma[], dates: string[], horario: string, tempo = TEMPO_MIN) {
+  const lectivas = sessoesSemFim(sessoes).filter(s => {
+    const m = sessaoModalidade(s);
+    return (m === "presencial" || m === "sincrona") && minutosDaHora(s.horaInicio) != null && minutosDaHora(s.horaFim) != null
+      && minutosDaHora(s.horaFim)! > minutosDaHora(s.horaInicio)!;
+  });
+  const padrao = defaultSlot(horario, "presencial");
+  const inicios = [...lectivas.map(s => minutosDaHora(s.horaInicio)!), minutosDaHora(padrao.horaInicio)!];
+  const fins = [...lectivas.map(s => minutosDaHora(s.horaFim)!), minutosDaHora(padrao.horaFim)!];
+  const base = Math.min(...inicios);
+  const n = Math.max(1, Math.ceil((Math.max(...fins) - base) / tempo));
+  const dias = new Set(dates);
+  const blocos: BlocoTempos[] = [];
+  const porDia = new Map<string, SessaoCronograma[]>();
+  for (const s of lectivas) if (dias.has(s.data)) porDia.set(s.data, [...(porDia.get(s.data) ?? []), s]);
+  for (const [date, lista] of porDia) {
+    // Sessões que se sobrepõem no mesmo dia juntam-se num bloco.
+    const ord = [...lista].sort((a, b) => minutosDaHora(a.horaInicio)! - minutosDaHora(b.horaInicio)!);
+    let grupo: SessaoCronograma[] = [];
+    let fimGrupo = -1;
+    const fechar = () => {
+      if (!grupo.length) return;
+      const ini = Math.min(...grupo.map(s => minutosDaHora(s.horaInicio)!));
+      const fim = Math.max(...grupo.map(s => minutosDaHora(s.horaFim)!));
+      const linha = Math.floor((ini - base) / tempo);
+      const linhas = Math.max(1, Math.ceil((fim - base) / tempo) - linha);
+      const total = linhas * tempo;
+      const topo0 = base + linha * tempo;
+      // Só as que se sobrepõem de facto ficam lado a lado; as seguidas ficam uma por baixo da outra.
+      const fimDaColuna: number[] = [];
+      const colunaDe = grupo.map(s => {
+        const ini = minutosDaHora(s.horaInicio)!;
+        let c = fimDaColuna.findIndex(f => f <= ini);
+        if (c < 0) { c = fimDaColuna.length; fimDaColuna.push(0); }
+        fimDaColuna[c] = minutosDaHora(s.horaFim)!;
+        return c;
+      });
+      blocos.push({
+        date, linha, linhas,
+        sessoes: grupo.map((s, i) => ({
+          s,
+          topo: ((minutosDaHora(s.horaInicio)! - topo0) / total) * 100,
+          altura: ((minutosDaHora(s.horaFim)! - minutosDaHora(s.horaInicio)!) / total) * 100,
+          coluna: colunaDe[i]!, colunas: fimDaColuna.length,
+        })),
+      });
+      grupo = [];
+    };
+    // Fim do grupo arredondado ao tempo: uma sessão que começa num tempo já ocupado entra no mesmo bloco.
+    const fimEmTempos = (m: number) => base + Math.ceil((m - base) / tempo) * tempo;
+    for (const s of ord) {
+      const ini = minutosDaHora(s.horaInicio)!;
+      if (grupo.length && ini >= fimEmTempos(fimGrupo)) fechar();
+      grupo.push(s);
+      fimGrupo = Math.max(fimGrupo, minutosDaHora(s.horaFim)!);
+    }
+    fechar();
+  }
+  return { base, n, tempo, blocos, inicioDaLinha: (i: number) => horaDosMinutos(base + i * tempo) };
+}

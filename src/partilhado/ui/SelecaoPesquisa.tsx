@@ -27,6 +27,8 @@ export function SelecaoPesquisa({
   const [aberto, setAberto] = useState(false);
   const [q, setQ] = useState("");
   const [ativo, setAtivo] = useState(0);
+  // Perto do fundo do ecrã (ex.: no fim de um painel), a lista abre para cima em vez de ficar cortada.
+  const [paraCima, setParaCima] = useState(false);
   const raiz = useRef<HTMLDivElement>(null);
   const pesquisa = useRef<HTMLInputElement>(null);
   const lista = useRef<HTMLUListElement>(null);
@@ -41,6 +43,8 @@ export function SelecaoPesquisa({
 
   useEffect(() => {
     if (!aberto) return;
+    const r = raiz.current?.getBoundingClientRect();
+    if (r) setParaCima(window.innerHeight - r.bottom < 320 && r.top > window.innerHeight - r.bottom);
     setQ("");
     setAtivo(Math.max(0, todas.findIndex(o => o.valor === value)));
     pesquisa.current?.focus();
@@ -69,7 +73,7 @@ export function SelecaoPesquisa({
         <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-tinta-suave" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4Z" /></svg>
       </button>
       {aberto && (
-        <div className="absolute left-0 right-0 z-[70] mt-1 overflow-hidden rounded-controlo border border-linha-forte bg-superficie shadow-flutuante">
+        <div className={cx("absolute left-0 right-0 z-[70] overflow-hidden rounded-controlo border border-linha-forte bg-superficie shadow-flutuante", paraCima ? "bottom-full mb-1" : "mt-1")}>
           <div className="border-b border-linha p-1.5">
             <input
               ref={pesquisa} value={q} placeholder={placeholder} aria-label={placeholder} aria-controls={listaId}

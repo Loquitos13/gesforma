@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Aviso, Botao, Campo, Entrada, Selecao, data, eur } from "../../../../partilhado/ui";
+import { Aviso, Botao, Campo, Entrada, SelecaoPesquisa, data, eur } from "../../../../partilhado/ui";
 import {
   apiCompletar, apiConcluirInscricao, apiInscreverGold, apiPedirPagamento, apiTurmaCheia, apiValidarPreinscricao, type DossieLead,
 } from "../../../../partilhado/api/crm";
@@ -86,7 +86,7 @@ export function FichaSecretaria({ d, role, onMudou }: { d: DossieLead; role: str
             <Campo rotulo="Turma de destino" ajuda={d.turmaPelaSecretaria
               ? "A validação cria a ficha do formando nesta turma, a conta e o email de acesso."
               : "Se a turma pedida estiver cheia, escolha outra do mesmo curso. A pasta na Drive muda de sítio."}>
-              {p => <Selecao {...p} value={destino} onChange={e => setDestino(e.target.value)} opcoes={opcoesTurma} vazio="Escolha a turma" />}
+              {p => <SelecaoPesquisa {...p} value={destino} onChange={setDestino} opcoes={opcoesTurma} vazio="Escolha a turma" placeholder="Pesquisar turma (nome, horário, local)…" />}
             </Campo>
           )}
           {d.faltaValidar && <p className="m-0 text-xs text-tinta-suave">{d.faltaValidar}</p>}
@@ -108,7 +108,7 @@ export function FichaSecretaria({ d, role, onMudou }: { d: DossieLead; role: str
       {sec && l.regime === "gold" && d.validadaEm && l.estado !== "Formando" && (
         <section aria-label="Inscrever na turma" className="flex flex-wrap items-end gap-2 rounded-cartao border border-sucesso/30 bg-sucesso-suave p-3">
           <Campo rotulo="Inscrever na turma" className="min-w-[220px] flex-1">
-            {p => <Selecao {...p} value={destino} onChange={e => setDestino(e.target.value)} opcoes={opcoesTurma} vazio="Escolha a turma" />}
+            {p => <SelecaoPesquisa {...p} value={destino} onChange={setDestino} opcoes={opcoesTurma} vazio="Escolha a turma" placeholder="Pesquisar turma (nome, horário, local)…" />}
           </Campo>
           <Botao variante="primario" disabled={!destinoSel || destinoSel.livres <= 0} aCarregar={inscrever.aCorrer}
             onClick={() => destinoSel && void inscrever.correr(l, destinoSel.id).then(depois)}>Inscrever</Botao>

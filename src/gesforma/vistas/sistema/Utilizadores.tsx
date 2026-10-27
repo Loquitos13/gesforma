@@ -76,7 +76,7 @@ export default function Utilizadores({ navigate }: VistaProps) {
   return (
     <div className="space-y-5">
       <PageHeader
-        trilho={[{ rotulo: "Sistema", onClick: () => navigate("configuracoes") }, { rotulo: "Gestão" }, { rotulo: "Utilizadores" }]}
+        trilho={[{ rotulo: "Sistema", onClick: () => navigate("configuracoes") }, { rotulo: "Utilizadores" }]}
         titulo="Utilizadores"
         subtitulo="Quem não estiver aqui não entra no GesForma, nem com Google ou Microsoft."
         acoes={<Botao variante="primario" onClick={() => setNovo(true)}>Novo utilizador</Botao>}

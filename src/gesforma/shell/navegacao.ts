@@ -59,7 +59,7 @@ export const MENU: GrupoMenu[] = [
     { label: "Listas de opções", view: "listas-opcoes", icon: "lista" },
   ] },
   { group: "Sistema", items: [
-    { label: "Gestão", icon: "pessoas", children: [{ label: "Utilizadores", view: "utilizadores" }] },
+    { label: "Utilizadores", view: "utilizadores", icon: "pessoas" },
     { label: "Emails Automáticos", view: "emails", icon: "email" },
     { label: "Pagamentos", view: "pagamentos", icon: "cartao" },
     { label: "Site", view: "site", icon: "site" },
@@ -115,7 +115,7 @@ export function menuDoPerfil(role: string): GrupoMenu[] {
     .map(g => ({ ...g, items: g.items.filter(item => item.view !== "gold-cronogramas") }))
     .map(g => (g.group !== "Sistema" || role === "admin")
       ? g
-      : { ...g, items: g.items.filter(item => item.label !== "Gestão" && item.view !== "site") })
+      : { ...g, items: g.items.filter(item => item.view !== "utilizadores" && item.view !== "site") })
     // Os serviços para empresas são conteúdo do site: só a administração os edita (o servidor também o impõe).
     .map(g => (g.group === "Gestão" && role !== "admin") ? { ...g, items: g.items.filter(item => item.view !== "empresas-servicos") } : g)
     // O blog é da secretaria: a Financiada vê só as listas de opções em Gestão (o comercial não tem Gestão, ver soVendas).

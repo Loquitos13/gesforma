@@ -254,6 +254,38 @@ export function apiFolhasPresencaFin(turmaId: number, sessao?: number) {
     sessao ? `Folhas de presenca e sumarios - sessao ${sessao}.pdf` : "Folhas de presenca e sumarios.pdf", "application/pdf");
 }
 
+// ── Assinatura qualificada (Cartão de Cidadão / Chave Móvel Digital, na app Autenticação.gov) ──
+
+export type AssinaturaQualificada = { papel: "formador" | "coordenacao"; titular: string; emissor: string; serie: string; em: string };
+export type DocSessao = "plano" | "folha";
+
+const rotaAssinatura = (turmaId: number, n: number, doc: DocSessao, sessaoId?: string, sufixo = "") =>
+  `/v1/turmas/fin/${turmaId}/sessoes/${n}/assinatura/${doc}${sufixo}${sessaoId ? `?sessaoId=${encodeURIComponent(sessaoId)}` : ""}`;
+
+export const apiEstadoAssinaturaQualificada = (turmaId: number, n: number, doc: DocSessao, sessaoId?: string) =>
+  api<{ assinaturas: AssinaturaQualificada[]; desatualizada: boolean }>(rotaAssinatura(turmaId, n, doc, sessaoId));
+
+/** O PDF para assinar na Autenticação.gov (com as assinaturas que já tiver). */
+export function apiPdfParaAssinar(turmaId: number, n: number, doc: DocSessao, sessaoId?: string) {
+  return descarregarFicheiro(rotaAssinatura(turmaId, n, doc, sessaoId, "/pdf"), `${doc === "plano" ? "Plano de sessao" : "Folha de presencas"} - sessao ${n} - para assinar.pdf`, "application/pdf");
+}
+
+export function apiPdfAssinadoQualificado(turmaId: number, n: number, doc: DocSessao, sessaoId?: string) {
+  return descarregarFicheiro(rotaAssinatura(turmaId, n, doc, sessaoId, "/assinado"), `${doc === "plano" ? "Plano de sessao" : "Folha de presencas"} - sessao ${n} - assinado.pdf`, "application/pdf");
+}
+
+/** Envia o PDF assinado: o servidor confirma a assinatura (CC/CMD) antes de o guardar. */
+export async function apiEnviarAssinadoQualificado(turmaId: number, n: number, doc: DocSessao, ficheiro: File, sessaoId?: string) {
+  const corpo = new FormData();
+  corpo.append("ficheiro", ficheiro, ficheiro.name);
+  const res = await fetch(`${BASE}${rotaAssinatura(turmaId, n, doc, sessaoId)}`, {
+    method: "POST", credentials: "include", headers: { "X-Gesforma-Client": "web" }, body: corpo,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, typeof data.error === "string" ? data.error : "Não foi possível confirmar a assinatura.");
+  return data as { assinaturas: AssinaturaQualificada[] };
+}
+
 /** Plano de sessão da Financiada no modelo da candidatura (só a sessão n, ou todos). */
 export function apiPlanosSessaoFin(turmaId: number, sessao?: number) {
   return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/planos-sessao${sessao ? `?sessao=${sessao}` : ""}`,

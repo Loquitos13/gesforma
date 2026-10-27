@@ -215,6 +215,7 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
               soLeitura={souFormador && planoSessao && ped.planosDoCurso.includes(planoSessao.n) ? "Plano definido na ficha do curso"
                 : planoSessao && !podeDoc(planoSessao, "plano") ? (ped.planos[planoSessao.n]?.assinado ? "Aprovado: só a coordenação o altera" : "Só consulta") : undefined}
               coordenacao={staffPodeDossie(user.role)}
+              qualificada={{ turmaId: t.id }}
               onSave={data => { if (planoSessao) void ped.guardarPlano(planoSessao.n, data, planoSessao.id); }}
               onPdf={planoSessao ? () => { apiPlanosSessaoFin(t.id, planoSessao.n).catch(err => toastError(err, "Não foi possível gerar o plano de sessão.")); } : undefined} />
             <PresencasSessaoModal open={!!presencasSessao} onClose={() => setPresencasSessao(null)} sessao={presencasSessao ?? undefined} turmaNome={t.nome} cursoNome={t.curso}
@@ -226,6 +227,7 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
                 : undefined}
               podeValidar={staffPodeDossie(user.role)}
               onSave={(rows, folha) => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id, folha); }}
+              qualificada={presencasSessao ? { turmaId: t.id, sessaoId: presencasSessao.id } : undefined}
               onAssinar={souFormador ? (rows, folha) => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id, folha, true); } : undefined}
               onValidar={(validar, rows, folha) => { if (presencasSessao) void ped.validarPresencas(presencasSessao.n, validar, rows, folha, presencasSessao.id); }}
               onImprimir={presencasSessao ? () => { apiFolhasPresencaFin(t.id, presencasSessao.n).catch(err => toastError(err, "Não foi possível gerar a folha de presenças.")); } : undefined} />

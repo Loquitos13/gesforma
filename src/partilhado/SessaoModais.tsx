@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { data as fmtDataUi } from "./ui/formatos";
 import { I } from "./turmaIcones";
+import { AssinaturaQualificada } from "./AssinaturaQualificada";
 
 export type MomentoKey = "introducao" | "desenvolvimento" | "conclusao";
 export type MomentoField = { conteudo: string; atividades: string; metodos: string; avaliacao: string; recursos: string; materiais: string; tempo: string };
@@ -103,13 +104,15 @@ export function sumarioPreenchido(s?: SumarioSessaoData) {
   return !!s && s.conteudos.trim().length > 0;
 }
 
-export function PlanoSessaoModal({ open, onClose, sessao, plano: planoGravado, onSave, soLeitura, onPdf, coordenacao = false }: {
+export function PlanoSessaoModal({ open, onClose, sessao, plano: planoGravado, onSave, soLeitura, onPdf, coordenacao = false, qualificada }: {
   open: boolean; onClose: () => void;
   sessao?: SessaoMeta;
   plano: PlanoSessaoData;
   onSave: (data: PlanoSessaoData) => void;
   /** Coordenação pedagógica: edita, aprova ou devolve com comentários. Sem ela (formador): preenche e submete. */
   coordenacao?: boolean;
+  /** Financiada: assinatura qualificada (CC/CMD) do PDF do plano. */
+  qualificada?: { turmaId: number };
   /** PDF do plano gravado (Financiada: modelo da candidatura). */
   onPdf?: () => void;
   /** Motivo para mostrar o plano sem o deixar editar (ex.: plano definido na ficha do curso). */
@@ -207,6 +210,9 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano: planoGravado, o
                 </span>
               )}
             </div>
+          )}
+          {qualificada && !editing && hasContent && (
+            <AssinaturaQualificada turmaId={qualificada.turmaId} n={sessao.n} sessaoId={sessao.id} doc="plano" />
           )}
           {devolver !== null && (
             <div className="space-y-2 rounded-xl border border-red-200 p-3">

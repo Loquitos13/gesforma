@@ -1,5 +1,8 @@
 /** Pedagogia da turma: leitura geral, sessões (plano, sumário, presenças) e documentos. */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import {
+  AssinaturaQualificadaErro, estadoQualificada, pdfAssinado as pdfAssinadoQualificado, pdfParaAssinar, receberAssinado,
+} from "../../sessaoAssinaturaQualificada.js";
 import { z } from "zod";
 import { dtpForTurma } from "../../pedagogia/dtp.js";
 import { importarDeTurma, importarPlanosCurso, ordensComPlanoDoCurso } from "../../planosCurso.js";
@@ -11,7 +14,7 @@ import {
 } from "../../repos/pedagogiaSessoes.js";
 import { carregarTurma, cronogramaDaTurma, cronogramaParaGravar, formandosDaTurma } from "../../repos/pedagogiaTurma.js";
 import { ERRO_TURMA_FECHADA, turmaFechada } from "../../resultados.js";
-import { podeGravarSessao, sessaoLectivaN, sessaoLectivaPorId } from "../../sessaoAcesso.js";
+import { nomesDoFormador, podeGravarSessao, sessaoLectivaN, sessaoLectivaPorId } from "../../sessaoAcesso.js";
 import { planoComRegras, podeValidarPresencas, sumarioComRegras } from "../../sessaoRegras.js";
 import { avisarPlanoRevisto } from "../../planoAviso.js";
 import { documentosSessoesDaTurma, NOMES_DOCUMENTOS_FIN } from "../../documentosFin.js";
@@ -22,6 +25,9 @@ import { enviarPdf, formadorPodeVer, turmaOu404 } from "./comum.js";
 // Sem origem: da ficha do curso. Com origem: de outra turma do mesmo curso (turma padrão), planos e sumários.
 /** Só a sessão n (1…), ou todas as sessões lectivas. */
 const sessaoQuery = z.object({ sessao: z.coerce.number().int().positive().max(2000).optional() });
+
+const sessaoAssinaturaParam = sessaoParam.extend({ doc: z.enum(["plano", "folha"]) });
+const sessaoIdQuery = z.object({ sessaoId: z.string().trim().min(1).max(120).optional() });
 
 const importarPlanosSchema = z.object({ substituir: z.boolean().optional().default(false), origemTurmaId: z.number().int().positive().optional() });
 
@@ -192,6 +198,81 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
       }
     }
     return { sessao: sessaoDTO(gravada.n, await lerSessao(db, regime, id, sessaoId), sessaoId) };
+  });
+
+  // ── Assinatura qualificada (Cartão de Cidadão / Chave Móvel Digital, na app Autenticação.gov) ──────────────
+  /** A sessão (pelo n ou pelo sessaoId) e o papel de quem pede: o formador da sessão ou a coordenação. */
+  async function sessaoParaAssinar(req: FastifyRequest, reply: FastifyReply) {
+    const v = validar(reply, { params: sessaoAssinaturaParam, query: sessaoIdQuery }, req);
+    if (!v) return null;
+    const { regime, id, n, doc } = v.params;
+    if (regime !== "fin") { reply.code(400).send({ error: "A assinatura qualificada da sessão é da Financiada." }); return null; }
+    if (!(await formadorPodeVer(db, req, reply, regime, id, "Só consulta as turmas em que está atribuído."))) return null;
+    const turmaRow = await cronogramaDaTurma(db, regime, id);
+    if (!turmaRow) { reply.code(404).send({ error: "turma não encontrada" }); return null; }
+    const sessaoId = v.query.sessaoId ?? String(sessaoLectivaN(turmaRow.cronograma, n)?.id ?? "");
+    const alvo = sessaoLectivaPorId(turmaRow.cronograma, sessaoId);
+    if (!alvo) { reply.code(404).send({ error: "A sessão não existe no cronograma da turma." }); return null; }
+    const role = req.actor!.role;
+    const papel = role === "formador" ? "formador" as const : podeValidarPresencas(role) ? "coordenacao" as const : null;
+    if (!papel) { reply.code(403).send({ error: "Sem acesso." }); return null; }
+    if (papel === "formador") {
+      const acesso = await podeGravarSessao(db, req.actor!, { regime, turmaId: id, sessaoId, cronograma: turmaRow.cronograma });
+      if (!acesso.ok) { reply.code(403).send({ error: acesso.erro }); return null; }
+    }
+    return { id, n: alvo.n, sessaoId, doc, papel, formadores: formadoresDaSessao(alvo.sessao) };
+  }
+
+  app.get("/v1/turmas/:regime/:id/sessoes/:n/assinatura/:doc", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const s = await sessaoParaAssinar(req, reply);
+    if (!s) return;
+    return estadoQualificada(db, s.id, s.sessaoId, s.doc);
+  });
+
+  /** O PDF para assinar na Autenticação.gov (com as assinaturas que já tiver). */
+  app.get("/v1/turmas/:regime/:id/sessoes/:n/assinatura/:doc/pdf", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const s = await sessaoParaAssinar(req, reply);
+    if (!s) return;
+    const pdf = await pdfParaAssinar(db, s.id, s.sessaoId, s.n, s.doc);
+    return enviarPdf(reply, `${s.doc === "plano" ? "Plano de sessao" : "Folha de presencas"} - sessao ${s.n} - para assinar.pdf`, pdf);
+  });
+
+  app.get("/v1/turmas/:regime/:id/sessoes/:n/assinatura/:doc/assinado", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const s = await sessaoParaAssinar(req, reply);
+    if (!s) return;
+    const pdf = await pdfAssinadoQualificado(db, s.id, s.sessaoId, s.doc);
+    if (!pdf) return reply.code(404).send({ error: "Ainda não há PDF assinado com Cartão de Cidadão / CMD." });
+    return enviarPdf(reply, `${s.doc === "plano" ? "Plano de sessao" : "Folha de presencas"} - sessao ${s.n} - assinado.pdf`, pdf);
+  });
+
+  app.post("/v1/turmas/:regime/:id/sessoes/:n/assinatura/:doc", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const s = await sessaoParaAssinar(req, reply);
+    if (!s) return;
+    let bytes: Buffer | null = null;
+    try {
+      for await (const part of req.parts()) if (part.type === "file") bytes = await part.toBuffer();
+    } catch {
+      return reply.code(400).send({ error: "Upload inválido ou demasiado grande." });
+    }
+    if (!bytes?.length) return reply.code(400).send({ error: "Escolha o PDF assinado." });
+    // O formador assina como ele próprio: o nome do certificado tem de conter o da sua ficha (um dos formadores da sessão).
+    const meus = s.papel === "formador" ? await nomesDoFormador(db, req.actor!.email, req.actor!.name, req.actor!.id) : new Set<string>();
+    const nomes = s.formadores.filter(f => [...meus].some(m => m.toLowerCase() === f.toLowerCase()));
+    try {
+      const r = await receberAssinado(db, s.id, s.sessaoId, s.doc, bytes, { papel: s.papel, nomes: nomes.length ? nomes : [req.actor!.name] });
+      const ultima = r.assinaturas.at(-1)!;
+      await audit(db, req.actor!.id, `turma.${s.doc}_assinatura_qualificada`, "turma", String(s.id), req.ip, {
+        sessao: s.n, sessaoId: s.sessaoId, papel: s.papel, titular: ultima.titular, emissor: ultima.emissor, hash: r.hash,
+      });
+      return { assinaturas: r.assinaturas };
+    } catch (err) {
+      if (err instanceof AssinaturaQualificadaErro) return reply.code(err.estado).send({ error: err.message });
+      throw err;
+    }
   });
 
   /** Copia os planos de sessão da ficha do curso para as sessões da turma (com `substituir`, também as não assinadas). */

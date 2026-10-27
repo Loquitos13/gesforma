@@ -5,6 +5,7 @@ import { data as fmtDataUi } from "./ui/formatos";
 import { imprimirFolhasPresencas } from "./presencasPrint";
 import { I } from "./turmaIcones";
 import { dataHoraAssinatura } from "./SessaoModais";
+import { AssinaturaQualificada } from "./AssinaturaQualificada";
 
 export type EstadoPresenca = "presente" | "falta_justificada" | "falta_injustificada" | "atraso";
 
@@ -64,11 +65,11 @@ function Segmento<T extends string>({ valor, opcoes, onChange, desactivado, rotu
 }
 
 export function PresencasSessaoModal({
-  open, onClose, sessao, formandos, folha, validada = false, onSave, onValidar, podeValidar = false, soLeitura, onAssinar,
+  open, onClose, sessao, formandos, folha, validada = false, onSave, onValidar, podeValidar = false, soLeitura, onAssinar, qualificada,
   turmaNome, cursoNome, onImprimir,
 }: {
   open: boolean; onClose: () => void;
-  sessao?: { n: number; data: string; hora: string; modulo?: string; formador?: string };
+  sessao?: { n: number; data: string; hora: string; modulo?: string; formador?: string; id?: string };
   formandos?: LinhaPresenca[];
   folha?: FolhaSessao | null;
   /** A coordenação já validou: o formador só consulta. */
@@ -77,6 +78,8 @@ export function PresencasSessaoModal({
   /** Coordenação: valida (ou reabre) a folha, gravando ao mesmo tempo o que estiver alterado. */
   onValidar?: (validar: boolean, rows: LinhaPresenca[], folha: { teoricas: number | null; praticas: number | null }) => void;
   podeValidar?: boolean;
+  /** Financiada: assinatura qualificada (CC/CMD) do PDF da folha (depois de gravada). */
+  qualificada?: { turmaId: number; sessaoId?: string };
   /** Formador: grava e assina digitalmente a folha. */
   onAssinar?: (rows: LinhaPresenca[], folha: { teoricas: number | null; praticas: number | null }) => void;
   /** Motivo para abrir só em consulta. */
@@ -219,6 +222,11 @@ export function PresencasSessaoModal({
             );
           })}
         </ul>
+        {qualificada && sessao && (formandos ?? []).some(f => f.estado) && (
+          <div className="px-5 py-3 border-t border-slate-100">
+            <AssinaturaQualificada turmaId={qualificada.turmaId} n={sessao.n} sessaoId={qualificada.sessaoId ?? sessao.id} doc="folha" />
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2 px-5 py-4 border-t border-slate-100 flex-shrink-0">
           <button onClick={onClose} className="flex-1 py-2 border border-slate-200 text-sm text-slate-600 rounded-lg hover:bg-slate-50">{bloqueada ? "Fechar" : "Cancelar"}</button>

@@ -94,7 +94,8 @@ export type SessaoDocFin = {
   assinaturas?: { planoFormador?: Assinatura; planoCoordenador?: Assinatura; folhaFormador?: Assinatura; folhaCoordenador?: Assinatura };
 };
 
-export type Assinatura = { nome: string; em: string } | null;
+/** `qualificada`: assinatura com Cartão de Cidadão / Chave Móvel Digital (PDF assinado guardado no GesForma). */
+export type Assinatura = { nome: string; em: string; qualificada?: boolean } | null;
 
 const MOMENTOS = [
   { id: "introducao", rotulo: "Introdução" },
@@ -277,8 +278,11 @@ function fichaDoFormando(f: FormandoExecucao): FichaInscricaoFin {
 type SessaoCronograma = { id?: string; data?: string; horaInicio?: string; horaFim?: string; modulos?: string[]; formadores?: string[]; formador?: string };
 
 /** As sessões lectivas (presencial e síncrona) da turma, com plano, sumário e presenças. */
-async function sessoesDaTurma(db: Db, turma: TurmaReembolso, formandos: FormandoExecucao[]): Promise<SessaoDocFin[]> {
+async function sessoesDaTurma(db: Db, turma: TurmaReembolso, formandos: FormandoExecucao[], semAssinaturas = false): Promise<SessaoDocFin[]> {
   const linhas = await listarSessoes(db, "fin", turma.id);
+  // Assinaturas qualificadas (CC/CMD) guardadas: passam à frente das assinaturas simples na linha de cada um.
+  const { qualificadasDaTurma } = await import("./sessaoAssinaturaQualificada.js");
+  const qualificadas = semAssinaturas ? new Map() : await qualificadasDaTurma(db, turma.id);
   const porN = new Map(linhas.map(l => [Number(l.sessao_n), l]));
   const out: SessaoDocFin[] = [];
   for (let n = 1; n <= 2000; n++) {
@@ -306,12 +310,17 @@ async function sessoesDaTurma(db: Db, turma: TurmaReembolso, formandos: Formando
     const horas = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
     const ass = (nome: unknown, em: unknown): Assinatura => (txt(nome) && txt(em) ? { nome: txt(nome), em: txt(em) } : null);
     const assPlano = obj(plano.assinaturaFormador);
+    const q = (doc: "plano" | "folha", papel: "formador" | "coordenacao"): Assinatura => {
+      const a = (qualificadas.get(`${String(s.id ?? "")}|${doc}`) ?? []).filter((x: { papel: string }) => x.papel === papel).at(-1);
+      return a ? { nome: a.titular, em: a.em, qualificada: true } : null;
+    };
     out.push({
-      assinaturas: {
-        planoFormador: ass(assPlano.nome, assPlano.em),
-        planoCoordenador: plano.estado === "aprovado" || plano.assinado === true ? ass(plano.revistoPor, plano.revistoEm) : null,
-        folhaFormador: ass(folha.assinadaPor, folha.assinadaEm),
-        folhaCoordenador: obj(linha?.sumario).presencasValidadas ? ass(folha.validadaPor, folha.validadaEm) : null,
+      // O PDF emitido para assinar com CC/CMD sai com as linhas em branco (a assinatura vai no próprio PDF).
+      assinaturas: semAssinaturas ? {} : {
+        planoFormador: q("plano", "formador") ?? ass(assPlano.nome, assPlano.em),
+        planoCoordenador: q("plano", "coordenacao") ?? (plano.estado === "aprovado" || plano.assinado === true ? ass(plano.revistoPor, plano.revistoEm) : null),
+        folhaFormador: q("folha", "formador") ?? ass(folha.assinadaPor, folha.assinadaEm),
+        folhaCoordenador: q("folha", "coordenacao") ?? (obj(linha?.sumario).presencasValidadas ? ass(folha.validadaPor, folha.validadaEm) : null),
       },
       componente: { teoricas: horas(folha.teoricas), praticas: horas(folha.praticas) },
       n,
@@ -497,11 +506,12 @@ function celulaRotulo(d: Doc, pg: Pg, x: number, w: number, alt: number, rotulo:
 export function textoAssinatura(a: Assinatura | undefined) {
   if (!a) return "";
   const dt = new Date(a.em);
-  if (Number.isNaN(dt.getTime())) return `Assinado digitalmente por ${a.nome}`;
+  const como = a.qualificada ? "Assinatura qualificada (Cartão de Cidadão / CMD) de" : "Assinado digitalmente por";
+  if (Number.isNaN(dt.getTime())) return `${como} ${a.nome}`;
   const p = Object.fromEntries(new Intl.DateTimeFormat("pt-PT", {
     timeZone: "Europe/Lisbon", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
   }).formatToParts(dt).map(x => [x.type, x.value]));
-  return `Assinado digitalmente por ${a.nome} em ${p.day}-${p.month}-${p.year} ${p.hour}:${p.minute}`;
+  return `${como} ${a.nome} em ${p.day}-${p.month}-${p.year} ${p.hour}:${p.minute}`;
 }
 
 function linhaAssinatura(d: Doc, pg: Pg, rotulo: string, comprimento = 150, assinatura?: Assinatura) {
@@ -859,11 +869,11 @@ export async function fichasInscricaoDaTurma(db: Db, turmaId: number, formandoId
 }
 
 /** Planos de sessão e folhas de presenças / sumários da turma (todas as sessões lectivas, ou só a sessão n). */
-export async function documentosSessoesDaTurma(db: Db, turmaId: number, opts: { n?: number; so?: "planos" | "folhas" } = {}) {
+export async function documentosSessoesDaTurma(db: Db, turmaId: number, opts: { n?: number; so?: "planos" | "folhas"; semAssinaturas?: boolean } = {}) {
   const turma = await turmaReembolso(db, turmaId);
   if (!turma) return null;
   const formandos = await formandosDaTurma(db, turma);
-  const [cab, todas] = await Promise.all([cabecalhoFin(db, turma), sessoesDaTurma(db, turma, formandos)]);
+  const [cab, todas] = await Promise.all([cabecalhoFin(db, turma), sessoesDaTurma(db, turma, formandos, opts.semAssinaturas)]);
   const sessoes = opts.n == null ? todas : todas.filter(s => s.n === opts.n);
   if (opts.n != null && !sessoes.length) return null;
   const vazio = Buffer.alloc(0);

@@ -1,4 +1,5 @@
 /** Exportação do dossiê da turma num ZIP organizado pelas pastas (Gold) ou tópicos (Financiada). */
+import { pdfsAssinadosDaTurma } from "../sessaoAssinaturaQualificada.js";
 import type { Db } from "../db/pool.js";
 import { NA_PASTA_DA_TURMA } from "../googleDrive.js";
 import { getDriveFile, listDriveFiles, readDriveContent } from "../driveFicheiros.js";
@@ -59,6 +60,11 @@ export async function exportarDossie(db: Db, actorId: string | undefined, regime
   geradosZip.push({ rel: `${root}/${pastaSess}/Folhas de presenca e sumarios.pdf`, data: gerados.folhas, itens: ["presencas", "sumarios"] });
   geradosZip.push({ rel: `${root}/${pastaSess}/Planos de sessao.pdf`, data: gerados.planos, itens: ["planos"] });
   if (regime === "fin") {
+    // Planos e folhas assinados com Cartão de Cidadão / CMD: vão tal e qual (juntá-los num PDF partiria a assinatura).
+    for (const a of await pdfsAssinadosDaTurma(db, turma.id)) {
+      const nome = `${a.documento === "plano" ? "Plano de sessao" : "Folha de presencas"} - sessao ${a.n} (assinado CC-CMD).pdf`;
+      geradosZip.push({ rel: `${root}/${pastaSess}/Assinados CC-CMD/${nome}`, data: a.pdf, itens: [a.documento === "plano" ? "planos" : "presencas"] });
+    }
     // Fichas de inscrição no modelo da candidatura (uma página por formando), geradas na hora.
     const fichas = await fichasInscricaoDaTurma(db, turma.id);
     if (fichas) geradosZip.push({ rel: `${root}/${pastaFinDoItem("fichas")}/${fichas.nome}`, data: fichas.bytes, itens: ["fichas"] });

@@ -13,6 +13,8 @@ import { writePreinscricaoPii } from "../src/pii.js";
 import { anexosDaTurma } from "../src/repos/dtp.js";
 import { carregarTurma } from "../src/repos/pedagogiaTurma.js";
 import { arrancar, pedido, type Ctx } from "./helpers.js";
+import { assinarIncremental, pki } from "./pkiTeste.js";
+import { estadoQualificada, pdfAssinado, pdfParaAssinar, receberAssinado } from "../src/sessaoAssinaturaQualificada.js";
 
 /** A Financiada só associa à acção com os documentos obrigatórios (menos o contrato, que se assina ao entrar). */
 const DOCS_TURMA_OK = Object.fromEntries(["cc", "ch", "cu", "ci", "ce", "morada", "rgpd"].map(k => [k, { ok: true, data: "" }]));
@@ -284,6 +286,53 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     expect(p1).not.toContain("Assinado digitalmente");
   });
 
+  it("assinatura qualificada (CC/CMD): formador e coordenação assinam o PDF emitido; outro titular, PDF alterado ou conteúdo mudado não passam", async () => {
+    const ctx = await arrancar();
+    const t = await turmaFin(ctx);
+    const { raiz } = await pki();
+    const ancoras = [raiz];
+    const pdf = await pdfParaAssinar(ctx.db, t.id, "d1", 1, "plano");
+    expect(pdf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+    // O PDF para assinar não traz as assinaturas simples: a assinatura vai no próprio PDF.
+    expect((await paginas(pdf))[0]).not.toContain("Assinado digitalmente");
+    // Pedir de novo devolve o mesmo PDF (o que se assina tem de ser exactamente o emitido).
+    expect((await pdfParaAssinar(ctx.db, t.id, "d1", 1, "plano")).equals(pdf)).toBe(true);
+
+    // Outro titular não assina como formador; um PDF que não é o emitido também não.
+    await expect(receberAssinado(ctx.db, t.id, "d1", "plano", await assinarIncremental(pdf, "MARIA SANTOS"), { papel: "formador", nomes: ["Rita Lopes"] }, ancoras))
+      .rejects.toThrow(/não corresponde/);
+    const outro = Buffer.concat([pdf.subarray(0, pdf.length - 10), Buffer.from("%%EOF     \n", "latin1")]);
+    await expect(receberAssinado(ctx.db, t.id, "d1", "plano", await assinarIncremental(outro, "RITA MARIA LOPES"), { papel: "formador", nomes: ["Rita Lopes"] }, ancoras))
+      .rejects.toThrow();
+    // Certificado fora das ECs aceites (auto-assinado): recusado.
+    await expect(receberAssinado(ctx.db, t.id, "d1", "plano", await assinarIncremental(pdf, "RITA MARIA LOPES", true), { papel: "formador", nomes: ["Rita Lopes"] }, ancoras))
+      .rejects.toThrow(/Cartão de Cidadão/);
+
+    const doFormador = await assinarIncremental(pdf, "RITA MARIA LOPES");
+    const r1 = await receberAssinado(ctx.db, t.id, "d1", "plano", doFormador, { papel: "formador", nomes: ["Rita Lopes"] }, ancoras);
+    expect(r1.assinaturas).toMatchObject([{ papel: "formador", titular: "RITA MARIA LOPES", emissor: "EC de Assinatura de Teste" }]);
+    // A coordenação assina sobre o PDF que já traz a assinatura do formador.
+    const seguinte = await pdfParaAssinar(ctx.db, t.id, "d1", 1, "plano");
+    expect(seguinte.equals(doFormador)).toBe(true);
+    const r2 = await receberAssinado(ctx.db, t.id, "d1", "plano", await assinarIncremental(seguinte, "ANA COORDENADORA"), { papel: "coordenacao", nomes: [] }, ancoras);
+    expect(r2.assinaturas.map(a => a.papel)).toEqual(["formador", "coordenacao"]);
+    expect((await pdfAssinado(ctx.db, t.id, "d1", "plano"))?.length).toBeGreaterThan(doFormador.length);
+
+    // Os PDF gerados no backoffice indicam as assinaturas qualificadas.
+    const planos = await paginas((await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}/planos-sessao?sessao=1`)).rawPayload);
+    expect(planos[0]).toContain("o Formador: Assinatura qualificada (Cartão de Cidadão / CMD) de RITA MARIA LOPES");
+    expect(planos[0]).toContain("o Coordenador: Assinatura qualificada (Cartão de Cidadão / CMD) de ANA COORDENADORA");
+
+    // Alterar o plano depois de assinado: a assinatura qualificada deixa de valer e é preciso emitir e assinar de novo.
+    await ctx.db.query("UPDATE turma_sessoes SET plano = jsonb_set(plano, '{objetivosGerais}', '\"Outro objetivo\"') WHERE regime = 'fin' AND turma_id = $1 AND sessao_id = 'd1'", [t.id]);
+    expect(await estadoQualificada(ctx.db, t.id, "d1", "plano")).toEqual({ assinaturas: [], desatualizada: true });
+    expect(await pdfAssinado(ctx.db, t.id, "d1", "plano")).toBeNull();
+    await expect(receberAssinado(ctx.db, t.id, "d1", "plano", await assinarIncremental(seguinte, "ANA COORDENADORA"), { papel: "coordenacao", nomes: [] }, ancoras))
+      .rejects.toThrow(/alterado/);
+    // O formador fora da sessão não chega às rotas da assinatura.
+    expect((await pedido(ctx, "formador", "GET", `/v1/turmas/fin/${t.id}/sessoes/1/assinatura/plano`)).statusCode).toBe(403);
+  });
+
   it("plano de sessão: uma página na horizontal por sessão lectiva, com as colunas do modelo e o Tempo", async () => {
     const ctx = await arrancar();
     const t = await turmaFin(ctx);
@@ -430,7 +479,9 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     const up = await enviar("secretaria", `/v1/catalogos/programas/${progId}/logo`, png(7, 3));
     expect(up.statusCode, up.body).toBe(200);
     expect((await pedido(ctx, "secretaria", "GET", `/v1/catalogos/programas/${progId}/logo`)).json().logo.mime).toBe("image/png");
-    expect((await pedido(ctx, null, "GET", `/v1/public/logos/programa/${progId}`)).headers["content-type"]).toBe("image/png");
+    // Pedido anónimo com IP próprio: o limite sem sessão (por IP) conta todos os pedidos deste ficheiro.
+    const publico = await ctx.app.inject({ method: "GET", url: `/v1/public/logos/programa/${progId}`, headers: { "x-gesforma-client": "web" }, remoteAddress: "10.77.0.1" });
+    expect(publico.headers["content-type"]).toBe("image/png");
     // DGERT: só a administração carrega.
     expect((await enviar("secretaria", "/v1/configuracoes/logo-dgert", png(9, 4))).statusCode).toBe(403);
     expect((await enviar("admin", "/v1/configuracoes/logo-dgert", png(9, 4))).statusCode).toBe(200);

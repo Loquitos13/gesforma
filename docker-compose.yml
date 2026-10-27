@@ -17,7 +17,9 @@ services:
       POSTGRES_USER: gesforma
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # Na pasta-mãe: o Postgres 18+ guarda os dados em /var/lib/postgresql/<versão>/docker e não arranca com o
+      # disco em /var/lib/postgresql/data (o sítio das versões antigas, que também funcionam assim).
+      - pgdata:/var/lib/postgresql
       - ./backups:/backups
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U gesforma -d gesforma"]

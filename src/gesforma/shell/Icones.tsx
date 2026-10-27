@@ -19,6 +19,7 @@ export const CAMINHOS_ICONE = {
   calendario: "M4 5h16v16H4zM4 9h16M8 3v4M16 3v4",
   seta: "m9 6 6 6-6 6",
   sair: "M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0",
+  chave: "M14.5 9.5a4 4 0 1 0-1.4 3.05L20 19.5M17 16.5l2-2M18.5 18l1.5-1.5",
   menu: "M4 6h16M4 12h16M4 18h16",
   fechar: "M6 6l12 12M18 6 6 18",
   sino: "M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0",

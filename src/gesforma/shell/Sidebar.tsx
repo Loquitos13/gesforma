@@ -3,6 +3,7 @@ import { useAuth } from "../../partilhado/AuthGate";
 import { cx } from "../../partilhado/ui";
 import type { Vista } from "../rotasGesforma";
 import { roleLabel } from "../UsersView";
+import { AlterarPalavraPasse } from "./AlterarPalavraPasse";
 import { Icone } from "./Icones";
 import { menuDoPerfil, painelDoPerfil, vistaDoMenu, type GrupoMenu, type ItemMenu } from "./navegacao";
 import { preCarregarVista } from "./rotas";
@@ -28,6 +29,13 @@ export function Sidebar({ view, onNavigate, onFechar, compacta = false, onAltern
   compacta?: boolean; onAlternar?: () => void;
 }) {
   const { user, logout } = useAuth();
+  const [mudarPasse, setMudarPasse] = useState(false);
+  const botaoPasse = (
+    <button type="button" aria-label="Alterar palavra-passe" title="Alterar palavra-passe" onClick={() => setMudarPasse(true)} className="p-1.5 rounded-controlo text-nav-fraco hover:text-white hover:bg-white/10">
+      <Icone nome="chave" />
+    </button>
+  );
+  const modalPasse = <AlterarPalavraPasse aberto={mudarPasse} onFechar={() => setMudarPasse(false)} />;
   const menu = useMemo(() => menuDoPerfil(user.role), [user.role]);
   const ativo = vistaDoMenu(view);
   const [abertos, setAbertos] = useState(() => abertosIniciais(menu, ativo));
@@ -80,7 +88,9 @@ export function Sidebar({ view, onNavigate, onFechar, compacta = false, onAltern
             </div>
           ))}
         </nav>
-        <div className="border-t border-white/10 py-3 w-full flex justify-center shrink-0">
+        <div className="border-t border-white/10 py-3 w-full flex flex-col items-center gap-1 shrink-0">
+          {botaoPasse}
+          {modalPasse}
           <button type="button" aria-label="Terminar sessão" title="Terminar sessão" onClick={() => void logout()} className="p-1.5 rounded-controlo text-nav-fraco hover:text-white hover:bg-white/10">
             <Icone nome="sair" />
           </button>
@@ -198,6 +208,8 @@ export function Sidebar({ view, onNavigate, onFechar, compacta = false, onAltern
             <span className="block text-sm font-semibold text-white truncate">{user.name}</span>
             <span className="block text-nav-fraco truncate">{roleLabel(user.role)}</span>
           </span>
+          {botaoPasse}
+          {modalPasse}
           <button type="button" aria-label="Terminar sessão" title="Terminar sessão" onClick={() => void logout()} className="p-1.5 rounded-controlo text-nav-fraco hover:text-white hover:bg-white/10">
             <Icone nome="sair" />
           </button>

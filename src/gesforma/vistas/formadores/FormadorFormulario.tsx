@@ -6,6 +6,7 @@ import { SLOTS_TODOS } from "../../../partilhado/disponibilidade";
 import { toastError } from "../../../partilhado/toastBus";
 import { Aviso, Botao, Caixa, Campo, Entrada, Interruptor, Modal } from "../../../partilhado/ui";
 import { AvisoAcesso } from "./AvisoAcesso";
+import { corpoAcesso, ESCOLHA_INICIAL, erroEscolha, EscolhaPalavraPasse, type EscolhaAcesso } from "./EscolhaPalavraPasse";
 
 const novo = (regime: Regime): DadosFormador => ({
   nome: "", telf: "", email: "", especialidade: "", ccp: "", ccpValidade: "", nif: "", regimes: [regime],
@@ -37,12 +38,15 @@ export function FormadorFormulario({ aberto, regime, formador, especialidades, o
   /** Palavra-passe temporária gerada agora (mostrada uma vez). */
   const [novoAcesso, setNovoAcesso] = useState<AcessoCriado>(null);
   const [aRepor, setARepor] = useState(false);
+  /** Palavra-passe do acesso: gerada (temporária) ou escolhida — ao criar, e ao repor numa ficha que já existe. */
+  const [escolha, setEscolha] = useState<EscolhaAcesso>(ESCOLHA_INICIAL);
 
   useEffect(() => {
     if (!aberto) return;
     setErro("");
     setExistente(null);
     setNovoAcesso(null);
+    setEscolha(ESCOLHA_INICIAL);
     setD(formador ? deFormador(formador) : novo(regime));
   }, [aberto, formador, regime]);
 
@@ -53,11 +57,13 @@ export function FormadorFormulario({ aberto, regime, formador, especialidades, o
     if (!d.nome.trim()) { setErro("Indique o nome do formador."); return; }
     if (!d.regimes.length) { setErro("Escolha pelo menos um regime: Gold ou Financiada."); return; }
     if (d.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email.trim())) { setErro("O email não parece válido."); return; }
+    const erroPasse = !formador && d.email.trim() ? erroEscolha(escolha) : "";
+    if (erroPasse) { setErro(erroPasse); return; }
     setErro("");
     setAGravar(true);
     try {
       const corpo = { ...d, nome: d.nome.trim(), email: d.email.trim(), telf: d.telf.trim(), ccp: d.ccp.trim(), nif: d.nif.trim(), especialidade: d.especialidade.trim() };
-      const r = formador ? await apiAlterarFormador(formador.id, corpo) : await apiCriarFormador(corpo);
+      const r = formador ? await apiAlterarFormador(formador.id, corpo) : await apiCriarFormador({ ...corpo, acesso: corpoAcesso(escolha) });
       onGuardado(r.formador, r.acesso);
     } catch (e) {
       const ficha = e instanceof ApiError && typeof e.dados?.fichaExistente === "number" ? e.dados.fichaExistente : null;
@@ -71,9 +77,13 @@ export function FormadorFormulario({ aberto, regime, formador, especialidades, o
 
   async function reporAcesso() {
     if (!formador) return;
+    const erroPasse = erroEscolha(escolha);
+    if (erroPasse) { setErro(erroPasse); return; }
+    setErro("");
     setARepor(true);
     try {
-      setNovoAcesso((await apiReporAcessoFormador(formador.id)).acesso);
+      setNovoAcesso((await apiReporAcessoFormador(formador.id, corpoAcesso(escolha))).acesso);
+      setEscolha(ESCOLHA_INICIAL);
     } catch (e) {
       toastError(e, "Não foi possível gerar a palavra-passe.");
     } finally {
@@ -127,10 +137,19 @@ export function FormadorFormulario({ aberto, regime, formador, especialidades, o
             {p => <Entrada {...p} type="tel" value={d.telf} onChange={e => mudar({ telf: e.target.value })} />}
           </Campo>
         </div>
+        {!formador && d.email.trim() && (
+          <div className="rounded-cartao border border-linha p-3">
+            <p className="m-0 mb-2 text-[13px] font-medium text-tinta">Palavra-passe do acesso à área do formador</p>
+            <EscolhaPalavraPasse nome="acesso-novo-formador" valor={escolha} onMudar={setEscolha} />
+          </div>
+        )}
         {formador?.email && (
-          <div className="flex flex-wrap items-center gap-2 rounded-cartao border border-linha p-3 text-[13px]">
-            <span className="flex-1 min-w-[12rem] text-tinta-suave">Acesso à área do formador: a palavra-passe é temporária e o formador muda-a no primeiro acesso.</span>
-            <Botao variante="secundario" tamanho="sm" aCarregar={aRepor} onClick={() => void reporAcesso()}>Gerar nova palavra-passe</Botao>
+          <div className="space-y-2 rounded-cartao border border-linha p-3">
+            <p className="m-0 text-[13px] font-medium text-tinta">Acesso à área do formador: nova palavra-passe</p>
+            <EscolhaPalavraPasse nome="acesso-repor-formador" valor={escolha} onMudar={setEscolha} />
+            <Botao variante="secundario" tamanho="sm" aCarregar={aRepor} onClick={() => void reporAcesso()}>
+              {escolha.modo === "definir" ? "Definir esta palavra-passe" : "Gerar nova palavra-passe"}
+            </Botao>
           </div>
         )}
         {novoAcesso && <AvisoAcesso acesso={novoAcesso} onFechar={() => setNovoAcesso(null)} />}

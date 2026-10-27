@@ -121,14 +121,18 @@ export type DadosFormador = {
   custoHora: number;
 };
 
-export type AcessoCriado = { email: string; password?: string; criado: boolean } | null;
+/** `password` só vem quando foi gerada (a escolhida já a sabe quem a definiu); `temporaria` = troca obrigatória no próximo acesso. */
+export type AcessoCriado = { email: string; password?: string; criado: boolean; temporaria?: boolean } | null;
 
-/** Nova palavra-passe temporária da conta do formador (ou cria a conta, se a ficha ainda não a tem). */
-export function apiReporAcessoFormador(id: number) {
-  return enviar.post<{ acesso: AcessoCriado }>(`/v1/formadores/${id}/acesso`, {});
+/** Palavra-passe escolhida pela equipa (vazia = gerar uma temporária). */
+export type EscolhaAcessoFormador = { password?: string; temporaria?: boolean };
+
+/** Nova palavra-passe da conta do formador, gerada ou escolhida (ou cria a conta, se a ficha ainda não a tem). */
+export function apiReporAcessoFormador(id: number, escolha: EscolhaAcessoFormador = {}) {
+  return enviar.post<{ acesso: AcessoCriado }>(`/v1/formadores/${id}/acesso`, escolha);
 }
 
-export function apiCriarFormador(dados: DadosFormador) {
+export function apiCriarFormador(dados: DadosFormador & { acesso?: EscolhaAcessoFormador }) {
   return enviar.post<{ formador: FormadorBase; acesso: AcessoCriado }>("/v1/formadores", dados);
 }
 

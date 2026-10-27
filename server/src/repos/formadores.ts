@@ -421,16 +421,19 @@ export async function utilizadorPorEmail(c: Consulta, email: string) {
 }
 
 /** Cria a conta; `false` se o email já tem conta (sem erro, para servir dentro de uma transacção). */
-export async function inserirUtilizadorFormador(c: Consulta, d: { id: string; nome: string; email: string; hash: string }) {
+export async function inserirUtilizadorFormador(c: Consulta, d: { id: string; nome: string; email: string; hash: string; mudarNoPrimeiro?: boolean }) {
   const id = await valor(c, `INSERT INTO users (id, name, email, password_hash, role, active, must_change_password)
-     VALUES ($1,$2,$3,$4,'formador',true,true) ON CONFLICT (email) DO NOTHING RETURNING id`, [d.id, d.nome, d.email, d.hash]);
+     VALUES ($1,$2,$3,$4,'formador',true,$5) ON CONFLICT (email) DO NOTHING RETURNING id`, [d.id, d.nome, d.email, d.hash, d.mudarNoPrimeiro ?? true]);
   return id != null;
 }
 
-/** Nova palavra-passe temporária para a conta do formador (troca obrigatória no próximo acesso; as sessões abertas fecham). */
-export async function reporContaFormador(c: Consulta, userId: string, hash: string) {
-  const id = await valor(c, `UPDATE users SET password_hash = $2, must_change_password = true
-     WHERE id = $1::uuid AND role = 'formador' RETURNING id`, [userId, hash]);
+/**
+ * Nova palavra-passe para a conta do formador (por omissão temporária: troca obrigatória no próximo acesso);
+ * as sessões abertas fecham.
+ */
+export async function reporContaFormador(c: Consulta, userId: string, hash: string, mudarNoProximo = true) {
+  const id = await valor(c, `UPDATE users SET password_hash = $2, must_change_password = $3
+     WHERE id = $1::uuid AND role = 'formador' RETURNING id`, [userId, hash, mudarNoProximo]);
   if (id == null) return false;
   await valor(c, "DELETE FROM sessions WHERE user_id = $1::uuid RETURNING user_id", [userId]);
   return true;

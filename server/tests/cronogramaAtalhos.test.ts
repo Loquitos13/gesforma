@@ -72,4 +72,29 @@ describe("acesso do formador", () => {
     expect(conta.rows[0]!.must_change_password).toBe(true);
     expect((await pedido(ctx, "formador", "POST", `/v1/formadores/${id}/acesso`, {})).statusCode).toBe(403);
   });
+
+  it("a palavra-passe escolhida ao criar fica (ou pede a troca, se marcada); entra-se com ela e não se repete na resposta", async () => {
+    const ctx = await arrancar();
+    const mustChange = async (email: string) =>
+      (await ctx.db.query<{ must_change_password: boolean }>("SELECT must_change_password FROM users WHERE email = $1", [email])).rows[0]!.must_change_password;
+
+    const fraca = await pedido(ctx, "secretaria", "POST", "/v1/formadores", { nome: `PP Fraca ${Date.now()}`, email: `ppf.${Date.now()}@exemplo.pt`, regimes: ["gold"], acesso: { password: "curta" } });
+    expect(fraca.statusCode).toBe(400);
+
+    const email = `ppe.${Date.now()}@exemplo.pt`;
+    const r = await pedido(ctx, "secretaria", "POST", "/v1/formadores", { nome: `PP Escolhida ${Date.now()}`, email, regimes: ["gold"], acesso: { password: "Escolhida!2026", temporaria: false } });
+    expect(r.statusCode, r.body).toBe(200);
+    expect(r.json().acesso).toEqual({ email, criado: true, temporaria: false });
+    expect(await mustChange(email)).toBe(false);
+    const login = await pedido(ctx, null, "POST", "/v1/auth/login", { email, password: "Escolhida!2026" });
+    expect(login.statusCode, login.body).toBe(200);
+    expect(login.json().user.mustChangePassword).toBe(false);
+
+    // Repor com uma escolhida e troca no próximo acesso.
+    const id = r.json().formador.id as number;
+    const reposta = await pedido(ctx, "secretaria", "POST", `/v1/formadores/${id}/acesso`, { password: "Outra!Passe2026", temporaria: true });
+    expect(reposta.statusCode, reposta.body).toBe(200);
+    expect(reposta.json().acesso).toEqual({ email, criado: false, temporaria: true });
+    expect(await mustChange(email)).toBe(true);
+  });
 });

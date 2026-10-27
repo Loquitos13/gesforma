@@ -5,7 +5,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { DOCS_FORMADOR } from "../../../src/partilhado/dossierDocs.js";
-import { ContaFormadorEmUso, formadorEstaAlocado, garantirContaFormador } from "../formadorConta.js";
+import { ContaFormadorEmUso, formadorEstaAlocado, garantirContaFormador, palavraPasseDaConta } from "../formadorConta.js";
 import { mapFile } from "../driveFicheiros.js";
 import { bloqueioFormador, propagarFormador } from "../ligacoes.js";
 import { sincronizarTurmasDoFormador } from "../despesasFormador.js";
@@ -16,7 +16,7 @@ import { pode } from "../permissoes/capacidades.js";
 import { fichaDoProprioFormador } from "../sessaoAcesso.js";
 import * as repo from "../repos/formadores.js";
 import { hashPassword, normalizeEmail } from "../security.js";
-import { gerarPalavraPasse } from "../../../src/partilhado/passwordPolicy.js";
+import { mensagemPalavraPasse, palavraPasseValida } from "../../../src/partilhado/passwordPolicy.js";
 import { idParam, paginacao, regime as regimeSchema, textoQuery, validar } from "../validacao.js";
 import { hojeIso } from "./turmas.js";
 import type { Deps } from "./tipos.js";
@@ -49,6 +49,22 @@ const formadorSchema = z.object({
   disponibilidade: z.array(z.enum(SLOTS)).optional(),
   custoHora: z.number().min(0).max(10000).optional(),
 });
+
+/** Palavra-passe do acesso: vazia = gerar uma temporária; escolhida = fica (ou troca-se no primeiro acesso, se `temporaria`). */
+const acessoSchema = z.object({
+  password: z.string().max(128).optional().default(""),
+  temporaria: z.boolean().optional().default(false),
+});
+
+/** A palavra-passe escolhida tem de cumprir as regras da plataforma (mensagem de erro, ou null). */
+function erroPalavraPasseEscolhida(a: { password: string } | undefined) {
+  return a?.password && !palavraPasseValida(a.password) ? mensagemPalavraPasse(a.password) : null;
+}
+
+/** O que a equipa vê do acesso: a palavra-passe só quando foi gerada (a escolhida já a sabe). */
+function acessoCriado(conta: { email: string; password: string; temporaria: boolean; escolhida: boolean }): Acesso {
+  return { email: conta.email, ...(conta.escolhida ? {} : { password: conta.password }), criado: true, temporaria: conta.temporaria };
+}
 
 const docsSchema = z.object({
   docs: z.array(z.object({
@@ -101,7 +117,7 @@ function limiteCcp(hoje: string) {
   return somarDias(hoje, 90);
 }
 
-type Acesso = { email: string; password?: string; criado: boolean } | null;
+type Acesso = { email: string; password?: string; criado: boolean; temporaria?: boolean } | null;
 
 export async function registar(app: FastifyInstance, deps: Deps) {
   const { db, requireAuth, audit } = deps;
@@ -215,10 +231,12 @@ export async function registar(app: FastifyInstance, deps: Deps) {
 
   app.post("/v1/formadores", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    const v = validar(reply, { body: formadorSchema }, req);
+    const v = validar(reply, { body: formadorSchema.extend({ acesso: acessoSchema.optional() }) }, req);
     if (!v) return;
     const d = v.body;
     if (!veRegimes(req.actor!.role, d.regimes)) return reply.code(403).send({ error: SEM_REGIME });
+    const erroPasse = erroPalavraPasseEscolhida(d.acesso);
+    if (erroPasse) return reply.code(400).send({ error: erroPasse });
     const id = await nextOpsId(db);
     // Ficha e conta juntas: um email recusado (409) não deixa a ficha criada a meio.
     let conta: Awaited<ReturnType<typeof garantirContaFormador>>;
@@ -228,7 +246,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
           nome: d.nome, telf: d.telf, email: d.email, especialidade: d.especialidade, ccp: d.ccp, ccpValidade: d.ccpValidade || null,
           nif: d.nif, regimes: d.regimes, estado: d.estado, disponibilidade: d.disponibilidade ?? [...SLOTS], custoHora: d.custoHora ?? 0,
         });
-        const c = await garantirContaFormador(q, d.nome, d.email, id);
+        const c = await garantirContaFormador(q, d.nome, d.email, id, d.acesso);
         if (c) await repo.ligarConta(q, id, c.userId);
         if (c && d.estado === "Inactivo") await repo.definirContaActiva(q, id, false);
         return c;
@@ -248,7 +266,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     // Uma turma da Financiada que já tinha este nome passa a ter o custo por hora e o NIF da ficha nas despesas.
     if (d.custoHora || d.nif) await sincronizarTurmasDoFormador(db, d.nome);
     const row = await repo.obterFormador(db, id);
-    const acesso: Acesso = conta ? (conta.criado ? { email: conta.email, password: conta.password, criado: true } : { email: conta.email, criado: false }) : null;
+    const acesso: Acesso = conta ? (conta.criado ? acessoCriado(conta) : { email: conta.email, criado: false }) : null;
     return { formador: row ? { ...repo.mapFormadorBase(row), alocado: false } : { id }, acesso };
   });
 
@@ -316,12 +334,18 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     return { formador, acesso };
   });
 
-  /** Nova palavra-passe temporária para o formador (ou a conta, se a ficha ainda não a tem); mostra-se uma vez. */
+  /**
+   * Nova palavra-passe para o formador (ou a conta, se a ficha ainda não a tem): gerada e temporária (mostra-se uma
+   * vez), ou a escolhida pela equipa (fica, salvo se pedir a troca no próximo acesso).
+   */
   app.post("/v1/formadores/:id/acesso", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    const v = validar(reply, { params: idParam }, req);
+    const v = validar(reply, { params: idParam, body: acessoSchema.optional() }, req);
     if (!v) return;
     const id = v.params.id;
+    const erroPasse = erroPalavraPasseEscolhida(v.body);
+    if (erroPasse) return reply.code(400).send({ error: erroPasse });
+    const escolha = v.body?.password ? v.body : undefined;
     const antes = await repo.obterFormador(db, id);
     if (!antes) return reply.code(404).send({ error: "formador não encontrado" });
     if (!veAlgumRegime(req.actor!.role, repo.mapFormadorBase(antes).regimes)) return reply.code(403).send({ error: SEM_REGIME });
@@ -330,18 +354,17 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     let acesso: Acesso = null;
     try {
       acesso = await db.tx(async q => {
-        if (antes.user_id) {
-          const password = gerarPalavraPasse();
-          if (!(await repo.reporContaFormador(q, String(antes.user_id), await hashPassword(password)))) return null;
-          return { email, password, criado: false };
-        }
-        const conta = await garantirContaFormador(q, String(antes.nome ?? ""), email, id);
+        const repor = async (userId: string, mail: string): Promise<Acesso> => {
+          const { password, temporaria } = palavraPasseDaConta(escolha);
+          if (!(await repo.reporContaFormador(q, userId, await hashPassword(password), temporaria))) return null;
+          return { email: mail, ...(escolha ? {} : { password }), criado: false, temporaria };
+        };
+        if (antes.user_id) return repor(String(antes.user_id), email);
+        const conta = await garantirContaFormador(q, String(antes.nome ?? ""), email, id, escolha);
         if (!conta) return null;
         await repo.ligarConta(q, id, conta.userId);
-        if (conta.criado) return { email: conta.email, password: conta.password, criado: true };
-        const password = gerarPalavraPasse();
-        await repo.reporContaFormador(q, conta.userId, await hashPassword(password));
-        return { email: conta.email, password, criado: false };
+        if (conta.criado) return acessoCriado(conta);
+        return repor(conta.userId, conta.email);
       });
     } catch (err) {
       if (err instanceof ContaFormadorEmUso) return reply.code(409).send({ error: err.message });

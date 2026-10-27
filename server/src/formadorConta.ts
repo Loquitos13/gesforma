@@ -19,19 +19,31 @@ export class ContaFormadorEmUso extends Error {
 }
 
 /**
- * Cria a conta de formador (palavra-passe temporária) ou liga-se à conta de formador que já existe com o
+ * Palavra-passe da conta: a escolhida pela equipa (fica, salvo se pedir a troca no primeiro acesso) ou uma gerada,
+ * sempre temporária (troca obrigatória no primeiro acesso).
+ */
+export type EscolhaPalavraPasse = { password?: string; temporaria?: boolean };
+
+export function palavraPasseDaConta(escolha?: EscolhaPalavraPasse) {
+  return escolha?.password
+    ? { password: escolha.password, temporaria: Boolean(escolha.temporaria) }
+    : { password: gerarPalavraPasse(), temporaria: true };
+}
+
+/**
+ * Cria a conta de formador (palavra-passe gerada e temporária, ou a escolhida) ou liga-se à conta de formador que já existe com o
  * mesmo email, se não estiver ligada a outra ficha. Uma conta da equipa ou de formando nunca se liga:
  * a ficha passaria a abrir-se (e a ser desactivada) com essa conta.
  */
-export async function garantirContaFormador(c: Consulta, nome: string, emailRaw: string, fichaId: number) {
+export async function garantirContaFormador(c: Consulta, nome: string, emailRaw: string, fichaId: number, escolha?: EscolhaPalavraPasse) {
   const email = normalizeEmail(emailRaw);
   if (!email || !isEmail(email)) return null;
   let existente = await utilizadorPorEmail(c, email);
   if (!existente) {
-    const password = gerarPalavraPasse();
+    const { password, temporaria } = palavraPasseDaConta(escolha);
     const id = randomUUID();
-    if (await inserirUtilizadorFormador(c, { id, nome: nome.trim() || email, email, hash: await hashPassword(password) })) {
-      return { userId: id, email, criado: true as const, password };
+    if (await inserirUtilizadorFormador(c, { id, nome: nome.trim() || email, email, hash: await hashPassword(password), mudarNoPrimeiro: temporaria })) {
+      return { userId: id, email, criado: true as const, password, temporaria, escolhida: Boolean(escolha?.password) };
     }
     existente = await utilizadorPorEmail(c, email);
     if (!existente) return null;

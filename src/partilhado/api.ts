@@ -61,6 +61,9 @@ export const apiLogin = (email: string, password: string) =>
   api<{ user: SessionUser }>("/v1/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
 export const apiChangeOwnPassword = (password: string) =>
   api<{ ok: boolean; user: SessionUser }>("/v1/auth/password", { method: "POST", body: JSON.stringify({ password }) });
+/** Mudar a própria palavra-passe, por vontade (com a actual). */
+export const apiAlterarMinhaPalavraPasse = (atual: string, password: string) =>
+  api<{ ok: boolean; user: SessionUser }>("/v1/auth/password", { method: "POST", body: JSON.stringify({ atual, password }) });
 export const apiLogout = () => api<{ ok: boolean }>("/v1/auth/logout", { method: "POST" });
 
 export type DocPreinscricaoCurso = {

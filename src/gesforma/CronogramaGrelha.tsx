@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 
 import { SearchSelect } from "../partilhado/FormKit";
 
-import { type GrelhaLinha, aplicarEvento, buildLinha, defaultSlot, eventosDoDia, EVENTO_OPTS, linhaLabel, normHora, preencherIntervalo, type EventoDia } from "../partilhado/cronogramaGrelha";
+import { type GrelhaLinha, aplicarEvento, buildLinha, defaultSlot, diasDaRepeticao, eventosDoDia, EVENTO_OPTS, linhaLabel, normHora, preencherIntervalo, type EventoDia, type Repeticao } from "../partilhado/cronogramaGrelha";
 
 import { type SessaoModalidade, casarModulo, codigoModulo, formatDiaMes, ordenarCodigos, ordenarModulos, sessaoModulos, type SessaoCronograma } from "../partilhado/turmaModel";
 
@@ -38,6 +38,8 @@ export function HoraField({
     </label>
   );
 }
+
+const DIA_SEMANA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 
 export const TONE: Record<string, string> = {
   presencial: "bg-[#a60000] text-white",
@@ -135,16 +137,19 @@ export function EventoModal({
   const [form, setForm] = useState<EventoForm>(() => formInicial(inicial, linha, horario, catalogoInicial));
   const [erro, setErro] = useState("");
   const [aRemover, setARemover] = useState(false);
-  // E-learning (e prazos): o mesmo evento até outra data, sem ter de marcar os dias um a um.
+  // O mesmo evento até outra data, sem ter de marcar os dias um a um: o e-learning todos os dias, uma sessão
+  // presencial ou síncrona por omissão uma vez por semana (no mesmo dia da semana).
   const [ate, setAte] = useState("");
-  const [soUteis, setSoUteis] = useState(false);
+  const [repeticao, setRepeticao] = useState<Repeticao>(() => (formInicial(inicial, linha, horario, catalogoInicial).mod === "auto" ? "dias" : "semanal"));
   const editing = Boolean(alvo);
   const catalogo = useMemo(() => moduloOpts.map(o => o.value), [moduloOpts]);
   const opcoes = catalogo;
 
   function abrir(ev: EventoDia | null) {
     setAlvo(ev);
-    setForm(formInicial(ev, ev ? undefined : linha, horario, catalogo));
+    const f = formInicial(ev, ev ? undefined : linha, horario, catalogo);
+    setForm(f);
+    if (!ate) setRepeticao(f.mod === "auto" ? "dias" : "semanal");
     setErro("");
     setARemover(false);
   }
@@ -156,6 +161,7 @@ export function EventoModal({
   }
 
   function escolherMod(next: EventoMod) {
+    if (!ate) setRepeticao(next === "auto" ? "dias" : "semanal");
     setForm(f => {
       if (semHoras(next)) return { ...f, mod: next, horaInicio: "", horaFim: "" };
       if (!semHoras(f.mod)) return { ...f, mod: next };
@@ -190,14 +196,12 @@ export function EventoModal({
         : [],
       modalidade: form.mod,
     };
-    let next = aplicarEvento(sessoes, date, nextLinha, dados, alvo?.linha ?? null);
-    if (form.mod === "auto" && ate) {
-      if (ate <= date) {
-        setErro("A data «até» tem de ser depois deste dia.");
-        return;
-      }
-      next = preencherIntervalo(next, date, ate, nextLinha, dados, soUteis);
+    if (ate && ate <= date) {
+      setErro("A data «Repetir até» tem de ser depois deste dia.");
+      return;
     }
+    let next = aplicarEvento(sessoes, date, nextLinha, dados, alvo?.linha ?? null);
+    if (ate) next = preencherIntervalo(next, date, ate, nextLinha, dados, repeticao);
     onApply(next, nextLinha);
     onClose();
   }
@@ -260,21 +264,29 @@ export function EventoModal({
             <HoraField label="Fim" value={form.horaFim} onChange={v => setForm(f => ({ ...f, horaFim: v }))} />
           </div>
         )}
-        {form.mod === "auto" && (
-          <div className="space-y-2">
-            <p className="text-[11px] text-slate-500">O e-learning não tem hora de sala - ocupa o dia na grelha.</p>
-            <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-100 bg-slate-50 p-2">
-              <label className="text-[11px] font-semibold text-slate-600">Repetir todos os dias até
-                <input type="date" value={ate} min={date} onChange={e => { setAte(e.target.value); setErro(""); }}
-                  className="mt-1 block px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white" />
-              </label>
-              <label className="flex items-center gap-1.5 pb-1.5 text-[11px] text-slate-600">
-                <input type="checkbox" checked={soUteis} onChange={e => setSoUteis(e.target.checked)} /> Só dias úteis
-              </label>
-              {ate && <button type="button" onClick={() => setAte("")} className="pb-1.5 text-[11px] text-slate-500 underline">Só este dia</button>}
-            </div>
+        {form.mod === "auto" && <p className="text-[11px] text-slate-500">O e-learning não tem hora de sala - ocupa o dia na grelha.</p>}
+        <div className="space-y-1 rounded-lg border border-slate-100 bg-slate-50 p-2">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="text-[11px] font-semibold text-slate-600">Repetir até
+              <input type="date" aria-label="Repetir até" value={ate} min={date} onChange={e => { setAte(e.target.value); setErro(""); }}
+                className="mt-1 block px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white" />
+            </label>
+            <label className="text-[11px] font-semibold text-slate-600">Frequência
+              <select aria-label="Frequência da repetição" value={repeticao} onChange={e => setRepeticao(e.target.value as Repeticao)}
+                className="mt-1 block px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white">
+                <option value="semanal">Todas as semanas ({DIA_SEMANA[new Date(`${date}T12:00:00`).getDay()]})</option>
+                <option value="uteis">Todos os dias úteis</option>
+                <option value="dias">Todos os dias</option>
+              </select>
+            </label>
+            {ate && <button type="button" onClick={() => setAte("")} className="pb-1.5 text-[11px] text-slate-500 underline">Só este dia</button>}
           </div>
-        )}
+          <p className="m-0 text-[11px] text-slate-500">
+            {ate && ate > date
+              ? `${diasDaRepeticao(date, ate, repeticao).length} dias com este evento, até ${ate.split("-").reverse().join("-")}. Os dias que já o têm ficam como estão.`
+              : "Opcional: o mesmo evento, com a mesma hora e os mesmos módulos, até ao dia escolhido."}
+          </p>
+        </div>
         {form.mod === "avaliacao" && (
           <p className="text-[11px] text-slate-500">Marca este dia como limite de entrega de tarefas / avaliação dos módulos escolhidos.</p>
         )}

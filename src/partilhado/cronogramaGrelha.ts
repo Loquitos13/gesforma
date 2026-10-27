@@ -448,19 +448,35 @@ export function saltoMatricula(dates: string[], sessoes: SessaoCronograma[], mat
   return { de: vazios[0]!, ate: vazios[vazios.length - 1]!, n: vazios.length };
 }
 
-/** O mesmo evento em todos os dias de `de` a `ate` (ex.: e-learning de um módulo durante uma semana). */
+/** Repetir um evento até uma data: todos os dias, só nos dias úteis, ou uma vez por semana (no mesmo dia da semana). */
+export type Repeticao = "dias" | "uteis" | "semanal";
+
+/** Os dias de `de` a `ate` (inclusive) em que o evento se repete. */
+export function diasDaRepeticao(de: string, ate: string, repeticao: Repeticao = "dias") {
+  const semana = parseIso(de).getDay();
+  return datesFromRange(de, ate).filter(d => {
+    const dia = parseIso(d).getDay();
+    if (repeticao === "uteis") return dia !== 0 && dia !== 6;
+    if (repeticao === "semanal") return dia === semana;
+    return true;
+  });
+}
+
+/**
+ * O mesmo evento nos dias de `de` a `ate` (ex.: e-learning de um módulo durante uma semana, ou a mesma sessão
+ * presencial todas as segundas). Os outros dias que já têm este evento ficam como estão (com os seus módulos e dados).
+ */
 export function preencherIntervalo(
   sessoes: SessaoCronograma[],
   de: string,
   ate: string,
   linha: GrelhaLinha,
   next: { modulos: string[]; formadores?: string[]; modalidade?: SessaoModalidade },
-  soDiasUteis = false,
+  repeticao: Repeticao = "dias",
 ) {
   let out = sessoes;
-  for (const d of datesFromRange(de, ate)) {
-    const dia = parseIso(d).getDay();
-    if (soDiasUteis && (dia === 0 || dia === 6)) continue;
+  for (const d of diasDaRepeticao(de, ate, repeticao)) {
+    if (d !== de && out.some(s => s.data === d && matchLinha(s, linha))) continue;
     out = upsertCell(out, d, linha, next);
   }
   return out;

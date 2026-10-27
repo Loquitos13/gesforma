@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLinha, datesFromRange, grelhaTempos, temasDaSessao, mudarHorasLinha, preencherIntervalo, saltoMatricula, setMatricula } from "../../src/partilhado/cronogramaGrelha.js";
+import { buildLinha, datesFromRange, diasDaRepeticao, grelhaTempos, temasDaSessao, mudarHorasLinha, preencherIntervalo, saltoMatricula, setMatricula } from "../../src/partilhado/cronogramaGrelha.js";
 import type { SessaoCronograma } from "../../src/partilhado/turmaModel.js";
 import { arrancar, pedido } from "./helpers.js";
 
@@ -19,9 +19,21 @@ describe("atalhos do cronograma", () => {
     const auto = buildLinha("auto", "", "");
     const todos = preencherIntervalo([], "2026-11-24", "2026-12-02", auto, { modulos: ["M1"] });
     expect(todos).toHaveLength(9);
-    const uteis = preencherIntervalo([], "2026-11-24", "2026-12-02", auto, { modulos: ["M1"] }, true);
+    const uteis = preencherIntervalo([], "2026-11-24", "2026-12-02", auto, { modulos: ["M1"] }, "uteis");
     expect(uteis.map(x => x.data)).not.toContain("2026-11-28");
     expect(uteis).toHaveLength(7);
+  });
+
+  it("uma sessão presencial repete-se todas as semanas até uma data; os dias que já a têm ficam como estão", () => {
+    const linha = buildLinha("presencial", "09:00", "13:00");
+    const existente = { ...s("x", "2026-11-16"), modulos: ["M3"] };
+    // Segunda, 02-11 até 30-11: cinco segundas-feiras; a de 16-11 já tinha sessão (mantém o id e o módulo).
+    const r = preencherIntervalo([existente], "2026-11-02", "2026-11-30", linha, { modulos: ["M1"], formadores: ["Ana"] }, "semanal");
+    expect(r.map(x => x.data).sort()).toEqual(["2026-11-02", "2026-11-09", "2026-11-16", "2026-11-23", "2026-11-30"]);
+    expect(r.find(x => x.data === "2026-11-16")).toMatchObject({ id: "x", modulos: ["M3"] });
+    expect(r.find(x => x.data === "2026-11-23")).toMatchObject({ horaInicio: "09:00", horaFim: "13:00", modulos: ["M1"], formadores: ["Ana"] });
+    expect(new Set(r.map(x => x.id)).size).toBe(5);
+    expect(diasDaRepeticao("2026-11-02", "2026-11-08", "uteis")).toHaveLength(5);
   });
 
   it("muda a hora de uma linha inteira mantendo os ids; recusa sobreposição", () => {

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Db } from "./db/pool.js";
+import { ordenarCronograma } from "../../src/partilhado/cronogramaOrdem.js";
 import { lerSessao, sessoesComDados } from "./repos/pedagogiaSessoes.js";
 import { cronogramaDaTurma, cronogramaParaGravar } from "./repos/pedagogiaTurma.js";
 import type { Consulta, Regime } from "./repos/sql.js";
@@ -45,10 +46,13 @@ function formadoresDe(s: SessaoLectiva | null | undefined) {
   return s.formador?.trim() ? [s.formador.trim()] : [];
 }
 
-/** Cada sessão do cronograma com um id único (as que não têm, ou o repetem, recebem um novo). */
+/**
+ * Cada sessão do cronograma com um id único (as que não têm, ou o repetem, recebem um novo), por ordem cronológica
+ * e com as datas em aaaa-mm-dd (cronogramaOrdem.ts): o número de cada sessão segue as datas, não a ordem em que se criou.
+ */
 export function comIdsUnicos(cronograma: unknown[]) {
   const vistos = new Set<string>();
-  return cronograma.map((item, i) => {
+  return ordenarCronograma(cronograma).map((item, i) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return item;
     const o = item as Record<string, unknown>;
     let id = String(o.id ?? "").trim();

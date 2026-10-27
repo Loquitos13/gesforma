@@ -2,6 +2,7 @@
 // pré-inscrições candidatas. Tudo lido da API; as escritas gravam no servidor e recarregam.
 import { useCallback, useMemo, useRef, useState } from "react";
 import { ApiError } from "../../../../partilhado/api/cliente";
+import { ordenarCronograma } from "../../../../partilhado/cronogramaOrdem";
 import { apiLeads, type Lead } from "../../../../partilhado/api/crm";
 import {
   apiApagarFormando, apiCriarFormandoFin, apiCriarFormandoGold, apiDocumentosFormandoFin, apiListarFormandos,
@@ -106,7 +107,9 @@ export function useTurmaCockpit<R extends Regime>(regime: R, id: number | undefi
 
   const patch = useCallback((p: Partial<DadosTurma>) => { void gravar(p, p as Partial<TurmaGold & TurmaFin>); }, [gravar]);
   /** O servidor recusa cronogramas que cruzam sessões do mesmo formador noutra turma. */
-  const setCronograma = useCallback((cronograma: SessaoCronograma[]) => {
+  const setCronograma = useCallback((novo: SessaoCronograma[]) => {
+    // Por data e hora, como o servidor grava: os números das sessões no ecrã batem logo com os gravados.
+    const cronograma = ordenarCronograma(novo);
     void gravar({ cronograma }, { cronograma });
     return true;
   }, [gravar]);

@@ -127,9 +127,10 @@ describe("sessões ligadas pelo id", () => {
     expect((await pedido(ctx, "secretaria", "PUT", `${base}/sessoes/2`, sumario("da s2"))).statusCode).toBe(200);
     expect((await pedido(ctx, "secretaria", "PUT", `${base}/sessoes/9`, sumario("x"))).statusCode).toBe(404);
 
-    // Troca a ordem de s1 e s2: os números mudam, os sumários ficam com a sua sessão.
+    // Troca os dias de s1 e s2: os números seguem as datas, os sumários ficam com a sua sessão.
     const patch = (cronograma: unknown[]) => pedido(ctx, "secretaria", "PATCH", `/v1/turmas-gold/${id}`, { cronograma });
-    expect((await patch([cron[1], cron[0], cron[2]])).statusCode).toBe(200);
+    const [trocadaS2, trocadaS1] = [{ ...cron[1]!, data: "2099-07-01" }, { ...cron[0]!, data: "2099-07-02" }];
+    expect((await patch([trocadaS1, trocadaS2, cron[2]])).statusCode).toBe(200);
     const ped = (await pedido(ctx, "secretaria", "GET", `${base}/pedagogia`)).json().sessoes as { n: number; sessaoId: string; sumario: { conteudos: string } }[];
     expect(ped.map(s => [s.n, s.sessaoId, s.sumario.conteudos]).sort()).toEqual([[1, "s2", "da s2"], [2, "s1", "da s1"]]);
 
@@ -143,10 +144,10 @@ describe("sessões ligadas pelo id", () => {
     expect(s1.rows[0]).toMatchObject({ sessao_n: 2, sumario: { conteudos: "por id" } });
 
     // Remover, ou passar a não lectiva, uma sessão com sumário: 409. Remover uma sem dados passa.
-    expect((await patch([cron[1], cron[2]])).statusCode).toBe(409);
-    expect((await patch([cron[1], { ...cron[0], modalidade: "auto" }, cron[2]])).statusCode).toBe(409);
-    expect((await pedido(ctx, "secretaria", "POST", `${base}/cronograma/publicar`, { sessoes: [cron[0], cron[2]] })).statusCode).toBe(409);
-    expect((await patch([cron[1], { ...cron[0], data: "2099-07-09" }])).statusCode).toBe(200);
+    expect((await patch([trocadaS2, cron[2]])).statusCode).toBe(409);
+    expect((await patch([trocadaS2, { ...trocadaS1, modalidade: "auto" }, cron[2]])).statusCode).toBe(409);
+    expect((await pedido(ctx, "secretaria", "POST", `${base}/cronograma/publicar`, { sessoes: [trocadaS1, cron[2]] })).statusCode).toBe(409);
+    expect((await patch([trocadaS2, { ...trocadaS1, data: "2099-07-09" }])).statusCode).toBe(200);
   });
 
   it("a migração liga as linhas antigas ao id da sessão na sua posição e deixa as órfãs sem sessão", async () => {

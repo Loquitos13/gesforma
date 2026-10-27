@@ -1,8 +1,8 @@
-import { type GrelhaLinha, cellLabelPrint, cellTone, charsDaCelula, formatHoraFaixa, grupoLinha, larguraDiasEmChars, monthSpans, weekdayCode } from "./cronogramaGrelha";
+import { type GrelhaLinha, type BlocoTempos, cellLabelPrint, cellTone, charsDaCelula, formatHoraFaixa, grelhaTempos, grupoLinha, horaOficial, larguraDiasEmChars, monthSpans, weekdayCode } from "./cronogramaGrelha";
 import type { LocalMapeado } from "./cronogramaLocal";
 import { fmtDataCalendario } from "./horaLisboa";
 import { urlLogoEntidade } from "./logoEntidade";
-import { codigoModulo, type SessaoCronograma } from "./turmaModel";
+import { codigoModulo, ordenarCodigos, sessaoModalidade, type SessaoCronograma } from "./turmaModel";
 
 export type CronogramaPrintInput = {
   horario: string;
@@ -122,6 +122,47 @@ function groupRowsHtml(
   }).join("");
 }
 
+/** Altura de cada tempo de 45 minutos na folha. */
+const TEMPO_MM = 5.2;
+
+/** Rótulo da aula no bloco: os códigos dos módulos (M3/M4); sem módulos, o tipo de sessão. */
+function rotuloAula(s: SessaoCronograma) {
+  const codes = ordenarCodigos((s.modulos ?? []).map(codigoModulo).filter(Boolean));
+  if (codes.length) return codes.join("/");
+  return sessaoModalidade(s) === "sincrona" ? "Síncrona" : "Aula";
+}
+
+/**
+ * Aulas presenciais e síncronas em tempos de 45 minutos, como na grelha do editor: uma linha por tempo e cada aula
+ * desenhada à proporção da sua duração (uma sessão de 3h30 ocupa quatro tempos e dois terços do quinto).
+ */
+function temposHtml(dates: string[], sessoes: SessaoCronograma[], horario: string, matricula?: string) {
+  const t = grelhaTempos(sessoes, dates, horario);
+  if (!t.blocos.length && !matricula) return "";
+  const porDia = new Map<string, BlocoTempos[]>();
+  for (const b of t.blocos) porDia.set(b.date, [...(porDia.get(b.date) ?? []), b]);
+  return Array.from({ length: t.n }, (_, r) => {
+    const grupo = r === 0
+      ? `<th class="group" rowspan="${t.n}">Horário das aulas<br /><span class="sub">tempos de ${t.tempo} min</span></th>`
+      : "";
+    const hora = `<th class="time tempo">${esc(horaOficial(t.inicioDaLinha(r)))} – ${esc(horaOficial(t.inicioDaLinha(r + 1)))}</th>`;
+    const cells = dates.map(d => {
+      const doDia = porDia.get(d) ?? [];
+      if (d === matricula && !doDia.length) return r === 0 ? `<td class="cell mat" rowspan="${t.n}"></td>` : "";
+      const bloco = doDia.find(b => b.linha <= r && r < b.linha + b.linhas);
+      if (!bloco) return `<td class="cell vazio"></td>`;
+      if (bloco.linha !== r) return "";
+      const aulas = bloco.sessoes.map(({ s: ses, topo, altura, coluna, colunas }) => {
+        const cls = sessaoModalidade(ses) === "sincrona" ? "sinc" : "pres";
+        const estilo = `top:${topo.toFixed(2)}%;height:${altura.toFixed(2)}%;left:${((coluna / colunas) * 100).toFixed(2)}%;width:${(100 / colunas).toFixed(2)}%`;
+        return `<div class="aula ${cls}" style="${estilo}" title="${esc(formatHoraFaixa(ses.horaInicio, ses.horaFim))}">${esc(rotuloAula(ses))}</div>`;
+      }).join("");
+      return `<td class="cell bloco" rowspan="${bloco.linhas}"><div class="blocos" style="height:${(bloco.linhas * TEMPO_MM).toFixed(2)}mm">${aulas}</div></td>`;
+    }).join("");
+    return `<tr class="tempo">${grupo}${hora}${cells}</tr>`;
+  }).join("");
+}
+
 const GRUPO_MM = 26;
 const HORA_MM = 22;
 const MARGEM_MM = 7;
@@ -129,7 +170,8 @@ const A4_LARGURA_MM = 297;
 
 /** Milímetros da coluna: o texto mais comprido (M7/M8, Aval., nome do mês) define a largura toda. */
 export function largurasColunaMm(dates: string[], linhas: GrelhaLinha[], sessoes: SessaoCronograma[]) {
-  const rotulos = dates.map(d => linhas.map(l => cellLabelPrint(sessoes, d, l)).filter(Boolean));
+  const aulas = (d: string) => sessoes.filter(s => s.data === d && ["presencial", "sincrona"].includes(sessaoModalidade(s))).map(rotuloAula);
+  const rotulos = dates.map(d => [...linhas.map(l => cellLabelPrint(sessoes, d, l)), ...aulas(d)].filter(Boolean));
   const chars = larguraDiasEmChars(dates, rotulos);
   return chars.map((n, i) => {
     const cheio = rotulos[i]?.reduce((m, t) => Math.max(m, charsDaCelula(t)), 0) ?? 0;
@@ -157,6 +199,7 @@ function gridHtml(
   linhas: GrelhaLinha[],
   sessoes: SessaoCronograma[],
   larguras: number[],
+  horario: string,
   matricula?: string,
 ) {
   const months = monthSpans(dates);
@@ -165,7 +208,7 @@ function gridHtml(
   const dayRow = dates.map(d => `<th class="day${d === matricula ? " mat" : ""}">${esc(String(Number(d.slice(8))))}</th>`).join("");
   const weekRow = dates.map(d => `<th class="wd${d === matricula ? " mat" : ""}">${esc(weekdayCode(d))}</th>`).join("");
   const cols = `<col class="c-group" /><col class="c-time" />${larguras.map(w => `<col style="width:${w}mm" />`).join("")}`;
-  const grupos = (["presencial", "sincrona", "auto", "avaliacao"] as const)
+  const grupos = temposHtml(dates, sessoes, horario, matricula) + (["auto", "avaliacao"] as const)
     .map(g => groupRowsHtml(g, linhas.filter(l => l.modalidade === g), dates, sessoes, matricula))
     .join("");
   return `<table class="grid">
@@ -199,11 +242,22 @@ export function linhasComSessoes(linhas: GrelhaLinha[], dates: string[], sessoes
   return linhas.filter(l => l === primeiraPresencial || dates.some(d => cellTone(sessoes, d, l) !== "empty"));
 }
 
-export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
+/**
+ * Medidas da folha: as larguras dos dias e o tamanho da página (as linhas de e-learning e avaliação mais os tempos de
+ * 45 minutos das aulas, que contam meia linha cada).
+ */
+export function medidasFolha(input: Pick<CronogramaPrintInput, "dates" | "linhas" | "sessoes" | "horario" | "matricula">) {
   const linhas = linhasComSessoes(input.linhas, input.dates, input.sessoes, input.matricula);
   const larguras = largurasColunaMm(input.dates, linhas, input.sessoes);
-  const page = printPageSize(larguras, linhas.length);
-  const grid = gridHtml(input.dates, linhas, input.sessoes, larguras, input.matricula);
+  const t = grelhaTempos(input.sessoes, input.dates, input.horario);
+  const tempos = t.blocos.length || input.matricula ? t.n : 0;
+  const outras = linhas.filter(l => l.modalidade === "auto" || l.modalidade === "avaliacao").length;
+  return { linhas, larguras, page: printPageSize(larguras, outras + Math.ceil(tempos * TEMPO_MM / 10)) };
+}
+
+export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
+  const { linhas, larguras, page } = medidasFolha(input);
+  const grid = gridHtml(input.dates, linhas, input.sessoes, larguras, input.horario, input.matricula);
 
   const mods = legendModulos(input.sessoes);
   const mid = Math.ceil(mods.length / 2);
@@ -230,7 +284,7 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
   <title>${esc(tituloCronograma(input.horario))}</title>
   <style>
     @page { size: ${page.largura}mm ${page.altura}mm; margin: 8mm ${MARGEM_MM}mm; }
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     html, body { margin: 0; padding: 0; background: #fff; color: #111; }
     body { font-family: Arial, Helvetica, sans-serif; font-size: 10px; padding: 8px 10px 14px; }
     .sheet { width: ${page.tabelaMm}mm; min-width: 100%; background: #fff; }
@@ -260,6 +314,13 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
     .auto { background: #d4d4d4; color: #111; }
     .aval { background: #f5c518; color: #111; }
     .mat { background: #15803d; color: #fff; }
+    tr.tempo { height: ${TEMPO_MM}mm; }
+    .group .sub { font-weight: 400; color: #444; }
+    .time.tempo { font-size: 7.5px; font-weight: 500; padding: 0 4px; }
+    .cell.vazio { padding: 0; }
+    .cell.bloco { padding: 0; vertical-align: top; }
+    .blocos { position: relative; width: 100%; }
+    .aula { position: absolute; display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 8px; font-weight: 700; line-height: 1.1; text-align: center; border: 0.5px solid #fff; }
     .legend { margin-top: 12px; max-width: 260mm; }
     .legend h3 { margin: 0 0 6px; font-size: 11px; }
     .swatch { display: flex; align-items: flex-start; gap: 8px; margin: 3px 0; font-size: 9px; }

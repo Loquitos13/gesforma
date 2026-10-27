@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { data as fmtDataUi } from "../../../../partilhado/ui/formatos";
 import { apiEnviarInqueritosTurma } from "../../../../partilhado/api/inqueritos";
-import { apiTurmaGoldFecho, emitAutomation } from "../../../../partilhado/api";
+import { apiFolhasPresencaFin, apiPlanosSessaoFin, apiTurmaGoldFecho, emitAutomation } from "../../../../partilhado/api";
 import { useAuth } from "../../../../partilhado/AuthGate";
 import { useNomesEu, useOpcoesFormador } from "../../../../partilhado/dados/comuns";
 import { NextActions, type NextAction } from "../../../../partilhado/SecretaryUX";
@@ -11,7 +11,7 @@ import { podeMexerDocumento, staffPodeDossie } from "../../../../partilhado/sess
 import { FileUploadModal, PresencasSessaoModal, PlanoSessaoModal, SumarioSessaoModal, emptyPlano, emptySumario, sumarioPreenchido, type SessaoMeta } from "../../../../partilhado/TurmaExtras";
 import { cronogramaToSessoes, horasDoFormador, isTurmaActiva, lugaresLivres } from "../../../../partilhado/turmaModel";
 import type { FormandoTurma } from "../../../../partilhado/tiposFormando";
-import { persist, toastOk } from "../../../../partilhado/toastBus";
+import { persist, toastError, toastOk } from "../../../../partilhado/toastBus";
 import { Botao, ConfirmarPerigo } from "../../../../partilhado/ui";
 import { CertificadoVerModal, ExportTurmaModal, type CertificadoPreview, type ExportTurmaInfo } from "../../../ActionSurfaces";
 import { useProgramaDoCurso } from "../../../cursoPrograma";
@@ -207,7 +207,8 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
               soLeitura={souFormador && planoSessao && ped.planosDoCurso.includes(planoSessao.n) ? "Plano definido na ficha do curso"
                 : planoSessao && !podeDoc(planoSessao, "plano") ? (ped.planos[planoSessao.n]?.assinado ? "Aprovado: só a coordenação o altera" : "Só consulta") : undefined}
               coordenacao={staffPodeDossie(user.role)}
-              onSave={data => { if (planoSessao) void ped.guardarPlano(planoSessao.n, data, planoSessao.id); }} />
+              onSave={data => { if (planoSessao) void ped.guardarPlano(planoSessao.n, data, planoSessao.id); }}
+              onPdf={planoSessao ? () => { apiPlanosSessaoFin(t.id, planoSessao.n, "gold").catch(err => toastError(err, "Não foi possível gerar o plano de sessão.")); } : undefined} />
             <SumarioSessaoModal open={!!sumarioSessao} onClose={() => setSumarioSessao(null)} sessao={sumarioSessao ?? undefined}
               sumario={sumarioSessao ? herdarSumarioCurso(modelosCurso.planos, sumarioSessao.n, ped.sumario(sumarioSessao.n)) : emptySumario()}
               onSave={data => {
@@ -227,7 +228,8 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
               podeValidar={staffPodeDossie(user.role)}
               onSave={(rows, folha) => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id, folha); }}
               onAssinar={souFormador ? (rows, folha) => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id, folha, true); } : undefined}
-              onValidar={(validar, rows, folha) => { if (presencasSessao) void ped.validarPresencas(presencasSessao.n, validar, rows, folha, presencasSessao.id); }} />
+              onValidar={(validar, rows, folha) => { if (presencasSessao) void ped.validarPresencas(presencasSessao.n, validar, rows, folha, presencasSessao.id); }}
+              onImprimir={presencasSessao ? () => { apiFolhasPresencaFin(t.id, presencasSessao.n, "gold").catch(err => toastError(err, "Não foi possível gerar a folha de presenças.")); } : undefined} />
             <FileUploadModal open={uploadCert !== null} onClose={() => setUploadCert(null)} title="Carregar certificado"
               context={{ kind: "certificado", regime: "gold", turma: t.nome, formando: uploadCert != null ? String(uploadCert) : undefined, label: "Certificado" }}
               onConfirm={file => { if (uploadCert != null) void ped.guardarCertificado(uploadCert, { emitido: true, ficheiroId: file.id, ficheiroNome: file.name, ficheiroUrl: file.openUrl, ...(uploadNota != null ? { nota: uploadNota } : {}) }); }} />

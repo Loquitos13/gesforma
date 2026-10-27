@@ -1,7 +1,7 @@
 /** PDFs gerados do dossiê (cronograma, presenças, planos, perguntas dos inquéritos) e anexos no Drive. */
 import { hojeLisboa } from "../datas.js";
 import type { Db } from "../db/pool.js";
-import { cronogramaFin, documentosSessoesDaTurma, pdfTextoDaTurmaFin } from "../documentosFin.js";
+import { cronogramaFin, cronogramaGold, documentosSessoesDaTurma, documentosSessoesGold, pdfTextoDaTurmaFin } from "../documentosFin.js";
 import { pdfsDoDossie, type SessaoPedagogicaPdf } from "../dtpPdfs.js";
 import { apagarFicheiroSubstituido, getDriveFile, mapFile, resumoConteudo, storeDriveFile } from "../driveFicheiros.js";
 import { sanitizeFileName } from "../ficheirosValidacao.js";
@@ -22,6 +22,9 @@ import type { Regime } from "./util.js";
 export async function montarPdfsDossie(db: Db, regime: Regime, turma: TurmaRow) {
   const fin = regime === "fin" ? await documentosSessoesDaTurma(db, turma.id) : null;
   if (fin) return { cronograma: (await cronogramaFin(db, turma.id)) ?? Buffer.alloc(0), folhas: fin.folhas, planos: fin.planos };
+  // Gold: os mesmos documentos da Financiada, com o logótipo da entidade e sem o programa nem o rodapé de financiamento.
+  const gold = regime === "gold" ? await documentosSessoesGold(db, turma.id) : null;
+  if (gold) return { cronograma: (await cronogramaGold(db, turma.id)) ?? Buffer.alloc(0), folhas: gold.folhas, planos: gold.planos };
   return montarPdfsTexto(db, regime, turma);
 }
 

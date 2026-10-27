@@ -17,7 +17,7 @@ import { ERRO_TURMA_FECHADA, turmaFechada } from "../../resultados.js";
 import { nomesDoFormador, podeGravarSessao, sessaoLectivaN, sessaoLectivaPorId } from "../../sessaoAcesso.js";
 import { planoComRegras, podeValidarPresencas, sumarioComRegras } from "../../sessaoRegras.js";
 import { avisarPlanoRevisto } from "../../planoAviso.js";
-import { documentosSessoesDaTurma, NOMES_DOCUMENTOS_FIN } from "../../documentosFin.js";
+import { documentosSessoesDaTurma, documentosSessoesGold, NOMES_DOCUMENTOS_FIN } from "../../documentosFin.js";
 import { regimeIdParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
 import { enviarPdf, formadorPodeVer, turmaOu404 } from "./comum.js";
@@ -84,7 +84,8 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
   });
 
   /**
-   * Folhas de presenças / sumário e planos de sessão da Financiada, no modelo da candidatura (para imprimir no cockpit).
+   * Folhas de presenças e planos de sessão para imprimir no cockpit: na Financiada, no modelo da candidatura; na Gold, o
+   * mesmo desenho com o logótipo da entidade, sem o programa nem os logótipos de financiamento.
    * O formador só os tira das turmas em que está atribuído; não ficam no dossiê (isso é o «Gerar» do Dossiê TP).
    */
   for (const [caminho, doc] of [["folhas-presenca", "folhas"], ["planos-sessao", "planos"]] as const) {
@@ -93,9 +94,10 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
       const v = validar(reply, { params: regimeIdParam, query: sessaoQuery }, req);
       if (!v) return;
       const { regime, id } = v.params;
-      if (regime !== "fin") return reply.code(400).send({ error: "Este documento é da turma financiada." });
       if (!(await formadorPodeVer(db, req, reply, regime, id, "Só consulta as turmas em que está atribuído."))) return;
-      const docs = await documentosSessoesDaTurma(db, id, { n: v.query.sessao, so: doc });
+      const docs = regime === "fin"
+        ? await documentosSessoesDaTurma(db, id, { n: v.query.sessao, so: doc })
+        : await documentosSessoesGold(db, id, { n: v.query.sessao, so: doc });
       if (!docs) return reply.code(404).send({ error: v.query.sessao ? "sessão não encontrada" : "turma não encontrada" });
       const base = NOMES_DOCUMENTOS_FIN[doc].replace(/\.pdf$/, "");
       const nome = v.query.sessao ? `${base} - sessao ${v.query.sessao}.pdf` : `${base}.pdf`;

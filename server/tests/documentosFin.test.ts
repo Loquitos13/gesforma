@@ -357,7 +357,7 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     expect(p2).not.toContain("15 min");
   });
 
-  it("sessão a sessão no cockpit: folha e plano da sessão n; o formador fora da turma não os tira; Gold recusa", async () => {
+  it("sessão a sessão no cockpit: folha e plano da sessão n; o formador fora da turma não os tira", async () => {
     const ctx = await arrancar();
     const t = await turmaFin(ctx);
     const folha = await pedido(ctx, "secretaria", "GET", `/v1/turmas/fin/${t.id}/folhas-presenca?sessao=2`);
@@ -374,7 +374,6 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     expect((await pedido(ctx, "secretaria", "GET", `/v1/turmas/fin/${t.id}/folhas-presenca?sessao=9`)).statusCode).toBe(404);
     expect((await pedido(ctx, "formador", "GET", `/v1/turmas/fin/${t.id}/folhas-presenca?sessao=1`)).statusCode).toBe(403);
     expect((await pedido(ctx, null, "GET", `/v1/turmas/fin/${t.id}/planos-sessao`)).statusCode).toBe(401);
-    expect((await pedido(ctx, "secretaria", "GET", `/v1/turmas/gold/${t.id}/folhas-presenca`)).statusCode).toBe(400);
     // O formador continua sem gerar o dossiê da turma.
     expect((await pedido(ctx, "formador", "GET", `/v1/turmas/fin/${t.id}/dossie/presencas`)).statusCode).toBe(403);
   });
@@ -448,13 +447,49 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     expect(nomes).toContain("5. Formandos/FichasInscricao.pdf");
     expect(nomes).toContain("Folhas de presenca e sumarios.pdf");
 
-    // Gold: o mesmo gerador de sempre (PDF de texto, sem imagens).
+    // Turma Gold que já não existe: o gerador de texto de sempre (sem imagens).
     const turma = await carregarTurma(ctx.db, "fin", t.id);
     const gold = await montarPdfsDossie(ctx.db, "gold", { ...turma!, id: -1 });
     expect(gold.folhas.toString("latin1")).toContain("Folhas de presenca");
     expect(imagens(gold.folhas)).toBe(0);
     const fin = await montarPdfsDossie(ctx.db, "fin", turma!);
     expect(imagens(fin.folhas)).toBeGreaterThanOrEqual(2);
+  });
+
+  it("Gold: folha de presenças e plano no desenho da Financiada, com o logótipo da entidade e sem programa nem rodapé de financiamento", async () => {
+    const ctx = await arrancar();
+    const nome = unico("TG Folha");
+    const tg = await pedido(ctx, "secretaria", "POST", "/v1/turmas-gold", {
+      dataInicio: "2099-11-02", nome, curso: "Curso Sem Ficha", vagas: 10,
+      cronograma: [{ id: "g1", data: "2099-11-02", horaInicio: "09:00", horaFim: "13:00", modalidade: "presencial", modulos: [], formadores: [] }],
+    });
+    expect(tg.statusCode, tg.body).toBe(200);
+    const id = tg.json().turma.id as number;
+    await guardarLogoEntidade(ctx.db, { nome: "logo.png", bytes: png(3, 2) });
+    try {
+      const folha = await pedido(ctx, "secretaria", "GET", `/v1/turmas/gold/${id}/folhas-presenca?sessao=1`);
+      expect(folha.statusCode, folha.body.slice(0, 200)).toBe(200);
+      const [texto] = await paginas(folha.rawPayload);
+      expect(texto).toContain("FOLHA DE PRESENÇAS");
+      expect(texto).toContain("Curso Sem Ficha");
+      expect(texto).toContain(nome);
+      expect(texto).toContain("02-11-2099");
+      expect(texto).not.toContain("Programa:");
+      const raw = folha.rawPayload.toString("latin1");
+      expect(raw).toMatch(/\/Width 3\s*\/Height 2|\/Height 2\s*\/Width 3/);
+      expect(raw).not.toMatch(/\/Width 350/);
+      // Só o logótipo (a imagem e a sua máscara de transparência): nada no rodapé.
+      expect(imagens(folha.rawPayload)).toBe(2);
+      const plano = await pedido(ctx, "secretaria", "GET", `/v1/turmas/gold/${id}/planos-sessao?sessao=1`);
+      expect(plano.statusCode).toBe(200);
+      expect(await paginas(plano.rawPayload)).toHaveLength(1);
+      // O dossiê da Gold leva os mesmos documentos (com o logótipo).
+      const dossie = await montarPdfsDossie(ctx.db, "gold", (await carregarTurma(ctx.db, "gold", id))!);
+      expect(imagens(dossie.folhas)).toBe(2);
+      expect(imagens(dossie.cronograma)).toBe(2);
+    } finally {
+      await apagarLogoEntidade(ctx.db);
+    }
   });
 
   it("logótipos do rodapé: DGERT e o do programa (carregados no backoffice) com o da UE; listagem de formandos nas duas", async () => {

@@ -277,12 +277,16 @@ function fichaDoFormando(f: FormandoExecucao): FichaInscricaoFin {
 
 type SessaoCronograma = { id?: string; data?: string; horaInicio?: string; horaFim?: string; modulos?: string[]; formadores?: string[]; formador?: string };
 
+type FormandoDaFolha = Pick<FormandoExecucao, "id" | "nome" | "apelido" | "estado"> & { transferido?: boolean };
+
 /** As sessões lectivas (presencial e síncrona) da turma, com plano, sumário e presenças. */
-async function sessoesDaTurma(db: Db, turma: TurmaReembolso, formandos: FormandoExecucao[], semAssinaturas = false): Promise<SessaoDocFin[]> {
-  const linhas = await listarSessoes(db, "fin", turma.id);
-  // Assinaturas qualificadas (CC/CMD) guardadas: passam à frente das assinaturas simples na linha de cada um.
+async function sessoesDaTurma(
+  db: Db, turma: { id: number; cronograma: unknown }, formandos: FormandoDaFolha[], semAssinaturas = false, regime: "fin" | "gold" = "fin",
+): Promise<SessaoDocFin[]> {
+  const linhas = await listarSessoes(db, regime, turma.id);
+  // Assinaturas qualificadas (CC/CMD, só na Financiada): passam à frente das assinaturas simples na linha de cada um.
   const { qualificadasDaTurma } = await import("./sessaoAssinaturaQualificada.js");
-  const qualificadas = semAssinaturas ? new Map() : await qualificadasDaTurma(db, turma.id);
+  const qualificadas = semAssinaturas || regime !== "fin" ? new Map() : await qualificadasDaTurma(db, turma.id);
   const porN = new Map(linhas.map(l => [Number(l.sessao_n), l]));
   const out: SessaoDocFin[] = [];
   for (let n = 1; n <= 2000; n++) {
@@ -676,8 +680,11 @@ export function textoSumario(s: SessaoDocFin["sumario"]) {
   return [txt(s.conteudos), txt(s.atividades), txt(s.observacoes) ? `Observações: ${txt(s.observacoes)}` : ""].filter(Boolean).join("\n");
 }
 
-/** Uma folha por sessão lectiva (sem sessões, uma folha em branco). Uma turma grande continua na página seguinte. */
-export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDocFin[]) {
+/**
+ * Uma folha por sessão lectiva (sem sessões, uma folha em branco). Uma turma grande continua na página seguinte.
+ * `pares`: o bloco do topo (na Gold, entidade, curso e turma em vez do enquadramento do programa).
+ */
+export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDocFin[], pares?: [string, string][]) {
   const d = await abrirDoc("Folhas de presenças", cab);
   const c = cab.candidatura;
   const lista: (SessaoDocFin | null)[] = sessoes.length ? sessoes : [null];
@@ -685,7 +692,7 @@ export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDoc
     // A Financiada deixou de ter sumário: o título só o refere nas sessões que ainda o têm gravado.
     const titulo = textoSumario(s?.sumario ?? null) ? "FOLHA DE PRESENÇAS / SUMÁRIO" : "FOLHA DE PRESENÇAS";
     let pg = novaPagina(d, RETRATO, titulo);
-    const pares: [string, string][] = [
+    const topo: [string, string][] = pares ?? [
       ["Entidade:", cab.entidade],
       ["Programa:", c.programa],
       ["Prioridade do Programa:", c.prioridade],
@@ -695,7 +702,7 @@ export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDoc
       ["UFCD:", [cab.ufcdCodigo, cab.ufcdNome].filter(Boolean).join(" | ")],
       ["Ação:", cab.acao],
     ];
-    for (const [r, v] of pares) linhaPar(d, pg, r, v, 130, 19);
+    for (const [r, v] of topo) linhaPar(d, pg, r, v, 130, 19);
     const terco = pg.largura / 3;
     celulaRotulo(d, pg, pg.m, terco, 18, "Sala:", "");
     celulaRotulo(d, pg, pg.m + terco, terco, 18, "Local:", cab.local);
@@ -884,6 +891,29 @@ export async function documentosSessoesDaTurma(db: Db, turmaId: number, opts: { 
   return { planos, folhas, sessoes: sessoes.length };
 }
 
+/**
+ * Gold: as mesmas folhas de presenças e planos de sessão da Financiada, com o logótipo da entidade no topo e sem o
+ * enquadramento do programa nem os logótipos de financiamento no rodapé.
+ */
+export async function documentosSessoesGold(db: Db, turmaId: number, opts: { n?: number; so?: "planos" | "folhas" } = {}) {
+  const turma = await one<{ id: number; nome: string; curso: string; local: string; cronograma: unknown }>(db,
+    "SELECT id, nome, curso, COALESCE(local, '') AS local, cronograma FROM turmas_gold WHERE id = $1", [turmaId]);
+  if (!turma) return null;
+  const formandos = await many<FormandoDaFolha>(db,
+    `SELECT id, COALESCE(nome, '') AS nome, COALESCE(apelido, '') AS apelido, COALESCE(estado, '') AS estado
+       FROM formandos_gold WHERE turma_id = $1 ORDER BY lower(nome), lower(apelido), id`, [turmaId]);
+  const [cab, todas] = await Promise.all([cabecalhoGold(db, turma), sessoesDaTurma(db, turma, formandos, false, "gold")]);
+  const sessoes = opts.n == null ? todas : todas.filter(s => s.n === opts.n);
+  if (opts.n != null && !sessoes.length) return null;
+  const pares: [string, string][] = [["Entidade:", cab.entidade], ["Curso:", turma.curso], ["Turma:", turma.nome]];
+  const vazio = Buffer.alloc(0);
+  const [planos, folhas] = await Promise.all([
+    opts.so === "folhas" ? vazio : pdfPlanosSessaoFin(cab, sessoes),
+    opts.so === "planos" ? vazio : pdfFolhasPresencaFin(cab, sessoes, pares),
+  ]);
+  return { planos, folhas, sessoes: sessoes.length };
+}
+
 /** Qualquer PDF de texto da turma (relatórios, pauta, programa…) com o cabeçalho e o rodapé da Financiada. */
 export async function pdfTextoDaTurmaFin(db: Db, turmaId: number, titulo: string, linhas: string[], subtitulo = "") {
   const turma = await turmaReembolso(db, turmaId);
@@ -933,7 +963,21 @@ export async function cronogramaFin(db: Db, turmaId: number) {
   const turma = await turmaReembolso(db, turmaId);
   if (!turma) return null;
   const cab = await cabecalhoFin(db, turma);
-  const sessoes = arr(turma.cronograma).filter((s): s is SessaoCron => Boolean(s) && typeof s === "object");
+  return pdfCronograma(cab, turma.cronograma,
+    [["Entidade:", cab.entidade], ["UFCD:", [cab.ufcdCodigo, cab.ufcdNome].filter(Boolean).join(" | ")], ["Ação:", cab.acao], ["Local:", cab.local]]);
+}
+
+/** Cronograma de uma turma Gold: o mesmo desenho, com o logótipo da entidade e sem rodapé de financiamento. */
+export async function cronogramaGold(db: Db, turmaId: number) {
+  const turma = await one<{ nome: string; curso: string; local: string; cronograma: unknown }>(db,
+    "SELECT nome, curso, COALESCE(local, '') AS local, cronograma FROM turmas_gold WHERE id = $1", [turmaId]);
+  if (!turma) return null;
+  const cab = await cabecalhoGold(db, turma);
+  return pdfCronograma(cab, turma.cronograma, [["Entidade:", cab.entidade], ["Curso:", turma.curso], ["Turma:", turma.nome], ["Local:", turma.local]]);
+}
+
+function pdfCronograma(cab: CabecalhoFin, cronograma: unknown, pares: [string, string][]) {
+  const sessoes = arr(cronograma).filter((s): s is SessaoCron => Boolean(s) && typeof s === "object");
   const linhas = sessoes.map((s, i) => [
     String(i + 1),
     fmtDataDDMMAAAA(txt(s.data).slice(0, 10)),
@@ -945,7 +989,7 @@ export async function cronogramaFin(db: Db, turmaId: number) {
   return pdfTabelaFin(cab, {
     titulo: "Cronograma",
     subtitulo: `${sessoes.length} ${sessoes.length === 1 ? "sessão" : "sessões"}`,
-    pares: [["Entidade:", cab.entidade], ["UFCD:", [cab.ufcdCodigo, cab.ufcdNome].filter(Boolean).join(" | ")], ["Ação:", cab.acao], ["Local:", cab.local]],
+    pares,
     colunas: [{ titulo: "N.º", peso: 4 }, { titulo: "Data", peso: 11 }, { titulo: "Horário", peso: 12 }, { titulo: "Modalidade", peso: 12 }, { titulo: "Módulos", peso: 34 }, { titulo: "Formador", peso: 27 }],
     linhas,
     vazio: "Ainda sem sessões neste cronograma.",

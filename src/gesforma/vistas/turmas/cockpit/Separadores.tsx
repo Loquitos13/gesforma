@@ -101,9 +101,9 @@ export function SessoesTurmaTab({
   const numCls = gold ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700";
   const planoTodo = gold ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100";
   function imprimirFolha(s?: SessaoMeta) {
-    // Financiada: a folha de presenças / sumário do modelo da candidatura (PDF do servidor, com logótipos e programa).
-    if (regime === "fin" && turmaId != null) {
-      apiFolhasPresencaFin(turmaId, s?.n).catch(err => toastError(err, "Não foi possível gerar a folha de presenças."));
+    // PDF do servidor: na Financiada o modelo da candidatura; na Gold o mesmo desenho, com o logótipo da entidade.
+    if (regime && turmaId != null) {
+      apiFolhasPresencaFin(turmaId, s?.n, regime).catch(err => toastError(err, "Não foi possível gerar a folha de presenças."));
       return;
     }
     imprimirFolhasPresencas({

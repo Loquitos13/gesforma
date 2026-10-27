@@ -236,8 +236,9 @@ export function ExportTurmaModal({
   const lista = turma.lista ?? [];
   const sessoes = turma.sessoes ?? [];
   const dtp = turma.dtp ?? [];
-  // Financiada: a folha de presenças / sumário sai do servidor, no modelo da candidatura.
-  const folhaFin = (turma.regime ?? turma.accent) === "fin" && turma.turmaId != null;
+  // A folha de presenças / sumário sai do servidor: na Financiada no modelo da candidatura, na Gold com o logótipo da entidade.
+  const regimeFolha = turma.regime ?? turma.accent ?? "gold";
+  const folhaFin = turma.turmaId != null;
 
   const packs = [
     {
@@ -264,14 +265,16 @@ export function ExportTurmaModal({
       id: "presencas",
       label: "Folhas de presença",
       detalhe: folhaFin
-        ? "Folha de presenças / sumário de cada sessão, no modelo da candidatura (PDF com logótipos, programa e sumário)"
+        ? (regimeFolha === "fin"
+          ? "Folha de presenças / sumário de cada sessão, no modelo da candidatura (PDF com logótipos, programa e sumário)"
+          : "Folha de presenças / sumário de cada sessão (PDF com o logótipo da entidade)")
         : lista.length
         ? (sessoes.length
           ? `Uma folha por sessão, com ${lista.length} inscritos e coluna de assinatura, disponível antes da sessão`
           : `Folha da turma com ${lista.length} inscritos e coluna de assinatura`)
         : "Inscreva formandos para gerar a folha",
       disabled: lista.length === 0 && !folhaFin,
-      run: () => folhaFin ? apiFolhasPresencaFin(turma.turmaId!) : imprimirFolhasPresencas({
+      run: () => folhaFin ? apiFolhasPresencaFin(turma.turmaId!, undefined, regimeFolha) : imprimirFolhasPresencas({
         turma: turma.nome,
         curso: turma.curso,
         formandos: lista,

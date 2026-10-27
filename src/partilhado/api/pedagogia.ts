@@ -248,9 +248,12 @@ export function apiDossieGerado(turmaId: number, itemId: string, fallback: strin
   return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/dossie/${encodeURIComponent(itemId)}`, fallback, "application/pdf");
 }
 
-/** Folhas de presenças / sumário da Financiada no modelo da candidatura (todas as sessões lectivas, ou só a sessão n). */
-export function apiFolhasPresencaFin(turmaId: number, sessao?: number) {
-  return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/folhas-presenca${sessao ? `?sessao=${sessao}` : ""}`,
+/**
+ * Folhas de presenças / sumário (todas as sessões lectivas, ou só a sessão n): na Financiada no modelo da candidatura;
+ * na Gold o mesmo desenho, com o logótipo da entidade e sem o programa nem os logótipos de financiamento.
+ */
+export function apiFolhasPresencaFin(turmaId: number, sessao?: number, regime: "fin" | "gold" = "fin") {
+  return descarregarFicheiro(`/v1/turmas/${regime}/${turmaId}/folhas-presenca${sessao ? `?sessao=${sessao}` : ""}`,
     sessao ? `Folhas de presenca e sumarios - sessao ${sessao}.pdf` : "Folhas de presenca e sumarios.pdf", "application/pdf");
 }
 
@@ -287,8 +290,8 @@ export async function apiEnviarAssinadoQualificado(turmaId: number, n: number, d
 }
 
 /** Plano de sessão da Financiada no modelo da candidatura (só a sessão n, ou todos). */
-export function apiPlanosSessaoFin(turmaId: number, sessao?: number) {
-  return descarregarFicheiro(`/v1/turmas/fin/${turmaId}/planos-sessao${sessao ? `?sessao=${sessao}` : ""}`,
+export function apiPlanosSessaoFin(turmaId: number, sessao?: number, regime: "fin" | "gold" = "fin") {
+  return descarregarFicheiro(`/v1/turmas/${regime}/${turmaId}/planos-sessao${sessao ? `?sessao=${sessao}` : ""}`,
     sessao ? `Planos de sessao - sessao ${sessao}.pdf` : "Planos de sessao.pdf", "application/pdf");
 }
 

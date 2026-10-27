@@ -137,19 +137,26 @@ export function FormadorFormulario({ aberto, regime, formador, especialidades, o
             {p => <Entrada {...p} type="tel" value={d.telf} onChange={e => mudar({ telf: e.target.value })} />}
           </Campo>
         </div>
-        {!formador && d.email.trim() && (
+        {/* Palavra-passe do acesso: sempre à vista (Gold e Financiada usam este formulário); sem email não há conta. */}
+        {!formador && (
           <div className="rounded-cartao border border-linha p-3">
             <p className="m-0 mb-2 text-[13px] font-medium text-tinta">Palavra-passe do acesso à área do formador</p>
-            <EscolhaPalavraPasse nome="acesso-novo-formador" valor={escolha} onMudar={setEscolha} />
+            {d.email.trim()
+              ? <EscolhaPalavraPasse nome="acesso-novo-formador" valor={escolha} onMudar={setEscolha} />
+              : <p className="m-0 text-xs text-tinta-suave">Indique o email do formador para escolher a palavra-passe: gerar uma temporária ou definir uma.</p>}
           </div>
         )}
-        {formador?.email && (
+        {formador && (
           <div className="space-y-2 rounded-cartao border border-linha p-3">
             <p className="m-0 text-[13px] font-medium text-tinta">Acesso à área do formador: nova palavra-passe</p>
-            <EscolhaPalavraPasse nome="acesso-repor-formador" valor={escolha} onMudar={setEscolha} />
-            <Botao variante="secundario" tamanho="sm" aCarregar={aRepor} onClick={() => void reporAcesso()}>
-              {escolha.modo === "definir" ? "Definir esta palavra-passe" : "Gerar nova palavra-passe"}
-            </Botao>
+            {formador.email
+              ? <>
+                  <EscolhaPalavraPasse nome="acesso-repor-formador" valor={escolha} onMudar={setEscolha} />
+                  <Botao variante="secundario" tamanho="sm" aCarregar={aRepor} onClick={() => void reporAcesso()}>
+                    {escolha.modo === "definir" ? "Definir esta palavra-passe" : "Gerar nova palavra-passe"}
+                  </Botao>
+                </>
+              : <p className="m-0 text-xs text-tinta-suave">Esta ficha ainda não tem email: indique-o e guarde as alterações; a conta de acesso cria-se nesse momento (com uma palavra-passe temporária), e depois pode definir outra aqui.</p>}
           </div>
         )}
         {novoAcesso && <AvisoAcesso acesso={novoAcesso} onFechar={() => setNovoAcesso(null)} />}

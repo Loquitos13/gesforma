@@ -35,7 +35,9 @@ export function PreviewSite({ f }: { f: FichaCurso }) {
             {(data.miniatura?.url || data.capa?.url) && <img src={data.miniatura?.url || data.capa?.url} alt="" className="h-14 w-14 shrink-0 rounded-controlo object-cover" />}
             <div className="min-w-0">
               <p className="m-0 text-[13px] font-bold leading-snug text-tinta">{data.titulo || "Título do curso"}</p>
-              <p className="m-0 mt-0.5 text-xs leading-snug text-tinta-suave">{destaque.resumo || "O texto de destaque aparece aqui."}</p>
+              {destaque.resumo
+                ? <TextoFormatado texto={destaque.resumo} className="m-0 mt-0.5 text-xs leading-snug text-tinta-suave [&_p]:m-0" nivel={4} />
+                : <p className="m-0 mt-0.5 text-xs leading-snug text-tinta-suave">O texto de destaque aparece aqui.</p>}
             </div>
           </div>
         </div>

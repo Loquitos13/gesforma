@@ -3,6 +3,7 @@
 import { useContext, useMemo, useState, type ComponentType, type CSSProperties } from "react";
 import type { ComponentConfig, Slot } from "@puckeditor/core";
 import { rotuloBotaoInscricao } from "../../partilhado/siteConteudo";
+import { TextoFormatado } from "../../partilhado/TextoFormatadoVista";
 import { useInscricaoOpcional } from "../SiteInscricao";
 import { Icon, OfertaCtx, type Course } from "../SiteLanding";
 import { cartaoPadrao, CartaoCurso, campoCartao, type EstiloCartao } from "./blocosCursos";
@@ -70,7 +71,7 @@ function LinhaCurso({ c, guardado, comparado, onGuardar, onComparar, guardar, co
           {guardar && <button type="button" onClick={onGuardar} className={`ml-auto text-xs font-bold ${guardado ? "text-[var(--c-destaque)]" : "opacity-45"}`}>{guardado ? "Guardado" : "Guardar"}</button>}
         </div>}
         <h2 className={juntar("font-serif text-2xl font-bold", (etiquetas || guardar) && "mt-3")}><a href={`/formacao/${c.id}`} className="hover:text-[var(--c-destaque)]">{c.title}</a></h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 opacity-60">{c.resumo}</p>
+        <TextoFormatado texto={c.resumo} className="mt-2 max-w-2xl text-sm leading-6 opacity-60" nivel={4} />
         <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-xs font-bold opacity-60">
           <span className="flex items-center gap-2"><Icon name="clock" className="h-4 w-4" />{c.duration}</span>
           <span className="flex items-center gap-2"><Icon name={c.format === "E-learning" ? "screen" : "pin"} className="h-4 w-4" />{c.start}</span>

@@ -11,6 +11,7 @@ import { eur } from "../../partilhado/ui/formatos";
 import { videoDoCurso } from "../../partilhado/siteServicos";
 import { fraseLocais, textoAutomaticoCurso, tituloLocais } from "./textosLocais";
 import { TextoEmLinha, TextoFormatado } from "../../partilhado/TextoFormatadoVista";
+import { textoSimples } from "../../partilhado/textoFormatado";
 import { corSegura, estiloBloco, estiloTexto, estiloVazio, juntar, lados, tipoVazia, type Estilo, type Tipografia } from "./estilos";
 
 type Estado = "a-carregar" | "erro" | "pronto";
@@ -96,7 +97,7 @@ export function variaveisCurso(c: Course, local: string): Record<string, string>
   const doLocal = c.sessoes.filter(s => !local || s.local === local);
   const prox = doLocal[0];
   return {
-    curso: c.title, area: c.area, formato: c.format, duracao: c.duration, descricao: c.description, resumo: c.resumo,
+    curso: c.title, area: c.area, formato: c.format, duracao: c.duration, descricao: textoSimples(c.description), resumo: textoSimples(c.resumo),
     inscricao: c.enrollment, regime: c.funding === "Gold" ? "ENA Gold" : "Financiada",
     local, locais: locaisDo(c).join(", "),
     horarios: [...new Set(doLocal.map(s => s.horario).filter(Boolean))].join(", "),

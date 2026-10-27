@@ -24,10 +24,14 @@ export function cortarNaPalavra(texto: string, max = RESUMO_IDEAL) {
   return `${base.replace(/[\s,;:.\-–—]+$/, "")}…`;
 }
 
-/** Os dois textos a mostrar, já com as regras de recurso aplicadas. */
+/**
+ * Os dois textos a mostrar, já com as regras de recurso aplicadas. O destaque próprio guarda a formatação
+ * (textoFormatado.ts); o que sai da síntese é texto corrido. `resumoSimples` é o destaque sem marcas (pesquisa da Google).
+ */
 export function textosCurso(payload: { resumo?: unknown; sintese?: unknown }, recurso = "") {
-  const proprio = typeof payload.resumo === "string" ? payload.resumo.replace(/\s+/g, " ").trim() : "";
+  const proprio = typeof payload.resumo === "string" ? payload.resumo.replace(/\r\n?/g, "\n").trim() : "";
   const completo = (typeof payload.sintese === "string" ? payload.sintese.trim() : "") || recurso;
-  // O destaque é texto corrido: sem as marcas de negrito, ligações e listas do texto completo.
-  return { resumo: proprio || cortarNaPalavra(textoSimples(completo)), completo, resumoProprio: Boolean(proprio) };
+  const temProprio = Boolean(textoSimples(proprio));
+  const resumo = temProprio ? proprio : cortarNaPalavra(textoSimples(completo));
+  return { resumo, resumoSimples: temProprio ? textoSimples(proprio) : resumo, completo, resumoProprio: temProprio };
 }

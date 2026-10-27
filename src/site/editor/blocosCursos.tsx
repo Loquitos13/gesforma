@@ -6,6 +6,7 @@ import { OfertaCtx, type Course } from "../SiteLanding";
 import { campoCor, campoCurso, campoImagem, campoMarcas, campoNumero, campoOrdemCursos, nomesCursos, simNao } from "./campos";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { corSegura, estiloBloco, estiloTexto, estiloVazio, juntar, ligacaoSegura, tipoVazia, type Estilo, type Tipografia } from "./estilos";
+import { TextoFormatado } from "../../partilhado/TextoFormatadoVista";
 import { ajudaVariaveis, preencherVariaveis, variaveisCurso } from "./blocosCurso";
 
 export const INFO_CARTAO = [
@@ -189,7 +190,7 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
           <a href={href} className="hover:opacity-80">{curso.title}</a>
         </h3>
       )}
-      {ver.has("descricao") && curso.resumo && e.formato !== "compacto" && <p className={juntar("mt-3 text-sm leading-6", linhas)}>{curso.resumo}</p>}
+      {ver.has("descricao") && curso.resumo && e.formato !== "compacto" && <TextoFormatado texto={curso.resumo} className={juntar("mt-3 text-sm leading-6", linhas)} nivel={4} />}
       {(ver.has("preco") || ver.has("duracao") || ver.has("inicio") || ver.has("botao")) && (
         <div className={juntar("flex flex-wrap items-end justify-between gap-3", e.formato === "compacto" ? "mt-3" : "mt-auto pt-5")}
           style={e.formato === "compacto" || sobreposto ? undefined : { borderTop: "1px solid rgba(20,38,61,.1)", marginTop: "1.25rem" }}>

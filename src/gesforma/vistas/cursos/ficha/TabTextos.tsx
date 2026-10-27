@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 import type { MomentoField, MomentoKey } from "../../../../partilhado/TurmaExtras";
 import { novoPlanoCurso } from "../../../planosCurso";
 import { RESUMO_IDEAL, RESUMO_MAX, textosCurso } from "../../../../partilhado/textosCurso";
+import { textoSimples } from "../../../../partilhado/textoFormatado";
 import { TextoComFormatacao } from "./TextoComFormatacao";
 import type { PlanoLinha } from "./modelo";
 import type { FichaCurso } from "./useFichaCurso";
@@ -22,17 +23,19 @@ function BlocoTexto({ rotulo, ajuda, valor, onMudar, linhas = 7 }: { rotulo: str
 /** Texto de destaque (catálogo): curto, com contador; vazio, o site corta o texto completo e mostra-o aqui como sugestão. */
 function TextoDestaque({ f }: { f: FichaCurso }) {
   const { data, patch } = f;
+  // O limite conta as marcas (é o que o servidor confere); o aviso do cartão conta só o texto que se vê.
   const n = data.resumo.trim().length;
+  const visivel = textoSimples(data.resumo).length;
   const derivado = textosCurso({ sintese: data.sintese }).resumo;
-  const tom = n === 0 ? "neutro" : n > RESUMO_IDEAL ? "aviso" : "sucesso";
+  const tom = visivel === 0 ? "neutro" : visivel > RESUMO_IDEAL ? "aviso" : "sucesso";
   return (
-    <Cartao titulo="Texto de destaque (catálogo)" subtitulo="Uma ou duas frases para os cartões do curso, o catálogo e as listagens do site. Também serve de descrição na pesquisa da Google."
-      acoes={<Estado tom={tom}>{n ? "Próprio" : derivado ? "Do enquadramento" : "Em falta"}</Estado>}>
-      <AreaTexto aria-label="Texto de destaque (catálogo)" rows={3} maxLength={RESUMO_MAX} value={data.resumo}
+    <Cartao titulo="Texto de destaque (catálogo)" subtitulo="Uma ou duas frases para os cartões do curso, o catálogo e as listagens do site. Também serve de descrição na pesquisa da Google (sem a formatação)."
+      acoes={<Estado tom={tom}>{visivel ? "Próprio" : derivado ? "Do enquadramento" : "Em falta"}</Estado>}>
+      <TextoComFormatacao rotulo="Texto de destaque (catálogo)" linhas={3} valor={data.resumo}
         placeholder={derivado || "Ex.: Formação certificada para quem quer ser formador, em b-learning, com simulação pedagógica."}
-        onChange={e => patch({ resumo: e.target.value.replace(/\n+/g, " ") })} />
-      <p className={`num m-0 mt-1 flex justify-between gap-2 text-xs ${n > RESUMO_IDEAL ? "text-aviso" : "text-tinta-suave"}`}>
-        <span>{n ? (n > RESUMO_IDEAL ? `Acima de ${RESUMO_IDEAL}: em alguns cartões pode ficar cortado.` : "") : "Vazio: o site usa o início do enquadramento (o que se vê a cinzento)."}</span>
+        onMudar={v => patch({ resumo: v.slice(0, RESUMO_MAX) })} />
+      <p className={`num m-0 mt-1 flex justify-between gap-2 text-xs ${visivel > RESUMO_IDEAL ? "text-aviso" : "text-tinta-suave"}`}>
+        <span>{visivel ? (visivel > RESUMO_IDEAL ? `Acima de ${RESUMO_IDEAL}: em alguns cartões pode ficar cortado.` : "") : "Vazio: o site usa o início do enquadramento (o que se vê a cinzento)."}</span>
         <span aria-live="polite">{n}/{RESUMO_MAX}</span>
       </p>
     </Cartao>
@@ -64,7 +67,7 @@ export function TabConteudo({ f }: { f: FichaCurso }) {
             {p => <Entrada {...p} maxLength={70} value={data.seoTitulo} placeholder={data.titulo} onChange={e => patch({ seoTitulo: e.target.value })} />}
           </Campo>
           <Campo rotulo="Descrição na pesquisa" ajuda={`${data.seoDescricao.length}/160 caracteres. Diga para quem é, o que se ganha e o formato. Vazia: o texto de destaque.`}>
-            {p => <AreaTexto {...p} rows={3} maxLength={200} value={data.seoDescricao} placeholder={textosCurso(data).resumo} onChange={e => patch({ seoDescricao: e.target.value })} />}
+            {p => <AreaTexto {...p} rows={3} maxLength={200} value={data.seoDescricao} placeholder={textosCurso(data).resumoSimples} onChange={e => patch({ seoDescricao: e.target.value })} />}
           </Campo>
         </div>
       </Cartao>

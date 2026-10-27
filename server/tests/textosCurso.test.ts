@@ -27,6 +27,15 @@ describe("textos de destaque do curso (regras)", () => {
     // Palavra única enorme: corta a direito.
     expect(cortarNaPalavra("x".repeat(300), 160)).toBe(`${"x".repeat(160)}…`);
   });
+
+  it("o destaque próprio guarda a formatação; a versão simples (pesquisa) vai sem marcas", () => {
+    const t = textosCurso({ sintese: LONGO, resumo: "Curso **certificado** pela [DGERT](https://www.dgert.gov.pt).\n- Presencial" });
+    expect(t.resumo).toBe("Curso **certificado** pela [DGERT](https://www.dgert.gov.pt).\n- Presencial");
+    expect(t.resumoSimples).toBe("Curso certificado pela DGERT. Presencial");
+    expect(t.resumoProprio).toBe(true);
+    // Só espaços e linhas em branco: vale o do enquadramento.
+    expect(textosCurso({ sintese: "Curso curto.", resumo: " \n\n " })).toMatchObject({ resumo: "Curso curto.", resumoProprio: false });
+  });
 });
 
 describe("textos de destaque do curso (ficha e catálogo público)", () => {

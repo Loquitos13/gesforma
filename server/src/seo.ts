@@ -177,7 +177,7 @@ export async function metaDaPagina(db: Db, caminhoBruto: string, host?: string):
     const { cursos } = await listarCatalogoPublico(db);
     const c = cursos.find(x => x.id === slug);
     if (!c) return base({ estado: 404, titulo: comNome("Curso não encontrado"), indexar: false, corpo: "<h1>Este curso não está na oferta.</h1><p><a href=\"/formacao\">Ver todos os cursos</a></p>" });
-    const descricao = cortar(limpar(c.seoDescricao || c.resumo || c.descricao), 160);
+    const descricao = cortar(limpar(c.seoDescricao || textoSimples(c.resumo || c.descricao)), 160);
     const titulo = comNome(limpar(c.seoTitulo) || c.titulo);
     return base({
       titulo, descricao, imagem: c.capa ? absoluto(origem, c.capa) : imagemBase,

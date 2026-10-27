@@ -157,6 +157,10 @@ Na VPS, depois de preencher `.env` com segredos gerados (`openssl rand -base64 4
 docker compose up -d db api
 ```
 
+### VPS (Hetzner)
+
+Site, backoffice, API e Postgres numa só máquina, com Docker e o Caddy a fazer o HTTPS: guia completo em [`docs/hetzner.md`](docs/hetzner.md) (servidor, variáveis, migração da base da Neon, mudança do domínio, cópias de segurança e atualizações com `deploy/atualizar.sh`).
+
 ### Vercel
 
 A API vai no **mesmo projecto** que a app (`/api`), para o cookie de sessão ser do mesmo domínio. A Vercel é serverless: não há `setInterval`. A fila de email corre no fim de cada evento e num cron horário (`/api/v1/cron/email`), que também envia os lembretes das pré-inscrições e esvazia a fila até ~20 s por chamada. O cron só abre com `Authorization: Bearer $CRON_SECRET` (a Vercel envia-o quando a variável `CRON_SECRET` está definida); sem ela responde 503. No plano Hobby a Vercel só aceita crons diários - aí volte a `0 7 * * *` na `vercel.json`; a janela do lembrete 24h cobre hoje e amanhã.

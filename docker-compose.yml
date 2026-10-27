@@ -1,13 +1,16 @@
-# GesForma na VPS: Postgres + API na mesma máquina, rede só interna.
-# A base não é publicada. A API só escuta em 127.0.0.1 - o Caddy/nginx faz TLS.
+# GesForma numa VPS (ex.: Hetzner): site + backoffice + API + Postgres numa só máquina.
+# Guia completo: docs/hetzner.md.
 #
-#   cp .env.example .env   # gere passwords e SESSION_SECRET
-#   docker compose up -d db api
-#   docker compose --profile backup run --rm backup
+#   cp .env.example .env                              # preencha (ver docs/hetzner.md)
+#   docker compose --profile build run --rm construir # constrói o site (dist/)
+#   docker compose up -d --build                      # base, API, Caddy (HTTPS) e tarefas
+#   deploy/atualizar.sh                               # nas atualizações seguintes
+#
+# Só o Caddy está exposto (80/443). A base e a API ficam na rede interna.
 
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:${POSTGRES_VERSAO:-17}-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: gesforma
@@ -38,27 +41,84 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Todas as variáveis do .env (Google, Microsoft, SMTP, pagamentos, WhatsApp…); as de baixo mandam sobre elas.
+    env_file: .env
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://gesforma:${POSTGRES_PASSWORD}@db:5432/gesforma
-      SESSION_SECRET: ${SESSION_SECRET}
-      ADMIN_EMAIL: ${ADMIN_EMAIL}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-      ADMIN_NAME: ${ADMIN_NAME:-Tania}
-      APP_ORIGIN: ${APP_ORIGIN}
-      MAIL_MODE: ${MAIL_MODE:-log}
-      SMTP_URL: ${SMTP_URL:-}
-      MAIL_FROM: ${MAIL_FROM:-ENA Formação <formacao@ena.pt>}
-      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
+      DATABASE_SSL: "off"
+      API_HOST: 0.0.0.0
       API_PORT: "43148"
       TRUST_PROXY: "true"
+      DRIVE_DIR: /app/server/data/drive-files
+    volumes:
+      # A API lê dist/app.html para servir as páginas do site com as etiquetas de SEO.
+      - ./dist:/app/dist:ro
+      # Ficheiros carregados quando a Google Drive não está ligada.
+      - ficheiros:/app/server/data/drive-files
     ports:
+      # Só no próprio servidor (diagnóstico com curl); de fora entra-se pelo Caddy.
       - "127.0.0.1:43148:43148"
     networks:
       - internal
 
+  web:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      DOMINIO: ${DOMINIO}
+      EMAIL_CERTIFICADOS: ${EMAIL_CERTIFICADOS:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./dist:/srv/dist:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - internal
+
+  # Cópia diária da base e sincronização da Drive (deploy/tarefas/crontab).
+  tarefas:
+    image: postgres:${POSTGRES_VERSAO:-17}-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      CRON_SECRET: ${CRON_SECRET}
+    volumes:
+      - ./backups:/backups
+      - ./deploy/tarefas:/tarefas:ro
+    # O crond não passa as variáveis às tarefas: ficam num ficheiro que os scripts leem.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        export -p > /tarefas.env
+        cp /tarefas/crontab /etc/crontabs/root
+        exec crond -f -l 8
+    networks:
+      - internal
+
+  # Constrói o site (dist/) sem precisar de Node no servidor: docker compose --profile build run --rm construir
+  construir:
+    image: node:22-alpine
+    profiles: ["build"]
+    working_dir: /app
+    volumes:
+      - ./:/app
+    command: ["sh", "-c", "npm ci --no-audit --no-fund && npm run build"]
+
+  # Cópia manual (scripts/backup.sh): docker compose --profile backup run --rm backup
   backup:
-    image: postgres:16-alpine
+    image: postgres:${POSTGRES_VERSAO:-17}-alpine
     profiles: ["backup"]
     depends_on:
       db:
@@ -81,6 +141,9 @@ services:
 
 volumes:
   pgdata:
+  ficheiros:
+  caddy_data:
+  caddy_config:
 
 networks:
   internal:

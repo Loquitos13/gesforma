@@ -1,0 +1,70 @@
+# GesForma na VPS (Hetzner): o Caddy faz o HTTPS (certificado Let's Encrypt automático), serve o site já construído
+# (dist/) e passa à API o que a Vercel passava à função: /api/*, as páginas do site (com as etiquetas de SEO),
+# /sitemap.xml e /robots.txt. É o equivalente ao vercel.json.
+#
+# O domínio vem do .env (DOMINIO=ena.pt). O DNS do domínio tem de apontar para o IP da VPS antes de arrancar.
+
+{
+	email {$EMAIL_CERTIFICADOS}
+}
+
+{$DOMINIO} {
+	encode zstd gzip
+
+	# Cabeçalhos de segurança do site (os mesmos do vercel.json); a API manda os seus.
+	@site not path /api/*
+	header @site {
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self'; frame-src 'self' blob: https://drive.google.com https://docs.google.com https://www.youtube-nocookie.com https://player.vimeo.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self' https://accounts.google.com https://login.microsoftonline.com"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Strict-Transport-Security "max-age=31536000"
+	}
+	header -Server
+
+	# API: /api/v1/... chega à API como /v1/... (como na Vercel e no vite.config.ts).
+	handle_path /api/* {
+		reverse_proxy api:43148
+	}
+
+	handle /sitemap.xml {
+		rewrite * /v1/public/sitemap.xml
+		reverse_proxy api:43148
+	}
+	handle /robots.txt {
+		rewrite * /v1/public/robots.txt
+		reverse_proxy api:43148
+	}
+
+	# Ficheiros do build (JS, CSS, imagens, ícones). Os de /assets têm o hash no nome: cache de um ano.
+	@ficheiro {
+		not path /
+		file {
+			root /srv/dist
+			try_files {path}
+		}
+	}
+	handle @ficheiro {
+		root * /srv/dist
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	# Tudo o resto é uma página do site ou do backoffice: a API devolve a aplicação com o título, a descrição
+	# e os dados de partilha da página (server/src/seo.ts).
+	handle {
+		rewrite * /v1/public/pagina?caminho={path}
+		reverse_proxy api:43148
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
+
+# Com o domínio principal (ena.pt), o www passa para ele. Tire o # das 3 linhas depois de o www apontar para a VPS.
+# www.{$DOMINIO} {
+# 	redir https://{$DOMINIO}{uri} permanent
+# }

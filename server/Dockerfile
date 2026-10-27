@@ -7,6 +7,8 @@ RUN cd server && npm ci --omit=dev
 COPY server/src ./server/src
 COPY server/tsconfig.json ./server/
 COPY src/partilhado ./src/partilhado
+# Pasta dos ficheiros carregados sem Google Drive (volume «ficheiros» no docker-compose.yml).
+RUN mkdir -p /app/server/data/drive-files && chown -R gesforma:gesforma /app/server/data
 WORKDIR /app/server
 USER gesforma
 ENV NODE_ENV=production

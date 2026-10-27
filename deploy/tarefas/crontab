@@ -1,0 +1,5 @@
+# Tarefas agendadas da VPS (contentor «tarefas», hora UTC). Na Vercel eram os crons do vercel.json.
+# A fila de emails e os avisos dos documentos correm dentro da API (a cada 2,5 s): não precisam daqui.
+# min hora dia mês dia-da-semana
+0 2 * * * /tarefas/backup.sh >> /proc/1/fd/1 2>&1
+30 3 * * * /tarefas/drive.sh >> /proc/1/fd/1 2>&1

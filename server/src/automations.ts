@@ -5,7 +5,7 @@ import { renderAutomaticEmail } from "./emailHtml.js";
 import { parseEmailXml } from "./emailXml.js";
 import { lerEntidade } from "./regrasConfig.js";
 import { linhaContactosLocal } from "../../src/partilhado/contactosLocal.js";
-import { config } from "./config.js";
+import { config, isProd } from "./config.js";
 import { sendMail } from "./mailer.js";
 import {
   avancarEstadoLead, devolverReservas, exemploReal, formandosDaTurma, leadsParados, libertarReservasPresas, marcarEnviado,
@@ -176,6 +176,13 @@ async function enqueueTurmaReminders(db: Db) {
   }
 }
 
+/**
+ * Sem SMTP utilizável (não configurado, ou a password gravada não se lê com o SESSION_SECRET atual) o email fica só no
+ * registo. Em produção isso é uma falha: aparece como «Falhou», com a causa, e pode reenviar-se depois de corrigir.
+ */
+export const SEM_SMTP_PRODUCAO = "Não enviado: sem SMTP utilizável. Confirme Configurações › Emails (se a password gravada já não se lê, por exemplo depois de mudar o SESSION_SECRET, grave-a de novo) e reenvie.";
+const SEM_SMTP_REGISTO = "SMTP desligado: ficou só no registo da API";
+
 /** Minutos em «sending» a partir dos quais um envio se dá por interrompido (a função da Vercel dura no máximo 30 s). */
 const RESERVA_PRESA_MIN = 10;
 
@@ -186,8 +193,13 @@ async function enviarReservado(db: Db, job: EnvioReservado) {
       ? job.body_html
       : job.body_text.split("\n").map(l => (l ? `<p>${l.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>` : "<br>")).join("")
         + `<img src="${pixel}" width="1" height="1" alt="" />`;
-    await sendMail(db, { to: job.to_email, name: job.to_name, subject: job.subject, text: job.body_text, html });
-    await marcarEnviado(db, job.id);
+    const mailId = await sendMail(db, { to: job.to_email, name: job.to_name, subject: job.subject, text: job.body_text, html });
+    const soRegisto = String(mailId).startsWith("log:");
+    if (soRegisto && isProd) {
+      await marcarFalha(db, job.id, true, SEM_SMTP_PRODUCAO);
+      return false;
+    }
+    await marcarEnviado(db, job.id, soRegisto ? SEM_SMTP_REGISTO : null);
     return true;
   } catch (err) {
     await marcarFalha(db, job.id, job.attempts + 1 >= 5, err instanceof Error ? err.message.slice(0, 400) : "falha no envio");

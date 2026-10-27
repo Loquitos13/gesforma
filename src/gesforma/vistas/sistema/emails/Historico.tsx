@@ -51,7 +51,9 @@ export function Historico() {
       id: "estado", titulo: "Estado",
       celula: e => (
         <span className="inline-flex gap-1.5 flex-wrap">
-          <Estado tom={ESTADO[e.estado].tom} title={e.erro ?? undefined}>{ESTADO[e.estado].rotulo}</Estado>
+          {e.estado === "sent" && e.erro?.startsWith("SMTP desligado")
+            ? <Estado tom="aviso" title={e.erro}>Só registado (sem SMTP)</Estado>
+            : <Estado tom={ESTADO[e.estado].tom} title={e.erro ?? undefined}>{ESTADO[e.estado].rotulo}</Estado>}
           {e.aberto && <Estado tom="neutro">Aberto</Estado>}
         </span>
       ),

@@ -1,4 +1,4 @@
-// Separador "Visão geral" do cockpit Financiada: números, programa da UFCD, formandos com documentos e formadores.
+// Separador «Inscritos» do cockpit Financiada: formandos com documentos, formadores, próximas sessões e (fechado) o programa da UFCD.
 import { DOCS_FORMANDO_FIN, docsFinOkCount } from "../../../../partilhado/dossierDocs";
 import { EmptyHint, MobileCard, RowActions } from "../../../../partilhado/SecretaryUX";
 import type { FormandoFin } from "../../../../partilhado/tiposFormando";
@@ -30,12 +30,6 @@ export function FinVisaoGeral({ turma, membros, prontos, souFormador, verCustos,
   onValoresHora: (valores: Record<string, number>) => void;
 }) {
   const total = DOCS_FORMANDO_FIN.length;
-  const numeros = [
-    { l: "Código interno", v: turma.nome, c: "text-tinta" },
-    { l: "UFCD", v: turma.ufcdCod || "—", c: "text-ligacao" },
-    { l: "Formandos", v: `${turma.alunos}/${turma.alunosTotal}`, c: "text-tinta" },
-    { l: "Documentos prontos", v: `${prontos}/${membros.length}`, c: prontos === membros.length ? "text-sucesso" : "text-aviso" },
-  ];
   const futuras = turma.cronograma.filter(s => s.data >= hojeIso());
   const accoes = (f: FormandoFin) => [
     ...(onFicha ? [{ label: "Ficha", icon: I.eye, onClick: () => onFicha(f) }] : []),
@@ -51,23 +45,6 @@ export function FinVisaoGeral({ turma, membros, prontos, souFormador, verCustos,
 
   return (
     <>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {numeros.map(s => (
-          <Cartao key={s.l}>
-            <p className="m-0 text-xs text-tinta-suave">{s.l}</p>
-            <p className={`num m-0 mt-1 text-lg font-semibold truncate ${s.c}`}>{s.v}</p>
-          </Cartao>
-        ))}
-      </div>
-      <Cartao titulo="Programa da UFCD" acoes={!souFormador ? <Botao variante="ligacao" tamanho="sm" onClick={onEditarPrograma}>Editar programa</Botao> : undefined}>
-        <ul className="m-0 p-0 list-none space-y-2">
-          {(programa.length ? programa : [`${rotuloCodigoCurso(turma.ufcdCod)} · ${turma.curso} (${turma.horas} h)`]).map((linha, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm text-tinta">
-              <span className="w-1.5 h-1.5 rounded-full bg-ligacao mt-1.5 flex-shrink-0" aria-hidden="true" />{linha}
-            </li>
-          ))}
-        </ul>
-      </Cartao>
       <Cartao
         titulo="Formandos"
         semPadding
@@ -143,6 +120,17 @@ export function FinVisaoGeral({ turma, membros, prontos, souFormador, verCustos,
             )}
         </Cartao>
       </div>
+      <details className="rounded-painel border border-linha bg-superficie px-4 py-3">
+        <summary className="cursor-pointer text-sm font-semibold text-tinta">Programa da UFCD</summary>
+        <ul className="m-0 mt-3 p-0 list-none space-y-2">
+          {(programa.length ? programa : [`${rotuloCodigoCurso(turma.ufcdCod)} · ${turma.curso} (${turma.horas} h)`]).map((linha, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm text-tinta">
+              <span className="w-1.5 h-1.5 rounded-full bg-ligacao mt-1.5 flex-shrink-0" aria-hidden="true" />{linha}
+            </li>
+          ))}
+        </ul>
+        {!souFormador && <Botao variante="ligacao" tamanho="sm" className="mt-2" onClick={onEditarPrograma}>Editar programa</Botao>}
+      </details>
       {verCustos && <CustosTurmaCard turma={turma} regime="fin" canEdit={!turma.fechadaEm} onValores={onValoresHora} />}
     </>
   );

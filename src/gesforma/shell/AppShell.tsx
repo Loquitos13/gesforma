@@ -15,7 +15,8 @@ import type { ParamsVista, VistaProps } from "./tipos";
 
 function paramsDe(d: Partial<Destino>, drive?: string): ParamsVista {
   return {
-    tab: d.tab ?? "overview",
+    // A Financiada abre no Cronograma (por dias); a Gold na visão geral.
+    tab: d.tab ?? (d.view === "fin-cockpit-turma" ? "sessoes" : "overview"),
     turmaId: d.turmaId,
     cursoId: d.cursoId ?? ((d.view === "gold-curso-ficha" || d.view === "fin-curso-ficha") ? "new" : undefined),
     cursoNome: d.cursoNome,

@@ -10,7 +10,7 @@ export type Vista =
   | "formadores" | "blog-posts" | "blog-tematicas" | "empresas-servicos"
   | "emails" | "pagamentos" | "configuracoes" | "utilizadores" | "equipa" | "notificacoes" | "listas-opcoes" | "site";
 
-export type Separador = "overview" | "cronograma" | "sessoes" | "avaliacao" | "documentos" | "dtp" | "certificados" | "despesas";
+export type Separador = "overview" | "cronograma" | "sessoes" | "avaliacao" | "subsidio" | "documentos" | "dtp" | "certificados" | "despesas";
 
 export type Destino = {
   view: Vista;
@@ -106,7 +106,7 @@ const POR_CAMINHO = new Map<string, Vista>(
     .map(([vista, caminho]) => [caminho, vista]),
 );
 
-const SEPARADORES = new Set<Separador>(["overview", "cronograma", "sessoes", "avaliacao", "documentos", "dtp", "certificados", "despesas"]);
+const SEPARADORES = new Set<Separador>(["overview", "cronograma", "sessoes", "avaliacao", "subsidio", "documentos", "dtp", "certificados", "despesas"]);
 
 function separadorDe(valor: string | null): Separador | undefined {
   return valor && SEPARADORES.has(valor as Separador) ? valor as Separador : undefined;
@@ -139,7 +139,8 @@ export function caminhoDaVista(destino: Destino, drive = ""): string | null {
   if (vista === "fin-formando-ficha") path = `/gesforma/financiada/formandos/${destino.formandoId}`;
   if (vista === "formador-ficha") path = `/gesforma/formadores/${destino.formadorId}`;
   const q = new URLSearchParams();
-  if (destino.tab && destino.tab !== "overview" && (vista === "gold-cockpit-turma" || vista === "fin-cockpit-turma")) q.set("separador", destino.tab);
+  const padrao = vista === "fin-cockpit-turma" ? "sessoes" : "overview";
+  if (destino.tab && destino.tab !== padrao && (vista === "gold-cockpit-turma" || vista === "fin-cockpit-turma")) q.set("separador", destino.tab);
   if (destino.cursoNome && (vista === "gold-modulos" || vista === "fin-modulos")) q.set("curso", destino.cursoNome);
   if (destino.formandoId && (vista === "gold-formandos-turmas" || vista === "gold-formandos-gold" || vista === "fin-formandos")) {
     q.set("formando", String(destino.formandoId));

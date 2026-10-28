@@ -227,7 +227,7 @@ export function SessoesTurmaTab({
   );
 }
 
-export function TurmaTabBar({ tab, onChange, accent = "gold", dtpPct, dossie = true, despesas = false, so, rotulos }: { tab: CockpitTab; onChange: (t: CockpitTab) => void; accent?: "gold" | "fin"; dtpPct: number; dossie?: boolean; despesas?: boolean; so?: CockpitTab[]; rotulos?: Partial<Record<CockpitTab, string>> }) {
+export function TurmaTabBar({ tab, onChange, accent = "gold", dtpPct, dossie = true, despesas = false, so, rotulos, ordem }: { tab: CockpitTab; onChange: (t: CockpitTab) => void; accent?: "gold" | "fin"; dtpPct: number; dossie?: boolean; despesas?: boolean; so?: CockpitTab[]; rotulos?: Partial<Record<CockpitTab, string>>; /** Os separadores e a ordem (os outros não aparecem). */ ordem?: CockpitTab[] }) {
   const active = accent === "gold" ? "border-amber-500 text-amber-600" : "border-blue-600 text-blue-600";
   const chip = accent === "gold" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700";
   const todas: { id: CockpitTab; label: string; icon: React.ReactNode }[] = [
@@ -235,12 +235,14 @@ export function TurmaTabBar({ tab, onChange, accent = "gold", dtpPct, dossie = t
     { id: "cronograma", label: "Cronograma", icon: I.calendar },
     { id: "sessoes", label: "Sessões", icon: I.calendar },
     { id: "avaliacao", label: "Avaliação", icon: I.clipboard },
+    { id: "subsidio", label: "Subsídio", icon: I.euro },
     { id: "documentos", label: "Documentos", icon: I.file },
     ...(dossie ? [{ id: "dtp" as const, label: "Dossiê TP", icon: I.folder }] : []),
     { id: "certificados", label: "Certificados", icon: I.doc },
     ...(despesas ? [{ id: "despesas" as const, label: "Despesas", icon: I.euro }] : []),
   ];
-  const tabs = so ? todas.filter(t => so.includes(t.id)) : todas;
+  const visiveis = ordem ? ordem.flatMap(id => todas.filter(t => t.id === id)) : todas.filter(t => t.id !== "subsidio");
+  const tabs = so ? visiveis.filter(t => so.includes(t.id)) : visiveis;
   return (
     <div className="flex gap-0.5 border-b border-slate-200 overflow-x-auto scrollbar-hide">
       {tabs.map(t => (

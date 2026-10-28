@@ -66,7 +66,7 @@ export default function Turmas({ view, navigate }: VistaProps) {
     ok: r => `Inquéritos enviados a ${r.enviados} formando(s)${r.semEmail ? ` · ${r.semEmail} sem email` : ""}.`,
   });
 
-  const cockpit = (t: LinhaTurma, tab: SeparadorCockpit = "overview") =>
+  const cockpit = (t: LinhaTurma, tab?: SeparadorCockpit) =>
     navigate({ view: fin ? "fin-cockpit-turma" : "gold-cockpit-turma", turmaId: t.id, tab });
 
   function acoes(t: LinhaTurma): AcaoMenu[] {

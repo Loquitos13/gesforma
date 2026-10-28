@@ -34,7 +34,7 @@ export function EstadoCockpit({ aCarregar, erro, existe, onVoltar, children }: {
 }
 
 /** Painel para acrescentar uma sessão ao cronograma da turma. */
-export function NovaSessaoPainel({ aberto, onFechar, regime, turma, horaPadrao, duracao, onCriar }: {
+export function NovaSessaoPainel({ aberto, onFechar, regime, turma, horaPadrao, duracao, onCriar, sessao, dataInicial = "", onEliminar }: {
   aberto: boolean;
   onFechar: () => void;
   regime: "gold" | "fin";
@@ -42,20 +42,26 @@ export function NovaSessaoPainel({ aberto, onFechar, regime, turma, horaPadrao, 
   horaPadrao: string;
   duracao: number;
   onCriar: (sessao: SessaoCronograma) => void;
+  /** Editar esta sessão (o mesmo id) em vez de criar uma nova. */
+  sessao?: SessaoCronograma | null;
+  /** Dia já escolhido (o «+» de um dia vazio do cronograma). */
+  dataInicial?: string;
+  onEliminar?: () => void;
 }) {
-  const [formadores, setFormadores] = useState<string[]>(turma.formador ? [turma.formador] : []);
-  const [modulos, setModulos] = useState<string[]>([]);
-  const [data, setData] = useState("");
-  const [hora, setHora] = useState(horaPadrao);
+  const [formadores, setFormadores] = useState<string[]>(sessao ? sessao.formadores ?? [] : turma.formador ? [turma.formador] : []);
+  const [modulos, setModulos] = useState<string[]>(sessao?.modulos ?? []);
+  const [data, setData] = useState(sessao?.data ?? dataInicial);
+  const [hora, setHora] = useState(sessao?.horaInicio || horaPadrao);
+  const [horaFim, setHoraFim] = useState(sessao?.horaFim || "");
   const programa = useProgramaDoCurso(regime, turma.curso);
   const opcoesBase = useOpcoesFormador(formadores, regime);
   const fichas = useFormadoresTodos();
   const daTurma = useMemo(() => [turma.formador, ...(turma.formadores ?? [])].map(n => n.trim()).filter(Boolean), [turma.formador, turma.formadores]);
   const outras = useSessoesNoutrasTurmas(daTurma.length ? daTurma : opcoesBase.map(o => o.value), { regime, id: turma.id });
   const inicio = hora || horaPadrao;
-  const fim = horaMais(inicio, duracao);
+  const fim = horaFim && horaFim > inicio ? horaFim : horaMais(inicio, duracao);
   const opcoes = (daTurma.length ? opcoesBase.filter(o => daTurma.includes(o.value)) : opcoesBase).map(o => {
-    const ocupado = formadorIndisponivel(o.value, data, inicio, fim, [{ cronograma: turma.cronograma }, ...outras]);
+    const ocupado = formadorIndisponivel(o.value, data, inicio, fim, [{ cronograma: turma.cronograma.filter(x => x.id !== sessao?.id) }, ...outras]);
     const ficha = fichas.find(f => f.nome.toLowerCase() === o.value.toLowerCase());
     const fora = regime === "gold" && Boolean(ficha) && !sessaoCabeNoSlot(data, inicio, fim, ficha?.disponibilidade);
     if (!ocupado && !fora) return o;
@@ -65,7 +71,7 @@ export function NovaSessaoPainel({ aberto, onFechar, regime, turma, horaPadrao, 
 
   function criar() {
     if (!data) return;
-    onCriar({ id: `s-manual-${Date.now()}`, data, horaInicio: inicio, horaFim: fim, modulos, formadores });
+    onCriar({ ...(sessao ?? {}), id: sessao?.id ?? `s-manual-${Date.now()}`, data, horaInicio: inicio, horaFim: fim, modulos, formadores });
     setData("");
     setModulos([]);
   }
@@ -74,19 +80,21 @@ export function NovaSessaoPainel({ aberto, onFechar, regime, turma, horaPadrao, 
     <Modal
       aberto={aberto}
       onFechar={onFechar}
-      titulo="Nova sessão"
+      titulo={sessao ? "Editar sessão" : "Nova sessão"}
       subtitulo={turma.nome}
       rodape={(
-        <div className="flex gap-2 justify-end">
+        <div className="flex w-full gap-2 justify-end">
+          {sessao && onEliminar && <Botao variante="perigo" className="mr-auto" onClick={onEliminar}>Eliminar sessão</Botao>}
           <Botao variante="secundario" onClick={onFechar}>Cancelar</Botao>
-          <Botao variante="primario" disabled={!data} onClick={criar}>Criar sessão</Botao>
+          <Botao variante="primario" disabled={!data} onClick={criar}>{sessao ? "Guardar" : "Criar sessão"}</Botao>
         </div>
       )}
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <Campo rotulo="Data">{p => <Entrada {...p} type="date" value={data} onChange={e => setData(e.target.value)} />}</Campo>
           <Campo rotulo="Hora de início">{p => <Entrada {...p} type="time" value={hora} onChange={e => setHora(e.target.value)} />}</Campo>
+          <Campo rotulo="Hora de fim">{p => <Entrada {...p} type="time" value={fim} onChange={e => setHoraFim(e.target.value)} />}</Campo>
         </div>
         <div>
           <p className="m-0 mb-1.5 text-[13px] font-semibold text-tinta">Formadores</p>
@@ -99,7 +107,7 @@ export function NovaSessaoPainel({ aberto, onFechar, regime, turma, horaPadrao, 
             placeholder={`Pesquisar ${unidade.singular} do curso…`} noneLabel={`Selecionar ${unidade.plural}…`}
             unitSingular={unidade.singular} unitPlural={unidade.plural} />
         </div>
-        <p className="m-0 text-xs text-tinta-suave">A sessão dura {duracao} h. Quem já tem sessão nesse horário noutra turma aparece indisponível.</p>
+        <p className="m-0 text-xs text-tinta-suave">Quem já tem sessão nesse horário noutra turma aparece indisponível.</p>
       </div>
     </Modal>
   );

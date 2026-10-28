@@ -26,7 +26,8 @@ function useMigalhas(view: Vista, params: ParamsVista, navigate: Navegar): { ite
   if (naTurma) {
     const ehGold = view === "gold-cockpit-turma";
     const turma = dados?.turma;
-    const separador = view === "fin-presencas" ? "Sessões" : (cockpitTabLabel[params.tab] ?? "Visão geral");
+    const rotulos: Record<string, string> = ehGold ? cockpitTabLabel : { ...cockpitTabLabel, sessoes: "Cronograma", cronograma: "Cronograma", overview: "Inscritos", subsidio: "Subsídio", despesas: "Despesas" };
+    const separador = view === "fin-presencas" ? "Sessões" : (rotulos[params.tab] ?? "Visão geral");
     const base: Migalha[] = ehFormador
       ? [{ rotulo: "As minhas turmas", onClick: () => navigate("formador-turmas") }]
       : [
@@ -35,7 +36,7 @@ function useMigalhas(view: Vista, params: ParamsVista, navigate: Navegar): { ite
       ];
     if (!turma) return { itens: [...base, { rotulo: "Turma" }] };
     return {
-      itens: [...base, { rotulo: turma.nome, onClick: () => navigate({ view: ehGold ? "gold-cockpit-turma" : "fin-cockpit-turma", turmaId: turma.id, tab: "overview" }) }, { rotulo: separador }],
+      itens: [...base, { rotulo: turma.nome, onClick: () => navigate({ view: ehGold ? "gold-cockpit-turma" : "fin-cockpit-turma", turmaId: turma.id }) }, { rotulo: separador }],
       detalhe: ehGold ? `${turma.curso} · ${turma.local}` : `${rotuloCodigoCurso(turma.ufcdCod ?? "")} · ${turma.curso}`,
     };
   }

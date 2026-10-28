@@ -17,10 +17,12 @@ type Passo = "rever" | "registos";
  * Apoios de uma turma da Financiada num mês: rever o cálculo antes de registar,
  * depois aprovar, marcar como pago (em lote) e exportar para as transferências.
  */
-export function ProcessarApoios({ turma, aberto, onFechar }: {
+export function ProcessarApoios({ turma, aberto, onFechar, embutido = false }: {
   turma: { id: number; nome: string } | null;
   aberto: boolean;
   onFechar: () => void;
+  /** Dentro da turma (separador «Subsídio»), em vez de num modal. */
+  embutido?: boolean;
 }) {
   const turmaId = turma?.id ?? 0;
   const [mes, setMes] = useState(mesAtual());
@@ -78,7 +80,7 @@ export function ProcessarApoios({ turma, aberto, onFechar }: {
 
   const rodape = passo === "rever" ? (
     <>
-      <Botao variante="fantasma" onClick={onFechar}>Fechar</Botao>
+      {!embutido && <Botao variante="fantasma" onClick={onFechar}>Fechar</Botao>}
       <Botao
         variante="primario"
         disabled={!previa || (totalPrevia <= 0 && !aAnular)}
@@ -90,22 +92,15 @@ export function ProcessarApoios({ turma, aberto, onFechar }: {
     </>
   ) : (
     <>
-      <Botao variante="fantasma" onClick={onFechar}>Fechar</Botao>
+      {!embutido && <Botao variante="fantasma" onClick={onFechar}>Fechar</Botao>}
       <Botao disabled={!registos.length} aCarregar={aExportar} onClick={() => void exportar()}>Exportar Excel</Botao>
       {(totais.calculado?.n ?? 0) > 0 && <Botao variante="primario" aCarregar={aprovar.aCorrer} onClick={() => void aprovar.correr()}>Aprovar {totais.calculado!.n}</Botao>}
       {(totais.aprovado?.n ?? 0) > 0 && <Botao variante="primario" onClick={() => setPagar(true)}>Marcar {totais.aprovado!.n} como pagos</Botao>}
     </>
   );
 
-  return (
-    <Modal
-      aberto={aberto}
-      onFechar={onFechar}
-      largura="lg"
-      titulo="Apoios da turma"
-      subtitulo={turma?.nome}
-      rodape={rodape}
-    >
+  const corpo = (
+    <>
       <div className="flex flex-col gap-4">
         <div className="flex items-end gap-3 flex-wrap">
           <label className="flex flex-col gap-1 text-[13px] font-medium text-tinta">
@@ -182,6 +177,20 @@ export function ProcessarApoios({ turma, aberto, onFechar }: {
           }
         }}
       />
+    </>
+  );
+  if (embutido) {
+    return (
+      <section className="rounded-painel border border-linha bg-superficie p-4">
+        <p className="m-0 mb-3 text-sm text-tinta-suave">Subsídio de alimentação e restantes apoios, calculados a partir das folhas de presença de cada mês.</p>
+        {corpo}
+        <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-linha-suave pt-3">{rodape}</div>
+      </section>
+    );
+  }
+  return (
+    <Modal aberto={aberto} onFechar={onFechar} largura="lg" titulo="Apoios da turma" subtitulo={turma?.nome} rodape={rodape}>
+      {corpo}
     </Modal>
   );
 }

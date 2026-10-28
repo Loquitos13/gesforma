@@ -12,7 +12,7 @@ import { persist, toastError, toastOk } from "../../../../partilhado/toastBus";
 import { FileUploadModal, PresencasSessaoModal, PlanoSessaoModal, emptyPlano, estadoPlano, type SessaoMeta } from "../../../../partilhado/TurmaExtras";
 import { cronogramaToSessoes, horasDoFormador, isTurmaActiva, lugaresLivres } from "../../../../partilhado/turmaModel";
 import type { FormandoFin } from "../../../../partilhado/tiposFormando";
-import { Botao, ConfirmarPerigo } from "../../../../partilhado/ui";
+import { Botao, ConfirmarPerigo, Separadores as Pilulas, num } from "../../../../partilhado/ui";
 import { CertificadoVerModal, ExportTurmaModal, type CertificadoPreview, type ExportTurmaInfo } from "../../../ActionSurfaces";
 import { useProgramaDoCurso } from "../../../cursoPrograma";
 import { DtpPanel } from "../../../DtpView";
@@ -30,19 +30,37 @@ import { EstadoCockpit, NovaSessaoPainel, ReabrirTurma } from "./comum";
 import { recarregarTurma, useMembrosFin, useResultadosTurma, useTurmaCockpit } from "./dados";
 import { EditarTurmaFin, InscreverFin, TransferirEEliminarFin } from "./FinDialogos";
 import { FinVisaoGeral } from "./FinVisaoGeral";
+import { CronogramaDias, horasDaSessao } from "./CronogramaDias";
+import { ProcessarApoios } from "../../formandos/apoios/ProcessarApoios";
+import type { SessaoCronograma } from "../../../../partilhado/turmaModel";
 import { FormadorProfileSlideOver } from "./PerfilFormador";
 import { rotuloCodigoCurso } from "../../../../partilhado/codigoCurso";
 
-export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { turmaId?: number; initialTab?: Separador; navigate: Navegar }) {
+type VistaCronograma = "dias" | "grelha" | "lista";
+
+/** Ordem dos separadores da Financiada: o Cronograma (por dias) primeiro, como no GesForma antigo. */
+const ORDEM_FIN: Separador[] = ["sessoes", "overview", "avaliacao", "subsidio", "documentos", "dtp", "certificados", "despesas"];
+const ROTULOS_FIN: Partial<Record<Separador, string>> = { sessoes: "Cronograma", overview: "Inscritos", subsidio: "Subsídio" };
+
+export function CockpitFin({ turmaId, initialTab = "sessoes", navigate }: { turmaId?: number; initialTab?: Separador; navigate: Navegar }) {
   const { turma, erro, aCarregar, patch, setCronograma, publicarCronograma, toggle } = useTurmaCockpit("fin", turmaId);
   const { membros } = useMembrosFin(turmaId);
   const { user } = useAuth();
   const souFormador = user.role === "formador";
   const nomesEu = useNomesEu();
   const opcoesFormador = useOpcoesFormador(undefined, "fin");
-  const [tab, setTab] = useState<Separador>(initialTab);
-  const separadorDe = (t: Separador): Separador => (souFormador ? tabDoFormador(t) : t);
-  useEffect(() => { setTab(separadorDe(initialTab)); }, [initialTab, turmaId, souFormador]); // eslint-disable-line react-hooks/exhaustive-deps
+  // «cronograma» (a grelha de 45 minutos) é uma vista do separador Cronograma.
+  const [vistaCrono, setVistaCrono] = useState<VistaCronograma>(initialTab === "cronograma" ? "grelha" : "dias");
+  const separadorDe = (t: Separador): Separador => {
+    const s = t === "cronograma" ? "sessoes" : t;
+    return souFormador ? tabDoFormador(s) : s;
+  };
+  const [tab, setTabBase] = useState<Separador>(separadorDe(initialTab));
+  const setTab = (t: Separador) => { if (t === "cronograma") setVistaCrono("grelha"); setTabBase(separadorDe(t)); };
+  useEffect(() => { setTab(initialTab); }, [initialTab, turmaId, souFormador]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [editarSessao, setEditarSessao] = useState<SessaoCronograma | null>(null);
+  const [diaNovo, setDiaNovo] = useState("");
+  const [apagarSessao, setApagarSessao] = useState<SessaoCronograma | null>(null);
   const ped = useTurmaPedagogia("fin", turma?.id ?? 0, turma?.cronograma);
   const criterios = useCriteriosAvaliacao("fin", turma?.curso);
   const programa = useProgramaDoCurso("fin", turma?.curso ?? "");
@@ -107,6 +125,20 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
                   }} />
         );
         const ocupacao = t.alunosTotal > 0 ? Math.min(100, (t.alunos / t.alunosTotal) * 100) : 0;
+        // Indicadores do topo (como o «Gerir turma» antigo): volume = horas × presentes nas folhas.
+        const porId = new Map(t.cronograma.map(c => [c.id, c]));
+        const horasDe = (s: { id?: string }) => horasDaSessao(s.id ? porId.get(s.id) : undefined);
+        const volumeRealizado = sessoes.reduce((soma, s) => soma + horasDe(s) * (ped.presencas[s.n]?.filter(p => p.presente).length ?? 0), 0);
+        const volumeCandidatura = t.horas * t.alunosTotal;
+        const diasUteis = new Set(sessoes.map(s => s.dataIso ?? "").filter(d => d && [1, 2, 3, 4, 5].includes(new Date(`${d}T12:00:00Z`).getUTCDay())));
+        const diasUteisFeitos = [...diasUteis].filter(d => d < new Date().toISOString().slice(0, 10)).length;
+        const avaliacaoPendente = resultados?.formandos.filter(f => f.nota == null && !/desist/i.test(f.estado)).length;
+        const indicadores = [
+          { rotulo: "Inscritos / Vagas", valor: <><span className="text-emerald-700">{t.alunos}</span><span className="text-tinta-suave">/{t.alunosTotal}</span></>, detalhe: `${prontos} com documentos prontos`, tab: "overview" as Separador },
+          { rotulo: "Volume de formação", valor: <><span className="text-blue-900">{num(volumeRealizado)} h</span><span className="text-tinta-suave"> / {num(volumeCandidatura)} h</span></>, detalhe: `Realizado / em candidatura · expectável ${num(t.horas * t.alunos)} h`, tab: "sessoes" as Separador },
+          { rotulo: "Subsídio de alimentação", valor: <span className="text-blue-900">{diasUteis.size} dias úteis</span>, detalhe: `${diasUteisFeitos} já realizados`, tab: "subsidio" as Separador },
+          { rotulo: "Avaliação da aprendizagem", valor: <span className={avaliacaoPendente ? "text-red-800" : "text-emerald-700"}>{avaliacaoPendente == null ? "—" : avaliacaoPendente ? `${avaliacaoPendente} pendentes` : "Completa"}</span>, detalhe: "Formandos sem nota", tab: "avaliacao" as Separador },
+        ];
 
         return (
           <>
@@ -171,11 +203,41 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
               </section>
 
               <NextActions accent="fin" actions={proximos.slice(0, 3)} />
-              <TurmaTabBar tab={tab} onChange={t => setTab(separadorDe(t))} accent="fin" dtpPct={ped.dtp.pct} dossie={staffPodeDossie(user.role)} despesas={!souFormador}
-                so={souFormador ? TABS_FORMADOR : undefined} />
+              {!souFormador && (
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  {indicadores.map(k => (
+                    <button key={k.rotulo} type="button" onClick={() => setTab(k.tab)}
+                      className="rounded-painel border border-linha bg-superficie px-4 py-3 text-left hover:border-linha-forte">
+                      <p className="m-0 text-[13px] text-tinta-suave">{k.rotulo}</p>
+                      <p className="num m-0 mt-1 text-2xl font-semibold">{k.valor}</p>
+                      <p className="m-0 mt-0.5 text-xs text-tinta-suave">{k.detalhe}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <TurmaTabBar tab={tab} onChange={setTab} accent="fin" dtpPct={ped.dtp.pct} dossie={staffPodeDossie(user.role)} despesas={!souFormador}
+                ordem={ORDEM_FIN} rotulos={ROTULOS_FIN} so={souFormador ? TABS_FORMADOR : undefined} />
               {!activa && <TurmaInactivaBanner nome={t.nome} onActivate={() => toggle(true)} />}
 
-              {tab === "cronograma" && !souFormador && (
+              {tab === "sessoes" && (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Pilulas<VistaCronograma> estilo="pilula" rotulo="Vista do cronograma" ativo={souFormador && vistaCrono === "grelha" ? "dias" : vistaCrono} onMudar={setVistaCrono}
+                    itens={[{ id: "dias", rotulo: "Por dias" }, ...(souFormador ? [] : [{ id: "grelha" as const, rotulo: "Grelha de 45 min" }]), { id: "lista", rotulo: "Lista de sessões" }]} />
+                  {!souFormador && vistaCrono === "dias" && (
+                    <div className="flex flex-wrap gap-2">
+                      <Botao tamanho="sm" variante="secundario" onClick={() => setVistaCrono("grelha")}>Regenerar grelha</Botao>
+                      <Botao tamanho="sm" variante="primario" onClick={() => { setDiaNovo(""); setNovaSessao(true); }}>+ Sessão</Botao>
+                    </div>
+                  )}
+                </div>
+              )}
+              {tab === "sessoes" && (vistaCrono === "dias" || (souFormador && vistaCrono === "grelha")) && (
+                <CronogramaDias sessoes={sessoes} cronograma={t.cronograma} inicio={t.dataInicio} planos={ped.planos} presencas={ped.presencas} sumarios={sumarios}
+                  inscritos={membros.length} podeCriar={!souFormador} podeEditarSessao={!souFormador}
+                  onNova={dia => { setDiaNovo(dia); setNovaSessao(true); }} onEditar={setEditarSessao}
+                  onPresencas={setPresencasSessao} onPlano={setPlanoSessao} />
+              )}
+              {tab === "sessoes" && vistaCrono === "grelha" && !souFormador && (
                 <CronogramaEditor layout="page" accent="fin" turmaId={t.id} identidade={`fin-${t.id}`} nome={t.nome} sessoes={t.cronograma}
                   onChange={setCronograma} publicar={publicarCronograma} inicio={t.dataInicio} horario={t.horario} horas={t.horas} formador={t.formador} curso={t.curso} local={t.local} />
               )}
@@ -184,7 +246,10 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
                   onToggle={(item, proximo) => void ped.guardarDtp(item.id, proximo)} onAnexo={(item, file) => void ped.guardarDtpAnexo(item.id, file)}
                   onActualizar={() => void ped.recarregar()} />
               )}
-              {tab === "sessoes" && sessoesTab}
+              {tab === "sessoes" && vistaCrono === "lista" && sessoesTab}
+              {tab === "subsidio" && !souFormador && (
+                <ProcessarApoios embutido turma={{ id: t.id, nome: t.nome }} aberto onFechar={() => undefined} />
+              )}
               {tab === "avaliacao" && (
                 <TurmaAvaliacao key={t.id} regime="fin" turmaId={t.id} cursoNome={t.curso} turmaNome={t.nome} accent="fin" formandos={nomesCockpit} soLeitura={souFormador} />
               )}
@@ -238,8 +303,15 @@ export function CockpitFin({ turmaId, initialTab = "overview", navigate }: { tur
             <ExportTurmaModal open={!!exportar} onClose={() => setExportar(null)} turma={exportar} />
             <FormadorProfileSlideOver open={!!formadorAberto} onClose={() => setFormadorAberto(null)} nome={formadorAberto ?? t.formador} accent="fin" turma={t.nome}
               horas={formadorAberto ? horasDoFormador(t.cronograma, formadorAberto) : undefined} />
-            <NovaSessaoPainel key={`sessao-${novaSessao}`} aberto={novaSessao} onFechar={() => setNovaSessao(false)} regime="fin" turma={t} horaPadrao="19:00" duracao={3}
-              onCriar={s => { setCronograma([...t.cronograma, s]); setNovaSessao(false); }} />
+            <NovaSessaoPainel key={`sessao-${novaSessao}-${diaNovo}`} aberto={novaSessao} onFechar={() => setNovaSessao(false)} regime="fin" turma={t} horaPadrao="19:00" duracao={3}
+              dataInicial={diaNovo} onCriar={s => { setCronograma([...t.cronograma, s]); setNovaSessao(false); }} />
+            <NovaSessaoPainel key={`editar-${editarSessao?.id ?? ""}`} aberto={Boolean(editarSessao)} onFechar={() => setEditarSessao(null)} regime="fin" turma={t} horaPadrao="19:00" duracao={3}
+              sessao={editarSessao}
+              onCriar={s => { setCronograma(t.cronograma.map(x => x.id === s.id ? s : x)); setEditarSessao(null); }}
+              onEliminar={() => { setApagarSessao(editarSessao); setEditarSessao(null); }} />
+            <ConfirmarPerigo aberto={Boolean(apagarSessao)} onFechar={() => setApagarSessao(null)} titulo="Eliminar sessão" acao="Eliminar sessão"
+              descricao={apagarSessao ? `A sessão de ${fmtDataUi(apagarSessao.data)} sai do cronograma.` : ""}
+              onConfirmar={async () => { if (apagarSessao) setCronograma(t.cronograma.filter(x => x.id !== apagarSessao.id)); setApagarSessao(null); }} />
             <InscreverFin aberto={inscrever} onFechar={() => setInscrever(false)} turma={t} activa={activa} membros={membros} onActivar={() => toggle(true)} />
             <EditarTurmaFin aberto={editar} onFechar={() => setEditar(false)} turma={t} onGravar={patch} />
             <TransferirEEliminarFin turma={t} transferir={transferir} eliminar={eliminar} onFechar={() => { setTransferir(null); setEliminar(null); }} />

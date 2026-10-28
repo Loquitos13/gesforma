@@ -4,7 +4,13 @@ import { resolveSmtpTransport, smtpConfigured } from "./smtpConfig.js";
 import { sanitizeHeader } from "./security.js";
 
 type Anexo = { nome: string; tipo: string; conteudo: Buffer };
-type SendInput = { to: string; name: string; subject: string; text: string; html?: string; anexos?: Anexo[] };
+type SendInput = {
+  to: string; name: string; subject: string; text: string; html?: string; anexos?: Anexo[];
+  /** Remetente próprio (ex.: o email do local); as respostas vão para ele. Sem isto, o da configuração SMTP. */
+  de?: { nome: string; email: string };
+  /** Cópia oculta (ex.: para a caixa do remetente ficar com o registo do que se enviou). */
+  bcc?: string;
+};
 
 // Um transporte por configuração, reaproveitado entre envios (o cron manda vários seguidos). Com limites de tempo:
 // um SMTP que não responde não pode prender a função da Vercel (30 s) até ela morrer a meio da fila.
@@ -37,8 +43,9 @@ export async function sendMail(db: Db, input: SendInput) {
   }
   const mailer = emCache.mailer;
   const info = await mailer.sendMail({
-    from: transport.from,
-    replyTo: transport.replyTo || undefined,
+    from: input.de ? { name: sanitizeHeader(input.de.nome), address: sanitizeHeader(input.de.email) } : transport.from,
+    replyTo: input.de ? sanitizeHeader(input.de.email) : transport.replyTo || undefined,
+    bcc: input.bcc ? sanitizeHeader(input.bcc) : undefined,
     // Nome e endereço separados: com texto «Nome <email>», vírgulas ou endereços no nome viravam destinatários.
     to: { name: sanitizeHeader(input.name), address: to },
     subject,

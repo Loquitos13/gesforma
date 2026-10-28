@@ -90,7 +90,24 @@ export function FichaActividade({ d, onMudou }: { d: DossieLead; onMudou: () => 
         {FILTROS.map(f => <Chip key={f.id} ativo={filtro === f.id} onClick={() => setFiltro(f.id)}>{f.rotulo}</Chip>)}
       </div>
 
-      {eventos.length === 0 ? <Vazio compacto titulo="Ainda sem actividade." /> : (
+      {filtro === "nota" ? (
+        // As notas do pedido, por inteiro (incluem as que vieram do sistema antigo, que não têm evento no histórico).
+        d.notas.length === 0 ? <Vazio compacto titulo="Ainda sem notas." /> : (
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
+            {d.notas.map(n => (
+              <li key={n.id} className="rounded-cartao border border-linha px-3 py-2">
+                <div className="flex items-start gap-2">
+                  <p className="m-0 flex-1 text-xs text-tinta-suave">
+                    {relativo(n.createdAt)}{n.actorName ? ` · ${n.actorName}` : ""}{n.meio ? ` · ${n.meio}` : ""}{n.resultado ? ` · ${n.resultado}` : ""}
+                  </p>
+                  <Botao variante="ligacao" tamanho="sm" onClick={() => void fixar.correr(id, n.id, !n.fixada).then(r => r && onMudou())}>{n.fixada ? "Desafixar" : "Fixar"}</Botao>
+                </div>
+                <p className="m-0 whitespace-pre-wrap break-words text-sm">{n.nota}</p>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : eventos.length === 0 ? <Vazio compacto titulo="Ainda sem actividade." /> : (
         <ol className="m-0 flex list-none flex-col gap-3 border-l border-linha p-0 pl-4">
           {eventos.map(e => (
             <li key={e.id} className="relative">
@@ -103,9 +120,10 @@ export function FichaActividade({ d, onMudou }: { d: DossieLead; onMudou: () => 
         </ol>
       )}
 
-      {d.notas.some(n => !n.fixada) && (
+      {filtro !== "nota" && d.notas.some(n => !n.fixada) && (
         <details>
           <summary className="cursor-pointer text-[13px] font-semibold text-ligacao">Notas ({d.notas.length})</summary>
+          <p className="m-0 mt-1 text-xs text-tinta-suave">O texto completo de cada nota está no filtro «Notas», acima.</p>
           <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0">
             {d.notas.map(n => (
               <li key={n.id} className="flex items-center gap-2 text-xs">

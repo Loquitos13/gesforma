@@ -192,6 +192,11 @@ export const apiCompletar = (id: number, d: DadosLead) => enviar.post<DossieLead
 
 export const apiNota = (id: number, nota: string, meio = "", resultado = "") =>
   enviar.post<DossieLead>(`/v1/crm/leads/${id}/notas`, { nota, meio, resultado });
+/** Email à pessoa, enviado pelo GesForma com o email do local como remetente. */
+export type RemetentesLead = { para: string; nome: string; curso: string; local: string; sugerido: string; remetentes: { local: string; email: string }[] };
+export const apiRemetentesLead = (id: number, signal?: AbortSignal) => api<RemetentesLead>(`/v1/crm/leads/${id}/email`, { signal });
+export const apiEnviarEmailLead = (id: number, d: { de: string; assunto: string; texto: string }) =>
+  enviar.post<{ ok: boolean; para: string; de: string; dossie: DossieLead }>(`/v1/crm/leads/${id}/email`, d);
 export const apiFixarNota = (id: number, nid: number, fixada: boolean) =>
   enviar.post<DossieLead>(`/v1/crm/leads/${id}/notas/${nid}/fixar`, { fixada });
 export const apiGravarDadosFin = (id: number, d: Partial<PerfilFinLead>) =>

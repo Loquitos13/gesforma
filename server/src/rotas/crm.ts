@@ -15,6 +15,7 @@ import { pode } from "../permissoes/capacidades.js";
 import { registerWhatsappRoutes } from "../whatsapp.js";
 import { idParam, textoQuery, validar } from "../validacao.js";
 import { registarDocumentosCrm } from "./crmDocumentos.js";
+import { EmailLeadErro, enviarEmailLead, remetentesDoLead } from "../emailLead.js";
 import { registarFaturacao } from "./faturacao.js";
 import { turmasDoFormador } from "../sessaoAcesso.js";
 import { comercialAbre } from "../../../src/partilhado/vistasComercial.js";
@@ -303,6 +304,37 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     await addLeadNota(db, v.params.id, req.actor!.id, v.body.nota, v.body.meio ?? "", v.body.resultado ?? "");
     await audit(db, req.actor!.id, "crm.nota", "preinscricao", String(v.params.id), req.ip);
     return getLeadDossier(db, v.params.id, req.actor!);
+  });
+
+  /** Remetentes possíveis do email à pessoa (o email de cada local, o do local da pré-inscrição primeiro). */
+  app.get("/v1/crm/leads/:id/email", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: idParam }, req);
+    if (!v) return;
+    const info = await remetentesDoLead(db, v.params.id);
+    if (!info) return reply.code(404).send({ error: "pré-inscrição inexistente" });
+    return info;
+  });
+
+  app.post("/v1/crm/leads/:id/email", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, {
+      params: idParam,
+      body: z.object({
+        de: z.string().trim().max(254),
+        assunto: z.string().trim().min(1, "Escreva o assunto.").max(200),
+        texto: z.string().trim().min(1, "Escreva a mensagem.").max(10000),
+      }),
+    }, req);
+    if (!v) return;
+    try {
+      const r = await enviarEmailLead(db, v.params.id, req.actor!.id, v.body);
+      await audit(db, req.actor!.id, "crm.email", "preinscricao", String(v.params.id), req.ip, { de: r.de });
+      return { ok: true, ...r, dossie: await getLeadDossier(db, v.params.id, req.actor!) };
+    } catch (err) {
+      if (err instanceof EmailLeadErro) return reply.code(err.estado).send({ error: err.message });
+      throw err;
+    }
   });
 
   app.post("/v1/crm/leads/:id/notas/:nid/fixar", async (req, reply) => {

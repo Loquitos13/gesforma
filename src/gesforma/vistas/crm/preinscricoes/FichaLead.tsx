@@ -3,11 +3,12 @@ import { Aviso, Botao, ErroCarregar, Esqueleto, Estado, Modal, Separadores, cx }
 import { apiDossie, apiNota, type DossieLead, type Lead } from "../../../../partilhado/api/crm";
 import { invalidar, useRecurso } from "../../../../partilhado/dados/useRecurso";
 import { useAuth } from "../../../../partilhado/AuthGate";
-import { toastError } from "../../../../partilhado/toastBus";
+import { toastError, toastOk } from "../../../../partilhado/toastBus";
 import { FichaActividade } from "./FichaActividade";
 import { FichaContabilidade } from "./FichaContabilidade";
 import { FichaDados } from "./FichaDados";
 import { FichaDocumentos } from "./FichaDocumentos";
+import { EmailLead } from "./EmailLead";
 import { FichaSecretaria } from "./FichaSecretaria";
 import { nomeCompleto, proximoPasso, rotuloEtapa, telWhatsapp, tomEtapa } from "./util";
 
@@ -28,6 +29,9 @@ function percurso(d: DossieLead) {
   return passos;
 }
 
+/** Datas ISO dentro de um texto («2026-11-22 2027-01-28») em dd-mm-aaaa. */
+const datasPt = (t: string) => t.replace(/(\d{4})-(\d{2})-(\d{2})/g, "$3-$2-$1");
+
 /** Ficha da pré-inscrição: percurso, próximo passo, contactos e separadores de trabalho. */
 export function FichaLead({ id, lista, onFechar, onMudar }: {
   id: number | null;
@@ -37,6 +41,7 @@ export function FichaLead({ id, lista, onFechar, onMudar }: {
 }) {
   const { user } = useAuth();
   const [aba, setAba] = useState<Aba>("actividade");
+  const [email, setEmail] = useState(false);
   const { dados: d, erro, recarregar } = useRecurso(id ? `crm:lead:${id}` : null, signal => apiDossie(id!, signal));
   useEffect(() => { setAba("actividade"); }, [id]);
 
@@ -58,9 +63,9 @@ export function FichaLead({ id, lista, onFechar, onMudar }: {
     invalidar("crm:");
   }
 
-  async function registarContacto(canal: "Telefone" | "WhatsApp" | "Email") {
+  async function registarContacto(canal: "Telefone" | "WhatsApp") {
     if (!d) return;
-    const texto = canal === "WhatsApp" ? "Abriu WhatsApp." : canal === "Email" ? "Escreveu por email." : "Tentativa de chamada.";
+    const texto = canal === "WhatsApp" ? "Abriu WhatsApp." : "Tentativa de chamada.";
     try {
       await apiNota(d.lead.id, texto, canal, canal === "Telefone" ? "" : "Atendeu");
       actualizado();
@@ -95,6 +100,25 @@ export function FichaLead({ id, lista, onFechar, onMudar }: {
             {lead.etiquetaNome && <span className="text-xs font-semibold" style={{ color: lead.etiquetaCor || undefined }}>● {lead.etiquetaNome}</span>}
           </div>
 
+          {/* O que a pessoa escolheu ao pré-inscrever-se (local e horário decidem a turma) e o email à vista. */}
+          <dl aria-label="Dados do pedido" className="m-0 grid grid-cols-2 gap-x-4 gap-y-2 rounded-cartao border border-linha px-4 py-3 text-[13px] sm:grid-cols-4">
+            {([["Local", lead.local], ["Horário", lead.horario], ["Início", datasPt(lead.inicioCurso || "")], ["Concelho", lead.concelho]] as const).map(([r, v]) => (
+              <div key={r} className="min-w-0">
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-tinta-suave">{r}</dt>
+                <dd className="m-0 truncate font-semibold" title={v || undefined}>{v || "—"}</dd>
+              </div>
+            ))}
+            <div className="col-span-2 min-w-0 sm:col-span-4">
+              <dt className="text-[11px] font-semibold uppercase tracking-wide text-tinta-suave">Email</dt>
+              <dd className="m-0 flex min-w-0 items-center gap-2">
+                <span className="truncate font-semibold select-all">{lead.email || "—"}</span>
+                {lead.email && (
+                  <Botao variante="ligacao" tamanho="sm" onClick={() => { void navigator.clipboard?.writeText(lead.email).then(() => toastOk("Email copiado.")); }}>Copiar</Botao>
+                )}
+              </dd>
+            </div>
+          </dl>
+
           <ol aria-label="Percurso" className="m-0 flex list-none gap-1 p-0">
             {percurso(d).map(p => (
               <li key={p.rotulo} className="flex-1 min-w-0">
@@ -119,7 +143,7 @@ export function FichaLead({ id, lista, onFechar, onMudar }: {
               ? <a className="inline-flex h-9 items-center rounded-controlo bg-tinta px-3 font-semibold text-white" href={`tel:${lead.telf}`} onClick={() => void registarContacto("Telefone")}>Ligar · {lead.telf}</a>
               : <span className="inline-flex h-9 items-center rounded-controlo bg-linha-suave px-3 text-tinta-fraca">Sem telemóvel</span>}
             {wa && <a className="inline-flex h-9 items-center rounded-controlo bg-sucesso px-3 font-semibold text-white" href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" onClick={() => void registarContacto("WhatsApp")}>WhatsApp</a>}
-            {lead.email && <a className="inline-flex h-9 items-center rounded-controlo border border-linha-forte px-3 font-semibold text-tinta" href={`mailto:${lead.email}`} onClick={() => void registarContacto("Email")}>Email</a>}
+            {lead.email && <button type="button" className="inline-flex h-9 items-center rounded-controlo border border-linha-forte px-3 font-semibold text-tinta hover:bg-fundo" onClick={() => setEmail(true)}>Email</button>}
             {lead.regime === "gold" && (user.role === "admin" || user.role === "secretaria") && <FichaContabilidade leadId={lead.id} />}
           </div>
 
@@ -148,6 +172,7 @@ export function FichaLead({ id, lista, onFechar, onMudar }: {
           {aba === "documentos" && <FichaDocumentos d={d} role={user.role} onMudou={actualizado} />}
           {aba === "dados" && <FichaDados d={d} onMudou={actualizado} />}
           {aba === "secretaria" && <FichaSecretaria d={d} role={user.role} onMudou={actualizado} />}
+          <EmailLead d={d} aberto={email} onFechar={() => setEmail(false)} onEnviado={actualizado} />
         </div>
       )}
     </Modal>

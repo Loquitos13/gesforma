@@ -98,22 +98,18 @@ export default function Turmas({ view, navigate }: VistaProps) {
     {
       id: "nome", titulo: "Turma", ordenavel: true, principal: true,
       celula: t => (
-        <div className="min-w-0">
+        <div className="min-w-0 max-w-[220px]">
           <p className="m-0 font-semibold text-tinta truncate">{t.nome}</p>
           <p className="m-0 text-xs text-tinta-suave truncate">{fin && t.ufcd ? `${rotuloCodigoCurso(t.ufcd)} · ` : ""}{t.curso}</p>
         </div>
       ),
     },
     {
-      id: "local", titulo: "Local e horário", esconderMovel: true,
-      celula: t => <div className="text-[13px]"><p className="m-0">{t.local || "—"}</p><p className="m-0 text-xs text-tinta-suave">{t.horario || "Horário por definir"}</p></div>,
-    },
-    {
-      id: "inicio", titulo: "Datas", ordenavel: true,
+      id: "inicio", titulo: "Local, horário e início", ordenavel: true, esconderMovel: true,
       celula: t => (
-        <div className="num text-[13px] whitespace-nowrap">
-          <p className="m-0">{data(t.dataInicio)}{t.dataFim && t.dataFim !== t.dataInicio ? ` – ${data(t.dataFim)}` : ""}</p>
-          <p className="m-0 text-xs text-tinta-suave">{num(t.horas)} h · {t.realizadas}/{t.sessoes} sessões</p>
+        <div className="text-[13px] max-w-[190px]">
+          <p className="m-0">{t.local || "—"}</p>
+          <p className="m-0 text-xs text-tinta-suave">{t.horario || "Horário por definir"} · <span className="num">{data(t.dataInicio)}</span></p>
         </div>
       ),
     },
@@ -128,7 +124,7 @@ export default function Turmas({ view, navigate }: VistaProps) {
         const tom = tomOcupacao(ocupadas, t.capacidade);
         const largura = t.capacidade > 0 ? Math.min(100, Math.round((ocupadas / t.capacidade) * 100)) : 0;
         return (
-          <div className="num min-w-[130px]">
+          <div className="num min-w-[120px]">
             <div className="flex items-center gap-2">
               <span className="relative flex-1 h-1.5 rounded-full bg-linha-suave overflow-hidden" aria-hidden="true">
                 <span className={cx("absolute inset-y-0 left-0 rounded-full", BARRA[tom])} style={{ width: `${largura}%` }} />
@@ -136,7 +132,7 @@ export default function Turmas({ view, navigate }: VistaProps) {
               <span className="text-[13px] font-semibold">{ocupadas}/{t.capacidade}</span>
             </div>
             <p className="m-0 mt-0.5 text-xs text-tinta-suave">
-              {fin ? `${t.docsCompletos} com documentos completos` : t.livres > 0 ? `${t.livres} vagas livres${t.reservas ? ` · ${t.reservas} reservas` : ""}` : "Sem vagas"}
+              {fin ? `${t.docsCompletos} com documentos` : t.livres > 0 ? `${t.livres} vagas livres${t.reservas ? ` · ${t.reservas} reservas` : ""}` : "Sem vagas"}
             </p>
           </div>
         );
@@ -147,7 +143,7 @@ export default function Turmas({ view, navigate }: VistaProps) {
       celula: t => (
         <div className="space-y-1">
           <Estado tom={FASE_ESTADO[t.fase].tom}>{FASE_ESTADO[t.fase].rotulo}</Estado>
-          <p className="m-0 text-xs text-tinta-suave">{t.inscricoesAbertas ? "Inscrições abertas" : "Inscrições fechadas"}{fin && t.financiador ? ` · ${t.financiador}` : ""}</p>
+          <p className="m-0 text-xs text-tinta-suave">{t.inscricoesAbertas ? "Inscrições abertas" : "Inscrições fechadas"}</p>
         </div>
       ),
     },
@@ -155,12 +151,15 @@ export default function Turmas({ view, navigate }: VistaProps) {
       id: "alertas", titulo: "Alertas", esconderMovel: true,
       celula: t => {
         const al = alertasDaTurma(t, regime, pct(t));
-        if (!al.length) return <span className="text-xs text-sucesso">Sem pendentes</span>;
+        if (!al.length) return <span className="text-xs text-tinta-suave">—</span>;
+        const [primeiro, ...resto] = al;
         return (
-          <ul className="m-0 p-0 list-none space-y-0.5">
-            {al.slice(0, 2).map(a => <li key={a.texto} className={cx("text-xs", TOM_CLASSES[a.tom].texto)}>{a.texto}</li>)}
-            {al.length > 2 && <li className="text-xs text-tinta-suave">+{al.length - 2} alertas</li>}
-          </ul>
+          <div className="w-[160px] whitespace-normal" title={al.map(a => a.texto).join("\n")}>
+            <span className={cx("inline-block rounded-md px-2 py-1 text-xs font-semibold leading-snug", TOM_CLASSES[primeiro.tom].fundo, TOM_CLASSES[primeiro.tom].texto)}>
+              {primeiro.tom === "perigo" || primeiro.tom === "aviso" ? "⚠ " : ""}{primeiro.texto}
+            </span>
+            {resto.length > 0 && <p className="m-0 mt-0.5 text-xs text-tinta-suave">+{resto.length} {resto.length === 1 ? "alerta" : "alertas"}</p>}
+          </div>
         );
       },
     },
@@ -247,7 +246,14 @@ export default function Turmas({ view, navigate }: VistaProps) {
             onOrdenar={ordem => setF({ ordem })}
             onLinha={t => cockpit(t)}
             aCarregar={lista.aCarregar && !lista.dados}
-            acoesLinha={t => <MenuLinha rotulo={`Mais ações para ${t.nome}`} acoes={acoes(t)} />}
+            acoesLinha={t => (
+              <div className="flex items-center justify-end gap-1.5">
+                <Botao variante="primario" tamanho="sm" onClick={e => { e.stopPropagation(); cockpit(t); }}>
+                  {formador ? "Abrir turma" : "Gerir turma"}
+                </Botao>
+                <MenuLinha rotulo={`Mais ações para ${t.nome}`} acoes={acoes(t).slice(1)} />
+              </div>
+            )}
             vazio={filtrosAtivos || f.fase
               ? <span>Nenhuma turma com estes filtros. <Botao variante="ligacao" onClick={limpar}>Limpar filtros</Botao></span>
               : <span>Ainda não há turmas{gerir ? ". Crie a primeira com «Nova turma»." : "."}</span>}

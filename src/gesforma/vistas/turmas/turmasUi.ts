@@ -36,7 +36,7 @@ export function alertasDaTurma(t: LinhaTurma, regime: "gold" | "fin", dtpPct?: n
   const out: Alerta[] = [];
   if (t.sumariosEmFalta > 0) {
     out.push({ texto: regime === "fin"
-      ? `${plural(t.sumariosEmFalta, "folha de presenças", "folhas de presenças")} por preencher`
+      ? `${plural(t.sumariosEmFalta, "folha", "folhas")} por preencher`
       : `${plural(t.sumariosEmFalta, "sumário", "sumários")} por assinar`, tom: "perigo" });
   }
   if (regime === "gold" && t.reservas > 0 && t.fase !== "fechada") {

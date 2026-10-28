@@ -58,6 +58,8 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
     if (!turma) return;
     // O formador fica fora do dossiê (FORMADOR_SEM_LEITURA): não recebe o DTP nem as ligações dos anexos.
     const formador = req.actor!.role === "formador";
+    // Os planos e sumários da ficha do curso chegam a todas as turmas (também às que já existiam): só grava o que mudou.
+    await importarPlanosCurso(db, regime, id).catch(err => req.log.warn({ err }, "planos do curso: importação falhou"));
     const [sessoes, documentos, certificados, dtp, planosDoCurso] = await Promise.all([
       listarSessoes(db, regime, id),
       listarDocumentos(db, regime, id),

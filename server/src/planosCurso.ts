@@ -1,8 +1,9 @@
 /**
  * Planos de sessão do curso (ficha do curso) levados para as turmas desse curso.
  * O plano do curso com a ordem n vai para a sessão lectiva n da turma (presencial ou síncrona).
- * Só se escreve nas sessões sem plano (ou, ao substituir, nas que não estão assinadas) e nunca em turmas fechadas.
- * O sumário padrão do curso não se grava: só pré-preenche o editor do sumário no ecrã.
+ * O plano e o sumário (conteúdos e atividades; só na Gold, a Financiada não tem sumário) são iguais em todas as turmas:
+ * gravam-se nas sessões sem eles, marcados `origem: "curso"`. Enquanto a turma não os altera (gravar na turma tira a
+ * marca) nem os assina, acompanham as mudanças da ficha do curso. Nunca em turmas fechadas.
  */
 import type { Db } from "./db/pool.js";
 import { asObj } from "./pedagogia/util.js";
@@ -50,14 +51,25 @@ export function planoTemTexto(raw: unknown) {
   return Object.values(asObj(p.momentos)).some(m => Object.values(asObj(m)).some(v => String(v ?? "").trim()));
 }
 
+type SumarioCurso = { conteudos: string; atividades: string };
+
 /** Planos com texto da ficha do curso, pela ordem da sessão. */
 async function planosDoCurso(db: Db, regime: Regime, cursoId: number) {
+  return new Map([...(await modelosDoCurso(db, regime, cursoId))].flatMap(([n, m]) => (m.plano ? [[n, m.plano] as const] : [])));
+}
+
+/** Plano e sumário padrão de cada sessão da ficha do curso (só os que têm texto). */
+async function modelosDoCurso(db: Db, regime: Regime, cursoId: number) {
   const ficha = await lerFicha(db, regime, cursoId);
   const linhas = asObj(ficha?.payload).planosSessao;
-  const out = new Map<number, PlanoSessao>();
+  const out = new Map<number, { plano: PlanoSessao | null; sumario: SumarioCurso | null }>();
   for (const l of Array.isArray(linhas) ? linhas : []) {
     const p = planoDaLinha(l);
-    if (p && planoTemTexto(p.plano)) out.set(p.ordem, p.plano);
+    if (!p) continue;
+    const s = asObj(asObj(l).sumario);
+    const sumario = { conteudos: txt(s.conteudos, 6000), atividades: txt(s.atividades, 6000) };
+    const temSumario = regime === "gold" && Boolean(sumario.conteudos.trim() || sumario.atividades.trim());
+    if (planoTemTexto(p.plano) || temSumario) out.set(p.ordem, { plano: planoTemTexto(p.plano) ? p.plano : null, sumario: temSumario ? sumario : null });
   }
   return out;
 }
@@ -70,39 +82,67 @@ export async function ordensComPlanoDoCurso(db: Db, regime: Regime, turmaId: num
   return cursoId ? new Set((await planosDoCurso(db, regime, Number(cursoId))).keys()) : new Set<number>();
 }
 
-export type ResultadoImportacao = { importados: number; mantidos: number; semModelo: number; fechada?: boolean };
+export type ResultadoImportacao = { importados: number; mantidos: number; semModelo: number; sumarios?: number; fechada?: boolean };
+
+/** Igualdade sem depender da ordem das chaves (o jsonb reordena-as) nem dos campos vazios. */
+function estavel(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(estavel);
+  if (v && typeof v === "object") {
+    return Object.fromEntries(Object.entries(v).filter(([, x]) => x !== undefined && x !== null).sort(([a], [b]) => a.localeCompare(b)).map(([k, x]) => [k, estavel(x)]));
+  }
+  return v;
+}
+const igual = (a: unknown, b: unknown) => JSON.stringify(estavel(a)) === JSON.stringify(estavel(b));
 
 export async function importarPlanosCurso(db: Db, regime: Regime, turmaId: number, o: { substituir?: boolean } = {}): Promise<ResultadoImportacao> {
-  const vazio = { importados: 0, mantidos: 0, semModelo: 0 };
+  const vazio = { importados: 0, mantidos: 0, semModelo: 0, sumarios: 0 };
   const turma = await turmaParaPlanos(db, regime, turmaId);
   if (!turma) return vazio;
   if (turma.fechada_em) return { ...vazio, fechada: true };
   const cursoId = turma.curso_id ?? (await cursoPorNome(db, regime, turma.curso))?.id ?? null;
   if (!cursoId) return vazio;
-  const planos = await planosDoCurso(db, regime, Number(cursoId));
-  if (!planos.size) return vazio;
-  const actuais = new Map((await listarSessoes(db, regime, turmaId)).map(s => [String(s.sessao_id ?? ""), asObj(s.plano)]));
+  const modelos = await modelosDoCurso(db, regime, Number(cursoId));
+  if (!modelos.size) return vazio;
+  const actuais = new Map((await listarSessoes(db, regime, turmaId)).map(s => [String(s.sessao_id ?? ""), s]));
   const r = { ...vazio };
   // O plano n do curso vai para a sessão que hoje está na posição n; depois de gravado fica preso ao id dessa sessão.
   for (let n = 1; sessaoLectivaN(turma.cronograma, n); n++) {
     const sessaoId = String(sessaoLectivaN(turma.cronograma, n)?.id ?? "");
-    const modelo = planos.get(n);
-    if (!modelo) { r.semModelo += 1; continue; }
-    const actual = actuais.get(sessaoId);
-    const temPlano = actual != null && planoTemTexto(actual);
-    if (temPlano && (!o.substituir || actual.assinado === true)) { r.mantidos += 1; continue; }
-    if (!sessaoId) { r.semModelo += 1; continue; }
-    await gravarSessao(db, regime, turmaId, { id: sessaoId, n }, { plano: modelo });
-    r.importados += 1;
+    const modelo = modelos.get(n);
+    if (!modelo || !sessaoId) { r.semModelo += 1; continue; }
+    const linha = actuais.get(sessaoId);
+    const partes: { plano?: unknown; sumario?: unknown } = {};
+
+    const plano = asObj(linha?.plano);
+    // Sem plano, ainda o do curso (não alterado na turma) ou, ao substituir, um não assinado.
+    const herdavel = !planoTemTexto(plano) || (plano.origem === "curso" && plano.assinado !== true) || (o.substituir && plano.assinado !== true);
+    if (modelo.plano && herdavel) {
+      // Definido pela coordenação na ficha do curso: chega à turma já aprovado.
+      const novo = { ...modelo.plano, origem: "curso", estado: "aprovado", assinado: false, revistoPor: "Ficha do curso" };
+      if (!igual({ ...plano, revistoEm: undefined }, { ...novo, revistoEm: undefined })) partes.plano = { ...novo, revistoEm: new Date().toISOString() };
+    }
+
+    const sumario = asObj(linha?.sumario);
+    const sumarioVazio = !String(sumario.conteudos ?? "").trim() && !String(sumario.atividades ?? "").trim();
+    if (modelo.sumario && sumario.assinado !== true && (sumarioVazio || sumario.origem === "curso" || o.substituir)) {
+      const novo = { ...sumario, conteudos: modelo.sumario.conteudos, atividades: modelo.sumario.atividades, assinado: false, origem: "curso" };
+      if (!igual(sumario, novo)) partes.sumario = novo;
+    }
+
+    if (!partes.plano && !partes.sumario) { r.mantidos += 1; continue; }
+    await gravarSessao(db, regime, turmaId, { id: sessaoId, n }, partes);
+    if (partes.plano) r.importados += 1;
+    if (partes.sumario) r.sumarios += 1;
   }
   return r;
 }
 
-/** Depois de gravar a ficha do curso: leva os planos às turmas abertas do curso (sem substituir). */
+/** Depois de gravar a ficha do curso: leva os planos e os sumários às turmas abertas do curso. */
 export async function importarParaTurmasDoCurso(db: Db, regime: Regime, cursoId: number) {
   let importados = 0;
   for (const id of await turmasAbertasDoCurso(db, regime, cursoId)) {
-    importados += (await importarPlanosCurso(db, regime, id)).importados;
+    const r = await importarPlanosCurso(db, regime, id);
+    importados += r.importados + (r.sumarios ?? 0);
   }
   return importados;
 }

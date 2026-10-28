@@ -24,7 +24,7 @@ export function ImportarPlanosCurso({ regime, turmaId, onImportados }: { regime:
       const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
       const partes = [
         plural(r.importados, "plano importado", "planos importados"),
-        origem ? plural(r.sumarios ?? 0, "sumário copiado", "sumários copiados") : "",
+        r.sumarios ? plural(r.sumarios, "sumário copiado", "sumários copiados") : "",
         r.mantidos ? plural(r.mantidos, "sessão mantida", "sessões mantidas") : "",
         r.semModelo ? `${plural(r.semModelo, "sessão", "sessões")} sem correspondência` : "",
       ].filter(Boolean);
@@ -50,13 +50,13 @@ export function ImportarPlanosCurso({ regime, turmaId, onImportados }: { regime:
         <div className="flex flex-col gap-3 text-[13px]">
           <Campo rotulo="De onde">
             {p => (
-              <Selecao {...p} value={origem} onChange={e => setOrigem(e.target.value)} vazio="Ficha do curso (só planos)"
+              <Selecao {...p} value={origem} onChange={e => setOrigem(e.target.value)} vazio={regime === "gold" ? "Ficha do curso (planos e sumários)" : "Ficha do curso (planos)"}
                 opcoes={turmas.map(t => ({ valor: String(t.id), rotulo: `${/^turma\b/i.test(t.nome) ? "" : "Turma "}${t.nome}${t.dataInicio ? ` · ${fmtDataCalendario(t.dataInicio)}` : ""} (planos e sumários)` }))} />
             )}
           </Campo>
           {origem
             ? <p className="m-0">Cada sessão recebe o plano e o sumário (conteúdos e atividades) da sessão com o mesmo número na turma escolhida. As observações e as assinaturas não se copiam.</p>
-            : <p className="m-0">Cada sessão recebe o plano com o mesmo número na ficha do curso (separador Planos). O sumário padrão do curso aparece no sumário da sessão enquanto este estiver vazio.</p>}
+            : <p className="m-0">Cada sessão recebe o plano e o sumário com o mesmo número na ficha do curso (separador Planos). Isto já acontece sozinho: use-o com «substituir» para repor o do curso nas sessões alteradas.</p>}
           <p className="m-0 text-tinta-suave">Contam só as sessões presenciais e síncronas, pela ordem do cronograma. O que já está assinado nunca é alterado.</p>
           <Caixa rotulo="Substituir também o que já está preenchido" ajuda="Por omissão só se preenchem as sessões ainda vazias."
             checked={substituir} onChange={e => setSubstituir(e.target.checked)} />

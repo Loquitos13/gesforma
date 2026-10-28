@@ -12,7 +12,7 @@ export type PlanoCurso = {
   objetivosGerais: string;
   objetivosEspecificos: string;
   momentos: PlanoSessaoData["momentos"];
-  /** Sumário padrão: só pré-preenche o sumário da sessão, nunca é gravado sozinho. */
+  /** Sumário padrão: o servidor grava-o como sumário da sessão (Gold) em todas as turmas do curso. */
   sumario: { conteudos: string; atividades: string };
 };
 

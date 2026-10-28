@@ -21,7 +21,7 @@ async function planosDaTurma(ctx: Ctx, turmaId: number) {
 }
 
 describe("planos de sessão do curso nas turmas", () => {
-  it("a turma recebe os planos do curso pela ordem das sessões lectivas, sem tocar nos que já têm plano", async () => {
+  it("todas as turmas do curso recebem os planos e os sumários da ficha, pela ordem das sessões lectivas; o que a turma alterou fica", async () => {
     const ctx = await arrancar();
     const curso = unico("Curso Planos");
     const c = await pedido(ctx, "secretaria", "POST", "/v1/cursos-gold", { nome: curso, categoria: "Teste", tipo: "Pré-inscrição", preco: 100, regime: "Presencial", horas: 8 });
@@ -51,25 +51,41 @@ describe("planos de sessão do curso nas turmas", () => {
       payload: { planosSessao: [plano(1, "Gerais 1"), { ordem: 2, objetivosGerais: "Gerais 2", objetivosEspecificos: "", conteudo: "Conteúdo antigo" }, plano(3, "Gerais 3")] },
     });
     expect(ficha.statusCode, ficha.body).toBe(200);
-    expect(ficha.json().planosImportados).toBe(2);
+    // Planos das sessões 1 e 2; sumários das sessões 1 e 3 (a 3 tem plano próprio, mas o sumário estava vazio).
+    expect(ficha.json().planosImportados).toBe(4);
     let linhas = await planosDaTurma(ctx, turmaId);
     expect(linhas.map(l => [l.sessao_n, l.plano?.objetivosGerais])).toEqual([[1, "Gerais 1"], [2, "Gerais 2"], [3, "Plano próprio"]]);
     expect(linhas[1]!.plano!.momentos.desenvolvimento.conteudo).toBe("Conteúdo antigo");
-    // O sumário padrão não se grava como sumário.
-    expect(linhas.every(l => l.sumario == null)).toBe(true);
+    // Definido na ficha do curso: chega aprovado.
+    expect(linhas[0]!.plano).toMatchObject({ estado: "aprovado", origem: "curso" });
+    // O sumário padrão também passa a sumário da sessão (por assinar).
+    const sumarios = linhas.map(l => (l.sumario as { conteudos?: string; assinado?: boolean } | null));
+    expect(sumarios.map(x => x?.conteudos ?? null)).toEqual(["Sumário padrão 1", null, "Sumário padrão 3"]);
+    expect(sumarios[0]!.assinado).toBe(false);
 
     // Botão: com substituir, a sessão 3 (não assinada) passa ao plano do curso. Há 3 sessões lectivas, todas com modelo.
     expect((await pedido(ctx, "formador", "POST", `/v1/turmas/gold/${turmaId}/planos/importar`, { substituir: true })).statusCode).toBe(403);
     const imp = await pedido(ctx, "secretaria", "POST", `/v1/turmas/gold/${turmaId}/planos/importar`, { substituir: true });
     expect(imp.statusCode, imp.body).toBe(200);
-    expect(imp.json()).toMatchObject({ importados: 3, mantidos: 0, semModelo: 0 });
+    // Só se grava o que muda: as sessões 1 e 2 já tinham o plano do curso.
+    expect(imp.json()).toMatchObject({ importados: 1, mantidos: 2, semModelo: 0 });
     linhas = await planosDaTurma(ctx, turmaId);
     expect(linhas.find(l => l.sessao_n === 3)!.plano!.objetivosGerais).toBe("Gerais 3");
 
     // Plano assinado nunca se substitui.
     await ctx.db.query("UPDATE turma_sessoes SET plano = plano || '{\"assinado\": true}'::jsonb WHERE regime = 'gold' AND turma_id = $1 AND sessao_n = 1", [turmaId]);
     const imp2 = await pedido(ctx, "secretaria", "POST", `/v1/turmas/gold/${turmaId}/planos/importar`, { substituir: true });
-    expect(imp2.json()).toMatchObject({ importados: 2, mantidos: 1 });
+    expect(imp2.json()).toMatchObject({ importados: 0, mantidos: 3 });
+
+    // Mudar a ficha do curso chega às turmas que não alteraram nem assinaram; o que a turma alterou fica.
+    const editado = { objetivosGerais: "Alterado na turma", objetivosEspecificos: "", momentos: plano(2, "").momentos };
+    expect((await pedido(ctx, "secretaria", "PUT", `/v1/turmas/gold/${turmaId}/sessoes/2`, { plano: editado })).statusCode).toBe(200);
+    const ficha2 = await pedido(ctx, "secretaria", "PUT", `/v1/cursos/gold/${cursoId}/ficha`, {
+      payload: { planosSessao: [plano(1, "Gerais 1 v2"), plano(2, "Gerais 2 v2"), plano(3, "Gerais 3 v2")] },
+    });
+    expect(ficha2.statusCode, ficha2.body).toBe(200);
+    linhas = await planosDaTurma(ctx, turmaId);
+    expect(linhas.map(l => l.plano?.objetivosGerais)).toEqual(["Gerais 1", "Alterado na turma", "Gerais 3 v2"]);
 
     // Uma turma nova do curso já nasce com os planos.
     const t2 = await pedido(ctx, "secretaria", "POST", "/v1/turmas-gold", {
@@ -77,7 +93,7 @@ describe("planos de sessão do curso nas turmas", () => {
       cronograma: [{ id: "1", data: "2099-05-04", horaInicio: "09:00", horaFim: "13:00", modalidade: "presencial", formadores: [] }],
     });
     expect(t2.statusCode, t2.body).toBe(200);
-    expect((await planosDaTurma(ctx, t2.json().turma.id as number)).map(l => l.plano?.objetivosGerais)).toEqual(["Gerais 1"]);
+    expect((await planosDaTurma(ctx, t2.json().turma.id as number)).map(l => l.plano?.objetivosGerais)).toEqual(["Gerais 1 v2"]);
 
     // Turma fechada: não se importa.
     await ctx.db.query("UPDATE turmas_gold SET fechada_em = now() WHERE id = $1", [turmaId]);

@@ -196,7 +196,7 @@ export function TabPlanos({ f }: { f: FichaCurso }) {
   };
   const renumerar = (lista: PlanoLinha[]) => lista.map((p, j) => ({ ...p, ordem: j + 1 }));
   return (
-    <Cartao titulo="Plano de cada sessão" subtitulo="O plano n vai para a sessão n de cada turma do curso (só sessões presenciais e síncronas, pela ordem do cronograma). Ao gravar a ficha, as turmas abertas recebem os planos nas sessões ainda sem plano; no separador Sessões da turma pode importá-los de novo.">
+    <Cartao titulo="Plano de cada sessão" subtitulo="O plano e o sumário n vão para a sessão n de todas as turmas do curso (só sessões presenciais e síncronas, pela ordem do cronograma), já aprovados. Ao gravar a ficha, as turmas abertas recebem as alterações nas sessões que não mudaram o plano ou o sumário nem os assinaram.">
       <div className="space-y-3">
         {data.planosSessao.length === 0 && <Vazio compacto titulo="Ainda sem planos." descricao="Acrescente a primeira sessão." />}
         {data.planosSessao.map((linha, i) => (
@@ -225,7 +225,7 @@ export function TabPlanos({ f }: { f: FichaCurso }) {
                 onChange={e => mudar(i, { sumario: { ...linha.sumario, conteudos: e.target.value } })} />
               <AreaTexto aria-label={`Sessão ${linha.ordem}: sumário, atividades`} rows={3} placeholder="Atividades realizadas" value={linha.sumario.atividades}
                 onChange={e => mudar(i, { sumario: { ...linha.sumario, atividades: e.target.value } })} />
-              <p className="m-0 text-xs text-tinta-suave sm:col-span-2">O formador encontra este texto no sumário da sessão enquanto estiver vazio; o sumário só conta depois de ele o gravar e assinar.</p>
+              <p className="m-0 text-xs text-tinta-suave sm:col-span-2">Gold: fica como sumário da sessão em todas as turmas do curso; o formador só tem de o assinar (ou acrescentar as observações).</p>
             </Recolhivel>
           </div>
         ))}

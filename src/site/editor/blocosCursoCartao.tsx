@@ -459,15 +459,24 @@ function EsconderSeVazio({ ativo, children }: { ativo: boolean; children: ReactN
     const el = ref.current;
     const cartao = el?.closest("aside");
     if (!el || !cartao || !ativo) return;
+    // Conta só o que se vê: os blocos podem estar escondidos no telemóvel, no tablet ou no computador (ena-oculto-*).
+    const visivel = (n: Element) => n.getClientRects().length > 0;
     const ver = () => {
-      const vazio = !el.textContent?.trim() && !el.querySelector("img, video, iframe, button, a, input, select, textarea, svg, canvas");
-      cartao.style.display = vazio ? "none" : "";
+      cartao.style.display = "";
+      const media = [...el.querySelectorAll("img, video, iframe, button, a, input, select, textarea, svg, canvas")].some(visivel);
+      let texto = false;
+      const andar = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let t = andar.nextNode(); t && !texto; t = andar.nextNode()) {
+        texto = Boolean(t.textContent?.trim()) && Boolean(t.parentElement && visivel(t.parentElement));
+      }
+      if (!media && !texto) cartao.style.display = "none";
     };
     ver();
-    // Os blocos mudam com o local escolhido (preço, turmas): volta a ver-se a cada mudança.
+    // Os blocos mudam com o local escolhido (preço, turmas) e o que se esconde depende da largura do ecrã.
     const obs = new MutationObserver(ver);
-    obs.observe(el, { childList: true, subtree: true, characterData: true });
-    return () => { obs.disconnect(); cartao.style.display = ""; };
+    obs.observe(el, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["class", "style", "hidden"] });
+    window.addEventListener("resize", ver);
+    return () => { obs.disconnect(); window.removeEventListener("resize", ver); cartao.style.display = ""; };
   }, [ativo]);
   return <div ref={ref} className="contents">{children}</div>;
 }

@@ -152,9 +152,9 @@ describe("documentos da Financiada: rótulos", () => {
     expect(rotuloSituacaoEmprego("6 - Inativos")).toBe("Inativos");
     expect(acaoDaTurma({ numero_acao: 2, ufcd_cod: "", c_ufcd_cod: "8600", c_ufcd: "Competências", curso: "X" } as never)).toBe("UFCD 8600 - Competências (Ação 2)");
     expect(colunasMomento({ conteudo: "C", metodos: "M", atividades: "A", recursos: "R", materiais: "Mat", avaliacao: "Av", tempo: "10 min" }))
-      .toEqual(["C", "M\nA", "R\nMat", "Av", "10 min"]);
+      .toEqual(["C", "A", "M", "R\nMat", "Av", "10 min"]);
     // Plano antigo, sem «Tempo»: a coluna fica em branco.
-    expect(colunasMomento({ conteudo: "C" })[4]).toBe("");
+    expect(colunasMomento({ conteudo: "C" })[5]).toBe("");
     expect(textoSumario({ conteudos: "X", observacoes: "Y" })).toBe("X\nObservações: Y");
     expect(lerCandidaturaFin(undefined)).toEqual(CANDIDATURA_FIN_OMISSAO);
     // Campo gravado em branco fica em branco; o que nunca foi gravado usa a omissão.
@@ -346,9 +346,9 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     expect(imagens(bytes)).toBeGreaterThanOrEqual(2);
     const [p1, p2] = await paginas(bytes);
     for (const v of [
-      "PLANO DE SESSÃO", "Publico alvo:", "Formandos do módulo - Competências empreendedoras", "Objetivos:",
+      "PLANO DE SESSÃO", "Público-alvo:", "Formandos do módulo - Competências empreendedoras", "Objetivo geral:", "Objetivos específicos:",
       "Identificar competências empreendedoras.", "Elaborar um CV Europass.",
-      "Momento", "Conteúdos", "Métodos / Estratégias", "Recursos didáticos", "Avaliação", "Tempo",
+      "Momento", "Conteúdos", "Atividades", "Métodos / Estratégias", "Recursos didáticos", "Avaliação", "Tempo",
       "Introdução", "Desenvolvimento", "Conclusão", "Apresentação da sessão", "Expositivo", "Projetor", "Observação direta",
       "15 min", "2h30", "Simulação de entrevista", "o Formador:", "o Coordenador:",
     ]) expect(p1, v).toContain(v);
@@ -475,6 +475,9 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
       expect(texto).toContain(nome);
       expect(texto).toContain("02-11-2099");
       expect(texto).not.toContain("Programa:");
+      // Modelo CCP: nº, nome e assinaturas, quadro do sumário; sem sala, T/P nem meios utilizados.
+      for (const v of ["FOLHA DE PRESENÇAS / SUMÁRIO", "N.º", "Nome dos Formandos", "Assinaturas", "Sumário:", "Horário:"]) expect(texto, v).toContain(v);
+      for (const v of ["Sala:", "T:", "P:", "Meios"]) expect(texto, v).not.toContain(v);
       const raw = folha.rawPayload.toString("latin1");
       expect(raw).toMatch(/\/Width 3\s*\/Height 2|\/Height 2\s*\/Width 3/);
       expect(raw).not.toMatch(/\/Width 350/);
@@ -482,7 +485,11 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
       expect(imagens(folha.rawPayload)).toBe(2);
       const plano = await pedido(ctx, "secretaria", "GET", `/v1/turmas/gold/${id}/planos-sessao?sessao=1`);
       expect(plano.statusCode).toBe(200);
-      expect(await paginas(plano.rawPayload)).toHaveLength(1);
+      const pp = await paginas(plano.rawPayload);
+      expect(pp).toHaveLength(1);
+      // Gold: as assinaturas ficam na folha de presenças / sumário, não no plano.
+      expect(pp[0]).not.toContain("o Formador:");
+      expect(pp[0]).toContain("Objetivo geral:");
       // O dossiê da Gold leva os mesmos documentos (com o logótipo).
       const dossie = await montarPdfsDossie(ctx.db, "gold", (await carregarTurma(ctx.db, "gold", id))!);
       expect(imagens(dossie.folhas)).toBe(2);

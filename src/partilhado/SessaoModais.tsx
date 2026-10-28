@@ -321,12 +321,14 @@ export function PlanoSessaoModal({ open, onClose, sessao, plano: planoGravado, o
   );
 }
 
-export function SumarioSessaoModal({ open, onClose, sessao, sumario, accent = "gold", onSave }: {
+export function SumarioSessaoModal({ open, onClose, sessao, sumario, accent = "gold", onSave, onPdf }: {
   open: boolean; onClose: () => void;
   sessao?: SessaoMeta;
   sumario: SumarioSessaoData;
   accent?: "gold" | "fin";
   onSave: (data: SumarioSessaoData) => void;
+  /** Folha de presenças / sumário da sessão em PDF (com os formandos e o sumário gravado). */
+  onPdf?: () => void;
 }) {
   const gold = accent === "gold";
   const [editing, setEditing] = useState(false);
@@ -363,7 +365,13 @@ export function SumarioSessaoModal({ open, onClose, sessao, sumario, accent = "g
             <p className="text-sm font-semibold text-slate-800">Sumário - Sessão {sessao.n}</p>
             <p className="text-xs text-slate-400 mt-0.5">{fmtDataUi(sessao.data)} · {sessao.hora} · {formadoresDaSessaoLabel(sessao) || "Formador por definir"}</p>
           </div>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
+          <div className="flex items-center gap-2">
+            {onPdf && !editing && (
+              <button onClick={onPdf} title="Folha de presenças / sumário em PDF, com o que está gravado"
+                className="text-xs font-semibold px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50">PDF</button>
+            )}
+            <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100">{I.x}</button>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">

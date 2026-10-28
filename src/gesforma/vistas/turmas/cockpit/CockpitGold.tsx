@@ -211,6 +211,7 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
               onPdf={planoSessao ? () => { apiPlanosSessaoFin(t.id, planoSessao.n, "gold").catch(err => toastError(err, "Não foi possível gerar o plano de sessão.")); } : undefined} />
             <SumarioSessaoModal open={!!sumarioSessao} onClose={() => setSumarioSessao(null)} sessao={sumarioSessao ?? undefined}
               sumario={sumarioSessao ? herdarSumarioCurso(modelosCurso.planos, sumarioSessao.n, ped.sumario(sumarioSessao.n)) : emptySumario()}
+              onPdf={sumarioSessao ? () => { apiFolhasPresencaFin(t.id, sumarioSessao.n, "gold").catch(err => toastError(err, "Não foi possível gerar a folha de presenças / sumário.")); } : undefined}
               onSave={data => {
                 if (!sumarioSessao) return;
                 void ped.guardarSumario(sumarioSessao.n, data, sumarioSessao.id);

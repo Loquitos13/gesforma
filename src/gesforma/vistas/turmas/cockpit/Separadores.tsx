@@ -122,8 +122,8 @@ export function SessoesTurmaTab({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            disabled={formandos.length === 0}
-            title={formandos.length ? "Folha gerada com todos os inscritos, mesmo antes da sessão" : "Inscreva formandos para gerar a folha"}
+            disabled={formandos.length === 0 && turmaId == null}
+            title={formandos.length ? "Folha gerada com todos os inscritos, mesmo antes da sessão" : "Sem inscritos: a folha sai com linhas em branco"}
             onClick={() => imprimirFolha()}
             className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40"
           >
@@ -189,7 +189,7 @@ export function SessoesTurmaTab({
                     <div className="flex flex-col gap-1 items-start">
                       <button
                         type="button"
-                        disabled={formandos.length === 0}
+                        disabled={formandos.length === 0 && turmaId == null}
                         title="Folha gerada pela plataforma, disponível antes da sessão"
                         onClick={() => imprimirFolha(s)}
                         className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 whitespace-nowrap"

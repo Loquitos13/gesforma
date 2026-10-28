@@ -599,75 +599,95 @@ const horario = (s: Pick<SessaoDocFin, "horaInicio" | "horaFim">) => (s.horaInic
 /** As colunas do plano no modelo: Conteúdos | Métodos / Estratégias | Recursos didáticos | Avaliação | Tempo. */
 export function colunasMomento(m: MomentoPlano | undefined) {
   const juntar = (...v: (string | undefined)[]) => v.map(txt).filter(Boolean).join("\n");
-  return [juntar(m?.conteudo), juntar(m?.metodos, m?.atividades), juntar(m?.recursos, m?.materiais), juntar(m?.avaliacao), juntar(m?.tempo)];
+  return [juntar(m?.conteudo), juntar(m?.atividades), juntar(m?.metodos), juntar(m?.recursos, m?.materiais), juntar(m?.avaliacao), juntar(m?.tempo)];
 }
 
-/** Uma página por sessão lectiva (sem sessões, um plano em branco). */
-export async function pdfPlanosSessaoFin(cab: CabecalhoFin, sessoes: SessaoDocFin[]) {
+/** «M1 · O formador… · 10h» → «M1 · O formador…» (as horas do módulo já estão no sumário). */
+function semHoras(modulo: string) {
+  return modulo.replace(/\s*[·-]\s*\d+([.,]\d+)?\s*h\s*$/i, "").trim();
+}
+
+/**
+ * Uma página por sessão lectiva (sem sessões, um plano em branco): objetivo geral e específicos em caixas separadas,
+ * a tabela dos momentos com as atividades, e tudo na mesma folha (a letra da tabela encolhe quando é preciso).
+ * `semAssinaturas` (Gold): as linhas do formador e do coordenador ficam na folha de presenças / sumário.
+ */
+export async function pdfPlanosSessaoFin(cab: CabecalhoFin, sessoes: SessaoDocFin[], semAssinaturas = false) {
   const d = await abrirDoc("Planos de sessão", cab);
   const lista: (SessaoDocFin | null)[] = sessoes.length ? sessoes : [null];
-  const cabecalhos = ["Momento", "Conteúdos", "Métodos / Estratégias", "Recursos didáticos", "Avaliação", "Tempo"];
+  const cabecalhos = ["Momento", "Conteúdos", "Atividades", "Métodos / Estratégias", "Recursos didáticos", "Avaliação", "Tempo"];
   for (const s of lista) {
     const sub = s ? [`Sessão ${s.n}`, fmtDataDDMMAAAA(s.data), horario(s), s.formadores.join(", ")].filter(Boolean).join(" · ") : "";
-    let pg = novaPagina(d, PAISAGEM, "PLANO DE SESSÃO", sub);
+    const pg = novaPagina(d, PAISAGEM, "PLANO DE SESSÃO", sub);
     const larguras = (() => {
-      const momento = 110;
-      const tempo = 60;
-      const resto = (pg.largura - momento - tempo) / 4;
-      return [momento, resto, resto, resto, resto, tempo];
+      const momento = 90;
+      const tempo = 50;
+      const resto = (pg.largura - momento - tempo) / 5;
+      return [momento, resto, resto, resto, resto, resto, tempo];
     })();
-    const modulo = s?.modulos.length ? s.modulos.join(" · ") : [cab.ufcdNome].filter(Boolean).join("");
-    escrever(pg, "Publico alvo:", pg.m + 6, pg.y - TAM, d.negrito, TAM);
-    const xPublico = pg.m + 84;
-    const [publico = ""] = quebrar(`Formandos do módulo - ${modulo}`, d.sans, TAM, pg.largura - 90);
-    escrever(pg, publico, xPublico, pg.y - TAM, d.sans, TAM);
-    pg.y -= 24;
-    const objetivos = [s?.plano?.objetivosGerais, s?.plano?.objetivosEspecificos].map(txt).filter(Boolean).join("\n");
-    const linhasObj = quebrar(objetivos, d.sans, TAM, pg.largura - xPublico + pg.m - 10);
-    const altObj = Math.max(42, linhasObj.length * ENTRELINHA + 10);
-    escrever(pg, "Objetivos:", pg.m + 6, pg.y - altObj / 2 - 3, d.negrito, TAM);
-    caixa(pg, xPublico, pg.y - altObj, pg.w - pg.m - xPublico, altObj);
-    linhasObj.forEach((l, i) => escrever(pg, l, xPublico + 5, pg.y - 5 - TAM - i * ENTRELINHA, d.sans, TAM));
-    pg.y -= altObj + 12;
+    const modulo = semHoras(s?.modulos.length ? s.modulos.join(" · ") : [cab.ufcdNome].filter(Boolean).join(""));
+    const xValor = pg.m + 110;
+    const larguraValor = pg.w - pg.m - xValor;
+    escrever(pg, "Público-alvo:", pg.m + 6, pg.y - TAM, d.negrito, TAM);
+    const [publico = ""] = quebrar(`Formandos do módulo - ${modulo}`, d.sans, TAM, larguraValor);
+    escrever(pg, publico, xValor, pg.y - TAM, d.sans, TAM);
+    pg.y -= 20;
+    for (const [rotulo, valor] of [["Objetivo geral:", s?.plano?.objetivosGerais], ["Objetivos específicos:", s?.plano?.objetivosEspecificos]] as const) {
+      const linhas = quebrar(txt(valor), d.sans, TAM, larguraValor - 10);
+      const alt = Math.max(24, linhas.length * ENTRELINHA + 10);
+      escrever(pg, rotulo, pg.m + 6, pg.y - alt / 2 - 3, d.negrito, TAM);
+      caixa(pg, xValor, pg.y - alt, larguraValor, alt);
+      linhas.forEach((l, i) => escrever(pg, l, xValor + 5, pg.y - 5 - TAM - i * ENTRELINHA, d.sans, TAM));
+      pg.y -= alt + 6;
+    }
+    pg.y -= 6;
 
-    const desenharCabecalhoTabela = () => {
-      let x = pg.m;
-      cabecalhos.forEach((c, i) => {
-        caixa(pg, x, pg.y - 18, larguras[i]!, 18);
-        const lc = d.negrito.widthOfTextAtSize(c, TAM);
-        escrever(pg, c, x + (larguras[i]! - lc) / 2, pg.y - 12.5, d.negrito, TAM);
-        x += larguras[i]!;
-      });
-      pg.y -= 18;
-    };
-    desenharCabecalhoTabela();
-    const tamCel = 8.5;
-    const entreCel = 10.5;
-    for (const mo of MOMENTOS) {
-      const colunas = colunasMomento(s?.plano?.momentos?.[mo.id]);
-      const quebradas = colunas.map((c, i) => quebrar(c, d.sans, tamCel, larguras[i + 1]! - 8));
-      const alt = Math.max(76, Math.max(...quebradas.map(q => q.length)) * entreCel + 10);
-      if (pg.y - alt < pg.fundo + 60) {
-        pg = novaPagina(d, PAISAGEM, "PLANO DE SESSÃO", sub);
-        desenharCabecalhoTabela();
-      }
-      let x = pg.m;
-      caixa(pg, x, pg.y - alt, larguras[0]!, alt);
+    // Tudo numa folha: escolhe a maior letra com que os três momentos cabem no espaço que sobra.
+    const disponivel = pg.y - 18 - pg.fundo - (semAssinaturas ? 4 : 52);
+    const colunasDe = MOMENTOS.map(mo => colunasMomento(s?.plano?.momentos?.[mo.id]));
+    const medir = (tam: number) => colunasDe.map(colunas => {
+      const quebradas = colunas.map((c, i) => quebrar(c, d.sans, tam, larguras[i + 1]! - 8));
+      return { quebradas, alt: Math.max(36, Math.max(...quebradas.map(q => q.length)) * (tam + 2) + 10) };
+    });
+    let tamCel = 8.5;
+    let linhasMomentos = medir(tamCel);
+    while (tamCel > 5.5 && linhasMomentos.reduce((t, m) => t + m.alt, 0) > disponivel) {
+      tamCel -= 0.5;
+      linhasMomentos = medir(tamCel);
+    }
+    const sobra = disponivel - linhasMomentos.reduce((t, m) => t + m.alt, 0);
+    // Com espaço de sobra, as linhas crescem por igual até ao fim da folha (como o modelo).
+    const extra = sobra > 0 ? Math.min(sobra / MOMENTOS.length, 60) : 0;
+
+    let x = pg.m;
+    cabecalhos.forEach((c, i) => {
+      caixa(pg, x, pg.y - 18, larguras[i]!, 18);
+      const lc = d.negrito.widthOfTextAtSize(c, TAM);
+      escrever(pg, c, x + (larguras[i]! - lc) / 2, pg.y - 12.5, d.negrito, TAM);
+      x += larguras[i]!;
+    });
+    pg.y -= 18;
+    MOMENTOS.forEach((mo, k) => {
+      const { quebradas } = linhasMomentos[k]!;
+      const alt = linhasMomentos[k]!.alt + extra;
+      let xc = pg.m;
+      caixa(pg, xc, pg.y - alt, larguras[0]!, alt);
       const lm = d.sans.widthOfTextAtSize(mo.rotulo, TAM);
-      escrever(pg, mo.rotulo, x + (larguras[0]! - lm) / 2, pg.y - alt / 2 - 3, d.sans, TAM);
-      x += larguras[0]!;
+      escrever(pg, mo.rotulo, xc + (larguras[0]! - lm) / 2, pg.y - alt / 2 - 3, d.sans, TAM);
+      xc += larguras[0]!;
       quebradas.forEach((linhas, i) => {
         const lw = larguras[i + 1]!;
-        caixa(pg, x, pg.y - alt, lw, alt);
-        linhas.forEach((l, j) => escrever(pg, l, x + 4, pg.y - 5 - tamCel - j * entreCel, d.sans, tamCel));
-        x += lw;
+        caixa(pg, xc, pg.y - alt, lw, alt);
+        linhas.forEach((l, j) => escrever(pg, l, xc + 4, pg.y - 5 - tamCel - j * (tamCel + 2), d.sans, tamCel));
+        xc += lw;
       });
       pg.y -= alt;
+    });
+    if (!semAssinaturas) {
+      pg.y -= 16;
+      linhaAssinatura(d, pg, "o Formador:", 150, s?.assinaturas?.planoFormador);
+      linhaAssinatura(d, pg, "o Coordenador:", 150, s?.assinaturas?.planoCoordenador);
     }
-    pg.y -= 16;
-    if (pg.y - 40 < pg.fundo) pg = novaPagina(d, PAISAGEM, "PLANO DE SESSÃO", sub);
-    linhaAssinatura(d, pg, "o Formador:", 150, s?.assinaturas?.planoFormador);
-    linhaAssinatura(d, pg, "o Coordenador:", 150, s?.assinaturas?.planoCoordenador);
   }
   return fecharDoc(d);
 }
@@ -684,13 +704,14 @@ export function textoSumario(s: SessaoDocFin["sumario"]) {
  * Uma folha por sessão lectiva (sem sessões, uma folha em branco). Uma turma grande continua na página seguinte.
  * `pares`: o bloco do topo (na Gold, entidade, curso e turma em vez do enquadramento do programa).
  */
-export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDocFin[], pares?: [string, string][]) {
+export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDocFin[], pares?: [string, string][], gold = false) {
   const d = await abrirDoc("Folhas de presenças", cab);
   const c = cab.candidatura;
   const lista: (SessaoDocFin | null)[] = sessoes.length ? sessoes : [null];
   for (const s of lista) {
     // A Financiada deixou de ter sumário: o título só o refere nas sessões que ainda o têm gravado.
-    const titulo = textoSumario(s?.sumario ?? null) ? "FOLHA DE PRESENÇAS / SUMÁRIO" : "FOLHA DE PRESENÇAS";
+    // Gold (CCP): o modelo da folha de presenças / sumário, sem sala, T/P nem meios utilizados.
+    const titulo = gold || textoSumario(s?.sumario ?? null) ? "FOLHA DE PRESENÇAS / SUMÁRIO" : "FOLHA DE PRESENÇAS";
     let pg = novaPagina(d, RETRATO, titulo);
     const topo: [string, string][] = pares ?? [
       ["Entidade:", cab.entidade],
@@ -702,8 +723,14 @@ export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDoc
       ["UFCD:", [cab.ufcdCodigo, cab.ufcdNome].filter(Boolean).join(" | ")],
       ["Ação:", cab.acao],
     ];
-    for (const [r, v] of topo) linhaPar(d, pg, r, v, 130, 19);
+    for (const [r, v] of gold && s?.modulos.length ? [...topo, ["Módulo:", s.modulos.join(" · ")] as [string, string]] : topo) linhaPar(d, pg, r, v, 130, 19);
     const terco = pg.largura / 3;
+    if (gold) {
+      celulaRotulo(d, pg, pg.m, terco, 20, "Local:", cab.local);
+      celulaRotulo(d, pg, pg.m + terco, terco, 20, "Data:", fmtDataDDMMAAAA(s?.data));
+      celulaRotulo(d, pg, pg.m + 2 * terco, terco, 20, "Horário:", s ? horario(s) : "");
+      pg.y -= 20 + 12;
+    } else {
     celulaRotulo(d, pg, pg.m, terco, 18, "Sala:", "");
     celulaRotulo(d, pg, pg.m + terco, terco, 18, "Local:", cab.local);
     celulaRotulo(d, pg, pg.m + 2 * terco, terco, 18, "Data:", fmtDataDDMMAAAA(s?.data));
@@ -714,10 +741,17 @@ export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDoc
     celulaRotulo(d, pg, pg.m + terco, terco, 22, "T:", horasTP(s?.componente?.teoricas));
     celulaRotulo(d, pg, pg.m + 2 * terco, terco, 22, "P:", horasTP(s?.componente?.praticas));
     pg.y -= 22 + 12;
+    }
 
-    const colNome = pg.largura / 2;
+    // Gold: coluna do número à esquerda e «Assinaturas» em vez de «Presenças».
+    const colN = gold ? 26 : 0;
+    const colNome = gold ? (pg.largura - colN) * 0.45 : pg.largura / 2;
+    const xNome = pg.m + colN;
     const cabecalhoLista = () => {
-      for (const [x, w, t] of [[pg.m, colNome, "Nome:"], [pg.m + colNome, pg.largura - colNome, "Presenças:"]] as const) {
+      const colunas: [number, number, string][] = gold
+        ? [[pg.m, colN, "N.º"], [xNome, colNome, "Nome dos Formandos"], [xNome + colNome, pg.largura - colN - colNome, "Assinaturas"]]
+        : [[pg.m, colNome, "Nome:"], [pg.m + colNome, pg.largura - colNome, "Presenças:"]];
+      for (const [x, w, t] of colunas) {
         caixa(pg, x, pg.y - 16, w, 16);
         const lt = d.negrito.widthOfTextAtSize(t, TAM);
         escrever(pg, t, x + (w - lt) / 2, pg.y - 11.5, d.negrito, TAM);
@@ -726,25 +760,33 @@ export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDoc
     };
     cabecalhoLista();
     const linhas = s?.presencas.length ? s.presencas : Array.from({ length: 12 }, () => ({ nome: "", presenca: "" }));
-    for (const p of linhas) {
-      if (pg.y - 15 < pg.fundo + 10) {
+    const alt = gold ? 18 : 15;
+    linhas.forEach((p, i) => {
+      if (pg.y - alt < pg.fundo + 10) {
         pg = novaPagina(d, RETRATO, titulo, s ? `Sessão ${s.n} · ${fmtDataDDMMAAAA(s.data)} (continuação)` : "");
         cabecalhoLista();
       }
-      caixa(pg, pg.m, pg.y - 15, colNome, 15, 0.4);
-      caixa(pg, pg.m + colNome, pg.y - 15, pg.largura - colNome, 15, 0.4);
+      if (gold) {
+        caixa(pg, pg.m, pg.y - alt, colN, alt, 0.4);
+        const num = String(i + 1);
+        escrever(pg, num, pg.m + (colN - d.sans.widthOfTextAtSize(num, TAM)) / 2, pg.y - alt + 5.5, d.sans, TAM);
+      }
+      caixa(pg, xNome, pg.y - alt, colNome, alt, 0.4);
+      caixa(pg, xNome + colNome, pg.y - alt, pg.largura - colN - colNome, alt, 0.4);
       const [nome = ""] = quebrar(p.nome, d.sans, TAM, colNome - 10);
-      escrever(pg, nome, pg.m + 5, pg.y - 11, d.sans, TAM);
-      escrever(pg, p.presenca, pg.m + colNome + 5, pg.y - 11, d.sans, TAM);
-      pg.y -= 15;
-    }
+      escrever(pg, nome, xNome + 5, pg.y - alt + 5.5, d.sans, TAM);
+      // Gold: a assinatura é à mão; só fica escrito quem faltou.
+      const marca = gold ? (/aus|falt/i.test(p.presenca) ? p.presenca : "") : p.presenca;
+      escrever(pg, marca, xNome + colNome + 5, pg.y - alt + 5.5, d.sans, TAM);
+      pg.y -= alt;
+    });
     pg.y -= 12;
 
     // A Financiada deixou de ter sumário: o quadro só sai nas sessões que já o tinham gravado.
     const sumario = textoSumario(s?.sumario ?? null);
-    if (sumario) {
-      const linhasSumario = quebrar(sumario, d.sans, TAM, pg.largura - 12);
-      const altSumario = Math.max(56, linhasSumario.length * ENTRELINHA + 10);
+    if (sumario || gold) {
+      const linhasSumario = sumario ? quebrar(sumario, d.sans, TAM, pg.largura - 12) : [];
+      const altSumario = Math.max(gold ? 90 : 56, linhasSumario.length * ENTRELINHA + 10);
       if (pg.y - altSumario - 16 < pg.fundo) pg = novaPagina(d, RETRATO, titulo, s ? `Sessão ${s.n} · ${fmtDataDDMMAAAA(s.data)} (continuação)` : "");
       escrever(pg, "Sumário:", pg.m, pg.y - TAM, d.negrito, TAM);
       pg.y -= TAM + 5;
@@ -905,11 +947,11 @@ export async function documentosSessoesGold(db: Db, turmaId: number, opts: { n?:
   const [cab, todas] = await Promise.all([cabecalhoGold(db, turma), sessoesDaTurma(db, turma, formandos, false, "gold")]);
   const sessoes = opts.n == null ? todas : todas.filter(s => s.n === opts.n);
   if (opts.n != null && !sessoes.length) return null;
-  const pares: [string, string][] = [["Entidade:", cab.entidade], ["Curso:", turma.curso], ["Turma:", turma.nome]];
+  const pares: [string, string][] = [["Entidade Formadora:", cab.entidade], ["Curso:", turma.curso], ["Ação:", turma.nome]];
   const vazio = Buffer.alloc(0);
   const [planos, folhas] = await Promise.all([
-    opts.so === "folhas" ? vazio : pdfPlanosSessaoFin(cab, sessoes),
-    opts.so === "planos" ? vazio : pdfFolhasPresencaFin(cab, sessoes, pares),
+    opts.so === "folhas" ? vazio : pdfPlanosSessaoFin(cab, sessoes, true),
+    opts.so === "planos" ? vazio : pdfFolhasPresencaFin(cab, sessoes, pares, true),
   ]);
   return { planos, folhas, sessoes: sessoes.length };
 }

@@ -40,7 +40,7 @@ export function diasDoCronograma(sessoes: SessaoMeta[], inicio: string, limite =
 
 export function CronogramaDias({
   sessoes, cronograma, inicio, planos, presencas, sumarios, inscritos, podeCriar, podeEditarSessao,
-  onNova, onEditar, onPresencas, onPlano,
+  onNova, onEditar, onEliminar, onPresencas, onPlano,
 }: {
   sessoes: SessaoMeta[];
   cronograma: SessaoCronograma[];
@@ -53,6 +53,7 @@ export function CronogramaDias({
   podeEditarSessao: boolean;
   onNova: (dia: string) => void;
   onEditar: (s: SessaoCronograma) => void;
+  onEliminar?: (s: SessaoCronograma) => void;
   onPresencas: (s: SessaoMeta) => void;
   onPlano: (s: SessaoMeta) => void;
 }) {
@@ -90,7 +91,13 @@ export function CronogramaDias({
               const validada = Boolean(sumarios[s.n]?.presencasValidadas);
               return (
                 <div key={s.n} className={cx(i > 0 && "mt-3 border-t border-linha-suave pt-3")}>
-                  <p className="m-0 text-xs text-tinta-suave">Aula {s.n}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="m-0 text-xs text-tinta-suave">Aula {s.n}</p>
+                    {podeEditarSessao && c && onEliminar && (
+                      <button type="button" onClick={() => onEliminar(c)} aria-label={`Eliminar a aula ${s.n}`} title="Eliminar a sessão"
+                        className="-mt-1 -mr-1 h-6 w-6 rounded text-sm font-bold text-red-600 hover:bg-red-50">×</button>
+                    )}
+                  </div>
                   {i === 0 && (
                     <>
                       <p className="m-0 text-[15px] font-semibold text-tinta">{DIAS[diaDaSemana(dia)]}</p>

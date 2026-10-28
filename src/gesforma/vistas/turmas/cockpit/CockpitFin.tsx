@@ -31,6 +31,9 @@ import { recarregarTurma, useMembrosFin, useResultadosTurma, useTurmaCockpit } f
 import { EditarTurmaFin, InscreverFin, TransferirEEliminarFin } from "./FinDialogos";
 import { FinVisaoGeral } from "./FinVisaoGeral";
 import { CronogramaDias, horasDaSessao } from "./CronogramaDias";
+import { ImportarPlanosCurso } from "./ImportarPlanos";
+import { descarregarCronograma } from "../../../cronogramaExport";
+import { sessoesSemFim } from "../../../../partilhado/cronogramaGrelha";
 import { ProcessarApoios } from "../../formandos/apoios/ProcessarApoios";
 import type { SessaoCronograma } from "../../../../partilhado/turmaModel";
 import { FormadorProfileSlideOver } from "./PerfilFormador";
@@ -224,17 +227,34 @@ export function CockpitFin({ turmaId, initialTab = "sessoes", navigate }: { turm
                   <Pilulas<VistaCronograma> estilo="pilula" rotulo="Vista do cronograma" ativo={souFormador && vistaCrono === "grelha" ? "dias" : vistaCrono} onMudar={setVistaCrono}
                     itens={[{ id: "dias", rotulo: "Por dias" }, ...(souFormador ? [] : [{ id: "grelha" as const, rotulo: "Grelha de 45 min" }]), { id: "lista", rotulo: "Lista de sessões" }]} />
                   {!souFormador && vistaCrono === "dias" && (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ImportarPlanosCurso regime="fin" turmaId={t.id} onImportados={() => void ped.recarregar()} />
+                      <Botao tamanho="sm" variante="secundario" disabled={!t.cronograma.length}
+                        onClick={() => descarregarCronograma({ curso: t.curso, local: t.local, horario: t.horario, inicio: t.dataInicio, formador: t.formador, nome: t.nome, sessoes: sessoesSemFim(t.cronograma) })}>Descarregar</Botao>
                       <Botao tamanho="sm" variante="secundario" onClick={() => setVistaCrono("grelha")}>Regenerar grelha</Botao>
                       <Botao tamanho="sm" variante="primario" onClick={() => { setDiaNovo(""); setNovaSessao(true); }}>+ Sessão</Botao>
                     </div>
                   )}
                 </div>
               )}
+              {tab === "sessoes" && vistaCrono === "dias" && (() => {
+                // Como no GesForma antigo: o que falta preencher e as datas da acção por cima dos dias.
+                const hoje = new Date().toISOString().slice(0, 10);
+                const folhasFalta = sessoes.filter(s => (s.dataIso ?? "") <= hoje && !ped.presencas[s.n]).length;
+                const datas = sessoes.map(s => s.dataIso ?? "").filter(Boolean).sort();
+                return (
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-painel border border-linha bg-superficie px-4 py-2.5 text-[13px]">
+                    <span className="text-tinta-suave">Faltam preencher:</span>
+                    <span className={folhasFalta ? "font-semibold text-amber-700" : "text-emerald-700"}>{folhasFalta ? `⚠ ${folhasFalta} ${folhasFalta === 1 ? "folha de presenças" : "folhas de presenças"}` : "Folhas em dia"}</span>
+                    <span className={semPlano ? "font-semibold text-red-700" : "text-emerald-700"}>{semPlano ? `${semPlano} ${semPlano === 1 ? "plano de sessão" : "planos de sessão"}` : "Planos em dia"}</span>
+                    <span className="text-tinta-suave">Início <span className="num text-tinta">{fmtDataUi(datas[0] || t.dataInicio)}</span>{datas.length ? <> · fim <span className="num text-tinta">{fmtDataUi(datas[datas.length - 1]!)}</span></> : null} · {t.local || "Local por definir"}</span>
+                  </div>
+                );
+              })()}
               {tab === "sessoes" && (vistaCrono === "dias" || (souFormador && vistaCrono === "grelha")) && (
                 <CronogramaDias sessoes={sessoes} cronograma={t.cronograma} inicio={t.dataInicio} planos={ped.planos} presencas={ped.presencas} sumarios={sumarios}
                   inscritos={membros.length} podeCriar={!souFormador} podeEditarSessao={!souFormador}
-                  onNova={dia => { setDiaNovo(dia); setNovaSessao(true); }} onEditar={setEditarSessao}
+                  onNova={dia => { setDiaNovo(dia); setNovaSessao(true); }} onEditar={setEditarSessao} onEliminar={setApagarSessao}
                   onPresencas={setPresencasSessao} onPlano={setPlanoSessao} />
               )}
               {tab === "sessoes" && vistaCrono === "grelha" && !souFormador && (

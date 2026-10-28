@@ -41,10 +41,11 @@ export function ImportarPlanosCurso({ regime, turmaId, onImportados }: { regime:
   return (
     <>
       <button type="button" onClick={() => setAberto(true)}
+        title="Copia os planos de sessão (e, de outra turma, também os sumários) para esta turma"
         className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
-        Importar planos
+        Copiar planos e sumários
       </button>
-      <Modal aberto={aberto} onFechar={() => setAberto(false)} largura="sm" titulo="Importar planos de sessão"
+      <Modal aberto={aberto} onFechar={() => setAberto(false)} largura="sm" titulo="Copiar planos e sumários"
         rodape={<><Botao onClick={() => setAberto(false)}>Cancelar</Botao><Botao variante="primario" aCarregar={aCorrer} onClick={() => void importar()}>Importar</Botao></>}>
         <div className="flex flex-col gap-3 text-[13px]">
           <Campo rotulo="De onde">

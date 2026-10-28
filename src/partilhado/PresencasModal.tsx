@@ -183,7 +183,10 @@ export function PresencasSessaoModal({
             return (
               <li key={l.id} className={`px-5 py-3 ${ausente ? "bg-red-50/40" : ""}`}>
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className="flex-1 min-w-[10rem] text-sm text-slate-700">{l.nome}</span>
+                  {/* Um clique no nome troca entre presente e ausente. */}
+                  <button type="button" disabled={bloqueada} title={bloqueada ? undefined : "Clique para trocar entre presente e ausente"}
+                    onClick={() => mudar(l.id, ausente ? { presente: true, estado: "presente" } : { presente: false, estado: "falta_injustificada", minutos: undefined })}
+                    className="flex-1 min-w-[10rem] text-left text-sm text-slate-700 bg-transparent border-0 p-0 cursor-pointer disabled:cursor-default">{l.nome}</button>
                   <Segmento rotulo={`Presença de ${l.nome}`} desactivado={bloqueada} valor={ausente ? "ausente" : "presente"}
                     onChange={v => mudar(l.id, v === "presente"
                       ? { presente: true, estado: "presente" }

@@ -1,7 +1,7 @@
 // Página do curso: escolha do local e cartão de inscrição feito de blocos (imagem, textos com variáveis
 // do curso e botão). O local escolhido é da página: os dados, as turmas, o preço e o botão seguem-no.
 import { videoDoCurso } from "../../partilhado/siteServicos";
-import type { ComponentType } from "react";
+import { useLayoutEffect, useRef, type ComponentType, type ReactNode } from "react";
 import type { ComponentConfig, Slot } from "@puckeditor/core";
 import { ePrepago, ePreinscricao, rotuloBotaoInscricao, TEXTO_DIRETO, textoDiretoAtual } from "../../partilhado/siteConteudo";
 import { useInscricaoOpcional } from "../SiteInscricao";
@@ -439,11 +439,38 @@ export const CursoInscricao: ComponentConfig<CartaoProps> = {
     }}>
       {curso => p.textoPrepago !== undefined
         ? <CartaoAntigo p={p} curso={curso} Conteudo={Conteudo} />
-        : <Conteudo className="flex flex-col" style={{ gap: `${p.espaco ?? 16}px` }} minEmptyHeight={60} />}
+        : (
+          <EsconderSeVazio ativo={!(p0.puck as { isEditing?: boolean } | undefined)?.isEditing}>
+            <Conteudo className="flex flex-col" style={{ gap: `${p.espaco ?? 16}px` }} minEmptyHeight={60} />
+          </EsconderSeVazio>
+        )}
     </Caixa>
     );
   },
 };
+
+/**
+ * No site, um cartão sem nada para mostrar desaparece por inteiro (barra, fundo e sombra): por exemplo, um cartão
+ * só com o vídeo de apresentação num curso sem vídeo. No editor fica, para se poder escolher e mudar.
+ */
+function EsconderSeVazio({ ativo, children }: { ativo: boolean; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const cartao = el?.closest("aside");
+    if (!el || !cartao || !ativo) return;
+    const ver = () => {
+      const vazio = !el.textContent?.trim() && !el.querySelector("img, video, iframe, button, a, input, select, textarea, svg, canvas");
+      cartao.style.display = vazio ? "none" : "";
+    };
+    ver();
+    // Os blocos mudam com o local escolhido (preço, turmas): volta a ver-se a cada mudança.
+    const obs = new MutationObserver(ver);
+    obs.observe(el, { childList: true, subtree: true, characterData: true });
+    return () => { obs.disconnect(); cartao.style.display = ""; };
+  }, [ativo]);
+  return <div ref={ref} className="contents">{children}</div>;
+}
 
 /** Cartão gravado antes dos blocos (só até a página voltar a ser publicada pelo editor, que o converte). */
 function CartaoAntigo({ p, curso, Conteudo }: { p: Omit<CartaoProps, "conteudo">; curso: Course; Conteudo: ComponentType<{ className?: string; minEmptyHeight?: number }> }) {

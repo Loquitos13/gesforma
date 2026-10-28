@@ -4,7 +4,7 @@
  * os dados de partilha (Open Graph/Twitter), os dados estruturados (schema.org em JSON-LD) e um conteúdo mínimo
  * legível sem JavaScript; e ainda o sitemap.xml e o robots.txt. Tudo se configura em Sistema › Site › SEO.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { lerDocumento, textoDoCorpo } from "../../src/partilhado/blogBlocos.js";
@@ -250,14 +250,27 @@ export async function metaDaPagina(db: Db, caminhoBruto: string, host?: string):
  * se não estiver, lê-se do próprio site (os ficheiros estáticos são servidos antes das reescritas, sem ciclo).
  */
 let modelo: string | null = null;
-export function definirModeloHtml(html: string | null) { modelo = html; }
+/** Ficheiro de onde veio o modelo e a hora em que mudou: numa VPS o site reconstrói-se com a API a correr. */
+let doFicheiro: { caminho: string; mudou: number } | null = null;
+export function definirModeloHtml(html: string | null) { modelo = html; doFicheiro = null; }
 export async function indexHtml(): Promise<string | null> {
+  if (modelo && doFicheiro) {
+    // Reconstruído (deploy/atualizar.sh): o app.html antigo aponta para ficheiros que o build novo apagou, e o site
+    // ficava em branco até a API reiniciar. Relê-se quando o ficheiro muda.
+    const agora = (() => { try { return statSync(doFicheiro.caminho).mtimeMs; } catch { return -1; } })();
+    if (agora === doFicheiro.mudou) return modelo;
+    modelo = null;
+    doFicheiro = null;
+  }
   if (modelo) return modelo;
   const aqui = dirname(fileURLToPath(import.meta.url));
   // O build muda dist/index.html para dist/app.html (scripts/htmlDaApp.mjs); index.html fica para builds antigos.
   for (const nome of ["app.html", "index.html"]) {
     for (const p of [join(process.cwd(), "dist", nome), join(aqui, "..", "..", "dist", nome)]) {
-      if (existsSync(p)) return (modelo = readFileSync(p, "utf8"));
+      if (existsSync(p)) {
+        doFicheiro = { caminho: p, mudou: statSync(p).mtimeMs };
+        return (modelo = readFileSync(p, "utf8"));
+      }
     }
   }
   try {

@@ -46,9 +46,10 @@ function filtros(f: CrmFiltros, hoje: string, semEstado = false) {
   const needle = padraoPesquisa(q);
   if (needle) {
     const id = Number(q);
-    const texto = "nome ILIKE ? OR apelido ILIKE ? OR email ILIKE ? OR telf ILIKE ? OR curso ILIKE ? OR nif ILIKE ? OR id IN (SELECT preinscricao_id FROM preinscricao_contactos WHERE nota ILIKE ?)";
-    if (Number.isInteger(id) && id > 0) w.add(`id = ? OR ${texto}`, id, needle, needle, needle, needle, needle, needle, needle);
-    else w.add(texto, needle, needle, needle, needle, needle, needle, needle);
+    // O nome completo também encontra («Cátia Pinheiro» está partido em nome e apelido).
+    const texto = "nome ILIKE ? OR apelido ILIKE ? OR (nome || ' ' || apelido) ILIKE ? OR email ILIKE ? OR telf ILIKE ? OR curso ILIKE ? OR nif ILIKE ? OR id IN (SELECT preinscricao_id FROM preinscricao_contactos WHERE nota ILIKE ?)";
+    if (Number.isInteger(id) && id > 0) w.add(`id = ? OR ${texto}`, id, needle, needle, needle, needle, needle, needle, needle, needle);
+    else w.add(texto, needle, needle, needle, needle, needle, needle, needle, needle);
   }
   if (!semEstado && f.estado && f.estado !== "Todos") w.add("estado = ?", f.estado);
   w.add("curso = ?", f.curso);
@@ -194,7 +195,7 @@ export async function pesquisar(c: Consulta, q: string, limite: number, ator?: A
   const needle = padraoPesquisa(q.slice(0, 80));
   if (!needle) return [];
   const w = new Filtros([needle, q.trim().slice(0, 12), Math.min(30, Math.max(1, limite))])
-    .sempre(`nome ILIKE $1 OR apelido ILIKE $1 OR email ILIKE $1 OR telf ILIKE $1 OR curso ILIKE $1 OR nif ILIKE $1
+    .sempre(`nome ILIKE $1 OR apelido ILIKE $1 OR (nome || ' ' || apelido) ILIKE $1 OR email ILIKE $1 OR telf ILIKE $1 OR curso ILIKE $1 OR nif ILIKE $1
          OR CAST(id AS text) = $2
          OR id IN (SELECT preinscricao_id FROM preinscricao_contactos WHERE nota ILIKE $1)`).visivelPara(ator, "comercial_id", "regime");
   return many<Linha>(c, comEtiqueta(`SELECT * FROM preinscricoes ${w.where} ORDER BY inscrito DESC LIMIT $3`), w.params);

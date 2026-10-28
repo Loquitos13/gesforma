@@ -306,6 +306,17 @@ describe("validação: os dados passam para a ficha do formando", () => {
       await ctx.db.query("INSERT INTO preinscricao_docs (preinscricao_id, tipo, nome, estado) VALUES ($1, $2, $3, 'validado')", [id, tipo, `${tipo}.pdf`]);
     }
     expect((await ctx.app.inject({ method: "POST", url: `/v1/public/documentos/${token}/concluir` })).statusCode).toBe(200);
+    // Percurso concluído: passa à fila «Na secretaria» (não fica em «Não contactado»).
+    const l = await linha(ctx, id);
+    expect(l.estado).toBe("Pré-inscrição");
+    expect(l.secretaria_em).toBeTruthy();
+    const fila = await pedido(ctx, "financiada", "GET", "/v1/crm/leads?regime=fin&fila=secretaria&perPage=100");
+    expect(fila.statusCode, fila.body).toBe(200);
+    expect(fila.json().items.map((x: { id: number }) => x.id)).toContain(id);
+    // O nome completo (nome + apelido) também encontra o pedido.
+    const nomeCompleto = `${l.nome} ${l.apelido}`.trim();
+    const busca = await pedido(ctx, "financiada", "GET", `/v1/crm/leads?regime=fin&q=${encodeURIComponent(nomeCompleto)}&perPage=100`);
+    expect(busca.json().items.map((x: { id: number }) => x.id)).toContain(id);
     const ok = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/validar-preinscricao`, { turmaId });
     expect(ok.statusCode, ok.body).toBe(200);
 

@@ -309,6 +309,11 @@ export async function concluirPercurso(db: Db, leadId: number) {
     }
     await evento(db, leadId, undefined, "Percurso de pré-inscrição concluído",
       avisou ? "Aguarda validação. Email com os documentos em falta." : "Aguarda validação da secretaria");
+    // Financiada: quem conclui o percurso (um formando que volta noutra acção, com os documentos já validados,
+    // fá-lo logo) passa à fila «Na secretaria» para validar e colocar na turma, em vez de ficar em «Não contactado».
+    if (regime === "fin" && ["Não contactado", "1º Contacto", "2º Contacto"].includes(String(row.estado))) {
+      await leads.entregarASecretaria(db, leadId, true);
+    }
   }
   return { ok: true as const, emFalta: emFalta.filter(d => !d.recusado).map(d => d.label) };
 }

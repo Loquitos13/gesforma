@@ -304,6 +304,20 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
               <p className="mt-3 text-lg leading-8 text-[#1C3350]/75">
                 {aviso || "A secretaria da ENA entra em contacto consigo."} O pedido ficou associado a {email}.
               </p>
+              {(() => {
+                // Os contactos do local escolhido (Edição de cursos › Locais, ou a ficha do curso).
+                const ct = (curso?.contactosLocais ?? []).find(x => norm(x.local) === norm(local));
+                const tel = ct?.telefone?.trim() || ct?.telemovel?.trim() || "";
+                const mail = ct?.email?.trim() || "";
+                if (!ct || (!tel && !mail)) return null;
+                return (
+                  <div className="mt-5 border-t border-[#1C3350]/10 pt-4 text-sm leading-6 text-[#1C3350]/75">
+                    <p className="font-bold text-[#1C3350]">Para qualquer dúvida contacte{ct.local ? ` ${ct.local}` : ""}:</p>
+                    {tel && <p>Telefone: <a className="font-semibold hover:underline" href={`tel:${tel.replace(/[^\d+]/g, "")}`}>{tel}</a></p>}
+                    {mail && <p>Email: <a className="font-semibold hover:underline" href={`mailto:${mail}`}>{mail}</a></p>}
+                  </div>
+                );
+              })()}
               {prepago && (
                 <p className="mt-3 text-sm leading-6 text-[#1C3350]/65">
                   Escolheu {metodo}. {notaPagamento} O valor só fica liquidado quando o banco confirma. Neste passo não há cobrança no cartão.

@@ -7,6 +7,7 @@ import { campoCor, campoCurso, campoImagem, campoMarcas, campoNumero, campoOrdem
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { corSegura, estiloBloco, estiloTexto, estiloVazio, juntar, ligacaoSegura, tipoVazia, type Estilo, type Tipografia } from "./estilos";
 import { TextoFormatado } from "../../partilhado/TextoFormatadoVista";
+import { ordenarAreas } from "../../partilhado/areasFormacao";
 import { ajudaVariaveis, preencherVariaveis, variaveisCurso } from "./blocosCurso";
 
 export const INFO_CARTAO = [
@@ -436,7 +437,7 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
       return porProcura.sort((a, b) => (pos.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (pos.get(b.id) ?? Number.MAX_SAFE_INTEGER));
     }, [cursos, regime, ordem, ordemManual]);
     const modos = useMemo(() => ["Todos", ...["Presencial", "B-learning", "E-learning"].filter(m => base.some(c => c.format === m))], [base]);
-    const listaAreas = useMemo(() => [...new Set(base.map(c => c.area.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt")), [base]);
+    const listaAreas = useMemo(() => ordenarAreas([...new Set(base.map(c => c.area.trim()).filter(Boolean))]), [base]);
     const lista = base
       .filter(c => (filtro === "Todos" || c.format === filtro) && (!area || c.area.trim() === area)
         && `${c.title} ${c.area}`.toLowerCase().includes(q.trim().toLowerCase()))

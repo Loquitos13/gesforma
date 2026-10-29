@@ -8,6 +8,7 @@ import { escolherPreco, regrasDoPayload } from "./precoOferta.js";
 import { eur } from "../../src/partilhado/ui/formatos.js";
 import { CONTACTOS_LOCAL } from "../../src/partilhado/contactosLocal.js";
 import { textosCurso } from "../../src/partilhado/textosCurso.js";
+import { AREA_FINANCIADA } from "../../src/partilhado/areasFormacao.js";
 
 export type ContactoLocal = { local: string; telemovel: string; telefone: string; email: string; whatsapp: string };
 
@@ -309,7 +310,8 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       id: row.id,
       regime: "fin",
       titulo,
-      area: texto(payload.categoria) || "Formação financiada",
+      // Os financiados ficam todos numa área própria do site (a categoria da ficha serve o backoffice).
+      area: AREA_FINANCIADA,
       modalidadeTexto: texto(payload.regime) || row.regime,
       horas: numeroPositivo(payload.horas, Number(row.horas) || 0),
       preco: 0,

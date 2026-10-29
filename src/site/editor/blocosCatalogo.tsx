@@ -10,6 +10,7 @@ import { cartaoPadrao, CartaoCurso, campoCartao, type EstiloCartao } from "./blo
 import { simNao } from "./campos";
 import { campoAparencia } from "./camposGrupos";
 import { estiloBloco, estiloVazio, juntar, type Estilo } from "./estilos";
+import { ordenarAreas } from "../../partilhado/areasFormacao";
 
 type Linha = "Todas" | "Financiada" | "Gold";
 type Acesso = "Todas" | "Acesso direto" | "Pré-pago" | "Pré-inscrição";
@@ -114,7 +115,7 @@ function CatalogoVista(p: Omit<CatalogoProps, "zonaTopo" | "zonaLista"> & { zona
   const [comparar, setComparar] = useState<string[]>([]);
   const [aComparar, setAComparar] = useState(false);
 
-  const areas = useMemo(() => ["Todas", ...new Set(cursos.map(c => c.area).filter(Boolean))], [cursos]);
+  const areas = useMemo(() => ["Todas", ...ordenarAreas([...new Set(cursos.map(c => c.area).filter(Boolean))])], [cursos]);
   const modalidades = useMemo(() => ["Todos", ...["Presencial", "B-learning", "E-learning"].filter(m => cursos.some(c => c.format === m))], [cursos]);
   const lista = cursos.filter(c =>
     (formato === "Todos" || c.format === formato) && (area === "Todas" || c.area === area)

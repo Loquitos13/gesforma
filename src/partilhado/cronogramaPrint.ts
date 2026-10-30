@@ -18,6 +18,8 @@ export type CronogramaPrintInput = {
   sessoes: SessaoCronograma[];
   /** Folha para mostrar dentro de outra página, sem abrir a impressão. */
   embutido?: boolean;
+  /** Gold (modelo do CCP): aulas presenciais a amarelo e datas limite de avaliação a vermelho. */
+  cores?: "gold" | "fin";
   /** Dados da entidade (Configurações › Entidade) para o cabeçalho. */
   entidade?: Partial<Record<"nome" | "morada" | "codigoPostal" | "localidade" | "telefone" | "email" | "site", string>>;
 };
@@ -309,10 +311,10 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
     .group { text-align: left; font-size: 8px; font-weight: 700; padding: 3px 4px; line-height: 1.25; background: #fff; white-space: normal; }
     .time { text-align: left; font-size: 8px; font-weight: 600; padding: 2px 4px; white-space: nowrap; background: #fff; }
     .cell { font-size: 8px; font-weight: 700; min-height: 22px; height: auto; line-height: 1.15; text-align: center; white-space: normal; word-break: keep-all; overflow-wrap: normal; padding: 2px 1px; }
-    .pres { background: #a60000; color: #fff; }
+    .pres { background: ${input.cores === "gold" ? "#ffc000; color: #111" : "#a60000; color: #fff"}; }
     .sinc { background: #1d4ed8; color: #fff; }
     .auto { background: #d4d4d4; color: #111; }
-    .aval { background: #f5c518; color: #111; }
+    .aval { background: ${input.cores === "gold" ? "#e00000; color: #fff" : "#f5c518; color: #111"}; }
     .mat { background: #15803d; color: #fff; }
     tr.tempo { height: ${TEMPO_MM}mm; }
     .group .sub { font-weight: 400; color: #444; }

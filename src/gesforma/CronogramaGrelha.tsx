@@ -50,6 +50,13 @@ export const TONE: Record<string, string> = {
   empty: "bg-white hover:bg-slate-50 text-slate-400",
 };
 
+/** Gold (modelo do CCP): aulas presenciais a amarelo e datas limite de avaliação a vermelho. */
+export const TONE_GOLD: Record<string, string> = {
+  ...TONE,
+  presencial: "bg-[#ffc000] text-slate-900",
+  avaliacao: "bg-[#e00000] text-white",
+};
+
 type EventoMod = Exclude<SessaoModalidade, "matricula">;
 
 type EventoForm = {
@@ -105,6 +112,25 @@ function alternarModulo(modulos: string[], opcao: string, catalogo: string[]) {
     ? modulos.filter(m => opcaoDoModulo(m, catalogo) !== opcao)
     : [...modulos, opcao];
   return ordenarModulos(next);
+}
+
+/** Horários habituais (e os já usados neste cronograma) para não escrever a hora de cada módulo à mão. */
+const HORARIOS_PADRAO: Record<"presencial" | "sincrona", [string, string][]> = {
+  presencial: [["09:00", "13:00"], ["09:00", "13:30"], ["11:00", "13:00"], ["14:00", "18:00"], ["19:00", "22:00"], ["19:00", "23:00"]],
+  sincrona: [["10:00", "11:30"], ["19:00", "20:30"], ["19:00", "22:00"]],
+};
+
+function horariosRapidos(sessoes: SessaoCronograma[], mod: string) {
+  const tipo = mod === "sincrona" ? "sincrona" : "presencial";
+  const usados = sessoes
+    .filter(s => (s.modalidade ?? "presencial") === tipo && s.horaInicio && s.horaFim)
+    .map(s => [normHora(s.horaInicio), normHora(s.horaFim)] as [string, string]);
+  const vistos = new Set<string>();
+  return [...usados, ...HORARIOS_PADRAO[tipo]]
+    .filter(([a, b]) => a && b && !vistos.has(`${a}-${b}`) && vistos.add(`${a}-${b}`))
+    .sort((x, y) => `${x[0]}${x[1]}`.localeCompare(`${y[0]}${y[1]}`))
+    .slice(0, 10)
+    .map(([horaInicio, horaFim]) => ({ horaInicio, horaFim }));
 }
 
 export function EventoModal({
@@ -262,6 +288,20 @@ export function EventoModal({
           <div className="grid grid-cols-2 gap-3 sm:max-w-md">
             <HoraField label="Início" value={form.horaInicio} onChange={v => setForm(f => ({ ...f, horaInicio: v }))} />
             <HoraField label="Fim" value={form.horaFim} onChange={v => setForm(f => ({ ...f, horaFim: v }))} />
+          </div>
+        )}
+        {!semHoras(form.mod) && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-slate-500">Horários:</span>
+            {horariosRapidos(sessoes, form.mod).map(h => {
+              const ativo = normHora(form.horaInicio) === h.horaInicio && normHora(form.horaFim) === h.horaFim;
+              return (
+                <button key={`${h.horaInicio}-${h.horaFim}`} type="button" onClick={() => setForm(f => ({ ...f, ...h }))}
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${ativo ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>
+                  {h.horaInicio}–{h.horaFim}
+                </button>
+              );
+            })}
           </div>
         )}
         {form.mod === "auto" && <p className="text-[11px] text-slate-500">O e-learning não tem hora de sala - ocupa o dia na grelha.</p>}

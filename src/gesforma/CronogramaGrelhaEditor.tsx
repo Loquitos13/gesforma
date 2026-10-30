@@ -4,13 +4,13 @@ import { useOpcoes } from "../partilhado/dados/useOpcoes";
 import { apiPublicEntidade } from "../partilhado/api/publico";
 import { useRecurso } from "../partilhado/dados/useRecurso";
 import { useProgramaDoCurso } from "./cursoPrograma";
-import { type GrelhaLinha, addDays, cellLabel, cellTone, comFimCronograma, datesFromRange, defaultSlot, dayNum, fimEstavel, grelhaPeriodo, grupoLinha, larguraDiasEmChars, linhaLabel, linhasFromSessoes, mergeLinhas, monthSpans, moverEvento, saltoMatricula, setMatricula, sessoesSemFim, weekdayCode, grelhaTempos, type BlocoTempos, TEMPO_MIN, minutosDaHora, horaDosMinutos, horaOficial, formatHoraFaixa, linhaDaSessao, buildLinha, temasDaSessao } from "../partilhado/cronogramaGrelha";
+import { type GrelhaLinha, addDays, cellLabel, cellTone, comFimCronograma, datesFromRange, defaultSlot, dayNum, fimEstavel, grelhaPeriodo, grupoLinha, larguraDiasEmChars, linhaLabel, linhasFromSessoes, mergeLinhas, monthSpans, moverEvento, saltosVazios, setMatricula, sessoesSemFim, weekdayCode, grelhaTempos, type BlocoTempos, TEMPO_MIN, minutosDaHora, horaDosMinutos, horaOficial, formatHoraFaixa, linhaDaSessao, buildLinha, temasDaSessao } from "../partilhado/cronogramaGrelha";
 import { generateEnaCronograma } from "../partilhado/cronogramaGrelhaGerar";
 import { mapLocalTurma, type LocalCatalogo } from "../partilhado/cronogramaLocal";
 import { imprimirCronogramaEna } from "../partilhado/cronogramaPrint";
 import { codigoInternoTurma } from "../partilhado/turmaCodigo";
 import { formatDiaMes, sessaoModalidade, type SessaoCronograma } from "../partilhado/turmaModel";
-import { TONE, EventoModal } from "./CronogramaGrelha";
+import { TONE, TONE_GOLD, EventoModal } from "./CronogramaGrelha";
 
 export function CronogramaGrelha({
   sessoes,
@@ -22,6 +22,7 @@ export function CronogramaGrelha({
   curso,
   nome,
   local,
+  onLocal,
   accent = "gold",
   compact = false,
   identidade = "",
@@ -35,6 +36,7 @@ export function CronogramaGrelha({
   curso?: string;
   nome?: string;
   local?: string;
+  onLocal?: (local: string) => void;
   accent?: "gold" | "fin";
   compact?: boolean;
   identidade?: string;
@@ -63,6 +65,13 @@ export function CronogramaGrelha({
     [locaisOpcoes],
   );
   const localMapeado = useMemo(() => mapLocalTurma(local, locaisCatalogo), [local, locaisCatalogo]);
+  // Locais ativos deste regime (Edição de Cursos › Locais), para escolher o local no cabeçalho.
+  const nomesLocais = useMemo(() => [...new Set([
+    ...(local ? [local] : []),
+    ...locaisOpcoes
+      .filter(o => (!o.regime || o.regime === accent) && !/^inativ|^inactiv|^arquiv/i.test(String((o.extra as { estado?: string; status?: string } | undefined)?.status ?? (o.extra as { estado?: string } | undefined)?.estado ?? "")))
+      .map(o => o.rotulo),
+  ])].filter(Boolean), [locaisOpcoes, local, accent]);
 
   useEffect(() => {
     setLinhas(prev => mergeLinhas(linhasFromSessoes(sessoes, horario), prev));
@@ -82,11 +91,16 @@ export function CronogramaGrelha({
 
   const start = [matricula, inicio, periodo.inicio].filter(Boolean).sort()[0] ?? inicio;
   const todosOsDias = useMemo(() => datesFromRange(start, fim || addDays(inicio || start, 31)), [start, fim, inicio]);
-  // Os dias vazios entre a matrícula e o início ficam numa só coluna («…»); um clique mostra-os.
+  // Os dias seguidos sem eventos (entre a matrícula e o início, ou um intervalo longo entre módulos) ficam numa só
+  // coluna («…»); um clique mostra-os. A impressão também os salta.
   const [verSalto, setVerSalto] = useState(false);
-  const salto = verSalto ? null : saltoMatricula(todosOsDias, sessoes, matricula, inicio);
-  const dates = useMemo(() => (salto ? todosOsDias.filter(d => d < salto.de || d > salto.ate) : todosOsDias), [todosOsDias, salto?.de, salto?.ate]);
-  const months = monthSpans(dates).map(m => (salto && m.key === matricula.slice(0, 7) ? { ...m, count: m.count + 1 } : m));
+  const saltos = useMemo(() => (verSalto ? [] : saltosVazios(todosOsDias, sessoes, matricula, inicio)), [verSalto, todosOsDias, sessoes, matricula, inicio]);
+  const saltoApos = useMemo(() => new Map(saltos.map(x => [x.apos, x])), [saltos]);
+  const dates = useMemo(
+    () => (saltos.length ? todosOsDias.filter(d => !saltos.some(x => d >= x.de && d <= x.ate)) : todosOsDias),
+    [todosOsDias, saltos],
+  );
+  const months = monthSpans(dates).map(m => ({ ...m, count: m.count + saltos.filter(x => x.apos.slice(0, 7) === m.key).length }));
   const larguras = useMemo(() => {
     const blocosDias = new Set(sessoesSemFim(sessoes).filter(x => x.horaInicio && x.horaFim).map(x => x.data));
     // As aulas mostram o nome do módulo ou o tema: a coluna alarga até à palavra mais comprida (com limite).
@@ -111,6 +125,7 @@ export function CronogramaGrelha({
   const duracaoPadrao = Math.max(TEMPO_MIN, (minutosDaHora(slotPadrao.horaFim) ?? 0) - (minutosDaHora(slotPadrao.horaInicio) ?? 0));
   const codigo = codigoInternoTurma(curso ?? "", local ?? "", horario, inicio);
   const gold = accent === "gold";
+  const tons = gold ? TONE_GOLD : TONE;
 
   function gravar(next: SessaoCronograma[], fimForcado?: string) {
     const alvo = fimForcado ?? fimEstavel(next, fim);
@@ -163,10 +178,27 @@ export function CronogramaGrelha({
             <span className="text-slate-500 w-40 flex-shrink-0">Data de início</span>
             <span className="font-semibold text-slate-800">{inicio ? formatDiaMes(inicio) : "-"}</span>
           </p>
-          <p className="flex items-center gap-2">
-            <span className="text-slate-500 w-40 flex-shrink-0">Local de realização</span>
-            <span className="font-semibold text-slate-800">{localMapeado.localizacao}</span>
-          </p>
+          {onLocal ? (
+            <label className="flex items-start gap-2">
+              <span className="text-slate-500 w-40 flex-shrink-0 pt-1">Local de realização</span>
+              <span className="flex-1 min-w-0">
+                <select value={local ?? ""} onChange={e => onLocal(e.target.value)} className="w-full px-2 py-1 border border-slate-200 rounded-lg bg-white">
+                  <option value="">Escolher…</option>
+                  {nomesLocais.map(n => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+                <span className="mt-0.5 block text-[11px] text-slate-500">
+                  {localMapeado.morada || "Sem morada: acrescente-a em Edição de Cursos › Locais."}
+                </span>
+              </span>
+            </label>
+          ) : (
+            <p className="flex items-center gap-2">
+              <span className="text-slate-500 w-40 flex-shrink-0">Local de realização</span>
+              <span className="font-semibold text-slate-800">{localMapeado.localizacao}</span>
+            </p>
+          )}
           <label className="flex items-center gap-2">
             <span className="text-slate-500 w-40 flex-shrink-0">Data de fim</span>
             <input type="date" value={fim} min={inicio || undefined} onChange={e => changeFim(e.target.value)} className="flex-1 px-2 py-1 border border-slate-200 rounded-lg" />
@@ -200,8 +232,8 @@ export function CronogramaGrelha({
                     {dayNum(d)}
                   </button>
                 </th>
-                {salto && d === matricula && colunaSalto("n", (
-                  <button type="button" onClick={() => setVerSalto(true)} title={`${salto.n} dias sem eventos entre a matrícula e o início (${formatDiaMes(salto.de)} a ${formatDiaMes(salto.ate)}). Clique para os mostrar.`}
+                {saltoApos.has(d) && colunaSalto(`n-${d}`, (
+                  <button type="button" onClick={() => setVerSalto(true)} title={`${saltoApos.get(d)!.n} dias sem eventos (${formatDiaMes(saltoApos.get(d)!.de)} a ${formatDiaMes(saltoApos.get(d)!.ate)}). Clique para os mostrar.`}
                     className="block w-full py-1 text-slate-500 hover:bg-slate-100">…</button>
                 ), 2)}
                 </Fragment>
@@ -237,7 +269,7 @@ export function CronogramaGrelha({
                   if (d === matricula && !doDia.length) {
                     if (r === 0) {
                       cells.push(
-                        <td key={chave} rowSpan={tempos.n} className={`border border-slate-100 px-0.5 text-center align-middle text-[9px] font-bold ${TONE.matricula}`}>Matrícula</td>,
+                        <td key={chave} rowSpan={tempos.n} className={`border border-slate-100 px-0.5 text-center align-middle text-[9px] font-bold ${tons.matricula}`}>Matrícula</td>,
                       );
                     }
                   } else if (bloco) {
@@ -263,7 +295,7 @@ export function CronogramaGrelha({
                                   setEvento({ date: d, linha: linhaSes });
                                 }}
                                 style={{ top: `${topo}%`, height: `${altura}%`, left: `${(coluna / colunas) * 100}%`, width: `${100 / colunas}%` }}
-                                className={`absolute flex flex-col items-center justify-center overflow-hidden border border-white/50 px-0.5 text-[9px] font-bold leading-tight cursor-grab active:cursor-grabbing ${TONE[sessaoModalidade(ses)] ?? TONE.presencial}`}
+                                className={`absolute flex flex-col items-center justify-center overflow-hidden border border-white/50 px-0.5 text-[9px] font-bold leading-tight cursor-grab active:cursor-grabbing ${tons[sessaoModalidade(ses)] ?? tons.presencial}`}
                                 title={`${formatDiaMes(d)} · ${formatHoraFaixa(ses.horaInicio, ses.horaFim)} · arraste para mudar de dia ou hora; clique para editar`}
                               >
                                 {temasDaSessao(ses).length
@@ -305,11 +337,11 @@ export function CronogramaGrelha({
                       >
                         <button type="button" aria-label={`${formatDiaMes(d)} às ${horaOficial(tempos.inicioDaLinha(r))}: adicionar aula`}
                           onClick={() => setEvento({ date: d, linha: buildLinha("presencial", horaDosMinutos(ini), horaDosMinutos(ini + duracaoPadrao)) })}
-                          className={`block h-full min-h-[2.3rem] w-full ${TONE.empty}`} />
+                          className={`block h-full min-h-[2.3rem] w-full ${tons.empty}`} />
                       </td>,
                     );
                   }
-                  if (salto && d === matricula) cells.push(<td key={`salto-${chave}`} className="border border-slate-100 bg-slate-50" aria-hidden="true" />);
+                  if (saltoApos.has(d)) cells.push(<td key={`salto-${chave}`} className="border border-slate-100 bg-slate-50" aria-hidden="true" />);
                   return cells;
                 })}
               </tr>
@@ -379,7 +411,7 @@ export function CronogramaGrelha({
                             }
                             setEvento({ date: d, linha });
                           }}
-                          className={`block w-full min-h-10 px-0.5 py-1 text-[9px] font-bold leading-tight whitespace-normal ${TONE[tone] ?? TONE.empty} ${preenchida ? "cursor-grab active:cursor-grabbing" : ""}`}
+                          className={`block w-full min-h-10 px-0.5 py-1 text-[9px] font-bold leading-tight whitespace-normal ${tons[tone] ?? tons.empty} ${preenchida ? "cursor-grab active:cursor-grabbing" : ""}`}
                           title={preenchida
                             ? `${formatDiaMes(d)} · ${linhaLabel(linha)} · arraste para mudar dia, hora ou metodologia; clique para editar os ${unidade === "capítulo" ? "capítulos" : "módulos"}`
                             : `${formatDiaMes(d)} · ${linhaLabel(linha)}`}
@@ -388,8 +420,8 @@ export function CronogramaGrelha({
                         </button>
                       </td>
                     );
-                  }).flatMap((td, di) => (salto && dates[di] === matricula
-                    ? [td, <td key={`salto-${linha.id}`} className="border border-slate-100 bg-slate-50" aria-hidden="true" />]
+                  }).flatMap((td, di) => (saltoApos.has(dates[di]!)
+                    ? [td, <td key={`salto-${linha.id}-${dates[di]}`} className="border border-slate-100 bg-slate-50" aria-hidden="true" />]
                     : [td]))}
                 </tr>
               ));
@@ -430,6 +462,7 @@ export function CronogramaGrelha({
               linhas,
               sessoes: sessoesSemFim(sessoes),
               entidade: entidade?.entidade,
+              cores: gold ? "gold" : "fin",
             });
           }}
           className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
@@ -458,10 +491,10 @@ export function CronogramaGrelha({
 
       <ul className="text-[11px] text-slate-600 space-y-1 px-1">
         <li className="flex items-center gap-2"><span className="w-3.5 h-3.5 rounded-sm bg-[#15803d]" /> Data limite de matrícula e instruções de início (email)</li>
-        <li className="flex items-center gap-2"><span className="w-3.5 h-3.5 rounded-sm bg-[#a60000]" /> Aulas presenciais em sala, por módulo</li>
+        <li className="flex items-center gap-2"><span className={`w-3.5 h-3.5 rounded-sm ${gold ? "bg-[#ffc000]" : "bg-[#a60000]"}`} /> Aulas presenciais em sala, por módulo</li>
         <li className="flex items-center gap-2"><span className="w-3.5 h-3.5 rounded-sm bg-[#1d4ed8]" /> Sessão síncrona em vídeo-conferência</li>
         <li className="flex items-center gap-2"><span className="w-3.5 h-3.5 rounded-sm bg-slate-300" /> E-learning / auto-aprendizagem</li>
-        <li className="flex items-center gap-2"><span className="w-3.5 h-3.5 rounded-sm bg-amber-400" /> Data limite de avaliação do(s) módulo(s)</li>
+        <li className="flex items-center gap-2"><span className={`w-3.5 h-3.5 rounded-sm ${gold ? "bg-[#e00000]" : "bg-amber-400"}`} /> Data limite de avaliação do(s) módulo(s)</li>
       </ul>
     </div>
   );

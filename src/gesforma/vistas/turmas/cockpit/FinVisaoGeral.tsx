@@ -33,13 +33,14 @@ export function FinVisaoGeral({ turma, membros, prontos, souFormador, verCustos,
   const futuras = turma.cronograma.filter(s => s.data >= hojeIso());
   const accoes = (f: FormandoFin) => [
     ...(onFicha ? [{ label: "Ficha", icon: I.eye, onClick: () => onFicha(f) }] : []),
+    // A folha de inscrição (para o formando e o coordenador assinarem) fica à vista, logo a seguir à ficha.
     ...(!souFormador ? [
+      {
+        label: "Folha de inscrição", icon: I.download,
+        onClick: () => { apiFichaInscricaoFin(f.id).catch(err => toastError(err, "Não foi possível gerar a folha de inscrição.")); },
+      },
       { label: "Transferir", icon: I.transfer, tone: "purple" as const, onClick: () => onTransferir(f) },
       { label: "Eliminar", icon: I.trash, tone: "red" as const, onClick: () => onEliminar(f) },
-      {
-        label: "Ficha de inscrição (PDF)", icon: I.download,
-        onClick: () => { apiFichaInscricaoFin(f.id).catch(err => toastError(err, "Não foi possível gerar a ficha de inscrição.")); },
-      },
     ] : []),
   ];
 
@@ -94,7 +95,7 @@ export function FinVisaoGeral({ turma, membros, prontos, souFormador, verCustos,
                           </span>
                         </Td>
                       )}
-                      <Td><RowActions actions={accoes(f)} /></Td>
+                      <Td><RowActions actions={accoes(f)} primary={3} /></Td>
                     </tr>
                   );
                 })}

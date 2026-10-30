@@ -19,7 +19,7 @@ export function PublicCronograma({ regime, turmaId }: { regime: Regime; turmaId:
   const folha = useMemo(() => dados && folhaDe({
     nome: dados.nome, local: dados.local, horario: dados.horario, dataInicio: dados.inicio, dataFim: dados.fim,
     plano: dados.sessoes.map((s, i) => ({ id: `s${i}`, ...s })),
-  }, dados.curso, dados.entidade), [dados]);
+  }, dados.curso, dados.entidade, regime), [dados, regime]);
   useEffect(() => { if (dados) document.title = `Cronograma · ${dados.nome || dados.curso}`; }, [dados]);
 
   return (

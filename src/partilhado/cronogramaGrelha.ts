@@ -448,6 +448,30 @@ export function saltoMatricula(dates: string[], sessoes: SessaoCronograma[], mat
   return { de: vazios[0]!, ate: vazios[vazios.length - 1]!, n: vazios.length };
 }
 
+/**
+ * Cortes da grelha: os dias seguidos sem nenhum evento ficam numa só coluna («…») depois do último dia com evento,
+ * para o cronograma não ficar comprido demais. Entre a matrícula e o início bastam 3 dias; no resto, `minimo`.
+ */
+export function saltosVazios(dates: string[], sessoes: SessaoCronograma[], matricula: string, inicio: string, minimo = 7) {
+  const comEvento = new Set(sessoesSemFim(sessoes).map(s => s.data));
+  if (matricula) comEvento.add(matricula);
+  if (inicio) comEvento.add(inicio);
+  const saltos: { apos: string; de: string; ate: string; n: number }[] = [];
+  let i = 0;
+  while (i < dates.length) {
+    if (comEvento.has(dates[i]!)) { i += 1; continue; }
+    let j = i;
+    while (j + 1 < dates.length && !comEvento.has(dates[j + 1]!)) j += 1;
+    const apos = dates[i - 1];
+    const n = j - i + 1;
+    const minimoAqui = matricula && apos === matricula && inicio > matricula ? 3 : minimo;
+    // Só corta entre dois dias com eventos (o fim da grelha fica como está).
+    if (apos && j + 1 < dates.length && n >= minimoAqui) saltos.push({ apos, de: dates[i]!, ate: dates[j]!, n });
+    i = j + 1;
+  }
+  return saltos;
+}
+
 /** Repetir um evento até uma data: todos os dias, só nos dias úteis, ou uma vez por semana (no mesmo dia da semana). */
 export type Repeticao = "dias" | "uteis" | "semanal";
 

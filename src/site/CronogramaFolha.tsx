@@ -4,7 +4,7 @@ import type { TurmaPercurso } from "../partilhado/api";
 import { apiPublicEntidade, type EntidadePublica } from "../partilhado/api/publico";
 import { useRecurso } from "../partilhado/dados/useRecurso";
 import { mapLocalTurma } from "../partilhado/cronogramaLocal";
-import { comFimCronograma, datesFromRange, FIM_CRONOGRAMA_ID, grelhaPeriodo, linhasFromSessoes, sessoesSemFim } from "../partilhado/cronogramaGrelha";
+import { comFimCronograma, datesFromRange, FIM_CRONOGRAMA_ID, grelhaPeriodo, linhasFromSessoes, saltosVazios, sessoesSemFim } from "../partilhado/cronogramaGrelha";
 import { buildCronogramaPrintHtml, medidasFolha } from "../partilhado/cronogramaPrint";
 import { codigoInternoTurma } from "../partilhado/turmaCodigo";
 import type { SessaoModalidade, SessaoCronograma } from "../partilhado/turmaModel";
@@ -27,7 +27,7 @@ function planoParaSessoes(turma: TurmaFolha): SessaoCronograma[] {
   })));
 }
 
-export function folhaDe(turma: TurmaFolha, curso: string, entidade?: EntidadePublica) {
+export function folhaDe(turma: TurmaFolha, curso: string, entidade?: EntidadePublica, cores: "gold" | "fin" = "gold") {
   const sessoes = planoParaSessoes(turma);
   if (!sessoes.length) return null;
   // A «Data de fim» da turma conta mesmo que seja depois da última sessão.
@@ -37,7 +37,10 @@ export function folhaDe(turma: TurmaFolha, curso: string, entidade?: EntidadePub
   const inicio = turma.dataInicio;
   const fim = periodo.fim || inicio;
   const start = [matricula, inicio, periodo.inicio].filter(Boolean).sort()[0] ?? inicio;
-  const dates = datesFromRange(start, fim);
+  // Os intervalos longos sem eventos saltam-se, como na grelha da turma.
+  const todos = datesFromRange(start, fim);
+  const saltos = saltosVazios(todos, sessoes, matricula, inicio);
+  const dates = todos.filter(d => !saltos.some(x => d >= x.de && d <= x.ate));
   const linhas = linhasFromSessoes(sessoes, turma.horario);
   const input = {
     horario: turma.horario,
@@ -53,6 +56,7 @@ export function folhaDe(turma: TurmaFolha, curso: string, entidade?: EntidadePub
     sessoes,
     embutido: true,
     entidade,
+    cores,
   };
   const { page } = medidasFolha(input);
   return { html: buildCronogramaPrintHtml(input), larguraMm: page.largura, alturaMm: page.altura, input };

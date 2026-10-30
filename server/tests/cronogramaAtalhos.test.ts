@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLinha, datesFromRange, diasDaRepeticao, grelhaTempos, temasDaSessao, mudarHorasLinha, preencherIntervalo, saltoMatricula, setMatricula } from "../../src/partilhado/cronogramaGrelha.js";
+import { buildLinha, datesFromRange, diasDaRepeticao, grelhaTempos, temasDaSessao, mudarHorasLinha, preencherIntervalo, saltoMatricula, saltosVazios, setMatricula } from "../../src/partilhado/cronogramaGrelha.js";
 import type { SessaoCronograma } from "../../src/partilhado/turmaModel.js";
 import { arrancar, pedido } from "./helpers.js";
 
@@ -13,6 +13,17 @@ describe("atalhos do cronograma", () => {
     expect(saltoMatricula(dias, sessoes, "2026-11-02", "2026-11-23")).toEqual({ de: "2026-11-03", ate: "2026-11-22", n: 20 });
     // Com um evento pelo meio, não se esconde nada.
     expect(saltoMatricula(dias, [...sessoes, s("b", "2026-11-10")], "2026-11-02", "2026-11-23")).toBeNull();
+  });
+
+  it("intervalos longos sem eventos entre módulos ficam numa só coluna (cortes)", () => {
+    const sessoes = setMatricula([s("a", "2026-11-23"), s("b", "2026-11-24"), s("c", "2026-12-15"), s("d", "2026-12-17")], "2026-11-02");
+    const dias = datesFromRange("2026-11-02", "2026-12-20");
+    expect(saltosVazios(dias, sessoes, "2026-11-02", "2026-11-23")).toEqual([
+      { apos: "2026-11-02", de: "2026-11-03", ate: "2026-11-22", n: 20 },
+      { apos: "2026-11-24", de: "2026-11-25", ate: "2026-12-14", n: 20 },
+    ]);
+    // Um dia vazio entre aulas (16) e os dias depois da última sessão ficam como estão.
+    expect(saltosVazios(dias, sessoes, "", "2026-11-23").some(x => x.de === "2026-12-16" || x.de === "2026-12-18")).toBe(false);
   });
 
   it("o e-learning preenche um intervalo de dias (com ou sem fins de semana)", () => {

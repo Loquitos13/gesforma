@@ -16,7 +16,7 @@ import { CronogramaRemover } from "./CronogramaRemover";
 
 export function CronogramaEditor({
   sessoes, onChange, inicio, horario, horas, formador, formadoresTurma, curso, nome, local, accent = "gold",
-  layout = "compact", turmaId, identidade, publicar,
+  layout = "compact", turmaId, identidade, publicar, onLocal,
 }: {
   sessoes: SessaoCronograma[];
   onChange: (next: SessaoCronograma[]) => void;
@@ -34,6 +34,8 @@ export function CronogramaEditor({
   identidade?: string;
   /** Publicar com a versão do cronograma (o cockpit grava em fila); sem ele publica-se directamente. */
   publicar?: (sessoes: SessaoCronograma[]) => Promise<{ url: string }>;
+  /** Mudar o local da turma a partir do cabeçalho do cronograma (Gold). */
+  onLocal?: (local: string) => void;
 }) {
   const gold = accent === "gold";
   const page = layout === "page";
@@ -220,6 +222,7 @@ export function CronogramaEditor({
         curso={curso}
         nome={nome}
         local={local}
+        onLocal={onLocal}
         accent={accent}
         compact={!page}
         identidade={identidade ?? (turmaId != null ? String(turmaId) : "")}

@@ -72,6 +72,8 @@ export const config = {
   dataEncryptionKey: process.env.DATA_ENCRYPTION_KEY ?? "",
   /** Segredo de sessão anterior, se foi trocado: o chaveiro ainda decifra o que foi cifrado com ele. */
   legacySessionSecret: process.env.LEGACY_SESSION_SECRET ?? "",
+  /** Chaves de cifra anteriores (32 bytes em base64, separadas por vírgulas): só decifram, nunca cifram. */
+  legacyDataEncryptionKeys: (process.env.DATA_ENCRYPTION_KEY_LEGACY ?? "").split(",").map(s => s.trim()).filter(Boolean),
   paymentWebhookKey: process.env.PAYMENT_WEBHOOK_KEY ?? "",
   whatsappToken: process.env.WHATSAPP_TOKEN ?? "",
   whatsappPhoneId: process.env.WHATSAPP_PHONE_ID ?? "",
@@ -186,6 +188,12 @@ export function avisosConfiguracao(): AvisoConfiguracao[] {
     out.push({ variavel: "DATA_ENCRYPTION_KEY", nivel: "alto", mensagem: "Sem chave própria: os dados pessoais são cifrados com uma chave derivada do segredo de sessão." });
   } else if (Buffer.from(config.dataEncryptionKey, "base64").length !== 32) {
     out.push({ variavel: "DATA_ENCRYPTION_KEY", nivel: "alto", mensagem: "Tem de ter 32 bytes em base64." });
+  }
+  for (const k of config.legacyDataEncryptionKeys) {
+    if (Buffer.from(k, "base64").length !== 32) {
+      out.push({ variavel: "DATA_ENCRYPTION_KEY_LEGACY", nivel: "alto", mensagem: "Cada chave antiga tem de ter 32 bytes em base64." });
+      break;
+    }
   }
   if (!process.env.APP_ORIGIN) {
     out.push({ variavel: "APP_ORIGIN", nivel: "medio", mensagem: `Não definida: a origem é deduzida (${config.appOrigin}). Defina o endereço público do GesForma.` });

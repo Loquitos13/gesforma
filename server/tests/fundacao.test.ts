@@ -70,6 +70,24 @@ describe("camada base", () => {
     await ctx.db.query("DELETE FROM preinscricoes WHERE id = $1", [id]);
   });
 
+  it("chaveiro: a chave de cifra da instalação anterior (DATA_ENCRYPTION_KEY_LEGACY) só lê; sem ela o erro diz o que falta", async () => {
+    const { config } = await import("../src/config.js");
+    const { decryptField } = await import("../src/fieldCrypto.js");
+    const antiga = randomBytes(32);
+    const iv = randomBytes(12);
+    const c = createCipheriv("aes-256-gcm", antiga, iv);
+    const enc = Buffer.concat([c.update("PT50000201231234567890154", "utf8"), c.final()]);
+    const valor = `v1:${iv.toString("base64url")}:${c.getAuthTag().toString("base64url")}:${enc.toString("base64url")}`;
+    expect(() => decryptField(valor)).toThrow(/DATA_ENCRYPTION_KEY_LEGACY/);
+    const antes = config.legacyDataEncryptionKeys;
+    config.legacyDataEncryptionKeys = [antiga.toString("base64")];
+    try {
+      expect(decryptField(valor)).toBe("PT50000201231234567890154");
+    } finally {
+      config.legacyDataEncryptionKeys = antes;
+    }
+  });
+
   it("uploads: o conteúdo tem de corresponder à extensão", async () => {
     const { conteudoPermitido } = await import("../src/ficheirosValidacao.js");
     expect(conteudoPermitido("a.pdf", Buffer.from("%PDF-1.7 ..."))).toBeNull();

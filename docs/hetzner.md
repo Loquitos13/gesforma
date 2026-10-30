@@ -54,6 +54,7 @@ cp .env.example .env && chmod 600 .env && nano .env
 
 - `SESSION_SECRET`, e também `LEGACY_SESSION_SECRET` se existir.
 - `DATA_ENCRYPTION_KEY`: **obrigatoriamente a mesma**. Os dados pessoais estão cifrados com ela; com outra chave ficam ilegíveis.
+  Se já se usou outra, ponha a antiga em `DATA_ENCRYPTION_KEY_LEGACY` (e o segredo antigo em `LEGACY_SESSION_SECRET`), reinicie e use Sistema › Recifrar.
 - `ADMIN_EMAIL`, `ADMIN_PASSWORD`.
 - `GOOGLE_*`, `MICROSOFT_*`, `SMTP_URL`, `MAIL_*`, `PAYMENT_WEBHOOK_KEY` e `WHATSAPP_*`, os que existirem.
 

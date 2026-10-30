@@ -29,9 +29,14 @@ let chaveiroCache: { id: string; chaves: Buffer[] } | null = null;
  * DATA_ENCRYPTION_KEY depois não torne ilegíveis os dados já cifrados.
  */
 export function chaveiro(): Buffer[] {
-  const id = [config.dataEncryptionKey, config.sessionSecret, config.legacySessionSecret].join("|");
+  const id = [config.dataEncryptionKey, ...config.legacyDataEncryptionKeys, config.sessionSecret, config.legacySessionSecret].join("|");
   if (chaveiroCache?.id === id) return chaveiroCache.chaves;
   const lista = [chaveAtual()];
+  // Chaves de cifra antigas (por exemplo, a da instalação anterior): só servem para ler.
+  for (const k of config.legacyDataEncryptionKeys) {
+    const buf = Buffer.from(k, "base64");
+    if (buf.length === 32) lista.push(buf);
+  }
   for (const segredo of [config.sessionSecret, config.legacySessionSecret, defaultDevSecret]) {
     if (segredo) lista.push(derivar(segredo));
   }
@@ -80,7 +85,8 @@ function abrirComChaveiro(iv: Buffer, tag: Buffer, data: Buffer) {
       ultimo = err;
     }
   }
-  throw ultimo ?? new Error("dados cifrados ilegíveis");
+  // A mensagem do Node («Unsupported state or unable to authenticate data») não diz nada a quem a vê.
+  throw new Error("Dados pessoais cifrados com uma chave que este servidor não tem (defina DATA_ENCRYPTION_KEY_LEGACY com a chave anterior).", { cause: ultimo });
 }
 
 export function decryptField(stored: string): string {

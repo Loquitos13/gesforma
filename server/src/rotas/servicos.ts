@@ -89,6 +89,19 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     dados: b.dados,
   });
 
+  /** Só um nível de páginas «dentro»: a mãe tem de existir e não estar dentro de outra; quem tem filhas não entra noutra. */
+  const erroDaMae = async (slug: string, pai: unknown, id?: number) => {
+    const todos = await repo.listar(db);
+    const proprio = id != null ? todos.find(x => x.id === id) : undefined;
+    const temFilhas = todos.some(x => x.dados.pai && (x.dados.pai === slug || (proprio && x.dados.pai === proprio.slug)) && x.id !== id);
+    if (!pai) return null;
+    const mae = todos.find(x => x.slug === pai);
+    if (!mae) return `A página-mãe «${String(pai)}» não existe.`;
+    if (mae.dados.pai) return `«${String(mae.dados.titulo ?? mae.slug)}» já está dentro de outra página: escolha uma página dos cartões da página Empresas.`;
+    if (temFilhas) return "Este serviço tem páginas dentro dele: não pode ficar dentro de outro.";
+    return null;
+  };
+
   app.get("/v1/servicos", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     return { servicos: await repo.listar(db) };
@@ -101,6 +114,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const s = await preparar(v.body);
     if (!s.slug) return reply.code(400).send({ error: "O endereço da página ficou vazio: use letras ou números no título." });
     if (s.dados.pai === s.slug) return reply.code(400).send({ error: "Um serviço não pode ficar dentro de si próprio." });
+    const erroPai = await erroDaMae(s.slug, s.dados.pai);
+    if (erroPai) return reply.code(400).send({ error: erroPai });
     try {
       const r = await repo.criar(db, s);
       await audit(db, req.actor!.id, "servico.criar", "servico", String(r?.id ?? ""), req.ip);
@@ -118,9 +133,14 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const s = await preparar(v.body);
     if (!s.slug) return reply.code(400).send({ error: "O endereço da página ficou vazio: use letras ou números no título." });
     if (s.dados.pai === s.slug) return reply.code(400).send({ error: "Um serviço não pode ficar dentro de si próprio." });
+    const erroPai = await erroDaMae(s.slug, s.dados.pai, v.params.id);
+    if (erroPai) return reply.code(400).send({ error: erroPai });
     try {
+      const antes = (await repo.listar(db)).find(x => x.id === v.params.id);
       const r = await repo.atualizar(db, v.params.id, s);
       if (!r) return reply.code(404).send({ error: "serviço inexistente" });
+      // Mudou o endereço: as páginas que estavam dentro dele continuam dentro (senão saltavam para os cartões).
+      if (antes && antes.slug !== s.slug) await repo.mudarMae(db, antes.slug, s.slug);
       await audit(db, req.actor!.id, "servico.gravar", "servico", String(v.params.id), req.ip);
       return { servico: r };
     } catch (e) {
@@ -133,6 +153,12 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: z.object({ id: idNum }) }, req);
     if (!v) return;
+    const todos = await repo.listar(db);
+    const alvo = todos.find(x => x.id === v.params.id);
+    const filhos = alvo ? todos.filter(x => x.dados.pai === alvo.slug) : [];
+    if (filhos.length) {
+      return reply.code(409).send({ error: `Este serviço tem ${filhos.length === 1 ? "uma página" : `${filhos.length} páginas`} dentro (${filhos.map(f => f.dados.titulo).join(", ")}). Tire-as de dentro dele ou desative-o em vez de o apagar.` });
+    }
     if (!(await repo.apagar(db, v.params.id))) return reply.code(404).send({ error: "serviço inexistente" });
     await audit(db, req.actor!.id, "servico.apagar", "servico", String(v.params.id), req.ip);
     return { ok: true };

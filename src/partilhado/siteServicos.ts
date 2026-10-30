@@ -41,8 +41,10 @@ export const LIMITES_SERVICO = {
 
 /** Os serviços que aparecem nos cartões da página Empresas: os que não estão dentro de outro serviço ativo. */
 export const servicosDeTopo = <T extends Pick<ServicoSite, "slug" | "titulo" | "pai">>(lista: T[]) => {
-  const slugs = new Set(lista.map(s => slugServico(s)));
-  return lista.filter(s => !s.pai || !slugs.has(s.pai));
+  // Só um nível: um serviço fica escondido se a página-mãe existir e estiver ela própria nos cartões (sem mãe).
+  // Assim, uma mãe posta por engano dentro de uma das filhas não faz desaparecer as três.
+  const deTopo = new Set(lista.filter(s => !s.pai).map(s => slugServico(s)));
+  return lista.filter(s => !s.pai || !deTopo.has(s.pai));
 };
 
 /** Textos de um cartão escritos só na página Empresas (bloco «Serviços», campo «porServico» no editor do site). */

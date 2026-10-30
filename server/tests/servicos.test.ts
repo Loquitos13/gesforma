@@ -36,6 +36,38 @@ describe("Serviços para empresas (Gestão › Empresas / Business)", () => {
   });
 });
 
+describe("Páginas dentro de outra (Certifica)", () => {
+  it("a mãe com páginas dentro não se apaga nem entra noutra; mudar o endereço leva as filhas", async () => {
+    const ctx = await arrancar();
+    type Linha = { id: number; slug: string; ativo: boolean; dados: Record<string, unknown> };
+    const lista = async () => (await pedido(ctx, "admin", "GET", "/v1/servicos")).json().servicos as Linha[];
+    const mae = (await lista()).find(s => s.slug === "certificacao-dgert-de-entidades-formadoras")!;
+    const filha = (await lista()).find(s => s.slug === "certificacao-inicial")!;
+    expect(filha.dados.pai).toBe(mae.slug);
+    // Apagar a mãe: recusado (as filhas ficavam soltas).
+    const apagar = await pedido(ctx, "admin", "DELETE", `/v1/servicos/${mae.id}`);
+    expect(apagar.statusCode).toBe(409);
+    expect(apagar.json().error).toMatch(/Certificação Inicial/);
+    // A mãe dentro de uma filha: recusado (as três desapareciam dos cartões).
+    expect((await pedido(ctx, "admin", "PUT", `/v1/servicos/${mae.id}`, { slug: mae.slug, ativo: true, dados: { ...mae.dados, pai: "certificacao-inicial" } })).statusCode).toBe(400);
+    // Novo endereço da mãe: as filhas continuam dentro dela.
+    expect((await pedido(ctx, "admin", "PUT", `/v1/servicos/${mae.id}`, { slug: "certificacao-dgert", ativo: true, dados: mae.dados })).statusCode).toBe(200);
+    expect((await lista()).filter(s => s.dados.pai === "certificacao-dgert").map(s => s.slug).sort()).toEqual(["alargamento-da-certificacao", "certificacao-inicial"]);
+  });
+
+  it("os cartões da página Empresas mostram a mãe mesmo com dados em ciclo", async () => {
+    const { servicosDeTopo } = await import("../../src/partilhado/siteServicos.js");
+    const lista = [
+      { slug: "mae", titulo: "Mãe", pai: "filha" },
+      { slug: "filha", titulo: "Filha", pai: "mae" },
+      { slug: "outro", titulo: "Outro", pai: "" },
+    ];
+    // Ninguém está «de topo» na mãe nem na filha: aparecem as duas em vez de desaparecerem.
+    expect(servicosDeTopo(lista).map(s => s.slug)).toEqual(["mae", "filha", "outro"]);
+    expect(servicosDeTopo([{ slug: "mae", titulo: "Mãe", pai: "" }, { slug: "filha", titulo: "Filha", pai: "mae" }]).map(s => s.slug)).toEqual(["mae"]);
+  });
+});
+
 describe("Modelo da página de serviço no editor", () => {
   it("grava rascunho e publica", async () => {
     const ctx = await arrancar();

@@ -36,3 +36,8 @@ export async function proximaOrdem(c: Consulta) {
   const r = await one<{ ordem: number }>(c, "SELECT COALESCE(MAX(ordem), 0) + 10 AS ordem FROM servicos");
   return Number(r?.ordem ?? 10);
 }
+
+/** As páginas «dentro» de `de` passam a estar dentro de `para` (a página-mãe mudou de endereço). */
+export function mudarMae(c: Consulta, de: string, para: string) {
+  return many(c, "UPDATE servicos SET dados = jsonb_set(dados, '{pai}', to_jsonb($2::text)), atualizado_em = now() WHERE dados->>'pai' = $1", [de, para]);
+}

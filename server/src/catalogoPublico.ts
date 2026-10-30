@@ -8,7 +8,7 @@ import { escolherPreco, regrasDoPayload } from "./precoOferta.js";
 import { eur } from "../../src/partilhado/ui/formatos.js";
 import { CONTACTOS_LOCAL } from "../../src/partilhado/contactosLocal.js";
 import { textosCurso } from "../../src/partilhado/textosCurso.js";
-import { AREA_FINANCIADA } from "../../src/partilhado/areasFormacao.js";
+import { AREA_FINANCIADA, areaCanonica } from "../../src/partilhado/areasFormacao.js";
 
 export type ContactoLocal = { local: string; telemovel: string; telefone: string; email: string; whatsapp: string };
 
@@ -294,7 +294,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       id: row.id,
       regime: "gold",
       titulo,
-      area: texto(payload.categoria) || row.categoria || "Gold",
+      area: areaCanonica(texto(payload.categoria) || row.categoria || "Gold"),
       modalidadeTexto: texto(payload.regime) || row.regime,
       horas: numeroPositivo(payload.horas, Number(row.horas) || 0),
       preco: numeroPositivo(payload.preco, Number(row.preco) || 0),

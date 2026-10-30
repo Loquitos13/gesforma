@@ -10,7 +10,7 @@ import { cartaoPadrao, CartaoCurso, campoCartao, type EstiloCartao } from "./blo
 import { simNao } from "./campos";
 import { campoAparencia } from "./camposGrupos";
 import { estiloBloco, estiloVazio, juntar, type Estilo } from "./estilos";
-import { ordenarAreas } from "../../partilhado/areasFormacao";
+import { AREAS_FORMACAO, areaCanonica } from "../../partilhado/areasFormacao";
 
 type Linha = "Todas" | "Financiada" | "Gold";
 type Acesso = "Todas" | "Acesso direto" | "Pré-pago" | "Pré-inscrição";
@@ -109,14 +109,15 @@ function CatalogoVista(p: Omit<CatalogoProps, "zonaTopo" | "zonaLista"> & { zona
   const [q, setQ] = useState("");
   const [formato, setFormato] = useState("Todos");
   // «?area=…» vem dos botões das áreas na página inicial (Oferta formativa).
-  const [area, setArea] = useState(params?.get("area")?.trim() || "Todas");
+  const [area, setArea] = useState(() => { const a = params?.get("area")?.trim(); return a ? areaCanonica(a) : "Todas"; });
   const [linha, setLinha] = useState<Linha>(inicial === "financiada" ? "Financiada" : inicial === "gold" ? "Gold" : "Todas");
   const [acesso, setAcesso] = useState<Acesso>("Todas");
   const [guardados, setGuardados] = useState<string[]>([]);
   const [comparar, setComparar] = useState<string[]>([]);
   const [aComparar, setAComparar] = useState(false);
 
-  const areas = useMemo(() => ["Todas", ...ordenarAreas([...new Set(cursos.map(c => c.area).filter(Boolean))])], [cursos]);
+  // As áreas do site são sempre as mesmas 7, por esta ordem (cursos com outra área só aparecem em «Todas»).
+  const areas = ["Todas", ...AREAS_FORMACAO];
   const modalidades = useMemo(() => ["Todos", ...["Presencial", "B-learning", "E-learning"].filter(m => cursos.some(c => c.format === m))], [cursos]);
   const lista = cursos.filter(c =>
     (formato === "Todos" || c.format === formato) && (area === "Todas" || c.area === area)

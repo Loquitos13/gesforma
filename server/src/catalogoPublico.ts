@@ -64,6 +64,8 @@ export type CursoPublico = {
   topicos: TopicosCurso;
   /** Vídeo de apresentação (ficha › Identidade): endereço do YouTube / Vimeo / .mp4 ou o ID do YouTube. */
   video: string;
+  /** Endereço do curso no Moodle (ficha › Oferta), para a página de entrada; só http(s). */
+  moodle: string;
   seoTitulo: string; seoDescricao: string;
   /** Contactos de cada local do curso: os da ficha do curso (se o local lhe estiver atribuído), senão os de Locais. */
   contactosLocais: ContactoLocal[];
@@ -376,6 +378,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       funcionamento: texto(payload.funcionamento),
       topicos: topicosDoPayload(payload),
       video: texto(payload.video),
+      moodle: /^https?:\/\//i.test(texto(payload.moodleUrl)) ? texto(payload.moodleUrl) : "",
       seoTitulo: texto(payload.seoTitulo), seoDescricao: texto(payload.seoDescricao),
       contactosLocais: contactosDoCurso(payload, [
         ...curso.chaves.flatMap(key => (sessoes.get(key) ?? []).map(s => s.local)),

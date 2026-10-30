@@ -139,6 +139,11 @@ export function TabOferta({ f }: { f: FichaCurso }) {
           <Campo rotulo="Regime" ajuda="Síncrono: sessões em tempo real com o formador. Assíncrono: o formando segue ao seu ritmo. Misto: aulas online síncronas (Sala Virtual) e tarefas de e-learning no Moodle.">
             {p => <Selecao {...p} opcoes={[...OPCOES_SINCRONIA]} vazio="Por definir" value={data.regimeSincronia} onChange={e => patch(comLocalElearning({ regimeSincronia: regimeSincronia(e.target.value) }))} />}
           </Campo>
+          {(/b-learning|e-learning/i.test(data.regime) || data.regimeSincronia === "assincrono" || data.regimeSincronia === "misto") && (
+            <Campo className="sm:col-span-2" rotulo="Endereço do Moodle" ajuda="B-learning, e-learning assíncrono ou misto: o curso aparece na página de entrada do site com o botão «Entrar», que abre este endereço.">
+              {p => <Entrada {...p} type="url" placeholder="https://…" value={data.moodleUrl} onChange={e => patch({ moodleUrl: e.target.value.trim() })} />}
+            </Campo>
+          )}
           {regime === "fin" && (
             <Campo rotulo="Programa" ajuda="Programa, prioridade e tipologias dos documentos das turmas deste curso (Edição de cursos › Programas). Cada turma pode escolher outro; sem programa, vale o primeiro activo.">
               {p => <SelecaoPesquisa {...p} opcoes={comValor(ordenarPorRecentes(programas.selecao, programasRecentes()), data.programaFin)} vazio="Sem programa" placeholder="Pesquisar programa…" value={data.programaFin} onChange={v => { lembrarPrograma(v); patch({ programaFin: v }); }} />}

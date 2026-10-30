@@ -117,6 +117,50 @@ export function irPosLogin(role: string) {
   window.location.assign(destinoPosLogin(role, params.get("destino")));
 }
 
+type CursoMoodle = { id: string; titulo: string; area: string; imagem: string; moodle: string };
+
+/** Os cursos com endereço do Moodle (ficha do curso › Oferta), para quem começou no Moodle antigo. */
+function useCursosMoodle() {
+  const [cursos, setCursos] = useState<CursoMoodle[]>([]);
+  useEffect(() => {
+    let vivo = true;
+    fetch("/api/v1/public/catalogo")
+      .then(r => (r.ok ? r.json() : null))
+      .then((r: { cursos?: { id: string; titulo: string; area: string; capa: string | null; miniatura: string | null; moodle?: string }[] } | null) => {
+        if (!vivo || !r) return;
+        setCursos((r.cursos ?? []).filter(c => c.moodle).map(c => ({ id: c.id, titulo: c.titulo, area: c.area, imagem: c.miniatura || c.capa || "", moodle: c.moodle! })));
+      })
+      .catch(() => undefined);
+    return () => { vivo = false; };
+  }, []);
+  return cursos;
+}
+
+/** Caixa a pulsar e a lista dos cursos no Moodle, cada um com «Entrar». */
+function EntradaMoodle({ cursos, escuro }: { cursos: CursoMoodle[]; escuro: boolean }) {
+  if (!cursos.length) return null;
+  return (
+    <div className="relative">
+      <p className="ena-anim-pulsar rounded-lg border-2 border-[#FFA900] bg-[#FFA900] px-5 py-4 text-center text-base font-extrabold text-[#14263D] shadow-[0_0_0_6px_rgba(255,169,0,.25)]">
+        Entra no Moodle para cursos iniciados até 30/10/2026
+      </p>
+      <ul className="mt-5 space-y-3">
+        {cursos.map(c => (
+          <li key={c.id} className={`flex items-center gap-4 overflow-hidden rounded-lg ${escuro ? "bg-white/10" : "border border-[#1C3350]/15 bg-white"}`}>
+            {c.imagem && <img src={c.imagem} alt="" className="h-20 w-28 shrink-0 object-cover" />}
+            <div className="min-w-0 flex-1 py-3">
+              <p className={`text-sm font-bold ${escuro ? "text-white" : "text-[#1C3350]"}`}>{c.titulo}</p>
+              {c.area && <p className={`mt-0.5 text-xs ${escuro ? "text-white/60" : "text-[#1C3350]/60"}`}>{c.area}</p>}
+            </div>
+            <a href={c.moodle} target="_blank" rel="noreferrer"
+              className="mr-3 shrink-0 bg-[#FFA900] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.12em] text-[#14263D] hover:brightness-95">Entrar</a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function LoginFormando({ onEntrou, trocaInicial = null, painel = PAINEL_ENTRADA }: {
   onEntrou: (user: SessionUser) => void; trocaInicial?: SessionUser | null; painel?: PainelEntrada;
 }) {
@@ -131,6 +175,7 @@ export function LoginFormando({ onEntrou, trocaInicial = null, painel = PAINEL_E
   const [nova, setNova] = useState("");
   const [google, setGoogle] = useState(false);
   const [microsoft, setMicrosoft] = useState(false);
+  const cursosMoodle = useCursosMoodle();
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("login");
@@ -211,17 +256,22 @@ export function LoginFormando({ onEntrou, trocaInicial = null, painel = PAINEL_E
           <div className="relative mx-auto max-w-lg">
             {painel.kicker && <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#FFA900]">{painel.kicker}</p>}
             {painel.titulo && <h1 className="mt-5 font-serif text-5xl font-bold leading-tight">{painel.titulo}</h1>}
-            <ul className="mt-8 space-y-4 text-white/70">
-              {painel.itens.filter(Boolean).map(item => (
-                <li key={item} className="flex items-center gap-3"><Icon name="check" className="h-5 w-5 shrink-0 text-[#FFA900]" />{item}</li>
-              ))}
-            </ul>
+            {cursosMoodle.length ? (
+              <div className="mt-8"><EntradaMoodle cursos={cursosMoodle} escuro /></div>
+            ) : (
+              <ul className="mt-8 space-y-4 text-white/70">
+                {painel.itens.filter(Boolean).map(item => (
+                  <li key={item} className="flex items-center gap-3"><Icon name="check" className="h-5 w-5 shrink-0 text-[#FFA900]" />{item}</li>
+                ))}
+              </ul>
+            )}
           </div>
           <p className="relative text-xs text-white/35">{painel.rodape}</p>
         </section>
       )}
       <section className="flex items-center justify-center px-5 py-16" style={{ background: painel.fundoFormulario || "#F9F9F9" }}>
         <div className="w-full max-w-md">
+          {cursosMoodle.length > 0 && <div className={`mb-10 ${painel.mostrar ? "lg:hidden" : ""}`}><EntradaMoodle cursos={cursosMoodle} escuro={false} /></div>}
           {trocar ? (
             <>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#A60000]">Primeira entrada</p>

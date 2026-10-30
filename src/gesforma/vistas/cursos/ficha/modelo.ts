@@ -50,6 +50,8 @@ export type CursoSite = {
   organizacaoPrograma: OrganizacaoPrograma; topicosPrograma: TopicoPrograma[];
   avaliacaoCurso: AvaliacaoCurso; precosOferta: PrecoOferta[]; planosSessao: PlanoLinha[];
   valoresFormador: ValorFormador[]; entidadeResponsavel: string; conteudosMoodle: ConteudoMoodle[];
+  /** Endereço do curso no Moodle (b-learning, e-learning assíncrono ou misto): aparece na página de entrada do site. */
+  moodleUrl: string;
 };
 
 export const TABS: { id: TabId; rotulo: string; precisaId?: boolean }[] = [
@@ -139,6 +141,7 @@ export function fichaInicial(curso: CursoBase | null, regime: Regime, modelos: O
     precosOferta: [], planosSessao: [], valoresFormador: [],
     entidadeResponsavel: "",
     conteudosMoodle: [],
+    moodleUrl: "",
   };
 }
 
@@ -167,6 +170,7 @@ export function fundirGuardado(base: CursoSite, guardado: Record<string, unknown
     organizacaoPrograma: programa.organizacao,
     regimeSincronia: regimeSincronia(guardado.regimeSincronia),
     programaFin: typeof guardado.programaFin === "string" ? guardado.programaFin : "",
+    moodleUrl: typeof guardado.moodleUrl === "string" ? guardado.moodleUrl : "",
     topicosPrograma: programa.topicos.length ? programa.topicos : base.topicosPrograma,
     avaliacaoCurso: cursoECcp(nome) && avaliacao.estrutura !== "ccp" ? avaliacaoCcp() : avaliacao,
     banner: mediaComUrl(guardado.banner) ?? base.banner,

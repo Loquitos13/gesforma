@@ -125,7 +125,7 @@ const Ico = ({ n, cls = "h-4 w-4" }: { n: keyof typeof ICONES; cls?: string }) =
 
 /** Um cartão de curso com o estilo escolhido no editor (landing e catálogo). */
 /** O que um cartão em destaque pode mudar em relação ao curso (vazio = dados do curso). */
-export type ExtraCartao = { etiqueta?: string; botao?: string; ligacao?: string; corBotao?: string; corTextoBotao?: string; animacao?: string; animacaoBotao?: string };
+export type ExtraCartao = { etiqueta?: string; etiqueta2?: string; imagemRodape?: string; botao?: string; ligacao?: string; corBotao?: string; corTextoBotao?: string; animacao?: string; animacaoBotao?: string };
 
 // Por cartão: vazio = o do estilo do cartão; "nenhuma" desliga a animação só nesse cartão.
 const SOBREPOR_ANIMACAO = [{ label: "Igual aos outros cartões", value: "" }, { label: "Sem animação", value: "nenhuma" }];
@@ -161,6 +161,10 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
     <span className="inline-flex px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-[0.1em]"
       style={forte ? { background: acento, color: "#14263D" } : { background: "#14263D", color: "#fff" }}>{texto}</span>
   );
+  // Com uma segunda etiqueta (ex.: «Financiada» + «Sub. Alim. 6€ aula»), a primeira fica a azul e a segunda a amarelo.
+  const regime = () => extra?.etiqueta2
+    ? <>{etiqueta(extra.etiqueta || curso.funding)}{etiqueta(extra.etiqueta2, true)}</>
+    : etiqueta(extra?.etiqueta || curso.funding, curso.funding === "Gold");
   const img = ver.has("imagem") && (
     <a href={href} tabIndex={-1} aria-hidden="true"
       className={juntar("relative block overflow-hidden bg-[#E7EBF0]", horizontal && "shrink-0", e.formato === "lista" ? "w-28 sm:w-40" : e.formato === "horizontal" ? "ena-cartao-h-img" : "w-full", sobreposto && "absolute inset-0")}
@@ -169,7 +173,7 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
       {!sobreposto && (ver.has("formato") || ver.has("regime")) && (
         <span className="absolute left-3 top-3 flex flex-wrap gap-1.5">
           {ver.has("formato") && curso.format && etiqueta(curso.format, curso.format === "E-learning")}
-          {ver.has("regime") && etiqueta(extra?.etiqueta || curso.funding, curso.funding === "Gold")}
+          {ver.has("regime") && regime()}
         </span>
       )}
     </a>
@@ -179,11 +183,11 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
       {sobreposto && (ver.has("formato") || ver.has("regime")) && (
         <span className="mb-3 flex flex-wrap gap-1.5" style={e.centrar ? { justifyContent: "center" } : undefined}>
           {ver.has("formato") && curso.format && etiqueta(curso.format, true)}
-          {ver.has("regime") && etiqueta(extra?.etiqueta || curso.funding, curso.funding === "Gold")}
+          {ver.has("regime") && regime()}
         </span>
       )}
       {!ver.has("imagem") && !sobreposto && (ver.has("formato") || ver.has("regime")) && (
-        <span className="mb-3 flex flex-wrap gap-1.5">{ver.has("formato") && curso.format && etiqueta(curso.format, curso.format === "E-learning")}{ver.has("regime") && etiqueta(extra?.etiqueta || curso.funding, curso.funding === "Gold")}</span>
+        <span className="mb-3 flex flex-wrap gap-1.5">{ver.has("formato") && curso.format && etiqueta(curso.format, curso.format === "E-learning")}{ver.has("regime") && regime()}</span>
       )}
       {ver.has("area") && curso.area && <p className="text-xs font-bold uppercase tracking-[0.12em]" style={{ color: sobreposto ? acento : "var(--c-destaque)" }}>{curso.area}</p>}
       {ver.has("titulo") && (
@@ -195,6 +199,7 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
       {(ver.has("preco") || ver.has("duracao") || ver.has("inicio") || ver.has("botao")) && (
         <div className={juntar("flex flex-wrap items-end justify-between gap-3", e.formato === "compacto" ? "mt-3" : "mt-auto pt-5")}
           style={e.formato === "compacto" || sobreposto ? undefined : { borderTop: "1px solid rgba(20,38,61,.1)", marginTop: "1.25rem" }}>
+          {extra?.imagemRodape && <img src={extra.imagemRodape} alt="" className="h-9 max-w-[60%] object-contain object-left" />}
           <div className="space-y-1.5 text-xs font-semibold" style={e.centrar ? { margin: "0 auto" } : undefined}>
             {ver.has("preco") && curso.funding === "Gold" && precoTxt && <span className="block text-sm font-bold" style={{ color: sobreposto ? "#fff" : corSegura(e.corTitulo) }}>{precoTxt}</span>}
             {ver.has("duracao") && curso.duration && <span className="flex items-center gap-2"><Ico n="relogio" />{curso.duration}</span>}
@@ -268,7 +273,7 @@ function Estado({ estado, recarregar }: { estado: string; recarregar?: () => voi
 // ─── Cursos em destaque ──────────────────────────────────────────────────────
 
 /** Um cartão em destaque: um curso, com imagem e textos que podem substituir os do curso (ou um cartão livre). */
-type ItemDestaque = { cursoId: string; imagem?: string; titulo?: string; texto?: string; etiqueta?: string; botao?: string; ligacao?: string; corBotao?: string; corTextoBotao?: string; animacao?: string; animacaoBotao?: string };
+type ItemDestaque = { cursoId: string; imagem?: string; titulo?: string; texto?: string; etiqueta?: string; etiqueta2?: string; imagemRodape?: string; botao?: string; ligacao?: string; corBotao?: string; corTextoBotao?: string; animacao?: string; animacaoBotao?: string };
 type DestaqueProps = { modo: "lista" | "escolhidos" | "automatico"; ordem: string[]; cursos: ItemDestaque[]; limite: number | null; cartao: EstiloCartao; aparencia: Estilo };
 
 /** Curso vazio, para cartões livres (sem curso): só mostram o que se escreve no cartão. */
@@ -311,6 +316,8 @@ export const CursosDestaque: ComponentConfig<DestaqueProps> = {
         titulo: { type: "text", label: "Título (vazio = o do curso)" },
         texto: { type: "textarea", label: "Texto (vazio = o texto de destaque do curso)" },
         etiqueta: { type: "text", label: "Etiqueta (vazio = Gold / Financiada)" },
+        etiqueta2: { type: "text", label: "Segunda etiqueta, a amarelo (ex.: «Sub. Alim. 6€ aula»); com ela a primeira fica a azul" },
+        imagemRodape: campoImagem("Logótipos no rodapé, ao lado do botão (opcional)") as never,
         botao: { type: "text", label: "Texto do botão (vazio = o do cartão)" },
         ligacao: { type: "text", label: "Ligação (vazio = página do curso)" },
         corBotao: campoCor("Cor do botão (vazio = a do cartão)") as never,
@@ -318,7 +325,7 @@ export const CursosDestaque: ComponentConfig<DestaqueProps> = {
         animacao: { type: "select", label: "Animação deste cartão", options: [...SOBREPOR_ANIMACAO, { label: "Flutuar", value: "flutuar" }, { label: "Balançar", value: "balancar" }] },
         animacaoBotao: { type: "select", label: "Animação do botão deste cartão", options: [...SOBREPOR_ANIMACAO, { label: "Pulsar", value: "pulsar" }, { label: "Saltar", value: "saltar" }] },
       },
-      defaultItemProps: { cursoId: "", imagem: "", titulo: "", texto: "", etiqueta: "", botao: "", ligacao: "", corBotao: "", corTextoBotao: "", animacao: "", animacaoBotao: "" },
+      defaultItemProps: { cursoId: "", imagem: "", titulo: "", texto: "", etiqueta: "", etiqueta2: "", imagemRodape: "", botao: "", ligacao: "", corBotao: "", corTextoBotao: "", animacao: "", animacaoBotao: "" },
       getItemSummary: (item, i) => `${(i ?? 0) + 1}. ${item.titulo?.trim() || (item.cursoId ? nomesCursos.get(item.cursoId) ?? "Curso fora da oferta" : "Escolha o curso")}`,
     },
     limite: campoNumero("Quantos (nos mais procurados)", ""),
@@ -340,7 +347,7 @@ export const CursosDestaque: ComponentConfig<DestaqueProps> = {
       const porId = new Map(cursos.map(c => [c.id, c]));
       if (modo === "lista") return { lista: (ordem ?? []).map(id => porId.get(id)).filter((c): c is Course => Boolean(c)), extras: [] as ExtraCartao[] };
       const itens = (escolhidos ?? []).map(x => ({ x, c: cartaoDe(x, porId.get(x.cursoId)) })).filter(i => i.c);
-      return { lista: itens.map(i => i.c!), extras: itens.map(({ x }) => ({ etiqueta: x.etiqueta, botao: x.botao, ligacao: x.ligacao, corBotao: x.corBotao, corTextoBotao: x.corTextoBotao, animacao: x.animacao, animacaoBotao: x.animacaoBotao })) };
+      return { lista: itens.map(i => i.c!), extras: itens.map(({ x }) => ({ etiqueta: x.etiqueta, etiqueta2: x.etiqueta2, imagemRodape: x.imagemRodape, botao: x.botao, ligacao: x.ligacao, corBotao: x.corBotao, corTextoBotao: x.corTextoBotao, animacao: x.animacao, animacaoBotao: x.animacaoBotao })) };
     }, [modo, ordem, escolhidos, limite, cursos, destaques]);
     const c = estiloBloco(aparencia);
     return (
